@@ -13,23 +13,10 @@ held AS (                                        -- every open, live account on 
                    AND coalesce(a.closed_day, '9999-12-31') >= m.day
     JOIN entities e ON e.id = a.id AND e.deleted_at IS NULL
 )
-SELECT day,
-       CAST(round(sum(net)) AS INTEGER) AS net_worth_minor,   -- reporting currency, minor units
-       count(*)                          AS accounts,          -- accounts that have a balance by then
-       sum(net IS NULL)                  AS unconverted        -- > 0: an FX rate is missing and the total understates
-  FROM (
-    SELECT h.day,
-           (CASE h.side WHEN 'asset' THEN 1 ELSE -1 END) * h.amount
-           * CASE WHEN h.currency = :base THEN 1.0
-                  WHEN h.currency < :base THEN (SELECT r.rate FROM fx_rates r
-                       WHERE r.from_ccy = h.currency AND r.to_ccy = :base AND r.day <= h.day ORDER BY r.day DESC LIMIT 1)
-                  ELSE 1.0 / (SELECT r.rate FROM fx_rates r
-                       WHERE r.from_ccy = :base AND r.to_ccy = h.currency AND r.day <= h.day ORDER BY r.day DESC LIMIT 1)
-             END
-           * (SELECT subunits FROM currencies WHERE code = :base) * 1.0
-           / (SELECT subunits FROM currencies WHERE code = h.currency) AS net
-      FROM held h
-     WHERE h.amount IS NOT NULL
-  )
- GROUP BY day
- ORDER BY day;
+SELECT day, currency,
+       sum((CASE side WHEN 'asset' THEN 1 ELSE -1 END) * amount) AS net_worth_minor,   -- minor units of that currency
+       count(*)                                                  AS accounts           -- accounts of that currency with a balance by then
+  FROM held
+ WHERE amount IS NOT NULL
+ GROUP BY day, currency
+ ORDER BY currency, day;

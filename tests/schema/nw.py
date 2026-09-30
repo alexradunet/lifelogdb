@@ -1,14 +1,11 @@
 import sqlite3, random, datetime as dt, time, sys
-from fractions import Fraction
 exec(open('probes1.py').read().split('# ---- P1:')[0])
-Q616 = open('q616.sql').read() if len(sys.argv)<2 else None
-Q617 = open('q617.sql').read() if len(sys.argv)<2 else None
 random.seed(7)
-def gen(n_acc=14, years=12, base='EUR'):
+def gen(n_acc=14, years=12):
     c = fresh()
     c.execute("INSERT INTO currencies(code,name,subunits) VALUES ('MRU','Ouguiya',5)")   # non-decimal subunit on purpose
     c.execute("INSERT INTO currencies(code,name,subunits) VALUES ('BTC','Bitcoin',100000000)")   # user-registered: not seeded
-    ccys = ['EUR','USD','JPY','BTC','GBP','MRU']
+    ccys = ['EUR','USD','JPY','BTC','GBP','MRU']   # amounts of different currencies are never added
     accts=[]
     for k in range(n_acc):
         i = ent(c,'account'); cur = random.choice(ccys); side = random.choice(['asset','asset','asset','liability'])
@@ -31,23 +28,11 @@ def gen(n_acc=14, years=12, base='EUR'):
                     c.execute(f"INSERT INTO balances(account_id,day,amount,recorded_at) VALUES (?,?,NULL,{NOW})",(a['id'],d.isoformat()))
                     if random.random()<.5: c.execute(f"INSERT INTO balances(account_id,day,amount,recorded_at) VALUES (?,?,?,{NOW})",(a['id'],d.isoformat(),amt+7))
             d += dt.timedelta(random.choice([30,31,45,90]))
-    # fx: canonical pairs vs EUR; leave GBP with NO rate at all, and MRU only from 2016
-    fx=[]
-    for cur,rate0 in (('USD',1.1),('JPY',130.0),('BTC',30000.0),('MRU',40.0)):
-        d = dt.date(2011,12,1) if cur!='MRU' else dt.date(2016,1,1)
-        while d <= dt.date(2024,12,31):
-            rate = rate0*random.uniform(.7,1.4)
-            a,b = sorted([cur,base]); 
-            # stored as (from<to): 1 from = rate' to
-            if a==cur: stored=(cur,base,1.0/rate)      # rate = units of cur per EUR  => 1 cur = 1/rate EUR
-            else:      stored=(base,cur,rate)
-            c.execute("INSERT INTO fx_rates(from_ccy,to_ccy,day,rate) VALUES (?,?,?,?)",(*stored[:2],d.isoformat(),stored[2])); fx.append((cur,d,rate))
-            d += dt.timedelta(random.choice([10,20,35]))
     return c, accts
 
-def oracle(c, accts, day, base='EUR'):
-    subunits = dict(c.execute("select code,subunits from currencies"))
-    tot = Fraction(0); n=0; unconv=0; rows={}
+def oracle(c, accts, day):
+    """{currency: (signed net in that currency's minor units, accounts counted)} — exact integers, straight from the rules of 6.16."""
+    out = {}
     d = dt.date.fromisoformat(day)
     for a in accts:
         if a.get('dead'): continue
@@ -57,16 +42,9 @@ def oracle(c, accts, day, base='EUR'):
         for (bd, amt) in c.execute("select day, amount from balances where account_id=? order by id", (a['id'],)): eff[bd]=amt
         days = sorted(k for k,v in eff.items() if v is not None and k<=day)
         if not days: continue
-        amt = eff[days[-1]]; n+=1
-        if a['cur']==base: rate = Fraction(1)
-        else:
-            lo,hi = sorted([a['cur'],base])
-            row = c.execute("select rate from fx_rates where from_ccy=? and to_ccy=? and day<=? order by day desc limit 1",(lo,hi,day)).fetchone()
-            if not row: unconv+=1; continue
-            rate = Fraction(row[0]) if a['cur']==lo else 1/Fraction(row[0])
-        val = (1 if a['side']=='asset' else -1)*Fraction(amt)*rate*Fraction(subunits[base])/Fraction(subunits[a['cur']])
-        tot += val
-    return tot, n, unconv
+        tot, n = out.get(a['cur'], (0, 0))
+        out[a['cur']] = (tot + (1 if a['side']=='asset' else -1)*eff[days[-1]], n+1)
+    return out
 
 c, accts = gen()
 month_ends = []
@@ -75,29 +53,29 @@ while d < dt.date(2024,12,31):
     month_ends.append(d.isoformat()); d = (d.replace(day=1)+dt.timedelta(32)).replace(day=1); d = (d.replace(day=28)+dt.timedelta(4)).replace(day=1)-dt.timedelta(1)
 month_ends.append('2024-12-31')
 t=time.time()
-rows = c.execute(open('q617.sql').read(), dict(from_day='2012-01-15', to_day='2024-12-20', base='EUR')).fetchall()
+rows = c.execute(open('q617.sql').read(), dict(from_day='2012-01-15', to_day='2024-12-20')).fetchall()
 el=time.time()-t
 print(f'series rows={len(rows)} ({el:.3f}s)  first={rows[0]} last={rows[-1]}')
-bad=exact=0; worst=0; cnt_mismatch=0
-byday = {r[0]:r for r in rows}
+series = {}
+for (day, cur, net, n) in rows: series.setdefault(day, {})[cur] = (net, n)
+compared = mismatches = 0
 for m in month_ends:
-    if m not in byday: continue
-    tot,n,unc = oracle(c,accts,m)
-    r = byday[m]
-    # SQL: accounts counted = joined valued accounts (incl unconverted); oracle n counts valued incl unconverted
-    diff = abs(Fraction(r[1] or 0) - tot) if r[1] is not None else abs(tot)
-    worst = max(worst, float(diff))
-    if diff <= Fraction(1,2)+Fraction(1,1000): exact+=1
-    elif diff <= 1: bad+=1
-    else: cnt_mismatch+=1; print('MISMATCH', m, r, float(tot), n, unc)
-    if (r[2], r[3]) != (n, unc): cnt_mismatch+=1; print('COUNT MISMATCH', m, r, n, unc)
-print(f'month-ends compared={len(byday)} within-rounding={exact} off-by-<=1={bad} real-mismatches={cnt_mismatch} worst_abs_diff={worst:.4f}')
-print('unconverted months (GBP has no rate):', sum(1 for r in rows if r[3]>0), 'of', len(rows))
-# as-of breakdown query vs series total for a random day
+    if m not in series: continue
+    compared += 1
+    if series[m] != oracle(c, accts, m): mismatches += 1; print('MISMATCH', m, series[m], oracle(c, accts, m))
+print(f'month-ends compared={compared} real-mismatches={mismatches}   (every figure an exact integer, per currency)')
+assert compared >= 150 and len({r[1] for r in rows}) >= 5, (compared, {r[1] for r in rows})   # the fixture really is multi-currency and long
+# as-of query: its rows summed per currency (as 6.16 says to wrap it) vs the oracle, on days that are not month-ends too
 q = open('q616.sql').read()
-for day in ['2015-06-30','2019-12-31','2024-12-31']:
-    br = c.execute(q, dict(day=day, base='EUR')).fetchall()
-    tot = sum(x[6] for x in br if x[6] is not None)
-    print(day, 'breakdown rows', len(br), 'sum', tot, 'series', byday.get(day, ('-',))[1], 'oracle', round(float(oracle(c,accts,day)[0])))
+wrapped = 'SELECT currency, sum(net_minor), count(*) FROM (' + q.strip().rstrip(';') + ') GROUP BY currency'
+bad = 0
+for day in ['2015-06-30','2016-02-29','2019-12-31','2021-07-04','2024-12-31']:
+    got = {cur: (net, n) for cur, net, n in c.execute(wrapped, dict(day=day))}
+    want = oracle(c, accts, day)
+    if got != want: bad += 1; print('MISMATCH breakdown', day, got, want)
+    per_acct = c.execute(q, dict(day=day)).fetchall()
+    print(day, 'per-account rows', len(per_acct), 'currencies', sorted(got), 'series', series.get(day, {}) == got if day in series else '-')
+print(f'as-of days compared=5 real-mismatches={bad}')
+assert bad == 0 and mismatches == 0
 print('plan check:'); 
-for r in c.execute('explain query plan '+q, dict(day='2019-12-31', base='EUR')): print('  ', r[3])
+for r in c.execute('explain query plan '+q, dict(day='2019-12-31')): print('  ', r[3])

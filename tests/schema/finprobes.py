@@ -109,22 +109,10 @@ c.execute(f"INSERT INTO links(from_id,to_id,kind,created_at) VALUES (?,?,'friend
 check('symmetric mirror terminates under recursive_triggers=ON', c.execute('select count(*) from links').fetchone()[0]==2)
 c.execute("DELETE FROM links WHERE from_id=? AND to_id=?",(p,q)); check('mirror delete terminates under ON', c.execute('select count(*) from links').fetchone()[0]==0)
 
-# ---------- fx_rates
+# ---------- no exchange rates (D18): net worth is per currency, nothing converts
 c = fresh()
-for lbl,exp,sql in [('fx canonical ok','OK',"INSERT INTO fx_rates VALUES ('EUR','USD','2026-01-01',1.08,'manual')"),
-                    ('fx inverse direction rejected','ERR',"INSERT INTO fx_rates VALUES ('USD','EUR','2026-01-01',0.92,'manual')"),
-                    ('fx same currency rejected','ERR',"INSERT INTO fx_rates VALUES ('EUR','EUR','2026-01-01',1,'manual')"),
-                    ('fx rate 0','ERR',"INSERT INTO fx_rates VALUES ('EUR','GBP','2026-01-01',0,'manual')"),
-                    ('fx rate negative','ERR',"INSERT INTO fx_rates VALUES ('EUR','GBP','2026-01-01',-1,'manual')"),
-                    ('fx rate +inf','ERR',"INSERT INTO fx_rates VALUES ('EUR','GBP','2026-01-01',9e999,'manual')"),
-                    ('fx rate NULL','ERR',"INSERT INTO fx_rates VALUES ('EUR','GBP','2026-01-01',NULL,'manual')"),
-                    ('fx unknown currency','ERR',"INSERT INTO fx_rates VALUES ('EUR','QQQ','2026-01-01',2,'manual')"),
-                    ('fx duplicate pair+day','ERR',"INSERT INTO fx_rates VALUES ('EUR','USD','2026-01-01',1.09,'manual')"),
-                    ('fx bad day','ERR',"INSERT INTO fx_rates VALUES ('EUR','USD','2026-1-2',1.09,'manual')"),
-                    ('fx correction in place ok (reference data)','OK',"UPDATE fx_rates SET rate=1.081 WHERE from_ccy='EUR' AND to_ccy='USD'"),
-                    ('fx redenomination fixed rate ok','OK',"INSERT INTO currencies VALUES ('DEM','Deutsche Mark',100,NULL)"),
-                    ('fx DEM->EUR 1.95583 ok','OK',"INSERT INTO fx_rates VALUES ('DEM','EUR','1999-01-01',0.5112918811962185,'ECB fixed')")]:
-    probe(lbl,exp,sql,c=c)
+check('no fx_rates table: nothing in the file converts one currency into another', not c.execute("select 1 from sqlite_schema where name like '%fx%' or name like '%rate%'").fetchall())
+probe('a retired currency (DEM) can be registered: one series per currency, so a redenomination is just a second code','OK',"INSERT INTO currencies VALUES ('DEM','Deutsche Mark',100,NULL)",c=c)
 
 # ---------- links to accounts
 c = fresh(); a = acct(c,'Flat','asset'); m = memo(c,'bought the flat'); e = ent(c,'event'); c.execute("INSERT INTO events(id,title,start_day) VALUES (?,'Bought flat','2026-05-01')",(e,))

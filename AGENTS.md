@@ -40,7 +40,7 @@ Until the schema is frozen (decision D13):
   matters, see §2.2), tombstones instead of deletes (enforced by BEFORE DELETE triggers),
   composite FK `(id, entity_type) → entities(id, type)` in every *entity* domain table
   (`pages`, `events`, `tasks`, `people`, `places`, `accounts` — not `measurements`/`metrics`/
-  `balances`/`currencies`/`fx_rates`, which are facts and registries), append-only measurements
+  `balances`/`currencies`, which are facts and registries), append-only measurements
   and balances enforced by triggers (measurement corrections use `supersedes_id`; a balance is
   corrected by a newer row for the same account+day; both are retracted with a NULL value/amount),
   importers use `ON CONFLICT … DO NOTHING`, never `OR IGNORE`/`OR REPLACE`, money as

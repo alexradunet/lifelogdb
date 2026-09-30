@@ -93,7 +93,7 @@ K('D3 principle 5 says life.db is irreplaceable and names only the FTS index and
 K('D4 §2.3 no longer says "Every table uses"', 'Every table uses `INTEGER PRIMARY KEY`' not in live)
 c = sqlite3.connect(':memory:'); c.executescript(DDL)
 nk = sorted(t for (t,) in c.execute("select name from sqlite_schema where type='table' and name not like 'pages_fts%' and name not like 'sqlite_%'") if not any(r[5]==1 and r[2]=='INTEGER' and c.execute(f"select count(*) from pragma_table_info('{t}') where pk>0").fetchone()[0]==1 for r in c.execute(f"pragma table_info('{t}')")))
-K('D4 the tables without a single INTEGER primary key are exactly the four the text names', nk==sorted(['currencies','fx_rates','link_kinds','lifelog_meta']), nk)
+K('D4 the tables without a single INTEGER primary key are exactly the three the text names', nk==sorted(['currencies','link_kinds','lifelog_meta']), nk)
 K('D5 readers paragraph no longer lists sqlite-web as a reader', 'Readers (Datasette, sqlite-web' not in live)
 K('D6 D14/D17 carry the sqlite-web pointer', '`sqlite-web` is **not used**' in live and 'a second writer' in live and 'Datasette listens on localhost only' in live)
 # D7: the documented advice works

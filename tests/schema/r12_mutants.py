@@ -20,7 +20,7 @@ MUTANTS = [
  ('the foreign_key_check line is gone from 2.8',   mutate("PRAGMA foreign_key_check;    -- no rows\n", "")),
  ('the imports step runs nightly.sh again',        mutate("1. **Trial run first.**", "1. **Snapshot first.** Run `nightly.sh` (§2.8).")),
  ('the titles key says export filenames again',    mutate("'page titles never change and are valid file names everywhere:", "'page titles are export filenames and never change:")),
- ('a 2075 question is dropped',                    mutate("| 20 | What is a memo, what is a page, and can one become the other? | `pages_kind` | `untitled`, `never changes` |\n", "")),
+ ('a 2075 question is dropped',                    mutate("| 19 | What is a memo, what is a page, and can one become the other? | `pages_kind` | `untitled`, `never changes` |\n", "")),
  ('the off-box copy is mandatory again',           mutate("| The file is damaged or lost | `synchronous=FULL` and WAL on SQLite ≥ 3.51.3, on a local disk (§2.9); the integrity checks find damage (§2.8) |", "| The file is damaged or lost | a mandatory off-box copy and a drilled restore (§2.8) |")),
 ]
 

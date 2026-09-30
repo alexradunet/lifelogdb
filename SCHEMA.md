@@ -112,9 +112,9 @@ deferred out of v1 (D9) — the layout grows a `media/` sibling when they return
 ### 2.3 Identity
 
 - Every entity, fact and join table uses `INTEGER PRIMARY KEY` (rowid alias; no
-  `AUTOINCREMENT` — the keyword adds overhead and is "usually not needed" [R4]). The four
-  registries and reference tables keep their natural key instead: `lifelog_meta(key)`,
-  `link_kinds(kind)`, `currencies(code)`, `fx_rates(from_ccy, to_ccy, day)`.
+  `AUTOINCREMENT` — the keyword adds overhead and is "usually not needed" [R4]). The three
+  registries keep their natural key instead: `lifelog_meta(key)`, `link_kinds(kind)`,
+  `currencies(code)`.
 - The six *entity* types (`page`, `event`, `task`, `person`, `place`, `account`) share one ID
   space via the `entities` supertype table (D8, D16, D18). A domain row's `id` **equals** its
   `entities.id`; the app inserts the `entities` row first with `INSERT … RETURNING id` and binds
@@ -129,7 +129,7 @@ deferred out of v1 (D9) — the layout grows a `media/` sibling when they return
   keeps it from changing. With agents among the writers (D3), it is how a wrong row is traced to the
   writer that made it. `measurements.source` and `balances.source` name the *data* source instead
   (`manual`, `statement`, an importer).
-- `measurements`, `balances`, `metrics`, `currencies`, `fx_rates`, `links`, `link_kinds`,
+- `measurements`, `balances`, `metrics`, `currencies`, `links`, `link_kinds`,
   `lifelog_meta` are *not* entities (they are facts, joins, and registries). An `account` is an
   entity; its balances are facts.
 
@@ -478,9 +478,10 @@ flowchart LR
   | mortgage, loan, card | `side = 'liability'` | the amount owed, positive |
 
   Sell everything or dispose of it: record a final balance and set `closed_day`.
-- **Net worth is derived.** It is computed on read from the latest balance of each open account
-  as of a day, converted with `fx_rates` as of that day (§6.16–6.17); it is never written to a
-  table, so it can be re-derived in any currency for any date.
+- **Net worth is derived, one figure per currency.** It is computed on read from the latest
+  balance of each open account as of a day, assets minus liabilities, summed within each currency
+  (§6.16–6.17); it is never written to a table. Amounts of different currencies are never added:
+  minor units of EUR and JPY are not the same size. With one currency it is already one number.
 - **Secrets.** Never store credentials, PINs or full account/card numbers in `life.db` or in a
   memo: the file is plaintext (D17). An account's `notes` may hold the last four digits. Finance
   data never goes into git — its history cannot be scrubbed (§2.1).
@@ -493,11 +494,9 @@ flowchart LR
     stmt["statement, app or own estimate<br/>the value on a local day"] -->|"INSERT, never edit"| bal[("balances<br/>integer minor units<br/>append-only")]
     bal -->|"balance_values:<br/>newest row per day,<br/>NULL retracts"| held["each open, live account<br/>latest balance on or before the day<br/>asset adds, liability subtracts"]
     acc[("accounts<br/>side, currency")] --> held
-    held --> same{"same currency<br/>as the report?"}
-    same -->|"yes"| sum
-    same -->|"no"| fx[("fx_rates<br/>newest rate on or before the day<br/>inverse is 1/rate")] --> sum
-    cur[("currencies<br/>subunits")] -.->|"scale"| sum
-    sum["sum in minor units<br/>of the reporting currency"] --> nw(["net worth on that day<br/>derived, never stored"])
+    held --> sum["sum per currency<br/>in that currency's minor units"]
+    sum --> nw(["net worth on that day<br/>one figure per currency<br/>derived, never stored"])
+    cur[("currencies<br/>subunits")] -.->|"whole units"| nw
 ```
 
 ---
@@ -539,21 +538,20 @@ here, and a row cannot be dropped without the test noticing.
 | 5 | When was a row written, versus when did it happen? | `created_at` | `never back-dated` |
 | 6 | Can anything be deleted? | `deletes` | `tombstone` |
 | 7 | Are measurements kept? How is one corrected? | `measurements` | `append-only`, `retracts` |
-| 8 | In what unit are amounts? How do I get net worth? | `money`, `net_worth` | `minor units`, `never stored` |
+| 8 | In what unit are amounts? How do I get net worth? | `money`, `net_worth` | `minor units`, `never stored`, `per currency` |
 | 9 | Which balance row wins for a day? | `balances` | `newest row` |
-| 10 | How are currencies converted? | `fx_rates` | `from_ccy < to_ccy` |
-| 11 | Which link kinds exist, and who may link what? | `link_kinds` | `closed registry` |
-| 12 | How do `[[wikilinks]]` and `#tags` become links? | `wikilinks` | `CommonMark`, `invalid target makes no link` |
-| 13 | Why is a page never renamed? What makes a title valid? | `renames`, `titles`, `title_key` | `never`, `240`, `NFC` |
-| 14 | Why do ids of different tables coincide? How are rows created? | `entities` | `supertype`, `one transaction` |
-| 15 | Who may write, and with which settings? | `writers` | `BEGIN IMMEDIATE`, `read-only` |
-| 16 | What is derived and can be rebuilt? | `pages_fts`, `title_key` | `rebuildable`, `derived` |
-| 17 | How do imports avoid duplicates and bad rows? | `imports` | `DO NOTHING`, `OR IGNORE` |
-| 18 | What does a repeating event mean? | `recurrence` | `templates` |
-| 19 | How does the schema change after real data exists? | `evolution` | `additive`, `user_version` |
-| 20 | What is a memo, what is a page, and can one become the other? | `pages_kind` | `untitled`, `never changes` |
-| 21 | Which SQLite may write this file? | `sqlite` | `3.51.3`, `3.53` |
-| 22 | Who or what wrote this row? | `provenance` | `written at insert`, `agent` |
+| 10 | Which link kinds exist, and who may link what? | `link_kinds` | `closed registry` |
+| 11 | How do `[[wikilinks]]` and `#tags` become links? | `wikilinks` | `CommonMark`, `invalid target makes no link` |
+| 12 | Why is a page never renamed? What makes a title valid? | `renames`, `titles`, `title_key` | `never`, `240`, `NFC` |
+| 13 | Why do ids of different tables coincide? How are rows created? | `entities` | `supertype`, `one transaction` |
+| 14 | Who may write, and with which settings? | `writers` | `BEGIN IMMEDIATE`, `read-only` |
+| 15 | What is derived and can be rebuilt? | `pages_fts`, `title_key` | `rebuildable`, `derived` |
+| 16 | How do imports avoid duplicates and bad rows? | `imports` | `DO NOTHING`, `OR IGNORE` |
+| 17 | What does a repeating event mean? | `recurrence` | `templates` |
+| 18 | How does the schema change after real data exists? | `evolution` | `additive`, `user_version` |
+| 19 | What is a memo, what is a page, and can one become the other? | `pages_kind` | `untitled`, `never changes` |
+| 20 | Which SQLite may write this file? | `sqlite` | `3.51.3`, `3.53` |
+| 21 | Who or what wrote this row? | `provenance` | `written at insert`, `agent` |
 
 **Imports** — the path for data that already exists elsewhere (a journal archive, a health export,
 statements). Every step was executed on 1 000 synthetic rows:
@@ -644,8 +642,7 @@ INSERT INTO lifelog_meta(key, value) VALUES
   ('pages_kind',  'pages.kind is memo (untitled: the capture stream and the inbox; always has a day) or page (titled, unique, linkable; its day is NULL when the app created it as a link target); it never changes after insert'),
   ('money',       'amounts are INTEGER minor units of accounts.currency; whole units = amount / currencies.subunits; never REAL, never in measurements'),
   ('balances',    'append-only snapshots of an account''s value on a local day (account, day, amount); the newest row per (account_id, day) wins, newest = recorded last = highest id; NULL amount retracts; read through balance_values'),
-  ('net_worth',   'derived, never stored: per open account, latest balance on or before the day, converted with fx_rates, assets minus liabilities (section 6.16)'),
-  ('fx_rates',    'reference data (mutable): 1 from_ccy = rate to_ccy in WHOLE units; one row per pair, stored with from_ccy < to_ccy; as-of lookup = newest day <= target'),
+  ('net_worth',   'derived, never stored: per open account, latest balance on or before the day, assets minus liabilities, summed per currency; amounts of different currencies are never added (section 6.16)'),
   ('entities',    'every page/event/task/person/place/account row has an entities row with the same id (supertype; composite FK (id, entity_type)); both are inserted in one transaction'),
   ('wikilinks',   'links(kind=wikilink) from a page always equal what its body names: [[Title]], [[Title|alias]] and #tag, read from the CommonMark text, never rewritten; rebuilt on every save; an invalid target makes no link'),
   ('writers',     'one writing application; every connection sets foreign_keys=ON, recursive_triggers=ON, synchronous=FULL, trusted_schema=OFF, journal_mode=WAL and starts write transactions with BEGIN IMMEDIATE; every other tool opens the file read-only'),
@@ -992,19 +989,6 @@ CREATE VIEW balance_values AS
      AND NOT EXISTS (SELECT 1 FROM balances x
                       WHERE x.account_id = b.account_id AND x.day = b.day AND x.id > b.id);
 
-CREATE TABLE fx_rates (
-  -- reference data (mutable, re-importable): 1 from_ccy = rate to_ccy in WHOLE units. One canonical
-  -- direction per pair (from_ccy < to_ccy), so a pair can never hold two rates; the inverse is 1/rate.
-  -- Re-importing a rate re-states every past net-worth figure that used it.
-  from_ccy TEXT NOT NULL REFERENCES currencies(code),
-  to_ccy   TEXT NOT NULL REFERENCES currencies(code),
-  day      TEXT NOT NULL CONSTRAINT fx_rates_day CHECK (date(day) IS day),
-  rate     REAL NOT NULL CONSTRAINT fx_rates_rate CHECK (rate > 0 AND rate < 1e18),   -- 1 from_ccy = rate to_ccy, in WHOLE units (not minor units)
-  source   TEXT NOT NULL DEFAULT 'manual',
-  PRIMARY KEY (from_ccy, to_ccy, day),
-  CONSTRAINT fx_rates_direction CHECK (from_ccy < to_ccy)          -- one canonical direction per pair; the inverse is 1/rate
-) STRICT;
-
 CREATE TABLE link_kinds (
   -- the CLOSED registry of link kinds: a link's kind must be registered first (FK), and a kind's
   -- structure (symmetric flag, allowed endpoint entity types) is fixed at registration and enforced
@@ -1157,7 +1141,7 @@ CREATE TRIGGER accounts_no_delete BEFORE DELETE ON accounts
 BEGIN SELECT RAISE(ABORT, 'accounts are never deleted: tombstone the entity (entities.deleted_at)'); END;
 ```
 
-**Table count: 15 real tables (11 + `currencies`, `accounts`, `balances`, `fx_rates` — D18) + 1 FTS5
+**Table count: 14 real tables (11 + `currencies`, `accounts`, `balances` — D18) + 1 FTS5
 virtual table + 3 views** (`measurement_values`, `balance_values`, `ghost_pages`) **+ 33 triggers**. That
 is the entire system. Every `CHECK` is named (`CONSTRAINT <table>_<rule>`), so any rule can be dropped or
 re-added by name after the freeze (D13).
@@ -1261,7 +1245,7 @@ erDiagram
 Facts are not entities. `measurements` and `balances` are append-only (D7, D18): a correction is a new
 row, and `measurements.supersedes_id` points back at the row it corrects; `measurements.entity_id`
 records provenance (a mood reading points at its memo). An amount is an integer in minor units of the
-account's currency, and `fx_rates` is reference data with one canonical direction per pair.
+account's currency; `currencies` is the closed registry that gives an amount its meaning.
 `lifelog_meta` stands alone: it is the contract as data (D17).
 
 ```mermaid
@@ -1272,8 +1256,6 @@ erDiagram
     measurements |o--o| measurements : "supersedes_id"
     accounts    ||--o{ balances     : "account_id"
     currencies  ||--o{ accounts     : "currency"
-    currencies  ||--o{ fx_rates     : "from_ccy"
-    currencies  ||--o{ fx_rates     : "to_ccy"
 
     metrics {
         INTEGER id PK
@@ -1312,12 +1294,6 @@ erDiagram
         TEXT code PK
         TEXT name
         INTEGER subunits "minor units per whole unit"
-    }
-    fx_rates {
-        TEXT from_ccy PK, FK
-        TEXT to_ccy PK, FK
-        TEXT day PK
-        REAL rate "1 from_ccy = rate to_ccy"
     }
     lifelog_meta {
         TEXT key PK
@@ -1409,7 +1385,7 @@ How the pieces serve the product concepts:
 | Birthdays | query over `people.birth_day` — deliberately not events |
 | Biomarkers / quantified self / habits | `metrics` + `measurements` (§6.7) |
 | Stocks, crypto, deposits, valuables, property, loans | one `account` each (§2.10 table): a balance is its value on a day |
-| Net worth over time | derived: latest `balance_values` per open `account`, converted with `fx_rates` (§6.16–6.17) |
+| Net worth over time | derived: latest `balance_values` per open `account`, assets minus liabilities, summed per currency (§6.16–6.17) |
 | "What was my flat / mortgage / pension worth in 2019?" | `balances` of that account, as of a day (§6.15–6.16) |
 | Notes about an account or a money decision | `links(kind='about', memo/event → account)` |
 | Which accounts are stale | §6.18 |
@@ -1467,9 +1443,8 @@ Each decision: **context → decision → alternatives rejected → rationale �
 ### D3 — IDs: `INTEGER PRIMARY KEY`; UUIDs rejected.
 
 - **Decision.** Every entity, fact and join table is keyed by `INTEGER PRIMARY KEY` (a rowid
-  alias). The registries and reference tables — `lifelog_meta`, `link_kinds`, `currencies`,
-  `fx_rates` — keep their natural key (`key`, `kind`, `code`, `(from_ccy, to_ccy, day)`): an
-  integer surrogate would only hide the name (§2.3). No `AUTOINCREMENT` (extra CPU/IO/bookkeeping,
+  alias). The registries — `lifelog_meta`, `link_kinds`, `currencies` — keep their natural key
+  (`key`, `kind`, `code`): an integer surrogate would only hide the name (§2.3). No `AUTOINCREMENT` (extra CPU/IO/bookkeeping,
   "usually not needed" [R4]). No UUIDs.
 - **Alternatives.** UUIDv7/v4 TEXT keys: benchmarked *slower* (random TEXT keys scatter
   inserts across the B-tree, causing page splits) and larger; their only real advantage —
@@ -2027,7 +2002,7 @@ Each decision: **context → decision → alternatives rejected → rationale �
 - **Alternatives.** Comments only (invisible to queries); a documentation wiki (lives outside the
   artifact, rots).
 
-### D18 — Money: accounts, balances, currencies, FX. Net worth is derived.
+### D18 — Money: accounts, balances, currencies. Net worth is derived, per currency.
 
 - **Context.** The lifelong database also holds financial data — first of all *net worth over time*
   and entries like it (what an account, a house, a loan was worth on a day). Money has three
@@ -2063,17 +2038,14 @@ Each decision: **context → decision → alternatives rejected → rationale �
     duplicates); to keep the manual value, enter it again after the import. Like `measurements`, the
     table is **bitemporal** [R68]: `day` is valid time, `recorded_at` and the row order are
     transaction time.
-  - **`fx_rates` — reference data.** `(from_ccy, to_ccy, day, rate)` with `from_ccy < to_ccy`
-    enforced, so one pair can never carry two contradictory rates; `rate` is `REAL` because a
-    rate is a ratio, not money (canonical amounts stay integers; converted figures are derived).
-    Mutable and re-importable — it is public reference data, not a personal fact. The price of
-    that: a corrected rate re-states every past net-worth figure that used it, and nothing records
-    the old one.
-  - **Net worth is derived, never stored** (§6.16–6.17): per live, open account the latest
-    balance on or before the day, × the rate *as of the reporting day*, assets minus
-    liabilities. The reporting currency is a query parameter, so the history can be re-stated
-    in any currency; a missing rate yields an explicit NULL/`unconverted` count instead of a
-    silent gap.
+  - **No exchange rates.** Nothing in the file converts one currency into another, so every
+    stored number stays an exact integer and no figure can be re-stated behind your back by a
+    corrected rate. A rate table is additive when wanted (§7).
+  - **Net worth is derived, never stored, and reported per currency** (§6.16–6.17): per live,
+    open account the latest balance on or before the day, assets minus liabilities, summed
+    *within* each currency. Amounts of different currencies are never added — a minor unit of
+    EUR (1/100) and one of JPY (1/1) are not the same size. With one currency this is already
+    the single figure; with several it is one figure per currency.
 - **Why the CHECKs are named.** Adding a type like `'account'` to `entities.type` after the freeze
   is a table rebuild unless the CHECK is *named*: SQLite ≥ 3.53 supports `ALTER TABLE … DROP
   CONSTRAINT` / `ADD CONSTRAINT`, but only for a constraint that has a name — an unnamed inline
@@ -2094,8 +2066,8 @@ Each decision: **context → decision → alternatives rejected → rationale �
   - *One signed column and no `side`*: rejected — a loan typed positive by mistake flips the
     sign of net worth silently; `side` makes the meaning explicit and immutable, amounts stay as
     statements print them.
-  - *Store net-worth totals directly*: rejected — loses the drivers and cannot be re-stated in
-    another currency. The one legitimate use, importing a spreadsheet of totals, is a
+  - *Store net-worth totals directly*: rejected — loses the drivers (which account moved, and how
+    stale each number is). The one legitimate use, importing a spreadsheet of totals, is a
     pseudo-account closed when detailed accounts begin (§6.17).
   - *`supersedes_id` chains for balances*: rejected — `balances` has a natural key
     `(account, day)` (measurements do not: several readings a day are valid), so "newest row
@@ -2104,20 +2076,18 @@ Each decision: **context → decision → alternatives rejected → rationale �
     deferred, §7 — it is a second product (categories, transfers, splits, importers) and it is
     additive later: a `transactions` table would reference `accounts`, and `balances` would become
     its reconciliation points.
-  - *Quantity × price per holding*: deferred, §7. It does not fit `currencies`/`fx_rates` as they
-    are: the code CHECK rejects `V`, `ZM`, `BRK.B`, `VWCE.DE`; a price must be stored as its
-    reciprocal whenever the ticker sorts after the reporting currency (`from_ccy < to_ccy`); a
-    ticker-to-ticker "rate" is accepted; and a US-listed stock priced in USD cannot be valued in EUR
-    without a second hop. Doing it properly means a units registry, a `prices` table and longer
+  - *Quantity × price per holding*: deferred, §7. It does not fit `currencies` as it is: the code
+    CHECK rejects `V`, `ZM`, `BRK.B`, `VWCE.DE`, and a US-listed stock priced in USD cannot be valued
+    in EUR without a rate. Doing it properly means a units registry, a `prices` table and longer
     queries — real weight for a number the statement already prints. Reopen when automatic repricing
     or allocation by security is wanted; the additive path is a `securities` + `prices` pair and a
     nullable `accounts.security_id`, and nothing in the schema blocks it.
   - *Accounts outside the entity supertype*: rejected — no links, no tombstone, and no cheap way to
     change that after the freeze (moving rows into the supertype is a data migration, not a CHECK).
 - **Costs accepted.** A balance carries forward until replaced, so a stale account keeps
-  counting (`stale_days`, §6.18, exist to expose that); FX rates must be maintained by hand or
-  by an importer, per pair, for the reporting currency you use (no triangulation through a pivot);
-  there is no return/attribution analysis (needs flows — §7); joint holdings are
+  counting (`stale_days`, §6.18, exist to expose that); there is no cross-currency total, so a
+  life in two currencies has two net-worth series — a redenomination (the DEM became the EUR) starts
+  a second one — until a rate table is added (§7); there is no return/attribution analysis (needs flows — §7); joint holdings are
   recorded as your share, not modelled as co-ownership.
 - **Sources.** [R53][R54][R55][R56][R57].
 
@@ -2601,10 +2571,10 @@ A retraction only hides the day: the earlier days remain, so the as-of rule of �
 back to the previous balance. Writing a correct value after a retraction simply becomes the
 newest row again.
 
-### 6.16 Net worth on a day, per account and in a reporting currency
+### 6.16 Net worth on a day, per account and per currency
 
-`:day` is the local day to value, `:base` the reporting currency code (`'EUR'`). Net worth is
-derived — never stored — so it can be re-computed in any currency, on any day.
+`:day` is the local day to value. Net worth is derived — never stored — and never adds amounts
+of different currencies: each account's signed value is in its own currency's minor units.
 
 ```sql
 WITH held AS (                                   -- open, live accounts on :day, and the day of the balance that counts
@@ -2618,19 +2588,15 @@ WITH held AS (                                   -- open, live accounts on :day,
 )
 SELECT h.name, h.side, h.currency, b.amount, h.as_of,
        CAST(julianday(:day) - julianday(h.as_of) AS INTEGER) AS stale_days,        -- how old the number is
-       CAST(round((CASE h.side WHEN 'asset' THEN 1 ELSE -1 END) * b.amount
-            * CASE WHEN h.currency = :base THEN 1.0
-                   WHEN h.currency < :base THEN (SELECT r.rate FROM fx_rates r
-                        WHERE r.from_ccy = h.currency AND r.to_ccy = :base AND r.day <= :day ORDER BY r.day DESC LIMIT 1)
-                   ELSE 1.0 / (SELECT r.rate FROM fx_rates r
-                        WHERE r.from_ccy = :base AND r.to_ccy = h.currency AND r.day <= :day ORDER BY r.day DESC LIMIT 1)
-              END
-            * (SELECT subunits FROM currencies WHERE code = :base) * 1.0
-            / (SELECT subunits FROM currencies WHERE code = h.currency)) AS INTEGER) AS net_base_minor  -- NULL = no FX rate
+       (CASE h.side WHEN 'asset' THEN 1 ELSE -1 END) * b.amount AS net_minor       -- signed, minor units of h.currency
   FROM held h
   CROSS JOIN balance_values b ON b.account_id = h.id AND b.day = h.as_of   -- CROSS JOIN pins the order: accounts first, then seek
- ORDER BY h.side, h.name;
+ ORDER BY h.currency, h.side, h.name;
 ```
+
+Net worth on `:day` is that query wrapped: `SELECT currency, sum(net_minor), count(*) FROM (…)
+GROUP BY currency` — one row per currency, exact integers. "Net worth by category" groups on
+`a.category` (add it to `held`) as well as `currency`.
 
 The rules, all executed against an exact-arithmetic oracle:
 
@@ -2641,13 +2607,9 @@ The rules, all executed against an exact-arithmetic oracle:
   someone looks (§6.18 lists the accounts that need updating).
 - `side` decides the sign: assets add, liabilities subtract. Balances are stored as the
   institution states them (a mortgage is a positive amount owed).
-- Conversion uses the `fx_rates` row **as of `:day`**, not as of the balance's own day, so a
-  2019 balance is worth what it would fetch on the reporting day. A pair is stored in one
-  direction (`from_ccy < to_ccy`): the inverse is `1/rate`. `net_base_minor` is in **minor units of
-  `:base`**. If no rate exists it is NULL, and a `SUM` would silently skip the row — so always
-  check for NULLs (the series query counts them).
-- Each row is rounded to a whole minor unit, so the sum of the rows can differ by a minor
-  unit or so from the series total in §6.17, which rounds the sum.
+- **Never `sum(net_minor)` across currencies:** the units differ (EUR 1/100, JPY 1/1), so the
+  result is a number that means nothing. Always group by `currency`. To see one figure in whole
+  units, divide by `currencies.subunits` (§6.15).
 - `CROSS JOIN` pins the join order (accounts first, then an index seek per account). Without
   it SQLite scans every balance row (measured at 36 500 rows: 0.043 s without the `CROSS
   JOIN`, 0.000 s with it).
@@ -2670,37 +2632,21 @@ held AS (                                        -- every open, live account on 
                    AND coalesce(a.closed_day, '9999-12-31') >= m.day
     JOIN entities e ON e.id = a.id AND e.deleted_at IS NULL
 )
-SELECT day,
-       CAST(round(sum(net)) AS INTEGER) AS net_worth_minor,   -- reporting currency, minor units
-       count(*)                          AS accounts,          -- accounts that have a balance by then
-       sum(net IS NULL)                  AS unconverted        -- > 0: an FX rate is missing and the total understates
-  FROM (
-    SELECT h.day,
-           (CASE h.side WHEN 'asset' THEN 1 ELSE -1 END) * h.amount
-           * CASE WHEN h.currency = :base THEN 1.0
-                  WHEN h.currency < :base THEN (SELECT r.rate FROM fx_rates r
-                       WHERE r.from_ccy = h.currency AND r.to_ccy = :base AND r.day <= h.day ORDER BY r.day DESC LIMIT 1)
-                  ELSE 1.0 / (SELECT r.rate FROM fx_rates r
-                       WHERE r.from_ccy = :base AND r.to_ccy = h.currency AND r.day <= h.day ORDER BY r.day DESC LIMIT 1)
-             END
-           * (SELECT subunits FROM currencies WHERE code = :base) * 1.0
-           / (SELECT subunits FROM currencies WHERE code = h.currency) AS net
-      FROM held h
-     WHERE h.amount IS NOT NULL
-  )
- GROUP BY day
- ORDER BY day;
+SELECT day, currency,
+       sum((CASE side WHEN 'asset' THEN 1 ELSE -1 END) * amount) AS net_worth_minor,   -- minor units of that currency
+       count(*)                                                  AS accounts           -- accounts of that currency with a balance by then
+  FROM held
+ WHERE amount IS NOT NULL
+ GROUP BY day, currency
+ ORDER BY currency, day;
 ```
 
-`accounts` is how many accounts had a balance by that month-end; `unconverted > 0` means an FX
-rate was missing for at least one of them, so that month understates (never a silent
-zero). Measured over 31 years of month-ends with 40 accounts and 438 000 balance rows: 0.085 s.
-Joining `balance_values` directly makes SQLite scan all balances once per month — 17.3 s at
+One series per currency. A month-end at which no account of a currency has a balance has no row for
+it (nothing held, not a zero). `accounts` is how many accounts of that currency had a balance by that
+month-end. Measured over 31 years of month-ends with 40 accounts in 5 currencies and 438 000 balance rows:
+0.056 s. Joining `balance_values` directly makes SQLite scan all balances once per month — 17.3 s at
 36 500 rows; the correlated scalar subquery in `held` turns that into an index seek per
 (month, account).
-
-Net worth for one day is §6.16 with a final `SELECT sum(net_base_minor), count(*) …`;
-"net worth by category" is the same query grouped on `a.category`.
 
 **Backfilling history from a spreadsheet of monthly totals** (no per-account detail): make one
 account, `'Legacy net worth'` (`side = 'asset'`, `category = 'aggregate'`), record the totals as
@@ -2777,8 +2723,8 @@ re-added, each with the trigger that should reopen the question.
 | Unicode-aware uniqueness for `places.name` | Not a filename; ASCII-`NOCASE` is enough for a personal registry today (`metrics.name` is lowercase ASCII by its CHECK) | A real duplicate like `Zürich`/`ZÜRICH` appears (then: a `name_key`, same pattern) |
 | Hard deletes / GDPR-style erasure | Tombstones keep everything (D11) | A legal/privacy need to truly destroy specific rows |
 | Transaction ledger (income, spending, transfers), budgets, categories | A second product (splits, transfers, importers, categorisation); net worth needs only balances (D18). Additive later: `transactions` referencing `accounts`, `balances` as reconciliation points | The owner wants spending/savings-rate analysis, or a bank-feed importer exists |
-| Per-holding quantity × price, cost basis / lots, dividends, returns (TWR/IRR) | Net worth needs the market *value* on a day, which the statement or app gives; quantity × price needs a `prices` table and non-currency units — the schema cannot hold a ticker (executed: `V`, `ZM`, `BRK.B` fail the code CHECK; a price must be entered as a reciprocal when the ticker sorts after the reporting currency). Additive later: a `securities` + `prices` pair and a nullable `accounts.security_id` (D18) | The owner wants automatic repricing, allocation by security or realised/unrealised gain |
-| Cross rates through a pivot currency; automatic FX import | Store the pairs you report in (D18); an importer can fill `fx_rates` | A second reporting currency, or backfilling decades of rates by hand hurts |
+| Per-holding quantity × price, cost basis / lots, dividends, returns (TWR/IRR) | Net worth needs the market *value* on a day, which the statement or app gives; quantity × price needs a `prices` table and non-currency units — the schema cannot hold a ticker (executed: `V`, `ZM`, `BRK.B` fail the code CHECK). Additive later: a `securities` + `prices` pair and a nullable `accounts.security_id` (D18) | The owner wants automatic repricing, allocation by security or realised/unrealised gain |
+| Currency conversion: exchange rates, one net-worth figure across currencies | Net worth is reported per currency (D18); with one currency it is already one figure | Accounts in more than one currency and you want a single total. Additive: an `fx_rates` table `(from_ccy, to_ccy, day, rate)` referencing `currencies`, and the conversion join in §6.16–6.17 |
 | Co-ownership / shares of joint accounts, multiple owners | Single-user database; record your own share (D18) | A second person needs their own view |
 | Storing account numbers, IBANs, credentials | A plaintext DB makes them a liability (§2.10, D17) | Never in `life.db`; use a password manager |
 | Partial dates (`1870`, `1870-05`) for people and events | Nothing asked for one yet. The standard for them is EDTF, now ISO 8601-2 [R70] (`1870`, `1870-05`, `1870~` for "about 1870"). The path is one migration: `DROP CONSTRAINT people_birth_day` and `ADD CONSTRAINT people_birth_day` with a CHECK that also accepts the EDTF forms wanted — executed for `YYYY` and `YYYY-MM` on a populated table; junk and month 13 stay rejected. Queries that do date arithmetic on `birth_day` (birthdays) must then skip partial values | The first ancestor or approximate date you want to record |

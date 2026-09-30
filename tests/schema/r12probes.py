@@ -22,12 +22,12 @@ def K(label, cond, detail=''):
 # ---- A
 c = sqlite3.connect(':memory:'); c.executescript(DDL)
 meta = dict(c.execute('select key, value from lifelog_meta').fetchall())
-K('A lifelog_meta has 25 rows (23 + sqlite and provenance, round 15)', len(meta) == 25, len(meta))
+K('A lifelog_meta has 24 rows (23 + sqlite and provenance, round 15, minus fx_rates)', len(meta) == 24, len(meta))
 K('A no export or backups key', not ({'export', 'backups'} & set(meta)), sorted({'export', 'backups'} & set(meta)))
 K('A no lifelog_meta value mentions export/, dump/, backups/, restore or VACUUM INTO', not [k for k, v in meta.items() if re.search(r'export/|dump/|backups/|restore|VACUUM INTO', v, re.I)])
 sec = doc[doc.index('### 2.11 '):doc.index('## 3. The schema')]
 rows = re.findall(r'^\|\s*(\d+)\s*\|([^|]+)\|([^|]+)\|([^|]+)\|\s*$', sec, re.M)
-K('A the 2075 table has 22 questions numbered 1..22', [int(r[0]) for r in rows] == list(range(1, 23)), [r[0] for r in rows])
+K('A the 2075 table has 21 questions numbered 1..21', [int(r[0]) for r in rows] == list(range(1, 22)), [r[0] for r in rows])
 
 # ---- B  the block of section 2.8, executed literally
 s28 = doc[doc.index('### 2.8 '):doc.index('### 2.9 ')]
