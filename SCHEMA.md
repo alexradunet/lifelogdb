@@ -1573,6 +1573,9 @@ the constraints that carry it; the rule itself is in §3 or §2.
   a search box over `pages_fts`, and a backlinks panel. For ad-hoc exploration: **Datasette** pointed
   at `life.db`, read-only (§2.6) [R49]. `sqlite-web` is **not used** [R50]: it can insert, update and
   delete rows — a second writer that bypasses the insert conventions (principle 3).
+- **The writing application** is `app/`: one Go binary that is the CLI, the REST API and the MCP
+  server, so the owner's UIs, AI agents and importers all write through it. Its own decisions are in
+  `app/README.md`.
 - **Rejected.** Building a generic admin UI — Datasette already is one, maintained by someone else.
 - **Sources.** [R49][R50].
 

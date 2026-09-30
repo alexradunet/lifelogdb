@@ -5,7 +5,9 @@
 The design document for **Lifelog**, a lifetime-scale single-user SQLite database
 (`life.db`). `SCHEMA.md` is the product: goals, storage contract, canonical DDL,
 decision log (D1–D22), query cookbook, non-goals, references. It states the current truth
-only. There is no application code yet; `tests/` holds the validation suites (see below).
+only. `tests/` holds the validation suites (see below). `app/` is the one writing application
+(Go: CLI, REST API and MCP server); its decisions are in `app/README.md`, and it has no code yet. The
+app never edits the DDL: it embeds §3 of `SCHEMA.md`, and the hard rule below applies to it too.
 
 ## The one hard rule: no migrations until the schema freeze
 
