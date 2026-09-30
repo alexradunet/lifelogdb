@@ -559,7 +559,8 @@ CREATE TABLE entities (
   -- [[wikilinks]] write, and a people/places/holdings row whose FK points at that pages row. A ghost page
   -- is promoted by UPDATE entities SET type = 'person' (the FK cascades it to pages.entity_type).
   -- Nothing is ever deleted: deleted_at is the tombstone (D11), enforced by BEFORE DELETE triggers.
-  -- import_id: an importer's (or an offline client's) key for the row, unique per source, written at insert
+  -- import_id: the key a writer that may send the row twice gives it (an importer, an offline phone, a retrying
+  -- agent); whether the row was imported is source, not import_id. Unique per source, written at insert
   -- and never changed. Insert with ON CONFLICT(source, import_id) WHERE import_id IS NOT NULL DO NOTHING
   -- RETURNING id: no id back = imported before, so no domain row is inserted (section 6.22).
   id         INTEGER PRIMARY KEY,
@@ -570,7 +571,7 @@ CREATE TABLE entities (
   deleted_at TEXT     CONSTRAINT entities_deleted_at CHECK (deleted_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', deleted_at) IS deleted_at),   -- the tombstone
   tz         TEXT     CONSTRAINT entities_tz CHECK (tz IS NULL OR (length(tz) BETWEEN 1 AND 64 AND tz NOT GLOB '*[^A-Za-z0-9_/+-]*')),   -- IANA zone of the device that captured the row ('Europe/Berlin'); NULL = unknown
   source     TEXT NOT NULL CONSTRAINT entities_source CHECK (length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*'),   -- the writer (lifelog_meta.source)
-  import_id  TEXT,                        -- the source's own key for this row, unique per source; NULL = not imported
+  import_id  TEXT,                        -- the sender's key, unique per source; NULL = sent once. Imported or not: source
   UNIQUE (id, type)
 ) STRICT;
 CREATE UNIQUE INDEX entities_import ON entities(source, import_id) WHERE import_id IS NOT NULL;
