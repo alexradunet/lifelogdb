@@ -8,9 +8,11 @@ here is a migration and nothing touches `life.db`**: every suite extracts §3 (a
 ```
 python3 tests/run_all.py              # every suite, ~15 s
 python3 tests/run_all.py --datasette  # + Datasette opens the file read-only (installs it into tests/.venv)
+python3 tests/run_all.py --mermaid    # + render every mermaid diagram (needs node + `mmdc` + a Chromium, see below)
 ```
 
-Needs `python3` (venv + network once, for `markdown-it-py`) and the `sqlite3` CLI (3.53 was used).
+Needs `python3` (venv + network once, for `markdown-it-py`) and the `sqlite3` CLI (3.53 was used). `--mermaid` also needs
+`npm i -g @mermaid-js/mermaid-cli` (12.0.0 was used) and a Chromium; point `MMDC` / `PUPPETEER_EXECUTABLE_PATH` at them if they are not on `PATH`.
 
 | folder | suite | proves | record |
 |---|---|---|---|
@@ -22,6 +24,7 @@ Needs `python3` (venv + network once, for `markdown-it-py`) and the `sqlite3` CL
 | | `r10probes.py` | device-name titles, the **2075 test**, the deferred features' additive paths, the import path | #12 |
 | | `r11probes.py`, `r11_mutants.py` | notes and wiki merged into one `page` kind (D5 addendum 5): the day rule, one title namespace, lookups without a `kind` predicate, ghosts, the day view, fixed kind; then twelve broken copies of the document, each of which must fail a probe | #13 |
 | | `r12probes.py`, `r12_mutants.py` | round 12 narrowed the document to the schema and its reliability: the three integrity checks of §2.8 run literally on the **live** file (zeroed page, truncation, flipped index entry, flipped value, orphan balance, orphan `entities` row), 23 `lifelog_meta` keys and 20 2075 questions, no export/dump/snapshot text left in §1–§7 or in `tests/`; then nine broken copies of the document, each of which must fail a probe | #14 |
+| | `diagrams.py`, `diagrams_mutants.py`, `render_diagrams.py` | the nine mermaid diagrams of §2.4, §2.9, §2.10, §4, §6.14 say what §3 says: tables, columns, types, PK/FK marks, foreign keys and their cardinality, the link map vs `link_kinds`, the correction story executed; then twelve broken copies of the document (the DDL changed under a diagram, or a diagram edited), each of which must fail a check; `render_diagrams.py` (optional) renders every block | #15 |
 | | `fuzz.py`, `nw.py`, `cookbook_doc.py` | recurrence expander and net worth vs independent oracles; every §6 block runs | #4–#9 |
 | | `r7probes_ds.py` | Datasette is read-only (optional) | #9 |
 | `wikilinks/` | `wikisave.py` | **reference implementation** of the §2.5 save contract (a test instrument, not the application) | #10 |

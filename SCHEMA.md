@@ -1,8 +1,8 @@
 # Lifelog — Database Schema v1
 
-**Status:** v1.13 — frozen pending external review (review rounds 3, 3b, 3c applied; round 4 = an
-independent review plus the finance tier D18; rounds 5–10 = its fixes: mechanical items, time zone / `completed_day` / one place per event, the text inconsistencies plus durability and write transactions, the wikilink save contract, and the last open items with a repeatable test suite in `tests/` — **no recorded finding is open**; what remains is two gates only the owner can close, the external review and the first real import, §8 round 10; round 11 then merged notes and wiki pages into one `page` kind, D5 addendum 5; round 12 narrowed the document to the schema and its reliability and withdrew the markdown export and the snapshot / restore / dump contract, §7, §8 #14). Not yet applied to any canonical database.
-**Date:** 2026-09-30 (v1.0–v1.4: 2026-09-29; v1.5–v1.13: 2026-09-30)
+**Status:** v1.14 — frozen pending external review (review rounds 3, 3b, 3c applied; round 4 = an
+independent review plus the finance tier D18; rounds 5–10 = its fixes: mechanical items, time zone / `completed_day` / one place per event, the text inconsistencies plus durability and write transactions, the wikilink save contract, and the last open items with a repeatable test suite in `tests/` — **no recorded finding is open**; what remains is two gates only the owner can close, the external review and the first real import, §8 round 10; round 11 then merged notes and wiki pages into one `page` kind, D5 addendum 5; round 12 narrowed the document to the schema and its reliability and withdrew the markdown export and the snapshot / restore / dump contract, §7, §8 #14; round 13 added mermaid diagrams that a test suite checks against the DDL, §8 #15). Not yet applied to any canonical database.
+**Date:** 2026-09-30 (v1.0–v1.4: 2026-09-29; v1.5–v1.14: 2026-09-30)
 **Scope of the project:** A lifetime personal database (journal/memos, pages (notes, wiki), events,
 tasks, people, health metrics, personal finance — accounts, balances, net worth; file
 attachments deferred — D9) in a single SQLite file,
@@ -139,6 +139,24 @@ deferred out of v1 (D9) — the layout grows a `media/` sibling when they return
 - `balances` are append-only in the same way: `UPDATE` and `DELETE` are rejected; a wrong
   value is corrected by inserting a newer row for the same `(account_id, day)`, and an entry
   that should never have existed is retracted with a NULL `amount` (D18).
+
+**A correction never overwrites.** One reading, corrected, retracted and restored — what
+`measurement_values` shows after each insert (§6.10). `balance_values` works the same way, with the
+newest row per `(account_id, day)` in place of `supersedes_id`.
+
+```mermaid
+%% diagram: correct-measurement
+stateDiagram-v2
+    direction LR
+    state "view shows 71.2" as V1
+    state "view shows 70.8" as V2
+    state "view shows nothing (retracted)" as V3
+    state "view shows 71.4" as V4
+    [*] --> V1: INSERT row 1, value 71.2
+    V1 --> V2: INSERT row 2, value 70.8, supersedes 1
+    V2 --> V3: INSERT row 3, value NULL, supersedes 2
+    V3 --> V4: INSERT row 4, value 71.4, supersedes 3
+```
 
 ### 2.5 Prose, wikilinks, and renames
 
@@ -369,6 +387,19 @@ app, its CLI, the API service, and local agents are all the same *writer* as lon
 they go through the one application stack that owns the insert conventions (entity row
 first, day written at insert, wikilinks re-extracted on save, measurements appended).
 
+**Who writes, who reads** (principle 3, D3):
+
+```mermaid
+%% diagram: writers
+flowchart LR
+    ui["UI"] --> app
+    cli["CLI and API"] --> app
+    agents["agents"] --> app
+    app["the one writing application<br/>insert conventions, wikilink sync,<br/>title_key, pragmas checked at connect"]
+    app -->|"BEGIN IMMEDIATE, then write"| db[("life.db<br/>SQLite, WAL")]
+    db -.->|"readers never block the writer"| ro["read-only tools<br/>Datasette, mode=ro"]
+```
+
 ### 2.10 Money (D18)
 
 - **Exact, integer, per-account currency.** An amount is an `INTEGER` count of *minor units*
@@ -398,6 +429,21 @@ first, day written at insert, wikilinks re-extracted on save, measurements appen
 - **Secrets.** Never store credentials, PINs or full account/card numbers in `life.db` or in a
   memo: the file is plaintext (D17). An account's `notes` may hold the last four digits. Finance
   data never goes into git — its history cannot be scrubbed (§2.1).
+
+**From a statement to net worth** (§6.15–§6.17):
+
+```mermaid
+%% diagram: money-flow
+flowchart LR
+    stmt["statement, app or own estimate<br/>the value on a local day"] -->|"INSERT, never edit"| bal[("balances<br/>integer minor units<br/>append-only")]
+    bal -->|"balance_values:<br/>newest row per day,<br/>NULL retracts"| held["each open, live account<br/>latest balance on or before the day<br/>asset adds, liability subtracts"]
+    acc[("accounts<br/>side, currency")] --> held
+    held --> same{"same currency<br/>as the report?"}
+    same -->|"yes"| sum
+    same -->|"no"| fx[("fx_rates<br/>newest rate on or before the day<br/>inverse is 1/rate")] --> sum
+    cur[("currencies<br/>subunits")] -.->|"scale"| sum
+    sum["sum in minor units<br/>of the reporting currency"] --> nw(["net worth on that day<br/>derived, never stored"])
+```
 
 ---
 
@@ -1161,33 +1207,230 @@ system.
 
 ## 4. Entity model overview
 
-```
-entities (supertype: id, type, created_at, updated_at, deleted_at, tz)
-   │ 1:1, shared PK, composite FK (id, entity_type) → entities(id, type)
-   │    guarantees type and domain table always agree
-   ├── pages      (memo | page)          ── prose, inbox state, capture day
-   ├── events                             ── day-precise happenings, recurrence,
-   │                                        optional place_id
-   ├── tasks                              ── open | done; recurrence; subtasks via links
-   ├── people                            ── name + birth/death days
-   ├── places                            ── named locations for events and links
-   └── accounts                          ── anything with a balance: side (asset|liability),
-                                            currency, opened/closed day (D18)
+The diagrams are part of the contract: `tests/schema/diagrams.py` checks every table, column, key and
+foreign key they draw against §3, so a diagram cannot drift from the DDL without a test failing.
+(`pages_fts`, the FTS5 index over `pages`, is derived and rebuildable and is not drawn.)
 
-links       (from_id → to_id, kind)        ── polymorphic graph over entities;
-                                           │ symmetric kinds are mirrored by trigger
-link_kinds  (kind, symmetric, from/to_types) ── CLOSED registry: links.kind must reference it;
-                                           │ symmetry + endpoint types fixed and enforced
-measurements (metric_id, day, value …)      ── append-only time series (optionally → entity,
-                                           │ e.g. mood rows point at their memo)
-metrics      (name, unit)                   ── registry keeping series canonical
-balances     (account_id, day, amount …)    ── append-only INTEGER minor-unit snapshots; newest row per
-                                           │ (account, day) wins, NULL amount retracts (D18)
-currencies   (code, subunits)               ── closed registry: minor units per whole unit, immutable
-fx_rates     (from_ccy, to_ccy, day, rate)  ── reference data, one canonical direction per pair
-pages_fts    (FTS5 over pages)              ── derived, rebuildable
-lifelog_meta (key, value)                   ── the storage contract as queryable data
+### 4.1 Entities and the graph
+
+One supertype row per linkable thing (`entities`), one domain row per entity with the *same* id — the
+composite foreign key `(id, entity_type) → entities(id, type)` makes the type and the table agree — and
+one polymorphic graph (`links`) over the supertype. `links.kind` is a foreign key to the closed
+registry `link_kinds`.
+
+```mermaid
+%% diagram: er-core
+erDiagram
+    entities ||--o| pages    : "id"
+    entities ||--o| events   : "id"
+    entities ||--o| tasks    : "id"
+    entities ||--o| people   : "id"
+    entities ||--o| places   : "id"
+    entities ||--o| accounts : "id"
+    places   |o--o{ events   : "place_id"
+    entities ||--o{ links    : "from_id"
+    entities ||--o{ links    : "to_id"
+    link_kinds ||--o{ links  : "kind"
+
+    entities {
+        INTEGER id PK
+        TEXT type "page, event, task, person, place, account"
+        TEXT created_at "when written, never back-dated"
+        TEXT updated_at
+        TEXT deleted_at "tombstone"
+        TEXT tz
+    }
+    pages {
+        INTEGER id PK, FK
+        TEXT kind "memo or page, fixed"
+        TEXT title "pages only, immutable"
+        TEXT title_key "unique, app-computed"
+        TEXT day "local capture day"
+        TEXT triaged_at "NULL = still in the inbox"
+        TEXT body "CommonMark"
+    }
+    events {
+        INTEGER id PK, FK
+        TEXT title
+        TEXT start_day
+        TEXT end_day
+        INTEGER place_id FK
+        TEXT repeat "none, daily, weekly, monthly, yearly"
+    }
+    tasks {
+        INTEGER id PK, FK
+        TEXT title
+        TEXT status "open or done"
+        TEXT due_day
+        TEXT completed_day
+        TEXT repeat
+    }
+    people {
+        INTEGER id PK, FK
+        TEXT name
+        TEXT birth_day
+        TEXT death_day
+    }
+    places {
+        INTEGER id PK, FK
+        TEXT name
+    }
+    accounts {
+        INTEGER id PK, FK
+        TEXT name
+        TEXT side "asset or liability"
+        TEXT currency FK
+    }
+    links {
+        INTEGER id PK
+        INTEGER from_id FK
+        INTEGER to_id FK
+        TEXT kind FK
+        TEXT created_at
+    }
+    link_kinds {
+        TEXT kind PK
+        INTEGER symmetric
+        TEXT from_types "NULL = any"
+        TEXT to_types "NULL = any"
+    }
 ```
+
+### 4.2 Facts, money and registries
+
+Facts are not entities. `measurements` and `balances` are append-only (D7, D18): a correction is a new
+row, and `measurements.supersedes_id` points back at the row it corrects; `measurements.entity_id`
+records provenance (a mood reading points at its memo). An amount is an integer in minor units of the
+account's currency, and `fx_rates` is reference data with one canonical direction per pair.
+`lifelog_meta` stands alone: it is the contract as data (D17).
+
+```mermaid
+%% diagram: er-facts
+erDiagram
+    metrics     ||--o{ measurements : "metric_id"
+    entities    |o--o{ measurements : "entity_id"
+    measurements |o--o| measurements : "supersedes_id"
+    accounts    ||--o{ balances     : "account_id"
+    currencies  ||--o{ accounts     : "currency"
+    currencies  ||--o{ fx_rates     : "from_ccy"
+    currencies  ||--o{ fx_rates     : "to_ccy"
+
+    metrics {
+        INTEGER id PK
+        TEXT name "snake_case, unique"
+        TEXT unit "fixed"
+    }
+    measurements {
+        INTEGER id PK
+        INTEGER metric_id FK
+        TEXT day "local day"
+        TEXT taken_at "UTC instant"
+        REAL value "NULL = retraction"
+        TEXT recorded_at "when written down"
+        INTEGER entity_id FK "provenance, e.g. the memo"
+        INTEGER supersedes_id FK "the row it corrects"
+    }
+    entities {
+        INTEGER id PK
+    }
+    accounts {
+        INTEGER id PK, FK
+        TEXT name
+        TEXT side "asset or liability"
+        TEXT currency FK
+        TEXT opened_day
+        TEXT closed_day
+    }
+    balances {
+        INTEGER id PK
+        INTEGER account_id FK
+        TEXT day "local as-of day"
+        INTEGER amount "minor units, NULL = retraction"
+        TEXT recorded_at
+    }
+    currencies {
+        TEXT code PK
+        TEXT name
+        INTEGER subunits "minor units per whole unit"
+    }
+    fx_rates {
+        TEXT from_ccy PK, FK
+        TEXT to_ccy PK, FK
+        TEXT day PK
+        REAL rate "1 from_ccy = rate to_ccy"
+    }
+    lifelog_meta {
+        TEXT key PK
+        TEXT value "the contract, as data"
+    }
+```
+
+### 4.3 Who may link what
+
+An arrow is a `link_kinds` row; a double-headed arrow is a symmetric kind, mirrored by trigger so that one
+direction suffices for backlinks. `any entity` is an endpoint with no restriction (`from_types` or
+`to_types` NULL). A trigger rejects every link whose endpoint types do not fit its kind.
+
+```mermaid
+%% diagram: link-map
+flowchart LR
+    any(["any entity"])
+    person["person"]
+    event["event"]
+    place["place"]
+    account["account"]
+    task["task"]
+    page["page"]
+
+    any -->|"about"| person
+    any -->|"about"| place
+    any -->|"about"| account
+    any <-->|"related"| any
+    person -->|"attended"| event
+    person -->|"visited"| place
+    person -->|"parent-of"| person
+    person <-->|"friend, family"| person
+    place -->|"located-in"| place
+    task -->|"subtask"| task
+    task -->|"spawned"| page
+    page -->|"wikilink, redirect, spawned"| page
+```
+
+### 4.4 The life of a memo and of a page
+
+A memo is captured into the inbox and leaves it once; a page starts as a ghost when a link names a title
+that does not exist yet, or as a written page when the owner creates it on purpose (D5 addendum 5).
+
+```mermaid
+%% diagram: memo-life
+stateDiagram-v2
+    direction LR
+    [*] --> Inbox: capture, triaged_at is NULL
+    Inbox --> Triaged: keep, set triaged_at
+    Inbox --> Triaged: act, new task or page plus a spawned link, set triaged_at
+    Inbox --> Tombstoned: junk, set deleted_at
+    Triaged --> Tombstoned: set deleted_at
+```
+
+```mermaid
+%% diagram: page-life
+stateDiagram-v2
+    direction LR
+    state "Ghost (empty, no day)" as Ghost
+    state "Written page" as Written
+    state "Redirect stub" as Stub
+    [*] --> Ghost: a link names a title that does not exist yet
+    [*] --> Written: created on purpose, with a day
+    Ghost --> Written: body saved, day stays NULL
+    Written --> Written: body edited, title and kind never change
+    Written --> Stub: renamed, so the old page becomes a stub and a redirect link is added
+```
+
+Any row can be tombstoned (`entities.deleted_at`, D11); a save whose link resolves a tombstoned title
+revives that page instead of duplicating it (§6.14). A ghost that nothing links to is listed by
+`ghost_pages` after 30 days (§6.13) — the view only lists, tombstoning stays the owner's act.
+
+### 4.5 Product concepts
 
 How the pieces serve the product concepts:
 
@@ -2081,7 +2324,6 @@ example starts its transaction with `BEGIN IMMEDIATE` (§2.9).
 ### 6.1 Capture a memo (the universal insert convention)
 
 Every entity insert is two statements in one transaction: `entities` first, then the
-
 domain row reusing the id. The domain row's `entity_type` is constant per table (the
 composite FK relies on it).
 
@@ -2406,7 +2648,29 @@ spelling, NFC) and `:key` (`title_key(:title)`). Everything below — the body w
 sync — is **one `BEGIN IMMEDIATE` transaction** (§2.9): two writers that save the same new link
 cannot both see "none found" — the second waits, then finds the first one's page. Each target is
 its own `SAVEPOINT`, so a target that fails for any reason is rolled back alone (no link, no orphan
-`entities` row) and the save carries on (D19).
+`entities` row) and the save carries on (D19). The procedure at a glance; the SQL follows:
+
+```mermaid
+%% diagram: save-flow
+flowchart TD
+    start(["save a page body"]) --> begin["BEGIN IMMEDIATE"]
+    begin --> body["0. write the body<br/>INSERT (§6.1) or UPDATE pages SET body"]
+    body --> more{"another distinct<br/>valid target?"}
+    more -->|"yes"| sp["SAVEPOINT target"]
+    sp --> resolve["1. resolve<br/>WHERE title_key = :key"]
+    resolve --> found{"found?"}
+    found -->|"no"| create["2b. INSERT entities and pages<br/>an empty page, day NULL"]
+    found -->|"yes, tombstoned"| revive["2a. entities.deleted_at = NULL"]
+    found -->|"yes, live"| link
+    create --> link["3. INSERT links wikilink<br/>ON CONFLICT DO NOTHING"]
+    revive --> link
+    link -->|"ok"| release["RELEASE target"]
+    link -->|"any error in 1 to 3"| back["ROLLBACK TO target, RELEASE<br/>no link and no orphan row"]
+    release --> more
+    back --> more
+    more -->|"no"| prune["4. DELETE the wikilink rows<br/>the body no longer names"]
+    prune --> commit(["COMMIT"])
+```
 
 ```sql
 BEGIN IMMEDIATE;
@@ -3880,6 +4144,59 @@ each probe's label before it ran.
   file's structure and to constraints, not a changed value (E5); one machine, one filesystem, synthetic data, no power-loss
   test; restic, Windows and real data were never run.
 
+### Review round 13 (2026-09-30, owner: "enhance schema.md with mermaid diagrams where we find necessary to make it more visually appealing")
+
+Presentation only: the DDL is byte-identical to v1.13. Nine diagrams were added where prose or an ASCII sketch was doing a
+poor job, and each one is checked, because a diagram that drifts from §3 is worse than none.
+
+| Where | Diagram | What it replaces or adds |
+|---|---|---|
+| §2.4 | state diagram: one reading corrected, retracted and restored, with what `measurement_values` shows after each insert | the hardest rule to picture from prose |
+| §2.9 | who writes (UI, CLI and API, agents → the one application → `life.db`) and who reads (read-only tools) | principle 3 as a picture |
+| §2.10 | statement → `balances` → `balance_values` → latest per account → FX → net worth | the derivation that §6.15–6.17 spread over three queries |
+| §4.1, §4.2 | two ER diagrams: entities and the graph; facts, money and registries | the ASCII tree of §4 (now removed) |
+| §4.3 | who may link what, one arrow per `link_kinds` row | the registry table of §3, in one view |
+| §4.4 | the life of a memo (inbox, triaged, tombstoned) and of a page (ghost, written, stub) | prose spread over D5, D11 and §6.13 |
+| §6.14 | flowchart of the wikilink save: `SAVEPOINT` per target, resolve / revive / create, link, prune | the step list of the SQL below it |
+
+Not drawn, on purpose: the time model (§2.2), the connection pragmas (§2.9) and the recurrence expander (§6.12) read better as the
+tables and SQL they already are; a diagram there would only restate them. Also fixed: a blank line that split a paragraph in §6.1.
+
+### Validation record #15 (2026-09-30, round 13)
+
+Baseline first: 17/17 suites on v1.13. The DDL was extracted before and after: unchanged (652 lines, 76 objects). Expected outcomes
+were declared in each check's label.
+
+- **Diagram checks: 449/449** (`tests/schema/diagrams.py`). *Structure:* exactly nine blocks, each announced by `%% diagram: <id>`,
+  each of the intended type. *The two ER diagrams against the DDL:* all 15 tables are drawn; every drawn column exists with its
+  declared type; a `PK` mark equals a primary-key column and an `FK` mark equals a column of a foreign key; every foreign key of
+  the DDL is a relationship labelled with its first column, and every relationship is a foreign key; the symbols follow the
+  constraint (NOT NULL parent → `||`, nullable → `|o`; a unique or primary key in the child → `o|`, otherwise `o{`), including the
+  partial unique index behind `supersedes_id`. *The link map:* the same edges as `link_kinds` — from, to, symmetric — with `any
+  entity` for a NULL endpoint list. *The correction story, executed:* rows 1–4 of the diagram get ids 1–4 in a fresh database, and
+  `measurement_values` shows 71.2, 70.8, nothing, 71.4 after them; the diagram's inserts, values and states are those. *The save
+  flow and §6.14* name steps 0, 1, 2a, 2b, 3, 4 alike.
+- **The checks can fail: 12 broken copies of this document, all noticed** (`tests/schema/diagrams_mutants.py`, 1 to 2 checks failing
+  each, no crashes): a foreign key not drawn, a wrong cardinality, a wrong column type, a column that does not exist, a missing
+  `FK` mark, an invented link-map edge, a wrong value in the correction story, a renumbered save step, a diagram deleted — and, the
+  drift the suite exists for, **the DDL changed under an untouched diagram**: `events.place_id` made NOT NULL, a new link kind, a new
+  table.
+- **The first run found a real error, mine:** `accounts.id` in the facts diagram was marked `PK` only; it is also a foreign key
+  (composite, to `entities`). Corrected. (`accounts.currency` had the same omission in the other diagram; I had spotted and fixed
+  that one while inserting.) My first version of the checks parsed `TYPE name` as `name type` and failed 91 checks on its own.
+- **Syntax and looks, executed rather than assumed:** every block was rendered with mermaid-cli 12.0.0 on Chromium — nine of nine
+  (`tests/schema/render_diagrams.py`, `run_all.py --mermaid`, optional because it needs node) — and a diagram with a deliberately
+  broken line makes that step fail (8/9, exit 1). Layouts were looked at and changed: the money flow was first drawn top-down
+  (956 × 3400 px, unreadable) and is now left-to-right; the link map's two self-loops on `page` are one edge; the memo diagram shows
+  *keep* and *act* as two transitions.
+- **Suites:** `run_all.py` gains `diagrams`, `diagram mutants` and the optional `mermaid` step (17 → 19 suites, ~15 s); the README
+  lists them. Nothing was loosened, and no existing suite needed a change: all 17 earlier suites give the same counts as in #14.
+- **Known limits.** Other viewers (GitHub, GitLab, an editor preview) ship other mermaid versions; the diagrams use only `erDiagram`,
+  `flowchart` and `stateDiagram-v2` with quoted labels, but were rendered here only by mermaid-cli 12.0.0. The text inside quotes
+  (attribute comments, edge labels) is prose and is not checked; the memo, page, writers and money diagrams are checked for the
+  names and steps they use, while their truth is that of the suites behind those rules (record #13 for pages, the net-worth oracle
+  for the money flow, the save-contract probes for §6.14).
+
 ---
 
 ---
@@ -4117,7 +4434,7 @@ The seven real systems surveyed during research, and exactly what was taken from
 
 ---
 
-*Document history: v1.13, 2026-09-30 — round 12 (§8 #14): the document narrowed to the schema and its reliability — the markdown export and the snapshot / restore / dump contract (§2.8, D12 addendum 2) and their tests are withdrawn (§7); D4 and D12 keep their decisions (the database is canonical; no revision tables); §2.8 is now the three integrity checks, executed on the live file; the `export` and `backups` keys and two 2075 questions are gone from the DDL; validation record #14. v1.11, 2026-09-30 — round 10 (§8): every remaining finding closed or deferred with an executed path — R8-01 fixed in the DDL (device names before an extension, superscript names), six `lifelog_meta` keys added by the now-executed 2075 test, §2.11 (threat model, 2075 test, import path), D5 addendum 4 and D17 addendum 3, four deferred rows in §7, the orphan-entities check in `nightly.sh`; the lost validation suites recovered and kept in `tests/` with `run_all.py` (R4-19 d); validation record #12. v1.10, 2026-09-30 — round 9 (§8): the backup contract of R4-14 (D12 addendum 2; §2.8 rewritten with a tested nightly script and restore script, §2.1 `.gitignore` and `dump/`): `VACUUM INTO` instead of `.backup`/`cp`, verification, retention, mandatory off-box copy, restore rules, CSV dump never in git — the DDL is unchanged; validation record #11. v1.9, 2026-09-30 — round 8 (§8): the wikilink save contract of R4-12 (D19; §2.5 rules and test vectors, §6.14 rewritten as the full save) — the DDL is unchanged; `#tag` is read, not expanded; a stub is not scanned; §6.5 excludes `redirect`; validation record #10. v1.8, 2026-09-30 — round 7 (§8): the text inconsistencies of R4-16 and five more found in a re-scan (snapshots are not derived, natural-key registries, "export mirrors 100%", readers must be read-only, D12 audit metadata); `synchronous = FULL` and `BEGIN IMMEDIATE` for every write transaction (R4-13), §6.14 resolves inside one transaction; validation record #9. v1.7, 2026-09-30 — round 6 (§8): `entities.tz` / `measurements.tz` (IANA zone at capture), `tasks.completed_day` and a `'done'` row in the day view, `events.place_id` as an event's only place (`visited` person→place only, `lives-in` removed); validation record #8. v1.6, 2026-09-30 — round 5 (§8): the mechanical round-4 fixes (`ON CONFLICT` imports, `(source, import_id, metric_id)` key, retractable measurements, `recorded_at`, enforced no-delete triggers, all enumerated CHECKs named, immutable `metrics.unit`, `located-in`/`parent-of`, no-op-safe immutability triggers); finance scope settled as value-snapshot accounts (stocks, crypto, deposits, valuables — D18 addendum 1); validation record #7. v1.5, 2026-09-30 — round 4 (§8): independent review with 19 recorded findings (R4-01…R4-19; R4-01 applied: `recursive_triggers=ON` mandatory) and the finance tier D18 (`currencies`, `accounts` as a sixth entity type, append-only `balances`, `fx_rates`; net worth derived, §6.15–6.18; validation record #6). v1 draft, 2026-09-29 — initial synthesis of two research rounds and
+*Document history: v1.14, 2026-09-30 — round 13 (§8 #15): nine mermaid diagrams (§2.4, §2.9, §2.10, §4.1–4.4, §6.14) replace the ASCII entity tree and picture the correction rule, the writers, net worth, links, lifecycles and the wikilink save; `tests/schema/diagrams.py` checks them against the DDL — the DDL is unchanged; validation record #15. v1.13, 2026-09-30 — round 12 (§8 #14): the document narrowed to the schema and its reliability — the markdown export and the snapshot / restore / dump contract (§2.8, D12 addendum 2) and their tests are withdrawn (§7); D4 and D12 keep their decisions (the database is canonical; no revision tables); §2.8 is now the three integrity checks, executed on the live file; the `export` and `backups` keys and two 2075 questions are gone from the DDL; validation record #14. v1.11, 2026-09-30 — round 10 (§8): every remaining finding closed or deferred with an executed path — R8-01 fixed in the DDL (device names before an extension, superscript names), six `lifelog_meta` keys added by the now-executed 2075 test, §2.11 (threat model, 2075 test, import path), D5 addendum 4 and D17 addendum 3, four deferred rows in §7, the orphan-entities check in `nightly.sh`; the lost validation suites recovered and kept in `tests/` with `run_all.py` (R4-19 d); validation record #12. v1.10, 2026-09-30 — round 9 (§8): the backup contract of R4-14 (D12 addendum 2; §2.8 rewritten with a tested nightly script and restore script, §2.1 `.gitignore` and `dump/`): `VACUUM INTO` instead of `.backup`/`cp`, verification, retention, mandatory off-box copy, restore rules, CSV dump never in git — the DDL is unchanged; validation record #11. v1.9, 2026-09-30 — round 8 (§8): the wikilink save contract of R4-12 (D19; §2.5 rules and test vectors, §6.14 rewritten as the full save) — the DDL is unchanged; `#tag` is read, not expanded; a stub is not scanned; §6.5 excludes `redirect`; validation record #10. v1.8, 2026-09-30 — round 7 (§8): the text inconsistencies of R4-16 and five more found in a re-scan (snapshots are not derived, natural-key registries, "export mirrors 100%", readers must be read-only, D12 audit metadata); `synchronous = FULL` and `BEGIN IMMEDIATE` for every write transaction (R4-13), §6.14 resolves inside one transaction; validation record #9. v1.7, 2026-09-30 — round 6 (§8): `entities.tz` / `measurements.tz` (IANA zone at capture), `tasks.completed_day` and a `'done'` row in the day view, `events.place_id` as an event's only place (`visited` person→place only, `lives-in` removed); validation record #8. v1.6, 2026-09-30 — round 5 (§8): the mechanical round-4 fixes (`ON CONFLICT` imports, `(source, import_id, metric_id)` key, retractable measurements, `recorded_at`, enforced no-delete triggers, all enumerated CHECKs named, immutable `metrics.unit`, `located-in`/`parent-of`, no-op-safe immutability triggers); finance scope settled as value-snapshot accounts (stocks, crypto, deposits, valuables — D18 addendum 1); validation record #7. v1.5, 2026-09-30 — round 4 (§8): independent review with 19 recorded findings (R4-01…R4-19; R4-01 applied: `recursive_triggers=ON` mandatory) and the finance tier D18 (`currencies`, `accounts` as a sixth entity type, append-only `balances`, `fx_rates`; net worth derived, §6.15–6.18; validation record #6). v1 draft, 2026-09-29 — initial synthesis of two research rounds and
 the owner's decisions (scope narrowed to DB + UI; Model B chosen after the writer-drift
 objection; journal merged into memos-as-inbox). v1.1, same day — DDL mechanically
 validated on SQLite 3.53.4 (§8 validation record); §2.9 connection pragmas added after

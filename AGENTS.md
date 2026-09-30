@@ -25,7 +25,11 @@ Until the schema is frozen (decision D13):
 
 - Every change to §3's DDL must keep the document self-consistent: the entity-model
   overview (§4), the decision log (§5), and the query cookbook (§6) all describe the
-  same schema. If you change the DDL, change them too.
+  same schema. If you change the DDL, change them too — including the mermaid diagrams
+  (§2.4, §2.9, §2.10, §4, §6.14): `tests/schema/diagrams.py` compares the ER diagrams and the
+  link map with the DDL and fails when they drift. Each diagram starts with a `%% diagram: <id>` line;
+  keep to `erDiagram`, `flowchart` and `stateDiagram-v2` with quoted labels, and run
+  `python3 tests/run_all.py --mermaid` after editing one (it renders them).
 - After changing DDL or the cookbook, run `python3 tests/run_all.py` (about 15 s): it extracts §3
   from this document, applies it to throwaway databases and runs the adversarial probes, the
   oracles, the cookbook blocks and the document-text checks. Append a new validation record; never edit old records.

@@ -3,6 +3,7 @@
 
     python3 tests/run_all.py              # every suite (~15 s)
     python3 tests/run_all.py --datasette  # + the read-only check of Datasette (installs it into tests/.venv)
+    python3 tests/run_all.py --mermaid    # + render every mermaid diagram (needs mmdc and a Chromium: see schema/render_diagrams.py)
 
 Nothing here is a migration and nothing touches life.db: every suite builds throwaway databases from the DDL it extracts
 from SCHEMA.md section 3. Needs: python3 (with venv + network once, for markdown-it-py) and the sqlite3 CLI."""
@@ -36,6 +37,8 @@ SUITES = [   # (name, directory, argv, predicate, what it proves)
  ('r11 mutants',   'schema',    ['r11_mutants.py'],           lambda o: ratio(o, r'(\d+)/(\d+) broken documents'), 'each round-11 rule put back the old way must fail a probe'),
  ('r12probes',     'schema',    ['r12probes.py', '{DDL}'],    lambda o: ratio(o, r'round-12 probes: (\d+)/(\d+)'), 'the 2.8 integrity checks on the live file, no export/backup/dump text left, 23 meta keys'),
  ('r12 mutants',   'schema',    ['r12_mutants.py'],           lambda o: ratio(o, r'(\d+)/(\d+) broken documents'), 'each round-12 rule put back the old way must fail a probe'),
+ ('diagrams',      'schema',    ['diagrams.py', '{DDL}'],     lambda o: ratio(o, r'diagram checks: (\d+)/(\d+)'), 'the mermaid diagrams say what the DDL says: tables, columns, keys, foreign keys, link kinds, the correction story'),
+ ('diagram mutants', 'schema',   ['diagrams_mutants.py'],      lambda o: ratio(o, r'(\d+)/(\d+) broken documents'), 'a diagram edited, or the DDL changed under it, must fail a check'),
  ('expander',      'schema',    ['fuzz.py', '{DDL}'],         lambda o: re.search(r'compared (\d+) mismatches 0\s*$', o.strip().splitlines()[-1]) is not None, 'recurrence expander vs an independent oracle'),
  ('net worth',     'schema',    ['nw.py', '{DDL}'],           lambda o: 'real-mismatches=0' in o, 'net worth queries vs an exact-rational oracle'),
  ('cookbook',      'schema',    ['cookbook_doc.py', '{DDL}'], lambda o: 'cookbook failures: 0' in o, 'every SQL block of section 6 runs'),
@@ -68,6 +71,8 @@ def main():
     results = [run(*s, env) for s in SUITES]
     if '--datasette' in ARGS:
         results.append(run('datasette', 'schema', ['r7probes_ds.py', '{DDL}'], lambda o: ratio(o, r'(\d+)/(\d+) met expectations'), 'Datasette opens the file read-only', env))
+    if '--mermaid' in ARGS:
+        results.append(run('mermaid', 'schema', ['render_diagrams.py'], lambda o: ratio(o, r'(\d+)/(\d+) diagrams rendered'), 'every mermaid block renders', env))
     print(f"\n{sum(results)}/{len(results)} suites passed")
     sys.exit(0 if all(results) else 1)
 
