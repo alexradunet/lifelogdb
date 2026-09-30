@@ -1,5 +1,5 @@
 """Identity, provenance and deletion (SCHEMA.md §2.2, §2.3, D3, D8, D11): the supertype and its composite foreign keys,
-ids carried by RETURNING, `source` on every row, no hard deletes, updated_at kept by triggers."""
+ids carried by RETURNING, `source` on every row, `import_id` on entities (a re-run inserts nothing, §6.22), no hard deletes, updated_at kept by triggers."""
 import os, re, sys, time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'lib'))
 from kit import *
@@ -91,6 +91,32 @@ for typ, sql in (('page', "UPDATE pages SET body='y' WHERE id=?"), ('event', "UP
                  ('person', "UPDATE people SET nickname='n' WHERE id=?"), ('holding', "UPDATE holdings SET institution='Bank' WHERE id=?")):
     c.execute(sql, (ids[typ],))
     S.K(f'updating a {typ} bumps entities.updated_at', one(c, 'select updated_at > created_at from entities where id=?', (ids[typ],)) == 1)
+# ---- entities.import_id: a re-run, a replay or a retry inserts nothing (§6.22)
+c = fresh(); B = statements(block('6.22'))
+ins_ent, ins_ev, upd = [s for s in B if code(s).split()[0].rstrip(';').upper() not in ('BEGIN', 'COMMIT')]
+def run_import(key):
+    got = c.execute(ins_ent, {'import_id': key}).fetchall()
+    if got: c.execute(ins_ev, {'event_id': got[0][0]})
+    return got
+first = run_import('cal-1'); again = run_import('cal-1')
+S.K('§6.22: the first run returns an id, the re-run returns none and adds no event',
+    len(first) == 1 and again == [] and one(c, 'select count(*) from events') == 1 and integrity_ok(c))
+S.K('the same import_id under another source is another row (per-source namespace)',
+    tryx(c, f"INSERT INTO entities(type,created_at,updated_at,source,import_id) VALUES ('event',{NOW},{NOW},'import:health','cal-1')") == 'OK')
+S.K('rows without an import_id never collide',
+    all(tryx(c, f"INSERT INTO entities(type,created_at,updated_at,source) VALUES ('task',{NOW},{NOW},'import:calendar')") == 'OK' for _ in range(2)))
+S.K('a plain INSERT of a known key is refused (the index is unique)',
+    'UNIQUE' in tryx(c, f"INSERT INTO entities(type,created_at,updated_at,source,import_id) VALUES ('event',{NOW},{NOW},'import:calendar','cal-1')"))
+S.K('entities.import_id cannot change', 'never changed' in tryx(c, "UPDATE entities SET import_id='cal-2' WHERE id=?", (first[0][0],)))
+S.K('...nor be cleared', 'never changed' in tryx(c, "UPDATE entities SET import_id=NULL WHERE id=?", (first[0][0],)))
+c.execute("UPDATE events SET start_day='2026-10-01'"); c.execute(upd, {'import_id': 'cal-1'})
+S.K('§6.22: a moved event is updated in its own row', one(c, 'select start_day from events where id=?', (first[0][0],)) == '2026-10-02')
+c.execute("UPDATE events SET start_day='2026-10-01'"); c.execute(f'UPDATE entities SET deleted_at={NOW} WHERE id=?', (first[0][0],))
+c.execute(upd, {'import_id': 'cal-1'}); again = run_import('cal-1')
+S.K('§6.22: a tombstoned import is neither updated nor inserted again',
+    one(c, 'select start_day from events where id=?', (first[0][0],)) == '2026-10-01' and again == [] and one(c, 'select count(*) from events') == 1)
+
+c = fresh(); ids = {t: thing(c, t) for t in ('page', 'event', 'task', 'person', 'place', 'holding')}
 c.execute("UPDATE entities SET updated_at='2000-01-01T00:00:00.000Z'"); time.sleep(0.002)
 c.execute(f'UPDATE entities SET deleted_at={NOW} WHERE id=?', (ids['page'],))
 r = c.execute('select updated_at, deleted_at from entities where id=?', (ids['page'],)).fetchone()

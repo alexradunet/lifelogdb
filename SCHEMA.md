@@ -120,7 +120,8 @@ ones that span tables are also rows of `lifelog_meta` (§3), so the file carries
   of the row — `ui`, `cli`, `api`, `agent:<name>`, `import:<name>` (lowercase `[a-z0-9_:.-]`, 1–64
   characters). Only the moment of writing knows it, so it is required at insert and never changes;
   with agents among the writers (D3) it is how a wrong row is traced to the writer that made it. An
-  importer's `import_id` is unique per `source`, so its name is also the deduplication namespace.
+  importer's `import_id` — on entities and on facts — is unique per `source`, so its name is also the
+  deduplication namespace.
   What kind of figure a balance is (a statement, an estimate) goes in its `note`.
 
 ### 2.3 Deletion and corrections
@@ -497,7 +498,13 @@ DETACH s;
    `ON CONFLICT(from_id, to_id, kind) DO NOTHING`.
 3. **Identity and time.** `source` names the importer (`import:<name>`), `import_id` is the source's
    own id, `day` / `taken_at` / `tz` say when it happened, `recorded_at` is when you imported it.
-   `created_at` of an entity row is always the write time (§2.1).
+   `created_at` of an entity row is always the write time (§2.1). An imported event or task carries
+   its key on `entities` (§6.22). **The key must come out the same on every run**: the source's own id
+   (a Health Connect record's id; a calendar's `UID`, plus the instance's start for one occurrence of
+   a recurring event, whose occurrences share the `UID`). A source without ids gets a key built from
+   fields it never changes (the start instant and the place) — and a change to one of them then looks
+   like a new row. The key deduplicates within one `source` only: the same workout from two sources is
+   two rows, for the app to match and the owner to tombstone one.
 4. **What a failure does.** `ON CONFLICT … DO NOTHING` skips only a duplicate key: a malformed
    day, an impossible value or a dangling foreign key still raises and the **whole batch rolls back**.
    Fix the data and run the batch again.
@@ -552,6 +559,9 @@ CREATE TABLE entities (
   -- [[wikilinks]] write, and a people/places/holdings row whose FK points at that pages row. A ghost page
   -- is promoted by UPDATE entities SET type = 'person' (the FK cascades it to pages.entity_type).
   -- Nothing is ever deleted: deleted_at is the tombstone (D11), enforced by BEFORE DELETE triggers.
+  -- import_id: an importer's (or an offline client's) key for the row, unique per source, written at insert
+  -- and never changed. Insert with ON CONFLICT(source, import_id) WHERE import_id IS NOT NULL DO NOTHING
+  -- RETURNING id: no id back = imported before, so no domain row is inserted (section 6.22).
   id         INTEGER PRIMARY KEY,
   type       TEXT NOT NULL CONSTRAINT entities_type
                   CHECK (type IN ('page','event','task','person','place','holding')),
@@ -560,8 +570,10 @@ CREATE TABLE entities (
   deleted_at TEXT     CONSTRAINT entities_deleted_at CHECK (deleted_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', deleted_at) IS deleted_at),   -- the tombstone
   tz         TEXT     CONSTRAINT entities_tz CHECK (tz IS NULL OR (length(tz) BETWEEN 1 AND 64 AND tz NOT GLOB '*[^A-Za-z0-9_/+-]*')),   -- IANA zone of the device that captured the row ('Europe/Berlin'); NULL = unknown
   source     TEXT NOT NULL CONSTRAINT entities_source CHECK (length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*'),   -- the writer (lifelog_meta.source)
+  import_id  TEXT,                        -- the source's own key for this row, unique per source; NULL = not imported
   UNIQUE (id, type)
 ) STRICT;
+CREATE UNIQUE INDEX entities_import ON entities(source, import_id) WHERE import_id IS NOT NULL;
 
 CREATE TABLE pages (
   -- All prose (D5): memos (untitled; the journal stream and the inbox, triaged_at NULL = still in the
@@ -1018,11 +1030,12 @@ BEGIN
   -- tombstoning and un-tombstoning are changes too; watching deleted_at only, it cannot re-fire itself
   UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = NEW.id;
 END;
-CREATE TRIGGER entities_source_fixed BEFORE UPDATE OF source ON entities
-  WHEN NEW.source IS NOT OLD.source
+CREATE TRIGGER entities_provenance_fixed BEFORE UPDATE OF source, import_id ON entities
+  WHEN NEW.source IS NOT OLD.source OR NEW.import_id IS NOT OLD.import_id
 BEGIN
-  -- provenance is captured at insert; the WHEN clause lets full-row updates through
-  SELECT RAISE(ABORT, 'entities.source is written at insert and never changed');
+  -- provenance is captured at insert, and a changed key would let a re-run import the row again;
+  -- the WHEN clause lets full-row updates through
+  SELECT RAISE(ABORT, 'entities.source and import_id are written at insert and never changed');
 END;
 
 CREATE TRIGGER entities_no_delete BEFORE DELETE ON entities
@@ -1256,6 +1269,7 @@ revives that page instead of duplicating it (§6.13). A ghost that nothing links
 | Biomarkers / quantified self | `metrics` + `measurements` (§6.7) |
 | Net worth over time | derived from `balance_values`, per currency (§6.15–6.16) |
 | Kinds of events (workouts, sleep, flights) | `links(kind='is-a')` from the event to the page naming its kind; the page's backlinks list them (§6.21, D22) |
+| Imported events and tasks (calendar, health sessions) | `entities.import_id`, unique per `source`: a re-run inserts nothing, a moved event updates its row (§6.22) |
 | Location history ("where was I?") | `positions`, one GPS fix per row; the place it was is the nearest `places` point (§6.20, D21) |
 | Search | `pages_fts` (§6.8) |
 | "Which of my agents wrote this?" | `source` on every entity, link, measurement, balance and position (§2.2) |
@@ -1324,8 +1338,7 @@ the constraints that carry it; the rule itself is in §3 or §2.
   safely, and the "single writer" rule (principle 3) means *single writing application*, not single
   process. A phone keeps a read-only copy (§2.6); offline it queues only *new* rows and replays them
   through the API, so nothing can conflict. A replay, like a re-run importer, must insert nothing
-  twice: facts have `(source, import_id)`; entities get the same key with the first importer that
-  writes entities (§7).
+  twice: the client gives each new row an `import_id`, the key facts and entities have (§6.22).
 - **Rejected: devices that each hold a copy and merge (CRDTs).** cr-sqlite, the SQLite extension for
   it, allows no checked foreign keys, no UNIQUE constraint but the primary key and no CHECK across
   columns in a merged table [R75] — the composite FKs, the unique `title_key` and the paired CHECKs
@@ -2309,6 +2322,34 @@ SELECT pg.title AS kind, count(*) AS events
 An event with no kind yet: `NOT EXISTS (SELECT 1 FROM links l WHERE l.from_id = ev.id AND l.kind =
 'is-a')`.
 
+### 6.22 Import an event once: insert it, re-run it, update a moved one
+
+**Who sets `import_id`:** every writer that may send the same row twice — an importer (re-run, or a
+fresh export years later), a phone replaying its offline queue, an agent retrying after a timeout whose
+first attempt did commit. It is the key the *sender* gives the row: the source's own id when there is
+one (§2.8 step 3), else a UUID the client makes once and resends unchanged. A row typed on the hub itself
+cannot arrive twice and has none. The same holds for measurements, balances and positions.
+
+```sql
+BEGIN IMMEDIATE;
+INSERT INTO entities(type, created_at, updated_at, source, import_id)
+VALUES ('event', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'import:calendar', :import_id)
+ON CONFLICT(source, import_id) WHERE import_id IS NOT NULL DO NOTHING
+RETURNING id;   -- the app keeps it as :event_id; no row back = imported before: skip the next INSERT
+INSERT INTO events(id, title, start_day, start_at, end_at)
+VALUES (:event_id, 'Dentist', '2026-10-01', '2026-10-01T07:00:00.000Z', '2026-10-01T08:00:00.000Z');
+COMMIT;
+
+-- a later run finds the event moved: update the live row that has the key; a tombstoned one stays gone
+UPDATE events
+   SET start_day = '2026-10-02', start_at = '2026-10-02T07:00:00.000Z', end_at = '2026-10-02T08:00:00.000Z'
+ WHERE id = (SELECT id FROM entities
+              WHERE source = 'import:calendar' AND import_id = :import_id AND deleted_at IS NULL);
+```
+
+A run that inserts nothing the second time is the check of §2.8 step 5. `import_id` never changes
+(`entities_provenance_fixed`), so the key found on the next run is the key written on the first.
+
 ---
 
 ## 7. Explicit non-goals and deferred work
@@ -2319,8 +2360,7 @@ re-added, each with the trigger that should reopen the question.
 | Cut item | Why cut | Reopen when |
 |---|---|---|
 | Copies of the database that merge (sync, CRDTs) | Other devices are clients of the one writer (D3); a merge would force UUID keys and drop the checked FKs and the unique `title_key` [R75] | Never while the schema rests on those constraints |
-| An import key on entities (`source`, `import_id`) | Facts have one, entities not yet. One key, with the name and rule it has on facts, serves three needs: a re-run importer of events (calendar, Health Connect sessions) inserts nothing, a changed event updates its own row, and a phone's offline replay never duplicates (D3). Additive: `ADD COLUMN import_id` + a partial unique index (executed) | The first importer that writes entities — the import before the freeze |
-| An entity `uid` (UUIDv7) | An integer id is never reused and a title is permanent, so references are already stable; the import key above covers replay; the column is additive (D3, executed) | A reference that must survive a re-key or a merge |
+| An entity `uid` (UUIDv7) | An integer id is never reused and a title is permanent, so references are already stable; `entities.import_id` covers an offline replay; the column is additive (D3, executed) | A reference that must survive a re-key or a merge |
 | Agent CLI/API | Planned as a later layer over the same DB; single-writer rule (principle 3) extends to it naturally; `source` already tells its rows apart (§2.2) | After v1 UI exists |
 | Binary files / `attachments` | Cut from v1 (D9): all-text DB stays megabyte-scale; design kept in D9 | The first real photo/PDF attachment need |
 | Recurring events and tasks | A lifelog records what happened; the calendar does planning; birthdays, habits and reminders are covered without it; design kept in D15 | A recurring event wanted in this database, or a task to tick off per occurrence that a habit metric cannot hold |

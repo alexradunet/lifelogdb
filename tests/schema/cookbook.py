@@ -6,7 +6,7 @@ from kit import *
 import sqlite3
 S = Suite('cookbook')
 BL = docsql.cookbook_blocks(DOC)
-S.K('§6 has at least 21 SQL blocks, one per section from 6.1 to 6.21', len(BL) >= 21 and len(blocks()) == 21 and all(f'6.{i}' in blocks() for i in range(1, 22)), sorted(blocks()))
+S.K('§6 has at least 22 SQL blocks, one per section from 6.1 to 6.22', len(BL) >= 22 and len(blocks()) == 22 and all(f'6.{i}' in blocks() for i in range(1, 23)), sorted(blocks()))
 
 def seeded(hardened):
     c = fresh(hardened=hardened)
@@ -22,7 +22,7 @@ def seeded(hardened):
              day='2026-09-29', page_id=wp, person_id=pe, entity_id=pe, handle_title='Bob Sample', handle_key='bob sample', ghost_id=gh, memo_id=me, task_id=ta,
              due_day='2026-10-05', query='schema', key='newpage', title='Newpage', metric_id=2, wrong_row_id=1, source='ui',
              taken_at='2026-09-29T03:00:00.000Z', at='2026-09-29T12:00:00.000Z', lat=35.681, lon=139.691, max_accuracy_m=100, m_per_deg_lon=90300.0, radius_m=500,
-             event_id=ev, kind_id=wo)
+             event_id=ev, kind_id=wo, import_id='cal-uid-1')
     return c, P
 
 for hardened in (False, True):

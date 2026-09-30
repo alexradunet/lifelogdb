@@ -1,7 +1,7 @@
 """Evolution after the freeze (SCHEMA.md D13, D17, §7): every CHECK is named and droppable by name; an unnamed one is not,
 a looser second CHECK does not relax the first, ADD CONSTRAINT checks existing rows; enums widen on a populated database;
 the partial-date and tokenizer paths of §7 work; a link kind widens by migration; a promotion can strand a link (§7); an
-entity uid and an entity import key are additive (D3, §7); a comment outside a statement is not stored."""
+entity uid is additive (D3); a comment outside a statement is not stored."""
 import os, re, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'lib'))
 from kit import *
@@ -105,17 +105,6 @@ for (i,) in c.execute('select id from entities').fetchall(): c.execute('UPDATE e
 c.execute('CREATE UNIQUE INDEX entities_uid_unique ON entities(uid)'); c.execute('ALTER TABLE entities ALTER COLUMN uid SET NOT NULL'); c.execute('COMMIT')
 S.K('every existing entity has a unique uid, and an entity without one is refused afterwards',
     one(c, 'select count(distinct uid) = count(*) from entities') == 1 and 'NOT NULL' in tryx(c, f"INSERT INTO entities(type,created_at,updated_at,source) VALUES ('task',{NOW},{NOW},'ui')"))
-S.K('...with integrity and foreign keys clean', integrity_ok(c))
-
-# ---- an import key on entities is additive (§7): a re-run or a replay inserts nothing, a changed event is found again
-c = populated(); c.execute('BEGIN IMMEDIATE'); c.execute('ALTER TABLE entities ADD COLUMN import_id TEXT')
-c.execute('CREATE UNIQUE INDEX entities_import ON entities(source, import_id) WHERE import_id IS NOT NULL'); c.execute('COMMIT')
-put = lambda: c.execute(f"INSERT INTO entities(type,created_at,updated_at,source,import_id) VALUES ('event',{NOW},{NOW},'import:calendar','evt-1') "
-                        "ON CONFLICT(source, import_id) WHERE import_id IS NOT NULL DO NOTHING RETURNING id").fetchall()
-first = put(); domain(c, 'event', first[0][0], title='Dentist'); again = put()
-c.execute("UPDATE events SET start_day = '2026-10-02' WHERE id = (SELECT id FROM entities WHERE source = 'import:calendar' AND import_id = 'evt-1')")
-S.K('the second insert of the same (source, import_id) returns no id, and the moved event is updated in its own row',
-    len(first) == 1 and again == [] and one(c, 'select start_day from events where id = ?', (first[0][0],)) == '2026-10-02')
 S.K('...with integrity and foreign keys clean', integrity_ok(c))
 
 # ---- comments: inside a statement kept, outside dropped (why the rules live inside)
