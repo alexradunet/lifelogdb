@@ -32,7 +32,7 @@ for t in cases:
     k = title_key(t) if t else ''
     c.execute('SAVEPOINT f')
     try:
-        pid = c.execute(f"INSERT INTO entities(type,created_at,updated_at,source) VALUES('page',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
+        pid = c.execute(f"INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES('page',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
         c.execute("INSERT INTO pages(id,kind,title,title_key,day) VALUES(?, 'page', ?, ?, NULL)", (pid, t, k)); db = True
     except sqlite3.Error as e:
         db = False; why = str(e)[:40]

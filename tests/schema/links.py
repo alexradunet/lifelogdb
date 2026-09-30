@@ -54,7 +54,7 @@ S.K('Tokyo located-in Kanto located-in Japan', link(c, tokyo, kanto, 'located-in
 S.K('located-in is one-way (no mirror)', one(c, "select count(*) from links where kind='located-in'") == 2)
 kid, par = named(c, 'person'), named(c, 'person')
 S.K('parent-of keeps its direction', link(c, par, kid, 'parent-of') == 'OK' and one(c, "select count(*) from links where kind='parent-of'") == 1)
-ev = ent(c, 'event'); domain(c, 'event', ev, title='Trip', start_day='2019-04-02', place_id=tokyo)
+ev = ent(c, 'event'); domain(c, 'event', ev, name='Trip', start_day='2019-04-02', place_id=tokyo)
 P = dict(place_id=japan, from_day='2019-01-01', to_day='2019-12-31')
 S.K('§6.18 finds the Tokyo trip inside Japan, named by the place\'s title', c.execute(block('6.18'), P).fetchall() == [('Trip', '2019-04-02', 'Tokyo')])
 link(c, japan, tokyo, 'located-in')
@@ -69,8 +69,8 @@ S.K('§6.18 terminates on a cycle (UNION)', r == [('Trip', '2019-04-02', 'Tokyo'
 
 # ---- kinds of events (§6.21, D22)
 c = fresh(); wo, run_, sl = page(c, 'Workout'), page(c, 'Running'), page(c, 'Sleep'); m1 = memo(c); ta = thing(c, 'task'); pa = named(c, 'person')
-def ev(title, day):
-    return thing(c, 'event', title=title, start_day=day)
+def ev(name, day):
+    return thing(c, 'event', name=name, start_day=day)
 e1, e2, e3, e4, e5 = ev('Run', '2025-03-01'), ev('Gym', '2025-06-01'), ev('Night', '2025-06-02'), ev('Run', '2024-12-31'), ev('Old gym', '2025-02-01')
 for lbl, exp, f, t in [('event->page', 'OK', e1, wo), ('a second kind on the same event', 'OK', e1, run_), ('page->page', 'ERR', m1, wo),
                        ('task->page', 'ERR', ta, wo), ('event->person', 'ERR', e1, pa), ('event->event', 'ERR', e1, e2)]:

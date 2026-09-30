@@ -9,8 +9,8 @@ c = fresh()
 
 # ---- instants
 for bad in ('2026-06-09 10:00:00.000', '2026-06-09T10:00:00Z', '2026-06-09T10:00:00.000', '2026-06-09T10:00:00.000+02:00', '2026-06-09T25:00:00.000Z', ''):
-    S.K(f'instant {bad!r} rejected on entities.created_at', tryx(c, "INSERT INTO entities(type,created_at,updated_at,source) VALUES ('page',?,'2026-06-09T10:00:00.000Z','ui')", (bad,)).startswith('ERR'))
-S.K('a well-formed instant is accepted', tryx(c, "INSERT INTO entities(type,created_at,updated_at,source) VALUES ('page','2026-06-09T10:00:00.000Z','2026-06-09T10:00:00.000Z','ui')") == 'OK')
+    S.K(f'instant {bad!r} rejected on entities.created_at', tryx(c, "INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES ('page',?,'2026-06-09T10:00:00.000Z','ui')", (bad,)).startswith('ERR'))
+S.K('a well-formed instant is accepted', tryx(c, "INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES ('page','2026-06-09T10:00:00.000Z','2026-06-09T10:00:00.000Z','ui')") == 'OK')
 S.K('created_at has no default and is NOT NULL (app-written)', [(r[3], r[4]) for r in c.execute("pragma table_info('entities')") if r[1] == 'created_at'] == [(1, None)])
 S.K("strftime('%f') renders SS.SSS (three digits, rounded)", one(c, "select strftime('%f','2026-06-09 21:14:03.482999')") == '03.483')
 S.K('whole-second input is widened to .000Z: one fixed width', one(c, "select strftime('%Y-%m-%dT%H:%M:%fZ','2026-06-09T21:14:03Z')") == '2026-06-09T21:14:03.000Z')
@@ -18,9 +18,9 @@ S.K('CURRENT_TIMESTAMP is second-precision and non-ISO', re.fullmatch(r'\d{4}-\d
 S.K('same-second instants order by their fraction as plain text', one(c, "select '2026-06-09T21:14:03.482Z' < '2026-06-09T21:14:03.483Z'") == 1)
 
 # ---- days, on every day column
-DAYCOLS = [('events', 'start_day', lambda: dict(id=ent(c, 'event'), title='x')), ('events', 'end_day', lambda: dict(id=ent(c, 'event'), title='x', start_day='2000-01-01')),
-           ('tasks', 'due_day', lambda: dict(id=ent(c, 'task'), title='x')), ('pages', 'day', lambda: dict(id=ent(c, 'page'), kind='memo')),
-           ('measurements', 'day', lambda: dict(metric_id=1, value=1, source='ui', recorded_at='2026-01-01T00:00:00.000Z')),
+DAYCOLS = [('events', 'start_day', lambda: dict(id=ent(c, 'event'), name='x')), ('events', 'end_day', lambda: dict(id=ent(c, 'event'), name='x', start_day='2000-01-01')),
+           ('tasks', 'due_day', lambda: dict(id=ent(c, 'task'), name='x')), ('pages', 'day', lambda: dict(id=ent(c, 'page'), kind='memo')),
+           ('measurements', 'day', lambda: dict(metric_id=1, value=1, source='ui', created_at='2026-01-01T00:00:00.000Z')),
            ('people', 'birth_day', None), ('holdings', 'opened_day', None), ('balances', 'day', None)]
 h = named(c, 'holding')
 for table, col, base in DAYCOLS:
@@ -41,10 +41,10 @@ S.K('every day and instant CHECK in §3 uses IS, never =', not re.search(r"(?:da
 
 # ---- zone
 for tz in ['Europe/Berlin', 'UTC', 'America/Argentina/Buenos_Aires', 'Etc/GMT+5', 'America/Port-au-Prince', None, 'x' * 64]:
-    S.K(f'entities.tz {str(tz)[:20]!r} accepted', tryx(c, f"INSERT INTO entities(type,created_at,updated_at,tz,source) VALUES ('page',{NOW},{NOW},?,'ui')", (tz,)) == 'OK')
+    S.K(f'entities.tz {str(tz)[:20]!r} accepted', tryx(c, f"INSERT INTO entities(entity_type,created_at,updated_at,tz,source) VALUES ('page',{NOW},{NOW},?,'ui')", (tz,)) == 'OK')
     S.K(f'measurements.tz {str(tz)[:20]!r} accepted', measure(c, 1, '2026-06-09', 3, taken_at='2026-06-09T22:30:00.000Z', tz=tz) == 'OK')
 for tz in ['', 'Europe Berlin', 'x' * 65, 'Europe/Berlin\n', 'ünï/x', 'a;b', 'Europe/Berlin ']:
-    S.K(f'entities.tz {tz[:14]!r} rejected', tryx(c, f"INSERT INTO entities(type,created_at,updated_at,tz,source) VALUES ('page',{NOW},{NOW},?,'ui')", (tz,)).startswith('ERR'))
+    S.K(f'entities.tz {tz[:14]!r} rejected', tryx(c, f"INSERT INTO entities(entity_type,created_at,updated_at,tz,source) VALUES ('page',{NOW},{NOW},?,'ui')", (tz,)).startswith('ERR'))
     S.K(f'measurements.tz {tz[:14]!r} rejected', measure(c, 1, '2026-06-09', 3, tz=tz).startswith('ERR'))
 S.K('events have no tz column of their own (D10)', 'tz' not in [r[1] for r in c.execute("pragma table_info('events')")])
 

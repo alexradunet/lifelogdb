@@ -112,7 +112,7 @@ st_sql = set(re.findall(r'^-- (0|1|2a|2b|3|4)\)', sql, re.M)); st_fig = set(re.f
 S.K('the save flow names steps 0, 1, 2a, 2b, 3, 4 exactly as §6.13 does', st_sql == st_fig == {'0', '1', '2a', '2b', '3', '4'}, (st_sql, st_fig))
 S.K('the save flow has BEGIN IMMEDIATE, SAVEPOINT, RELEASE, ROLLBACK TO and COMMIT, as §6.13', all(w in body('save-flow') for w in ('BEGIN IMMEDIATE', 'SAVEPOINT target', 'RELEASE target', 'ROLLBACK TO target', 'COMMIT')))
 S.K('the memo diagram uses the three states of a memo', set(re.findall(r'(Inbox|Triaged|Tombstoned)', body('memo-life'))) == {'Inbox', 'Triaged', 'Tombstoned'})
-S.K('the page diagram has the named state and promotion by type', 'Named' in body('page-life') and 'entities.type' in body('page-life'))
+S.K('the page diagram has the named state and promotion by type', 'Named' in body('page-life') and 'entities.entity_type' in body('page-life'))
 S.K('the writers diagram names BEGIN IMMEDIATE, WAL, mode=ro', all(w in body('writers') for w in ('BEGIN IMMEDIATE', 'WAL', 'mode=ro')))
 S.K('the money flow names balances, holdings, currencies, balance_values and sums per currency, with no conversion',
     all(w in body('money-flow') for w in ('balances', 'holdings', 'currencies', 'balance_values', 'per currency')) and 'fx' not in body('money-flow'))

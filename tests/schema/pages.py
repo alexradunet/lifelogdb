@@ -111,7 +111,7 @@ c = fresh(); p = add(c, 'page', 'Notes'); mo = add(c, 'memo', body='first words 
 def hits(q): return one(c, 'select count(*) from pages_fts where pages_fts match ?', (q,))
 S.K('an insert is indexed; unicode61 folds accents (zurich finds Zürich)', hits('first') == 1 and hits('zurich') == 1)
 before = c.total_changes; c.execute(f'UPDATE pages SET triaged_at={NOW} WHERE id=?', (mo,)); d = c.total_changes - before
-S.K('triage touches pages and entities only, not the index (pages_fts_au watches title and body)', d == 2, d)
+S.K('triage touches pages and entities only, not the index (pages_fts_update watches title and body)', d == 2, d)
 c.execute("UPDATE pages SET body='second words' WHERE id=?", (mo,))
 S.K('a body change re-indexes: old word gone, new word found', hits('first') == 0 and hits('second') == 1)
 add(c, 'memo', body='日本語のノートを書く')

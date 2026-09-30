@@ -15,8 +15,8 @@ S = Suite('named entities')
 c = fresh()
 for t in NAMED:
     i = named(c, t, f'H {t}')
-    S.K(f'a {t} is one id: entities.type, pages.entity_type and its domain row agree',
-        one(c, 'select e.type = p.entity_type from entities e join pages p using(id) where id=?', (i,)) == 1 and one(c, 'select count(*) from entities') == len(NAMED[:NAMED.index(t) + 1]))
+    S.K(f'a {t} is one id: entities.entity_type, pages.entity_type and its domain row agree',
+        one(c, 'select e.entity_type = p.entity_type from entities e join pages p using(id) where id=?', (i,)) == 1 and one(c, 'select count(*) from entities') == len(NAMED[:NAMED.index(t) + 1]))
 for t, tbl in (('person', 'people'), ('place', 'places'), ('holding', 'holdings')):
     e = ent(c, t)
     S.K(f'a {t} without a page is refused (its FK points at pages)', tryx(c, f'INSERT INTO {tbl}(id{",name" if t == "person" else ""}{",side,currency" if t == "holding" else ""}) VALUES (?{",?" if t == "person" else ""}{",?,?" if t == "holding" else ""})',
@@ -28,21 +28,21 @@ S.K('an event or a task cannot have a pages row', all(tryx(c, "INSERT INTO pages
 S.K('a person row with no people row, only a page, is what the orphan query is for (the FKs allow the page alone)',
     tryx(c, "INSERT INTO pages(id,entity_type,kind,title,title_key) VALUES (?, 'person', 'page', 'Half', 'half')", (ent(c, 'person'),)) == 'OK')
 cols = lambda t: [r[1] for r in c.execute(f"pragma table_info('{t}')")]
-S.K('places and holdings have no name column (the title is the name); people keep name; none has notes',
-    'name' not in cols('places') and 'name' not in cols('holdings') and 'name' in cols('people') and all('notes' not in cols(t) for t in ('people', 'places', 'holdings')))
+S.K('places and holdings have no name column (the title is the name); people keep name; none has a note',
+    'name' not in cols('places') and 'name' not in cols('holdings') and 'name' in cols('people') and all('note' not in cols(t) for t in ('people', 'places', 'holdings')))
 S.K('entities has no page_id column', 'page_id' not in cols('entities'))
 # promotion and its limits
 c = fresh(); g = page(c, 'Ana'); mm = memo(c, '[[Ana]]'); link(c, mm, g, 'wikilink')
-r1 = tryx(c, "UPDATE entities SET type='person' WHERE id=? AND type='page'", (g,)); r2 = tryx(c, "INSERT INTO people(id,name) VALUES (?, 'Ana Example')", (g,))
-S.K('a plain page is promoted: UPDATE entities.type cascades to pages.entity_type, then the people row', r1 == r2 == 'OK'
-    and c.execute('select e.type, p.entity_type from entities e join pages p using(id) where id=?', (g,)).fetchone() == ('person', 'person'), (r1, r2))
+r1 = tryx(c, "UPDATE entities SET entity_type='person' WHERE id=? AND entity_type='page'", (g,)); r2 = tryx(c, "INSERT INTO people(id,name) VALUES (?, 'Ana Example')", (g,))
+S.K('a plain page is promoted: UPDATE entities.entity_type cascades to pages.entity_type, then the people row', r1 == r2 == 'OK'
+    and c.execute('select e.entity_type, p.entity_type from entities e join pages p using(id) where id=?', (g,)).fetchone() == ('person', 'person'), (r1, r2))
 S.K('...and the memo\'s link to it is kept (the id did not change)', c.execute("select to_id from links where from_id=?", (mm,)).fetchall() == [(g,)])
-S.K('a promoted person cannot be turned back into a plain page (the people row\'s FK)', tryx(c, "UPDATE entities SET type='page' WHERE id=?", (g,)).startswith('ERR'))
-S.K('...nor into a place', tryx(c, "UPDATE entities SET type='place' WHERE id=?", (g,)).startswith('ERR'))
-S.K('a memo cannot be promoted (pages_named_titled)', 'pages_named_titled' in tryx(c, "UPDATE entities SET type='person' WHERE id=?", (mm,)))
-S.K('a page cannot become an event (pages_entity_type)', 'pages_entity_type' in tryx(c, "UPDATE entities SET type='event' WHERE id=?", (page(c, 'Ev'),)))
+S.K('a promoted person cannot be turned back into a plain page (the people row\'s FK)', tryx(c, "UPDATE entities SET entity_type='page' WHERE id=?", (g,)).startswith('ERR'))
+S.K('...nor into a place', tryx(c, "UPDATE entities SET entity_type='place' WHERE id=?", (g,)).startswith('ERR'))
+S.K('a memo cannot be promoted (pages_named_titled)', 'pages_named_titled' in tryx(c, "UPDATE entities SET entity_type='person' WHERE id=?", (mm,)))
+S.K('a page cannot become an event (pages_entity_type)', 'pages_entity_type' in tryx(c, "UPDATE entities SET entity_type='event' WHERE id=?", (page(c, 'Ev'),)))
 ev = thing(c, 'event')
-S.K('an event cannot change type (its FK has no cascade)', tryx(c, "UPDATE entities SET type='task' WHERE id=?", (ev,)).startswith('ERR'))
+S.K('an event cannot change type (its FK has no cascade)', tryx(c, "UPDATE entities SET entity_type='task' WHERE id=?", (ev,)).startswith('ERR'))
 S.K('the page of a person cannot be deleted', tryx(c, 'DELETE FROM pages WHERE id=?', (g,)).startswith('ERR'))
 S.K('tombstoning the person keeps its page', tryx(c, f'UPDATE entities SET deleted_at={NOW} WHERE id=?', (g,)) == 'OK' and one(c, 'select title from pages where id=?', (g,)) == 'Ana')
 S.K('integrity and foreign keys clean', integrity_ok(c))
@@ -61,7 +61,7 @@ if len(sel0) == 1 and len(memos_q) == 1 and len(create) == 5 and len(promo) == 4
     S.K('step 0 finds nothing for a new handle', c.execute(sel0[0], {k: P[k] for k in ('handle_key',)}).fetchall() == [])
     for st in create: run_block(c, st, P)
     pid = P.get('person_id')
-    S.K('create: one id, a person with its page titled by the handle', c.execute('select e.type, p.entity_type, p.title, pe.name from entities e join pages p using(id) join people pe using(id)').fetchall()
+    S.K('create: one id, a person with its page titled by the handle', c.execute('select e.entity_type, p.entity_type, p.title, pe.name from entities e join pages p using(id) join people pe using(id)').fetchall()
         == [('person', 'person', 'Bob Sample', 'Bob Sample')] and pid is not None)
     S.K('step 0 now reports the handle as taken (entity_type person)', c.execute(sel0[0], {'handle_key': 'bob sample'}).fetchall() == [(pid, 'person')])
     S.K('the same handle cannot be made twice, in any case', 'title_key' in tryx(c, "INSERT INTO pages(id,kind,title,title_key) VALUES (?, 'page', 'BOB SAMPLE', 'bob sample')", (ent(c, 'page'),)))
@@ -71,7 +71,7 @@ if len(sel0) == 1 and len(memos_q) == 1 and len(create) == 5 and len(promo) == 4
     gid = one(c, "select id from pages where title_key='ana example'")
     S.K('step 0 finds the ghost the memo made, as a plain page', c.execute(sel0[0], {'handle_key': 'ana example'}).fetchall() == [(gid, 'page')])
     for st in promo: run_block(c, st, dict(ghost_id=gid))
-    S.K('the promotion block turns it into a person, one id', c.execute('select e.type, pe.name from entities e join people pe using(id) where id=?', (gid,)).fetchall() == [('person', 'Ana Example')])
+    S.K('the promotion block turns it into a person, one id', c.execute('select e.entity_type, pe.name from entities e join people pe using(id) where id=?', (gid,)).fetchall() == [('person', 'Ana Example')])
     S.K('...and the old memo already names her, no re-save needed', [r[0] for r in c.execute(memos_q[0], {'person_id': gid})] == [mid])
     S.K('promoting a memo fails in the UPDATE', tryx(c, promo[1], {'ghost_id': mid}).startswith('ERR'))
     S.K('promoting a page that is already a person changes no row, and the people insert fails', tryx(c, promo[1], {'ghost_id': gid}) == 'OK'

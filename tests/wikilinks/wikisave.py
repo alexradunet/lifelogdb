@@ -100,7 +100,7 @@ def sync_wikilinks(c, page_id, body, mutate=()):
             row = c.execute("SELECT p.id, e.deleted_at FROM pages p JOIN entities e ON e.id=p.id "
                             "WHERE p.title_key=?", (key,)).fetchone()
             if row is None:
-                tid = c.execute(f"INSERT INTO entities(type,created_at,updated_at,source) VALUES('page',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
+                tid = c.execute(f"INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES('page',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
                 c.execute("INSERT INTO pages(id,kind,title,title_key) VALUES(?, 'page', ?, ?)", (tid, title, key))
             else:
                 tid = row[0]
@@ -120,7 +120,7 @@ def sync_wikilinks(c, page_id, body, mutate=()):
 def save_memo(c, body, day='2026-09-30', mutate=()):
     c.execute('BEGIN IMMEDIATE')
     try:
-        pid = c.execute(f"INSERT INTO entities(type,created_at,updated_at,source) VALUES('page',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
+        pid = c.execute(f"INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES('page',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
         c.execute("INSERT INTO pages(id,kind,day,body) VALUES(?, 'memo', ?, ?)", (pid, day, body))
         r = sync_wikilinks(c, pid, body, mutate)
         c.execute('COMMIT')

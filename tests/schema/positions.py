@@ -10,7 +10,7 @@ INF, NAN = float('inf'), float('nan')
 
 def fix(c, taken_at='2026-09-30T10:00:00.000Z', day='2026-09-30', lat=44.43, lon=26.10, source='ui', **cols):
     cols = dict(taken_at=taken_at, day=day, lat=lat, lon=lon, source=source, **cols)
-    return tryx(c, f"INSERT INTO positions({','.join(cols)},recorded_at) VALUES ({','.join('?' * len(cols))},{NOW})", tuple(cols.values()))
+    return tryx(c, f"INSERT INTO positions({','.join(cols)},created_at) VALUES ({','.join('?' * len(cols))},{NOW})", tuple(cols.values()))
 
 # ---- a fix: time, zone, source
 c = fresh()
@@ -19,12 +19,12 @@ for bad in ['2026-09-30T10:00:00Z', '2026-09-30 10:00:00.000', '2026-9-30T10:00:
     S.K(f'taken_at {bad!r} is refused (round-trip CHECK)', fix(c, taken_at=bad).startswith('ERR'))
 for bad in ['2026-9-30', '2026-02-30', '30.09.2026', '']:
     S.K(f'day {bad!r} is refused (round-trip CHECK)', fix(c, day=bad).startswith('ERR'))
-S.K('a fix without taken_at is refused', tryx(c, f"INSERT INTO positions(day,lat,lon,recorded_at,source) VALUES ('2026-09-30',1,1,{NOW},'ui')").startswith('ERR'))
-S.K('a fix without day is refused', tryx(c, f"INSERT INTO positions(taken_at,lat,lon,recorded_at,source) VALUES ('2026-09-30T10:00:00.000Z',1,1,{NOW},'ui')").startswith('ERR'))
-S.K('a malformed recorded_at is refused', tryx(c, "INSERT INTO positions(taken_at,day,lat,lon,recorded_at,source) VALUES ('2026-09-30T10:00:00.000Z','2026-09-30',1,1,'2026-09-30 10:00','ui')").startswith('ERR'))
+S.K('a fix without taken_at is refused', tryx(c, f"INSERT INTO positions(day,lat,lon,created_at,source) VALUES ('2026-09-30',1,1,{NOW},'ui')").startswith('ERR'))
+S.K('a fix without day is refused', tryx(c, f"INSERT INTO positions(taken_at,lat,lon,created_at,source) VALUES ('2026-09-30T10:00:00.000Z',1,1,{NOW},'ui')").startswith('ERR'))
+S.K('a malformed created_at is refused', tryx(c, "INSERT INTO positions(taken_at,day,lat,lon,created_at,source) VALUES ('2026-09-30T10:00:00.000Z','2026-09-30',1,1,'2026-09-30 10:00','ui')").startswith('ERR'))
 S.K('a zone with a space is refused', fix(c, tz='Europe/ Berlin').startswith('ERR'))
 S.K('an IANA zone is accepted', fix(c, tz='Europe/Berlin') == 'OK')
-S.K('source is required', tryx(c, f"INSERT INTO positions(taken_at,day,lat,lon,recorded_at) VALUES ('2026-09-30T10:00:00.000Z','2026-09-30',1,1,{NOW})").startswith('ERR'))
+S.K('source is required', tryx(c, f"INSERT INTO positions(taken_at,day,lat,lon,created_at) VALUES ('2026-09-30T10:00:00.000Z','2026-09-30',1,1,{NOW})").startswith('ERR'))
 S.K("source 'UI' is refused (lowercase)", fix(c, source='UI').startswith('ERR'))
 S.K("source 'import:gpslogger' is accepted", fix(c, source='import:gpslogger') == 'OK')
 
@@ -53,32 +53,32 @@ S.K('UPDATE of a coordinate is refused', tryx(c, 'UPDATE positions SET lat = 0')
 S.K('UPDATE of source is refused', tryx(c, "UPDATE positions SET source = 'cli'").startswith('ERR'))
 S.K('DELETE is refused', tryx(c, 'DELETE FROM positions').startswith('ERR'))
 S.K('INSERT OR REPLACE over a fix is refused (recursive_triggers=ON fires positions_no_delete)',
-    tryx(c, f"INSERT OR REPLACE INTO positions(id,taken_at,day,lat,lon,recorded_at,source) VALUES (1,'2026-09-30T11:00:00.000Z','2026-09-30',1,1,{NOW},'ui')").startswith('ERR'))
+    tryx(c, f"INSERT OR REPLACE INTO positions(id,taken_at,day,lat,lon,created_at,source) VALUES (1,'2026-09-30T11:00:00.000Z','2026-09-30',1,1,{NOW},'ui')").startswith('ERR'))
 S.K('the fix is unchanged after all of that', c.execute('select * from positions').fetchall() == first)
 
-# ---- imports: ON CONFLICT DO NOTHING, taken_at as import_id when the export has none
+# ---- imports: ON CONFLICT DO NOTHING, taken_at as import_key when the export has none
 c = fresh(); c.execute("ATTACH ':memory:' AS s")
 c.execute('CREATE TABLE s.staging(taken_at, day, tz, lat, lon, acc)')
 rnd = random.Random(7)
 rows = [(f'2026-09-{d:02d}T{h:02d}:{m:02d}:00.000Z', f'2026-09-{d:02d}', 'Europe/Berlin' if m % 2 else '', f'{44.4 + rnd.random() / 10:.6f}',
          f'{26.0 + rnd.random() / 10:.6f}', '' if h % 5 == 0 else f'{rnd.uniform(3, 80):.1f}') for d in range(1, 11) for h in range(1, 21) for m in (0, 15, 30, 45)]
 c.executemany('INSERT INTO s.staging VALUES (?,?,?,?,?,?)', rows)
-IMPORT = f"""INSERT INTO positions(taken_at, day, tz, lat, lon, accuracy_m, recorded_at, source, import_id)
+IMPORT = f"""INSERT INTO positions(taken_at, day, tz, lat, lon, accuracy_m, created_at, source, import_key)
 SELECT taken_at, day, NULLIF(tz, ''), lat, lon, NULLIF(acc, ''), {NOW}, :source, taken_at
   FROM s.staging WHERE true
-ON CONFLICT(source, import_id) WHERE import_id IS NOT NULL DO NOTHING"""
+ON CONFLICT(source, import_key) WHERE import_key IS NOT NULL DO NOTHING"""
 def load(source='import:gps'):
     c.execute('BEGIN IMMEDIATE'); n = c.execute(IMPORT, dict(source=source)).rowcount; c.execute('COMMIT'); return n
 S.K(f'the import inserts all {len(rows)} staged fixes', load() == len(rows))
 S.K('running it a second time inserts nothing', load() == 0 and one(c, 'select count(*) from positions') == len(rows))
 S.K("an empty CSV field became NULL, not '' (NULLIF)", one(c, 'select count(*) from positions where accuracy_m is null') > 0 and one(c, "select count(*) from positions where tz = ''") == 0)
-S.K('the same import_id under another source is another fix (per-source namespace)', load('import:other') == len(rows))
+S.K('the same import_key under another source is another fix (per-source namespace)', load('import:other') == len(rows))
 c.execute("INSERT INTO s.staging VALUES ('2026-09-11T10:00:00.000Z','2026-09-11','','91','26','')")
 before = one(c, 'select count(*) from positions')
 try: load('import:third'); r = 'OK'
 except sqlite3.Error as e: r = str(e); c.execute('ROLLBACK')
 S.K('one impossible latitude fails the whole batch (DO NOTHING skips only duplicates)', r != 'OK' and one(c, 'select count(*) from positions') == before, r)
-S.K('the unique index is partial: fixes without import_id never collide', fix(c) == 'OK' and fix(c) == 'OK')
+S.K('the unique index is partial: fixes without import_key never collide', fix(c) == 'OK' and fix(c) == 'OK')
 
 # ---- §6.20: the indexes the reads walk
 B = block('6.20'); ST = statements(B)

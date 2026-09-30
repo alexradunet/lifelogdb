@@ -42,7 +42,7 @@ S.K('ADD CONSTRAINT checks the existing rows (tightening is as safe as loosening
 
 # ---- widening enums on a populated database
 WIDEN = {
- 'entities_type': ('entities', "type IN ('page','event','task','person','place','holding','vehicle')", lambda c: tryx(c, f"INSERT INTO entities(type,created_at,updated_at,source) VALUES ('vehicle',{NOW},{NOW},'ui')")),
+ 'entities_entity_type': ('entities', "entity_type IN ('page','event','task','person','place','holding','vehicle')", lambda c: tryx(c, f"INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES ('vehicle',{NOW},{NOW},'ui')")),
  'pages_kind': ('pages', "kind IN ('memo','page','image')", lambda c: tryx(c, "INSERT INTO pages(id,kind,title,title_key,day) VALUES (?, 'image', 'Pic', 'pic', '2026-06-09')", (ent(c, 'page'),))),
  'holdings_side': ('holdings', "side IN ('asset','liability','equity')", lambda c: tryx(c, "INSERT INTO holdings(id,side,currency) VALUES (?, 'equity', 'EUR')", (named_page(c, 'holding'),))),
 }
@@ -93,7 +93,7 @@ S.K('...and the guard is back: the next change is refused', 'fixed at registrati
 # ---- a promotion can leave a link its kind now refuses (§7): links are checked at insert only
 c = fresh(); ev = thing(c, 'event'); w = page(c, 'Workout')
 S.K('an event is-a [[Workout]]', link(c, ev, w, 'is-a') == 'OK')
-c.execute("UPDATE entities SET type = 'person' WHERE id = ?", (w,)); domain(c, 'person', w)
+c.execute("UPDATE entities SET entity_type = 'person' WHERE id = ?", (w,)); domain(c, 'person', w)
 S.K('promoting Workout to a person keeps the old is-a edge, which a new insert would refuse',
     one(c, "select count(*) from links where to_id = ? and kind = 'is-a'", (w,)) == 1 and 'endpoint type not allowed' in link(c, thing(c, 'event'), w, 'is-a'))
 
@@ -104,7 +104,7 @@ c.execute("ALTER TABLE entities ADD COLUMN uid TEXT CONSTRAINT entities_uid CHEC
 for (i,) in c.execute('select id from entities').fetchall(): c.execute('UPDATE entities SET uid = ? WHERE id = ?', (str(uuid.uuid4()), i))
 c.execute('CREATE UNIQUE INDEX entities_uid_unique ON entities(uid)'); c.execute('ALTER TABLE entities ALTER COLUMN uid SET NOT NULL'); c.execute('COMMIT')
 S.K('every existing entity has a unique uid, and an entity without one is refused afterwards',
-    one(c, 'select count(distinct uid) = count(*) from entities') == 1 and 'NOT NULL' in tryx(c, f"INSERT INTO entities(type,created_at,updated_at,source) VALUES ('task',{NOW},{NOW},'ui')"))
+    one(c, 'select count(distinct uid) = count(*) from entities') == 1 and 'NOT NULL' in tryx(c, f"INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES ('task',{NOW},{NOW},'ui')"))
 S.K('...with integrity and foreign keys clean', integrity_ok(c))
 
 # ---- comments: inside a statement kept, outside dropped (why the rules live inside)

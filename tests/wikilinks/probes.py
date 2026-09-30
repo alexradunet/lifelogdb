@@ -18,7 +18,7 @@ def check(name, cond, detail=''):
     if not cond: fails.append(name)
     print(('PASS ' if cond else 'FAIL ') + name + (f' — {detail}' if detail else ''))
 def links_of(c, pid): return sorted(r[0] for r in c.execute("SELECT p.title FROM links l JOIN pages p ON p.id=l.to_id WHERE l.from_id=? AND l.kind='wikilink'", (pid,)))
-def orphans(c): return c.execute("SELECT count(*) FROM entities e WHERE type='page' AND NOT EXISTS (SELECT 1 FROM pages p WHERE p.id=e.id)").fetchone()[0]
+def orphans(c): return c.execute("SELECT count(*) FROM entities e WHERE entity_type='page' AND NOT EXISTS (SELECT 1 FROM pages p WHERE p.id=e.id)").fetchone()[0]
 def integrity(c):
     return c.execute('pragma integrity_check').fetchone()[0] == 'ok' and not c.execute('pragma foreign_key_check').fetchall()
 
@@ -57,11 +57,11 @@ check('P3e dropped targets survive as pages (and may become ghosts, §6.12)', c.
 
 # P4 self link, stub
 c = fresh()
-c.execute('BEGIN IMMEDIATE'); wid = c.execute(f"INSERT INTO entities(type,created_at,updated_at,source) VALUES('page',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
+c.execute('BEGIN IMMEDIATE'); wid = c.execute(f"INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES('page',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
 c.execute("INSERT INTO pages(id,kind,title,title_key,body) VALUES(?, 'page','Diet','diet','')", (wid,)); c.execute('COMMIT')
 edit_body(c, wid, 'About [[Diet]] and [[diet]] and [[Food]]', mutate=MUT)
 check('P4a a page never links to itself', links_of(c, wid) == ['Food'], str(links_of(c, wid)))
-c.execute('BEGIN IMMEDIATE'); old = c.execute(f"INSERT INTO entities(type,created_at,updated_at,source) VALUES('page',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
+c.execute('BEGIN IMMEDIATE'); old = c.execute(f"INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES('page',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
 c.execute("INSERT INTO pages(id,kind,title,title_key,body) VALUES(?, 'page','Old diet','old diet','[[Food]] [[Stuff]]')", (old,)); c.execute('COMMIT')
 edit_body(c, old, '[[Food]] [[Stuff]]', mutate=MUT)
 n_before = len(links_of(c, old))

@@ -57,7 +57,7 @@ def doc_save(c, page_id, body, own_key):
 
 def doc_memo(c, body):
     c.execute(St['begin'][0])
-    pid = c.execute(f"INSERT INTO entities(type,created_at,updated_at,source) VALUES('page',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
+    pid = c.execute(f"INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES('page',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
     c.execute("INSERT INTO pages(id,kind,day,body) VALUES(?, 'memo', '2026-09-30', ?)", (pid, body))
     doc_save(c, pid, body, None); c.execute(St['commit'][0]); return pid
 
@@ -91,7 +91,7 @@ if all(len(v) == 1 for v in St.values()):
 # ---- C  §6.5 drops redirect rows
 c = fresh(); c.execute('BEGIN IMMEDIATE')
 def mk(kind, title=None, body=''):
-    i = c.execute(f"INSERT INTO entities(type,created_at,updated_at,source) VALUES('page',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
+    i = c.execute(f"INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES('page',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
     c.execute("INSERT INTO pages(id,kind,title,title_key,day,body) VALUES(?,?,?,?,?,?)", (i, kind, title, W.title_key(title) if title else None, None if kind == 'page' else '2026-09-30', body)); return i
 new, old, mm = mk('page', 'Diet plan'), mk('page', 'Diet', '#REDIRECT [[Diet plan]]'), mk('memo', body='[[Diet plan]]')
 for f, t, k in ((old, new, 'redirect'), (mm, new, 'wikilink')):

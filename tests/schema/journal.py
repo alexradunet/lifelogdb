@@ -9,7 +9,7 @@ S = Suite('journal')
 # ---- events
 c = fresh()
 def ev(**kw):
-    cols = dict(id=ent(c, 'event'), title='t', start_day='2026-06-01', **kw)
+    cols = dict(id=ent(c, 'event'), name='t', start_day='2026-06-01', **kw)
     return tryx(c, f"INSERT INTO events({','.join(cols)}) VALUES ({','.join('?' * len(cols))})", tuple(cols.values()))
 S.K('an event may be day-precise only', ev() == 'OK')
 S.K('end_day before start_day refused', ev(end_day='2026-05-31').startswith('ERR'))
@@ -22,11 +22,11 @@ S.K('tasks have no status column: open = completed_at IS NULL', 'status' not in 
 
 # ---- tasks
 t = lambda: ent(c, 'task')
-S.K('done without completed_day refused', tryx(c, f"INSERT INTO tasks(id,title,completed_at) VALUES (?,'x',{NOW})", (t(),)).startswith('ERR'))
-S.K('done without completed_at refused', tryx(c, "INSERT INTO tasks(id,title,completed_day) VALUES (?,'x','2026-06-09')", (t(),)).startswith('ERR'))
-S.K('a malformed completed_day refused', tryx(c, f"INSERT INTO tasks(id,title,completed_at,completed_day) VALUES (?,'x',{NOW},'2026-6-9')", (t(),)).startswith('ERR'))
-a = t(); S.K('done with both accepted', tryx(c, "INSERT INTO tasks(id,title,completed_at,completed_day) VALUES (?,'ship it','2026-06-09T22:30:00.000Z','2026-06-10')", (a,)) == 'OK')
-b = t(); c.execute("INSERT INTO tasks(id,title,due_day) VALUES (?,'open one','2026-06-01')", (b,))
+S.K('done without completed_day refused', tryx(c, f"INSERT INTO tasks(id,name,completed_at) VALUES (?,'x',{NOW})", (t(),)).startswith('ERR'))
+S.K('done without completed_at refused', tryx(c, "INSERT INTO tasks(id,name,completed_day) VALUES (?,'x','2026-06-09')", (t(),)).startswith('ERR'))
+S.K('a malformed completed_day refused', tryx(c, f"INSERT INTO tasks(id,name,completed_at,completed_day) VALUES (?,'x',{NOW},'2026-6-9')", (t(),)).startswith('ERR'))
+a = t(); S.K('done with both accepted', tryx(c, "INSERT INTO tasks(id,name,completed_at,completed_day) VALUES (?,'ship it','2026-06-09T22:30:00.000Z','2026-06-10')", (a,)) == 'OK')
+b = t(); c.execute("INSERT INTO tasks(id,name,due_day) VALUES (?,'open one','2026-06-01')", (b,))
 S.K('completing an open task: the documented UPDATE', tryx(c, f"UPDATE tasks SET completed_at={NOW}, completed_day='2026-06-11' WHERE id=?", (b,)) == 'OK')
 S.K('half un-completing it is refused', tryx(c, 'UPDATE tasks SET completed_at=NULL WHERE id=?', (b,)).startswith('ERR'))
 plan = ' | '.join(r[3] for r in c.execute("EXPLAIN QUERY PLAN SELECT id FROM tasks WHERE completed_at IS NULL AND due_day <= '2026-06-01'"))
@@ -40,9 +40,9 @@ S.K('...and not on 2026-06-09', ('done', '2026-06-09T22:30:00.000Z', 'ship it') 
 c = fresh()
 memo(c, 'a memo', day='2026-09-29'); page(c, 'Essay', day='2026-09-29', body='text'); page(c, 'Link target'); page(c, 'Yesterday essay', day='2026-09-28', body='x')
 named(c, 'person', 'Sam')
-e = ent(c, 'event'); domain(c, 'event', e, title='Trip', start_day='2026-09-28', end_day='2026-09-30')
-tk = ent(c, 'task'); domain(c, 'task', tk, title='Overdue', due_day='2026-09-01')
-dn = ent(c, 'task'); domain(c, 'task', dn, title='Later', due_day='2026-10-01')
+e = ent(c, 'event'); domain(c, 'event', e, name='Trip', start_day='2026-09-28', end_day='2026-09-30')
+tk = ent(c, 'task'); domain(c, 'task', tk, name='Overdue', due_day='2026-09-01')
+dn = ent(c, 'task'); domain(c, 'task', dn, name='Later', due_day='2026-10-01')
 c.execute("INSERT INTO metrics(name,unit) VALUES ('weight','kg')"); measure(c, 2, '2026-09-29', 71.2, taken_at='2026-09-29T06:00:00.000Z'); measure(c, 2, '2026-09-29', 70.0, supersedes_id=1)
 rows = c.execute(DV, {'day': '2026-09-29'}).fetchall()
 got = {(r[0], r[2]) for r in rows}
@@ -66,14 +66,14 @@ S.K('the inbox is served by the partial index pages_inbox', 'pages_inbox' in pla
 
 # ---- one place per event; where did I live
 c = fresh(); pe = named(c, 'person'); pl = named(c, 'place', 'Berlin')
-e = ent(c, 'event'); domain(c, 'event', e, title='Living in Berlin', start_day='2015-03-01', end_day='2018-08-31', place_id=pl)
+e = ent(c, 'event'); domain(c, 'event', e, name='Living in Berlin', start_day='2015-03-01', end_day='2018-08-31', place_id=pl)
 Q = "SELECT p.title FROM events ev JOIN entities e ON e.id=ev.id AND e.deleted_at IS NULL JOIN pages p ON p.id=ev.place_id WHERE ev.start_day <= :day AND coalesce(ev.end_day, ev.start_day) >= :day"
 S.K("'where did I live on 2015-06-01' is a dated event with a place", c.execute(Q, dict(day='2015-06-01')).fetchall() == [('Berlin',)])
 S.K('...and is empty after it ended', c.execute(Q, dict(day='2019-01-01')).fetchall() == [])
 
 # ---- what stands in for recurrence (D15)
-c = fresh(); t1 = ent(c, 'task'); domain(c, 'task', t1, title='pay rent', due_day='2026-01-01')
-t2 = ent(c, 'task'); domain(c, 'task', t2, title='pay rent', due_day='2026-02-01')
+c = fresh(); t1 = ent(c, 'task'); domain(c, 'task', t1, name='pay rent', due_day='2026-01-01')
+t2 = ent(c, 'task'); domain(c, 'task', t2, name='pay rent', due_day='2026-02-01')
 S.K('the next reminder is linked with the symmetric related (two edges)', link(c, t2, t1, 'related') == 'OK' and one(c, "select count(*) from links where kind='related'") == 2)
 S.K('spawned task->task stays refused', link(c, t2, t1, 'spawned').startswith('ERR'))
 c.execute("INSERT INTO metrics(name,unit) VALUES ('rent_paid','')"); mid = one(c, "select id from metrics where name='rent_paid'")

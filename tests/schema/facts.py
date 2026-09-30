@@ -11,7 +11,7 @@ c = fresh(); c.execute("INSERT INTO metrics(name,unit) VALUES ('weight','kg')");
 S.K('mood is seeded (D6)', one(c, "select count(*) from metrics where name='mood'") == 1)
 measure(c, W_, '2026-06-01', 70)
 S.K('metrics.unit cannot change', tryx(c, "UPDATE metrics SET unit='lb' WHERE name='weight'").startswith('ERR'))
-S.K('a no-op SET unit=unit with a note edit passes', tryx(c, "UPDATE metrics SET unit=unit, notes='body weight' WHERE name='weight'") == 'OK')
+S.K('a no-op SET unit=unit with a note edit passes', tryx(c, "UPDATE metrics SET unit=unit, note='body weight' WHERE name='weight'") == 'OK')
 S.K('a name typo can be fixed', tryx(c, "UPDATE metrics SET name='body_weight' WHERE name='weight'") == 'OK')
 for nm in ['Blood Pressure', 'bp sys', 'bp-sys', '', 'Weight', 'MOOD', 'x(y)', 'ünï']:
     S.K(f'metric name {nm!r} rejected', tryx(c, "INSERT INTO metrics(name,unit) VALUES (?, 'x')", (nm,)).startswith('ERR'))
@@ -24,9 +24,9 @@ def sup(v, s, metric=None, id_=None):
     cols = dict(supersedes_id=s) if id_ is None else dict(supersedes_id=s, id=id_)
     return measure(c, metric or w, '2026-06-01', v, **cols)
 measure(c, w, '2026-06-01', 70)
-S.K('a measurement without recorded_at is refused', tryx(c, "INSERT INTO measurements(metric_id,day,value,source) VALUES (1,'2026-06-01',3,'ui')").startswith('ERR'))
+S.K('a measurement without created_at is refused', tryx(c, "INSERT INTO measurements(metric_id,day,value,source) VALUES (1,'2026-06-01',3,'ui')").startswith('ERR'))
 S.K('UPDATE of a value refused', tryx(c, 'UPDATE measurements SET value=1').startswith('ERR'))
-S.K('UPDATE of supersedes_id or entity_id refused', tryx(c, 'UPDATE measurements SET supersedes_id=NULL').startswith('ERR') and tryx(c, 'UPDATE measurements SET entity_id=NULL').startswith('ERR'))
+S.K('UPDATE of supersedes_id or captured_with_id refused', tryx(c, 'UPDATE measurements SET supersedes_id=NULL').startswith('ERR') and tryx(c, 'UPDATE measurements SET captured_with_id=NULL').startswith('ERR'))
 S.K('DELETE refused', tryx(c, 'DELETE FROM measurements').startswith('ERR'))
 S.K('a correction supersedes a row', sup(71, 1) == 'OK')
 S.K('a second correction of the same row is refused', sup(72, 1).startswith('ERR'))
@@ -63,29 +63,29 @@ S.K('...but on a correction it is a retraction the DB cannot tell apart (why the
 
 # ---- import idiom: ON CONFLICT DO NOTHING, never OR IGNORE, never OR REPLACE
 c = fresh(); c.execute("INSERT INTO metrics(name,unit) VALUES ('steps','n')"); st = one(c, "select id from metrics where name='steps'")
-imp = f"INSERT INTO measurements(metric_id,day,value,source,import_id,recorded_at) VALUES ({st},?,?,?,?,{NOW}) ON CONFLICT(source,import_id,metric_id) WHERE import_id IS NOT NULL DO NOTHING"
+imp = f"INSERT INTO measurements(metric_id,day,value,source,import_key,created_at) VALUES ({st},?,?,?,?,{NOW}) ON CONFLICT(source,import_key,metric_id) WHERE import_key IS NOT NULL DO NOTHING"
 S.K('first import row', tryx(c, imp, ('2026-06-09', 8000, 'import:apple', '1001')) == 'OK')
 c.execute(imp, ('2026-06-09', 8000, 'import:apple', '1001'))
-S.K('the same source, id and metric again inserts nothing', c.execute('select changes()').fetchone()[0] == 0 and one(c, 'select count(*) from measurements where import_id=\'1001\'') == 1)
-S.K('the same import_id from another importer is kept', tryx(c, imp, ('2026-06-10', 9000, 'import:garmin', '1001')) == 'OK' and one(c, "select count(*) from measurements where import_id='1001'") == 2)
+S.K('the same source, id and metric again inserts nothing', c.execute('select changes()').fetchone()[0] == 0 and one(c, 'select count(*) from measurements where import_key=\'1001\'') == 1)
+S.K('the same import_key from another importer is kept', tryx(c, imp, ('2026-06-10', 9000, 'import:garmin', '1001')) == 'OK' and one(c, "select count(*) from measurements where import_key='1001'") == 2)
 S.K('ON CONFLICT DO NOTHING still raises on a malformed day', tryx(c, imp, ('2026-6-9', 1, 'import:apple', '2002')).startswith('ERR'))
 n = one(c, 'select count(*) from measurements')
-S.K('OR IGNORE swallows a malformed day silently (the documented hole)', tryx(c, f"INSERT OR IGNORE INTO measurements(metric_id,day,value,source,import_id,recorded_at) VALUES ({st},'2026-6-9',1,'import:apple','2002',{NOW})") == 'OK'
+S.K('OR IGNORE swallows a malformed day silently (the documented hole)', tryx(c, f"INSERT OR IGNORE INTO measurements(metric_id,day,value,source,import_key,created_at) VALUES ({st},'2026-6-9',1,'import:apple','2002',{NOW})") == 'OK'
     and one(c, 'select count(*) from measurements') == n)
-S.K('OR IGNORE also swallows a CHECK violation (a NULL first value)', tryx(c, f"INSERT OR IGNORE INTO measurements(metric_id,day,value,source,recorded_at) VALUES ({st},'2026-06-11',NULL,'ui',{NOW})") == 'OK'
+S.K('OR IGNORE also swallows a CHECK violation (a NULL first value)', tryx(c, f"INSERT OR IGNORE INTO measurements(metric_id,day,value,source,created_at) VALUES ({st},'2026-06-11',NULL,'ui',{NOW})") == 'OK'
     and one(c, 'select count(*) from measurements') == n)
-c0 = fresh(rt=False); c0.execute("INSERT INTO metrics(name,unit) VALUES ('w','kg')"); measure(c0, 2, '2026-01-01', 70, source='import:s', import_id='k')
+c0 = fresh(rt=False); c0.execute("INSERT INTO metrics(name,unit) VALUES ('w','kg')"); measure(c0, 2, '2026-01-01', 70, source='import:s', import_key='k')
 S.K('with recursive_triggers=OFF, OR REPLACE rewrites history (why the pragma is mandatory)',
-    tryx(c0, f"INSERT OR REPLACE INTO measurements(metric_id,day,value,source,import_id,recorded_at) VALUES (2,'2026-01-01',99,'import:s','k',{NOW})") == 'OK'
+    tryx(c0, f"INSERT OR REPLACE INTO measurements(metric_id,day,value,source,import_key,created_at) VALUES (2,'2026-01-01',99,'import:s','k',{NOW})") == 'OK'
     and c0.execute('select value from measurements').fetchall() == [(99.0,)])
-c1 = fresh(); c1.execute("INSERT INTO metrics(name,unit) VALUES ('w','kg')"); measure(c1, 2, '2026-01-01', 70, source='import:s', import_id='k')
+c1 = fresh(); c1.execute("INSERT INTO metrics(name,unit) VALUES ('w','kg')"); measure(c1, 2, '2026-01-01', 70, source='import:s', import_key='k')
 S.K('with recursive_triggers=ON the same REPLACE is refused and history is intact',
-    tryx(c1, f"INSERT OR REPLACE INTO measurements(metric_id,day,value,source,import_id,recorded_at) VALUES (2,'2026-01-01',99,'import:s','k',{NOW})").startswith('ERR')
+    tryx(c1, f"INSERT OR REPLACE INTO measurements(metric_id,day,value,source,import_key,created_at) VALUES (2,'2026-01-01',99,'import:s','k',{NOW})").startswith('ERR')
     and c1.execute('select value from measurements').fetchall() == [(70.0,)])
 
 # ---- the read view is index-served
 c = fresh(); c.execute("INSERT INTO metrics(name,unit) VALUES ('w','kg')"); c.execute('BEGIN')
-c.executemany(f"INSERT INTO measurements(metric_id,day,value,source,recorded_at) VALUES (2,?,?,'ui',{NOW})",
+c.executemany(f"INSERT INTO measurements(metric_id,day,value,source,created_at) VALUES (2,?,?,'ui',{NOW})",
               [((dt.date(2000, 1, 1) + dt.timedelta(days=i % 9000)).isoformat(), i * 0.001) for i in range(20000)])
 c.execute('COMMIT')
 plan = ' | '.join(r[3] for r in c.execute('EXPLAIN QUERY PLAN SELECT count(*) FROM measurement_values'))

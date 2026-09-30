@@ -49,11 +49,11 @@ for label, bad in (("a value 'abc'", ('bad', '2026-02-01', '', '', 'abc')), ('an
 stage([('t1', '2026-03-01', '', '', '70')])
 S.K("without NULLIF an empty taken_at ('' is not NULL) fails its CHECK", 'CHECK' in run(c, IMP.replace("NULLIF(taken_at, '')", 'taken_at')))
 S.K('without WHERE true the statement is rejected (the ON is read as a join\'s)', re.search(r'JOIN|syntax', run(c, IMP.replace('  FROM s.staging WHERE true', '  FROM s.staging'))) is not None)
-S.K('a conflict target without the index\'s WHERE does not match the partial unique index', 'does not match' in run(c, IMP.replace(' WHERE import_id IS NOT NULL DO NOTHING', ' DO NOTHING')))
+S.K('a conflict target without the index\'s WHERE does not match the partial unique index', 'does not match' in run(c, IMP.replace(' WHERE import_key IS NOT NULL DO NOTHING', ' DO NOTHING')))
 S.K("CAST hides garbage: 'abc' -> 0.0, '' -> 0.0, '12.5kg' -> 12.5", c.execute("select cast('abc' as real), cast('' as real), cast('12.5kg' as real)").fetchone() == (0.0, 0.0, 12.5))
 stage([('cast1', '2026-03-05', '', '', 'abc')])
 S.K("with CAST the bad value 'abc' would be stored as 0.0 (the trap, shown)", run(c, IMP.replace("NULLIF(tz, ''), value,", "NULLIF(tz, ''), CAST(value AS REAL),")) == 'OK'
-    and c.execute("select value from measurements where import_id='cast1'").fetchone() == (0.0,))
+    and c.execute("select value from measurements where import_key='cast1'").fetchone() == (0.0,))
 orphan = sql_blocks(section('### 2.5 ', '### 2.6 '))[0].splitlines()[2].split(';')[0]
 S.K('afterwards: integrity_check ok, foreign_key_check empty, no orphan entities row', integrity_ok(c) and c.execute(orphan).fetchall() == [])
 pc = c.execute('SELECT source, count(*), min(day), max(day) FROM measurements GROUP BY source').fetchall()

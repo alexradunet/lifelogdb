@@ -76,7 +76,7 @@ def title_key(t):
 def ent(c, typ, source='ui', created=None):
     """The entities row, id by RETURNING."""
     at = created or NOW
-    return c.execute(f"INSERT INTO entities(type,created_at,updated_at,source) VALUES (?,{at},{at},?) RETURNING id", (typ, source)).fetchone()[0]
+    return c.execute(f"INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES (?,{at},{at},?) RETURNING id", (typ, source)).fetchone()[0]
 
 
 def memo(c, body='x', day='2026-09-30', created=None):
@@ -104,8 +104,8 @@ def domain(c, typ, i, **cols):
     if typ == 'person': cols.setdefault('name', 'P')
     if typ == 'holding': cols.setdefault('side', 'asset'); cols.setdefault('currency', 'EUR')
     table = dict(person='people', place='places', holding='holdings', event='events', task='tasks')[typ]
-    if typ == 'event': cols.setdefault('title', 'E'); cols.setdefault('start_day', '2026-09-30')
-    if typ == 'task': cols.setdefault('title', 'T')
+    if typ == 'event': cols.setdefault('name', 'E'); cols.setdefault('start_day', '2026-09-30')
+    if typ == 'task': cols.setdefault('name', 'T')
     cols = dict(id=i, **cols)
     c.execute(f"INSERT INTO {table}({','.join(cols)}) VALUES ({','.join('?' * len(cols))})", tuple(cols.values()))
 
@@ -123,12 +123,12 @@ def link(c, f, t, kind, source='ui'):
 
 def measure(c, metric, day, value, source='ui', **cols):
     cols = dict(metric_id=metric, day=day, value=value, source=source, **cols)
-    return tryx(c, f"INSERT INTO measurements({','.join(cols)},recorded_at) VALUES ({','.join('?' * len(cols))},{NOW})", tuple(cols.values()))
+    return tryx(c, f"INSERT INTO measurements({','.join(cols)},created_at) VALUES ({','.join('?' * len(cols))},{NOW})", tuple(cols.values()))
 
 
 def balance(c, holding, day, amount, source='ui', **cols):
     cols = dict(holding_id=holding, day=day, amount=amount, source=source, **cols)
-    return tryx(c, f"INSERT INTO balances({','.join(cols)},recorded_at) VALUES ({','.join('?' * len(cols))},{NOW})", tuple(cols.values()))
+    return tryx(c, f"INSERT INTO balances({','.join(cols)},created_at) VALUES ({','.join('?' * len(cols))},{NOW})", tuple(cols.values()))
 
 
 def statements(sql):

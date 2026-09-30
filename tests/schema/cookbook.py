@@ -11,7 +11,7 @@ S.K('§6 has at least 22 SQL blocks, one per section from 6.1 to 6.22', len(BL) 
 def seeded(hardened):
     c = fresh(hardened=hardened)
     me = memo(c, 'Shipped the schema. [[Lifelog]]', '2026-09-29'); wp = page(c, 'Lifelog'); link(c, me, wp, 'wikilink')
-    pe = named(c, 'person', 'Sam', name='Sam'); ev = thing(c, 'event', title='Trip', start_day='2026-09-29'); ta = thing(c, 'task', title='do', due_day='2026-09-28')
+    pe = named(c, 'person', 'Sam', name='Sam'); ev = thing(c, 'event', name='Trip', start_day='2026-09-29'); ta = thing(c, 'task', name='do', due_day='2026-09-28')
     link(c, pe, ev, 'attended'); gh = page(c, 'Ana'); wo = page(c, 'Workout')
     pl = named(c, 'place', 'Japan', lat=35.68, lon=139.69)
     c.execute("INSERT INTO metrics(name,unit) VALUES ('weight','kg')")
@@ -22,7 +22,7 @@ def seeded(hardened):
              day='2026-09-29', page_id=wp, person_id=pe, entity_id=pe, handle_title='Bob Sample', handle_key='bob sample', ghost_id=gh, memo_id=me, task_id=ta,
              due_day='2026-10-05', query='schema', key='newpage', title='Newpage', metric_id=2, wrong_row_id=1, source='ui',
              taken_at='2026-09-29T03:00:00.000Z', at='2026-09-29T12:00:00.000Z', lat=35.681, lon=139.691, max_accuracy_m=100, m_per_deg_lon=90300.0, radius_m=500,
-             event_id=ev, kind_id=wo, import_id='cal-uid-1')
+             event_id=ev, kind_id=wo, import_key='cal-uid-1')
     return c, P
 
 for hardened in (False, True):
