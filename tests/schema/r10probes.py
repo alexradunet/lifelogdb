@@ -3,7 +3,7 @@ A  R8-01: the title CHECK rejects a Windows device name bare OR before an extens
 B  The "2075 test" of SCHEMA.md §2.11: every question in the doc's table is answered, from `lifelog_meta` alone.
 C  The deferred features of §7 have a working additive path (executed, not assumed):
    C1 partial dates (R4-18)  C2 tokenizer switch for CJK search (R4-15)  C3 a `mention` link kind for people (R4-11 e).
-D  The orphan check of nightly.sh finds an entities row without a domain row and is silent on a clean database.
+D  The orphan query of SCHEMA.md 2.8 finds an entities row without a domain row and is silent on a clean database.
 E  The import path of §2.11, run from the document's own SQL on 1 000 rows: idempotent, all-or-nothing, and the three traps are real."""
 exec(open('probes1.py').read().split('# ---- P1:')[0])
 import re
@@ -86,9 +86,9 @@ K('C3 a memo can now mention a person; a memo cannot mention a place', tryx(c, f
 K('C3 the mention shows up in "everything about a person" (links to_id = person)', c.execute("select count(*) from links where to_id=? and kind='mention'", (pe,)).fetchone()[0] == 1)
 K('C3 the existing kinds are untouched', c.execute("select count(*) from link_kinds where kind in ('wikilink','about','redirect')").fetchone()[0] == 3)
 
-# ---- D orphan check (the query of nightly.sh, taken from the document text)
+# ---- D orphan check (the query of section 2.8, taken from the document text)
 m = re.search(r"SELECT id FROM entities WHERE id NOT IN \(SELECT id FROM pages UNION SELECT id FROM events UNION SELECT id FROM tasks UNION SELECT id FROM people UNION SELECT id FROM places UNION SELECT id FROM accounts\)", doc)
-K('D the orphan query is in the document (nightly.sh)', m is not None)
+K('D the orphan query is in the document (2.8)', m is not None)
 c = fresh(); memo(c, 'x')
 K('D clean database: the orphan query returns nothing', m and c.execute(m.group(0)).fetchall() == [])
 o = ent(c, 'page')

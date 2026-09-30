@@ -1,8 +1,8 @@
 # Lifelog — Database Schema v1
 
-**Status:** v1.12 — frozen pending external review (review rounds 3, 3b, 3c applied; round 4 = an
-independent review plus the finance tier D18; rounds 5–10 = its fixes: mechanical items, time zone / `completed_day` / one place per event, the text inconsistencies plus durability and write transactions, the wikilink save contract, the snapshot / restore / way-out contract, and the last open items with a repeatable test suite in `tests/` — **no recorded finding is open**; what remains is three gates only the owner can close, §8 round 10; round 11 then merged notes and wiki pages into one `page` kind, D5 addendum 5). Not yet applied to any canonical database.
-**Date:** 2026-09-30 (v1.0–v1.4: 2026-09-29)
+**Status:** v1.13 — frozen pending external review (review rounds 3, 3b, 3c applied; round 4 = an
+independent review plus the finance tier D18; rounds 5–10 = its fixes: mechanical items, time zone / `completed_day` / one place per event, the text inconsistencies plus durability and write transactions, the wikilink save contract, and the last open items with a repeatable test suite in `tests/` — **no recorded finding is open**; what remains is two gates only the owner can close, the external review and the first real import, §8 round 10; round 11 then merged notes and wiki pages into one `page` kind, D5 addendum 5; round 12 narrowed the document to the schema and its reliability and withdrew the markdown export and the snapshot / restore / dump contract, §7, §8 #14). Not yet applied to any canonical database.
+**Date:** 2026-09-30 (v1.0–v1.4: 2026-09-29; v1.5–v1.13: 2026-09-30)
 **Scope of the project:** A lifetime personal database (journal/memos, pages (notes, wiki), events,
 tasks, people, health metrics, personal finance — accounts, balances, net worth; file
 attachments deferred — D9) in a single SQLite file,
@@ -49,16 +49,15 @@ and *canonical data being corrupted by uncontrolled writers*.
    `.schema` output alone. (SQLite's own "application file format" essay makes exactly
    this argument — see [R1].)
 3. **Single writing application.** One application (later with CLI/API/agent
-   front-ends) owns all writes to the database and the derived export folder. Many
+   front-ends) owns all writes to the database. Many
    *processes* are fine — one *writer* owning the conventions. No other app is ever
    pointed at the canonical data with write access (see D3).
 4. **Additive-only evolution after freeze.** Once real data exists, schema changes are
    `ADD COLUMN` / `CREATE TABLE` / new indexes and numbered forward-only migrations.
    SQLite explicitly blesses additive change as its compatibility mechanism
    ("adding new tables or columns does not change the meaning of prior queries" [R1]).
-5. **Derived data is disposable.** The markdown export folder and the FTS index can be
-   deleted and rebuilt from canonical data at any time. Only `life.db` — and its nightly
-   snapshots, the only history of the structured data (D12) — is irreplaceable.
+5. **Derived data is disposable.** The FTS index and `title_key` can be dropped and rebuilt
+   from canonical data at any time; nothing else is derived. `life.db` is irreplaceable.
    (Binary files are out of v1 entirely — see D9.)
 
 ---
@@ -72,32 +71,12 @@ the init DDL (§3; after the freeze, `0001_init.sql`).
 
 ```
 life/
-├── life.db                  # canonical: all structured data + all prose
-├── export/                  # DERIVED (nightly): markdown mirror of the PROSE, git-versioned
-│   ├── days/2026-06-09.md   #   one file per day, bundling that day's memos
-│   └── pages/<Title>.md     #   one file per page (unique titles — D5), [[wikilinks]] preserved
-├── backups/                 # nightly VACUUM INTO snapshots, each verified — NOT derived: the only history of structured data (D12, §2.8)
-└── dump/                    # DERIVED (nightly): one CSV per table, from the newest snapshot — the "leave" format (§2.8); never in git
+└── life.db                  # canonical: all structured data + all prose
 ```
 
-`life/` is a git repository. Git tracks `export/`, the init DDL, and application code —
-never `life.db` itself (binary churn), and never `backups/` or `dump/` either: they hold the
-finance tables, and git history cannot be scrubbed (D17 addendum 2). Its `.gitignore`
-(executed, §8 #11 — `git add -A` stages only `export/` and this file):
-
-```
-life.db
-life.db-wal
-life.db-shm
-life.db.broken-*
-backups/
-dump/
-dump.tmp/
-```
-
-Text history therefore comes free from git-over-export; DB history comes from nightly
-snapshots (D12). Binary files (`media/`) are deliberately deferred out of v1 (D9) — the
-layout grows a `media/` sibling when they return.
+`life.db`, `life.db-wal` and `life.db-shm` are never committed to git: binary churn, and git
+history cannot be scrubbed of finance data (§2.10). Binary files (`media/`) are deliberately
+deferred out of v1 (D9) — the layout grows a `media/` sibling when they return.
 
 ### 2.2 Time
 
@@ -165,7 +144,7 @@ layout grows a `media/` sibling when they return.
 
 - `pages.body` is CommonMark text. Wiki references are written inline as `[[Page Title]]`.
   A `#tag` is read as `[[tag]]`, so tags are just pages (D5). The app never rewrites
-  the body: `#health` stays `#health` in the database and in `export/`.
+  the body: `#health` stays `#health` in the database.
 - **The save contract (D19).** Saving a page body is one `BEGIN IMMEDIATE` transaction
   (§6.14): the body, then the page's `links(kind='wikilink')` rows, made **equal to the set of
   pages the body names** — missing rows added, rows the body no longer supports deleted — so a
@@ -253,19 +232,21 @@ layout grows a `media/` sibling when they return.
   are excluded from backlink queries (§6.5), and the stub's own body is not read for
   wikilinks (contract above). Orphaned empty stubs are surfaced by the
   `ghost_pages` view for occasional sweeps (§6.13).
-- **Titles are filenames — the schema keeps them safe, unique and permanent.**
-  - *Safe.* A page title becomes `export/pages/<title>.md`, so the DDL
+- **Titles are file-name-safe names — the schema keeps them safe, unique and permanent.**
+  - *Safe.* A page title must be usable as a file name anywhere, so the DDL
     rejects titles that are unsafe as a filename on Linux, macOS and Windows: path
     separators and Windows-reserved characters (`/ \ : * ? " < > |`), control
     characters (incl. NUL), a leading or trailing `.` (hidden files, `..`, Windows), a
     Windows device name (`CON`, `NUL`, `COM1`…, and the superscript `COM¹ COM² COM³ LPT¹ LPT² LPT³`)
     **bare or before an extension** — `CON.backup` and `NUL.txt` are the device too [R58] — and
     leading/trailing spaces. Titles are 1–240 **bytes** (a filename limit is 255
-    bytes, minus `.md`). `[[Health/Diet]]` and `[[Re: plan]]` are therefore not valid
+    bytes, with headroom for an extension). `[[Health/Diet]]` and `[[Re: plan]]` are therefore not valid
     page names — use `[[Health - Diet]]` — and a wikilink to one makes no link (contract
     above). Memos have no title. Checked against the Windows documentation only (Windows itself
     is not executable here); a name with a space before its dot (`CON .txt`) is not covered
-    because the documentation does not say it is reserved.
+    because the documentation does not say it is reserved. The rule is the strict one on
+    purpose: the title CHECKs are unnamed, so loosening one after the freeze is a table rebuild
+    (D5 addenda 4 and 6).
   - *Permanent.* A title never changes (`pages_title_fixed`): a rename would silently
     repoint every `[[Old Title]]` in decades of prose (D5). To fix a title, create the
     new page and turn the old one into a `#REDIRECT` stub with `links(kind='redirect')`.
@@ -303,14 +284,6 @@ layout grows a `media/` sibling when they return.
     that predicate, so SQLite uses it (§6.14). The unique index covers tombstoned pages, so when a save resolves a title
     that belongs to a tombstoned page the app un-tombstones it rather than inserting a
     duplicate.
-  - *Exporter backstop.* Because equal keys are impossible, the exporter should never see
-    two titles that a case-folding/normalising filesystem treats as one. It still checks
-    for a filename collision at write time and, if one ever occurs (a filesystem rule
-    finer than casefold + NFC), disambiguates as `<title> (<id>).md` — a mirror-side
-    safety net, never a change to canonical data. Not tested on macOS or Windows
-    filesystems: what is verified is that the keys collide in the database (§8 #5).
-- The exporter writes bodies verbatim, so `[[wikilinks]]` remain in the markdown mirror
-  (readable, and render as a graph in Obsidian pointed read-only at `export/`).
 
 ### 2.6 Files (deferred — see D9)
 
@@ -319,8 +292,6 @@ first real photo/PDF need). The design — SHA-256 content-addressed `media/`, h
 extension + mime + size in an `attachments` table, path derived never stored, dedup by
 hash — is recorded in D9 so it is not reinvented. Reopen trigger: the first genuine
 attachment need. Until then the database is all text and `life.db` stays megabyte-scale.
-(`export/` mirrors all the *prose*; the structured tables live in `life.db` and its
-snapshots, and are readable without SQLite as the CSVs of `dump/` — §2.8.)
 
 ### 2.7 Migrations
 
@@ -335,156 +306,35 @@ snapshots, and are readable without SQLite as the CSVs of `dump/` — §2.8.)
 - The init DDL sets `PRAGMA application_id = 0x4C494645` (`'LIFE'`) so `file(1)` and
   future tools can recognize the database [R1].
 
-### 2.8 Backups
+### 2.8 Integrity checks
 
-The snapshots are the only history of the structured data (D12), so this section is a contract,
-not advice. Everything in it was executed (§8 #11, and #12 for the orphan check). The numbers come from a synthetic database of
-about five years of logging — 50 MB, 314 000 measurements, 5 600 pages — on this machine's btrfs.
+Three checks tell whether a file still obeys the schema. They read only the file, need no other
+copy, and each catches what the others cannot. Run them before and after an import (§2.11) or a
+migration (§2.7), and after any writer crashed. Every claim below was executed on the **live**
+file (§8 #14), not on a copy.
 
-- **Snapshot with `VACUUM INTO` — not `cp`, not `.backup`.**
-  - *A byte copy of a live WAL database is torn.* `cp --reflink=never` of a database a second
-    process was writing to: with constant checkpoints **95 of 150** copies were damaged (65 failed
-    `integrity_check`, 30 were unreadable), 5 of 150 at the default checkpoint setting; copying the
-    main file and then `-wal` (or the other way round) failed 51 and 67 of 150. (On btrfs a copy can be
-    a copy-on-write clone: Python's `shutil.copy` was clean in 360 tries and plain `cp` failed 2 of
-    100 — a property of the filesystem and the tool, not a guarantee.) The WAL "should be kept with the database if the database is copied" [R62].
-  - *`.backup` is consistent but can starve.* The backup API restarts when another process
-    commits during the copy [R60]. On the 50 MB file a writer committing 5 times a second did no
-    harm; **19 commits a second — a bulk import — kept it from finishing in 30 s**. (The same test
-    on a 10 MB file in tmpfs only broke at ~230 commits/s: the threshold depends on size and disk.)
-  - *`VACUUM INTO`* is one read transaction and "a consistent snapshot" [R61]: 0.29 s at 19
-    commits/s and 0.26 s at 155 on the 50 MB file, consistent every time. The copy keeps `application_id`,
-    `user_version`, all 76 objects and the FTS5 index — but it is a **rollback-journal file, not
-    WAL**, so a restore switches it back (§2.9). The target must not exist [R61], hence the `.tmp` name.
-- **The nightly job.** One script, run from cron in `life/`; it stops at the first failing step
-  (non-zero exit, so cron mails it). A night that fails *verification* changes nothing already on disk: earlier
-  snapshots stay byte-identical, `dump/` is not replaced, nothing goes off-box, and step 4 never
-  runs, so a bad night cannot push a good snapshot out of the retention window. On the 50 MB file
-  the whole run, with a writer active, took 1.8 s.
-
-```sh
-#!/bin/sh
-# nightly.sh — run from cron inside life/. Stops at the first failing step (exit != 0, so cron mails it).
-set -eu
-day=$(date +%Y%m%d)
-snap=backups/life-$day.db
-mkdir -p backups
-trap 'rm -f "$snap.tmp"' EXIT      # a failed night leaves no half-written file behind
-
-# 1. Snapshot. VACUUM INTO is one read transaction: it finishes however busy the writers are.
-#    (.backup restarts whenever another process commits — it never finished at 19 commits/s on 50 MB.)
-rm -f "$snap.tmp"
-timeout 900 sqlite3 -readonly life.db "VACUUM INTO '$snap.tmp'"
-
-# 2. Verify the copy BEFORE it gets a real name, so a file called life-*.db is always a checked one.
-[ "$(sqlite3 -readonly "$snap.tmp" 'PRAGMA integrity_check')" = ok ]
-[ -z "$(sqlite3 -readonly "$snap.tmp" 'PRAGMA foreign_key_check')" ]
-[ -z "$(sqlite3 -readonly "$snap.tmp" 'SELECT id FROM entities WHERE id NOT IN (SELECT id FROM pages UNION SELECT id FROM events UNION SELECT id FROM tasks UNION SELECT id FROM people UNION SELECT id FROM places UNION SELECT id FROM accounts)')" ]
-[ "$(sqlite3 -readonly "$snap.tmp" 'PRAGMA application_id')" = 1279870533 ]
-mv "$snap.tmp" "$snap"
-(cd backups && sha256sum "life-$day.db" > "life-$day.db.sha256")
-
-# 3. CSV dump of every table, made from the verified snapshot (not from the live file). Never in git.
-rm -rf dump.tmp && mkdir dump.tmp
-for t in $(sqlite3 -readonly "$snap" "SELECT name FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*' AND name NOT GLOB 'pages_fts*'"); do
-  sqlite3 -readonly -header -csv "$snap" "SELECT * FROM \"$t\" ORDER BY rowid" > "dump.tmp/$t.csv"
-done
-rm -rf dump && mv dump.tmp dump
-
-# 4. Prune: the newest 30 snapshots, plus the first one of every month, forever.
-ls backups/life-????????.db | awk '
-  { f[NR] = $0; m = substr($0, 14, 6); first[NR] = (m != prev); prev = m }
-  END { for (i = 1; i <= NR; i++) if (i <= NR - 30 && !first[i]) print f[i] }' |
-while read -r old; do rm -f "$old" "$old.sha256"; done
-
-# 5. Off-box: any command that copies backups/ and dump/ to another machine or account.
-#    Append-only (restic) or rsync WITHOUT --delete: a mirror that deletes copies your accident.
-sh -c "${OFFBOX_CMD:?set OFFBOX_CMD to the command that copies backups/ and dump/ off this machine}"
+```sql
+PRAGMA integrity_check;      -- one row: ok
+PRAGMA foreign_key_check;    -- no rows
+SELECT id FROM entities WHERE id NOT IN (SELECT id FROM pages UNION SELECT id FROM events UNION SELECT id FROM tasks UNION SELECT id FROM people UNION SELECT id FROM places UNION SELECT id FROM accounts);   -- no rows
 ```
 
-- **What the verification can and cannot see.** On the copy, `integrity_check` (0.55 s for 50 MB)
-  caught a zeroed page, a truncated file and an index entry that no longer matches its row (a flipped
-  byte in `title_key`: *the copy inherits the damage, so the check rejects it*; a zeroed table page
-  makes `VACUUM INTO` itself fail). It is **not enough alone**: a writer that forgot `PRAGMA
-  foreign_keys=ON` (§2.9 — per connection) stored an orphan balance and `integrity_check` said `ok`,
-  so `foreign_key_check` runs too — and so does the one check no constraint can express: an `entities` row with no domain row (a writer that died between its two inserts; §8 round 5) must not exist. And **nothing in SQLite sees a flipped byte inside a value** — a
-  changed text cell passed `integrity_check` (there are no page checksums). That is why the job
-  records each snapshot's SHA-256, restore compares against it, and the off-box tool should verify
-  what it stores (restic's `check --read-data`; not installed here, so not executed).
-- **Retention: the newest 30 snapshots plus the first one of every month, forever** (step 4;
-  checked against an independent oracle on 1 200 fake file names). Thirty dailies cover "I noticed
-  yesterday"; the monthlies cover "I noticed in a year" — a silent content flip can sit unseen for
-  months, and D11's accepted blindness means structured edits between snapshots are invisible, so
-  beyond 30 days the granularity is one month. Cost: a snapshot is about the size of the database
-  (9.9 MB for a 10.3 MB file), so at 50 MB thirty dailies are 1.5 GB and the monthlies add 0.6 GB a
-  year; growing to 200 MB over twenty years is ~25 GB in total (arithmetic, not measured). Reopen
-  when snapshots take more than ~10 % of the disk: thin old monthlies to one a year.
-- **An off-box copy is mandatory.** A snapshot on the machine that holds `life.db` is not a
-  backup. Step 5 runs `$OFFBOX_CMD` and **fails the night if it is unset, empty or failing**
-  (executed: all three exit non-zero, and the verified local snapshot is kept). The command must be
-  append-only for the job: `restic backup backups dump` into an encrypted repository (recommended;
-  not executed here), or `rsync -a backups dump host:dir/` **without `--delete`** — executed: with
-  `--delete` a snapshot removed or lost locally disappears from the copy on the next run. rsync
-  never prunes, so off-box retention is that tool's job (restic: `forget`), never this script's. The
-  destination is encrypted at rest (D17 addendum 2).
-- **Restore.** With every writer stopped: `sh restore.sh backups/life-YYYYMMDD.db`.
-
-```sh
-#!/bin/sh
-# restore.sh SNAPSHOT [DIR] — with every writer stopped. DIR defaults to the current directory (life/).
-set -eu
-snap=$1; dir=${2:-.}
-# 1. Check the file you are about to trust: the hash recorded when it was verified, then the same checks.
-(cd "$(dirname "$snap")" && sha256sum -c "$(basename "$snap").sha256")
-[ "$(sqlite3 -readonly "$snap" 'PRAGMA integrity_check')" = ok ]
-[ -z "$(sqlite3 -readonly "$snap" 'PRAGMA foreign_key_check')" ]
-# 2. Put the old file and ITS OWN -wal/-shm aside (evidence); a stale -wal left next to the restored file would be replayed into it.
-ts=$(date +%Y%m%d%H%M%S)
-for e in "" -wal -shm; do
-  if [ -e "$dir/life.db$e" ]; then mv "$dir/life.db$e" "$dir/life.db.broken-$ts$e"; fi
-done
-# 3. Restore. A VACUUM INTO snapshot is a rollback-journal file: switch it back to WAL (persistent).
-cp "$snap" "$dir/life.db"
-[ "$(sqlite3 "$dir/life.db" 'PRAGMA journal_mode=WAL')" = wal ]
-[ "$(sqlite3 -readonly "$dir/life.db" 'PRAGMA integrity_check')" = ok ]
-```
-
-  The rules it encodes, each demonstrated. *Check first:* it refused a snapshot whose content had
-  flipped (hash), one with a zeroed page (`integrity_check`) and one with an orphan balance
-  (`foreign_key_check`), and left `life.db` untouched each time. *Never leave the old `-wal`
-  behind:* with the stale `-wal` kept next to the restored file, a snapshot of 2 626 pages silently
-  came back as the newer 3 426, and an older snapshot next to a newer `-wal` was damaged
-  (`integrity_check` errors) — SQLite: separated from its WAL, a database can lose commits or
-  become corrupt, and the only safe way to drop a WAL is to open and close the database [R62]. So the
-  old `life.db` and its **own** `-wal`/`-shm` are moved aside together as `life.db.broken-<time>`
-  (evidence; still opens with the newer data), never deleted. *Switch back to WAL* — the snapshot
-  is not.
-- **The drill.** A backup that has never been restored is a hope. Run `restore.sh` on the **off-box**
-  copy into an empty directory — `sh restore.sh /path/to/offbox/backups/life-YYYYMMDD.db /tmp/drill`
-  (executed: no old `life.db` to move aside is fine) — before the first real data, after any change
-  to the job, and at least once a year. Pass = it exits 0 (the hash equals the one recorded when
-  the snapshot was verified, the checks pass, WAL mode) and yesterday's memo is readable from it.
-  It never touches the live file.
-- **`dump/` — the way out.** One CSV per table (15; the FTS index is derived and not dumped),
-  written from the verified snapshot by `sqlite3 -header -csv … ORDER BY rowid`, so every table is
-  readable without SQLite. It is overwritten nightly (history is the snapshots), 33 MB and under a
-  second at 50 MB, **never in git** (finance — D17 addendum 2; `.gitignore` above) and part of the
-  off-box copy. It is **not a restore path**: restore is from a snapshot (a CSV carries no types,
-  triggers or constraints). Executed facts: a NULL is an empty field and `''` is `""` (a parser that
-  drops quotes cannot tell them apart); REAL values keep every digit (`0.30000000000000004`); text
-  with newlines, CRLF, quotes, commas, emoji and CJK survives a real CSV parser; an empty table is
-  an empty file (the CLI prints no header for zero rows); records end in CRLF (RFC 4180).
-- Litestream-style continuous replication is deliberately *not* used: overkill for a
-  single-user local DB; Litestream's own docs recommend plain cron backups at this scale
-  [R23].
-- Backups and dumps are plaintext: the DB is deliberately not encrypted (D17). Protect off-box
-  copies at rest by encrypting the *destination* (restic repo, encrypted disk), not the
-  database itself.
+- **`integrity_check` — the file's structure.** It caught a zeroed table page, a file truncated by
+  three pages, and an index entry that no longer matches its row (a flipped byte in a `title_key`
+  inside `pages_title`: `row … missing from index pages_title`).
+- **`foreign_key_check` — what the first cannot see.** A writer that forgot `PRAGMA foreign_keys=ON`
+  (§2.9 — per connection) stored a balance for an account that does not exist, and
+  `integrity_check` said `ok`.
+- **The orphan query — the one check no constraint can express.** An `entities` row with no domain
+  row (a writer that died between its two inserts; §8 round 5): both other checks are clean on it.
+- **What none of them sees: a changed value.** A flipped byte inside a body passed
+  `integrity_check` — SQLite keeps no page checksums — so damage inside a cell cannot be found from
+  the file alone.
 
 ### 2.9 Connection setup (every writer, mandatory)
 
 ```sql
-PRAGMA journal_mode = WAL;     -- persistent; set once by the init DDL (§3) and again by restore.sh (a VACUUM INTO snapshot is not WAL, §2.8)
+PRAGMA journal_mode = WAL;     -- persistent; set once by the init DDL (§3)
 PRAGMA synchronous  = FULL;    -- per connection. NORMAL in WAL "might roll back following a power loss" [R54];
                                -- FULL costs about 1 ms per commit here (btrfs, §8 #9) — free for a journal
 PRAGMA foreign_keys = ON;      -- MANDATORY per connection: SQLite's default is OFF and
@@ -546,10 +396,8 @@ first, day written at insert, wikilinks re-extracted on save, measurements appen
   as of a day, converted with `fx_rates` as of that day (§6.16–6.17); it is never written to a
   table, so it can be re-derived in any currency for any date.
 - **Secrets.** Never store credentials, PINs or full account/card numbers in `life.db` or in a
-  memo (memos are mirrored into `export/`, which is git-tracked). An account's `notes` may hold
-  the last four digits. The finance tables are **not** exported to `export/` (which mirrors
-  pages only — see §8 round 4, R4-14) and must not be added to it without an explicit decision
-  about git history, which cannot be scrubbed.
+  memo: the file is plaintext (D17). An account's `notes` may hold the last four digits. Finance
+  data never goes into git — its history cannot be scrubbed (§2.1).
 
 ---
 
@@ -562,11 +410,11 @@ the control, and what is left:
 
 | Threat | Control | Residual |
 |---|---|---|
-| The file is damaged or lost | verified nightly snapshots, a mandatory off-box copy, a drilled restore (§2.8) | power loss is documented, not simulated; damage *inside a value* is found only by the recorded SHA-256 |
-| A buggy writer, importer or agent | one writing application; triggers for append-only facts, no hard deletes and fixed kinds and titles; `ON CONFLICT … DO NOTHING`; `BEGIN IMMEDIATE`; the nightly foreign-key and orphan checks (§2.4, §2.9, §2.8) | the pragmas are per connection, so the application asserts them at connect |
+| The file is damaged or lost | `synchronous=FULL` and WAL (§2.9); the integrity checks find damage (§2.8) | nothing recovers it: no second copy of the file is kept (§7); power loss is documented, not simulated; damage *inside a value* is found by no check |
+| A buggy writer, importer or agent | one writing application; triggers for append-only facts, no hard deletes and fixed kinds and titles; `ON CONFLICT … DO NOTHING`; `BEGIN IMMEDIATE`; the foreign-key and orphan checks (§2.4, §2.9, §2.8) | the pragmas are per connection, so the application asserts them at connect |
 | Another tool editing rows | exploration tools open the file read-only; Datasette was executed read-only (§2.9, D14) | anything with write access to the file bypasses every control |
-| A stolen disk or off-box copy | the disk, the snapshots, `dump/` and the off-box destination are encrypted at rest (D17 addendum 2) | a stolen *unlocked* machine has everything |
-| Finance or health data leaking through git or the mirror | finance never in `export/`; `backups/` and `dump/` git-ignored; no credentials or full account numbers, ever (§2.1, §2.10) | `notes` fields are free text — the owner's discipline |
+| A stolen disk | the disk holding `life.db` is encrypted at rest (D17 addendum 2) | a stolen *unlocked* machine has everything |
+| Finance or health data leaking through git | `life.db` and its `-wal`/`-shm` are never committed; no credentials or full account numbers, ever (§2.1, §2.10) | `notes` fields are free text — the owner's discipline |
 | The data exposed on a network | Datasette on localhost only and read-only; nothing that runs arbitrary SQL is reachable from outside (D17 addendum 2) | a wrong bind address |
 | A reader in fifty years without this document | the 2075 test, below | — |
 
@@ -597,20 +445,18 @@ here, and a row cannot be dropped without the test noticing.
 | 13 | Why is a page never renamed? What makes a title valid? | `renames`, `titles`, `title_key` | `never`, `240`, `NFC` |
 | 14 | Why do ids of different tables coincide? How are rows created? | `entities` | `supertype`, `one transaction` |
 | 15 | Who may write, and with which settings? | `writers` | `BEGIN IMMEDIATE`, `read-only` |
-| 16 | What is derived and can be rebuilt? | `pages_fts`, `title_key`, `export` | `rebuildable`, `derived` |
-| 17 | Where are the readable copies and the history? | `export`, `backups` | `dump/`, `backups/` |
-| 18 | How do I restore a damaged file? | `backups` | `restore.sh`, `-wal` |
-| 19 | How do imports avoid duplicates and bad rows? | `imports` | `DO NOTHING`, `OR IGNORE` |
-| 20 | What does a repeating event or task mean? | `recurrence` | `templates` |
-| 21 | How does the schema change after real data exists? | `evolution` | `additive`, `user_version` |
-| 22 | What is a memo, what is a page, and can one become the other? | `pages_kind` | `untitled`, `never changes` |
+| 16 | What is derived and can be rebuilt? | `pages_fts`, `title_key` | `rebuildable`, `derived` |
+| 17 | How do imports avoid duplicates and bad rows? | `imports` | `DO NOTHING`, `OR IGNORE` |
+| 18 | What does a repeating event or task mean? | `recurrence` | `templates` |
+| 19 | How does the schema change after real data exists? | `evolution` | `additive`, `user_version` |
+| 20 | What is a memo, what is a page, and can one become the other? | `pages_kind` | `untitled`, `never changes` |
 
 **Imports** — the path for data that already exists elsewhere (a journal archive, a health export,
 statements). Every step was executed (§8 #12) on 1 000 synthetic rows:
 
-1. **Snapshot first.** Run `nightly.sh` (§2.8); a bad import is undone by restoring that snapshot,
-   because rows are never deleted. Do the first run of any new importer on a *copy*: `sqlite3
-   life.db "VACUUM INTO '/tmp/trial.db'"`.
+1. **Trial run first.** Rows are never deleted, so a bad import can only be retracted row by row
+   (a NULL-value correction for a measurement or a balance, a tombstone for an entity). Do the
+   first run of any new importer on a *copy*: `sqlite3 life.db "VACUUM INTO '/tmp/trial.db'"`.
 2. **Load the rows into a scratch database, never into `life.db`** (`sqlite3 scratch.db ".import
    --csv weights.csv staging"`), then insert in one `BEGIN IMMEDIATE` transaction per batch:
 
@@ -640,8 +486,8 @@ DETACH s;
 4. **What a failure does.** `ON CONFLICT … DO NOTHING` skips only a duplicate key: a malformed
    day, an impossible value or a dangling foreign key still raises and the **whole batch rolls back**
    (`OR IGNORE` would swallow them, §8 #6). Fix the data and run the batch again.
-5. **Check afterwards:** `PRAGMA integrity_check`, `PRAGMA foreign_key_check`, the orphan query of
-   `nightly.sh`, per-source counts (`SELECT source, count(*), min(day), max(day) FROM measurements
+5. **Check afterwards:** the three checks of §2.8 (`integrity_check`, `foreign_key_check`, the orphan
+   query), per-source counts (`SELECT source, count(*), min(day), max(day) FROM measurements
    GROUP BY source`), and **run the importer a second time — it must insert nothing.**
 6. **Before the freeze**, run steps 1–5 once with a real export on a copy and record the result in
    §8: a real import is the one test this schema has never had.
@@ -667,13 +513,11 @@ to a fresh file (see the §8 validation records for the exact procedure).
 --     'date(x) = x' would ACCEPT malformed dates. 'date(x) IS x'
 --     returns 0 for them. (Verified empirically; see §8.)
 --   * Single writing APPLICATION (many processes/clients fine: app,
---     CLI, API, agents); nothing else writes life.db or export/
+--     CLI, API, agents); nothing else writes life.db
 --   * Importers use INSERT ... ON CONFLICT(...) DO NOTHING — never OR IGNORE
 --     (it also skips CHECK / NOT NULL violations, silently) and never
 --     OR REPLACE (a delete; §8 #6, #7)
 --   * No binary files in v1: attachments/media are deferred (D9)
---   * export/ is derived, regenerated nightly; backups/ holds snapshots — the
---     only history of structured data (D12), NOT rebuildable
 --   * No hard deletes of entities OR their domain rows: deleted_at is a
 --     tombstone, ENFORCED by BEFORE DELETE triggers (links are the one
 --     hard-deleted table, D11);
@@ -689,7 +533,7 @@ to a fresh file (see the §8 validation records for the exact procedure).
 --     link_kinds (FK); registering a kind is a deliberate INSERT, and a
 --     kind's structure (symmetric flag, endpoint types) is fixed at
 --     registration; a trigger checks every link's endpoint types
---   * page titles double as export filenames, so the DDL forbids
+--   * page titles must be valid file names everywhere, so the DDL forbids
 --     path-unsafe titles, never lets a title change (renames are forbidden,
 --     D5), and enforces uniqueness on title_key — the title in NFC +
 --     Unicode-casefolded form, computed by the app (SQLite cannot fold
@@ -739,7 +583,7 @@ INSERT INTO lifelog_meta(key, value) VALUES
   ('tz',          'entities.tz and measurements.tz = IANA zone name of the writer when the row (measurements: taken_at) was captured, e.g. Europe/Berlin; NULL = unknown; with the UTC instant it gives the local time of day'),
   ('imports',     'INSERT ... ON CONFLICT(source, import_id ...) DO NOTHING; never OR IGNORE (skips CHECK/NOT NULL violations silently) or OR REPLACE (a delete)'),
   ('link_kinds',  'closed registry: links.kind references link_kinds; symmetric flag and endpoint types immutable and enforced; links rows are hard-deleted (D11)'),
-  ('titles',      'page titles are export filenames and never change: <=240 bytes, no path/reserved characters or names (a device name like CON is reserved even before an extension); memos are untitled'),
+  ('titles',      'page titles never change and are valid file names everywhere: <=240 bytes, no path/reserved characters or names (a device name like CON is reserved even before an extension); memos are untitled'),
   ('title_key',   'pages.title_key = NFC(casefold(NFC(title))), computed by the app; UNIQUE across pages (a memo has none); ASCII titles must equal lower(title); rebuildable'),
   ('pages_kind',  'pages.kind is memo (untitled: the capture stream and the inbox; always has a day) or page (titled, unique, linkable; its day is NULL when the app created it as a link target); it never changes after insert'),
   ('money',       'amounts are INTEGER minor units of accounts.currency; whole units = amount / currencies.subunits; never REAL, never in measurements'),
@@ -749,8 +593,6 @@ INSERT INTO lifelog_meta(key, value) VALUES
   ('entities',    'every page/event/task/person/place/account row has an entities row with the same id (supertype; composite FK (id, entity_type)); both are inserted in one transaction'),
   ('wikilinks',   'links(kind=wikilink) from a page always equal what its body names: [[Title]], [[Title|alias]] and #tag, read from the CommonMark text, never rewritten; rebuilt on every save; an invalid target makes no link'),
   ('writers',     'one writing application; every connection sets foreign_keys=ON, recursive_triggers=ON, synchronous=FULL, journal_mode=WAL and starts write transactions with BEGIN IMMEDIATE; every other tool opens the file read-only'),
-  ('export',      'export/ = markdown mirror of the prose only; dump/ = one CSV per table; both derived nightly from the database and never authoritative; neither is in git if it holds finance'),
-  ('backups',     'backups/life-YYYYMMDD.db = verified nightly VACUUM INTO snapshots, the only history of structured data; restore with restore.sh: check, move the old file AND its -wal/-shm aside, copy, journal_mode=WAL'),
   ('evolution',   'after the first real data: numbered forward-only SQL migrations, additive only, PRAGMA user_version; enumerated CHECKs are named so they can be widened with ALTER TABLE DROP/ADD CONSTRAINT');
 
 -- ------------------------------------------------------------
@@ -798,7 +640,7 @@ CREATE TABLE pages (
   CHECK (title_key IS NULL OR title GLOB '*[^ -~]*' OR title_key = lower(title)),   -- pure-ASCII titles: the DB verifies the key
   CHECK (title IS NULL OR (title = trim(title) AND length(title) >= 1
                            AND length(CAST(title AS BLOB)) <= 240)),  -- bytes: a filename limit is 255 bytes
-  CHECK (title IS NULL OR (                        -- the title IS the export filename (<title>.md): keep it safe
+  CHECK (title IS NULL OR (                        -- a title must be a valid file name on Linux, macOS and Windows: keep it safe
          title NOT GLOB '*[/\:*?"<>|]*'            -- path separators and Windows-reserved characters
          AND title NOT GLOB ('*[' || char(1) || '-' || char(31) || char(127) || ']*')   -- control characters
          AND instr(title, char(0)) = 0
@@ -1369,9 +1211,7 @@ How the pieces serve the product concepts:
 | Notes about an account or a money decision | `links(kind='about', memo/event → account)` |
 | Which accounts are stale | §6.18 |
 | Search | `pages_fts` (§6.8) |
-| History of prose | git over `export/` (nightly regenerated mirror) |
-| Structured data readable without SQLite | `dump/` — one CSV per table, never in git (§2.8) |
-| History of everything | verified nightly snapshots (§2.8) |
+| History of a row | none beyond `created_at` / `updated_at` / `deleted_at` and the append-only facts (D12) |
 
 ---
 
@@ -1433,7 +1273,7 @@ Each decision: **context → decision → alternatives rejected → rationale �
   inserts across the B-tree, causing page splits) and larger; their only real advantage —
   collision-free IDs for multi-device merge — buys nothing while sync is a non-goal
   (§7) [R26][R27].
-- **Trade accepted.** If restore-into-fresh-DB merges or multi-device sync ever become
+- **Trade accepted.** If merging two databases or multi-device sync ever become
   real, integer IDs from two databases can collide. Mitigation if that day comes: SQLite
   makes re-keying a one-script job (`UPDATE … SET id = id + offset` in FK-off
   transaction), or add a nullable `uuid` column then. We do not pay for it now.
@@ -1455,46 +1295,34 @@ Each decision: **context → decision → alternatives rejected → rationale �
   natural key (`key`, `kind`, `code`, `(from_ccy, to_ccy, day)`) — an integer surrogate would
   only hide the name. The rule holds for every entity, fact and join table (§2.3).
 
-### D4 — Text ownership: DB is canonical; markdown export is a derived, one-way mirror. ("Model B")
+### D4 — Text ownership: the database is canonical. *(Round 12: the markdown-export half is withdrawn, §7.)*
 
-- **Context.** This was the hardest decision. Two failure modes are mirror images:
-  - *Files canonical*: any app, plugin, or future tool pointed at the folder becomes a
-    legitimate writer of canonical data → dialect drift and corruption. Evidence: the
-    Logseq↔Obsidian ecosystem needs dedicated conversion tools (journal filename formats
-    `YYYY_MM_DD` vs `YYYY-MM-DD`, URL-encoded filenames, block-reference syntax, property
-    formats, task statuses) [R29][R30][R31][R32]; a widely-shared lock-in story describes
-    an app whose "markdown" export rewrote every link to `[[uuid-7f3a…]]` [R33].
-  - *DB canonical, no export*: the original Taskdesk fear — meaning trapped in the app.
-- **Decision.** `pages.body` in SQLite is the single source of truth for prose. A nightly
-  job regenerates a plain-markdown mirror in `export/` (CommonMark, `[[wikilinks]]`
-  preserved, one file per page, one bundled file per day for memos). `export/`
-  is git-versioned and **read-only by rule**: insurance and a viewing layer, never an
-  editing surface. External apps (Obsidian, VS Code) may *look* at `export/`; nothing may
-  write canonical data except this app (and later its CLI/API).
+- **Context.** This was the hardest decision. *Files canonical*: any app, plugin, or future tool
+  pointed at the folder becomes a legitimate writer of canonical data → dialect drift and
+  corruption. Evidence: the Logseq↔Obsidian ecosystem needs dedicated conversion tools (journal
+  filename formats `YYYY_MM_DD` vs `YYYY-MM-DD`, URL-encoded filenames, block-reference syntax,
+  property formats, task statuses) [R29][R30][R31][R32]. *DB canonical*: the original Taskdesk
+  fear — meaning trapped in the app.
+- **Decision.** `pages.body` in SQLite is the single source of truth for prose. No folder of
+  files holds canonical text, and nothing may write canonical data except this app (and later
+  its CLI/API). The ability to leave rests on the file format itself (D1) and on the schema being
+  its own documentation (principle 2).
 - **Why not files-canonical with discipline (linters + git as recovery net)?** Git is a
   *recovery* net, not a *guard* — it requires noticing damage after the fact. The
   owner's own multi-app history (Obsidian, Logseq, Trilium, each leaving residue) is
-  direct evidence that the discipline requirement fails in practice. Model B removes the
-  trust requirement structurally.
+  direct evidence that the discipline requirement fails in practice. Keeping the database
+  canonical removes the trust requirement structurally.
 - **Why not files-canonical with a single writer (only our app writes files)?** It keeps
   the open-format benefit, but inherits every engineering complaint Logseq documented
   when they *split their product in two* over this exact axis: live editing rewrites
   whole files per keystroke-batch; renaming a page must rewrite every referencing file;
-  files lack persistent IDs and timestamps [R34][R35][R36]. Logseq DB (SQLite canonical +
-  versioned file export) is the side chosen by a team that hit the live-editing
-  requirement head-on [R34][R36]. The `medi` project's ADR-02 independently chose
-  DB-centric storage with import/export for versioning on the same reasoning [R37].
-- **Honest counterweight (recorded for the reviewer).** The "file over app" position
-  (Steph Ango [R38]; "the database is a projection of a markdown file" [R39]; local-first
-  [R40]) holds that a nightly export "isn't the same files." Our answer: the concern
-  behind file-over-app is *the ability to leave*, and a continuous, git-versioned,
-  app-independent markdown mirror preserves exactly that ability — while the canonical
-  store gets transactions, FK integrity, FTS, and a controlled write path. The export
-  format contract (§2.5) is deliberately minimal so any future tool can re-import it.
-- **Costs accepted.** (1) Export files must never be hand-edited — edits are lost on
-  regeneration. (2) Prose is edited only through this app's UI/CLI/API. (3) Two artifacts
-  exist, though only one is canonical.
-- **Sources.** [R29]–[R40].
+  files lack persistent IDs and timestamps [R34][R35][R36]. Logseq DB (SQLite canonical)
+  is the side chosen by a team that hit the live-editing requirement head-on [R34][R36].
+- **Costs accepted.** Prose is edited only through this app's UI/CLI/API.
+- **Withdrawn in round 12.** This decision used to include a nightly, derived, git-versioned
+  markdown mirror of the prose. It is out of scope while the schema is made reliable (§7 says
+  when to reopen); nothing in the schema depends on it.
+- **Sources.** [R29]–[R32], [R34]–[R36].
 
 ### D5 — One `pages` table for all prose; journal dropped; memos = journal + inbox.
 
@@ -1508,8 +1336,8 @@ Each decision: **context → decision → alternatives rejected → rationale �
   no separate tag system. *(How a tag is recognised, and that the body is never rewritten
   to `[[health]]`: D19.)* `note` and `wiki` pages carry a capture `day` (local date,
   like memos) so "notes touched that day" is a first-class query, and note/wiki titles
-  share one unique index (`pages_title`) so every exportable page has an unambiguous
-  filename.
+  share one unique index (`pages_title`) so every page has an unambiguous
+  name.
 - **Inbox mechanism = one column.** `triaged_at TEXT NULL` on memos:
   - keep-as-memory → set `triaged_at`;
   - needs action → create task/note + `links(kind='spawned', from=task, to=memo)` + set
@@ -1518,8 +1346,8 @@ Each decision: **context → decision → alternatives rejected → rationale �
   Inbox view = `kind='memo' AND triaged_at IS NULL AND deleted_at IS NULL`.
 - **Alternatives.**
   - *Separate `journal` kind / one daily page row*: rejected — a page you must not forget
-    to create, and two capture paths. The daily-bundle *export* file (§2.1) reconstructs
-    the classic journal archive from the stream anyway.
+    to create, and two capture paths. The day view (§6.2) reconstructs
+    the classic journal page from the stream anyway.
   - *Separate `inbox` table or status workflow column*: rejected — a status machine is
     the 80% solution to a 20% problem; one nullable timestamp distinguishes
     untriaged/triaged and nothing else is needed until proven otherwise.
@@ -1531,15 +1359,15 @@ Each decision: **context → decision → alternatives rejected → rationale �
 
 - **Addendum (review round 3, titles).** `note`/`wiki` titles are now unique
   case-insensitively (`pages_title` uses `COLLATE NOCASE`, matching `metrics.name`, and
-  `places.name` likewise), because titles become export filenames and `Diet.md` /
-  `diet.md` collide on case-insensitive filesystems. Titles must be trimmed and 1–200
+  `places.name` likewise), because titles are file names and `Diet` /
+  `diet` collide on case-insensitive filesystems. Titles must be trimmed and 1–200
   characters; a memo must **not** have a title (a titled memo is invisible to the
   title index and to §6.3). `pages.kind` remains mutable, but the CHECKs are re-evaluated
   on every UPDATE, so a kind change is only accepted if the row satisfies the new kind's
-  rules. Path characters in titles are left to the exporter (§2.5).
+  rules. Path characters in titles were left to the app (§2.5).
 
 - **Addendum 2 (review round 3b, filename-safe titles; `kind` is fixed).** The first
-  addendum left path characters to the exporter and capped titles at 200 characters;
+  addendum left path characters to the app and capped titles at 200 characters;
   both are superseded. The DDL now rejects path-unsafe titles itself (§2.5 lists the
   rules), and the length limit is 240 **bytes** (a 200-character title of 4-byte
   characters is 800 bytes — over the filesystem limit). Verified: every forbidden
@@ -1551,7 +1379,7 @@ Each decision: **context → decision → alternatives rejected → rationale �
   triage already works. This replaces the first addendum's "kind remains mutable" —
   the CHECKs alone let `note → wiki` silently drop the day requirement and `note → memo`
   leave an orphan title. **Known limit:** case-insensitive uniqueness is ASCII-only
-  (§2.5), so the exporter still disambiguates collisions. *(Superseded by addendum 3.)*
+  (§2.5). *(Superseded by addendum 3.)*
 
 - **Addendum 3 (review round 3c, Unicode-proof uniqueness; titles are immutable).**
   Addenda 1–2 made uniqueness case-insensitive with `COLLATE NOCASE`, which folds only
@@ -1563,18 +1391,16 @@ Each decision: **context → decision → alternatives rejected → rationale �
   ASCII titles) and cannot verify a non-ASCII fold — that is the writing application's
   duty. Rejected: an ICU/custom collation (breaks writes and `integrity_check` for every
   reader lacking it — §7); ASCII-only titles (a life log has `日本語` and `Zürich` in it);
-  leaving it to the exporter's write-time check (a mirror-side symptom fix — kept only
-  as a backstop). Titles are **immutable** (`pages_title_fixed`): D5's "renames are
+  leaving it to a check at the moment a file is written (a symptom fix). Titles are **immutable** (`pages_title_fixed`): D5's "renames are
   forbidden" was a convention and is now enforced; the sanctioned path is new page +
   `#REDIRECT` stub. `title_key` is derived and updatable, `title` is not. *Scope:*
   `places.name` and `metrics.name` remain ASCII-`NOCASE` — they are never filenames, and
   `Zürich`/`ZÜRICH` as two places is a data-quality issue, not a collision (§8 #5).
 
 - **Addendum 4 (round 10, the titles stay; device names).** (1) The independent review (R4-19 a)
-  argued that titles carry filename rules and immutability only so that *derived* export names stay
-  simple, and that an exporter writing `<id>-<slug>.md` would free them. Reconsidered and **kept**:
-  the mirror promises (D4, §2.5) that `[[Title]]` points at a file of that name, which id-named files
-  would break; the rules are tested (D19, record #10); and the owner asked for them after round 3b.
+  argued that titles carry filename rules and immutability only so that *derived* file names stay
+  simple, and that id-named files would free them. Reconsidered and **kept**: the rules are tested
+  (D19, record #10), and the owner asked for them after round 3b.
   The cost is real and stated: the title CHECKs are unnamed, so loosening one after the freeze is a
   table rebuild, not an `ALTER` — a reason to settle it now, and it is settled. *Reopen only if* a
   title you actually want is forbidden (`Re: plan`) often enough to hurt. (2) R8-01 is fixed in the
@@ -1586,7 +1412,7 @@ Each decision: **context → decision → alternatives rejected → rationale �
 - **Addendum 5 (round 11, notes and wiki pages are one kind).** `note` and `wiki` differed in three
   things only: `day` (required for a note, optional for a wiki page), whether the page shows in the day
   view (§6.2), and whether the ghost sweep counts it. They already shared one title index, one set of
-  title rules and one `[[link]]` namespace, and their two export folders were one filename space. The
+  title rules and one `[[link]]` namespace. The
   split also leaked: a `[[link]]` to a title that does not exist yet creates the page as `wiki` (§6.14),
   and `kind` and `title` are immutable — so anything linked before it was written became a wiki page
   whatever it was meant to be, and a wrong choice could be undone only by a new page and a redirect stub.
@@ -1596,8 +1422,8 @@ Each decision: **context → decision → alternatives rejected → rationale �
   `day = NULL`, as a wiki page did (`*_day` is written at insert, never recomputed, §2.2). `pages_title`
   is now `UNIQUE … WHERE title_key IS NOT NULL` (memos have no key) and the `kind` predicate is gone from
   every lookup — an equality on the key implies the index's predicate (executed, §8 #13); the `SCAN` that
-  round 3 saw was for a predicate on `kind`, which a lookup by key does not imply. `export/` has one folder, `export/pages/`. Memos stay separate: untitled
-  (capture without friction), the inbox column, bundled per day in the export, never the target of a
+  round 3 saw was for a predicate on `kind`, which a lookup by key does not imply. Memos stay separate: untitled
+  (capture without friction), the inbox column, never the target of a
   `[[link]]`. A category of pages (essay, reference) is a tag, and a tag is a page. One behaviour is new:
   an empty page created on purpose, with a day, that nothing links to, is listed by `ghost_pages` after 30
   days, as a link target always was — a note never was; the view only lists, tombstoning stays the owner's
@@ -1605,6 +1431,13 @@ Each decision: **context → decision → alternatives rejected → rationale �
   (no canonical database exists); after real data exists, merging two kinds would mean rewriting `kind`
   on every row against `pages_kind_fixed` — this is the cheap moment. *Reopen only if* a need appears
   that a tag or `day IS NOT NULL` cannot serve.
+
+- **Addendum 6 (round 12, the title rules stay without the export).** The filename rules of addenda
+  2–4 were introduced so that a title could name a file, and the code that writes those files is out of
+  scope for now (§7). The rules stay unchanged, for the reasons already recorded: they are tested (D19,
+  record #10); loosening one later is a table rebuild because the title CHECKs are unnamed, while a title
+  that is valid everywhere never has to be renamed (D5) if files return. *Reopen only if* a title you
+  actually want is forbidden (`Re: plan`) often enough to hurt — the trigger of addendum 4.
 
 ### D6 — Mood: the `mood` metric in `measurements`, not a column on `pages`.
 
@@ -1867,9 +1700,8 @@ Each decision: **context → decision → alternatives rejected → rationale �
   rows tombstoned, policy encoded in `link_kinds`) and **rejected**: the owner does not
   need "who was in my life when" as a structured query — the *evidence* (memos,
   `attended` events) survives anyway, and relationship links are a summary over that
-  evidence. Consequences, accepted knowingly: relationship removal is invisible between
-  nightly snapshots, and after snapshot retention expires it is invisible forever *(retention is
-  now defined — the newest 30, then one per month: §2.8)*. The
+  evidence. Consequences, accepted knowingly: relationship removal is invisible — the
+  row is gone and nothing records that it existed. The
   split policy remains additive-later (a `deleted_at` column + partial unique index +
   one `derived` flag in `link_kinds`), and `sqlite-history` triggers [R48] are the
   documented retrofit if relationship erasure ever needs to be auditable. `attachments`,
@@ -1892,60 +1724,35 @@ Each decision: **context → decision → alternatives rejected → rationale �
   the triggers guard against mistakes, not against a writer that drops them. An `entities` row
   with no domain row (a writer bug) is still insertable — see R4-07 in §8.
 
-### D12 — Audit trail: git-over-export + nightly snapshots; no revision tables.
+### D12 — Audit trail: no revision tables. *(Round 12: git-over-export and nightly snapshots are withdrawn, §7.)*
 
-- **Decision.** Prose history comes from git tracking the nightly-regenerated `export/`
-  mirror (diffs, blame, restore — for free, forever, zero maintenance). Database history
-  comes from nightly snapshots (§2.8; the mechanism is `VACUUM INTO`, not `.backup` — addendum 2). The schema contains **no revision or
-  history tables**. Row-level `created_at`/`updated_at` (trigger-maintained) is the only
-  in-DB temporal metadata *(not exact — addendum)*.
+- **Decision.** The schema contains **no revision or history tables**. The only in-DB temporal
+  metadata is row-level: `entities.created_at` (written by the app, never back-dated, §2.2) and
+  `updated_at` (trigger-maintained); the `deleted_at` tombstone (D11); and `recorded_at` on the
+  append-only `measurements` and `balances` (measurements also `taken_at` and `tz`), whose
+  corrections are new rows, not overwrites (D7, D18).
 - **Alternatives.**
   - *Full revision snapshots per edit* (the predecessor design): rejected — an app-level
-    versioning system is significant code to build and maintain, and git does it better
-    for text, which is where nearly all edit volume is.
+    versioning system is significant code to build and maintain, for a history nobody has asked to
+    query.
   - *Trigger-based history tables* (e.g., Simon Willison's `sqlite-history` pattern —
     triggers log every INSERT/UPDATE/DELETE with JSON diffs into a companion table):
     rejected **for now**, but this is the documented fallback: it retrofits onto the
     current schema with no redesign if a real need appears (e.g., wanting intra-day
     history of structured rows) [R48].
-  - *`updated_at` only, no snapshots*: rejected — a corrupt or clobbered DB file would be
-    unrecoverable.
-- **Cost accepted.** Structured-data changes between snapshots are not individually
-  recoverable (only prose, via git). At single-user write volume with daily snapshots,
-  worst-case loss is one day of low-churn metadata. Judged a correct Pareto cut.
-- **Sources.** [R23][R24][R25][R48].
-
-- **Addendum (round 7, audit metadata, durability, write transactions).** (1) "`created_at`/
-  `updated_at` (trigger-maintained) is the only in-DB temporal metadata" is no longer exact:
-  `created_at` is written by the app (never back-dated, §2.2), only `updated_at` is
-  trigger-maintained, and `measurements` and `balances` carry `recorded_at`, measurements also
-  `taken_at`, `tz` — the no-revision-tables decision is unchanged. (2) Durability: a nightly
-  snapshot is only as good as the last commit, so connections use `synchronous = FULL`
-  (§2.9). SQLite documents that with `NORMAL` in WAL "a transaction committed … might roll back
-  following a power loss" [R54]; measured here, `FULL` is ~1 ms per commit against ~0.1 ms
-  (btrfs, 500 memo commits, §8 #9) — invisible for a journal. (3) Every write transaction starts
-  with `BEGIN IMMEDIATE` (§2.9). (4) `backups/` is *not* derived (§1, §2.1): snapshots are the
-  only history of structured data; the rest of R4-14 (retention, verification, an off-box copy,
-  a CSV mirror) is still open. *(Closed in addendum 2.)*
-
-- **Addendum 2 (round 9, the snapshot contract — R4-14).** D12 said "nightly snapshots" and left
-  the rest unspecified; §2.8 now specifies it, and every line was executed (§8 #11). (1) The
-  primitive is `VACUUM INTO`: `cp` of a live WAL file was damaged in 95 of 150 copies, and `.backup`
-  restarts whenever another process commits and never finished at 19 commits/s on 50 MB. (2) Each
-  snapshot is verified under a temporary name — `integrity_check`, `foreign_key_check`, no
-  `entities` row without a domain row, `application_id` — and then given a SHA-256; a failed night changes nothing already on disk.
-  (3) Retention: the newest 30 plus the first of each month, forever. (4) An off-box copy is
-  mandatory and the night fails without it; append-only (restic) or rsync without `--delete`.
-  (5) Restore checks the snapshot first, moves the old file *and its own* `-wal`/`-shm` aside
-  together, and switches the copy back to WAL; a stale `-wal` left beside a restored file
-  resurrected newer data or corrupted it. (6) `dump/` holds one CSV per table — the way out — and
-  is **never in git**: the finance tables are in it and history cannot be scrubbed, so the answer
-  to "may finance data enter git" is no, by `.gitignore` and by layout.
-  *Alternatives.* `.backup` and `cp` (above); Litestream (still rejected, §7); a nightly SQL text
-  `.dump` instead of CSV — not tried: a snapshot is already the lossless copy, and CSV is the one
-  that needs no SQLite to read. *Costs accepted.* Structured changes between snapshots remain
-  invisible (unchanged); damage *inside a value* is detectable only by the recorded hash and the
-  off-box tool, not by SQLite; the restore drill is a manual habit.
+- **Cost accepted.** An `UPDATE` to a mutable row (a page body, a task, a person) overwrites the
+  old value, and nothing recovers it.
+- **Addendum (round 7, durability, write transactions).** A commit must survive power loss, so
+  connections use `synchronous = FULL` (§2.9). SQLite documents that with `NORMAL` in WAL "a
+  transaction committed … might roll back following a power loss" [R54]; measured here, `FULL` is ~1 ms
+  per commit against ~0.1 ms (btrfs, 500 memo commits, §8 #9) — invisible for a journal. Every write
+  transaction starts with `BEGIN IMMEDIATE` (§2.9).
+- **Withdrawn in round 12.** This decision used to add prose history by git over a nightly markdown
+  export, and database history by nightly `VACUUM INTO` snapshots with retention, verification, an
+  off-box copy, a restore procedure and a CSV dump (§2.8, D12 addendum 2). All of it is out of scope
+  while the schema is made reliable; §7 says when to reopen, and §2.8 keeps only the checks that
+  read the file itself.
+- **Sources.** [R48][R54].
 
 ### D13 — Migrations: numbered plain SQL + `PRAGMA user_version`; freeze-and-migrate.
 
@@ -1964,10 +1771,9 @@ Each decision: **context → decision → alternatives rejected → rationale �
   multiple independent write-ups implement it in under 100 lines and report no need for
   more [R20][R21][R22]. SQLite's compatibility essay explicitly blesses additive change
   as the mechanism by which schemas evolve without breaking old meaning [R1].
-- **Down-migrations** are rejected as a category: the recovery path for a bad migration
-  is restoring the previous nightly snapshot, which must exist before any migration is
-  applied (rule for the app: *snapshot, then migrate* — run `nightly.sh` of §2.8 first, so the
-  snapshot is verified and off-box).
+- **Down-migrations** are rejected as a category. A migration is applied to a *copy* of the file
+  first (`VACUUM INTO`, as for an importer, §2.11) and the three checks of §2.8 must pass on the
+  copy before it touches `life.db`; a migration that fails on the copy is fixed, never reversed.
 
 - **Addendum (round 5, named CHECKs make "additive" true).** Widening an enum after the
   freeze (a new `pages.kind`, entity type, `repeat` value) is a two-statement transactional
@@ -2114,21 +1920,24 @@ Each decision: **context → decision → alternatives rejected → rationale �
 
 - **Addendum 2 (round 4, finance raises the stakes of plaintext).** With D18 the file holds a
   wealth history, not only prose. The decision stands (no database encryption) but the
-  threat model it rested on is restated: (1) the finance tables are **never** mirrored into
-  `export/`, so amounts cannot end up in git history (which cannot be scrubbed) — by
-  construction today, by rule tomorrow (§2.10); (2) the disk holding `life.db`, every
-  snapshot and `dump/` (all-tables CSV, never in git — D12 addendum 2) must be encrypted at rest (full-disk encryption, an encrypted restic repo), because
-  the file itself will not be; (3) Datasette listens on localhost only and opens the
+  threat model it rested on is restated: (1) the finance tables never enter git, whose history
+  cannot be scrubbed (§2.1, §2.10); (2) the disk holding `life.db` must be encrypted at rest
+  (full-disk encryption), because the file itself will not be; (3) Datasette listens on localhost only and opens the
   file read-only (`?mode=ro`, its default for a mutable database — verified, §8 #9); nothing that can
   run arbitrary SQL from a browser is exposed to a network; (4) no credentials or full account numbers, ever (§2.10).
 
 - **Addendum 3 (round 10, the 2075 test is now a test).** The contract as data claimed to let a stranger
-  understand the file, but nothing checked it. §2.11 lists 21 questions and the `lifelog_meta` keys that
-  must answer them; `tests/schema/r10probes.py` runs the table. It found six things a stranger could not
+  understand the file, but nothing checked it. §2.11 lists 20 questions and the `lifelog_meta` keys that
+  must answer them; `tests/schema/r10probes.py` runs the table. It found four things a stranger could not
   learn from `.schema` — how an entity row relates to its domain row, how wikilinks and tags become links,
-  who may write and with what settings, what `export/` and `dump/` are, how to restore, and how the
-  schema evolves — and they are now keys (`entities`, `wikilinks`, `writers`, `export`, `backups`,
-  `evolution`; 25 rows in all). A new contract rule now needs a row in the table and a key in the DDL.
+  who may write and with what settings, and how the schema evolves — and they are now keys (`entities`,
+  `wikilinks`, `writers`, `evolution`; 23 rows in all). A new contract rule now needs a row in the table
+  and a key in the DDL.
+
+- **Addendum 4 (round 12, two keys withdrawn).** Round 10 added six keys; two of them — `export` and
+  `backups`, with questions 17 and 18 — described the export folder and the snapshot / restore contract,
+  and went with them (§7, §8 #14). The rule and its test are unchanged: every key answers some question,
+  every question is answered from `lifelog_meta` alone.
 
 ### D18 — Money: accounts, balances, currencies, FX. Net worth is derived. *(Round 4)*
 
@@ -2250,7 +2059,7 @@ Each decision: **context → decision → alternatives rejected → rationale �
     the owner's text, cannot be told from a hand-written `[[health]]`, and adds nothing the
     extraction does not already do.
   - *Obsidian-style `[[Page#Heading]]` / `^block` targets*: rejected — `#` is legal in a title
-    (`[[C#]]`), and Obsidian only reads `export/`; `|alias` is kept because `|` can never be in a
+    (`[[C#]]`); `|alias` is kept because `|` can never be in a
     title, so it is unambiguous.
   - *Keep a stub's wikilink and exempt only its tag*: rejected — the stub would show up as a
     backlink of its own replacement, duplicating the `redirect` edge.
@@ -2839,15 +2648,15 @@ re-added, each with the trigger that should reopen the question.
 | Multi-device sync / CRDTs | Not a goal; would force UUIDs (D3), change-tracking columns, conflict resolution | A second device must write canonical data |
 | Agent CLI/API | Planned as a later layer over the same DB; single-writer rule (§1.3) extends to it naturally | After v1 UI exists |
 | Binary files / `attachments` | Cut from v1 (D9): all-text DB stays megabyte-scale; design kept in D9 | The first real photo/PDF attachment need |
-| Database encryption | Deliberate plaintext (D17); protect off-box copies by encrypting the destination (restic, encrypted disk) | A legal/privacy requirement for at-rest encryption |
-| Revision/history tables | git-over-export + snapshots cover the need (D12); `sqlite-history` triggers are the documented fallback [R48] | Demonstrated need for intra-day history of structured rows |
+| Database encryption | Deliberate plaintext (D17); protect the disk instead (full-disk encryption) | A legal/privacy requirement for at-rest encryption |
+| Revision/history tables | Tombstones and append-only facts cover the need (D12); `sqlite-history` triggers are the documented fallback [R48] | Demonstrated need for intra-day history of structured rows |
 | Raw wearable-import tier | health-mcp's two-tier mirror exists for provider quirks [R8]; premature with zero importers | A second data source appears, or re-import fidelity bites |
 | LOINC / UCUM / reference ranges | Interop vocabulary, not storage need (D7) [R8] | FHIR export or clinical data exchange wanted |
 | Multi-resolution rollups | ~5 GB/lifetime of sensor data queries fine raw (D7) [R45] | Query latency is ever noticeable |
 | Text-valued measurements | `value REAL` keeps charting trivial (D7) | A real series needs non-numeric values (then: probably a note + link instead) |
 | JSON columns / property bags | The core anti-decision (D2) | Never |
 | Generic view system, AI generation | Cut from product scope by the owner | Product decision, not schema |
-| Litestream / continuous replication | A nightly `VACUUM INTO` snapshot is the right scale (D12, §2.8) [R23] | Write volume or preciousness grows dramatically |
+| Markdown export of the prose; nightly snapshots, restore and an off-box copy; a CSV dump; continuous replication | Withdrawn in round 12 to focus on the schema and its reliability; nothing in the schema depends on any of them (D4, D12). Until one exists there is **no second copy** of `life.db`, and the file itself is the only thing to leave with | Before the first real data enters a canonical `life.db` (the freeze, D13) at the latest; the earlier design is in git history (§8 #14) |
 | Trash UI with restore/expiry | Tombstones (D11) are already the data layer | UI work; zero schema change |
 | `.sqlar` single-artifact packaging | `tar` covers "one file to email" | Frequent whole-archive portability need |
 | Unicode collation for titles (ICU / app-registered) | A collation only one program registers makes the DB unwritable and un-integrity-checkable for everyone else (`no such collation sequence`); the app-computed `title_key` gives the same uniqueness (D5 addendum 3) | Never, unless SQLite ships Unicode folding in the core |
@@ -2857,7 +2666,7 @@ re-added, each with the trigger that should reopen the question.
 | Per-holding quantity × price, cost basis / lots, dividends, returns (TWR/IRR) | Net worth needs the market *value* on a day, which the statement or app gives; quantity × price needs a `prices` table and non-currency units — v1.5 cannot even hold a ticker (executed: `V`, `ZM`, `BRK.B` fail the code CHECK; a price must be entered as a reciprocal when the ticker sorts after the reporting currency). Additive later: a `securities` + `prices` pair and a nullable `accounts.security_id` (D18 addendum 1) | The owner wants automatic repricing, allocation by security or realised/unrealised gain |
 | Cross rates through a pivot currency; automatic FX import | Store the pairs you report in (D18); an importer can fill `fx_rates` | A second reporting currency, or backfilling decades of rates by hand hurts |
 | Co-ownership / shares of joint accounts, multiple owners | Single-user database; record your own share (D18) | A second person needs their own view |
-| Storing account numbers, IBANs, credentials | Plaintext DB and a git-tracked export make them a liability (§2.10, D17 addendum 2) | Never in `life.db`; use a password manager |
+| Storing account numbers, IBANs, credentials | A plaintext DB makes them a liability (§2.10, D17 addendum 2) | Never in `life.db`; use a password manager |
 | Partial dates (`1870`, `1870-05`) for people and events (R4-18) | Nothing asked for one yet. `birth_day`'s CHECK is unnamed, so it cannot be loosened in place (`DROP CONSTRAINT` finds no name — executed); the additive path is a nullable `birth_approx` TEXT column with a GLOB CHECK, which works on a populated STRICT table and leaves the triggers alone (executed, §8 #12) | The first ancestor or approximate date you want to record |
 | Searching *inside* a CJK run (R4-15) | `unicode61`, kept, folds `é ü ș ț` but a CJK run is one token (`本語` does not find `日本語のノート`). The index is derived, so switching is one transaction — drop `pages_fts`, create it with `tokenize='trigram remove_diacritics 1'`, `rebuild` — and the sync triggers keep working (executed). Trigram finds 3+-character parts and still not two-character words (`京都`) | The first real CJK memo you cannot find |
 | Typing a person's name instead of picking them (`[[Sam]]`, `@Sam`; R4-11 e) | A wikilink resolves to a page; people are linked with `about` from a picker (§6.6). A text mention needs a rule for two people called Sam. The additive path is one `link_kinds` row (`mention`, page→person) and a line in D19 — executed: accepted for a person, rejected for a place | Picking a person becomes the slow part of capture |
@@ -2866,6 +2675,11 @@ re-added, each with the trigger that should reopen the question.
 ---
 
 ## 8. Validation records and review resolutions
+
+*Records #1–#13 describe the document as it stood when each was written, and are kept unedited (AGENTS.md).
+§2.8 was then the backup contract, D4 and D12 also specified a markdown export and nightly snapshots, §2.1 had
+`export/`, `backups/` and `dump/`, and `tests/backups/` ran the scripts. Round 12 withdrew all of that (#14);
+read the older records with that in mind.*
 
 ### Validation record (2026-09-29, one author)
 
@@ -3990,13 +3804,90 @@ clean; `lifelog_meta` 25 rows, unchanged). Expected outcomes were declared in ea
   a ghost after 30 days (D5 addendum 5). The title CHECKs are unchanged and still unnamed (D5 addendum 4).
   Synthetic data only; no canonical database exists, so no row was migrated.
 
+### Review round 12 (2026-09-30, owner: "simplify for now the schema.md document and remove anything mentioning markdown export or backup or dumps, for now we just focus on the schema and its reliability")
+
+A scope cut, not a redesign: the DDL keeps every table, column, CHECK, index, view and trigger. What went is
+everything about *copies* of the data — the markdown export (`export/`), the snapshot / retention / off-box /
+restore contract with its two scripts (§2.8), the CSV dump, the `backups/` and `dump/` layout, and the tests of
+those scripts. What stayed is everything about *the file itself*: WAL, `synchronous=FULL`, `BEGIN IMMEDIATE`
+(§2.9), the integrity checks (now §2.8, executed on the live file), the import path and the read-only tools.
+
+| Item | Resolution | Where |
+|---|---|---|
+| §2.8 Backups | replaced by *Integrity checks*: `integrity_check`, `foreign_key_check` and the orphan query, each with what it does and does not see | §2.8 |
+| §2.1 layout, `.gitignore` | `life.db` alone; the file and its `-wal` / `-shm` are never committed | §2.1 |
+| D4 | "the database is canonical" stays with its two arguments against files-canonical; the mirror half is withdrawn | D4 |
+| D12 | "no revision tables" stays, its metadata text made exact; git-over-export and snapshots (incl. addendum 2) withdrawn | D12 |
+| D13 | down-migrations: a migration runs on a copy first and the three checks must pass (was: "restore the last snapshot") | D13 |
+| `lifelog_meta` | keys `export` and `backups` removed (25 → 23 rows); `titles` no longer says "export filenames" | §3 |
+| 2075 test | questions 17 (readable copies, history) and 18 (restore) removed: 20 questions | §2.11, D17 add. 4 |
+| threat model | "file damaged or lost" now says no second copy is kept; the off-box and mirror rows are reduced to the disk and git | §2.11 |
+| title rules | **kept unchanged** — they were introduced for export filenames, but loosening one later is a table rebuild (unnamed CHECKs) and the strict rule needs no exporter | D5 add. 6 |
+| import step 1 | "snapshot first" became "trial run on a copy first"; a bad import is retracted row by row (rows are never deleted) | §2.11 |
+| §7 | one row for what was withdrawn and when to reopen it (before the first real data); the Litestream row is folded into it | §7 |
+| references | R23–R25, R33, R37–R40 and R60–R62 dropped (cited only by withdrawn text); numbers are not reused | §9 |
+| owner gates | three (round 10) are now two: the external review and the first real import | status line |
+
+### Validation record #14 (2026-09-30, round 12)
+
+Baseline first: all 15 suites passed on v1.12 before the first edit. Then §3 was extracted from this document's text
+(652 lines, 76 objects, `integrity_check` ok, `foreign_key_check` clean; `lifelog_meta` 23 rows, was 25). The DDL differs from
+v1.12 in comments and in the two removed and one reworded `lifelog_meta` rows only. Expected outcomes were declared in
+each probe's label before it ran.
+
+- **SQLite claims, executed on the live file (3.53.4; 3 000 pages of prose, 1.8 MB, no snapshot involved).** Before, the
+  checks had only been run on `VACUUM INTO` copies (#11). *Clean file:* `integrity_check` ok, `foreign_key_check` and the
+  orphan query empty. *Zeroed table page:* `integrity_check` reports errors. *Truncated by three pages:* the file is
+  reported malformed. *Flipped byte in a `title_key` inside `pages_title`:* `row … missing from index pages_title`.
+  *Flipped byte inside a body value:* the text changed and `integrity_check` still says `ok`. *Orphan balance written
+  with `foreign_keys=OFF`:* `integrity_check` ok, `foreign_key_check` reports `balances|1|accounts`, orphan query empty.
+  *`entities` row without a domain row:* both PRAGMAs clean, the orphan query returns exactly that id. 7 of 7 as declared.
+- **Round-12 probes: 33/33** (`tests/schema/r12probes.py`): the same seven, taken from the block printed in §2.8 (three
+  statements, executed literally, on a database that holds a row of every domain type so a query that forgets one table
+  reports a false orphan); `lifelog_meta` has 23 rows and no `export` / `backups`; the 2075 table has 20 questions numbered
+  1–20; the live text (§1–§7) holds none of `export/`, `dump/`, `backups/`, `nightly.sh`, `restore.sh`, `OFFBOX`, `restic`,
+  `rsync`, `.sha256`, `exporter`, `Litestream`, `off-box` only where the withdrawal is recorded, and every remaining line that
+  says "export" is a tool feature, a standards remark or that record; the DDL text names no exporter, folder or nightly job;
+  `tests/` holds no backup harness.
+- **The probes can fail: nine broken copies of this document, all noticed** (`tests/schema/r12_mutants.py`, 1 to 6 probes
+  failing each): the `export` key back (6), the `backups` key back (5), a `backups/` folder back in the layout (1), the orphan
+  query without `accounts` (3), the `foreign_key_check` line gone from §2.8 (6), the imports step running `nightly.sh` again
+  (1), the `titles` row saying "export filenames" again (1), a 2075 question dropped (1), and the off-box copy mandatory again
+  in the threat model (2). The **unchanged v1.12 document** passes 5 of the 33.
+- **Suites changed because the document legitimately changed** (same edit; nothing loosened): `r7probes.py` D2 and D3 guarded
+  round-7 wording about `backups/` being "derived" and principle 5 naming the snapshots — rewritten to the new layout and
+  principle 5 (count unchanged, 36); `r10probes.py` labels only (116 → 112: two 2075 questions × two checks); `docchecks.py` D9b
+  (the layout is `life.db` alone; 44 → 44); `run_all.py` and `tests/README.md` (`--slow`, `--mutants`, the backup harness and its 14
+  script mutants removed; the two r12 suites added). **Removed with the contract they tested:** `tests/backups/` (26 harness
+  checks, 14 mutants) and the one-off `tests/experiments/r9_*` scripts behind #11 — in git history. `experiments/r10_diff.py`
+  stays: it is the evidence of #12.
+- **All suites on the new DDL:** `regress` 139/139, finance 88/88, round 5 112/112, round 6 49/49, round 7 36/36, round 10
+  112/112, round 11 43/43 and 12/12, round 12 33/33 and 9/9, expander 212 290 occurrences / 0 mismatches, net worth 155/155
+  month-ends (worst difference 0.49), 20 cookbook blocks 0 failures, vectors 55/55, title fuzz 43 309 strings (6 163 accepted; the
+  app predicate and the CHECK disagree on none), save procedure 25/25, document checks 44/44. `python3 tests/run_all.py`:
+  **17/17 suites**, about 15 s.
+- **Mistakes of mine, fixed before any conclusion:** my first index-corruption probe asked for the `dbstat` virtual table,
+  which this `sqlite3` build does not have — the error surfaced as a *parse* error and crashed the script, not as a failed
+  probe — so it now locates the index cell by scanning the file for the key's bytes; the first `r12probes` run failed four
+  of my own stale-phrase patterns (`export/interop` in D7, `append-only snapshots` for balances, `a mirrored edge` for
+  symmetric links, `health export` in the imports text — all legitimate) and one insert of a currency that is already seeded;
+  `r7probes` D2 tripped on `export/interop` the same way. The patterns are narrowed, and the "remaining `export` lines"
+  check whitelists three literal fragments of the withdrawal record — it will need touching if that text is re-wrapped.
+- **Known limits.** **There is no second copy of `life.db` in this design any more** (§7 row; the reopen trigger is the first
+  real data). Records #1–#13, the *Document history* footer and the older addenda of D5, D13 and D17 still name the withdrawn
+  contract in the past tense: they are history and were not edited (AGENTS.md); git holds the full earlier text. The title
+  rules keep their filename form although no code writes files (D5 addendum 6). The integrity checks find damage to the
+  file's structure and to constraints, not a changed value (E5); one machine, one filesystem, synthetic data, no power-loss
+  test; restic, Windows and real data were never run.
+
 ---
 
 ---
 
 ## 9. References
 
-What each source contributed to the decisions above.
+What each source contributed to the decisions above. Reference numbers are never reused: R23–R25,
+R33, R37–R40 and R60–R62 were dropped in round 12 with the text that cited them.
 
 ### SQLite durability, format, and features
 
@@ -4083,8 +3974,7 @@ What each source contributed to the decisions above.
   literally forked over this decision.
 - **[R36]** *Logseq DB Unofficial FAQ* —
   <https://logseq.io/page/e87c7359-51f7-44fe-87b3-4a0cd9f2dee3/695feeec-88be-4c5b-8bf2-572513c2f730>
-  In the DB version the database is canonical; markdown import/export is the migration
-  path.
+  In the DB version the database is canonical.
 - **[R29]** morganholland/logseq-to-obsidian-migration —
   <https://github.com/morganholland/logseq-to-obsidian-migration>
   Dedicated tooling required between two "plain markdown" apps: journal filename
@@ -4099,23 +3989,6 @@ What each source contributed to the decisions above.
 - **[R32]** laughedelic/obsidian-importer: Logseq assessment —
   <https://github.com/laughedelic/obsidian-importer/blob/feat/logseq-importer/docs/logseq-importer-assessment.md>
   Catalogue of Logseq-specific constructs an importer must translate.
-- **[R33]** Authon: *How to escape note-taking lock-in with plain markdown and git* —
-  <https://blog.authon.dev/how-to-escape-note-taking-lock-in-with-plain-markdown-and-git>
-  The mirror-image horror story: an app's "markdown" export with every link rewritten to
-  `[[uuid-7f3a…]]`, hashed attachment names, app-private frontmatter. Markdown-in-name-only.
-- **[R37]** medi ADR-02: *Database-Centric Storage with Import/Export for Versioning* —
-  <https://docs.rs/crate/medi/latest/source/docs/adr/02-db-centric.md>
-  Independent project choosing DB-canonical + git-versioned export on the same reasoning.
-- **[R38]** Steph Ango: *File over app* — <https://stephango.com/file-over-app>
-  The strongest counter-position; addressed head-on in D4 (ability-to-leave is preserved
-  by the continuous export mirror).
-- **[R39]** Andrew Pyle: *Markdown as Source of Truth, DB as Projection* —
-  <https://andrewjpyle.com/writing/database-as-a-projection-of-markdown>
-  The inverse architecture, recorded as the honest counterweight to D4.
-- **[R40]** Ink & Switch: *Local-first software* —
-  <https://www.inkandswitch.com/essay/local-first/>
-  Ownership ideals the design tries to satisfy in spirit (local, durable, exportable).
-
 ### Schema-design evidence (D2, D3)
 
 - **[R15]** Anton Zhiyanov: *JSON and virtual columns in SQLite* —
@@ -4149,7 +4022,7 @@ What each source contributed to the decisions above.
   <https://www.microsoft.com/en-us/research/wp-content/uploads/2006/04/tr-2006-45.pdf>
   Classic study; break-even a few hundred KB — small in DB, large on filesystem. → D9.
 
-### Operations: migrations, backups, audit (D12, D13)
+### Operations: migrations, audit (D12, D13)
 
 - **[R20]** Ash: *Simple Migration System in SQLite* —
   <https://www.ash.dev/blog/simple-migration-system-in-sqlite/>
@@ -4160,15 +4033,6 @@ What each source contributed to the decisions above.
 - **[R22]** David Röthlisberger: *Simple declarative schema migration for SQLite* —
   <https://david.rothlis.net/declarative-schema-migration-for-sqlite/>
   Schema-in-one-file, auto-applied additions; the declarative extreme of the same idea.
-- **[R23]** Litestream: *Cron-based backup* — <https://litestream.io/alternatives/cron/>
-  Litestream's own docs: for small single-user DBs, periodic `.backup` is appropriate;
-  never `cp` a live DB.
-- **[R24]** Mac SQL Client: *How to safely back up or copy a live SQLite database* —
-  <https://www.macsqlclient.com/blog/68-how-to-safely-back-up-or-copy-a-live-sqlite-database>
-  WAL torn-copy failure modes demonstrated.
-- **[R25]** Agentic Developer Cookbook: *Database backup and recovery* —
-  <https://agenticdevelopercookbook.com/guidelines/implementing/data/backup-and-recovery>
-  `.backup` as default; `VACUUM INTO` when compaction matters.
 - **[R48]** Simon Willison: *sqlite-history — tracking changes to SQLite tables using
   triggers* — <https://simonwillison.net/2023/Apr/15/sqlite-history/> (code:
   <https://github.com/simonw/sqlite-history>)
@@ -4221,24 +4085,6 @@ What each source contributed to the decisions above.
   entities are decoded; `#Heading` without a space is not a heading) was executed, not read from
   the spec. → §2.5, D19.
 
-### Round 9 — snapshots, restore and the way out (D12 addendum 2)
-
-- **[R60]** SQLite: *Online Backup API* — <https://www.sqlite.org/backup.html>
-  "If another thread or process writes to the source database while this function is sleeping, then
-  SQLite detects this and usually restarts the backup process when sqlite3_backup_step() is next
-  called." Why `.backup` starved at 19 commits/s on 50 MB (§8 #11). → §2.8, D12 addendum 2.
-- **[R61]** SQLite: *VACUUM* — <https://www.sqlite.org/lang_vacuum.html>
-  "The VACUUM INTO command is transactional in the sense that the generated output database is a
-  consistent snapshot of the original database." The target "must not previously exist, or else it
-  must be an empty file". The page says nothing on journal mode: that the copy is **not** WAL was
-  found by executing it. → §2.8.
-- **[R62]** SQLite: *Write-Ahead Logging* — <https://www.sqlite.org/wal.html>
-  "The WAL file is part of the persistent state of the database and should be kept with the
-  database if the database is copied or moved. If a database file is separated from its WAL file,
-  then transactions that were previously committed to the database might be lost, or the database
-  file might become corrupted." and "The only safe way to remove a WAL file is to open the database
-  file … then immediately close the database." → §2.8 (restore), §8 #11.
-
 ### Recurrence (D15)
 
 - **[R51]** Stack Overflow: *Should I store dates or recurrence rules in my database when
@@ -4266,12 +4112,12 @@ The seven real systems surveyed during research, and exactly what was taken from
 | Open Brane [R43] | 942k rows, 3 GB | One append-only 8-column table; no FKs | append-only spirit for measurements, `INSERT OR IGNORE` idempotency, blobs-outside-DB | payload_json column (violates D2), no-FK design (violates D8) |
 | health-mcp [R8] | Years of use | Typed biomarker tables; two-tier wearables; forward-only migrations | UTC+local-day convention, forward-only numbered migrations, metric registry concept | LOINC/UCUM/ref-ranges, raw mirror tier (both deferred, §7) |
 | Myome [R45] | Design paper | TSDB + SQLite + object store | Scale calibration (~5 GB/lifetime → no rollups needed) | TSDB, FHIR machinery, multi-resolution storage |
-| Kaydet [R41] | 9 yrs daily entries | Plain text + SQLite index | Evidence that boring survives; hybrid text+DB instinct (transformed into D4's export mirror) | Files-as-canonical (owner's writer-drift objection) |
-| Logseq OG vs DB [R34]–[R36] | Product-scale split | Files-canonical vs SQLite-canonical | The decisive precedent for D4: a team that hit live-editing limits chose DB-canonical + export | Block-level datom model, collaboration machinery |
+| Kaydet [R41] | 9 yrs daily entries | Plain text + SQLite index | Evidence that boring survives; hybrid text+DB instinct (resolved as D4: the database is canonical) | Files-as-canonical (owner's writer-drift objection) |
+| Logseq OG vs DB [R34]–[R36] | Product-scale split | Files-canonical vs SQLite-canonical | The decisive precedent for D4: a team that hit live-editing limits chose DB-canonical | Block-level datom model, collaboration machinery |
 
 ---
 
-*Document history: v1.11, 2026-09-30 — round 10 (§8): every remaining finding closed or deferred with an executed path — R8-01 fixed in the DDL (device names before an extension, superscript names), six `lifelog_meta` keys added by the now-executed 2075 test, §2.11 (threat model, 2075 test, import path), D5 addendum 4 and D17 addendum 3, four deferred rows in §7, the orphan-entities check in `nightly.sh`; the lost validation suites recovered and kept in `tests/` with `run_all.py` (R4-19 d); validation record #12. v1.10, 2026-09-30 — round 9 (§8): the backup contract of R4-14 (D12 addendum 2; §2.8 rewritten with a tested nightly script and restore script, §2.1 `.gitignore` and `dump/`): `VACUUM INTO` instead of `.backup`/`cp`, verification, retention, mandatory off-box copy, restore rules, CSV dump never in git — the DDL is unchanged; validation record #11. v1.9, 2026-09-30 — round 8 (§8): the wikilink save contract of R4-12 (D19; §2.5 rules and test vectors, §6.14 rewritten as the full save) — the DDL is unchanged; `#tag` is read, not expanded; a stub is not scanned; §6.5 excludes `redirect`; validation record #10. v1.8, 2026-09-30 — round 7 (§8): the text inconsistencies of R4-16 and five more found in a re-scan (snapshots are not derived, natural-key registries, "export mirrors 100%", readers must be read-only, D12 audit metadata); `synchronous = FULL` and `BEGIN IMMEDIATE` for every write transaction (R4-13), §6.14 resolves inside one transaction; validation record #9. v1.7, 2026-09-30 — round 6 (§8): `entities.tz` / `measurements.tz` (IANA zone at capture), `tasks.completed_day` and a `'done'` row in the day view, `events.place_id` as an event's only place (`visited` person→place only, `lives-in` removed); validation record #8. v1.6, 2026-09-30 — round 5 (§8): the mechanical round-4 fixes (`ON CONFLICT` imports, `(source, import_id, metric_id)` key, retractable measurements, `recorded_at`, enforced no-delete triggers, all enumerated CHECKs named, immutable `metrics.unit`, `located-in`/`parent-of`, no-op-safe immutability triggers); finance scope settled as value-snapshot accounts (stocks, crypto, deposits, valuables — D18 addendum 1); validation record #7. v1.5, 2026-09-30 — round 4 (§8): independent review with 19 recorded findings (R4-01…R4-19; R4-01 applied: `recursive_triggers=ON` mandatory) and the finance tier D18 (`currencies`, `accounts` as a sixth entity type, append-only `balances`, `fx_rates`; net worth derived, §6.15–6.18; validation record #6). v1 draft, 2026-09-29 — initial synthesis of two research rounds and
+*Document history: v1.13, 2026-09-30 — round 12 (§8 #14): the document narrowed to the schema and its reliability — the markdown export and the snapshot / restore / dump contract (§2.8, D12 addendum 2) and their tests are withdrawn (§7); D4 and D12 keep their decisions (the database is canonical; no revision tables); §2.8 is now the three integrity checks, executed on the live file; the `export` and `backups` keys and two 2075 questions are gone from the DDL; validation record #14. v1.11, 2026-09-30 — round 10 (§8): every remaining finding closed or deferred with an executed path — R8-01 fixed in the DDL (device names before an extension, superscript names), six `lifelog_meta` keys added by the now-executed 2075 test, §2.11 (threat model, 2075 test, import path), D5 addendum 4 and D17 addendum 3, four deferred rows in §7, the orphan-entities check in `nightly.sh`; the lost validation suites recovered and kept in `tests/` with `run_all.py` (R4-19 d); validation record #12. v1.10, 2026-09-30 — round 9 (§8): the backup contract of R4-14 (D12 addendum 2; §2.8 rewritten with a tested nightly script and restore script, §2.1 `.gitignore` and `dump/`): `VACUUM INTO` instead of `.backup`/`cp`, verification, retention, mandatory off-box copy, restore rules, CSV dump never in git — the DDL is unchanged; validation record #11. v1.9, 2026-09-30 — round 8 (§8): the wikilink save contract of R4-12 (D19; §2.5 rules and test vectors, §6.14 rewritten as the full save) — the DDL is unchanged; `#tag` is read, not expanded; a stub is not scanned; §6.5 excludes `redirect`; validation record #10. v1.8, 2026-09-30 — round 7 (§8): the text inconsistencies of R4-16 and five more found in a re-scan (snapshots are not derived, natural-key registries, "export mirrors 100%", readers must be read-only, D12 audit metadata); `synchronous = FULL` and `BEGIN IMMEDIATE` for every write transaction (R4-13), §6.14 resolves inside one transaction; validation record #9. v1.7, 2026-09-30 — round 6 (§8): `entities.tz` / `measurements.tz` (IANA zone at capture), `tasks.completed_day` and a `'done'` row in the day view, `events.place_id` as an event's only place (`visited` person→place only, `lives-in` removed); validation record #8. v1.6, 2026-09-30 — round 5 (§8): the mechanical round-4 fixes (`ON CONFLICT` imports, `(source, import_id, metric_id)` key, retractable measurements, `recorded_at`, enforced no-delete triggers, all enumerated CHECKs named, immutable `metrics.unit`, `located-in`/`parent-of`, no-op-safe immutability triggers); finance scope settled as value-snapshot accounts (stocks, crypto, deposits, valuables — D18 addendum 1); validation record #7. v1.5, 2026-09-30 — round 4 (§8): independent review with 19 recorded findings (R4-01…R4-19; R4-01 applied: `recursive_triggers=ON` mandatory) and the finance tier D18 (`currencies`, `accounts` as a sixth entity type, append-only `balances`, `fx_rates`; net worth derived, §6.15–6.18; validation record #6). v1 draft, 2026-09-29 — initial synthesis of two research rounds and
 the owner's decisions (scope narrowed to DB + UI; Model B chosen after the writer-drift
 objection; journal merged into memos-as-inbox). v1.1, same day — DDL mechanically
 validated on SQLite 3.53.4 (§8 validation record); §2.9 connection pragmas added after

@@ -26,10 +26,9 @@ Until the schema is frozen (decision D13):
 - Every change to §3's DDL must keep the document self-consistent: the entity-model
   overview (§4), the decision log (§5), and the query cookbook (§6) all describe the
   same schema. If you change the DDL, change them too.
-- After changing DDL, the cookbook, or any script in §2.8, run `python3 tests/run_all.py`
-  (add `--slow --mutants` when §2.8 or the DDL changed): it extracts §3 from this document,
-  applies it to throwaway databases and runs the adversarial probes, the oracles, the cookbook
-  blocks and the document-text checks. Append a new validation record; never edit old records.
+- After changing DDL or the cookbook, run `python3 tests/run_all.py` (about 15 s): it extracts §3
+  from this document, applies it to throwaway databases and runs the adversarial probes, the
+  oracles, the cookbook blocks and the document-text checks. Append a new validation record; never edit old records.
   If a suite must change because the document legitimately changed, change it in the same
   edit and say so in the record — `tests/` is validation, not a migration runner (the hard rule
   above still holds). A new contract rule needs a row in the §2.11 table and a key in `lifelog_meta`.
@@ -54,15 +53,16 @@ Until the schema is frozen (decision D13):
   equal to what its CommonMark text names (rows added **and deleted**), each auto-created target in its own
   `SAVEPOINT`, an invalid target makes no link and never blocks a save, `#tag` is read and never expanded,
   a `#REDIRECT [[` stub is not scanned (the vectors in §2.5 must keep passing),
-  the backup contract (§2.8, D12 addendum 2, tested scripts): nightly snapshots by `VACUUM INTO` (never `cp`, not
-  `.backup` — it starves under writes), each verified under a temporary name (`integrity_check`,
-  `foreign_key_check`, `application_id`) and hashed, the newest 30 plus the first of each month kept, an off-box
-  copy that is mandatory and append-only (never `rsync --delete`), restore that moves the old `life.db` **and
-  its own `-wal`/`-shm`** aside and switches the copy back to WAL, and `backups/` and `dump/` (all tables as CSV,
-  finance included) never in git.
+  the three integrity checks of §2.8 (`integrity_check`, `foreign_key_check`, the orphan-`entities` query —
+  each catches what the others cannot; executed on the live file), and `life.db` with its `-wal`/`-shm`
+  never in git (finance data cannot be scrubbed from history).
   Exploration tools (Datasette) open the file read-only; nothing that edits rows is pointed at it.
 - Decisions are append-style: amend an existing D-number only by adding an addendum
   that says so; new decisions get new numbers.
+- **Out of scope for now (SCHEMA.md §7, round 12):** the markdown export, backups / snapshots /
+  restore, CSV dumps and off-box copies. The document is about the schema and its reliability;
+  do not reintroduce any of them into `SCHEMA.md` or `tests/` unless the owner reopens it
+  (`tests/schema/r12probes.py` fails if their text comes back).
 
 ## Empiricism over intuition
 

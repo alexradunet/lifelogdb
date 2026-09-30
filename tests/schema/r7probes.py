@@ -78,8 +78,8 @@ r = subprocess.run(['sqlite3','-readonly',path,"INSERT INTO lifelog_meta VALUES 
 # ---- D. the inconsistencies are gone from the live text (§1–§7); decision text keeps history via pointers
 live = doc[:doc.index('## 8. Validation records')]
 K('D1 no "mirrors 100%" claim left in §1–§7', 'mirrors 100%' not in live)
-K('D2 backups/ not labelled DERIVED in §2.1 or the DDL header', 'backups/                 # DERIVED' not in live and 'export/ and backups/ are derived' not in live)
-K('D3 principle 5 names the snapshots as irreplaceable', 'snapshots, the only history of the structured data' in live.replace('\n   ',' '))
+K('D2 §2.1 lists life.db alone (round 12): no export/, backups/ or dump/ in the layout or the DDL header', all(x not in live.replace('export/interop', '') for x in ('export/', 'backups/', 'dump/')))
+K('D3 principle 5 says life.db is irreplaceable and names only the FTS index and title_key as derived', 'and `title_key` can be dropped and rebuilt' in live.replace('\n   ',' ') and '`life.db` is irreplaceable' in live)
 K('D4 §2.3 no longer says "Every table uses"', 'Every table uses `INTEGER PRIMARY KEY`' not in live)
 c = sqlite3.connect(':memory:'); c.executescript(DDL)
 nk = sorted(t for (t,) in c.execute("select name from sqlite_schema where type='table' and name not like 'pages_fts%' and name not like 'sqlite_%'") if not any(r[5]==1 and r[2]=='INTEGER' and c.execute(f"select count(*) from pragma_table_info('{t}') where pk>0").fetchone()[0]==1 for r in c.execute(f"pragma table_info('{t}')")))
