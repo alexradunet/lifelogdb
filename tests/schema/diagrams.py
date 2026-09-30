@@ -84,7 +84,7 @@ for key, (cols, child) in want.items():
     uniq = any(s <= set(cols) for s in unique_sets(child))
     exp = ('|o' if nullable else '||', 'o|' if uniq else 'o{')
     K(f'B {key[0]} -> {key[1]} ({key[2]}): symbols {exp} as the constraint implies', exp in drawn[key], (drawn[key], exp))
-K('B er-core draws entities -> each of the six domain tables (id)', all(('entities', t, 'id') in drawn for t in ('pages', 'events', 'tasks', 'people', 'places', 'accounts')))
+K('B er-core draws entities -> each of the six domain tables (id)', all(('entities', t, 'id') in drawn for t in ('pages', 'events', 'tasks', 'people', 'places', 'holdings')))
 
 # ---- C  the link map
 edges = {}
@@ -95,7 +95,7 @@ for kind, sym, ft, tt in c.execute('select kind, symmetric, from_types, to_types
     for f in (ft.split(',') if ft else ['any']):
         for t in (tt.split(',') if tt else ['any']): exp.setdefault((f, t, bool(sym)), set()).add(kind)
 K('C the link map has the same edges as link_kinds (from, to, symmetric) -> kinds', edges == exp, {'only in map': {k: v for k, v in edges.items() if exp.get(k) != v}, 'only in DDL': {k: v for k, v in exp.items() if edges.get(k) != v}})
-K('C every node of the map is an entity type or `any`', {n for e in edges for n in e[:2]} <= {'any', 'page', 'event', 'task', 'person', 'place', 'account'})
+K('C every node of the map is an entity type or `any`', {n for e in edges for n in e[:2]} <= {'any', 'page', 'event', 'task', 'person', 'place', 'holding'})
 
 # ---- D  the correction story, executed
 NOW = "'2026-09-30T10:00:00.000Z'"
@@ -119,5 +119,5 @@ K('E the save flow names steps 0, 1, 2a, 2b, 3, 4 exactly as the SQL of 6.14 doe
 K('E the save flow has one BEGIN IMMEDIATE, one SAVEPOINT / RELEASE / ROLLBACK TO, one COMMIT — as 6.14', all(w in body('save-flow') for w in ('BEGIN IMMEDIATE', 'SAVEPOINT target', 'RELEASE target', 'ROLLBACK TO target', 'COMMIT')))
 K('E the memo diagram uses the three states of a memo: inbox (triaged_at NULL), triaged, tombstoned', re.findall(r'(\w+) --> (\w+)', body('memo-life')) == [('Inbox', 'Triaged'), ('Inbox', 'Triaged'), ('Inbox', 'Tombstoned'), ('Triaged', 'Tombstoned')] or set(re.findall(r'(?:--> |^    )(Inbox|Triaged|Tombstoned)', body('memo-life'), re.M)) == {'Inbox', 'Triaged', 'Tombstoned'})
 K('E the writers diagram names the settings it relies on: BEGIN IMMEDIATE, WAL, mode=ro', all(w in body('writers') for w in ('BEGIN IMMEDIATE', 'WAL', 'mode=ro')))
-K('E the money flow names the tables it reads: balances, accounts, currencies, balance_values — and sums per currency, with no conversion step', all(w in body('money-flow') for w in ('balances', 'accounts', 'currencies', 'balance_values', 'per currency')) and 'fx_rates' not in body('money-flow') and all(w in tables or w == 'balance_values' for w in ('balances', 'accounts', 'currencies')))
+K('E the money flow names the tables it reads: balances, holdings, currencies, balance_values — and sums per currency, with no conversion step', all(w in body('money-flow') for w in ('balances', 'holdings', 'currencies', 'balance_values', 'per currency')) and 'fx_rates' not in body('money-flow') and all(w in tables or w == 'balance_values' for w in ('balances', 'holdings', 'currencies')))
 print(f'diagram checks: {sum(res)}/{len(res)} met expectations')

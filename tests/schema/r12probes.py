@@ -50,7 +50,7 @@ c.execute("INSERT INTO events(id,title,start_day) VALUES (?, 'ev', '2026-09-30')
 c.execute("INSERT INTO tasks(id,title) VALUES (?, 'tk')", (ent('task'),))                                      # so a query that forgets one of the six
 c.execute("INSERT INTO people(id,name) VALUES (?, 'pe')", (ent('person'),))                                    # tables reports a false orphan on a clean file
 c.execute("INSERT INTO places(id,name) VALUES (?, 'pl')", (ent('place'),))
-c.execute("INSERT INTO accounts(id,name,side,currency) VALUES (?, 'ac', 'asset', 'EUR')", (ent('account'),))
+c.execute("INSERT INTO holdings(id,name,side,currency) VALUES (?, 'ac', 'asset', 'EUR')", (ent('holding'),))
 c.execute('COMMIT'); c.execute('PRAGMA wal_checkpoint(TRUNCATE)'); c.close()
 PS = sqlite3.connect(base).execute('pragma page_size').fetchone()[0]
 def sq(p, sql):
@@ -84,7 +84,7 @@ if j >= 0: flip(p, j)
 ic, fk, orph = checks(p); n = sq(p, "SELECT count(*) FROM pages WHERE body LIKE '%korem ipsum lorem%' OR body LIKE '%morem ipsum lorem%'")
 K('B E5 flipped byte inside a body value: the text changed and integrity_check is STILL ok', j >= 0 and n == '1' and ic == ['ok'], (j, ic, n))
 p = cp('fk'); c = sqlite3.connect(p, isolation_level=None); c.execute('PRAGMA foreign_keys=OFF')
-try: c.execute("INSERT INTO balances(account_id,day,amount,recorded_at,source) VALUES (99999,'2026-09-30',100,'2026-09-30T10:00:00.000Z','manual')"); ins = 'inserted'
+try: c.execute("INSERT INTO balances(holding_id,day,amount,recorded_at,source) VALUES (99999,'2026-09-30',100,'2026-09-30T10:00:00.000Z','manual')"); ins = 'inserted'
 except sqlite3.Error as e: ins = f'refused: {e}'
 c.close(); ic, fk, orph = checks(p)
 K('B E6 orphan balance written with foreign_keys=OFF: integrity ok, foreign_key_check reports it, orphan query empty', ins == 'inserted' and ic == ['ok'] and fk != '' and orph == '', (ins, ic, fk, orph))

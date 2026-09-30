@@ -2,7 +2,7 @@
 
 **Status:** frozen pending external review. No canonical database exists yet; until one does, §3 is edited in place (D13).
 **Scope of the project:** A lifetime personal database (journal/memos, pages (notes, wiki), events,
-tasks, people, health metrics, personal finance — accounts, balances, net worth; file
+tasks, people, health metrics, personal finance — holdings, balances, net worth; file
 attachments deferred — D9) in a single SQLite file,
 plus a custom UI for data entry and daily use. Everything else (view generators, AI
 features, sync, multi-device) is explicitly out of scope.
@@ -115,7 +115,7 @@ deferred out of v1 (D9) — the layout grows a `media/` sibling when they return
   `AUTOINCREMENT` — the keyword adds overhead and is "usually not needed" [R4]). The three
   registries keep their natural key instead: `lifelog_meta(key)`, `link_kinds(kind)`,
   `currencies(code)`.
-- The six *entity* types (`page`, `event`, `task`, `person`, `place`, `account`) share one ID
+- The six *entity* types (`page`, `event`, `task`, `person`, `place`, `holding`) share one ID
   space via the `entities` supertype table (D8, D16, D18). A domain row's `id` **equals** its
   `entities.id`; the app inserts the `entities` row first with `INSERT … RETURNING id` and binds
   that id in the same transaction (see §6.1). Never `last_insert_rowid()` across statements: any
@@ -130,7 +130,7 @@ deferred out of v1 (D9) — the layout grows a `media/` sibling when they return
   writer that made it. `measurements.source` and `balances.source` name the *data* source instead
   (`manual`, `statement`, an importer).
 - `measurements`, `balances`, `metrics`, `currencies`, `links`, `link_kinds`,
-  `lifelog_meta` are *not* entities (they are facts, joins, and registries). An `account` is an
+  `lifelog_meta` are *not* entities (they are facts, joins, and registries). A `holding` is an
   entity; its balances are facts.
 
 ### 2.4 Deletion
@@ -148,12 +148,12 @@ deferred out of v1 (D9) — the layout grows a `media/` sibling when they return
   DO NOTHING` — never `INSERT OR IGNORE` (it silently skips rows that violate a CHECK or NOT
   NULL) and never `OR REPLACE` (a delete, blocked only when `recursive_triggers=ON`, §2.9).
 - `balances` are append-only in the same way: `UPDATE` and `DELETE` are rejected; a wrong
-  value is corrected by inserting a newer row for the same `(account_id, day)`, and an entry
+  value is corrected by inserting a newer row for the same `(holding_id, day)`, and an entry
   that should never have existed is retracted with a NULL `amount` (D18).
 
 **A correction never overwrites.** One reading, corrected, retracted and restored — what
 `measurement_values` shows after each insert (§6.10). `balance_values` works the same way, with the
-newest row per `(account_id, day)` in place of `supersedes_id`.
+newest row per `(holding_id, day)` in place of `supersedes_id`.
 
 ```mermaid
 %% diagram: correct-measurement
@@ -352,7 +352,7 @@ file, not on a copy.
 ```sql
 PRAGMA integrity_check;      -- one row: ok
 PRAGMA foreign_key_check;    -- no rows
-SELECT id FROM entities WHERE id NOT IN (SELECT id FROM pages UNION SELECT id FROM events UNION SELECT id FROM tasks UNION SELECT id FROM people UNION SELECT id FROM places UNION SELECT id FROM accounts);   -- no rows
+SELECT id FROM entities WHERE id NOT IN (SELECT id FROM pages UNION SELECT id FROM events UNION SELECT id FROM tasks UNION SELECT id FROM people UNION SELECT id FROM places UNION SELECT id FROM holdings);   -- no rows
 INSERT INTO pages_fts(pages_fts, rank) VALUES ('integrity-check', 1);   -- no error
 ```
 
@@ -360,7 +360,7 @@ INSERT INTO pages_fts(pages_fts, rank) VALUES ('integrity-check', 1);   -- no er
   three pages, and an index entry that no longer matches its row (a flipped byte in a `title_key`
   inside `pages_title`: `row … missing from index pages_title`).
 - **`foreign_key_check` — what the first cannot see.** A writer that forgot `PRAGMA foreign_keys=ON`
-  (§2.9 — per connection) stored a balance for an account that does not exist, and
+  (§2.9 — per connection) stored a balance for a holding that does not exist, and
   `integrity_check` said `ok`.
 - **The orphan query — the one check no constraint can express.** An `entities` row with no domain
   row (a writer that died between its two inserts): both other checks are clean on it.
@@ -457,19 +457,19 @@ flowchart LR
 
 ### 2.10 Money (D18)
 
-- **Exact, integer, per-account currency.** An amount is an `INTEGER` count of *minor units*
-  of the owning account's currency; `currencies.subunits` (100 for EUR, 1 for JPY) turns it
+- **Exact, integer, per-holding currency.** An amount is an `INTEGER` count of *minor units*
+  of the owning holding's currency; `currencies.subunits` (100 for EUR, 1 for JPY) turns it
   into a number. Never `REAL`, never a `measurements` row: `0.1 + 0.2` in `REAL` is
   `0.30000000000000004` (executed), and a sum of balances must be exact.
 - **A balance is a fact about a local day.** `balances.day` is the *local* date the figure
   describes (end of day) — the same rule as every `*_day` (§2.2). `recorded_at` is the UTC
   instant it was written down; the two differ whenever history is backfilled.
-- **What an account is.** Anything with a balance or a value. Record **your own share** of
+- **What a holding is.** Anything with a balance or a value. Record **your own share** of
   joint items. `side` (`asset` | `liability`) and `currency` never change (a trigger);
   `category` is free taxonomy. One rule covers everything: *the balance is the value in the
-  account's currency on that day, as the statement, the app or your own estimate says*.
+  holding's currency on that day, as the statement, the app or your own estimate says*.
 
-  | You own | Make an account | Balance is |
+  | You own | Make a holding | Balance is |
   |---|---|---|
   | deposit, savings, cash | `category 'deposit'` / `'cash'`, its own currency | the statement balance |
   | stocks, funds, pension | one per broker or wrapper (`'brokerage'`, `'pension'`); one per currency if you hold several | the portfolio's market value |
@@ -479,11 +479,11 @@ flowchart LR
 
   Sell everything or dispose of it: record a final balance and set `closed_day`.
 - **Net worth is derived, one figure per currency.** It is computed on read from the latest
-  balance of each open account as of a day, assets minus liabilities, summed within each currency
+  balance of each open holding as of a day, assets minus liabilities, summed within each currency
   (§6.16–6.17); it is never written to a table. Amounts of different currencies are never added:
   minor units of EUR and JPY are not the same size. With one currency it is already one number.
 - **Secrets.** Never store credentials, PINs or full account/card numbers in `life.db` or in a
-  memo: the file is plaintext (D17). An account's `notes` may hold the last four digits. Finance
+  memo: the file is plaintext (D17). A holding's `notes` may hold the last four digits. Finance
   data never goes into git — its history cannot be scrubbed (§2.1).
 
 **From a statement to net worth** (§6.15–§6.17):
@@ -492,8 +492,8 @@ flowchart LR
 %% diagram: money-flow
 flowchart LR
     stmt["statement, app or own estimate<br/>the value on a local day"] -->|"INSERT, never edit"| bal[("balances<br/>integer minor units<br/>append-only")]
-    bal -->|"balance_values:<br/>newest row per day,<br/>NULL retracts"| held["each open, live account<br/>latest balance on or before the day<br/>asset adds, liability subtracts"]
-    acc[("accounts<br/>side, currency")] --> held
+    bal -->|"balance_values:<br/>newest row per day,<br/>NULL retracts"| held["each open, live holding<br/>latest balance on or before the day<br/>asset adds, liability subtracts"]
+    acc[("holdings<br/>side, currency")] --> held
     held --> sum["sum per currency<br/>in that currency's minor units"]
     sum --> nw(["net worth on that day<br/>one figure per currency<br/>derived, never stored"])
     cur[("currencies<br/>subunits")] -.->|"whole units"| nw
@@ -640,10 +640,10 @@ INSERT INTO lifelog_meta(key, value) VALUES
   ('titles',      'page titles never change and are valid file names everywhere: <=240 bytes, no path/reserved characters or names (a device name like CON is reserved even before an extension), no control, invisible or bidi characters; memos are untitled'),
   ('title_key',   'pages.title_key = NFC(casefold(NFC(title))), computed by the app; UNIQUE across pages (a memo has none); ASCII titles must equal lower(title); rebuildable'),
   ('pages_kind',  'pages.kind is memo (untitled: the capture stream and the inbox; always has a day) or page (titled, unique, linkable; its day is NULL when the app created it as a link target); it never changes after insert'),
-  ('money',       'amounts are INTEGER minor units of accounts.currency; whole units = amount / currencies.subunits; never REAL, never in measurements'),
-  ('balances',    'append-only snapshots of an account''s value on a local day (account, day, amount); the newest row per (account_id, day) wins, newest = recorded last = highest id; NULL amount retracts; read through balance_values'),
-  ('net_worth',   'derived, never stored: per open account, latest balance on or before the day, assets minus liabilities, summed per currency; amounts of different currencies are never added (section 6.16)'),
-  ('entities',    'every page/event/task/person/place/account row has an entities row with the same id (supertype; composite FK (id, entity_type)); both are inserted in one transaction'),
+  ('money',       'amounts are INTEGER minor units of holdings.currency; whole units = amount / currencies.subunits; never REAL, never in measurements'),
+  ('balances',    'append-only snapshots of a holding''s value on a local day (holding, day, amount); the newest row per (holding_id, day) wins, newest = recorded last = highest id; NULL amount retracts; read through balance_values'),
+  ('net_worth',   'derived, never stored: per open holding, latest balance on or before the day, assets minus liabilities, summed per currency; amounts of different currencies are never added (section 6.16)'),
+  ('entities',    'every page/event/task/person/place/holding row has an entities row with the same id (supertype; composite FK (id, entity_type)); both are inserted in one transaction'),
   ('wikilinks',   'links(kind=wikilink) from a page always equal what its body names: [[Title]], [[Title|alias]] and #tag, read from the CommonMark text, never rewritten; rebuilt on every save; an invalid target makes no link'),
   ('writers',     'one writing application; every connection sets foreign_keys=ON, recursive_triggers=ON, synchronous=FULL, trusted_schema=OFF, journal_mode=WAL and starts write transactions with BEGIN IMMEDIATE; every other tool opens the file read-only'),
   ('sqlite',      'writers need SQLite >= 3.51.3 (fixes a WAL corruption race between concurrent writers and checkpoints); migrations need >= 3.53 (ALTER TABLE ADD/DROP CONSTRAINT); CHECKs use only functions every such version has'),
@@ -651,7 +651,7 @@ INSERT INTO lifelog_meta(key, value) VALUES
   ('evolution',   'after the first real data: numbered forward-only SQL migrations, additive only, PRAGMA user_version; every CHECK is named, so any rule can be widened or tightened with ALTER TABLE DROP/ADD CONSTRAINT');
 
 CREATE TABLE entities (
-  -- The shared spine: one row per linkable thing (page, event, task, person, place, account).
+  -- The shared spine: one row per linkable thing (page, event, task, person, place, holding).
   -- UNIQUE(id, type) plus the composite FK (id, entity_type) in every domain table make a row's
   -- type and its domain table agree; the app inserts this row first, in the same transaction.
   -- Nothing is ever deleted: deleted_at is the tombstone (D11), enforced by BEFORE DELETE triggers.
@@ -660,7 +660,7 @@ CREATE TABLE entities (
   -- that uses IS, not =: a CHECK passes on NULL, and date('2026-9-3') is NULL.
   id         INTEGER PRIMARY KEY,
   type       TEXT NOT NULL CONSTRAINT entities_type
-                  CHECK (type IN ('page','event','task','person','place','account')),
+                  CHECK (type IN ('page','event','task','person','place','holding')),
   created_at TEXT NOT NULL CONSTRAINT entities_created_at CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at),   -- when written to life.db, never back-dated
   updated_at TEXT NOT NULL CONSTRAINT entities_updated_at CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', updated_at) IS updated_at),   -- kept by the *_touch triggers
   deleted_at TEXT     CONSTRAINT entities_deleted_at CHECK (deleted_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', deleted_at) IS deleted_at),
@@ -927,67 +927,67 @@ BEGIN
   SELECT RAISE(ABORT, 'currencies.subunits is fixed: it defines what every stored amount means; register a new currency code instead');
 END;
 
-CREATE TABLE accounts (
+CREATE TABLE holdings (
   -- anything with a balance or a value: bank, deposit, brokerage, crypto wallet, pension, cash,
   -- property, vehicle, valuables, loan, mortgage, card. Stocks and crypto are valued like everything
-  -- else: the market value in the account's currency on that day. An entity, so memos and events can
+  -- else: the market value in the holding's currency on that day. An entity, so memos and events can
   -- link to it and it can be tombstoned. side and currency define what every balance means and never
-  -- change (accounts_meaning_fixed). Record your OWN share of joint items.
+  -- change (holdings_meaning_fixed). Record your OWN share of joint items.
   id          INTEGER PRIMARY KEY,
-  entity_type TEXT NOT NULL DEFAULT 'account' CONSTRAINT accounts_entity_type CHECK (entity_type = 'account'),
+  entity_type TEXT NOT NULL DEFAULT 'holding' CONSTRAINT holdings_entity_type CHECK (entity_type = 'holding'),
   name        TEXT NOT NULL UNIQUE COLLATE NOCASE,   -- 'Main checking', 'Flat (Berlin)'; unique like places.name
-  side        TEXT NOT NULL CONSTRAINT accounts_side CHECK (side IN ('asset','liability')),
+  side        TEXT NOT NULL CONSTRAINT holdings_side CHECK (side IN ('asset','liability')),
   currency    TEXT NOT NULL REFERENCES currencies(code),
   category    TEXT COLLATE NOCASE,                   -- free taxonomy: 'cash','deposit','brokerage','crypto','pension','property','valuables','loan'
   institution TEXT,
-  opened_day  TEXT CONSTRAINT accounts_opened_day CHECK (opened_day IS NULL OR date(opened_day) IS opened_day),
-  closed_day  TEXT CONSTRAINT accounts_closed_day CHECK (closed_day IS NULL OR date(closed_day) IS closed_day),   -- last day the account counts (inclusive)
+  opened_day  TEXT CONSTRAINT holdings_opened_day CHECK (opened_day IS NULL OR date(opened_day) IS opened_day),
+  closed_day  TEXT CONSTRAINT holdings_closed_day CHECK (closed_day IS NULL OR date(closed_day) IS closed_day),   -- last day the holding counts (inclusive)
   notes       TEXT,
   FOREIGN KEY (id, entity_type) REFERENCES entities(id, type),
-  CONSTRAINT accounts_closed_order CHECK (closed_day IS NULL OR opened_day IS NULL OR closed_day >= opened_day)
+  CONSTRAINT holdings_closed_order CHECK (closed_day IS NULL OR opened_day IS NULL OR closed_day >= opened_day)
 ) STRICT;
-CREATE TRIGGER accounts_meaning_fixed BEFORE UPDATE OF side, currency ON accounts
+CREATE TRIGGER holdings_meaning_fixed BEFORE UPDATE OF side, currency ON holdings
   WHEN NEW.side IS NOT OLD.side OR NEW.currency IS NOT OLD.currency
 BEGIN
   -- changing either would rewrite history; the WHEN clause keeps full-row ORM updates working
-  SELECT RAISE(ABORT, 'an account''s side and currency are fixed: close it and open a new account instead');
+  SELECT RAISE(ABORT, 'a holding''s side and currency are fixed: close it and open a new holding instead');
 END;
 
 CREATE TABLE balances (
-  -- append-only snapshots of an account's VALUE on a local day, in INTEGER minor units of the account's
+  -- append-only snapshots of a holding's VALUE on a local day, in INTEGER minor units of the holding's
   -- currency (never REAL; whole units = amount / currencies.subunits). The newest row per
-  -- (account_id, day) wins, newest = recorded last = highest id; a row with a NULL amount RETRACTS
+  -- (holding_id, day) wins, newest = recorded last = highest id; a row with a NULL amount RETRACTS
   -- that day. A wrong entry is corrected by another row, never UPDATE/DELETE (triggers; they need
   -- PRAGMA recursive_triggers=ON to stop a REPLACE). Read through balance_values. Net worth is
   -- derived, never stored (section 6.16).
   id          INTEGER PRIMARY KEY,
-  account_id  INTEGER NOT NULL REFERENCES accounts(id),
+  holding_id  INTEGER NOT NULL REFERENCES holdings(id),
   day         TEXT NOT NULL CONSTRAINT balances_day CHECK (date(day) IS day),   -- LOCAL as-of date: the end-of-day balance / valuation
-  amount      INTEGER,                                  -- minor units of accounts.currency, as the institution states it
+  amount      INTEGER,                                  -- minor units of holdings.currency, as the institution states it
                                                         -- (a mortgage of 200 000 is +20000000: side says it is owed);
-                                                        -- NULL = retraction of this (account, day)
+                                                        -- NULL = retraction of this (holding, day)
   recorded_at TEXT NOT NULL CONSTRAINT balances_recorded_at CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', recorded_at) IS recorded_at),  -- when it was written down
   source      TEXT NOT NULL DEFAULT 'manual',           -- 'manual','statement','estimate','import:<name>'
   import_id   TEXT,                                     -- importer's dedup key, unique per source
   note        TEXT                                      -- 'after selling the ETF', 'agent estimate'
 ) STRICT;
-CREATE INDEX balances_series ON balances(account_id, day);   -- newest-per-day and as-of lookups (rowid is the last key part)
+CREATE INDEX balances_series ON balances(holding_id, day);   -- newest-per-day and as-of lookups (rowid is the last key part)
 CREATE UNIQUE INDEX balances_import ON balances(source, import_id) WHERE import_id IS NOT NULL;
 CREATE TRIGGER balances_no_update BEFORE UPDATE ON balances
 BEGIN
-  SELECT RAISE(ABORT, 'balances are append-only: correct by inserting a newer row for the same (account, day)');
+  SELECT RAISE(ABORT, 'balances are append-only: correct by inserting a newer row for the same (holding, day)');
 END;
 CREATE TRIGGER balances_no_delete BEFORE DELETE ON balances
 BEGIN
   SELECT RAISE(ABORT, 'balances are never deleted: retract by inserting a row with NULL amount');
 END;
 CREATE VIEW balance_values AS
-  -- the canonical read rule: the newest row (highest id) per (account, day), unless it is a retraction
+  -- the canonical read rule: the newest row (highest id) per (holding, day), unless it is a retraction
   SELECT b.*
     FROM balances b
    WHERE b.amount IS NOT NULL
      AND NOT EXISTS (SELECT 1 FROM balances x
-                      WHERE x.account_id = b.account_id AND x.day = b.day AND x.id > b.id);
+                      WHERE x.holding_id = b.holding_id AND x.day = b.day AND x.id > b.id);
 
 CREATE TABLE link_kinds (
   -- the CLOSED registry of link kinds: a link's kind must be registered first (FK), and a kind's
@@ -1010,7 +1010,7 @@ INSERT INTO link_kinds(kind, symmetric, from_types, to_types, note) VALUES
   ('spawned',  0, 'task,page', 'page',         'task/page created from a memo during triage'),
   ('subtask',  0, 'task',      'task',         'child task → parent task'),
   ('attended', 0, 'person',    'event',        'person → event'),
-  ('about',    0, NULL,        'person,place,account', 'entity → person/place/account it is about'),
+  ('about',    0, NULL,        'person,place,holding', 'entity → person/place/holding it is about'),
   ('visited',  0, 'person',    'place',        'person → place; the place of an EVENT is events.place_id, never a link (D16)'),
   ('located-in', 0, 'place',   'place',        'containment: Tokyo → Japan; transitive — walk it with a recursive CTE (section 6.19)'),
   ('parent-of', 0, 'person',   'person',       'parent → child; ''family'' stays the symmetric catch-all'),
@@ -1105,7 +1105,7 @@ END;
 CREATE TRIGGER places_touch AFTER UPDATE ON places BEGIN
   UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = NEW.id;
 END;
-CREATE TRIGGER accounts_touch AFTER UPDATE ON accounts BEGIN
+CREATE TRIGGER holdings_touch AFTER UPDATE ON holdings BEGIN
   UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = NEW.id;
 END;
 CREATE TRIGGER entities_touch AFTER UPDATE OF deleted_at ON entities
@@ -1137,11 +1137,11 @@ CREATE TRIGGER people_no_delete BEFORE DELETE ON people
 BEGIN SELECT RAISE(ABORT, 'people are never deleted: tombstone the entity (entities.deleted_at)'); END;
 CREATE TRIGGER places_no_delete BEFORE DELETE ON places
 BEGIN SELECT RAISE(ABORT, 'places are never deleted: tombstone the entity (entities.deleted_at)'); END;
-CREATE TRIGGER accounts_no_delete BEFORE DELETE ON accounts
-BEGIN SELECT RAISE(ABORT, 'accounts are never deleted: tombstone the entity (entities.deleted_at)'); END;
+CREATE TRIGGER holdings_no_delete BEFORE DELETE ON holdings
+BEGIN SELECT RAISE(ABORT, 'holdings are never deleted: tombstone the entity (entities.deleted_at)'); END;
 ```
 
-**Table count: 14 real tables (11 + `currencies`, `accounts`, `balances` — D18) + 1 FTS5
+**Table count: 14 real tables (11 + `currencies`, `holdings`, `balances` — D18) + 1 FTS5
 virtual table + 3 views** (`measurement_values`, `balance_values`, `ghost_pages`) **+ 33 triggers**. That
 is the entire system. Every `CHECK` is named (`CONSTRAINT <table>_<rule>`), so any rule can be dropped or
 re-added by name after the freeze (D13).
@@ -1169,7 +1169,7 @@ erDiagram
     entities ||--o| tasks    : "id"
     entities ||--o| people   : "id"
     entities ||--o| places   : "id"
-    entities ||--o| accounts : "id"
+    entities ||--o| holdings : "id"
     places   |o--o{ events   : "place_id"
     entities ||--o{ links    : "from_id"
     entities ||--o{ links    : "to_id"
@@ -1177,7 +1177,7 @@ erDiagram
 
     entities {
         INTEGER id PK
-        TEXT type "page, event, task, person, place, account"
+        TEXT type "page, event, task, person, place, holding"
         TEXT created_at "when written, never back-dated"
         TEXT updated_at
         TEXT deleted_at "tombstone"
@@ -1218,7 +1218,7 @@ erDiagram
         INTEGER id PK, FK
         TEXT name
     }
-    accounts {
+    holdings {
         INTEGER id PK, FK
         TEXT name
         TEXT side "asset or liability"
@@ -1245,7 +1245,7 @@ erDiagram
 Facts are not entities. `measurements` and `balances` are append-only (D7, D18): a correction is a new
 row, and `measurements.supersedes_id` points back at the row it corrects; `measurements.entity_id`
 records provenance (a mood reading points at its memo). An amount is an integer in minor units of the
-account's currency; `currencies` is the closed registry that gives an amount its meaning.
+holding's currency; `currencies` is the closed registry that gives an amount its meaning.
 `lifelog_meta` stands alone: it is the contract as data (D17).
 
 ```mermaid
@@ -1254,8 +1254,8 @@ erDiagram
     metrics     ||--o{ measurements : "metric_id"
     entities    |o--o{ measurements : "entity_id"
     measurements |o--o| measurements : "supersedes_id"
-    accounts    ||--o{ balances     : "account_id"
-    currencies  ||--o{ accounts     : "currency"
+    holdings    ||--o{ balances     : "holding_id"
+    currencies  ||--o{ holdings     : "currency"
 
     metrics {
         INTEGER id PK
@@ -1275,7 +1275,7 @@ erDiagram
     entities {
         INTEGER id PK
     }
-    accounts {
+    holdings {
         INTEGER id PK, FK
         TEXT name
         TEXT side "asset or liability"
@@ -1285,7 +1285,7 @@ erDiagram
     }
     balances {
         INTEGER id PK
-        INTEGER account_id FK
+        INTEGER holding_id FK
         TEXT day "local as-of day"
         INTEGER amount "minor units, NULL = retraction"
         TEXT recorded_at
@@ -1314,13 +1314,13 @@ flowchart LR
     person["person"]
     event["event"]
     place["place"]
-    account["account"]
+    holding["holding"]
     task["task"]
     page["page"]
 
     any -->|"about"| person
     any -->|"about"| place
-    any -->|"about"| account
+    any -->|"about"| holding
     any <-->|"related"| any
     person -->|"attended"| event
     person -->|"visited"| place
@@ -1384,11 +1384,11 @@ How the pieces serve the product concepts:
 | Recurring events | `repeat_*` columns on `events`; occurrences expanded at read with a recursive CTE (§6.12). Tasks do not repeat: a reminder is a repeating event, a per-occurrence checklist is a 0/1 habit metric (D15) |
 | Birthdays | query over `people.birth_day` — deliberately not events |
 | Biomarkers / quantified self / habits | `metrics` + `measurements` (§6.7) |
-| Stocks, crypto, deposits, valuables, property, loans | one `account` each (§2.10 table): a balance is its value on a day |
-| Net worth over time | derived: latest `balance_values` per open `account`, assets minus liabilities, summed per currency (§6.16–6.17) |
-| "What was my flat / mortgage / pension worth in 2019?" | `balances` of that account, as of a day (§6.15–6.16) |
-| Notes about an account or a money decision | `links(kind='about', memo/event → account)` |
-| Which accounts are stale | §6.18 |
+| Stocks, crypto, deposits, valuables, property, loans | one `holding` each (§2.10 table): a balance is its value on a day |
+| Net worth over time | derived: latest `balance_values` per open `holding`, assets minus liabilities, summed per currency (§6.16–6.17) |
+| "What was my flat / mortgage / pension worth in 2019?" | `balances` of that holding, as of a day (§6.15–6.16) |
+| Notes about a holding or a money decision | `links(kind='about', memo/event → holding)` |
+| Which holdings are stale | §6.18 |
 | Search | `pages_fts` (§6.8) |
 | History of a row | none beyond `created_at` / `updated_at` / `deleted_at` and the append-only facts (D12) |
 | "Which of my agents wrote this?" | `entities.source`, `links.source`, written at insert (§2.3) |
@@ -1655,7 +1655,7 @@ Each decision: **context → decision → alternatives rejected → rationale �
 
 ### D8 — One `entities` supertype + one polymorphic `links` graph; a closed kind registry; symmetry in-DB.
 
-- **Decision.** The six linkable types (D18 adds accounts) share one ID space through `entities`;
+- **Decision.** The six linkable types (D18 adds holdings) share one ID space through `entities`;
   all relationships of every kind live in a single `links(from_id, to_id, kind)` table with real
   foreign keys. `UNIQUE(from_id, to_id, kind)` allows several kinds between the same pair but
   forbids duplicate edges.
@@ -1685,7 +1685,7 @@ Each decision: **context → decision → alternatives rejected → rationale �
     immutability trigger carries a `WHEN` guard, so a full-row `UPDATE` that changes only `note`
     passes. A mirror row copies its original's `note`, `created_at` and `source`.
   - **Seeded kinds** (§4.3): `wikilink` and `redirect` page→page; `spawned` task|page→page;
-    `subtask` task→task; `attended` person→event; `about` any→person|place|account; `visited`
+    `subtask` task→task; `attended` person→event; `about` any→person|place|holding; `visited`
     person→place (an event's place is `events.place_id`, never a link — D16); `located-in`
     place→place (so "everything in Japan" is answerable, §6.19); `parent-of` person→person
     (direction kept; `family` stays the symmetric catch-all); `friend` and `family` person↔person;
@@ -2002,34 +2002,34 @@ Each decision: **context → decision → alternatives rejected → rationale �
 - **Alternatives.** Comments only (invisible to queries); a documentation wiki (lives outside the
   artifact, rots).
 
-### D18 — Money: accounts, balances, currencies. Net worth is derived, per currency.
+### D18 — Money: holdings, balances, currencies. Net worth is derived, per currency.
 
 - **Context.** The lifelong database also holds financial data — first of all *net worth over time*
-  and entries like it (what an account, a house, a loan was worth on a day). Money has three
+  and entries like it (what a holding, a house, a loan was worth on a day). Money has three
   properties the rest of the schema does not: it must be **exact**, it has a **currency** (several,
   over 50 years — and currencies are redenominated: the DEM became the EUR at a fixed rate), and its
   history is **audited** — a wrong balance must be corrected visibly, not overwritten.
 - **Decision.**
-  - **Exact integers.** An amount is an `INTEGER` count of minor units of the owning account's
+  - **Exact integers.** An amount is an `INTEGER` count of minor units of the owning holding's
     currency. `currencies(code, name, subunits)` is a closed registry (`subunits` = minor units
     per whole unit: EUR 100, JPY 1, BTC 10⁸; any integer, so a 1/5 subunit like MRU works) and
     `subunits` is immutable (`currencies_subunits_fixed`) — changing it would silently rescale
     every stored amount. The seed holds seven common codes; adding one is a deliberate `INSERT`.
-  - **`accounts` — a sixth entity type.** Anything with a balance or value: bank account,
+  - **`holdings` — a sixth entity type.** Anything with a balance or value: bank account,
     brokerage, crypto wallet, pension, cash, property, vehicle, valuables, loan, mortgage, card.
     Columns: `name` (unique, NOCASE, like `places`), `side` (`asset|liability`), `currency`, free
     `category`, `institution`, `opened_day`, `closed_day` (inclusive), `notes`. `side` and
-    `currency` are immutable (`accounts_meaning_fixed`, with a `WHEN` clause so ORMs' full-row
-    updates work). Being an entity gives accounts the graph (`about` links from memos and events),
+    `currency` are immutable (`holdings_meaning_fixed`, with a `WHEN` clause so ORMs' full-row
+    updates work). Being an entity gives holdings the graph (`about` links from memos and events),
     the tombstone and `updated_at` for free. Record your **own share** of joint holdings.
-  - **One rule covers every holding: an account's balance is its value in its own currency on a
+  - **One rule covers every holding: a holding's balance is its value in its own currency on a
     day** — a deposit's statement balance, a portfolio's or a crypto wallet's market value, an
     estimate for a house or a watch (table in §2.10). Nothing more is modelled: only the `category`
     vocabulary and guidance, and crypto is valued in fiat like everything else (no BTC seed row).
-  - **`balances` — append-only snapshots.** `(account_id, day, amount, recorded_at, source,
+  - **`balances` — append-only snapshots.** `(holding_id, day, amount, recorded_at, source,
     import_id, note)`. `day` is the local as-of date (end of day; note Beancount asserts at the
     *start* of a date [R56]); `recorded_at` is when it was written. `UPDATE`/`DELETE` are
-    rejected. **The newest row per `(account_id, day)` wins**, and a row with a NULL `amount`
+    rejected. **The newest row per `(holding_id, day)` wins**, and a row with a NULL `amount`
     **retracts** that day — the two operations that `measurements` cannot do. Read through
     `balance_values`. Import idempotency is `UNIQUE(source, import_id)` used with
     `ON CONFLICT … DO NOTHING`. *Newest* means **recorded last — the highest `id`**, not the most
@@ -2042,21 +2042,21 @@ Each decision: **context → decision → alternatives rejected → rationale �
     stored number stays an exact integer and no figure can be re-stated behind your back by a
     corrected rate. A rate table is additive when wanted (§7).
   - **Net worth is derived, never stored, and reported per currency** (§6.16–6.17): per live,
-    open account the latest balance on or before the day, assets minus liabilities, summed
+    open holding the latest balance on or before the day, assets minus liabilities, summed
     *within* each currency. Amounts of different currencies are never added — a minor unit of
     EUR (1/100) and one of JPY (1/1) are not the same size. With one currency this is already
     the single figure; with several it is one figure per currency.
-- **Why the CHECKs are named.** Adding a type like `'account'` to `entities.type` after the freeze
+- **Why the CHECKs are named.** Adding a type like `'holding'` to `entities.type` after the freeze
   is a table rebuild unless the CHECK is *named*: SQLite ≥ 3.53 supports `ALTER TABLE … DROP
   CONSTRAINT` / `ADD CONSTRAINT`, but only for a constraint that has a name — an unnamed inline
   `CHECK` reports `no such constraint`, and adding a looser second CHECK does not relax the first
   (both apply). Verified, including that a named constraint can be dropped and re-added on a
   populated database with the foreign keys and `integrity_check` intact. So `entities_type`,
-  `accounts_side` and `currencies_subunits` are named, like every other CHECK (D13).
+  `holdings_side` and `currencies_subunits` are named, like every other CHECK (D13).
 - **Alternatives rejected.**
-  - *Money as `measurements`* (one metric per account, `value REAL`): rejected. `REAL` drifts
+  - *Money as `measurements`* (one metric per holding, `value REAL`): rejected. `REAL` drifts
     (`0.1 + 0.2` executed: `0.30000000000000004`); the unit lives on the metric, not the row, so a
-    currency cannot vary or be looked up per account; there is no retraction; an account is
+    currency cannot vary or be looked up per holding; there is no retraction; a holding is
     not linkable; and `INSERT OR REPLACE` can rewrite it. Storing integer-valued floats
     would be exact up to 2⁵³, but nothing in the file says so — principle 2 fails.
   - *Decimal as TEXT / `NUMERIC`*: rejected — SQLite has no decimal type. Executed: TEXT
@@ -2066,25 +2066,25 @@ Each decision: **context → decision → alternatives rejected → rationale �
   - *One signed column and no `side`*: rejected — a loan typed positive by mistake flips the
     sign of net worth silently; `side` makes the meaning explicit and immutable, amounts stay as
     statements print them.
-  - *Store net-worth totals directly*: rejected — loses the drivers (which account moved, and how
+  - *Store net-worth totals directly*: rejected — loses the drivers (which holding moved, and how
     stale each number is). The one legitimate use, importing a spreadsheet of totals, is a
-    pseudo-account closed when detailed accounts begin (§6.17).
+    pseudo-holding closed when detailed holdings begin (§6.17).
   - *`supersedes_id` chains for balances*: rejected — `balances` has a natural key
-    `(account, day)` (measurements do not: several readings a day are valid), so "newest row
+    `(holding, day)` (measurements do not: several readings a day are valid), so "newest row
     wins" is simpler and cannot be ambiguous. Two correction shapes exist for two shapes of data.
   - *Full double-entry ledger* (`transactions` + `postings`, hledger/GnuCash shape):
     deferred, §7 — it is a second product (categories, transfers, splits, importers) and it is
-    additive later: a `transactions` table would reference `accounts`, and `balances` would become
+    additive later: a `transactions` table would reference `holdings`, and `balances` would become
     its reconciliation points.
   - *Quantity × price per holding*: deferred, §7. It does not fit `currencies` as it is: the code
     CHECK rejects `V`, `ZM`, `BRK.B`, `VWCE.DE`, and a US-listed stock priced in USD cannot be valued
     in EUR without a rate. Doing it properly means a units registry, a `prices` table and longer
     queries — real weight for a number the statement already prints. Reopen when automatic repricing
     or allocation by security is wanted; the additive path is a `securities` + `prices` pair and a
-    nullable `accounts.security_id`, and nothing in the schema blocks it.
-  - *Accounts outside the entity supertype*: rejected — no links, no tombstone, and no cheap way to
+    nullable `holdings.security_id`, and nothing in the schema blocks it.
+  - *Holdings outside the entity supertype*: rejected — no links, no tombstone, and no cheap way to
     change that after the freeze (moving rows into the supertype is a data migration, not a CHECK).
-- **Costs accepted.** A balance carries forward until replaced, so a stale account keeps
+- **Costs accepted.** A balance carries forward until replaced, so a stale holding keeps
   counting (`stale_days`, §6.18, exist to expose that); there is no cross-currency total, so a
   life in two currencies has two net-worth series — a redenomination (the DEM became the EUR) starts
   a second one — until a rate table is added (§7); there is no return/attribution analysis (needs flows — §7); joint holdings are
@@ -2528,60 +2528,60 @@ that made it, and without the `SAVEPOINT` a rejected target leaves its `entities
 a tombstoned page, an old memo edited years later included, so the UI tells the owner that the save
 revives a deleted page before it commits.
 
-### 6.15 Open an account; record, correct and retract a balance (D18)
+### 6.15 Open a holding; record, correct and retract a balance (D18)
 
-Amounts are **integer minor units** of the account's currency (`currencies.subunits` per
-whole unit): €12,345.67 is `1234567`. Opening an account is the universal two-statement
+Amounts are **integer minor units** of the holding's currency (`currencies.subunits` per
+whole unit): €12,345.67 is `1234567`. Opening a holding is the universal two-statement
 entity insert (§6.1); recording a balance is one row. Nothing is ever edited or deleted.
 
 ```sql
 BEGIN IMMEDIATE;
 INSERT INTO entities(type, created_at, updated_at, source)
-VALUES ('account', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'ui')
-RETURNING id;   -- the app keeps it as :account_id
-INSERT INTO accounts(id, name, side, currency, category, institution, opened_day)
-VALUES (:account_id, 'Main checking', 'asset', 'EUR', 'cash', 'Bank A', '2019-03-01');
+VALUES ('holding', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'ui')
+RETURNING id;   -- the app keeps it as :holding_id
+INSERT INTO holdings(id, name, side, currency, category, institution, opened_day)
+VALUES (:holding_id, 'Main checking', 'asset', 'EUR', 'cash', 'Bank A', '2019-03-01');
 COMMIT;
 
 -- what the statement says at the end of a LOCAL day
-INSERT INTO balances(account_id, day, amount, recorded_at, source)
-VALUES (:account_id, '2026-09-30', 1234567, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'statement');
+INSERT INTO balances(holding_id, day, amount, recorded_at, source)
+VALUES (:holding_id, '2026-09-30', 1234567, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'statement');
 
--- a wrong entry is never edited: write the right one for the same (account, day) — the newest row wins
-INSERT INTO balances(account_id, day, amount, recorded_at, note)
-VALUES (:account_id, '2026-09-30', 1234576, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'digits transposed');
+-- a wrong entry is never edited: write the right one for the same (holding, day) — the newest row wins
+INSERT INTO balances(holding_id, day, amount, recorded_at, note)
+VALUES (:holding_id, '2026-09-30', 1234576, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'digits transposed');
 
--- an entry that should never have existed (wrong account, wrong day): retract it with NULL
-INSERT INTO balances(account_id, day, amount, recorded_at, note)
-VALUES (:account_id, '2026-09-30', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'belongs to the savings account');
+-- an entry that should never have existed (wrong holding, wrong day): retract it with NULL
+INSERT INTO balances(holding_id, day, amount, recorded_at, note)
+VALUES (:holding_id, '2026-09-30', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'belongs to the savings holding');
 
 -- idempotent bulk import: ON CONFLICT ... DO NOTHING skips only the duplicate. Not INSERT OR IGNORE,
 -- which would also skip a row with a malformed day or a NULL where one is required — silently.
-INSERT INTO balances(account_id, day, amount, recorded_at, source, import_id)
-VALUES (:account_id, :day, :amount, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'bank_csv', :row_key)
+INSERT INTO balances(holding_id, day, amount, recorded_at, source, import_id)
+VALUES (:holding_id, :day, :amount, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'bank_csv', :row_key)
 ON CONFLICT(source, import_id) WHERE import_id IS NOT NULL DO NOTHING;
 
 -- reading one back as a number
 SELECT b.day, b.amount * 1.0 / c.subunits AS whole_units, a.currency
-  FROM balance_values b JOIN accounts a ON a.id = b.account_id JOIN currencies c ON c.code = a.currency
- WHERE b.account_id = :account_id ORDER BY b.day;
+  FROM balance_values b JOIN holdings a ON a.id = b.holding_id JOIN currencies c ON c.code = a.currency
+ WHERE b.holding_id = :holding_id ORDER BY b.day;
 ```
 
 A retraction only hides the day: the earlier days remain, so the as-of rule of §6.16 falls
 back to the previous balance. Writing a correct value after a retraction simply becomes the
 newest row again.
 
-### 6.16 Net worth on a day, per account and per currency
+### 6.16 Net worth on a day, per holding and per currency
 
 `:day` is the local day to value. Net worth is derived — never stored — and never adds amounts
-of different currencies: each account's signed value is in its own currency's minor units.
+of different currencies: each holding's signed value is in its own currency's minor units.
 
 ```sql
-WITH held AS (                                   -- open, live accounts on :day, and the day of the balance that counts
+WITH held AS (                                   -- open, live holdings on :day, and the day of the balance that counts
   SELECT a.id, a.name, a.side, a.currency,
          (SELECT b.day FROM balance_values b
-           WHERE b.account_id = a.id AND b.day <= :day ORDER BY b.day DESC LIMIT 1) AS as_of
-    FROM accounts a
+           WHERE b.holding_id = a.id AND b.day <= :day ORDER BY b.day DESC LIMIT 1) AS as_of
+    FROM holdings a
     JOIN entities e ON e.id = a.id AND e.deleted_at IS NULL
    WHERE coalesce(a.opened_day, '0000-01-01') <= :day
      AND coalesce(a.closed_day, '9999-12-31') >= :day
@@ -2590,7 +2590,7 @@ SELECT h.name, h.side, h.currency, b.amount, h.as_of,
        CAST(julianday(:day) - julianday(h.as_of) AS INTEGER) AS stale_days,        -- how old the number is
        (CASE h.side WHEN 'asset' THEN 1 ELSE -1 END) * b.amount AS net_minor       -- signed, minor units of h.currency
   FROM held h
-  CROSS JOIN balance_values b ON b.account_id = h.id AND b.day = h.as_of   -- CROSS JOIN pins the order: accounts first, then seek
+  CROSS JOIN balance_values b ON b.holding_id = h.id AND b.day = h.as_of   -- CROSS JOIN pins the order: holdings first, then seek
  ORDER BY h.currency, h.side, h.name;
 ```
 
@@ -2600,17 +2600,17 @@ GROUP BY currency` — one row per currency, exact integers. "Net worth by categ
 
 The rules, all executed against an exact-arithmetic oracle:
 
-- An account **counts** on `:day` if it is live (not tombstoned), open (`opened_day <= :day <=
+- A holding **counts** on `:day` if it is live (not tombstoned), open (`opened_day <= :day <=
   closed_day`, both inclusive; NULL = unbounded) and has at least one balance on or before
   `:day`. Its value is the **latest effective balance on or before `:day`** (carried forward);
   `stale_days` says how old that number is — a balance from 2019 silently counts in 2026 unless
-  someone looks (§6.18 lists the accounts that need updating).
+  someone looks (§6.18 lists the holdings that need updating).
 - `side` decides the sign: assets add, liabilities subtract. Balances are stored as the
   institution states them (a mortgage is a positive amount owed).
 - **Never `sum(net_minor)` across currencies:** the units differ (EUR 1/100, JPY 1/1), so the
   result is a number that means nothing. Always group by `currency`. To see one figure in whole
   units, divide by `currencies.subunits` (§6.15).
-- `CROSS JOIN` pins the join order (accounts first, then an index seek per account). Without
+- `CROSS JOIN` pins the join order (holdings first, then an index seek per holding). Without
   it SQLite scans every balance row (measured at 36 500 rows: 0.043 s without the `CROSS
   JOIN`, 0.000 s with it).
 
@@ -2623,45 +2623,45 @@ WITH RECURSIVE month_ends(day) AS (
   SELECT date(day, 'start of month', '+2 month', '-1 day') FROM month_ends
    WHERE day < date(:to_day, 'start of month', '+1 month', '-1 day')
 ),
-held AS (                                        -- every open, live account on every month-end, with its latest balance
+held AS (                                        -- every open, live holding on every month-end, with its latest balance
   SELECT m.day, a.side, a.currency,
          (SELECT b.amount FROM balance_values b
-           WHERE b.account_id = a.id AND b.day <= m.day ORDER BY b.day DESC LIMIT 1) AS amount
+           WHERE b.holding_id = a.id AND b.day <= m.day ORDER BY b.day DESC LIMIT 1) AS amount
     FROM month_ends m
-    JOIN accounts a ON coalesce(a.opened_day, '0000-01-01') <= m.day
+    JOIN holdings a ON coalesce(a.opened_day, '0000-01-01') <= m.day
                    AND coalesce(a.closed_day, '9999-12-31') >= m.day
     JOIN entities e ON e.id = a.id AND e.deleted_at IS NULL
 )
 SELECT day, currency,
        sum((CASE side WHEN 'asset' THEN 1 ELSE -1 END) * amount) AS net_worth_minor,   -- minor units of that currency
-       count(*)                                                  AS accounts           -- accounts of that currency with a balance by then
+       count(*)                                                  AS holdings           -- holdings of that currency with a balance by then
   FROM held
  WHERE amount IS NOT NULL
  GROUP BY day, currency
  ORDER BY currency, day;
 ```
 
-One series per currency. A month-end at which no account of a currency has a balance has no row for
-it (nothing held, not a zero). `accounts` is how many accounts of that currency had a balance by that
-month-end. Measured over 31 years of month-ends with 40 accounts in 5 currencies and 438 000 balance rows:
+One series per currency. A month-end at which no holding of a currency has a balance has no row for
+it (nothing held, not a zero). `holdings` is how many holdings of that currency had a balance by that
+month-end. Measured over 31 years of month-ends with 40 holdings in 5 currencies and 438 000 balance rows:
 0.056 s. Joining `balance_values` directly makes SQLite scan all balances once per month — 17.3 s at
 36 500 rows; the correlated scalar subquery in `held` turns that into an index seek per
-(month, account).
+(month, holding).
 
-**Backfilling history from a spreadsheet of monthly totals** (no per-account detail): make one
-account, `'Legacy net worth'` (`side = 'asset'`, `category = 'aggregate'`), record the totals as
+**Backfilling history from a spreadsheet of monthly totals** (no per-holding detail): make one
+holding, `'Legacy net worth'` (`side = 'asset'`, `category = 'aggregate'`), record the totals as
 its balances (liabilities already netted, so amounts may be negative), and set its
-`closed_day` to the day the detailed accounts begin. Nothing is double-counted and the series is
+`closed_day` to the day the detailed holdings begin. Nothing is double-counted and the series is
 continuous.
 
-### 6.18 Accounts that need updating
+### 6.18 Holdings that need updating
 
 ```sql
 SELECT a.name, max(b.day) AS last_balance,
        CAST(julianday(:day) - julianday(max(b.day)) AS INTEGER) AS stale_days
-  FROM accounts a
+  FROM holdings a
   JOIN entities e ON e.id = a.id AND e.deleted_at IS NULL
-  LEFT JOIN balance_values b ON b.account_id = a.id AND b.day <= :day
+  LEFT JOIN balance_values b ON b.holding_id = a.id AND b.day <= :day
  WHERE a.closed_day IS NULL OR a.closed_day >= :day
  GROUP BY a.id
 HAVING max(b.day) IS NULL OR max(b.day) < date(:day, '-35 day')
@@ -2722,10 +2722,10 @@ re-added, each with the trigger that should reopen the question.
 | Unicode collation for titles (ICU / app-registered) | A collation only one program registers makes the DB unwritable and un-integrity-checkable for everyone else (`no such collation sequence`); the app-computed `title_key` gives the same uniqueness (D5) | Never, unless SQLite ships Unicode folding in the core |
 | Unicode-aware uniqueness for `places.name` | Not a filename; ASCII-`NOCASE` is enough for a personal registry today (`metrics.name` is lowercase ASCII by its CHECK) | A real duplicate like `Zürich`/`ZÜRICH` appears (then: a `name_key`, same pattern) |
 | Hard deletes / GDPR-style erasure | Tombstones keep everything (D11) | A legal/privacy need to truly destroy specific rows |
-| Transaction ledger (income, spending, transfers), budgets, categories | A second product (splits, transfers, importers, categorisation); net worth needs only balances (D18). Additive later: `transactions` referencing `accounts`, `balances` as reconciliation points | The owner wants spending/savings-rate analysis, or a bank-feed importer exists |
-| Per-holding quantity × price, cost basis / lots, dividends, returns (TWR/IRR) | Net worth needs the market *value* on a day, which the statement or app gives; quantity × price needs a `prices` table and non-currency units — the schema cannot hold a ticker (executed: `V`, `ZM`, `BRK.B` fail the code CHECK). Additive later: a `securities` + `prices` pair and a nullable `accounts.security_id` (D18) | The owner wants automatic repricing, allocation by security or realised/unrealised gain |
-| Currency conversion: exchange rates, one net-worth figure across currencies | Net worth is reported per currency (D18); with one currency it is already one figure | Accounts in more than one currency and you want a single total. Additive: an `fx_rates` table `(from_ccy, to_ccy, day, rate)` referencing `currencies`, and the conversion join in §6.16–6.17 |
-| Co-ownership / shares of joint accounts, multiple owners | Single-user database; record your own share (D18) | A second person needs their own view |
+| Transaction ledger (income, spending, transfers), budgets, categories | A second product (splits, transfers, importers, categorisation); net worth needs only balances (D18). Additive later: `transactions` referencing `holdings`, `balances` as reconciliation points | The owner wants spending/savings-rate analysis, or a bank-feed importer exists |
+| Per-holding quantity × price, cost basis / lots, dividends, returns (TWR/IRR) | Net worth needs the market *value* on a day, which the statement or app gives; quantity × price needs a `prices` table and non-currency units — the schema cannot hold a ticker (executed: `V`, `ZM`, `BRK.B` fail the code CHECK). Additive later: a `securities` + `prices` pair and a nullable `holdings.security_id` (D18) | The owner wants automatic repricing, allocation by security or realised/unrealised gain |
+| Currency conversion: exchange rates, one net-worth figure across currencies | Net worth is reported per currency (D18); with one currency it is already one figure | Holdings in more than one currency and you want a single total. Additive: an `fx_rates` table `(from_ccy, to_ccy, day, rate)` referencing `currencies`, and the conversion join in §6.16–6.17 |
+| Co-ownership / shares of joint holdings, multiple owners | Single-user database; record your own share (D18) | A second person needs their own view |
 | Storing account numbers, IBANs, credentials | A plaintext DB makes them a liability (§2.10, D17) | Never in `life.db`; use a password manager |
 | Partial dates (`1870`, `1870-05`) for people and events | Nothing asked for one yet. The standard for them is EDTF, now ISO 8601-2 [R70] (`1870`, `1870-05`, `1870~` for "about 1870"). The path is one migration: `DROP CONSTRAINT people_birth_day` and `ADD CONSTRAINT people_birth_day` with a CHECK that also accepts the EDTF forms wanted — executed for `YYYY` and `YYYY-MM` on a populated table; junk and month 13 stay rejected. Queries that do date arithmetic on `birth_day` (birthdays) must then skip partial values | The first ancestor or approximate date you want to record |
 | Repeating tasks | A task has one status, so a repeating one could only be a reminder that ends when done; a repeating event is the reminder and a 0/1 habit metric the checklist (D15) | A task you must tick off per occurrence, with its own history, that a habit metric cannot hold (then: the six `repeat_*` columns and CHECKs of `events` on `tasks`, `due_day` as the anchor — additive) |

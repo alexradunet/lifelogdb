@@ -39,12 +39,12 @@ Until the schema is frozen (decision D13):
   columns with round-trip CHECKs (`date(x) IS x`, `strftime(...) IS x` — the `IS`
   matters, see §2.2), tombstones instead of deletes (enforced by BEFORE DELETE triggers),
   composite FK `(id, entity_type) → entities(id, type)` in every *entity* domain table
-  (`pages`, `events`, `tasks`, `people`, `places`, `accounts` — not `measurements`/`metrics`/
+  (`pages`, `events`, `tasks`, `people`, `places`, `holdings` — not `measurements`/`metrics`/
   `balances`/`currencies`, which are facts and registries), append-only measurements
   and balances enforced by triggers (measurement corrections use `supersedes_id`; a balance is
-  corrected by a newer row for the same account+day; both are retracted with a NULL value/amount),
+  corrected by a newer row for the same holding+day; both are retracted with a NULL value/amount),
   importers use `ON CONFLICT … DO NOTHING`, never `OR IGNORE`/`OR REPLACE`, money as
-  INTEGER minor units of the account's currency — never REAL (D18), every CHECK NAMED
+  INTEGER minor units of the holding's currency — never REAL (D18), every CHECK NAMED
   (`CONSTRAINT <table>_<rule> CHECK …`) so any rule can be dropped or re-added later, using only functions
   the minimum SQLite has (`lifelog_meta.sqlite`), the rules a table needs written as comments *inside* its
   `CREATE` statement (comments outside are not stored in the file), ids carried with `INSERT … RETURNING id`,

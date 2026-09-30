@@ -91,7 +91,7 @@ K('C3 the mention shows up in "everything about a person" (links to_id = person)
 K('C3 the existing kinds are untouched', c.execute("select count(*) from link_kinds where kind in ('wikilink','about','redirect')").fetchone()[0] == 3)
 
 # ---- D orphan check (the query of section 2.8, taken from the document text)
-m = re.search(r"SELECT id FROM entities WHERE id NOT IN \(SELECT id FROM pages UNION SELECT id FROM events UNION SELECT id FROM tasks UNION SELECT id FROM people UNION SELECT id FROM places UNION SELECT id FROM accounts\)", doc)
+m = re.search(r"SELECT id FROM entities WHERE id NOT IN \(SELECT id FROM pages UNION SELECT id FROM events UNION SELECT id FROM tasks UNION SELECT id FROM people UNION SELECT id FROM places UNION SELECT id FROM holdings\)", doc)
 K('D the orphan query is in the document (2.8)', m is not None)
 c = fresh(); memo(c, 'x')
 K('D clean database: the orphan query returns nothing', m and c.execute(m.group(0)).fetchall() == [])

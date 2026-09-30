@@ -28,7 +28,7 @@ def ratio(out, pat=r'(\d+)/(\d+)'):
 
 SUITES = [   # (name, directory, argv, predicate, what it proves)
  ('regress',       'schema',    ['regress.py', '{DDL}'],      lambda o: ratio(o, r'(\d+)/(\d+)\s*$'), 'v1.4 behaviours: CHECKs, triggers, FKs, STRICT, FTS'),
- ('finprobes',     'schema',    ['finprobes.py', '{DDL}'],    lambda o: ratio(o, r'finance probes: (\d+)/(\d+)'), 'D18 money: currencies, accounts, balances, exact integers, no exchange rates'),
+ ('finprobes',     'schema',    ['finprobes.py', '{DDL}'],    lambda o: ratio(o, r'finance probes: (\d+)/(\d+)'), 'D18 money: currencies, holdings, balances, exact integers, no exchange rates'),
  ('r5probes',      'schema',    ['r5probes.py', '{DDL}'],     lambda o: ratio(o, r'round-5 probes: (\d+)/(\d+)'), 'imports, retractions, recorded_at, no-delete triggers, named CHECKs'),
  ('r6probes',      'schema',    ['r6probes.py', '{DDL}'],     lambda o: ratio(o, r'round-6 probes: (\d+)/(\d+)'), 'tz, completed_day, one place per event'),
  ('r7probes',      'schema',    ['r7probes.py', '{DDL}'],     lambda o: ratio(o, r'round-7 probes: (\d+)/(\d+)'), 'BEGIN IMMEDIATE race, pragmas, read-only readers, text fixes'),

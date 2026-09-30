@@ -11,12 +11,12 @@ def mutate(old, new):
     assert n == 1, f'mutation target found {n}x: {old[:70]!r}'
     return doc.replace(old, new, 1)
 
-ORPHAN = "SELECT id FROM entities WHERE id NOT IN (SELECT id FROM pages UNION SELECT id FROM events UNION SELECT id FROM tasks UNION SELECT id FROM people UNION SELECT id FROM places UNION SELECT id FROM accounts);"
+ORPHAN = "SELECT id FROM entities WHERE id NOT IN (SELECT id FROM pages UNION SELECT id FROM events UNION SELECT id FROM tasks UNION SELECT id FROM people UNION SELECT id FROM places UNION SELECT id FROM holdings);"
 MUTANTS = [
  ('the export key is back in lifelog_meta',        mutate("  ('evolution',   'after the first real data", "  ('export',      'export/ = markdown mirror of the prose only; derived nightly'),\n  ('evolution',   'after the first real data")),
  ('the backups key is back in lifelog_meta',       mutate("  ('evolution',   'after the first real data", "  ('backups',     'life-YYYYMMDD.db = verified nightly snapshots; restore with restore.sh'),\n  ('evolution',   'after the first real data")),
  ('a backups/ folder is back in the layout',       mutate("└── life.db                  # canonical: all structured data + all prose", "├── life.db                  # canonical: all structured data + all prose\n└── backups/                 # nightly snapshots")),
- ('the orphan query forgets the accounts table',   mutate(ORPHAN, ORPHAN.replace(" UNION SELECT id FROM accounts", ""))),
+ ('the orphan query forgets the holdings table',   mutate(ORPHAN, ORPHAN.replace(" UNION SELECT id FROM holdings", ""))),
  ('the foreign_key_check line is gone from 2.8',   mutate("PRAGMA foreign_key_check;    -- no rows\n", "")),
  ('the imports step runs nightly.sh again',        mutate("1. **Trial run first.**", "1. **Snapshot first.** Run `nightly.sh` (§2.8).")),
  ('the titles key says export filenames again',    mutate("'page titles never change and are valid file names everywhere:", "'page titles are export filenames and never change:")),

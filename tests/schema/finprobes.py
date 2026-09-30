@@ -10,10 +10,10 @@ def check(label, cond, detail=''):
     results.append(bool(cond))
     if not cond: print(f'  FAIL {label} {detail}')
 def acct(c, name='Main', side='asset', cur='EUR', **kw):
-    i = ent(c,'account'); cols = dict(id=i,name=name,side=side,currency=cur, **kw)
-    c.execute(f"INSERT INTO accounts({','.join(cols)}) VALUES ({','.join('?'*len(cols))})", tuple(cols.values())); return i
+    i = ent(c,'holding'); cols = dict(id=i,name=name,side=side,currency=cur, **kw)
+    c.execute(f"INSERT INTO holdings({','.join(cols)}) VALUES ({','.join('?'*len(cols))})", tuple(cols.values())); return i
 def bal(c, a, day, amt, **kw):
-    cols = dict(account_id=a, day=day, amount=amt, **kw)
+    cols = dict(holding_id=a, day=day, amount=amt, **kw)
     return c.execute(f"INSERT INTO balances({','.join(cols)},recorded_at) VALUES ({','.join('?'*len(cols))},{NOW})", tuple(cols.values()))
 
 # ---------- currencies
@@ -34,53 +34,53 @@ for lbl,exp,sql in [('cur lowercase code','ERR',"INSERT INTO currencies VALUES (
 check('cur seed count 7+2', c.execute('select count(*) from currencies').fetchone()[0]==9)
 check('seed JPY subunits=1, EUR=100, no BTC seeded', dict(c.execute("select code,subunits from currencies where code in ('JPY','EUR','BTC')"))=={'JPY':1,'EUR':100})
 
-# ---------- accounts
+# ---------- holdings
 c = fresh(); a = acct(c,'Main')
-probe('acct type/table mismatch (page entity)','ERR',"INSERT INTO accounts(id,name,side,currency) VALUES (?,?,?,?)",(ent(c,'page'),'X','asset','EUR'),c)
-probe('acct without entity row','ERR',"INSERT INTO accounts(id,name,side,currency) VALUES (9999,'Y','asset','EUR')",c=c)
+probe('acct type/table mismatch (page entity)','ERR',"INSERT INTO holdings(id,name,side,currency) VALUES (?,?,?,?)",(ent(c,'page'),'X','asset','EUR'),c)
+probe('acct without entity row','ERR',"INSERT INTO holdings(id,name,side,currency) VALUES (9999,'Y','asset','EUR')",c=c)
 probe('acct id also in places','ERR',"INSERT INTO places(id,name) VALUES (?, 'P')",(a,),c)
-probe('acct side debt','ERR',"INSERT INTO accounts(id,name,side,currency) VALUES (?,?,?,?)",(ent(c,'account'),'D','debt','EUR'),c)
-probe('acct NULL side','ERR',"INSERT INTO accounts(id,name,side,currency) VALUES (?,?,NULL,?)",(ent(c,'account'),'D2','EUR'),c)
-probe('acct unregistered currency','ERR',"INSERT INTO accounts(id,name,side,currency) VALUES (?,?,?,?)",(ent(c,'account'),'E','asset','XXX'),c)
-probe('acct duplicate name (NOCASE)','ERR',"INSERT INTO accounts(id,name,side,currency) VALUES (?,?,?,?)",(ent(c,'account'),'main','asset','EUR'),c)
-probe('acct closed < opened','ERR',"INSERT INTO accounts(id,name,side,currency,opened_day,closed_day) VALUES (?,?,?,?,?,?)",(ent(c,'account'),'F','asset','EUR','2020-05-01','2020-04-30'),c)
-probe('acct closed = opened ok','OK',"INSERT INTO accounts(id,name,side,currency,opened_day,closed_day) VALUES (?,?,?,?,?,?)",(ent(c,'account'),'G','asset','EUR','2020-05-01','2020-05-01'),c)
-probe('acct malformed opened_day','ERR',"INSERT INTO accounts(id,name,side,currency,opened_day) VALUES (?,?,?,?,?)",(ent(c,'account'),'H','asset','EUR','2020-5-1'),c)
-probe('acct closed without opened ok','OK',"INSERT INTO accounts(id,name,side,currency,closed_day) VALUES (?,?,?,?,?)",(ent(c,'account'),'I','asset','EUR','2020-05-01'),c)
-probe('acct UPDATE side','ERR',"UPDATE accounts SET side='liability' WHERE id=?",(a,),c)
-probe('acct UPDATE currency','ERR',"UPDATE accounts SET currency='USD' WHERE id=?",(a,),c)
-probe('acct full-row no-op UPDATE ok','OK',"UPDATE accounts SET name='Main', side=side, currency=currency, category='Cash' WHERE id=?",(a,),c)
+probe('acct side debt','ERR',"INSERT INTO holdings(id,name,side,currency) VALUES (?,?,?,?)",(ent(c,'holding'),'D','debt','EUR'),c)
+probe('acct NULL side','ERR',"INSERT INTO holdings(id,name,side,currency) VALUES (?,?,NULL,?)",(ent(c,'holding'),'D2','EUR'),c)
+probe('acct unregistered currency','ERR',"INSERT INTO holdings(id,name,side,currency) VALUES (?,?,?,?)",(ent(c,'holding'),'E','asset','XXX'),c)
+probe('acct duplicate name (NOCASE)','ERR',"INSERT INTO holdings(id,name,side,currency) VALUES (?,?,?,?)",(ent(c,'holding'),'main','asset','EUR'),c)
+probe('acct closed < opened','ERR',"INSERT INTO holdings(id,name,side,currency,opened_day,closed_day) VALUES (?,?,?,?,?,?)",(ent(c,'holding'),'F','asset','EUR','2020-05-01','2020-04-30'),c)
+probe('acct closed = opened ok','OK',"INSERT INTO holdings(id,name,side,currency,opened_day,closed_day) VALUES (?,?,?,?,?,?)",(ent(c,'holding'),'G','asset','EUR','2020-05-01','2020-05-01'),c)
+probe('acct malformed opened_day','ERR',"INSERT INTO holdings(id,name,side,currency,opened_day) VALUES (?,?,?,?,?)",(ent(c,'holding'),'H','asset','EUR','2020-5-1'),c)
+probe('acct closed without opened ok','OK',"INSERT INTO holdings(id,name,side,currency,closed_day) VALUES (?,?,?,?,?)",(ent(c,'holding'),'I','asset','EUR','2020-05-01'),c)
+probe('acct UPDATE side','ERR',"UPDATE holdings SET side='liability' WHERE id=?",(a,),c)
+probe('acct UPDATE currency','ERR',"UPDATE holdings SET currency='USD' WHERE id=?",(a,),c)
+probe('acct full-row no-op UPDATE ok','OK',"UPDATE holdings SET name='Main', side=side, currency=currency, category='Cash' WHERE id=?",(a,),c)
 before = c.execute('select updated_at from entities where id=?',(a,)).fetchone()[0]
 import time; time.sleep(0.005)
-c.execute("UPDATE accounts SET institution='Bank A' WHERE id=?",(a,))
+c.execute("UPDATE holdings SET institution='Bank A' WHERE id=?",(a,))
 check('acct update bumps entities.updated_at', c.execute('select updated_at from entities where id=?',(a,)).fetchone()[0] > before)
 probe('entities type foo','ERR',f"INSERT INTO entities(type,created_at,updated_at) VALUES ('foo',{NOW},{NOW})",c=c)
-probe('entities type account ok','OK',f"INSERT INTO entities(type,created_at,updated_at) VALUES ('account',{NOW},{NOW})",c=c)
+probe('entities type holding ok','OK',f"INSERT INTO entities(type,created_at,updated_at) VALUES ('holding',{NOW},{NOW})",c=c)
 c.execute(f"UPDATE entities SET deleted_at={NOW} WHERE id=?",(a,))
 check('acct tombstone recorded', c.execute('select deleted_at is not null from entities where id=?',(a,)).fetchone()[0]==1)
 
 # ---------- balances
 c = fresh(); a = acct(c,'Chk'); l = acct(c,'Mortgage','liability')
-probe('bal integer ok','OK',f"INSERT INTO balances(account_id,day,amount,recorded_at) VALUES (?,'2026-01-31',1234567,{NOW})",(a,),c)
-probe('bal REAL 12.5 rejected (STRICT)','ERR',f"INSERT INTO balances(account_id,day,amount,recorded_at) VALUES (?,'2026-02-28',12.5,{NOW})",(a,),c)
-probe('bal REAL 12.0 accepted as 12 (lossless)','OK',f"INSERT INTO balances(account_id,day,amount,recorded_at) VALUES (?,'2026-02-27',12.0,{NOW})",(a,),c)
+probe('bal integer ok','OK',f"INSERT INTO balances(holding_id,day,amount,recorded_at) VALUES (?,'2026-01-31',1234567,{NOW})",(a,),c)
+probe('bal REAL 12.5 rejected (STRICT)','ERR',f"INSERT INTO balances(holding_id,day,amount,recorded_at) VALUES (?,'2026-02-28',12.5,{NOW})",(a,),c)
+probe('bal REAL 12.0 accepted as 12 (lossless)','OK',f"INSERT INTO balances(holding_id,day,amount,recorded_at) VALUES (?,'2026-02-27',12.0,{NOW})",(a,),c)
 check('bal 12.0 stored as integer', c.execute("select typeof(amount) from balances where day='2026-02-27'").fetchone()[0]=='integer')
-probe('bal text 12x rejected','ERR',f"INSERT INTO balances(account_id,day,amount,recorded_at) VALUES (?,'2026-02-26','12x',{NOW})",(a,),c)
-probe('bal malformed day','ERR',f"INSERT INTO balances(account_id,day,amount,recorded_at) VALUES (?,'2026-2-3',1,{NOW})",(a,),c)
-probe('bal impossible day','ERR',f"INSERT INTO balances(account_id,day,amount,recorded_at) VALUES (?,'2026-02-30',1,{NOW})",(a,),c)
-probe('bal malformed recorded_at','ERR',"INSERT INTO balances(account_id,day,amount,recorded_at) VALUES (?,'2026-03-01',1,'2026-03-01 10:00:00')",(a,),c)
-probe('bal missing recorded_at','ERR',"INSERT INTO balances(account_id,day,amount) VALUES (?,'2026-03-01',1)",(a,),c)
-probe('bal dangling account (FK on)','ERR',f"INSERT INTO balances(account_id,day,amount,recorded_at) VALUES (9999,'2026-03-01',1,{NOW})",c=c)
+probe('bal text 12x rejected','ERR',f"INSERT INTO balances(holding_id,day,amount,recorded_at) VALUES (?,'2026-02-26','12x',{NOW})",(a,),c)
+probe('bal malformed day','ERR',f"INSERT INTO balances(holding_id,day,amount,recorded_at) VALUES (?,'2026-2-3',1,{NOW})",(a,),c)
+probe('bal impossible day','ERR',f"INSERT INTO balances(holding_id,day,amount,recorded_at) VALUES (?,'2026-02-30',1,{NOW})",(a,),c)
+probe('bal malformed recorded_at','ERR',"INSERT INTO balances(holding_id,day,amount,recorded_at) VALUES (?,'2026-03-01',1,'2026-03-01 10:00:00')",(a,),c)
+probe('bal missing recorded_at','ERR',"INSERT INTO balances(holding_id,day,amount) VALUES (?,'2026-03-01',1)",(a,),c)
+probe('bal dangling holding (FK on)','ERR',f"INSERT INTO balances(holding_id,day,amount,recorded_at) VALUES (9999,'2026-03-01',1,{NOW})",c=c)
 probe('bal UPDATE','ERR',"UPDATE balances SET amount=5 WHERE id=1",c=c)
 probe('bal DELETE','ERR',"DELETE FROM balances WHERE id=1",c=c)
-probe('bal negative (overdraft) ok','OK',f"INSERT INTO balances(account_id,day,amount,recorded_at) VALUES (?,'2026-03-02',-5000,{NOW})",(a,),c)
-probe('bal huge int64 ok','OK',f"INSERT INTO balances(account_id,day,amount,recorded_at) VALUES (?,'2026-03-03',9000000000000000000,{NOW})",(a,),c)
+probe('bal negative (overdraft) ok','OK',f"INSERT INTO balances(holding_id,day,amount,recorded_at) VALUES (?,'2026-03-02',-5000,{NOW})",(a,),c)
+probe('bal huge int64 ok','OK',f"INSERT INTO balances(holding_id,day,amount,recorded_at) VALUES (?,'2026-03-03',9000000000000000000,{NOW})",(a,),c)
 # newest wins, retraction, re-entry
 c = fresh(); a = acct(c,'Chk')
 bal(c,a,'2026-01-31',100); bal(c,a,'2026-02-28',200); bal(c,a,'2026-02-28',250)         # correction
-vals = lambda: c.execute("select day,amount from balance_values where account_id=? order by day",(a,)).fetchall()
+vals = lambda: c.execute("select day,amount from balance_values where holding_id=? order by day",(a,)).fetchall()
 check('newest row per day wins', vals()==[('2026-01-31',100),('2026-02-28',250)], vals())
-bal(c,a,'2026-02-28',None,note='wrong account')                                          # retraction
+bal(c,a,'2026-02-28',None,note='wrong holding')                                          # retraction
 check('retraction hides the day', vals()==[('2026-01-31',100)], vals())
 bal(c,a,'2026-02-28',260)                                                                # re-entry after retraction
 check('re-entry after retraction wins', vals()==[('2026-01-31',100),('2026-02-28',260)], vals())
@@ -88,21 +88,21 @@ check('all history still stored', c.execute('select count(*) from balances').fet
 # retraction as first row is harmless
 bal(c,a,'2026-03-31',None); check('lone retraction shows nothing', ('2026-03-31',None) not in vals() and len(vals())==2)
 # idempotent import
-probe('import first','OK',f"INSERT INTO balances(account_id,day,amount,recorded_at,source,import_id) VALUES (?,'2026-04-30',1,{NOW},'bank_csv','L1') ON CONFLICT(source,import_id) WHERE import_id IS NOT NULL DO NOTHING",(a,),c)
-r = probe('import repeat (no-op)','OK',f"INSERT INTO balances(account_id,day,amount,recorded_at,source,import_id) VALUES (?,'2026-04-30',1,{NOW},'bank_csv','L1') ON CONFLICT(source,import_id) WHERE import_id IS NOT NULL DO NOTHING",(a,),c)
+probe('import first','OK',f"INSERT INTO balances(holding_id,day,amount,recorded_at,source,import_id) VALUES (?,'2026-04-30',1,{NOW},'bank_csv','L1') ON CONFLICT(source,import_id) WHERE import_id IS NOT NULL DO NOTHING",(a,),c)
+r = probe('import repeat (no-op)','OK',f"INSERT INTO balances(holding_id,day,amount,recorded_at,source,import_id) VALUES (?,'2026-04-30',1,{NOW},'bank_csv','L1') ON CONFLICT(source,import_id) WHERE import_id IS NOT NULL DO NOTHING",(a,),c)
 check('import repeat inserted 0 rows', r[1]==0 and c.execute("select count(*) from balances where import_id='L1'").fetchone()[0]==1)
-probe('same import_id other source ok','OK',f"INSERT INTO balances(account_id,day,amount,recorded_at,source,import_id) VALUES (?,'2026-05-31',1,{NOW},'broker_csv','L1')",(a,),c)
-probe('import: ON CONFLICT still raises on bad day','ERR',f"INSERT INTO balances(account_id,day,amount,recorded_at,source,import_id) VALUES (?,'2026-5-31',1,{NOW},'bank_csv','L9') ON CONFLICT(source,import_id) WHERE import_id IS NOT NULL DO NOTHING",(a,),c)
-r = tryx(c, f"INSERT OR IGNORE INTO balances(account_id,day,amount,recorded_at,source,import_id) VALUES (?,'2026-5-31',1,{NOW},'bank_csv','L9')",(a,))
+probe('same import_id other source ok','OK',f"INSERT INTO balances(holding_id,day,amount,recorded_at,source,import_id) VALUES (?,'2026-05-31',1,{NOW},'broker_csv','L1')",(a,),c)
+probe('import: ON CONFLICT still raises on bad day','ERR',f"INSERT INTO balances(holding_id,day,amount,recorded_at,source,import_id) VALUES (?,'2026-5-31',1,{NOW},'bank_csv','L9') ON CONFLICT(source,import_id) WHERE import_id IS NOT NULL DO NOTHING",(a,),c)
+r = tryx(c, f"INSERT OR IGNORE INTO balances(holding_id,day,amount,recorded_at,source,import_id) VALUES (?,'2026-5-31',1,{NOW},'bank_csv','L9')",(a,))
 check('DOCUMENTED HOLE: OR IGNORE swallows a bad day silently', r==('OK',0), r)
 # REPLACE bypass: OFF vs ON
 c = fresh(); a = acct(c,'Chk'); bal(c,a,'2026-01-31',100,source='s',import_id='k')
-r = tryx(c, f"INSERT OR REPLACE INTO balances(account_id,day,amount,recorded_at,source,import_id) VALUES (?,'2026-01-31',999,{NOW},'s','k')",(a,))
+r = tryx(c, f"INSERT OR REPLACE INTO balances(holding_id,day,amount,recorded_at,source,import_id) VALUES (?,'2026-01-31',999,{NOW},'s','k')",(a,))
 check('DOCUMENTED HOLE: REPLACE rewrites history when recursive_triggers=OFF', r==('OK',1) and c.execute('select amount from balances').fetchall()==[(999,)], r)
 c = fresh(); c.execute('PRAGMA recursive_triggers=ON'); a = acct(c,'Chk'); bal(c,a,'2026-01-31',100,source='s',import_id='k')
-probe('REPLACE blocked when recursive_triggers=ON','ERR',f"INSERT OR REPLACE INTO balances(account_id,day,amount,recorded_at,source,import_id) VALUES (?,'2026-01-31',999,{NOW},'s','k')",(a,),c)
+probe('REPLACE blocked when recursive_triggers=ON','ERR',f"INSERT OR REPLACE INTO balances(holding_id,day,amount,recorded_at,source,import_id) VALUES (?,'2026-01-31',999,{NOW},'s','k')",(a,),c)
 check('history intact after blocked REPLACE', c.execute('select amount from balances').fetchall()==[(100,)])
-probe('REPLACE INTO by id blocked when ON','ERR',f"REPLACE INTO balances(id,account_id,day,amount,recorded_at) VALUES (1,?,'2026-01-31',5,{NOW})",(a,),c)
+probe('REPLACE INTO by id blocked when ON','ERR',f"REPLACE INTO balances(id,holding_id,day,amount,recorded_at) VALUES (1,?,'2026-01-31',5,{NOW})",(a,),c)
 # mirror/touch/entity triggers still fine with recursive_triggers ON
 p = ent(c,'person'); c.execute("INSERT INTO people(id,name) VALUES (?,'S')",(p,)); q = ent(c,'person'); c.execute("INSERT INTO people(id,name) VALUES (?,'T')",(q,))
 c.execute(f"INSERT INTO links(from_id,to_id,kind,created_at) VALUES (?,?,'friend',{NOW})",(p,q))
@@ -114,11 +114,11 @@ c = fresh()
 check('no fx_rates table: nothing in the file converts one currency into another', not c.execute("select 1 from sqlite_schema where name like '%fx%' or name like '%rate%'").fetchall())
 probe('a retired currency (DEM) can be registered: one series per currency, so a redenomination is just a second code','OK',"INSERT INTO currencies VALUES ('DEM','Deutsche Mark',100,NULL)",c=c)
 
-# ---------- links to accounts
+# ---------- links to holdings
 c = fresh(); a = acct(c,'Flat','asset'); m = memo(c,'bought the flat'); e = ent(c,'event'); c.execute("INSERT INTO events(id,title,start_day) VALUES (?,'Bought flat','2026-05-01')",(e,))
 pg = ent(c,'page'); c.execute("INSERT INTO pages(id,kind,title,title_key) VALUES (?,'page','Some','some')",(pg,))
-for lbl,exp,f,t,k in [('link memo about account','OK',m,a,'about'),('link event about account','OK',e,a,'about'),('link account related page','OK',a,pg,'related'),
-                      ('link about page rejected (regression)','ERR',m,pg,'about'),('link account subtask rejected','ERR',a,a,'subtask'),('link wikilink to account rejected','ERR',m,a,'wikilink')]:
+for lbl,exp,f,t,k in [('link memo about holding','OK',m,a,'about'),('link event about holding','OK',e,a,'about'),('link holding related page','OK',a,pg,'related'),
+                      ('link about page rejected (regression)','ERR',m,pg,'about'),('link holding subtask rejected','ERR',a,a,'subtask'),('link wikilink to holding rejected','ERR',m,a,'wikilink')]:
     probe(lbl,exp,f"INSERT INTO links(from_id,to_id,kind,created_at) VALUES (?,?,?,{NOW})",(f,t,k),c)
 
 # ---------- exactness: why not REAL / measurements
@@ -133,8 +133,8 @@ print('  (REAL sum of 0.1 and 0.2 =', repr(real_sum), ')')
 # ---------- entities_type widening is a 2-statement migration (named CHECK)
 c = fresh(); a = acct(c,'Z')
 check('drop named constraint', tryx(c,"ALTER TABLE entities DROP CONSTRAINT entities_type")[0]=='OK')
-check('add widened constraint', tryx(c,"ALTER TABLE entities ADD CONSTRAINT entities_type CHECK (type IN ('page','event','task','person','place','account','holding'))")[0]=='OK')
-probe('new type accepted after widening','OK',f"INSERT INTO entities(type,created_at,updated_at) VALUES ('holding',{NOW},{NOW})",c=c)
+check('add widened constraint', tryx(c,"ALTER TABLE entities ADD CONSTRAINT entities_type CHECK (type IN ('page','event','task','person','place','holding','vehicle'))")[0]=='OK')
+probe('new type accepted after widening','OK',f"INSERT INTO entities(type,created_at,updated_at) VALUES ('vehicle',{NOW},{NOW})",c=c)
 check('integrity + FK ok after widening', c.execute('pragma integrity_check').fetchall()==[('ok',)] and c.execute('pragma foreign_key_check').fetchall()==[])
 c = fresh(); pass
 

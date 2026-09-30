@@ -8,11 +8,11 @@ def gen(n_acc=14, years=12):
     ccys = ['EUR','USD','JPY','BTC','GBP','MRU']   # amounts of different currencies are never added
     accts=[]
     for k in range(n_acc):
-        i = ent(c,'account'); cur = random.choice(ccys); side = random.choice(['asset','asset','asset','liability'])
+        i = ent(c,'holding'); cur = random.choice(ccys); side = random.choice(['asset','asset','asset','liability'])
         o = dt.date(2012,1,1)+dt.timedelta(random.randrange(0,900)); cl = o+dt.timedelta(random.randrange(400,4000)) if random.random()<.35 else None
-        c.execute("INSERT INTO accounts(id,name,side,currency,opened_day,closed_day) VALUES (?,?,?,?,?,?)",(i,f'acct{k}',side,cur,o.isoformat(), cl.isoformat() if cl else None))
+        c.execute("INSERT INTO holdings(id,name,side,currency,opened_day,closed_day) VALUES (?,?,?,?,?,?)",(i,f'acct{k}',side,cur,o.isoformat(), cl.isoformat() if cl else None))
         accts.append(dict(id=i,side=side,cur=cur,open=o,close=cl,name=f'acct{k}'))
-    # tombstone one account
+    # tombstone one holding
     dead = accts[3]['id']; c.execute(f"UPDATE entities SET deleted_at={NOW} WHERE id=?", (dead,)); accts[3]['dead']=True
     # balances with corrections & retractions
     for a in accts:
@@ -20,18 +20,18 @@ def gen(n_acc=14, years=12):
         while d <= end:
             if random.random()<.8:
                 amt = random.randrange(-5_000_000, 90_000_000) if a['cur']!='BTC' else random.randrange(0, 900_000_000)
-                c.execute(f"INSERT INTO balances(account_id,day,amount,recorded_at) VALUES (?,?,?,{NOW})",(a['id'],d.isoformat(),amt))
+                c.execute(f"INSERT INTO balances(holding_id,day,amount,recorded_at) VALUES (?,?,?,{NOW})",(a['id'],d.isoformat(),amt))
                 r = random.random()
                 if r<.15:  # correction
-                    c.execute(f"INSERT INTO balances(account_id,day,amount,recorded_at) VALUES (?,?,?,{NOW})",(a['id'],d.isoformat(),amt+random.randrange(1,5000)))
+                    c.execute(f"INSERT INTO balances(holding_id,day,amount,recorded_at) VALUES (?,?,?,{NOW})",(a['id'],d.isoformat(),amt+random.randrange(1,5000)))
                 elif r<.25: # retraction
-                    c.execute(f"INSERT INTO balances(account_id,day,amount,recorded_at) VALUES (?,?,NULL,{NOW})",(a['id'],d.isoformat()))
-                    if random.random()<.5: c.execute(f"INSERT INTO balances(account_id,day,amount,recorded_at) VALUES (?,?,?,{NOW})",(a['id'],d.isoformat(),amt+7))
+                    c.execute(f"INSERT INTO balances(holding_id,day,amount,recorded_at) VALUES (?,?,NULL,{NOW})",(a['id'],d.isoformat()))
+                    if random.random()<.5: c.execute(f"INSERT INTO balances(holding_id,day,amount,recorded_at) VALUES (?,?,?,{NOW})",(a['id'],d.isoformat(),amt+7))
             d += dt.timedelta(random.choice([30,31,45,90]))
     return c, accts
 
 def oracle(c, accts, day):
-    """{currency: (signed net in that currency's minor units, accounts counted)} — exact integers, straight from the rules of 6.16."""
+    """{currency: (signed net in that currency's minor units, holdings counted)} — exact integers, straight from the rules of 6.16."""
     out = {}
     d = dt.date.fromisoformat(day)
     for a in accts:
@@ -39,7 +39,7 @@ def oracle(c, accts, day):
         if a['open']>d or (a['close'] and a['close']<d): continue
         # effective balances = newest row per day, unless NULL
         eff = {}
-        for (bd, amt) in c.execute("select day, amount from balances where account_id=? order by id", (a['id'],)): eff[bd]=amt
+        for (bd, amt) in c.execute("select day, amount from balances where holding_id=? order by id", (a['id'],)): eff[bd]=amt
         days = sorted(k for k,v in eff.items() if v is not None and k<=day)
         if not days: continue
         tot, n = out.get(a['cur'], (0, 0))
@@ -74,7 +74,7 @@ for day in ['2015-06-30','2016-02-29','2019-12-31','2021-07-04','2024-12-31']:
     want = oracle(c, accts, day)
     if got != want: bad += 1; print('MISMATCH breakdown', day, got, want)
     per_acct = c.execute(q, dict(day=day)).fetchall()
-    print(day, 'per-account rows', len(per_acct), 'currencies', sorted(got), 'series', series.get(day, {}) == got if day in series else '-')
+    print(day, 'per-holding rows', len(per_acct), 'currencies', sorted(got), 'series', series.get(day, {}) == got if day in series else '-')
 print(f'as-of days compared=5 real-mismatches={bad}')
 assert bad == 0 and mismatches == 0
 print('plan check:'); 

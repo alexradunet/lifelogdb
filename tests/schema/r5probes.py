@@ -18,7 +18,7 @@ def livedb():
     ids['page'] = memo(c,'hello')
     for typ,sql in (('event',"INSERT INTO events(id,title,start_day) VALUES (?, 'E','2026-06-01')"),('task',"INSERT INTO tasks(id,title) VALUES (?, 'T')"),
                     ('person',"INSERT INTO people(id,name) VALUES (?, 'P')"),('place',"INSERT INTO places(id,name) VALUES (?, 'Pl')"),
-                    ('account',"INSERT INTO accounts(id,name,side,currency) VALUES (?, 'A','asset','EUR')")):
+                    ('holding',"INSERT INTO holdings(id,name,side,currency) VALUES (?, 'A','asset','EUR')")):
         ids[typ] = ent(c,typ); c.execute(sql,(ids[typ],))
     return c, ids
 
@@ -55,7 +55,7 @@ P('R4-10 valid recorded_at','OK',c,f"INSERT INTO measurements(metric_id,day,valu
 
 # ---- R4-07: no hard deletes of entities or domain rows
 c, ids = livedb()
-for typ,tbl in (('page','pages'),('event','events'),('task','tasks'),('person','people'),('place','places'),('account','accounts')):
+for typ,tbl in (('page','pages'),('event','events'),('task','tasks'),('person','people'),('place','places'),('holding','holdings')):
     P(f'R4-07 DELETE FROM {tbl}','ERR',c,f"DELETE FROM {tbl} WHERE id=?",(ids[typ],))
     P(f'R4-07 DELETE its entities row ({typ})','ERR',c,"DELETE FROM entities WHERE id=?",(ids[typ],))
 K('R4-07 nothing removed', c.execute("select count(*) from entities").fetchone()[0]==6)
@@ -77,20 +77,20 @@ P('R4-07 DELETE of a measurement still rejected','ERR',c,"DELETE FROM measuremen
 
 # ---- R4-08: every named enum CHECK can be widened on a populated database
 WIDEN = {
- 'entities_type': ("entities", "type IN ('page','event','task','person','place','account','holding')",
-                   f"INSERT INTO entities(type,created_at,updated_at) VALUES ('holding',{RA},{RA})"),
+ 'entities_type': ("entities", "type IN ('page','event','task','person','place','holding','vehicle')",
+                   f"INSERT INTO entities(type,created_at,updated_at) VALUES ('vehicle',{RA},{RA})"),
  'pages_kind': ("pages", "kind IN ('memo','page','image')",
                 "INSERT INTO pages(id,kind,title,title_key,day) VALUES ({e},'image','Pic','pic','2026-06-09')"),
  'tasks_status': ("tasks", "status IN ('open','done','dropped')", "INSERT INTO tasks(id,title,status) VALUES ({t},'x','dropped')"),
  'events_repeat': ("events", "repeat IN ('none','daily','weekly','monthly','yearly','hourly')", "INSERT INTO events(id,title,start_day,repeat) VALUES ({ev},'h','2026-06-01','hourly')"),
  'events_repeat_position': ("events", "repeat_position IS NULL OR (repeat = 'monthly' AND repeat_position IN ('first','second','third','fourth','fifth','last') AND repeat_weekday IN ('mo','tu','we','th','fr','sa','su'))",
                    "INSERT INTO events(id,title,start_day,repeat,repeat_position,repeat_weekday) VALUES ({ev},'f','2026-06-01','monthly','fifth','fr')"),
- 'accounts_side': ("accounts", "side IN ('asset','liability','equity')", "INSERT INTO accounts(id,name,side,currency) VALUES ({ac},'Eq','equity','EUR')"),
+ 'holdings_side': ("holdings", "side IN ('asset','liability','equity')", "INSERT INTO holdings(id,name,side,currency) VALUES ({ac},'Eq','equity','EUR')"),
 }
 for name,(tbl,expr,use) in WIDEN.items():
     c, ids = livedb()
-    before = tryx(c, use.format(e=ent(c,'page'),t=ent(c,'task'),ev=ent(c,'event'),ac=ent(c,'account')) if '{' in use else use)[0]
-    P(f'R4-08 {name}: the new value is rejected before','ERR',c,use.format(e=ent(c,'page'),t=ent(c,'task'),ev=ent(c,'event'),ac=ent(c,'account')) if '{' in use else use)
+    before = tryx(c, use.format(e=ent(c,'page'),t=ent(c,'task'),ev=ent(c,'event'),ac=ent(c,'holding')) if '{' in use else use)[0]
+    P(f'R4-08 {name}: the new value is rejected before','ERR',c,use.format(e=ent(c,'page'),t=ent(c,'task'),ev=ent(c,'event'),ac=ent(c,'holding')) if '{' in use else use)
     c.execute('BEGIN')
     P(f'R4-08 {name}: DROP CONSTRAINT','OK',c,f"ALTER TABLE {tbl} DROP CONSTRAINT {name}")
     P(f'R4-08 {name}: ADD widened','OK',c,f"ALTER TABLE {tbl} ADD CONSTRAINT {name} CHECK ({expr})")
@@ -98,7 +98,7 @@ for name,(tbl,expr,use) in WIDEN.items():
     # the widened value needs a fresh entity row of the right type where a domain row is inserted
     if tbl == 'entities': u = use
     else:
-        typ = {'pages':'page','tasks':'task','events':'event','accounts':'account'}[tbl]
+        typ = {'pages':'page','tasks':'task','events':'event','holdings':'holding'}[tbl]
         u = use.format(e=ent(c,'page') if False else 0, t=0, ev=0, ac=0)
         newid = ent(c, typ); u = use.format(e=newid, t=newid, ev=newid, ac=newid)
     P(f'R4-08 {name}: the widened value is accepted','OK',c,u)

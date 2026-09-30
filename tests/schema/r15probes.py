@@ -89,8 +89,8 @@ c = fresh(); ent(c, 'page'); ent(c, 'page')
 P = dict(day='2026-09-29', amount=777, row_key='r1')
 try: run_block(c, block('6.15 '), P); r = 'OK'
 except sqlite3.Error as e: r = 'ERR ' + str(e)
-a = c.execute("SELECT id FROM accounts").fetchall(); nb = c.execute("SELECT count(*) FROM balances WHERE account_id = ?", (P.get('account_id'),)).fetchone()[0]
-K('A3 §6.15 run literally: the account RETURNs its id and every balance lands on it', r == 'OK' and a == [(P.get('account_id'),)] and nb == 4, (r, a, nb, P))
+a = c.execute("SELECT id FROM holdings").fetchall(); nb = c.execute("SELECT count(*) FROM balances WHERE holding_id = ?", (P.get('holding_id'),)).fetchone()[0]
+K('A3 §6.15 run literally: the holding RETURNs its id and every balance lands on it', r == 'OK' and a == [(P.get('holding_id'),)] and nb == 4, (r, a, nb, P))
 
 # ---- B  the FTS integrity check of §2.8
 s28 = doc[doc.index('### 2.8 '):doc.index('### 2.9 ')]

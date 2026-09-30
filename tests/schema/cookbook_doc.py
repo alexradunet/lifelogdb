@@ -24,11 +24,11 @@ c.execute(f"INSERT INTO links(from_id,to_id,kind,created_at) VALUES ({me},{wp},'
 c.execute("INSERT INTO metrics(name,unit) VALUES ('weight','kg')")
 c.execute("INSERT INTO measurements(metric_id,day,value,recorded_at) VALUES (2,'2026-09-29',71.2,strftime('%Y-%m-%dT%H:%M:%fZ','now'))")
 c.execute("INSERT INTO measurements(metric_id,day,value,recorded_at) VALUES (2,'2026-09-28',70.9,strftime('%Y-%m-%dT%H:%M:%fZ','now'))")
-ac = ent(c,'account'); c.execute("INSERT INTO accounts(id,name,side,currency,opened_day) VALUES (?,'Seed','asset','EUR','2019-01-01')",(ac,))
-for d_,v_ in (('2026-05-31',100000),('2026-08-31',120000)): c.execute(f"INSERT INTO balances(account_id,day,amount,recorded_at) VALUES (?,?,?,{NOW})",(ac,d_,v_))
-usd = ent(c,'account'); c.execute("INSERT INTO accounts(id,name,side,currency,opened_day) VALUES (?,'Brokerage','asset','USD','2019-01-01')",(usd,))
-c.execute(f"INSERT INTO balances(account_id,day,amount,recorded_at) VALUES (?,'2026-06-30',5000000,{NOW})",(usd,))
-P = dict(found_id=wp, target_id=wp, target_ids='[]', place_id=1, mistaken_row_id=2, account_id=ac, row_key='r1', amount=777, from_day='2026-01-15', to_day='2026-09-10', day='2026-09-29', page_id=wp, person_id=pe, memo_id=me, task_id=ta, due_day='2026-10-05', query='schema',
+ac = ent(c,'holding'); c.execute("INSERT INTO holdings(id,name,side,currency,opened_day) VALUES (?,'Seed','asset','EUR','2019-01-01')",(ac,))
+for d_,v_ in (('2026-05-31',100000),('2026-08-31',120000)): c.execute(f"INSERT INTO balances(holding_id,day,amount,recorded_at) VALUES (?,?,?,{NOW})",(ac,d_,v_))
+usd = ent(c,'holding'); c.execute("INSERT INTO holdings(id,name,side,currency,opened_day) VALUES (?,'Brokerage','asset','USD','2019-01-01')",(usd,))
+c.execute(f"INSERT INTO balances(holding_id,day,amount,recorded_at) VALUES (?,'2026-06-30',5000000,{NOW})",(usd,))
+P = dict(found_id=wp, target_id=wp, target_ids='[]', place_id=1, mistaken_row_id=2, holding_id=ac, row_key='r1', amount=777, from_day='2026-01-15', to_day='2026-09-10', day='2026-09-29', page_id=wp, person_id=pe, memo_id=me, task_id=ta, due_day='2026-10-05', query='schema',
          key='newpage', title='Newpage', start_day='2026-09-01', end_day='2026-10-31', metric_id=2, wrong_row_id=1, source='ui')
 fails = 0
 for i,b in enumerate(blocks,1):
