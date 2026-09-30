@@ -1,4 +1,4 @@
-"""Round-8 probes for the save contract. Expected outcome declared in each check's 'exp' text BEFORE the run.
+"""The save contract (SCHEMA.md §2.4, §6.13, D19) through the reference implementation, against the real DDL. Expected outcome in each label.
 mutate=('rule',...) disables reference-implementation rules; with --mutant the probes must fail."""
 import sqlite3, sys, json, random, threading, time, os, tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -53,22 +53,20 @@ n1 = c.execute('select count(*), max(id) from links').fetchone(); edit_body(c, p
 check('P3c re-saving the same body changes nothing (idempotent, no new rows)', n1 == n2, f'{n1} {n2}')
 edit_body(c, pid, 'no links at all', mutate=MUT)
 check('P3d body without links: all wikilinks removed', links_of(c, pid) == [])
-check('P3e dropped targets survive as pages (and may become ghosts, §6.13)', c.execute("select count(*) from pages where kind='page'").fetchone()[0] == 4)
+check('P3e dropped targets survive as pages (and may become ghosts, §6.12)', c.execute("select count(*) from pages where kind='page'").fetchone()[0] == 4)
 
 # P4 self link, stub
 c = fresh()
-c.execute('BEGIN IMMEDIATE'); c.execute(f"INSERT INTO entities(type,created_at,updated_at) VALUES('page',{NOW},{NOW})")
-wid = c.execute('select last_insert_rowid()').fetchone()[0]
+c.execute('BEGIN IMMEDIATE'); wid = c.execute(f"INSERT INTO entities(type,created_at,updated_at,source) VALUES('page',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
 c.execute("INSERT INTO pages(id,kind,title,title_key,body) VALUES(?, 'page','Diet','diet','')", (wid,)); c.execute('COMMIT')
 edit_body(c, wid, 'About [[Diet]] and [[diet]] and [[Food]]', mutate=MUT)
 check('P4a a page never links to itself', links_of(c, wid) == ['Food'], str(links_of(c, wid)))
-c.execute('BEGIN IMMEDIATE'); c.execute(f"INSERT INTO entities(type,created_at,updated_at) VALUES('page',{NOW},{NOW})")
-old = c.execute('select last_insert_rowid()').fetchone()[0]
+c.execute('BEGIN IMMEDIATE'); old = c.execute(f"INSERT INTO entities(type,created_at,updated_at,source) VALUES('page',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
 c.execute("INSERT INTO pages(id,kind,title,title_key,body) VALUES(?, 'page','Old diet','old diet','[[Food]] [[Stuff]]')", (old,)); c.execute('COMMIT')
 edit_body(c, old, '[[Food]] [[Stuff]]', mutate=MUT)
 n_before = len(links_of(c, old))
 edit_body(c, old, '#REDIRECT [[Diet]]', mutate=MUT)
-c.execute('BEGIN IMMEDIATE'); c.execute(f"INSERT INTO links(from_id,to_id,kind,created_at) VALUES(?,?, 'redirect', {NOW})", (old, wid)); c.execute('COMMIT')
+c.execute('BEGIN IMMEDIATE'); c.execute(f"INSERT INTO links(from_id,to_id,kind,created_at,source) VALUES(?,?, 'redirect', {NOW}, 'ui')", (old, wid)); c.execute('COMMIT')
 check('P4b a stub has no wikilink edges (old links dropped, new not made) and no page "REDIRECT"', n_before == 2 and links_of(c, old) == [] and c.execute("select count(*) from pages where title_key='redirect'").fetchone()[0] == 0, f'{n_before} {links_of(c, old)}')
 check('P4c the stub\'s one edge is the redirect link', c.execute("select count(*) from links where from_id=? and kind='redirect'", (old,)).fetchone()[0] == 1)
 

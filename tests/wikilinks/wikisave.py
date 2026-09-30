@@ -1,4 +1,4 @@
-"""Reference implementation of the proposed wikilink/tag save contract (round 8, D19).
+"""Reference implementation of the wikilink/tag save contract (SCHEMA.md §2.4, §6.13, D19) — a test instrument, not the application.
 Parameters `mutate=` switch single rules off so the probes can be shown to fail (mutation checks)."""
 import re, json, sqlite3, unicodedata
 from markdown_it import MarkdownIt
@@ -100,13 +100,12 @@ def sync_wikilinks(c, page_id, body, mutate=()):
             row = c.execute("SELECT p.id, e.deleted_at FROM pages p JOIN entities e ON e.id=p.id "
                             "WHERE p.title_key=?", (key,)).fetchone()
             if row is None:
-                c.execute(f"INSERT INTO entities(type,created_at,updated_at) VALUES('page',{NOW},{NOW})")
-                tid = c.execute('SELECT last_insert_rowid()').fetchone()[0]
+                tid = c.execute(f"INSERT INTO entities(type,created_at,updated_at,source) VALUES('page',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
                 c.execute("INSERT INTO pages(id,kind,title,title_key) VALUES(?, 'page', ?, ?)", (tid, title, key))
             else:
                 tid = row[0]
                 if row[1] is not None and 'no_revive' not in mutate: c.execute('UPDATE entities SET deleted_at=NULL WHERE id=?', (tid,))
-            c.execute(f"INSERT INTO links(from_id,to_id,kind,created_at) VALUES(?,?, 'wikilink', {NOW}) "
+            c.execute(f"INSERT INTO links(from_id,to_id,kind,created_at,source) VALUES(?,?, 'wikilink', {NOW}, 'ui') "
                       "ON CONFLICT(from_id,to_id,kind) DO NOTHING", (page_id, tid))
             if 'no_savepoint' not in mutate: c.execute('RELEASE target')
         except sqlite3.Error:
@@ -121,8 +120,7 @@ def sync_wikilinks(c, page_id, body, mutate=()):
 def save_memo(c, body, day='2026-09-30', mutate=()):
     c.execute('BEGIN IMMEDIATE')
     try:
-        c.execute(f"INSERT INTO entities(type,created_at,updated_at) VALUES('page',{NOW},{NOW})")
-        pid = c.execute('SELECT last_insert_rowid()').fetchone()[0]
+        pid = c.execute(f"INSERT INTO entities(type,created_at,updated_at,source) VALUES('page',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
         c.execute("INSERT INTO pages(id,kind,day,body) VALUES(?, 'memo', ?, ?)", (pid, day, body))
         r = sync_wikilinks(c, pid, body, mutate)
         c.execute('COMMIT')

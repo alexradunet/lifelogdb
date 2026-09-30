@@ -1,23 +1,102 @@
-"""Checks against the document text itself (SCHEMA.md), not against scratch copies: the vector table of 2.5 reproduces, the save SQL of 6.14 run
-literally equals the reference implementation, 6.5 drops redirect rows, every 6 statement prepares, the R8-01 CHECK, stale phrases are gone.
-A crash in one section is a FAIL, not a stop."""
-"""Checks against the DOCUMENT TEXT (SCHEMA.md), not against my scratch copies. Expected outcomes in the labels."""
-import sqlite3, sys, re, json, hashlib, random, os, unicodedata
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE); sys.path.insert(0, os.path.join(HERE, '..', 'lib'))
-import docsql as extract, wikisave as W
-from wikisave import NOW
-DOC = os.environ.get('DOC') or extract.DOC
-text = open(DOC, encoding='utf-8').read()
-res = []
-def check(name, cond, detail=''):
-    res.append(bool(cond)); print(('PASS ' if cond else 'FAIL ') + name + (f' — {detail}' if detail else ''))
+"""The save contract as the DOCUMENT prints it (SCHEMA.md §2.4 and §6.13), not as the reference implementation does.
+A  the vector table of §2.4 reproduces with the reference extraction, row for row;
+B  the SQL of §6.13, run literally statement by statement, gives the vector results, leaves no orphan, carries ids by
+   RETURNING, and equals the reference implementation after 400 random edits;
+C  §6.5 lists a memo's wikilink and not a stub's redirect row."""
+import json, os, random, re, sqlite3, sys
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'lib'))
+from kit import Suite, DOC, NOW, fresh, block, statements, code, section
+import wikisave as W
+from vectors import V
+S = Suite('document save contract')
 
+# ---- A  the table of §2.4
+sec = section('### 2.4 ', '### 2.5 ')
+m = re.search(r'\| body \| links to.*?\n\s*\|---\|---\|\n((?:\s*\|.*\n)+)', sec)
+rows = []
+for line in (m.group(1).splitlines() if m else []):
+    mm = re.fullmatch(r'\| (``? .*? ``?|`[^`]*`) \| (.*) \|', line.strip())
+    if not mm: S.K('A a vector row parses', False, line); continue
+    body = mm.group(1)
+    body = body[3:-3] if body.startswith('``') else body[1:-1]
+    body = body.replace('\\|', '|').replace('\\n', '\n').replace('\\u0301', '́').replace('\\u0308', '̈')
+    rows.append((body, [] if mm.group(2) == '—' else re.findall(r'`([^`]*)`', mm.group(2))))
+bad = [(b, e, list(W.targets(b)[0].values())) for b, e in rows if list(W.targets(b)[0].values()) != e]
+S.K('A the §2.4 table has at least 25 vectors and every one reproduces', len(rows) >= 25 and not bad, (len(rows), bad[:3]))
+S.K('A the 240/241-byte and 80/81-CJK boundary under the table holds', W.targets('[[' + 'a' * 240 + ']]')[0] and not W.targets('[[' + 'a' * 241 + ']]')[0]
+    and W.targets('[[' + '日' * 80 + ']]')[0] and not W.targets('[[' + '日' * 81 + ']]')[0])
 
-_SECTIONS = ["# D1 the DDL is extracted from the document text\nddl = extract.ddl(text)\ndef fresh():\n    c = sqlite3.connect(':memory:', isolation_level=None)\n    c.execute('PRAGMA foreign_keys=ON'); c.execute('PRAGMA recursive_triggers=ON'); c.executescript(ddl); return c\nc = fresh()\ncheck('D2 applies cleanly: at least the 75 objects, integrity ok, foreign_key_check clean',\n      c.execute('select count(*) from sqlite_master').fetchone()[0] >= 75 and c.execute('pragma integrity_check').fetchone()[0] == 'ok' and not c.execute('pragma foreign_key_check').fetchall())\n\n", "# D3 the vector table of §2.5, parsed from the doc text\nsec = extract.section(text, r'^### 2\\.5 ', r'^### 2\\.6 ')\nm = re.search(r'\\| body \\| links to.*?\\n\\s*\\|---\\|---\\|\\n((?:\\s*\\|.*\\n)+)', sec)\nrows = []\nfor line in m.group(1).splitlines():\n    line = line.strip()\n    mm = re.fullmatch(r'\\| (``? .*? ``?|`[^`]*`) \\| (.*) \\|', line)\n    assert mm, line\n    body = mm.group(1)\n    body = body[3:-3] if body.startswith('``') else body[1:-1]\n    body = body.replace('\\\\|', '|').replace('\\\\n', '\\n').replace('\\\\u0301', '́').replace('\\\\u0308', '̈')\n    exp = [] if mm.group(2) == '—' else re.findall(r'`([^`]*)`', mm.group(2))\n    rows.append((body, exp))\nbad = [(b, e, list(W.targets(b)[0].values())) for b, e in rows if list(W.targets(b)[0].values()) != e]\ncheck(f'D3 the {len(rows)} vectors printed in §2.5 all reproduce', len(rows) == 30 and not bad, str(bad[:3]))\n# the prose line under the table\ncheck('D3b 240/241-byte and 80/81-CJK boundary as stated', W.targets('[[' + 'a'*240 + ']]')[0] and not W.targets('[[' + 'a'*241 + ']]')[0] and W.targets('[[' + '日'*80 + ']]')[0] and not W.targets('[[' + '日'*81 + ']]')[0])\n\n", '# D4 §6.14 executed LITERALLY from the doc text\nblk = [s for h, s in extract.cookbook_blocks(text) if h.startswith(\'6.14\')][0]\nstmts, acc = [], \'\'\nfor line in blk.splitlines(keepends=True):\n    acc += line\n    if sqlite3.complete_statement(acc):\n        if re.search(r\'^\\s*[A-Za-z]\', re.sub(r\'--[^\\n]*\', \'\', acc), re.M): stmts.append(acc)\n        acc = \'\'\n    elif not acc.strip() or acc.strip().startswith(\'--\') and \'\\n\' not in acc.strip(): acc = \'\'\nkinds = {}\nfor st in stmts:\n    k = re.sub(r\'--[^\\n]*\', \'\', st).strip().split()[0:2]\n    kinds.setdefault(\' \'.join(k).upper(), []).append(st)\ncheck(\'D4a §6.14 has the statements the text describes\', all(k in kinds for k in [\'BEGIN IMMEDIATE;\', \'SAVEPOINT TARGET;\', \'SELECT P.ID,\', \'UPDATE ENTITIES\', \'INSERT INTO\', \'RELEASE TARGET;\', \'DELETE FROM\', \'COMMIT;\']) or True, list(kinds))\ndef by_prefix(pref): return [st for st in stmts if re.sub(r\'--[^\\n]*\', \'\', st).strip().upper().startswith(pref)]\nS = {k: by_prefix(v) for k, v in dict(begin=\'BEGIN IMMEDIATE\', sp=\'SAVEPOINT\', sel=\'SELECT\', rev=\'UPDATE ENTITIES\', ent=\'INSERT INTO ENTITIES\', pg=\'INSERT INTO PAGES\', ln=\'INSERT INTO LINKS\', rel=\'RELEASE\', dele=\'DELETE FROM LINKS\', commit=\'COMMIT\').items()}\ncheck(\'D4b one statement of each kind, none missing\', all(len(v) == 1 for v in S.values()), {k: len(v) for k, v in S.items()})\n\ndef run_doc_save(conn, page_id, body, own_key):\n    """Executes the doc\'s own SQL, statement by statement; the app part is only extract/validate/key."""\n    ok, bad_ = W.targets(body, own_key)\n    ids = []\n    for key, title in ok.items():\n        conn.execute(S[\'sp\'][0])\n        try:\n            row = conn.execute(S[\'sel\'][0], {\'key\': key}).fetchone()\n            if row is None:\n                tid = conn.execute(S[\'ent\'][0], {\'source\': \'ui\'}).fetchone()[0]\n                conn.execute(S[\'pg\'][0], {\'title\': title, \'key\': key, \'target_id\': tid})\n            else:\n                tid = row[0]\n                if row[2] is not None: conn.execute(S[\'rev\'][0], {\'found_id\': tid})\n            conn.execute(S[\'ln\'][0], {\'page_id\': page_id, \'target_id\': tid, \'source\': \'ui\'})\n            conn.execute(S[\'rel\'][0])\n        except sqlite3.Error:\n            conn.execute(\'ROLLBACK TO target\'); conn.execute(\'RELEASE target\'); continue\n        ids.append(tid)\n    conn.execute(S[\'dele\'][0], {\'page_id\': page_id, \'target_ids\': json.dumps(ids)})\n    return ids\n\ndef doc_memo(conn, body):\n    conn.execute(S[\'begin\'][0])\n    conn.execute(f"INSERT INTO entities(type,created_at,updated_at) VALUES(\'page\',{NOW},{NOW})")\n    pid = conn.execute(\'select last_insert_rowid()\').fetchone()[0]\n    conn.execute("INSERT INTO pages(id,kind,day,body) VALUES(?, \'memo\', \'2026-09-30\', ?)", (pid, body))\n    run_doc_save(conn, pid, body, None)\n    conn.execute(S[\'commit\'][0]); return pid\ndef doc_edit(conn, pid, body):\n    conn.execute(S[\'begin\'][0]); conn.execute(\'UPDATE pages SET body=? WHERE id=?\', (body, pid))\n    own = conn.execute(\'select title_key from pages where id=?\', (pid,)).fetchone()[0]\n    run_doc_save(conn, pid, body, own); conn.execute(S[\'commit\'][0])\ndef links_of(conn, pid): return sorted(r[0] for r in conn.execute("SELECT p.title FROM links l JOIN pages p ON p.id=l.to_id WHERE l.from_id=? AND l.kind=\'wikilink\'", (pid,)))\nfrom vectors import V\nokv = True; orph = 0\nfor label, body, exp in V:\n    c = fresh(); pid = doc_memo(c, body)\n    orph += c.execute("select count(*) from entities e where type=\'page\' and not exists (select 1 from pages p where p.id=e.id)").fetchone()[0]\n    if links_of(c, pid) != sorted(exp): okv = False; print(\'   differs:\', label, links_of(c, pid), exp)\ncheck(f\'D4c the doc\\\'s SQL, run literally, gives the vector result for all {len(V)} vectors\', okv)\ncheck(\'D4d and leaves no orphan entities row (54 fresh databases)\', orph == 0)\n# step 2b RETURNs the new id, which the pages INSERT and step 3 bind as :target_id (round 15: no last_insert_rowid())\nc = fresh(); c.execute(\'BEGIN IMMEDIATE\'); eid = c.execute(S[\'ent\'][0], {\'source\': \'ui\'}).fetchone()[0]\nc.execute(S[\'pg\'][0], {\'title\': \'Zed\', \'key\': \'zed\', \'target_id\': eid}); c.execute(\'COMMIT\')\ncheck(\'D4e the id §6.14 step 2b RETURNs is the new page id, and no §6.14 statement uses last_insert_rowid()\', c.execute("select id from pages where title=\'Zed\'").fetchone()[0] == eid and \'last_insert_rowid\' not in blk)\n# incremental edits through the doc\'s SQL == reference implementation, 400 random edits\nfrags = [\'[[Alpha]]\', \'[[alpha|a]]\', \'#beta\', \'`[[code]]`\', \'[[Bad/Name]]\', \'~~~\\n[[fence]]\\n~~~\', \'[[Ünï]]\', \'[[UNÏ]]\', \'text\', \'#Beta\', \'[[Gamma delta]]\', \'#12\', \'[[CON]]\', \'#REDIRECTED\', \'#REDIRECT [[Alpha]]\']\nrng = random.Random(10); ca, cb = fresh(), fresh()\npa = [doc_memo(ca, \'seed\') for _ in range(6)]; pb = [W.save_memo(cb, \'seed\')[0] for _ in range(6)]\nfor _ in range(400):\n    i = rng.randrange(6); body = \' \'.join(rng.choice(frags) for _ in range(rng.randint(0, 6)))\n    doc_edit(ca, pa[i], body); W.edit_body(cb, pb[i], body)\ncheck(\'D4f doc SQL == reference implementation after 400 random edits (links per page)\', [links_of(ca, p) for p in pa] == [links_of(cb, p) for p in pb])\ncheck(\'D4g same set of pages in both\', sorted(r[0] for r in ca.execute(\'select title_key from pages where title_key is not null\')) == sorted(r[0] for r in cb.execute(\'select title_key from pages where title_key is not null\')))\n\n', '# D5 §6.5 from the doc: a stub\'s redirect edge is not a backlink\nb65 = [s for h, s in extract.cookbook_blocks(text) if h.startswith(\'6.5\')][0]\nc = fresh(); c.execute(\'BEGIN IMMEDIATE\')\ndef mk(kind, title=None, key=None, body=\'\'):\n    c.execute(f"INSERT INTO entities(type,created_at,updated_at) VALUES(\'page\',{NOW},{NOW})"); i = c.execute(\'select last_insert_rowid()\').fetchone()[0]\n    c.execute("INSERT INTO pages(id,kind,title,title_key,day,body) VALUES(?,?,?,?,?,?)", (i, kind, title, key, None if kind == \'page\' else \'2026-09-30\', body)); return i\nnew, old, memo = mk(\'page\', \'Diet plan\', \'diet plan\'), mk(\'page\', \'Diet\', \'diet\', \'#REDIRECT [[Diet plan]]\'), mk(\'memo\', body=\'[[Diet plan]]\')\nfor f, t, k in ((old, new, \'redirect\'), (memo, new, \'wikilink\')):\n    c.execute(f"INSERT INTO links(from_id,to_id,kind,created_at) VALUES(?,?,?,{NOW})", (f, t, k))\nc.execute(\'COMMIT\')\nrows = c.execute(b65, {\'page_id\': new}).fetchall()\ncheck(\'D5 §6.5 lists the memo\\\'s wikilink and not the stub\\\'s redirect row\', [r[0] for r in rows] == [\'wikilink\'] and len(rows) == 1, str(rows))\n\n', '# D6 every §6 block still prepares against the (unchanged) DDL; 6.1 executes\nc = fresh(); nfail = 0; n = 0\nfor h, s in extract.cookbook_blocks(text):\n    acc = \'\'\n    for line in s.splitlines(keepends=True):\n        acc += line\n        if sqlite3.complete_statement(acc):\n            code = re.sub(r\'--[^\\n]*\', \'\', acc).strip()\n            if code and code.split()[0].upper() not in (\'BEGIN\', \'COMMIT\', \'SAVEPOINT\', \'RELEASE\', \'ROLLBACK\'):\n                n += 1\n                try: c.execute(\'EXPLAIN \' + acc, {k: None for k in re.findall(r\':([A-Za-z_]+)\', acc)})\n                except sqlite3.Error as e: nfail += 1; print(\'   prepare failed:\', h, str(e)[:80], \'|\', code[:60])\n            acc = \'\'\ncheck(f\'D6 all {n} statements of the 20 §6 blocks prepare against the DDL\', nfail == 0)\nb61 = [s for h, s in extract.cookbook_blocks(text) if h.startswith(\'6.1 \')][0]\nc = fresh(); P61 = {}\nacc = \'\'\nfor line in b61.splitlines(keepends=True):\n    acc += line\n    if sqlite3.complete_statement(acc):\n        if re.sub(r\'--[^\\n]*\', \'\', acc).strip():\n            cur = c.execute(acc, {k: v for k, v in P61.items() if \':\' + k in acc})\n            m6 = re.search(r\'RETURNING id;[^\\n]*?:(\\w+)\', acc)\n            if m6: P61[m6.group(1)] = cur.fetchone()[0]\n        acc = \'\'\ncheck(\'D6b §6.1 executes from the doc text (memo + mood measurement on that memo)\', c.execute("select count(*) from pages where kind=\'memo\'").fetchone()[0] == 1 and c.execute(\'select entity_id from measurements\').fetchall() == [(P61.get(\'memo_id\'),)])\n\n', '# D7 R8-01 is fixed in the DDL: a device name is rejected bare AND before an extension\nc = fresh(); acc = {}\nfor t in [\'CON.backup\', \'NUL.txt\', \'COM\\u00b9\', \'LPT\\u00b2\', \'lpt9.a.b\', \'CON\', \'COM1\', \'CON \', \'con.\', \'Com10\', \'a.CON\', \'CONSOLE.txt\']:\n    c.execute(\'SAVEPOINT x\')\n    try:\n        c.execute(f"INSERT INTO entities(type,created_at,updated_at) VALUES(\'page\',{NOW},{NOW})"); i = c.execute(\'select last_insert_rowid()\').fetchone()[0]\n        c.execute("INSERT INTO pages(id,kind,title,title_key) VALUES(?, \'page\', ?, ?)", (i, t, W.title_key(t))); acc[t] = True\n    except sqlite3.Error: acc[t] = False\n    c.execute(\'ROLLBACK TO x\'); c.execute(\'RELEASE x\')\ncheck(\'D7 the DDL rejects CON.backup, NUL.txt, COM¹, LPT², lpt9.a.b, CON, COM1, "CON ", "con." and accepts Com10, a.CON, CONSOLE.txt\',\n      [acc[t] for t in [\'CON.backup\', \'NUL.txt\', \'COM\\u00b9\', \'LPT\\u00b2\', \'lpt9.a.b\', \'CON\', \'COM1\', \'CON \', \'con.\']] == [False]*9 and [acc[t] for t in [\'Com10\', \'a.CON\', \'CONSOLE.txt\']] == [True]*3, str(acc))\n\n', "# D8 stale strings gone from live text (§1–§7), present where they belong\nlive = text[:text.index('## 8. References')]\nfor pat in ['*Not covered:* a device name followed by an extension', 'this is left open (R8-01)', 'the DDL accepts them (executed, §8 #10)', 'sugar for `[[tag]]`', 'expands hashtags', 'upserts `links(kind=\\'wikilink\\')`', 'on any mainstream filesystem', 'reserved even with an extension', 'Resolve a `[[wikilink]]` target, or create', 'so the only source is capture-time', 'Cron `.backup`', 'transaction-safe API']:\n    check(f'D8 live text no longer contains: {pat}', pat not in live)\nfor pat, where in [('### D19 ', 'decision log'), ('### 6.14 Save a body with wikilinks', '§6.14'), ('[R58]', 'refs used'), ('D19', 'D5 pointer')]:\n    check(f'D8 doc contains {pat!r} ({where})', pat in text)\n", '# D9 round 11: notes and wiki pages are one kind - the live text (sections 1-7) says so everywhere\nlive = text[:text.index(\'## 8. References\')]\nfor pat in ["export/<notes|wiki>", "p.kind IN (\'note\',\'wiki\')", "WHERE kind IN (\'note\',\'wiki\')", "p.kind = \'wiki\'", "p.kind = \'note\'", "(memo | note | wiki)",\n            "the `kind` predicate is what lets SQLite use the partial index", "the predicate lets SQLite use this partial index",\n            "notes/<Title>.md", "wiki/<Title>.md", "one file per note", "`pages(kind=\'wiki\')`"]:\n    check(f\'D9 live text no longer contains: {pat}\', pat not in live)\nsec21 = extract.section(text, r\'^### 2\\.1 \', r\'^### 2\\.2 \')\ncheck(\'D9b the layout in 2.1 is life.db alone (round 12: no export/, backups/ or dump/ folder)\', \'life.db\' in sec21 and not any(x in sec21 for x in (\'export/\', \'backups/\', \'dump/\', \'days/\', \'pages/<Title>.md\')))\ncheck(\'D9c D5 says the kinds are memo and page\', "`kind IN (\'memo\',\'page\')`" in text)\n']
-for _p in _SECTIONS:
-    try:
-        exec(compile(_p, 'docchecks-section', 'exec'), globals())
-    except Exception as _e:
-        check('section crashed: ' + _p.split(chr(10))[0][:50], False, repr(_e)[:160])
-print(f'{sum(res)}/{len(res)} document checks')
+# ---- B  §6.13 run literally
+sts = statements(block('6.13'))
+def by(prefix): return [s for s in sts if code(s).upper().startswith(prefix)]
+St = {k: by(v) for k, v in dict(begin='BEGIN IMMEDIATE', sp='SAVEPOINT', sel='SELECT', rev='UPDATE ENTITIES', ent='INSERT INTO ENTITIES',
+                                  pg='INSERT INTO PAGES', ln='INSERT INTO LINKS', rel='RELEASE', dele='DELETE FROM LINKS', commit='COMMIT').items()}
+S.K('B §6.13 has exactly one statement of each step', all(len(v) == 1 for v in St.values()), {k: len(v) for k, v in St.items()})
+S.K('B §6.13 opens with BEGIN IMMEDIATE and resolves inside the transaction', sts and code(sts[0]).upper().startswith('BEGIN IMMEDIATE')
+    and sts.index(St['sel'][0]) < sts.index(St['ent'][0]) < sts.index(St['commit'][0]) if all(St.values()) else False)
+S.K('B no §6.13 statement uses last_insert_rowid()', 'last_insert_rowid' not in block('6.13'))
+
+def doc_save(c, page_id, body, own_key):
+    ok, _ = W.targets(body, own_key); ids = []
+    for key, title in ok.items():
+        c.execute(St['sp'][0])
+        try:
+            row = c.execute(St['sel'][0], {'key': key}).fetchone()
+            if row is None:
+                tid = c.execute(St['ent'][0], {'source': 'ui'}).fetchone()[0]
+                c.execute(St['pg'][0], {'title': title, 'key': key, 'target_id': tid})
+            else:
+                tid = row[0]
+                if row[2] is not None: c.execute(St['rev'][0], {'found_id': tid})
+            c.execute(St['ln'][0], {'page_id': page_id, 'target_id': tid, 'source': 'ui'})
+            c.execute(St['rel'][0])
+        except sqlite3.Error:
+            c.execute('ROLLBACK TO target'); c.execute('RELEASE target'); continue
+        ids.append(tid)
+    c.execute(St['dele'][0], {'page_id': page_id, 'target_ids': json.dumps(ids)})
+
+def doc_memo(c, body):
+    c.execute(St['begin'][0])
+    pid = c.execute(f"INSERT INTO entities(type,created_at,updated_at,source) VALUES('page',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
+    c.execute("INSERT INTO pages(id,kind,day,body) VALUES(?, 'memo', '2026-09-30', ?)", (pid, body))
+    doc_save(c, pid, body, None); c.execute(St['commit'][0]); return pid
+
+def doc_edit(c, pid, body):
+    c.execute(St['begin'][0]); c.execute('UPDATE pages SET body=? WHERE id=?', (body, pid))
+    doc_save(c, pid, body, c.execute('select title_key from pages where id=?', (pid,)).fetchone()[0]); c.execute(St['commit'][0])
+
+def links_of(c, pid): return sorted(r[0] for r in c.execute("SELECT p.title FROM links l JOIN pages p ON p.id=l.to_id WHERE l.from_id=? AND l.kind='wikilink'", (pid,)))
+if all(len(v) == 1 for v in St.values()):
+    okv, orph = True, 0
+    for label, body, exp in V:
+        c = fresh(); pid = doc_memo(c, body)
+        orph += c.execute("select count(*) from entities e where not exists (select 1 from pages p where p.id=e.id)").fetchone()[0]
+        if links_of(c, pid) != sorted(exp): okv = False; print('   differs:', label, links_of(c, pid), exp)
+    S.K(f'B the document\'s SQL, run literally, gives the vector result for all {len(V)} vectors', okv)
+    S.K('B ...and leaves no orphan entities row', orph == 0)
+    c = fresh(); c.execute('BEGIN IMMEDIATE'); eid = c.execute(St['ent'][0], {'source': 'ui'}).fetchone()[0]
+    c.execute(St['pg'][0], {'title': 'Zed', 'key': 'zed', 'target_id': eid}); c.execute('COMMIT')
+    S.K('B the id step 2b RETURNs is the new page\'s id', c.execute("select id from pages where title='Zed'").fetchone()[0] == eid)
+    frags = ['[[Alpha]]', '[[alpha|a]]', '#beta', '`[[code]]`', '[[Bad/Name]]', '~~~\n[[fence]]\n~~~', '[[Ünï]]', '[[UNÏ]]', 'text', '#Beta',
+             '[[Gamma delta]]', '#12', '[[CON]]', '#REDIRECTED', '#REDIRECT [[Alpha]]']
+    rng = random.Random(10); ca, cb = fresh(), fresh()
+    pa = [doc_memo(ca, 'seed') for _ in range(6)]; pb = [W.save_memo(cb, 'seed')[0] for _ in range(6)]
+    for _ in range(400):
+        i = rng.randrange(6); body = ' '.join(rng.choice(frags) for _ in range(rng.randint(0, 6)))
+        doc_edit(ca, pa[i], body); W.edit_body(cb, pb[i], body)
+    S.K('B the document\'s SQL equals the reference implementation after 400 random edits', [links_of(ca, p) for p in pa] == [links_of(cb, p) for p in pb])
+    S.K('B ...with the same set of pages', sorted(r[0] for r in ca.execute('select title_key from pages where title_key is not null'))
+        == sorted(r[0] for r in cb.execute('select title_key from pages where title_key is not null')))
+
+# ---- C  §6.5 drops redirect rows
+c = fresh(); c.execute('BEGIN IMMEDIATE')
+def mk(kind, title=None, body=''):
+    i = c.execute(f"INSERT INTO entities(type,created_at,updated_at,source) VALUES('page',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
+    c.execute("INSERT INTO pages(id,kind,title,title_key,day,body) VALUES(?,?,?,?,?,?)", (i, kind, title, W.title_key(title) if title else None, None if kind == 'page' else '2026-09-30', body)); return i
+new, old, mm = mk('page', 'Diet plan'), mk('page', 'Diet', '#REDIRECT [[Diet plan]]'), mk('memo', body='[[Diet plan]]')
+for f, t, k in ((old, new, 'redirect'), (mm, new, 'wikilink')):
+    c.execute(f"INSERT INTO links(from_id,to_id,kind,created_at,source) VALUES(?,?,?,{NOW},'ui')", (f, t, k))
+c.execute('COMMIT')
+rows = c.execute(block('6.5'), {'page_id': new}).fetchall()
+S.K('C §6.5 lists the memo\'s wikilink and not the stub\'s redirect row', [r[0] for r in rows] == ['wikilink'], rows)
+S.done()

@@ -2,7 +2,7 @@
 Expectation (declared first): zero disagreements in the direction 'app accepts, DB rejects' (that would
 block saves); and, because title_ok mirrors the CHECKs one-for-one, zero in the other direction as well,
 EXCEPT where I know they differ: unassigned code points (category Cn), which only the app can recognise —
-the alphabet below holds none, and r15probes.py tests that difference on its own."""
+the alphabet below holds none, and schema/pages.py tests that difference on its own."""
 import os, sqlite3, random, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from wikisave import title_ok, title_key, NOW
@@ -32,8 +32,7 @@ for t in cases:
     k = title_key(t) if t else ''
     c.execute('SAVEPOINT f')
     try:
-        c.execute(f"INSERT INTO entities(type,created_at,updated_at) VALUES('page',{NOW},{NOW})")
-        pid = c.execute('select last_insert_rowid()').fetchone()[0]
+        pid = c.execute(f"INSERT INTO entities(type,created_at,updated_at,source) VALUES('page',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
         c.execute("INSERT INTO pages(id,kind,title,title_key,day) VALUES(?, 'page', ?, ?, NULL)", (pid, t, k)); db = True
     except sqlite3.Error as e:
         db = False; why = str(e)[:40]

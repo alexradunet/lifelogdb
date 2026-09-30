@@ -19,63 +19,72 @@ Until the schema is frozen (decision D13):
   (e.g. `/tmp/…/life.db`), test, discard. Never migrate a test DB — recreate it.
 - Numbered forward-only migrations (`0002_*.sql`, …) begin **only after** real data
   exists in a canonical `life.db`, and from then on changes are additive-only
-  (`ADD COLUMN` / `CREATE TABLE` / new indexes — see principle 4 in SCHEMA.md §1).
+  (`ADD COLUMN` / `CREATE TABLE` / new indexes — see principle 4 in SCHEMA.md §1). Anything still
+  in the schema at the freeze stays for good, so cutting happens before it.
+
+## What earns a change (SCHEMA.md §1, principles 1, 6 and 7)
+
+- **Real use drives change.** A new table, column, constraint, trigger or convention needs a real
+  incident behind it — a failed import, a bug in the writing application, a question the data could
+  not answer — or it must replace something it makes redundant. A hypothetical writer is not an
+  incident. The next step is the capture path and one real import (§2.8), not another review.
+- **One home per concept.** A fact that can be derived from another column is not stored beside it
+  (open task = `completed_at IS NULL`; a place's name is its page title).
 
 ## Editing SCHEMA.md
 
-- Every change to §3's DDL must keep the document self-consistent: the entity-model
-  overview (§4), the decision log (§5), and the query cookbook (§6) all describe the
-  same schema. If you change the DDL, change them too — including the mermaid diagrams
-  (§2.4, §2.9, §2.10, §4, §6.14): `tests/schema/diagrams.py` compares the ER diagrams and the
-  link map with the DDL and fails when they drift. Each diagram starts with a `%% diagram: <id>` line;
-  keep to `erDiagram`, `flowchart` and `stateDiagram-v2` with quoted labels, and run
+- **One home per rule.** A table's rule is its constraint/trigger and a comment inside its `CREATE`
+  statement (comments outside are not stored in the file); a rule that spans tables is a
+  `lifelog_meta` row (keep them few); §2 holds only what the DDL cannot (time, the wikilink grammar
+  and vectors, connection settings, integrity checks, imports); §5 says *why* and cites constraint
+  names instead of restating the rule; §6 shows it in use. Do not restate a rule in a second place.
+- Every change to §3's DDL must keep the document self-consistent: §2, §4, §5, §6 and the totals
+  line under §3. The mermaid diagrams (§2.3, §2.6, §2.7, §4, §6.13) are checked by
+  `tests/schema/diagrams.py`: the ER diagrams draw tables, key columns and foreign keys only, and the
+  link map must equal `link_kinds`. Each diagram starts with a `%% diagram: <id>` line; keep to
+  `erDiagram`, `flowchart` and `stateDiagram-v2` with quoted labels, and run
   `python3 tests/run_all.py --mermaid` after editing one (it renders them).
-- After changing DDL or the cookbook, run `python3 tests/run_all.py` (about 30 s): it extracts §3
-  from this document, applies it to throwaway databases and runs the adversarial probes, the
-  oracles, the cookbook blocks and the document-text checks. If a suite must change because the document legitimately changed,
-  change it in the same edit and say so in the commit message — a suite loosened to pass proves
-  nothing, and `tests/` is validation, not a migration runner (the hard rule above still holds). A new contract rule needs a row in the §2.11 table and a key in `lifelog_meta`.
-- DDL conventions that must be preserved: UTC ISO-8601 instants and local-day TEXT
-  columns with round-trip CHECKs (`date(x) IS x`, `strftime(...) IS x` — the `IS`
-  matters, see §2.2), tombstones instead of deletes (enforced by BEFORE DELETE triggers),
-  composite FK `(id, entity_type) → entities(id, type)` in every *entity* domain table
-  (`pages`, `events`, `tasks`, `people`, `places`, `holdings` — not `measurements`/`metrics`/
-  `balances`/`currencies`, which are facts and registries), every *named* entity (`person`, `place`, `holding`)
-  owning one page through `entities.page_id` — `CHECK`-tied, unique across types, fixed after insert, inserted **first**
-  (page entity, `pages` row, named entity, domain row: §6.20, D20) — so `[[Name]]` reaches it through the title and no
-  `notes` column exists on them, append-only measurements
-  and balances enforced by triggers (measurement corrections use `supersedes_id`; a balance is
-  corrected by a newer row for the same holding+day; both are retracted with a NULL value/amount),
-  importers use `ON CONFLICT … DO NOTHING`, never `OR IGNORE`/`OR REPLACE`, money as
-  INTEGER minor units of the holding's currency — never REAL (D18), every CHECK NAMED
-  (`CONSTRAINT <table>_<rule> CHECK …`) so any rule can be dropped or re-added later, using only functions
-  the minimum SQLite has (`lifelog_meta.sqlite`), the rules a table needs written as comments *inside* its
-  `CREATE` statement (comments outside are not stored in the file), ids carried with `INSERT … RETURNING id`,
-  never `last_insert_rowid()` across statements, `entities.source`/`links.source` written at insert and never
-  changed, a closed, endpoint-typed `link_kinds` registry (`links.kind` is an FK; a trigger
-  checks kind and endpoint types), filename-safe, immutable page titles (`pages.kind` is `memo` or `page`) with a unique app-computed
-  `title_key` (NFC + casefold; SQLite cannot fold Unicode — test vectors in §2.5), `pages.kind`
-  fixed after insert,
-  single writing application, `PRAGMA foreign_keys=ON` and `PRAGMA recursive_triggers=ON` per
-  connection (with the latter OFF, `REPLACE` bypasses the append-only DELETE triggers — §2.9),
-  `PRAGMA synchronous=FULL`, `PRAGMA trusted_schema=OFF`, SQLite ≥ 3.51.3 for writers, and every write
-  transaction starts with `BEGIN IMMEDIATE` (§2.9),
-  the wikilink save contract (§2.5, §6.14, D19): saving a body keeps the page's `links(kind='wikilink')`
-  equal to what its CommonMark text names (rows added **and deleted**), each auto-created target in its own
-  `SAVEPOINT`, an invalid target makes no link and never blocks a save, `#tag` is read and never expanded,
-  a `#REDIRECT [[` stub is not scanned (the vectors in §2.5 must keep passing),
-  the four integrity checks of §2.8 (`integrity_check`, `foreign_key_check`, the orphan-`entities` query,
-  the FTS5 `integrity-check` — each catches what the others cannot; executed on the live file), and `life.db` with its `-wal`/`-shm`
-  never in git (finance data cannot be scrubbed from history).
-  Exploration tools (Datasette) open the file read-only; nothing that edits rows is pointed at it.
+- After changing DDL or the cookbook, run `python3 tests/run_all.py` (about 15 s). The suites are
+  grouped by subject (`tests/README.md`). If a suite must change because the document legitimately
+  changed, change it in the same edit and say so in the commit message — a suite loosened to pass
+  proves nothing, and `tests/` is validation, not a migration runner (the hard rule above still
+  holds). A new cross-table rule needs a `lifelog_meta` key and a row in the 2075 table of §2.8; a
+  new rule of any kind gets a mutant in `tests/schema/mutants.py`.
+- DDL conventions that must be preserved: UTC ISO-8601 instants and local-day TEXT columns with
+  round-trip CHECKs (`date(x) IS x`, `strftime(...) IS x` — the `IS` matters, §2.1); tombstones
+  instead of deletes (BEFORE DELETE triggers; only `links` rows are deleted); every *entity* domain row
+  keyed by its `entities` id through a composite FK `(id, entity_type)` — `pages`, `events` and `tasks`
+  to `entities(id, type)`, and `people`, `places` and `holdings` to `pages(id, entity_type)`, because a
+  person, place or holding **is** a page: one id, whose page title is its handle and its name
+  (`pages.entity_type`, `ON UPDATE CASCADE` for promotion; §2.2, §6.19, D20); append-only
+  measurements and balances (measurement corrections use `supersedes_id`; a balance is corrected by a
+  newer row for the same holding+day; both are retracted with a NULL value/amount); importers use
+  `ON CONFLICT … DO NOTHING`, never `OR IGNORE`/`OR REPLACE`; money as INTEGER minor units of the
+  holding's currency — never REAL (D18); every CHECK NAMED (`CONSTRAINT <table>_<rule> CHECK …`),
+  using only functions the minimum SQLite has (`lifelog_meta.sqlite`); ids carried with
+  `INSERT … RETURNING id`, never `last_insert_rowid()` across statements; `source` (the writer:
+  `ui`, `cli`, `api`, `agent:<name>`, `import:<name>`) required on `entities`, `links`,
+  `measurements` and `balances`, written at insert and never changed; a closed, endpoint-typed
+  `link_kinds` registry; filename-safe, immutable page titles (`pages.kind` is `memo` or `page`, fixed)
+  with a unique app-computed `title_key` (NFC + casefold; vectors in §2.4); nothing repeats (D15);
+  single writing application, `PRAGMA foreign_keys=ON`, `recursive_triggers=ON`, `synchronous=FULL`,
+  `trusted_schema=OFF` per connection, SQLite ≥ 3.51.3 for writers, every write transaction starts
+  with `BEGIN IMMEDIATE` (§2.6); the wikilink save contract (§2.4, §6.13, D19): saving a body keeps
+  the page's `links(kind='wikilink')` equal to what its CommonMark text names (rows added **and
+  deleted**), each auto-created target in its own `SAVEPOINT`, an invalid target makes no link and
+  never blocks a save, `#tag` is read and never expanded, a `#REDIRECT [[` stub is not scanned; the
+  four integrity checks of §2.5; and `life.db` with its `-wal`/`-shm` never in git (finance data
+  cannot be scrubbed from history). Exploration tools (Datasette) open the file read-only; nothing
+  that edits rows is pointed at it.
 - **`SCHEMA.md` states the current truth and nothing else:** no review rounds, validation records,
   addenda, "superseded" notes, finding ids, version narrative or changelog
-  (`tests/schema/nohistory.py` fails if any comes back). When a decision changes, rewrite it in place —
-  git is the log. Keep D-numbers stable (they are cited across the document); new decisions get new numbers.
+  (`tests/schema/document.py` fails if any comes back). When a decision changes, rewrite it in place —
+  git is the log. Keep D-numbers stable (they are cited across the document); new decisions get new
+  numbers. Tests are named by subject, never by review round.
 - **Out of scope for now (SCHEMA.md §7):** the markdown export, backups / snapshots /
   restore, CSV dumps and off-box copies. The document is about the schema and its reliability;
   do not reintroduce any of them into `SCHEMA.md` or `tests/` unless the owner reopens it
-  (`tests/schema/r12probes.py` fails if their text comes back).
+  (`tests/schema/document.py` fails if their text comes back).
 
 ## Empiricism over intuition
 
