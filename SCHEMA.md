@@ -4,7 +4,8 @@
 **Scope of the project:** A lifetime personal database (journal/memos, pages (notes, wiki), events,
 tasks, people, places, health metrics, location history, personal finance — holdings, balances, net worth; file
 attachments deferred — D9) in a single SQLite file, plus a custom UI for data entry and daily use.
-Everything else (view generators, AI features, sync, multi-device) is explicitly out of scope.
+Other devices are clients of the one writing application (D3); everything else (view generators, AI
+features, sync or merge between copies of the database) is explicitly out of scope.
 
 This document is self-contained and written to be reviewed cold. Each rule has **one home**: a table's
 rules are the constraints, triggers and comments of its `CREATE` statement in §3; the conventions the DDL
@@ -82,7 +83,8 @@ ones that span tables are also rows of `lifelog_meta` (§3), so the file carries
   chronologically as plain text, and that keeps rows written within the same second in order (a
   balance and its correction) (executed).
 - **Local days** (`*_day` columns): the *local calendar date where the thing happened or
-  was captured*, TEXT `YYYY-MM-DD`, written at insert time from the writer's timezone.
+  was captured*, TEXT `YYYY-MM-DD`, written at insert time in the zone of the device that captured
+  it — a phone's, never the clock or zone of a hub on a server (D3).
   **Never derived from the UTC instant at query time.** This survives timezone changes,
   DST, and travel: "the day I graduated" is a local-date fact, not an instant [R7][R8][R9].
 - **Round-trip CHECKs.** Every day column is checked with `date(x) IS x`, every instant with
@@ -93,7 +95,7 @@ ones that span tables are also rows of `lifelog_meta` (§3), so the file carries
   never back-dated, so it is an audit trail (as `recorded_at` is on `measurements` and
   `balances`). When a thing *happened* is its own `day` / `*_at`. (An imported memo's original
   time of day has no column: a known limit.)
-- **Zone.** `entities.tz`, `measurements.tz` and `positions.tz` store the writer's IANA zone at capture
+- **Zone.** `entities.tz`, `measurements.tz` and `positions.tz` store the capturing device's IANA zone
   (`Europe/Berlin`; NULL = unknown), so a UTC instant can be read as local time. Only capture time
   can supply it. Events have no `tz` of their own (D10).
 - An event may be day-precise only (`start_day`, `end_day`, no `*_at`): date-level facts are
@@ -251,7 +253,9 @@ to=new)`. Consumers follow one hop; `redirect` links are excluded from backlink 
 trimmed, and a valid file name on Linux, macOS and Windows — the strict direction on purpose (D5).
 The app is stricter in one way: it also rejects code points Unicode has not assigned yet (category
 `Cn`), whose case fold a later Unicode version could define — which would silently change
-`title_key` (executed). Unicode keeps case folding stable only for assigned characters [R63].
+`title_key` (executed). Unicode promises a stable case fold only for assigned characters, and formally
+only for text in NFKC form [R74]; a title with a compatibility character (full-width `Ｃａｆé`, a
+ligature, `x²`) is outside that promise, a known limit (§7).
 
 **`title_key`.** Uniqueness is on the key, not on the title. The function is fixed:
 `title_key = NFC(casefold(NFC(title)))` — in Python
@@ -554,7 +558,7 @@ CREATE TABLE entities (
   created_at TEXT NOT NULL CONSTRAINT entities_created_at CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at),   -- when written to life.db, never back-dated
   updated_at TEXT NOT NULL CONSTRAINT entities_updated_at CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', updated_at) IS updated_at),   -- kept by the *_touch triggers
   deleted_at TEXT     CONSTRAINT entities_deleted_at CHECK (deleted_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', deleted_at) IS deleted_at),   -- the tombstone
-  tz         TEXT     CONSTRAINT entities_tz CHECK (tz IS NULL OR (length(tz) BETWEEN 1 AND 64 AND tz NOT GLOB '*[^A-Za-z0-9_/+-]*')),   -- IANA zone of the writer when the row was created ('Europe/Berlin'); NULL = unknown
+  tz         TEXT     CONSTRAINT entities_tz CHECK (tz IS NULL OR (length(tz) BETWEEN 1 AND 64 AND tz NOT GLOB '*[^A-Za-z0-9_/+-]*')),   -- IANA zone of the device that captured the row ('Europe/Berlin'); NULL = unknown
   source     TEXT NOT NULL CONSTRAINT entities_source CHECK (length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*'),   -- the writer (lifelog_meta.source)
   UNIQUE (id, type)
 ) STRICT;
@@ -1306,15 +1310,27 @@ the constraints that carry it; the rule itself is in §3 or §2.
 - **Alternatives.** UUIDv7/v4 TEXT keys: benchmarked *slower* (random TEXT keys scatter
   inserts across the B-tree) and larger; their only real advantage — collision-free IDs for
   multi-device merge — buys nothing while sync is a non-goal (§7) [R26][R27].
+- **An id is a permanent reference.** Nothing but `links` rows is deleted, so an entity id is never
+  reused, and a named entity also has its permanent title (D20).
 - **Trade accepted.** If merging two databases ever becomes real, integer IDs can collide.
-  Mitigation then: re-key with one script, or add a nullable `uuid` column.
-- **Multiple writers.** The plan is multiple *clients* through one controlled service — a UI, an
-  MCP layer for AI agents, a mobile client — all writing via the app's API. That is multiple
-  processes or connections, not multiple divergent databases: WAL + `busy_timeout` + `BEGIN
-  IMMEDIATE` serialize concurrent writers to one file safely, and the "single writer" rule
-  (principle 3) means *single writing application*, not single process. Devices holding divergent
-  local copies that merge (CRDT territory) stay out of scope.
-- **Sources.** [R4][R26][R27].
+  Mitigation then: re-key with one script, or add an `entities.uid` column — additive after the
+  freeze up to unique and `NOT NULL` (`ADD COLUMN`, a backfill, a unique index, `ALTER COLUMN uid SET
+  NOT NULL`; executed); a backfilled uid loses nothing, since nothing outside pointed at the old rows.
+- **Multiple devices: a hub and its clients.** The hub is one live `life.db` on a machine the owner
+  holds; it may move to another (a copy, then the checks of §2.5), never run in two places at once.
+  Everything else is a *client* of it — the UI, the owner's own apps, AI agents, a phone — writing
+  through the app's API. That is multiple processes or connections, not multiple divergent
+  databases: WAL + `busy_timeout` + `BEGIN IMMEDIATE` serialize concurrent writers to one file
+  safely, and the "single writer" rule (principle 3) means *single writing application*, not single
+  process. A phone keeps a read-only copy (§2.6); offline it queues only *new* rows and replays them
+  through the API, so nothing can conflict. A replay, like a re-run importer, must insert nothing
+  twice: facts have `(source, import_id)`; entities get the same key with the first importer that
+  writes entities (§7).
+- **Rejected: devices that each hold a copy and merge (CRDTs).** cr-sqlite, the SQLite extension for
+  it, allows no checked foreign keys, no UNIQUE constraint but the primary key and no CHECK across
+  columns in a merged table [R75] — the composite FKs, the unique `title_key` and the paired CHECKs
+  this schema rests on.
+- **Sources.** [R4][R26][R27][R75].
 
 ### D4 — Text ownership: the database is canonical.
 
@@ -1424,7 +1440,9 @@ the constraints that carry it; the rule itself is in §3 or §2.
   — also on a connection with `foreign_keys=OFF`, executed in autocommit. Symmetric kinds are mirrored
   by trigger on insert *and* delete, so a half-edge cannot exist whatever the writer, and both mirror
   triggers terminate under `recursive_triggers=ON` (executed). Links are immutable except `note`
-  (`links_immutable`). Cycles (e.g. `subtask`) are not prevented; §6.11 caps its walk.
+  (`links_immutable`). Cycles (e.g. `subtask`) are not prevented; §6.11 caps its walk. Widening a
+  kind's endpoint types is a deliberate migration: drop `link_kinds_structure_fixed`, update the row,
+  recreate the trigger, in one transaction (executed).
 - **Alternatives.**
   - *No supertype; discriminator pairs* (`from_kind TEXT, from_id INT`): rejected — no foreign keys,
     so edges can dangle silently forever.
@@ -1765,7 +1783,7 @@ memo is meant (§2.2).
 
 ```sql
 BEGIN IMMEDIATE;
-INSERT INTO entities(type, created_at, updated_at, tz, source)   -- tz: the writer's IANA zone right now
+INSERT INTO entities(type, created_at, updated_at, tz, source)   -- tz: the capturing device's IANA zone right now
 VALUES ('page', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'Europe/Berlin', 'ui')
 RETURNING id;   -- the app keeps it as :memo_id
 INSERT INTO pages(id, kind, day, body)
@@ -2300,7 +2318,9 @@ re-added, each with the trigger that should reopen the question.
 
 | Cut item | Why cut | Reopen when |
 |---|---|---|
-| Multi-device sync / CRDTs | Not a goal; would force UUIDs (D3), change-tracking columns, conflict resolution | A second device must write canonical data |
+| Copies of the database that merge (sync, CRDTs) | Other devices are clients of the one writer (D3); a merge would force UUID keys and drop the checked FKs and the unique `title_key` [R75] | Never while the schema rests on those constraints |
+| An import key on entities (`source`, `import_id`) | Facts have one, entities not yet. One key, with the name and rule it has on facts, serves three needs: a re-run importer of events (calendar, Health Connect sessions) inserts nothing, a changed event updates its own row, and a phone's offline replay never duplicates (D3). Additive: `ADD COLUMN import_id` + a partial unique index (executed) | The first importer that writes entities — the import before the freeze |
+| An entity `uid` (UUIDv7) | An integer id is never reused and a title is permanent, so references are already stable; the import key above covers replay; the column is additive (D3, executed) | A reference that must survive a re-key or a merge |
 | Agent CLI/API | Planned as a later layer over the same DB; single-writer rule (principle 3) extends to it naturally; `source` already tells its rows apart (§2.2) | After v1 UI exists |
 | Binary files / `attachments` | Cut from v1 (D9): all-text DB stays megabyte-scale; design kept in D9 | The first real photo/PDF attachment need |
 | Recurring events and tasks | A lifelog records what happened; the calendar does planning; birthdays, habits and reminders are covered without it; design kept in D15 | A recurring event wanted in this database, or a task to tick off per occurrence that a habit metric cannot hold |
@@ -2315,6 +2335,7 @@ re-added, each with the trigger that should reopen the question.
 | Markdown export of the prose; nightly snapshots, restore and an off-box copy; a CSV dump; continuous replication | Out of scope while the schema is being made reliable; nothing in the schema depends on any of them (D4, D12). Until one exists there is **no second copy** of `life.db`, and the file itself is the only thing to leave with | Before the first real data enters a canonical `life.db` (the freeze, D13) at the latest |
 | Trash UI with restore/expiry | Tombstones (D11) are already the data layer | UI work; zero schema change |
 | `.sqlar` single-artifact packaging | `tar` covers "one file to email" | Frequent whole-archive portability need |
+| An NFKC `title_key` (`NFKC(casefold(NFKC(title)))`) | Unicode's formal case-fold promise covers NFKC text [R74]; the NFC key is outside it only for titles with compatibility characters, rare in this life log. The key is derived, so switching is a recompute; two titles it merges (`Ｃａｆé`, `Café`) become a redirect | A rebuilt `title_key` differs from the stored one after a Unicode upgrade, or a look-alike duplicate page appears |
 | Unicode collation for titles (ICU / app-registered) | A collation only one program registers makes the DB unwritable and un-integrity-checkable for everyone else; the app-computed `title_key` gives the same uniqueness (D5) | Never, unless SQLite ships Unicode folding in the core |
 | Hard deletes / GDPR-style erasure | Tombstones keep everything (D11) | A legal/privacy need to truly destroy specific rows |
 | Transaction ledger (income, spending, transfers), budgets, categories | A second product (splits, transfers, importers, categorisation); net worth needs only balances (D18). Additive later: `transactions` referencing `holdings`, `balances` as reconciliation points | The owner wants spending/savings-rate analysis, or a bank-feed importer exists |
@@ -2331,6 +2352,7 @@ re-added, each with the trigger that should reopen the question.
 | Places across the ±180° meridian | The §6.20 distance treats 179.9° and −179.9° as 360° apart (D21) | A place or a trip near the antimeridian (Fiji, Chukotka) |
 | A spatial index (R\*Tree) | `positions_time` and `positions_day` serve the questions asked; R\*Tree is a compile-time option [R73] | A query by area over the whole track is ever slow |
 | Kinds of kinds ([[Running]] is-a [[Workout]]) and kinds of tasks | An event takes several kinds instead, so a run counts under both (D22). Additive: register a `page → page` kind and walk it as §6.18 walks `located-in` | Tagging every run twice becomes a chore, or a question asks for a kind of task |
+| Re-checking links when an entity changes type | `links_endpoint_types` checks a link at insert; a promotion (D20) can leave one its kind now refuses — an event is-a [[Workout]], then Workout becomes a person (executed). Additive: a trigger on `UPDATE OF type ON entities` | The first such link found in real data |
 | Visits and trips from a location export as events | An importer's decision, not schema: an event with `place_id` already holds a visit | The first import of such an export |
 
 ---
@@ -2469,6 +2491,10 @@ the gaps are intentional.
   <https://www.productionhardening.org/sqlite-architecture-production-hardening/schema-design-for-edge-devices/integer-primary-keys-for-embedded-writes/>
   Random TEXT UUID keys scatter inserts across the B-tree (page splits, dirty-block
   churn). → D3.
+- **[R75]** vlcn.io: *cr-sqlite — Constraints* — <https://vlcn.io/docs/cr-sqlite/constraints> (code:
+  <https://github.com/vlcn-io/cr-sqlite>, last release v0.16.3, January 2024) A merged ("CRR") table
+  may not have checked foreign keys, unique constraints other than the primary key, or CHECKs that
+  depend on other columns. → D3, §7.
 - **[R47]** Microsoft Research TR-2006-45: *To BLOB or Not To BLOB* —
   <https://www.microsoft.com/en-us/research/wp-content/uploads/2006/04/tr-2006-45.pdf>
   Classic study; break-even a few hundred KB — small in DB, large on filesystem. → D9.
@@ -2537,8 +2563,12 @@ the gaps are intentional.
   the spec. → §2.4, D19.
 - **[R63]** Unicode Technical Standard #39, *Unicode Security Mechanisms* —
   <https://www.unicode.org/reports/tr39/> (with UAX #31, *Identifiers*): default-ignorable and bidi
-  characters are dropped or rejected before identifiers are compared, because they are invisible;
-  case-folding stability covers assigned characters only. → §2.4 (the invisible-character rule, `Cn`).
+  characters are dropped or rejected before identifiers are compared, because they are invisible.
+  → §2.4 (the invisible-character rule).
+- **[R74]** Unicode: *Character Encoding Stability Policies* —
+  <https://www.unicode.org/policies/stability_policy.html> Case folding stability (Unicode 5.2+): for a
+  string of assigned characters, `toCasefold(toNFKC(S))` is the same under every later version — the
+  formal promise covers NFKC text only. Normalization stability covers assigned characters. → §2.4 (`Cn`), §7.
 
 ### Reliability of the file (§2.5, §2.6, §2.8)
 
@@ -2547,7 +2577,7 @@ the gaps are intentional.
   Considered for in-value damage and not used (an extension in every writer); a checksumming
   filesystem does the same job below the file. → §2.5.
 - **[R65]** SQLite: *Write-Ahead Logging* — <https://www.sqlite.org/wal.html>
-  The WAL-reset bug (3.7.0 – 3.51.2, fixed in 3.51.3; backports 3.44.6 and 3.50.7): two or more
+  The WAL-reset bug (3.7.0 – 3.51.2, fixed in 3.51.3 and 3.53.0; backports 3.44.6 and 3.50.7): two or more
   connections, a write racing a checkpoint, a lost transaction. Also: checkpoint starvation by
   readers that never let go, "WAL does not work over a network filesystem", the conditions for
   read-only access. → §2.6, `lifelog_meta.sqlite`.

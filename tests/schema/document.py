@@ -49,7 +49,7 @@ def problems(text):
     return out
 p = problems(DOC)
 S.K('the document has none of the marks of history', not p, p)
-for name, text in [('an addendum back in D3', DOC.replace('- **Sources.** [R4][R26][R27].', '- **Sources.** [R4][R26][R27].\n\n- **Addendum (round 7).** x', 1)),
+for name, text in [('an addendum back in D3', DOC.replace('- **Sources.** [R4][R26][R27][R75].', '- **Sources.** [R4][R26][R27][R75].\n\n- **Addendum (round 7).** x', 1)),
                    ('a finding id', DOC.replace('- **Sources.** [R58][R59].', '- **Sources.** [R58][R59]. (R4-11 e)', 1)),
                    ('a review section', DOC.replace('## 8. References', '## 8. Review resolutions\n\n## 9. References', 1)),
                    ('a version in the status line', DOC.replace('**Status:** ', '**Status:** v1.14 — ', 1)),

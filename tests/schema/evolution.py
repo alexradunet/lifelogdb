@@ -1,6 +1,7 @@
 """Evolution after the freeze (SCHEMA.md D13, D17, §7): every CHECK is named and droppable by name; an unnamed one is not,
 a looser second CHECK does not relax the first, ADD CONSTRAINT checks existing rows; enums widen on a populated database;
-the partial-date and tokenizer paths of §7 work; a comment outside a statement is not stored."""
+the partial-date and tokenizer paths of §7 work; a link kind widens by migration; a promotion can strand a link (§7); an
+entity uid and an entity import key are additive (D3, §7); a comment outside a statement is not stored."""
 import os, re, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'lib'))
 from kit import *
@@ -81,6 +82,41 @@ S.K('...but not a two-character word (the known limit)', hits('本語') == 0)
 m = memo(c, 'これは新しい記録です'); n1 = hits('新しい'); c.execute("UPDATE pages SET body='全く別の内容' WHERE id=?", (m,))
 S.K('the sync triggers keep working after the switch', n1 == 1 and (hits('新しい'), hits('別の内')) == (0, 1))
 S.K('...and the FTS integrity-check passes', tryx(c, "INSERT INTO pages_fts(pages_fts, rank) VALUES('integrity-check', 1)") == 'OK')
+
+# ---- a link kind is widened by a migration (D8): drop the guard, update the row, recreate the guard
+c = populated(); guard = c.execute("select sql from sqlite_schema where name='link_kinds_structure_fixed'").fetchone()[0]
+c.execute('BEGIN IMMEDIATE'); c.execute('DROP TRIGGER link_kinds_structure_fixed')
+c.execute("UPDATE link_kinds SET from_types = 'event,task' WHERE kind = 'is-a'"); c.execute(guard); c.execute('COMMIT')
+S.K('after the migration a task may be is-a a page', link(c, thing(c, 'task'), page(c, 'Errand'), 'is-a') == 'OK')
+S.K('...and the guard is back: the next change is refused', 'fixed at registration' in tryx(c, "UPDATE link_kinds SET from_types = NULL WHERE kind = 'is-a'"))
+
+# ---- a promotion can leave a link its kind now refuses (§7): links are checked at insert only
+c = fresh(); ev = thing(c, 'event'); w = page(c, 'Workout')
+S.K('an event is-a [[Workout]]', link(c, ev, w, 'is-a') == 'OK')
+c.execute("UPDATE entities SET type = 'person' WHERE id = ?", (w,)); domain(c, 'person', w)
+S.K('promoting Workout to a person keeps the old is-a edge, which a new insert would refuse',
+    one(c, "select count(*) from links where to_id = ? and kind = 'is-a'", (w,)) == 1 and 'endpoint type not allowed' in link(c, thing(c, 'event'), w, 'is-a'))
+
+# ---- an entity uid is additive after the freeze (D3): add, backfill, unique index, then NOT NULL
+import uuid
+c = populated(); c.execute('BEGIN IMMEDIATE')
+c.execute("ALTER TABLE entities ADD COLUMN uid TEXT CONSTRAINT entities_uid CHECK (uid IS NULL OR length(uid) = 36)")
+for (i,) in c.execute('select id from entities').fetchall(): c.execute('UPDATE entities SET uid = ? WHERE id = ?', (str(uuid.uuid4()), i))
+c.execute('CREATE UNIQUE INDEX entities_uid_unique ON entities(uid)'); c.execute('ALTER TABLE entities ALTER COLUMN uid SET NOT NULL'); c.execute('COMMIT')
+S.K('every existing entity has a unique uid, and an entity without one is refused afterwards',
+    one(c, 'select count(distinct uid) = count(*) from entities') == 1 and 'NOT NULL' in tryx(c, f"INSERT INTO entities(type,created_at,updated_at,source) VALUES ('task',{NOW},{NOW},'ui')"))
+S.K('...with integrity and foreign keys clean', integrity_ok(c))
+
+# ---- an import key on entities is additive (§7): a re-run or a replay inserts nothing, a changed event is found again
+c = populated(); c.execute('BEGIN IMMEDIATE'); c.execute('ALTER TABLE entities ADD COLUMN import_id TEXT')
+c.execute('CREATE UNIQUE INDEX entities_import ON entities(source, import_id) WHERE import_id IS NOT NULL'); c.execute('COMMIT')
+put = lambda: c.execute(f"INSERT INTO entities(type,created_at,updated_at,source,import_id) VALUES ('event',{NOW},{NOW},'import:calendar','evt-1') "
+                        "ON CONFLICT(source, import_id) WHERE import_id IS NOT NULL DO NOTHING RETURNING id").fetchall()
+first = put(); domain(c, 'event', first[0][0], title='Dentist'); again = put()
+c.execute("UPDATE events SET start_day = '2026-10-02' WHERE id = (SELECT id FROM entities WHERE source = 'import:calendar' AND import_id = 'evt-1')")
+S.K('the second insert of the same (source, import_id) returns no id, and the moved event is updated in its own row',
+    len(first) == 1 and again == [] and one(c, 'select start_day from events where id = ?', (first[0][0],)) == '2026-10-02')
+S.K('...with integrity and foreign keys clean', integrity_ok(c))
 
 # ---- comments: inside a statement kept, outside dropped (why the rules live inside)
 t = sqlite3.connect(':memory:'); t.executescript('-- outside comment\nCREATE TABLE k (\n  -- inside comment\n  x INTEGER\n) STRICT;')
