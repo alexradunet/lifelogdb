@@ -4,7 +4,7 @@
 
 The design document for **Lifelog**, a lifetime-scale single-user SQLite database
 (`life.db`). `SCHEMA.md` is the product: goals, storage contract, canonical DDL,
-decision log (D1–D19), query cookbook, non-goals, references. It states the current truth
+decision log (D1–D20), query cookbook, non-goals, references. It states the current truth
 only. There is no application code yet; `tests/` holds the validation suites (see below).
 
 ## The one hard rule: no migrations until the schema freeze
@@ -40,7 +40,10 @@ Until the schema is frozen (decision D13):
   matters, see §2.2), tombstones instead of deletes (enforced by BEFORE DELETE triggers),
   composite FK `(id, entity_type) → entities(id, type)` in every *entity* domain table
   (`pages`, `events`, `tasks`, `people`, `places`, `holdings` — not `measurements`/`metrics`/
-  `balances`/`currencies`, which are facts and registries), append-only measurements
+  `balances`/`currencies`, which are facts and registries), every *named* entity (`person`, `place`, `holding`)
+  owning one page through `entities.page_id` — `CHECK`-tied, unique across types, fixed after insert, inserted **first**
+  (page entity, `pages` row, named entity, domain row: §6.20, D20) — so `[[Name]]` reaches it through the title and no
+  `notes` column exists on them, append-only measurements
   and balances enforced by triggers (measurement corrections use `supersedes_id`; a balance is
   corrected by a newer row for the same holding+day; both are retracted with a NULL value/amount),
   importers use `ON CONFLICT … DO NOTHING`, never `OR IGNORE`/`OR REPLACE`, money as

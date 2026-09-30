@@ -54,11 +54,11 @@ P('R4-10 malformed recorded_at','ERR',c,"INSERT INTO measurements(metric_id,day,
 P('R4-10 valid recorded_at','OK',c,f"INSERT INTO measurements(metric_id,day,value,recorded_at) VALUES (1,'2026-06-01',3,{RA})")
 
 # ---- R4-07: no hard deletes of entities or domain rows
-c, ids = livedb()
+c, ids = livedb(); n_entities = c.execute("select count(*) from entities").fetchone()[0]
 for typ,tbl in (('page','pages'),('event','events'),('task','tasks'),('person','people'),('place','places'),('holding','holdings')):
     P(f'R4-07 DELETE FROM {tbl}','ERR',c,f"DELETE FROM {tbl} WHERE id=?",(ids[typ],))
     P(f'R4-07 DELETE its entities row ({typ})','ERR',c,"DELETE FROM entities WHERE id=?",(ids[typ],))
-K('R4-07 nothing removed', c.execute("select count(*) from entities").fetchone()[0]==6)
+K('R4-07 nothing removed', c.execute("select count(*) from entities").fetchone()[0]==n_entities==9)   # 6 types + the 3 pages of the named ones (D20)
 P('R4-07 REPLACE INTO pages blocked (recursive_triggers=ON)','OK' if False else 'ERR',(lambda cc:(cc.execute('PRAGMA recursive_triggers=ON'),cc)[1])(c),
   f"REPLACE INTO pages(id,entity_type,kind,day,body) VALUES ({ids['page']},'page','memo','2026-06-09','overwritten')")
 K('R4-07 the memo body survived the REPLACE', c.execute("select body from pages where id=?",(ids['page'],)).fetchone()[0]=='hello')

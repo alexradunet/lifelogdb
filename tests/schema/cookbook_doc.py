@@ -28,7 +28,7 @@ ac = ent(c,'holding'); c.execute("INSERT INTO holdings(id,name,side,currency,ope
 for d_,v_ in (('2026-05-31',100000),('2026-08-31',120000)): c.execute(f"INSERT INTO balances(holding_id,day,amount,recorded_at) VALUES (?,?,?,{NOW})",(ac,d_,v_))
 usd = ent(c,'holding'); c.execute("INSERT INTO holdings(id,name,side,currency,opened_day) VALUES (?,'Brokerage','asset','USD','2019-01-01')",(usd,))
 c.execute(f"INSERT INTO balances(holding_id,day,amount,recorded_at) VALUES (?,'2026-06-30',5000000,{NOW})",(usd,))
-P = dict(found_id=wp, target_id=wp, target_ids='[]', place_id=1, mistaken_row_id=2, holding_id=ac, row_key='r1', amount=777, from_day='2026-01-15', to_day='2026-09-10', day='2026-09-29', page_id=wp, person_id=pe, memo_id=me, task_id=ta, due_day='2026-10-05', query='schema',
+P = dict(found_id=wp, target_id=wp, target_ids='[]', place_id=1, mistaken_row_id=2, holding_id=ac, row_key='r1', amount=777, from_day='2026-01-15', to_day='2026-09-10', day='2026-09-29', page_id=wp, person_id=pe, entity_id=pe, handle_title='Bob Sample', handle_key='bob sample', memo_id=me, task_id=ta, due_day='2026-10-05', query='schema',
          key='newpage', title='Newpage', start_day='2026-09-01', end_day='2026-10-31', metric_id=2, wrong_row_id=1, source='ui')
 fails = 0
 for i,b in enumerate(blocks,1):

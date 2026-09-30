@@ -22,12 +22,12 @@ def K(label, cond, detail=''):
 # ---- A
 c = sqlite3.connect(':memory:'); c.executescript(DDL)
 meta = dict(c.execute('select key, value from lifelog_meta').fetchall())
-K('A lifelog_meta has 24 rows (23 + sqlite and provenance, round 15, minus fx_rates)', len(meta) == 24, len(meta))
+K('A lifelog_meta has 25 rows (24 + named_pages, D20)', len(meta) == 25, len(meta))
 K('A no export or backups key', not ({'export', 'backups'} & set(meta)), sorted({'export', 'backups'} & set(meta)))
 K('A no lifelog_meta value mentions export/, dump/, backups/, restore or VACUUM INTO', not [k for k, v in meta.items() if re.search(r'export/|dump/|backups/|restore|VACUUM INTO', v, re.I)])
 sec = doc[doc.index('### 2.11 '):doc.index('## 3. The schema')]
 rows = re.findall(r'^\|\s*(\d+)\s*\|([^|]+)\|([^|]+)\|([^|]+)\|\s*$', sec, re.M)
-K('A the 2075 table has 21 questions numbered 1..21', [int(r[0]) for r in rows] == list(range(1, 22)), [r[0] for r in rows])
+K('A the 2075 table has 22 questions numbered 1..22', [int(r[0]) for r in rows] == list(range(1, 23)), [r[0] for r in rows])
 
 # ---- B  the block of section 2.8, executed literally
 s28 = doc[doc.index('### 2.8 '):doc.index('### 2.9 ')]
@@ -41,7 +41,12 @@ K('B the block is exactly four statements: integrity_check, foreign_key_check, t
 D = tempfile.mkdtemp(prefix='r12-'); NOW = "'2026-09-30T10:00:00.000Z'"; base = f'{D}/base.db'
 c = sqlite3.connect(base, isolation_level=None); c.execute('PRAGMA foreign_keys=ON'); c.execute('PRAGMA recursive_triggers=ON'); c.executescript(DDL)
 c.execute('BEGIN IMMEDIATE')
-def ent(t): c.execute(f"INSERT INTO entities(type,created_at,updated_at) VALUES ('{t}',{NOW},{NOW})"); return c.execute('select last_insert_rowid()').fetchone()[0]
+def ent(t):
+    pg = 'NULL'
+    if t in ('person', 'place', 'holding'):      # D20: a named entity has a page, inserted first
+        c.execute(f"INSERT INTO entities(type,created_at,updated_at) VALUES ('page',{NOW},{NOW})"); pg = c.execute('select last_insert_rowid()').fetchone()[0]
+        c.execute("INSERT INTO pages(id,kind,title,title_key) VALUES (?, 'page', ?, ?)", (pg, f'handle {t}', f'handle {t}'))
+    c.execute(f"INSERT INTO entities(type,created_at,updated_at,page_id) VALUES ('{t}',{NOW},{NOW},{pg})"); return c.execute('select last_insert_rowid()').fetchone()[0]
 for i in range(3000):                                   # 3 000 pages so that the table and pages_title span many pages
     pid = ent('page')
     if i % 2: c.execute("INSERT INTO pages(id,kind,title,title_key,day,body) VALUES (?, 'page', ?, ?, '2026-09-30', ?)", (pid, f'Title {i:05d}', f'title {i:05d}', f'BODYMARK{i:05d} ' + 'lorem ipsum ' * 20))

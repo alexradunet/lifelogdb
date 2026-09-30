@@ -22,7 +22,7 @@ def problems(text):
     toc = re.findall(r'^\d+\. \[(.+?)\]\(#(.+?)\)$', text, re.M)
     if len(toc) != 8: out.append(f'the table of contents has {len(toc)} entries, not 8')
     ds = [int(x) for x in re.findall(r'^### D(\d+) — ', text, re.M)]
-    if ds != list(range(1, 20)): out.append(f'decisions are not D1..D19 in order: {ds}')
+    if ds != list(range(1, 21)): out.append(f'decisions are not D1..D20 in order: {ds}')
     if re.search(r'^### D\d+ — .*\*\(', text, re.M): out.append('a decision title carries a parenthetical status')
     if not re.search(r'^\*\*Status:\*\* frozen pending external review\. No canonical database exists yet', text, re.M): out.append('the status line is not the one-sentence current status')
     return out
@@ -41,7 +41,7 @@ def mutant(name, text):
     q = problems(text); K(f'a broken copy is noticed: {name}', bool(q) and q != p, q[:1])
 mutant('an addendum back in D3', doc.replace('- **Sources.** [R4][R26][R27].', '- **Sources.** [R4][R26][R27].\n\n- **Addendum (round 7, registries).** x', 1))
 mutant('a pointer into §8', doc.replace('(executed on 0.65.5)', '(executed on 0.65.5, §8 #9)', 1))
-mutant('a finding id', doc.replace('never reaches the `people` row (§7).', 'never reaches the `people` row (R4-11 e, still open).', 1))
+mutant('a finding id', doc.replace('- **Sources.** [R58] [R59].', '- **Sources.** [R58] [R59]. (R4-11 e, still open)', 1))
 mutant('a review section back', doc.replace('## 8. References', '## 8. Validation records and review resolutions\n\n## 9. References', 1))
 mutant('a version in the status line', doc.replace('**Status:** frozen', '**Status:** v1.14 — frozen', 1))
 mutant('a superseded note', doc.replace('### D4 — Text ownership: the database is canonical.', '### D4 — Text ownership: the database is canonical. *(Superseded by D5.)*', 1))

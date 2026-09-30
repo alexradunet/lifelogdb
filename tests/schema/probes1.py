@@ -7,8 +7,15 @@ def fresh(path=':memory:'):
     c.executescript(DDL)
     c.execute('PRAGMA foreign_keys=ON')
     return c
+NAMED = ('person', 'place', 'holding')      # D20: a named entity has a page, inserted first
+_handles = [0]
 def ent(c, typ):
-    c.execute(f"INSERT INTO entities(type,created_at,updated_at) VALUES (?,{NOW},{NOW})", (typ,))
+    pg = None
+    if typ in NAMED:
+        _handles[0] += 1; t = f'Handle {_handles[0]}'
+        c.execute(f"INSERT INTO entities(type,created_at,updated_at) VALUES ('page',{NOW},{NOW})"); pg = c.execute('select last_insert_rowid()').fetchone()[0]
+        c.execute("INSERT INTO pages(id,kind,title,title_key) VALUES (?,'page',?,?)", (pg, t, t.lower()))
+    c.execute(f"INSERT INTO entities(type,created_at,updated_at,page_id) VALUES (?,{NOW},{NOW},?)", (typ, pg))
     return c.execute('select last_insert_rowid()').fetchone()[0]
 def memo(c, body='x', day='2026-06-09'):
     i = ent(c,'page'); c.execute("INSERT INTO pages(id,kind,day,body) VALUES (?,?,?,?)",(i,'memo',day,body)); return i

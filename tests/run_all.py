@@ -39,6 +39,8 @@ SUITES = [   # (name, directory, argv, predicate, what it proves)
  ('r12 mutants',   'schema',    ['r12_mutants.py'],           lambda o: ratio(o, r'(\d+)/(\d+) broken documents'), 'each round-12 rule put back the old way must fail a probe'),
  ('r15probes',     'schema',    ['r15probes.py', '{DDL}'],    lambda o: ratio(o, r'round-15 probes: (\d+)/(\d+)'), 'ids via RETURNING, the FTS5 check, invisible title characters, SQLite version and hardening, named CHECKs, no task recurrence, provenance'),
  ('r15 mutants',   'schema',    ['r15_mutants.py'],           lambda o: ratio(o, r'(\d+)/(\d+) broken documents'), 'each round-15 rule put back the old way must fail a probe'),
+ ('r16probes',     'schema',    ['r16probes.py', '{DDL}'],    lambda o: ratio(o, r'round-16 probes: (\d+)/(\d+)'), 'D20 named entities are pages: the page_id rules, 6.20 and 6.6 run literally, the ghost view, two Sams, the document text'),
+ ('r16 mutants',   'schema',    ['r16_mutants.py'],           lambda o: ratio(o, r'(\d+)/(\d+) broken documents'), 'each D20 rule taken out or put back the old way must fail a probe'),
  ('no history',    'schema',    ['nohistory.py'],             lambda o: ratio(o, r'history checks: (\d+)/(\d+)'), 'SCHEMA.md states the current truth only: no rounds, records, addenda, superseded notes, finding ids, changelog'),
  ('diagrams',      'schema',    ['diagrams.py', '{DDL}'],     lambda o: ratio(o, r'diagram checks: (\d+)/(\d+)'), 'the mermaid diagrams say what the DDL says: tables, columns, keys, foreign keys, link kinds, the correction story'),
  ('diagram mutants', 'schema',   ['diagrams_mutants.py'],      lambda o: ratio(o, r'(\d+)/(\d+) broken documents'), 'a diagram edited, or the DDL changed under it, must fail a check'),

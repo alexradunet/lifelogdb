@@ -28,8 +28,14 @@ def fresh(hardened=False):
     c = sqlite3.connect(':memory:', isolation_level=None)
     if hardened: c.setconfig(sqlite3.SQLITE_DBCONFIG_DEFENSIVE, True); c.execute('PRAGMA trusted_schema = OFF')
     c.executescript(DDL); c.execute('PRAGMA foreign_keys=ON'); c.execute('PRAGMA recursive_triggers=ON'); return c
-def ent(c, t):
-    return c.execute(f"INSERT INTO entities(type,created_at,updated_at) VALUES (?,{NOW},{NOW}) RETURNING id", (t,)).fetchone()[0]
+_handles = [0]
+def ent(c, t, source=None):
+    pg = None
+    if t in ('person', 'place', 'holding'):     # D20: a named entity has a page, inserted first
+        _handles[0] += 1; title = f'Handle {_handles[0]}'
+        pg = c.execute(f"INSERT INTO entities(type,created_at,updated_at) VALUES ('page',{NOW},{NOW}) RETURNING id").fetchone()[0]
+        c.execute("INSERT INTO pages(id,kind,title,title_key) VALUES (?, 'page', ?, ?)", (pg, title, title.lower()))
+    return c.execute(f"INSERT INTO entities(type,created_at,updated_at,page_id,source) VALUES (?,{NOW},{NOW},?,?) RETURNING id", (t, pg, source)).fetchone()[0]
 def page(c, title):
     i = ent(c, 'page'); c.execute("INSERT INTO pages(id,kind,title,title_key) VALUES (?, 'page', ?, ?)", (i, title, title_key(title))); return i
 def memo(c, body='x'):
@@ -205,9 +211,9 @@ for v in ('ui', 'cli', 'api', 'agent:claude', 'import:bank_csv', 'import:health-
 for v in ('', 'UI', 'agent claude', 'x' * 65, 'a/b'):
     K(f'G source {v!r} is rejected', tryx(c, f"INSERT INTO entities(type,created_at,updated_at,source) VALUES ('page',{NOW},{NOW},?)", (v,)).startswith('ERR'))
 try:
-    e1 = c.execute(f"INSERT INTO entities(type,created_at,updated_at,source) VALUES ('person',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
+    e1 = ent(c, 'person', 'ui')
     c.execute("INSERT INTO people(id,name) VALUES (?, 'A')", (e1,))
-    e2 = c.execute(f"INSERT INTO entities(type,created_at,updated_at) VALUES ('person',{NOW},{NOW}) RETURNING id").fetchone()[0]
+    e2 = ent(c, 'person')
     c.execute("INSERT INTO people(id,name) VALUES (?, 'B')", (e2,))
     K('G entities.source cannot change', tryx(c, "UPDATE entities SET source = 'cli' WHERE id = ?", (e1,)).startswith('ERR'))
     K('G ...cannot be filled in later either (written at insert)', tryx(c, "UPDATE entities SET source = 'cli' WHERE id = ?", (e2,)).startswith('ERR'))

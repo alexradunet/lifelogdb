@@ -2,7 +2,7 @@
 A  R8-01: the title CHECK rejects a Windows device name bare OR before an extension, and the six superscript names.
 B  The "2075 test" of SCHEMA.md §2.11: every question in the doc's table is answered, from `lifelog_meta` alone.
 C  The deferred features of §7 have a working additive path (executed, not assumed):
-   C1 partial dates (R4-18)  C2 tokenizer switch for CJK search (R4-15)  C3 a `mention` link kind for people (R4-11 e).
+   C1 partial dates (R4-18)  C2 tokenizer switch for CJK search (R4-15).
 D  The orphan query of SCHEMA.md 2.8 finds an entities row without a domain row and is silent on a clean database.
 E  The import path of §2.11, run from the document's own SQL on 1 000 rows: idempotent, all-or-nothing, and the three traps are real."""
 exec(open('probes1.py').read().split('# ---- P1:')[0])
@@ -79,16 +79,6 @@ m = memo(c, 'これは新しい記録です'); n1 = hits('新しい')
 c.execute("UPDATE pages SET body='全く別の内容' WHERE id=?", (m,)); n2 = (hits('新しい'), hits('別の内'))
 K('C2 insert indexed, update re-indexed', n1 == 1 and n2 == (0, 1), (n1, n2))
 K('C2 the FTS integrity-check passes after the switch', tryx(c, "INSERT INTO pages_fts(pages_fts, rank) VALUES('integrity-check', 1)")[0] == 'OK')
-
-# ---- C3 a `mention` link kind, page -> person
-c = fresh(); me = memo(c, 'Lunch with Sam #friends'); pe = ent(c, 'person'); c.execute("INSERT INTO people(id,name) VALUES (?, 'Sam')", (pe,)); pl = ent(c, 'place'); c.execute("INSERT INTO places(id,name) VALUES (?, 'Cafe')", (pl,))
-K('C3 before: a page -> person link can only be kind `about` (wikilink is page -> page)', tryx(c, f"INSERT INTO links(from_id,to_id,kind,created_at) VALUES ({me},{pe},'wikilink',{NOW})")[0] == 'ERR' and tryx(c, f"INSERT INTO links(from_id,to_id,kind,created_at) VALUES ({me},{pe},'about',{NOW})")[0] == 'OK')
-c.execute(f"DELETE FROM links WHERE from_id={me}")
-r = tryx(c, "INSERT INTO link_kinds(kind,symmetric,from_types,to_types,note) VALUES ('mention',0,'page','person','[[Sam]]-style mention of a person in a page body')")
-K('C3 registering the kind is one INSERT (the registry is closed, not frozen)', r[0] == 'OK', r)
-K('C3 a memo can now mention a person; a memo cannot mention a place', tryx(c, f"INSERT INTO links(from_id,to_id,kind,created_at) VALUES ({me},{pe},'mention',{NOW})")[0] == 'OK' and tryx(c, f"INSERT INTO links(from_id,to_id,kind,created_at) VALUES ({me},{pl},'mention',{NOW})")[0] == 'ERR')
-K('C3 the mention shows up in "everything about a person" (links to_id = person)', c.execute("select count(*) from links where to_id=? and kind='mention'", (pe,)).fetchone()[0] == 1)
-K('C3 the existing kinds are untouched', c.execute("select count(*) from link_kinds where kind in ('wikilink','about','redirect')").fetchone()[0] == 3)
 
 # ---- D orphan check (the query of section 2.8, taken from the document text)
 m = re.search(r"SELECT id FROM entities WHERE id NOT IN \(SELECT id FROM pages UNION SELECT id FROM events UNION SELECT id FROM tasks UNION SELECT id FROM people UNION SELECT id FROM places UNION SELECT id FROM holdings\)", doc)

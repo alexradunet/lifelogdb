@@ -129,6 +129,15 @@ deferred out of v1 (D9) — the layout grows a `media/` sibling when they return
   keeps it from changing. With agents among the writers (D3), it is how a wrong row is traced to the
   writer that made it. `measurements.source` and `balances.source` name the *data* source instead
   (`manual`, `statement`, an importer).
+- **Named entities have a page (D20).** A `person`, `place` or `holding` is named: its
+  `entities.page_id` points at one `pages` row (`kind='page'`) whose title is the handle that
+  `[[wikilinks]]` write. A CHECK ties the two together — a named type has a page, every other type
+  has none — the column is unique across all types (a page is one thing's page, never two), and a
+  trigger keeps it from changing. The page comes first: page entity, `pages` row, then the named
+  entity and its domain row (§6.20). To promote a ghost page, insert the named entity with that
+  page's id. `people.name`, `places.name` and `holdings.name` stay the editable display name; the
+  title is the permanent handle, and two people called Sam are told apart in it (`Sam (barber)`),
+  because title uniqueness (`title_key`, below) already refuses the second `Sam`.
 - `measurements`, `balances`, `metrics`, `currencies`, `links`, `link_kinds`,
   `lifelog_meta` are *not* entities (they are facts, joins, and registries). A `holding` is an
   entity; its balances are facts.
@@ -212,10 +221,16 @@ stateDiagram-v2
     body, and the next save links it once it is valid.
   - *A page never links to itself* (`[[Diet]]` inside the page `Diet` is ignored), and *a
     tombstoned target is revived*, not duplicated (Lookups, below).
+  - *Named pages (D20).* The title of a person's, place's or holding's page is its handle, so
+    `[[Bob Sample]]` is an ordinary wikilink to that page and the save contract does not change:
+    nothing in §6.14 knows about people. What the body says about the person is found through the
+    page (§6.6). A name nobody has a page for yet creates a plain ghost page, which can be promoted
+    to a person, place or holding later (§6.20).
   - *Known limits.* A body that also defines a reference (`[Ref]: http://r`) turns `[[Ref]]` into
     a Markdown link, so it is not a wikilink; a `#` written as an entity (`&#35;x`) is decoded
-    before the scan and counts as a tag; a wikilink resolves to a **page** only, so `[[Sam]]`
-    never reaches the `people` row (§7).
+    before the scan and counts as a tag; a wikilink lands on a page, so `[[Sam]]` reaches the
+    person only if their handle is exactly `Sam`, and a typo (`[[Sm]]`) makes a ghost page like any
+    other (§6.13).
 
   Test vectors — every writer must reproduce them (`\n`, `́`, `̈` stand for a line
   break and combining marks; a body is shown in a code span):
@@ -483,7 +498,7 @@ flowchart LR
   (§6.16–6.17); it is never written to a table. Amounts of different currencies are never added:
   minor units of EUR and JPY are not the same size. With one currency it is already one number.
 - **Secrets.** Never store credentials, PINs or full account/card numbers in `life.db` or in a
-  memo: the file is plaintext (D17). A holding's `notes` may hold the last four digits. Finance
+  memo: the file is plaintext (D17). A holding's page may hold the last four digits. Finance
   data never goes into git — its history cannot be scrubbed (§2.1).
 
 **From a statement to net worth** (§6.15–§6.17):
@@ -515,7 +530,7 @@ the control, and what is left:
 | A buggy writer, importer or agent | one writing application; triggers for append-only facts, no hard deletes and fixed kinds and titles; `ON CONFLICT … DO NOTHING`; `BEGIN IMMEDIATE`; the foreign-key and orphan checks (§2.4, §2.9, §2.8) | the pragmas are per connection, so the application asserts them at connect |
 | Another tool editing rows | exploration tools open the file read-only; Datasette was executed read-only (§2.9, D14) | anything with write access to the file bypasses every control |
 | A stolen disk | the disk holding `life.db` is encrypted at rest (D17) | a stolen *unlocked* machine has everything |
-| Finance or health data leaking through git | `life.db` and its `-wal`/`-shm` are never committed; no credentials or full account numbers, ever (§2.1, §2.10) | `notes` fields are free text — the owner's discipline |
+| Finance or health data leaking through git | `life.db` and its `-wal`/`-shm` are never committed; no credentials or full account numbers, ever (§2.1, §2.10) | page bodies and `notes` fields are free text — the owner's discipline |
 | The data exposed on a network | Datasette on localhost only and read-only; nothing that runs arbitrary SQL is reachable from outside (D17) | a wrong bind address |
 | A reader in fifty years without this document | the 2075 test, below | — |
 
@@ -552,6 +567,7 @@ here, and a row cannot be dropped without the test noticing.
 | 19 | What is a memo, what is a page, and can one become the other? | `pages_kind` | `untitled`, `never changes` |
 | 20 | Which SQLite may write this file? | `sqlite` | `3.51.3`, `3.53` |
 | 21 | Who or what wrote this row? | `provenance` | `written at insert`, `agent` |
+| 22 | How does `[[Bob Sample]]` reach a person, a place or a holding? | `named_pages` | `entities.page_id`, `handle`, `never changed` |
 
 **Imports** — the path for data that already exists elsewhere (a journal archive, a health export,
 statements). Every step was executed on 1 000 synthetic rows:
@@ -645,6 +661,7 @@ INSERT INTO lifelog_meta(key, value) VALUES
   ('net_worth',   'derived, never stored: per open holding, latest balance on or before the day, assets minus liabilities, summed per currency; amounts of different currencies are never added (section 6.16)'),
   ('entities',    'every page/event/task/person/place/holding row has an entities row with the same id (supertype; composite FK (id, entity_type)); both are inserted in one transaction'),
   ('wikilinks',   'links(kind=wikilink) from a page always equal what its body names: [[Title]], [[Title|alias]] and #tag, read from the CommonMark text, never rewritten; rebuilt on every save; an invalid target makes no link'),
+  ('named_pages', 'every person, place and holding has exactly one page (entities.page_id, set at insert, never changed); the page title is the handle [[wikilinks]] write, so a wikilink reaches the thing through its page; no other type has a page'),
   ('writers',     'one writing application; every connection sets foreign_keys=ON, recursive_triggers=ON, synchronous=FULL, trusted_schema=OFF, journal_mode=WAL and starts write transactions with BEGIN IMMEDIATE; every other tool opens the file read-only'),
   ('sqlite',      'writers need SQLite >= 3.51.3 (fixes a WAL corruption race between concurrent writers and checkpoints); migrations need >= 3.53 (ALTER TABLE ADD/DROP CONSTRAINT); CHECKs use only functions every such version has'),
   ('provenance',  'entities.source and links.source name the writer (ui, cli, api, agent:<name>, import:<name>); written at insert, never changed; NULL = unknown'),
@@ -658,6 +675,9 @@ CREATE TABLE entities (
   -- Every *_at column in this file is a UTC ISO-8601 instant with milliseconds, every *_day a LOCAL
   -- date 'YYYY-MM-DD' written at insert and never recomputed; both are checked by a round-trip
   -- that uses IS, not =: a CHECK passes on NULL, and date('2026-9-3') is NULL.
+  -- A person, place or holding is named: page_id is its page, whose title is the handle that
+  -- [[wikilinks]] write (D20). The page comes first, so the app inserts page entity, pages row,
+  -- this row, domain row; promoting an existing ghost page is the same insert with that page's id.
   id         INTEGER PRIMARY KEY,
   type       TEXT NOT NULL CONSTRAINT entities_type
                   CHECK (type IN ('page','event','task','person','place','holding')),
@@ -666,7 +686,9 @@ CREATE TABLE entities (
   deleted_at TEXT     CONSTRAINT entities_deleted_at CHECK (deleted_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', deleted_at) IS deleted_at),
   tz         TEXT     CONSTRAINT entities_tz CHECK (tz IS NULL OR (length(tz) BETWEEN 1 AND 64 AND tz NOT GLOB '*[^A-Za-z0-9_/+-]*')),   -- IANA zone of the writer when the row was created ('Europe/Berlin'); NULL = unknown
   source     TEXT     CONSTRAINT entities_source CHECK (source IS NULL OR (length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*')),   -- which writer made the row: 'ui', 'cli', 'api', 'agent:<name>', 'import:<name>'; written at insert, never changed; NULL = unknown
-  UNIQUE (id, type)
+  page_id    INTEGER UNIQUE REFERENCES pages(id),   -- person/place/holding: its page (D20), unique across all types, fixed after insert; every other type: NULL
+  UNIQUE (id, type),
+  CONSTRAINT entities_page_iff_named CHECK ((type IN ('person','place','holding')) = (page_id IS NOT NULL))
 ) STRICT;
 
 CREATE TABLE pages (
@@ -677,6 +699,7 @@ CREATE TABLE pages (
   -- Uniqueness is on title_key = NFC(casefold(NFC(title))), computed by the app because SQLite cannot
   -- fold Unicode: 'Café' = 'CAFÉ' = NFD 'Café'. Look a page up with WHERE title_key = :key.
   -- links(kind='wikilink') from a page always equal the [[titles]] and #tags its body names (D19).
+  -- A person, place or holding owns one page (entities.page_id, D20): [[Bob Sample]] reaches the person through it.
   id          INTEGER PRIMARY KEY,
   entity_type TEXT NOT NULL DEFAULT 'page' CONSTRAINT pages_entity_type CHECK (entity_type = 'page'),
   kind        TEXT NOT NULL CONSTRAINT pages_kind CHECK (kind IN ('memo','page')),
@@ -749,11 +772,11 @@ END;
 CREATE TABLE places (
   -- named locations, an entity type linkable like everything else (D16); events.place_id points here.
   -- name is unique case-insensitively for ASCII only ('Berlin' = 'berlin'); disambiguate homonyms
-  -- in the name itself ('Springfield (IL)').
+  -- in the name itself ('Springfield (IL)'). Prose about a place lives on its page (entities.page_id,
+  -- D20), whose title is the handle [[wikilinks]] write.
   id          INTEGER PRIMARY KEY,
   entity_type TEXT NOT NULL DEFAULT 'place' CONSTRAINT places_entity_type CHECK (entity_type = 'place'),
   name        TEXT NOT NULL UNIQUE COLLATE NOCASE,
-  notes       TEXT,
   FOREIGN KEY (id, entity_type) REFERENCES entities(id, type)
 ) STRICT;
 
@@ -819,14 +842,15 @@ CREATE TABLE tasks (
 CREATE INDEX tasks_open ON tasks(status, due_day);
 
 CREATE TABLE people (
-  -- people in the owner's life; relationships between them are links (friend, family, parent-of)
+  -- people in the owner's life; relationships between them are links (friend, family, parent-of).
+  -- A person's prose lives on their page (entities.page_id, D20), not here: name is the full name,
+  -- the page title is the handle [[wikilinks]] write, and two Sams are told apart in the handle.
   id          INTEGER PRIMARY KEY,
   entity_type TEXT NOT NULL DEFAULT 'person' CONSTRAINT people_entity_type CHECK (entity_type = 'person'),
   name        TEXT NOT NULL,
   nickname    TEXT,
   birth_day   TEXT CONSTRAINT people_birth_day CHECK (birth_day IS NULL OR date(birth_day) IS birth_day),
   death_day   TEXT CONSTRAINT people_death_day CHECK (death_day IS NULL OR date(death_day) IS death_day),
-  notes       TEXT,
   FOREIGN KEY (id, entity_type) REFERENCES entities(id, type),
   CONSTRAINT people_death_order CHECK (death_day IS NULL OR birth_day IS NULL OR death_day >= birth_day)
 ) STRICT;
@@ -932,7 +956,8 @@ CREATE TABLE holdings (
   -- property, vehicle, valuables, loan, mortgage, card. Stocks and crypto are valued like everything
   -- else: the market value in the holding's currency on that day. An entity, so memos and events can
   -- link to it and it can be tombstoned. side and currency define what every balance means and never
-  -- change (holdings_meaning_fixed). Record your OWN share of joint items.
+  -- change (holdings_meaning_fixed). Record your OWN share of joint items. Prose about a holding
+  -- lives on its page (entities.page_id, D20), whose title is the handle [[wikilinks]] write.
   id          INTEGER PRIMARY KEY,
   entity_type TEXT NOT NULL DEFAULT 'holding' CONSTRAINT holdings_entity_type CHECK (entity_type = 'holding'),
   name        TEXT NOT NULL UNIQUE COLLATE NOCASE,   -- 'Main checking', 'Flat (Berlin)'; unique like places.name
@@ -942,7 +967,6 @@ CREATE TABLE holdings (
   institution TEXT,
   opened_day  TEXT CONSTRAINT holdings_opened_day CHECK (opened_day IS NULL OR date(opened_day) IS opened_day),
   closed_day  TEXT CONSTRAINT holdings_closed_day CHECK (closed_day IS NULL OR date(closed_day) IS closed_day),   -- last day the holding counts (inclusive)
-  notes       TEXT,
   FOREIGN KEY (id, entity_type) REFERENCES entities(id, type),
   CONSTRAINT holdings_closed_order CHECK (closed_day IS NULL OR opened_day IS NULL OR closed_day >= opened_day)
 ) STRICT;
@@ -1081,11 +1105,13 @@ END;
 
 CREATE VIEW ghost_pages AS
   -- empty pages nobody points at, 30 days old: a link target created by a capture-time typo and
-  -- never written (renames never create ghosts). The UI lists them; tombstoning is the owner's act.
+  -- never written (renames never create ghosts). The page of a person, place or holding is not a
+  -- ghost, however empty (D20). The UI lists them; tombstoning is the owner's act.
   SELECT p.id, p.title, e.created_at
     FROM pages p JOIN entities e ON e.id = p.id
    WHERE p.kind = 'page' AND p.body = '' AND e.deleted_at IS NULL
      AND e.created_at < strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 day')
+     AND NOT EXISTS (SELECT 1 FROM entities n WHERE n.page_id = p.id)
      AND NOT EXISTS (SELECT 1 FROM links l WHERE l.to_id = p.id AND l.kind <> 'redirect')
      AND NOT EXISTS (SELECT 1 FROM links l WHERE l.from_id = p.id);
 
@@ -1120,6 +1146,20 @@ BEGIN
   -- provenance is captured at insert or not at all; the WHEN clause lets full-row updates through
   SELECT RAISE(ABORT, 'entities.source is written at insert and never changed');
 END;
+CREATE TRIGGER entities_page_fixed BEFORE UPDATE OF page_id ON entities
+  WHEN NEW.page_id IS NOT OLD.page_id
+BEGIN
+  -- a person, place or holding keeps its page for good, as a page keeps its title (D20); the WHEN
+  -- clause lets full-row updates through
+  SELECT RAISE(ABORT, 'entities.page_id is written at insert and never changed');
+END;
+CREATE TRIGGER entities_page_is_a_page BEFORE INSERT ON entities
+  WHEN NEW.page_id IS NOT NULL
+BEGIN
+  -- the foreign key proves the row exists; this proves it is a titled page, not a memo
+  SELECT RAISE(ABORT, 'an entity''s page must be a titled page, not a memo')
+   WHERE NOT EXISTS (SELECT 1 FROM pages WHERE id = NEW.page_id AND kind = 'page');
+END;
 
 CREATE TRIGGER entities_no_delete BEFORE DELETE ON entities
 BEGIN
@@ -1142,7 +1182,7 @@ BEGIN SELECT RAISE(ABORT, 'holdings are never deleted: tombstone the entity (ent
 ```
 
 **Table count: 14 real tables (11 + `currencies`, `holdings`, `balances` — D18) + 1 FTS5
-virtual table + 3 views** (`measurement_values`, `balance_values`, `ghost_pages`) **+ 33 triggers**. That
+virtual table + 3 views** (`measurement_values`, `balance_values`, `ghost_pages`) **+ 35 triggers**. That
 is the entire system. Every `CHECK` is named (`CONSTRAINT <table>_<rule>`), so any rule can be dropped or
 re-added by name after the freeze (D13).
 
@@ -1159,7 +1199,8 @@ foreign key they draw against §3, so a diagram cannot drift from the DDL withou
 One supertype row per linkable thing (`entities`), one domain row per entity with the *same* id — the
 composite foreign key `(id, entity_type) → entities(id, type)` makes the type and the table agree — and
 one polymorphic graph (`links`) over the supertype. `links.kind` is a foreign key to the closed
-registry `link_kinds`.
+registry `link_kinds`. A person, place or holding also points at one page through `entities.page_id`
+(D20): that page is what `[[wikilinks]]` reach.
 
 ```mermaid
 %% diagram: er-core
@@ -1171,6 +1212,7 @@ erDiagram
     entities ||--o| places   : "id"
     entities ||--o| holdings : "id"
     places   |o--o{ events   : "place_id"
+    pages    |o--o| entities : "page_id"
     entities ||--o{ links    : "from_id"
     entities ||--o{ links    : "to_id"
     link_kinds ||--o{ links  : "kind"
@@ -1183,6 +1225,7 @@ erDiagram
         TEXT deleted_at "tombstone"
         TEXT tz
         TEXT source "which writer, fixed"
+        INTEGER page_id FK "person, place, holding: its page, fixed"
     }
     pages {
         INTEGER id PK, FK
@@ -1379,7 +1422,8 @@ How the pieces serve the product concepts:
 | Notes and wiki | `pages(kind='page')` — one kind: titled, unique, dated only if written on purpose — + `links(kind='wikilink')` kept equal to what the `[[body]]` text names (save contract, §2.5, D19) |
 | Tags | same mechanism: `#health` is read as `[[health]]`, a page; the body is never rewritten (D5, D19) |
 | Backlinks | `links WHERE to_id = ?` (§6.5); symmetric kinds are mirrored on insert and delete, so one direction suffices. Asymmetric kinds (`attended`, `subtask`, …) need both directions for "everything about X" (§6.6) |
-| Life graph ("everything about my son") | `links` over `people`/`events`/`pages`/`places` (§6.6) |
+| Life graph ("everything about my son") | `links` over `people`/`events`/`pages`/`places` (§6.6), plus the `[[wikilinks]]` into his page |
+| Naming a person, place or holding in a memo | `[[Bob Sample]]` is an ordinary wikilink to the page that `entities.page_id` gives them (D20); the memos that name them: §6.20 |
 | Subtasks | `links(kind='subtask', child → parent)`; recursive CTE for nesting (§6.11) |
 | Recurring events | `repeat_*` columns on `events`; occurrences expanded at read with a recursive CTE (§6.12). Tasks do not repeat: a reminder is a repeating event, a per-occurrence checklist is a 0/1 habit metric (D15) |
 | Birthdays | query over `people.birth_day` — deliberately not events |
@@ -1387,7 +1431,7 @@ How the pieces serve the product concepts:
 | Stocks, crypto, deposits, valuables, property, loans | one `holding` each (§2.10 table): a balance is its value on a day |
 | Net worth over time | derived: latest `balance_values` per open `holding`, assets minus liabilities, summed per currency (§6.16–6.17) |
 | "What was my flat / mortgage / pension worth in 2019?" | `balances` of that holding, as of a day (§6.15–6.16) |
-| Notes about a holding or a money decision | `links(kind='about', memo/event → holding)` |
+| Notes about a holding or a money decision | a wikilink to the holding's page (memos, pages) or `links(kind='about', event → holding)` (D20) |
 | Which holdings are stale | §6.18 |
 | Search | `pages_fts` (§6.8) |
 | History of a row | none beyond `created_at` / `updated_at` / `deleted_at` and the append-only facts (D12) |
@@ -1953,7 +1997,8 @@ Each decision: **context → decision → alternatives rejected → rationale �
 
 ### D16 — Places: a fifth entity type.
 
-- **Decision.** `places(id, name UNIQUE, notes)` joins `entities` as a linkable type. An event has
+- **Decision.** `places(id, name UNIQUE)` joins `entities` as a linkable type, with a page of its
+  own for prose and for `[[wikilinks]]` (D20). An event has
   exactly one place, `events.place_id`; links can connect anything to a place (`about`), and a person
   to a place they visited (`visited`, person → place only). There is no `lives-in` kind: it would be
   undated, so "where did I live in 2015" would be unanswerable, while a dated event (start and end
@@ -2018,7 +2063,8 @@ Each decision: **context → decision → alternatives rejected → rationale �
   - **`holdings` — a sixth entity type.** Anything with a balance or value: bank account,
     brokerage, crypto wallet, pension, cash, property, vehicle, valuables, loan, mortgage, card.
     Columns: `name` (unique, NOCASE, like `places`), `side` (`asset|liability`), `currency`, free
-    `category`, `institution`, `opened_day`, `closed_day` (inclusive), `notes`. `side` and
+    `category`, `institution`, `opened_day`, `closed_day` (inclusive); free prose lives on the
+    holding's page (D20). `side` and
     `currency` are immutable (`holdings_meaning_fixed`, with a `WHEN` clause so ORMs' full-row
     updates work). Being an entity gives holdings the graph (`about` links from memos and events),
     the tombstone and `updated_at` for free. Record your **own share** of joint holdings.
@@ -2129,6 +2175,43 @@ Each decision: **context → decision → alternatives rejected → rationale �
   target is not remembered anywhere except in the body's own text.
 - **Sources.** [R58] [R59].
 
+### D20 — Named entities are pages: a person, place or holding has one page, and `[[Name]]` reaches it through the title.
+
+- **Decision.** `entities.page_id` (unique, nullable) points at a `pages` row of kind `page`. A named
+  type — `person`, `place`, `holding` — must have one and every other type must not
+  (`entities_page_iff_named`); it is fixed after insert (`entities_page_fixed`) and must be a titled
+  page, not a memo (`entities_page_is_a_page`). The page title is the entity's handle, and the existing
+  unique `title_key` is what forces two people called Sam to be told apart (`Sam (barber)`). The
+  save contract of D19 is untouched: `[[Bob Sample]]` is an ordinary wikilink to a page. What the
+  memos say about someone is found by following wikilinks into their page (§6.6, §6.20). Free prose
+  about a named entity is its page body, so `people`, `places` and `holdings` have no `notes`. `about`
+  stays: events and tasks carry no wikilinks, and a link can be made by picking the entity.
+- **Why.** The owner writes `Today I met [[Bob Sample]]` and wants the memo attached to the person.
+  A wikilink is page → page (D8), so it can only land on a page. Making the person a page needs nothing
+  new in the save contract: no rule for a page and a person with one name, no dependence on the
+  `people` table at save time, so renaming a person cannot drop a link from an old memo, and a rebuild
+  from the bodies alone still gives every link (§2.5).
+- **Alternatives.**
+  - *A `mention` link kind, page → person, resolved by matching names when the body is saved*:
+    rejected — a page and a person with one name need a precedence rule; a link would depend on the
+    body *and* on the `people` table at save time, so a rename or a new person changes what a re-save
+    produces; two people called Sam need a rule of their own.
+  - *A `[[@Name]]` prefix for people*: rejected — it is the same resolution problem with a namespace
+    in front, and it makes the owner type a marker.
+  - *`page_id` on each of `people`, `places`, `holdings`*: rejected — one page could then be a
+    person's and a place's at once, which takes cross-table triggers to forbid; one unique column on
+    the supertype forbids it by itself.
+  - *`pages.subject_id` pointing at the entity*: rejected — a page-side pointer cannot say that every
+    person *must* have a page; the CHECK on `entities` can.
+  - *A nullable `page_id` (a page only when someone is mentioned)*: rejected — then a person created
+    today is not found by `[[Name]]` until someone remembers to attach a page; with the page made
+    first, typing the name always reaches the person.
+- **Costs accepted.** Every person, place and holding needs a unique handle and a page, even one
+  never mentioned; an importer makes both (§6.20). A typo in a name makes a ghost page like any
+  wikilink typo (§6.13). A handle is permanent like any title (D5): a changed name is `name`, and
+  `[[Old name]]` keeps working. A memo names a person by wikilink *or* by `about`; the two are
+  separate rows, and the ark query (§6.6) reads both.
+
 ---
 
 ## 6. Query cookbook
@@ -2140,7 +2223,8 @@ example starts its transaction with `BEGIN IMMEDIATE` (§2.9).
 ### 6.1 Capture a memo (the universal insert convention)
 
 Every entity insert is two statements in one transaction: `entities` first, `RETURNING id`, then
-the domain row with that id. The app keeps the id in a variable (below `:memo_id`) and binds it
+the domain row with that id. (A person, place or holding has its page inserted first, which makes it
+four statements: §6.20.) The app keeps the id in a variable (below `:memo_id`) and binds it
 wherever the memo is meant. Never `last_insert_rowid()` for this: the link sync inserts rows in
 between, and the mood reading would then point at a random entity with no error (executed, §2.3).
 The domain row's `entity_type` is constant per table (the composite FK relies on it).
@@ -2260,24 +2344,32 @@ SELECT l.kind, e.type, l.from_id,
 
 For symmetric kinds the mirror row (D8) makes this one direction sufficient.
 
-### 6.6 Everything about a person (the ark query)
+### 6.6 Everything about a person, place or holding (the ark query)
 
-Symmetric kinds are mirrored, so `to_id` finds them; asymmetric kinds put the person
+Symmetric kinds are mirrored, so `to_id` finds them; asymmetric kinds put the entity
 on either end (`attended` is person → event, `about` is entity → person), so query
-both directions:
+both directions. A person, place or holding also owns a page (D20), and a memo that writes
+`[[Bob Sample]]` links to that page, not to the person: the third leg follows those
+wikilinks. The prose about the entity is its page body.
 
 ```sql
 SELECT l.kind, e.type, l.from_id AS other_id, 'in' AS direction
   FROM links l JOIN entities e ON e.id = l.from_id
- WHERE l.to_id = :person_id AND e.deleted_at IS NULL
+ WHERE l.to_id = :entity_id AND e.deleted_at IS NULL
 UNION ALL
 SELECT l.kind, e.type, l.to_id, 'out'
   FROM links l JOIN entities e ON e.id = l.to_id
- WHERE l.from_id = :person_id AND e.deleted_at IS NULL;
+ WHERE l.from_id = :entity_id AND e.deleted_at IS NULL
+UNION ALL
+SELECT l.kind, e.type, l.from_id, 'in via page'       -- [[wikilinks]] to the entity's page
+  FROM entities me
+  JOIN links l    ON l.to_id = me.page_id AND l.kind = 'wikilink'
+  JOIN entities e ON e.id = l.from_id
+ WHERE me.id = :entity_id AND e.deleted_at IS NULL;
 ```
 
-Both directions are index-served: `links_to` for `to_id`, the `UNIQUE(from_id,to_id,kind)`
-index for `from_id`.
+The first two legs are index-served by `links_to` for `to_id` and by the `UNIQUE(from_id,to_id,kind)`
+index for `from_id`; the third by the unique index on `entities.page_id` and `links_to`.
 
 ### 6.7 Metric series, corrections applied (weight, last 90 days)
 
@@ -2450,7 +2542,8 @@ SELECT p.id, p.title, e.created_at
  WHERE p.kind = 'page' AND p.body = '' AND e.deleted_at IS NULL
    AND e.created_at < strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 day')
    AND NOT EXISTS (SELECT 1 FROM links l WHERE l.to_id = p.id AND l.kind <> 'redirect')
-   AND NOT EXISTS (SELECT 1 FROM links l WHERE l.from_id = p.id);
+   AND NOT EXISTS (SELECT 1 FROM links l WHERE l.from_id = p.id)
+   AND NOT EXISTS (SELECT 1 FROM entities n WHERE n.page_id = p.id);   -- a person's, place's or holding's page is not a ghost (D20)
 ```
 
 Live in the schema as the `ghost_pages` view; the UI surfaces it as a cleanup list.
@@ -2531,13 +2624,17 @@ revives a deleted page before it commits.
 ### 6.15 Open a holding; record, correct and retract a balance (D18)
 
 Amounts are **integer minor units** of the holding's currency (`currencies.subunits` per
-whole unit): €12,345.67 is `1234567`. Opening a holding is the universal two-statement
-entity insert (§6.1); recording a balance is one row. Nothing is ever edited or deleted.
+whole unit): €12,345.67 is `1234567`. Opening a holding is the four-statement insert of a named
+entity — its page first (D20, §6.20); recording a balance is one row. Nothing is ever edited or deleted.
 
 ```sql
 BEGIN IMMEDIATE;
 INSERT INTO entities(type, created_at, updated_at, source)
-VALUES ('holding', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'ui')
+VALUES ('page', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'ui')
+RETURNING id;   -- the holding's page: the app keeps it as :handle_page_id
+INSERT INTO pages(id, kind, title, title_key) VALUES (:handle_page_id, 'page', 'Main checking', 'main checking');
+INSERT INTO entities(type, created_at, updated_at, source, page_id)
+VALUES ('holding', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'ui', :handle_page_id)
 RETURNING id;   -- the app keeps it as :holding_id
 INSERT INTO holdings(id, name, side, currency, category, institution, opened_day)
 VALUES (:holding_id, 'Main checking', 'asset', 'EUR', 'cash', 'Bank A', '2019-03-01');
@@ -2696,6 +2793,48 @@ plus city-level ones: this query finds all of them because containment rolls the
 into the country. Where someone *lived* is a dated event (start and end day, `place_id`), not an
 undated link.
 
+### 6.20 Named entities: create one, find its page, find the memos that name it (D20)
+
+A person, place or holding needs its page first (§2.3): page entity, `pages` row, then the named
+entity carrying `page_id`, then the domain row — one transaction. Step 0 is the same resolve as
+§6.14. No row: create the page (steps 1–2). A row nobody owns yet — a ghost that an earlier
+`[[Bob Sample]]` made: **adopt** it by skipping steps 1–2 and binding its id as `:handle_page_id`
+(the promotion). A row somebody owns: the handle is taken; choose another (`Bob Sample (colleague)`).
+A place or a holding is the same four statements with its own type and domain row (§6.15).
+
+```sql
+BEGIN IMMEDIATE;
+-- 0. does the handle exist already? :handle_key = title_key(:handle_title), §2.5
+SELECT p.id, EXISTS (SELECT 1 FROM entities n WHERE n.page_id = p.id) AS owned
+  FROM pages p WHERE p.title_key = :handle_key;
+-- 1. the page's entity (skip 1 and 2 to adopt an unowned page)
+INSERT INTO entities(type, created_at, updated_at, source)
+VALUES ('page', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'ui')
+RETURNING id;   -- the app keeps it as :handle_page_id
+-- 2. the page
+INSERT INTO pages(id, kind, title, title_key) VALUES (:handle_page_id, 'page', :handle_title, :handle_key);
+-- 3. the person's entity, pointing at the page
+INSERT INTO entities(type, created_at, updated_at, source, page_id)
+VALUES ('person', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'ui', :handle_page_id)
+RETURNING id;   -- the app keeps it as :new_person_id
+-- 4. the domain row
+INSERT INTO people(id, name, nickname) VALUES (:new_person_id, 'Bob Sample', NULL);
+COMMIT;
+
+-- the page of an entity, and the entity a page belongs to (no row = an ordinary page)
+SELECT p.id, p.title, p.body FROM entities e JOIN pages p ON p.id = e.page_id WHERE e.id = :person_id;
+SELECT e.id, e.type FROM entities e WHERE e.page_id = :page_id;
+
+-- the memos that name a person, place or holding in [[…]], newest first
+SELECT m.id, m.day, substr(m.body, 1, 60) AS start
+  FROM entities me
+  JOIN links l    ON l.to_id = me.page_id AND l.kind = 'wikilink'
+  JOIN pages m    ON m.id = l.from_id AND m.kind = 'memo'
+  JOIN entities em ON em.id = m.id AND em.deleted_at IS NULL
+ WHERE me.id = :person_id
+ ORDER BY m.day DESC, m.id DESC;
+```
+
 ---
 
 ## 7. Explicit non-goals and deferred work
@@ -2730,7 +2869,6 @@ re-added, each with the trigger that should reopen the question.
 | Partial dates (`1870`, `1870-05`) for people and events | Nothing asked for one yet. The standard for them is EDTF, now ISO 8601-2 [R70] (`1870`, `1870-05`, `1870~` for "about 1870"). The path is one migration: `DROP CONSTRAINT people_birth_day` and `ADD CONSTRAINT people_birth_day` with a CHECK that also accepts the EDTF forms wanted — executed for `YYYY` and `YYYY-MM` on a populated table; junk and month 13 stay rejected. Queries that do date arithmetic on `birth_day` (birthdays) must then skip partial values | The first ancestor or approximate date you want to record |
 | Repeating tasks | A task has one status, so a repeating one could only be a reminder that ends when done; a repeating event is the reminder and a 0/1 habit metric the checklist (D15) | A task you must tick off per occurrence, with its own history, that a habit metric cannot hold (then: the six `repeat_*` columns and CHECKs of `events` on `tasks`, `due_day` as the anchor — additive) |
 | Searching *inside* a CJK run | `unicode61`, kept, folds `é ü ș ț` but a CJK run is one token (`本語` does not find `日本語のノート`). The index is derived, so switching is one transaction — drop `pages_fts`, create it with `tokenize='trigram remove_diacritics 1'`, `rebuild` — and the sync triggers keep working (executed). Trigram finds 3+-character parts and still not two-character words (`京都`) | The first real CJK memo you cannot find |
-| Typing a person's name instead of picking them (`[[Sam]]`, `@Sam`) | A wikilink resolves to a page; people are linked with `about` from a picker (§6.6). A text mention needs a rule for two people called Sam. The additive path is one `link_kinds` row (`mention`, page→person) and a line in D19 — executed: accepted for a person, rejected for a place | Picking a person becomes the slow part of capture |
 | The local wall-clock time of a recurring *timed* event across DST (D10) | Occurrences expand by local day; a timed recurrence is a UTC instant, so its local hour shifts across a DST change; `entities.tz` records where it was set but the expander does not use it | A recurring timed event where the hour matters |
 
 ---
