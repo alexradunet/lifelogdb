@@ -4,7 +4,7 @@
 
 The design document for **Lifelog**, a lifetime-scale single-user SQLite database
 (`life.db`). `SCHEMA.md` is the product: goals, storage contract, canonical DDL,
-decision log (D1–D20), query cookbook, non-goals, references. It states the current truth
+decision log (D1–D22), query cookbook, non-goals, references. It states the current truth
 only. There is no application code yet; `tests/` holds the validation suites (see below).
 
 ## The one hard rule: no migrations until the schema freeze
@@ -57,14 +57,15 @@ Until the schema is frozen (decision D13):
   to `entities(id, type)`, and `people`, `places` and `holdings` to `pages(id, entity_type)`, because a
   person, place or holding **is** a page: one id, whose page title is its handle and its name
   (`pages.entity_type`, `ON UPDATE CASCADE` for promotion; §2.2, §6.19, D20); append-only
-  measurements and balances (measurement corrections use `supersedes_id`; a balance is corrected by a
-  newer row for the same holding+day; both are retracted with a NULL value/amount); importers use
+  measurements, balances and positions (measurement corrections use `supersedes_id`; a balance is corrected
+  by a newer row for the same holding+day; both are retracted with a NULL value/amount; a GPS fix is never
+  corrected, D21); importers use
   `ON CONFLICT … DO NOTHING`, never `OR IGNORE`/`OR REPLACE`; money as INTEGER minor units of the
   holding's currency — never REAL (D18); every CHECK NAMED (`CONSTRAINT <table>_<rule> CHECK …`),
   using only functions the minimum SQLite has (`lifelog_meta.sqlite`); ids carried with
   `INSERT … RETURNING id`, never `last_insert_rowid()` across statements; `source` (the writer:
   `ui`, `cli`, `api`, `agent:<name>`, `import:<name>`) required on `entities`, `links`,
-  `measurements` and `balances`, written at insert and never changed; a closed, endpoint-typed
+  `measurements`, `balances` and `positions`, written at insert and never changed; a closed, endpoint-typed
   `link_kinds` registry; filename-safe, immutable page titles (`pages.kind` is `memo` or `page`, fixed)
   with a unique app-computed `title_key` (NFC + casefold; vectors in §2.4); nothing repeats (D15);
   single writing application, `PRAGMA foreign_keys=ON`, `recursive_triggers=ON`, `synchronous=FULL`,

@@ -2,7 +2,7 @@
 
 **Status:** freeze candidate. No canonical database exists yet; until one does, §3 is edited in place (D13). The next step is the capture path and one real import (§2.8), not another review.
 **Scope of the project:** A lifetime personal database (journal/memos, pages (notes, wiki), events,
-tasks, people, places, health metrics, personal finance — holdings, balances, net worth; file
+tasks, people, places, health metrics, location history, personal finance — holdings, balances, net worth; file
 attachments deferred — D9) in a single SQLite file, plus a custom UI for data entry and daily use.
 Everything else (view generators, AI features, sync, multi-device) is explicitly out of scope.
 
@@ -93,7 +93,7 @@ ones that span tables are also rows of `lifelog_meta` (§3), so the file carries
   never back-dated, so it is an audit trail (as `recorded_at` is on `measurements` and
   `balances`). When a thing *happened* is its own `day` / `*_at`. (An imported memo's original
   time of day has no column: a known limit.)
-- **Zone.** `entities.tz` and `measurements.tz` store the writer's IANA zone at capture
+- **Zone.** `entities.tz`, `measurements.tz` and `positions.tz` store the writer's IANA zone at capture
   (`Europe/Berlin`; NULL = unknown), so a UTC instant can be read as local time. Only capture time
   can supply it. Events have no `tz` of their own (D10).
 - An event may be day-precise only (`start_day`, `end_day`, no `*_at`): date-level facts are
@@ -114,7 +114,7 @@ ones that span tables are also rows of `lifelog_meta` (§3), so the file carries
   refuse a person without a page and a person turned back into a page; `pages_named_titled` refuses a
   memo turned into a person (executed). Title uniqueness already refuses a second `Sam`, so two people called Sam are told apart
   in the handle (`Sam (barber)`); `people.name` is the editable full name.
-- **Provenance.** `source` on `entities`, `links`, `measurements` and `balances` names the writer
+- **Provenance.** `source` on `entities`, `links`, `measurements`, `balances` and `positions` names the writer
   of the row — `ui`, `cli`, `api`, `agent:<name>`, `import:<name>` (lowercase `[a-z0-9_:.-]`, 1–64
   characters). Only the moment of writing knows it, so it is required at insert and never changes;
   with agents among the writers (D3) it is how a wrong row is traced to the writer that made it. An
@@ -131,7 +131,8 @@ ones that span tables are also rows of `lifelog_meta` (§3), so the file carries
   `UPDATE` and `DELETE`. A measurement is corrected by a row whose `supersedes_id` names it (at most
   one per row; correct the correction to change it again); a balance by a newer row for the same
   `(holding_id, day)`. A NULL `value` / `amount` **retracts**. The views `measurement_values` and
-  `balance_values` are the read rule.
+  `balance_values` are the read rule. `positions` rejects both too, and has no correction at all: a
+  GPS fix is raw sensor output, so a doubtful one is left out when read, by `accuracy_m` (D21).
 - **Imports insert with `ON CONFLICT(…) DO NOTHING`**, never `INSERT OR IGNORE` (it also skips rows
   that violate a CHECK or NOT NULL, silently) and never `OR REPLACE` (a delete, blocked only when
   `recursive_triggers=ON`, §2.6) (both executed).
@@ -418,7 +419,7 @@ plaintext file (D17 — the database is deliberately not encrypted).
 | A buggy writer, importer or agent | one writing application; triggers for append-only facts, no hard deletes and fixed kinds and titles; `ON CONFLICT … DO NOTHING`; `BEGIN IMMEDIATE`; `source` on every row; the foreign-key and orphan checks (§2.3, §2.6, §2.5) | the pragmas are per connection, so the application asserts them at connect |
 | Another tool editing rows | exploration tools open the file read-only (§2.6, D14) | anything with write access to the file bypasses every control |
 | A stolen disk | the disk holding `life.db` is encrypted at rest (D17) | a stolen *unlocked* machine has everything |
-| Finance or health data leaking through git | `life.db` and its `-wal`/`-shm` are never committed; no credentials or full account numbers, ever (§2.6, §2.7) | page bodies and `notes` fields are free text — the owner's discipline |
+| Finance, health or location data leaking through git | `life.db` and its `-wal`/`-shm` are never committed; no credentials or full account numbers, ever (§2.6, §2.7) | page bodies and `notes` fields are free text — the owner's discipline |
 | The data exposed on a network | Datasette on localhost only and read-only; nothing that runs arbitrary SQL is reachable from outside (D17) | a wrong bind address |
 | A reader in fifty years without this document | the 2075 test, below | — |
 
@@ -455,6 +456,8 @@ each phrase in the last column, and **every key of `lifelog_meta` must be used b
 | 20 | What is a memo, what is a page, and can one become the other? | `pages`, `pages_kind_fixed` | `untitled`, `fixed` |
 | 21 | Which SQLite may write this file? | `sqlite` | `3.51.3`, `3.53` |
 | 22 | Who or what wrote this row? | `source` | `written at insert`, `agent` |
+| 23 | Where was I at a given moment? Where is a place? | `positions`, `places` | `WGS84`, `append-only`, `query time` |
+| 24 | What kind of event was it? How many workouts this year? | `events` | `is-a`, `never a column` |
 
 **Imports** — the path for data that already exists elsewhere (a journal archive, a health export,
 statements). Every step was executed on 1 000 synthetic rows:
@@ -527,11 +530,11 @@ CREATE TABLE lifelog_meta (
   value TEXT NOT NULL
 ) STRICT;
 INSERT INTO lifelog_meta(key, value) VALUES
-  ('schema',    'lifelog v1: journal, wiki, tasks, events, people, places, health metrics and money of one person; the rules of each table are comments inside its CREATE statement (.schema), the rules that span tables are these rows'),
+  ('schema',    'lifelog v1: journal, wiki, tasks, events, people, places, health metrics, location history and money of one person; the rules of each table are comments inside its CREATE statement (.schema), the rules that span tables are these rows'),
   ('instants',  'every *_at column is a UTC ISO-8601 TEXT instant with milliseconds, e.g. 2026-06-09T21:14:03.482Z, written by the app; CHECK strftime(''%Y-%m-%dT%H:%M:%fZ'', x) IS x'),
   ('days',      'every *_day column (and day) is the LOCAL calendar date YYYY-MM-DD where the thing happened, written at insert, never recomputed from an instant; CHECK date(x) IS x (IS, not =: a CHECK passes on NULL, and date(''2026-9-3'') is NULL)'),
-  ('deletes',   'nothing is deleted except links rows: an entity is a tombstone (entities.deleted_at), measurements and balances are corrected by inserting rows; BEFORE DELETE triggers enforce it'),
-  ('source',    'entities, links, measurements and balances: source names the writer of the row (ui, cli, api, agent:<name>, import:<name>); written at insert, never changed; an importer''s import_id is unique per source'),
+  ('deletes',   'nothing is deleted except links rows: an entity is a tombstone (entities.deleted_at), measurements and balances are corrected by inserting rows, positions are never corrected; BEFORE DELETE triggers enforce it'),
+  ('source',    'entities, links, measurements, balances and positions: source names the writer of the row (ui, cli, api, agent:<name>, import:<name>); written at insert, never changed; an importer''s import_id is unique per source'),
   ('writers',   'one writing application; every connection sets foreign_keys=ON, recursive_triggers=ON, synchronous=FULL, trusted_schema=OFF and starts write transactions with BEGIN IMMEDIATE; every other tool opens the file read-only; imports use INSERT ... ON CONFLICT DO NOTHING, never OR IGNORE (skips CHECK/NOT NULL violations silently) or OR REPLACE (a delete)'),
   ('sqlite',    'writers need SQLite >= 3.51.3 (fixes a WAL race between concurrent writers and checkpoints); migrations need >= 3.53 (ALTER TABLE ADD/DROP CONSTRAINT); CHECKs use only functions every such version has'),
   ('evolution', 'after the first real data: numbered forward-only SQL migrations, additive only, counted in PRAGMA user_version; every CHECK is named, so any rule can be widened or tightened with ALTER TABLE DROP/ADD CONSTRAINT');
@@ -654,14 +657,20 @@ CREATE TABLE people (
 CREATE TABLE places (
   -- named locations (D16): events.place_id points here, located-in links nest them (Tokyo -> Japan).
   -- A place is also a page with the same id (D20): the page title is its name and its handle.
+  -- lat/lon: its representative point, WGS84 decimal degrees, or neither (D21); a misplaced point is fixed
+  -- by UPDATE. A GPS fix in positions is matched to a place at query time (section 6.20), never stored.
   id          INTEGER PRIMARY KEY,
   entity_type TEXT NOT NULL DEFAULT 'place' CONSTRAINT places_entity_type CHECK (entity_type = 'place'),
-  FOREIGN KEY (id, entity_type) REFERENCES pages(id, entity_type)
+  lat         REAL CONSTRAINT places_lat CHECK (lat IS NULL OR lat BETWEEN -90 AND 90),
+  lon         REAL CONSTRAINT places_lon CHECK (lon IS NULL OR lon BETWEEN -180 AND 180),
+  FOREIGN KEY (id, entity_type) REFERENCES pages(id, entity_type),
+  CONSTRAINT places_coords_pair CHECK ((lat IS NULL) = (lon IS NULL))   -- a point, or no point
 ) STRICT;
 
 CREATE TABLE events (
   -- happenings: appointments, trips, milestones, where you lived. Date-level facts are first-class;
   -- instants are optional extra precision. An event has one place, place_id. Events do not repeat (D15).
+  -- Its kind is an is-a link to a page ([[Workout]]), never a column; one event may have several (D22).
   id          INTEGER PRIMARY KEY,
   entity_type TEXT NOT NULL DEFAULT 'event' CONSTRAINT events_entity_type CHECK (entity_type = 'event'),
   title       TEXT NOT NULL,
@@ -762,6 +771,38 @@ CREATE VIEW measurement_values AS
     FROM measurements me
    WHERE me.value IS NOT NULL
      AND NOT EXISTS (SELECT 1 FROM measurements x WHERE x.supersedes_id = me.id);
+
+CREATE TABLE positions (
+  -- the location history (D21): one GPS fix per row, where the owner was at taken_at, as WGS84 decimal
+  -- degrees. Append-only, enforced by triggers: never UPDATE or DELETE, and there is no correction row; a
+  -- doubtful fix is left out when read, by accuracy_m (metres, the fix's horizontal accuracy radius).
+  -- day is the LOCAL date of taken_at, tz the IANA zone there (NULL = unknown), both written at insert.
+  -- Imports: INSERT ... ON CONFLICT(source, import_id) WHERE import_id IS NOT NULL DO NOTHING; an export
+  -- without ids of its own uses taken_at as import_id. Never OR IGNORE (it skips CHECK violations silently).
+  id          INTEGER PRIMARY KEY,
+  taken_at    TEXT NOT NULL CONSTRAINT positions_taken_at CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', taken_at) IS taken_at),
+  day         TEXT NOT NULL CONSTRAINT positions_day CHECK (date(day) IS day),
+  tz          TEXT CONSTRAINT positions_tz CHECK (tz IS NULL OR (length(tz) BETWEEN 1 AND 64 AND tz NOT GLOB '*[^A-Za-z0-9_/+-]*')),
+  lat         REAL NOT NULL CONSTRAINT positions_lat CHECK (lat BETWEEN -90 AND 90),     -- NOT NULL also refuses a NaN
+  lon         REAL NOT NULL CONSTRAINT positions_lon CHECK (lon BETWEEN -180 AND 180),
+  accuracy_m  REAL CONSTRAINT positions_accuracy CHECK (accuracy_m IS NULL OR accuracy_m BETWEEN 0 AND 1e7),
+  recorded_at TEXT NOT NULL CONSTRAINT positions_recorded_at CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', recorded_at) IS recorded_at),
+  source      TEXT NOT NULL CONSTRAINT positions_source CHECK (length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*'),   -- the writer (lifelog_meta.source)
+  import_id   TEXT,                        -- importer's dedup key, unique per source
+  CONSTRAINT positions_not_null_island CHECK (NOT (lat = 0 AND lon = 0))   -- 0, 0 is how photo metadata says "no location"
+) STRICT;
+CREATE INDEX positions_time ON positions(taken_at);                -- where was I at an instant
+CREATE INDEX positions_day ON positions(day, taken_at);            -- a day's track, in order
+CREATE UNIQUE INDEX positions_import
+  ON positions(source, import_id) WHERE import_id IS NOT NULL;
+CREATE TRIGGER positions_no_update BEFORE UPDATE ON positions
+BEGIN
+  SELECT RAISE(ABORT, 'positions are append-only: a fix is never edited');
+END;
+CREATE TRIGGER positions_no_delete BEFORE DELETE ON positions
+BEGIN
+  SELECT RAISE(ABORT, 'positions are never deleted: a doubtful fix is left out when read, by accuracy_m');
+END;
 
 CREATE TABLE currencies (
   -- money (D18) is an exact tier of its own, never rows in measurements. This is the closed registry
@@ -874,6 +915,7 @@ INSERT INTO link_kinds(kind, symmetric, from_types, to_types, note) VALUES
   ('visited',  0, 'person',    'place',        'person → place; the place of an EVENT is events.place_id, never a link (D16)'),
   ('located-in', 0, 'place',   'place',        'containment: Tokyo → Japan; transitive — walk it with a recursive CTE (section 6.18)'),
   ('parent-of', 0, 'person',   'person',       'parent → child; ''family'' stays the symmetric catch-all'),
+  ('is-a',     0, 'event',     'page',         'event → the page naming its kind: [[Workout]], [[Sleep]] (D22)'),
   ('friend',   1, 'person',    'person',       NULL),
   ('family',   1, 'person',    'person',       NULL),
   ('related',  1, NULL,        NULL,           'anything ↔ anything');
@@ -999,8 +1041,8 @@ CREATE TRIGGER holdings_no_delete BEFORE DELETE ON holdings
 BEGIN SELECT RAISE(ABORT, 'holdings are never deleted: tombstone the entity (entities.deleted_at)'); END;
 ```
 
-**14 tables + 1 FTS5 virtual table + 3 views** (`measurement_values`, `balance_values`, `ghost_pages`)
-**+ 32 triggers.** That is the entire system. Every `CHECK` is named (`CONSTRAINT <table>_<rule>`), so
+**15 tables + 1 FTS5 virtual table + 3 views** (`measurement_values`, `balance_values`, `ghost_pages`)
+**+ 34 triggers.** That is the entire system. Every `CHECK` is named (`CONSTRAINT <table>_<rule>`), so
 any rule can be dropped or re-added by name after the freeze (D13).
 
 ---
@@ -1076,10 +1118,11 @@ erDiagram
 
 ### 4.2 Facts, money and registries
 
-Facts are not entities. `measurements` and `balances` are append-only (D7, D18): a correction is a new
-row, and `measurements.supersedes_id` points back at the row it corrects; `measurements.entity_id`
-records provenance (a mood reading points at its memo). `currencies` gives an amount its meaning.
-`lifelog_meta` stands alone: the rules that span tables (D17).
+Facts are not entities. `measurements`, `balances` and `positions` are append-only (D7, D18, D21). A
+correction is a new row, and `measurements.supersedes_id` points back at the row it corrects;
+`measurements.entity_id` records provenance (a mood reading points at its memo). A position has no
+foreign key: it is matched to a place by distance at query time (§6.20). `currencies` gives an amount
+its meaning. `lifelog_meta` stands alone: the rules that span tables (D17).
 
 ```mermaid
 %% diagram: er-facts
@@ -1113,6 +1156,9 @@ erDiagram
     currencies {
         TEXT code PK
     }
+    positions {
+        INTEGER id PK
+    }
     lifelog_meta {
         TEXT key PK
     }
@@ -1139,6 +1185,7 @@ flowchart LR
     any -->|"about"| named
     any <-->|"related"| any
     person -->|"attended"| event
+    event -->|"is-a"| page
     person -->|"visited"| place
     person -->|"parent-of"| person
     person <-->|"friend, family"| person
@@ -1204,8 +1251,10 @@ revives that page instead of duplicating it (§6.13). A ghost that nothing links
 | Birthdays | a query over `people.birth_day` — deliberately not events |
 | Biomarkers / quantified self | `metrics` + `measurements` (§6.7) |
 | Net worth over time | derived from `balance_values`, per currency (§6.15–6.16) |
+| Kinds of events (workouts, sleep, flights) | `links(kind='is-a')` from the event to the page naming its kind; the page's backlinks list them (§6.21, D22) |
+| Location history ("where was I?") | `positions`, one GPS fix per row; the place it was is the nearest `places` point (§6.20, D21) |
 | Search | `pages_fts` (§6.8) |
-| "Which of my agents wrote this?" | `source` on every entity, link, measurement and balance (§2.2) |
+| "Which of my agents wrote this?" | `source` on every entity, link, measurement, balance and position (§2.2) |
 
 ---
 
@@ -1437,8 +1486,8 @@ the constraints that carry it; the rule itself is in §3 or §2.
   `links` graph. Storage cost is irrelevant at this scale.
 - **Alternatives.** Hard delete + `ON DELETE CASCADE` (destroys evidence, cascades surprises);
   trash-with-expiry (a policy layer that can be added on top of tombstones later).
-- **Facts.** `measurements` and `balances` are not even tombstoned: they are corrected by inserting
-  rows, as medical records are. The triggers guard against mistakes, not against a writer that drops
+- **Facts.** `measurements`, `balances` and `positions` are not even tombstoned: the first two are
+  corrected by inserting rows, as medical records are, and a GPS fix is never corrected (D21). The triggers guard against mistakes, not against a writer that drops
   them, so "tamper-evident" would overstate it.
 - **Tasks.** Abandoning a task is erasure (a tombstone), not a recorded decision: there is no
   `dropped` state, and a completed task stays completed.
@@ -1519,7 +1568,7 @@ the constraints that carry it; the rule itself is in §3 or §2.
   exactly one place, `events.place_id`; `about` links connect anything to a place, `visited` a person
   to a place, `located-in` nests places (so "everything in Japan" is answerable, §6.18). There is no
   `lives-in` kind: it would be undated, while a dated event (start and end day, `place_id`) answers
-  "where did I live in 2015".
+  "where did I live in 2015". A place may also carry a point, and a GPS fix is matched to it (D21).
 - **Alternatives.** Free-text `events.place` (the place queries fail, and backfilling 10 years of
   free text is the painful path); a `places` table outside the supertype (no links, no tombstones).
 - **Sources.** [R46].
@@ -1640,6 +1689,65 @@ the constraints that carry it; the rule itself is in §3 or §2.
   an importer makes one (§6.19). A handle is permanent like any title: a changed name is `people.name`,
   and `[[Old name]]` keeps working. A typo in a name makes a ghost page like any wikilink typo. A memo
   names a person by wikilink *or* by `about`; the two are separate rows, and §6.6 reads both.
+
+### D21 — Location: a GPS track in `positions`, a point on each place.
+
+- **Decision.** Where the owner was is a fact tier of its own. `positions` holds one GPS fix per row —
+  `taken_at`, the local `day` and `tz`, WGS84 `lat`/`lon` [R71], an optional `accuracy_m` — with
+  `source` and `import_id` as on `measurements`. It is append-only (`positions_no_update`,
+  `positions_no_delete`) and has no correction row, so a fix at exactly 0°, 0° is refused
+  (`positions_not_null_island`): Google Photos metadata writes 0.0, 0.0 for a photo without a location,
+  and imported as a fix it could never be taken back. A place may carry one point (`places_lat`,
+  `places_lon`, `places_coords_pair`), which is an attribute of the place and so is edited in place.
+  A fix is matched to a place at query time, never stored (§6.20).
+- **Where the fixes come from.** An Android phone, the location in Google Photos metadata and
+  Google's location history (Timeline), each through an importer with its own `source`.
+- **Why.** The owner asked "where was I at a given moment?", and the schema could only answer with a
+  place's name on an event. A track also dates things an event never records: the walk, the drive, the
+  day nobody wrote down.
+- **No correction.** A fix is raw sensor output, not a statement the owner makes. A wrong one is left out
+  when read, by `accuracy_m`, and a wrong import is caught by the trial run on a copy (§2.8). A
+  retraction can be added later without touching a row (§7).
+- **Distance without math functions.** `sin`/`cos` exist only in SQLite builds compiled with
+  `SQLITE_ENABLE_MATH_FUNCTIONS` [R72], so §6.20 uses only `+ - *`: the app binds the metres per degree of
+  longitude at the fix's latitude (`111320·cos(lat)`) and the query ranks places by the squared
+  equirectangular distance. Within a city it picks the same place as the great-circle distance, and its
+  distance is within 0.5 % of it, so only a place within 1 % of the radius can fall either side (executed,
+  against a haversine oracle). **Known limit:** across the ±180° meridian two nearby points
+  are 360° apart, so a place there is not found; GeoJSON cuts geometry at the meridian for the same
+  reason [R71].
+- **Alternatives.**
+  - *Two metrics, `latitude` and `longitude`, in `measurements`*: rejected — nothing pairs the two rows
+    of one fix, a correction could supersede one half, and a chart of either alone means nothing.
+  - *Each fix an entity*: rejected — a phone logs hundreds a day, and nothing links to a fix; a
+    tombstone per row buys nothing a filter by accuracy does not.
+  - *A radius or polygon per place*: not taken — nearest point within a bound radius answers the
+    question; a place's extent is additive later (§7).
+- **Sources.** [R71][R72].
+
+### D22 — An event's kind: an `is-a` link to the page that names it.
+
+- **Decision.** A workout, a night's sleep, a flight and a doctor's visit are all `events`; what tells
+  them apart is an `is-a` link from the event to a page — [[Workout]], [[Sleep]] — never a column. An
+  event may have several kinds (a run is-a [[Running]] and is-a [[Workout]]) or none. The kind page is
+  an ordinary page: its title is the kind's one name (unique by `title_key`), its body holds what the
+  owner writes about it, and its backlinks (§6.5) list its events. An importer maps its own type (a
+  phone's exercise or sleep session) to a kind page, resolved or created as a wikilink target is
+  (§6.13).
+- **Why.** "How many workouts did I do this year?" or "every doctor's visit" could only be answered by
+  guessing from titles, and the phone's health data arrives already typed.
+- **Alternatives.**
+  - *A `kind` column on `events`*: rejected — free text splits one kind by spelling (`gym`, `Gym`,
+    `workout`), a CHECK list closes a taxonomy that is personal (D8: constrain structure, leave taxonomy
+    open), and neither has anywhere to write about the kind.
+  - *An `event_kinds` registry*: rejected — a second namespace of names beside page titles, which are
+    already unique, casefolded and filename-safe.
+  - *The `related` link*: rejected — symmetric and meaning anything, so an event of kind [[Workout]]
+    could not be told from one merely related to it.
+  - *A `#workout` tag in `events.notes`*: rejected — event notes are not scanned for links (only page
+    bodies are, D19).
+- **Scope.** Events only: a page names its subjects by wikilink, and no question has asked for a kind
+  of task. A kind is not itself of a kind (§7).
 
 ---
 
@@ -2104,6 +2212,85 @@ A promotion cannot go wrong quietly: a memo fails the `UPDATE` itself (`pages_na
 page that is already named or gone makes the `UPDATE` change no row, so the `people` insert fails on its
 key (executed); roll the transaction back.
 
+### 6.20 Where was I? Record a fix, the fix at a moment, a day's track, the place it was (D21)
+
+A fix is inserted once and never edited; an importer adds its `import_id` and `ON CONFLICT(source,
+import_id) WHERE import_id IS NOT NULL DO NOTHING` (§2.8). "Where was I" is the last good fix at or
+before the moment: show its `taken_at`, since the fix before a gap may be hours old. The place is the
+nearest live place with a point within `:radius_m`. The app binds `:m_per_deg_lon = 111320 ·
+cos(:lat in radians)`, so the query needs no math functions (D21) and works on every SQLite.
+
+```sql
+-- record a fix (here a manual pin)
+INSERT INTO positions(taken_at, day, tz, lat, lon, accuracy_m, recorded_at, source)
+VALUES (:taken_at, :day, 'Europe/Berlin', :lat, :lon, 12, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'ui')
+RETURNING id;   -- the app keeps it as :position_id
+
+-- where was I at :at? the last fix at or before it that is accurate enough (walks positions_time)
+SELECT taken_at, lat, lon, accuracy_m
+  FROM positions
+ WHERE taken_at <= :at AND (accuracy_m IS NULL OR accuracy_m <= :max_accuracy_m)
+ ORDER BY taken_at DESC
+ LIMIT 1;
+
+-- the track of a local day, in order (positions_day)
+SELECT taken_at, lat, lon, accuracy_m
+  FROM positions
+ WHERE day = :day AND (accuracy_m IS NULL OR accuracy_m <= :max_accuracy_m)
+ ORDER BY taken_at;
+
+-- which place was the fix at :lat, :lon? d2 is the squared distance in metres
+SELECT id, title, d2
+  FROM (SELECT pl.id, pg.title,
+               ((pl.lat - :lat) * 111320.0) * ((pl.lat - :lat) * 111320.0)
+             + ((pl.lon - :lon) * :m_per_deg_lon) * ((pl.lon - :lon) * :m_per_deg_lon) AS d2
+          FROM places pl
+          JOIN pages pg   ON pg.id = pl.id
+          JOIN entities e ON e.id = pl.id AND e.deleted_at IS NULL
+         WHERE pl.lat IS NOT NULL)
+ WHERE d2 <= :radius_m * :radius_m
+ ORDER BY d2
+ LIMIT 1;
+```
+
+Give a place its point with `UPDATE places SET lat = …, lon = … WHERE id = :place_id`; both or neither
+(`places_coords_pair`). No place within the radius is an answer too: the fix is shown as coordinates.
+
+### 6.21 Kinds of events: give an event its kind, the events of a kind, how many of each (D22)
+
+`:kind_id` is the page naming the kind, resolved by its `title_key` or created as a wikilink target is
+(§6.13). An event whose kind page was tombstoned is not counted under it.
+
+```sql
+-- this event is a workout
+INSERT INTO links(from_id, to_id, kind, created_at, source)
+VALUES (:event_id, :kind_id, 'is-a', strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'ui')
+ON CONFLICT(from_id, to_id, kind) DO NOTHING;
+
+-- every workout between two days (links_to serves the kind)
+SELECT ev.id, ev.title, ev.start_day, ev.end_day
+  FROM links l
+  JOIN events ev  ON ev.id = l.from_id
+  JOIN entities e ON e.id = ev.id AND e.deleted_at IS NULL
+ WHERE l.to_id = :kind_id AND l.kind = 'is-a'
+   AND ev.start_day BETWEEN :from_day AND :to_day
+ ORDER BY ev.start_day;
+
+-- how many events of each kind between two days
+SELECT pg.title AS kind, count(*) AS events
+  FROM links l
+  JOIN events ev  ON ev.id = l.from_id
+  JOIN entities e ON e.id = ev.id AND e.deleted_at IS NULL
+  JOIN pages pg   ON pg.id = l.to_id
+  JOIN entities k ON k.id = pg.id AND k.deleted_at IS NULL
+ WHERE l.kind = 'is-a' AND ev.start_day BETWEEN :from_day AND :to_day
+ GROUP BY pg.id
+ ORDER BY events DESC, pg.title;
+```
+
+An event with no kind yet: `NOT EXISTS (SELECT 1 FROM links l WHERE l.from_id = ev.id AND l.kind =
+'is-a')`.
+
 ---
 
 ## 7. Explicit non-goals and deferred work
@@ -2138,6 +2325,13 @@ re-added, each with the trigger that should reopen the question.
 | Partial dates (`1870`, `1870-05`) for people and events | Nothing asked for one yet. The standard for them is EDTF, now ISO 8601-2 [R70]. The path is one migration: `DROP CONSTRAINT people_birth_day` and `ADD CONSTRAINT people_birth_day` with a CHECK that also accepts the EDTF forms wanted — executed for `YYYY` and `YYYY-MM` on a populated table; junk and month 13 stay rejected. Queries that do date arithmetic on `birth_day` must then skip partial values | The first ancestor or approximate date you want to record |
 | Searching *inside* a CJK run | `unicode61`, kept, folds `é ü ș ț` but a CJK run is one token (`本語` does not find `日本語のノート`). The index is derived, so switching is one transaction — drop `pages_fts`, create it with `tokenize='trigram remove_diacritics 1'`, `rebuild` — and the sync triggers keep working (executed). Trigram finds 3+-character parts and still not two-character words (`京都`) | The first real CJK memo you cannot find |
 | A second name column for places and holdings | The page title is the name (D20); a separate `name` had to be unique a second time | A place or holding whose display name must differ from its permanent handle |
+| Altitude, speed, heading, activity type on a fix | The question is where, not how (D21); the sources can record altitude, but no question needs it. Additive: nullable columns on `positions` | A question needs one |
+| Correcting or retracting a fix | A fix is raw sensor output; a doubtful one is left out by `accuracy_m` (D21). Additive: a `retracted_positions(position_id)` table the reads exclude | A wrong fix that the accuracy filter keeps must be hidden |
+| A place's extent (radius or polygon) | The nearest point within a bound radius answers "which place" (§6.20). Additive: a nullable `places.radius_m` | Matching picks the wrong one of two close places |
+| Places across the ±180° meridian | The §6.20 distance treats 179.9° and −179.9° as 360° apart (D21) | A place or a trip near the antimeridian (Fiji, Chukotka) |
+| A spatial index (R\*Tree) | `positions_time` and `positions_day` serve the questions asked; R\*Tree is a compile-time option [R73] | A query by area over the whole track is ever slow |
+| Kinds of kinds ([[Running]] is-a [[Workout]]) and kinds of tasks | An event takes several kinds instead, so a run counts under both (D22). Additive: register a `page → page` kind and walk it as §6.18 walks `located-in` | Tagging every run twice becomes a chore, or a question asks for a kind of task |
+| Visits and trips from a location export as events | An importer's decision, not schema: an event with `place_id` already holds a visit | The first import of such an export |
 
 ---
 
@@ -2391,6 +2585,17 @@ the gaps are intentional.
   The structured-interval family in production since SQL Server 7: `freq_type` /
   `freq_interval` / `freq_recurrence_factor` / `freq_relative_interval` — the shape
   `repeat` / `repeat_weekdays` / `repeat_every` of D15's deferred design follows.
+
+### Location (D21)
+
+- **[R71]** RFC 7946, *The GeoJSON Format* (2016) — <https://datatracker.ietf.org/doc/html/rfc7946>
+  Positions are WGS84 longitude and latitude in decimal degrees; geometry that crosses the
+  antimeridian is cut in two (§3.1.9). → D21.
+- **[R72]** SQLite: *Built-in Mathematical SQL Functions* — <https://sqlite.org/lang_mathfunc.html>
+  `sin`, `cos`, `acos`, `radians` are active only in builds compiled with
+  `-DSQLITE_ENABLE_MATH_FUNCTIONS`. → D21, §6.20.
+- **[R73]** SQLite: *The SQLite R\*Tree Module* — <https://sqlite.org/rtree.html> A spatial index as a
+  virtual table, present only in builds compiled with `SQLITE_ENABLE_RTREE`. → §7.
 
 ---
 

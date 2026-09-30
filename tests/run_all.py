@@ -35,6 +35,7 @@ SUITES = [   # (name, directory, script, predicate)
  ('links',            'schema',    'links.py',         MET),
  ('facts',            'schema',    'facts.py',         MET),
  ('money',            'schema',    'money.py',         MET),
+ ('positions',        'schema',    'positions.py',     MET),
  ('journal',          'schema',    'journal.py',       MET),
  ('writers',          'schema',    'writers.py',       MET),
  ('integrity',        'schema',    'integrity.py',     MET),

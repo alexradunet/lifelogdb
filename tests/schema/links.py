@@ -1,5 +1,5 @@
-"""The graph (SCHEMA.md D8, D16): the closed link-kind registry, endpoint types, symmetric mirrors, immutability,
-containment and subtasks with their cycle guards, and the INSERT OR REPLACE trap."""
+"""The graph (SCHEMA.md D8, D16, D22): the closed link-kind registry, endpoint types, symmetric mirrors, immutability,
+containment, kinds of events (§6.21, D22) and subtasks with their cycle guards, and the INSERT OR REPLACE trap."""
 import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'lib'))
 from kit import *
@@ -66,6 +66,30 @@ try: r = c.execute(block('6.18'), P).fetchall()
 except sqlite3.Error as e: r = 'ERR ' + str(e)
 c.set_progress_handler(None, 0)
 S.K('§6.18 terminates on a cycle (UNION)', r == [('Trip', '2019-04-02', 'Tokyo')], r)
+
+# ---- kinds of events (§6.21, D22)
+c = fresh(); wo, run_, sl = page(c, 'Workout'), page(c, 'Running'), page(c, 'Sleep'); m1 = memo(c); ta = thing(c, 'task'); pa = named(c, 'person')
+def ev(title, day):
+    return thing(c, 'event', title=title, start_day=day)
+e1, e2, e3, e4, e5 = ev('Run', '2025-03-01'), ev('Gym', '2025-06-01'), ev('Night', '2025-06-02'), ev('Run', '2024-12-31'), ev('Old gym', '2025-02-01')
+for lbl, exp, f, t in [('event->page', 'OK', e1, wo), ('a second kind on the same event', 'OK', e1, run_), ('page->page', 'ERR', m1, wo),
+                       ('task->page', 'ERR', ta, wo), ('event->person', 'ERR', e1, pa), ('event->event', 'ERR', e1, e2)]:
+    r = link(c, f, t, 'is-a'); S.K(f'link is-a {lbl}: {exp}', r.startswith(exp), r)
+S.K('is-a is one-way (no mirror)', one(c, "select count(*) from links where kind='is-a'") == 2)
+for e, k in [(e2, wo), (e3, sl), (e4, wo), (e5, wo)]: link(c, e, k, 'is-a')
+c.execute("UPDATE entities SET deleted_at = " + NOW + " WHERE id = ?", (e5,))
+P = dict(event_id=e2, kind_id=wo, from_day='2025-01-01', to_day='2025-12-31')
+tag = lambda: tryx(c, statements(block('6.21'))[0], P)
+S.K('§6.21 tagging an event already of that kind is a no-op (ON CONFLICT DO NOTHING)',
+    tag() == 'OK' and one(c, "select count(*) from links where kind='is-a' and from_id=?", (e2,)) == 1)
+S.K('§6.21 the workouts of 2025, in order, without the tombstoned one or last year\'s',
+    [r[1:3] for r in c.execute(statements(block('6.21'))[1], P)] == [('Run', '2025-03-01'), ('Gym', '2025-06-01')])
+cnt = lambda: c.execute(statements(block('6.21'))[2], P).fetchall()
+S.K('§6.21 counts each kind of 2025, a run under both of its kinds', cnt() == [('Workout', 2), ('Running', 1), ('Sleep', 1)], cnt())
+c.execute("UPDATE entities SET deleted_at = " + NOW + " WHERE id = ?", (sl,))
+S.K('§6.21 a tombstoned kind page is not counted', cnt() == [('Workout', 2), ('Running', 1)], cnt())
+S.K('§6.21 the list of a kind is served by links_to', any('links_to' in r[3] for r in c.execute('EXPLAIN QUERY PLAN ' + statements(block('6.21'))[1], P)))
+S.K('the kind page\'s backlinks (§6.5) list its events', {r[2] for r in c.execute(block('6.5'), {'page_id': wo})} == {e1, e2, e4})
 
 # ---- subtasks (§6.11) and the cycle cap
 c = fresh(); root, a, b = thing(c, 'task'), thing(c, 'task'), thing(c, 'task')

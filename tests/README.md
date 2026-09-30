@@ -23,9 +23,10 @@ with `<name>: X/Y met expectations`; a suite that stops on an error reports that
 | | `identity.py` | the supertype and its composite FKs, ids by `RETURNING`, `source` on every row, no hard deletes, `updated_at` (§2.2, §2.3, D8, D11) |
 | | `named.py` | a person, place or holding is a page: one id, promotion, §6.19 and §6.6 run literally, two Sams (D20) |
 | | `pages.py` | kinds and the day rule, filename-safe titles, `title_key` and its vectors, lookups, FTS, why not a collation (§2.4, D5) |
-| | `links.py` | the closed kind registry, endpoint types, mirrors, containment and subtasks with their cycle guards (D8, D16) |
+| | `links.py` | the closed kind registry, endpoint types, mirrors, containment, kinds of events and subtasks with their cycle guards (D8, D16, D22) |
 | | `facts.py` | metrics and measurements: append-only, supersede, retract, finite values, never `OR IGNORE`/`OR REPLACE` (D7) |
 | | `money.py` | currencies, holdings, balances, exactness, and §6.15/§6.16 against an exact-integer oracle (§2.7, D18) |
+| | `positions.py` | the location history and a place's point: a fix's CHECKs, NaN and infinity, no fix at 0, 0, append-only, import idempotency, the §6.20 reads and their indexes, the nearest place against a haversine oracle, the antimeridian limit (D21) |
 | | `journal.py` | events and tasks, the §6.2 day view, inbox and triage, what stands in for recurrence (D5, D15) |
 | | `writers.py` | the `BEGIN IMMEDIATE` race with real threads, pragmas, read-only readers, a hardened connection (§2.6) |
 | | `integrity.py` | the four checks of §2.5 on the live file, against real damage |
@@ -34,7 +35,7 @@ with `<name>: X/Y met expectations`; a suite that stops on an error reports that
 | | `cookbook.py` | every §6 block prepares and runs, on a plain and on a hardened connection |
 | | `document.py` | the 2075 test, the rules live in the file, current truth only, out-of-scope stays out, the §3 totals |
 | | `diagrams.py` | the nine mermaid diagrams say what the DDL says (keys, relationships, the link map, the correction story) |
-| | `mutants.py` | 49 broken copies of `SCHEMA.md`, one rule each; the suite that owns the rule must notice |
+| | `mutants.py` | 62 broken copies of `SCHEMA.md`, one rule each; the suite that owns the rule must notice |
 | | `datasette_ro.py`, `render_diagrams.py` | optional: Datasette is read-only; every diagram renders |
 | `wikilinks/` | `wikisave.py` | **reference implementation** of the save contract (a test instrument, not the application) |
 | | `check_vectors.py`, `vectors.py` | the extraction vectors (some of them are printed in §2.4) |
