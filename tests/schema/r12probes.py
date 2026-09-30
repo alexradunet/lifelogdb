@@ -1,6 +1,6 @@
 """Round-12 probes (run:  python3 r12probes.py DDLFILE).  Expected outcome is in each label.
 Round 12 narrowed SCHEMA.md to the schema and its reliability: the markdown export, the snapshot / restore / dump contract
-and their tests are withdrawn (section 7, record #14).
+and their tests are withdrawn (section 7).
 A  The contract as data lost its two keys: `lifelog_meta` has 23 rows, none called export or backups; the 2075 table has
    20 numbered questions.
 B  The three integrity checks of section 2.8, taken literally from the document text and run on the LIVE file (no snapshot):
@@ -13,7 +13,7 @@ HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, os.path.jo
 import docsql
 DDL = open(sys.argv[1], encoding='utf-8').read()
 doc = docsql.doc_text()
-live = doc[:doc.index('## 8. Validation records')]
+live = doc[:doc.index('## 8. References')]
 res = []
 def K(label, cond, detail=''):
     res.append(bool(cond))
@@ -22,21 +22,22 @@ def K(label, cond, detail=''):
 # ---- A
 c = sqlite3.connect(':memory:'); c.executescript(DDL)
 meta = dict(c.execute('select key, value from lifelog_meta').fetchall())
-K('A lifelog_meta has 23 rows', len(meta) == 23, len(meta))
+K('A lifelog_meta has 25 rows (23 + sqlite and provenance, round 15)', len(meta) == 25, len(meta))
 K('A no export or backups key', not ({'export', 'backups'} & set(meta)), sorted({'export', 'backups'} & set(meta)))
 K('A no lifelog_meta value mentions export/, dump/, backups/, restore or VACUUM INTO', not [k for k, v in meta.items() if re.search(r'export/|dump/|backups/|restore|VACUUM INTO', v, re.I)])
 sec = doc[doc.index('### 2.11 '):doc.index('## 3. The schema')]
 rows = re.findall(r'^\|\s*(\d+)\s*\|([^|]+)\|([^|]+)\|([^|]+)\|\s*$', sec, re.M)
-K('A the 2075 table has 20 questions numbered 1..20', [int(r[0]) for r in rows] == list(range(1, 21)), [r[0] for r in rows])
+K('A the 2075 table has 22 questions numbered 1..22', [int(r[0]) for r in rows] == list(range(1, 23)), [r[0] for r in rows])
 
 # ---- B  the block of section 2.8, executed literally
 s28 = doc[doc.index('### 2.8 '):doc.index('### 2.9 ')]
 blk = re.search(r'```sql\n(.*?)\n```', s28, re.S)
-K('B section 2.8 has one sql block with the three checks', blk is not None and blk.group(1).count(';') >= 3)
+K('B section 2.8 has one sql block with the checks', blk is not None and blk.group(1).count(';') >= 3)
 stmts = [re.sub(r'\s*--.*$', '', l).strip() for l in (blk.group(1).splitlines() if blk else [])]
 stmts = [x for x in stmts if x]
-K('B the block is exactly three statements: integrity_check, foreign_key_check, the orphan query',
-  len(stmts) == 3 and stmts[0].lower().startswith('pragma integrity_check') and stmts[1].lower().startswith('pragma foreign_key_check') and stmts[2].upper().startswith('SELECT ID FROM ENTITIES'), stmts)
+K('B the block is exactly four statements: integrity_check, foreign_key_check, the orphan query, the FTS5 integrity-check (round 15)',
+  len(stmts) == 4 and stmts[0].lower().startswith('pragma integrity_check') and stmts[1].lower().startswith('pragma foreign_key_check') and stmts[2].upper().startswith('SELECT ID FROM ENTITIES')
+  and "'integrity-check', 1" in stmts[3], stmts)
 D = tempfile.mkdtemp(prefix='r12-'); NOW = "'2026-09-30T10:00:00.000Z'"; base = f'{D}/base.db'
 c = sqlite3.connect(base, isolation_level=None); c.execute('PRAGMA foreign_keys=ON'); c.execute('PRAGMA recursive_triggers=ON'); c.executescript(DDL)
 c.execute('BEGIN IMMEDIATE')
@@ -55,7 +56,8 @@ PS = sqlite3.connect(base).execute('pragma page_size').fetchone()[0]
 def sq(p, sql):
     r = subprocess.run(['sqlite3', '-readonly', p, sql], capture_output=True, text=True, stdin=subprocess.DEVNULL); return (r.stdout + r.stderr).strip()
 def checks(p):
-    if len(stmts) != 3: return None, None, None
+    """the first three checks (read-only); the FTS5 check writes, so it is proven in r15probes.py"""
+    if len(stmts) != 4: return None, None, None
     return sq(p, stmts[0]).splitlines()[:1], sq(p, stmts[1]), sq(p, stmts[2].rstrip(';'))
 def cp(name): p = f'{D}/{name}.db'; shutil.copy(base, p); return p
 def scan(p, pat, want_index):
@@ -94,10 +96,10 @@ shutil.rmtree(D, ignore_errors=True)
 # ---- C  stale phrases in the live text
 STRICT = ['export/', 'dump/', 'backups/', 'dump.tmp', 'nightly.sh', 'restore.sh', 'OFFBOX', 'restic', 'rsync', '.sha256', 'exporter', 'Exporter', 'Litestream', 'VACUUM INTO snapshots', 'drilled restore']
 for tok in STRICT: K(f'C live text does not contain {tok!r}', tok not in live.replace('export/interop', ''))   # D7's 'standards matter for export/interop' is about units
-K("C 'off-box' only where the withdrawal is recorded (D12, §7)", live.count('off-box') == 2, live.count('off-box'))
-OK_EXPORT = ('JSON/CSV export', 'export/interop', 'FHIR export', 'a health export', 'scale-export', 'with a real export', 'markdown export', 'the export folder', 'without the export', 'git-over-export', 'the `export` and', '`export` and\n', 'Withdrawn in round 12', 'Markdown export of the prose', 'the markdown-export half is withdrawn', ' export, and database history by nightly', 'two of them — `export` and')
+K("C 'off-box' only in the §7 row that says it is out of scope", live.count('off-box') == 1, live.count('off-box'))
+OK_EXPORT = ('JSON/CSV export', 'export/interop', 'FHIR export', 'a health export', 'scale-export', 'with a real export', 'Markdown export of the prose')
 stale = [l for l in live.splitlines() if re.search(r'\bexport\b', l, re.I) and not any(o in l for o in OK_EXPORT)]
-K('C every remaining line that says "export" is a tool feature, a standards remark, or the record of the withdrawal', not stale, stale[:3])
+K('C every remaining line that says "export" is a tool feature, a standards remark, an import source, or the §7 row that puts the markdown export out of scope', not stale, stale[:3])
 K('C the DDL text (comments and lifelog_meta rows) names no exporter, export/, backups/, dump/, nightly job or VACUUM INTO', not re.search(r'exporter|export/|backups?/|dump/|nightly|restore\.sh|VACUUM INTO', docsql.ddl(doc), re.I))
 
 # ---- D  the test tree

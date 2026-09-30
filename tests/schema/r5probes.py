@@ -83,11 +83,8 @@ WIDEN = {
                 "INSERT INTO pages(id,kind,title,title_key,day) VALUES ({e},'image','Pic','pic','2026-06-09')"),
  'tasks_status': ("tasks", "status IN ('open','done','dropped')", "INSERT INTO tasks(id,title,status) VALUES ({t},'x','dropped')"),
  'events_repeat': ("events", "repeat IN ('none','daily','weekly','monthly','yearly','hourly')", "INSERT INTO events(id,title,start_day,repeat) VALUES ({ev},'h','2026-06-01','hourly')"),
- 'tasks_repeat': ("tasks", "repeat IN ('none','daily','weekly','monthly','yearly','hourly')", "INSERT INTO tasks(id,title,due_day,repeat) VALUES ({t},'h','2026-06-01','hourly')"),
  'events_repeat_position': ("events", "repeat_position IS NULL OR (repeat = 'monthly' AND repeat_position IN ('first','second','third','fourth','fifth','last') AND repeat_weekday IN ('mo','tu','we','th','fr','sa','su'))",
                    "INSERT INTO events(id,title,start_day,repeat,repeat_position,repeat_weekday) VALUES ({ev},'f','2026-06-01','monthly','fifth','fr')"),
- 'tasks_repeat_position': ("tasks", "repeat_position IS NULL OR (repeat = 'monthly' AND repeat_position IN ('first','second','third','fourth','fifth','last') AND repeat_weekday IN ('mo','tu','we','th','fr','sa','su'))",
-                   "INSERT INTO tasks(id,title,due_day,repeat,repeat_position,repeat_weekday) VALUES ({t},'f','2026-06-01','monthly','fifth','fr')"),
  'accounts_side': ("accounts", "side IN ('asset','liability','equity')", "INSERT INTO accounts(id,name,side,currency) VALUES ({ac},'Eq','equity','EUR')"),
 }
 for name,(tbl,expr,use) in WIDEN.items():
@@ -145,9 +142,10 @@ K('R4-11 §6.19 finds the Tokyo trip inside Japan', len(rows)==1 and rows[0][0]=
 c.execute(f"INSERT INTO links(from_id,to_id,kind,created_at) VALUES ({japan},{tokyo},'located-in',{RA})")   # a cycle
 K('R4-11 §6.19 terminates on a cycle', len(c.execute(Q, dict(place_id=japan, from_day='2019-01-01', to_day='2019-12-31')).fetchall())==1)
 
-# ---- orphan-entity detector from §8 round 5
+# ---- orphan-entity detector (SCHEMA.md 2.8)
 doc = open(DOCPATH,encoding='utf-8').read()
-i = doc.index('R4-07\'s residue'); OQ = re.search(r'```sql\n(.*?)\n```', doc[i:], re.S).group(1)
-c, ids = livedb(); K('orphan query: healthy database returns nothing', c.execute(OQ).fetchall()==[])
-o = ent(c,'place'); K('orphan query: finds an entity with no domain row', c.execute(OQ).fetchall()==[(o,'place')])
+i = doc.index('### 2.8 '); blk = re.search(r'```sql\n(.*?)\n```', doc[i:], re.S).group(1)
+OQ = re.sub(r'\s*--.*$', '', [l for l in blk.splitlines() if l.startswith('SELECT id FROM entities')][0])
+c, ids = livedb(); K('orphan query (2.8): healthy database returns nothing', c.execute(OQ).fetchall()==[])
+o = ent(c,'place'); K('orphan query (2.8): finds an entity with no domain row', c.execute(OQ).fetchall()==[(o,)])
 print(f'round-5 probes: {sum(res)}/{len(res)} met expectations')

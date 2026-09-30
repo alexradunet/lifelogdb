@@ -1,5 +1,5 @@
 """Round-11 probes (run:  python3 r11probes.py DDLFILE).  Expected outcome is in each label.
-Round 11 merged `note` and `wiki` into one `page` kind (SCHEMA.md D5 addendum 5). What changed, and what must not have:
+Round 11 merged `note` and `wiki` into one `page` kind (SCHEMA.md D5). What changed, and what must not have:
 A  kinds: 'memo' and 'page' only; 'note' and 'wiki' are gone.
 B  day: a memo always has one; a page may or may not (the one CHECK that changed).
 C  one title namespace: titles collide across pages whether or not either has a day; memos have no key and never collide.

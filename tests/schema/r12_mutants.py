@@ -1,6 +1,6 @@
 """Break the round-12 rules on purpose and require r12probes.py to notice.   python3 r12_mutants.py
 Each mutant is a copy of SCHEMA.md with one statement put back the way it was before round 12 (or damaged); the DDL and the
-text the probes read are taken from that copy. A probe suite that cannot fail proves nothing (records #6, #12, #13)."""
+text the probes read are taken from that copy. A probe suite that cannot fail proves nothing."""
 import os, re, subprocess, sys, tempfile
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, os.path.join(HERE, '..', 'lib'))
 import docsql
@@ -21,7 +21,7 @@ MUTANTS = [
  ('the imports step runs nightly.sh again',        mutate("1. **Trial run first.**", "1. **Snapshot first.** Run `nightly.sh` (§2.8).")),
  ('the titles key says export filenames again',    mutate("'page titles never change and are valid file names everywhere:", "'page titles are export filenames and never change:")),
  ('a 2075 question is dropped',                    mutate("| 20 | What is a memo, what is a page, and can one become the other? | `pages_kind` | `untitled`, `never changes` |\n", "")),
- ('the off-box copy is mandatory again',           mutate("| The file is damaged or lost | `synchronous=FULL` and WAL (§2.9); the integrity checks find damage (§2.8) |", "| The file is damaged or lost | a mandatory off-box copy and a drilled restore (§2.8) |")),
+ ('the off-box copy is mandatory again',           mutate("| The file is damaged or lost | `synchronous=FULL` and WAL on SQLite ≥ 3.51.3, on a local disk (§2.9); the integrity checks find damage (§2.8) |", "| The file is damaged or lost | a mandatory off-box copy and a drilled restore (§2.8) |")),
 ]
 
 def run(text):
@@ -36,7 +36,7 @@ assert ok == n > 0, f'the unmutated document must pass its own probes first: {ok
 caught = 0
 for name, text in MUTANTS:
     (ok, n), out = run(text)
-    noticed = n != -1 and ok != n          # a crash is not 'noticed': the probes must fail cleanly (record #13)
+    noticed = n != -1 and ok != n          # a crash is not 'noticed': the probes must fail cleanly
     caught += noticed
     print(f"  {'caught ' if noticed else 'MISSED '} {name:<48} {'crash' if n == -1 else f'{n - ok} of {n} probes fail'}")
 print(f'{caught}/{len(MUTANTS)} broken documents were noticed')

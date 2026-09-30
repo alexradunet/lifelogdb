@@ -59,7 +59,7 @@ T('position w/o weekday','ERR',c,*ev(repeat='monthly',repeat_position='last')); 
 T('position fifth','ERR',c,*ev(repeat='monthly',repeat_position='fifth',repeat_weekday='fr'))
 t = ent(c,'task'); T('done w/o completed_at','ERR',c,"INSERT INTO tasks(id,title,status) VALUES (?,'x','done')",(t,))
 t = ent(c,'task'); T('open with completed_at','ERR',c,f"INSERT INTO tasks(id,title,status,completed_at) VALUES (?,'x','open',{NOW})",(t,))
-t = ent(c,'task'); T('recurring task w/o due_day','ERR',c,"INSERT INTO tasks(id,title,repeat) VALUES (?,'x','daily')",(t,))
+t = ent(c,'task'); T('tasks have no repeat column (round 15: only events repeat)','ERR',c,"INSERT INTO tasks(id,title,due_day,repeat) VALUES (?,'x','2026-06-01','daily')",(t,))
 t = ent(c,'task'); T('status dropped','ERR',c,"INSERT INTO tasks(id,title,status) VALUES (?,'x','dropped')",(t,))
 p = ent(c,'person'); T('death<birth','ERR',c,"INSERT INTO people(id,name,birth_day,death_day) VALUES (?, 'x','2000-01-01','1999-01-01')",(p,))
 # --- places / metrics

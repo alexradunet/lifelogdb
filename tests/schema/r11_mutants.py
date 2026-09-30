@@ -1,11 +1,11 @@
 """Break the round-11 rules on purpose and require r11probes.py to notice.   python3 r11_mutants.py
 Each mutant is a copy of SCHEMA.md with one statement put back the way it was before the merge (or damaged); the DDL and the
-cookbook blocks the probes read are taken from that copy. A probe suite that cannot fail proves nothing (records #6, #12)."""
+cookbook blocks the probes read are taken from that copy. A probe suite that cannot fail proves nothing."""
 import os, re, subprocess, sys, tempfile
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, os.path.join(HERE, '..', 'lib'))
 import docsql
 doc = open(docsql.DOC, encoding='utf-8').read()
-live = doc[:doc.index('## 8. Validation records')]
+live = doc[:doc.index('## 8. References')]
 
 def mutate(old, new, nth=None):
     """Replace one exact statement of the live text; nth picks the nth of several identical ones (0-based)."""

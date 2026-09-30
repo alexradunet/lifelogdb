@@ -1,6 +1,6 @@
 """Break the diagrams (and the DDL under them) on purpose and require diagrams.py to notice.   python3 diagrams_mutants.py
 Each mutant is a copy of SCHEMA.md with one statement changed; the DDL the checks read is taken from that copy. Half of them edit a
-diagram, half change the DDL and leave the diagram alone — the drift these checks exist for. A crash is not 'noticed' (record #13)."""
+diagram, half change the DDL and leave the diagram alone — the drift these checks exist for. A crash is not 'noticed'."""
 import os, re, subprocess, sys, tempfile
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, os.path.join(HERE, '..', 'lib'))
 import docsql

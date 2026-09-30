@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run every validation suite against the DDL and the cookbook in SCHEMA.md.
 
-    python3 tests/run_all.py              # every suite (~15 s)
+    python3 tests/run_all.py              # every suite (~30 s)
     python3 tests/run_all.py --datasette  # + the read-only check of Datasette (installs it into tests/.venv)
     python3 tests/run_all.py --mermaid    # + render every mermaid diagram (needs mmdc and a Chromium: see schema/render_diagrams.py)
 
@@ -35,8 +35,11 @@ SUITES = [   # (name, directory, argv, predicate, what it proves)
  ('r10probes',     'schema',    ['r10probes.py', '{DDL}'],    lambda o: ratio(o, r'round-10 probes: (\d+)/(\d+)'), 'device-name titles, the 2075 test, the deferred features, imports'),
  ('r11probes',     'schema',    ['r11probes.py', '{DDL}'],    lambda o: ratio(o, r'round-11 probes: (\d+)/(\d+)'), 'notes and wiki merged into one page kind: day, titles, lookups, ghosts, day view'),
  ('r11 mutants',   'schema',    ['r11_mutants.py'],           lambda o: ratio(o, r'(\d+)/(\d+) broken documents'), 'each round-11 rule put back the old way must fail a probe'),
- ('r12probes',     'schema',    ['r12probes.py', '{DDL}'],    lambda o: ratio(o, r'round-12 probes: (\d+)/(\d+)'), 'the 2.8 integrity checks on the live file, no export/backup/dump text left, 23 meta keys'),
+ ('r12probes',     'schema',    ['r12probes.py', '{DDL}'],    lambda o: ratio(o, r'round-12 probes: (\d+)/(\d+)'), 'the 2.8 integrity checks on the live file, no export/backup/dump text left, 25 meta keys'),
  ('r12 mutants',   'schema',    ['r12_mutants.py'],           lambda o: ratio(o, r'(\d+)/(\d+) broken documents'), 'each round-12 rule put back the old way must fail a probe'),
+ ('r15probes',     'schema',    ['r15probes.py', '{DDL}'],    lambda o: ratio(o, r'round-15 probes: (\d+)/(\d+)'), 'ids via RETURNING, the FTS5 check, invisible title characters, SQLite version and hardening, named CHECKs, no task recurrence, provenance'),
+ ('r15 mutants',   'schema',    ['r15_mutants.py'],           lambda o: ratio(o, r'(\d+)/(\d+) broken documents'), 'each round-15 rule put back the old way must fail a probe'),
+ ('no history',    'schema',    ['nohistory.py'],             lambda o: ratio(o, r'history checks: (\d+)/(\d+)'), 'SCHEMA.md states the current truth only: no rounds, records, addenda, superseded notes, finding ids, changelog'),
  ('diagrams',      'schema',    ['diagrams.py', '{DDL}'],     lambda o: ratio(o, r'diagram checks: (\d+)/(\d+)'), 'the mermaid diagrams say what the DDL says: tables, columns, keys, foreign keys, link kinds, the correction story'),
  ('diagram mutants', 'schema',   ['diagrams_mutants.py'],      lambda o: ratio(o, r'(\d+)/(\d+) broken documents'), 'a diagram edited, or the DDL changed under it, must fail a check'),
  ('expander',      'schema',    ['fuzz.py', '{DDL}'],         lambda o: re.search(r'compared (\d+) mismatches 0\s*$', o.strip().splitlines()[-1]) is not None, 'recurrence expander vs an independent oracle'),

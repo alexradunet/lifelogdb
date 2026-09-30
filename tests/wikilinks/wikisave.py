@@ -31,6 +31,7 @@ def scan_tags(run, mutate=()):
 STUB = re.compile(r'\A\s*#redirect\s+\[\[', re.I)
 DEVICES = {'CON','PRN','AUX','NUL'} | {f'COM{i}' for i in range(1,10)} | {f'LPT{i}' for i in range(1,10)} | {'COM¹','COM²','COM³','LPT¹','LPT²','LPT³'}
 NOW = "strftime('%Y-%m-%dT%H:%M:%fZ','now')"
+INVISIBLE = {0xAD, 0x61C, 0x200B, 0x200E, 0x200F, 0xFEFF} | set(range(0x202A, 0x202F)) | set(range(0x2060, 0x2065)) | set(range(0x2066, 0x206A))
 
 def title_key(t):
     return unicodedata.normalize('NFC', unicodedata.normalize('NFC', t).casefold())
@@ -43,7 +44,9 @@ def title_ok(t, mutate=()):
     if not t or t != t.strip(' '): return False
     if len(t.encode('utf-8')) > 240: return False
     if any(ch in '/\\:*?"<>|' for ch in t): return False
-    if any(ord(ch) <= 31 or ord(ch) == 127 for ch in t): return False      # includes NUL
+    if any(ord(ch) <= 31 or 127 <= ord(ch) <= 159 for ch in t): return False   # C0 (incl. NUL), DEL, C1
+    if any(ord(ch) in INVISIBLE for ch in t): return False                 # invisible and bidi characters (§2.5)
+    if 'allow_unassigned' not in mutate and any(unicodedata.category(ch) == 'Cn' for ch in t): return False   # app only: a later Unicode may give it a fold
     if t[0] == '.' or t[-1] == '.': return False
     base = t if 'device_bare_only' in mutate else t.split('.', 1)[0]      # CON.backup is the device too [R58]
     if _ascii_upper(base) in DEVICES: return False

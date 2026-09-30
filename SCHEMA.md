@@ -1,8 +1,6 @@
 # Lifelog — Database Schema v1
 
-**Status:** v1.14 — frozen pending external review (review rounds 3, 3b, 3c applied; round 4 = an
-independent review plus the finance tier D18; rounds 5–10 = its fixes: mechanical items, time zone / `completed_day` / one place per event, the text inconsistencies plus durability and write transactions, the wikilink save contract, and the last open items with a repeatable test suite in `tests/` — **no recorded finding is open**; what remains is two gates only the owner can close, the external review and the first real import, §8 round 10; round 11 then merged notes and wiki pages into one `page` kind, D5 addendum 5; round 12 narrowed the document to the schema and its reliability and withdrew the markdown export and the snapshot / restore / dump contract, §7, §8 #14; round 13 added mermaid diagrams that a test suite checks against the DDL, §8 #15). Not yet applied to any canonical database.
-**Date:** 2026-09-30 (v1.0–v1.4: 2026-09-29; v1.5–v1.14: 2026-09-30)
+**Status:** frozen pending external review. No canonical database exists yet; until one does, §3 is edited in place (D13).
 **Scope of the project:** A lifetime personal database (journal/memos, pages (notes, wiki), events,
 tasks, people, health metrics, personal finance — accounts, balances, net worth; file
 attachments deferred — D9) in a single SQLite file,
@@ -26,8 +24,7 @@ without access to the conversation that produced it.
 5. [Decision log](#5-decision-log)
 6. [Query cookbook](#6-query-cookbook)
 7. [Explicit non-goals and deferred work](#7-explicit-non-goals-and-deferred-work)
-8. [Validation records and review resolutions](#8-validation-records-and-review-resolutions)
-9. [References](#9-references)
+8. [References](#8-references)
 
 ---
 
@@ -46,8 +43,9 @@ and *canonical data being corrupted by uncontrolled writers*.
    silently re-added.
 2. **The schema is the documentation.** Real tables, real column names, real types, real
    constraints. A stranger in 2075 should understand the database from
-   `.schema` output alone. (SQLite's own "application file format" essay makes exactly
-   this argument — see [R1].)
+   `.schema` output alone — so the rules each table needs are comments *inside* its `CREATE`
+   statement, the only comments the file keeps. (SQLite's own "application file format" essay
+   makes exactly this argument — see [R1].)
 3. **Single writing application.** One application (later with CLI/API/agent
    front-ends) owns all writes to the database. Many
    *processes* are fine — one *writer* owning the conventions. No other app is ever
@@ -65,7 +63,8 @@ and *canonical data being corrupted by uncontrolled writers*.
 ## 2. Storage contract (conventions)
 
 These conventions are part of the schema's meaning. They are also embedded as comments in
-the init DDL (§3; after the freeze, `0001_init.sql`).
+the init DDL (§3; after the freeze, `0001_init.sql`). *Executed* in this document means that a suite in
+`tests/` runs the claim against §3 (`tests/README.md` lists the suites).
 
 ### 2.1 Directory layout
 
@@ -94,14 +93,14 @@ deferred out of v1 (D9) — the layout grows a `media/` sibling when they return
   `date(x) IS x` for days, `strftime('%Y-%m-%dT%H:%M:%fZ', x) IS x` for instants.
   The `IS` operator, not `=`, matters: a CHECK passes when it evaluates to NULL, and
   `date()` returns NULL for malformed input, so `date(x) = x` silently *accepts*
-  garbage like `2026-9-3` — empirically confirmed and fixed (see §8).
+  garbage like `2026-9-3` — empirically confirmed.
 - **`entities.created_at` is when the row was written to `life.db`** — never back-dated, so it
   can serve as an audit trail (as `recorded_at` does on `measurements` and `balances`). When a
   thing *happened* is its own `day` / `*_at`. (An imported memo's original time of day has no
-  column yet — open item R4-04, §8.)
+  column: a known limit.)
 - **Time zone.** `entities.tz` and `measurements.tz` store the writer's IANA zone at capture
   (`Europe/Berlin`; NULL = unknown), so a UTC instant can be read as local time. Only capture time
-  can supply it — it cannot be reconstructed later. Events have no `tz` of their own (D10 addendum).
+  can supply it — it cannot be reconstructed later. Events have no `tz` of their own (D10).
 - An event may be day-precise only (`start_day`, `end_day`, no `*_at`). Date-level facts
   are first-class in a biography database.
 
@@ -113,18 +112,25 @@ deferred out of v1 (D9) — the layout grows a `media/` sibling when they return
   `link_kinds(kind)`, `currencies(code)`, `fx_rates(from_ccy, to_ccy, day)`.
 - The six *entity* types (`page`, `event`, `task`, `person`, `place`, `account`) share one ID
   space via the `entities` supertype table (D8, D16, D18). A domain row's `id` **equals** its
-  `entities.id`; the app inserts the `entities` row first and reuses
-  `last_insert_rowid()` in the same transaction (see §6.1). `UNIQUE(id, type)` on
+  `entities.id`; the app inserts the `entities` row first with `INSERT … RETURNING id` and binds
+  that id in the same transaction (see §6.1). Never `last_insert_rowid()` across statements: any
+  insert in between — a link, a ghost page, a measurement — moves it, and the next row silently
+  points at the wrong entity (executed). `UNIQUE(id, type)` on
   `entities` plus a composite FK in every domain table make the type↔table pairing
-  structural, not conventional (verified — §8).
+  structural, not conventional (verified).
+- **Provenance.** `entities.source` and `links.source` name the writer that made the row — `ui`,
+  `cli`, `api`, `agent:<name>`, `import:<name>` (lowercase `[a-z0-9_:.-]`, 1–64 characters; NULL =
+  unknown). Like `tz`, only the moment of writing knows it, so it is written at insert and a trigger
+  keeps it from changing. With agents among the writers (D3), it is how a wrong row is traced to the
+  writer that made it. `measurements.source` and `balances.source` name the *data* source instead
+  (`manual`, `statement`, an importer).
 - `measurements`, `balances`, `metrics`, `currencies`, `fx_rates`, `links`, `link_kinds`,
   `lifelog_meta` are *not* entities (they are facts, joins, and registries). An `account` is an
   entity; its balances are facts.
 
 ### 2.4 Deletion
 
-- **No hard deletes of entities.** Deletion sets `entities.deleted_at` (tombstone) — and since
-  round 5 that is *enforced*: `BEFORE DELETE` triggers reject deleting an `entities` row or any
+- **No hard deletes of entities.** Deletion sets `entities.deleted_at` (tombstone) — and that is *enforced*: `BEFORE DELETE` triggers reject deleting an `entities` row or any
   domain row (`links` are the one hard-deleted table, D11). Every read path filters
   `deleted_at IS NULL`. In 20 years it should be possible to know what was erased and when (D11).
 - Junk captured by accident (duplicate import, mis-tap) is tombstoned like everything
@@ -168,7 +174,7 @@ stateDiagram-v2
   pages the body names** — missing rows added, rows the body no longer supports deleted — so a
   re-save changes nothing and every link can be rebuilt from the bodies alone. The `links`
   table is the source of truth for the graph; the body text is the source of truth for prose.
-  Backlinks = `links WHERE to_id = ?`. The rules, all executed in §8 #10 against the vectors
+  Backlinks = `links WHERE to_id = ?`. The rules, all executed against the vectors
   below:
   - *What is read.* The CommonMark **text** of `pages.body`, after NFC normalisation — not code
     spans, code blocks, raw HTML, link destinations or image alt text. Any CommonMark parser
@@ -194,7 +200,7 @@ stateDiagram-v2
     is never a tag, so nothing can create a page called `redirect`.
   - *An invalid target makes no link and never blocks a save.* A title the filename rules below
     reject (`[[Health/Diet]]`, `[[Re: plan]]`, the tag `#con`) is skipped. The app checks those
-    rules before inserting — its predicate agreed with the DDL's own CHECKs on 43 361 strings —
+    rules before inserting — its predicate agreed with the DDL's own CHECKs on 44 025 strings —
     and creates each target inside its own `SAVEPOINT` (§6.14), so even a target the predicate
     wrongly let through is rolled back alone: the memo is saved and no orphan `entities` row is
     left. The UI reports skipped targets; nothing is stored about them — the text stays in the
@@ -204,7 +210,7 @@ stateDiagram-v2
   - *Known limits.* A body that also defines a reference (`[Ref]: http://r`) turns `[[Ref]]` into
     a Markdown link, so it is not a wikilink; a `#` written as an entity (`&#35;x`) is decoded
     before the scan and counts as a tag; a wikilink resolves to a **page** only, so `[[Sam]]`
-    never reaches the `people` row (R4-11 e, still open).
+    never reaches the `people` row (§7).
 
   Test vectors — every writer must reproduce them (`\n`, `́`, `̈` stand for a line
   break and combining marks; a body is shown in a code span):
@@ -254,7 +260,10 @@ stateDiagram-v2
   - *Safe.* A page title must be usable as a file name anywhere, so the DDL
     rejects titles that are unsafe as a filename on Linux, macOS and Windows: path
     separators and Windows-reserved characters (`/ \ : * ? " < > |`), control
-    characters (incl. NUL), a leading or trailing `.` (hidden files, `..`, Windows), a
+    characters (incl. NUL, DEL and the C1 range U+0080–U+009F), invisible and bidi characters (soft
+    hyphen U+00AD, U+061C, zero-width space U+200B, LRM/RLM U+200E–F, embeddings and overrides
+    U+202A–E, U+2060–4, isolates U+2066–9, BOM U+FEFF — each would make `Diet` and a look-alike
+    `Diet` two pages [R63]; ZWNJ/ZWJ U+200C/D stay, Persian words and emoji need them), a leading or trailing `.` (hidden files, `..`, Windows), a
     Windows device name (`CON`, `NUL`, `COM1`…, and the superscript `COM¹ COM² COM³ LPT¹ LPT² LPT³`)
     **bare or before an extension** — `CON.backup` and `NUL.txt` are the device too [R58] — and
     leading/trailing spaces. Titles are 1–240 **bytes** (a filename limit is 255
@@ -263,8 +272,11 @@ stateDiagram-v2
     above). Memos have no title. Checked against the Windows documentation only (Windows itself
     is not executable here); a name with a space before its dot (`CON .txt`) is not covered
     because the documentation does not say it is reserved. The rule is the strict one on
-    purpose: the title CHECKs are unnamed, so loosening one after the freeze is a table rebuild
-    (D5 addenda 4 and 6).
+    purpose, and it is named (`pages_title_safe`): loosening it after the freeze is one
+    `DROP CONSTRAINT` + `ADD CONSTRAINT`, while a title that is valid everywhere never has to change
+    (D5). The app is stricter than the DDL in one way: it also rejects code points Unicode has not
+    assigned yet (category `Cn`), whose case fold a later Unicode version could define — which would
+    silently change `title_key`. Unicode keeps case folding stable only for assigned characters.
   - *Permanent.* A title never changes (`pages_title_fixed`): a rename would silently
     repoint every `[[Old Title]]` in decades of prose (D5). To fix a title, create the
     new page and turn the old one into a `#REDIRECT` stub with `links(kind='redirect')`.
@@ -301,7 +313,8 @@ stateDiagram-v2
     partial (`WHERE title_key IS NOT NULL`: memos have no key) and an equality on the key implies
     that predicate, so SQLite uses it (§6.14). The unique index covers tombstoned pages, so when a save resolves a title
     that belongs to a tombstoned page the app un-tombstones it rather than inserting a
-    duplicate.
+    duplicate. Saving *any* body that names it does this — an old memo edited years later
+    included — so the UI tells the owner that the save revives a deleted page.
 
 ### 2.6 Files (deferred — see D9)
 
@@ -326,15 +339,16 @@ attachment need. Until then the database is all text and `life.db` stays megabyt
 
 ### 2.8 Integrity checks
 
-Three checks tell whether a file still obeys the schema. They read only the file, need no other
+Four checks tell whether a file still obeys the schema. They read only the file, need no other
 copy, and each catches what the others cannot. Run them before and after an import (§2.11) or a
 migration (§2.7), and after any writer crashed. Every claim below was executed on the **live**
-file (§8 #14), not on a copy.
+file, not on a copy.
 
 ```sql
 PRAGMA integrity_check;      -- one row: ok
 PRAGMA foreign_key_check;    -- no rows
 SELECT id FROM entities WHERE id NOT IN (SELECT id FROM pages UNION SELECT id FROM events UNION SELECT id FROM tasks UNION SELECT id FROM people UNION SELECT id FROM places UNION SELECT id FROM accounts);   -- no rows
+INSERT INTO pages_fts(pages_fts, rank) VALUES ('integrity-check', 1);   -- no error
 ```
 
 - **`integrity_check` — the file's structure.** It caught a zeroed table page, a file truncated by
@@ -344,43 +358,79 @@ SELECT id FROM entities WHERE id NOT IN (SELECT id FROM pages UNION SELECT id FR
   (§2.9 — per connection) stored a balance for an account that does not exist, and
   `integrity_check` said `ok`.
 - **The orphan query — the one check no constraint can express.** An `entities` row with no domain
-  row (a writer that died between its two inserts; §8 round 5): both other checks are clean on it.
+  row (a writer that died between its two inserts): both other checks are clean on it.
+- **The FTS5 integrity-check — the index against its content.** `pages_fts` is an external-content
+  index over `pages`; if the two drift apart (a row indexed that `pages` does not hold), searches
+  return wrong rows and `PRAGMA integrity_check` still says `ok`. The FTS5 command with rank `1`
+  compares the index with `pages` and fails (`database disk image is malformed`). The index is
+  derived: `INSERT INTO pages_fts(pages_fts) VALUES('rebuild')` repairs it (all executed). Writing
+  it is a write, so it runs on a writer connection.
 - **What none of them sees: a changed value.** A flipped byte inside a body passed
   `integrity_check` — SQLite keeps no page checksums — so damage inside a cell cannot be found from
-  the file alone.
+  the file alone. The cheap guard is below the file: keep `life.db` on a filesystem that checksums
+  data (btrfs and ZFS do by default; never `chattr +C` the file or its folder, which turns btrfs
+  checksums off) and scrub it now and then (`btrfs scrub`) — a flipped byte then becomes a read
+  error instead of a silently wrong value. SQLite's own `cksumvfs` [R64] does the same per page
+  inside the file, at the cost of an extension every writer must load; it is not used.
 
 ### 2.9 Connection setup (every writer, mandatory)
 
 ```sql
 PRAGMA journal_mode = WAL;     -- persistent; set once by the init DDL (§3)
 PRAGMA synchronous  = FULL;    -- per connection. NORMAL in WAL "might roll back following a power loss" [R54];
-                               -- FULL costs about 1 ms per commit here (btrfs, §8 #9) — free for a journal
+                               -- FULL costs about 1 ms per commit here (btrfs) — free for a journal
 PRAGMA foreign_keys = ON;      -- MANDATORY per connection: SQLite's default is OFF and
-                               -- STRICT does not enforce FKs (verified — see §8 record)
+                               -- STRICT does not enforce FKs (verified)
 PRAGMA recursive_triggers = ON;  -- MANDATORY per connection: with OFF, INSERT OR REPLACE / REPLACE INTO
                                -- deletes the conflicting row WITHOUT firing the append-only DELETE
-                               -- triggers (measurements, balances) — verified, §8 #6; ON blocks it
+                               -- triggers (measurements, balances) — verified; ON blocks it
 PRAGMA busy_timeout = 5000;    -- wait instead of failing instantly on SQLITE_BUSY
+PRAGMA trusted_schema = OFF;   -- the schema may call only side-effect-free functions (all of this one's are)
 ```
 
 A writer should read these back at connect time and refuse to run if `foreign_keys` or
 `recursive_triggers` is 0 or `synchronous` is not 2 (FULL, which is also SQLite's default) —
 none of these is stored in the file, so the file alone cannot enforce them (and `PRAGMA
-foreign_keys` is a silent no-op inside a transaction).
+foreign_keys` is a silent no-op inside a transaction). It also refuses to run on a SQLite older
+than **3.51.3**: every version from 3.7.0 to 3.51.2 has a WAL race in which a write that lands
+while two checkpoints overlap can be lost from the file — rare, but this design has several writer
+processes and readers on one file, which is exactly the condition [R65]. Migrations need 3.53
+(D13). The versions are data (`lifelog_meta.sqlite`), and every CHECK uses only functions those
+versions have.
+
+Two more settings cost nothing. `SQLITE_DBCONFIG_DEFENSIVE` (a C-level switch, in Python
+`conn.setconfig(sqlite3.SQLITE_DBCONFIG_DEFENSIVE, True)`) makes the FTS shadow tables and
+`writable_schema` untouchable from SQL, so no statement can corrupt the index or the schema by
+hand; with it and `trusted_schema = OFF` the whole schema and every §6 query still work (executed).
+`PRAGMA optimize` when a connection closes keeps the planner's statistics fresh (the `CROSS JOIN`s
+of §6.16 pin their order regardless).
+
+The driver must not open transactions of its own. Python's `sqlite3` in its default mode silently
+sends a deferred `BEGIN` before the first `INSERT`/`UPDATE`/`DELETE`, which defeats the
+`BEGIN IMMEDIATE` rule below; open the connection with `autocommit=True` (Python 3.12+) or
+`isolation_level=None` and issue `BEGIN IMMEDIATE` yourself. Other drivers have the same switch
+under other names.
 
 **Every write transaction starts with `BEGIN IMMEDIATE`.** A deferred `BEGIN` that reads first —
 resolve a wikilink, then create the page (§6.14) — fails **at once** with `database is locked`
 if another writer committed in between: `busy_timeout` does not apply to that lock upgrade
-(executed, §8 #9). `BEGIN IMMEDIATE` takes the write lock up front, so a second writer waits
+(executed). `BEGIN IMMEDIATE` takes the write lock up front, so a second writer waits
 (up to `busy_timeout`) and then sees the first one's rows. Every write example in §6 does this;
 keep such transactions short.
 
 Readers need no setup but must be **read-only**: open the file with `?mode=ro` (SQLite then
 refuses every write — `attempt to write a readonly database`, executed) or `sqlite3 -readonly`.
 Datasette does this by itself — its connection is `mode=ro` and its SQL console accepts only
-`SELECT` (executed on 0.65.5, §8 #9). Under WAL a reader sees the live file while the app writes
+`SELECT` (executed on 0.65.5). Under WAL a reader sees the live file while the app writes
 and never blocks it (executed). sqlite-web can insert, update and delete rows, which would make
-it a second writer, so it is not used (D14 addendum).
+it a second writer, so it is not used (D14). Three reader traps [R65][R66]:
+- **Never `immutable=1`** (Datasette's `-i`): it tells SQLite the file cannot change, so a reader of
+  the live file sees stale or inconsistent pages while the app writes. Use the default `mode=ro`.
+- **Keep read transactions short.** A checkpoint cannot reset the WAL while any reader holds a
+  snapshot; a reader that never lets go makes `life.db-wal` grow without bound.
+- **One machine, a local disk.** WAL needs shared memory between the processes, so `life.db` never
+  lives on a network file system (NFS, SMB) or in a folder a sync client (Dropbox, Syncthing,
+  iCloud) copies while it is open.
 
 "Single writing application" (principle 3, D3) does not mean a single OS process: the
 app, its CLI, the API service, and local agents are all the same *writer* as long as
@@ -405,7 +455,7 @@ flowchart LR
 - **Exact, integer, per-account currency.** An amount is an `INTEGER` count of *minor units*
   of the owning account's currency; `currencies.subunits` (100 for EUR, 1 for JPY) turns it
   into a number. Never `REAL`, never a `measurements` row: `0.1 + 0.2` in `REAL` is
-  `0.30000000000000004` (executed, §8 #6), and a sum of balances must be exact.
+  `0.30000000000000004` (executed), and a sum of balances must be exact.
 - **A balance is a fact about a local day.** `balances.day` is the *local* date the figure
   describes (end of day) — the same rule as every `*_day` (§2.2). `recorded_at` is the UTC
   instant it was written down; the two differ whenever history is backfilled.
@@ -448,7 +498,7 @@ flowchart LR
 ---
 
 
-### 2.11 Threat model, the 2075 test, and imports (R4-19 c)
+### 2.11 Threat model, the 2075 test, and imports
 
 **What is protected, and from what.** The asset is `life.db`: prose, health and finance in one
 plaintext file (D17 — the database is deliberately not encrypted). The threats worth a control,
@@ -456,12 +506,13 @@ the control, and what is left:
 
 | Threat | Control | Residual |
 |---|---|---|
-| The file is damaged or lost | `synchronous=FULL` and WAL (§2.9); the integrity checks find damage (§2.8) | nothing recovers it: no second copy of the file is kept (§7); power loss is documented, not simulated; damage *inside a value* is found by no check |
+| The file is damaged or lost | `synchronous=FULL` and WAL on SQLite ≥ 3.51.3, on a local disk (§2.9); the integrity checks find damage (§2.8) | nothing recovers it: no second copy of the file is kept (§7); power loss is documented, not simulated [R67] |
+| A changed value inside the file (bit rot) | a data-checksumming filesystem (btrfs, ZFS), never `chattr +C`, a periodic `scrub` (§2.8) | no check *inside* SQLite sees it; on a filesystem without checksums nothing does |
 | A buggy writer, importer or agent | one writing application; triggers for append-only facts, no hard deletes and fixed kinds and titles; `ON CONFLICT … DO NOTHING`; `BEGIN IMMEDIATE`; the foreign-key and orphan checks (§2.4, §2.9, §2.8) | the pragmas are per connection, so the application asserts them at connect |
 | Another tool editing rows | exploration tools open the file read-only; Datasette was executed read-only (§2.9, D14) | anything with write access to the file bypasses every control |
-| A stolen disk | the disk holding `life.db` is encrypted at rest (D17 addendum 2) | a stolen *unlocked* machine has everything |
+| A stolen disk | the disk holding `life.db` is encrypted at rest (D17) | a stolen *unlocked* machine has everything |
 | Finance or health data leaking through git | `life.db` and its `-wal`/`-shm` are never committed; no credentials or full account numbers, ever (§2.1, §2.10) | `notes` fields are free text — the owner's discipline |
-| The data exposed on a network | Datasette on localhost only and read-only; nothing that runs arbitrary SQL is reachable from outside (D17 addendum 2) | a wrong bind address |
+| The data exposed on a network | Datasette on localhost only and read-only; nothing that runs arbitrary SQL is reachable from outside (D17) | a wrong bind address |
 | A reader in fifty years without this document | the 2075 test, below | — |
 
 Out of scope: a hostile local user, malware running as the owner, and legal compulsion — those
@@ -493,12 +544,14 @@ here, and a row cannot be dropped without the test noticing.
 | 15 | Who may write, and with which settings? | `writers` | `BEGIN IMMEDIATE`, `read-only` |
 | 16 | What is derived and can be rebuilt? | `pages_fts`, `title_key` | `rebuildable`, `derived` |
 | 17 | How do imports avoid duplicates and bad rows? | `imports` | `DO NOTHING`, `OR IGNORE` |
-| 18 | What does a repeating event or task mean? | `recurrence` | `templates` |
+| 18 | What does a repeating event mean? | `recurrence` | `templates` |
 | 19 | How does the schema change after real data exists? | `evolution` | `additive`, `user_version` |
 | 20 | What is a memo, what is a page, and can one become the other? | `pages_kind` | `untitled`, `never changes` |
+| 21 | Which SQLite may write this file? | `sqlite` | `3.51.3`, `3.53` |
+| 22 | Who or what wrote this row? | `provenance` | `written at insert`, `agent` |
 
 **Imports** — the path for data that already exists elsewhere (a journal archive, a health export,
-statements). Every step was executed (§8 #12) on 1 000 synthetic rows:
+statements). Every step was executed on 1 000 synthetic rows:
 
 1. **Trial run first.** Rows are never deleted, so a bad import can only be retracted row by row
    (a NULL-value correction for a measurement or a balance, a tombstone for an entity). Do the
@@ -525,94 +578,46 @@ DETACH s;
    KEY or UNIQUE constraint". **Never `CAST(value AS REAL)`**: it turns `'abc'` and `''` into `0.0`
    and `'12.5kg'` into `12.5`, silently — a plain insert into the STRICT column converts `'12.5'` and
    rejects `'abc'` and `''`. A CSV empty field is `''`, not NULL, so optional columns go through
-   `NULLIF(…, '')`; a `''` in `taken_at` fails its CHECK.
+   `NULLIF(…, '')`; a `''` in `taken_at` fails its CHECK. A fourth, for links: **never `INSERT OR
+   REPLACE` into `links`** — on a symmetric kind the replace and the two mirror triggers keep firing
+   each other (an outer `OR REPLACE` also overrides the mirror's own `OR IGNORE`), and SQLite stops
+   with `too many levels of trigger recursion` (executed; nothing is changed, but the batch fails). Use `ON CONFLICT(from_id, to_id, kind) DO NOTHING`.
 3. **Identity and time.** `source` names the importer, `import_id` is the source's own id, `day` /
    `taken_at` / `tz` say when it happened, `recorded_at` is when you imported it. `created_at` of an
    entity row is always the write time (§2.2) — never the date of the thing imported.
 4. **What a failure does.** `ON CONFLICT … DO NOTHING` skips only a duplicate key: a malformed
    day, an impossible value or a dangling foreign key still raises and the **whole batch rolls back**
-   (`OR IGNORE` would swallow them, §8 #6). Fix the data and run the batch again.
-5. **Check afterwards:** the three checks of §2.8 (`integrity_check`, `foreign_key_check`, the orphan
-   query), per-source counts (`SELECT source, count(*), min(day), max(day) FROM measurements
+   (`OR IGNORE` would swallow them). Fix the data and run the batch again.
+5. **Check afterwards:** the four checks of §2.8 (`integrity_check`, `foreign_key_check`, the orphan
+   query, the FTS5 integrity-check), per-source counts (`SELECT source, count(*), min(day), max(day) FROM measurements
    GROUP BY source`), and **run the importer a second time — it must insert nothing.**
-6. **Before the freeze**, run steps 1–5 once with a real export on a copy and record the result in
-   §8: a real import is the one test this schema has never had.
+6. **Before the freeze**, run steps 1–5 once with a real export on a copy: a real import is the one
+   test this schema has never had.
 
 ## 3. The schema (canonical DDL)
 
 This is the canonical init DDL. Until the freeze it is edited **in place** here — there
 is no `0001_init.sql` file yet (D13); a test database is created by applying this block
-to a fresh file (see the §8 validation records for the exact procedure).
+to a fresh file (`tests/lib/docsql.py` extracts it).
 
 ```sql
 -- ============================================================
--- Lifelog schema v1  (single init file — edited in place until the
--- freeze; numbered migrations begin only after real data exists)
---
--- Conventions (the whole contract — also queryable in lifelog_meta):
---   * All *_at columns: UTC ISO-8601 TEXT, millisecond precision
---     ('2026-06-09T21:14:03.482Z'), enforced by a CHECK round-trip
---   * All *_day columns: LOCAL calendar date TEXT ('YYYY-MM-DD'),
---     written at insert, never recomputed, enforced by date() round-trip
---   * Round-trip CHECKs use IS, not =: a CHECK passes when it
---     evaluates to NULL, and date('2026-9-3') is NULL — so
---     'date(x) = x' would ACCEPT malformed dates. 'date(x) IS x'
---     returns 0 for them. (Verified empirically; see §8.)
---   * Single writing APPLICATION (many processes/clients fine: app,
---     CLI, API, agents); nothing else writes life.db
---   * Importers use INSERT ... ON CONFLICT(...) DO NOTHING — never OR IGNORE
---     (it also skips CHECK / NOT NULL violations, silently) and never
---     OR REPLACE (a delete; §8 #6, #7)
---   * No binary files in v1: attachments/media are deferred (D9)
---   * No hard deletes of entities OR their domain rows: deleted_at is a
---     tombstone, ENFORCED by BEFORE DELETE triggers (links are the one
---     hard-deleted table, D11);
---     measurements are append-only, ENFORCED by triggers: no UPDATE, no
---     DELETE; corrections insert a row with supersedes_id (one per row); a
---     correction with a NULL value RETRACTS the row it corrects
---   * entities.created_at = when the row was written to life.db, never
---     back-dated; when a thing HAPPENED is the day / *_at of its own table
---   * entities.tz / measurements.tz = IANA zone of the writer at capture
---     (NULL = unknown): with the UTC instant it gives the local time of day,
---     which cannot be reconstructed later; only captured at write time
---   * link kinds are a CLOSED registry: links.kind must reference
---     link_kinds (FK); registering a kind is a deliberate INSERT, and a
---     kind's structure (symmetric flag, endpoint types) is fixed at
---     registration; a trigger checks every link's endpoint types
---   * page titles must be valid file names everywhere, so the DDL forbids
---     path-unsafe titles, never lets a title change (renames are forbidden,
---     D5), and enforces uniqueness on title_key — the title in NFC +
---     Unicode-casefolded form, computed by the app (SQLite cannot fold
---     Unicode); pages.kind never changes after insert
---   * Pages are never renamed: new page + links(kind='redirect')
---   * Repeating events/tasks are templates; occurrences expand at read
---   * Money is INTEGER minor units of the account's currency, never REAL:
---     amount / currencies.subunits = whole units (D18). Balances are
---     append-only snapshots of an account's VALUE on a day (a deposit, a
---     brokerage, a wallet, a house, a watch all look the same); net worth
---     is derived, never stored.
---   * Every enumerated CHECK is NAMED (entities_type, pages_kind,
---     tasks_status, events_repeat, tasks_repeat, *_repeat_position,
---     accounts_side) so a later ALTER TABLE ... DROP/ADD CONSTRAINT can
---     widen it; an unnamed CHECK can never be dropped (verified, §8 #6, #7)
---   * EVERY writer connection must set:  PRAGMA foreign_keys = ON;
---     PRAGMA recursive_triggers = ON;  PRAGMA busy_timeout = 5000;
---     PRAGMA synchronous = FULL;  and start every write transaction with
---     BEGIN IMMEDIATE (a deferred BEGIN that reads first fails at once with
---     'database is locked' when another writer commits in between; §2.9)
---     (SQLite defaults FKs OFF per connection; STRICT does not enforce
---     them; with recursive_triggers OFF a REPLACE deletes rows WITHOUT
---     firing the append-only DELETE triggers — verified, §8 #6)
+-- Lifelog schema v1: the single init file, edited in place until the freeze;
+-- numbered migrations begin only after real data exists (D13).
+-- The contract is data:  SELECT * FROM lifelog_meta;  and the rules of each table are
+-- comments INSIDE its CREATE statement, so .schema shows them (a comment outside a
+-- statement is not stored in the file).
+-- Every writer connection: SQLite >= 3.51.3; PRAGMA foreign_keys = ON;
+-- PRAGMA recursive_triggers = ON; PRAGMA synchronous = FULL; PRAGMA trusted_schema = OFF;
+-- and every write transaction starts with BEGIN IMMEDIATE (section 2.9).
 -- ============================================================
 PRAGMA application_id = 0x4C494645;   -- 'LIFE' — recognizable to file(1) and tools
 PRAGMA user_version  = 1;
 PRAGMA journal_mode  = WAL;           -- persistent; readers (Datasette) don't block the writer
 
--- ------------------------------------------------------------
--- The contract as data: time formats, derived indexes, rename and
--- recurrence semantics — readable with a SELECT, not just comments.
--- ------------------------------------------------------------
 CREATE TABLE lifelog_meta (
+  -- the contract as data: time formats, derived indexes, rename, recurrence, money and
+  -- writer rules, readable with a SELECT by someone who has only this file
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 ) STRICT;
@@ -621,7 +626,7 @@ INSERT INTO lifelog_meta(key, value) VALUES
   ('instants',   'UTC ISO-8601 TEXT, ms precision, e.g. 2026-06-09T21:14:03.482Z'),
   ('days',       'LOCAL calendar date TEXT YYYY-MM-DD, written at insert, never recomputed'),
   ('renames',    'pages are never renamed; new page + links(kind=''redirect'')'),
-  ('recurrence', 'rows with repeat <> ''none'' are templates; occurrences expand at read'),
+  ('recurrence', 'events with repeat <> ''none'' are templates; occurrences expand at read; nothing else repeats'),
   ('pages_fts',  'derived FTS5 index (unicode61: a CJK run is one token); pages_fts_* shadow tables are rebuildable, not data'),
   ('measurements','append-only (triggers reject UPDATE/DELETE); read through view measurement_values; one correction per row; a correction with NULL value retracts its row'),
   ('deletes',     'entities and their domain rows are never deleted (tombstone via entities.deleted_at, enforced by triggers); measurements and balances are never deleted; only links rows are hard-deleted (D11)'),
@@ -629,105 +634,102 @@ INSERT INTO lifelog_meta(key, value) VALUES
   ('tz',          'entities.tz and measurements.tz = IANA zone name of the writer when the row (measurements: taken_at) was captured, e.g. Europe/Berlin; NULL = unknown; with the UTC instant it gives the local time of day'),
   ('imports',     'INSERT ... ON CONFLICT(source, import_id ...) DO NOTHING; never OR IGNORE (skips CHECK/NOT NULL violations silently) or OR REPLACE (a delete)'),
   ('link_kinds',  'closed registry: links.kind references link_kinds; symmetric flag and endpoint types immutable and enforced; links rows are hard-deleted (D11)'),
-  ('titles',      'page titles never change and are valid file names everywhere: <=240 bytes, no path/reserved characters or names (a device name like CON is reserved even before an extension); memos are untitled'),
+  ('titles',      'page titles never change and are valid file names everywhere: <=240 bytes, no path/reserved characters or names (a device name like CON is reserved even before an extension), no control, invisible or bidi characters; memos are untitled'),
   ('title_key',   'pages.title_key = NFC(casefold(NFC(title))), computed by the app; UNIQUE across pages (a memo has none); ASCII titles must equal lower(title); rebuildable'),
   ('pages_kind',  'pages.kind is memo (untitled: the capture stream and the inbox; always has a day) or page (titled, unique, linkable; its day is NULL when the app created it as a link target); it never changes after insert'),
   ('money',       'amounts are INTEGER minor units of accounts.currency; whole units = amount / currencies.subunits; never REAL, never in measurements'),
-  ('balances',    'append-only snapshots of an account''s value on a local day (account, day, amount); the newest row per (account_id, day) wins; NULL amount retracts; read through balance_values'),
+  ('balances',    'append-only snapshots of an account''s value on a local day (account, day, amount); the newest row per (account_id, day) wins, newest = recorded last = highest id; NULL amount retracts; read through balance_values'),
   ('net_worth',   'derived, never stored: per open account, latest balance on or before the day, converted with fx_rates, assets minus liabilities (section 6.16)'),
   ('fx_rates',    'reference data (mutable): 1 from_ccy = rate to_ccy in WHOLE units; one row per pair, stored with from_ccy < to_ccy; as-of lookup = newest day <= target'),
   ('entities',    'every page/event/task/person/place/account row has an entities row with the same id (supertype; composite FK (id, entity_type)); both are inserted in one transaction'),
   ('wikilinks',   'links(kind=wikilink) from a page always equal what its body names: [[Title]], [[Title|alias]] and #tag, read from the CommonMark text, never rewritten; rebuilt on every save; an invalid target makes no link'),
-  ('writers',     'one writing application; every connection sets foreign_keys=ON, recursive_triggers=ON, synchronous=FULL, journal_mode=WAL and starts write transactions with BEGIN IMMEDIATE; every other tool opens the file read-only'),
-  ('evolution',   'after the first real data: numbered forward-only SQL migrations, additive only, PRAGMA user_version; enumerated CHECKs are named so they can be widened with ALTER TABLE DROP/ADD CONSTRAINT');
+  ('writers',     'one writing application; every connection sets foreign_keys=ON, recursive_triggers=ON, synchronous=FULL, trusted_schema=OFF, journal_mode=WAL and starts write transactions with BEGIN IMMEDIATE; every other tool opens the file read-only'),
+  ('sqlite',      'writers need SQLite >= 3.51.3 (fixes a WAL corruption race between concurrent writers and checkpoints); migrations need >= 3.53 (ALTER TABLE ADD/DROP CONSTRAINT); CHECKs use only functions every such version has'),
+  ('provenance',  'entities.source and links.source name the writer (ui, cli, api, agent:<name>, import:<name>); written at insert, never changed; NULL = unknown'),
+  ('evolution',   'after the first real data: numbered forward-only SQL migrations, additive only, PRAGMA user_version; every CHECK is named, so any rule can be widened or tightened with ALTER TABLE DROP/ADD CONSTRAINT');
 
--- ------------------------------------------------------------
--- Shared spine: one row per linkable thing. UNIQUE(id, type) plus
--- the composite FK in every domain table guarantees that a row's
--- type and its domain table always agree, and one id can never
--- live in two domain tables. deleted_at is the tombstone (D11).
--- ------------------------------------------------------------
 CREATE TABLE entities (
+  -- The shared spine: one row per linkable thing (page, event, task, person, place, account).
+  -- UNIQUE(id, type) plus the composite FK (id, entity_type) in every domain table make a row's
+  -- type and its domain table agree; the app inserts this row first, in the same transaction.
+  -- Nothing is ever deleted: deleted_at is the tombstone (D11), enforced by BEFORE DELETE triggers.
+  -- Every *_at column in this file is a UTC ISO-8601 instant with milliseconds, every *_day a LOCAL
+  -- date 'YYYY-MM-DD' written at insert and never recomputed; both are checked by a round-trip
+  -- that uses IS, not =: a CHECK passes on NULL, and date('2026-9-3') is NULL.
   id         INTEGER PRIMARY KEY,
   type       TEXT NOT NULL CONSTRAINT entities_type
                   CHECK (type IN ('page','event','task','person','place','account')),
-  created_at TEXT NOT NULL CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at),
-  updated_at TEXT NOT NULL CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', updated_at) IS updated_at),
-  deleted_at TEXT     CHECK (deleted_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', deleted_at) IS deleted_at),
-  tz         TEXT     CHECK (tz IS NULL OR (length(tz) BETWEEN 1 AND 64 AND tz NOT GLOB '*[^A-Za-z0-9_/+-]*')),   -- IANA zone of the writer when the row was created ('Europe/Berlin'); NULL = unknown
+  created_at TEXT NOT NULL CONSTRAINT entities_created_at CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at),   -- when written to life.db, never back-dated
+  updated_at TEXT NOT NULL CONSTRAINT entities_updated_at CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', updated_at) IS updated_at),   -- kept by the *_touch triggers
+  deleted_at TEXT     CONSTRAINT entities_deleted_at CHECK (deleted_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', deleted_at) IS deleted_at),
+  tz         TEXT     CONSTRAINT entities_tz CHECK (tz IS NULL OR (length(tz) BETWEEN 1 AND 64 AND tz NOT GLOB '*[^A-Za-z0-9_/+-]*')),   -- IANA zone of the writer when the row was created ('Europe/Berlin'); NULL = unknown
+  source     TEXT     CONSTRAINT entities_source CHECK (source IS NULL OR (length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*')),   -- which writer made the row: 'ui', 'cli', 'api', 'agent:<name>', 'import:<name>'; written at insert, never changed; NULL = unknown
   UNIQUE (id, type)
 ) STRICT;
 
--- ------------------------------------------------------------
--- All prose lives here: quick captures (memo: untitled, the journal
--- stream and the inbox) and titled, interlinked pages (page: an essay,
--- a reference page, a tag; one kind, D5 addendum 5). There is no
--- "journal" entity: the day page is a VIEW over the memo stream
--- (see query cookbook). memos double as an inbox: triaged_at NULL
--- = still in inbox. Mood is NOT a column: it is the 'mood' metric
--- in measurements, optionally pointed at its memo (D6).
--- ------------------------------------------------------------
 CREATE TABLE pages (
+  -- All prose: memos (untitled; the journal stream and the inbox, triaged_at NULL = still in the
+  -- inbox) and pages (titled, unique, linkable: an essay, a reference page, a tag; D5). The day page
+  -- is a query over the memo stream, not a row. Mood is the 'mood' metric in measurements (D6).
+  -- A title is permanent: pages are never renamed (new page + a #REDIRECT stub + links(kind='redirect')).
+  -- Uniqueness is on title_key = NFC(casefold(NFC(title))), computed by the app because SQLite cannot
+  -- fold Unicode: 'Café' = 'CAFÉ' = NFD 'Café'. Look a page up with WHERE title_key = :key.
+  -- links(kind='wikilink') from a page always equal the [[titles]] and #tags its body names (D19).
   id          INTEGER PRIMARY KEY,
-  entity_type TEXT NOT NULL DEFAULT 'page' CHECK (entity_type = 'page'),
+  entity_type TEXT NOT NULL DEFAULT 'page' CONSTRAINT pages_entity_type CHECK (entity_type = 'page'),
   kind        TEXT NOT NULL CONSTRAINT pages_kind CHECK (kind IN ('memo','page')),
   title       TEXT,                       -- page: required, filename-safe, immutable; memo: NULL
   title_key   TEXT,                       -- page: NFC(casefold(NFC(title))), app-computed, unique; memo: NULL
   day         TEXT,                       -- local capture day; required for a memo; a page has one if written on purpose, NULL for a link target the app created
-  triaged_at  TEXT CHECK (triaged_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', triaged_at) IS triaged_at),
+  triaged_at  TEXT CONSTRAINT pages_triaged_at CHECK (triaged_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', triaged_at) IS triaged_at),
   body        TEXT NOT NULL DEFAULT '',   -- CommonMark; [[Wiki Links]] inline
   FOREIGN KEY (id, entity_type) REFERENCES entities(id, type),
-  CHECK (kind = 'page' OR day IS NOT NULL),   -- a memo always has a day; a page may have none
-  CHECK (kind = 'memo' OR title IS NOT NULL),
-  CHECK (kind <> 'memo' OR title IS NULL),   -- memos are untitled: a titled memo would be unfindable
-  CHECK ((title IS NULL) = (title_key IS NULL)),
-  CHECK (title_key IS NULL OR (length(title_key) >= 1 AND title_key = trim(title_key)
+  CONSTRAINT pages_memo_day CHECK (kind = 'page' OR day IS NOT NULL),   -- a memo always has a day; a page may have none
+  CONSTRAINT pages_page_titled CHECK (kind = 'memo' OR title IS NOT NULL),
+  CONSTRAINT pages_memo_untitled CHECK (kind <> 'memo' OR title IS NULL),   -- memos are untitled: a titled memo would be unfindable
+  CONSTRAINT pages_key_iff_title CHECK ((title IS NULL) = (title_key IS NULL)),
+  CONSTRAINT pages_key_folded CHECK (title_key IS NULL OR (length(title_key) >= 1 AND title_key = trim(title_key)
                                AND title_key NOT GLOB '*[A-Z]*')),      -- a folded key has no ASCII capitals
-  CHECK (title_key IS NULL OR title GLOB '*[^ -~]*' OR title_key = lower(title)),   -- pure-ASCII titles: the DB verifies the key
-  CHECK (title IS NULL OR (title = trim(title) AND length(title) >= 1
+  CONSTRAINT pages_key_ascii CHECK (title_key IS NULL OR title GLOB '*[^ -~]*' OR title_key = lower(title)),   -- pure-ASCII titles: the DB verifies the key
+  CONSTRAINT pages_title_len CHECK (title IS NULL OR (title = trim(title) AND length(title) >= 1
                            AND length(CAST(title AS BLOB)) <= 240)),  -- bytes: a filename limit is 255 bytes
-  CHECK (title IS NULL OR (                        -- a title must be a valid file name on Linux, macOS and Windows: keep it safe
+  CONSTRAINT pages_title_safe CHECK (title IS NULL OR (   -- a title must be a valid file name on Linux, macOS and Windows: keep it safe
          title NOT GLOB '*[/\:*?"<>|]*'            -- path separators and Windows-reserved characters
-         AND title NOT GLOB ('*[' || char(1) || '-' || char(31) || char(127) || ']*')   -- control characters
+         AND title NOT GLOB ('*[' || char(1) || '-' || char(31) || char(127) || '-' || char(159) || char(173) || char(1564)
+                             || char(8203) || char(8206) || '-' || char(8207) || char(8234) || '-' || char(8238)
+                             || char(8288) || '-' || char(8292) || char(8294) || '-' || char(8297) || char(65279) || ']*')
+                                                   -- control characters (C0, DEL, C1) and invisible or bidi ones: soft hyphen, Arabic
+                                                   -- letter mark, zero-width space, LRM/RLM, embeddings and overrides, word joiner and
+                                                   -- invisible operators, isolates, BOM. ZWNJ/ZWJ (U+200C/D) stay: scripts and emoji need them
          AND instr(title, char(0)) = 0
          AND substr(title, 1, 1) <> '.' AND substr(title, -1) <> '.'   -- no hidden files, '..', trailing dot
          AND upper(CASE WHEN instr(title, '.') > 0 THEN substr(title, 1, instr(title, '.') - 1) ELSE title END)
              NOT IN ('CON','PRN','AUX','NUL',                -- Windows device names, bare or before an extension (CON.backup)
                'COM1','COM2','COM3','COM4','COM5','COM6','COM7','COM8','COM9','COM¹','COM²','COM³',
                'LPT1','LPT2','LPT3','LPT4','LPT5','LPT6','LPT7','LPT8','LPT9','LPT¹','LPT²','LPT³'))),
-  CHECK (triaged_at IS NULL OR kind = 'memo'),
-  CHECK (day IS NULL OR date(day) IS day)
+  CONSTRAINT pages_triage_memo CHECK (triaged_at IS NULL OR kind = 'memo'),
+  CONSTRAINT pages_day_valid CHECK (day IS NULL OR date(day) IS day)
 ) STRICT;
--- Uniqueness is on the key, not the title: 'Café' = 'CAFÉ' = NFD 'Café' = 'Diet' = 'diet' all collide.
--- Look pages up with  WHERE title_key = :key  (an equality implies the index's predicate, so SQLite uses it;
--- memos have no key and stay out of the index).
-CREATE UNIQUE INDEX pages_title ON pages(title_key) WHERE title_key IS NOT NULL;
+CREATE UNIQUE INDEX pages_title ON pages(title_key) WHERE title_key IS NOT NULL;   -- memos have no key and stay out of it
 CREATE INDEX pages_day ON pages(day);
 CREATE INDEX pages_inbox ON pages(day) WHERE kind = 'memo' AND triaged_at IS NULL;
--- Titles never change (D5: renames are forbidden — they would repoint every [[Old Title]]
--- in decades of prose). Fix a title by creating the new page and turning the old one into a
--- #REDIRECT stub (links.kind = 'redirect'). title_key is derived data and may be recomputed.
 CREATE TRIGGER pages_title_fixed BEFORE UPDATE OF title ON pages
   WHEN NEW.title IS NOT OLD.title
 BEGIN
+  -- a rename would repoint every [[Old Title]] in decades of prose (D5); title_key is derived and may be recomputed
   SELECT RAISE(ABORT, 'titles are immutable: create the new page and make this one a #REDIRECT stub');
 END;
--- A page never changes kind: a memo that deserves to be a page becomes a NEW page
--- linked kind='spawned' (D5); flipping kind in place would silently change which
--- CHECKs and indexes govern the row.
 CREATE TRIGGER pages_kind_fixed BEFORE UPDATE OF kind ON pages
   WHEN NEW.kind IS NOT OLD.kind
 BEGIN
+  -- flipping kind in place would silently change which CHECKs and indexes govern the row (D5)
   SELECT RAISE(ABORT, 'pages.kind is fixed: create a new page and link it (kind=spawned) instead');
 END;
 
--- Full-text search over prose. External-content FTS5 kept in sync
--- by triggers, so it can never drift and can be rebuilt with:
---   INSERT INTO pages_fts(pages_fts) VALUES('rebuild');
--- Tokenizer: the default unicode61 (folds accents: Zurich finds Zürich, stefan finds Ștefan)
--- — a CJK run is ONE token, so a part of it is not found. Decided, not forgotten: §7,
--- switching is drop + create with tokenize='trigram remove_diacritics 1' + rebuild.
 CREATE VIRTUAL TABLE pages_fts USING fts5(
+  -- derived: external-content FTS5 kept in sync by the three triggers below; rebuild with
+  -- INSERT INTO pages_fts(pages_fts) VALUES('rebuild'). Tokenizer unicode61 folds accents
+  -- (Zurich finds Zürich); a CJK run is ONE token (section 7).
   title, body, content='pages', content_rowid='id'
 );
 CREATE TRIGGER pages_fts_ai AFTER INSERT ON pages BEGIN
@@ -736,36 +738,34 @@ END;
 CREATE TRIGGER pages_fts_ad AFTER DELETE ON pages BEGIN
   INSERT INTO pages_fts(pages_fts, rowid, title, body) VALUES ('delete', OLD.id, OLD.title, OLD.body);
 END;
-CREATE TRIGGER pages_fts_au AFTER UPDATE ON pages BEGIN
+CREATE TRIGGER pages_fts_au AFTER UPDATE OF title, body ON pages BEGIN
+  -- only the indexed columns: triage or a no-op update does not re-index the body
   INSERT INTO pages_fts(pages_fts, rowid, title, body) VALUES ('delete', OLD.id, OLD.title, OLD.body);
   INSERT INTO pages_fts(rowid, title, body) VALUES (NEW.id, NEW.title, NEW.body);
 END;
 
--- ------------------------------------------------------------
--- Named locations: a fifth entity type, linkable like everything
--- else (D16). events.place_id points here.
--- ------------------------------------------------------------
 CREATE TABLE places (
+  -- named locations, an entity type linkable like everything else (D16); events.place_id points here.
+  -- name is unique case-insensitively for ASCII only ('Berlin' = 'berlin'); disambiguate homonyms
+  -- in the name itself ('Springfield (IL)').
   id          INTEGER PRIMARY KEY,
-  entity_type TEXT NOT NULL DEFAULT 'place' CHECK (entity_type = 'place'),
-  name        TEXT NOT NULL UNIQUE COLLATE NOCASE,   -- 'Berlin' = 'berlin'
+  entity_type TEXT NOT NULL DEFAULT 'place' CONSTRAINT places_entity_type CHECK (entity_type = 'place'),
+  name        TEXT NOT NULL UNIQUE COLLATE NOCASE,
   notes       TEXT,
   FOREIGN KEY (id, entity_type) REFERENCES entities(id, type)
 ) STRICT;
 
--- ------------------------------------------------------------
--- Happenings: appointments, trips, milestones. Date-level facts
--- are first-class; instants are optional extra precision.
--- Repeating rows are templates (D15): occurrences expand at read.
--- ------------------------------------------------------------
 CREATE TABLE events (
+  -- happenings: appointments, trips, milestones. Date-level facts are first-class; instants are
+  -- optional extra precision. A repeating event is a template (D15): occurrences expand at read
+  -- (section 6.12), never stored. Events are the only thing that repeats.
   id          INTEGER PRIMARY KEY,
-  entity_type TEXT NOT NULL DEFAULT 'event' CHECK (entity_type = 'event'),
+  entity_type TEXT NOT NULL DEFAULT 'event' CONSTRAINT events_entity_type CHECK (entity_type = 'event'),
   title       TEXT NOT NULL,
-  start_day   TEXT NOT NULL CHECK (date(start_day) IS start_day),
-  end_day     TEXT CHECK (end_day IS NULL OR date(end_day) IS end_day),
-  start_at    TEXT CHECK (start_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', start_at) IS start_at),
-  end_at      TEXT CHECK (end_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', end_at) IS end_at),
+  start_day   TEXT NOT NULL CONSTRAINT events_start_day CHECK (date(start_day) IS start_day),
+  end_day     TEXT CONSTRAINT events_end_day CHECK (end_day IS NULL OR date(end_day) IS end_day),
+  start_at    TEXT CONSTRAINT events_start_at CHECK (start_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', start_at) IS start_at),
+  end_at      TEXT CONSTRAINT events_end_at CHECK (end_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', end_at) IS end_at),
   place_id    INTEGER REFERENCES places(id),
   notes       TEXT,
   repeat        TEXT NOT NULL DEFAULT 'none'
@@ -776,15 +776,15 @@ CREATE TABLE events (
   repeat_position TEXT,                -- monthly only, w/ repeat_weekday:
                                         -- 'first'..'last' → "last Friday"
   repeat_weekday  TEXT,                -- monthly only, w/ repeat_position: 'mo'..'su'
-  repeat_until   TEXT CHECK (repeat_until IS NULL OR date(repeat_until) IS repeat_until),
+  repeat_until   TEXT CONSTRAINT events_repeat_until CHECK (repeat_until IS NULL OR date(repeat_until) IS repeat_until),
   FOREIGN KEY (id, entity_type) REFERENCES entities(id, type),
-  CHECK (end_day IS NULL OR end_day >= start_day),
-  CHECK (end_at IS NULL OR start_at IS NULL OR end_at >= start_at),
-  CHECK (repeat_until IS NULL OR repeat_until >= start_day),
-  CHECK (repeat_every IS NULL OR (repeat <> 'none' AND repeat_every >= 1)),
-  CHECK (repeat_until IS NULL OR repeat <> 'none'),
-  CHECK ((repeat = 'weekly') = (repeat_weekdays IS NOT NULL)),
-  CHECK (repeat_weekdays IS NULL OR (              -- 'mo,we,fr': lowercase 2-letter tokens, comma-separated
+  CONSTRAINT events_end_day_order CHECK (end_day IS NULL OR end_day >= start_day),
+  CONSTRAINT events_end_at_order CHECK (end_at IS NULL OR start_at IS NULL OR end_at >= start_at),
+  CONSTRAINT events_until_order CHECK (repeat_until IS NULL OR repeat_until >= start_day),
+  CONSTRAINT events_repeat_every CHECK (repeat_every IS NULL OR (repeat <> 'none' AND repeat_every >= 1)),
+  CONSTRAINT events_until_repeats CHECK (repeat_until IS NULL OR repeat <> 'none'),
+  CONSTRAINT events_weekly_weekdays CHECK ((repeat = 'weekly') = (repeat_weekdays IS NOT NULL)),
+  CONSTRAINT events_repeat_weekdays CHECK (repeat_weekdays IS NULL OR (   -- 'mo,we,fr': lowercase 2-letter tokens, comma-separated
          repeat_weekdays NOT GLOB '*[^a-z,]*'
          AND repeat_weekdays NOT GLOB ',*' AND repeat_weekdays NOT GLOB '*,'
          AND repeat_weekdays NOT GLOB '*,,*'
@@ -792,127 +792,89 @@ CREATE TABLE events (
              3 * (length(repeat_weekdays) - length(replace(repeat_weekdays, ',', '')) + 1) - 1
          AND length(replace(replace(replace(replace(replace(replace(replace(replace(
                repeat_weekdays,'su',''),'mo',''),'tu',''),'we',''),'th',''),'fr',''),'sa',''),',','')) = 0)),
-  CHECK ((repeat_position IS NULL) = (repeat_weekday IS NULL)),
+  CONSTRAINT events_position_pair CHECK ((repeat_position IS NULL) = (repeat_weekday IS NULL)),
   CONSTRAINT events_repeat_position CHECK (repeat_position IS NULL OR
          (repeat = 'monthly' AND repeat_position IN ('first','second','third','fourth','last')
           AND repeat_weekday IN ('mo','tu','we','th','fr','sa','su')))
 ) STRICT;
 CREATE INDEX events_start ON events(start_day);
 
--- ------------------------------------------------------------
--- Tasks are fleeting: open | done. Abandoning a task is erasure
--- (a tombstone), not a recorded decision. A repeating task is a
--- template like a repeating event; completing it ends the series
--- (repeat_until = the completion day, by convention) (D15).
--- ------------------------------------------------------------
 CREATE TABLE tasks (
+  -- fleeting: open | done. Abandoning a task is erasure (a tombstone), not a recorded decision.
+  -- Tasks do not repeat: a reminder is a repeating event, "did I do it each month" is a 0/1 habit
+  -- metric in measurements (D15).
   id           INTEGER PRIMARY KEY,
-  entity_type  TEXT NOT NULL DEFAULT 'task' CHECK (entity_type = 'task'),
+  entity_type  TEXT NOT NULL DEFAULT 'task' CONSTRAINT tasks_entity_type CHECK (entity_type = 'task'),
   title        TEXT NOT NULL,
   status       TEXT NOT NULL DEFAULT 'open' CONSTRAINT tasks_status CHECK (status IN ('open','done')),
-  due_day      TEXT CHECK (due_day IS NULL OR date(due_day) IS due_day),
-  completed_at TEXT CHECK (completed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', completed_at) IS completed_at),
-  completed_day TEXT CHECK (completed_day IS NULL OR date(completed_day) IS completed_day),   -- LOCAL day it was done (D10)
-  repeat        TEXT NOT NULL DEFAULT 'none'
-                 CONSTRAINT tasks_repeat CHECK (repeat IN ('none','daily','weekly','monthly','yearly')),
-  repeat_every  INTEGER,
-  repeat_weekdays TEXT,
-  repeat_position TEXT,
-  repeat_weekday  TEXT,
-  repeat_until   TEXT CHECK (repeat_until IS NULL OR date(repeat_until) IS repeat_until),
+  due_day      TEXT CONSTRAINT tasks_due_day CHECK (due_day IS NULL OR date(due_day) IS due_day),
+  completed_at TEXT CONSTRAINT tasks_completed_at CHECK (completed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', completed_at) IS completed_at),
+  completed_day TEXT CONSTRAINT tasks_completed_day CHECK (completed_day IS NULL OR date(completed_day) IS completed_day),   -- LOCAL day it was done (D10)
   FOREIGN KEY (id, entity_type) REFERENCES entities(id, type),
-  CHECK ((status = 'done') = (completed_at IS NOT NULL)),
-  CHECK ((status = 'done') = (completed_day IS NOT NULL)),
-  CHECK (repeat = 'none' OR due_day IS NOT NULL),    -- a template needs an anchor day to expand from
-  CHECK (repeat_every IS NULL OR (repeat <> 'none' AND repeat_every >= 1)),
-  CHECK (repeat_until IS NULL OR repeat <> 'none'),
-  CHECK ((repeat = 'weekly') = (repeat_weekdays IS NOT NULL)),
-  CHECK (repeat_weekdays IS NULL OR (              -- 'mo,we,fr': lowercase 2-letter tokens, comma-separated
-         repeat_weekdays NOT GLOB '*[^a-z,]*'
-         AND repeat_weekdays NOT GLOB ',*' AND repeat_weekdays NOT GLOB '*,'
-         AND repeat_weekdays NOT GLOB '*,,*'
-         AND length(repeat_weekdays) =
-             3 * (length(repeat_weekdays) - length(replace(repeat_weekdays, ',', '')) + 1) - 1
-         AND length(replace(replace(replace(replace(replace(replace(replace(replace(
-               repeat_weekdays,'su',''),'mo',''),'tu',''),'we',''),'th',''),'fr',''),'sa',''),',','')) = 0)),
-  CHECK ((repeat_position IS NULL) = (repeat_weekday IS NULL)),
-  CONSTRAINT tasks_repeat_position CHECK (repeat_position IS NULL OR
-         (repeat = 'monthly' AND repeat_position IN ('first','second','third','fourth','last')
-          AND repeat_weekday IN ('mo','tu','we','th','fr','sa','su')))
+  CONSTRAINT tasks_done_at CHECK ((status = 'done') = (completed_at IS NOT NULL)),
+  CONSTRAINT tasks_done_day CHECK ((status = 'done') = (completed_day IS NOT NULL))
 ) STRICT;
 CREATE INDEX tasks_open ON tasks(status, due_day);
 
--- ------------------------------------------------------------
 CREATE TABLE people (
+  -- people in the owner's life; relationships between them are links (friend, family, parent-of)
   id          INTEGER PRIMARY KEY,
-  entity_type TEXT NOT NULL DEFAULT 'person' CHECK (entity_type = 'person'),
+  entity_type TEXT NOT NULL DEFAULT 'person' CONSTRAINT people_entity_type CHECK (entity_type = 'person'),
   name        TEXT NOT NULL,
   nickname    TEXT,
-  birth_day   TEXT CHECK (birth_day IS NULL OR date(birth_day) IS birth_day),
-  death_day   TEXT CHECK (death_day IS NULL OR date(death_day) IS death_day),
+  birth_day   TEXT CONSTRAINT people_birth_day CHECK (birth_day IS NULL OR date(birth_day) IS birth_day),
+  death_day   TEXT CONSTRAINT people_death_day CHECK (death_day IS NULL OR date(death_day) IS death_day),
   notes       TEXT,
   FOREIGN KEY (id, entity_type) REFERENCES entities(id, type),
-  CHECK (death_day IS NULL OR birth_day IS NULL OR death_day >= birth_day)
+  CONSTRAINT people_death_order CHECK (death_day IS NULL OR birth_day IS NULL OR death_day >= birth_day)
 ) STRICT;
 
--- ------------------------------------------------------------
--- Metrics: a tiny registry that keeps time-series canonical.
--- 'weight' is one series forever, never 'weight'/'Weight'/'weight kg'
--- (hence COLLATE NOCASE). Seeded with 'mood' (D6); UI should make
--- create-on-the-fly painless (suggest + confirm).
--- ------------------------------------------------------------
 CREATE TABLE metrics (
+  -- a tiny registry that keeps time series canonical: 'weight' is one series forever, never
+  -- 'Weight' or 'weight kg' (names are snake_case). Seeded with 'mood' (D6). The unit gives every
+  -- stored value its meaning, so it never changes (metrics_unit_fixed).
   id    INTEGER PRIMARY KEY,
-  name  TEXT NOT NULL UNIQUE COLLATE NOCASE,  -- snake_case canonical: 'weight', 'mood'
+  name  TEXT NOT NULL UNIQUE,                 -- snake_case canonical: 'weight', 'mood'
   unit  TEXT NOT NULL DEFAULT '',             -- 'kg', 'bpm', 'h'; '' for 1-5 scales
   notes TEXT,
-  CHECK (length(name) >= 1 AND name NOT GLOB '*[^a-z0-9_]*')   -- snake_case, as the comment says
+  CONSTRAINT metrics_name CHECK (length(name) >= 1 AND name NOT GLOB '*[^a-z0-9_]*')   -- lowercase snake_case, so no case variants
 ) STRICT;
--- The unit gives every stored value its meaning; changing it would silently reinterpret the series.
 CREATE TRIGGER metrics_unit_fixed BEFORE UPDATE OF unit ON metrics
   WHEN NEW.unit IS NOT OLD.unit
 BEGIN
+  -- changing the unit would silently reinterpret the whole series
   SELECT RAISE(ABORT, 'metrics.unit is fixed: it defines what every stored value means; register a new metric instead');
 END;
 INSERT INTO metrics(name, unit, notes) VALUES
   ('mood', '', '1-5; attached to its memo via measurements.entity_id when posted');
 
--- ------------------------------------------------------------
--- Measurements: one row per data point (the FxLifeSheet shape,
--- which survived 380k rows / 6+ years). Append-only: never UPDATE
--- a value; corrections insert a new row with supersedes_id — and
--- triggers enforce it and reject cross-metric corrections. A correction whose
--- value is NULL RETRACTS the row it corrects (a mis-tap, a wrong metric).
--- import_id makes bulk re-imports idempotent:
---   INSERT ... ON CONFLICT(source, import_id, metric_id)
---     WHERE import_id IS NOT NULL DO NOTHING
--- (never OR IGNORE: it silently skips rows violating a CHECK or NOT NULL).
--- ------------------------------------------------------------
 CREATE TABLE measurements (
+  -- one row per data point (the FxLifeSheet shape, 380k rows over 6+ years). The table is
+  -- append-only, enforced by triggers: never UPDATE or DELETE. A correction is a new row whose supersedes_id names the row
+  -- it corrects, at most one per row (chain: correct the correction); a correction with a NULL value
+  -- RETRACTS the row it corrects. Read through the view measurement_values.
+  -- Imports: INSERT ... ON CONFLICT(source, import_id, metric_id) WHERE import_id IS NOT NULL
+  -- DO NOTHING; never OR IGNORE (it silently skips CHECK / NOT NULL violations).
   id            INTEGER PRIMARY KEY,
   metric_id     INTEGER NOT NULL REFERENCES metrics(id),
-  day           TEXT NOT NULL CHECK (date(day) IS day),  -- local date the value refers to
-  taken_at      TEXT CHECK (taken_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', taken_at) IS taken_at),
-  tz            TEXT CHECK (tz IS NULL OR (length(tz) BETWEEN 1 AND 64 AND tz NOT GLOB '*[^A-Za-z0-9_/+-]*')),   -- IANA zone where taken_at was captured; NULL = unknown
+  day           TEXT NOT NULL CONSTRAINT measurements_day CHECK (date(day) IS day),  -- local date the value refers to
+  taken_at      TEXT CONSTRAINT measurements_taken_at CHECK (taken_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', taken_at) IS taken_at),
+  tz            TEXT CONSTRAINT measurements_tz CHECK (tz IS NULL OR (length(tz) BETWEEN 1 AND 64 AND tz NOT GLOB '*[^A-Za-z0-9_/+-]*')),   -- IANA zone where taken_at was captured; NULL = unknown
   value         REAL,                        -- numeric only, by design (D7); NULL only on a correction: it RETRACTS the row it supersedes
-  recorded_at   TEXT NOT NULL CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', recorded_at) IS recorded_at),  -- when it was written down (audit; taken_at is when it was measured)
+  recorded_at   TEXT NOT NULL CONSTRAINT measurements_recorded_at CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', recorded_at) IS recorded_at),  -- when it was written down (audit; taken_at is when it was measured)
   source        TEXT NOT NULL DEFAULT 'manual',
   import_id     TEXT,                        -- importer's dedup key, unique per (source, metric)
   entity_id     INTEGER REFERENCES entities(id),      -- provenance: captured with this memo/event
   supersedes_id INTEGER REFERENCES measurements(id),  -- optional: corrects an earlier row
-  CHECK (supersedes_id IS NULL OR supersedes_id <> id),
-  CHECK (value IS NOT NULL OR supersedes_id IS NOT NULL)   -- a first reading has a value; only a correction may retract
+  CONSTRAINT measurements_not_self CHECK (supersedes_id IS NULL OR supersedes_id <> id),
+  CONSTRAINT measurements_first_has_value CHECK (value IS NOT NULL OR supersedes_id IS NOT NULL),   -- a first reading has a value; only a correction may retract
+  CONSTRAINT measurements_value_finite CHECK (value IS NULL OR abs(value) <= 1.7976931348623157e308)   -- finite: rejects ±Infinity (a NaN arrives as NULL)
 ) STRICT;
 CREATE INDEX measurements_series ON measurements(metric_id, day);
 CREATE UNIQUE INDEX measurements_import
   ON measurements(source, import_id, metric_id) WHERE import_id IS NOT NULL;
--- Append-only, enforced: rows are never changed or removed. A correction
--- is a NEW row whose supersedes_id names the row it replaces; each row can
--- be corrected at most once (chain corrections: correct the correction).
--- Because supersedes_id can only be set at INSERT and must name an earlier
--- row, supersede chains can never form a cycle.
 CREATE UNIQUE INDEX measurements_one_correction
-  ON measurements(supersedes_id) WHERE supersedes_id IS NOT NULL;  -- also serves measurement_values
+  ON measurements(supersedes_id) WHERE supersedes_id IS NOT NULL;  -- one correction per row; also serves measurement_values
 CREATE INDEX measurements_day ON measurements(day);                -- day view
 CREATE TRIGGER measurements_no_update BEFORE UPDATE ON measurements
 BEGIN
@@ -922,46 +884,28 @@ CREATE TRIGGER measurements_no_delete BEFORE DELETE ON measurements
 BEGIN
   SELECT RAISE(ABORT, 'measurements are never deleted: correct by inserting a row with supersedes_id');
 END;
--- A correction must correct an EXISTING row of the SAME metric
--- (IS NOT, not <>: a dangling supersedes_id yields NULL, and NULL <> x is NULL = pass):
 CREATE TRIGGER measurements_supersede_metric AFTER INSERT ON measurements
   WHEN NEW.supersedes_id IS NOT NULL
 BEGIN
+  -- a correction must correct an EXISTING row of the SAME metric (IS NOT, not <>: a dangling
+  -- supersedes_id yields NULL, and NULL <> x is NULL = pass). supersedes_id is set only at INSERT
+  -- and must name an existing row, so correction chains can never form a cycle.
   SELECT RAISE(ABORT, 'supersedes_id must reference a measurement of the same metric')
    WHERE (SELECT metric_id FROM measurements WHERE id = NEW.supersedes_id) IS NOT NEW.metric_id;
 END;
--- The canonical read rule, as a view: rows nothing has corrected, minus retractions.
 CREATE VIEW measurement_values AS
+  -- the canonical read rule: rows nothing has corrected, minus retractions
   SELECT me.*
     FROM measurements me
    WHERE me.value IS NOT NULL
      AND NOT EXISTS (SELECT 1 FROM measurements x WHERE x.supersedes_id = me.id);
 
--- ------------------------------------------------------------
--- Money (D18). Personal finance is a small, exact tier of its own — never
--- rows in measurements (REAL, one unit per metric, no retraction).
---   currencies : closed registry of the currencies you hold or value things
---                in; subunits = minor units per whole unit (EUR 100, JPY 1),
---                so a stranger can turn an INTEGER amount into a number
---                without the app. Immutable.
---   accounts   : anything with a balance or a value — bank, deposit,
---                brokerage, crypto wallet, pension, cash, property, vehicle,
---                valuables (watch, art), loan, mortgage, card. Stocks and
---                crypto are valued like everything else: the market value in
---                fiat that the statement or app shows on that day. A
---                sixth ENTITY type, so memos/events can link to it and it can
---                be tombstoned. side + currency define what every balance
---                means and never change. Record your OWN share of joint items.
---   balances   : append-only snapshots. The newest row per (account_id, day)
---                wins; a row with NULL amount RETRACTS that day. Wrong entry =
---                insert another row, never UPDATE/DELETE. Read through
---                balance_values. Net worth is DERIVED (see section 6.16).
---   fx_rates   : reference data (mutable, re-importable). Canonical direction
---                from_ccy < to_ccy, so one pair can never hold two rates.
--- Never store credentials or full account/card numbers anywhere in life.db.
--- ------------------------------------------------------------
 CREATE TABLE currencies (
-  code     TEXT PRIMARY KEY CHECK (length(code) BETWEEN 3 AND 10 AND code NOT GLOB '*[^A-Z0-9]*'),  -- ISO 4217 code: 'EUR', 'JPY' (a coin you hold by quantity may be registered too)
+  -- money (D18) is an exact tier of its own, never rows in measurements. This is the closed registry
+  -- of currencies you hold or value things in; subunits = minor units per whole unit (EUR 100, JPY 1),
+  -- so a stranger can turn an INTEGER amount into a number without the app. subunits never changes.
+  -- Never store credentials or full account/card numbers anywhere in life.db.
+  code     TEXT PRIMARY KEY CONSTRAINT currencies_code CHECK (length(code) BETWEEN 3 AND 10 AND code NOT GLOB '*[^A-Z0-9]*'),  -- ISO 4217 code: 'EUR', 'JPY' (a coin you hold by quantity may be registered too)
   name     TEXT NOT NULL,
   subunits INTEGER NOT NULL CONSTRAINT currencies_subunits CHECK (subunits BETWEEN 1 AND 1000000000),  -- minor units per 1 whole unit
   notes    TEXT
@@ -974,50 +918,59 @@ INSERT INTO currencies(code, name, subunits) VALUES
   ('CAD', 'Canadian dollar',100),
   ('AUD', 'Australian dollar', 100),
   ('JPY', 'Japanese yen',   1);
--- Changing subunits would silently rescale every balance ever recorded in that currency.
 CREATE TRIGGER currencies_subunits_fixed BEFORE UPDATE OF subunits ON currencies
   WHEN NEW.subunits IS NOT OLD.subunits
 BEGIN
+  -- changing subunits would silently rescale every balance ever recorded in that currency
   SELECT RAISE(ABORT, 'currencies.subunits is fixed: it defines what every stored amount means; register a new currency code instead');
 END;
 
 CREATE TABLE accounts (
+  -- anything with a balance or a value: bank, deposit, brokerage, crypto wallet, pension, cash,
+  -- property, vehicle, valuables, loan, mortgage, card. Stocks and crypto are valued like everything
+  -- else: the market value in the account's currency on that day. An entity, so memos and events can
+  -- link to it and it can be tombstoned. side and currency define what every balance means and never
+  -- change (accounts_meaning_fixed). Record your OWN share of joint items.
   id          INTEGER PRIMARY KEY,
-  entity_type TEXT NOT NULL DEFAULT 'account' CHECK (entity_type = 'account'),
+  entity_type TEXT NOT NULL DEFAULT 'account' CONSTRAINT accounts_entity_type CHECK (entity_type = 'account'),
   name        TEXT NOT NULL UNIQUE COLLATE NOCASE,   -- 'Main checking', 'Flat (Berlin)'; unique like places.name
   side        TEXT NOT NULL CONSTRAINT accounts_side CHECK (side IN ('asset','liability')),
   currency    TEXT NOT NULL REFERENCES currencies(code),
   category    TEXT COLLATE NOCASE,                   -- free taxonomy: 'cash','deposit','brokerage','crypto','pension','property','valuables','loan'
   institution TEXT,
-  opened_day  TEXT CHECK (opened_day IS NULL OR date(opened_day) IS opened_day),
-  closed_day  TEXT CHECK (closed_day IS NULL OR date(closed_day) IS closed_day),   -- last day the account counts (inclusive)
+  opened_day  TEXT CONSTRAINT accounts_opened_day CHECK (opened_day IS NULL OR date(opened_day) IS opened_day),
+  closed_day  TEXT CONSTRAINT accounts_closed_day CHECK (closed_day IS NULL OR date(closed_day) IS closed_day),   -- last day the account counts (inclusive)
   notes       TEXT,
   FOREIGN KEY (id, entity_type) REFERENCES entities(id, type),
-  CHECK (closed_day IS NULL OR opened_day IS NULL OR closed_day >= opened_day)
+  CONSTRAINT accounts_closed_order CHECK (closed_day IS NULL OR opened_day IS NULL OR closed_day >= opened_day)
 ) STRICT;
--- side and currency give every balance its meaning; changing either would rewrite history.
--- (The WHEN clause keeps full-row ORM updates working.) To change: close it, open a new account.
 CREATE TRIGGER accounts_meaning_fixed BEFORE UPDATE OF side, currency ON accounts
   WHEN NEW.side IS NOT OLD.side OR NEW.currency IS NOT OLD.currency
 BEGIN
+  -- changing either would rewrite history; the WHEN clause keeps full-row ORM updates working
   SELECT RAISE(ABORT, 'an account''s side and currency are fixed: close it and open a new account instead');
 END;
 
 CREATE TABLE balances (
+  -- append-only snapshots of an account's VALUE on a local day, in INTEGER minor units of the account's
+  -- currency (never REAL; whole units = amount / currencies.subunits). The newest row per
+  -- (account_id, day) wins, newest = recorded last = highest id; a row with a NULL amount RETRACTS
+  -- that day. A wrong entry is corrected by another row, never UPDATE/DELETE (triggers; they need
+  -- PRAGMA recursive_triggers=ON to stop a REPLACE). Read through balance_values. Net worth is
+  -- derived, never stored (section 6.16).
   id          INTEGER PRIMARY KEY,
   account_id  INTEGER NOT NULL REFERENCES accounts(id),
-  day         TEXT NOT NULL CHECK (date(day) IS day),   -- LOCAL as-of date: the end-of-day balance / valuation
+  day         TEXT NOT NULL CONSTRAINT balances_day CHECK (date(day) IS day),   -- LOCAL as-of date: the end-of-day balance / valuation
   amount      INTEGER,                                  -- minor units of accounts.currency, as the institution states it
                                                         -- (a mortgage of 200 000 is +20000000: side says it is owed);
                                                         -- NULL = retraction of this (account, day)
-  recorded_at TEXT NOT NULL CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', recorded_at) IS recorded_at),  -- when it was written down
+  recorded_at TEXT NOT NULL CONSTRAINT balances_recorded_at CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', recorded_at) IS recorded_at),  -- when it was written down
   source      TEXT NOT NULL DEFAULT 'manual',           -- 'manual','statement','estimate','import:<name>'
   import_id   TEXT,                                     -- importer's dedup key, unique per source
   note        TEXT                                      -- 'after selling the ETF', 'agent estimate'
 ) STRICT;
 CREATE INDEX balances_series ON balances(account_id, day);   -- newest-per-day and as-of lookups (rowid is the last key part)
 CREATE UNIQUE INDEX balances_import ON balances(source, import_id) WHERE import_id IS NOT NULL;
--- Append-only, enforced (needs PRAGMA recursive_triggers=ON for REPLACE, see header):
 CREATE TRIGGER balances_no_update BEFORE UPDATE ON balances
 BEGIN
   SELECT RAISE(ABORT, 'balances are append-only: correct by inserting a newer row for the same (account, day)');
@@ -1026,8 +979,8 @@ CREATE TRIGGER balances_no_delete BEFORE DELETE ON balances
 BEGIN
   SELECT RAISE(ABORT, 'balances are never deleted: retract by inserting a row with NULL amount');
 END;
--- The canonical read rule: the newest row per (account, day), unless that row is a retraction.
 CREATE VIEW balance_values AS
+  -- the canonical read rule: the newest row (highest id) per (account, day), unless it is a retraction
   SELECT b.*
     FROM balances b
    WHERE b.amount IS NOT NULL
@@ -1035,40 +988,32 @@ CREATE VIEW balance_values AS
                       WHERE x.account_id = b.account_id AND x.day = b.day AND x.id > b.id);
 
 CREATE TABLE fx_rates (
+  -- reference data (mutable, re-importable): 1 from_ccy = rate to_ccy in WHOLE units. One canonical
+  -- direction per pair (from_ccy < to_ccy), so a pair can never hold two rates; the inverse is 1/rate.
+  -- Re-importing a rate re-states every past net-worth figure that used it.
   from_ccy TEXT NOT NULL REFERENCES currencies(code),
   to_ccy   TEXT NOT NULL REFERENCES currencies(code),
-  day      TEXT NOT NULL CHECK (date(day) IS day),
-  rate     REAL NOT NULL CHECK (rate > 0 AND rate < 1e18),   -- 1 from_ccy = rate to_ccy, in WHOLE units (not minor units)
+  day      TEXT NOT NULL CONSTRAINT fx_rates_day CHECK (date(day) IS day),
+  rate     REAL NOT NULL CONSTRAINT fx_rates_rate CHECK (rate > 0 AND rate < 1e18),   -- 1 from_ccy = rate to_ccy, in WHOLE units (not minor units)
   source   TEXT NOT NULL DEFAULT 'manual',
   PRIMARY KEY (from_ccy, to_ccy, day),
-  CHECK (from_ccy < to_ccy)          -- one canonical direction per pair; the inverse is 1/rate
+  CONSTRAINT fx_rates_direction CHECK (from_ccy < to_ccy)          -- one canonical direction per pair; the inverse is 1/rate
 ) STRICT;
 
--- ------------------------------------------------------------
--- One graph for everything: wiki backlinks, person↔person
--- relationships, memo→task provenance, subtasks, attendance,
--- redirects. link_kinds is a CLOSED registry: a link's kind must be
--- registered first (FK), and a kind's structure — the symmetric flag
--- and the allowed endpoint entity types — is fixed at registration
--- and enforced (a trigger checks every link's endpoint types).
--- Registering a kind is a deliberate INSERT INTO link_kinds
--- (lowercase, [a-z0-9_-]) — a typo can no longer silently create a
--- new kind. from_types / to_types: NULL = any entity type, otherwise
--- a comma list drawn from entities.type ('task,page'). A misspelt type
--- token fails CLOSED: every link of that kind is rejected. The mirror
--- triggers keep symmetric kinds two-sided on insert AND delete, so a
--- half-edge can never exist and backlink queries need only to_id for
--- them. Cycles (e.g. subtask) are not prevented by the schema (D8).
--- ------------------------------------------------------------
 CREATE TABLE link_kinds (
-  kind       TEXT PRIMARY KEY CHECK (kind = lower(kind) AND length(kind) > 0 AND kind NOT GLOB '*[^a-z0-9_-]*'),
-  symmetric  INTEGER NOT NULL DEFAULT 0 CHECK (symmetric IN (0,1)),
-  from_types TEXT CHECK (from_types IS NULL OR (from_types NOT GLOB '*[^a-z,]*' AND from_types NOT GLOB ',*'
+  -- the CLOSED registry of link kinds: a link's kind must be registered first (FK), and a kind's
+  -- structure (symmetric flag, allowed endpoint entity types) is fixed at registration and enforced
+  -- by a trigger on every link. Registering a kind is a deliberate INSERT, so a typo cannot create
+  -- one. from_types / to_types: NULL = any entity type, else a comma list of entities.type values
+  -- ('task,page'); a misspelt token fails CLOSED (every link of that kind is rejected).
+  kind       TEXT PRIMARY KEY CONSTRAINT link_kinds_kind CHECK (kind = lower(kind) AND length(kind) > 0 AND kind NOT GLOB '*[^a-z0-9_-]*'),
+  symmetric  INTEGER NOT NULL DEFAULT 0 CONSTRAINT link_kinds_symmetric CHECK (symmetric IN (0,1)),
+  from_types TEXT CONSTRAINT link_kinds_from_types CHECK (from_types IS NULL OR (from_types NOT GLOB '*[^a-z,]*' AND from_types NOT GLOB ',*'
                          AND from_types NOT GLOB '*,' AND from_types NOT GLOB '*,,*')),
-  to_types   TEXT CHECK (to_types   IS NULL OR (to_types   NOT GLOB '*[^a-z,]*' AND to_types   NOT GLOB ',*'
+  to_types   TEXT CONSTRAINT link_kinds_to_types CHECK (to_types   IS NULL OR (to_types   NOT GLOB '*[^a-z,]*' AND to_types   NOT GLOB ',*'
                          AND to_types   NOT GLOB '*,' AND to_types   NOT GLOB '*,,*')),
   note       TEXT,
-  CHECK (symmetric = 0 OR from_types IS to_types)   -- a mirrored edge must be valid in both directions
+  CONSTRAINT link_kinds_mirror_valid CHECK (symmetric = 0 OR from_types IS to_types)   -- a mirrored edge must be valid in both directions
 ) STRICT;
 INSERT INTO link_kinds(kind, symmetric, from_types, to_types, note) VALUES
   ('wikilink', 0, 'page',      'page',         'extracted from [[body]] on save; body is the truth'),
@@ -1077,42 +1022,47 @@ INSERT INTO link_kinds(kind, symmetric, from_types, to_types, note) VALUES
   ('subtask',  0, 'task',      'task',         'child task → parent task'),
   ('attended', 0, 'person',    'event',        'person → event'),
   ('about',    0, NULL,        'person,place,account', 'entity → person/place/account it is about'),
-  ('visited',  0, 'person',    'place',        'person → place; the place of an EVENT is events.place_id, never a link (D16 addendum)'),
+  ('visited',  0, 'person',    'place',        'person → place; the place of an EVENT is events.place_id, never a link (D16)'),
   ('located-in', 0, 'place',   'place',        'containment: Tokyo → Japan; transitive — walk it with a recursive CTE (section 6.19)'),
   ('parent-of', 0, 'person',   'person',       'parent → child; ''family'' stays the symmetric catch-all'),
   ('friend',   1, 'person',    'person',       NULL),
   ('family',   1, 'person',    'person',       NULL),
   ('related',  1, NULL,        NULL,           'anything ↔ anything');
--- A kind's structure is fixed once registered: changing it would leave edges that
--- violate it or half-edges. To change structure, register a new kind.
 CREATE TRIGGER link_kinds_structure_fixed BEFORE UPDATE OF symmetric, from_types, to_types ON link_kinds
   WHEN NEW.symmetric IS NOT OLD.symmetric OR NEW.from_types IS NOT OLD.from_types OR NEW.to_types IS NOT OLD.to_types
 BEGIN
+  -- changing a kind's structure would leave edges that violate it, or half-edges; register a new kind
   SELECT RAISE(ABORT, 'a link kind''s structure (symmetric, endpoint types) is fixed at registration; register a new kind instead');
 END;
 
 CREATE TABLE links (
+  -- one graph for everything: wiki backlinks, relationships, triage provenance, subtasks, attendance,
+  -- redirects. Rows are hard-deleted (the one such table, D11) and immutable otherwise (delete and
+  -- re-insert). Symmetric kinds are mirrored by trigger on insert AND delete, so a half-edge cannot
+  -- exist and backlinks need only to_id. Cycles (e.g. subtask) are not prevented (D8).
+  -- source names the writer, like entities.source; written at insert, never changed.
   id         INTEGER PRIMARY KEY,
   from_id    INTEGER NOT NULL REFERENCES entities(id),
   to_id      INTEGER NOT NULL REFERENCES entities(id),
   kind       TEXT NOT NULL REFERENCES link_kinds(kind),  -- closed registry
   note       TEXT,
-  created_at TEXT NOT NULL CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at),
+  created_at TEXT NOT NULL CONSTRAINT links_created_at CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at),
+  source     TEXT CONSTRAINT links_source CHECK (source IS NULL OR (length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*')),
   UNIQUE (from_id, to_id, kind)
 ) STRICT;
 CREATE INDEX links_to ON links(to_id);   -- backlinks query (from_id is served by the UNIQUE index)
 
--- Links are immutable: to change one, delete and re-insert.
-CREATE TRIGGER links_immutable BEFORE UPDATE OF from_id, to_id, kind ON links
+CREATE TRIGGER links_immutable BEFORE UPDATE OF from_id, to_id, kind, source ON links
   WHEN NEW.from_id IS NOT OLD.from_id OR NEW.to_id IS NOT OLD.to_id OR NEW.kind IS NOT OLD.kind
+    OR NEW.source IS NOT OLD.source
 BEGIN
+  -- only note may change; to change anything else, delete and re-insert
   SELECT RAISE(ABORT, 'links are immutable: delete and re-insert');
 END;
--- The registry is closed even if a connection forgot PRAGMA foreign_keys=ON: an
--- unregistered kind is rejected here as well as by the FK. Endpoint types must match
--- the kind; an unknown endpoint id is treated as type '?' and so rejected for typed kinds.
 CREATE TRIGGER links_endpoint_types BEFORE INSERT ON links
 BEGIN
+  -- the registry is closed even on a connection that forgot PRAGMA foreign_keys=ON; an unknown
+  -- endpoint id counts as type '?' and so is rejected for typed kinds
   SELECT RAISE(ABORT, 'link kind is not registered in link_kinds')
    WHERE NOT EXISTS (SELECT 1 FROM link_kinds k WHERE k.kind = NEW.kind);
   SELECT RAISE(ABORT, 'link endpoint type not allowed for this kind (see link_kinds.from_types / to_types)')
@@ -1125,13 +1075,13 @@ BEGIN
                           AND instr(',' || k.to_types || ',',
                                     ',' || coalesce((SELECT type FROM entities WHERE id = NEW.to_id), '?') || ',') = 0)));
 END;
--- Mirror symmetric edges on insert and remove the mirror on delete.
 CREATE TRIGGER links_mirror_insert AFTER INSERT ON links
   WHEN NEW.from_id <> NEW.to_id
    AND (SELECT symmetric FROM link_kinds WHERE kind = NEW.kind) = 1
 BEGIN
-  INSERT OR IGNORE INTO links(from_id, to_id, kind, note, created_at)
-  VALUES (NEW.to_id, NEW.from_id, NEW.kind, NEW.note, NEW.created_at);
+  -- mirror a symmetric edge; OR IGNORE makes the re-fire find the row present and stop
+  INSERT OR IGNORE INTO links(from_id, to_id, kind, note, created_at, source)
+  VALUES (NEW.to_id, NEW.from_id, NEW.kind, NEW.note, NEW.created_at, NEW.source);
 END;
 CREATE TRIGGER links_mirror_delete AFTER DELETE ON links
   WHEN OLD.from_id <> OLD.to_id
@@ -1140,9 +1090,9 @@ BEGIN
   DELETE FROM links WHERE from_id = OLD.to_id AND to_id = OLD.from_id AND kind = OLD.kind;
 END;
 
--- Ghost pages: empty pages nobody points at (a link target created by a
--- capture-time typo and never written; renames never create ghosts). The UI sweeps this list.
 CREATE VIEW ghost_pages AS
+  -- empty pages nobody points at, 30 days old: a link target created by a capture-time typo and
+  -- never written (renames never create ghosts). The UI lists them; tombstoning is the owner's act.
   SELECT p.id, p.title, e.created_at
     FROM pages p JOIN entities e ON e.id = p.id
    WHERE p.kind = 'page' AND p.body = '' AND e.deleted_at IS NULL
@@ -1150,11 +1100,8 @@ CREATE VIEW ghost_pages AS
      AND NOT EXISTS (SELECT 1 FROM links l WHERE l.to_id = p.id AND l.kind <> 'redirect')
      AND NOT EXISTS (SELECT 1 FROM links l WHERE l.from_id = p.id);
 
--- ------------------------------------------------------------
--- updated_at is maintained in-DB so ANY future writer (CLI,
--- agents, scripts) gets audit timestamps right without app help.
--- ------------------------------------------------------------
 CREATE TRIGGER pages_touch AFTER UPDATE ON pages BEGIN
+  -- updated_at is kept in the DB, so every writer (CLI, agents, scripts) gets it right
   UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = NEW.id;
 END;
 CREATE TRIGGER events_touch AFTER UPDATE ON events BEGIN
@@ -1172,19 +1119,25 @@ END;
 CREATE TRIGGER accounts_touch AFTER UPDATE ON accounts BEGIN
   UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = NEW.id;
 END;
--- Tombstoning and un-tombstoning are changes too (its own update of updated_at
--- does not re-fire: the trigger watches deleted_at only).
 CREATE TRIGGER entities_touch AFTER UPDATE OF deleted_at ON entities
   WHEN NEW.deleted_at IS NOT OLD.deleted_at
 BEGIN
+  -- tombstoning and un-tombstoning are changes too; watching deleted_at only, it cannot re-fire itself
   UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = NEW.id;
 END;
+CREATE TRIGGER entities_source_fixed BEFORE UPDATE OF source ON entities
+  WHEN NEW.source IS NOT OLD.source
+BEGIN
+  -- provenance is captured at insert or not at all; the WHEN clause lets full-row updates through
+  SELECT RAISE(ABORT, 'entities.source is written at insert and never changed');
+END;
 
--- No hard deletes (D11), enforced: an entity and its domain row are tombstoned, never removed.
--- (Under PRAGMA recursive_triggers=ON these also stop REPLACE from deleting a row.) links are
--- the one table whose rows are hard-deleted; measurements/balances have their own triggers.
 CREATE TRIGGER entities_no_delete BEFORE DELETE ON entities
-BEGIN SELECT RAISE(ABORT, 'entities are never deleted: set entities.deleted_at (tombstone)'); END;
+BEGIN
+  -- no hard deletes (D11): an entity and its domain row are tombstoned, never removed; under
+  -- PRAGMA recursive_triggers=ON these triggers also stop REPLACE from deleting a row
+  SELECT RAISE(ABORT, 'entities are never deleted: set entities.deleted_at (tombstone)');
+END;
 CREATE TRIGGER pages_no_delete BEFORE DELETE ON pages
 BEGIN SELECT RAISE(ABORT, 'pages are never deleted: tombstone the entity (entities.deleted_at)'); END;
 CREATE TRIGGER events_no_delete BEFORE DELETE ON events
@@ -1200,8 +1153,9 @@ BEGIN SELECT RAISE(ABORT, 'accounts are never deleted: tombstone the entity (ent
 ```
 
 **Table count: 15 real tables (11 + `currencies`, `accounts`, `balances`, `fx_rates` — D18) + 1 FTS5
-virtual table + 3 views** (`measurement_values`, `balance_values`, `ghost_pages`). That is the entire
-system.
+virtual table + 3 views** (`measurement_values`, `balance_values`, `ghost_pages`) **+ 33 triggers**. That
+is the entire system. Every `CHECK` is named (`CONSTRAINT <table>_<rule>`), so any rule can be dropped or
+re-added by name after the freeze (D13).
 
 ---
 
@@ -1239,6 +1193,7 @@ erDiagram
         TEXT updated_at
         TEXT deleted_at "tombstone"
         TEXT tz
+        TEXT source "which writer, fixed"
     }
     pages {
         INTEGER id PK, FK
@@ -1263,7 +1218,6 @@ erDiagram
         TEXT status "open or done"
         TEXT due_day
         TEXT completed_day
-        TEXT repeat
     }
     people {
         INTEGER id PK, FK
@@ -1287,6 +1241,7 @@ erDiagram
         INTEGER to_id FK
         TEXT kind FK
         TEXT created_at
+        TEXT source "which writer, fixed"
     }
     link_kinds {
         TEXT kind PK
@@ -1399,7 +1354,7 @@ flowchart LR
 ### 4.4 The life of a memo and of a page
 
 A memo is captured into the inbox and leaves it once; a page starts as a ghost when a link names a title
-that does not exist yet, or as a written page when the owner creates it on purpose (D5 addendum 5).
+that does not exist yet, or as a written page when the owner creates it on purpose (D5).
 
 ```mermaid
 %% diagram: memo-life
@@ -1445,7 +1400,7 @@ How the pieces serve the product concepts:
 | Backlinks | `links WHERE to_id = ?` (§6.5); symmetric kinds are mirrored on insert and delete, so one direction suffices. Asymmetric kinds (`attended`, `subtask`, …) need both directions for "everything about X" (§6.6) |
 | Life graph ("everything about my son") | `links` over `people`/`events`/`pages`/`places` (§6.6) |
 | Subtasks | `links(kind='subtask', child → parent)`; recursive CTE for nesting (§6.11) |
-| Recurring events & tasks | `repeat_*` columns; occurrences expanded at read with a recursive CTE (§6.12). A repeating *task* is a reminder: completing it ends the series (D15 addendum 2) |
+| Recurring events | `repeat_*` columns on `events`; occurrences expanded at read with a recursive CTE (§6.12). Tasks do not repeat: a reminder is a repeating event, a per-occurrence checklist is a 0/1 habit metric (D15) |
 | Birthdays | query over `people.birth_day` — deliberately not events |
 | Biomarkers / quantified self / habits | `metrics` + `measurements` (§6.7) |
 | Stocks, crypto, deposits, valuables, property, loans | one `account` each (§2.10 table): a balance is its value on a day |
@@ -1455,6 +1410,7 @@ How the pieces serve the product concepts:
 | Which accounts are stale | §6.18 |
 | Search | `pages_fts` (§6.8) |
 | History of a row | none beyond `created_at` / `updated_at` / `deleted_at` and the append-only facts (D12) |
+| "Which of my agents wrote this?" | `entities.source`, `links.source`, written at insert (§2.3) |
 
 ---
 
@@ -1462,11 +1418,10 @@ How the pieces serve the product concepts:
 
 Each decision: **context → decision → alternatives rejected → rationale → sources.**
 
-### D1 — Container: a single SQLite file. *(Settled; not re-opened)*
+### D1 — Container: a single SQLite file.
 
-- **Decision.** SQLite, one file (`life.db`). *(v1 addendum: binaries are deferred
-  entirely — D9; when they return they live external in `media/`, by the design kept
-  there.)*
+- **Decision.** SQLite, one file (`life.db`). Binary files are not stored in it at all (D9); when
+  they return they live outside it in `media/`.
 - **Alternatives.** Postgres/server DB (rejected: operational burden for single user,
   no longevity benefit); plain files only (see D4); NoSQL embedded stores (rejected:
   weaker durability guarantees, no standard query language for future readers).
@@ -1481,9 +1436,6 @@ Each decision: **context → decision → alternatives rejected → rationale �
 
 ### D2 — Typed tables with real columns, `STRICT` mode; no JSON property bags, no EAV.
 
-- **Context.** The predecessor design stored properties as JSON keyed by UUIDs, with
-  definitions in TypeScript. The generic-object model existed to power a view-generation
-  system that has been cut from scope.
 - **Decision.** Per-domain typed tables; every column real, named, and typed; every table
   declared `STRICT` (SQLite ≥ 3.37): every value must be *losslessly* convertible to the
   declared column type or the statement fails — `'xyz'` into INTEGER is rejected
@@ -1509,9 +1461,11 @@ Each decision: **context → decision → alternatives rejected → rationale �
 
 ### D3 — IDs: `INTEGER PRIMARY KEY`; UUIDs rejected.
 
-- **Decision.** Every table keyed by `INTEGER PRIMARY KEY` (a rowid alias) *(the registries
-  keep their natural key — addendum)*. No
-  `AUTOINCREMENT` (extra CPU/IO/bookkeeping, "usually not needed" [R4]). No UUIDs.
+- **Decision.** Every entity, fact and join table is keyed by `INTEGER PRIMARY KEY` (a rowid
+  alias). The registries and reference tables — `lifelog_meta`, `link_kinds`, `currencies`,
+  `fx_rates` — keep their natural key (`key`, `kind`, `code`, `(from_ccy, to_ccy, day)`): an
+  integer surrogate would only hide the name (§2.3). No `AUTOINCREMENT` (extra CPU/IO/bookkeeping,
+  "usually not needed" [R4]). No UUIDs.
 - **Alternatives.** UUIDv7/v4 TEXT keys: benchmarked *slower* (random TEXT keys scatter
   inserts across the B-tree, causing page splits) and larger; their only real advantage —
   collision-free IDs for multi-device merge — buys nothing while sync is a non-goal
@@ -1520,12 +1474,11 @@ Each decision: **context → decision → alternatives rejected → rationale �
   real, integer IDs from two databases can collide. Mitigation if that day comes: SQLite
   makes re-keying a one-script job (`UPDATE … SET id = id + offset` in FK-off
   transaction), or add a nullable `uuid` column then. We do not pay for it now.
-- **Multi-writer clarification (cross-review).** The owner's plan is multiple *clients*
-  through one controlled service — a React app, an MCP layer for AI agents, a mobile
-  client — all writing via the app's API. That is multiple processes or connections,
-  not multiple divergent databases: WAL + `busy_timeout` serializes concurrent writers
-  to one file safely, integer IDs stay correct, and the "single writer" rule
-  (principle #3) is understood as *single writing application*, not single process.
+- **Multiple writers.** The plan is multiple *clients* through one controlled service — a React
+  app, an MCP layer for AI agents, a mobile client — all writing via the app's API. That is
+  multiple processes or connections, not multiple divergent databases: WAL + `busy_timeout`
+  serializes concurrent writers to one file safely, integer IDs stay correct, and the "single
+  writer" rule (principle #3) means *single writing application*, not single process.
   What remains out of scope: devices holding divergent local copies that merge
   (CRDT territory — cr-sqlite/vlcn-style tooling is currently beta-grade and its
   column-level machinery would violate "schema is the documentation"). If that day
@@ -1533,19 +1486,14 @@ Each decision: **context → decision → alternatives rejected → rationale �
   identity at write time is the only part that cannot be reconstructed later.
 - **Sources.** [R4][R26][R27].
 
-- **Addendum (round 7, registries).** "Every table" is not literally true: `lifelog_meta`,
-  `link_kinds`, `currencies` and `fx_rates` are registries and reference data keyed by their
-  natural key (`key`, `kind`, `code`, `(from_ccy, to_ccy, day)`) — an integer surrogate would
-  only hide the name. The rule holds for every entity, fact and join table (§2.3).
-
-### D4 — Text ownership: the database is canonical. *(Round 12: the markdown-export half is withdrawn, §7.)*
+### D4 — Text ownership: the database is canonical.
 
 - **Context.** This was the hardest decision. *Files canonical*: any app, plugin, or future tool
   pointed at the folder becomes a legitimate writer of canonical data → dialect drift and
   corruption. Evidence: the Logseq↔Obsidian ecosystem needs dedicated conversion tools (journal
   filename formats `YYYY_MM_DD` vs `YYYY-MM-DD`, URL-encoded filenames, block-reference syntax,
-  property formats, task statuses) [R29][R30][R31][R32]. *DB canonical*: the original Taskdesk
-  fear — meaning trapped in the app.
+  property formats, task statuses) [R29][R30][R31][R32]. *DB canonical*: the fear of meaning
+  trapped in the app.
 - **Decision.** `pages.body` in SQLite is the single source of truth for prose. No folder of
   files holds canonical text, and nothing may write canonical data except this app (and later
   its CLI/API). The ability to leave rests on the file format itself (D1) and on the schema being
@@ -1562,31 +1510,55 @@ Each decision: **context → decision → alternatives rejected → rationale �
   files lack persistent IDs and timestamps [R34][R35][R36]. Logseq DB (SQLite canonical)
   is the side chosen by a team that hit the live-editing requirement head-on [R34][R36].
 - **Costs accepted.** Prose is edited only through this app's UI/CLI/API.
-- **Withdrawn in round 12.** This decision used to include a nightly, derived, git-versioned
-  markdown mirror of the prose. It is out of scope while the schema is made reliable (§7 says
-  when to reopen); nothing in the schema depends on it.
 - **Sources.** [R29]–[R32], [R34]–[R36].
 
 ### D5 — One `pages` table for all prose; journal dropped; memos = journal + inbox.
 
-- **Decision.** A single text entity with `kind IN ('memo','note','wiki')` *(now `('memo','page')`: addendum 5)*. The owner's
-  product intent: memos are a Twitter/Memos-style capture stream that serves *both* as
-  the journal (the day's record) *and* as an inbox (capture now,
-  triage later). There is **no journal entity and no daily-page row**: the day page is a
-  query over `pages.day` (+ events/tasks/measurements for that day, §6.2). This is the
-  "journal emerges from the stream" model. **Tags are the same mechanism**: `#health`
-  is simply the wiki page `health` referenced as `[[health]]` — one graph, one syntax,
-  no separate tag system. *(How a tag is recognised, and that the body is never rewritten
-  to `[[health]]`: D19.)* `note` and `wiki` pages carry a capture `day` (local date,
-  like memos) so "notes touched that day" is a first-class query, and note/wiki titles
-  share one unique index (`pages_title`) so every page has an unambiguous
-  name.
+- **Decision.** A single text entity `pages` with `kind IN ('memo','page')`.
+  - A **memo** is the Twitter/Memos-style capture stream: it serves *both* as the journal (the
+    day's record) *and* as an inbox (capture now, triage later). It is untitled (capture without
+    friction), always has a `day`, and is never the target of a `[[link]]`.
+  - A **page** is titled, unique and linkable — an essay, a reference page, a tag. *Dated is a
+    property, not a type:* the app sets `day` on a page the owner creates on purpose and leaves it
+    NULL on a page it creates as a link target, so the day view (§6.2) shows what was **written**
+    that day, not what was **mentioned**. A ghost that is written later keeps `day = NULL`
+    (`*_day` is written at insert, never recomputed, §2.2). A category of pages (essay,
+    reference) is a tag, and a tag is a page.
+  - There is **no journal entity and no daily-page row**: the day page is a query over
+    `pages.day` (+ events/tasks/measurements for that day, §6.2) — the "journal emerges from the
+    stream" model.
+  - **Tags are the same mechanism**: `#health` is simply the page `health`, referenced as
+    `[[health]]` — one graph, one syntax, no separate tag system. How a tag is recognised, and
+    that the body is never rewritten to `[[health]]`: D19.
 - **Inbox mechanism = one column.** `triaged_at TEXT NULL` on memos:
   - keep-as-memory → set `triaged_at`;
-  - needs action → create task/note + `links(kind='spawned', from=task, to=memo)` + set
+  - needs action → create a task or page + `links(kind='spawned', from=task, to=memo)` + set
     `triaged_at` (provenance preserved);
   - junk → tombstone.
   Inbox view = `kind='memo' AND triaged_at IS NULL AND deleted_at IS NULL`.
+- **Titles and kinds are fixed.**
+  - A title is **1–240 bytes**, trimmed, and safe as a file name on Linux, macOS and Windows
+    (§2.5 lists the rules: path separators and Windows-reserved characters, control characters,
+    invisible and bidi characters, a leading or trailing `.`, a device name such as `CON` **bare or before the first `.`**, and
+    the six superscript names `COM¹ … LPT³` [R58]). The DDL rejects the rest; a memo must not have a
+    title (a titled memo would be invisible to the title index and to §6.3).
+  - Uniqueness is on **`title_key`** = `NFC(casefold(NFC(title)))`, computed by the app (function
+    and test vectors in §2.5); `pages_title` is `UNIQUE … WHERE title_key IS NOT NULL`
+    (memos have no key) and no lookup carries a `kind` predicate — an equality on the key
+    implies the index's predicate (executed). The DB verifies the parts it can (key present iff
+    titled, trimmed, no ASCII capitals, `= lower(title)` for ASCII titles); that a non-ASCII fold
+    is the *right* fold is the writing application's duty.
+  - A title **never changes** (`pages_title_fixed`): renames are forbidden, because they would
+    silently repoint every `[[Old Title]]` in decades of prose. The sanctioned path is a new page
+    plus a `#REDIRECT` stub. `title_key` is derived and may be recomputed.
+  - `pages.kind` **never changes** after insert (`pages_kind_fixed`; a no-op `SET kind = kind` is
+    allowed): a memo that deserves to be a page becomes a *new* page linked `kind='spawned'`,
+    exactly as triage works. Without the trigger the CHECKs alone would let a kind flip silently
+    drop the day requirement or leave an orphan title.
+  - `places.name` stays ASCII-`NOCASE` (and `metrics.name` is lowercase ASCII by its CHECK): they
+    are never file names, and `Zürich`/`ZÜRICH` as two places is a data-quality issue, not a
+    collision. A place name is unique, so two places called Springfield are told apart in the name
+    itself (`Springfield (IL)`).
 - **Alternatives.**
   - *Separate `journal` kind / one daily page row*: rejected — a page you must not forget
     to create, and two capture paths. The day view (§6.2) reconstructs
@@ -1596,130 +1568,90 @@ Each decision: **context → decision → alternatives rejected → rationale �
     untriaged/triaged and nothing else is needed until proven otherwise.
   - *Zero-column inbox ("recent memos are the inbox")*: rejected — it makes the inbox
     view either unbounded history or an arbitrary time window.
+  - *Separate `note` and `wiki` kinds*: rejected. They would differ in three things only — the
+    `day` rule, whether the page shows in the day view, and whether the ghost sweep counts it —
+    while sharing one title index, one set of title rules and one `[[link]]` namespace. The split
+    also leaks: a `[[link]]` to a title that does not exist yet creates a page, and `kind` and
+    `title` are immutable, so anything linked before it was written would stay whatever kind the
+    link guessed, undoable only by a new page and a redirect stub.
+  - *ASCII-only case-insensitive uniqueness (`COLLATE NOCASE`)*: rejected — it folds only ASCII,
+    so `Café notes` and `CAFÉ NOTES` (and NFC vs NFD spellings of one name) would be distinct rows
+    that collide as files on macOS and Windows.
+  - *An ICU or app-registered collation*: rejected — it breaks writes and `integrity_check` for
+    every reader lacking it (§7).
+  - *ASCII-only titles*: rejected — a life log has `日本語` and `Zürich` in it.
+  - *Id-named files, so that titles need no file-name rules*: rejected — the rules are tested (D19),
+    and they are the strict direction: loosening `pages_title_safe` after the freeze is one
+    `DROP CONSTRAINT` + `ADD CONSTRAINT` (every CHECK is named, D13), while tightening it later would
+    meet titles that already break the new rule, and a title that is valid everywhere never has to
+    be renamed. *Reopen only if* a title you actually want is forbidden (`Re: plan`) often enough to
+    hurt.
+- **Costs accepted.** Merging or splitting kinds after real data exists would mean rewriting
+  `kind` on every row against `pages_kind_fixed`. An empty page created on purpose, with a day,
+  that nothing links to is listed by `ghost_pages` after 30 days, as a link target always was;
+  the view only lists, tombstoning stays the owner's act. *Reopen only if* a need appears that a
+  tag or `day IS NOT NULL` cannot serve.
 - **Sources.** Kaydet (9 years of daily entries as plain text + SQLite index) [R41];
   FxLifeSheet (capture-friction minimization) [R9][R42]; Memos-style capture is the
-  owner's stated interface preference.
-
-- **Addendum (review round 3, titles).** `note`/`wiki` titles are now unique
-  case-insensitively (`pages_title` uses `COLLATE NOCASE`, matching `metrics.name`, and
-  `places.name` likewise), because titles are file names and `Diet` /
-  `diet` collide on case-insensitive filesystems. Titles must be trimmed and 1–200
-  characters; a memo must **not** have a title (a titled memo is invisible to the
-  title index and to §6.3). `pages.kind` remains mutable, but the CHECKs are re-evaluated
-  on every UPDATE, so a kind change is only accepted if the row satisfies the new kind's
-  rules. Path characters in titles were left to the app (§2.5).
-
-- **Addendum 2 (review round 3b, filename-safe titles; `kind` is fixed).** The first
-  addendum left path characters to the app and capped titles at 200 characters;
-  both are superseded. The DDL now rejects path-unsafe titles itself (§2.5 lists the
-  rules), and the length limit is 240 **bytes** (a 200-character title of 4-byte
-  characters is 800 bytes — over the filesystem limit). Verified: every forbidden
-  character, control characters 1/9/10/13/31/127, NUL, `.hidden`/`..`/trailing dot,
-  `CON`/`nul`/`COM1`/`lpt9` rejected; `CONSOLE`, `com10`, `LPT0`, `Café notes`, `日本語 ノート`
-  and 240-byte titles accepted; 243 bytes rejected. `pages.kind` **never changes after
-  insert** (`pages_kind_fixed` trigger; a no-op `SET kind = kind` is allowed): a memo
-  that deserves to be a note becomes a *new* note linked `kind='spawned'`, exactly as
-  triage already works. This replaces the first addendum's "kind remains mutable" —
-  the CHECKs alone let `note → wiki` silently drop the day requirement and `note → memo`
-  leave an orphan title. **Known limit:** case-insensitive uniqueness is ASCII-only
-  (§2.5). *(Superseded by addendum 3.)*
-
-- **Addendum 3 (review round 3c, Unicode-proof uniqueness; titles are immutable).**
-  Addenda 1–2 made uniqueness case-insensitive with `COLLATE NOCASE`, which folds only
-  ASCII: `Café notes` and `CAFÉ NOTES` (and NFC vs NFD spellings of the same name) were
-  distinct rows that collide as files on macOS/Windows. Now: `pages.title_key` holds
-  `NFC(casefold(NFC(title)))` (function and test vectors in §2.5), `pages_title` is a
-  unique index on it, and `NOCASE` no longer applies to titles. The DB verifies the
-  parts it can (key present iff titled, trimmed, no ASCII capitals, `= lower(title)` for
-  ASCII titles) and cannot verify a non-ASCII fold — that is the writing application's
-  duty. Rejected: an ICU/custom collation (breaks writes and `integrity_check` for every
-  reader lacking it — §7); ASCII-only titles (a life log has `日本語` and `Zürich` in it);
-  leaving it to a check at the moment a file is written (a symptom fix). Titles are **immutable** (`pages_title_fixed`): D5's "renames are
-  forbidden" was a convention and is now enforced; the sanctioned path is new page +
-  `#REDIRECT` stub. `title_key` is derived and updatable, `title` is not. *Scope:*
-  `places.name` and `metrics.name` remain ASCII-`NOCASE` — they are never filenames, and
-  `Zürich`/`ZÜRICH` as two places is a data-quality issue, not a collision (§8 #5).
-
-- **Addendum 4 (round 10, the titles stay; device names).** (1) The independent review (R4-19 a)
-  argued that titles carry filename rules and immutability only so that *derived* file names stay
-  simple, and that id-named files would free them. Reconsidered and **kept**: the rules are tested
-  (D19, record #10), and the owner asked for them after round 3b.
-  The cost is real and stated: the title CHECKs are unnamed, so loosening one after the freeze is a
-  table rebuild, not an `ALTER` — a reason to settle it now, and it is settled. *Reopen only if* a
-  title you actually want is forbidden (`Re: plan`) often enough to hurt. (2) R8-01 is fixed in the
-  DDL: a Windows device name is rejected **before the first `.`** as well as bare, and the six
-  superscript names (`COM¹ … LPT³`) are listed [R58]. Old vs new CHECK on 43 458 strings: exactly
-  the 12 strings of that class flip from accepted to rejected, none flips the other way, none changes
-  outside the class (§8 #12).
-
-- **Addendum 5 (round 11, notes and wiki pages are one kind).** `note` and `wiki` differed in three
-  things only: `day` (required for a note, optional for a wiki page), whether the page shows in the day
-  view (§6.2), and whether the ghost sweep counts it. They already shared one title index, one set of
-  title rules and one `[[link]]` namespace. The
-  split also leaked: a `[[link]]` to a title that does not exist yet creates the page as `wiki` (§6.14),
-  and `kind` and `title` are immutable — so anything linked before it was written became a wiki page
-  whatever it was meant to be, and a wrong choice could be undone only by a new page and a redirect stub.
-  Now `kind IN ('memo','page')`. *Dated is a property, not a type:* the app sets `day` on a page the owner
-  creates on purpose and leaves it NULL on a page it creates as a link target, so the day view (§6.2)
-  shows what was **written** that day, not what was **mentioned**. A ghost that is written later keeps
-  `day = NULL`, as a wiki page did (`*_day` is written at insert, never recomputed, §2.2). `pages_title`
-  is now `UNIQUE … WHERE title_key IS NOT NULL` (memos have no key) and the `kind` predicate is gone from
-  every lookup — an equality on the key implies the index's predicate (executed, §8 #13); the `SCAN` that
-  round 3 saw was for a predicate on `kind`, which a lookup by key does not imply. Memos stay separate: untitled
-  (capture without friction), the inbox column, never the target of a
-  `[[link]]`. A category of pages (essay, reference) is a tag, and a tag is a page. One behaviour is new:
-  an empty page created on purpose, with a day, that nothing links to, is listed by `ghost_pages` after 30
-  days, as a link target always was — a note never was; the view only lists, tombstoning stays the owner's
-  act. *Cost:* no data
-  (no canonical database exists); after real data exists, merging two kinds would mean rewriting `kind`
-  on every row against `pages_kind_fixed` — this is the cheap moment. *Reopen only if* a need appears
-  that a tag or `day IS NOT NULL` cannot serve.
-
-- **Addendum 6 (round 12, the title rules stay without the export).** The filename rules of addenda
-  2–4 were introduced so that a title could name a file, and the code that writes those files is out of
-  scope for now (§7). The rules stay unchanged, for the reasons already recorded: they are tested (D19,
-  record #10); loosening one later is a table rebuild because the title CHECKs are unnamed, while a title
-  that is valid everywhere never has to be renamed (D5) if files return. *Reopen only if* a title you
-  actually want is forbidden (`Re: plan`) often enough to hurt — the trigger of addendum 4.
+  owner's stated interface preference; Windows reserved names [R58].
 
 ### D6 — Mood: the `mood` metric in `measurements`, not a column on `pages`.
 
 - **Decision.** Mood is a time series like any other: a seeded metric
   `('mood', '', '1-5')` whose rows are appended to `measurements`. When a mood is
   attached to a memo, the measurement row carries `entity_id` = the memo's id, so
-  the provenance link costs nothing (the column already existed). "Mood over time"
-  is one query over one table (§6.4).
-- **History.** The first draft of this document proposed
-  `pages.mood INTEGER CHECK (mood BETWEEN 1 AND 5)`. The cross-review (§8) reopened
-  it; the owner chose the metric home so a standalone mood tap (no memo text) needs
-  no second mechanism, and mood charts uniformly with every other series. The 1–5
-  range is now app-level validation on one metric row, not a schema CHECK.
+  the provenance link costs nothing (the column already exists). "Mood over time"
+  is one query over one table (§6.4). The 1–5 range is app-level validation on one
+  metric row, not a schema CHECK.
+- **Rule.** One home per concept, forever: mood lives in `measurements` and nowhere else. A
+  standalone mood tap (no memo text) needs no second mechanism, and mood charts uniformly with
+  every other series.
 - **Alternatives.**
   - *`pages.mood` column*: rejected — splits the concept across two tables the
     moment a text-less mood tap happens, and forces a join for series queries.
   - *Both (column + metric)*: rejected — two homes for one concept is the classic
     drift failure; pick one.
-- **Rule.** One home per concept, forever: mood lives in `measurements` and nowhere
-  else.
 
 ### D7 — Measurements: one FxLifeSheet-shaped table + tiny metric registry; append-only.
 
 - **Decision.**
-  - `metrics(id, name UNIQUE, unit, notes)` — a registry whose only job is keeping series
-    canonical ('weight' is one series forever). Seeded rows, extensible; UI should make
-    create-on-the-fly painless (suggest + confirm).
-  - `measurements(metric_id, day, taken_at?, value REAL, source, import_id?, entity_id?,
-    supersedes_id?)` — one row per data point. **Append-only**: values are never UPDATEd;
-    a correction is a new row with `supersedes_id` → the old row. Reads take
-    "latest non-superseded per (metric, day)" — now codified as the
-    `measurement_values` VIEW so every future reader uses the same rule (cross-review,
-    open question 5). `import_id` + partial UNIQUE index make bulk re-imports
-    idempotent via `INSERT OR IGNORE` *(now `ON CONFLICT … DO NOTHING` — addendum 2)*. A trigger (added in cross-review) rejects a
-    correction whose `supersedes_id` points at a row of a *different* metric — the one
-    supersede invariant that could silently corrupt a series. `entity_id` is documented
-    as provenance ("captured with this memo/event"), not "about this person": the owner
-    is the only subject of measurements. `metrics.name` is UNIQUE with COLLATE NOCASE
-    so 'Weight' and 'weight' cannot become two series.
+  - `metrics(id, name UNIQUE, unit, notes)` — a registry whose only job is keeping series canonical
+    ('weight' is one series forever; the name is lowercase snake_case by CHECK, so 'Weight' cannot
+    become a second one).
+    Seeded rows, extensible; UI should make create-on-the-fly painless (suggest + confirm).
+    `unit` is immutable (`metrics_unit_fixed`): it gives every stored value its meaning.
+  - `measurements(metric_id, day, taken_at?, tz?, value REAL, recorded_at, source, import_id?,
+    entity_id?, supersedes_id?)` — one row per data point. `day` is the local date the value
+    refers to; `taken_at` (UTC) and `tz` say when and where it was measured; `recorded_at`
+    (NOT NULL) says when it was written down. In the literature's terms the table is
+    **bitemporal** [R68]: `day`/`taken_at` is *valid time* (when it was true), `recorded_at` and the
+    append-only rows are *transaction time* (when the database learned it), so "what did I believe
+    my weight was on 1 March, as of 1 April" stays answerable.
+  - **Append-only, enforced.** Triggers reject every `UPDATE` and `DELETE`. A correction is a new
+    row with `supersedes_id` → the row it corrects. A partial `UNIQUE` index on `supersedes_id`
+    allows at most one correction per row (chain corrections by correcting the correction), and
+    because `supersedes_id` can only be set at insert and must name an existing row, chains cannot
+    form cycles. A trigger rejects a correction whose `supersedes_id` points at a row of a
+    *different* metric — the one supersede invariant that could silently corrupt a series; it uses
+    `IS NOT`, so a dangling `supersedes_id` is rejected even with `foreign_keys=OFF`.
+  - **Retraction.** A correction whose `value` is NULL **retracts** the row it corrects (a mis-tap,
+    a wrong metric): `value` is nullable, and `CHECK (value IS NOT NULL OR supersedes_id IS NOT
+    NULL)` keeps a first reading honest. Re-entry = correct the retraction.
+  - **Values are finite.** `measurements_value_finite` rejects `±Infinity` (a `REAL` column stores
+    `1e999` as infinity otherwise, and one such row poisons every average). SQLite turns a bound
+    `NaN` into NULL before any CHECK sees it: as a first reading that is rejected, but as a
+    *correction* it is a retraction the database cannot tell from an intended one (both executed).
+    So the app never binds NaN — an importer that meets one skips the row and reports it.
+  - **`measurement_values`** is the one read rule, as a view: exactly "rows nothing has corrected,
+    minus retractions". Two independent readings on one day are both legitimate and both returned
+    (average or pick in the query, not the view). The unique index on `supersedes_id` doubles as
+    the index the view's `NOT EXISTS` needs — without it the view is quadratic (measured: 14 s at
+    20 000 rows; 0.004 s with the index). `measurements(day)` serves the day view.
+  - **Imports** are idempotent: the key is `(source, import_id, metric_id)` under a partial unique
+    index, and importers use `INSERT … ON CONFLICT … DO NOTHING`, never `OR IGNORE` (§2.4).
+  - `entity_id` is documented as provenance ("captured with this memo/event"), not "about this
+    person": the owner is the only subject of measurements. A wrong `source` or `entity_id` cannot
+    be edited in place either — correct by superseding.
 - **This is the most battle-tested part of the design.** FxLifeSheet's actual schema
   (verified from `db/create_tables.sql` in the repo) is a single `raw_data` table —
   `timestamp, yearmonth/yearweek/year/quarter/month/day/hour/minute, key, question,
@@ -1730,7 +1662,7 @@ Each decision: **context → decision → alternatives rejected → rationale �
   `source` provenance.
 - **Deliberate simplifications vs. prior art** (all listed in §7 as deferred):
   - `value REAL` only — no text-valued measurements. Charting stays trivial; prose
-    observations belong in memos/notes with a link.
+    observations belong in memos/pages with a link.
   - No LOINC/UCUM/reference-range columns (health-mcp has them [R8]) — a personal
     registry with free-text `unit` is the 20%; standards matter for export/interop, not
     local storage.
@@ -1741,40 +1673,44 @@ Each decision: **context → decision → alternatives rejected → rationale �
     aggregates in milliseconds at this volume.
 - **Sources.** [R8][R9][R42][R43][R45].
 
-- **Addendum (review round 3, append-only is now enforced; one correction per row).**
-  D7 said measurements are append-only and that reads take "latest non-superseded per
-  (metric, day)". Both were conventions the DDL did not enforce, and the view does not
-  literally deduplicate per day. Corrected: (1) triggers reject every `UPDATE` and
-  `DELETE` on `measurements`; (2) a partial `UNIQUE` index on `supersedes_id` allows at
-  most one correction per row (chain corrections by correcting the correction), and
-  because `supersedes_id` can only be set at insert and must name an existing row,
-  chains cannot form cycles; (3) `measurement_values` means exactly "rows nothing has
-  corrected" — two independent readings on one day are both legitimate and both
-  returned (average or pick in the query, not the view); (4) the same-metric trigger uses
-  `IS NOT` so a dangling `supersedes_id` is rejected even with `foreign_keys=OFF`;
-  (5) the unique index doubles as the index the view's `NOT EXISTS` needs — without it
-  the view was quadratic (measured: 14 s at 20 000 rows; 0.004 s with the index). Also
-  added: `measurements(day)` for the day view. Accepted cost: a wrong `source` or
-  `entity_id` cannot be edited in place either — correct by superseding.
+### D8 — One `entities` supertype + one polymorphic `links` graph; a closed kind registry; symmetry in-DB.
 
-- **Addendum 2 (round 5: retraction, audit time, import key).** Executed findings R4-02/03/06/10
-  (§8): (1) a correction whose `value` is NULL **retracts** the row it corrects —
-  `value` is nullable, `CHECK (value IS NOT NULL OR supersedes_id IS NOT NULL)` keeps a first
-  reading honest, and `measurement_values` hides retractions (re-entry = correct the
-  retraction); (2) `recorded_at` (NOT NULL) says when a row was written, apart from `taken_at`;
-  (3) the import key is `(source, import_id, metric_id)` — two importers can no longer collide —
-  and importers use `ON CONFLICT … DO NOTHING`, superseding the `INSERT OR IGNORE` above.
-
-### D8 — One `entities` supertype + one polymorphic `links` graph; symmetry in-DB.
-
-- **Decision.** The five linkable types share one ID space through `entities`; all
-  relationships of every kind live in a single `links(from_id, to_id, kind)` table with
-  real foreign keys. `kind` is free text — unconstrained in `links` itself, but
-  auto-registered in the `link_kinds` registry table on first use. The registry's one
-  structural job: a `symmetric` flag. An AFTER INSERT trigger mirrors any row whose
-  kind is symmetric (`A→B` also stores `B→A`), so a half-edge can never exist —
-  whatever the writer (app, CLI, API, agent). Backlink queries stay trivial
-  (`WHERE to_id = ?`) for symmetric kinds because the mirror row exists.
+- **Decision.** The six linkable types (D18 adds accounts) share one ID space through `entities`;
+  all relationships of every kind live in a single `links(from_id, to_id, kind)` table with real
+  foreign keys. `UNIQUE(from_id, to_id, kind)` allows several kinds between the same pair but
+  forbids duplicate edges.
+  - **The kind registry is closed.** `links.kind` is a foreign key to `link_kinds`, so an
+    unregistered kind is rejected; registering a kind is a deliberate `INSERT INTO link_kinds` (a
+    data row, not a schema change — the taxonomy stays open-ended, just never implicit). Kind
+    names are lowercase `[a-z0-9_-]`.
+  - **A kind's structure is fixed at registration** (`link_kinds_structure_fixed`): the
+    `symmetric` flag and the allowed endpoint types `from_types` / `to_types` (NULL = any entity
+    type, otherwise a comma list from `entities.type`). To change one, register a new kind.
+  - **Endpoint types are enforced.** A `BEFORE INSERT` trigger on `links` checks the kind and
+    both endpoints — including the mirror rows of symmetric kinds, which must therefore be valid
+    in both directions (`CHECK (symmetric = 0 OR from_types IS to_types)`). A misspelt type token
+    fails **closed** (every link of that kind is rejected) and an unknown endpoint id counts as
+    type `'?'`. The trigger also rejects an unregistered kind itself — the FK alone would let one
+    through on a connection with `foreign_keys=OFF` (executed in autocommit; `PRAGMA
+    foreign_keys` is a no-op inside a transaction). What still depends on `foreign_keys=ON`
+    (mandatory, §2.9): dangling endpoint ids of *untyped* kinds (`related`, `about`'s source) and
+    every other FK.
+  - **Symmetry is structural.** Trigger-maintained mirrors keep symmetric kinds two-sided on
+    insert *and* delete (`A→B` also stores `B→A`), so a half-edge can never exist — whatever the
+    writer (app, CLI, API, agent) — and backlink queries stay trivial (`WHERE to_id = ?`). Both
+    mirror triggers terminate under `PRAGMA recursive_triggers=ON` (executed): the insert mirror
+    uses `INSERT OR IGNORE`, so its re-fire finds the row present and stops; the delete mirror
+    finds nothing left to delete. Deleting one side of a symmetric edge deletes its mirror.
+  - **Links are immutable** in `from_id`, `to_id`, `kind` and `source` (delete and re-insert); the
+    immutability trigger carries a `WHEN` guard, so a full-row `UPDATE` that changes only `note`
+    passes. A mirror row copies its original's `note`, `created_at` and `source`.
+  - **Seeded kinds** (§4.3): `wikilink` and `redirect` page→page; `spawned` task|page→page;
+    `subtask` task→task; `attended` person→event; `about` any→person|place|account; `visited`
+    person→place (an event's place is `events.place_id`, never a link — D16); `located-in`
+    place→place (so "everything in Japan" is answerable, §6.19); `parent-of` person→person
+    (direction kept; `family` stays the symmetric catch-all); `friend` and `family` person↔person;
+    `related` any↔any.
+  - Cycles (e.g. `subtask`) are not prevented by the schema; §6.11 caps its walk.
 - **Alternatives.**
   - *No supertype; discriminator pairs* (`from_kind TEXT, from_id INT`): rejected — no
     foreign keys, so edges can dangle silently forever. The whole point of putting the
@@ -1782,11 +1718,13 @@ Each decision: **context → decision → alternatives rejected → rationale �
   - *Per-relationship tables* (`friendships`, `attendance`, `page_links`, …): rejected —
     N tables and N code paths for one concept ("these two things are related"), and
     "everything about X" becomes a union over an open-ended set.
-  - *CHECK-list on `links.kind`*: rejected — relationship taxonomy is personal and grows
-    unpredictably ('godmother', 'college-roommate'); each addition would need a
-    migration. Structural enums (`entities.type`, `pages.kind`, `tasks.status`) ARE
-    constrained, because those are architecture, not taxonomy. The line: **constrain
-    structure, leave taxonomy free.**
+  - *A CHECK-list on `links.kind`*: rejected — relationship taxonomy is personal and grows
+    unpredictably ('godmother', 'college-roommate'); each addition would need a migration.
+    Structural enums (`entities.type`, `pages.kind`, `tasks.status`) ARE constrained, because
+    those are architecture, not taxonomy. The line: **constrain structure, leave taxonomy
+    open — but never implicit.**
+  - *Free-text kinds auto-registered on first use*: rejected — a typo (`Friend`) would register a
+    permanent kind, and a kind later flagged symmetric would never get its missing mirror rows.
   - *Symmetry as discipline (store one edge, query with `from_id = ? OR to_id = ?`)*:
     rejected — every graph query must remember the OR (miss once, lose half the
     graph), and nothing stops two writers storing the same pair in both directions.
@@ -1803,75 +1741,17 @@ Each decision: **context → decision → alternatives rejected → rationale �
   needs with one index: wiki backlinks (`kind='wikilink'`, asymmetric), life
   relationships (`kind='family'/'friend'/…`, symmetric), provenance (`kind='spawned'`
   from memo triage, `kind='attended'` for events, `kind='subtask'`, `kind='redirect'`
-  for renames). `UNIQUE(from_id, to_id, kind)` allows multiple relationship kinds
-  between the same pair but forbids duplicate edges (and makes the trigger's mirror
-  insert idempotent).
-- **Operational note.** If a kind's symmetry flag is flipped 0→1 after edges exist,
-  run the documented backfill (`INSERT OR IGNORE` the mirrors for that kind); the
-  trigger only fires on new inserts.
+  for renames).
 - **Sources.** [R46][R43].
-
-- **Addendum (review round 3, the registry is closed; mirrors on delete).**
-  D8 said `kind` is "auto-registered on first use". That let a typo (`Friend`) register
-  a permanent asymmetric kind, and a kind later flagged symmetric never got its missing
-  mirror rows. Now: `links.kind` is a foreign key to `link_kinds`, so an unregistered
-  kind is rejected; registering a kind is a deliberate `INSERT INTO link_kinds`
-  (a data row, not a schema change — the taxonomy is still open-ended, just never
-  implicit); kind names must be lowercase `[a-z0-9_-]`; `symmetric` is immutable
-  (`BEFORE UPDATE` trigger) — to change a kind's symmetry, register a new kind. This
-  supersedes the "Operational note" above (backfill on flag flip) — flips are now
-  impossible. `links` rows are immutable in `from_id`/`to_id`/`kind` (delete and
-  re-insert); deleting one side of a symmetric edge deletes its mirror. Both mirror
-  triggers terminate under `PRAGMA recursive_triggers=ON` (verified §8 #3): the insert
-  mirror uses `INSERT OR IGNORE`, so its re-fire finds the row present and stops; the
-  delete mirror finds nothing left to delete. **(Superseded by addendum 2 below: endpoint
-  types are now constrained.)** *Originally not constrained:* endpoint types
-  (`subtask` between two pages is accepted); this is knowingly left to the app and
-  reopens if a bad edge is ever found in real data. Cycle prevention for `subtask`
-  stays app-level, so §6.11 caps its depth. Seeded `lives-in` and `visited` (D16
-  used them).
-
-- **Addendum 2 (review round 3b, endpoint types are now constrained; closed even
-  with foreign keys off).** The first addendum left endpoint types to the app and is
-  superseded on that point. `link_kinds` gained `from_types` / `to_types` (NULL = any
-  entity type, else a comma list from `entities.type`), and a `BEFORE INSERT` trigger on
-  `links` checks both endpoints — including the mirror rows of symmetric kinds, which
-  must therefore be valid in both directions (`CHECK (symmetric = 0 OR from_types IS
-  to_types)`). Seeded: `wikilink`/`redirect` page→page; `spawned` task|page→page;
-  `subtask` task→task; `attended` person→event; `about` any→person|place;
-  `lives-in` person→place; `visited` person|event→place; `friend`/`family`
-  person↔person; `related` any↔any. A kind's structure (symmetry *and* endpoint types)
-  is immutable once registered (`link_kinds_structure_fixed`); to change it, register a
-  new kind. A misspelt type token fails **closed** (every link of that kind is
-  rejected), and an unknown endpoint id counts as type `'?'`. The same trigger also
-  rejects an **unregistered kind** itself — the FK alone let one through on a connection
-  with `foreign_keys=OFF` (executed in autocommit; `PRAGMA foreign_keys` is a no-op inside
-  a transaction). What still depends on `foreign_keys=ON` (mandatory, §2.9): dangling
-  endpoint ids of *untyped* kinds (`related`, `about`'s source) and every other FK.
-  Cycles remain unconstrained by the schema (§6.11 caps its walk).
-
-- **Addendum 3 (round 4, a sixth entity type).** `entities.type` gains `'account'` (D18), so
-  the shared ID space now holds six types; the constraint is named `entities_type` (see D18,
-  "why now"). The seeded `about` kind now targets `person,place,account`, so a memo or an event
-  can be *about* an account.
-
-- **Addendum 4 (round 5, small changes).** Seeded `located-in` (place → place, so "everything in
-  Japan" is answerable, §6.19) and `parent-of` (person → person, direction kept; `family` stays
-  the symmetric catch-all). `links_immutable` and `link_kinds_structure_fixed` gained a `WHEN`
-  guard, so a full-row `UPDATE` that changes only `note` passes (R4-17).
-
-- **Addendum 5 (round 6, seeds).** `lives-in` is removed and `visited` is person → place only
-  (D16 addendum): an event's place is `events.place_id`, never a link.
 
 ### D9 — Binary files: DEFERRED out of v1. The design is kept here for the day it returns.
 
-- **Decision (v1, cross-review).** No `attachments` table, no `media/` directory, no
-  binary files in the system at all. Media was a second thought for the owner, and the
-  "if it needs to be outside, it's not part of this system" framing made the cut the
-  honest one: the entire design below is **perfectly additive later** (a future
-  `attachments` migration touches nothing else, needs no backfill, and nothing in v1
-  references it). Until then, a memo that needs a file references it in prose.
-- **The deferred design (unchanged, for the record).** Binary files live in `media/`,
+- **Decision.** No `attachments` table, no `media/` directory, no binary files in the system at
+  all. The "if it needs to be outside, it's not part of this system" framing makes the cut the
+  honest one: the entire design below is **perfectly additive later** (a future `attachments`
+  migration touches nothing else, needs no backfill, and nothing in v1 references it). Until then,
+  a memo that needs a file references it in prose.
+- **The deferred design.** Binary files live in `media/`,
   named by SHA-256; `attachments` rows carry `(entity_id, sha256, ext, mime, size)`;
   path = `media/<sha256[0:2]>/<sha256><ext>`, derived, never stored. Dedup is
   automatic (same bytes → same file). No inline BLOBs: SQLite's own benchmarks put
@@ -1891,6 +1771,25 @@ Each decision: **context → decision → alternatives rejected → rationale �
 
 - **Decision.** See §2.2. ISO-8601 UTC TEXT for instants; local `YYYY-MM-DD` TEXT for
   days, written at insert, never recomputed.
+  - **Zone.** `entities.tz` and `measurements.tz` hold the IANA zone name of the writer when the row
+    — for measurements, `taken_at` — was captured (`NULL` = unknown). A UTC instant alone cannot say
+    whether `22:30Z` was 14:30, 22:30 or 07:30 the next morning, and only capture time can supply the
+    zone, which is why it cannot wait for a migration. The DB checks the shape (1–64 characters of
+    `A-Za-z0-9_/+-`), not that the name is a real zone; readers convert with a tz database. `events`
+    deliberately have no `tz` (KISS): an event's `start_at` is read in the creating writer's
+    `entities.tz`, a guess for a trip planned from elsewhere, and a *recurring timed* event has no
+    defined local time across DST — a known limit (§7). Zone names are renamed now and then
+    (`Europe/Kiev` became `Europe/Kyiv` in 2022); the tz database keeps the old name as a link in its
+    `backward` file, so a reader resolves a stored name with a tz database that includes it. The
+    standard way to write an instant with its zone is RFC 9557 [R69]:
+    `2026-06-09T21:14:03.482Z[Europe/Berlin]` — exactly `*_at` plus `tz`, so writing it needs no
+    new data.
+  - **Provenance, for the same reason.** Which writer made a row (`entities.source`,
+    `links.source`, §2.3) is also known only at the moment of writing, so it is a column now, not a
+    migration later.
+  - **Completion day.** `tasks.completed_day` (local; paired with `status = 'done'` and
+    `completed_at`) makes "what I finished on day X" a plain lookup instead of the query-time
+    UTC-to-local derivation this decision forbids; §6.2 has a `'done'` row.
 - **Alternatives.**
   - *Instants only, local day computed at query time*: rejected — a timezone move or DST
     rule silently rewrites history ("June 3" becomes "June 2" for anything stored near
@@ -1904,78 +1803,58 @@ Each decision: **context → decision → alternatives rejected → rationale �
     (space separator, no Z); a documented footgun [R28].
 - **Sources.** [R5][R6][R7][R8][R28].
 
-- **Addendum (round 6, zone and completion day).** (1) `entities.tz` and `measurements.tz` hold
-  the IANA zone name of the writer when the row — for measurements, `taken_at` — was captured
-  (`NULL` = unknown). A UTC instant alone cannot say whether `22:30Z` was 14:30, 22:30 or 07:30 the
-  next morning (R4-04), and only capture time can supply the zone, which is why it could not wait
-  for a migration. The DB checks the shape (1–64 characters of `A-Za-z0-9_/+-`), not that the name
-  is a real zone; readers convert with a tz database. `events` deliberately have no `tz` (owner
-  decision, KISS): an event's `start_at` is read in the creating writer's `entities.tz`, a guess
-  for a trip planned from elsewhere, and a *recurring timed* event still has no defined local time
-  across DST — a known limit. (2) `tasks.completed_day` (local; paired with `status = 'done'` and
-  `completed_at`) makes "what I finished on day X" a plain lookup instead of the query-time
-  UTC-to-local derivation this decision forbids; §6.2 gained a `'done'` row.
-
 ### D11 — Deletion: tombstones, never hard deletes.
 
 - **Decision.** Deleting an entity sets `entities.deleted_at`. Reads filter
-  `deleted_at IS NULL`. No row is ever physically removed by the app.
+  `deleted_at IS NULL`. No entity row and no domain row is ever physically removed: `BEFORE DELETE`
+  triggers on `entities` and the six domain tables reject it (the `entities` trigger also holds on a
+  connection with `foreign_keys=OFF` and for orphan entity rows). Tombstoning and un-tombstoning bump
+  `entities.updated_at` (`entities_touch`, watching `deleted_at` only, so it cannot re-fire itself —
+  executed with `recursive_triggers=ON`): "what changed most recently" is one column, and
+  `updated_at` equals `deleted_at` for a fresh tombstone.
 - **Rationale.** In a biography database, *erasure is itself biographical*: in 20 years
   it should be possible to see what the 2027 version of the owner deleted, and when.
   Hard deletes also break the `links` graph (FK violations or silently dangling
-  relationships) and undermine the audit story of D12. Storage cost of keeping everything
-  is irrelevant at this scale.
+  relationships). Storage cost of keeping everything is irrelevant at this scale.
 - **Alternatives.** Hard delete + `ON DELETE CASCADE` (destroys evidence, cascades
   surprises); trash-with-expiry (a policy layer — can be added later *on top of*
   tombstones without schema change; the data layer is already there).
-- **Exception.** `measurements` are never deleted at all — not even tombstoned. They are
-  corrected via `supersedes_id` (D7). This is how medical records think, and it makes the
-  health history tamper-evident for free *(overstated — D11 addendum 3)*.
-- **Task semantics (cross-review).** Tasks are *fleeting* entities: `status` is
-  `open | done` — there is no `dropped` status. Abandoning a task is erasure (a
-  tombstone), not a recorded decision, and a completed task stays completed forever.
-  `CHECK ((status = 'done') = (completed_at IS NOT NULL))` keeps the two columns honest.
-- **Known asymmetry (owner-settled, Option A).** `links` rows are hard-deleted — no
-  tombstone, no audit. Wikilink removal is even *required* (the body is the truth,
-  §2.5: re-extraction on save must delete dangling rows or the table fights its own
-  source of truth). Authored links (`friend`, `family`, …) are deleted with them, which
-  was weighed explicitly against a split policy (derived rows hard-deleted, authored
-  rows tombstoned, policy encoded in `link_kinds`) and **rejected**: the owner does not
-  need "who was in my life when" as a structured query — the *evidence* (memos,
-  `attended` events) survives anyway, and relationship links are a summary over that
-  evidence. Consequences, accepted knowingly: relationship removal is invisible — the
-  row is gone and nothing records that it existed. The
-  split policy remains additive-later (a `deleted_at` column + partial unique index +
-  one `derived` flag in `link_kinds`), and `sqlite-history` triggers [R48] are the
-  documented retrofit if relationship erasure ever needs to be auditable. `attachments`,
-  if D9 ever returns, inherits this same rule.
+- **Exception.** `measurements` and `balances` are never deleted at all — not even tombstoned. They
+  are corrected by inserting rows (D7, D18), and triggers enforce it. This is how medical records
+  think. The triggers guard against mistakes, not against a writer that drops them, so "tamper-evident"
+  would overstate it. An `entities` row with no domain row (a writer that died between its two
+  inserts) is still insertable; the orphan query of §2.8 finds it.
+- **Task semantics.** Tasks are *fleeting* entities: `status` is `open | done` — there is no
+  `dropped` status. Abandoning a task is erasure (a tombstone), not a recorded decision, and a
+  completed task stays completed forever. `CHECK ((status = 'done') = (completed_at IS NOT NULL))`
+  keeps the two columns honest.
+- **Known asymmetry.** `links` rows are hard-deleted — no tombstone, no audit. Wikilink removal is
+  even *required* (the body is the truth, §2.5: re-extraction on save must delete dangling rows or
+  the table fights its own source of truth). Authored links (`friend`, `family`, …) are deleted with
+  them, which was weighed explicitly against a split policy (derived rows hard-deleted, authored
+  rows tombstoned, policy encoded in `link_kinds`) and **rejected**: "who was in my life when" is
+  not needed as a structured query — the *evidence* (memos, `attended` events) survives anyway, and
+  relationship links are a summary over that evidence. Consequence, accepted knowingly: relationship
+  removal is invisible — the row is gone and nothing records that it existed. The split policy
+  remains additive-later (a `deleted_at` column + partial unique index + one `derived` flag in
+  `link_kinds`), and `sqlite-history` triggers [R48] are the documented retrofit if relationship
+  erasure ever needs to be auditable. `attachments`, if D9 ever returns, inherits this same rule.
 
-- **Addendum (review round 3).** The `measurements` exception above is now enforced by
-  triggers (D7 addendum). The known `links` hard-delete asymmetry stands (owner-settled);
-  note that deleting a symmetric edge now removes both directions.
-
-- **Addendum 2 (review round 3b).** Tombstoning and un-tombstoning now bump
-  `entities.updated_at` (`entities_touch`, watching `deleted_at` only, so it cannot
-  re-fire itself — verified with `recursive_triggers=ON`): "what changed most recently"
-  is one column again, and `updated_at` equals `deleted_at` for a fresh tombstone.
-
-- **Addendum 3 (round 5, deletes are enforced).** "No row is ever physically removed by the
-  app" was a convention for entities (executed: `DELETE FROM pages` then `DELETE FROM entities`
-  worked, and a freed newest id was reused). Now `BEFORE DELETE` triggers on `entities` and the six
-  domain tables reject it; the `entities` trigger also holds on a connection with
-  `foreign_keys=OFF` and for orphan entity rows. "Tamper-evident for free" above overstated it:
-  the triggers guard against mistakes, not against a writer that drops them. An `entities` row
-  with no domain row (a writer bug) is still insertable — see R4-07 in §8.
-
-### D12 — Audit trail: no revision tables. *(Round 12: git-over-export and nightly snapshots are withdrawn, §7.)*
+### D12 — Audit trail: no revision tables.
 
 - **Decision.** The schema contains **no revision or history tables**. The only in-DB temporal
   metadata is row-level: `entities.created_at` (written by the app, never back-dated, §2.2) and
-  `updated_at` (trigger-maintained); the `deleted_at` tombstone (D11); and `recorded_at` on the
+  `updated_at` (trigger-maintained); the `deleted_at` tombstone (D11); `source` on `entities` and
+  `links`, which says who wrote the row, not what it said before (§2.3); and `recorded_at` on the
   append-only `measurements` and `balances` (measurements also `taken_at` and `tz`), whose
   corrections are new rows, not overwrites (D7, D18).
+- **Durability.** A commit must survive power loss, so connections use `synchronous = FULL`
+  (§2.9). SQLite documents that with `NORMAL` in WAL "a transaction committed … might roll back
+  following a power loss" [R54]; measured here, `FULL` is ~1 ms per commit against ~0.1 ms (btrfs,
+  500 memo commits) — invisible for a journal. Every write transaction starts with `BEGIN IMMEDIATE`
+  (§2.9).
 - **Alternatives.**
-  - *Full revision snapshots per edit* (the predecessor design): rejected — an app-level
+  - *Full revision snapshots per edit*: rejected — an app-level
     versioning system is significant code to build and maintain, for a history nobody has asked to
     query.
   - *Trigger-based history tables* (e.g., Simon Willison's `sqlite-history` pattern —
@@ -1985,16 +1864,6 @@ Each decision: **context → decision → alternatives rejected → rationale �
     history of structured rows) [R48].
 - **Cost accepted.** An `UPDATE` to a mutable row (a page body, a task, a person) overwrites the
   old value, and nothing recovers it.
-- **Addendum (round 7, durability, write transactions).** A commit must survive power loss, so
-  connections use `synchronous = FULL` (§2.9). SQLite documents that with `NORMAL` in WAL "a
-  transaction committed … might roll back following a power loss" [R54]; measured here, `FULL` is ~1 ms
-  per commit against ~0.1 ms (btrfs, 500 memo commits, §8 #9) — invisible for a journal. Every write
-  transaction starts with `BEGIN IMMEDIATE` (§2.9).
-- **Withdrawn in round 12.** This decision used to add prose history by git over a nightly markdown
-  export, and database history by nightly `VACUUM INTO` snapshots with retention, verification, an
-  off-box copy, a restore procedure and a CSV dump (§2.8, D12 addendum 2). All of it is out of scope
-  while the schema is made reliable; §7 says when to reopen, and §2.8 keeps only the checks that
-  read the file itself.
 - **Sources.** [R48][R54].
 
 ### D13 — Migrations: numbered plain SQL + `PRAGMA user_version`; freeze-and-migrate.
@@ -2002,29 +1871,30 @@ Each decision: **context → decision → alternatives rejected → rationale �
 - **Decision.** See §2.7. No ORM, no migration framework, no down-migrations. Forward
   only. **Until the freeze, there are no migrations at all:** the v1 schema is edited in
   place (§3 is the canonical DDL; at freeze it becomes `db/migrations/0001_init.sql`)
-  and any test database is
-  recreated from scratch; `user_version` stays 1. Numbered files and the additive-only
-  policy begin **after** the first real data is imported. **After the freeze, all changes
-  are additive** (new tables,
-  new columns, new indexes); column renames via `ALTER TABLE … RENAME COLUMN` are allowed
-  and must be recorded in the migration file with a comment explaining the rename (the
-  migration history is the dictionary of meaning changes).
+  and any test database is recreated from scratch; `user_version` stays 1. Numbered files and the
+  additive-only policy begin **after** the first real data is imported. **After the freeze, all
+  changes are additive** (new tables, new columns, new indexes); column renames via `ALTER TABLE …
+  RENAME COLUMN` are allowed and must be recorded in the migration file with a comment explaining the
+  rename (the migration history is the dictionary of meaning changes).
+- **Every CHECK is named, so every rule can change without a rebuild.** Widening an enum after the
+  freeze (a new `pages.kind`, entity type, `repeat` value), letting partial dates into `birth_day`
+  or loosening the title rules is a two-statement transactional migration — `ALTER TABLE … DROP
+  CONSTRAINT <name>; … ADD CONSTRAINT <name> CHECK (…)` (SQLite ≥ 3.53 [R55]) — **only because the
+  CHECK has a name**: an unnamed CHECK can never be dropped (`no such constraint`), and adding a
+  looser second CHECK does not relax the first (both apply). The alternative is SQLite's 12-step
+  table rebuild, here with FTS triggers, a composite FK and tombstone triggers to recreate. `ADD
+  CONSTRAINT` checks the existing rows (it fails on one that breaks the new rule), so tightening is
+  as safe as loosening. Names are `<table>_<column>` or `<table>_<rule>` (`people_birth_day`,
+  `pages_title_safe`). Executed: every name drops on a populated database, and a widened rule takes
+  effect with integrity and foreign-key checks clean; the migration runner must use such a SQLite.
 - **Rationale.** This is the convergent simplest practice for SQLite projects: a
   `user_version` pragma in the file header, an array of `.sql` files applied in order —
   multiple independent write-ups implement it in under 100 lines and report no need for
   more [R20][R21][R22]. SQLite's compatibility essay explicitly blesses additive change
   as the mechanism by which schemas evolve without breaking old meaning [R1].
 - **Down-migrations** are rejected as a category. A migration is applied to a *copy* of the file
-  first (`VACUUM INTO`, as for an importer, §2.11) and the three checks of §2.8 must pass on the
+  first (`VACUUM INTO`, as for an importer, §2.11) and the four checks of §2.8 must pass on the
   copy before it touches `life.db`; a migration that fails on the copy is fixed, never reversed.
-
-- **Addendum (round 5, named CHECKs make "additive" true).** Widening an enum after the
-  freeze (a new `pages.kind`, entity type, `repeat` value) is a two-statement transactional
-  migration — `ALTER TABLE … DROP CONSTRAINT <name>; … ADD CONSTRAINT <name> CHECK (…)` — **only
-  because every enumerated CHECK is now named**; verified for all eight on a populated database with
-  integrity and foreign-key checks clean (§8 #7), on SQLite 3.53.4. The migration runner must use
-  such a SQLite; the older claim of a "one-line migration" (§8, question 9) was false for the
-  unnamed DDL.
 
 ### D14 — UI: thin custom app for capture/browse; off-the-shelf tools for exploration.
 
@@ -2034,8 +1904,11 @@ Each decision: **context → decision → alternatives rejected → rationale �
   (sparklines/line charts from `measurements`), forms for events/tasks/people/places, a
   search box over `pages_fts`, and a backlinks panel. For ad-hoc exploration, browsing raw
   tables, and running SQL: **Datasette** pointed at `life.db` (instant table browsing,
-  faceting, SQL console, JSON/CSV export, zero code) [R49], optionally `sqlite-web` when
-  direct row editing is wanted [R50] *(dropped — it is a second writer; addendum)*.
+  faceting, SQL console, JSON/CSV export, zero code) [R49]. It opens the file read-only (§2.9)
+  and its SQL console accepts only `SELECT` (executed on 0.65.5). `sqlite-web` is **not used**
+  [R50]: it can insert, update and delete rows — a second writer that bypasses the
+  entity-row-first and `title_key` conventions, against principle 3 and D3. Editing goes through the
+  app, whose forms already cover row editing.
 - **Rejected.** Building a generic object-browser/admin UI — Datasette already is one,
   is maintained by someone else, and reads any SQLite file this schema produces. This is
   the single biggest UI-side Pareto cut: the custom surface shrinks to data entry and
@@ -2045,16 +1918,9 @@ Each decision: **context → decision → alternatives rejected → rationale �
   conventions header embedded in §3's init DDL.
 - **Sources.** [R49][R50].
 
-- **Addendum (round 7, one writer).** `sqlite-web` "when direct row editing is wanted" is
-  dropped: it can insert, update and delete rows — a second writer that bypasses the entity-row-first
-  and `title_key` conventions, against principle 3 and D3. Exploration tools open the file
-  read-only (§2.9); Datasette does so by default and its SQL console accepts only `SELECT`
-  (executed on 0.65.5, §8 #9). Editing goes through the app. D14's list of what the app builds
-  (composer, day view, inbox, forms) already covers row editing.
-
 ### D15 — Recurrence: structured `repeat_*` columns, occurrences expanded at read.
 
-- **Decision.** `events` and `tasks` carry six readable recurrence columns:
+- **Decision.** `events` carry six readable recurrence columns (tasks do not repeat, below):
   `repeat` (`none|daily|weekly|monthly|yearly`), `repeat_every` (NULL = 1; 13 with
   `daily` = every 13 days, 3 with `monthly` = quarterly), `repeat_weekdays` (weekly
   only, e.g. `'mo,we,fr'`), `repeat_position` + `repeat_weekday` (monthly only:
@@ -2064,11 +1930,32 @@ Each decision: **context → decision → alternatives rejected → rationale �
   recurrence: they are a one-line query over `people.birth_day`. Recurring *habits*
   (daily meditation) are *not* events: they are 0/1 `measurements` on a habit metric —
   the FxLifeSheet pattern, charts for free.
-- **Task recurrence semantics.** Completing a repeating task ends the series
-  (`completed_at` set, `repeat_until` = the completion day by convention); the app may
-  spawn the next-occurrence task via `links(kind='spawned')`. "Edit only this
-  occurrence" is deliberately unsupported — split the series instead (end the first
-  with `repeat_until`, create a second).
+- **Payload CHECKs.** `repeat_every` only with a repeating kind and ≥ 1; `repeat_until` only on a
+  repeating row (and ≥ `start_day` for events); `repeat = 'weekly'` **iff** `repeat_weekdays` is
+  present, and the value must be a strictly formatted list of lowercase two-letter tokens
+  (`'mo,we,fr'` — anything else would insert silently and then never recur).
+- **Expansion semantics.**
+  - *Week.* "Every Nth week" counts **calendar weeks (Mon–Sun)** from the week containing
+    `start_day`, not 7-day blocks from `start_day` (which would put a Wednesday-start series'
+    following Monday in week 0).
+  - *Month.* SQLite's `'+N month'`/`'+N year'` **normalise** rather than clamp
+    (`date('2026-01-31','+1 month')` = `2026-03-03`; `date('2024-02-29','+1 year')` = `2025-03-01`),
+    so "the 31st" and Feb-29 series are computed by matching `min(start day-of-month, last day of that
+    month)` (clamping: Jan 31, Feb 28, Mar 31).
+  - *Duration.* A recurring event with `end_day` keeps its duration per occurrence (§6.12 returns
+    `occ_start` and `occ_end`).
+  - *One expander.* A single window-bounded query (§6.12) serves every kind, checked against an
+    independent oracle.
+- **Tasks do not repeat.** A task has one `status`, so a repeating task could only ever be done
+  once: completing it would end the series, which makes it a reminder, not a checklist — it could
+  never record "done this month, not that month". Both needs have a better home: a **reminder** is a
+  repeating event ("pay rent", monthly), and **"did I do it each month"** is a 0/1 habit measurement,
+  whose history charts for free. A one-off follow-up is a normal task; if two tasks belong together,
+  link them with the symmetric `related` (a `spawned` link from task to task is rejected — D8
+  allows `spawned` task|page → page only). Recurrence on tasks is additive later (§7): the same six
+  columns and CHECKs as `events`, with `due_day` as the anchor. "Edit only this occurrence" of an
+  event is deliberately unsupported — split the series instead (end the first with
+  `repeat_until`, create a second).
 - **Alternatives.**
   - *RFC-5545 RRULE text column*: rejected — a cryptic string in a column is exactly
     the "meaning lives in app code" failure this schema exists to prevent; unreadable
@@ -2076,162 +1963,124 @@ Each decision: **context → decision → alternatives rejected → rationale �
   - *Materialized occurrence rows* (Google Calendar's shape): rejected at this scale —
     drags in the three-way edit problem (this instance / this and future / all) and a
     regeneration job, for a calendar that is mostly non-recurring.
-  - *A separate `recurrences` table*: rejected — six columns used by exactly two tables
-    don't justify a join and a second ID space.
+  - *A separate `recurrences` table*: rejected — six columns used by one table don't justify a
+    join and a second ID space.
 - **Research basis.** The calendar literature is unanimous on the fork (store the rule
   and expand on read vs materialize instances) [R51][R52]; the structured-interval
   shape follows the classic practitioner designs (e.g. SQL Server Agent's
   `freq_type/freq_interval` family) [R52].
 - **Sources.** [R51][R52].
 
-- **Addendum (review round 3, recurrence hardening and the expander).**
-  - *Payload CHECKs.* `repeat_every` only with a repeating kind and ≥ 1;
-    `repeat_until` only on a repeating row (and ≥ `start_day` for events);
-    `repeat = 'weekly'` **iff** `repeat_weekdays` is present, and the value must be
-    a strictly formatted list of lowercase two-letter tokens (`'mo,we,fr'` — anything
-    else used to insert silently and then never recur); a repeating **task** must have
-    a `due_day` (its expansion anchor; `due_day` plays `start_day`'s role).
-  - *Week semantics.* "Every Nth week" counts **calendar weeks (Mon–Sun)** from the
-    week containing `start_day`. The first draft counted 7-day blocks from `start_day`,
-    which put a Wednesday-start series' following Monday in week 0.
-  - *Month arithmetic.* SQLite's `'+N month'`/`'+N year'` **normalise** rather than
-    clamp (`date('2026-01-31','+1 month')` = `2026-03-03`; `date('2024-02-29','+1 year')` =
-    `2025-03-01`), so "the 31st" and Feb-29 series are computed by matching
-    `min(start day-of-month, last day of that month)` (clamping: Jan 31, Feb 28, Mar 31).
-  - *Duration.* A recurring event with `end_day` keeps its duration per occurrence
-    (§6.12 returns `occ_start` and `occ_end`).
-  - *One expander.* The four per-kind CTEs of the first draft are replaced by a single
-    window-bounded query (§6.12). The first draft's weekly/monthly/daily CTEs had five
-    independent defects (unbounded walk to year 9999, occurrences before `start_day`,
-    `repeat_until`/`:end_day` not applied, `repeat_every` ignored for monthly, no
-    monthly-same-day or yearly expansion at all) — none were caught because the
-    validation records checked that queries ran, not that they were right.
-
-- **Addendum 2 (round 7, repeating tasks are reminders).** Two statements above did not fit the
-  rest of the schema. (1) *"The app may spawn the next-occurrence task via `links(kind='spawned')`"*:
-  D8 addendum 2 makes `spawned` task|page → page only (a task or note born from a memo), so a
-  task → task `spawned` link is rejected (executed). The next occurrence is simply a new task;
-  if a link is wanted, use the symmetric `related` (any ↔ any). (2) *Completing a repeating task
-  ends the series* — so a repeating task cannot record "done this month, not that month": it is
-  a **reminder** (`repeat_until` = the `completed_day` by convention), not a checklist. For "did I
-  do it each month" use a 0/1 habit measurement (this decision, first paragraph), whose history
-  charts for free; for a one-off follow-up create a normal task.
-
 ### D16 — Places: a fifth entity type.
 
-- **Decision.** `places(id, name UNIQUE, notes)` joins `entities` as a linkable type;
-  `events.place_id` references it; links can connect anything to a place
-  (`kind='lives-in'`, `kind='visited'`). Promoted from the v1 cut list after the
-  owner confirmed place-centric queries ("everything in Japan 2019", "days spent in
-  Berlin") are likely — free-text `place` would make those impossible and backfilling
-  10 years of free text is the painful path.
+- **Decision.** `places(id, name UNIQUE, notes)` joins `entities` as a linkable type. An event has
+  exactly one place, `events.place_id`; links can connect anything to a place (`about`), and a person
+  to a place they visited (`visited`, person → place only). There is no `lives-in` kind: it would be
+  undated, so "where did I live in 2015" would be unanswerable, while a dated event (start and end
+  day, `place_id`) answers it, and §6.19 rolls cities up into countries.
+  Place-centric queries ("everything in Japan 2019", "days spent in Berlin") are expected, and
+  free-text `place` would make those impossible — backfilling 10 years of free text is the painful
+  path.
 - **Alternatives.** Free-text `events.place` (rejected — the queries above fail); a
   `places` table *outside* the entity supertype (rejected — places deserve graph
   links and tombstones like everything else; that is what the supertype is for).
 - **Sources.** [R46] (ark's place nodes).
 
-- **Addendum (round 6, one home for an event's place).** An event has exactly one place,
-  `events.place_id`. The `visited` link kind is person → place only (it was person|event) and
-  `lives-in` is removed — it was undated, so "where did I live in 2015" was unanswerable; a dated
-  event (start and end day, `place_id`) answers it, and §6.19 rolls cities up into countries.
-
-### D17 — The contract as data: `lifelog_meta`, date GLOBs, and in-DB semantic guards.
+### D17 — The contract as data: `lifelog_meta`, date round-trips, and in-DB semantic guards.
 
 - **Decision.** A tiny `lifelog_meta(key, value)` table, seeded at init, carries the
   storage contract (time formats, rebuildability of FTS, rename convention, recurrence
-  semantics) as *queryable data* rather than comments — comments are invisible to
-  `SELECT *` and stripped by some tooling. Alongside it, the contract is enforced where
-  CHECK constraints can reach: every `*_day` column must pass
-  `date(col) = col` (format *and* calendar validity — '2026-13-45' and '2026-9-3' are
-  rejected), every `*_at` column a GLOB on the ISO-8601 shape. The supertype gains
-  `UNIQUE(id, type)` and every domain table a constant `entity_type` column + composite
-  FK, so a row's type and its domain table can never disagree and one id can never live
-  in two domain tables (the cross-review's B2/B3 findings — now impossible).
+  semantics, the measurement, link-kind and title rules) as *queryable data* rather than comments —
+  comments are invisible to `SELECT *` and stripped by some tooling, and a comment *outside* a
+  `CREATE` statement is not stored in the file at all (executed), which is why §3 puts each table's
+  rules inside its own statement and keeps the file header to a pointer. Alongside it, the contract is
+  enforced where CHECK constraints can reach: every `*_day` column must pass `date(col) IS col`
+  (format *and* calendar validity — '2026-13-45' and '2026-9-3' are rejected; `=` would silently
+  accept malformed dates, because a CHECK passes on NULL), and every `*_at` column the
+  `strftime(...) IS col` round-trip — not a GLOB on the ISO shape. GLOBs appear only as
+  character-class guards (`tz`, titles and `title_key`, `metrics.name`, `currencies.code`, `repeat_weekdays`, and the
+  kind and type lists of `link_kinds`, `source`). The supertype has `UNIQUE(id, type)` and every domain
+  table a constant `entity_type` column + composite FK, so a row's type and its domain table can never
+  disagree and one id can never live in two domain tables. A CHECK uses only functions that every
+  SQLite the contract allows has (`lifelog_meta.sqlite`): a SQLite that lacks one cannot write the
+  table or integrity-check it — so no `octet_length()` where `length(CAST(x AS BLOB))` does the same.
+- **The 2075 test.** A stranger holding only `life.db` must be able to answer the questions of §2.11
+  from `.schema` and `SELECT * FROM lifelog_meta`. The table lists 22 questions and the `lifelog_meta`
+  keys that answer them (25 rows); `tests/schema/r10probes.py` runs it, and fails if a key answers no
+  question or a question loses its answer. A new contract rule therefore needs a row in the table and
+  a key in the DDL.
+- **Threat model.** The database is deliberately not encrypted, and with finance in the file the
+  assumptions behind that are explicit: (1) the finance tables never enter git, whose history cannot
+  be scrubbed (§2.1, §2.10); (2) the disk holding `life.db` must be encrypted at rest (full-disk
+  encryption), because the file itself will not be; (3) Datasette listens on localhost only and opens
+  the file read-only (`?mode=ro`, its default for a mutable database — verified); nothing that can run
+  arbitrary SQL from a browser is exposed to a network; (4) no credentials or full account numbers,
+  ever (§2.10).
 - **Rationale.** Principle #2 ("the schema is the documentation") deserves mechanism,
   not prose. These are one-time costs, zero per-write cost, and they make the 2075 test
   (`.schema` + the data itself, cold) actually pass.
-- **Alternatives.** Comments only (status quo ante — invisible to queries); a
-  documentation wiki (lives outside the artifact, rots).
+- **Alternatives.** Comments only (invisible to queries); a documentation wiki (lives outside the
+  artifact, rots).
 
-- **Addendum (review round 3).** Two statements above are corrected: (1) day columns
-  are checked with `date(col) IS col`, not `date(col) = col` (`=` silently accepts
-  malformed dates — §2.2, §8), and instants with the `strftime(...) IS col` round-trip,
-  not a GLOB; the only GLOBs in the DDL are the `repeat_weekdays` format guard and the
-  `link_kinds.kind` character guard. (2) The contract table now also records the
-  measurement, link-kind and title rules (`lifelog_meta`).
-- **Sources.** none needed — all claims here were executed (§8 #3).
+### D18 — Money: accounts, balances, currencies, FX. Net worth is derived.
 
-- **Addendum 2 (round 4, finance raises the stakes of plaintext).** With D18 the file holds a
-  wealth history, not only prose. The decision stands (no database encryption) but the
-  threat model it rested on is restated: (1) the finance tables never enter git, whose history
-  cannot be scrubbed (§2.1, §2.10); (2) the disk holding `life.db` must be encrypted at rest
-  (full-disk encryption), because the file itself will not be; (3) Datasette listens on localhost only and opens the
-  file read-only (`?mode=ro`, its default for a mutable database — verified, §8 #9); nothing that can
-  run arbitrary SQL from a browser is exposed to a network; (4) no credentials or full account numbers, ever (§2.10).
-
-- **Addendum 3 (round 10, the 2075 test is now a test).** The contract as data claimed to let a stranger
-  understand the file, but nothing checked it. §2.11 lists 20 questions and the `lifelog_meta` keys that
-  must answer them; `tests/schema/r10probes.py` runs the table. It found four things a stranger could not
-  learn from `.schema` — how an entity row relates to its domain row, how wikilinks and tags become links,
-  who may write and with what settings, and how the schema evolves — and they are now keys (`entities`,
-  `wikilinks`, `writers`, `evolution`; 23 rows in all). A new contract rule now needs a row in the table
-  and a key in the DDL.
-
-- **Addendum 4 (round 12, two keys withdrawn).** Round 10 added six keys; two of them — `export` and
-  `backups`, with questions 17 and 18 — described the export folder and the snapshot / restore contract,
-  and went with them (§7, §8 #14). The rule and its test are unchanged: every key answers some question,
-  every question is answered from `lifelog_meta` alone.
-
-### D18 — Money: accounts, balances, currencies, FX. Net worth is derived. *(Round 4)*
-
-- **Context.** The owner wants financial data in the same lifelong database — first of all
-  *net worth over time* and entries like it (what an account, a house, a loan was worth on a
-  day). Money has three properties the rest of the schema does not: it must be **exact**, it
-  has a **currency** (several, over 50 years — and currencies are redenominated: the DEM became
-  the EUR at a fixed rate), and its history is **audited** — a wrong balance must be corrected
-  visibly, not overwritten.
+- **Context.** The lifelong database also holds financial data — first of all *net worth over time*
+  and entries like it (what an account, a house, a loan was worth on a day). Money has three
+  properties the rest of the schema does not: it must be **exact**, it has a **currency** (several,
+  over 50 years — and currencies are redenominated: the DEM became the EUR at a fixed rate), and its
+  history is **audited** — a wrong balance must be corrected visibly, not overwritten.
 - **Decision.**
   - **Exact integers.** An amount is an `INTEGER` count of minor units of the owning account's
     currency. `currencies(code, name, subunits)` is a closed registry (`subunits` = minor units
     per whole unit: EUR 100, JPY 1, BTC 10⁸; any integer, so a 1/5 subunit like MRU works) and
     `subunits` is immutable (`currencies_subunits_fixed`) — changing it would silently rescale
-    every stored amount. The seed holds eight common codes; adding one is a deliberate `INSERT`.
+    every stored amount. The seed holds seven common codes; adding one is a deliberate `INSERT`.
   - **`accounts` — a sixth entity type.** Anything with a balance or value: bank account,
-    brokerage, pension, cash, property, vehicle, loan, mortgage, card. Columns: `name` (unique,
-    NOCASE, like `places`), `side` (`asset|liability`), `currency`, free `category`,
-    `institution`, `opened_day`, `closed_day` (inclusive), `notes`. `side` and `currency` are
-    immutable (`accounts_meaning_fixed`, with a `WHEN` clause so ORMs' full-row updates work).
-    Being an entity gives accounts the graph (`about` links from memos and events), the tombstone
-    and `updated_at` for free. Record your **own share** of joint holdings.
+    brokerage, crypto wallet, pension, cash, property, vehicle, valuables, loan, mortgage, card.
+    Columns: `name` (unique, NOCASE, like `places`), `side` (`asset|liability`), `currency`, free
+    `category`, `institution`, `opened_day`, `closed_day` (inclusive), `notes`. `side` and
+    `currency` are immutable (`accounts_meaning_fixed`, with a `WHEN` clause so ORMs' full-row
+    updates work). Being an entity gives accounts the graph (`about` links from memos and events),
+    the tombstone and `updated_at` for free. Record your **own share** of joint holdings.
+  - **One rule covers every holding: an account's balance is its value in its own currency on a
+    day** — a deposit's statement balance, a portfolio's or a crypto wallet's market value, an
+    estimate for a house or a watch (table in §2.10). Nothing more is modelled: only the `category`
+    vocabulary and guidance, and crypto is valued in fiat like everything else (no BTC seed row).
   - **`balances` — append-only snapshots.** `(account_id, day, amount, recorded_at, source,
     import_id, note)`. `day` is the local as-of date (end of day; note Beancount asserts at the
     *start* of a date [R56]); `recorded_at` is when it was written. `UPDATE`/`DELETE` are
     rejected. **The newest row per `(account_id, day)` wins**, and a row with a NULL `amount`
-    **retracts** that day — the two operations that `measurements` cannot do (§8 R4-06). Read
-    through `balance_values`. Import idempotency is `UNIQUE(source, import_id)` used with
-    `ON CONFLICT … DO NOTHING`.
+    **retracts** that day — the two operations that `measurements` cannot do. Read through
+    `balance_values`. Import idempotency is `UNIQUE(source, import_id)` used with
+    `ON CONFLICT … DO NOTHING`. *Newest* means **recorded last — the highest `id`**, not the most
+    trustworthy source: the first import of old statements, run after a manual correction of the
+    same days, wins over that correction. Re-running the import changes nothing (its rows are
+    duplicates); to keep the manual value, enter it again after the import. Like `measurements`, the
+    table is **bitemporal** [R68]: `day` is valid time, `recorded_at` and the row order are
+    transaction time.
   - **`fx_rates` — reference data.** `(from_ccy, to_ccy, day, rate)` with `from_ccy < to_ccy`
     enforced, so one pair can never carry two contradictory rates; `rate` is `REAL` because a
     rate is a ratio, not money (canonical amounts stay integers; converted figures are derived).
-    Mutable and re-importable — it is public reference data, not a personal fact.
+    Mutable and re-importable — it is public reference data, not a personal fact. The price of
+    that: a corrected rate re-states every past net-worth figure that used it, and nothing records
+    the old one.
   - **Net worth is derived, never stored** (§6.16–6.17): per live, open account the latest
     balance on or before the day, × the rate *as of the reporting day*, assets minus
     liabilities. The reporting currency is a query parameter, so the history can be re-stated
     in any currency; a missing rate yields an explicit NULL/`unconverted` count instead of a
     silent gap.
-- **Why now (before the freeze).** Adding `'account'` to `entities.type` later is a table
-  rebuild unless the CHECK is *named*: SQLite 3.53.4 supports `ALTER TABLE … DROP CONSTRAINT` /
-  `ADD CONSTRAINT`, but only for a constraint that has a name — an unnamed inline `CHECK`
-  reports `no such constraint`, and adding a looser second CHECK does not relax the first (both
-  apply). Verified, including that a named constraint can be dropped and re-added on a populated
-  database with the foreign keys and `integrity_check` intact (§8 #6). So D18 names
-  `entities_type`, `accounts_side` and `currencies_subunits`; naming every other enum CHECK is
-  finding R4-08.
+- **Why the CHECKs are named.** Adding a type like `'account'` to `entities.type` after the freeze
+  is a table rebuild unless the CHECK is *named*: SQLite ≥ 3.53 supports `ALTER TABLE … DROP
+  CONSTRAINT` / `ADD CONSTRAINT`, but only for a constraint that has a name — an unnamed inline
+  `CHECK` reports `no such constraint`, and adding a looser second CHECK does not relax the first
+  (both apply). Verified, including that a named constraint can be dropped and re-added on a
+  populated database with the foreign keys and `integrity_check` intact. So `entities_type`,
+  `accounts_side` and `currencies_subunits` are named, like every other CHECK (D13).
 - **Alternatives rejected.**
   - *Money as `measurements`* (one metric per account, `value REAL`): rejected. `REAL` drifts
     (`0.1 + 0.2` executed: `0.30000000000000004`); the unit lives on the metric, not the row, so a
-    currency cannot vary or be looked up per account; there is no retraction (R4-06); an account is
-    not linkable; and `INSERT OR REPLACE` can rewrite it (R4-01). Storing integer-valued floats
+    currency cannot vary or be looked up per account; there is no retraction; an account is
+    not linkable; and `INSERT OR REPLACE` can rewrite it. Storing integer-valued floats
     would be exact up to 2⁵³, but nothing in the file says so — principle 2 fails.
   - *Decimal as TEXT / `NUMERIC`*: rejected — SQLite has no decimal type. Executed: TEXT
     decimals sort as strings (`'10.25'` before `'9.5'`) and their `SUM` is a float
@@ -2246,12 +2095,20 @@ Each decision: **context → decision → alternatives rejected → rationale �
   - *`supersedes_id` chains for balances*: rejected — `balances` has a natural key
     `(account, day)` (measurements do not: several readings a day are valid), so "newest row
     wins" is simpler and cannot be ambiguous. Two correction shapes exist for two shapes of data.
-  - *Full double-entry ledger now* (`transactions` + `postings`, hledger/GnuCash shape):
+  - *Full double-entry ledger* (`transactions` + `postings`, hledger/GnuCash shape):
     deferred, §7 — it is a second product (categories, transfers, splits, importers) and it is
     additive later: a `transactions` table would reference `accounts`, and `balances` would become
     its reconciliation points.
-  - *Accounts outside the entity supertype*: rejected — no links, no tombstone, and (see "why
-    now") no additive way to change that after freeze.
+  - *Quantity × price per holding*: deferred, §7. It does not fit `currencies`/`fx_rates` as they
+    are: the code CHECK rejects `V`, `ZM`, `BRK.B`, `VWCE.DE`; a price must be stored as its
+    reciprocal whenever the ticker sorts after the reporting currency (`from_ccy < to_ccy`); a
+    ticker-to-ticker "rate" is accepted; and a US-listed stock priced in USD cannot be valued in EUR
+    without a second hop. Doing it properly means a units registry, a `prices` table and longer
+    queries — real weight for a number the statement already prints. Reopen when automatic repricing
+    or allocation by security is wanted; the additive path is a `securities` + `prices` pair and a
+    nullable `accounts.security_id`, and nothing in the schema blocks it.
+  - *Accounts outside the entity supertype*: rejected — no links, no tombstone, and no cheap way to
+    change that after the freeze (moving rows into the supertype is a data migration, not a CHECK).
 - **Costs accepted.** A balance carries forward until replaced, so a stale account keeps
   counting (`stale_days`, §6.18, exist to expose that); FX rates must be maintained by hand or
   by an importer, per pair, for the reporting currency you use (no triangulation through a pivot);
@@ -2259,46 +2116,30 @@ Each decision: **context → decision → alternatives rejected → rationale �
   recorded as your share, not modelled as co-ownership.
 - **Sources.** [R53][R54][R55][R56][R57].
 
-- **Addendum 1 (round 5: stocks, crypto, deposits, valuables — KISS).** The owner asked for net
-  worth to include these and *nothing more* (no ledger). One rule covers all of them: **an account's
-  balance is its value in its own currency on a day** — a deposit's statement balance, a
-  portfolio's or a crypto wallet's market value, an estimate for a house or a watch (table in §2.10).
-  No schema was added for this; only the `category` vocabulary and guidance, and the BTC seed row
-  was dropped from `currencies` (crypto is valued in fiat like everything else).
-  *Considered and deferred:* tracking quantity × price per holding. Tested against v1.5, it does not
-  fit `currencies`/`fx_rates`: the code CHECK rejects `V`, `ZM`, `BRK.B`, `VWCE.DE`; a price must be
-  stored as its reciprocal whenever the ticker sorts after the reporting currency (`from_ccy <
-  to_ccy`); a ticker-to-ticker "rate" is accepted; and a US-listed stock priced in USD cannot be
-  valued in EUR without a second hop. Doing it properly means a units registry, a `prices` table and
-  longer queries — real weight for a number the statement already prints. Reopen when the owner
-  wants automatic repricing or allocation by security; the additive path is a `securities` +
-  `prices` pair and a nullable `accounts.security_id`, and nothing in v1.6 blocks it.
-
-### D19 — The wikilink save contract: one transaction, links follow the body, a bad target never blocks a save. *(Round 8)*
+### D19 — The wikilink save contract: one transaction, links follow the body, a bad target never blocks a save.
 
 - **Decision.** Saving a page body is one `BEGIN IMMEDIATE` transaction that writes the body and
   makes the page's `links(kind='wikilink')` rows equal to the pages the body names — adding,
   and deleting, rows — with each target resolved or created inside its own `SAVEPOINT` (§6.14).
   What is read (CommonMark text only), what a wikilink and a tag are, stubs, self-links,
   tombstones and the known limits are in §2.5, with test vectors. **An invalid target makes no link
-  and never blocks a save.** The schema did not change: the DDL of §3 is byte-identical to v1.8.
-- **Why now.** R4-12, executed on v1.8: the auto-created page for `[[Health/Diet]]`, `[[Re: plan]]`
-  and `[[Target|alias]]` is rejected by the filename CHECK; a writer that swallows the error and
-  commits leaves an orphan `entities` row, and one that does not loses the memo. Four neighbouring
-  gaps were found while writing it down: no cookbook block wrote a `wikilink` row (the §6.1 memo
-  mentioned `[[Lifelog]]` and linked nothing); "upserts" left a link behind after the body dropped
-  it; read literally, the tag rule turns a stub's `#REDIRECT` into a page called `REDIRECT`; and
-  §6.5 listed `redirect` rows although §2.5 said backlink queries exclude them.
+  and never blocks a save.** The DDL does not implement it: the contract lives in the writing application.
+- **Why.** Without it: the auto-created page for `[[Health/Diet]]`, `[[Re: plan]]` and
+  `[[Target|alias]]` is rejected by the filename CHECK; a writer that swallows the error and commits
+  leaves an orphan `entities` row, and one that does not loses the memo. An "upsert" of links leaves
+  a link behind after the body dropped it. Read literally, the tag rule turns a stub's `#REDIRECT`
+  into a page called `REDIRECT`. And `redirect` rows would be listed as backlinks although backlink
+  queries exclude them.
 - **Alternatives.**
   - *A `pending_links` table for targets that do not resolve*: rejected in D8's alternatives, and
     not needed — the body is the record of an unresolved mention.
   - *Make the database skip a bad target* (a trigger that swallows the page insert, or a title
     CHECK loose enough for any `[[text]]`): a CHECK cannot skip a row, and a title the filesystem
-    cannot hold is exactly what the CHECK exists to stop (D5 addendum 2).
+    cannot hold is exactly what the CHECK exists to stop (D5).
   - *A regular expression over the raw body*: rejected — it cannot tell code, URLs and raw HTML
     from prose without re-implementing a CommonMark parser. Reading the parser's text nodes gives
     all the exclusions with no grammar to maintain.
-  - *Expand `#health` into `[[health]]` in the body* (what §2.5 used to say): rejected — it rewrites
+  - *Expand `#health` into `[[health]]` in the body*: rejected — it rewrites
     the owner's text, cannot be told from a hand-written `[[health]]`, and adds nothing the
     extraction does not already do.
   - *Obsidian-style `[[Page#Heading]]` / `^block` targets*: rejected — `#` is legal in a title
@@ -2309,9 +2150,9 @@ Each decision: **context → decision → alternatives rejected → rationale �
 - **Costs accepted.** The contract lives in the one writing application (principle 3). The database
   checks what it can — endpoints are pages (`links_endpoint_types`), titles are filename-safe and
   unique by key — but not that `links` matches the bodies. That drift is detectable and repairable:
-  a rebuild from the bodies gives the same links as 400 incremental random edits (§8 #10). A skipped
+  a rebuild from the bodies gives the same links as 400 incremental random edits (executed). A skipped
   target is not remembered anywhere except in the body's own text.
-- **Sources.** [R58] [R59]; R4-12 (§8).
+- **Sources.** [R58] [R59].
 
 ---
 
@@ -2323,21 +2164,24 @@ example starts its transaction with `BEGIN IMMEDIATE` (§2.9).
 
 ### 6.1 Capture a memo (the universal insert convention)
 
-Every entity insert is two statements in one transaction: `entities` first, then the
-domain row reusing the id. The domain row's `entity_type` is constant per table (the
-composite FK relies on it).
+Every entity insert is two statements in one transaction: `entities` first, `RETURNING id`, then
+the domain row with that id. The app keeps the id in a variable (below `:memo_id`) and binds it
+wherever the memo is meant. Never `last_insert_rowid()` for this: the link sync inserts rows in
+between, and the mood reading would then point at a random entity with no error (executed, §2.3).
+The domain row's `entity_type` is constant per table (the composite FK relies on it).
 
 ```sql
 BEGIN IMMEDIATE;
-INSERT INTO entities(type, created_at, updated_at, tz)      -- tz: the writer's IANA zone right now
-VALUES ('page', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'Europe/Berlin');
+INSERT INTO entities(type, created_at, updated_at, tz, source)   -- tz: the writer's IANA zone right now
+VALUES ('page', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'Europe/Berlin', 'ui')
+RETURNING id;   -- the app keeps it as :memo_id
 INSERT INTO pages(id, kind, day, body)
-VALUES (last_insert_rowid(), 'memo', '2026-09-29',
+VALUES (:memo_id, 'memo', '2026-09-29',
         'Shipped the schema doc. Review pending. [[Lifelog]]');
 -- the body names [[Lifelog]]: the link sync of §6.14 runs here, inside this same transaction
 -- optional mood, attached to the memo it belongs to (D6):
 INSERT INTO measurements(metric_id, day, value, source, entity_id, recorded_at)
-SELECT id, '2026-09-29', 4, 'manual', last_insert_rowid(), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+SELECT id, '2026-09-29', 4, 'manual', :memo_id, strftime('%Y-%m-%dT%H:%M:%fZ','now')
   FROM metrics WHERE name = 'mood';      -- (a timed reading also sets taken_at and tz)
 COMMIT;
 ```
@@ -2368,7 +2212,7 @@ SELECT what, at, detail FROM (
   UNION ALL
   SELECT 'task', NULL, t.title
     FROM tasks t JOIN entities e ON e.id = t.id
-   WHERE e.deleted_at IS NULL AND t.status = 'open' AND t.repeat = 'none'
+   WHERE e.deleted_at IS NULL AND t.status = 'open'
      AND t.due_day <= :day
   UNION ALL
   SELECT 'done', t.completed_at, t.title                     -- what was finished that LOCAL day
@@ -2393,12 +2237,10 @@ keep occurrences still running on `:day`:
 -- run §6.12 with those two bounds, then keep rows WHERE occ_end >= :day
 ```
 
-"Pages touched that day" = pages *written* that day (a page has a `day`; a link target the app created has none, D5
-addendum 5), flagged if edited since;
+"Pages touched that day" = pages *written* that day (a page has a `day`; a link target the app created has none, D5), flagged if edited since;
 deriving an *updated*-day from the UTC instant at query time is deliberately not done
 — D10. Undated open tasks deliberately do NOT appear in every day view — they live in
-the task list, not the journal. Recurring tasks are expanded the same way as events,
-with `due_day` as the anchor (§6.12). Completing a task sets `status`, `completed_at` and the
+the task list, not the journal. Tasks do not repeat (D15). Completing a task sets `status`, `completed_at` and the
 **local** `completed_day` together (`UPDATE tasks SET status = 'done', completed_at = …,
 completed_day = :day WHERE id = :task_id`); the `'done'` row above is "what I finished today"
 without any UTC-to-local conversion at read time (D10).
@@ -2492,13 +2334,13 @@ SELECT p.id, p.kind, p.title,
 
 ```sql
 BEGIN IMMEDIATE;
-INSERT INTO entities(type, created_at, updated_at)
-VALUES ('task', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+INSERT INTO entities(type, created_at, updated_at, source)
+VALUES ('task', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'ui')
+RETURNING id;   -- the app keeps it as :task_id
 INSERT INTO tasks(id, title, due_day)
-VALUES (last_insert_rowid(), 'Book dentist appointment', :due_day);
--- last_insert_rowid() is still the new task's id: no statement has intervened
-INSERT INTO links(from_id, to_id, kind, created_at)
-VALUES (last_insert_rowid(), :memo_id, 'spawned', strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+VALUES (:task_id, 'Book dentist appointment', :due_day);
+INSERT INTO links(from_id, to_id, kind, created_at, source)
+VALUES (:task_id, :memo_id, 'spawned', strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'ui');
 UPDATE pages SET triaged_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = :memo_id;
 COMMIT;
 ```
@@ -2510,7 +2352,7 @@ COMMIT;
 INSERT INTO measurements(metric_id, day, taken_at, value, source, supersedes_id, recorded_at)
 VALUES (:metric_id, :day, NULL, 71.4, 'manual', :wrong_row_id, strftime('%Y-%m-%dT%H:%M:%fZ','now'));
 -- rejected if :wrong_row_id belongs to a different metric, does not exist, or
--- was already corrected once (correct the correction instead) — D7 addendum
+-- was already corrected once (correct the correction instead) — D7
 
 -- a row that should never have existed (a mis-tap): RETRACT it — a correction with a NULL value.
 -- measurement_values then hides both rows; to bring a value back, correct the retraction.
@@ -2535,20 +2377,19 @@ SELECT t.title, subtree.depth
  ORDER BY subtree.depth;
 ```
 
-Endpoint types are enforced (`subtask` is task→task only — D8 addendum 2), but cycle
+Endpoint types are enforced (`subtask` is task→task only — D8), but cycle
 *prevention* is app-level: never link a task to its own ancestor. Without the depth cap, a two-task
 cycle below the root never terminated (verified); with it, a cycle repeats at most 32
 levels and the query still returns.
 
-### 6.12 Occurrences of recurring events and tasks (one expander, D15)
+### 6.12 Occurrences of recurring events (one expander, D15)
 
 The `repeat_*` columns carry enough *readable* information to answer "what occurs in
 this window?" with date arithmetic — no RRULE parser, no materialized rows. One
 window-bounded query covers every repeat kind: it walks the days of
 `[:start_day, :end_day]` (never further) and joins each day to the recurring events
 whose rule matches it. Each occurrence returns `occ_start` and `occ_end` (a multi-day
-event keeps its duration). Tasks use the same query with `tasks`, `due_day` as the
-anchor and no `end_day`/duration columns.
+event keeps its duration). Only events repeat (D15).
 
 ```sql
 WITH RECURSIVE days(day) AS (
@@ -2605,7 +2446,7 @@ SELECT e.id, e.title, d.day AS occ_start,
  ORDER BY d.day, e.id
 ```
 
-Semantics, all executed and cross-checked (§8 #3):
+Semantics, all executed and cross-checked:
 
 - `daily` / `repeat_every`: every N days from `start_day`.
 - `weekly`: the listed weekdays, every Nth **calendar week (Mon–Sun)** counted from the
@@ -2683,16 +2524,17 @@ SELECT p.id, p.title, e.deleted_at
   FROM pages p JOIN entities e ON e.id = p.id
  WHERE p.title_key = :key;
 
--- 2a) found, but tombstoned: revive it
+-- 2a) found, but tombstoned: revive it (the UI tells the owner the save revives a deleted page)
 UPDATE entities SET deleted_at = NULL WHERE id = :found_id;
 -- 2b) none found: create the empty page (no day: a link target is not something written today)
-INSERT INTO entities(type, created_at, updated_at)
-VALUES ('page', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'));
-INSERT INTO pages(id, kind, title, title_key) VALUES (last_insert_rowid(), 'page', :title, :key);
+INSERT INTO entities(type, created_at, updated_at, source)
+VALUES ('page', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), :source)
+RETURNING id;   -- the app keeps it as :target_id
+INSERT INTO pages(id, kind, title, title_key) VALUES (:target_id, 'page', :title, :key);
 
--- 3) link it (:target_id is :found_id, or last_insert_rowid() after 2b)
-INSERT INTO links(from_id, to_id, kind, created_at)
-VALUES (:page_id, :target_id, 'wikilink', strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+-- 3) link it (:target_id is :found_id, or the id 2b returned)
+INSERT INTO links(from_id, to_id, kind, created_at, source)
+VALUES (:page_id, :target_id, 'wikilink', strftime('%Y-%m-%dT%H:%M:%fZ','now'), :source)
 ON CONFLICT(from_id, to_id, kind) DO NOTHING;
 RELEASE target;   -- on any error in 1-3:  ROLLBACK TO target;  RELEASE target;  and go on
 
@@ -2706,8 +2548,10 @@ COMMIT;
 
 `[[cafe\u0301 NOTES]]` and `[[Café notes]]` produce the same `:key`, so both resolve to the one page;
 `title` keeps the spelling of whoever created it (in NFC). Without step 4 a link outlives the text
-that made it, and without the `SAVEPOINT` a rejected target leaves its `entities` row behind — the
-two defects of v1.8 (R4-12, §8 round 8).
+that made it, and without the `SAVEPOINT` a rejected target leaves its `entities` row behind.
+`:source` is the saving writer (`ui`, `agent:<name>`, §2.3). Step 2a runs for *any* save that names
+a tombstoned page, an old memo edited years later included, so the UI tells the owner that the save
+revives a deleted page before it commits.
 
 ### 6.15 Open an account; record, correct and retract a balance (D18)
 
@@ -2717,10 +2561,11 @@ entity insert (§6.1); recording a balance is one row. Nothing is ever edited or
 
 ```sql
 BEGIN IMMEDIATE;
-INSERT INTO entities(type, created_at, updated_at)
-VALUES ('account', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+INSERT INTO entities(type, created_at, updated_at, source)
+VALUES ('account', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'ui')
+RETURNING id;   -- the app keeps it as :account_id
 INSERT INTO accounts(id, name, side, currency, category, institution, opened_day)
-VALUES (last_insert_rowid(), 'Main checking', 'asset', 'EUR', 'cash', 'Bank A', '2019-03-01');
+VALUES (:account_id, 'Main checking', 'asset', 'EUR', 'cash', 'Bank A', '2019-03-01');
 COMMIT;
 
 -- what the statement says at the end of a LOCAL day
@@ -2736,7 +2581,7 @@ INSERT INTO balances(account_id, day, amount, recorded_at, note)
 VALUES (:account_id, '2026-09-30', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'belongs to the savings account');
 
 -- idempotent bulk import: ON CONFLICT ... DO NOTHING skips only the duplicate. Not INSERT OR IGNORE,
--- which would also skip a row with a malformed day or a NULL where one is required — silently (§8 #6).
+-- which would also skip a row with a malformed day or a NULL where one is required — silently.
 INSERT INTO balances(account_id, day, amount, recorded_at, source, import_id)
 VALUES (:account_id, :day, :amount, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'bank_csv', :row_key)
 ON CONFLICT(source, import_id) WHERE import_id IS NOT NULL DO NOTHING;
@@ -2782,7 +2627,7 @@ SELECT h.name, h.side, h.currency, b.amount, h.as_of,
  ORDER BY h.side, h.name;
 ```
 
-The rules, all executed against an exact-arithmetic oracle (§8 #6):
+The rules, all executed against an exact-arithmetic oracle:
 
 - An account **counts** on `:day` if it is live (not tombstoned), open (`opened_day <= :day <=
   closed_day`, both inclusive; NULL = unbounded) and has at least one balance on or before
@@ -2845,9 +2690,9 @@ SELECT day,
 `accounts` is how many accounts had a balance by that month-end; `unconverted > 0` means an FX
 rate was missing for at least one of them, so that month understates (never a silent
 zero). Measured over 31 years of month-ends with 40 accounts and 438 000 balance rows: 0.085 s.
-The first draft of this query joined `balance_values` directly and SQLite scanned all
-balances once per month — 17.3 s at 36 500 rows; the correlated scalar subquery in `held`
-turns that into an index seek per (month, account).
+Joining `balance_values` directly makes SQLite scan all balances once per month — 17.3 s at
+36 500 rows; the correlated scalar subquery in `held` turns that into an index seek per
+(month, account).
 
 Net worth for one day is §6.16 with a final `SELECT sum(net_base_minor), count(*) …`;
 "net worth by category" is the same query grouped on `a.category`.
@@ -2895,7 +2740,7 @@ SELECT ev.title, ev.start_day, pl.name AS place
 ```
 
 An event has exactly one place, `events.place_id` — there is no second, link-based home
-(D16 addendum). A trip through several cities is one event per leg, or a country-level event
+(D16). A trip through several cities is one event per leg, or a country-level event
 plus city-level ones: this query finds all of them because containment rolls the cities up
 into the country. Where someone *lived* is a dated event (start and end day, `place_id`), not an
 undated link.
@@ -2910,7 +2755,7 @@ re-added, each with the trigger that should reopen the question.
 | Cut item | Why cut | Reopen when |
 |---|---|---|
 | Multi-device sync / CRDTs | Not a goal; would force UUIDs (D3), change-tracking columns, conflict resolution | A second device must write canonical data |
-| Agent CLI/API | Planned as a later layer over the same DB; single-writer rule (§1.3) extends to it naturally | After v1 UI exists |
+| Agent CLI/API | Planned as a later layer over the same DB; single-writer rule (principle 3) extends to it naturally; `source` already tells its rows apart (§2.3) | After v1 UI exists |
 | Binary files / `attachments` | Cut from v1 (D9): all-text DB stays megabyte-scale; design kept in D9 | The first real photo/PDF attachment need |
 | Database encryption | Deliberate plaintext (D17); protect the disk instead (full-disk encryption) | A legal/privacy requirement for at-rest encryption |
 | Revision/history tables | Tombstones and append-only facts cover the need (D12); `sqlite-history` triggers are the documented fallback [R48] | Demonstrated need for intra-day history of structured rows |
@@ -2920,1291 +2765,29 @@ re-added, each with the trigger that should reopen the question.
 | Text-valued measurements | `value REAL` keeps charting trivial (D7) | A real series needs non-numeric values (then: probably a note + link instead) |
 | JSON columns / property bags | The core anti-decision (D2) | Never |
 | Generic view system, AI generation | Cut from product scope by the owner | Product decision, not schema |
-| Markdown export of the prose; nightly snapshots, restore and an off-box copy; a CSV dump; continuous replication | Withdrawn in round 12 to focus on the schema and its reliability; nothing in the schema depends on any of them (D4, D12). Until one exists there is **no second copy** of `life.db`, and the file itself is the only thing to leave with | Before the first real data enters a canonical `life.db` (the freeze, D13) at the latest; the earlier design is in git history (§8 #14) |
+| Markdown export of the prose; nightly snapshots, restore and an off-box copy; a CSV dump; continuous replication | Out of scope while the schema is being made reliable; nothing in the schema depends on any of them (D4, D12). Until one exists there is **no second copy** of `life.db`, and the file itself is the only thing to leave with | Before the first real data enters a canonical `life.db` (the freeze, D13) at the latest |
 | Trash UI with restore/expiry | Tombstones (D11) are already the data layer | UI work; zero schema change |
 | `.sqlar` single-artifact packaging | `tar` covers "one file to email" | Frequent whole-archive portability need |
-| Unicode collation for titles (ICU / app-registered) | A collation only one program registers makes the DB unwritable and un-integrity-checkable for everyone else (`no such collation sequence`); the app-computed `title_key` gives the same uniqueness (D5 addendum 3) | Never, unless SQLite ships Unicode folding in the core |
-| Unicode-aware uniqueness for `places.name` / `metrics.name` | Not filenames; ASCII-`NOCASE` is enough for a personal registry today | A real duplicate like `Zürich`/`ZÜRICH` appears (then: a `name_key`, same pattern) |
+| Unicode collation for titles (ICU / app-registered) | A collation only one program registers makes the DB unwritable and un-integrity-checkable for everyone else (`no such collation sequence`); the app-computed `title_key` gives the same uniqueness (D5) | Never, unless SQLite ships Unicode folding in the core |
+| Unicode-aware uniqueness for `places.name` | Not a filename; ASCII-`NOCASE` is enough for a personal registry today (`metrics.name` is lowercase ASCII by its CHECK) | A real duplicate like `Zürich`/`ZÜRICH` appears (then: a `name_key`, same pattern) |
 | Hard deletes / GDPR-style erasure | Tombstones keep everything (D11) | A legal/privacy need to truly destroy specific rows |
 | Transaction ledger (income, spending, transfers), budgets, categories | A second product (splits, transfers, importers, categorisation); net worth needs only balances (D18). Additive later: `transactions` referencing `accounts`, `balances` as reconciliation points | The owner wants spending/savings-rate analysis, or a bank-feed importer exists |
-| Per-holding quantity × price, cost basis / lots, dividends, returns (TWR/IRR) | Net worth needs the market *value* on a day, which the statement or app gives; quantity × price needs a `prices` table and non-currency units — v1.5 cannot even hold a ticker (executed: `V`, `ZM`, `BRK.B` fail the code CHECK; a price must be entered as a reciprocal when the ticker sorts after the reporting currency). Additive later: a `securities` + `prices` pair and a nullable `accounts.security_id` (D18 addendum 1) | The owner wants automatic repricing, allocation by security or realised/unrealised gain |
+| Per-holding quantity × price, cost basis / lots, dividends, returns (TWR/IRR) | Net worth needs the market *value* on a day, which the statement or app gives; quantity × price needs a `prices` table and non-currency units — the schema cannot hold a ticker (executed: `V`, `ZM`, `BRK.B` fail the code CHECK; a price must be entered as a reciprocal when the ticker sorts after the reporting currency). Additive later: a `securities` + `prices` pair and a nullable `accounts.security_id` (D18) | The owner wants automatic repricing, allocation by security or realised/unrealised gain |
 | Cross rates through a pivot currency; automatic FX import | Store the pairs you report in (D18); an importer can fill `fx_rates` | A second reporting currency, or backfilling decades of rates by hand hurts |
 | Co-ownership / shares of joint accounts, multiple owners | Single-user database; record your own share (D18) | A second person needs their own view |
-| Storing account numbers, IBANs, credentials | A plaintext DB makes them a liability (§2.10, D17 addendum 2) | Never in `life.db`; use a password manager |
-| Partial dates (`1870`, `1870-05`) for people and events (R4-18) | Nothing asked for one yet. `birth_day`'s CHECK is unnamed, so it cannot be loosened in place (`DROP CONSTRAINT` finds no name — executed); the additive path is a nullable `birth_approx` TEXT column with a GLOB CHECK, which works on a populated STRICT table and leaves the triggers alone (executed, §8 #12) | The first ancestor or approximate date you want to record |
-| Searching *inside* a CJK run (R4-15) | `unicode61`, kept, folds `é ü ș ț` but a CJK run is one token (`本語` does not find `日本語のノート`). The index is derived, so switching is one transaction — drop `pages_fts`, create it with `tokenize='trigram remove_diacritics 1'`, `rebuild` — and the sync triggers keep working (executed). Trigram finds 3+-character parts and still not two-character words (`京都`) | The first real CJK memo you cannot find |
-| Typing a person's name instead of picking them (`[[Sam]]`, `@Sam`; R4-11 e) | A wikilink resolves to a page; people are linked with `about` from a picker (§6.6). A text mention needs a rule for two people called Sam. The additive path is one `link_kinds` row (`mention`, page→person) and a line in D19 — executed: accepted for a person, rejected for a place | Picking a person becomes the slow part of capture |
-| The local wall-clock time of a recurring *timed* event across DST (D10 addendum) | Occurrences expand by local day; a timed recurrence is a UTC instant, so its local hour shifts across a DST change; `entities.tz` records where it was set but the expander does not use it | A recurring timed event where the hour matters |
+| Storing account numbers, IBANs, credentials | A plaintext DB makes them a liability (§2.10, D17) | Never in `life.db`; use a password manager |
+| Partial dates (`1870`, `1870-05`) for people and events | Nothing asked for one yet. The standard for them is EDTF, now ISO 8601-2 [R70] (`1870`, `1870-05`, `1870~` for "about 1870"). The path is one migration: `DROP CONSTRAINT people_birth_day` and `ADD CONSTRAINT people_birth_day` with a CHECK that also accepts the EDTF forms wanted — executed for `YYYY` and `YYYY-MM` on a populated table; junk and month 13 stay rejected. Queries that do date arithmetic on `birth_day` (birthdays) must then skip partial values | The first ancestor or approximate date you want to record |
+| Repeating tasks | A task has one status, so a repeating one could only be a reminder that ends when done; a repeating event is the reminder and a 0/1 habit metric the checklist (D15) | A task you must tick off per occurrence, with its own history, that a habit metric cannot hold (then: the six `repeat_*` columns and CHECKs of `events` on `tasks`, `due_day` as the anchor — additive) |
+| Searching *inside* a CJK run | `unicode61`, kept, folds `é ü ș ț` but a CJK run is one token (`本語` does not find `日本語のノート`). The index is derived, so switching is one transaction — drop `pages_fts`, create it with `tokenize='trigram remove_diacritics 1'`, `rebuild` — and the sync triggers keep working (executed). Trigram finds 3+-character parts and still not two-character words (`京都`) | The first real CJK memo you cannot find |
+| Typing a person's name instead of picking them (`[[Sam]]`, `@Sam`) | A wikilink resolves to a page; people are linked with `about` from a picker (§6.6). A text mention needs a rule for two people called Sam. The additive path is one `link_kinds` row (`mention`, page→person) and a line in D19 — executed: accepted for a person, rejected for a place | Picking a person becomes the slow part of capture |
+| The local wall-clock time of a recurring *timed* event across DST (D10) | Occurrences expand by local day; a timed recurrence is a UTC instant, so its local hour shifts across a DST change; `entities.tz` records where it was set but the expander does not use it | A recurring timed event where the hour matters |
 
 ---
 
-## 8. Validation records and review resolutions
+## 8. References
 
-*Records #1–#13 describe the document as it stood when each was written, and are kept unedited (AGENTS.md).
-§2.8 was then the backup contract, D4 and D12 also specified a markdown export and nightly snapshots, §2.1 had
-`export/`, `backups/` and `dump/`, and `tests/backups/` ran the scripts. Round 12 withdrew all of that (#14);
-read the older records with that in mind.*
-
-### Validation record (2026-09-29, one author)
-
-§3 was applied verbatim with the `sqlite3` CLI on **SQLite 3.53.4** (Linux):
-
-- All tables, indexes, and triggers create cleanly; `user_version=1` and
-  `application_id='LIFE'` round-trip; external-content FTS5 over a STRICT content table
-  and the partial UNIQUE indexes parse and work.
-- Cookbook queries §6.1–§6.9 executed against seeded data; FTS5 sync triggers kept
-  `pages_fts` correct on insert and update; `supersedes_id` filtering returned only the
-  corrected value.
-- `updated_at` triggers verified. Cosmetic caveat: timestamps have millisecond
-  precision, so an insert and an immediate update can share the same millisecond —
-  timing-sensitive tests need ≥ 1 ms separation. No schema impact.
-- CHECK constraints reject as designed: `memo` without `day`; `mood=7`.
-- STRICT semantics confirmed as *lossless conversion*, not blanket rejection (D2
-  wording corrected accordingly).
-- **FK gotcha confirmed:** `PRAGMA foreign_keys` defaults to OFF per connection and
-  STRICT does not enable it. With FKs off, a `links` row referencing nonexistent entity
-  9999 persisted silently; with `foreign_keys=ON` it was rejected
-  (`FOREIGN KEY constraint failed`). This drove the new §2.9 and the DDL header note.
-
-### Validation record #2 (2026-09-29, independent cross-review)
-
-The amended §3 was applied to a fresh file (SQLite 3.53.4, python `sqlite3` and CLI) and
-**52/52 adversarial + positive tests passed**, covering: all B-series rejections (NULL
-title wiki, type↔table mismatch, id in two domain tables, done-without-completed_at,
-end<start, malformed days/instants including `2026-02-31` / `2026-9-3` / `banana` /
-space-separated and second-precision instants, NOCASE metric duplicates, note/memo
-without day, duplicate note titles, cross-metric supersede, recurrence CHECK matrix),
-plus positives: symmetric mirroring, auto-registered new link kinds, redirect
-non-mirroring, subtask links, places FK, FTS sync on insert/update, `ghost_pages`
-behavior, `measurement_values`, `pages_touch`, STRICT rejections, import idempotency.
-
-Three real bugs were found in the *reviewer's own first draft* of the amended DDL and
-fixed before landing — all are of a kind that only empirical testing catches:
-
-1. **The CHECK NULL hole.** `CHECK (date(x) = x)` evaluates to NULL (not 0) when
-   `date(x)` is NULL, and **a CHECK passes on NULL** — so `date(x) = x` silently accepts
-   `2026-9-3` and `2026-13-01`. The fix is `date(x) IS x` (`IS` yields 0/1, never NULL).
-   Same for the instant round-trip: `strftime(...) IS x`. All round-trip CHECKs in §3
-   now use `IS`; the original v1 draft's day-format constraints had the identical hole
-   via `LIKE`-free text columns.
-2. **`strftime` has no `%a`.** SQLite's `strftime` does not support weekday-name
-   formats; `strftime('%a', d)` returns an empty string, silently. The weekly-recurrence
-   cookbook query therefore uses `substr('su,mo,tu,we,th,fr,sa', strftime('%w', d)*3+1, 2)`.
-3. **`'weekday N'` steps forward only.** Computing "last Friday" by walking *forward*
-   from month-end to Sunday then back 2 days is wrong for months ending Tue–Thu
-   (it lands outside the month). Correct: step *backward* from the last day by
-   `(last_day_w − target_w + 7) % 7` days. All recurrence CTEs in §6.12 were executed
-   and cross-checked against Python's `calendar`, including both Februaries — exact
-   match.
-
-Also verified: `date('2026-02-31') = '2026-03-03'` (SQLite rolls over rather than
-rejecting), which the `IS` round-trip catches correctly.
-
-### Questions — resolution after cross-review
-
-The original reviewer questions were settled as follows (details in the decision log):
-
-1. **Re-validation** — done; see record #2 above.
-2. **Supertype FK delete behavior** — composite FKs `(id, entity_type) → entities(id,
-   type)` now make the pairing structural; delete behavior is moot under tombstones.
-3. **Mood** — removed from `pages`; the `mood` metric in `measurements`, each row
-   optionally pointed at its memo (D6).
-4. **`links.kind` registry** — adopted: `link_kinds` table with a `symmetric` flag and
-   auto-registration trigger (D8).
-5. **Measurement read rule** — added the `measurement_values` view (D7).
-6. **`attachments` files table** — moot: attachments deferred out of v1 (D9).
-7. **Index set** — `entities(type)` index cut; inbox partial index added; titles unique
-   partial index added (D5).
-8. **FTS triggers vs. nightly rebuild** — kept triggers (search always correct; rebuild
-   remains available via the documented `INSERT INTO pages_fts(pages_fts)
-   VALUES('rebuild')`).
-9. **`pages.kind` list** — kept enumerated ('memo','note','wiki'); new kinds are a
-   one-line migration after freeze, per the additive-only policy.
-10. **Over-engineering pass** — cut: `entities.type` index, `tasks.status='dropped'`,
-    `attachments` (whole table, deferred), `places` free-text column, UUIDs reaffirmed.
-    The remaining flagged asymmetry is below.
-
-### Owner veto received (2026-09-29, post-cross-review)
-
-1. **`links` hard-delete asymmetry (B11) — settled: Option A.** Blanket hard-delete of
-   `links` stays. A split policy (tombstone authored kinds, hard-delete derived kinds,
-   encoded in `link_kinds`) was proposed and rejected: "who mattered, when" is not a
-   query the owner needs; the evidence in memos and events survives regardless.
-   Consequences recorded in D11 (relationship removal invisible after snapshot
-   retention; split policy remains additive-later if ever wanted).
-
-No open questions remain. The schema is freeze-ready.
-
-### Review round 3 (2026-09-29, two independent reviewers + author)
-
-Two further reviews ran after the owner veto above. Every finding below was executed
-against a fresh database (SQLite **3.53.4**); findings that did not reproduce are listed
-as refuted so they are not raised again. Changes are recorded in the decision addenda
-(D5, D7, D8, D11, D12, D15, D17) and in §3/§6.
-
-**Resolved (DDL changed):** `measurement_values` was quadratic and did not mean what D7
-said (unique partial index on `supersedes_id`; wording corrected); append-only was a
-comment (triggers reject `UPDATE`/`DELETE`; `supersedes_id` immutable, so no cycles;
-`IS NOT` closes the dangling-reference hole); symmetric links left a half-edge on delete
-(mirror-delete trigger); the link registry auto-registered typos and late-flagged
-symmetric kinds (closed registry, owner decision: FK to `link_kinds`, immutable
-`symmetric`, immutable links); `repeat_weekdays` accepted garbage and weekly rules with no
-weekdays never recurred (format CHECK, weekly ⇔ weekdays); repeating tasks without an
-anchor day expanded to nothing; case-colliding and blank note/wiki titles, titled memos;
-`repeat_every`/`repeat_until` on non-repeating rows; `measurements(day)` index.
-**Resolved (cookbook changed):** §6.2 read superseded values and sorted NULLs by
-accident; §6.6 missed asymmetric kinds; §6.9 used `ORDER BY id DESC LIMIT 1`; §6.11
-did not terminate on a cycle; §6.12's four CTEs replaced by one expander (bounded
-walk, `start_day`, `repeat_until`, `repeat_every`, clamping, yearly, monthly-same-day,
-duration, calendar weeks).
-**Refuted (schema was right):** `pages_day` index exists (line in §3; plan uses it);
-`links(from_id)` is served by the `UNIQUE(from_id,to_id,kind)` index (plan:
-`SEARCH … sqlite_autoindex_links_1 (from_id=?)`); `pages_fts` does declare
-`content_rowid='id'`; the mirror trigger terminates under `recursive_triggers=ON`; the
-end-of-`repeat_until` month is *not* dropped by the monthly CTE (the opposite defect was
-real: the occurrence itself was never compared with `repeat_until`).
-**Deliberately not adopted at the time, adopted afterwards (round 3b below):** an
-`updated_at` bump on tombstoning, restricting path characters in titles, link endpoint
-types, and a `pages.kind` transition rule.
-**Note on record #1:** its "`mood=7`" line refers to the first-draft `pages.mood` column,
-superseded by D6; earlier records are not edited.
-
-### Validation record #3 (2026-09-29, review round 3)
-
-§3 was extracted from this document and applied to a fresh file; all DDL statements
-create cleanly (49 schema objects). Unlike records #1–#2, every check below has an
-**expected value stated in advance**; a run that merely completes is not a pass.
-
-- **Regression probes: 52/52 expectations met** — each adversarial insert/update was
-  declared "must reject" or "must accept" before running: case-duplicate title,
-  titled memo, blank/padded/201-char title, `Berlin`/`berlin` places; nine malformed
-  `repeat_weekdays` values (`Mon,Wed`, `friday`, `xyz`, `mo we fr`, `mo,,fr`, `,mo`,
-  `mo,`, `mo,mo,zz`, `MO`), weekly without weekdays, daily with weekdays,
-  `none`+`repeat_every=-5`, `none`+`repeat_until`, `every 0`, `until` before start,
-  recurring task without `due_day`; a second correction of one measurement, a
-  correction chain (100←102←104 leaves exactly {101,104} visible), cross-metric and
-  dangling `supersedes_id` (with `foreign_keys=OFF`), `UPDATE` of value / `supersedes_id`
-  / `entity_id`, `DELETE`, `INSERT OR IGNORE` import idempotency; unregistered and
-  mis-cased link kinds, illegal kind names, immutable `symmetric`, immutable links,
-  mirror on insert (2 edges) and on delete (0 edges), self-link stored once, and both
-  mirror triggers terminating under `recursive_triggers=ON`.
-- **Performance:** `measurement_values` over 120 000 rows: **0.009 s**; plan
-  `SEARCH x USING COVERING INDEX measurements_one_correction (supersedes_id=?)`
-  (before: `SCAN x` per row — 14 s at 20 000 rows, killed after 300 s at 200 000).
-  `measurements` day lookup uses `measurements_day`.
-- **§6.12 expander vs an independent oracle:** 16 recurring events (daily, every 13
-  days, weekly, biweekly starting on a Wednesday, biweekly Sunday, last Friday with a
-  start after that month's Friday, second and fourth weekday, first Monday with
-  `repeat_until` mid-month, monthly-on-the-31st, quarterly same-day and quarterly
-  last-Friday, Feb-29 yearly, every-2-years, an ended series, a 3-day yearly
-  conference) over four windows (15 months, 5 years, October 2026, February 2026):
-  **SQL and oracle agree on every (title, occ_start, occ_end) triple in all 4 windows**
-  (706, 1959, 60 and 36 occurrences). The oracle is plain Python (`calendar`,
-  `datetime.date.weekday`, no SQL date arithmetic). It and the SQL share one *reading
-  of the rules* — calendar weeks, clamping — which is now written down in D15 instead
-  of implied. Spot checks: biweekly Wed-start `2026-09-30, 10-02, 10-12, 10-14, 10-16,
-  10-26…`; last Friday from a `2026-10-31` start first returns `2026-11-27`; monthly on
-  the 31st `01-31, 02-28, 03-31, 04-30, 05-31`; quarterly `01-15, 04-15, 07-15, 10-15`;
-  Feb-29 yearly `2026-02-28, 2027-02-28`; first Monday with `until 2026-12-04` stops
-  after `2026-11-02`.
-  One month over 16 recurring events: 60 occurrences in 0.0005 s (the first-draft
-  daily CTE materialised 224 014 rows for one open-ended event).
-- **Task variant** (same query, `tasks`, `due_day` anchor): biweekly Tue/Thu from
-  `2026-03-03` → `03-03, 03-05, 03-17, 03-19, 03-31, 04-02`; monthly on the 30th
-  clamps; daily-every-3 correct.
-- **Day view (§6.2):** superseded reading absent; undated rows first, then
-  chronological; the multi-day recurring conference (`05-05`→`05-07`) shows on `05-06`
-  through the lookback window and not on `05-08`.
-- **Cookbook:** every SQL block in §6 was extracted from this document's text and
-  executed against a seeded database (13 blocks, 0 failures). §6.9 produced exactly one
-  `spawned` edge from the new task's id to the memo and set `triaged_at`; §6.10 accepted
-  a first correction.
-- **SQLite sharp edges executed and now recorded** (D15 addendum, §6.12): `date()`
-  normalises `+N month`/`+N year`; `||` binds tighter than `*`, `/`, `+`; a trigger takes
-  exactly one event (`AFTER INSERT, UPDATE` is a syntax error); `GLOB` negation is
-  `[^…]` with no alternation; a partial `UNIQUE` index serves a correlated `NOT EXISTS`;
-  `NULL <> x` is NULL (so a CHECK/trigger guard needs `IS NOT`).
-
-### Review round 3b (2026-09-29, owner follow-up: the four "not adopted" items)
-
-The owner asked for the four items round 3 had deliberately left out. All are now in §3
-(decisions: D5 addendum 2, D8 addendum 2, D12 addendum 2):
-
-1. **Filename-safe titles** — path/Windows-reserved characters, control characters and
-   NUL, leading/trailing `.`, Windows device names, ≤ 240 **bytes**.
-2. **Link endpoint types** — `link_kinds.from_types/to_types`, enforced by a trigger;
-   kind structure immutable; the registry stays closed even with `foreign_keys=OFF`.
-3. **`pages.kind` is fixed** after insert.
-4. **Tombstone / un-tombstone bumps `updated_at`.**
-
-### Validation record #4 (2026-09-29, review round 3b)
-
-§3 was extracted from this document and applied to fresh files (SQLite **3.53.4**, 52
-schema objects). Expected outcomes were declared before each probe ran.
-
-- **Round-3 regression suite re-run: 53/53** (the title-length probe was updated from
-  "201 characters rejected" to "241 bytes rejected, 240 bytes accepted"; a garbled
-  `links_immutable` probe that never ran was removed — it is covered below).
-- **New probes: 93/93** — 30 path-safety rejections (each of `/ \ : * ? " < > |`,
-  control characters 1/9/10/13/31/127, NUL, `.hidden`, `..`, `.`, `trail.`, `a.`,
-  `CON`/`con`/`Nul`/`prn`/`AUX`/`COM1`/`lpt9`) and 9 acceptances (`CONSOLE`, `com10`,
-  `LPT0`, `Lifelog v1.2`, `Café notes`, `日本語 ノート`, a punctuation-heavy title, 240 ASCII
-  bytes, 80 three-byte characters = 240 bytes) with 81 three-byte characters (243 bytes)
-  rejected; `kind` changes memo→note, note→wiki and wiki→memo rejected while a no-op
-  `SET kind = kind` and ordinary body/triage edits are accepted; tombstone and
-  un-tombstone each bump `updated_at` (equal to `deleted_at` for a tombstone) and
-  terminate under `recursive_triggers=ON`; **26 endpoint-type cases** (each seeded kind
-  accepted with valid endpoints and rejected with a wrong source, wrong target or both,
-  incl. `subtask` page→page, `attended` event→person, `friend` person→event,
-  `wikilink` page→person, `spawned` task→task) with symmetric mirrors intact under typing
-  (`friend` = 2 edges, `related` = 2); registry structure (types accepted, symmetric
-  kind with differing types rejected, malformed type lists `Person` / `page,,task` /
-  `page,` rejected, a misspelt token `persno` fails closed, `symmetric`/`from_types`/
-  `to_types` immutable, `note` still editable).
-- **Correction to record #3.** Record #3 listed "dangling `supersedes_id`, with
-  `foreign_keys=OFF`" as verified, but that probe ran inside an open transaction, where
-  `PRAGMA foreign_keys` is a **no-op** — the FK was actually ON. The claim happens to be
-  true, and was re-verified here on a genuinely FK-OFF autocommit connection
-  (`PRAGMA foreign_keys` read back as 0): the dangling `supersedes_id` is rejected by the
-  trigger's `IS NOT`; a typed link to a nonexistent endpoint is rejected by the endpoint
-  trigger; **an unregistered link kind was accepted** (the FK was the only guard) — the
-  reason the endpoint trigger now rejects unregistered kinds itself; a link of an *untyped*
-  kind to a nonexistent endpoint is still accepted with FKs off — that is what
-  `foreign_keys=ON` (mandatory, §2.9) is for.
-- **Known limit, executed:** `NOCASE` folds ASCII only. `health`/`HEALTH` collide as
-  intended, but `Café notes`/`CAFÉ NOTES` are both accepted; the exporter must
-  disambiguate (§2.5). SQLite has no Unicode case folding or normalisation without ICU.
-- **Still passing after the changes:** `measurement_values` over 120 000 rows 0.010 s;
-  expander vs oracle **4/4 windows exact**; all **13** §6 blocks executed from this
-  document's text with 0 failures (§6.6 returned the person's `attended` edge, which
-  the old `to_id`-only query would have missed).
-- **Not done, on purpose:** titles remain editable (D5 forbids renames by convention —
-  `[[Old Title]]` links in prose would silently repoint — but the schema does not enforce
-  it; a title-immutability trigger is a one-line follow-up if wanted).
-
-### Review round 3c (2026-09-29, owner follow-up: immutable titles, Unicode collisions)
-
-Both items the owner asked for after round 3b are in §3 (D5 addendum 3; §2.5 rewritten;
-§6.14 and two §7 rows added):
-
-1. **Titles are immutable** — `pages_title_fixed`; the sanctioned fix is new page +
-   `#REDIRECT` stub. This closes the "not done, on purpose" item of record #4.
-2. **Unicode-proof uniqueness** — `pages.title_key` = `NFC(casefold(NFC(title)))`,
-   app-computed, with `pages_title` now a `UNIQUE` index on it (replacing the
-   ASCII-only `NOCASE` index). This supersedes the "known limit" of record #4.
-
-### Validation record #5 (2026-09-29, review round 3c)
-
-§3 was extracted from this document and applied to fresh files (SQLite **3.53.4**, 53
-schema objects). Expected outcomes were declared before each probe ran.
-
-- **Title-key probes: 38/38.** Collisions rejected with `UNIQUE constraint failed:
-  pages.title_key`: `CAFÉ NOTES`, NFD `Cafe\u0301 notes`, `café NOTES` and NFD-upper
-  against `Café notes`; `STRASSE` against `Straße`; `σας` against `ΣΑΣ` (final sigma);
-  `ǆ` against `Ǆ`; `DIET` against `Diet` (also across kinds: a wiki page against a
-  note); a new page colliding with a **tombstoned** title. Distinct titles accepted:
-  `Cafe notes` (no accent), `日本語` and `日本語 2`. The DB verifies what it can: an ASCII
-  title with a wrong key (`Diet2`/`dyet2`) rejected, a key with a capital rejected, a
-  note without a key and a memo with a key rejected, an empty key and a key with
-  surrounding spaces rejected; a correct ASCII key and a plausible non-ASCII key
-  (`Über`/`über`) accepted. **UNIQUE also holds on the UPDATE path** (setting `Öl`'s key
-  to `Ärger`'s key rejected). *Note on an earlier draft of this probe:* "recompute
-  `title_key` to a colliding value" used an ASCII title and was rejected by the
-  ASCII-consistency CHECK, not the index — the non-ASCII probe above is the real test.
-- **Titles immutable:** `UPDATE title` rejected; `SET title = title` (no-op), body edits
-  and `title_key` recomputation accepted (recomputation still passes the CHECKs and the
-  index); the sanctioned rename — new page, old page's body replaced with
-  `#REDIRECT [[Diet plan]]`, `links(kind='redirect')` — accepted.
-- **Wikilink resolution:** the §6.14 query resolves `[[CAFE\u0301 NOTES]]` to the stored
-  `Café notes`; plan `SEARCH pages USING INDEX pages_title (title_key=?)`. Without the
-  `kind IN ('note','wiki')` predicate the same lookup is `SCAN pages` (a partial index
-  is used only when the query implies its predicate) — hence §2.5's instruction.
-- **Vector table:** all 12 titles in the §2.5 table were parsed from this document and
-  compared with the reference function: each title's key is the one shown in its row.
-- **Why not a collation (executed):** an app-registered `UNICODE_CI` unique index rejected
-  `Café`/`CAFÉ` as wanted, but the `sqlite3` CLI without the collation could `SELECT`
-  yet failed every `INSERT` and `PRAGMA integrity_check` with `no such collation
-  sequence: UNICODE_CI`. That is §7's reason for rejecting it.
-- **Still passing after the change:** round-3 regression suite 53/53 (its inserts now
-  supply `title_key`); round-3b probes 93/93 (the `CAFÉ NOTES` probe flipped from
-  "known limit: accepted" to "rejected"); expander vs oracle 4/4 windows exact;
-  `measurement_values` over 120 000 rows 0.009 s; all **14** §6 blocks (incl. §6.14)
-  executed from this document's text with 0 failures.
-- **Known limits, stated plainly:**
-  1. SQLite cannot check a **non-ASCII** key: a writer sending a wrong key (`Ünï2` with
-     key `x1`) is accepted — verified. Consequence: uniqueness (only) is as good as the
-     app's fold function; the vectors in §2.5 exist so every writer can be tested.
-  2. Casefold + NFC is stricter than most filesystems (`ﬁle` = `file`), never looser
-     for canonical equivalence and case, but it was **not run on a macOS or Windows
-     filesystem** here; the exporter's write-time collision check stays as a backstop.
-  3. If a future Unicode version adds case-fold pairs, recompute `title_key` (allowed);
-     the unique index will then surface any real collision at that moment.
-  4. `places.name` and `metrics.name` are still ASCII-`NOCASE` (§7, D5 addendum 3).
-
-
-### Review round 4 (2026-09-30, independent review + owner request: finance)
-
-An independent review of the goals and of §3 as it stood at v1.4, run **empirically** (the
-AGENTS.md rule): every finding below was reproduced on a fresh database (SQLite **3.53.4**)
-before it was written down; suspicions that did not reproduce are not listed. In parallel the
-owner asked for financial data (net worth over time and similar entries) — that is D18 and
-`§6.15–6.18`. The "freeze-ready" line in *Owner veto received* above predates this round and no
-longer holds for the items marked **decide before first data**.
-
-Status: **APPLIED** = already in v1.5; **OPEN** = recorded with a proposed fix, awaiting the owner
-(nothing else in §3 was changed — round 4 touched only what D18 needs). *Statuses are as of round 4;
-round 5 below resolves R4-02, 03, 06, 07, 08, 09, 10, 17 and seeds for R4-11 a/c; round 6 resolves R4-04, 05 and R4-11 b/d; round 7 resolves R4-13, R4-16 and the `backups/` label of R4-14; round 8 resolves R4-12; round 9 resolves R4-14; round 10 resolves R4-11 e, R4-15, R4-18, R4-19 and R8-01 (§8, round 10 has the final status of every finding).*
-
-*Suggested triage.* **Decide before the first real row** (impossible or costly to retrofit): R4-04,
-R4-08, R4-10, R4-11 b/d, R4-05. **Correctness, fix any time**: R4-02, R4-03, R4-06, R4-07, R4-09.
-The rest is documentation or low-risk polish.
-
-**High**
-
-- **R4-01 — `REPLACE` bypasses the append-only triggers. APPLIED (§2.9).** With SQLite's default
-  `recursive_triggers=OFF`, `INSERT OR REPLACE` / `REPLACE INTO` on `measurements` silently
-  rewrote a row (70 → 99 via the unique `import_id`; 70 → 123 via the primary key) — the
-  `measurements_no_delete` trigger never fired. §2.4, D7 and D11 say append-only is "enforced by
-  triggers, not convention"; for REPLACE it was convention. With `recursive_triggers=ON` the same
-  statements fail (`measurements are never deleted`) [R53]. Fix: the pragma is now mandatory
-  (§2.9, DDL header) and a writer must read it back at connect. Residual: a per-connection
-  setting, like `foreign_keys` — the file cannot enforce it.
-- **R4-02 — `INSERT OR IGNORE`, the documented importer idiom, silently drops bad rows.** APPLIED
-  for `balances` (§6.15); **OPEN** for the `measurements` wording (§2.4, D7). Executed: an
-  `INSERT OR IGNORE` with day `'2026-9-3'` returned OK with 0 rows and no error; likewise a NULL
-  `value`. (Foreign-key violations and `RAISE(ABORT)` triggers are *not* swallowed.) A 50 000-row
-  import with one date-format bug would report success. `INSERT … ON CONFLICT(<target>) DO
-  NOTHING` skips only the duplicate — the same bad day still raised `CHECK constraint failed`.
-- **R4-03 — `measurements_import` has no `source`. OPEN.** The index is `(import_id, metric_id)`:
-  two importers that both number rows `1001` collide and the second is dropped silently
-  (executed: 1 row kept, expected 2). Open Brane, cited in D7, keys on `(source, actor)`. Fix:
-  `(source, import_id, metric_id)`. (`balances` already uses `(source, import_id)`.)
-- **R4-04 — No timezone is captured anywhere. OPEN — decide before first data.** An instant plus a
-  local `day` cannot say what the local *time* was: `22:30Z` is 14:30, 22:30 or 07:30 next day
-  depending on where you were; no table has a `tz`/offset column (executed), and the DB accepts a
-  `taken_at` and `day` three days apart. Recurring events with a `start_at` have no defined local
-  time across DST. Only capture time can supply the zone — it cannot be backfilled, which is the
-  argument D3 makes about identity. Options: `entities.tz` (IANA name of the writer at creation),
-  `events.tz`, `measurements.tz`; or an integer offset. With an offset, `day` becomes checkable
-  (`date(taken_at, offset) IS day`).
-
-**Medium**
-
-- **R4-05 — Tasks have no local completion day. OPEN — decide before first data.** Only
-  `completed_at` (UTC) exists, so "what I finished on 2026-06-09" needs the query-time
-  UTC→local derivation D10 forbids, and §6.2's day view never selects completed tasks (executed:
-  no `_day` column but `due_day`; §6.2 has no completed branch). Fix: `completed_day`
-  (`(status='done') = (completed_day IS NOT NULL)`) and a day-view row.
-- **R4-06 — A measurement cannot be retracted. OPEN.** Superseding with a NULL value fails
-  (`NOT NULL constraint failed: measurements.value`) and superseding a row of another metric
-  fails (same-metric trigger), so a value logged on the wrong metric, or a mistaken mood tap, is
-  immortal in the series. Fix: let a correction carry NULL and exclude it in
-  `measurement_values` — the shape `balances` has (D18).
-- **R4-07 — "No hard deletes" is a convention for entities. OPEN.** Executed: `DELETE FROM pages`
-  then `DELETE FROM entities` both succeed; an `entities` row of type `page` with no `pages` row
-  is accepted; and because there is no `AUTOINCREMENT`, deleting the newest row lets the id be
-  reused (ids `1` and `1`), silently repointing anything that remembers it (export filenames,
-  ids in prose). Fix: `BEFORE DELETE` triggers on `entities` and the six domain tables — with
-  `recursive_triggers=ON` they also stop REPLACE.
-- **R4-08 — Enumerated CHECKs are unnamed, so they cannot be widened. APPLIED for
-  `entities.type` and the new tables; OPEN for the rest.** Executed on 3.53.4: `ALTER TABLE …
-  DROP CONSTRAINT` reports `no such constraint` for an unnamed inline CHECK, and adding a looser
-  second CHECK does not relax the first (both apply); a *named* constraint drops and re-adds in a
-  transaction on a populated database with `foreign_key_check` and `integrity_check` clean, a
-  violating `ADD` is rejected, and `ROLLBACK` restores it. So the resolution of question 9
-  ("new kinds are a one-line migration after freeze") was false for this DDL and true only with
-  names — and only where the migration runner's SQLite supports it (tested: 3.53.4; `ALTER
-  COLUMN … NOT NULL` is documented as 3.53.0, 2026-04-09 [R55]). Fix: name `pages_kind`,
-  `tasks_status`, the two `repeat` CHECKs, `link_kinds.symmetric` — free now, a table rebuild later.
-- **R4-09 — `metrics.unit` and `name` are mutable. OPEN.** `UPDATE metrics SET unit='lb'`
-  succeeded, silently reinterpreting every stored value; `' Blood Pressure (sys) '` is an accepted
-  name. `link_kinds` protects its structure; `metrics` does not. Fix: a `metrics_meaning_fixed`
-  trigger (as `accounts_meaning_fixed`) and a name CHECK like `link_kinds.kind`.
-- **R4-10 — "Happened" and "recorded" are not separated. OPEN — decide before first data.**
-  `measurements` has no `recorded_at`, so when a value was entered — or corrected, D11's own "what was
-  erased and when" — is unknowable; `entities.created_at` doubles as "authored" and "imported"
-  for backfilled memos (the day view then shows 2026 timestamps on 2015 days). Fix:
-  `measurements.recorded_at`; say what `created_at` means for imports. (`balances` has it.)
-- **R4-11 — Graph gaps. OPEN (b and d: decide before first data; a and c are data-only seeds).**
-  (a) No place-containment kind: the only kinds that can join place→place are `about` and
-  `related` (executed), so D16's motivating query "everything in Japan 2019" is unanswerable —
-  seed `located-in` (place→place). (b) `events.place_id` and `links(kind='visited', event→place)`
-  are two homes for one fact, against D6's own rule, and `place_id` cannot hold a trip's two
-  cities. (c) `family` is symmetric, so "my son" (D8's own example) cannot be told from "my
-  father" — seed `parent-of`. (d) `lives-in` carries no dates: "where did I live in 2015" is
-  unanswerable, and `links` have no valid-time at all. (e) Wikilinks resolve only to pages, so
-  `[[Sam]]` never reaches the `people` row — the "everything about a person" query (§6.6) sees only
-  hand-made `about` links.
-- **R4-12 — The wikilink save contract is unspecified. OPEN (spec).** Executed: the auto-created
-  wiki page for `[[Health/Diet]]`, `[[Re: plan]]` and `[[Target|alias]]` is rejected by the
-  filename CHECK (`[[C#]]` is fine). If auto-create shares the memo's transaction, saving a memo
-  that mentions one fails. Unspecified: `|alias`, `#anchor`, code spans/fences, and how a `#tag`
-  is told from a Markdown heading, a URL fragment or `C#`. Rule to add: an invalid target makes no
-  link and never blocks a save.
-- **R4-13 — Concurrency and durability defaults. OPEN (doc).** A deferred `BEGIN`, a read, another
-  writer's commit, then a write fails at once with `database is locked` — after 0.0 s, despite
-  `busy_timeout=5000` (executed); `BEGIN IMMEDIATE` succeeds. Wikilink resolve-then-create
-  (§6.14) is exactly that shape, and D3 plans several writers. Also `synchronous=NORMAL` in WAL
-  "might roll back following a power loss" [R54] — for a low-write, high-value database `FULL`
-  costs milliseconds (from SQLite's documentation; a power cut is not executable here). Fix:
-  §2.9 — write transactions are `BEGIN IMMEDIATE`; `synchronous=FULL`.
-- **R4-14 — Backups, export, and ability-to-leave. OPEN.** `backups/` is labelled DERIVED, yet it is
-  the only history of structured data (D12), off-box is optional, and there is no retention rule,
-  no `integrity_check`/`foreign_key_check` of a snapshot and no restore drill. `export/` mirrors
-  **prose only**: §2.6's "export/ mirrors 100% of the data" is false — events, tasks, people,
-  places, measurements, balances and links have no text mirror — so D4's answer to *file over app*
-  holds for prose. Fix: relabel snapshots irreplaceable and make an off-box copy mandatory; verify
-  each snapshot; add a nightly per-table CSV dump (a Library-of-Congress format, D1), with an
-  explicit decision on whether finance tables may enter git (history cannot be scrubbed, D17
-  addendum 2).
-- **R4-15 — Search cannot see inside CJK text. OPEN (low urgency: the index is derived).**
-  Default `unicode61` treats a CJK run as one token: in `日本語のノートを書く` the queries `本語` and
-  `ノート` get 0 hits, only the whole run matches (executed). `é/ü/ș/ț` fold (`cafe`, `zurich`,
-  `stefan`, `tara` hit), `ß`→`ss` and `ł`→`l` do not, even with `remove_diacritics 2`. `trigram
-  remove_diacritics 1` finds `ノート`/`日本語` and folds accents but misses 2-character words
-  (`京都`, `本語`) and queries shorter than three characters. The doc's own examples (`日本語`,
-  `Zürich`) make this a stated requirement; record the tokenizer decision.
-
-**Low**
-
-- **R4-16 — Contradictions and overclaims in the text. OPEN.** D14 offers sqlite-web "when direct
-  row editing is wanted" — a second, unguarded writer against principle 3/D3. D15 says the app
-  may spawn the next occurrence via `links(kind='spawned')` task→task, which D8 addendum 2
-  rejects (executed). D11's "tamper-evident for free" — any writer can drop the triggers, and
-  REPLACE bypassed them (R4-01): "guards against mistakes" is what is true. And completing a
-  repeating task ends its series, so per-occurrence tracking ("pay rent" monthly) is impossible:
-  it is a reminder, not a task.
-- **R4-17 — Immutability triggers reject no-op writes. OPEN.** `links_immutable` and
-  `link_kinds_structure_fixed` fire on `SET kind = kind` (executed): a full-row ORM `UPDATE` of a
-  link raises even when only `note` changed. `pages_title_fixed` and D18's triggers use a `WHEN`
-  guard.
-- **R4-18 — Partial dates. OPEN (additive later).** `people.birth_day` (and `events.start_day`)
-  reject `1870` and `1870-05` (executed): ancestors and approximate dates cannot be stored.
-- **R4-19 — Goals and process. OPEN.** (a) *Pareto vs machinery*: canonical titles are forbidden
-  `/ : ? |` and made immutable forever so that *derived* export filenames stay simple — principle 5
-  inverted; an exporter naming files `<id>-<slug>.md` would free the titles. (b) *Single writer*
-  rests on three per-connection pragmas the file cannot enforce (R4-01): assert them at connect.
-  (c) *Missing goals*: a threat model (finance makes it real — D17 addendum 2), an explicit "2075
-  test" (the questions a stranger must answer from `.schema` and `lifelog_meta` alone) and an import
-  / data-quality path. (d) The validation scripts are not in the repository, so records #1–#6 cannot
-  be re-run; keeping them (a `tests/` folder is not a migration) is the owner's call.
-
-**Confirmed sound (executed, so not repeated as findings):** §3 applies cleanly; the
-recurrence expander agrees with a fresh independent oracle; `measurement_values` is fast at
-120 000 rows; FTS stays in sync on update and passes `integrity-check`; all §6 blocks run; the
-NFC/casefold title uniqueness, the endpoint-typed link registry and the CHECK matrices behave
-as the earlier records say (§8 #6, regression).
-
-### Validation record #6 (2026-09-30, round 4 — finance and the review probes)
-
-§3 was **extracted from this document's text** and applied to fresh files (SQLite **3.53.4**,
-**68** schema objects: 53 + 4 tables (`currencies`, `accounts`, `balances`, `fx_rates`), 5 indexes,
-5 triggers and the `balance_values` view; `integrity_check` ok, `foreign_key_check` clean). Expected outcomes were
-declared before each probe ran.
-
-- **Round-4 review probes** (R4-01…R4-18): each finding above is an executed probe with the
-  result quoted in its entry. Four of my own first probes were wrong and were fixed before
-  anything was concluded: the "cross-metric `OR IGNORE`" probe was masked by the
-  one-correction unique index; the first REPLACE-with-triggers probe ran after the row's
-  `import_id` had been overwritten; the first `BEGIN IMMEDIATE` scenario made the second writer
-  block, which is correct behaviour, not a failure; and one cookbook run passed a `title` and
-  `title_key` that disagree (the CHECK rightly rejected it).
-- **Finance probes: 89/89** — `currencies` (lower-case, 2- and 11-character codes, duplicate,
-  `subunits` 0 and 10⁹+1 rejected, 10⁹ and a non-decimal 5 accepted, `subunits` immutable while
-  a no-op `SET subunits = subunits` and a name change pass); `accounts` (type/table mismatch,
-  no entity row, id also in `places`, bad `side`, NULL side, unregistered currency, NOCASE
-  duplicate name, `closed < opened`, malformed day, `side`/`currency` immutable, full-row no-op
-  update accepted, `updated_at` bumped, tombstone recorded, `entities.type = 'foo'` rejected);
-  `balances` (integer accepted, `12.5` and `'12x'` rejected, `12.0` stored as integer, bad day and
-  instant, missing `recorded_at`, dangling account, `UPDATE`/`DELETE` rejected, negative and
-  int64-size amounts, newest row per day wins, a retraction hides the day and the as-of value
-  falls back, re-entry after retraction wins, all rows retained, idempotent import with
-  `ON CONFLICT`, the same `import_id` from another source accepted, `ON CONFLICT` still raises on a
-  bad day while `OR IGNORE` swallows it — recorded as a hole); `REPLACE` **rewrites history with
-  `recursive_triggers=OFF` and is blocked with `ON`** (also `REPLACE INTO … id`), and the
-  symmetric-link mirror triggers still terminate under `ON`; `fx_rates` (inverse direction, same
-  currency, rate 0 / negative / +inf / NULL, unknown currency, duplicate day, bad day rejected;
-  in-place correction and a DEM→EUR fixed-rate row accepted); links to accounts (`about` from a
-  memo and an event accepted, `about` a page and `wikilink`/`subtask` to an account rejected);
-  exactness (REAL `0.1 + 0.2 = 0.30000000000000004`, integer minor units exact); widening
-  `entities.type` by drop/add of the named constraint.
-- **The probe suite can fail.** Mutation test: eight deliberate breakages of the DDL (canonical-order
-  CHECK removed, `accounts_meaning_fixed` neutered, balances `DELETE` allowed, `balance_values`
-  ignoring retractions, `account` dropped from `entities_type`, dropped from `about`, `subunits`
-  CHECK removed, `entities_type` left unnamed) were each caught by 2–4 probes (or by the suite
-  refusing to run). A first version of one mutation was invalid SQL and was redone.
-- **Net worth vs an exact oracle.** A random book — 14 accounts in EUR/USD/JPY/BTC/GBP and a
-  5-subunit currency, assets and liabilities, corrections, retractions, gaps, closed accounts, one
-  tombstoned account, GBP with **no** rate at all, one currency whose rates start in 2016 — was
-  valued with §6.17 for **155 month-ends** and compared with a Python oracle using exact
-  rational arithmetic: every total within rounding (worst 0.49 of a minor unit, none off by one),
-  and the `accounts` and `unconverted` counts identical in every month. §6.16's breakdown ties to
-  the series (per-row rounding differs by one minor unit at most). A hand-checkable case
-  (€1 200.00 + $50 000 at 1.10 + ¥300 000 at 160 − €200 000 mortgage) gives −151 470.45;
-  a missing rate yields NULL / `unconverted = 1`, never a silent zero.
-- **Performance.** `measurement_values` over 120 000 rows: 0.011 s. Net worth over 438 000 balance
-  rows and 40 accounts: as-of breakdown 0.000 s, 372 month-ends 0.085 s. The first draft of §6.17
-  took 17.3 s at 36 500 rows (planner scanned all balances per month); §6.16 without `CROSS JOIN`
-  scanned every balance row. Both are rewritten (§6.16–6.17).
-- **Regression of v1.4 behaviour: 139/139** on the v1.5 DDL (titles and their Unicode keys,
-  path safety, kind/title immutability, day/instant round-trips, recurrence CHECK matrix,
-  measurement append-only and supersede rules, link registry and endpoint types, mirror
-  insert/delete, tombstone `updated_at`, FTS sync) — and the **identical suite gives the same 139/139 on
-  the untouched v1.4 DDL**. Earlier exploratory probes produce byte-identical output on both DDLs.
-- **§6 cookbook:** all **19** SQL blocks extracted from this text (15 + §6.15–6.18) executed, 0
-  failures. **Expander vs a fresh oracle** (written independently of the one in record #3): 600
-  random rules × 5 windows = 212 290 occurrences, 0 mismatches.
-- **Known limits, stated plainly.** (1) R4-01's fix is a per-connection pragma the file cannot
-  enforce. (2) `ALTER … ADD/DROP CONSTRAINT` was verified on 3.53.4 only. (3) `synchronous`
-  durability is from SQLite's documentation; a power cut was not simulated. (4) Net-worth
-  conversion uses REAL rates and rounds at the end — exact to a minor unit in the tests, not a
-  guarantee for every pathological rate. (5) Nothing here has run against real data.
-
-### Review round 5 (2026-09-30, owner: apply the round-4 mechanical fixes; net worth to include stocks, crypto, deposits and valuables — "keep it KISS and Pareto")
-
-**Applied (v1.6)** — each is a probe in validation record #7:
-
-| Finding | Change |
-|---|---|
-| R4-02 importer idiom | `ON CONFLICT(…) DO NOTHING` everywhere (header, §2.4, D7 addendum 2, `lifelog_meta.imports`) |
-| R4-03 import key | `measurements_import` is `(source, import_id, metric_id)` |
-| R4-06 retraction | `measurements.value` nullable; a NULL-value *correction* retracts; `CHECK` keeps a first reading honest; `measurement_values` hides retractions (§6.10) |
-| R4-07 hard deletes | `BEFORE DELETE` triggers on `entities` and the 6 domain tables |
-| R4-08 named CHECKs | all 8 enumerated CHECKs named (`entities_type`, `pages_kind`, `tasks_status`, `events_repeat`, `tasks_repeat`, `events_repeat_position`, `tasks_repeat_position`, `accounts_side`); each proven to drop and re-add widened. Left unnamed on purpose: `symmetric IN (0,1)` (a boolean) and the Windows-device-name blacklist (not a set of allowed values) |
-| R4-09 metrics | `metrics.unit` immutable (`metrics_unit_fixed`); `name` must be snake_case |
-| R4-10 audit time | `measurements.recorded_at` NOT NULL; `created_at` = write time, never back-dated (§2.2) |
-| R4-11 a, c | seeds `located-in` (place→place) and `parent-of` (person→person); §6.19 |
-| R4-17 no-op writes | `WHEN` guards on `links_immutable` and `link_kinds_structure_fixed` |
-
-**Finance scope (D18 addendum 1).** Stocks, crypto, deposits and other valuables are all accounts
-whose balance is their value in their own currency on a day (§2.10 table). No table was added; the
-BTC seed row was dropped. Tracking quantity × price per holding was tested, found not to fit
-v1.5, and deferred (§7) — the owner's "KISS and Pareto" applies: a net-worth number needs the
-value a statement already prints.
-
-**Still OPEN as of round 5** (round 6 below closes R4-04, R4-05 and R4-11 b/d) — decisions for the owner, none blocks the finance tier: **R4-04** timezone,
-**R4-05** `completed_day`, **R4-11 b/d/e** (place_id vs `visited`, dated `lives-in`, wikilinks to
-people), **R4-12** wikilink save contract, **R4-13** `BEGIN IMMEDIATE` / `synchronous`,
-**R4-14** backups and a CSV mirror, **R4-15** CJK search, **R4-16** text contradictions,
-**R4-18** partial dates, **R4-19** goals and process. R4-07's residue: an `entities` row with no
-domain row can still be inserted (a writer bug, not a deletion); detect it with
-
-```sql
-SELECT id, type FROM entities
- WHERE id NOT IN (SELECT id FROM pages UNION SELECT id FROM events UNION SELECT id FROM tasks
-                  UNION SELECT id FROM people UNION SELECT id FROM places UNION SELECT id FROM accounts);
-```
-
-### Validation record #7 (2026-09-30, round 5)
-
-§3 was **extracted from this document's text** (633 lines) and applied to fresh files (SQLite
-**3.53.4**, **76** schema objects; `integrity_check` ok, `foreign_key_check` clean). Expected outcomes
-were declared before each probe ran.
-
-- **Round-5 probes: 112/112.** R4-03: the same `import_id` from two sources is kept, a repeat from
-  one source is a no-op. R4-02: `ON CONFLICT … DO NOTHING` still raises on a malformed day while
-  `OR IGNORE` swallows it (recorded as the hole it is). R4-06: a first reading with NULL rejected;
-  a mis-tap retracted and hidden together with its retraction; a cross-metric retraction rejected;
-  a retracted row cannot be corrected twice; correcting the retraction restores a value; nothing is
-  ever removed; `UPDATE` still rejected. R4-10: `recorded_at` required and validated. R4-07:
-  `DELETE` rejected on `entities` and on all six domain tables, for an orphan `entities` row,
-  and on a connection with `foreign_keys=OFF` (the orphan-row query above returns nothing on a healthy
-  database and finds an inserted orphan); `REPLACE INTO pages` rejected under
-  `recursive_triggers=ON` and the body survived; tombstoning, hard-deleting a link, and the
-  measurement `DELETE` rejection unchanged. R4-08: for **each of the eight** named constraints,
-  the new value is rejected before, `DROP CONSTRAINT` then `ADD CONSTRAINT` (widened) succeed in a
-  transaction, the new value is accepted after, and integrity/FK checks are clean. R4-09:
-  `UPDATE unit` rejected, a no-op `SET unit = unit` and a rename accepted, seven bad names
-  (`Blood Pressure`, `bp sys`, `bp-sys`, empty, `Weight`, `x(y)`, `ünï`) rejected, four good
-  ones accepted. R4-17: a full-row `UPDATE` changing only `note` passes on `links` and `link_kinds`;
-  changing a kind, an endpoint, `symmetric` or `to_types` is rejected. R4-11: `located-in` is
-  place→place only and one-way; `parent-of` is person→person only and keeps direction; §6.19 finds
-  the Tokyo trip inside Japan through Kanto and terminates on a cycle.
-- **The suite can fail.** Eleven deliberate breakages (import key without `source`, `value` NOT
-  NULL again, the view showing retractions, each of three delete triggers neutered, `pages_kind`
-  unnamed, `metrics_unit_fixed` neutered, `recorded_at` optional, the `WHEN` guard removed, the
-  `located-in` seed removed) were each caught. One of my first mutations was invalid (it only
-  changed a message, so the trigger still aborted); and neutering `entities_no_delete` at first went
-  unnoticed because the foreign key already blocked deleting an entity that has a domain row — the
-  orphan-row and `foreign_keys=OFF` probes were added and now catch it.
-- **Before the KISS decision** the plan was to generalise `currencies` into units with a `prices`
-  table; testing v1.5 with tickers (D18 addendum 1) showed why that is real weight, and the
-  owner's KISS/Pareto instruction ended it. What v1.6 adds for finance is guidance, not tables.
-- **Unchanged and re-run on the v1.6 DDL:** regression of v1.4 behaviour **139/139**; finance probes
-  **88/88** (the BTC seed row and one now-moot "unnamed CHECK" probe removed); net worth vs the exact
-  oracle **155/155 month-ends** within rounding (worst 0.49 of a minor unit; `accounts` and
-  `unconverted` counts identical); expander vs an independent oracle **212 290** occurrences,
-  0 mismatches; **all 20** §6 SQL blocks extracted from this text (§6.19 is new) ran with 0
-  failures; `measurement_values` over 120 000 rows 0.008 s.
-- **Known limits.** Named CHECKs widen only on a SQLite that supports `ALTER … DROP/ADD CONSTRAINT`
-  (tested on 3.53.4). Everything in this record ran on synthetic data.
-
-### Review round 6 (2026-09-30, owner: "yes" to the three recommendations)
-
-**Applied (v1.7)** — each is a probe in validation record #8:
-
-| Finding | Change |
-|---|---|
-| R4-04 timezone | `entities.tz` and `measurements.tz`: IANA zone of the writer at capture, NULL = unknown, shape-checked (`A-Za-z0-9_/+-`, 1–64); `events` deliberately have none (D10 addendum); §2.2, §6.1, `lifelog_meta.tz` |
-| R4-05 local completion day | `tasks.completed_day`, paired with `status = 'done'` like `completed_at`; §6.2 day view lists what was finished that local day |
-| R4-11 b, d | `events.place_id` is an event's only place: `visited` is person→place only, `lives-in` removed (a dated event answers "where did I live in 2015"); §6.19 text |
-
-**Still OPEN** (none blocks anything): **R4-11 e** (wikilinks to people), **R4-12** wikilink save
-contract, **R4-13** `BEGIN IMMEDIATE` and `synchronous`, **R4-14** backups and a CSV mirror,
-**R4-15** CJK search, **R4-16** text contradictions, **R4-18** partial dates, **R4-19** goals and
-process. Known limit of R4-04: a *recurring timed* event still has no defined local time across DST.
-
-### Validation record #8 (2026-09-30, round 6)
-
-§3 was **extracted from this document's text** and applied to fresh files (SQLite **3.53.4**, 76
-schema objects, `integrity_check` ok, `foreign_key_check` clean). Expected outcomes were declared
-before each probe ran.
-
-- **Round-6 probes: 49/49.** `tz` on both tables: `Europe/Berlin`, `UTC`,
-  `America/Argentina/Buenos_Aires`, `Etc/GMT+5`, `Asia/Kolkata`, `America/Port-au-Prince`, a
-  64-character name and NULL accepted; empty, `Europe Berlin`, 65 characters, a trailing newline,
-  `ünï/x`, `a;b` and a trailing space rejected; the §6.1 example from this text stores its zone.
-  `completed_day`: done without it, done without `completed_at`, open with it, malformed and
-  impossible days rejected; the documented completion `UPDATE` works; un-completing without
-  clearing the day is rejected; §6.2 run from this text lists the task done on local 2026-06-10
-  (its UTC instant is 2026-06-09 22:30) and not on 06-09. Places: `lives-in` is no longer a kind;
-  `visited` accepts person→place and rejects event→place and place→person; a dated event answers
-  "where did I live on 2015-06-01" and is empty after it ended.
-- **The suite can fail.** Eight deliberate breakages (each `tz` CHECK removed, the length limit
-  removed, the `completed_day` pairing and format CHECKs removed, `lives-in` seeded again,
-  `visited` allowing events again) were each caught (1–7 failing probes); one mutation text was
-  malformed and was redone.
-- **Regression:** v1.4 behaviour **139/139** (four link probes updated for the removed kinds — an
-  expected change, not a regression); round-5 probes **112/112** (one `lives-in` link replaced by
-  `visited`); finance probes **88/88**; net worth vs the exact oracle **155/155** month-ends;
-  expander vs an independent oracle **212 290** occurrences, 0 mismatches; every §6 SQL block
-  extracted from this text ran with 0 failures.
-- **Known limits.** The DB checks a zone's *shape*, not that it exists. Synthetic data only.
-
-### Review round 7 (2026-09-30, owner: fix the doc inconsistencies and R4-13)
-
-**R4-13 — durability and write transactions (applied).** `synchronous = FULL` replaces `NORMAL` in
-§2.9 (SQLite documents that a WAL commit under `NORMAL` "might roll back following a power loss"
-[R54]; the measured price of `FULL` is ~1 ms per commit, §8 #9). Every write transaction starts with
-`BEGIN IMMEDIATE` (§2.9, the DDL header, §6.1/6.9/6.14/6.15), and §6.14 now resolves and creates
-inside one transaction, so two writers saving the same new link cannot both see "none found".
-A writer asserts `synchronous` alongside `foreign_keys` and `recursive_triggers` at connect time.
-
-**R4-16 — contradictions and overclaims (applied)**, plus five more found by re-scanning the whole
-text for the same kind of defect. Live text (§1–§7, the DDL header) was corrected in place;
-decision text keeps its history and gains an addendum or a pointer (AGENTS.md):
-
-| Where | Was | Now |
-|---|---|---|
-| D14 | "optionally `sqlite-web` when direct row editing is wanted" — a second, unguarded writer | dropped; tools open the file read-only; editing goes through the app (D14 addendum, §2.9, §9 [R50]) |
-| D15 | next occurrence via `links(kind='spawned')` task→task — rejected by D8 addendum 2 | a new task, optionally `related`; **repeating tasks are reminders** (completing ends the series); per-occurrence tracking = a 0/1 habit measurement (D15 addendum 2, §4) |
-| D11 | "tamper-evident for free" | pointer to D11 addendum 3 ("guards against mistakes") |
-| D17 addendum 2 | "Datasette/sqlite-web … open read-only" | Datasette only, with the verified default |
-| §1 principle 5, §2.1, DDL header *(new)* | "Only `life.db` is irreplaceable"; `backups/` "DERIVED" | snapshots are irreplaceable — the only history of structured data (D12) |
-| §2.3, D3 *(new)* | "Every table uses `INTEGER PRIMARY KEY`" | every entity/fact/join table does; `lifelog_meta`, `link_kinds`, `currencies`, `fx_rates` keep their natural key (D3 addendum) |
-| §2.6, §7 *(new)* | "`export/` mirrors 100% of the data" | mirrors all the prose; structured tables live only in `life.db` and snapshots |
-| D12 *(new)* | "`created_at`/`updated_at` (trigger-maintained) is the only temporal metadata" | `created_at` is app-written, `updated_at` trigger-maintained, `recorded_at`/`taken_at`/`tz` exist (D12 addendum) |
-| D7 *(new)* | importers use `INSERT OR IGNORE` | pointer to addendum 2 (`ON CONFLICT … DO NOTHING`) |
-| §2.9 readers *(new)* | "Datasette, sqlite-web … need no setup" | readers must be read-only (`?mode=ro`, `sqlite3 -readonly`) |
-
-**Still OPEN** (none blocks anything): **R4-11 e** (wikilinks to people), **R4-12** the wikilink save
-contract, **R4-14** (retention, snapshot verification, an off-box copy, a CSV mirror — the `backups/`
-label is fixed), **R4-15** CJK search, **R4-18** partial dates, **R4-19** goals and process.
-
-### Validation record #9 (2026-09-30, round 7)
-
-§3 was **extracted from this document's text** (644 lines; only header comments changed since #8)
-and applied to fresh files (SQLite **3.53.4**, 76 objects, `integrity_check` ok, `foreign_key_check`
-clean). Expected outcomes were declared before each probe ran.
-
-- **Round-7 probes: 36/36.** *The race (real connections and threads):* with a deferred `BEGIN`,
-  a read, and another writer committing in between, the write fails at once with `database is locked`
-  and one page exists; with `BEGIN IMMEDIATE`, the first writer creates the page and the second waits
-  for the lock (0.33 s in the run) and then **finds** it — no error, one page. The §6.14 block from this
-  text opens with `BEGIN IMMEDIATE`, resolves inside the transaction, runs, and creates the page; no
-  bare `BEGIN` remains in §6. *Pragmas:* SQLite's default `synchronous` is FULL (2), so the setting
-  records intent; §2.9 and the DDL header state `FULL` and the `BEGIN IMMEDIATE` rule. *Readers:* a
-  `mode=ro` connection is not blocked by an open write transaction and sees the commit; `INSERT`,
-  `DELETE`, `UPDATE` and `DROP` all fail with `attempt to write a readonly database`; the writer is
-  not slowed by a connected reader; `sqlite3 -readonly` refuses writes. *Text:* no "mirrors 100%",
-  no "DERIVED" backups, principle 5 names the snapshots, §2.3 no longer says "every table" and
-  the tables without a single integer primary key are exactly the four it now names, the readers
-  paragraph no longer lists sqlite-web, D14/D17 carry the pointer; the advice in D15 works
-  (`spawned` task→task stays rejected, `related` links a next occurrence with two edges, a 0/1
-  habit metric records per-occurrence outcomes); `entities.created_at` has no default and cannot be
-  omitted (app-written).
-- **The probes can fail.** Run against the document as it stood *before* this round, **14 of the 36
-  fail** — every text and cookbook fix is detected — while the concurrency and read-only probes pass
-  on both, as they should: that SQLite behaviour never changed, only the documentation did. (The
-  first version of that comparison crashed at the first missing string instead of listing failures;
-  the probes were made robust.)
-- **Datasette 0.65.5, installed in a scratch venv: 9/9.** Its connection to a mutable database
-  is `mode=ro` (from its own source: `qs = "?mode=ro"`; `?immutable=1` only for an immutable
-  database); reading works; `INSERT`, `DELETE` and `DROP` are refused with `attempt to write a
-  readonly database`; its SQL console answers `400 Statement must be a SELECT` to `INSERT` and
-  `DELETE` and runs `SELECT`; table browsing works; the file is unchanged afterwards. The Datasette
-  documentation page fetched did not state the default, so this is from the executed version, not
-  the docs. sqlite-web's own documentation lists row editing by default and a `-r/--read-only` flag.
-- **What `synchronous = FULL` costs, measured.** 500 two-row memo commits (`BEGIN IMMEDIATE`,
-  entity + page, `COMMIT`) on this machine's btrfs: **`NORMAL` 0.12 ms per commit, `FULL` 0.97 ms**.
-  A first run in `/tmp` (tmpfs, where `fsync` is free) showed no difference and was discarded as
-  meaningless. That `NORMAL` can lose a committed transaction on power loss is SQLite's own
-  documentation [R54]; a power cut was not simulated.
-- **Regression, unchanged:** v1.4 behaviour **139/139**; finance probes **88/88**; round-5 probes
-  **112/112**; round-6 probes **49/49**; net worth vs the exact oracle **155/155** month-ends;
-  expander vs an independent oracle **212 290** occurrences, 0 mismatches; all **20** §6 SQL blocks
-  extracted from this text ran with 0 failures.
-- **Known limits.** Durability under power loss is documented, not demonstrated here. The read-only
-  behaviour of Datasette is that of 0.65.5. Synthetic data only.
-
-### Review round 8 (2026-09-30, owner: "Let's continue" — R4-12, the wikilink save contract)
-
-**R4-12 — applied (D19; §2.5, §6.14).** Reproduced on v1.8 before anything was written (record #10:
-9 of 9 expectations held). The contract is prose plus one cookbook block; **the DDL did not change**
-(byte-identical to v1.8), so every choice below is reversible by editing §2.5 and D19:
-
-| Where | Was | Now |
-|---|---|---|
-| §2.5 tags | "`#tag` is sugar for `[[tag]]`: the app *expands* hashtags to wikilinks" — a rewrite of the body, with no grammar | a tag is *read*, never expanded; the grammar is in §2.5 (not `C#`, `a#b`, `http://x/#frag`, `#12`; not inside a wikilink) |
-| §2.5 sync | "upserts `links(kind='wikilink')` rows" — a link outlived the text that made it | the page's wikilinks **equal** the set its body names: rows added and deleted; a re-save changes nothing; everything is rebuildable from the bodies |
-| §2.5 scan | unspecified — `\|alias`, `#anchor`, code spans and fences, raw HTML, escapes | the CommonMark *text* of the body only (a parser's text nodes); `\|alias` ignored by the DB, no `#anchor`, no escape (code span instead) |
-| invalid target | the auto-created page for `[[Health/Diet]]` fails the filename CHECK and either loses the memo or leaves an orphan `entities` row | **no link, never blocks a save**: a predicate mirroring the CHECKs, and each target in its own `SAVEPOINT` |
-| §6.14 | resolve and create only — no cookbook block wrote a `wikilink` row, and §6.1's memo named `[[Lifelog]]` and linked nothing | the whole save in one transaction: savepoint per target, revive a tombstone, link with `ON CONFLICT … DO NOTHING`, drop stale links |
-| rename stubs | `#REDIRECT [[New]]` would become the tag page `REDIRECT` and a backlink of its own replacement | a body starting `#REDIRECT [[` is not scanned; its one edge is the `redirect` link |
-| §6.5 | listed `redirect` rows although §2.5 said backlink queries exclude them | `AND l.kind <> 'redirect'` |
-| §6.13 | ghosts come only from capture-time typos | also from a mention edited out of a body |
-| §2.5 *Safe* | "rejects titles unsafe as a filename on any mainstream filesystem" | narrower wording, and R8-01 |
-
-The four choices an owner might veto, each decided here for the smallest rule that works: `|alias` is
-supported and `#anchor` is not (`|` can never be in a title, `#` can); a tag is read and the text is
-never rewritten; a stub is skipped wholesale rather than only its tag; "what counts as text" is
-delegated to a CommonMark parser instead of a hand-written grammar.
-
-**R8-01 — a Windows device name followed by an extension passes the title CHECK. OPEN (low).**
-Found while fuzzing the filename predicate. The DDL rejects the bare names (`CON`, `COM1`) but
-accepts `CON.backup`, `NUL.txt`, `COM¹` and `LPT²` (executed). Microsoft documents `NUL.txt` as
-equivalent to `NUL` and `COM¹` as reserved [R58] (from the documentation; Windows is not executable
-here). It harms only a Windows copy of `export/`, and the exporter already owns a write-time
-backstop. Fix if ever wanted: test the part of the title before the first `.`, and add the six
-superscript names — a `CHECK` rewrite, not a migration, until real data exists (D13).
-
-**R4-19 d, evidence.** The scratch scripts of rounds 5–7 (the 139, 88, 112, 49, 36 and 9 probes, the
-net-worth and recurrence oracles) were lost when `/tmp` was cleared between sessions. This round had
-to rebuild its harness and could re-run none of them; its regression therefore rests on the DDL being
-byte-identical (record #10, D1). That is the cost R4-19 d warned about. Keeping the scripts in a
-`tests/` folder remains the owner's call.
-
-**Still OPEN** (none blocks anything): **R4-11 e** (wikilinks to *people* — a wikilink resolves to a
-page only), **R4-14** (retention, snapshot verification, an off-box copy, a CSV mirror), **R4-15**
-CJK search, **R4-18** partial dates, **R4-19** goals and process, **R8-01** device names with an
-extension.
-
-### Validation record #10 (2026-09-30, round 8)
-
-§3 was **extracted from this document's text** and is **byte-identical to v1.8's** (644 lines,
-sha-256 `be71f4ab…`; 76 objects, `integrity_check` ok, `foreign_key_check` clean, SQLite **3.53.4**).
-Expected outcomes were declared before each probe ran. The reference implementation of the contract is
-Python with markdown-it-py 4.2.0 [R59]; it is a test instrument, not a deliverable.
-
-- **Baseline on v1.8: 9/9 held.** Creating the page for `[[Health/Diet]]` and for `[[Target|alias]]`
-  fails on the filename CHECK; a writer that swallows the error and commits leaves one orphan
-  `entities` row each; a literal reading of the tag rule turns a stub's `#REDIRECT` into a tag; an
-  upsert-only sync leaves the link after the body drops it; no §6 block inserts a `wikilink` row; the
-  DDL accepts a page linking to itself; §6.5 has no `redirect` exclusion.
-- **What the parser hands back** (executed before the rules were written): code spans, fenced and
-  indented code, raw HTML, comments and image alt text never reach the scan; `\[[x]]` and `&#35;x`
-  arrive already decoded (so there is no escape, and an entity can make a tag); text between inline
-  tags is one run each; `#Heading` without a space is a paragraph; `[[Diet]](url)` and a
-  `[[Ref]]` with a `[Ref]:` definition are Markdown links, not text.
-- **54 extraction vectors: 54/54** (29 are printed in §2.5; the rest cover 240/241-byte and 80/81-CJK
-  title limits, raw HTML, image alt text, link labels, nesting, newlines, dots and devices). The first
-  run had one failure that was **my expectation's**: the order of `[[Project #alpha]] #beta [[#gamma]]`
-  is appearance order (`beta` before `#gamma`); the vector was corrected, not the code.
-- **The filename predicate against the DDL: 43 361 distinct strings** (random over an alphabet of
-  every hazard — separators, control characters, dots, spaces, NBSP and ideographic space, device
-  names in every case, boundary lengths built from 1- to 4-byte characters). The database accepted
-  6 234; **zero disagreements in either direction** — the app never offers a title the CHECK rejects.
-- **The save procedure against the real DDL: 25/25.** A memo naming `[[Health/Diet]]`, `[[Re: plan]]`,
-  `[[Target|alias]]`, `[[Good page]]`, `#health`, `#con`, `#C` is saved; links go to `C`, `Good page`,
-  `Target`, `health`; the three invalid targets are reported and stored nowhere; no orphan. With the
-  predicate **switched off** the save still commits (the savepoint rolls the bad target back alone).
-  Edit sequences: add, drop, re-save (no new rows), empty body (all links gone); a page never links
-  to itself; a stub loses its old wikilinks, makes none, and no `REDIRECT` page exists; a tombstoned
-  target is revived, not duplicated; **400 random edits over six pages leave the same links as a
-  rebuild from the final bodies**; four real threads saving memos about the same new target and tag
-  end with no error, one page each and eight links.
-- **The probes can fail: 13/13 mutants caught** — no CommonMark parser (raw scan), no validation,
-  no savepoint, alias kept in the title, tags read inside wikilinks, tag without the "not glued"
-  rule, numeric tags, no stub rule, self-links, no stale-link delete, no tombstone revival, an
-  ASCII-only word class for tags, no NFC. One result is worth keeping: with the predicate alone off
-  only the extraction vectors fail — the savepoint keeps the save alive on its own; with the
-  savepoint alone off, the save raises. The two layers are independent.
-- **The document text: 26/26.** The 29 vectors parsed back out of §2.5's table reproduce; §6.14's SQL,
-  split into statements and **executed literally from the text** (only extraction, validation and
-  the key are the app's), gives the vector result for all 54 vectors on 54 fresh databases, leaves
-  no orphan, and after 400 random edits equals the reference implementation; `last_insert_rowid()`
-  after `INSERT INTO pages` is the new page's id (step 3 relies on it); §6.5 from the text drops a
-  stub's `redirect` row and keeps the memo's `wikilink`; §6.1 runs; all 39 statements of the 20 §6
-  blocks prepare; the stale phrases are gone from §1–§7. **Against the v1.8 text 16 of the 21 outcomes
-  recorded fail** (the table and §6.14 sections cannot even run there); seven deliberately broken copies of this text (no stale-link delete, no savepoint, a
-  wrong vector, the old filename claim back, a changed CHECK, no `redirect` exclusion, no `ON CONFLICT`)
-  were each caught.
-- **R8-01, executed:** the DDL accepts `CON.backup`, `NUL.txt`, `COM¹`, `LPT²`, `Com10` and rejects
-  `CON`, `COM1`, `CON ` and `con.`.
-- **Mistakes of mine, fixed before any conclusion:** the vector order above; one probe's expected
-  list omitted `#C` (a valid one-letter tag); the first document harness reused one database for all
-  vectors (a later vector then linked to an earlier page spelled differently — which is the
-  documented "first spelling wins") and did not bind parameters; one check had an `or True`.
-- **Regression.** The DDL is byte-identical, so the database behaviour recorded in #6–#9 is
-  unchanged; those suites (139, 88, 112, 49, 36, 9 probes, the net-worth and recurrence oracles) were
-  **not re-run** — their scripts no longer exist (R4-19 d). What did change is §6.1 (a comment),
-  §6.5, §6.13 (prose) and §6.14, all executed above.
-- **Known limits.** The reader is one parser (markdown-it-py 4.2.0); another could differ on an
-  unlisted edge, which is what the vectors are for. Windows behaviour is from Microsoft's
-  documentation. Concurrency was four threads against a local file. The NFC step means a title typed
-  decomposed is *stored* composed. Synthetic data only.
-
-### Review round 9 (2026-09-30, owner: "let's continue" — R4-14, backups, verification and the way out)
-
-**R4-14 — applied (D12 addendum 2; §2.8, §2.1, §2.9).** The DDL did not change (byte-identical to
-v1.8) and no new decision number was needed: this is the contract D12 left open. Every claim in §2.8
-that the old text took from documentation was executed first, and three of my own predictions were
-wrong (below). What the experiments turned up, in the order they turned up:
-
-| # | Finding (executed) | Consequence |
-|---|---|---|
-| a | `.backup` is consistent but **starves**: on a 50 MB file a writer doing 19 commits/s kept it from finishing in 30 s (5/s was fine; in tmpfs on 10 MB the break came at ~230/s) | the snapshot is `VACUUM INTO`, one read transaction: 0.26–0.29 s at 19 and 155 commits/s |
-| b | "never `cp` a live database" was from the docs: a byte copy was damaged in **95 of 150** tries at constant checkpoints, 5 of 150 at the default; on btrfs a reflinked copy hid it | claim confirmed, with the filesystem caveat |
-| c | a `VACUUM INTO` copy is **not WAL** (rollback-journal header) though it keeps `application_id`, `user_version`, all 76 objects and FTS5 | restore switches it back to WAL |
-| d | restoring over a database that still has its `-wal`/`-shm`: the snapshot silently came back as the newer data (3 426 pages, not 2 626), or an older snapshot was corrupted | restore moves the old file **and its own sidecars** aside together, never leaves a stale `-wal` |
-| e | `integrity_check` says `ok` for an orphan row (foreign keys are per connection) and for a flipped byte inside a value (no page checksums) | `foreign_key_check` too, plus a recorded SHA-256; the off-box tool verifies what it stores |
-| f | nothing said `backups/` must stay out of git; `life/` is a git repository and the snapshots hold the finance tables | `.gitignore` (§2.1) |
-
-The rest of the R4-14 list, as decided: retention is the newest 30 plus the first of each month,
-forever; an off-box copy is mandatory and the night fails without it (append-only — restic, or
-rsync **without** `--delete`, which mirrors accidents); the restore is a script and is drilled from
-the off-box copy; `dump/` holds one CSV per table as the way out. **The finance-in-git question is
-answered no**: `backups/` and `dump/` are ignored, and `export/` never had finance rows (D17
-addendum 2).
-
-**Still OPEN** (none blocks anything): **R4-11 e** (wikilinks to *people*), **R4-15** CJK search,
-**R4-18** partial dates, **R4-19** goals and process, **R8-01** device names with an extension.
-Not executed here because the tool is not installed: the recommended off-box path, restic (append-only
-backups, `check --read-data`) — only rsync was run.
-
-### Validation record #11 (2026-09-30, round 9)
-
-§3 was **extracted from this document's text** and is **byte-identical to v1.8's** (644 lines; the
-round-8 document checks still pass, below). The scripts of §2.8 and the `.gitignore` of §2.1 were
-**extracted from this text and run**. Expected outcomes were declared before each experiment.
-Numbers: a synthetic lifelog (1 year = 1 126 pages, 62 780 measurements, ~10 MB; 5 years = 5 628
-pages, 313 900 measurements, 50 MB), SQLite **3.53.4**, Linux, GNU coreutils; timings on btrfs unless
-said otherwise.
-
-- **Does the snapshot finish and is it consistent while another process writes?** A second process
-  commits an entity + page + measurement per transaction, tagged, so a torn snapshot shows as a
-  mismatch. *50 MB, btrfs:* `.backup` 0.17 s and 0.20 s at 1 and 5 commits/s, **did not finish in
-  30 s at 19 and 46**; `VACUUM INTO` 0.29 s at 19 and 0.26 s at 155. *10 MB, tmpfs:* `.backup` 0.02 s up
-  to 21/s, 0.58 s at 93/s, did not finish in 40 s at 229/s; `VACUUM INTO` 0.03 s at 21, 219 and 13 238.
-  Every snapshot that finished was consistent (pages = measurements, `integrity_check` ok, no orphan).
-  My prediction was "every `.backup` is clean" — true of the ones that finished, blind to the ones that
-  did not. The first run, with an unthrottled writer, grew the file to 2.7 GB and ran one `.backup`
-  for 4½ minutes; it was stopped and discarded, and redone with a bounded writer.
-- **`cp` of a live file.** `cp --reflink=never` while the writer ran: constant checkpoints — 55 ok,
-  65 `integrity_check` failures, 30 unreadable of 150; default checkpoints 145 ok, 5 unreadable of
-  150; main file then `-wal`: 99 ok, 35 + 16 bad of 150; `-wal` then main: 83 ok, 46 + 21 bad. The
-  first version of this experiment was **invalid**: on btrfs `shutil.copy` makes a reflink clone and
-  was clean in 360 tries; plain `cp` failed 2 of 100.
-- **Identity of a snapshot.** `.backup` and `VACUUM INTO` both keep `application_id` (0x4C494645),
-  `user_version` 1, all 76 objects and a working FTS5 (779 hits for `coffee`); `.backup` keeps WAL
-  (header bytes 2, 2) and `VACUUM INTO` is `delete` mode (1, 1); 10 268 vs 9 916 KiB; 0.07 s vs 0.09 s.
-- **What verification sees.** An orphan balance written with `foreign_keys=OFF`: `integrity_check`
-  `ok`, `foreign_key_check` one row. A zeroed page, a truncated file: detected. A flipped byte in the
-  indexed `title_key`: detected (`row … missing from index pages_title`). A flipped byte inside a text
-  cell: **not detected** — `integrity_check` ok while the `pages` table differs; only the SHA-256
-  differs. On a damaged *live* file: a flipped index key — `VACUUM INTO` succeeds, the copy carries the
-  damage and fails `integrity_check` (I predicted `VACUUM INTO` would rebuild the index and hide it —
-  wrong); a zeroed table page — `VACUUM INTO` itself fails; a flipped content byte — copied silently.
-  `integrity_check` takes 0.55 s and `quick_check` 0.20 s on 50 MB.
-- **Stale WAL on restore** (a crash image: `life.db` + `-wal` + `-shm` holding newer frames).
-  Snapshot copied over with both sidecars kept: 3 426 pages, not the snapshot's 2 626; `-shm` removed,
-  `-wal` kept: the same; both removed: 2 626; an **older** snapshot next to a newer `-wal`:
-  `integrity_check` errors (`btreeInitPage() returns error code 11`).
-- **The CSV dump.** 15 base tables, FTS shadow tables excluded, 0.64–0.80 s and 33 MB; record counts
-  equal row counts except the empty `fx_rates`, which is a 0-byte file with no header. NULL is an
-  empty field and `''` is `""`. I predicted REAL values would lose digits past 15 — wrong on 3.53.4:
-  `0.30000000000000004`, `1.0e-07`, `123456789.12345679`, `4.9406564584124654e-324` all round-trip.
-  Newlines, CRLF, quotes, commas, emoji, CJK, `\N` and `NULL` inside text survive a real CSV parser.
-  `-nullvalue '\N'` works in CSV mode but leaves text `\N` indistinguishable and puts `\N` into numeric
-  cells, so it is not used.
-- **The two scripts: 25/25 probes**, run from the drafts and again from the text of §2.8 and §2.1.
-  On the 50 MB file with a writer active `nightly.sh` exits 0 in 1.8 s, and the snapshot is
-  consistent, hashed (`sha256sum -c` ok), with 15 CSVs, an off-box copy and no `.tmp`. A live file
-  with an orphan balance: non-zero exit, no snapshot for the night, the earlier snapshot
-  byte-identical, `dump/` untouched, nothing copied off-box. A live file with a damaged index:
-  `VACUUM INTO` succeeds, step 2 rejects the copy, exit non-zero, no snapshot and no `dump/`. Off-box
-  command unset, empty or failing: non-zero exit with the local snapshot kept. Pruning 1 200 fake
-  names (with gaps, a `.FAILED` file and an unrelated file): the kept set equals an independent oracle
-  (newest 30 ∪ first of each month, 69 files), `.sha256` files go with their snapshot. Restore over a
-  crash image: exit 0, 5 628 pages, WAL mode, `integrity_check` ok, and the old file with its `-wal` and
-  `-shm` kept as `life.db.broken-<time>` still opens with the newer 6 328 pages; restore refuses a
-  snapshot with flipped content (hash), a zeroed page (`integrity_check`) and an orphan balance
-  (`foreign_key_check`), each time leaving `life.db` untouched; the drill from the off-box copy into an
-  empty directory works. With §2.1's `.gitignore`, `git add -A` stages only `export/` and the
-  `.gitignore`. `rsync -a` keeps a file deleted locally; `rsync -a --delete` removes it from the copy.
-- **The probes can fail: 13/13 mutants of the scripts caught, from the drafts and again from the text of §2.8** — `.backup` instead of `VACUUM INTO`,
-  no `foreign_key_check`, no `integrity_check`, verification after the rename, no temporary name,
-  keeping 15 instead of 30, no monthly keep, an optional off-box step, no hash check, the stale
-  `-wal` left behind, no switch back to WAL, no `foreign_key_check` on restore, the old file deleted
-  instead of kept (two of them, `.backup` and the missing temporary name, were caught by the night failing outright rather than by a probe of their own). One mutant (`no_integrity`) **escaped** the first 24 probes — none of them made that
-  line decisive; the damaged-index night was added and catches it.
-- **The document text, re-checked:** the round-8 checks (DDL byte-identical, 76 objects, the 29
-  vectors, §6.14 run literally, all §6 statements prepare) — all 26 pass on the final text.
-- **Mistakes of mine, fixed before any conclusion:** the writer flood above; the `cp` experiment that
-  measured btrfs reflinks; a `pkill -f` that matched its own shell (twice); an `E5b` check that looked
-  for the wrong title and then called the CLI helper with `-csv` as the SQL and hung on stdin; the
-  generator swapping a metric's name and id; one sentence of the first draft of §2.8 said "clean in
-  480 tries" where the record says 360 (corrected), and "0.26–0.29 s at 155/s" where it was two rates.
-- **Regression.** The DDL is byte-identical, so the behaviour recorded in #6–#10 is unchanged; the
-  older probe suites (#6–#9) were **not re-run** — their scripts no longer exist (R4-19 d).
-- **Known limits.** Synthetic data, one machine, one filesystem (btrfs) and tmpfs; the thresholds move
-  with size and disk. **Power loss** is not simulated — durability is `synchronous=FULL` plus SQLite's
-  documentation. **restic** is not installed: the off-box step was run with rsync to a local directory.
-  The scripts were run with GNU coreutils and `sqlite3` 3.53.4 (`timeout`, `sha256sum`; macOS lacks
-  both by default). The off-box copy's own corruption is out of reach of these scripts.
-
-### Review round 10 (2026-09-30, owner: "fix everything in one go")
-
-Every item left by round 9 is resolved, or deferred with a path that was **executed**, or recorded as an
-accepted limit. The DDL changed this time (one CHECK, six `lifelog_meta` keys, a comment), so a regression
-was needed — and possible: the validation suites of rounds 5–7, lost with the scratch directory (R4-19 d),
-were **recovered from the session transcript** (the commands that wrote them replayed in order; the first
-replay reproduced the recorded counts exactly: 139, 88, 112, 49) and are now kept in `tests/` with a
-runner (`python3 tests/run_all.py`).
-
-| Item | Resolution | Where |
-|---|---|---|
-| **R4-19 d** validation scripts not in the repo | recovered and kept: `tests/`, `run_all.py`, a README that maps each suite to its record; AGENTS.md now says to run it | `tests/README.md` |
-| **R8-01** device names before an extension | **fixed in the DDL**: the part of the title before the first `.` is tested, and the six superscript names are listed; 12 strings flip from accepted to rejected, none the other way | D5 addendum 4, §2.5 |
-| **R4-19 a** filename-safe immutable titles | **kept**, with the cost (unnamed CHECKs cannot be loosened after the freeze) and the reopen condition written down | D5 addendum 4 |
-| **R4-19 b** pragmas per connection | already asserted at connect since round 7 — **closed** | §2.9 |
-| **R4-19 c** threat model, 2075 test, import path | written: §2.11. The 2075 test is *executed* and found six keys missing from `lifelog_meta`: `entities`, `wikilinks`, `writers`, `export`, `backups`, `evolution` (now 25 rows); the import path is run on 1 000 rows and found three traps (below) | §2.11, D17 addendum 3 |
-| **R4-15** CJK search | **decided**: keep `unicode61`; the switch to trigram (drop, create, rebuild, one transaction) was executed | §7, DDL comment |
-| **R4-18** partial dates | **deferred**; executed: the unnamed `birth_day` CHECK cannot be dropped in place, a nullable `birth_approx` column with a CHECK can be added to a populated STRICT table | §7 |
-| **R4-11 e** a person named in text | **deferred**; executed: one `link_kinds` row (`mention`, page→person) works and the endpoint types are enforced | §7 |
-| DST residual (recurring timed events) | recorded as a deferred row with its trigger | §7 |
-| orphan `entities` rows | now checked: a third verification in `nightly.sh`, with a test and a mutant | §2.8 |
-
-**Three traps the import example would have taught, found by running it:** `CAST(x AS REAL)` turns
-`'abc'` and `''` into `0.0` and `'12.5kg'` into `12.5`, silently (a plain insert into the STRICT column
-converts `'12.5'` and rejects the others); `INSERT … SELECT … FROM … ON CONFLICT` needs `WHERE true`
-(SQLite reads the `ON` as a join's); the conflict target must repeat the partial index's
-`WHERE import_id IS NOT NULL`. And a CSV empty field is `''`, not NULL, so `taken_at` needs `NULLIF`.
-
-**The final status of every recorded finding** (the round-4 list keeps its old "OPEN" headings as history):
-
-| Finding | Status | Round |
-|---|---|---|
-| R4-01 `REPLACE` bypasses triggers | applied — `recursive_triggers=ON` | 4 |
-| R4-02, 03, 06, 07, 08, 09, 10, 17 | applied (imports, retractions, no-delete triggers, named CHECKs, `recorded_at`, immutable units, no-op-safe triggers) | 5 |
-| R4-04 timezone, R4-05 `completed_day` | applied | 6 |
-| R4-11 graph gaps | a, c seeds (5); b, d one place per event (6); **e deferred with a tested path (10)** | 5, 6, 10 |
-| R4-12 wikilink save contract | applied — D19 | 8 |
-| R4-13 concurrency, durability | applied — `BEGIN IMMEDIATE`, `synchronous=FULL` | 7 |
-| R4-14 backups and the way out | applied — §2.8, D12 addendum 2 | 7, 9 |
-| R4-15 CJK search | **decided, switch tested** | 10 |
-| R4-16 contradictions | applied | 7 |
-| R4-18 partial dates | **deferred with a tested path** | 10 |
-| R4-19 goals and process | a kept, b closed, c written, d done | 10 |
-| R8-01 device names | **fixed** | 10 |
-
-**Nothing recorded is open.** What is left is not a defect: **three gates only the owner can close** — the
-external review the status line waits for; an off-box destination and the first restore drill from it
-(§2.8); and the first real import (§2.11 step 6), the one test this schema has never had. **Accepted
-limits**, unchanged: power loss is documented not simulated; restic, Windows itself and real data were
-never run; widening a named CHECK is verified on SQLite 3.53.4 only; the per-connection pragmas cannot be
-enforced by the file. **Deferred, each with its reopen trigger** (§7): partial dates, CJK-inside search, a
-typed person mention, the local hour of recurring timed events across DST.
-
-### Validation record #12 (2026-09-30, round 10)
-
-§3 was extracted from this document's text (654 lines, 76 objects, `integrity_check` ok,
-`foreign_key_check` clean; `lifelog_meta` 25 rows). Expected outcomes were declared before each probe ran.
-
-- **Recovery of the lost suites.** Replaying only the file-writing commands of the transcript (heredocs,
-  in-place patches) into an empty directory and running the result on the v1.8 DDL gave the recorded
-  counts exactly: `regress` **139/139**, finance **88/88**, round 5 **112/112**, round 6 **49/49**, and
-  the recurrence expander **212 290** occurrences, 0 mismatches, net worth **155/155** month-ends. Round 7
-  (**36/36**) and the cookbook runner needed one change each, for a legitimate reason: both executed the
-  §6.14 block that round 8 rewrote (they now bind its new parameters / skip its link-sync statements,
-  which `tests/wikilinks` covers). The recovery is faithful because the old counts came back, not because
-  it looked right.
-- **The DDL change, old against new.** The same 43 458 strings (random over an alphabet of every filename
-  hazard, plus device names in every case, with and without extensions and superscripts) were offered to
-  the v1.8 and the new `pages` CHECK: **12 flip from accepted to rejected — all of them device names before
-  an extension or superscript names — none flips the other way, none changes outside that class.**
-  Independently, the app-side title predicate and the new CHECK agree on 43 309 strings (6 163 accepted),
-  zero disagreements either way; the 55 extraction vectors, including the new device-name row, pass.
-- **All suites on the new DDL:** `regress` 139/139, finance 88/88, round 5 112/112, round 6 49/49, round 7
-  36/36, expander 212 290 / 0, net worth 155/155, 20 cookbook blocks 0 failures; wikilink vectors 55/55,
-  save procedure 25/25, document checks 30/30; nightly/restore harness **26/26** (S1–S8, now including the orphan-entities night). `python3 tests/run_all.py
-  --slow --mutants --datasette` runs them from a clean checkout: **16/16 suites** — the 13 fast suites in about
-  12 s, the backup harness in 39 s, the 14 broken scripts in 524 s.
-- **Round-10 probes: 116/116** (`tests/schema/r10probes.py`). *Titles:* 11 names accepted (`CONSOLE`,
-  `CONSOLE.txt`, `a.CON`, `x.NUL`, `COM10`, `com10.x`, `LPT0`…), 20 rejected (`CON`, `con.txt`, `CON.backup`,
-  `NUL.tar.gz`, `lpt9.a.b`, the six superscript names, with extensions too, `CON.`, `.CON`, `CON `, ` CON`).
-  *The 2075 test:* 22 questions, each key present and each phrase in the answer, every `lifelog_meta` key
-  used, numbering without gaps. *R4-18:* `birth_day` rejects `1870` and `1870-05`; `ALTER TABLE … DROP
-  CONSTRAINT birth_day` fails (nothing to name); `ADD COLUMN birth_approx … CHECK` works on the populated
-  STRICT table, stores `1870` and `1870-05`, rejects `abc`, `1870-13`, `1870-5`, `18700`, leaves the
-  `people` trigger working. *R4-15:* before, `unicode61` finds the whole run and `zurich` but not `本語` or
-  `ノート`; after drop + create + `rebuild` with `trigram remove_diacritics 1`, `本語の`, `ノート`, `日本語` and
-  `zurich` are found and the two-character `本語` is still not (the recorded limit); insert and update stay in
-  sync through the triggers; the FTS integrity-check passes. *R4-11 e:* a page→person link is only possible
-  as `about` today; registering `mention` is one `INSERT`; a memo may then mention a person and may not
-  mention a place. *Orphans:* the query finds an `entities` row without a domain row and is silent on a clean
-  database. *Imports,* run from the document's SQL: 1 000 rows load, 200 empty `taken_at`/`tz` cells become
-  NULL; running it again inserts nothing; ten duplicates plus ten new rows insert exactly ten; a batch with
-  `'abc'`, with an empty value or with a malformed day (`CHECK` — not swallowed by `DO NOTHING`) is
-  rejected as a whole; without `NULLIF` an empty `taken_at` fails its CHECK; without `WHERE true` and
-  without the index's `WHERE` the statement is rejected; `CAST` stores the bad value as `0.0`;
-  afterwards `integrity_check`, `foreign_key_check` and the orphan query are clean.
-- **The orphan check in `nightly.sh`:** a live file with an `entities` row and no domain row — passes
-  `integrity_check` and `foreign_key_check` — now stops the night with no snapshot and no `dump/`.
-- **The probes can fail.** Ten breakages of the DDL or the document, each caught: the old device-name
-  CHECK back (11 failures), the superscript names removed (6), the `wikilinks`, `entities` and `backups`
-  keys damaged or removed, a non-partial import index, the orphan query removed from the document, a
-  broken FTS insert trigger, and a row cut from the 2075 table. **The last one escaped at first**: the
-  probe only asked for "at least 15 questions". It now also requires every `lifelog_meta` key to be used
-  by a question and the numbering to be gap-free (the table gained question 22, `pages_kind`, which the
-  coverage rule exposed). The scripts' harness gained a mutant for the orphan check; **all 14 mutants of `nightly.sh` and `restore.sh` are caught** (the 13 of record #11 and `no_orphan_check`, which S2c catches).
-- **Mistakes of mine, fixed before any conclusion:** my replay's first run of round 7 and the cookbook
-  runner failed on the rewritten §6.14 (expected, above); the first sentence I wrote about `WHERE true`
-  said "a syntax error" where SQLite says "a JOIN clause is required before ON" (the probe caught the
-  wording); a stray line in the import probes; and the 2075 table that could be shortened unnoticed.
-- **Known limits.** Synthetic data only; one machine and one filesystem; Windows behaviour is from
-  Microsoft's documentation (a name with a space before its dot is not covered because the documentation
-  does not say it is reserved); `tests/experiments/` holds the one-off scripts behind #11 and #12 as
-  evidence, not as portable tests; Datasette 0.65.5, executed in `tests/.venv`, 9/9 (its behaviour is that of that version).
-
-### Review round 11 (2026-09-30, owner: "do we need notes and wiki pages, and treat everything like a wiki page?" — "Yes")
-
-The question was answered from the DDL, not from memory: `note` and `wiki` differed in three things only
-(the `day` rule, the day view, the ghost sweep), and already shared one title index, one set of title rules
-and one `[[link]]` namespace; their two export folders were one filename space. The split also leaked — a
-link to a missing title creates a **wiki** page, and `kind` and `title` are immutable, so anything linked
-before it was written became a wiki page whatever it was meant to be. They are now one kind, `page`; memos
-stay separate. (The owner also asked whether rows carry `created_at` and `updated_at`: yes, on `entities`,
-`created_at` written by the app and `updated_at` by triggers — unchanged, §3, D12.)
-
-| Item | Resolution | Where |
-|---|---|---|
-| `note` and `wiki` | one kind: `kind IN ('memo','page')`; "dated" is the `day` column, not a type | D5 addendum 5, §3 |
-| `day` | required for a memo only; the app sets it on a page created on purpose and leaves it NULL on a link target | §3, §6.2, §6.14 |
-| `pages_title` | `UNIQUE … WHERE title_key IS NOT NULL`; no `kind` predicate in any lookup | §2.5, §3, §6.14 |
-| export | one folder, `export/pages/<Title>.md` | §2.1, D4 |
-| ghost sweep and day view | `kind = 'page'`; the day view labels them `page` | §3, §6.2, §6.13 |
-| 2075 test | row 22 asks what a memo and a page are; the `pages_kind` text says `untitled` and `never changes` | §2.11, `lifelog_meta` |
-
-### Validation record #13 (2026-09-30, round 11)
-
-§3 was extracted from this document's text (656 lines, 76 objects, `integrity_check` ok, `foreign_key_check`
-clean; `lifelog_meta` 25 rows, unchanged). Expected outcomes were declared in each probe's label before it ran.
-
-- **SQLite claims, executed first (3.53.4).** A `UNIQUE … WHERE title_key IS NOT NULL` index accepts two NULL
-  keys and one real key and rejects a duplicate real key. `WHERE title_key = ?` and `= :key` plan as
-  `SEARCH … USING INDEX` — an equality implies `IS NOT NULL` — and so does the §6.14 statement, taken from this
-  document, on a database of 500 memos and 4 pages; a lookup by `lower(title)` is a `SCAN` (the control).
-  `INDEXED BY` on the partial index answers `WHERE title_key = 'diet'` and refuses `SELECT id … WHERE title_key
-  IS NULL` with `no query solution` (the index holds no memo); on a full index that query works.
-  `SELECT count(*) … INDEXED BY` ignores the hint and scans the table (52 of 52 rows), so it cannot tell the
-  two indexes apart — my first probe used it.
-- **Round-11 probes: 43/43** (`tests/schema/r11probes.py`). *Kinds:* `memo` and `page` accepted; `note`,
-  `wiki`, `image` and `''` rejected; the named CHECK lists exactly the two. *Day:* a memo without a day
-  rejected; a page with and without a day accepted; a page without a title or key, a titled memo and a keyed
-  memo rejected. *One namespace:* `DIET` (no day) and `diet` (another day) collide with `Diet`; NFD `Café`
-  collides with NFC; 200 memos with NULL keys are accepted; a tombstoned page still holds its title.
-  *Lookups:* the §6.14 resolve statement has no `kind`, is a `SEARCH` on `pages_title`, finds `Zürich` by
-  `zürich`; the index is partial and its SQL has no `kind`. *Link first, write later:* `#japan-trip` in a memo
-  creates an empty `page` with no day; writing it needs no new page or redirect; the memo still links to it;
-  `Japan-Trip` is refused. *Ghosts and the day view, from the document's own SQL:* `ghost_pages` and §6.13
-  list exactly the empty, unlinked, live pages older than 30 days (with or without a day) and not a written
-  page, a linked one, a young one, a tombstoned one or an empty memo; §6.2 shows the page written that day
-  once, labelled `page` and `page (edited)` after an edit, and not a link target or another day's page.
-  *Fixed kind:* `page → memo` and `memo → page` are refused **by `pages_kind_fixed`** (its message is checked,
-  so a CHECK that happens to fail does not count), a no-op `SET kind = kind` is accepted, a title still cannot
-  change.
-- **The probes can fail: 12 broken copies of this document, all noticed** (`tests/schema/r11_mutants.py`,
-  1 to 20 probes failing each): the old kinds back (20), every page needing a day (7), no day required at all
-  (1), the index predicate on `kind` (3), no predicate so memos are indexed (2), a non-unique index (6), the
-  old `wiki` in the view (1) and in §6.13 (1), the old `note` in §6.2 (2), the old `kind` predicate in §6.14
-  (2), and each of the two fixed-kind / fixed-title triggers disabled (2, 1). **My first runner counted a crash
-  as "noticed" and passed 12/12 with four of them tracebacks** (a probe dereferencing a row the broken schema
-  had not created). The probes are now None-safe and a crash counts as a miss.
-- **Suites changed because the document legitimately changed** (in the same edit; nothing loosened):
-  `regress.py` — the kind literals, and the two expectations that encoded the old day rule (*note without a
-  day → ERR* is now *page without a day → OK*; the count stays 139); `r5probes.py` (the widened
-  `pages_kind` text), `r7probes.py` and `wikisave.py` (the resolve statement without a `kind` predicate),
-  `probes.py`, `cookbook_doc.py`, `finprobes.py`, `probes1.py`, `r10probes.py`, `title_fuzz.py`,
-  `backups/mkdb.py` (kind literals); `docchecks.py` — the kind literals and a new section D9 (12 stale phrases
-  absent from §1–§7, one folder in §2.1, addendum 5 present; 30 → 44 checks). `tests/experiments/r10_diff.py`
-  keeps `'wiki'`: it is the frozen evidence of record #12.
-- **All suites on the new DDL:** `regress` 139/139, finance 88/88, round 5 112/112, round 6 49/49, round 7
-  36/36, round 10 116/116, round 11 43/43 and 12/12, expander 212 290 occurrences / 0 mismatches, net worth
-  155/155 month-ends (worst difference 0.49), 20 cookbook blocks 0 failures, vectors 55/55, title fuzz 43 309
-  strings (6 163 accepted; the app predicate and the CHECK disagree on none), save procedure 25/25, document
-  checks 44/44; nightly/restore harness 26/26; all 14 script mutants noticed. `python3 tests/run_all.py
-  --slow --mutants`: **17/17 suites** (the 15 fast suites in about 10 s, the backup harness in 22 s, the
-  script mutants in 275 s).
-- **Mistakes of mine, fixed before any conclusion:** the `count(*) … INDEXED BY` probe (above); a probe for
-  "a second page with that title" that used a different key (`Japan Trip` against the tag `japan-trip`); a
-  ghost comparison sorted by `id` instead of `title`; the runner that counted crashes (above); and a search
-  for old kind literals that excluded `tests/backups/`. **The last one the fast suites could not see:** they
-  passed 15/15 while `backups/mkdb.py` still inserted `kind='wiki'`; the `--slow` run crashed on
-  `CHECK constraint failed: pages_kind`, which is why AGENTS.md asks for `--slow --mutants` when the DDL
-  changes.
-- **Known limits.** A ghost that is written later keeps `day = NULL` and so never appears in a day view (as a
-  wiki page never did; `*_day` is never recomputed). An empty, unlinked page created on purpose is swept like
-  a ghost after 30 days (D5 addendum 5). The title CHECKs are unchanged and still unnamed (D5 addendum 4).
-  Synthetic data only; no canonical database exists, so no row was migrated.
-
-### Review round 12 (2026-09-30, owner: "simplify for now the schema.md document and remove anything mentioning markdown export or backup or dumps, for now we just focus on the schema and its reliability")
-
-A scope cut, not a redesign: the DDL keeps every table, column, CHECK, index, view and trigger. What went is
-everything about *copies* of the data — the markdown export (`export/`), the snapshot / retention / off-box /
-restore contract with its two scripts (§2.8), the CSV dump, the `backups/` and `dump/` layout, and the tests of
-those scripts. What stayed is everything about *the file itself*: WAL, `synchronous=FULL`, `BEGIN IMMEDIATE`
-(§2.9), the integrity checks (now §2.8, executed on the live file), the import path and the read-only tools.
-
-| Item | Resolution | Where |
-|---|---|---|
-| §2.8 Backups | replaced by *Integrity checks*: `integrity_check`, `foreign_key_check` and the orphan query, each with what it does and does not see | §2.8 |
-| §2.1 layout, `.gitignore` | `life.db` alone; the file and its `-wal` / `-shm` are never committed | §2.1 |
-| D4 | "the database is canonical" stays with its two arguments against files-canonical; the mirror half is withdrawn | D4 |
-| D12 | "no revision tables" stays, its metadata text made exact; git-over-export and snapshots (incl. addendum 2) withdrawn | D12 |
-| D13 | down-migrations: a migration runs on a copy first and the three checks must pass (was: "restore the last snapshot") | D13 |
-| `lifelog_meta` | keys `export` and `backups` removed (25 → 23 rows); `titles` no longer says "export filenames" | §3 |
-| 2075 test | questions 17 (readable copies, history) and 18 (restore) removed: 20 questions | §2.11, D17 add. 4 |
-| threat model | "file damaged or lost" now says no second copy is kept; the off-box and mirror rows are reduced to the disk and git | §2.11 |
-| title rules | **kept unchanged** — they were introduced for export filenames, but loosening one later is a table rebuild (unnamed CHECKs) and the strict rule needs no exporter | D5 add. 6 |
-| import step 1 | "snapshot first" became "trial run on a copy first"; a bad import is retracted row by row (rows are never deleted) | §2.11 |
-| §7 | one row for what was withdrawn and when to reopen it (before the first real data); the Litestream row is folded into it | §7 |
-| references | R23–R25, R33, R37–R40 and R60–R62 dropped (cited only by withdrawn text); numbers are not reused | §9 |
-| owner gates | three (round 10) are now two: the external review and the first real import | status line |
-
-### Validation record #14 (2026-09-30, round 12)
-
-Baseline first: all 15 suites passed on v1.12 before the first edit. Then §3 was extracted from this document's text
-(652 lines, 76 objects, `integrity_check` ok, `foreign_key_check` clean; `lifelog_meta` 23 rows, was 25). The DDL differs from
-v1.12 in comments and in the two removed and one reworded `lifelog_meta` rows only. Expected outcomes were declared in
-each probe's label before it ran.
-
-- **SQLite claims, executed on the live file (3.53.4; 3 000 pages of prose, 1.8 MB, no snapshot involved).** Before, the
-  checks had only been run on `VACUUM INTO` copies (#11). *Clean file:* `integrity_check` ok, `foreign_key_check` and the
-  orphan query empty. *Zeroed table page:* `integrity_check` reports errors. *Truncated by three pages:* the file is
-  reported malformed. *Flipped byte in a `title_key` inside `pages_title`:* `row … missing from index pages_title`.
-  *Flipped byte inside a body value:* the text changed and `integrity_check` still says `ok`. *Orphan balance written
-  with `foreign_keys=OFF`:* `integrity_check` ok, `foreign_key_check` reports `balances|1|accounts`, orphan query empty.
-  *`entities` row without a domain row:* both PRAGMAs clean, the orphan query returns exactly that id. 7 of 7 as declared.
-- **Round-12 probes: 33/33** (`tests/schema/r12probes.py`): the same seven, taken from the block printed in §2.8 (three
-  statements, executed literally, on a database that holds a row of every domain type so a query that forgets one table
-  reports a false orphan); `lifelog_meta` has 23 rows and no `export` / `backups`; the 2075 table has 20 questions numbered
-  1–20; the live text (§1–§7) holds none of `export/`, `dump/`, `backups/`, `nightly.sh`, `restore.sh`, `OFFBOX`, `restic`,
-  `rsync`, `.sha256`, `exporter`, `Litestream`, `off-box` only where the withdrawal is recorded, and every remaining line that
-  says "export" is a tool feature, a standards remark or that record; the DDL text names no exporter, folder or nightly job;
-  `tests/` holds no backup harness.
-- **The probes can fail: nine broken copies of this document, all noticed** (`tests/schema/r12_mutants.py`, 1 to 6 probes
-  failing each): the `export` key back (6), the `backups` key back (5), a `backups/` folder back in the layout (1), the orphan
-  query without `accounts` (3), the `foreign_key_check` line gone from §2.8 (6), the imports step running `nightly.sh` again
-  (1), the `titles` row saying "export filenames" again (1), a 2075 question dropped (1), and the off-box copy mandatory again
-  in the threat model (2). The **unchanged v1.12 document** passes 5 of the 33.
-- **Suites changed because the document legitimately changed** (same edit; nothing loosened): `r7probes.py` D2 and D3 guarded
-  round-7 wording about `backups/` being "derived" and principle 5 naming the snapshots — rewritten to the new layout and
-  principle 5 (count unchanged, 36); `r10probes.py` labels only (116 → 112: two 2075 questions × two checks); `docchecks.py` D9b
-  (the layout is `life.db` alone; 44 → 44); `run_all.py` and `tests/README.md` (`--slow`, `--mutants`, the backup harness and its 14
-  script mutants removed; the two r12 suites added). **Removed with the contract they tested:** `tests/backups/` (26 harness
-  checks, 14 mutants) and the one-off `tests/experiments/r9_*` scripts behind #11 — in git history. `experiments/r10_diff.py`
-  stays: it is the evidence of #12.
-- **All suites on the new DDL:** `regress` 139/139, finance 88/88, round 5 112/112, round 6 49/49, round 7 36/36, round 10
-  112/112, round 11 43/43 and 12/12, round 12 33/33 and 9/9, expander 212 290 occurrences / 0 mismatches, net worth 155/155
-  month-ends (worst difference 0.49), 20 cookbook blocks 0 failures, vectors 55/55, title fuzz 43 309 strings (6 163 accepted; the
-  app predicate and the CHECK disagree on none), save procedure 25/25, document checks 44/44. `python3 tests/run_all.py`:
-  **17/17 suites**, about 15 s.
-- **Mistakes of mine, fixed before any conclusion:** my first index-corruption probe asked for the `dbstat` virtual table,
-  which this `sqlite3` build does not have — the error surfaced as a *parse* error and crashed the script, not as a failed
-  probe — so it now locates the index cell by scanning the file for the key's bytes; the first `r12probes` run failed four
-  of my own stale-phrase patterns (`export/interop` in D7, `append-only snapshots` for balances, `a mirrored edge` for
-  symmetric links, `health export` in the imports text — all legitimate) and one insert of a currency that is already seeded;
-  `r7probes` D2 tripped on `export/interop` the same way. The patterns are narrowed, and the "remaining `export` lines"
-  check whitelists three literal fragments of the withdrawal record — it will need touching if that text is re-wrapped.
-- **Known limits.** **There is no second copy of `life.db` in this design any more** (§7 row; the reopen trigger is the first
-  real data). Records #1–#13, the *Document history* footer and the older addenda of D5, D13 and D17 still name the withdrawn
-  contract in the past tense: they are history and were not edited (AGENTS.md); git holds the full earlier text. The title
-  rules keep their filename form although no code writes files (D5 addendum 6). The integrity checks find damage to the
-  file's structure and to constraints, not a changed value (E5); one machine, one filesystem, synthetic data, no power-loss
-  test; restic, Windows and real data were never run.
-
-### Review round 13 (2026-09-30, owner: "enhance schema.md with mermaid diagrams where we find necessary to make it more visually appealing")
-
-Presentation only: the DDL is byte-identical to v1.13. Nine diagrams were added where prose or an ASCII sketch was doing a
-poor job, and each one is checked, because a diagram that drifts from §3 is worse than none.
-
-| Where | Diagram | What it replaces or adds |
-|---|---|---|
-| §2.4 | state diagram: one reading corrected, retracted and restored, with what `measurement_values` shows after each insert | the hardest rule to picture from prose |
-| §2.9 | who writes (UI, CLI and API, agents → the one application → `life.db`) and who reads (read-only tools) | principle 3 as a picture |
-| §2.10 | statement → `balances` → `balance_values` → latest per account → FX → net worth | the derivation that §6.15–6.17 spread over three queries |
-| §4.1, §4.2 | two ER diagrams: entities and the graph; facts, money and registries | the ASCII tree of §4 (now removed) |
-| §4.3 | who may link what, one arrow per `link_kinds` row | the registry table of §3, in one view |
-| §4.4 | the life of a memo (inbox, triaged, tombstoned) and of a page (ghost, written, stub) | prose spread over D5, D11 and §6.13 |
-| §6.14 | flowchart of the wikilink save: `SAVEPOINT` per target, resolve / revive / create, link, prune | the step list of the SQL below it |
-
-Not drawn, on purpose: the time model (§2.2), the connection pragmas (§2.9) and the recurrence expander (§6.12) read better as the
-tables and SQL they already are; a diagram there would only restate them. Also fixed: a blank line that split a paragraph in §6.1.
-
-### Validation record #15 (2026-09-30, round 13)
-
-Baseline first: 17/17 suites on v1.13. The DDL was extracted before and after: unchanged (652 lines, 76 objects). Expected outcomes
-were declared in each check's label.
-
-- **Diagram checks: 449/449** (`tests/schema/diagrams.py`). *Structure:* exactly nine blocks, each announced by `%% diagram: <id>`,
-  each of the intended type. *The two ER diagrams against the DDL:* all 15 tables are drawn; every drawn column exists with its
-  declared type; a `PK` mark equals a primary-key column and an `FK` mark equals a column of a foreign key; every foreign key of
-  the DDL is a relationship labelled with its first column, and every relationship is a foreign key; the symbols follow the
-  constraint (NOT NULL parent → `||`, nullable → `|o`; a unique or primary key in the child → `o|`, otherwise `o{`), including the
-  partial unique index behind `supersedes_id`. *The link map:* the same edges as `link_kinds` — from, to, symmetric — with `any
-  entity` for a NULL endpoint list. *The correction story, executed:* rows 1–4 of the diagram get ids 1–4 in a fresh database, and
-  `measurement_values` shows 71.2, 70.8, nothing, 71.4 after them; the diagram's inserts, values and states are those. *The save
-  flow and §6.14* name steps 0, 1, 2a, 2b, 3, 4 alike.
-- **The checks can fail: 12 broken copies of this document, all noticed** (`tests/schema/diagrams_mutants.py`, 1 to 2 checks failing
-  each, no crashes): a foreign key not drawn, a wrong cardinality, a wrong column type, a column that does not exist, a missing
-  `FK` mark, an invented link-map edge, a wrong value in the correction story, a renumbered save step, a diagram deleted — and, the
-  drift the suite exists for, **the DDL changed under an untouched diagram**: `events.place_id` made NOT NULL, a new link kind, a new
-  table.
-- **The first run found a real error, mine:** `accounts.id` in the facts diagram was marked `PK` only; it is also a foreign key
-  (composite, to `entities`). Corrected. (`accounts.currency` had the same omission in the other diagram; I had spotted and fixed
-  that one while inserting.) My first version of the checks parsed `TYPE name` as `name type` and failed 91 checks on its own.
-- **Syntax and looks, executed rather than assumed:** every block was rendered with mermaid-cli 12.0.0 on Chromium — nine of nine
-  (`tests/schema/render_diagrams.py`, `run_all.py --mermaid`, optional because it needs node) — and a diagram with a deliberately
-  broken line makes that step fail (8/9, exit 1). Layouts were looked at and changed: the money flow was first drawn top-down
-  (956 × 3400 px, unreadable) and is now left-to-right; the link map's two self-loops on `page` are one edge; the memo diagram shows
-  *keep* and *act* as two transitions.
-- **Suites:** `run_all.py` gains `diagrams`, `diagram mutants` and the optional `mermaid` step (17 → 19 suites, ~15 s); the README
-  lists them. Nothing was loosened, and no existing suite needed a change: all 17 earlier suites give the same counts as in #14.
-- **Known limits.** Other viewers (GitHub, GitLab, an editor preview) ship other mermaid versions; the diagrams use only `erDiagram`,
-  `flowchart` and `stateDiagram-v2` with quoted labels, but were rendered here only by mermaid-cli 12.0.0. The text inside quotes
-  (attribute comments, edge labels) is prose and is not checked; the memo, page, writers and money diagrams are checked for the
-  names and steps they use, while their truth is that of the suites behind those rules (record #13 for pages, the net-worth oracle
-  for the money flow, the save-contract probes for §6.14).
-
----
-
----
-
-## 9. References
-
-What each source contributed to the decisions above. Reference numbers are never reused: R23–R25,
-R33, R37–R40 and R60–R62 were dropped in round 12 with the text that cited them.
+What each source contributed to the decisions above. Reference numbers are identifiers, not a count:
+the gaps are intentional.
 
 ### SQLite durability, format, and features
 
@@ -4361,24 +2944,24 @@ R33, R37–R40 and R60–R62 were dropped in round 12 with the text that cited t
   <https://github.com/simonw/datasette>)
   Instant browsing/SQL/faceting/JSON-CSV export over any SQLite file; Datasette Lite runs
   in-browser.
-- **[R50]** sqlite-web — <https://github.com/coleifer/sqlite-web> (**not used** — it edits rows, i.e. is a second writer; it does have `-r/--read-only`. D14 addendum)
+- **[R50]** sqlite-web — <https://github.com/coleifer/sqlite-web> (**not used** — it edits rows, i.e. is a second writer; it does have `-r/--read-only`. D14)
   Web-based table browser with row insert/update/delete, CSV/JSON import-export.
 
-### Round 4 — SQLite behaviour and money (D18, §8 #6)
+### SQLite behaviour and money (D18)
 
 - **[R53]** SQLite: *ON CONFLICT clause* — <https://www.sqlite.org/lang_conflict.html>
   "When the REPLACE conflict resolution strategy deletes rows in order to satisfy a
   constraint, delete triggers fire if and only if recursive triggers are enabled." The reason
   `PRAGMA recursive_triggers = ON` is mandatory (§2.9). (The page's wording on which
-  constraints `IGNORE` skips is loose; what it does was executed — §8 #6.) → D18, §2.4, §2.9.
+  constraints `IGNORE` skips is loose; what it does was executed.) → D18, §2.4, §2.9.
 - **[R54]** SQLite: *PRAGMA statements* — <https://www.sqlite.org/pragma.html>
   `synchronous=NORMAL` in WAL mode: "A transaction committed in WAL mode with
-  synchronous=NORMAL might roll back following a power loss or system crash" (R4-13);
-  `recursive_triggers` is a per-connection setting, off by default. → §2.9, §8 round 4.
+  synchronous=NORMAL might roll back following a power loss or system crash";
+  `recursive_triggers` is a per-connection setting, off by default. → §2.9.
 - **[R55]** SQLite: *ALTER TABLE* — <https://www.sqlite.org/lang_altertable.html>
-  `ALTER COLUMN … SET/DROP NOT NULL` arrived in 3.53.0 (2026-04-09). The page as fetched does
-  not describe `ADD/DROP CONSTRAINT` for CHECK; that behaviour, and its restriction to *named*
-  constraints, was found by executing it on 3.53.4 (§8 #6). → D18, R4-08.
+  With the release notes, <https://www.sqlite.org/changes.html>: since 3.53.0 (2026-04-09)
+  `ALTER TABLE` can add and remove NOT NULL and CHECK constraints. Its restriction to *named* constraints,
+  and that `ADD CONSTRAINT` checks existing rows, were found by executing it on 3.53.4. → D13, D18.
 - **[R56]** Beancount `balance` directive (via the `beancount_ex` library docs — the official
   syntax page URL tried returned 404): asserts an account's balance at the *beginning* of a
   date — the reason `balances.day` states "end of day" explicitly.
@@ -4387,20 +2970,56 @@ R33, R37–R40 and R60–R62 were dropped in round 12 with the text that cited t
   exponent is a per-currency fact (JPY 0, KWD 3), and a few currencies (MRU, MGA) subdivide
   by 5 — why `currencies.subunits` is a per-row integer and not a global "cents" assumption. → D18.
 
-### Round 8 — the wikilink save contract (D19)
+### The wikilink save contract (D19)
 
 - **[R58]** Microsoft Learn: *Naming Files, Paths, and Namespaces* —
   <https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file>
   Reserved names (`CON`, `PRN`, `AUX`, `NUL`, `COM1`–`COM9`, `LPT1`–`LPT9`, and the superscript
   digits `COM¹ COM² COM³ LPT¹ LPT² LPT³`): "avoid these names followed immediately by an extension; for
   example, NUL.txt and NUL.tar.gz are both equivalent to NUL"; no trailing space or period. The
-  DDL covers the bare names only (R8-01). → §2.5.
+  DDL rejects the bare names, the names before an extension and the superscript names. → §2.5.
 - **[R59]** markdown-it-py 4.2.0, the Python port of markdown-it, a CommonMark-compliant parser —
   <https://github.com/executablebooks/markdown-it-py>; the specification it implements is
-  <https://spec.commonmark.org/>. Used as the reference reader in §8 #10: which text it hands
+  <https://spec.commonmark.org/>. Used as the reference reader in `tests/wikilinks`: which text it hands
   back (code spans, fences, indented code, raw HTML and image alt text are not text; escapes and
   entities are decoded; `#Heading` without a space is not a heading) was executed, not read from
   the spec. → §2.5, D19.
+- **[R63]** Unicode Technical Standard #39, *Unicode Security Mechanisms* —
+  <https://www.unicode.org/reports/tr39/> (with UAX #31, *Identifiers*): default-ignorable and bidi
+  characters are dropped or rejected before identifiers are compared, because they are invisible;
+  case-folding stability covers assigned characters only. → §2.5 (the invisible-character rule, `Cn`).
+
+### Reliability of the file (§2.8, §2.9, §2.11)
+
+- **[R64]** SQLite: *The Checksum VFS Shim* — <https://www.sqlite.org/cksumvfs.html>
+  An 8-byte checksum per page (reserve bytes = 8), `SQLITE_IOERR_DATA` on a mismatch; SQLite ≥ 3.32.
+  Considered for in-value damage and not used (an extension in every writer); a checksumming
+  filesystem does the same job below the file. → §2.8.
+- **[R65]** SQLite: *Write-Ahead Logging* — <https://www.sqlite.org/wal.html>
+  The WAL-reset bug (3.7.0 – 3.51.2, fixed in 3.51.3; backports 3.44.6 and 3.50.7): two or more
+  connections, a write racing a checkpoint, a lost transaction. Also: checkpoint starvation by
+  readers that never let go, "WAL does not work over a network filesystem", the conditions for
+  read-only access. → §2.9, `lifelog_meta.sqlite`.
+- **[R66]** SQLite: *How To Corrupt An SQLite Database File* —
+  <https://www.sqlite.org/howtocorrupt.html> Network filesystems, files copied while open, broken
+  POSIX locks, `immutable` on a changing file. → §2.9.
+- **[R67]** T. S. Pillai et al., *All File Systems Are Not Created Equal: On the Complexity of
+  Crafting Crash-Consistent Applications*, OSDI 2014 —
+  <https://www.usenix.org/conference/osdi14/technical-sessions/presentation/pillai>
+  SQLite among the studied applications: crash consistency depends on the filesystem's persistence
+  properties, which is why power loss is listed as documented, not simulated. → §2.11.
+
+### Time and dates (D7, D10, D18, §7)
+
+- **[R68]** R. T. Snodgrass, *Developing Time-Oriented Database Applications in SQL*, Morgan
+  Kaufmann 2000; SQL:2011's application-time and system-time periods are the same two clocks. Valid
+  time vs transaction time — the two clocks of `measurements` and `balances`. → D7, D18.
+- **[R69]** RFC 9557, *Date and Time on the Internet: Timestamps with Additional Information*
+  (2024) — <https://datatracker.ietf.org/doc/html/rfc9557> An IANA zone in brackets after an RFC 3339
+  instant. → D10.
+- **[R70]** Library of Congress, *Extended Date/Time Format (EDTF)*, incorporated in ISO 8601-2:2019 —
+  <https://www.loc.gov/standards/datetime/> Year and month precision, approximate (`~`) and uncertain
+  (`?`) dates. → §7 (partial dates).
 
 ### Recurrence (D15)
 
@@ -4426,20 +3045,8 @@ The seven real systems surveyed during research, and exactly what was taken from
 |---|---|---|---|---|
 | FxLifeSheet [R9][R42] | 380k points, 6+ yrs | One `raw_data` table; metric registry in config | measurements shape, `import_id` idempotency, denormalized time buckets (`day`), capture-friction philosophy | value-as-TEXT (we use REAL), Postgres, 8 separate time-bucket columns (one `day` suffices) |
 | ark [R46] | 700k items, 125 GB store + 9 GB SQLite | Content-addressed files; SQLite index; typed edges | `media/` sha256 store, `links` as the one graph, "everything about a person" query | annotations layer, classification/quality subsystems |
-| Open Brane [R43] | 942k rows, 3 GB | One append-only 8-column table; no FKs | append-only spirit for measurements, `INSERT OR IGNORE` idempotency, blobs-outside-DB | payload_json column (violates D2), no-FK design (violates D8) |
+| Open Brane [R43] | 942k rows, 3 GB | One append-only 8-column table; no FKs | append-only spirit for measurements, keyed idempotent writes (as `ON CONFLICT … DO NOTHING`), blobs-outside-DB | payload_json column (violates D2), no-FK design (violates D8), `INSERT OR IGNORE` (it also swallows CHECK and NOT NULL violations, §2.4) |
 | health-mcp [R8] | Years of use | Typed biomarker tables; two-tier wearables; forward-only migrations | UTC+local-day convention, forward-only numbered migrations, metric registry concept | LOINC/UCUM/ref-ranges, raw mirror tier (both deferred, §7) |
 | Myome [R45] | Design paper | TSDB + SQLite + object store | Scale calibration (~5 GB/lifetime → no rollups needed) | TSDB, FHIR machinery, multi-resolution storage |
 | Kaydet [R41] | 9 yrs daily entries | Plain text + SQLite index | Evidence that boring survives; hybrid text+DB instinct (resolved as D4: the database is canonical) | Files-as-canonical (owner's writer-drift objection) |
 | Logseq OG vs DB [R34]–[R36] | Product-scale split | Files-canonical vs SQLite-canonical | The decisive precedent for D4: a team that hit live-editing limits chose DB-canonical | Block-level datom model, collaboration machinery |
-
----
-
-*Document history: v1.14, 2026-09-30 — round 13 (§8 #15): nine mermaid diagrams (§2.4, §2.9, §2.10, §4.1–4.4, §6.14) replace the ASCII entity tree and picture the correction rule, the writers, net worth, links, lifecycles and the wikilink save; `tests/schema/diagrams.py` checks them against the DDL — the DDL is unchanged; validation record #15. v1.13, 2026-09-30 — round 12 (§8 #14): the document narrowed to the schema and its reliability — the markdown export and the snapshot / restore / dump contract (§2.8, D12 addendum 2) and their tests are withdrawn (§7); D4 and D12 keep their decisions (the database is canonical; no revision tables); §2.8 is now the three integrity checks, executed on the live file; the `export` and `backups` keys and two 2075 questions are gone from the DDL; validation record #14. v1.11, 2026-09-30 — round 10 (§8): every remaining finding closed or deferred with an executed path — R8-01 fixed in the DDL (device names before an extension, superscript names), six `lifelog_meta` keys added by the now-executed 2075 test, §2.11 (threat model, 2075 test, import path), D5 addendum 4 and D17 addendum 3, four deferred rows in §7, the orphan-entities check in `nightly.sh`; the lost validation suites recovered and kept in `tests/` with `run_all.py` (R4-19 d); validation record #12. v1.10, 2026-09-30 — round 9 (§8): the backup contract of R4-14 (D12 addendum 2; §2.8 rewritten with a tested nightly script and restore script, §2.1 `.gitignore` and `dump/`): `VACUUM INTO` instead of `.backup`/`cp`, verification, retention, mandatory off-box copy, restore rules, CSV dump never in git — the DDL is unchanged; validation record #11. v1.9, 2026-09-30 — round 8 (§8): the wikilink save contract of R4-12 (D19; §2.5 rules and test vectors, §6.14 rewritten as the full save) — the DDL is unchanged; `#tag` is read, not expanded; a stub is not scanned; §6.5 excludes `redirect`; validation record #10. v1.8, 2026-09-30 — round 7 (§8): the text inconsistencies of R4-16 and five more found in a re-scan (snapshots are not derived, natural-key registries, "export mirrors 100%", readers must be read-only, D12 audit metadata); `synchronous = FULL` and `BEGIN IMMEDIATE` for every write transaction (R4-13), §6.14 resolves inside one transaction; validation record #9. v1.7, 2026-09-30 — round 6 (§8): `entities.tz` / `measurements.tz` (IANA zone at capture), `tasks.completed_day` and a `'done'` row in the day view, `events.place_id` as an event's only place (`visited` person→place only, `lives-in` removed); validation record #8. v1.6, 2026-09-30 — round 5 (§8): the mechanical round-4 fixes (`ON CONFLICT` imports, `(source, import_id, metric_id)` key, retractable measurements, `recorded_at`, enforced no-delete triggers, all enumerated CHECKs named, immutable `metrics.unit`, `located-in`/`parent-of`, no-op-safe immutability triggers); finance scope settled as value-snapshot accounts (stocks, crypto, deposits, valuables — D18 addendum 1); validation record #7. v1.5, 2026-09-30 — round 4 (§8): independent review with 19 recorded findings (R4-01…R4-19; R4-01 applied: `recursive_triggers=ON` mandatory) and the finance tier D18 (`currencies`, `accounts` as a sixth entity type, append-only `balances`, `fx_rates`; net worth derived, §6.15–6.18; validation record #6). v1 draft, 2026-09-29 — initial synthesis of two research rounds and
-the owner's decisions (scope narrowed to DB + UI; Model B chosen after the writer-drift
-objection; journal merged into memos-as-inbox). v1.1, same day — DDL mechanically
-validated on SQLite 3.53.4 (§8 validation record); §2.9 connection pragmas added after
-FK enforcement was found OFF by default; D2 wording corrected on STRICT semantics.
-v1.4, same day — round 3c (§8 #5): titles immutable; `title_key` (NFC + casefold, app-computed) makes title uniqueness Unicode-proof; §6.14. v1.3, same day — round 3b (§8 #4): filename-safe titles, endpoint-typed links (registry closed even without the FK), `pages.kind` fixed, tombstones bump `updated_at`. v1.2, same day — review round 3 (§8 #3): measurements made genuinely append-only and
-the read view indexed, link registry closed with mirror-on-delete, recurrence CHECKs
-and one oracle-verified expander, title rules, cookbook fixes. Frozen pending external review; on approval, §3 becomes `db/migrations/0001_init.sql`
-verbatim and the schema enters additive-only mode.*

@@ -5,6 +5,13 @@ s = doc.index('## 6. Query cookbook'); e = doc.index('## 7. Explicit non-goals')
 blocks = re.findall(r'```sql\n(.*?)\n```', doc[s:e], re.S)
 print('cookbook sql blocks:', len(blocks))
 
+if os.environ.get('HARDENED'):          # §2.9: DEFENSIVE + trusted_schema=OFF must leave every block working (round 15)
+    def fresh(path=':memory:'):
+        c = sqlite3.connect(path, isolation_level=None)
+        c.setconfig(sqlite3.SQLITE_DBCONFIG_DEFENSIVE, True); c.execute('PRAGMA trusted_schema = OFF')
+        c.executescript(DDL); c.execute('PRAGMA foreign_keys=ON'); c.execute('PRAGMA recursive_triggers=ON')
+        return c
+    print('hardened connection: SQLITE_DBCONFIG_DEFENSIVE + trusted_schema=OFF')
 c = fresh()
 # seed
 me = memo(c, 'Shipped the schema. [[Lifelog]]', '2026-09-29')
@@ -23,7 +30,7 @@ usd = ent(c,'account'); c.execute("INSERT INTO accounts(id,name,side,currency,op
 c.execute(f"INSERT INTO balances(account_id,day,amount,recorded_at) VALUES (?,'2026-06-30',5000000,{NOW})",(usd,))
 c.execute("INSERT INTO fx_rates(from_ccy,to_ccy,day,rate) VALUES ('EUR','USD','2026-01-01',1.10)")
 P = dict(found_id=wp, target_id=wp, target_ids='[]', place_id=1, mistaken_row_id=2, account_id=ac, row_key='r1', amount=777, base='EUR', from_day='2026-01-15', to_day='2026-09-10', day='2026-09-29', page_id=wp, person_id=pe, memo_id=me, task_id=ta, due_day='2026-10-05', query='schema',
-         key='newpage', title='Newpage', start_day='2026-09-01', end_day='2026-10-31', metric_id=2, wrong_row_id=1)
+         key='newpage', title='Newpage', start_day='2026-09-01', end_day='2026-10-31', metric_id=2, wrong_row_id=1, source='ui')
 fails = 0
 for i,b in enumerate(blocks,1):
     stmts=[]; cur=''
@@ -36,7 +43,10 @@ for i,b in enumerate(blocks,1):
         if 'SELECT id FROM metrics' in st or True:
             try:
                 cur = c.execute(st, {k:v for k,v in P.items() if ':'+k in st})
-                if cur.description: nrows = len(cur.fetchall())
+                rows = cur.fetchall() if cur.description else None
+                if rows is not None: nrows = len(rows)
+                m = re.search(r'RETURNING id;[^\n]*?:(\w+)', st)          # the id the app keeps (round 15)
+                if m and rows: P[m.group(1)] = rows[0][0]
             except sqlite3.Error as ex:
                 ok=False; print(f'  block {i} FAILED: {ex}\n    {st[:120]!r}')
     fails += (not ok)

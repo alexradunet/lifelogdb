@@ -46,10 +46,20 @@ b614 = blk('### 6.14'); K('A3 §6.14 opens with BEGIN IMMEDIATE', b614.lstrip().
 try: inside = b614.index('BEGIN IMMEDIATE') < b614.index('SELECT p.id') < b614.index('INSERT INTO entities') < b614.index('COMMIT')
 except ValueError: inside = False
 K('A3 §6.14 resolves INSIDE the transaction', inside)
-path = mkdb(); c = conn(path)
-for st in [s for s in re.split(r';\s*\n', b614) if re.sub(r'--.*','',s).strip()]:
-    if ':page_id' in st or ':target' in st or ':found_id' in st: continue      # link sync / revive: covered by tests/wikilinks
-    c.execute(st, {k:v for k,v in dict(key='cafe',title='Cafe').items() if ':'+k in st})
+path = mkdb(); c = conn(path); P = dict(key='cafe', title='Cafe', source='ui')
+def split_sql(sql):
+    out, acc = [], ''
+    for line in sql.splitlines(keepends=True):
+        acc += line
+        if sqlite3.complete_statement(acc):
+            if re.sub(r'--.*','',acc).strip(): out.append(acc)
+            acc = ''
+    return out
+for st in split_sql(b614):
+    code = re.sub(r'--.*','',st)
+    if ':page_id' in code or ':found_id' in code: continue      # link sync / revive: covered by tests/wikilinks
+    cur = c.execute(st, {k:v for k,v in P.items() if ':'+k in code})
+    if 'RETURNING id' in st: P['target_id'] = cur.fetchone()[0]   # round 15: the new page's id travels with RETURNING
 K('A3 §6.14 block runs and creates the page', c.execute("select count(*) from pages where title_key='cafe'").fetchone()[0]==1)
 # every write transaction in §6 is IMMEDIATE
 sec6 = doc[doc.index('## 6. Query cookbook'):doc.index('## 7. Explicit non-goals')]
@@ -76,7 +86,7 @@ t=time.time(); w.execute("INSERT INTO lifelog_meta VALUES ('k','v')"); K('C1 the
 r = subprocess.run(['sqlite3','-readonly',path,"INSERT INTO lifelog_meta VALUES ('z','z')"],capture_output=True,text=True); K('C2 sqlite3 -readonly refuses writes', 'readonly' in (r.stderr+r.stdout))
 
 # ---- D. the inconsistencies are gone from the live text (§1–§7); decision text keeps history via pointers
-live = doc[:doc.index('## 8. Validation records')]
+live = doc[:doc.index('## 8. References')]
 K('D1 no "mirrors 100%" claim left in §1–§7', 'mirrors 100%' not in live)
 K('D2 §2.1 lists life.db alone (round 12): no export/, backups/ or dump/ in the layout or the DDL header', all(x not in live.replace('export/interop', '') for x in ('export/', 'backups/', 'dump/')))
 K('D3 principle 5 says life.db is irreplaceable and names only the FTS index and title_key as derived', 'and `title_key` can be dropped and rebuilt' in live.replace('\n   ',' ') and '`life.db` is irreplaceable' in live)
@@ -85,12 +95,12 @@ c = sqlite3.connect(':memory:'); c.executescript(DDL)
 nk = sorted(t for (t,) in c.execute("select name from sqlite_schema where type='table' and name not like 'pages_fts%' and name not like 'sqlite_%'") if not any(r[5]==1 and r[2]=='INTEGER' and c.execute(f"select count(*) from pragma_table_info('{t}') where pk>0").fetchone()[0]==1 for r in c.execute(f"pragma table_info('{t}')")))
 K('D4 the tables without a single INTEGER primary key are exactly the four the text names', nk==sorted(['currencies','fx_rates','link_kinds','lifelog_meta']), nk)
 K('D5 readers paragraph no longer lists sqlite-web as a reader', 'Readers (Datasette, sqlite-web' not in live)
-K('D6 D14/D17 carry the sqlite-web pointer', 'dropped — it is a second writer' in live and 'Datasette listens on localhost only' in live)
+K('D6 D14/D17 carry the sqlite-web pointer', '`sqlite-web` is **not used**' in live and 'a second writer' in live and 'Datasette listens on localhost only' in live)
 # D7: the documented advice works
 path = mkdb(); c = conn(path)
 def task(title): 
     c.execute(f"INSERT INTO entities(type,created_at,updated_at) VALUES ('task',{RA},{RA})"); i=c.execute('select last_insert_rowid()').fetchone()[0]
-    c.execute("INSERT INTO tasks(id,title,due_day,repeat) VALUES (?,?, '2026-01-01','monthly')",(i,title)); return i
+    c.execute("INSERT INTO tasks(id,title,due_day) VALUES (?,?, '2026-01-01')",(i,title)); return i   # tasks do not repeat (round 15)
 t1, t2 = task('pay rent'), task('pay rent')
 try: c.execute(f"INSERT INTO links(from_id,to_id,kind,created_at) VALUES (?,?,'spawned',{RA})",(t2,t1)); K('D7 spawned task->task stays rejected', False)
 except sqlite3.Error: K('D7 spawned task->task stays rejected', True)
@@ -98,7 +108,7 @@ c.execute(f"INSERT INTO links(from_id,to_id,kind,created_at) VALUES (?,?,'relate
 c.execute("INSERT INTO metrics(name,unit) VALUES ('rent_paid','')"); mid = c.execute("select id from metrics where name='rent_paid'").fetchone()[0]
 for day,v in (('2026-01-31',1),('2026-02-28',0),('2026-03-31',1)): c.execute(f"INSERT INTO measurements(metric_id,day,value,recorded_at) VALUES (?,?,?,{RA})",(mid,day,v))
 K('D7 per-occurrence tracking via a 0/1 habit metric works', c.execute("select group_concat(value) from (select value from measurement_values where metric_id=? order by day)",(mid,)).fetchone()[0]=='1.0,0.0,1.0')
-# D8: created_at is app-written, updated_at trigger-maintained (D12 addendum)
+# D8: created_at is app-written, updated_at trigger-maintained (D12)
 K('D8 entities.created_at has no default and is NOT NULL (app-written)', [ (r[3], r[4]) for r in c.execute("pragma table_info('entities')") if r[1]=='created_at'][0]==(1,None))
 try: c.execute("INSERT INTO entities(type,updated_at) VALUES ('page','2026-06-09T10:00:00.000Z')"); K('D8 insert without created_at rejected', False)
 except sqlite3.Error: K('D8 insert without created_at rejected', True)

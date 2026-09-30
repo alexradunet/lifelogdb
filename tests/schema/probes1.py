@@ -71,9 +71,9 @@ c.execute("INSERT INTO measurements(metric_id,day,value) VALUES (2,'2026-06-01',
 show('P5a UPDATE metrics SET unit=lb', 'ERR?', tryx(c, "UPDATE metrics SET unit='lb' WHERE name='weight'"))
 show('P5b metric name with spaces/uppercase accepted', 'ERR?', tryx(c, "INSERT INTO metrics(name,unit) VALUES (' Blood Pressure (sys) ','mmHg')"))
 
-# ---- P6: D15 'spawn next task via spawned' vs D8 addendum-2 endpoint types
-c = fresh(); t1=ent(c,'task'); c.execute("INSERT INTO tasks(id,title,due_day,repeat) VALUES (?,'rent','2026-01-01','monthly')",(t1,))
-t2=ent(c,'task'); c.execute("INSERT INTO tasks(id,title,due_day,repeat) VALUES (?,'rent','2026-02-01','monthly')",(t2,))
+# ---- P6: D15 'spawn next task via spawned' vs D8 endpoint types
+c = fresh(); t1=ent(c,'task'); c.execute("INSERT INTO tasks(id,title,due_day) VALUES (?,'rent','2026-01-01')",(t1,))
+t2=ent(c,'task'); c.execute("INSERT INTO tasks(id,title,due_day) VALUES (?,'rent','2026-02-01')",(t2,))
 show('P6 links(spawned) task->task (D15 says allowed)', 'ERR', tryx(c, f"INSERT INTO links(from_id,to_id,kind,created_at) VALUES ({t2},{t1},'spawned',{NOW})"))
 
 # ---- P7: D16 motivation: 'everything in Japan' needs place containment
