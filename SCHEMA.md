@@ -83,6 +83,11 @@ deferred out of v1 (D9) — the layout grows a `media/` sibling when they return
   e.g. `2026-06-09T21:14:03.482Z`. Written by the app, never by SQLite defaults
   (SQLite's `CURRENT_TIMESTAMP` is second-precision and non-ISO; `strftime('%Y-%m-%dT%H:%M:%fZ','now')`
   is the in-DB form used by triggers) [R5][R6][R28].
+  Milliseconds because `%f` always renders `SS.SSS` (three digits), which gives one fixed-width string
+  that the round-trip CHECK can compare, that sorts chronologically as plain text, and that keeps rows
+  written within the same second in order (e.g. a balance and its correction). The digits are audit
+  precision, not measurement accuracy: `*_day` carries the facts, and `taken_at` is rarely known
+  finer than a second.
 - **Local days** (`*_day` columns): the *local calendar date where the thing happened or
   was captured*, TEXT `YYYY-MM-DD`, written at insert time from the writer's timezone.
   **Never derived from the UTC instant at query time.** This survives timezone changes,

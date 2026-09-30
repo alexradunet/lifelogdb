@@ -55,4 +55,11 @@ K('seeded kinds no longer include lives-in', c.execute("select count(*) from lin
 Q = "SELECT pl.name FROM events ev JOIN entities e ON e.id=ev.id AND e.deleted_at IS NULL JOIN places pl ON pl.id=ev.place_id WHERE ev.start_day <= :day AND coalesce(ev.end_day, ev.start_day) >= :day"
 K("'where did I live on 2015-06-01' is answered by a dated event", c.execute(Q, dict(day='2015-06-01')).fetchall()==[('Berlin',)])
 K("…and is empty after it ended", c.execute(Q, dict(day='2019-01-01')).fetchall()==[])
+# ---- instants: %f is the fixed-width millisecond form; CURRENT_TIMESTAMP is not
+c = fresh()
+K("strftime('%f') renders SS.SSS (3 digits, rounded)", c.execute("select strftime('%f','2026-06-09 21:14:03.482999')").fetchone()[0]=='03.483')
+K("whole-second input is widened to .000Z (one fixed width)", c.execute("select strftime('%Y-%m-%dT%H:%M:%fZ','2026-06-09T21:14:03Z')").fetchone()[0]=='2026-06-09T21:14:03.000Z')
+K("CURRENT_TIMESTAMP is second-precision and non-ISO", re.fullmatch(r'\d{4}-\d\d-\d\d \d\d:\d\d:\d\d', c.execute("select CURRENT_TIMESTAMP").fetchone()[0]) is not None)
+K("same-second instants order by their fraction as plain text", c.execute("select '2026-06-09T21:14:03.482Z' < '2026-06-09T21:14:03.483Z'").fetchone()[0]==1)
+
 print(f'round-6 probes: {sum(res)}/{len(res)} met expectations')
