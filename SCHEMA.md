@@ -1,6 +1,6 @@
 # Lifelog — Database Schema v1
 
-**Status:** freeze candidate. No canonical database exists yet; until one does, §3 is edited in place (D13). The next step is the capture path and one real import (§2.7), not another review.
+**Status:** freeze candidate. No canonical database exists yet; until one does, §3 is edited in place (D13). The 2026-10 trial import (a real vault, into a copy — §2.7) has already taught D5, D22, D23 and D24; the next step is the capture path and the first import into the canonical `life.db`, not another review.
 **Scope of the project:** A lifetime personal database — a life log and its backup, not a project
 manager (D23): a journal of day pages, notes and wiki pages, people, places and health metrics (events,
 money, location history and file attachments deferred — D22, D18, D21, D9) in a single SQLite file, plus a custom UI for data entry and daily use.
@@ -479,8 +479,9 @@ DETACH s;
 5. **Check afterwards:** the four checks of §2.5, per-source counts (`SELECT source, count(*),
    min(day), max(day) FROM measurements GROUP BY source`), and **run the importer a second time — it
    must insert nothing.**
-6. **Before the freeze**, run steps 1–5 once with a real export on a copy: a real import is the one
-   test this schema has never had.
+6. **Before the freeze**, run steps 1–5 once with a real export into the canonical file: the
+   2026-10 trial — a real vault, imported into a copy — already taught D5, D22, D23 and D24; an
+   import into `life.db` itself is the one test this schema has never had.
 
 ## 3. The schema (canonical DDL)
 
