@@ -8,7 +8,7 @@ cookbook, non-goals, references. It states the current truth only. Any developer
 build an application around it; the contract they implement is `SCHEMA.md` and nothing else.
 
 `app/` is the **first official application**: a Go binary (a CLI now; a REST API and an MCP server
-later) and the reference writer of a `life.db`. Its own decisions (A1–A6) are in `app/README.md`. It
+later) and the reference writer of a `life.db`. Its own decisions (A1–A9) are in `app/README.md`. It
 implements the schema; it never defines it.
 
 | path | what it is | it answers to |
@@ -153,8 +153,9 @@ Their homes are in `SCHEMA.md`; this list is the checklist, not the rule.
 - **Importing data is a skill, not a script.** Asked to import anything (a vault, an export, lab
   results), read `app/skills/import/SKILL.md` first and follow it; never write an importer for one
   source (A7). Code is added only for what every import needs and a model does badly (`inspect`,
-  `find`, `measure`). The workspace beside a source (`<source>.lifelog/`) holds private data, like the
-  source itself: neither ever goes into git (`/import/` is ignored).
+  `find`, `measure`, and facts files checked and applied whole by `batch`, A9). The workspace beside a
+  source (`<source>.lifelog/`) holds private data, like the source itself: neither ever goes into git
+  (`/import/` is ignored).
 - **Dependencies stay few** (A1, A3): the standard library first; `modernc.org/sqlite` (pure Go, no cgo,
   FTS5 built in) is the driver. A new dependency needs a reason in `app/README.md`.
 - **Style**: `gofmt`, `go vet`, tests beside the code, comments that cite the `SCHEMA.md` section they
