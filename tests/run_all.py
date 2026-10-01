@@ -11,11 +11,22 @@ import os, re, subprocess, sys, tempfile, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ARGS = set(sys.argv[1:])
-VENV = os.path.join(HERE, '.venv'); PY = os.path.join(VENV, 'bin', 'python')
+VENV = os.path.join(HERE, '.venv')
+
+def venv_python():
+    for rel in (('bin', 'python'), ('Scripts', 'python.exe')):  # POSIX, Windows
+        p = os.path.join(VENV, *rel)
+        if os.path.exists(p):
+            return p
+    return os.path.join(VENV, 'bin', 'python')
+
+PY = venv_python()
 
 def ensure_venv(extra=()):
+    global PY
     if not os.path.exists(PY):
         subprocess.run([sys.executable, '-m', 'venv', VENV], check=True)
+        PY = venv_python()
     need = ['markdown-it-py', *extra]
     have = subprocess.run([PY, '-m', 'pip', 'list', '--format=freeze'], capture_output=True, text=True).stdout.lower()
     missing = [p for p in need if p.lower() not in have]

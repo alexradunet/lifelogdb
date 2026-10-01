@@ -10,7 +10,7 @@ MUT = tuple(a for a in sys.argv[1:] if not a.startswith('--'))
 def fresh(path=':memory:'):
     c = sqlite3.connect(path, isolation_level=None)
     c.execute('PRAGMA foreign_keys=ON'); c.execute('PRAGMA recursive_triggers=ON'); c.execute('PRAGMA busy_timeout=5000')
-    if path == ':memory:' or not os.path.getsize(path): c.executescript(open(os.environ['DDL']).read())
+    if path == ':memory:' or not os.path.getsize(path): c.executescript(open(os.environ['DDL'], encoding='utf-8').read())
     return c
 res, fails = [], []
 def check(name, cond, detail=''):

@@ -15,6 +15,11 @@ Needs Python ≥ 3.12 (venv + network once, for `markdown-it-py`) whose `sqlite3
 ≥ 3.51.3 built with FTS5 (3.53 was used); a distribution's build may lack FTS5 (`no such module: fts5`). `--mermaid` also needs
 `npm i -g @mermaid-js/mermaid-cli` and a Chromium; point `MMDC` / `PUPPETEER_EXECUTABLE_PATH` at them if they are not on `PATH`.
 
+On Windows the venv is `Scripts\python.exe` (the runner looks there too), and the extracted DDL is read as UTF-8 by every
+script that opens it — with the locale default (cp1252) the non-ASCII device names of `pages_title_safe` would be corrupted and
+the suites would run a DDL that is not §3. The `sqlite3` CLI comes from sqlite.org's tools zip (put its folder on `PATH`); a
+newer `sqlite3.dll` in the interpreter's `DLLs` folder lifts Python's own module.
+
 The suites are grouped by **subject**, not by when a rule was added. Each one states its expectation in every label and ends
 with `<name>: X/Y met expectations`; a suite that stops on an error reports that as a failed expectation.
 
