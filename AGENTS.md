@@ -56,7 +56,7 @@ Until the schema is frozen (decision D13):
   round-trip CHECKs (`date(x) IS x`, `strftime(...) IS x` — the `IS` matters, §2.1); tombstones
   instead of deletes (BEFORE DELETE triggers; only `links` rows are deleted); every *entity* domain row
   keyed by its `entities` id through a composite FK `(id, entity_type)` — `pages`, `events` and `tasks`
-  to `entities(id, type)`, and `people`, `places` and `holdings` to `pages(id, entity_type)`, because a
+  to `entities(id, entity_type)`, and `people`, `places` and `holdings` to `pages(id, entity_type)`, because a
   person, place or holding **is** a page: one id, whose page title is its handle and its name
   (`pages.entity_type`, `ON UPDATE CASCADE` for promotion; §2.2, §6.19, D20); append-only
   measurements, balances and positions (measurement corrections use `supersedes_id`; a balance is corrected
