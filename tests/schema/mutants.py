@@ -71,6 +71,7 @@ MUTANTS = [   # (suite, what is broken, the broken document)
  ('cookbook', '§6.11 names a column that does not exist', mutate('SELECT d.day, pl.title AS place', 'SELECT d.day, pl.name AS place')),
  ('document', 'a 2075 answer is gone from the file', mutate("  ('sqlite',    'writers need SQLite >= 3.51.3", "  ('sqlite',    'writers need SQLite >= 3.51")),
  ('document', 'a lifelog_meta key answers no question', mutate("  ('evolution', 'after the first real data", "  ('orphan',    'x'),\n  ('evolution', 'after the first real data")),
+ ('document', '§6.15 bypasses the save contract', mutate('run the link sync of §6.13', 'skip')),
  ('document', 'the §3 totals drift from the DDL', mutate('**+ 24 triggers.**', '**+ 25 triggers.**')),
  ('diagrams', 'a foreign key is not drawn', mutate('    pages    ||--o| people   : "id"\n', '')),
  ('diagrams', 'the link map invents an edge', mutate('    place -->|"located-in"| place\n', '    place -->|"located-in"| place\n    person -->|"mentioned"| page\n')),

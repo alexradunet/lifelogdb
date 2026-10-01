@@ -1943,6 +1943,9 @@ UPDATE pages
 
 A run that inserts nothing the second time is the check of §2.7 step 5. `import_key` never changes
 (`entities_provenance_fixed`), so the key found on the next run is the key written on the first.
+A body an import writes or changes is a save like any other (D19): run the link sync of §6.13 in
+the same transaction — create or resolve each target the body names, drop the links it no longer
+names — so `links(kind='wikilink')` stays equal to the body.
 
 ### 6.16 Habits: start and stop one, the habits of a day, completion over a period (D24)
 

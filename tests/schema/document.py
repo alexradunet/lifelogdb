@@ -21,6 +21,7 @@ for num, q, where, must in rows:
     S.K(f'Q{num}: the answer says {phrases}', phrases and all(p in text for p in phrases), [p for p in phrases if p not in text])
     used |= set(places)
 S.K('every lifelog_meta key answers some question (no rule without a question)', set(meta) <= used, sorted(set(meta) - used))
+S.K('§6.15 sends an imported body through the save contract (D19)', 'run the link sync of §6.13' in section('### 6.15 ', '### 6.16 '))
 
 # ---- the rules live in the file, once
 S.K('lifelog_meta holds only the few cross-table rules (at most 8 keys)', len(meta) <= 8, sorted(meta))
