@@ -33,7 +33,7 @@ current mutants count before editing it** (it is 61 at commit `6058f24`).
 | 005 | Make SCHEMA.md fully writer-neutral — the app is being deleted | P1 | M | — (before/with the app's deletion) | DONE |
 | 003 | Scope the no-deletes rule to life data; state the registries' own rule | P2 | S | — (after 002: shared meta rows, mutants.py) | DONE |
 | 006 | Reference hygiene and wording nits — R63/R73, D12, D13, R71, WAL backports | P2 | S | — | DONE |
-| 007 | Document the idempotent re-run of a habit period (§6.16) | P3 | S | — (after 002: shared habits.py) | TODO |
+| 007 | Document the idempotent re-run of a habit period (§6.16) | P3 | S | — (after 002: shared habits.py) | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale — finding fixed independently or approach

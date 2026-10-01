@@ -61,6 +61,7 @@ MUTANTS = [   # (suite, what is broken, the broken document)
  ('habits', 'a period may end before it starts', mutate("CONSTRAINT habit_periods_order CHECK (end_day IS NULL OR end_day >= start_day)", "CONSTRAINT habit_periods_order CHECK (1)")),
  ('habits', 'start_day is checked with = instead of IS', mutate("CHECK (date(start_day) IS start_day)", "CHECK (date(start_day) = start_day)")),
  ('habits', '§6.16 counts a day not recorded as not done', mutate("sum(s.value IS 0) AS not_done", "sum(s.value IS NOT 1) AS not_done")),
+ ('habits', '§6.16 loses the idempotent re-run', mutate('A re-sent period is idempotent: insert it with\n`ON CONFLICT(metric_id, start_day) DO NOTHING`', 'A re-sent period is idempotent: insert it again')),
  ('habits', '§6.2 lists a habit outside its periods', mutate("   WHERE h.start_day <= :day AND coalesce(h.end_day, '9999-12-31') >= :day\n  UNION ALL", "   WHERE 1\n  UNION ALL")),
  ('journal', '§6.2 shows superseded readings', mutate('    FROM measurement_values me JOIN metrics m ON m.id = me.metric_id\n   WHERE me.day = :day', '    FROM measurements me JOIN metrics m ON m.id = me.metric_id\n   WHERE me.day = :day')),
  ('writers', '§2.6 no longer sets trusted_schema = OFF', mutate("PRAGMA trusted_schema = OFF;   -- the schema may call only side-effect-free functions (all of this one's are)\n", '')),

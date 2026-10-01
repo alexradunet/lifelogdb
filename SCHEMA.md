@@ -2000,7 +2000,10 @@ SELECT m.name, count(*) AS active_days,
 ```
 
 A day outside every period is not a habit day at all: it is in no count. Two check-ins on one day
-count once (the higher wins).
+count once (the higher wins). A re-sent period is idempotent: insert it with
+`ON CONFLICT(metric_id, start_day) DO NOTHING` — the insert trigger fires first, so a genuine
+overlap still raises — and apply a changed `end_day` with an UPDATE of the row at that metric and
+start day; periods are keyed by the owner's data, not by a sender's `import_key` (D24).
 
 ---
 
