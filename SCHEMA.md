@@ -431,6 +431,7 @@ each phrase in the last column, and **every key of `lifelog_meta` must be used b
 | 19 | Who or what wrote this row? | `source` | `written at insert`, `agent` |
 | 20 | Does it keep to-dos and plans? | `schema` | `not a project manager` |
 | 21 | Where was I on a given day? | `pages`, `link_kinds` | `places the owner was at`, `kind='at'` |
+| 22 | Which metrics are habits, and was one meant to be done on a day? | `habit_periods` | `HABIT`, `NOT RECORDED` |
 
 **Imports** — the path for data that already exists elsewhere (a journal archive, a health export,
 lab results). Every step was executed on 1 000 synthetic rows:
@@ -512,7 +513,7 @@ INSERT INTO lifelog_meta(key, value) VALUES
   ('instants',  'every *_at column is a UTC ISO-8601 TEXT instant with milliseconds, e.g. 2026-06-09T21:14:03.482Z, written by the app; CHECK strftime(''%Y-%m-%dT%H:%M:%fZ'', x) IS x; created_at, on every table that has it, is when the row was written to life.db, never back-dated (when a thing happened is its day or its other *_at)'),
   ('days',      'every *_day column (and day) is the LOCAL calendar date YYYY-MM-DD where the thing happened, written at insert, never recomputed from an instant; CHECK date(x) IS x (IS, not =: a CHECK passes on NULL, and date(''2026-9-3'') is NULL)'),
   ('deletes',   'nothing is deleted except links rows: an entity is a tombstone (entities.deleted_at), a measurement is corrected by inserting a row; BEFORE DELETE triggers enforce it'),
-  ('source',    'entities, links and measurements: source names the writer of the row (ui, cli, api, agent:<name>, import:<name>); written at insert, never changed; the import_key a writer gives a row is unique per source'),
+  ('source',    'entities, links, measurements and habit_periods: source names the writer of the row (ui, cli, api, agent:<name>, import:<name>); written at insert, never changed; the import_key a writer gives a row is unique per source'),
   ('writers',   'one writing application; every connection sets foreign_keys=ON, recursive_triggers=ON, synchronous=FULL, trusted_schema=OFF and starts write transactions with BEGIN IMMEDIATE; every other tool opens the file read-only; imports use INSERT ... ON CONFLICT DO NOTHING, never OR IGNORE (skips CHECK/NOT NULL violations silently) or OR REPLACE (a delete)'),
   ('sqlite',    'writers need SQLite >= 3.51.3 (fixes a WAL race between concurrent writers and checkpoints); migrations need >= 3.53 (ALTER TABLE ADD/DROP CONSTRAINT); CHECKs use only functions every such version has'),
   ('evolution', 'after the first real data: numbered forward-only SQL migrations, additive only, counted in PRAGMA user_version; every CHECK is named, so any rule can be widened or tightened with ALTER TABLE DROP/ADD CONSTRAINT');
@@ -697,6 +698,44 @@ CREATE VIEW measurement_values AS
    WHERE me.value IS NOT NULL
      AND NOT EXISTS (SELECT 1 FROM measurements x WHERE x.supersedes_id = me.id);
 
+CREATE TABLE habit_periods (
+  -- a metric is a HABIT while it has a period: the local days the owner meant to do it (D24). Check-ins
+  -- stay in measurements (1 = done, 0 = not done that day); a day inside a period with no check-in is
+  -- NOT RECORDED, never assumed done or not done. A habit is unitless (0/1). A restarted habit has several
+  -- periods, which never overlap. A wrong period is corrected by UPDATE, never deleted.
+  id         INTEGER PRIMARY KEY,
+  metric_id  INTEGER NOT NULL REFERENCES metrics(id),
+  start_day  TEXT NOT NULL CONSTRAINT habit_periods_start_day CHECK (date(start_day) IS start_day),
+  end_day    TEXT CONSTRAINT habit_periods_end_day CHECK (end_day IS NULL OR date(end_day) IS end_day),   -- the last day, inclusive; NULL = still going
+  source     TEXT NOT NULL CONSTRAINT habit_periods_source CHECK (length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*'),   -- the writer (lifelog_meta.source)
+  CONSTRAINT habit_periods_order CHECK (end_day IS NULL OR end_day >= start_day),
+  UNIQUE (metric_id, start_day)
+) STRICT;
+CREATE TRIGGER habit_periods_check_insert BEFORE INSERT ON habit_periods
+BEGIN
+  SELECT RAISE(ABORT, 'a habit is a unitless metric (0 = not done, 1 = done): this metric has a unit')
+   WHERE (SELECT unit FROM metrics WHERE id = NEW.metric_id) IS NOT '';
+  -- a period with the same start is left to UNIQUE, so ON CONFLICT DO NOTHING re-runs it (this trigger fires first)
+  SELECT RAISE(ABORT, 'periods of one habit never overlap: end the open one first')
+   WHERE EXISTS (SELECT 1 FROM habit_periods p WHERE p.metric_id = NEW.metric_id
+                    AND p.start_day IS NOT NEW.start_day
+                    AND p.start_day <= coalesce(NEW.end_day, '9999-12-31')
+                    AND coalesce(p.end_day, '9999-12-31') >= NEW.start_day);
+END;
+CREATE TRIGGER habit_periods_check_update BEFORE UPDATE OF metric_id, start_day, end_day ON habit_periods
+BEGIN
+  SELECT RAISE(ABORT, 'a habit is a unitless metric (0 = not done, 1 = done): this metric has a unit')
+   WHERE (SELECT unit FROM metrics WHERE id = NEW.metric_id) IS NOT '';
+  SELECT RAISE(ABORT, 'periods of one habit never overlap')
+   WHERE EXISTS (SELECT 1 FROM habit_periods p WHERE p.metric_id = NEW.metric_id AND p.id <> NEW.id
+                    AND p.start_day <= coalesce(NEW.end_day, '9999-12-31')
+                    AND coalesce(p.end_day, '9999-12-31') >= NEW.start_day);
+END;
+CREATE TRIGGER habit_periods_no_delete BEFORE DELETE ON habit_periods
+BEGIN
+  SELECT RAISE(ABORT, 'habit periods are never deleted: correct a wrong one with UPDATE');
+END;
+
 CREATE TABLE link_kinds (
   -- the CLOSED registry of link kinds: a link's kind must be registered first (FK), and a kind's
   -- structure (symmetric flag, allowed endpoint entity types) is fixed at registration and enforced
@@ -828,8 +867,8 @@ CREATE TRIGGER people_no_delete BEFORE DELETE ON people
 BEGIN SELECT RAISE(ABORT, 'people are never deleted: tombstone the entity (entities.deleted_at)'); END;
 ```
 
-**8 tables + 1 FTS5 virtual table + 2 views** (`measurement_values`, `ghost_pages`)
-**+ 20 triggers.** That is the entire system. Every `CHECK` is named (`CONSTRAINT <table>_<rule>`), so
+**9 tables + 1 FTS5 virtual table + 2 views** (`measurement_values`, `ghost_pages`)
+**+ 23 triggers.** That is the entire system. Every `CHECK` is named (`CONSTRAINT <table>_<rule>`), so
 any rule can be dropped or re-added by name after the freeze (D13).
 
 ---
@@ -884,7 +923,8 @@ erDiagram
 
 A reading is a fact, not an entity: `measurements` is append-only (D7). A correction is a new row, and
 `measurements.supersedes_id` points back at the row it corrects; `measurements.captured_with_id` records
-provenance (a mood reading points at its day page). `lifelog_meta` stands alone: the rules that span
+provenance (a mood reading points at its day page). `habit_periods` says when a metric is a habit
+(D24). `lifelog_meta` stands alone: the rules that span
 tables (D17).
 
 ```mermaid
@@ -893,6 +933,7 @@ erDiagram
     metrics     ||--o{ measurements : "metric_id"
     entities    |o--o{ measurements : "captured_with_id"
     measurements |o--o| measurements : "supersedes_id"
+    metrics     ||--o{ habit_periods : "metric_id"
 
     metrics {
         INTEGER id PK
@@ -905,6 +946,10 @@ erDiagram
     }
     entities {
         INTEGER id PK
+    }
+    habit_periods {
+        INTEGER id PK
+        INTEGER metric_id FK
     }
     lifelog_meta {
         TEXT key PK
@@ -977,7 +1022,7 @@ revives that page instead of duplicating it (§6.13). A ghost that nothing links
 | Backlinks | `links WHERE to_id = ?` (§6.5) |
 | People and places in prose | `[[Bob Sample]]` links to the person itself, because the person is a page (D20, §6.14) |
 | Life graph ("everything about my son") | `links` in both directions from his id (§6.6) |
-| Habits | "did I do it each month" is a 0/1 habit metric (D15) |
+| Habits | a 0/1 metric with active periods: the day's habits done, not done or not recorded, and completion over a period (§6.16, D24) |
 | To-dos, reminders, projects | not here: a life log, not a project manager (D23) |
 | Birthdays | a query over `people.birth_day` |
 | Biomarkers / quantified self | `metrics` + `measurements` (§6.7) |
@@ -1146,6 +1191,7 @@ the constraints that carry it; the rule itself is in §3 or §2.
   `measurement_values` is the one read rule; two independent readings on one day are both returned.
   The unique index on `supersedes_id` doubles as the index the view's `NOT EXISTS` needs (executed:
   the plan uses it).
+- **Habits** are 0/1 metrics with active periods (D24): their check-ins are ordinary rows here.
 - **`captured_with_id`** is provenance (the day page the reading was captured with), not "about
   this person": the owner is the only subject of measurements.
 - **This is the most battle-tested part of the design.** FxLifeSheet's actual schema is a single
@@ -1290,7 +1336,7 @@ the constraints that carry it; the rule itself is in §3 or §2.
 - **Decision.** Nothing repeats: there are no tasks or events (D23, D22). A lifelog records what
   happened; a repeating appointment is planning, which the owner's calendar already does. What the
   schema still covers: **birthdays** are a query over `people.birth_day`; **"did I do it each month"**
-  is a 0/1 habit metric in `measurements`, whose history charts for free.
+  is a habit — a 0/1 metric with its active periods (D24) — whose history charts for free.
 - **The deferred design** — additive later, on events if they return (D22):
   structured, readable columns `repeat` (`none|daily|weekly|monthly|yearly`), `repeat_every`
   (NULL = 1), `repeat_weekdays` (`'mo,we,fr'`, weekly only) and `repeat_until` (inclusive); a repeating
@@ -1494,6 +1540,33 @@ the constraints that carry it; the rule itself is in §3 or §2.
   owner ever wants to-dos here.
 - **Reopen trigger.** The owner wants to-dos, reminders or projects kept in this database.
 
+### D24 — Habits: a metric with active periods.
+
+- **Decision.** A habit is a unitless metric (D7) that has periods in `habit_periods`: the local days
+  the owner meant to do it, from `start_day` to `end_day` (inclusive; NULL = still going). Its
+  check-ins stay in `measurements`, one home for a day's value: 1 = done, 0 = not done. On a day inside
+  a period, no check-in is **not recorded** — never assumed either way. A restarted habit has several
+  periods, which never overlap (`habit_periods_check_insert`, `_check_update`); a period on a metric
+  with a unit is refused; a wrong period is corrected by `UPDATE`, never deleted
+  (`habit_periods_no_delete`). The day's habits and their completion are §6.16; the day view lists
+  them (§6.2).
+- **Why** (the first real import, 2026-10). The vault's habits and supplements became 0/1 metrics,
+  and two questions had no answer: which metrics are habits (only a note's wording set them apart
+  from mood or a 0/1 lab marker), and whether a habit was meant to be done on a given day — so a day
+  with no check-in could not be told from a day outside the habit, and no streak or completion rate
+  could be honest.
+- **Alternatives.**
+  - *A separate check-in table*: rejected — a second home for "how was that day", with its own
+    corrections, imports and charts, and no join with mood or weight.
+  - *A `kind` column on `metrics`*: rejected — it says which metrics are habits, not when.
+  - *Start and stop columns on `metrics`*: rejected — a habit restarted (vitamin D each winter) needs
+    several periods.
+  - *A missing day counts as not done*: rejected — imported notes rarely say which days a habit was
+    done, so every unwritten day would count against the owner. An explicit 0 says "not done".
+- **Costs accepted.** A completion rate is over recorded days; the not-recorded days are counted, not
+  hidden. A habit's target ("three times a week") has no column yet (§7). The 0/1 range of a check-in
+  is checked by the app, like mood's 1–5 (D6).
+
 ---
 
 ## 6. Query cookbook
@@ -1532,7 +1605,8 @@ COMMIT;
 
 ### 6.2 The day view
 
-The day's page, other pages written that day, the places the owner was at, and measurements (through `measurement_values`, so corrected readings never show).
+The day's page, other pages written that day, the places the owner was at, the habits active that
+day with their state (§6.16), and the other measurements (through `measurement_values`, so corrected readings never show).
 `ORDER BY (at IS NOT NULL), at` puts undated items — the day page first — before the rest on purpose;
 a bare `ORDER BY at` does it by accident.
 
@@ -1554,9 +1628,17 @@ SELECT what, at, detail FROM (
     JOIN entities e ON e.id = pl.id AND e.deleted_at IS NULL
    WHERE d.title_key = :day
   UNION ALL
+  SELECT 'habit', NULL, m.name || ': ' ||
+         CASE (SELECT max(v.value) FROM measurement_values v WHERE v.metric_id = m.id AND v.day = :day)
+           WHEN 1 THEN 'done' WHEN 0 THEN 'not done' ELSE 'not recorded' END
+    FROM habit_periods h JOIN metrics m ON m.id = h.metric_id
+   WHERE h.start_day <= :day AND coalesce(h.end_day, '9999-12-31') >= :day
+  UNION ALL
   SELECT m.name, me.taken_at, CAST(me.value AS TEXT) || ' ' || m.unit
     FROM measurement_values me JOIN metrics m ON m.id = me.metric_id
    WHERE me.day = :day
+     AND NOT EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = me.metric_id
+                        AND h.start_day <= :day AND coalesce(h.end_day, '9999-12-31') >= :day)
 )
 ORDER BY (at IS NOT NULL), at;
 ```
@@ -1854,6 +1936,51 @@ UPDATE pages
 A run that inserts nothing the second time is the check of §2.7 step 5. `import_key` never changes
 (`entities_provenance_fixed`), so the key found on the next run is the key written on the first.
 
+### 6.16 Habits: start and stop one, the habits of a day, completion over a period (D24)
+
+`:metric` is a unitless metric; a check-in is a measurement of it, 1 or 0 (§6.10 corrects one).
+
+```sql
+-- start the habit on :day; no end yet
+INSERT INTO habit_periods(metric_id, start_day, source)
+SELECT id, :day, 'ui' FROM metrics WHERE name = :metric;
+
+-- stop it: the open period ends on :day
+UPDATE habit_periods SET end_day = :day
+ WHERE metric_id = (SELECT id FROM metrics WHERE name = :metric) AND end_day IS NULL;
+
+-- the habits of :day: done, not done, or not recorded
+SELECT m.name,
+       CASE (SELECT max(v.value) FROM measurement_values v WHERE v.metric_id = m.id AND v.day = :day)
+         WHEN 1 THEN 'done' WHEN 0 THEN 'not done' ELSE 'not recorded' END AS state
+  FROM habit_periods h JOIN metrics m ON m.id = h.metric_id
+ WHERE h.start_day <= :day AND coalesce(h.end_day, '9999-12-31') >= :day
+ ORDER BY m.name;
+
+-- completion between :from_day and :to_day, per habit: the days it was active, and of those the
+-- days done, not done and not recorded (a rate is done / (done + not done))
+WITH RECURSIVE days(day) AS (
+  SELECT :from_day
+  UNION ALL
+  SELECT date(day, '+1 day') FROM days WHERE day < :to_day
+),
+active AS (
+  SELECT h.metric_id, d.day
+    FROM days d JOIN habit_periods h ON h.start_day <= d.day AND coalesce(h.end_day, '9999-12-31') >= d.day
+)
+SELECT m.name, count(*) AS active_days,
+       sum(s.value IS 1) AS done, sum(s.value IS 0) AS not_done, sum(s.value IS NULL) AS not_recorded
+  FROM active a
+  JOIN metrics m ON m.id = a.metric_id
+  LEFT JOIN (SELECT metric_id, day, max(value) AS value FROM measurement_values GROUP BY metric_id, day) s
+         ON s.metric_id = a.metric_id AND s.day = a.day
+ GROUP BY m.id
+ ORDER BY m.name;
+```
+
+A day outside every period is not a habit day at all: it is in no count. Two check-ins on one day
+count once (the higher wins).
+
 ---
 
 ## 7. Explicit non-goals and deferred work
@@ -1888,6 +2015,7 @@ re-added, each with the trigger that should reopen the question.
 | Money: holdings, balances, net worth over time; then a transaction ledger, quantity × price, exchange rates, joint holdings | The first real import kept the money notes as text; nothing has needed them as rows (D18); design kept in D18, each later step additive on top of balances | The first balance or statement the owner wants stored as a number |
 | Location history: a GPS track, a point per place, matching a fix to a place | The owner does not want minute-by-minute tracking; a day page's `at` links say where the day was (D16, D21); design kept in D21 | A location export the owner wants kept, or "where was I at 15:00?" |
 | The zone of the device that wrote each row; a nickname | Only a timed reading needs a zone (`measurements.tz`); a nickname is the person's page text (D10). Each is one `ADD COLUMN` | A question that needs one |
+| A habit's target ("three times a week") | A period says when a habit applies; completion is counted per day (D24). Additive: a nullable column on `habit_periods` | A habit whose goal is not "every day" and a question about meeting it |
 | Re-checking links when an entity changes type | `links_endpoint_types` checks a link at insert; a promotion (D20) can leave one its kind now refuses — a day page `at` the place [[Lakeside]], then Lakeside becomes a person (executed). Additive: a trigger on `UPDATE OF type ON entities` | The first such link found in real data |
 | Events: appointments, trips, sessions, where you lived (a table of dated happenings) | A day page and its `[[links]]` record what happened, with whom and where (D22, §6.3); design kept in D22 | A source of dated spans or timed sessions (phone sleep and exercise, a calendar, a location export's visits), or a question the day pages cannot answer |
 

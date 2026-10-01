@@ -30,6 +30,7 @@ with `<name>: X/Y met expectations`; a suite that stops on an error reports that
 | | `named.py` | a person or a place is a page: one id, promotion, §6.14, §6.3 and §6.6 run literally, two Sams (D16, D20) |
 | | `pages.py` | every page titled, the day rule, filename-safe titles, `title_key` and its vectors, lookups, FTS, why not a collation (§2.4, D5) |
 | | `links.py` | the closed kind registry, endpoint types, mirrors, `at`, containment over day pages with its cycle guard (D8, D16) |
+| | `habits.py` | habit periods: their days, order, no overlap, unitless only, never deleted; §6.16 and the §6.2 habit leg — done, not done, not recorded (D24) |
 | | `facts.py` | metrics and measurements: append-only, supersede, retract, finite values, never `OR IGNORE`/`OR REPLACE` (D7) |
 | | `journal.py` | the day page and capture (§6.1), the §6.2 day view, the days that name someone (§6.3), where I was (§6.9), what stands in for recurrence, events and tasks (D5, D15, D16, D22, D23) |
 | | `writers.py` | the `BEGIN IMMEDIATE` race with real threads, pragmas, read-only readers, a hardened connection (§2.6) |
@@ -39,7 +40,7 @@ with `<name>: X/Y met expectations`; a suite that stops on an error reports that
 | | `cookbook.py` | every §6 block prepares and runs, on a plain and on a hardened connection |
 | | `document.py` | the 2075 test, the rules live in the file, current truth only, out-of-scope stays out, the §3 totals |
 | | `diagrams.py` | the seven mermaid diagrams say what the DDL says (keys, relationships, the link map, the correction story) |
-| | `mutants.py` | 53 broken copies of `SCHEMA.md`, one rule each; the suite that owns the rule must notice |
+| | `mutants.py` | 61 broken copies of `SCHEMA.md`, one rule each; the suite that owns the rule must notice |
 | | `datasette_ro.py`, `render_diagrams.py` | optional: Datasette is read-only; every diagram renders |
 | `wikilinks/` | `wikisave.py` | **reference implementation** of the save contract (a test instrument, not the application) |
 | | `check_vectors.py`, `vectors.py` | the extraction vectors (some of them are printed in §2.4) |

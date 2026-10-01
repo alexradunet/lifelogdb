@@ -6,7 +6,7 @@ from kit import *
 import sqlite3
 S = Suite('cookbook')
 BL = docsql.cookbook_blocks(DOC)
-S.K('§6 has at least 15 SQL blocks, one per section from 6.1 to 6.15', len(BL) >= 15 and len(blocks()) == 15 and all(f'6.{i}' in blocks() for i in range(1, 16)), sorted(blocks()))
+S.K('§6 has at least 16 SQL blocks, one per section from 6.1 to 6.16', len(BL) >= 16 and len(blocks()) == 16 and all(f'6.{i}' in blocks() for i in range(1, 17)), sorted(blocks()))
 
 def seeded(hardened):
     c = fresh(hardened=hardened)
@@ -14,12 +14,12 @@ def seeded(hardened):
     pe = named(c, 'person', 'Sam', name='Sam')
     gh = page(c, 'Ana')
     pl = named(c, 'place', 'Japan'); link(c, dp, pe, 'wikilink'); link(c, dp, pl, 'wikilink'); link(c, dp, pl, 'at')
-    c.execute("INSERT INTO metrics(name,unit) VALUES ('weight','kg')")
+    c.execute("INSERT INTO metrics(name,unit) VALUES ('weight','kg')"); c.execute("INSERT INTO metrics(name,unit) VALUES ('vitamin_d','')")
     measure(c, 2, '2026-09-29', 71.2); measure(c, 2, '2026-09-28', 70.9)
     P = dict(found_id=wp, target_id=wp, target_ids='[]', place_id=pl, day_page_id=dp, mistaken_row_id=2, from_day='2026-01-15', to_day='2026-09-10',
              day='2026-09-29', page_id=wp, person_id=pe, entity_id=pe, handle_title='Bob Sample', handle_key='bob sample', ghost_id=gh,
              due_day='2026-10-05', query='schema', key='newpage', title='Newpage', metric_id=2, wrong_row_id=1, source='ui',
-             import_key='notes/sourdough.md')
+             import_key='notes/sourdough.md', metric='vitamin_d')
     return c, P
 
 for hardened in (False, True):

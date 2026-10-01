@@ -124,6 +124,11 @@ def measure(c, metric, day, value, source='ui', **cols):
     return tryx(c, f"INSERT INTO measurements({','.join(cols)},created_at) VALUES ({','.join('?' * len(cols))},{NOW})", tuple(cols.values()))
 
 
+def habit(c, metric, start, end=None, source='ui'):
+    """A habit period (D24): 'OK' or 'ERR <message>'."""
+    return tryx(c, 'INSERT INTO habit_periods(metric_id,start_day,end_day,source) VALUES (?,?,?,?)', (metric, start, end, source))
+
+
 def statements(sql):
     """Split a block into complete statements, dropping comment-only ones."""
     out, acc = [], ''
