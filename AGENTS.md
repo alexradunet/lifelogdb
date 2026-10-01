@@ -17,6 +17,7 @@ implements the schema; it never defines it.
 | `tests/` | the validation suites: every *executed* claim of `SCHEMA.md`, and the reference implementation of the wikilink save contract (`tests/wikilinks/wikisave.py`) | `SCHEMA.md` |
 | `app/` | the Go writer; embeds §3 as `app/internal/db/schema.sql` | `SCHEMA.md` and `tests/` |
 | `app/skills/` | instructions a model follows to drive the CLI: `import` (any source, an Obsidian vault included) | `app/` |
+| `app/IMPORT.md` | the reference for imports: the workspace, facts files, the CLI's checks, gates and replay | `app/` |
 
 **One writer per database, many applications around the schema.** Principle 3 (single writing
 application) is a rule about *one `life.db` file*: whatever application writes a given file is the only
