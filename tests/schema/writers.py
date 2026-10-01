@@ -67,7 +67,7 @@ c = sqlite3.connect(':memory:', isolation_level=None); c.setconfig(sqlite3.SQLIT
 for st in statements(b26[0] if b26 else ''): c.execute(st)
 try:
     c.executescript(DDL); p = page(c, 'Hardened'); c.execute("UPDATE pages SET body='searchable words' WHERE id=?", (p,))
-    mm = memo(c, 'another'); link(c, mm, p, 'wikilink'); named(c, 'person', 'Ada')
+    mm = page(c, 'Another', body='another'); link(c, mm, p, 'wikilink'); named(c, 'person', 'Ada')
     c.execute("DELETE FROM links WHERE from_id=? AND kind='wikilink' AND to_id NOT IN (SELECT value FROM json_each('[]'))", (mm,))
     got = (one(c, "SELECT count(*) FROM pages_fts WHERE pages_fts MATCH 'searchable'"), one(c, 'SELECT count(*) FROM ghost_pages'), one(c, 'SELECT count(*) FROM measurement_values'), one(c, 'SELECT count(*) FROM balance_values'))
     hard = 'OK'

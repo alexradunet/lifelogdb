@@ -1,6 +1,6 @@
 """Reference implementation of the wikilink/tag save contract (SCHEMA.md §2.4, §6.13, D19) — a test instrument, not the application.
 Parameters `mutate=` switch single rules off so the probes can be shown to fail (mutation checks)."""
-import re, json, sqlite3, unicodedata
+import itertools, re, json, sqlite3, unicodedata
 from markdown_it import MarkdownIt
 
 _md = MarkdownIt('commonmark')
@@ -101,7 +101,8 @@ def sync_wikilinks(c, page_id, body, mutate=()):
                             "WHERE p.title_key=?", (key,)).fetchone()
             if row is None:
                 tid = c.execute(f"INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES('page',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
-                c.execute("INSERT INTO pages(id,kind,title,title_key) VALUES(?, 'page', ?, ?)", (tid, title, key))
+                c.execute("INSERT INTO pages(id,title,title_key,day) VALUES(?, ?, ?, CASE WHEN date(?) IS ? THEN ? END)",
+                          (tid, title, key, title, title, title))   # a day page's day is its title (§6.13 step 2b)
             else:
                 tid = row[0]
                 if row[1] is not None and 'no_revive' not in mutate: c.execute('UPDATE entities SET deleted_at=NULL WHERE id=?', (tid,))
@@ -117,12 +118,36 @@ def sync_wikilinks(c, page_id, body, mutate=()):
                   (page_id, json.dumps(ids)))
     return ids, skipped
 
-def save_memo(c, body, day='2026-09-30', mutate=()):
+_notes = itertools.count(1)
+
+def save_page(c, body, title=None, day='2026-09-30', mutate=()):
+    """A new page with this body, its links synced in the same transaction: (page id, (linked ids, skipped)).
+    No title: a fresh one ('Note N'). A title that is a day is that day's page, so its day is the title."""
+    title = title or f'Note {next(_notes)}'
+    if c.execute('SELECT date(?) IS ?', (title, title)).fetchone()[0]: day = title
     c.execute('BEGIN IMMEDIATE')
     try:
         pid = c.execute(f"INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES('page',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
-        c.execute("INSERT INTO pages(id,kind,day,body) VALUES(?, 'memo', ?, ?)", (pid, day, body))
+        c.execute('INSERT INTO pages(id,title,title_key,day,body) VALUES(?, ?, ?, ?, ?)', (pid, title, title_key(title), day, body))
         r = sync_wikilinks(c, pid, body, mutate)
+        c.execute('COMMIT')
+    except BaseException:
+        c.execute('ROLLBACK'); raise
+    return pid, r
+
+def capture(c, text, day='2026-09-30', mutate=()):
+    """§6.1: append an entry to the day page of `day`, creating (or reviving) it, and sync its links: (page id, sync result)."""
+    c.execute('BEGIN IMMEDIATE')
+    try:
+        row = c.execute('SELECT p.id, e.deleted_at FROM pages p JOIN entities e ON e.id=p.id WHERE p.title_key=?', (day,)).fetchone()
+        if row is None:
+            pid = c.execute(f"INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES('page',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
+            c.execute('INSERT INTO pages(id,title,title_key,day) VALUES(?, ?, ?, ?)', (pid, day, day, day))
+        else:
+            pid = row[0]
+            if row[1] is not None: c.execute('UPDATE entities SET deleted_at=NULL WHERE id=?', (pid,))
+        c.execute("UPDATE pages SET body = body || CASE WHEN body = '' THEN '' ELSE char(10, 10) END || ? WHERE id=?", (text, pid))
+        r = sync_wikilinks(c, pid, c.execute('SELECT body FROM pages WHERE id=?', (pid,)).fetchone()[0], mutate)
         c.execute('COMMIT')
     except BaseException:
         c.execute('ROLLBACK'); raise

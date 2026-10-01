@@ -10,7 +10,7 @@ S = Suite('evolution')
 
 def populated():
     c = fresh()
-    for t in ('page', 'event', 'task', 'person', 'place', 'holding'): thing(c, t)
+    for t in ('page', 'task', 'person', 'place', 'holding'): thing(c, t)
     page(c, 'Some page'); return c
 
 # ---- every CHECK named, every name droppable
@@ -42,12 +42,11 @@ S.K('ADD CONSTRAINT checks the existing rows (tightening is as safe as loosening
 
 # ---- widening enums on a populated database
 WIDEN = {
- 'entities_entity_type': ('entities', "entity_type IN ('page','event','task','person','place','holding','vehicle')", lambda c: tryx(c, f"INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES ('vehicle',{NOW},{NOW},'ui')")),
- 'pages_kind': ('pages', "kind IN ('memo','page','image')", lambda c: tryx(c, "INSERT INTO pages(id,kind,title,title_key,day) VALUES (?, 'image', 'Pic', 'pic', '2026-06-09')", (ent(c, 'page'),))),
+ 'entities_entity_type': ('entities', "entity_type IN ('page','task','person','place','holding','vehicle')", lambda c: tryx(c, f"INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES ('vehicle',{NOW},{NOW},'ui')")),
  'holdings_side': ('holdings', "side IN ('asset','liability','equity')", lambda c: tryx(c, "INSERT INTO holdings(id,side,currency) VALUES (?, 'equity', 'EUR')", (named_page(c, 'holding'),))),
 }
 def named_page(c, typ):
-    i = ent(c, typ); c.execute("INSERT INTO pages(id,entity_type,kind,title,title_key) VALUES (?, ?, 'page', ?, ?)", (i, typ, f'W{i}', f'w{i}')); return i
+    i = ent(c, typ); c.execute("INSERT INTO pages(id,entity_type,title,title_key) VALUES (?, ?, ?, ?)", (i, typ, f'W{i}', f'w{i}')); return i
 for name, (tbl, expr, use) in WIDEN.items():
     c = populated()
     S.K(f'{name}: the new value is refused before', use(c).startswith('ERR'))
@@ -71,7 +70,7 @@ S.K('integrity clean and the touch trigger still works', integrity_ok(c) and one
 
 # ---- §7 CJK search: the tokenizer switch is one transaction on a derived index
 c = fresh(); jp = '日本語のノートを書く'
-for b in (jp, 'Zürich café notes', 'plain english text'): memo(c, b)
+for i, b in enumerate((jp, 'Zürich café notes', 'plain english text')): page(c, f'Text {i}', body=b)
 def hits(q): return one(c, 'select count(*) from pages_fts where pages_fts match ?', (q,))
 S.K('before: unicode61 finds the whole CJK run and accented words, not a part of the run', (hits(jp), hits('zurich'), hits('本語'), hits('ノート')) == (1, 1, 0, 0))
 c.execute('BEGIN IMMEDIATE'); c.execute('DROP TABLE pages_fts')
@@ -79,23 +78,23 @@ c.execute("CREATE VIRTUAL TABLE pages_fts USING fts5(title, body, content='pages
 c.execute("INSERT INTO pages_fts(pages_fts) VALUES('rebuild')"); c.execute('COMMIT')
 S.K('after: trigram finds 3+-character parts and still folds accents', (hits('本語の'), hits('ノート'), hits('日本語'), hits('zurich')) == (1, 1, 1, 1))
 S.K('...but not a two-character word (the known limit)', hits('本語') == 0)
-m = memo(c, 'これは新しい記録です'); n1 = hits('新しい'); c.execute("UPDATE pages SET body='全く別の内容' WHERE id=?", (m,))
+m = page(c, 'New text', body='これは新しい記録です'); n1 = hits('新しい'); c.execute("UPDATE pages SET body='全く別の内容' WHERE id=?", (m,))
 S.K('the sync triggers keep working after the switch', n1 == 1 and (hits('新しい'), hits('別の内')) == (0, 1))
 S.K('...and the FTS integrity-check passes', tryx(c, "INSERT INTO pages_fts(pages_fts, rank) VALUES('integrity-check', 1)") == 'OK')
 
 # ---- a link kind is widened by a migration (D8): drop the guard, update the row, recreate the guard
 c = populated(); guard = c.execute("select sql from sqlite_schema where name='link_kinds_structure_fixed'").fetchone()[0]
 c.execute('BEGIN IMMEDIATE'); c.execute('DROP TRIGGER link_kinds_structure_fixed')
-c.execute("UPDATE link_kinds SET from_types = 'event,task' WHERE kind = 'is-a'"); c.execute(guard); c.execute('COMMIT')
-S.K('after the migration a task may be is-a a page', link(c, thing(c, 'task'), page(c, 'Errand'), 'is-a') == 'OK')
-S.K('...and the guard is back: the next change is refused', 'fixed at registration' in tryx(c, "UPDATE link_kinds SET from_types = NULL WHERE kind = 'is-a'"))
+c.execute("UPDATE link_kinds SET to_types = 'page,person' WHERE kind = 'spawned'"); c.execute(guard); c.execute('COMMIT')
+S.K('after the migration a task may be spawned from a person\'s page', link(c, thing(c, 'task'), named(c, 'person'), 'spawned') == 'OK')
+S.K('...and the guard is back: the next change is refused', 'fixed at registration' in tryx(c, "UPDATE link_kinds SET to_types = NULL WHERE kind = 'spawned'"))
 
 # ---- a promotion can leave a link its kind now refuses (§7): links are checked at insert only
-c = fresh(); ev = thing(c, 'event'); w = page(c, 'Workout')
-S.K('an event is-a [[Workout]]', link(c, ev, w, 'is-a') == 'OK')
+c = fresh(); tk = thing(c, 'task'); w = page(c, 'Ana')
+S.K('a task spawned from the page [[Ana]]', link(c, tk, w, 'spawned') == 'OK')
 c.execute("UPDATE entities SET entity_type = 'person' WHERE id = ?", (w,)); domain(c, 'person', w)
-S.K('promoting Workout to a person keeps the old is-a edge, which a new insert would refuse',
-    one(c, "select count(*) from links where to_id = ? and kind = 'is-a'", (w,)) == 1 and 'endpoint type not allowed' in link(c, thing(c, 'event'), w, 'is-a'))
+S.K('promoting Ana to a person keeps the old spawned edge, which a new insert would refuse',
+    one(c, "select count(*) from links where to_id = ? and kind = 'spawned'", (w,)) == 1 and 'endpoint type not allowed' in link(c, thing(c, 'task'), w, 'spawned'))
 
 # ---- an entity uid is additive after the freeze (D3): add, backfill, unique index, then NOT NULL
 import uuid

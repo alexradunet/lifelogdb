@@ -105,7 +105,7 @@ Their homes are in `SCHEMA.md`; this list is the checklist, not the rule.
 - **Time** (§2.1, D10): UTC ISO-8601 instants and local-day TEXT columns with round-trip CHECKs
   (`date(x) IS x`, `strftime(...) IS x` — the `IS` matters).
 - **Identity** (§2.2, D20): every *entity* domain row is keyed by its `entities` id through a composite
-  FK `(id, entity_type)` — `pages`, `events` and `tasks` to `entities(id, entity_type)`; `people`,
+  FK `(id, entity_type)` — `pages` and `tasks` to `entities(id, entity_type)`; `people`,
   `places` and `holdings` to `pages(id, entity_type)`, because a person, place or holding **is** a page:
   one id, whose page title is its handle and its name (`pages.entity_type`, `ON UPDATE CASCADE` for
   promotion; §6.19). Ids are carried with `INSERT … RETURNING id`, never `last_insert_rowid()` across
@@ -122,8 +122,9 @@ Their homes are in `SCHEMA.md`; this list is the checklist, not the rule.
 - **CHECKs**: every one NAMED (`CONSTRAINT <table>_<rule> CHECK …`), using only functions the minimum
   SQLite has (`lifelog_meta.sqlite`) — no math functions, even where a build has them.
 - **Links**: a closed, endpoint-typed `link_kinds` registry (D8).
-- **Pages** (§2.4, D5): filename-safe, immutable titles (`pages.kind` is `memo` or `page`, fixed) with a
-  unique app-computed `title_key` (NFC + casefold; vectors in §2.4). Nothing repeats (D15).
+- **Pages** (§2.4, D5): every page titled, with filename-safe, immutable titles and a unique app-computed
+  `title_key` (NFC + casefold; vectors in §2.4). The journal is one day page per local day, titled
+  `YYYY-MM-DD` (`pages_day_page`). There are no events (D22); nothing repeats (D15).
 - **Connections** (§2.6): one writing application per file; per connection `PRAGMA foreign_keys=ON`,
   `recursive_triggers=ON`, `synchronous=FULL`, `trusted_schema=OFF`, read back and refused if wrong;
   SQLite ≥ 3.51.3 for writers; every write transaction starts with `BEGIN IMMEDIATE`; the driver opens

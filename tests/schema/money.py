@@ -23,7 +23,7 @@ S.K('no exchange-rate table: nothing in the file converts one currency into anot
 
 # ---- holdings
 c = fresh(); a = named(c, 'holding', 'Main')
-def hold(side='asset', cur='EUR', **kw): i = ent(c, 'holding'); c.execute("INSERT INTO pages(id,entity_type,kind,title,title_key) VALUES (?, 'holding', 'page', ?, ?)", (i, f'H{i}', f'h{i}')); return i, dict(id=i, side=side, currency=cur, **kw)
+def hold(side='asset', cur='EUR', **kw): i = ent(c, 'holding'); c.execute("INSERT INTO pages(id,entity_type,title,title_key) VALUES (?, 'holding', ?, ?)", (i, f'H{i}', f'h{i}')); return i, dict(id=i, side=side, currency=cur, **kw)
 def ins(cols): return tryx(c, f"INSERT INTO holdings({','.join(cols)}) VALUES ({','.join('?' * len(cols))})", tuple(cols.values()))
 for lbl, exp, kw in [('side debt', 'ERR', dict(side='debt')), ('NULL side', 'ERR', dict(side=None)), ('an unregistered currency', 'ERR', dict(cur='XXX')),
                      ('closed before opened', 'ERR', dict(opened_day='2020-05-01', closed_day='2020-04-30')), ('closed = opened', 'OK', dict(opened_day='2020-05-01', closed_day='2020-05-01')),
@@ -76,10 +76,10 @@ t.execute('CREATE TABLE n (x NUMERIC)'); t.execute("INSERT INTO n VALUES ('12345
 S.K('a NUMERIC column stores a long decimal as REAL (1234567890123456.78 -> 1234567890123456.8)', t.execute('select typeof(x), x from n').fetchone() == ('real', 1234567890123456.8))
 
 # ---- links to holdings
-c = fresh(); a = named(c, 'holding', 'Flat'); m = memo(c); e = thing(c, 'event')
-S.K('a memo is about a holding', link(c, m, a, 'about') == 'OK')
-S.K('an event is about a holding', link(c, e, a, 'about') == 'OK')
-S.K('a memo wikilinks to a holding (it is a page)', link(c, m, a, 'wikilink') == 'OK')
+c = fresh(); a = named(c, 'holding', 'Flat'); m = day_page(c); e = thing(c, 'task')
+S.K('a day page is about a holding', link(c, m, a, 'about') == 'OK')
+S.K('a task is about a holding', link(c, e, a, 'about') == 'OK')
+S.K('a day page wikilinks to a holding (it is a page)', link(c, m, a, 'wikilink') == 'OK')
 
 # ---- §6.14 run literally
 c = fresh(); ent(c, 'page'); ent(c, 'page'); P = dict(day='2026-09-29', amount=777, row_key='r1')

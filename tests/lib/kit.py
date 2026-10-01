@@ -79,14 +79,14 @@ def ent(c, typ, source='ui', created=None):
     return c.execute(f"INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES (?,{at},{at},?) RETURNING id", (typ, source)).fetchone()[0]
 
 
-def memo(c, body='x', day='2026-09-30', created=None):
-    i = ent(c, 'page', created=created)
-    c.execute("INSERT INTO pages(id,kind,day,body) VALUES (?, 'memo', ?, ?)", (i, day, body)); return i
+def day_page(c, day='2026-09-30', body='x', created=None):
+    """The journal page of a local day (D5): titled with the day, its day the title."""
+    return page(c, day, day=day, body=body, created=created)
 
 
 def page(c, title, day=None, body='', created=None, key=None):
     i = ent(c, 'page', created=created)
-    c.execute("INSERT INTO pages(id,kind,title,title_key,day,body) VALUES (?, 'page', ?, ?, ?, ?)",
+    c.execute("INSERT INTO pages(id,title,title_key,day,body) VALUES (?, ?, ?, ?, ?)",
               (i, title, key if key is not None else title_key(title), day, body)); return i
 
 
@@ -96,24 +96,23 @@ def named(c, typ, handle=None, **cols):
     if handle is None:
         _n[0] += 1; handle = f'{typ.title()} {_n[0]}'
     i = ent(c, typ)
-    c.execute("INSERT INTO pages(id,entity_type,kind,title,title_key) VALUES (?, ?, 'page', ?, ?)", (i, typ, handle, title_key(handle)))
+    c.execute("INSERT INTO pages(id,entity_type,title,title_key) VALUES (?, ?, ?, ?)", (i, typ, handle, title_key(handle)))
     domain(c, typ, i, **cols); return i
 
 
 def domain(c, typ, i, **cols):
     if typ == 'person': cols.setdefault('name', 'P')
     if typ == 'holding': cols.setdefault('side', 'asset'); cols.setdefault('currency', 'EUR')
-    table = dict(person='people', place='places', holding='holdings', event='events', task='tasks')[typ]
-    if typ == 'event': cols.setdefault('name', 'E'); cols.setdefault('start_day', '2026-09-30')
+    table = dict(person='people', place='places', holding='holdings', task='tasks')[typ]
     if typ == 'task': cols.setdefault('name', 'T')
     cols = dict(id=i, **cols)
     c.execute(f"INSERT INTO {table}({','.join(cols)}) VALUES ({','.join('?' * len(cols))})", tuple(cols.values()))
 
 
 def thing(c, typ, **cols):
-    """Any entity with its domain row: event, task, or a named one."""
+    """Any entity with its domain row: a page, a task, or a named one."""
     if typ in NAMED: return named(c, typ, **cols)
-    if typ == 'page': return memo(c)
+    if typ == 'page': _n[0] += 1; return page(c, f'Page {_n[0]}', body='x')
     i = ent(c, typ); domain(c, typ, i, **cols); return i
 
 
@@ -148,7 +147,7 @@ def code(st):
 
 def run_block(c, sql, P, after=None, only=None):
     """Execute a document block statement by statement, as the app would: bind the :params it names, and keep an id a
-    statement RETURNs under the :name its comment gives ('RETURNING id;  -- ... :memo_id'). Returns each statement's rows."""
+    statement RETURNs under the :name its comment gives ('RETURNING id;  -- ... :page_id'). Returns each statement's rows."""
     out = []
     for st in statements(sql):
         if only and not only(code(st)): continue

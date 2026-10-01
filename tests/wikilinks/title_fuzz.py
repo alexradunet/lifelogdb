@@ -33,7 +33,7 @@ for t in cases:
     c.execute('SAVEPOINT f')
     try:
         pid = c.execute(f"INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES('page',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
-        c.execute("INSERT INTO pages(id,kind,title,title_key,day) VALUES(?, 'page', ?, ?, NULL)", (pid, t, k)); db = True
+        c.execute("INSERT INTO pages(id,title,title_key,day) VALUES(?, ?, ?, CASE WHEN date(?) IS ? THEN ? END)", (pid, t, k, t, t, t)); db = True
     except sqlite3.Error as e:
         db = False; why = str(e)[:40]
     c.execute('ROLLBACK TO f'); c.execute('RELEASE f')

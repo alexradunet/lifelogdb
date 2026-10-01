@@ -1,9 +1,9 @@
 # Lifelog — Database Schema v1
 
 **Status:** freeze candidate. No canonical database exists yet; until one does, §3 is edited in place (D13). The next step is the capture path and one real import (§2.8), not another review.
-**Scope of the project:** A lifetime personal database (journal/memos, pages (notes, wiki), events,
-tasks, people, places, health metrics, location history, personal finance — holdings, balances, net worth; file
-attachments deferred — D9) in a single SQLite file, plus a custom UI for data entry and daily use.
+**Scope of the project:** A lifetime personal database (a journal of day pages, notes and wiki pages,
+tasks, people, places, health metrics, location history, personal finance — holdings, balances, net worth; events
+and file attachments deferred — D22, D9) in a single SQLite file, plus a custom UI for data entry and daily use.
 Other devices are clients of the one writing application (D3); everything else (view generators, AI
 features, sync or merge between copies of the database) is explicitly out of scope.
 
@@ -93,13 +93,11 @@ ones that span tables are also rows of `lifelog_meta` (§3), so the file carries
   `2026-9-3` (executed).
 - **Written versus happened.** `created_at` — on `entities`, `links`, `measurements`, `balances` and
   `positions` alike — is when the row was written to `life.db`, never back-dated, so it is an audit
-  trail. When a thing *happened* is its own `day` / `*_at`. (An imported memo's original
-  time of day has no column: a known limit.)
+  trail. When a thing *happened* is its own `day` / `*_at`. (An entry in a day page has no time
+  of its own; a time worth keeping is written in its text: a known limit, D5.)
 - **Zone.** `entities.tz`, `measurements.tz` and `positions.tz` store the capturing device's IANA zone
   (`Europe/Berlin`; NULL = unknown), so a UTC instant can be read as local time. Only capture time
-  can supply it. Events have no `tz` of their own (D10).
-- An event may be day-precise only (`start_day`, `end_day`, no `*_at`): date-level facts are
-  first-class in a biography database.
+  can supply it.
 
 ### 2.2 Identity and provenance
 
@@ -113,8 +111,7 @@ ones that span tables are also rows of `lifelog_meta` (§3), so the file carries
   `[[wikilinks]]` write) and `people`. Insert them in that order in one transaction (§6.19). A ghost
   page an earlier `[[Name]]` created is *promoted* instead: `UPDATE entities SET entity_type = 'person'`
   (the foreign key cascades it to `pages.entity_type`), then insert the `people` row. The foreign keys
-  refuse a person without a page and a person turned back into a page; `pages_named_titled` refuses a
-  memo turned into a person (executed). Title uniqueness already refuses a second `Sam`, so two people called Sam are told apart
+  refuse a person without a page and a person turned back into a page (executed). Title uniqueness already refuses a second `Sam`, so two people called Sam are told apart
   in the handle (`Sam (barber)`); `people.name` is the editable full name.
 - **Provenance.** `source` on `entities`, `links`, `measurements`, `balances` and `positions` names the writer
   of the row — `ui`, `cli`, `api`, `agent:<name>`, `import:<name>` (lowercase `[a-z0-9_:.-]`, 1–64
@@ -198,12 +195,12 @@ below:
   (`[[Health/Diet]]`, `[[Re: plan]]`, the tag `#con`) is skipped. The app checks the title rules
   before inserting — its predicate agrees with the DDL's CHECKs on more than 40 000 generated
   strings — and creates each target inside its own `SAVEPOINT` (§6.13), so even a target the
-  predicate wrongly let through is rolled back alone: the memo is saved and no orphan `entities`
+  predicate wrongly let through is rolled back alone: the page is saved and no orphan `entities`
   row is left. The UI reports skipped targets; nothing is stored about them.
 - *A page never links to itself* (`[[Diet]]` inside the page `Diet` is ignored), and *a
   tombstoned target is revived*, not duplicated: the unique index covers tombstoned pages, so the
-  save un-tombstones the page it resolves — any save that names it, an old memo edited years later
-  included, so the UI tells the owner.
+  save un-tombstones the page it resolves — any save that names it, an old day page edited years
+  later included, so the UI tells the owner.
 - *Named pages.* A person's, place's or holding's page is a page like any other, so `[[Bob
   Sample]]` is an ordinary wikilink and nothing in the save contract knows about people (D20).
 - *Known limits.* A body that also defines a reference (`[Ref]: http://r`) turns `[[Ref]]` into
@@ -275,11 +272,17 @@ language must reproduce these vectors exactly:
 | `İstanbul` | `i̇stanbul` (`i` + U+0307) |
 | `日本語 ノート`, `Diet` | `日本語 ノート`, `diet` |
 
-The database verifies what it can (`pages_key_*`: a key iff a title, trimmed, no ASCII capitals,
-`lower(title)` for a pure-ASCII title); that a non-ASCII key is the *right* fold is the writing
-application's duty (principle 3) — a writer that computes it wrongly gets uniqueness wrong and
-nothing else. Resolve a `[[wikilink]]` with `WHERE title_key = :key`: an equality on the key implies
-the partial index's predicate, so SQLite uses `pages_title` (executed).
+The database verifies what it can (`pages_key_*`: trimmed, no ASCII capitals, `lower(title)` for a
+pure-ASCII title); that a non-ASCII key is the *right* fold is the writing application's duty
+(principle 3) — a writer that computes it wrongly gets uniqueness wrong and nothing else. Resolve a
+`[[wikilink]]` with `WHERE title_key = :key`, a search on the unique index `pages_title` (executed).
+
+**Day pages.** The journal is one page per local day, titled with that day: `2026-09-29`. Its `day`
+is its title (`pages_day_page`), so a day page is the page whose title equals its day, and its key is
+its title (a pure-ASCII title). Capture appends to today's page and creates it on the first write
+(§6.1); `[[2026-09-29]]` reaches it like any other title, and a link that names a day before anything
+was written that day creates that day's page, empty (§6.13). A day page is an ordinary page in every
+other way: its `[[links]]` say who the day was with and where (§6.3).
 
 ### 2.5 Integrity checks
 
@@ -291,7 +294,7 @@ file, not on a copy.
 ```sql
 PRAGMA integrity_check;      -- one row: ok
 PRAGMA foreign_key_check;    -- no rows
-SELECT id FROM entities WHERE id NOT IN (SELECT id FROM pages WHERE entity_type = 'page' UNION SELECT id FROM events UNION SELECT id FROM tasks UNION SELECT id FROM people UNION SELECT id FROM places UNION SELECT id FROM holdings);   -- no rows
+SELECT id FROM entities WHERE id NOT IN (SELECT id FROM pages WHERE entity_type = 'page' UNION SELECT id FROM tasks UNION SELECT id FROM people UNION SELECT id FROM places UNION SELECT id FROM holdings);   -- no rows
 INSERT INTO pages_fts(pages_fts, rank) VALUES ('integrity-check', 1);   -- no error
 ```
 
@@ -400,7 +403,7 @@ the holding's currency on that day, as the statement, the app or your own estima
 
 Sell everything or dispose of it: record a final balance and set `closed_day`. Net worth is
 derived on read, one figure per currency (§6.15–§6.16). **Never store** credentials, PINs or full
-account/card numbers in `life.db` or in a memo: the file is plaintext (D17); a holding's page may
+account/card numbers in `life.db` or in a page: the file is plaintext (D17); a holding's page may
 hold the last four digits.
 
 ```mermaid
@@ -458,13 +461,12 @@ each phrase in the last column, and **every key of `lifelog_meta` must be used b
 | 15 | Who may write, and with which settings? | `writers` | `BEGIN IMMEDIATE`, `read-only` |
 | 16 | What is derived and can be rebuilt? | `pages_fts`, `pages` | `rebuild`, `derived` |
 | 17 | How do imports avoid duplicates and bad rows? | `writers`, `measurements` | `DO NOTHING`, `OR IGNORE` |
-| 18 | Does anything repeat? | `events`, `tasks` | `do not repeat` |
+| 18 | Does anything repeat? | `tasks` | `do not repeat` |
 | 19 | How does the schema change after real data exists? | `evolution` | `additive`, `user_version` |
-| 20 | What is a memo, what is a page, and can one become the other? | `pages`, `pages_kind_fixed` | `untitled`, `fixed` |
+| 20 | Where is the journal? What did I write on a given day? | `pages` | `day page`, `YYYY-MM-DD`, `title equals its day` |
 | 21 | Which SQLite may write this file? | `sqlite` | `3.51.3`, `3.53` |
 | 22 | Who or what wrote this row? | `source` | `written at insert`, `agent` |
 | 23 | Where was I at a given moment? Where is a place? | `positions`, `places` | `WGS84`, `append-only`, `query time` |
-| 24 | What kind of event was it? How many workouts this year? | `events` | `is-a`, `never a column` |
 
 **Imports** — the path for data that already exists elsewhere (a journal archive, a health export,
 statements). Every step was executed on 1 000 synthetic rows:
@@ -500,13 +502,12 @@ DETACH s;
    `ON CONFLICT(from_id, to_id, kind) DO NOTHING`.
 3. **Identity and time.** `source` names the importer (`import:<name>`), `import_key` is the source's
    own id, `day` / `taken_at` / `tz` say when it happened, `created_at` is when you imported it — on
-   every table, `created_at` is the write time (§2.1). An imported event or task carries
-   its key on `entities` (§6.22). **The key must come out the same on every run**: the source's own id
-   (a Health Connect record's id; a calendar's `UID`, plus the instance's start for one occurrence of
-   a recurring event, whose occurrences share the `UID`). A source without ids gets a key built from
-   fields it never changes (the start instant and the place) — and a change to one of them then looks
-   like a new row. The key deduplicates within one `source` only: the same workout from two sources is
-   two rows, for the app to match and the owner to tombstone one.
+   every table, `created_at` is the write time (§2.1). An imported task or page carries
+   its key on `entities` (§6.21). **The key must come out the same on every run**: the source's own id
+   (a Health Connect record's id; a to-do app's task id). A source without ids gets a key built from
+   fields it never changes (a note's file name, the day of a reading) — and a change to one of them then
+   looks like a new row. The key deduplicates within one `source` only: the same reading from two
+   sources is two rows, for the app to match and the owner to retract one.
 4. **What a failure does.** `ON CONFLICT … DO NOTHING` skips only a duplicate key: a malformed
    day, an impossible value or a dangling foreign key still raises and the **whole batch rolls back**.
    Fix the data and run the batch again.
@@ -543,7 +544,7 @@ CREATE TABLE lifelog_meta (
   value TEXT NOT NULL
 ) STRICT;
 INSERT INTO lifelog_meta(key, value) VALUES
-  ('schema',    'lifelog v1: journal, wiki, tasks, events, people, places, health metrics, location history and money of one person; the rules of each table are comments inside its CREATE statement (.schema), the rules that span tables are these rows'),
+  ('schema',    'lifelog v1: the journal (one page per day), wiki, tasks, people, places, health metrics, location history and money of one person; the rules of each table are comments inside its CREATE statement (.schema), the rules that span tables are these rows'),
   ('instants',  'every *_at column is a UTC ISO-8601 TEXT instant with milliseconds, e.g. 2026-06-09T21:14:03.482Z, written by the app; CHECK strftime(''%Y-%m-%dT%H:%M:%fZ'', x) IS x; created_at, on every table that has it, is when the row was written to life.db, never back-dated (when a thing happened is its day or its other *_at)'),
   ('days',      'every *_day column (and day) is the LOCAL calendar date YYYY-MM-DD where the thing happened, written at insert, never recomputed from an instant; CHECK date(x) IS x (IS, not =: a CHECK passes on NULL, and date(''2026-9-3'') is NULL)'),
   ('deletes',   'nothing is deleted except links rows: an entity is a tombstone (entities.deleted_at), measurements and balances are corrected by inserting rows, positions are never corrected; BEFORE DELETE triggers enforce it'),
@@ -553,7 +554,7 @@ INSERT INTO lifelog_meta(key, value) VALUES
   ('evolution', 'after the first real data: numbered forward-only SQL migrations, additive only, counted in PRAGMA user_version; every CHECK is named, so any rule can be widened or tightened with ALTER TABLE DROP/ADD CONSTRAINT');
 
 CREATE TABLE entities (
-  -- The shared spine: one row per linkable thing (page, event, task, person, place, holding). Its domain
+  -- The shared spine: one row per linkable thing (page, task, person, place, holding). Its domain
   -- row has the SAME id: the app inserts this row first with INSERT ... RETURNING id and binds that id in
   -- the same transaction. UNIQUE(id, entity_type) plus the composite FK (id, entity_type) of every domain
   -- table make a row's type and its table agree.
@@ -564,10 +565,10 @@ CREATE TABLE entities (
   -- import_key: the key a writer that may send the row twice gives it (an importer, an offline phone, a
   -- retrying agent); whether the row was imported is source, not import_key. Unique per source, written at
   -- insert and never changed. Insert with ON CONFLICT(source, import_key) WHERE import_key IS NOT NULL
-  -- DO NOTHING RETURNING id: no id back = imported before, so no domain row is inserted (section 6.22).
+  -- DO NOTHING RETURNING id: no id back = imported before, so no domain row is inserted (section 6.21).
   id          INTEGER PRIMARY KEY,
   entity_type TEXT NOT NULL CONSTRAINT entities_entity_type
-                  CHECK (entity_type IN ('page','event','task','person','place','holding')),
+                  CHECK (entity_type IN ('page','task','person','place','holding')),
   created_at  TEXT NOT NULL CONSTRAINT entities_created_at CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at),   -- the write time (lifelog_meta.instants)
   updated_at  TEXT NOT NULL CONSTRAINT entities_updated_at CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', updated_at) IS updated_at),   -- kept by the *_touch triggers
   deleted_at  TEXT     CONSTRAINT entities_deleted_at CHECK (deleted_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', deleted_at) IS deleted_at),   -- the tombstone
@@ -579,9 +580,10 @@ CREATE TABLE entities (
 CREATE UNIQUE INDEX entities_import ON entities(source, import_key) WHERE import_key IS NOT NULL;
 
 CREATE TABLE pages (
-  -- All prose (D5): memos (untitled; the journal stream and the inbox, triaged_at NULL = still in the
-  -- inbox) and pages (titled, unique, linkable: an essay, a reference page, a tag, and the page of a person,
-  -- place or holding, whose entity_type says which — D20). The day page is a query over the memo stream.
+  -- All prose (D5): every page is titled, unique and linkable: an essay, a reference page, a tag, the page
+  -- of a person, place or holding (its entity_type says which, D20), and the journal. The journal is one
+  -- DAY PAGE per local day, titled YYYY-MM-DD ('2026-09-29'): its title equals its day (pages_day_page), so
+  -- [[2026-09-29]] reaches it. Capture appends to today's page, created on the first write.
   -- A title is permanent and a valid file name on every OS: a page is never renamed (create the new page,
   -- make the old one a '#REDIRECT [[New]]' stub, add links(kind='redirect')).
   -- Uniqueness is on title_key = NFC(casefold(NFC(title))), computed by the app because SQLite cannot fold
@@ -590,25 +592,19 @@ CREATE TABLE pages (
   -- rebuilt on every save; an invalid target makes no link and never blocks the save (D19).
   id          INTEGER PRIMARY KEY,
   entity_type TEXT NOT NULL DEFAULT 'page' CONSTRAINT pages_entity_type CHECK (entity_type IN ('page','person','place','holding')),   -- 'page', or the named entity this page is
-  kind        TEXT NOT NULL CONSTRAINT pages_kind CHECK (kind IN ('memo','page')),
-  title       TEXT,                       -- page: required, filename-safe, immutable; memo: NULL
-  title_key   TEXT,                       -- page: NFC(casefold(NFC(title))), app-computed, unique; memo: NULL
-  day         TEXT,                       -- local capture day; required for a memo; a page has one if written on purpose, NULL for a link target the app created
-  triaged_at  TEXT CONSTRAINT pages_triaged_at CHECK (triaged_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', triaged_at) IS triaged_at),
+  title       TEXT NOT NULL,              -- filename-safe, immutable; a day page's is its day
+  title_key   TEXT NOT NULL,              -- NFC(casefold(NFC(title))), app-computed, unique
+  day         TEXT,                       -- local day it was written: a day page's day; a page written on purpose has one, a link target the app created has none
   body        TEXT NOT NULL DEFAULT '',   -- CommonMark; [[Wiki Links]] inline
   UNIQUE (id, entity_type),               -- the parent key of people, places and holdings
   FOREIGN KEY (id, entity_type) REFERENCES entities(id, entity_type) ON UPDATE CASCADE,   -- a promoted page follows its entity's type
-  CONSTRAINT pages_named_titled CHECK (entity_type = 'page' OR kind = 'page'),   -- a person's, place's or holding's page is titled, never a memo
-  CONSTRAINT pages_memo_day CHECK (kind = 'page' OR day IS NOT NULL),   -- a memo always has a day; a page may have none
-  CONSTRAINT pages_page_titled CHECK (kind = 'memo' OR title IS NOT NULL),
-  CONSTRAINT pages_memo_untitled CHECK (kind <> 'memo' OR title IS NULL),   -- memos are untitled: a titled memo would be unfindable
-  CONSTRAINT pages_key_iff_title CHECK ((title IS NULL) = (title_key IS NULL)),
-  CONSTRAINT pages_key_folded CHECK (title_key IS NULL OR (length(title_key) >= 1 AND title_key = trim(title_key)
-                               AND title_key NOT GLOB '*[A-Z]*')),      -- a folded key has no ASCII capitals
-  CONSTRAINT pages_key_ascii CHECK (title_key IS NULL OR title GLOB '*[^ -~]*' OR title_key = lower(title)),   -- pure-ASCII titles: the DB verifies the key
-  CONSTRAINT pages_title_len CHECK (title IS NULL OR (title = trim(title) AND length(title) >= 1
-                           AND length(CAST(title AS BLOB)) <= 240)),  -- bytes: a filename limit is 255 bytes
-  CONSTRAINT pages_title_safe CHECK (title IS NULL OR (   -- a title must be a valid file name on Linux, macOS and Windows: keep it safe
+  CONSTRAINT pages_day_page CHECK (date(title) IS NOT title OR day IS title),   -- a page titled with a day is that day's page
+  CONSTRAINT pages_key_folded CHECK (length(title_key) >= 1 AND title_key = trim(title_key)
+                               AND title_key NOT GLOB '*[A-Z]*'),      -- a folded key has no ASCII capitals
+  CONSTRAINT pages_key_ascii CHECK (title GLOB '*[^ -~]*' OR title_key = lower(title)),   -- pure-ASCII titles: the DB verifies the key
+  CONSTRAINT pages_title_len CHECK (title = trim(title) AND length(title) >= 1
+                           AND length(CAST(title AS BLOB)) <= 240),  -- bytes: a filename limit is 255 bytes
+  CONSTRAINT pages_title_safe CHECK (   -- a title must be a valid file name on Linux, macOS and Windows: keep it safe
          title NOT GLOB '*[/\:*?"<>|]*'            -- path separators and Windows-reserved characters
          AND title NOT GLOB ('*[' || char(1) || '-' || char(31) || char(127) || '-' || char(159) || char(173) || char(1564)
                              || char(8203) || char(8206) || '-' || char(8207) || char(8234) || '-' || char(8238)
@@ -621,24 +617,16 @@ CREATE TABLE pages (
          AND upper(CASE WHEN instr(title, '.') > 0 THEN substr(title, 1, instr(title, '.') - 1) ELSE title END)
              NOT IN ('CON','PRN','AUX','NUL',                -- Windows device names, bare or before an extension (CON.backup)
                'COM1','COM2','COM3','COM4','COM5','COM6','COM7','COM8','COM9','COM¹','COM²','COM³',
-               'LPT1','LPT2','LPT3','LPT4','LPT5','LPT6','LPT7','LPT8','LPT9','LPT¹','LPT²','LPT³'))),
-  CONSTRAINT pages_triage_memo CHECK (triaged_at IS NULL OR kind = 'memo'),
+               'LPT1','LPT2','LPT3','LPT4','LPT5','LPT6','LPT7','LPT8','LPT9','LPT¹','LPT²','LPT³')),
   CONSTRAINT pages_day CHECK (day IS NULL OR date(day) IS day)
 ) STRICT;
-CREATE UNIQUE INDEX pages_title ON pages(title_key) WHERE title_key IS NOT NULL;   -- memos have no key and stay out of it
+CREATE UNIQUE INDEX pages_title ON pages(title_key);
 CREATE INDEX pages_day ON pages(day);
-CREATE INDEX pages_inbox ON pages(day) WHERE kind = 'memo' AND triaged_at IS NULL;
 CREATE TRIGGER pages_title_fixed BEFORE UPDATE OF title ON pages
   WHEN NEW.title IS NOT OLD.title
 BEGIN
   -- a rename would repoint every [[Old Title]] in decades of prose (D5); title_key is derived and may be recomputed
   SELECT RAISE(ABORT, 'titles are immutable: create the new page and make this one a #REDIRECT stub');
-END;
-CREATE TRIGGER pages_kind_fixed BEFORE UPDATE OF kind ON pages
-  WHEN NEW.kind IS NOT OLD.kind
-BEGIN
-  -- a memo stays a memo and a page a page: flipping kind would silently change which CHECKs govern the row (D5)
-  SELECT RAISE(ABORT, 'pages.kind is fixed: create a new page and link it (kind=spawned) instead');
 END;
 
 CREATE VIRTUAL TABLE pages_fts USING fts5(
@@ -654,7 +642,7 @@ CREATE TRIGGER pages_fts_delete AFTER DELETE ON pages BEGIN
   INSERT INTO pages_fts(pages_fts, rowid, title, body) VALUES ('delete', OLD.id, OLD.title, OLD.body);
 END;
 CREATE TRIGGER pages_fts_update AFTER UPDATE OF title, body ON pages BEGIN
-  -- only the indexed columns: triage or a promotion does not re-index the body
+  -- only the indexed columns: a promotion does not re-index the body
   INSERT INTO pages_fts(pages_fts, rowid, title, body) VALUES ('delete', OLD.id, OLD.title, OLD.body);
   INSERT INTO pages_fts(rowid, title, body) VALUES (NEW.id, NEW.title, NEW.body);
 END;
@@ -674,7 +662,7 @@ CREATE TABLE people (
 ) STRICT;
 
 CREATE TABLE places (
-  -- named locations (D16): events.place_id points here, located-in links nest them (Tokyo -> Japan).
+  -- named locations (D16): a day page names where the day was with [[Place]], located-in links nest them (Tokyo -> Japan).
   -- A place is also a page with the same id (D20): the page title is its name and its handle.
   -- lat/lon: its representative point, WGS84 decimal degrees, or neither (D21); a misplaced point is fixed
   -- by UPDATE. A GPS fix in positions is matched to a place at query time (section 6.20), never stored.
@@ -685,25 +673,6 @@ CREATE TABLE places (
   FOREIGN KEY (id, entity_type) REFERENCES pages(id, entity_type),
   CONSTRAINT places_coords_pair CHECK ((lat IS NULL) = (lon IS NULL))   -- a point, or no point
 ) STRICT;
-
-CREATE TABLE events (
-  -- happenings: appointments, trips, milestones, where you lived. Date-level facts are first-class;
-  -- instants are optional extra precision. An event has one place, place_id. Events do not repeat (D15).
-  -- Its kind is an is-a link to a page ([[Workout]]), never a column; one event may have several (D22).
-  id          INTEGER PRIMARY KEY,
-  entity_type TEXT NOT NULL DEFAULT 'event' CONSTRAINT events_entity_type CHECK (entity_type = 'event'),
-  name        TEXT NOT NULL,   -- an editable label ('Dentist'), not a handle: only a page has a title
-  start_day   TEXT NOT NULL CONSTRAINT events_start_day CHECK (date(start_day) IS start_day),
-  end_day     TEXT CONSTRAINT events_end_day CHECK (end_day IS NULL OR date(end_day) IS end_day),
-  start_at    TEXT CONSTRAINT events_start_at CHECK (start_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', start_at) IS start_at),
-  end_at      TEXT CONSTRAINT events_end_at CHECK (end_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', end_at) IS end_at),
-  place_id    INTEGER REFERENCES places(id),
-  note        TEXT,
-  FOREIGN KEY (id, entity_type) REFERENCES entities(id, entity_type),
-  CONSTRAINT events_end_day_order CHECK (end_day IS NULL OR end_day >= start_day),
-  CONSTRAINT events_end_at_order CHECK (end_at IS NULL OR start_at IS NULL OR end_at >= start_at)
-) STRICT;
-CREATE INDEX events_start ON events(start_day);
 
 CREATE TABLE tasks (
   -- fleeting: open until completed_at is set, together with the LOCAL completed_day it was done (D10).
@@ -736,7 +705,7 @@ BEGIN
   SELECT RAISE(ABORT, 'metrics.unit is fixed: it defines what every stored value means; register a new metric instead');
 END;
 INSERT INTO metrics(name, unit, note) VALUES
-  ('mood', '', '1-5; attached to its memo via measurements.captured_with_id when posted');
+  ('mood', '', '1-5; attached to its day page via measurements.captured_with_id when posted');
 
 CREATE TABLE measurements (
   -- one row per data point (the FxLifeSheet shape). The table is append-only, enforced by triggers: never
@@ -755,7 +724,7 @@ CREATE TABLE measurements (
   created_at       TEXT NOT NULL CONSTRAINT measurements_created_at CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at),
   source           TEXT NOT NULL CONSTRAINT measurements_source CHECK (length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*'),   -- the writer (lifelog_meta.source)
   import_key       TEXT,                        -- importer's dedup key, unique per (source, metric)
-  captured_with_id INTEGER REFERENCES entities(id),      -- provenance: the memo/event this reading was captured with
+  captured_with_id INTEGER REFERENCES entities(id),      -- provenance: the page (a day page) this reading was captured with
   supersedes_id    INTEGER REFERENCES measurements(id),  -- optional: corrects an earlier row
   CONSTRAINT measurements_not_self CHECK (supersedes_id IS NULL OR supersedes_id <> id),
   CONSTRAINT measurements_first_has_value CHECK (value IS NOT NULL OR supersedes_id IS NOT NULL),   -- a first reading has a value; only a correction may retract
@@ -927,14 +896,12 @@ CREATE TABLE link_kinds (
 INSERT INTO link_kinds(kind, symmetric, from_types, to_types, note) VALUES
   ('wikilink', 0, 'page,person,place,holding', 'page,person,place,holding', 'extracted from [[body]] on save; body is the truth'),
   ('redirect', 0, 'page',      'page',         'old stub page → its replacement; renames, D5'),
-  ('spawned',  0, 'task,page', 'page',         'task/page created from a memo during triage'),
+  ('spawned',  0, 'task,page', 'page',         'task/page created from a page (a line of a day page)'),
   ('subtask',  0, 'task',      'task',         'child task → parent task'),
-  ('attended', 0, 'person',    'event',        'person → event'),
   ('about',    0, NULL,        'person,place,holding', 'entity → person/place/holding it is about'),
-  ('visited',  0, 'person',    'place',        'person → place; the place of an EVENT is events.place_id, never a link (D16)'),
+  ('visited',  0, 'person',    'place',        'person → place; the day the owner was there is the day page that names it (D16)'),
   ('located-in', 0, 'place',   'place',        'containment: Tokyo → Japan; transitive — walk it with a recursive CTE (section 6.18)'),
   ('parent-of', 0, 'person',   'person',       'parent → child; ''family'' stays the symmetric catch-all'),
-  ('is-a',     0, 'event',     'page',         'event → the page naming its kind: [[Workout]], [[Sleep]] (D22)'),
   ('friend',   1, 'person',    'person',       NULL),
   ('family',   1, 'person',    'person',       NULL),
   ('related',  1, NULL,        NULL,           'anything ↔ anything');
@@ -946,7 +913,7 @@ BEGIN
 END;
 
 CREATE TABLE links (
-  -- one graph for everything: wiki backlinks, relationships, triage provenance, subtasks, attendance,
+  -- one graph for everything: wiki backlinks, relationships, the page a task came from, subtasks,
   -- redirects. Rows are hard-deleted (the one such table, D11) and immutable otherwise (delete and
   -- re-insert). Symmetric kinds are mirrored by trigger on insert AND delete, so a half-edge cannot
   -- exist and backlinks need only to_id. Cycles (e.g. subtask) are not prevented (D8).
@@ -1006,16 +973,13 @@ CREATE VIEW ghost_pages AS
   -- ghost, however empty (D20). The UI lists them; tombstoning is the owner's act.
   SELECT p.id, p.title, e.created_at
     FROM pages p JOIN entities e ON e.id = p.id
-   WHERE p.kind = 'page' AND p.entity_type = 'page' AND p.body = '' AND e.deleted_at IS NULL
+   WHERE p.entity_type = 'page' AND p.body = '' AND e.deleted_at IS NULL
      AND e.created_at < strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 day')
      AND NOT EXISTS (SELECT 1 FROM links l WHERE l.to_id = p.id AND l.kind <> 'redirect')
      AND NOT EXISTS (SELECT 1 FROM links l WHERE l.from_id = p.id);
 
 CREATE TRIGGER pages_touch AFTER UPDATE ON pages BEGIN
   -- updated_at is kept in the DB, so every writer (CLI, agents, scripts) gets it right
-  UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = NEW.id;
-END;
-CREATE TRIGGER events_touch AFTER UPDATE ON events BEGIN
   UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = NEW.id;
 END;
 CREATE TRIGGER tasks_touch AFTER UPDATE ON tasks BEGIN
@@ -1052,8 +1016,6 @@ BEGIN
 END;
 CREATE TRIGGER pages_no_delete BEFORE DELETE ON pages
 BEGIN SELECT RAISE(ABORT, 'pages are never deleted: tombstone the entity (entities.deleted_at)'); END;
-CREATE TRIGGER events_no_delete BEFORE DELETE ON events
-BEGIN SELECT RAISE(ABORT, 'events are never deleted: tombstone the entity (entities.deleted_at)'); END;
 CREATE TRIGGER tasks_no_delete BEFORE DELETE ON tasks
 BEGIN SELECT RAISE(ABORT, 'tasks are never deleted: tombstone the entity (entities.deleted_at)'); END;
 CREATE TRIGGER people_no_delete BEFORE DELETE ON people
@@ -1064,8 +1026,8 @@ CREATE TRIGGER holdings_no_delete BEFORE DELETE ON holdings
 BEGIN SELECT RAISE(ABORT, 'holdings are never deleted: tombstone the entity (entities.deleted_at)'); END;
 ```
 
-**15 tables + 1 FTS5 virtual table + 3 views** (`measurement_values`, `balance_values`, `ghost_pages`)
-**+ 35 triggers.** That is the entire system. Every `CHECK` is named (`CONSTRAINT <table>_<rule>`), so
+**14 tables + 1 FTS5 virtual table + 3 views** (`measurement_values`, `balance_values`, `ghost_pages`)
+**+ 32 triggers.** That is the entire system. Every `CHECK` is named (`CONSTRAINT <table>_<rule>`), so
 any rule can be dropped or re-added by name after the freeze (D13).
 
 ---
@@ -1089,12 +1051,10 @@ person, place or holding is also a page (D20): its `people` / `places` / `holdin
 %% diagram: er-core
 erDiagram
     entities ||--o| pages    : "id"
-    entities ||--o| events   : "id"
     entities ||--o| tasks    : "id"
     pages    ||--o| people   : "id"
     pages    ||--o| places   : "id"
     pages    ||--o| holdings : "id"
-    places   |o--o{ events   : "place_id"
     entities ||--o{ links    : "from_id"
     entities ||--o{ links    : "to_id"
     link_kinds ||--o{ links  : "kind"
@@ -1105,11 +1065,6 @@ erDiagram
     pages {
         INTEGER id PK, FK
         TEXT entity_type FK
-    }
-    events {
-        INTEGER id PK, FK
-        TEXT entity_type FK
-        INTEGER place_id FK
     }
     tasks {
         INTEGER id PK, FK
@@ -1143,7 +1098,7 @@ erDiagram
 
 Facts are not entities. `measurements`, `balances` and `positions` are append-only (D7, D18, D21). A
 correction is a new row, and `measurements.supersedes_id` points back at the row it corrects;
-`measurements.captured_with_id` records provenance (a mood reading points at its memo). A position has no
+`measurements.captured_with_id` records provenance (a mood reading points at its day page). A position has no
 foreign key: it is matched to a place by distance at query time (§6.20). `currencies` gives an amount
 its meaning. `lifelog_meta` stands alone: the rules that span tables (D17).
 
@@ -1198,7 +1153,6 @@ is an endpoint with no restriction (`from_types` or `to_types` NULL).
 flowchart LR
     any(["any entity"])
     person["person"]
-    event["event"]
     place["place"]
     task["task"]
     page["page"]
@@ -1207,8 +1161,6 @@ flowchart LR
 
     any -->|"about"| named
     any <-->|"related"| any
-    person -->|"attended"| event
-    event -->|"is-a"| page
     person -->|"visited"| place
     person -->|"parent-of"| person
     person <-->|"friend, family"| person
@@ -1219,38 +1171,27 @@ flowchart LR
     titled -->|"wikilink"| titled
 ```
 
-### 4.4 The life of a memo and of a page
+### 4.4 The life of a page
 
-A memo is captured into the inbox and leaves it once; a page starts as a ghost when a link names a title
-that does not exist yet, or as a written page when the owner creates it on purpose (D5). Either can
+A page starts as a ghost when a link names a title that does not exist yet, or as a written page when
+the owner creates it on purpose — a day page when the first thing is captured that day (D5). Either can
 become the page of a person, place or holding (D20).
-
-```mermaid
-%% diagram: memo-life
-stateDiagram-v2
-    direction LR
-    [*] --> Inbox: capture, triaged_at is NULL
-    Inbox --> Triaged: keep, set triaged_at
-    Inbox --> Triaged: act, new task or page plus a spawned link, set triaged_at
-    Inbox --> Tombstoned: junk, set deleted_at
-    Triaged --> Tombstoned: set deleted_at
-```
 
 ```mermaid
 %% diagram: page-life
 stateDiagram-v2
     direction LR
-    state "Ghost (empty, no day)" as Ghost
+    state "Ghost (empty)" as Ghost
     state "Written page" as Written
     state "Redirect stub" as Stub
     state "Named (person, place, holding)" as Named
     [*] --> Ghost: a link names a title that does not exist yet
-    [*] --> Written: created on purpose, with a day
+    [*] --> Written: created on purpose, with a day, or the day page on the day's first capture
     [*] --> Named: a person, place or holding is created
-    Ghost --> Written: body saved, day stays NULL
+    Ghost --> Written: body saved, the day unchanged
     Ghost --> Named: promoted, entities.entity_type changes
     Written --> Named: promoted, entities.entity_type changes
-    Written --> Written: body edited, title and kind never change
+    Written --> Written: body edited or appended to, the title never changes
     Written --> Stub: renamed, so the old page becomes a stub and a redirect link is added
 ```
 
@@ -1262,20 +1203,20 @@ revives that page instead of duplicating it (§6.13). A ghost that nothing links
 
 | Product concept | Schema mechanism |
 |---|---|
-| Journaling | Posting `memo` pages during the day; the "day page" is a query (§6.2), not an entity |
-| Inbox and triage | `memo` rows with `triaged_at IS NULL` (§6.3); keep → set `triaged_at`; act → task + `links(kind='spawned')` (§6.9); junk → tombstone |
-| Mood tracking | the `mood` metric in `measurements`, each row optionally pointing at its memo (§6.4) |
-| Notes, wiki and tags | `pages(kind='page')` + `links(kind='wikilink')` kept equal to what the body names (§2.4, §6.13); `#health` is the page `health` |
+| Journaling | the day page, titled `YYYY-MM-DD`: capture appends to it (§6.1); the day view adds what else that day holds (§6.2) |
+| "When did I see Ana / go to Lakeside?" | the day pages that link `[[Ana]]` or `[[Lakeside]]` (§6.3) |
+| A to-do written in a day page | a task + `links(kind='spawned')` to the page it came from (§6.9) |
+| Mood tracking | the `mood` metric in `measurements`, each row optionally pointing at its day page (§6.4) |
+| Notes, wiki and tags | `pages` + `links(kind='wikilink')` kept equal to what the body names (§2.4, §6.13); `#health` is the page `health` |
 | Backlinks | `links WHERE to_id = ?` (§6.5) |
 | People, places, holdings in prose | `[[Bob Sample]]` links to the person itself, because the person is a page (D20, §6.19) |
 | Life graph ("everything about my son") | `links` in both directions from his id (§6.6) |
 | Subtasks | `links(kind='subtask', child → parent)`; recursive CTE (§6.11) |
 | Reminders and habits | a reminder is a task with a `due_day`; "did I do it each month" is a 0/1 habit metric (D15) |
-| Birthdays | a query over `people.birth_day` — deliberately not events |
+| Birthdays | a query over `people.birth_day` |
 | Biomarkers / quantified self | `metrics` + `measurements` (§6.7) |
 | Net worth over time | derived from `balance_values`, per currency (§6.15–6.16) |
-| Kinds of events (workouts, sleep, flights) | `links(kind='is-a')` from the event to the page naming its kind; the page's backlinks list them (§6.21, D22) |
-| Imported events and tasks (calendar, health sessions) | `entities.import_key`, unique per `source`: a re-run inserts nothing, a moved event updates its row (§6.22) |
+| Imported tasks and pages (a to-do app, a vault) | `entities.import_key`, unique per `source`: a re-run inserts nothing, a changed task updates its row (§6.21) |
 | Location history ("where was I?") | `positions`, one GPS fix per row; the place it was is the nearest `places` point (§6.20, D21) |
 | Search | `pages_fts` (§6.8) |
 | "Which of my agents wrote this?" | `source` on every entity, link, measurement, balance and position (§2.2) |
@@ -1344,7 +1285,7 @@ the constraints that carry it; the rule itself is in §3 or §2.
   safely, and the "single writer" rule (principle 3) means *single writing application*, not single
   process. A phone keeps a read-only copy (§2.6); offline it queues only *new* rows and replays them
   through the API, so nothing can conflict. A replay, like a re-run importer, must insert nothing
-  twice: the client gives each new row an `import_key`, the key facts and entities have (§6.22).
+  twice: the client gives each new row an `import_key`, the key facts and entities have (§6.21).
 - **Rejected: devices that each hold a copy and merge (CRDTs).** cr-sqlite, the SQLite extension for
   it, allows no checked foreign keys, no UNIQUE constraint but the primary key and no CHECK across
   columns in a merged table [R75] — the composite FKs, the unique `title_key` and the paired CHECKs
@@ -1371,31 +1312,34 @@ the constraints that carry it; the rule itself is in §3 or §2.
 - **Costs accepted.** Prose is edited only through this app's UI/CLI/API.
 - **Sources.** [R29]–[R32], [R34]–[R36].
 
-### D5 — One `pages` table for all prose; memos = journal + inbox; titles are permanent.
+### D5 — One `pages` table for all prose; the journal is a page per day; titles are permanent.
 
-- **Decision.** One text entity `pages` with `kind` `memo` or `page` (`pages_kind`, fixed by
-  `pages_kind_fixed`).
-  - A **memo** is the Memos-style capture stream: it is *both* the journal (the day's record) *and*
-    the inbox. It is untitled (capture without friction), always has a `day`, and is never the target
-    of a `[[link]]`.
-  - A **page** is titled, unique and linkable — an essay, a reference page, a tag, a person. *Dated is
-    a property, not a type:* the app sets `day` on a page the owner creates on purpose and leaves it
-    NULL on a page it creates as a link target, so the day view (§6.2) shows what was **written**
-    that day, not what was **mentioned**.
-  - There is **no journal entity and no daily-page row**: the day page is a query. **Tags are pages**:
-    one graph, one syntax.
-  - **The inbox is one column**, `triaged_at`.
+- **Decision.** One text entity `pages`, every row titled, unique and linkable — an essay, a reference
+  page, a tag, a person, and the journal.
+  - The journal is **one day page per local day**, titled with the day (`2026-09-29`); its `day` is
+    its title (`pages_day_page`), so `[[2026-09-29]]` reaches it and the day page of a day is one
+    lookup by key. Capture appends to today's page and creates it on the first write (§6.1, §2.4).
+  - *Dated is a property, not a type:* the app sets `day` on a page the owner creates on purpose and
+    leaves it NULL on a page it creates as a link target, so the day view (§6.2) shows what was
+    **written** that day, not what was **mentioned** — except a day page, whose title is its day.
+  - **Tags are pages**: one graph, one syntax.
   - **Titles** are permanent (`pages_title_fixed`), unique by `title_key` (§2.4) and safe as a file
     name everywhere (`pages_title_safe`).
+- **Why a page per day.** The first real import, an Obsidian vault of one note per day, met untitled
+  journal entries: no day could be linked, and every `[[2026-08-20]]` the vault wrote made a second,
+  empty page beside that day's entries — two homes for one day. Untitled entries also needed a second
+  kind of page with its own CHECKs, and an inbox column nobody used.
 - **Alternatives.**
-  - *Separate `journal` kind / one daily page row*: rejected — a page you must not forget to create,
-    and two capture paths.
-  - *Separate `inbox` table or status column*: rejected — a status machine is the 80% solution to a
-    20% problem; one nullable timestamp is enough. *Zero-column inbox ("recent memos")*: rejected —
-    the inbox becomes unbounded history or an arbitrary time window.
+  - *Untitled memos, the day page a query over them (a Memos-style stream, which is also the inbox)*:
+    rejected — the incident above; and something to act on is a task (§6.9), not a second state of a
+    page.
+  - *A `journal` table beside `pages`*: rejected — a day would not be linkable (`[[…]]` reaches only
+    pages), and prose would have two homes.
+  - *A day page with a free title and a unique `day`*: rejected — `[[2026-09-29]]` could not find it
+    without a second lookup rule, and two pages could claim one day by title and by column.
   - *Separate `note` and `wiki` kinds*: rejected — they would differ only in the day rule and share
-    one title namespace; a `[[link]]` to a title that does not exist yet creates a page, and with
-    `kind` fixed, anything linked before it was written would keep whatever kind the link guessed.
+    one title namespace; a `[[link]]` to a title that does not exist yet creates a page, and anything
+    linked before it was written would keep whatever kind the link guessed.
   - *Renames*: rejected — renaming silently repoints every `[[Old Title]]` in decades of prose, or
     leaves ghosts if it doesn't; a redirect stub keeps both working (§2.4).
   - *ASCII-only case-insensitive uniqueness (`COLLATE NOCASE`)*: rejected — `Café notes` and
@@ -1408,14 +1352,15 @@ the constraints that carry it; the rule itself is in §3 or §2.
     direction: loosening `pages_title_safe` after the freeze is one `DROP CONSTRAINT` + `ADD
     CONSTRAINT` (D13), while tightening it later would meet titles that already break the new rule.
     *Reopen only if* a title you actually want is forbidden (`Re: plan`) often enough to hurt.
-- **Costs accepted.** A `kind` or a title cannot be corrected in place: a new page and a link or a
-  stub. An empty page created on purpose that nothing links to shows in `ghost_pages`.
+- **Costs accepted.** An entry in a day page has no time of its own: a time worth keeping is written
+  in the text. There is no inbox. A title cannot be corrected in place: a new page and a stub. An
+  empty page created on purpose that nothing links to shows in `ghost_pages`.
 - **Sources.** Kaydet [R41]; FxLifeSheet [R9][R42]; Windows reserved names [R58].
 
 ### D6 — Mood: the `mood` metric in `measurements`, not a column on `pages`.
 
 - **Decision.** Mood is a time series like any other: a seeded metric `mood` whose rows are appended
-  to `measurements`. When a mood is attached to a memo, the row's `captured_with_id` is the memo's id. The
+  to `measurements`. When a mood is attached to a day page, the row's `captured_with_id` is the page's id. The
   1–5 range is app-level validation on one metric row, not a schema CHECK.
 - **Rule.** One home per concept, forever (principle 6): a standalone mood tap needs no second
   mechanism, and mood charts uniformly with every other series.
@@ -1438,20 +1383,20 @@ the constraints that carry it; the rule itself is in §3 or §2.
   `measurement_values` is the one read rule; two independent readings on one day are both returned.
   The unique index on `supersedes_id` doubles as the index the view's `NOT EXISTS` needs (executed:
   the plan uses it).
-- **`captured_with_id`** is provenance (the memo or event the reading was captured with), not "about
+- **`captured_with_id`** is provenance (the day page the reading was captured with), not "about
   this person": the owner is the only subject of measurements.
 - **This is the most battle-tested part of the design.** FxLifeSheet's actual schema is a single
   `raw_data` table carrying 380k data points over 6+ years with zero schema drama [R9][R42]. Open Brane
   runs one append-only table with keyed idempotent writes at 942k rows [R43]. We keep three of their
   devices: `import_key` idempotency, denormalized local `day`, `source` provenance.
 - **Deliberate simplifications** (§7): `value REAL` only (no text-valued measurements — prose belongs
-  in memos); no LOINC/UCUM/reference ranges [R8]; no raw/normalized two-tier wearable mirror [R8]; no
+  in pages); no LOINC/UCUM/reference ranges [R8]; no raw/normalized two-tier wearable mirror [R8]; no
   multi-resolution rollups (~5 GB/lifetime of sensor data queries fine raw) [R45].
 - **Sources.** [R8][R9][R42][R43][R45][R68].
 
 ### D8 — One `entities` supertype + one polymorphic `links` graph; a closed kind registry; symmetry in-DB.
 
-- **Decision.** The six linkable types share one ID space through `entities`; all relationships live
+- **Decision.** The five linkable types share one ID space through `entities`; all relationships live
   in one `links(from_id, to_id, kind)` table with real foreign keys (`UNIQUE(from_id, to_id, kind)`
   allows several kinds between one pair, never a duplicate edge). `links.kind` references the closed
   registry `link_kinds`, whose structure is fixed at registration (`link_kinds_structure_fixed`);
@@ -1468,7 +1413,7 @@ the constraints that carry it; the rule itself is in §3 or §2.
   - *Per-relationship tables* (`friendships`, `attendance`, …): rejected — N tables and N code paths
     for one concept, and "everything about X" becomes a union over an open-ended set.
   - *A CHECK-list on `links.kind`*: rejected — relationship taxonomy is personal and grows
-    ('godmother', 'college-roommate'). Structural enums (`entities.entity_type`, `pages.kind`) ARE
+    ('godmother', 'college-roommate'). Structural enums (`entities.entity_type`, `pages.entity_type`) ARE
     constrained: **constrain structure, leave taxonomy open — but never implicit.**
   - *Free-text kinds auto-registered on first use*: rejected — a typo (`Friend`) would register a
     permanent kind.
@@ -1484,13 +1429,13 @@ the constraints that carry it; the rule itself is in §3 or §2.
 
 - **Decision.** No `attachments` table, no `media/` directory, no binary files at all. The design
   below is **perfectly additive later** (a future `attachments` table touches nothing else). Until
-  then, a memo that needs a file references it in prose.
+  then, a page that needs a file references it in prose.
 - **The deferred design.** Binary files live in `media/`, named by SHA-256; `attachments` rows carry
   `(entity_id, sha256, ext, mime, size)`; path = `media/<sha256[0:2]>/<sha256><ext>`, derived, never
   stored. Dedup is automatic. No inline BLOBs: SQLite's own benchmarks put the break-even around
   100 KB [R2][R3], and "To BLOB or Not To BLOB" agrees [R47]. ark and Open Brane converged here
   [R46][R43]. No GC: orphans accumulate, and a one-query sweep exists for the day it matters.
-- **Reopen trigger.** An actual attachment need appears (photos in memos, scanned documents).
+- **Reopen trigger.** An actual attachment need appears (photos in day pages, scanned documents).
 - **Sources.** [R2][R3][R43][R46][R47].
 
 ### D10 — Time model: UTC instants + denormalized local days, both TEXT.
@@ -1500,8 +1445,7 @@ the constraints that carry it; the rule itself is in §3 or §2.
   shape of a zone name, not that it is a real zone; readers convert with a tz database, which keeps
   renamed zones (`Europe/Kiev` → `Europe/Kyiv`) as links. The standard way to write an instant with
   its zone is RFC 9557 [R69]: `2026-06-09T21:14:03.482Z[Europe/Berlin]` — exactly `*_at` plus `tz`.
-  `events` deliberately have no `tz` (KISS): an event's `start_at` is read in its writer's
-  `entities.tz`, a guess for a trip planned from elsewhere. `tasks.completed_day` makes "what I
+  `tasks.completed_day` makes "what I
   finished on day X" a plain lookup instead of the query-time UTC-to-local derivation this decision
   forbids. Provenance (`source`) is a column now for the same reason as the zone (§2.2).
 - **Alternatives.**
@@ -1530,8 +1474,8 @@ the constraints that carry it; the rule itself is in §3 or §2.
   `dropped` state, and a completed task stays completed.
 - **Known asymmetry.** `links` rows are hard-deleted — no tombstone, no audit. Wikilink removal is
   *required* (the body is the truth, D19). Authored links (`friend`, `family`, …) go the same way,
-  weighed against a split policy and **rejected**: the *evidence* (memos, `attended` events) survives,
-  and relationship links are a summary over it. Relationship removal is therefore invisible. The split
+  weighed against a split policy and **rejected**: the *evidence* (the day pages that name
+  people together) survives, and relationship links are a summary over it. Relationship removal is therefore invisible. The split
   policy stays additive later (a `deleted_at` column + partial unique index + a flag in `link_kinds`),
   and `sqlite-history` triggers [R48] are the documented retrofit.
 
@@ -1556,7 +1500,7 @@ the constraints that carry it; the rule itself is in §3 or §2.
   is allowed and recorded in its migration). `PRAGMA application_id = 'LIFE'` lets `file(1)` and
   future tools recognize the database [R1].
 - **Every CHECK is named, so every rule can change without a rebuild.** Widening an enum (a new
-  entity type, `pages.kind`), letting partial dates into `birth_day` or loosening the title rules is a
+  entity type, a holding's `side`), letting partial dates into `birth_day` or loosening the title rules is a
   two-statement transactional migration — `ALTER TABLE … DROP CONSTRAINT <name>; … ADD CONSTRAINT
   <name> CHECK (…)` (SQLite ≥ 3.53 [R55]) — **only because the CHECK has a name**: an unnamed CHECK
   cannot be dropped (`no such constraint`), and adding a looser second CHECK does not relax the first
@@ -1570,8 +1514,8 @@ the constraints that carry it; the rule itself is in §3 or §2.
 
 ### D14 — UI: thin custom app for capture/browse; off-the-shelf tools for exploration.
 
-- **Decision.** Build only what the product needs: a Memos-style capture composer (with mood, D6), a
-  day view, an inbox triage view, simple metric charts, forms for events/tasks/people/places/holdings,
+- **Decision.** Build only what the product needs: a capture composer that appends to today's page
+  (with mood, D6), a day view, simple metric charts, forms for tasks/people/places/holdings,
   a search box over `pages_fts`, and a backlinks panel. For ad-hoc exploration: **Datasette** pointed
   at `life.db`, read-only (§2.6) [R49]. `sqlite-web` is **not used** [R50]: it can insert, update and
   delete rows — a second writer that bypasses the insert conventions (principle 3).
@@ -1583,12 +1527,13 @@ the constraints that carry it; the rule itself is in §3 or §2.
 
 ### D15 — Recurrence: DEFERRED out of v1. The design is kept here for the day it returns.
 
-- **Decision.** Nothing repeats: events and tasks have no recurrence columns. A lifelog records what
-  happened; a repeating appointment is planning, which the owner's calendar already does. What the
+- **Decision.** Nothing repeats: tasks have no recurrence columns (and there are no events, D22). A
+  lifelog records what happened; a repeating appointment is planning, which the owner's calendar already does. What the
   schema still covers: **birthdays** are a query over `people.birth_day`; **"did I do it each month"**
   is a 0/1 habit metric in `measurements`, whose history charts for free; a **reminder** is a task
   with a `due_day`, or the next one created when the last is done (link the two with `related`).
-- **The deferred design** — additive later, on `events` (and `tasks`, with `due_day` as the anchor):
+- **The deferred design** — additive later, on `tasks` (`due_day` as the anchor) and on events if they
+  return (D22):
   structured, readable columns `repeat` (`none|daily|weekly|monthly|yearly`), `repeat_every`
   (NULL = 1), `repeat_weekdays` (`'mo,we,fr'`, weekly only) and `repeat_until` (inclusive); a repeating
   row is a *template*, and occurrences are expanded at read by one window-bounded recursive CTE, never
@@ -1604,13 +1549,15 @@ the constraints that carry it; the rule itself is in §3 or §2.
 
 ### D16 — Places: an entity type.
 
-- **Decision.** A place is an entity and a page (D20); its name is the page title. An event has
-  exactly one place, `events.place_id`; `about` links connect anything to a place, `visited` a person
-  to a place, `located-in` nests places (so "everything in Japan" is answerable, §6.18). There is no
-  `lives-in` kind: it would be undated, while a dated event (start and end day, `place_id`) answers
-  "where did I live in 2015". A place may also carry a point, and a GPS fix is matched to it (D21).
-- **Alternatives.** Free-text `events.place` (the place queries fail, and backfilling 10 years of
-  free text is the painful path); a `places` table outside the supertype (no links, no tombstones).
+- **Decision.** A place is an entity and a page (D20); its name is the page title. A day page names
+  where the day was with `[[Place]]`, so the days spent somewhere are its backlinks (§6.3); `about`
+  links connect anything to a place, `visited` a person to a place, `located-in` nests places (so
+  "everything in Japan" is answerable, §6.18). There is no `lives-in` kind: it would be undated; where
+  the owner lived is written in prose until dated spans return with events (D22). A place may also
+  carry a point, and a GPS fix is matched to it (D21).
+- **Alternatives.** A place as plain text in prose, not a page (the place queries fail, and
+  backfilling 10 years of free text is the painful path); a `places` table outside the supertype (no
+  links, no tombstones).
 - **Sources.** [R46].
 
 ### D17 — The contract as data: `lifelog_meta`, comments inside the statements, in-DB guards.
@@ -1678,7 +1625,7 @@ the constraints that carry it; the rule itself is in §3 or §2.
   application, and the DDL checks what it can — endpoint types, filename-safe unique titles.
 - **Why.** Without it: the auto-created page for `[[Health/Diet]]` is rejected by the title CHECK; a
   writer that swallows the error and commits leaves an orphan `entities` row, and one that does not
-  loses the memo. An "upsert" of links leaves a link behind after the body dropped it. Read literally,
+  loses the page's text. An "upsert" of links leaves a link behind after the body dropped it. Read literally,
   the tag rule turns a stub's `#REDIRECT` into a page called `REDIRECT`.
 - **Alternatives.**
   - *Make the database skip a bad target* (a trigger that swallows the page insert, or a title CHECK
@@ -1708,26 +1655,27 @@ the constraints that carry it; the rule itself is in §3 or §2.
 - **Promotion.** A ghost page made by an earlier `[[Bob Sample]]` becomes the person by
   `UPDATE entities SET entity_type = 'person'` — the `ON UPDATE CASCADE` foreign key carries the new type to
   `pages.entity_type` — and one `people` insert. The foreign keys refuse a person without a page, and
-  undoing a promotion (the `people` row's FK); `pages_named_titled` refuses a memo; `pages_entity_type`
-  refuses turning a page into an event or a task (all executed).
-- **Why.** The owner writes `Today I met [[Bob Sample]]` and wants the memo attached to the person.
+  undoing a promotion (the `people` row's FK); `pages_entity_type` refuses turning a page into a task
+  (both executed).
+- **Why.** The owner writes `Today I met [[Bob Sample]]` and wants that day's page attached to the
+  person.
   A wikilink can only land on a page, so the person must be one. Giving the person and the page the
   same id means the backlinks of the person *are* the backlinks of the page: no second id to resolve,
   no `page_id` pointer and its rules, one row fewer per named thing.
 - **Alternatives.**
   - *A separate page entity pointed at by `entities.page_id`*: rejected — two ids for one person (the
-    page `[[…]]` reaches and the person `about`/`attended` point at), a pointer column with a CHECK, a
+    page `[[…]]` reaches and the person `about` points at), a pointer column with a CHECK, a
     UNIQUE and two triggers, a third leg in every "everything about X" query, and a place or holding
     name that had to be unique twice (its own `name` and its title).
   - *A `mention` link kind, page → person, resolved by matching names on save*: rejected — a page and
     a person with one name need a precedence rule, and a link would depend on the `people` table at
     save time, so a rename or a new person changes what a re-save produces.
   - *A `[[@Name]]` prefix for people*: rejected — the same resolution problem with a namespace in front.
-  - *Everything is a page (events and tasks too)*: not taken — an event's or task's name is a label,
-    not a unique permanent handle, and would collide (`Dentist`).
+  - *Everything is a page (tasks too)*: not taken — a task's name is a label, not a unique permanent
+    handle, and would collide (`Dentist`).
 - **Costs accepted.** Every person, place and holding needs a unique handle, even one never mentioned;
   an importer makes one (§6.19). A handle is permanent like any title: a changed name is `people.name`,
-  and `[[Old name]]` keeps working. A typo in a name makes a ghost page like any wikilink typo. A memo
+  and `[[Old name]]` keeps working. A typo in a name makes a ghost page like any wikilink typo. A page
   names a person by wikilink *or* by `about`; the two are separate rows, and §6.6 reads both.
 
 ### D21 — Location: a GPS track in `positions`, a point on each place.
@@ -1742,9 +1690,9 @@ the constraints that carry it; the rule itself is in §3 or §2.
   A fix is matched to a place at query time, never stored (§6.20).
 - **Where the fixes come from.** An Android phone, the location in Google Photos metadata and
   Google's location history (Timeline), each through an importer with its own `source`.
-- **Why.** The owner asked "where was I at a given moment?", and the schema could only answer with a
-  place's name on an event. A track also dates things an event never records: the walk, the drive, the
-  day nobody wrote down.
+- **Why.** The owner asked "where was I at a given moment?", and the schema could only answer with the
+  places a day page names. A track also dates what no page records: the walk, the drive, the day
+  nobody wrote down.
 - **No correction.** A fix is raw sensor output, not a statement the owner makes. A wrong one is left out
   when read, by `accuracy_m`, and a wrong import is caught by the trial run on a copy (§2.8). A
   retraction can be added later without touching a row (§7).
@@ -1765,29 +1713,31 @@ the constraints that carry it; the rule itself is in §3 or §2.
     question; a place's extent is additive later (§7).
 - **Sources.** [R71][R72].
 
-### D22 — An event's kind: an `is-a` link to the page that names it.
+### D22 — Events: DEFERRED out of v1. The design is kept here for the day it returns.
 
-- **Decision.** A workout, a night's sleep, a flight and a doctor's visit are all `events`; what tells
-  them apart is an `is-a` link from the event to a page — [[Workout]], [[Sleep]] — never a column. An
-  event may have several kinds (a run is-a [[Running]] and is-a [[Workout]]) or none. The kind page is
-  an ordinary page: its title is the kind's one name (unique by `title_key`), its body holds what the
-  owner writes about it, and its backlinks (§6.5) list its events. An importer maps its own type (a
-  phone's exercise or sleep session) to a kind page, resolved or created as a wikilink target is
-  (§6.13).
-- **Why.** "How many workouts did I do this year?" or "every doctor's visit" could only be answered by
-  guessing from titles, and the phone's health data arrives already typed.
-- **Alternatives.**
-  - *A `kind` column on `events`*: rejected — free text splits one kind by spelling (`gym`, `Gym`,
-    `workout`), a CHECK list closes a taxonomy that is personal (D8: constrain structure, leave taxonomy
-    open), and neither has anywhere to write about the kind.
-  - *An `event_kinds` registry*: rejected — a second namespace of names beside page titles, which are
-    already unique, casefolded and filename-safe.
-  - *The `related` link*: rejected — symmetric and meaning anything, so an event of kind [[Workout]]
-    could not be told from one merely related to it.
-  - *A `#workout` tag in `events.note`*: rejected — an event's note is not scanned for links (only page
-    bodies are, D19).
-- **Scope.** Events only: a page names its subjects by wikilink, and no question has asked for a kind
-  of task. A kind is not itself of a kind (§7).
+- **Decision.** No `events` table. What happened on a day is that day's page (D5): its text says
+  what, and its `[[links]]` say who and where — the days with `[[Ana]]` or at `[[Lakeside]]` are the
+  day pages that link them (§6.3). A task is still a task; a reading is still a measurement.
+- **Why.** The first real import, an Obsidian vault of daily notes, had a model write an event for
+  every outing a note told ("we went to Lakeside", a haircut, a visit): each one a second copy of a
+  sentence of that day's page, an event and a place of the same name, and nothing a question needed
+  that the day page and its links did not already answer. Nothing else needed events yet: no source
+  that delivers dated spans or timed sessions has been imported.
+- **The deferred design** — additive later (a new table, two link kinds): `events(id, entity_type,
+  name, start_day, end_day, start_at, end_at, place_id, note)` hanging off `entities` like `tasks`,
+  with the round-trip CHECKs of §2.1 and `end ≥ start`; day-precise events first-class, instants
+  optional; one place per event (`place_id`); `attended` (person → event); and an event's **kind** as
+  an `is-a` link to the page naming it — [[Workout]], [[Sleep]] — never a column (free text splits a
+  kind by spelling, a CHECK list closes a personal taxonomy, and a registry is a second namespace
+  beside page titles). An importer would key its events like any entity (§6.21), and a moved event
+  would update its row.
+- **Alternatives.** *Keep the table and tell importers to write fewer events*: rejected — whatever
+  is in the schema at the freeze stays for good (D13), and the table had no real row a day page could
+  not hold. *An event as a page*: rejected — an event's name is a label, not a unique handle, and
+  would collide (`Dentist`).
+- **Reopen trigger.** A source that delivers dated spans or timed sessions — a phone's sleep and
+  exercise sessions, a calendar, a location export's visits — or a question the day pages cannot
+  answer: "how many workouts this year?", "where did I live in 2015?".
 
 ---
 
@@ -1797,50 +1747,51 @@ Proof that the schema serves the product with plain SQL. `:named` are bind param
 All examples filter tombstones (`e.deleted_at IS NULL`). Every write transaction starts with
 `BEGIN IMMEDIATE` (§2.6), and every block runs in `tests/`.
 
-### 6.1 Capture a memo (the universal insert convention)
+### 6.1 Capture: append to the day page (the universal insert convention)
 
 Every entity insert is two statements in one transaction: `entities` first, `RETURNING id`, then the
-domain row with that id, which the app keeps in a variable (below `:memo_id`) and binds wherever the
-memo is meant (§2.2).
+domain row with that id, which the app keeps in a variable (below `:page_id`) and binds wherever the
+page is meant (§2.2). Capture appends to today's page; the first capture of a day creates it.
 
 ```sql
 BEGIN IMMEDIATE;
+-- today's page, if the day has one (a day page's key is its title, §2.4): found, the app keeps its id
+-- as :page_id and skips the two INSERTs; found tombstoned, it revives it as §6.13 step 2a does
+SELECT p.id, e.deleted_at FROM pages p JOIN entities e ON e.id = p.id WHERE p.title_key = '2026-09-29';
 INSERT INTO entities(entity_type, created_at, updated_at, tz, source)   -- tz: the capturing device's IANA zone right now
 VALUES ('page', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'Europe/Berlin', 'ui')
-RETURNING id;   -- the app keeps it as :memo_id
-INSERT INTO pages(id, kind, day, body)
-VALUES (:memo_id, 'memo', '2026-09-29',
-        'Shipped the schema doc. Review pending. [[Lifelog]]');
+RETURNING id;   -- the app keeps it as :page_id
+INSERT INTO pages(id, title, title_key, day)
+VALUES (:page_id, '2026-09-29', '2026-09-29', '2026-09-29');
+-- the entry, after a blank line when the page already has text
+UPDATE pages SET body = body || CASE WHEN body = '' THEN '' ELSE char(10, 10) END
+                        || 'Shipped the schema doc. Review pending. [[Lifelog]]'
+ WHERE id = :page_id;
 -- the body names [[Lifelog]]: the link sync of §6.13 runs here, inside this same transaction
--- optional mood, attached to the memo it belongs to (D6):
+-- optional mood, attached to the page it belongs to (D6):
 INSERT INTO measurements(metric_id, day, value, source, captured_with_id, created_at)
-SELECT id, '2026-09-29', 4, 'ui', :memo_id, strftime('%Y-%m-%dT%H:%M:%fZ','now')
+SELECT id, '2026-09-29', 4, 'ui', :page_id, strftime('%Y-%m-%dT%H:%M:%fZ','now')
   FROM metrics WHERE name = 'mood';      -- (a timed reading also sets taken_at and tz)
 COMMIT;
 ```
 
-### 6.2 The day view ("journal page" — it's a query, not a table)
+### 6.2 The day view
 
-Memos for the day, pages written that day, events on that day, open tasks due by then, what was
-finished that **local** day, and measurements (through `measurement_values`, so corrected readings
-never show). `ORDER BY (at IS NOT NULL), at` puts undated items first on purpose; a bare `ORDER BY at`
-does it by accident.
+The day's page, other pages written that day, open tasks due by then, what was finished that **local**
+day, and measurements (through `measurement_values`, so corrected readings never show).
+`ORDER BY (at IS NOT NULL), at` puts undated items — the day page first — before the rest on purpose;
+a bare `ORDER BY at` does it by accident.
 
 ```sql
 SELECT what, at, detail FROM (
-  SELECT 'memo' AS what, e.created_at AS at, p.body AS detail
+  SELECT 'day page' AS what, NULL AS at, p.body AS detail
     FROM pages p JOIN entities e ON e.id = p.id
-   WHERE p.day = :day AND p.kind = 'memo' AND e.deleted_at IS NULL
+   WHERE p.title_key = :day AND e.deleted_at IS NULL
   UNION ALL
   SELECT 'page' || CASE WHEN e.updated_at > e.created_at THEN ' (edited)' ELSE '' END,
          e.updated_at, p.title
     FROM pages p JOIN entities e ON e.id = p.id
-   WHERE p.day = :day AND p.kind = 'page' AND e.deleted_at IS NULL
-  UNION ALL
-  SELECT 'event', ev.start_at, ev.name
-    FROM events ev JOIN entities e ON e.id = ev.id
-   WHERE e.deleted_at IS NULL
-     AND ev.start_day <= :day AND coalesce(ev.end_day, ev.start_day) >= :day
+   WHERE p.day = :day AND p.title <> :day AND e.deleted_at IS NULL
   UNION ALL
   SELECT 'task', NULL, t.name
     FROM tasks t JOIN entities e ON e.id = t.id
@@ -1862,13 +1813,20 @@ A page shows on the day it was *written* (a link target the app created has no d
 edited since. Undated open tasks live in the task list, not in every day view. Completing a task sets
 both columns: `UPDATE tasks SET completed_at = :now, completed_day = :day WHERE id = :task_id`.
 
-### 6.3 The inbox
+### 6.3 The days that name someone or somewhere
+
+"When did I see Ana?", "when was I at Lakeside?": the day pages that name the person, place or page,
+newest first — by a `[[wikilink]]` in their text, or by an `about` link a writer added where the text
+names them without brackets (an imported note). A day page is the page whose title is its day (§2.4).
+For the days spent anywhere inside a place (Tokyo in Japan), walk `located-in` first (§6.18).
 
 ```sql
-SELECT p.id, e.created_at, p.body
-  FROM pages p JOIN entities e ON e.id = p.id
- WHERE p.kind = 'memo' AND p.triaged_at IS NULL AND e.deleted_at IS NULL
- ORDER BY e.created_at DESC;
+SELECT DISTINCT d.day, substr(d.body, 1, 60) AS start
+  FROM links l
+  JOIN pages d    ON d.id = l.from_id AND d.title = d.day
+  JOIN entities e ON e.id = d.id AND e.deleted_at IS NULL
+ WHERE l.to_id = :entity_id AND l.kind IN ('wikilink', 'about')
+ ORDER BY d.day DESC;
 ```
 
 ### 6.4 Mood over time
@@ -1883,12 +1841,10 @@ SELECT me.day, me.value
 ### 6.5 Backlinks to a page (or to anything)
 
 ```sql
-SELECT l.kind, e.entity_type, l.from_id,
-       COALESCE(pg.title, ev.name, t.name, substr(pg.body, 1, 40)) AS label   -- memos: start of the body
+SELECT l.kind, e.entity_type, l.from_id, COALESCE(pg.title, t.name) AS label
   FROM links l
   JOIN entities e ON e.id = l.from_id AND e.deleted_at IS NULL
   LEFT JOIN pages   pg ON pg.id = l.from_id
-  LEFT JOIN events  ev ON ev.id = l.from_id
   LEFT JOIN tasks   t  ON t.id  = l.from_id
  WHERE l.to_id = :page_id
    AND l.kind <> 'redirect';   -- a rename stub is not a mention of its replacement (§2.4)
@@ -1899,9 +1855,9 @@ this one direction suffices for them.
 
 ### 6.6 Everything about a person, place or holding (the ark query)
 
-Asymmetric kinds put the entity on either end (`attended` is person → event, `about` is entity →
-person), so query both directions. The memos and pages that write `[[Bob Sample]]` link to the
-person's own id (D20), so they are in the first leg; what the person's page body links to is in the
+Asymmetric kinds put the entity on either end (`visited` is person → place, `about` is entity →
+person), so query both directions. The pages that write `[[Bob Sample]]`, day pages included, link
+to the person's own id (D20), so they are in the first leg; what the person's page body links to is in the
 second.
 
 ```sql
@@ -1931,7 +1887,7 @@ Two legitimate readings on one day are both returned; aggregate in the query if 
 ### 6.8 Full-text search
 
 ```sql
-SELECT p.id, p.kind, p.title,
+SELECT p.id, p.title,
        snippet(pages_fts, 1, '<b>', '</b>', '…', 24) AS ctx
   FROM pages_fts
   JOIN pages p    ON p.id = pages_fts.rowid
@@ -1940,7 +1896,7 @@ SELECT p.id, p.kind, p.title,
  ORDER BY rank;
 ```
 
-### 6.9 Triage: memo → task (provenance preserved)
+### 6.9 A task from a day page (provenance preserved)
 
 ```sql
 BEGIN IMMEDIATE;
@@ -1950,8 +1906,7 @@ RETURNING id;   -- the app keeps it as :task_id
 INSERT INTO tasks(id, name, due_day)
 VALUES (:task_id, 'Book dentist appointment', :due_day);
 INSERT INTO links(from_id, to_id, kind, created_at, source)
-VALUES (:task_id, :memo_id, 'spawned', strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'ui');
-UPDATE pages SET triaged_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = :memo_id;
+VALUES (:task_id, :page_id, 'spawned', strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'ui');
 COMMIT;
 ```
 
@@ -2017,7 +1972,7 @@ flowchart TD
     more -->|"yes"| sp["SAVEPOINT target"]
     sp --> resolve["1. resolve<br/>WHERE title_key = :key"]
     resolve --> found{"found?"}
-    found -->|"no"| create["2b. INSERT entities and pages<br/>an empty page, day NULL"]
+    found -->|"no"| create["2b. INSERT entities and pages<br/>an empty page: no day, or a day page's own"]
     found -->|"yes, tombstoned"| revive["2a. entities.deleted_at = NULL"]
     found -->|"yes, live"| link
     create --> link["3. INSERT links wikilink<br/>ON CONFLICT DO NOTHING"]
@@ -2036,18 +1991,20 @@ BEGIN IMMEDIATE;
 
 -- for each target (skip a target whose :key is the page's own title_key):
 SAVEPOINT target;
--- 1) resolve (an equality on title_key implies the partial unique index's predicate, so it is used)
+-- 1) resolve (a search on the unique index pages_title)
 SELECT p.id, p.title, e.deleted_at
   FROM pages p JOIN entities e ON e.id = p.id
  WHERE p.title_key = :key;
 
 -- 2a) found, but tombstoned: revive it (the UI tells the owner the save revives a deleted page)
 UPDATE entities SET deleted_at = NULL WHERE id = :found_id;
--- 2b) none found: create the empty page (no day: a link target is not something written today)
+-- 2b) none found: create the empty page; no day (a link target is not something written today),
+--     except a day page, whose day is its title (pages_day_page)
 INSERT INTO entities(entity_type, created_at, updated_at, source)
 VALUES ('page', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), :source)
 RETURNING id;   -- the app keeps it as :target_id
-INSERT INTO pages(id, kind, title, title_key) VALUES (:target_id, 'page', :title, :key);
+INSERT INTO pages(id, title, title_key, day)
+VALUES (:target_id, :title, :key, CASE WHEN date(:title) IS :title THEN :title END);
 
 -- 3) link it (:target_id is :found_id, or the id 2b returned)
 INSERT INTO links(from_id, to_id, kind, created_at, source)
@@ -2077,7 +2034,7 @@ BEGIN IMMEDIATE;
 INSERT INTO entities(entity_type, created_at, updated_at, source)
 VALUES ('holding', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'ui')
 RETURNING id;   -- the app keeps it as :holding_id
-INSERT INTO pages(id, entity_type, kind, title, title_key) VALUES (:holding_id, 'holding', 'page', 'Main checking', 'main checking');
+INSERT INTO pages(id, entity_type, title, title_key) VALUES (:holding_id, 'holding', 'Main checking', 'main checking');
 INSERT INTO holdings(id, side, currency, category, institution, opened_day)
 VALUES (:holding_id, 'asset', 'EUR', 'cash', 'Bank A', '2019-03-01');
 COMMIT;
@@ -2193,7 +2150,8 @@ HAVING max(b.day) IS NULL OR max(b.day) < date(:day, '-35 day')
 
 `located-in` (place → place: Tokyo → Kanto → Japan) is one-way and transitive. Walk it down with a
 recursive CTE — `UNION`, not `UNION ALL`, so a mistaken cycle ends instead of looping (executed) —
-then join what hangs off those places. "Everything in Japan 2019", for events:
+then join what hangs off those places. "My days in Japan in 2019": the day pages that name a place
+inside it (§6.3):
 
 ```sql
 WITH RECURSIVE inside(id) AS (
@@ -2201,19 +2159,19 @@ WITH RECURSIVE inside(id) AS (
   UNION
   SELECT l.from_id FROM links l JOIN inside ON l.to_id = inside.id WHERE l.kind = 'located-in'
 )
-SELECT ev.name, ev.start_day, pl.title AS place
-  FROM events ev
-  JOIN entities e ON e.id = ev.id AND e.deleted_at IS NULL
-  JOIN inside ON inside.id = ev.place_id
-  JOIN pages pl ON pl.id = ev.place_id
- WHERE ev.start_day BETWEEN :from_day AND :to_day
- ORDER BY ev.start_day;
+SELECT d.day, pl.title AS place
+  FROM inside
+  JOIN links l    ON l.to_id = inside.id AND l.kind = 'wikilink'
+  JOIN pages d    ON d.id = l.from_id AND d.title = d.day
+  JOIN entities e ON e.id = d.id AND e.deleted_at IS NULL
+  JOIN pages pl   ON pl.id = inside.id
+ WHERE d.day BETWEEN :from_day AND :to_day
+ ORDER BY d.day, pl.title;
 ```
 
-A trip through several cities is one event per leg, or a country-level event plus city-level ones.
-Where someone *lived* is a dated event (start and end day, `place_id`), not an undated link.
+A day that names two places inside Japan is listed once per place.
 
-### 6.19 A person, place or holding: create one, promote a ghost page, find the memos that name it (D20)
+### 6.19 A person, place or holding: create one, promote a ghost page (D20)
 
 Step 0 is the resolve of §6.13. No row: create it (steps 1–3). A plain page (`entity_type = 'page'`,
 e.g. a ghost an earlier `[[Bob Sample]]` made): promote it instead. Any other row: the handle is
@@ -2229,7 +2187,7 @@ BEGIN IMMEDIATE;
 INSERT INTO entities(entity_type, created_at, updated_at, source)
 VALUES ('person', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'ui')
 RETURNING id;   -- the app keeps it as :person_id
-INSERT INTO pages(id, entity_type, kind, title, title_key) VALUES (:person_id, 'person', 'page', :handle_title, :handle_key);
+INSERT INTO pages(id, entity_type, title, title_key) VALUES (:person_id, 'person', :handle_title, :handle_key);
 INSERT INTO people(id, name) VALUES (:person_id, 'Bob Sample');
 COMMIT;
 
@@ -2238,19 +2196,11 @@ BEGIN IMMEDIATE;
 UPDATE entities SET entity_type = 'person' WHERE id = :ghost_id AND entity_type = 'page';   -- cascades to pages.entity_type
 INSERT INTO people(id, name) VALUES (:ghost_id, 'Ana Example');
 COMMIT;
-
--- the memos that name a person, place or holding in [[…]], newest first
-SELECT m.id, m.day, substr(m.body, 1, 60) AS start
-  FROM links l
-  JOIN pages m     ON m.id = l.from_id AND m.kind = 'memo'
-  JOIN entities em ON em.id = m.id AND em.deleted_at IS NULL
- WHERE l.to_id = :person_id AND l.kind = 'wikilink'
- ORDER BY m.day DESC, m.id DESC;
 ```
 
-A promotion cannot go wrong quietly: a memo fails the `UPDATE` itself (`pages_named_titled`), and a
-page that is already named or gone makes the `UPDATE` change no row, so the `people` insert fails on its
-key (executed); roll the transaction back.
+The day pages that already name the person (§6.3) keep their links: the id did not change. A promotion
+cannot go wrong quietly: a page that is already named or gone makes the `UPDATE` change no row, so the
+`people` insert fails on its key (executed); roll the transaction back.
 
 ### 6.20 Where was I? Record a fix, the fix at a moment, a day's track, the place it was (D21)
 
@@ -2296,42 +2246,7 @@ SELECT id, title, d2
 Give a place its point with `UPDATE places SET lat = …, lon = … WHERE id = :place_id`; both or neither
 (`places_coords_pair`). No place within the radius is an answer too: the fix is shown as coordinates.
 
-### 6.21 Kinds of events: give an event its kind, the events of a kind, how many of each (D22)
-
-`:kind_id` is the page naming the kind, resolved by its `title_key` or created as a wikilink target is
-(§6.13). An event whose kind page was tombstoned is not counted under it.
-
-```sql
--- this event is a workout
-INSERT INTO links(from_id, to_id, kind, created_at, source)
-VALUES (:event_id, :kind_id, 'is-a', strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'ui')
-ON CONFLICT(from_id, to_id, kind) DO NOTHING;
-
--- every workout between two days (links_to serves the kind)
-SELECT ev.id, ev.name, ev.start_day, ev.end_day
-  FROM links l
-  JOIN events ev  ON ev.id = l.from_id
-  JOIN entities e ON e.id = ev.id AND e.deleted_at IS NULL
- WHERE l.to_id = :kind_id AND l.kind = 'is-a'
-   AND ev.start_day BETWEEN :from_day AND :to_day
- ORDER BY ev.start_day;
-
--- how many events of each kind between two days
-SELECT pg.title AS kind, count(*) AS events
-  FROM links l
-  JOIN events ev  ON ev.id = l.from_id
-  JOIN entities e ON e.id = ev.id AND e.deleted_at IS NULL
-  JOIN pages pg   ON pg.id = l.to_id
-  JOIN entities k ON k.id = pg.id AND k.deleted_at IS NULL
- WHERE l.kind = 'is-a' AND ev.start_day BETWEEN :from_day AND :to_day
- GROUP BY pg.id
- ORDER BY events DESC, pg.title;
-```
-
-An event with no kind yet: `NOT EXISTS (SELECT 1 FROM links l WHERE l.from_id = ev.id AND l.kind =
-'is-a')`.
-
-### 6.22 Import an event once: insert it, re-run it, update a moved one
+### 6.21 Import a row once: insert it, re-run it, update a changed one
 
 **Who sets `import_key`:** every writer that may send the same row twice — an importer (re-run, or a
 fresh export years later), a phone replaying its offline queue, an agent retrying after a timeout whose
@@ -2342,18 +2257,18 @@ cannot arrive twice and has none. The same holds for measurements, balances and 
 ```sql
 BEGIN IMMEDIATE;
 INSERT INTO entities(entity_type, created_at, updated_at, source, import_key)
-VALUES ('event', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'import:calendar', :import_key)
+VALUES ('task', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'import:todo', :import_key)
 ON CONFLICT(source, import_key) WHERE import_key IS NOT NULL DO NOTHING
-RETURNING id;   -- the app keeps it as :event_id; no row back = imported before: skip the next INSERT
-INSERT INTO events(id, name, start_day, start_at, end_at)
-VALUES (:event_id, 'Dentist', '2026-10-01', '2026-10-01T07:00:00.000Z', '2026-10-01T08:00:00.000Z');
+RETURNING id;   -- the app keeps it as :task_id; no row back = imported before: skip the next INSERT
+INSERT INTO tasks(id, name, due_day)
+VALUES (:task_id, 'Renew passport', '2026-10-01');
 COMMIT;
 
--- a later run finds the event moved: update the live row that has the key; a tombstoned one stays gone
-UPDATE events
-   SET start_day = '2026-10-02', start_at = '2026-10-02T07:00:00.000Z', end_at = '2026-10-02T08:00:00.000Z'
+-- a later run finds the task moved: update the live row that has the key; a tombstoned one stays gone
+UPDATE tasks
+   SET due_day = '2026-10-15'
  WHERE id = (SELECT id FROM entities
-              WHERE source = 'import:calendar' AND import_key = :import_key AND deleted_at IS NULL);
+              WHERE source = 'import:todo' AND import_key = :import_key AND deleted_at IS NULL);
 ```
 
 A run that inserts nothing the second time is the check of §2.8 step 5. `import_key` never changes
@@ -2372,7 +2287,7 @@ re-added, each with the trigger that should reopen the question.
 | An entity `uid` (UUIDv7) | An integer id is never reused and a title is permanent, so references are already stable; `entities.import_key` covers an offline replay; the column is additive (D3, executed) | A reference that must survive a re-key or a merge |
 | Agent CLI/API | Planned as a later layer over the same DB; single-writer rule (principle 3) extends to it naturally; `source` already tells its rows apart (§2.2) | After v1 UI exists |
 | Binary files / `attachments` | Cut from v1 (D9): all-text DB stays megabyte-scale; design kept in D9 | The first real photo/PDF attachment need |
-| Recurring events and tasks | A lifelog records what happened; the calendar does planning; birthdays, habits and reminders are covered without it; design kept in D15 | A recurring event wanted in this database, or a task to tick off per occurrence that a habit metric cannot hold |
+| Recurring tasks (and events) | A lifelog records what happened; the calendar does planning; birthdays, habits and reminders are covered without it; design kept in D15 | A recurring event wanted in this database, or a task to tick off per occurrence that a habit metric cannot hold |
 | Database encryption | Deliberate plaintext (D17); protect the disk instead (full-disk encryption) | A legal/privacy requirement for at-rest encryption |
 | Revision/history tables | Tombstones and append-only facts cover the need (D12); `sqlite-history` triggers are the documented fallback [R48] | Demonstrated need for intra-day history of structured rows |
 | Raw wearable-import tier | health-mcp's two-tier mirror exists for provider quirks [R8]; premature with zero importers | A second data source appears, or re-import fidelity bites |
@@ -2392,17 +2307,16 @@ re-added, each with the trigger that should reopen the question.
 | Currency conversion: exchange rates, one net-worth figure across currencies | Net worth is reported per currency (D18); with one currency it is already one figure | Holdings in more than one currency and you want a single total. Additive: an `fx_rates` table `(from_ccy, to_ccy, day, rate)` referencing `currencies`, and the conversion join in §6.15–6.16 |
 | Co-ownership / shares of joint holdings, multiple owners | Single-user database; record your own share (D18) | A second person needs their own view |
 | Storing account numbers, IBANs, credentials | A plaintext DB makes them a liability (§2.7, D17) | Never in `life.db`; use a password manager |
-| Partial dates (`1870`, `1870-05`) for people and events | Nothing asked for one yet. The standard for them is EDTF, now ISO 8601-2 [R70]. The path is one migration: `DROP CONSTRAINT people_birth_day` and `ADD CONSTRAINT people_birth_day` with a CHECK that also accepts the EDTF forms wanted — executed for `YYYY` and `YYYY-MM` on a populated table; junk and month 13 stay rejected. Queries that do date arithmetic on `birth_day` must then skip partial values | The first ancestor or approximate date you want to record |
-| Searching *inside* a CJK run | `unicode61`, kept, folds `é ü ș ț` but a CJK run is one token (`本語` does not find `日本語のノート`). The index is derived, so switching is one transaction — drop `pages_fts`, create it with `tokenize='trigram remove_diacritics 1'`, `rebuild` — and the sync triggers keep working (executed). Trigram finds 3+-character parts and still not two-character words (`京都`) | The first real CJK memo you cannot find |
+| Partial dates (`1870`, `1870-05`) for people | Nothing asked for one yet. The standard for them is EDTF, now ISO 8601-2 [R70]. The path is one migration: `DROP CONSTRAINT people_birth_day` and `ADD CONSTRAINT people_birth_day` with a CHECK that also accepts the EDTF forms wanted — executed for `YYYY` and `YYYY-MM` on a populated table; junk and month 13 stay rejected. Queries that do date arithmetic on `birth_day` must then skip partial values | The first ancestor or approximate date you want to record |
+| Searching *inside* a CJK run | `unicode61`, kept, folds `é ü ș ț` but a CJK run is one token (`本語` does not find `日本語のノート`). The index is derived, so switching is one transaction — drop `pages_fts`, create it with `tokenize='trigram remove_diacritics 1'`, `rebuild` — and the sync triggers keep working (executed). Trigram finds 3+-character parts and still not two-character words (`京都`) | The first real CJK page you cannot find |
 | A second name column for places and holdings | The page title is the name (D20); a separate `name` had to be unique a second time | A place or holding whose display name must differ from its permanent handle |
 | Altitude, speed, heading, activity type on a fix | The question is where, not how (D21); the sources can record altitude, but no question needs it. Additive: nullable columns on `positions` | A question needs one |
 | Correcting or retracting a fix | A fix is raw sensor output; a doubtful one is left out by `accuracy_m` (D21). Additive: a `retracted_positions(position_id)` table the reads exclude | A wrong fix that the accuracy filter keeps must be hidden |
 | A place's extent (radius or polygon) | The nearest point within a bound radius answers "which place" (§6.20). Additive: a nullable `places.radius_m` | Matching picks the wrong one of two close places |
 | Places across the ±180° meridian | The §6.20 distance treats 179.9° and −179.9° as 360° apart (D21) | A place or a trip near the antimeridian (Fiji, Chukotka) |
 | A spatial index (R\*Tree) | `positions_time` and `positions_day` serve the questions asked; R\*Tree is a compile-time option [R73] | A query by area over the whole track is ever slow |
-| Kinds of kinds ([[Running]] is-a [[Workout]]) and kinds of tasks | An event takes several kinds instead, so a run counts under both (D22). Additive: register a `page → page` kind and walk it as §6.18 walks `located-in` | Tagging every run twice becomes a chore, or a question asks for a kind of task |
-| Re-checking links when an entity changes type | `links_endpoint_types` checks a link at insert; a promotion (D20) can leave one its kind now refuses — an event is-a [[Workout]], then Workout becomes a person (executed). Additive: a trigger on `UPDATE OF type ON entities` | The first such link found in real data |
-| Visits and trips from a location export as events | An importer's decision, not schema: an event with `place_id` already holds a visit | The first import of such an export |
+| Re-checking links when an entity changes type | `links_endpoint_types` checks a link at insert; a promotion (D20) can leave one its kind now refuses — a task spawned from the page [[Ana]], then Ana becomes a person (executed). Additive: a trigger on `UPDATE OF type ON entities` | The first such link found in real data |
+| Events: appointments, trips, sessions, where you lived (a table of dated happenings) | A day page and its `[[links]]` record what happened, with whom and where (D22, §6.3); design kept in D22 | A source of dated spans or timed sessions (phone sleep and exercise, a calendar, a location export's visits), or a question the day pages cannot answer |
 
 ---
 

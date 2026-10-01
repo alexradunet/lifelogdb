@@ -20,8 +20,8 @@ D = tempfile.mkdtemp(prefix='integrity-'); base = f'{D}/base.db'
 c = fresh(base); c.execute('BEGIN IMMEDIATE')
 for i in range(3000):                        # enough pages that the table and pages_title span many pages
     if i % 2: page(c, f'Title {i:05d}', day='2026-09-30', body=f'BODYMARK{i:05d} ' + 'lorem ipsum ' * 20)
-    else: memo(c, f'BODYMARK{i:05d} ' + 'dolor sit amet ' * 20)
-for t in ('event', 'task', 'person', 'place', 'holding'): thing(c, t)      # one row of every domain type, so a query that
+    else: page(c, f'Note {i:05d}', body=f'BODYMARK{i:05d} ' + 'dolor sit amet ' * 20)
+for t in ('task', 'person', 'place', 'holding'): thing(c, t)      # one row of every domain type, so a query that
 c.execute('COMMIT'); c.execute('PRAGMA wal_checkpoint(TRUNCATE)'); c.close()  # forgets one table reports a false orphan
 PS = sqlite3.connect(base).execute('pragma page_size').fetchone()[0]
 def sq(p, sql):
@@ -55,12 +55,12 @@ S.K('a balance for no holding, written with foreign_keys=OFF (STRICT does not en
 p = cp('orph'); c = sqlite3.connect(p, isolation_level=None); oid = ent(c, 'page'); c.close()
 S.K('an entities row with no domain row: only the orphan query sees it', checks(p) == (['ok'], '', str(oid)), (checks(p), oid))
 p = cp('half'); c = sqlite3.connect(p, isolation_level=None); c.execute('PRAGMA foreign_keys=ON'); hid = ent(c, 'person')
-c.execute("INSERT INTO pages(id,entity_type,kind,title,title_key) VALUES (?, 'person', 'page', 'Half person', 'half person')", (hid,)); c.close()
+c.execute("INSERT INTO pages(id,entity_type,title,title_key) VALUES (?, 'person', 'Half person', 'half person')", (hid,)); c.close()
 S.K('a person with a page but no people row: only the orphan query sees it', checks(p) == (['ok'], '', str(hid)), (checks(p), hid))
 shutil.rmtree(D, ignore_errors=True)
 
 # ---- the fourth check: the FTS index against pages (it writes, so a writer connection)
-c = fresh(); memo(c, 'alpha beta'); page(c, 'Gamma')
+c = fresh(); day_page(c, '2026-09-30', 'alpha beta'); page(c, 'Gamma')
 S.K('on a clean file every statement of §2.5 runs without error', all(tryx(c, s) == 'OK' for s in sts))
 c.execute("INSERT INTO pages_fts(rowid, title, body) VALUES (999, 'ghost', 'drifted')")
 S.K('a drifted FTS index: PRAGMA integrity_check still says ok', c.execute('PRAGMA integrity_check').fetchall() == [('ok',)])

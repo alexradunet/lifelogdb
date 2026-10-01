@@ -18,8 +18,10 @@ S.K('CURRENT_TIMESTAMP is second-precision and non-ISO', re.fullmatch(r'\d{4}-\d
 S.K('same-second instants order by their fraction as plain text', one(c, "select '2026-06-09T21:14:03.482Z' < '2026-06-09T21:14:03.483Z'") == 1)
 
 # ---- days, on every day column
-DAYCOLS = [('events', 'start_day', lambda: dict(id=ent(c, 'event'), name='x')), ('events', 'end_day', lambda: dict(id=ent(c, 'event'), name='x', start_day='2000-01-01')),
-           ('tasks', 'due_day', lambda: dict(id=ent(c, 'task'), name='x')), ('pages', 'day', lambda: dict(id=ent(c, 'page'), kind='memo')),
+import itertools; _t = itertools.count()
+def _page():
+    i = ent(c, 'page'); n = next(_t); return dict(id=i, title=f'Day test {n}', title_key=f'day test {n}')
+DAYCOLS = [('tasks', 'due_day', lambda: dict(id=ent(c, 'task'), name='x')), ('pages', 'day', _page),
            ('measurements', 'day', lambda: dict(metric_id=1, value=1, source='ui', created_at='2026-01-01T00:00:00.000Z')),
            ('people', 'birth_day', None), ('holdings', 'opened_day', None), ('balances', 'day', None)]
 h = named(c, 'holding')
@@ -46,10 +48,9 @@ for tz in ['Europe/Berlin', 'UTC', 'America/Argentina/Buenos_Aires', 'Etc/GMT+5'
 for tz in ['', 'Europe Berlin', 'x' * 65, 'Europe/Berlin\n', 'ünï/x', 'a;b', 'Europe/Berlin ']:
     S.K(f'entities.tz {tz[:14]!r} rejected', tryx(c, f"INSERT INTO entities(entity_type,created_at,updated_at,tz,source) VALUES ('page',{NOW},{NOW},?,'ui')", (tz,)).startswith('ERR'))
     S.K(f'measurements.tz {tz[:14]!r} rejected', measure(c, 1, '2026-06-09', 3, tz=tz).startswith('ERR'))
-S.K('events have no tz column of their own (D10)', 'tz' not in [r[1] for r in c.execute("pragma table_info('events')")])
 
 # ---- §6.1 records the zone
 c = fresh(); P = {}
 run_block(c, block('6.1'), P)
-S.K('§6.1 run literally stores the memo with its zone', one(c, "select tz from entities where id=?", (P.get('memo_id'),)) == 'Europe/Berlin')
+S.K('§6.1 run literally stores the day page with its zone', one(c, "select tz from entities where id=?", (P.get('page_id'),)) == 'Europe/Berlin')
 S.done()

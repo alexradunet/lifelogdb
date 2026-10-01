@@ -1,5 +1,5 @@
-"""The graph (SCHEMA.md D8, D16, D22): the closed link-kind registry, endpoint types, symmetric mirrors, immutability,
-containment, kinds of events (§6.21, D22) and subtasks with their cycle guards, and the INSERT OR REPLACE trap."""
+"""The graph (SCHEMA.md D8, D16): the closed link-kind registry, endpoint types, symmetric mirrors, immutability,
+containment (§6.18) and subtasks with their cycle guards, and the INSERT OR REPLACE trap."""
 import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'lib'))
 from kit import *
@@ -8,32 +8,32 @@ S = Suite('links')
 
 c = fresh()
 pa, pb = named(c, 'person'), named(c, 'person'); pl = named(c, 'place'); ho = named(c, 'holding')
-ea = thing(c, 'event'); ta, tb = thing(c, 'task'), thing(c, 'task'); m1 = memo(c); pw = page(c, 'Wiki')
+ta, tb = thing(c, 'task'), thing(c, 'task'); m1 = day_page(c); pw = page(c, 'Wiki')
 for lbl, exp, f, t, k in [
     ('friend person-person', 'OK', pa, pb, 'friend'), ('an unregistered kind (Friend)', 'ERR', pa, pb, 'Friend'), ('lives-in is not a kind', 'ERR', pa, pl, 'lives-in'),
-    ('attended person->event', 'OK', pa, ea, 'attended'), ('attended event->person', 'ERR', ea, pa, 'attended'), ('friend person->event', 'ERR', pa, ea, 'friend'),
-    ('subtask task->task', 'OK', ta, tb, 'subtask'), ('subtask page->page', 'ERR', m1, pw, 'subtask'), ('spawned task->memo', 'OK', ta, m1, 'spawned'),
-    ('spawned task->task', 'ERR', ta, tb, 'spawned'), ('wikilink memo->page', 'OK', m1, pw, 'wikilink'), ('wikilink memo->person (a person is a page)', 'OK', m1, pa, 'wikilink'),
-    ('wikilink memo->place', 'OK', m1, pl, 'wikilink'), ('wikilink memo->holding', 'OK', m1, ho, 'wikilink'), ('wikilink person page->page', 'OK', pa, pw, 'wikilink'),
-    ('wikilink memo->event', 'ERR', m1, ea, 'wikilink'), ('wikilink task->page', 'ERR', ta, pw, 'wikilink'), ('redirect page->page', 'OK', m1, pw, 'redirect'),
-    ('redirect page->person', 'ERR', pw, pa, 'redirect'), ('about memo->person', 'OK', m1, pb, 'about'), ('about event->holding', 'OK', ea, ho, 'about'),
-    ('about memo->page', 'ERR', m1, pw, 'about'), ('about memo->task', 'ERR', m1, ta, 'about'), ('related task-person', 'OK', ta, pa, 'related'),
-    ('visited person->place', 'OK', pa, pl, 'visited'), ('visited event->place (place_id is the one home)', 'ERR', ea, pl, 'visited'),
+    ('attended is not a kind (no events, D22)', 'ERR', pa, pw, 'attended'), ('is-a is not a kind (no events, D22)', 'ERR', pw, pw, 'is-a'), ('friend person->place', 'ERR', pa, pl, 'friend'),
+    ('subtask task->task', 'OK', ta, tb, 'subtask'), ('subtask page->page', 'ERR', m1, pw, 'subtask'), ('spawned task->day page', 'OK', ta, m1, 'spawned'),
+    ('spawned task->task', 'ERR', ta, tb, 'spawned'), ('wikilink day page->page', 'OK', m1, pw, 'wikilink'), ('wikilink day page->person (a person is a page)', 'OK', m1, pa, 'wikilink'),
+    ('wikilink day page->place', 'OK', m1, pl, 'wikilink'), ('wikilink day page->holding', 'OK', m1, ho, 'wikilink'), ('wikilink person page->page', 'OK', pa, pw, 'wikilink'),
+    ('wikilink page->task', 'ERR', m1, ta, 'wikilink'), ('wikilink task->page', 'ERR', ta, pw, 'wikilink'), ('redirect page->page', 'OK', m1, pw, 'redirect'),
+    ('redirect page->person', 'ERR', pw, pa, 'redirect'), ('about day page->person', 'OK', m1, pb, 'about'), ('about task->holding', 'OK', ta, ho, 'about'),
+    ('about day page->page', 'ERR', m1, pw, 'about'), ('about day page->task', 'ERR', m1, ta, 'about'), ('related task-person', 'OK', ta, pa, 'related'),
+    ('visited person->place', 'OK', pa, pl, 'visited'), ('visited page->place (a day page names the place instead)', 'ERR', m1, pl, 'visited'),
     ('visited place->person', 'ERR', pl, pa, 'visited'), ('a dangling endpoint of a typed kind', 'ERR', 9999, pl, 'visited'),
     ('located-in place->person', 'ERR', pl, pa, 'located-in'), ('parent-of person->place', 'ERR', pa, pl, 'parent-of')]:
     r = link(c, f, t, k); S.K(f'link {lbl}: {exp}', r.startswith(exp), r)
-S.K('a duplicate edge is refused (UNIQUE from, to, kind)', link(c, pa, ea, 'attended').startswith('ERR'))
+S.K('a duplicate edge is refused (UNIQUE from, to, kind)', link(c, pa, pl, 'visited').startswith('ERR'))
 S.K('a symmetric kind is stored in both directions', one(c, "select count(*) from links where kind='friend'") == 2)
 S.K('links are immutable: kind', 'immutable' in tryx(c, "UPDATE links SET kind='related' WHERE kind='friend'"))
-S.K('links are immutable: an endpoint', 'immutable' in tryx(c, 'UPDATE links SET to_id=? WHERE kind=\'attended\'', (pb,)))
-S.K('a full-row update that changes only the note passes', tryx(c, "UPDATE links SET note='hi', from_id=from_id, to_id=to_id, kind=kind WHERE kind='attended'") == 'OK')
+S.K('links are immutable: an endpoint', 'immutable' in tryx(c, 'UPDATE links SET to_id=? WHERE kind=\'visited\'', (pb,)))
+S.K('a full-row update that changes only the note passes', tryx(c, "UPDATE links SET note='hi', from_id=from_id, to_id=to_id, kind=kind WHERE kind='visited'") == 'OK')
 c.execute("DELETE FROM links WHERE kind='friend' AND from_id=?", (pa,))
 S.K('deleting one side of a symmetric edge deletes its mirror', one(c, "select count(*) from links where kind='friend'") == 0)
 
 # ---- the registry
 S.K('link_kinds: symmetric is fixed (by the trigger: subtask could be symmetric by its CHECK)', 'fixed at registration' in tryx(c, "UPDATE link_kinds SET symmetric=1 WHERE kind='subtask'"))
 S.K('link_kinds: to_types is fixed', 'fixed at registration' in tryx(c, "UPDATE link_kinds SET to_types='person' WHERE kind='about'"))
-S.K('link_kinds: a note edit with symmetric=symmetric passes', tryx(c, "UPDATE link_kinds SET note='n', symmetric=symmetric, from_types=from_types WHERE kind='attended'") == 'OK')
+S.K('link_kinds: a note edit with symmetric=symmetric passes', tryx(c, "UPDATE link_kinds SET note='n', symmetric=symmetric, from_types=from_types WHERE kind='visited'") == 'OK')
 S.K('a kind name in upper case is refused', tryx(c, "INSERT INTO link_kinds(kind,symmetric) VALUES ('Boss',0)").startswith('ERR'))
 S.K('a symmetric kind with different endpoint types is refused', tryx(c, "INSERT INTO link_kinds(kind,symmetric,from_types,to_types) VALUES ('mentor',1,'person','place')").startswith('ERR'))
 S.K('a malformed type list is refused', tryx(c, "INSERT INTO link_kinds(kind,symmetric,from_types,to_types) VALUES ('k2',0,'Person','page')").startswith('ERR'))
@@ -54,9 +54,14 @@ S.K('Tokyo located-in Kanto located-in Japan', link(c, tokyo, kanto, 'located-in
 S.K('located-in is one-way (no mirror)', one(c, "select count(*) from links where kind='located-in'") == 2)
 kid, par = named(c, 'person'), named(c, 'person')
 S.K('parent-of keeps its direction', link(c, par, kid, 'parent-of') == 'OK' and one(c, "select count(*) from links where kind='parent-of'") == 1)
-ev = ent(c, 'event'); domain(c, 'event', ev, name='Trip', start_day='2019-04-02', place_id=tokyo)
+d1 = day_page(c, '2019-04-02', 'landed in [[Tokyo]]'); link(c, d1, tokyo, 'wikilink')
+d2 = day_page(c, '2019-04-05', 'a day in [[Japan]] and [[Kanto]]'); link(c, d2, japan, 'wikilink'); link(c, d2, kanto, 'wikilink')
+d3 = day_page(c, '2018-12-31', '[[Tokyo]] again'); link(c, d3, tokyo, 'wikilink')
+osaka = named(c, 'place', 'Osaka'); d4 = day_page(c, '2019-06-01', 'not linked to Japan: [[Osaka]]'); link(c, d4, osaka, 'wikilink')
+pg = page(c, 'Tokyo guide', day='2019-05-01'); link(c, pg, tokyo, 'wikilink')
 P = dict(place_id=japan, from_day='2019-01-01', to_day='2019-12-31')
-S.K('§6.18 finds the Tokyo trip inside Japan, named by the place\'s title', c.execute(block('6.18'), P).fetchall() == [('Trip', '2019-04-02', 'Tokyo')])
+WANT = [('2019-04-02', 'Tokyo'), ('2019-04-05', 'Japan'), ('2019-04-05', 'Kanto')]
+S.K('§6.18 finds the 2019 days in Japan by the places inside it, not another year, a place outside or a page that is not a day', c.execute(block('6.18'), P).fetchall() == WANT, c.execute(block('6.18'), P).fetchall())
 link(c, japan, tokyo, 'located-in')
 steps = [0]
 def stop():
@@ -65,31 +70,7 @@ c.set_progress_handler(stop, 1000)
 try: r = c.execute(block('6.18'), P).fetchall()
 except sqlite3.Error as e: r = 'ERR ' + str(e)
 c.set_progress_handler(None, 0)
-S.K('§6.18 terminates on a cycle (UNION)', r == [('Trip', '2019-04-02', 'Tokyo')], r)
-
-# ---- kinds of events (§6.21, D22)
-c = fresh(); wo, run_, sl = page(c, 'Workout'), page(c, 'Running'), page(c, 'Sleep'); m1 = memo(c); ta = thing(c, 'task'); pa = named(c, 'person')
-def ev(name, day):
-    return thing(c, 'event', name=name, start_day=day)
-e1, e2, e3, e4, e5 = ev('Run', '2025-03-01'), ev('Gym', '2025-06-01'), ev('Night', '2025-06-02'), ev('Run', '2024-12-31'), ev('Old gym', '2025-02-01')
-for lbl, exp, f, t in [('event->page', 'OK', e1, wo), ('a second kind on the same event', 'OK', e1, run_), ('page->page', 'ERR', m1, wo),
-                       ('task->page', 'ERR', ta, wo), ('event->person', 'ERR', e1, pa), ('event->event', 'ERR', e1, e2)]:
-    r = link(c, f, t, 'is-a'); S.K(f'link is-a {lbl}: {exp}', r.startswith(exp), r)
-S.K('is-a is one-way (no mirror)', one(c, "select count(*) from links where kind='is-a'") == 2)
-for e, k in [(e2, wo), (e3, sl), (e4, wo), (e5, wo)]: link(c, e, k, 'is-a')
-c.execute("UPDATE entities SET deleted_at = " + NOW + " WHERE id = ?", (e5,))
-P = dict(event_id=e2, kind_id=wo, from_day='2025-01-01', to_day='2025-12-31')
-tag = lambda: tryx(c, statements(block('6.21'))[0], P)
-S.K('§6.21 tagging an event already of that kind is a no-op (ON CONFLICT DO NOTHING)',
-    tag() == 'OK' and one(c, "select count(*) from links where kind='is-a' and from_id=?", (e2,)) == 1)
-S.K('§6.21 the workouts of 2025, in order, without the tombstoned one or last year\'s',
-    [r[1:3] for r in c.execute(statements(block('6.21'))[1], P)] == [('Run', '2025-03-01'), ('Gym', '2025-06-01')])
-cnt = lambda: c.execute(statements(block('6.21'))[2], P).fetchall()
-S.K('§6.21 counts each kind of 2025, a run under both of its kinds', cnt() == [('Workout', 2), ('Running', 1), ('Sleep', 1)], cnt())
-c.execute("UPDATE entities SET deleted_at = " + NOW + " WHERE id = ?", (sl,))
-S.K('§6.21 a tombstoned kind page is not counted', cnt() == [('Workout', 2), ('Running', 1)], cnt())
-S.K('§6.21 the list of a kind is served by links_to', any('links_to' in r[3] for r in c.execute('EXPLAIN QUERY PLAN ' + statements(block('6.21'))[1], P)))
-S.K('the kind page\'s backlinks (§6.5) list its events', {r[2] for r in c.execute(block('6.5'), {'page_id': wo})} == {e1, e2, e4})
+S.K('§6.18 terminates on a cycle (UNION)', r == WANT, r)
 
 # ---- subtasks (§6.11) and the cycle cap
 c = fresh(); root, a, b = thing(c, 'task'), thing(c, 'task'), thing(c, 'task')

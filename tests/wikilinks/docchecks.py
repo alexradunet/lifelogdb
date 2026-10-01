@@ -2,7 +2,7 @@
 A  the vector table of §2.4 reproduces with the reference extraction, row for row;
 B  the SQL of §6.13, run literally statement by statement, gives the vector results, leaves no orphan, carries ids by
    RETURNING, and equals the reference implementation after 400 random edits;
-C  §6.5 lists a memo's wikilink and not a stub's redirect row."""
+C  §6.5 lists a day page's wikilink and not a stub's redirect row."""
 import json, os, random, re, sqlite3, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'lib'))
 from kit import Suite, DOC, NOW, fresh, block, statements, code, section
@@ -55,11 +55,11 @@ def doc_save(c, page_id, body, own_key):
         ids.append(tid)
     c.execute(St['dele'][0], {'page_id': page_id, 'target_ids': json.dumps(ids)})
 
-def doc_memo(c, body):
+def doc_page(c, body, title='Vector body'):
     c.execute(St['begin'][0])
     pid = c.execute(f"INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES('page',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
-    c.execute("INSERT INTO pages(id,kind,day,body) VALUES(?, 'memo', '2026-09-30', ?)", (pid, body))
-    doc_save(c, pid, body, None); c.execute(St['commit'][0]); return pid
+    c.execute('INSERT INTO pages(id,title,title_key,body) VALUES(?, ?, ?, ?)', (pid, title, W.title_key(title), body))
+    doc_save(c, pid, body, W.title_key(title)); c.execute(St['commit'][0]); return pid
 
 def doc_edit(c, pid, body):
     c.execute(St['begin'][0]); c.execute('UPDATE pages SET body=? WHERE id=?', (body, pid))
@@ -69,7 +69,7 @@ def links_of(c, pid): return sorted(r[0] for r in c.execute("SELECT p.title FROM
 if all(len(v) == 1 for v in St.values()):
     okv, orph = True, 0
     for label, body, exp in V:
-        c = fresh(); pid = doc_memo(c, body)
+        c = fresh(); pid = doc_page(c, body)
         orph += c.execute("select count(*) from entities e where not exists (select 1 from pages p where p.id=e.id)").fetchone()[0]
         if links_of(c, pid) != sorted(exp): okv = False; print('   differs:', label, links_of(c, pid), exp)
     S.K(f'B the document\'s SQL, run literally, gives the vector result for all {len(V)} vectors', okv)
@@ -80,7 +80,7 @@ if all(len(v) == 1 for v in St.values()):
     frags = ['[[Alpha]]', '[[alpha|a]]', '#beta', '`[[code]]`', '[[Bad/Name]]', '~~~\n[[fence]]\n~~~', '[[Ünï]]', '[[UNÏ]]', 'text', '#Beta',
              '[[Gamma delta]]', '#12', '[[CON]]', '#REDIRECTED', '#REDIRECT [[Alpha]]']
     rng = random.Random(10); ca, cb = fresh(), fresh()
-    pa = [doc_memo(ca, 'seed') for _ in range(6)]; pb = [W.save_memo(cb, 'seed')[0] for _ in range(6)]
+    pa = [doc_page(ca, 'seed', f'Seed {i}') for i in range(6)]; pb = [W.save_page(cb, 'seed', f'Seed {i}')[0] for i in range(6)]
     for _ in range(400):
         i = rng.randrange(6); body = ' '.join(rng.choice(frags) for _ in range(rng.randint(0, 6)))
         doc_edit(ca, pa[i], body); W.edit_body(cb, pb[i], body)
@@ -90,13 +90,13 @@ if all(len(v) == 1 for v in St.values()):
 
 # ---- C  §6.5 drops redirect rows
 c = fresh(); c.execute('BEGIN IMMEDIATE')
-def mk(kind, title=None, body=''):
+def mk(title, body='', day=None):
     i = c.execute(f"INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES('page',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
-    c.execute("INSERT INTO pages(id,kind,title,title_key,day,body) VALUES(?,?,?,?,?,?)", (i, kind, title, W.title_key(title) if title else None, None if kind == 'page' else '2026-09-30', body)); return i
-new, old, mm = mk('page', 'Diet plan'), mk('page', 'Diet', '#REDIRECT [[Diet plan]]'), mk('memo', body='[[Diet plan]]')
+    c.execute("INSERT INTO pages(id,title,title_key,day,body) VALUES(?,?,?,?,?)", (i, title, W.title_key(title), day, body)); return i
+new, old, mm = mk('Diet plan'), mk('Diet', '#REDIRECT [[Diet plan]]'), mk('2026-09-30', '[[Diet plan]]', '2026-09-30')
 for f, t, k in ((old, new, 'redirect'), (mm, new, 'wikilink')):
     c.execute(f"INSERT INTO links(from_id,to_id,kind,created_at,source) VALUES(?,?,?,{NOW},'ui')", (f, t, k))
 c.execute('COMMIT')
 rows = c.execute(block('6.5'), {'page_id': new}).fetchall()
-S.K('C §6.5 lists the memo\'s wikilink and not the stub\'s redirect row', [r[0] for r in rows] == ['wikilink'], rows)
+S.K('C §6.5 lists the day page\'s wikilink and not the stub\'s redirect row', [r[0] for r in rows] == ['wikilink'], rows)
 S.done()
