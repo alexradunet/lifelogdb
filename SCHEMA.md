@@ -48,9 +48,10 @@ and *canonical data being corrupted by uncontrolled writers*.
    `CREATE` statement, the only comments the file keeps, and `lifelog_meta` holds the few rules that
    span tables. (SQLite's own "application file format" essay makes exactly this argument — see [R1].)
 3. **Single writing application.** One application (later with CLI/API/agent
-   front-ends) owns all writes to the database. Many
+   front-ends) owns all writes to a given `life.db`. Many
    *processes* are fine — one *writer* owning the conventions. No other app is ever
-   pointed at the canonical data with write access (see D3).
+   pointed at the canonical data with write access (see D3). Any application that keeps
+   this whole contract may be that writer (D14).
 4. **Additive-only evolution after freeze.** Once real data exists, schema changes are
    `ADD COLUMN` / `CREATE TABLE` / new indexes and numbered forward-only migrations.
    SQLite explicitly blesses additive change as its compatibility mechanism
@@ -1575,9 +1576,11 @@ the constraints that carry it; the rule itself is in §3 or §2.
   a search box over `pages_fts`, and a backlinks panel. For ad-hoc exploration: **Datasette** pointed
   at `life.db`, read-only (§2.6) [R49]. `sqlite-web` is **not used** [R50]: it can insert, update and
   delete rows — a second writer that bypasses the insert conventions (principle 3).
-- **The writing application** is `app/`: one Go binary that is the CLI, the REST API and the MCP
-  server, so the owner's UIs, AI agents and importers all write through it. Its own decisions are in
-  `app/README.md`.
+- **The writing application.** This document is the whole contract: an application in any language
+  that keeps it (§3 applied verbatim, §2, the §2.4 vectors) may be the writer of a `life.db` — the one
+  writer of that file, never a second beside it. The first, kept in this repository, is `app/`: one Go
+  binary that is the CLI, the REST API and the MCP server, so the owner's UIs, AI agents and importers
+  all write through it. Its own decisions are in `app/README.md`; nothing there adds to this contract.
 - **Rejected.** Building a generic admin UI — Datasette already is one, maintained by someone else.
 - **Sources.** [R49][R50].
 
