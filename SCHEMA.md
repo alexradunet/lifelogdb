@@ -1,9 +1,9 @@
 # Lifelog — Database Schema v1
 
-**Status:** freeze candidate. No canonical database exists yet; until one does, §3 is edited in place (D13). The next step is the capture path and one real import (§2.8), not another review.
-**Scope of the project:** A lifetime personal database (a journal of day pages, notes and wiki pages,
-tasks, people, places, health metrics, location history, personal finance — holdings, balances, net worth; events
-and file attachments deferred — D22, D9) in a single SQLite file, plus a custom UI for data entry and daily use.
+**Status:** freeze candidate. No canonical database exists yet; until one does, §3 is edited in place (D13). The next step is the capture path and one real import (§2.7), not another review.
+**Scope of the project:** A lifetime personal database — a life log and its backup, not a project
+manager (D23): a journal of day pages, notes and wiki pages, people, places and health metrics (events,
+money, location history and file attachments deferred — D22, D18, D21, D9) in a single SQLite file, plus a custom UI for data entry and daily use.
 Other devices are clients of the one writing application (D3); everything else (view generators, AI
 features, sync or merge between copies of the database) is explicitly out of scope.
 
@@ -81,7 +81,7 @@ ones that span tables are also rows of `lifelog_meta` (§3), so the file carries
   is the in-DB form used by triggers) [R5][R6][R28]. Milliseconds because `%f` always renders
   `SS.SSS`, which gives one fixed-width string that the round-trip CHECK can compare, that sorts
   chronologically as plain text, and that keeps rows written within the same second in order (a
-  balance and its correction) (executed).
+  reading and its correction) (executed).
 - **Local days** (`*_day` columns): the *local calendar date where the thing happened or
   was captured*, TEXT `YYYY-MM-DD`, written at insert time in the zone of the device that captured
   it — a phone's, never the clock or zone of a hub on a server (D3).
@@ -91,13 +91,12 @@ ones that span tables are also rows of `lifelog_meta` (§3), so the file carries
   `strftime('%Y-%m-%dT%H:%M:%fZ', x) IS x`. The `IS` matters: a CHECK passes when it evaluates
   to NULL, and `date()` returns NULL for malformed input, so `date(x) = x` silently *accepts*
   `2026-9-3` (executed).
-- **Written versus happened.** `created_at` — on `entities`, `links`, `measurements`, `balances` and
-  `positions` alike — is when the row was written to `life.db`, never back-dated, so it is an audit
-  trail. When a thing *happened* is its own `day` / `*_at`. (An entry in a day page has no time
+- **Written versus happened.** `created_at` — on `entities`, `links` and `measurements` alike — is
+  when the row was written to `life.db`, never back-dated, so it is an audit trail. When a thing *happened* is its own `day` / `*_at`. (An entry in a day page has no time
   of its own; a time worth keeping is written in its text: a known limit, D5.)
-- **Zone.** `entities.tz`, `measurements.tz` and `positions.tz` store the capturing device's IANA zone
-  (`Europe/Berlin`; NULL = unknown), so a UTC instant can be read as local time. Only capture time
-  can supply it.
+- **Zone.** `measurements.tz` stores the IANA zone of the device that took a timed reading
+  (`Europe/Berlin`; NULL = unknown), so its `taken_at` can be read as local time. Only capture time
+  can supply it. Every other instant is a write time, read in UTC.
 
 ### 2.2 Identity and provenance
 
@@ -106,20 +105,21 @@ ones that span tables are also rows of `lifelog_meta` (§3), so the file carries
   in the same transaction (§6.1). Never `last_insert_rowid()` across statements: any insert in
   between — a link, a ghost page, a measurement — moves it, and the next row silently points at the
   wrong entity (executed).
-- **A person, place or holding is a page (D20).** It is one id with three rows: `entities`
+- **A person or a place is a page (D20).** A person is one id with three rows: `entities`
   (`entity_type = 'person'`), `pages` (`entity_type = 'person'`, titled — the title is the handle that
-  `[[wikilinks]]` write) and `people`. Insert them in that order in one transaction (§6.19). A ghost
-  page an earlier `[[Name]]` created is *promoted* instead: `UPDATE entities SET entity_type = 'person'`
-  (the foreign key cascades it to `pages.entity_type`), then insert the `people` row. The foreign keys
-  refuse a person without a page and a person turned back into a page (executed). Title uniqueness already refuses a second `Sam`, so two people called Sam are told apart
+  `[[wikilinks]]` write) and `people`. Insert them in that order in one transaction (§6.14). A place is
+  the first two only, with `entity_type = 'place'`: it has no columns of its own (D16). A ghost page an
+  earlier `[[Name]]` created is *promoted* instead: `UPDATE entities SET entity_type = 'person'` (the
+  foreign key cascades it to `pages.entity_type`), then insert the `people` row; a place needs nothing
+  more. The foreign keys refuse a person without a page and a person turned back into a page
+  (executed). Title uniqueness already refuses a second `Sam`, so two people called Sam are told apart
   in the handle (`Sam (barber)`); `people.name` is the editable full name.
-- **Provenance.** `source` on `entities`, `links`, `measurements`, `balances` and `positions` names the writer
+- **Provenance.** `source` on `entities`, `links` and `measurements` names the writer
   of the row — `ui`, `cli`, `api`, `agent:<name>`, `import:<name>` (lowercase `[a-z0-9_:.-]`, 1–64
   characters). Only the moment of writing knows it, so it is required at insert and never changes;
   with agents among the writers (D3) it is how a wrong row is traced to the writer that made it. An
   importer's `import_key` — on entities and on facts — is unique per `source`, so its name is also the
   deduplication namespace.
-  What kind of figure a balance is (a statement, an estimate) goes in its `note`.
 
 ### 2.3 Deletion and corrections
 
@@ -127,19 +127,16 @@ ones that span tables are also rows of `lifelog_meta` (§3), so the file carries
   `BEFORE DELETE` triggers reject deleting an `entities` row or any domain row, also on a connection
   that forgot `foreign_keys` (executed). Every read path filters `deleted_at IS NULL`. Junk captured by
   accident is tombstoned like everything else.
-- **Facts are corrected by inserting, never by editing.** `measurements` and `balances` reject
-  `UPDATE` and `DELETE`. A measurement is corrected by a row whose `supersedes_id` names it (at most
-  one per row; correct the correction to change it again); a balance by a newer row for the same
-  `(holding_id, day)`. A NULL `value` / `amount` **retracts**. The views `measurement_values` and
-  `balance_values` are the read rule. `positions` rejects both too, and has no correction at all: a
-  GPS fix is raw sensor output, so a doubtful one is left out when read, by `accuracy_m` (D21).
+- **Readings are corrected by inserting, never by editing.** `measurements` rejects `UPDATE` and
+  `DELETE`. A measurement is corrected by a row whose `supersedes_id` names it (at most one per row;
+  correct the correction to change it again); a NULL `value` **retracts**. The view
+  `measurement_values` is the read rule.
 - **Imports insert with `ON CONFLICT(…) DO NOTHING`**, never `INSERT OR IGNORE` (it also skips rows
   that violate a CHECK or NOT NULL, silently) and never `OR REPLACE` (a delete, blocked only when
   `recursive_triggers=ON`, §2.6) (both executed).
 
 **A correction never overwrites.** One reading, corrected, retracted and restored — what
-`measurement_values` shows after each insert (§6.10). `balance_values` works the same way, with the
-newest row per `(holding_id, day)` in place of `supersedes_id`.
+`measurement_values` shows after each insert (§6.10).
 
 ```mermaid
 %% diagram: correct-measurement
@@ -201,7 +198,7 @@ below:
   tombstoned target is revived*, not duplicated: the unique index covers tombstoned pages, so the
   save un-tombstones the page it resolves — any save that names it, an old day page edited years
   later included, so the UI tells the owner.
-- *Named pages.* A person's, place's or holding's page is a page like any other, so `[[Bob
+- *Named pages.* A person's or a place's page is a page like any other, so `[[Bob
   Sample]]` is an ordinary wikilink and nothing in the save contract knows about people (D20).
 - *Known limits.* A body that also defines a reference (`[Ref]: http://r`) turns `[[Ref]]` into
   a Markdown link; a `#` written as an entity (`&#35;x`) is decoded before the scan and counts as
@@ -287,14 +284,14 @@ other way: its `[[links]]` say who the day was with and where (§6.3).
 ### 2.5 Integrity checks
 
 Four checks tell whether a file still obeys the schema. They read only the file, need no other
-copy, and each catches what the others cannot. Run them before and after an import (§2.8) or a
+copy, and each catches what the others cannot. Run them before and after an import (§2.7) or a
 migration (D13), and after any writer crashed. Every claim below was executed on the **live**
 file, not on a copy.
 
 ```sql
 PRAGMA integrity_check;      -- one row: ok
 PRAGMA foreign_key_check;    -- no rows
-SELECT id FROM entities WHERE id NOT IN (SELECT id FROM pages WHERE entity_type = 'page' UNION SELECT id FROM tasks UNION SELECT id FROM people UNION SELECT id FROM places UNION SELECT id FROM holdings);   -- no rows
+SELECT id FROM entities WHERE id NOT IN (SELECT id FROM pages WHERE entity_type IN ('page','place') UNION SELECT id FROM people);   -- no rows
 INSERT INTO pages_fts(pages_fts, rank) VALUES ('integrity-check', 1);   -- no error
 ```
 
@@ -302,7 +299,7 @@ INSERT INTO pages_fts(pages_fts, rank) VALUES ('integrity-check', 1);   -- no er
   three pages, and an index entry that no longer matches its row (a flipped byte in a `title_key`
   inside `pages_title`).
 - **`foreign_key_check` — what the first cannot see.** A writer that forgot `PRAGMA foreign_keys=ON`
-  (§2.6 — per connection; `STRICT` does not enforce foreign keys) stored a balance for a holding that
+  (§2.6 — per connection; `STRICT` does not enforce foreign keys) stored a reading of a metric that
   does not exist, and `integrity_check` said `ok`.
 - **The orphan query — the one check no constraint can express.** An `entities` row with no domain
   row (a writer that died between its inserts, or a person with a page but no `people` row): both
@@ -369,7 +366,7 @@ make it a second writer, so it is not used (D14). Three reader traps [R65][R66]:
   iCloud) copies while it is open.
 
 `life.db`, `life.db-wal` and `life.db-shm` are never committed to git: binary churn, and git
-history cannot be scrubbed of finance data.
+history cannot be scrubbed of health data.
 
 "Single writing application" (principle 3, D3) does not mean a single OS process: the
 app, its CLI, the API service and local agents are all the same *writer* as long as
@@ -386,40 +383,9 @@ flowchart LR
     db -.->|"readers never block the writer"| ro["read-only tools<br/>Datasette, mode=ro"]
 ```
 
-### 2.7 Money (D18)
+### 2.7 Threat model, the 2075 test, and imports
 
-The rules are in §3 (`currencies`, `holdings`, `balances`, `balance_values`). What the DDL cannot say
-is what to model: **a holding is anything with a balance or a value, and its balance is the value in
-the holding's currency on that day, as the statement, the app or your own estimate says.** Record
-**your own share** of joint items.
-
-| You own | Make a holding | Balance is |
-|---|---|---|
-| deposit, savings, cash | `category 'deposit'` / `'cash'`, its own currency | the statement balance |
-| stocks, funds, pension | one per broker or wrapper (`'brokerage'`, `'pension'`); one per currency if you hold several | the portfolio's market value |
-| crypto | one per exchange or wallet (`'crypto'`), valued in the fiat you track it in | its market value that day |
-| house, car, watch, art | `'property'`, `'vehicle'`, `'valuables'` | your estimate (say so in `note`) |
-| mortgage, loan, card | `side = 'liability'` | the amount owed, positive |
-
-Sell everything or dispose of it: record a final balance and set `closed_day`. Net worth is
-derived on read, one figure per currency (§6.15–§6.16). **Never store** credentials, PINs or full
-account/card numbers in `life.db` or in a page: the file is plaintext (D17); a holding's page may
-hold the last four digits.
-
-```mermaid
-%% diagram: money-flow
-flowchart LR
-    stmt["statement, app or own estimate<br/>the value on a local day"] -->|"INSERT, never edit"| bal[("balances<br/>integer minor units<br/>append-only")]
-    bal -->|"balance_values:<br/>newest row per day,<br/>NULL retracts"| held["each open, live holding<br/>latest balance on or before the day<br/>asset adds, liability subtracts"]
-    acc[("holdings<br/>side, currency")] --> held
-    held --> sum["sum per currency<br/>in that currency's minor units"]
-    sum --> nw(["net worth on that day<br/>one figure per currency<br/>derived, never stored"])
-    cur[("currencies<br/>subunits")] -.->|"whole units"| nw
-```
-
-### 2.8 Threat model, the 2075 test, and imports
-
-**What is protected, and from what.** The asset is `life.db`: prose, health and finance in one
+**What is protected, and from what.** The asset is `life.db`: prose and health data in one
 plaintext file (D17 — the database is deliberately not encrypted).
 
 | Threat | Control | Residual |
@@ -429,7 +395,7 @@ plaintext file (D17 — the database is deliberately not encrypted).
 | A buggy writer, importer or agent | one writing application; triggers for append-only facts, no hard deletes and fixed kinds and titles; `ON CONFLICT … DO NOTHING`; `BEGIN IMMEDIATE`; `source` on every row; the foreign-key and orphan checks (§2.3, §2.6, §2.5) | the pragmas are per connection, so the application asserts them at connect |
 | Another tool editing rows | exploration tools open the file read-only (§2.6, D14) | anything with write access to the file bypasses every control |
 | A stolen disk | the disk holding `life.db` is encrypted at rest (D17) | a stolen *unlocked* machine has everything |
-| Finance, health or location data leaking through git | `life.db` and its `-wal`/`-shm` are never committed; no credentials or full account numbers, ever (§2.6, §2.7) | page bodies and `note` fields are free text — the owner's discipline |
+| Health data or private notes leaking through git | `life.db` and its `-wal`/`-shm` are never committed; no credentials or account numbers, ever (§2.6) | page bodies and `note` fields are free text — the owner's discipline |
 | The data exposed on a network | Datasette on localhost only and read-only; nothing that runs arbitrary SQL is reachable from outside (D17) | a wrong bind address |
 | A reader in fifty years without this document | the 2075 test, below | — |
 
@@ -447,32 +413,30 @@ each phrase in the last column, and **every key of `lifelog_meta` must be used b
 | 1 | What is this, and where are its rules? | `schema` | `lifelog`, `CREATE statement` |
 | 2 | How is an instant stored? | `instants` | `UTC`, `ISO-8601` |
 | 3 | What is a `*_day` column? | `days` | `LOCAL`, `never recomputed`, `IS, not =` |
-| 4 | In which time zone was a row written? | `entities`, `measurements` | `IANA` |
+| 4 | In which time zone was a reading taken? | `measurements` | `IANA` |
 | 5 | When was a row written, versus when did it happen? | `instants`, `measurements` | `never back-dated`, `created_at` |
 | 6 | Can anything be deleted? | `deletes`, `entities_no_delete` | `tombstone`, `links` |
 | 7 | Are measurements kept? How is one corrected? | `measurements`, `measurement_values` | `append-only`, `RETRACTS` |
-| 8 | In what unit are amounts? How do I get net worth? | `balances`, `holdings` | `minor units`, `never stored`, `per currency` |
-| 9 | Which balance row wins for a day? | `balances` | `highest id` |
-| 10 | Which link kinds exist, and who may link what? | `link_kinds` | `CLOSED registry` |
-| 11 | How do `[[wikilinks]]` and `#tags` become links? | `pages` | `CommonMark`, `invalid target makes no link` |
-| 12 | Why is a page never renamed? What makes a title valid? | `pages`, `pages_title_fixed` | `never renamed`, `file name`, `NFC` |
-| 13 | Why do ids of different tables coincide? How are rows created? | `entities` | `SAME id`, `RETURNING` |
-| 14 | How does `[[Bob Sample]]` reach a person, a place or a holding? | `entities`, `people` | `is also a page`, `handle` |
-| 15 | Who may write, and with which settings? | `writers` | `BEGIN IMMEDIATE`, `read-only` |
-| 16 | What is derived and can be rebuilt? | `pages_fts`, `pages` | `rebuild`, `derived` |
-| 17 | How do imports avoid duplicates and bad rows? | `writers`, `measurements` | `DO NOTHING`, `OR IGNORE` |
-| 18 | Does anything repeat? | `tasks` | `do not repeat` |
-| 19 | How does the schema change after real data exists? | `evolution` | `additive`, `user_version` |
-| 20 | Where is the journal? What did I write on a given day? | `pages` | `day page`, `YYYY-MM-DD`, `title equals its day` |
-| 21 | Which SQLite may write this file? | `sqlite` | `3.51.3`, `3.53` |
-| 22 | Who or what wrote this row? | `source` | `written at insert`, `agent` |
-| 23 | Where was I at a given moment? Where is a place? | `positions`, `places` | `WGS84`, `append-only`, `query time` |
+| 8 | Which link kinds exist, and who may link what? | `link_kinds` | `CLOSED registry` |
+| 9 | How do `[[wikilinks]]` and `#tags` become links? | `pages` | `CommonMark`, `invalid target makes no link` |
+| 10 | Why is a page never renamed? What makes a title valid? | `pages`, `pages_title_fixed` | `never renamed`, `file name`, `NFC` |
+| 11 | Why do ids of different tables coincide? How are rows created? | `entities` | `SAME id`, `RETURNING` |
+| 12 | How does `[[Bob Sample]]` reach a person or a place? | `entities`, `people` | `is also a page`, `handle` |
+| 13 | Who may write, and with which settings? | `writers` | `BEGIN IMMEDIATE`, `read-only` |
+| 14 | What is derived and can be rebuilt? | `pages_fts`, `pages` | `rebuild`, `derived` |
+| 15 | How do imports avoid duplicates and bad rows? | `writers`, `measurements` | `DO NOTHING`, `OR IGNORE` |
+| 16 | How does the schema change after real data exists? | `evolution` | `additive`, `user_version` |
+| 17 | Where is the journal? What did I write on a given day? | `pages` | `day page`, `YYYY-MM-DD`, `title equals its day` |
+| 18 | Which SQLite may write this file? | `sqlite` | `3.51.3`, `3.53` |
+| 19 | Who or what wrote this row? | `source` | `written at insert`, `agent` |
+| 20 | Does it keep to-dos and plans? | `schema` | `not a project manager` |
+| 21 | Where was I on a given day? | `pages`, `link_kinds` | `places the owner was at`, `kind='at'` |
 
 **Imports** — the path for data that already exists elsewhere (a journal archive, a health export,
-statements). Every step was executed on 1 000 synthetic rows:
+lab results). Every step was executed on 1 000 synthetic rows:
 
 1. **Trial run first.** Rows are never deleted, so a bad import can only be retracted row by row
-   (a NULL-value correction for a measurement or a balance, a tombstone for an entity). Do the
+   (a NULL-value correction for a measurement, a tombstone for an entity). Do the
    first run of any new importer on a *copy*: `sqlite3 life.db "VACUUM INTO '/tmp/trial.db'"`.
 2. **Load the rows into a scratch database, never into `life.db`** (`sqlite3 scratch.db ".import
    --csv weights.csv staging"`), then insert in one `BEGIN IMMEDIATE` transaction per batch:
@@ -502,9 +466,9 @@ DETACH s;
    `ON CONFLICT(from_id, to_id, kind) DO NOTHING`.
 3. **Identity and time.** `source` names the importer (`import:<name>`), `import_key` is the source's
    own id, `day` / `taken_at` / `tz` say when it happened, `created_at` is when you imported it — on
-   every table, `created_at` is the write time (§2.1). An imported task or page carries
-   its key on `entities` (§6.21). **The key must come out the same on every run**: the source's own id
-   (a Health Connect record's id; a to-do app's task id). A source without ids gets a key built from
+   every table, `created_at` is the write time (§2.1). An imported page, person or place carries
+   its key on `entities` (§6.15). **The key must come out the same on every run**: the source's own id
+   (a Health Connect record's id; a note's path in its vault). A source without ids gets a key built from
    fields it never changes (a note's file name, the day of a reading) — and a change to one of them then
    looks like a new row. The key deduplicates within one `source` only: the same reading from two
    sources is two rows, for the app to match and the owner to retract one.
@@ -544,35 +508,35 @@ CREATE TABLE lifelog_meta (
   value TEXT NOT NULL
 ) STRICT;
 INSERT INTO lifelog_meta(key, value) VALUES
-  ('schema',    'lifelog v1: the journal (one page per day), wiki, tasks, people, places, health metrics, location history and money of one person; the rules of each table are comments inside its CREATE statement (.schema), the rules that span tables are these rows'),
+  ('schema',    'lifelog v1: the journal (one page per day), wiki, people, places and health metrics of one person: a life log, not a project manager; the rules of each table are comments inside its CREATE statement (.schema), the rules that span tables are these rows'),
   ('instants',  'every *_at column is a UTC ISO-8601 TEXT instant with milliseconds, e.g. 2026-06-09T21:14:03.482Z, written by the app; CHECK strftime(''%Y-%m-%dT%H:%M:%fZ'', x) IS x; created_at, on every table that has it, is when the row was written to life.db, never back-dated (when a thing happened is its day or its other *_at)'),
   ('days',      'every *_day column (and day) is the LOCAL calendar date YYYY-MM-DD where the thing happened, written at insert, never recomputed from an instant; CHECK date(x) IS x (IS, not =: a CHECK passes on NULL, and date(''2026-9-3'') is NULL)'),
-  ('deletes',   'nothing is deleted except links rows: an entity is a tombstone (entities.deleted_at), measurements and balances are corrected by inserting rows, positions are never corrected; BEFORE DELETE triggers enforce it'),
-  ('source',    'entities, links, measurements, balances and positions: source names the writer of the row (ui, cli, api, agent:<name>, import:<name>); written at insert, never changed; the import_key a writer gives a row is unique per source'),
+  ('deletes',   'nothing is deleted except links rows: an entity is a tombstone (entities.deleted_at), a measurement is corrected by inserting a row; BEFORE DELETE triggers enforce it'),
+  ('source',    'entities, links and measurements: source names the writer of the row (ui, cli, api, agent:<name>, import:<name>); written at insert, never changed; the import_key a writer gives a row is unique per source'),
   ('writers',   'one writing application; every connection sets foreign_keys=ON, recursive_triggers=ON, synchronous=FULL, trusted_schema=OFF and starts write transactions with BEGIN IMMEDIATE; every other tool opens the file read-only; imports use INSERT ... ON CONFLICT DO NOTHING, never OR IGNORE (skips CHECK/NOT NULL violations silently) or OR REPLACE (a delete)'),
   ('sqlite',    'writers need SQLite >= 3.51.3 (fixes a WAL race between concurrent writers and checkpoints); migrations need >= 3.53 (ALTER TABLE ADD/DROP CONSTRAINT); CHECKs use only functions every such version has'),
   ('evolution', 'after the first real data: numbered forward-only SQL migrations, additive only, counted in PRAGMA user_version; every CHECK is named, so any rule can be widened or tightened with ALTER TABLE DROP/ADD CONSTRAINT');
 
 CREATE TABLE entities (
-  -- The shared spine: one row per linkable thing (page, task, person, place, holding). Its domain
-  -- row has the SAME id: the app inserts this row first with INSERT ... RETURNING id and binds that id in
-  -- the same transaction. UNIQUE(id, entity_type) plus the composite FK (id, entity_type) of every domain
-  -- table make a row's type and its table agree.
-  -- A person, place or holding is also a page (D20): one id, with a pages row whose title is the handle
-  -- [[wikilinks]] write, and a people/places/holdings row whose FK points at that pages row. A ghost page
-  -- is promoted by UPDATE entities SET entity_type = 'person' (the FK cascades it to pages.entity_type).
+  -- The shared spine: one row per linkable thing (page, person, place). Its domain row has the
+  -- SAME id: the app inserts this row first with INSERT ... RETURNING id and binds that id in the same
+  -- transaction. UNIQUE(id, entity_type) plus the composite FK (id, entity_type) of every domain table
+  -- make a row's type and its table agree.
+  -- A person or a place is also a page (D20): one id, with a pages row whose title is the handle
+  -- [[wikilinks]] write; a person also has a people row whose FK points at that pages row, a place has no
+  -- row of its own (D16). A ghost page is promoted by UPDATE entities SET entity_type = 'person' (the FK
+  -- cascades it to pages.entity_type).
   -- Nothing is ever deleted: deleted_at is the tombstone (D11), enforced by BEFORE DELETE triggers.
   -- import_key: the key a writer that may send the row twice gives it (an importer, an offline phone, a
   -- retrying agent); whether the row was imported is source, not import_key. Unique per source, written at
   -- insert and never changed. Insert with ON CONFLICT(source, import_key) WHERE import_key IS NOT NULL
-  -- DO NOTHING RETURNING id: no id back = imported before, so no domain row is inserted (section 6.21).
+  -- DO NOTHING RETURNING id: no id back = imported before, so no domain row is inserted (section 6.15).
   id          INTEGER PRIMARY KEY,
   entity_type TEXT NOT NULL CONSTRAINT entities_entity_type
-                  CHECK (entity_type IN ('page','task','person','place','holding')),
+                  CHECK (entity_type IN ('page','person','place')),
   created_at  TEXT NOT NULL CONSTRAINT entities_created_at CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at),   -- the write time (lifelog_meta.instants)
   updated_at  TEXT NOT NULL CONSTRAINT entities_updated_at CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', updated_at) IS updated_at),   -- kept by the *_touch triggers
   deleted_at  TEXT     CONSTRAINT entities_deleted_at CHECK (deleted_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', deleted_at) IS deleted_at),   -- the tombstone
-  tz          TEXT     CONSTRAINT entities_tz CHECK (tz IS NULL OR (length(tz) BETWEEN 1 AND 64 AND tz NOT GLOB '*[^A-Za-z0-9_/+-]*')),   -- IANA zone of the device that captured the row ('Europe/Berlin'); NULL = unknown
   source      TEXT NOT NULL CONSTRAINT entities_source CHECK (length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*'),   -- the writer (lifelog_meta.source)
   import_key  TEXT,                        -- the sender's key, unique per source; NULL = sent once. Imported or not: source
   UNIQUE (id, entity_type)
@@ -581,9 +545,10 @@ CREATE UNIQUE INDEX entities_import ON entities(source, import_key) WHERE import
 
 CREATE TABLE pages (
   -- All prose (D5): every page is titled, unique and linkable: an essay, a reference page, a tag, the page
-  -- of a person, place or holding (its entity_type says which, D20), and the journal. The journal is one
+  -- of a person or a place (its entity_type says which, D20), and the journal. The journal is one
   -- DAY PAGE per local day, titled YYYY-MM-DD ('2026-09-29'): its title equals its day (pages_day_page), so
   -- [[2026-09-29]] reaches it. Capture appends to today's page, created on the first write.
+  -- Where was I: the places the owner was at that day are links(kind='at') from its day page (D16).
   -- A title is permanent and a valid file name on every OS: a page is never renamed (create the new page,
   -- make the old one a '#REDIRECT [[New]]' stub, add links(kind='redirect')).
   -- Uniqueness is on title_key = NFC(casefold(NFC(title))), computed by the app because SQLite cannot fold
@@ -591,12 +556,12 @@ CREATE TABLE pages (
   -- links(kind='wikilink') from a page always equal the [[titles]] and #tags its CommonMark text names,
   -- rebuilt on every save; an invalid target makes no link and never blocks the save (D19).
   id          INTEGER PRIMARY KEY,
-  entity_type TEXT NOT NULL DEFAULT 'page' CONSTRAINT pages_entity_type CHECK (entity_type IN ('page','person','place','holding')),   -- 'page', or the named entity this page is
+  entity_type TEXT NOT NULL DEFAULT 'page' CONSTRAINT pages_entity_type CHECK (entity_type IN ('page','person','place')),   -- 'page', or the named entity this page is
   title       TEXT NOT NULL,              -- filename-safe, immutable; a day page's is its day
   title_key   TEXT NOT NULL,              -- NFC(casefold(NFC(title))), app-computed, unique
   day         TEXT,                       -- local day it was written: a day page's day; a page written on purpose has one, a link target the app created has none
   body        TEXT NOT NULL DEFAULT '',   -- CommonMark; [[Wiki Links]] inline
-  UNIQUE (id, entity_type),               -- the parent key of people, places and holdings
+  UNIQUE (id, entity_type),               -- the parent key of people
   FOREIGN KEY (id, entity_type) REFERENCES entities(id, entity_type) ON UPDATE CASCADE,   -- a promoted page follows its entity's type
   CONSTRAINT pages_day_page CHECK (date(title) IS NOT title OR day IS title),   -- a page titled with a day is that day's page
   CONSTRAINT pages_key_folded CHECK (length(title_key) >= 1 AND title_key = trim(title_key)
@@ -654,39 +619,11 @@ CREATE TABLE people (
   id          INTEGER PRIMARY KEY,
   entity_type TEXT NOT NULL DEFAULT 'person' CONSTRAINT people_entity_type CHECK (entity_type = 'person'),
   name        TEXT NOT NULL,
-  nickname    TEXT,
   birth_day   TEXT CONSTRAINT people_birth_day CHECK (birth_day IS NULL OR date(birth_day) IS birth_day),
   death_day   TEXT CONSTRAINT people_death_day CHECK (death_day IS NULL OR date(death_day) IS death_day),
   FOREIGN KEY (id, entity_type) REFERENCES pages(id, entity_type),
   CONSTRAINT people_death_day_order CHECK (death_day IS NULL OR birth_day IS NULL OR death_day >= birth_day)
 ) STRICT;
-
-CREATE TABLE places (
-  -- named locations (D16): a day page names where the day was with [[Place]], located-in links nest them (Tokyo -> Japan).
-  -- A place is also a page with the same id (D20): the page title is its name and its handle.
-  -- lat/lon: its representative point, WGS84 decimal degrees, or neither (D21); a misplaced point is fixed
-  -- by UPDATE. A GPS fix in positions is matched to a place at query time (section 6.20), never stored.
-  id          INTEGER PRIMARY KEY,
-  entity_type TEXT NOT NULL DEFAULT 'place' CONSTRAINT places_entity_type CHECK (entity_type = 'place'),
-  lat         REAL CONSTRAINT places_lat CHECK (lat IS NULL OR lat BETWEEN -90 AND 90),
-  lon         REAL CONSTRAINT places_lon CHECK (lon IS NULL OR lon BETWEEN -180 AND 180),
-  FOREIGN KEY (id, entity_type) REFERENCES pages(id, entity_type),
-  CONSTRAINT places_coords_pair CHECK ((lat IS NULL) = (lon IS NULL))   -- a point, or no point
-) STRICT;
-
-CREATE TABLE tasks (
-  -- fleeting: open until completed_at is set, together with the LOCAL completed_day it was done (D10).
-  -- Abandoning a task is erasure (a tombstone), not a recorded decision. Tasks do not repeat (D15).
-  id            INTEGER PRIMARY KEY,
-  entity_type   TEXT NOT NULL DEFAULT 'task' CONSTRAINT tasks_entity_type CHECK (entity_type = 'task'),
-  name          TEXT NOT NULL,   -- an editable label, not a handle
-  due_day       TEXT CONSTRAINT tasks_due_day CHECK (due_day IS NULL OR date(due_day) IS due_day),
-  completed_at  TEXT CONSTRAINT tasks_completed_at CHECK (completed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', completed_at) IS completed_at),
-  completed_day TEXT CONSTRAINT tasks_completed_day CHECK (completed_day IS NULL OR date(completed_day) IS completed_day),
-  FOREIGN KEY (id, entity_type) REFERENCES entities(id, entity_type),
-  CONSTRAINT tasks_completed_pair CHECK ((completed_at IS NULL) = (completed_day IS NULL))   -- done = both set, open = neither
-) STRICT;
-CREATE INDEX tasks_open ON tasks(due_day) WHERE completed_at IS NULL;
 
 CREATE TABLE metrics (
   -- a tiny registry that keeps time series canonical: 'weight' is one series forever, never
@@ -760,130 +697,12 @@ CREATE VIEW measurement_values AS
    WHERE me.value IS NOT NULL
      AND NOT EXISTS (SELECT 1 FROM measurements x WHERE x.supersedes_id = me.id);
 
-CREATE TABLE positions (
-  -- the location history (D21): one GPS fix per row, where the owner was at taken_at, as WGS84 decimal
-  -- degrees. Append-only, enforced by triggers: never UPDATE or DELETE, and there is no correction row; a
-  -- doubtful fix is left out when read, by accuracy_m (metres, the fix's horizontal accuracy radius).
-  -- day is the LOCAL date of taken_at, tz the IANA zone there (NULL = unknown), both written at insert.
-  -- Imports: INSERT ... ON CONFLICT(source, import_key) WHERE import_key IS NOT NULL DO NOTHING; an export
-  -- without ids of its own uses taken_at as import_key. Never OR IGNORE (it skips CHECK violations silently).
-  id          INTEGER PRIMARY KEY,
-  taken_at    TEXT NOT NULL CONSTRAINT positions_taken_at CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', taken_at) IS taken_at),
-  day         TEXT NOT NULL CONSTRAINT positions_day CHECK (date(day) IS day),
-  tz          TEXT CONSTRAINT positions_tz CHECK (tz IS NULL OR (length(tz) BETWEEN 1 AND 64 AND tz NOT GLOB '*[^A-Za-z0-9_/+-]*')),
-  lat         REAL NOT NULL CONSTRAINT positions_lat CHECK (lat BETWEEN -90 AND 90),     -- NOT NULL also refuses a NaN
-  lon         REAL NOT NULL CONSTRAINT positions_lon CHECK (lon BETWEEN -180 AND 180),
-  accuracy_m  REAL CONSTRAINT positions_accuracy_m CHECK (accuracy_m IS NULL OR accuracy_m BETWEEN 0 AND 1e7),
-  created_at  TEXT NOT NULL CONSTRAINT positions_created_at CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at),
-  source      TEXT NOT NULL CONSTRAINT positions_source CHECK (length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*'),   -- the writer (lifelog_meta.source)
-  import_key  TEXT,                        -- importer's dedup key, unique per source
-  CONSTRAINT positions_not_null_island CHECK (NOT (lat = 0 AND lon = 0))   -- 0, 0 is how photo metadata says "no location"
-) STRICT;
-CREATE INDEX positions_time ON positions(taken_at);                -- where was I at an instant
-CREATE INDEX positions_day ON positions(day, taken_at);            -- a day's track, in order
-CREATE UNIQUE INDEX positions_import
-  ON positions(source, import_key) WHERE import_key IS NOT NULL;
-CREATE TRIGGER positions_no_update BEFORE UPDATE ON positions
-BEGIN
-  SELECT RAISE(ABORT, 'positions are append-only: a fix is never edited');
-END;
-CREATE TRIGGER positions_no_delete BEFORE DELETE ON positions
-BEGIN
-  SELECT RAISE(ABORT, 'positions are never deleted: a doubtful fix is left out when read, by accuracy_m');
-END;
-
-CREATE TABLE currencies (
-  -- money (D18) is an exact tier of its own, never rows in measurements. This is the closed registry
-  -- of currencies you hold or value things in; subunits = minor units per whole unit (EUR 100, JPY 1),
-  -- so a stranger can turn an INTEGER amount into a number without the app. subunits never changes.
-  -- Never store credentials or full account/card numbers anywhere in life.db.
-  code     TEXT PRIMARY KEY CONSTRAINT currencies_code CHECK (length(code) BETWEEN 3 AND 10 AND code NOT GLOB '*[^A-Z0-9]*'),  -- ISO 4217 code: 'EUR', 'JPY' (a coin you hold by quantity may be registered too)
-  name     TEXT NOT NULL,
-  subunits INTEGER NOT NULL CONSTRAINT currencies_subunits CHECK (subunits BETWEEN 1 AND 1000000000),  -- minor units per 1 whole unit
-  note     TEXT
-) STRICT;
-INSERT INTO currencies(code, name, subunits) VALUES
-  ('USD', 'US dollar',      100),
-  ('EUR', 'Euro',           100),
-  ('GBP', 'Pound sterling', 100),
-  ('CHF', 'Swiss franc',    100),
-  ('CAD', 'Canadian dollar',100),
-  ('AUD', 'Australian dollar', 100),
-  ('JPY', 'Japanese yen',   1);
-CREATE TRIGGER currencies_subunits_fixed BEFORE UPDATE OF subunits ON currencies
-  WHEN NEW.subunits IS NOT OLD.subunits
-BEGIN
-  -- changing subunits would silently rescale every balance ever recorded in that currency
-  SELECT RAISE(ABORT, 'currencies.subunits is fixed: it defines what every stored amount means; register a new currency code instead');
-END;
-
-CREATE TABLE holdings (
-  -- anything with a balance or a value: bank, deposit, brokerage, crypto wallet, pension, cash,
-  -- property, vehicle, valuables, loan, mortgage, card, valued in the holding's currency on a day.
-  -- Record your OWN share of joint items. side and currency define what every balance means and never
-  -- change (holdings_meaning_fixed). A holding is also a page with the same id (D20): the page title is its
-  -- name and handle. Net worth is derived, never stored, and summed per currency: amounts of different
-  -- currencies are never added (section 6.15).
-  id          INTEGER PRIMARY KEY,
-  entity_type TEXT NOT NULL DEFAULT 'holding' CONSTRAINT holdings_entity_type CHECK (entity_type = 'holding'),
-  side        TEXT NOT NULL CONSTRAINT holdings_side CHECK (side IN ('asset','liability')),
-  currency    TEXT NOT NULL REFERENCES currencies(code),
-  category    TEXT COLLATE NOCASE,                   -- free taxonomy: 'cash','deposit','brokerage','crypto','pension','property','valuables','loan'
-  institution TEXT,
-  opened_day  TEXT CONSTRAINT holdings_opened_day CHECK (opened_day IS NULL OR date(opened_day) IS opened_day),
-  closed_day  TEXT CONSTRAINT holdings_closed_day CHECK (closed_day IS NULL OR date(closed_day) IS closed_day),   -- last day the holding counts (inclusive)
-  FOREIGN KEY (id, entity_type) REFERENCES pages(id, entity_type),
-  CONSTRAINT holdings_closed_day_order CHECK (closed_day IS NULL OR opened_day IS NULL OR closed_day >= opened_day)
-) STRICT;
-CREATE TRIGGER holdings_meaning_fixed BEFORE UPDATE OF side, currency ON holdings
-  WHEN NEW.side IS NOT OLD.side OR NEW.currency IS NOT OLD.currency
-BEGIN
-  -- changing either would rewrite history; the WHEN clause keeps full-row ORM updates working
-  SELECT RAISE(ABORT, 'a holding''s side and currency are fixed: close it and open a new holding instead');
-END;
-
-CREATE TABLE balances (
-  -- append-only snapshots of a holding's VALUE on a local day, in INTEGER minor units of the holding's
-  -- currency (never REAL; whole units = amount / currencies.subunits). The newest row per
-  -- (holding_id, day) wins, newest = recorded last = highest id; a row with a NULL amount RETRACTS
-  -- that day. A wrong entry is corrected by another row, never UPDATE/DELETE (triggers; they need
-  -- PRAGMA recursive_triggers=ON to stop a REPLACE). Read through balance_values. Net worth is
-  -- derived, never stored, per currency (section 6.15).
-  id          INTEGER PRIMARY KEY,
-  holding_id  INTEGER NOT NULL REFERENCES holdings(id),
-  day         TEXT NOT NULL CONSTRAINT balances_day CHECK (date(day) IS day),   -- LOCAL as-of date: the end-of-day balance / valuation
-  amount      INTEGER,                                  -- minor units of holdings.currency, as the institution states it
-                                                        -- (a mortgage of 200 000 is +20000000: side says it is owed);
-                                                        -- NULL = retraction of this (holding, day)
-  created_at  TEXT NOT NULL CONSTRAINT balances_created_at CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at),
-  source      TEXT NOT NULL CONSTRAINT balances_source CHECK (length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*'),   -- the writer (lifelog_meta.source)
-  import_key  TEXT,                                     -- importer's dedup key, unique per source
-  note        TEXT                                      -- 'statement', 'estimate', 'after selling the ETF'
-) STRICT;
-CREATE INDEX balances_series ON balances(holding_id, day);   -- newest-per-day and as-of lookups (rowid is the last key part)
-CREATE UNIQUE INDEX balances_import ON balances(source, import_key) WHERE import_key IS NOT NULL;
-CREATE TRIGGER balances_no_update BEFORE UPDATE ON balances
-BEGIN
-  SELECT RAISE(ABORT, 'balances are append-only: correct by inserting a newer row for the same (holding, day)');
-END;
-CREATE TRIGGER balances_no_delete BEFORE DELETE ON balances
-BEGIN
-  SELECT RAISE(ABORT, 'balances are never deleted: retract by inserting a row with NULL amount');
-END;
-CREATE VIEW balance_values AS
-  -- the canonical read rule: the newest row (highest id) per (holding, day), unless it is a retraction
-  SELECT b.*
-    FROM balances b
-   WHERE b.amount IS NOT NULL
-     AND NOT EXISTS (SELECT 1 FROM balances x
-                      WHERE x.holding_id = b.holding_id AND x.day = b.day AND x.id > b.id);
-
 CREATE TABLE link_kinds (
   -- the CLOSED registry of link kinds: a link's kind must be registered first (FK), and a kind's
   -- structure (symmetric flag, allowed endpoint entity types) is fixed at registration and enforced
   -- by a trigger on every link. Registering a kind is a deliberate INSERT, so a typo cannot create
   -- one. from_types / to_types: NULL = any entity type, else a comma list of entities.entity_type values
-  -- ('task,page'); a misspelt token fails CLOSED (every link of that kind is rejected).
+  -- ('person,place'); a misspelt token fails CLOSED (every link of that kind is rejected).
   kind       TEXT PRIMARY KEY CONSTRAINT link_kinds_kind CHECK (kind = lower(kind) AND length(kind) > 0 AND kind NOT GLOB '*[^a-z0-9_-]*'),
   symmetric  INTEGER NOT NULL DEFAULT 0 CONSTRAINT link_kinds_symmetric CHECK (symmetric IN (0,1)),
   from_types TEXT CONSTRAINT link_kinds_from_types CHECK (from_types IS NULL OR (from_types NOT GLOB '*[^a-z,]*' AND from_types NOT GLOB ',*'
@@ -894,13 +713,11 @@ CREATE TABLE link_kinds (
   CONSTRAINT link_kinds_mirror_valid CHECK (symmetric = 0 OR from_types IS to_types)   -- a mirrored edge must be valid in both directions
 ) STRICT;
 INSERT INTO link_kinds(kind, symmetric, from_types, to_types, note) VALUES
-  ('wikilink', 0, 'page,person,place,holding', 'page,person,place,holding', 'extracted from [[body]] on save; body is the truth'),
+  ('wikilink', 0, 'page,person,place', 'page,person,place', 'extracted from [[body]] on save; body is the truth'),
   ('redirect', 0, 'page',      'page',         'old stub page → its replacement; renames, D5'),
-  ('spawned',  0, 'task,page', 'page',         'task/page created from a page (a line of a day page)'),
-  ('subtask',  0, 'task',      'task',         'child task → parent task'),
-  ('about',    0, NULL,        'person,place,holding', 'entity → person/place/holding it is about'),
-  ('visited',  0, 'person',    'place',        'person → place; the day the owner was there is the day page that names it (D16)'),
-  ('located-in', 0, 'place',   'place',        'containment: Tokyo → Japan; transitive — walk it with a recursive CTE (section 6.18)'),
+  ('about',    0, NULL,        'person,place', 'entity → person/place it is about'),
+  ('at',       0, 'page',      'place',        'day page → a place the owner was at that day; from a day page only, which the app checks (D16)'),
+  ('located-in', 0, 'place',   'place',        'containment: Tokyo → Japan; transitive — walk it with a recursive CTE (section 6.11)'),
   ('parent-of', 0, 'person',   'person',       'parent → child; ''family'' stays the symmetric catch-all'),
   ('friend',   1, 'person',    'person',       NULL),
   ('family',   1, 'person',    'person',       NULL),
@@ -913,10 +730,10 @@ BEGIN
 END;
 
 CREATE TABLE links (
-  -- one graph for everything: wiki backlinks, relationships, the page a task came from, subtasks,
+  -- one graph for everything: wiki backlinks, relationships, where the owner was, containment,
   -- redirects. Rows are hard-deleted (the one such table, D11) and immutable otherwise (delete and
   -- re-insert). Symmetric kinds are mirrored by trigger on insert AND delete, so a half-edge cannot
-  -- exist and backlinks need only to_id. Cycles (e.g. subtask) are not prevented (D8).
+  -- exist and backlinks need only to_id. Cycles (e.g. located-in) are not prevented (D8).
   -- source names the writer, as on entities; written at insert, never changed.
   id         INTEGER PRIMARY KEY,
   from_id    INTEGER NOT NULL REFERENCES entities(id),
@@ -969,8 +786,8 @@ END;
 
 CREATE VIEW ghost_pages AS
   -- empty plain pages nobody points at, 30 days old: a link target created by a capture-time typo and
-  -- never written (renames never create ghosts). The page of a person, place or holding is never a
-  -- ghost, however empty (D20). The UI lists them; tombstoning is the owner's act.
+  -- never written (renames never create ghosts). The page of a person or a place is never a ghost,
+  -- however empty (D20). The UI lists them; tombstoning is the owner's act.
   SELECT p.id, p.title, e.created_at
     FROM pages p JOIN entities e ON e.id = p.id
    WHERE p.entity_type = 'page' AND p.body = '' AND e.deleted_at IS NULL
@@ -982,16 +799,7 @@ CREATE TRIGGER pages_touch AFTER UPDATE ON pages BEGIN
   -- updated_at is kept in the DB, so every writer (CLI, agents, scripts) gets it right
   UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = NEW.id;
 END;
-CREATE TRIGGER tasks_touch AFTER UPDATE ON tasks BEGIN
-  UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = NEW.id;
-END;
 CREATE TRIGGER people_touch AFTER UPDATE ON people BEGIN
-  UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = NEW.id;
-END;
-CREATE TRIGGER places_touch AFTER UPDATE ON places BEGIN
-  UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = NEW.id;
-END;
-CREATE TRIGGER holdings_touch AFTER UPDATE ON holdings BEGIN
   UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = NEW.id;
 END;
 CREATE TRIGGER entities_touch AFTER UPDATE OF deleted_at ON entities
@@ -1016,18 +824,12 @@ BEGIN
 END;
 CREATE TRIGGER pages_no_delete BEFORE DELETE ON pages
 BEGIN SELECT RAISE(ABORT, 'pages are never deleted: tombstone the entity (entities.deleted_at)'); END;
-CREATE TRIGGER tasks_no_delete BEFORE DELETE ON tasks
-BEGIN SELECT RAISE(ABORT, 'tasks are never deleted: tombstone the entity (entities.deleted_at)'); END;
 CREATE TRIGGER people_no_delete BEFORE DELETE ON people
 BEGIN SELECT RAISE(ABORT, 'people are never deleted: tombstone the entity (entities.deleted_at)'); END;
-CREATE TRIGGER places_no_delete BEFORE DELETE ON places
-BEGIN SELECT RAISE(ABORT, 'places are never deleted: tombstone the entity (entities.deleted_at)'); END;
-CREATE TRIGGER holdings_no_delete BEFORE DELETE ON holdings
-BEGIN SELECT RAISE(ABORT, 'holdings are never deleted: tombstone the entity (entities.deleted_at)'); END;
 ```
 
-**14 tables + 1 FTS5 virtual table + 3 views** (`measurement_values`, `balance_values`, `ghost_pages`)
-**+ 32 triggers.** That is the entire system. Every `CHECK` is named (`CONSTRAINT <table>_<rule>`), so
+**8 tables + 1 FTS5 virtual table + 2 views** (`measurement_values`, `ghost_pages`)
+**+ 20 triggers.** That is the entire system. Every `CHECK` is named (`CONSTRAINT <table>_<rule>`), so
 any rule can be dropped or re-added by name after the freeze (D13).
 
 ---
@@ -1044,17 +846,14 @@ is derived and rebuildable and is not drawn.)
 One supertype row per linkable thing (`entities`), one domain row per entity with the *same* id — the
 composite foreign key `(id, entity_type)` makes the type and the table agree — and one polymorphic graph
 (`links`) over the supertype, whose `kind` is a foreign key to the closed registry `link_kinds`. A
-person, place or holding is also a page (D20): its `people` / `places` / `holdings` row hangs off its
-`pages` row, which hangs off its `entities` row — one id, three rows.
+person or a place is also a page (D20): a person's `people` row hangs off its `pages` row, which hangs
+off its `entities` row — one id, three rows; a place is its `entities` and `pages` rows alone (D16).
 
 ```mermaid
 %% diagram: er-core
 erDiagram
     entities ||--o| pages    : "id"
-    entities ||--o| tasks    : "id"
     pages    ||--o| people   : "id"
-    pages    ||--o| places   : "id"
-    pages    ||--o| holdings : "id"
     entities ||--o{ links    : "from_id"
     entities ||--o{ links    : "to_id"
     link_kinds ||--o{ links  : "kind"
@@ -1066,22 +865,9 @@ erDiagram
         INTEGER id PK, FK
         TEXT entity_type FK
     }
-    tasks {
-        INTEGER id PK, FK
-        TEXT entity_type FK
-    }
     people {
         INTEGER id PK, FK
         TEXT entity_type FK
-    }
-    places {
-        INTEGER id PK, FK
-        TEXT entity_type FK
-    }
-    holdings {
-        INTEGER id PK, FK
-        TEXT entity_type FK
-        TEXT currency FK
     }
     links {
         INTEGER id PK
@@ -1094,13 +880,12 @@ erDiagram
     }
 ```
 
-### 4.2 Facts, money and registries
+### 4.2 Facts and registries
 
-Facts are not entities. `measurements`, `balances` and `positions` are append-only (D7, D18, D21). A
-correction is a new row, and `measurements.supersedes_id` points back at the row it corrects;
-`measurements.captured_with_id` records provenance (a mood reading points at its day page). A position has no
-foreign key: it is matched to a place by distance at query time (§6.20). `currencies` gives an amount
-its meaning. `lifelog_meta` stands alone: the rules that span tables (D17).
+A reading is a fact, not an entity: `measurements` is append-only (D7). A correction is a new row, and
+`measurements.supersedes_id` points back at the row it corrects; `measurements.captured_with_id` records
+provenance (a mood reading points at its day page). `lifelog_meta` stands alone: the rules that span
+tables (D17).
 
 ```mermaid
 %% diagram: er-facts
@@ -1108,8 +893,6 @@ erDiagram
     metrics     ||--o{ measurements : "metric_id"
     entities    |o--o{ measurements : "captured_with_id"
     measurements |o--o| measurements : "supersedes_id"
-    holdings    ||--o{ balances     : "holding_id"
-    currencies  ||--o{ holdings     : "currency"
 
     metrics {
         INTEGER id PK
@@ -1121,20 +904,6 @@ erDiagram
         INTEGER supersedes_id FK
     }
     entities {
-        INTEGER id PK
-    }
-    holdings {
-        INTEGER id PK, FK
-        TEXT currency FK
-    }
-    balances {
-        INTEGER id PK
-        INTEGER holding_id FK
-    }
-    currencies {
-        TEXT code PK
-    }
-    positions {
         INTEGER id PK
     }
     lifelog_meta {
@@ -1154,20 +923,17 @@ flowchart LR
     any(["any entity"])
     person["person"]
     place["place"]
-    task["task"]
     page["page"]
-    named["person, place, holding"]
-    titled["page, person, place, holding"]
+    named["person, place"]
+    titled["page, person, place"]
 
     any -->|"about"| named
     any <-->|"related"| any
-    person -->|"visited"| place
+    page -->|"at"| place
     person -->|"parent-of"| person
     person <-->|"friend, family"| person
     place -->|"located-in"| place
-    task -->|"subtask"| task
-    task -->|"spawned"| page
-    page -->|"redirect, spawned"| page
+    page -->|"redirect"| page
     titled -->|"wikilink"| titled
 ```
 
@@ -1175,7 +941,7 @@ flowchart LR
 
 A page starts as a ghost when a link names a title that does not exist yet, or as a written page when
 the owner creates it on purpose — a day page when the first thing is captured that day (D5). Either can
-become the page of a person, place or holding (D20).
+become the page of a person or a place (D20).
 
 ```mermaid
 %% diagram: page-life
@@ -1184,10 +950,10 @@ stateDiagram-v2
     state "Ghost (empty)" as Ghost
     state "Written page" as Written
     state "Redirect stub" as Stub
-    state "Named (person, place, holding)" as Named
+    state "Named (person, place)" as Named
     [*] --> Ghost: a link names a title that does not exist yet
     [*] --> Written: created on purpose, with a day, or the day page on the day's first capture
-    [*] --> Named: a person, place or holding is created
+    [*] --> Named: a person or a place is created
     Ghost --> Written: body saved, the day unchanged
     Ghost --> Named: promoted, entities.entity_type changes
     Written --> Named: promoted, entities.entity_type changes
@@ -1205,21 +971,19 @@ revives that page instead of duplicating it (§6.13). A ghost that nothing links
 |---|---|
 | Journaling | the day page, titled `YYYY-MM-DD`: capture appends to it (§6.1); the day view adds what else that day holds (§6.2) |
 | "When did I see Ana / go to Lakeside?" | the day pages that link `[[Ana]]` or `[[Lakeside]]` (§6.3) |
-| A to-do written in a day page | a task + `links(kind='spawned')` to the page it came from (§6.9) |
+| "Where was I that day?" | `links(kind='at')` from the day page to each place; the days at a place are its `at` backlinks (§6.9, D16) |
 | Mood tracking | the `mood` metric in `measurements`, each row optionally pointing at its day page (§6.4) |
 | Notes, wiki and tags | `pages` + `links(kind='wikilink')` kept equal to what the body names (§2.4, §6.13); `#health` is the page `health` |
 | Backlinks | `links WHERE to_id = ?` (§6.5) |
-| People, places, holdings in prose | `[[Bob Sample]]` links to the person itself, because the person is a page (D20, §6.19) |
+| People and places in prose | `[[Bob Sample]]` links to the person itself, because the person is a page (D20, §6.14) |
 | Life graph ("everything about my son") | `links` in both directions from his id (§6.6) |
-| Subtasks | `links(kind='subtask', child → parent)`; recursive CTE (§6.11) |
-| Reminders and habits | a reminder is a task with a `due_day`; "did I do it each month" is a 0/1 habit metric (D15) |
+| Habits | "did I do it each month" is a 0/1 habit metric (D15) |
+| To-dos, reminders, projects | not here: a life log, not a project manager (D23) |
 | Birthdays | a query over `people.birth_day` |
 | Biomarkers / quantified self | `metrics` + `measurements` (§6.7) |
-| Net worth over time | derived from `balance_values`, per currency (§6.15–6.16) |
-| Imported tasks and pages (a to-do app, a vault) | `entities.import_key`, unique per `source`: a re-run inserts nothing, a changed task updates its row (§6.21) |
-| Location history ("where was I?") | `positions`, one GPS fix per row; the place it was is the nearest `places` point (§6.20, D21) |
+| Imported notes (a vault) | `entities.import_key`, unique per `source`: a re-run inserts nothing, a changed note updates its page (§6.15) |
 | Search | `pages_fts` (§6.8) |
-| "Which of my agents wrote this?" | `source` on every entity, link, measurement, balance and position (§2.2) |
+| "Which of my agents wrote this?" | `source` on every entity, link and measurement (§2.2) |
 
 ---
 
@@ -1265,8 +1029,8 @@ the constraints that carry it; the rule itself is in §3 or §2.
 ### D3 — IDs: `INTEGER PRIMARY KEY`; UUIDs rejected.
 
 - **Decision.** Every entity, fact and join table is keyed by `INTEGER PRIMARY KEY` (a rowid
-  alias). The registries — `lifelog_meta`, `link_kinds`, `currencies` — keep their natural key
-  (`key`, `kind`, `code`): an integer surrogate would only hide the name. No `AUTOINCREMENT`
+  alias). The registries — `lifelog_meta`, `link_kinds` — keep their natural key
+  (`key`, `kind`): an integer surrogate would only hide the name. No `AUTOINCREMENT`
   (extra CPU/IO/bookkeeping, "usually not needed" [R4]). No UUIDs.
 - **Alternatives.** UUIDv7/v4 TEXT keys: benchmarked *slower* (random TEXT keys scatter
   inserts across the B-tree) and larger; their only real advantage — collision-free IDs for
@@ -1285,7 +1049,7 @@ the constraints that carry it; the rule itself is in §3 or §2.
   safely, and the "single writer" rule (principle 3) means *single writing application*, not single
   process. A phone keeps a read-only copy (§2.6); offline it queues only *new* rows and replays them
   through the API, so nothing can conflict. A replay, like a re-run importer, must insert nothing
-  twice: the client gives each new row an `import_key`, the key facts and entities have (§6.21).
+  twice: the client gives each new row an `import_key`, the key facts and entities have (§6.15).
 - **Rejected: devices that each hold a copy and merge (CRDTs).** cr-sqlite, the SQLite extension for
   it, allows no checked foreign keys, no UNIQUE constraint but the primary key and no CHECK across
   columns in a merged table [R75] — the composite FKs, the unique `title_key` and the paired CHECKs
@@ -1331,8 +1095,7 @@ the constraints that carry it; the rule itself is in §3 or §2.
   kind of page with its own CHECKs, and an inbox column nobody used.
 - **Alternatives.**
   - *Untitled memos, the day page a query over them (a Memos-style stream, which is also the inbox)*:
-    rejected — the incident above; and something to act on is a task (§6.9), not a second state of a
-    page.
+    rejected — the incident above; and a page needs no second state.
   - *A `journal` table beside `pages`*: rejected — a day would not be linkable (`[[…]]` reaches only
     pages), and prose would have two homes.
   - *A day page with a free title and a unique `day`*: rejected — `[[2026-09-29]]` could not find it
@@ -1396,7 +1159,7 @@ the constraints that carry it; the rule itself is in §3 or §2.
 
 ### D8 — One `entities` supertype + one polymorphic `links` graph; a closed kind registry; symmetry in-DB.
 
-- **Decision.** The five linkable types share one ID space through `entities`; all relationships live
+- **Decision.** The four linkable types share one ID space through `entities`; all relationships live
   in one `links(from_id, to_id, kind)` table with real foreign keys (`UNIQUE(from_id, to_id, kind)`
   allows several kinds between one pair, never a duplicate edge). `links.kind` references the closed
   registry `link_kinds`, whose structure is fixed at registration (`link_kinds_structure_fixed`);
@@ -1404,7 +1167,7 @@ the constraints that carry it; the rule itself is in §3 or §2.
   — also on a connection with `foreign_keys=OFF`, executed in autocommit. Symmetric kinds are mirrored
   by trigger on insert *and* delete, so a half-edge cannot exist whatever the writer, and both mirror
   triggers terminate under `recursive_triggers=ON` (executed). Links are immutable except `note`
-  (`links_fixed`). Cycles (e.g. `subtask`) are not prevented; §6.11 caps its walk. Widening a
+  (`links_fixed`). Cycles (e.g. `located-in`) are not prevented; §6.11 walks it with `UNION`. Widening a
   kind's endpoint types is a deliberate migration: drop `link_kinds_structure_fixed`, update the row,
   recreate the trigger, in one transaction (executed).
 - **Alternatives.**
@@ -1440,14 +1203,13 @@ the constraints that carry it; the rule itself is in §3 or §2.
 
 ### D10 — Time model: UTC instants + denormalized local days, both TEXT.
 
-- **Decision.** §2.1. The zone is a column because only capture time can supply it: a UTC instant
-  alone cannot say whether `22:30Z` was 14:30, 22:30 or 07:30 the next morning. The DB checks the
+- **Decision.** §2.1. A timed reading's zone is a column because only capture time can supply it: a
+  UTC instant alone cannot say whether `22:30Z` was 14:30, 22:30 or 07:30 the next morning. Every
+  other instant is a write time, and a write time needs no zone. The DB checks the
   shape of a zone name, not that it is a real zone; readers convert with a tz database, which keeps
   renamed zones (`Europe/Kiev` → `Europe/Kyiv`) as links. The standard way to write an instant with
   its zone is RFC 9557 [R69]: `2026-06-09T21:14:03.482Z[Europe/Berlin]` — exactly `*_at` plus `tz`.
-  `tasks.completed_day` makes "what I
-  finished on day X" a plain lookup instead of the query-time UTC-to-local derivation this decision
-  forbids. Provenance (`source`) is a column now for the same reason as the zone (§2.2).
+  Provenance (`source`) is a column for the same reason as the zone (§2.2).
 - **Alternatives.**
   - *Instants only, local day computed at query time*: rejected — a timezone move or DST rule
     silently rewrites history. This is why FxLifeSheet needed a dedicated `tag_days` importer to
@@ -1467,11 +1229,9 @@ the constraints that carry it; the rule itself is in §3 or §2.
   `links` graph. Storage cost is irrelevant at this scale.
 - **Alternatives.** Hard delete + `ON DELETE CASCADE` (destroys evidence, cascades surprises);
   trash-with-expiry (a policy layer that can be added on top of tombstones later).
-- **Facts.** `measurements`, `balances` and `positions` are not even tombstoned: the first two are
-  corrected by inserting rows, as medical records are, and a GPS fix is never corrected (D21). The triggers guard against mistakes, not against a writer that drops
+- **Facts.** `measurements` are not even tombstoned: they are corrected by inserting rows, as medical
+  records are. The triggers guard against mistakes, not against a writer that drops
   them, so "tamper-evident" would overstate it.
-- **Tasks.** Abandoning a task is erasure (a tombstone), not a recorded decision: there is no
-  `dropped` state, and a completed task stays completed.
 - **Known asymmetry.** `links` rows are hard-deleted — no tombstone, no audit. Wikilink removal is
   *required* (the body is the truth, D19). Authored links (`friend`, `family`, …) go the same way,
   weighed against a split policy and **rejected**: the *evidence* (the day pages that name
@@ -1487,7 +1247,7 @@ the constraints that carry it; the rule itself is in §3 or §2.
 - **Alternatives.** *Full revision snapshots per edit*: rejected — significant code for a history
   nobody has asked to query. *Trigger-based history tables* (`sqlite-history` [R48]): rejected **for
   now**; it retrofits onto the current schema with no redesign if a real need appears.
-- **Cost accepted.** An `UPDATE` to a mutable row (a page body, a task, a person) overwrites the old
+- **Cost accepted.** An `UPDATE` to a mutable row (a page body, a person) overwrites the old
   value, and nothing recovers it.
 - **Sources.** [R48][R54].
 
@@ -1500,7 +1260,7 @@ the constraints that carry it; the rule itself is in §3 or §2.
   is allowed and recorded in its migration). `PRAGMA application_id = 'LIFE'` lets `file(1)` and
   future tools recognize the database [R1].
 - **Every CHECK is named, so every rule can change without a rebuild.** Widening an enum (a new
-  entity type, a holding's `side`), letting partial dates into `birth_day` or loosening the title rules is a
+  entity type, a new link endpoint), letting partial dates into `birth_day` or loosening the title rules is a
   two-statement transactional migration — `ALTER TABLE … DROP CONSTRAINT <name>; … ADD CONSTRAINT
   <name> CHECK (…)` (SQLite ≥ 3.53 [R55]) — **only because the CHECK has a name**: an unnamed CHECK
   cannot be dropped (`no such constraint`), and adding a looser second CHECK does not relax the first
@@ -1508,14 +1268,14 @@ the constraints that carry it; the rule itself is in §3 or §2.
   executed on a populated database, with integrity and foreign-key checks clean after. The alternative
   is SQLite's 12-step table rebuild, with FTS triggers, composite FKs and tombstone triggers to recreate.
 - **Down-migrations** are rejected as a category. A migration runs on a *copy* first (`VACUUM INTO`,
-  as for an importer, §2.8) and the four checks of §2.5 must pass on the copy before it touches
+  as for an importer, §2.7) and the four checks of §2.5 must pass on the copy before it touches
   `life.db`.
 - **Sources.** [R1][R20][R21][R22][R55].
 
 ### D14 — UI: thin custom app for capture/browse; off-the-shelf tools for exploration.
 
 - **Decision.** Build only what the product needs: a capture composer that appends to today's page
-  (with mood, D6), a day view, simple metric charts, forms for tasks/people/places/holdings,
+  (with mood, D6), a day view, simple metric charts, forms for people/places,
   a search box over `pages_fts`, and a backlinks panel. For ad-hoc exploration: **Datasette** pointed
   at `life.db`, read-only (§2.6) [R49]. `sqlite-web` is **not used** [R50]: it can insert, update and
   delete rows — a second writer that bypasses the insert conventions (principle 3).
@@ -1527,13 +1287,11 @@ the constraints that carry it; the rule itself is in §3 or §2.
 
 ### D15 — Recurrence: DEFERRED out of v1. The design is kept here for the day it returns.
 
-- **Decision.** Nothing repeats: tasks have no recurrence columns (and there are no events, D22). A
-  lifelog records what happened; a repeating appointment is planning, which the owner's calendar already does. What the
+- **Decision.** Nothing repeats: there are no tasks or events (D23, D22). A lifelog records what
+  happened; a repeating appointment is planning, which the owner's calendar already does. What the
   schema still covers: **birthdays** are a query over `people.birth_day`; **"did I do it each month"**
-  is a 0/1 habit metric in `measurements`, whose history charts for free; a **reminder** is a task
-  with a `due_day`, or the next one created when the last is done (link the two with `related`).
-- **The deferred design** — additive later, on `tasks` (`due_day` as the anchor) and on events if they
-  return (D22):
+  is a 0/1 habit metric in `measurements`, whose history charts for free.
+- **The deferred design** — additive later, on events if they return (D22):
   structured, readable columns `repeat` (`none|daily|weekly|monthly|yearly`), `repeat_every`
   (NULL = 1), `repeat_weekdays` (`'mo,we,fr'`, weekly only) and `repeat_until` (inclusive); a repeating
   row is a *template*, and occurrences are expanded at read by one window-bounded recursive CTE, never
@@ -1541,23 +1299,32 @@ the constraints that carry it; the rule itself is in §3 or §2.
   clamp to the month's last day. The expander and its oracle are in the git history of `tests/`.
 - **Alternatives kept rejected for that day.** *An RFC-5545 RRULE string*: meaning lives in a parser,
   unreadable cold. *Materialized occurrence rows*: the three-way edit problem (this / this and future /
-  all) and a regeneration job [R51][R52]. *A task whose one `status` repeats*: completing it ends the
-  series.
-- **Reopen trigger.** A recurring event the owner wants in this database rather than the calendar,
-  or a task to tick off per occurrence that a habit metric cannot hold.
+  all) and a regeneration job [R51][R52].
+- **Reopen trigger.** A recurring event the owner wants in this database rather than the calendar.
 - **Sources.** [R51][R52].
 
-### D16 — Places: an entity type.
+### D16 — Places: a page of type `place`; where the owner was is an `at` link from the day page.
 
-- **Decision.** A place is an entity and a page (D20); its name is the page title. A day page names
-  where the day was with `[[Place]]`, so the days spent somewhere are its backlinks (§6.3); `about`
-  links connect anything to a place, `visited` a person to a place, `located-in` nests places (so
-  "everything in Japan" is answerable, §6.18). There is no `lives-in` kind: it would be undated; where
-  the owner lived is written in prose until dated spans return with events (D22). A place may also
-  carry a point, and a GPS fix is matched to it (D21).
-- **Alternatives.** A place as plain text in prose, not a page (the place queries fail, and
-  backfilling 10 years of free text is the painful path); a `places` table outside the supertype (no
-  links, no tombstones).
+- **Decision.** A place is an entity and a page (D20) with `entity_type = 'place'`, and nothing else:
+  its name is the page title, what the owner knows about it is the page's text, and it has no row of
+  its own. Where the owner was on a day is a link `at` from that day's page to the place (several
+  places a day are several links; the link's `note` may say when) — so "where was I on 7 August" and
+  "when was I at Lakeside" are one link query each (§6.9). `about` links connect anything to a place;
+  `located-in` nests places, so "everything in Japan" is answerable (§6.11). There is no `lives-in`
+  kind: it would be undated; where the owner lived is prose until dated spans return with events (D22).
+- **Why `at` and not the day page's `[[Lakeside]]`.** A wikilink says the day *names* Lakeside — "we
+  talked about going to Lakeside" and "I was at Lakeside" would be the same row. The owner asked to
+  register the place they were at on the day itself, so it is a link kind of its own.
+- **Alternatives.**
+  - *A `places` table with a point (`lat`, `lon`)*: deferred with the location history it served (D21);
+    a point comes back as an additive `places(id, lat, lon)` table hanging off the page.
+  - *A `visited` link (person → place)*: rejected — undated, and never used by a real import.
+  - *A `place_id` column on pages*: rejected — a day has several places, and a column for day pages
+    only would sit empty on every other page.
+  - *A place as plain text in prose, not a page*: the place queries fail, and backfilling 10 years of
+    free text is the painful path.
+- **Costs accepted.** `link_kinds` can say "from a page", not "from a *day* page": the writing
+  application refuses an `at` from any other page (§2.4 says how a day page is recognised).
 - **Sources.** [R46].
 
 ### D17 — The contract as data: `lifelog_meta`, comments inside the statements, in-DB guards.
@@ -1570,53 +1337,41 @@ the constraints that carry it; the rule itself is in §3 or §2.
   uses only functions every SQLite the contract allows has (`lifelog_meta.sqlite`) — a SQLite that
   lacks one cannot write the table or integrity-check it — so no `octet_length()` where
   `length(CAST(x AS BLOB))` does the same.
-- **The 2075 test** (§2.8) is executed: every question must be answered from `.schema` and
+- **The 2075 test** (§2.7) is executed: every question must be answered from `.schema` and
   `lifelog_meta`, and every `lifelog_meta` key must answer some question. A new rule that spans tables
   therefore needs a key and a row in that table; a table's own rule needs a comment in its statement.
-- **Threat model.** The database is deliberately not encrypted (§2.8): finance never enters git; the
+- **Threat model.** The database is deliberately not encrypted (§2.7): health data never enters git; the
   disk is encrypted at rest; Datasette listens on localhost only and opens the file read-only; no
   credentials or full account numbers, ever.
 - **Alternatives.** Comments only in a separate document (lives outside the artifact, rots); all
   rules as `lifelog_meta` rows (a second copy of what the statements already say).
 
-### D18 — Money: holdings, balances, currencies. Net worth is derived, per currency.
+### D18 — Money: DEFERRED out of v1. The design is kept here for the day it returns.
 
-- **Context.** The lifelong database also holds *net worth over time* and entries like it. Money must
-  be **exact**, has a **currency** (several over 50 years, and currencies are redenominated), and its
-  history is **audited**: a wrong balance is corrected visibly, not overwritten.
-- **Decision.**
-  - **Exact integers** in minor units of the holding's currency; `currencies.subunits` (immutable,
-    `currencies_subunits_fixed`) gives them meaning — any integer, so a 1/5 subunit like MRU works.
-  - **`holdings`** — an entity and a page (D20): the graph, the tombstone, `updated_at` and a page for
-    prose come for free. `side` and `currency` are immutable (`holdings_meaning_fixed`, with a `WHEN`
-    clause so full-row updates work). One rule covers every holding (§2.7).
-  - **`balances`** — append-only snapshots; the newest row per `(holding_id, day)` wins and a NULL
-    amount retracts, read through `balance_values`. *Newest* means **recorded last — the highest `id`**,
-    not the most trustworthy source: the first import of old statements, run after a manual correction
-    of the same days, wins over that correction; re-running the import changes nothing (its rows are
-    duplicates), so to keep the manual value, enter it again after the import. Like `measurements`, the
-    table is **bitemporal** [R68].
-  - **Net worth is derived, never stored, and reported per currency** (§6.15–6.16): amounts of
-    different currencies are never added — a minor unit of EUR and one of JPY are not the same size.
-    Nothing converts one currency into another, so no figure can be re-stated behind your back by a
-    corrected rate.
-- **Alternatives rejected.**
-  - *Money as `measurements`*: `REAL` drifts (`0.1 + 0.2` is `0.30000000000000004`, executed), the unit
-    lives on the metric, there is no per-day retraction, and a holding would not be linkable.
-  - *Decimal as TEXT / `NUMERIC`*: SQLite has no decimal type — TEXT decimals sort as strings
-    (`'10.25'` before `'9.5'`) and `NUMERIC` stores a long decimal as REAL (executed).
-  - *One signed column and no `side`*: a loan typed positive by mistake flips net worth silently.
-  - *Store net-worth totals*: loses the drivers. The one legitimate use, a spreadsheet of totals, is a
-    pseudo-holding closed when detailed holdings begin (§6.16).
-  - *`supersedes_id` chains for balances*: `balances` has a natural key `(holding, day)`, so "newest
-    row wins" is simpler; measurements have none (several readings a day are valid). Two shapes of
-    data, two correction shapes.
-  - *Full double-entry ledger*, *quantity × price per holding*, *exchange rates*: deferred, §7 — each
-    is additive later and nothing in the schema blocks it.
-  - *Holdings outside the entity supertype*: no links, no tombstone, no page.
-- **Costs accepted.** A balance carries forward until replaced, so a stale holding keeps counting
-  (§6.17 exposes that); a life in two currencies has two net-worth series; there is no return
-  analysis (needs flows, §7); joint holdings are recorded as your share.
+- **Decision.** No `currencies`, `holdings` or `balances`. The first real import kept the owner's
+  money notes as text, and no question has needed them as rows yet; what the schema holds at
+  the freeze stays for good (D13), while these tables are additive later (they reference only
+  `entities` and `pages`).
+- **The deferred design.**
+  - **Exact integers** in minor units of a holding's currency; a closed `currencies` registry whose
+    `subunits` (immutable) gives an amount its meaning — any integer, so a 1/5 subunit like MRU works.
+  - **`holdings`** — an entity and a page (D20), like a person: `side` (asset or liability) and
+    `currency`, both immutable; anything with a balance or a value is a holding: a bank account, a
+    pension, a house at your own estimate, a mortgage. Record your own share of joint items.
+  - **`balances`** — append-only snapshots of a holding's value on a local day; the newest row per
+    `(holding_id, day)` wins (recorded last, the highest `id`) and a NULL amount retracts, read through
+    a `balance_values` view. Bitemporal like `measurements` [R68].
+  - **Net worth is derived, never stored, and reported per currency**: amounts of different currencies
+    are never added, and nothing converts one into another. The queries (net worth on a day, at every
+    month-end, holdings that need updating) and their exact-integer oracle are in the git history of
+    `tests/`.
+- **Alternatives kept rejected for that day.** *Money as `measurements`*: `REAL` drifts (`0.1 + 0.2`),
+  the unit lives on the metric and there is no per-day retraction. *Decimal as TEXT or `NUMERIC`*: TEXT
+  sorts as strings, and `NUMERIC` stores a long decimal as REAL. *One signed column and no `side`*: a
+  loan typed positive flips net worth silently. *Stored net-worth totals*: they lose the drivers. *A
+  double-entry ledger, quantity × price, exchange rates*: each additive on top of balances (§7).
+- **Reopen trigger.** The owner wants net worth over time in this database: the first statement,
+  balance or snapshot to be stored as a number.
 - **Sources.** [R53][R54][R55][R56][R57][R68].
 
 ### D19 — The wikilink save contract: one transaction, links follow the body, a bad target never blocks a save.
@@ -1643,20 +1398,19 @@ the constraints that carry it; the rule itself is in §3 or §2.
   edits (executed). A skipped target is remembered only in the body's own text.
 - **Sources.** [R58][R59].
 
-### D20 — A person, place or holding is a page: one id, and `[[Name]]` reaches it directly.
+### D20 — A person or a place is a page: one id, and `[[Name]]` reaches it directly.
 
-- **Decision.** A named entity is one id with three rows: `entities` (its type), a titled `pages` row
-  whose `entity_type` is that type, and its domain row, whose composite FK references the `pages` row
-  (`people`/`places`/`holdings` → `pages` → `entities`). The page title is the entity's handle, and the
-  unique `title_key` forces two people called Sam apart (`Sam (barber)`). Places and holdings have no
-  name column (the title is the name); `people.name` is the editable full name. The save contract is
+- **Decision.** A named entity is one id: `entities` (its type) and a titled `pages` row whose
+  `entity_type` is that type; a person also has a `people` row, whose composite FK references the
+  `pages` row (`people` → `pages` → `entities`), and a place has nothing more (D16). The page title is
+  the entity's handle, and the unique `title_key` forces two people called Sam apart (`Sam (barber)`).
+  A place has no name column (the title is the name); `people.name` is the editable full name. The save contract is
   untouched: `[[Bob Sample]]` is an ordinary wikilink, and it lands on the person's own id, so
   "everything about Bob" is one pair of link queries (§6.6).
 - **Promotion.** A ghost page made by an earlier `[[Bob Sample]]` becomes the person by
   `UPDATE entities SET entity_type = 'person'` — the `ON UPDATE CASCADE` foreign key carries the new type to
-  `pages.entity_type` — and one `people` insert. The foreign keys refuse a person without a page, and
-  undoing a promotion (the `people` row's FK); `pages_entity_type` refuses turning a page into a task
-  (both executed).
+  `pages.entity_type` — and one `people` insert (a place needs none). The foreign keys refuse a person
+  without a page, and undoing a promotion (the `people` row's FK) (executed).
 - **Why.** The owner writes `Today I met [[Bob Sample]]` and wants that day's page attached to the
   person.
   A wikilink can only land on a page, so the person must be one. Giving the person and the page the
@@ -1665,71 +1419,53 @@ the constraints that carry it; the rule itself is in §3 or §2.
 - **Alternatives.**
   - *A separate page entity pointed at by `entities.page_id`*: rejected — two ids for one person (the
     page `[[…]]` reaches and the person `about` points at), a pointer column with a CHECK, a
-    UNIQUE and two triggers, a third leg in every "everything about X" query, and a place or holding
-    name that had to be unique twice (its own `name` and its title).
+    UNIQUE and two triggers, a third leg in every "everything about X" query, and a place name that
+    had to be unique twice (its own `name` and its title).
   - *A `mention` link kind, page → person, resolved by matching names on save*: rejected — a page and
     a person with one name need a precedence rule, and a link would depend on the `people` table at
     save time, so a rename or a new person changes what a re-save produces.
   - *A `[[@Name]]` prefix for people*: rejected — the same resolution problem with a namespace in front.
-  - *Everything is a page (tasks too)*: not taken — a task's name is a label, not a unique permanent
-    handle, and would collide (`Dentist`).
-- **Costs accepted.** Every person, place and holding needs a unique handle, even one never mentioned;
-  an importer makes one (§6.19). A handle is permanent like any title: a changed name is `people.name`,
+- **Costs accepted.** Every person and place needs a unique handle, even one never mentioned;
+  an importer makes one (§6.14). A handle is permanent like any title: a changed name is `people.name`,
   and `[[Old name]]` keeps working. A typo in a name makes a ghost page like any wikilink typo. A page
   names a person by wikilink *or* by `about`; the two are separate rows, and §6.6 reads both.
 
-### D21 — Location: a GPS track in `positions`, a point on each place.
+### D21 — Location history: DEFERRED out of v1. The design is kept here for the day it returns.
 
-- **Decision.** Where the owner was is a fact tier of its own. `positions` holds one GPS fix per row —
-  `taken_at`, the local `day` and `tz`, WGS84 `lat`/`lon` [R71], an optional `accuracy_m` — with
-  `source` and `import_key` as on `measurements`. It is append-only (`positions_no_update`,
-  `positions_no_delete`) and has no correction row, so a fix at exactly 0°, 0° is refused
-  (`positions_not_null_island`): Google Photos metadata writes 0.0, 0.0 for a photo without a location,
-  and imported as a fix it could never be taken back. A place may carry one point (`places_lat`,
-  `places_lon`, `places_coords_pair`), which is an attribute of the place and so is edited in place.
-  A fix is matched to a place at query time, never stored (§6.20).
-- **Where the fixes come from.** An Android phone, the location in Google Photos metadata and
-  Google's location history (Timeline), each through an importer with its own `source`.
-- **Why.** The owner asked "where was I at a given moment?", and the schema could only answer with the
-  places a day page names. A track also dates what no page records: the walk, the drive, the day
-  nobody wrote down.
-- **No correction.** A fix is raw sensor output, not a statement the owner makes. A wrong one is left out
-  when read, by `accuracy_m`, and a wrong import is caught by the trial run on a copy (§2.8). A
-  retraction can be added later without touching a row (§7).
-- **Distance without math functions.** `sin`/`cos` exist only in SQLite builds compiled with
-  `SQLITE_ENABLE_MATH_FUNCTIONS` [R72], so §6.20 uses only `+ - *`: the app binds the metres per degree of
-  longitude at the fix's latitude (`111320·cos(lat)`) and the query ranks places by the squared
-  equirectangular distance. Within a city it picks the same place as the great-circle distance, and its
-  distance is within 0.5 % of it, so only a place within 1 % of the radius can fall either side (executed,
-  against a haversine oracle). **Known limit:** across the ±180° meridian two nearby points
-  are 360° apart, so a place there is not found; GeoJSON cuts geometry at the meridian for the same
-  reason [R71].
-- **Alternatives.**
-  - *Two metrics, `latitude` and `longitude`, in `measurements`*: rejected — nothing pairs the two rows
-    of one fix, a correction could supersede one half, and a chart of either alone means nothing.
-  - *Each fix an entity*: rejected — a phone logs hundreds a day, and nothing links to a fix; a
-    tombstone per row buys nothing a filter by accuracy does not.
-  - *A radius or polygon per place*: not taken — nearest point within a bound radius answers the
-    question; a place's extent is additive later (§7).
+- **Decision.** No GPS track. The owner does not want minute-by-minute tracking: where they were is
+  the `at` links of the day pages (D16). A place has no point, since nothing would be matched to it.
+- **The deferred design** — additive later (two new tables, nothing else changes): `positions`, one
+  GPS fix per row — `taken_at`, the local `day` and `tz`, WGS84 `lat`/`lon` [R71], an optional
+  `accuracy_m`, `source` and `import_key` — append-only with no correction row (a fix is raw sensor
+  output; a doubtful one is left out when read, by `accuracy_m`), refusing a fix at exactly 0°, 0° (how
+  photo metadata says "no location"); and `places(id, lat, lon)`, a point per place, hanging off its
+  page. A fix is matched to the nearest place at query time, never stored, with `+ - *` only (`sin` and
+  `cos` exist only in builds with `SQLITE_ENABLE_MATH_FUNCTIONS` [R72]): the app binds the metres per
+  degree of longitude at the fix's latitude and the query ranks places by the squared equirectangular
+  distance. The query and its haversine oracle are in the git history of `tests/`.
+- **Alternatives kept rejected for that day.** *Latitude and longitude as two metrics*: nothing pairs
+  the two rows of one fix. *Each fix an entity*: hundreds a day, and nothing links to a fix.
+- **Reopen trigger.** A location export the owner wants kept (Google Timeline, a phone's track, photo
+  locations), or a question the day pages cannot answer: "where was I at 15:00 on that day?".
 - **Sources.** [R71][R72].
 
 ### D22 — Events: DEFERRED out of v1. The design is kept here for the day it returns.
 
 - **Decision.** No `events` table. What happened on a day is that day's page (D5): its text says
   what, and its `[[links]]` say who and where — the days with `[[Ana]]` or at `[[Lakeside]]` are the
-  day pages that link them (§6.3). A task is still a task; a reading is still a measurement.
+  day pages that link them (§6.3); a reading is still a measurement.
 - **Why.** The first real import, an Obsidian vault of daily notes, had a model write an event for
   every outing a note told ("we went to Lakeside", a haircut, a visit): each one a second copy of a
   sentence of that day's page, an event and a place of the same name, and nothing a question needed
   that the day page and its links did not already answer. Nothing else needed events yet: no source
   that delivers dated spans or timed sessions has been imported.
 - **The deferred design** — additive later (a new table, two link kinds): `events(id, entity_type,
-  name, start_day, end_day, start_at, end_at, place_id, note)` hanging off `entities` like `tasks`,
+  name, start_day, end_day, start_at, end_at, place_id, note)` hanging off `entities` like `people` off `pages`,
   with the round-trip CHECKs of §2.1 and `end ≥ start`; day-precise events first-class, instants
   optional; one place per event (`place_id`); `attended` (person → event); and an event's **kind** as
   an `is-a` link to the page naming it — [[Workout]], [[Sleep]] — never a column (free text splits a
   kind by spelling, a CHECK list closes a personal taxonomy, and a registry is a second namespace
-  beside page titles). An importer would key its events like any entity (§6.21), and a moved event
+  beside page titles). An importer would key its events like any entity (§6.15), and a moved event
   would update its row.
 - **Alternatives.** *Keep the table and tell importers to write fewer events*: rejected — whatever
   is in the schema at the freeze stays for good (D13), and the table had no real row a day page could
@@ -1738,6 +1474,25 @@ the constraints that carry it; the rule itself is in §3 or §2.
 - **Reopen trigger.** A source that delivers dated spans or timed sessions — a phone's sleep and
   exercise sessions, a calendar, a location export's visits — or a question the day pages cannot
   answer: "how many workouts this year?", "where did I live in 2015?".
+
+### D23 — A life log, not a project manager: no tasks.
+
+- **Decision.** No `tasks` table and no task links (`spawned`, `subtask`). `life.db` keeps what
+  happened and what was measured — the day pages, notes, people, places and readings — and is the
+  backup of that record. What is still to be done belongs to the tools made for it (a to-do app, a
+  calendar); a plan the owner wrote stays the text of its page, where it is found by search (§6.8).
+- **Why** (the first real import, 2026-10). The vault's plans and goals became 53 open tasks with no
+  due day and no completion, the import asked question after question about which checkbox was a
+  task, a habit or a rule, and the owner's verdict was that this database is a journal and a backup,
+  not a project-management tool. A task is also the one entity whose rows go stale by design: open
+  until closed somewhere else.
+- **Alternatives.** *Keep tasks for reminders*: rejected — the owner's calendar and to-do app already
+  remind, and a second list drifts from them. *Tasks as pages*: rejected — a task's name is a label,
+  not a unique handle (`Dentist`), and it would collide.
+- **Costs accepted.** A habit is still a 0/1 metric (D15); a done thing worth remembering is written in
+  the day page. Tasks are additive later — a table hanging off `entities` and two link kinds — if the
+  owner ever wants to-dos here.
+- **Reopen trigger.** The owner wants to-dos, reminders or projects kept in this database.
 
 ---
 
@@ -1758,8 +1513,8 @@ BEGIN IMMEDIATE;
 -- today's page, if the day has one (a day page's key is its title, §2.4): found, the app keeps its id
 -- as :page_id and skips the two INSERTs; found tombstoned, it revives it as §6.13 step 2a does
 SELECT p.id, e.deleted_at FROM pages p JOIN entities e ON e.id = p.id WHERE p.title_key = '2026-09-29';
-INSERT INTO entities(entity_type, created_at, updated_at, tz, source)   -- tz: the capturing device's IANA zone right now
-VALUES ('page', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'Europe/Berlin', 'ui')
+INSERT INTO entities(entity_type, created_at, updated_at, source)
+VALUES ('page', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'ui')
 RETURNING id;   -- the app keeps it as :page_id
 INSERT INTO pages(id, title, title_key, day)
 VALUES (:page_id, '2026-09-29', '2026-09-29', '2026-09-29');
@@ -1777,8 +1532,7 @@ COMMIT;
 
 ### 6.2 The day view
 
-The day's page, other pages written that day, open tasks due by then, what was finished that **local**
-day, and measurements (through `measurement_values`, so corrected readings never show).
+The day's page, other pages written that day, the places the owner was at, and measurements (through `measurement_values`, so corrected readings never show).
 `ORDER BY (at IS NOT NULL), at` puts undated items — the day page first — before the rest on purpose;
 a bare `ORDER BY at` does it by accident.
 
@@ -1793,14 +1547,12 @@ SELECT what, at, detail FROM (
     FROM pages p JOIN entities e ON e.id = p.id
    WHERE p.day = :day AND p.title <> :day AND e.deleted_at IS NULL
   UNION ALL
-  SELECT 'task', NULL, t.name
-    FROM tasks t JOIN entities e ON e.id = t.id
-   WHERE e.deleted_at IS NULL AND t.completed_at IS NULL
-     AND t.due_day <= :day
-  UNION ALL
-  SELECT 'done', t.completed_at, t.name
-    FROM tasks t JOIN entities e ON e.id = t.id
-   WHERE e.deleted_at IS NULL AND t.completed_day = :day
+  SELECT 'at', NULL, pl.title
+    FROM pages d
+    JOIN links l    ON l.from_id = d.id AND l.kind = 'at'
+    JOIN pages pl   ON pl.id = l.to_id
+    JOIN entities e ON e.id = pl.id AND e.deleted_at IS NULL
+   WHERE d.title_key = :day
   UNION ALL
   SELECT m.name, me.taken_at, CAST(me.value AS TEXT) || ' ' || m.unit
     FROM measurement_values me JOIN metrics m ON m.id = me.metric_id
@@ -1810,15 +1562,15 @@ ORDER BY (at IS NOT NULL), at;
 ```
 
 A page shows on the day it was *written* (a link target the app created has no day, D5), flagged if
-edited since. Undated open tasks live in the task list, not in every day view. Completing a task sets
-both columns: `UPDATE tasks SET completed_at = :now, completed_day = :day WHERE id = :task_id`.
+edited since.
 
 ### 6.3 The days that name someone or somewhere
 
 "When did I see Ana?", "when was I at Lakeside?": the day pages that name the person, place or page,
 newest first — by a `[[wikilink]]` in their text, or by an `about` link a writer added where the text
 names them without brackets (an imported note). A day page is the page whose title is its day (§2.4).
-For the days spent anywhere inside a place (Tokyo in Japan), walk `located-in` first (§6.18).
+The days the owner was *at* a place are its `at` links (§6.9); for the days anywhere inside a place
+(Tokyo in Japan), walk `located-in` first (§6.11).
 
 ```sql
 SELECT DISTINCT d.day, substr(d.body, 1, 60) AS start
@@ -1841,21 +1593,20 @@ SELECT me.day, me.value
 ### 6.5 Backlinks to a page (or to anything)
 
 ```sql
-SELECT l.kind, e.entity_type, l.from_id, COALESCE(pg.title, t.name) AS label
+SELECT l.kind, e.entity_type, l.from_id, pg.title AS label
   FROM links l
-  JOIN entities e ON e.id = l.from_id AND e.deleted_at IS NULL
-  LEFT JOIN pages   pg ON pg.id = l.from_id
-  LEFT JOIN tasks   t  ON t.id  = l.from_id
+  JOIN entities e  ON e.id = l.from_id AND e.deleted_at IS NULL
+  JOIN pages    pg ON pg.id = l.from_id
  WHERE l.to_id = :page_id
    AND l.kind <> 'redirect';   -- a rename stub is not a mention of its replacement (§2.4)
 ```
 
-A person, place or holding is a page, so its title labels it. Symmetric kinds are mirrored (D8), so
+A person or a place is a page, so its title labels it. Symmetric kinds are mirrored (D8), so
 this one direction suffices for them.
 
-### 6.6 Everything about a person, place or holding (the ark query)
+### 6.6 Everything about a person or a place (the ark query)
 
-Asymmetric kinds put the entity on either end (`visited` is person → place, `about` is entity →
+Asymmetric kinds put the entity on either end (`parent-of` is person → person, `about` is entity →
 person), so query both directions. The pages that write `[[Bob Sample]]`, day pages included, link
 to the person's own id (D20), so they are in the first leg; what the person's page body links to is in the
 second.
@@ -1896,18 +1647,33 @@ SELECT p.id, p.title,
  ORDER BY rank;
 ```
 
-### 6.9 A task from a day page (provenance preserved)
+### 6.9 Where was I: the places of a day, the days at a place (D16)
+
+`:day_page_id` is the day's page (§6.1 finds or creates it), `:place_id` the place's page. The app
+refuses an `at` link from a page that is not a day page.
 
 ```sql
-BEGIN IMMEDIATE;
-INSERT INTO entities(entity_type, created_at, updated_at, source)
-VALUES ('task', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'ui')
-RETURNING id;   -- the app keeps it as :task_id
-INSERT INTO tasks(id, name, due_day)
-VALUES (:task_id, 'Book dentist appointment', :due_day);
-INSERT INTO links(from_id, to_id, kind, created_at, source)
-VALUES (:task_id, :page_id, 'spawned', strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'ui');
-COMMIT;
+-- I was at Lakeside on 2026-07-31, in the evening
+INSERT INTO links(from_id, to_id, kind, note, created_at, source)
+VALUES (:day_page_id, :place_id, 'at', 'evening', strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'ui')
+ON CONFLICT(from_id, to_id, kind) DO NOTHING;
+
+-- where was I on :day?
+SELECT pl.title, l.note
+  FROM pages d
+  JOIN links l    ON l.from_id = d.id AND l.kind = 'at'
+  JOIN pages pl   ON pl.id = l.to_id
+  JOIN entities e ON e.id = pl.id AND e.deleted_at IS NULL
+ WHERE d.title_key = :day
+ ORDER BY pl.title;
+
+-- the days I was at a place, newest first (links_to serves the place)
+SELECT d.day, l.note
+  FROM links l
+  JOIN pages d    ON d.id = l.from_id AND d.title = d.day
+  JOIN entities e ON e.id = d.id AND e.deleted_at IS NULL
+ WHERE l.to_id = :place_id AND l.kind = 'at'
+ ORDER BY d.day DESC;
 ```
 
 ### 6.10 Correct a wrong measurement (append-only)
@@ -1925,25 +1691,30 @@ INSERT INTO measurements(metric_id, day, value, source, supersedes_id, created_a
 VALUES (:metric_id, :day, NULL, 'ui', :mistaken_row_id, strftime('%Y-%m-%dT%H:%M:%fZ','now'));
 ```
 
-### 6.11 Subtasks (recursive CTE over `links`)
+### 6.11 Everything inside a place (containment)
+
+`located-in` (place → place: Tokyo → Kanto → Japan) is one-way and transitive. Walk it down with a
+recursive CTE — `UNION`, not `UNION ALL`, so a mistaken cycle ends instead of looping (executed) —
+then join what hangs off those places. "My days in Japan in 2019": the day pages with an `at` link to
+a place inside it (§6.9):
 
 ```sql
-WITH RECURSIVE subtree(root, id, depth) AS (
-  SELECT :task_id, :task_id, 0
-  UNION ALL
-  SELECT subtree.root, l.from_id, subtree.depth + 1
-    FROM links l JOIN subtree ON l.to_id = subtree.id
-   WHERE l.kind = 'subtask' AND subtree.depth < 32     -- cycle guard: the walk always terminates
+WITH RECURSIVE inside(id) AS (
+  SELECT :place_id
+  UNION
+  SELECT l.from_id FROM links l JOIN inside ON l.to_id = inside.id WHERE l.kind = 'located-in'
 )
-SELECT t.name, subtree.depth
-  FROM subtree JOIN tasks t ON t.id = subtree.id
-  JOIN entities e ON e.id = t.id AND e.deleted_at IS NULL
- WHERE subtree.id <> subtree.root OR subtree.depth = 0
- ORDER BY subtree.depth;
+SELECT d.day, pl.title AS place
+  FROM inside
+  JOIN links l    ON l.to_id = inside.id AND l.kind = 'at'
+  JOIN pages d    ON d.id = l.from_id AND d.title = d.day
+  JOIN entities e ON e.id = d.id AND e.deleted_at IS NULL
+  JOIN pages pl   ON pl.id = inside.id
+ WHERE d.day BETWEEN :from_day AND :to_day
+ ORDER BY d.day, pl.title;
 ```
 
-Cycle *prevention* is app-level: never link a task to its own ancestor. Without the depth cap, a
-two-task cycle below the root never terminates (executed); with it, the query returns.
+A day that names two places inside Japan is listed once per place.
 
 ### 6.12 Ghost pages (the wikilink sweep, D5)
 
@@ -2021,168 +1792,21 @@ COMMIT;
 ```
 
 `[[café NOTES]]` and `[[Café notes]]` produce the same `:key`, so both resolve to the one page;
-`title` keeps the spelling of whoever created it. A target may be a person, place or holding: it is a
+`title` keeps the spelling of whoever created it. A target may be a person or a place: it is a
 page (D20). `:source` is the saving writer (§2.2).
 
-### 6.14 Open a holding; record, correct and retract a balance (D18)
-
-Amounts are **integer minor units** of the holding's currency: €12,345.67 is `1234567`. A holding is
-a named entity (§6.19): its entity, its page (the title is its name), its `holdings` row.
-
-```sql
-BEGIN IMMEDIATE;
-INSERT INTO entities(entity_type, created_at, updated_at, source)
-VALUES ('holding', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'ui')
-RETURNING id;   -- the app keeps it as :holding_id
-INSERT INTO pages(id, entity_type, title, title_key) VALUES (:holding_id, 'holding', 'Main checking', 'main checking');
-INSERT INTO holdings(id, side, currency, category, institution, opened_day)
-VALUES (:holding_id, 'asset', 'EUR', 'cash', 'Bank A', '2019-03-01');
-COMMIT;
-
--- what the statement says at the end of a LOCAL day
-INSERT INTO balances(holding_id, day, amount, created_at, source, note)
-VALUES (:holding_id, '2026-09-30', 1234567, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'ui', 'statement');
-
--- a wrong entry is never edited: write the right one for the same (holding, day) — the newest row wins
-INSERT INTO balances(holding_id, day, amount, created_at, source, note)
-VALUES (:holding_id, '2026-09-30', 1234576, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'ui', 'digits transposed');
-
--- an entry that should never have existed (wrong holding, wrong day): retract it with NULL
-INSERT INTO balances(holding_id, day, amount, created_at, source, note)
-VALUES (:holding_id, '2026-09-30', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'ui', 'belongs to the savings holding');
-
--- idempotent bulk import: ON CONFLICT ... DO NOTHING skips only the duplicate (§2.3)
-INSERT INTO balances(holding_id, day, amount, created_at, source, import_key)
-VALUES (:holding_id, :day, :amount, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'import:bank_csv', :row_key)
-ON CONFLICT(source, import_key) WHERE import_key IS NOT NULL DO NOTHING;
-
--- reading one back as a number
-SELECT b.day, b.amount * 1.0 / c.subunits AS whole_units, a.currency
-  FROM balance_values b JOIN holdings a ON a.id = b.holding_id JOIN currencies c ON c.code = a.currency
- WHERE b.holding_id = :holding_id ORDER BY b.day;
-```
-
-A retraction only hides the day: the as-of rule of §6.15 falls back to the previous balance. Writing a
-correct value after a retraction simply becomes the newest row again.
-
-### 6.15 Net worth on a day, per holding and per currency
-
-`:day` is the local day to value. Each holding's signed value is in its own currency's minor units.
-
-```sql
-WITH held AS (                                   -- open, live holdings on :day, and the day of the balance that counts
-  SELECT a.id, p.title AS name, a.side, a.currency,
-         (SELECT b.day FROM balance_values b
-           WHERE b.holding_id = a.id AND b.day <= :day ORDER BY b.day DESC LIMIT 1) AS as_of
-    FROM holdings a
-    JOIN pages p    ON p.id = a.id
-    JOIN entities e ON e.id = a.id AND e.deleted_at IS NULL
-   WHERE coalesce(a.opened_day, '0000-01-01') <= :day
-     AND coalesce(a.closed_day, '9999-12-31') >= :day
-)
-SELECT h.name, h.side, h.currency, b.amount, h.as_of,
-       CAST(julianday(:day) - julianday(h.as_of) AS INTEGER) AS stale_days,        -- how old the number is
-       (CASE h.side WHEN 'asset' THEN 1 ELSE -1 END) * b.amount AS net_minor       -- signed, minor units of h.currency
-  FROM held h
-  CROSS JOIN balance_values b ON b.holding_id = h.id AND b.day = h.as_of   -- CROSS JOIN pins the order: holdings first, then seek
- ORDER BY h.currency, h.side, h.name;
-```
-
-Net worth on `:day` is that query wrapped: `SELECT currency, sum(net_minor), count(*) FROM (…)
-GROUP BY currency` — one row per currency, exact integers. **Never `sum(net_minor)` across
-currencies** (D18). The rules, executed against an exact-arithmetic oracle: a holding **counts** on
-`:day` if it is live, open (`opened_day <= :day <= closed_day`, both inclusive; NULL = unbounded) and
-has a balance on or before `:day`; its value is the **latest effective balance on or before `:day`**,
-carried forward (`stale_days` says how old); `side` decides the sign. `CROSS JOIN` pins the join order,
-so SQLite seeks each holding's balance by index instead of scanning every balance (executed: the plan).
-
-### 6.16 Net worth over time (month-ends)
-
-```sql
-WITH RECURSIVE month_ends(day) AS (
-  SELECT date(:from_day, 'start of month', '+1 month', '-1 day')
-  UNION ALL
-  SELECT date(day, 'start of month', '+2 month', '-1 day') FROM month_ends
-   WHERE day < date(:to_day, 'start of month', '+1 month', '-1 day')
-),
-held AS (                                        -- every open, live holding on every month-end, with its latest balance
-  SELECT m.day, a.side, a.currency,
-         (SELECT b.amount FROM balance_values b
-           WHERE b.holding_id = a.id AND b.day <= m.day ORDER BY b.day DESC LIMIT 1) AS amount
-    FROM month_ends m
-    JOIN holdings a ON coalesce(a.opened_day, '0000-01-01') <= m.day
-                   AND coalesce(a.closed_day, '9999-12-31') >= m.day
-    JOIN entities e ON e.id = a.id AND e.deleted_at IS NULL
-)
-SELECT day, currency,
-       sum((CASE side WHEN 'asset' THEN 1 ELSE -1 END) * amount) AS net_worth_minor,   -- minor units of that currency
-       count(*)                                                  AS holdings           -- holdings of that currency with a balance by then
-  FROM held
- WHERE amount IS NOT NULL
- GROUP BY day, currency
- ORDER BY currency, day;
-```
-
-One series per currency; a month-end at which no holding of a currency has a balance has no row for it.
-The correlated scalar subquery makes each (month, holding) an index seek; joining `balance_values`
-directly would scan all balances once per month.
-
-**Backfilling history from a spreadsheet of monthly totals**: make one holding, `Legacy net worth`
-(`side = 'asset'`, `category = 'aggregate'`), record the totals as its balances (liabilities already
-netted, so amounts may be negative), and set its `closed_day` to the day the detailed holdings begin.
-
-### 6.17 Holdings that need updating
-
-```sql
-SELECT p.title, max(b.day) AS last_balance,
-       CAST(julianday(:day) - julianday(max(b.day)) AS INTEGER) AS stale_days
-  FROM holdings a
-  JOIN pages p    ON p.id = a.id
-  JOIN entities e ON e.id = a.id AND e.deleted_at IS NULL
-  LEFT JOIN balance_values b ON b.holding_id = a.id AND b.day <= :day
- WHERE a.closed_day IS NULL OR a.closed_day >= :day
- GROUP BY a.id
-HAVING max(b.day) IS NULL OR max(b.day) < date(:day, '-35 day')
- ORDER BY stale_days DESC;
-```
-
-### 6.18 Everything inside a place (containment)
-
-`located-in` (place → place: Tokyo → Kanto → Japan) is one-way and transitive. Walk it down with a
-recursive CTE — `UNION`, not `UNION ALL`, so a mistaken cycle ends instead of looping (executed) —
-then join what hangs off those places. "My days in Japan in 2019": the day pages that name a place
-inside it (§6.3):
-
-```sql
-WITH RECURSIVE inside(id) AS (
-  SELECT :place_id
-  UNION
-  SELECT l.from_id FROM links l JOIN inside ON l.to_id = inside.id WHERE l.kind = 'located-in'
-)
-SELECT d.day, pl.title AS place
-  FROM inside
-  JOIN links l    ON l.to_id = inside.id AND l.kind = 'wikilink'
-  JOIN pages d    ON d.id = l.from_id AND d.title = d.day
-  JOIN entities e ON e.id = d.id AND e.deleted_at IS NULL
-  JOIN pages pl   ON pl.id = inside.id
- WHERE d.day BETWEEN :from_day AND :to_day
- ORDER BY d.day, pl.title;
-```
-
-A day that names two places inside Japan is listed once per place.
-
-### 6.19 A person, place or holding: create one, promote a ghost page (D20)
+### 6.14 A person or a place: create one, promote a ghost page (D20)
 
 Step 0 is the resolve of §6.13. No row: create it (steps 1–3). A plain page (`entity_type = 'page'`,
 e.g. a ghost an earlier `[[Bob Sample]]` made): promote it instead. Any other row: the handle is
-taken; choose another (`Bob Sample (colleague)`). A place or a holding is the same with its own
-type and domain row (§6.14).
+taken; choose another (`Bob Sample (colleague)`). A place is the same with its own type and no
+domain row: `entities` and `pages` only, and its promotion is the `UPDATE` alone (D16).
 
 ```sql
 -- 0. does the handle exist already?  :handle_key = title_key(:handle_title), §2.4
 SELECT p.id, p.entity_type FROM pages p WHERE p.title_key = :handle_key;
 
--- create: entity, page, domain row — one id
+-- create: entity, page, people row — one id
 BEGIN IMMEDIATE;
 INSERT INTO entities(entity_type, created_at, updated_at, source)
 VALUES ('person', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'ui')
@@ -2202,76 +1826,32 @@ The day pages that already name the person (§6.3) keep their links: the id did 
 cannot go wrong quietly: a page that is already named or gone makes the `UPDATE` change no row, so the
 `people` insert fails on its key (executed); roll the transaction back.
 
-### 6.20 Where was I? Record a fix, the fix at a moment, a day's track, the place it was (D21)
-
-A fix is inserted once and never edited; an importer adds its `import_key` and `ON CONFLICT(source,
-import_key) WHERE import_key IS NOT NULL DO NOTHING` (§2.8). "Where was I" is the last good fix at or
-before the moment: show its `taken_at`, since the fix before a gap may be hours old. The place is the
-nearest live place with a point within `:radius_m`. The app binds `:m_per_deg_lon = 111320 ·
-cos(:lat in radians)`, so the query needs no math functions (D21) and works on every SQLite.
-
-```sql
--- record a fix (here a manual pin)
-INSERT INTO positions(taken_at, day, tz, lat, lon, accuracy_m, created_at, source)
-VALUES (:taken_at, :day, 'Europe/Berlin', :lat, :lon, 12, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'ui')
-RETURNING id;   -- the app keeps it as :position_id
-
--- where was I at :at? the last fix at or before it that is accurate enough (walks positions_time)
-SELECT taken_at, lat, lon, accuracy_m
-  FROM positions
- WHERE taken_at <= :at AND (accuracy_m IS NULL OR accuracy_m <= :max_accuracy_m)
- ORDER BY taken_at DESC
- LIMIT 1;
-
--- the track of a local day, in order (positions_day)
-SELECT taken_at, lat, lon, accuracy_m
-  FROM positions
- WHERE day = :day AND (accuracy_m IS NULL OR accuracy_m <= :max_accuracy_m)
- ORDER BY taken_at;
-
--- which place was the fix at :lat, :lon? d2 is the squared distance in metres
-SELECT id, title, d2
-  FROM (SELECT pl.id, pg.title,
-               ((pl.lat - :lat) * 111320.0) * ((pl.lat - :lat) * 111320.0)
-             + ((pl.lon - :lon) * :m_per_deg_lon) * ((pl.lon - :lon) * :m_per_deg_lon) AS d2
-          FROM places pl
-          JOIN pages pg   ON pg.id = pl.id
-          JOIN entities e ON e.id = pl.id AND e.deleted_at IS NULL
-         WHERE pl.lat IS NOT NULL)
- WHERE d2 <= :radius_m * :radius_m
- ORDER BY d2
- LIMIT 1;
-```
-
-Give a place its point with `UPDATE places SET lat = …, lon = … WHERE id = :place_id`; both or neither
-(`places_coords_pair`). No place within the radius is an answer too: the fix is shown as coordinates.
-
-### 6.21 Import a row once: insert it, re-run it, update a changed one
+### 6.15 Import a row once: insert it, re-run it, update a changed one
 
 **Who sets `import_key`:** every writer that may send the same row twice — an importer (re-run, or a
 fresh export years later), a phone replaying its offline queue, an agent retrying after a timeout whose
 first attempt did commit. It is the key the *sender* gives the row: the source's own id when there is
-one (§2.8 step 3), else a UUID the client makes once and resends unchanged. A row typed on the hub itself
-cannot arrive twice and has none. The same holds for measurements, balances and positions.
+one (§2.7 step 3), else a UUID the client makes once and resends unchanged. A row typed on the hub itself
+cannot arrive twice and has none. The same holds for measurements.
 
 ```sql
 BEGIN IMMEDIATE;
 INSERT INTO entities(entity_type, created_at, updated_at, source, import_key)
-VALUES ('task', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'import:todo', :import_key)
+VALUES ('page', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'import:vault', :import_key)
 ON CONFLICT(source, import_key) WHERE import_key IS NOT NULL DO NOTHING
-RETURNING id;   -- the app keeps it as :task_id; no row back = imported before: skip the next INSERT
-INSERT INTO tasks(id, name, due_day)
-VALUES (:task_id, 'Renew passport', '2026-10-01');
+RETURNING id;   -- the app keeps it as :page_id; no row back = imported before: skip the next INSERT
+INSERT INTO pages(id, title, title_key, body)
+VALUES (:page_id, 'Sourdough', 'sourdough', 'Feed the starter the night before.');
 COMMIT;
 
--- a later run finds the task moved: update the live row that has the key; a tombstoned one stays gone
-UPDATE tasks
-   SET due_day = '2026-10-15'
+-- a later run finds the note changed: update the live page that has the key; a tombstoned one stays gone
+UPDATE pages
+   SET body = 'Feed the starter the night before; 75% water.'
  WHERE id = (SELECT id FROM entities
-              WHERE source = 'import:todo' AND import_key = :import_key AND deleted_at IS NULL);
+              WHERE source = 'import:vault' AND import_key = :import_key AND deleted_at IS NULL);
 ```
 
-A run that inserts nothing the second time is the check of §2.8 step 5. `import_key` never changes
+A run that inserts nothing the second time is the check of §2.7 step 5. `import_key` never changes
 (`entities_provenance_fixed`), so the key found on the next run is the key written on the first.
 
 ---
@@ -2287,7 +1867,7 @@ re-added, each with the trigger that should reopen the question.
 | An entity `uid` (UUIDv7) | An integer id is never reused and a title is permanent, so references are already stable; `entities.import_key` covers an offline replay; the column is additive (D3, executed) | A reference that must survive a re-key or a merge |
 | Agent CLI/API | Planned as a later layer over the same DB; single-writer rule (principle 3) extends to it naturally; `source` already tells its rows apart (§2.2) | After v1 UI exists |
 | Binary files / `attachments` | Cut from v1 (D9): all-text DB stays megabyte-scale; design kept in D9 | The first real photo/PDF attachment need |
-| Recurring tasks (and events) | A lifelog records what happened; the calendar does planning; birthdays, habits and reminders are covered without it; design kept in D15 | A recurring event wanted in this database, or a task to tick off per occurrence that a habit metric cannot hold |
+| Recurring events | A lifelog records what happened; the calendar does planning; birthdays and habits are covered without it; design kept in D15 | A recurring event wanted in this database, or a task to tick off per occurrence that a habit metric cannot hold |
 | Database encryption | Deliberate plaintext (D17); protect the disk instead (full-disk encryption) | A legal/privacy requirement for at-rest encryption |
 | Revision/history tables | Tombstones and append-only facts cover the need (D12); `sqlite-history` triggers are the documented fallback [R48] | Demonstrated need for intra-day history of structured rows |
 | Raw wearable-import tier | health-mcp's two-tier mirror exists for provider quirks [R8]; premature with zero importers | A second data source appears, or re-import fidelity bites |
@@ -2302,20 +1882,13 @@ re-added, each with the trigger that should reopen the question.
 | An NFKC `title_key` (`NFKC(casefold(NFKC(title)))`) | Unicode's formal case-fold promise covers NFKC text [R74]; the NFC key is outside it only for titles with compatibility characters, rare in this life log. The key is derived, so switching is a recompute; two titles it merges (`Ｃａｆé`, `Café`) become a redirect | A rebuilt `title_key` differs from the stored one after a Unicode upgrade, or a look-alike duplicate page appears |
 | Unicode collation for titles (ICU / app-registered) | A collation only one program registers makes the DB unwritable and un-integrity-checkable for everyone else; the app-computed `title_key` gives the same uniqueness (D5) | Never, unless SQLite ships Unicode folding in the core |
 | Hard deletes / GDPR-style erasure | Tombstones keep everything (D11) | A legal/privacy need to truly destroy specific rows |
-| Transaction ledger (income, spending, transfers), budgets, categories | A second product (splits, transfers, importers, categorisation); net worth needs only balances (D18). Additive later: `transactions` referencing `holdings`, `balances` as reconciliation points | The owner wants spending/savings-rate analysis, or a bank-feed importer exists |
-| Per-holding quantity × price, cost basis / lots, dividends, returns (TWR/IRR) | Net worth needs the market *value* on a day, which the statement or app gives; quantity × price needs a `prices` table and non-currency units — the schema cannot hold a ticker (executed: `V`, `ZM`, `BRK.B` fail `currencies_code`). Additive later: a `securities` + `prices` pair and a nullable `holdings.security_id` | The owner wants automatic repricing, allocation by security or realised/unrealised gain |
-| Currency conversion: exchange rates, one net-worth figure across currencies | Net worth is reported per currency (D18); with one currency it is already one figure | Holdings in more than one currency and you want a single total. Additive: an `fx_rates` table `(from_ccy, to_ccy, day, rate)` referencing `currencies`, and the conversion join in §6.15–6.16 |
-| Co-ownership / shares of joint holdings, multiple owners | Single-user database; record your own share (D18) | A second person needs their own view |
-| Storing account numbers, IBANs, credentials | A plaintext DB makes them a liability (§2.7, D17) | Never in `life.db`; use a password manager |
+| Storing account numbers, IBANs, credentials | A plaintext DB makes them a liability (D17) | Never in `life.db`; use a password manager |
 | Partial dates (`1870`, `1870-05`) for people | Nothing asked for one yet. The standard for them is EDTF, now ISO 8601-2 [R70]. The path is one migration: `DROP CONSTRAINT people_birth_day` and `ADD CONSTRAINT people_birth_day` with a CHECK that also accepts the EDTF forms wanted — executed for `YYYY` and `YYYY-MM` on a populated table; junk and month 13 stay rejected. Queries that do date arithmetic on `birth_day` must then skip partial values | The first ancestor or approximate date you want to record |
 | Searching *inside* a CJK run | `unicode61`, kept, folds `é ü ș ț` but a CJK run is one token (`本語` does not find `日本語のノート`). The index is derived, so switching is one transaction — drop `pages_fts`, create it with `tokenize='trigram remove_diacritics 1'`, `rebuild` — and the sync triggers keep working (executed). Trigram finds 3+-character parts and still not two-character words (`京都`) | The first real CJK page you cannot find |
-| A second name column for places and holdings | The page title is the name (D20); a separate `name` had to be unique a second time | A place or holding whose display name must differ from its permanent handle |
-| Altitude, speed, heading, activity type on a fix | The question is where, not how (D21); the sources can record altitude, but no question needs it. Additive: nullable columns on `positions` | A question needs one |
-| Correcting or retracting a fix | A fix is raw sensor output; a doubtful one is left out by `accuracy_m` (D21). Additive: a `retracted_positions(position_id)` table the reads exclude | A wrong fix that the accuracy filter keeps must be hidden |
-| A place's extent (radius or polygon) | The nearest point within a bound radius answers "which place" (§6.20). Additive: a nullable `places.radius_m` | Matching picks the wrong one of two close places |
-| Places across the ±180° meridian | The §6.20 distance treats 179.9° and −179.9° as 360° apart (D21) | A place or a trip near the antimeridian (Fiji, Chukotka) |
-| A spatial index (R\*Tree) | `positions_time` and `positions_day` serve the questions asked; R\*Tree is a compile-time option [R73] | A query by area over the whole track is ever slow |
-| Re-checking links when an entity changes type | `links_endpoint_types` checks a link at insert; a promotion (D20) can leave one its kind now refuses — a task spawned from the page [[Ana]], then Ana becomes a person (executed). Additive: a trigger on `UPDATE OF type ON entities` | The first such link found in real data |
+| Money: holdings, balances, net worth over time; then a transaction ledger, quantity × price, exchange rates, joint holdings | The first real import kept the money notes as text; nothing has needed them as rows (D18); design kept in D18, each later step additive on top of balances | The first balance or statement the owner wants stored as a number |
+| Location history: a GPS track, a point per place, matching a fix to a place | The owner does not want minute-by-minute tracking; a day page's `at` links say where the day was (D16, D21); design kept in D21 | A location export the owner wants kept, or "where was I at 15:00?" |
+| The zone of the device that wrote each row; a nickname | Only a timed reading needs a zone (`measurements.tz`); a nickname is the person's page text (D10). Each is one `ADD COLUMN` | A question that needs one |
+| Re-checking links when an entity changes type | `links_endpoint_types` checks a link at insert; a promotion (D20) can leave one its kind now refuses — a day page `at` the place [[Lakeside]], then Lakeside becomes a person (executed). Additive: a trigger on `UPDATE OF type ON entities` | The first such link found in real data |
 | Events: appointments, trips, sessions, where you lived (a table of dated happenings) | A day page and its `[[links]]` record what happened, with whom and where (D22, §6.3); design kept in D22 | A source of dated spans or timed sessions (phone sleep and exercise, a calendar, a location export's visits), or a question the day pages cannot answer |
 
 ---
@@ -2533,7 +2106,7 @@ the gaps are intentional.
   string of assigned characters, `toCasefold(toNFKC(S))` is the same under every later version — the
   formal promise covers NFKC text only. Normalization stability covers assigned characters. → §2.4 (`Cn`), §7.
 
-### Reliability of the file (§2.5, §2.6, §2.8)
+### Reliability of the file (§2.5, §2.6, §2.7)
 
 - **[R64]** SQLite: *The Checksum VFS Shim* — <https://www.sqlite.org/cksumvfs.html>
   An 8-byte checksum per page (reserve bytes = 8), `SQLITE_IOERR_DATA` on a mismatch; SQLite ≥ 3.32.
@@ -2551,7 +2124,7 @@ the gaps are intentional.
   Crafting Crash-Consistent Applications*, OSDI 2014 —
   <https://www.usenix.org/conference/osdi14/technical-sessions/presentation/pillai>
   SQLite among the studied applications: crash consistency depends on the filesystem's persistence
-  properties, which is why power loss is listed as documented, not simulated. → §2.8.
+  properties, which is why power loss is listed as documented, not simulated. → §2.7.
 
 ### Time and dates (D7, D10, D18, §7)
 
@@ -2586,7 +2159,7 @@ the gaps are intentional.
   antimeridian is cut in two (§3.1.9). → D21.
 - **[R72]** SQLite: *Built-in Mathematical SQL Functions* — <https://sqlite.org/lang_mathfunc.html>
   `sin`, `cos`, `acos`, `radians` are active only in builds compiled with
-  `-DSQLITE_ENABLE_MATH_FUNCTIONS`. → D21, §6.20.
+  `-DSQLITE_ENABLE_MATH_FUNCTIONS`. → D21.
 - **[R73]** SQLite: *The SQLite R\*Tree Module* — <https://sqlite.org/rtree.html> A spatial index as a
   virtual table, present only in builds compiled with `SQLITE_ENABLE_RTREE`. → §7.
 

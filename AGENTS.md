@@ -3,8 +3,15 @@
 ## What this repo is
 
 **Lifelog is a schema first.** The product is `SCHEMA.md`: the design of `life.db`, a lifetime-scale,
-single-user SQLite database — goals, storage contract, canonical DDL, decision log (D1–D22), query
-cookbook, non-goals, references. It states the current truth only. Any developer, in any language, may
+single-user SQLite database — goals, storage contract, canonical DDL, decision log (D1–D23), query
+cookbook, non-goals, references. It states the current truth only.
+
+**What `life.db` is for: a life log and its backup — not a project-management database.** It keeps
+what happened and what was measured: a journal of day pages, notes, the people and places in them,
+where the owner was, and health readings. To-dos, reminders, projects and plans belong to the tools
+made for them; a plan written in a note stays that note's text (SCHEMA.md D23). Events, money, location
+history and attachments are deferred (D22, D18, D21, D9). A proposal that turns `life.db` into a
+planner, a tracker of open work or a finance ledger needs a real incident and the owner's word first. Any developer, in any language, may
 build an application around it; the contract they implement is `SCHEMA.md` and nothing else.
 
 `app/` is the **first official application**: a Go binary (a CLI now; a REST API and an MCP server
@@ -61,9 +68,9 @@ Two writers on one file are not.
   incident behind it — a failed import, a bug in the writing application, a question the data could
   not answer — or it must replace something it makes redundant. A hypothetical writer is not an
   incident, and neither is a wish of `app/`. The next step is the capture path and one real import
-  (§2.8), not another review.
+  (§2.7), not another review.
 - **One home per concept.** A fact that can be derived from another column is not stored beside it
-  (open task = `completed_at IS NULL`; a place's name is its page title).
+  (a day page's day is its title; a place's name is its page title).
 
 ## Editing SCHEMA.md
 
@@ -78,7 +85,7 @@ Two writers on one file are not.
   extraction) is specified in §2.4 with vectors in `tests/wikilinks/vectors.py`; Go code may be an
   example, never the only statement of a rule.
 - **Self-consistency.** Every change to §3's DDL keeps §2, §4, §5, §6 and the totals line under §3 in
-  step. The mermaid diagrams (§2.3, §2.6, §2.7, §4, §6.13) are checked by `tests/schema/diagrams.py`:
+  step. The mermaid diagrams (§2.3, §2.6, §4, §6.13) are checked by `tests/schema/diagrams.py`:
   the ER diagrams draw tables, key columns and foreign keys only, and the link map must equal
   `link_kinds`. Each diagram starts with a `%% diagram: <id>` line; keep to `erDiagram`, `flowchart`
   and `stateDiagram-v2` with quoted labels.
@@ -86,7 +93,7 @@ Two writers on one file are not.
   (`tests/README.md`). If a suite must change because the document legitimately changed, change it in
   the same edit and say so in the commit message — a suite loosened to pass proves nothing, and
   `tests/` is validation, not a migration runner. A new cross-table rule needs a `lifelog_meta` key and
-  a row in the 2075 table of §2.8; a new rule of any kind gets a mutant in `tests/schema/mutants.py`.
+  a row in the 2075 table of §2.7; a new rule of any kind gets a mutant in `tests/schema/mutants.py`.
   Keep the counts in `tests/README.md` (diagrams, mutants) true.
 - **Current truth and nothing else:** no review rounds, validation records, addenda, "superseded"
   notes, finding ids, version narrative or changelog (`tests/schema/document.py` fails if any comes
@@ -105,26 +112,24 @@ Their homes are in `SCHEMA.md`; this list is the checklist, not the rule.
 - **Time** (§2.1, D10): UTC ISO-8601 instants and local-day TEXT columns with round-trip CHECKs
   (`date(x) IS x`, `strftime(...) IS x` — the `IS` matters).
 - **Identity** (§2.2, D20): every *entity* domain row is keyed by its `entities` id through a composite
-  FK `(id, entity_type)` — `pages` and `tasks` to `entities(id, entity_type)`; `people`,
-  `places` and `holdings` to `pages(id, entity_type)`, because a person, place or holding **is** a page:
-  one id, whose page title is its handle and its name (`pages.entity_type`, `ON UPDATE CASCADE` for
-  promotion; §6.19). Ids are carried with `INSERT … RETURNING id`, never `last_insert_rowid()` across
+  FK `(id, entity_type)` — `pages` to `entities(id, entity_type)`, `people` to `pages(id, entity_type)`,
+  because a person **is** a page; a place is its page alone (D16). One id, whose page title is its
+  handle and its name (`pages.entity_type`, `ON UPDATE CASCADE` for promotion; §6.14). Ids are carried with `INSERT … RETURNING id`, never `last_insert_rowid()` across
   statements.
 - **Provenance**: `source` (the writer: `ui`, `cli`, `api`, `agent:<name>`, `import:<name>`) is
-  required on `entities`, `links`, `measurements`, `balances` and `positions`, written at insert and
-  never changed; `import_key` is unique per `source`.
+  required on `entities`, `links` and `measurements`, written at insert and never changed; `import_key`
+  is unique per `source`.
 - **No deletes** (§2.3, D11): tombstones (BEFORE DELETE triggers); only `links` rows are deleted.
-- **Append-only facts**: measurements, balances and positions. A measurement is corrected with
-  `supersedes_id`; a balance by a newer row for the same holding+day; both are retracted with a NULL
-  value/amount; a GPS fix is never corrected (D21).
-- **Imports**: `ON CONFLICT … DO NOTHING`, never `OR IGNORE` / `OR REPLACE` (§2.8).
-- **Money**: INTEGER minor units of the holding's currency — never REAL (§2.7, D18).
+- **Append-only facts**: measurements. A reading is corrected with `supersedes_id` and retracted with a
+  NULL value (D7).
+- **Imports**: `ON CONFLICT … DO NOTHING`, never `OR IGNORE` / `OR REPLACE` (§2.7).
 - **CHECKs**: every one NAMED (`CONSTRAINT <table>_<rule> CHECK …`), using only functions the minimum
   SQLite has (`lifelog_meta.sqlite`) — no math functions, even where a build has them.
 - **Links**: a closed, endpoint-typed `link_kinds` registry (D8).
 - **Pages** (§2.4, D5): every page titled, with filename-safe, immutable titles and a unique app-computed
   `title_key` (NFC + casefold; vectors in §2.4). The journal is one day page per local day, titled
-  `YYYY-MM-DD` (`pages_day_page`). There are no events (D22); nothing repeats (D15).
+  `YYYY-MM-DD` (`pages_day_page`); where the owner was that day is `at` links to places (D16). There
+  are no events or tasks (D22, D23); nothing repeats (D15).
 - **Connections** (§2.6): one writing application per file; per connection `PRAGMA foreign_keys=ON`,
   `recursive_triggers=ON`, `synchronous=FULL`, `trusted_schema=OFF`, read back and refused if wrong;
   SQLite ≥ 3.51.3 for writers; every write transaction starts with `BEGIN IMMEDIATE`; the driver opens

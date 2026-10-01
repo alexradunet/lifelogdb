@@ -13,7 +13,7 @@ DOC = docsql.doc_text()
 DDL = open(DDL_PATH, encoding='utf-8').read() if DDL_PATH else docsql.ddl(DOC)
 LIVE = DOC[:DOC.index('## 8. References')] if '## 8. References' in DOC else DOC
 NOW = "strftime('%Y-%m-%dT%H:%M:%fZ','now')"
-NAMED = ('person', 'place', 'holding')
+NAMED = ('person', 'place')
 
 
 class Suite:
@@ -92,7 +92,7 @@ def page(c, title, day=None, body='', created=None, key=None):
 
 _n = [0]
 def named(c, typ, handle=None, **cols):
-    """A person, place or holding (D20): the entity, its page (entity_type = typ), its domain row — one id."""
+    """A person or a place (D20): the entity and its page (entity_type = typ), and a person's people row — one id."""
     if handle is None:
         _n[0] += 1; handle = f'{typ.title()} {_n[0]}'
     i = ent(c, typ)
@@ -101,16 +101,15 @@ def named(c, typ, handle=None, **cols):
 
 
 def domain(c, typ, i, **cols):
+    if typ == 'place': return                      # a place is its page: no row of its own (D16)
     if typ == 'person': cols.setdefault('name', 'P')
-    if typ == 'holding': cols.setdefault('side', 'asset'); cols.setdefault('currency', 'EUR')
-    table = dict(person='people', place='places', holding='holdings', task='tasks')[typ]
-    if typ == 'task': cols.setdefault('name', 'T')
+    table = dict(person='people')[typ]
     cols = dict(id=i, **cols)
     c.execute(f"INSERT INTO {table}({','.join(cols)}) VALUES ({','.join('?' * len(cols))})", tuple(cols.values()))
 
 
 def thing(c, typ, **cols):
-    """Any entity with its domain row: a page, a task, or a named one."""
+    """Any entity with its domain row: a page, or a named one."""
     if typ in NAMED: return named(c, typ, **cols)
     if typ == 'page': _n[0] += 1; return page(c, f'Page {_n[0]}', body='x')
     i = ent(c, typ); domain(c, typ, i, **cols); return i
@@ -123,11 +122,6 @@ def link(c, f, t, kind, source='ui'):
 def measure(c, metric, day, value, source='ui', **cols):
     cols = dict(metric_id=metric, day=day, value=value, source=source, **cols)
     return tryx(c, f"INSERT INTO measurements({','.join(cols)},created_at) VALUES ({','.join('?' * len(cols))},{NOW})", tuple(cols.values()))
-
-
-def balance(c, holding, day, amount, source='ui', **cols):
-    cols = dict(holding_id=holding, day=day, amount=amount, source=source, **cols)
-    return tryx(c, f"INSERT INTO balances({','.join(cols)},created_at) VALUES ({','.join('?' * len(cols))},{NOW})", tuple(cols.values()))
 
 
 def statements(sql):

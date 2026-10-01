@@ -33,7 +33,7 @@ S.K('BEGIN IMMEDIATE: the first writer creates, the second waits and then finds 
 S.K('...the second really waited for the lock', res.get('B', ('', 0))[1] > 0.25, res)
 S.K('...one page', conn(path).execute("select count(*) from pages where title_key='diet'").fetchone()[0] == 1)
 sec6 = DOC[DOC.index('## 6. Query cookbook'):DOC.index('## 7. ')]
-S.K('§6 has no bare BEGIN, and its write blocks start with BEGIN IMMEDIATE', not re.findall(r'^BEGIN;?\s*$', sec6, re.M) and len(re.findall(r'^BEGIN IMMEDIATE;', sec6, re.M)) >= 6)
+S.K('§6 has no bare BEGIN, and its write blocks start with BEGIN IMMEDIATE', not re.findall(r'^BEGIN;?\s*$', sec6, re.M) and len(re.findall(r'^BEGIN IMMEDIATE;', sec6, re.M)) >= 5)
 
 # ---- pragmas
 S.K('SQLite\'s default synchronous is FULL (2)', sqlite3.connect(mkdb()).execute('PRAGMA synchronous').fetchone()[0] == 2)
@@ -69,9 +69,9 @@ try:
     c.executescript(DDL); p = page(c, 'Hardened'); c.execute("UPDATE pages SET body='searchable words' WHERE id=?", (p,))
     mm = page(c, 'Another', body='another'); link(c, mm, p, 'wikilink'); named(c, 'person', 'Ada')
     c.execute("DELETE FROM links WHERE from_id=? AND kind='wikilink' AND to_id NOT IN (SELECT value FROM json_each('[]'))", (mm,))
-    got = (one(c, "SELECT count(*) FROM pages_fts WHERE pages_fts MATCH 'searchable'"), one(c, 'SELECT count(*) FROM ghost_pages'), one(c, 'SELECT count(*) FROM measurement_values'), one(c, 'SELECT count(*) FROM balance_values'))
+    got = (one(c, "SELECT count(*) FROM pages_fts WHERE pages_fts MATCH 'searchable'"), one(c, 'SELECT count(*) FROM ghost_pages'), one(c, 'SELECT count(*) FROM measurement_values'))
     hard = 'OK'
 except sqlite3.Error as e: hard, got = 'ERR ' + str(e), None
-S.K('with DEFENSIVE and trusted_schema=OFF: DDL, writes, FTS, views, json_each and a named entity all work', hard == 'OK' and got == (1, 0, 0, 0), (hard, got))
+S.K('with DEFENSIVE and trusted_schema=OFF: DDL, writes, FTS, views, json_each and a named entity all work', hard == 'OK' and got == (1, 0, 0), (hard, got))
 S.K('...and a write to an FTS shadow table is refused', tryx(c, 'DELETE FROM pages_fts_data').startswith('ERR'))
 S.done()

@@ -10,7 +10,7 @@ S = Suite('evolution')
 
 def populated():
     c = fresh()
-    for t in ('page', 'task', 'person', 'place', 'holding'): thing(c, t)
+    for t in ('page', 'person', 'place'): thing(c, t)
     page(c, 'Some page'); return c
 
 # ---- every CHECK named, every name droppable
@@ -42,8 +42,7 @@ S.K('ADD CONSTRAINT checks the existing rows (tightening is as safe as loosening
 
 # ---- widening enums on a populated database
 WIDEN = {
- 'entities_entity_type': ('entities', "entity_type IN ('page','task','person','place','holding','vehicle')", lambda c: tryx(c, f"INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES ('vehicle',{NOW},{NOW},'ui')")),
- 'holdings_side': ('holdings', "side IN ('asset','liability','equity')", lambda c: tryx(c, "INSERT INTO holdings(id,side,currency) VALUES (?, 'equity', 'EUR')", (named_page(c, 'holding'),))),
+ 'entities_entity_type': ('entities', "entity_type IN ('page','person','place','vehicle')", lambda c: tryx(c, f"INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES ('vehicle',{NOW},{NOW},'ui')")),
 }
 def named_page(c, typ):
     i = ent(c, typ); c.execute("INSERT INTO pages(id,entity_type,title,title_key) VALUES (?, ?, ?, ?)", (i, typ, f'W{i}', f'w{i}')); return i
@@ -85,16 +84,16 @@ S.K('...and the FTS integrity-check passes', tryx(c, "INSERT INTO pages_fts(page
 # ---- a link kind is widened by a migration (D8): drop the guard, update the row, recreate the guard
 c = populated(); guard = c.execute("select sql from sqlite_schema where name='link_kinds_structure_fixed'").fetchone()[0]
 c.execute('BEGIN IMMEDIATE'); c.execute('DROP TRIGGER link_kinds_structure_fixed')
-c.execute("UPDATE link_kinds SET to_types = 'page,person' WHERE kind = 'spawned'"); c.execute(guard); c.execute('COMMIT')
-S.K('after the migration a task may be spawned from a person\'s page', link(c, thing(c, 'task'), named(c, 'person'), 'spawned') == 'OK')
-S.K('...and the guard is back: the next change is refused', 'fixed at registration' in tryx(c, "UPDATE link_kinds SET to_types = NULL WHERE kind = 'spawned'"))
+c.execute("UPDATE link_kinds SET to_types = 'person,place' WHERE kind = 'at'"); c.execute(guard); c.execute('COMMIT')
+S.K('after the migration a day page may be at a person\'s home page', link(c, day_page(c), named(c, 'person'), 'at') == 'OK')
+S.K('...and the guard is back: the next change is refused', 'fixed at registration' in tryx(c, "UPDATE link_kinds SET to_types = NULL WHERE kind = 'at'"))
 
 # ---- a promotion can leave a link its kind now refuses (§7): links are checked at insert only
-c = fresh(); tk = thing(c, 'task'); w = page(c, 'Ana')
-S.K('a task spawned from the page [[Ana]]', link(c, tk, w, 'spawned') == 'OK')
+c = fresh(); d = day_page(c, '2026-07-31'); w = named(c, 'place', 'Lakeside')
+S.K('a day page at the place [[Lakeside]]', link(c, d, w, 'at') == 'OK')
 c.execute("UPDATE entities SET entity_type = 'person' WHERE id = ?", (w,)); domain(c, 'person', w)
-S.K('promoting Ana to a person keeps the old spawned edge, which a new insert would refuse',
-    one(c, "select count(*) from links where to_id = ? and kind = 'spawned'", (w,)) == 1 and 'endpoint type not allowed' in link(c, thing(c, 'task'), w, 'spawned'))
+S.K('turning Lakeside into a person keeps the old at edge, which a new insert would refuse',
+    one(c, "select count(*) from links where to_id = ? and kind = 'at'", (w,)) == 1 and 'endpoint type not allowed' in link(c, day_page(c, '2026-08-01'), w, 'at'))
 
 # ---- an entity uid is additive after the freeze (D3): add, backfill, unique index, then NOT NULL
 import uuid
@@ -103,7 +102,7 @@ c.execute("ALTER TABLE entities ADD COLUMN uid TEXT CONSTRAINT entities_uid CHEC
 for (i,) in c.execute('select id from entities').fetchall(): c.execute('UPDATE entities SET uid = ? WHERE id = ?', (str(uuid.uuid4()), i))
 c.execute('CREATE UNIQUE INDEX entities_uid_unique ON entities(uid)'); c.execute('ALTER TABLE entities ALTER COLUMN uid SET NOT NULL'); c.execute('COMMIT')
 S.K('every existing entity has a unique uid, and an entity without one is refused afterwards',
-    one(c, 'select count(distinct uid) = count(*) from entities') == 1 and 'NOT NULL' in tryx(c, f"INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES ('task',{NOW},{NOW},'ui')"))
+    one(c, 'select count(distinct uid) = count(*) from entities') == 1 and 'NOT NULL' in tryx(c, f"INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES ('page',{NOW},{NOW},'ui')"))
 S.K('...with integrity and foreign keys clean', integrity_ok(c))
 
 # ---- comments: inside a statement kept, outside dropped (why the rules live inside)

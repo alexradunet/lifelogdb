@@ -1,6 +1,6 @@
-"""The journal (SCHEMA.md D5, D10, D15, D22): the day page and its CHECK, capture that appends to it (§6.1), the §6.2 day
-view, the days that name someone or somewhere (§6.3), a task from a day page (§6.9), tasks and their CHECKs, completion on
-the LOCAL day, and what stands in for recurrence and for events."""
+"""The journal (SCHEMA.md D5, D15, D16, D22, D23): the day page and its CHECK, capture that appends to it (§6.1), the §6.2
+day view, the days that name someone or somewhere (§6.3), where the owner was (§6.9), and what stands in for recurrence,
+events and tasks."""
 import os, re, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'lib'))
 from kit import *
@@ -56,41 +56,21 @@ g = one(c, "select id from pages where title='2026-12-02'")
 S.K('a link that names a day before anything was written makes that day\'s page, with its day', c.execute('select day, body from pages where id=?', (g,)).fetchone() == ('2026-12-02', ''))
 S.K('...and the first capture of that day writes into it', W.capture(c, 'it came', '2026-12-02')[0] == g and one(c, 'select body from pages where id=?', (g,)) == 'it came')
 
-# ---- tasks
-c = fresh()
-cols = lambda t: [r[1] for r in c.execute(f"pragma table_info('{t}')")]
-S.K('tasks have no recurrence columns (D15)', not [x for x in cols('tasks') if x.startswith('repeat')])
-S.K('tasks have no status column: open = completed_at IS NULL', 'status' not in cols('tasks'))
-t = lambda: ent(c, 'task')
-S.K('done without completed_day refused', tryx(c, f"INSERT INTO tasks(id,name,completed_at) VALUES (?,'x',{NOW})", (t(),)).startswith('ERR'))
-S.K('done without completed_at refused', tryx(c, "INSERT INTO tasks(id,name,completed_day) VALUES (?,'x','2026-06-09')", (t(),)).startswith('ERR'))
-S.K('a malformed completed_day refused', tryx(c, f"INSERT INTO tasks(id,name,completed_at,completed_day) VALUES (?,'x',{NOW},'2026-6-9')", (t(),)).startswith('ERR'))
-a = t(); S.K('done with both accepted', tryx(c, "INSERT INTO tasks(id,name,completed_at,completed_day) VALUES (?,'ship it','2026-06-09T22:30:00.000Z','2026-06-10')", (a,)) == 'OK')
-b = t(); c.execute("INSERT INTO tasks(id,name,due_day) VALUES (?,'open one','2026-06-01')", (b,))
-S.K('completing an open task: the documented UPDATE', tryx(c, f"UPDATE tasks SET completed_at={NOW}, completed_day='2026-06-11' WHERE id=?", (b,)) == 'OK')
-S.K('half un-completing it is refused', tryx(c, 'UPDATE tasks SET completed_at=NULL WHERE id=?', (b,)).startswith('ERR'))
-plan = ' | '.join(r[3] for r in c.execute("EXPLAIN QUERY PLAN SELECT id FROM tasks WHERE completed_at IS NULL AND due_day <= '2026-06-01'"))
-S.K('open tasks by due day use the partial index tasks_open', 'tasks_open' in plan, plan)
-
 # ---- §6.2 day view
 DV = block('6.2')
-rows = c.execute(DV, dict(day='2026-06-10')).fetchall()
-S.K('§6.2 lists the task done on LOCAL 2026-06-10 (its UTC instant is 06-09 22:30)', ('done', '2026-06-09T22:30:00.000Z', 'ship it') in rows)
-S.K('...and not on 2026-06-09', ('done', '2026-06-09T22:30:00.000Z', 'ship it') not in c.execute(DV, dict(day='2026-06-09')).fetchall())
 c = fresh()
-day_page(c, '2026-09-29', 'a day of work'); day_page(c, '2026-09-28', 'yesterday')
+d29 = day_page(c, '2026-09-29', 'a day of work'); d28 = day_page(c, '2026-09-28', 'yesterday')
+office, home = named(c, 'place', 'Office'), named(c, 'place', 'Home'); link(c, d29, office, 'at'); link(c, d28, home, 'at')
 page(c, 'Essay', day='2026-09-29', body='text'); page(c, 'Link target'); page(c, 'Yesterday essay', day='2026-09-28', body='x')
 named(c, 'person', 'Sam')
-tk = ent(c, 'task'); domain(c, 'task', tk, name='Overdue', due_day='2026-09-01')
-dn = ent(c, 'task'); domain(c, 'task', dn, name='Later', due_day='2026-10-01')
 c.execute("INSERT INTO metrics(name,unit) VALUES ('weight','kg')"); measure(c, 2, '2026-09-29', 71.2, taken_at='2026-09-29T06:00:00.000Z'); measure(c, 2, '2026-09-29', 70.0, supersedes_id=1)
 rows = c.execute(DV, {'day': '2026-09-29'}).fetchall()
 got = {(r[0], r[2]) for r in rows}
-S.K('§6.2 shows the day page, the page written that day, the overdue task and the corrected reading',
-    {('day page', 'a day of work'), ('page', 'Essay'), ('task', 'Overdue'), ('weight', '70.0 kg')} <= got, rows)
+S.K('§6.2 shows the day page, the page written that day, where I was and the corrected reading',
+    {('day page', 'a day of work'), ('page', 'Essay'), ('at', 'Office'), ('weight', '70.0 kg')} <= got, rows)
 S.K('...the day page once, as the day page and not again as a page written that day', [r[0] for r in rows].count('day page') == 1 and ('page', '2026-09-29') not in got, rows)
-S.K('...not another day\'s page, a link target, a person\'s page, a page of another day, a task due later or the superseded reading',
-    not {r[2] for r in rows} & {'yesterday', 'Link target', 'Sam', 'Yesterday essay', 'Later', '71.2 kg'}, rows)
+S.K('...not another day\'s page or place, a link target, a person\'s page, a page of another day or the superseded reading',
+    not {r[2] for r in rows} & {'yesterday', 'Home', 'Link target', 'Sam', 'Yesterday essay', '71.2 kg'}, rows)
 S.K('...undated items first, the day page leading', rows[0][0] == 'day page' and [r[1] is None for r in rows] == sorted([r[1] is None for r in rows], reverse=True))
 pid = one(c, "select id from pages where title='Essay'")
 c.execute("UPDATE entities SET created_at='2026-09-29T08:00:00.000Z' WHERE id=?", (pid,)); c.execute("UPDATE pages SET body='text 2' WHERE id=?", (pid,))
@@ -112,18 +92,25 @@ S.K('...and drops a tombstoned day', [r[0] for r in c.execute(Q, {'entity_id': a
 plan = ' | '.join(r[3] for r in c.execute('EXPLAIN QUERY PLAN ' + Q, {'entity_id': ana}))
 S.K('§6.3 is served by links_to', 'links_to' in plan, plan)
 
-# ---- §6.9 a task from a day page
-c = fresh(); dp = day_page(c, '2026-09-30', 'call the dentist'); P = dict(page_id=dp, due_day='2026-10-05')
-try: run_block(c, block('6.9'), P); r = 'OK'
-except sqlite3.Error as e: r = 'ERR ' + str(e)
-S.K('§6.9 run literally: the task it RETURNed is spawned from the day page', r == 'OK'
-    and c.execute("select t.id, l.to_id from tasks t join links l on l.from_id=t.id and l.kind='spawned'").fetchall() == [(P.get('task_id'), dp)], (r, P))
+# ---- §6.9 where was I: at links from the day page
+c = fresh(); par, cor, spa = named(c, 'place', 'Lakeside'), named(c, 'place', 'Northgate'), named(c, 'place', 'Southpark')
+d7, _ = W.capture(c, 'am fost in northgate, apoi la southpark', '2026-08-07'); d31, _ = W.capture(c, 'seara la lakeside', '2026-07-31')
+st = statements(block('6.9'))
+run_block(c, st[0], dict(day_page_id=d31, place_id=par))
+S.K('§6.9 records an at link from the day page to the place, with its note', one(c, "select note from links where from_id=? and to_id=? and kind='at'", (d31, par)) == 'evening')
+S.K('...and again is a no-op (ON CONFLICT DO NOTHING)', tryx(c, st[0], dict(day_page_id=d31, place_id=par)) == 'OK' and one(c, "select count(*) from links where kind='at'") == 1)
+link(c, d7, cor, 'at'); link(c, d7, spa, 'at'); d8, _ = W.capture(c, 'iar la lakeside', '2026-08-08'); link(c, d8, par, 'at')
+S.K('§6.9 where was I on 2026-08-07: both places, by title', [r[0] for r in c.execute(st[1], {'day': '2026-08-07'})] == ['Northgate', 'Southpark'])
+S.K('§6.9 the days at Lakeside, newest first', [r[0] for r in c.execute(st[2], {'place_id': par})] == ['2026-08-08', '2026-07-31'])
+S.K('an at link to a person is refused: at points at a place', link(c, d7, named(c, 'person', 'Ana'), 'at').startswith('ERR'))
+S.K('an at link from a person is refused: at comes from a page', link(c, named(c, 'person', 'Ion'), par, 'at').startswith('ERR'))
+c.execute(f'UPDATE entities SET deleted_at={NOW} WHERE id=?', (spa,))
+S.K('...and a tombstoned place is not where I was', [r[0] for r in c.execute(st[1], {'day': '2026-08-07'})] == ['Northgate'])
 
-# ---- what stands in for recurrence (D15) and for events (D22)
-c = fresh(); t1 = ent(c, 'task'); domain(c, 'task', t1, name='pay rent', due_day='2026-01-01')
-t2 = ent(c, 'task'); domain(c, 'task', t2, name='pay rent', due_day='2026-02-01')
-S.K('the next reminder is linked with the symmetric related (two edges)', link(c, t2, t1, 'related') == 'OK' and one(c, "select count(*) from links where kind='related'") == 2)
-S.K('spawned task->task stays refused', link(c, t2, t1, 'spawned').startswith('ERR'))
+# ---- what stands in for recurrence (D15), events (D22) and tasks (D23)
+c = fresh()
+S.K('there is no tasks table and no task link kind (D23)', one(c, "select count(*) from sqlite_schema where name='tasks'") == 0
+    and one(c, "select count(*) from link_kinds where kind in ('spawned','subtask')") == 0)
 c.execute("INSERT INTO metrics(name,unit) VALUES ('rent_paid','')"); mid = one(c, "select id from metrics where name='rent_paid'")
 for d, v in (('2026-01-31', 1), ('2026-02-28', 0), ('2026-03-31', 1)): measure(c, mid, d, v)
 S.K('"did I do it each month" is a 0/1 habit metric', one(c, 'select group_concat(value) from (select value from measurement_values where metric_id=? order by day)', (mid,)) == '1.0,0.0,1.0')

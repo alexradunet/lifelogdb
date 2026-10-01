@@ -1,5 +1,5 @@
 """The mermaid diagrams of SCHEMA.md say what the DDL says.
-A  structure: exactly the eight diagrams, each announced by a `%% diagram: <id>` line, each of a known type;
+A  structure: exactly the seven diagrams, each announced by a `%% diagram: <id>` line, each of a known type;
 B  the two ER diagrams draw keys only: every table is drawn; every drawn column is a PK or FK column with its declared type
    and marks; every PK and FK column is drawn somewhere; every foreign key is a relationship and every relationship a foreign
    key, labelled by its first column, with the cardinality the constraint implies (NOT NULL `||`, nullable `|o`; unique in
@@ -20,8 +20,8 @@ for b in re.findall(r'```mermaid\n(.*?)\n```', DOC, re.S):
     S.K('every mermaid block starts with a `%% diagram: id` line', m is not None, b[:40])
     if m: byid.setdefault(m.group(1), []).append(b[m.end():])
 WANT = {'er-core': 'erDiagram', 'er-facts': 'erDiagram', 'link-map': 'flowchart', 'page-life': 'stateDiagram-v2',
-        'correct-measurement': 'stateDiagram-v2', 'writers': 'flowchart', 'money-flow': 'flowchart', 'save-flow': 'flowchart'}
-S.K('exactly the eight diagrams, each once', sorted(byid) == sorted(WANT) and all(len(v) == 1 for v in byid.values()), {k: len(v) for k, v in byid.items()})
+        'correct-measurement': 'stateDiagram-v2', 'writers': 'flowchart', 'save-flow': 'flowchart'}
+S.K('exactly the seven diagrams, each once', sorted(byid) == sorted(WANT) and all(len(v) == 1 for v in byid.values()), {k: len(v) for k, v in byid.items()})
 for k, kind in WANT.items():
     if k in byid: S.K(f'{k} is a {kind}', byid[k][0].startswith(kind))
 def body(k): return byid.get(k, [''])[0]
@@ -92,7 +92,7 @@ for kind, sym, ft, tt in c.execute('select kind, symmetric, from_types, to_types
     for f in (ft.split(',') if ft else ['any']):
         for t in (tt.split(',') if tt else ['any']): exp.setdefault((f, t, bool(sym)), set()).add(kind)
 S.K('the link map has the same edges as link_kinds', edges == exp, {'only in map': {k: v for k, v in edges.items() if exp.get(k) != v}, 'only in DDL': {k: v for k, v in exp.items() if edges.get(k) != v}})
-S.K('every node of the map names entity types or `any entity`', all(set(v) <= {'any', 'page', 'task', 'person', 'place', 'holding'} for v in types.values()), types)
+S.K('every node of the map names entity types or `any entity`', all(set(v) <= {'any', 'page', 'person', 'place'} for v in types.values()), types)
 
 # ---- D  the correction story
 cm = body('correct-measurement')
@@ -113,6 +113,4 @@ S.K('the save flow names steps 0, 1, 2a, 2b, 3, 4 exactly as §6.13 does', st_sq
 S.K('the save flow has BEGIN IMMEDIATE, SAVEPOINT, RELEASE, ROLLBACK TO and COMMIT, as §6.13', all(w in body('save-flow') for w in ('BEGIN IMMEDIATE', 'SAVEPOINT target', 'RELEASE target', 'ROLLBACK TO target', 'COMMIT')))
 S.K('the page diagram has the named state, promotion by type and the day page', 'Named' in body('page-life') and 'entities.entity_type' in body('page-life') and 'day page' in body('page-life'))
 S.K('the writers diagram names BEGIN IMMEDIATE, WAL, mode=ro', all(w in body('writers') for w in ('BEGIN IMMEDIATE', 'WAL', 'mode=ro')))
-S.K('the money flow names balances, holdings, currencies, balance_values and sums per currency, with no conversion',
-    all(w in body('money-flow') for w in ('balances', 'holdings', 'currencies', 'balance_values', 'per currency')) and 'fx' not in body('money-flow'))
 S.done()

@@ -1,5 +1,5 @@
 """The four integrity checks of SCHEMA.md §2.5, taken literally from the document and run on the LIVE file: a clean file,
-a zeroed page, a truncated file, a flipped index entry, a flipped value (undetected, as the text says), a balance written
+a zeroed page, a truncated file, a flipped index entry, a flipped value (undetected, as the text says), a reading written
 with foreign_keys=OFF, an entities row with no domain row, a person with a page but no people row, a drifted FTS index."""
 import os, re, shutil, subprocess, sys, tempfile
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'lib'))
@@ -21,7 +21,7 @@ c = fresh(base); c.execute('BEGIN IMMEDIATE')
 for i in range(3000):                        # enough pages that the table and pages_title span many pages
     if i % 2: page(c, f'Title {i:05d}', day='2026-09-30', body=f'BODYMARK{i:05d} ' + 'lorem ipsum ' * 20)
     else: page(c, f'Note {i:05d}', body=f'BODYMARK{i:05d} ' + 'dolor sit amet ' * 20)
-for t in ('task', 'person', 'place', 'holding'): thing(c, t)      # one row of every domain type, so a query that
+for t in ('person', 'place'): thing(c, t)      # one row of every domain type, so a query that
 c.execute('COMMIT'); c.execute('PRAGMA wal_checkpoint(TRUNCATE)'); c.close()  # forgets one table reports a false orphan
 PS = sqlite3.connect(base).execute('pragma page_size').fetchone()[0]
 def sq(p, sql):
@@ -49,9 +49,9 @@ for m in re.finditer(rb'lorem ipsum lorem', open(base, 'rb').read()):  # free sp
     if n == '1': j = m.start(); break
 S.K('a flipped byte inside a body: the text changed and integrity_check is STILL ok', j >= 0 and n == '1' and checks(p)[0] == ['ok'], (j, n))
 p = cp('fk'); c = sqlite3.connect(p, isolation_level=None); c.execute('PRAGMA foreign_keys=OFF')
-ins = tryx(c, "INSERT INTO balances(holding_id,day,amount,created_at,source) VALUES (99999,'2026-09-30',100,'2026-09-30T10:00:00.000Z','ui')"); c.close()
+ins = tryx(c, "INSERT INTO measurements(metric_id,day,value,created_at,source) VALUES (99999,'2026-09-30',100,'2026-09-30T10:00:00.000Z','ui')"); c.close()
 ic, fk, orph = checks(p)
-S.K('a balance for no holding, written with foreign_keys=OFF (STRICT does not enforce FKs): only foreign_key_check sees it', ins == 'OK' and ic == ['ok'] and fk != '' and orph == '', (ins, ic, fk, orph))
+S.K('a reading of no metric, written with foreign_keys=OFF (STRICT does not enforce FKs): only foreign_key_check sees it', ins == 'OK' and ic == ['ok'] and fk != '' and orph == '', (ins, ic, fk, orph))
 p = cp('orph'); c = sqlite3.connect(p, isolation_level=None); oid = ent(c, 'page'); c.close()
 S.K('an entities row with no domain row: only the orphan query sees it', checks(p) == (['ok'], '', str(oid)), (checks(p), oid))
 p = cp('half'); c = sqlite3.connect(p, isolation_level=None); c.execute('PRAGMA foreign_keys=ON'); hid = ent(c, 'person')

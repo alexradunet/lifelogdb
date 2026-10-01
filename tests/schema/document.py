@@ -1,4 +1,4 @@
-"""The document itself (SCHEMA.md): the 2075 test of §2.8 against a fresh database; the rules live in the file (each
+"""The document itself (SCHEMA.md): the 2075 test of §2.7 against a fresh database; the rules live in the file (each
 table's inside its CREATE statement, the cross-table ones in a few lifelog_meta rows); current truth only (no review rounds,
 records, addenda, superseded notes, finding ids, versions, changelog); out-of-scope features stay out; the §3 totals match."""
 import os, re, sys
@@ -10,7 +10,7 @@ S = Suite('document')
 # ---- the 2075 test
 c = fresh(); meta = dict(c.execute('select key, value from lifelog_meta'))
 schema = {n: s for n, s in c.execute('select name, sql from sqlite_schema where sql is not null')}
-rows = re.findall(r'^\|\s*(\d+)\s*\|([^|]+)\|([^|]+)\|([^|]+)\|\s*$', section('### 2.8 ', '## 3. '), re.M)
+rows = re.findall(r'^\|\s*(\d+)\s*\|([^|]+)\|([^|]+)\|([^|]+)\|\s*$', section('### 2.7 ', '## 3. '), re.M)
 S.K('the 2075 table has at least 20 questions, numbered 1..n without a gap', len(rows) >= 20 and [int(r[0]) for r in rows] == list(range(1, len(rows) + 1)), [r[0] for r in rows])
 used = set()
 for num, q, where, must in rows:
@@ -26,7 +26,7 @@ S.K('every lifelog_meta key answers some question (no rule without a question)',
 S.K('lifelog_meta holds only the few cross-table rules (at most 8 keys)', len(meta) <= 8, sorted(meta))
 first = re.search(r'^(?!\s*--)\s*\S', DDL, re.M); head = DDL[:first.start()] if first else DDL
 S.K('the DDL header before the first statement is a short pointer (<= 12 lines) naming lifelog_meta', head.count('\n') <= 12 and 'lifelog_meta' in head)
-for t in ('entities', 'pages', 'people', 'places', 'tasks', 'metrics', 'measurements', 'positions', 'currencies', 'holdings', 'balances', 'link_kinds', 'links', 'lifelog_meta'):
+for t in ('entities', 'pages', 'people', 'metrics', 'measurements', 'link_kinds', 'links', 'lifelog_meta'):
     S.K(f'{t}: its CREATE statement carries its rules as comments', re.search(r'\n\s*--', schema.get(t, '')) is not None)
 n = {k: one(c, f"select count(*) from sqlite_schema where type='{k}' and name not like 'sqlite_%' and not (type='table' and name like 'pages_fts_%')") for k in ('table', 'view', 'trigger')}
 tot = re.search(r'\*\*(\d+) tables \+ 1 FTS5 virtual table \+ (\d+) views\*\*.*?\*\*\+ (\d+) triggers\.\*\*', DOC, re.S)
@@ -42,7 +42,7 @@ def problems(text):
     heads = re.findall(r'^## (\d+)\. (.+)$', text, re.M)
     if [int(x) for x, _ in heads] != list(range(1, 9)) or not heads or heads[-1][1] != 'References': out.append(f'sections are not 1..8 ending in References: {heads}')
     if len(re.findall(r'^\d+\. \[(.+?)\]\(#(.+?)\)$', text, re.M)) != 8: out.append('the table of contents does not have 8 entries')
-    if [int(x) for x in re.findall(r'^### D(\d+) — ', text, re.M)] != list(range(1, 23)): out.append('decisions are not D1..D22 in order')
+    if [int(x) for x in re.findall(r'^### D(\d+) — ', text, re.M)] != list(range(1, 24)): out.append('decisions are not D1..D23 in order')
     if re.search(r'^### D\d+ — .*\*\(', text, re.M): out.append('a decision title carries a parenthetical status')
     if not re.search(r'^\*\*Status:\*\* [^\n]{10,}$', text, re.M): out.append('there is no one-line status')
     if not re.search(r'\n## Appendix A[^\n]*\n(?:(?!\n## ).)*\Z', text, re.S): out.append('the document does not end with the prior-art appendix')
