@@ -7,4 +7,5 @@ life.db-shm
 *.db-shm
 
 __pycache__/
+/tests/.venv/
 /app/lifelog

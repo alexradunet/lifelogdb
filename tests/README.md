@@ -11,7 +11,8 @@ python3 tests/run_all.py --datasette  # + Datasette opens the file read-only (in
 python3 tests/run_all.py --mermaid    # + render every mermaid diagram (needs node + `mmdc` + a Chromium, see below)
 ```
 
-Needs `python3` (venv + network once, for `markdown-it-py`) and the `sqlite3` CLI (3.53 was used). `--mermaid` also needs
+Needs Python ≥ 3.12 (venv + network once, for `markdown-it-py`) whose `sqlite3` module, like the `sqlite3` CLI, runs SQLite
+≥ 3.51.3 built with FTS5 (3.53 was used); a distribution's build may lack FTS5 (`no such module: fts5`). `--mermaid` also needs
 `npm i -g @mermaid-js/mermaid-cli` and a Chromium; point `MMDC` / `PUPPETEER_EXECUTABLE_PATH` at them if they are not on `PATH`.
 
 The suites are grouped by **subject**, not by when a rule was added. Each one states its expectation in every label and ends
@@ -35,7 +36,7 @@ with `<name>: X/Y met expectations`; a suite that stops on an error reports that
 | | `cookbook.py` | every §6 block prepares and runs, on a plain and on a hardened connection |
 | | `document.py` | the 2075 test, the rules live in the file, current truth only, out-of-scope stays out, the §3 totals |
 | | `diagrams.py` | the nine mermaid diagrams say what the DDL says (keys, relationships, the link map, the correction story) |
-| | `mutants.py` | 62 broken copies of `SCHEMA.md`, one rule each; the suite that owns the rule must notice |
+| | `mutants.py` | 66 broken copies of `SCHEMA.md`, one rule each; the suite that owns the rule must notice |
 | | `datasette_ro.py`, `render_diagrams.py` | optional: Datasette is read-only; every diagram renders |
 | `wikilinks/` | `wikisave.py` | **reference implementation** of the save contract (a test instrument, not the application) |
 | | `check_vectors.py`, `vectors.py` | the extraction vectors (some of them are printed in §2.4) |
