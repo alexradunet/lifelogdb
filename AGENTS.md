@@ -16,7 +16,7 @@ implements the schema; it never defines it.
 | `SCHEMA.md` | the contract: §3 is the one canonical DDL | real use (below) |
 | `tests/` | the validation suites: every *executed* claim of `SCHEMA.md`, and the reference implementation of the wikilink save contract (`tests/wikilinks/wikisave.py`) | `SCHEMA.md` |
 | `app/` | the Go writer; embeds §3 as `app/internal/db/schema.sql` | `SCHEMA.md` and `tests/` |
-| `app/skills/` | instructions a model follows to drive the CLI (the Obsidian import) | `app/` |
+| `app/skills/` | instructions a model follows to drive the CLI: `import` (any source, an Obsidian vault included) | `app/` |
 
 **One writer per database, many applications around the schema.** Principle 3 (single writing
 application) is a rule about *one `life.db` file*: whatever application writes a given file is the only
@@ -150,6 +150,11 @@ Their homes are in `SCHEMA.md`; this list is the checklist, not the rule.
   vectors and on generated inputs (A5). A change to either side changes both, in the same commit.
 - **The CLI prints JSON on stdout, errors on stderr**, so people and models read the same output. A
   flag or command change updates `app/skills/*/SKILL.md` in the same commit.
+- **Importing data is a skill, not a script.** Asked to import anything (a vault, an export, lab
+  results), read `app/skills/import/SKILL.md` first and follow it; never write an importer for one
+  source (A7). Code is added only for what every import needs and a model does badly (`inspect`,
+  `find`, `measure`). The workspace beside a source (`<source>.lifelog/`) holds private data, like the
+  source itself: neither ever goes into git (`/import/` is ignored).
 - **Dependencies stay few** (A1, A3): the standard library first; `modernc.org/sqlite` (pure Go, no cgo,
   FTS5 built in) is the driver. A new dependency needs a reason in `app/README.md`.
 - **Style**: `gofmt`, `go vet`, tests beside the code, comments that cite the `SCHEMA.md` section they
