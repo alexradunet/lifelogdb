@@ -335,9 +335,9 @@ A writer reads these back at connect time and refuses to run if `foreign_keys` o
 `recursive_triggers` is 0 or `synchronous` is not 2 (FULL, which is also SQLite's default,
 executed) — none of these is stored in the file, and `PRAGMA foreign_keys` is a silent no-op inside
 a transaction (executed). It also refuses to run on a SQLite older than **3.51.3**: every version from
-3.7.0 to 3.51.2 has a WAL race in which a write that lands while two checkpoints overlap can be lost
-— rare, but this design has several writer processes and readers on one file, which is exactly the
-condition [R65]. Migrations need 3.53 (D13).
+3.7.0 to 3.51.2, except the backports 3.44.6 and 3.50.7, has a WAL race in which a write that lands
+while two checkpoints overlap can be lost — rare, but this design has several writer processes and
+readers on one file, which is exactly the condition [R65]. Migrations need 3.53 (D13).
 
 Two more settings cost nothing. `SQLITE_DBCONFIG_DEFENSIVE` (a C-level switch, in Python
 `conn.setconfig(sqlite3.SQLITE_DBCONFIG_DEFENSIVE, True)`) makes the FTS shadow tables and
@@ -1178,7 +1178,7 @@ the constraints that carry it; the rule itself is in §3 or §2.
 - **Costs accepted.** An entry in a day page has no time of its own: a time worth keeping is written
   in the text. There is no inbox. A title cannot be corrected in place: a new page and a stub. An
   empty page created on purpose that nothing links to shows in `ghost_pages`.
-- **Sources.** Kaydet [R41]; FxLifeSheet [R9][R42]; Windows reserved names [R58].
+- **Sources.** Kaydet [R41]; FxLifeSheet [R9][R42]; Windows reserved names [R58]; Unicode security [R63].
 
 ### D6 — Mood: the `mood` metric in `measurements`, not a column on `pages`.
 
@@ -1302,9 +1302,10 @@ the constraints that carry it; the rule itself is in §3 or §2.
 
 ### D12 — Audit trail: no revision tables.
 
-- **Decision.** No revision or history tables. The temporal metadata is row-level: `created_at` (on every
-  table), `updated_at`, the tombstone, `source`, and the append-only facts. A commit must
-  survive power loss, so connections use `synchronous = FULL` (§2.6) [R54].
+- **Decision.** No revision or history tables. The temporal metadata is row-level: `created_at`
+  (on every table that has it — entities, links, measurements), `updated_at`, the tombstone, `source`,
+  and the append-only facts. A commit must survive power loss, so connections use
+  `synchronous = FULL` (§2.6) [R54].
 - **Alternatives.** *Full revision snapshots per edit*: rejected — significant code for a history
   nobody has asked to query. *Trigger-based history tables* (`sqlite-history` [R48]): rejected **for
   now**; it retrofits onto the current schema with no redesign if a real need appears.
@@ -1318,8 +1319,8 @@ the constraints that carry it; the rule itself is in §3 or §2.
   migrations:** §3 is edited in place and test databases are recreated; `user_version` stays 1. After
   real data exists: numbered plain-SQL files, `db/migrations/0002_*.sql`, … applied in order, progress
   in `PRAGMA user_version` [R20][R21][R22]; additive only (new tables, columns, indexes; a column rename
-  is allowed and recorded in its migration). `PRAGMA application_id = 'LIFE'` lets `file(1)` and
-  future tools recognize the database [R1].
+  is allowed and recorded in its migration). `PRAGMA application_id = 0x4C494645` ('LIFE') lets
+  `file(1)` and future tools recognize the database [R1].
 - **Every CHECK is named, so every rule can change without a rebuild.** Widening an enum (a new
   entity type, a new link endpoint), letting partial dates into `birth_day` or loosening the title rules is a
   two-statement transactional migration — `ALTER TABLE … DROP CONSTRAINT <name>; … ADD CONSTRAINT
@@ -2248,7 +2249,7 @@ the gaps are intentional.
 - **[R63]** Unicode Technical Standard #39, *Unicode Security Mechanisms* —
   <https://www.unicode.org/reports/tr39/> (with UAX #31, *Identifiers*): default-ignorable and bidi
   characters are dropped or rejected before identifiers are compared, because they are invisible.
-  → §2.4 (the invisible-character rule).
+  → D5, §2.4 (the invisible-character rule).
 - **[R74]** Unicode: *Character Encoding Stability Policies* —
   <https://www.unicode.org/policies/stability_policy.html> Case folding stability (Unicode 5.2+): for a
   string of assigned characters, `toCasefold(toNFKC(S))` is the same under every later version — the
@@ -2304,12 +2305,10 @@ the gaps are intentional.
 
 - **[R71]** RFC 7946, *The GeoJSON Format* (2016) — <https://datatracker.ietf.org/doc/html/rfc7946>
   Positions are WGS84 longitude and latitude in decimal degrees; geometry that crosses the
-  antimeridian is cut in two (§3.1.9). → D21.
+  antimeridian is cut in two (RFC 7946 §3.1.9). → D21.
 - **[R72]** SQLite: *Built-in Mathematical SQL Functions* — <https://sqlite.org/lang_mathfunc.html>
   `sin`, `cos`, `acos`, `radians` are active only in builds compiled with
   `-DSQLITE_ENABLE_MATH_FUNCTIONS`. → D21.
-- **[R73]** SQLite: *The SQLite R\*Tree Module* — <https://sqlite.org/rtree.html> A spatial index as a
-  virtual table, present only in builds compiled with `SQLITE_ENABLE_RTREE`. → §7.
 
 ---
 
