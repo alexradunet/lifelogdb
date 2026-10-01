@@ -167,7 +167,7 @@ below:
 
 - *What is read.* The CommonMark **text** of `pages.body`, after NFC normalisation — not code
   spans, code blocks, raw HTML, link destinations or image alt text. A conformant CommonMark parser
-  yields exactly this, so nothing is hand-parsed (the app uses goldmark; the reference in `tests/` uses
+  yields exactly this, so nothing is hand-parsed (the reference implementation in `tests/` uses
   markdown-it-py [R59], which loses a code span that follows an unclosed `[`, where the CommonMark
   reference implementation keeps it).
 - *Wikilink.* `[[title]]` or `[[title|alias]]`, with no `[`, `]` or line break inside, and the
@@ -189,11 +189,11 @@ below:
   the app writes — so a stub never shows up as a backlink. Elsewhere the word `#redirect` alone
   is never a tag, so nothing can create a page called `redirect`.
 - *An invalid target makes no link and never blocks a save.* A title `pages_title_safe` rejects
-  (`[[Health/Diet]]`, `[[Re: plan]]`, the tag `#con`) is skipped. The app checks the title rules
-  before inserting — its predicate agrees with the DDL's CHECKs on more than 40 000 generated
-  strings — and creates each target inside its own `SAVEPOINT` (§6.13), so even a target the
-  predicate wrongly let through is rolled back alone: the page is saved and no orphan `entities`
-  row is left. The UI reports skipped targets; nothing is stored about them.
+  (`[[Health/Diet]]`, `[[Re: plan]]`, the tag `#con`) is skipped. A writer checks the title rules
+  before inserting — the reference predicate in `tests/` agrees with the DDL's CHECKs on more than
+  40 000 generated strings — and creates each target inside its own `SAVEPOINT` (§6.13), so even a
+  target the predicate wrongly let through is rolled back alone: the page is saved and no orphan
+  `entities` row is left. The UI reports skipped targets; nothing is stored about them.
 - *A page never links to itself* (`[[Diet]]` inside the page `Diet` is ignored), and *a
   tombstoned target is revived*, not duplicated: the unique index covers tombstoned pages, so the
   save un-tombstones the page it resolves — any save that names it, an old day page edited years
@@ -248,9 +248,9 @@ to=new)`. Consumers follow one hop; `redirect` links are excluded from backlink 
 
 **Titles.** The rules are the CHECKs `pages_title_len` and `pages_title_safe` (§3): 1–240 bytes,
 trimmed, and a valid file name on Linux, macOS and Windows — the strict direction on purpose (D5).
-The app is stricter in one way: it also rejects code points Unicode has not assigned yet (category
-`Cn`), whose case fold a later Unicode version could define — which would silently change
-`title_key` (executed). Unicode promises a stable case fold only for assigned characters, and formally
+Every writer must be stricter than the DDL in one way: it also rejects code points Unicode has not
+assigned yet (category `Cn`), whose case fold a later Unicode version could define — which would
+silently change `title_key` (executed). Unicode promises a stable case fold only for assigned characters, and formally
 only for text in NFKC form [R74]; a title with a compatibility character (full-width `Ｃａｆé`, a
 ligature, `x²`) is outside that promise, a known limit (§7).
 
@@ -1333,9 +1333,11 @@ the constraints that carry it; the rule itself is in §3 or §2.
   a search box over `pages_fts`, and a backlinks panel. For ad-hoc exploration: **Datasette** pointed
   at `life.db`, read-only (§2.6) [R49]. `sqlite-web` is **not used** [R50]: it can insert, update and
   delete rows — a second writer that bypasses the insert conventions (principle 3).
-- **The writing application** is `app/`: one Go binary that is the CLI, the REST API and the MCP
-  server, so the owner's UIs, AI agents and importers all write through it. Its own decisions are in
-  `app/README.md`.
+- **The writing application** is one stack the owner controls — one codebase, in whatever language —
+  that carries the insert conventions (§2.2, §6.1) and exposes them as a CLI, a REST API and an
+  agent surface, so the owner's UIs, AI agents and importers all write through it (principle 3).
+  Its own engineering decisions live outside this document: it implements the schema, it never
+  defines it.
 - **Rejected.** Building a generic admin UI — Datasette already is one, maintained by someone else.
 - **Sources.** [R49][R50].
 
