@@ -42,9 +42,11 @@ p = cp('idx'); data = open(p, 'rb').read()
 j = next((m.start() for m in re.finditer(rb'title 012\d\d', data) if re.fullmatch(rb'Title \d{5}', data[m.start() - 11:m.start()]) is None), None)
 if j is not None: flip(p, j, 6)
 S.K('a flipped byte in a title_key inside the pages_title index: integrity_check is not ok', j is not None and checks(p)[0] != ['ok'])
-p = cp('val'); j = open(p, 'rb').read().find(b'lorem ipsum lorem')
-if j >= 0: flip(p, j)
-n = sq(p, "SELECT count(*) FROM pages WHERE body LIKE '%korem ipsum lorem%' OR body LIKE '%morem ipsum lorem%'")
+j, n = -1, '0'                                # without secure_delete a b-tree split leaves stale copies of cells in
+for m in re.finditer(rb'lorem ipsum lorem', open(base, 'rb').read()):  # free space: flip copies until one is a live row
+    p = cp('val'); flip(p, m.start())
+    n = sq(p, "SELECT count(*) FROM pages WHERE body LIKE '%korem ipsum lorem%' OR body LIKE '%morem ipsum lorem%'")
+    if n == '1': j = m.start(); break
 S.K('a flipped byte inside a body: the text changed and integrity_check is STILL ok', j >= 0 and n == '1' and checks(p)[0] == ['ok'], (j, n))
 p = cp('fk'); c = sqlite3.connect(p, isolation_level=None); c.execute('PRAGMA foreign_keys=OFF')
 ins = tryx(c, "INSERT INTO balances(holding_id,day,amount,created_at,source) VALUES (99999,'2026-09-30',100,'2026-09-30T10:00:00.000Z','ui')"); c.close()
