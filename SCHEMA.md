@@ -172,8 +172,10 @@ graph; the body text is the source of truth for prose. The rules, all executed a
 below:
 
 - *What is read.* The CommonMark **text** of `pages.body`, after NFC normalisation — not code
-  spans, code blocks, raw HTML, link destinations or image alt text. Any CommonMark parser
-  yields exactly this (tested with markdown-it-py [R59]), so nothing is hand-parsed.
+  spans, code blocks, raw HTML, link destinations or image alt text. A conformant CommonMark parser
+  yields exactly this, so nothing is hand-parsed (the app uses goldmark; the reference in `tests/` uses
+  markdown-it-py [R59], which loses a code span that follows an unclosed `[`, where the CommonMark
+  reference implementation keeps it).
 - *Wikilink.* `[[title]]` or `[[title|alias]]`, with no `[`, `]` or line break inside, and the
   brackets and title in **one** run of plain text (`[[Health *Diet*]]` is not a link, and
   `[[Diet]](url)` is a Markdown link). The title is the text before the first `|`, trimmed of

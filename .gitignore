@@ -1,0 +1,10 @@
+# never commit the database: finance data cannot be scrubbed from git history (SCHEMA.md §2.6)
+life.db
+life.db-wal
+life.db-shm
+*.db
+*.db-wal
+*.db-shm
+
+__pycache__/
+/app/lifelog
