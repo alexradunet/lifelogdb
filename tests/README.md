@@ -40,7 +40,7 @@ with `<name>: X/Y met expectations`; a suite that stops on an error reports that
 | | `cookbook.py` | every §6 block prepares and runs, on a plain and on a hardened connection |
 | | `document.py` | the 2075 test, the rules live in the file, current truth only, out-of-scope stays out, the §3 totals |
 | | `diagrams.py` | the seven mermaid diagrams say what the DDL says (keys, relationships, the link map, the correction story) |
-| | `mutants.py` | 63 broken copies of `SCHEMA.md`, one rule each; the suite that owns the rule must notice |
+| | `mutants.py` | 64 broken copies of `SCHEMA.md`, one rule each; the suite that owns the rule must notice |
 | | `datasette_ro.py`, `render_diagrams.py` | optional: Datasette is read-only; every diagram renders |
 | `wikilinks/` | `wikisave.py` | **reference implementation** of the save contract (a test instrument, not the application) |
 | | `check_vectors.py`, `vectors.py` | the extraction vectors (some of them are printed in §2.4) |

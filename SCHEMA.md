@@ -123,10 +123,13 @@ ones that span tables are also rows of `lifelog_meta` (§3), so the file carries
 
 ### 2.3 Deletion and corrections
 
-- **Nothing is deleted except `links` rows.** Entities are tombstoned (`entities.deleted_at`), and
-  `BEFORE DELETE` triggers reject deleting an `entities` row or any domain row, also on a connection
-  that forgot `foreign_keys` (executed). Every read path filters `deleted_at IS NULL`. Junk captured by
-  accident is tombstoned like everything else.
+- **Life data is never deleted except `links` rows.** Entities are tombstoned
+  (`entities.deleted_at`), and `BEFORE DELETE` triggers reject deleting an `entities` row or any
+  domain row (measurements and habit periods included), also on a connection that forgot
+  `foreign_keys` (executed). The registries — `metrics`, `link_kinds`, `lifelog_meta` — are the
+  owner's administrative rows: an unreferenced one may be deleted, and each table's CREATE comment
+  says so. Every read path filters `deleted_at IS NULL`. Junk captured by accident is tombstoned like
+  everything else.
 - **Readings are corrected by inserting, never by editing.** `measurements` rejects `UPDATE` and
   `DELETE`. A measurement is corrected by a row whose `supersedes_id` names it (at most one per row;
   correct the correction to change it again); a NULL `value` **retracts**. The view
@@ -415,7 +418,7 @@ each phrase in the last column, and **every key of `lifelog_meta` must be used b
 | 3 | What is a `*_day` column? | `days` | `LOCAL`, `never recomputed`, `IS, not =` |
 | 4 | In which time zone was a reading taken? | `measurements` | `IANA` |
 | 5 | When was a row written, versus when did it happen? | `instants`, `measurements` | `never back-dated`, `created_at` |
-| 6 | Can anything be deleted? | `deletes`, `entities_no_delete` | `tombstone`, `links` |
+| 6 | Can anything be deleted? | `deletes`, `entities_no_delete` | `tombstone`, `links`, `registries` |
 | 7 | Are measurements kept? How is one corrected? | `measurements`, `measurement_values` | `append-only`, `RETRACTS` |
 | 8 | Which link kinds exist, and who may link what? | `link_kinds` | `CLOSED registry` |
 | 9 | How do `[[wikilinks]]` and `#tags` become links? | `pages` | `CommonMark`, `invalid target makes no link` |
@@ -506,6 +509,7 @@ PRAGMA journal_mode  = WAL;           -- persistent; readers (Datasette) don't b
 CREATE TABLE lifelog_meta (
   -- the rules that span tables, readable with a SELECT by someone who has only this file;
   -- the rules of one table are comments inside its own CREATE statement
+  -- rows are rules the owner adds or removes; deleting one removes the rule from the file itself
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 ) STRICT;
@@ -513,7 +517,7 @@ INSERT INTO lifelog_meta(key, value) VALUES
   ('schema',    'lifelog v1: the journal (one page per day), wiki, people, places and health metrics of one person: a life log, not a project manager; the rules of each table are comments inside its CREATE statement (.schema), the rules that span tables are these rows'),
   ('instants',  'every *_at column is a UTC ISO-8601 TEXT instant with milliseconds, e.g. 2026-06-09T21:14:03.482Z, written by the app; CHECK strftime(''%Y-%m-%dT%H:%M:%fZ'', x) IS x; created_at, on every table that has it, is when the row was written to life.db, never back-dated (when a thing happened is its day or its other *_at)'),
   ('days',      'every *_day column (and day) is the LOCAL calendar date YYYY-MM-DD where the thing happened, written at insert, never recomputed from an instant; CHECK date(x) IS x (IS, not =: a CHECK passes on NULL, and date(''2026-9-3'') is NULL)'),
-  ('deletes',   'nothing is deleted except links rows: an entity is a tombstone (entities.deleted_at), a measurement is corrected by inserting a row; BEFORE DELETE triggers enforce it'),
+  ('deletes',   'life data is never deleted except links rows: an entity is a tombstone (entities.deleted_at), a measurement is corrected by inserting a row; BEFORE DELETE triggers enforce it on entities and every domain row; the registries (metrics, link_kinds, lifelog_meta) are the owner''s administrative rows, deletable while nothing references them (each CREATE comment says so)'),
   ('source',    'entities, links, measurements and habit_periods: source names the writer of the row (ui, cli, api, agent:<name>, import:<name>); written at insert, never changed; import_key, on entities and on measurements, is unique per source'),
   ('writers',   'one writing application; every connection sets foreign_keys=ON, recursive_triggers=ON, synchronous=FULL, trusted_schema=OFF and starts write transactions with BEGIN IMMEDIATE; every other tool opens the file read-only; imports use INSERT ... ON CONFLICT DO NOTHING, never OR IGNORE (skips CHECK/NOT NULL violations silently) or OR REPLACE (a delete)'),
   ('sqlite',    'writers need SQLite >= 3.51.3 (fixes a WAL race between concurrent writers and checkpoints); migrations need >= 3.53 (ALTER TABLE ADD/DROP CONSTRAINT); CHECKs use only functions every such version has'),
@@ -631,6 +635,8 @@ CREATE TABLE metrics (
   -- a tiny registry that keeps time series canonical: 'weight' is one series forever, never
   -- 'Weight' or 'weight kg' (names are snake_case). Seeded with 'mood' (D6). The unit gives every
   -- stored value its meaning, so it never changes (metrics_unit_fixed).
+  -- an unreferenced metric may be deleted (a mistake registered); a referenced one is refused by
+  -- the foreign keys of measurements and habit_periods: a used metric stays (its series is life data).
   id    INTEGER PRIMARY KEY,
   name  TEXT NOT NULL UNIQUE,                 -- snake_case canonical: 'weight', 'mood'
   unit  TEXT NOT NULL DEFAULT '',             -- 'kg', 'bpm', 'h'; '' for 1-5 scales
@@ -750,6 +756,7 @@ CREATE TABLE link_kinds (
   -- by a trigger on every link. Registering a kind is a deliberate INSERT, so a typo cannot create
   -- one. from_types / to_types: NULL = any entity type, else a comma list of entities.entity_type values
   -- ('person,place'); a misspelt token fails CLOSED (every link of that kind is rejected).
+  -- an unreferenced kind may be deleted by the owner; a used one is refused by the links FK
   kind       TEXT PRIMARY KEY CONSTRAINT link_kinds_kind CHECK (kind = lower(kind) AND length(kind) > 0 AND kind NOT GLOB '*[^a-z0-9_-]*'),
   symmetric  INTEGER NOT NULL DEFAULT 0 CONSTRAINT link_kinds_symmetric CHECK (symmetric IN (0,1)),
   from_types TEXT CONSTRAINT link_kinds_from_types CHECK (from_types IS NULL OR (from_types NOT GLOB '*[^a-z,]*' AND from_types NOT GLOB ',*'

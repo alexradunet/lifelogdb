@@ -77,6 +77,9 @@ S.K('with foreign_keys=OFF: DELETE FROM people still refused', tryx(c, 'DELETE F
 c.execute('PRAGMA foreign_keys=ON')
 link(c, ids['person'], ids['place'], 'about')
 S.K('links rows may be hard-deleted (the one such table)', tryx(c, 'DELETE FROM links WHERE from_id=?', (ids['person'],)) == 'OK' and one(c, 'select count(*) from links') == 0)
+c.execute("INSERT INTO metrics(name, unit) VALUES ('spare', '')"); measure(c, one(c, "select id from metrics where name='mood'"), '2026-01-01', 3)
+S.K('an unreferenced registry row may be deleted (registries are administrative)', tryx(c, "DELETE FROM metrics WHERE name='spare'") == 'OK')
+S.K('a referenced metric is refused by its foreign key, not by a trigger', 'FOREIGN KEY' in tryx(c, "DELETE FROM metrics WHERE name='mood'").upper())
 
 # ---- updated_at, kept by triggers
 c = fresh(); ids = {t: thing(c, t) for t in ('page', 'person', 'place')}
