@@ -117,7 +117,7 @@ Their homes are in `SCHEMA.md`; this list is the checklist, not the rule.
   handle and its name (`pages.entity_type`, `ON UPDATE CASCADE` for promotion; §6.14). Ids are carried with `INSERT … RETURNING id`, never `last_insert_rowid()` across
   statements.
 - **Provenance**: `source` (the writer: `ui`, `cli`, `api`, `agent:<name>`, `import:<name>`) is
-  required on `entities`, `links` and `measurements`, written at insert and never changed; `import_key`
+  required on `entities`, `links`, `measurements` and `habit_periods`, written at insert and never changed; `import_key`
   is unique per `source`.
 - **No deletes** (§2.3, D11): tombstones (BEFORE DELETE triggers); only `links` rows are deleted.
 - **Append-only facts**: measurements. A reading is corrected with `supersedes_id` and retracted with a

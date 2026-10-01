@@ -114,7 +114,7 @@ ones that span tables are also rows of `lifelog_meta` (§3), so the file carries
   more. The foreign keys refuse a person without a page and a person turned back into a page
   (executed). Title uniqueness already refuses a second `Sam`, so two people called Sam are told apart
   in the handle (`Sam (barber)`); `people.name` is the editable full name.
-- **Provenance.** `source` on `entities`, `links` and `measurements` names the writer
+- **Provenance.** `source` on `entities`, `links`, `measurements` and `habit_periods` names the writer
   of the row — `ui`, `cli`, `api`, `agent:<name>`, `import:<name>` (lowercase `[a-z0-9_:.-]`, 1–64
   characters). Only the moment of writing knows it, so it is required at insert and never changes;
   with agents among the writers (D3) it is how a wrong row is traced to the writer that made it. An
@@ -514,7 +514,7 @@ INSERT INTO lifelog_meta(key, value) VALUES
   ('instants',  'every *_at column is a UTC ISO-8601 TEXT instant with milliseconds, e.g. 2026-06-09T21:14:03.482Z, written by the app; CHECK strftime(''%Y-%m-%dT%H:%M:%fZ'', x) IS x; created_at, on every table that has it, is when the row was written to life.db, never back-dated (when a thing happened is its day or its other *_at)'),
   ('days',      'every *_day column (and day) is the LOCAL calendar date YYYY-MM-DD where the thing happened, written at insert, never recomputed from an instant; CHECK date(x) IS x (IS, not =: a CHECK passes on NULL, and date(''2026-9-3'') is NULL)'),
   ('deletes',   'nothing is deleted except links rows: an entity is a tombstone (entities.deleted_at), a measurement is corrected by inserting a row; BEFORE DELETE triggers enforce it'),
-  ('source',    'entities, links, measurements and habit_periods: source names the writer of the row (ui, cli, api, agent:<name>, import:<name>); written at insert, never changed; the import_key a writer gives a row is unique per source'),
+  ('source',    'entities, links, measurements and habit_periods: source names the writer of the row (ui, cli, api, agent:<name>, import:<name>); written at insert, never changed; import_key, on entities and on measurements, is unique per source'),
   ('writers',   'one writing application; every connection sets foreign_keys=ON, recursive_triggers=ON, synchronous=FULL, trusted_schema=OFF and starts write transactions with BEGIN IMMEDIATE; every other tool opens the file read-only; imports use INSERT ... ON CONFLICT DO NOTHING, never OR IGNORE (skips CHECK/NOT NULL violations silently) or OR REPLACE (a delete)'),
   ('sqlite',    'writers need SQLite >= 3.51.3 (fixes a WAL race between concurrent writers and checkpoints); migrations need >= 3.53 (ALTER TABLE ADD/DROP CONSTRAINT); CHECKs use only functions every such version has'),
   ('evolution', 'after the first real data: numbered forward-only SQL migrations, additive only, counted in PRAGMA user_version; every CHECK is named, so any rule can be widened or tightened with ALTER TABLE DROP/ADD CONSTRAINT');
@@ -736,6 +736,13 @@ CREATE TRIGGER habit_periods_no_delete BEFORE DELETE ON habit_periods
 BEGIN
   SELECT RAISE(ABORT, 'habit periods are never deleted: correct a wrong one with UPDATE');
 END;
+CREATE TRIGGER habit_periods_source_fixed BEFORE UPDATE OF source ON habit_periods
+  WHEN NEW.source IS NOT OLD.source
+BEGIN
+  -- provenance is written at insert and never changed, as on entities and links (lifelog_meta.source);
+  -- the WHEN clause lets full-row updates through
+  SELECT RAISE(ABORT, 'habit_periods.source is written at insert and never changed');
+END;
 
 CREATE TABLE link_kinds (
   -- the CLOSED registry of link kinds: a link's kind must be registered first (FK), and a kind's
@@ -869,7 +876,7 @@ BEGIN SELECT RAISE(ABORT, 'people are never deleted: tombstone the entity (entit
 ```
 
 **9 tables + 1 FTS5 virtual table + 2 views** (`measurement_values`, `ghost_pages`)
-**+ 23 triggers.** That is the entire system. Every `CHECK` is named (`CONSTRAINT <table>_<rule>`), so
+**+ 24 triggers.** That is the entire system. Every `CHECK` is named (`CONSTRAINT <table>_<rule>`), so
 any rule can be dropped or re-added by name after the freeze (D13).
 
 ---

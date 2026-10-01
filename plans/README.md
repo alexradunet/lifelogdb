@@ -28,7 +28,7 @@ current mutants count before editing it** (it is 61 at commit `6058f24`).
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
 | 001 | State the freeze gate's current truth — the trial import happened | P1 | S | — | DONE |
-| 002 | Enforce `habit_periods.source` like the other three provenance columns | P1 | S | — (after 001 avoids prose collisions) | TODO |
+| 002 | Enforce `habit_periods.source` like the other three provenance columns | P1 | S | — (after 001 avoids prose collisions) | DONE |
 | 004 | §6.15 must send imported bodies through the wikilink save contract | P1 | S | — (after 002: shared mutants.py) | TODO |
 | 005 | Make SCHEMA.md fully writer-neutral — the app is being deleted | P1 | M | — (before/with the app's deletion) | TODO |
 | 003 | Scope the no-deletes rule to life data; state the registries' own rule | P2 | S | — (after 002: shared meta rows, mutants.py) | TODO |

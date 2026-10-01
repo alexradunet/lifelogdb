@@ -30,6 +30,8 @@ S.K('moving a period onto another refused (update)', 'overlap' in tryx(c, "UPDAT
 S.K('...moving it into a gap accepted', tryx(c, "UPDATE habit_periods SET end_day='2026-10-30' WHERE start_day='2026-10-01'") == 'OK')
 S.K('moving a period to a metric with a unit refused (update)', 'unitless' in tryx(c, "UPDATE habit_periods SET metric_id=? WHERE start_day='2026-10-01'", (kg,)))
 S.K('a period is never deleted', tryx(c, 'DELETE FROM habit_periods').startswith('ERR') and one(c, 'select count(*) from habit_periods') == 3)
+S.K("a period's source never changes", 'never changed' in tryx(c, "UPDATE habit_periods SET source='cli' WHERE start_day='2026-10-01'"))
+S.K("...a full-row update that keeps it accepted", tryx(c, "UPDATE habit_periods SET source='ui', end_day=end_day WHERE start_day='2026-10-01'") == 'OK')
 S.K('mood is not a habit: it has no period', one(c, "select count(*) from habit_periods h join metrics m on m.id=h.metric_id where m.name='mood'") == 0)
 S.K('the database is clean', integrity_ok(c))
 
