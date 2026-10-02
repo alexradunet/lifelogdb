@@ -2,18 +2,23 @@ package importer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"lifelog/internal/core"
 	"lifelog/internal/db"
 )
 
-// ReplayResult is what a replay did to its target, and how the target compares with the trial.
+// ReplayResult is what a replay did to its target (in a dry run, what it would do), and how the target compares
+// with the trial.
 type ReplayResult struct {
 	Target      string                `json:"target"`
+	DryRun      bool                  `json:"dry_run"`
 	Initialised bool                  `json:"initialised"`
+	Failures    []Failure             `json:"failures"`
 	Vault       *VaultResult          `json:"vault,omitempty"`
 	Metrics     []string              `json:"metrics,omitempty"`
 	Files       []Report              `json:"files"`
@@ -24,16 +29,54 @@ type ReplayResult struct {
 	Differences []string              `json:"differences"`
 }
 
-// Replay applies the whole workspace to another database with no model (the guide's "Trial, then the real
-// run"): the vault plan, the approved metrics, every done or waiting facts file in ledger order (a file that
-// names a row not written yet is retried after the rest), the owner's corrections, then the integrity checks.
-// A target that does not exist is initialised; an existing one is never re-initialised.
-func (w *Workspace) Replay(ctx context.Context, trial *core.Store, target string) (*ReplayResult, error) {
-	res := &ReplayResult{Target: target, Files: []Report{}, Differences: []string{}}
-	if same(target, w.TrialDB()) {
-		return nil, refuse("the target is the trial database itself")
+// Failure is one part of a rehearsed replay that failed: a step (vault, metrics, corrections, integrity) or one
+// facts file.
+type Failure struct {
+	Step  string `json:"step"`
+	File  string `json:"file,omitempty"`
+	Error string `json:"error"`
+}
+
+func (f Failure) String() string {
+	if f.File != "" {
+		return fmt.Sprintf("%s %s: %s", f.Step, f.File, f.Error)
 	}
-	if _, err := os.Stat(target); err != nil {
+	return f.Step + ": " + f.Error
+}
+
+func newReplayResult(target string) *ReplayResult {
+	return &ReplayResult{Target: target, Failures: []Failure{}, Files: []Report{}, Differences: []string{}}
+}
+
+// failed records a failure when rehearsing, so that the rehearsal goes on and reports every one; otherwise the
+// failure is the error that stops the replay.
+func (r *ReplayResult) failed(rehearse bool, step, file string, err error) error {
+	if !rehearse {
+		return err
+	}
+	r.Failures = append(r.Failures, Failure{Step: step, File: file, Error: err.Error()})
+	return nil
+}
+
+// Replay applies the whole workspace to another database with no model (the guide's "Trial, then the real
+// run"). It rehearses first (Rehearse) and writes the target only when the rehearsal failed nowhere and its
+// integrity checks were clean; otherwise the target is left as it was, not even created, and the refusal lists
+// every failure. A target that does not exist is initialised; an existing one is never re-initialised.
+func (w *Workspace) Replay(ctx context.Context, trial *core.Store, target string) (*ReplayResult, error) {
+	rehearsal, err := w.Rehearse(ctx, trial, target)
+	if err != nil {
+		return nil, err
+	}
+	if len(rehearsal.Failures) > 0 {
+		lines := make([]string, len(rehearsal.Failures))
+		for i, f := range rehearsal.Failures {
+			lines[i] = "- " + f.String()
+		}
+		return nil, refuse("the replay failed when rehearsed on a copy of %s, so nothing was written to it:\n%s",
+			target, strings.Join(lines, "\n"))
+	}
+	res := newReplayResult(target)
+	if !exists(target) {
 		if err := db.Init(target); err != nil {
 			return nil, err
 		}
@@ -45,9 +88,65 @@ func (w *Workspace) Replay(ctx context.Context, trial *core.Store, target string
 	}
 	defer d.Close()
 	ts := &core.Store{DB: d}
+	if err := w.replayInto(ctx, ts, res, false); err != nil {
+		return res, fmt.Errorf("the replay into %s failed after a clean rehearsal, and what it wrote before stays "+
+			"(every write is idempotent: fix the cause and replay again): %w", target, err)
+	}
+	return res, w.compareWithTrial(ctx, trial, ts, res)
+}
 
-	if p, ok, err := w.LoadPlan(); err != nil {
+// Rehearse is a replay's dry run: the whole replay on a throwaway copy of the target (VACUUM INTO, as the trial
+// was made; a new database when the target does not exist), going on past each failure so that the result lists
+// all of them, then the integrity checks and the comparison with the trial. The target is only read, and the copy
+// is removed before Rehearse returns.
+func (w *Workspace) Rehearse(ctx context.Context, trial *core.Store, target string) (res *ReplayResult, err error) {
+	if same(target, w.TrialDB()) {
+		return nil, refuse("the target is the trial database itself")
+	}
+	dir, err := os.MkdirTemp(w.Dir, ".rehearsal-*") // inside the workspace: the copy holds the owner's data
+	if err != nil {
 		return nil, err
+	}
+	defer func() {
+		if rmErr := os.RemoveAll(dir); rmErr != nil {
+			res, err = nil, errors.Join(err, fmt.Errorf("the rehearsal copy %s could not be removed: %w", dir, rmErr))
+		}
+	}()
+	res = newReplayResult(target)
+	res.DryRun = true
+	copyPath := filepath.Join(dir, "target.db")
+	if exists(target) {
+		err = db.Copy(target, copyPath)
+	} else {
+		err, res.Initialised = db.Init(copyPath), true
+	}
+	if err != nil {
+		return nil, err
+	}
+	d, err := db.Open(copyPath)
+	if err != nil {
+		return nil, err
+	}
+	defer d.Close() // before the folder is removed: deferred calls run last in, first out
+	ts := &core.Store{DB: d}
+	if err := w.replayInto(ctx, ts, res, true); err != nil {
+		return nil, err
+	}
+	if err := w.compareWithTrial(ctx, trial, ts, res); err != nil {
+		return nil, err
+	}
+	if !res.Integrity.OK {
+		res.Failures = append(res.Failures, Failure{Step: "integrity", Error: "the integrity checks are not clean on the rehearsal copy"})
+	}
+	return res, nil
+}
+
+// replayInto applies the workspace to ts: the vault plan, the approved metrics, every done or waiting facts file
+// in ledger order (a file that names a row not written yet is retried after the rest), then the owner's
+// corrections. Rehearsing, a failing step or file is recorded and the rest goes on; otherwise the first stops it.
+func (w *Workspace) replayInto(ctx context.Context, ts *core.Store, res *ReplayResult, rehearse bool) error {
+	if p, ok, err := w.LoadPlan(); err != nil {
+		return err
 	} else if ok {
 		fresh := &Plan{Notes: make([]Note, len(p.Notes))}
 		copy(fresh.Notes, p.Notes)
@@ -56,17 +155,22 @@ func (w *Workspace) Replay(ctx context.Context, trial *core.Store, target string
 			fresh.Notes[i].Problems = nil
 		}
 		if res.Vault, err = w.applyPlan(ctx, ts, fresh, false); err != nil {
-			return res, err
+			if err := res.failed(rehearse, "vault", "", err); err != nil {
+				return err
+			}
 		}
 	}
 	if g, _ := w.Gate("metrics.md"); g == "approved" {
+		var err error
 		if res.Metrics, err = w.RegisterMetrics(ctx, ts); err != nil {
-			return res, err
+			if err := res.failed(rehearse, "metrics", "", err); err != nil {
+				return err
+			}
 		}
 	}
 	lines, _, err := w.Ledger()
 	if err != nil {
-		return res, err
+		return err
 	}
 	var pending []string
 	for _, l := range lines {
@@ -77,45 +181,68 @@ func (w *Workspace) Replay(ctx context.Context, trial *core.Store, target string
 	for len(pending) > 0 {
 		var later []string
 		var lastErr error
+		waits := map[string]error{} // why each file of later waits
 		for _, file := range pending {
 			f, pos, rules, err := w.prepare(file)
 			if err != nil {
-				return res, err
+				if err := res.failed(rehearse, "facts", file, err); err != nil {
+					return err
+				}
+				continue
 			}
 			r, err := w.write(ctx, ts, f, pos, rules, false)
 			if err != nil {
 				if strings.Contains(err.Error(), "not written yet") {
 					later, lastErr = append(later, file), err
+					waits[file] = err
 					continue
 				}
-				return res, err
+				if err := res.failed(rehearse, "facts", file, err); err != nil {
+					return err
+				}
+				continue
 			}
 			res.Files = append(res.Files, *r)
 		}
-		if len(later) == len(pending) {
-			return res, lastErr // no progress: a reference no file writes
+		if len(later) == len(pending) { // no progress: a reference no file writes
+			if !rehearse {
+				return lastErr
+			}
+			for _, file := range later {
+				res.failed(rehearse, "facts", file, waits[file])
+			}
+			break
 		}
 		pending = later
 	}
 	if res.Corrections, err = w.replayCorrections(ctx, ts); err != nil {
-		return res, err
+		if err := res.failed(rehearse, "corrections", "", err); err != nil {
+			return err
+		}
 	}
+	return nil
+}
+
+// compareWithTrial runs the integrity checks on ts and compares its counts with the trial's.
+func (w *Workspace) compareWithTrial(ctx context.Context, trial, ts *core.Store, res *ReplayResult) error {
+	var err error
 	if res.Integrity, err = ts.Integrity(ctx); err != nil {
-		return res, err
+		return err
 	}
 	if res.Trial, err = trial.Counts(ctx); err != nil {
-		return res, err
+		return err
 	}
 	if res.Counts, err = ts.Counts(ctx); err != nil {
-		return res, err
+		return err
 	}
 	if d := compare(res.Trial, res.Counts); d != nil {
 		res.Differences = d
 	}
-	return res, nil
+	return nil
 }
 
-// replayCorrections brings each corrected imported reading to the value the owner gave it on the trial.
+// replayCorrections brings each corrected imported reading to the value the owner gave it on the trial. A
+// correction whose reading the replay did not write makes none of them: the refusal names every such one.
 func (w *Workspace) replayCorrections(ctx context.Context, ts *core.Store) (int, error) {
 	cs, err := w.Corrections()
 	if err != nil || len(cs) == 0 {
@@ -123,13 +250,15 @@ func (w *Workspace) replayCorrections(ctx context.Context, ts *core.Store) (int,
 	}
 	n := 0
 	err = ts.Do(ctx, "cli", func(t *core.Tx) error {
+		var missing []string
 		for _, c := range cs {
 			id, err := t.MeasurementByKey(c.Source, c.Metric, c.Key)
 			if err != nil {
 				return err
 			}
 			if id == 0 {
-				return refuse("a correction names %s %s, which the replay did not write", c.Metric, c.Key)
+				missing = append(missing, c.Metric+" "+c.Key)
+				continue
 			}
 			last, value, ok, err := t.CurrentOf(id)
 			if err != nil {
@@ -142,6 +271,10 @@ func (w *Workspace) replayCorrections(ctx context.Context, ts *core.Store) (int,
 				return err
 			}
 			n++
+		}
+		if len(missing) > 0 {
+			n = 0 // rolled back
+			return refuse("corrections name readings the replay did not write: %s", strings.Join(missing, "; "))
 		}
 		return nil
 	})

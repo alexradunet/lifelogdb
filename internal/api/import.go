@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -45,8 +46,9 @@ var importCatalog = []spec{
 		"POST", "/import/vault/fix", []Field{req("path", "text", "Note path"), opt("title", "text", "Title"), opt("day", "date", "Day")}, false},
 	{"apply-vault", "Apply the vault", "Create every note's page, then save each note's text through the save contract (a daily note of an existing day is appended once).",
 		"POST", "/import/vault/apply", nil, false},
-	{"replay", "Replay", "Apply the whole workspace to another database (the real run): only when the owner says so.",
-		"POST", "/import/replay", []Field{req("to", "text", "Target database path")}, true},
+	{"replay", "Replay", "Apply the whole workspace to another database (the real run): only when the owner says so. It is rehearsed on a throwaway copy of the target first and writes nothing unless the rehearsal is clean; dry_run=1 is the rehearsal alone, listing every failure.",
+		"POST", "/import/replay", []Field{req("to", "text", "Target database path"),
+			{Name: "dry_run", Type: "number", Title: "Dry run: rehearse on a copy, write nothing", Options: []string{"1", "0"}}}, true},
 }
 
 func (h *server) mountImport(get func(string, func(*http.Request) (*Entity, error)), post func(string, func(*http.Request, string) (*Entity, error))) {
@@ -346,6 +348,21 @@ func (h *server) replay(r *http.Request, _ string) (*Entity, error) {
 	}
 	if err := required(v, "to"); err != nil {
 		return nil, err
+	}
+	switch v.Get("dry_run") {
+	case "", "0":
+	case "1":
+		res, err := h.ws.Rehearse(r.Context(), h.s, v.Get("to"))
+		if err != nil {
+			return nil, err
+		}
+		title := "Rehearsed on a copy of " + v.Get("to") + ": clean, nothing written"
+		if len(res.Failures) > 0 {
+			title = fmt.Sprintf("Rehearsed on a copy of %s: %d failures, nothing written", v.Get("to"), len(res.Failures))
+		}
+		return h.importEntity("replay", title, "/import", res), nil
+	default:
+		return nil, &core.Error{Status: 422, Msg: "dry_run is 1 or 0"}
 	}
 	res, err := h.ws.Replay(r.Context(), h.s, v.Get("to"))
 	if err != nil {

@@ -52,7 +52,9 @@ Import (docs/guides/importing.md), with --workspace <source>.lifelog:
   lifelog import approve rules|metrics    the owner's stamp (an interactive terminal only)
   lifelog import status                   gates, ledger, questions, next file, what to do now
   lifelog import check FILE | apply FILE  check or apply one facts file
-  lifelog import replay --to PATH         the real run: the whole workspace into another database
+  lifelog import replay --to PATH         the real run: the whole workspace into another database,
+                                          rehearsed on a copy first (nothing written unless it is clean)
+  lifelog import replay --to PATH --dry-run   the rehearsal alone: every failure, nothing written
   lifelog mcp --workspace DIR             the MCP server with the import tools added
 
 Global flags, anywhere on the line:
@@ -65,7 +67,7 @@ Global flags, anywhere on the line:
 
 type opts struct {
 	db, url, source, addr, agent, mood, day, workspace, from, to string
-	human                                                        bool
+	human, dryRun                                                bool
 	args                                                         []string
 }
 
@@ -78,6 +80,10 @@ func parse(argv []string) (opts, error) {
 		a := argv[i]
 		if a == "--human" {
 			o.human = true
+			continue
+		}
+		if a == "--dry-run" {
+			o.dryRun = true
 			continue
 		}
 		if a == "--" {
@@ -264,16 +270,20 @@ func run(o opts) error {
 }
 
 func doAction(o opts, c *client.Client, name string, vals map[string]string) error {
+	return show(o)(do(c, name, vals))
+}
+
+func do(c *client.Client, name string, vals map[string]string) (*api.Entity, error) {
 	actions, err := c.Catalog()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	for _, a := range actions {
 		if a.Name == name {
-			return show(o)(c.Do(a, vals))
+			return c.Do(a, vals)
 		}
 	}
-	return fmt.Errorf("no action %q (lifelog actions)", name)
+	return nil, fmt.Errorf("no action %q (lifelog actions)", name)
 }
 
 func listActions(o opts, c *client.Client) error {
@@ -428,9 +438,21 @@ func importCommand(o opts, c *client.Client, args []string) error {
 		return doAction(o, c, args[0]+"-facts", map[string]string{"file": args[1]})
 	case "replay":
 		if o.to == "" {
-			return errors.New("import replay --to PATH")
+			return errors.New("import replay --to PATH [--dry-run]")
 		}
-		return doAction(o, c, "replay", map[string]string{"to": o.to})
+		if !o.dryRun {
+			return doAction(o, c, "replay", map[string]string{"to": o.to})
+		}
+		e, err := do(c, "replay", map[string]string{"to": o.to, "dry_run": "1"})
+		if err := show(o)(e, err); err != nil {
+			return err
+		}
+		if p, ok := e.Properties.(map[string]any); ok {
+			if fs, _ := p["failures"].([]any); len(fs) > 0 {
+				return fmt.Errorf("the rehearsal found %d failures; nothing was written to %s", len(fs), o.to)
+			}
+		}
+		return nil
 	}
 	return fmt.Errorf("unknown import step %q (lifelog help)", args[0])
 }

@@ -1,7 +1,7 @@
 # 0005 — A replay stops in the middle and leaves the target half-written; there is no dry run
 
 - **Date:** 2026-10-02
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the import, during `import replay --to <db>`
 
 ## What happened
@@ -32,5 +32,9 @@ On a fresh database and a source folder whose ledger lists a daily note before t
 
 ## Resolution
 
-_(open)_ A `replay --dry-run` that runs every facts check against the trial and reports the failures
-before touching the target would make the real run a formality.
+A replay now rehearses before it writes ([plan 027](../plans/027-a-replay-rehearses-before-it-writes.md)): the
+whole replay runs first on a throwaway `VACUUM INTO` copy of the target, going on past each failure, and the
+target is written only when that rehearsal failed nowhere and its integrity checks were clean; otherwise it is
+left as it was (a new target is not even created) and every failure is listed. `import replay --dry-run` is the
+rehearsal alone. [Importing](../guides/importing.md), "Trial, then the real run", says so;
+`TestReplayRehearsesBeforeItWrites` reproduces the half-written target and checks it no longer happens.
