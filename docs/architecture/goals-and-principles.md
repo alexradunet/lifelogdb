@@ -21,7 +21,7 @@ and *canonical data being corrupted by uncontrolled writers*.
    front-ends) owns all writes to the database. Many
    *processes* are fine — one *writer* owning the conventions. No other app is ever
    pointed at the canonical data with write access (see [D3](../decisions/D03-integer-ids.md)).
-4. **Additive-only evolution after freeze.** Once real data exists, schema changes are
+4. **Additive-only evolution after freeze.** After the freeze ([D13](../decisions/D13-migrations-and-freeze.md) says what it is), schema changes are
    additive ([D13](../decisions/D13-migrations-and-freeze.md) says what that allows), in numbered forward-only migrations.
    SQLite explicitly blesses additive change as its compatibility mechanism
    ("adding new tables or columns does not change the meaning of prior queries" [R1](../research/references.md#r1)).

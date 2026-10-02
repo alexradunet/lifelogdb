@@ -7,7 +7,7 @@ and nothing touches `life.db`**: every suite reads `docs/schema/schema.sql` (and
 leaves its folder behind. The reference parser is pinned (`markdown-it-py==4.2.0`).
 
 ```
-python3 tests/run_all.py              # every suite, ~45 s, most of it the mutants
+python3 tests/run_all.py              # every suite, ~70 s, most of it the mutants
 python3 tests/run_all.py --datasette  # + Datasette opens the file read-only (installs it into tests/.venv)
 python3 tests/run_all.py --mermaid    # + render every mermaid diagram (needs node + `mmdc` + a Chromium, see below)
 ```

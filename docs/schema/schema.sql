@@ -1,6 +1,6 @@
 -- ============================================================
 -- Lifelog schema v1: the single init file, edited in place until the freeze;
--- numbered migrations begin only after real data exists (D13).
+-- numbered migrations begin only after the freeze (D13).
 -- Each table's rules are comments INSIDE its CREATE statement, so .schema shows them (a comment
 -- outside a statement is not stored in the file); the rules that span tables: SELECT * FROM lifelog_meta;
 -- Every writer connection: SQLite >= 3.51.3; PRAGMA foreign_keys = ON;
@@ -26,7 +26,7 @@ INSERT INTO lifelog_meta(key, value) VALUES
   ('source',    'entities, links, measurements and habit_periods: source names the writer of the row (ui, cli, api, agent:<name>, import:<name>); written at insert, never changed; import_key, on entities and on measurements, is unique per source'),
   ('writers',   'one writing application; every connection sets foreign_keys=ON, recursive_triggers=ON, synchronous=FULL, trusted_schema=OFF and starts write transactions with BEGIN IMMEDIATE; every other tool opens the file read-only; imports use INSERT ... ON CONFLICT DO NOTHING, never OR IGNORE (skips CHECK/NOT NULL violations silently) or OR REPLACE (a delete)'),
   ('sqlite',    'writers need SQLite >= 3.51.3 (fixes a WAL race between concurrent writers and checkpoints); migrations need >= 3.53 (ALTER TABLE ADD/DROP CONSTRAINT); CHECKs use only functions every such version has'),
-  ('evolution', 'after the first real data: numbered forward-only SQL migrations, additive only (new tables, columns and indexes; a named CHECK may be replaced with ALTER TABLE DROP/ADD CONSTRAINT, so every CHECK is named), counted in PRAGMA user_version');
+  ('evolution', 'after the freeze (the first row written that cannot be replayed from an import; before it a file is rebuilt, not migrated): numbered forward-only SQL migrations, additive only (new tables, columns and indexes; a named CHECK may be replaced with ALTER TABLE DROP/ADD CONSTRAINT, so every CHECK is named), counted in PRAGMA user_version');
 
 CREATE TABLE entities (
   -- The shared spine: one row per linkable thing (page, person, place). Its domain row has the

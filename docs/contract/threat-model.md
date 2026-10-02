@@ -41,7 +41,7 @@ each phrase in the last column, and **every key of `lifelog_meta` must be used b
 | 13 | Who may write, and with which settings? | `writers` | `BEGIN IMMEDIATE`, `read-only` |
 | 14 | What is derived and can be rebuilt? | `pages_fts`, `pages` | `rebuild`, `derived` |
 | 15 | How do imports avoid duplicates and bad rows? | `writers`, `measurements` | `DO NOTHING`, `OR IGNORE` |
-| 16 | How does the schema change after real data exists? | `evolution` | `additive`, `user_version` |
+| 16 | How does the schema change once the file holds data it cannot rebuild? | `evolution` | `additive`, `user_version` |
 | 17 | Where is the journal? What did I write on a given day? | `pages` | `day page`, `YYYY-MM-DD`, `title equals its day` |
 | 18 | Which SQLite may write this file? | `sqlite` | `3.51.3`, `3.53` |
 | 19 | Who or what wrote this row? | `source` | `written at insert`, `agent` |

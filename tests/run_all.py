@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run every validation suite against the DDL, the cookbook and the text of the docs (docs/).
 
-    python3 tests/run_all.py              # every suite (~45 s)
+    python3 tests/run_all.py              # every suite (~70 s)
     python3 tests/run_all.py --datasette  # + Datasette opens the file read-only (installs it into tests/.venv)
     python3 tests/run_all.py --mermaid    # + render every mermaid diagram (needs mmdc and a Chromium: see schema/render_diagrams.py)
 
