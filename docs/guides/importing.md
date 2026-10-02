@@ -168,7 +168,9 @@ collapsed; everything else counts.
   ([imports](../contract/imports.md) step 3, [import a row once](../cookbook/import-a-row-once.md)).
 - **References are titles.** `from`, `to` and `with` name a person, a place, a plain page or a day
   page by its title (`"2031-04-12"`, `"Bob Sample"`). A reference to a row not written yet is refused
-  as "not written yet": write it earlier in the file, or apply the other file first.
+  as "not written yet": write it earlier in the file, or apply the other file first. So is a link end that is still
+  a plain page where the kind needs a person or a place (`link_kinds`): the person or place that promotes it is
+  not written yet. An end of a type no write can make fit (a day page where a person is needed) is refused outright.
 - There is no `event` and no `task` kind ([D22](../decisions/D22-events.md), [D23](../decisions/D23-no-tasks.md)); a facts file that writes one is refused, with
   that reason.
 - `value` is the cell **as written**, unit included (`"48 ng/mL"`); when the file writes the unit
@@ -363,8 +365,9 @@ The real run, when the owner says so: initialise the real database only if it do
 one that holds data); *replay* the workspace onto it; *status* against it shows the trial's counts
 and no mismatches; *replay* again writes nothing. *replay* applies, in order: the vault plan when
 there is one, the approved metrics, the facts file of every `[x]` and `[?]` ledger line in ledger
-order (retrying after the rest any file that references a row not written yet), then the four checks
-of [integrity checks](../contract/integrity-checks.md). If anything differs from the trial, stop and report it.
+order, then the four checks of [integrity checks](../contract/integrity-checks.md). A file refused as "not written yet" is
+applied again after the rest, pass after pass, so the ledger's order never decides the outcome; a pass that writes
+no file stops the replay with that refusal. If anything differs from the trial, stop and report it.
 
 Facts files hold no database ids: keys are derived from source paths and references name titles, so
 the real database gets the trial's rows with ids of its own, and nothing is remapped.

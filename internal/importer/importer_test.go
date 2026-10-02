@@ -3,6 +3,7 @@ package importer
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -101,7 +102,8 @@ func (f *fixture) facts(t *testing.T, file string, v any) error {
 }
 
 func code(err error) int {
-	if e, ok := err.(*core.Error); ok {
+	var e *core.Error
+	if errors.As(err, &e) {
 		return e.Status
 	}
 	return 0
@@ -343,6 +345,98 @@ func TestReadingsKeysAndReplay(t *testing.T) {
 	}
 	if res.Corrections != 0 || len(res.Differences) != 0 {
 		t.Errorf("a second replay: %+v", res)
+	}
+}
+
+// issue 0004: an about link to a note's page, applied before the file that makes that page a person, is an ordering
+// error: applied alone it is refused with what to do; the replay applies it after the rest, whatever the ledger order.
+// A link to a page that no file ever promotes still fails, and so does an end of a type no write can make fit.
+func TestLinkBeforePromotion(t *testing.T) {
+	f := setup(t)
+	f.approveRules(t, rulesBody)
+	f.w.MakeLedger()
+	if _, err := f.w.PlanVault(ctx, f.s); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.w.ApplyVault(ctx, f.s); err != nil {
+		t.Fatal(err)
+	}
+	day, bob := "Journal/2031-04-11.md", "Contacts/Bob Sample.md"
+	linkTo := func(to string) map[string]any {
+		return map[string]any{"file": day, "writes": []any{
+			map[string]any{"link": map[string]any{"from": "2031-04-11", "to": to, "kind": "about"}, "quote": "Swam at Riverside Pool with Bobby"}}}
+	}
+	if err := f.facts(t, day, linkTo("Bob Sample")); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.facts(t, bob, map[string]any{"file": bob, "writes": []any{
+		map[string]any{"person": map[string]any{"title": "Bob Sample"}, "quote": "Bob Sample, a friend from school"}}}); err != nil {
+		t.Fatal(err)
+	}
+
+	// applied alone, before Bob's own file: refused as an ordering error that says what to do
+	_, err := f.w.Apply(ctx, f.s, day)
+	if !waitsForAnother(err) || code(err) != 422 || !strings.Contains(err.Error(), `"Bob Sample" is still a plain page`) {
+		t.Fatalf("the about link before the person's file: %v", err)
+	}
+	if _, err := f.w.Apply(ctx, f.s, bob); err != nil {
+		t.Fatal(err)
+	}
+	if r, err := f.w.Apply(ctx, f.s, day); err != nil || r.Summary != "1 link (1 new)" {
+		t.Fatalf("after the person's file: %v, %v", r, err)
+	}
+
+	// the ledger lists the day before Bob's file: the replay applies the day after the rest
+	lines, _, err := f.w.Ledger()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ordered []Line
+	var bobLine Line
+	for _, l := range lines {
+		if l.File == bob {
+			bobLine = l
+			continue
+		}
+		ordered = append(ordered, l)
+	}
+	if err := f.w.writeLedger(append(ordered, bobLine)); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(t.TempDir(), "life.db")
+	res, err := f.w.Replay(ctx, f.s, target)
+	if err != nil {
+		t.Fatalf("replay with the day ledgered first: %v", err)
+	}
+	if len(res.Files) != 2 || res.Files[0].File != bob || len(res.Differences) != 0 || !res.Integrity.OK {
+		t.Errorf("replay: %+v", res)
+	}
+	if res, err = f.w.Replay(ctx, f.s, target); err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range res.Files {
+		if strings.Contains(r.Summary, "new") || strings.Contains(r.Summary, "promoted") {
+			t.Errorf("a second replay wrote %s: %s", r.File, r.Summary)
+		}
+	}
+
+	// a page that no file promotes: refused alone, and the replay stops on it at the end, naming it
+	if err := f.facts(t, day, linkTo("Recipes")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.w.Check(ctx, f.s, day); !waitsForAnother(err) {
+		t.Errorf("a link to a page no file promotes: %v", err)
+	}
+	if _, err := f.w.Replay(ctx, f.s, filepath.Join(t.TempDir(), "life.db")); err == nil || !strings.Contains(err.Error(), `"Recipes" is still a plain page`) {
+		t.Errorf("the replay of a link to a page no file promotes: %v", err)
+	}
+
+	// a day page never becomes a person: the registry's own refusal, never retried
+	if err := f.facts(t, day, linkTo("2031-04-12")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.w.Check(ctx, f.s, day); err == nil || waitsForAnother(err) || !strings.Contains(err.Error(), "endpoint type not allowed") {
+		t.Errorf("an about link to a day page: %v", err)
 	}
 }
 

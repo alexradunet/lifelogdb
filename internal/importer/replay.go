@@ -26,7 +26,8 @@ type ReplayResult struct {
 
 // Replay applies the whole workspace to another database with no model (the guide's "Trial, then the real
 // run"): the vault plan, the approved metrics, every done or waiting facts file in ledger order (a file that
-// names a row not written yet is retried after the rest), the owner's corrections, then the integrity checks.
+// names a row not written yet, or links a plain page another file promotes, is retried after the rest), the
+// owner's corrections, then the integrity checks.
 // A target that does not exist is initialised; an existing one is never re-initialised.
 func (w *Workspace) Replay(ctx context.Context, trial *core.Store, target string) (*ReplayResult, error) {
 	res := &ReplayResult{Target: target, Files: []Report{}, Differences: []string{}}
@@ -84,7 +85,7 @@ func (w *Workspace) Replay(ctx context.Context, trial *core.Store, target string
 			}
 			r, err := w.write(ctx, ts, f, pos, rules, false)
 			if err != nil {
-				if strings.Contains(err.Error(), "not written yet") {
+				if waitsForAnother(err) {
 					later, lastErr = append(later, file), err
 					continue
 				}

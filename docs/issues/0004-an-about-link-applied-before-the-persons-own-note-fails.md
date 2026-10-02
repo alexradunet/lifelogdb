@@ -1,7 +1,7 @@
 # 0004 — An `about` link applied before the person's own note fails, and the replay aborts on it
 
 - **Date:** 2026-10-02
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the import, on a vault whose daily notes name people who also have their own notes
 
 ## What happened
@@ -45,5 +45,9 @@ A source folder with two files:
 
 ## Resolution
 
-_(open)_ The replay loop could apply every person/place write in a first pass before any link, or treat
-"endpoint type not allowed" as a retryable ordering error like "not written yet".
+A link end that is still a plain page where the kind needs a person or a place (read from `link_kinds`) is now
+refused as "not written yet", naming the page and what to apply first; the replay already applies such a file
+again after the rest, so the ledger's order no longer matters. A day page, a redirect stub or a page no file
+promotes still fails: the first two at once (the trigger's refusal), the last when a replay pass writes nothing.
+No schema change; [importing](../guides/importing.md) says so. [Plan 026](../plans/026-link-before-promotion-is-an-ordering-error.md);
+`TestLinkBeforePromotion` reproduces the issue.

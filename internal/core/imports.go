@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 
 	"lifelog/internal/text"
 )
@@ -42,6 +43,23 @@ func (t *Tx) MetricUnit(name string) (unit string, found bool, err error) {
 		return "", false, nil
 	}
 	return unit, err == nil, err
+}
+
+// LinkEnds are the entity types a registered kind accepts at each end (link_kinds.from_types / to_types); nil is
+// any type. found is false when no kind has the name.
+func (t *Tx) LinkEnds(kind string) (from, to []string, found bool, err error) {
+	var f, g sql.NullString
+	err = t.tx.QueryRow(`SELECT from_types, to_types FROM link_kinds WHERE kind = ?`, kind).Scan(&f, &g)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil, false, nil
+	}
+	split := func(s sql.NullString) []string {
+		if !s.Valid {
+			return nil
+		}
+		return strings.Split(s.String, ",")
+	}
+	return split(f), split(g), err == nil, err
 }
 
 // Body is a page's body.
