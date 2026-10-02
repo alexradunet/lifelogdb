@@ -22,7 +22,7 @@ and *canonical data being corrupted by uncontrolled writers*.
    *processes* are fine — one *writer* owning the conventions. No other app is ever
    pointed at the canonical data with write access (see [D3](../decisions/D03-integer-ids.md)).
 4. **Additive-only evolution after freeze.** Once real data exists, schema changes are
-   `ADD COLUMN` / `CREATE TABLE` / new indexes and numbered forward-only migrations.
+   additive ([D13](../decisions/D13-migrations-and-freeze.md) says what that allows), in numbered forward-only migrations.
    SQLite explicitly blesses additive change as its compatibility mechanism
    ("adding new tables or columns does not change the meaning of prior queries" [R1](../research/references.md#r1)).
 5. **Derived data is disposable.** The FTS index and `title_key` can be dropped and rebuilt
@@ -30,7 +30,7 @@ and *canonical data being corrupted by uncontrolled writers*.
    (Binary files are out of v1 entirely — see [D9](../decisions/D09-binary-files.md).)
 6. **One home per concept, one home per rule.** A concept is stored once ([D6](../decisions/D06-mood-is-a-measurement.md): mood lives in
    `measurements` and nowhere else; a named entity's name is its page title, [D20](../decisions/D20-named-pages.md)), and a rule is
-   written once (the reading guide above). A fact that can be derived from another column is not
+   written once ([the docs index](../README.md) says where each kind of rule lives). A fact that can be derived from another column is not
    stored beside it.
 7. **Real use drives change.** A new constraint, trigger or convention needs a real incident behind
    it — a failed import, a bug in the writing application, a question the data could not answer —

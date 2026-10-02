@@ -6,7 +6,7 @@
   the owner meant to do it, from `start_day` to `end_day` (inclusive; NULL = still going). Its
   check-ins stay in `measurements`, one home for a day's value: 1 = done, 0 = not done. On a day inside
   a period, no check-in is **not recorded** — never assumed either way. A restarted habit has several
-  periods, which never overlap (`habit_periods_check_insert`, `_check_update`); a period on a metric
+  periods, which never overlap (`habit_periods_check_insert`, `habit_periods_check_update`); a period on a metric
   with a unit is refused; a wrong period is corrected by `UPDATE`, never deleted
   (`habit_periods_no_delete`). The day's habits and their completion are [habits](../cookbook/habits.md); the day view lists
   them ([the day view](../cookbook/day-view.md)).

@@ -10,10 +10,10 @@
   uses only functions every SQLite the contract allows has (`lifelog_meta.sqlite`) — a SQLite that
   lacks one cannot write the table or integrity-check it — so no `octet_length()` where
   `length(CAST(x AS BLOB))` does the same.
-- **The 2075 test** ([imports](../contract/imports.md)) is executed: every question must be answered from `.schema` and
+- **The 2075 test** ([threat model and the 2075 test](../contract/threat-model.md)) is executed: every question must be answered from `.schema` and
   `lifelog_meta`, and every `lifelog_meta` key must answer some question. A new rule that spans tables
   therefore needs a key and a row in that table; a table's own rule needs a comment in its statement.
-- **Threat model.** The database is deliberately not encrypted ([imports](../contract/imports.md)): health data never enters git; the
+- **Threat model.** The database is deliberately not encrypted ([threat model](../contract/threat-model.md)): health data never enters git; the
   disk is encrypted at rest; Datasette listens on localhost only and opens the file read-only; no
   credentials or full account numbers, ever.
 - **Alternatives.** Comments only in a separate document (lives outside the artifact, rots); all

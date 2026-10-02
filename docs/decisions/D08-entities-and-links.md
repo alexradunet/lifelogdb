@@ -2,7 +2,7 @@
 
 **Status:** accepted
 
-- **Decision.** The four linkable types share one ID space through `entities`; all relationships live
+- **Decision.** The three linkable types (page, person, place; `entities_entity_type`) share one ID space through `entities`; all relationships live
   in one `links(from_id, to_id, kind)` table with real foreign keys (`UNIQUE(from_id, to_id, kind)`
   allows several kinds between one pair, never a duplicate edge). `links.kind` references the closed
   registry `link_kinds`, whose structure is fixed at registration (`link_kinds_structure_fixed`);

@@ -5,7 +5,7 @@
 -- outside a statement is not stored in the file); the rules that span tables: SELECT * FROM lifelog_meta;
 -- Every writer connection: SQLite >= 3.51.3; PRAGMA foreign_keys = ON;
 -- PRAGMA recursive_triggers = ON; PRAGMA synchronous = FULL; PRAGMA trusted_schema = OFF;
--- and every write transaction starts with BEGIN IMMEDIATE (section 2.6).
+-- and every write transaction starts with BEGIN IMMEDIATE (docs/contract/connections.md).
 -- ============================================================
 PRAGMA application_id = 0x4C494645;   -- 'LIFE' — recognizable to file(1) and tools
 PRAGMA user_version  = 1;
@@ -21,12 +21,12 @@ CREATE TABLE lifelog_meta (
 INSERT INTO lifelog_meta(key, value) VALUES
   ('schema',    'lifelog v1: the journal (one page per day), wiki, people, places and health metrics of one person: a life log, not a project manager; the rules of each table are comments inside its CREATE statement (.schema), the rules that span tables are these rows'),
   ('instants',  'every *_at column is a UTC ISO-8601 TEXT instant with milliseconds, e.g. 2026-06-09T21:14:03.482Z, written by the app; CHECK strftime(''%Y-%m-%dT%H:%M:%fZ'', x) IS x; created_at, on every table that has it, is when the row was written to life.db, never back-dated (when a thing happened is its day or its other *_at)'),
-  ('days',      'every *_day column (and day) is the LOCAL calendar date YYYY-MM-DD where the thing happened, written at insert, never recomputed from an instant; CHECK date(x) IS x (IS, not =: a CHECK passes on NULL, and date(''2026-9-3'') is NULL)'),
+  ('days',      'every *_day column (and day) is the LOCAL calendar date YYYY-MM-DD where the thing happened, written by the app from the local calendar, never recomputed from an instant; CHECK date(x) IS x (IS, not =: a CHECK passes on NULL, and date(''2026-9-3'') is NULL)'),
   ('deletes',   'life data is never deleted except links rows: an entity is a tombstone (entities.deleted_at), a measurement is corrected by inserting a row; BEFORE DELETE triggers enforce it on entities and every domain row; the registries (metrics, link_kinds, lifelog_meta) are the owner''s administrative rows, deletable while nothing references them (each CREATE comment says so)'),
   ('source',    'entities, links, measurements and habit_periods: source names the writer of the row (ui, cli, api, agent:<name>, import:<name>); written at insert, never changed; import_key, on entities and on measurements, is unique per source'),
   ('writers',   'one writing application; every connection sets foreign_keys=ON, recursive_triggers=ON, synchronous=FULL, trusted_schema=OFF and starts write transactions with BEGIN IMMEDIATE; every other tool opens the file read-only; imports use INSERT ... ON CONFLICT DO NOTHING, never OR IGNORE (skips CHECK/NOT NULL violations silently) or OR REPLACE (a delete)'),
   ('sqlite',    'writers need SQLite >= 3.51.3 (fixes a WAL race between concurrent writers and checkpoints); migrations need >= 3.53 (ALTER TABLE ADD/DROP CONSTRAINT); CHECKs use only functions every such version has'),
-  ('evolution', 'after the first real data: numbered forward-only SQL migrations, additive only, counted in PRAGMA user_version; every CHECK is named, so any rule can be widened or tightened with ALTER TABLE DROP/ADD CONSTRAINT');
+  ('evolution', 'after the first real data: numbered forward-only SQL migrations, additive only (new tables, columns and indexes; a named CHECK may be replaced with ALTER TABLE DROP/ADD CONSTRAINT, so every CHECK is named), counted in PRAGMA user_version');
 
 CREATE TABLE entities (
   -- The shared spine: one row per linkable thing (page, person, place). Its domain row has the
@@ -41,7 +41,7 @@ CREATE TABLE entities (
   -- import_key: the key a writer that may send the row twice gives it (an importer, an offline phone, a
   -- retrying agent); whether the row was imported is source, not import_key. Unique per source, written at
   -- insert and never changed. Insert with ON CONFLICT(source, import_key) WHERE import_key IS NOT NULL
-  -- DO NOTHING RETURNING id: no id back = imported before, so no domain row is inserted (section 6.15).
+  -- DO NOTHING RETURNING id: no id back = imported before, so no domain row is inserted.
   id          INTEGER PRIMARY KEY,
   entity_type TEXT NOT NULL CONSTRAINT entities_entity_type
                   CHECK (entity_type IN ('page','person','place')),
@@ -110,7 +110,7 @@ END;
 CREATE VIRTUAL TABLE pages_fts USING fts5(
   -- derived: external-content FTS5 kept in sync by the three triggers below; rebuild with
   -- INSERT INTO pages_fts(pages_fts) VALUES('rebuild'). Tokenizer unicode61 folds accents
-  -- (Zurich finds Zürich); a CJK run is ONE token (section 7).
+  -- (Zurich finds Zürich); a CJK run is ONE token (a known limit of unicode61).
   title, body, content='pages', content_rowid='id'
 );
 CREATE TRIGGER pages_fts_insert AFTER INSERT ON pages BEGIN
@@ -278,7 +278,7 @@ INSERT INTO link_kinds(kind, symmetric, from_types, to_types, note) VALUES
   ('redirect', 0, 'page',      'page,person,place', 'old stub page → its replacement, a page, person or place; renames, D5'),
   ('about',    0, NULL,        'person,place', 'entity → person/place it is about'),
   ('at',       0, 'page',      'place',        'day page → a place the owner was at that day; from a day page only, which the app checks (D16)'),
-  ('located-in', 0, 'place',   'place',        'containment: Tokyo → Japan; transitive — walk it with a recursive CTE (section 6.11)'),
+  ('located-in', 0, 'place',   'place',        'containment: Tokyo → Japan; transitive — walk it with a recursive CTE'),
   ('parent-of', 0, 'person',   'person',       'parent → child; ''family'' stays the symmetric catch-all'),
   ('friend',   1, 'person',    'person',       NULL),
   ('family',   1, 'person',    'person',       NULL),

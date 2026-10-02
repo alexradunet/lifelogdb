@@ -14,7 +14,7 @@
 - **Alternatives.** *Keep tasks for reminders*: rejected — the owner's calendar and to-do app already
   remind, and a second list drifts from them. *Tasks as pages*: rejected — a task's name is a label,
   not a unique handle (`Dentist`), and it would collide.
-- **Costs accepted.** A habit is still a 0/1 metric ([D15](D15-recurrence.md)); a done thing worth remembering is written in
+- **Costs accepted.** A habit is still a 0/1 metric ([D24](D24-habits.md)); a done thing worth remembering is written in
   the day page. Tasks are additive later — a table hanging off `entities` and two link kinds — if the
   owner ever wants to-dos here.
 - **Reopen trigger.** The owner wants to-dos, reminders or projects kept in this database.

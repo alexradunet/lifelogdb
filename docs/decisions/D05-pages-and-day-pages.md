@@ -3,7 +3,7 @@
 **Status:** accepted
 
 - **Decision.** One text entity `pages`, every row titled, unique and linkable — an essay, a reference
-  page, a tag, a person, and the journal.
+  page, a tag, a person, a place, and the journal.
   - The journal is **one day page per local day**, titled with the day (`2026-09-29`); its `day` is
     its title (`pages_day_page`), so `[[2026-09-29]]` reaches it and the day page of a day is one
     lookup by key. Capture appends to today's page and creates it on the first write ([capture](../cookbook/capture.md), [titles and wikilinks](../contract/titles-and-wikilinks.md)).

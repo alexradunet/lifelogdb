@@ -49,8 +49,8 @@ schema is frozen ([D13](docs/decisions/D13-migrations-and-freeze.md)):
 - Test databases are throwaway: apply `schema.sql` to a fresh file (e.g. `/tmp/…/life.db`), test, discard.
   Never migrate a test DB — recreate it.
 - Numbered forward-only migrations (`0002_*.sql`, …) begin **only after** real data exists in a
-  canonical `life.db`, and from then on changes are additive-only (`ADD COLUMN` / `CREATE TABLE` / new
-  indexes — principle 4 of the [goals](docs/architecture/goals-and-principles.md)). Anything still in the schema at the
+  canonical `life.db`, and from then on changes are additive-only ([D13](docs/decisions/D13-migrations-and-freeze.md) defines it; principle 4 of the
+  [goals](docs/architecture/goals-and-principles.md)). Anything still in the schema at the
   freeze stays for good, so cutting happens before it.
 
 ## What earns a change (principles 1, 6 and 7 of the [goals](docs/architecture/goals-and-principles.md))
@@ -133,8 +133,8 @@ Their homes are in `docs/`; this list is the checklist, not the rule.
   was that day is `at` links to places (D16). There are no events or tasks (D22, D23); nothing repeats (D15). A habit
   is a 0/1 metric with active periods (D24).
 - **Connections** ([connection setup](docs/contract/connections.md)): one writing application per file; per connection
-  `PRAGMA foreign_keys=ON`, `recursive_triggers=ON`, `synchronous=FULL`, `trusted_schema=OFF`, read back and refused
-  if wrong; SQLite ≥ 3.51.3 for writers; every write transaction starts with `BEGIN IMMEDIATE`; the driver opens
+  `PRAGMA foreign_keys=ON`, `recursive_triggers=ON`, `synchronous=FULL`, `trusted_schema=OFF` (the first three read back and refused
+  if wrong); SQLite ≥ 3.51.3 for writers; every write transaction starts with `BEGIN IMMEDIATE`; the driver opens
   no transactions of its own. Readers open the file read-only (`mode=ro`, never `immutable=1`);
   exploration tools (Datasette) likewise, and nothing that edits rows is pointed at it.
 - **The wikilink save contract** ([titles and wikilinks](docs/contract/titles-and-wikilinks.md),

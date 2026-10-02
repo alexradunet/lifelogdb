@@ -16,4 +16,4 @@
 | Biomarkers / quantified self | `metrics` + `measurements` ([a metric series](../cookbook/metric-series.md)) |
 | Imported notes (a vault) | `entities.import_key`, unique per `source`: a re-run inserts nothing, a changed note updates its page ([import a row once](../cookbook/import-a-row-once.md)) |
 | Search | `pages_fts` ([full-text search](../cookbook/full-text-search.md)) |
-| "Which of my agents wrote this?" | `source` on every entity, link and measurement ([identity and provenance](../contract/identity-and-provenance.md)) |
+| "Which of my agents wrote this?" | `source` on every entity, link, measurement and habit period ([identity and provenance](../contract/identity-and-provenance.md)) |

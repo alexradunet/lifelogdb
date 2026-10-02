@@ -5,8 +5,8 @@
 - **Decision.** No ORM, no migration framework, no down-migrations. **Until the freeze there are no
   migrations:** [schema](../schema/README.md) is edited in place and test databases are recreated; `user_version` stays 1. After
   real data exists: numbered plain-SQL files, `db/migrations/0002_*.sql`, … applied in order, progress
-  in `PRAGMA user_version` [R20](../research/references.md#r20)[R21](../research/references.md#r21)[R22](../research/references.md#r22); additive only (new tables, columns, indexes; a column rename
-  is allowed and recorded in its migration). `PRAGMA application_id = 0x4C494645` ('LIFE') lets
+  in `PRAGMA user_version` [R20](../research/references.md#r20)[R21](../research/references.md#r21)[R22](../research/references.md#r22); additive only — new tables, columns and indexes, a column rename
+  (recorded in its migration), and replacing a named CHECK (next bullet); never a dropped table or column. `PRAGMA application_id = 0x4C494645` ('LIFE') lets
   `file(1)` and future tools recognize the database [R1](../research/references.md#r1).
 - **Every CHECK is named, so every rule can change without a rebuild.** Widening an enum (a new
   entity type, a new link endpoint), letting partial dates into `birth_day` or loosening the title rules is a

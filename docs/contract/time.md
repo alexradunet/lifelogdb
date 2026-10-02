@@ -8,7 +8,7 @@
   chronologically as plain text, and that keeps rows written within the same second in order (a
   reading and its correction) (executed).
 - **Local days** (`*_day` columns): the *local calendar date where the thing happened or
-  was captured*, TEXT `YYYY-MM-DD`, written at insert time in the zone of the device that captured
+  was captured*, TEXT `YYYY-MM-DD`, written by the app in the zone of the device that captured
   it — a phone's, never the clock or zone of a hub on a server ([D3](../decisions/D03-integer-ids.md)).
   **Never derived from the UTC instant at query time.** This survives timezone changes,
   DST, and travel: "the day I graduated" is a local-date fact, not an instant [R7](../research/references.md#r7)[R8](../research/references.md#r8)[R9](../research/references.md#r9).

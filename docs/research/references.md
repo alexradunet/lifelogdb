@@ -229,7 +229,7 @@ the gaps are intentional.
   Crafting Crash-Consistent Applications*, OSDI 2014 —
   <https://www.usenix.org/conference/osdi14/technical-sessions/presentation/pillai>
   SQLite among the studied applications: crash consistency depends on the filesystem's persistence
-  properties, which is why power loss is listed as documented, not simulated. → [imports](../contract/imports.md).
+  properties, which is why power loss is listed as documented, not simulated. → [threat model](../contract/threat-model.md).
 
 ## Time and dates (D7, D10, D18, non-goals)
 
