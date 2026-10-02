@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Run every validation suite against the DDL, the cookbook and the text of SCHEMA.md.
+"""Run every validation suite against the DDL, the cookbook and the text of the docs (docs/).
 
     python3 tests/run_all.py              # every suite (~15 s)
     python3 tests/run_all.py --datasette  # + Datasette opens the file read-only (installs it into tests/.venv)
     python3 tests/run_all.py --mermaid    # + render every mermaid diagram (needs mmdc and a Chromium: see schema/render_diagrams.py)
 
-Nothing here is a migration and nothing touches life.db: every suite builds throwaway databases from the DDL it extracts
-from SCHEMA.md section 3. Needs: python3 (with venv + network once, for markdown-it-py) and the sqlite3 CLI."""
+Nothing here is a migration and nothing touches life.db: every suite builds throwaway databases from the DDL in
+from docs/schema/schema.sql. Needs: python3 (with venv + network once, for markdown-it-py) and the sqlite3 CLI."""
 import os, re, shutil, subprocess, sys, tempfile, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -80,7 +80,7 @@ def main():
         n = sum(1 for _ in open(ddl))
         objs = subprocess.run(['sqlite3', ':memory:', '.read ' + ddl, 'SELECT count(*) FROM sqlite_master;'], capture_output=True, text=True).stdout.split()[-1]
         ver = subprocess.run(['sqlite3', '--version'], capture_output=True, text=True).stdout.split()[0]
-        print(f'SCHEMA.md section 3: {n} lines, {objs} schema objects; SQLite {ver}\n', flush=True)
+        print(f'docs/schema/schema.sql: {n} lines, {objs} schema objects; SQLite {ver}\n', flush=True)
         env = dict(os.environ, DDL=ddl, PYTHONDONTWRITEBYTECODE='1', TMPDIR=scratch, TEMP=scratch, TMP=scratch)
         results = [run(*s, env) for s in SUITES]
         if '--datasette' in ARGS: results.append(run('datasette', 'schema', 'datasette_ro.py', MET, env))

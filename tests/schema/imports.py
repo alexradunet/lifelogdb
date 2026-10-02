@@ -1,4 +1,4 @@
-"""The import path of SCHEMA.md §2.7, run from the document's own SQL on 1 000 CSV rows: idempotent, all-or-nothing,
+"""The import path of contract/imports, run from the page's own SQL on 1 000 CSV rows: idempotent, all-or-nothing,
 and the three traps (WHERE true, the partial index's WHERE, CAST) are real."""
 import csv, os, re, shutil, subprocess, sys, tempfile
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'lib'))
@@ -6,9 +6,9 @@ from kit import *
 import sqlite3
 S = Suite('imports')
 
-sec = section('### 2.7 ', '## 3. ')
+sec = doc_page('contract/imports.md')
 IMP = [b for b in sql_blocks(sec) if "ATTACH 'scratch.db' AS s;" in b]
-S.K('§2.7 has the import block', len(IMP) == 1)
+S.K('contract/imports has the import block', len(IMP) == 1)
 if not IMP: S.done()
 IMP = IMP[0]
 SRC = re.search(r"'(import:[a-z0-9_:.-]+)'", IMP)
@@ -54,9 +54,9 @@ S.K("CAST hides garbage: 'abc' -> 0.0, '' -> 0.0, '12.5kg' -> 12.5", c.execute("
 stage([('cast1', '2026-03-05', '', '', 'abc')])
 S.K("with CAST the bad value 'abc' would be stored as 0.0 (the trap, shown)", run(c, IMP.replace("NULLIF(tz, ''), value,", "NULLIF(tz, ''), CAST(value AS REAL),")) == 'OK'
     and c.execute("select value from measurements where import_key='cast1'").fetchone() == (0.0,))
-orphan = sql_blocks(section('### 2.5 ', '### 2.6 '))[0].splitlines()[2].split(';')[0]
+orphan = sql_blocks(doc_page('contract/integrity-checks.md'))[0].splitlines()[2].split(';')[0]
 S.K('afterwards: integrity_check ok, foreign_key_check empty, no orphan entities row', integrity_ok(c) and c.execute(orphan).fetchall() == [])
 pc = c.execute('SELECT source, count(*), min(day), max(day) FROM measurements GROUP BY source').fetchall()
-S.K('the per-source count of §2.7 answers', any(r[0] == SRC and r[1] >= 1010 for r in pc), pc)
+S.K('the per-source count of contract/imports answers', any(r[0] == SRC and r[1] >= 1010 for r in pc), pc)
 shutil.rmtree(work, ignore_errors=True)
 S.done()

@@ -1,8 +1,8 @@
-"""A person or a place is a page (SCHEMA.md §2.2, D16, D20): one id with an entities row and a titled pages row, and a
+"""A person or a place is a page (contract/identity-and-provenance, D16, D20): one id with an entities row and a titled pages row, and a
 person's people row, chained people -> pages -> entities.
 A  the foreign keys and CHECKs: what may and may not be built, and what a promotion may and may not do;
-B  §6.14 run literally: create, promote a ghost, a taken handle, never a day page; the day pages that named the ghost keep naming her;
-C  a day page that writes [[Name]] reaches the person through the real save contract; §6.3, §6.5, §6.6; renames; rebuild;
+B  cookbook/person-or-place run literally: create, promote a ghost, a taken handle, never a day page; the day pages that named the ghost keep naming her;
+C  a day page that writes [[Name]] reaches the person through the real save contract; cookbook/days-that-name, cookbook/backlinks, cookbook/everything-about; renames; rebuild;
 D  two Sams, two Springfields; ghost_pages leaves named pages alone."""
 import os, re, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'lib'))
@@ -48,12 +48,12 @@ S.K('the page of a person cannot be deleted', tryx(c, 'DELETE FROM pages WHERE i
 S.K('tombstoning the person keeps its page', tryx(c, f'UPDATE entities SET deleted_at={NOW} WHERE id=?', (g,)) == 'OK' and one(c, 'select title from pages where id=?', (g,)) == 'Ana')
 S.K('integrity and foreign keys clean', integrity_ok(c))
 
-# ---- B  §6.14 run literally
-sts = statements(block('6.14'))
+# ---- B  cookbook/person-or-place run literally
+sts = statements(block('person-or-place'))
 sel0 = [s for s in sts if code(s).upper().startswith('SELECT P.ID')]
 create = sts[sts.index(sel0[0]) + 1:][:5] if sel0 else []
 promo = sts[sts.index(sel0[0]) + 6:][:4] if sel0 else []
-S.K('§6.14 has a resolve, a five-statement create and a four-statement promotion',
+S.K('cookbook/person-or-place has a resolve, a five-statement create and a four-statement promotion',
     len(sel0) == 1 and len(sts) == 10 and [re.match(r'\w+', code(s)).group(0).upper() for s in create] == ['BEGIN', 'INSERT', 'INSERT', 'INSERT', 'COMMIT']
     and [re.match(r'\w+', code(s)).group(0).upper() for s in promo] == ['BEGIN', 'UPDATE', 'INSERT', 'COMMIT'], [code(s)[:25] for s in sts])
 if len(sel0) == 1 and len(create) == 5 and len(promo) == 4:
@@ -75,7 +75,7 @@ if len(sel0) == 1 and len(create) == 5 and len(promo) == 4:
     S.K('step 0 finds the ghost the day page made, as a plain page', c.execute(sel0[0], {'handle_key': 'ana example'}).fetchall() == [(gid, 'page')])
     for st in promo: run_block(c, st, dict(ghost_id=gid))
     S.K('the promotion block turns it into a person, one id', c.execute('select e.entity_type, pe.name from entities e join people pe using(id) where id=?', (gid,)).fetchall() == [('person', 'Ana Example')])
-    S.K('...and the old day page already names her, no re-save needed (§6.3)', [r[0] for r in c.execute(block('6.3'), {'entity_id': gid})] == ['2026-09-30'])
+    S.K('...and the old day page already names her, no re-save needed (cookbook/days-that-name)', [r[0] for r in c.execute(block('days-that-name'), {'entity_id': gid})] == ['2026-09-30'])
     S.K('promoting a page that is already a person changes no row, and the people insert fails', tryx(c, promo[1], {'ghost_id': gid}) == 'OK'
         and c.execute('select changes()').fetchone()[0] == 0 and tryx(c, promo[2], {'ghost_id': gid}).startswith('ERR'))
     pl = named(c, 'place', 'Lisbon')
@@ -97,17 +97,17 @@ S.K('the day page links to the person\'s own id, and no new page was made', c.ex
     and one(c, "select count(*) from pages where title_key='bob sample'") == 1)
 S.K('an alias does not change the target', c.execute('select to_id from links where from_id=?', (m3,)).fetchall() == [(bod,)])
 S.K('the person\'s page body links out like any page', c.execute("select p.title from links l join pages p on p.id=l.to_id where l.from_id=? and l.kind='wikilink'", (bod,)).fetchall() == [('Cluj',)])
-ark = c.execute(block('6.6'), {'entity_id': bod}).fetchall()
-S.K('§6.6 finds the day pages and the page that name him, what his page links to, and what it is about', sorted((r[0], r[2], r[3]) for r in ark)
+ark = c.execute(block('everything-about'), {'entity_id': bod}).fetchall()
+S.K('cookbook/everything-about finds the day pages and the page that name him, what his page links to, and what it is about', sorted((r[0], r[2], r[3]) for r in ark)
     == sorted([('wikilink', m1, 'in'), ('wikilink', m3, 'in'), ('wikilink', wiki, 'in'), ('wikilink', one(c, "select id from pages where title='Cluj'"), 'out'), ('about', rome, 'out')]), ark)
 S.K('...and not the typo', m4 not in [r[2] for r in ark])
-S.K('§6.6 is two legs (the third leg through a separate page is gone)', block('6.6').count('UNION ALL') == 1)
-q = block('6.3')
-S.K('§6.3 lists the day pages only, newest day first', [r[0] for r in c.execute(q, {'entity_id': bod})] == ['2026-09-30', '2026-09-28'])
+S.K('cookbook/everything-about is two legs (the third leg through a separate page is gone)', block('everything-about').count('UNION ALL') == 1)
+q = block('days-that-name')
+S.K('cookbook/days-that-name lists the day pages only, newest day first', [r[0] for r in c.execute(q, {'entity_id': bod})] == ['2026-09-30', '2026-09-28'])
 c.execute(f'UPDATE entities SET deleted_at={NOW} WHERE id=?', (m3,))
 S.K('...and drops a tombstoned day', [r[0] for r in c.execute(q, {'entity_id': bod})] == ['2026-09-28'])
-bl = c.execute(block('6.5'), {'page_id': bod}).fetchall()
-S.K('§6.5 labels the backlinks of a person by title, a day page by its day', sorted(r[3] for r in bl) == sorted(['Coffee spots', '2026-09-28']), bl)
+bl = c.execute(block('backlinks'), {'page_id': bod}).fetchall()
+S.K('cookbook/backlinks labels the backlinks of a person by title, a day page by its day', sorted(r[3] for r in bl) == sorted(['Coffee spots', '2026-09-28']), bl)
 before = sorted(c.execute("select from_id, to_id from links where kind='wikilink'").fetchall())
 c.execute("UPDATE people SET name='Bob S.' WHERE id=?", (bod,))
 for pid, body in c.execute('select id, body from pages').fetchall():

@@ -1,5 +1,5 @@
-"""Identity, provenance and deletion (SCHEMA.md §2.2, §2.3, D3, D8, D11): the supertype and its composite foreign keys,
-ids carried by RETURNING, `source` on every row, `import_key` on entities (a re-run inserts nothing, §6.15), no hard deletes, updated_at kept by triggers."""
+"""Identity, provenance and deletion (contract/identity-and-provenance, contract/deletion-and-corrections, D3, D8, D11): the supertype and its composite foreign keys,
+ids carried by RETURNING, `source` on every row, `import_key` on entities (a re-run inserts nothing, cookbook/import-a-row-once), no hard deletes, updated_at kept by triggers."""
 import os, re, sys, time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'lib'))
 from kit import *
@@ -27,16 +27,16 @@ m = ent(c, 'page')
 c.execute("INSERT INTO pages(id,title,title_key,day) VALUES (?, '2026-09-30', '2026-09-30', '2026-09-30')", (m,)); g = page(c, 'Target')
 link(c, m, g, 'wikilink')
 S.K('last_insert_rowid() moves: after a link insert it is the link\'s id, not the page\'s', one(c, 'select last_insert_rowid()') != m)
-S.K('no §6 block uses last_insert_rowid()', not [h for h, s in docsql.cookbook_blocks(DOC) if 'last_insert_rowid' in s])
+S.K('no cookbook block uses last_insert_rowid()', not [h for h, s in docsql.cookbook_blocks() if 'last_insert_rowid' in s])
 c = fresh()
 for i in range(10): page(c, f'Seed {i}')                       # entity ids run ahead of link ids
 P = {}
-def sync(st):                                                   # the §6.13 link sync, inside §6.1's transaction
+def sync(st):                                                   # the cookbook/save-a-body link sync, inside cookbook/capture's transaction
     if st.upper().startswith('UPDATE PAGES SET BODY'):
         link(c, P['page_id'], page(c, 'Lifelog'), 'wikilink')
-try: run_block(c, block('6.1'), P, sync); r = 'OK'
+try: run_block(c, block('capture'), P, sync); r = 'OK'
 except sqlite3.Error as ex: r = 'ERR ' + str(ex)
-S.K('§6.1 run literally, with a link sync inside: the mood reading points at the day page the RETURNING gave',
+S.K('cookbook/capture run literally, with a link sync inside: the mood reading points at the day page the RETURNING gave',
     r == 'OK' and c.execute("select captured_with_id from measurements").fetchall() == [(P.get('page_id'),)] and one(c, "select title from pages where id=?", (P.get('page_id'),)) == '2026-09-29', (r, P))
 
 # ---- source on every row
@@ -88,8 +88,8 @@ for typ, sql in (('page', "UPDATE pages SET body='y' WHERE id=?"),
                  ('person', "UPDATE people SET birth_day='1990-01-01' WHERE id=?"), ('place', "UPDATE pages SET body='a café' WHERE id=?")):
     c.execute(sql, (ids[typ],))
     S.K(f'updating a {typ} bumps entities.updated_at', one(c, 'select updated_at > created_at from entities where id=?', (ids[typ],)) == 1)
-# ---- entities.import_key: a re-run, a replay or a retry inserts nothing (§6.15)
-c = fresh(); B = statements(block('6.15'))
+# ---- entities.import_key: a re-run, a replay or a retry inserts nothing (cookbook/import-a-row-once)
+c = fresh(); B = statements(block('import-a-row-once'))
 ins_ent, ins_page, upd = [s for s in B if code(s).split()[0].rstrip(';').upper() not in ('BEGIN', 'COMMIT')]
 K = 'notes/sourdough.md'
 def run_import(key):
@@ -98,7 +98,7 @@ def run_import(key):
     return got
 body = lambda: one(c, 'select body from pages where id=?', (first[0][0],))
 first = run_import(K); again = run_import(K)
-S.K('§6.15: the first run returns an id, the re-run returns none and adds no page',
+S.K('cookbook/import-a-row-once: the first run returns an id, the re-run returns none and adds no page',
     len(first) == 1 and again == [] and one(c, "select count(*) from pages where title='Sourdough'") == 1 and integrity_ok(c))
 S.K('the same import_key under another source is another row (per-source namespace)',
     tryx(c, f"INSERT INTO entities(entity_type,created_at,updated_at,source,import_key) VALUES ('page',{NOW},{NOW},'import:health',?)", (K,)) == 'OK')
@@ -109,10 +109,10 @@ S.K('a plain INSERT of a known key is refused (the index is unique)',
 S.K('entities.import_key cannot change', 'never changed' in tryx(c, "UPDATE entities SET import_key='notes/other.md' WHERE id=?", (first[0][0],)))
 S.K('...nor be cleared', 'never changed' in tryx(c, "UPDATE entities SET import_key=NULL WHERE id=?", (first[0][0],)))
 c.execute(upd, {'import_key': K})
-S.K('§6.15: a changed note is updated in its own page', body() == 'Feed the starter the night before; 75% water.')
+S.K('cookbook/import-a-row-once: a changed note is updated in its own page', body() == 'Feed the starter the night before; 75% water.')
 c.execute("UPDATE pages SET body='old' WHERE id=?", (first[0][0],)); c.execute(f'UPDATE entities SET deleted_at={NOW} WHERE id=?', (first[0][0],))
 c.execute(upd, {'import_key': K}); again = run_import(K)
-S.K('§6.15: a tombstoned import is neither updated nor inserted again',
+S.K('cookbook/import-a-row-once: a tombstoned import is neither updated nor inserted again',
     body() == 'old' and again == [] and one(c, "select count(*) from pages where title='Sourdough'") == 1)
 
 c = fresh(); ids = {t: thing(c, t) for t in ('page', 'person', 'place')}

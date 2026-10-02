@@ -1,4 +1,4 @@
-"""Reference implementation of the wikilink/tag save contract (SCHEMA.md §2.4, §6.13, D19) — a test instrument, not the application.
+"""Reference implementation of the wikilink/tag save contract (contract/titles-and-wikilinks, cookbook/save-a-body, D19) — a test instrument, not the application.
 Parameters `mutate=` switch single rules off so the probes can be shown to fail (mutation checks)."""
 import itertools, re, json, sqlite3, unicodedata
 from markdown_it import MarkdownIt
@@ -40,12 +40,12 @@ def _ascii_upper(s):
     return ''.join(c.upper() if c.isascii() else c for c in s)
 
 def title_ok(t, mutate=()):
-    """The §3 filename CHECKs, as a predicate."""
+    """The schema filename CHECKs, as a predicate."""
     if not t or t != t.strip(' '): return False
     if len(t.encode('utf-8')) > 240: return False
     if any(ch in '/\\:*?"<>|' for ch in t): return False
     if any(ord(ch) <= 31 or 127 <= ord(ch) <= 159 for ch in t): return False   # C0 (incl. NUL), DEL, C1
-    if any(ord(ch) in INVISIBLE for ch in t): return False                 # invisible and bidi characters (§2.5)
+    if any(ord(ch) in INVISIBLE for ch in t): return False                 # invisible and bidi characters (contract/integrity-checks)
     if 'allow_unassigned' not in mutate and any(unicodedata.category(ch) == 'Cn' for ch in t): return False   # app only: a later Unicode may give it a fold
     if t[0] == '.' or t[-1] == '.': return False
     base = t if 'device_bare_only' in mutate else t.split('.', 1)[0]      # CON.backup is the device too [R58]
@@ -102,7 +102,7 @@ def sync_wikilinks(c, page_id, body, mutate=()):
             if row is None:
                 tid = c.execute(f"INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES('page',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
                 c.execute("INSERT INTO pages(id,title,title_key,day) VALUES(?, ?, ?, CASE WHEN date(?) IS ? THEN ? END)",
-                          (tid, title, key, title, title, title))   # a day page's day is its title (§6.13 step 2b)
+                          (tid, title, key, title, title, title))   # a day page's day is its title (cookbook/save-a-body step 2b)
             else:
                 tid = row[0]
                 if row[1] is not None and 'no_revive' not in mutate: c.execute('UPDATE entities SET deleted_at=NULL WHERE id=?', (tid,))
@@ -136,7 +136,7 @@ def save_page(c, body, title=None, day='2026-09-30', mutate=()):
     return pid, r
 
 def capture(c, text, day='2026-09-30', mutate=()):
-    """§6.1: append an entry to the day page of `day`, creating (or reviving) it, and sync its links: (page id, sync result)."""
+    """cookbook/capture: append an entry to the day page of `day`, creating (or reviving) it, and sync its links: (page id, sync result)."""
     c.execute('BEGIN IMMEDIATE')
     try:
         row = c.execute('SELECT p.id, e.deleted_at FROM pages p JOIN entities e ON e.id=p.id WHERE p.title_key=?', (day,)).fetchone()

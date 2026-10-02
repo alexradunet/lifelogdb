@@ -1,4 +1,4 @@
-"""Optional (run_all.py --datasette): Datasette opens the file read-only and its SQL console accepts only SELECT (§2.6, D14)."""
+"""Optional (run_all.py --datasette): Datasette opens the file read-only and its SQL console accepts only SELECT (contract/connections, D14)."""
 import asyncio, os, sqlite3, sys, tempfile
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'lib'))
 from kit import Suite, DDL

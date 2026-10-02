@@ -1,0 +1,20 @@
+# D17 — The contract as data: `lifelog_meta`, comments inside the statements, in-DB guards.
+
+**Status:** accepted
+
+- **Decision.** The rules of a table are comments inside its `CREATE` statement: a comment *outside* a
+  statement is not stored in the file (executed), and `.schema` prints the statements. The few rules
+  that span tables are rows of `lifelog_meta(key, value)`, queryable with `SELECT *`. Alongside, the
+  contract is enforced where CHECK constraints reach: date and instant round-trips ([time](../contract/time.md)), GLOBs only
+  as character-class guards, and the composite FKs that make a row's type and its table agree. A CHECK
+  uses only functions every SQLite the contract allows has (`lifelog_meta.sqlite`) — a SQLite that
+  lacks one cannot write the table or integrity-check it — so no `octet_length()` where
+  `length(CAST(x AS BLOB))` does the same.
+- **The 2075 test** ([imports](../contract/imports.md)) is executed: every question must be answered from `.schema` and
+  `lifelog_meta`, and every `lifelog_meta` key must answer some question. A new rule that spans tables
+  therefore needs a key and a row in that table; a table's own rule needs a comment in its statement.
+- **Threat model.** The database is deliberately not encrypted ([imports](../contract/imports.md)): health data never enters git; the
+  disk is encrypted at rest; Datasette listens on localhost only and opens the file read-only; no
+  credentials or full account numbers, ever.
+- **Alternatives.** Comments only in a separate document (lives outside the artifact, rots); all
+  rules as `lifelog_meta` rows (a second copy of what the statements already say).

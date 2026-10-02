@@ -1,4 +1,4 @@
-"""Time (SCHEMA.md §2.1, D10): instants, local days and their round-trip CHECKs, why `IS` and not `=`, the zone, and
+"""Time (contract/time, D10): instants, local days and their round-trip CHECKs, why `IS` and not `=`, the zone, and
 created_at written by the app."""
 import os, re, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'lib'))
@@ -36,7 +36,7 @@ t.execute("CREATE TABLE eq (d TEXT CHECK (date(d) = d)) STRICT"); t.execute("CRE
 S.K("date('2026-9-3') is NULL", t.execute("select date('2026-9-3') is null").fetchone()[0] == 1)
 S.K('a CHECK with = accepts 2026-9-3 (NULL passes a CHECK)', tryx(t, "INSERT INTO eq VALUES ('2026-9-3')") == 'OK')
 S.K('the same CHECK with IS rejects it', tryx(t, "INSERT INTO isx VALUES ('2026-9-3')").startswith('ERR'))
-S.K('every day and instant CHECK in §3 uses IS, never =', not re.search(r"(?:date|strftime)\([^)]*\)\s*=\s*\w", code(DDL)), re.findall(r"(?:date|strftime)\([^)]*\)\s*=\s*\w+", code(DDL)))
+S.K('every day and instant CHECK in schema uses IS, never =', not re.search(r"(?:date|strftime)\([^)]*\)\s*=\s*\w", code(DDL)), re.findall(r"(?:date|strftime)\([^)]*\)\s*=\s*\w+", code(DDL)))
 
 # ---- zone
 for tz in ['Europe/Berlin', 'UTC', 'America/Argentina/Buenos_Aires', 'Etc/GMT+5', 'America/Port-au-Prince', None, 'x' * 64]:

@@ -1,4 +1,4 @@
-# never commit the database: finance data cannot be scrubbed from git history (SCHEMA.md §2.6)
+# never commit the database: finance data cannot be scrubbed from git history (docs/contract/connections.md)
 life.db
 life.db-wal
 life.db-shm

@@ -1,4 +1,4 @@
-"""Render every mermaid block of SCHEMA.md with mermaid-cli, so a syntax error cannot ship.   python3 render_diagrams.py
+"""Render every mermaid block of the docs with mermaid-cli, so a syntax error cannot ship.   python3 render_diagrams.py
 Optional (run_all.py --mermaid): needs node with `mmdc` on PATH (or MMDC=/path/to/mmdc) and a Chromium/Chrome
 (PUPPETEER_EXECUTABLE_PATH, or `chromium` / `google-chrome` on PATH). Install once:  npm i -g @mermaid-js/mermaid-cli
 Nothing is written into the repository: the SVGs go to a temporary directory."""

@@ -1,17 +1,18 @@
 """Shared helpers for the suites: the DDL and the document under test, fresh databases, the insert conventions of
-SCHEMA.md (entity first, ids by RETURNING, a named entity is one id with a page), and the expectation counter.
+the docs (entity first, ids by RETURNING, a named entity is one id with a page), and the expectation counter.
 
-A suite reads the DDL from argv[1] or $DDL and the document from $DOC (default: ../../SCHEMA.md), so the mutant
-runner can point it at a broken copy. It ends with `<name>: X/Y met expectations` and exits 1 unless X == Y."""
+A suite reads the DDL from argv[1] or $DDL and the docs from $DOCS (default: ../../docs), so the mutant runner can
+point it at a broken copy. It ends with `<name>: X/Y met expectations` and exits 1 unless X == Y."""
 import os, re, sqlite3, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE); sys.path.insert(0, os.path.join(HERE, '..', 'wikilinks'))
 import docsql
 
 DDL_PATH = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1].endswith('.sql') else os.environ.get('DDL')
-DOC = docsql.doc_text()
-DDL = open(DDL_PATH, encoding='utf-8').read() if DDL_PATH else docsql.ddl(DOC)
-LIVE = DOC[:DOC.index('## 8. References')] if '## 8. References' in DOC else DOC
+DOC = docsql.doc_text()                         # every current-truth page
+DDL = open(DDL_PATH, encoding='utf-8').read() if DDL_PATH else docsql.ddl()
+LIVE = docsql.doc_text(skip=('research/',))     # the same, without the references
+doc_page = docsql.page
 NOW = "strftime('%Y-%m-%dT%H:%M:%fZ','now')"
 NAMED = ('person', 'place')
 
@@ -42,7 +43,7 @@ class Suite:
 
 
 def fresh(path=':memory:', hardened=False, fk=True, rt=True, ddl=None):
-    """A connection in autocommit mode with the schema applied and the §2.6 pragmas set."""
+    """A connection in autocommit mode with the schema applied and the contract/connections pragmas set."""
     c = sqlite3.connect(path, isolation_level=None)
     if hardened:
         c.setconfig(sqlite3.SQLITE_DBCONFIG_DEFENSIVE, True); c.execute('PRAGMA trusted_schema = OFF')
@@ -159,24 +160,16 @@ def run_block(c, sql, P, after=None, only=None):
     return out
 
 
-def blocks(text=None):
-    """{'6.1': sql, ...}: the first sql block under each §6 heading."""
+def blocks():
+    """{'capture': sql, ...}: the first sql block of each cookbook recipe, by its key."""
     out = {}
-    for h, s in docsql.cookbook_blocks(text or DOC):
-        out.setdefault(h.split()[0], s)
+    for k, s in docsql.cookbook_blocks():
+        out.setdefault(k, s)
     return out
 
 
-def block(num):
-    return blocks().get(num, '')
-
-
-def section(start, end):
-    """The text between two headings, e.g. section('### 2.5 ', '### 2.6 ')."""
-    try:
-        return DOC[DOC.index(start):DOC.index(end)]
-    except ValueError:
-        return ''
+def block(key):
+    return blocks().get(key, '')
 
 
 def sql_blocks(text):

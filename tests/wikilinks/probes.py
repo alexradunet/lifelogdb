@@ -1,4 +1,4 @@
-"""The save contract (SCHEMA.md §2.4, §6.13, D19) through the reference implementation, against the real DDL. Expected outcome in each label.
+"""The save contract (contract/titles-and-wikilinks, cookbook/save-a-body, D19) through the reference implementation, against the real DDL. Expected outcome in each label.
 mutate=('rule',...) disables reference-implementation rules; with --mutant the probes must fail."""
 import sqlite3, sys, json, random, threading, time, os, tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -53,7 +53,7 @@ n1 = c.execute('select count(*), max(id) from links').fetchone(); edit_body(c, p
 check('P3c re-saving the same body changes nothing (idempotent, no new rows)', n1 == n2, f'{n1} {n2}')
 edit_body(c, pid, 'no links at all', mutate=MUT)
 check('P3d body without links: all wikilinks removed', links_of(c, pid) == [])
-check('P3e dropped targets survive as pages (and may become ghosts, §6.12)', c.execute("select count(*) from pages where id<>?", (pid,)).fetchone()[0] == 4)
+check('P3e dropped targets survive as pages (and may become ghosts, cookbook/ghost-pages)', c.execute("select count(*) from pages where id<>?", (pid,)).fetchone()[0] == 4)
 
 # P4 self link, stub
 c = fresh()

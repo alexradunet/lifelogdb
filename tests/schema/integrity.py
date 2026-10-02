@@ -1,4 +1,4 @@
-"""The four integrity checks of SCHEMA.md §2.5, taken literally from the document and run on the LIVE file: a clean file,
+"""The four integrity checks of contract/integrity-checks, taken literally from the page and run on the LIVE file: a clean file,
 a zeroed page, a truncated file, a flipped index entry, a flipped value (undetected, as the text says), a reading written
 with foreign_keys=OFF, an entities row with no domain row, a person with a page but no people row, a drifted FTS index."""
 import os, re, shutil, subprocess, sys, tempfile
@@ -7,10 +7,10 @@ from kit import *
 import sqlite3
 S = Suite('integrity')
 
-blk = sql_blocks(section('### 2.5 ', '### 2.6 '))
+blk = sql_blocks(doc_page('contract/integrity-checks.md'))
 sts = [re.sub(r'\s*--.*$', '', l).strip() for l in (blk[0].splitlines() if blk else [])]
 sts = [x for x in sts if x]
-S.K('§2.5 has exactly the four checks: integrity_check, foreign_key_check, the orphan query, the FTS5 integrity-check',
+S.K('contract/integrity-checks has exactly the four checks: integrity_check, foreign_key_check, the orphan query, the FTS5 integrity-check',
     len(sts) == 4 and sts[0].lower().startswith('pragma integrity_check') and sts[1].lower().startswith('pragma foreign_key_check')
     and sts[2].upper().startswith('SELECT ID FROM ENTITIES') and "'integrity-check', 1" in sts[3], sts)
 if len(sts) != 4: S.done()
@@ -61,10 +61,10 @@ shutil.rmtree(D, ignore_errors=True)
 
 # ---- the fourth check: the FTS index against pages (it writes, so a writer connection)
 c = fresh(); day_page(c, '2026-09-30', 'alpha beta'); page(c, 'Gamma')
-S.K('on a clean file every statement of §2.5 runs without error', all(tryx(c, s) == 'OK' for s in sts))
+S.K('on a clean file every statement of contract/integrity-checks runs without error', all(tryx(c, s) == 'OK' for s in sts))
 c.execute("INSERT INTO pages_fts(rowid, title, body) VALUES (999, 'ghost', 'drifted')")
 S.K('a drifted FTS index: PRAGMA integrity_check still says ok', c.execute('PRAGMA integrity_check').fetchall() == [('ok',)])
-S.K('...and the FTS5 integrity-check of §2.5 fails', tryx(c, sts[3]).startswith('ERR'))
+S.K('...and the FTS5 integrity-check of contract/integrity-checks fails', tryx(c, sts[3]).startswith('ERR'))
 c.execute("INSERT INTO pages_fts(pages_fts) VALUES('rebuild')")
 S.K("...until 'rebuild' repairs it", tryx(c, sts[3]) == 'OK')
 S.done()

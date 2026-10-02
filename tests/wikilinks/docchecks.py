@@ -1,17 +1,18 @@
-"""The save contract as the DOCUMENT prints it (SCHEMA.md §2.4 and §6.13), not as the reference implementation does.
-A  the vector table of §2.4 reproduces with the reference extraction, row for row;
-B  the SQL of §6.13, run literally statement by statement, gives the vector results, leaves no orphan, carries ids by
+"""The save contract as the DOCUMENT prints it (contract/titles-and-wikilinks and cookbook/save-a-body), not as the reference implementation does.
+A  the vector table of contract/titles-and-wikilinks reproduces with the reference extraction, row for row;
+B  the SQL of cookbook/save-a-body, run literally statement by statement, gives the vector results, leaves no orphan, carries ids by
    RETURNING, and equals the reference implementation after 400 random edits;
-C  §6.5 lists a day page's wikilink and not a stub's redirect row."""
+C  cookbook/backlinks lists a day page's wikilink and not a stub's redirect row."""
 import json, os, random, re, sqlite3, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'lib'))
-from kit import Suite, DOC, NOW, fresh, block, statements, code, section
+from kit import Suite, DOC, NOW, fresh, block, statements, code
+import docsql
 import wikisave as W
 from vectors import V
 S = Suite('document save contract')
 
-# ---- A  the table of §2.4
-sec = section('### 2.4 ', '### 2.5 ')
+# ---- A  the table of contract/titles-and-wikilinks
+sec = docsql.page('contract/titles-and-wikilinks.md')
 m = re.search(r'\| body \| links to.*?\n\s*\|---\|---\|\n((?:\s*\|.*\n)+)', sec)
 rows = []
 for line in (m.group(1).splitlines() if m else []):
@@ -22,19 +23,19 @@ for line in (m.group(1).splitlines() if m else []):
     body = body.replace('\\|', '|').replace('\\n', '\n').replace('\\u0301', '́').replace('\\u0308', '̈')
     rows.append((body, [] if mm.group(2) == '—' else re.findall(r'`([^`]*)`', mm.group(2))))
 bad = [(b, e, list(W.targets(b)[0].values())) for b, e in rows if list(W.targets(b)[0].values()) != e]
-S.K('A the §2.4 table has at least 25 vectors and every one reproduces', len(rows) >= 25 and not bad, (len(rows), bad[:3]))
+S.K('A the contract/titles-and-wikilinks table has at least 25 vectors and every one reproduces', len(rows) >= 25 and not bad, (len(rows), bad[:3]))
 S.K('A the 240/241-byte and 80/81-CJK boundary under the table holds', W.targets('[[' + 'a' * 240 + ']]')[0] and not W.targets('[[' + 'a' * 241 + ']]')[0]
     and W.targets('[[' + '日' * 80 + ']]')[0] and not W.targets('[[' + '日' * 81 + ']]')[0])
 
-# ---- B  §6.13 run literally
-sts = statements(block('6.13'))
+# ---- B  cookbook/save-a-body run literally
+sts = statements(block('save-a-body'))
 def by(prefix): return [s for s in sts if code(s).upper().startswith(prefix)]
 St = {k: by(v) for k, v in dict(begin='BEGIN IMMEDIATE', sp='SAVEPOINT', sel='SELECT', rev='UPDATE ENTITIES', ent='INSERT INTO ENTITIES',
                                   pg='INSERT INTO PAGES', ln='INSERT INTO LINKS', rel='RELEASE', dele='DELETE FROM LINKS', commit='COMMIT').items()}
-S.K('B §6.13 has exactly one statement of each step', all(len(v) == 1 for v in St.values()), {k: len(v) for k, v in St.items()})
-S.K('B §6.13 opens with BEGIN IMMEDIATE and resolves inside the transaction', sts and code(sts[0]).upper().startswith('BEGIN IMMEDIATE')
+S.K('B cookbook/save-a-body has exactly one statement of each step', all(len(v) == 1 for v in St.values()), {k: len(v) for k, v in St.items()})
+S.K('B cookbook/save-a-body opens with BEGIN IMMEDIATE and resolves inside the transaction', sts and code(sts[0]).upper().startswith('BEGIN IMMEDIATE')
     and sts.index(St['sel'][0]) < sts.index(St['ent'][0]) < sts.index(St['commit'][0]) if all(St.values()) else False)
-S.K('B no §6.13 statement uses last_insert_rowid()', 'last_insert_rowid' not in block('6.13'))
+S.K('B no cookbook/save-a-body statement uses last_insert_rowid()', 'last_insert_rowid' not in block('save-a-body'))
 
 def doc_save(c, page_id, body, own_key):
     ok, _ = W.targets(body, own_key); ids = []
@@ -88,7 +89,7 @@ if all(len(v) == 1 for v in St.values()):
     S.K('B ...with the same set of pages', sorted(r[0] for r in ca.execute('select title_key from pages where title_key is not null'))
         == sorted(r[0] for r in cb.execute('select title_key from pages where title_key is not null')))
 
-# ---- C  §6.5 drops redirect rows
+# ---- C  cookbook/backlinks drops redirect rows
 c = fresh(); c.execute('BEGIN IMMEDIATE')
 def mk(title, body='', day=None):
     i = c.execute(f"INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES('page',{NOW},{NOW},'ui') RETURNING id").fetchone()[0]
@@ -97,6 +98,6 @@ new, old, mm = mk('Diet plan'), mk('Diet', '#REDIRECT [[Diet plan]]'), mk('2026-
 for f, t, k in ((old, new, 'redirect'), (mm, new, 'wikilink')):
     c.execute(f"INSERT INTO links(from_id,to_id,kind,created_at,source) VALUES(?,?,?,{NOW},'ui')", (f, t, k))
 c.execute('COMMIT')
-rows = c.execute(block('6.5'), {'page_id': new}).fetchall()
-S.K('C §6.5 lists the day page\'s wikilink and not the stub\'s redirect row', [r[0] for r in rows] == ['wikilink'], rows)
+rows = c.execute(block('backlinks'), {'page_id': new}).fetchall()
+S.K('C cookbook/backlinks lists the day page\'s wikilink and not the stub\'s redirect row', [r[0] for r in rows] == ['wikilink'], rows)
 S.done()

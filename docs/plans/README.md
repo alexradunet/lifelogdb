@@ -1,5 +1,10 @@
 # Implementation Plans
 
+Plans are dated records ([how a change happens](../process.md)): each one cites the docs as they were at the commit it
+names. Plans 001–013 were written when the whole design was one file, `SCHEMA.md`; its sections now live in
+[docs/](../README.md) (§2 → `contract/`, §3 → `schema/schema.sql`, §5 → `decisions/`, §6 → `cookbook/`, §7 →
+`architecture/non-goals.md`, §8 → `research/`). New plans go in this folder, numbered on from the last.
+
 Two runs of the improve skill, both on 2026-10-02.
 
 - **Plans 001–007** — against commit `6058f24`, a read-only audit of `SCHEMA.md`; every gap verified by

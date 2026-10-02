@@ -1,6 +1,8 @@
-"""The document itself (SCHEMA.md): the 2075 test of §2.7 against a fresh database; the rules live in the file (each
-table's inside its CREATE statement, the cross-table ones in a few lifelog_meta rows); current truth only (no review rounds,
-records, addenda, superseded notes, finding ids, versions, changelog); out-of-scope features stay out; the §3 totals match."""
+"""The docs themselves (docs/): the 2075 test of the threat model against a fresh database; the rules live in the file (each
+table's inside its CREATE statement, the cross-table ones in a few lifelog_meta rows); the tree holds together (every decision
+D1..Dn in its own record, every relative link resolves, every page is reachable from docs/README.md); current truth only
+outside the records (no review rounds, addenda, superseded notes, finding ids, versions, changelog, section numbers);
+out-of-scope features stay out; the totals in schema/README.md match."""
 import os, re, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'lib'))
 from kit import *
@@ -10,7 +12,7 @@ S = Suite('document')
 # ---- the 2075 test
 c = fresh(); meta = dict(c.execute('select key, value from lifelog_meta'))
 schema = {n: s for n, s in c.execute('select name, sql from sqlite_schema where sql is not null')}
-rows = re.findall(r'^\|\s*(\d+)\s*\|([^|]+)\|([^|]+)\|([^|]+)\|\s*$', section('### 2.7 ', '## 3. '), re.M)
+rows = re.findall(r'^\|\s*(\d+)\s*\|([^|]+)\|([^|]+)\|([^|]+)\|\s*$', doc_page('contract/threat-model.md'), re.M)
 S.K('the 2075 table has at least 20 questions, numbered 1..n without a gap', len(rows) >= 20 and [int(r[0]) for r in rows] == list(range(1, len(rows) + 1)), [r[0] for r in rows])
 used = set()
 for num, q, where, must in rows:
@@ -21,7 +23,7 @@ for num, q, where, must in rows:
     S.K(f'Q{num}: the answer says {phrases}', phrases and all(p in text for p in phrases), [p for p in phrases if p not in text])
     used |= set(places)
 S.K('every lifelog_meta key answers some question (no rule without a question)', set(meta) <= used, sorted(set(meta) - used))
-S.K('§6.15 sends an imported body through the save contract (D19)', 'run the link sync of §6.13' in section('### 6.15 ', '### 6.16 '))
+S.K('import-a-row-once sends an imported body through the save contract (D19)', 'run the link sync of [save a body](save-a-body.md)' in doc_page('cookbook/import-a-row-once.md'))
 
 # ---- the rules live in the file, once
 S.K('lifelog_meta holds only the few cross-table rules (at most 8 keys)', len(meta) <= 8, sorted(meta))
@@ -31,37 +33,97 @@ for t in ('entities', 'pages', 'people', 'metrics', 'measurements', 'habit_perio
     S.K(f'{t}: its CREATE statement carries its rules as comments', re.search(r'\n\s*--', schema.get(t, '')) is not None)
 n = {k: one(c, f"select count(*) from sqlite_schema where type='{k}' and name not like 'sqlite_%' and not (type='table' and name like 'pages_fts_%')") for k in ('table', 'view', 'trigger')}
 tot = re.search(r'\*\*(\d+) tables \+ 1 FTS5 virtual table \+ (\d+) views\*\*.*?\*\*\+ (\d+) triggers\.\*\*', DOC, re.S)
-S.K('the totals under §3 match the DDL (tables, views, triggers)', tot and (int(tot.group(1)) + 1, int(tot.group(2)), int(tot.group(3))) == (n['table'], n['view'], n['trigger']), (tot and tot.groups(), n))
+S.K('the totals in schema/README.md match the DDL (tables, views, triggers)', tot and (int(tot.group(1)) + 1, int(tot.group(2)), int(tot.group(3))) == (n['table'], n['view'], n['trigger']), (tot and tot.groups(), n))
 
-# ---- current truth only
-FORBIDDEN = [('a pointer into a removed section (§9)', r'§9\b'), ('an addendum', r'[Aa]ddend'), ('a numbered round', r'\b[Rr]ound[ -]\d'),
+# ---- the tree holds together
+REPO = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
+TREE = {r: doc_page(r) for r in docsql.pages()}
+for top in docsql.RECORDS[:2]:   # issues, rfcs: their indexes and templates are linked pages too
+    for f in ('README.md', 'template.md'): TREE[f'{top}/{f}'] = doc_page(f'{top}/{f}')
+
+def strip_code(text):
+    text = re.sub(r'^```.*?^```', '', text, flags=re.S | re.M)
+    return re.sub(r'(`+).+?\1', '', text)
+
+def slug(h):
+    """GitHub's heading anchor: lowercase, punctuation dropped, spaces to hyphens."""
+    h = re.sub(r'\[([^\]]*)\]\([^)]*\)', r'\1', h).strip().lower()
+    return re.sub(r' ', '-', re.sub(r'[^\w\- ]', '', h))
+
+def anchors(text):
+    out, seen = set(re.findall(r'<a id="([^"]+)"></a>', text)), {}
+    for h in re.findall(r'^#{1,6} (.+)$', strip_code(text), re.M):
+        s = slug(h); n = seen.get(s, 0); seen[s] = n + 1
+        out.add(s if n == 0 else f'{s}-{n}')
+    return out
+
+def links(text):
+    return [u for u in re.findall(r'\]\(([^)\s]+)\)', strip_code(text)) if not re.match(r'[a-z]+:', u)]
+
+def resolve(base, url):
+    """(target, anchor) of a link on the page base; both relative to docs/ ('..' leaves the tree)."""
+    path, _, anchor = url.partition('#')
+    if not path: return base, anchor
+    return os.path.normpath(os.path.join(os.path.dirname(base), path)).replace(os.sep, '/'), anchor
+
+def problems(tree, root=None):
+    root = root or docsql.DOCS; out = []
+    adr = sorted(r for r in tree if re.match(r'decisions/D\d\d-[a-z0-9-]+\.md$', r))
+    nums = [int(r[11:13]) for r in adr]
+    if nums != list(range(1, len(nums) + 1)) or len(nums) < 24: out.append(f'decisions are not D01..Dn without a gap: {nums}')
+    for r in adr:
+        n = int(r[11:13]); h1 = tree[r].split('\n', 1)[0]
+        if not h1.startswith(f'# D{n} — '): out.append(f'{r}: the title is not "# D{n} — ..."')
+        if re.search(r'\*\(', h1): out.append(f'{r}: the title carries a parenthetical status')
+        if not re.search(r'^\*\*Status:\*\* (accepted|deferred)$', tree[r], re.M): out.append(f'{r}: no **Status:** accepted|deferred line')
+        if f']({r[10:]})' not in tree.get('decisions/README.md', ''): out.append(f'{r} is not in the decision index')
+    if not re.search(r'^\*\*Status:\*\* [^\n]{10,}$', tree.get('README.md', ''), re.M): out.append('docs/README.md has no one-line status')
+    for r, text in tree.items():
+        for name, pat in FORBIDDEN if not r.startswith(docsql.RECORDS) else ():
+            m = re.search(pat, text)
+            if m: out.append(f'{r}: {name}: {m.group(0)!r}')
+        for u in links(text):
+            target, anchor = resolve(r, u)
+            outside = os.path.join(REPO, 'docs', target) if target.startswith('..') else os.path.join(root, *target.split('/'))
+            if target not in tree and not os.path.exists(outside): out.append(f'{r}: broken link {u}')
+            elif anchor and target in tree and anchor not in anchors(tree[target]): out.append(f'{r}: no anchor #{anchor} in {target}')
+    reach, todo = set(), ['README.md']
+    while todo:
+        r = todo.pop()
+        if r in reach or r not in tree: continue
+        reach.add(r); todo += [resolve(r, u)[0] for u in links(tree[r])]
+    orphans = sorted(set(tree) - reach)
+    if orphans: out.append(f'pages not reachable from docs/README.md: {orphans}')
+    return out
+
+FORBIDDEN = [('a section number: pages link each other instead', r'§\s?\d'), ('an addendum', r'[Aa]ddend'), ('a numbered round', r'\b[Rr]ound[ -]\d'),
              ('a finding id (R4-12, R8-01)', r'\bR\d+-\d+\b'), ('a validation record', r'[Vv]alidation record|record #\d'), ('a superseded statement', r'[Ss]uperseded'),
              ('a version narrative (v1.14)', r'\bv1\.\d+'), ('a changelog', r'Document history|[Cc]hangelog'), ('a review narrative', r'cross-review|independent review|[Rr]eview round|[Rr]eview resolutions'),
              ('a withdrawal notice', r'[Ww]ithdrawn'), ('a "first draft" story', r'\b[Ff]irst draft\b')]
-def problems(text):
-    out = [f'{name}: {m.group(0)!r}' for name, pat in FORBIDDEN for m in [re.search(pat, text)] if m]
-    heads = re.findall(r'^## (\d+)\. (.+)$', text, re.M)
-    if [int(x) for x, _ in heads] != list(range(1, 9)) or not heads or heads[-1][1] != 'References': out.append(f'sections are not 1..8 ending in References: {heads}')
-    if len(re.findall(r'^\d+\. \[(.+?)\]\(#(.+?)\)$', text, re.M)) != 8: out.append('the table of contents does not have 8 entries')
-    if [int(x) for x in re.findall(r'^### D(\d+) — ', text, re.M)] != list(range(1, 25)): out.append('decisions are not D1..D24 in order')
-    if re.search(r'^### D\d+ — .*\*\(', text, re.M): out.append('a decision title carries a parenthetical status')
-    if not re.search(r'^\*\*Status:\*\* [^\n]{10,}$', text, re.M): out.append('there is no one-line status')
-    if not re.search(r'\n## Appendix A[^\n]*\n(?:(?!\n## ).)*\Z', text, re.S): out.append('the document does not end with the prior-art appendix')
-    return out
-p = problems(DOC)
-S.K('the document has none of the marks of history', not p, p)
-for name, text in [('an addendum back in D3', DOC.replace('- **Sources.** [R4][R26][R27][R75].', '- **Sources.** [R4][R26][R27][R75].\n\n- **Addendum (round 7).** x', 1)),
-                   ('a finding id', DOC.replace('- **Sources.** [R58][R59].', '- **Sources.** [R58][R59]. (R4-11 e)', 1)),
-                   ('a review section', DOC.replace('## 8. References', '## 8. Review resolutions\n\n## 9. References', 1)),
-                   ('a version in the status line', DOC.replace('**Status:** ', '**Status:** v1.14 — ', 1)),
-                   ('a superseded note', DOC.replace('### D4 — Text ownership: the database is canonical.', '### D4 — Text ownership: the database is canonical. *(Superseded by D5.)*', 1)),
-                   ('a decision deleted', DOC.replace('### D7 — ', '### DX — ', 1))]:
-    q = problems(text); S.K(f'a broken copy is noticed: {name}', q and q != p, q[:1])
+p = problems(TREE)
+S.K('the tree holds together and has none of the marks of history', not p, p[:5])
+D3, D4, D7 = 'decisions/D03-integer-ids.md', 'decisions/D04-database-is-canonical.md', 'decisions/D07-measurements.md'
+def broken(r, old, new): return {**TREE, r: TREE[r].replace(old, new, 1)}
+for name, tree in [('an addendum back in D3', broken(D3, '- **Sources.**', '- **Addendum (round 7).** x\n- **Sources.**')),
+                   ('a finding id', broken(D3, '- **Sources.**', '- (R4-11 e)\n- **Sources.**')),
+                   ('a review section', broken('research/references.md', '## SQLite durability', '## Review resolutions\n\n## SQLite durability')),
+                   ('a version in the status line', broken('README.md', '**Status:** ', '**Status:** v1.14 — ')),
+                   ('a superseded note', broken(D4, '\n', ' *(Superseded by D5.)*\n')),
+                   ('a section number back', broken('contract/time.md', 'Never derived', 'See §2.4. Never derived')),
+                   ('a decision deleted', {k: v for k, v in TREE.items() if k != D7}),
+                   ('a decision without its status', broken(D7, '**Status:** accepted', '')),
+                   ('a broken link', broken('contract/time.md', '\n', '\nSee [nowhere](nowhere.md).\n')),
+                   ('a broken anchor', broken('contract/time.md', '\n', '\nSee [R999](../research/references.md#r999).\n')),
+                   ('an orphan page', {**TREE, 'contract/orphan.md': '# Orphan\n'})]:
+    q = problems(tree); S.K(f'a broken copy is noticed: {name}', q and q != p, q[:1])
+roots = {f: open(os.path.join(REPO, *f.split('/')), encoding='utf-8').read() for f in ('README.md', 'AGENTS.md', 'tests/README.md')}
+bad = [f'{f}: {u}' for f, text in roots.items() for u in links(text) if not os.path.exists(os.path.join(REPO, os.path.dirname(f), u.partition('#')[0]))]
+S.K('every relative link of README.md, AGENTS.md and tests/README.md resolves', not bad, bad)
 
-# ---- out of scope stays out (§7): export, snapshots, dumps
+# ---- out of scope stays out (non-goals): export, snapshots, dumps
 for tok in ('export/', 'dump/', 'backups/', 'nightly.sh', 'restore.sh', 'restic', 'rsync', 'Litestream', 'drilled restore', 'exporter'):
     S.K(f'the live text does not contain {tok!r}', tok not in LIVE)
-S.K("'off-box' only in the §7 row that puts it out of scope", LIVE.count('off-box') == 1)
+S.K("'off-box' only in the non-goals row that puts it out of scope", LIVE.count('off-box') == 1)
 S.K('the DDL names no exporter, export/, backups/, dump/ or nightly job', not re.search(r'exporter|export/|backups?/|dump/|nightly|restore\.sh', DDL, re.I))
 T = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 hits = [f for r, ds, fs in os.walk(T) if '.venv' not in r for f in fs if f.endswith(('.py', '.md')) and f != 'document.py'

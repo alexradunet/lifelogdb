@@ -1,4 +1,4 @@
-"""Writers and readers (SCHEMA.md §2.6, D3, D14): the BEGIN IMMEDIATE race with real concurrent connections, the pragmas
+"""Writers and readers (contract/connections, D3, D14): the BEGIN IMMEDIATE race with real concurrent connections, the pragmas
 and what they do, read-only readers under WAL, the minimum SQLite as data, and a hardened connection."""
 import os, re, subprocess, sys, tempfile, threading, time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'lib'))
@@ -11,7 +11,7 @@ def conn(path):
     c = sqlite3.connect(path, isolation_level=None); c.execute('PRAGMA foreign_keys=ON'); c.execute('PRAGMA recursive_triggers=ON'); c.execute('PRAGMA busy_timeout=5000'); return c
 RESOLVE = 'SELECT p.id FROM pages p WHERE p.title_key = ?'
 
-# ---- the race of §6.13
+# ---- the race of cookbook/save-a-body
 path = mkdb(); A, B = conn(path), conn(path)
 A.execute('BEGIN'); S.K('deferred: the resolve finds nothing', A.execute(RESOLVE, ('diet',)).fetchall() == [])
 B.execute('BEGIN IMMEDIATE'); page(B, 'Diet'); B.execute('COMMIT')
@@ -32,14 +32,14 @@ th = [threading.Thread(target=writer, args=('A', 0.0, 0.4)), threading.Thread(ta
 S.K('BEGIN IMMEDIATE: the first writer creates, the second waits and then finds it', res.get('A', ('',))[0] == 'created' and res.get('B', ('',))[0] == 'found', res)
 S.K('...the second really waited for the lock', res.get('B', ('', 0))[1] > 0.25, res)
 S.K('...one page', conn(path).execute("select count(*) from pages where title_key='diet'").fetchone()[0] == 1)
-sec6 = DOC[DOC.index('## 6. Query cookbook'):DOC.index('## 7. ')]
-S.K('§6 has no bare BEGIN, and its write blocks start with BEGIN IMMEDIATE', not re.findall(r'^BEGIN;?\s*$', sec6, re.M) and len(re.findall(r'^BEGIN IMMEDIATE;', sec6, re.M)) >= 5)
+sec6 = '\n'.join(s for _, s in docsql.cookbook_blocks())
+S.K('cookbook has no bare BEGIN, and its write blocks start with BEGIN IMMEDIATE', not re.findall(r'^BEGIN;?\s*$', sec6, re.M) and len(re.findall(r'^BEGIN IMMEDIATE;', sec6, re.M)) >= 5)
 
 # ---- pragmas
 S.K('SQLite\'s default synchronous is FULL (2)', sqlite3.connect(mkdb()).execute('PRAGMA synchronous').fetchone()[0] == 2)
-b26 = sql_blocks(section('### 2.6 ', '### 2.7 '))
+b26 = sql_blocks(doc_page('contract/connections.md'))
 want = {'journal_mode': 'WAL', 'synchronous': 'FULL', 'foreign_keys': 'ON', 'recursive_triggers': 'ON', 'trusted_schema': 'OFF'}
-S.K('the §2.6 block sets every pragma the contract names', b26 and all(re.search(rf'PRAGMA {k}\s*=\s*{v}', b26[0]) for k, v in want.items()), b26[:1])
+S.K('the contract/connections block sets every pragma the contract names', b26 and all(re.search(rf'PRAGMA {k}\s*=\s*{v}', b26[0]) for k, v in want.items()), b26[:1])
 head = DDL[:DDL.index('PRAGMA application_id')]
 S.K('the DDL header names SQLite >= 3.51.3, the pragmas and BEGIN IMMEDIATE', all(x in head for x in ('3.51.3', 'foreign_keys = ON', 'recursive_triggers = ON', 'synchronous = FULL', 'trusted_schema = OFF', 'BEGIN IMMEDIATE')))
 c = sqlite3.connect(':memory:', isolation_level=None); c.executescript(DDL)
@@ -62,7 +62,7 @@ S.K('the writer is not slowed by a connected reader', time.time() - t0 < 0.5)
 r = subprocess.run(['sqlite3', '-readonly', path, "INSERT INTO lifelog_meta VALUES ('z','z')"], capture_output=True, text=True, stdin=subprocess.DEVNULL)
 S.K('sqlite3 -readonly refuses writes', 'readonly' in r.stderr + r.stdout)
 
-# ---- a hardened connection: DEFENSIVE + the §2.6 pragmas
+# ---- a hardened connection: DEFENSIVE + the contract/connections pragmas
 c = sqlite3.connect(':memory:', isolation_level=None); c.setconfig(sqlite3.SQLITE_DBCONFIG_DEFENSIVE, True)
 for st in statements(b26[0] if b26 else ''): c.execute(st)
 try:

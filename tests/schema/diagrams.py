@@ -1,12 +1,12 @@
-"""The mermaid diagrams of SCHEMA.md say what the DDL says.
+"""The mermaid diagrams of the docs say what the DDL says.
 A  structure: exactly the seven diagrams, each announced by a `%% diagram: <id>` line, each of a known type;
 B  the two ER diagrams draw keys only: every table is drawn; every drawn column is a PK or FK column with its declared type
    and marks; every PK and FK column is drawn somewhere; every foreign key is a relationship and every relationship a foreign
    key, labelled by its first column, with the cardinality the constraint implies (NOT NULL `||`, nullable `|o`; unique in
    the child `o|`, else `o{`);
 C  the link map against `link_kinds`: same edges (a node naming several types stands for each), same symmetric arrows;
-D  the correction story of §2.3, executed;
-E  the save flow and §6.13 name the same steps; the other diagrams name what they rely on."""
+D  the correction story of contract/deletion-and-corrections, executed;
+E  the save flow and cookbook/save-a-body name the same steps; the other diagrams name what they rely on."""
 import os, re, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'lib'))
 from kit import *
@@ -107,10 +107,10 @@ S.K('the story has four inserts', [x[0] for x in steps] == ['1', '2', '3', '4'],
 S.K('executed, the view shows what each state of the diagram says', shown == states, (shown, states))
 
 # ---- E
-sql = block('6.13')
+sql = block('save-a-body')
 st_sql = set(re.findall(r'^-- (0|1|2a|2b|3|4)\)', sql, re.M)); st_fig = set(re.findall(r'\b(0|1|2a|2b|3|4)\. ', body('save-flow')))
-S.K('the save flow names steps 0, 1, 2a, 2b, 3, 4 exactly as §6.13 does', st_sql == st_fig == {'0', '1', '2a', '2b', '3', '4'}, (st_sql, st_fig))
-S.K('the save flow has BEGIN IMMEDIATE, SAVEPOINT, RELEASE, ROLLBACK TO and COMMIT, as §6.13', all(w in body('save-flow') for w in ('BEGIN IMMEDIATE', 'SAVEPOINT target', 'RELEASE target', 'ROLLBACK TO target', 'COMMIT')))
+S.K('the save flow names steps 0, 1, 2a, 2b, 3, 4 exactly as cookbook/save-a-body does', st_sql == st_fig == {'0', '1', '2a', '2b', '3', '4'}, (st_sql, st_fig))
+S.K('the save flow has BEGIN IMMEDIATE, SAVEPOINT, RELEASE, ROLLBACK TO and COMMIT, as cookbook/save-a-body', all(w in body('save-flow') for w in ('BEGIN IMMEDIATE', 'SAVEPOINT target', 'RELEASE target', 'ROLLBACK TO target', 'COMMIT')))
 S.K('the page diagram has the named state, promotion by type and the day page', 'Named' in body('page-life') and 'entities.entity_type' in body('page-life') and 'day page' in body('page-life'))
 S.K('the writers diagram names BEGIN IMMEDIATE, WAL, mode=ro', all(w in body('writers') for w in ('BEGIN IMMEDIATE', 'WAL', 'mode=ro')))
 S.done()

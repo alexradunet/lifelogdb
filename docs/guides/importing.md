@@ -4,7 +4,7 @@
 
 An import process for any writer of `life.db`: a model reads the source and decides what it states,
 and the writer's code checks those decisions and writes them. The contract every import keeps is
-`SCHEMA.md` §2.7; this guide adds the process around it and changes no rule. The process was first
+[imports](../contract/imports.md); this guide adds the process around it and changes no rule. The process was first
 used in the 2026-10 trial import of a notes vault.
 
 ## Three parties
@@ -30,7 +30,7 @@ database. So an import is:
   written by the writer from what was written;
 - **replayable** — facts hold no database ids, so the real run applies them with no model;
 - **auditable and correctable** — every row traces to a quote; an edit of the facts file and a second
-  *apply* adds what was missing; a reading whose value was wrong is corrected by the owner (§6.10), and
+  *apply* adds what was missing; a reading whose value was wrong is corrected by the owner ([correct a measurement](../cookbook/correct-a-measurement.md)), and
   that correction must reach the real run (see the last section).
 
 ## The workspace
@@ -50,7 +50,7 @@ online service.
 | `trial.db` | the trial database | the writer |
 
 **rules.md.** The first line is the gate; `source:` gives the `entities.source` of every row
-(`import:<name>`, one per source, §2.2). The writer reads `## Aliases` (a name the notes write that
+(`import:<name>`, one per source, [identity and provenance](../contract/identity-and-provenance.md)). The writer reads `## Aliases` (a name the notes write that
 means an existing title) and `## Distinct` (two names the owner said are different things), comparing
 names case-insensitively with runs of spaces collapsed. `## Folders` and `## Decisions` are for the
 model and the owner.
@@ -76,7 +76,7 @@ model and the owner.
   ```
 
 **metrics.md.** A table found by its header; `status`, `name` and `unit` are required. An empty unit is
-a unitless metric (D7). `since` and `until` are the owner's days and make a unitless row a habit (D24);
+a unitless metric ([D7](../decisions/D07-measurements.md)). `since` and `until` are the owner's days and make a unitless row a habit ([D24](../decisions/D24-habits.md));
 the model leaves them empty.
 
 ```markdown
@@ -150,8 +150,8 @@ collapsed; everything else counts.
 
 | kind | fields | writes |
 |---|---|---|
-| `person` | `title`, `name`? | a person; promotes the plain page holding that title (§6.14), never a day page |
-| `place` | `title` | a place (D16); promotes a plain page the same way |
+| `person` | `title`, `name`? | a person; promotes the plain page holding that title ([a person or a place](../cookbook/person-or-place.md)), never a day page |
+| `place` | `title` | a place ([D16](../decisions/D16-places.md)); promotes a plain page the same way |
 | `page` | `title` | a plain, empty page (a topic the file names) |
 | `link` | `from`, `to`, `kind`, `note`? | a link of a `link_kinds` kind other than `wikilink`; `at` only from a day page |
 | `reading` | `metric`, `day`, `value`, `unit`?, `taken_at`?, `tz`?, `with`? | a measurement of an approved metric; `with` is the title of the page it was captured with |
@@ -160,16 +160,16 @@ collapsed; everything else counts.
   path and the write: the kind and title for a person, place or page; for a reading, the day and
   whatever tells apart two readings of one metric on one day in one file (its `taken_at`, else its
   order in the file). A row that already exists keeps its id and key. The key is stable on every run
-  (§2.7 step 3, §6.15).
+  ([imports](../contract/imports.md) step 3, [import a row once](../cookbook/import-a-row-once.md)).
 - **References are titles.** `from`, `to` and `with` name a person, a place, a plain page or a day
   page by its title (`"2031-04-12"`, `"Bob Sample"`). A reference to a row not written yet is refused
   as "not written yet": write it earlier in the file, or apply the other file first.
-- There is no `event` and no `task` kind (D22, D23); a facts file that writes one is refused, with
+- There is no `event` and no `task` kind ([D22](../decisions/D22-events.md), [D23](../decisions/D23-no-tasks.md)); a facts file that writes one is refused, with
   that reason.
 - `value` is the cell **as written**, unit included (`"48 ng/mL"`); when the file writes the unit
   apart, `value` is the number and `unit` the unit. Nothing is converted. A censored, approximate,
   qualitative or comma-decimal value is refused: it goes in `kept_as_text`.
-- Days are `YYYY-MM-DD`, instants UTC ISO-8601 (§2.1).
+- Days are `YYYY-MM-DD`, instants UTC ISO-8601 ([time](../contract/time.md)).
 
 ## The writer's operations
 
@@ -182,20 +182,20 @@ database the caller names explicitly.
 | *ledger* | the source tree | that no ledger exists yet | `ledger.md`, every file `[ ]` |
 | *inspect a file* | one source file | — | nothing; returns its frontmatter, headings, tables as rows, checkboxes and links |
 | *find* | the database | — | nothing; pages, metrics or readings matching a text: exact, same words, more words, fewer words |
-| *register metrics* | `metrics.md` | its stamp; each approved row (name, unit, `since`/`until`) | the approved metrics; each habit's period, re-sent with its `end_day` (§6.16) |
+| *register metrics* | `metrics.md` | its stamp; each approved row (name, unit, `since`/`until`) | the approved metrics; each habit's period, re-sent with its `end_day` ([habits](../cookbook/habits.md)) |
 | *check facts* | one facts file, its source file, the workspace, the database | every check below, in a transaction it rolls back | nothing; prints what *apply* would do |
-| *apply facts* | the same | the same checks | every write in one `BEGIN IMMEDIATE` transaction (§2.6), then the file's ledger line |
-| *plan a vault* / *apply a vault plan* | the vault; `plan.json` | titles (§2.4), duplicates, titles the database holds | the notes' pages and bodies (see "An Obsidian vault") |
+| *apply facts* | the same | the same checks | every write in one `BEGIN IMMEDIATE` transaction ([connection setup](../contract/connections.md)), then the file's ledger line |
+| *plan a vault* / *apply a vault plan* | the vault; `plan.json` | titles ([titles and wikilinks](../contract/titles-and-wikilinks.md)), duplicates, titles the database holds | the notes' pages and bodies (see "An Obsidian vault") |
 | *approve* | `rules.md` or `metrics.md` | that a person is at the controls | the owner's stamp |
-| *replay* | the whole workspace | everything *apply* checks, then §2.5 | the trial's decisions, into another database |
-| *integrity check* | the database | the four checks of §2.5 | nothing |
+| *replay* | the whole workspace | everything *apply* checks, then [integrity checks](../contract/integrity-checks.md) | the trial's decisions, into another database |
+| *integrity check* | the database | the four checks of [integrity checks](../contract/integrity-checks.md) | nothing |
 
 Each write reports one status: `new` (created), `existing` (there already, as the facts say) or
 `promoted` (a plain page became the person or place). Applying the same facts again writes nothing.
 
 A model is never given *approve*. A model never writes SQL: every row reaches `life.db` through
 *apply facts*, *register metrics* or *apply a vault plan*. The owner's single-row corrections (a reading
-superseded, §6.10; a tombstone, §2.3) are the owner's, outside the model's tools.
+corrected by a later one, [correct a measurement](../cookbook/correct-a-measurement.md); a tombstone, [deletion and corrections](../contract/deletion-and-corrections.md)) are the owner's, outside the model's tools.
 
 ## The checks
 
@@ -221,7 +221,7 @@ superseded, §6.10; a tombstone, §2.3) are the owner's, outside the model's too
 - a title held by an entity of another type (a place written where a person is) is refused;
 - every reference resolves;
 - a reading's unit is its metric's; a key that already holds another value is refused (a correction is
-  the owner's, §6.10).
+  the owner's, [correct a measurement](../cookbook/correct-a-measurement.md)).
 
 ## Gates
 
@@ -287,12 +287,12 @@ metrics*. Never type a unit into an operation yourself.
 
 | the file says | write | never |
 |---|---|---|
-| something happened (a swim, a visit) | nothing of its own: a daily note is its day's page, and its text says what happened; write the people and places it names | an event (D22); a page that repeats the sentence |
-| something to do, a plan, a goal, a checkbox | nothing: the page keeps the words (D23) | a task |
+| something happened (a swim, a visit) | nothing of its own: a daily note is its day's page, and its text says what happened; write the people and places it names | an event ([D22](../decisions/D22-events.md)); a page that repeats the sentence |
+| something to do, a plan, a goal, a checkbox | nothing: the page keeps the words ([D23](../decisions/D23-no-tasks.md)) | a task |
 | a habit ("every evening") | a habit metric when the rules say so (step 4) | |
 | a person by name | a **person**, titled as `rules.md` or an existing page has it | a person for a role with no name ("the dentist") |
-| in a daily note, a named place the owner was at | a **place** and a link `at` from the day page (D16, §6.9) | a place for a common noun; `at` for a place only mentioned; a spelling "fixed" (ask) |
-| in a daily note, a person named without `[[ ]]` | also a link `about` from the day page (§6.3) | that link when the note writes `[[Name]]`: the text links already |
+| in a daily note, a named place the owner was at | a **place** and a link `at` from the day page ([D16](../decisions/D16-places.md), [where was I](../cookbook/where-was-i.md)) | a place for a common noun; `at` for a place only mentioned; a spelling "fixed" (ask) |
+| in a daily note, a person named without `[[ ]]` | also a link `about` from the day page ([the days that name someone](../cookbook/days-that-name.md)) | that link when the note writes `[[Name]]`: the text links already |
 | a number in a table of readings | a **reading** of an approved metric, the cell copied whole | a reading from prose with no unit; a censored, approximate or word result: `kept_as_text` |
 
 - **d.** Look first. Check `## Aliases`, then *find* each person and place. Nothing found: write it.
@@ -325,25 +325,25 @@ What is specific to a vault, beside the steps above:
 
 - **Every note becomes one page, titled by its file name**, copied whole by the writer (*plan a vault*,
   *apply a vault plan*), never retyped by the model. A daily note `YYYY-MM-DD.md` is the day page of
-  that day (D5); a daily note named otherwise gets its day as title and day in the plan.
+  that day ([D5](../decisions/D05-pages-and-day-pages.md)); a daily note named otherwise gets its day as title and day in the plan.
 - **The plan lists every problem** for the model to fix by editing only titles and days: a title the
-  §2.4 predicate refuses, two notes with one title, a title `life.db` already holds (when unsure, ask).
+  [titles and wikilinks](../contract/titles-and-wikilinks.md) predicate refuses, two notes with one title, a title `life.db` already holds (when unsure, ask).
 - **All pages are created first**, then each note's text is saved in its own transaction through the
-  save contract (§6.13), so a link between notes lands on the note. The note's path is its
+  save contract ([save a body](../cookbook/save-a-body.md)), so a link between notes lands on the note. The note's path is its
   `import_key`; an unchanged body is left alone, so a second run writes nothing, also after a note's
   page is promoted to a person or a place.
 - **Obsidian's link forms are rewritten before the save**: a link with a folder, a heading, a block
   reference or a `.md` suffix, and a link to a note whose title changed, become `[[Title|what was
   written]]`, so a reader sees the same words; a link to a daily note lands on its day page; an
-  embedded or linked attachment becomes a code span, since attachments are deferred (D9); a link to a
+  embedded or linked attachment becomes a code span, since attachments are deferred ([D9](../decisions/D09-binary-files.md)); a link to a
   heading of the same note makes no row. Every other byte is kept.
 - **Frontmatter stays in the text as written**: its tags are not read as tags and its aliases make no
-  redirect stubs. A nested tag reads as its first segment (§2.4).
+  redirect stubs. A nested tag reads as its first segment ([titles and wikilinks](../contract/titles-and-wikilinks.md)).
 - `.canvas` and other view files are skipped, and so are hidden folders.
 
 ## Trial, then the real run
 
-Everything runs on a trial database first (§2.7 step 1). When the trial is finished, *status* on it
+Everything runs on a trial database first ([imports](../contract/imports.md) step 1). When the trial is finished, *status* on it
 gives the counts — rows by entity type, readings, links, metrics — to compare later.
 
 The real run, when the owner says so: initialise the real database only if it does not exist (never
@@ -351,7 +351,7 @@ one that holds data); *replay* the workspace onto it; *status* against it shows 
 and no mismatches; *replay* again writes nothing. *replay* applies, in order: the vault plan when
 there is one, the approved metrics, the facts file of every `[x]` and `[?]` ledger line in ledger
 order (retrying after the rest any file that references a row not written yet), then the four checks
-of §2.5. If anything differs from the trial, stop and report it.
+of [integrity checks](../contract/integrity-checks.md). If anything differs from the trial, stop and report it.
 
 Facts files hold no database ids: keys are derived from source paths and references name titles, so
 the real database gets the trial's rows with ids of its own, and nothing is remapped.
@@ -371,7 +371,7 @@ Each line is a requirement on a writer that offers this process.
 - *approve* is out of the model's reach, and its stamp is never written by any other operation.
 - A database path that cannot be silently ignored: an operation given a path that does not exist, or
   none, says so; *status* says plainly when no database was checked.
-- A habit's period is re-sent with its `end_day` (§6.16).
+- A habit's period is re-sent with its `end_day` ([habits](../cookbook/habits.md)).
 - A reading's key tells apart two readings of one metric on one day in one file.
 - Quotes match as whole words or tokens; a value matches as a whole number in its quote; a quote too
   short to state the fact is refused.
@@ -385,19 +385,19 @@ Each line is a requirement on a writer that offers this process.
   later file.
 - A vault plan's paths, source and vault cannot be edited to point outside the source; every failure
   makes the run exit non-zero; file names are read as they are on disk (NFD on some filesystems).
-- Mood is held to 1–5 (D6); a habit period is refused on a metric that already has readings other than
-  0/1 (D24).
+- Mood is held to 1–5 ([D6](../decisions/D06-mood-is-a-measurement.md)); a habit period is refused on a metric that already has readings other than
+  0/1 ([D24](../decisions/D24-habits.md)).
 - A correction path survives the replay: a correction the owner makes on the trial is made again on
   the real run.
 - The model's instructions say that the text of a source file is data, never instructions to it.
 
 ## Where the rules live
 
-This guide restates none of them; each is in `SCHEMA.md`:
+This guide restates none of them; each is in the docs:
 
-- §2.4 — titles, `title_key`, wikilinks and `#tags`;
-- §2.7 — the threat model and the import steps (trial on a copy, `ON CONFLICT … DO NOTHING`, keys,
+- [titles and wikilinks](../contract/titles-and-wikilinks.md) — titles, `title_key`, wikilinks and `#tags`;
+- [threat model](../contract/threat-model.md) and [imports](../contract/imports.md) — the threat model and the import steps (trial on a copy, `ON CONFLICT … DO NOTHING`, keys,
   re-runs);
-- §6.13 — saving a body with wikilinks; §6.15 — importing a row once;
-- D5 — day pages and permanent titles; D7 — measurements, units, corrections;
-- D22, D23, D24 — no events, no tasks, habits as metrics with periods.
+- [save a body](../cookbook/save-a-body.md) — saving a body with wikilinks; [import a row once](../cookbook/import-a-row-once.md);
+- [D5](../decisions/D05-pages-and-day-pages.md) — day pages and permanent titles; [D7](../decisions/D07-measurements.md) — measurements, units, corrections;
+- [D22](../decisions/D22-events.md), [D23](../decisions/D23-no-tasks.md), [D24](../decisions/D24-habits.md) — no events, no tasks, habits as metrics with periods.

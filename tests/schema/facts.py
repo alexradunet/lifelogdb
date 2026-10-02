@@ -1,4 +1,4 @@
-"""Measurements and metrics (SCHEMA.md §2.3, D6, D7): the registry, append-only rows, supersede chains and retraction,
+"""Measurements and metrics (contract/deletion-and-corrections, D6, D7): the registry, append-only rows, supersede chains and retraction,
 finite values and NaN, the read view and its index, and why never OR IGNORE / OR REPLACE."""
 import os, sys, datetime as dt
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'lib'))
@@ -44,7 +44,7 @@ S.K('nothing was deleted: all six rows remain', one(c, 'select count(*) from mea
 measure(c, w, '2026-06-05', 70.1); measure(c, w, '2026-06-05', 70.4)
 S.K('two independent readings on one day are both returned', one(c, "select count(*) from measurement_values where day='2026-06-05'") == 2)
 
-# ---- the correction story of §2.3, executed
+# ---- the correction story of contract/deletion-and-corrections, executed
 c = fresh(); c.execute("INSERT INTO metrics(name,unit) VALUES ('weight','kg')"); w = one(c, "select id from metrics where name='weight'")
 shown = []
 for v, s in ((71.2, None), (70.8, 1), (None, 2), (71.4, 3)):

@@ -1,6 +1,6 @@
-"""Evolution after the freeze (SCHEMA.md D13, D17, §7): every CHECK is named and droppable by name; an unnamed one is not,
+"""Evolution after the freeze (D13, D17, architecture/non-goals): every CHECK is named and droppable by name; an unnamed one is not,
 a looser second CHECK does not relax the first, ADD CONSTRAINT checks existing rows; enums widen on a populated database;
-the partial-date and tokenizer paths of §7 work; a link kind widens by migration; a promotion can strand a link (§7); an
+the partial-date and tokenizer paths of architecture/non-goals work; a link kind widens by migration; a promotion can strand a link (architecture/non-goals); an
 entity uid is additive (D3); a comment outside a statement is not stored."""
 import os, re, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'lib'))
@@ -16,7 +16,7 @@ def populated():
 # ---- every CHECK named, every name droppable
 body = code(DDL)
 nchk = len(re.findall(r'\bCHECK\s*\(', body)); names = re.findall(r'\bCONSTRAINT\s+(\w+)\s+CHECK\s*\(', body)
-S.K('every CHECK in §3 is named', nchk > 0 and nchk == len(names), (nchk, len(names)))
+S.K('every CHECK in schema is named', nchk > 0 and nchk == len(names), (nchk, len(names)))
 S.K('constraint names are unique', len(names) == len(set(names)), [n for n in names if names.count(n) > 1])
 S.K('names are <table>_<column or rule>', all(any(n.startswith(t + '_') for t in re.findall(r'CREATE TABLE (\w+)', body)) for n in names), [n for n in names if not any(n.startswith(t + '_') for t in re.findall(r'CREATE TABLE (\w+)', body))])
 tbl_of = {}
@@ -54,7 +54,7 @@ for name, (tbl, expr, use) in WIDEN.items():
     S.K(f'{name}: the new value is accepted', use(c) == 'OK')
     S.K(f'{name}: integrity and foreign keys clean', integrity_ok(c))
 
-# ---- §7 partial dates: DROP + ADD of people_birth_day
+# ---- architecture/non-goals partial dates: DROP + ADD of people_birth_day
 c = fresh(); p1 = named(c, 'person', 'Ada', birth_day='1815-12-10'); p2 = named(c, 'person', 'Ancestor')
 S.K('birth_day refuses 1870 and 1870-05 today', tryx(c, "UPDATE people SET birth_day='1870' WHERE id=?", (p2,)).startswith('ERR') and tryx(c, "UPDATE people SET birth_day='1870-05' WHERE id=?", (p2,)).startswith('ERR'))
 c.execute('BEGIN')
@@ -67,7 +67,7 @@ S.K('YYYY and YYYY-MM are stored; full dates are untouched', tryx(c, "UPDATE peo
 S.K('junk and month 13 are still refused', all(tryx(c, 'UPDATE people SET birth_day=? WHERE id=?', (v, p2)).startswith('ERR') for v in ('abc', '1870-13', '1870-5', '18700', '1870-05-01x')))
 S.K('integrity clean and the touch trigger still works', integrity_ok(c) and one(c, 'select updated_at >= created_at from entities where id=?', (p2,)) == 1)
 
-# ---- §7 CJK search: the tokenizer switch is one transaction on a derived index
+# ---- architecture/non-goals CJK search: the tokenizer switch is one transaction on a derived index
 c = fresh(); jp = '日本語のノートを書く'
 for i, b in enumerate((jp, 'Zürich café notes', 'plain english text')): page(c, f'Text {i}', body=b)
 def hits(q): return one(c, 'select count(*) from pages_fts where pages_fts match ?', (q,))
@@ -88,7 +88,7 @@ c.execute("UPDATE link_kinds SET to_types = 'person,place' WHERE kind = 'at'"); 
 S.K('after the migration a day page may be at a person\'s home page', link(c, day_page(c), named(c, 'person'), 'at') == 'OK')
 S.K('...and the guard is back: the next change is refused', 'fixed at registration' in tryx(c, "UPDATE link_kinds SET to_types = NULL WHERE kind = 'at'"))
 
-# ---- a promotion can leave a link its kind now refuses (§7): links are checked at insert only
+# ---- a promotion can leave a link its kind now refuses (architecture/non-goals): links are checked at insert only
 c = fresh(); d = day_page(c, '2026-07-31'); w = named(c, 'place', 'Lakeside')
 S.K('a day page at the place [[Lakeside]]', link(c, d, w, 'at') == 'OK')
 c.execute("UPDATE entities SET entity_type = 'person' WHERE id = ?", (w,)); domain(c, 'person', w)

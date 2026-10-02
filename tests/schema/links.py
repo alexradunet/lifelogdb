@@ -1,5 +1,5 @@
-"""The graph (SCHEMA.md D8, D16): the closed link-kind registry, endpoint types, symmetric mirrors, immutability,
-containment (§6.11) with its cycle guard, and the INSERT OR REPLACE trap."""
+"""The graph (D8, D16): the closed link-kind registry, endpoint types, symmetric mirrors, immutability,
+containment (cookbook/inside-a-place) with its cycle guard, and the INSERT OR REPLACE trap."""
 import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'lib'))
 from kit import *
@@ -55,7 +55,7 @@ S.K('INSERT OR REPLACE on a symmetric link: too many levels of trigger recursion
     tryx(c2, f"INSERT OR REPLACE INTO links(from_id,to_id,kind,created_at,source) VALUES (?,?,'friend',{NOW},'ui')", (x, y)))
 S.K('ON CONFLICT DO NOTHING is the way', tryx(c2, f"INSERT INTO links(from_id,to_id,kind,created_at,source) VALUES (?,?,'friend',{NOW},'ui') ON CONFLICT(from_id,to_id,kind) DO NOTHING", (x, y)) == 'OK')
 
-# ---- containment (§6.11) and one-way kinds
+# ---- containment (cookbook/inside-a-place) and one-way kinds
 c = fresh(); japan, kanto, tokyo = named(c, 'place', 'Japan'), named(c, 'place', 'Kanto'), named(c, 'place', 'Tokyo')
 S.K('Tokyo located-in Kanto located-in Japan', link(c, tokyo, kanto, 'located-in') == link(c, kanto, japan, 'located-in') == 'OK')
 S.K('located-in is one-way (no mirror)', one(c, "select count(*) from links where kind='located-in'") == 2)
@@ -68,20 +68,20 @@ osaka = named(c, 'place', 'Osaka'); d4 = day_page(c, '2019-06-01', 'not linked t
 d5 = day_page(c, '2019-07-01', 'planning [[Tokyo]]'); link(c, d5, tokyo, 'wikilink')
 P = dict(place_id=japan, from_day='2019-01-01', to_day='2019-12-31')
 WANT = [('2019-04-02', 'Tokyo'), ('2019-04-05', 'Japan'), ('2019-04-05', 'Kanto')]
-S.K('§6.11 finds the 2019 days at a place in Japan, not another year, a place outside or a day that only names it', c.execute(block('6.11'), P).fetchall() == WANT, c.execute(block('6.11'), P).fetchall())
+S.K('cookbook/inside-a-place finds the 2019 days at a place in Japan, not another year, a place outside or a day that only names it', c.execute(block('inside-a-place'), P).fetchall() == WANT, c.execute(block('inside-a-place'), P).fetchall())
 typo = named(c, 'place', 'Tokio (typo)'); link(c, typo, japan, 'located-in')
 d6 = day_page(c, '2019-04-09', 'mistyped place'); link(c, d6, typo, 'at')
 c.execute(f'UPDATE entities SET deleted_at={NOW} WHERE id=?', (typo,))
-S.K('§6.11 leaves out a tombstoned place and its days', c.execute(block('6.11'), P).fetchall() == WANT, c.execute(block('6.11'), P).fetchall())
-S.K('§6.11 asked about a tombstoned place itself lists nothing', c.execute(block('6.11'), dict(P, place_id=typo)).fetchall() == [])
+S.K('cookbook/inside-a-place leaves out a tombstoned place and its days', c.execute(block('inside-a-place'), P).fetchall() == WANT, c.execute(block('inside-a-place'), P).fetchall())
+S.K('cookbook/inside-a-place asked about a tombstoned place itself lists nothing', c.execute(block('inside-a-place'), dict(P, place_id=typo)).fetchall() == [])
 link(c, japan, tokyo, 'located-in')
 steps = [0]
 def stop():
     steps[0] += 1; return 1 if steps[0] > 2000 else 0
 c.set_progress_handler(stop, 1000)
-try: r = c.execute(block('6.11'), P).fetchall()
+try: r = c.execute(block('inside-a-place'), P).fetchall()
 except sqlite3.Error as e: r = 'ERR ' + str(e)
 c.set_progress_handler(None, 0)
-S.K('§6.11 terminates on a cycle (UNION)', r == WANT, r)
+S.K('cookbook/inside-a-place terminates on a cycle (UNION)', r == WANT, r)
 
 S.done()

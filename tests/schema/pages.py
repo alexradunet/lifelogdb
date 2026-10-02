@@ -1,4 +1,4 @@
-"""Pages and titles (SCHEMA.md §2.4, D5): every page titled, the day rule, one title namespace, filename-safe titles,
+"""Pages and titles (contract/titles-and-wikilinks, D5): every page titled, the day rule, one title namespace, filename-safe titles,
 title_key and its vectors, lookups by key, fixed titles, link first and write later, full-text search, and why titles are
 not unique by a collation. The day page itself is in journal.py."""
 import os, re, subprocess, sys, tempfile
@@ -62,8 +62,8 @@ S.K('a key with an ASCII capital rejected', add(c, 'Diet3', key='Diet3') is None
 S.K('a key with a leading space rejected', add(c, 'Diet4', key=' diet4') is None)
 S.K('a non-ASCII title with a plausible key accepted (the app owns the fold)', add(c, 'Über', key='über') is not None)
 
-# ---- title_key vectors of §2.4
-sec = section('### 2.4 ', '### 2.5 ')
+# ---- title_key vectors of contract/titles-and-wikilinks
+sec = doc_page('contract/titles-and-wikilinks.md')
 m = re.search(r'\| title \| `title_key` \|\n\|---\|---\|\n((?:\|.*\n)+)', sec)
 vec = []
 for line in (m.group(1).splitlines() if m else []):
@@ -71,7 +71,7 @@ for line in (m.group(1).splitlines() if m else []):
     ins = [x.replace('\\u0301', '́') for x in re.findall(r'`([^`]+)`', left)]; outs = re.findall(r'`([^`]+)`', right)
     if len(outs) == 1: outs = outs * len(ins)
     vec += list(zip(ins, outs))
-S.K('the title_key table of §2.4 has at least 12 pairs and every one is what the function gives', len(vec) >= 12 and all(title_key(a) == b for a, b in vec), [(a, b, title_key(a)) for a, b in vec if title_key(a) != b])
+S.K('the title_key table of contract/titles-and-wikilinks has at least 12 pairs and every one is what the function gives', len(vec) >= 12 and all(title_key(a) == b for a, b in vec), [(a, b, title_key(a)) for a, b in vec if title_key(a) != b])
 
 # ---- fixed title
 c = fresh(); p = add(c, 'Fixed')
@@ -82,8 +82,8 @@ S.K('a no-op SET title = title passes', tryx(c, "UPDATE pages SET title=title, b
 c = fresh()
 for i in range(500): add(c, f'Note {i}', body=f'note {i}')
 for t in ('Diet', 'Food', 'Zürich'): add(c, t)
-sel = [s for s in statements(block('6.13')) if code(s).upper().startswith('SELECT')]
-S.K('§6.13 has one resolve', len(sel) == 1, sel)
+sel = [s for s in statements(block('save-a-body')) if code(s).upper().startswith('SELECT')]
+S.K('cookbook/save-a-body has one resolve', len(sel) == 1, sel)
 if sel:
     plan = ' | '.join(r[3] for r in c.execute('EXPLAIN QUERY PLAN ' + sel[0], {'key': 'diet'}))
     S.K('...and is a SEARCH on pages_title', 'SEARCH' in plan and 'pages_title' in plan and 'SCAN p' not in plan, plan)
@@ -109,7 +109,7 @@ add(c, 'CJK', body='日本語のノートを書く')
 S.K('a CJK run is one token (the known limit of unicode61)', hits('日本語のノートを書く') == 1 and hits('本語') == 0)
 c.execute('INSERT INTO pages_fts(pages_fts) VALUES(\'rebuild\')')
 S.K('the index rebuilds from pages and passes its integrity-check', hits('second') == 1 and tryx(c, "INSERT INTO pages_fts(pages_fts, rank) VALUES('integrity-check', 1)") == 'OK')
-S.K('§6.8 finds a page by a word of its body', [r[0] for r in c.execute(block('6.8'), {'query': 'second'})] == [mo])
+S.K('cookbook/full-text-search finds a page by a word of its body', [r[0] for r in c.execute(block('full-text-search'), {'query': 'second'})] == [mo])
 
 # ---- why not a collation: an index on a collation only the app has
 d = tempfile.mkdtemp(); path = os.path.join(d, 'coll.db')
