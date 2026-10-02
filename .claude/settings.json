@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(**/*.db)",
+      "Read(**/*.db-wal)",
+      "Read(**/*.db-shm)",
+      "Read(**/*.db-journal)",
+      "Read(**/*.lifelog/**)",
+      "Read(import/**)",
+      "Read(//**/*.db)",
+      "Read(//**/*.db-wal)",
+      "Read(//**/*.db-shm)",
+      "Read(//**/*.db-journal)",
+      "Read(//**/*.lifelog/**)",
+      "Bash(sqlite3 *)",
+      "Bash(datasette *)",
+      "Bash(lifelog *)",
+      "Bash(./lifelog *)",
+      "Bash(go run ./cmd/lifelog *)",
+      "PowerShell(sqlite3 *)",
+      "PowerShell(datasette *)",
+      "PowerShell(lifelog *)",
+      "PowerShell(.\\lifelog *)",
+      "PowerShell(go run ./cmd/lifelog *)"
+    ]
+  }
+}
