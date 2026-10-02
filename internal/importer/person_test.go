@@ -10,7 +10,7 @@ import (
 	"lifelog/internal/db"
 )
 
-// a person note that is only frontmatter (issue 0003): synthetic, like the rest of the vault
+// a person note that is only frontmatter — synthetic, like the rest of the vault
 const bobPerson = "People/Bob Person.md"
 
 func addSource(t *testing.T, f *fixture, file, body string) {

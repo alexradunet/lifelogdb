@@ -56,7 +56,7 @@ func createPage(t *testing.T, path, title string) {
 	}
 }
 
-// A replay rehearses on a throwaway copy of its target before it writes (issue 0005): a file that fails leaves the
+// A replay rehearses on a throwaway copy of its target before it writes — a file that fails leaves the
 // target as it was, a dry run lists every failure and writes nothing, and no copy is left behind.
 func TestReplayRehearsesBeforeItWrites(t *testing.T) {
 	f := setup(t)

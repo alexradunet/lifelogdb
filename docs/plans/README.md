@@ -1,199 +1,68 @@
 # Implementation Plans
 
-Plans are dated records ([how a change happens](../process.md)): each one cites the docs as they were at the commit it
-names. Plans 001–013 were written when the whole design was one file, `SCHEMA.md`; its sections now live in
-[docs/](../README.md) (§2 → `contract/`, §3 → `schema/schema.sql`, §5 → `decisions/`, §6 → `cookbook/`, §7 →
-`architecture/non-goals.md`, §8 → `research/`). New plans go in this folder, numbered on from the last.
-
-Three runs of the improve skill, all on 2026-10-02.
-
-- **Plans 001–007** — against commit `6058f24`, a read-only audit of `SCHEMA.md`; every gap verified by
-  execution on throwaway databases built from §3. All DONE.
-- **Plans 008–012** — against commit `3e2fcf4`, a deep audit of the whole repo (`SCHEMA.md`, `tests/`
-  and the Go app). The owner then decided to remove `app/` (plan 008); the plans that remain cover
-  `SCHEMA.md` and `tests/` only. Findings that lived only in `app/` are listed at the bottom, so a
-  future writer can avoid them.
-- **Plans 014–022** — against commit `4d84261`, a deep audit of the `docs/` tree (after the split of `SCHEMA.md`)
-  and `tests/`: six parallel audits (DDL, docs consistency, cookbook SQL, suites, the wikilink contract and the
-  guides, security/DX/direction), every finding re-checked against the files and most by execution on throwaway
-  databases. The owner chose all nine plans and decided four questions (below).
-- **Plans 025–028** — on top of `d65b14c`, one per open issue from the first real import (0003–0006), each built
-  in its own worktree in parallel and merged together; issue 0001 (renames) waits for the owner's contract choices.
-
-**The commit hashes cited by plans 001–013 and by this index before plan 014 no longer resolve**: history was
-rewritten before the docs split, so `6058f24`, `3e2fcf4`, `430ea6e`, `4b3b6db`, `6442e03`, `6ce208d`, `6f02944`,
-`961b040` and `0364503` are pre-rewrite names. Their drift checks cannot run; the plans stand as records of what was
-decided, and the "details in git history at `3e2fcf4`" for the `app/` findings below are no longer reachable locally.
-
-**Context the executors must know:**
-- There is no application in this repo. Plans 001–013 touched `SCHEMA.md`; plans 014 on touch `docs/` and `tests/`.
-- Every plan ends with the full suite run:
-  `tests/.venv/Scripts/python.exe tests/run_all.py` (Windows;
-  `python3 tests/run_all.py` elsewhere) → `20/20 suites passed`.
-  Suites change with the document, never to make it pass (AGENTS.md).
-- `fixes.md` was carried out by plans 001–007 and deleted by plan 012.
-
-Execute in the order below unless dependencies say otherwise. Plans 009, 010 and 011 each add mutants
-to `tests/schema/mutants.py` and edit the count in `tests/README.md`: run them one after another and
-always **read the current mutants count before editing it** (it is 66 at commit `3e2fcf4`, 70 at `4d84261`).
-The same holds for plans 017, 020, 022 and 016, which all add mutants.
-
-## Execution order & status
+A plan is a dated record ([how a change happens](../process.md)): a change large enough to hand to another agent,
+written as a self-contained brief with done criteria. It cites the docs as they were at the commit it names. One file
+per plan, `NNN-short-slug.md`, numbered on from the last: plans up to 028 are done and live in git history
+(`git log -- docs/plans`), so the next one is **029**.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| 001 | State the freeze gate's current truth — the trial import happened | P1 | S | — | DONE |
-| 002 | Enforce `habit_periods.source` like the other three provenance columns | P1 | S | — | DONE |
-| 004 | §6.15 must send imported bodies through the wikilink save contract | P1 | S | — | DONE |
-| 005 | Make SCHEMA.md fully writer-neutral | P1 | M | — | DONE |
-| 003 | Scope the no-deletes rule to life data; state the registries' own rule | P2 | S | — | DONE |
-| 006 | Reference hygiene and wording nits — R63/R73, D12, D13, R71, WAL backports | P2 | S | — | DONE |
-| 007 | Document the idempotent re-run of a habit period (§6.16) | P3 | S | — | DONE |
-| 008 | Remove `app/` and every reference to it | P1 | S | — | DONE (`4b3b6db`) |
-| 009 | §6.16: a re-sent habit period carries its `end_day` | P1 | S | 008 (ordering only) | DONE (`430ea6e`) |
-| 010 | Cookbook reads of where the owner was skip tombstones (§6.2, §6.9, §6.11) | P2 | S | after 009 (mutants count) | DONE (`6f02944`) |
-| 011 | A redirect stub may point at a person or a place | P2 | M | **owner decision A/B**; after 010 (mutants count) | DONE, option A (`6442e03`) |
-| 012 | The suites leave nothing in TEMP, pin their parser; `fixes.md` goes | P2 | S | — | DONE (`0364503`) |
-| 013 | Keep the LLM-assisted import process as a writer-neutral guide (`IMPORTING.md`) | P1 | M | 008 | DONE (`961b040`, `6ce208d`) |
-| 014 | [Make the text the freeze will keep forever say only true things](014-pre-freeze-text-hygiene.md) | P1 | S | — | DONE (`26c20b5`) |
-| 015 | [The suite runner states what it needs, checks it first, and never hangs](015-runner-states-and-checks-its-needs.md) | P1 | S | 014 (ordering) | DONE (`fee9a39`) |
-| 017 | [The cookbook recipes a writer copies return the right rows and write safely](017-cookbook-recipes-return-the-right-rows.md) | P1 | S | 015 (ordering) | DONE (`feca0eb`) |
-| 022 | [A mention under an old name counts for its redirect target; a redirect target is never a ghost](022-an-old-name-still-counts.md) | P2 | S | 017 | DONE (`0edb0e9`) |
-| 016 | [Every rule of the DDL has an expectation that fails when it is removed, and a mutant](016-every-rule-has-a-test-and-a-mutant.md) | P1 | M | 015, 017, 022 | DONE (`5d13a1e`) |
-| 018 | [An import workspace can never be committed; the threat model names the model-driven import](018-import-workspaces-stay-out-of-git.md) | P1 | S | after 014, 017 (same files) | DONE (`8f47c0e`) |
-| 019 | [The wikilink contract states every rule and every vector](019-wikilink-contract-stands-without-python.md) | P2 | M | 015 (ordering) | DONE (`6c8632a`) |
-| 020 | [The import guide agrees with the imports contract; a captured day takes the note once](020-import-guide-agrees-with-the-contract.md) | P1 | M | 017, 018, 019 | DONE (`cd0f050`) |
-| 021 | [Design: what the freeze is, what must hold before it, what changes after](021-freeze-runbook.md) | P2 | M | all others | IN REVIEW (owner) (`a55fcac`) |
-| 023 | [The writer: `app/`, one Go binary serving a hypermedia API, a CLI and an MCP server](023-the-writer-app.md) | P1 | L | — | IN PROGRESS (v1 built; first real use next) |
-| 024 | [Habits, renames and the import flow in `app/`](024-habits-renames-import.md) | P1 | L | 023 | IN PROGRESS (built; the first real import next) |
-| 025 | [A person's birth and death day from the import](025-person-birth-day-from-the-import.md) (issue 0003) | P1 | S | 024 | DONE (`b7e1b8c`) |
-| 026 | [A link to a page another file promotes is an ordering error](026-link-before-promotion-is-an-ordering-error.md) (issue 0004) | P1 | S | 024 | DONE (`51ee4d2`) |
-| 027 | [A replay rehearses before it writes](027-a-replay-rehearses-before-it-writes.md) (issue 0005) | P1 | S | 024 | DONE (`c729b8b`) |
-| 028 | [A stale gate says what changed](028-a-stale-gate-says-what-changed.md) (issue 0006) | P1 | S | 024 | DONE (`56bd830`) |
 
 Status values: TODO | IN PROGRESS | IN REVIEW (owner) | DONE | BLOCKED (with one-line reason) |
-REJECTED (with one-line rationale — finding fixed independently or approach
-abandoned)
+REJECTED (with one-line rationale). A plan that is DONE or REJECTED is deleted; git is the log.
 
-## Dependency notes
+## What is left (2026-10-02)
 
-- 008 first: the other plans assume no `app/` (no Go gate to run).
-- 009 → 010 → 011 in that order: each adds mutants and edits `tests/README.md`'s count; 009 and 011 do
-  not share other files, 010 and 011 both edit `tests/schema/links.py`.
-- 011 is held until the owner chooses option A (widen `redirect`) or B (keep it, forbid promoting a
-  redirect target). The plan explains both.
-- 012 is independent; it edits `tests/README.md` but not the mutant count.
-- **014–022, in the table's order.** 014 first: it rewrites text in `schema.sql` and `AGENTS.md` that later plans
-  anchor on. 015 before the suite plans (its preflight and `PYTHONUTF8` make failures readable). 017 → 022 → 016:
-  all three add mutants and edit `tests/schema/named.py`; 016 also tests `ghost_pages` and the cookbook recipes that
-  017 and 022 change, so it goes last of the three. 018 and 020 edit `docs/guides/importing.md` after 017 (the
-  `person` row), 018 before 020. 019 is independent of 016–018 but must precede 020 (020's frontmatter sentence relies
-  on 019's scan rule). 021 is last: it cites the state the others leave.
-- Plans 014–022 each say "Planned at `4d84261`" in their drift check; an earlier plan of this run landing first is
-  expected drift, and each plan names which.
+### The owner decides
 
-## Owner decisions (2026-10-02, for plans 020 and 022)
+- **Renames** — [issue 0001](../issues/0001-a-rename-has-no-recipe.md): does the body move to the new page, do the
+  typed links move or stay on the stub, may a rename land on an existing (empty) page? The writer moves both and
+  allows only an empty target; the contract does not say.
+- **A new file after the freeze.** (a) `schema.sql` stays the full current DDL, each migration also edits it, and a
+  suite proves `schema.sql` equals the frozen DDL plus migrations — *recommended*; or (b) `schema.sql` is frozen as
+  `0001` and a new file is `0001` plus every migration.
+- **`pages_fts_delete`** can never fire while `pages_no_delete` exists: keep it as a guard, or cut it before the freeze.
+- **The export / snapshot / off-box copy non-goal**: its reopen trigger is the freeze — keep it out, or reopen it
+  through an issue ([process](../process.md#before-the-freeze), item 3).
+- **Readers and `trusted_schema=OFF`**: should a reader that opens a `life.db` it did not write set it too?
+- **The `Cn` title rule's Unicode version**: the writer pins 15.0; should the contract name a version?
+- **A tombstoned day page still shows its mood reading** (a reading is retracted, not tombstoned, D7): should
+  tombstoning a day retract its readings?
 
-- A daily note imported for a day whose day page already exists is **appended** to it, once, recorded in `plan.json` (020).
-- Prose comes in **only through a vault**; a journal export is converted to one `YYYY-MM-DD.md` per day first (020).
-- The days that name someone and backlinks **follow one `redirect` hop** (022).
-- A page a `redirect` points at is **not a ghost**: the view drops its redirect exclusion (022).
+### Next step
 
-## The next writer
+- **The first import into the canonical `life.db`** (the real run of the import guide), then the freeze checklist
+  ([process](../process.md#before-the-freeze)).
 
-The owner chose it on 2026-10-02: `app/`, in Go (plan 023). The capture path exists; the first import into the
-canonical `life.db` through it is the next step. The freeze runbook is plan 021.
+### Known bugs and gaps in the writer
 
-## Findings considered and rejected
+- **`version` collides within a millisecond**: two saves of one page in the same millisecond share
+  `entities.updated_at`, so the stale-save 409 can miss; `TestSaveCarriesItsVersion` flaked once on this.
+- **No action to set or correct a person's birth or death day** outside an import: the correction is SQL for now.
+- **A replay's real run is not atomic**: a failure after a clean rehearsal (a full disk, another writer in between)
+  keeps the writes made before it; every write is idempotent, so a re-run completes it.
+- **The vault step stops at its first failing note**, in the rehearsal too: a vault failure is reported once, not
+  per note.
+- **The workspace is not locked** between a replay's rehearsal and its real run.
+- **The vault plan refuses a note whose title the database already holds as a person** (no longer needed for
+  birthdays, but still a wall for a person created by hand first).
 
-From the first run (001–007):
+### Deferred until a real case (reopen when it happens)
 
-- **`metrics.name` is mutable while `metrics.unit` is fixed** — by design (D7).
-- **`at` links from non-day pages are not rejected by the DDL** — a documented D16 cost; §7 lists the fix.
-- **markdown-it-py loses a code span after an unclosed `[`** — documented in §2.4.
-- **§2.2's "import_key is unique per source" vs the measurements index** — both correct in their homes.
-- **No triggers guarding registry deletion** — resolved by wording (plan 003).
-- **Performance / security at this scale** — not applicable (~5 GB/lifetime, D7).
+- An `UPDATE` of an id leaves `pages_fts` stale — no write path changes an id.
+- The symmetric link mirror fails closed under an explicit `INSERT OR ABORT`/`OR FAIL`/`OR ROLLBACK` into `links`;
+  the fix is `WHERE NOT EXISTS` in `links_mirror_insert`.
+- `ghost_pages` lists an empty day page only a measurement's `captured_with_id` references (a mood-only capture),
+  and never lists a ghost whose only referrer was tombstoned.
+- `#REDIRECT` "any case" is ambiguous for Unicode case variants (`#REDİRECT`).
+- The day view's "(edited)" flag shows on freshly written non-day pages (an insert then a body update).
+- Habit edge cases: a completion range with `from > to` returns one row; a same-day stop and restart is refused.
+- Updatable columns no writer updates: a link's `note`/`created_at`, `entities.created_at`; an embedded NUL byte
+  passes the GLOB checks; `INSERT OR REPLACE` could rewrite a used metric's unit (writers never use it).
+- The approval stamp and its `.approved/` copy are lines in files: anything that writes the workspace directly can
+  forge them (the guide's honest limit).
 
-From the second run (008–012), schema side:
+### Housekeeping
 
-- **`INSERT OR REPLACE` or deferred foreign keys can rewrite a used metric's unit or a link kind's
-  structure** — the writer conventions already forbid `OR REPLACE` (§2.3, §2.7); no incident. Reopen if a
-  writer ever does it.
-- **An embedded NUL byte passes the GLOB-based CHECKs** (`metrics.name`, `source`) — no write path can
-  produce one; reopen if one appears.
-- **A link's `note`, `created_at` and `id` are updatable, and a mirrored edge's note can diverge** — no
-  writer updates links; reopen with the first one that does.
-- **`ghost_pages` lists an empty day page that only a measurement's `captured_with_id` references** —
-  latent until a mood-only capture exists; handle it with that capture path.
-- **§2.4's "any case" for `#REDIRECT` is ambiguous** (the Python reference matches Unicode case variants
-  such as `#REDİRECT`; an ASCII-only writer does not) — exotic; settle it with the next writer's vectors.
-- **The `Cn` title rule depends on the writer's Unicode version** (Python 3.12 has Unicode 15.0) — rare in
-  practice; state a version when a second writer exists.
-
-From the second run, findings that lived only in `app/` (dropped with it — a future writer should not
-repeat them; details in git history at `3e2fcf4` and in this run's audit):
-
-- import commands ignored a `--db` given after the subcommand, and `import status` reported green with no
-  database; a habit with a later period broke `import metrics`/`replay`; two readings of one metric on one
-  day in one facts file collided on their derived key; facts checks were plain substring tests (a
-  one-letter quote, "1.5" inside "11.5"); `batch apply` committed before checking the ledger (a `[-]`
-  file got imported) and wrote the ledger non-atomically; mood's 1–5 range was unchecked and `habit
-  start` accepted a scale metric; `obsidian apply` trusted every field of `plan.json` and exited 0 on
-  failed notes; `import status` missed removed person/place/page/link writes and treated answered
-  questions as open; the approval stamp did not cover the file's content; corrections were not
-  replayable; page writes skipped the look-alike check; the ledger parser dropped BOM'd or `*` lines;
-  table links lost their `\|`; `capture --key` was ignored; the Go parity tests skipped on Windows
-  because they called `python3`; 24 of 39 deliberate breakages of the A9 guards survived `go test`.
-
-From the third run (014–022):
-
-- **A change of `entities.entity_type` is not re-checked against existing links** (a place demoted to a page keeps
-  its `at` links; a redirect stub promoted keeps its `redirect`) — a recorded deferral in
-  `architecture/non-goals.md` ("Re-checking links when an entity changes type"); plan 017 adds the recipe-level guard
-  for the stub, the DB trigger waits for a real case.
-- **An `UPDATE` of an id (`entities.id`, `pages.id`) leaves `pages_fts` stale** — no write path changes an id, any
-  link or reading on the id blocks it, and the FTS and orphan integrity checks report it.
-- **`entities.created_at` is updatable** — same reasoning as the rejected "a link's `created_at` is updatable".
-- **The symmetric mirror fails under an explicit `INSERT OR ABORT`/`OR FAIL`/`OR ROLLBACK` into `links`** (the outer
-  conflict clause overrides the trigger's `OR IGNORE`; executed) — it fails closed, and no writer writes an explicit
-  `OR ABORT`. Reopen with the first writer or ORM that does: the fix is `WHERE NOT EXISTS` in `links_mirror_insert`.
-- **`pages_fts_delete` can never fire** — kept for now; plan 021 asks the owner (Q2).
-- **The day view's "(edited)" flag appears on ~40% of freshly written non-day pages** (an INSERT then an UPDATE of the
-  body in one transaction, `'now'` differs) — cosmetic; settle it with the UI.
-- **A tombstoned day page still shows its mood reading** in the day view and mood-over-time — a reading is retracted,
-  not tombstoned (D7); whether tombstoning a day should retract its readings is a UI/owner question, no incident yet.
-- **A ghost whose only referrer was tombstoned is never listed** by `ghost_pages` — links of a tombstoned page stay by
-  design (D11); revisit with the cleanup UI.
-- **Habit edge cases** (a completion range with `from > to` returns one row; a same-day stop and restart is refused as
-  an overlap; a check-in of 2 reads as "not recorded") — the app holds 0/1 (D24); minor.
-- **`writers.py`'s timing margins** (50 ms) could flake on a loaded machine — did not flake in repeated and parallel runs.
-- **Unpinned `datasette` and `mdurl`** — optional suite / transitive dependency; low value.
-- **`.agents/skills` and `.claude/skills` are two copies of the improve skill** — identical today.
-- **`tests/wikilinks/mktable.py`** is unlisted and its label list lacks one row — a helper nobody runs; delete it when next touched.
-- **The `Cluj` fixture in `named.py`** — a real city, like the other generic places; not personal data.
-- **No CI** — a GitHub workflow needs a SQLite ≥ 3.53 build with FTS5; worth doing once a second contributor exists.
-
-## Open questions for the owner (plan 021)
-
-- **Q1. A new file after the freeze.** (a) `schema.sql` stays the full current DDL, each migration also edits it, and a
-  suite proves `schema.sql` equals the frozen DDL plus migrations (same `sqlite_master`) — *recommended*: a new file is
-  still one command; or (b) `schema.sql` is frozen as `0001`, a new file is `0001` plus every migration.
-- **Q2. `pages_fts_delete`** can never fire while `pages_no_delete` exists. Keep it (a guard for an owner who drops
-  that trigger) or cut it before the freeze?
-- **Q3.** The non-goal "Agent CLI/API" reads as cut while D14 and principle 3 make it part of the writer — delete or
-  reword the row?
-  **Answered (owner, 2026-10-02):** deleted — the writer of plan 023 is that CLI, API and agent surface.
-- **Q4.** The export/snapshot/off-box non-goal row's reopen trigger is the freeze: decide it (checklist item 3 of
-  [process](../process.md#before-the-freeze)).
-- **Q5.** Should readers that open a `life.db` they did not write also set `trusted_schema=OFF`?
-- **Q6. Pages that still equate the freeze with the first real data** (D13 now defines it as the first unreplayable
-  write; a replayable import is real data but is rebuilt, not migrated). Out of scope for plan 021, owner to decide:
-  `architecture/non-goals.md:21` ("Before the first real data enters a canonical `life.db` (the freeze, D13) at the
-  latest" — under the new definition this trigger fires before the freeze, so Q4 and checklist item 3 of process.md
-  need the wording aligned); `architecture/goals-and-principles.md:24` ("Once real data exists, schema changes are
-  additive"); `schema/schema.sql:3` ("numbered migrations begin only after real data exists (D13)"); `schema/schema.sql:29`, the stored `lifelog_meta` 'evolution' row ("after the first real data: numbered forward-only SQL migrations, additive only ..."), which every file keeps forever and which now disagrees with D13; `contract/threat-model.md:44`, 2075 table row 16 ("How does the schema change after real data exists?" -> `evolution`); `README.md:3`, the status line ("No canonical database exists yet; until one does, schema.sql is edited in place (D13)" - under the new D13 a canonical file holding only replayable imports can exist while schema.sql is still edited in place).
-  **Answered (owner, 2026-10-02):** every page now uses D13's meaning — "the freeze" is the first row that cannot be
-  replayed from an import. Reworded: the non-goals row's trigger ("Before the freeze"), principle 4, the header and the
-  stored `evolution` row of `schema.sql` (which defines the freeze inline, for the 2075 reader), 2075 question 16, and the
-  status line of `docs/README.md`.
+- No CI: a GitHub workflow running `go generate ./... && go vet ./... && go test ./...`.
+- `.agents/skills` and `.claude/skills` are two identical copies of the improve skill.

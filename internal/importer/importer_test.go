@@ -146,7 +146,7 @@ func TestLedger(t *testing.T) {
 	if err != nil || n != 8 {
 		t.Fatalf("ledger: %d files, %v", n, err)
 	}
-	// issue 0002: a name holding the ledger's own " — " separator survives the round trip
+	// a name holding the ledger's own " — " separator survives the round trip
 	if err := f.w.Skip("Notes/A — B.png", "an attachment — with — dashes in its name"); err != nil {
 		t.Fatalf("skip a name with an em dash: %v", err)
 	}
@@ -347,7 +347,7 @@ func TestReadingsKeysAndReplay(t *testing.T) {
 	}
 }
 
-// issue 0004: an about link to a note's page, applied before the file that makes that page a person, is an ordering
+// an about link to a note's page, applied before the file that makes that page a person, is an ordering
 // error: applied alone it is refused with what to do; the replay applies it after the rest, whatever the ledger order.
 // A link to a page that no file ever promotes still fails, and so does an end of a type no write can make fit.
 func TestLinkBeforePromotion(t *testing.T) {

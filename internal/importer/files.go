@@ -318,7 +318,7 @@ type Line struct {
 }
 
 // A ledger line is `- [state] file` with an optional note. A file name that contains the separator is
-// written quoted, so the note is always what follows the first " — " (issue 0002).
+// written quoted, so the note is always what follows the first " — ".
 var ledgerLine = regexp.MustCompile(`^- \[([ x?-])\] (.+)$`)
 
 const ledgerSep = " — "

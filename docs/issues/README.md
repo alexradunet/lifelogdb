@@ -3,15 +3,11 @@
 An issue records an incident from real use — a failed import, a bug in the writing application, a question the
 data could not answer, a rule that is ambiguous or untestable. It is the evidence a schema change needs
 ([how a change happens](../process.md)). One file per incident, named `NNNN-short-slug.md`, written from the
-[template](template.md).
+[template](template.md), numbered on from the last: issues up to 0006 are closed and live in git history
+(`git log -- docs/issues`), so the next one is **0007**. A resolved or won't-fix issue is deleted; git is the log.
 
-| id | title | status | resolved by |
-|---|---|---|---|
-| [0001](0001-a-rename-has-no-recipe.md) | A rename has no recipe, and the contract leaves open what moves with it | open | — |
-| [0002](0002-a-ledger-line-with-an-em-dash-in-the-file-name-is-cut.md) | A ledger line whose file name contains " — " is cut in half | resolved | `cad659b` |
-| [0003](0003-an-import-cannot-set-a-persons-birth-day.md) | An import cannot set a person's birth_day, and a bodyless person note cannot be promoted | resolved | `b7e1b8c` (plan 025) |
-| [0004](0004-an-about-link-applied-before-the-persons-own-note-fails.md) | An `about` link applied before the person's own note fails, and the replay aborts on it | resolved | `51ee4d2` (plan 026) |
-| [0005](0005-a-replay-stops-in-the-middle-and-leaves-the-target-half-written.md) | A replay stops in the middle and leaves the target half-written; there is no dry run | resolved | `c729b8b` (plan 027) |
-| [0006](0006-one-edited-word-in-a-stamped-file-stops-the-whole-import.md) | One edited word in a stamped file stops the whole import, and status does not say what changed | resolved | `56bd830` (plan 028) |
+| id | title | status |
+|---|---|---|
+| [0001](0001-a-rename-has-no-recipe.md) | A rename has no recipe, and the contract leaves open what moves with it | open |
 
-Status values: open | proposed (an RFC exists) | resolved | won't fix (with a one-line reason).
+Status values: open | proposed (an RFC exists).
