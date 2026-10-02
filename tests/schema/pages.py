@@ -60,6 +60,9 @@ for t in ('Diet͸', '\U000E0080x'):
 S.K('ASCII title with a wrong key rejected', add(c, 'Diet2', key='dyet2') is None)
 S.K('a key with an ASCII capital rejected', add(c, 'Diet3', key='Diet3') is None)
 S.K('a key with a leading space rejected', add(c, 'Diet4', key=' diet4') is None)
+S.K("a non-ASCII title's key may not hold an ASCII capital", add(c, 'Café Q', key='Café Q') is None)
+S.K('a title with leading space refused (a key the app folded to match)', add(c, ' Pädded', key='pädded') is None)
+S.K('a title with a NUL byte refused', add(c, 'a\x00é', key=title_key('a\x00é')) is None)
 S.K('a non-ASCII title with a plausible key accepted (the app owns the fold)', add(c, 'Über', key='über') is not None)
 
 # ---- title_key vectors of contract/titles-and-wikilinks

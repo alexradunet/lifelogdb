@@ -51,6 +51,9 @@ for v in ('ui', 'cli', 'api', 'agent:claude', 'import:bank_csv', 'import:health-
 for v in ('', 'UI', 'agent claude', 'x' * 65, 'a/b', 'manual ', None):
     S.K(f'source {v!r} rejected on entities and measurements', tryx(c, f"INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES ('page',{NOW},{NOW},?)", (v,)).startswith('ERR')
         and measure(c, 1, '2026-01-01', 3, source=v).startswith('ERR'))
+c.execute("INSERT INTO metrics(name,unit) VALUES ('hab','')")
+S.K('links.source takes the same GLOB as entities.source', link(c, named(c, 'person'), named(c, 'person'), 'friend', source='UI').startswith('ERR'))
+S.K('habit_periods.source takes the same GLOB as entities.source', habit(c, one(c, "select id from metrics where name='hab'"), '2026-01-01', source='Import:x').startswith('ERR'))
 a, b = named(c, 'person'), named(c, 'person')
 S.K('entities.source cannot change', tryx(c, "UPDATE entities SET source='cli' WHERE id=?", (a,)).startswith('ERR'))
 S.K('a no-op full-row update and a tombstone still pass', tryx(c, f"UPDATE entities SET source=source, deleted_at={NOW} WHERE id=?", (a,)) == 'OK')
@@ -89,6 +92,10 @@ for typ, sql in (('page', "UPDATE pages SET body='y' WHERE id=?"),
     c.execute(sql, (ids[typ],))
     S.K(f'updating a {typ} bumps entities.updated_at', one(c, 'select updated_at > created_at from entities where id=?', (ids[typ],)) == 1)
 # ---- entities.import_key: a re-run, a replay or a retry inserts nothing (cookbook/import-a-row-once)
+c = fresh()
+IMP = f"INSERT INTO entities(entity_type,created_at,updated_at,source,import_key) VALUES ('page',{NOW},{NOW},'import:x','k1')"
+S.K('a second entity with the same (source, import_key) is refused', tryx(c, IMP) == 'OK' and 'UNIQUE' in tryx(c, IMP))
+c = fresh(); B = statements(block('import-a-row-once'))
 c = fresh(); B = statements(block('import-a-row-once'))
 ins_ent, ins_page, upd = [s for s in B if code(s).split()[0].rstrip(';').upper() not in ('BEGIN', 'COMMIT')]
 K = 'notes/sourdough.md'

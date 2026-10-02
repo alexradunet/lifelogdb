@@ -13,6 +13,19 @@ def mutate(old, new, nth=0):
     r, i = hits[nth]
     return {r: FILES[r][:i] + new + FILES[r][i + len(old):]}
 
+def nocheck(name):
+    """The mutant of one named CHECK: its condition is always true. The CHECK's parenthesis is found by counting."""
+    t = FILES['schema/schema.sql']; m = re.search(r'CONSTRAINT ' + name + r'\s+CHECK\s*\(', t); assert m, name
+    i, depth = m.end(), 1
+    while depth: depth += {'(': 1, ')': -1}.get(t[i], 0); i += 1
+    return mutate(t[m.start():i], f'CONSTRAINT {name} CHECK (1)')
+
+def notrigger(name):
+    """The mutant of one trigger: it never fires (its WHEN becomes WHEN 0, or WHEN 0 is added before BEGIN)."""
+    t = FILES['schema/schema.sql']; m = re.search(r'CREATE TRIGGER ' + name + r'\b(.*?)BEGIN', t, re.S); assert m, name
+    head = m.group(1); w = head.find('WHEN ')
+    return mutate(m.group(0), f'CREATE TRIGGER {name}' + (head[:w] if w >= 0 else head.rstrip() + ' ') + 'WHEN 0 BEGIN')
+
 ORPHAN = "SELECT id FROM entities WHERE id NOT IN (SELECT id FROM pages WHERE entity_type IN ('page','place') UNION"
 MUTANTS = [   # (suite, what is broken, the broken document)
  ('dates', 'a day CHECK uses = instead of IS', mutate("CONSTRAINT pages_day CHECK (day IS NULL OR date(day) IS day)", "CONSTRAINT pages_day CHECK (day IS NULL OR date(day) = day)")),
@@ -92,6 +105,57 @@ MUTANTS = [   # (suite, what is broken, the broken document)
  ('facts', 'metric-series includes the 91st day', mutate("me.day > date(", "me.day >= date(")),
  ('named', 'a promotion does not revive a tombstoned page', mutate(", deleted_at = NULL   -- cascades", "   -- cascades")),
  ('named', 'a promotion takes a redirect stub', mutate("\n   AND NOT EXISTS (SELECT 1 FROM links WHERE from_id = :ghost_id AND kind = 'redirect')", "")),
+ ('dates', 'entities.updated_at may lack milliseconds', nocheck('entities_updated_at')),
+ ('dates', 'a tombstone need not be an instant', nocheck('entities_deleted_at')),
+ ('dates', 'links.created_at need not be an instant', nocheck('links_created_at')),
+ ('dates', 'measurements.created_at need not be an instant', nocheck('measurements_created_at')),
+ ('dates', 'people.death_day need not round-trip', nocheck('people_death_day')),
+ ('dates', 'habit_periods.end_day need not round-trip', nocheck('habit_periods_end_day')),
+ ('named', 'a death may precede the birth', nocheck('people_death_day_order')),
+ ('identity', 'links.source may be anything', nocheck('links_source')),
+ ('identity', 'habit_periods.source may be anything', nocheck('habit_periods_source')),
+ ('links', 'link_kinds.symmetric may be 2', nocheck('link_kinds_symmetric')),
+ ('facts', 'a metric name may be registered twice', mutate("name  TEXT NOT NULL UNIQUE,", "name  TEXT NOT NULL,")),
+ ('pages', 'a title key may hold an ASCII capital', nocheck('pages_key_folded')),
+ ('pages', 'a title may have leading or trailing space', mutate("CHECK (title = trim(title) AND length(title) >= 1", "CHECK (length(title) >= 1")),
+ ('pages', 'a title may hold a NUL byte', mutate("         AND instr(title, char(0)) = 0\n", "")),
+ ('facts', 'a correction of a row that does not exist passes with foreign_keys=OFF', mutate("   WHERE (SELECT metric_id FROM measurements WHERE id = NEW.supersedes_id) IS NOT NEW.metric_id;", "   WHERE (SELECT metric_id FROM measurements WHERE id = NEW.supersedes_id) <> NEW.metric_id;")),
+ ('links', 'an unknown endpoint id passes as a place with foreign_keys=OFF', mutate("coalesce((SELECT entity_type FROM entities WHERE id = NEW.to_id), '?')", "coalesce((SELECT entity_type FROM entities WHERE id = NEW.to_id), 'place')")),
+ ('named', 'ghost_pages lists a page younger than 30 days', mutate("     AND e.created_at < strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 day')\n", "")),
+ ('named', 'ghost_pages lists a tombstoned page', mutate("   WHERE p.entity_type = 'page' AND p.body = '' AND e.deleted_at IS NULL", "   WHERE p.entity_type = 'page' AND p.body = ''")),
+ ('facts', 'cookbook/mood-over-time shows superseded readings', mutate("  FROM measurement_values me\n  JOIN metrics m ON m.id = me.metric_id AND m.name = 'mood'", "  FROM measurements me\n  JOIN metrics m ON m.id = me.metric_id AND m.name = 'mood'")),
+ ('facts', 'cookbook/metric-series shows superseded readings', mutate("  FROM measurement_values me\n  JOIN metrics m ON m.id = me.metric_id AND m.name = 'weight'", "  FROM measurements me\n  JOIN metrics m ON m.id = me.metric_id AND m.name = 'weight'")),
+ ('writers', 'the DDL does not mark the file as Lifelog', mutate("PRAGMA application_id = 0x4C494645;", "PRAGMA application_id = 0;")),
+ ('pages', 'a title can change', notrigger('pages_title_fixed')),
+ ('identity', 'entities may be hard-deleted', notrigger('entities_no_delete')),
+ ('identity', 'pages may be hard-deleted', notrigger('pages_no_delete')),
+ ('identity', "a link's endpoints can change", notrigger('links_fixed')),
+ ('identity', 'editing a person does not bump updated_at', notrigger('people_touch')),
+ ('identity', 'measurements.source may be anything', nocheck('measurements_source')),
+ ('identity', 'entities.entity_type may be anything', nocheck('entities_entity_type')),
+ ('facts', 'measurements may be deleted', notrigger('measurements_no_delete')),
+ ('facts', "a metric's unit can change", notrigger('metrics_unit_fixed')),
+ ('facts', 'a reading may be corrected twice', mutate("CREATE UNIQUE INDEX measurements_one_correction", "CREATE INDEX measurements_one_correction")),
+ ('facts', 'a measurement may be imported twice', mutate("CREATE UNIQUE INDEX measurements_import", "CREATE INDEX measurements_import")),
+ ('facts', 'a reading may supersede itself', nocheck('measurements_not_self')),
+ ('facts', 'a first reading may have no value', nocheck('measurements_first_has_value')),
+ ('facts', 'a metric name may be upper case', nocheck('metrics_name')),
+ ('facts', 'measurement_values shows retractions', mutate("   WHERE me.value IS NOT NULL\n     AND NOT EXISTS", "   WHERE NOT EXISTS")),
+ ('dates', 'measurements.tz may be anything', nocheck('measurements_tz')),
+ ('dates', 'measurements.day is checked with = instead of IS', mutate("CONSTRAINT measurements_day CHECK (date(day) IS day)", "CONSTRAINT measurements_day CHECK (date(day) = day)")),
+ ('dates', 'people.birth_day is checked with = instead of IS', mutate("CHECK (birth_day IS NULL OR date(birth_day) IS birth_day)", "CHECK (birth_day IS NULL OR date(birth_day) = birth_day)")),
+ ('imports', 'measurements.taken_at may be anything', nocheck('measurements_taken_at')),
+ ('pages', 'a pure-ASCII title may have any key', nocheck('pages_key_ascii')),
+ ('pages', 'a title may be 400 bytes', mutate("length(CAST(title AS BLOB)) <= 240", "length(CAST(title AS BLOB)) <= 400")),
+ ('links', 'deleting a symmetric link leaves its mirror', notrigger('links_mirror_delete')),
+ ('links', 'an unregistered kind passes the trigger', mutate("   WHERE NOT EXISTS (SELECT 1 FROM link_kinds k WHERE k.kind = NEW.kind);", "   WHERE 0 AND NOT EXISTS (SELECT 1 FROM link_kinds k WHERE k.kind = NEW.kind);")),
+ ('links', 'a link kind may be named in upper case', nocheck('link_kinds_kind')),
+ ('links', 'from_types may be malformed', nocheck('link_kinds_from_types')),
+ ('links', 'a symmetric kind may have different endpoint types', nocheck('link_kinds_mirror_valid')),
+ ('habits', 'one habit may start twice on a day', mutate(",\n  UNIQUE (metric_id, start_day)", "")),
+ ('habits', 'an update may give a habit a unit', mutate("   WHERE (SELECT unit FROM metrics WHERE id = NEW.metric_id) IS NOT '';", "   WHERE 0;", nth=1)),
+ ('habits', 'a period that starts where another starts is refused as an overlap', mutate("                    AND p.start_day IS NOT NEW.start_day\n", "")),
+ ('writers', 'the DDL does not set WAL', mutate("PRAGMA journal_mode  = WAL;", "PRAGMA journal_mode  = DELETE;")),
 ]
 
 def run(suite, broken):
@@ -112,10 +176,26 @@ for suite in sorted({s for s, _, _ in MUTANTS}):
 caught = 0
 for suite, name, text in MUTANTS:
     (ok, n), out = run(suite, text)
-    noticed = n != -1 and ok != n
-    caught += noticed
     stop = re.search(r'the suite stopped: (.*)', out)
+    noticed = n != -1 and ok != n and not (stop and n - ok == 1)
+    caught += noticed
     how = 'no result: ' + out.splitlines()[-1][:80] if n == -1 else f'{n - ok} of {n} fail' + (f' (stopped: {stop.group(1)[:60]})' if stop else '')
-    print(f"  {'caught ' if noticed else 'MISSED '} {suite:<10} {name:<60} {how}")
-print(f'mutants: {caught}/{len(MUTANTS)} met expectations')
-sys.exit(0 if caught == len(MUTANTS) else 1)
+    print(f"  {'caught ' if noticed else ('stopped only' if n != -1 and ok != n else 'MISSED ')} {suite:<10} {name:<60} {how}")
+
+# the reference implementation of the save contract (tests/wikilinks/wikisave.py): each rule it can switch off must fail a probe.
+# allow_unassigned is the one exception: that rule is owned by tests/schema/pages.py (the unassigned code points), not by the probes.
+SWITCHES = ['ascii_word', 'tag_no_lookbehind', 'device_bare_only', 'no_parser', 'no_nfc', 'no_stub_rule', 'alias_kept', 'tags_inside_wikilinks',
+            'numeric_tags', 'no_validation', 'self_links', 'no_savepoint', 'no_revive', 'no_delete_sync']
+d = tempfile.mkdtemp(prefix='switch-'); ddl = os.path.join(d, 'ddl.sql'); open(ddl, 'w', encoding='utf-8', newline='\n').write(docsql.ddl())
+total = len(MUTANTS) + len(SWITCHES)
+try:
+    for sw in SWITCHES:
+        p = subprocess.run([sys.executable, '-W', 'ignore', os.path.join(HERE, '..', 'wikilinks', 'probes.py'), ddl, sw], cwd=HERE,
+                           env=dict(os.environ, DDL=ddl, PYTHONDONTWRITEBYTECODE='1', PYTHONUTF8='1'), capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=300)
+        m = re.search(r'(\d+)/(\d+) probes passed', p.stdout.strip().splitlines()[-1] if p.stdout.strip() else '')
+        noticed = bool(m) and int(m.group(1)) < int(m.group(2)) and 'Traceback' not in p.stderr
+        caught += noticed
+        print(f"  {'caught ' if noticed else 'MISSED '} {'probes':<10} {'wikisave.py: ' + sw:<60} {m.group(0) if m else 'no result: ' + (p.stderr.strip().splitlines() or [''])[-1][:80]}")
+finally: shutil.rmtree(d, ignore_errors=True)
+print(f'mutants: {caught}/{total} met expectations')
+sys.exit(0 if caught == total else 1)

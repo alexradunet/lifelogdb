@@ -41,11 +41,14 @@ S.K('deleting one side of a symmetric edge deletes its mirror', one(c, "select c
 S.K('link_kinds: symmetric is fixed (by the trigger: located-in could be symmetric by its CHECK)', 'fixed at registration' in tryx(c, "UPDATE link_kinds SET symmetric=1 WHERE kind='located-in'"))
 S.K('link_kinds: to_types is fixed', 'fixed at registration' in tryx(c, "UPDATE link_kinds SET to_types='person' WHERE kind='about'"))
 S.K('link_kinds: a note edit with symmetric=symmetric passes', tryx(c, "UPDATE link_kinds SET note='n', symmetric=symmetric, from_types=from_types WHERE kind='at'") == 'OK')
+S.K('link_kinds.symmetric is 0 or 1', tryx(c, "INSERT INTO link_kinds(kind, symmetric) VALUES ('x-test', 2)").startswith('ERR'))
 S.K('a kind name in upper case is refused', tryx(c, "INSERT INTO link_kinds(kind,symmetric) VALUES ('Boss',0)").startswith('ERR'))
 S.K('a symmetric kind with different endpoint types is refused', tryx(c, "INSERT INTO link_kinds(kind,symmetric,from_types,to_types) VALUES ('mentor',1,'person','place')").startswith('ERR'))
 S.K('a malformed type list is refused', tryx(c, "INSERT INTO link_kinds(kind,symmetric,from_types,to_types) VALUES ('k2',0,'Person','page')").startswith('ERR'))
 S.K('a misspelt type token fails closed: every link of that kind is refused', tryx(c, "INSERT INTO link_kinds(kind,symmetric,from_types,to_types) VALUES ('godparent',0,'persn','person')") == 'OK'
     and link(c, pa, pb, 'godparent').startswith('ERR'))
+cn = fresh(fk=False)
+S.K('with foreign_keys=OFF, a typed link to an id that does not exist is refused', 'endpoint type' in link(cn, day_page(cn), 99999, 'at'))
 c2 = fresh(fk=False); x, y = named(c2, 'person'), named(c2, 'person')
 S.K('with foreign_keys=OFF an unregistered kind is still refused (the trigger, in autocommit)', 'not registered' in link(c2, x, y, 'nemesis'))
 S.K('the mirrors terminate under recursive_triggers=ON', link(c2, x, y, 'family') == 'OK' and one(c2, "select count(*) from links where kind='family'") == 2

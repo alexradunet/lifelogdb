@@ -38,6 +38,17 @@ S.K('a CHECK with = accepts 2026-9-3 (NULL passes a CHECK)', tryx(t, "INSERT INT
 S.K('the same CHECK with IS rejects it', tryx(t, "INSERT INTO isx VALUES ('2026-9-3')").startswith('ERR'))
 S.K('every day and instant CHECK in schema uses IS, never =', not re.search(r"(?:date|strftime)\([^)]*\)\s*=\s*\w", code(DDL)), re.findall(r"(?:date|strftime)\([^)]*\)\s*=\s*\w+", code(DDL)))
 
+# ---- the other instants and days
+ENT = "INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES ('page','2026-01-01T00:00:00.000Z',?,'ui')"
+S.K('entities.updated_at without milliseconds refused', tryx(c, ENT, ('2026-01-01T00:00:00Z',)).startswith('ERR'))
+S.K('a tombstone that is not an instant refused', tryx(c, "UPDATE entities SET deleted_at='2026-01-01' WHERE id=?", (ent(c, 'page'),)).startswith('ERR'))
+pa_, pb_ = named(c, 'person'), named(c, 'person')
+S.K('measurements.created_at must be an instant', tryx(c, "INSERT INTO measurements(metric_id,day,value,source,created_at) VALUES (1,'2026-01-01',1,'ui','2026-01-01 10:00:00')").startswith('ERR'))
+S.K('links.created_at must be an instant', tryx(c, "INSERT INTO links(from_id,to_id,kind,created_at,source) VALUES (?,?,'related','2026-01-01 10:00:00','ui')", (pa_, pb_)).startswith('ERR'))
+S.K('people.death_day must round-trip', tryx(c, "UPDATE people SET death_day='2026-9-3' WHERE id=?", (pa_,)).startswith('ERR'))
+c.execute("INSERT INTO metrics(name,unit) VALUES ('hab','')"); hab_ = one(c, "select id from metrics where name='hab'")
+S.K('habit_periods.end_day must round-trip', habit(c, hab_, '2026-01-01', '2026-2-1').startswith('ERR'))
+
 # ---- zone
 for tz in ['Europe/Berlin', 'UTC', 'America/Argentina/Buenos_Aires', 'Etc/GMT+5', 'America/Port-au-Prince', None, 'x' * 64]:
     S.K(f'measurements.tz {str(tz)[:20]!r} accepted', measure(c, 1, '2026-06-09', 3, taken_at='2026-06-09T22:30:00.000Z', tz=tz) == 'OK')

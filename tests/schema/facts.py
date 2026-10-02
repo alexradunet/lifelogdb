@@ -13,6 +13,7 @@ measure(c, W_, '2026-06-01', 70)
 S.K('metrics.unit cannot change', tryx(c, "UPDATE metrics SET unit='lb' WHERE name='weight'").startswith('ERR'))
 S.K('a no-op SET unit=unit with a note edit passes', tryx(c, "UPDATE metrics SET unit=unit, note='body weight' WHERE name='weight'") == 'OK')
 S.K('a name typo can be fixed', tryx(c, "UPDATE metrics SET name='body_weight' WHERE name='weight'") == 'OK')
+S.K('a metric name is registered once', tryx(c, "INSERT INTO metrics(name,unit) VALUES ('mood','x')").startswith('ERR'))
 for nm in ['Blood Pressure', 'bp sys', 'bp-sys', '', 'Weight', 'MOOD', 'x(y)', 'ünï']:
     S.K(f'metric name {nm!r} rejected', tryx(c, "INSERT INTO metrics(name,unit) VALUES (?, 'x')", (nm,)).startswith('ERR'))
 for nm in ['bp_sys', 'x1', '_a', 'steps_walked']:
@@ -50,6 +51,18 @@ shown = []
 for v, s in ((71.2, None), (70.8, 1), (None, 2), (71.4, 3)):
     measure(c, w, '2026-09-30', v, supersedes_id=s); shown.append([r[0] for r in c.execute('select value from measurement_values where metric_id=?', (w,))])
 S.K('corrected, retracted, restored: the view shows 71.2, 70.8, nothing, 71.4', shown == [[71.2], [70.8], [], [71.4]], shown)
+
+# ---- foreign_keys=OFF: the trigger alone refuses a correction of a row that does not exist
+c = fresh(fk=False); c.execute("INSERT INTO metrics(name,unit) VALUES ('weight','kg')"); w = one(c, "select id from metrics where name='weight'")
+S.K('with foreign_keys=OFF, a correction of a row that does not exist is refused by the trigger', 'same metric' in measure(c, w, '2026-06-01', 1, supersedes_id=99999))
+
+# ---- the cookbook reads skip superseded and retracted readings
+c = fresh(); c.execute("INSERT INTO metrics(name,unit) VALUES ('weight','kg')"); w = one(c, "select id from metrics where name='weight'")
+for m_, nm_ in ((1, 'mood'), (w, 'weight')):
+    measure(c, m_, '2026-09-01', 3); a_ = one(c, 'select max(id) from measurements'); measure(c, m_, '2026-09-01', 4, supersedes_id=a_)
+    measure(c, m_, '2026-09-02', 5); b_ = one(c, 'select max(id) from measurements'); measure(c, m_, '2026-09-02', None, supersedes_id=b_)
+S.K('cookbook/mood-over-time skips superseded and retracted readings', c.execute(block('mood-over-time')).fetchall() == [('2026-09-01', 4.0)], c.execute(block('mood-over-time')).fetchall())
+S.K('cookbook/metric-series skips superseded and retracted readings', c.execute(block('metric-series'), {'day': '2026-10-02'}).fetchall() == [('2026-09-01', 4.0)], c.execute(block('metric-series'), {'day': '2026-10-02'}).fetchall())
 
 # ---- finite values, NaN
 c = fresh()

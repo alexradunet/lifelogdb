@@ -10,6 +10,7 @@ def mkdb():
 def conn(path):
     c = sqlite3.connect(path, isolation_level=None); c.execute('PRAGMA foreign_keys=ON'); c.execute('PRAGMA recursive_triggers=ON'); c.execute('PRAGMA busy_timeout=5000'); return c
 RESOLVE = 'SELECT p.id FROM pages p WHERE p.title_key = ?'
+S.K('journal_mode=WAL is stored in the file by the DDL', sqlite3.connect(mkdb()).execute('PRAGMA journal_mode').fetchone()[0] == 'wal')
 
 # ---- the race of cookbook/save-a-body
 path = mkdb(); A, B = conn(path), conn(path)
@@ -43,8 +44,8 @@ S.K('the contract/connections block sets every pragma the contract names', b26 a
 head = DDL[:DDL.index('PRAGMA application_id')]
 S.K('the DDL header names SQLite >= 3.51.3, the pragmas and BEGIN IMMEDIATE', all(x in head for x in ('3.51.3', 'foreign_keys = ON', 'recursive_triggers = ON', 'synchronous = FULL', 'trusted_schema = OFF', 'BEGIN IMMEDIATE')))
 c = sqlite3.connect(':memory:', isolation_level=None); c.executescript(DDL)
-S.K('journal_mode=WAL is stored in the file by the DDL', sqlite3.connect(mkdb()).execute('PRAGMA journal_mode').fetchone()[0] == 'wal')
 c.execute('BEGIN'); c.execute('PRAGMA foreign_keys=ON'); inside = c.execute('PRAGMA foreign_keys').fetchone()[0]; c.execute('COMMIT')
+S.K('the DDL marks the file as Lifelog: application_id 0x4C494645 and user_version 1', c.execute('PRAGMA application_id').fetchone()[0] == 0x4C494645 and c.execute('PRAGMA user_version').fetchone()[0] == 1)
 S.K('PRAGMA foreign_keys is a silent no-op inside a transaction', inside == 0)
 meta = dict(c.execute('select key, value from lifelog_meta'))
 S.K("lifelog_meta.sqlite names 3.51.3 and 3.53", '3.51.3' in meta.get('sqlite', '') and '3.53' in meta.get('sqlite', ''))

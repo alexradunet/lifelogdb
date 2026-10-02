@@ -24,6 +24,7 @@ S.K('the page and the entity must agree on the type', tryx(c, "INSERT INTO pages
 S.K('there is no task entity (D23)', tryx(c, f"INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES ('task',{NOW},{NOW},'ui')").startswith('ERR'))
 S.K('a person row with no people row, only a page, is what the orphan query is for (the FKs allow the page alone)',
     tryx(c, "INSERT INTO pages(id,entity_type,title,title_key) VALUES (?, 'person', 'Half', 'half')", (ent(c, 'person'),)) == 'OK')
+S.K('a death before the birth is refused', tryx(c, "UPDATE people SET birth_day='2000-01-02', death_day='2000-01-01' WHERE id=?", (named(c, 'person'),)).startswith('ERR'))
 cols = lambda t: [r[1] for r in c.execute(f"pragma table_info('{t}')")]
 S.K('people keep name, and have no nickname and no note', 'name' in cols('people') and not {'nickname', 'note'} & set(cols('people')))
 S.K('entities has no page_id column', 'page_id' not in cols('entities'))
@@ -140,5 +141,10 @@ gp = page(c, 'Typo page')
 tgt = page(c, 'Renamed target'); st = page(c, 'Old target name', body='#REDIRECT [[Renamed target]]'); link(c, st, tgt, 'redirect')
 c.execute("UPDATE entities SET created_at = strftime('%Y-%m-%dT%H:%M:%fZ','now','-40 day')")
 gh = [r[1] for r in c.execute('select id, title from ghost_pages')]
+gnew = page(c, 'Brand new'); gdead = page(c, 'Tombstoned ghost')
+c.execute("UPDATE entities SET created_at = strftime('%Y-%m-%dT%H:%M:%fZ','now','-40 day') WHERE id=?", (gdead,)); c.execute(f'UPDATE entities SET deleted_at={NOW} WHERE id=?', (gdead,))
+gh2 = [r[0] for r in c.execute('select id from ghost_pages')]
+S.K('ghost_pages leaves a page younger than 30 days alone', gnew not in gh2, gh2)
+S.K('ghost_pages leaves a tombstoned page alone', gdead not in gh2, gh2)
 S.K('ghost_pages lists the real ghost and none of the person or place pages, and not a page a rename points at', gh == ['Typo page'], gh)
 S.done()
