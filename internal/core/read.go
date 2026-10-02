@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"time"
 
@@ -351,11 +352,18 @@ type Result struct {
 	Truncated bool     `json:"truncated"`
 }
 
-// Query runs one statement on the read-only pool (mode=ro, query_only): any SQL may be sent, none can write.
+// Query runs one statement on the read-only pool (mode=ro, query_only): any SQL may be sent, none can write. The
+// statement runs on a connection of its own, which gets query_only and trusted_schema=OFF back before it returns
+// to the pool (connections.md): a PRAGMA sent here never reaches the next reader.
 func (s *Store) Query(ctx context.Context, q string, maxRows int) (*Result, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	rows, err := s.DB.R.QueryContext(ctx, q)
+	conn, err := s.DB.R.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer restoreReader(conn)
+	rows, err := conn.QueryContext(ctx, q)
 	if err != nil {
 		return nil, invalid("%v", err)
 	}
@@ -386,4 +394,15 @@ func (s *Store) Query(ctx context.Context, q string, maxRows int) (*Result, erro
 		return nil, invalid("%v", err)
 	}
 	return res, nil
+}
+
+// restoreReader sets a read connection's pragmas again and returns it to the pool; one that cannot be restored is
+// closed instead, never reused.
+func restoreReader(conn *sql.Conn) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := conn.ExecContext(ctx, `PRAGMA query_only = ON; PRAGMA trusted_schema = OFF`); err != nil {
+		conn.Raw(func(any) error { return driver.ErrBadConn })
+	}
+	conn.Close()
 }

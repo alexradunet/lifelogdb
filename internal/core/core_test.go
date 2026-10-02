@@ -210,3 +210,20 @@ func TestQueryCannotWrite(t *testing.T) {
 		t.Errorf("rows %v truncated %v err %v", r, r != nil && r.Truncated, err)
 	}
 }
+
+// A PRAGMA sent through Query never reaches the next reader: the connection gets its pragmas back first.
+func TestQueryRestoresTheReaderPragmas(t *testing.T) {
+	s := fresh(t)
+	s.DB.R.SetMaxOpenConns(1) // the next query reuses the same connection
+	for _, p := range []string{"PRAGMA trusted_schema = ON", "PRAGMA query_only = OFF"} {
+		if _, err := s.Query(ctx, p, 10); err != nil {
+			t.Fatalf("%s: %v", p, err)
+		}
+	}
+	for p, want := range map[string]int64{"PRAGMA trusted_schema": 0, "PRAGMA query_only": 1} {
+		r, err := s.Query(ctx, p, 10)
+		if err != nil || len(r.Rows) != 1 || r.Rows[0][0] != want {
+			t.Errorf("%s after a reset sent through Query: %v %v, want %d", p, r, err, want)
+		}
+	}
+}
