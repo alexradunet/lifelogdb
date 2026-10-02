@@ -17,6 +17,8 @@ Three runs of the improve skill, all on 2026-10-02.
   and `tests/`: six parallel audits (DDL, docs consistency, cookbook SQL, suites, the wikilink contract and the
   guides, security/DX/direction), every finding re-checked against the files and most by execution on throwaway
   databases. The owner chose all nine plans and decided four questions (below).
+- **Plans 025–028** — on top of `d65b14c`, one per open issue from the first real import (0003–0006), each built
+  in its own worktree in parallel and merged together; issue 0001 (renames) waits for the owner's contract choices.
 
 **The commit hashes cited by plans 001–013 and by this index before plan 014 no longer resolve**: history was
 rewritten before the docs split, so `6058f24`, `3e2fcf4`, `430ea6e`, `4b3b6db`, `6442e03`, `6ce208d`, `6f02944`,
@@ -64,6 +66,10 @@ The same holds for plans 017, 020, 022 and 016, which all add mutants.
 | 021 | [Design: what the freeze is, what must hold before it, what changes after](021-freeze-runbook.md) | P2 | M | all others | IN REVIEW (owner) (`a55fcac`) |
 | 023 | [The writer: `app/`, one Go binary serving a hypermedia API, a CLI and an MCP server](023-the-writer-app.md) | P1 | L | — | IN PROGRESS (v1 built; first real use next) |
 | 024 | [Habits, renames and the import flow in `app/`](024-habits-renames-import.md) | P1 | L | 023 | IN PROGRESS (built; the first real import next) |
+| 025 | [A person's birth and death day from the import](025-person-birth-day-from-the-import.md) (issue 0003) | P1 | S | 024 | DONE (`b7e1b8c`) |
+| 026 | [A link to a page another file promotes is an ordering error](026-link-before-promotion-is-an-ordering-error.md) (issue 0004) | P1 | S | 024 | DONE (`51ee4d2`) |
+| 027 | [A replay rehearses before it writes](027-a-replay-rehearses-before-it-writes.md) (issue 0005) | P1 | S | 024 | DONE (`c729b8b`) |
+| 028 | [A stale gate says what changed](028-a-stale-gate-says-what-changed.md) (issue 0006) | P1 | S | 024 | DONE (`56bd830`) |
 
 Status values: TODO | IN PROGRESS | IN REVIEW (owner) | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale — finding fixed independently or approach

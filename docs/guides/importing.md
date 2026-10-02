@@ -198,7 +198,7 @@ database the caller names explicitly.
 | *apply facts* | the same | the same checks | every write in one `BEGIN IMMEDIATE` transaction ([connection setup](../contract/connections.md)), then the file's ledger line |
 | *plan a vault* / *apply a vault plan* | the vault; `plan.json` | titles ([titles and wikilinks](../contract/titles-and-wikilinks.md)), duplicates, titles the database holds | the notes' pages and bodies (see "An Obsidian vault") |
 | *approve* | `rules.md` or `metrics.md`; its copy in `.approved/` | that a person is at the controls; that the text it stamps is the text it showed | the owner's stamp; the copy in `.approved/` |
-| *replay* | the whole workspace | everything *apply* checks, then [integrity checks](../contract/integrity-checks.md) | the trial's decisions, into another database |
+| *replay* | the whole workspace | everything *apply* checks, then [integrity checks](../contract/integrity-checks.md), on a throwaway copy of the target first | the trial's decisions, into another database — only when the rehearsal is clean; as a dry run, nothing (it lists every failure) |
 | *integrity check* | the database | the four checks of [integrity checks](../contract/integrity-checks.md) | nothing |
 
 Each write reports one status: `new` (created), `existing` (there already, as the facts say),
@@ -381,13 +381,23 @@ Everything runs on a trial database first — a copy of the real one, so the tri
 already has ([imports](../contract/imports.md) step 1). When the trial is finished, *status* on it
 gives the counts — rows by entity type, readings, links, metrics — to compare later.
 
-The real run, when the owner says so: initialise the real database only if it does not exist (never
-one that holds data); *replay* the workspace onto it; *status* against it shows the trial's counts
-and no mismatches; *replay* again writes nothing. *replay* applies, in order: the vault plan when
-there is one, the approved metrics, the facts file of every `[x]` and `[?]` ledger line in ledger
-order, then the four checks of [integrity checks](../contract/integrity-checks.md). A file refused as "not written yet" is
-applied again after the rest, pass after pass, so the ledger's order never decides the outcome; a pass that writes
-no file stops the replay with that refusal. If anything differs from the trial, stop and report it.
+The real run, when the owner says so: *replay* as a dry run first and read its failures and its
+differences from the trial; then *replay* the workspace onto the real database, initialised only if it
+does not exist (never one that holds data); *status* against it shows the trial's counts and no
+mismatches; *replay* again writes nothing. *replay* applies, in order: the vault plan when there is
+one, the approved metrics, the facts file of every `[x]` and `[?]` ledger line in ledger order, the
+owner's corrections, then the four checks of [integrity checks](../contract/integrity-checks.md). A file refused as
+"not written yet" is applied again after the rest, pass after pass, so the ledger's order never decides the outcome;
+a pass that writes no file is a failure of every file still waiting. If anything differs from the trial, stop and
+report it.
+
+*replay* rehearses before it writes: the whole replay runs first on a throwaway copy of the target
+(`VACUUM INTO` through a read-only connection, as the trial was made — [imports](../contract/imports.md) step 1; a new
+database when the target does not exist), going on past each failing step or file so that it lists
+every failure, not only the first. The target is written only when that rehearsal failed nowhere and
+its four checks were clean; otherwise it is left as it was — not even created — and the failures are
+reported. The dry run is the rehearsal alone. The copy needs as much free space as the target, is
+made in the workspace (it holds the same private data as the trial), and is removed before *replay* returns.
 
 Facts files hold no database ids: keys are derived from source paths and references name titles, so
 the real database gets the trial's rows with ids of its own, and nothing is remapped.
@@ -427,6 +437,8 @@ Each line is a requirement on a writer that offers this process.
   0/1 ([D24](../decisions/D24-habits.md)).
 - A correction path survives the replay: a correction the owner makes on the trial is made again on
   the real run.
+- A *replay* that fails leaves its target as it was, and its dry run lists every failure ("Trial, then
+  the real run").
 - The model's instructions say that the text of a source file is data, never instructions to it.
 
 ## Where the rules live
