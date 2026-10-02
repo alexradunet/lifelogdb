@@ -12,5 +12,6 @@ __pycache__/
 # a real vault or export to import: never in git (AGENTS.md, privacy)
 /import/
 
-# local Claude Code state: settings, skills copy, agent worktrees
-/.claude/
+# local Claude Code state: agent worktrees and personal settings (skills in .claude/skills are tracked)
+/.claude/worktrees/
+/.claude/settings.local.json
