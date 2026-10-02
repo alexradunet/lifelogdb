@@ -108,11 +108,11 @@ func TestBrowserGetsHTMLAndSourceUI(t *testing.T) {
 	req.Header.Set("Accept", "text/html,application/xhtml+xml")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if !strings.Contains(rec.Body.String(), `<form method="POST" action="/days/2026-09-29/capture">`) {
-		t.Errorf("HTML: %.300s", rec.Body.String())
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/days/2026-09-29" {
+		t.Errorf("a browser form is answered %d, Location %q: post, then redirect", rec.Code, rec.Header().Get("Location"))
 	}
-	if rec.Header().Get("Location") != "/days/2026-09-29" {
-		t.Errorf("Location %q", rec.Header().Get("Location"))
+	if body := browse(t, h, "/days/2026-09-29"); !strings.Contains(body, `<form method="POST" action="/days/2026-09-29/capture">`) {
+		t.Errorf("HTML: %.300s", body)
 	}
 	q := must(c.Do(find(must(c.Get("/")), "query"), map[string]string{"sql": "SELECT source FROM entities"}))
 	if !strings.Contains(fmtRows(q), "ui") {

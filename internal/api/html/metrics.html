@@ -1,0 +1,41 @@
+{{define "metrics"}}{{template "head" .}}
+<h1>Metrics</h1>
+{{with .Props.metrics}}<div class="scroll"><table><tr><th>metric</th><th>unit</th><th></th><th>note</th></tr>
+{{range .}}<tr><td><a href="/metrics/{{pathesc .name}}">{{.name}}</a></td><td>{{.unit}}</td><td>{{if .habit}}<span class="badge">habit</span>{{end}}</td><td class="muted">{{.note}}</td></tr>{{end}}
+</table></div>{{end}}
+<h2>Record</h2>
+{{template "form" (form (.Action "record"))}}
+{{template "foot" .}}{{end}}
+
+{{define "series"}}{{template "head" .}}
+{{$s := .Props}}
+<h1>{{.Title}}</h1>
+<div class="sub"><span>{{$s.from}} – {{$s.to}}</span><a href="/metrics">All metrics</a>
+<a href="/metrics/{{pathesc $s.metric}}?from=0001-01-01&amp;to={{$s.to}}">All readings</a></div>
+{{with $s.readings}}{{chart $s.from $s.to .}}
+<div class="scroll"><table><tr><th>day</th><th class="num">value</th><th>taken at</th></tr>
+{{range .}}<tr><td><a href="/days/{{.day}}">{{.day}}</a></td><td class="num"><a href="/measurements/{{num .id}}">{{num .value}}</a></td><td class="muted">{{.taken_at}}</td></tr>{{end}}
+</table></div>{{else}}<p class="muted">No readings in this range.</p>{{end}}
+
+{{with $s.habit_periods}}<h2>Habit periods</h2><ul class="plain">{{range .}}<li>from {{.start_day}}{{with .end_day}} to {{.}}{{else}}, ongoing{{end}}</li>{{end}}</ul>{{end}}
+{{with .Action "check-in"}}<h2>Check in</h2>{{template "form" (form . "choices:done" "1 0" "class" "inline")}}{{end}}
+
+<h2>Record</h2>
+{{template "form" (form (.Action "record") "class" "inline" "hide" "taken_at,tz,import_key")}}
+{{template "boxed" (form (.Action "start-habit"))}}
+{{template "boxed" (form (.Action "stop-habit"))}}
+{{template "foot" .}}{{end}}
+
+{{define "habits"}}{{template "head" .}}
+{{$h := .Props}}
+<h1>Habits</h1>
+<div class="sub"><a href="/days/{{$h.day}}">{{weekday $h.day}} {{$h.day}}</a></div>
+<div class="pager"><a href="{{.Link "prev"}}" rel="prev">← Previous day</a><a href="{{.Link "next"}}" rel="next">Next day →</a></div>
+{{with $h.habits}}<ul class="plain">{{range .}}{{$href := printf "/metrics/%s" (pathesc .metric)}}
+<li class="row"><a class="grow" href="{{$href}}">{{.metric}}</a>
+<span class="{{if eq .state "done"}}done{{else if eq .state "not done"}}notdone{{else}}muted{{end}}">{{.state}}</span>
+{{with $.ActionFor "check-in" $href}}{{template "form" (form . "done" "1" "hide" "day" "button" "Done" "class" "tiny")}}{{template "form" (form . "done" "0" "hide" "day" "button" "Not done" "class" "tiny")}}{{end}}</li>{{end}}</ul>
+{{else}}<p class="muted">No habit is active on this day. A habit is a unitless metric with a period: start one from its metric's page.</p>{{end}}
+{{with $h.completion}}<h2>{{$h.from}} – {{$h.to}}</h2><div class="scroll"><table><tr><th>habit</th><th class="num">done</th><th class="num">not done</th><th class="num">not recorded</th><th class="num">active days</th></tr>
+{{range .}}<tr><td>{{.metric}}</td><td class="num">{{num .done}}</td><td class="num">{{num .not_done}}</td><td class="num">{{num .not_recorded}}</td><td class="num">{{num .active_days}}</td></tr>{{end}}</table></div>{{end}}
+{{template "foot" .}}{{end}}

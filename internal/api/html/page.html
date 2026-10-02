@@ -1,0 +1,52 @@
+{{define "page"}}{{template "head" .}}
+{{$p := .Props}}
+<h1>{{.Title}}</h1>
+<div class="sub">
+{{if $p.is_day_page}}<span class="badge">day</span><a href="{{.Link "day"}}">{{weekday $p.day}} — the day view</a>
+{{else}}<span class="badge">{{$p.entity_type}}</span>{{end}}
+{{with $p.person}}{{with .name}}<span>{{.}}</span>{{end}}{{with .birth_day}}<span>born {{.}}</span>{{end}}{{with .death_day}}<span>died {{.}}</span>{{end}}{{end}}
+</div>
+
+{{if $p.deleted_at}}<div class="note warn">Deleted {{$p.deleted_at}}. Nothing is ever removed: revive it to bring it back.
+{{template "form" (form (.Action "revive") "class" "tiny")}}</div>{{end}}
+{{if $p.is_redirect_stub}}<div class="note">This page was renamed; it now only points to the new title.</div>{{end}}
+
+<section>
+{{if $p.body}}<div class="prose">{{markdown $p.body}}</div>{{else}}<p class="muted">Nothing written here yet.</p>{{end}}
+{{with rejected $p.body}}<div class="note warn">These names make no link — a title cannot hold <code>/ \ : * ? " &lt; &gt; |</code>, or start or end with a dot or space:
+{{range $i, $t := .}}{{if $i}}, {{end}}<code>[[{{$t}}]]</code>{{end}}</div>{{end}}
+</section>
+
+{{with form (.Action "save-body") "button" "Save"}}<details{{if not $p.body}} open{{end}}><summary>Edit</summary>
+<p class="desc">CommonMark. [[Title]] links a page and #tag a tag page; both are created if new.</p>
+{{template "form" .}}</details>{{end}}
+
+{{with $p.links}}<h2>Links</h2>{{range group . "kind"}}<div class="row"><span class="muted">{{.Key}}</span>
+{{range .Items}}<a href="/pages/{{num .id}}">{{.title}}</a>{{with .note}} <span class="muted">({{.}})</span>{{end}}{{end}}</div>{{end}}{{end}}
+
+{{with $p.backlinks}}<h2>Backlinks</h2>{{range group . "kind"}}<div class="muted">{{if eq .Key "wikilink"}}mentioned in{{else}}{{.Key}}{{end}}</div>
+<ul class="plain">{{range .Items}}<li><a href="/pages/{{num .id}}">{{.title}}</a>{{if ne .entity_type "page"}} <span class="badge">{{.entity_type}}</span>{{end}}</li>{{end}}</ul>{{end}}{{end}}
+
+{{if or (.Action "rename") (.Action "promote") (.Action "link") (.Action "tombstone")}}<h2>More</h2>
+{{template "boxed" (form (.Action "link") "button" "Add a typed link")}}
+{{template "boxed" (form (.Action "unlink") "button" "Remove a typed link")}}
+{{template "boxed" (form (.Action "rename"))}}
+{{template "boxed" (form (.Action "promote") "button" "Make it a person or a place")}}
+{{template "boxed" (form (.Action "tombstone"))}}{{end}}
+<p class="sub"><span>created {{$p.created_at}}</span><span>saved {{$p.version}}</span></p>
+{{template "foot" .}}{{end}}
+
+{{define "measurement"}}{{template "head" .}}
+{{$m := .Props}}
+<h1>{{if $m.retraction}}Retracted{{else}}{{num $m.value}}{{end}} <span class="muted">{{$m.metric}}</span></h1>
+<div class="sub"><a href="{{.Link "day"}}">{{weekday $m.day}} {{$m.day}}</a><a href="{{.Link "series"}}">{{$m.metric}} series</a>
+{{with $m.taken_at}}<span>taken {{.}}{{with $m.tz}} ({{.}}){{end}}</span>{{end}}</div>
+{{if $m.retraction}}<div class="note">This row retracts the reading before it: that reading never counts.</div>
+{{else if not $m.current}}<div class="note">This reading was corrected or retracted. {{with .Link "superseded-by"}}<a href="{{.}}">See what replaced it</a>.{{end}}</div>{{end}}
+<ul class="plain">
+{{with .Link "supersedes"}}<li><a href="{{.}}">The reading this corrects</a></li>{{end}}
+{{with .Link "captured-with"}}<li><a href="{{.}}">Captured with its day page</a></li>{{end}}
+</ul>
+{{with .Action "correct"}}<h2>Correct</h2>{{template "form" (form . "class" "inline")}}{{end}}
+{{template "boxed" (form (.Action "retract"))}}
+{{template "foot" .}}{{end}}

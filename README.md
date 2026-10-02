@@ -49,9 +49,14 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   socket; the CLI and the MCP server call it in-process (`internal/client`), or a running server with `--url`.
   Writes go through `internal/core` only: no generic UPDATE or DELETE exists anywhere.
 - **Hypermedia (HATEOAS).** Every response is a Siren entity: properties, links, and the actions legal on that
-  resource, with their fields prefilled (a page's `save-body` carries its body and `version`). `Accept: text/html`
-  gets the same entity as a page of links and forms, rendered by one generic template. `GET /actions` is the
-  catalog; the CLI's `do` and the MCP tools are generated from it, so a new action needs no client change.
+  resource, with their fields prefilled (a page's `save-body` carries its body and `version`). `GET /actions` is
+  the catalog; the CLI's `do` and the MCP tools are generated from it, so a new action needs no client change.
+- **The browser gets the same entity.** `Accept: text/html` renders it with a template per class (day, page,
+  person, place, metric, habits, search, lists; `internal/api/html/`, embedded) or a generic one for any other. A
+  template reads only the properties the JSON carries and places only the actions the entity offers, so a form
+  shows where the action is legal and nowhere else. A body is CommonMark with goldmark's safe defaults (raw HTML
+  omitted), its `[[wikilinks]]` and `#tags` linked. No JavaScript: a browser form posts and is answered 303 to the
+  resource it changed, so a reload never posts twice; a refused one shows the text it sent.
 - **Provenance per surface.** `source` is `cli`, `api`, `ui` (a browser form) or `agent:<name>` (MCP);
   the `Lifelog-Source` header sets it.
 - **Optimistic saves.** A body save sends the `version` (`entities.updated_at`) it read; a newer one is a 409.

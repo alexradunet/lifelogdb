@@ -116,7 +116,7 @@ func Candidates(body string) []string {
 			}
 		}
 		for _, t := range scanTags(blanked) {
-			if allDigits(t.tag) || strings.ToLower(t.tag) == "redirect" {
+			if !namesPage(t.tag) {
 				continue
 			}
 			found = append(found, hit{runeToByte(run, t.pos), t.tag})
@@ -151,6 +151,26 @@ func Targets(body, ownKey string) (keys, titles, rejected []string) {
 		keys, titles = append(keys, k), append(titles, t)
 	}
 	return
+}
+
+// TagAt reads the #tag that starts s, where prev is the character before it ('\n' at the start of a line), by the
+// rules Candidates applies; n is its length in bytes, '#' included, and 0 when no tag naming a page starts there.
+func TagAt(prev rune, s string) (tag string, n int) {
+	if !strings.HasPrefix(s, "#") {
+		return "", 0
+	}
+	line, _, _ := strings.Cut(s, "\n")
+	for _, t := range scanTags(append([]rune{prev}, []rune(line)...)) {
+		if t.pos == 1 && namesPage(t.tag) {
+			return t.tag, 1 + len(t.tag)
+		}
+	}
+	return "", 0
+}
+
+// namesPage reports a scanned #tag that names a page: not all digits, not the #REDIRECT word.
+func namesPage(tag string) bool {
+	return !allDigits(tag) && strings.ToLower(tag) != "redirect"
 }
 
 func tagChar(r rune) bool {

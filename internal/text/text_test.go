@@ -159,3 +159,22 @@ func TestUnassignedRejected(t *testing.T) {
 		t.Error("an ordinary title was rejected")
 	}
 }
+
+// TagAt, read at each '#', finds the tags Candidates finds.
+func TestTagAtAgreesWithCandidates(t *testing.T) {
+	for _, in := range []string{"#run", "a#b", "x #run-club! and #ünï", "#123 #2026a", "#REDIRECT", "##x", "/#x", "(#x) #a_b-"} {
+		var got []string
+		prev := '\n'
+		for i, r := range in {
+			if r == '#' {
+				if tag, n := TagAt(prev, in[i:]); n > 0 {
+					got = append(got, tag)
+				}
+			}
+			prev = r
+		}
+		if want := Candidates(in); strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Errorf("%q: TagAt finds %q, Candidates %q", in, got, want)
+		}
+	}
+}

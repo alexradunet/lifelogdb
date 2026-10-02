@@ -110,6 +110,10 @@ func (h *server) serve(f func(*http.Request) (*Entity, error)) http.HandlerFunc 
 			e, status = errorEntity(err)
 		case r.Method == "POST":
 			if self := selfOf(e); self != "" {
+				if wantsHTML(r) { // a browser form: post, then redirect, so a reload never posts again
+					http.Redirect(w, r, self, http.StatusSeeOther)
+					return
+				}
 				w.Header().Set("Location", self)
 			}
 		}
@@ -148,9 +152,7 @@ func errorEntity(err error) (*Entity, int) {
 
 func write(w http.ResponseWriter, r *http.Request, status int, e *Entity) {
 	if wantsHTML(r) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.WriteHeader(status)
-		renderHTML(w, e)
+		renderHTML(w, r, status, e)
 		return
 	}
 	w.Header().Set("Content-Type", "application/vnd.siren+json")

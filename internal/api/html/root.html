@@ -1,0 +1,50 @@
+{{define "root"}}{{template "head" .}}
+<h1>{{weekday .Props.today}}</h1>
+<div class="sub"><a href="/days/{{.Props.today}}">{{.Props.today}}</a><a href="/habits">Today's habits</a></div>
+
+<h2>Capture</h2>
+{{template "form" (form (.Action "capture") "choices:mood" "1 2 3 4 5" "button" "Add to today")}}
+
+<h2 id="new">New</h2>
+{{template "boxed" (form (.Action "create-page"))}}
+{{template "boxed" (form (.Action "create-person"))}}
+{{template "boxed" (form (.Action "create-place"))}}
+{{template "boxed" (form (.Action "record"))}}
+
+<h2>Find</h2>
+{{template "form" (form (.Action "find") "class" "inline" "button" "Open")}}
+
+<h2>More</h2>
+<ul class="plain">
+<li><a href="/ghosts">Ghost pages</a> <span class="muted">— linked, never written</span></li>
+<li><a href="/integrity">Integrity checks</a></li>
+<li><a href="/actions">Every action</a></li>
+</ul>
+{{template "boxed" (form (.Action "register-metric"))}}
+{{template "boxed" (form (.Action "query"))}}
+{{template "foot" .}}{{end}}
+
+{{define "list"}}{{template "head" .}}
+<h1>{{.Title}}</h1>
+{{$items := .Embedded "item"}}
+{{if $items}}<ul class="plain">{{range $items}}<li><a href="{{.Href}}">{{.Title}}</a>{{if eq $.Title "Days"}} <span class="muted">{{weekday .Title}}</span>{{end}}</li>{{end}}</ul>
+{{else}}<p class="muted">Nothing yet.</p>{{end}}
+{{with .Action "create-person"}}<h2>New</h2>{{template "form" (form .)}}{{end}}
+{{with .Action "create-place"}}<h2>New</h2>{{template "form" (form . "class" "inline")}}{{end}}
+{{template "foot" .}}{{end}}
+
+{{define "search"}}{{template "head" .}}
+<h1>Search</h1>
+{{template "form" (form (.Action "search") "class" "inline")}}
+{{with .Props}}{{with .hits}}<ul class="plain">{{range .}}<li><a href="/pages/{{num .id}}">{{.title}}</a><div class="muted">{{.snippet}}</div></li>{{end}}</ul>
+{{else}}<p class="muted">No page matches.</p>{{end}}{{end}}
+<p class="desc">FTS5 syntax: words, "a phrase", prefix*, a OR b.</p>
+{{template "foot" .}}{{end}}
+
+{{define "error"}}{{template "head" .}}
+<h1>{{if .Submitted}}Not saved{{else if eq (num .Props.status) "404"}}Not found{{else}}Refused{{end}} <span class="badge">{{num .Props.status}}</span></h1>
+<p class="note warn">{{.Props.message}}</p>
+{{with .Link "existing"}}<p class="note">A page with that title exists: <a href="{{.}}">open it</a>.</p>{{end}}
+{{with .Submitted}}<h2>What you sent</h2><p class="desc">Nothing was saved. Copy it from here.</p><textarea class="tall" readonly>{{.}}</textarea>{{end}}
+<p class="sub">{{with .Back}}<a href="{{.}}">Back</a>{{end}}<a href="/">Home</a></p>
+{{template "foot" .}}{{end}}
