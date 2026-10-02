@@ -21,6 +21,23 @@ incident ──▶ issue ──▶ proposal (RFC) ──▶ decision (ADR) ─�
 5. **Plan** — [plans/](plans/README.md). When a change is large enough to hand to another agent, it is written as a
    self-contained plan with done criteria, and its status is kept in the plans index.
 
+## Before the freeze
+
+The freeze is the first unreplayable write to the canonical `life.db` ([D13](decisions/D13-migrations-and-freeze.md)).
+Each item is checkable from the repo:
+
+1. Every plan in [plans](plans/README.md) is DONE or REJECTED, and every [issue](issues/README.md) is resolved or won't-fix.
+2. `tests/run_all.py` is green on a SQLite >= 3.53 with FTS5, at the commit of `schema.sql` that will make the file.
+3. The owner has decided each non-goal whose "Reopen when" is the freeze ([non-goals](architecture/non-goals.md): the export,
+   snapshot and off-box copy row): kept out, or reopened through an issue.
+4. The text the file will keep has been read once more as a stranger would: the comments inside the `CREATE`
+   statements, the `lifelog_meta` rows and the `link_kinds` notes ([threat model and the 2075 test](contract/threat-model.md)).
+5. The writer that will make the file reproduces every vector of [titles and wikilinks](contract/titles-and-wikilinks.md) and passes the
+   four [integrity checks](contract/integrity-checks.md) on a trial.
+6. A trial import ran on a copy and its counts are recorded; a second run wrote nothing ([imports](contract/imports.md)).
+
+The freeze itself is the first unreplayable write (D13); the status line of [the docs index](README.md) records the commit.
+
 ## Current truth and history
 
 | folders | what they are |

@@ -1,6 +1,6 @@
 # Lifelog — database architecture
 
-**Status:** freeze candidate. No canonical database exists yet; until one does, [schema.sql](schema/schema.sql) is edited in place ([D13](decisions/D13-migrations-and-freeze.md)). The 2026-10 trial import (a real vault, into a copy — [imports](contract/imports.md)) has already taught [D5](decisions/D05-pages-and-day-pages.md), [D22](decisions/D22-events.md), [D23](decisions/D23-no-tasks.md) and [D24](decisions/D24-habits.md); the next step is the capture path and the first import into the canonical `life.db`, not another review.
+**Status:** freeze candidate. No canonical database exists yet; until one does, [schema.sql](schema/schema.sql) is edited in place ([D13](decisions/D13-migrations-and-freeze.md)). The 2026-10 trial import (a real vault, into a copy — [imports](contract/imports.md)) has already taught [D5](decisions/D05-pages-and-day-pages.md), [D22](decisions/D22-events.md), [D23](decisions/D23-no-tasks.md) and [D24](decisions/D24-habits.md); the next step is the capture path and the first import into the canonical `life.db`, not another review. The checklist before the freeze: [process](process.md#before-the-freeze).
 
 **Scope of the project:** A lifetime personal database — a life log and its backup, not a project
 manager ([D23](decisions/D23-no-tasks.md)): a journal of day pages, notes and wiki pages, people, places and health metrics (events,

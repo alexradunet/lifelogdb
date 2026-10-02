@@ -166,3 +166,16 @@ From the third run (014–022):
 - **`tests/wikilinks/mktable.py`** is unlisted and its label list lacks one row — a helper nobody runs; delete it when next touched.
 - **The `Cluj` fixture in `named.py`** — a real city, like the other generic places; not personal data.
 - **No CI** — a GitHub workflow needs a SQLite ≥ 3.53 build with FTS5; worth doing once a second contributor exists.
+
+## Open questions for the owner (plan 021)
+
+- **Q1. A new file after the freeze.** (a) `schema.sql` stays the full current DDL, each migration also edits it, and a
+  suite proves `schema.sql` equals the frozen DDL plus migrations (same `sqlite_master`) - *recommended*: a new file is
+  still one command; or (b) `schema.sql` is frozen as `0001`, a new file is `0001` plus every migration.
+- **Q2. `pages_fts_delete`** can never fire while `pages_no_delete` exists. Keep it (a guard for an owner who drops
+  that trigger) or cut it before the freeze?
+- **Q3.** The non-goal "Agent CLI/API" reads as cut while D14 and principle 3 make it part of the writer - delete or
+  reword the row?
+- **Q4.** The export/snapshot/off-box non-goal row's reopen trigger is the freeze: decide it (checklist item 3 of
+  [process](../process.md#before-the-freeze)).
+- **Q5.** Should readers that open a `life.db` they did not write also set `trusted_schema=OFF`?
