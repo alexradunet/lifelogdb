@@ -150,7 +150,7 @@ collapsed; everything else counts.
 
 | kind | fields | writes |
 |---|---|---|
-| `person` | `title`, `name`? | a person; promotes the plain page holding that title ([a person or a place](../cookbook/person-or-place.md)), never a day page |
+| `person` | `title`, `name`? | a person; promotes the plain page holding that title ([a person or a place](../cookbook/person-or-place.md)), never a day page or a redirect stub; a tombstoned one is revived |
 | `place` | `title` | a place ([D16](../decisions/D16-places.md)); promotes a plain page the same way |
 | `page` | `title` | a plain, empty page (a topic the file names) |
 | `link` | `from`, `to`, `kind`, `note`? | a link of a `link_kinds` kind other than `wikilink`; `at` only from a day page |

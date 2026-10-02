@@ -3,7 +3,7 @@
 Asymmetric kinds put the entity on either end (`parent-of` is person → person, `about` is entity →
 person), so query both directions. The pages that write `[[Bob Sample]]`, day pages included, link
 to the person's own id ([D20](../decisions/D20-named-pages.md)), so they are in the first leg; what the person's page body links to is in the
-second.
+second. A symmetric kind (`friend`, `family`, `related`) is stored in both directions ([D8](../decisions/D08-entities-and-links.md)), so it is read in the first leg only.
 
 ```sql
 SELECT l.kind, e.entity_type, l.from_id AS other_id, 'in' AS direction
@@ -12,7 +12,8 @@ SELECT l.kind, e.entity_type, l.from_id AS other_id, 'in' AS direction
 UNION ALL
 SELECT l.kind, e.entity_type, l.to_id, 'out'
   FROM links l JOIN entities e ON e.id = l.to_id
- WHERE l.from_id = :entity_id AND e.deleted_at IS NULL;
+ WHERE l.from_id = :entity_id AND e.deleted_at IS NULL
+   AND l.kind NOT IN (SELECT kind FROM link_kinds WHERE symmetric = 1);
 ```
 
 The legs are index-served by `links_to` and by the `UNIQUE(from_id, to_id, kind)` index.

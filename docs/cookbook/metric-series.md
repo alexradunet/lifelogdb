@@ -4,7 +4,7 @@
 SELECT me.day, me.value
   FROM measurement_values me
   JOIN metrics m ON m.id = me.metric_id AND m.name = 'weight'
- WHERE me.day >= date(:day, '-90 day')
+ WHERE me.day > date(:day, '-90 day') AND me.day <= :day
  ORDER BY me.day;
 ```
 

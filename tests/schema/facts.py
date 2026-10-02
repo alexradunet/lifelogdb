@@ -83,6 +83,11 @@ S.K('with recursive_triggers=ON the same REPLACE is refused and history is intac
     tryx(c1, f"INSERT OR REPLACE INTO measurements(metric_id,day,value,source,import_key,created_at) VALUES (2,'2026-01-01',99,'import:s','k',{NOW})").startswith('ERR')
     and c1.execute('select value from measurements').fetchall() == [(70.0,)])
 
+# ---- cookbook/metric-series: the 90 days ending on :day
+c = fresh(); c.execute("INSERT INTO metrics(name,unit) VALUES ('weight','kg')"); w = one(c, "select id from metrics where name='weight'")
+for d_ in ('2026-07-04', '2026-07-05', '2026-10-02', '2026-10-03'): measure(c, w, d_, 70)
+S.K('cookbook/metric-series: the 90 days ending on :day, none after it', [r[0] for r in c.execute(block('metric-series'), {'day': '2026-10-02'})] == ['2026-07-05', '2026-10-02'])
+
 # ---- the read view is index-served
 c = fresh(); c.execute("INSERT INTO metrics(name,unit) VALUES ('w','kg')"); c.execute('BEGIN')
 c.executemany(f"INSERT INTO measurements(metric_id,day,value,source,created_at) VALUES (2,?,?,'ui',{NOW})",

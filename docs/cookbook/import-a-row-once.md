@@ -17,10 +17,13 @@ VALUES (:page_id, 'Sourdough', 'sourdough', 'Feed the starter the night before.'
 COMMIT;
 
 -- a later run finds the note changed: update the live page that has the key; a tombstoned one stays gone
+BEGIN IMMEDIATE;
 UPDATE pages
    SET body = 'Feed the starter the night before; 75% water.'
  WHERE id = (SELECT id FROM entities
               WHERE source = 'import:vault' AND import_key = :import_key AND deleted_at IS NULL);
+-- then, before COMMIT, the link sync of cookbook/save-a-body.md (steps 1-4) for this page's new body
+COMMIT;
 ```
 
 A run that inserts nothing the second time is the check of [imports](../contract/imports.md) step 5. `import_key` never changes

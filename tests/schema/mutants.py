@@ -85,6 +85,11 @@ MUTANTS = [   # (suite, what is broken, the broken document)
  ('diagrams', 'a new link kind, the map unchanged', mutate("  ('friend',   1, 'person',    'person',       NULL),", "  ('mentor',   0, 'person',    'person',       NULL),\n  ('friend',   1, 'person',    'person',       NULL),")),
  ('diagrams', 'the correction story shows a wrong value', mutate('state "view shows 70.8" as V2', 'state "view shows 70.9" as V2')),
  ('diagrams', 'a non-key column is drawn', mutate('    link_kinds {\n        TEXT kind PK\n', '    link_kinds {\n        TEXT kind PK\n        INTEGER symmetric\n')),
+ ('named', 'the ark query lists a symmetric relation in both legs', mutate(" AND l.kind NOT IN (SELECT kind FROM link_kinds WHERE symmetric = 1)", "")),
+ ('facts', 'metric-series has no upper bound', mutate("me.day <= :day", "1")),
+ ('facts', 'metric-series includes the 91st day', mutate("me.day > date(", "me.day >= date(")),
+ ('named', 'a promotion does not revive a tombstoned page', mutate(", deleted_at = NULL   -- cascades", "   -- cascades")),
+ ('named', 'a promotion takes a redirect stub', mutate("\n   AND NOT EXISTS (SELECT 1 FROM links WHERE from_id = :ghost_id AND kind = 'redirect')", "")),
 ]
 
 def run(suite, broken):

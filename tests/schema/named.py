@@ -63,7 +63,7 @@ if len(sel0) == 1 and len(create) == 5 and len(promo) == 4:
     pid = P.get('person_id')
     S.K('create: one id, a person with its page titled by the handle', c.execute('select e.entity_type, p.entity_type, p.title, pe.name from entities e join pages p using(id) join people pe using(id)').fetchall()
         == [('person', 'person', 'Bob Sample', 'Bob Sample')] and pid is not None)
-    S.K('step 0 now reports the handle as taken (entity_type person)', c.execute(sel0[0], {'handle_key': 'bob sample'}).fetchall() == [(pid, 'person')])
+    S.K('step 0 now reports the handle as taken (entity_type person)', c.execute(sel0[0], {'handle_key': 'bob sample'}).fetchall() == [(pid, 'person', None, 0)])
     S.K('the same handle cannot be made twice, in any case', 'title_key' in tryx(c, "INSERT INTO pages(id,title,title_key) VALUES (?, 'BOB SAMPLE', 'bob sample')", (ent(c, 'page'),)))
     S.K('a place is created as its entity and its page', named(c, 'place', 'Berlin') and one(c, "select count(*) from pages where entity_type <> 'page'") == 2)
     gp = page(c, 'Lakeside')
@@ -72,7 +72,7 @@ if len(sel0) == 1 and len(create) == 5 and len(promo) == 4:
     # promote a ghost an earlier day page made
     c = fresh(); mid, _ = W.capture(c, 'Today I met [[Ana Example]]', '2026-09-30')
     gid = one(c, "select id from pages where title_key='ana example'")
-    S.K('step 0 finds the ghost the day page made, as a plain page', c.execute(sel0[0], {'handle_key': 'ana example'}).fetchall() == [(gid, 'page')])
+    S.K('step 0 finds the ghost the day page made, as a plain page', c.execute(sel0[0], {'handle_key': 'ana example'}).fetchall() == [(gid, 'page', None, 0)])
     for st in promo: run_block(c, st, dict(ghost_id=gid))
     S.K('the promotion block turns it into a person, one id', c.execute('select e.entity_type, pe.name from entities e join people pe using(id) where id=?', (gid,)).fetchall() == [('person', 'Ana Example')])
     S.K('...and the old day page already names her, no re-save needed (cookbook/days-that-name)', [r[0] for r in c.execute(block('days-that-name'), {'entity_id': gid})] == ['2026-09-30'])
@@ -83,6 +83,12 @@ if len(sel0) == 1 and len(create) == 5 and len(promo) == 4:
     S.K('promoting a day page is refused by pages_day_page_plain: the day stays the journal\'s page', 'pages_day_page_plain' in tryx(c, promo[1], {'ghost_id': mid})
         and one(c, 'select e.entity_type || p.entity_type from entities e join pages p using(id) where id=?', (mid,)) == 'pagepage')
     S.K('...nor into a place', 'pages_day_page_plain' in tryx(c, promo[1].replace("'person'", "'place'", 1), {'ghost_id': mid}))
+    t = page(c, 'Cleo Sample'); c.execute(f'UPDATE entities SET deleted_at={NOW} WHERE id=?', (t,))
+    tryx(c, promo[1], {'ghost_id': t}); tryx(c, promo[2], {'ghost_id': t})
+    S.K('a tombstoned ghost is promoted and revived', one(c, "select entity_type is 'person' and deleted_at is null from entities where id=?", (t,)) == 1)
+    new = page(c, 'Dana Sample (colleague)'); stub = page(c, 'Dana', body='#REDIRECT [[Dana Sample (colleague)]]'); link(c, stub, new, 'redirect')
+    S.K('a redirect stub is not promoted: the UPDATE changes no row and the people insert fails', tryx(c, promo[1], {'ghost_id': stub}) == 'OK'
+        and c.execute('select changes()').fetchone()[0] == 0 and tryx(c, promo[2], {'ghost_id': stub}).startswith('ERR'))
 
 # ---- C  the save contract reaches the person
 c = fresh(); bod = named(c, 'person', 'Bob Sample', name='Bob Sample')
@@ -108,6 +114,9 @@ c.execute(f'UPDATE entities SET deleted_at={NOW} WHERE id=?', (m3,))
 S.K('...and drops a tombstoned day', [r[0] for r in c.execute(q, {'entity_id': bod})] == ['2026-09-28'])
 bl = c.execute(block('backlinks'), {'page_id': bod}).fetchall()
 S.K('cookbook/backlinks labels the backlinks of a person by title, a day page by its day', sorted(r[3] for r in bl) == sorted(['Coffee spots', '2026-09-28']), bl)
+ana = named(c, 'person', 'Ana Example', name='Ana Example'); link(c, bod, ana, 'friend')
+ark = c.execute(block('everything-about'), {'entity_id': bod}).fetchall()
+S.K('...and a friend once, not twice', [(r[0], r[2], r[3]) for r in ark if r[0] == 'friend'] == [('friend', ana, 'in')], ark)
 before = sorted(c.execute("select from_id, to_id from links where kind='wikilink'").fetchall())
 c.execute("UPDATE people SET name='Bob S.' WHERE id=?", (bod,))
 for pid, body in c.execute('select id, body from pages').fetchall():
