@@ -55,7 +55,7 @@ The same holds for plans 017, 020, 022 and 016, which all add mutants.
 | 013 | Keep the LLM-assisted import process as a writer-neutral guide (`IMPORTING.md`) | P1 | M | 008 | DONE (`961b040`, `6ce208d`) |
 | 014 | [Make the text the freeze will keep forever say only true things](014-pre-freeze-text-hygiene.md) | P1 | S | — | DONE (`26c20b5`) |
 | 015 | [The suite runner states what it needs, checks it first, and never hangs](015-runner-states-and-checks-its-needs.md) | P1 | S | 014 (ordering) | DONE (`fee9a39`) |
-| 017 | [The cookbook recipes a writer copies return the right rows and write safely](017-cookbook-recipes-return-the-right-rows.md) | P1 | S | 015 (ordering) | TODO |
+| 017 | [The cookbook recipes a writer copies return the right rows and write safely](017-cookbook-recipes-return-the-right-rows.md) | P1 | S | 015 (ordering) | DONE (`feca0eb`) |
 | 022 | [A mention under an old name counts for its redirect target; a redirect target is never a ghost](022-an-old-name-still-counts.md) | P2 | S | 017 | TODO |
 | 016 | [Every rule of the DDL has an expectation that fails when it is removed, and a mutant](016-every-rule-has-a-test-and-a-mutant.md) | P1 | M | 015, 017, 022 | TODO |
 | 018 | [An import workspace can never be committed; the threat model names the model-driven import](018-import-workspaces-stay-out-of-git.md) | P1 | S | after 014, 017 (same files) | TODO |
