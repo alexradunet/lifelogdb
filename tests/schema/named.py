@@ -35,6 +35,11 @@ S.K('a plain page is promoted: UPDATE entities.entity_type cascades to pages.ent
 S.K('...and the day page\'s link to it is kept (the id did not change)', c.execute("select to_id from links where from_id=?", (mm,)).fetchall() == [(g,)])
 S.K('a promoted person cannot be turned back into a plain page (the people row\'s FK)', tryx(c, "UPDATE entities SET entity_type='page' WHERE id=?", (g,)).startswith('ERR'))
 S.K('...nor into a place', tryx(c, "UPDATE entities SET entity_type='place' WHERE id=?", (g,)).startswith('ERR'))
+dp = day_page(c, '2026-09-29')
+S.K('a day page cannot become a person or a place: the cascade meets pages_day_page_plain',
+    all('pages_day_page_plain' in tryx(c, f"UPDATE entities SET entity_type='{t}' WHERE id=?", (dp,)) for t in ('person', 'place')))
+S.K('a person or a place cannot be titled with a day, even with that day', 'pages_day_page_plain' in tryx(c,
+    "INSERT INTO pages(id,entity_type,title,title_key,day) VALUES (?, 'place', '2026-09-28', '2026-09-28', '2026-09-28')", (ent(c, 'place'),)))
 S.K('a page cannot become an unknown type', tryx(c, "UPDATE entities SET entity_type='task' WHERE id=?", (page(c, 'Tk'),)).startswith('ERR'))
 cf = fresh(fk=False)
 S.K('pages.entity_type is checked even on a connection without foreign keys (pages_entity_type)',
@@ -75,11 +80,9 @@ if len(sel0) == 1 and len(create) == 5 and len(promo) == 4:
         and c.execute('select changes()').fetchone()[0] == 0 and tryx(c, promo[2], {'ghost_id': gid}).startswith('ERR'))
     pl = named(c, 'place', 'Lisbon')
     S.K('promoting a place\'s page into a person changes no row, and the people insert fails on its FK', tryx(c, promo[1], {'ghost_id': pl}) == 'OK' and tryx(c, promo[2], {'ghost_id': pl}).startswith('ERR'))
-    S.K('promoting a day page changes no row, and the people insert fails: the day stays the journal\'s page', tryx(c, promo[1], {'ghost_id': mid}) == 'OK'
-        and c.execute('select changes()').fetchone()[0] == 0 and tryx(c, promo[2], {'ghost_id': mid}).startswith('ERR')
-        and one(c, 'select entity_type from pages where id=?', (mid,)) == 'page')
-    S.K('...nor into a place: the UPDATE alone changes no row', tryx(c, promo[1].replace("'person'", "'place'", 1), {'ghost_id': mid}) == 'OK'
-        and c.execute('select changes()').fetchone()[0] == 0)
+    S.K('promoting a day page is refused by pages_day_page_plain: the day stays the journal\'s page', 'pages_day_page_plain' in tryx(c, promo[1], {'ghost_id': mid})
+        and one(c, 'select e.entity_type || p.entity_type from entities e join pages p using(id) where id=?', (mid,)) == 'pagepage')
+    S.K('...nor into a place', 'pages_day_page_plain' in tryx(c, promo[1].replace("'person'", "'place'", 1), {'ghost_id': mid}))
 
 # ---- C  the save contract reaches the person
 c = fresh(); bod = named(c, 'person', 'Bob Sample', name='Bob Sample')

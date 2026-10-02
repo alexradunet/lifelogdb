@@ -128,8 +128,8 @@ Their homes are in `SCHEMA.md`; this list is the checklist, not the rule.
 - **Links**: a closed, endpoint-typed `link_kinds` registry (D8).
 - **Pages** (§2.4, D5): every page titled, with filename-safe, immutable titles and a unique app-computed
   `title_key` (NFC + casefold; vectors in §2.4). The journal is one day page per local day, titled
-  `YYYY-MM-DD` (`pages_day_page`); where the owner was that day is `at` links to places (D16). There
-  are no events or tasks (D22, D23); nothing repeats (D15). A habit is a 0/1 metric with active periods (D24).
+  `YYYY-MM-DD` (`pages_day_page`) and never promoted (`pages_day_page_plain`); where the owner was that
+  day is `at` links to places (D16). There are no events or tasks (D22, D23); nothing repeats (D15). A habit is a 0/1 metric with active periods (D24).
 - **Connections** (§2.6): one writing application per file; per connection `PRAGMA foreign_keys=ON`,
   `recursive_triggers=ON`, `synchronous=FULL`, `trusted_schema=OFF`, read back and refused if wrong;
   SQLite ≥ 3.51.3 for writers; every write transaction starts with `BEGIN IMMEDIATE`; the driver opens

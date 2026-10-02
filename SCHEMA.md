@@ -111,8 +111,7 @@ ones that span tables are also rows of `lifelog_meta` (§3), so the file carries
   the first two only, with `entity_type = 'place'`: it has no columns of its own (D16). A ghost page an
   earlier `[[Name]]` created is *promoted* instead: `UPDATE entities SET entity_type = 'person'` (the
   foreign key cascades it to `pages.entity_type`), then insert the `people` row; a place needs nothing
-  more. A day page is never promoted: it is the journal of its day (D5), and its `at` links need it
-  to stay a page (D16). The foreign keys refuse a person without a page and a person turned back into
+  more. A day page is never promoted (`pages_day_page_plain`, D20). The foreign keys refuse a person without a page and a person turned back into
   a page (executed). Title uniqueness already refuses a second `Sam`, so two people called Sam are told apart
   in the handle (`Sam (barber)`); `people.name` is the editable full name.
 - **Provenance.** `source` on `entities`, `links`, `measurements` and `habit_periods` names the writer
@@ -554,7 +553,8 @@ CREATE TABLE pages (
   -- All prose (D5): every page is titled, unique and linkable: an essay, a reference page, a tag, the page
   -- of a person or a place (its entity_type says which, D20), and the journal. The journal is one
   -- DAY PAGE per local day, titled YYYY-MM-DD ('2026-09-29'): its title equals its day (pages_day_page), so
-  -- [[2026-09-29]] reaches it. Capture appends to today's page, created on the first write.
+  -- [[2026-09-29]] reaches it. Capture appends to today's page, created on the first write. A day page is
+  -- never a person or a place (pages_day_page_plain): a promotion of it is refused (D20).
   -- Where was I: the places the owner was at that day are links(kind='at') from its day page (D16).
   -- A title is permanent and a valid file name on every OS: a page is never renamed (create the new page,
   -- make the old one a '#REDIRECT [[New]]' stub, add links(kind='redirect')).
@@ -571,6 +571,7 @@ CREATE TABLE pages (
   UNIQUE (id, entity_type),               -- the parent key of people
   FOREIGN KEY (id, entity_type) REFERENCES entities(id, entity_type) ON UPDATE CASCADE,   -- a promoted page follows its entity's type
   CONSTRAINT pages_day_page CHECK (date(title) IS NOT title OR day IS title),   -- a page titled with a day is that day's page
+  CONSTRAINT pages_day_page_plain CHECK (date(title) IS NOT title OR entity_type = 'page'),   -- ...and stays a plain page
   CONSTRAINT pages_key_folded CHECK (length(title_key) >= 1 AND title_key = trim(title_key)
                                AND title_key NOT GLOB '*[A-Z]*'),      -- a folded key has no ASCII capitals
   CONSTRAINT pages_key_ascii CHECK (title GLOB '*[^ -~]*' OR title_key = lower(title)),   -- pure-ASCII titles: the DB verifies the key
@@ -1002,7 +1003,7 @@ flowchart LR
 
 A page starts as a ghost when a link names a title that does not exist yet, or as a written page when
 the owner creates it on purpose — a day page when the first thing is captured that day (D5). Either can
-become the page of a person or a place (D20) — except a day page, which stays the journal of its day.
+become the page of a person or a place (D20) — except a day page (`pages_day_page_plain`).
 
 ```mermaid
 %% diagram: page-life
@@ -1475,7 +1476,9 @@ the constraints that carry it; the rule itself is in §3 or §2.
 - **Promotion.** A ghost page made by an earlier `[[Bob Sample]]` becomes the person by
   `UPDATE entities SET entity_type = 'person'` — the `ON UPDATE CASCADE` foreign key carries the new type to
   `pages.entity_type` — and one `people` insert (a place needs none). The foreign keys refuse a person
-  without a page, and undoing a promotion (the `people` row's FK) (executed).
+  without a page, and undoing a promotion (the `people` row's FK) (executed). A day page is never
+  promoted: it is the journal of its day (D5), and its `at` links need it to stay a page (D16).
+  `pages_day_page_plain` checks the cascaded type, so the `UPDATE` on `entities` is refused (executed).
 - **Why.** The owner writes `Today I met [[Bob Sample]]` and wants that day's page attached to the
   person.
   A wikilink can only land on a page, so the person must be one. Giving the person and the page the
@@ -1918,17 +1921,16 @@ COMMIT;
 
 -- promote: the plain page :ghost_id becomes a person; its links stay (the id does not change)
 BEGIN IMMEDIATE;
-UPDATE entities SET entity_type = 'person'   -- cascades to pages.entity_type
- WHERE id = :ghost_id AND entity_type = 'page'
-   AND id NOT IN (SELECT id FROM pages WHERE title = day);   -- a day page stays the journal's (§2.2)
+UPDATE entities SET entity_type = 'person' WHERE id = :ghost_id AND entity_type = 'page';   -- cascades to pages.entity_type
 INSERT INTO people(id, name) VALUES (:ghost_id, 'Ana Example');
 COMMIT;
 ```
 
 The day pages that already name the person (§6.3) keep their links: the id did not change. A promotion
-cannot go wrong quietly: a page that is already named, a day page or none at all makes the `UPDATE`
-change no row, so the `people` insert fails on its key (executed); roll the transaction back. A place's
-promotion has no second statement, so its writer checks that the `UPDATE` changed one row.
+cannot go wrong quietly: a page that is already named, or none at all, makes the `UPDATE` change no
+row, so the `people` insert fails on its key; a day page makes the `UPDATE` itself fail
+(`pages_day_page_plain`). Both executed; roll the transaction back. A place's promotion has no second
+statement, so its writer checks that the `UPDATE` changed one row.
 
 ### 6.15 Import a row once: insert it, re-run it, update a changed one
 

@@ -30,7 +30,7 @@ MUTANTS = [   # (suite, what is broken, the broken document)
  ('links', 'located-in accepts any endpoint', mutate("  ('located-in', 0, 'place',   'place',", "  ('located-in', 0, NULL,      NULL,")),
  ('named', 'people hang off entities instead of their page', mutate("  FOREIGN KEY (id, entity_type) REFERENCES pages(id, entity_type),\n  CONSTRAINT people_death_day_order", "  FOREIGN KEY (id, entity_type) REFERENCES entities(id, entity_type),\n  CONSTRAINT people_death_day_order")),
  ('named', 'a promotion does not cascade to the page', mutate("REFERENCES entities(id, entity_type) ON UPDATE CASCADE,", "REFERENCES entities(id, entity_type),")),
- ('named', '§6.14 promotes a day page', mutate("\n   AND id NOT IN (SELECT id FROM pages WHERE title = day);", ";")),
+ ('named', 'a day page may be promoted', mutate("CHECK (date(title) IS NOT title OR entity_type = 'page')", "CHECK (1)")),
  ('named', 'ghost_pages lists the page of a person', mutate("WHERE p.entity_type = 'page' AND p.body = ''", "WHERE p.body = ''")),
  ('named', 'a wikilink cannot land on a person', mutate("('wikilink', 0, 'page,person,place', 'page,person,place',", "('wikilink', 0, 'page,person,place', 'page',")),
  ('named', 'a page may claim an unknown type', mutate("CHECK (entity_type IN ('page','person','place')),   -- 'page', or the named entity this page is", "CHECK (1),   -- 'page', or the named entity this page is")),
