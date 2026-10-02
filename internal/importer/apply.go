@@ -2,7 +2,9 @@ package importer
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -106,7 +108,11 @@ func (w *Workspace) write(ctx context.Context, s *core.Store, f *Facts, pos []in
 		for i, wr := range f.Writes {
 			o, err := applyWrite(t, f.File, wr, keys[i], rules)
 			if err != nil {
-				return refuse("%s: write %d (%s): %v", f.File, i+1, wr.kind(), err)
+				e := refuse("%s: write %d (%s): %v", f.File, i+1, wr.kind(), err)
+				if errors.Is(err, errNotYet) {
+					return &notYet{e.(*core.Error)}
+				}
+				return e
 			}
 			o.Write = i + 1
 			r.Outcomes = append(r.Outcomes, o)
@@ -161,6 +167,9 @@ func applyWrite(t *core.Tx, file string, wr Write, key string, rules *Rules) (Ou
 		}
 		to, err := resolve(t, l.To)
 		if err != nil {
+			return Outcome{}, err
+		}
+		if err := notPromotedYet(t, l); err != nil {
 			return Outcome{}, err
 		}
 		added, err := t.Link(from, to, l.Kind, l.Note)
@@ -259,6 +268,20 @@ func named(t *core.Tx, rules *Rules, typ, title, key string, create func(string)
 	return o, fmt.Errorf("%q is held by a %s, not a %s", title, p.Type, typ)
 }
 
+// errNotYet is a reference to a row another write makes: a title no live row holds, or a plain page that a link
+// needs as a person or a place before the file that promotes it is applied. Applied alone, the file is refused;
+// a replay applies it again after the rest (the guide's "Trial, then the real run").
+var errNotYet = errors.New("not written yet")
+
+// notYet is a file's refusal caused by errNotYet: still a core.Error (a 422), and errors.Is(err, errNotYet).
+type notYet struct{ refusal *core.Error }
+
+func (e *notYet) Error() string   { return e.refusal.Msg }
+func (e *notYet) Unwrap() []error { return []error{e.refusal, errNotYet} }
+
+// waitsForAnother reports whether a file was refused only for a row another file writes.
+func waitsForAnother(err error) bool { return errors.Is(err, errNotYet) }
+
 // resolve is a reference by title: it must name a live row already written.
 func resolve(t *core.Tx, title string) (int64, error) {
 	p, err := t.Lookup(title)
@@ -266,9 +289,45 @@ func resolve(t *core.Tx, title string) (int64, error) {
 		return 0, err
 	}
 	if p == nil || p.Deleted {
-		return 0, fmt.Errorf("%q is not written yet: write it earlier in the file, or apply the other file first", title)
+		return 0, fmt.Errorf("%q is %w: write it earlier in the file, or apply the other file first", title, errNotYet)
 	}
 	return p.ID, nil
+}
+
+// notPromotedYet refuses, as not written yet, a link end that is a plain page where the kind needs a person or a
+// place (link_kinds.from_types / to_types): a person or place write promotes it, in this file or another. Any other
+// type the kind does not accept (a day page, a stub, a person where a place is needed) is left to the registry's
+// own refusal.
+func notPromotedYet(t *core.Tx, l *LinkW) error {
+	fromTypes, toTypes, found, err := t.LinkEnds(l.Kind)
+	if err != nil || !found {
+		return err // an unknown kind is refused by the registry
+	}
+	for _, end := range []struct {
+		title string
+		types []string
+	}{{l.From, fromTypes}, {l.To, toTypes}} {
+		if end.types == nil || slices.Contains(end.types, "page") {
+			continue
+		}
+		var wanted []string
+		for _, typ := range []string{"person", "place"} {
+			if slices.Contains(end.types, typ) {
+				wanted = append(wanted, typ)
+			}
+		}
+		p, err := t.Lookup(end.title)
+		if err != nil {
+			return err
+		}
+		if len(wanted) == 0 || p.Type != "page" || p.DayPage || p.Stub {
+			continue
+		}
+		need := strings.Join(wanted, " or ")
+		return fmt.Errorf("%q is still a plain page, and the %s link needs a %s there: that %s is %w; write it earlier in the file, or apply the file that writes it first",
+			end.title, l.Kind, need, need, errNotYet)
+	}
+	return nil
 }
 
 // ---- look-alikes and find
