@@ -158,25 +158,29 @@ func (w *Workspace) Gate(name string) (string, error) {
 
 // Approve stamps rules.md or metrics.md as the owner's. Only the CLI calls it, at an interactive terminal; it
 // is not in the API, so no model can reach it. In metrics.md every row still proposed becomes approved first.
-func (w *Workspace) Approve(name string, today time.Time) error {
-	if name != "rules.md" && name != "metrics.md" {
-		return fmt.Errorf("approve rules.md or metrics.md, not %s", name)
-	}
+// shown is the Hash of the Review the owner read: a body that changed since is refused, never stamped. The
+// approved file is then copied for the next review (approval.go).
+func (w *Workspace) Approve(name string, today time.Time, shown string) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	text, ok, err := w.read(name)
+	rest, err := w.toStamp(name)
 	if err != nil {
 		return err
 	}
-	if !ok {
-		return fmt.Errorf("no %s to approve", name)
+	if bodyHash(rest) != shown {
+		return fmt.Errorf("%s changed after it was shown: nothing stamped; approve it again", name)
 	}
-	_, rest := splitStatus(text)
-	if name == "metrics.md" {
-		rest = approveRows(rest)
+	stamped := []byte(fmt.Sprintf("status: approved %s (owner) sha256:%s", today.Format(time.DateOnly), bodyHash(rest)) + "\n" + rest)
+	if err := writeAtomic(w.file(name), stamped); err != nil {
+		return err
 	}
-	stamp := fmt.Sprintf("status: approved %s (owner) sha256:%s", today.Format(time.DateOnly), bodyHash(rest))
-	return writeAtomic(w.file(name), []byte(stamp+"\n"+rest))
+	if err := os.MkdirAll(filepath.Join(w.Dir, approvedDir), 0o700); err != nil {
+		return fmt.Errorf("%s approved, but no copy kept for the next review: %w", name, err)
+	}
+	if err := writeAtomic(w.approvedPath(name), stamped); err != nil {
+		return fmt.Errorf("%s approved, but no copy kept for the next review: %w", name, err)
+	}
+	return nil
 }
 
 // ---- rules.md

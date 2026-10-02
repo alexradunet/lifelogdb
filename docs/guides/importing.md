@@ -52,6 +52,7 @@ outside every repository, or in a folder its `.gitignore` excludes (this reposit
 | `plan.json` | a vault only: each note's title and day (see "An Obsidian vault") | the writer drafts; the model fixes |
 | `facts/<file>.json` | one facts file per source file, the source's tree mirrored | the model |
 | `trial.db` | the trial database | the writer |
+| `.approved/rules.md`, `.approved/metrics.md` | each stamped file as the owner last approved it, stamp included (see "Gates") | the writer, only when the owner approves |
 
 **rules.md.** The first line is the gate; `source:` gives the `entities.source` of every row
 (`import:<name>`, one per source, `lifelog_meta.source`). The writer reads `## Aliases` (a name the notes write that
@@ -183,7 +184,7 @@ database the caller names explicitly.
 
 | operation | reads | checks | writes |
 |---|---|---|---|
-| *status* | the workspace; the database when one is given | the gates; every done file dry-run against the database | nothing; prints gates, ledger counts, questions, the next file, one "do now" sentence, mismatches |
+| *status* | the workspace; the database when one is given | the gates; every done file dry-run against the database | nothing; prints gates (for a closed gate, the lines changed since its last approval), ledger counts, questions, the next file, one "do now" sentence, mismatches |
 | *ledger* | the source tree | that no ledger exists yet | `ledger.md`, every file `[ ]` |
 | *inspect a file* | one source file | — | nothing; returns its frontmatter, headings, tables as rows, checkboxes and links |
 | *find* | the database | — | nothing; pages, metrics or readings matching a text: exact, same words, more words, fewer words |
@@ -191,7 +192,7 @@ database the caller names explicitly.
 | *check facts* | one facts file, its source file, the workspace, the database | every check below, in a transaction it rolls back | nothing; prints what *apply* would do |
 | *apply facts* | the same | the same checks | every write in one `BEGIN IMMEDIATE` transaction ([connection setup](../contract/connections.md)), then the file's ledger line |
 | *plan a vault* / *apply a vault plan* | the vault; `plan.json` | titles ([titles and wikilinks](../contract/titles-and-wikilinks.md)), duplicates, titles the database holds | the notes' pages and bodies (see "An Obsidian vault") |
-| *approve* | `rules.md` or `metrics.md` | that a person is at the controls | the owner's stamp |
+| *approve* | `rules.md` or `metrics.md`; its copy in `.approved/` | that a person is at the controls; that the text it stamps is the text it showed | the owner's stamp; the copy in `.approved/` |
 | *replay* | the whole workspace | everything *apply* checks, then [integrity checks](../contract/integrity-checks.md) | the trial's decisions, into another database |
 | *integrity check* | the database | the four checks of [integrity checks](../contract/integrity-checks.md) | nothing |
 
@@ -240,6 +241,16 @@ The model cannot open a gate: *approve* is not among its tools, and *approve* re
 at the controls (an interactive terminal, a signed-in owner session). The honest limit: a stamp is a
 line in a file, and anything that can write the file can forge it. The model's instructions forbid
 editing a `status:` line; the owner's review of the workspace is what finally holds.
+
+The stamp covers the whole text, so any edit closes the gate; the owner re-reads only what changed.
+When it stamps, *approve* copies the approved file, stamp included, to `.approved/`. The next *approve*
+shows the lines changed since that copy as a line diff (the whole text the first time, or when no copy
+fits), and stamps only the text it showed: a file changed while the owner read it is not stamped.
+*status* names the changed lines of a closed gate. The copy serves the review and nothing else:
+a gate opens on its own stamp's hash, never on the copy. A copy whose stamp does not cover its own text,
+or that is not the approval the file's stamp names, is not used, and the review shows the whole text. No
+model operation writes `.approved/`; anything that writes the workspace directly could still make a
+diff hide a change, the same honest limit as the stamp, so the owner can always read the whole file.
 
 ## The procedure for the model
 
