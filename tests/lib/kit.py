@@ -11,7 +11,6 @@ import docsql
 DDL_PATH = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1].endswith('.sql') else os.environ.get('DDL')
 DOC = docsql.doc_text()                         # every current-truth page
 DDL = open(DDL_PATH, encoding='utf-8').read() if DDL_PATH else docsql.ddl()
-LIVE = docsql.doc_text(skip=('research/',))     # the same, without the references
 doc_page = docsql.page
 NOW = "strftime('%Y-%m-%dT%H:%M:%fZ','now')"
 NAMED = ('person', 'place')

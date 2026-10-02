@@ -25,5 +25,5 @@ incident ──▶ issue ──▶ proposal (RFC) ──▶ decision (ADR) ─�
 
 | folders | what they are |
 |---|---|
-| `architecture/`, `schema/`, `contract/`, `decisions/`, `cookbook/`, `guides/`, `research/` | **current truth only**: today's rule and its reasons, never the story of how it got there. When something changes it is rewritten in place; git is the log. `tests/schema/document.py` lists the marks of history it refuses. |
+| `architecture/`, `schema/`, `contract/`, `decisions/`, `cookbook/`, `guides/`, `research/` | **current truth only**: today's rule and its reasons, never the story of how it got there. When something changes it is rewritten in place; git is the log. |
 | `issues/`, `rfcs/`, `plans/` | **records**: dated, written once, closed with a status. They cite the docs as they were at their commit. |

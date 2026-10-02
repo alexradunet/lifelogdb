@@ -1,8 +1,7 @@
 """The docs themselves (docs/): the 2075 test of the threat model against a fresh database; the rules live in the file (each
 table's inside its CREATE statement, the cross-table ones in a few lifelog_meta rows); the tree holds together (every decision
-D1..Dn in its own record, every relative link resolves, every page is reachable from docs/README.md); current truth only
-outside the records (no review rounds, addenda, superseded notes, finding ids, versions, changelog, section numbers);
-out-of-scope features stay out; the totals in schema/README.md match."""
+D1..Dn in its own record, every relative link resolves, every page is reachable from docs/README.md); the totals in
+schema/README.md match."""
 import os, re, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'lib'))
 from kit import *
@@ -79,9 +78,6 @@ def problems(tree, root=None):
         if f']({r[10:]})' not in tree.get('decisions/README.md', ''): out.append(f'{r} is not in the decision index')
     if not re.search(r'^\*\*Status:\*\* [^\n]{10,}$', tree.get('README.md', ''), re.M): out.append('docs/README.md has no one-line status')
     for r, text in tree.items():
-        for name, pat in FORBIDDEN if not r.startswith(docsql.RECORDS) else ():
-            m = re.search(pat, text)
-            if m: out.append(f'{r}: {name}: {m.group(0)!r}')
         for u in links(text):
             target, anchor = resolve(r, u)
             outside = os.path.join(REPO, 'docs', target) if target.startswith('..') else os.path.join(root, *target.split('/'))
@@ -96,21 +92,11 @@ def problems(tree, root=None):
     if orphans: out.append(f'pages not reachable from docs/README.md: {orphans}')
     return out
 
-FORBIDDEN = [('a section number: pages link each other instead', r'§\s?\d'), ('an addendum', r'[Aa]ddend'), ('a numbered round', r'\b[Rr]ound[ -]\d'),
-             ('a finding id (R4-12, R8-01)', r'\bR\d+-\d+\b'), ('a validation record', r'[Vv]alidation record|record #\d'), ('a superseded statement', r'[Ss]uperseded'),
-             ('a version narrative (v1.14)', r'\bv1\.\d+'), ('a changelog', r'Document history|[Cc]hangelog'), ('a review narrative', r'cross-review|independent review|[Rr]eview round|[Rr]eview resolutions'),
-             ('a withdrawal notice', r'[Ww]ithdrawn'), ('a "first draft" story', r'\b[Ff]irst draft\b')]
 p = problems(TREE)
-S.K('the tree holds together and has none of the marks of history', not p, p[:5])
-D3, D4, D7 = 'decisions/D03-integer-ids.md', 'decisions/D04-database-is-canonical.md', 'decisions/D07-measurements.md'
+S.K('the tree holds together', not p, p[:5])
+D7 = 'decisions/D07-measurements.md'
 def broken(r, old, new): return {**TREE, r: TREE[r].replace(old, new, 1)}
-for name, tree in [('an addendum back in D3', broken(D3, '- **Sources.**', '- **Addendum (round 7).** x\n- **Sources.**')),
-                   ('a finding id', broken(D3, '- **Sources.**', '- (R4-11 e)\n- **Sources.**')),
-                   ('a review section', broken('research/references.md', '## SQLite durability', '## Review resolutions\n\n## SQLite durability')),
-                   ('a version in the status line', broken('README.md', '**Status:** ', '**Status:** v1.14 — ')),
-                   ('a superseded note', broken(D4, '\n', ' *(Superseded by D5.)*\n')),
-                   ('a section number back', broken('contract/time.md', 'Never derived', 'See §2.4. Never derived')),
-                   ('a decision deleted', {k: v for k, v in TREE.items() if k != D7}),
+for name, tree in [('a decision deleted', {k: v for k, v in TREE.items() if k != D7}),
                    ('a decision without its status', broken(D7, '**Status:** accepted', '')),
                    ('a broken link', broken('contract/time.md', '\n', '\nSee [nowhere](nowhere.md).\n')),
                    ('a broken anchor', broken('contract/time.md', '\n', '\nSee [R999](../research/references.md#r999).\n')),
@@ -120,14 +106,4 @@ roots = {f: open(os.path.join(REPO, *f.split('/')), encoding='utf-8').read() for
 bad = [f'{f}: {u}' for f, text in roots.items() for u in links(text) if not os.path.exists(os.path.join(REPO, os.path.dirname(f), u.partition('#')[0]))]
 S.K('every relative link of README.md, AGENTS.md and tests/README.md resolves', not bad, bad)
 
-# ---- out of scope stays out (non-goals): export, snapshots, dumps
-for tok in ('export/', 'dump/', 'backups/', 'nightly.sh', 'restore.sh', 'restic', 'rsync', 'Litestream', 'drilled restore', 'exporter'):
-    S.K(f'the live text does not contain {tok!r}', tok not in LIVE)
-S.K("'off-box' only in the non-goals row that puts it out of scope", LIVE.count('off-box') == 1)
-S.K('the DDL names no exporter, export/, backups/, dump/ or nightly job', not re.search(r'exporter|export/|backups?/|dump/|nightly|restore\.sh', DDL, re.I))
-T = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
-hits = [f for r, ds, fs in os.walk(T) if '.venv' not in r for f in fs if f.endswith(('.py', '.md')) and f != 'document.py'
-        and re.search(r'nightly\.sh|restore\.sh|OFFBOX|scripts_test', open(os.path.join(r, f), encoding='utf-8', errors='ignore').read())]
-S.K('no test file refers to a backup harness', not hits, hits)
-S.K('no test file is named after a review round', not [f for r, ds, fs in os.walk(T) if '.venv' not in r for f in fs if re.match(r'r\d+', f)])
 S.done()

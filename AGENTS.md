@@ -95,13 +95,12 @@ schema is frozen ([D13](docs/decisions/D13-migrations-and-freeze.md)):
   `tests/schema/mutants.py`. Keep the counts in `tests/README.md` (diagrams, mutants) true.
 - **Current truth and nothing else** in every folder of `docs/` except `issues/`, `rfcs/` and `plans/`, which are
   dated records: no review rounds, validation records, addenda, "superseded" notes, finding ids, version narrative
-  or changelog (`tests/schema/document.py` fails if any comes back). When a decision changes, rewrite it in place —
+  or changelog. When a decision changes, rewrite it in place —
   git is the log. Keep D-numbers stable (they are cited across the docs and inside `schema.sql`); new decisions get
   new numbers. Tests are named by subject, never by review round.
 - **Out of scope for now ([non-goals](docs/architecture/non-goals.md)):** the markdown export, backups / snapshots /
   restore, CSV dumps and off-box copies. The docs are about the schema and its reliability; do not reintroduce
-  any of them into `docs/` or `tests/` unless the owner reopens it
-  (`tests/schema/document.py` fails if their text comes back).
+  any of them into `docs/` or `tests/` unless the owner reopens it.
 - **Plans** live in `docs/plans/` (the `improve` skill's default `plans/` at the repo root is not used: point it
   there).
 
