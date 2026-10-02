@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -87,9 +88,31 @@ func pages(s *S) {
 	for _, t := range []string{"Café", "\U0001F389 Party", "می\u200cخواهم", "\U0001F468\u200d\U0001F469\u200d\U0001F467", "İstanbul", "❤\ufe0f"} {
 		s.K(fmt.Sprintf("%q accepted by both (ZWNJ/ZWJ and variation selectors carry meaning)", t), c.add(t) != 0 && text.ValidTitle(t))
 	}
-	for _, t := range []string{"Diet\u0378", "\U000E0080x"} {
-		s.K(fmt.Sprintf("unassigned code point %q: the writer rejects it, the DB cannot tell", t), !text.ValidTitle(t) && c.add(t) != 0)
+	// the Cn rule of contract/titles-and-wikilinks: the version it names is the one the writer pins, and its code points
+	tw := regexp.MustCompile(`(?s)\*\*Titles\.\*\*.*?\n\n`).FindString(s.d.Page("contract/titles-and-wikilinks.md"))
+	uv := regexp.MustCompile(`\*\*Unicode (\d+\.\d+)\*\*`).FindStringSubmatch(tw)
+	s.K("the Cn rule names one Unicode version, the one the writer pins", uv != nil && uv[1]+".0" == text.AssignedVersion, uv, text.AssignedVersion)
+	cps := func(t string) (out []rune) {
+		for _, m := range regexp.MustCompile("`U\\+([0-9A-F]{4,6})`").FindAllStringSubmatch(t, -1) {
+			n, _ := strconv.ParseUint(m[1], 16, 32)
+			out = append(out, rune(n))
+		}
+		return out
 	}
+	var refused, accepted []rune
+	if m := regexp.MustCompile(`(?s)a writer refuses (.*?) in a title, and accepts (.*?)\.\s`).FindStringSubmatch(tw); m != nil {
+		refused, accepted = cps(m[1]), cps(m[2])
+	}
+	s.K("the Cn rule lists code points a writer refuses and accepts", len(refused) >= 3 && len(accepted) >= 1, refused, accepted)
+	for _, r := range refused {
+		t := "Diet" + string(r)
+		s.K(fmt.Sprintf("U+%04X, listed as refused: the writer rejects it, the DB cannot tell", r), !text.ValidTitle(t) && c.add(t) != 0)
+	}
+	for _, r := range accepted {
+		t := "Diet" + string(r)
+		s.K(fmt.Sprintf("U+%04X, listed as accepted: accepted by both", r), text.ValidTitle(t) && c.add(t) != 0)
+	}
+	s.K("U+E0080 (unassigned, plane 14): the writer rejects it, the DB cannot tell", !text.ValidTitle("\U000E0080x") && c.add("\U000E0080x") != 0)
 	s.K("ASCII title with a wrong key rejected", c.addPage("Diet2", nil, "", "dyet2") == 0)
 	s.K("a key with an ASCII capital rejected", c.addPage("Diet3", nil, "", "Diet3") == 0)
 	s.K("a key with a leading space rejected", c.addPage("Diet4", nil, "", " diet4") == 0)

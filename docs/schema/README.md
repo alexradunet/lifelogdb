@@ -1,8 +1,8 @@
 # Schema
 
-[`schema.sql`](schema.sql) is the canonical init DDL. Until the freeze it is edited **in place** — there
-is no `0001_init.sql` file yet ([D13](../decisions/D13-migrations-and-freeze.md)). A new database, a test database included, is
-that file applied verbatim to a fresh file:
+[`schema.sql`](schema.sql) is the canonical init DDL, always the full current one: until the freeze it is
+edited **in place**, and after it each migration edits it too ([D13](../decisions/D13-migrations-and-freeze.md)). A new database, a
+test database included, is that file applied verbatim to a fresh file:
 
 ```
 sqlite3 life.db < docs/schema/schema.sql
@@ -12,7 +12,7 @@ sqlite3 life.db < docs/schema/schema.sql
 `CREATE` statement, so `.schema` prints them; the rules that span tables are the rows of `lifelog_meta`.
 
 **9 tables + 1 FTS5 virtual table + 2 views** (`measurement_values`, `ghost_pages`)
-**+ 24 triggers.** That is the entire system. Every `CHECK` is named (`CONSTRAINT <table>_<rule>`), so
+**+ 23 triggers.** That is the entire system. Every `CHECK` is named (`CONSTRAINT <table>_<rule>`), so
 any rule can be dropped or re-added by name after the freeze ([D13](../decisions/D13-migrations-and-freeze.md)).
 
 ## The objects

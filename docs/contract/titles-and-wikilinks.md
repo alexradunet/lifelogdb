@@ -135,10 +135,12 @@ display name is `people.name`, [D20](../decisions/D20-named-pages.md)). Consumer
 
 **Titles.** The rules are the CHECKs `pages_title_len` and `pages_title_safe` ([schema](../schema/README.md)): 1–240 bytes,
 trimmed, and a valid file name on Linux, macOS and Windows — the strict direction on purpose ([D5](../decisions/D05-pages-and-day-pages.md)).
-Every writer must be stricter than the DDL in one way: it also rejects code points Unicode has not
-assigned yet (category `Cn`), whose case fold a later Unicode version could define — which would
-silently change `title_key` (executed). Unicode promises a stable case fold only for assigned characters, and formally
-only for text in NFKC form [R74](../research/references.md#r74); a title with a compatibility character (full-width `Ｃａｆé`, a
+Every writer must be stricter than the DDL in one way: it also rejects code points that **Unicode 15.0** has not
+assigned (category `Cn` there), whose case fold a later Unicode version could define — which would silently change
+`title_key` (executed). The version is named, not "the newest", so the titles a writer accepts do not change when its
+language or library ships newer Unicode tables: a writer refuses `U+0378` (unassigned), `U+2EBF0` (assigned in
+Unicode 15.1) and `U+1FAE9` (16.0) in a title, and accepts `U+1FAE8` (15.0) (executed). Unicode promises a stable
+case fold only for assigned characters, and formally only for text in NFKC form [R74](../research/references.md#r74); a title with a compatibility character (full-width `Ｃａｆé`, a
 ligature, `x²`) is outside that promise, a known limit ([non-goals](../architecture/non-goals.md)).
 
 **`title_key`.** Uniqueness is on the key, not on the title. The function is fixed:

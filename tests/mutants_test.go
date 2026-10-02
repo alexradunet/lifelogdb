@@ -151,7 +151,7 @@ var mutants = []struct {
 	{"document", "a lifelog_meta key answers no question", edit("  ('evolution', 'after the freeze", "  ('orphan',    'x'),\n  ('evolution', 'after the freeze")},
 	{"document", "cookbook/import-a-row-once bypasses the save contract", edit("run the link sync of [save a body](save-a-body.md)", "skip")},
 	{"document", "the deletes row hides the registries", edit("the registries (metrics, link_kinds, lifelog_meta) are the owner''s administrative rows", "metrics, link_kinds and lifelog_meta are the owner''s administrative rows")},
-	{"document", "the schema totals drift from the DDL", edit("**+ 24 triggers.**", "**+ 25 triggers.**")},
+	{"document", "the schema totals drift from the DDL", edit("**+ 23 triggers.**", "**+ 24 triggers.**")},
 	{"diagrams", "a foreign key is not drawn", edit("    pages    ||--o| people   : \"id\"\n", "")},
 	{"diagrams", "the link map invents an edge", edit("    place -->|\"located-in\"| place\n", "    place -->|\"located-in\"| place\n    person -->|\"mentioned\"| page\n")},
 	{"diagrams", "a new link kind, the map unchanged", edit("  ('friend',   1, 'person',    'person',       NULL),", "  ('mentor',   0, 'person',    'person',       NULL),\n  ('friend',   1, 'person',    'person',       NULL),")},
@@ -213,6 +213,9 @@ var mutants = []struct {
 	{"habits", "an update may give a habit a unit", editNth("   WHERE (SELECT unit FROM metrics WHERE id = NEW.metric_id) IS NOT '';", "   WHERE 0;", 1)},
 	{"habits", "a period that starts where another starts is refused as an overlap", edit("                    AND p.start_day IS NOT NEW.start_day\n", "")},
 	{"writers", "the DDL does not set WAL", edit("PRAGMA journal_mode  = WAL;", "PRAGMA journal_mode  = DELETE;")},
+	{"writers", "contract/connections lets readers keep trusted_schema on", edit("Readers must be **read-only** and set **`PRAGMA trusted_schema = OFF`** per connection, as writers do.", "Readers must be **read-only**.")},
+	{"pages", "the Cn rule names a Unicode version the writer does not pin", edit("**Unicode 15.0** has not", "**Unicode 16.0** has not")},
+	{"pages", "the Cn rule accepts a code point Unicode 15.0 has not assigned", edit("and `U+1FAE9` (16.0) in a title, and accepts `U+1FAE8` (15.0)", "in a title, and accepts `U+1FAE8` (15.0) and `U+1FAE9` (16.0)")},
 }
 
 var (

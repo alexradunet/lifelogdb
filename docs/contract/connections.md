@@ -34,10 +34,12 @@ if another writer committed in between: `busy_timeout` does not apply to that lo
 (executed). `BEGIN IMMEDIATE` takes the write lock up front, so a second writer waits
 (up to `busy_timeout`) and then sees the first one's rows (executed). Keep such transactions short.
 
-Readers need no setup but must be **read-only**: open the file with `?mode=ro` (SQLite then
-refuses every write — `attempt to write a readonly database`, executed) or `sqlite3 -readonly`.
-Datasette does this by itself. Under WAL a reader sees the
-live file while the app writes and never blocks it (executed). sqlite-web can edit rows, which would
+Readers must be **read-only** and set **`PRAGMA trusted_schema = OFF`** per connection, as writers do. Open the
+file with `?mode=ro` (SQLite then refuses every write — `attempt to write a readonly database`, executed) or
+`sqlite3 -readonly`; Datasette opens it read-only by itself. The pragma matters because a reader runs whatever schema
+the file holds: with it OFF, a view that calls a function not marked side-effect-free fails (`unsafe use of …`)
+instead of running it, and every [cookbook](../cookbook/README.md) query still runs on such a reader (both executed).
+Under WAL a reader sees the live file while the app writes and never blocks it (executed). sqlite-web can edit rows, which would
 make it a second writer, so it is not used ([D14](../decisions/D14-ui-and-tools.md)). Three reader traps [R65](../research/references.md#r65)[R66](../research/references.md#r66):
 - **Never `immutable=1`** (Datasette's `-i`): it tells SQLite the file cannot change, so a reader of
   the live file sees stale or inconsistent pages while the app writes. Use the default `mode=ro`.

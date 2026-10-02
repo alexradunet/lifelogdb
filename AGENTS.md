@@ -54,8 +54,9 @@ schema is frozen ([D13](docs/decisions/D13-migrations-and-freeze.md)):
   Never migrate a test DB — recreate it.
 - Numbered forward-only migrations (`0002_*.sql`, …) begin **only after** the freeze ([D13](docs/decisions/D13-migrations-and-freeze.md) says what that is),
   and from then on changes are additive-only ([D13](docs/decisions/D13-migrations-and-freeze.md) defines it; principle 4 of the
-  [goals](docs/architecture/goals-and-principles.md)). Anything still in the schema at the
-  freeze stays for good, so cutting happens before it.
+  [goals](docs/architecture/goals-and-principles.md)). Each migration also edits `schema.sql`, which stays the full
+  current DDL; there is never a `0001_init.sql` ([D13](docs/decisions/D13-migrations-and-freeze.md) says how the two are kept equal).
+  Anything still in the schema at the freeze stays for good, so cutting happens before it.
 
 ## What earns a change (principles 1, 6 and 7 of the [goals](docs/architecture/goals-and-principles.md))
 
@@ -139,7 +140,8 @@ Their homes are in `docs/`; this list is the checklist, not the rule.
 - **Connections** ([connection setup](docs/contract/connections.md)): one writing application per file; per connection
   `PRAGMA foreign_keys=ON`, `recursive_triggers=ON`, `synchronous=FULL`, `trusted_schema=OFF` (the first three read back and refused
   if wrong); SQLite ≥ 3.51.3 for writers; every write transaction starts with `BEGIN IMMEDIATE`; the driver opens
-  no transactions of its own. Readers open the file read-only (`mode=ro`, never `immutable=1`);
+  no transactions of its own. Readers open the file read-only (`mode=ro`, never `immutable=1`) and set
+  `trusted_schema=OFF` too;
   exploration tools (Datasette) likewise, and nothing that edits rows is pointed at it.
 - **The wikilink save contract** ([titles and wikilinks](docs/contract/titles-and-wikilinks.md),
   [save a body](docs/cookbook/save-a-body.md), D19): saving a body keeps the page's

@@ -166,4 +166,8 @@ func integrity(s *S) {
 	s.K("...and the FTS5 integrity-check of contract/integrity-checks fails", strings.HasPrefix(c.tryx(sts[3]), "ERR"))
 	c.must("INSERT INTO pages_fts(pages_fts) VALUES('rebuild')")
 	s.K("...until 'rebuild' repairs it", c.tryx(sts[3]) == "OK")
+	gone := c.page("Gone")
+	c.must("DROP TRIGGER pages_no_delete")
+	c.must("DELETE FROM pages WHERE id=?", gone)
+	s.K("a page deleted past pages_no_delete (no trigger keeps the index in step): the FTS5 integrity-check fails", strings.HasPrefix(c.tryx(sts[3]), "ERR"))
 }

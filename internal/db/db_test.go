@@ -64,6 +64,21 @@ func TestPragmasAndReaders(t *testing.T) {
 	if _, err := d.R.Exec("INSERT INTO lifelog_meta(key, value) VALUES ('x', 'y')"); err == nil {
 		t.Error("the read-only pool accepted a write")
 	}
+	var ts int64 = -1
+	if err := d.R.QueryRow("PRAGMA trusted_schema").Scan(&ts); err != nil || ts != 0 {
+		t.Errorf("the read-only pool has trusted_schema = %d (%v), want 0", ts, err)
+	}
+	var path string
+	d.W.QueryRow("SELECT file FROM pragma_database_list WHERE name = 'main'").Scan(&path)
+	trusting, _ := sql.Open("lifelog", "file:"+filepath.ToSlash(path)+"?mode=ro&_pragma=trusted_schema(1)")
+	defer trusting.Close()
+	if err := trusting.Ping(); err == nil || !strings.Contains(err.Error(), "trusted_schema") {
+		t.Errorf("a reader with trusted_schema=ON was not refused: %v", err)
+	}
+	cp := filepath.Join(t.TempDir(), "copy.db")
+	if err := Copy(path, cp); err != nil {
+		t.Errorf("Copy through a reader with trusted_schema=OFF: %v", err)
+	}
 	if _, err := d.W.Exec("INSERT INTO pages_fts_data VALUES (99, 'x')"); err == nil {
 		t.Error("defensive mode is off: an FTS shadow table was writable")
 	}
