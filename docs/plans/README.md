@@ -170,12 +170,18 @@ From the third run (014–022):
 ## Open questions for the owner (plan 021)
 
 - **Q1. A new file after the freeze.** (a) `schema.sql` stays the full current DDL, each migration also edits it, and a
-  suite proves `schema.sql` equals the frozen DDL plus migrations (same `sqlite_master`) - *recommended*: a new file is
+  suite proves `schema.sql` equals the frozen DDL plus migrations (same `sqlite_master`) — *recommended*: a new file is
   still one command; or (b) `schema.sql` is frozen as `0001`, a new file is `0001` plus every migration.
 - **Q2. `pages_fts_delete`** can never fire while `pages_no_delete` exists. Keep it (a guard for an owner who drops
   that trigger) or cut it before the freeze?
-- **Q3.** The non-goal "Agent CLI/API" reads as cut while D14 and principle 3 make it part of the writer - delete or
+- **Q3.** The non-goal "Agent CLI/API" reads as cut while D14 and principle 3 make it part of the writer — delete or
   reword the row?
 - **Q4.** The export/snapshot/off-box non-goal row's reopen trigger is the freeze: decide it (checklist item 3 of
   [process](../process.md#before-the-freeze)).
+- **Q6. Pages that still equate the freeze with the first real data** (D13 now defines it as the first unreplayable
+  write; a replayable import is real data but is rebuilt, not migrated). Out of scope for plan 021, owner to decide:
+  `architecture/non-goals.md:21` ("Before the first real data enters a canonical `life.db` (the freeze, D13) at the
+  latest" — under the new definition this trigger fires before the freeze, so Q4 and checklist item 3 of process.md
+  need the wording aligned); `architecture/goals-and-principles.md:24` ("Once real data exists, schema changes are
+  additive"); `schema/schema.sql:3` ("numbered migrations begin only after real data exists (D13)").
 - **Q5.** Should readers that open a `life.db` they did not write also set `trusted_schema=OFF`?
