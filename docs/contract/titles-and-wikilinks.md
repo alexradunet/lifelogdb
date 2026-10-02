@@ -34,8 +34,10 @@ below:
   heading; `#Heading` is not a CommonMark heading, so it is a tag. `#Health` and `#health` are
   one page.
 - *Stub pages.* A body that starts — after any whitespace — with `#REDIRECT` (any case), then at
-  least one whitespace character (a line break counts), then `[[`, is a rename stub (below): it gets no wikilinks and no tags — its one edge is the `redirect` link
-  the app writes — so a stub never shows up as a backlink. Elsewhere the word `#redirect` alone
+  least one whitespace character (a line break counts), then `[[`, is a rename stub (below).
+  "Whitespace" here is Unicode White_Space, U+00A0 included — not ASCII-only `\s` and not
+  JavaScript's `\s` (which adds U+FEFF). A stub gets no wikilinks and no tags — its one edge is
+  the `redirect` link the app writes — so a stub never shows up as a backlink. Elsewhere the word `#redirect` alone
   is never a tag, so nothing can create a page called `redirect`.
 - *An invalid target makes no link and never blocks a save.* A title `pages_title_safe` rejects
   (`[[Health/Diet]]`, `[[Re: plan]]`, the tag `#con`) is skipped. Targets are checked first and then de-duplicated by `title_key`, so the first **valid** spelling of a key is the one linked and created. A writer checks the title rules
