@@ -62,6 +62,8 @@ The same holds for plans 017, 020, 022 and 016, which all add mutants.
 | 019 | [The wikilink contract states every rule and every vector](019-wikilink-contract-stands-without-python.md) | P2 | M | 015 (ordering) | DONE (`6c8632a`) |
 | 020 | [The import guide agrees with the imports contract; a captured day takes the note once](020-import-guide-agrees-with-the-contract.md) | P1 | M | 017, 018, 019 | DONE (`cd0f050`) |
 | 021 | [Design: what the freeze is, what must hold before it, what changes after](021-freeze-runbook.md) | P2 | M | all others | IN REVIEW (owner) (`a55fcac`) |
+| 023 | [The writer: `app/`, one Go binary serving a hypermedia API, a CLI and an MCP server](023-the-writer-app.md) | P1 | L | — | IN PROGRESS (v1 built; first real use next) |
+| 024 | [Habits, renames and the import flow in `app/`](024-habits-renames-import.md) | P1 | L | 023 | IN PROGRESS (built; the first real import next) |
 
 Status values: TODO | IN PROGRESS | IN REVIEW (owner) | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale — finding fixed independently or approach
@@ -91,11 +93,10 @@ abandoned)
 - The days that name someone and backlinks **follow one `redirect` hop** (022).
 - A page a `redirect` points at is **not a ghost**: the view drops its redirect exclusion (022).
 
-## Not planned: the next writer
+## The next writer
 
-There is no writer and no import path in the repo, while the status line of `docs/README.md` names the capture path
-and the first import into the canonical `life.db` as the next step. Choosing or building the next writer is the
-owner's decision. The freeze runbook is now plan 021.
+The owner chose it on 2026-10-02: `app/`, in Go (plan 023). The capture path exists; the first import into the
+canonical `life.db` through it is the next step. The freeze runbook is plan 021.
 
 ## Findings considered and rejected
 
@@ -176,6 +177,7 @@ From the third run (014–022):
   that trigger) or cut it before the freeze?
 - **Q3.** The non-goal "Agent CLI/API" reads as cut while D14 and principle 3 make it part of the writer — delete or
   reword the row?
+  **Answered (owner, 2026-10-02):** deleted — the writer of plan 023 is that CLI, API and agent surface.
 - **Q4.** The export/snapshot/off-box non-goal row's reopen trigger is the freeze: decide it (checklist item 3 of
   [process](../process.md#before-the-freeze)).
 - **Q5.** Should readers that open a `life.db` they did not write also set `trusted_schema=OFF`?

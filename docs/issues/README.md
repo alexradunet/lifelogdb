@@ -7,5 +7,6 @@ data could not answer, a rule that is ambiguous or untestable. It is the evidenc
 
 | id | title | status | resolved by |
 |---|---|---|---|
+| [0001](0001-a-rename-has-no-recipe.md) | A rename has no recipe, and the contract leaves open what moves with it | open | — |
 
 Status values: open | proposed (an RFC exists) | resolved | won't fix (with a one-line reason).

@@ -8,6 +8,8 @@ life.db-shm
 *.db-journal
 
 __pycache__/
+/app/lifelog
+/app/lifelog.exe
 /tests/.venv/
 
 # a real vault or export to import, and its workspace (docs/guides/importing.md): never in git

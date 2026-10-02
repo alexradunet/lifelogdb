@@ -15,9 +15,10 @@ history and attachments are deferred ([D22](docs/decisions/D22-events.md), [D18]
 planner, a tracker of open work or a finance ledger needs a real incident and the owner's word first. Any developer, in any language, may
 build an application around it; the contract they implement is `docs/` and nothing else.
 
-There is no application in this repo. A writer is built against the docs
-([building a writer](docs/guides/building-a-writer.md)): it implements the schema and never defines it. One writer per
-`life.db` file, many applications around the schema.
+A writer is built against the docs ([building a writer](docs/guides/building-a-writer.md)): it implements the schema and
+never defines it. One writer per `life.db` file, many applications around the schema. `app/` is the owner's writer —
+one Go binary that serves the API, the CLI and the MCP server ([app/README.md](app/README.md)); it answers to `docs/`
+like any other writer, and `docs/` never names it.
 
 | path | what it is | it answers to |
 |---|---|---|
@@ -26,6 +27,7 @@ There is no application in this repo. A writer is built against the docs
 | `docs/guides/` | for people building on the schema: [building a writer](docs/guides/building-a-writer.md), [importing with a model](docs/guides/importing.md) | the contract |
 | `docs/issues/`, `docs/rfcs/`, `docs/plans/` | the process records: incidents, proposals, execution plans ([how a change happens](docs/process.md)) | — |
 | `tests/` | the validation suites: every *executed* claim of the docs, and the reference implementation of the wikilink save contract (`tests/wikilinks/wikisave.py`) | the docs |
+| `app/` | the owner's writer: `lifelog` (Go) — hypermedia API, CLI, MCP server | the docs |
 
 ## Setup and checks
 
@@ -33,15 +35,18 @@ There is no application in this repo. A writer is built against the docs
 |---|---|---|
 | the suites (`tests/`) | Python **≥ 3.12** (`Connection.setconfig`); its `sqlite3` module and the `sqlite3` CLI both on SQLite **≥ 3.53 with FTS5** (writers need only 3.51.3; the suites run migrations, which need 3.53); network once, for the venv | `python3 tests/run_all.py` (about 70 s; Windows: `tests/.venv/Scripts/python.exe tests/run_all.py`) |
 | the diagrams | node, `npm i -g @mermaid-js/mermaid-cli`, a Chromium | `python3 tests/run_all.py --mermaid` |
+| the writer (`app/`) | Go ≥ 1.27 (no cgo: SQLite is the pure-Go `modernc.org/sqlite`); network once, for the modules | `cd app && go generate ./... && go test ./...` |
 
 - A distribution's SQLite may be too old or built without FTS5 (`no such module: fts5`). Build the
   amalgamation with `--enable-fts5` and put its `bin/` on `PATH` and `lib/` on `LD_LIBRARY_PATH`.
-- What to run after a change: `schema.sql`, any page under `docs/` → the suites; a diagram → the suites with
-  `--mermaid`. Every suite must end green. Say in the commit message what you ran.
+- What to run after a change: `schema.sql`, any page under `docs/` → the suites; `schema.sql` or the wikilink vectors
+  in `docs/contract/titles-and-wikilinks.md` → also `app/`'s tests (`go generate` copies `schema.sql` into it); a
+  diagram → the suites with `--mermaid`; `app/` → its tests. Every suite must end green. Say in the commit message
+  what you ran.
 
 ## The one hard rule: no migrations until the schema freeze
 
-**Do not create `db/migrations/`, `0001_init.sql`, or any migration runner** — not in `docs/` or `tests/`. Until the
+**Do not create `db/migrations/`, `0001_init.sql`, or any migration runner** — not in `docs/`, `tests/` or `app/`. Until the
 schema is frozen ([D13](docs/decisions/D13-migrations-and-freeze.md)):
 
 - **`docs/schema/schema.sql` is the single canonical init DDL and is edited in place.** Schema changes = edit it
