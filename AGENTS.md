@@ -21,6 +21,7 @@ application on the schema" below): it implements the schema and never defines it
 |---|---|---|
 | `SCHEMA.md` | the contract: §3 is the one canonical DDL | real use (below) |
 | `tests/` | the validation suites: every *executed* claim of `SCHEMA.md`, and the reference implementation of the wikilink save contract (`tests/wikilinks/wikisave.py`) | `SCHEMA.md` |
+| `IMPORTING.md` | how a writer runs an LLM-assisted import: workspace, facts files, checks, gates, the model's procedure | `SCHEMA.md` §2.7 |
 
 **One writer per database, many applications around the schema.** Principle 3 (single writing
 application) is a rule about *one `life.db` file*: whatever application writes a given file is the only
