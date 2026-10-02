@@ -29,6 +29,10 @@
     linked before it was written would keep whatever kind the link guessed.
   - *Renames*: rejected — renaming silently repoints every `[[Old Title]]` in decades of prose, or
     leaves ghosts if it doesn't; a redirect stub keeps both working ([titles and wikilinks](../contract/titles-and-wikilinks.md)).
+  - *A stub that keeps the old text or the typed links it starts*: rejected — the page would live under two titles,
+    and a choice left to each writer gives two writers different rows for the same rename. *A rename into a taken title
+    that merges the two texts*: rejected — no merge is the same in every writer; only an empty page, the ghost of a
+    typo, is taken in ([rename a page](../cookbook/rename-a-page.md)).
   - *ASCII-only case-insensitive uniqueness (`COLLATE NOCASE`)*: rejected — `Café notes` and
     `CAFÉ NOTES` (and NFC vs NFD spellings) would be distinct rows. *ASCII-only titles*: rejected —
     a life log has `日本語` and `Zürich` in it.

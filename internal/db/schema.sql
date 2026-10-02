@@ -62,8 +62,9 @@ CREATE TABLE pages (
   -- [[2026-09-29]] reaches it. Capture appends to today's page, created on the first write. A day page is
   -- never a person or a place (pages_day_page_plain): a promotion of it is refused (D20).
   -- Where was I: the places the owner was at that day are links(kind='at') from its day page (D16).
-  -- A title is permanent and a valid file name on every OS: a page is never renamed (create the new page,
-  -- make the old one a '#REDIRECT [[New]]' stub, add links(kind='redirect')).
+  -- A title is permanent and a valid file name on every OS: a page is never renamed. Its text and typed links move
+  -- to the page holding the new title (a new page, or an existing one only when the old page is empty), the old one
+  -- becomes a '#REDIRECT [[New]]' stub with links(kind='redirect') (contract/titles-and-wikilinks).
   -- Uniqueness is on title_key = NFC(casefold(NFC(title))), computed by the app because SQLite cannot fold
   -- Unicode: 'Café' = 'CAFÉ' = NFD 'Café'. Look a page up with WHERE title_key = :key. The key is derived.
   -- links(kind='wikilink') from a page always equal the [[titles]] and #tags its CommonMark text names,

@@ -19,7 +19,8 @@ stateDiagram-v2
     Ghost --> Named: promoted, entities.entity_type changes
     Written --> Named: promoted unless a day page, entities.entity_type changes
     Written --> Written: body edited or appended to, the title never changes
-    Written --> Stub: renamed, so the old page becomes a stub and a redirect link is added
+    Written --> Stub: renamed, its text and typed links moving to a new page, a redirect link added
+    Ghost --> Stub: renamed, into a free title or one that exists, a redirect link added
 ```
 
 Any row can be tombstoned (`entities.deleted_at`, [D11](../decisions/D11-tombstones.md)); a save whose link resolves a tombstoned title
