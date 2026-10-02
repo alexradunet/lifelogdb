@@ -7,19 +7,19 @@ and nothing touches `life.db`**: every suite reads `docs/schema/schema.sql` (and
 leaves its folder behind. The reference parser is pinned (`markdown-it-py==4.2.0`).
 
 ```
-python3 tests/run_all.py              # every suite, ~15 s
+python3 tests/run_all.py              # every suite, ~45 s, most of it the mutants
 python3 tests/run_all.py --datasette  # + Datasette opens the file read-only (installs it into tests/.venv)
 python3 tests/run_all.py --mermaid    # + render every mermaid diagram (needs node + `mmdc` + a Chromium, see below)
 ```
 
 Needs Python ≥ 3.12 (venv + network once, for `markdown-it-py`) whose `sqlite3` module, like the `sqlite3` CLI, runs SQLite
-≥ 3.51.3 built with FTS5 (3.53 was used); a distribution's build may lack FTS5 (`no such module: fts5`). `--mermaid` also needs
+≥ 3.53 built with FTS5 (the suites run migrations; a writer needs only 3.51.3); a distribution's build may lack FTS5 (`no such module: fts5`). `run_all.py` checks both first and says what is missing. `--mermaid` also needs
 `npm i -g @mermaid-js/mermaid-cli` and a Chromium; point `MMDC` / `PUPPETEER_EXECUTABLE_PATH` at them if they are not on `PATH`.
 
 On Windows the venv is `Scripts\python.exe` (the runner looks there too), and the extracted DDL is read as UTF-8 by every
 script that opens it — with the locale default (cp1252) the non-ASCII device names of `pages_title_safe` would be corrupted and
 the suites would run a DDL that is not `schema.sql`. The `sqlite3` CLI comes from sqlite.org's tools zip (put its folder on `PATH`); a
-newer `sqlite3.dll` in the interpreter's `DLLs` folder lifts Python's own module.
+newer `sqlite3.dll` in the interpreter's `DLLs` folder lifts Python's own module. The runner sets `PYTHONUTF8=1` for every suite, so a failing suite's non-ASCII diagnostic prints instead of crashing.
 
 The suites are grouped by **subject**, not by when a rule was added. Each one states its expectation in every label and ends
 with `<name>: X/Y met expectations`; a suite that stops on an error reports that as a failed expectation.

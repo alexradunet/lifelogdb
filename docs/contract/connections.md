@@ -11,8 +11,8 @@ PRAGMA trusted_schema = OFF;   -- the schema may call only side-effect-free func
 ```
 
 A writer reads these back at connect time and refuses to run if `foreign_keys` or
-`recursive_triggers` is 0 or `synchronous` is not 2 (FULL, which is also SQLite's default,
-executed) — none of these is stored in the file, and `PRAGMA foreign_keys` is a silent no-op inside
+`recursive_triggers` is 0 or `synchronous` is not 2 (FULL, executed; the default
+of most builds, but set it anyway) — none of these is stored in the file, and `PRAGMA foreign_keys` is a silent no-op inside
 a transaction (executed). It also refuses to run on a SQLite older than **3.51.3**: every version from
 3.7.0 to 3.51.2, except the backports 3.44.6 and 3.50.7, has a WAL race in which a write that lands
 while two checkpoints overlap can be lost — rare, but this design has several writer processes and

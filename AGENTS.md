@@ -31,7 +31,7 @@ There is no application in this repo. A writer is built against the docs
 
 | what | needs | run |
 |---|---|---|
-| the suites (`tests/`) | Python **≥ 3.12** (`Connection.setconfig`); its `sqlite3` module and the `sqlite3` CLI both on SQLite **≥ 3.51.3 with FTS5** (3.53 is used); network once, for the venv | `python3 tests/run_all.py` (about 15 s) |
+| the suites (`tests/`) | Python **≥ 3.12** (`Connection.setconfig`); its `sqlite3` module and the `sqlite3` CLI both on SQLite **≥ 3.53 with FTS5** (writers need only 3.51.3; the suites run migrations, which need 3.53); network once, for the venv | `python3 tests/run_all.py` (about 45 s; Windows: `tests/.venv/Scripts/python.exe tests/run_all.py`) |
 | the diagrams | node, `npm i -g @mermaid-js/mermaid-cli`, a Chromium | `python3 tests/run_all.py --mermaid` |
 
 - A distribution's SQLite may be too old or built without FTS5 (`no such module: fts5`). Build the

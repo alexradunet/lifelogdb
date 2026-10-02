@@ -36,7 +36,7 @@ sec6 = '\n'.join(s for _, s in docsql.cookbook_blocks())
 S.K('cookbook has no bare BEGIN, and its write blocks start with BEGIN IMMEDIATE', not re.findall(r'^BEGIN;?\s*$', sec6, re.M) and len(re.findall(r'^BEGIN IMMEDIATE;', sec6, re.M)) >= 5)
 
 # ---- pragmas
-S.K('SQLite\'s default synchronous is FULL (2)', sqlite3.connect(mkdb()).execute('PRAGMA synchronous').fetchone()[0] == 2)
+c = sqlite3.connect(mkdb()); c.execute('PRAGMA synchronous=FULL'); S.K('synchronous=FULL reads back as 2 (what the writer checks)', c.execute('PRAGMA synchronous').fetchone()[0] == 2)
 b26 = sql_blocks(doc_page('contract/connections.md'))
 want = {'journal_mode': 'WAL', 'synchronous': 'FULL', 'foreign_keys': 'ON', 'recursive_triggers': 'ON', 'trusted_schema': 'OFF'}
 S.K('the contract/connections block sets every pragma the contract names', b26 and all(re.search(rf'PRAGMA {k}\s*=\s*{v}', b26[0]) for k, v in want.items()), b26[:1])

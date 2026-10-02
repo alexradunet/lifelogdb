@@ -89,13 +89,15 @@ MUTANTS = [   # (suite, what is broken, the broken document)
 
 def run(suite, broken):
     d = tempfile.mkdtemp(prefix='mutant-'); root, ddl = os.path.join(d, 'docs'), os.path.join(d, 'ddl.sql')
-    shutil.copytree(docsql.DOCS, root)
-    for r, t in broken.items(): open(os.path.join(root, *r.split('/')), 'w', encoding='utf-8', newline='\n').write(t)
-    open(ddl, 'w', encoding='utf-8', newline='\n').write(docsql.ddl(root))
-    p = subprocess.run([sys.executable, '-W', 'ignore', f'{suite}.py', ddl], cwd=HERE, env=dict(os.environ, DOCS=root, DDL=ddl, PYTHONDONTWRITEBYTECODE='1'),
-                       capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=300)
-    m = re.search(r': (\d+)/(\d+) met expectations\s*$', p.stdout.strip())
-    return (int(m.group(1)), int(m.group(2))) if m else (0, -1), (p.stdout + p.stderr).strip()
+    try:
+        shutil.copytree(docsql.DOCS, root)
+        for r, t in broken.items(): open(os.path.join(root, *r.split('/')), 'w', encoding='utf-8', newline='\n').write(t)
+        open(ddl, 'w', encoding='utf-8', newline='\n').write(docsql.ddl(root))
+        p = subprocess.run([sys.executable, '-W', 'ignore', f'{suite}.py', ddl], cwd=HERE, env=dict(os.environ, DOCS=root, DDL=ddl, PYTHONDONTWRITEBYTECODE='1', PYTHONUTF8='1'),
+                           capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=300)
+        m = re.search(r': (\d+)/(\d+) met expectations\s*$', p.stdout.strip())
+        return (int(m.group(1)), int(m.group(2))) if m else (0, -1), (p.stdout + p.stderr).strip()
+    finally: shutil.rmtree(d, ignore_errors=True)
 
 for suite in sorted({s for s, _, _ in MUTANTS}):
     (ok, n), out = run(suite, {})
