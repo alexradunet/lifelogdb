@@ -58,5 +58,11 @@ orphan = sql_blocks(doc_page('contract/integrity-checks.md'))[0].splitlines()[2]
 S.K('afterwards: integrity_check ok, foreign_key_check empty, no orphan entities row', integrity_ok(c) and c.execute(orphan).fetchall() == [])
 pc = c.execute('SELECT source, count(*), min(day), max(day) FROM measurements GROUP BY source').fetchall()
 S.K('the per-source count of contract/imports answers', any(r[0] == SRC and r[1] >= 1010 for r in pc), pc)
+rp = f'{work}/ro.db'; fresh(rp).close()
+ro = sqlite3.connect(f'file:{rp}?mode=ro', uri=True); ro.execute(f"VACUUM INTO '{work}/copy.db'")
+S.K('contract/imports step 1: a read-only connection makes the copy (VACUUM INTO)',
+    sqlite3.connect(f'{work}/copy.db').execute('select count(*) from lifelog_meta').fetchone() == ro.execute('select count(*) from lifelog_meta').fetchone() != (0,))
+ro.close()
+S.K('contract/imports step 1: the documented command opens the file read-only', 'sqlite3 -readonly life.db "VACUUM INTO' in doc_page('contract/imports.md'))
 shutil.rmtree(work, ignore_errors=True)
 S.done()

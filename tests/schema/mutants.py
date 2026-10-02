@@ -88,6 +88,7 @@ MUTANTS = [   # (suite, what is broken, the broken document)
  ('integrity', 'the orphan query counts a person\'s page as its domain row', mutate(ORPHAN, ORPHAN.replace(" WHERE entity_type IN ('page','place')", ''))),
  ('integrity', 'contract/integrity-checks loses the FTS5 integrity-check', mutate("INSERT INTO pages_fts(pages_fts, rank) VALUES ('integrity-check', 1);   -- no error\n", '')),
  ('imports', 'the import block loses WHERE true', mutate('  FROM s.staging WHERE true\n', '  FROM s.staging\n')),
+ ('imports', 'contract/imports copies life.db through a read-write shell', mutate('sqlite3 -readonly life.db "VACUUM INTO', 'sqlite3 life.db "VACUUM INTO')),
  ('evolution', 'one CHECK is unnamed', mutate('CONSTRAINT people_death_day_order CHECK', 'CHECK')),
  ('cookbook', 'cookbook/inside-a-place names a column that does not exist', mutate('SELECT d.day, pl.title AS place', 'SELECT d.day, pl.name AS place')),
  ('document', 'a 2075 answer is gone from the file', mutate("  ('sqlite',    'writers need SQLite >= 3.51.3", "  ('sqlite',    'writers need SQLite >= 3.51")),
