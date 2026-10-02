@@ -16,12 +16,19 @@ for lbl, exp, f, t, k in [
     ('wikilink day page->page', 'OK', m1, pw, 'wikilink'), ('wikilink day page->person (a person is a page)', 'OK', m1, pa, 'wikilink'),
     ('wikilink day page->place', 'OK', m1, pl, 'wikilink'), ('wikilink person page->page', 'OK', pa, pw, 'wikilink'),
     ('redirect page->page', 'OK', m1, pw, 'redirect'),
-    ('redirect page->person', 'ERR', pw, pa, 'redirect'), ('about day page->person', 'OK', m1, pb, 'about'), ('about person->place', 'OK', pa, pl, 'about'),
+    ('redirect page->person (the replacement may be named)', 'OK', pw, pa, 'redirect'),
+    ('redirect page->place', 'OK', m1, pl, 'redirect'), ('redirect person->page (a stub is a plain page)', 'ERR', pa, pw, 'redirect'),
+    ('about day page->person', 'OK', m1, pb, 'about'), ('about person->place', 'OK', pa, pl, 'about'),
     ('about day page->page', 'ERR', m1, pw, 'about'), ('related page-person', 'OK', pw, pa, 'related'),
     ('at day page->place', 'OK', m1, pl, 'at'), ('at person->place (at comes from a page)', 'ERR', pa, pl, 'at'), ('at page->person', 'ERR', pw, pa, 'at'),
     ('visited is not a kind (D16)', 'ERR', pa, pl, 'visited'), ('a dangling endpoint of a typed kind', 'ERR', 9999, pl, 'at'),
     ('located-in place->person', 'ERR', pl, pa, 'located-in'), ('parent-of person->place', 'ERR', pa, pl, 'parent-of')]:
     r = link(c, f, t, k); S.K(f'link {lbl}: {exp}', r.startswith(exp), r)
+g = page(c, 'Sam Bee'); t = page(c, 'Sam B')
+S.K('a redirect to a plain page', link(c, g, t, 'redirect') == 'OK')
+c.execute("UPDATE entities SET entity_type='person' WHERE id=?", (t,)); c.execute('INSERT INTO people(id,name) VALUES (?,?)', (t, 'Sam B'))
+c.execute("DELETE FROM links WHERE from_id=? AND kind='redirect'", (g,))
+S.K('...survives the promotion of its target: the same row inserts again', link(c, g, t, 'redirect') == 'OK')
 S.K('a duplicate edge is refused (UNIQUE from, to, kind)', link(c, m1, pl, 'at').startswith('ERR'))
 S.K('a symmetric kind is stored in both directions', one(c, "select count(*) from links where kind='friend'") == 2)
 S.K('links are immutable: kind', 'immutable' in tryx(c, "UPDATE links SET kind='related' WHERE kind='friend'"))

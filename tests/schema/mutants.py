@@ -27,6 +27,7 @@ MUTANTS = [   # (suite, what is broken, the broken document)
  ('identity', 'people may be hard-deleted', mutate("CREATE TRIGGER people_no_delete BEFORE DELETE ON people\nBEGIN SELECT RAISE(ABORT, 'people are never deleted: tombstone the entity (entities.deleted_at)'); END;\n", "")),
  ('identity', 'editing a page does not bump updated_at', mutate("CREATE TRIGGER pages_touch AFTER UPDATE ON pages BEGIN\n", "CREATE TRIGGER pages_touch AFTER UPDATE ON pages WHEN 0 BEGIN\n")),
  ('identity', 'the tombstone does not bump updated_at', mutate("CREATE TRIGGER entities_touch AFTER UPDATE OF deleted_at ON entities\n  WHEN NEW.deleted_at IS NOT OLD.deleted_at", "CREATE TRIGGER entities_touch AFTER UPDATE OF deleted_at ON entities\n  WHEN 0")),
+ ('links', 'a redirect may not point at a person', mutate("'page,person,place', 'old stub page", "'page',         'old stub page")),
  ('links', 'located-in accepts any endpoint', mutate("  ('located-in', 0, 'place',   'place',", "  ('located-in', 0, NULL,      NULL,")),
  ('named', 'people hang off entities instead of their page', mutate("  FOREIGN KEY (id, entity_type) REFERENCES pages(id, entity_type),\n  CONSTRAINT people_death_day_order", "  FOREIGN KEY (id, entity_type) REFERENCES entities(id, entity_type),\n  CONSTRAINT people_death_day_order")),
  ('named', 'a promotion does not cascade to the page', mutate("REFERENCES entities(id, entity_type) ON UPDATE CASCADE,", "REFERENCES entities(id, entity_type),")),

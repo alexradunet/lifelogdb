@@ -247,7 +247,11 @@ break and combining marks; a body is shown in a code span):
 
 **Renames.** A title never changes (`pages_title_fixed`, D5). To fix one: create the new page, make
 the old page a one-line stub (`#REDIRECT [[New Title]]`) and add `links(kind='redirect', from=old,
-to=new)`. Consumers follow one hop; `redirect` links are excluded from backlink queries (§6.5).
+to=new)`. The stub is a plain page; the replacement may be a page, a person or a place, so a ghost
+made by a misspelt `[[Name]]` can point at the person, and a replacement promoted later (§6.14) keeps
+its redirect. A person's or a place's own title is its permanent handle and is not renamed (a person's
+display name is `people.name`, D20). Consumers follow one hop; `redirect` links are excluded from
+backlink queries (§6.5).
 
 **Titles.** The rules are the CHECKs `pages_title_len` and `pages_title_safe` (§3): 1–240 bytes,
 trimmed, and a valid file name on Linux, macOS and Windows — the strict direction on purpose (D5).
@@ -770,7 +774,7 @@ CREATE TABLE link_kinds (
 ) STRICT;
 INSERT INTO link_kinds(kind, symmetric, from_types, to_types, note) VALUES
   ('wikilink', 0, 'page,person,place', 'page,person,place', 'extracted from [[body]] on save; body is the truth'),
-  ('redirect', 0, 'page',      'page',         'old stub page → its replacement; renames, D5'),
+  ('redirect', 0, 'page',      'page,person,place', 'old stub page → its replacement, a page, person or place; renames, D5'),
   ('about',    0, NULL,        'person,place', 'entity → person/place it is about'),
   ('at',       0, 'page',      'place',        'day page → a place the owner was at that day; from a day page only, which the app checks (D16)'),
   ('located-in', 0, 'place',   'place',        'containment: Tokyo → Japan; transitive — walk it with a recursive CTE (section 6.11)'),
@@ -995,7 +999,7 @@ flowchart LR
     person -->|"parent-of"| person
     person <-->|"friend, family"| person
     place -->|"located-in"| place
-    page -->|"redirect"| page
+    page -->|"redirect"| titled
     titled -->|"wikilink"| titled
 ```
 
