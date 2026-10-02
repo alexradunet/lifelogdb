@@ -1,16 +1,18 @@
-# never commit the database: finance data cannot be scrubbed from git history (docs/contract/connections.md)
+# never commit the database: health data and private notes cannot be scrubbed from git history (docs/contract/connections.md)
 life.db
 life.db-wal
 life.db-shm
 *.db
 *.db-wal
 *.db-shm
+*.db-journal
 
 __pycache__/
 /tests/.venv/
 
-# a real vault or export to import: never in git (AGENTS.md, privacy)
+# a real vault or export to import, and its workspace (docs/guides/importing.md): never in git
 /import/
+*.lifelog/
 
 # local Claude Code state: agent worktrees and personal settings (skills in .claude/skills are tracked)
 /.claude/worktrees/

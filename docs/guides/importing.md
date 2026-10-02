@@ -36,8 +36,8 @@ database. So an import is:
 ## The workspace
 
 The workspace is a folder beside the source, named after it: source `Notebook/`, workspace
-`Notebook.lifelog/`. It holds private data, like the source itself: neither goes into git or any
-online service.
+`Notebook.lifelog/`. It holds private data, like the source itself: neither goes into git or any online service: keep both
+outside every repository, or in a folder its `.gitignore` excludes (this repository ignores `/import/` and `*.lifelog/`).
 
 | file | what | who writes it |
 |---|---|---|

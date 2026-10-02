@@ -143,8 +143,8 @@ Their homes are in `docs/`; this list is the checklist, not the rule.
   auto-created target in its own `SAVEPOINT`; an invalid target makes no link and never blocks a save;
   `#tag` is read and never expanded; a `#REDIRECT [[` stub is not scanned.
 - **Integrity**: the four [integrity checks](docs/contract/integrity-checks.md).
-- **Privacy**: `life.db` with its `-wal`/`-shm` never in git (finance data cannot be scrubbed from
-  history; `.gitignore` covers `*.db`). Never commit a real vault, real notes or real data as a fixture:
+- **Privacy**: `life.db` with its `-wal`/`-shm` never in git (health data and private notes cannot be scrubbed from history; `.gitignore` covers `*.db`, `*.db-journal`, `/import/`
+  and an import workspace `*.lifelog/`). Never commit a real vault, real notes or real data as a fixture:
   tests use synthetic data only.
 
 ## Empiricism over intuition
