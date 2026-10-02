@@ -106,6 +106,9 @@ S.K('an at link to a person is refused: at points at a place', link(c, d7, named
 S.K('an at link from a person is refused: at comes from a page', link(c, named(c, 'person', 'Ion'), par, 'at').startswith('ERR'))
 c.execute(f'UPDATE entities SET deleted_at={NOW} WHERE id=?', (spa,))
 S.K('...and a tombstoned place is not where I was', [r[0] for r in c.execute(st[1], {'day': '2026-08-07'})] == ['Northgate'])
+c.execute(f'UPDATE entities SET deleted_at={NOW} WHERE id=?', (d31,))
+S.K('§6.9 where was I on a tombstoned day: nowhere', [r[0] for r in c.execute(st[1], {'day': '2026-07-31'})] == [])
+S.K('§6.2 a tombstoned day lists none of its places', [r for r in c.execute(DV, {'day': '2026-07-31'}) if r[0] == 'at'] == [])
 
 # ---- what stands in for recurrence (D15), events (D22) and tasks (D23)
 c = fresh()

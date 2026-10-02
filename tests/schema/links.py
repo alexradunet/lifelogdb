@@ -62,6 +62,11 @@ d5 = day_page(c, '2019-07-01', 'planning [[Tokyo]]'); link(c, d5, tokyo, 'wikili
 P = dict(place_id=japan, from_day='2019-01-01', to_day='2019-12-31')
 WANT = [('2019-04-02', 'Tokyo'), ('2019-04-05', 'Japan'), ('2019-04-05', 'Kanto')]
 S.K('§6.11 finds the 2019 days at a place in Japan, not another year, a place outside or a day that only names it', c.execute(block('6.11'), P).fetchall() == WANT, c.execute(block('6.11'), P).fetchall())
+typo = named(c, 'place', 'Tokio (typo)'); link(c, typo, japan, 'located-in')
+d6 = day_page(c, '2019-04-09', 'mistyped place'); link(c, d6, typo, 'at')
+c.execute(f'UPDATE entities SET deleted_at={NOW} WHERE id=?', (typo,))
+S.K('§6.11 leaves out a tombstoned place and its days', c.execute(block('6.11'), P).fetchall() == WANT, c.execute(block('6.11'), P).fetchall())
+S.K('§6.11 asked about a tombstoned place itself lists nothing', c.execute(block('6.11'), dict(P, place_id=typo)).fetchall() == [])
 link(c, japan, tokyo, 'located-in')
 steps = [0]
 def stop():

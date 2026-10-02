@@ -1645,6 +1645,7 @@ SELECT what, at, detail FROM (
   UNION ALL
   SELECT 'at', NULL, pl.title
     FROM pages d
+    JOIN entities de ON de.id = d.id AND de.deleted_at IS NULL
     JOIN links l    ON l.from_id = d.id AND l.kind = 'at'
     JOIN pages pl   ON pl.id = l.to_id
     JOIN entities e ON e.id = pl.id AND e.deleted_at IS NULL
@@ -1765,6 +1766,7 @@ ON CONFLICT(from_id, to_id, kind) DO NOTHING;
 -- where was I on :day?
 SELECT pl.title, l.note
   FROM pages d
+  JOIN entities de ON de.id = d.id AND de.deleted_at IS NULL
   JOIN links l    ON l.from_id = d.id AND l.kind = 'at'
   JOIN pages pl   ON pl.id = l.to_id
   JOIN entities e ON e.id = pl.id AND e.deleted_at IS NULL
@@ -1806,7 +1808,9 @@ a place inside it (§6.9):
 WITH RECURSIVE inside(id) AS (
   SELECT :place_id
   UNION
-  SELECT l.from_id FROM links l JOIN inside ON l.to_id = inside.id WHERE l.kind = 'located-in'
+  SELECT l.from_id FROM links l JOIN inside ON l.to_id = inside.id
+    JOIN entities ep ON ep.id = l.from_id AND ep.deleted_at IS NULL
+   WHERE l.kind = 'located-in'
 )
 SELECT d.day, pl.title AS place
   FROM inside
@@ -1814,6 +1818,7 @@ SELECT d.day, pl.title AS place
   JOIN pages d    ON d.id = l.from_id AND d.title = d.day
   JOIN entities e ON e.id = d.id AND e.deleted_at IS NULL
   JOIN pages pl   ON pl.id = inside.id
+  JOIN entities epl ON epl.id = pl.id AND epl.deleted_at IS NULL
  WHERE d.day BETWEEN :from_day AND :to_day
  ORDER BY d.day, pl.title;
 ```
