@@ -1,7 +1,7 @@
 # 0002 — A ledger line whose file name contains " — " is cut in half
 
 - **Date:** 2026-10-02
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the import ledger (`make-ledger` / `ledgerState`), with a source file named `Protocol — Pareto Analysis.md`
 
 ## What happened
@@ -44,4 +44,5 @@ On a fresh database built from [schema.sql](../schema/schema.sql):
 
 ## Resolution
 
-_(open)_
+`writeLedger` quotes a file name that contains the separator and `Ledger` reads it back whole
+(commit `cad659b`); `TestLedger` round-trips a name with em dashes in it.

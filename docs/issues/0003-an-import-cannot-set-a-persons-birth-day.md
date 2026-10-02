@@ -53,7 +53,7 @@ birthday: 1980-03-29
 
 ## Rules involved
 
-- [Identity (D20)](../decisions/D20-identity.md) — a person is a page with a `people` row.
+- [Named pages (D20)](../decisions/D20-named-pages.md) — a person is a page with a `people` row.
 - [Importing](../guides/importing.md) — the quote is the evidence a facts write is allowed to make.
 - `people.birth_day` in [schema.sql](../schema/schema.sql).
 
