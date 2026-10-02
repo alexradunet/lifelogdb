@@ -8,7 +8,6 @@ life.db-shm
 
 __pycache__/
 /tests/.venv/
-/app/lifelog
 
 # a real vault or export to import: never in git (AGENTS.md, privacy)
 /import/

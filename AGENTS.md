@@ -14,22 +14,17 @@ history and attachments are deferred (D22, D18, D21, D9). A proposal that turns 
 planner, a tracker of open work or a finance ledger needs a real incident and the owner's word first. Any developer, in any language, may
 build an application around it; the contract they implement is `SCHEMA.md` and nothing else.
 
-`app/` is the **first official application**: a Go binary (a CLI now; a REST API and an MCP server
-later) and the reference writer of a `life.db`. Its own decisions (A1–A9) are in `app/README.md`. It
-implements the schema; it never defines it.
+There is no application in this repo. A writer is built against `SCHEMA.md` (see "Building another
+application on the schema" below): it implements the schema and never defines it.
 
 | path | what it is | it answers to |
 |---|---|---|
 | `SCHEMA.md` | the contract: §3 is the one canonical DDL | real use (below) |
 | `tests/` | the validation suites: every *executed* claim of `SCHEMA.md`, and the reference implementation of the wikilink save contract (`tests/wikilinks/wikisave.py`) | `SCHEMA.md` |
-| `app/` | the Go writer; embeds §3 as `app/internal/db/schema.sql` | `SCHEMA.md` and `tests/` |
-| `app/skills/` | instructions a model follows to drive the CLI: `import` (any source, an Obsidian vault included) | `app/` |
-| `app/IMPORT.md` | the reference for imports: the workspace, facts files, the CLI's checks, gates and replay | `app/` |
 
 **One writer per database, many applications around the schema.** Principle 3 (single writing
 application) is a rule about *one `life.db` file*: whatever application writes a given file is the only
-thing that writes it, and every other tool opens it read-only. It does not say only `app/` may ever
-exist. Another developer's writer for their own `life.db` is fine if it follows the whole contract.
+thing that writes it, and every other tool opens it read-only. It does not say only one application may ever exist. Another developer's writer for their own `life.db` is fine if it follows the whole contract.
 Two writers on one file are not.
 
 ## Setup and checks
@@ -38,20 +33,15 @@ Two writers on one file are not.
 |---|---|---|
 | the suites (`tests/`) | Python **≥ 3.12** (`Connection.setconfig`); its `sqlite3` module and the `sqlite3` CLI both on SQLite **≥ 3.51.3 with FTS5** (3.53 is used); network once, for the venv | `python3 tests/run_all.py` (about 15 s) |
 | the diagrams | node, `npm i -g @mermaid-js/mermaid-cli`, a Chromium | `python3 tests/run_all.py --mermaid` |
-| the app (`app/`) | Go as pinned in `app/mise.toml` (`mise install`) and `go.mod` | `go vet ./... && go test ./...` in `app/` |
 
-- Run `python3 tests/run_all.py` **before** `go test ./...`: it creates `tests/.venv`. Without the venv
-  the Go parity tests (`internal/wiki`) **skip** instead of failing, so a green `go test` proves less.
 - A distribution's SQLite may be too old or built without FTS5 (`no such module: fts5`). Build the
   amalgamation with `--enable-fts5` and put its `bin/` on `PATH` and `lib/` on `LD_LIBRARY_PATH`.
-- What to run after a change: §3 DDL, §2 or §6 → the suites **and** `go generate ./internal/db && go test ./...`
-  in `app/`; a diagram → the suites with `--mermaid`; `app/` → `gofmt -l .`, `go vet ./...`, `go test ./...`.
+- What to run after a change: §3 DDL, §2 or §6 → the suites; a diagram → the suites with `--mermaid`.
   Every suite must end green. Say in the commit message what you ran.
 
 ## The one hard rule: no migrations until the schema freeze
 
-**Do not create `db/migrations/`, `0001_init.sql`, or any migration runner** — not in `SCHEMA.md`,
-`tests/` or `app/`. Until the schema is frozen (decision D13):
+**Do not create `db/migrations/`, `0001_init.sql`, or any migration runner** — not in `SCHEMA.md` or `tests/`. Until the schema is frozen (decision D13):
 
 - `SCHEMA.md` **§3 is the single canonical init DDL and is edited in place.** Schema changes = edit §3
   (and the decision log, cookbook and contract sections it touches) directly in the document.
@@ -67,7 +57,7 @@ Two writers on one file are not.
 - **Real use drives change.** A new table, column, constraint, trigger or convention needs a real
   incident behind it — a failed import, a bug in the writing application, a question the data could
   not answer — or it must replace something it makes redundant. A hypothetical writer is not an
-  incident, and neither is a wish of `app/`. The next step is the capture path and one real import
+  incident, and neither is a wish of an application. The next step is the capture path and one real import
   (§2.7), not another review.
 - **One home per concept.** A fact that can be derived from another column is not stored beside it
   (a day page's day is its title; a place's name is its page title).
@@ -79,10 +69,10 @@ Two writers on one file are not.
   `lifelog_meta` row (keep them few); §2 holds only what the DDL cannot (time, the wikilink grammar and
   vectors, connection settings, integrity checks, imports); §5 says *why* and cites constraint names
   instead of restating the rule; §6 shows it in use. Do not restate a rule in a second place — that
-  includes this file, `app/README.md` and code comments: cite the section instead.
-- **Language-neutral.** The contract must be implementable without reading `app/`. Anything a writer
+  includes this file, an application's docs and code comments: cite the section instead.
+- **Language-neutral.** The contract must be implementable without reading any application's code. Anything a writer
   must compute identically in every language (the title predicate, `title_key`, wikilink and `#tag`
-  extraction) is specified in §2.4 with vectors in `tests/wikilinks/vectors.py`; Go code may be an
+  extraction) is specified in §2.4 with vectors in `tests/wikilinks/vectors.py`; an implementation may be an
   example, never the only statement of a rule.
 - **Self-consistency.** Every change to §3's DDL keeps §2, §4, §5, §6 and the totals line under §3 in
   step. The mermaid diagrams (§2.3, §2.6, §4, §6.13) are checked by `tests/schema/diagrams.py`:
@@ -102,7 +92,7 @@ Two writers on one file are not.
   round.
 - **Out of scope for now (SCHEMA.md §7):** the markdown export, backups / snapshots / restore, CSV
   dumps and off-box copies. The document is about the schema and its reliability; do not reintroduce
-  any of them into `SCHEMA.md`, `tests/` or `app/` unless the owner reopens it
+  any of them into `SCHEMA.md` or `tests/` unless the owner reopens it
   (`tests/schema/document.py` fails if their text comes back).
 
 ## Conventions every writer and every DDL change preserves
@@ -144,31 +134,6 @@ Their homes are in `SCHEMA.md`; this list is the checklist, not the rule.
   history; `.gitignore` covers `*.db`). Never commit a real vault, real notes or real data as a fixture:
   tests use synthetic data only.
 
-## Working on `app/` (Go, the first official application)
-
-- **The schema is embedded, never written.** `app/internal/db/schema.sql` is generated from §3
-  (`go generate ./internal/db`); `TestSchemaIsSection3` fails while they differ. Never edit it by hand,
-  never put DDL, `ALTER` or a migration in Go code.
-- **Every write goes through `internal/store`**, inside `db.Write` (one `BEGIN IMMEDIATE` transaction;
-  the DSN sets `_txlock=immediate` and the connection checks its pragmas at open). The CLI, and later
-  the REST API and MCP server, are thin faces over it (A2); none of them writes SQL of its own.
-  Read-only work uses `db.OpenReadOnly`.
-- **Parity with the reference.** `internal/wiki` must agree with `tests/wikilinks/` on the §2.4
-  vectors and on generated inputs (A5). A change to either side changes both, in the same commit.
-- **The CLI prints JSON on stdout, errors on stderr**, so people and models read the same output. A
-  flag or command change updates `app/skills/*/SKILL.md` in the same commit.
-- **Importing data is a skill, not a script.** Asked to import anything (a vault, an export, lab
-  results), read `app/skills/import/SKILL.md` first and follow it; never write an importer for one
-  source (A7). Code is added only for what every import needs and a model does badly (`inspect`,
-  `find`, `measure`, and facts files checked and applied whole by `batch`, A9). The workspace beside a
-  source (`<source>.lifelog/`) holds private data, like the source itself: neither ever goes into git
-  (`/import/` is ignored).
-- **Dependencies stay few** (A1, A3): the standard library first; `modernc.org/sqlite` (pure Go, no cgo,
-  FTS5 built in) is the driver. A new dependency needs a reason in `app/README.md`.
-- **Style**: `gofmt`, `go vet`, tests beside the code, comments that cite the `SCHEMA.md` section they
-  implement rather than restating it. A new application decision gets the next A-number in
-  `app/README.md`; the build order there is kept current.
-
 ## Building another application on the schema
 
 A developer writing their own Lifelog application (any language) needs, from this repo:
@@ -183,7 +148,7 @@ A developer writing their own Lifelog application (any language) needs, from thi
    is a readable reference implementation of the save contract.
 
 Such an application changes nothing here. If it finds a rule that is ambiguous, untestable or missing,
-that is an incident under "What earns a change": fix `SCHEMA.md` (and its suite), not just the app.
+that is an incident under "What earns a change": fix `SCHEMA.md` (and its suite), not just the application.
 
 ## Empiricism over intuition
 
