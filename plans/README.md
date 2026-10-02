@@ -16,7 +16,7 @@ Two runs of the improve skill, both on 2026-10-02.
   `tests/.venv/Scripts/python.exe tests/run_all.py` (Windows;
   `python3 tests/run_all.py` elsewhere) → `20/20 suites passed`.
   Suites change with the document, never to make it pass (AGENTS.md).
-- `fixes.md` is superseded by plans 001–007; plan 012 deletes it.
+- `fixes.md` was carried out by plans 001–007 and deleted by plan 012.
 
 Execute in the order below unless dependencies say otherwise. Plans 009, 010 and 011 each add mutants
 to `tests/schema/mutants.py` and edit the count in `tests/README.md`: run them one after another and
@@ -33,12 +33,12 @@ always **read the current mutants count before editing it** (it is 66 at commit 
 | 003 | Scope the no-deletes rule to life data; state the registries' own rule | P2 | S | — | DONE |
 | 006 | Reference hygiene and wording nits — R63/R73, D12, D13, R71, WAL backports | P2 | S | — | DONE |
 | 007 | Document the idempotent re-run of a habit period (§6.16) | P3 | S | — | DONE |
-| 008 | Remove `app/` and every reference to it | P1 | S | — | DONE — reviewed; commit `4b3b6db` on branch `worktree-agent-ab9f58b080597fd0d`, not merged yet |
-| 009 | §6.16: a re-sent habit period carries its `end_day` | P1 | S | 008 (ordering only) | TODO |
-| 010 | Cookbook reads of where the owner was skip tombstones (§6.2, §6.9, §6.11) | P2 | S | after 009 (mutants count) | TODO |
-| 011 | A redirect stub may point at a person or a place | P2 | M | **owner decision A/B**; after 010 (mutants count) | TODO (owner chose A) |
-| 012 | The suites leave nothing in TEMP, pin their parser; `fixes.md` goes | P2 | S | — | TODO |
-| 013 | Keep the LLM-assisted import process as a writer-neutral guide (`IMPORTING.md`) | P1 | M | 008 | TODO |
+| 008 | Remove `app/` and every reference to it | P1 | S | — | DONE (`4b3b6db`) |
+| 009 | §6.16: a re-sent habit period carries its `end_day` | P1 | S | 008 (ordering only) | DONE (`430ea6e`) |
+| 010 | Cookbook reads of where the owner was skip tombstones (§6.2, §6.9, §6.11) | P2 | S | after 009 (mutants count) | DONE (`6f02944`) |
+| 011 | A redirect stub may point at a person or a place | P2 | M | **owner decision A/B**; after 010 (mutants count) | DONE, option A (`6442e03`) |
+| 012 | The suites leave nothing in TEMP, pin their parser; `fixes.md` goes | P2 | S | — | DONE (`0364503`) |
+| 013 | Keep the LLM-assisted import process as a writer-neutral guide (`IMPORTING.md`) | P1 | M | 008 | DONE (`961b040`, `6ce208d`) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale — finding fixed independently or approach
