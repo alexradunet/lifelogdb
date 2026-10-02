@@ -3,7 +3,8 @@
 `SCHEMA.md` marks a claim *executed* when a suite in this folder runs it. This folder exists so that the rule in `AGENTS.md`
 — *after changing DDL, re-run the checks* — can actually be followed. **Nothing here is a migration and nothing touches
 `life.db`**: every suite extracts §3 (and the §2 and §6 blocks it needs) from `SCHEMA.md`, builds throwaway databases and
-discards them.
+discards them. `run_all.py` gives every suite one temporary folder and removes it at the end; a suite run on its own
+leaves its folder behind. The reference parser is pinned (`markdown-it-py==4.2.0`).
 
 ```
 python3 tests/run_all.py              # every suite, ~15 s

@@ -7,7 +7,7 @@
 
 Nothing here is a migration and nothing touches life.db: every suite builds throwaway databases from the DDL it extracts
 from SCHEMA.md section 3. Needs: python3 (with venv + network once, for markdown-it-py) and the sqlite3 CLI."""
-import os, re, subprocess, sys, tempfile, time
+import os, re, shutil, subprocess, sys, tempfile, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ARGS = set(sys.argv[1:])
@@ -27,7 +27,7 @@ def ensure_venv(extra=()):
     if not os.path.exists(PY):
         subprocess.run([sys.executable, '-m', 'venv', VENV], check=True)
         PY = venv_python()
-    need = ['markdown-it-py', *extra]
+    need = ['markdown-it-py==4.2.0', *extra]
     have = subprocess.run([PY, '-m', 'pip', 'list', '--format=freeze'], capture_output=True, text=True).stdout.lower()
     missing = [p for p in need if p.lower() not in have]
     if missing:
@@ -73,17 +73,23 @@ def run(name, d, script, ok, env):
 
 def main():
     ensure_venv(['datasette'] if '--datasette' in ARGS else [])
-    tmp = tempfile.mkdtemp(prefix='lifelog-ddl-'); ddl = os.path.join(tmp, 'ddl.sql')
-    subprocess.run([sys.executable, os.path.join(HERE, 'lib', 'docsql.py'), 'ddl', ddl], check=True)
-    n = sum(1 for _ in open(ddl))
-    objs = subprocess.run(['sqlite3', ':memory:', '.read ' + ddl, 'SELECT count(*) FROM sqlite_master;'], capture_output=True, text=True).stdout.split()[-1]
-    ver = subprocess.run(['sqlite3', '--version'], capture_output=True, text=True).stdout.split()[0]
-    print(f'SCHEMA.md section 3: {n} lines, {objs} schema objects; SQLite {ver}\n', flush=True)
-    env = dict(os.environ, DDL=ddl, PYTHONDONTWRITEBYTECODE='1')
-    results = [run(*s, env) for s in SUITES]
-    if '--datasette' in ARGS: results.append(run('datasette', 'schema', 'datasette_ro.py', MET, env))
-    if '--mermaid' in ARGS: results.append(run('mermaid', 'schema', 'render_diagrams.py', lambda o: ratio(o, r'(\d+)/(\d+) diagrams rendered'), env))
-    print(f"\n{sum(results)}/{len(results)} suites passed")
+    scratch = tempfile.mkdtemp(prefix='lifelog-suites-')
+    try:
+        tmp = tempfile.mkdtemp(prefix='lifelog-ddl-', dir=scratch); ddl = os.path.join(tmp, 'ddl.sql')
+        subprocess.run([sys.executable, os.path.join(HERE, 'lib', 'docsql.py'), 'ddl', ddl], check=True)
+        n = sum(1 for _ in open(ddl))
+        objs = subprocess.run(['sqlite3', ':memory:', '.read ' + ddl, 'SELECT count(*) FROM sqlite_master;'], capture_output=True, text=True).stdout.split()[-1]
+        ver = subprocess.run(['sqlite3', '--version'], capture_output=True, text=True).stdout.split()[0]
+        print(f'SCHEMA.md section 3: {n} lines, {objs} schema objects; SQLite {ver}\n', flush=True)
+        env = dict(os.environ, DDL=ddl, PYTHONDONTWRITEBYTECODE='1', TMPDIR=scratch, TEMP=scratch, TMP=scratch)
+        results = [run(*s, env) for s in SUITES]
+        if '--datasette' in ARGS: results.append(run('datasette', 'schema', 'datasette_ro.py', MET, env))
+        if '--mermaid' in ARGS: results.append(run('mermaid', 'schema', 'render_diagrams.py', lambda o: ratio(o, r'(\d+)/(\d+) diagrams rendered'), env))
+        print(f"\n{sum(results)}/{len(results)} suites passed")
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+        if os.path.exists(scratch):
+            print(f'note: could not remove {scratch} (a file is still open)', flush=True)
     sys.exit(0 if all(results) else 1)
 
 if __name__ == '__main__':
