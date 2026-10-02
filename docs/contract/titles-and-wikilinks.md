@@ -36,7 +36,7 @@ below:
 - *Stub pages.* A body that starts — after any whitespace — with `#REDIRECT` (any case), then at
   least one whitespace character (a line break counts), then `[[`, is a rename stub (below).
   "Whitespace" here is Unicode White_Space, U+00A0 included — not ASCII-only `\s` and not
-  JavaScript's `\s` (which adds U+FEFF). A stub gets no wikilinks and no tags — its one edge is
+  JavaScript's `\s` (which adds U+FEFF and lacks U+0085). A stub gets no wikilinks and no tags — its one edge is
   the `redirect` link the app writes — so a stub never shows up as a backlink. Elsewhere the word `#redirect` alone
   is never a tag, so nothing can create a page called `redirect`.
 - *An invalid target makes no link and never blocks a save.* A title `pages_title_safe` rejects

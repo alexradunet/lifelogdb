@@ -1,5 +1,5 @@
 """The save contract as the DOCUMENT prints it (contract/titles-and-wikilinks and cookbook/save-a-body), not as the reference implementation does.
-A  the vector table of contract/titles-and-wikilinks reproduces with the reference extraction, row for row;
+A  the vector table of contract/titles-and-wikilinks reproduces with the reference extraction, row for row, and equals vectors.py minus the five computed bodies;
 B  the SQL of cookbook/save-a-body, run literally statement by statement, gives the vector results, leaves no orphan, carries ids by
    RETURNING, and equals the reference implementation after 400 random edits;
 C  cookbook/backlinks lists a day page's wikilink and not a stub's redirect row."""
