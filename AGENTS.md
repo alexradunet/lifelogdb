@@ -2,10 +2,12 @@
 
 ## What this repo is
 
-**Lifelog is a schema first.** The product is the database architecture in [`docs/`](docs/README.md): the
-design of `life.db`, a lifetime-scale, single-user SQLite database — goals, the canonical DDL
+**The product is `lifelog`, the Go application** ([README](README.md)): one binary at the repo root that writes
+`life.db`, a lifetime-scale, single-user SQLite database, and serves it as a hypermedia API, a CLI and an MCP server.
+**The database it writes is specified on its own** in [`docs/`](docs/README.md) — goals, the canonical DDL
 ([`docs/schema/schema.sql`](docs/schema/schema.sql)), the storage contract, the decision log (D1–D24), the query
-cookbook, non-goals, research. The docs state the current truth only.
+cookbook, non-goals, research — so that `life.db` can be read, or written by another application, in any language.
+The docs state the current truth only.
 
 **What `life.db` is for: a life log and its backup — not a project-management database.** It keeps
 what happened and what was measured: a journal of day pages, notes, the people and places in them,
@@ -16,9 +18,9 @@ planner, a tracker of open work or a finance ledger needs a real incident and th
 build an application around it; the contract they implement is `docs/` and nothing else.
 
 A writer is built against the docs ([building a writer](docs/guides/building-a-writer.md)): it implements the schema and
-never defines it. One writer per `life.db` file, many applications around the schema. `app/` is the owner's writer —
-one Go binary that serves the API, the CLI and the MCP server ([app/README.md](app/README.md)); it answers to `docs/`
-like any other writer, and `docs/` never names it.
+never defines it. One writer per `life.db` file, many applications around the schema. `lifelog` is that writer for the
+owner's file; it answers to `docs/` like any other writer would, and `docs/` never names it — the contract stays
+language-neutral, so a rule lives in the docs and the Go code cites it.
 
 | path | what it is | it answers to |
 |---|---|---|
@@ -26,27 +28,24 @@ like any other writer, and `docs/` never names it.
 | `docs/architecture/`, `docs/contract/`, `docs/decisions/`, `docs/cookbook/`, `docs/research/` | the contract around it: why, what the DDL cannot hold, the SQL in use, the evidence | real use |
 | `docs/guides/` | for people building on the schema: [building a writer](docs/guides/building-a-writer.md), [importing with a model](docs/guides/importing.md) | the contract |
 | `docs/issues/`, `docs/rfcs/`, `docs/plans/` | the process records: incidents, proposals, execution plans ([how a change happens](docs/process.md)) | — |
-| `tests/` | the validation suites: every *executed* claim of the docs, and the reference implementation of the wikilink save contract (`tests/wikilinks/wikisave.py`) | the docs |
-| `app/` | the owner's writer: `lifelog` (Go) — hypermedia API, CLI, MCP server | the docs |
+| `tests/` | the validation suites (Go tests): every *executed* claim of the docs, run against the DDL in `docs/` and through the writer's own extraction and save | the docs |
+| `cmd/`, `internal/`, `tools/`, `go.mod` | the product: `lifelog` (Go) — hypermedia API, CLI, MCP server ([README](README.md)) | the docs |
 
 ## Setup and checks
 
 | what | needs | run |
 |---|---|---|
-| the suites (`tests/`) | Python **≥ 3.12** (`Connection.setconfig`); its `sqlite3` module and the `sqlite3` CLI both on SQLite **≥ 3.53 with FTS5** (writers need only 3.51.3; the suites run migrations, which need 3.53); network once, for the venv | `python3 tests/run_all.py` (about 70 s; Windows: `tests/.venv/Scripts/python.exe tests/run_all.py`) |
-| the diagrams | node, `npm i -g @mermaid-js/mermaid-cli`, a Chromium | `python3 tests/run_all.py --mermaid` |
-| the writer (`app/`) | Go ≥ 1.27 (no cgo: SQLite is the pure-Go `modernc.org/sqlite`); network once, for the modules | `cd app && go generate ./... && go test ./...` |
+| everything: the application and the suites | Go ≥ 1.27 and nothing else (no cgo, no Python, no `sqlite3` CLI: SQLite is the pure-Go `modernc.org/sqlite`, 3.53.4 with FTS5 — the suites run migrations, which need 3.53; a writer needs only 3.51.3); network once, for the modules | `go generate ./... && go vet ./... && go test ./...` (about 25 s; `-short` skips the mutants) |
+| the suites alone | the same | `go test ./tests` ([tests/README.md](tests/README.md)) |
+| the diagrams | node, `npm i -g @mermaid-js/mermaid-cli`, a Chromium | `LIFELOG_MERMAID=1 go test ./tests -run TestMermaidRender` |
 
-- A distribution's SQLite may be too old or built without FTS5 (`no such module: fts5`). Build the
-  amalgamation with `--enable-fts5` and put its `bin/` on `PATH` and `lib/` on `LD_LIBRARY_PATH`.
-- What to run after a change: `schema.sql`, any page under `docs/` → the suites; `schema.sql` or the wikilink vectors
-  in `docs/contract/titles-and-wikilinks.md` → also `app/`'s tests (`go generate` copies `schema.sql` into it); a
-  diagram → the suites with `--mermaid`; `app/` → its tests. Every suite must end green. Say in the commit message
-  what you ran.
+- What to run after a change: anything — `go generate ./... && go test ./...` (`go generate` copies `schema.sql` into
+  `internal/db`, and a test fails while the copy is stale); a diagram → also the mermaid render. Every test must pass.
+  Say in the commit message what you ran.
 
 ## The one hard rule: no migrations until the schema freeze
 
-**Do not create `db/migrations/`, `0001_init.sql`, or any migration runner** — not in `docs/`, `tests/` or `app/`. Until the
+**Do not create `db/migrations/`, `0001_init.sql`, or any migration runner** — not in `docs/`, `tests/` or the Go code. Until the
 schema is frozen ([D13](docs/decisions/D13-migrations-and-freeze.md)):
 
 - **`docs/schema/schema.sql` is the single canonical init DDL and is edited in place.** Schema changes = edit it
@@ -81,15 +80,15 @@ schema is frozen ([D13](docs/decisions/D13-migrations-and-freeze.md)):
   includes this file, an application's docs and code comments: link the page instead.
 - **One page per concept, linked.** Pages link each other with relative markdown links
   (`[imports](../contract/imports.md)`); there are no section numbers. Every link must resolve and every page must be
-  reachable from `docs/README.md` (`tests/schema/document.py` checks both). A new decision is a new file in
+  reachable from `docs/README.md` (the `document` suite checks both). A new decision is a new file in
   `docs/decisions/` from its template, listed in the decision index.
 - **Language-neutral.** The contract must be implementable without reading any application's code. Anything a writer
   must compute identically in every language (the title predicate, `title_key`, wikilink and `#tag`
   extraction) is specified in [titles and wikilinks](docs/contract/titles-and-wikilinks.md) with its vectors
-  (the same list as `tests/wikilinks/vectors.py`); an implementation may be an example, never the only statement of a rule.
+  (the suites read them from that page: it is their only copy); an implementation may be an example, never the only statement of a rule.
 - **Self-consistency.** Every change to `schema.sql` keeps the contract pages, the entity model, the decisions,
   the cookbook and the totals line in `docs/schema/README.md` in step. The mermaid diagrams are checked by
-  `tests/schema/diagrams.py`: the ER diagrams draw tables, key columns and foreign keys only, and the link map must
+  the `diagrams` suite: the ER diagrams draw tables, key columns and foreign keys only, and the link map must
   equal `link_kinds`. Each diagram starts with a `%% diagram: <id>` line; keep to `erDiagram`, `flowchart`
   and `stateDiagram-v2` with quoted labels.
 - **Suites change with the docs, never to make them pass.** The suites are grouped by subject
@@ -97,7 +96,7 @@ schema is frozen ([D13](docs/decisions/D13-migrations-and-freeze.md)):
   the same edit and say so in the commit message — a suite loosened to pass proves nothing, and
   `tests/` is validation, not a migration runner. A new cross-table rule needs a `lifelog_meta` key and
   a row in the 2075 table of the [threat model](docs/contract/threat-model.md); a new rule of any kind gets a mutant in
-  `tests/schema/mutants.py`. Keep the counts in `tests/README.md` (diagrams, mutants) true.
+  `tests/mutants_test.go`. Keep the counts in `tests/README.md` (diagrams, mutants) true.
 - **Current truth and nothing else** in every folder of `docs/` except `issues/`, `rfcs/` and `plans/`, which are
   dated records: no review rounds, validation records, addenda, "superseded" notes, finding ids, version narrative
   or changelog. When a decision changes, rewrite it in place —

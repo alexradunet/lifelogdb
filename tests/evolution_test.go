@@ -1,0 +1,189 @@
+package tests
+
+import (
+	"crypto/rand"
+	"fmt"
+	"regexp"
+	"strings"
+)
+
+// evolution: evolution after the freeze (D13, D17, architecture/non-goals) — every CHECK is named and droppable by
+// name; an unnamed one is not, a looser second CHECK does not relax the first, ADD CONSTRAINT checks existing rows;
+// enums widen on a populated database; the partial-date and tokenizer paths of architecture/non-goals work; a
+// link kind widens by migration; a promotion can strand a link; an entity uid is additive (D3); a comment outside
+// a statement is not stored.
+func evolution(s *S) {
+	err := func(r string) bool { return strings.HasPrefix(r, "ERR") }
+	populated := func() *C {
+		c := s.fresh()
+		for _, t := range []string{"page", "person", "place"} {
+			c.thing(t)
+		}
+		c.page("Some page")
+		return c
+	}
+
+	// ---- every CHECK named, every name droppable
+	body := code(s.ddl)
+	nchk := len(regexp.MustCompile(`\bCHECK\s*\(`).FindAllString(body, -1))
+	var names []string
+	for _, m := range regexp.MustCompile(`\bCONSTRAINT\s+(\w+)\s+CHECK\s*\(`).FindAllStringSubmatch(body, -1) {
+		names = append(names, m[1])
+	}
+	s.K("every CHECK in schema is named", nchk > 0 && nchk == len(names), nchk, len(names))
+	seen, dup := map[string]bool{}, []string{}
+	for _, n := range names {
+		if seen[n] {
+			dup = append(dup, n)
+		}
+		seen[n] = true
+	}
+	s.K("constraint names are unique", len(dup) == 0, dup)
+	var tables []string
+	for _, m := range regexp.MustCompile(`CREATE TABLE (\w+)`).FindAllStringSubmatch(body, -1) {
+		tables = append(tables, m[1])
+	}
+	var badName []string
+	for _, n := range names {
+		ok := false
+		for _, t := range tables {
+			ok = ok || strings.HasPrefix(n, t+"_")
+		}
+		if !ok {
+			badName = append(badName, n)
+		}
+	}
+	s.K("names are <table>_<column or rule>", len(badName) == 0, badName)
+	type nt struct{ name, table string }
+	var tblOf []nt
+	for _, m := range regexp.MustCompile(`(?s)CREATE TABLE (\w+) \((.*?)\n\) STRICT;`).FindAllStringSubmatch(body, -1) {
+		for _, n := range regexp.MustCompile(`\bCONSTRAINT\s+(\w+)\s+CHECK`).FindAllStringSubmatch(m[2], -1) {
+			tblOf = append(tblOf, nt{n[1], m[1]})
+		}
+	}
+	c := populated()
+	var bad []string
+	for _, x := range tblOf {
+		c.must("BEGIN")
+		if c.tryx("ALTER TABLE "+x.table+" DROP CONSTRAINT "+x.name) != "OK" {
+			bad = append(bad, x.name)
+		}
+		c.must("ROLLBACK")
+	}
+	s.K("every named CHECK can be dropped by name on a populated database", len(tblOf) > 0 && len(bad) == 0, bad)
+	s.K("integrity clean after the drops were rolled back", c.integrityOK())
+
+	// ---- what a name buys (SQLite >= 3.53)
+	t := s.connect("")
+	t.must("CREATE TABLE u (x INTEGER CHECK (x > 0)) STRICT")
+	s.K("an unnamed CHECK cannot be dropped", strings.Contains(t.tryx("ALTER TABLE u DROP CONSTRAINT x"), "no such constraint"))
+	t.must("CREATE TABLE v (x INTEGER CONSTRAINT v_x CHECK (x > 0)) STRICT")
+	t.must("ALTER TABLE v ADD CONSTRAINT v_x2 CHECK (x > -10)")
+	s.K("adding a looser second CHECK does not relax the first (both apply)", err(t.tryx("INSERT INTO v VALUES (-5)")))
+	t.must("INSERT INTO v VALUES (5)")
+	s.K("ADD CONSTRAINT checks the existing rows (tightening is as safe as loosening)", err(t.tryx("ALTER TABLE v ADD CONSTRAINT v_x3 CHECK (x > 10)")))
+
+	// ---- widening enums on a populated database
+	use := func(c *C) string {
+		return c.tryx("INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES ('vehicle'," + NOW + "," + NOW + ",'ui')")
+	}
+	c = populated()
+	s.K("entities_entity_type: the new value is refused before", err(use(c)))
+	c.must("BEGIN")
+	r1 := c.tryx("ALTER TABLE entities DROP CONSTRAINT entities_entity_type")
+	r2 := c.tryx("ALTER TABLE entities ADD CONSTRAINT entities_entity_type CHECK (entity_type IN ('page','person','place','vehicle'))")
+	c.must("COMMIT")
+	s.K("entities_entity_type: DROP and ADD the widened CHECK in one transaction", r1 == "OK" && r2 == "OK", r1, r2)
+	s.K("entities_entity_type: the new value is accepted", use(c) == "OK")
+	s.K("entities_entity_type: integrity and foreign keys clean", c.integrityOK())
+
+	// ---- architecture/non-goals partial dates: DROP + ADD of people_birth_day
+	c = s.fresh()
+	p1 := c.named("person", "Ada", M{"birth_day": "1815-12-10"})
+	p2 := c.named("person", "Ancestor")
+	s.K("birth_day refuses 1870 and 1870-05 today", err(c.tryx("UPDATE people SET birth_day='1870' WHERE id=?", p2)) && err(c.tryx("UPDATE people SET birth_day='1870-05' WHERE id=?", p2)))
+	c.must("BEGIN")
+	r1 = c.tryx("ALTER TABLE people DROP CONSTRAINT people_birth_day")
+	r2 = c.tryx("ALTER TABLE people ADD CONSTRAINT people_birth_day CHECK (birth_day IS NULL OR date(birth_day) IS birth_day OR birth_day GLOB '[0-9][0-9][0-9][0-9]' OR (birth_day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]' AND substr(birth_day, 6, 2) BETWEEN '01' AND '12'))")
+	c.must("COMMIT")
+	s.K("the named CHECK is dropped and re-added looser on a populated STRICT table", r1 == "OK" && r2 == "OK", r1, r2)
+	s.K("YYYY and YYYY-MM are stored; full dates are untouched", c.tryx("UPDATE people SET birth_day='1870' WHERE id=?", p2) == "OK" &&
+		c.tryx("UPDATE people SET birth_day='1870-05' WHERE id=?", p2) == "OK" && c.str("select birth_day from people where id=?", p1) == "1815-12-10")
+	junk := true
+	for _, v := range []string{"abc", "1870-13", "1870-5", "18700", "1870-05-01x"} {
+		junk = junk && err(c.tryx("UPDATE people SET birth_day=? WHERE id=?", v, p2))
+	}
+	s.K("junk and month 13 are still refused", junk)
+	s.K("integrity clean and the touch trigger still works", c.integrityOK() && c.n("select updated_at >= created_at from entities where id=?", p2) == 1)
+
+	// ---- architecture/non-goals CJK search: the tokenizer switch is one transaction on a derived index
+	c = s.fresh()
+	jp := "日本語のノートを書く"
+	for i, b := range []string{jp, "Zürich café notes", "plain english text"} {
+		c.pageW(fmt.Sprintf("Text %d", i), nil, b)
+	}
+	hits := func(q string) int64 { return c.n("select count(*) from pages_fts where pages_fts match ?", q) }
+	s.K("before: unicode61 finds the whole CJK run and accented words, not a part of the run", hits(jp) == 1 && hits("zurich") == 1 && hits("本語") == 0 && hits("ノート") == 0)
+	c.must("BEGIN IMMEDIATE")
+	c.must("DROP TABLE pages_fts")
+	c.must("CREATE VIRTUAL TABLE pages_fts USING fts5(title, body, content='pages', content_rowid='id', tokenize='trigram remove_diacritics 1')")
+	c.must("INSERT INTO pages_fts(pages_fts) VALUES('rebuild')")
+	c.must("COMMIT")
+	s.K("after: trigram finds 3+-character parts and still folds accents", hits("本語の") == 1 && hits("ノート") == 1 && hits("日本語") == 1 && hits("zurich") == 1)
+	s.K("...but not a two-character word (the known limit)", hits("本語") == 0)
+	m := c.pageW("New text", nil, "これは新しい記録です")
+	n1 := hits("新しい")
+	c.must("UPDATE pages SET body='全く別の内容' WHERE id=?", m)
+	s.K("the sync triggers keep working after the switch", n1 == 1 && hits("新しい") == 0 && hits("別の内") == 1)
+	s.K("...and the FTS integrity-check passes", c.tryx("INSERT INTO pages_fts(pages_fts, rank) VALUES('integrity-check', 1)") == "OK")
+
+	// ---- a link kind is widened by a migration (D8): drop the guard, update the row, recreate the guard
+	c = populated()
+	guard := c.str("select sql from sqlite_schema where name='link_kinds_structure_fixed'")
+	c.must("BEGIN IMMEDIATE")
+	c.must("DROP TRIGGER link_kinds_structure_fixed")
+	c.must("UPDATE link_kinds SET to_types = 'person,place' WHERE kind = 'at'")
+	c.must(guard)
+	c.must("COMMIT")
+	s.K("after the migration a day page may be at a person's home page", c.link(c.dayPage("2026-09-30", "x"), c.named("person", ""), "at") == "OK")
+	s.K("...and the guard is back: the next change is refused", strings.Contains(c.tryx("UPDATE link_kinds SET to_types = NULL WHERE kind = 'at'"), "fixed at registration"))
+
+	// ---- a promotion can leave a link its kind now refuses (architecture/non-goals): links are checked at insert only
+	c = s.fresh()
+	d := c.dayPage("2026-07-31", "x")
+	w := c.named("place", "Lakeside")
+	s.K("a day page at the place [[Lakeside]]", c.link(d, w, "at") == "OK")
+	c.must("UPDATE entities SET entity_type = 'person' WHERE id = ?", w)
+	c.domain("person", w, nil)
+	s.K("turning Lakeside into a person keeps the old at edge, which a new insert would refuse",
+		c.n("select count(*) from links where to_id = ? and kind = 'at'", w) == 1 && strings.Contains(c.link(c.dayPage("2026-08-01", "x"), w, "at"), "endpoint type not allowed"))
+
+	// ---- an entity uid is additive after the freeze (D3): add, backfill, unique index, then NOT NULL
+	c = populated()
+	c.must("BEGIN IMMEDIATE")
+	c.must("ALTER TABLE entities ADD COLUMN uid TEXT CONSTRAINT entities_uid CHECK (uid IS NULL OR length(uid) = 36)")
+	for _, id := range c.col("select id from entities") {
+		c.must("UPDATE entities SET uid = ? WHERE id = ?", uuid4(), id)
+	}
+	c.must("CREATE UNIQUE INDEX entities_uid_unique ON entities(uid)")
+	c.must("ALTER TABLE entities ALTER COLUMN uid SET NOT NULL")
+	c.must("COMMIT")
+	s.K("every existing entity has a unique uid, and an entity without one is refused afterwards",
+		c.n("select count(distinct uid) = count(*) from entities") == 1 && strings.Contains(c.tryx("INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES ('page',"+NOW+","+NOW+",'ui')"), "NOT NULL"))
+	s.K("...with integrity and foreign keys clean", c.integrityOK())
+
+	// ---- comments: inside a statement kept, outside dropped (why the rules live inside)
+	t = s.connect("")
+	t.must("-- outside comment\nCREATE TABLE k (\n  -- inside comment\n  x INTEGER\n) STRICT;")
+	all := strings.Join(t.col("select coalesce(sql, '') from sqlite_schema"), " ")
+	s.K("a comment inside a CREATE statement is stored in the file, one outside is not", strings.Contains(t.str("select sql from sqlite_schema where name='k'"), "inside comment") && !strings.Contains(all, "outside comment"))
+}
+
+// uuid4 is a random version-4 UUID: 36 characters.
+func uuid4() string {
+	b := make([]byte, 16)
+	rand.Read(b)
+	b[6] = b[6]&0x0f | 0x40
+	b[8] = b[8]&0x3f | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}

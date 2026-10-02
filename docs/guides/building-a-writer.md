@@ -14,9 +14,8 @@ What a writer needs from this repo:
    [titles and wikilinks](../contract/titles-and-wikilinks.md) (titles, `title_key`, the save contract).
 3. **The [cookbook](../cookbook/README.md)** as the canonical reads and writes; `lifelog_meta` and the comments inside
    `.schema` as the in-file summary.
-4. **The test vectors** printed in [titles and wikilinks](../contract/titles-and-wikilinks.md) as a conformance suite (the same
-   list is `tests/wikilinks/vectors.py`, kept equal to the page by a suite); `tests/wikilinks/wikisave.py` is a readable
-   reference implementation of the save contract.
+4. **The test vectors** printed in [titles and wikilinks](../contract/titles-and-wikilinks.md) as a conformance suite: the
+   page is their only copy, and the suites in `tests/` read them from it.
 5. For imports with a model, the [importing guide](importing.md).
 
 Such an application changes nothing here. If it finds a rule that is ambiguous, untestable or missing, that is an

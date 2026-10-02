@@ -196,9 +196,9 @@ the gaps are intentional.
   digits `COM¹ COM² COM³ LPT¹ LPT² LPT³`): "avoid these names followed immediately by an extension; for
   example, NUL.txt and NUL.tar.gz are both equivalent to NUL"; no trailing space or period. The
   DDL rejects the bare names, the names before an extension and the superscript names. → [titles and wikilinks](../contract/titles-and-wikilinks.md), [D5](../decisions/D05-pages-and-day-pages.md).
-- <a id="r59"></a>**[R59]** markdown-it-py 4.2.0, the Python port of markdown-it, a CommonMark-compliant parser —
-  <https://github.com/executablebooks/markdown-it-py>; the specification it implements is
-  <https://spec.commonmark.org/>. Used as the reference reader in `tests/wikilinks`: which text it hands
+- <a id="r59"></a>**[R59]** goldmark, a CommonMark-compliant Markdown parser for Go —
+  <https://github.com/yuin/goldmark>; the specification it implements is
+  <https://spec.commonmark.org/>. The reader the suites in `tests/` run the vectors through: which text it hands
   back (code spans, fences, indented code, raw HTML and image alt text are not text; escapes and
   entities are decoded; `#Heading` without a space is not a heading) was executed, not read from
   the spec. → [titles and wikilinks](../contract/titles-and-wikilinks.md), [D19](../decisions/D19-wikilink-save-contract.md).

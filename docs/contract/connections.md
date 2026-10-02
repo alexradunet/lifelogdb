@@ -36,7 +36,7 @@ if another writer committed in between: `busy_timeout` does not apply to that lo
 
 Readers need no setup but must be **read-only**: open the file with `?mode=ro` (SQLite then
 refuses every write — `attempt to write a readonly database`, executed) or `sqlite3 -readonly`.
-Datasette does this by itself (executed by the optional Datasette suite). Under WAL a reader sees the
+Datasette does this by itself. Under WAL a reader sees the
 live file while the app writes and never blocks it (executed). sqlite-web can edit rows, which would
 make it a second writer, so it is not used ([D14](../decisions/D14-ui-and-tools.md)). Three reader traps [R65](../research/references.md#r65)[R66](../research/references.md#r66):
 - **Never `immutable=1`** (Datasette's `-i`): it tells SQLite the file cannot change, so a reader of

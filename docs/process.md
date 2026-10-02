@@ -26,7 +26,8 @@ incident ──▶ issue ──▶ proposal (RFC) ──▶ decision (ADR) ─�
 The freeze is defined in [D13](decisions/D13-migrations-and-freeze.md). Each item is checkable from the repo:
 
 1. Every plan in [plans](plans/README.md) is DONE or REJECTED, and every [issue](issues/README.md) is resolved or won't-fix.
-2. `tests/run_all.py` is green on a SQLite ≥ 3.53 with FTS5, at the commit of `schema.sql` that will make the file.
+2. The suites in `tests/` are green (`go test ./tests`, on a SQLite ≥ 3.53 with FTS5), at the commit of `schema.sql`
+   that will make the file.
 3. The owner has decided each non-goal whose "Reopen when" is the freeze ([non-goals](architecture/non-goals.md): the export,
    snapshot and off-box copy row): kept out, or reopened through an issue.
 4. The text the file will keep has been read once more as a stranger would: the comments inside the `CREATE`

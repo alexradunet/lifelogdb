@@ -15,9 +15,8 @@ below:
   each run of text is then NFC-normalised — so a character whose NFC form is CommonMark syntax
   (U+1FEF becomes a backtick) never acts as syntax. Not read: code spans, code blocks, raw HTML,
   link destinations or image alt text. A conformant CommonMark parser
-  yields exactly this, so nothing is hand-parsed (the reference implementation in `tests/` uses
-  markdown-it-py [R59](../research/references.md#r59), which loses a code span that follows an unclosed `[`, where the CommonMark
-  reference implementation keeps it).
+  yields exactly this, so nothing is hand-parsed (the suites in `tests/` read with goldmark
+  [R59](../research/references.md#r59)).
 - *Wikilink.* `[[title]]` or `[[title|alias]]`, with no `[`, `]` or line break (LF or CR) inside — U+2028 and U+2029 are ordinary characters — and the
   brackets and title in **one** run of plain text (`[[Health *Diet*]]` is not a link, and
   `[[Diet]](url)` is a Markdown link). The title is the text before the first `|`, trimmed of
@@ -41,7 +40,7 @@ below:
   is never a tag, so nothing can create a page called `redirect`.
 - *An invalid target makes no link and never blocks a save.* A title `pages_title_safe` rejects
   (`[[Health/Diet]]`, `[[Re: plan]]`, the tag `#con`) is skipped. Targets are checked first and then de-duplicated by `title_key`, so the first **valid** spelling of a key is the one linked and created. A writer checks the title rules
-  before inserting — the reference predicate in `tests/` agrees with the DDL's CHECKs on more than
+  before inserting — a writer's predicate, checked in `tests/`, agrees with the DDL's CHECKs on more than
   40 000 generated strings — and creates each target inside its own `SAVEPOINT` ([save a body](../cookbook/save-a-body.md)), so even a
   target the predicate wrongly let through is rolled back alone: the page is saved and no orphan
   `entities` row is left. The UI reports skipped targets; nothing is stored about them.
