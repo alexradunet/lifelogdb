@@ -347,13 +347,13 @@ END;
 
 CREATE VIEW ghost_pages AS
   -- empty plain pages nobody points at, 30 days old: a link target created by a capture-time typo and
-  -- never written (renames never create ghosts). The page of a person or a place is never a ghost,
+  -- never written (a page anything links to, a rename's target included, is not one). The page of a person or a place is never a ghost,
   -- however empty (D20). The UI lists them; tombstoning is the owner's act.
   SELECT p.id, p.title, e.created_at
     FROM pages p JOIN entities e ON e.id = p.id
    WHERE p.entity_type = 'page' AND p.body = '' AND e.deleted_at IS NULL
      AND e.created_at < strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 day')
-     AND NOT EXISTS (SELECT 1 FROM links l WHERE l.to_id = p.id AND l.kind <> 'redirect')
+     AND NOT EXISTS (SELECT 1 FROM links l WHERE l.to_id = p.id)
      AND NOT EXISTS (SELECT 1 FROM links l WHERE l.from_id = p.id);
 
 CREATE TRIGGER pages_touch AFTER UPDATE ON pages BEGIN

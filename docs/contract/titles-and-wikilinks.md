@@ -93,8 +93,8 @@ the old page a one-line stub (`#REDIRECT [[New Title]]`) and add `links(kind='re
 to=new)`. The stub is a plain page; the replacement may be a page, a person or a place, so a ghost
 made by a misspelt `[[Name]]` can point at the person, and a replacement promoted later ([a person or a place](../cookbook/person-or-place.md)) keeps
 its redirect. A person's or a place's own title is its permanent handle and is not renamed (a person's
-display name is `people.name`, [D20](../decisions/D20-named-pages.md)). Consumers follow one hop; `redirect` links are excluded from
-backlink queries ([backlinks](../cookbook/backlinks.md)).
+display name is `people.name`, [D20](../decisions/D20-named-pages.md)). Consumers follow one hop — the days that name someone and backlinks count a stub's mentions as its replacement's
+([the days that name someone](../cookbook/days-that-name.md), [backlinks](../cookbook/backlinks.md)); the `redirect` row itself is never a backlink.
 
 **Titles.** The rules are the CHECKs `pages_title_len` and `pages_title_safe` ([schema](../schema/README.md)): 1–240 bytes,
 trimmed, and a valid file name on Linux, macOS and Windows — the strict direction on purpose ([D5](../decisions/D05-pages-and-day-pages.md)).

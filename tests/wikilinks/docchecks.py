@@ -97,7 +97,9 @@ def mk(title, body='', day=None):
 new, old, mm = mk('Diet plan'), mk('Diet', '#REDIRECT [[Diet plan]]'), mk('2026-09-30', '[[Diet plan]]', '2026-09-30')
 for f, t, k in ((old, new, 'redirect'), (mm, new, 'wikilink')):
     c.execute(f"INSERT INTO links(from_id,to_id,kind,created_at,source) VALUES(?,?,?,{NOW},'ui')", (f, t, k))
+dd = mk('2026-09-29', '[[Diet]]', '2026-09-29')
+c.execute(f"INSERT INTO links(from_id,to_id,kind,created_at,source) VALUES(?,?,'wikilink',{NOW},'ui')", (dd, old))
 c.execute('COMMIT')
 rows = c.execute(block('backlinks'), {'page_id': new}).fetchall()
-S.K('C cookbook/backlinks lists the day page\'s wikilink and not the stub\'s redirect row', [r[0] for r in rows] == ['wikilink'], rows)
+S.K('C cookbook/backlinks lists the wikilinks to the page and to its stub, not the stub\'s redirect row', sorted((r[0], r[2]) for r in rows) == sorted([('wikilink', mm), ('wikilink', dd)]), rows)
 S.done()
