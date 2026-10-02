@@ -20,9 +20,9 @@ CREATE TABLE lifelog_meta (
 ) STRICT;
 INSERT INTO lifelog_meta(key, value) VALUES
   ('schema',    'lifelog v1: the journal (one page per day), wiki, people, places and health metrics of one person: a life log, not a project manager; the rules of each table are comments inside its CREATE statement (.schema), the rules that span tables are these rows'),
-  ('instants',  'every *_at column is a UTC ISO-8601 TEXT instant with milliseconds, e.g. 2026-06-09T21:14:03.482Z, written by the app; CHECK strftime(''%Y-%m-%dT%H:%M:%fZ'', x) IS x; created_at, on every table that has it, is when the row was written to life.db, never back-dated (when a thing happened is its day or its other *_at)'),
-  ('days',      'every *_day column (and day) is the LOCAL calendar date YYYY-MM-DD where the thing happened, written by the app from the local calendar, never recomputed from an instant; CHECK date(x) IS x (IS, not =: a CHECK passes on NULL, and date(''2026-9-3'') is NULL)'),
-  ('deletes',   'life data is never deleted except links rows: an entity is a tombstone (entities.deleted_at), a measurement is corrected by inserting a row; BEFORE DELETE triggers enforce it on entities and every domain row; the registries (metrics, link_kinds, lifelog_meta) are the owner''s administrative rows, deletable while nothing references them (each CREATE comment says so)'),
+  ('instants',  'every *_at column is a UTC ISO-8601 TEXT instant with milliseconds, e.g. 2026-06-09T21:14:03.482Z, written by the app, never by a SQLite default (CURRENT_TIMESTAMP has no milliseconds and is not ISO-8601; a trigger writes strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')); fixed width, so it sorts as text; CHECK strftime(''%Y-%m-%dT%H:%M:%fZ'', x) IS x; created_at, on every table that has it, is when the row was written to life.db, never back-dated (when a thing happened is its day or its other *_at)'),
+  ('days',      'every *_day column (and day) is the LOCAL calendar date YYYY-MM-DD where the thing happened, written by the app from the local calendar of the device that captured it (never a server''s), never recomputed from an instant; CHECK date(x) IS x (IS, not =: a CHECK passes on NULL, and date(''2026-9-3'') is NULL)'),
+  ('deletes',   'life data is never deleted except links rows: an entity is a tombstone (entities.deleted_at), a measurement is corrected by inserting a row; BEFORE DELETE triggers enforce it on entities and every domain row; every read path filters entities.deleted_at IS NULL; the registries (metrics, link_kinds, lifelog_meta) are the owner''s administrative rows, deletable while nothing references them (each CREATE comment says so)'),
   ('source',    'entities, links, measurements and habit_periods: source names the writer of the row (ui, cli, api, agent:<name>, import:<name>); written at insert, never changed; import_key, on entities and on measurements, is unique per source'),
   ('writers',   'one writing application; every connection sets foreign_keys=ON, recursive_triggers=ON, synchronous=FULL, trusted_schema=OFF and starts write transactions with BEGIN IMMEDIATE; every other tool opens the file read-only; imports use INSERT ... ON CONFLICT DO NOTHING, never OR IGNORE (skips CHECK/NOT NULL violations silently) or OR REPLACE (a delete)'),
   ('sqlite',    'writers need SQLite >= 3.51.3 (fixes a WAL race between concurrent writers and checkpoints); migrations need >= 3.53 (ALTER TABLE ADD/DROP CONSTRAINT); CHECKs use only functions every such version has'),
@@ -31,12 +31,13 @@ INSERT INTO lifelog_meta(key, value) VALUES
 CREATE TABLE entities (
   -- The shared spine: one row per linkable thing (page, person, place). Its domain row has the
   -- SAME id: the app inserts this row first with INSERT ... RETURNING id and binds that id in the same
-  -- transaction. UNIQUE(id, entity_type) plus the composite FK (id, entity_type) of every domain table
+  -- transaction; never last_insert_rowid() across statements (any insert in between, a link or a ghost
+  -- page, moves it). UNIQUE(id, entity_type) plus the composite FK (id, entity_type) of every domain table
   -- make a row's type and its table agree.
   -- A person or a place is also a page (D20): one id, with a pages row whose title is the handle
   -- [[wikilinks]] write; a person also has a people row whose FK points at that pages row, a place has no
   -- row of its own (D16). A ghost page is promoted by UPDATE entities SET entity_type = 'person' (the FK
-  -- cascades it to pages.entity_type).
+  -- cascades it to pages.entity_type), then a person's people row is inserted.
   -- Nothing is ever deleted: deleted_at is the tombstone (D11), enforced by BEFORE DELETE triggers.
   -- import_key: the key a writer that may send the row twice gives it (an importer, an offline phone, a
   -- retrying agent); whether the row was imported is source, not import_key. Unique per source, written at

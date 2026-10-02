@@ -54,7 +54,7 @@ outside every repository, or in a folder its `.gitignore` excludes (this reposit
 | `trial.db` | the trial database | the writer |
 
 **rules.md.** The first line is the gate; `source:` gives the `entities.source` of every row
-(`import:<name>`, one per source, [identity and provenance](../contract/identity-and-provenance.md)). The writer reads `## Aliases` (a name the notes write that
+(`import:<name>`, one per source, `lifelog_meta.source`). The writer reads `## Aliases` (a name the notes write that
 means an existing title) and `## Distinct` (two names the owner said are different things), comparing
 names case-insensitively with runs of spaces collapsed. `## Folders` and `## Decisions` are for the
 model and the owner.
@@ -174,7 +174,7 @@ collapsed; everything else counts.
 - `value` is the cell **as written**, unit included (`"48 ng/mL"`); when the file writes the unit
   apart, `value` is the number and `unit` the unit. Nothing is converted. A censored, approximate,
   qualitative or comma-decimal value is refused: it goes in `kept_as_text`.
-- Days are `YYYY-MM-DD`, instants UTC ISO-8601 ([time](../contract/time.md)).
+- Days are `YYYY-MM-DD`, instants UTC ISO-8601 (`lifelog_meta.days`, `lifelog_meta.instants`).
 
 ## The writer's operations
 
@@ -200,7 +200,7 @@ Each write reports one status: `new` (created), `existing` (there already, as th
 
 A model is never given *approve*. A model never writes SQL: every row reaches `life.db` through
 *apply facts*, *register metrics* or *apply a vault plan*. The owner's single-row corrections (a reading
-corrected by a later one, [correct a measurement](../cookbook/correct-a-measurement.md); a tombstone, [deletion and corrections](../contract/deletion-and-corrections.md)) are the owner's, outside the model's tools.
+corrected by a later one, [correct a measurement](../cookbook/correct-a-measurement.md); a tombstone, [D11](../decisions/D11-tombstones.md)) are the owner's, outside the model's tools.
 
 ## The checks
 

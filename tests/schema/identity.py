@@ -1,4 +1,4 @@
-"""Identity, provenance and deletion (contract/identity-and-provenance, contract/deletion-and-corrections, D3, D8, D11): the supertype and its composite foreign keys,
+"""Identity, provenance and deletion (schema.sql, D3, D8, D11): the supertype and its composite foreign keys,
 ids carried by RETURNING, `source` on every row, `import_key` on entities (a re-run inserts nothing, cookbook/import-a-row-once), no hard deletes, updated_at kept by triggers."""
 import os, re, sys, time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'lib'))

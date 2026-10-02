@@ -34,7 +34,7 @@ DETACH s;
    `ON CONFLICT(from_id, to_id, kind) DO NOTHING`.
 3. **Identity and time.** `source` names the importer (`import:<name>`), `import_key` is the source's
    own id, `day` / `taken_at` / `tz` say when it happened, `created_at` is when you imported it — on
-   every table that has it, `created_at` is the write time ([time](time.md)). An imported page, person or place
+   every table that has it, `created_at` is the write time (`lifelog_meta.instants`). An imported page, person or place
    carries its key on `entities` ([import a row once](../cookbook/import-a-row-once.md)). **The key must come out the same on every run**: the source's own id
    (a Health Connect record's id; a note's path in its vault). A source without ids gets a key built from
    fields it never changes (a note's file name, the day of a reading) — and a change to one of them then

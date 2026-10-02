@@ -98,8 +98,8 @@ D7 = 'decisions/D07-measurements.md'
 def broken(r, old, new): return {**TREE, r: TREE[r].replace(old, new, 1)}
 for name, tree in [('a decision deleted', {k: v for k, v in TREE.items() if k != D7}),
                    ('a decision without its status', broken(D7, '**Status:** accepted', '')),
-                   ('a broken link', broken('contract/time.md', '\n', '\nSee [nowhere](nowhere.md).\n')),
-                   ('a broken anchor', broken('contract/time.md', '\n', '\nSee [R999](../research/references.md#r999).\n')),
+                   ('a broken link', broken('contract/imports.md', '\n', '\nSee [nowhere](nowhere.md).\n')),
+                   ('a broken anchor', broken('contract/imports.md', '\n', '\nSee [R999](../research/references.md#r999).\n')),
                    ('an orphan page', {**TREE, 'contract/orphan.md': '# Orphan\n'})]:
     q = problems(tree); S.K(f'a broken copy is noticed: {name}', q and q != p, q[:1])
 roots = {f: open(os.path.join(REPO, *f.split('/')), encoding='utf-8').read() for f in ('README.md', 'AGENTS.md', 'tests/README.md')}

@@ -5,7 +5,7 @@
 - **Decision.** The rules of a table are comments inside its `CREATE` statement: a comment *outside* a
   statement is not stored in the file (executed), and `.schema` prints the statements. The few rules
   that span tables are rows of `lifelog_meta(key, value)`, queryable with `SELECT *`. Alongside, the
-  contract is enforced where CHECK constraints reach: date and instant round-trips ([time](../contract/time.md)), GLOBs only
+  contract is enforced where CHECK constraints reach: date and instant round-trips ([D10](D10-time-model.md)), GLOBs only
   as character-class guards, and the composite FKs that make a row's type and its table agree. A CHECK
   uses only functions every SQLite the contract allows has (`lifelog_meta.sqlite`) — a SQLite that
   lacks one cannot write the table or integrity-check it — so no `octet_length()` where

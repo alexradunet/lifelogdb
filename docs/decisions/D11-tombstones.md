@@ -2,7 +2,10 @@
 
 **Status:** accepted
 
-- **Decision.** [deletion and corrections](../contract/deletion-and-corrections.md); the `*_no_delete` triggers. Tombstoning and un-tombstoning bump
+- **Decision.** `lifelog_meta.deletes`; the `*_no_delete` triggers, which also hold on a connection that forgot
+  `foreign_keys` (executed), and under `recursive_triggers=ON` stop `INSERT OR REPLACE` from deleting a row
+  (executed, [connection setup](../contract/connections.md)). Junk captured by accident is tombstoned like
+  everything else. Tombstoning and un-tombstoning bump
   `entities.updated_at` (`entities_touch`, watching `deleted_at` only, so it cannot re-fire itself
   under `recursive_triggers=ON`, executed).
 - **Rationale.** In a biography database, *erasure is itself biographical*: in 20 years it should be

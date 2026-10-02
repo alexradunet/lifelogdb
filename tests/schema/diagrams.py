@@ -5,7 +5,7 @@ B  the two ER diagrams draw keys only: every table is drawn; every drawn column 
    key, labelled by its first column, with the cardinality the constraint implies (NOT NULL `||`, nullable `|o`; unique in
    the child `o|`, else `o{`);
 C  the link map against `link_kinds`: same edges (a node naming several types stands for each), same symmetric arrows;
-D  the correction story of contract/deletion-and-corrections, executed;
+D  the correction story of cookbook/correct-a-measurement, executed;
 E  the save flow and cookbook/save-a-body name the same steps; the other diagrams name what they rely on."""
 import os, re, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'lib'))

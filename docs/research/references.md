@@ -18,7 +18,7 @@ the gaps are intentional.
 - <a id="r4"></a>**[R4]** SQLite: *AUTOINCREMENT* — <https://www.sqlite.org/autoinc.html>
   `INTEGER PRIMARY KEY` = rowid alias; AUTOINCREMENT overhead, "usually not needed". → [D3](../decisions/D03-integer-ids.md).
 - <a id="r5"></a>**[R5]** SQLite: *Date And Time Functions* — <https://www.sqlite.org/lang_datefunc.html>
-  `strftime('%Y-%m-%dT%H:%M:%fZ','now')`; 'now' is UTC. → [time](../contract/time.md), [D10](../decisions/D10-time-model.md).
+  `strftime('%Y-%m-%dT%H:%M:%fZ','now')`; 'now' is UTC. → [D10](../decisions/D10-time-model.md).
 - <a id="r6"></a>**[R6]** SQLite: *Datatypes* — <https://www.sqlite.org/datatype3.html>
   Dates as TEXT ISO-8601 is the canonical representation. → [D10](../decisions/D10-time-model.md).
 - <a id="r10"></a>**[R10]** SQLite: *SQLite as a Library of Congress Recommended Storage Format* —
@@ -171,7 +171,7 @@ the gaps are intentional.
   "When the REPLACE conflict resolution strategy deletes rows in order to satisfy a
   constraint, delete triggers fire if and only if recursive triggers are enabled." The reason
   `PRAGMA recursive_triggers = ON` is mandatory ([connection setup](../contract/connections.md)). (The page's wording on which
-  constraints `IGNORE` skips is loose; what it does was executed.) → [D18](../decisions/D18-money.md), [deletion and corrections](../contract/deletion-and-corrections.md), [connection setup](../contract/connections.md).
+  constraints `IGNORE` skips is loose; what it does was executed.) → [D18](../decisions/D18-money.md), [imports](../contract/imports.md), [connection setup](../contract/connections.md).
 - <a id="r54"></a>**[R54]** SQLite: *PRAGMA statements* — <https://www.sqlite.org/pragma.html>
   `synchronous=NORMAL` in WAL mode: "A transaction committed in WAL mode with
   synchronous=NORMAL might roll back following a power loss or system crash";

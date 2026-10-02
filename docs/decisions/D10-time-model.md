@@ -2,13 +2,22 @@
 
 **Status:** accepted
 
-- **Decision.** [time](../contract/time.md). A timed reading's zone is a column because only capture time can supply it: a
+- **Decision.** The rules are `lifelog_meta.instants` and `lifelog_meta.days`, and the round-trip CHECK on every
+  `*_at` and `*_day` column. An instant has milliseconds because `%f` always renders `SS.SSS`: one
+  fixed-width string that the round-trip CHECK can compare, that sorts chronologically as plain text, and
+  that keeps rows written within the same second in order, a reading and its correction (executed). The
+  CHECK uses `IS`, because a CHECK passes when it evaluates to NULL and `date()` returns NULL for malformed
+  input: `date(x) = x` silently accepts `2026-9-3` (executed). A local day is written in the zone of the
+  device that captured it — a phone's, never the clock or zone of a hub on a server ([D3](D03-integer-ids.md)) — and never
+  derived from the instant at query time: "the day I graduated" is a local-date fact, not an instant
+  [R7](../research/references.md#r7)[R8](../research/references.md#r8)[R9](../research/references.md#r9). A timed reading's zone is a column because only capture time can supply it: a
   UTC instant alone cannot say whether `22:30Z` was 14:30, 22:30 or 07:30 the next morning. Every
   other instant is a write time, and a write time needs no zone. The DB checks the
   shape of a zone name, not that it is a real zone; readers convert with a tz database, which keeps
   renamed zones (`Europe/Kiev` → `Europe/Kyiv`) as links. The standard way to write an instant with
   its zone is RFC 9557 [R69](../research/references.md#r69): `2026-06-09T21:14:03.482Z[Europe/Berlin]` — exactly `*_at` plus `tz`.
-  Provenance (`source`) is a column for the same reason as the zone ([identity and provenance](../contract/identity-and-provenance.md)).
+  Provenance (`source`, `lifelog_meta.source`) is a column for the same reason as the zone: only the moment of writing
+  knows it, and with agents among the writers ([D3](D03-integer-ids.md)) it is how a wrong row is traced to the writer that made it.
 - **Alternatives.**
   - *Instants only, local day computed at query time*: rejected — a timezone move or DST rule
     silently rewrites history. This is why FxLifeSheet needed a dedicated `tag_days` importer to
@@ -16,4 +25,4 @@
   - *Unix epoch / Julian day integers*: unreadable in the file and in ad-hoc queries (principle 2).
     SQLite's own docs list TEXT ISO-8601 as the canonical representation [R5](../research/references.md#r5)[R6](../research/references.md#r6).
   - *SQLite `CURRENT_TIMESTAMP` defaults*: rejected — second precision, non-ISO (executed) [R28](../research/references.md#r28).
-- **Sources.** [R5](../research/references.md#r5)[R6](../research/references.md#r6)[R7](../research/references.md#r7)[R8](../research/references.md#r8)[R28](../research/references.md#r28)[R69](../research/references.md#r69).
+- **Sources.** [R5](../research/references.md#r5)[R6](../research/references.md#r6)[R7](../research/references.md#r7)[R8](../research/references.md#r8)[R9](../research/references.md#r9)[R28](../research/references.md#r28)[R69](../research/references.md#r69).

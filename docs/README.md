@@ -10,7 +10,7 @@ features, sync or merge between copies of the database) is explicitly out of sco
 
 These pages are the contract of `life.db`: a writer in any language implements them and nothing else.
 Each rule has **one home**: a table's rules are the constraints, triggers and comments of its `CREATE`
-statement in [schema.sql](schema/schema.sql); the conventions the DDL cannot hold (time, the wikilink grammar,
+statement in [schema.sql](schema/schema.sql); the conventions the DDL cannot hold (the wikilink grammar,
 connection settings, imports) are in the [storage contract](contract/README.md); the [decisions](decisions/README.md) say
 *why*, citing constraint names instead of restating them; the [cookbook](cookbook/README.md) shows the SQL in use.
 *Executed* means that a suite in `tests/` runs the claim against the schema ([tests/README.md](../tests/README.md) lists the suites).
@@ -32,8 +32,7 @@ connection settings, imports) are in the [storage contract](contract/README.md);
 
 **Storage contract** — what the DDL cannot hold; every writer's obligations.
 
-- [Overview](contract/README.md): [time](contract/time.md), [identity and provenance](contract/identity-and-provenance.md),
-  [deletion and corrections](contract/deletion-and-corrections.md), [titles and wikilinks](contract/titles-and-wikilinks.md),
+- [Overview](contract/README.md): [titles and wikilinks](contract/titles-and-wikilinks.md),
   [integrity checks](contract/integrity-checks.md), [connection setup](contract/connections.md),
   [threat model and the 2075 test](contract/threat-model.md), [imports](contract/imports.md)
 

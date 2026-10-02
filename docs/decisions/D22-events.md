@@ -12,7 +12,7 @@
   that delivers dated spans or timed sessions has been imported.
 - **The deferred design** — additive later (a new table, two link kinds): `events(id, entity_type,
   name, start_day, end_day, start_at, end_at, place_id, note)` hanging off `entities` like `people` off `pages`,
-  with the round-trip CHECKs of [time](../contract/time.md) and `end ≥ start`; day-precise events first-class, instants
+  with the round-trip CHECKs of [D10](D10-time-model.md) and `end ≥ start`; day-precise events first-class, instants
   optional; one place per event (`place_id`); `attended` (person → event); and an event's **kind** as
   an `is-a` link to the page naming it — [[Workout]], [[Sleep]] — never a column (free text splits a
   kind by spelling, a CHECK list closes a personal taxonomy, and a registry is a second namespace

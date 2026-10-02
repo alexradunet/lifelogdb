@@ -2,7 +2,9 @@
 
 **Status:** accepted
 
-- **Decision.** The three linkable types (page, person, place; `entities_entity_type`) share one ID space through `entities`; all relationships live
+- **Decision.** The three linkable types (page, person, place; `entities_entity_type`) share one ID space through `entities`. A domain row takes its id
+  from the `entities` insert by `RETURNING id`: `last_insert_rowid()` across statements is moved by any insert in
+  between — a link, a ghost page, a measurement — and the next row silently points at the wrong entity (executed). All relationships live
   in one `links(from_id, to_id, kind)` table with real foreign keys (`UNIQUE(from_id, to_id, kind)`
   allows several kinds between one pair, never a duplicate edge). `links.kind` references the closed
   registry `link_kinds`, whose structure is fixed at registration (`link_kinds_structure_fixed`);

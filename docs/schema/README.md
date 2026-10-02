@@ -21,7 +21,7 @@ What each one is for, and where it is explained. Its rules are in its `CREATE` s
 
 | object | holds | why | used in |
 |---|---|---|---|
-| `entities` | one row per linkable thing: the shared id, its type, provenance, the tombstone | [D8](../decisions/D08-entities-and-links.md), [D11](../decisions/D11-tombstones.md) | [identity and provenance](../contract/identity-and-provenance.md) |
+| `entities` | one row per linkable thing: the shared id, its type, provenance, the tombstone | [D8](../decisions/D08-entities-and-links.md), [D11](../decisions/D11-tombstones.md) | [capture](../cookbook/capture.md) |
 | `pages` | every page: titled prose, the day pages of the journal, the page of a person or a place | [D5](../decisions/D05-pages-and-day-pages.md), [D16](../decisions/D16-places.md), [D20](../decisions/D20-named-pages.md) | [titles and wikilinks](../contract/titles-and-wikilinks.md), [capture](../cookbook/capture.md) |
 | `people` | what a person has beyond its page | [D20](../decisions/D20-named-pages.md) | [a person or a place](../cookbook/person-or-place.md) |
 | `metrics` | the registry of what is measured | [D7](../decisions/D07-measurements.md) | [a metric series](../cookbook/metric-series.md) |

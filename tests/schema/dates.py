@@ -1,4 +1,4 @@
-"""Time (contract/time, D10): instants, local days and their round-trip CHECKs, why `IS` and not `=`, the zone, and
+"""Time (lifelog_meta.instants and .days, D10): instants, local days and their round-trip CHECKs, why `IS` and not `=`, the zone, and
 created_at written by the app."""
 import os, re, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'lib'))

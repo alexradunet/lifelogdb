@@ -26,8 +26,8 @@ with `<name>: X/Y met expectations`; a suite that stops on an error reports that
 
 | folder | suite | subject |
 |---|---|---|
-| `schema/` | `dates.py` | instants, local days, the round-trip CHECKs and why `IS`, the zone (contract/time, D10) |
-| | `identity.py` | the supertype and its composite FKs, ids by `RETURNING`, `source` on every row, no hard deletes, `updated_at` (contract/identity-and-provenance, contract/deletion-and-corrections, D8, D11) |
+| `schema/` | `dates.py` | instants, local days, the round-trip CHECKs and why `IS`, the zone (lifelog_meta.instants and .days, D10) |
+| | `identity.py` | the supertype and its composite FKs, ids by `RETURNING`, `source` on every row, no hard deletes, `updated_at` (schema.sql, D8, D10, D11) |
 | | `named.py` | a person or a place is a page: one id, promotion, cookbook/person-or-place, cookbook/days-that-name and cookbook/everything-about run literally, two Sams (D16, D20) |
 | | `pages.py` | every page titled, the day rule, filename-safe titles, `title_key` and its vectors, lookups, FTS, why not a collation (contract/titles-and-wikilinks, D5) |
 | | `links.py` | the closed kind registry, endpoint types, mirrors, `at`, containment over day pages with its cycle guard (D8, D16) |

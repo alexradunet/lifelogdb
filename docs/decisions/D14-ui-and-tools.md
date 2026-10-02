@@ -8,7 +8,7 @@
   at `life.db`, read-only ([connection setup](../contract/connections.md)) [R49](../research/references.md#r49). `sqlite-web` is **not used** [R50](../research/references.md#r50): it can insert, update and
   delete rows — a second writer that bypasses the insert conventions (principle 3).
 - **The writing application** is one stack the owner controls — one codebase, in whatever language —
-  that carries the insert conventions ([identity and provenance](../contract/identity-and-provenance.md), [capture](../cookbook/capture.md)) and exposes them as a CLI, a REST API and an
+  that carries the insert conventions ([capture](../cookbook/capture.md)) and exposes them as a CLI, a REST API and an
   agent surface, so the owner's UIs, AI agents and importers all write through it (principle 3).
   Its own engineering decisions live outside these docs: it implements the schema, it never
   defines it.

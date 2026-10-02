@@ -1,4 +1,4 @@
-"""A person or a place is a page (contract/identity-and-provenance, D16, D20): one id with an entities row and a titled pages row, and a
+"""A person or a place is a page (schema.sql, D16, D20): one id with an entities row and a titled pages row, and a
 person's people row, chained people -> pages -> entities.
 A  the foreign keys and CHECKs: what may and may not be built, and what a promotion may and may not do;
 B  cookbook/person-or-place run literally: create, promote a ghost, a taken handle, never a day page; the day pages that named the ghost keep naming her;

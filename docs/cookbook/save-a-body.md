@@ -65,4 +65,4 @@ COMMIT;
 
 `[[café NOTES]]` and `[[Café notes]]` produce the same `:key`, so both resolve to the one page;
 `title` keeps the spelling of whoever created it. A target may be a person or a place: it is a
-page ([D20](../decisions/D20-named-pages.md)). `:source` is the saving writer ([identity and provenance](../contract/identity-and-provenance.md)).
+page ([D20](../decisions/D20-named-pages.md)). `:source` is the saving writer (`lifelog_meta.source`).

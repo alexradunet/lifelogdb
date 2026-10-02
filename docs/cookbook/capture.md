@@ -2,7 +2,7 @@
 
 Every entity insert is two statements in one transaction: `entities` first, `RETURNING id`, then the
 domain row with that id, which the app keeps in a variable (below `:page_id`) and binds wherever the
-page is meant ([identity and provenance](../contract/identity-and-provenance.md)). Capture appends to today's page; the first capture of a day creates it.
+page is meant (the `entities` comment in [schema.sql](../schema/schema.sql)). Capture appends to today's page; the first capture of a day creates it.
 
 ```sql
 BEGIN IMMEDIATE;

@@ -70,12 +70,12 @@ schema is frozen ([D13](docs/decisions/D13-migrations-and-freeze.md)):
 
 - **One home per rule.** A table's rule is its constraint/trigger and a comment inside its `CREATE`
   statement in `schema.sql` (comments outside are not stored in the file); a rule that spans tables is a
-  `lifelog_meta` row (keep them few); `docs/contract/` holds only what the DDL cannot (time, the wikilink grammar and
+  `lifelog_meta` row (keep them few); `docs/contract/` holds only what the DDL cannot (the wikilink grammar and
   vectors, connection settings, integrity checks, imports); `docs/decisions/` says *why* and cites constraint names
   instead of restating the rule; `docs/cookbook/` shows it in use. Do not restate a rule in a second place — that
   includes this file, an application's docs and code comments: link the page instead.
 - **One page per concept, linked.** Pages link each other with relative markdown links
-  (`[time](../contract/time.md)`); there are no section numbers. Every link must resolve and every page must be
+  (`[imports](../contract/imports.md)`); there are no section numbers. Every link must resolve and every page must be
   reachable from `docs/README.md` (`tests/schema/document.py` checks both). A new decision is a new file in
   `docs/decisions/` from its template, listed in the decision index.
 - **Language-neutral.** The contract must be implementable without reading any application's code. Anything a writer
@@ -108,9 +108,9 @@ schema is frozen ([D13](docs/decisions/D13-migrations-and-freeze.md)):
 
 Their homes are in `docs/`; this list is the checklist, not the rule.
 
-- **Time** ([time](docs/contract/time.md), D10): UTC ISO-8601 instants and local-day TEXT columns with round-trip CHECKs
+- **Time** (`lifelog_meta.instants` and `.days`, [D10](docs/decisions/D10-time-model.md)): UTC ISO-8601 instants and local-day TEXT columns with round-trip CHECKs
   (`date(x) IS x`, `strftime(...) IS x` — the `IS` matters).
-- **Identity** ([identity](docs/contract/identity-and-provenance.md), D20): every *entity* domain row is keyed by its
+- **Identity** (the `entities` comment in [schema.sql](docs/schema/schema.sql), D20): every *entity* domain row is keyed by its
   `entities` id through a composite FK `(id, entity_type)` — `pages` to `entities(id, entity_type)`, `people` to
   `pages(id, entity_type)`, because a person **is** a page; a place is its page alone (D16). One id, whose page title
   is its handle and its name (`pages.entity_type`, `ON UPDATE CASCADE` for promotion;
@@ -119,7 +119,7 @@ Their homes are in `docs/`; this list is the checklist, not the rule.
 - **Provenance**: `source` (the writer: `ui`, `cli`, `api`, `agent:<name>`, `import:<name>`) is
   required on `entities`, `links`, `measurements` and `habit_periods`, written at insert and never changed; `import_key`
   is unique per `source`.
-- **No deletes** ([deletion](docs/contract/deletion-and-corrections.md), D11): tombstones (BEFORE DELETE triggers);
+- **No deletes** (`lifelog_meta.deletes`, [D11](docs/decisions/D11-tombstones.md)): tombstones (BEFORE DELETE triggers);
   only `links` rows are deleted.
 - **Append-only facts**: measurements. A reading is corrected with `supersedes_id` and retracted with a
   NULL value (D7).
