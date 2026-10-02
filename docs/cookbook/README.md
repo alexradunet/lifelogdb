@@ -26,3 +26,4 @@ The order below is the order the suites run the recipes in; the key is how a sui
 | [A person or a place: create one, promote a ghost page (D20)](person-or-place.md) | `person-or-place` |
 | [Import a row once: insert it, re-run it, update a changed one](import-a-row-once.md) | `import-a-row-once` |
 | [Habits: start and stop one, the habits of a day, completion over a period (D24)](habits.md) | `habits` |
+| [Take a snapshot, check it, restore it (D25)](take-a-snapshot.md) | `take-a-snapshot` |

@@ -27,6 +27,7 @@ lifelog day --human
 lifelog serve                              # http://127.0.0.1:7777 — open it in a browser
 lifelog mcp --agent lmstudio               # MCP on stdio; rows are written as agent:lmstudio
 lifelog habits --human                     # today's habits; lifelog done evening_walk
+lifelog snapshot --to ~/snapshots --human  # life-YYYY-MM-DD.db and its restore check
 ```
 
 An import ([importing with a model](docs/guides/importing.md)) works in a workspace beside its source and on a
@@ -77,6 +78,9 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **The schema is embedded.** `go generate ./...` copies `docs/schema/schema.sql` into `internal/db`; a test fails
   when the copy is stale. `lifelog init` refuses an existing file; `Open` refuses a file without Lifelog's
   `application_id`.
+- **Snapshots are the owner's** ([take a snapshot](docs/cookbook/take-a-snapshot.md)). `lifelog snapshot` is a CLI
+  command only, never an API action or an MCP tool: it writes a file on this machine. It refuses a folder inside a
+  git work tree, and its restore check opens the snapshot with `Close` skipping `PRAGMA optimize`.
 - **`serve` binds 127.0.0.1** and has no authentication: `life.db` holds health data, and the API is for this
   machine.
 

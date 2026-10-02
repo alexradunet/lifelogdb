@@ -1,12 +1,17 @@
 package tests
 
+import (
+	"fmt"
+	"path/filepath"
+)
+
 // cookbook: every SQL block of the cookbook (docs/cookbook/) prepares and runs on a seeded database, statement by
 // statement with its ids carried by RETURNING — on a normal connection and on a hardened one
 // (SQLITE_DBCONFIG_DEFENSIVE + trusted_schema=OFF, contract/connections).
 func cookbook(s *S) {
 	bl := s.d.CookbookBlocks()
 	first, order := s.d.Blocks()
-	s.K("the cookbook has at least 16 SQL blocks, one or more per recipe, 16 recipes", len(bl) >= 16 && len(first) == 16 && eq(order, s.d.CookbookOrder()), order)
+	s.K("the cookbook has at least 17 SQL blocks, one or more per recipe, 17 recipes", len(bl) >= 17 && len(first) == 17 && eq(order, s.d.CookbookOrder()), order)
 
 	seeded := func(hardened bool) (*C, P) {
 		c := s.freshWith(F{Hardened: hardened})
@@ -26,7 +31,8 @@ func cookbook(s *S) {
 		return c, P{"found_id": wp, "target_id": wp, "target_ids": "[]", "place_id": pl, "day_page_id": dp, "mistaken_row_id": 2, "from_day": "2026-01-15", "to_day": "2026-09-10",
 			"day": "2026-09-29", "page_id": wp, "person_id": pe, "entity_id": pe, "handle_title": "Bob Sample", "handle_key": "bob sample", "ghost_id": gh,
 			"due_day": "2026-10-05", "query": "schema", "key": "newpage", "title": "Newpage", "metric_id": 2, "wrong_row_id": 1, "source": "ui",
-			"import_key": "notes/sourdough.md", "metric": "vitamin_d"}
+			"import_key": "notes/sourdough.md", "metric": "vitamin_d",
+			"snapshot": filepath.ToSlash(filepath.Join(s.dir, fmt.Sprintf("cookbook-snapshot-%v.db", hardened)))}
 	}
 
 	for _, hardened := range []bool{false, true} {

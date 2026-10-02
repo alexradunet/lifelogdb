@@ -21,6 +21,7 @@ var suites = []struct {
 	{"writers", writers},
 	{"integrity", integrity},
 	{"imports", imports},
+	{"snapshots", snapshots},
 	{"evolution", evolution},
 	{"cookbook", cookbook},
 	{"document", document},

@@ -5,7 +5,7 @@
 **The product is `lifelog`, the Go application** ([README](README.md)): one binary at the repo root that writes
 `life.db`, a lifetime-scale, single-user SQLite database, and serves it as a hypermedia API, a CLI and an MCP server.
 **The database it writes is specified on its own** in [`docs/`](docs/README.md) — goals, the canonical DDL
-([`docs/schema/schema.sql`](docs/schema/schema.sql)), the storage contract, the decision log (D1–D24), the query
+([`docs/schema/schema.sql`](docs/schema/schema.sql)), the storage contract, the decision log (D1–D25), the query
 cookbook, non-goals, research — so that `life.db` can be read, or written by another application, in any language.
 The docs state the current truth only.
 
@@ -102,9 +102,10 @@ schema is frozen ([D13](docs/decisions/D13-migrations-and-freeze.md)):
   or changelog. When a decision changes, rewrite it in place —
   git is the log. Keep D-numbers stable (they are cited across the docs and inside `schema.sql`); new decisions get
   new numbers. Tests are named by subject, never by review round.
-- **Out of scope for now ([non-goals](docs/architecture/non-goals.md)):** the markdown export, backups / snapshots /
-  restore, CSV dumps and off-box copies. The docs are about the schema and its reliability; do not reintroduce
-  any of them into `docs/` or `tests/` unless the owner reopens it.
+- **Out of scope for now ([non-goals](docs/architecture/non-goals.md)):** the markdown export, CSV dumps, off-box
+  copies and continuous replication. The docs are about the schema and its reliability; do not reintroduce
+  any of them into `docs/` or `tests/` unless the owner reopens it. Snapshots are in: a dated `VACUUM INTO` copy
+  and its restore check ([D25](docs/decisions/D25-snapshots.md)).
 - **Plans** live in `docs/plans/` (the `improve` skill's default `plans/` at the repo root is not used: point it
   there).
 
@@ -147,7 +148,7 @@ Their homes are in `docs/`; this list is the checklist, not the rule.
   auto-created target in its own `SAVEPOINT`; an invalid target makes no link and never blocks a save;
   `#tag` is read and never expanded; a `#REDIRECT [[` stub is not scanned.
 - **Integrity**: the four [integrity checks](docs/contract/integrity-checks.md).
-- **Privacy**: `life.db` with its `-wal`/`-shm` never in git (health data and private notes cannot be scrubbed from history; `.gitignore` covers `*.db`, `*.db-journal`, `/import/`
+- **Privacy**: `life.db` with its `-wal`/`-shm`, and every snapshot of it, never in git (health data and private notes cannot be scrubbed from history; `.gitignore` covers `*.db`, `*.db-journal`, `/import/`
   and an import workspace `*.lifelog/`). Never commit a real vault, real notes or real data as a fixture:
   tests use synthetic data only.
 

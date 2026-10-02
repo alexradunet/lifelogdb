@@ -28,8 +28,8 @@ The freeze is defined in [D13](decisions/D13-migrations-and-freeze.md). Each ite
 1. Every plan in [plans](plans/README.md) is DONE or REJECTED, and every [issue](issues/README.md) is resolved or won't-fix.
 2. The suites in `tests/` are green (`go test ./tests`, on a SQLite ≥ 3.53 with FTS5), at the commit of `schema.sql`
    that will make the file.
-3. The owner has decided each non-goal whose "Reopen when" is the freeze ([non-goals](architecture/non-goals.md): the export,
-   snapshot and off-box copy row): kept out, or reopened through an issue.
+3. No [non-goal](architecture/non-goals.md) has the freeze as its "Reopen when": the owner decides each such row first —
+   kept out, or reopened through an issue (snapshots: [D25](decisions/D25-snapshots.md)).
 4. The text the file will keep has been read once more as a stranger would: the comments inside the `CREATE`
    statements, the `lifelog_meta` rows and the `link_kinds` notes ([threat model and the 2075 test](contract/threat-model.md)).
 5. The writer that will make the file reproduces every vector of [titles and wikilinks](contract/titles-and-wikilinks.md) and passes the
