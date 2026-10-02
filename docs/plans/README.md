@@ -17,6 +17,11 @@ Three runs of the improve skill, all on 2026-10-02.
   and `tests/`: six parallel audits (DDL, docs consistency, cookbook SQL, suites, the wikilink contract and the
   guides, security/DX/direction), every finding re-checked against the files and most by execution on throwaway
   databases. The owner chose all nine plans and decided four questions (below).
+- **Plans 025–042** — against commit `cad659b`, a deep audit of the Go writer (at the repo root since `9ac130f`), the
+  suites (ported to Go) and the docs: six parallel audits (core/db/text, the import flow, API/MCP security, tests and
+  tooling, architecture and performance at lifetime scale, docs drift and direction). The top findings were re-read in
+  the code, and the `/query` write path was reproduced on a throwaway database. The owner chose every finding
+  group and three design plans (040–042).
 
 **The commit hashes cited by plans 001–013 and by this index before plan 014 no longer resolve**: history was
 rewritten before the docs split, so `6058f24`, `3e2fcf4`, `430ea6e`, `4b3b6db`, `6442e03`, `6ce208d`, `6f02944`,
@@ -64,6 +69,24 @@ The same holds for plans 017, 020, 022 and 016, which all add mutants.
 | 021 | [Design: what the freeze is, what must hold before it, what changes after](021-freeze-runbook.md) | P2 | M | all others | IN REVIEW (owner) (`a55fcac`) |
 | 023 | [The writer: `app/`, one Go binary serving a hypermedia API, a CLI and an MCP server](023-the-writer-app.md) | P1 | L | — | IN PROGRESS (v1 built; first real use next) |
 | 024 | [Habits, renames and the import flow in `app/`](024-habits-renames-import.md) | P1 | L | 023 | IN PROGRESS (built; the first real import next) |
+| 025 | [The docs and the plans index say what is true after the move to Go](025-docs-say-what-the-go-move-left.md) | P1 | S | — (run first) | TODO |
+| 026 | [`POST /query` and the MCP `query` tool run one read and nothing else](026-query-is-really-read-only.md) | P1 | M | — | TODO |
+| 027 | [`lifelog serve` answers only the owner's own browser and tools on this machine](027-serve-answers-only-its-own-pages.md) | P1 | S–M | — | TODO |
+| 028 | [The MCP tools take what a model sends; every action has its own name](028-mcp-tools-take-what-models-send.md) | P1 | S | — | TODO |
+| 029 | [The real run gets exactly what the trial has, or says loudly that it did not](029-the-real-run-is-the-trial.md) | P1 | M | before the first real import; before 030 | TODO |
+| 030 | [A fact passes only on its own words; a reading's key comes from the source alone](030-a-fact-passes-only-on-its-own-words.md) | P1 | M | 029; before the first real import | TODO |
+| 031 | [A vault's notes arrive whole and linked; a deleted page stays deleted](031-vault-notes-arrive-whole.md) | P1 | M | 029, 030 | TODO |
+| 032 | [The owner's approval stamps what the owner saw; workspace files survive editors and errors](032-the-owners-gate-shows-what-it-stamps.md) | P2 | M | 029, 031 | TODO |
+| 033 | [The core writes hold their own rules](033-core-writes-hold-their-own-rules.md) | P2 | M | 026, 029, 031 | TODO |
+| 034 | [Every safety claim of the README has a test that fails when it breaks](034-the-safety-claims-have-tests.md) | P2 | M | 026–029 | TODO |
+| 035 | [Every push runs the checks; staticcheck is clean; dead code is gone](035-every-push-runs-the-checks.md) | P2 | S | best after 026–034 | TODO |
+| 036 | [Each action is declared once, in the catalog](036-each-action-is-declared-once.md) | P3 | M | 028, 034 | TODO |
+| 037 | [Import status grows linearly; no answer floods a small model's context](037-status-and-pages-stay-small-at-lifetime-scale.md) | P2 | M–L | 026, 029–032 (036 if landed) | TODO |
+| 038 | [The habit completion recipe reads only the days it counts (issue 0008)](038-habit-completion-reads-only-its-days.md) | P2 | S | — | TODO |
+| 039 | [A body's text is decoded once, as CommonMark does (issue 0009)](039-text-is-decoded-once.md) | P2 | S | — | TODO |
+| 040 | [Design + prototype: the import procedure comes from the guide, over MCP](040-the-import-procedure-comes-from-the-guide.md) | P2 | M | 028 | TODO |
+| 041 | [Design: issue 0001 gets its proposal (renames)](041-renames-get-a-recipe.md) | P2 | S | 033 (cites it) | TODO |
+| 042 | [Decision prep: five questions the freeze will make permanent](042-the-freeze-questions-get-answers.md) | P2 | S | owner decisions (Phase B) | TODO (Phase A ready for the owner) |
 
 Status values: TODO | IN PROGRESS | IN REVIEW (owner) | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale — finding fixed independently or approach
@@ -85,6 +108,15 @@ abandoned)
   on 019's scan rule). 021 is last: it cites the state the others leave.
 - Plans 014–022 each say "Planned at `4d84261`" in their drift check; an earlier plan of this run landing first is
   expected drift, and each plan names which.
+
+- **025–042, in the table's order.** 025 first: it rewrites this index's context block (the Go gate replaces
+  `run_all.py`). 026, 027 and 028 are independent of each other and of the import plans. **029 and 030 must land before
+  the first real import**: reading keys and replay semantics become permanent then (each plan has a STOP if a real run
+  already happened). 029 → 030 → 031 → 032 share `internal/importer/importer_test.go` and parts of `vault.go`/`status.go`:
+  run them one after another. 033 follows 026/029/031 (same `internal/core` and `internal/db` files). 034 tests what
+  026–029 make true. 036 and 037 rework files every earlier plan touched: run them late. 038 and 039 are independent; each
+  adds an issue (0008, 0009 — 030 adds 0007): if a number is taken, take the next free one. 040 extends 028's MCP tests.
+  041 needs only the owner's reading; 042 Phase B waits for the owner's table.
 
 ## Owner decisions (2026-10-02, for plans 020 and 022)
 
@@ -167,6 +199,32 @@ From the third run (014–022):
 - **`tests/wikilinks/mktable.py`** is unlisted and its label list lacks one row — a helper nobody runs; delete it when next touched.
 - **The `Cluj` fixture in `named.py`** — a real city, like the other generic places; not personal data.
 - **No CI** — a GitHub workflow needs a SQLite ≥ 3.53 build with FTS5; worth doing once a second contributor exists.
+
+From the fourth run (025–042):
+
+- **"No CI"** (third run) — reversed: the suites need only Go now (pure-Go SQLite), so plan 035 adds a workflow.
+- **A successful HTML form POST answers 200, not 303** (a reload could re-post a capture) — the browser asks before
+  re-posting, and a redirect would drop the Result panel that shows what a save skipped.
+- **Owner-only actions trust the `Lifelog-Source` header on the socket** — any local process that can reach the socket can
+  also run the CLI as the owner; the gate exists for MCP models, whose source the server fixes. Cross-site browsers are
+  closed by plan 027.
+- **Raw error messages and the database path in API answers** — a local, single-user tool; the messages help the owner
+  and the agent. The path stops mattering once `/query` cannot attach (plan 026).
+- **The integrity check is a cheap-looking GET/MCP tool** (minutes on a 5 GB file) — it is the contract's
+  `PRAGMA integrity_check`, and the guide has the model run it before an import.
+- **`plan.json` is rewritten after every appended note** — a one-time cost of a vault import.
+- **Source paths with Windows device names or trailing dots, symlinks inside the source** — the source tree is the
+  owner's, and facts and the ledger require exact ledger names; reopen if a source ever comes from someone else.
+- **Entity keys and note-path keys share one namespace with an unescaped `|`** — `|` cannot occur in a Windows file name;
+  reopen for a source on another filesystem.
+- **A link target `[[-0001-01-01]]` is skipped where the recipe's `date()` test would make a day page** — negligible.
+- **Editing a redirect stub's body through `save-body`** — left for the rename decision (plan 041).
+- **`writers` suite timing margins** — no flake in eight runs, `GOMAXPROCS=1` included (third run said the same).
+- **Duplicate vector-table parsers in `tests/` and `internal/text`**, **links outside `docs/` unchecked** — small; fold
+  them when one changes.
+- **The mermaid render has not run since the port** (`LIFELOG_MERMAID=1`) — an owner action with node and a Chromium,
+  not a plan.
+- **Dependencies** — every direct module is at its latest; `govulncheck` clean; nothing to do.
 
 ## Open questions for the owner (plan 021)
 
