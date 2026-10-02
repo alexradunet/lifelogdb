@@ -61,7 +61,7 @@ The same holds for plans 017, 020, 022 and 016, which all add mutants.
 | 018 | [An import workspace can never be committed; the threat model names the model-driven import](018-import-workspaces-stay-out-of-git.md) | P1 | S | after 014, 017 (same files) | DONE (`8f47c0e`) |
 | 019 | [The wikilink contract states every rule and every vector](019-wikilink-contract-stands-without-python.md) | P2 | M | 015 (ordering) | DONE (`6c8632a`) |
 | 020 | [The import guide agrees with the imports contract; a captured day takes the note once](020-import-guide-agrees-with-the-contract.md) | P1 | M | 017, 018, 019 | DONE (`cd0f050`) |
-| 021 | [Design: what the freeze is, what must hold before it, what changes after](021-freeze-runbook.md) | P2 | M | all others | TODO (ends IN REVIEW (owner)) |
+| 021 | [Design: what the freeze is, what must hold before it, what changes after](021-freeze-runbook.md) | P2 | M | all others | IN REVIEW (owner) (`a55fcac`) |
 
 Status values: TODO | IN PROGRESS | IN REVIEW (owner) | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale — finding fixed independently or approach
