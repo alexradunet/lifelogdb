@@ -13,21 +13,20 @@ REJECTED (with one-line rationale). A plan that is DONE or REJECTED is deleted; 
 
 ## What is left (2026-10-02)
 
-### The owner decides
+### The owner decided (2026-10-02) — to carry into the docs
 
-- **Renames** — [issue 0001](../issues/0001-a-rename-has-no-recipe.md): does the body move to the new page, do the
-  typed links move or stay on the stub, may a rename land on an existing (empty) page? The writer moves both and
-  allows only an empty target; the contract does not say.
-- **A new file after the freeze.** (a) `schema.sql` stays the full current DDL, each migration also edits it, and a
-  suite proves `schema.sql` equals the frozen DDL plus migrations — *recommended*; or (b) `schema.sql` is frozen as
-  `0001` and a new file is `0001` plus every migration.
-- **`pages_fts_delete`** can never fire while `pages_no_delete` exists: keep it as a guard, or cut it before the freeze.
-- **The export / snapshot / off-box copy non-goal**: its reopen trigger is the freeze — keep it out, or reopen it
-  through an issue ([process](../process.md#before-the-freeze), item 3).
-- **Readers and `trusted_schema=OFF`**: should a reader that opens a `life.db` it did not write set it too?
-- **The `Cn` title rule's Unicode version**: the writer pins 15.0; should the contract name a version?
-- **A tombstoned day page still shows its mood reading** (a reading is retracted, not tombstoned, D7): should
-  tombstoning a day retract its readings?
+- **Renames** ([issue 0001](../issues/0001-a-rename-has-no-recipe.md)): the text and the old page's typed links move to
+  the new page; the stub holds only its `redirect`. A rename into an existing title only when the old page is empty
+  (a typo ghost); otherwise refused, never merged. A cookbook recipe and its suite, then the issue closes.
+- **A new file after the freeze**: `schema.sql` stays the full current DDL; each migration also edits it, and a suite
+  proves `schema.sql` equals the frozen DDL plus every migration (same `sqlite_master`). D13 and `AGENTS.md`.
+- **`pages_fts_delete`** is cut before the freeze (it can never fire while `pages_no_delete` exists; the FTS
+  integrity check reports a stale index).
+- **Snapshots are reopened** (only snapshots: a dated `VACUUM INTO` copy and a restore check; the export, CSV dump and
+  off-box copy stay out): an issue, then the non-goals row and the freeze checklist's item 3.
+- **Readers set `trusted_schema=OFF`** too, required by [connection setup](../contract/connections.md).
+- **The `Cn` rule names Unicode 15.0** in [titles and wikilinks](../contract/titles-and-wikilinks.md).
+- **A tombstoned day page keeps showing its mood reading**: left as is; a reading is retracted by hand (D7).
 
 ### Next step
 
