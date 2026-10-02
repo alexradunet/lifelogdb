@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -394,17 +393,25 @@ func importOwner(o opts, ws *importer.Workspace, args []string) error {
 			return errors.New("approve runs only at an interactive terminal: the owner approves, never a script or a model")
 		}
 		file := args[1] + ".md"
-		b, err := os.ReadFile(filepath.Join(ws.Dir, file))
+		rv, err := ws.Review(file)
 		if err != nil {
 			return err
 		}
-		fmt.Printf("%s\n---\nType approve to stamp %s as yours: ", b, file)
+		switch {
+		case rv.Since == "":
+			fmt.Printf("%s, the whole text (no earlier approval to compare with):\n\n%s\n---\n", file, rv.Text)
+		case rv.Text == "":
+			fmt.Printf("%s: no line changed since your approval of %s.\n---\n", file, rv.Since)
+		default:
+			fmt.Printf("%s: the lines changed since your approval of %s (- as you approved it, + now; line numbers of the file):\n\n%s\n---\n", file, rv.Since, rv.Text)
+		}
+		fmt.Printf("Type approve to stamp %s as yours: ", file)
 		var answer string
 		fmt.Scanln(&answer)
 		if answer != "approve" {
 			return errors.New("not approved")
 		}
-		if err := ws.Approve(file, time.Now()); err != nil {
+		if err := ws.Approve(file, time.Now(), rv.Hash); err != nil {
 			return err
 		}
 		fmt.Println(file, "approved")

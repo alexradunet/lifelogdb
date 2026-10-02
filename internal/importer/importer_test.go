@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"lifelog/internal/core"
 	"lifelog/internal/db"
@@ -75,7 +74,7 @@ func (f *fixture) approveRules(t *testing.T, body string) {
 	if err := f.w.DraftRules(body); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.w.Approve("rules.md", time.Now()); err != nil {
+	if err := ownerApproves(f.w, "rules.md"); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -87,7 +86,7 @@ func (f *fixture) metrics(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := f.w.Approve("metrics.md", time.Now()); err != nil {
+	if err := ownerApproves(f.w, "metrics.md"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.w.RegisterMetrics(ctx, f.s); err != nil {

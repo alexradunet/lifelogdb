@@ -1,7 +1,7 @@
 # 0006 — One edited word in a stamped file stops the whole import, and status does not say what changed
 
 - **Date:** 2026-10-02
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the import, after a one-line clarification of `rules.md`
 
 ## What happened
@@ -32,5 +32,8 @@ facts were already applied left a finished import unable to replay at all.
 
 ## Resolution
 
-_(open)_ `Approve` could store the previous body and have `approve` print only the lines that changed,
-and `status` could name the changed lines when a gate is stale.
+The gate is unchanged: only the owner stamps, and any edit closes it. When it stamps, the writer now
+keeps a copy of the approved file in the workspace's `.approved/`, which no model operation can write;
+`approve` shows only the lines changed since that copy (the whole text the first time) and stamps only
+the text it showed, and `status` names the changed lines of a closed gate. The copy never opens a gate
+([importing](../guides/importing.md), "Gates"; [plan 028](../plans/028-a-stale-gate-says-what-changed.md)).

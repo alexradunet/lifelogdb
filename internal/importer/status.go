@@ -24,6 +24,9 @@ type Status struct {
 	Mismatches []string          `json:"mismatches"`
 	Outside    []string          `json:"written_outside_the_facts,omitempty"`
 	Counts     *core.Counts      `json:"counts,omitempty"`
+
+	// Changed is, for each gate that is not approved, the lines changed since the owner's last approval.
+	Changed map[string][]string `json:"changed_since_approval,omitempty"`
 }
 
 // Status reads the workspace and checks it against the database: every done file is dry-run and must write
@@ -37,6 +40,15 @@ func (w *Workspace) Status(ctx context.Context, s *core.Store, dbPath string) (*
 			return nil, err
 		}
 		st.Gates[f] = g
+		// a closed gate names what changed since the owner's last approval (the guide's "Gates")
+		if g == "stale" || g == "draft" {
+			if d := w.Changed(f, 20); d != nil {
+				if st.Changed == nil {
+					st.Changed = map[string][]string{}
+				}
+				st.Changed[f] = d
+			}
+		}
 	}
 	if r, err := w.Rules(); err == nil {
 		st.Source = r.Source
@@ -108,13 +120,13 @@ func (w *Workspace) Status(ctx context.Context, s *core.Store, dbPath string) (*
 	case st.Gates["rules.md"] == "missing":
 		st.DoNow = "Survey the source and draft rules.md (step 2), then stop for the owner."
 	case st.Gates["rules.md"] != "approved":
-		st.DoNow = "Stop: rules.md is " + st.Gates["rules.md"] + "; the owner approves it (lifelog import approve rules)."
+		st.DoNow = "Stop: rules.md is " + st.Gates["rules.md"] + changedLines(st.Changed["rules.md"]) + "; the owner approves it (lifelog import approve rules)."
 	case w.IsVault() && !hasPlan:
 		st.DoNow = "Plan the vault (plan-vault), then fix every problem it lists (step 3)."
 	case hasPlan && !vaultApplied:
 		st.DoNow = "Fix the plan's problems (fix-plan) and apply the vault plan (apply-vault) (step 3)."
 	case st.Gates["metrics.md"] == "draft" || st.Gates["metrics.md"] == "stale":
-		st.DoNow = "Stop: metrics.md waits for the owner's approval (lifelog import approve metrics)."
+		st.DoNow = "Stop: metrics.md waits for the owner's approval" + changedLines(st.Changed["metrics.md"]) + " (lifelog import approve metrics)."
 	case !hasLedger:
 		st.DoNow = "Make the ledger (make-ledger), then skip what the rules skip (step 5)."
 	case len(st.Mismatches) > 0:
@@ -129,6 +141,37 @@ func (w *Workspace) Status(ctx context.Context, s *core.Store, dbPath string) (*
 		st.DoNow = "Every file is done: run the integrity check and report the counts (step 9)."
 	}
 	return st, nil
+}
+
+// changedLines names the lines of a short diff, from its hunk headers: " (changed since the approval: line 12,
+// lines 20-22)". Nothing when there is no diff.
+func changedLines(diff []string) string {
+	var spans []string
+	for _, l := range diff {
+		var a, b string
+		if _, err := fmt.Sscanf(l, "@@ %s %s @@", &a, &b); err != nil || !strings.HasPrefix(b, "+") {
+			continue
+		}
+		start, n := b[1:], 1
+		if s, c, ok := strings.Cut(b[1:], ","); ok {
+			start = s
+			fmt.Sscan(c, &n)
+		}
+		var first int
+		fmt.Sscan(start, &first)
+		switch {
+		case n == 0:
+			spans = append(spans, fmt.Sprintf("removed after line %d", first))
+		case n == 1:
+			spans = append(spans, "line "+start)
+		default:
+			spans = append(spans, fmt.Sprintf("lines %d-%d", first, first+n-1))
+		}
+	}
+	if len(spans) == 0 {
+		return ""
+	}
+	return " (changed since the approval: " + strings.Join(spans, ", ") + ")"
 }
 
 func waitsOn(note string, open map[string]bool) bool {
