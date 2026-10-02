@@ -178,10 +178,10 @@ From the third run (014–022):
   reword the row?
 - **Q4.** The export/snapshot/off-box non-goal row's reopen trigger is the freeze: decide it (checklist item 3 of
   [process](../process.md#before-the-freeze)).
+- **Q5.** Should readers that open a `life.db` they did not write also set `trusted_schema=OFF`?
 - **Q6. Pages that still equate the freeze with the first real data** (D13 now defines it as the first unreplayable
   write; a replayable import is real data but is rebuilt, not migrated). Out of scope for plan 021, owner to decide:
   `architecture/non-goals.md:21` ("Before the first real data enters a canonical `life.db` (the freeze, D13) at the
   latest" — under the new definition this trigger fires before the freeze, so Q4 and checklist item 3 of process.md
   need the wording aligned); `architecture/goals-and-principles.md:24` ("Once real data exists, schema changes are
-  additive"); `schema/schema.sql:3` ("numbered migrations begin only after real data exists (D13)").
-- **Q5.** Should readers that open a `life.db` they did not write also set `trusted_schema=OFF`?
+  additive"); `schema/schema.sql:3` ("numbered migrations begin only after real data exists (D13)"); `schema/schema.sql:29`, the stored `lifelog_meta` 'evolution' row ("after the first real data: numbered forward-only SQL migrations, additive only ..."), which every file keeps forever and which now disagrees with D13; `contract/threat-model.md:44`, 2075 table row 16 ("How does the schema change after real data exists?" -> `evolution`); `README.md:3`, the status line ("No canonical database exists yet; until one does, schema.sql is edited in place (D13)" - under the new D13 a canonical file holding only replayable imports can exist while schema.sql is still edited in place).

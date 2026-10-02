@@ -49,7 +49,7 @@ schema is frozen ([D13](docs/decisions/D13-migrations-and-freeze.md)):
 - Test databases are throwaway: apply `schema.sql` to a fresh file (e.g. `/tmp/…/life.db`), test, discard.
   Never migrate a test DB — recreate it.
 - Numbered forward-only migrations (`0002_*.sql`, …) begin **only after** the freeze ([D13](docs/decisions/D13-migrations-and-freeze.md) says what that is),
-  and from then on changes are additive-only (principle 4 of the
+  and from then on changes are additive-only ([D13](docs/decisions/D13-migrations-and-freeze.md) defines it; principle 4 of the
   [goals](docs/architecture/goals-and-principles.md)). Anything still in the schema at the
   freeze stays for good, so cutting happens before it.
 

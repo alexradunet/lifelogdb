@@ -6,7 +6,7 @@
   migrations:** [schema](../schema/README.md) is edited in place and test databases are recreated; `user_version` stays 1. After
   the freeze (next bullet): numbered plain-SQL files, `db/migrations/0002_*.sql`, … applied in order, progress
   in `PRAGMA user_version` [R20](../research/references.md#r20)[R21](../research/references.md#r21)[R22](../research/references.md#r22); additive only — new tables, columns and indexes, a column rename
-  (recorded in its migration), and replacing a named CHECK (next bullet); never a dropped table or column. `PRAGMA application_id = 0x4C494645` ('LIFE') lets
+  (recorded in its migration), and replacing a named CHECK (the named-CHECK bullet below); never a dropped table or column. `PRAGMA application_id = 0x4C494645` ('LIFE') lets
   `file(1)` and future tools recognize the database [R1](../research/references.md#r1).
 - **The freeze.** The freeze is the first write to the canonical `life.db` of a row that cannot be replayed from an
   import workspace: a capture, a correction, a tombstone, anything typed into the file. Before it, a file holding only
