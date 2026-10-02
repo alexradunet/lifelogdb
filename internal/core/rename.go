@@ -2,16 +2,13 @@ package core
 
 import (
 	"context"
-	"strings"
 
 	"lifelog/internal/text"
 )
 
-// Rename gives a plain page a new title the only way titles allow (docs/contract/titles-and-wikilinks.md,
-// "Renames"): the page titled newTitle gets the text, the old page becomes a one-line #REDIRECT stub, and a
-// redirect link joins them. Into a title that is free, the body moves to a new page; into an existing page only
-// when the old page is empty (a typo's ghost). The old page's typed links (about, related, ...) move with it;
-// that is this writer's choice, the contract leaves it open. Returns the new page's id.
+// Rename gives a plain page a new title the only way titles allow: docs/contract/titles-and-wikilinks.md
+// ("Renames") says what moves and what is refused, docs/cookbook/rename-a-page.md is its SQL. Returns the id of
+// the page that holds the new title.
 func (t *Tx) Rename(id int64, newTitle string) (int64, error) {
 	old, err := t.pageByID(id)
 	if err != nil {
@@ -37,14 +34,22 @@ func (t *Tx) Rename(id int64, newTitle string) (int64, error) {
 	}
 	var to int64
 	if target == nil {
-		var day string
-		t.tx.QueryRow(`SELECT coalesce(day, '') FROM pages WHERE id = ?`, id).Scan(&day)
-		if to, _, _, err = t.CreatePage(newTitle, old.Body, day, ""); err != nil {
+		var day any // the old page's day, NULL kept; a title that is a day has that day (pages_day_page)
+		if err := t.tx.QueryRow(`SELECT day FROM pages WHERE id = ?`, id).Scan(&day); err != nil {
+			return 0, err
+		}
+		if IsDay(newTitle) {
+			day = newTitle
+		}
+		if to, _, err = t.insertPage("page", newTitle, text.TitleKey(newTitle), day, old.Body, ""); err != nil {
+			return 0, err
+		}
+		if _, err = t.syncWikilinks(to, old.Body); err != nil {
 			return 0, err
 		}
 	} else {
 		switch {
-		case strings.TrimSpace(old.Body) != "":
+		case old.Body != "":
 			return 0, &ExistsError{target.ID, target.Title}
 		case target.Deleted:
 			return 0, conflict("%s is deleted: revive it first", target.Title)

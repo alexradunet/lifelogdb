@@ -1,7 +1,7 @@
 # 0001 — A rename has no recipe, and the contract leaves open what moves with it
 
 - **Date:** 2026-10-02
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the writer `app/` (plan 024), implementing renames against the docs
 
 ## What happened
@@ -31,4 +31,12 @@ which page holds the body and the `related` link. The docs do not say.
 
 ## Resolution
 
-—
+The owner decided (2026-10-02), and the "Renames" paragraph of [titles and wikilinks](../contract/titles-and-wikilinks.md)
+now says it: the text and the typed links the old page starts move to the page that holds the new title (a symmetric
+kind's mirror with them), so the stub holds only its `#REDIRECT [[New Title]]` body and its `redirect` row; a rename
+into a title that exists is allowed only for an empty old page, and otherwise refused, never merged. The recipe is
+[rename a page](../cookbook/rename-a-page.md), run by the `renames` suite (`Sourdogh` → `Sourdough` with a body and a
+`related` link, a typo ghost into an existing person, a page with text into a taken title refused), which also checks
+that the writer's own rename writes the same rows. The writer changed in two places to match: an old page is empty
+only when its body is `''` (whitespace was counted as empty), and the new page keeps the old page's `day`, NULL
+included (it was given today's).

@@ -30,6 +30,7 @@ the document (a broken block makes a later step impossible) reports that as one 
 | `identity_test.go` | `identity` | the supertype and its composite FKs, ids by `RETURNING`, `source` on every row, no hard deletes, `updated_at` (schema.sql, D8, D10, D11) |
 | `named_test.go` | `named` | a person or a place is a page: one id, promotion, cookbook/person-or-place, cookbook/days-that-name and cookbook/everything-about run literally, two Sams (D16, D20) |
 | `pages_test.go` | `pages` | every page titled, the day rule, filename-safe titles, `title_key` and its vectors, lookups, FTS, why not a collation (contract/titles-and-wikilinks, D5) |
+| `renames_test.go` | `renames` | cookbook/rename-a-page run literally: the text, the day and the typed links move, the stub keeps its redirect alone, a typo ghost into an existing person, the refusals; the writer's own rename writes the same rows (contract/titles-and-wikilinks, D5) |
 | `links_test.go` | `links` | the closed kind registry, endpoint types, mirrors, `at`, containment over day pages with its cycle guard (D8, D16) |
 | `habits_test.go` | `habits` | habit periods: their days, order, no overlap, unitless only, never deleted; cookbook/habits and the cookbook/day-view habit leg — done, not done, not recorded (D24) |
 | `facts_test.go` | `facts` | metrics and measurements: append-only, supersede, retract, finite values, never `OR IGNORE`/`OR REPLACE` (D7) |
@@ -44,7 +45,7 @@ the document (a broken block makes a later step impossible) reports that as one 
 | `wikilinks_test.go` | `doc-save-contract` | the save contract as the docs print it: the vector table of contract/titles-and-wikilinks, cookbook/save-a-body run literally (and equal to a writer's own save after 400 random edits), cookbook/backlinks |
 | | `save-contract` | the save contract through a writer's own save against the DDL: invalid targets, the `SAVEPOINT` backstop, set equality, stubs, revival, 400 random edits against a rebuild, 4 concurrent writers, every vector |
 | | `title-fuzz` | the writer's title predicate equals the DDL's CHECKs on more than 40 000 generated strings |
-| `mutants_test.go` | `TestMutants` | 129 broken copies of the docs tree, one rule each; the suite that owns the rule must notice |
+| `mutants_test.go` | `TestMutants` | 134 broken copies of the docs tree, one rule each; the suite that owns the rule must notice |
 | `render_test.go` | `TestMermaidRender` | optional: every diagram renders |
 | `kit_test.go`, `suites_test.go` | | reading the tree (a page, the cookbook blocks by recipe key, an overlay of broken files for a mutant); fresh databases and the insert conventions (entity first, `RETURNING`, named entities); the runner |
 

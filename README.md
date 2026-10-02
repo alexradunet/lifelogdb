@@ -66,9 +66,9 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **Owner-only actions.** `register-metric` and `replay` are refused to an `agent:*` writer and are never MCP tools.
   `approve` is not in the API at all: `lifelog import approve` refuses without an interactive terminal, and its stamp
   (`status: approved YYYY-MM-DD (owner) sha256:…`) hashes the rest of the file, so an edit closes the gate again.
-- **Renames move the text and the typed links.** The new page gets the body and the old page's typed links; the
-  old page becomes the `#REDIRECT` stub. Into an existing title only when the old page is empty (issue 0001 asks the
-  docs to settle this).
+- **Renames move the text and the typed links**, as [titles and wikilinks](docs/contract/titles-and-wikilinks.md)
+  ("Renames") requires and [rename a page](docs/cookbook/rename-a-page.md) writes; `lifelog rename` and the API's
+  `rename` action run it.
 - **The import workspace is fixed at startup** (`--workspace`); a request names files relative to the source and
   never leaves it. Rows are written as rules.md's `source:`. A row or a note page an agent changes directly during
   an import is allowed and reported by *status*: a replay carries only the facts and the notes.
