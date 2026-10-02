@@ -111,8 +111,9 @@ ones that span tables are also rows of `lifelog_meta` (§3), so the file carries
   the first two only, with `entity_type = 'place'`: it has no columns of its own (D16). A ghost page an
   earlier `[[Name]]` created is *promoted* instead: `UPDATE entities SET entity_type = 'person'` (the
   foreign key cascades it to `pages.entity_type`), then insert the `people` row; a place needs nothing
-  more. The foreign keys refuse a person without a page and a person turned back into a page
-  (executed). Title uniqueness already refuses a second `Sam`, so two people called Sam are told apart
+  more. A day page is never promoted: it is the journal of its day (D5), and its `at` links need it
+  to stay a page (D16). The foreign keys refuse a person without a page and a person turned back into
+  a page (executed). Title uniqueness already refuses a second `Sam`, so two people called Sam are told apart
   in the handle (`Sam (barber)`); `people.name` is the editable full name.
 - **Provenance.** `source` on `entities`, `links`, `measurements` and `habit_periods` names the writer
   of the row — `ui`, `cli`, `api`, `agent:<name>`, `import:<name>` (lowercase `[a-z0-9_:.-]`, 1–64
@@ -1001,7 +1002,7 @@ flowchart LR
 
 A page starts as a ghost when a link names a title that does not exist yet, or as a written page when
 the owner creates it on purpose — a day page when the first thing is captured that day (D5). Either can
-become the page of a person or a place (D20).
+become the page of a person or a place (D20) — except a day page, which stays the journal of its day.
 
 ```mermaid
 %% diagram: page-life
@@ -1016,7 +1017,7 @@ stateDiagram-v2
     [*] --> Named: a person or a place is created
     Ghost --> Written: body saved, the day unchanged
     Ghost --> Named: promoted, entities.entity_type changes
-    Written --> Named: promoted, entities.entity_type changes
+    Written --> Named: promoted unless a day page, entities.entity_type changes
     Written --> Written: body edited or appended to, the title never changes
     Written --> Stub: renamed, so the old page becomes a stub and a redirect link is added
 ```
@@ -1898,9 +1899,9 @@ page (D20). `:source` is the saving writer (§2.2).
 ### 6.14 A person or a place: create one, promote a ghost page (D20)
 
 Step 0 is the resolve of §6.13. No row: create it (steps 1–3). A plain page (`entity_type = 'page'`,
-e.g. a ghost an earlier `[[Bob Sample]]` made): promote it instead. Any other row: the handle is
-taken; choose another (`Bob Sample (colleague)`). A place is the same with its own type and no
-domain row: `entities` and `pages` only, and its promotion is the `UPDATE` alone (D16).
+e.g. a ghost an earlier `[[Bob Sample]]` made) that is not a day page: promote it instead. Any other
+row: the handle is taken; choose another (`Bob Sample (colleague)`). A place is the same with its own
+type and no domain row: `entities` and `pages` only, and its promotion is the `UPDATE` alone (D16).
 
 ```sql
 -- 0. does the handle exist already?  :handle_key = title_key(:handle_title), §2.4
@@ -1917,14 +1918,17 @@ COMMIT;
 
 -- promote: the plain page :ghost_id becomes a person; its links stay (the id does not change)
 BEGIN IMMEDIATE;
-UPDATE entities SET entity_type = 'person' WHERE id = :ghost_id AND entity_type = 'page';   -- cascades to pages.entity_type
+UPDATE entities SET entity_type = 'person'   -- cascades to pages.entity_type
+ WHERE id = :ghost_id AND entity_type = 'page'
+   AND id NOT IN (SELECT id FROM pages WHERE title = day);   -- a day page stays the journal's (§2.2)
 INSERT INTO people(id, name) VALUES (:ghost_id, 'Ana Example');
 COMMIT;
 ```
 
 The day pages that already name the person (§6.3) keep their links: the id did not change. A promotion
-cannot go wrong quietly: a page that is already named or gone makes the `UPDATE` change no row, so the
-`people` insert fails on its key (executed); roll the transaction back.
+cannot go wrong quietly: a page that is already named, a day page or none at all makes the `UPDATE`
+change no row, so the `people` insert fails on its key (executed); roll the transaction back. A place's
+promotion has no second statement, so its writer checks that the `UPDATE` changed one row.
 
 ### 6.15 Import a row once: insert it, re-run it, update a changed one
 

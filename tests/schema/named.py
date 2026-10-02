@@ -1,7 +1,7 @@
 """A person or a place is a page (SCHEMA.md §2.2, D16, D20): one id with an entities row and a titled pages row, and a
 person's people row, chained people -> pages -> entities.
 A  the foreign keys and CHECKs: what may and may not be built, and what a promotion may and may not do;
-B  §6.14 run literally: create, promote a ghost, a taken handle; the day pages that named the ghost keep naming her;
+B  §6.14 run literally: create, promote a ghost, a taken handle, never a day page; the day pages that named the ghost keep naming her;
 C  a day page that writes [[Name]] reaches the person through the real save contract; §6.3, §6.5, §6.6; renames; rebuild;
 D  two Sams, two Springfields; ghost_pages leaves named pages alone."""
 import os, re, sys
@@ -75,6 +75,11 @@ if len(sel0) == 1 and len(create) == 5 and len(promo) == 4:
         and c.execute('select changes()').fetchone()[0] == 0 and tryx(c, promo[2], {'ghost_id': gid}).startswith('ERR'))
     pl = named(c, 'place', 'Lisbon')
     S.K('promoting a place\'s page into a person changes no row, and the people insert fails on its FK', tryx(c, promo[1], {'ghost_id': pl}) == 'OK' and tryx(c, promo[2], {'ghost_id': pl}).startswith('ERR'))
+    S.K('promoting a day page changes no row, and the people insert fails: the day stays the journal\'s page', tryx(c, promo[1], {'ghost_id': mid}) == 'OK'
+        and c.execute('select changes()').fetchone()[0] == 0 and tryx(c, promo[2], {'ghost_id': mid}).startswith('ERR')
+        and one(c, 'select entity_type from pages where id=?', (mid,)) == 'page')
+    S.K('...nor into a place: the UPDATE alone changes no row', tryx(c, promo[1].replace("'person'", "'place'", 1), {'ghost_id': mid}) == 'OK'
+        and c.execute('select changes()').fetchone()[0] == 0)
 
 # ---- C  the save contract reaches the person
 c = fresh(); bod = named(c, 'person', 'Bob Sample', name='Bob Sample')
