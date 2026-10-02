@@ -44,7 +44,7 @@ with `<name>: X/Y met expectations`; a suite that stops on an error reports that
 | | `mutants.py` | 128 broken copies of the docs tree, one rule each, and each switch of `wikisave.py` (142 in all); the suite that owns the rule must notice |
 | | `datasette_ro.py`, `render_diagrams.py` | optional: Datasette is read-only; every diagram renders |
 | `wikilinks/` | `wikisave.py` | **reference implementation** of the save contract (a test instrument, not the application) |
-| | `check_vectors.py`, `vectors.py` | the extraction vectors (some of them are printed in contract/titles-and-wikilinks) |
+| | `check_vectors.py`, `vectors.py` | the extraction vectors; the contract/titles-and-wikilinks table prints every one (docchecks keeps them equal) |
 | | `title_fuzz.py` | the app-side title predicate equals the DDL's CHECK on generated strings |
 | | `probes.py` | the save procedure against the real DDL, incl. 400 random edits and 4 concurrent writers |
 | | `docchecks.py` | the save contract as the docs print it: the contract/titles-and-wikilinks table, cookbook/save-a-body run literally, cookbook/backlinks |

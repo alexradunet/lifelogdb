@@ -1,6 +1,7 @@
 # (label, body, expected titles extracted+valid, in order of first appearance, de-duplicated by key)
 # Written BEFORE the reference implementation was first run.
 A240 = 'a' * 240; A241 = 'a' * 241; J80 = '日' * 80; J81 = '日' * 81
+SS81 = 'ss' * 81; ESZ81 = 'ẞ' * 81
 V = [
  # wikilinks
  ('plain',            'See [[Diet plan]].',                       ['Diet plan']),
@@ -60,4 +61,19 @@ V = [
  ('redirect stub lc', '  #redirect  [[New Title]]\nmore #tag',    []),
  ('redirect not first','see #REDIRECT [[New Title]]',             ['New Title']),
  ('redirect as text','#redirectors are fun',                      ['redirectors']),
+ # rules the reference decides: digits and hyphens, stub whitespace, NFC after the parse, validity before de-duplication, line breaks
+ ('tag date',          '#2026-09-29 and #2024-12',             ['2026-09-29', '2024-12']),
+ ('tag other numbers', '#½ #² #Ⅻ',                             ['½', '²', 'Ⅻ']),
+ ('redirect newline',  '#REDIRECT\n[[x]]',                     []),
+ ('redirect tab',      '#REDIRECT\t[[x]]',                     []),
+ ('redirect nbsp',     ' #REDIRECT [[x]]',                []),
+ ('redirect glued',    '#REDIRECT[[x]]',                       ['x']),
+ ('nfc after parse',   '`[[x]]`',                    ['x']),
+ ('valid before dedup', f'[[{ESZ81}]] [[{SS81}]]',             [SS81]),
+ ('line separator',    '[[a b]]',                         ['a b']),
+ ('carriage return',   '[[a\rb]]',                             []),
+ # the same rows as printed in contract/titles-and-wikilinks, in the precomposed spelling
+ ('dup by key NFC',    '[[Café]] [[CAFÉ]] [[Café]] [[cafe]]',  ['Café', 'cafe']),
+ ('wikilink NFC',      '[[Café notes]]',                       ['Café notes']),
+ ('tag NFC',           '#café #zürich',                        ['café', 'zürich']),
 ]

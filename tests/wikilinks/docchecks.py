@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 from kit import Suite, DOC, NOW, fresh, block, statements, code
 import docsql
 import wikisave as W
-from vectors import V
+from vectors import V, A240, A241, J80, J81, SS81, ESZ81
 S = Suite('document save contract')
 
 # ---- A  the table of contract/titles-and-wikilinks
@@ -20,10 +20,17 @@ for line in (m.group(1).splitlines() if m else []):
     if not mm: S.K('A a vector row parses', False, line); continue
     body = mm.group(1)
     body = body[3:-3] if body.startswith('``') else body[1:-1]
-    body = body.replace('\\|', '|').replace('\\n', '\n').replace('\\u0301', '́').replace('\\u0308', '̈')
-    rows.append((body, [] if mm.group(2) == '—' else re.findall(r'`([^`]*)`', mm.group(2))))
+    def unesc(t): return re.sub(r'\\u([0-9a-fA-F]{4})', lambda x: chr(int(x.group(1), 16)), t.replace('\\|', '|').replace('\\n', '\n').replace('\\r', '\r').replace('\\t', '\t'))
+    body = unesc(body)
+    rows.append((body, [] if mm.group(2) == '—' else [unesc(t) for t in re.findall(r'`([^`]*)`', mm.group(2))]))
 bad = [(b, e, list(W.targets(b)[0].values())) for b, e in rows if list(W.targets(b)[0].values()) != e]
-S.K('A the contract/titles-and-wikilinks table has at least 25 vectors and every one reproduces', len(rows) >= 25 and not bad, (len(rows), bad[:3]))
+COMPUTED = {f'[[{x}]]' for x in (A240, A241, J80, J81)} | {f'[[{ESZ81}]] [[{SS81}]]'}
+printed = {(b, tuple(e)) for b, e in rows}
+wanted = {(b, tuple(e)) for _, b, e in V if b not in COMPUTED}
+S.K('A every vector of vectors.py except the computed ones is printed in the contract table, with the same titles', printed == wanted and len(rows) == len(printed),
+    (len(rows), sorted(wanted - printed)[:3], sorted(printed - wanted)[:3]))
+S.K('A every printed vector reproduces with the reference extraction', rows and not bad, (len(rows), bad[:3]))
+S.K('A 81 x ẞ beside 81 x ss (243 bytes, invalid) links ss, as the line under the table says', list(W.targets(f'[[{ESZ81}]] [[{SS81}]]')[0].values()) == [SS81])
 S.K('A the 240/241-byte and 80/81-CJK boundary under the table holds', W.targets('[[' + 'a' * 240 + ']]')[0] and not W.targets('[[' + 'a' * 241 + ']]')[0]
     and W.targets('[[' + '日' * 80 + ']]')[0] and not W.targets('[[' + '日' * 81 + ']]')[0])
 

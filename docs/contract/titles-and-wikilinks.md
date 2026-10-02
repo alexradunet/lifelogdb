@@ -11,12 +11,14 @@ and every link can be rebuilt from the bodies alone. The `links` table is the so
 graph; the body text is the source of truth for prose. The rules, all executed against the vectors
 below:
 
-- *What is read.* The CommonMark **text** of `pages.body`, after NFC normalisation — not code
-  spans, code blocks, raw HTML, link destinations or image alt text. A conformant CommonMark parser
+- *What is read.* The CommonMark **text** of `pages.body`: the stored body is parsed as it is, and
+  each run of text is then NFC-normalised — so a character whose NFC form is CommonMark syntax
+  (U+1FEF becomes a backtick) never acts as syntax. Not read: code spans, code blocks, raw HTML,
+  link destinations or image alt text. A conformant CommonMark parser
   yields exactly this, so nothing is hand-parsed (the reference implementation in `tests/` uses
   markdown-it-py [R59](../research/references.md#r59), which loses a code span that follows an unclosed `[`, where the CommonMark
   reference implementation keeps it).
-- *Wikilink.* `[[title]]` or `[[title|alias]]`, with no `[`, `]` or line break inside, and the
+- *Wikilink.* `[[title]]` or `[[title|alias]]`, with no `[`, `]` or line break (LF or CR) inside — U+2028 and U+2029 are ordinary characters — and the
   brackets and title in **one** run of plain text (`[[Health *Diet*]]` is not a link, and
   `[[Diet]](url)` is a Markdown link). The title is the text before the first `|`, trimmed of
   spaces (U+0020 only, like the DDL's `trim`); the alias is display text the database ignores.
@@ -25,17 +27,18 @@ below:
   normalised: `[[Health  Diet]]` with two spaces is a different page from `[[Health Diet]]`.
 - *Tag.* `#` followed by words of letters, marks, digits and `_` (Unicode categories L, M, N)
   joined by single `-`, where the `#` is **not** glued to a preceding such character, `/` or `#`
-  — so `C#`, `a#b`, `http://x/#frag` and `##x` are not tags — and the word is not all digits
-  (`#12` and `#2024` are not tags, `#2024-review` is). Wikilinks are read first and their text
+  — so `C#`, `a#b`, `http://x/#frag` and `##x` are not tags — and the tag is not made only of decimal
+  digits (category Nd): `#12` and `#2024` are not tags; `#2024-review`, `#2026-09-29` (which
+  names that day's page) and `#½` are. Wikilinks are read first and their text
   is not re-read for tags (`[[Project #alpha]]` is one title). `# Heading` (with a space) is a
   heading; `#Heading` is not a CommonMark heading, so it is a tag. `#Health` and `#health` are
   one page.
-- *Stub pages.* A body that starts with `#REDIRECT [[` (any case, leading whitespace allowed) is
-  a rename stub (below): it gets no wikilinks and no tags — its one edge is the `redirect` link
+- *Stub pages.* A body that starts — after any whitespace — with `#REDIRECT` (any case), then at
+  least one whitespace character (a line break counts), then `[[`, is a rename stub (below): it gets no wikilinks and no tags — its one edge is the `redirect` link
   the app writes — so a stub never shows up as a backlink. Elsewhere the word `#redirect` alone
   is never a tag, so nothing can create a page called `redirect`.
 - *An invalid target makes no link and never blocks a save.* A title `pages_title_safe` rejects
-  (`[[Health/Diet]]`, `[[Re: plan]]`, the tag `#con`) is skipped. A writer checks the title rules
+  (`[[Health/Diet]]`, `[[Re: plan]]`, the tag `#con`) is skipped. Targets are checked first and then de-duplicated by `title_key`, so the first **valid** spelling of a key is the one linked and created. A writer checks the title rules
   before inserting — the reference predicate in `tests/` agrees with the DDL's CHECKs on more than
   40 000 generated strings — and creates each target inside its own `SAVEPOINT` ([save a body](../cookbook/save-a-body.md)), so even a
   target the predicate wrongly let through is rolled back alone: the page is saved and no orphan
@@ -50,8 +53,8 @@ below:
   a Markdown link; a `#` written as an entity (`&#35;x`) is decoded before the scan and counts as
   a tag; a typo (`[[Sm]]`) makes a ghost page like any other ([ghost pages](../cookbook/ghost-pages.md)).
 
-Test vectors — every writer must reproduce them (`\n`, `́`, `̈` stand for a line
-break and combining marks; a body is shown in a code span):
+Test vectors — every writer must reproduce them. A body is shown in a code span; `\n`, `\r` and
+`\t` stand for a line feed, a carriage return and a tab, `\uXXXX` for that code point, and `\|` for `|`.
 
 | body | links to (`title`s, in order) |
 |---|---|
@@ -62,31 +65,64 @@ break and combining marks; a body is shown in a code span):
 | `[[Health/Diet]]` | — |
 | `[[Re: plan]]` | — |
 | `[[]] [[ ]] [[\|alias]]` | — |
-| `[[Café]] [[CAFÉ]] [[Café]] [[cafe]]` | `Café`, `cafe` |
-| `[[Café notes]]` | `Café notes` |
+| `[[multi\nline]]` | — |
+| `[[Café]] [[CAFÉ]] [[Cafe\u0301]] [[cafe]]` | `Café`, `cafe` |
+| `[[Diet]] [[diet]]` | `Diet` |
+| `[[nested [[x]] y]]` | `x` |
 | `\[[escaped]]` | `escaped` |
 | `` text `[[code]]` text `` | — |
 | `a\n\n~~~\n[[fence]]\n~~~\n\nb` | — |
+| `` a\n\n```\n[[fence]]\n#fencetag\n```\n\nb `` | — |
+| `a\n\n    [[indented]]\n\nb` | — |
+| `<span>[[html]]</span> <!-- [[cm]] -->` | `html` |
+| `![alt [[img]]](u.png)` | — |
+| `[see [[Diet]]](http://x)` | `Diet` |
 | `[[Diet]](http://y)` | — |
 | `[[Health *Diet*]]` | — |
 | `[[Ref]]\n\n[Ref]: http://r` | — |
+| `[[.hidden]] [[trail.]] [[a.b]]` | `a.b` |
 | `[[CON]] [[nul]] [[Com1]] [[CONSOLE]] [[COM10]] [[LPT0]]` | `CONSOLE`, `COM10`, `LPT0` |
 | `[[CON.backup]] [[nul.txt]] [[COM¹]] [[LPT².x]] [[a.CON]] [[CONSOLE.txt]]` | `a.CON`, `CONSOLE.txt` |
+| `[[tab\there]]` | — |
+| `# Plan for [[Diet plan\|it]]` | `Diet plan` |
 | `Feeling good #health today` | `health` |
 | `#Health and #health and #HEALTH` | `Health` |
+| `#日本語 #zürich #a_b-c` | `日本語`, `zürich`, `a_b-c` |
 | `#tag. #tag2, (#paren) "#quoted" #end-` | `tag`, `tag2`, `paren`, `quoted`, `end` |
-| `#café #zürich` | `café`, `zürich` |
+| `line\n#second\n#third` | `second`, `third` |
 | `# Heading\n\n## Sub\n\n### Sub sub` | — |
 | `#Heading` | `Heading` |
 | `I write C# and F# and a#b` | — |
 | `[a](http://x/#frag) <http://x/#auto> http://x/#bare` | — |
 | `issue #12 and #2024 but #2024-review` | `2024-review` |
+| `##tag` | — |
+| `# and # alone #` | — |
+| `` `#code` and #real `` | `real` |
 | `[[Project #alpha]] #beta [[#gamma]]` | `Project #alpha`, `beta`, `#gamma` |
 | `#con #nul #console` | `console` |
+| `#work/project` | `work` |
+| `#cafe\u0301 #zu\u0308rich` | `café`, `zürich` |
+| `#हिन्दी and #ひらがな` | `हिन्दी`, `ひらがな` |
+| `e\u0301#tag` | — |
+| `[[Cafe\u0301 notes]]` | `Café notes` |
 | `#REDIRECT [[New Title]]` | — |
+| `  #redirect  [[New Title]]\nmore #tag` | — |
 | `see #REDIRECT [[New Title]]` | `New Title` |
+| `#redirectors are fun` | `redirectors` |
+| `#2026-09-29 and #2024-12` | `2026-09-29`, `2024-12` |
+| `#½ #² #Ⅻ` | `½`, `²`, `Ⅻ` |
+| `#REDIRECT\n[[x]]` | — |
+| `#REDIRECT\t[[x]]` | — |
+| `\u00a0#REDIRECT [[x]]` | — |
+| `#REDIRECT[[x]]` | `x` |
+| `\u1fef[[x]]\u1fef` | `x` |
+| `[[a\u2028b]]` | `a\u2028b` |
+| `[[a\rb]]` | — |
+| `[[Café]] [[CAFÉ]] [[Café]] [[cafe]]` | `Café`, `cafe` |
+| `[[Café notes]]` | `Café notes` |
+| `#café #zürich` | `café`, `zürich` |
 
-(Also: a 240-byte title is a link, a 241-byte one is not; 80 × `日` = 240 bytes is, 81 is not.)
+(Also: a 240-byte title is a link, a 241-byte one is not; 80 × `日` = 240 bytes is, 81 is not; `[[ẞ…]] [[ss…]]` with each spelling 81 times links `ss…`: the first is 243 bytes, invalid, and dropped before de-duplication.)
 
 **Renames.** A title never changes (`pages_title_fixed`, [D5](../decisions/D05-pages-and-day-pages.md)). To fix one: create the new page, make
 the old page a one-line stub (`#REDIRECT [[New Title]]`) and add `links(kind='redirect', from=old,

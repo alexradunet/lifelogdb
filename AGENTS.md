@@ -80,8 +80,8 @@ schema is frozen ([D13](docs/decisions/D13-migrations-and-freeze.md)):
   `docs/decisions/` from its template, listed in the decision index.
 - **Language-neutral.** The contract must be implementable without reading any application's code. Anything a writer
   must compute identically in every language (the title predicate, `title_key`, wikilink and `#tag`
-  extraction) is specified in [titles and wikilinks](docs/contract/titles-and-wikilinks.md) with vectors in
-  `tests/wikilinks/vectors.py`; an implementation may be an example, never the only statement of a rule.
+  extraction) is specified in [titles and wikilinks](docs/contract/titles-and-wikilinks.md) with its vectors
+  (the same list as `tests/wikilinks/vectors.py`); an implementation may be an example, never the only statement of a rule.
 - **Self-consistency.** Every change to `schema.sql` keeps the contract pages, the entity model, the decisions,
   the cookbook and the totals line in `docs/schema/README.md` in step. The mermaid diagrams are checked by
   `tests/schema/diagrams.py`: the ER diagrams draw tables, key columns and foreign keys only, and the link map must
