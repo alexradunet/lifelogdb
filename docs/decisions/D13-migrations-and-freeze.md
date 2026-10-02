@@ -12,10 +12,13 @@
   import workspace: a capture, a correction, a tombstone, anything typed into the file. Before it, a file holding only
   replayable imports is rebuilt (a new `schema.sql`, then a *replay*, [importing with a model](../guides/importing.md))
   instead of migrated. At the freeze, the commit of `schema.sql` that made the file is recorded in the status line of
-  [the docs index](../README.md). After it `schema.sql` is no longer edited in place: each change is a numbered migration
-  under `db/migrations/`, starting at `0002_`, run on a copy first (below). A new file after the freeze: `schema.sql` stays the
-  full current DDL, each migration also edits it, and a suite proves `schema.sql` equals the frozen DDL plus the migrations
-  (same `sqlite_master`), so a new file is still one command.
+  [the docs index](../README.md). After it every change is a numbered migration under `db/migrations/`, starting at
+  `0002_`, run on a copy first (below); `schema.sql` never changes without one.
+- **One full DDL after the freeze.** `schema.sql` stays the full current DDL: each migration also edits `schema.sql` in
+  the same commit, so a new file is still that one file applied verbatim. A suite proves the two agree: the frozen
+  `schema.sql` (at the recorded commit) with every migration applied in order has the same `sqlite_master` as the
+  current `schema.sql` applied to an empty file. The suite is added with the first migration; before the freeze there
+  is nothing to compare.
 - **Every CHECK is named, so every rule can change without a rebuild.** Widening an enum (a new
   entity type, a new link endpoint), letting partial dates into `birth_day` or loosening the title rules is a
   two-statement transactional migration — `ALTER TABLE … DROP CONSTRAINT <name>; … ADD CONSTRAINT
@@ -28,5 +31,7 @@
   as for an importer, [imports](../contract/imports.md)) and the four checks of [integrity checks](../contract/integrity-checks.md) must pass on the copy before it touches
   `life.db`.
 - **Alternatives.** *Freeze at the first import* — rejected: an import alone is replayable, so freezing then would lock
-  in a schema that no unreplayable data depends on yet.
+  in a schema that no unreplayable data depends on yet. *Freeze `schema.sql` as `0001_init.sql` and make a new file by
+  replaying every migration on it* — rejected: today's schema would exist only as the sum of the files, so no single
+  file would show it, and the comments inside its `CREATE` statements would keep the frozen text.
 - **Sources.** [R1](../research/references.md#r1)[R20](../research/references.md#r20)[R21](../research/references.md#r21)[R22](../research/references.md#r22)[R55](../research/references.md#r55).

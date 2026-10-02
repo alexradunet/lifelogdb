@@ -46,12 +46,16 @@ func init() {
 	sql.Register("lifelog", d)
 }
 
-// checkConnection runs on every new connection: the version floor always, the pragmas on writers.
+// checkConnection runs on every new connection: the version floor always, trusted_schema on readers, the pragmas
+// on writers.
 func checkConnection(c sqlite.ExecQuerierContext, dsn string) error {
 	if v := version(c); v < MinVersion {
 		return fmt.Errorf("SQLite %d is older than %d (connections.md)", v, MinVersion)
 	}
 	if strings.Contains(dsn, "mode=ro") {
+		if got := intOf(c, "PRAGMA trusted_schema"); got != 0 {
+			return fmt.Errorf("PRAGMA trusted_schema reads back %d on a reader, want 0; refusing to read", got)
+		}
 		return nil
 	}
 	for _, p := range pragmas {
@@ -183,7 +187,7 @@ func Copy(from, to string) error {
 	if _, err := os.Stat(from); err != nil {
 		return fmt.Errorf("no database at %s: %w", from, err)
 	}
-	r, err := sql.Open("lifelog", "file:"+filepath.ToSlash(from)+"?mode=ro")
+	r, err := sql.Open("lifelog", "file:"+filepath.ToSlash(from)+"?mode=ro&_pragma=trusted_schema(0)")
 	if err != nil {
 		return err
 	}

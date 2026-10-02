@@ -109,16 +109,14 @@ BEGIN
 END;
 
 CREATE VIRTUAL TABLE pages_fts USING fts5(
-  -- derived: external-content FTS5 kept in sync by the three triggers below; rebuild with
+  -- derived: external-content FTS5 kept in sync by the two triggers below (a page is never deleted:
+  -- pages_no_delete), checked by the FTS5 integrity-check (contract/integrity-checks); rebuild with
   -- INSERT INTO pages_fts(pages_fts) VALUES('rebuild'). Tokenizer unicode61 folds accents
   -- (Zurich finds Zürich); a CJK run is ONE token (a known limit of unicode61).
   title, body, content='pages', content_rowid='id'
 );
 CREATE TRIGGER pages_fts_insert AFTER INSERT ON pages BEGIN
   INSERT INTO pages_fts(rowid, title, body) VALUES (NEW.id, NEW.title, NEW.body);
-END;
-CREATE TRIGGER pages_fts_delete AFTER DELETE ON pages BEGIN
-  INSERT INTO pages_fts(pages_fts, rowid, title, body) VALUES ('delete', OLD.id, OLD.title, OLD.body);
 END;
 CREATE TRIGGER pages_fts_update AFTER UPDATE OF title, body ON pages BEGIN
   -- only the indexed columns: a promotion does not re-index the body

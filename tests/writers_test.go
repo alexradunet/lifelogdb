@@ -1,13 +1,19 @@
 package tests
 
 import (
+	"database/sql/driver"
 	"fmt"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
+
+	"modernc.org/sqlite"
 )
+
+// probeOnce registers lifelog_probe, an application function with no SQLITE_INNOCUOUS flag, for every connection.
+var probeOnce sync.Once
 
 // try runs fn and turns a stop into "ERR <why>"; "OK" when fn returns.
 func try(fn func()) (r string) {
@@ -156,6 +162,22 @@ func writers(s *S) {
 	t0 := time.Now()
 	w.must("INSERT INTO lifelog_meta VALUES ('k','v')")
 	s.K("the writer is not slowed by a connected reader", time.Since(t0) < 500*time.Millisecond)
+
+	// ---- a reader sets trusted_schema=OFF: a view in the file that calls a function not marked side-effect-free
+	// (an application function, registered without SQLITE_INNOCUOUS) is refused instead of run
+	s.K("contract/connections: readers are read-only and set trusted_schema = OFF",
+		regexp.MustCompile("Readers must be \\*\\*read-only\\*\\* and set \\*\\*`PRAGMA trusted_schema = OFF`\\*\\*").MatchString(s.d.Page("contract/connections.md")))
+	probeOnce.Do(func() {
+		sqlite.MustRegisterScalarFunction("lifelog_probe", 0, func(*sqlite.FunctionContext, []driver.Value) (driver.Value, error) {
+			return int64(1), nil
+		})
+	})
+	p = s.mkdb()
+	s.connect(p, "_pragma=trusted_schema(1)").must("CREATE VIEW probe AS SELECT lifelog_probe() AS x")
+	trusting := s.connect(p, "mode=ro", "_pragma=trusted_schema(1)").tryx("SELECT x FROM probe")
+	careful := s.connect(p, "mode=ro", "_pragma=trusted_schema(0)").tryx("SELECT x FROM probe")
+	s.K("a mode=ro reader with trusted_schema=ON runs the view's function", trusting == "OK", trusting)
+	s.K("...with trusted_schema=OFF it refuses it: unsafe use", strings.Contains(careful, "unsafe use"), careful)
 
 	// ---- a hardened connection: DEFENSIVE + the contract/connections pragmas
 	c = s.connect("", "_defensive=1")

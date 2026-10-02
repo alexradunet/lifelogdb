@@ -145,6 +145,16 @@ func TestUnassignedRejected(t *testing.T) {
 	if ValidTitle("a\U000E0080b") || ValidTitle("x͸") {
 		t.Error("a title with an unassigned code point was accepted")
 	}
+	page, err := os.ReadFile(contract)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v := strings.TrimSuffix(AssignedVersion, ".0"); !strings.Contains(string(page), "**Unicode "+v+"**") {
+		t.Errorf("the contract's Cn rule does not name Unicode %s, the version this writer pins", v)
+	}
+	if ValidTitle("a\U0001FAE9") || !ValidTitle("a\U0001FAE8") {
+		t.Error("the Cn rule does not follow Unicode 15.0: U+1FAE9 (16.0) must be refused, U+1FAE8 (15.0) accepted")
+	}
 	if !ValidTitle("Lakeside") || !ValidTitle("2026-09-29") {
 		t.Error("an ordinary title was rejected")
 	}

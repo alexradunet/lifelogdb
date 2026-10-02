@@ -58,7 +58,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   500 rows at most.
 - **Connections** ([connection setup](docs/contract/connections.md)): one writing connection with the pragmas
   set by DSN and read back by a connection hook (a wrong value refuses the connection), `SQLITE_DBCONFIG_DEFENSIVE`,
-  `BEGIN IMMEDIATE` via `_txlock=immediate`, the 3.51.3 floor checked; readers use `mode=ro`.
+  `BEGIN IMMEDIATE` via `_txlock=immediate`, the 3.51.3 floor checked; readers use `mode=ro` with `trusted_schema=OFF`, read back the same way.
 - **Unicode.** `title_key` uses `x/text`'s full case fold; the `Cn` rule uses a pinned Unicode 15.0 assigned table,
   not the tables Go ships, so the titles this writer accepts do not change with a Go upgrade.
 - **One transaction type.** Every write is a method on `core.Tx`; an operation alone is one transaction, and an
