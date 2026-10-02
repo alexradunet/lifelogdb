@@ -25,6 +25,7 @@ var vault = map[string]string{
 	"Recipes.md":             "## Bread\n\nflour, water `[[not a link]]`\n",
 	"Medical/Twice.md":       "2031-05-01 morning: 48 ng/mL\n2031-05-01 evening: 52 ng/mL\n",
 	"photo.png":              "\x89PNG\x00\x00",
+	"Notes/A — B.png":        "\x89PNG\x00\x00",
 }
 
 const rulesBody = `source: import:notebook
@@ -141,8 +142,28 @@ func TestGates(t *testing.T) {
 func TestLedger(t *testing.T) {
 	f := setup(t)
 	n, err := f.w.MakeLedger()
-	if err != nil || n != 7 {
+	if err != nil || n != 8 {
 		t.Fatalf("ledger: %d files, %v", n, err)
+	}
+	// issue 0002: a name holding the ledger's own " — " separator survives the round trip
+	if err := f.w.Skip("Notes/A — B.png", "an attachment — with — dashes in its name"); err != nil {
+		t.Fatalf("skip a name with an em dash: %v", err)
+	}
+	lines, _, err := f.w.Ledger()
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, l := range lines {
+		if l.File == "Notes/A — B.png" {
+			found = true
+			if l.State != "-" || l.Note != "skip: an attachment — with — dashes in its name" {
+				t.Errorf("the em-dash name was cut: %+v", l)
+			}
+		}
+	}
+	if !found {
+		t.Error("the em-dash file is not in the ledger")
 	}
 	if _, err := f.w.MakeLedger(); code(err) != 409 {
 		t.Errorf("a second ledger: %v", err)

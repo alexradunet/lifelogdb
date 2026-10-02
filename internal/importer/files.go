@@ -317,7 +317,11 @@ type Line struct {
 	Note  string `json:"note,omitempty"`
 }
 
-var ledgerLine = regexp.MustCompile(`^- \[([ x?-])\] (.+?)(?: — (.*))?$`)
+// A ledger line is `- [state] file` with an optional note. A file name that contains the separator is
+// written quoted, so the note is always what follows the first " — " (issue 0002).
+var ledgerLine = regexp.MustCompile(`^- \[([ x?-])\] (.+)$`)
+
+const ledgerSep = " — "
 
 func (w *Workspace) Ledger() ([]Line, bool, error) {
 	text, ok, err := w.read("ledger.md")
@@ -327,7 +331,22 @@ func (w *Workspace) Ledger() ([]Line, bool, error) {
 	var out []Line
 	for _, l := range strings.Split(text, "\n") {
 		if m := ledgerLine.FindStringSubmatch(l); m != nil {
-			out = append(out, Line{m[1], m[2], m[3]})
+			rest, file, note := m[2], "", ""
+			if strings.HasPrefix(rest, `"`) {
+				q := strings.Index(rest[1:], `"`)
+				if q < 0 {
+					continue // a broken line is not a file
+				}
+				file = rest[1 : 1+q]
+				if tail := rest[1+q+1:]; strings.HasPrefix(tail, ledgerSep) {
+					note = tail[len(ledgerSep):]
+				}
+			} else if i := strings.Index(rest, ledgerSep); i >= 0 {
+				file, note = rest[:i], rest[i+len(ledgerSep):]
+			} else {
+				file = rest
+			}
+			out = append(out, Line{m[1], file, note})
 		}
 	}
 	return out, true, nil
@@ -336,9 +355,13 @@ func (w *Workspace) Ledger() ([]Line, bool, error) {
 func (w *Workspace) writeLedger(lines []Line) error {
 	var b strings.Builder
 	for _, l := range lines {
-		fmt.Fprintf(&b, "- [%s] %s", l.State, l.File)
+		name := l.File
+		if strings.Contains(name, ledgerSep) {
+			name = `"` + name + `"`
+		}
+		fmt.Fprintf(&b, "- [%s] %s", l.State, name)
 		if l.Note != "" {
-			fmt.Fprintf(&b, " — %s", l.Note)
+			fmt.Fprintf(&b, "%s%s", ledgerSep, l.Note)
 		}
 		b.WriteString("\n")
 	}
