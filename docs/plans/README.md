@@ -20,7 +20,11 @@ snapshots (D25, cookbook/take-a-snapshot); a tombstoned day keeps its mood readi
 
 ### Next step
 
-- **The first import into the canonical `life.db`** (the real run of the import guide), then the freeze checklist
+- **Rebuild the canonical `life.db` from today's `schema.sql`** (the owner, locally: a fresh file, then *replay*
+  every workspace into it, [D13](../decisions/D13-migrations-and-freeze.md)). The file was made before
+  `pages_fts_delete` was cut, and a canonical file is rebuilt, never migrated, until the freeze. A snapshot first
+  ([D25](../decisions/D25-snapshots.md)).
+- **The rest of the imports and the capture path**, then the freeze checklist
   ([process](../process.md#before-the-freeze)).
 
 ### Known bugs and gaps in the writer
