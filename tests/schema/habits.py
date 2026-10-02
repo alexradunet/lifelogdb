@@ -30,6 +30,16 @@ S.K('a re-run with a changed end_day is a no-op until the UPDATE follows',
     tryx(c, "INSERT INTO habit_periods(metric_id,start_day,end_day,source) VALUES (?, '2026-10-01', '2026-10-15', 'ui') ON CONFLICT(metric_id, start_day) DO NOTHING", (vd,)) == 'OK'
     and one(c, "select end_day from habit_periods where start_day='2026-10-01'") == '2026-10-31')
 S.K('§6.16 documents the idempotent re-run', 'ON CONFLICT(metric_id, start_day) DO NOTHING' in section('### 6.16 ', '## 7. '))
+# a restarted habit: the re-send of the closed first period must carry its end_day (§6.16)
+c2 = fresh(); rs = metric(c2, 'stretching')
+S.K('a closed period, then a later open one (a restarted habit)',
+    habit(c2, rs, '2026-01-01', '2026-01-31') == 'OK' and habit(c2, rs, '2026-03-01') == 'OK')
+S.K('§6.16 re-send of the closed period WITH its end_day is a no-op beside the later period',
+    tryx(c2, "INSERT INTO habit_periods(metric_id,start_day,end_day,source) VALUES (?, '2026-01-01', '2026-01-31', 'ui') ON CONFLICT(metric_id, start_day) DO NOTHING", (rs,)) == 'OK'
+    and one(c2, 'select count(*) from habit_periods where metric_id=?', (rs,)) == 2)
+S.K('...re-sent WITHOUT its end_day it is an open period, and the insert trigger refuses the overlap',
+    'overlap' in tryx(c2, "INSERT INTO habit_periods(metric_id,start_day,source) VALUES (?, '2026-01-01', 'ui') ON CONFLICT(metric_id, start_day) DO NOTHING", (rs,)))
+S.K('§6.16 says a re-sent period carries its end_day', 'carrying the `end_day` it was sent with' in section('### 6.16 ', '## 7. '))
 S.K('moving a period onto another refused (update)', 'overlap' in tryx(c, "UPDATE habit_periods SET end_day='2026-11-15' WHERE start_day='2026-10-01'"))
 S.K('...moving it into a gap accepted', tryx(c, "UPDATE habit_periods SET end_day='2026-10-30' WHERE start_day='2026-10-01'") == 'OK')
 S.K('moving a period to a metric with a unit refused (update)', 'unitless' in tryx(c, "UPDATE habit_periods SET metric_id=? WHERE start_day='2026-10-01'", (kg,)))
