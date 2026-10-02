@@ -29,8 +29,9 @@ database. So an import is:
 - **all or nothing per file** — a file's facts commit in one transaction, and its ledger line is
   written by the writer from what was written;
 - **replayable** — facts hold no database ids, so the real run applies them with no model;
-- **auditable and correctable** — every row traces to a quote; a correction is an edit of the facts
-  file and a second *apply*.
+- **auditable and correctable** — every row traces to a quote; an edit of the facts file and a second
+  *apply* adds what was missing; a reading whose value was wrong is corrected by the owner (§6.10), and
+  that correction must reach the real run (see the last section).
 
 ## The workspace
 
