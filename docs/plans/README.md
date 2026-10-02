@@ -53,7 +53,7 @@ The same holds for plans 017, 020, 022 and 016, which all add mutants.
 | 011 | A redirect stub may point at a person or a place | P2 | M | **owner decision A/B**; after 010 (mutants count) | DONE, option A (`6442e03`) |
 | 012 | The suites leave nothing in TEMP, pin their parser; `fixes.md` goes | P2 | S | — | DONE (`0364503`) |
 | 013 | Keep the LLM-assisted import process as a writer-neutral guide (`IMPORTING.md`) | P1 | M | 008 | DONE (`961b040`, `6ce208d`) |
-| 014 | [Make the text the freeze will keep forever say only true things](014-pre-freeze-text-hygiene.md) | P1 | S | — | TODO |
+| 014 | [Make the text the freeze will keep forever say only true things](014-pre-freeze-text-hygiene.md) | P1 | S | — | DONE (`26c20b5`) |
 | 015 | [The suite runner states what it needs, checks it first, and never hangs](015-runner-states-and-checks-its-needs.md) | P1 | S | 014 (ordering) | TODO |
 | 017 | [The cookbook recipes a writer copies return the right rows and write safely](017-cookbook-recipes-return-the-right-rows.md) | P1 | S | 015 (ordering) | TODO |
 | 022 | [A mention under an old name counts for its redirect target; a redirect target is never a ghost](022-an-old-name-still-counts.md) | P2 | S | 017 | TODO |
