@@ -150,11 +150,14 @@ relative to the source). An unknown field is an error, so a misspelt key is neve
 
 Each write has **exactly one** kind and a **`quote`**: words copied from the source file, character
 for character, that state it. Quote and file are compared after NFC and with runs of whitespace
-collapsed; everything else counts.
+collapsed; everything else counts. Frontmatter is part of the file and is quoted like the rest. A quote
+names a title when it holds the title or a name `## Aliases` maps to it; besides, a file names its own
+title — its title in the vault plan, else its file name without the extension — and a daily note its own
+day, so a note that is only frontmatter can still say that it is a person.
 
 | kind | fields | writes |
 |---|---|---|
-| `person` | `title`, `name`? | a person; promotes the plain page holding that title ([a person or a place](../cookbook/person-or-place.md)), never a day page or a redirect stub; a tombstoned one is revived |
+| `person` | `title`, `name`?, `birth_day`?, `death_day`? | a person; promotes the plain page holding that title ([a person or a place](../cookbook/person-or-place.md)), never a day page or a redirect stub; a tombstoned one is revived. A birth or death day is written where the person has none, and left alone where it holds that day |
 | `place` | `title` | a place ([D16](../decisions/D16-places.md)); promotes a plain page the same way |
 | `page` | `title` | a plain, empty page (a topic the file names); a title that is a day makes that day's page, its `day` its title ([D5](../decisions/D05-pages-and-day-pages.md)) |
 | `link` | `from`, `to`, `kind`, `note`? | a link of a `link_kinds` kind other than `wikilink`; `at` only from a day page |
@@ -195,8 +198,9 @@ database the caller names explicitly.
 | *replay* | the whole workspace | everything *apply* checks, then [integrity checks](../contract/integrity-checks.md) | the trial's decisions, into another database |
 | *integrity check* | the database | the four checks of [integrity checks](../contract/integrity-checks.md) | nothing |
 
-Each write reports one status: `new` (created), `existing` (there already, as the facts say) or
-`promoted` (a plain page became the person or place). Applying the same facts again writes nothing.
+Each write reports one status: `new` (created), `existing` (there already, as the facts say),
+`promoted` (a plain page became the person or place) or `updated` (an existing person was given a birth or
+death day it lacked). Applying the same facts again writes nothing.
 
 A model is never given *approve*. A model never writes SQL: every row reaches `life.db` through
 *apply facts*, *register metrics* or *apply a vault plan*. The owner's single-row corrections (a reading
@@ -207,6 +211,7 @@ corrected by a later one, [correct a measurement](../cookbook/correct-a-measurem
 **Against the source file and the workspace** (no database). The file is refused for:
 
 - a write with no kind or more than one; an empty quote; a quote not in the source file;
+- a person, place or page whose title its quote does not name; a link whose quote names neither end;
 - a title that `## Aliases` maps to another title (write that title instead);
 - a name, title or note holding a question or row number (`Q4`, `#5`) its quote does not hold;
 - a day that is not `YYYY-MM-DD`;
@@ -214,6 +219,7 @@ corrected by a later one, [correct a measurement](../cookbook/correct-a-measurem
 - a reading whose metric is not approved in a stamped `metrics.md`; whose `value` is not in its quote
   (for a unitless 0/1 marker, the quote holds the result word instead); whose `day` is neither in its
   quote nor the file's own day (a `YYYY-MM-DD` file name, or a date in its frontmatter);
+- a person's `birth_day` or `death_day` that is not in its quote, as written;
 - a `kept_as_text` entry without a quote and a why, or whose quote is not in the file; a `waiting`
   entry that is not `Q<n>`.
 
@@ -226,7 +232,9 @@ corrected by a later one, [correct a measurement](../cookbook/correct-a-measurem
 - a title held by an entity of another type (a place written where a person is) is refused;
 - every reference resolves;
 - a reading's unit is its metric's; a key that already holds another value is refused (a correction is
-  the owner's, [correct a measurement](../cookbook/correct-a-measurement.md)).
+  the owner's, [correct a measurement](../cookbook/correct-a-measurement.md));
+- a person that already holds another birth or death day is refused: the facts never change one (a
+  correction is the owner's).
 
 ## Gates
 
@@ -297,6 +305,7 @@ metrics*. Never type a unit into an operation yourself.
 | something to do, a plan, a goal, a checkbox | nothing: the page keeps the words ([D23](../decisions/D23-no-tasks.md)) | a task |
 | a habit ("every evening") | a habit metric when the rules say so (step 4) | |
 | a person by name | a **person**, titled as `rules.md` or an existing page has it | a person for a role with no name ("the dentist") |
+| a person's birth or death day, written `YYYY-MM-DD` | `birth_day` or `death_day` on that person's write, its line as the quote | a day rewritten from another form ("29 March 1980"): `kept_as_text` |
 | in a daily note, a named place the owner was at | a **place** and a link `at` from the day page ([D16](../decisions/D16-places.md), [where was I](../cookbook/where-was-i.md)) | a place for a common noun; `at` for a place only mentioned; a spelling "fixed" (ask) |
 | in a daily note, a person named without `[[ ]]` | also a link `about` from the day page ([the days that name someone](../cookbook/days-that-name.md)) | that link when the note writes `[[Name]]`: the text links already |
 | a number in a table of readings | a **reading** of an approved metric, the cell copied whole | a reading from prose with no unit; a censored, approximate or word result: `kept_as_text` |
