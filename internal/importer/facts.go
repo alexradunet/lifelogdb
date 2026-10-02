@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -40,8 +41,10 @@ type Write struct {
 }
 
 type Person struct {
-	Title string `json:"title"`
-	Name  string `json:"name,omitempty"`
+	Title    string `json:"title"`
+	Name     string `json:"name,omitempty"`
+	BirthDay string `json:"birth_day,omitempty"`
+	DeathDay string `json:"death_day,omitempty"`
 }
 
 type Named struct {
@@ -293,12 +296,26 @@ func fileDay(file, text string) string {
 	return ""
 }
 
+// ownTitle is the title a file is the note of: its title in the vault plan, else its file name without its
+// extension. Like a daily note's day, it is evidence from the file itself: a note names its own title.
+func (w *Workspace) ownTitle(file string) string {
+	if p, ok, err := w.LoadPlan(); err == nil && ok {
+		for _, n := range p.Notes {
+			if n.Path == file {
+				return n.Title
+			}
+		}
+	}
+	return norm.NFC.String(strings.TrimSuffix(path.Base(file), path.Ext(file)))
+}
+
 // checkStatic is the guide's first list of checks: against the source file and the workspace only.
 // It also resolves aliases and returns, per write, the position of its quote in the source (for reading keys).
 func (w *Workspace) checkStatic(f *Facts, source string, rules *Rules, approved map[string]Metric) (pos []int, errs []string) {
 	src := collapse(source)
 	srcLower := strings.ToLower(src)
 	day := fileDay(f.File, source)
+	own := w.ownTitle(f.File)
 	pos = make([]int, len(f.Writes))
 	bad := func(i int, format string, a ...any) {
 		errs = append(errs, fmt.Sprintf("write %d: ", i+1)+fmt.Sprintf(format, a...))
@@ -330,8 +347,8 @@ func (w *Workspace) checkStatic(f *Facts, source string, rules *Rules, approved 
 		hasNum := func(s string) bool {
 			return questionNum.MatchString(s) && !questionNum.MatchString(q)
 		}
-		states := func(title string) bool { // the quote names the title, or a name an alias maps to it; a daily note names its own day
-			if containsFold(q, title) || (day != "" && title == day) {
+		states := func(title string) bool { // the quote names the title, or a name an alias maps to it; a note names its own title, a daily note its own day
+			if containsFold(q, title) || (day != "" && title == day) || (own != "" && text.TitleKey(title) == text.TitleKey(own)) {
 				return true
 			}
 			for name, t := range rules.Aliases {
@@ -357,6 +374,15 @@ func (w *Workspace) checkStatic(f *Facts, source string, rules *Rules, approved 
 			}
 			if !states(wr.Person.Title) && (wr.Person.Name == "" || !containsFold(q, wr.Person.Name)) {
 				bad(i, "the quote does not name %q", wr.Person.Title)
+			}
+			for _, d := range [2][2]string{{"birth_day", wr.Person.BirthDay}, {"death_day", wr.Person.DeathDay}} {
+				switch {
+				case d[1] == "":
+				case !core.IsDay(d[1]):
+					bad(i, "%s %q is not YYYY-MM-DD", d[0], d[1])
+				case !containsFold(q, d[1]):
+					bad(i, "the %s %s is not in the quote", d[0], d[1])
+				}
 			}
 		case "place":
 			checkTitle(wr.Place.Title)

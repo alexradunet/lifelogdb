@@ -11,7 +11,7 @@ import (
 	"lifelog/internal/text"
 )
 
-// Outcome is what one write did, or would do: new, existing or promoted (the guide's statuses).
+// Outcome is what one write did, or would do: new, existing, promoted or updated (the guide's statuses).
 type Outcome struct {
 	Write  int    `json:"write"`
 	Kind   string `json:"kind"`
@@ -126,13 +126,16 @@ func (w *Workspace) write(ctx context.Context, s *core.Store, f *Facts, pos []in
 func applyWrite(t *core.Tx, file string, wr Write, key string, rules *Rules) (Outcome, error) {
 	switch wr.kind() {
 	case "person":
-		return named(t, rules, "person", wr.Person.Title, entityKey(file, "person", wr.Person.Title), func(k string) (int64, bool, error) {
-			return t.CreatePerson(wr.Person.Title, wr.Person.Name, "", "", k)
-		}, wr.Person.Name)
+		p := wr.Person
+		return named(t, rules, "person", p.Title, entityKey(file, "person", p.Title), func(k string) (int64, bool, error) {
+			return t.CreatePerson(p.Title, p.Name, p.BirthDay, p.DeathDay, k)
+		}, p.Name, func(id int64) (bool, error) {
+			return t.FillPersonDays(id, p.BirthDay, p.DeathDay)
+		})
 	case "place":
 		return named(t, rules, "place", wr.Place.Title, entityKey(file, "place", wr.Place.Title), func(k string) (int64, bool, error) {
 			return t.CreatePlace(wr.Place.Title, k)
-		}, "")
+		}, "", nil)
 	case "page":
 		title := wr.Page.Title
 		p, err := t.Lookup(title)
@@ -207,11 +210,22 @@ func status(existing bool) string {
 }
 
 // named writes a person or a place: an exact title is that row (revived if tombstoned), a plain page holding
-// the title is promoted (never a day page or a stub), a new title passes the look-alike check first.
-func named(t *core.Tx, rules *Rules, typ, title, key string, create func(string) (int64, bool, error), name string) (Outcome, error) {
+// the title is promoted (never a day page or a stub), a new title passes the look-alike check first. fill, when
+// given, writes what the row lacks (a person's days) and says whether it wrote: an existing row it fills is updated.
+func named(t *core.Tx, rules *Rules, typ, title, key string, create func(string) (int64, bool, error), name string, fill func(int64) (bool, error)) (Outcome, error) {
 	o := Outcome{Kind: typ, What: title}
 	p, err := t.Lookup(title)
 	if err != nil {
+		return o, err
+	}
+	filled := func(id int64) (Outcome, error) {
+		if fill == nil {
+			return o, nil
+		}
+		changed, err := fill(id)
+		if changed && o.Status == "existing" {
+			o.Status = "updated"
+		}
 		return o, err
 	}
 	switch {
@@ -219,9 +233,12 @@ func named(t *core.Tx, rules *Rules, typ, title, key string, create func(string)
 		if err := lookAlike(t, rules, title); err != nil {
 			return o, err
 		}
-		_, existing, err := create(key)
+		id, existing, err := create(key)
 		o.Status = status(existing)
-		return o, err
+		if err != nil || !existing {
+			return o, err
+		}
+		return filled(id)
 	case p.Type == typ:
 		if p.Deleted {
 			if err := t.Revive(p.ID); err != nil {
@@ -229,12 +246,15 @@ func named(t *core.Tx, rules *Rules, typ, title, key string, create func(string)
 			}
 		}
 		o.Status = "existing"
-		return o, nil
+		return filled(p.ID)
 	case p.Type == "page" && (p.DayPage || p.Stub):
 		return o, fmt.Errorf("%q is a day page or a redirect stub, never a %s", title, typ)
 	case p.Type == "page":
 		o.Status = "promoted"
-		return o, t.Promote(p.ID, typ, name)
+		if err := t.Promote(p.ID, typ, name); err != nil {
+			return o, err
+		}
+		return filled(p.ID)
 	}
 	return o, fmt.Errorf("%q is held by a %s, not a %s", title, p.Type, typ)
 }
@@ -385,7 +405,7 @@ func summary(r *Report) string {
 		s = "nothing written"
 	}
 	var st []string
-	for _, k := range []string{"new", "existing", "promoted"} {
+	for _, k := range []string{"new", "existing", "promoted", "updated"} {
 		if n := stat[k]; n > 0 {
 			st = append(st, fmt.Sprintf("%d %s", n, k))
 		}

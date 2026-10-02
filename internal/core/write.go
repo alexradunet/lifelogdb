@@ -378,6 +378,35 @@ func (t *Tx) Promote(id int64, typ, name string) error {
 	return err
 }
 
+// FillPersonDays gives a person the birth_day and death_day it lacks: a NULL column takes the day given, a day
+// the row already holds is left alone, and a different one is refused (changing it is a correction, the owner's).
+// changed reports whether a column was written.
+func (t *Tx) FillPersonDays(id int64, birth, death string) (changed bool, err error) {
+	var have [2]sql.NullString
+	err = t.tx.QueryRow(`SELECT birth_day, death_day FROM people WHERE id = ?`, id).Scan(&have[0], &have[1])
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, notFound("no person %d", id)
+	}
+	if err != nil {
+		return false, err
+	}
+	for i, c := range [2]struct{ col, want string }{{"birth_day", birth}, {"death_day", death}} {
+		switch {
+		case c.want == "" || have[i].Valid && have[i].String == c.want:
+		case have[i].Valid:
+			return false, conflict("the person's %s is %s, not %s: a correction is the owner's", c.col, have[i].String, c.want)
+		case !IsDay(c.want):
+			return false, invalid("%s %q is not YYYY-MM-DD", c.col, c.want)
+		default:
+			if _, err := t.tx.Exec(`UPDATE people SET `+c.col+` = ? WHERE id = ?`, c.want, id); err != nil {
+				return false, err
+			}
+			changed = true
+		}
+	}
+	return changed, nil
+}
+
 // Tombstone and Revive set or clear entities.deleted_at (D11): nothing is ever deleted.
 func (t *Tx) Tombstone(id int64) error {
 	return t.setDeleted(id, `UPDATE entities SET deleted_at = `+Now+` WHERE id = ? AND deleted_at IS NULL`)

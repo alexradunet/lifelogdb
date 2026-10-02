@@ -1,7 +1,7 @@
 # 0003 — An import cannot set a person's birth_day, and a bodyless person note cannot be promoted
 
 - **Date:** 2026-10-02
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the import, on notes under `People/` whose only content is frontmatter
 
 ## What happened
@@ -59,4 +59,9 @@ birthday: 1980-03-29
 
 ## Resolution
 
-_(open)_
+The facts file's `person` write takes `birth_day` and `death_day`, each in its quote as written; a new person is
+created with them, a promoted page or an existing person gets a day it lacks (status `updated`), and a different
+day than the one held is refused (a correction is the owner's). A quote also names the file's own title (its
+title in the vault plan, else its file name), as a daily note names its own day, so a frontmatter-only note is
+promoted with the quote `birthday: 1980-03-29`. No schema change; [importing](../guides/importing.md) updated.
+[Plan 025](../plans/025-person-birth-day-from-the-import.md).
