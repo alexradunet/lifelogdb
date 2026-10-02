@@ -8,6 +8,7 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -294,7 +295,7 @@ func (h *server) day(r *http.Request) (*Entity, error) {
 	e := &Entity{
 		Class: []string{"day"}, Title: day, Properties: d,
 		Links: []Link{link("self", dayHref(day), day), link("prev", dayHref(t.AddDate(0, 0, -1).Format(time.DateOnly)), "Previous day"),
-			link("next", dayHref(t.AddDate(0, 0, 1).Format(time.DateOnly)), "Next day"), link("index", "/", "Home")},
+			link("next", dayHref(t.AddDate(0, 0, 1).Format(time.DateOnly)), "Next day"), link("metrics", "/metrics", "Metrics"), link("index", "/", "Home")},
 		Actions: []Action{action("capture", map[string]string{"day": day}, nil), h.recordAction(r.Context(), "", day)},
 	}
 	if d.PageID != 0 {
@@ -400,15 +401,21 @@ func withOptions(a Action, field string, opts []string) Action {
 	return a
 }
 
+// inUseDays is how far back a view looks for the metrics it offers to record: a series read at least monthly
+// stays offered, a lab marker read twice a year is recorded from its own page (/metrics/{name}).
+const inUseDays = 60
+
+// recordAction offers the metrics in use on day (and metric, when the view is that metric's), not the whole
+// registry; the record action itself takes any registered metric.
 func (h *server) recordAction(ctx context.Context, metric, day string) Action {
 	a := action("record", nil, map[string]any{"day": day})
 	if metric != "" {
 		a.Fields[0].Value = metric
 	}
-	if ms, err := h.s.Metrics(ctx); err == nil {
-		var names []string
-		for _, m := range ms {
-			names = append(names, m.Name)
+	if names, err := h.s.InUse(ctx, day, inUseDays); err == nil {
+		if metric != "" && !slices.Contains(names, metric) {
+			names = append(names, metric)
+			slices.Sort(names)
 		}
 		a = withOptions(a, "metric", names)
 	}
@@ -436,9 +443,13 @@ func (h *server) metrics(r *http.Request) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
+	var names []string
+	for _, m := range ms {
+		names = append(names, m.Name)
+	}
 	e := &Entity{Class: []string{"metrics"}, Title: "Metrics", Properties: map[string]any{"metrics": ms},
 		Links:   []Link{link("self", "/metrics", "Metrics"), link("index", "/", "Home")},
-		Actions: []Action{h.recordAction(r.Context(), "", core.Today())}}
+		Actions: []Action{withOptions(action("record", nil, map[string]any{"day": core.Today()}), "metric", names)}}
 	for _, m := range ms {
 		e.Entities = append(e.Entities, link("item", "/metrics/"+url.PathEscape(m.Name), m.Name))
 	}

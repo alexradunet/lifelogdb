@@ -90,7 +90,7 @@ var catalog = []spec{
 		"POST", "/pages/{id}/links", []Field{path("id", "number", "Page id"), req("to", "text", "To (title)"), req("kind", "text", "Kind"), opt("note", "text", "Note")}, false},
 	{"unlink", "Unlink", "Remove a typed link from this page to the page titled `to`.",
 		"POST", "/pages/{id}/unlink", []Field{path("id", "number", "Page id"), req("to", "text", "To (title)"), req("kind", "text", "Kind")}, false},
-	{"record", "Record", "Record a reading of a registered metric for a local day. import_key makes a re-send a no-op.",
+	{"record", "Record", "Record a reading of a registered metric for a local day. import_key makes a re-send a no-op. A view offers the metrics read in its last 60 days; /metrics lists them all.",
 		"POST", "/measurements", []Field{req("metric", "text", "Metric"), req("day", "date", "Day"), req("value", "number", "Value"),
 			opt("taken_at", "text", "Taken at (UTC, 2026-06-09T21:14:03.482Z)"), opt("tz", "text", "Zone (IANA)"), opt("import_key", "text", "Key")}, false},
 	{"correct", "Correct", "Correct a reading with a new value (a reading is corrected once; correct the correction after that).",

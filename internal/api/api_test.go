@@ -158,3 +158,36 @@ func hasOption(a api.Action, field, opt string) bool {
 	}
 	return false
 }
+
+func TestViewsOfferTheMetricsInUse(t *testing.T) {
+	c, _ := fresh(t)
+	root := must(c.Get("/"))
+	for _, m := range []map[string]string{{"name": "weight", "unit": "kg"}, {"name": "ldl", "unit": "mg/dL"}} {
+		must(c.Do(find(root, "register-metric"), m))
+	}
+	day := "2026-06-01"
+	for _, r := range []map[string]string{
+		{"metric": "weight", "day": "2026-05-20", "value": "71.5"},
+		{"metric": "ldl", "day": "2025-12-01", "value": "96"}, // a lab marker, read twice a year
+	} {
+		must(c.Do(find(root, "record"), r))
+	}
+	dayView := must(c.Get("/days/" + day))
+	rec := find(dayView, "record")
+	if !hasOption(rec, "metric", "weight") || hasOption(rec, "metric", "ldl") || hasOption(rec, "metric", "mood") {
+		t.Errorf("the day view offers %v: only what was read in its last 60 days", rec.Fields[0].Options)
+	}
+	if href(dayView, "metrics") != "/metrics" {
+		t.Error("the day view does not link the whole registry")
+	}
+	if all := find(must(c.Get("/metrics")), "record"); !hasOption(all, "metric", "ldl") || !hasOption(all, "metric", "mood") {
+		t.Errorf("/metrics offers %v: every registered metric", all.Fields[0].Options)
+	}
+	if ldl := find(must(c.Get("/metrics/ldl")), "record"); !hasOption(ldl, "metric", "ldl") || ldl.Fields[0].Value != "ldl" {
+		t.Errorf("a series offers %v with %v: its own metric, selected", ldl.Fields[0].Options, ldl.Fields[0].Value)
+	}
+	must(c.Do(find(dayView, "record"), map[string]string{"metric": "ldl", "day": day, "value": "92"}))
+	if !hasOption(find(must(c.Get("/days/"+day)), "record"), "metric", "ldl") {
+		t.Error("a metric read on the day is not offered")
+	}
+}

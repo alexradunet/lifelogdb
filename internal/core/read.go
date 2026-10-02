@@ -274,6 +274,32 @@ func (s *Store) Metrics(ctx context.Context) ([]Metric, error) {
 	return out, rows.Err()
 }
 
+// InUse names the metrics with a current reading in the n days up to day, so a view offers the series the
+// owner keeps rather than the whole registry (a lab marker read twice a year stays at /metrics).
+func (s *Store) InUse(ctx context.Context, day string, n int) ([]string, error) {
+	if !IsDay(day) {
+		return nil, invalid("day is YYYY-MM-DD")
+	}
+	rows, err := s.DB.R.QueryContext(ctx, `
+		SELECT m.name FROM metrics m
+		 WHERE EXISTS (SELECT 1 FROM measurement_values v
+		                WHERE v.metric_id = m.id AND v.day > date(?, '-' || ? || ' day') AND v.day <= ?)
+		 ORDER BY m.name`, day, n, day)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		out = append(out, name)
+	}
+	return out, rows.Err()
+}
+
 // Series is cookbook/metric-series.md: the current readings of one metric in (from, to].
 func (s *Store) Series(ctx context.Context, metric, from, to string) ([]Reading, error) {
 	if !IsDay(from) || !IsDay(to) {
