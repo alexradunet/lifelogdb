@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"modernc.org/sqlite"
 )
@@ -111,10 +112,13 @@ func dsn(path string, readOnly bool) string {
 // DB is one life.db: a single writing connection and a pool of read-only ones.
 type DB struct {
 	W, R *sql.DB
+	keep bool // a snapshot under its restore check: Close leaves the file as it was
 }
 
 // Open opens an existing life.db.
-func Open(path string) (*DB, error) {
+func Open(path string) (*DB, error) { return open(path, false) }
+
+func open(path string, keep bool) (*DB, error) {
 	if _, err := os.Stat(path); err != nil {
 		return nil, fmt.Errorf("no database at %s (create one with `lifelog init`): %w", path, err)
 	}
@@ -128,7 +132,7 @@ func Open(path string) (*DB, error) {
 		w.Close()
 		return nil, err
 	}
-	d := &DB{W: w, R: r}
+	d := &DB{W: w, R: r, keep: keep}
 	var id int64
 	if err := w.QueryRow("PRAGMA application_id").Scan(&id); err != nil {
 		d.Close()
@@ -161,7 +165,9 @@ func Init(path string) error {
 }
 
 func (d *DB) Close() error {
-	d.W.Exec("PRAGMA optimize")
+	if !d.keep {
+		d.W.Exec("PRAGMA optimize")
+	}
 	return errors.Join(d.R.Close(), d.W.Close())
 }
 
@@ -195,3 +201,44 @@ func Copy(from, to string) error {
 	_, err = r.Exec(`VACUUM INTO ?`, to)
 	return err
 }
+
+// Snapshot takes a snapshot of a life.db into dir (docs/cookbook/take-a-snapshot.md, D25): a Copy named by the local
+// day of now, life-YYYY-MM-DD.db, or life-YYYY-MM-DDTHHMMSS.db when the day has one already. It never overwrites a
+// file and refuses a folder inside a git work tree. It returns the snapshot's path.
+func Snapshot(from, dir string, now time.Time) (string, error) {
+	dir, err := filepath.Abs(dir)
+	if err != nil {
+		return "", err
+	}
+	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
+		return "", fmt.Errorf("no folder %s for the snapshot", dir)
+	}
+	if repo := gitWorkTree(dir); repo != "" {
+		return "", fmt.Errorf("%s is inside the git work tree %s: a snapshot holds health data and private notes, "+
+			"which git history cannot forget; choose a folder outside it", dir, repo)
+	}
+	to := filepath.Join(dir, "life-"+now.Format("2006-01-02")+".db")
+	if _, err := os.Stat(to); err == nil {
+		to = filepath.Join(dir, "life-"+now.Format("2006-01-02T150405")+".db")
+	}
+	return to, Copy(from, to)
+}
+
+// gitWorkTree is the folder at or above dir that holds a .git entry, or "".
+func gitWorkTree(dir string) string {
+	for d := dir; ; {
+		if _, err := os.Stat(filepath.Join(d, ".git")); err == nil {
+			return d
+		}
+		up := filepath.Dir(d)
+		if up == d {
+			return ""
+		}
+		d = up
+	}
+}
+
+// OpenSnapshot opens a snapshot for its restore check (docs/cookbook/take-a-snapshot.md): as Open opens life.db —
+// the FTS5 check is an INSERT, refused on a read-only connection — but Close runs no PRAGMA optimize, which can
+// write to the file, so the checks leave the snapshot as it was.
+func OpenSnapshot(path string) (*DB, error) { return open(path, true) }

@@ -38,6 +38,7 @@ the document (a broken block makes a later step impossible) reports that as one 
 | `writers_test.go` | `writers` | the `BEGIN IMMEDIATE` race with real concurrent connections, pragmas, read-only readers and their `trusted_schema=OFF`, a hardened connection (contract/connections) |
 | `integrity_test.go` | `integrity` | the four checks of contract/integrity-checks on the live file, against real damage |
 | `imports_test.go` | `imports` | the import block of contract/imports on 1 000 CSV rows, and its traps |
+| `snapshots_test.go` | `snapshots` | cookbook/take-a-snapshot on a live file: `VACUUM INTO` through a read-only connection while the writer writes, its target, the restore check left byte for byte, the restore and the old `-wal` beside it (D25) |
 | `evolution_test.go` | `evolution` | named CHECKs, widening, partial dates, the tokenizer switch, comments inside statements (D13, D17, architecture/non-goals) |
 | `cookbook_test.go` | `cookbook` | every cookbook block prepares and runs, on a plain and on a hardened connection; every block that only reads runs on a reader (`mode=ro`, `trusted_schema=OFF`) |
 | `document_test.go` | `document` | the 2075 test, the rules live in the file, the tree holds together (one record per decision, every relative link and anchor resolves, every page reachable from `docs/README.md`), the totals in `schema/README.md` |
@@ -45,7 +46,7 @@ the document (a broken block makes a later step impossible) reports that as one 
 | `wikilinks_test.go` | `doc-save-contract` | the save contract as the docs print it: the vector table of contract/titles-and-wikilinks, cookbook/save-a-body run literally (and equal to a writer's own save after 400 random edits), cookbook/backlinks |
 | | `save-contract` | the save contract through a writer's own save against the DDL: invalid targets, the `SAVEPOINT` backstop, set equality, stubs, revival, 400 random edits against a rebuild, 4 concurrent writers, every vector |
 | | `title-fuzz` | the writer's title predicate equals the DDL's CHECKs on more than 40 000 generated strings |
-| `mutants_test.go` | `TestMutants` | 137 broken copies of the docs tree, one rule each; the suite that owns the rule must notice |
+| `mutants_test.go` | `TestMutants` | 142 broken copies of the docs tree, one rule each; the suite that owns the rule must notice |
 | `render_test.go` | `TestMermaidRender` | optional: every diagram renders |
 | `kit_test.go`, `suites_test.go` | | reading the tree (a page, the cookbook blocks by recipe key, an overlay of broken files for a mutant); fresh databases and the insert conventions (entity first, `RETURNING`, named entities); the runner |
 

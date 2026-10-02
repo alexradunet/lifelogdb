@@ -5,7 +5,7 @@ lab results). Every step was executed on 1 000 synthetic rows:
 
 1. **Trial run first.** Rows are never deleted, so a bad import can only be retracted row by row
    (a NULL-value correction for a measurement, a tombstone for an entity). Do the
-   first run of any new importer on a *copy*: `sqlite3 -readonly life.db "VACUUM INTO '/tmp/trial.db'"` — a read-only connection may make the copy (*executed*).
+   first run of any new importer on a *copy*: `sqlite3 -readonly -cmd "PRAGMA trusted_schema=OFF" life.db "VACUUM INTO '/tmp/trial.db'"` — a read-only connection may make the copy (*executed*).
 2. **Load the rows into a scratch database, never into `life.db`** (`sqlite3 scratch.db ".import
    --csv weights.csv staging"`), then insert in one `BEGIN IMMEDIATE` transaction per batch, on the writer's own connection set up as [connection setup](connections.md) requires (the `sqlite3` shell sets none of it: `foreign_keys` is off there):
 

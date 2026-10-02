@@ -30,3 +30,4 @@ reused, and a decision that changes is rewritten in place (git is its history).
 | [D22](D22-events.md) | Events: DEFERRED out of v1. The design is kept here for the day it returns. | deferred |
 | [D23](D23-no-tasks.md) | A life log, not a project manager: no tasks. | accepted |
 | [D24](D24-habits.md) | Habits: a metric with active periods. | accepted |
+| [D25](D25-snapshots.md) | Snapshots: a dated `VACUUM INTO` copy, trusted once its restore check passes. | accepted |

@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -45,6 +46,8 @@ const usage = `lifelog — the writer of a life.db
   lifelog habits [YYYY-MM-DD]         the day's habits and completion
   lifelog done METRIC [--day D]       check a habit in as done (skip METRIC: not done)
   lifelog rename PAGE-ID TITLE        rename a plain page (the old one becomes a redirect stub)
+  lifelog snapshot [--to DIR]         a dated copy of life.db (life-YYYY-MM-DD.db, beside it or in DIR),
+                                      then its restore check (docs/cookbook/take-a-snapshot.md)
 
 Import (docs/guides/importing.md), with --workspace <source>.lifelog:
   lifelog import setup [--from life.db]   make trial.db: a copy of the real database, or a new one
@@ -138,6 +141,9 @@ func run(o opts) error {
 		}
 		fmt.Println("created", o.db)
 		return nil
+	}
+	if cmd == "snapshot" {
+		return snapshot(o)
 	}
 
 	var ws *importer.Workspace
@@ -367,6 +373,52 @@ func human(e *api.Entity) {
 }
 
 func indent(s string) string { return "    " + strings.ReplaceAll(s, "\n", "\n    ") }
+
+// snapshot is the owner's `lifelog snapshot [--to DIR]` (docs/cookbook/take-a-snapshot.md, D25): a file on this
+// machine, never an API action or an MCP tool. The folder defaults to the one that holds life.db.
+func snapshot(o opts) error {
+	if o.url != "" {
+		return errors.New("snapshot reads the file itself: drop --url")
+	}
+	if o.db == "" {
+		return errors.New("no database: pass --db PATH or set LIFELOG_DB")
+	}
+	dir := o.to
+	if dir == "" {
+		dir = filepath.Dir(o.db)
+	}
+	path, res, err := takeSnapshot(context.Background(), o.db, dir, time.Now())
+	if err != nil {
+		return err
+	}
+	if o.human && res.OK {
+		fmt.Printf("snapshot: %s\nrestore check: ok\n", path)
+	} else if err := printJSON(map[string]any{"snapshot": path, "restore_check": res}); err != nil {
+		return err
+	}
+	if !res.OK {
+		return fmt.Errorf("%s failed its restore check: it is kept, but it is not one to restore", path)
+	}
+	return nil
+}
+
+// takeSnapshot takes the snapshot and runs its restore check: the four integrity checks, which leave it as it was.
+func takeSnapshot(ctx context.Context, from, dir string, now time.Time) (string, *core.IntegrityResult, error) {
+	path, err := db.Snapshot(from, dir, now)
+	if err != nil {
+		return "", nil, err
+	}
+	d, err := db.OpenSnapshot(path)
+	if err != nil {
+		return path, nil, fmt.Errorf("the snapshot %s cannot be checked: %w", path, err)
+	}
+	defer d.Close()
+	res, err := (&core.Store{DB: d}).Integrity(ctx)
+	if err != nil {
+		return path, nil, fmt.Errorf("the restore check of %s: %w", path, err)
+	}
+	return path, res, nil
+}
 
 // importOwner runs the import steps that need no running API: setup makes the trial database, approve is the
 // owner's stamp and is never reachable by the API or a model.

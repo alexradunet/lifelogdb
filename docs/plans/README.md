@@ -11,22 +11,12 @@ per plan, `NNN-short-slug.md`, numbered on from the last: plans up to 028 are do
 Status values: TODO | IN PROGRESS | IN REVIEW (owner) | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale). A plan that is DONE or REJECTED is deleted; git is the log.
 
-## What is left (2026-10-02)
+## What is left (2026-10-03)
 
-### The owner decided (2026-10-02) — to carry into the docs
-
-- **Renames** ([issue 0001](../issues/0001-a-rename-has-no-recipe.md)): the text and the old page's typed links move to
-  the new page; the stub holds only its `redirect`. A rename into an existing title only when the old page is empty
-  (a typo ghost); otherwise refused, never merged. A cookbook recipe and its suite, then the issue closes.
-- **A new file after the freeze**: `schema.sql` stays the full current DDL; each migration also edits it, and a suite
-  proves `schema.sql` equals the frozen DDL plus every migration (same `sqlite_master`). D13 and `AGENTS.md`.
-- **`pages_fts_delete`** is cut before the freeze (it can never fire while `pages_no_delete` exists; the FTS
-  integrity check reports a stale index).
-- **Snapshots are reopened** (only snapshots: a dated `VACUUM INTO` copy and a restore check; the export, CSV dump and
-  off-box copy stay out): an issue, then the non-goals row and the freeze checklist's item 3.
-- **Readers set `trusted_schema=OFF`** too, required by [connection setup](../contract/connections.md).
-- **The `Cn` rule names Unicode 15.0** in [titles and wikilinks](../contract/titles-and-wikilinks.md).
-- **A tombstoned day page keeps showing its mood reading**: left as is; a reading is retracted by hand (D7).
+The owner's decisions of 2026-10-02 are carried out: renames (the contract, cookbook/rename-a-page), one full DDL
+after the freeze (D13), `pages_fts_delete` cut, readers set `trusted_schema=OFF`, the `Cn` rule names Unicode 15.0,
+snapshots (D25, cookbook/take-a-snapshot); a tombstoned day keeps its mood reading. No open issue: the next is
+**0008**.
 
 ### Next step
 
@@ -45,6 +35,15 @@ REJECTED (with one-line rationale). A plan that is DONE or REJECTED is deleted; 
 - **The workspace is not locked** between a replay's rehearsal and its real run.
 - **The vault plan refuses a note whose title the database already holds as a person** (no longer needed for
   birthdays, but still a wall for a person created by hand first).
+- **No `lifelog restore`**: restoring a snapshot is the manual procedure of the recipe.
+- **The import's `trial.db` and the replay's rehearsal copy come out in rollback-journal mode** (`VACUUM INTO` does not
+  keep WAL, executed by the snapshots suite); only the restore sets WAL back.
+
+### For the freeze checklist
+
+- Consider an item "a snapshot of the frozen file passes its restore check" ([D25](../decisions/D25-snapshots.md)).
+- Run the optional diagram render once (`LIFELOG_MERMAID=1 go test ./tests -run TestMermaidRender`): the page
+  lifecycle diagram gained a `Ghost --> Stub` transition and was not rendered.
 
 ### Deferred until a real case (reopen when it happens)
 
@@ -54,6 +53,9 @@ REJECTED (with one-line rationale). A plan that is DONE or REJECTED is deleted; 
 - `ghost_pages` lists an empty day page only a measurement's `captured_with_id` references (a mood-only capture),
   and never lists a ghost whose only referrer was tombstoned.
 - `#REDIRECT` "any case" is ambiguous for Unicode case variants (`#REDİRECT`).
+- Renaming a page that is itself the target of an older stub leaves a two-hop chain (A → Old → New); reads follow
+  one hop, so mentions of A do not count for New. A typed link from another page into a renamed page, of a kind
+  registered later, would stay on the stub (no kind registered today can do that).
 - The day view's "(edited)" flag shows on freshly written non-day pages (an insert then a body update).
 - Habit edge cases: a completion range with `from > to` returns one row; a same-day stop and restart is refused.
 - Updatable columns no writer updates: a link's `note`/`created_at`, `entities.created_at`; an embedded NUL byte

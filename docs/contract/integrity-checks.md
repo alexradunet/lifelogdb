@@ -2,7 +2,7 @@
 
 Four checks tell whether a file still obeys the schema. They read only the file, need no other
 copy, and each catches what the others cannot. Run them before and after an import ([imports](imports.md)) or a
-migration ([D13](../decisions/D13-migrations-and-freeze.md)), and after any writer crashed. Every claim below was executed on the **live**
+migration ([D13](../decisions/D13-migrations-and-freeze.md)), on every snapshot ([take a snapshot](../cookbook/take-a-snapshot.md)), and after any writer crashed. Every claim below was executed on the **live**
 file, not on a copy.
 
 ```sql
