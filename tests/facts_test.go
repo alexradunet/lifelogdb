@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// facts: measurements and metrics (schema.sql, D6, D7) — the registry, append-only rows, supersede chains and
+// facts: measurements and metrics (schema.sql, D6, D7, D26) — the registry and its categories, append-only rows, supersede chains and
 // retraction, finite values and NaN, the read view and its index, and why never OR IGNORE / OR REPLACE.
 func facts(s *S) {
 	err := func(r string) bool { return strings.HasPrefix(r, "ERR") }
@@ -27,6 +27,59 @@ func facts(s *S) {
 	for _, nm := range []string{"bp_sys", "x1", "_a", "steps_walked"} {
 		s.K(fmt.Sprintf("metric name %q accepted", nm), c.tryx("INSERT INTO metrics(name,unit) VALUES (?, 'x')", nm) == "OK")
 	}
+
+	// ---- metric categories (D26): a tree whose parents are fixed
+	c = s.fresh()
+	cat := func(name string) int64 { return c.n("select id from metric_categories where name=?", name) }
+	s.K("the top-level categories are seeded", c.tab("select name from metric_categories where parent_id is null order by name") == "biomarkers; body; self_report; substances")
+	s.K("mood is seeded in self_report", c.str("select c.name from metrics m join metric_categories c on c.id=m.category_id where m.name='mood'") == "self_report")
+	addCat := func(name string, parent any) string {
+		return c.tryx("INSERT INTO metric_categories(name,parent_id) VALUES (?,?)", name, parent)
+	}
+	s.K("a subcategory is registered under an existing parent", addCat("hormones", cat("biomarkers")) == "OK")
+	s.K("nesting has no depth limit", addCat("thyroid", cat("hormones")) == "OK" && addCat("thyroid_antibodies", cat("thyroid")) == "OK")
+	s.K("a category name is registered once", err(addCat("thyroid", nil)))
+	for _, nm := range []string{"Lipids", "blood count", "blood-count", "", "ünï"} {
+		s.K(fmt.Sprintf("category name %q rejected", nm), err(addCat(nm, nil)))
+	}
+	s.K("a parent that does not exist is refused", err(addCat("lipids", 999)))
+	s.K("a category cannot be its own parent (explicit id)", err(c.tryx("INSERT INTO metric_categories(id,name,parent_id) VALUES (500,'loop',500)")))
+	s.K("a category cannot be its own parent (the id it is about to be given)",
+		err(c.tryx("INSERT INTO metric_categories(name,parent_id) VALUES ('loop',(SELECT max(id)+1 FROM metric_categories))")))
+	s.K("the parent cannot change, so no cycle can form", err(c.tryx("UPDATE metric_categories SET parent_id=? WHERE name='hormones'", cat("thyroid"))))
+	s.K("a top-level category cannot be given a parent", err(c.tryx("UPDATE metric_categories SET parent_id=? WHERE name='body'", cat("biomarkers"))))
+	s.K("a full-row update with the same parent and a new note passes", c.tryx("UPDATE metric_categories SET parent_id=parent_id, note='endocrine' WHERE name='hormones'") == "OK")
+	tsh := c.metric("tsh", "µUI/mL")
+	s.K("a metric is filed in a category", c.tryx("UPDATE metrics SET category_id=? WHERE id=?", cat("thyroid"), tsh) == "OK")
+	s.K("a metric cannot be filed in a category that does not exist", err(c.tryx("UPDATE metrics SET category_id=999 WHERE id=?", tsh)))
+	s.K("a category is renamed by one UPDATE; its children and metrics follow by id",
+		c.tryx("UPDATE metric_categories SET name='endocrine' WHERE name='hormones'") == "OK" &&
+			c.str("select p.name from metric_categories c join metric_categories p on p.id=c.parent_id where c.name='thyroid'") == "endocrine" &&
+			c.str("select c.name from metrics m join metric_categories c on c.id=m.category_id where m.id=?", tsh) == "thyroid")
+	s.K("a category with subcategories is not deleted", err(c.tryx("DELETE FROM metric_categories WHERE name='endocrine'")))
+	c.must("DELETE FROM metric_categories WHERE name='thyroid_antibodies'")
+	s.K("a category with metrics is not deleted", err(c.tryx("DELETE FROM metric_categories WHERE name='thyroid'")))
+	s.K("a metric is re-filed by UPDATE, and the emptied category may be deleted",
+		c.tryx("UPDATE metrics SET category_id=? WHERE id=?", cat("biomarkers"), tsh) == "OK" && c.tryx("DELETE FROM metric_categories WHERE name='thyroid'") == "OK")
+
+	// ---- cookbook/metrics-by-category, executed
+	c = s.fresh()
+	c.must("INSERT INTO metric_categories(name,parent_id) SELECT 'lipids', id FROM metric_categories WHERE name='biomarkers'")
+	c.must("INSERT INTO metrics(name,unit,category_id) SELECT 'ldl_cholesterol','mg/dL', id FROM metric_categories WHERE name='lipids'")
+	c.must("INSERT INTO metrics(name,unit,category_id) SELECT 'weight','kg', id FROM metric_categories WHERE name='body'")
+	c.metric("steps", "n")
+	vd := c.metric("vitamin_d", "")
+	c.habit(vd, "2026-01-01", nil)
+	out, e := c.runBlock(s.d.Block("metrics-by-category"), P{"category": "biomarkers", "subcategory": "vitamins", "metric": "vitamin_d"}, nil)
+	if e != nil {
+		stop("metrics-by-category: %v", e)
+	}
+	_, e = c.runBlock(s.d.Block("metrics-by-category"), P{"category": "biomarkers", "subcategory": "vitamins", "metric": "vitamin_d"}, nil)
+	s.K("cookbook/metrics-by-category runs twice: the second registers nothing", e == nil && c.n("select count(*) from metric_categories where name='vitamins'") == 1, e)
+	sub, all := tab(out[2]), tab(out[3])
+	s.K("cookbook/metrics-by-category: the subtree of a category holds its subcategories' metrics", sub == "biomarkers/lipids|ldl_cholesterol|mg/dL; biomarkers/vitamins|vitamin_d|", sub)
+	s.K("cookbook/metrics-by-category: habits first, then by category path, the metrics not filed last",
+		all == "1|biomarkers/vitamins|vitamin_d|; 0|biomarkers/lipids|ldl_cholesterol|mg/dL; 0|body|weight|kg; 0|self_report|mood|; 0||steps|n", all)
 
 	// ---- append-only, supersede, retract
 	c = s.fresh()

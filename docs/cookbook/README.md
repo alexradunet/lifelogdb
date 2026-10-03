@@ -27,4 +27,5 @@ The order below is the order the suites run the recipes in; the key is how a sui
 | [Rename a page: a new page and a stub (D5)](rename-a-page.md) | `rename-a-page` |
 | [Import a row once: insert it, re-run it, update a changed one](import-a-row-once.md) | `import-a-row-once` |
 | [Habits: start and stop one, the habits of a day, completion over a period (D24)](habits.md) | `habits` |
+| [Metrics by category: file a metric, a category's subtree, every metric grouped (D26)](metrics-by-category.md) | `metrics-by-category` |
 | [Take a snapshot, check it, restore it (D25)](take-a-snapshot.md) | `take-a-snapshot` |

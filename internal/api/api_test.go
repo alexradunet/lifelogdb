@@ -191,3 +191,47 @@ func TestViewsOfferTheMetricsInUse(t *testing.T) {
 		t.Error("a metric read on the day is not offered")
 	}
 }
+
+func TestMetricsAreGroupedByCategory(t *testing.T) {
+	c, h := fresh(t)
+	root := must(c.Get("/"))
+	for _, m := range []map[string]string{{"name": "tsh", "unit": "µUI/mL"}, {"name": "weight", "unit": "kg"},
+		{"name": "walk"}, {"name": "steps", "unit": "n"}} {
+		must(c.Do(find(root, "register-metric"), m))
+	}
+	must(c.Do(find(must(c.Get("/metrics")), "register-category"), map[string]string{"path": "biomarkers/thyroid"}))
+	tsh := must(c.Get("/metrics/tsh"))
+	if !hasOption(find(tsh, "file-metric"), "category", "biomarkers/thyroid") {
+		t.Fatalf("a series offers the registered categories: %v", find(tsh, "file-metric").Fields)
+	}
+	must(c.Do(find(tsh, "file-metric"), map[string]string{"category": "biomarkers/thyroid"}))
+	must(c.Do(find(must(c.Get("/metrics/weight")), "file-metric"), map[string]string{"category": "body"}))
+	walk := must(c.Get("/metrics/walk"))
+	must(c.Do(find(walk, "file-metric"), map[string]string{"category": "body"}))
+	must(c.Do(find(walk, "start-habit"), map[string]string{"start_day": "2026-09-20"}))
+	if _, err := c.Do(find(walk, "file-metric"), map[string]string{"category": "thyroid"}); err == nil {
+		t.Error("a path that skips the top files the metric")
+	}
+
+	var got []string
+	for _, g := range must(c.Get("/metrics")).Properties.(map[string]any)["groups"].([]any) {
+		g := g.(map[string]any)
+		var ms []string
+		for _, m := range g["metrics"].([]any) {
+			ms = append(ms, m.(map[string]any)["name"].(string))
+		}
+		got = append(got, g["title"].(string)+":"+strings.Join(ms, ","))
+	}
+	if want := "Habits:walk biomarkers: thyroid:tsh body:weight self report:mood Not filed:steps"; strings.Join(got, " ") != want {
+		t.Errorf("groups %q, want %q: habits first, each category in tree order with its subcategories, the rest last", strings.Join(got, " "), want)
+	}
+	page := browse(t, h, "/metrics")
+	for _, s := range []string{"<h2>Habits", `<span class="badge">body</span>`, "<h3>thyroid", "biomarkers/thyroid", "<h2>Not filed"} {
+		if !strings.Contains(page, s) {
+			t.Errorf("/metrics lacks %q", s)
+		}
+	}
+	if s := browse(t, h, "/metrics/tsh"); !strings.Contains(s, `<span class="badge">biomarkers/thyroid</span>`) {
+		t.Error("a series does not show its category")
+	}
+}

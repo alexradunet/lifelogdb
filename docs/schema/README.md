@@ -11,8 +11,8 @@ sqlite3 life.db < docs/schema/schema.sql
 `PRAGMA application_id` marks the result as a Lifelog database. Each table's rules are comments inside its
 `CREATE` statement, so `.schema` prints them; the rules that span tables are the rows of `lifelog_meta`.
 
-**9 tables + 1 FTS5 virtual table + 2 views** (`measurement_values`, `ghost_pages`)
-**+ 23 triggers.** That is the entire system. Every `CHECK` is named (`CONSTRAINT <table>_<rule>`), so
+**10 tables + 1 FTS5 virtual table + 2 views** (`measurement_values`, `ghost_pages`)
+**+ 24 triggers.** That is the entire system. Every `CHECK` is named (`CONSTRAINT <table>_<rule>`), so
 any rule can be dropped or re-added by name after the freeze ([D13](../decisions/D13-migrations-and-freeze.md)).
 
 ## The objects
@@ -24,6 +24,7 @@ What each one is for, and where it is explained. Its rules are in its `CREATE` s
 | `entities` | one row per linkable thing: the shared id, its type, provenance, the tombstone | [D8](../decisions/D08-entities-and-links.md), [D11](../decisions/D11-tombstones.md) | [capture](../cookbook/capture.md) |
 | `pages` | every page: titled prose, the day pages of the journal, the page of a person or a place | [D5](../decisions/D05-pages-and-day-pages.md), [D16](../decisions/D16-places.md), [D20](../decisions/D20-named-pages.md) | [titles and wikilinks](../contract/titles-and-wikilinks.md), [capture](../cookbook/capture.md) |
 | `people` | what a person has beyond its page | [D20](../decisions/D20-named-pages.md) | [a person or a place](../cookbook/person-or-place.md) |
+| `metric_categories` | the closed tree of categories metrics are filed in | [D26](../decisions/D26-metric-categories.md) | [metrics by category](../cookbook/metrics-by-category.md) |
 | `metrics` | the registry of what is measured | [D7](../decisions/D07-measurements.md) | [a metric series](../cookbook/metric-series.md) |
 | `measurements` | readings, append-only | [D6](../decisions/D06-mood-is-a-measurement.md), [D7](../decisions/D07-measurements.md) | [correct a measurement](../cookbook/correct-a-measurement.md) |
 | `habit_periods` | when a metric is a habit | [D24](../decisions/D24-habits.md) | [habits](../cookbook/habits.md) |

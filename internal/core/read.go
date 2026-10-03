@@ -248,17 +248,21 @@ func (s *Store) Search(ctx context.Context, q string, limit int) ([]Hit, error) 
 	return out, rows.Err()
 }
 
-// Metric is a registry row; Habit says it has a period (D24).
+// Metric is a registry row; Habit says it has a period (D24), Category is the path of the category it is filed
+// in, "" for none (D26).
 type Metric struct {
-	Name  string `json:"name"`
-	Unit  string `json:"unit"`
-	Note  string `json:"note,omitempty"`
-	Habit bool   `json:"habit"`
+	Name     string `json:"name"`
+	Unit     string `json:"unit"`
+	Note     string `json:"note,omitempty"`
+	Habit    bool   `json:"habit"`
+	Category string `json:"category,omitempty"`
 }
 
 func (s *Store) Metrics(ctx context.Context) ([]Metric, error) {
-	rows, err := s.DB.R.QueryContext(ctx, `SELECT name, unit, coalesce(note, ''),
-	        EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id) FROM metrics m ORDER BY name`)
+	rows, err := s.DB.R.QueryContext(ctx, categoryPaths+`
+		SELECT m.name, m.unit, coalesce(m.note, ''),
+		       EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id), coalesce(t.path, '')
+		  FROM metrics m LEFT JOIN tree t ON t.id = m.category_id ORDER BY m.name`)
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +270,7 @@ func (s *Store) Metrics(ctx context.Context) ([]Metric, error) {
 	out := []Metric{}
 	for rows.Next() {
 		var m Metric
-		if err := rows.Scan(&m.Name, &m.Unit, &m.Note, &m.Habit); err != nil {
+		if err := rows.Scan(&m.Name, &m.Unit, &m.Note, &m.Habit, &m.Category); err != nil {
 			return nil, err
 		}
 		out = append(out, m)

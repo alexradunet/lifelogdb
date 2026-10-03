@@ -17,6 +17,7 @@
   The unique index on `supersedes_id` doubles as the index the view's `NOT EXISTS` needs (executed:
   the plan uses it).
 - **Habits** are 0/1 metrics with active periods ([D24](D24-habits.md)): their check-ins are ordinary rows here.
+- **Categories** file metrics in a tree (biomarkers, lipids, substances) ([D26](D26-metric-categories.md)).
 - **`captured_with_id`** is provenance (the day page the reading was captured with), not "about
   this person": the owner is the only subject of measurements.
 - **This is the most battle-tested part of the design.** FxLifeSheet's actual schema is a single

@@ -18,7 +18,8 @@
 - **Alternatives.**
   - *A separate check-in table*: rejected — a second home for "how was that day", with its own
     corrections, imports and charts, and no join with mood or weight.
-  - *A `kind` column on `metrics`*: rejected — it says which metrics are habits, not when.
+  - *A `kind` column on `metrics`*: rejected — it says which metrics are habits, not when. For the
+    same reason a habit is never a metric category ([D26](D26-metric-categories.md)).
   - *Start and stop columns on `metrics`*: rejected — a habit restarted (vitamin D each winter) needs
     several periods.
   - *A missing day counts as not done*: rejected — imported notes rarely say which days a habit was

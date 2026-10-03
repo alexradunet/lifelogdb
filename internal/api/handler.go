@@ -71,6 +71,8 @@ func New(s *core.Store, ws *importer.Workspace) http.Handler {
 	post("/query", h.query)
 	post("/pages/{id}/rename", h.rename)
 	post("/metrics", ownerOnly(h.registerMetric))
+	post("/metric-categories", ownerOnly(h.registerCategory))
+	post("/metrics/{name}/category", ownerOnly(h.fileMetric))
 	post("/metrics/{name}/periods", h.startHabit)
 	post("/metrics/{name}/stop", h.stopHabit)
 	post("/metrics/{name}/check-in", h.checkIn)
@@ -449,9 +451,14 @@ func (h *server) metrics(r *http.Request) (*Entity, error) {
 	for _, m := range ms {
 		names = append(names, m.Name)
 	}
-	e := &Entity{Class: []string{"metrics"}, Title: "Metrics", Properties: map[string]any{"metrics": ms},
-		Links:   []Link{link("self", "/metrics", "Metrics"), link("index", "/", "Home")},
-		Actions: []Action{withOptions(action("record", nil, map[string]any{"day": core.Today()}), "metric", names)}}
+	cs, err := h.s.Categories(r.Context())
+	if err != nil {
+		return nil, err
+	}
+	e := &Entity{Class: []string{"metrics"}, Title: "Metrics", Properties: map[string]any{"metrics": ms, "groups": groupMetrics(ms, cs)},
+		Links: []Link{link("self", "/metrics", "Metrics"), link("index", "/", "Home")},
+		Actions: []Action{withOptions(action("record", nil, map[string]any{"day": core.Today()}), "metric", names),
+			action("register-category", nil, nil)}}
 	for _, m := range ms {
 		e.Entities = append(e.Entities, link("item", "/metrics/"+url.PathEscape(m.Name), m.Name))
 	}
@@ -480,8 +487,9 @@ func (h *server) series(r *http.Request) (*Entity, error) {
 		return nil, err
 	}
 	self := "/metrics/" + url.PathEscape(name) + "?from=" + from + "&to=" + to
+	category := h.category(r.Context(), name)
 	e := &Entity{Class: []string{"series"}, Title: name,
-		Properties: map[string]any{"metric": name, "from": from, "to": to, "readings": rows, "habit_periods": periods},
+		Properties: map[string]any{"metric": name, "from": from, "to": to, "readings": rows, "habit_periods": periods, "category": category},
 		Links:      []Link{link("self", self, name), link("up", "/metrics", "Metrics"), link("habits", "/habits", "Habits"), link("index", "/", "Home")},
 		Actions:    []Action{h.recordAction(r.Context(), name, core.Today())}}
 	ids := map[string]string{"name": url.PathEscape(name)}
@@ -491,6 +499,7 @@ func (h *server) series(r *http.Request) (*Entity, error) {
 	} else if h.unitless(r.Context(), name) {
 		e.Actions = append(e.Actions, action("start-habit", ids, map[string]any{"start_day": core.Today()}))
 	}
+	e.Actions = append(e.Actions, h.fileAction(r.Context(), name, category))
 	for _, m := range rows {
 		e.Entities = append(e.Entities, link("reading", measurementHref(m.ID), fmt.Sprintf("%s %g", m.Day, m.Value)))
 	}

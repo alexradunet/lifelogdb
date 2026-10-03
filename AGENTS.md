@@ -5,7 +5,7 @@
 **The product is `lifelog`, the Go application** ([README](README.md)): one binary at the repo root that writes
 `life.db`, a lifetime-scale, single-user SQLite database, and serves it as a hypermedia API, a CLI and an MCP server.
 **The database it writes is specified on its own** in [`docs/`](docs/README.md) — goals, the canonical DDL
-([`docs/schema/schema.sql`](docs/schema/schema.sql)), the storage contract, the decision log (D1–D25), the query
+([`docs/schema/schema.sql`](docs/schema/schema.sql)), the storage contract, the decision log (D1–D26), the query
 cookbook, non-goals, research — so that `life.db` can be read, or written by another application, in any language.
 The docs state the current truth only.
 

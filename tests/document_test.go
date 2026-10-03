@@ -80,7 +80,7 @@ func document(s *S) {
 	head := ddlHeader(s.ddl)
 	s.K("the DDL header before the first statement is a short pointer (<= 12 lines) naming lifelog_meta", strings.Count(head, "\n") <= 12 && strings.Contains(head, "lifelog_meta"))
 	inner := regexp.MustCompile(`\n\s*--`)
-	for _, t := range []string{"entities", "pages", "people", "metrics", "measurements", "habit_periods", "link_kinds", "links", "lifelog_meta"} {
+	for _, t := range []string{"entities", "pages", "people", "metric_categories", "metrics", "measurements", "habit_periods", "link_kinds", "links", "lifelog_meta"} {
 		s.K(t+": its CREATE statement carries its rules as comments", inner.MatchString(schema[t]))
 	}
 	count := func(k string) int64 {

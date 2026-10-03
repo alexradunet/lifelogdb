@@ -48,6 +48,18 @@ func (w *Workspace) RegisterMetrics(ctx context.Context, s *core.Store) ([]strin
 				return refuse("%s: %v", n, err)
 			}
 			line := n + ": " + map[bool]string{true: "registered", false: "existing"}[added]
+			if m.Category != "" { // its path registered top first, then the metric filed in it (D26)
+				if _, err := t.RegisterCategory(m.Category, ""); err != nil {
+					return refuse("%s: %v", n, err)
+				}
+				filed, err := t.FileMetric(m.Name, m.Category)
+				if err != nil {
+					return refuse("%s: %v", n, err)
+				}
+				if filed {
+					line += ", filed in " + strings.Trim(strings.TrimSpace(m.Category), "/")
+				}
+			}
 			if m.Since != "" {
 				if err := t.StartHabit(m.Name, m.Since, m.Until); err != nil {
 					return refuse("%s: %v", n, err)

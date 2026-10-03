@@ -12,7 +12,7 @@ import (
 func cookbook(s *S) {
 	bl := s.d.CookbookBlocks()
 	first, order := s.d.Blocks()
-	s.K("the cookbook has at least 18 SQL blocks, one or more per recipe, 18 recipes", len(bl) >= 18 && len(first) == 18 && eq(order, s.d.CookbookOrder()), order)
+	s.K("the cookbook has at least 19 SQL blocks, one or more per recipe, 19 recipes", len(bl) >= 19 && len(first) == 19 && eq(order, s.d.CookbookOrder()), order)
 
 	seeded := func(hardened bool, path string) (*C, P) {
 		c := s.freshWith(F{Hardened: hardened, Path: path})
@@ -35,7 +35,7 @@ func cookbook(s *S) {
 		return c, P{"old_id": old, "new_title": "Sourdough starter", "new_key": "sourdough starter", "found_id": wp, "target_id": wp, "target_ids": "[]", "place_id": pl, "day_page_id": dp, "mistaken_row_id": 2, "from_day": "2026-01-15", "to_day": "2026-09-10",
 			"day": "2026-09-29", "page_id": wp, "person_id": pe, "entity_id": pe, "handle_title": "Bob Sample", "handle_key": "bob sample", "ghost_id": gh,
 			"due_day": "2026-10-05", "query": "schema", "key": "newpage", "title": "Newpage", "metric_id": 2, "wrong_row_id": 1, "source": "ui",
-			"import_key": "notes/sourdough.md", "metric": "vitamin_d",
+			"import_key": "notes/sourdough.md", "metric": "vitamin_d", "category": "biomarkers", "subcategory": "vitamins",
 			"snapshot": filepath.ToSlash(filepath.Join(s.dir, fmt.Sprintf("cookbook-snapshot-%v.db", hardened)))}
 	}
 

@@ -515,3 +515,64 @@ func TestRewriteLinks(t *testing.T) {
 		}
 	}
 }
+
+func TestMetricsAreFiledFromTheirCategory(t *testing.T) {
+	f := setup(t)
+	f.approveRules(t, rulesBody)
+	for _, m := range []Metric{{Name: "ferritin", Unit: "ng/mL", Category: "biomarkers/iron"}, {Name: "coffee_cups", Unit: "cups"}} {
+		if err := f.w.ProposeMetric(m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := ownerApproves(f.w, "metrics.md"); err != nil {
+		t.Fatal(err)
+	}
+	done, err := f.w.RegisterMetrics(ctx, f.s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(done, "; "); got != "coffee_cups: registered; ferritin: registered, filed in biomarkers/iron" {
+		t.Errorf("register metrics did %q", got)
+	}
+	if done, _ := f.w.RegisterMetrics(ctx, f.s); strings.Join(done, "; ") != "coffee_cups: existing; ferritin: existing" {
+		t.Errorf("a re-run did %q", done)
+	}
+	ms, _ := f.s.Metrics(ctx)
+	for _, m := range ms {
+		if want := map[string]string{"ferritin": "biomarkers/iron", "mood": "self_report"}[m.Name]; m.Category != want {
+			t.Errorf("%s is filed in %q, want %q", m.Name, m.Category, want)
+		}
+	}
+
+	// a path that puts a registered category under another parent is refused, and nothing is written
+	editLine(t, f.w, "metrics.md", "| biomarkers/iron |", "| substances/iron |")
+	if err := ownerApproves(f.w, "metrics.md"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.w.RegisterMetrics(ctx, f.s); err == nil || !strings.Contains(err.Error(), "another parent") {
+		t.Errorf("a category moved to another parent: %v", err)
+	}
+}
+
+func TestAMetricsFileWithoutTheCategoryColumn(t *testing.T) {
+	f := setup(t)
+	old := "status: draft\n\n| status | name | unit | note | from | doubts | since | until |\n|---|---|---|---|---|---|---|---|\n" +
+		"| proposed | ferritin | ng/mL | | | | | |\n"
+	if err := os.WriteFile(filepath.Join(f.w.Dir, "metrics.md"), []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.w.ProposeMetric(Metric{Name: "ldl", Unit: "mg/dL", Category: "biomarkers"}); err == nil {
+		t.Error("a category proposed into a file with no category column")
+	}
+	if err := f.w.ProposeMetric(Metric{Name: "ldl", Unit: "mg/dL"}); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(filepath.Join(f.w.Dir, "metrics.md"))
+	if !strings.HasSuffix(string(b), "| proposed | ldl | mg/dL | | | | | |\n") {
+		t.Errorf("the row does not follow the file's header: %q", b)
+	}
+	ms, err := f.w.Metrics()
+	if err != nil || len(ms) != 2 || ms[0].Category != "" {
+		t.Errorf("the rows of an old file: %+v %v", ms, err)
+	}
+}

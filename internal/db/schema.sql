@@ -22,7 +22,7 @@ INSERT INTO lifelog_meta(key, value) VALUES
   ('schema',    'lifelog v1: the journal (one page per day), wiki, people, places and health metrics of one person: a life log, not a project manager; the rules of each table are comments inside its CREATE statement (.schema), the rules that span tables are these rows'),
   ('instants',  'every *_at column is a UTC ISO-8601 TEXT instant with milliseconds, e.g. 2026-06-09T21:14:03.482Z, written by the app, never by a SQLite default (CURRENT_TIMESTAMP has no milliseconds and is not ISO-8601; a trigger writes strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')); fixed width, so it sorts as text; CHECK strftime(''%Y-%m-%dT%H:%M:%fZ'', x) IS x; created_at, on every table that has it, is when the row was written to life.db, never back-dated (when a thing happened is its day or its other *_at)'),
   ('days',      'every *_day column (and day) is the LOCAL calendar date YYYY-MM-DD where the thing happened, written by the app from the local calendar of the device that captured it (never a server''s), never recomputed from an instant; CHECK date(x) IS x (IS, not =: a CHECK passes on NULL, and date(''2026-9-3'') is NULL)'),
-  ('deletes',   'life data is never deleted except links rows: an entity is a tombstone (entities.deleted_at), a measurement is corrected by inserting a row; BEFORE DELETE triggers enforce it on entities and every domain row; every read path filters entities.deleted_at IS NULL; the registries (metrics, link_kinds, lifelog_meta) are the owner''s administrative rows, deletable while nothing references them (each CREATE comment says so)'),
+  ('deletes',   'life data is never deleted except links rows: an entity is a tombstone (entities.deleted_at), a measurement is corrected by inserting a row; BEFORE DELETE triggers enforce it on entities and every domain row; every read path filters entities.deleted_at IS NULL; the registries (metrics, metric_categories, link_kinds, lifelog_meta) are the owner''s administrative rows, deletable while nothing references them (each CREATE comment says so)'),
   ('source',    'entities, links, measurements and habit_periods: source names the writer of the row (ui, cli, api, agent:<name>, import:<name>); written at insert, never changed; import_key, on entities and on measurements, is unique per source'),
   ('writers',   'one writing application; every connection sets foreign_keys=ON, recursive_triggers=ON, synchronous=FULL, trusted_schema=OFF and starts write transactions with BEGIN IMMEDIATE; every other tool opens the file read-only; imports use INSERT ... ON CONFLICT DO NOTHING, never OR IGNORE (skips CHECK/NOT NULL violations silently) or OR REPLACE (a delete)'),
   ('sqlite',    'writers need SQLite >= 3.51.3 (fixes a WAL race between concurrent writers and checkpoints); migrations need >= 3.53 (ALTER TABLE ADD/DROP CONSTRAINT); CHECKs use only functions every such version has'),
@@ -138,16 +138,45 @@ CREATE TABLE people (
   CONSTRAINT people_death_day_order CHECK (death_day IS NULL OR birth_day IS NULL OR death_day >= birth_day)
 ) STRICT;
 
+CREATE TABLE metric_categories (
+  -- the CLOSED registry of metric categories, a tree (D26): parent_id NULL = a top-level category.
+  -- Registering one is a deliberate INSERT, so a typo cannot become a second category. The parent is
+  -- fixed at registration (metric_categories_parent_fixed) and must already exist (the foreign key),
+  -- so no cycle can form; to move a category, register a new one and re-file its metrics. The name
+  -- may change: everything refers to a category by its id.
+  -- Whether a metric is a habit is NOT a category: it is a habit while it has habit_periods (D24).
+  -- an unreferenced category may be deleted by the owner; one with metrics or subcategories is
+  -- refused by the foreign keys.
+  id        INTEGER PRIMARY KEY,
+  name      TEXT NOT NULL UNIQUE CONSTRAINT metric_categories_name CHECK (length(name) >= 1 AND name NOT GLOB '*[^a-z0-9_]*'),   -- snake_case: 'biomarkers', 'lipids'
+  parent_id INTEGER REFERENCES metric_categories(id),   -- NULL = top level
+  note      TEXT,
+  CONSTRAINT metric_categories_not_self CHECK (parent_id IS NOT id)
+) STRICT;
+CREATE TRIGGER metric_categories_parent_fixed BEFORE UPDATE OF parent_id ON metric_categories
+  WHEN NEW.parent_id IS NOT OLD.parent_id
+BEGIN
+  -- a parent that could change could close a cycle; fixed, the tree needs no walk to stay a tree
+  SELECT RAISE(ABORT, 'a category''s parent is fixed at registration; register a new category and re-file its metrics');
+END;
+INSERT INTO metric_categories(name, note) VALUES
+  ('biomarkers',  'laboratory results: blood, urine, hormones, allergens'),
+  ('body',        'measurements of the body: weight, blood pressure, heart rate'),
+  ('self_report', 'how the owner rated something: mood'),
+  ('substances',  'what the owner took in: alcohol, cannabis, caffeine, supplements');
+
 CREATE TABLE metrics (
   -- a tiny registry that keeps time series canonical: 'weight' is one series forever, never
   -- 'Weight' or 'weight kg' (names are snake_case). Seeded with 'mood' (D6). The unit gives every
-  -- stored value its meaning, so it never changes (metrics_unit_fixed).
+  -- stored value its meaning, so it never changes (metrics_unit_fixed). category_id files the
+  -- metric in metric_categories (D26); NULL = not filed. A metric is re-filed by UPDATE.
   -- an unreferenced metric may be deleted (a mistake registered); a referenced one is refused by
   -- the foreign keys of measurements and habit_periods: a used metric stays (its series is life data).
   id    INTEGER PRIMARY KEY,
   name  TEXT NOT NULL UNIQUE,                 -- snake_case canonical: 'weight', 'mood'
   unit  TEXT NOT NULL DEFAULT '',             -- 'kg', 'bpm', 'h'; '' for 1-5 scales
   note  TEXT,
+  category_id INTEGER REFERENCES metric_categories(id),
   CONSTRAINT metrics_name CHECK (length(name) >= 1 AND name NOT GLOB '*[^a-z0-9_]*')   -- lowercase snake_case, so no case variants
 ) STRICT;
 CREATE TRIGGER metrics_unit_fixed BEFORE UPDATE OF unit ON metrics
@@ -156,8 +185,9 @@ BEGIN
   -- changing the unit would silently reinterpret the whole series
   SELECT RAISE(ABORT, 'metrics.unit is fixed: it defines what every stored value means; register a new metric instead');
 END;
-INSERT INTO metrics(name, unit, note) VALUES
-  ('mood', '', '1-5; attached to its day page via measurements.captured_with_id when posted');
+INSERT INTO metrics(name, unit, note, category_id) VALUES
+  ('mood', '', '1-5; attached to its day page via measurements.captured_with_id when posted',
+   (SELECT id FROM metric_categories WHERE name = 'self_report'));
 
 CREATE TABLE measurements (
   -- one row per data point (the FxLifeSheet shape). The table is append-only, enforced by triggers: never

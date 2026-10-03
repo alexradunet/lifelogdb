@@ -27,11 +27,13 @@ type Metric struct {
 	Doubts string `json:"doubts,omitempty"`
 	Since  string `json:"since,omitempty"`
 	Until  string `json:"until,omitempty"`
+	// Category is the path of the category the metric is filed in (D26): "biomarkers/iron"; "" files nothing.
+	Category string `json:"category,omitempty"`
 }
 
-var metricCols = []string{"status", "name", "unit", "note", "from", "doubts", "since", "until"}
+var metricCols = []string{"status", "name", "unit", "note", "from", "doubts", "since", "until", "category"}
 
-const metricsHeader = "| status | name | unit | note | from | doubts | since | until |\n|---|---|---|---|---|---|---|---|\n"
+const metricsHeader = "| status | name | unit | note | from | doubts | since | until | category |\n|---|---|---|---|---|---|---|---|---|\n"
 
 // tableCells splits a markdown table row on the | that are not escaped.
 func tableCells(row string) []string {
@@ -103,6 +105,8 @@ func (w *Workspace) Metrics() ([]Metric, error) {
 				m.Since = v
 			case "until":
 				m.Until = v
+			case "category":
+				m.Category = v
 			}
 		}
 		out = append(out, m)
@@ -167,8 +171,32 @@ func (w *Workspace) ProposeMetric(m Metric) error {
 	if !strings.HasSuffix(text, "\n") {
 		text += "\n"
 	}
-	text += fmt.Sprintf("| proposed | %s | %s | %s | %s | %s | | |\n", cell(m.Name), cell(m.Unit), cell(m.Note), cell(m.From), cell(m.Doubts))
+	cols := headerCols(text)
+	if m.Category != "" && !contains(cols, "category") {
+		return refuse("metrics.md has no category column: the owner adds it to the header first")
+	}
+	vals := map[string]string{"status": "proposed", "name": m.Name, "unit": m.Unit, "note": m.Note, "from": m.From,
+		"doubts": m.Doubts, "category": strings.TrimSpace(m.Category)}
+	row := "|"
+	for _, c := range cols {
+		if v := vals[c]; v != "" {
+			row += " " + cell(v)
+		}
+		row += " |"
+	}
+	text += row + "\n"
 	return writeAtomic(w.file("metrics.md"), []byte(text))
+}
+
+// headerCols are the columns of metrics.md's table, in the order its header gives them.
+func headerCols(text string) []string {
+	for _, line := range strings.Split(text, "\n") {
+		if cells := tableCells(line); strings.HasPrefix(strings.TrimSpace(line), "|") &&
+			contains(cells, "status") && contains(cells, "name") && contains(cells, "unit") {
+			return cells
+		}
+	}
+	return metricCols
 }
 
 // approveRows turns every proposed row into an approved one.

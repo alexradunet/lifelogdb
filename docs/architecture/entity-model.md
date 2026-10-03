@@ -49,19 +49,27 @@ erDiagram
 A reading is a fact, not an entity: `measurements` is append-only ([D7](../decisions/D07-measurements.md)). A correction is a new row, and
 `measurements.supersedes_id` points back at the row it corrects; `measurements.captured_with_id` records
 provenance (a mood reading points at its day page). `habit_periods` says when a metric is a habit
-([D24](../decisions/D24-habits.md)). `lifelog_meta` stands alone: the rules that span
+([D24](../decisions/D24-habits.md)). `metric_categories` files metrics in a tree of categories whose parents
+never change ([D26](../decisions/D26-metric-categories.md)). `lifelog_meta` stands alone: the rules that span
 tables ([D17](../decisions/D17-contract-as-data.md)).
 
 ```mermaid
 %% diagram: er-facts
 erDiagram
+    metric_categories |o--o{ metric_categories : "parent_id"
+    metric_categories |o--o{ metrics : "category_id"
     metrics     ||--o{ measurements : "metric_id"
     entities    |o--o{ measurements : "captured_with_id"
     measurements |o--o| measurements : "supersedes_id"
     metrics     ||--o{ habit_periods : "metric_id"
 
+    metric_categories {
+        INTEGER id PK
+        INTEGER parent_id FK
+    }
     metrics {
         INTEGER id PK
+        INTEGER category_id FK
     }
     measurements {
         INTEGER id PK

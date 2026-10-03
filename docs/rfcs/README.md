@@ -7,6 +7,6 @@ becomes a [decision](../decisions/README.md). One file per proposal, named `NNNN
 
 | id | title | status | issues | decision |
 |---|---|---|---|---|
-| [0001](0001-metric-categories.md) | Metric categories: a closed registry, a tree whose parents never change | draft | [0008](../issues/0008-metrics-cannot-be-grouped.md) | — |
+| [0001](0001-metric-categories.md) | Metric categories: a closed registry, a tree whose parents never change | accepted | 0008 | [D26](../decisions/D26-metric-categories.md) |
 
 Status values: draft | accepted | rejected (with a one-line reason) | withdrawn.

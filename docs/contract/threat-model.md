@@ -48,3 +48,4 @@ each phrase in the last column, and **every key of `lifelog_meta` must be used b
 | 20 | Does it keep to-dos and plans? | `schema` | `not a project manager` |
 | 21 | Where was I on a given day? | `pages`, `link_kinds` | `places the owner was at`, `kind='at'` |
 | 22 | Which metrics are habits, and was one meant to be done on a day? | `habit_periods` | `HABIT`, `NOT RECORDED` |
+| 23 | Which metrics are biomarkers, or what the owner took in? | `metric_categories` | `a tree`, `top-level category`, `NOT a category` |

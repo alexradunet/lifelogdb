@@ -1,8 +1,8 @@
 # 0001 — Metric categories: a closed registry, a tree whose parents never change
 
 - **Date:** 2026-10-03
-- **Status:** draft
-- **Answers:** [0008](../issues/0008-metrics-cannot-be-grouped.md)
+- **Status:** accepted
+- **Answers:** 0008, the metrics cannot be grouped (resolved; `git log -- docs/issues`)
 
 ## Problem
 
@@ -43,9 +43,9 @@ owner's, registered through the import workspace while the canonical file is sti
 The `facts` suite executes: the seeds; a subcategory and a third level; a missing parent refused; a self-parent
 refused, with an explicit id and with the id SQLite is about to assign; a parent change refused, a full-row update
 passing; a rename followed by children and metrics; a category with children or metrics refused on delete, an
-empty one deleted; a metric re-filed; and a new cookbook recipe, metrics by category.
+empty one deleted; a metric re-filed; and the recipe [metrics by category](../cookbook/metrics-by-category.md).
 Mutants: each CHECK made always true, the trigger never firing, the name unique no more.
 
 ## Outcome
 
-Filled in when it closes.
+Accepted as [D26](../decisions/D26-metric-categories.md).

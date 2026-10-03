@@ -82,15 +82,16 @@ model and the owner.
 
 **metrics.md.** A table found by its header; `status`, `name` and `unit` are required. An empty unit is
 a unitless metric ([D7](../decisions/D07-measurements.md)). `since` and `until` are the owner's days and make a unitless row a habit ([D24](../decisions/D24-habits.md));
-the model leaves them empty.
+the model leaves them empty. `category`, optional, files the metric ([D26](../decisions/D26-metric-categories.md)): a path of
+category names from the top, `biomarkers/iron`; a file without the column files nothing.
 
 ```markdown
 status: draft
 
-| status | name | unit | note | from | doubts | since | until |
-|---|---|---|---|---|---|---|---|
-| proposed | ferritin | ng/mL | Ferritin (blood) | Medical/Results/Ferritin.md | | | |
-| proposed | evening_walk | | 1 = done that day | Journal/2031/2031-03-01.md | | | |
+| status | name | unit | note | from | doubts | since | until | category |
+|---|---|---|---|---|---|---|---|---|
+| proposed | ferritin | ng/mL | Ferritin (blood) | Medical/Results/Ferritin.md | | | | biomarkers/iron |
+| proposed | evening_walk | | 1 = done that day | Journal/2031/2031-03-01.md | | | | |
 ```
 
 **questions.md.** One question per doubt. The status after `·` is `open`, `answered`, `done` or
@@ -193,7 +194,7 @@ database the caller names explicitly.
 | *ledger* | the source tree | that no ledger exists yet | `ledger.md`, every file `[ ]` |
 | *inspect a file* | one source file | — | nothing; returns its frontmatter, headings, tables as rows, checkboxes and links |
 | *find* | the database | — | nothing; pages, metrics or readings matching a text: exact, same words, more words, fewer words |
-| *register metrics* | `metrics.md` | its stamp; each approved row (name, unit, `since`/`until`) | the approved metrics; each habit's period, re-sent with its `end_day` ([habits](../cookbook/habits.md)) |
+| *register metrics* | `metrics.md` | its stamp; each approved row (name, unit, `since`/`until`, `category`); that a category already registered has the parent its path gives | the approved metrics; the categories of each path, top first, and the metric filed in the last ([metrics by category](../cookbook/metrics-by-category.md)); each habit's period, re-sent with its `end_day` ([habits](../cookbook/habits.md)) |
 | *check facts* | one facts file, its source file, the workspace, the database | every check below, in a transaction it rolls back | nothing; prints what *apply* would do |
 | *apply facts* | the same | the same checks | every write in one `BEGIN IMMEDIATE` transaction ([connection setup](../contract/connections.md)), then the file's ledger line |
 | *plan a vault* / *apply a vault plan* | the vault; `plan.json` | titles ([titles and wikilinks](../contract/titles-and-wikilinks.md)), duplicates, titles the database holds | the notes' pages and bodies (see "An Obsidian vault") |

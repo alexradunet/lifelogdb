@@ -26,8 +26,8 @@ var importCatalog = []spec{
 		"GET", "/import/find", []Field{req("text", "text", "Name")}, false},
 	{"draft-rules", "Draft rules", "Write rules.md for the owner to approve: a `source: import:<name>` line, then ## Folders, ## Aliases (\"name\" → \"Title\"), ## Distinct (\"a\" ≠ \"b\"), ## Decisions. Never a status line; any change waits for the owner's approval again.",
 		"POST", "/import/rules", []Field{req("body", "textarea", "rules.md without its status line")}, false},
-	{"propose-metric", "Propose a metric", "Add a proposed metric to metrics.md for the owner: a lowercase snake_case name, the unit exactly as written ('' for a unitless scale; a habit is unitless with note '1 = done that day').",
-		"POST", "/import/metrics", []Field{req("name", "text", "Name"), opt("unit", "text", "Unit"), opt("note", "text", "Note"), opt("from", "text", "From file"), opt("doubts", "text", "Doubts")}, false},
+	{"propose-metric", "Propose a metric", "Add a proposed metric to metrics.md for the owner: a lowercase snake_case name, the unit exactly as written ('' for a unitless scale; a habit is unitless with note '1 = done that day'); category, the path of the category to file it in (biomarkers/iron), when metrics.md has that column.",
+		"POST", "/import/metrics", []Field{req("name", "text", "Name"), opt("unit", "text", "Unit"), opt("note", "text", "Note"), opt("from", "text", "From file"), opt("doubts", "text", "Doubts"), opt("category", "text", "Category")}, false},
 	{"ask", "Ask the owner", "Add a question to questions.md: what you found and options that each say the exact rows its answer writes (one option per line). Never answer it yourself.",
 		"POST", "/import/questions", []Field{req("question", "text", "Question"), req("options", "textarea", "Options, one per line"), opt("file", "text", "File and line"), opt("about", "text", "About"), opt("found", "text", "Found")}, false},
 	{"close-question", "Close a question", "Mark an answered question done, once its answer is in the rules and the facts and applied.",
@@ -218,7 +218,7 @@ func (h *server) proposeMetric(r *http.Request, _ string) (*Entity, error) {
 		return nil, err
 	}
 	if err := h.ws.ProposeMetric(importer.Metric{Name: v.Get("name"), Unit: v.Get("unit"), Note: v.Get("note"),
-		From: v.Get("from"), Doubts: v.Get("doubts")}); err != nil {
+		From: v.Get("from"), Doubts: v.Get("doubts"), Category: v.Get("category")}); err != nil {
 		return nil, err
 	}
 	ms, err := h.ws.Metrics()

@@ -69,7 +69,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   not the tables Go ships, so the titles this writer accepts do not change with a Go upgrade.
 - **One transaction type.** Every write is a method on `core.Tx`; an operation alone is one transaction, and an
   import's *apply facts* runs several of the same methods in one. Nothing writes around them.
-- **Owner-only actions.** `register-metric` and `replay` are refused to an `agent:*` writer and are never MCP tools.
+- **Owner-only actions.** `register-metric`, `register-category`, `file-metric` and `replay` are refused to an `agent:*` writer and are never MCP tools.
   `approve` is not in the API at all: `lifelog import approve` refuses without an interactive terminal, and its stamp
   (`status: approved YYYY-MM-DD (owner) sha256:…`) hashes the rest of the file, so an edit closes the gate again.
 - **Renames move the text and the typed links**, as [titles and wikilinks](docs/contract/titles-and-wikilinks.md)
