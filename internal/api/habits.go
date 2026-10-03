@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"lifelog/internal/core"
@@ -170,7 +171,7 @@ func (h *server) metricEntity(r *http.Request, name string) (*Entity, error) {
 func (h *server) unitless(ctx context.Context, name string) bool {
 	ms, _ := h.s.Metrics(ctx)
 	for _, m := range ms {
-		if m.Name == name {
+		if strings.EqualFold(m.Name, name) {
 			return m.Unit == ""
 		}
 	}

@@ -12,6 +12,8 @@ import (
 
 	"golang.org/x/text/unicode/norm"
 
+	ltext "lifelog/internal/text"
+
 	"lifelog/internal/core"
 )
 
@@ -27,7 +29,7 @@ type Metric struct {
 	Doubts string `json:"doubts,omitempty"`
 	Since  string `json:"since,omitempty"`
 	Until  string `json:"until,omitempty"`
-	// Category is the path of the category the metric is filed in (D26): "biomarkers/iron"; "" files nothing.
+	// Category is the path of the category pages the metric is filed in (D26): "Biomarkers/Iron"; "" files nothing.
 	Category string `json:"category,omitempty"`
 }
 
@@ -135,7 +137,7 @@ func (w *Workspace) ApprovedMetrics() (map[string]Metric, error) {
 	out := map[string]Metric{}
 	for _, m := range ms {
 		if m.Status == "approved" {
-			out[m.Name] = m
+			out[ltext.TitleKey(m.Name)] = m
 		}
 	}
 	return out, nil
@@ -144,8 +146,8 @@ func (w *Workspace) ApprovedMetrics() (map[string]Metric, error) {
 // ProposeMetric adds a proposed row for the owner to review. since and until are the owner's to write.
 func (w *Workspace) ProposeMetric(m Metric) error {
 	m.Name, m.Unit = strings.TrimSpace(m.Name), strings.TrimSpace(m.Unit)
-	if !regexp.MustCompile(`^[a-z0-9_]+$`).MatchString(m.Name) {
-		return refuse("metric name %q: lowercase snake_case (a-z 0-9 _)", m.Name)
+	if !ltext.ValidTitle(m.Name) {
+		return refuse("metric name %q: a metric's name is its page title, and this is not a valid one (D27)", m.Name)
 	}
 	if m.Since != "" || m.Until != "" {
 		return refuse("since and until are the owner's days: leave them empty")
@@ -157,7 +159,7 @@ func (w *Workspace) ProposeMetric(m Metric) error {
 		return err
 	}
 	for _, r := range rows {
-		if r.Name == m.Name {
+		if ltext.TitleKey(r.Name) == ltext.TitleKey(m.Name) {
 			return refuse("metrics.md already has a row %s (%s)", m.Name, r.Status)
 		}
 	}

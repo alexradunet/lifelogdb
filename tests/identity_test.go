@@ -88,14 +88,14 @@ func identity(s *S) {
 
 	// ---- no hard deletes
 	c = s.fresh()
-	byType := map[string]int64{"page": c.thing("page"), "person": c.thing("person"), "place": c.thing("place")}
-	n0 := c.n("select count(*) from entities")
-	for _, x := range [][2]string{{"page", "pages"}, {"person", "people"}, {"place", "pages"}} {
+	byType := map[string]int64{"page": c.thing("page"), "person": c.thing("person"), "place": c.thing("place"), "metric": c.thing("metric")}
+	n0 := c.n("select count(*) from entities where source <> 'schema'")
+	for _, x := range [][2]string{{"page", "pages"}, {"person", "people"}, {"place", "pages"}, {"metric", "metrics"}} {
 		s.K("DELETE FROM "+x[1]+" is refused", err(c.tryx("DELETE FROM "+x[1]+" WHERE id=?", byType[x[0]])))
 		s.K("DELETE of the "+x[0]+" entities row is refused", err(c.tryx("DELETE FROM entities WHERE id=?", byType[x[0]])))
 	}
 	s.K("the page rows of named entities cannot be deleted either", err(c.tryx("DELETE FROM pages WHERE id=?", byType["person"])))
-	s.K("nothing was removed (three entities, one id each)", c.n("select count(*) from entities") == n0 && n0 == 3)
+	s.K("nothing was removed (four entities, one id each)", c.n("select count(*) from entities where source <> 'schema'") == n0 && n0 == 4)
 	s.K("REPLACE INTO pages is blocked under recursive_triggers=ON",
 		err(c.tryx(fmt.Sprintf("REPLACE INTO pages(id,entity_type,title,title_key,body) VALUES (%d,'page','Replaced','replaced','overwritten')", byType["page"]))) &&
 			c.str("select body from pages where id=?", byType["page"]) == "x")
@@ -107,10 +107,10 @@ func identity(s *S) {
 	c.must("PRAGMA foreign_keys=ON")
 	c.link(byType["person"], byType["place"], "about")
 	s.K("links rows may be hard-deleted (the one such table)", c.tryx("DELETE FROM links WHERE from_id=?", byType["person"]) == "OK" && c.n("select count(*) from links") == 0)
-	c.must("INSERT INTO metrics(name, unit) VALUES ('spare', '')")
-	c.measure(c.n("select id from metrics where name='mood'"), "2026-01-01", 3)
-	s.K("an unreferenced registry row may be deleted (registries are administrative)", c.tryx("DELETE FROM metrics WHERE name='spare'") == "OK")
-	s.K("a referenced metric is refused by its foreign key, not by a trigger", strings.Contains(strings.ToUpper(c.tryx("DELETE FROM metrics WHERE name='mood'")), "FOREIGN KEY"))
+	c.must("INSERT INTO link_kinds(kind) VALUES ('spare')")
+	s.K("an unreferenced registry row may be deleted (registries are administrative)", c.tryx("DELETE FROM link_kinds WHERE kind='spare'") == "OK")
+	c.link(byType["person"], byType["place"], "about")
+	s.K("a referenced link kind is refused by its foreign key, not by a trigger", strings.Contains(strings.ToUpper(c.tryx("DELETE FROM link_kinds WHERE kind='about'")), "FOREIGN KEY"))
 
 	// ---- updated_at, kept by triggers
 	c = s.fresh()

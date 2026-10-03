@@ -42,6 +42,7 @@ func integrity(s *S) {
 	}
 	c.thing("person") // one row of every domain type, so a query that forgets one table reports a false orphan
 	c.thing("place")
+	c.thing("metric")
 	c.must("COMMIT")
 	c.must("PRAGMA wal_checkpoint(TRUNCATE)")
 	c.Close()
@@ -151,6 +152,15 @@ func integrity(s *S) {
 	w.Close()
 	r = checks(p)
 	s.K("a person with a page but no people row: only the orphan query sees it", r == res{"ok", "", ids(hid)}, r, hid)
+
+	p = cp("half-metric")
+	w = s.connect(p)
+	w.must("PRAGMA foreign_keys=ON")
+	mid := w.ent("metric")
+	w.must("INSERT INTO pages(id,entity_type,title,title_key) VALUES (?, 'metric', 'Half metric', 'half metric')", mid)
+	w.Close()
+	r = checks(p)
+	s.K("a metric with a page but no metrics row: only the orphan query sees it", r == res{"ok", "", ids(mid)}, r, mid)
 
 	// ---- the fourth check: the FTS index against pages (it writes, so a writer connection)
 	c = s.fresh()

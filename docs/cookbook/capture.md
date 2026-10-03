@@ -22,6 +22,6 @@ UPDATE pages SET body = body || CASE WHEN body = '' THEN '' ELSE char(10, 10) EN
 -- optional mood, attached to the page it belongs to (D6):
 INSERT INTO measurements(metric_id, day, value, source, captured_with_id, created_at)
 SELECT id, '2026-09-29', 4, 'ui', :page_id, strftime('%Y-%m-%dT%H:%M:%fZ','now')
-  FROM metrics WHERE name = 'mood';      -- (a timed reading also sets taken_at and tz)
+  FROM pages WHERE title_key = 'mood' AND entity_type = 'metric';   -- a metric is a page (D27); a timed reading also sets taken_at and tz
 COMMIT;
 ```

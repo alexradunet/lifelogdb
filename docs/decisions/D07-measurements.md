@@ -1,9 +1,9 @@
-# D7 — Measurements: one FxLifeSheet-shaped table + tiny metric registry; append-only.
+# D7 — Measurements: one FxLifeSheet-shaped table, one row per metric; append-only.
 
 **Status:** accepted
 
-- **Decision.** `metrics` keeps series canonical (`metrics_name`: lowercase snake_case, so 'Weight'
-  cannot become a second series; `metrics_unit_fixed`). `measurements` holds one row per data point
+- **Decision.** A metric is a page ([D27](D27-a-metric-is-a-page.md)), so its title keeps a series canonical ('Weight'
+  and 'weight' are one `title_key`, and a title never changes), and its unit never changes (`metrics_unit_fixed`). `measurements` holds one row per data point
   and is **bitemporal** [R68](../research/references.md#r68): `day`/`taken_at` is *valid time*, `created_at` and the append-only
   rows are *transaction time*, so "what did I believe my weight was on 1 March, as of 1 April" stays
   answerable. The table is append-only (`measurements_no_update`, `measurements_no_delete`); a
@@ -17,7 +17,7 @@
   The unique index on `supersedes_id` doubles as the index the view's `NOT EXISTS` needs (executed:
   the plan uses it).
 - **Habits** are 0/1 metrics with active periods ([D24](D24-habits.md)): their check-ins are ordinary rows here.
-- **Categories** file metrics in a tree (biomarkers, lipids, substances) ([D26](D26-metric-categories.md)).
+- **Categories** file metrics in pages nested by `part-of` links (Biomarkers, Lipids, Substances) ([D26](D26-metric-categories.md)).
 - **`captured_with_id`** is provenance (the day page the reading was captured with), not "about
   this person": the owner is the only subject of measurements.
 - **This is the most battle-tested part of the design.** FxLifeSheet's actual schema is a single

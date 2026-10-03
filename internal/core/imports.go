@@ -38,7 +38,7 @@ func (t *Tx) ByImportKey(importKey string) (int64, error) {
 
 // MetricUnit is a registered metric's unit; found is false when no metric has the name.
 func (t *Tx) MetricUnit(name string) (unit string, found bool, err error) {
-	err = t.tx.QueryRow(`SELECT unit FROM metrics WHERE name = ?`, name).Scan(&unit)
+	err = t.tx.QueryRow(`SELECT m.unit FROM metrics m JOIN pages p ON p.id = m.id WHERE p.title_key = ?`, text.TitleKey(name)).Scan(&unit)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", false, nil
 	}
@@ -72,8 +72,8 @@ func (t *Tx) Body(id int64) (string, error) {
 // MeasurementByKey is the id of the reading a sender's key names under a source; 0 when none.
 func (t *Tx) MeasurementByKey(source, metric, key string) (int64, error) {
 	var id int64
-	err := t.tx.QueryRow(`SELECT me.id FROM measurements me JOIN metrics m ON m.id = me.metric_id
-	                       WHERE me.source = ? AND me.import_key = ? AND m.name = ?`, source, key, metric).Scan(&id)
+	err := t.tx.QueryRow(`SELECT me.id FROM measurements me JOIN pages m ON m.id = me.metric_id
+	                       WHERE me.source = ? AND me.import_key = ? AND m.title_key = ?`, source, key, text.TitleKey(metric)).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, nil
 	}
@@ -128,7 +128,7 @@ func (s *Store) Counts(ctx context.Context) (*Counts, error) {
 	if err := q(`SELECT source, count(*) FROM entities GROUP BY 1`, c.BySource); err != nil {
 		return nil, err
 	}
-	err := s.DB.R.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM pages), (SELECT count(*) FROM measurement_values),
+	err := s.DB.R.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM pages WHERE entity_type <> 'metric'), (SELECT count(*) FROM measurement_values),
 	                                           (SELECT count(*) FROM metrics), (SELECT count(*) FROM habit_periods)`).
 		Scan(&c.Pages, &c.Readings, &c.Metrics, &c.Habits)
 	return c, err
@@ -171,8 +171,8 @@ func (s *Store) Names(ctx context.Context) ([]Name, error) {
 
 // KeyedValue is the value the reading a sender's key names was first written with (not its correction).
 func (t *Tx) KeyedValue(metric, key string) (value float64, found bool, err error) {
-	err = t.tx.QueryRow(`SELECT me.value FROM measurements me JOIN metrics m ON m.id = me.metric_id
-	                      WHERE me.source = ? AND me.import_key = ? AND m.name = ?`, t.Source, key, metric).Scan(&value)
+	err = t.tx.QueryRow(`SELECT me.value FROM measurements me JOIN pages m ON m.id = me.metric_id
+	                      WHERE me.source = ? AND me.import_key = ? AND m.title_key = ?`, t.Source, key, text.TitleKey(metric)).Scan(&value)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, false, nil
 	}

@@ -230,7 +230,7 @@ func (t *Tx) Capture(day, entry string, mood *float64) (id int64, r Sync, err er
 	}
 	if mood != nil {
 		_, err = t.tx.Exec(`INSERT INTO measurements(metric_id, day, value, source, captured_with_id, created_at)
-		                    SELECT id, ?, ?, ?, ?, `+Now+` FROM metrics WHERE name = 'mood'`, day, *mood, t.Source, id)
+		                    SELECT id, ?, ?, ?, ?, `+Now+` FROM pages WHERE title_key = 'mood' AND entity_type = 'metric'`, day, *mood, t.Source, id)
 	}
 	return id, r, err
 }
@@ -443,6 +443,16 @@ func (t *Tx) Link(from, to int64, kind, note string) (added bool, err error) {
 			return false, invalid("an at link starts at a day page (D16)")
 		}
 	}
+	if kind == "part-of" { // the table allows any plain page; a category is never a day or a redirect stub (D26)
+		var odd bool
+		if err := t.tx.QueryRow(`SELECT coalesce((SELECT title = day OR EXISTS (SELECT 1 FROM links r WHERE r.from_id = p.id AND r.kind = 'redirect')
+		                           FROM pages p WHERE id = ?), 0)`, to).Scan(&odd); err != nil {
+			return false, err
+		}
+		if odd {
+			return false, invalid("a category is a plain page, never a day page or a redirect stub (D26)")
+		}
+	}
 	res, err := t.tx.Exec(`INSERT INTO links(from_id, to_id, kind, note, created_at, source) VALUES (?, ?, ?, ?, `+Now+`, ?)
 	                       ON CONFLICT(from_id, to_id, kind) DO NOTHING`, from, to, kind, nullIfEmpty(note), t.Source)
 	if err != nil {
@@ -494,15 +504,16 @@ func (t *Tx) Record(m Reading) (id int64, err error) {
 	}
 	var metric int64
 	var habit bool
-	err = t.tx.QueryRow(`SELECT id, EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id) FROM metrics m WHERE name = ?`,
-		m.Metric).Scan(&metric, &habit)
+	err = t.tx.QueryRow(`SELECT m.id, EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id) FROM pages m
+		  JOIN entities e ON e.id = m.id AND e.deleted_at IS NULL WHERE m.title_key = ? AND m.entity_type = 'metric'`,
+		text.TitleKey(m.Metric)).Scan(&metric, &habit)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, notFound("no metric %q: the owner registers metrics", m.Metric)
 	}
 	if err != nil {
 		return 0, err
 	}
-	if m.Metric == "mood" && !isMood(m.Value) {
+	if text.TitleKey(m.Metric) == "mood" && !isMood(m.Value) {
 		return 0, invalid("mood is 1-5")
 	}
 	if habit && m.Value != 0 && m.Value != 1 {
@@ -527,8 +538,8 @@ func (t *Tx) Record(m Reading) (id int64, err error) {
 // A retracted reading is found, with ok false.
 func (t *Tx) ReadingByKey(metric, key string) (value float64, ok, found bool, err error) {
 	var id int64
-	err = t.tx.QueryRow(`SELECT me.id FROM measurements me JOIN metrics m ON m.id = me.metric_id
-	                      WHERE me.source = ? AND me.import_key = ? AND m.name = ?`, t.Source, key, metric).Scan(&id)
+	err = t.tx.QueryRow(`SELECT me.id FROM measurements me JOIN pages m ON m.id = me.metric_id
+	                      WHERE me.source = ? AND me.import_key = ? AND m.title_key = ?`, t.Source, key, text.TitleKey(metric)).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, false, false, nil
 	}
@@ -565,7 +576,7 @@ func (t *Tx) Correct(wrong int64, value *float64) (id int64, err error) {
 // MeasurementKey is the sender's key of a measurement: its source, import_key and metric ("" when it has none).
 func (t *Tx) MeasurementKey(id int64) (source, key, metric string, err error) {
 	var k sql.NullString
-	err = t.tx.QueryRow(`SELECT me.source, me.import_key, m.name FROM measurements me JOIN metrics m ON m.id = me.metric_id
+	err = t.tx.QueryRow(`SELECT me.source, me.import_key, m.title FROM measurements me JOIN pages m ON m.id = me.metric_id
 	                      WHERE me.id = ?`, id).Scan(&source, &k, &metric)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", "", "", notFound("no measurement %d", id)

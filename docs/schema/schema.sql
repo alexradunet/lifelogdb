@@ -22,21 +22,21 @@ INSERT INTO lifelog_meta(key, value) VALUES
   ('schema',    'lifelog v1: the journal (one page per day), wiki, people, places and health metrics of one person: a life log, not a project manager; the rules of each table are comments inside its CREATE statement (.schema), the rules that span tables are these rows'),
   ('instants',  'every *_at column is a UTC ISO-8601 TEXT instant with milliseconds, e.g. 2026-06-09T21:14:03.482Z, written by the app, never by a SQLite default (CURRENT_TIMESTAMP has no milliseconds and is not ISO-8601; a trigger writes strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')); fixed width, so it sorts as text; CHECK strftime(''%Y-%m-%dT%H:%M:%fZ'', x) IS x; created_at, on every table that has it, is when the row was written to life.db, never back-dated (when a thing happened is its day or its other *_at)'),
   ('days',      'every *_day column (and day) is the LOCAL calendar date YYYY-MM-DD where the thing happened, written by the app from the local calendar of the device that captured it (never a server''s), never recomputed from an instant; CHECK date(x) IS x (IS, not =: a CHECK passes on NULL, and date(''2026-9-3'') is NULL)'),
-  ('deletes',   'life data is never deleted except links rows: an entity is a tombstone (entities.deleted_at), a measurement is corrected by inserting a row; BEFORE DELETE triggers enforce it on entities and every domain row; every read path filters entities.deleted_at IS NULL; the registries (metrics, metric_categories, link_kinds, lifelog_meta) are the owner''s administrative rows, deletable while nothing references them (each CREATE comment says so)'),
-  ('source',    'entities, links, measurements and habit_periods: source names the writer of the row (ui, cli, api, agent:<name>, import:<name>); written at insert, never changed; import_key, on entities and on measurements, is unique per source'),
+  ('deletes',   'life data is never deleted except links rows: an entity is a tombstone (entities.deleted_at), a measurement is corrected by inserting a row; BEFORE DELETE triggers enforce it on entities and every domain row; every read path filters entities.deleted_at IS NULL; the registries (link_kinds, lifelog_meta) are the owner''s administrative rows, deletable while nothing references them (each CREATE comment says so)'),
+  ('source',    'entities, links, measurements and habit_periods: source names the writer of the row (ui, cli, api, agent:<name>, import:<name>; schema for the rows this file seeds); written at insert, never changed; import_key, on entities and on measurements, is unique per source'),
   ('writers',   'one writing application; every connection sets foreign_keys=ON, recursive_triggers=ON, synchronous=FULL, trusted_schema=OFF and starts write transactions with BEGIN IMMEDIATE; every other tool opens the file read-only; imports use INSERT ... ON CONFLICT DO NOTHING, never OR IGNORE (skips CHECK/NOT NULL violations silently) or OR REPLACE (a delete)'),
   ('sqlite',    'writers need SQLite >= 3.51.3 (fixes a WAL race between concurrent writers and checkpoints); migrations need >= 3.53 (ALTER TABLE ADD/DROP CONSTRAINT); CHECKs use only functions every such version has'),
   ('evolution', 'after the freeze (the first row written that cannot be replayed from an import; before it a file is rebuilt, not migrated): numbered forward-only SQL migrations, additive only (new tables, columns and indexes; a named CHECK may be replaced with ALTER TABLE DROP/ADD CONSTRAINT, so every CHECK is named), counted in PRAGMA user_version');
 
 CREATE TABLE entities (
-  -- The shared spine: one row per linkable thing (page, person, place). Its domain row has the
+  -- The shared spine: one row per linkable thing (page, person, place, metric). Its domain row has the
   -- SAME id: the app inserts this row first with INSERT ... RETURNING id and binds that id in the same
   -- transaction; never last_insert_rowid() across statements (any insert in between, a link or a ghost
   -- page, moves it). UNIQUE(id, entity_type) plus the composite FK (id, entity_type) of every domain table
   -- make a row's type and its table agree.
-  -- A person or a place is also a page (D20): one id, with a pages row whose title is the handle
-  -- [[wikilinks]] write; a person also has a people row whose FK points at that pages row, a place has no
-  -- row of its own (D16). A ghost page is promoted by UPDATE entities SET entity_type = 'person' (the FK
+  -- A person, a place or a metric is also a page (D20, D27): one id, with a pages row whose title is the handle
+  -- [[wikilinks]] write; a person also has a people row whose FK points at that pages row, a metric a metrics
+  -- row, a place has no row of its own (D16). A ghost page is promoted by UPDATE entities SET entity_type = 'person' (the FK
   -- cascades it to pages.entity_type), then a person's people row is inserted.
   -- Nothing is ever deleted: deleted_at is the tombstone (D11), enforced by BEFORE DELETE triggers.
   -- import_key: the key a writer that may send the row twice gives it (an importer, an offline phone, a
@@ -45,7 +45,7 @@ CREATE TABLE entities (
   -- DO NOTHING RETURNING id: no id back = imported before, so no domain row is inserted.
   id          INTEGER PRIMARY KEY,
   entity_type TEXT NOT NULL CONSTRAINT entities_entity_type
-                  CHECK (entity_type IN ('page','person','place')),
+                  CHECK (entity_type IN ('page','person','place','metric')),
   created_at  TEXT NOT NULL CONSTRAINT entities_created_at CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at),   -- the write time (lifelog_meta.instants)
   updated_at  TEXT NOT NULL CONSTRAINT entities_updated_at CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', updated_at) IS updated_at),   -- kept by the *_touch triggers
   deleted_at  TEXT     CONSTRAINT entities_deleted_at CHECK (deleted_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', deleted_at) IS deleted_at),   -- the tombstone
@@ -57,7 +57,7 @@ CREATE UNIQUE INDEX entities_import ON entities(source, import_key) WHERE import
 
 CREATE TABLE pages (
   -- All prose (D5): every page is titled, unique and linkable: an essay, a reference page, a tag, the page
-  -- of a person or a place (its entity_type says which, D20), and the journal. The journal is one
+  -- of a person, a place or a metric (its entity_type says which, D20, D27), and the journal. The journal is one
   -- DAY PAGE per local day, titled YYYY-MM-DD ('2026-09-29'): its title equals its day (pages_day_page), so
   -- [[2026-09-29]] reaches it. Capture appends to today's page, created on the first write. A day page is
   -- never a person or a place (pages_day_page_plain): a promotion of it is refused (D20).
@@ -70,7 +70,7 @@ CREATE TABLE pages (
   -- links(kind='wikilink') from a page always equal the [[titles]] and #tags its CommonMark text names,
   -- rebuilt on every save; an invalid target makes no link and never blocks the save (D19).
   id          INTEGER PRIMARY KEY,
-  entity_type TEXT NOT NULL DEFAULT 'page' CONSTRAINT pages_entity_type CHECK (entity_type IN ('page','person','place')),   -- 'page', or the named entity this page is
+  entity_type TEXT NOT NULL DEFAULT 'page' CONSTRAINT pages_entity_type CHECK (entity_type IN ('page','person','place','metric')),   -- 'page', or the named entity this page is
   title       TEXT NOT NULL,              -- filename-safe, immutable; a day page's is its day
   title_key   TEXT NOT NULL,              -- NFC(casefold(NFC(title))), app-computed, unique
   day         TEXT,                       -- local day it was written: a day page's day; a page written on purpose has one, a link target the app created has none
@@ -138,46 +138,18 @@ CREATE TABLE people (
   CONSTRAINT people_death_day_order CHECK (death_day IS NULL OR birth_day IS NULL OR death_day >= birth_day)
 ) STRICT;
 
-CREATE TABLE metric_categories (
-  -- the CLOSED registry of metric categories, a tree (D26): parent_id NULL = a top-level category.
-  -- Registering one is a deliberate INSERT, so a typo cannot become a second category. The parent is
-  -- fixed at registration (metric_categories_parent_fixed) and must already exist (the foreign key),
-  -- so no cycle can form; to move a category, register a new one and re-file its metrics. The name
-  -- may change: everything refers to a category by its id.
-  -- Whether a metric is a habit is NOT a category: it is a habit while it has habit_periods (D24).
-  -- an unreferenced category may be deleted by the owner; one with metrics or subcategories is
-  -- refused by the foreign keys.
-  id        INTEGER PRIMARY KEY,
-  name      TEXT NOT NULL UNIQUE CONSTRAINT metric_categories_name CHECK (length(name) >= 1 AND name NOT GLOB '*[^a-z0-9_]*'),   -- snake_case: 'biomarkers', 'lipids'
-  parent_id INTEGER REFERENCES metric_categories(id),   -- NULL = top level
-  note      TEXT,
-  CONSTRAINT metric_categories_not_self CHECK (parent_id IS NOT id)
-) STRICT;
-CREATE TRIGGER metric_categories_parent_fixed BEFORE UPDATE OF parent_id ON metric_categories
-  WHEN NEW.parent_id IS NOT OLD.parent_id
-BEGIN
-  -- a parent that could change could close a cycle; fixed, the tree needs no walk to stay a tree
-  SELECT RAISE(ABORT, 'a category''s parent is fixed at registration; register a new category and re-file its metrics');
-END;
-INSERT INTO metric_categories(name, note) VALUES
-  ('biomarkers',  'laboratory results: blood, urine, hormones, allergens'),
-  ('body',        'measurements of the body: weight, blood pressure, heart rate'),
-  ('self_report', 'how the owner rated something: mood'),
-  ('substances',  'what the owner took in: alcohol, cannabis, caffeine, supplements');
-
 CREATE TABLE metrics (
-  -- a tiny registry that keeps time series canonical: 'weight' is one series forever, never
-  -- 'Weight' or 'weight kg' (names are snake_case). Seeded with 'mood' (D6). The unit gives every
-  -- stored value its meaning, so it never changes (metrics_unit_fixed). category_id files the
-  -- metric in metric_categories (D26); NULL = not filed. A metric is re-filed by UPDATE.
-  -- an unreferenced metric may be deleted (a mistake registered); a referenced one is refused by
-  -- the foreign keys of measurements and habit_periods: a used metric stays (its series is life data).
-  id    INTEGER PRIMARY KEY,
-  name  TEXT NOT NULL UNIQUE,                 -- snake_case canonical: 'weight', 'mood'
-  unit  TEXT NOT NULL DEFAULT '',             -- 'kg', 'bpm', 'h'; '' for 1-5 scales
-  note  TEXT,
-  category_id INTEGER REFERENCES metric_categories(id),
-  CONSTRAINT metrics_name CHECK (length(name) >= 1 AND name NOT GLOB '*[^a-z0-9_]*')   -- lowercase snake_case, so no case variants
+  -- what is measured (D7). A metric is also a page with the same id (D27), as a person is: its title is
+  -- its name, one series forever (title_key makes 'Weight' and 'weight' one name, and a title never
+  -- changes), its body what the owner writes about it, and [[Weight]] in the journal reaches it. The unit
+  -- gives every stored value its meaning, so it never changes (metrics_unit_fixed). Seeded with Mood (D6).
+  -- A category is a page: a metric is filed in one by a part-of link from its page (D26).
+  -- A habit is NOT a category: a metric is a habit while it has habit_periods (D24).
+  -- A metric registered by mistake is tombstoned, never deleted (D11); its readings stay life data.
+  id          INTEGER PRIMARY KEY,
+  entity_type TEXT NOT NULL DEFAULT 'metric' CONSTRAINT metrics_entity_type CHECK (entity_type = 'metric'),
+  unit        TEXT NOT NULL DEFAULT '',   -- 'kg', 'bpm', 'h'; '' for 1-5 scales and 0/1 habits
+  FOREIGN KEY (id, entity_type) REFERENCES pages(id, entity_type)
 ) STRICT;
 CREATE TRIGGER metrics_unit_fixed BEFORE UPDATE OF unit ON metrics
   WHEN NEW.unit IS NOT OLD.unit
@@ -185,9 +157,11 @@ BEGIN
   -- changing the unit would silently reinterpret the whole series
   SELECT RAISE(ABORT, 'metrics.unit is fixed: it defines what every stored value means; register a new metric instead');
 END;
-INSERT INTO metrics(name, unit, note, category_id) VALUES
-  ('mood', '', '1-5; attached to its day page via measurements.captured_with_id when posted',
-   (SELECT id FROM metric_categories WHERE name = 'self_report'));
+INSERT INTO entities(id, entity_type, created_at, updated_at, source) VALUES
+  (1, 'metric', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'schema');
+INSERT INTO pages(id, entity_type, title, title_key, body) VALUES
+  (1, 'metric', 'Mood', 'mood', '1-5; attached to its day page via measurements.captured_with_id when posted');
+INSERT INTO metrics(id, unit) VALUES (1, '');
 
 CREATE TABLE measurements (
   -- one row per data point (the FxLifeSheet shape). The table is append-only, enforced by triggers: never
@@ -304,12 +278,13 @@ CREATE TABLE link_kinds (
   CONSTRAINT link_kinds_mirror_valid CHECK (symmetric = 0 OR from_types IS to_types)   -- a mirrored edge must be valid in both directions
 ) STRICT;
 INSERT INTO link_kinds(kind, symmetric, from_types, to_types, note) VALUES
-  ('wikilink', 0, 'page,person,place', 'page,person,place', 'extracted from [[body]] on save; body is the truth'),
-  ('redirect', 0, 'page',      'page,person,place', 'old stub page → its replacement, a page, person or place; renames, D5'),
+  ('wikilink', 0, 'page,person,place,metric', 'page,person,place,metric', 'extracted from [[body]] on save; body is the truth'),
+  ('redirect', 0, 'page',      'page,person,place,metric', 'old stub page → its replacement, a page, person, place or metric; renames, D5'),
   ('about',    0, NULL,        'person,place', 'entity → person/place it is about'),
   ('at',       0, 'page',      'place',        'day page → a place the owner was at that day; from a day page only, which the app checks (D16)'),
   ('located-in', 0, 'place',   'place',        'containment: Tokyo → Japan; transitive — walk it with a recursive CTE'),
   ('parent-of', 0, 'person',   'person',       'parent → child; ''family'' stays the symmetric catch-all'),
+  ('part-of',  0, NULL,        'page',         'anything → the page of a category it is filed in (Ferritin → Iron → Biomarkers, D26); walk it with a recursive CTE'),
   ('friend',   1, 'person',    'person',       NULL),
   ('family',   1, 'person',    'person',       NULL),
   ('related',  1, NULL,        NULL,           'anything ↔ anything');
@@ -377,7 +352,7 @@ END;
 
 CREATE VIEW ghost_pages AS
   -- empty plain pages nobody points at, 30 days old: a link target created by a capture-time typo and
-  -- never written (a page anything links to, a rename's target included, is not one). The page of a person or a place is never a ghost,
+  -- never written (a page anything links to, a rename's target included, is not one). The page of a person, a place or a metric is never a ghost,
   -- however empty (D20). The UI lists them; tombstoning is the owner's act.
   SELECT p.id, p.title, e.created_at
     FROM pages p JOIN entities e ON e.id = p.id
@@ -417,3 +392,5 @@ CREATE TRIGGER pages_no_delete BEFORE DELETE ON pages
 BEGIN SELECT RAISE(ABORT, 'pages are never deleted: tombstone the entity (entities.deleted_at)'); END;
 CREATE TRIGGER people_no_delete BEFORE DELETE ON people
 BEGIN SELECT RAISE(ABORT, 'people are never deleted: tombstone the entity (entities.deleted_at)'); END;
+CREATE TRIGGER metrics_no_delete BEFORE DELETE ON metrics
+BEGIN SELECT RAISE(ABORT, 'metrics are never deleted: tombstone the entity (entities.deleted_at)'); END;

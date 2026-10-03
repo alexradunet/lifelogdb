@@ -90,9 +90,9 @@ func journal(s *S) {
 	c.page("Link target")
 	c.pageW("Yesterday essay", "2026-09-28", "x")
 	c.named("person", "Sam")
-	c.metric("weight", "kg")
-	c.measure(2, "2026-09-29", 71.2, M{"taken_at": "2026-09-29T06:00:00.000Z"})
-	c.measure(2, "2026-09-29", 70.0, M{"supersedes_id": 1})
+	wt := c.metric("weight", "kg")
+	c.measure(wt, "2026-09-29", 71.2, M{"taken_at": "2026-09-29T06:00:00.000Z"})
+	c.measure(wt, "2026-09-29", 70.0, M{"supersedes_id": 1})
 	rows := c.rows(DV, P{"day": "2026-09-29"})
 	var got, kinds, items []string
 	for _, r := range rows {

@@ -45,16 +45,17 @@ func (w *Workspace) RegisterMetrics(ctx context.Context, s *core.Store) ([]strin
 			m := approved[n]
 			added, err := t.RegisterMetric(m.Name, m.Unit, m.Note)
 			if err != nil {
-				return refuse("%s: %v", n, err)
+				return refuse("%s: %v", m.Name, err)
 			}
-			line := n + ": " + map[bool]string{true: "registered", false: "existing"}[added]
-			if m.Category != "" { // its path registered top first, then the metric filed in it (D26)
-				if _, err := t.RegisterCategory(m.Category, ""); err != nil {
-					return refuse("%s: %v", n, err)
-				}
-				filed, err := t.FileMetric(m.Name, m.Category)
+			line := m.Name + ": " + map[bool]string{true: "registered", false: "existing"}[added]
+			if m.Category != "" { // the pages of its path, top first, then the metric filed in the last (D26)
+				id, err := t.MetricID(m.Name)
 				if err != nil {
-					return refuse("%s: %v", n, err)
+					return refuse("%s: %v", m.Name, err)
+				}
+				filed, err := t.File(id, m.Category)
+				if err != nil {
+					return refuse("%s: %v", m.Name, err)
 				}
 				if filed {
 					line += ", filed in " + strings.Trim(strings.TrimSpace(m.Category), "/")
@@ -62,7 +63,7 @@ func (w *Workspace) RegisterMetrics(ctx context.Context, s *core.Store) ([]strin
 			}
 			if m.Since != "" {
 				if err := t.StartHabit(m.Name, m.Since, m.Until); err != nil {
-					return refuse("%s: %v", n, err)
+					return refuse("%s: %v", m.Name, err)
 				}
 				line += ", a habit from " + m.Since
 				if m.Until != "" {

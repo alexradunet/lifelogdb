@@ -38,7 +38,7 @@ connection settings, imports) are in the [storage contract](contract/README.md);
 
 **Decisions** — why each rule is the way it is.
 
-- [Decision log](decisions/README.md): D1–D26, one record each
+- [Decision log](decisions/README.md): D1–D27, one record each
 
 **Cookbook** — the canonical reads and writes, every block executed.
 

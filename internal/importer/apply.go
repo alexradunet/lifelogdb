@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"slices"
 	"sort"
 	"strings"
@@ -434,7 +435,7 @@ func Find(ctx context.Context, s *core.Store, q string) ([]Match, error) {
 	}
 	for _, m := range ms {
 		if rel := relation(strings.ReplaceAll(q, "_", " "), strings.ReplaceAll(m.Name, "_", " ")); rel != "" {
-			out = append(out, Match{"metric", m.Name, "/metrics/" + m.Name, rel})
+			out = append(out, Match{"metric", m.Name, "/metrics/" + url.PathEscape(m.Name), rel})
 		}
 	}
 	sort.SliceStable(out, func(a, b int) bool { return rank(out[a].Relation) < rank(out[b].Relation) })

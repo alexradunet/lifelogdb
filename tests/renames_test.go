@@ -20,7 +20,8 @@ import (
 //
 //	changes no row of a page with text, even when a writer skipped the check;
 //
-// D  the writer's own rename (internal/core) writes the same rows as the recipe in A, B and C.
+// E  a category page (D26): the part-of links that end at it, its metrics', move to the new page;
+// D  the writer's own rename (internal/core) writes the same rows as the recipe in A, B, C and E.
 func renames(s *S) {
 	st := s.renameSteps()
 	sv, ok := s.saveSteps()
@@ -78,6 +79,32 @@ func renames(s *S) {
 	n2, e1 := goRename(c2, o2, "Sourdough")
 	_, e2 := goRename(c2, r2, "Rye")
 	s.K("D: the writer's own rename writes the same rows as the recipe (A)", e1 == nil && e2 == nil && n2 == nw && state(c2) == state(c), e1, e2, state(c2), state(c))
+
+	// ---- E  a category's page (D26): its metrics and the part-of links that end at it move too
+	filed := func(c *C) string {
+		return c.tab(`select mp.title, coalesce(p.title, '-') from metrics m join pages mp on mp.id = m.id
+		                 left join links l on l.from_id = m.id and l.kind = 'part-of' left join pages p on p.id = l.to_id order by 1`)
+	}
+	seedE := func(c *C) (lipds, chol int64) {
+		bio := c.page("Biomarkers")
+		lipds = c.pageW("Lipds", nil, "Fats in the blood.")
+		chol = c.page("Cholesterol")
+		c.link(lipds, bio, "part-of")
+		c.link(chol, lipds, "part-of")
+		c.link(c.metric("Triglycerides", "mg/dL"), lipds, "part-of")
+		return
+	}
+	c = s.fresh()
+	lipds, chol := seedE(c)
+	lip, why := c.docRename(st, sv, lipds, "Lipids")
+	s.K("E: a category's page is renamed; its metrics are filed in the new page", why == "" && filed(c) == "Mood|-; Triglycerides|Lipids", why, filed(c))
+	s.K("...its own part-of link moves, and so does its subcategory's", eq(outOf(c, lip), []string{"part-of|Biomarkers"}) && eq(outOf(c, chol), []string{"part-of|Lipids"}), outOf(c, lip), outOf(c, chol))
+	s.K("...nothing typed ends at the stub", c.n("select count(*) from links where to_id=? and kind not in ('wikilink','redirect')", lipds) == 0)
+	s.K("...the database is clean", c.integrityOK())
+	c2 = s.fresh()
+	l2, _ := seedE(c2)
+	_, e5 := goRename(c2, l2, "Lipids")
+	s.K("D: the writer's own rename writes the same rows as the recipe (E)", e5 == nil && state(c2) == state(c) && filed(c2) == filed(c), e5, state(c2), state(c))
 
 	// ---- B  a typo ghost into an existing person
 	seedB := func(c *C) (ghost, sam int64) {
@@ -156,12 +183,14 @@ func renames(s *S) {
 }
 
 // The statements of cookbook/rename-a-page, each one statement of its block, in order.
-type renameSteps struct{ begin, selOld, selNew, ent, pg, stub, redirect, move, dele, commit string }
+type renameSteps struct {
+	begin, selOld, selNew, ent, pg, stub, redirect, move, moveIn, dele, deleIn, commit string
+}
 
 func (s *S) renameSteps() renameSteps {
 	sts := statements(s.d.Block("rename-a-page"))
 	want := []string{"BEGIN IMMEDIATE", "SELECT", "SELECT", "INSERT INTO ENTITIES", "INSERT INTO PAGES", "UPDATE PAGES",
-		"INSERT INTO LINKS", "INSERT INTO LINKS", "DELETE FROM LINKS", "COMMIT"}
+		"INSERT INTO LINKS", "INSERT INTO LINKS", "INSERT INTO LINKS", "DELETE FROM LINKS", "DELETE FROM LINKS", "COMMIT"}
 	if len(sts) != len(want) {
 		stop("cookbook/rename-a-page has %d statements, not %d", len(sts), len(want))
 	}
@@ -170,7 +199,7 @@ func (s *S) renameSteps() renameSteps {
 			stop("cookbook/rename-a-page statement %d is not %s: %s", i, w, clip(code(sts[i]), 60))
 		}
 	}
-	return renameSteps{sts[0], sts[1], sts[2], sts[3], sts[4], sts[5], sts[6], sts[7], sts[8], sts[9]}
+	return renameSteps{sts[0], sts[1], sts[2], sts[3], sts[4], sts[5], sts[6], sts[7], sts[8], sts[9], sts[10], sts[11]}
 }
 
 // docRename is cookbook/rename-a-page run literally, with the refusals its steps 0, 1b and 2 name: the id of the
@@ -215,7 +244,7 @@ func (c *C) docRename(st renameSteps, sv saveSteps, old int64, title string) (in
 	if c.n("select changes()") != 1 {
 		return refuse("the stub step changed no row")
 	}
-	for _, x := range []string{st.redirect, st.move, st.dele, st.commit} {
+	for _, x := range []string{st.redirect, st.move, st.moveIn, st.dele, st.deleIn, st.commit} {
 		c.must(x, p)
 	}
 	return p["new_id"].(int64), ""

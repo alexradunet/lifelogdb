@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"sort"
 	"time"
 
 	"lifelog/internal/text"
@@ -185,14 +186,14 @@ SELECT what, at, detail FROM (
     JOIN entities e ON e.id = pl.id AND e.deleted_at IS NULL
    WHERE d.title_key = :day
   UNION ALL
-  SELECT 'habit', NULL, m.name || ': ' ||
+  SELECT 'habit', NULL, m.title || ': ' ||
          CASE (SELECT max(v.value) FROM measurement_values v WHERE v.metric_id = m.id AND v.day = :day)
            WHEN 1 THEN 'done' WHEN 0 THEN 'not done' ELSE 'not recorded' END
-    FROM habit_periods h JOIN metrics m ON m.id = h.metric_id
+    FROM habit_periods h JOIN pages m ON m.id = h.metric_id
    WHERE h.start_day <= :day AND coalesce(h.end_day, '9999-12-31') >= :day
   UNION ALL
-  SELECT m.name, me.taken_at, CAST(me.value AS TEXT) || ' ' || m.unit
-    FROM measurement_values me JOIN metrics m ON m.id = me.metric_id
+  SELECT p.title, me.taken_at, CAST(me.value AS TEXT) || ' ' || m.unit
+    FROM measurement_values me JOIN metrics m ON m.id = me.metric_id JOIN pages p ON p.id = m.id
    WHERE me.day = :day
      AND NOT EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = me.metric_id
                         AND h.start_day <= :day AND coalesce(h.end_day, '9999-12-31') >= :day)
@@ -201,8 +202,8 @@ ORDER BY (at IS NOT NULL), at;`
 
 func (s *Store) readings(ctx context.Context, where string, args ...any) ([]Reading, error) {
 	rows, err := s.DB.R.QueryContext(ctx, `
-		SELECT me.id, m.name, me.day, coalesce(me.taken_at, ''), coalesce(me.tz, ''), me.value, coalesce(me.captured_with_id, 0)
-		  FROM measurement_values me JOIN metrics m ON m.id = me.metric_id `+where, args...)
+		SELECT me.id, m.title, me.day, coalesce(me.taken_at, ''), coalesce(me.tz, ''), me.value, coalesce(me.captured_with_id, 0)
+		  FROM measurement_values me JOIN pages m ON m.id = me.metric_id `+where, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -248,34 +249,61 @@ func (s *Store) Search(ctx context.Context, q string, limit int) ([]Hit, error) 
 	return out, rows.Err()
 }
 
-// Metric is a registry row; Habit says it has a period (D24), Category is the path of the category it is filed
-// in, "" for none (D26).
+// Metric is a live metric (D27): its page's id, title (its name) and body (its note), its unit; Habit says it has
+// a period (D24), Categories are the paths of the categories it is filed in (D26).
 type Metric struct {
-	Name     string `json:"name"`
-	Unit     string `json:"unit"`
-	Note     string `json:"note,omitempty"`
-	Habit    bool   `json:"habit"`
-	Category string `json:"category,omitempty"`
+	ID         int64    `json:"id"`
+	Name       string   `json:"name"`
+	Unit       string   `json:"unit"`
+	Note       string   `json:"note,omitempty"`
+	Habit      bool     `json:"habit"`
+	Categories []string `json:"categories,omitempty"`
 }
 
 func (s *Store) Metrics(ctx context.Context) ([]Metric, error) {
-	rows, err := s.DB.R.QueryContext(ctx, categoryPaths+`
-		SELECT m.name, m.unit, coalesce(m.note, ''),
-		       EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id), coalesce(t.path, '')
-		  FROM metrics m LEFT JOIN tree t ON t.id = m.category_id ORDER BY m.name`)
+	rows, err := s.DB.R.QueryContext(ctx, `
+		SELECT m.id, p.title, m.unit, p.body, EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id)
+		  FROM metrics m JOIN pages p ON p.id = m.id JOIN entities e ON e.id = m.id AND e.deleted_at IS NULL
+		 ORDER BY p.title_key`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	out := []Metric{}
+	at := map[int64]int{}
 	for rows.Next() {
 		var m Metric
-		if err := rows.Scan(&m.Name, &m.Unit, &m.Note, &m.Habit, &m.Category); err != nil {
+		if err := rows.Scan(&m.ID, &m.Name, &m.Unit, &m.Note, &m.Habit); err != nil {
 			return nil, err
 		}
+		at[m.ID] = len(out)
 		out = append(out, m)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	cats, err := s.categories(ctx)
+	if err != nil {
+		return nil, err
+	}
+	filed, err := s.DB.R.QueryContext(ctx, `SELECT from_id, to_id FROM links WHERE kind = 'part-of'`)
+	if err != nil {
+		return nil, err
+	}
+	defer filed.Close()
+	for filed.Next() {
+		var from, to int64
+		if err := filed.Scan(&from, &to); err != nil {
+			return nil, err
+		}
+		if i, ok := at[from]; ok && cats[to] != nil {
+			out[i].Categories = append(out[i].Categories, cats[to].Path)
+		}
+	}
+	for i := range out {
+		sort.Strings(out[i].Categories)
+	}
+	return out, filed.Err()
 }
 
 // InUse names the metrics with a current reading in the n days up to day, so a view offers the series the
@@ -285,10 +313,10 @@ func (s *Store) InUse(ctx context.Context, day string, n int) ([]string, error) 
 		return nil, invalid("day is YYYY-MM-DD")
 	}
 	rows, err := s.DB.R.QueryContext(ctx, `
-		SELECT m.name FROM metrics m
-		 WHERE EXISTS (SELECT 1 FROM measurement_values v
+		SELECT m.title FROM pages m
+		 WHERE m.entity_type = 'metric' AND EXISTS (SELECT 1 FROM measurement_values v
 		                WHERE v.metric_id = m.id AND v.day > date(?, '-' || ? || ' day') AND v.day <= ?)
-		 ORDER BY m.name`, day, n, day)
+		 ORDER BY m.title_key`, day, n, day)
 	if err != nil {
 		return nil, err
 	}
@@ -309,7 +337,7 @@ func (s *Store) Series(ctx context.Context, metric, from, to string) ([]Reading,
 	if !IsDay(from) || !IsDay(to) {
 		return nil, invalid("from and to are YYYY-MM-DD days")
 	}
-	return s.readings(ctx, `WHERE m.name = ? AND me.day > ? AND me.day <= ? ORDER BY me.day, me.taken_at`, metric, from, to)
+	return s.readings(ctx, `WHERE m.title_key = ? AND me.day > ? AND me.day <= ? ORDER BY me.day, me.taken_at`, text.TitleKey(metric), from, to)
 }
 
 // Measurement reads one row of the append-only table, current or not, and what corrected it.
@@ -325,11 +353,11 @@ func (s *Store) Measurement(ctx context.Context, id int64) (*Measurement, error)
 	m := &Measurement{}
 	var value sql.NullFloat64
 	err := s.DB.R.QueryRowContext(ctx, `
-		SELECT me.id, m.name, me.day, coalesce(me.taken_at, ''), coalesce(me.tz, ''), me.value,
+		SELECT me.id, m.title, me.day, coalesce(me.taken_at, ''), coalesce(me.tz, ''), me.value,
 		       coalesce(me.captured_with_id, 0), coalesce(me.supersedes_id, 0),
 		       coalesce((SELECT x.id FROM measurements x WHERE x.supersedes_id = me.id), 0),
 		       EXISTS (SELECT 1 FROM measurement_values v WHERE v.id = me.id)
-		  FROM measurements me JOIN metrics m ON m.id = me.metric_id WHERE me.id = ?`, id).
+		  FROM measurements me JOIN pages m ON m.id = me.metric_id WHERE me.id = ?`, id).
 		Scan(&m.ID, &m.Metric, &m.Day, &m.TakenAt, &m.TZ, &value, &m.CapturedWith, &m.Supersedes, &m.SupersededBy, &m.Current)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, notFound("no measurement %d", id)

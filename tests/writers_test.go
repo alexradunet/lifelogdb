@@ -153,9 +153,9 @@ func writers(s *S) {
 	w.must("BEGIN IMMEDIATE")
 	w.ent("page")
 	ro := s.readOnly(p)
-	s.K("a mode=ro reader is not blocked by an open write transaction", ro.n("select count(*) from entities") == 0)
+	s.K("a mode=ro reader is not blocked by an open write transaction", ro.n("select count(*) from entities where entity_type = 'page'") == 0)
 	w.must("COMMIT")
-	s.K("...and sees the commit", ro.n("select count(*) from entities") == 1)
+	s.K("...and sees the commit", ro.n("select count(*) from entities where entity_type = 'page'") == 1)
 	for _, st := range []string{"INSERT INTO lifelog_meta VALUES ('x','y')", "DELETE FROM entities", "UPDATE entities SET deleted_at=NULL", "DROP TABLE lifelog_meta"} {
 		s.K("mode=ro refuses: "+clip(st, 30), strings.Contains(ro.tryx(st), "readonly"))
 	}

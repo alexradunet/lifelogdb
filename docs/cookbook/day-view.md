@@ -24,14 +24,14 @@ SELECT what, at, detail FROM (
     JOIN entities e ON e.id = pl.id AND e.deleted_at IS NULL
    WHERE d.title_key = :day
   UNION ALL
-  SELECT 'habit', NULL, m.name || ': ' ||
+  SELECT 'habit', NULL, m.title || ': ' ||
          CASE (SELECT max(v.value) FROM measurement_values v WHERE v.metric_id = m.id AND v.day = :day)
            WHEN 1 THEN 'done' WHEN 0 THEN 'not done' ELSE 'not recorded' END
-    FROM habit_periods h JOIN metrics m ON m.id = h.metric_id
+    FROM habit_periods h JOIN pages m ON m.id = h.metric_id
    WHERE h.start_day <= :day AND coalesce(h.end_day, '9999-12-31') >= :day
   UNION ALL
-  SELECT m.name, me.taken_at, CAST(me.value AS TEXT) || ' ' || m.unit
-    FROM measurement_values me JOIN metrics m ON m.id = me.metric_id
+  SELECT p.title, me.taken_at, CAST(me.value AS TEXT) || ' ' || m.unit
+    FROM measurement_values me JOIN metrics m ON m.id = me.metric_id JOIN pages p ON p.id = m.id
    WHERE me.day = :day
      AND NOT EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = me.metric_id
                         AND h.start_day <= :day AND coalesce(h.end_day, '9999-12-31') >= :day)

@@ -95,6 +95,34 @@ func (t *Tx) Rename(id int64, newTitle string) (int64, error) {
 			return 0, err
 		}
 	}
+	// the typed links that end at it (what is filed in a category's page, part-of) move too; a symmetric kind's
+	// mirror has already gone with the link it mirrors
+	rows, err = t.tx.Query(`SELECT from_id, kind, coalesce(note, '') FROM links
+	                         WHERE to_id = ? AND kind NOT IN ('wikilink', 'redirect')`, id)
+	if err != nil {
+		return 0, err
+	}
+	var ending []edge
+	for rows.Next() {
+		var e edge
+		if err := rows.Scan(&e.to, &e.kind, &e.note); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		ending = append(ending, e)
+	}
+	rows.Close()
+	for _, e := range ending {
+		if err := t.Unlink(e.to, id, e.kind); err != nil {
+			return 0, err
+		}
+		if e.to == to {
+			continue
+		}
+		if _, err := t.Link(e.to, to, e.kind, e.note); err != nil {
+			return 0, err
+		}
+	}
 	return to, nil
 }
 

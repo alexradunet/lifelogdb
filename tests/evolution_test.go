@@ -91,7 +91,7 @@ func evolution(s *S) {
 	s.K("entities_entity_type: the new value is refused before", err(use(c)))
 	c.must("BEGIN")
 	r1 := c.tryx("ALTER TABLE entities DROP CONSTRAINT entities_entity_type")
-	r2 := c.tryx("ALTER TABLE entities ADD CONSTRAINT entities_entity_type CHECK (entity_type IN ('page','person','place','vehicle'))")
+	r2 := c.tryx("ALTER TABLE entities ADD CONSTRAINT entities_entity_type CHECK (entity_type IN ('page','person','place','metric','vehicle'))")
 	c.must("COMMIT")
 	s.K("entities_entity_type: DROP and ADD the widened CHECK in one transaction", r1 == "OK" && r2 == "OK", r1, r2)
 	s.K("entities_entity_type: the new value is accepted", use(c) == "OK")

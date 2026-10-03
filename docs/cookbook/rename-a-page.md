@@ -47,9 +47,18 @@ SELECT :new_id, to_id, kind, note, strftime('%Y-%m-%dT%H:%M:%fZ','now'), :source
  WHERE from_id = :old_id AND kind NOT IN ('wikilink', 'redirect') AND to_id <> :new_id
 ON CONFLICT(from_id, to_id, kind) DO NOTHING;
 
--- 5) the stub keeps its redirect alone: its typed links go (their mirrors with them, links_mirror_delete), and so do
---    its wikilinks (a stub is not scanned: the link sync of its body finds no target)
+-- 4b) so are the typed links that end at it (what is filed in a category's page: part-of, D26)
+INSERT INTO links(from_id, to_id, kind, note, created_at, source)
+SELECT from_id, :new_id, kind, note, strftime('%Y-%m-%dT%H:%M:%fZ','now'), :source
+  FROM links
+ WHERE to_id = :old_id AND kind NOT IN ('wikilink', 'redirect') AND from_id <> :new_id
+ON CONFLICT(from_id, to_id, kind) DO NOTHING;
+
+-- 5) the stub keeps its redirect alone: its typed links go, both ways (their mirrors with them, links_mirror_delete),
+--    and so do its wikilinks (a stub is not scanned: the link sync of its body finds no target); the wikilinks other
+--    pages' text makes to it stay, as their text does
 DELETE FROM links WHERE from_id = :old_id AND kind <> 'redirect';
+DELETE FROM links WHERE to_id = :old_id AND kind NOT IN ('wikilink', 'redirect');
 COMMIT;
 ```
 
@@ -61,5 +70,7 @@ when the person `Sam` exists: no new page, the stub reads `#REDIRECT [[Sam]]`. `
 exists: refused, whether or not `Baking` has text of its own.
 
 Every typed link a plain page can start with the registered kinds (`about`, `related`) may start at any type, so the
-move never meets `links_endpoint_types`; a kind the owner registers that the replacement's type may not start makes
-step 4 fail, and the rename is rolled back.
+move never meets `links_endpoint_types`; a kind the replacement's type may not start or end — `part-of` into a person
+— makes step 4 or 4b fail, and the rename is rolled back. A category page `Lipds` renamed to `Lipids`: its
+`part-of` link to `Biomarkers`, and the `part-of` links of the metrics and subcategories filed in it, all move to
+`Lipids` ([metrics by category](metrics-by-category.md)).

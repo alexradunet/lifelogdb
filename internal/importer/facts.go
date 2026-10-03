@@ -414,7 +414,7 @@ func (w *Workspace) checkStatic(f *Facts, source string, rules *Rules, approved 
 			}
 		case "reading":
 			r := wr.Reading
-			m, ok := approved[r.Metric]
+			m, ok := approved[text.TitleKey(r.Metric)]
 			if !ok {
 				bad(i, "metric %q is not approved in a stamped metrics.md", r.Metric)
 				continue

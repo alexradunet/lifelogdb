@@ -5,7 +5,7 @@
 **The product is `lifelog`, the Go application** ([README](README.md)): one binary at the repo root that writes
 `life.db`, a lifetime-scale, single-user SQLite database, and serves it as a hypermedia API, a CLI and an MCP server.
 **The database it writes is specified on its own** in [`docs/`](docs/README.md) — goals, the canonical DDL
-([`docs/schema/schema.sql`](docs/schema/schema.sql)), the storage contract, the decision log (D1–D26), the query
+([`docs/schema/schema.sql`](docs/schema/schema.sql)), the storage contract, the decision log (D1–D27), the query
 cookbook, non-goals, research — so that `life.db` can be read, or written by another application, in any language.
 The docs state the current truth only.
 
@@ -116,13 +116,13 @@ Their homes are in `docs/`; this list is the checklist, not the rule.
 
 - **Time** (`lifelog_meta.instants` and `.days`, [D10](docs/decisions/D10-time-model.md)): UTC ISO-8601 instants and local-day TEXT columns with round-trip CHECKs
   (`date(x) IS x`, `strftime(...) IS x` — the `IS` matters).
-- **Identity** (the `entities` comment in [schema.sql](docs/schema/schema.sql), D20): every *entity* domain row is keyed by its
-  `entities` id through a composite FK `(id, entity_type)` — `pages` to `entities(id, entity_type)`, `people` to
-  `pages(id, entity_type)`, because a person **is** a page; a place is its page alone (D16). One id, whose page title
+- **Identity** (the `entities` comment in [schema.sql](docs/schema/schema.sql), D20, D27): every *entity* domain row is keyed by its
+  `entities` id through a composite FK `(id, entity_type)` — `pages` to `entities(id, entity_type)`, `people` and `metrics`
+  to `pages(id, entity_type)`, because a person or a metric **is** a page; a place is its page alone (D16). One id, whose page title
   is its handle and its name (`pages.entity_type`, `ON UPDATE CASCADE` for promotion;
   [a person or a place](docs/cookbook/person-or-place.md)). Ids are carried with `INSERT … RETURNING id`, never
   `last_insert_rowid()` across statements.
-- **Provenance**: `source` (the writer: `ui`, `cli`, `api`, `agent:<name>`, `import:<name>`) is
+- **Provenance**: `source` (the writer: `ui`, `cli`, `api`, `agent:<name>`, `import:<name>`; `schema` for the rows the DDL seeds) is
   required on `entities`, `links`, `measurements` and `habit_periods`, written at insert and never changed; `import_key`
   is unique per `source`.
 - **No deletes** (`lifelog_meta.deletes`, [D11](docs/decisions/D11-tombstones.md)): tombstones (BEFORE DELETE triggers);

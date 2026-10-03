@@ -2,139 +2,110 @@ package core
 
 import (
 	"context"
-	"database/sql"
-	"errors"
+	"sort"
 	"strings"
+
+	"lifelog/internal/text"
 )
 
-// Categories file metrics in a tree whose parents never change (D26, docs/cookbook/metrics-by-category.md).
-// A category is addressed by its path from the top: "biomarkers/lipids".
+// A category is a page, and anything is filed in it by a part-of link to that page; a category belongs to another
+// by the same link (D26, docs/cookbook/metrics-by-category.md). Nothing keeps those links a tree, so the writer
+// draws one: each category under one parent (the first by title), and a page it has seen ends the walk.
 
-// categoryPaths is every category with its path; the path is computed, never stored.
-const categoryPaths = `WITH RECURSIVE tree(id, path) AS (
-  SELECT id, name FROM metric_categories WHERE parent_id IS NULL
-  UNION ALL
-  SELECT c.id, t.path || '/' || c.name FROM metric_categories c JOIN tree t ON c.parent_id = t.id
-)`
-
-// Category is a registered category: its path, and the owner's note.
+// Category is a category page and the path the writer draws it at: the titles from the top, joined by '/'.
 type Category struct {
-	Path string `json:"path"`
-	Note string `json:"note,omitempty"`
+	ID    int64  `json:"id"`
+	Title string `json:"title"`
+	Path  string `json:"path"`
 }
 
-func (s *Store) Categories(ctx context.Context) ([]Category, error) {
-	rows, err := s.DB.R.QueryContext(ctx, categoryPaths+`
-		SELECT t.path, coalesce(c.note, '') FROM tree t JOIN metric_categories c ON c.id = t.id ORDER BY t.path`)
+// categories are the live pages something is part-of, by id, each with its path.
+func (s *Store) categories(ctx context.Context) (map[int64]*Category, error) {
+	rows, err := s.DB.R.QueryContext(ctx, `
+		SELECT l.from_id, p.id, p.title, p.title_key
+		  FROM links l JOIN pages p ON p.id = l.to_id
+		  JOIN entities e ON e.id = p.id AND e.deleted_at IS NULL
+		 WHERE l.kind = 'part-of'
+		 ORDER BY p.title_key`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	out := []Category{}
+	cats := map[int64]*Category{}
+	parent := map[int64]int64{} // the first category a page is part-of, by title
 	for rows.Next() {
-		var c Category
-		if err := rows.Scan(&c.Path, &c.Note); err != nil {
+		var from, id int64
+		var title, key string
+		if err := rows.Scan(&from, &id, &title, &key); err != nil {
 			return nil, err
 		}
-		out = append(out, c)
-	}
-	return out, rows.Err()
-}
-
-// splitPath checks a category path: snake_case names joined by '/'.
-func splitPath(path string) ([]string, error) {
-	names := strings.Split(strings.Trim(strings.TrimSpace(path), "/"), "/")
-	for _, n := range names {
-		if !metricName.MatchString(n) {
-			return nil, invalid("category path %q: lowercase snake_case names (a-z 0-9 _) joined by /", path)
+		cats[id] = &Category{ID: id, Title: title}
+		if _, ok := parent[from]; !ok {
+			parent[from] = id
 		}
 	}
-	return names, nil
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for id, c := range cats {
+		titles := []string{c.Title}
+		seen := map[int64]bool{id: true}
+		for p, ok := parent[id]; ok && !seen[p]; p, ok = parent[p] {
+			seen[p] = true
+			titles = append([]string{cats[p].Title}, titles...)
+		}
+		c.Path = strings.Join(titles, "/")
+	}
+	return cats, nil
 }
 
-// RegisterCategory registers every category of path that is missing, top first; note goes to the last one when
-// it is new. A category that exists under another parent is refused: a parent never changes
-// (metric_categories_parent_fixed), so the path names another tree.
-func (t *Tx) RegisterCategory(path, note string) (added bool, err error) {
-	names, err := splitPath(path)
+// Categories are the category pages, by path.
+func (s *Store) Categories(ctx context.Context) ([]Category, error) {
+	cats, err := s.categories(ctx)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
-	var parent sql.NullInt64
-	for i, name := range names {
-		var id int64
-		var have sql.NullInt64
-		err := t.tx.QueryRow(`SELECT id, parent_id FROM metric_categories WHERE name = ?`, name).Scan(&id, &have)
+	out := []Category{}
+	for _, c := range cats {
+		out = append(out, *c)
+	}
+	sort.Slice(out, func(i, j int) bool { return text.TitleKey(out[i].Path) < text.TitleKey(out[j].Path) })
+	return out, nil
+}
+
+// File files the entity id in the category at path, the titles of its pages from the top joined by '/'
+// (Biomarkers/Iron): a page of the path that is missing is made, a plain page with no text, and each is linked
+// part-of the one above it, then id to the last. added says whether id was not filed there before.
+func (t *Tx) File(id int64, path string) (added bool, err error) {
+	var ids []int64
+	for _, title := range strings.Split(strings.Trim(strings.TrimSpace(path), "/"), "/") {
+		title = strings.TrimSpace(title)
+		if !text.ValidTitle(title) {
+			return false, invalid("category %q in %q is not a valid title (docs/contract/titles-and-wikilinks.md)", title, path)
+		}
+		p, err := t.Lookup(title)
+		if err != nil {
+			return false, err
+		}
+		var c int64
 		switch {
-		case errors.Is(err, sql.ErrNoRows):
-			n := ""
-			if i == len(names)-1 {
-				n = note
-			}
-			if err := t.tx.QueryRow(`INSERT INTO metric_categories(name, parent_id, note) VALUES (?, ?, ?) RETURNING id`,
-				name, parent, nullIfEmpty(n)).Scan(&id); err != nil {
+		case p == nil && IsDay(title):
+			return false, conflict("%s is a day: a category is a plain page (D26)", title)
+		case p == nil:
+			if c, _, err = t.insertPage("page", title, text.TitleKey(title), nil, "", ""); err != nil {
 				return false, err
 			}
-			added = true
-		case err != nil:
-			return false, err
-		case have != parent:
-			return false, conflict("category %s exists under another parent: a parent never changes; register the path it has, or a new category", name)
+		case p.Type != "page" || p.DayPage || p.Stub || p.Deleted:
+			return false, conflict("%s is not a live plain page: a category is one (D26)", p.Title)
+		default:
+			c = p.ID
 		}
-		parent = sql.NullInt64{Int64: id, Valid: true}
-	}
-	return added, nil
-}
-
-// categoryID is the id of the category at path, which must be registered.
-func (t *Tx) categoryID(path string) (int64, error) {
-	names, err := splitPath(path)
-	if err != nil {
-		return 0, err
-	}
-	var parent sql.NullInt64
-	for _, name := range names {
-		var id int64
-		err := t.tx.QueryRow(`SELECT id FROM metric_categories WHERE name = ? AND parent_id IS ?`, name, parent).Scan(&id)
-		if errors.Is(err, sql.ErrNoRows) {
-			return 0, notFound("no category %q: the owner registers categories", path)
+		if len(ids) > 0 {
+			if _, err := t.Link(c, ids[len(ids)-1], "part-of", ""); err != nil {
+				return false, err
+			}
 		}
-		if err != nil {
-			return 0, err
-		}
-		parent = sql.NullInt64{Int64: id, Valid: true}
+		ids = append(ids, c)
 	}
-	return parent.Int64, nil
-}
-
-// FileMetric files a metric in the registered category at path; "" takes it out of every category.
-func (t *Tx) FileMetric(metric, path string) (changed bool, err error) {
-	id, err := t.metricID(metric)
-	if err != nil {
-		return false, err
-	}
-	var cat any
-	if strings.TrimSpace(path) != "" {
-		c, err := t.categoryID(path)
-		if err != nil {
-			return false, err
-		}
-		cat = c
-	}
-	res, err := t.tx.Exec(`UPDATE metrics SET category_id = ? WHERE id = ? AND category_id IS NOT ?`, cat, id, cat)
-	if err != nil {
-		return false, err
-	}
-	n, _ := res.RowsAffected()
-	return n == 1, nil
-}
-
-func (s *Store) RegisterCategory(ctx context.Context, source, path, note string) (added bool, err error) {
-	err = s.Do(ctx, source, func(t *Tx) (e error) { added, e = t.RegisterCategory(path, note); return })
-	return
-}
-
-func (s *Store) FileMetric(ctx context.Context, source, metric, path string) (changed bool, err error) {
-	err = s.Do(ctx, source, func(t *Tx) (e error) { changed, e = t.FileMetric(metric, path); return })
-	return
+	return t.Link(id, ids[len(ids)-1], "part-of", "")
 }

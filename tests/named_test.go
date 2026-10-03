@@ -24,7 +24,7 @@ func named(s *S) {
 	for i, t := range []string{"person", "place"} {
 		id := c.named(t, "H "+t)
 		s.K("a "+t+" is one id: entities.entity_type and pages.entity_type agree",
-			c.n("select e.entity_type = p.entity_type from entities e join pages p using(id) where id=?", id) == 1 && c.n("select count(*) from entities") == int64(i+1))
+			c.n("select e.entity_type = p.entity_type from entities e join pages p using(id) where id=?", id) == 1 && c.n("select count(*) from entities where source <> 'schema'") == int64(i+1))
 	}
 	s.K("a person without a page is refused (its FK points at pages)", err(c.tryx("INSERT INTO people(id,name) VALUES (?,?)", c.ent("person"), "x")))
 	s.K("a place has no table of its own: its page is the place (D16)", c.n("select count(*) from sqlite_schema where name in ('places','holdings')") == 0)
@@ -103,7 +103,7 @@ func named(s *S) {
 		s.K("step 0 now reports the handle as taken (entity_type person)", c.tab(sel0[0], P{"handle_key": "bob sample"}) == val(pid)+"|person|None|0")
 		s.K("the same handle cannot be made twice, in any case", strings.Contains(c.tryx("INSERT INTO pages(id,title,title_key) VALUES (?, 'BOB SAMPLE', 'bob sample')", c.ent("page")), "title_key"))
 		c.named("place", "Berlin")
-		s.K("a place is created as its entity and its page", c.n("select count(*) from pages where entity_type <> 'page'") == 2)
+		s.K("a place is created as its entity and its page", c.n("select count(*) from pages where entity_type in ('person', 'place')") == 2)
 		gp := c.page("Lakeside")
 		s.K("a plain page becomes a place by the UPDATE alone, its links kept", c.tryx(strings.Replace(promo[1], "'person'", "'place'", 1), P{"ghost_id": gp}) == "OK" &&
 			c.tab("select e.entity_type, p.entity_type from entities e join pages p using(id) where id=?", gp) == "place|place")

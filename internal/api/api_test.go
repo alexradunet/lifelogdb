@@ -174,13 +174,13 @@ func TestViewsOfferTheMetricsInUse(t *testing.T) {
 	}
 	dayView := must(c.Get("/days/" + day))
 	rec := find(dayView, "record")
-	if !hasOption(rec, "metric", "weight") || hasOption(rec, "metric", "ldl") || hasOption(rec, "metric", "mood") {
+	if !hasOption(rec, "metric", "weight") || hasOption(rec, "metric", "ldl") || hasOption(rec, "metric", "Mood") {
 		t.Errorf("the day view offers %v: only what was read in its last 60 days", rec.Fields[0].Options)
 	}
 	if href(dayView, "metrics") != "/metrics" {
 		t.Error("the day view does not link the whole registry")
 	}
-	if all := find(must(c.Get("/metrics")), "record"); !hasOption(all, "metric", "ldl") || !hasOption(all, "metric", "mood") {
+	if all := find(must(c.Get("/metrics")), "record"); !hasOption(all, "metric", "ldl") || !hasOption(all, "metric", "Mood") {
 		t.Errorf("/metrics offers %v: every registered metric", all.Fields[0].Options)
 	}
 	if ldl := find(must(c.Get("/metrics/ldl")), "record"); !hasOption(ldl, "metric", "ldl") || ldl.Fields[0].Value != "ldl" {
@@ -195,22 +195,26 @@ func TestViewsOfferTheMetricsInUse(t *testing.T) {
 func TestMetricsAreGroupedByCategory(t *testing.T) {
 	c, h := fresh(t)
 	root := must(c.Get("/"))
-	for _, m := range []map[string]string{{"name": "tsh", "unit": "µUI/mL"}, {"name": "weight", "unit": "kg"},
-		{"name": "walk"}, {"name": "steps", "unit": "n"}} {
+	for _, m := range []map[string]string{{"name": "TSH", "unit": "µUI/mL", "note": "thyroid-stimulating hormone"}, {"name": "Weight", "unit": "kg"},
+		{"name": "Walk"}, {"name": "Steps", "unit": "n"}} {
 		must(c.Do(find(root, "register-metric"), m))
 	}
-	must(c.Do(find(must(c.Get("/metrics")), "register-category"), map[string]string{"path": "biomarkers/thyroid"}))
-	tsh := must(c.Get("/metrics/tsh"))
-	if !hasOption(find(tsh, "file-metric"), "category", "biomarkers/thyroid") {
-		t.Fatalf("a series offers the registered categories: %v", find(tsh, "file-metric").Fields)
+	for _, p := range []string{"Biomarkers", "Thyroid", "Body"} {
+		must(c.Do(find(root, "create-page"), map[string]string{"title": p}))
 	}
-	must(c.Do(find(tsh, "file-metric"), map[string]string{"category": "biomarkers/thyroid"}))
-	must(c.Do(find(must(c.Get("/metrics/weight")), "file-metric"), map[string]string{"category": "body"}))
-	walk := must(c.Get("/metrics/walk"))
-	must(c.Do(find(walk, "file-metric"), map[string]string{"category": "body"}))
+	thyroid := must(c.Get("/pages?title=Thyroid"))
+	must(c.Do(find(thyroid, "link"), map[string]string{"to": "Biomarkers", "kind": "part-of"}))
+	tsh := must(c.Get("/metrics/tsh"))
+	if href(tsh, "page") == "" || find(tsh, "link").Title != "File in category" {
+		t.Fatalf("a series links its metric's page and offers to file it: %v", names(tsh))
+	}
+	must(c.Do(find(tsh, "link"), map[string]string{"to": "Thyroid", "kind": "part-of"}))
+	must(c.Do(find(must(c.Get("/metrics/Weight")), "link"), map[string]string{"to": "Body", "kind": "part-of"}))
+	walk := must(c.Get("/metrics/Walk"))
+	must(c.Do(find(walk, "link"), map[string]string{"to": "Body", "kind": "part-of"}))
 	must(c.Do(find(walk, "start-habit"), map[string]string{"start_day": "2026-09-20"}))
-	if _, err := c.Do(find(walk, "file-metric"), map[string]string{"category": "thyroid"}); err == nil {
-		t.Error("a path that skips the top files the metric")
+	if _, err := c.Do(find(walk, "link"), map[string]string{"to": "Nowhere", "kind": "part-of"}); err == nil {
+		t.Error("a metric is filed in a category page that does not exist")
 	}
 
 	var got []string
@@ -222,16 +226,19 @@ func TestMetricsAreGroupedByCategory(t *testing.T) {
 		}
 		got = append(got, g["title"].(string)+":"+strings.Join(ms, ","))
 	}
-	if want := "Habits:walk biomarkers: thyroid:tsh body:weight self report:mood Not filed:steps"; strings.Join(got, " ") != want {
-		t.Errorf("groups %q, want %q: habits first, each category in tree order with its subcategories, the rest last", strings.Join(got, " "), want)
+	if want := "Habits:Walk Biomarkers: Thyroid:TSH Body:Weight Not filed:Mood,Steps"; strings.Join(got, " ") != want {
+		t.Errorf("groups %q, want %q: habits first, each category in tree order with those under it, the rest last", strings.Join(got, " "), want)
 	}
 	page := browse(t, h, "/metrics")
-	for _, s := range []string{"<h2>Habits", `<span class="badge">body</span>`, "<h3>thyroid", "biomarkers/thyroid", "<h2>Not filed"} {
+	for _, s := range []string{"<h2>Habits", `<span class="badge">Body</span>`, ">Thyroid</a>", "Biomarkers/Thyroid", "<h2>Not filed", "thyroid-stimulating hormone"} {
 		if !strings.Contains(page, s) {
 			t.Errorf("/metrics lacks %q", s)
 		}
 	}
-	if s := browse(t, h, "/metrics/tsh"); !strings.Contains(s, `<span class="badge">biomarkers/thyroid</span>`) {
+	if s := browse(t, h, "/metrics/TSH"); !strings.Contains(s, `<span class="badge">Biomarkers/Thyroid</span>`) {
 		t.Error("a series does not show its category")
+	}
+	if s := browse(t, h, href(tsh, "page")); !strings.Contains(s, "thyroid-stimulating hormone") {
+		t.Error("a metric's page does not hold its note")
 	}
 }

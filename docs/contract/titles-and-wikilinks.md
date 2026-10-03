@@ -127,15 +127,16 @@ Test vectors — every writer must reproduce them. A body is shown in a code spa
 
 **Renames.** A title never changes (`pages_title_fixed`, [D5](../decisions/D05-pages-and-day-pages.md)). To fix one, a rename moves the page to the
 new title in one transaction ([rename a page](../cookbook/rename-a-page.md)): the old page's text goes to the page that holds the
-new title, and so do the typed links it starts (`about`, `related`, …; a symmetric kind's mirror with them); the old
+new title, and so do its typed links, the ones it starts and the ones that end at it (`about`, `related`, `part-of`, …; a
+symmetric kind's mirror with them; what is filed in a category's page is its `part-of` links, [D26](../decisions/D26-metric-categories.md)); the old
 page keeps only the one-line body `#REDIRECT [[New Title]]` (the replacement's own spelling) and
 `links(kind='redirect', from=old, to=new)`. A free title gets a new page with the old page's text and `day` (a title that
 is a day has that day). A title that exists already is taken only by an empty old page (`body = ''`, the ghost of a
 typo) and only when the page holding it is live and not a stub; any other rename into it is refused — two texts are
 never merged. A new title with the old one's `title_key` is no rename. Only a live plain page is renamed: not a
-day page (its title is its day), not a stub, and not a person or a place — their title is a permanent handle (a person's
-display name is `people.name`, [D20](../decisions/D20-named-pages.md)). The stub is a plain page; the replacement may be a page, a person or a
-place, so a ghost made by a misspelt `[[Name]]` can point at the person, and a replacement promoted later
+day page (its title is its day), not a stub, and not a person, a place or a metric — their title is a permanent handle (a person's
+display name is `people.name`, [D20](../decisions/D20-named-pages.md); a metric's title names its series, [D27](../decisions/D27-a-metric-is-a-page.md)). The stub is a plain page; the replacement may be a page, a person, a
+place or a metric, so a ghost made by a misspelt `[[Name]]` can point at the person, and a replacement promoted later
 ([a person or a place](../cookbook/person-or-place.md)) keeps its redirect. Consumers follow one hop — the days that name someone and backlinks count a stub's mentions as its replacement's
 ([the days that name someone](../cookbook/days-that-name.md), [backlinks](../cookbook/backlinks.md)); the `redirect` row itself is never a backlink.
 

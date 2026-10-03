@@ -12,74 +12,65 @@ import (
 func facts(s *S) {
 	err := func(r string) bool { return strings.HasPrefix(r, "ERR") }
 
-	// ---- metrics
+	// ---- metrics: a metric is a page (D27)
 	c := s.fresh()
-	w := c.metric("weight", "kg")
-	s.K("mood is seeded (D6)", c.n("select count(*) from metrics where name='mood'") == 1)
+	w := c.metric("Weight", "kg")
+	s.K("Mood is seeded (D6): a metric, its page and its entity, one id", c.tab(`select e.entity_type, p.title, p.entity_type, m.unit
+	      from metrics m join pages p on p.id = m.id join entities e on e.id = m.id where p.title_key = 'mood'`) == "metric|Mood|metric|")
 	c.measure(w, "2026-06-01", 70)
-	s.K("metrics.unit cannot change", err(c.tryx("UPDATE metrics SET unit='lb' WHERE name='weight'")))
-	s.K("a no-op SET unit=unit with a note edit passes", c.tryx("UPDATE metrics SET unit=unit, note='body weight' WHERE name='weight'") == "OK")
-	s.K("a name typo can be fixed", c.tryx("UPDATE metrics SET name='body_weight' WHERE name='weight'") == "OK")
-	s.K("a metric name is registered once", err(c.tryx("INSERT INTO metrics(name,unit) VALUES ('mood','x')")))
-	for _, nm := range []string{"Blood Pressure", "bp sys", "bp-sys", "", "Weight", "MOOD", "x(y)", "ünï"} {
-		s.K(fmt.Sprintf("metric name %q rejected", nm), err(c.tryx("INSERT INTO metrics(name,unit) VALUES (?, 'x')", nm)))
-	}
-	for _, nm := range []string{"bp_sys", "x1", "_a", "steps_walked"} {
-		s.K(fmt.Sprintf("metric name %q accepted", nm), c.tryx("INSERT INTO metrics(name,unit) VALUES (?, 'x')", nm) == "OK")
-	}
+	s.K("metrics.unit cannot change", err(c.tryx("UPDATE metrics SET unit='lb' WHERE id=?", w)))
+	s.K("a no-op SET unit=unit passes", c.tryx("UPDATE metrics SET unit=unit WHERE id=?", w) == "OK")
+	s.K("a metric's note is its page's body", c.tryx("UPDATE pages SET body='body weight, morning' WHERE id=?", w) == "OK")
+	s.K("a metric's name is its title, which never changes", err(c.tryx("UPDATE pages SET title='Body weight' WHERE id=?", w)))
+	s.K("a metric name is registered once, whatever its case (title_key)", err(c.tryx("INSERT INTO pages(id,entity_type,title,title_key) VALUES (?,'metric','WEIGHT','weight')", c.ent("metric"))))
+	pg := c.page("Steps")
+	s.K("a metrics row needs a page of type metric", err(c.tryx("INSERT INTO metrics(id,unit) VALUES (?,'n')", pg)))
+	s.K("...and cannot claim another type to hang off a person's page", err(c.tryx("INSERT INTO metrics(id,entity_type,unit) VALUES (?,'person','n')", c.named("person", "Ann"))))
+	s.K("a page becomes a metric by the UPDATE that promotes any page (D20), then its metrics row",
+		c.tryx("UPDATE entities SET entity_type='metric' WHERE id=?", pg) == "OK" && c.tryx("INSERT INTO metrics(id,unit) VALUES (?,'n')", pg) == "OK")
+	s.K("a metric is never deleted: it is tombstoned", err(c.tryx("DELETE FROM metrics WHERE id=?", pg)) &&
+		c.tryx("UPDATE entities SET deleted_at="+NOW+" WHERE id=?", pg) == "OK")
+	s.K("[[Weight]] in the journal links to the metric", c.link(c.dayPage("2026-06-01", "[[Weight]]"), w, "wikilink") == "OK")
 
-	// ---- metric categories (D26): a tree whose parents are fixed
+	// ---- metric categories (D26): a category is a page, filing is a part-of link
 	c = s.fresh()
-	cat := func(name string) int64 { return c.n("select id from metric_categories where name=?", name) }
-	s.K("the top-level categories are seeded", c.tab("select name from metric_categories where parent_id is null order by name") == "biomarkers; body; self_report; substances")
-	s.K("mood is seeded in self_report", c.str("select c.name from metrics m join metric_categories c on c.id=m.category_id where m.name='mood'") == "self_report")
-	addCat := func(name string, parent any) string {
-		return c.tryx("INSERT INTO metric_categories(name,parent_id) VALUES (?,?)", name, parent)
-	}
-	s.K("a subcategory is registered under an existing parent", addCat("hormones", cat("biomarkers")) == "OK")
-	s.K("nesting has no depth limit", addCat("thyroid", cat("hormones")) == "OK" && addCat("thyroid_antibodies", cat("thyroid")) == "OK")
-	s.K("a category name is registered once", err(addCat("thyroid", nil)))
-	for _, nm := range []string{"Lipids", "blood count", "blood-count", "", "ünï"} {
-		s.K(fmt.Sprintf("category name %q rejected", nm), err(addCat(nm, nil)))
-	}
-	s.K("a parent that does not exist is refused", err(addCat("lipids", 999)))
-	s.K("a category cannot be its own parent (explicit id)", err(c.tryx("INSERT INTO metric_categories(id,name,parent_id) VALUES (500,'loop',500)")))
-	s.K("a category cannot be its own parent (the id it is about to be given)",
-		err(c.tryx("INSERT INTO metric_categories(name,parent_id) VALUES ('loop',(SELECT max(id)+1 FROM metric_categories))")))
-	s.K("the parent cannot change, so no cycle can form", err(c.tryx("UPDATE metric_categories SET parent_id=? WHERE name='hormones'", cat("thyroid"))))
-	s.K("a top-level category cannot be given a parent", err(c.tryx("UPDATE metric_categories SET parent_id=? WHERE name='body'", cat("biomarkers"))))
-	s.K("a full-row update with the same parent and a new note passes", c.tryx("UPDATE metric_categories SET parent_id=parent_id, note='endocrine' WHERE name='hormones'") == "OK")
-	tsh := c.metric("tsh", "µUI/mL")
-	s.K("a metric is filed in a category", c.tryx("UPDATE metrics SET category_id=? WHERE id=?", cat("thyroid"), tsh) == "OK")
-	s.K("a metric cannot be filed in a category that does not exist", err(c.tryx("UPDATE metrics SET category_id=999 WHERE id=?", tsh)))
-	s.K("a category is renamed by one UPDATE; its children and metrics follow by id",
-		c.tryx("UPDATE metric_categories SET name='endocrine' WHERE name='hormones'") == "OK" &&
-			c.str("select p.name from metric_categories c join metric_categories p on p.id=c.parent_id where c.name='thyroid'") == "endocrine" &&
-			c.str("select c.name from metrics m join metric_categories c on c.id=m.category_id where m.id=?", tsh) == "thyroid")
-	s.K("a category with subcategories is not deleted", err(c.tryx("DELETE FROM metric_categories WHERE name='endocrine'")))
-	c.must("DELETE FROM metric_categories WHERE name='thyroid_antibodies'")
-	s.K("a category with metrics is not deleted", err(c.tryx("DELETE FROM metric_categories WHERE name='thyroid'")))
-	s.K("a metric is re-filed by UPDATE, and the emptied category may be deleted",
-		c.tryx("UPDATE metrics SET category_id=? WHERE id=?", cat("biomarkers"), tsh) == "OK" && c.tryx("DELETE FROM metric_categories WHERE name='thyroid'") == "OK")
+	tsh := c.metric("TSH", "µUI/mL")
+	thy, bio := c.page("Thyroid"), c.page("Biomarkers")
+	s.K("a metric is filed in a category by a part-of link to its page", c.link(tsh, thy, "part-of") == "OK")
+	s.K("a category is nested by the same link between pages", c.link(thy, bio, "part-of") == "OK")
+	s.K("a metric may be filed in two categories", c.link(tsh, bio, "part-of") == "OK")
+	sam := c.named("person", "Sam", M{"name": "Sam"})
+	s.K("anything may be filed in a category: a person", c.link(sam, c.page("Family"), "part-of") == "OK")
+	s.K("...but a category is a plain page: never a person or a metric", err(c.link(thy, sam, "part-of")) && err(c.link(thy, tsh, "part-of")))
 
 	// ---- cookbook/metrics-by-category, executed
 	c = s.fresh()
-	c.must("INSERT INTO metric_categories(name,parent_id) SELECT 'lipids', id FROM metric_categories WHERE name='biomarkers'")
-	c.must("INSERT INTO metrics(name,unit,category_id) SELECT 'ldl_cholesterol','mg/dL', id FROM metric_categories WHERE name='lipids'")
-	c.must("INSERT INTO metrics(name,unit,category_id) SELECT 'weight','kg', id FROM metric_categories WHERE name='body'")
-	c.metric("steps", "n")
-	vd := c.metric("vitamin_d", "")
+	bio, lip, vit := c.page("Biomarkers"), c.page("Lipids"), c.page("Vitamins")
+	c.link(lip, bio, "part-of")
+	c.link(c.metric("LDL cholesterol", "mg/dL"), lip, "part-of")
+	c.link(c.metric("Weight", "kg"), c.page("Body"), "part-of")
+	c.metric("Steps", "n")
+	vd := c.metric("Vitamin D", "")
 	c.habit(vd, "2026-01-01", nil)
-	out, e := c.runBlock(s.d.Block("metrics-by-category"), P{"category": "biomarkers", "subcategory": "vitamins", "metric": "vitamin_d"}, nil)
+	p := P{"metric_id": vd, "page_id": vit, "parent_id": bio, "source": "ui"}
+	out, e := c.runBlock(s.d.Block("metrics-by-category"), p, nil)
 	if e != nil {
 		stop("metrics-by-category: %v", e)
 	}
-	_, e = c.runBlock(s.d.Block("metrics-by-category"), P{"category": "biomarkers", "subcategory": "vitamins", "metric": "vitamin_d"}, nil)
-	s.K("cookbook/metrics-by-category runs twice: the second registers nothing", e == nil && c.n("select count(*) from metric_categories where name='vitamins'") == 1, e)
+	_, e = c.runBlock(s.d.Block("metrics-by-category"), p, nil)
+	s.K("cookbook/metrics-by-category runs twice: the second files and nests nothing",
+		e == nil && c.n("select count(*) from links where kind='part-of' and from_id in (?, ?)", vit, vd) == 2, e)
 	sub, all := tab(out[2]), tab(out[3])
-	s.K("cookbook/metrics-by-category: the subtree of a category holds its subcategories' metrics", sub == "biomarkers/lipids|ldl_cholesterol|mg/dL; biomarkers/vitamins|vitamin_d|", sub)
-	s.K("cookbook/metrics-by-category: habits first, then by category path, the metrics not filed last",
-		all == "1|biomarkers/vitamins|vitamin_d|; 0|biomarkers/lipids|ldl_cholesterol|mg/dL; 0|body|weight|kg; 0|self_report|mood|; 0||steps|n", all)
+	s.K("cookbook/metrics-by-category: a category holds the metrics of every category under it", sub == "Lipids|LDL cholesterol|mg/dL; Vitamins|Vitamin D|", sub)
+	s.K("cookbook/metrics-by-category: habits first, then by category, the metrics filed nowhere last",
+		all == "1|Vitamins|Vitamin D|; 0|Body|Weight|kg; 0|Lipids|LDL cholesterol|mg/dL; 0||Mood|; 0||Steps|n", all)
+	walk := statements(s.d.Block("metrics-by-category"))[2]
+	c.link(bio, lip, "part-of") // a cycle: Biomarkers part-of Lipids part-of Biomarkers
+	cyc, e := c.query(walk, P{"parent_id": bio})
+	s.K("cookbook/metrics-by-category: a cycle of part-of links ends the walk", e == nil && tab(cyc) == sub, e, tab(cyc))
+	c.must("UPDATE entities SET deleted_at="+NOW+" WHERE id=?", vit)
+	s.K("cookbook/metrics-by-category: a deleted category's metrics read as filed nowhere",
+		strings.Contains(tab(c.rows(statements(s.d.Block("metrics-by-category"))[3])), "1||Vitamin D|"))
 
 	// ---- append-only, supersede, retract
 	c = s.fresh()

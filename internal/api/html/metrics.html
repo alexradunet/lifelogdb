@@ -1,19 +1,18 @@
 {{define "metrics"}}{{template "head" .}}
 <h1>Metrics</h1>
 {{range .Props.groups}}<section class="group depth-{{num .depth}}">
-{{if eq (num .depth) "0"}}<h2>{{.title}}{{with .metrics}} <span class="muted">{{len .}}</span>{{end}}</h2>{{else}}<h3>{{.title}} <span class="muted">{{.path}}{{with .metrics}} · {{len .}}{{end}}</span></h3>{{end}}
+{{if eq (num .depth) "0"}}<h2>{{if .page}}<a href="/pages/{{num .page}}">{{.title}}</a>{{else}}{{.title}}{{end}}{{with .metrics}} <span class="muted">{{len .}}</span>{{end}}</h2>{{else}}<h3><a href="/pages/{{num .page}}">{{.title}}</a> <span class="muted">{{.path}}{{with .metrics}} · {{len .}}{{end}}</span></h3>{{end}}
 {{with .metrics}}<div class="scroll"><table><tr><th>metric</th><th>unit</th><th>note</th></tr>
-{{range .}}<tr><td><a href="/metrics/{{pathesc .name}}">{{.name}}</a>{{if and .habit .category}} <span class="badge">{{.category}}</span>{{end}}</td><td>{{.unit}}</td><td class="muted">{{.note}}</td></tr>{{end}}
+{{range .}}<tr><td><a href="/metrics/{{pathesc .name}}">{{.name}}</a>{{if .habit}}{{range .categories}} <span class="badge">{{.}}</span>{{end}}{{end}}</td><td>{{.unit}}</td><td class="muted">{{.note}}</td></tr>{{end}}
 </table></div>{{end}}</section>{{end}}
 <h2>Record</h2>
 {{template "form" (form (.Action "record"))}}
-{{template "boxed" (form (.Action "register-category"))}}
 {{template "foot" .}}{{end}}
 
 {{define "series"}}{{template "head" .}}
 {{$s := .Props}}
 <h1>{{.Title}}</h1>
-<div class="sub"><span>{{$s.from}} – {{$s.to}}</span>{{with $s.category}}<span class="badge">{{.}}</span>{{end}}<a href="/metrics">All metrics</a>
+<div class="sub"><span>{{$s.from}} – {{$s.to}}</span>{{range $s.categories}}<span class="badge">{{.}}</span>{{end}}{{with .Link "page"}}<a href="{{.}}">Page</a>{{end}}<a href="/metrics">All metrics</a>
 <a href="/metrics/{{pathesc $s.metric}}?from=0001-01-01&amp;to={{$s.to}}">All readings</a></div>
 {{with $s.readings}}{{chart $s.from $s.to .}}
 <div class="scroll"><table><tr><th>day</th><th class="num">value</th><th>taken at</th></tr>
@@ -27,7 +26,7 @@
 {{template "form" (form (.Action "record") "class" "inline" "hide" "taken_at,tz,import_key")}}
 {{template "boxed" (form (.Action "start-habit"))}}
 {{template "boxed" (form (.Action "stop-habit"))}}
-{{template "boxed" (form (.Action "file-metric"))}}
+{{template "boxed" (form (.Action "link") "hide" "kind,note")}}
 {{template "foot" .}}{{end}}
 
 {{define "habits"}}{{template "head" .}}

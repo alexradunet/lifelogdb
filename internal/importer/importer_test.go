@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -519,10 +520,13 @@ func TestRewriteLinks(t *testing.T) {
 func TestMetricsAreFiledFromTheirCategory(t *testing.T) {
 	f := setup(t)
 	f.approveRules(t, rulesBody)
-	for _, m := range []Metric{{Name: "ferritin", Unit: "ng/mL", Category: "biomarkers/iron"}, {Name: "coffee_cups", Unit: "cups"}} {
+	for _, m := range []Metric{{Name: "Ferritin", Unit: "ng/mL", Note: "iron stores", Category: "Biomarkers/Iron"}, {Name: "coffee_cups", Unit: "cups"}} {
 		if err := f.w.ProposeMetric(m); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if err := f.w.ProposeMetric(Metric{Name: "FERRITIN", Unit: "ng/mL"}); err == nil {
+		t.Error("the same name in another case was proposed twice")
 	}
 	if err := ownerApproves(f.w, "metrics.md"); err != nil {
 		t.Fatal(err)
@@ -531,26 +535,29 @@ func TestMetricsAreFiledFromTheirCategory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(done, "; "); got != "coffee_cups: registered; ferritin: registered, filed in biomarkers/iron" {
+	if got := strings.Join(done, "; "); got != "coffee_cups: registered; Ferritin: registered, filed in Biomarkers/Iron" {
 		t.Errorf("register metrics did %q", got)
 	}
-	if done, _ := f.w.RegisterMetrics(ctx, f.s); strings.Join(done, "; ") != "coffee_cups: existing; ferritin: existing" {
+	if done, _ := f.w.RegisterMetrics(ctx, f.s); strings.Join(done, "; ") != "coffee_cups: existing; Ferritin: existing" {
 		t.Errorf("a re-run did %q", done)
 	}
 	ms, _ := f.s.Metrics(ctx)
 	for _, m := range ms {
-		if want := map[string]string{"ferritin": "biomarkers/iron", "mood": "self_report"}[m.Name]; m.Category != want {
-			t.Errorf("%s is filed in %q, want %q", m.Name, m.Category, want)
+		if want := map[string]string{"Ferritin": "[Biomarkers/Iron]"}[m.Name]; fmt.Sprint(m.Categories) != "["+strings.Trim(want, "[]")+"]" {
+			t.Errorf("%s is filed in %v, want %s", m.Name, m.Categories, want)
+		}
+		if m.Name == "Ferritin" && m.Note != "iron stores" {
+			t.Errorf("the note is the metric page's body: %q", m.Note)
 		}
 	}
 
-	// a path that puts a registered category under another parent is refused, and nothing is written
-	editLine(t, f.w, "metrics.md", "| biomarkers/iron |", "| substances/iron |")
+	// a path through a page that is not a plain one is refused, and nothing is written
+	editLine(t, f.w, "metrics.md", "| Biomarkers/Iron |", "| Mood/Iron |")
 	if err := ownerApproves(f.w, "metrics.md"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.w.RegisterMetrics(ctx, f.s); err == nil || !strings.Contains(err.Error(), "another parent") {
-		t.Errorf("a category moved to another parent: %v", err)
+	if _, err := f.w.RegisterMetrics(ctx, f.s); err == nil || !strings.Contains(err.Error(), "plain page") {
+		t.Errorf("a metric's page as a category: %v", err)
 	}
 }
 

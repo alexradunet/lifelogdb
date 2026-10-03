@@ -4,38 +4,62 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"regexp"
+
+	"lifelog/internal/text"
 )
 
-var metricName = regexp.MustCompile(`^[a-z0-9_]+$`)
-
-// RegisterMetric adds a metric to the registry (the owner's administrative row, D7). Registering one that exists
-// with the same unit is a no-op; another unit is refused: a unit never changes (metrics_unit_fixed).
+// RegisterMetric makes a metric (D27): a page titled name, whose body is the note, and its metrics row with the
+// unit, one id. A ghost page of that title becomes the metric, as a person is promoted (D20). Registering one that
+// exists with the same unit is a no-op; another unit is refused: a unit never changes (metrics_unit_fixed).
 func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
-	if !metricName.MatchString(name) {
-		return false, invalid("metric %q: lowercase snake_case (a-z 0-9 _)", name)
+	if !text.ValidTitle(name) {
+		return false, invalid("metric name %q is not a valid title (docs/contract/titles-and-wikilinks.md)", name)
 	}
-	res, err := t.tx.Exec(`INSERT INTO metrics(name, unit, note) VALUES (?, ?, ?) ON CONFLICT(name) DO NOTHING`,
-		name, unit, nullIfEmpty(note))
+	p, err := t.Lookup(name)
 	if err != nil {
 		return false, err
 	}
-	if n, _ := res.RowsAffected(); n == 1 {
-		return true, nil
+	switch {
+	case p == nil:
+		id, _, err := t.insertPage("metric", name, text.TitleKey(name), nil, note, "")
+		if err != nil {
+			return false, err
+		}
+		_, err = t.tx.Exec(`INSERT INTO metrics(id, unit) VALUES (?, ?)`, id, unit)
+		return err == nil, err
+	case p.Type == "metric":
+		var have string
+		if err := t.tx.QueryRow(`SELECT unit FROM metrics WHERE id = ?`, p.ID).Scan(&have); err != nil {
+			return false, err
+		}
+		if have != unit {
+			return false, conflict("metric %s exists with unit %q, not %q: a unit never changes; register a new metric", p.Title, have, unit)
+		}
+		return false, nil
+	case p.Type != "page" || p.DayPage || p.Stub:
+		return false, conflict("%s is taken by a %s, a day page or a redirect stub: a metric's title must be free or an empty plain page (D27)", p.Title, p.Type)
+	case p.Body != "" && note != "":
+		return false, conflict("%s is a page with text: a metric takes a page whose body is empty, or no note", p.Title)
 	}
-	var have string
-	if err := t.tx.QueryRow(`SELECT unit FROM metrics WHERE name = ?`, name).Scan(&have); err != nil {
+	if _, err := t.tx.Exec(`UPDATE entities SET entity_type = 'metric', deleted_at = NULL WHERE id = ?`, p.ID); err != nil {
 		return false, err
 	}
-	if have != unit {
-		return false, conflict("metric %s exists with unit %q, not %q: a unit never changes; register a new metric", name, have, unit)
+	if _, err := t.tx.Exec(`INSERT INTO metrics(id, unit) VALUES (?, ?)`, p.ID, unit); err != nil {
+		return false, err
 	}
-	return false, nil
+	if note != "" {
+		if _, err := t.SetBody(p.ID, note); err != nil {
+			return false, err
+		}
+	}
+	return true, nil
 }
 
+// metricID finds a live metric by its name, in any case (its title_key).
 func (t *Tx) metricID(name string) (int64, error) {
 	var id int64
-	err := t.tx.QueryRow(`SELECT id FROM metrics WHERE name = ?`, name).Scan(&id)
+	err := t.tx.QueryRow(`SELECT p.id FROM pages p JOIN entities e ON e.id = p.id AND e.deleted_at IS NULL
+	                       WHERE p.title_key = ? AND p.entity_type = 'metric'`, text.TitleKey(name)).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, notFound("no metric %q: the owner registers metrics", name)
 	}
@@ -114,12 +138,12 @@ func (s *Store) Habits(ctx context.Context, day string) ([]HabitState, error) {
 		return nil, invalid("day %q is not YYYY-MM-DD", day)
 	}
 	rows, err := s.DB.R.QueryContext(ctx, `
-		SELECT m.name,
+		SELECT m.title,
 		       CASE (SELECT max(v.value) FROM measurement_values v WHERE v.metric_id = m.id AND v.day = :day)
 		         WHEN 1 THEN 'done' WHEN 0 THEN 'not done' ELSE 'not recorded' END AS state
-		  FROM habit_periods h JOIN metrics m ON m.id = h.metric_id
+		  FROM habit_periods h JOIN pages m ON m.id = h.metric_id
 		 WHERE h.start_day <= :day AND coalesce(h.end_day, '9999-12-31') >= :day
-		 ORDER BY m.name`, sql.Named("day", day))
+		 ORDER BY m.title_key`, sql.Named("day", day))
 	if err != nil {
 		return nil, err
 	}
@@ -158,14 +182,14 @@ func (s *Store) Completion(ctx context.Context, from, to string) ([]Completion, 
 		  SELECT h.metric_id, d.day
 		    FROM days d JOIN habit_periods h ON h.start_day <= d.day AND coalesce(h.end_day, '9999-12-31') >= d.day
 		)
-		SELECT m.name, count(*) AS active_days,
+		SELECT m.title, count(*) AS active_days,
 		       sum(s.value IS 1) AS done, sum(s.value IS 0) AS not_done, sum(s.value IS NULL) AS not_recorded
 		  FROM active a
-		  JOIN metrics m ON m.id = a.metric_id
+		  JOIN pages m ON m.id = a.metric_id
 		  LEFT JOIN (SELECT metric_id, day, max(value) AS value FROM measurement_values GROUP BY metric_id, day) s
 		         ON s.metric_id = a.metric_id AND s.day = a.day
 		 GROUP BY m.id
-		 ORDER BY m.name`, sql.Named("from_day", from), sql.Named("to_day", to))
+		 ORDER BY m.title_key`, sql.Named("from_day", from), sql.Named("to_day", to))
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +214,7 @@ type Period struct {
 // Periods lists a metric's habit periods, oldest first.
 func (s *Store) Periods(ctx context.Context, metric string) ([]Period, error) {
 	rows, err := s.DB.R.QueryContext(ctx, `SELECT h.start_day, coalesce(h.end_day, '') FROM habit_periods h
-	                                         JOIN metrics m ON m.id = h.metric_id WHERE m.name = ? ORDER BY h.start_day`, metric)
+	                                         JOIN pages m ON m.id = h.metric_id WHERE m.title_key = ? ORDER BY h.start_day`, text.TitleKey(metric))
 	if err != nil {
 		return nil, err
 	}
@@ -205,3 +229,6 @@ func (s *Store) Periods(ctx context.Context, metric string) ([]Period, error) {
 	}
 	return out, rows.Err()
 }
+
+// MetricID is the id of a live metric, found by its name in any case.
+func (t *Tx) MetricID(name string) (int64, error) { return t.metricID(name) }

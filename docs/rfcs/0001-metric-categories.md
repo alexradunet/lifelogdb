@@ -48,4 +48,4 @@ Mutants: each CHECK made always true, the trigger never firing, the name unique 
 
 ## Outcome
 
-Accepted as [D26](../decisions/D26-metric-categories.md).
+Accepted as [D26](../decisions/D26-metric-categories.md); replaced by [0002](0002-categories-are-pages.md) after the owner's review.

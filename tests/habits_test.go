@@ -49,7 +49,7 @@ func habits(s *S) {
 	s.K("a period is never deleted", err(c.tryx("DELETE FROM habit_periods")) && c.n("select count(*) from habit_periods") == 3)
 	s.K("a period's source never changes", strings.Contains(c.tryx("UPDATE habit_periods SET source='cli' WHERE start_day='2026-10-01'"), "never changed"))
 	s.K("...a full-row update that keeps it accepted", c.tryx("UPDATE habit_periods SET source='ui', end_day=end_day WHERE start_day='2026-10-01'") == "OK")
-	s.K("mood is not a habit: it has no period", c.n("select count(*) from habit_periods h join metrics m on m.id=h.metric_id where m.name='mood'") == 0)
+	s.K("mood is not a habit: it has no period", c.n("select count(*) from habit_periods h join pages m on m.id=h.metric_id where m.title_key='mood'") == 0)
 	s.K("the database is clean", c.integrityOK())
 
 	// ---- cookbook/habits run literally

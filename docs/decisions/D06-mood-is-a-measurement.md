@@ -2,8 +2,8 @@
 
 **Status:** accepted
 
-- **Decision.** Mood is a time series like any other: a seeded metric `mood` whose rows are appended
-  to `measurements`. When a mood is attached to a day page, the row's `captured_with_id` is the page's id. The
+- **Decision.** Mood is a time series like any other: a seeded metric, the page `Mood`
+  ([D27](D27-a-metric-is-a-page.md)), whose rows are appended to `measurements`. When a mood is attached to a day page, the row's `captured_with_id` is the page's id. The
   1–5 range is app-level validation on one metric row, not a schema CHECK.
 - **Rule.** One home per concept, forever (principle 6): a standalone mood tap needs no second
   mechanism, and mood charts uniformly with every other series.

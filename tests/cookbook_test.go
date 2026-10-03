@@ -18,6 +18,7 @@ func cookbook(s *S) {
 		c := s.freshWith(F{Hardened: hardened, Path: path})
 		dp := c.dayPage("2026-09-28", "Shipped the schema with [[Sam]] in [[Japan]]. [[Lifelog]]")
 		wp := c.page("Lifelog")
+		cat := c.page("Biomarkers")
 		c.link(dp, wp, "wikilink")
 		pe := c.named("person", "Sam", M{"name": "Sam"})
 		gh := c.page("Ana")
@@ -25,17 +26,17 @@ func cookbook(s *S) {
 		c.link(dp, pe, "wikilink")
 		c.link(dp, pl, "wikilink")
 		c.link(dp, pl, "at")
-		c.must("INSERT INTO metrics(name,unit) VALUES ('weight','kg')")
-		c.must("INSERT INTO metrics(name,unit) VALUES ('vitamin_d','')")
-		c.measure(2, "2026-09-29", 71.2)
-		c.measure(2, "2026-09-28", 70.9)
+		w := c.metric("weight", "kg")
+		c.metric("vitamin_d", "")
+		c.measure(w, "2026-09-29", 71.2)
+		c.measure(w, "2026-09-28", 70.9)
 		old := c.pageW("Sourdogh", nil, "Feed the starter. [[Lifelog]]")
 		c.link(old, wp, "wikilink")
 		c.link(old, pl, "about")
 		return c, P{"old_id": old, "new_title": "Sourdough starter", "new_key": "sourdough starter", "found_id": wp, "target_id": wp, "target_ids": "[]", "place_id": pl, "day_page_id": dp, "mistaken_row_id": 2, "from_day": "2026-01-15", "to_day": "2026-09-10",
 			"day": "2026-09-29", "page_id": wp, "person_id": pe, "entity_id": pe, "handle_title": "Bob Sample", "handle_key": "bob sample", "ghost_id": gh,
-			"due_day": "2026-10-05", "query": "schema", "key": "newpage", "title": "Newpage", "metric_id": 2, "wrong_row_id": 1, "source": "ui",
-			"import_key": "notes/sourdough.md", "metric": "vitamin_d", "category": "biomarkers", "subcategory": "vitamins",
+			"due_day": "2026-10-05", "query": "schema", "key": "newpage", "title": "Newpage", "metric_id": w, "wrong_row_id": 1, "source": "ui",
+			"import_key": "notes/sourdough.md", "metric": "vitamin_d", "parent_id": cat,
 			"snapshot": filepath.ToSlash(filepath.Join(s.dir, fmt.Sprintf("cookbook-snapshot-%v.db", hardened)))}
 	}
 

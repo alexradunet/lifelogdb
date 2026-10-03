@@ -15,6 +15,7 @@
   without a page, and undoing a promotion (the `people` row's FK) (executed). A day page is never
   promoted: it is the journal of its day ([D5](D05-pages-and-day-pages.md)), and its `at` links need it to stay a page ([D16](D16-places.md)).
   `pages_day_page_plain` checks the cascaded type, so the `UPDATE` on `entities` is refused (executed).
+- **A metric** is a named entity in the same way: a page and a `metrics` row, one id ([D27](D27-a-metric-is-a-page.md)).
 - **Why.** The owner writes `Today I met [[Bob Sample]]` and wants that day's page attached to the
   person.
   A wikilink can only land on a page, so the person must be one. Giving the person and the page the

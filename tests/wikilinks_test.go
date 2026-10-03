@@ -256,7 +256,7 @@ func saveContract(s *S) {
 	s.K("P3c re-saving the same body changes nothing (idempotent, no new rows)", n1 == n2, n1, n2)
 	c.editBody(pid, "no links at all")
 	s.K("P3d body without links: all wikilinks removed", len(c.linksOf(pid)) == 0)
-	s.K("P3e dropped targets survive as pages (and may become ghosts, cookbook/ghost-pages)", c.n("select count(*) from pages where id<>?", pid) == 4)
+	s.K("P3e dropped targets survive as pages (and may become ghosts, cookbook/ghost-pages)", c.n("select count(*) from pages where id<>? and entity_type = 'page'", pid) == 4)
 
 	// P4 self link, stub
 	c = s.fresh()

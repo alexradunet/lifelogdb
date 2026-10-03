@@ -13,7 +13,7 @@ lab results). Every step was executed on 1 000 synthetic rows:
 ATTACH 'scratch.db' AS s;
 BEGIN IMMEDIATE;
 INSERT INTO measurements(metric_id, day, taken_at, tz, value, created_at, source, import_key)
-SELECT (SELECT id FROM metrics WHERE name = 'weight'), day, NULLIF(taken_at, ''), NULLIF(tz, ''), value,
+SELECT (SELECT id FROM pages WHERE title_key = 'weight' AND entity_type = 'metric'), day, NULLIF(taken_at, ''), NULLIF(tz, ''), value,
        strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'import:scale', id
   FROM s.staging WHERE true
 ON CONFLICT(source, import_key, metric_id) WHERE import_key IS NOT NULL DO NOTHING;

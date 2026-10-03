@@ -551,12 +551,15 @@ func (c *C) domain(typ string, id int64, cols M) {
 	if typ == "place" { // a place is its page: no row of its own (D16)
 		return
 	}
-	m := M{"id": id, "name": "P"}
+	table, m := "people", M{"id": id, "name": "P"}
+	if typ == "metric" { // a metric's row holds its unit (D27)
+		table, m = "metrics", M{"id": id, "unit": ""}
+	}
 	for k, v := range cols {
 		m[k] = v
 	}
 	cs, marks, vals := m.split()
-	c.must("INSERT INTO people("+strings.Join(cs, ",")+") VALUES ("+marks+")", vals...)
+	c.must("INSERT INTO "+table+"("+strings.Join(cs, ",")+") VALUES ("+marks+")", vals...)
 }
 
 // thing is any entity with its domain row: a page, or a named one.
@@ -596,8 +599,9 @@ func (c *C) habit(metric any, start string, end any, source ...string) string {
 	return c.tryx("INSERT INTO habit_periods(metric_id,start_day,end_day,source) VALUES (?,?,?,?)", metric, start, end, src)
 }
 
-func (c *C) metric(name, unit string) int64 {
-	return c.rows("INSERT INTO metrics(name,unit) VALUES (?,?) RETURNING id", name, unit)[0][0].(int64)
+// metric is a metric (D27): the entity, its page titled title, and its metrics row with the unit, one id.
+func (c *C) metric(title, unit string) int64 {
+	return c.named("metric", title, M{"unit": unit})
 }
 
 // ---- statements and blocks

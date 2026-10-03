@@ -66,7 +66,7 @@ func TestCaptureCreatesTheDayAndItsLinks(t *testing.T) {
 		t.Errorf("wikilinks after a second capture: %s", got)
 	}
 	d, _ := s.Day(ctx, "2026-09-29")
-	if len(d.Readings) != 1 || d.Readings[0].Metric != "mood" || d.Readings[0].CapturedWith != id {
+	if len(d.Readings) != 1 || d.Readings[0].Metric != "Mood" || d.Readings[0].CapturedWith != id {
 		t.Errorf("mood reading %+v", d.Readings)
 	}
 	if _, _, err := s.Capture(ctx, "cli", "2026-09-29", "", ptr(9)); status(err) != 422 {
