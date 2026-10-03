@@ -8,5 +8,6 @@ data could not answer, a rule that is ambiguous or untestable. It is the evidenc
 
 | id | title | status |
 |---|---|---|
+| [0008](0008-metrics-cannot-be-grouped.md) | The metrics cannot be grouped: a hundred lab values, a drink count and mood in one list | proposed |
 
 Status values: open | proposed (an RFC exists).
