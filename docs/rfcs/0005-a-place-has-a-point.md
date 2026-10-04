@@ -61,4 +61,4 @@ mutant per rule.
 
 Accepted: [D21](../decisions/D21-location-history.md) rewritten in place (a place has a point and a radius; a photo's place
 becomes an `at` link when it is kept; no track), [D16](../decisions/D16-places.md) and [D9](../decisions/D09-binary-files.md) amended; plan 031 done
-(`git log -- docs/plans`). The Takeout step is [plan 032](../plans/032-takeout-photos.md).
+(`git log -- docs/plans`). Keeping the few photos chosen for a day, from any library, is [plan 033](../plans/033-photos-from-any-source.md).
