@@ -31,6 +31,8 @@ lifelog snapshot --to ~/snapshots --human  # life-YYYY-MM-DD.db and its restore 
 lifelog file memo.m4a --text memo.txt     # keep a file: its text, the original hashed and never stored
 lifelog file IMG_0001.HEIC --preview IMG_0001.jpg   # a photo lifelog cannot read: send a JPEG of it
 lifelog file IMG_0003.jpg --at Lakeside --radius 300   # a photo near no known place: name the place
+lifelog file ~/picks/2019-06 --dry-run --human   # the few photos chosen for some days: what keeping them would do
+lifelog file ~/picks/2019-06 --human             # keep them: their days linked, the ones near no place grouped
 ```
 
 An import ([importing with a model](docs/guides/importing.md)) works in a workspace beside its source and on a
@@ -42,7 +44,6 @@ lifelog mcp --workspace ~/import/Notebook.lifelog --agent lmstudio              
 lifelog import approve rules --workspace ~/import/Notebook.lifelog                  # the owner, at a terminal
 lifelog import status --workspace ~/import/Notebook.lifelog --human
 lifelog import replay --to ~/life/life.db --workspace ~/import/Notebook.lifelog     # the real run, when you say so
-lifelog import photos inventory ~/takeout-x/Takeout/"Google Photos" --human   # counts of a Photos export (plan 032)
 ```
 
 ## Decisions
@@ -97,6 +98,9 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   picture; `GET /pages/{id}/preview` and `GET /previews?title=` serve it. A photo's day and position come from its EXIF
   (`internal/photo`: a JPEG's APP1, a HEIC's Exif item, read from the original's first megabyte): its day links the
   place its position is in, `at` names one, `locate` sets or moves a place's point; the position is never stored.
+  `lifelog file` keeps several (paths, or a folder's photos and videos), with `--dry-run` and a report per day and
+  per group of photos near no place. Nothing reads an export's own files: the photo itself is the source, whatever
+  library it comes from.
 - **`serve` binds 127.0.0.1** and has no authentication: `life.db` holds health data, and the API is for this
   machine.
 
@@ -110,7 +114,6 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 | `internal/core` | the cookbook's writes and reads; the save contract; habits; renames; files |
 | `internal/preview` | the picture a file page keeps: decode, scale to 1600 px, EXIF orientation, a JPEG of at most 1 MB with no metadata |
 | `internal/photo` | what a photo's metadata says: the day and time taken, the position, the orientation (JPEG and HEIC); `phototest` builds synthetic ones |
-| `internal/takeout` | a Google Takeout export: Photos' media paired with their sidecars (every naming form), and its inventory of counts |
 | `internal/importer` | the import workspace, the facts checks and apply, the vault plan, status, replay |
 | `internal/api` | the action catalog, the routes, Siren and HTML |
 | `internal/client` | the hypermedia client (in-process or remote) |

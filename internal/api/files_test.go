@@ -185,3 +185,16 @@ func TestAPhotosPlaceAndDay(t *testing.T) {
 		t.Error("a radius that is not a number was accepted")
 	}
 }
+
+func TestAddFileDryRunWritesNothing(t *testing.T) {
+	c, _ := fresh(t)
+	add := find(must(c.Get("/")), "add-file")
+	path, _ := jpegFile(t, "x.jpg", 40, 30)
+	e := must(c.DoFiles(add, map[string]string{"title": "x.jpg", "dry_run": "1"}, map[string]string{"original": path}))
+	if res, _ := e.Result.(map[string]any); !strings.Contains(strings.Join(e.Class, ","), "dry-run") || res == nil || res["id"] != nil {
+		t.Errorf("a dry run: %+v %+v", e.Class, e.Result)
+	}
+	if list := must(c.Get("/files")); len(list.Entities) != 0 {
+		t.Error("a dry run kept a file")
+	}
+}

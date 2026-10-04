@@ -25,9 +25,18 @@ const (
 
 // addFile keeps a file (docs/cookbook/keep-a-file.md, D9) and answers with its page; Result says what was written.
 func (h *server) addFile(r *http.Request, src string) (*Entity, error) {
-	in, err := fileForm(r)
+	in, dry, err := fileForm(r)
 	if err != nil {
 		return nil, err
+	}
+	if dry {
+		k, err := h.s.TryAddFile(r.Context(), src, in)
+		if err != nil {
+			return nil, err
+		}
+		return &Entity{Class: []string{"result", "dry-run"}, Title: "Dry run: nothing written",
+			Properties: map[string]any{"title": in.Title, "sha256": in.SHA256, "mime": in.MIME, "picture": in.Preview != nil},
+			Result:     k, Links: []Link{link("index", "/", "Home")}}, nil
 	}
 	k, err := h.s.AddFile(r.Context(), src, in)
 	if err != nil {
@@ -39,19 +48,21 @@ func (h *server) addFile(r *http.Request, src string) (*Entity, error) {
 // fileForm reads an add-file request. Multipart (a browser, the CLI): the original is streamed through SHA-256 and
 // never stored; a picture the writer reads is held, up to maxPicture, to make the preview from. Url-encoded or JSON
 // (an agent that hashed the file itself): sha256 and mime, and no picture.
-func fileForm(r *http.Request) (core.FileIn, error) {
-	bad := func(msg string) (core.FileIn, error) { return core.FileIn{}, &core.Error{Status: 422, Msg: msg} }
+func fileForm(r *http.Request) (core.FileIn, bool, error) {
+	bad := func(msg string) (core.FileIn, bool, error) {
+		return core.FileIn{}, false, &core.Error{Status: 422, Msg: msg}
+	}
 	if ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); ct != "multipart/form-data" {
 		v, err := form(r)
 		if err != nil {
-			return core.FileIn{}, err
+			return core.FileIn{}, false, err
 		}
 		if err := required(v, "title", "sha256", "mime"); err != nil {
-			return core.FileIn{}, err
+			return core.FileIn{}, false, err
 		}
 		r, err := radius(v.Get("radius"))
 		return core.FileIn{Title: v.Get("title"), SHA256: v.Get("sha256"), MIME: v.Get("mime"), Body: v.Get("body"), Day: v.Get("day"),
-			At: v.Get("at"), Radius: r}, err
+			At: v.Get("at"), Radius: r}, v.Get("dry_run") == "1", err
 	}
 	mr, err := r.MultipartReader()
 	if err != nil {
@@ -98,7 +109,7 @@ func fileForm(r *http.Request) (core.FileIn, error) {
 	in := core.FileIn{Title: vals["title"], SHA256: vals["sha256"], MIME: vals["mime"], Body: vals["body"], Day: vals["day"], At: vals["at"],
 		Taken: meta.Day(), Lat: meta.Lat, Lon: meta.Lon, HasGPS: meta.HasGPS}
 	if in.Radius, err = radius(vals["radius"]); err != nil {
-		return core.FileIn{}, err
+		return core.FileIn{}, false, err
 	}
 	switch {
 	case sent && in.SHA256 != "" && !strings.EqualFold(strings.TrimSpace(in.SHA256), sum):
@@ -121,7 +132,7 @@ func fileForm(r *http.Request) (core.FileIn, error) {
 		}
 		in.Preview = p
 	}
-	return in, nil
+	return in, vals["dry_run"] == "1", nil
 }
 
 // readOriginal hashes the original as it streams, and keeps its first megabyte for its metadata (photo.Read: a

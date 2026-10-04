@@ -2,8 +2,8 @@
 
 **Status:** accepted
 
-- **Context.** The owner ingests recordings, PDFs, scans, photos and a few videos, picked one at a time or a folder at
-  a time, and wants everything that can be text kept as text, the source deleted once its text is kept, a small
+- **Context.** The owner ingests recordings, PDFs, scans, photos and a few videos — the few that represent a day, picked
+  one at a time from any library, never a library itself — and wants everything that can be text kept as text, the source deleted once its text is kept, a small
   picture kept for good where the picture matters, the originals left where they are, and no file kept twice
   ([issue 0009](../issues/README.md), [proposal 0004](../rfcs/0004-a-file-is-a-page.md)). The vault import had skipped
   every attachment.

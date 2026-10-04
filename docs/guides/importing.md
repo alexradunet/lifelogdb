@@ -406,6 +406,15 @@ A file the owner keeps is a page of its own, written by one operation the writer
 `![[title]]` in a day page shows the file there. A page that named the title before the file was kept (a ghost) becomes
 the file when it is kept, so that day's link lands on it.
 
+**Photos.** `life.db` keeps the few photos that represent a day, never a library
+([non-goals](../architecture/non-goals.md)). The owner chooses them in any tool — a phone, a backup folder, Google
+Photos, Apple Photos — and exports or copies those originals with their metadata, the location included; the writer
+reads the day and the position from the photo itself, never from an export's own files. A HEIC gives its day and
+place, and its picture only when a JPEG of it is sent too (or exported in its place). Keep the chosen photos together:
+first a dry run, which writes nothing and lists the photos near no place, grouped; then name each group's place once
+(one photo of it, with the place's title and radius), and keep them all — the rest of a group links by itself, and a
+second run writes nothing.
+
 ## Trial, then the real run
 
 Everything runs on a trial database first — a copy of the real one, so the trial meets every page the owner

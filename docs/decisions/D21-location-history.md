@@ -3,8 +3,8 @@
 **Status:** accepted
 
 - **Context.** The owner wants the place a photo was taken to say where its day was, as the `at` links of the day
-  pages do ([D16](D16-places.md)), and the photos of a Google Takeout export fill days nothing else records
-  ([issue 0010](../issues/README.md), [proposal 0005](../rfcs/0005-a-place-has-a-point.md)). A position can be linked
+  pages do ([D16](D16-places.md)), for the few photos they keep of a day, from any library — a phone, a backup,
+  Google Photos, Apple Photos ([issue 0010](../issues/README.md), [proposal 0005](../rfcs/0005-a-place-has-a-point.md)). A position can be linked
   only if something knows which place it is in, and the owner does not want movements kept.
 - **Decision.** A place may have one `places` row, keyed by its page (`places(id, entity_type)` references
   `pages(id, entity_type)`): its point (`places_lat`, `places_lon`, never 0°, 0°: `places_not_null_island`), the

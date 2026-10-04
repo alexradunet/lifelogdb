@@ -2,13 +2,13 @@
 
 - **Date:** 2026-10-04
 - **Status:** accepted
-- **Answers:** [0010](../issues/0010-a-photos-place-has-no-home.md), a photo's place cannot become an `at` link
+- **Answers:** 0010, a photo's place cannot become an `at` link (resolved; `git log -- docs/issues`)
 
 ## Problem
 
 A photo's position must become an `at` link from the day it was taken to a place, with no position stored and no
 track kept; a position near no known place is asked about once; Home and Work are recognised and never linked
-([0010](../issues/0010-a-photos-place-has-no-home.md)).
+(issue 0010).
 
 ## Options
 
@@ -61,4 +61,5 @@ mutant per rule.
 
 Accepted: [D21](../decisions/D21-location-history.md) rewritten in place (a place has a point and a radius; a photo's place
 becomes an `at` link when it is kept; no track), [D16](../decisions/D16-places.md) and [D9](../decisions/D09-binary-files.md) amended; plan 031 done
-(`git log -- docs/plans`). Keeping the few photos chosen for a day, from any library, is [plan 033](../plans/033-photos-from-any-source.md).
+(`git log -- docs/plans`). Keeping the few photos chosen for a day, from any library, was plan 033 (done; plan 032, a Google export taken
+wholesale, was rejected).

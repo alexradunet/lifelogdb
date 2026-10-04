@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -24,7 +26,6 @@ import (
 	"lifelog/internal/db"
 	"lifelog/internal/importer"
 	"lifelog/internal/mcp"
-	"lifelog/internal/takeout"
 )
 
 const version = "0.1.0"
@@ -47,17 +48,16 @@ const usage = `lifelog — the writer of a life.db
   lifelog habits [YYYY-MM-DD]         the day's habits and completion
   lifelog done METRIC [--day D]       check a habit in as done (skip METRIC: not done)
   lifelog rename PAGE-ID TITLE        rename a plain page (the old one becomes a redirect stub)
-  lifelog file PATH [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day D] [--at PLACE [--radius M]]
+  lifelog file PATH... [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day D] [--at PLACE [--radius M]] [--dry-run]
                                       keep a file (docs/cookbook/keep-a-file.md): the original is hashed,
                                       never stored; its text from FILE; a picture made from a JPEG, PNG or
                                       GIF, else from PICTURE; the title defaults to the file's name. A photo
                                       links its day to the place it was taken in; one near no place is
                                       reported, and --at names the place (docs/cookbook/place-of-a-photo.md)
+                                      Several paths, or a folder's photos: the few chosen for a day, kept
+                                      together, with a report; --dry-run writes nothing
   lifelog snapshot [--to DIR]         a dated copy of life.db (life-YYYY-MM-DD.db, beside it or in DIR),
                                       then its restore check (docs/cookbook/take-a-snapshot.md)
-
-  lifelog import photos inventory FOLDER  counts of a Google Photos export (plan 032): its sidecars, positions and
-                                          EXIF, never a name, a date, a place or a caption; reads, writes nothing
 
 Import (docs/guides/importing.md), with --workspace <source>.lifelog:
   lifelog import setup [--from life.db]   make trial.db: a copy of the real database, or a new one
@@ -155,9 +155,6 @@ func run(o opts) error {
 	}
 	if cmd == "snapshot" {
 		return snapshot(o)
-	}
-	if cmd == "import" && len(args) >= 2 && args[0] == "photos" && args[1] == "inventory" {
-		return photosInventory(o, args[2:])
 	}
 
 	var ws *importer.Workspace
@@ -310,54 +307,285 @@ func do(c *client.Client, name string, vals map[string]string) (*api.Entity, err
 // keepFile is `lifelog file PATH`: the add-file action with the original streamed from disk (hashed by the API,
 // never stored), its text read from --text, and a picture from --preview when the original is not one lifelog reads.
 func keepFile(o opts, c *client.Client, args []string) error {
-	if len(args) != 1 {
-		return errors.New("file PATH [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day YYYY-MM-DD] [--at PLACE [--radius M]]")
+	if len(args) == 0 {
+		return errors.New("file PATH... [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day YYYY-MM-DD] [--at PLACE [--radius M]] [--dry-run]")
 	}
-	vals := map[string]string{"title": o.title}
-	if o.title == "" {
-		vals["title"] = filepath.Base(args[0])
+	paths, err := mediaPaths(args)
+	if err != nil {
+		return err
 	}
-	if o.text != "" {
-		b, err := os.ReadFile(o.text)
-		if err != nil {
-			return err
-		}
-		vals["body"] = string(b)
-	}
-	if o.mime != "" {
-		vals["mime"] = o.mime
-	}
-	if o.at != "" {
-		vals["at"] = o.at
-	}
-	if o.radius != "" {
-		vals["radius"] = o.radius
-	}
-	if o.day != "" {
-		vals["day"] = o.day
-	}
-	files := map[string]string{"original": args[0]}
-	if o.preview != "" {
-		files["preview"] = o.preview
+	one := len(args) == 1 && len(paths) == 1 && paths[0] == args[0]
+	if !one && (o.title != "" || o.text != "" || o.preview != "" || o.mime != "") {
+		return errors.New("--title, --text, --preview and --mime describe one file: keep it alone")
 	}
 	actions, err := c.Catalog()
 	if err != nil {
 		return err
 	}
+	var add api.Action
 	for _, a := range actions {
 		if a.Name == "add-file" {
-			e, err := c.DoFiles(a, vals, files)
-			if err := show(o)(e, err); err != nil {
-				return err
-			}
-			if r, _ := e.Result.(map[string]any); r != nil && r["unmatched"] != nil {
-				u, _ := r["unmatched"].(map[string]any)
-				fmt.Fprintf(os.Stderr, "near no place: %v, %v (%v)\nname it: lifelog file %s --at PLACE [--radius METRES]\n", u["lat"], u["lon"], u["map"], args[0])
-			}
-			return nil
+			add = a
 		}
 	}
-	return errors.New("the API has no add-file action")
+	if add.Name == "" {
+		return errors.New("the API has no add-file action")
+	}
+	keep := func(p string) (*api.Entity, error) {
+		vals := map[string]string{"title": o.title}
+		if o.title == "" {
+			vals["title"] = filepath.Base(p)
+		}
+		if o.text != "" {
+			b, err := os.ReadFile(o.text)
+			if err != nil {
+				return nil, err
+			}
+			vals["body"] = string(b)
+		}
+		for k, v := range map[string]string{"mime": o.mime, "day": o.day, "at": o.at, "radius": o.radius} {
+			if v != "" {
+				vals[k] = v
+			}
+		}
+		if o.dryRun {
+			vals["dry_run"] = "1"
+		}
+		files := map[string]string{"original": p}
+		if o.preview != "" {
+			files["preview"] = o.preview
+		}
+		return c.DoFiles(add, vals, files)
+	}
+	if one {
+		e, err := keep(paths[0])
+		if err := show(o)(e, err); err != nil {
+			return err
+		}
+		if u := unmatchedOf(e); u != nil {
+			fmt.Fprintf(os.Stderr, "near no place: %v, %v (%v)\nname it: lifelog file %s --at PLACE [--radius METRES]\n", u["lat"], u["lon"], u["map"], paths[0])
+		}
+		return nil
+	}
+	var kept []keptFile
+	failed := 0
+	for _, p := range paths {
+		k := keptFile{Path: p}
+		e, err := keep(p)
+		if err != nil {
+			k.Error = err.Error()
+			failed++
+		} else if r, ok := e.Result.(map[string]any); ok {
+			k.Result = r
+		}
+		kept = append(kept, k)
+	}
+	s := summarise(kept, o.dryRun)
+	if o.human {
+		s.print(os.Stdout)
+	} else if err := printJSON(s); err != nil {
+		return err
+	}
+	if failed > 0 {
+		return fmt.Errorf("%d of %d files could not be kept", failed, len(paths))
+	}
+	return nil
+}
+
+// mediaPaths are the files to keep: a path as it is, a folder as its photos and videos (not its sub-folders), sorted.
+func mediaPaths(args []string) ([]string, error) {
+	var out []string
+	for _, a := range args {
+		st, err := os.Stat(a)
+		if err != nil {
+			return nil, err
+		}
+		if !st.IsDir() {
+			out = append(out, a)
+			continue
+		}
+		entries, err := os.ReadDir(a)
+		if err != nil {
+			return nil, err
+		}
+		var found []string
+		for _, e := range entries {
+			t := core.MimeOf(e.Name(), nil)
+			if !e.IsDir() && (strings.HasPrefix(t, "image/") || strings.HasPrefix(t, "video/")) {
+				found = append(found, filepath.Join(a, e.Name()))
+			}
+		}
+		if len(found) == 0 {
+			return nil, fmt.Errorf("%s holds no photo or video", a)
+		}
+		sort.Strings(found)
+		out = append(out, found...)
+	}
+	return out, nil
+}
+
+func unmatchedOf(e *api.Entity) map[string]any {
+	if e == nil {
+		return nil
+	}
+	r, _ := e.Result.(map[string]any)
+	u, _ := r["unmatched"].(map[string]any)
+	return u
+}
+
+// keptFile is what keeping one file of a batch did: the add-file result, or the refusal.
+type keptFile struct {
+	Path   string         `json:"path"`
+	Error  string         `json:"error,omitempty"`
+	Result map[string]any `json:"result,omitempty"`
+}
+
+// batch is the report of a batch (docs/plans/033): per day what was kept and linked, and the photos near no place in
+// groups, each to be named once.
+type batch struct {
+	DryRun    bool              `json:"dry_run,omitempty"`
+	Kept      int               `json:"kept"`
+	Already   int               `json:"kept_already"`
+	Failed    int               `json:"failed"`
+	Days      map[string]*daySo `json:"days"`
+	NoDay     []string          `json:"no_day_of_their_own,omitempty"`
+	Unmatched []*group          `json:"near_no_place,omitempty"`
+	Files     []keptFile        `json:"files"`
+}
+
+type daySo struct {
+	Photos int      `json:"photos"`
+	At     []string `json:"at,omitempty"`         // the places linked
+	Known  []string `json:"recognised,omitempty"` // places matched and never linked (home, work)
+	Near   int      `json:"near_no_place,omitempty"`
+}
+
+type group struct {
+	Lat, Lon float64  `json:"-"`
+	Count    int      `json:"photos"`
+	Days     []string `json:"days"`
+	Map      string   `json:"map"`
+	NameWith string   `json:"name_it_with"`
+}
+
+func summarise(files []keptFile, dry bool) *batch {
+	b := &batch{DryRun: dry, Days: map[string]*daySo{}, Files: files}
+	add := func(list []string, s string) []string {
+		for _, x := range list {
+			if x == s {
+				return list
+			}
+		}
+		return append(list, s)
+	}
+	for _, f := range files {
+		r := f.Result
+		switch {
+		case f.Error != "":
+			b.Failed++
+			continue
+		case r["existing"] == true:
+			b.Already++
+		default:
+			b.Kept++
+		}
+		day, _ := r["day"].(string)
+		u, _ := r["unmatched"].(map[string]any)
+		if day == "" {
+			b.NoDay = append(b.NoDay, filepath.Base(f.Path))
+		} else {
+			d := b.Days[day]
+			if d == nil {
+				d = &daySo{}
+				b.Days[day] = d
+			}
+			d.Photos++
+			if place, _ := r["place"].(string); place != "" {
+				if r["linked"] == true {
+					d.At = add(d.At, place)
+				} else {
+					d.Known = add(d.Known, place)
+				}
+			}
+			if u != nil {
+				d.Near++
+			}
+		}
+		if u == nil {
+			continue
+		}
+		lat, _ := u["lat"].(float64)
+		lon, _ := u["lon"].(float64)
+		var g *group
+		for _, x := range b.Unmatched {
+			if haversine(lat, lon, x.Lat, x.Lon) <= 500 {
+				g = x
+				break
+			}
+		}
+		if g == nil {
+			m, _ := u["map"].(string)
+			g = &group{Lat: lat, Lon: lon, Map: m,
+				NameWith: fmt.Sprintf("lifelog file \"%s\" --at PLACE [--radius METRES], then keep them all again", f.Path)}
+			b.Unmatched = append(b.Unmatched, g)
+		}
+		g.Count++
+		if day != "" {
+			g.Days = add(g.Days, day)
+		}
+	}
+	for _, g := range b.Unmatched {
+		sort.Strings(g.Days)
+	}
+	return b
+}
+
+func (b *batch) print(w io.Writer) {
+	if b.DryRun {
+		fmt.Fprintln(w, "dry run: nothing written")
+	}
+	fmt.Fprintf(w, "%d files: %d kept, %d kept already, %d failed\n", b.Kept+b.Already+b.Failed, b.Kept, b.Already, b.Failed)
+	days := make([]string, 0, len(b.Days))
+	for d := range b.Days {
+		days = append(days, d)
+	}
+	sort.Strings(days)
+	for _, d := range days {
+		x := b.Days[d]
+		line := fmt.Sprintf("%s: %d photo(s)", d, x.Photos)
+		if len(x.At) > 0 {
+			line += " · at " + strings.Join(x.At, ", ")
+		}
+		if len(x.Known) > 0 {
+			line += " · recognised, not linked: " + strings.Join(x.Known, ", ")
+		}
+		if x.Near > 0 {
+			line += fmt.Sprintf(" · %d near no place", x.Near)
+		}
+		fmt.Fprintln(w, line)
+	}
+	if len(b.NoDay) > 0 {
+		fmt.Fprintf(w, "no day of their own (no EXIF date): %s\n", strings.Join(b.NoDay, ", "))
+	}
+	if len(b.Unmatched) > 0 {
+		fmt.Fprintf(w, "near no place, %d group(s):\n", len(b.Unmatched))
+		for i, g := range b.Unmatched {
+			fmt.Fprintf(w, "  %d. %d photo(s), %s, %s\n     name it: %s\n", i+1, g.Count, strings.Join(g.Days, " "), g.Map, g.NameWith)
+		}
+	}
+	for _, f := range b.Files {
+		if f.Error != "" {
+			fmt.Fprintf(w, "failed: %s: %s\n", f.Path, f.Error)
+		}
+	}
+}
+
+// haversine is the great-circle distance in metres, for grouping the photos of a report.
+func haversine(lat1, lon1, lat2, lon2 float64) float64 {
+	rad := math.Pi / 180
+	dlat, dlon := (lat2-lat1)*rad, (lon2-lon1)*rad
+	h := math.Pow(math.Sin(dlat/2), 2) + math.Cos(lat1*rad)*math.Cos(lat2*rad)*math.Pow(math.Sin(dlon/2), 2)
+	return 2 * 6371008.8 * math.Asin(math.Sqrt(h))
 }
 
 func listActions(o opts, c *client.Client) error {
@@ -583,50 +811,4 @@ func importCommand(o opts, c *client.Client, args []string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown import step %q (lifelog help)", args[0])
-}
-
-// photosInventory is `lifelog import photos inventory FOLDER` (plan 032, Phase A): the counts of a Google Photos
-// export, for the owner to read and paste. It opens no database and writes nothing.
-func photosInventory(o opts, args []string) error {
-	if len(args) != 1 {
-		return errors.New("import photos inventory FOLDER (the extracted Google Photos folder)")
-	}
-	inv, err := takeout.Take(args[0])
-	if err != nil {
-		return err
-	}
-	if !o.human {
-		return printJSON(inv)
-	}
-	list := func(m map[string]int) string {
-		keys := make([]string, 0, len(m))
-		for k := range m {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		var out []string
-		for _, k := range keys {
-			out = append(out, fmt.Sprintf("%s %d", k, m[k]))
-		}
-		return strings.Join(out, " · ")
-	}
-	fmt.Println("Google Photos export: counts only, no names, dates, places or captions")
-	fmt.Printf("folders: %d (%d named with a year, %d with a metadata.json)\n", inv.Folders, inv.YearFolders, inv.MetadataFolders)
-	fmt.Printf("media files: %s\n", list(inv.Media))
-	fmt.Printf("json files: %d; photo sidecars: %d (shared by several files %d, claimed by no file %d)\n", inv.JSONFiles, inv.Sidecars, inv.SharedSidecars, inv.Unclaimed)
-	fmt.Printf("sidecar found by: %s\n", list(inv.FoundBy))
-	fmt.Printf("sidecar keys: %s\n", list(inv.Keys))
-	fmt.Printf("positions: in geoData %d · in geoDataExif only %d · none or 0, 0 %d\n", inv.GeoData, inv.GeoDataExifOnly, inv.NoPosition)
-	fmt.Printf("photoTakenTime %d · descriptions %d · naming people %d\n", inv.TakenTime, inv.Descriptions, inv.WithPeople)
-	fmt.Printf("files also in another folder (same name and size): %d\n", inv.SameNameAndSize)
-	formats := make([]string, 0, len(inv.Exif))
-	for f := range inv.Exif {
-		formats = append(formats, f)
-	}
-	sort.Strings(formats)
-	for _, f := range formats {
-		e := inv.Exif[f]
-		fmt.Printf("EXIF, %s: %d files, %d with a date, %d with a position (the first %d bytes of each)\n", f, e.Files, e.Date, e.GPS, inv.ExifReadBytes)
-	}
-	return nil
 }

@@ -161,3 +161,17 @@ func TestPlaceRefusals(t *testing.T) {
 		t.Errorf("integrity: %+v %v", r, err)
 	}
 }
+
+func TestAPhotoNearNoPlaceStillHasItsDay(t *testing.T) {
+	s := fresh(t)
+	k, err := s.AddFile(ctx, "cli", FileIn{Title: "IMG_1.HEIC", SHA256: sha('a'), MIME: "image/heic", Taken: "2019-06-05", Lat: 41.15, Lon: -8.61, HasGPS: true})
+	if err != nil || k.Day != "2019-06-05" || k.Unmatched == nil || k.Linked || k.Embedded {
+		t.Errorf("a HEIC near no place: %+v %v", k, err)
+	}
+	if f, _ := s.PageByID(ctx, k.ID); f.Day != "2019-06-05" {
+		t.Errorf("its page is on %s", f.Day)
+	}
+	if d := dayOf(t, s, "2019-06-05"); d != nil {
+		t.Errorf("a day page made for nothing: %+v", d)
+	}
+}

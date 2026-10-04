@@ -35,7 +35,7 @@ type FileIn struct {
 
 // Kept is what keeping a file did.
 type Kept struct {
-	ID           int64     `json:"id"`
+	ID           int64     `json:"id,omitempty"`            // none in a dry run that would create the page
 	Existing     bool      `json:"existing,omitempty"`      // the original was kept already: that page, nothing else written
 	Deleted      bool      `json:"deleted,omitempty"`       // ...and it is tombstoned, so not even a preview was added
 	PreviewAdded bool      `json:"preview_added,omitempty"` // a file kept without a preview got this one
@@ -174,6 +174,9 @@ func (t *Tx) AddFile(f FileIn) (k Kept, err error) {
 // has none) or the place the position is in; then, when the file has a day of its own, that day's at link and the
 // file shown in that day's page. No day of its own, no link: a photo links the day it was taken.
 func (t *Tx) placeAndDay(k *Kept, f FileIn, title, day string, own, picture bool) error {
+	if own {
+		k.Day = day
+	}
 	var place int64
 	link := false
 	switch {
@@ -207,7 +210,6 @@ func (t *Tx) placeAndDay(k *Kept, f FileIn, title, day string, own, picture bool
 	if !own || !(place != 0 && link || picture) {
 		return nil
 	}
-	k.Day = day
 	dayID, err := t.dayPage(day)
 	if err != nil {
 		return err
@@ -288,4 +290,14 @@ func MimeOf(name string, head []byte) string {
 		return t
 	}
 	return "application/octet-stream"
+}
+
+// TryAddFile is AddFile in a transaction that is rolled back: what keeping the file would do, writing nothing. A page
+// it would create has no id.
+func (s *Store) TryAddFile(ctx context.Context, source string, f FileIn) (k Kept, err error) {
+	err = s.DryRun(ctx, source, func(t *Tx) (e error) { k, e = t.AddFile(f); return })
+	if !k.Existing {
+		k.ID = 0
+	}
+	return
 }

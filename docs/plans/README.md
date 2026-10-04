@@ -2,14 +2,13 @@
 
 A plan is a dated record ([how a change happens](../process.md)): a change large enough to hand to another agent,
 written as a self-contained brief with done criteria. It cites the docs as they were at the commit it names. One file
-per plan, `NNN-short-slug.md`, numbered on from the last: plans up to 028, 030 and 031 are done, 032 rejected (the owner keeps the few photos chosen for a day, from any
+per plan, `NNN-short-slug.md`, numbered on from the last: plans up to 028, 030, 031 and 033 are done, 032 rejected (the owner keeps the few photos chosen for a day, from any
 source), and live in git history
 (`git log -- docs/plans`), so the next one is **034**.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
 | [029](029-google-takeout.md) | Google Takeout: places and daily health totals, with no schema change | P1 | L | — | TODO |
-| [033](033-photos-from-any-source.md) | Photos from any source: keep the few chosen for a day, their day and place from the photo itself | P1 | M | — | TODO |
 
 Status values: TODO | IN PROGRESS | IN REVIEW (owner) | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale). A plan that is DONE or REJECTED is deleted; git is the log.
@@ -19,7 +18,8 @@ REJECTED (with one-line rationale). A plan that is DONE or REJECTED is deleted; 
 The owner's decisions of 2026-10-02 are carried out: renames (the contract, cookbook/rename-a-page), one full DDL
 after the freeze (D13), `pages_fts_delete` cut, readers set `trusted_schema=OFF`, the `Cn` rule names Unicode 15.0,
 snapshots (D25, cookbook/take-a-snapshot); a tombstoned day keeps its mood reading. Files are kept as pages: their text, a small picture, the original outside (D9, plan 030 done). A place has a point and a photo kept links
-its day (D21, plan 031 done). Open: issue 0010, for photos kept a few at a time from any library: plan 033.
+its day (D21, plan 031 done). The few photos
+chosen for a day are kept together, from any library (plan 033 done). No open issue: the next is **0011**.
 
 ### Next step
 
