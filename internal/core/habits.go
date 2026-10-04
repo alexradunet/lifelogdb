@@ -9,7 +9,8 @@ import (
 )
 
 // RegisterMetric makes a metric (D27): a page titled name, whose body is the note, and its metrics row with the
-// unit, one id. A ghost page of that title becomes the metric, as a person is promoted (D20). Registering one that
+// unit, one id. A plain page of that title becomes the metric, as a person is promoted (D20): a ghost, or a note
+// the owner wrote about it, whose text is kept — the note is written only to an empty body. Registering one that
 // exists with the same unit is a no-op; another unit is refused: a unit never changes (metrics_unit_fixed).
 func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
 	if !text.ValidTitle(name) {
@@ -37,9 +38,7 @@ func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
 		}
 		return false, nil
 	case p.Type != "page" || p.DayPage || p.Stub:
-		return false, conflict("%s is taken by a %s, a day page or a redirect stub: a metric's title must be free or an empty plain page (D27)", p.Title, p.Type)
-	case p.Body != "" && note != "":
-		return false, conflict("%s is a page with text: a metric takes a page whose body is empty, or no note", p.Title)
+		return false, conflict("%s is taken by a %s, a day page or a redirect stub: a metric's title must be free or a plain page (D27)", p.Title, p.Type)
 	}
 	if _, err := t.tx.Exec(`UPDATE entities SET entity_type = 'metric', deleted_at = NULL WHERE id = ?`, p.ID); err != nil {
 		return false, err
@@ -47,7 +46,7 @@ func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
 	if _, err := t.tx.Exec(`INSERT INTO metrics(id, unit) VALUES (?, ?)`, p.ID, unit); err != nil {
 		return false, err
 	}
-	if note != "" {
+	if note != "" && p.Body == "" { // the owner's text is never overwritten
 		if _, err := t.SetBody(p.ID, note); err != nil {
 			return false, err
 		}

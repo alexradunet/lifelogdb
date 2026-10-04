@@ -583,3 +583,35 @@ func TestAMetricsFileWithoutTheCategoryColumn(t *testing.T) {
 		t.Errorf("the rows of an old file: %+v %v", ms, err)
 	}
 }
+
+// a vault note titled like a metric is that metric's page (D27): registering the metric promotes it and keeps the
+// note's text, and the note column is not written over it; a second vault apply and registration change nothing
+func TestAVaultNoteBecomesItsMetricsPage(t *testing.T) {
+	f := setup(t)
+	f.approveRules(t, rulesBody)
+	if _, err := f.w.PlanVault(ctx, f.s); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.w.ApplyVault(ctx, f.s); err != nil {
+		t.Fatal(err)
+	}
+	id, err := f.s.PageID(ctx, "Ferritin")
+	if err != nil || id == 0 {
+		t.Fatalf("the vault made no page Ferritin: %v", err)
+	}
+	f.metrics(t) // ferritin, with the note "Ferritin (blood)"
+	p, err := f.s.PageByID(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Type != "metric" || !strings.Contains(p.Body, "| 2031-03-01 | 48 ng/mL |") {
+		t.Errorf("the note's page became the metric with its text kept: %s %q", p.Type, p.Body)
+	}
+	res, err := f.w.ApplyVault(ctx, f.s)
+	if err != nil || res.Saved != 0 {
+		t.Errorf("the vault applied again saves nothing on the metric's page: %+v %v", res, err)
+	}
+	if done, err := f.w.RegisterMetrics(ctx, f.s); err != nil || !strings.Contains(strings.Join(done, "; "), "ferritin: existing") {
+		t.Errorf("registering again: %q %v", done, err)
+	}
+}

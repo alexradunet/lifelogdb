@@ -13,8 +13,10 @@
   metric's own: its `unit`, fixed (`metrics_unit_fixed`). A metric is never deleted (`metrics_no_delete`); one
   registered by mistake is tombstoned ([D11](D11-tombstones.md)). It is filed in a category by a `part-of` link, as
   anything is ([D26](D26-metric-categories.md)); `[[Weight]]` in the journal is a backlink of the metric. Mood is
-  seeded as the metric page `Mood` ([D6](D06-mood-is-a-measurement.md)). A ghost page becomes a metric by the same
-  promotion a person takes. Measurements, habit periods and corrections keep referencing `metrics(id)`.
+  seeded as the metric page `Mood` ([D6](D06-mood-is-a-measurement.md)). A plain page of the metric's title becomes
+  the metric by the same promotion a person takes — a ghost, or a note the owner already wrote about it (an imported
+  `aPTT.md`), whose text is kept: a registration's note fills only an empty body, never the owner's words.
+  Measurements, habit periods and corrections keep referencing `metrics(id)`.
 - **Alternatives.**
   - *A snake_case `metrics.name` beside the title*: rejected — every metric with two names (`ferritin`,
     "Ferritin"), the duplication one home per concept forbids.

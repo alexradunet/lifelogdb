@@ -37,6 +37,19 @@ func TestMetricsArePagesFiledInCategories(t *testing.T) {
 	if p, _ := s.PageByID(ctx, ghost); p.Type != "metric" || p.Body != "iron stores" {
 		t.Errorf("the promoted page: %+v", p)
 	}
+	written, _, err := s.CreatePage(ctx, "cli", "aPTT", "Clotting time; mine runs long.")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if added, err := s.RegisterMetric(ctx, "cli", "aptt", "seconds", "aPTT"); err != nil || !added {
+		t.Fatalf("a page the owner wrote about it becomes the metric: %v %v", added, err)
+	}
+	if p, _ := s.PageByID(ctx, written); p.Type != "metric" || p.Title != "aPTT" || p.Body != "Clotting time; mine runs long." {
+		t.Errorf("the owner's text is kept, the note is not written over it: %+v", p)
+	}
+	if added, err := s.RegisterMetric(ctx, "cli", "aptt", "seconds", "aPTT"); err != nil || added {
+		t.Errorf("registering it again is a no-op: %v %v", added, err)
+	}
 	if added, err := file("LDL cholesterol", "Biomarkers/Lipids"); err != nil || !added {
 		t.Fatalf("filing makes the category pages and their part-of links: %v %v", added, err)
 	}
