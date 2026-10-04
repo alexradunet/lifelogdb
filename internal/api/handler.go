@@ -82,6 +82,7 @@ func New(s *core.Store, ws *importer.Workspace) http.Handler {
 	post("/measurements/{id}/retract", h.retract)
 	post("/query", h.query)
 	post("/pages/{id}/rename", h.rename)
+	post("/pages/{id}/locate", h.locate)
 	post("/metrics", ownerOnly(h.registerMetric))
 	post("/metrics/{name}/periods", h.startHabit)
 	post("/metrics/{name}/stop", h.stopHabit)
@@ -359,6 +360,9 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 	if p.File != nil && p.File.Preview {
 		e.Links = append(e.Links, link("preview", pageHref(id)+"/preview", "Picture"))
 	}
+	if p.Point != nil {
+		e.Links = append(e.Links, link("map", core.MapLink(p.Point.Lat, p.Point.Lon), "Map"))
+	}
 	for _, l := range p.Out {
 		e.Entities = append(e.Entities, Link{Rel: []string{l.Kind}, Href: pageHref(l.ID), Title: l.Title, Class: []string{l.Type}})
 	}
@@ -376,6 +380,13 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 		e.Actions = append(e.Actions, action("save-body", ids, map[string]any{"body": p.Body, "version": p.Version}))
 		if p.Type == "page" && !p.IsDayPage {
 			e.Actions = append(e.Actions, action("promote", ids, nil), action("rename", ids, nil))
+		}
+		if p.Type == "place" {
+			values := map[string]any{"radius_m": core.DefaultRadius, "link_days": "1"}
+			if pt := p.Point; pt != nil {
+				values = map[string]any{"lat": pt.Lat, "lon": pt.Lon, "radius_m": pt.RadiusM, "link_days": map[bool]string{true: "1", false: "0"}[pt.LinkDays]}
+			}
+			e.Actions = append(e.Actions, action("locate", ids, values))
 		}
 	}
 	kinds, err := h.linkKinds(ctx, p.Type, p.IsDayPage)

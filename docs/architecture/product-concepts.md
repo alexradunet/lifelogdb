@@ -4,7 +4,7 @@
 |---|---|
 | Journaling | the day page, titled `YYYY-MM-DD`: capture appends to it ([capture](../cookbook/capture.md)); the day view adds what else that day holds ([the day view](../cookbook/day-view.md)) |
 | "When did I see Ana / go to Lakeside?" | the day pages that link `[[Ana]]` or `[[Lakeside]]` ([the days that name someone](../cookbook/days-that-name.md)) |
-| "Where was I that day?" | `links(kind='at')` from the day page to each place; the days at a place are its `at` backlinks ([where was I](../cookbook/where-was-i.md), [D16](../decisions/D16-places.md)) |
+| "Where was I that day?" | `links(kind='at')` from the day page to each place; the days at a place are its `at` backlinks ([where was I](../cookbook/where-was-i.md), [D16](../decisions/D16-places.md)); a photo kept links the day it was taken to the place its position is in ([the place of a photo](../cookbook/place-of-a-photo.md), [D21](../decisions/D21-location-history.md)) |
 | Mood tracking | the `mood` metric in `measurements`, each row optionally pointing at its day page ([mood over time](../cookbook/mood-over-time.md)) |
 | Notes, wiki and tags | `pages` + `links(kind='wikilink')` kept equal to what the body names ([titles and wikilinks](../contract/titles-and-wikilinks.md), [save a body](../cookbook/save-a-body.md)); `#health` is the page `health` |
 | Backlinks | `links WHERE to_id = ?` ([backlinks](../cookbook/backlinks.md)) |

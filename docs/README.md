@@ -4,7 +4,7 @@
 
 **Scope of the project:** A lifetime personal database — a life log and its backup, not a project
 manager ([D23](decisions/D23-no-tasks.md)): a journal of day pages, notes and wiki pages, people, places, health metrics and the files the owner keeps, as their text and a small picture ([D9](decisions/D09-binary-files.md)) (events,
-money and location history deferred — [D22](decisions/D22-events.md), [D18](decisions/D18-money.md), [D21](decisions/D21-location-history.md)) in a single SQLite file, plus a custom UI for data entry and daily use.
+money and a location track deferred — [D22](decisions/D22-events.md), [D18](decisions/D18-money.md), [D21](decisions/D21-location-history.md)) in a single SQLite file, plus a custom UI for data entry and daily use.
 Other devices are clients of the one writing application ([D3](decisions/D03-integer-ids.md)); everything else (view generators, AI
 features, sync or merge between copies of the database) is explicitly out of scope.
 

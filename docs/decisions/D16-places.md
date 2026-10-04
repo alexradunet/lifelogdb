@@ -2,9 +2,9 @@
 
 **Status:** accepted
 
-- **Decision.** A place is an entity and a page ([D20](D20-named-pages.md)) with `entity_type = 'place'`, and nothing else:
-  its name is the page title, what the owner knows about it is the page's text, and it has no row of
-  its own. Where the owner was on a day is a link `at` from that day's page to the place (several
+- **Decision.** A place is an entity and a page ([D20](D20-named-pages.md)) with `entity_type = 'place'`: its name is the
+  page title, what the owner knows about it is the page's text, and where it is — a point and a radius, optional —
+  is its `places` row ([D21](D21-location-history.md)): a photo kept there links its day. Where the owner was on a day is a link `at` from that day's page to the place (several
   places a day are several links; the link's `note` may say when) — so "where was I on 7 August" and
   "when was I at Lakeside" are one link query each ([where was I](../cookbook/where-was-i.md)). `about` links connect anything to a place;
   `located-in` nests places, so "everything in Japan" is answerable ([inside a place](../cookbook/inside-a-place.md)). There is no `lives-in`
@@ -13,8 +13,6 @@
   talked about going to Lakeside" and "I was at Lakeside" would be the same row. The owner asked to
   register the place they were at on the day itself, so it is a link kind of its own.
 - **Alternatives.**
-  - *A `places` table with a point (`lat`, `lon`)*: deferred with the location history it served ([D21](D21-location-history.md));
-    a point comes back as an additive `places(id, lat, lon)` table hanging off the page.
   - *A `visited` link (person → place)*: rejected — undated, and never used by a real import.
   - *A `place_id` column on pages*: rejected — a day has several places, and a column for day pages
     only would sit empty on every other page.

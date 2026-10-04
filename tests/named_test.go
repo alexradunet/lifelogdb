@@ -27,7 +27,9 @@ func named(s *S) {
 			c.n("select e.entity_type = p.entity_type from entities e join pages p using(id) where id=?", id) == 1 && c.n("select count(*) from entities where source <> 'schema'") == int64(i+1))
 	}
 	s.K("a person without a page is refused (its FK points at pages)", err(c.tryx("INSERT INTO people(id,name) VALUES (?,?)", c.ent("person"), "x")))
-	s.K("a place has no table of its own: its page is the place (D16)", c.n("select count(*) from sqlite_schema where name in ('places','holdings')") == 0)
+	s.K("a place needs no row of its own: its page is the place, and a places row only gives it a point (D16, D21)",
+		c.n("select count(*) from sqlite_schema where name = 'holdings'") == 0 && c.n("select count(*) from places") == 0 &&
+			c.n("select count(*) from entities where entity_type = 'place'") == 1)
 	s.K("a named page must be titled", err(c.tryx("INSERT INTO pages(id,entity_type,day) VALUES (?, 'person', '2026-09-30')", c.ent("person"))))
 	s.K("the page and the entity must agree on the type", err(c.tryx("INSERT INTO pages(id,entity_type,title,title_key) VALUES (?, 'place', 'Mismatch', 'mismatch')", c.ent("person"))))
 	s.K("there is no task entity (D23)", err(c.tryx("INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES ('task',"+NOW+","+NOW+",'ui')")))

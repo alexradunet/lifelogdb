@@ -5,7 +5,6 @@ package preview
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"image"
@@ -13,6 +12,8 @@ import (
 	_ "image/gif"
 	"image/jpeg"
 	_ "image/png"
+
+	"lifelog/internal/photo"
 )
 
 const (
@@ -51,7 +52,7 @@ func Make(src []byte) ([]byte, error) {
 	if long := max(w, h); long > MaxEdge {
 		dw, dh = max(1, (w*MaxEdge+long/2)/long), max(1, (h*MaxEdge+long/2)/long)
 	}
-	out := orient(scale(m, dw, dh), orientation(src))
+	out := orient(scale(m, dw, dh), photo.Read(src).Orientation)
 	for _, q := range []int{85, 75, 65, 55, 45, 35} {
 		var b bytes.Buffer
 		if err := jpeg.Encode(&b, out, &jpeg.Options{Quality: q}); err != nil {
@@ -171,68 +172,4 @@ func orient(m *image.RGBA, o int) *image.RGBA {
 		}
 	}
 	return out
-}
-
-// orientation is a JPEG's EXIF orientation (tag 0x0112 of IFD0 in the APP1 segment), 1 when it has none.
-func orientation(b []byte) int {
-	if len(b) < 4 || b[0] != 0xFF || b[1] != 0xD8 {
-		return 1
-	}
-	for i := 2; i+4 <= len(b); {
-		if b[i] != 0xFF {
-			return 1
-		}
-		marker := b[i+1]
-		switch {
-		case marker == 0xFF: // fill byte
-			i++
-			continue
-		case marker == 0xDA || marker == 0xD9: // the image data: no header follows
-			return 1
-		case marker == 0x01 || marker >= 0xD0 && marker <= 0xD7: // markers without a length
-			i += 2
-			continue
-		}
-		n := int(binary.BigEndian.Uint16(b[i+2:]))
-		if n < 2 || i+2+n > len(b) {
-			return 1
-		}
-		if seg := b[i+4 : i+2+n]; marker == 0xE1 && len(seg) > 6 && string(seg[:6]) == "Exif\x00\x00" {
-			return exifOrientation(seg[6:])
-		}
-		i += 2 + n
-	}
-	return 1
-}
-
-func exifOrientation(t []byte) int {
-	if len(t) < 8 {
-		return 1
-	}
-	var bo binary.ByteOrder
-	switch string(t[:2]) {
-	case "II":
-		bo = binary.LittleEndian
-	case "MM":
-		bo = binary.BigEndian
-	default:
-		return 1
-	}
-	off := int(bo.Uint32(t[4:8]))
-	if off < 8 || off+2 > len(t) {
-		return 1
-	}
-	for k := range int(bo.Uint16(t[off:])) {
-		e := off + 2 + 12*k
-		if e+12 > len(t) {
-			return 1
-		}
-		if bo.Uint16(t[e:]) == 0x0112 {
-			if v := int(bo.Uint16(t[e+8:])); v >= 1 && v <= 8 {
-				return v
-			}
-			return 1
-		}
-	}
-	return 1
 }

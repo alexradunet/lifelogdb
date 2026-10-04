@@ -396,6 +396,10 @@ A file the owner keeps is a page of its own, written by one operation the writer
 3. **Keep it.** The writer hashes the original (SHA-256), names its type, and writes the page, its text and its picture
    in one transaction — or finds the file kept already, whatever source sent it, and writes nothing but a missing
    picture. The title is the owner's: a writer may propose the file's name, and a title is permanent.
+   A photo's own day and position come from its metadata: its page is on the day it was taken and shown in that day's
+   page, and the day gets an `at` link to the place its position is in ([the place of a photo](../cookbook/place-of-a-photo.md)).
+   A position near no place writes no link: the writer reports it, and the owner names the place, which takes that
+   position as its point. The position itself is never stored.
 4. **Then the source.** A recording or a PDF is deleted only once its page holds the text the owner read; a photo's
    original stays in the photo library. The original is never written to `life.db`.
 

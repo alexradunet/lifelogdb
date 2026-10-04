@@ -40,7 +40,9 @@ DETACH s;
    fields it never changes (a note's file name, the day of a reading) — and a change to one of them then
    looks like a new row. The key deduplicates within one `source` only: the same reading from two
    sources is two rows, for the app to match and the owner to retract one. A file is the exception: it is found by
-   the hash of its original, `files.sha256`, whatever its source, and kept once ([keep a file](../cookbook/keep-a-file.md)).
+   the hash of its original, `files.sha256`, whatever its source, and kept once ([keep a file](../cookbook/keep-a-file.md)). A place's point
+   comes from the owner, who names the place a photo was taken at ([the place of a photo](../cookbook/place-of-a-photo.md)): an
+   import never guesses one.
 4. **What a failure does.** `ON CONFLICT … DO NOTHING` skips only a duplicate key: a malformed
    day, an impossible value or a dangling foreign key still raises and the **whole batch rolls back**.
    Fix the data and run the batch again.

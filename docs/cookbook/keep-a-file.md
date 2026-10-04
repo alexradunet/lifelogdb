@@ -5,7 +5,8 @@ Before the write the writer has, from the original: `:sha256`, the SHA-256 of it
 type in lowercase (`audio/mp4`, `image/heic`); and from the owner or a local model: `:body`, the file's text (a
 transcript, the text of a PDF or a scan, a caption) and `:preview`, a JPEG of the picture whose long edge is at most
 1600 px, or NULL. `:file_title` is the page's title (checked by the title predicate first) and `:file_key` its
-`title_key`; `:day` is the local day it is kept. The original is then left where it is, or deleted once its text is
+`title_key`; `:day` is the local day the file was made when the file says so (a photo's day taken: [the place of a photo](place-of-a-photo.md)),
+else the day it is kept. The original is then left where it is, or deleted once its text is
 here; it is never written to the database.
 
 **One transaction.** Steps 0 and 1 read what the branches are decided on; a refusal is `ROLLBACK`, and nothing is

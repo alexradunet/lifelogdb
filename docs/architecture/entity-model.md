@@ -12,7 +12,8 @@ composite foreign key `(id, entity_type)` makes the type and the table agree —
 (`links`) over the supertype, whose `kind` is a foreign key to the closed registry `link_kinds`. A
 person, a place, a metric or a file is also a page ([D20](../decisions/D20-named-pages.md), [D27](../decisions/D27-a-metric-is-a-page.md), [D9](../decisions/D09-binary-files.md)): a person's `people` row hangs off its `pages` row, which hangs
 off its `entities` row — one id, three rows; a metric's `metrics` row and a file's `files` row hang off their page the
-same way; a place is its `entities` and `pages` rows alone ([D16](../decisions/D16-places.md)).
+same way; a place is its `entities` and `pages` rows ([D16](../decisions/D16-places.md)), and a `places` row when it has a point
+([D21](../decisions/D21-location-history.md)).
 
 ```mermaid
 %% diagram: er-core
@@ -20,6 +21,7 @@ erDiagram
     entities ||--o| pages    : "id"
     pages    ||--o| people   : "id"
     pages    ||--o| files    : "id"
+    pages    ||--o| places   : "id"
     entities ||--o{ links    : "from_id"
     entities ||--o{ links    : "to_id"
     link_kinds ||--o{ links  : "kind"
@@ -36,6 +38,10 @@ erDiagram
         TEXT entity_type FK
     }
     files {
+        INTEGER id PK, FK
+        TEXT entity_type FK
+    }
+    places {
         INTEGER id PK, FK
         TEXT entity_type FK
     }

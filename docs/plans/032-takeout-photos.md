@@ -3,7 +3,8 @@
 - **Date:** 2026-10-04, at commit `f5d84fd`.
 - **Priority:** P1. **Effort:** L (four phases; the last is the owner's).
 - **Status:** TODO.
-- **Depends on:** [plan 031](031-a-place-has-a-point.md) (a place's point, the match, a file's day and embed).
+- **Depends on:** plan 031, done (`git log -- docs/plans`): a place's point, the match, a file's day and embed
+  ([D21](../decisions/D21-location-history.md), [the place of a photo](../cookbook/place-of-a-photo.md)).
 - **Answers:** [issue 0010](../issues/0010-a-photos-place-has-no-home.md), for the source the owner imports first.
   Plan 029 parked the photos of the same export; this plan is that step.
 

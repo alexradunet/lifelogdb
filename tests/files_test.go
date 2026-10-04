@@ -173,8 +173,9 @@ func files(s *S) {
 	k, ew := cw.store().AddFile(context.Background(), "ui", core.FileIn{Title: "2026-06-02 Lake.jpg", SHA256: hash(1), MIME: "image/heic",
 		Body: "The lake at dawn.", Day: "2026-06-02", Preview: jpegBytes})
 	s.K("the writer's own keep writes the rows the recipe writes", ew == nil && shape(cw) == shape(c), ew, shape(cw))
+	beforeAgain := count(cw)
 	k2, ew := cw.store().AddFile(context.Background(), "import:photos", core.FileIn{Title: "IMG_0001.HEIC", SHA256: hash(1), MIME: "image/heic"})
-	s.K("...and finds the same original again, from another source, writing nothing", ew == nil && k2.Existing && k2.ID == k.ID && count(cw) == "1|1", ew, k2)
+	s.K("...and finds the same original again, from another source, writing nothing", ew == nil && k2.Existing && k2.ID == k.ID && count(cw) == beforeAgain, ew, k2)
 	before := count(c)
 	again := params(hash(1), "IMG_0001.HEIC", jpegBytes)
 	again["source"] = "import:photos"

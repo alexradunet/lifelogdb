@@ -19,7 +19,7 @@ INSERT INTO pages_fts(pages_fts, rank) VALUES ('integrity-check', 1);   -- no er
   ([connection setup](connections.md) — per connection; `STRICT` does not enforce foreign keys) stored a reading of a metric that
   does not exist, and `integrity_check` said `ok`.
 - **The orphan query — the one check no constraint can express.** An `entities` row with no domain
-  row (a writer that died between its inserts, or a person, a metric or a file with a page but no `people`, `metrics` or `files` row): both
+  row (a writer that died between its inserts, or a person, a metric or a file with a page but no `people`, `metrics` or `files` row; a place needs no row of its own, its `places` row being only its point): both
   other checks are clean on it.
 - **The FTS5 integrity-check — the index against its content.** `pages_fts` is an external-content
   index over `pages`; if the two drift apart, searches return wrong rows and `integrity_check` still

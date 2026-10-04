@@ -25,6 +25,7 @@ type Page struct {
 	IsStub    bool    `json:"is_redirect_stub"`
 	Person    *Person `json:"person,omitempty"`
 	File      *File   `json:"file,omitempty"`
+	Point     *Point  `json:"point,omitempty"` // a place's, when it has one (D21)
 	Out       []Edge  `json:"links"`
 	In        []Edge  `json:"backlinks"`
 }
@@ -69,6 +70,11 @@ func (s *Store) PageByID(ctx context.Context, id int64) (*Page, error) {
 			return nil, err
 		}
 		p.Person.Birth, p.Person.Death = b.String, d.String
+	}
+	if p.Type == "place" {
+		if p.Point, err = s.PlaceOf(ctx, id); err != nil {
+			return nil, err
+		}
 	}
 	if p.Type == "file" {
 		p.File = &File{}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -15,10 +16,12 @@ import (
 	"testing"
 
 	"lifelog/internal/api"
+	"lifelog/internal/photo"
+	"lifelog/internal/photo/phototest"
 )
 
-// photo writes a synthetic w×h JPEG and returns its path and the SHA-256 of its bytes.
-func photo(t *testing.T, name string, w, h int) (string, string) {
+// jpegFile writes a synthetic w×h JPEG and returns its path and the SHA-256 of its bytes.
+func jpegFile(t *testing.T, name string, w, h int) (string, string) {
 	t.Helper()
 	m := image.NewRGBA(image.Rect(0, 0, w, h))
 	for y := range h {
@@ -43,7 +46,7 @@ func props(e *api.Entity) map[string]any { p, _ := e.Properties.(map[string]any)
 func TestAddFileKeepsAPhotoAndItsPicture(t *testing.T) {
 	c, h := fresh(t)
 	add := find(must(c.Get("/")), "add-file")
-	path, sum := photo(t, "IMG_0001.JPG", 2400, 1800)
+	path, sum := jpegFile(t, "IMG_0001.JPG", 2400, 1800)
 	e, err := c.DoFiles(add, map[string]string{"title": "2026-10-04 Lake.jpg", "body": "The lake with [[Sam]]."}, map[string]string{"original": path})
 	if err != nil {
 		t.Fatal(err)
@@ -95,7 +98,7 @@ func TestAddFileFromAnAgentAndWithAPicture(t *testing.T) {
 	if file, _ := props(e)["file"].(map[string]any); file["mime"] != "image/heic" || file["preview"] != false {
 		t.Fatalf("a HEIC: %+v", props(e))
 	}
-	frame, _ := photo(t, "frame.jpg", 300, 200)
+	frame, _ := jpegFile(t, "frame.jpg", 300, 200)
 	e = must(c.DoFiles(add, map[string]string{"title": "IMG_0002.HEIC"}, map[string]string{"original": heic, "preview": frame}))
 	if res, _ := e.Result.(map[string]any); res["preview_added"] != true || href(e, "preview") == "" {
 		t.Errorf("a picture sent later: %+v", e.Result)
@@ -108,7 +111,7 @@ func TestAddFileFromAnAgentAndWithAPicture(t *testing.T) {
 func TestFileViews(t *testing.T) {
 	c, h := fresh(t)
 	root := must(c.Get("/"))
-	path, _ := photo(t, "lake.jpg", 40, 30)
+	path, _ := jpegFile(t, "lake.jpg", 40, 30)
 	f := must(c.DoFiles(find(root, "add-file"), map[string]string{"title": "Lake.jpg", "body": "dawn"}, map[string]string{"original": path}))
 	day := must(c.Do(find(root, "capture"), map[string]string{"text": "Swam. ![[Lake.jpg|the lake]]"}))
 	for path, want := range map[string][]string{
@@ -123,5 +126,62 @@ func TestFileViews(t *testing.T) {
 				t.Errorf("%s does not show %s", path, w)
 			}
 		}
+	}
+}
+
+// TestAPhotosPlaceAndDay is plan 031 through the API: a photo's own day and position, read from the original.
+func TestAPhotosPlaceAndDay(t *testing.T) {
+	c, h := fresh(t)
+	root := must(c.Get("/"))
+	lisbon := must(c.Do(find(root, "create-place"), map[string]string{"title": "Lisbon"}))
+	lisbon = must(c.Do(find(lisbon, "locate"), map[string]string{"lat": "38.7223", "lon": "-9.1393", "radius_m": "10000"}))
+	if pt, _ := props(lisbon)["point"].(map[string]any); pt["radius_m"] != float64(10000) || pt["link_days"] != true || href(lisbon, "map") == "" {
+		t.Fatalf("Lisbon located: %+v", props(lisbon))
+	}
+	write := func(name string, b []byte) string {
+		p := filepath.Join(t.TempDir(), name)
+		if err := os.WriteFile(p, b, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	add := find(root, "add-file")
+	jpg := write("IMG_1.jpg", phototest.JPEG(64, 48, photo.Meta{Taken: "2019-06-03 07:41:12", Lat: 38.7139, Lon: -9.1394, HasGPS: true}, true))
+	e := must(c.DoFiles(add, map[string]string{"title": "2019-06-03 IMG_1.jpg"}, map[string]string{"original": jpg}))
+	res, _ := e.Result.(map[string]any)
+	if res["place"] != "Lisbon" || res["linked"] != true || res["embedded"] != true || res["day"] != "2019-06-03" || props(e)["day"] != "2019-06-03" {
+		t.Fatalf("a photo in Lisbon: %+v", res)
+	}
+	day := must(c.Get("/days/2019-06-03"))
+	if !strings.Contains(fmt.Sprint(day.Properties), "Lisbon") {
+		t.Errorf("the day view does not say where the day was: %+v", day.Properties)
+	}
+	if body := browse(t, h, href(day, "page")); !strings.Contains(body, `<img src="/previews?title=2019-06-03+IMG_1.jpg"`) {
+		t.Errorf("the day page does not show the photo")
+	}
+	// a HEIC in Porto: no picture, no embed; near no place, then named
+	heic := write("IMG_2.HEIC", phototest.HEIC(photo.Meta{Taken: "2019-06-04 10:00:00", Lat: 41.1496, Lon: -8.6110, HasGPS: true}, false, false))
+	e = must(c.DoFiles(add, map[string]string{"title": "2019-06-04 IMG_2.HEIC"}, map[string]string{"original": heic}))
+	res, _ = e.Result.(map[string]any)
+	u, _ := res["unmatched"].(map[string]any)
+	if u == nil || !strings.Contains(fmt.Sprint(u["map"]), "openstreetmap.org") || res["linked"] == true || res["embedded"] == true {
+		t.Fatalf("a HEIC near no place: %+v", res)
+	}
+	e = must(c.DoFiles(add, map[string]string{"title": "x", "at": "Porto", "radius": "6000"}, map[string]string{"original": heic}))
+	if res, _ = e.Result.(map[string]any); res["existing"] != true || res["point_set"] != true || res["linked"] != true || res["place"] != "Porto" {
+		t.Errorf("named: %+v", res)
+	}
+	porto := must(c.Get("/pages?title=Porto"))
+	if pt, _ := props(porto)["point"].(map[string]any); pt["radius_m"] != float64(6000) || find(porto, "locate").Name == "" {
+		t.Errorf("Porto: %+v", props(porto))
+	}
+	if body := browse(t, h, href(porto, "self")); !strings.Contains(body, "6000 m") || !strings.Contains(body, `action="`+href(porto, "self")+`/locate"`) {
+		t.Errorf("a place page shows no point or no locate form")
+	}
+	if _, err := c.Do(find(porto, "locate"), map[string]string{"lat": "0", "lon": "0", "radius_m": "100"}); err == nil {
+		t.Error("0°, 0° was accepted as a place's point")
+	}
+	if _, err := c.DoFiles(add, map[string]string{"title": "y", "radius": "big"}, map[string]string{"original": heic}); err == nil {
+		t.Error("a radius that is not a number was accepted")
 	}
 }

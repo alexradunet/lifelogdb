@@ -14,6 +14,7 @@ var suites = []struct {
 	{"identity", identity},
 	{"named", named},
 	{"files", files},
+	{"places", places},
 	{"pages", pages},
 	{"renames", renames},
 	{"links", links},

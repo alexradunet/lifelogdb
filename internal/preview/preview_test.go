@@ -10,6 +10,8 @@ import (
 	"image/png"
 	"math/rand"
 	"testing"
+
+	"lifelog/internal/photo"
 )
 
 // halves is a w×h picture, its left half red and its right half blue, with noise so it compresses like a photo.
@@ -88,7 +90,7 @@ func TestMakeScalesTheLongEdge(t *testing.T) {
 
 func TestMakeTurnsAJPEGUpright(t *testing.T) {
 	src := encodeJPEG(t, halves(40, 20)) // red left, blue right
-	if orientation(src) != 1 {
+	if photo.Read(src).Orientation != 1 {
 		t.Fatal("a JPEG without EXIF has orientation 1")
 	}
 	for o, want := range map[uint16][2]string{
@@ -97,7 +99,7 @@ func TestMakeTurnsAJPEGUpright(t *testing.T) {
 		3: {"blue", "red"}, // half a turn: the left half goes to the right
 	} {
 		j := withOrientation(src, o)
-		if got := orientation(j); got != int(o) {
+		if got := photo.Read(j).Orientation; got != int(o) {
 			t.Fatalf("orientation %d read as %d", o, got)
 		}
 		b, err := Make(j)
@@ -122,7 +124,7 @@ func TestMakeTurnsAJPEGUpright(t *testing.T) {
 		if !is[want[0]](first) || !is[want[1]](second) {
 			t.Errorf("orientation %d: want %s then %s", o, want[0], want[1])
 		}
-		if orientation(b) != 1 {
+		if photo.Read(b).Orientation != 1 {
 			t.Errorf("orientation %d: the preview keeps EXIF", o)
 		}
 	}

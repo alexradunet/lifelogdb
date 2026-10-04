@@ -30,6 +30,7 @@ lifelog habits --human                     # today's habits; lifelog done evenin
 lifelog snapshot --to ~/snapshots --human  # life-YYYY-MM-DD.db and its restore check
 lifelog file memo.m4a --text memo.txt     # keep a file: its text, the original hashed and never stored
 lifelog file IMG_0001.HEIC --preview IMG_0001.jpg   # a photo lifelog cannot read: send a JPEG of it
+lifelog file IMG_0003.jpg --at Lakeside --radius 300   # a photo near no known place: name the place
 ```
 
 An import ([importing with a model](docs/guides/importing.md)) works in a workspace beside its source and on a
@@ -92,7 +93,9 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   the original through SHA-256 and drops it; nothing of it is stored. `internal/preview` makes every picture itself —
   from a JPEG, PNG or GIF, or a JPEG sent for a HEIC or a video frame: scaled to 1600 px, turned upright by EXIF,
   re-encoded with no metadata (no GPS). An agent sends `sha256`, `mime` and the text. `![[Title]]` renders the
-  picture; `GET /pages/{id}/preview` and `GET /previews?title=` serve it.
+  picture; `GET /pages/{id}/preview` and `GET /previews?title=` serve it. A photo's day and position come from its EXIF
+  (`internal/photo`: a JPEG's APP1, a HEIC's Exif item, read from the original's first megabyte): its day links the
+  place its position is in, `at` names one, `locate` sets or moves a place's point; the position is never stored.
 - **`serve` binds 127.0.0.1** and has no authentication: `life.db` holds health data, and the API is for this
   machine.
 
@@ -105,6 +108,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 | `internal/text` | the title predicate, `title_key`, wikilink and `#tag` extraction; tested against the vectors of [titles and wikilinks](docs/contract/titles-and-wikilinks.md) |
 | `internal/core` | the cookbook's writes and reads; the save contract; habits; renames; files |
 | `internal/preview` | the picture a file page keeps: decode, scale to 1600 px, EXIF orientation, a JPEG of at most 1 MB with no metadata |
+| `internal/photo` | what a photo's metadata says: the day and time taken, the position, the orientation (JPEG and HEIC); `phototest` builds synthetic ones |
 | `internal/importer` | the import workspace, the facts checks and apply, the vault plan, status, replay |
 | `internal/api` | the action catalog, the routes, Siren and HTML |
 | `internal/client` | the hypermedia client (in-process or remote) |

@@ -13,8 +13,8 @@ The docs state the current truth only.
 what happened and what was measured: a journal of day pages, notes, the people and places in them,
 where the owner was, health readings, and the files the owner keeps — as their text and a small picture, the
 original left outside ([D9](docs/decisions/D09-binary-files.md)). To-dos, reminders, projects and plans belong to the tools
-made for them; a plan written in a note stays that note's text ([D23](docs/decisions/D23-no-tasks.md)). Events, money and location
-history are deferred ([D22](docs/decisions/D22-events.md), [D18](docs/decisions/D18-money.md), [D21](docs/decisions/D21-location-history.md)). A proposal that turns `life.db` into a
+made for them; a plan written in a note stays that note's text ([D23](docs/decisions/D23-no-tasks.md)). Events, money and a location
+track are deferred ([D22](docs/decisions/D22-events.md), [D18](docs/decisions/D18-money.md), [D21](docs/decisions/D21-location-history.md)). A proposal that turns `life.db` into a
 planner, a tracker of open work or a finance ledger needs a real incident and the owner's word first. Any developer, in any language, may
 build an application around it; the contract they implement is `docs/` and nothing else.
 
@@ -119,7 +119,7 @@ Their homes are in `docs/`; this list is the checklist, not the rule.
   (`date(x) IS x`, `strftime(...) IS x` — the `IS` matters).
 - **Identity** (the `entities` comment in [schema.sql](docs/schema/schema.sql), D20, D27, D9): every *entity* domain row is keyed by its
   `entities` id through a composite FK `(id, entity_type)` — `pages` to `entities(id, entity_type)`, `people`, `metrics` and `files`
-  to `pages(id, entity_type)`, because a person, a metric or a file **is** a page; a place is its page alone (D16). One id, whose page title
+  to `pages(id, entity_type)`, because a person, a metric or a file **is** a page; a place is its page, and a `places` row when it has a point (D16, D21). One id, whose page title
   is its handle and its name (`pages.entity_type`, `ON UPDATE CASCADE` for promotion;
   [a person or a place](docs/cookbook/person-or-place.md)). Ids are carried with `INSERT … RETURNING id`, never
   `last_insert_rowid()` across statements.

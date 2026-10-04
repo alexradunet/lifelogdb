@@ -26,7 +26,7 @@ reused, and a decision that changes is rewritten in place (git is its history).
 | [D18](D18-money.md) | Money: DEFERRED out of v1. The design is kept here for the day it returns. | deferred |
 | [D19](D19-wikilink-save-contract.md) | The wikilink save contract: one transaction, links follow the body, a bad target never blocks a save. | accepted |
 | [D20](D20-named-pages.md) | A person or a place is a page: one id, and `[[Name]]` reaches it directly. | accepted |
-| [D21](D21-location-history.md) | Location history: DEFERRED out of v1. The design is kept here for the day it returns. | deferred |
+| [D21](D21-location-history.md) | Location: a place has a point and a radius; a photo's place becomes an `at` link when it is kept; no track. | accepted |
 | [D22](D22-events.md) | Events: DEFERRED out of v1. The design is kept here for the day it returns. | deferred |
 | [D23](D23-no-tasks.md) | A life log, not a project manager: no tasks. | accepted |
 | [D24](D24-habits.md) | Habits: a metric with active periods. | accepted |

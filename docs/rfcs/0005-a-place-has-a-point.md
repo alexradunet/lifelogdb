@@ -1,7 +1,7 @@
 # 0005 — A place has a point and a radius; a photo's place and day are taken when it is kept
 
 - **Date:** 2026-10-04
-- **Status:** draft
+- **Status:** accepted
 - **Answers:** [0010](../issues/0010-a-photos-place-has-no-home.md), a photo's place cannot become an `at` link
 
 ## Problem
@@ -59,4 +59,6 @@ mutant per rule.
 
 ## Outcome
 
-Filled in when it closes.
+Accepted: [D21](../decisions/D21-location-history.md) rewritten in place (a place has a point and a radius; a photo's place
+becomes an `at` link when it is kept; no track), [D16](../decisions/D16-places.md) and [D9](../decisions/D09-binary-files.md) amended; plan 031 done
+(`git log -- docs/plans`). The Takeout step is [plan 032](../plans/032-takeout-photos.md).

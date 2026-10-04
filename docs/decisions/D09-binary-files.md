@@ -24,6 +24,10 @@
   deleted (`files_no_delete`); one kept by mistake is tombstoned ([D11](D11-tombstones.md)). The original is never
   stored in `life.db` and never managed by its writer. A plain page of the file's title — a ghost an earlier embed
   made — becomes the file by the promotion a person takes, its text kept ([keep a file](../cookbook/keep-a-file.md)).
+- **A file's day.** A file's page carries the day the file was made when the file says so — a photo's EXIF date, the
+  camera's local clock (`lifelog_meta.days`) — else the day it is kept. A file with a picture and a day of its own is
+  shown in that day's page by `![[title]]`, appended once; a photo's position links that day to a place
+  ([D21](D21-location-history.md), [the place of a photo](../cookbook/place-of-a-photo.md)).
 - **Alternatives.**
   - *Keep files deferred, a transcript a plain page keyed by the hash*: rejected — the key deduplicates per `source`
     only, a transcript appended to a day page has no key, and no picture can be kept.

@@ -46,10 +46,12 @@ const usage = `lifelog — the writer of a life.db
   lifelog habits [YYYY-MM-DD]         the day's habits and completion
   lifelog done METRIC [--day D]       check a habit in as done (skip METRIC: not done)
   lifelog rename PAGE-ID TITLE        rename a plain page (the old one becomes a redirect stub)
-  lifelog file PATH [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day D]
+  lifelog file PATH [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day D] [--at PLACE [--radius M]]
                                       keep a file (docs/cookbook/keep-a-file.md): the original is hashed,
                                       never stored; its text from FILE; a picture made from a JPEG, PNG or
-                                      GIF, else from PICTURE; the title defaults to the file's name
+                                      GIF, else from PICTURE; the title defaults to the file's name. A photo
+                                      links its day to the place it was taken in; one near no place is
+                                      reported, and --at names the place (docs/cookbook/place-of-a-photo.md)
   lifelog snapshot [--to DIR]         a dated copy of life.db (life-YYYY-MM-DD.db, beside it or in DIR),
                                       then its restore check (docs/cookbook/take-a-snapshot.md)
 
@@ -72,9 +74,9 @@ Global flags, anywhere on the line:
 `
 
 type opts struct {
-	db, url, source, addr, agent, mood, day, workspace, from, to, title, text, preview, mime string
-	human, dryRun                                                                            bool
-	args                                                                                     []string
+	db, url, source, addr, agent, mood, day, workspace, from, to, title, text, preview, mime, at, radius string
+	human, dryRun                                                                                        bool
+	args                                                                                                 []string
 }
 
 // parse takes flags anywhere on the line (an old CLI ignored --db after the subcommand).
@@ -82,7 +84,7 @@ func parse(argv []string) (opts, error) {
 	o := opts{db: os.Getenv("LIFELOG_DB"), source: "cli", addr: "127.0.0.1:7777"}
 	vals := map[string]*string{"--db": &o.db, "--url": &o.url, "--source": &o.source, "--addr": &o.addr,
 		"--agent": &o.agent, "--mood": &o.mood, "--day": &o.day, "--workspace": &o.workspace, "--from": &o.from, "--to": &o.to,
-		"--title": &o.title, "--text": &o.text, "--preview": &o.preview, "--mime": &o.mime}
+		"--title": &o.title, "--text": &o.text, "--preview": &o.preview, "--mime": &o.mime, "--at": &o.at, "--radius": &o.radius}
 	for i := 0; i < len(argv); i++ {
 		a := argv[i]
 		if a == "--human" {
@@ -302,7 +304,7 @@ func do(c *client.Client, name string, vals map[string]string) (*api.Entity, err
 // never stored), its text read from --text, and a picture from --preview when the original is not one lifelog reads.
 func keepFile(o opts, c *client.Client, args []string) error {
 	if len(args) != 1 {
-		return errors.New("file PATH [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day YYYY-MM-DD]")
+		return errors.New("file PATH [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day YYYY-MM-DD] [--at PLACE [--radius M]]")
 	}
 	vals := map[string]string{"title": o.title}
 	if o.title == "" {
@@ -318,6 +320,12 @@ func keepFile(o opts, c *client.Client, args []string) error {
 	if o.mime != "" {
 		vals["mime"] = o.mime
 	}
+	if o.at != "" {
+		vals["at"] = o.at
+	}
+	if o.radius != "" {
+		vals["radius"] = o.radius
+	}
 	if o.day != "" {
 		vals["day"] = o.day
 	}
@@ -331,7 +339,15 @@ func keepFile(o opts, c *client.Client, args []string) error {
 	}
 	for _, a := range actions {
 		if a.Name == "add-file" {
-			return show(o)(c.DoFiles(a, vals, files))
+			e, err := c.DoFiles(a, vals, files)
+			if err := show(o)(e, err); err != nil {
+				return err
+			}
+			if r, _ := e.Result.(map[string]any); r != nil && r["unmatched"] != nil {
+				u, _ := r["unmatched"].(map[string]any)
+				fmt.Fprintf(os.Stderr, "near no place: %v, %v (%v)\nname it: lifelog file %s --at PLACE [--radius METRES]\n", u["lat"], u["lon"], u["map"], args[0])
+			}
+			return nil
 		}
 	}
 	return errors.New("the API has no add-file action")

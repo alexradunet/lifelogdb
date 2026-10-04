@@ -199,21 +199,8 @@ func (t *Tx) Capture(day, entry string, mood *float64) (id int64, r Sync, err er
 	if mood != nil && !isMood(*mood) {
 		return 0, r, invalid("mood is 1-5")
 	}
-	p, err := t.lookupKey(day)
-	switch {
-	case err != nil:
+	if id, err = t.dayPage(day); err != nil {
 		return 0, r, err
-	case p == nil:
-		if id, _, err = t.insertPage("page", day, day, day, "", ""); err != nil {
-			return 0, r, err
-		}
-	default:
-		id = p.ID
-		if p.Deleted {
-			if _, err := t.tx.Exec(`UPDATE entities SET deleted_at = NULL WHERE id = ?`, id); err != nil {
-				return 0, r, err
-			}
-		}
 	}
 	if entry != "" {
 		if _, err := t.tx.Exec(`UPDATE pages SET body = body || CASE WHEN body = '' THEN '' ELSE char(10, 10) END || ?
@@ -236,6 +223,22 @@ func (t *Tx) Capture(day, entry string, mood *float64) (id int64, r Sync, err er
 }
 
 func isMood(v float64) bool { return v >= 1 && v <= 5 && v == math.Trunc(v) }
+
+// dayPage is the id of a local day's page: found (revived when tombstoned), or created on its first write
+// (cookbook/capture.md).
+func (t *Tx) dayPage(day string) (int64, error) {
+	p, err := t.lookupKey(day)
+	switch {
+	case err != nil:
+		return 0, err
+	case p == nil:
+		id, _, err := t.insertPage("page", day, day, day, "", "")
+		return id, err
+	case p.Deleted:
+		_, err = t.tx.Exec(`UPDATE entities SET deleted_at = NULL WHERE id = ?`, p.ID)
+	}
+	return p.ID, err
+}
 
 // SaveBody replaces a page's body and syncs its wikilinks (cookbook/save-a-body.md). version is the
 // entities.updated_at the caller read; a newer one means someone else saved in between.

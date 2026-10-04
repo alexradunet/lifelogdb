@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"math"
 	"path/filepath"
 	"strings"
 )
@@ -13,7 +14,7 @@ import (
 func cookbook(s *S) {
 	bl := s.d.CookbookBlocks()
 	first, order := s.d.Blocks()
-	s.K("the cookbook has at least 20 SQL blocks, one or more per recipe, 20 recipes", len(bl) >= 20 && len(first) == 20 && eq(order, s.d.CookbookOrder()), order)
+	s.K("the cookbook has at least 21 SQL blocks, one or more per recipe, 21 recipes", len(bl) >= 21 && len(first) == 21 && eq(order, s.d.CookbookOrder()), order)
 
 	seeded := func(hardened bool, path string) (*C, P) {
 		c := s.freshWith(F{Hardened: hardened, Path: path})
@@ -40,6 +41,7 @@ func cookbook(s *S) {
 			"import_key": "notes/sourdough.md", "metric": "vitamin_d", "parent_id": cat,
 			"sha256": strings.Repeat("ab", 32), "mime": "image/heic", "preview": jpegBytes, "file_title": "2026-09-29 Lake.jpg",
 			"file_key": "2026-09-29 lake.jpg", "body": "The lake at dawn with [[Sam]].",
+			"lat": 38.7139, "lon": -9.1394, "radius_m": 8000, "link_days": 1, "m_per_deg_lon": 111320 * math.Cos(38.7139*math.Pi/180), "taken_day": "2026-08-15",
 			"snapshot": filepath.ToSlash(filepath.Join(s.dir, fmt.Sprintf("cookbook-snapshot-%v.db", hardened)))}
 	}
 

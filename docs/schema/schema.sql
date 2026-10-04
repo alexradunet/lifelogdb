@@ -36,7 +36,7 @@ CREATE TABLE entities (
   -- make a row's type and its table agree.
   -- A person, a place, a metric or a file is also a page (D20, D27, D9): one id, with a pages row whose title is the
   -- handle [[wikilinks]] write; a person also has a people row whose FK points at that pages row, a metric a metrics
-  -- row, a file a files row, a place has no row of its own (D16). A ghost page is promoted by UPDATE entities SET entity_type = 'person' (the FK
+  -- row, a file a files row, a place may have a places row (its point, D21). A ghost page is promoted by UPDATE entities SET entity_type = 'person' (the FK
   -- cascades it to pages.entity_type), then a person's people row is inserted.
   -- Nothing is ever deleted: deleted_at is the tombstone (D11), enforced by BEFORE DELETE triggers.
   -- import_key: the key a writer that may send the row twice gives it (an importer, an offline phone, a
@@ -73,7 +73,7 @@ CREATE TABLE pages (
   entity_type TEXT NOT NULL DEFAULT 'page' CONSTRAINT pages_entity_type CHECK (entity_type IN ('page','person','place','metric','file')),   -- 'page', or the named entity this page is
   title       TEXT NOT NULL,              -- filename-safe, immutable; a day page's is its day
   title_key   TEXT NOT NULL,              -- NFC(casefold(NFC(title))), app-computed, unique
-  day         TEXT,                       -- local day it was written: a day page's day; a page written on purpose has one, a link target the app created has none
+  day         TEXT,                       -- local day it was written: a day page's day; a page written on purpose has one (a file's: the day it was made, when the file says), a link target the app created has none
   body        TEXT NOT NULL DEFAULT '',   -- CommonMark; [[Wiki Links]] inline
   UNIQUE (id, entity_type),               -- the parent key of people
   FOREIGN KEY (id, entity_type) REFERENCES entities(id, entity_type) ON UPDATE CASCADE,   -- a promoted page follows its entity's type
@@ -136,6 +136,25 @@ CREATE TABLE people (
   death_day   TEXT CONSTRAINT people_death_day CHECK (death_day IS NULL OR date(death_day) IS death_day),
   FOREIGN KEY (id, entity_type) REFERENCES pages(id, entity_type),
   CONSTRAINT people_death_day_order CHECK (death_day IS NULL OR birth_day IS NULL OR death_day >= birth_day)
+) STRICT;
+
+CREATE TABLE places (
+  -- where a place is (D21): one point and a radius, never where the owner was — that is the at links of the day
+  -- pages (D16). Optional: a place without a row has no point and is never matched. A photo's position is matched
+  -- when the photo is kept, to the live places whose circle holds it: the smallest radius first, then the nearest.
+  -- The distance needs no math function: the app binds the metres per degree of longitude at the position's latitude
+  -- (111320 * cos(lat)) and compares the squared equirectangular distance with radius_m squared; a circle is not
+  -- matched across the 180th meridian. link_days = 1: the photo's day gets an at link to the place; 0: the place is
+  -- recognised (its photos are never asked about) and not linked — home, work. The photo's position is never stored.
+  -- A wrong point is fixed by UPDATE; never deleted: tombstone the entity (D11).
+  id          INTEGER PRIMARY KEY,
+  entity_type TEXT NOT NULL DEFAULT 'place' CONSTRAINT places_entity_type CHECK (entity_type = 'place'),
+  lat         REAL NOT NULL CONSTRAINT places_lat CHECK (lat BETWEEN -90 AND 90),      -- WGS84 degrees
+  lon         REAL NOT NULL CONSTRAINT places_lon CHECK (lon BETWEEN -180 AND 180),
+  radius_m    INTEGER NOT NULL CONSTRAINT places_radius CHECK (radius_m BETWEEN 10 AND 100000),   -- a café ~100, a city ~10000
+  link_days   INTEGER NOT NULL DEFAULT 1 CONSTRAINT places_link_days CHECK (link_days IN (0, 1)),
+  FOREIGN KEY (id, entity_type) REFERENCES pages(id, entity_type),
+  CONSTRAINT places_not_null_island CHECK (lat <> 0 OR lon <> 0)   -- 0°, 0° is how photo metadata says "no location"
 ) STRICT;
 
 CREATE TABLE metrics (
@@ -309,7 +328,7 @@ INSERT INTO link_kinds(kind, symmetric, from_types, to_types, note) VALUES
   ('wikilink', 0, 'page,person,place,metric,file', 'page,person,place,metric,file', 'extracted from [[body]] on save (an embed ![[...]] is one); body is the truth'),
   ('redirect', 0, 'page',      'page,person,place,metric,file', 'old stub page → its replacement, a page, person, place, metric or file; renames, D5'),
   ('about',    0, NULL,        'person,place', 'entity → person/place it is about'),
-  ('at',       0, 'page',      'place',        'day page → a place the owner was at that day; from a day page only, which the app checks (D16)'),
+  ('at',       0, 'page',      'place',        'day page → a place the owner was at that day; from a day page only, which the app checks (D16); a photo kept makes one to the place its position is in (D21)'),
   ('located-in', 0, 'place',   'place',        'containment: Tokyo → Japan; transitive — walk it with a recursive CTE'),
   ('parent-of', 0, 'person',   'person',       'parent → child; ''family'' stays the symmetric catch-all'),
   ('part-of',  0, NULL,        'page',         'anything → the page of a category it is filed in (Ferritin → Iron → Biomarkers, D26); walk it with a recursive CTE'),
@@ -396,6 +415,9 @@ END;
 CREATE TRIGGER people_touch AFTER UPDATE ON people BEGIN
   UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = NEW.id;
 END;
+CREATE TRIGGER places_touch AFTER UPDATE ON places BEGIN
+  UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = NEW.id;
+END;
 CREATE TRIGGER files_touch AFTER UPDATE ON files BEGIN
   UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = NEW.id;
 END;
@@ -423,6 +445,8 @@ CREATE TRIGGER pages_no_delete BEFORE DELETE ON pages
 BEGIN SELECT RAISE(ABORT, 'pages are never deleted: tombstone the entity (entities.deleted_at)'); END;
 CREATE TRIGGER people_no_delete BEFORE DELETE ON people
 BEGIN SELECT RAISE(ABORT, 'people are never deleted: tombstone the entity (entities.deleted_at)'); END;
+CREATE TRIGGER places_no_delete BEFORE DELETE ON places
+BEGIN SELECT RAISE(ABORT, 'places are never deleted: fix a wrong point by UPDATE, tombstone the entity (entities.deleted_at)'); END;
 CREATE TRIGGER metrics_no_delete BEFORE DELETE ON metrics
 BEGIN SELECT RAISE(ABORT, 'metrics are never deleted: tombstone the entity (entities.deleted_at)'); END;
 CREATE TRIGGER files_no_delete BEFORE DELETE ON files
