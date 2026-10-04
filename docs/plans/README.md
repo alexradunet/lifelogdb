@@ -3,10 +3,11 @@
 A plan is a dated record ([how a change happens](../process.md)): a change large enough to hand to another agent,
 written as a self-contained brief with done criteria. It cites the docs as they were at the commit it names. One file
 per plan, `NNN-short-slug.md`, numbered on from the last: plans up to 028 are done and live in git history
-(`git log -- docs/plans`), so the next one is **029**.
+(`git log -- docs/plans`), so the next one is **030**.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
+| [029](029-google-takeout.md) | Google Takeout: places and daily health totals, with no schema change | P1 | L | — | TODO |
 
 Status values: TODO | IN PROGRESS | IN REVIEW (owner) | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale). A plan that is DONE or REJECTED is deleted; git is the log.
