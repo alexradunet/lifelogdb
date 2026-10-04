@@ -9,7 +9,7 @@ used in the 2026-10 trial import of a notes vault.
 
 Page text comes in only through a vault ("An Obsidian vault" below): facts files write rows, never a page's body. A
 journal or diary export is first converted to a folder of one Markdown file per day, named `YYYY-MM-DD.md`, and
-imported as a vault.
+imported as a vault. A file — a recording, a PDF, a photo — is kept on its own ("Files" below).
 
 ## Three parties
 
@@ -68,7 +68,7 @@ model and the owner.
   - `Journal/**/*.md` — one note per day: its day's page; the people it names, the places the owner was at
   - `Contacts/*.md` — one person per note
   - `Medical/Results/*.md` — readings: one metric per note, values from its table
-  - `**/*.png`, `**/*.pdf` — skip: attachments are not imported
+  - `**/*.png`, `**/*.pdf` — skip: an attachment is kept on its own, as a file
 
   ## Aliases
   - "Bobby" → "Bob Sample"
@@ -373,12 +373,34 @@ What is specific to a vault, beside the steps above:
 - **Obsidian's link forms are rewritten before the save**: a link with a folder, a heading, a block
   reference or a `.md` suffix, and a link to a note whose title changed, become `[[Title|what was
   written]]`, so a reader sees the same words; a link to a daily note lands on its day page; an
-  embedded or linked attachment becomes a code span, since attachments are deferred ([D9](../decisions/D09-binary-files.md)); a link to a
-  heading of the same note makes no row. Every other byte is kept.
+  embedded or linked attachment becomes a code span: the file is not part of the vault (it is kept on its own, "Files"
+  below), and a code span keeps each attachment a note names from becoming an empty page; a link to a heading of the
+  same note makes no row. Every other byte is kept.
 - **Frontmatter stays in the text as written** and is scanned like the rest of the body ([titles and wikilinks](../contract/titles-and-wikilinks.md)): a
   `tags: [health]` list has no `#`, so it makes no tag, while a `"[[Note]]"` or `"#tag"` written inside it does; its aliases
   make no redirect stubs. A nested tag reads as its first segment (`#work/project` is `work`).
 - `.canvas` and other view files are skipped, and so are hidden folders.
+
+## Files: a recording, a PDF, a photo
+
+A file the owner keeps is a page of its own, written by one operation the writer checks whole (*keep a file*,
+[keep a file](../cookbook/keep-a-file.md), [D9](../decisions/D09-binary-files.md)), not by a facts file. For each file:
+
+1. **Its text.** A local model makes it: a recording's transcript, the text of a PDF, a scan read by OCR, a video's
+   speech. The owner reads it before anything else: the source will be deleted, and an error in the text can be put
+   right only while the source lives. A photo's text is its caption, or nothing.
+2. **Its picture**, for a photo, a scan whose picture matters, or one frame of a video: a JPEG whose long edge is at
+   most 1600 px. A writer makes it from a format it can read; a format it cannot (HEIC, a video) is first turned into a
+   JPEG by another tool (`ffmpeg -i in.heic picture.jpg`; a frame: `ffmpeg -ss 1 -i in.mp4 -frames:v 1 frame.jpg`),
+   which the writer scales. The preview keeps no metadata: a photo's GPS stays out.
+3. **Keep it.** The writer hashes the original (SHA-256), names its type, and writes the page, its text and its picture
+   in one transaction — or finds the file kept already, whatever source sent it, and writes nothing but a missing
+   picture. The title is the owner's: a writer may propose the file's name, and a title is permanent.
+4. **Then the source.** A recording or a PDF is deleted only once its page holds the text the owner read; a photo's
+   original stays in the photo library. The original is never written to `life.db`.
+
+`![[title]]` in a day page shows the file there. A page that named the title before the file was kept (a ghost) becomes
+the file when it is kept, so that day's link lands on it.
 
 ## Trial, then the real run
 

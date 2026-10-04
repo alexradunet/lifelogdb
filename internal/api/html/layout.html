@@ -25,7 +25,7 @@ section{margin:18px 0}
 .prose pre,pre{white-space:pre-wrap;background:var(--panel);padding:10px 12px;border-radius:6px;font-size:14px}
 .prose code{background:var(--panel);padding:1px 4px;border-radius:4px;font-size:.92em}.prose pre code{padding:0;background:none}
 .prose blockquote{margin:0;padding-left:14px;border-left:3px solid var(--line);color:var(--muted)}
-.prose img{max-width:100%}
+.prose img,img.preview{max-width:100%;height:auto;border-radius:6px}a.wikilink.embed{border-bottom:none}
 a.wikilink{border-bottom:1px dotted var(--accent)}a.wikilink:hover{text-decoration:none;border-bottom-style:solid}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:12px 0}
 .note{border-left:3px solid var(--accent);background:var(--panel);padding:8px 12px;border-radius:0 6px 6px 0;margin:12px 0;font-size:14px}
@@ -54,14 +54,14 @@ svg.chart{width:100%;height:auto;margin:8px 0}svg.chart polyline{fill:none;strok
 svg.chart circle{fill:var(--accent)}svg.chart .axis{stroke:var(--line)}svg.chart text{fill:var(--muted);font-size:12px;text-anchor:end}svg.chart text.x{text-anchor:middle}
 .done{color:var(--ok)}.notdone{color:var(--warn)}
 </style></head><body>
-<header class="top"><a class="brand" href="/">Lifelog</a><a href="/days/today">Today</a><a href="/days">Days</a><a href="/people">People</a><a href="/places">Places</a><a href="/metrics">Metrics</a><a href="/habits">Habits</a><a href="/#new">New</a>
+<header class="top"><a class="brand" href="/">Lifelog</a><a href="/days/today">Today</a><a href="/days">Days</a><a href="/people">People</a><a href="/places">Places</a><a href="/files">Files</a><a href="/metrics">Metrics</a><a href="/habits">Habits</a><a href="/#new">New</a>
 <form method="GET" action="/search" role="search"><input type="search" name="q" placeholder="Search" aria-label="Search"></form></header>
 <main>{{end}}
 
 {{define "foot"}}</main></body></html>{{end}}
 
 {{/* form draws one action of the entity (see formOf); nothing when the action is not offered */}}
-{{define "form"}}{{with .}}<form method="{{.Method}}" action="{{.Href}}"{{with .Class}} class="{{.}}"{{end}}>
+{{define "form"}}{{with .}}<form method="{{.Method}}" action="{{.Href}}"{{with .Class}} class="{{.}}"{{end}}{{if .Multipart}} enctype="multipart/form-data"{{end}}>
 {{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{with .Value}}{{num .}}{{end}}">{{end}}
 {{range .Shown}}<div class="field"><label for="f-{{$.Name}}-{{.Name}}">{{or .Title .Name}}{{if .Required}} *{{end}}</label>
 {{if .Options}}<select id="f-{{$.Name}}-{{.Name}}" name="{{.Name}}">{{$v := num .Value}}{{range .Options}}<option{{if eq . $v}} selected{{end}}>{{.}}</option>{{end}}</select>

@@ -88,6 +88,9 @@ func schema(fields []api.Field) map[string]any {
 	props := map[string]any{}
 	req := []string{}
 	for _, f := range fields {
+		if f.Type == "file" { // a file is sent by the CLI or a browser; an agent sends its sha256 and mime
+			continue
+		}
 		p := map[string]any{"type": "string"}
 		switch f.Type {
 		case "number":

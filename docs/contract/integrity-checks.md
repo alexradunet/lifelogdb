@@ -8,7 +8,7 @@ file, not on a copy.
 ```sql
 PRAGMA integrity_check;      -- one row: ok
 PRAGMA foreign_key_check;    -- no rows
-SELECT id FROM entities WHERE id NOT IN (SELECT id FROM pages WHERE entity_type IN ('page','place') UNION SELECT id FROM people UNION SELECT id FROM metrics);   -- no rows
+SELECT id FROM entities WHERE id NOT IN (SELECT id FROM pages WHERE entity_type IN ('page','place') UNION SELECT id FROM people UNION SELECT id FROM metrics UNION SELECT id FROM files);   -- no rows
 INSERT INTO pages_fts(pages_fts, rank) VALUES ('integrity-check', 1);   -- no error
 ```
 
@@ -19,7 +19,7 @@ INSERT INTO pages_fts(pages_fts, rank) VALUES ('integrity-check', 1);   -- no er
   ([connection setup](connections.md) — per connection; `STRICT` does not enforce foreign keys) stored a reading of a metric that
   does not exist, and `integrity_check` said `ok`.
 - **The orphan query — the one check no constraint can express.** An `entities` row with no domain
-  row (a writer that died between its inserts, or a person or a metric with a page but no `people` or `metrics` row): both
+  row (a writer that died between its inserts, or a person, a metric or a file with a page but no `people`, `metrics` or `files` row): both
   other checks are clean on it.
 - **The FTS5 integrity-check — the index against its content.** `pages_fts` is an external-content
   index over `pages`; if the two drift apart, searches return wrong rows and `integrity_check` still

@@ -19,7 +19,7 @@ CREATE TABLE lifelog_meta (
   value TEXT NOT NULL
 ) STRICT;
 INSERT INTO lifelog_meta(key, value) VALUES
-  ('schema',    'lifelog v1: the journal (one page per day), wiki, people, places and health metrics of one person: a life log, not a project manager; the rules of each table are comments inside its CREATE statement (.schema), the rules that span tables are these rows'),
+  ('schema',    'lifelog v1: the journal (one page per day), wiki, people, places, health metrics and the files kept as their text and a small picture, of one person: a life log, not a project manager; the rules of each table are comments inside its CREATE statement (.schema), the rules that span tables are these rows'),
   ('instants',  'every *_at column is a UTC ISO-8601 TEXT instant with milliseconds, e.g. 2026-06-09T21:14:03.482Z, written by the app, never by a SQLite default (CURRENT_TIMESTAMP has no milliseconds and is not ISO-8601; a trigger writes strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')); fixed width, so it sorts as text; CHECK strftime(''%Y-%m-%dT%H:%M:%fZ'', x) IS x; created_at, on every table that has it, is when the row was written to life.db, never back-dated (when a thing happened is its day or its other *_at)'),
   ('days',      'every *_day column (and day) is the LOCAL calendar date YYYY-MM-DD where the thing happened, written by the app from the local calendar of the device that captured it (never a server''s), never recomputed from an instant; CHECK date(x) IS x (IS, not =: a CHECK passes on NULL, and date(''2026-9-3'') is NULL)'),
   ('deletes',   'life data is never deleted except links rows: an entity is a tombstone (entities.deleted_at), a measurement is corrected by inserting a row; BEFORE DELETE triggers enforce it on entities and every domain row; every read path filters entities.deleted_at IS NULL; the registries (link_kinds, lifelog_meta) are the owner''s administrative rows, deletable while nothing references them (each CREATE comment says so)'),
@@ -29,14 +29,14 @@ INSERT INTO lifelog_meta(key, value) VALUES
   ('evolution', 'after the freeze (the first row written that cannot be replayed from an import; before it a file is rebuilt, not migrated): numbered forward-only SQL migrations, additive only (new tables, columns and indexes; a named CHECK may be replaced with ALTER TABLE DROP/ADD CONSTRAINT, so every CHECK is named), counted in PRAGMA user_version');
 
 CREATE TABLE entities (
-  -- The shared spine: one row per linkable thing (page, person, place, metric). Its domain row has the
+  -- The shared spine: one row per linkable thing (page, person, place, metric, file). Its domain row has the
   -- SAME id: the app inserts this row first with INSERT ... RETURNING id and binds that id in the same
   -- transaction; never last_insert_rowid() across statements (any insert in between, a link or a ghost
   -- page, moves it). UNIQUE(id, entity_type) plus the composite FK (id, entity_type) of every domain table
   -- make a row's type and its table agree.
-  -- A person, a place or a metric is also a page (D20, D27): one id, with a pages row whose title is the handle
-  -- [[wikilinks]] write; a person also has a people row whose FK points at that pages row, a metric a metrics
-  -- row, a place has no row of its own (D16). A ghost page is promoted by UPDATE entities SET entity_type = 'person' (the FK
+  -- A person, a place, a metric or a file is also a page (D20, D27, D9): one id, with a pages row whose title is the
+  -- handle [[wikilinks]] write; a person also has a people row whose FK points at that pages row, a metric a metrics
+  -- row, a file a files row, a place has no row of its own (D16). A ghost page is promoted by UPDATE entities SET entity_type = 'person' (the FK
   -- cascades it to pages.entity_type), then a person's people row is inserted.
   -- Nothing is ever deleted: deleted_at is the tombstone (D11), enforced by BEFORE DELETE triggers.
   -- import_key: the key a writer that may send the row twice gives it (an importer, an offline phone, a
@@ -45,7 +45,7 @@ CREATE TABLE entities (
   -- DO NOTHING RETURNING id: no id back = imported before, so no domain row is inserted.
   id          INTEGER PRIMARY KEY,
   entity_type TEXT NOT NULL CONSTRAINT entities_entity_type
-                  CHECK (entity_type IN ('page','person','place','metric')),
+                  CHECK (entity_type IN ('page','person','place','metric','file')),
   created_at  TEXT NOT NULL CONSTRAINT entities_created_at CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at),   -- the write time (lifelog_meta.instants)
   updated_at  TEXT NOT NULL CONSTRAINT entities_updated_at CHECK (strftime('%Y-%m-%dT%H:%M:%fZ', updated_at) IS updated_at),   -- kept by the *_touch triggers
   deleted_at  TEXT     CONSTRAINT entities_deleted_at CHECK (deleted_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', deleted_at) IS deleted_at),   -- the tombstone
@@ -57,7 +57,7 @@ CREATE UNIQUE INDEX entities_import ON entities(source, import_key) WHERE import
 
 CREATE TABLE pages (
   -- All prose (D5): every page is titled, unique and linkable: an essay, a reference page, a tag, the page
-  -- of a person, a place or a metric (its entity_type says which, D20, D27), and the journal. The journal is one
+  -- of a person, a place, a metric or a file (its entity_type says which, D20, D27, D9), and the journal. The journal is one
   -- DAY PAGE per local day, titled YYYY-MM-DD ('2026-09-29'): its title equals its day (pages_day_page), so
   -- [[2026-09-29]] reaches it. Capture appends to today's page, created on the first write. A day page is
   -- never a person or a place (pages_day_page_plain): a promotion of it is refused (D20).
@@ -70,7 +70,7 @@ CREATE TABLE pages (
   -- links(kind='wikilink') from a page always equal the [[titles]] and #tags its CommonMark text names,
   -- rebuilt on every save; an invalid target makes no link and never blocks the save (D19).
   id          INTEGER PRIMARY KEY,
-  entity_type TEXT NOT NULL DEFAULT 'page' CONSTRAINT pages_entity_type CHECK (entity_type IN ('page','person','place','metric')),   -- 'page', or the named entity this page is
+  entity_type TEXT NOT NULL DEFAULT 'page' CONSTRAINT pages_entity_type CHECK (entity_type IN ('page','person','place','metric','file')),   -- 'page', or the named entity this page is
   title       TEXT NOT NULL,              -- filename-safe, immutable; a day page's is its day
   title_key   TEXT NOT NULL,              -- NFC(casefold(NFC(title))), app-computed, unique
   day         TEXT,                       -- local day it was written: a day page's day; a page written on purpose has one, a link target the app created has none
@@ -162,6 +162,34 @@ INSERT INTO entities(id, entity_type, created_at, updated_at, source) VALUES
 INSERT INTO pages(id, entity_type, title, title_key, body) VALUES
   (1, 'metric', 'Mood', 'mood', '1-5; attached to its day page via measurements.captured_with_id when posted');
 INSERT INTO metrics(id, unit) VALUES (1, '');
+
+CREATE TABLE files (
+  -- a file the owner keeps (D9): a recording, a PDF, a scan, a photo, a video. A file is also a page with the same
+  -- id, as a person is (D20): its title is its handle (![[2026-10-04 Lake.jpg]] in a day page is a wikilink to it),
+  -- its body the file's text — a transcript, the text of a PDF or a scan, a caption — so search finds it.
+  -- The ORIGINAL is never stored in life.db and never managed by its writer: it stays outside (a photo library), or
+  -- is deleted once its text is kept here. sha256 names the original: one page per original, whatever writer sends
+  -- it — look it up first (WHERE sha256 = :sha256) and link the page found; files_sha256 refuses a second row.
+  -- preview is the picture kept for good: a JPEG, its long edge at most 1600 px (the writer scales it), at most 1 MB,
+  -- with no metadata (a photo's GPS is the location history D21 leaves out); NULL where the text is the point (a
+  -- recording, a PDF). A video keeps one frame. sha256 and mime never change
+  -- (files_original_fixed); a missing preview may be added later. Never deleted: tombstone the entity (D11).
+  id          INTEGER PRIMARY KEY,
+  entity_type TEXT NOT NULL DEFAULT 'file' CONSTRAINT files_entity_type CHECK (entity_type = 'file'),
+  sha256      TEXT NOT NULL CONSTRAINT files_sha256 CHECK (length(sha256) = 64 AND sha256 NOT GLOB '*[^0-9a-f]*'),   -- of the original's bytes, lowercase hex
+  mime        TEXT NOT NULL CONSTRAINT files_mime CHECK (length(mime) <= 127 AND mime GLOB '[a-z]*/[a-z0-9]*'
+                           AND mime NOT GLOB '*[^a-z0-9/.+-]*' AND mime NOT GLOB '*/*/*'),   -- of the original, lowercase: 'audio/mp4', 'image/heic', 'application/pdf'
+  preview     BLOB CONSTRAINT files_preview CHECK (preview IS NULL OR (substr(preview, 1, 3) IS x'FFD8FF'
+                           AND length(preview) <= 1048576)),   -- a JPEG; IS, not =: substr of an empty blob is NULL
+  FOREIGN KEY (id, entity_type) REFERENCES pages(id, entity_type)
+) STRICT;
+CREATE UNIQUE INDEX files_sha256 ON files(sha256);   -- one page per original
+CREATE TRIGGER files_original_fixed BEFORE UPDATE OF sha256, mime ON files
+  WHEN NEW.sha256 IS NOT OLD.sha256 OR NEW.mime IS NOT OLD.mime
+BEGIN
+  -- the hash and the type name the original; another original is another file
+  SELECT RAISE(ABORT, 'files.sha256 and mime name the original and never change: another original is another file');
+END;
 
 CREATE TABLE measurements (
   -- one row per data point (the FxLifeSheet shape). The table is append-only, enforced by triggers: never
@@ -278,8 +306,8 @@ CREATE TABLE link_kinds (
   CONSTRAINT link_kinds_mirror_valid CHECK (symmetric = 0 OR from_types IS to_types)   -- a mirrored edge must be valid in both directions
 ) STRICT;
 INSERT INTO link_kinds(kind, symmetric, from_types, to_types, note) VALUES
-  ('wikilink', 0, 'page,person,place,metric', 'page,person,place,metric', 'extracted from [[body]] on save; body is the truth'),
-  ('redirect', 0, 'page',      'page,person,place,metric', 'old stub page → its replacement, a page, person, place or metric; renames, D5'),
+  ('wikilink', 0, 'page,person,place,metric,file', 'page,person,place,metric,file', 'extracted from [[body]] on save (an embed ![[...]] is one); body is the truth'),
+  ('redirect', 0, 'page',      'page,person,place,metric,file', 'old stub page → its replacement, a page, person, place, metric or file; renames, D5'),
   ('about',    0, NULL,        'person,place', 'entity → person/place it is about'),
   ('at',       0, 'page',      'place',        'day page → a place the owner was at that day; from a day page only, which the app checks (D16)'),
   ('located-in', 0, 'place',   'place',        'containment: Tokyo → Japan; transitive — walk it with a recursive CTE'),
@@ -352,7 +380,7 @@ END;
 
 CREATE VIEW ghost_pages AS
   -- empty plain pages nobody points at, 30 days old: a link target created by a capture-time typo and
-  -- never written (a page anything links to, a rename's target included, is not one). The page of a person, a place or a metric is never a ghost,
+  -- never written (a page anything links to, a rename's target included, is not one). The page of a person, a place, a metric or a file is never a ghost,
   -- however empty (D20). The UI lists them; tombstoning is the owner's act.
   SELECT p.id, p.title, e.created_at
     FROM pages p JOIN entities e ON e.id = p.id
@@ -366,6 +394,9 @@ CREATE TRIGGER pages_touch AFTER UPDATE ON pages BEGIN
   UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = NEW.id;
 END;
 CREATE TRIGGER people_touch AFTER UPDATE ON people BEGIN
+  UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = NEW.id;
+END;
+CREATE TRIGGER files_touch AFTER UPDATE ON files BEGIN
   UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = NEW.id;
 END;
 CREATE TRIGGER entities_touch AFTER UPDATE OF deleted_at ON entities
@@ -394,3 +425,5 @@ CREATE TRIGGER people_no_delete BEFORE DELETE ON people
 BEGIN SELECT RAISE(ABORT, 'people are never deleted: tombstone the entity (entities.deleted_at)'); END;
 CREATE TRIGGER metrics_no_delete BEFORE DELETE ON metrics
 BEGIN SELECT RAISE(ABORT, 'metrics are never deleted: tombstone the entity (entities.deleted_at)'); END;
+CREATE TRIGGER files_no_delete BEFORE DELETE ON files
+BEGIN SELECT RAISE(ABORT, 'files are never deleted: tombstone the entity (entities.deleted_at)'); END;

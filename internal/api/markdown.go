@@ -45,11 +45,27 @@ func pageLink(title, label string) ast.Node {
 	return l
 }
 
-var wikiAtStart = regexp.MustCompile(`^\[\[([^\[\]\n\r]*)\]\]`)
+// embedLink is ![[title]]: the picture of the file page the title names, linking the page; a title with no picture
+// shows its alt text, the label.
+func embedLink(title, label string) ast.Node {
+	img := ast.NewImage(ast.NewLink())
+	img.Destination = []byte("/previews?title=" + url.QueryEscape(title))
+	img.SetAttributeString("loading", []byte("lazy"))
+	alt := ast.NewString([]byte(label))
+	alt.SetRaw(true)
+	img.AppendChild(img, alt)
+	l := ast.NewLink()
+	l.Destination = []byte(titleHref(title))
+	l.SetAttributeString("class", []byte("wikilink embed"))
+	l.AppendChild(l, img)
+	return l
+}
+
+var wikiAtStart = regexp.MustCompile(`^(!?)\[\[([^\[\]\n\r]*)\]\]`)
 
 type wikilinkParser struct{}
 
-func (wikilinkParser) Trigger() []byte { return []byte{'['} }
+func (wikilinkParser) Trigger() []byte { return []byte{'[', '!'} } // '!' before the image parser, for an embed
 
 func (wikilinkParser) Parse(_ ast.Node, block gtext.Reader, _ parser.Context) ast.Node {
 	line, _ := block.PeekLine()
@@ -57,7 +73,7 @@ func (wikilinkParser) Parse(_ ast.Node, block gtext.Reader, _ parser.Context) as
 	if m == nil {
 		return nil
 	}
-	inner := string(util.ResolveEntityNames(util.ResolveNumericReferences(util.UnescapePunctuations(m[1]))))
+	inner := string(util.ResolveEntityNames(util.ResolveNumericReferences(util.UnescapePunctuations(m[2]))))
 	title, label, piped := strings.Cut(inner, "|")
 	title = strings.Trim(title, " ")
 	if !text.ValidTitle(title) {
@@ -67,6 +83,9 @@ func (wikilinkParser) Parse(_ ast.Node, block gtext.Reader, _ parser.Context) as
 		label = title
 	}
 	block.Advance(len(m[0]))
+	if len(m[1]) > 0 {
+		return embedLink(title, label)
+	}
 	return pageLink(title, label)
 }
 

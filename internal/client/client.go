@@ -6,9 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"lifelog/internal/api"
@@ -62,8 +65,8 @@ func (c *Client) Get(href string) (*api.Entity, error) {
 	return c.send(req)
 }
 
-// Do submits an action with field values. Fields of a templated href ({id}) are filled from values.
-func (c *Client) Do(a api.Action, values map[string]string) (*api.Entity, error) {
+// fill is an action's href with its path fields filled, and its other field values (file fields are DoFiles').
+func fill(a api.Action, values map[string]string) (string, url.Values, error) {
 	href := a.Href
 	form := url.Values{}
 	for _, f := range a.Fields {
@@ -71,24 +74,84 @@ func (c *Client) Do(a api.Action, values map[string]string) (*api.Entity, error)
 		if !ok && f.Value != nil {
 			v, ok = fmt.Sprint(f.Value), true
 		}
-		if f.In == "path" {
+		switch {
+		case f.Type == "file":
+			if ok {
+				return "", nil, fmt.Errorf("%s: %s is a file, sent with DoFiles", a.Name, f.Name)
+			}
+		case f.In == "path":
 			if !ok {
-				return nil, fmt.Errorf("%s needs %s", a.Name, f.Name)
+				return "", nil, fmt.Errorf("%s needs %s", a.Name, f.Name)
 			}
 			href = strings.ReplaceAll(href, "{"+f.Name+"}", url.PathEscape(v))
-			continue
-		}
-		if ok {
+		case ok:
 			form.Set(f.Name, v)
 		}
 	}
 	for k := range values {
 		if !hasField(a, k) {
-			return nil, fmt.Errorf("%s has no field %q", a.Name, k)
+			return "", nil, fmt.Errorf("%s has no field %q", a.Name, k)
 		}
 	}
+	return href, form, nil
+}
+
+// DoFiles submits an action as multipart/form-data: values as fields, and files (field name → path on disk)
+// streamed from disk, never held whole in memory.
+func (c *Client) DoFiles(a api.Action, values, files map[string]string) (*api.Entity, error) {
+	href, form, err := fill(a, values)
+	if err != nil {
+		return nil, err
+	}
+	for name := range files {
+		if !hasField(a, name) {
+			return nil, fmt.Errorf("%s has no field %q", a.Name, name)
+		}
+	}
+	pr, pw := io.Pipe()
+	defer pr.Close() // a handler that stops reading early must not leave the writer blocked
+	mw := multipart.NewWriter(pw)
+	go func() {
+		pw.CloseWithError(func() error {
+			for k, vs := range form {
+				for _, v := range vs {
+					if err := mw.WriteField(k, v); err != nil {
+						return err
+					}
+				}
+			}
+			for name, path := range files {
+				f, err := os.Open(path)
+				if err != nil {
+					return err
+				}
+				part, err := mw.CreateFormFile(name, filepath.Base(path))
+				if err == nil {
+					_, err = io.Copy(part, f)
+				}
+				f.Close()
+				if err != nil {
+					return err
+				}
+			}
+			return mw.Close()
+		}())
+	}()
+	req, err := http.NewRequest(a.Method, c.base+href, pr)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	return c.send(req)
+}
+
+// Do submits an action with field values. Fields of a templated href ({id}) are filled from values.
+func (c *Client) Do(a api.Action, values map[string]string) (*api.Entity, error) {
+	href, form, err := fill(a, values)
+	if err != nil {
+		return nil, err
+	}
 	var req *http.Request
-	var err error
 	if a.Method == "GET" {
 		req, err = http.NewRequest("GET", c.base+href+"?"+form.Encode(), nil)
 	} else {

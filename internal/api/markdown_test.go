@@ -18,6 +18,9 @@ func TestMarkdownLinksWhatNamesAPage(t *testing.T) {
 		{"<script>alert(1)</script>", "raw HTML omitted", "<script>"},
 		{"[x](javascript:alert(1))", `<a href="">x</a>`, "javascript"},
 		{"# Heading\n\n*em* **strong**", "<h1>Heading</h1>", ""},
+		{"see ![[Lake.jpg|the lake]] here", `<a href="/pages?title=Lake.jpg" class="wikilink embed"><img src="/previews?title=Lake.jpg" alt="the lake" loading="lazy"></a>`, "!"},
+		{"![[Lake.jpg]]", `alt="Lake.jpg"`, ""},
+		{"![[a/b]] ![x](u.png)", `![[a/b]] <img src="u.png" alt="x">`, "embed"},
 	} {
 		got := string(markdown(c.in))
 		if !strings.Contains(got, c.want) || (c.not != "" && strings.Contains(got, c.not)) {

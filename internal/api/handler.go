@@ -48,8 +48,19 @@ func New(s *core.Store, ws *importer.Workspace) http.Handler {
 	get("/days/{day}", h.day)
 	get("/pages", h.find)
 	get("/pages/{id}", h.page)
-	get("/people", h.named("person", "people"))
-	get("/places", h.named("place", "places"))
+	get("/people", h.named("person", "people", "create-person"))
+	get("/places", h.named("place", "places", "create-place"))
+	get("/files", h.named("file", "files", "add-file"))
+	m.HandleFunc("GET /pages/{id}/preview", picture(func(r *http.Request) ([]byte, error) {
+		id, err := idOf(r)
+		if err != nil {
+			return nil, err
+		}
+		return h.s.Preview(r.Context(), id)
+	}))
+	m.HandleFunc("GET /previews", picture(func(r *http.Request) ([]byte, error) {
+		return h.s.PreviewByTitle(r.Context(), r.URL.Query().Get("title"))
+	}))
 	get("/metrics", h.metrics)
 	get("/metrics/{name}", h.series)
 	get("/measurements/{id}", h.measurement)
@@ -60,6 +71,7 @@ func New(s *core.Store, ws *importer.Workspace) http.Handler {
 	post("/pages/{id}/body", h.saveBody)
 	post("/people", h.createPerson)
 	post("/places", h.createPlace)
+	post("/files", h.addFile)
 	post("/pages/{id}/promote", h.promote)
 	post("/pages/{id}/tombstone", h.tombstone)
 	post("/pages/{id}/revive", h.revive)
@@ -251,11 +263,11 @@ func (h *server) root(r *http.Request) (*Entity, error) {
 		Class: []string{"root"}, Title: "Lifelog",
 		Properties: map[string]any{"today": today},
 		Links: []Link{link("self", "/", "Lifelog"), link("today", dayHref(today), "Today"), link("days", "/days", "Days"),
-			link("people", "/people", "People"), link("places", "/places", "Places"), link("metrics", "/metrics", "Metrics"),
+			link("people", "/people", "People"), link("places", "/places", "Places"), link("files", "/files", "Files"), link("metrics", "/metrics", "Metrics"),
 			link("habits", "/habits", "Habits"), link("ghosts", "/ghosts", "Ghost pages"), link("actions", "/actions", "All actions")},
 		Actions: []Action{
 			action("capture", map[string]string{"day": today}, nil), action("search", nil, nil), action("find", nil, nil),
-			action("create-page", nil, nil), action("create-person", nil, nil), action("create-place", nil, nil),
+			action("create-page", nil, nil), action("create-person", nil, nil), action("create-place", nil, nil), action("add-file", nil, nil),
 			h.recordAction(r.Context(), "", today), action("register-metric", nil, nil), action("query", nil, nil)},
 	}, nil
 }
@@ -344,6 +356,9 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 		e.Class = append(e.Class, "day-page")
 		e.Links = append(e.Links, link("day", dayHref(p.Day), "Day view"))
 	}
+	if p.File != nil && p.File.Preview {
+		e.Links = append(e.Links, link("preview", pageHref(id)+"/preview", "Picture"))
+	}
 	for _, l := range p.Out {
 		e.Entities = append(e.Entities, Link{Rel: []string{l.Kind}, Href: pageHref(l.ID), Title: l.Title, Class: []string{l.Type}})
 	}
@@ -424,7 +439,7 @@ func (h *server) recordAction(ctx context.Context, metric, day string) Action {
 	return a
 }
 
-func (h *server) named(typ, plural string) func(*http.Request) (*Entity, error) {
+func (h *server) named(typ, plural, create string) func(*http.Request) (*Entity, error) {
 	return func(r *http.Request) (*Entity, error) {
 		list, err := h.s.Named(r.Context(), typ)
 		if err != nil {
@@ -432,7 +447,7 @@ func (h *server) named(typ, plural string) func(*http.Request) (*Entity, error) 
 		}
 		e := &Entity{Class: []string{plural}, Title: strings.ToUpper(plural[:1]) + plural[1:],
 			Links:   []Link{link("self", "/"+plural, plural), link("index", "/", "Home")},
-			Actions: []Action{action("create-"+typ, nil, nil)}}
+			Actions: []Action{action(create, nil, nil)}}
 		for _, p := range list {
 			e.Entities = append(e.Entities, Link{Rel: []string{"item"}, Href: pageHref(p.ID), Title: p.Title, Class: []string{typ}})
 		}

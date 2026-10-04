@@ -11,9 +11,10 @@ The docs state the current truth only.
 
 **What `life.db` is for: a life log and its backup — not a project-management database.** It keeps
 what happened and what was measured: a journal of day pages, notes, the people and places in them,
-where the owner was, and health readings. To-dos, reminders, projects and plans belong to the tools
-made for them; a plan written in a note stays that note's text ([D23](docs/decisions/D23-no-tasks.md)). Events, money, location
-history and attachments are deferred ([D22](docs/decisions/D22-events.md), [D18](docs/decisions/D18-money.md), [D21](docs/decisions/D21-location-history.md), [D9](docs/decisions/D09-binary-files.md)). A proposal that turns `life.db` into a
+where the owner was, health readings, and the files the owner keeps — as their text and a small picture, the
+original left outside ([D9](docs/decisions/D09-binary-files.md)). To-dos, reminders, projects and plans belong to the tools
+made for them; a plan written in a note stays that note's text ([D23](docs/decisions/D23-no-tasks.md)). Events, money and location
+history are deferred ([D22](docs/decisions/D22-events.md), [D18](docs/decisions/D18-money.md), [D21](docs/decisions/D21-location-history.md)). A proposal that turns `life.db` into a
 planner, a tracker of open work or a finance ledger needs a real incident and the owner's word first. Any developer, in any language, may
 build an application around it; the contract they implement is `docs/` and nothing else.
 
@@ -116,9 +117,9 @@ Their homes are in `docs/`; this list is the checklist, not the rule.
 
 - **Time** (`lifelog_meta.instants` and `.days`, [D10](docs/decisions/D10-time-model.md)): UTC ISO-8601 instants and local-day TEXT columns with round-trip CHECKs
   (`date(x) IS x`, `strftime(...) IS x` — the `IS` matters).
-- **Identity** (the `entities` comment in [schema.sql](docs/schema/schema.sql), D20, D27): every *entity* domain row is keyed by its
-  `entities` id through a composite FK `(id, entity_type)` — `pages` to `entities(id, entity_type)`, `people` and `metrics`
-  to `pages(id, entity_type)`, because a person or a metric **is** a page; a place is its page alone (D16). One id, whose page title
+- **Identity** (the `entities` comment in [schema.sql](docs/schema/schema.sql), D20, D27, D9): every *entity* domain row is keyed by its
+  `entities` id through a composite FK `(id, entity_type)` — `pages` to `entities(id, entity_type)`, `people`, `metrics` and `files`
+  to `pages(id, entity_type)`, because a person, a metric or a file **is** a page; a place is its page alone (D16). One id, whose page title
   is its handle and its name (`pages.entity_type`, `ON UPDATE CASCADE` for promotion;
   [a person or a place](docs/cookbook/person-or-place.md)). Ids are carried with `INSERT … RETURNING id`, never
   `last_insert_rowid()` across statements.
@@ -150,7 +151,7 @@ Their homes are in `docs/`; this list is the checklist, not the rule.
   auto-created target in its own `SAVEPOINT`; an invalid target makes no link and never blocks a save;
   `#tag` is read and never expanded; a `#REDIRECT [[` stub is not scanned.
 - **Integrity**: the four [integrity checks](docs/contract/integrity-checks.md).
-- **Privacy**: `life.db` with its `-wal`/`-shm`, and every snapshot of it, never in git (health data and private notes cannot be scrubbed from history; `.gitignore` covers `*.db`, `*.db-journal`, `/import/`
+- **Privacy**: `life.db` with its `-wal`/`-shm`, and every snapshot of it, never in git (health data, private notes and pictures cannot be scrubbed from history; `.gitignore` covers `*.db`, `*.db-journal`, `/import/`
   and an import workspace `*.lifelog/`). Never commit a real vault, real notes or real data as a fixture:
   tests use synthetic data only.
 

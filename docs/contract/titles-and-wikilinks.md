@@ -48,8 +48,11 @@ below:
   tombstoned target is revived*, not duplicated: the unique index covers tombstoned pages, so the
   save un-tombstones the page it resolves — any save that names it, an old day page edited years
   later included, so the UI tells the owner.
-- *Named pages.* A person's or a place's page is a page like any other, so `[[Bob
+- *Named pages.* A person's, a place's, a metric's or a file's page is a page like any other, so `[[Bob
   Sample]]` is an ordinary wikilink and nothing in the save contract knows about people ([D20](../decisions/D20-named-pages.md)).
+- *Embeds.* `![[Lake.jpg]]` is the wikilink `[[Lake.jpg]]` with a `!` before it: the `!` is ordinary text, so the
+  link is the same row. Showing the picture of a file page there ([D9](../decisions/D09-binary-files.md)) is a
+  reader's business; the database stores the text as written.
 - *Known limits.* A body that also defines a reference (`[Ref]: http://r`) turns `[[Ref]]` into
   a Markdown link; a `#` written as an entity (`&#35;x`) is decoded before the scan and counts as
   a tag; a typo (`[[Sm]]`) makes a ghost page like any other ([ghost pages](../cookbook/ghost-pages.md)).
@@ -77,6 +80,8 @@ Test vectors — every writer must reproduce them. A body is shown in a code spa
 | `a\n\n    [[indented]]\n\nb` | — |
 | `<span>[[html]]</span> <!-- [[cm]] -->` | `html` |
 | `![alt [[img]]](u.png)` | — |
+| `![[Lake.jpg]] and ![[Lake.jpg\|a lake]]` | `Lake.jpg` |
+| `!![[A]] x![[B]]` | `A`, `B` |
 | `[see [[Diet]]](http://x)` | `Diet` |
 | `[[Diet]](http://y)` | — |
 | `[[Health *Diet*]]` | — |
@@ -134,9 +139,9 @@ page keeps only the one-line body `#REDIRECT [[New Title]]` (the replacement's o
 is a day has that day). A title that exists already is taken only by an empty old page (`body = ''`, the ghost of a
 typo) and only when the page holding it is live and not a stub; any other rename into it is refused — two texts are
 never merged. A new title with the old one's `title_key` is no rename. Only a live plain page is renamed: not a
-day page (its title is its day), not a stub, and not a person, a place or a metric — their title is a permanent handle (a person's
-display name is `people.name`, [D20](../decisions/D20-named-pages.md); a metric's title names its series, [D27](../decisions/D27-a-metric-is-a-page.md)). The stub is a plain page; the replacement may be a page, a person, a
-place or a metric, so a ghost made by a misspelt `[[Name]]` can point at the person, and a replacement promoted later
+day page (its title is its day), not a stub, and not a person, a place, a metric or a file — their title is a permanent handle (a person's
+display name is `people.name`, [D20](../decisions/D20-named-pages.md); a metric's title names its series, [D27](../decisions/D27-a-metric-is-a-page.md); a file's is what embeds it, [D9](../decisions/D09-binary-files.md)). The stub is a plain page; the replacement may be a page, a person, a
+place, a metric or a file, so a ghost made by a misspelt `[[Name]]` can point at the person, and a replacement promoted later
 ([a person or a place](../cookbook/person-or-place.md)) keeps its redirect. Consumers follow one hop — the days that name someone and backlinks count a stub's mentions as its replacement's
 ([the days that name someone](../cookbook/days-that-name.md), [backlinks](../cookbook/backlinks.md)); the `redirect` row itself is never a backlink.
 

@@ -2,7 +2,7 @@
 
 **Status:** accepted
 
-- **Decision.** SQLite, one file (`life.db`). Binary files are not stored in it at all ([D9](D09-binary-files.md)).
+- **Decision.** SQLite, one file (`life.db`). A file the owner keeps is in it as its text and a small picture; its original is never stored ([D9](D09-binary-files.md)).
 - **Alternatives.** Postgres/server DB (rejected: operational burden for single user,
   no longevity benefit); plain files only (see [D4](D04-database-is-canonical.md)); NoSQL embedded stores (rejected:
   weaker durability guarantees, no standard query language for future readers).

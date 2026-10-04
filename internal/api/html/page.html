@@ -5,11 +5,13 @@
 {{if $p.is_day_page}}<span class="badge">day</span><a href="{{.Link "day"}}">{{weekday $p.day}} — the day view</a>
 {{else}}<span class="badge">{{$p.entity_type}}</span>{{end}}
 {{with $p.person}}{{with .name}}<span>{{.}}</span>{{end}}{{with .birth_day}}<span>born {{.}}</span>{{end}}{{with .death_day}}<span>died {{.}}</span>{{end}}{{end}}
+{{with $p.file}}<span>{{.mime}}</span><span title="SHA-256 of the original">{{slice .sha256 0 12}}…</span>{{end}}
 </div>
 
 {{if $p.deleted_at}}<div class="note warn">Deleted {{$p.deleted_at}}. Nothing is ever removed: revive it to bring it back.
 {{template "form" (form (.Action "revive") "class" "tiny")}}</div>{{end}}
 {{if $p.is_redirect_stub}}<div class="note">This page was renamed; it now only points to the new title.</div>{{end}}
+{{with .Link "preview"}}<p><a href="{{.}}"><img class="preview" src="{{.}}" alt="{{$.Title}}"></a></p>{{end}}
 
 <section>
 {{if $p.body}}<div class="prose">{{markdown $p.body}}</div>{{else}}<p class="muted">Nothing written here yet.</p>{{end}}

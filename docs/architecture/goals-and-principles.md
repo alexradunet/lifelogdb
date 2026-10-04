@@ -27,7 +27,8 @@ and *canonical data being corrupted by uncontrolled writers*.
    ("adding new tables or columns does not change the meaning of prior queries" [R1](../research/references.md#r1)).
 5. **Derived data is disposable.** The FTS index and `title_key` can be dropped and rebuilt
    from canonical data at any time; nothing else is derived. `life.db` is irreplaceable.
-   (Binary files are out of v1 entirely — see [D9](../decisions/D09-binary-files.md).)
+   (A file's preview is not derived data: its original is not in the file, so the preview is the copy kept, never
+   rebuilt — [D9](../decisions/D09-binary-files.md).)
 6. **One home per concept, one home per rule.** A concept is stored once ([D6](../decisions/D06-mood-is-a-measurement.md): mood lives in
    `measurements` and nowhere else; a named entity's name is its page title, [D20](../decisions/D20-named-pages.md)), and a rule is
    written once ([the docs index](../README.md) says where each kind of rule lives). A fact that can be derived from another column is not

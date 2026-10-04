@@ -1,8 +1,8 @@
 # Lifelog
 
 `lifelog` is one Go binary that keeps a lifetime-scale, single-user SQLite database, `life.db` — a life log and
-its backup: a journal of day pages, notes, the people and places in them, where you were, and health readings. It
-serves the file three ways: a hypermedia API (with an HTML face for the browser), a CLI and an MCP server.
+its backup: a journal of day pages, notes, the people and places in them, where you were, health readings, and the
+files you keep — a recording's transcript, a PDF's text, a photo's small picture. It serves the file three ways: a hypermedia API (with an HTML face for the browser), a CLI and an MCP server.
 
 The database it writes is specified independently of it, so another program — in any language — can read
 `life.db`, or write its own:
@@ -28,6 +28,8 @@ lifelog serve                              # http://127.0.0.1:7777 — open it i
 lifelog mcp --agent lmstudio               # MCP on stdio; rows are written as agent:lmstudio
 lifelog habits --human                     # today's habits; lifelog done evening_walk
 lifelog snapshot --to ~/snapshots --human  # life-YYYY-MM-DD.db and its restore check
+lifelog file memo.m4a --text memo.txt     # keep a file: its text, the original hashed and never stored
+lifelog file IMG_0001.HEIC --preview IMG_0001.jpg   # a photo lifelog cannot read: send a JPEG of it
 ```
 
 An import ([importing with a model](docs/guides/importing.md)) works in a workspace beside its source and on a
@@ -86,6 +88,11 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **Snapshots are the owner's** ([take a snapshot](docs/cookbook/take-a-snapshot.md)). `lifelog snapshot` is a CLI
   command only, never an API action or an MCP tool: it writes a file on this machine. It refuses a folder inside a
   git work tree, and its restore check opens the snapshot with `Close` skipping `PRAGMA optimize`.
+- **Files** ([keep a file](docs/cookbook/keep-a-file.md), D9). `add-file` (`POST /files`, `lifelog file`) streams
+  the original through SHA-256 and drops it; nothing of it is stored. `internal/preview` makes every picture itself —
+  from a JPEG, PNG or GIF, or a JPEG sent for a HEIC or a video frame: scaled to 1600 px, turned upright by EXIF,
+  re-encoded with no metadata (no GPS). An agent sends `sha256`, `mime` and the text. `![[Title]]` renders the
+  picture; `GET /pages/{id}/preview` and `GET /previews?title=` serve it.
 - **`serve` binds 127.0.0.1** and has no authentication: `life.db` holds health data, and the API is for this
   machine.
 
@@ -93,10 +100,11 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 
 | path | what |
 |---|---|
-| `cmd/lifelog` | the binary: `init`, `serve`, `mcp`, `get`, `do`, `actions` and the shortcuts |
+| `cmd/lifelog` | the binary: `init`, `serve`, `mcp`, `get`, `do`, `actions` and the shortcuts (`file` among them) |
 | `internal/db` | open, pragmas, `BEGIN IMMEDIATE`, the embedded schema |
 | `internal/text` | the title predicate, `title_key`, wikilink and `#tag` extraction; tested against the vectors of [titles and wikilinks](docs/contract/titles-and-wikilinks.md) |
-| `internal/core` | the cookbook's writes and reads; the save contract; habits; renames |
+| `internal/core` | the cookbook's writes and reads; the save contract; habits; renames; files |
+| `internal/preview` | the picture a file page keeps: decode, scale to 1600 px, EXIF orientation, a JPEG of at most 1 MB with no metadata |
 | `internal/importer` | the import workspace, the facts checks and apply, the vault plan, status, replay |
 | `internal/api` | the action catalog, the routes, Siren and HTML |
 | `internal/client` | the hypermedia client (in-process or remote) |

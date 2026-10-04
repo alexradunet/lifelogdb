@@ -10,15 +10,16 @@ is derived and rebuildable and is not drawn.)
 One supertype row per linkable thing (`entities`), one domain row per entity with the *same* id — the
 composite foreign key `(id, entity_type)` makes the type and the table agree — and one polymorphic graph
 (`links`) over the supertype, whose `kind` is a foreign key to the closed registry `link_kinds`. A
-person, a place or a metric is also a page ([D20](../decisions/D20-named-pages.md), [D27](../decisions/D27-a-metric-is-a-page.md)): a person's `people` row hangs off its `pages` row, which hangs
-off its `entities` row — one id, three rows; a metric's `metrics` row hangs off its page the same way; a place is its
-`entities` and `pages` rows alone ([D16](../decisions/D16-places.md)).
+person, a place, a metric or a file is also a page ([D20](../decisions/D20-named-pages.md), [D27](../decisions/D27-a-metric-is-a-page.md), [D9](../decisions/D09-binary-files.md)): a person's `people` row hangs off its `pages` row, which hangs
+off its `entities` row — one id, three rows; a metric's `metrics` row and a file's `files` row hang off their page the
+same way; a place is its `entities` and `pages` rows alone ([D16](../decisions/D16-places.md)).
 
 ```mermaid
 %% diagram: er-core
 erDiagram
     entities ||--o| pages    : "id"
     pages    ||--o| people   : "id"
+    pages    ||--o| files    : "id"
     entities ||--o{ links    : "from_id"
     entities ||--o{ links    : "to_id"
     link_kinds ||--o{ links  : "kind"
@@ -31,6 +32,10 @@ erDiagram
         TEXT entity_type FK
     }
     people {
+        INTEGER id PK, FK
+        TEXT entity_type FK
+    }
+    files {
         INTEGER id PK, FK
         TEXT entity_type FK
     }

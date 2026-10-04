@@ -388,7 +388,7 @@ func rewriteText(s string, self *Note, idx map[string]*Note) string {
 			shown = alias
 		}
 		if attachExt.MatchString(target) || embed {
-			return "`" + tok + "`" // attachments are deferred (D9)
+			return "`" + tok + "`" // an attachment is not part of the vault: it is kept on its own as a file (D9)
 		}
 		name, anchor, hasAnchor := strings.Cut(target, "#")
 		if hasAnchor && strings.TrimSpace(name) == "" {

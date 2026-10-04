@@ -24,6 +24,7 @@ The order below is the order the suites run the recipes in; the key is how a sui
 | [Ghost pages (the wikilink sweep, D5)](ghost-pages.md) | `ghost-pages` |
 | [Save a body with wikilinks (resolve or create each target, sync the links)](save-a-body.md) | `save-a-body` |
 | [A person or a place: create one, promote a ghost page (D20)](person-or-place.md) | `person-or-place` |
+| [Keep a file: a recording, a PDF, a photo (D9)](keep-a-file.md) | `keep-a-file` |
 | [Rename a page: a new page and a stub (D5)](rename-a-page.md) | `rename-a-page` |
 | [Import a row once: insert it, re-run it, update a changed one](import-a-row-once.md) | `import-a-row-once` |
 | [Habits: start and stop one, the habits of a day, completion over a period (D24)](habits.md) | `habits` |

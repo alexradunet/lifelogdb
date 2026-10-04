@@ -14,7 +14,7 @@ reused, and a decision that changes is rewritten in place (git is its history).
 | [D6](D06-mood-is-a-measurement.md) | Mood: the `mood` metric in `measurements`, not a column on `pages`. | accepted |
 | [D7](D07-measurements.md) | Measurements: one FxLifeSheet-shaped table + tiny metric registry; append-only. | accepted |
 | [D8](D08-entities-and-links.md) | One `entities` supertype + one polymorphic `links` graph; a closed kind registry; symmetry in-DB. | accepted |
-| [D9](D09-binary-files.md) | Binary files: DEFERRED out of v1. The design is kept here for the day it returns. | deferred |
+| [D9](D09-binary-files.md) | Files: a file the owner keeps is a page; its text is the body, a small JPEG its picture, and the original stays outside. | accepted |
 | [D10](D10-time-model.md) | Time model: UTC instants + denormalized local days, both TEXT. | accepted |
 | [D11](D11-tombstones.md) | Deletion: tombstones, never hard deletes. | accepted |
 | [D12](D12-no-revision-tables.md) | Audit trail: no revision tables. | accepted |

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"image"
+	"image/jpeg"
 	"os"
 	"path/filepath"
 	"strings"
@@ -128,4 +130,47 @@ func mustRead(t *testing.T, p string) []byte {
 		t.Fatal(err)
 	}
 	return b
+}
+
+// TestFileCommand is `lifelog file PATH` on a throwaway database: the original is hashed and never stored, its text
+// read from --text, its picture made from it; the same file again keeps one page.
+func TestFileCommand(t *testing.T) {
+	dir := t.TempDir()
+	live := filepath.Join(dir, "life.db")
+	if err := db.Init(live); err != nil {
+		t.Fatal(err)
+	}
+	m := image.NewGray(image.Rect(0, 0, 64, 48))
+	var b bytes.Buffer
+	if err := jpeg.Encode(&b, m, nil); err != nil {
+		t.Fatal(err)
+	}
+	pic, text := filepath.Join(dir, "IMG_0001.jpg"), filepath.Join(dir, "caption.txt")
+	os.WriteFile(pic, b.Bytes(), 0o644)
+	os.WriteFile(text, []byte("Dawn at the lake with [[Sam]]."), 0o644)
+	for range 2 {
+		o, err := parse([]string{"file", pic, "--db", live, "--text", text, "--day", "2026-10-04"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := run(o); err != nil {
+			t.Fatal(err)
+		}
+	}
+	d, err := db.Open(live)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	s := &core.Store{DB: d}
+	id, _ := s.PageID(context.Background(), "IMG_0001.jpg")
+	p, err := s.PageByID(context.Background(), id)
+	if err != nil || p.Type != "file" || p.Body != "Dawn at the lake with [[Sam]]." || p.Day != "2026-10-04" || p.File == nil || !p.File.Preview {
+		t.Fatalf("the file page: %v %+v", err, p)
+	}
+	var n int
+	d.R.QueryRow(`SELECT count(*) FROM files`).Scan(&n)
+	if n != 1 {
+		t.Errorf("%d files rows after keeping one file twice", n)
+	}
 }

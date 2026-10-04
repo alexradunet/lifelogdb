@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 )
 
 // cookbook: every SQL block of the cookbook (docs/cookbook/) prepares and runs on a seeded database, statement by
@@ -12,7 +13,7 @@ import (
 func cookbook(s *S) {
 	bl := s.d.CookbookBlocks()
 	first, order := s.d.Blocks()
-	s.K("the cookbook has at least 19 SQL blocks, one or more per recipe, 19 recipes", len(bl) >= 19 && len(first) == 19 && eq(order, s.d.CookbookOrder()), order)
+	s.K("the cookbook has at least 20 SQL blocks, one or more per recipe, 20 recipes", len(bl) >= 20 && len(first) == 20 && eq(order, s.d.CookbookOrder()), order)
 
 	seeded := func(hardened bool, path string) (*C, P) {
 		c := s.freshWith(F{Hardened: hardened, Path: path})
@@ -37,6 +38,8 @@ func cookbook(s *S) {
 			"day": "2026-09-29", "page_id": wp, "person_id": pe, "entity_id": pe, "handle_title": "Bob Sample", "handle_key": "bob sample", "ghost_id": gh,
 			"due_day": "2026-10-05", "query": "schema", "key": "newpage", "title": "Newpage", "metric_id": w, "wrong_row_id": 1, "source": "ui",
 			"import_key": "notes/sourdough.md", "metric": "vitamin_d", "parent_id": cat,
+			"sha256": strings.Repeat("ab", 32), "mime": "image/heic", "preview": jpegBytes, "file_title": "2026-09-29 Lake.jpg",
+			"file_key": "2026-09-29 lake.jpg", "body": "The lake at dawn with [[Sam]].",
 			"snapshot": filepath.ToSlash(filepath.Join(s.dir, fmt.Sprintf("cookbook-snapshot-%v.db", hardened)))}
 	}
 

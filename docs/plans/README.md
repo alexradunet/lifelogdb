@@ -2,30 +2,31 @@
 
 A plan is a dated record ([how a change happens](../process.md)): a change large enough to hand to another agent,
 written as a self-contained brief with done criteria. It cites the docs as they were at the commit it names. One file
-per plan, `NNN-short-slug.md`, numbered on from the last: plans up to 028 are done and live in git history
+per plan, `NNN-short-slug.md`, numbered on from the last: plans up to 028, and 030, are done and live in git history
 (`git log -- docs/plans`), so the next one is **031**.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
 | [029](029-google-takeout.md) | Google Takeout: places and daily health totals, with no schema change | P1 | L | — | TODO |
-| [030](030-files.md) | Files: a file is a page, its text the body, a small picture kept, the original outside | P1 | L | — | TODO |
 
 Status values: TODO | IN PROGRESS | IN REVIEW (owner) | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale). A plan that is DONE or REJECTED is deleted; git is the log.
 
-## What is left (2026-10-03)
+## What is left (2026-10-04)
 
 The owner's decisions of 2026-10-02 are carried out: renames (the contract, cookbook/rename-a-page), one full DDL
 after the freeze (D13), `pages_fts_delete` cut, readers set `trusted_schema=OFF`, the `Cn` rule names Unicode 15.0,
-snapshots (D25, cookbook/take-a-snapshot); a tombstoned day keeps its mood reading. Open: issue 0009 (files), answered by proposal 0004 and plan 030.
+snapshots (D25, cookbook/take-a-snapshot); a tombstoned day keeps its mood reading. Files are kept as pages: their text, a small picture, the original outside (D9, plan 030 done). No open issue:
+the next is **0010**.
 
 ### Next step
 
 - **Rebuild the canonical `life.db` from today's `schema.sql`** (the owner, locally: a fresh file, then *replay*
   every workspace into it, [D13](../decisions/D13-migrations-and-freeze.md)). The file was made before
-  `pages_fts_delete` was cut, and a canonical file is rebuilt, never migrated, until the freeze. A snapshot first
+  `pages_fts_delete` was cut and before the `files` table ([D9](../decisions/D09-binary-files.md)), and a canonical file is rebuilt, never migrated, until the freeze. A snapshot first
   ([D25](../decisions/D25-snapshots.md)).
-- **The rest of the imports and the capture path**, then the freeze checklist
+- **The rest of the imports and the capture path** — the owner's files among them (`lifelog file`, the import guide's
+  "Files") — then the freeze checklist
   ([process](../process.md#before-the-freeze)).
 
 ### Known bugs and gaps in the writer

@@ -9,6 +9,7 @@
 {{template "boxed" (form (.Action "create-page"))}}
 {{template "boxed" (form (.Action "create-person"))}}
 {{template "boxed" (form (.Action "create-place"))}}
+{{template "boxed" (form (.Action "add-file") "hide" "sha256,mime")}}
 {{template "boxed" (form (.Action "record"))}}
 
 <h2>Find</h2>
@@ -31,6 +32,7 @@
 {{else}}<p class="muted">Nothing yet.</p>{{end}}
 {{with .Action "create-person"}}<h2>New</h2>{{template "form" (form .)}}{{end}}
 {{with .Action "create-place"}}<h2>New</h2>{{template "form" (form . "class" "inline")}}{{end}}
+{{with .Action "add-file"}}<h2>New</h2><p class="desc">{{.Description}}</p>{{template "form" (form . "hide" "sha256,mime")}}{{end}}
 {{template "foot" .}}{{end}}
 
 {{define "search"}}{{template "head" .}}

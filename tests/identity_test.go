@@ -88,14 +88,14 @@ func identity(s *S) {
 
 	// ---- no hard deletes
 	c = s.fresh()
-	byType := map[string]int64{"page": c.thing("page"), "person": c.thing("person"), "place": c.thing("place"), "metric": c.thing("metric")}
+	byType := map[string]int64{"page": c.thing("page"), "person": c.thing("person"), "place": c.thing("place"), "metric": c.thing("metric"), "file": c.thing("file")}
 	n0 := c.n("select count(*) from entities where source <> 'schema'")
-	for _, x := range [][2]string{{"page", "pages"}, {"person", "people"}, {"place", "pages"}, {"metric", "metrics"}} {
+	for _, x := range [][2]string{{"page", "pages"}, {"person", "people"}, {"place", "pages"}, {"metric", "metrics"}, {"file", "files"}} {
 		s.K("DELETE FROM "+x[1]+" is refused", err(c.tryx("DELETE FROM "+x[1]+" WHERE id=?", byType[x[0]])))
 		s.K("DELETE of the "+x[0]+" entities row is refused", err(c.tryx("DELETE FROM entities WHERE id=?", byType[x[0]])))
 	}
 	s.K("the page rows of named entities cannot be deleted either", err(c.tryx("DELETE FROM pages WHERE id=?", byType["person"])))
-	s.K("nothing was removed (four entities, one id each)", c.n("select count(*) from entities where source <> 'schema'") == n0 && n0 == 4)
+	s.K("nothing was removed (five entities, one id each)", c.n("select count(*) from entities where source <> 'schema'") == n0 && n0 == 5)
 	s.K("REPLACE INTO pages is blocked under recursive_triggers=ON",
 		err(c.tryx(fmt.Sprintf("REPLACE INTO pages(id,entity_type,title,title_key,body) VALUES (%d,'page','Replaced','replaced','overwritten')", byType["page"]))) &&
 			c.str("select body from pages where id=?", byType["page"]) == "x")

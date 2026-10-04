@@ -24,6 +24,7 @@ type Page struct {
 	IsDayPage bool    `json:"is_day_page"`
 	IsStub    bool    `json:"is_redirect_stub"`
 	Person    *Person `json:"person,omitempty"`
+	File      *File   `json:"file,omitempty"`
 	Out       []Edge  `json:"links"`
 	In        []Edge  `json:"backlinks"`
 }
@@ -68,6 +69,13 @@ func (s *Store) PageByID(ctx context.Context, id int64) (*Page, error) {
 			return nil, err
 		}
 		p.Person.Birth, p.Person.Death = b.String, d.String
+	}
+	if p.Type == "file" {
+		p.File = &File{}
+		if err := s.DB.R.QueryRowContext(ctx, `SELECT sha256, mime, preview IS NOT NULL FROM files WHERE id = ?`, id).
+			Scan(&p.File.SHA256, &p.File.MIME, &p.File.Preview); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
 	}
 	// outgoing edges to live entities; a symmetric kind's mirror is the same edge, so it shows once here
 	if p.Out, err = s.edges(ctx, `

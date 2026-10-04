@@ -46,6 +46,10 @@ const usage = `lifelog — the writer of a life.db
   lifelog habits [YYYY-MM-DD]         the day's habits and completion
   lifelog done METRIC [--day D]       check a habit in as done (skip METRIC: not done)
   lifelog rename PAGE-ID TITLE        rename a plain page (the old one becomes a redirect stub)
+  lifelog file PATH [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day D]
+                                      keep a file (docs/cookbook/keep-a-file.md): the original is hashed,
+                                      never stored; its text from FILE; a picture made from a JPEG, PNG or
+                                      GIF, else from PICTURE; the title defaults to the file's name
   lifelog snapshot [--to DIR]         a dated copy of life.db (life-YYYY-MM-DD.db, beside it or in DIR),
                                       then its restore check (docs/cookbook/take-a-snapshot.md)
 
@@ -68,16 +72,17 @@ Global flags, anywhere on the line:
 `
 
 type opts struct {
-	db, url, source, addr, agent, mood, day, workspace, from, to string
-	human, dryRun                                                bool
-	args                                                         []string
+	db, url, source, addr, agent, mood, day, workspace, from, to, title, text, preview, mime string
+	human, dryRun                                                                            bool
+	args                                                                                     []string
 }
 
 // parse takes flags anywhere on the line (an old CLI ignored --db after the subcommand).
 func parse(argv []string) (opts, error) {
 	o := opts{db: os.Getenv("LIFELOG_DB"), source: "cli", addr: "127.0.0.1:7777"}
 	vals := map[string]*string{"--db": &o.db, "--url": &o.url, "--source": &o.source, "--addr": &o.addr,
-		"--agent": &o.agent, "--mood": &o.mood, "--day": &o.day, "--workspace": &o.workspace, "--from": &o.from, "--to": &o.to}
+		"--agent": &o.agent, "--mood": &o.mood, "--day": &o.day, "--workspace": &o.workspace, "--from": &o.from, "--to": &o.to,
+		"--title": &o.title, "--text": &o.text, "--preview": &o.preview, "--mime": &o.mime}
 	for i := 0; i < len(argv); i++ {
 		a := argv[i]
 		if a == "--human" {
@@ -268,6 +273,8 @@ func run(o opts) error {
 			return errors.New("rename PAGE-ID NEW-TITLE")
 		}
 		return doAction(o, c, "rename", map[string]string{"id": args[0], "title": args[1]})
+	case "file":
+		return keepFile(o, c, args)
 	case "import":
 		return importCommand(o, c, args)
 	}
@@ -289,6 +296,45 @@ func do(c *client.Client, name string, vals map[string]string) (*api.Entity, err
 		}
 	}
 	return nil, fmt.Errorf("no action %q (lifelog actions)", name)
+}
+
+// keepFile is `lifelog file PATH`: the add-file action with the original streamed from disk (hashed by the API,
+// never stored), its text read from --text, and a picture from --preview when the original is not one lifelog reads.
+func keepFile(o opts, c *client.Client, args []string) error {
+	if len(args) != 1 {
+		return errors.New("file PATH [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day YYYY-MM-DD]")
+	}
+	vals := map[string]string{"title": o.title}
+	if o.title == "" {
+		vals["title"] = filepath.Base(args[0])
+	}
+	if o.text != "" {
+		b, err := os.ReadFile(o.text)
+		if err != nil {
+			return err
+		}
+		vals["body"] = string(b)
+	}
+	if o.mime != "" {
+		vals["mime"] = o.mime
+	}
+	if o.day != "" {
+		vals["day"] = o.day
+	}
+	files := map[string]string{"original": args[0]}
+	if o.preview != "" {
+		files["preview"] = o.preview
+	}
+	actions, err := c.Catalog()
+	if err != nil {
+		return err
+	}
+	for _, a := range actions {
+		if a.Name == "add-file" {
+			return show(o)(c.DoFiles(a, vals, files))
+		}
+	}
+	return errors.New("the API has no add-file action")
 }
 
 func listActions(o opts, c *client.Client) error {

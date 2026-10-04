@@ -1,7 +1,7 @@
 # Threat model and the 2075 test
 
-**What is protected, and from what.** The asset is `life.db`: prose and health data in one
-plaintext file ([D17](../decisions/D17-contract-as-data.md) — the database is deliberately not encrypted).
+**What is protected, and from what.** The asset is `life.db`: prose, health data and the pictures of kept files
+in one plaintext file ([D17](../decisions/D17-contract-as-data.md) — the database is deliberately not encrypted).
 
 | Threat | Control | Residual |
 |---|---|---|
@@ -49,3 +49,4 @@ each phrase in the last column, and **every key of `lifelog_meta` must be used b
 | 21 | Where was I on a given day? | `pages`, `link_kinds` | `places the owner was at`, `kind='at'` |
 | 22 | Which metrics are habits, and was one meant to be done on a day? | `habit_periods` | `HABIT`, `NOT RECORDED` |
 | 23 | Which metrics are biomarkers, or what the owner took in? | `metrics` | `a category is a page`, `part-of`, `NOT a category` |
+| 24 | Where are the photos, the recordings and the scans? | `files` | `never stored in life.db`, `sha256`, `JPEG` |

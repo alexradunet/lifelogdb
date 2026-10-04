@@ -1,8 +1,8 @@
 # 0004 — A file is a page: its text in the body, a small picture kept, the original outside
 
 - **Date:** 2026-10-04
-- **Status:** draft
-- **Answers:** [0009](../issues/0009-a-file-has-no-home.md), a file the owner keeps has no home
+- **Status:** accepted
+- **Answers:** 0009, a file the owner keeps has no home (resolved; `git log -- docs/issues`)
 
 ## Problem
 
@@ -63,4 +63,6 @@ test asks where the pictures are; the identity suite counts files among the rows
 
 ## Outcome
 
-Filled in when it closes.
+Accepted: [D9](../decisions/D09-binary-files.md), rewritten in place. One refinement in the making: the writer makes
+every preview itself, one sent to it included, so a preview is upright and keeps no metadata — a photo's GPS would be
+the location history [D21](../decisions/D21-location-history.md) leaves out.

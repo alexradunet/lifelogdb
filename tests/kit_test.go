@@ -5,10 +5,13 @@ package tests
 // (entity first, ids by RETURNING, a named entity is one id with a page).
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/jpeg"
 	"os"
 	"path"
 	"path/filepath"
@@ -552,8 +555,11 @@ func (c *C) domain(typ string, id int64, cols M) {
 		return
 	}
 	table, m := "people", M{"id": id, "name": "P"}
-	if typ == "metric" { // a metric's row holds its unit (D27)
+	switch typ {
+	case "metric": // a metric's row holds its unit (D27)
 		table, m = "metrics", M{"id": id, "unit": ""}
+	case "file": // a file's row holds its original's hash and type (D9); each one a different original
+		table, m = "files", M{"id": id, "sha256": fmt.Sprintf("%064x", c.s.next()), "mime": "image/jpeg"}
 	}
 	for k, v := range cols {
 		m[k] = v
@@ -598,6 +604,15 @@ func (c *C) habit(metric any, start string, end any, source ...string) string {
 	}
 	return c.tryx("INSERT INTO habit_periods(metric_id,start_day,end_day,source) VALUES (?,?,?,?)", metric, start, end, src)
 }
+
+// jpegBytes is a real JPEG (8×8, grey): a preview the DDL and the writer both accept.
+var jpegBytes = func() []byte {
+	var b bytes.Buffer
+	if err := jpeg.Encode(&b, image.NewGray(image.Rect(0, 0, 8, 8)), nil); err != nil {
+		panic(err)
+	}
+	return b.Bytes()
+}()
 
 // metric is a metric (D27): the entity, its page titled title, and its metrics row with the unit, one id.
 func (c *C) metric(title, unit string) int64 {

@@ -12,7 +12,7 @@ flowchart LR
     place["place"]
     page["page"]
     named["person, place"]
-    titled["page, person, place, metric"]
+    titled["page, person, place, metric, file"]
 
     any -->|"about"| named
     any <-->|"related"| any

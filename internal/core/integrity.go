@@ -36,7 +36,7 @@ func (s *Store) Integrity(ctx context.Context) (*IntegrityResult, error) {
 	}
 	rows.Close()
 	rows, err = s.DB.R.QueryContext(ctx, `SELECT id FROM entities WHERE id NOT IN
-	        (SELECT id FROM pages WHERE entity_type IN ('page','place') UNION SELECT id FROM people UNION SELECT id FROM metrics)`)
+	        (SELECT id FROM pages WHERE entity_type IN ('page','place') UNION SELECT id FROM people UNION SELECT id FROM metrics UNION SELECT id FROM files)`)
 	if err != nil {
 		return nil, err
 	}

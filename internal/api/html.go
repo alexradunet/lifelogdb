@@ -41,8 +41,8 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 
 // viewOf names the template that shows an entity of a class; a class without one is shown by "generic".
 var viewOf = map[string]string{
-	"root": "root", "day": "day", "page": "page", "person": "page", "place": "page",
-	"days": "list", "people": "list", "places": "list", "ghosts": "list", "search": "search",
+	"root": "root", "day": "day", "page": "page", "person": "page", "place": "page", "file": "page",
+	"days": "list", "people": "list", "places": "list", "files": "list", "ghosts": "list", "search": "search",
 	"metrics": "metrics", "series": "series", "habits": "habits", "measurement": "measurement", "error": "error",
 }
 
@@ -139,6 +139,16 @@ type formView struct {
 	Button, Class string
 	Shown         []Field
 	Hidden        []Field
+}
+
+// Multipart reports a form with a file field: a browser sends it as multipart/form-data.
+func (f *formView) Multipart() bool {
+	for _, fd := range f.Shown {
+		if fd.Type == "file" {
+			return true
+		}
+	}
+	return false
 }
 
 func formOf(x any, opts ...string) (*formView, error) {
