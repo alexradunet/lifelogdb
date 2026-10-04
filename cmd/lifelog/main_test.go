@@ -174,3 +174,24 @@ func TestFileCommand(t *testing.T) {
 		t.Errorf("%d files rows after keeping one file twice", n)
 	}
 }
+
+// TestPhotosInventory runs `lifelog import photos inventory` on a tiny synthetic export: it reads and writes nothing.
+func TestPhotosInventory(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "Google Photos", "Photos from 2019")
+	os.MkdirAll(dir, 0o755)
+	os.WriteFile(filepath.Join(dir, "IMG_1.jpg"), []byte("\xff\xd8\xff\xd9"), 0o644)
+	os.WriteFile(filepath.Join(dir, "IMG_1.jpg.json"), []byte(`{"title":"IMG_1.jpg","photoTakenTime":{"timestamp":"1"}}`), 0o644)
+	for _, human := range []string{"", "--human"} {
+		argv := []string{"import", "photos", "inventory", filepath.Dir(dir)}
+		if human != "" {
+			argv = append(argv, human)
+		}
+		o, err := parse(argv)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := run(o); err != nil {
+			t.Fatal(err)
+		}
+	}
+}

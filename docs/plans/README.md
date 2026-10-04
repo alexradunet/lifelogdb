@@ -8,7 +8,7 @@ per plan, `NNN-short-slug.md`, numbered on from the last: plans up to 028, 030 a
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
 | [029](029-google-takeout.md) | Google Takeout: places and daily health totals, with no schema change | P1 | L | — | TODO |
-| [032](032-takeout-photos.md) | Takeout photos: every photo gives its day's place, the albums the owner names are kept as files | P1 | L | — | TODO |
+| [032](032-takeout-photos.md) | Takeout photos: every photo gives its day's place, the albums the owner names are kept as files | P1 | L | — | IN PROGRESS (Phase B waits for the owner's inventory) |
 
 Status values: TODO | IN PROGRESS | IN REVIEW (owner) | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale). A plan that is DONE or REJECTED is deleted; git is the log.

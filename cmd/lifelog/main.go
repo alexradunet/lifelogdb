@@ -24,6 +24,7 @@ import (
 	"lifelog/internal/db"
 	"lifelog/internal/importer"
 	"lifelog/internal/mcp"
+	"lifelog/internal/takeout"
 )
 
 const version = "0.1.0"
@@ -54,6 +55,9 @@ const usage = `lifelog — the writer of a life.db
                                       reported, and --at names the place (docs/cookbook/place-of-a-photo.md)
   lifelog snapshot [--to DIR]         a dated copy of life.db (life-YYYY-MM-DD.db, beside it or in DIR),
                                       then its restore check (docs/cookbook/take-a-snapshot.md)
+
+  lifelog import photos inventory FOLDER  counts of a Google Photos export (plan 032): its sidecars, positions and
+                                          EXIF, never a name, a date, a place or a caption; reads, writes nothing
 
 Import (docs/guides/importing.md), with --workspace <source>.lifelog:
   lifelog import setup [--from life.db]   make trial.db: a copy of the real database, or a new one
@@ -151,6 +155,9 @@ func run(o opts) error {
 	}
 	if cmd == "snapshot" {
 		return snapshot(o)
+	}
+	if cmd == "import" && len(args) >= 2 && args[0] == "photos" && args[1] == "inventory" {
+		return photosInventory(o, args[2:])
 	}
 
 	var ws *importer.Workspace
@@ -576,4 +583,50 @@ func importCommand(o opts, c *client.Client, args []string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown import step %q (lifelog help)", args[0])
+}
+
+// photosInventory is `lifelog import photos inventory FOLDER` (plan 032, Phase A): the counts of a Google Photos
+// export, for the owner to read and paste. It opens no database and writes nothing.
+func photosInventory(o opts, args []string) error {
+	if len(args) != 1 {
+		return errors.New("import photos inventory FOLDER (the extracted Google Photos folder)")
+	}
+	inv, err := takeout.Take(args[0])
+	if err != nil {
+		return err
+	}
+	if !o.human {
+		return printJSON(inv)
+	}
+	list := func(m map[string]int) string {
+		keys := make([]string, 0, len(m))
+		for k := range m {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		var out []string
+		for _, k := range keys {
+			out = append(out, fmt.Sprintf("%s %d", k, m[k]))
+		}
+		return strings.Join(out, " · ")
+	}
+	fmt.Println("Google Photos export: counts only, no names, dates, places or captions")
+	fmt.Printf("folders: %d (%d named with a year, %d with a metadata.json)\n", inv.Folders, inv.YearFolders, inv.MetadataFolders)
+	fmt.Printf("media files: %s\n", list(inv.Media))
+	fmt.Printf("json files: %d; photo sidecars: %d (shared by several files %d, claimed by no file %d)\n", inv.JSONFiles, inv.Sidecars, inv.SharedSidecars, inv.Unclaimed)
+	fmt.Printf("sidecar found by: %s\n", list(inv.FoundBy))
+	fmt.Printf("sidecar keys: %s\n", list(inv.Keys))
+	fmt.Printf("positions: in geoData %d · in geoDataExif only %d · none or 0, 0 %d\n", inv.GeoData, inv.GeoDataExifOnly, inv.NoPosition)
+	fmt.Printf("photoTakenTime %d · descriptions %d · naming people %d\n", inv.TakenTime, inv.Descriptions, inv.WithPeople)
+	fmt.Printf("files also in another folder (same name and size): %d\n", inv.SameNameAndSize)
+	formats := make([]string, 0, len(inv.Exif))
+	for f := range inv.Exif {
+		formats = append(formats, f)
+	}
+	sort.Strings(formats)
+	for _, f := range formats {
+		e := inv.Exif[f]
+		fmt.Printf("EXIF, %s: %d files, %d with a date, %d with a position (the first %d bytes of each)\n", f, e.Files, e.Date, e.GPS, inv.ExifReadBytes)
+	}
+	return nil
 }

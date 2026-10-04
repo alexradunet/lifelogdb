@@ -42,6 +42,7 @@ lifelog mcp --workspace ~/import/Notebook.lifelog --agent lmstudio              
 lifelog import approve rules --workspace ~/import/Notebook.lifelog                  # the owner, at a terminal
 lifelog import status --workspace ~/import/Notebook.lifelog --human
 lifelog import replay --to ~/life/life.db --workspace ~/import/Notebook.lifelog     # the real run, when you say so
+lifelog import photos inventory ~/takeout-x/Takeout/"Google Photos" --human   # counts of a Photos export (plan 032)
 ```
 
 ## Decisions
@@ -109,6 +110,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 | `internal/core` | the cookbook's writes and reads; the save contract; habits; renames; files |
 | `internal/preview` | the picture a file page keeps: decode, scale to 1600 px, EXIF orientation, a JPEG of at most 1 MB with no metadata |
 | `internal/photo` | what a photo's metadata says: the day and time taken, the position, the orientation (JPEG and HEIC); `phototest` builds synthetic ones |
+| `internal/takeout` | a Google Takeout export: Photos' media paired with their sidecars (every naming form), and its inventory of counts |
 | `internal/importer` | the import workspace, the facts checks and apply, the vault plan, status, replay |
 | `internal/api` | the action catalog, the routes, Siren and HTML |
 | `internal/client` | the hypermedia client (in-process or remote) |
