@@ -302,7 +302,10 @@ question. Then **stop**: tell the owner the rules are ready and that they approv
 **4. Propose the metrics** (only if a rule says "readings" or "habits"). For each readings file:
 *inspect* it, *find* the metric. Add one `proposed` row: a `name`, the metric's page title (reuse one
 that exists; a title is never renamed), the `unit` exactly as written (empty for a unitless scale), a `note` in words, the
-`from` file, any `doubts`. A habit is a unitless row with note `1 = done that day`; leave `since` and
+`from` file, any `doubts`. When a note of the source is about that metric — its file name is the metric's name, in any
+case (`aPTT.md` for `aptt`) — that note is the metric's page ([D27](../decisions/D27-a-metric-is-a-page.md)): the `name` is the note's title exactly
+as the plan gives it, and the `note` is left empty, since the page keeps the note's text. This is not a doubt and not a
+question; list these rows in the report as "metric pages from notes". A habit is a unitless row with note `1 = done that day`; leave `since` and
 `until` empty. Then **stop** and ask the owner to review and approve. After approval, *register
 metrics*. Never type a unit into an operation yourself.
 

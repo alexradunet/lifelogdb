@@ -34,7 +34,7 @@ const usage = `lifelog — the writer of a life.db
   lifelog serve [--addr 127.0.0.1:7777]   the API: Siren JSON, or HTML in a browser
   lifelog mcp [--agent NAME]          the MCP server on stdio (writes as agent:NAME)
 
-  lifelog get PATH                    fetch a resource, e.g. /, /days/today, /pages/12
+  lifelog get PATH                    fetch a resource, e.g. /, /days/today, /pages/12 (or pages/12: Git Bash rewrites a leading /)
   lifelog do ACTION [field=value...]  run any action of the catalog (lifelog actions)
   lifelog actions                     list the actions and their fields
 
