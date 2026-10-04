@@ -3,11 +3,12 @@
 A plan is a dated record ([how a change happens](../process.md)): a change large enough to hand to another agent,
 written as a self-contained brief with done criteria. It cites the docs as they were at the commit it names. One file
 per plan, `NNN-short-slug.md`, numbered on from the last: plans up to 028 are done and live in git history
-(`git log -- docs/plans`), so the next one is **030**.
+(`git log -- docs/plans`), so the next one is **031**.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
 | [029](029-google-takeout.md) | Google Takeout: places and daily health totals, with no schema change | P1 | L | — | TODO |
+| [030](030-files.md) | Files: a file is a page, its text the body, a small picture kept, the original outside | P1 | L | — | TODO |
 
 Status values: TODO | IN PROGRESS | IN REVIEW (owner) | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale). A plan that is DONE or REJECTED is deleted; git is the log.
@@ -16,8 +17,7 @@ REJECTED (with one-line rationale). A plan that is DONE or REJECTED is deleted; 
 
 The owner's decisions of 2026-10-02 are carried out: renames (the contract, cookbook/rename-a-page), one full DDL
 after the freeze (D13), `pages_fts_delete` cut, readers set `trusted_schema=OFF`, the `Cn` rule names Unicode 15.0,
-snapshots (D25, cookbook/take-a-snapshot); a tombstoned day keeps its mood reading. No open issue: the next is
-**0008**.
+snapshots (D25, cookbook/take-a-snapshot); a tombstoned day keeps its mood reading. Open: issue 0009 (files), answered by proposal 0004 and plan 030.
 
 ### Next step
 
