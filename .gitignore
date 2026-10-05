@@ -7,14 +7,16 @@ life.db-shm
 *.db-shm
 *.db-journal
 
-# the built binary
+# the built binary and editor/Windows backup files
 /lifelog
 /lifelog.exe
+*~
 
 # a real vault or export to import, and its workspace (docs/guides/importing.md): never in git
 /import/
 *.lifelog/
 
-# local Claude Code state: agent worktrees and personal settings (skills in .claude/skills are tracked)
+# local Claude Code state: agent worktrees, locks and personal settings
 /.claude/worktrees/
 /.claude/settings.local.json
+/.claude/scheduled_tasks.lock

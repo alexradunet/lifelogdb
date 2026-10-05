@@ -8,7 +8,7 @@
 - **Priority:** P1/P2. **Effort:** L aggregate. **Risk:** HIGH for import evidence/identity, MED for surface integration.
 - **Status:** IN REVIEW (owner), not DONE.
 - **Scope:** all 22 owner-selected residual findings, implemented by nine isolated components and one serialized CLI stage, then integrated and reviewed in `implement/audit22-20261005-01`.
-- **Related residual briefs:** [038](038-reading-source-evidence.md), [043](043-canonical-reading-keys.md), [050](050-mcp-numeric-contract.md), [055](055-truthful-photo-embeds.md), [057](057-client-cancellation.md), [058](058-browser-mutation-feedback.md), [059](059-habit-domain-and-visibility.md), [065](065-markdown-link-precedence.md), [066](066-reading-root-scan-cost.md). Their owner-review status is unchanged.
+- **Related residual briefs:** 038, 043, 050, 055, 057, 058, 059, 065 and 066, available [at this record's baseline](https://github.com/alexradunet/lifelogdb/tree/e1d79591b6f57235a2132d17ad5123fe3bd424d0/docs/plans). Their owner-review status is unchanged.
 
 ## Why and boundaries
 
@@ -16,7 +16,7 @@ A further audit found residual gaps after the preceding batch: unsafe evidence a
 
 Canonical and embedded schema, `go.mod`/`go.sum`, and `internal/api/authority.go`/`authority_test.go` remain byte-identical to baseline. Plan-063's CLI address-refusal and real-listener mount tests are unchanged; early `LoopbackAddress` refusal and `NetworkAuthority` mounting remain intact. No migrations, freeze, canonical rebuild/replay, real database/export/workspace/media inspection, or lifelog MCP tool use occurred. Test databases, workspaces and JPEGs are synthetic disposable fixtures. The original checkout, master and unrelated worktrees were not edited. `lifelog.exe~` belongs to the original checkout; its absence in isolated integration was confirmed expected, not evidence of an initial ignored-file inventory.
 
-[029](029-google-takeout.md) B/C still requires owner inventory, selection and approvals; [070](070-trial-capture-pilot.md) still requires owner pilot/path/client approval. Neither this implementation nor passing tests opens those gates.
+[029](https://github.com/alexradunet/lifelogdb/blob/e1d79591b6f57235a2132d17ad5123fe3bd424d0/docs/plans/029-google-takeout.md) B/C still requires owner inventory, selection and approvals; [070](https://github.com/alexradunet/lifelogdb/blob/e1d79591b6f57235a2132d17ad5123fe3bd424d0/docs/plans/070-trial-capture-pilot.md) still requires owner pilot/path/client approval. Neither this implementation nor passing tests opens those gates.
 
 ## Finding-to-implementation and evidence map
 

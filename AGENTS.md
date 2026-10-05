@@ -267,8 +267,7 @@ or a promise of performance. Generate from scratch, never from private exports o
   copies and continuous replication. The docs are about the schema and its reliability; do not reintroduce
   any of them into `docs/` or `tests/` unless the owner reopens it. Snapshots are in: a dated `VACUUM INTO` copy
   and its restore check ([D25](docs/decisions/D25-snapshots.md)).
-- **Plans** live in `docs/plans/` (the `improve` skill's default `plans/` at the repo root is not used: point it
-  there).
+- **Plans** live in `docs/plans/`.
 
 ## Conventions every writer and every DDL change preserves
 
