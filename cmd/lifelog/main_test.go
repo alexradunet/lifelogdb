@@ -108,6 +108,85 @@ func TestSnapshot(t *testing.T) {
 	}
 }
 
+func TestSnapshotLiteralSpecialCharacterPaths(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	liveDir := filepath.Join(root, "live café %23")
+	live := filepath.Join(liveDir, "life %23.db")
+	writeSnapshotSentinel(t, filepath.Join(liveDir, "life #.db"))
+	if err := os.MkdirAll(liveDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Init(live); err != nil {
+		t.Fatalf("Init(%q) failed with alternate sentinel %q: %v", live, filepath.Join(liveDir, "life #.db"), err)
+	}
+	d, err := db.Open(live)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := (&core.Store{DB: d}).Capture(ctx, "cli", "2026-10-05", "Literal snapshot path for [[Sam]].", nil); err != nil {
+		d.Close()
+		t.Fatal(err)
+	}
+	d.Close()
+
+	dir := filepath.Join(root, "snapshots %23 café")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	destinationSentinel := filepath.Join(root, "snapshots # café", "life-2026-10-05.db")
+	writeSnapshotSentinel(t, destinationSentinel)
+	now := time.Date(2026, 10, 5, 8, 9, 10, 0, time.Local)
+	got, res, err := takeSnapshot(ctx, live, dir, now)
+	if err != nil {
+		t.Fatalf("takeSnapshot(%q, %q) failed: %v", live, dir, err)
+	}
+	want := filepath.Join(dir, "life-2026-10-05.db")
+	if got != want {
+		t.Fatalf("snapshot path = %q, want literal destination %q", got, want)
+	}
+	if !res.OK {
+		t.Fatalf("restore check failed on literal snapshot path: %+v", res)
+	}
+	if _, err := os.Stat(want); err != nil {
+		t.Fatalf("literal snapshot destination %q does not exist: %v", want, err)
+	}
+	assertSnapshotSentinel(t, filepath.Join(liveDir, "life #.db"))
+	assertSnapshotSentinel(t, destinationSentinel)
+	snap, err := db.OpenSnapshot(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer snap.Close()
+	var n int
+	if err := snap.R.QueryRow(`SELECT count(*) FROM pages WHERE title IN ('2026-10-05', 'Sam')`).Scan(&n); err != nil || n != 2 {
+		t.Fatalf("literal snapshot %q has %d captured pages (%v), want 2", want, n, err)
+	}
+}
+
+const snapshotSentinel = "literal snapshot sentinel\n"
+
+func writeSnapshotSentinel(t *testing.T, p string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(snapshotSentinel), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertSnapshotSentinel(t *testing.T, p string) {
+	t.Helper()
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatalf("alternate sentinel %q was removed: %v", p, err)
+	}
+	if string(b) != snapshotSentinel {
+		t.Fatalf("alternate sentinel %q changed to %q", p, string(b))
+	}
+}
+
 func TestSnapshotRefusesAGitWorkTree(t *testing.T) {
 	live := filepath.Join(t.TempDir(), "life.db")
 	if err := db.Init(live); err != nil {

@@ -8,7 +8,7 @@
 
 - **Date / planned at:** 2026-10-05, commit `726ffab`.
 - **Priority:** P1. **Effort:** S. **Risk:** MED (Windows/relative path forms and snapshot settings).
-- **Status:** TODO. **Depends on:** none. **Category:** bug. **Audit finding:** 12.
+- **Status:** IN REVIEW (owner). **Depends on:** none. **Category:** bug. **Audit finding:** 12.
 
 ## Why
 

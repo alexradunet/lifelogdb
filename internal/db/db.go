@@ -106,7 +106,19 @@ func dsn(path string, readOnly bool) string {
 			q.Add("_pragma", p.name+"("+p.set+")")
 		}
 	}
-	return "file:" + filepath.ToSlash(path) + "?" + q.Encode()
+	return sqliteFileURI(path, q)
+}
+
+func sqliteFileURI(path string, q url.Values) string {
+	return (&url.URL{Scheme: "file", Opaque: sqliteURIPath(path), RawQuery: q.Encode()}).String()
+}
+
+func sqliteURIPath(path string) string {
+	parts := strings.Split(filepath.ToSlash(path), "/")
+	for i := range parts {
+		parts[i] = url.PathEscape(parts[i])
+	}
+	return strings.Join(parts, "/")
 }
 
 // DB is one life.db: a single writing connection and a pool of read-only ones.
@@ -193,7 +205,10 @@ func Copy(from, to string) error {
 	if _, err := os.Stat(from); err != nil {
 		return fmt.Errorf("no database at %s: %w", from, err)
 	}
-	r, err := sql.Open("lifelog", "file:"+filepath.ToSlash(from)+"?mode=ro&_pragma=trusted_schema(0)")
+	q := url.Values{}
+	q.Set("mode", "ro")
+	q.Add("_pragma", "trusted_schema(0)")
+	r, err := sql.Open("lifelog", sqliteFileURI(from, q))
 	if err != nil {
 		return err
 	}
