@@ -153,6 +153,9 @@ func (t *Tx) AddFile(f FileIn) (k Kept, err error) {
 		} else {
 			body = p.Body
 		}
+		if _, err := t.tx.Exec(`UPDATE pages SET day = ? WHERE id = ? AND day IS NULL`, day, p.ID); err != nil {
+			return k, err
+		}
 		k.ID, k.Promoted, title = p.ID, true, p.Title
 	default:
 		return k, &ExistsError{p.ID, p.Title}

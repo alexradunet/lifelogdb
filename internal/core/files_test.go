@@ -7,6 +7,8 @@ import (
 	"image/jpeg"
 	"strings"
 	"testing"
+
+	"lifelog/internal/text"
 )
 
 func smallJPEG(t *testing.T) []byte {
@@ -112,6 +114,118 @@ func TestAddFilePromotesAGhost(t *testing.T) {
 	k, err = s.AddFile(ctx, "cli", FileIn{Title: "Notes.pdf", SHA256: sha('e'), MIME: "application/pdf"})
 	if p, _ := s.PageByID(ctx, k.ID); err != nil || p.Body != "my own words" || p.Type != "file" {
 		t.Errorf("a page with text, no text sent: %v %+v", err, p)
+	}
+}
+
+func TestFilePromotionDay(t *testing.T) {
+	s := fresh(t)
+	dayLists := func(day, title string) bool {
+		t.Helper()
+		d, err := s.Day(ctx, day)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range d.Rows {
+			if strings.HasPrefix(r.What, "page") && r.Detail == title {
+				return true
+			}
+		}
+		return false
+	}
+
+	if _, _, err := s.Capture(ctx, "cli", "2026-10-04", "Dawn: ![[Lake.jpg]]", nil); err != nil {
+		t.Fatal(err)
+	}
+	ghost, _ := s.PageID(ctx, "Lake.jpg")
+	k, err := s.AddFile(ctx, "cli", FileIn{Title: "lake.jpg", SHA256: sha('0'), MIME: "image/jpeg", Body: "With [[Bob]].", Day: "2026-10-04"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, _ := s.PageByID(ctx, ghost)
+	if !k.Promoted || k.ID != ghost || p.Type != "file" || p.Title != "Lake.jpg" || p.Body != "With [[Bob]]." || p.Day != "2026-10-04" || titles(p.In, "wikilink") != "2026-10-04" || titles(p.Out, "wikilink") != "Bob" {
+		t.Errorf("explicit-day promotion: kept %+v, page %+v", k, p)
+	}
+	if !dayLists("2026-10-04", "Lake.jpg") {
+		t.Error("the promoted explicit-day file is absent from its day view")
+	}
+	again, err := s.AddFile(ctx, "cli", FileIn{Title: "Other Lake.jpg", SHA256: sha('0'), MIME: "image/jpeg", Day: "2026-10-06"})
+	if err != nil || !again.Existing || again.ID != ghost {
+		t.Fatalf("re-send by hash: %+v %v", again, err)
+	}
+	if p, _ = s.PageByID(ctx, ghost); p.Day != "2026-10-04" || p.Title != "Lake.jpg" || p.Body != "With [[Bob]]." {
+		t.Errorf("re-send changed the promoted file page: %+v", p)
+	}
+
+	if _, _, err := s.Capture(ctx, "cli", "2026-10-05", "Trip: ![[Taken.jpg]]", nil); err != nil {
+		t.Fatal(err)
+	}
+	takenGhost, _ := s.PageID(ctx, "Taken.jpg")
+	k, err = s.AddFile(ctx, "cli", FileIn{Title: "taken.jpg", SHA256: sha('1'), MIME: "image/jpeg", Taken: "2026-10-05"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p, _ = s.PageByID(ctx, takenGhost); !k.Promoted || p.Day != "2026-10-05" || !dayLists("2026-10-05", "Taken.jpg") {
+		t.Errorf("taken-day promotion: kept %+v, page %+v", k, p)
+	}
+
+	var datedGhost int64
+	if err := s.Do(ctx, "cli", func(t *Tx) (err error) {
+		datedGhost, _, err = t.insertPage("page", "Already dated.jpg", text.TitleKey("Already dated.jpg"), "2026-10-01", "", "")
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	k, err = s.AddFile(ctx, "cli", FileIn{Title: "Already dated.jpg", SHA256: sha('2'), MIME: "image/jpeg", Day: "2026-10-07"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p, _ = s.PageByID(ctx, datedGhost); !k.Promoted || p.Day != "2026-10-01" || !dayLists("2026-10-01", "Already dated.jpg") || dayLists("2026-10-07", "Already dated.jpg") {
+		t.Errorf("promotion overwrote an existing day: kept %+v, page %+v", k, p)
+	}
+
+	if _, _, err := s.Capture(ctx, "cli", "2026-10-08", "Dry: ![[Dry.jpg]]", nil); err != nil {
+		t.Fatal(err)
+	}
+	dryGhost, _ := s.PageID(ctx, "Dry.jpg")
+	k, err = s.TryAddFile(ctx, "cli", FileIn{Title: "dry.jpg", SHA256: sha('3'), MIME: "image/jpeg", Day: "2026-10-08"})
+	if err != nil || !k.Promoted || k.ID != 0 {
+		t.Fatalf("dry-run promotion report: %+v %v", k, err)
+	}
+	if p, _ = s.PageByID(ctx, dryGhost); p.Type != "page" || p.Day != "" || p.File != nil {
+		t.Errorf("dry-run promotion wrote to storage: %+v", p)
+	}
+
+	var conflictID int64
+	if err := s.Do(ctx, "cli", func(t *Tx) (err error) {
+		conflictID, _, err = t.insertPage("page", "Conflict.pdf", text.TitleKey("Conflict.pdf"), "2026-10-02", "my own words", "")
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddFile(ctx, "cli", FileIn{Title: "Conflict.pdf", SHA256: sha('4'), MIME: "application/pdf", Day: "2026-10-09", Body: "OCR text"}); status(err) != 409 {
+		t.Fatalf("body conflict: %v", err)
+	}
+	if p, _ = s.PageByID(ctx, conflictID); p.Type != "page" || p.Day != "2026-10-02" || p.Body != "my own words" || p.File != nil {
+		t.Errorf("body conflict changed storage: %+v", p)
+	}
+
+	s = fresh(t)
+	placeID(t, s, "Lakeside", Point{46.1, 7.2, 300, true})
+	before := Today()
+	k, err = s.AddFile(ctx, "cli", FileIn{Title: "scan.jpg", SHA256: sha('5'), MIME: "image/jpeg", Lat: 46.1, Lon: 7.2, HasGPS: true, Preview: smallJPEG(t)})
+	after := Today()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, _ = s.PageByID(ctx, k.ID)
+	if p.Day != before && p.Day != after {
+		t.Errorf("undated keep used day %q, outside [%q,%q]", p.Day, before, after)
+	}
+	if k.Day != "" || k.Place != "Lakeside" || k.Linked || k.Embedded {
+		t.Errorf("undated photo got its own-day effects: %+v", k)
+	}
+	if dayID, _ := s.PageID(ctx, p.Day); dayID != 0 {
+		t.Errorf("undated photo made an automatic day page %d for %s", dayID, p.Day)
 	}
 }
 

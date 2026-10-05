@@ -204,9 +204,36 @@ func TestAPhotosPlaceAndDay(t *testing.T) {
 	}
 }
 
+func TestPromotedFileDay(t *testing.T) {
+	c, _ := fresh(t)
+	root := must(c.Get("/"))
+	capture := find(must(c.Get("/actions")), "capture")
+	if _, err := c.Do(capture, map[string]string{"day": "2026-10-04", "text": "Dawn: ![[Lake.jpg]]"}); err != nil {
+		t.Fatal(err)
+	}
+	path, _ := jpegFile(t, "lake.jpg", 40, 30)
+	e := must(c.DoFiles(find(root, "add-file"), map[string]string{"title": "lake.jpg", "day": "2026-10-04"}, map[string]string{"original": path}))
+	res, _ := e.Result.(map[string]any)
+	if res["promoted"] != true || props(e)["entity_type"] != "file" || props(e)["title"] != "Lake.jpg" || props(e)["day"] != "2026-10-04" {
+		t.Fatalf("promoted file: result %+v props %+v", res, props(e))
+	}
+	day := must(c.Get("/days/2026-10-04"))
+	listed := false
+	for _, row := range props(day)["view"].([]any) {
+		r, _ := row.(map[string]any)
+		if what, _ := r["what"].(string); strings.HasPrefix(what, "page") && r["detail"] == "Lake.jpg" {
+			listed = true
+		}
+	}
+	if !listed {
+		t.Errorf("the day view does not list the promoted file: %+v", props(day))
+	}
+}
+
 func TestAddFileDryRunWritesNothing(t *testing.T) {
 	c, _ := fresh(t)
-	add := find(must(c.Get("/")), "add-file")
+	root := must(c.Get("/"))
+	add := find(root, "add-file")
 	path, _ := jpegFile(t, "x.jpg", 40, 30)
 	e := must(c.DoFiles(add, map[string]string{"title": "x.jpg", "dry_run": "1"}, map[string]string{"original": path}))
 	if res, _ := e.Result.(map[string]any); !strings.Contains(strings.Join(e.Class, ","), "dry-run") || res == nil || res["id"] != nil {
@@ -214,5 +241,21 @@ func TestAddFileDryRunWritesNothing(t *testing.T) {
 	}
 	if list := must(c.Get("/files")); len(list.Entities) != 0 {
 		t.Error("a dry run kept a file")
+	}
+	capture := find(must(c.Get("/actions")), "capture")
+	if _, err := c.Do(capture, map[string]string{"day": "2026-10-04", "text": "Dawn: ![[Dry.jpg]]"}); err != nil {
+		t.Fatal(err)
+	}
+	path, _ = jpegFile(t, "dry.jpg", 40, 30)
+	e = must(c.DoFiles(add, map[string]string{"title": "dry.jpg", "day": "2026-10-04", "dry_run": "1"}, map[string]string{"original": path}))
+	if res, _ := e.Result.(map[string]any); res["promoted"] != true || res["id"] != nil {
+		t.Errorf("a dry-run promotion report: %+v", e.Result)
+	}
+	ghost := must(c.Get("/pages?title=Dry.jpg"))
+	if props(ghost)["entity_type"] != "page" || props(ghost)["day"] != nil || props(ghost)["file"] != nil {
+		t.Errorf("a dry-run promotion wrote to the ghost: %+v", props(ghost))
+	}
+	if list := must(c.Get("/files")); len(list.Entities) != 0 {
+		t.Error("a dry-run promotion kept a file")
 	}
 }
