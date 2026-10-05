@@ -75,6 +75,7 @@ func pendingCorrection(format string, a ...any) error {
 var (
 	correctionAfterReadyHook  func(correctionIntent) error
 	correctionAfterCommitHook func(correctionIntent) error
+	correctionResyncHook      func(correctionIntent) error
 )
 
 // CorrectImported corrects a replayable imported reading through a durable workspace intent. handled is false for
@@ -113,6 +114,7 @@ func (w *Workspace) CorrectImported(ctx context.Context, s *core.Store, actor st
 	}
 
 	var intent correctionIntent
+	published := false
 	err = s.Do(ctx, actor, func(t *core.Tx) error {
 		var e error
 		root, leaf, e = t.MeasurementRootAndLeaf(wrong)
@@ -131,6 +133,9 @@ func (w *Workspace) CorrectImported(ctx context.Context, s *core.Store, actor st
 			return e
 		}
 		postRename, e := w.publishCorrectionIntent(intent)
+		if postRename || e == nil {
+			published = true
+		}
 		if e != nil {
 			id = 0
 			if postRename {
@@ -147,6 +152,9 @@ func (w *Workspace) CorrectImported(ctx context.Context, s *core.Store, actor st
 		return nil
 	})
 	if err != nil {
+		if published && !strings.Contains(err.Error(), "pending recovery") {
+			return 0, true, pendingCorrection("correction intent %s is pending recovery after publication: %v", intent.EventKey, err)
+		}
 		return 0, true, err
 	}
 	if correctionAfterCommitHook != nil {
@@ -346,9 +354,13 @@ func (w *Workspace) RecoverCorrections(ctx context.Context, s *core.Store) error
 }
 
 func (w *Workspace) recoverCorrectionsLocked(ctx context.Context, s *core.Store) error {
-	intents, err := w.correctionIntents()
+	intents, err := w.orderedCorrectionIntents()
 	if err != nil {
 		return err
+	}
+	known := map[string]correctionIntent{}
+	for _, intent := range intents {
+		known[intent.EventKey] = intent
 	}
 	for _, intent := range intents {
 		legacy, err := w.legacyState(intent.RootSource, intent.Metric, intent.RootImportKey, nil)
@@ -358,18 +370,21 @@ func (w *Workspace) recoverCorrectionsLocked(ctx context.Context, s *core.Store)
 		if legacy.fingerprint != intent.LegacyFingerprint {
 			return refuse("correction intent %s conflicts with edits to legacy corrections for %s %s", intent.EventKey, intent.Metric, intent.RootImportKey)
 		}
-		if err := s.Do(ctx, intent.ActorSource, func(t *core.Tx) error { return recoverOneCorrection(t, intent) }); err != nil {
+		if err := w.resyncCorrectionIntent(intent); err != nil {
+			return err
+		}
+		if err := s.Do(ctx, intent.ActorSource, func(t *core.Tx) error { return recoverOneCorrection(t, intent, known) }); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func recoverOneCorrection(t *core.Tx, intent correctionIntent) error {
+func recoverOneCorrection(t *core.Tx, intent correctionIntent, known map[string]correctionIntent) error {
 	if id, err := t.MeasurementByKey(intent.ActorSource, intent.Metric, intent.EventKey); err != nil {
 		return err
 	} else if id != 0 {
-		return verifyEventRow(t, intent, id)
+		return verifyEventRow(t, intent, id, known)
 	}
 	rootID, err := t.MeasurementByKey(intent.RootSource, intent.Metric, intent.RootImportKey)
 	if err != nil {
@@ -402,21 +417,52 @@ func recoverOneCorrection(t *core.Tx, intent correctionIntent) error {
 	return err
 }
 
-func verifyEventRow(t *core.Tx, intent correctionIntent, id int64) error {
-	root, row, err := t.MeasurementRootAndLeaf(id)
+func verifyEventRow(t *core.Tx, intent correctionIntent, id int64, known map[string]correctionIntent) error {
+	root, _, err := t.MeasurementRootAndLeaf(id)
 	if err != nil {
 		return err
+	}
+	row, err := t.MeasurementRow(id)
+	if err != nil {
+		return err
+	}
+	if row.Source != intent.ActorSource || row.ImportKey != intent.EventKey {
+		return refuse("correction intent %s matches a row with another event identity", intent.EventKey)
 	}
 	if root.Source != intent.RootSource || root.ImportKey != intent.RootImportKey || text.TitleKey(root.Metric) != text.TitleKey(intent.Metric) {
 		return refuse("correction intent %s matches a row with another root", intent.EventKey)
 	}
-	if row.ID != id && row.ImportKey != intent.EventKey {
-		// The event exists but has itself been corrected; replay/recovery can advance from it, but a copied target
-		// with another current leaf is checked by the next intent or reported as a conflict there.
-		return nil
-	}
 	if (intent.Retracted && row.Value != nil) || (!intent.Retracted && (row.Value == nil || intent.Value == nil || *row.Value != *intent.Value)) {
 		return refuse("correction intent %s matches a row with another value", intent.EventKey)
+	}
+	pred, err := t.MeasurementRow(row.Supersedes)
+	if err != nil {
+		return err
+	}
+	switch intent.PredecessorKind {
+	case "legacy":
+		if !valueOK(intent.PredecessorValue, intent.PredecessorRetracted, valueOfRow(pred), pred.Value != nil) {
+			return refuse("correction intent %s has a different legacy predecessor", intent.EventKey)
+		}
+	case "event":
+		if pred.ImportKey != intent.PredecessorEventKey {
+			return refuse("correction intent %s predecessor is %s, not %s", intent.EventKey, pred.ImportKey, intent.PredecessorEventKey)
+		}
+	default:
+		return refuse("correction intent %s has unknown predecessor kind %q", intent.EventKey, intent.PredecessorKind)
+	}
+	leafID, _, _, err := t.CurrentOf(root.ID)
+	if err != nil {
+		return err
+	}
+	if leafID != row.ID {
+		leaf, err := t.MeasurementRow(leafID)
+		if err != nil {
+			return err
+		}
+		if _, ok := known[leaf.ImportKey]; !ok {
+			return refuse("correction intent %s is followed by an unknown later correction", intent.EventKey)
+		}
 	}
 	return nil
 }
@@ -431,6 +477,7 @@ func (w *Workspace) correctionIntents() ([]correctionIntent, error) {
 		return nil, err
 	}
 	var intents []correctionIntent
+	seen := map[string]bool{}
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") || strings.HasPrefix(e.Name(), ".tmp-") {
 			continue
@@ -443,15 +490,106 @@ func (w *Workspace) correctionIntents() ([]correctionIntent, error) {
 		if err := json.Unmarshal(b, &intent); err != nil {
 			return nil, fmt.Errorf("%s: %w", e.Name(), err)
 		}
+		if err := w.validateCorrectionIntent(e.Name(), intent); err != nil {
+			return nil, err
+		}
+		if seen[intent.EventKey] {
+			return nil, refuse("duplicate correction intent %s", intent.EventKey)
+		}
+		seen[intent.EventKey] = true
 		intents = append(intents, intent)
 	}
-	sort.Slice(intents, func(i, j int) bool {
-		if intents[i].CreatedAt == intents[j].CreatedAt {
-			return intents[i].EventKey < intents[j].EventKey
-		}
-		return intents[i].CreatedAt < intents[j].CreatedAt
-	})
 	return intents, nil
+}
+
+func (w *Workspace) validateCorrectionIntent(filename string, intent correctionIntent) error {
+	switch {
+	case intent.Version != correctionIntentVersion:
+		return refuse("correction intent %s has version %d", filename, intent.Version)
+	case intent.EventKey == "" || filename != intent.EventKey+".json":
+		return refuse("correction intent filename %s does not match event key %q", filename, intent.EventKey)
+	case intent.WorkspaceSource == "" || intent.RootSource == "" || intent.RootImportKey == "" || intent.Metric == "" || intent.ActorSource == "" || intent.LegacyFingerprint == "" || intent.CreatedAt == "":
+		return refuse("correction intent %s is missing required identity fields", intent.EventKey)
+	case intent.WorkspaceSource != intent.RootSource:
+		return refuse("correction intent %s workspace source %s does not match root source %s", intent.EventKey, intent.WorkspaceSource, intent.RootSource)
+	case intent.Retracted == (intent.Value != nil):
+		return refuse("correction intent %s has inconsistent value/retraction fields", intent.EventKey)
+	case intent.PredecessorRetracted == (intent.PredecessorValue != nil):
+		return refuse("correction intent %s has inconsistent predecessor value/retraction fields", intent.EventKey)
+	case intent.PredecessorKind != "legacy" && intent.PredecessorKind != "event":
+		return refuse("correction intent %s has predecessor kind %q", intent.EventKey, intent.PredecessorKind)
+	case intent.PredecessorKind == "event" && intent.PredecessorEventKey == "":
+		return refuse("correction intent %s has no predecessor event key", intent.EventKey)
+	}
+	if src, err := w.approvedImportSource(); err == nil && src != intent.WorkspaceSource {
+		return refuse("correction intent %s belongs to %s, not workspace %s", intent.EventKey, intent.WorkspaceSource, src)
+	}
+	return nil
+}
+
+func (w *Workspace) orderedCorrectionIntents() ([]correctionIntent, error) {
+	intents, err := w.correctionIntents()
+	if err != nil || len(intents) == 0 {
+		return intents, err
+	}
+	groups := map[correctionRoot][]correctionIntent{}
+	for _, intent := range intents {
+		groups[intent.root()] = append(groups[intent.root()], intent)
+	}
+	var roots []correctionRoot
+	for root := range groups {
+		roots = append(roots, root)
+	}
+	sort.Slice(roots, func(i, j int) bool {
+		return roots[i].source+roots[i].metric+roots[i].key < roots[j].source+roots[j].metric+roots[j].key
+	})
+	var ordered []correctionIntent
+	for _, root := range roots {
+		chain, err := orderIntentChain(groups[root])
+		if err != nil {
+			return nil, err
+		}
+		ordered = append(ordered, chain...)
+	}
+	return ordered, nil
+}
+
+func orderIntentChain(events []correctionIntent) ([]correctionIntent, error) {
+	byKey := map[string]correctionIntent{}
+	children := map[string][]correctionIntent{}
+	var first []correctionIntent
+	for _, event := range events {
+		byKey[event.EventKey] = event
+		if event.PredecessorKind == "legacy" {
+			first = append(first, event)
+		} else {
+			children[event.PredecessorEventKey] = append(children[event.PredecessorEventKey], event)
+		}
+	}
+	if len(first) != 1 {
+		return nil, refuse("correction events for %s %s have %d legacy starts", events[0].Metric, events[0].RootImportKey, len(first))
+	}
+	var out []correctionIntent
+	for cur := first[0]; ; {
+		out = append(out, cur)
+		next := children[cur.EventKey]
+		if len(next) == 0 {
+			break
+		}
+		if len(next) > 1 {
+			return nil, refuse("correction event %s has multiple successors", cur.EventKey)
+		}
+		cur = next[0]
+		delete(children, out[len(out)-1].EventKey)
+		if len(out) > len(events) {
+			return nil, refuse("correction events for %s %s contain a cycle", cur.Metric, cur.RootImportKey)
+		}
+	}
+	if len(out) != len(events) {
+		return nil, refuse("correction events for %s %s have missing predecessors", events[0].Metric, events[0].RootImportKey)
+	}
+	_ = byKey
+	return out, nil
 }
 
 func (w *Workspace) intentByEventKey(key string) (correctionIntent, bool, error) {
@@ -481,31 +619,104 @@ func (w *Workspace) rootHasEvent(source, metric, key string) (bool, error) {
 	return false, nil
 }
 
+func (w *Workspace) resyncCorrectionIntent(intent correctionIntent) error {
+	if correctionResyncHook != nil {
+		if err := correctionResyncHook(intent); err != nil {
+			return err
+		}
+	}
+	p := filepath.Join(w.Dir, correctionIntentDir, intent.EventKey+".json")
+	f, err := os.OpenFile(p, os.O_RDWR, 0)
+	if err != nil {
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return pendingCorrection("correction intent %s is pending recovery after file resync failed: %v", intent.EventKey, err)
+	}
+	if err := f.Close(); err != nil {
+		return pendingCorrection("correction intent %s is pending recovery after file close failed: %v", intent.EventKey, err)
+	}
+	if err := syncDir(filepath.Dir(p)); err != nil {
+		return pendingCorrection("correction intent %s is pending recovery after directory resync failed: %v", intent.EventKey, err)
+	}
+	return nil
+}
+
 func (w *Workspace) correctionIntentStates(ctx context.Context, s *core.Store) ([]string, error) {
-	intents, err := w.correctionIntents()
+	intents, err := w.orderedCorrectionIntents()
 	if err != nil || len(intents) == 0 || s == nil {
 		return nil, err
 	}
+	known := map[string]correctionIntent{}
+	for _, intent := range intents {
+		known[intent.EventKey] = intent
+	}
 	var out []string
 	for _, intent := range intents {
-		err := s.DryRun(ctx, intent.ActorSource, func(t *core.Tx) error { return recoverOneCorrection(t, intent) })
-		if err == nil {
-			out = append(out, fmt.Sprintf("pending correction intent %s for %s %s", intent.EventKey, intent.Metric, intent.RootImportKey))
-		} else if !alreadyRecovered(ctx, s, intent) {
-			out = append(out, fmt.Sprintf("conflicting correction intent %s for %s %s: %v", intent.EventKey, intent.Metric, intent.RootImportKey, err))
+		legacy, err := w.legacyState(intent.RootSource, intent.Metric, intent.RootImportKey, nil)
+		if err != nil {
+			return nil, err
+		}
+		if legacy.fingerprint != intent.LegacyFingerprint {
+			out = append(out, fmt.Sprintf("conflict: correction intent %s for %s %s conflicts with edited legacy corrections", intent.EventKey, intent.Metric, intent.RootImportKey))
+			continue
+		}
+		state, err := inspectCorrectionIntent(ctx, s, intent, known)
+		if err != nil {
+			return nil, err
+		}
+		if state != "" {
+			out = append(out, state)
 		}
 	}
 	return out, nil
 }
 
-func alreadyRecovered(ctx context.Context, s *core.Store, intent correctionIntent) bool {
-	ok := false
-	_ = s.DryRun(ctx, intent.ActorSource, func(t *core.Tx) error {
+func inspectCorrectionIntent(ctx context.Context, s *core.Store, intent correctionIntent, known map[string]correctionIntent) (string, error) {
+	var state string
+	err := s.DryRun(ctx, intent.ActorSource, func(t *core.Tx) error {
 		id, err := t.MeasurementByKey(intent.ActorSource, intent.Metric, intent.EventKey)
-		if err == nil && id != 0 && verifyEventRow(t, intent, id) == nil {
-			ok = true
+		if err != nil {
+			return err
+		}
+		if id != 0 {
+			if err := verifyEventRow(t, intent, id, known); err != nil {
+				state = fmt.Sprintf("conflict: correction intent %s for %s %s: %v", intent.EventKey, intent.Metric, intent.RootImportKey, err)
+			}
+			return nil
+		}
+		rootID, err := t.MeasurementByKey(intent.RootSource, intent.Metric, intent.RootImportKey)
+		if err != nil {
+			return err
+		}
+		if rootID == 0 {
+			state = fmt.Sprintf("conflict: correction intent %s for %s %s names a missing root", intent.EventKey, intent.Metric, intent.RootImportKey)
+			return nil
+		}
+		leafID, value, ok, err := t.CurrentOf(rootID)
+		if err != nil {
+			return err
+		}
+		leaf, err := t.MeasurementRow(leafID)
+		if err != nil {
+			return err
+		}
+		switch intent.PredecessorKind {
+		case "legacy":
+			if valueOK(intent.PredecessorValue, intent.PredecessorRetracted, value, ok) && leaf.ID == intent.PredecessorLocalID {
+				state = fmt.Sprintf("pending correction intent %s for %s %s", intent.EventKey, intent.Metric, intent.RootImportKey)
+			} else {
+				state = fmt.Sprintf("conflict: correction intent %s for %s %s predecessor no longer matches", intent.EventKey, intent.Metric, intent.RootImportKey)
+			}
+		case "event":
+			if leaf.ImportKey == intent.PredecessorEventKey {
+				state = fmt.Sprintf("pending correction intent %s for %s %s", intent.EventKey, intent.Metric, intent.RootImportKey)
+			} else {
+				state = fmt.Sprintf("conflict: correction intent %s for %s %s predecessor is %s", intent.EventKey, intent.Metric, intent.RootImportKey, leaf.ImportKey)
+			}
 		}
 		return nil
 	})
-	return ok
+	return state, err
 }

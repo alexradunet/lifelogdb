@@ -448,10 +448,11 @@ workspace intent for that correction. The intent names the imported root, the ac
 the predecessor (a frozen legacy prefix or a previous correction event), and the desired value or retraction with a
 writer-generated event key. A correction whose workspace intent cannot be published is rolled back in the database;
 a visible intent whose SQL commit result is unknown is reported as pending recovery and is retried before the next
-correction, rehearsal or replay. *status* reports pending or conflicting intents but does not repair them. A conflict
-means the owner inspects the named intent and the current reading chain, then either restores the expected predecessor
-or removes/archives the private intent after deciding not to carry it forward. This is not cross-file ACID and makes
-no power-loss promise beyond process-crash recovery from synced local files.
+correction, rehearsal or replay. *status* only inspects and reports pending or conflicting intents; it does not repair
+them. Rehearsal and replay first recover the trial database, even for a target dry run, so the trial remains the
+source of what will be replayed. A conflict is an owner-resolution gate: the writer names the intent and current
+reading chain and stops; it does not automatically repair, delete or overwrite append-only history. This is not
+cross-file ACID and makes no power-loss promise beyond process-crash recovery from synced local files.
 
 ## What an implementation must get right
 
