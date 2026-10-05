@@ -3,10 +3,12 @@ package importer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"syscall"
 	"testing"
 
 	"golang.org/x/text/unicode/norm"
@@ -191,6 +193,17 @@ func TestSourceFilenameIdentity(t *testing.T) {
 	}
 	if exists(missingTarget) {
 		t.Fatal("replay with a missing source file created the target")
+	}
+}
+
+func TestSourcePathMissingRecognizesTypedENOTDIR(t *testing.T) {
+	missing := fmt.Errorf("wrapped: %w", &os.PathError{Op: "stat", Path: "source/file/child", Err: syscall.ENOTDIR})
+	if !sourcePathMissing(missing) {
+		t.Fatal("typed ENOTDIR must be treated as a missing exact path so equivalent directories can be tried")
+	}
+	access := fmt.Errorf("wrapped: %w", &os.PathError{Op: "stat", Path: "source/file", Err: syscall.EACCES})
+	if sourcePathMissing(access) {
+		t.Fatal("access errors must not be treated as missing paths")
 	}
 }
 

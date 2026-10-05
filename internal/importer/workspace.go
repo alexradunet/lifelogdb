@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"golang.org/x/text/unicode/norm"
@@ -137,11 +138,7 @@ func (w *Workspace) resolveSourcePath(rel string) (string, bool, error) {
 }
 
 func sourcePathMissing(err error) bool {
-	if errors.Is(err, os.ErrNotExist) {
-		return true
-	}
-	var pathErr *os.PathError
-	return errors.As(err, &pathErr) && strings.Contains(strings.ToLower(pathErr.Err.Error()), "not a directory")
+	return errors.Is(err, os.ErrNotExist) || errors.Is(err, syscall.ENOTDIR)
 }
 
 func sourceDirCandidate(p string) (bool, error) {
