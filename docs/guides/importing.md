@@ -439,7 +439,9 @@ report it.
 database when the target does not exist), going on past each failing step or file so that it lists
 every failure, not only the first. The target is written only when that rehearsal failed nowhere and
 its four checks were clean; otherwise it is left as it was — not even created — and the failures are
-reported. The dry run is the rehearsal alone. The copy needs as much free space as the target, is
+reported. The dry run is the rehearsal alone. Old reading keys whose historical metric spelling makes their ordinal
+ambiguous are refused during rehearsal; the owner takes any local snapshot they want before resolving the workspace,
+and the writer never repairs or rewrites those keys automatically. The copy needs as much free space as the target, is
 made in the workspace (it holds the same private data as the trial), and is removed before *replay* returns.
 
 Facts files hold no database ids: keys are derived from source paths and references name titles, so

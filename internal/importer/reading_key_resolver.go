@@ -331,58 +331,86 @@ func (w *Workspace) validateTrialReadingIdentity(ctx context.Context, trial *cor
 	return nil
 }
 
-func (w *Workspace) resolveCorrectionKeyFromTrial(ctx context.Context, trial *core.Store, target *core.Tx, source, metric, key string) (string, error) {
-	if trial == nil {
+type correctionProof struct {
+	entries map[correctionRoot]correctionProofEntry
+}
+
+type correctionProofEntry struct {
+	file       string
+	writeIndex int
+}
+
+func (w *Workspace) buildCorrectionProof(ctx context.Context, trial, target *core.Store, intents []correctionIntent) (*correctionProof, error) {
+	if trial == nil || trial == target {
+		return nil, nil
+	}
+	needed := map[correctionRoot]bool{}
+	cs, err := w.Corrections()
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range cs {
+		needed[correctionRoot{c.Source, c.Metric, c.Key}] = true
+	}
+	for _, intent := range intents {
+		needed[intent.root()] = true
+	}
+	proof := &correctionProof{entries: map[correctionRoot]correctionProofEntry{}}
+	for root := range needed {
+		parsed, ok := parseReadingKey(root.key)
+		if !ok {
+			continue
+		}
+		f, pos, _, err := w.prepare(parsed.file)
+		if err != nil {
+			return nil, err
+		}
+		entry := correctionProofEntry{file: parsed.file, writeIndex: -1}
+		err = trial.DryRun(ctx, root.source, func(t *core.Tx) error {
+			resolved, err := resolveReadingKeys(t, root.source, f, pos)
+			if err != nil {
+				return err
+			}
+			idx, ok := resolved.storedKeyWrite[root.key]
+			if !ok {
+				return refuse("%s: correction root %s for %s has no validated original trial reading", parsed.file, root.key, root.metric)
+			}
+			entry.writeIndex = idx
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+		proof.entries[root] = entry
+	}
+	return proof, nil
+}
+
+func (w *Workspace) resolveCorrectionKeyFromProof(proof *correctionProof, target *core.Tx, source, metric, key string) (string, error) {
+	if proof == nil {
 		return w.resolveCorrectionKey(source, target, metric, key)
 	}
 	parsed, ok := parseReadingKey(key)
 	if !ok {
 		return key, nil
 	}
-	f, pos, _, err := w.prepare(parsed.file)
+	entry, ok := proof.entries[correctionRoot{source, metric, key}]
+	if !ok {
+		return "", refuse("%s: correction root %s for %s has no validated original trial reading", parsed.file, key, metric)
+	}
+	f, pos, _, err := w.prepare(entry.file)
 	if err != nil {
 		return "", err
-	}
-	writeIndex := -1
-	err = trial.DryRun(ctx, source, func(t *core.Tx) error {
-		resolved, err := resolveReadingKeys(t, source, f, pos)
-		if err != nil {
-			return err
-		}
-		if idx, ok := resolved.storedKeyWrite[key]; ok {
-			writeIndex = idx
-			return nil
-		}
-		return refuse("%s: correction root %s for %s has no validated original trial reading", parsed.file, key, metric)
-	})
-	if err != nil {
-		return "", err
-	}
-	if writeIndex < 0 {
-		return "", refuse("%s: ambiguous legacy correction root %s for %s", parsed.file, key, metric)
 	}
 	resolvedTarget, err := resolveReadingKeys(target, source, f, pos)
 	if err != nil {
 		return "", err
 	}
-	mapped := resolvedTarget.byWrite[writeIndex]
+	mapped := resolvedTarget.byWrite[entry.writeIndex]
 	if mapped == "" {
-		return "", refuse("%s: correction root %s did not map to a replayed reading", parsed.file, key)
+		return "", refuse("%s: correction root %s did not map to a replayed reading", entry.file, key)
 	}
 	return mapped, nil
-}
-
-func uniqueInts(in []int) []int {
-	seen := map[int]bool{}
-	var out []int
-	for _, n := range in {
-		if seen[n] {
-			continue
-		}
-		seen[n] = true
-		out = append(out, n)
-	}
-	return out
 }
 
 func describeResolvedKey(original, resolved string) string {

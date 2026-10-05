@@ -438,6 +438,37 @@ func TestLegacyReadingKeyCompatibility(t *testing.T) {
 		}
 	})
 
+	t.Run("same store already-present aliased event does not acquire nested writer", func(t *testing.T) {
+		f := setupReadingKeyFixture(t)
+		file := "Medical/EventAlias.md"
+		writeSource(t, f, file, "2031-10-01 value: 5 ng/mL\n")
+		mustLedger(t, f)
+		registerMetrics(t, f, Metric{Name: "ferritin", Unit: "ng/mL", Note: "Ferritin"})
+		root := recordReading(t, f, "ferritin", "2031-10-01", "", 5, file+"|reading|Ferritin|2031-10-01|1")
+		v := 4.0
+		if _, _, err := f.w.CorrectImported(ctx, f.s, "cli", root, &v); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.facts(t, file, map[string]any{"file": file, "writes": []any{readingFact("ferritin", "2031-10-01", "5 ng/mL", "2031-10-01 value: 5 ng/mL", nil)}}); err != nil {
+			t.Fatal(err)
+		}
+		markLedgerDone(t, f, file)
+		target := filepath.Join(t.TempDir(), "life.db")
+		if _, err := f.w.Replay(ctx, f.s, target); err != nil {
+			t.Fatal(err)
+		}
+		d, err := db.Open(target)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer d.Close()
+		short, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+		defer cancel()
+		if _, err := f.w.replayCorrections(short, &core.Store{DB: d}); err != nil {
+			t.Fatalf("already-present event alias lookup: %v", err)
+		}
+	})
+
 	t.Run("same store alias resolver does not acquire nested writer", func(t *testing.T) {
 		f := setupReadingKeyFixture(t)
 		file := "Medical/SameStore.md"
@@ -453,6 +484,32 @@ func TestLegacyReadingKeyCompatibility(t *testing.T) {
 		defer cancel()
 		if _, err := f.w.replayCorrections(short, f.s); err != nil {
 			t.Fatalf("same-store alias replay blocked/failed: %v", err)
+		}
+	})
+
+	t.Run("different store handles on same file do not nest writers", func(t *testing.T) {
+		f := setupReadingKeyFixture(t)
+		file := "Medical/HandleAlias.md"
+		writeSource(t, f, file, "2031-10-01 value: 5 ng/mL\n")
+		mustLedger(t, f)
+		registerMetrics(t, f, Metric{Name: "ferritin", Unit: "ng/mL", Note: "Ferritin"})
+		applyFacts(t, f, file, []any{readingFact("ferritin", "2031-10-01", "5 ng/mL", "2031-10-01 value: 5 ng/mL", nil)})
+		_, root, _ := importedReadingMetadata(t, f.s, "ferritin", "2031-10-01")
+		v := 4.0
+		if _, key, err := f.s.Correct(ctx, "cli", root, &v); err != nil {
+			t.Fatal(err)
+		} else if err := f.w.RecordCorrection(key); err != nil {
+			t.Fatal(err)
+		}
+		d, err := db.Open(f.trial)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer d.Close()
+		short, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+		defer cancel()
+		if _, err := f.w.replayCorrections(short, f.s, &core.Store{DB: d}); err != nil {
+			t.Fatalf("same-file alias proof tried to acquire another writer: %v", err)
 		}
 	})
 
