@@ -417,8 +417,11 @@ func (w *Workspace) MakeLedger() (int, error) {
 }
 
 // SourceFiles lists the source's files, /-separated and NFC, hidden folders and files left out, in order.
+// Two physical files that collapse to the same logical NFC path are refused before a ledger or vault plan is
+// written, because that path is the import identity.
 func (w *Workspace) SourceFiles() ([]string, error) {
 	var out []string
+	seen := map[string]string{}
 	err := filepath.WalkDir(w.Source, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -433,7 +436,13 @@ func (w *Workspace) SourceFiles() ([]string, error) {
 			return nil
 		}
 		rel, _ := filepath.Rel(w.Source, p)
-		out = append(out, norm.NFC.String(filepath.ToSlash(rel)))
+		physical := filepath.ToSlash(rel)
+		logical := norm.NFC.String(physical)
+		if prev, ok := seen[logical]; ok && prev != physical {
+			return refuse("%s and %s have the same logical source path %s", prev, physical, logical)
+		}
+		seen[logical] = physical
+		out = append(out, logical)
 		return nil
 	})
 	sort.Strings(out)

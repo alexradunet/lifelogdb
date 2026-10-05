@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -59,7 +60,9 @@ func (w *Workspace) TrialDB() string { return filepath.Join(w.Dir, "trial.db") }
 func (w *Workspace) file(name string) string { return filepath.Join(w.Dir, name) }
 
 // SourcePath resolves a source-relative path ("Journal/2031-04-12.md") and refuses one that leaves the source or
-// enters a hidden folder.
+// enters a hidden folder. The import's logical paths are NFC, but the physical file system may spell names in
+// another canonically equivalent form; an exact full physical path wins, otherwise every component must resolve to
+// exactly one complete physical path.
 func (w *Workspace) SourcePath(rel string) (string, error) {
 	rel = filepath.ToSlash(strings.TrimSpace(rel))
 	if rel == "" || strings.HasPrefix(rel, "/") || filepath.IsAbs(rel) || strings.Contains(rel, ":") {
@@ -73,11 +76,66 @@ func (w *Workspace) SourcePath(rel string) (string, error) {
 			return "", refuse("%q is in a hidden folder, which is never imported", rel)
 		}
 	}
-	p := filepath.Join(w.Source, filepath.FromSlash(rel))
-	if !strings.HasPrefix(p, w.Source+string(filepath.Separator)) {
+	exact := filepath.Join(w.Source, filepath.FromSlash(rel))
+	if !strings.HasPrefix(exact, w.Source+string(filepath.Separator)) {
 		return "", refuse("%q leaves the source", rel)
 	}
-	return p, nil
+	if _, err := os.Stat(exact); err == nil || !errors.Is(err, os.ErrNotExist) {
+		return exact, nil
+	}
+	resolved, ok, err := w.resolveSourcePath(rel)
+	if err != nil || ok {
+		return resolved, err
+	}
+	return exact, nil
+}
+
+func (w *Workspace) resolveSourcePath(rel string) (string, bool, error) {
+	candidates := []string{w.Source}
+	for _, part := range strings.Split(rel, "/") {
+		want := norm.NFC.String(part)
+		var next []string
+		for _, base := range candidates {
+			entries, err := os.ReadDir(base)
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			if err != nil {
+				return "", false, err
+			}
+			for _, e := range entries {
+				name := e.Name()
+				if strings.HasPrefix(name, ".") {
+					continue
+				}
+				if norm.NFC.String(name) == want {
+					next = append(next, filepath.Join(base, name))
+				}
+			}
+		}
+		if len(next) == 0 {
+			return "", false, nil
+		}
+		candidates = next
+	}
+	if len(candidates) == 1 {
+		return candidates[0], true, nil
+	}
+	sort.Strings(candidates)
+	return "", false, refuse("%q is ambiguous: multiple physical source paths have the same logical spelling (%s)", rel, strings.Join(sourceRelPaths(w.Source, candidates), ", "))
+}
+
+func sourceRelPaths(root string, paths []string) []string {
+	out := make([]string, 0, len(paths))
+	for _, p := range paths {
+		rel, err := filepath.Rel(root, p)
+		if err != nil {
+			out = append(out, p)
+			continue
+		}
+		out = append(out, filepath.ToSlash(rel))
+	}
+	return out
 }
 
 // ReadSource reads a source file, NFC-normalised (a file system may store names and text in NFD).

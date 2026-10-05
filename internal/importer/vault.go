@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -44,7 +45,7 @@ func (w *Workspace) LoadPlan() (*Plan, bool, error) {
 
 // IsVault says whether the source is a vault: it has an .obsidian folder, or a plan was made.
 func (w *Workspace) IsVault() bool {
-	return exists(w.Source+"/.obsidian") || exists(w.planPath())
+	return exists(filepath.Join(w.Source, ".obsidian")) || exists(w.planPath())
 }
 
 // PlanVault drafts plan.json against the database: every note becomes one page titled by its file name, a
@@ -71,8 +72,10 @@ func (w *Workspace) PlanVault(ctx context.Context, s *core.Store) (*Plan, error)
 		} else if src, err := w.ReadSource(f); err == nil {
 			n.Day = fileDay(f, src)
 			if n.Day == "" {
-				if st, err := os.Stat(w.Source + "/" + f); err == nil {
-					n.Day = st.ModTime().Format(time.DateOnly)
+				if p, err := w.SourcePath(f); err == nil {
+					if st, err := os.Stat(p); err == nil {
+						n.Day = st.ModTime().Format(time.DateOnly)
+					}
 				}
 			}
 		}

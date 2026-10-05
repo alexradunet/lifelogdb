@@ -8,7 +8,7 @@
 
 - **Date / planned at:** 2026-10-05, commit `726ffab`.
 - **Priority:** P2. **Effort:** M (including legacy path compatibility). **Risk:** MED (workspace path identity).
-- **Status:** TODO. **Depends on:** none. **Category:** bug. **Audit finding:** 11.
+- **Status:** IN REVIEW (owner). **Depends on:** none. **Category:** bug. **Audit finding:** 11.
 
 ## Why
 
