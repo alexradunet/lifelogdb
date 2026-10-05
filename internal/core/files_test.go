@@ -211,13 +211,20 @@ func TestFilePromotionDay(t *testing.T) {
 
 	s = fresh(t)
 	placeID(t, s, "Lakeside", Point{46.1, 7.2, 300, true})
+	if _, _, err := s.Capture(ctx, "cli", "2099-01-01", "Undated: ![[scan.jpg]]", nil); err != nil {
+		t.Fatal(err)
+	}
+	scanGhost, _ := s.PageID(ctx, "scan.jpg")
 	before := Today()
 	k, err = s.AddFile(ctx, "cli", FileIn{Title: "scan.jpg", SHA256: sha('5'), MIME: "image/jpeg", Lat: 46.1, Lon: 7.2, HasGPS: true, Preview: smallJPEG(t)})
 	after := Today()
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, _ = s.PageByID(ctx, k.ID)
+	p, _ = s.PageByID(ctx, scanGhost)
+	if !k.Promoted || k.ID != scanGhost {
+		t.Errorf("undated keep did not promote the ghost in place: %+v (ghost %d)", k, scanGhost)
+	}
 	if p.Day != before && p.Day != after {
 		t.Errorf("undated keep used day %q, outside [%q,%q]", p.Day, before, after)
 	}
