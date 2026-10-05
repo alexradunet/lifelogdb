@@ -273,7 +273,7 @@ func (i *inventory) addJSONFile(name, path, metric string) error {
 	if tok, err := dec.Token(); err != io.EOF || tok != nil {
 		return errPrivateInventory
 	}
-	if f.records == before && s.objects > 0 {
+	if f.records == before && !s.recognized {
 		f.unsupported++
 	}
 	return nil
@@ -285,6 +285,7 @@ type jsonScanner struct {
 	familyName string
 	metric     string
 	objects    int
+	recognized bool
 }
 
 type jsonSummary struct {
@@ -342,6 +343,9 @@ func (s *jsonScanner) scanValue(dec *json.Decoder, path, parentKey string) (json
 			return sum, nil
 		case '[':
 			s.recordShape(path, "array")
+			if s.isRecognizedContainer(path) {
+				s.recognized = true
+			}
 			for dec.More() {
 				child, err := s.scanValue(dec, path+"[]", parentKey)
 				if err != nil {
@@ -375,6 +379,31 @@ func (s *jsonScanner) scanValue(dec *json.Decoder, path, parentKey string) (json
 		return jsonSummary{}, errors.New("unknown JSON token")
 	}
 	return sum, nil
+}
+
+func (s *jsonScanner) isRecognizedContainer(path string) bool {
+	switch s.familyName {
+	case "Timeline Semantic Visits":
+		return path == "$.timelineObjects"
+	case "Timeline Records":
+		return path == "$.locations"
+	case "Timeline On-Device":
+		return path == "$.semanticSegments" || path == "$.timelineObjects"
+	case "Fit Sessions":
+		return path == "$" || path == "$.sessions"
+	case "Fitbit Sleep":
+		return path == "$" || path == "$.sleep"
+	case "Fitbit Steps":
+		return path == "$" || path == "$.steps"
+	case "Fitbit Heart Rate":
+		return path == "$" || path == "$.heartRate"
+	case "Fitbit Weight":
+		return path == "$" || path == "$.body-weight" || path == "$.weight"
+	case "Fitbit Exercise":
+		return path == "$" || path == "$.exercise"
+	default:
+		return false
+	}
 }
 
 func (s *jsonScanner) isRecord(path string, keys map[string]bool) bool {

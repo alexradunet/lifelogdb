@@ -101,6 +101,40 @@ func TestInventoryDoesNotInventStepsOverlapWhenFitStepsColumnIsAbsent(t *testing
 	}
 }
 
+func TestInventoryRecognizedEmptyContainersAreNotUnsupported(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "Fitbit/Sleep/sleep-empty.json", `{"sleep":[]}`)
+	writeFile(t, root, "Location History/Records/Records.json", `{"locations":[]}`)
+	writeFile(t, root, "Location History/Semantic Location History/2020/2020_JANUARY.json", `{"timelineObjects":[{"activitySegment":{"duration":{"startTimestamp":"2020-01-10T10:00:00Z"}}}]}`)
+	report, err := Inventory(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	families := familiesByName(report)
+	for _, name := range []string{"Fitbit Sleep", "Timeline Records", "Timeline Semantic Visits"} {
+		if got := families[name].UnsupportedFiles; got != 0 {
+			t.Fatalf("%s unsupported files = %d, want 0 for recognized empty/no-visit container; family=%+v", name, got, families[name])
+		}
+	}
+}
+
+func TestInventoryReportsScalarUnknownShape(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "Fitbit/Sleep/sleep-scalar.json", `"PRIVATE_MARKER scalar"`)
+	report, err := Inventory(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, _ := json.Marshal(report)
+	if strings.Contains(strings.ToLower(string(out)), strings.ToLower("PRIVATE_MARKER")) {
+		t.Fatalf("scalar unsupported-shape report leaked private detail: %s", out)
+	}
+	f := familiesByName(report)["Fitbit Sleep"]
+	if f.Records != 0 || f.UnsupportedFiles != 1 {
+		t.Fatalf("scalar unsupported shape = %+v, want zero records and one unsupported file", f)
+	}
+}
+
 func TestInventoryReportsUnsupportedShapeWithoutPrivateDetail(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, "Fitbit/Sleep/sleep-unknown.json", `{"unexpected":[{"when":"2020-01-10","PRIVATE_MARKER_DATA_KEY":"PRIVATE_MARKER value"}]}`)
