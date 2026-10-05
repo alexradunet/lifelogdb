@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -148,6 +149,13 @@ func run(o opts) error {
 
 func runContext(ctx context.Context, o opts) error {
 	cmd, args := o.args[0], o.args[1:]
+	if cmd == "serve" {
+		var err error
+		o.addr, err = api.LoopbackAddress(o.addr)
+		if err != nil {
+			return err
+		}
+	}
 	if cmd == "init" {
 		if o.db == "" && len(args) == 1 {
 			o.db = args[0]
@@ -215,10 +223,19 @@ func runContext(ctx context.Context, o opts) error {
 		if o.url != "" {
 			return errors.New("serve opens the file itself: drop --url")
 		}
-		srv := &http.Server{Addr: o.addr, Handler: handler, ReadHeaderTimeout: 10 * time.Second}
+		listener, err := net.Listen("tcp", o.addr)
+		if err != nil {
+			return err
+		}
+		defer listener.Close()
+		networkHandler, err := api.NetworkAuthority(listener.Addr(), handler)
+		if err != nil {
+			return err
+		}
+		srv := &http.Server{Addr: listener.Addr().String(), Handler: networkHandler, ReadHeaderTimeout: 10 * time.Second}
 		go func() { <-ctx.Done(); srv.Shutdown(context.Background()) }()
-		fmt.Fprintf(os.Stderr, "lifelog: serving %s on http://%s\n", o.db, o.addr)
-		if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+		fmt.Fprintf(os.Stderr, "lifelog: serving %s on http://%s\n", o.db, listener.Addr())
+		if err := srv.Serve(listener); !errors.Is(err, http.ErrServerClosed) {
 			return err
 		}
 		return nil

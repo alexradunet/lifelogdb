@@ -109,8 +109,14 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   `lifelog file` keeps several (paths, or a folder's photos and videos), with `--dry-run` and a report per day and
   per group of photos near no place. Nothing reads an export's own files: the photo itself is the source, whatever
   library it comes from.
-- **`serve` binds 127.0.0.1** and has no authentication: `life.db` holds health data, and the API is for this
-  machine. Browser-origin protection rejects cross-origin writes while keeping same-origin forms and non-browser
+- **`serve` is local-only** and has no authentication: `life.db` holds health data, and the API is for this
+  machine. The default bind is `127.0.0.1:7777`; `--addr` accepts numeric loopback IPs or `localhost` with a numeric
+  port (0 selects an ephemeral port, printed at startup). `localhost` binds to `127.0.0.1` without DNS resolution.
+  Network requests must name a loopback IP or ASCII case-insensitive `localhost` at the actual listener port, with
+  brackets for IPv6. An omitted HTTP port means 80, not the listener's port. Wildcard/empty-host/non-loopback binds,
+  custom hostnames, service-name ports and proxy deployments are unsupported. Forwarded headers confer no trust;
+  absolute-form request targets are refused. The network guard protects reads, previews and writes; in-process CLI/MCP dispatch is unchanged.
+  Browser-origin protection inside it rejects cross-origin writes while keeping same-origin forms and non-browser
   clients that send no browser origin headers working.
 
 ## Layout

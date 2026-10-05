@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -807,5 +808,101 @@ func TestImportSetupIntegrity(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestServeAuthorityAddress(t *testing.T) {
+	for _, tc := range []struct{ input, want string }{
+		{"127.0.0.1:7777", "127.0.0.1:7777"}, {"127.2.3.4:0", "127.2.3.4:0"}, {"localhost:0", "127.0.0.1:0"}, {"LOCALHOST:7777", "127.0.0.1:7777"}, {"[::1]:0", "[::1]:0"},
+	} {
+		for _, argv := range [][]string{{"serve", "--addr", tc.input}, {"--addr=" + tc.input, "serve"}} {
+			o, err := parse(argv)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := api.LoopbackAddress(o.addr)
+			if err != nil || got != tc.want {
+				t.Fatalf("%q got=%q err=%v", argv, got, err)
+			}
+		}
+	}
+	for _, addr := range []string{"", ":7777", "0.0.0.0:7777", "[::]:7777", "192.0.2.1:7777", "custom.invalid:7777", "localhoſt:7777", "localhost:http", "localhost:65536", "localhost:-1", "localhost:+1", "localhost.", "[::1%zone]:7777", "[localhost]:7777", "127.0.0.1", "localhost:"} {
+		// Address refusal precedes database opening, even when the file is absent.
+		err := runContext(context.Background(), opts{args: []string{"serve"}, addr: addr, db: filepath.Join(t.TempDir(), "absent.db")})
+		if err == nil || !strings.Contains(err.Error(), "serve address") {
+			t.Fatalf("addr=%q error=%v", addr, err)
+		}
+	}
+}
+
+func TestServeAuthorityMount(t *testing.T) {
+	// Run the real serve branch against a disposable synthetic database. Capture
+	// the printed ephemeral listener address rather than guessing a free port.
+	p := filepath.Join(t.TempDir(), "life.db")
+	if err := db.Init(p); err != nil {
+		t.Fatal(err)
+	}
+	read, write, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := os.Stderr
+	os.Stderr = write
+	defer func() { os.Stderr = old; read.Close(); write.Close() }()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	var serveErr error
+	go func() {
+		defer close(done)
+		serveErr = runContext(ctx, opts{args: []string{"serve"}, addr: "localhost:0", db: p, source: "cli"})
+	}()
+	defer func() {
+		cancel()
+		select {
+		case <-done:
+			if serveErr != nil {
+				t.Error(serveErr)
+			}
+		case <-time.After(10 * time.Second):
+			t.Error("serve shutdown timed out")
+		}
+	}()
+	line := make(chan string, 1)
+	go func() { s, _ := bufio.NewReader(read).ReadString('\n'); line <- s }()
+	var output string
+	select {
+	case output = <-line:
+	case <-done:
+		t.Fatalf("serve stopped before startup: %v", serveErr)
+	case <-time.After(10 * time.Second):
+		t.Fatal("serve startup timed out")
+	}
+	_, base, ok := strings.Cut(output, " on ")
+	if !ok {
+		t.Fatalf("startup: %q", output)
+	}
+	base = strings.TrimSpace(base)
+	if strings.HasSuffix(base, ":0") {
+		t.Fatalf("ephemeral port not reported: %s", base)
+	}
+	tr := &http.Transport{Proxy: nil}
+	defer tr.CloseIdleConnections()
+	hc := &http.Client{Transport: tr, Timeout: 10 * time.Second}
+	for _, tc := range []struct {
+		host string
+		want int
+	}{{"", 200}, {"arbitrary.invalid:7777", 403}} {
+		req, _ := http.NewRequest("GET", base+"/actions", nil)
+		if tc.host != "" {
+			req.Host = tc.host
+		}
+		res, err := hc.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != tc.want {
+			t.Fatalf("Host=%q status=%d", tc.host, res.StatusCode)
+		}
 	}
 }

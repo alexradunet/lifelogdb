@@ -8,7 +8,7 @@
 
 - **Planned at:** `0460379`, 2026-10-05.
 - **Priority:** P2. **Effort:** M. **Risk:** MED (legitimate listener/hostname compatibility).
-- **Status:** BLOCKED (owner approval of allowed authorities and custom/wildcard/proxy policy). Step 1 characterized. **Depends on:** implemented 034 origin protection.
+- **Status:** IN REVIEW (owner). Approved local-only policy implemented, parent-reviewed and integrated. **Depends on:** implemented 034 origin protection.
 - **Category:** security. **Deep-audit finding:** 19. **Confidence:** MED; arbitrary Host acceptance is source-confirmed, DNS-rebinding exploitation untested.
 
 ## Why
@@ -17,7 +17,7 @@ Cross-origin write protection does not authenticate the hostname used to reach a
 
 ## Current state and conventions
 
-`internal/api/handler.go:95–101` wraps routes in `http.NewCrossOriginProtection`, with no authority check. `cmd/lifelog/main.go:215` mounts that handler on the configured address. In-process clients intentionally use `http://lifelog.local` (`internal/client/client.go`), so a network-only guard must not break CLI/MCP dispatch.
+At the planning baseline, `internal/api/handler.go:95–101` wrapped routes in `http.NewCrossOriginProtection`, with no authority check. `cmd/lifelog/main.go:215` mounted that handler on the configured address. In-process clients intentionally use `http://lifelog.local` (`internal/client/client.go`), so a network-only guard must not break CLI/MCP dispatch.
 
 Follow `TestBrowserOriginProtection` for existing request-authenticity expectations and `httptest` for synthetic request matrices. [The application README](../../README.md) documents loopback/no-auth deployment; [non-goals](../architecture/non-goals.md) do not authorize a new authentication service.
 
@@ -42,18 +42,30 @@ Only paths in the drift command plus plan/index; `authority.go`/`authority_test.
 
 ## Done criteria
 
-- [ ] Approved authority policy is recorded; custom/wildcard cases are not guessed.
-- [ ] Every network route rejects unapproved Host/port before reading or writing data.
-- [ ] In-process clients and cross-origin write protection remain intact.
-- [ ] All gates pass; report distinguishes handler evidence from untested browser exploitation; index IN REVIEW (owner).
+- [x] Approved authority policy is recorded; custom/wildcard cases are not guessed.
+- [x] Every network route rejects unapproved Host/port before reading or writing data.
+- [x] In-process clients and cross-origin write protection remain intact.
+- [x] All gates pass; report distinguishes handler evidence from untested browser exploitation; index IN REVIEW (owner).
 
 ## Implementation evidence — 2026-10-05
 
 Step 1 ran on synthetic IPv4 and IPv6 loopback HTTP listeners: 72 cases covered nine authorities per listener and GET/headerless POST/matching-Origin POST/cross-origin POST. Arbitrary names and wrong ports reached GET and same-origin/headerless POST handlers; cross-origin POST remained 403. `--addr` parsing passes strings through (including custom/wildcard forms); parser acceptance is not proof of a successful bind or an approved deployment. No browser exploit, external DNS, proxy or non-loopback deployment was tested.
 
-`go test -mod=readonly -count=1 -v ./internal/api ./cmd/lifelog -run 'TestHTTPAuthority|TestServeAuthority|TestBrowserOriginProtection'`, client/MCP package tests and `git diff --check` passed in the isolated investigation worktree. Its baseline-acceptance tests are deliberately not integrated as hardened policy tests. No production guard was changed.
+`go test -mod=readonly -count=1 -v ./internal/api ./cmd/lifelog -run 'TestHTTPAuthority|TestServeAuthority|TestBrowserOriginProtection'`, client/MCP package tests and `git diff --check` passed in the isolated investigation worktree. Its baseline-acceptance tests are deliberately not integrated as hardened policy tests. No production guard was changed during that investigation.
 
-**Owner decision still required:** allow only loopback IPs and `localhost` at the listener port, rejecting custom hostnames, wildcard binds and proxy deployments until separately approved? No approval has been inferred. Steps 2–3 and their full gates remain blocked.
+**Owner approval:** the owner approved the local-only policy: loopback IPs and `localhost` at the actual listener port; reject wildcard/non-loopback binds, custom hostnames and unsupported proxy deployment configurations. Forwarded headers confer no authority, and in-process CLI/MCP dispatch remains unchanged. Steps 2–3 are authorized. This does not authorize opening, rebuilding or migrating the existing database; the owner intends to recreate it later, after downloading Google Takeout.
+
+### Approved implementation and parent review
+
+Rebaselined to `9c19b37`. `internal/api/authority.go` validates a numeric loopback/localhost bind before database opening and wraps only network serving. `localhost` binds deterministically to IPv4 loopback without DNS; IPv6 and IPv4-mapped loopback are supported, zones are refused, and port 0 uses the actual bound listener port. Decimal ports are compared numerically. Requests with no explicit HTTP port mean 80, never an arbitrary configured port. Non-loopback/custom authorities, malformed host/port syntax, trailing-dot names and wrong ports fail before the inner handler. Absolute-form request targets are refused because Go otherwise replaces Host from the target authority. Forwarded headers confer no trust. README documents the application policy; the storage contract is unchanged.
+
+Hardened tests use actual IPv4/IPv6 sockets, seven accepted and nineteen refused authorities across GET, POST and both preview paths, with exact inner-handler counters. Raw HTTP covers absolute-form target/wire-Host combinations and IPv6 zones. Further tests cover malformed authorities, origin/authority combinations, in-process dispatch, invalid startup configurations before database access, and the actual `serve` mount at a reported ephemeral port. These tests establish handler enforcement, not browser exploitability.
+
+Parent review reproduced and corrected two edge cases with failing regressions first: Unicode case folding admitted `localhoſt` as `localhost`, and absent ports incorrectly refused HTTP's default port 80. ASCII localhost matching and explicit default-port tests now enforce the approved authority/port identity without adding custom hosts. The startup test reads a complete banner line, bounds HTTP requests and waits for shutdown even on assertion failure.
+
+Parent gates passed after integration: the focus and package commands above; `go generate ./...`; `go vet -mod=readonly ./...`; `go test -mod=readonly -count=1 ./...`; `git diff --check`; and twenty repetitions of the authority/serve/origin focus command. Canonical/embedded schema and module files are unchanged. Tests used synthetic temporary databases; no existing owner database, real export or canonical replay was accessed. No browser/DNS-rebinding exploit, proxy deployment, race/fuzz or real-import validation is claimed. This remains an unauthenticated local service, not a defense against local clients already able to name an approved authority.
+
+An unrelated existing test flake surfaced once in the worker package gate: `TestBrowserMutationFeedback` treats any `bad` substring in its random hexadecimal receipt URL as private data. A receipt can randomly contain those characters. Reruns and final worker/parent gates passed unchanged; the feedback test was not loosened or changed in this plan.
 
 ## STOP conditions
 

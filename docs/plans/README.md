@@ -38,7 +38,7 @@ source), and live in git history
 | [060](060-canonical-metric-actions.md) | Use canonical metric identity for actions | P2 | S | — | IN REVIEW (owner) |
 | [061](061-redirect-stub-write-guards.md) | Guard redirect-stub mutations | P2 | M | — | IN REVIEW (owner) |
 | [062](062-commonmark-safe-vault-rewrite.md) | Preserve CommonMark code during vault rewriting | P2 | M | Serialize after 051/054 | IN REVIEW (owner) |
-| [063](063-http-authority-boundary.md) | Verify and constrain network HTTP authority | P2 | M | 034; explicit authority policy | BLOCKED (authority characterization complete; owner policy approval) |
+| [063](063-http-authority-boundary.md) | Verify and constrain network HTTP authority | P2 | M | 034; explicit authority policy | IN REVIEW (owner) |
 | [064](064-bounded-request-buffering.md) | Bound JSON and multipart metadata buffering | P2 | M | — | IN REVIEW (owner) |
 | [065](065-markdown-link-precedence.md) | Preserve ordinary Markdown link precedence | P2 | M | — | IN REVIEW (owner) |
 | [066](066-reading-root-scan-cost.md) | Batch reading-root lookup and day bucketing | P2 | M | 043; run after 038/056 | IN REVIEW (owner) |
@@ -52,20 +52,26 @@ REJECTED (with one-line rationale). An executor sets IN REVIEW (owner); the owne
 
 ## Implementation handoff (2026-10-05, based on `0460379`)
 
-Of the 26 actionable briefs, **25 are implemented, integrated and IN REVIEW (owner)**. This includes only Phase A
-of 029. **063 is BLOCKED on explicit network authority policy** after synthetic IPv4/IPv6 characterization;
-no production authority guard or browser exploit claim is implied. The owner-gated 029 B/C and 070 remain blocked.
+All **26 actionable briefs are implemented, integrated and IN REVIEW (owner)**. This includes only Phase A
+of 029. **063 implements the owner's approved local-only authority policy**, with synthetic IPv4/IPv6 tests and
+parent review; no browser exploit claim is implied. The owner-gated 029 B/C and 070 remain blocked; the owner's
+intended later database recreation authorizes no current database access or rebuild.
 
 Implementation used isolated GPT-6.1 Sol low-thinking workers with parent source/protocol review and integration.
 Review follow-ups fixed an escaped-existing-photo no-op refusal and unknown multipart-name retention, added complete
 status state snapshots and serialized rehearsal diagnostics, and repaired weak/stopped mutant witnesses. Approved
 narrow test-scope expansions are recorded in the affected briefs; no contract assertion or mutant credit was loosened.
 
-The combined working tree passed `go generate ./...`, `go vet -mod=readonly ./...`,
+The 25-plan batch passed `go generate ./...`, `go vet -mod=readonly ./...`,
 `go test -mod=readonly -count=1 ./...`, `git diff --check`, 20 writer-suite runs and three runs of all **190 mutants**.
-Photo/text/API and harness/named/identity/facts/dates integration checks passed too. Canonical/embedded schema and
-module files are unchanged. Main has no staged files or new commits; pre-existing plan inputs and `lifelog.exe~`
-were preserved. No real data, canonical replay, migrations or freeze work was performed.
+Photo/text/API and harness/named/identity/facts/dates integration checks passed too. It was committed and pushed as
+`9c19b37` at the owner's request. The subsequent 063 change passed generation, vet, the full uncached suite,
+package gates and twenty authority/serve/origin focus runs after parent integration and fixes for Unicode
+localhost matching and HTTP's implicit port 80. Its brief records an unrelated random-feedback-token test flake;
+final gates passed without changing that test. The owner requested publication of 063 after review;
+publication does not mark the plan DONE or authorize any database operation.
+Canonical/embedded schema and module files are unchanged. Pre-existing plan inputs and `lifelog.exe~` were preserved.
+No real data, canonical replay, migrations or freeze work was performed.
 
 Windows junction cases executed; ordinary symlink cases skipped individually when privileges were unavailable.
 No race/fuzz, browser exploitation, power-loss or real-import validation is claimed. Snapshot/source and metadata
