@@ -224,6 +224,22 @@ func (t *Tx) Capture(day, entry string, mood *float64) (id int64, r Sync, err er
 
 func isMood(v float64) bool { return v >= 1 && v <= 5 && v == math.Trunc(v) }
 
+func validateMeasurementValue(metric string, habit bool, value *float64) error {
+	if value == nil {
+		return nil
+	}
+	if math.IsNaN(*value) || math.IsInf(*value, 0) {
+		return invalid("value must be a finite number")
+	}
+	if text.TitleKey(metric) == "mood" && !isMood(*value) {
+		return invalid("mood is 1-5")
+	}
+	if habit && *value != 0 && *value != 1 {
+		return invalid("%s is a habit: 1 = done, 0 = not done (D24)", metric)
+	}
+	return nil
+}
+
 // dayPage is the id of a local day's page: found (revived when tombstoned), or created on its first write
 // (cookbook/capture.md).
 func (t *Tx) dayPage(day string) (int64, error) {
@@ -502,25 +518,23 @@ func (t *Tx) Record(m Reading) (id int64, err error) {
 	if m.TakenAt != "" && !IsInstant(m.TakenAt) {
 		return 0, invalid("taken_at %q is not a UTC instant like 2026-06-09T21:14:03.482Z", m.TakenAt)
 	}
-	if math.IsNaN(m.Value) || math.IsInf(m.Value, 0) {
-		return 0, invalid("value must be a finite number")
+	if err := validateMeasurementValue("", false, &m.Value); err != nil {
+		return 0, err
 	}
 	var metric int64
+	var metricTitle string
 	var habit bool
-	err = t.tx.QueryRow(`SELECT m.id, EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id) FROM pages m
+	err = t.tx.QueryRow(`SELECT m.id, m.title, EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id) FROM pages m
 		  JOIN entities e ON e.id = m.id AND e.deleted_at IS NULL WHERE m.title_key = ? AND m.entity_type = 'metric'`,
-		text.TitleKey(m.Metric)).Scan(&metric, &habit)
+		text.TitleKey(m.Metric)).Scan(&metric, &metricTitle, &habit)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, notFound("no metric %q: the owner registers metrics", m.Metric)
 	}
 	if err != nil {
 		return 0, err
 	}
-	if text.TitleKey(m.Metric) == "mood" && !isMood(m.Value) {
-		return 0, invalid("mood is 1-5")
-	}
-	if habit && m.Value != 0 && m.Value != 1 {
-		return 0, invalid("%s is a habit: 1 = done, 0 = not done (D24)", m.Metric)
+	if err := validateMeasurementValue(metricTitle, habit, &m.Value); err != nil {
+		return 0, err
 	}
 	var with any
 	if m.CapturedWith != 0 {
@@ -560,8 +574,18 @@ func (t *Tx) ReadingByKey(metric, key string) (value float64, ok, found bool, er
 
 // Correct supersedes a reading with a new value, or retracts it when value is nil (cookbook/correct-a-measurement.md).
 func (t *Tx) Correct(wrong int64, value *float64) (id int64, err error) {
-	if value != nil && (math.IsNaN(*value) || math.IsInf(*value, 0)) {
-		return 0, invalid("value must be a finite number")
+	var metricTitle string
+	var habit bool
+	err = t.tx.QueryRow(`SELECT m.title, EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id)
+	                       FROM measurements me JOIN pages m ON m.id = me.metric_id WHERE me.id = ?`, wrong).Scan(&metricTitle, &habit)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, notFound("no measurement %d", wrong)
+	}
+	if err != nil {
+		return 0, err
+	}
+	if err := validateMeasurementValue(metricTitle, habit, value); err != nil {
+		return 0, err
 	}
 	var v any
 	if value != nil {

@@ -103,6 +103,49 @@ func TestExistingTitleLinksToThePage(t *testing.T) {
 	}
 }
 
+func TestCorrectionDomainActions(t *testing.T) {
+	c, _ := fresh(t)
+	catalog, err := c.Catalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	actions := &api.Entity{Actions: catalog}
+	record := find(actions, "record")
+	correct := find(actions, "correct")
+	retract := find(actions, "retract")
+
+	mood := must(c.Do(record, map[string]string{"metric": "Mood", "day": "2026-10-01", "value": "3"}))
+	if _, err := c.Do(correct, map[string]string{"id": measurementID(mood), "value": "2.5"}); !clientStatus(err, 422) {
+		t.Fatalf("fractional mood correction: %v, want 422", err)
+	}
+	if _, err := c.Do(correct, map[string]string{"id": measurementID(mood), "value": "5"}); err != nil {
+		t.Fatalf("valid mood correction: %v", err)
+	}
+
+	if _, err := c.Do(find(actions, "register-metric"), map[string]string{"name": "api_walk"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Do(find(actions, "start-habit"), map[string]string{"name": "api_walk", "start_day": "2026-10-01"}); err != nil {
+		t.Fatal(err)
+	}
+	habit := must(c.Do(record, map[string]string{"metric": "api_walk", "day": "2026-10-01", "value": "1"}))
+	if _, err := c.Do(correct, map[string]string{"id": measurementID(habit), "value": "2"}); !clientStatus(err, 422) {
+		t.Fatalf("non-binary habit correction: %v, want 422", err)
+	}
+	if _, err := c.Do(retract, map[string]string{"id": measurementID(habit)}); err != nil {
+		t.Fatalf("habit retraction: %v", err)
+	}
+}
+
+func clientStatus(err error, want int) bool {
+	var ce *client.Error
+	return errors.As(err, &ce) && ce.Status == want
+}
+
+func measurementID(e *api.Entity) string {
+	return strings.TrimPrefix(href(e, "self"), "/measurements/")
+}
+
 func TestBrowserGetsHTMLAndSourceUI(t *testing.T) {
 	c, h := fresh(t)
 	req := httptest.NewRequest("POST", "/days/2026-09-29/capture", strings.NewReader("text=hello"))

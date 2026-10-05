@@ -200,6 +200,132 @@ func TestMeasurementsAreAppendOnly(t *testing.T) {
 	}
 }
 
+func TestCorrectionDomains(t *testing.T) {
+	s := fresh(t)
+	captured, _, err := s.Capture(ctx, "cli", "2026-10-01", "domain test", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.RegisterMetric(ctx, "cli", "focus", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.RegisterMetric(ctx, "cli", "evening_walk", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.StartHabit(ctx, "cli", "evening_walk", "2026-10-01", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.RegisterMetric(ctx, "cli", "winter_vitamin", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.StartHabit(ctx, "cli", "winter_vitamin", "2026-01-01", "2026-01-31"); err != nil {
+		t.Fatal(err)
+	}
+
+	assertRejectedCorrection := func(name string, r Reading, value float64) {
+		t.Helper()
+		id, err := s.Record(ctx, "cli", r)
+		if err != nil {
+			t.Fatalf("%s record: %v", name, err)
+		}
+		before := measurementRows(t, s)
+		if _, _, err := s.Correct(ctx, "cli", id, ptr(value)); status(err) != 422 {
+			t.Fatalf("%s correct to %g: %v, want 422", name, value, err)
+		}
+		if got := measurementRows(t, s); got != before {
+			t.Fatalf("%s wrote %d rows, want %d", name, got, before)
+		}
+		m, err := s.Measurement(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !m.Current || m.Value != r.Value {
+			t.Fatalf("%s current reading after rejection: current=%v value=%g, want %g", name, m.Current, m.Value, r.Value)
+		}
+	}
+
+	assertRejectedCorrection("mood above range", Reading{Metric: "mood", Day: "2026-10-01", Value: 3}, 6)
+	assertRejectedCorrection("fractional mood", Reading{Metric: "mood", Day: "2026-10-02", Value: 3}, 2.5)
+	assertRejectedCorrection("current habit", Reading{Metric: "evening_walk", Day: "2026-10-01", Value: 1}, 2)
+	assertRejectedCorrection("ended habit", Reading{Metric: "winter_vitamin", Day: "2026-02-05", Value: 0}, 2)
+
+	unknownRows := measurementRows(t, s)
+	if _, _, err := s.Correct(ctx, "cli", 987654321, ptr(1)); status(err) != 404 {
+		t.Fatalf("unknown measurement: %v, want 404", err)
+	}
+	if got := measurementRows(t, s); got != unknownRows {
+		t.Fatalf("unknown correction wrote %d rows, want %d", got, unknownRows)
+	}
+
+	lo, err := s.Record(ctx, "cli", Reading{Metric: "mood", Day: "2026-10-03", TakenAt: "2026-10-03T07:00:00.000Z", TZ: "Europe/Bucharest", Value: 3, CapturedWith: captured})
+	if err != nil {
+		t.Fatal(err)
+	}
+	loFix, _, err := s.Correct(ctx, "cli", lo, ptr(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := s.Measurement(ctx, loFix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Metric != "Mood" || m.Day != "2026-10-03" || m.TakenAt != "2026-10-03T07:00:00.000Z" || m.TZ != "Europe/Bucharest" || m.CapturedWith != captured || m.Supersedes != lo || !m.Current || m.Value != 1 {
+		t.Errorf("corrected row did not copy identity/provenance: %+v", m)
+	}
+
+	hi, err := s.Record(ctx, "cli", Reading{Metric: "mood", Day: "2026-10-04", Value: 4})
+	if err != nil {
+		t.Fatal(err)
+	}
+	hiFix, _, err := s.Correct(ctx, "cli", hi, ptr(5))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.Correct(ctx, "cli", hiFix, nil); err != nil {
+		t.Fatalf("nil retraction: %v", err)
+	}
+	d, err := s.Day(ctx, "2026-10-04")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(d.Readings) != 0 {
+		t.Fatalf("retracted boundary correction remains current: %+v", d.Readings)
+	}
+
+	start, err := s.Record(ctx, "cli", Reading{Metric: "mood", Day: "2026-10-05", Value: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	middle, _, err := s.Correct(ctx, "cli", start, ptr(4))
+	if err != nil {
+		t.Fatal(err)
+	}
+	end, _, err := s.Correct(ctx, "cli", middle, ptr(5))
+	if err != nil {
+		t.Fatalf("correction of a correction: %v", err)
+	}
+	if m, err := s.Measurement(ctx, end); err != nil || !m.Current || m.Supersedes != middle || m.Value != 5 {
+		t.Fatalf("second correction: %+v, %v", m, err)
+	}
+
+	focus, err := s.Record(ctx, "cli", Reading{Metric: "focus", Day: "2026-10-06", Value: 7})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.Correct(ctx, "cli", focus, ptr(2.5)); err != nil {
+		t.Fatalf("finite non-habit unitless correction: %v", err)
+	}
+}
+
+func measurementRows(t *testing.T, s *Store) int {
+	t.Helper()
+	var n int
+	if err := s.DB.R.QueryRowContext(ctx, `SELECT count(*) FROM measurements`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
 func TestQueryCannotWrite(t *testing.T) {
 	s := fresh(t)
 	if _, err := s.Query(ctx, "DELETE FROM link_kinds WHERE kind = 'related'", 10); status(err) != 422 {
