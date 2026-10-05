@@ -32,17 +32,56 @@ language-neutral, so a rule lives in the docs and the Go code cites it.
 | `tests/` | the validation suites (Go tests): every *executed* claim of the docs, run against the DDL in `docs/` and through the writer's own extraction and save | the docs |
 | `cmd/`, `internal/`, `tools/`, `go.mod` | the product: `lifelog` (Go) — hypermedia API, CLI, MCP server ([README](README.md)) | the docs |
 
+## Engineering priorities and working agreement
+
+Build for a maintainer fifty years from now: understandable code, replaceable dependencies and explicit contracts,
+not a promise that today's binary or toolchain lasts forever. Favor **consistent client behavior, ease of change and
+fast feedback**. Safeguards should catch failures, not create ceremony.
+
+- Read the relevant code, tests and contract before editing. Inspect the working tree; preserve unrelated and
+  uncommitted changes. Keep the diff focused on the requested task, with necessary local refactoring only.
+- Within that scope, proceed with implementation fixes and tests. Unless already authorized, explain the tradeoff
+  and ask before adding a dependency, making a broad architectural or externally visible behavior change, or
+  expanding scope. Contract changes follow the existing process below; routine implementation fixes need no new RFC.
+- Prefer the smallest understandable solution. Do not add layers, frameworks, generic repositories, configuration
+  knobs or speculative extension points for hypothetical needs. Do not reorganize working code just for uniformity.
+- Keep application engineering guidance here and application decisions in [README.md](README.md); the database
+  contract remains language-neutral in `docs/`. Explain non-obvious reasons and constraints, not what the syntax does.
+- Before finishing, inspect the diff and generated changes. Report what changed, exact checks run and their results,
+  and anything blocked or untested. Include checks in a commit message when committing; never imply unrun checks passed.
+
 ## Setup and checks
 
-| what | needs | run |
-|---|---|---|
-| everything: the application and the suites | Go ≥ 1.27 and nothing else (no cgo, no Python, no `sqlite3` CLI: SQLite is the pure-Go `modernc.org/sqlite`, 3.53.4 with FTS5 — the suites run migrations, which need 3.53; a writer needs only 3.51.3); network once, for the modules | `go generate ./... && go vet ./... && go test ./...` (about 25 s; `-short` skips the mutants) |
-| the suites alone | the same | `go test ./tests` ([tests/README.md](tests/README.md)) |
-| the diagrams | node, `npm i -g @mermaid-js/mermaid-cli`, a Chromium | `LIFELOG_MERMAID=1 go test ./tests -run TestMermaidRender` |
+Use the Go version required by [go.mod](go.mod). The ordinary build and baseline tests need no cgo, Python or
+`sqlite3` CLI: the pinned `modernc.org/sqlite` supplies SQLite. See [tests/README.md](tests/README.md) for its engine
+requirements and schema-evolution probes. Modules need network access once; baseline tests use synthetic local data,
+not external services or private files.
 
-- What to run after a change: anything — `go generate ./... && go test ./...` (`go generate` copies `schema.sql` into
-  `internal/db`, and a test fails while the copy is stale); a diagram → also the mermaid render. Every test must pass.
-  Say in the commit message what you ran.
+| tier | when / budget | run |
+|---|---|---|
+| focused feedback | while editing; aim for seconds | `go test ./internal/<package> -run '<TestName>'`; `go test -short ./...` for a broader quick check |
+| baseline | after **every** change, before completion; aim for about two minutes | `go generate ./... && go vet ./... && go test ./...` |
+| additional analysis | Go or dependency changes; also before releases | `staticcheck ./...` and `govulncheck ./...` |
+| order dependence | changes to shared state, test helpers or concurrency | `go test -count=1 -shuffle=on ./...`; replay the reported seed with `-shuffle=<seed>` |
+| races | extended checks on Linux; particularly concurrency changes | `CGO_ENABLED=1 go test -race -count=1 ./...` |
+| diagrams | diagram changes | `LIFELOG_MERMAID=1 go test ./tests -run TestMermaidRender` |
+
+- Run `gofmt` on changed Go files. `go generate` refreshes the embedded schema; never edit that copy directly.
+  The baseline includes mutants: `-short` is feedback, not a substitute for completion checks. These budgets are
+  design targets, not timeouts or permission to drop tests. Investigate slow suites instead of hiding coverage gaps.
+- Staticcheck and govulncheck are separate development tools, not application dependencies. Use reviewed, pinned
+  versions compatible with the toolchain; report versions. Do not silently install tools or introduce CI/tooling
+  configuration. If unavailable, report the check as not run. Use govulncheck's default text mode for exit-status
+  gating; successful JSON output is not a clean vulnerability result. Findings need resolution or explicit disposition,
+  not blanket suppressions.
+- The race check is a separate development environment: supported Linux target, cgo and a C compiler. It does not
+  change the pure-Go release build. Diagrams need `mmdc` and Chromium, as [the suite guide](tests/README.md) describes.
+- Support Windows and Linux while both are in use. Validate OS-sensitive paths, file operations and subprocesses on
+  both before release; identify the OS actually tested. Do not claim cross-platform coverage from cross-compilation.
+- Extended lifetime/stress, fuzz and benchmark runs may take 10–30 minutes and are explicit, not part of every edit.
+  Run the relevant extended checks for changes to the behavior they exercise; reserve the whole set for scheduled or
+  pre-release validation when available. Keep representative correctness cases in the baseline. Document a runner's
+  invocation when implementing it; specifying a workload here does not mean that runner exists or has passed.
 
 ## The one hard rule: no migrations until the schema freeze
 
@@ -71,6 +110,126 @@ schema is frozen ([D13](docs/decisions/D13-migrations-and-freeze.md)):
   the pages and the suites change together.
 - **One home per concept.** A fact that can be derived from another column is not stored beside it
   (a day page's day is its title; a place's name is its page title).
+
+## Go implementation
+
+- **Ordinary Go first.** Follow [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments): clear names,
+  early error returns, cohesive packages, explicit dependencies and small public surfaces. Keep supporting packages
+  under `internal/`. Prefer the standard library; justify a dependency by the complexity or risk it removes.
+- **Concrete types by default.** Put a small interface at the consumer that actually needs substitution; do not mirror
+  every struct with an interface or add a service/repository layer solely for mocks. Use generics only when they make
+  actual repeated logic simpler. Share domain behavior, not incidental similarities between unrelated operations.
+- **Preserve the existing application boundaries** ([README decisions](README.md#decisions)). Keep CLI, browser and
+  MCP adapters thin, using the shared API/action catalog rather than duplicating validation or business rules. Reuse
+  the existing core operations; a new surface must not become a second implementation of a write.
+- **Contexts and ownership.** Pass the operation's `context.Context` explicitly, first, through blocking calls and SQL.
+  Do not replace a request context with `Background` to evade cancellation, or use context values as dependency bags.
+  Prefer synchronous APIs. Every goroutine needs an owner, bounded work, a shutdown path and a way to await completion;
+  detached recovery work needs an explicitly justified lifetime.
+- **Errors are part of the behavior.** Check errors, including setup, scans, `rows.Err()`, commits and output flush/close
+  failures where data could be lost. Add useful operation context; use `%w` when exposing the cause is intentional and
+  `errors.Is`/`errors.As` for semantics. Do not classify errors by incidental strings. Return expected failures, not
+  panics; keep process exits at the executable boundary. Avoid duplicate logging and private bodies, readings or file
+  contents in diagnostics; do not expose internal errors indiscriminately to clients.
+- **Resources and transactions.** Close rows, files and response bodies and call cancellation functions with clear
+  ownership. Use existing transaction helpers; do not mix pool calls with an active transaction's operations or perform
+  avoidable network/file processing while holding a write transaction. Do not bypass connection setup for convenience
+  ([connection contract](docs/contract/connections.md)).
+- **Treat boundaries as untrusted.** Parameterize SQL values; allowlist dynamic identifiers. Bound request metadata,
+  decoding and concurrency; stream large payloads. Preserve the existing request, path and authority protections
+  ([application decisions](README.md#decisions)); lexical path cleaning alone is not filesystem containment. Test
+  malformed input and boundary refusals, not only well-formed examples.
+- **Portable and reproducible.** Use `filepath` for filesystem paths, not URL paths; avoid shell-dependent application
+  behavior. Respect platform differences in case, separators, symlinks and file replacement. Keep dependency and
+  toolchain updates deliberate, reviewed and tested; do not freeze vulnerable versions for the sake of longevity.
+
+## Tests that earn confidence
+
+- **Test-first where it matters.** For a bug, write a reproducer and observe the intended failure before the fix.
+  For risky writes, define invariants and failure cases before implementation. Elsewhere, test order is flexible, but
+  changed behavior needs tests before completion. If a pre-fix reproduction is impractical, explain why and what the
+  regression test proves. A setup failure is not a valid reproduction.
+- **Put tests with their subject.** Application tests live beside their packages as `*_test.go`; `tests/` validates
+  the database contract ([suite guide](tests/README.md)). Use existing helpers and the contract's own vectors. Name tests
+  by behavior; use table-driven subtests when cases share a structure, not as a requirement for every test.
+- **Test behavior, not scaffolding.** Assert results, persisted state and meaningful errors, including forbidden side
+  effects on failure. Prefer semantic assertions to whole-output snapshots, private call sequences or exact error
+  prose unless that representation is the contract. Check setup errors; use `t.Helper`, `t.Cleanup` and useful
+  got/want diagnostics. Fail the test from its test goroutine, not a background worker.
+- **Real SQLite for storage.** Use fresh files under `t.TempDir()`, the canonical/embedded DDL as appropriate and
+  production connection settings. Build application scenarios through the production writer. Direct SQL is appropriate
+  for isolated DDL probes, deliberate damage and clearly labeled bulk setup whose equivalence is checked; it must not
+  silently bypass the behavior under test. SQL mocks or `:memory:` alone cannot establish file-backed storage behavior.
+  Use narrow fakes for external boundaries or deliberate fault injection, not as a replacement for integration tests.
+- **Independent answers.** Use hand-checked expected values or a simpler reference model. Do not compute the expected
+  result using the production query, normalizer or algorithm being tested. Supplement row counts with relevant field,
+  relationship and ordering assertions. Integrity checks supplement these assertions; they do not replace them.
+- **Deterministic by construction.** Use fixed dates, local seeded RNGs and isolated temporary state; report seeds and
+  failing operations. Synchronize concurrent tests with signals, not sleeps. Use `testing/synctest` for self-contained
+  timing/concurrency logic, not as fake time for real database or filesystem I/O. Timeouts guard deadlocks, not speed.
+  Parallelize only isolated tests; avoid shared databases, mutable globals, environment or working-directory changes.
+- **Exercise failure paths according to risk.** For affected operations test validation boundaries, rollback after partial
+  work, cancellation, stale versions, repeated imports/retries, correction chains and reopen/recovery. Use subprocess
+  tests for process exits or interruption claims. Do not describe process-interruption tests as power-loss proof.
+- **Client parity is a first-class contract.** Run shared behavioral scenarios through applicable CLI, HTTP/HTML and
+  MCP entry points, including in-process and remote dispatch where relevant. Verify the same domain outcomes, validation
+  and persisted state, allowing only intentional presentation, provenance and permission differences. Assert those
+  differences too: owner-only actions must remain unavailable to agents. Include a small set of real transport/process
+  smoke tests; direct handler calls alone do not prove adapter wiring. Keep most exhaustive cases at their owning layer
+  rather than multiplying every test across every surface.
+- **Fuzz and property-test meaningful invariants.** Target text/Unicode parsing, metadata decoders, path handling,
+  import normalization and operation sequences. Keep seeds synthetic, cases independent and runs bounded; preserve
+  minimized failing inputs as regressions. Ordinary `go test` runs seed cases, not a fuzz campaign. Example of an
+  existing target: `go test ./internal/photo -run '^$' -fuzz '^FuzzRead$' -fuzztime=60s`.
+- **Coverage is a map, not a score.** Use coverage to find untested behavior, particularly failure paths; no global
+  percentage, test-count or one-test-per-function quota. Never weaken assertions, skip a failure, bless changed snapshots
+  or add retries just to get green. An incorrect test can change with evidence of the intended contract. Treat flakes
+  as defects. Contract-rule mutants remain governed by the documentation rules below.
+
+## Synthetic personas and scale
+
+When adding generators, use these agreed workloads. They exercise existing capabilities, not new schema requirements
+or a promise of performance. Generate from scratch, never from private exports or supposedly anonymized records.
+
+| persona | behavior to exercise |
+|---|---|
+| daily journaler | decades of day pages, people, places, links, search and edits |
+| measurement-heavy user | dense readings, habits, corrections, retractions and historical queries |
+| mixed-media keeper | notes, long transcripts, document text and selected photo previews |
+| messy importer | overlapping imports, duplicates, Unicode, malformed inputs, interruption and retries |
+
+- **Small:** representative cases of all four personas for routine correctness tests. **Lifetime:** a 50-year mixed
+  workload with 20 measurements/day, 3 files/day and about 4,000 imported notes in addition to day pages. **Stress:**
+  explicitly increased density, long text, high-degree links and import bursts; record the parameters, not just "large".
+- Make the logical dataset reproducible: fixed calendar anchor, seeds, generator version, operation order, payload-size
+  distributions and known answers. Include gaps, bursts, popular and rare links/terms, corrections and backdated data,
+  not just uniform append-only rows. On failure report the scenario, seed and operation; reduce it to a small regression.
+- Exercise end-to-end workflows and persisted results, not just successful bulk insertion. Keep a simple independent
+  oracle for expected queries/state. Label accelerated SQL loaders and compare manageable equivalent scenarios against
+  writer-built fixtures. Do not claim a direct-SQL load measures application import throughput.
+- Keep generators, small fixtures and regression inputs in git, not generated databases. Build databases in temporary
+  or explicitly selected ignored scratch storage with cleanup. Keep large preview-heavy runs opt-in and report disk
+  requirements; use valid synthetic payloads with representative sizes. Metadata-only runs are useful but must be
+  labeled: tiny repeated blobs do not establish realistic preview/storage scale.
+
+## Performance evidence, not speculative optimization
+
+- Measure important workflows at small and lifetime sizes: capture/save, day view, search/backlinks, historical
+  measurements, import/replay and snapshot/restore. Check correctness as well as cost. Establish reproducible baselines
+  before adding caches, indexes or concurrency; contract/schema changes still need the normal evidence and approval.
+- Keep fixture construction and correctness-oracle work outside timed query operations. Prefer `for b.Loop()` for new
+  Go benchmarks; report allocations. Fully consume results and check errors. Define whether preparation, commit,
+  decoding or preview creation is included. Reset mutable state outside timing or measure an explicitly bounded growth
+  trace; repeated iterations must not silently turn writes into no-ops or change the workload.
+- Compare repeated samples with `benchstat`, not one run; profile with `pprof` before optimizing. An existing benchmark:
+  `go test ./internal/importer -run '^$' -bench '^BenchmarkResolveReadingKeys$' -benchmem -count=10`.
+- Record scenario/seed, revision, Go and SQLite/driver versions, OS, hardware/storage, connection/maintenance settings
+  and cache conditions. Report latency, allocations, import throughput and storage (database, WAL/SHM and relevant
+  temporary files). Go allocation counts are not total process memory. Label warm versus fresh-process runs; do not
+  call a reopened database a cold-disk measurement without controlling the OS cache.
+- Use query plans and work counts to investigate scaling, not brittle exact `EXPLAIN QUERY PLAN` text assertions.
+  No universal wall-clock CI gate: introduce a hard budget only for an agreed usability requirement on a defined
+  environment. The 50-year workload is a test envelope, not evidence that any implementation already meets it.
 
 ## Editing the docs
 
@@ -163,3 +322,21 @@ executed by a suite in `tests/`, not assumed. If you add such a claim, write the
 the claim and mark it *executed* (the word means that a suite runs it). A suite must not depend on
 accidents of one SQLite build (page layout, compile options): it finds what it needs, or says plainly
 what it requires.
+
+## Engineering references
+
+These primary sources inform the application policies above; they do not override this repository's database contract
+or turn optional techniques into universal Go rules.
+
+- Go: [review comments](https://go.dev/wiki/CodeReviewComments), [module layout](https://go.dev/doc/modules/layout),
+  [error wrapping and API boundaries](https://go.dev/blog/go1.13-errors), [context](https://pkg.go.dev/context).
+- Testing: [test review comments](https://go.dev/wiki/TestComments), [testing APIs](https://pkg.go.dev/testing),
+  [fuzzing](https://go.dev/doc/security/fuzz/), [synctest](https://pkg.go.dev/testing/synctest),
+  [race detector and prerequisites](https://go.dev/doc/articles/race_detector).
+- Tools: [Staticcheck](https://staticcheck.dev/docs/),
+  [govulncheck and its limitations](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck).
+- Measurement: [benchmark loops](https://go.dev/blog/testing-b-loop),
+  [benchstat](https://pkg.go.dev/golang.org/x/perf/cmd/benchstat), [profiling](https://go.dev/doc/diagnostics),
+  [SQLite performance methodology](https://sqlite.org/cpu.html), [query-plan caveats](https://sqlite.org/eqp.html).
+- Model-based testing: [stateful reference-model example](https://hypothesis.readthedocs.io/en/latest/stateful.html)
+  (the technique, not a Python dependency).
