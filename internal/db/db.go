@@ -132,6 +132,11 @@ type DB struct {
 func Open(path string) (*DB, error) { return open(path, false) }
 
 func open(path string, keep bool) (*DB, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+	path = abs
 	if _, err := os.Stat(path); err != nil {
 		return nil, fmt.Errorf("no database at %s (create one with `lifelog init`): %w", path, err)
 	}

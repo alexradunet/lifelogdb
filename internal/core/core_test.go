@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"lifelog/internal/db"
 )
@@ -401,7 +402,10 @@ func TestQueryStatementBoundary(t *testing.T) {
 	s := fresh(t)
 	allowed := []string{
 		"SELECT ';' AS semi -- ; in a comment\n",
+		"SELECT \"semi;colon\" FROM (SELECT 1 AS \"semi;colon\") /* ; inside a block comment */",
 		"WITH x(v) AS (VALUES ('literal ;')) SELECT v FROM x; -- final terminator and comment",
+		"WITH backlinks(id, title) AS (SELECT p.id, p.title FROM pages p WHERE p.title = 'Nowhere') SELECT count(*) FROM backlinks",
+		"SELECT name FROM pragma_table_info('pages') WHERE name = 'title'",
 		"VALUES (1)",
 		"EXPLAIN QUERY PLAN SELECT * FROM pages",
 		"PRAGMA trusted_schema",
@@ -444,17 +448,39 @@ func TestQueryDoesNotLeakReaderState(t *testing.T) {
 	s.DB.R.SetMaxOpenConns(1) // force ordinary reads to reuse one pooled reader if Query touched it
 	assertReaderPragmas(t, s)
 
-	queries := []string{
-		"SELECT kind FROM link_kinds ORDER BY kind LIMIT 1",
-		"SELECT kind FROM link_kinds ORDER BY kind LIMIT 1; -- final terminator",
-		"SELECT kind FROM link_kinds ORDER BY kind",
-		"PRAGMA trusted_schema = ON",
-		"BEGIN; SELECT count(*) FROM pages",
+	queries := []struct {
+		sql       string
+		wantErr   bool
+		truncated bool
+	}{
+		{sql: "SELECT kind FROM link_kinds ORDER BY kind LIMIT 1"},
+		{sql: "SELECT kind FROM link_kinds ORDER BY kind LIMIT 1; -- final terminator"},
+		{sql: "SELECT kind FROM link_kinds ORDER BY kind", truncated: true},
+		{sql: "SELECT FROM pages", wantErr: true},
+		{sql: "PRAGMA trusted_schema = ON", wantErr: true},
+		{sql: "BEGIN; SELECT count(*) FROM pages", wantErr: true},
 	}
 	for _, q := range queries {
-		_, _ = s.Query(ctx, q, 1) // includes success, truncation and refused statements
+		r, err := s.Query(ctx, q.sql, 1) // includes success, truncation, SQLite syntax error and prevalidation refusal
+		if q.wantErr {
+			if status(err) != 422 {
+				t.Fatalf("%q status = %d (%v), want 422", q.sql, status(err), err)
+			}
+		} else if err != nil {
+			t.Fatalf("%q: %v", q.sql, err)
+		} else if r.Truncated != q.truncated {
+			t.Fatalf("%q truncated = %v, want %v", q.sql, r.Truncated, q.truncated)
+		}
 		assertReaderPragmas(t, s)
 	}
+
+	short, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	defer cancel()
+	_, err := s.Query(short, `WITH RECURSIVE cnt(x) AS (VALUES(0) UNION ALL SELECT x+1 FROM cnt WHERE x < 1000000000) SELECT sum(x) FROM cnt`, 1)
+	if err == nil || (status(err) != 422 && !errors.Is(err, context.DeadlineExceeded)) {
+		t.Fatalf("deadline-bound query error = %v (status %d), want cancellation", err, status(err))
+	}
+	assertReaderPragmas(t, s)
 
 	if _, _, err := s.CreatePage(ctx, "cli", "Fresh after query", ""); err != nil {
 		t.Fatal(err)
@@ -472,6 +498,57 @@ func assertReaderPragmas(t *testing.T, s *Store) {
 		if err := s.DB.R.QueryRowContext(ctx, p).Scan(&got); err != nil || got != want {
 			t.Fatalf("ordinary reader %s = %d, %v; want %d", p, got, err, want)
 		}
+	}
+}
+
+func TestQueryKeepsOpenedRelativeDatabaseAfterChdir(t *testing.T) {
+	root := t.TempDir()
+	original := filepath.Join(root, "original")
+	alternate := filepath.Join(root, "alternate")
+	for _, dir := range []string{original, alternate} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Init(filepath.Join(dir, "life.db")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeMetaValue(t, filepath.Join(original, "life.db"), "cwd-marker", "original")
+	writeMetaValue(t, filepath.Join(alternate, "life.db"), "cwd-marker", "alternate")
+
+	oldwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(oldwd)
+	if err := os.Chdir(original); err != nil {
+		t.Fatal(err)
+	}
+	d, err := db.Open("life.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if err := os.Chdir(alternate); err != nil {
+		t.Fatal(err)
+	}
+
+	s := &Store{d}
+	r, err := s.Query(ctx, `SELECT value FROM lifelog_meta WHERE key = 'cwd-marker'`, 1)
+	if err != nil || len(r.Rows) != 1 || r.Rows[0][0] != "original" {
+		t.Fatalf("ad-hoc query after chdir = %+v, %v; want original database", r, err)
+	}
+}
+
+func writeMetaValue(t *testing.T, p, key, value string) {
+	t.Helper()
+	d, err := db.Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if _, err := d.W.Exec(`INSERT INTO lifelog_meta(key, value) VALUES (?, ?)`, key, value); err != nil {
+		t.Fatal(err)
 	}
 }
 
