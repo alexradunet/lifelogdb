@@ -22,7 +22,7 @@ source), and live in git history
 | [044](044-source-filename-identity.md) | Resolve normalized source names to their physical filenames | P2 | M | — | IN REVIEW (owner) |
 | [045](045-literal-sqlite-paths.md) | Open literal filenames through escaped SQLite URIs | P1 | S | — | IN REVIEW (owner) |
 | [046](046-exclusive-database-init.md) | Reserve new database paths exclusively before initialization | P1 | S | 045 | TODO |
-| [047](047-file-promotion-day.md) | Fill the missing day when an embed ghost becomes a file | P2 | S | — | TODO |
+| [047](047-file-promotion-day.md) | Fill the missing day when an embed ghost becomes a file | P2 | S | — | IN REVIEW (owner) |
 
 Status values: TODO | IN PROGRESS | IN REVIEW (owner) | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale). An executor sets IN REVIEW (owner); the owner accepts or rejects. A plan that is DONE or REJECTED is deleted; git is the log.
