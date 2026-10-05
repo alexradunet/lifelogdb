@@ -83,13 +83,22 @@ func TestHEIFLocationBounds(t *testing.T) {
 	overlapIDAT := append([]byte{0}, item...)
 	repeated := make([]byte, (1<<19)+1)
 	unknown := map[string][]byte{
-		"truncated fields":       valid[:len(valid)-1],
-		"unsupported version":    heifWithLocations(3, 4, 4, 0, 0, item, heifLocation{id: 102, typ: "Exif", method: 1, extents: []heifExtent{{n: uint64(len(item))}}}),
-		"unsupported size":       heifWithLocations(1, 3, 4, 0, 0, item, heifLocation{id: 102, typ: "Exif", method: 1, extents: []heifExtent{{n: uint64(len(item))}}}),
-		"unsupported method":     heifWithLocations(1, 4, 4, 0, 0, item, heifLocation{id: 102, typ: "Exif", method: 2, extents: []heifExtent{{n: uint64(len(item))}}}),
-		"base plus offset wraps": heifWithLocations(1, 8, 8, 8, 0, overlapIDAT, heifLocation{id: 102, typ: "Exif", method: 1, base: ^uint64(0) - 1, extents: []heifExtent{{off: 2, n: uint64(len(item))}}}),
-		"extent end wraps":       heifWithLocations(1, 8, 8, 0, 0, make([]byte, 16), heifLocation{id: 102, typ: "Exif", method: 1, extents: []heifExtent{{off: ^uint64(0) - 1, n: 8}}}),
-		"over budget repeats":    heifWithLocations(1, 4, 4, 0, 0, repeated, heifLocation{id: 102, typ: "Exif", method: 1, extents: []heifExtent{{n: uint64(len(repeated))}, {n: uint64(len(repeated))}}}),
+		"truncated fields":        valid[:len(valid)-1],
+		"unsupported version":     heifWithLocations(3, 4, 4, 0, 0, item, heifLocation{id: 102, typ: "Exif", method: 1, extents: []heifExtent{{n: uint64(len(item))}}}),
+		"unsupported size":        heifWithLocations(1, 3, 4, 0, 0, item, heifLocation{id: 102, typ: "Exif", method: 1, extents: []heifExtent{{n: uint64(len(item))}}}),
+		"unsupported method":      heifWithLocations(1, 4, 4, 0, 0, item, heifLocation{id: 102, typ: "Exif", method: 2, extents: []heifExtent{{n: uint64(len(item))}}}),
+		"external data reference": heifWithLocations(1, 4, 4, 0, 0, item, heifLocation{id: 102, typ: "Exif", method: 1, dataRef: 7, extents: []heifExtent{{n: uint64(len(item))}}}),
+		"base plus offset wraps":  heifWithLocations(1, 8, 8, 8, 0, overlapIDAT, heifLocation{id: 102, typ: "Exif", method: 1, base: ^uint64(0) - 1, extents: []heifExtent{{off: 2, n: uint64(len(item))}}}),
+		"extent end wraps":        heifWithLocations(1, 8, 8, 0, 0, make([]byte, 16), heifLocation{id: 102, typ: "Exif", method: 1, extents: []heifExtent{{off: ^uint64(0) - 1, n: 8}}}),
+		"over budget repeats":     heifWithLocations(1, 4, 4, 0, 0, repeated, heifLocation{id: 102, typ: "Exif", method: 1, extents: []heifExtent{{n: uint64(len(repeated))}, {n: uint64(len(repeated))}}}),
+		"truncated non-target extents": heifWithLocations(1, 4, 4, 0, 0, item,
+			heifLocation{id: 101, typ: "hvc1", method: 0, extentCount: 3},
+			heifLocation{id: 102, typ: "Exif", method: 1, extents: []heifExtent{{n: uint64(len(item))}}},
+		),
+		"zero-width extent flood": heifWithLocations(1, 0, 0, 0, 0, nil,
+			heifLocation{id: 101, typ: "hvc1", method: 0, extentCount: 65535},
+			heifLocation{id: 102, typ: "Exif", method: 1, extents: []heifExtent{{}}},
+		),
 	}
 	for name, b := range unknown {
 		got := readPhoto(t, b)
@@ -104,6 +113,15 @@ func TestHEIFLocationBounds(t *testing.T) {
 	)
 	if got := readPhoto(t, withSkippedImage); got.Taken != want.Taken || !got.HasGPS {
 		t.Errorf("Exif after unavailable image item: %+v", got)
+	}
+
+	manyExtents := make([]heifExtent, 65535)
+	withManySkippedExtents := heifWithLocations(1, 4, 4, 0, 0, item,
+		heifLocation{id: 101, typ: "hvc1", method: 0, extents: manyExtents},
+		heifLocation{id: 102, typ: "Exif", method: 1, extents: []heifExtent{{n: uint64(len(item))}}},
+	)
+	if got := readPhoto(t, withManySkippedExtents); got.Taken != want.Taken || !got.HasGPS {
+		t.Errorf("Exif after many skipped extents: %+v", got)
 	}
 
 	budgetItem := heifExifItem(want, false, 1<<20-4-6-len(phototest.TIFF(want, false)))
@@ -131,11 +149,13 @@ func FuzzRead(f *testing.F) {
 type heifExtent struct{ off, n uint64 }
 
 type heifLocation struct {
-	id      uint32
-	typ     string
-	method  uint16
-	base    uint64
-	extents []heifExtent
+	id          uint32
+	typ         string
+	method      uint16
+	dataRef     uint16
+	base        uint64
+	extentCount int
+	extents     []heifExtent
 }
 
 func readPhoto(t *testing.T, b []byte) (m photo.Meta) {
@@ -172,9 +192,13 @@ func heifWithLocations(version byte, offSize, lenSize, baseSize, idxSize int, id
 		if version == 1 || version == 2 {
 			iloc = binary.BigEndian.AppendUint16(iloc, e.method)
 		}
-		iloc = binary.BigEndian.AppendUint16(iloc, 0)
+		iloc = binary.BigEndian.AppendUint16(iloc, e.dataRef)
 		iloc = appendSized(iloc, baseSize, e.base)
-		iloc = binary.BigEndian.AppendUint16(iloc, uint16(len(e.extents)))
+		extentCount := len(e.extents)
+		if e.extentCount != 0 {
+			extentCount = e.extentCount
+		}
+		iloc = binary.BigEndian.AppendUint16(iloc, uint16(extentCount))
 		for _, ex := range e.extents {
 			iloc = appendSized(iloc, idxSize, 0)
 			iloc = appendSized(iloc, offSize, ex.off)

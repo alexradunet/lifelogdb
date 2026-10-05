@@ -207,13 +207,24 @@ func itemData(file, iloc, idat []byte, item uint32) []byte {
 		if v == 1 || v == 2 {
 			method = r.n(2) & 15
 		}
-		r.n(2) // data_reference_index
+		dataRef := r.n(2)
 		base := r.n(baseSize)
 		extents := r.n(2)
 		if r.bad {
 			return nil
 		}
 		target := uint32(id) == item
+		extentBytes := idxSize + offSize + lenSize
+		if !target {
+			skip := extents * uint64(extentBytes)
+			if extentBytes != 0 && skip/uint64(extentBytes) != extents || !r.skip(skip) {
+				return nil
+			}
+			continue
+		}
+		if dataRef != 0 {
+			return nil
+		}
 		var out []byte
 		for range extents {
 			r.n(idxSize)
@@ -275,6 +286,15 @@ func (r *reader) n(size int) uint64 {
 	}
 	r.p += size
 	return v
+}
+
+func (r *reader) skip(n uint64) bool {
+	if n > uint64(len(r.b)-r.p) {
+		r.bad = true
+		return false
+	}
+	r.p += int(n)
+	return true
 }
 
 // parseTIFF reads IFD0 (orientation, the Exif and GPS IFD pointers), the Exif IFD (DateTimeOriginal) and the GPS IFD.
