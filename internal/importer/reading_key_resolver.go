@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"lifelog/internal/core"
 	"lifelog/internal/text"
@@ -18,6 +19,12 @@ type resolvedReadingKeys struct {
 }
 
 func resolveReadingKeys(t *core.Tx, source string, f *Facts, pos []int) (resolvedReadingKeys, error) {
+	return resolveReadingKeysWithLoader(source, f, pos, t.ImportedMeasurementRootsByFile)
+}
+
+type readingRootLoader func(source, file, metricKey string) ([]core.ImportedMeasurementRoot, error)
+
+func resolveReadingKeysWithLoader(source string, f *Facts, pos []int, load readingRootLoader) (resolvedReadingKeys, error) {
 	ids, err := readingIdentities(f, pos)
 	if err != nil {
 		return resolvedReadingKeys{}, err
@@ -28,17 +35,23 @@ func resolveReadingKeys(t *core.Tx, source string, f *Facts, pos []int) (resolve
 		byGroup[id.metricKey+"|"+id.day] = append(byGroup[id.metricKey+"|"+id.day], id)
 		res.byWrite[id.index] = id.canonicalKey
 	}
+	// Roots belong only to this call's checked facts and transaction snapshot.
+	rootsByMetricDay := map[string]map[string][]core.ImportedMeasurementRoot{}
 	for _, group := range byGroup {
-		roots, err := t.ImportedMeasurementRootsByFile(source, f.File, group[0].metricKey)
-		if err != nil {
-			return resolvedReadingKeys{}, err
-		}
-		var groupRoots []core.ImportedMeasurementRoot
-		for _, root := range roots {
-			if root.Day == group[0].day {
-				groupRoots = append(groupRoots, root)
+		metric := group[0].metricKey
+		byDay, loaded := rootsByMetricDay[metric]
+		if !loaded {
+			roots, err := load(source, f.File, metric)
+			if err != nil {
+				return resolvedReadingKeys{}, err
 			}
+			byDay = map[string][]core.ImportedMeasurementRoot{}
+			for _, root := range roots {
+				byDay[root.Day] = append(byDay[root.Day], root)
+			}
+			rootsByMetricDay[metric] = byDay
 		}
+		groupRoots := byDay[group[0].day]
 		if len(groupRoots) == 0 {
 			for _, id := range group {
 				res.setAlias(id.canonicalKey, id.canonicalKey, id.index)
@@ -294,41 +307,74 @@ func uniqueStrings(in []string) []string {
 	return out
 }
 
-func (w *Workspace) validateTrialReadingIdentity(ctx context.Context, trial *core.Store) error {
+// collectTrialReadingIdentityFailures only continues across independent file failures.
+// Workspace access and cancellation remain global aborts, never replay permission.
+func (w *Workspace) collectTrialReadingIdentityFailures(ctx context.Context, trial *core.Store) ([]Failure, error) {
 	lines, _, err := w.Ledger()
 	if err != nil {
-		return nil
+		return nil, err
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	// Check shared prerequisites separately so their failures are not attributed to files.
+	if g, err := w.Gate("rules.md"); err != nil {
+		return nil, err
+	} else if g != "approved" {
+		return nil, refuse("rules.md is %s: the owner approves it first (lifelog import approve rules)", g)
+	}
+	rules, err := w.Rules()
+	if err != nil {
+		return nil, err
+	}
+	approved, err := w.ApprovedMetrics()
+	if err != nil {
+		return nil, err
+	}
+	var failures []Failure
 	for _, line := range lines {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if line.State != "x" && line.State != "?" {
 			continue
 		}
-		facts, loadErr := w.LoadFacts(line.File)
-		if loadErr != nil {
-			return loadErr
-		}
-		hasReading := false
-		for _, wr := range facts.Writes {
-			if wr.Reading != nil {
-				hasReading = true
-				break
+		err := func() error {
+			f, err := w.LoadFacts(line.File)
+			if err != nil {
+				return err
 			}
+			hasReading := false
+			for _, wr := range f.Writes {
+				if wr.Reading != nil {
+					hasReading = true
+					break
+				}
+			}
+			if !hasReading {
+				return nil
+			}
+			src, err := w.ReadSource(line.File)
+			if err != nil {
+				return err
+			}
+			pos, errs := w.checkStatic(f, src, rules, approved)
+			if len(errs) > 0 {
+				return refuse("%s: %s", line.File, strings.Join(errs, "; "))
+			}
+			return trial.DryRun(ctx, rules.Source, func(t *core.Tx) error {
+				_, err := resolveReadingKeys(t, rules.Source, f, pos)
+				return err
+			})
+		}()
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
 		}
-		if !hasReading {
-			continue
-		}
-		f, pos, rules, err := w.prepare(line.File)
 		if err != nil {
-			return err
-		}
-		if err := trial.DryRun(ctx, rules.Source, func(t *core.Tx) error {
-			_, err := resolveReadingKeys(t, rules.Source, f, pos)
-			return err
-		}); err != nil {
-			return err
+			failures = append(failures, Failure{Step: "reading-identity", File: line.File, Error: err.Error()})
 		}
 	}
-	return nil
+	return failures, nil
 }
 
 type correctionProof struct {

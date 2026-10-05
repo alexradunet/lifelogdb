@@ -39,11 +39,12 @@ VALUES (:file_id, 'file', :file_title, :file_key, :day, :body);
 
 -- 1b) a plain page holds it: :file_id is that page. Its links stay (the id does not change); a tombstoned one is
 --     revived. Its text is kept: :body fills only an empty body, and when both have text, ROLLBACK — two texts are
---     never merged
+--     never merged. A missing day is filled independently of the text; an existing day stays.
 UPDATE entities SET entity_type = 'file', deleted_at = NULL   -- cascades to pages.entity_type
  WHERE id = :file_id AND entity_type = 'page'
    AND NOT EXISTS (SELECT 1 FROM links WHERE from_id = :file_id AND kind = 'redirect');
 UPDATE pages SET body = :body WHERE id = :file_id AND entity_type = 'file' AND body = '';
+UPDATE pages SET day = :day WHERE id = :file_id AND entity_type = 'file' AND day IS NULL;
 
 -- 2) either way, the files row: the original's hash and type, the picture
 INSERT INTO files(id, sha256, mime, preview) VALUES (:file_id, :sha256, :mime, :preview);

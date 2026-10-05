@@ -216,8 +216,7 @@ func (t *Tx) Capture(day, entry string, mood *float64) (id int64, r Sync, err er
 		return 0, r, err
 	}
 	if mood != nil {
-		_, err = t.tx.Exec(`INSERT INTO measurements(metric_id, day, value, source, captured_with_id, created_at)
-		                    SELECT id, ?, ?, ?, ?, `+Now+` FROM pages WHERE title_key = 'mood' AND entity_type = 'metric'`, day, *mood, t.Source, id)
+		_, err = t.Record(Reading{Metric: "Mood", Day: day, Value: *mood, CapturedWith: id})
 	}
 	return id, r, err
 }
@@ -278,8 +277,24 @@ func (t *Tx) SaveBody(id int64, body, version string) (Sync, error) {
 	return t.SetBody(id, body)
 }
 
+// refuseStubMutation keeps caller writes separate from the rename transition.
+func (t *Tx) refuseStubMutation(id int64) error {
+	var target int64
+	err := t.tx.QueryRow(`SELECT to_id FROM links WHERE from_id = ? AND kind = 'redirect'`, id).Scan(&target)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return conflict("page %d is a redirect stub: write to target %d instead", id, target)
+}
+
 // SetBody is SaveBody without the version check, for a writer that owns the body it sets (an import).
 func (t *Tx) SetBody(id int64, body string) (Sync, error) {
+	if err := t.refuseStubMutation(id); err != nil {
+		return Sync{}, err
+	}
 	if _, err := t.tx.Exec(`UPDATE pages SET body = ? WHERE id = ? AND body IS NOT ?`, body, id, body); err != nil {
 		return Sync{}, err
 	}
@@ -453,6 +468,12 @@ func (t *Tx) Link(from, to int64, kind, note string) (added bool, err error) {
 	if kind == "wikilink" || kind == "redirect" {
 		return false, invalid("%s links are written by saving a body or a rename, not directly", kind)
 	}
+	if err := t.refuseStubMutation(from); err != nil {
+		return false, err
+	}
+	if err := t.refuseStubMutation(to); err != nil {
+		return false, err
+	}
 	if kind == "at" {
 		var isDay bool
 		if err := t.tx.QueryRow(`SELECT coalesce((SELECT title = day FROM pages WHERE id = ?), 0)`, from).Scan(&isDay); err != nil {
@@ -486,6 +507,12 @@ func (t *Tx) Link(from, to int64, kind, note string) (added bool, err error) {
 func (t *Tx) Unlink(from, to int64, kind string) error {
 	if kind == "wikilink" || kind == "redirect" {
 		return invalid("%s links are removed by saving a body, not directly", kind)
+	}
+	if err := t.refuseStubMutation(from); err != nil {
+		return err
+	}
+	if err := t.refuseStubMutation(to); err != nil {
+		return err
 	}
 	res, err := t.tx.Exec(`DELETE FROM links WHERE from_id = ? AND to_id = ? AND kind = ?`, from, to, kind)
 	if err != nil {

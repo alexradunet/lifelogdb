@@ -28,3 +28,33 @@ func TestMarkdownLinksWhatNamesAPage(t *testing.T) {
 		}
 	}
 }
+
+// Whole-document expectations catch stolen destinations, nested anchors and leftover delimiters.
+func TestMarkdownLinkPrecedence(t *testing.T) {
+	for _, c := range []struct{ in, want string }{
+		{"[[Ana]](https://example.test)", `<p><a href="https://example.test">[Ana]</a></p>`},
+		{"[label [[Ana]] #run](https://example.test)", `<p><a href="https://example.test">label [[Ana]] #run</a></p>`},
+		{"[[Ana]][ref]\n\n[ref]: https://example.test", `<p><a href="https://example.test">[Ana]</a></p>`},
+		{"![[Ana]](photo.png)", `<p><img src="photo.png" alt="[Ana]"></p>`},
+		{"![[Ana]][pic]\n\n[pic]: photo.png", `<p><img src="photo.png" alt="[Ana]"></p>`},
+		{`[\[Ana\] &amp; Café](u)`, `<p><a href="u">[Ana] &amp; Café</a></p>`},
+		{"[[Ana *x*]]", `<p>[[Ana <em>x</em>]]</p>`},
+		{"[[Ana\nPopescu]]", "<p>[[Ana\nPopescu]]</p>"},
+		{"&#35;run ![[Café|A &amp; B]]", `<p><a href="/pages?title=run" class="wikilink">#run</a> <a href="/pages?title=Caf%C3%A9" class="wikilink embed"><img src="/previews?title=Caf%C3%A9" alt="A &amp; B" loading="lazy"></a></p>`},
+		{"![label [[Ana]] #run](photo.png)", `<p><img src="photo.png" alt="label [[Ana]] #run"></p>`},
+		{"[x](https://example.test/[[Ana]])", `<p><a href="https://example.test/%5B%5BAna%5D%5D">x</a></p>`},
+		{"[[Café|A &amp; B]]", `<p><a href="/pages?title=Caf%C3%A9" class="wikilink">A &amp; B</a></p>`},
+		{`\[\[Ana\]\]`, `<p><a href="/pages?title=Ana" class="wikilink">Ana</a></p>`},
+		{"&#91;&#91;Ana&#93;&#93;", `<p><a href="/pages?title=Ana" class="wikilink">Ana</a></p>`},
+		{"[[Ana|&lt;script&gt;]]", `<p><a href="/pages?title=Ana" class="wikilink">&lt;script&gt;</a></p>`},
+		{"[[Café]](u) [[Ana]]", `<p><a href="u">[Café]</a> <a href="/pages?title=Ana" class="wikilink">Ana</a></p>`},
+		{"[[Ana]](broken", `<p><a href="/pages?title=Ana" class="wikilink">Ana</a>(broken</p>`},
+		{"[[Ana] text](u)", `<p><a href="u">[Ana] text</a></p>`},
+		{"`[[Ana]]` [#run](javascript:bad)", `<p><code>[[Ana]]</code> <a href="">#run</a></p>`},
+		{"[[Ana]]  \n#run", "<p><a href=\"/pages?title=Ana\" class=\"wikilink\">Ana</a><br>\n<a href=\"/pages?title=run\" class=\"wikilink\">#run</a></p>"},
+	} {
+		if got := strings.TrimSpace(string(markdown(c.in))); got != c.want {
+			t.Errorf("%q: got %s; want %s", c.in, got, c.want)
+		}
+	}
+}

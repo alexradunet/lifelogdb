@@ -48,7 +48,7 @@ the document (a broken block makes a later step impossible) reports that as one 
 | `wikilinks_test.go` | `doc-save-contract` | the save contract as the docs print it: the vector table of contract/titles-and-wikilinks, cookbook/save-a-body run literally (and equal to a writer's own save after 400 random edits), cookbook/backlinks |
 | | `save-contract` | the save contract through a writer's own save against the DDL: invalid targets, the `SAVEPOINT` backstop, set equality, stubs, revival, 400 random edits against a rebuild, 4 concurrent writers, every vector |
 | | `title-fuzz` | the writer's title predicate equals the DDL's CHECKs on more than 40 000 generated strings |
-| `mutants_test.go` | `TestMutants` | 183 broken copies of the docs tree, one rule each; the suite that owns the rule must notice |
+| `mutants_test.go` | `TestMutants` | 190 broken copies of the docs tree, one rule each; a completed owning suite must fail the mutant's explicit rule witness |
 | `render_test.go` | `TestMermaidRender` | optional: every diagram renders |
 | `kit_test.go`, `suites_test.go` | | reading the tree (a page, the cookbook blocks by recipe key, an overlay of broken files for a mutant); fresh databases and the insert conventions (entity first, `RETURNING`, named entities); the runner |
 
@@ -62,6 +62,13 @@ in the 2075 table of contract/threat-model (`document` fails until both exist); 
 `CREATE` statement. A changed cookbook block or diagram: the suites that extract it will tell you. If a suite must
 change because the docs legitimately changed, change it in the same edit and say so in the commit message — a suite
 loosened to pass proves nothing. Add a mutant to `mutants_test.go` for a new rule, so the suite that owns it is shown
-to notice when it breaks.
+to notice when it breaks. Each mutant names an exact relevant expectation label in the registry; the runner retains
+failed labels separately from diagnostic details and credits only that named failure in a normally completed suite,
+after a clean baseline. Missing witnesses, unrelated failures and stopped suites receive no credit.
+`TestMutantWitness` checks these false-credit controls, including an unchanged mutation.
+
+The writer ordering probes use a zero-timeout lock refusal while the first transaction is open, then an explicit
+commit signal before the second writer resolves the existing row. Reader progress is tested with a known open
+snapshot and a 30-second deadlock guard, not a speed threshold. These probes do not measure automatic busy waiting.
 
 **What is not here:** power loss and real data have never been tested.

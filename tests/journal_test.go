@@ -44,6 +44,20 @@ func journal(s *S) {
 	s.K("...links it to what the entry names, and attaches the mood to it",
 		c.n("select count(*) from links l join pages p on p.id=l.to_id where l.from_id=? and p.title='Lifelog'", p["page_id"]) == 1 &&
 			c.tab("select captured_with_id from measurements") == val(p["page_id"]))
+	var moodInsert string
+	for _, st := range statements(s.d.Block("capture")) {
+		if strings.HasPrefix(strings.ToUpper(code(st)), "INSERT INTO MEASUREMENTS") {
+			moodInsert = st
+		}
+	}
+	mood := c.n("select id from pages where title_key='mood'")
+	c.must("UPDATE entities SET deleted_at="+NOW+" WHERE id=?", mood)
+	c.must(moodInsert, p)
+	s.K("cookbook/capture does not write tombstoned Mood", c.n("select count(*) from measurements") == 1)
+	c.must("UPDATE entities SET deleted_at=NULL WHERE id=?", mood)
+	c.must(moodInsert, p)
+	s.K("cookbook/capture writes revived Mood", c.n("select count(*) from measurements") == 2)
+
 	var sel, upd []string
 	for _, st := range statements(s.d.Block("capture")) {
 		switch u := strings.ToUpper(code(st)); {

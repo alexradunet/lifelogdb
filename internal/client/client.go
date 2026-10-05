@@ -3,6 +3,7 @@
 package client
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -36,8 +37,14 @@ func Remote(base, source string) *Client {
 type handlerTransport struct{ h http.Handler }
 
 func (t handlerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	if err := r.Context().Err(); err != nil {
+		return nil, err
+	}
 	rec := httptest.NewRecorder()
 	t.h.ServeHTTP(rec, r)
+	if err := r.Context().Err(); err != nil {
+		return nil, err
+	}
 	res := rec.Result()
 	res.Request = r
 	return res, nil
@@ -58,7 +65,14 @@ func (e *Error) Error() string {
 
 // Get fetches a resource by its href (a path such as /days/2026-09-29).
 func (c *Client) Get(href string) (*api.Entity, error) {
-	req, err := http.NewRequest("GET", c.base+href, nil)
+	return c.GetContext(context.Background(), href)
+}
+
+func (c *Client) GetContext(ctx context.Context, href string) (*api.Entity, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, "GET", c.base+href, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -99,6 +113,13 @@ func fill(a api.Action, values map[string]string) (string, url.Values, error) {
 // DoFiles submits an action as multipart/form-data: values as fields, and files (field name → path on disk)
 // streamed from disk, never held whole in memory.
 func (c *Client) DoFiles(a api.Action, values, files map[string]string) (*api.Entity, error) {
+	return c.DoFilesContext(context.Background(), a, values, files)
+}
+
+func (c *Client) DoFilesContext(ctx context.Context, a api.Action, values, files map[string]string) (*api.Entity, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	href, form, err := fill(a, values)
 	if err != nil {
 		return nil, err
@@ -109,9 +130,12 @@ func (c *Client) DoFiles(a api.Action, values, files map[string]string) (*api.En
 		}
 	}
 	pr, pw := io.Pipe()
-	defer pr.Close() // a handler that stops reading early must not leave the writer blocked
+	done := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() { pr.CloseWithError(ctx.Err()); pw.CloseWithError(ctx.Err()) })
+	defer func() { stop(); pr.Close(); pw.Close(); <-done }()
 	mw := multipart.NewWriter(pw)
 	go func() {
+		defer close(done)
 		pw.CloseWithError(func() error {
 			for k, vs := range form {
 				for _, v := range vs {
@@ -121,6 +145,9 @@ func (c *Client) DoFiles(a api.Action, values, files map[string]string) (*api.En
 				}
 			}
 			for name, path := range files {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
 				f, err := os.Open(path)
 				if err != nil {
 					return err
@@ -129,7 +156,10 @@ func (c *Client) DoFiles(a api.Action, values, files map[string]string) (*api.En
 				if err == nil {
 					_, err = io.Copy(part, f)
 				}
-				f.Close()
+				closeErr := f.Close()
+				if err == nil {
+					err = closeErr
+				}
 				if err != nil {
 					return err
 				}
@@ -137,25 +167,36 @@ func (c *Client) DoFiles(a api.Action, values, files map[string]string) (*api.En
 			return mw.Close()
 		}())
 	}()
-	req, err := http.NewRequest(a.Method, c.base+href, pr)
+	req, err := http.NewRequestWithContext(ctx, a.Method, c.base+href, pr)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", mw.FormDataContentType())
-	return c.send(req)
+	e, err := c.send(req)
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	return e, err
 }
 
 // Do submits an action with field values. Fields of a templated href ({id}) are filled from values.
 func (c *Client) Do(a api.Action, values map[string]string) (*api.Entity, error) {
+	return c.DoContext(context.Background(), a, values)
+}
+
+func (c *Client) DoContext(ctx context.Context, a api.Action, values map[string]string) (*api.Entity, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	href, form, err := fill(a, values)
 	if err != nil {
 		return nil, err
 	}
 	var req *http.Request
 	if a.Method == "GET" {
-		req, err = http.NewRequest("GET", c.base+href+"?"+form.Encode(), nil)
+		req, err = http.NewRequestWithContext(ctx, "GET", c.base+href+"?"+form.Encode(), nil)
 	} else {
-		req, err = http.NewRequest(a.Method, c.base+href, strings.NewReader(form.Encode()))
+		req, err = http.NewRequestWithContext(ctx, a.Method, c.base+href, strings.NewReader(form.Encode()))
 		if req != nil {
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		}
@@ -176,8 +217,13 @@ func hasField(a api.Action, name string) bool {
 }
 
 // Catalog is GET /actions: every action, with templated hrefs.
-func (c *Client) Catalog() ([]api.Action, error) {
-	e, err := c.Get("/actions")
+func (c *Client) Catalog() ([]api.Action, error) { return c.CatalogContext(context.Background()) }
+
+func (c *Client) CatalogContext(ctx context.Context) ([]api.Action, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	e, err := c.GetContext(ctx, "/actions")
 	if err != nil {
 		return nil, err
 	}

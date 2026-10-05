@@ -58,13 +58,6 @@ func (t *Tx) Rename(id int64, newTitle string) (int64, error) {
 		}
 		to = target.ID
 	}
-	if _, err := t.SetBody(id, "#REDIRECT [["+titleOf(target, newTitle)+"]]"); err != nil {
-		return 0, err
-	}
-	if _, err := t.tx.Exec(`INSERT INTO links(from_id, to_id, kind, created_at, source) VALUES (?, ?, 'redirect', `+Now+`, ?)`,
-		id, to, t.Source); err != nil {
-		return 0, err
-	}
 	rows, err := t.tx.Query(`SELECT to_id, kind, coalesce(note, '') FROM links
 	                          WHERE from_id = ? AND kind NOT IN ('wikilink', 'redirect')`, id)
 	if err != nil {
@@ -122,6 +115,14 @@ func (t *Tx) Rename(id int64, newTitle string) (int64, error) {
 		if _, err := t.Link(e.to, to, e.kind, e.note); err != nil {
 			return 0, err
 		}
+	}
+	// Finish the stub only after ordinary links have moved, within this same transaction.
+	if _, err := t.SetBody(id, "#REDIRECT [["+titleOf(target, newTitle)+"]]"); err != nil {
+		return 0, err
+	}
+	if _, err := t.tx.Exec(`INSERT INTO links(from_id, to_id, kind, created_at, source) VALUES (?, ?, 'redirect', `+Now+`, ?)`,
+		id, to, t.Source); err != nil {
+		return 0, err
 	}
 	return to, nil
 }

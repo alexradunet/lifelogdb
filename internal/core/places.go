@@ -138,19 +138,34 @@ func (t *Tx) placeFor(title string) (int64, error) {
 // embed shows a file in a day's page once: `![[title]]` appended after a blank line unless the page shows it
 // already, then the page's links synced (cookbook/place-of-a-photo.md).
 func (t *Tx) embed(dayID int64, title string) (bool, error) {
-	mark := "![[" + title + "]]"
-	res, err := t.tx.Exec(`UPDATE pages SET body = body || CASE WHEN body = '' THEN '' ELSE char(10, 10) END || ?
-	                        WHERE id = ? AND instr(body, ?) = 0`, mark, dayID, mark)
-	if err != nil {
-		return false, err
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return false, nil
-	}
 	var body string
 	if err := t.tx.QueryRow(`SELECT body FROM pages WHERE id = ?`, dayID).Scan(&body); err != nil {
 		return false, err
 	}
+	if text.HasEmbed(body, title) {
+		return false, nil
+	}
+	body += func() string {
+		if body == "" {
+			return ""
+		}
+		return "\n\n"
+	}() + "![[" + title + "]]"
+	keys, _, _ := text.Targets(body, "")
+	named := false
+	for _, key := range keys {
+		if key == text.TitleKey(title) {
+			named = true
+		}
+	}
+	if !text.HasEmbed(body, title) || !named {
+		return false, invalid("automatic photo embed cannot render and link here; edit the day's Markdown before keeping the photo")
+	}
+	_, err := t.tx.Exec(`UPDATE pages SET body = ? WHERE id = ?`, body, dayID)
+	if err != nil {
+		return false, err
+	}
+
 	_, err = t.syncWikilinks(dayID, body)
 	return true, err
 }
@@ -177,3 +192,24 @@ func MapLink(lat, lon float64) string {
 
 // round6 is a coordinate as reported: six decimals, about 10 cm.
 func round6(x float64) float64 { return math.Round(x*1e6) / 1e6 }
+
+func automaticEmbedTitle(title string) error {
+	mark := "![[" + title + "]]"
+	keys, _, _ := text.Targets(mark, "")
+	if !text.HasEmbed(mark, title) || len(keys) != 1 || keys[0] != text.TitleKey(title) {
+		return invalid("cannot automatically embed %q: give a new file an explicit representable title; an existing file's handle is not renamed", title)
+	}
+	return nil
+}
+
+func (t *Tx) preflightEmbed(day, title string) error {
+	var body string
+	err := t.tx.QueryRow(`SELECT body FROM pages WHERE title_key = ?`, day).Scan(&body)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	if err == nil && text.HasEmbed(body, title) {
+		return nil
+	}
+	return automaticEmbedTitle(title)
+}

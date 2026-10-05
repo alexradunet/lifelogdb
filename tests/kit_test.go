@@ -220,15 +220,16 @@ func (d *Docs) Block(key string) string { m, _ := d.Blocks(); return m[key] }
 
 // S is one run of one suite: the tree under test, its expectations, and a scratch folder.
 type S struct {
-	name  string
-	d     *Docs
-	ddl   string
-	dir   string
-	ok, n int
-	fails []string
-	mu    sync.Mutex
-	open  []*sql.DB
-	seq   int
+	name         string
+	d            *Docs
+	ddl          string
+	dir          string
+	ok, n        int
+	fails        []string
+	failedLabels []string
+	mu           sync.Mutex
+	open         []*sql.DB
+	seq          int
 }
 
 // K records one expectation; the label states the expected outcome.
@@ -243,6 +244,7 @@ func (s *S) K(label string, cond bool, detail ...any) bool {
 		if len(detail) > 0 {
 			d = " " + clip(fmt.Sprintf("%v", detail), 300)
 		}
+		s.failedLabels = append(s.failedLabels, label)
 		s.fails = append(s.fails, label+d)
 	}
 	return cond

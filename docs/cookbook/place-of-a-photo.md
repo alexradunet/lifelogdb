@@ -33,7 +33,16 @@ SELECT id, title, link_days, d2
 
 **Link the day and show the photo in it**, in one transaction — the keep's own when the photo is new. `:place_id` is the
 place matched; when its `link_days` is 0 the `at` link is skipped. `:file_title` is the photo's page title; when the photo
-has no picture the embed is skipped.
+has no picture the embed is skipped. Before any keep writes, when a picture and an explicit day require a new embed,
+preflight the actual selected file title (including an already-kept original's stored title) using the unchanged
+[titles and wikilinks](../contract/titles-and-wikilinks.md) extraction and rendering semantics. If automatic markup
+cannot name that handle, refuse the whole keep, including promotion, preview fill and place/day writes, requesting
+an explicit representable title for a new file; never rename an existing handle. Keeps needing no embed remain allowed.
+
+The writer binds `:append_embed` to 1 only when parsed CommonMark rendering contains no wiki embed naming the file's
+canonical title identity. Aliases and NFC/case equivalents count; code, ordinary Markdown links/images and plain
+wikilinks do not. Check that the proposed append actually renders the intended embed in the existing body context;
+otherwise refuse and roll back the keep. Preserve existing body bytes. Dry runs apply the same checks without writes.
 
 ```sql
 BEGIN IMMEDIATE;
@@ -50,7 +59,7 @@ VALUES (:photo_day_id, :place_id, 'at', strftime('%Y-%m-%dT%H:%M:%fZ','now'), :s
 ON CONFLICT(from_id, to_id, kind) DO NOTHING;
 -- the photo in its day, once: after a blank line, unless the page shows it already
 UPDATE pages SET body = body || CASE WHEN body = '' THEN '' ELSE char(10, 10) END || '![[' || :file_title || ']]'
- WHERE id = :photo_day_id AND instr(body, '![[' || :file_title || ']]') = 0;
+ WHERE id = :photo_day_id AND :append_embed = 1;
 -- the body names the photo: the link sync of cookbook/save-a-body.md runs here for :photo_day_id
 COMMIT;
 ```

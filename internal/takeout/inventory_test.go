@@ -271,3 +271,57 @@ func hasOverlap(report *Report, metric, month string) bool {
 	}
 	return false
 }
+
+func TestInventoryExtractionRootIncludesSiblingTimeline(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "Takeout/Fitbit/Sleep/sleep-PRIVATE_MARKER.json", `{"sleep":[{"startTime":"2020-01-01","PRIVATE_MARKER":"PRIVATE_MARKER"}]}`)
+	writeFile(t, root, "Timeline.json", `{"semanticSegments":[{"startTime":"2020-01-01","visit":{},"PRIVATE_MARKER":"PRIVATE_MARKER"}]}`)
+	writeFile(t, root, "Takeout/Google Photos/PRIVATE_MARKER.json", `{`)
+	direct, err := Inventory(filepath.Join(root, "Takeout"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrapped, err := Inventory(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if familiesByName(wrapped)["Timeline On-Device"].Records != 1 {
+		t.Error("sibling Timeline omitted")
+	}
+	if familiesByName(direct)["Fitbit Sleep"].Records != 1 || familiesByName(wrapped)["Fitbit Sleep"].Records != 1 {
+		t.Error("wrapped family omitted or duplicated")
+	}
+	if strings.Contains(wrapped.String(), "PRIVATE_MARKER") {
+		t.Fatal("private marker leaked")
+	}
+}
+
+func TestInventoryPopulatedContainersAndExerciseOverlap(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "Fitbit/Sleep/sleep-PRIVATE_MARKER.json", `{"sleep":[{"PRIVATE_MARKER":"PRIVATE_MARKER"}]}`)
+	writeFile(t, root, "Fitbit/Physical Activity/exercise-PRIVATE_MARKER.json", `{"exercise":[{"startTime":"2020-01-10","PRIVATE_MARKER":"PRIVATE_MARKER"},{"PRIVATE_MARKER":"PRIVATE_MARKER"}]}`)
+	writeFile(t, root, "Fit/Sessions/PRIVATE_MARKER.csv", "Start time,PRIVATE_MARKER\n2020-01-10,PRIVATE_MARKER\n")
+	writeFile(t, root, "Fit/Sessions/PRIVATE_MARKER.json", `{"sessions":[{"startTime":"2020-02-10","PRIVATE_MARKER":"PRIVATE_MARKER"}]}`)
+	writeFile(t, root, "Fitbit/Physical Activity/exercise-more.json", `[{"startTime":"2020-02-10"},{"startTime":"2020-03-10"}]`)
+	writeFile(t, root, "Fit/Sessions/missing.csv", "PRIVATE_MARKER\n2020-03-10\n")
+	writeFile(t, root, "Fit/Sessions/unknown.json", `{"sessions":[{"PRIVATE_MARKER":"2020-03-10"}]}`)
+	r, err := Inventory(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := familiesByName(r)
+	if f["Fitbit Sleep"].UnsupportedFiles != 1 || f["Fitbit Exercise"].UnsupportedFiles != 1 || f["Fit Sessions"].UnsupportedFiles != 1 {
+		t.Errorf("unsupported populated/mixed contents: %+v", r.Families)
+	}
+	for _, month := range []string{"2020-01", "2020-02"} {
+		if !hasOverlap(r, "exercise", month) {
+			t.Errorf("missing exercise overlap %s", month)
+		}
+	}
+	if hasOverlap(r, "exercise", "2020-03") {
+		t.Error("invented overlap")
+	}
+	if strings.Contains(r.String(), "PRIVATE_MARKER") {
+		t.Fatal("private marker leaked")
+	}
+}

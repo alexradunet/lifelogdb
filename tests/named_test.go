@@ -1,9 +1,12 @@
 package tests
 
 import (
+	"context"
+	"errors"
 	"regexp"
 	"strings"
 
+	"lifelog/internal/core"
 	"lifelog/internal/text"
 )
 
@@ -114,12 +117,11 @@ func named(s *S) {
 		mid := c.capture("Today I met [[Ana Example]]", "2026-09-30")
 		gid := c.n("select id from pages where title_key='ana example'")
 		s.K("step 0 finds the ghost the day page made, as a plain page", c.tab(sel0[0], P{"handle_key": "ana example"}) == ids(gid)+"|page|None|0")
-		for _, st := range promo {
-			if _, e := c.runBlock(st, P{"ghost_id": gid}, nil); e != nil {
-				stop("person-or-place promotion: %v", e)
-			}
+		_, promotionErr := c.runBlock(strings.Join(promo, "\n"), P{"ghost_id": gid}, nil)
+		if promotionErr != nil {
+			c.tryx("ROLLBACK")
 		}
-		s.K("the promotion block turns it into a person, one id", c.tab("select e.entity_type, pe.name from entities e join people pe using(id) where id=?", gid) == "person|Ana Example")
+		s.K("the promotion block turns it into a person, one id", promotionErr == nil && c.tab("select e.entity_type, pe.name from entities e join people pe using(id) where id=?", gid) == "person|Ana Example", promotionErr)
 		s.K("...and the old day page already names her, no re-save needed (cookbook/days-that-name)", eq(c.col(s.d.Block("days-that-name"), P{"entity_id": gid}), []string{"2026-09-30"}))
 		s.K("promoting a page that is already a person changes no row, and the people insert fails", c.tryx(promo[1], P{"ghost_id": gid}) == "OK" &&
 			c.n("select changes()") == 0 && err(c.tryx(promo[2], P{"ghost_id": gid})))
@@ -204,7 +206,15 @@ func named(s *S) {
 	resave := func() {
 		for _, r := range c.rows("select id, body from pages") {
 			if r[1] != "" {
-				c.editBody(r[0].(int64), r[1].(string))
+				id := r[0].(int64)
+				if id == bb {
+					links := c.tab("select from_id, to_id, kind from links where from_id=? or to_id=? order by 1,2,3", id, id)
+					e := c.store().Do(context.Background(), "ui", func(tx *core.Tx) error { _, e := tx.SetBody(id, r[1].(string)); return e })
+					var refusal *core.Error
+					s.K("a redirect stub refuses resave and preserves its body and links", errors.As(e, &refusal) && refusal.Status == 409 && c.str("select body from pages where id=?", id) == r[1].(string) && c.tab("select from_id, to_id, kind from links where from_id=? or to_id=? order by 1,2,3", id, id) == links)
+				} else {
+					c.editBody(id, r[1].(string))
+				}
 			}
 		}
 	}

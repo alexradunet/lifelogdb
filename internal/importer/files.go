@@ -422,20 +422,28 @@ func (w *Workspace) MakeLedger() (int, error) {
 func (w *Workspace) SourceFiles() ([]string, error) {
 	var out []string
 	seen := map[string]string{}
-	err := filepath.WalkDir(w.Source, func(p string, d fs.DirEntry, err error) error {
+	root, err := os.OpenRoot(w.Source)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	err = fs.WalkDir(root.FS(), ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if strings.HasPrefix(d.Name(), ".") && p != w.Source {
+		if strings.HasPrefix(d.Name(), ".") && p != "." {
 			if d.IsDir() {
-				return filepath.SkipDir
+				return fs.SkipDir
 			}
 			return nil
 		}
 		if d.IsDir() {
 			return nil
 		}
-		rel, _ := filepath.Rel(w.Source, p)
+		if _, err := root.Stat(filepath.FromSlash(p)); err != nil {
+			return err
+		}
+		rel := p
 		physical := filepath.ToSlash(rel)
 		logical := norm.NFC.String(physical)
 		if prev, ok := seen[logical]; ok && prev != physical {

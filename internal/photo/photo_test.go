@@ -247,3 +247,37 @@ func heifTestBox(typ string, body ...[]byte) []byte {
 	binary.BigEndian.PutUint32(b, uint32(len(b)))
 	return b
 }
+
+func TestGPSReferences(t *testing.T) {
+	for _, little := range []bool{false, true} {
+		for _, lat := range []float64{-12, 0, 12} {
+			for _, lon := range []float64{-34, 0, 34} {
+				want := photo.Meta{Taken: "2026-10-05 12:34:56", Orientation: 6, Lat: lat, Lon: lon, HasGPS: true}
+				for name, b := range map[string][]byte{"JPEG": phototest.JPEG(8, 8, want, little), "HEIC mdat": phototest.HEIC(want, little, false), "HEIC idat": phototest.HEIC(want, little, true)} {
+					got := photo.Read(b)
+					if got.HasGPS != (lat != 0 || lon != 0) || !near(got.Lat, lat) || !near(got.Lon, lon) {
+						t.Fatalf("%s little=%v valid: %+v", name, little, got)
+					}
+					for _, axis := range []uint16{1, 3} {
+						for _, bad := range []struct {
+							name, value string
+							typ         uint16
+							count       uint32
+							absent      bool
+						}{
+							{"absent", "", 2, 2, true}, {"empty", "", 2, 2, false}, {"wrong axis", "E\x00", 2, 2, false}, {"text", "South", 2, 4, false}, {"prefix", "Sx", 2, 2, false}, {"type", "S\x00", 1, 2, false}, {"short count", "S", 2, 1, false}, {"long count", "S\x00\x00", 2, 3, false}, {"truncated", "", 2, 8, false}, {"lowercase", "s\x00", 2, 2, false},
+						} {
+							if axis == 3 && bad.name == "wrong axis" {
+								bad.value = "N\x00"
+							}
+							got = photo.Read(phototest.GPSReference(b, axis, bad.typ, bad.count, bad.value, bad.absent))
+							if got.HasGPS || got.Lat != 0 || got.Lon != 0 || got.Taken != want.Taken || got.Orientation != want.Orientation {
+								t.Errorf("%s little=%v axis=%d %s: %+v", name, little, axis, bad.name, got)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}

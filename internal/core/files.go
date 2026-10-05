@@ -110,6 +110,11 @@ func (t *Tx) AddFile(f FileIn) (k Kept, err error) {
 		if k.Deleted {
 			return k, nil
 		}
+		if own && (hasPreview || f.Preview != nil) {
+			if err := t.preflightEmbed(day, title); err != nil {
+				return k, err
+			}
+		}
 		if !hasPreview && f.Preview != nil {
 			if _, err := t.tx.Exec(`UPDATE files SET preview = ? WHERE id = ? AND preview IS NULL`, f.Preview, k.ID); err != nil {
 				return k, err
@@ -127,6 +132,15 @@ func (t *Tx) AddFile(f FileIn) (k Kept, err error) {
 	p, err := t.Lookup(f.Title)
 	if err != nil {
 		return k, err
+	}
+	title = f.Title
+	if p != nil {
+		title = p.Title
+	}
+	if own && f.Preview != nil {
+		if err := t.preflightEmbed(day, title); err != nil {
+			return k, err
+		}
 	}
 	body := f.Body
 	switch {

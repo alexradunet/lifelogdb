@@ -333,11 +333,13 @@ func parseTIFF(t []byte) Meta {
 		gps := entries(t, bo, int(p.long(t, bo)))
 		lat, okLat := gps[0x0002].degrees(t, bo)
 		lon, okLon := gps[0x0004].degrees(t, bo)
-		if okLat && okLon {
-			if strings.HasPrefix(gps[0x0001].ascii(t, bo), "S") {
+		latRef := gps[0x0001].reference(t, bo, 'N', 'S')
+		lonRef := gps[0x0003].reference(t, bo, 'E', 'W')
+		if okLat && okLon && latRef != 0 && lonRef != 0 {
+			if latRef == 'S' {
 				lat = -lat
 			}
-			if strings.HasPrefix(gps[0x0003].ascii(t, bo), "W") {
+			if lonRef == 'W' {
 				lon = -lon
 			}
 			if lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180 && (lat != 0 || lon != 0) {
@@ -407,6 +409,18 @@ func (e entry) ascii(t []byte, bo binary.ByteOrder) string {
 		return ""
 	}
 	return string(e.value(t, bo))
+}
+
+// reference requires the EXIF ASCII count of two: a hemisphere and its NUL terminator.
+func (e entry) reference(t []byte, bo binary.ByteOrder, positive, negative byte) byte {
+	if e.typ != 2 || e.count != 2 {
+		return 0
+	}
+	v := e.value(t, bo)
+	if len(v) != 2 || v[1] != 0 || (v[0] != positive && v[0] != negative) {
+		return 0
+	}
+	return v[0]
 }
 
 // degrees is a GPS coordinate: three rationals, degrees, minutes and seconds.

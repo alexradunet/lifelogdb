@@ -594,3 +594,53 @@ func TestQueryUsesLiteralReadOnlyPath(t *testing.T) {
 		t.Fatalf("alternate sentinel changed to %q, %v", string(b), err)
 	}
 }
+
+func TestRedirectStubWrites(t *testing.T) {
+	s := fresh(t)
+	old, _, err := s.CreatePage(ctx, "cli", "Typo", "prose")
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := s.Rename(ctx, "cli", old, "Correct")
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, _, err := s.CreatePage(ctx, "cli", "Other", "[[Typo]]")
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, _ := s.PageByID(ctx, old)
+	dest, _ := s.PageByID(ctx, target)
+	cases := []struct {
+		name string
+		run  func() error
+	}{
+		{"save", func() error { _, e := s.SaveBody(ctx, "cli", old, "bad", before.Version); return e }},
+		{"import", func() error {
+			return s.Do(ctx, "import:synthetic", func(tx *Tx) error { _, e := tx.SetBody(old, "bad"); return e })
+		}},
+		{"source", func() error { return s.Link(ctx, "cli", old, other, "related", "") }},
+		{"target", func() error { return s.Link(ctx, "cli", other, old, "related", "") }},
+		{"unlink source", func() error { return s.Unlink(ctx, "cli", old, other, "related") }},
+		{"unlink target", func() error { return s.Unlink(ctx, "cli", other, old, "related") }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if e := tc.run(); status(e) != 409 || !strings.Contains(e.Error(), "target") {
+				t.Errorf("refusal: %v", e)
+			}
+		})
+	}
+	if e := s.Unlink(ctx, "cli", old, target, "redirect"); e == nil {
+		t.Error("removed redirect")
+	}
+	after, _ := s.PageByID(ctx, old)
+	destination, _ := s.PageByID(ctx, target)
+	if after.Body != before.Body || titles(after.Out, "redirect") != "Correct" || len(after.Out) != 1 || destination.Body != dest.Body || destination.Version != dest.Version {
+		t.Fatal("mutation changed stub or target")
+	}
+	mention, _ := s.PageByID(ctx, other)
+	if titles(mention.Out, "wikilink") != "Typo" {
+		t.Fatal("old wikilink changed")
+	}
+}

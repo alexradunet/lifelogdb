@@ -6,27 +6,26 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
-	"github.com/yuin/goldmark/parser"
 	gtext "github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
 
 	"lifelog/internal/text"
 )
 
-// A body is shown as CommonMark with goldmark's safe defaults (raw HTML omitted, dangerous URLs dropped), and
-// every [[wikilink]] and #tag that names a page links to it. Code spans and blocks are parsed first, so they are
-// never linked. The links panel, not this rendering, is what the save contract wrote.
-var bodyMD = goldmark.New(goldmark.WithParserOptions(parser.WithInlineParsers(
-	util.Prioritized(wikilinkParser{}, 199), // before the link parser, which also starts at '['
-	util.Prioritized(tagParser{}, 199),
-)))
+// CommonMark owns links and images before eligible plain text is enhanced. The links panel,
+// not this rendering, is what the save contract wrote.
+var bodyMD = goldmark.New()
 
 func markdown(src string) template.HTML {
 	var b bytes.Buffer
-	if err := bodyMD.Convert([]byte(src), &b); err != nil {
+	source := []byte(src)
+	doc := bodyMD.Parser().Parse(gtext.NewReader(source))
+	enhanceText(doc, source)
+	if err := bodyMD.Renderer().Render(&b, source, doc); err != nil {
 		return template.HTML("<pre>" + template.HTMLEscapeString(src) + "</pre>")
 	}
 	return template.HTML(b.String())
@@ -63,42 +62,102 @@ func embedLink(title, label string) ast.Node {
 
 var wikiAtStart = regexp.MustCompile(`^(!?)\[\[([^\[\]\n\r]*)\]\]`)
 
-type wikilinkParser struct{}
-
-func (wikilinkParser) Trigger() []byte { return []byte{'[', '!'} } // '!' before the image parser, for an embed
-
-func (wikilinkParser) Parse(_ ast.Node, block gtext.Reader, _ parser.Context) ast.Node {
-	line, _ := block.PeekLine()
-	m := wikiAtStart.FindSubmatch(line)
-	if m == nil {
-		return nil
+// enhanceText joins adjacent text segments before decoding, but never crosses an inline
+// container or line break. Existing anchors, images, code and HTML are left to CommonMark.
+func enhanceText(parent ast.Node, source []byte) {
+	for c := parent.FirstChild(); c != nil; {
+		switch c.(type) {
+		case *ast.Link, *ast.Image, *ast.AutoLink, *ast.CodeSpan, *ast.RawHTML,
+			*ast.CodeBlock, *ast.FencedCodeBlock, *ast.HTMLBlock:
+			c = c.NextSibling()
+		case *ast.Text:
+			var raw bytes.Buffer
+			first := c
+			var last *ast.Text
+			for c != nil {
+				t, ok := c.(*ast.Text)
+				if !ok {
+					break
+				}
+				raw.Write(t.Segment.Value(source))
+				last = t
+				c = c.NextSibling()
+				if t.SoftLineBreak() || t.HardLineBreak() {
+					break
+				}
+			}
+			decoded := util.ResolveEntityNames(util.ResolveNumericReferences(util.UnescapePunctuations(raw.Bytes())))
+			for _, node := range enhancedRun(string(decoded)) {
+				parent.InsertBefore(parent, first, node)
+			}
+			if last.SoftLineBreak() || last.HardLineBreak() {
+				br := ast.NewTextSegment(gtext.NewSegment(last.Segment.Stop, last.Segment.Stop))
+				br.SetSoftLineBreak(last.SoftLineBreak())
+				br.SetHardLineBreak(last.HardLineBreak())
+				parent.InsertBefore(parent, first, br)
+			}
+			for first != c {
+				next := first.NextSibling()
+				parent.RemoveChild(parent, first)
+				first = next
+			}
+		default:
+			enhanceText(c, source)
+			c = c.NextSibling()
+		}
 	}
-	inner := string(util.ResolveEntityNames(util.ResolveNumericReferences(util.UnescapePunctuations(m[2]))))
-	title, label, piped := strings.Cut(inner, "|")
-	title = strings.Trim(title, " ")
-	if !text.ValidTitle(title) {
-		return nil // no link is made of it: the text stays as written
-	}
-	if !piped || strings.TrimSpace(label) == "" {
-		label = title
-	}
-	block.Advance(len(m[0]))
-	if len(m[1]) > 0 {
-		return embedLink(title, label)
-	}
-	return pageLink(title, label)
 }
 
-type tagParser struct{}
-
-func (tagParser) Trigger() []byte { return []byte{'#'} }
-
-func (tagParser) Parse(_ ast.Node, block gtext.Reader, _ parser.Context) ast.Node {
-	line, _ := block.PeekLine()
-	tag, n := text.TagAt(block.PrecendingCharacter(), string(line))
-	if n == 0 || !text.ValidTitle(tag) {
-		return nil
+func enhancedRun(run string) []ast.Node {
+	var nodes []ast.Node
+	start := 0
+	plain := func(end int) {
+		if end > start {
+			s := ast.NewString([]byte(run[start:end]))
+			s.SetRaw(true)
+			nodes = append(nodes, s)
+		}
 	}
-	block.Advance(n)
-	return pageLink(tag, "#"+tag)
+	for i := 0; i < len(run); {
+		var node ast.Node
+		n := 0
+		if run[i] == '[' || run[i] == '!' {
+			if m := wikiAtStart.FindStringSubmatch(run[i:]); m != nil {
+				title, label, piped := strings.Cut(m[2], "|")
+				title = strings.Trim(title, " ")
+				if text.ValidTitle(title) {
+					if !piped || strings.TrimSpace(label) == "" {
+						label = title
+					}
+					if m[1] != "" {
+						node = embedLink(title, label)
+					} else {
+						node = pageLink(title, label)
+					}
+					n = len(m[0])
+				}
+			}
+		} else if run[i] == '#' {
+			prev := rune(10)
+			if i > 0 {
+				prev, _ = utf8.DecodeLastRuneInString(run[:i])
+			}
+			tag, size := text.TagAt(prev, run[i:])
+			if size > 0 && text.ValidTitle(tag) {
+				node = pageLink(tag, "#"+tag)
+				n = size
+			}
+		}
+		if node != nil {
+			plain(i)
+			nodes = append(nodes, node)
+			i += n
+			start = i
+		} else {
+			_, size := utf8.DecodeRuneInString(run[i:])
+			i += size
+		}
+	}
+	plain(len(run))
+	return nodes
 }

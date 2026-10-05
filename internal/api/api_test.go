@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -219,7 +220,7 @@ func TestBrowserGetsHTMLAndSourceUI(t *testing.T) {
 	req.Header.Set("Accept", "text/html,application/xhtml+xml")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/days/2026-09-29" {
+	if rec.Code != http.StatusSeeOther || !feedbackLocation(rec.Header().Get("Location"), "/days/2026-09-29") {
 		t.Errorf("a browser form is answered %d, Location %q: post, then redirect", rec.Code, rec.Header().Get("Location"))
 	}
 	if body := browse(t, h, "/days/2026-09-29"); !strings.Contains(body, `<form method="POST" action="/days/2026-09-29/capture">`) {
@@ -261,7 +262,7 @@ func TestBrowserOriginProtection(t *testing.T) {
 		"Origin":         "http://lifelog.local",
 		"Sec-Fetch-Site": "same-origin",
 	})
-	if sameOrigin.Code != http.StatusSeeOther || sameOrigin.Header().Get("Location") != "/days/2026-10-10" {
+	if sameOrigin.Code != http.StatusSeeOther || !feedbackLocation(sameOrigin.Header().Get("Location"), "/days/2026-10-10") {
 		t.Fatalf("same-origin browser form got %d, Location %q", sameOrigin.Code, sameOrigin.Header().Get("Location"))
 	}
 
@@ -477,4 +478,143 @@ func TestMetricsAreGroupedByCategory(t *testing.T) {
 	if s := browse(t, h, href(tsh, "page")); !strings.Contains(s, "thyroid-stimulating hormone") {
 		t.Error("a metric's page does not hold its note")
 	}
+}
+
+func TestTombstonedHabits(t *testing.T) {
+	c, _ := fresh(t)
+	root := must(c.Get("/"))
+	must(c.Do(find(root, "register-metric"), map[string]string{"name": "Walk"}))
+	walk := must(c.Get("/metrics/Walk"))
+	must(c.Do(find(walk, "start-habit"), map[string]string{"start_day": "2026-09-01"}))
+	page := must(c.Get("/pages?title=Walk"))
+	for i, hidden := range []bool{false, true, false} {
+		if hidden {
+			page = must(c.Do(find(page, "tombstone"), nil))
+		} else if i > 0 {
+			page = must(c.Do(find(page, "revive"), nil))
+		}
+		h := must(c.Get("/habits?day=2026-09-01&from=2026-09-01&to=2026-09-02"))
+		if hidden {
+			if find(h, "check-in").Name != "" || len(h.Entities) != 0 {
+				t.Errorf("hidden check-in offered: %+v", h)
+			}
+		} else if find(h, "check-in").Name == "" || len(h.Entities) != 1 {
+			t.Errorf("live check-in missing: %+v", h)
+		}
+	}
+}
+
+func TestMetricCanonicalActions(t *testing.T) {
+	for _, tc := range []struct{ stored, equivalent, unit, state string }{
+		{"Café", "Cafe\u0301", "", "unitless"},
+		{"Straße", "STRASSE", "", "unitless"},
+		{"Café mass", "Cafe\u0301 mass", "kg", "unitful"},
+		{"Straße mass", "STRASSE mass", "kg", "unitful"},
+		{"Café habit", "Cafe\u0301 habit", "", "habit"},
+		{"Straße habit", "STRASSE habit", "", "habit"},
+		{"Café hidden", "Cafe\u0301 hidden", "", "deleted"},
+		{"Straße hidden", "STRASSE hidden", "", "deleted"},
+		{"Café absent", "Cafe\u0301 absent", "", "unknown"},
+		{"Straße absent", "STRASSE absent", "", "unknown"},
+		{"ASCII metric", "ascii METRIC", "", "unitless"},
+	} {
+		t.Run(tc.stored, func(t *testing.T) {
+			c, _ := fresh(t)
+			if tc.state != "unknown" {
+				must(c.Do(find(must(c.Get("/")), "register-metric"), map[string]string{"name": tc.stored, "unit": tc.unit}))
+				if tc.state == "habit" {
+					must(c.Do(find(must(c.Get("/metrics/"+url.PathEscape(tc.stored))), "start-habit"), map[string]string{"start_day": "2026-01-01"}))
+				}
+				if tc.state == "deleted" {
+					must(c.Do(find(must(c.Get("/pages?title="+url.QueryEscape(tc.stored))), "tombstone"), nil))
+				}
+			}
+			stored := must(c.Get("/metrics/" + url.PathEscape(tc.stored)))
+			equivalent := must(c.Get("/metrics/" + url.PathEscape(tc.equivalent)))
+			if names(stored) != names(equivalent) {
+				t.Errorf("actions: stored %s, equivalent %s", names(stored), names(equivalent))
+			}
+			if href(stored, "page") != href(equivalent, "page") {
+				t.Errorf("page identity differs: %q vs %q", href(stored, "page"), href(equivalent, "page"))
+			}
+			for _, e := range []*api.Entity{stored, equivalent} {
+				if href(e, "self") == "" {
+					t.Error("missing self link")
+				} else if names(must(c.Get(href(e, "self")))) != names(e) {
+					t.Error("self link changes actions")
+				}
+				restricted := tc.state == "unknown" || tc.state == "deleted"
+				if restricted && (href(e, "page") != "" || find(e, "link").Name != "" || find(e, "start-habit").Name != "" || find(e, "check-in").Name != "") {
+					t.Errorf("restricted metric offers actions: %s", names(e))
+				}
+				if tc.unit != "" && find(e, "start-habit").Name != "" {
+					t.Error("unitful metric offers habit")
+				}
+			}
+			if tc.state == "unitless" {
+				a := find(equivalent, "start-habit")
+				if a.Name == "" {
+					t.Fatal("equivalent spelling lacks start action")
+				}
+				must(c.Do(a, map[string]string{"start_day": "2026-01-01"}))
+			}
+			if tc.state == "habit" {
+				a := find(equivalent, "check-in")
+				if a.Name == "" {
+					t.Fatal("equivalent spelling lacks check-in")
+				}
+				must(c.Do(a, map[string]string{"day": "2026-01-01", "done": "1"}))
+			}
+			if tc.state != "unknown" && tc.state != "deleted" {
+				page := must(c.Get(href(equivalent, "page")))
+				if page.Title != tc.stored {
+					t.Errorf("stored spelling changed: %q", page.Title)
+				}
+			}
+		})
+	}
+}
+
+func TestRedirectStubWrites(t *testing.T) {
+	c, _ := fresh(t)
+	root := must(c.Get("/"))
+	p := must(c.Do(find(root, "create-page"), map[string]string{"title": "Typo", "body": "prose"}))
+	oldHref := href(p, "self")
+	save, link, unlink := find(p, "save-body"), find(p, "link"), find(p, "unlink")
+	must(c.Do(find(p, "rename"), map[string]string{"title": "Correct"}))
+	other := must(c.Do(find(root, "create-page"), map[string]string{"title": "Other", "body": "[[Typo]]"}))
+	for _, name := range []string{"link", "unlink"} {
+		_, err := c.Do(find(other, name), map[string]string{"to": "Typo", "kind": "related"})
+		if !clientStatus(err, 409) {
+			t.Errorf("stub target %s: %v", name, err)
+		}
+	}
+	stub := must(c.Get(oldHref))
+	if names(stub) != "tombstone" {
+		t.Errorf("stub actions: %s", names(stub))
+	}
+	for _, a := range []api.Action{save, link, unlink} {
+		values := map[string]string{"to": "Correct", "kind": "related"}
+		if a.Name == "save-body" {
+			values = map[string]string{"body": "bad", "version": stub.Properties.(map[string]any)["version"].(string)}
+		}
+		_, err := c.Do(a, values)
+		if !clientStatus(err, 409) {
+			t.Errorf("%s bypass: %v", a.Name, err)
+		}
+	}
+}
+
+func feedbackLocation(location, path string) bool {
+	u, err := url.Parse(location)
+	if err != nil || u.Scheme != "" || u.Host != "" || u.Path != path || u.Fragment != "" {
+		return false
+	}
+	q := u.Query()
+	values := q["feedback"]
+	if len(q) != 1 || len(values) != 1 || len(values[0]) != 64 {
+		return false
+	}
+	_, err = hex.DecodeString(values[0])
+	return err == nil
 }

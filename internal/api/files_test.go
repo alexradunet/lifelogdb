@@ -8,6 +8,7 @@ import (
 	"image"
 	"image/color"
 	"image/jpeg"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -257,5 +258,103 @@ func TestAddFileDryRunWritesNothing(t *testing.T) {
 	}
 	if list := must(c.Get("/files")); len(list.Entities) != 0 {
 		t.Error("a dry-run promotion kept a file")
+	}
+}
+
+func TestPhotoGPSReferences(t *testing.T) {
+	for _, malformed := range []bool{true, false} {
+		t.Run(fmt.Sprint(malformed), func(t *testing.T) {
+			c, _ := fresh(t)
+			root := must(c.Get("/"))
+			place := must(c.Do(find(root, "create-place"), map[string]string{"title": "Southwest"}))
+			if !malformed {
+				must(c.Do(find(place, "locate"), map[string]string{"lat": "-12", "lon": "-34", "radius_m": "1000"}))
+			}
+			b := phototest.JPEG(32, 24, photo.Meta{Taken: "2026-10-05 12:34:56", Lat: -12, Lon: -34, HasGPS: true, Orientation: 6}, true)
+			if malformed {
+				b = phototest.GPSReference(b, 1, 2, 2, "Sx", false)
+			}
+			p := filepath.Join(t.TempDir(), "synthetic.jpg")
+			if err := os.WriteFile(p, b, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			fields := map[string]string{"title": "synthetic.jpg", "body": "kept text"}
+			e := must(c.DoFiles(find(root, "add-file"), fields, map[string]string{"original": p}))
+			res, _ := e.Result.(map[string]any)
+			file, _ := props(e)["file"].(map[string]any)
+			if props(e)["body"] != "kept text" || file["preview"] != true || res["day"] != "2026-10-05" || res["embedded"] != true {
+				t.Fatalf("file/day lost: %+v %+v", props(e), res)
+			}
+			if malformed {
+				if res["linked"] == true || res["point_set"] == true || res["unmatched"] != nil {
+					t.Errorf("guessed GPS persisted: %+v", res)
+				}
+				place = must(c.Get("/pages?title=Southwest"))
+				if props(place)["point"] != nil {
+					t.Errorf("guessed point: %+v", props(place))
+				}
+				day := must(c.Get("/days/2026-10-05"))
+				if strings.Contains(fmt.Sprint(day.Properties), "Southwest") {
+					t.Errorf("guessed at link: %+v", day.Properties)
+				}
+			} else if res["place"] != "Southwest" || res["linked"] != true {
+				t.Errorf("valid southwest lost: %+v", res)
+			}
+		})
+	}
+}
+
+func TestBrowserMutationFeedbackPhoto(t *testing.T) {
+	_, h := fresh(t)
+	for _, dry := range []bool{true, false} {
+		var b bytes.Buffer
+		mw := multipart.NewWriter(&b)
+		mw.WriteField("title", "Unmatched synthetic.jpg")
+		if dry {
+			mw.WriteField("dry_run", "1")
+		}
+		part, err := mw.CreateFormFile("original", "synthetic.jpg")
+		if err != nil {
+			t.Fatal(err)
+		}
+		part.Write(phototest.JPEG(64, 48, photo.Meta{Taken: "2019-06-04 10:00:00", Lat: 41.1496, Lon: -8.6110, HasGPS: true}, true))
+		mw.Close()
+		req := httptest.NewRequest("POST", "/files", &b)
+		req.Header.Set("Content-Type", mw.FormDataContentType())
+		req.Header.Set("Accept", "text/html")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		body := rec.Body.String()
+		if dry {
+			if rec.Code != 200 || rec.Header().Get("Location") != "" || !strings.Contains(body, "nothing written") {
+				t.Fatalf("dry run: %d %s", rec.Code, body)
+			}
+		} else {
+			if rec.Code != 303 {
+				t.Fatalf("photo POST: %d %s", rec.Code, body)
+			}
+			location := rec.Header().Get("Location")
+			if strings.Contains(location, "41.1496") || strings.Contains(location, "synthetic") {
+				t.Fatal("private redirect")
+			}
+			body = browse(t, h, location)
+		}
+		for _, want := range []string{"Result", "unmatched", "41.1496"} {
+			if !strings.Contains(body, want) {
+				t.Errorf("photo feedback missing %q", want)
+			}
+		}
+	}
+}
+
+func TestAutomaticEmbedAPIRefusal(t *testing.T) {
+	c, _ := fresh(t)
+	add := find(must(c.Get("/")), "add-file")
+	path, _ := jpegFile(t, "Lake [1].jpg", 40, 30)
+	for _, dry := range []string{"1", "0"} {
+		_, err := c.DoFiles(add, map[string]string{"title": "Lake [1].jpg", "day": "2026-10-04", "dry_run": dry}, map[string]string{"original": path})
+		if err == nil || !strings.Contains(err.Error(), "explicit") {
+			t.Fatalf("dry=%s: %v", dry, err)
+		}
 	}
 }

@@ -39,7 +39,7 @@ An import ([importing with a model](docs/guides/importing.md)) works in a worksp
 trial database inside it:
 
 ```
-lifelog import takeout inventory ~/takeout-x                                      # privacy-safe Timeline/Fit/Fitbit inventory
+lifelog import takeout inventory ~/takeout-x                                      # extraction root (including sibling Timeline.json), or Takeout folder; privacy-safe
 lifelog import setup --workspace ~/import/Notebook.lifelog --from ~/life/life.db   # trial.db: a copy
 lifelog mcp --workspace ~/import/Notebook.lifelog --agent lmstudio                  # the model's tools
 lifelog do import-find text="Sam" --workspace ~/import/Notebook.lifelog             # import lookup; page lookup stays find
@@ -135,3 +135,13 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 `go generate ./... && go vet ./... && go test ./...` — every test builds throwaway databases in a temporary folder:
 the packages from the embedded schema, the suites in `tests/` from `docs/schema/schema.sql` itself (and from broken
 copies of the docs, the mutants). `go test -short ./...` skips the mutants.
+
+### Request metadata limits
+
+Action JSON and URL-encoded bodies are limited to 20 MiB of encoded data; JSON
+must contain exactly one object. Multipart uploads allow up to 64 parts, 16 MiB
+per text field and 16 MiB total text (including unknown or repeated fields),
+and at most one original and one preview part. A supplied preview may be up to
+64 MiB. Over-limit requests return HTTP 413 without writing. Originals are
+hashed as streams without a total size limit; originals above the 64 MiB picture
+budget are kept without an automatically generated preview.

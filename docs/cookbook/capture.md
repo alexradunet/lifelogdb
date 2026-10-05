@@ -19,9 +19,13 @@ UPDATE pages SET body = body || CASE WHEN body = '' THEN '' ELSE char(10, 10) EN
                         || 'Shipped the schema doc. Review pending. [[Lifelog]]'
  WHERE id = :page_id;
 -- the body names [[Lifelog]]: the link sync of cookbook/save-a-body.md runs here, inside this same transaction
--- optional mood, attached to the page it belongs to (D6):
+-- optional mood: the app requires a live metric and validates the value under D6 and D24
+-- before inserting; a missing metric or refused value rolls back the entire capture
+-- (docs/decisions/D06-mood-is-a-measurement.md, docs/decisions/D24-habits.md)
+-- attached to the page it belongs to (D6):
 INSERT INTO measurements(metric_id, day, value, source, captured_with_id, created_at)
-SELECT id, '2026-09-29', 4, 'ui', :page_id, strftime('%Y-%m-%dT%H:%M:%fZ','now')
-  FROM pages WHERE title_key = 'mood' AND entity_type = 'metric';   -- a metric is a page (D27); a timed reading also sets taken_at and tz
+SELECT p.id, '2026-09-29', 4, 'ui', :page_id, strftime('%Y-%m-%dT%H:%M:%fZ','now')
+  FROM pages p JOIN entities e ON e.id = p.id AND e.deleted_at IS NULL
+ WHERE p.title_key = 'mood' AND p.entity_type = 'metric';   -- a metric is a page (D27); a timed reading also sets taken_at and tz
 COMMIT;
 ```

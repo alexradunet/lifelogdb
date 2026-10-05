@@ -141,6 +141,12 @@ func main() {
 }
 
 func run(o opts) error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	return runContext(ctx, o)
+}
+
+func runContext(ctx context.Context, o opts) error {
 	cmd, args := o.args[0], o.args[1:]
 	if cmd == "init" {
 		if o.db == "" && len(args) == 1 {
@@ -204,9 +210,6 @@ func run(o opts) error {
 		c = client.InProcess(handler, o.source)
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer stop()
-
 	switch cmd {
 	case "serve":
 		if o.url != "" {
@@ -225,9 +228,9 @@ func run(o opts) error {
 		if len(args) != 1 {
 			return errors.New("get PATH")
 		}
-		return show(o)(c.Get("/" + strings.TrimPrefix(args[0], "/"))) // "pages/1" too: some shells rewrite a leading /
+		return show(o)(c.GetContext(ctx, "/"+strings.TrimPrefix(args[0], "/"))) // "pages/1" too: some shells rewrite a leading /
 	case "actions":
-		return listActions(o, c)
+		return listActionsContext(ctx, o, c)
 	case "do":
 		if len(args) == 0 {
 			return errors.New("do ACTION [field=value...]")
@@ -240,7 +243,7 @@ func run(o opts) error {
 			}
 			vals[k] = v
 		}
-		return doAction(o, c, args[0], vals)
+		return doActionContext(ctx, o, c, args[0], vals)
 	case "capture":
 		day := o.day
 		if day == "" {
@@ -250,25 +253,25 @@ func run(o opts) error {
 		if o.mood != "" {
 			vals["mood"] = o.mood
 		}
-		return doAction(o, c, "capture", vals)
+		return doActionContext(ctx, o, c, "capture", vals)
 	case "day":
 		day := "today"
 		if len(args) == 1 {
 			day = args[0]
 		}
-		return show(o)(c.Get("/days/" + day))
+		return show(o)(c.GetContext(ctx, "/days/"+day))
 	case "page":
-		return show(o)(c.Get("/pages?title=" + url.QueryEscape(strings.Join(args, " "))))
+		return show(o)(c.GetContext(ctx, "/pages?title="+url.QueryEscape(strings.Join(args, " "))))
 	case "search":
-		return doAction(o, c, "search", map[string]string{"q": strings.Join(args, " ")})
+		return doActionContext(ctx, o, c, "search", map[string]string{"q": strings.Join(args, " ")})
 	case "query":
-		return doAction(o, c, "query", map[string]string{"sql": strings.Join(args, " ")})
+		return doActionContext(ctx, o, c, "query", map[string]string{"sql": strings.Join(args, " ")})
 	case "habits":
 		day := core.Today()
 		if len(args) == 1 {
 			day = args[0]
 		}
-		return show(o)(c.Get("/habits?day=" + day))
+		return show(o)(c.GetContext(ctx, "/habits?day="+day))
 	case "done", "skip":
 		if len(args) != 1 {
 			return fmt.Errorf("%s METRIC [--day YYYY-MM-DD]", cmd)
@@ -278,32 +281,40 @@ func run(o opts) error {
 			day = core.Today()
 		}
 		done := map[string]string{"done": "1", "skip": "0"}[cmd]
-		return doAction(o, c, "check-in", map[string]string{"name": args[0], "day": day, "done": done})
+		return doActionContext(ctx, o, c, "check-in", map[string]string{"name": args[0], "day": day, "done": done})
 	case "rename":
 		if len(args) != 2 {
 			return errors.New("rename PAGE-ID NEW-TITLE")
 		}
-		return doAction(o, c, "rename", map[string]string{"id": args[0], "title": args[1]})
+		return doActionContext(ctx, o, c, "rename", map[string]string{"id": args[0], "title": args[1]})
 	case "file":
-		return keepFile(o, c, args)
+		return keepFileContext(ctx, o, c, args)
 	case "import":
-		return importCommand(o, c, args)
+		return importCommandContext(ctx, o, c, args)
 	}
 	return fmt.Errorf("unknown command %q (lifelog help)", cmd)
 }
 
 func doAction(o opts, c *client.Client, name string, vals map[string]string) error {
-	return show(o)(do(c, name, vals))
+	return doActionContext(context.Background(), o, c, name, vals)
+}
+
+func doActionContext(ctx context.Context, o opts, c *client.Client, name string, vals map[string]string) error {
+	return show(o)(doContext(ctx, c, name, vals))
 }
 
 func do(c *client.Client, name string, vals map[string]string) (*api.Entity, error) {
-	actions, err := c.Catalog()
+	return doContext(context.Background(), c, name, vals)
+}
+
+func doContext(ctx context.Context, c *client.Client, name string, vals map[string]string) (*api.Entity, error) {
+	actions, err := c.CatalogContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 	for _, a := range actions {
 		if a.Name == name {
-			return c.Do(a, vals)
+			return c.DoContext(ctx, a, vals)
 		}
 	}
 	return nil, fmt.Errorf("no action %q (lifelog actions)", name)
@@ -312,6 +323,10 @@ func do(c *client.Client, name string, vals map[string]string) (*api.Entity, err
 // keepFile is `lifelog file PATH`: the add-file action with the original streamed from disk (hashed by the API,
 // never stored), its text read from --text, and a picture from --preview when the original is not one lifelog reads.
 func keepFile(o opts, c *client.Client, args []string) error {
+	return keepFileContext(context.Background(), o, c, args)
+}
+
+func keepFileContext(ctx context.Context, o opts, c *client.Client, args []string) error {
 	if len(args) == 0 {
 		return errors.New("file PATH... [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day YYYY-MM-DD] [--at PLACE [--radius M]] [--dry-run]")
 	}
@@ -323,7 +338,7 @@ func keepFile(o opts, c *client.Client, args []string) error {
 	if !one && (o.title != "" || o.text != "" || o.preview != "" || o.mime != "") {
 		return errors.New("--title, --text, --preview and --mime describe one file: keep it alone")
 	}
-	actions, err := c.Catalog()
+	actions, err := c.CatalogContext(ctx)
 	if err != nil {
 		return err
 	}
@@ -360,7 +375,7 @@ func keepFile(o opts, c *client.Client, args []string) error {
 		if o.preview != "" {
 			files["preview"] = o.preview
 		}
-		return c.DoFiles(add, vals, files)
+		return c.DoFilesContext(ctx, add, vals, files)
 	}
 	if one {
 		e, err := keep(paths[0])
@@ -375,6 +390,9 @@ func keepFile(o opts, c *client.Client, args []string) error {
 	var kept []keptFile
 	failed := 0
 	for _, p := range paths {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		k := keptFile{Path: p}
 		e, err := keep(p)
 		if err != nil {
@@ -594,7 +612,11 @@ func haversine(lat1, lon1, lat2, lon2 float64) float64 {
 }
 
 func listActions(o opts, c *client.Client) error {
-	actions, err := c.Catalog()
+	return listActionsContext(context.Background(), o, c)
+}
+
+func listActionsContext(ctx context.Context, o opts, c *client.Client) error {
+	actions, err := c.CatalogContext(ctx)
 	if err != nil {
 		return err
 	}
@@ -745,7 +767,10 @@ func importOwner(o opts, ws *importer.Workspace, args []string) error {
 			return err
 		}
 		if !res.OK {
-			return printJSON(res)
+			if err := printJSON(res); err != nil {
+				return err
+			}
+			return fmt.Errorf("%s failed trial integrity: the trial is kept for diagnosis", ws.TrialDB())
 		}
 		fmt.Println("integrity: ok")
 		return nil
@@ -797,25 +822,29 @@ func importTakeout(_ opts, args []string) error {
 }
 
 func importCommand(o opts, c *client.Client, args []string) error {
+	return importCommandContext(context.Background(), o, c, args)
+}
+
+func importCommandContext(ctx context.Context, o opts, c *client.Client, args []string) error {
 	if len(args) == 0 {
 		args = []string{"status"}
 	}
 	switch args[0] {
 	case "status":
-		return show(o)(c.Get("/import"))
+		return show(o)(c.GetContext(ctx, "/import"))
 	case "check", "apply":
 		if len(args) != 2 {
 			return fmt.Errorf("import %s FILE", args[0])
 		}
-		return doAction(o, c, args[0]+"-facts", map[string]string{"file": args[1]})
+		return doActionContext(ctx, o, c, args[0]+"-facts", map[string]string{"file": args[1]})
 	case "replay":
 		if o.to == "" {
 			return errors.New("import replay --to PATH [--dry-run]")
 		}
 		if !o.dryRun {
-			return doAction(o, c, "replay", map[string]string{"to": o.to})
+			return doActionContext(ctx, o, c, "replay", map[string]string{"to": o.to})
 		}
-		e, err := do(c, "replay", map[string]string{"to": o.to, "dry_run": "1"})
+		e, err := doContext(ctx, c, "replay", map[string]string{"to": o.to, "dry_run": "1"})
 		if err := show(o)(e, err); err != nil {
 			return err
 		}

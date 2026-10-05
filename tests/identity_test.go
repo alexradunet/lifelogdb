@@ -86,6 +86,14 @@ func identity(s *S) {
 	s.K("links.source cannot change", err(c.tryx("UPDATE links SET source='ui' WHERE from_id=?", a)))
 	s.K("a link note edit still passes", c.tryx("UPDATE links SET note='n', source=source WHERE from_id=?", a) == "OK")
 
+	// Probe endpoints independently of provenance, with valid alternate pages.
+	endpointConn := s.fresh()
+	from, to, other := endpointConn.page("From"), endpointConn.page("To"), endpointConn.page("Other")
+	endpointConn.link(from, to, "wikilink")
+	s.K("a link's endpoints cannot change", err(endpointConn.tryx("UPDATE links SET from_id=? WHERE from_id=? AND to_id=?", other, from, to)) &&
+		err(endpointConn.tryx("UPDATE links SET to_id=? WHERE from_id=? AND to_id=?", other, from, to)) &&
+		endpointConn.tab("SELECT from_id,to_id FROM links") == ids(from)+"|"+ids(to))
+
 	// ---- no hard deletes
 	c = s.fresh()
 	byType := map[string]int64{"page": c.thing("page"), "person": c.thing("person"), "place": c.thing("place"), "metric": c.thing("metric"), "file": c.thing("file")}
@@ -144,32 +152,35 @@ func identity(s *S) {
 		}
 		return got
 	}
-	first := runImport(K)
-	again := runImport(K)
-	if len(first) == 0 {
-		stop("cookbook/import-a-row-once: the first run returned no id")
+	first, importErr := c.query(insEnt, P{"import_key": K})
+	s.K("cookbook/import-a-row-once: the first insert returns an id", importErr == nil && len(first) == 1, importErr)
+	if importErr == nil && len(first) == 1 {
+		c.must(insPage, P{"page_id": first[0][0]})
+		again := runImport(K)
+		fid := first[0][0]
+		body := func() string { return c.str("select body from pages where id=?", fid) }
+		s.K("cookbook/import-a-row-once: the first run returns an id, the re-run returns none and adds no page",
+			len(first) == 1 && len(again) == 0 && c.n("select count(*) from pages where title='Sourdough'") == 1 && c.integrityOK())
+		s.K("the same import_key under another source is another row (per-source namespace)",
+			c.tryx("INSERT INTO entities(entity_type,created_at,updated_at,source,import_key) VALUES ('page',"+NOW+","+NOW+",'import:health',?)", K) == "OK")
+		twice := c.tryx("INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES ('page',"+NOW+","+NOW+",'import:vault')") == "OK" &&
+			c.tryx("INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES ('page',"+NOW+","+NOW+",'import:vault')") == "OK"
+		s.K("rows without an import_key never collide", twice)
+		s.K("a plain INSERT of a known key is refused (the index is unique)",
+			strings.Contains(c.tryx("INSERT INTO entities(entity_type,created_at,updated_at,source,import_key) VALUES ('page',"+NOW+","+NOW+",'import:vault',?)", K), "UNIQUE"))
+		keyFixed := s.K("entities.import_key cannot change", strings.Contains(c.tryx("UPDATE entities SET import_key='notes/other.md' WHERE id=?", fid), "never changed"))
+		keyNotCleared := s.K("...nor be cleared", strings.Contains(c.tryx("UPDATE entities SET import_key=NULL WHERE id=?", fid), "never changed"))
+		if keyFixed && keyNotCleared {
+			c.must(upd, P{"import_key": K})
+			s.K("cookbook/import-a-row-once: a changed note is updated in its own page", body() == "Feed the starter the night before; 75% water.", body())
+			c.must("UPDATE pages SET body='old' WHERE id=?", fid)
+			c.must("UPDATE entities SET deleted_at="+NOW+" WHERE id=?", fid)
+			c.must(upd, P{"import_key": K})
+			again = runImport(K)
+			s.K("cookbook/import-a-row-once: a tombstoned import is neither updated nor inserted again",
+				body() == "old" && len(again) == 0 && c.n("select count(*) from pages where title='Sourdough'") == 1)
+		}
 	}
-	fid := first[0][0]
-	body := func() string { return c.str("select body from pages where id=?", fid) }
-	s.K("cookbook/import-a-row-once: the first run returns an id, the re-run returns none and adds no page",
-		len(first) == 1 && len(again) == 0 && c.n("select count(*) from pages where title='Sourdough'") == 1 && c.integrityOK())
-	s.K("the same import_key under another source is another row (per-source namespace)",
-		c.tryx("INSERT INTO entities(entity_type,created_at,updated_at,source,import_key) VALUES ('page',"+NOW+","+NOW+",'import:health',?)", K) == "OK")
-	twice := c.tryx("INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES ('page',"+NOW+","+NOW+",'import:vault')") == "OK" &&
-		c.tryx("INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES ('page',"+NOW+","+NOW+",'import:vault')") == "OK"
-	s.K("rows without an import_key never collide", twice)
-	s.K("a plain INSERT of a known key is refused (the index is unique)",
-		strings.Contains(c.tryx("INSERT INTO entities(entity_type,created_at,updated_at,source,import_key) VALUES ('page',"+NOW+","+NOW+",'import:vault',?)", K), "UNIQUE"))
-	s.K("entities.import_key cannot change", strings.Contains(c.tryx("UPDATE entities SET import_key='notes/other.md' WHERE id=?", fid), "never changed"))
-	s.K("...nor be cleared", strings.Contains(c.tryx("UPDATE entities SET import_key=NULL WHERE id=?", fid), "never changed"))
-	c.must(upd, P{"import_key": K})
-	s.K("cookbook/import-a-row-once: a changed note is updated in its own page", body() == "Feed the starter the night before; 75% water.", body())
-	c.must("UPDATE pages SET body='old' WHERE id=?", fid)
-	c.must("UPDATE entities SET deleted_at="+NOW+" WHERE id=?", fid)
-	c.must(upd, P{"import_key": K})
-	again = runImport(K)
-	s.K("cookbook/import-a-row-once: a tombstoned import is neither updated nor inserted again",
-		body() == "old" && len(again) == 0 && c.n("select count(*) from pages where title='Sourdough'") == 1)
 
 	c = s.fresh()
 	pg := c.thing("page")

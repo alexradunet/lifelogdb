@@ -18,9 +18,11 @@ import (
 )
 
 const (
-	maxPicture = 64 << 20 // the largest original a picture is made from, and the largest picture sent
-	maxField   = 16 << 20 // a text field: a long transcript
-	maxMeta    = 1 << 20  // the head of an original read for its metadata
+	maxPicture       = 64 << 20 // the largest original a picture is made from, and the largest picture sent
+	maxParts         = 64
+	maxMultipartText = 16 << 20
+	maxField         = 16 << 20 // a text field: a long transcript
+	maxMeta          = 1 << 20  // the head of an original read for its metadata
 )
 
 // addFile keeps a file (docs/cookbook/keep-a-file.md, D9) and answers with its page; Result says what was written.
@@ -64,6 +66,7 @@ func fileForm(r *http.Request) (core.FileIn, bool, error) {
 		return core.FileIn{Title: v.Get("title"), SHA256: v.Get("sha256"), MIME: v.Get("mime"), Body: v.Get("body"), Day: v.Get("day"),
 			At: v.Get("at"), Radius: r}, v.Get("dry_run") == "1", err
 	}
+	defer r.Body.Close()
 	mr, err := r.MultipartReader()
 	if err != nil {
 		return bad("the form: " + err.Error())
@@ -73,6 +76,9 @@ func fileForm(r *http.Request) (core.FileIn, bool, error) {
 	var picture, given []byte
 	var meta photo.Meta
 	sent := false
+	parts, textBytes := 0, 0
+	seen := map[string]bool{}
+	overflow := func(msg string) (core.FileIn, bool, error) { return core.FileIn{}, false, requestLimit(msg) }
 	for {
 		part, err := mr.NextPart()
 		if errors.Is(err, io.EOF) {
@@ -81,7 +87,17 @@ func fileForm(r *http.Request) (core.FileIn, bool, error) {
 		if err != nil {
 			return bad("the form: " + err.Error())
 		}
+		parts++
+		if parts > maxParts {
+			return overflow("multipart request has more than 64 parts")
+		}
 		name := part.FormName()
+		if name == "original" || name == "preview" {
+			if seen[name] {
+				return overflow("duplicate " + name + " part")
+			}
+			seen[name] = true
+		}
 		switch {
 		case (name == "original" || name == "preview") && part.FileName() == "": // a file input left empty
 			_, err = io.Copy(io.Discard, part)
@@ -91,15 +107,26 @@ func fileForm(r *http.Request) (core.FileIn, bool, error) {
 		case name == "preview":
 			given, err = io.ReadAll(io.LimitReader(part, maxPicture+1))
 			if err == nil && len(given) > maxPicture {
-				return bad("the picture sent is larger than 64 MB")
+				return overflow("the picture sent is larger than 64 MiB")
 			}
 		default:
-			var b []byte
-			b, err = io.ReadAll(io.LimitReader(part, maxField+1))
-			if err == nil && len(b) > maxField {
-				return bad("field " + name + " is larger than 16 MB")
+			limited := io.LimitReader(part, int64(min(maxField, maxMultipartText-textBytes)+1))
+			var n int64
+			if key := fileTextField(name); key != "" {
+				var b []byte
+				b, err = io.ReadAll(limited)
+				n = int64(len(b))
+				if err == nil && n <= maxField && textBytes+len(b) <= maxMultipartText {
+					vals[key] = string(b)
+				}
+			} else {
+				// Unknown values still consume the budget, but neither names nor values are retained.
+				n, err = io.Copy(io.Discard, limited)
 			}
-			vals[name] = string(b)
+			textBytes += int(n)
+			if err == nil && (n > maxField || textBytes > maxMultipartText) {
+				return overflow("multipart text is larger than 16 MiB")
+			}
 		}
 		part.Close()
 		if err != nil {
@@ -133,6 +160,30 @@ func fileForm(r *http.Request) (core.FileIn, bool, error) {
 		in.Preview = p
 	}
 	return in, vals["dry_run"] == "1", nil
+}
+
+// fileTextField projects multipart names onto the fields retained by fileForm.
+func fileTextField(name string) string {
+	switch name {
+	case "title":
+		return "title"
+	case "sha256":
+		return "sha256"
+	case "mime":
+		return "mime"
+	case "body":
+		return "body"
+	case "day":
+		return "day"
+	case "at":
+		return "at"
+	case "radius":
+		return "radius"
+	case "dry_run":
+		return "dry_run"
+	default:
+		return ""
+	}
 }
 
 // readOriginal hashes the original as it streams, and keeps its first megabyte for its metadata (photo.Read: a

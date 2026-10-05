@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestSchemaCopyIsCurrent(t *testing.T) {
@@ -488,5 +489,48 @@ func TestWriteTakesTheLockUpFront(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestSnapshotDestinationErrors(t *testing.T) {
+	root := t.TempDir()
+	live := filepath.Join(root, "life.db")
+	if err := Init(live); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(live)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, dest := range []string{filepath.Join(root, "missing"), live} {
+		if _, err := Snapshot(live, dest, time.Now()); err == nil {
+			t.Errorf("accepted non-directory %s", dest)
+		}
+	}
+	target := filepath.Join(root, "target")
+	if err := os.Mkdir(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// A dangling .git entry is still a privacy marker, not evidence of safety.
+	if err := os.Symlink(filepath.Join(root, "absent"), filepath.Join(target, ".git")); err != nil {
+		t.Logf("dangling-marker check unavailable: %v", err)
+	} else if _, err := Snapshot(live, target, time.Now()); err == nil || !strings.Contains(err.Error(), "git work tree") {
+		t.Errorf("dangling marker refusal: %v", err)
+	}
+	entries, err := os.ReadDir(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if entry.Name() != ".git" {
+			t.Errorf("refusal left artifact %s", entry.Name())
+		}
+	}
+	after, err := os.ReadFile(live)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Error("destination error changed source")
 	}
 }

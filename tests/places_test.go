@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"lifelog/internal/core"
+	"lifelog/internal/text"
 )
 
 // places: where a place is (schema.sql, D21) — an optional row of a place's page with its point, its radius and
@@ -171,7 +172,7 @@ func places(s *S) {
 	// the day linked and the photo shown, once
 	c = s.fresh()
 	lake := c.named("place", "Lakeside")
-	p := P{"taken_day": "2019-06-03", "place_id": lake, "file_title": "2019-06-03 IMG_1.jpg", "source": "ui"}
+	p := P{"taken_day": "2019-06-03", "place_id": lake, "file_title": "2019-06-03 IMG_1.jpg", "source": "ui", "append_embed": 1}
 	if _, e := c.runBlock(day, p, nil); e != nil {
 		stop("place-of-a-photo day: %v", e)
 	}
@@ -181,6 +182,7 @@ func places(s *S) {
 			c.n("select count(*) from links where from_id=? and to_id=? and kind='at'", dp, lake) == 1, c.tab("select title, day, body from pages where id=?", dp))
 	sts := statements(day)
 	again := []string{sts[0], sts[4], sts[5], sts[6]} // the day page found: the two INSERTs skipped, as a writer does
+	p["append_embed"] = 0
 	if _, e := c.runBlock(strings.Join(again, "\n"), p, nil); e != nil {
 		stop("place-of-a-photo day again: %v", e)
 	}
@@ -188,8 +190,21 @@ func places(s *S) {
 		c.n("select count(*) from links where from_id=? and kind='at'", dp) == 1 && c.str("select body from pages where id=?", dp) == "![[2019-06-03 IMG_1.jpg]]")
 	c.must("UPDATE pages SET body = 'Swam at dawn.' WHERE id=?", dp)
 	p["file_title"] = "2019-06-03 IMG_2.jpg"
+	p["append_embed"] = 1
 	c.runBlock(strings.Join(again, "\n"), p, nil)
 	s.K("another photo is appended after a blank line", c.str("select body from pages where id=?", dp) == "Swam at dawn.\n\n![[2019-06-03 IMG_2.jpg]]")
+
+	for _, body := range []string{"![[2019-06-03 IMG_2.jpg|lake]]", "`![[2019-06-03 IMG_2.jpg]]`", "[[2019-06-03 IMG_2.jpg]]"} {
+		c.must("UPDATE pages SET body = ? WHERE id=?", body, dp)
+		p["append_embed"] = 1
+		want := body + "\n\n![[2019-06-03 IMG_2.jpg]]"
+		if text.HasEmbed(body, p["file_title"].(string)) {
+			p["append_embed"] = 0
+			want = body
+		}
+		_, e := c.runBlock(strings.Join(again, "\n"), p, nil)
+		s.K("cookbook parsed embed binding preserves aliases but appends after literal code/plain links", e == nil && c.str("select body from pages where id=?", dp) == want, e)
+	}
 	s.K("integrity and foreign keys clean", c.integrityOK())
 
 	// the writer's own keep of a photo writes what the recipe writes

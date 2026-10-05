@@ -137,11 +137,11 @@ func files(s *S) {
 	for _, st := range sts {
 		words = append(words, strings.ToUpper(firstWord.FindString(code(st))))
 	}
-	if strings.Join(words, " ") != "BEGIN SELECT UPDATE SELECT INSERT INSERT UPDATE UPDATE INSERT COMMIT" {
+	if strings.Join(words, " ") != "BEGIN SELECT UPDATE SELECT INSERT INSERT UPDATE UPDATE UPDATE INSERT COMMIT" {
 		stop("cookbook/keep-a-file: the write is not BEGIN, the two steps of 0, the resolve, 1a, 1b, the files row, COMMIT: %v", words)
 	}
-	begin, look, fill, resolve, commit := sts[0], sts[1], sts[2], sts[3], sts[9]
-	promote, row := sts[6:8], sts[8]
+	begin, look, fill, resolve, commit := sts[0], sts[1], sts[2], sts[3], sts[10]
+	promote, row := sts[6:9], sts[9]
 	run := func(c *C, p P, st ...string) error {
 		for _, x := range st {
 			if _, e := c.runBlock(x, p, nil); e != nil {
@@ -210,7 +210,7 @@ func files(s *S) {
 	s.K("step 1 finds the ghost: a plain page, empty, not a day page, not a stub",
 		len(held) == 1 && tab(held) == ids(ghost)+"|page|0|1|0", tab(held))
 	p["file_id"] = ghost
-	e = run(c, p, []string{promote[0], promote[1], row, commit}...)
+	e = run(c, p, []string{promote[0], promote[1], promote[2], row, commit}...)
 	s.K("1b promotes it: one id, a file page with the text, a files row; the day's embed lands on the file",
 		e == nil && c.tab("select e.entity_type, p.body, f.sha256 = ? from entities e join pages p using(id) join files f using(id) where id=?", hash(2), ghost) == "file|The lake at dawn.|1" &&
 			c.n("select count(*) from links where from_id=? and to_id=? and kind='wikilink'", d, ghost) == 1, e)
@@ -219,9 +219,44 @@ func files(s *S) {
 	written := c.pageW("Notes.pdf", nil, "my own words")
 	p = params(hash(3), "Notes.pdf", nil)
 	p["file_id"] = written
-	_ = run(c, p, begin, promote[0], promote[1], row, commit)
+	_ = run(c, p, begin, promote[0], promote[1], promote[2], row, commit)
 	s.K("a page with text becomes the file with its text kept; :body fills only an empty body",
 		c.str("select body from pages where id=?", written) == "my own words" && c.str("select entity_type from entities where id=?", written) == "file")
+	// Promotion row parity: date filling is independent of whether the page has text.
+	for _, tc := range []struct{ name, day, body, incoming string }{
+		{"missing day", "", "", "The lake at dawn."},
+		{"existing day", "2026-06-01", "", "The lake at dawn."},
+		{"existing text", "", "my own words", ""},
+	} {
+		cr, cw := s.fresh(), s.fresh()
+		seed := func(c *C) (int64, int64) {
+			d, _ := c.savePage("![[Promotion.jpg]]", "2026-06-03")
+			id := c.n("select id from pages where title='Promotion.jpg'")
+			c.must("UPDATE pages SET day=NULLIF(?, ''), body=? WHERE id=?", tc.day, tc.body, id)
+			return id, d
+		}
+		rid, rd := seed(cr)
+		wid, wd := seed(cw)
+		pp := params(hash(6), "Promotion.jpg", nil)
+		pp["file_id"], pp["body"] = rid, tc.incoming
+		er := run(cr, pp, begin, promote[0], promote[1], promote[2], row, commit)
+		kw, ew := cw.store().AddFile(context.Background(), "ui", core.FileIn{
+			Title: "Promotion.jpg", SHA256: hash(6), MIME: "image/heic", Day: "2026-06-02", Body: tc.incoming,
+		})
+		wantDay := tc.day
+		if wantDay == "" {
+			wantDay = "2026-06-02"
+		}
+		s.K("promotion "+tc.name+": recipe and writer agree, filling only a missing day",
+			er == nil && ew == nil && shape(cr) == shape(cw) && cr.str("select day from pages where id=?", rid) == wantDay,
+			er, ew, shape(cr), shape(cw))
+		s.K("promotion "+tc.name+": identity, text and backlinks survive without inferred photo links",
+			kw.Promoted && kw.ID == wid && cr.n("select id from files") == rid &&
+				cr.n("select count(*) from links where from_id=? and to_id=? and kind='wikilink'", rd, rid) == 1 &&
+				cw.n("select count(*) from links where from_id=? and to_id=? and kind='wikilink'", wd, wid) == 1 &&
+				cr.n("select count(*) from links") == 1 && cw.n("select count(*) from links") == 1 &&
+				cr.str("select body from pages where id=?", rid) == tc.body+tc.incoming)
+	}
 	for _, x := range []struct{ what, title string }{{"a person", "Bob Sample"}, {"a day page", "2026-06-03"}} {
 		var held int64
 		if x.what == "a person" {
@@ -231,7 +266,7 @@ func files(s *S) {
 		}
 		p = params(hash(4), x.title, nil)
 		p["file_id"] = held
-		e = run(c, p, []string{promote[0], promote[1], row, commit}...)
+		e = run(c, p, []string{promote[0], promote[1], promote[2], row, commit}...)
 		s.K("a title held by "+x.what+": 1b changes nothing and the files row is refused, so the whole write rolls back",
 			e != nil && c.str("select entity_type from entities where id=?", held) != "file" && c.n("select count(*) from files where sha256=?", hash(4)) == 0, e)
 	}
@@ -239,7 +274,7 @@ func files(s *S) {
 	c.link(stub, ghost, "redirect")
 	p = params(hash(5), "Old Lake", nil)
 	p["file_id"] = stub
-	e = run(c, p, []string{promote[0], promote[1], row, commit}...)
+	e = run(c, p, []string{promote[0], promote[1], promote[2], row, commit}...)
 	s.K("a redirect stub is never promoted", e != nil && c.str("select entity_type from entities where id=?", stub) == "page", e)
 	s.K("integrity and foreign keys clean after the refusals", c.integrityOK())
 }

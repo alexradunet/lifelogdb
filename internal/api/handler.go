@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"mime"
 	"net/http"
 	"net/url"
@@ -22,14 +23,15 @@ import (
 const SourceHeader = "Lifelog-Source"
 
 type server struct {
-	s  *core.Store
-	ws *importer.Workspace // nil unless started with --workspace
+	s        *core.Store
+	ws       *importer.Workspace // nil unless started with --workspace
+	feedback feedbackStore
 }
 
 // New returns the whole API as one handler: lifelog serve mounts it on a socket, the CLI and the MCP server
 // call it in-process. With an import workspace the /import routes are mounted too.
 func New(s *core.Store, ws *importer.Workspace) http.Handler {
-	h := &server{s, ws}
+	h := &server{s: s, ws: ws}
 	m := http.NewServeMux()
 	get := func(p string, f func(*http.Request) (*Entity, error)) { m.HandleFunc("GET "+p, h.serve(f)) }
 	post := func(p string, f func(*http.Request, string) (*Entity, error)) {
@@ -129,10 +131,17 @@ func (h *server) serve(f func(*http.Request) (*Entity, error)) http.HandlerFunc 
 		case r.Method == "POST":
 			if self := selfOf(e); self != "" {
 				if wantsHTML(r) { // a browser form: post, then redirect, so a reload never posts again
-					http.Redirect(w, r, self, http.StatusSeeOther)
+					http.Redirect(w, r, h.feedback.put(self, e.Result), http.StatusSeeOther)
 					return
 				}
 				w.Header().Set("Location", self)
+			}
+		}
+		if r.Method == "GET" && wantsHTML(r) && status < 400 {
+			if feedback := h.feedback.take(r.URL.Path, r.URL.Query().Get("feedback")); feedback != "" {
+				e.Result = feedback
+				w.Header().Set("Cache-Control", "no-store")
+				w.Header().Set("Referrer-Policy", "no-referrer")
 			}
 		}
 		write(w, r, status, e)
@@ -198,13 +207,40 @@ func source(r *http.Request) (string, error) {
 	return s, core.CheckSource(s)
 }
 
+const maxRequestBody = 20 << 20
+
+func requestBodyError(err error) error {
+	var limit *http.MaxBytesError
+	if errors.As(err, &limit) {
+		return requestLimit("request body is larger than 20 MiB")
+	}
+	return &core.Error{Status: 400, Msg: "body: " + err.Error()}
+}
+
+func requestLimit(msg string) error {
+	return &core.Error{Status: http.StatusRequestEntityTooLarge, Msg: msg}
+}
+
 // form reads an action's fields: urlencoded (what a browser and the CLI send) or a JSON object.
 func form(r *http.Request) (url.Values, error) {
+	defer r.Body.Close()
+	r.Body = http.MaxBytesReader(nil, r.Body, maxRequestBody)
 	ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if ct == "application/json" {
 		var m map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&m); err != nil {
-			return nil, &core.Error{Status: 400, Msg: "body: " + err.Error()}
+		dec := json.NewDecoder(r.Body)
+		if err := dec.Decode(&m); err != nil {
+			return nil, requestBodyError(err)
+		}
+		if m == nil {
+			return nil, requestBodyError(errors.New("expected a JSON object"))
+		}
+		var extra any
+		if err := dec.Decode(&extra); err != io.EOF {
+			if err == nil {
+				err = errors.New("expected one JSON object")
+			}
+			return nil, requestBodyError(err)
 		}
 		v := url.Values{}
 		for k, x := range m {
@@ -220,7 +256,7 @@ func form(r *http.Request) (url.Values, error) {
 		return v, nil
 	}
 	if err := r.ParseForm(); err != nil {
-		return nil, &core.Error{Status: 400, Msg: err.Error()}
+		return nil, requestBodyError(err)
 	}
 	return r.Form, nil
 }
@@ -398,7 +434,7 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(kinds) > 0 {
+	if len(kinds) > 0 && !p.IsStub {
 		e.Actions = append(e.Actions, withOptions(action("link", ids, nil), "kind", kinds))
 		e.Actions = append(e.Actions, withOptions(action("unlink", ids, nil), "kind", kinds))
 	}

@@ -153,6 +153,59 @@ func Targets(body, ownKey string) (keys, titles, rejected []string) {
 	return
 }
 
+// HasEmbed reports a rendered wiki embed naming title, using CommonMark's inline precedence.
+func HasEmbed(body, title string) bool {
+	key := TitleKey(title)
+	for _, run := range renderedTextRuns(body) {
+		for _, m := range wiki.FindAllStringSubmatchIndex(run, -1) {
+			if m[0] == 0 || run[m[0]-1] != '!' {
+				continue
+			}
+			target, _, _ := strings.Cut(run[m[2]:m[3]], "|")
+			target = strings.Trim(target, " ")
+			if ValidTitle(target) && TitleKey(target) == key {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func renderedTextRuns(body string) []string {
+	src := []byte(body)
+	doc := md.Parser().Parse(gtext.NewReader(src))
+	var runs []string
+	var walk func(ast.Node)
+	walk = func(parent ast.Node) {
+		for c := parent.FirstChild(); c != nil; {
+			switch c.(type) {
+			case *ast.Link, *ast.Image, *ast.AutoLink, *ast.CodeSpan, *ast.RawHTML,
+				*ast.CodeBlock, *ast.FencedCodeBlock, *ast.HTMLBlock:
+				c = c.NextSibling()
+			case *ast.Text:
+				var raw bytes.Buffer
+				for c != nil {
+					t, ok := c.(*ast.Text)
+					if !ok {
+						break
+					}
+					raw.Write(t.Segment.Value(src))
+					c = c.NextSibling()
+					if t.SoftLineBreak() || t.HardLineBreak() {
+						break
+					}
+				}
+				runs = append(runs, string(util.ResolveEntityNames(util.ResolveNumericReferences(util.UnescapePunctuations(raw.Bytes())))))
+			default:
+				walk(c)
+				c = c.NextSibling()
+			}
+		}
+	}
+	walk(doc)
+	return runs
+}
+
 // TagAt reads the #tag that starts s, where prev is the character before it ('\n' at the start of a line), by the
 // rules Candidates applies; n is its length in bytes, '#' included, and 0 when no tag naming a page starts there.
 func TagAt(prev rune, s string) (tag string, n int) {

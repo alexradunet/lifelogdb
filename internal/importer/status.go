@@ -84,11 +84,19 @@ func (w *Workspace) Status(ctx context.Context, s *core.Store, dbPath string) (*
 		if st.Counts, err = s.Counts(ctx); err != nil {
 			return nil, err
 		}
+		verified := map[int64]bool{}
+		if st.Corrections, err = w.correctionIntentStates(ctx, s, verified); err != nil {
+			return nil, err
+		}
 		if st.Source != "" && st.Gates["rules.md"] == "approved" {
 			w.mismatches(ctx, s, st, lines, plan)
 		}
-		if st.Corrections, err = w.correctionIntentStates(ctx, s); err != nil {
+		n, err := s.DirectAgentRows(ctx, verified)
+		if err != nil {
 			return nil, err
+		}
+		if n > 0 {
+			st.Outside = append(st.Outside, fmt.Sprintf("%d rows were written by agents directly, outside the facts: a replay does not carry them", n))
 		}
 	} else {
 		st.Mismatches = append(st.Mismatches, "no database was checked")
@@ -259,13 +267,7 @@ func (w *Workspace) mismatches(ctx context.Context, s *core.Store, st *Status, l
 			st.Mismatches = append(st.Mismatches, fmt.Sprintf("%d rows of %s are in no done facts file or vault note", outside, st.Source))
 		}
 	}
-	if res, err := s.Query(ctx, `SELECT (SELECT count(*) FROM entities WHERE source LIKE 'agent:%')
-	                                  + (SELECT count(*) FROM links WHERE source LIKE 'agent:%')
-	                                  + (SELECT count(*) FROM measurements WHERE source LIKE 'agent:%')`, 1); err == nil {
-		if n, _ := res.Rows[0][0].(int64); n > 0 {
-			st.Outside = append(st.Outside, fmt.Sprintf("%d rows were written by agents directly, outside the facts: a replay does not carry them", n))
-		}
-	}
+
 }
 
 // pendingNotes counts the notes of a plan not in the database yet.

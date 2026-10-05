@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -110,7 +111,11 @@ func parseFacts(data []byte) (*Facts, error) {
 	if err := dec.Decode(&f); err != nil {
 		return nil, refuse("facts file: %v", err)
 	}
-	if dec.More() {
+	var trailing json.RawMessage
+	if err := dec.Decode(&trailing); err != io.EOF {
+		if err != nil {
+			return nil, refuse("facts file: trailing input: %v", err)
+		}
 		return nil, refuse("facts file: one JSON object only")
 	}
 	if f.Writes == nil {
@@ -145,11 +150,13 @@ func (w *Workspace) WriteFacts(file string, data []byte) error {
 	if err != nil {
 		return err
 	}
+	var pretty bytes.Buffer
+	if err := json.Indent(&pretty, data, "", "  "); err != nil {
+		return refuse("facts file: %v", err)
+	}
 	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
 		return err
 	}
-	var pretty bytes.Buffer
-	json.Indent(&pretty, data, "", "  ")
 	return writeAtomic(p, pretty.Bytes())
 }
 
@@ -433,7 +440,7 @@ func (w *Workspace) checkStatic(f *Facts, source string, rules *Rules, approved 
 				continue
 			}
 			marker := m.Unit == "" && (num == 0 || num == 1)
-			if err := checkReadingSourceEvidence(f.File, source, src, q, pos[i], numText, unit, marker); err != nil {
+			if err := checkReadingSourceEvidence(f.File, source, src, q, pos[i], numText, unit, marker, approved); err != nil {
 				bad(i, "%v", err)
 			}
 			if r.With != "" {

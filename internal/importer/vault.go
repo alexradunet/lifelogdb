@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
+	gtext "github.com/yuin/goldmark/text"
 	"golang.org/x/text/unicode/norm"
 
 	"lifelog/internal/core"
@@ -45,7 +48,13 @@ func (w *Workspace) LoadPlan() (*Plan, bool, error) {
 
 // IsVault says whether the source is a vault: it has an .obsidian folder, or a plan was made.
 func (w *Workspace) IsVault() bool {
-	return exists(filepath.Join(w.Source, ".obsidian")) || exists(w.planPath())
+	root, err := os.OpenRoot(w.Source)
+	if err != nil {
+		return exists(w.planPath())
+	}
+	defer root.Close()
+	_, err = root.Stat(".obsidian")
+	return err == nil || exists(w.planPath())
 }
 
 // PlanVault drafts plan.json against the database: every note becomes one page titled by its file name, a
@@ -72,10 +81,8 @@ func (w *Workspace) PlanVault(ctx context.Context, s *core.Store) (*Plan, error)
 		} else if src, err := w.ReadSource(f); err == nil {
 			n.Day = fileDay(f, src)
 			if n.Day == "" {
-				if p, err := w.SourcePath(f); err == nil {
-					if st, err := os.Stat(p); err == nil {
-						n.Day = st.ModTime().Format(time.DateOnly)
-					}
+				if st, err := w.statSource(f); err == nil {
+					n.Day = st.ModTime().Format(time.DateOnly)
 				}
 			}
 		}
@@ -113,6 +120,9 @@ func (w *Workspace) validatePlan(ctx context.Context, s *core.Store, p *Plan) er
 			if len(byKey[text.TitleKey(n.Title)]) > 1 {
 				n.Problems = append(n.Problems, "another note has the same title: change one")
 			}
+			if err := checkVaultIdentity(t, n); err != nil {
+				return err
+			}
 			if n.Appended {
 				continue
 			}
@@ -138,6 +148,22 @@ func (w *Workspace) validatePlan(ctx context.Context, s *core.Store, p *Plan) er
 		}
 		return nil
 	})
+}
+
+func checkVaultIdentity(t *core.Tx, n *Note) error {
+	title, day, found, err := t.ImportedPageIdentity(n.Path)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return nil
+	}
+	plannedDay := n.Day
+	sameDay := (day == nil && plannedDay == "") || (day != nil && *day == plannedDay)
+	if title != n.Title || !sameDay {
+		return refuse("%s: applied page identity conflicts with the plan; titles and days cannot change after apply: ask the owner to replan in a fresh trial workspace", n.Path)
+	}
+	return nil
 }
 
 // FixPlan changes one note's title and day: the only fields the model may edit.
@@ -218,10 +244,28 @@ func (w *Workspace) applyPlan(ctx context.Context, s *core.Store, p *Plan, recor
 	if err != nil {
 		return nil, err
 	}
+	// Read every source before the first write, so a refused source leaves persistence unchanged.
+	root, err := os.OpenRoot(w.Source)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	bodies := make([]string, len(p.Notes))
+	for i, n := range p.Notes {
+		bodies[i], err = w.readSource(root, n.Path)
+		if err != nil {
+			return nil, err
+		}
+	}
 	res := &VaultResult{}
 	// 1. every page, in one transaction
 	err = s.Do(ctx, src, func(t *core.Tx) error {
 		res.Created = 0
+		for i := range p.Notes {
+			if err := checkVaultIdentity(t, &p.Notes[i]); err != nil {
+				return err
+			}
+		}
 		for _, n := range p.Notes {
 			if n.Action != "create" {
 				continue
@@ -247,10 +291,7 @@ func (w *Workspace) applyPlan(ctx context.Context, s *core.Store, p *Plan, recor
 	// 2. each body, in its own transaction
 	for i := range p.Notes {
 		n := &p.Notes[i]
-		raw, err := w.ReadSource(n.Path)
-		if err != nil {
-			return res, err
-		}
+		raw := bodies[i]
 		body := rewriteLinks(raw, n, links)
 		err = s.Do(ctx, src, func(t *core.Tx) error {
 			if n.Action == "append" {
@@ -287,7 +328,8 @@ func (w *Workspace) applyPlan(ctx context.Context, s *core.Store, p *Plan, recor
 }
 
 // appendOnce appends a daily note to its day page, as capture appends, unless it was appended before: by its
-// record, or, should the record have been lost, by the page already ending with the text.
+// record, or, should the record have been lost, by an exact body or complete trailing capture block.
+// Independently identical trailing text remains indistinguishable from a lost record.
 func appendOnce(t *core.Tx, n *Note, body string, res *VaultResult) error {
 	if strings.TrimSpace(body) == "" {
 		res.Same++
@@ -295,7 +337,7 @@ func appendOnce(t *core.Tx, n *Note, body string, res *VaultResult) error {
 	}
 	if p, err := t.Lookup(n.Title); err != nil {
 		return err
-	} else if p != nil && (n.Appended || strings.Contains(p.Body, body)) {
+	} else if p != nil && (n.Appended || p.Body == body || strings.HasSuffix(p.Body, "\n\n"+body)) {
 		res.Same++
 		return nil
 	}
@@ -323,7 +365,6 @@ func linkIndex(p *Plan) map[string]*Note {
 }
 
 var (
-	fenceRE     = regexp.MustCompile("^ {0,3}(```+|~~~+)")
 	wikiTokenRE = regexp.MustCompile(`!?\[\[([^\[\]\n]*)\]\]`)
 	attachExt   = regexp.MustCompile(`(?i)\.(png|jpe?g|gif|webp|svg|bmp|pdf|mp3|wav|m4a|ogg|mp4|mov|webm|zip|docx?|xlsx?|pptx?|canvas)$`)
 )
@@ -332,51 +373,61 @@ var (
 // a .md suffix, or a renamed target become [[Title|what was written]]; an attachment becomes a code span; a link
 // to a heading of the same note becomes a code span too, so it makes no row. Every other byte is kept.
 func rewriteLinks(src string, self *Note, idx map[string]*Note) string {
-	lines := strings.SplitAfter(src, "\n")
-	var out strings.Builder
-	fence := ""
-	for _, line := range lines {
-		if m := fenceRE.FindStringSubmatch(line); m != nil {
-			switch {
-			case fence == "":
-				fence = m[1][:3]
-			case strings.HasPrefix(m[1], fence):
-				fence = ""
+	// Recover code source segments only; never render or normalize Markdown.
+	doc := goldmark.New().Parser().Parse(gtext.NewReader([]byte(src)))
+	type span struct{ start, end int }
+	var protected []span
+	add := func(start, end int) {
+		if end > start {
+			protected = append(protected, span{start, end})
+		}
+	}
+	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		switch c := n.(type) {
+		case *ast.CodeSpan:
+			// Cover newlines and container prefixes between the inline segments too.
+			if first, last := c.FirstChild(), c.LastChild(); first != nil {
+				add(first.(*ast.Text).Segment.Start, last.(*ast.Text).Segment.Stop)
 			}
-			out.WriteString(line)
-			continue
+			return ast.WalkSkipChildren, nil
+		case *ast.FencedCodeBlock:
+			if c.Info != nil {
+				add(c.Info.Segment.Start, c.Info.Segment.Stop)
+			}
+			for i := 0; i < c.Lines().Len(); i++ {
+				line := c.Lines().At(i)
+				add(line.Start, line.Stop)
+			}
+			return ast.WalkSkipChildren, nil
+		case *ast.CodeBlock:
+			for i := 0; i < c.Lines().Len(); i++ {
+				line := c.Lines().At(i)
+				add(line.Start, line.Stop)
+			}
+			return ast.WalkSkipChildren, nil
 		}
-		if fence != "" || strings.HasPrefix(line, "    ") || strings.HasPrefix(line, "\t") {
-			out.WriteString(line)
-			continue
-		}
-		out.WriteString(rewriteOutsideCodeSpans(line, self, idx))
-	}
-	return out.String()
-}
-
-func rewriteOutsideCodeSpans(line string, self *Note, idx map[string]*Note) string {
+		return ast.WalkContinue, nil
+	})
+	sort.Slice(protected, func(i, j int) bool { return protected[i].start < protected[j].start })
 	var out strings.Builder
-	for len(line) > 0 {
-		i := strings.IndexByte(line, '`')
-		if i < 0 {
-			out.WriteString(rewriteText(line, self, idx))
-			break
+	offset := 0
+	for _, r := range protected {
+		if r.start > offset {
+			out.WriteString(rewriteText(src[offset:r.start], self, idx))
 		}
-		out.WriteString(rewriteText(line[:i], self, idx))
-		n := 1
-		for i+n < len(line) && line[i+n] == '`' {
-			n++
+		if r.end > offset {
+			start := r.start
+			if start < offset {
+				start = offset
+			}
+			out.WriteString(src[start:r.end])
+			offset = r.end
 		}
-		ticks := line[i : i+n]
-		end := strings.Index(line[i+n:], ticks)
-		if end < 0 {
-			out.WriteString(line[i:])
-			break
-		}
-		out.WriteString(line[i : i+n+end+n])
-		line = line[i+n+end+n:]
 	}
+	out.WriteString(rewriteText(src[offset:], self, idx))
 	return out.String()
 }
 

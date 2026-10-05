@@ -127,3 +127,122 @@ func isExists(err error) bool {
 	_, ok := err.(*ExistsError)
 	return ok || status(err) == 409
 }
+
+func TestCaptureHabitDomain(t *testing.T) {
+	s := fresh(t)
+	if err := s.StartHabit(ctx, "cli", "Mood", "2026-09-01", ""); err != nil {
+		t.Fatal(err)
+	}
+	day, _, err := s.Capture(ctx, "cli", "2026-09-29", "original [[Kept]]", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Tombstone(ctx, "cli", day); err != nil {
+		t.Fatal(err)
+	}
+	four := float64(4)
+	if _, _, err := s.Capture(ctx, "cli", "2026-09-29", "new [[Rollback target]]", &four); status(err) != 422 {
+		t.Errorf("habit mood 4: %v", err)
+	}
+	p, err := s.PageByID(ctx, day)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Body != "original [[Kept]]" || titles(p.Out, "wikilink") != "Kept" {
+		t.Errorf("capture not rolled back: %+v", p)
+	}
+	var deleted bool
+	if err := s.DB.R.QueryRow(`SELECT deleted_at IS NOT NULL FROM entities WHERE id = ?`, day).Scan(&deleted); err != nil || !deleted {
+		t.Errorf("day revival persisted: %v %v", deleted, err)
+	}
+	var n int
+	s.DB.R.QueryRow(`SELECT count(*) FROM pages WHERE title_key = 'rollback target'`).Scan(&n)
+	if n != 0 {
+		t.Error("target creation persisted")
+	}
+	s.DB.R.QueryRow(`SELECT count(*) FROM measurements`).Scan(&n)
+	if n != 0 {
+		t.Error("reading persisted")
+	}
+	if _, _, err := s.Capture(ctx, "cli", "2026-09-30", "new day", &four); status(err) != 422 {
+		t.Errorf("new day habit mood: %v", err)
+	}
+	s.DB.R.QueryRow(`SELECT count(*) FROM pages WHERE title_key = '2026-09-30'`).Scan(&n)
+	if n != 0 {
+		t.Error("new day persisted")
+	}
+	one := float64(1)
+	if _, _, err := s.Capture(ctx, "cli", "2026-09-29", "accepted", &one); err != nil {
+		t.Fatal(err)
+	}
+	s.DB.R.QueryRow(`SELECT count(*) FROM measurements WHERE value = 1 AND source = 'cli' AND captured_with_id = ?`, day).Scan(&n)
+	if n != 1 {
+		t.Error("capture provenance lost")
+	}
+	mood, err := s.PageID(ctx, "Mood")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Tombstone(ctx, "cli", mood); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.Capture(ctx, "cli", "2026-10-01", "refused", &one); status(err) != 404 {
+		t.Errorf("tombstoned mood: %v", err)
+	}
+	s.DB.R.QueryRow(`SELECT count(*) FROM pages WHERE title_key = '2026-10-01'`).Scan(&n)
+	if n != 0 {
+		t.Error("missing mood capture persisted")
+	}
+	if _, _, err := s.Capture(ctx, "cli", "2026-10-01", "text only", nil); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTombstonedHabits(t *testing.T) {
+	s := fresh(t)
+	if _, err := s.RegisterMetric(ctx, "cli", "Walk", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.StartHabit(ctx, "cli", "Walk", "2026-09-01", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Record(ctx, "cli", Reading{Metric: "Walk", Day: "2026-09-01", Value: 1}); err != nil {
+		t.Fatal(err)
+	}
+	id, _ := s.PageID(ctx, "Walk")
+	for i, hidden := range []bool{false, true, false} {
+		var err error
+		if hidden {
+			err = s.Tombstone(ctx, "cli", id)
+		} else if i > 0 {
+			err = s.Revive(ctx, "cli", id)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		h, err := s.Habits(ctx, "2026-09-01")
+		if err != nil {
+			t.Fatal(err)
+		}
+		c, err := s.Completion(ctx, "2026-09-01", "2026-09-02")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if hidden {
+			if len(h) != 0 || len(c) != 0 {
+				t.Errorf("hidden habit displayed: %v %v", h, c)
+			}
+		} else if len(h) != 1 || h[0].State != "done" || len(c) != 1 || c[0].Done != 1 || c[0].NotRecorded != 1 {
+			t.Errorf("live habit: %v %v", h, c)
+		}
+		var n int
+		s.DB.R.QueryRow(`SELECT count(*) FROM habit_periods WHERE metric_id = ?`, id).Scan(&n)
+		if n != 1 {
+			t.Error("period lost")
+		}
+		s.DB.R.QueryRow(`SELECT count(*) FROM measurements WHERE metric_id = ? AND value = 1`, id).Scan(&n)
+		if n != 1 {
+			t.Error("reading lost")
+		}
+	}
+}

@@ -178,3 +178,23 @@ func TestTagAtAgreesWithCandidates(t *testing.T) {
 		}
 	}
 }
+
+func TestPhotoEmbedContexts(t *testing.T) {
+	for _, tc := range []struct {
+		body string
+		want bool
+	}{
+		{"![[PHOTO.jpg|alias]]", true}, {"`![[Photo.jpg]]`", false},
+		{"~~~\n![[Photo.jpg]]\n~~~", false}, {"[![[Photo.jpg]]](url)", false},
+		{"![![[Photo.jpg]]](url)", false}, {"[[Photo.jpg]]", false},
+		{"![[Photo.jpg]]", true}, {"![[Lake [1].jpg]]", false},
+	} {
+		title := "Photo.jpg"
+		if strings.Contains(tc.body, "Lake") {
+			title = "Lake [1].jpg"
+		}
+		if got := HasEmbed(tc.body, title); got != tc.want {
+			t.Errorf("%q: %v", tc.body, got)
+		}
+	}
+}

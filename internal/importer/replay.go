@@ -100,11 +100,25 @@ func (w *Workspace) Replay(ctx context.Context, trial *core.Store, target string
 // all of them, then the integrity checks and the comparison with the trial. The target is only read, and the copy
 // is removed before Rehearse returns.
 func (w *Workspace) Rehearse(ctx context.Context, trial *core.Store, target string) (res *ReplayResult, err error) {
+	if p, ok, err := w.LoadPlan(); err != nil {
+		return nil, err
+	} else if ok {
+		if err := w.validatePlan(ctx, trial, p); err != nil {
+			return nil, err
+		}
+	}
 	if err := w.RecoverCorrections(ctx, trial); err != nil {
 		return nil, err
 	}
-	if err := w.validateTrialReadingIdentity(ctx, trial); err != nil {
+	res = newReplayResult(target)
+	res.DryRun = true
+	failures, err := w.collectTrialReadingIdentityFailures(ctx, trial)
+	if err != nil {
 		return nil, err
+	}
+	if len(failures) > 0 {
+		res.Failures = failures
+		return res, nil
 	}
 	if same(target, w.TrialDB()) {
 		return nil, refuse("the target is the trial database itself")

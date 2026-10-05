@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -120,7 +122,12 @@ func mcpTestClient(t *testing.T) *client.Client {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c := client.InProcess(api.New(&core.Store{DB: d}, ws), "agent:test")
+	handler := api.New(&core.Store{DB: d}, ws)
+	owner := client.InProcess(handler, "cli")
+	for _, fields := range []map[string]string{{"name": "walk"}, {"name": "weight", "unit": "kg"}} {
+		must(owner.Do(actionByName(t, must(owner.Get("/")), "register-metric"), fields))
+	}
+	c := client.InProcess(handler, "agent:test")
 	if _, err := c.Do(actionByName(t, must(c.Get("/")), "create-page"), map[string]string{"title": "Ana", "body": "Synthetic page"}); err != nil {
 		t.Fatal(err)
 	}
@@ -175,4 +182,168 @@ func href(e *api.Entity, rel string) string {
 		}
 	}
 	return ""
+}
+
+func numericSession(t *testing.T, c *client.Client) (*mcpsdk.ClientSession, context.Context) {
+	t.Helper()
+	srv, err := New(c, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, ct := mcpsdk.NewInMemoryTransports()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	done := make(chan error, 1)
+	go func() { done <- srv.Run(ctx, st) }()
+	session, err := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "test", Version: "0"}, nil).Connect(ctx, ct, nil)
+	if err != nil {
+		cancel()
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		session.Close()
+		cancel()
+		if err := <-done; err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	})
+	return session, ctx
+}
+
+func TestMCPNumericSchema(t *testing.T) {
+	session, ctx := numericSession(t, mcpTestClient(t))
+	tools, err := session.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tool := range tools.Tools {
+		b, _ := json.Marshal(tool.InputSchema)
+		var schema map[string]any
+		json.Unmarshal(b, &schema)
+		for name, property := range schema["properties"].(map[string]any) {
+			p := property.(map[string]any)
+			if options, ok := p["enum"].([]any); ok {
+				for _, v := range options {
+					switch p["type"] {
+					case "number":
+						if _, ok := v.(float64); !ok {
+							t.Errorf("%s.%s numeric enum is %T", tool.Name, name, v)
+						}
+					case "string":
+						if _, ok := v.(string); !ok {
+							t.Errorf("string enum is %T", v)
+						}
+					}
+				}
+			}
+		}
+	}
+	callTool(t, ctx, session, "start_habit", map[string]any{"name": "walk", "start_day": "2026-06-01"})
+	for _, done := range []int{0, 1} {
+		callTool(t, ctx, session, "check_in", map[string]any{"name": "walk", "day": fmt.Sprintf("2026-06-0%d", done+1), "done": done})
+	}
+	for _, args := range []map[string]any{{"name": "walk", "day": "2026-06-03", "done": 2}, {"name": "walk", "day": "2026-06-03"}} {
+		res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{Name: "check_in", Arguments: args})
+		if err == nil && !res.IsError {
+			t.Fatal("invalid check-in accepted")
+		}
+	}
+	callTool(t, ctx, session, "record", map[string]any{"metric": "weight", "day": "2026-06-01", "value": 71.5})
+}
+
+func TestMCPNumericArguments(t *testing.T) {
+	base := mcpTestClient(t)
+	actions, err := base.Catalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var paths []string
+	c := client.InProcess(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.siren+json")
+		if r.URL.Path == "/actions" {
+			json.NewEncoder(w).Encode(api.Entity{Actions: actions})
+			return
+		}
+		paths = append(paths, r.URL.Path)
+		json.NewEncoder(w).Encode(api.Entity{})
+	}), "agent:test")
+	session, ctx := numericSession(t, c)
+	for _, token := range []string{"999999", "1000000", "9007199254740993", "1e6", "9.007199254740993e15"} {
+		res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{Name: "tombstone", Arguments: json.RawMessage(`{"id":` + token + `}`)})
+		if err != nil || res.IsError {
+			t.Fatalf("%s: %v %v", token, res, err)
+		}
+	}
+	want := []string{"/pages/999999/tombstone", "/pages/1000000/tombstone", "/pages/9007199254740993/tombstone", "/pages/1000000/tombstone", "/pages/9007199254740993/tombstone"}
+	if fmt.Sprint(paths) != fmt.Sprint(want) {
+		t.Fatalf("paths %v want %v", paths, want)
+	}
+	for _, token := range []string{"1.5", "9223372036854775808", "1e100", "{}", "[]"} {
+		res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{Name: "tombstone", Arguments: json.RawMessage(`{"id":` + token + `}`)})
+		if err == nil && !res.IsError {
+			t.Fatalf("accepted %s", token)
+		}
+	}
+	if len(paths) != len(want) {
+		t.Fatal("invalid IDs dispatched")
+	}
+}
+
+func TestMCPNumericInvalidCatalog(t *testing.T) {
+	for _, option := range []string{"oops", "null", "\"1\""} {
+		if _, err := schema([]api.Field{{Name: "done", Type: "number", Options: []string{option}}}); err == nil {
+			t.Fatalf("accepted %q", option)
+		}
+	}
+}
+
+func TestMCPCancellation(t *testing.T) {
+	started, stopped := make(chan struct{}), make(chan struct{})
+	c := client.InProcess(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/blocked" {
+			close(started)
+			<-r.Context().Done()
+			close(stopped)
+			return
+		}
+		fmt.Fprint(w, `{}`)
+	}), "cli")
+	srv, err := New(c, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, ct := mcpsdk.NewInMemoryTransports()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- srv.Run(ctx, st) }()
+	session, err := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "test", Version: "0"}, nil).Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { session.Close(); cancel(); <-done }()
+	callCtx, stop := context.WithCancel(ctx)
+	defer stop()
+	result := make(chan error, 1)
+	go func() {
+		_, err := session.CallTool(callCtx, &mcpsdk.CallToolParams{Name: "get", Arguments: map[string]any{"href": "/blocked"}})
+		result <- err
+	}()
+	select {
+	case <-started:
+	case <-ctx.Done():
+		t.Fatal("call did not start")
+	}
+	stop()
+	select {
+	case <-stopped:
+	case <-ctx.Done():
+		t.Fatal("SDK did not cancel handler")
+	}
+	if err := <-result; err == nil {
+		t.Fatal("canceled call succeeded")
+	}
+	res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{Name: "get", Arguments: map[string]any{"href": "/ok"}})
+	if err != nil || res.IsError {
+		t.Fatalf("later call: %v %v", res, err)
+	}
 }

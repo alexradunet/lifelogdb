@@ -9,6 +9,9 @@ import (
 // dates: time (lifelog_meta.instants and .days, D10) — instants, local days and their round-trip CHECKs, why `IS`
 // and not `=`, the zone, and created_at written by the writer.
 func dates(s *S) {
+	fractional := s.fresh()
+	s.K("measurements.created_at accepts a UTC instant with milliseconds", fractional.tryx("INSERT INTO measurements(metric_id,day,value,source,created_at) VALUES (1,'2026-01-01',3,'ui','2026-01-01T12:34:56.123Z')") == "OK")
+
 	c := s.fresh()
 	ENT := "INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES ('page',?,'2026-06-09T10:00:00.000Z','ui')"
 

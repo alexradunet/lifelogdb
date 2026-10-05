@@ -56,7 +56,9 @@ svg.chart circle{fill:var(--accent)}svg.chart .axis{stroke:var(--line)}svg.chart
 </style></head><body>
 <header class="top"><a class="brand" href="/">Lifelog</a><a href="/days/today">Today</a><a href="/days">Days</a><a href="/people">People</a><a href="/places">Places</a><a href="/files">Files</a><a href="/metrics">Metrics</a><a href="/habits">Habits</a><a href="/#new">New</a>
 <form method="GET" action="/search" role="search"><input type="search" name="q" placeholder="Search" aria-label="Search"></form></header>
-<main>{{end}}
+<main>{{template "feedback" .}}{{end}}
+
+{{define "feedback"}}{{with .Result}}<div class="note" role="status"><h2>Result</h2>{{value .}}</div>{{end}}{{end}}
 
 {{define "foot"}}</main></body></html>{{end}}
 
@@ -75,7 +77,6 @@ svg.chart circle{fill:var(--accent)}svg.chart .axis{stroke:var(--line)}svg.chart
 {{define "generic"}}{{template "head" .}}
 <h1>{{.Title}}</h1><div class="sub">{{rel .Class}}</div>
 <p class="sub">{{range .Links}}<a href="{{.Href}}" rel="{{rel .Rel}}">{{or .Title .Href}}</a>{{end}}</p>
-{{with .Result}}<div class="note"><h2>Result</h2>{{value .}}</div>{{end}}
 {{with .Properties}}<section class="scroll">{{value .}}</section>{{end}}
 {{with .Entities}}<h2>Links</h2><ul class="plain">{{range .}}<li><a href="{{.Href}}">{{or .Title .Href}}</a> <span class="muted">{{rel .Rel}}</span></li>{{end}}</ul>{{end}}
 {{with .Actions}}<h2>Actions</h2>{{range .}}{{template "boxed" (form .)}}{{end}}{{end}}

@@ -18,7 +18,7 @@ type numberToken struct {
 	approximate bool
 }
 
-func checkReadingSourceEvidence(file, source, sourceCollapsed, quote string, quotePos int, numText, unit string, marker bool) error {
+func checkReadingSourceEvidence(file, source, sourceCollapsed, quote string, quotePos int, numText, unit string, marker bool, approved map[string]Metric) error {
 	matches, approximate := matchingNumberTokens(quote, numText, sourceCollapsed, quotePos)
 	tableValue := tableValueEvidence(file, source, sourceCollapsed, quote, quotePos, numText)
 	if marker {
@@ -36,6 +36,9 @@ func checkReadingSourceEvidence(file, source, sourceCollapsed, quote string, quo
 	}
 	if unit == "" {
 		if got := inlineUnitCandidate(quote, 0, matches); got != "" {
+			return refuse("the source evidence has unit %q at value %s, but the facts omit the unit", got, numText)
+		}
+		if got := omittedInlineUnit(sourceCollapsed, quotePos, matches, approved); got != "" {
 			return refuse("the source evidence has unit %q at value %s, but the facts omit the unit", got, numText)
 		}
 		if _, conflict := tableUnitEvidence(file, source, sourceCollapsed, quote, quotePos, numText, unit); conflict != "" {
@@ -162,9 +165,9 @@ func canStartNumber(s string, i int) bool {
 		}
 	}
 	if s[i] == '+' || s[i] == '-' {
-		return i+1 < len(s) && isASCIIDigit(s[i+1])
+		return i+1 < len(s) && (isASCIIDigit(s[i+1]) || ((s[i+1] == '.' || s[i+1] == ',') && i+2 < len(s) && isASCIIDigit(s[i+2])))
 	}
-	return isASCIIDigit(s[i])
+	return isASCIIDigit(s[i]) || ((s[i] == '.' || s[i] == ',') && i+1 < len(s) && isASCIIDigit(s[i+1]))
 }
 
 func isASCIIDigit(b byte) bool { return b >= '0' && b <= '9' }
@@ -253,6 +256,26 @@ func inlineUnitCandidate(context string, base int, matches []numberToken) string
 		}
 		got := b.String()
 		if strings.ContainsFunc(got, unicode.IsLetter) || strings.ContainsAny(got, "/%") {
+			return got
+		}
+	}
+	return ""
+}
+
+// Outside quote bounds, only lexical unit evidence is used, never a prose guess.
+func omittedInlineUnit(context string, base int, matches []numberToken, approved map[string]Metric) string {
+	for _, tok := range matches {
+		got := inlineUnitCandidate(context, base, []numberToken{tok})
+		if strings.ContainsAny(got, "/%µμ") {
+			return got
+		}
+		for _, m := range approved {
+			if m.Unit != "" && got == m.Unit {
+				return got
+			}
+		}
+		switch got {
+		case "kg", "g", "mg", "ng", "L", "mL", "dL", "cm", "mm", "km", "mmHg", "bpm", "kcal":
 			return got
 		}
 	}

@@ -36,6 +36,20 @@ func (t *Tx) ByImportKey(importKey string) (int64, error) {
 	return id, err
 }
 
+// ImportedPageIdentity reads the stored handle and nullable day for this source's key.
+// found is false when the key has not been applied.
+func (t *Tx) ImportedPageIdentity(importKey string) (title string, day *string, found bool, err error) {
+	var d sql.NullString
+	err = t.tx.QueryRow(`SELECT p.title, p.day FROM pages p JOIN entities e ON e.id = p.id WHERE e.source = ? AND e.import_key = ?`, t.Source, importKey).Scan(&title, &d)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil, false, nil
+	}
+	if d.Valid {
+		day = &d.String
+	}
+	return title, day, err == nil, err
+}
+
 // MetricUnit is a registered metric's unit; found is false when no metric has the name.
 func (t *Tx) MetricUnit(name string) (unit string, found bool, err error) {
 	err = t.tx.QueryRow(`SELECT m.unit FROM metrics m JOIN pages p ON p.id = m.id WHERE p.title_key = ?`, text.TitleKey(name)).Scan(&unit)
@@ -223,4 +237,27 @@ func (t *Tx) KeyedValue(metric, key string) (value float64, found bool, err erro
 		return 0, false, nil
 	}
 	return value, err == nil, err
+}
+
+// DirectAgentRows counts outside writes, excluding only verified durable measurement events.
+func (s *Store) DirectAgentRows(ctx context.Context, verified map[int64]bool) (int, error) {
+	var n int
+	if err := s.DB.R.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM entities WHERE source LIKE 'agent:%') + (SELECT count(*) FROM links WHERE source LIKE 'agent:%')`).Scan(&n); err != nil {
+		return 0, err
+	}
+	rows, err := s.DB.R.QueryContext(ctx, `SELECT id FROM measurements WHERE source LIKE 'agent:%'`)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return 0, err
+		}
+		if !verified[id] {
+			n++
+		}
+	}
+	return n, rows.Err()
 }

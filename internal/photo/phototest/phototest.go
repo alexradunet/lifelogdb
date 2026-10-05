@@ -251,3 +251,45 @@ func appendUint(b []byte, size int, v uint64) []byte {
 	}
 	return b
 }
+
+// GPSReference replaces one reference entry in a synthetic JPEG or HEIC. A zero
+// tag removes the reference; an out-of-line count points past the TIFF data.
+func GPSReference(b []byte, axis uint16, typ uint16, count uint32, value string, absent bool) []byte {
+	b = append([]byte(nil), b...)
+	start := bytes.Index(b, []byte("MM\x00\x2a"))
+	if start < 0 {
+		start = bytes.Index(b, []byte("II\x2a\x00"))
+	}
+	t := b[start:]
+	var bo binary.ByteOrder = binary.BigEndian
+	if string(t[:2]) == "II" {
+		bo = binary.LittleEndian
+	}
+	off := int(bo.Uint32(t[4:]))
+	gps := 0
+	for i := 0; i < int(bo.Uint16(t[off:])); i++ {
+		e := off + 2 + 12*i
+		if bo.Uint16(t[e:]) == 0x8825 {
+			gps = int(bo.Uint32(t[e+8:]))
+		}
+	}
+	for i := 0; i < int(bo.Uint16(t[gps:])); i++ {
+		e := gps + 2 + 12*i
+		if bo.Uint16(t[e:]) != axis {
+			continue
+		}
+		if absent {
+			bo.PutUint16(t[e:], 0)
+			break
+		}
+		bo.PutUint16(t[e+2:], typ)
+		bo.PutUint32(t[e+4:], count)
+		clear(t[e+8 : e+12])
+		copy(t[e+8:e+12], value)
+		if count > 4 {
+			bo.PutUint32(t[e+8:], uint32(len(t)+1))
+		}
+		break
+	}
+	return b
+}

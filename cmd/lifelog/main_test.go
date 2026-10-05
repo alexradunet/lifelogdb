@@ -3,11 +3,16 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"image"
 	"image/jpeg"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -487,4 +492,320 @@ func cmdHref(e *api.Entity, rel string) string {
 		}
 	}
 	return ""
+}
+
+func TestImportTakeoutInventoryExtractionRoot(t *testing.T) {
+	root := t.TempDir()
+	for rel, body := range map[string]string{
+		"Takeout/Fit/Sessions/PRIVATE_MARKER.json":    `{"sessions":[{"startTime":"2020-01-10","PRIVATE_MARKER":"PRIVATE_MARKER"}]}`,
+		"Takeout/Fitbit/exercise-PRIVATE_MARKER.json": `[{"startTime":"2020-01-10"},{"PRIVATE_MARKER":"PRIVATE_MARKER"}]`,
+		"Timeline.json": `{"semanticSegments":[{"startTime":"2020-01-10","visit":{},"PRIVATE_MARKER":"PRIVATE_MARKER"}]}`,
+	} {
+		p := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	o, err := parse([]string{"import", "takeout", "inventory", root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := captureStdout(t, func() {
+		if err := run(o); err != nil {
+			t.Fatal(err)
+		}
+	})
+	for _, want := range []string{"Timeline On-Device", `"unsupported_files": 1`, `"metric": "exercise"`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %s: %s", want, out)
+		}
+	}
+	if strings.Contains(out, "PRIVATE_MARKER") || strings.Contains(out, root) {
+		t.Fatal("private inventory detail leaked")
+	}
+	if _, err := os.Stat(filepath.Join(root, "life.db")); !os.IsNotExist(err) {
+		t.Fatal("inventory created database")
+	}
+}
+
+func TestSnapshotPhysicalDestination(t *testing.T) {
+	for _, kind := range []string{"symlink", "junction"} {
+		for _, marker := range []string{"directory", "file"} {
+			for _, layout := range []string{"destination", "ancestor", "lexical", "safe"} {
+				t.Run(kind+"/"+marker+"/"+layout, func(t *testing.T) {
+					if kind == "junction" && runtime.GOOS != "windows" {
+						t.Skip("Windows directory junctions require Windows")
+					}
+					root := t.TempDir()
+					live := filepath.Join(root, "life.db")
+					if err := db.Init(live); err != nil {
+						t.Fatal(err)
+					}
+					before := mustRead(t, live)
+					repo := filepath.Join(root, "repo")
+					target := filepath.Join(repo, "backups")
+					if layout == "safe" || layout == "lexical" {
+						target = filepath.Join(root, "safe #%'")
+					}
+					for _, dir := range []string{repo, target} {
+						if err := os.MkdirAll(dir, 0o755); err != nil {
+							t.Fatal(err)
+						}
+					}
+					git := filepath.Join(repo, ".git")
+					if marker == "directory" {
+						if err := os.Mkdir(git, 0o755); err != nil {
+							t.Fatal(err)
+						}
+					} else if err := os.WriteFile(git, []byte("gitdir: synthetic-marker\n"), 0o644); err != nil {
+						t.Fatal(err)
+					}
+					link := filepath.Join(root, "linked")
+					if layout == "lexical" {
+						link = filepath.Join(repo, "linked")
+					}
+					if kind == "junction" {
+						if out, err := exec.Command("cmd", "/c", "mklink", "/J", link, target).CombinedOutput(); err != nil {
+							t.Skipf("cannot create test-owned junction: %v: %s", err, out)
+						}
+					} else if err := os.Symlink(target, link); err != nil {
+						t.Skipf("cannot create test-owned directory symlink: %v", err)
+					}
+					if kind == "junction" {
+						info, err := os.Lstat(link)
+						if err != nil {
+							t.Fatal(err)
+						}
+						got, err := os.Readlink(link)
+						if err != nil || !strings.EqualFold(got, target) {
+							t.Fatalf("junction Readlink: %q %v, want %q", got, err, target)
+						}
+						t.Logf("junction mode %s; Readlink resolves target", info.Mode())
+					}
+					dest := link
+					physical := target
+					if layout == "ancestor" {
+						dest = filepath.Join(link, "child")
+						physical = filepath.Join(target, "child")
+						if err := os.Mkdir(physical, 0o755); err != nil {
+							t.Fatal(err)
+						}
+					}
+					now := time.Date(2026, 10, 2, 14, 30, 5, 0, time.Local)
+					if layout == "safe" {
+						p, res, err := takeSnapshot(context.Background(), live, dest, now)
+						if err != nil || !res.OK {
+							t.Fatalf("safe linked destination: %s %+v %v", p, res, err)
+						}
+						resolved, err := filepath.EvalSymlinks(physical)
+						if err != nil {
+							t.Fatal(err)
+						}
+						if filepath.Dir(p) != resolved {
+							t.Errorf("copy path %s is not physical destination %s", p, resolved)
+						}
+					} else {
+						o, err := parse([]string{"snapshot", "--db", live, "--to", dest})
+						if err != nil {
+							t.Fatal(err)
+						}
+						if err := run(o); err == nil || !strings.Contains(err.Error(), "git work tree") {
+							t.Errorf("command refusal: %v", err)
+						}
+						for _, dir := range []string{dest, physical} {
+							entries, err := os.ReadDir(dir)
+							if err != nil {
+								t.Fatal(err)
+							}
+							if len(entries) != 0 {
+								t.Errorf("refused destination %s contains artifacts: %v", dir, entries)
+							}
+						}
+					}
+					if !bytes.Equal(before, mustRead(t, live)) {
+						t.Error("snapshot changed source bytes")
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestCommandCancellation(t *testing.T) {
+	for _, args := range [][]string{{"get", "blocked"}, {"capture", "synthetic"}, {"import", "status"}, {"actions"}} {
+		t.Run(strings.Join(args, "-"), func(t *testing.T) {
+			started, stopped := make(chan struct{}), make(chan struct{})
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { close(started); <-r.Context().Done(); close(stopped) }))
+			defer srv.Close()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			done := make(chan error, 1)
+			go func() { done <- runContext(ctx, opts{args: args, url: srv.URL, source: "cli"}) }()
+			select {
+			case <-started:
+			case <-time.After(10 * time.Second):
+				t.Fatal("not started")
+			}
+			cancel()
+			select {
+			case <-stopped:
+			case <-time.After(10 * time.Second):
+				t.Fatal("handler not canceled")
+			}
+			if err := <-done; !errors.Is(err, context.Canceled) {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestCommandCancellationFileBatch(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	calls := 0
+	c := client.InProcess(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/actions" {
+			fmt.Fprint(w, `{"actions":[{"name":"add-file","method":"POST","href":"/files","fields":[{"name":"title"},{"name":"original","type":"file"}]}]}`)
+			return
+		}
+		calls++
+		cancel()
+		fmt.Fprint(w, `{}`)
+	}), "cli")
+	var paths []string
+	for _, name := range []string{"one.txt", "two.txt"} {
+		p := filepath.Join(t.TempDir(), name)
+		if err := os.WriteFile(p, []byte("synthetic"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		paths = append(paths, p)
+	}
+	if err := keepFileContext(ctx, opts{}, c, paths); !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	if calls != 1 {
+		t.Fatalf("started %d files after cancellation", calls)
+	}
+}
+
+// TestImportSetupIntegrity uses only disposable synthetic source files and workspaces.
+func TestImportSetupIntegrity(t *testing.T) {
+	if os.Getenv("LIFELOG_SETUP_TEST_CHILD") == "1" {
+		os.Args = append([]string{"lifelog"}, strings.Split(os.Getenv("LIFELOG_SETUP_TEST_ARGS"), "|")...)
+		main()
+		return
+	}
+	for _, kind := range []string{"clean", "orphan", "execution-error", "output-error"} {
+		t.Run(kind, func(t *testing.T) {
+			root := t.TempDir()
+			from := filepath.Join(root, "synthetic.db")
+			if err := db.Init(from); err != nil {
+				t.Fatal(err)
+			}
+			d, err := db.Open(from)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if kind == "orphan" || kind == "output-error" {
+				_, err = d.W.Exec(`INSERT INTO entities(id, entity_type, created_at, updated_at, source) VALUES(999, 'page', '2026-10-05T00:00:00.000Z', '2026-10-05T00:00:00.000Z', 'cli')`)
+			} else if kind == "execution-error" {
+				// A missing domain table makes the orphan query fail, rather than return OK=false.
+				_, err = d.W.Exec(`DROP TABLE people`)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := d.Close(); err != nil {
+				t.Fatal(err)
+			}
+			source := filepath.Join(root, "Synthetic")
+			if err := os.Mkdir(source, 0700); err != nil {
+				t.Fatal(err)
+			}
+			ws, err := importer.Open(source + ".lifelog")
+			if err != nil {
+				t.Fatal(err)
+			}
+			var setupErr error
+			var out string
+			if kind == "output-error" {
+				f, err := os.CreateTemp(root, "closed-output")
+				if err != nil {
+					t.Fatal(err)
+				}
+				f.Close()
+				old := os.Stdout
+				os.Stdout = f
+				defer func() { os.Stdout = old }()
+				setupErr = importOwner(opts{from: from}, ws, []string{"setup"})
+				os.Stdout = old
+				if !errors.Is(setupErr, os.ErrClosed) {
+					t.Fatalf("output error = %v, want closed-file error", setupErr)
+				}
+			} else {
+				out = captureStdout(t, func() { setupErr = importOwner(opts{from: from}, ws, []string{"setup"}) })
+				switch kind {
+				case "clean":
+					if setupErr != nil || !strings.Contains(out, "integrity: ok") {
+						t.Fatalf("clean setup: %v; %s", setupErr, out)
+					}
+				case "orphan":
+					if setupErr == nil || !strings.Contains(setupErr.Error(), "failed trial integrity") || !strings.Contains(out, `"ok": false`) || !strings.Contains(out, "999") {
+						t.Errorf("failed setup: %v; %s", setupErr, out)
+					}
+				case "execution-error":
+					if setupErr == nil || !strings.Contains(setupErr.Error(), "people") || strings.Contains(out, "integrity: ok") {
+						t.Fatalf("execution error: %v; %s", setupErr, out)
+					}
+				}
+			}
+			trial, err := db.Open(ws.TrialDB())
+			if err != nil {
+				t.Fatalf("diagnostic trial not retained: %v", err)
+			}
+			var entities, pages int
+			if err := trial.R.QueryRow(`SELECT count(*) FROM entities`).Scan(&entities); err != nil {
+				t.Fatal(err)
+			}
+			if err := trial.R.QueryRow(`SELECT count(*) FROM pages`).Scan(&pages); err != nil {
+				t.Fatal(err)
+			}
+			trial.Close()
+			want := 1
+			if kind == "orphan" || kind == "output-error" {
+				want = 2
+			}
+			if entities != want || pages != 1 {
+				t.Fatalf("setup repaired or imported rows: entities=%d pages=%d", entities, pages)
+			}
+			entries, err := os.ReadDir(ws.Dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, e := range entries {
+				if e.Name() != "facts" && e.Name() != "trial.db" {
+					t.Errorf("unexpected setup side effect: %s", e.Name())
+				}
+			}
+			if kind == "orphan" {
+				childSource := filepath.Join(root, "Child")
+				if err := os.Mkdir(childSource, 0700); err != nil {
+					t.Fatal(err)
+				}
+				cmd := exec.Command(os.Args[0], "-test.run=^TestImportSetupIntegrity$")
+				cmd.Env = append(os.Environ(), "LIFELOG_SETUP_TEST_CHILD=1", "LIFELOG_SETUP_TEST_ARGS="+strings.Join([]string{"import", "setup", "--from", from, "--workspace", childSource + ".lifelog"}, "|"))
+				output, err := cmd.CombinedOutput()
+				var exit *exec.ExitError
+				if !errors.As(err, &exit) || exit.ExitCode() != 1 || !strings.Contains(string(output), `"ok": false`) || !strings.Contains(string(output), "failed trial integrity") {
+					t.Errorf("entrypoint: %v; %s", err, output)
+				}
+				if _, err := os.Stat(filepath.Join(childSource+".lifelog", "trial.db")); err != nil {
+					t.Fatal(err)
+				}
+			}
+		})
+	}
 }

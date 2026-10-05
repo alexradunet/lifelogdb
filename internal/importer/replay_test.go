@@ -1,7 +1,9 @@
 package importer
 
 import (
+	"context"
 	"crypto/sha256"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -147,6 +149,102 @@ func TestReplayRehearsesBeforeItWrites(t *testing.T) {
 		if strings.Contains(r.Summary, "new") || strings.Contains(r.Summary, "promoted") {
 			t.Errorf("a second replay wrote %s: %s", r.File, r.Summary)
 		}
+	}
+	noRehearsalLeft(t, f.w)
+}
+
+func TestRehearsalIdentityFailures(t *testing.T) {
+	f := setupReadingKeyFixture(t)
+	bad, ambiguous, good := "Medical/Bad.md", "Medical/OldEqual.md", "Medical/Good.md"
+	for _, file := range []string{bad, ambiguous, good} {
+		writeSource(t, f, file, "2031-10-01 first: 5 ng/mL\n2031-10-01 second: 5 ng/mL\n")
+	}
+	for _, file := range []string{"Medical/Skipped.md", "Medical/Plain.md"} {
+		writeSource(t, f, file, "plain text")
+	}
+	mustLedger(t, f)
+	registerMetrics(t, f, Metric{Name: "ferritin", Unit: "ng/mL", Note: "Ferritin"})
+	for _, file := range []string{bad, ambiguous, good} {
+		if err := f.facts(t, file, map[string]any{"file": file, "writes": []any{readingFact("Ferritin", "2031-10-01", "5 ng/mL", "2031-10-01 first: 5 ng/mL", nil), readingFact("ferritin", "2031-10-01", "5 ng/mL", "2031-10-01 second: 5 ng/mL", nil)}}); err != nil {
+			t.Fatal(err)
+		}
+		markLedgerDone(t, f, file)
+	}
+	if err := f.w.mark(ambiguous, func(l *Line) error { l.State = "?"; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.facts(t, "Medical/Plain.md", map[string]any{"file": "Medical/Plain.md", "writes": []any{}}); err != nil {
+		t.Fatal(err)
+	}
+	markLedgerDone(t, f, "Medical/Plain.md")
+	if err := f.w.mark("Medical/Skipped.md", func(l *Line) error { l.State = "-"; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	p, err := f.w.factsPath(bad)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte("{"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	recordReading(t, f, "ferritin", "2031-10-01", "", 5, ambiguous+"|reading|Ferritin|2031-10-01|1")
+	recordReading(t, f, "ferritin", "2031-10-01", "", 5, ambiguous+"|reading|ferritin|2031-10-01|1")
+	ledgerBefore, _ := os.ReadFile(filepath.Join(f.w.Dir, "ledger.md"))
+	rows := importerMeasurementRows(t, f)
+	for _, existing := range []bool{false, true} {
+		target := filepath.Join(t.TempDir(), "life.db")
+		var before [32]byte
+		if existing {
+			if err := db.Init(target); err != nil {
+				t.Fatal(err)
+			}
+			before = fileSum(t, target)
+		}
+		res, err := f.w.Rehearse(ctx, f.s, target)
+		if err != nil {
+			t.Fatalf("preflight must report independent failures: %v", err)
+		}
+		if len(res.Failures) != 2 || res.Failures[0].File != bad || res.Failures[1].File != ambiguous {
+			t.Fatalf("failures = %+v", res.Failures)
+		}
+		if !res.DryRun || res.Initialised || res.Integrity != nil || res.Trial != nil || res.Counts != nil || len(res.Files) != 0 {
+			t.Fatalf("unperformed checks claimed: %+v", res)
+		}
+		if _, err := f.w.Replay(ctx, f.s, target); err == nil || !strings.Contains(err.Error(), bad) || !strings.Contains(err.Error(), ambiguous) {
+			t.Fatalf("refusal = %v", err)
+		}
+		if existing {
+			if fileSum(t, target) != before {
+				t.Fatal("target changed")
+			}
+		} else if exists(target) {
+			t.Fatal("target created")
+		}
+		noRehearsalLeft(t, f.w)
+	}
+	after, _ := os.ReadFile(filepath.Join(f.w.Dir, "ledger.md"))
+	if string(after) != string(ledgerBefore) || importerMeasurementRows(t, f) != rows {
+		t.Fatal("preflight changed workspace/trial")
+	}
+}
+
+func TestRehearsalIdentityFailuresCancellationAndLedger(t *testing.T) {
+	f := setupReadingKeyFixture(t)
+	mustLedger(t, f)
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err := f.w.Rehearse(cancelled, f.s, filepath.Join(t.TempDir(), "life.db")); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancellation = %v", err)
+	}
+	ledger := filepath.Join(f.w.Dir, "ledger.md")
+	if err := os.Remove(ledger); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(ledger, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if failures, err := f.w.collectTrialReadingIdentityFailures(ctx, f.s); err == nil || len(failures) != 0 {
+		t.Fatalf("global ledger error swallowed: %v, %+v", err, failures)
 	}
 	noRehearsalLeft(t, f.w)
 }

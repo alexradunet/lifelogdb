@@ -1,6 +1,7 @@
 package core
 
 import (
+	"lifelog/internal/text"
 	"strings"
 	"testing"
 )
@@ -173,5 +174,169 @@ func TestAPhotoNearNoPlaceStillHasItsDay(t *testing.T) {
 	}
 	if d := dayOf(t, s, "2019-06-05"); d != nil {
 		t.Errorf("a day page made for nothing: %+v", d)
+	}
+}
+
+func TestAutomaticEmbedRepresentability(t *testing.T) {
+	for _, mode := range []string{"new", "ghost", "existing"} {
+		t.Run(mode, func(t *testing.T) {
+			s := fresh(t)
+			f := photo(t, 'a', "Lake [1].jpg", "2019-06-03", 46.1, 7.2)
+			f.At = "Lakeside"
+			if mode == "ghost" {
+				if err := s.Do(ctx, "cli", func(tx *Tx) error {
+					_, _, err := tx.insertPage("page", f.Title, text.TitleKey(f.Title), "2001-02-03", "", "")
+					return err
+				}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if mode == "existing" {
+				seed := f
+				seed.Preview = nil
+				seed.Taken = ""
+				seed.Day = "2001-02-03"
+				seed.At = ""
+				seed.HasGPS = false
+				if _, err := s.AddFile(ctx, "cli", seed); err != nil {
+					t.Fatal(err)
+				}
+				f.Title = "Safe.jpg"
+			}
+			for _, dry := range []bool{true, false} {
+				var err error
+				if dry {
+					_, err = s.TryAddFile(ctx, "cli", f)
+				} else {
+					_, err = s.AddFile(ctx, "cli", f)
+				}
+				if err == nil || !strings.Contains(err.Error(), "explicit") {
+					t.Fatalf("dry=%v: expected explicit-title refusal, got %v", dry, err)
+				}
+				if dayOf(t, s, "2019-06-03") != nil {
+					t.Fatal("refusal created day")
+				}
+				if id, _ := s.PageID(ctx, "Lakeside"); id != 0 {
+					t.Fatal("refusal created place")
+				}
+				if mode == "ghost" {
+					id, _ := s.PageID(ctx, "Lake [1].jpg")
+					p, _ := s.PageByID(ctx, id)
+					if p.Type != "page" || p.Day != "2001-02-03" {
+						t.Fatalf("changed ghost: %+v", p)
+					}
+				}
+				if mode == "existing" {
+					id, _ := s.PageID(ctx, "Lake [1].jpg")
+					p, _ := s.PageByID(ctx, id)
+					if p.Day != "2001-02-03" {
+						t.Fatalf("changed existing date: %+v", p)
+					}
+					b, _ := s.Preview(ctx, id)
+					if b != nil {
+						t.Fatal("filled preview")
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestPhotoEmbedDeduplication(t *testing.T) {
+	for _, tc := range []struct {
+		body     string
+		embedded bool
+	}{
+		{"![[CAFÉ.jpg|lake]]", false}, {"![[Cafe\u0301.jpg]]", false},
+		{"`![[Café.jpg]]`", true}, {"```\n![[Café.jpg]]\n```", true},
+		{"[![[Café.jpg]]](https://example.invalid)", true}, {"![![[Café.jpg]]](picture.jpg)", true}, {"[[Café.jpg]]", true},
+	} {
+		t.Run(tc.body, func(t *testing.T) {
+			s := fresh(t)
+			if _, _, err := s.CreatePage(ctx, "cli", "2019-06-03", tc.body); err != nil {
+				t.Fatal(err)
+			}
+			f := photo(t, 'a', "Café.jpg", "2019-06-03", 46.1, 7.2)
+			k, err := s.AddFile(ctx, "cli", f)
+			if err != nil || k.Embedded != tc.embedded {
+				t.Fatalf("%+v %v", k, err)
+			}
+			want := tc.body
+			if tc.embedded {
+				want += "\n\n![[Café.jpg]]"
+			}
+			d := dayOf(t, s, "2019-06-03")
+			if d.Body != want || text.TitleKey(titles(d.Out, "wikilink")) != text.TitleKey(f.Title) {
+				t.Fatalf("day: %+v", d)
+			}
+			k, err = s.AddFile(ctx, "cli", f)
+			if err != nil || k.Embedded {
+				t.Fatalf("repeat: %+v %v", k, err)
+			}
+		})
+	}
+}
+
+func TestAutomaticEmbedBodyContextRefusal(t *testing.T) {
+	s := fresh(t)
+	body := "An unfinished example:\n```"
+	if _, _, err := s.CreatePage(ctx, "cli", "2019-06-03", body); err != nil {
+		t.Fatal(err)
+	}
+	f := photo(t, 'a', "Lake.jpg", "2019-06-03", 46.1, 7.2)
+	f.At = "Lakeside"
+	if _, err := s.AddFile(ctx, "cli", f); err == nil {
+		t.Fatal("append hidden in fence reported success")
+	}
+	if d := dayOf(t, s, "2019-06-03"); d.Body != body || len(d.Out) != 0 {
+		t.Fatalf("changed day: %+v", d)
+	}
+	if id, _ := s.PageID(ctx, "Lake.jpg"); id != 0 {
+		t.Fatal("file committed")
+	}
+	if id, _ := s.PageID(ctx, "Lakeside"); id != 0 {
+		t.Fatal("place committed")
+	}
+}
+
+func TestAutomaticEmbedNotNeeded(t *testing.T) {
+	for _, tc := range []struct {
+		day     string
+		preview bool
+	}{{"2019-06-03", false}, {"", true}} {
+		t.Run(tc.day, func(t *testing.T) {
+			s := fresh(t)
+			f := FileIn{Title: "Lake [1].jpg", SHA256: sha('a'), MIME: "image/jpeg", Taken: tc.day}
+			if tc.preview {
+				f.Preview = smallJPEG(t)
+			}
+			k, err := s.AddFile(ctx, "cli", f)
+			if err != nil || k.Embedded {
+				t.Fatalf("no embed needed: %+v %v", k, err)
+			}
+		})
+	}
+}
+
+func TestAutomaticEmbedEscapedExistingHandle(t *testing.T) {
+	s := fresh(t)
+	f := FileIn{Title: "&copy;.jpg", SHA256: sha('a'), MIME: "image/jpeg"}
+	k, err := s.AddFile(ctx, "cli", f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := `![[&amp;copy;.jpg]]`
+	if _, _, err := s.CreatePage(ctx, "cli", "2019-06-03", body); err != nil {
+		t.Fatal(err)
+	}
+	f.Title = "different.jpg"
+	f.Taken = "2019-06-03"
+	f.Preview = smallJPEG(t)
+	again, err := s.AddFile(ctx, "cli", f)
+	if err != nil || !again.Existing || !again.PreviewAdded || again.Embedded || again.ID != k.ID {
+		t.Fatalf("existing escaped embed: %+v %v", again, err)
+	}
+	if d := dayOf(t, s, "2019-06-03"); d.Body != body || titles(d.Out, "wikilink") != "&copy;.jpg" {
+		t.Fatalf("changed day: %+v", d)
 	}
 }

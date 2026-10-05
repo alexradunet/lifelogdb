@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"lifelog/internal/core"
+	"lifelog/internal/text"
 )
 
 // metricGroup is one section of /metrics: the habits (derived from their periods, D24), a category page with the
@@ -60,11 +61,12 @@ func groupMetrics(ms []core.Metric, cs []core.Category) []metricGroup {
 	return out
 }
 
-// metricOf is the live metric of that name (any case), nil when none.
+// metricOf is the live metric with that canonical title identity, nil when none.
 func (h *server) metricOf(ctx context.Context, name string) *core.Metric {
 	ms, _ := h.s.Metrics(ctx)
+	key := text.TitleKey(name)
 	for i := range ms {
-		if strings.EqualFold(ms[i].Name, name) {
+		if text.TitleKey(ms[i].Name) == key {
 			return &ms[i]
 		}
 	}

@@ -405,3 +405,101 @@ func TestReplayDryRunAction(t *testing.T) {
 		t.Error("the real run did not write the target")
 	}
 }
+
+func TestReplayDryRunActionAggregateIdentityFailures(t *testing.T) {
+	ctx := context.Background()
+	src := filepath.Join(t.TempDir(), "Aggregate")
+	if err := os.MkdirAll(src, 0755); err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range []string{"a.md", "b.md", "good.md"} {
+		if err := os.WriteFile(filepath.Join(src, file), []byte("2031-10-01 Mood 3\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ws, err := importer.Open(src + ".lifelog")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ws.Setup(""); err != nil {
+		t.Fatal(err)
+	}
+	if err := ws.DraftRules("source: import:aggregate\n"); err != nil {
+		t.Fatal(err)
+	}
+	approveWorkspaceFile(t, ws, "rules.md")
+	if err := ws.ProposeMetric(importer.Metric{Name: "Mood", Unit: "", Note: "synthetic"}); err != nil {
+		t.Fatal(err)
+	}
+	approveWorkspaceFile(t, ws, "metrics.md")
+	if _, err := ws.MakeLedger(); err != nil {
+		t.Fatal(err)
+	}
+	d, err := db.Open(ws.TrialDB())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	trial := &core.Store{DB: d}
+	if _, err := ws.RegisterMetrics(ctx, trial); err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range []string{"a.md", "b.md", "good.md"} {
+		facts := `{"file":"` + file + `","writes":[{"reading":{"metric":"Mood","day":"2031-10-01","value":"3"},"quote":"2031-10-01 Mood 3"}]}`
+		if err := ws.WriteFacts(file, []byte(facts)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ws.Apply(ctx, trial, file); err != nil {
+			t.Fatal(err)
+		}
+	}
+	owner := client.InProcess(api.New(trial, ws), "cli")
+	catalog, err := owner.Catalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	action := find(&api.Entity{Actions: catalog}, "replay")
+	target := filepath.Join(t.TempDir(), "life.db")
+	control, err := owner.Do(action, map[string]string{"to": target, "dry_run": "1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := control.Properties.(map[string]any)
+	if len(p["failures"].([]any)) != 0 || p["integrity"] == nil || p["trial_counts"] == nil || p["target_counts"] == nil {
+		t.Fatalf("valid control: %v", p)
+	}
+	for _, file := range []string{"a.md", "b.md"} {
+		if err := os.WriteFile(filepath.Join(ws.Dir, "facts", file+".json"), []byte("{"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e, err := owner.Do(action, map[string]string{"to": target, "dry_run": "1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p = e.Properties.(map[string]any)
+	failures := p["failures"].([]any)
+	if len(failures) != 2 {
+		t.Fatalf("aggregate serialization: %v", p)
+	}
+	for i, file := range []string{"a.md", "b.md"} {
+		failure := failures[i].(map[string]any)
+		if failure["file"] != file || failure["step"] != "reading-identity" || failure["error"] == "" {
+			t.Fatalf("failure %d: %v", i, failure)
+		}
+	}
+	for _, field := range []string{"integrity", "trial_counts", "target_counts"} {
+		if p[field] != nil {
+			t.Fatalf("unperformed %s: %v", field, p[field])
+		}
+	}
+	if p["initialised"] != false || len(p["files"].([]any)) != 0 {
+		t.Fatalf("unperformed writes: %v", p)
+	}
+	if _, err := owner.Do(action, map[string]string{"to": target}); err == nil || !strings.Contains(err.Error(), "a.md") || !strings.Contains(err.Error(), "b.md") {
+		t.Fatalf("real refusal: %v", err)
+	}
+	if _, err := os.Stat(target); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("diagnostics created target: %v", err)
+	}
+}

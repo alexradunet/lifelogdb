@@ -10,6 +10,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"golang.org/x/text/unicode/norm"
 
@@ -51,6 +52,10 @@ func TestSourceFilenameIdentity(t *testing.T) {
 	src := filepath.Join(root, "Notebook")
 	bodyNFD := "Cafe\u0301 body names [[Other]].\n"
 	physicalNote := writeSourceFile(t, src, "Journe\u0301e/Cafe\u0301.md", bodyNFD)
+	stamp := time.Date(2032, 7, 8, 12, 0, 0, 0, time.Local)
+	if err := os.Chtimes(physicalNote, stamp, stamp); err != nil {
+		t.Fatal(err)
+	}
 	writeSourceFile(t, src, "Aliase\u0301/Only.md", "unique alias\n")
 	composedSibling := writeSourceFile(t, src, "Sib\u00e9/Different.md", "exact directory leaf\n")
 	equivalentSibling := filepath.Join(src, filepath.FromSlash("Sibe\u0301/Other.md"))
@@ -127,6 +132,9 @@ func TestSourceFilenameIdentity(t *testing.T) {
 	for _, n := range p.Notes {
 		if n.Path == "Journ\u00e9e/Caf\u00e9.md" && n.Title == "Caf\u00e9" {
 			found = true
+			if n.Day != "2032-07-08" {
+				t.Fatalf("stat fallback day = %q", n.Day)
+			}
 		}
 	}
 	if !found {
@@ -274,4 +282,115 @@ func TestSourcePathAmbiguousEquivalentRefuses(t *testing.T) {
 	if _, err := w.PlanVault(context.Background(), s); err == nil || !strings.Contains(err.Error(), "same logical source path") {
 		t.Fatalf("PlanVault collision error = %v", err)
 	}
+}
+
+func TestSourceFilenameWhitespace(t *testing.T) {
+	src := filepath.Join(t.TempDir(), "Notebook")
+	names := []string{" Note.md", "Note.md", " Folder/ Child.md", " Cafe\u0301.md"}
+	bodies := []string{"leading evidence\n", "sibling evidence\n", "directory evidence\n", "unicode evidence\n"}
+	physical := make([]string, len(names))
+	for i, name := range names {
+		physical[i] = writeSourceFile(t, src, name, bodies[i])
+	}
+	w, store := setupSourcePathWorkspace(t, src)
+	f := &fixture{w: w, s: store, trial: w.TrialDB()}
+	f.approveRules(t, rulesBody)
+	files, err := w.SourceFiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.MakeLedger(); err != nil {
+		t.Fatal(err)
+	}
+	ledger, _, err := w.Ledger()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, name := range names {
+		logical := norm.NFC.String(name)
+		if !contains(files, logical) {
+			t.Fatalf("inventory missing %q: %q", logical, files)
+		}
+		found := false
+		for _, line := range ledger {
+			if line.File == logical {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("ledger missing %q", logical)
+		}
+		p, err := w.SourcePath(logical)
+		if err != nil || p != physical[i] {
+			t.Fatalf("path %q = %q, %v; want %q", logical, p, err, physical[i])
+		}
+		body, err := w.ReadSource(logical)
+		if err != nil || body != bodies[i] {
+			t.Fatalf("read %q = %q, %v", logical, body, err)
+		}
+	}
+	facts := map[string]any{"file": " Note.md", "writes": []any{map[string]any{"page": map[string]any{"title": "Evidence"}, "quote": "sibling evidence"}}}
+	if err := f.facts(t, " Note.md", facts); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Check(context.Background(), store, " Note.md"); err == nil {
+		t.Fatal("quote from whitespace-distinct sibling passed")
+	}
+	facts["writes"] = []any{map[string]any{"page": map[string]any{"title": "Evidence"}, "quote": "leading evidence"}}
+	if err := f.facts(t, " Note.md", facts); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Check(context.Background(), store, " Note.md"); err != nil {
+		t.Fatal(err)
+	}
+	factsBefore, err := os.ReadFile(filepath.Join(w.Dir, "facts", " Note.md.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.writeLedger(ledger); err != nil {
+		t.Fatal(err)
+	}
+	again, _, err := w.Ledger()
+	if err != nil || !reflect.DeepEqual(ledger, again) {
+		t.Fatalf("ledger changed: %+v, %v", again, err)
+	}
+	if _, err := w.Check(context.Background(), store, " Note.md"); err != nil {
+		t.Fatal(err)
+	}
+	factsAfter, err := os.ReadFile(filepath.Join(w.Dir, "facts", " Note.md.json"))
+	if err != nil || string(factsBefore) != string(factsAfter) {
+		t.Fatalf("facts changed: %v", err)
+	}
+	if _, err := w.ReadSource("  Note.md"); err == nil || !strings.Contains(err.Error(), "no source file   Note.md") {
+		t.Fatalf("missing spelling read = %v", err)
+	}
+	for i, p := range physical {
+		b, err := os.ReadFile(p)
+		if err != nil || string(b) != bodies[i] {
+			t.Fatalf("source changed: %q, %v", b, err)
+		}
+	}
+	t.Run("trailing", func(t *testing.T) {
+		p := filepath.Join(src, "Tail.md ")
+		if err := os.WriteFile(p, []byte("trailing"), 0o644); err != nil {
+			t.Skipf("filesystem cannot create trailing-space filename: %v", err)
+		}
+		entries, err := os.ReadDir(src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		distinct := false
+		for _, e := range entries {
+			if e.Name() == "Tail.md " {
+				distinct = true
+			}
+		}
+		if !distinct {
+			t.Skip("filesystem does not preserve trailing-space filename")
+		}
+		writeSourceFile(t, src, "Tail.md", "plain")
+		if body, err := w.ReadSource("Tail.md "); err != nil || body != "trailing" {
+			t.Fatalf("trailing read = %q, %v", body, err)
+		}
+	})
 }

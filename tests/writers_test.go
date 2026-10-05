@@ -57,53 +57,49 @@ func writers(s *S) {
 	s.K("deferred: the resolve finds nothing", A.tab(resolve, "diet") == "")
 	B.must("BEGIN IMMEDIATE")
 	B.page("Diet")
-	B.must("COMMIT")
-	out := try(func() { A.page("Diet"); A.must("COMMIT") })
-	if out != "OK" {
-		A.tryx("ROLLBACK")
+	B.must("PRAGMA busy_timeout=0")
+	commit := B.tryx("COMMIT")
+	s.K("under WAL the rival commits while the deferred reader holds its snapshot", commit == "OK", commit)
+	if commit != "OK" {
+		// A rollback-journal mutant cannot commit past A's read lock. Release the
+		// fixture locks and continue independent checks; WAL has its own witness.
+		A.must("ROLLBACK")
+		B.must("COMMIT")
+	} else {
+		out := try(func() { A.page("Diet"); A.must("COMMIT") })
+		if out != "OK" {
+			A.tryx("ROLLBACK")
+		}
+		s.K("deferred BEGIN, a read, a rival commit: the write fails at once (busy_timeout does not apply)", strings.Contains(out, "locked"), out)
 	}
-	s.K("deferred BEGIN, a read, a rival commit: the write fails at once (busy_timeout does not apply)", strings.Contains(out, "locked"), out)
 
 	p = s.mkdb()
-	type result struct {
-		what   string
-		waited time.Duration
-	}
-	var mu sync.Mutex
-	res := map[string]result{}
-	var wg sync.WaitGroup
-	writer := func(name string, delay, hold time.Duration) {
-		defer wg.Done()
-		c := s.writerConn(p)
-		time.Sleep(delay)
-		t0 := time.Now()
-		r := result{}
-		out := try(func() {
-			c.must("BEGIN IMMEDIATE")
-			r.waited = time.Since(t0)
-			found := c.tab(resolve, "diet") != ""
-			if !found {
-				time.Sleep(hold)
-				c.page("Diet")
-			}
-			c.must("COMMIT")
-			r.what = map[bool]string{true: "found", false: "created"}[found]
+	A, B = s.writerConn(p), s.writerConn(p)
+	A.must("BEGIN IMMEDIATE")
+	s.K("BEGIN IMMEDIATE: the first writer resolves no page", A.tab(resolve, "diet") == "")
+	B.must("PRAGMA busy_timeout=0")
+	blocked := B.tryx("BEGIN IMMEDIATE")
+	s.K("BEGIN IMMEDIATE: a second writer cannot begin while the first holds the lock", strings.Contains(blocked, "locked"), blocked)
+	A.page("Diet")
+	committed := make(chan struct{})
+	done := make(chan string, 1)
+	go func() {
+		<-committed
+		done <- try(func() {
+			B.must("BEGIN IMMEDIATE")
+			s.K("BEGIN IMMEDIATE: after the commit signal the second writer finds the existing page", B.tab(resolve, "diet") != "")
+			B.must("COMMIT")
 		})
-		if out != "OK" {
-			r.what = out
-			c.tryx("ROLLBACK")
-		}
-		mu.Lock()
-		res[name] = r
-		mu.Unlock()
+	}()
+	A.must("COMMIT")
+	close(committed)
+	select {
+	case out := <-done:
+		s.K("BEGIN IMMEDIATE: the second writer completes after the first commits", out == "OK", out)
+	case <-time.After(30 * time.Second):
+		stop("second writer did not complete after commit")
 	}
-	wg.Add(2)
-	go writer("A", 0, 400*time.Millisecond)
-	go writer("B", 100*time.Millisecond, 0)
-	wg.Wait()
-	s.K("BEGIN IMMEDIATE: the first writer creates, the second waits and then finds it", res["A"].what == "created" && res["B"].what == "found", res)
-	s.K("...the second really waited for the lock", res["B"].waited > 250*time.Millisecond, res)
-	s.K("...one page", s.writerConn(p).n("select count(*) from pages where title_key='diet'") == 1)
+	s.K("...one page", B.n("select count(*) from pages where title_key='diet'") == 1)
 	var all []string
 	for _, b := range s.d.CookbookBlocks() {
 		all = append(all, b.sql)
@@ -159,9 +155,17 @@ func writers(s *S) {
 	for _, st := range []string{"INSERT INTO lifelog_meta VALUES ('x','y')", "DELETE FROM entities", "UPDATE entities SET deleted_at=NULL", "DROP TABLE lifelog_meta"} {
 		s.K("mode=ro refuses: "+clip(st, 30), strings.Contains(ro.tryx(st), "readonly"))
 	}
-	t0 := time.Now()
-	w.must("INSERT INTO lifelog_meta VALUES ('k','v')")
-	s.K("the writer is not slowed by a connected reader", time.Since(t0) < 500*time.Millisecond)
+	ro.must("BEGIN")
+	ro.n("select count(*) from entities") // hold a known reader snapshot
+	progress := make(chan string, 1)
+	go func() { progress <- w.tryx("INSERT INTO lifelog_meta VALUES ('k','v')") }()
+	select {
+	case out := <-progress:
+		s.K("the writer commits while a connected reader holds a snapshot", out == "OK" && w.str("select value from lifelog_meta where key='k'") == "v", out)
+	case <-time.After(30 * time.Second):
+		stop("writer did not progress with connected reader")
+	}
+	ro.must("COMMIT")
 
 	// ---- a reader sets trusted_schema=OFF: a view in the file that calls a function not marked side-effect-free
 	// (an application function, registered without SQLITE_INNOCUOUS) is refused instead of run

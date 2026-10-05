@@ -88,6 +88,19 @@ func habits(s *S) {
 		vd, c.n("select id from measurements where day='2026-10-02'"))
 	s.K("a corrected check-in counts as corrected (measurement_values)", day("2026-10-02") == "vitamin_d|done", day("2026-10-02"))
 
+	// Tombstones hide display rows, without removing the periods or readings.
+	before := c.tab(completion, P{"from_day": "2026-09-28", "to_day": "2026-10-11"})
+	periods, readings := c.n("select count(*) from habit_periods"), c.n("select count(*) from measurements")
+	c.must("UPDATE entities SET deleted_at="+NOW+" WHERE id=?", vd)
+	s.K("cookbook/habits hides tombstoned daily rows", day("2026-10-01") == "")
+	s.K("cookbook/habits hides tombstoned completion rows", c.tab(completion, P{"from_day": "2026-09-28", "to_day": "2026-10-11"}) == "water_before_coffee|9|1|0|8")
+	c.must(stopSQL, P{"metric": "vitamin_d", "day": "2026-10-10"})
+	s.K("cookbook/habits stop does not change a tombstoned metric", c.str("select end_day from habit_periods where metric_id=? and start_day='2026-10-10'", vd) == "None")
+	s.K("cookbook/habits start does not add a tombstoned metric", c.tryx(start, P{"metric": "vitamin_d", "day": "2027-01-01"}) == "OK" && c.n("select count(*) from habit_periods") == periods)
+	s.K("cookbook/habits retains historical readings", c.n("select count(*) from measurements") == readings)
+	c.must("UPDATE entities SET deleted_at=NULL WHERE id=?", vd)
+	s.K("cookbook/habits revival restores daily and completion rows", day("2026-10-01") == "vitamin_d|done" && c.tab(completion, P{"from_day": "2026-09-28", "to_day": "2026-10-11"}) == before)
+
 	// ---- cookbook/day-view lists the day's habits, and not their check-ins a second time
 	DV := s.d.Block("day-view")
 	c.dayPage("2026-10-01", "a day")

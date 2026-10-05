@@ -4,9 +4,12 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/big"
+	"strconv"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -17,7 +20,7 @@ import (
 
 // Serve runs the MCP server on stdin/stdout until the client goes away.
 func Serve(ctx context.Context, c *client.Client, version string) error {
-	s, err := New(c, version)
+	s, err := NewContext(ctx, c, version)
 	if err != nil {
 		return err
 	}
@@ -26,7 +29,11 @@ func Serve(ctx context.Context, c *client.Client, version string) error {
 
 // New builds the server from GET /actions.
 func New(c *client.Client, version string) (*mcp.Server, error) {
-	actions, err := c.Catalog()
+	return NewContext(context.Background(), c, version)
+}
+
+func NewContext(ctx context.Context, c *client.Client, version string) (*mcp.Server, error) {
+	actions, err := c.CatalogContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +50,11 @@ func New(c *client.Client, version string) (*mcp.Server, error) {
 		if a.Owner {
 			continue // the owner's alone: never a model's tool
 		}
-		s.AddTool(&mcp.Tool{Name: toolName(a.Name), Description: a.Description, InputSchema: schema(a.Fields),
+		input, err := schema(a.Fields)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", a.Name, err)
+		}
+		s.AddTool(&mcp.Tool{Name: toolName(a.Name), Description: a.Description, InputSchema: input,
 			Annotations: annotations(a)}, call(c, a))
 	}
 	s.AddTool(&mcp.Tool{Name: "get_day", Description: "The day view of one local day (YYYY-MM-DD; default today): its journal page, places, habits and readings.",
@@ -58,7 +69,7 @@ func New(c *client.Client, version string) (*mcp.Server, error) {
 			if d := args["day"]; d != "" {
 				href = "/days/" + d
 			}
-			return result(c.Get(href))
+			return result(c.GetContext(ctx, href))
 		})
 	s.AddTool(&mcp.Tool{Name: "get", Description: "Follow a link: fetch the resource at an href from an earlier result (e.g. /pages/12).",
 		InputSchema: map[string]any{"type": "object", "required": []string{"href"},
@@ -72,7 +83,7 @@ func New(c *client.Client, version string) (*mcp.Server, error) {
 			if !strings.HasPrefix(args["href"], "/") {
 				return failure(fmt.Errorf("href must be a path such as /pages/12")), nil
 			}
-			return result(c.Get(args["href"]))
+			return result(c.GetContext(ctx, args["href"]))
 		})
 	return s, nil
 }
@@ -102,7 +113,7 @@ func annotations(a api.Action) *mcp.ToolAnnotations {
 }
 
 // schema is a JSON Schema for an action's fields: numbers as numbers, everything else a string.
-func schema(fields []api.Field) map[string]any {
+func schema(fields []api.Field) (map[string]any, error) {
 	props := map[string]any{}
 	req := []string{}
 	for _, f := range fields {
@@ -124,38 +135,81 @@ func schema(fields []api.Field) map[string]any {
 			p["description"] = desc
 		}
 		if len(f.Options) > 0 {
-			p["enum"] = f.Options
+			options := make([]any, 0, len(f.Options))
+			for _, option := range f.Options {
+				if f.Type == "number" {
+					var value any
+					decoder := json.NewDecoder(strings.NewReader(option))
+					decoder.UseNumber()
+					err := decoder.Decode(&value)
+					n, numeric := value.(json.Number)
+					if err != nil || !numeric || !json.Valid([]byte(option)) {
+						return nil, fmt.Errorf("invalid numeric option %q for %s", option, f.Name)
+					}
+					if _, err := strconv.ParseFloat(string(n), 64); err != nil {
+						return nil, fmt.Errorf("invalid numeric option %q for %s", option, f.Name)
+					}
+					options = append(options, n)
+				} else {
+					options = append(options, option)
+				}
+			}
+			p["enum"] = options
 		}
 		props[f.Name] = p
 		if f.Required {
 			req = append(req, f.Name)
 		}
 	}
-	return map[string]any{"type": "object", "properties": props, "required": req}
+	return map[string]any{"type": "object", "properties": props, "required": req}, nil
 }
 
 func call(c *client.Client, a api.Action) mcp.ToolHandler {
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		args, err := arguments(req)
+		args, err := arguments(req, a.Fields...)
 		if err != nil {
 			return failure(err), nil
 		}
-		return result(c.Do(a, args))
+		return result(c.DoContext(ctx, a, args))
 	}
 }
 
 // arguments flattens the tool arguments to the form values the API takes.
-func arguments(req *mcp.CallToolRequest) (map[string]string, error) {
+func arguments(req *mcp.CallToolRequest, fields ...api.Field) (map[string]string, error) {
 	var raw map[string]any
 	if len(req.Params.Arguments) > 0 {
-		if err := json.Unmarshal(req.Params.Arguments, &raw); err != nil {
+		decoder := json.NewDecoder(bytes.NewReader(req.Params.Arguments))
+		decoder.UseNumber()
+		if err := decoder.Decode(&raw); err != nil {
 			return nil, err
 		}
 	}
 	out := map[string]string{}
 	for k, v := range raw {
-		if v != nil {
-			out[k] = fmt.Sprint(v)
+		switch v := v.(type) {
+		case nil:
+		case string:
+			out[k] = v
+		case json.Number:
+			out[k] = string(v)
+			for _, f := range fields {
+				if f.Name == k && f.Type == "number" && f.In == "path" && f.Name == "id" {
+					text := string(v)
+					if i := strings.IndexAny(text, "eE"); i >= 0 {
+						exponent, err := strconv.Atoi(text[i+1:])
+						if err != nil || exponent > 1000 || exponent < -1000 {
+							return nil, fmt.Errorf("%s must be an int64", k)
+						}
+					}
+					n, ok := new(big.Rat).SetString(text)
+					if !ok || !n.IsInt() || !n.Num().IsInt64() {
+						return nil, fmt.Errorf("%s must be an int64", k)
+					}
+					out[k] = n.Num().String()
+				}
+			}
+		default:
+			return nil, fmt.Errorf("unsupported argument %s", k)
 		}
 	}
 	return out, nil

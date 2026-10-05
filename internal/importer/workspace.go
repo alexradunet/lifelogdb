@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -65,7 +66,21 @@ func (w *Workspace) file(name string) string { return filepath.Join(w.Dir, name)
 // another canonically equivalent form; an exact full physical path wins, otherwise every component must resolve to
 // exactly one complete physical path.
 func (w *Workspace) SourcePath(rel string) (string, error) {
-	rel = filepath.ToSlash(strings.TrimSpace(rel))
+	root, err := os.OpenRoot(w.Source)
+	if err != nil {
+		return "", err
+	}
+	defer root.Close()
+	p, err := w.sourcePath(root, rel)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(w.Source, p), nil
+}
+
+// sourcePath returns a root-relative spelling, never a capability for an unrestricted open.
+func (w *Workspace) sourcePath(root *os.Root, rel string) (string, error) {
+	rel = filepath.ToSlash(rel)
 	if rel == "" || strings.HasPrefix(rel, "/") || filepath.IsAbs(rel) || strings.Contains(rel, ":") {
 		return "", refuse("%q is not a path relative to the source", rel)
 	}
@@ -77,30 +92,27 @@ func (w *Workspace) SourcePath(rel string) (string, error) {
 			return "", refuse("%q is in a hidden folder, which is never imported", rel)
 		}
 	}
-	exact := filepath.Join(w.Source, filepath.FromSlash(rel))
-	if !strings.HasPrefix(exact, w.Source+string(filepath.Separator)) {
-		return "", refuse("%q leaves the source", rel)
-	}
-	if _, err := os.Stat(exact); err == nil {
+	exact := filepath.FromSlash(rel)
+	if _, err := root.Stat(exact); err == nil {
 		return exact, nil
 	} else if !sourcePathMissing(err) {
 		return "", err
 	}
-	resolved, ok, err := w.resolveSourcePath(rel)
+	resolved, ok, err := w.resolveSourcePath(root, rel)
 	if err != nil || ok {
 		return resolved, err
 	}
 	return exact, nil
 }
 
-func (w *Workspace) resolveSourcePath(rel string) (string, bool, error) {
-	candidates := []string{w.Source}
+func (w *Workspace) resolveSourcePath(root *os.Root, rel string) (string, bool, error) {
+	candidates := []string{"."}
 	parts := strings.Split(rel, "/")
 	for i, part := range parts {
 		want := norm.NFC.String(part)
 		var next []string
 		for _, base := range candidates {
-			entries, err := os.ReadDir(base)
+			entries, err := fs.ReadDir(root.FS(), filepath.ToSlash(base))
 			if errors.Is(err, os.ErrNotExist) {
 				continue
 			}
@@ -114,13 +126,16 @@ func (w *Workspace) resolveSourcePath(rel string) (string, bool, error) {
 				}
 				candidate := filepath.Join(base, name)
 				if i < len(parts)-1 {
-					isDir, err := sourceDirCandidate(candidate)
+					isDir, err := sourceDirCandidate(root, candidate)
 					if err != nil {
 						return "", false, err
 					}
 					if !isDir {
 						continue
 					}
+				}
+				if _, err := root.Stat(candidate); err != nil {
+					return "", false, err
 				}
 				next = append(next, candidate)
 			}
@@ -134,15 +149,15 @@ func (w *Workspace) resolveSourcePath(rel string) (string, bool, error) {
 		return candidates[0], true, nil
 	}
 	sort.Strings(candidates)
-	return "", false, refuse("%q is ambiguous: multiple physical source paths have the same logical spelling (%s)", rel, strings.Join(sourceRelPaths(w.Source, candidates), ", "))
+	return "", false, refuse("%q is ambiguous: multiple physical source paths have the same logical spelling (%s)", rel, strings.Join(sourceRelPaths(".", candidates), ", "))
 }
 
 func sourcePathMissing(err error) bool {
 	return errors.Is(err, os.ErrNotExist) || errors.Is(err, syscall.ENOTDIR)
 }
 
-func sourceDirCandidate(p string) (bool, error) {
-	st, err := os.Stat(p)
+func sourceDirCandidate(root *os.Root, p string) (bool, error) {
+	st, err := root.Stat(p)
 	if sourcePathMissing(err) {
 		return false, nil
 	}
@@ -167,11 +182,20 @@ func sourceRelPaths(root string, paths []string) []string {
 
 // ReadSource reads a source file, NFC-normalised (a file system may store names and text in NFD).
 func (w *Workspace) ReadSource(rel string) (string, error) {
-	p, err := w.SourcePath(rel)
+	root, err := os.OpenRoot(w.Source)
 	if err != nil {
 		return "", err
 	}
-	b, err := os.ReadFile(p)
+	defer root.Close()
+	return w.readSource(root, rel)
+}
+
+func (w *Workspace) readSource(root *os.Root, rel string) (string, error) {
+	p, err := w.sourcePath(root, rel)
+	if err != nil {
+		return "", err
+	}
+	b, err := root.ReadFile(p)
 	if errors.Is(err, os.ErrNotExist) {
 		return "", &core.Error{Status: 404, Msg: "no source file " + rel}
 	}
@@ -358,4 +382,17 @@ func (w *Workspace) Setup(from string) (string, error) {
 		return "copied " + from, db.Copy(from, w.TrialDB())
 	}
 	return "created from the schema", db.Init(w.TrialDB())
+}
+
+func (w *Workspace) statSource(rel string) (os.FileInfo, error) {
+	root, err := os.OpenRoot(w.Source)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	p, err := w.sourcePath(root, rel)
+	if err != nil {
+		return nil, err
+	}
+	return root.Stat(p)
 }

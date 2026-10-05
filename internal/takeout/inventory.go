@@ -104,7 +104,7 @@ func Inventory(folder string) (*Report, error) {
 	if err != nil || !info.IsDir() {
 		return nil, errors.New("takeout inventory needs an existing folder")
 	}
-	base := takeoutBase(folder)
+	base := folder
 	inv := &inventory{top: map[string]*topAcc{}, families: map[string]*familyAcc{}, metrics: map[string]map[string]map[string]bool{}}
 	err = filepath.WalkDir(base, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -114,7 +114,7 @@ func Inventory(folder string) (*Report, error) {
 		if err != nil {
 			return errPrivateInventory
 		}
-		rel = filepath.ToSlash(rel)
+		rel = strings.TrimPrefix(filepath.ToSlash(rel), "Takeout/")
 		if d.IsDir() {
 			if rel != "." && publicTopFolder(rel) == "Google Photos" {
 				return filepath.SkipDir
@@ -139,14 +139,6 @@ func Inventory(folder string) (*Report, error) {
 		return nil, errPrivateInventory
 	}
 	return inv.report(), nil
-}
-
-func takeoutBase(folder string) string {
-	p := filepath.Join(folder, "Takeout")
-	if st, err := os.Stat(p); err == nil && st.IsDir() {
-		return p
-	}
-	return folder
 }
 
 func publicTopFolder(rel string) string {
@@ -219,9 +211,9 @@ func (i *inventory) addKnownFile(path, rel, top string) error {
 			return i.addCSVFile("Fit Daily Aggregates", path, "Fit")
 		case (ext == ".csv" || ext == ".json") && strings.Contains(low, "session"):
 			if ext == ".csv" {
-				return i.addCSVFile("Fit Sessions", path, "")
+				return i.addCSVFile("Fit Sessions", path, "Fit:exercise")
 			}
-			return i.addJSONFile("Fit Sessions", path, "")
+			return i.addJSONFile("Fit Sessions", path, "exercise")
 		}
 	case "Fitbit":
 		name, metric := fitbitFamily(low)
@@ -273,24 +265,26 @@ func (i *inventory) addJSONFile(name, path, metric string) error {
 	if tok, err := dec.Token(); err != io.EOF || tok != nil {
 		return errPrivateInventory
 	}
-	if f.records == before && !s.recognized {
+	if s.unsupported || (f.records == before && !s.recognized) {
 		f.unsupported++
 	}
 	return nil
 }
 
 type jsonScanner struct {
-	inv        *inventory
-	family     *familyAcc
-	familyName string
-	metric     string
-	objects    int
-	recognized bool
+	inv         *inventory
+	family      *familyAcc
+	familyName  string
+	metric      string
+	objects     int
+	recognized  bool
+	unsupported bool
 }
 
 type jsonSummary struct {
-	keys   map[string]bool
-	months map[string]bool
+	supported bool
+	keys      map[string]bool
+	months    map[string]bool
 }
 
 func newSummary() jsonSummary { return jsonSummary{keys: map[string]bool{}, months: map[string]bool{}} }
@@ -316,7 +310,7 @@ func (s *jsonScanner) scanValue(dec *json.Decoder, path, parentKey string) (json
 				if !ok {
 					return jsonSummary{}, errors.New("non-string JSON object key")
 				}
-				if recordKeys[key] {
+				if recordKeys[key] || key == "activitySegment" {
 					sum.keys[key] = true
 				}
 				child, err := s.scanValue(dec, path+"."+publicJSONKey(key), key)
@@ -324,27 +318,38 @@ func (s *jsonScanner) scanValue(dec *json.Decoder, path, parentKey string) (json
 					return jsonSummary{}, err
 				}
 				mergeMonths(sum.months, child.months)
+				sum.supported = sum.supported || child.supported
 			}
 			end, err := dec.Token()
 			if err != nil || end != json.Delim('}') {
 				return jsonSummary{}, errors.New("bad JSON object")
 			}
 			if s.isRecord(path, sum.keys) {
+				sum.supported = true
 				s.family.records++
 				if s.familyName != "Timeline Records" {
 					mergeMonths(s.family.months, sum.months)
 				}
 				if s.metric != "" {
 					for month := range sum.months {
-						s.inv.addMetricMonth(s.metric, "Fitbit", month)
+						source := "Fitbit"
+						if s.familyName == "Fit Sessions" {
+							source = "Fit"
+						}
+						s.inv.addMetricMonth(s.metric, source, month)
 					}
 				}
+			}
+			if s.familyName == "Timeline Semantic Visits" && path == "$.timelineObjects[]" && sum.keys["activitySegment"] {
+				sum.supported = true
 			}
 			return sum, nil
 		case '[':
 			s.recordShape(path, "array")
-			if s.isRecognizedContainer(path) {
+			container := s.isRecognizedContainer(path)
+			if container && !dec.More() {
 				s.recognized = true
+				sum.supported = true
 			}
 			for dec.More() {
 				child, err := s.scanValue(dec, path+"[]", parentKey)
@@ -352,6 +357,14 @@ func (s *jsonScanner) scanValue(dec *json.Decoder, path, parentKey string) (json
 					return jsonSummary{}, err
 				}
 				mergeMonths(sum.months, child.months)
+				sum.supported = sum.supported || child.supported
+				if container {
+					if child.supported {
+						s.recognized = true
+					} else {
+						s.unsupported = true
+					}
+				}
 			}
 			end, err := dec.Token()
 			if err != nil || end != json.Delim(']') {
@@ -411,9 +424,9 @@ func (s *jsonScanner) isRecord(path string, keys map[string]bool) bool {
 	case "Timeline Semantic Visits":
 		return path == "$.timelineObjects[].placeVisit"
 	case "Timeline Records":
-		return path == "$.locations[]"
+		return path == "$.locations[]" && hasAnyKey(keys, "timestampMs", "timestamp")
 	case "Timeline On-Device":
-		return path == "$.semanticSegments[]" || path == "$.timelineObjects[]"
+		return (path == "$.semanticSegments[]" || path == "$.timelineObjects[]") && hasAnyKey(keys, "startTime", "startTimestamp")
 	case "Fit Sessions":
 		return (path == "$" || path == "$[]" || path == "$.sessions[]") && hasAnyKey(keys, "startTime", "Start time", "startTimestamp", "startTimestampMs")
 	case "Fitbit Sleep":
@@ -503,10 +516,10 @@ func (i *inventory) addCSVMetrics(source string, row map[string]string, rowMonth
 	if len(rowMonths) == 0 || source == "" {
 		return
 	}
-	if strings.HasPrefix(source, "Fitbit:") {
-		metric := strings.TrimPrefix(source, "Fitbit:")
+	if strings.HasPrefix(source, "Fitbit:") || strings.HasPrefix(source, "Fit:") {
+		src, metric, _ := strings.Cut(source, ":")
 		for month := range rowMonths {
-			i.addMetricMonth(metric, "Fitbit", month)
+			i.addMetricMonth(metric, src, month)
 		}
 		return
 	}
@@ -759,6 +772,8 @@ var explicitDateKeys = map[string]bool{
 var timestampMillisKeys = map[string]bool{"timestampMs": true, "startTimestampMs": true, "endTimestampMs": true}
 
 var recordKeys = map[string]bool{
+	"timestampMs":       true,
+	"timestamp":         true,
 	"Start time":        true,
 	"Date":              true,
 	"date":              true,

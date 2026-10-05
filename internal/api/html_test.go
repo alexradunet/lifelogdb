@@ -119,3 +119,27 @@ func TestBrowserKeepsWhatAFailedSaveSent(t *testing.T) {
 		t.Errorf("a stale browser save: %d %.600s", rec.Code, body)
 	}
 }
+
+func TestBrowserMutationFeedback(t *testing.T) {
+	c, h := fresh(t)
+	root := must(c.Get("/"))
+	target := must(c.Do(find(root, "create-page"), map[string]string{"title": "Revived target"}))
+	must(c.Do(find(target, "tombstone"), nil))
+	rec := submit(h, "/pages", url.Values{"title": {"Feedback page"}, "body": {"[[Revived target]] [[bad/name]]"}}, "")
+	if rec.Code != 303 {
+		t.Fatalf("POST: %d %s", rec.Code, rec.Body.String())
+	}
+	location := rec.Header().Get("Location")
+	body := browse(t, h, location)
+	for _, want := range []string{"Result", "revived", "skipped", "bad/name"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("missing %q in redirected feedback", want)
+		}
+	}
+	if strings.Contains(browse(t, h, location), "<h2>Result</h2>") {
+		t.Error("receipt replayed")
+	}
+	if strings.Contains(location, "Revived") || strings.Contains(location, "bad") {
+		t.Error("private URL")
+	}
+}

@@ -179,16 +179,25 @@ func TestNumericSourceEvidence(t *testing.T) {
 			want: "kept_as_text",
 		},
 	}
+	for _, prefix := range []string{".", "-.", "+.", ",", "-,", "+,"} {
+		rejects = append(rejects, struct{ name, file, body, day, val, unit, q, want string }{
+			"leading fraction " + prefix, "Medical/2031-06-01.md", "2031-06-01 ferritin " + prefix + "5 ng/mL\n", "2031-06-01", "5 ng/mL", "", "5 ng/mL", "exactly as written",
+		})
+	}
 	assertReject := func(t *testing.T, f *fixture, file string, facts map[string]any, want string) {
 		t.Helper()
 		if err := f.facts(t, file, facts); err != nil {
 			t.Fatal(err)
+		}
+		if _, err := f.w.Check(ctx, f.s, file); err == nil || !strings.Contains(err.Error(), want) {
+			t.Fatalf("Check error = %v, want %q", err, want)
 		}
 		before, err := f.s.Counts(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
 		beforeTotal := totalMeasurements(t, f)
+		correctionsBefore, _ := os.ReadFile(f.w.file("corrections.json"))
 		_, err = f.w.Apply(ctx, f.s, file)
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Fatalf("Apply error = %v, want containing %q", err, want)
@@ -203,6 +212,10 @@ func TestNumericSourceEvidence(t *testing.T) {
 		if afterTotal := totalMeasurements(t, f); afterTotal != beforeTotal {
 			t.Fatalf("rejected apply wrote measurements: before %d after %d", beforeTotal, afterTotal)
 		}
+		correctionsAfter, _ := os.ReadFile(f.w.file("corrections.json"))
+		if string(correctionsBefore) != string(correctionsAfter) {
+			t.Fatal("rejection changed corrections")
+		}
 		if st, err := f.w.ledgerState(file); err != nil || st != " " {
 			t.Fatalf("rejected apply changed ledger state to %q: %v", st, err)
 		}
@@ -211,6 +224,39 @@ func TestNumericSourceEvidence(t *testing.T) {
 		t.Run("reject "+tc.name, func(t *testing.T) {
 			f := setupEvidence(t, tc.file, tc.body)
 			assertReject(t, f, tc.file, ferritinFacts(tc.file, tc.day, tc.val, tc.unit, tc.q), tc.want)
+		})
+	}
+
+	for _, value := range []string{"48", "0", "1"} {
+		t.Run("reject cropped omitted unit "+value, func(t *testing.T) {
+			file := "Medical/Cropped.md"
+			f := setupEvidenceMetric(t, file, "2031-06-12 dose "+value+" kg\n", Metric{Name: "dose"})
+			assertReject(t, f, file, readingFacts(file, "dose", "2031-06-12", value, "", "2031-06-12 dose "+value), "source evidence")
+		})
+	}
+
+	for _, body := range []string{
+		`2031-06-12 dose 48 after lunch
+`,
+		`2031-06-12 dose 48
+2031-06-13 dose 48 kg
+`,
+		`2031-06-12 walk done
+`,
+	} {
+		t.Run("accept unitless context "+body, func(t *testing.T) {
+			file := "Medical/2031-06-12.md"
+			f := setupEvidenceMetric(t, file, body, Metric{Name: "dose"})
+			value, quote := "48", "2031-06-12 dose 48"
+			if strings.Contains(body, "done") {
+				value, quote = "1", "2031-06-12 walk done"
+			}
+			if err := f.facts(t, file, readingFacts(file, "dose", "2031-06-12", value, "", quote)); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := f.w.Apply(ctx, f.s, file); err != nil {
+				t.Fatal(err)
+			}
 		})
 	}
 

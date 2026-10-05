@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -293,10 +294,22 @@ func Snapshot(from, dir string, now time.Time) (string, error) {
 	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
 		return "", fmt.Errorf("no folder %s for the snapshot", dir)
 	}
-	if repo := gitWorkTree(dir); repo != "" {
-		return "", fmt.Errorf("%s is inside the git work tree %s: a snapshot holds health data and private notes, "+
-			"which git history cannot forget; choose a folder outside it", dir, repo)
+	physical, err := snapshotPhysicalDir(dir)
+	if err != nil {
+		return "", fmt.Errorf("resolve snapshot folder %s: %w", dir, err)
 	}
+	for _, candidate := range []string{dir, physical} {
+		repo, err := gitWorkTree(candidate)
+		if err != nil {
+			return "", fmt.Errorf("check snapshot folder %s: %w", candidate, err)
+		}
+		if repo != "" {
+			return "", fmt.Errorf("%s is inside the git work tree %s: a snapshot holds health data and private notes, "+
+				"which git history cannot forget; choose a folder outside it", candidate, repo)
+		}
+	}
+	// Copy through the checked physical path, not a link that can be retargeted.
+	dir = physical
 	to := filepath.Join(dir, "life-"+now.Format("2006-01-02")+".db")
 	if _, err := os.Stat(to); err == nil {
 		to = filepath.Join(dir, "life-"+now.Format("2006-01-02T150405")+".db")
@@ -304,15 +317,55 @@ func Snapshot(from, dir string, now time.Time) (string, error) {
 	return to, Copy(from, to)
 }
 
+// snapshotPhysicalDir also follows Windows junctions, which Go 1.27 marks
+// ModeIrregular rather than ModeSymlink (so EvalSymlinks alone skips them).
+func snapshotPhysicalDir(dir string) (string, error) {
+	if runtime.GOOS != "windows" {
+		return filepath.EvalSymlinks(dir)
+	}
+	for links := 0; links < 255; links++ {
+		volume := filepath.VolumeName(dir)
+		parts := strings.Split(strings.TrimLeft(dir[len(volume):], `\/`), string(filepath.Separator))
+		current := volume + string(filepath.Separator)
+		followed := false
+		for i, part := range parts {
+			current = filepath.Join(current, part)
+			fi, err := os.Lstat(current)
+			if err != nil {
+				return "", err
+			}
+			if fi.Mode()&(os.ModeSymlink|os.ModeIrregular) == 0 {
+				continue
+			}
+			target, err := os.Readlink(current)
+			if err != nil {
+				return "", fmt.Errorf("read directory link %s: %w", current, err)
+			}
+			if !filepath.IsAbs(target) {
+				target = filepath.Join(filepath.Dir(current), target)
+			}
+			dir = filepath.Join(append([]string{target}, parts[i+1:]...)...)
+			followed = true
+			break
+		}
+		if !followed {
+			return filepath.EvalSymlinks(dir)
+		}
+	}
+	return "", fmt.Errorf("too many directory links in snapshot folder %s", dir)
+}
+
 // gitWorkTree is the folder at or above dir that holds a .git entry, or "".
-func gitWorkTree(dir string) string {
+func gitWorkTree(dir string) (string, error) {
 	for d := dir; ; {
-		if _, err := os.Stat(filepath.Join(d, ".git")); err == nil {
-			return d
+		if _, err := os.Lstat(filepath.Join(d, ".git")); err == nil {
+			return d, nil
+		} else if !os.IsNotExist(err) {
+			return "", err
 		}
 		up := filepath.Dir(d)
 		if up == d {
-			return ""
+			return "", nil
 		}
 		d = up
 	}

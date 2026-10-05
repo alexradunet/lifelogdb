@@ -505,7 +505,7 @@ func verifyEventRowWithRoot(t *core.Tx, intent correctionIntent, id int64, known
 	return nil
 }
 
-func (w *Workspace) correctionIntents() ([]correctionIntent, error) {
+func (w *Workspace) correctionIntents(readOnly ...bool) ([]correctionIntent, error) {
 	dir := filepath.Join(w.Dir, correctionIntentDir)
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, os.ErrNotExist) {
@@ -528,7 +528,7 @@ func (w *Workspace) correctionIntents() ([]correctionIntent, error) {
 		if err := json.Unmarshal(b, &intent); err != nil {
 			return nil, fmt.Errorf("%s: %w", e.Name(), err)
 		}
-		if err := w.validateCorrectionIntent(e.Name(), intent); err != nil {
+		if err := w.validateCorrectionIntent(e.Name(), intent, readOnly...); err != nil {
 			return nil, err
 		}
 		if seen[intent.EventKey] {
@@ -540,7 +540,7 @@ func (w *Workspace) correctionIntents() ([]correctionIntent, error) {
 	return intents, nil
 }
 
-func (w *Workspace) validateCorrectionIntent(filename string, intent correctionIntent) error {
+func (w *Workspace) validateCorrectionIntent(filename string, intent correctionIntent, readOnly ...bool) error {
 	switch {
 	case intent.Version != correctionIntentVersion:
 		return refuse("correction intent %s has version %d", filename, intent.Version)
@@ -559,6 +559,16 @@ func (w *Workspace) validateCorrectionIntent(filename string, intent correctionI
 	case intent.PredecessorKind == "event" && intent.PredecessorEventKey == "":
 		return refuse("correction intent %s has no predecessor event key", intent.EventKey)
 	}
+	if len(readOnly) > 0 && readOnly[0] {
+		rules, err := w.Rules()
+		if err != nil {
+			return err
+		}
+		if rules.Source != intent.WorkspaceSource {
+			return refuse("correction intent %s belongs to %s, not workspace %s", intent.EventKey, intent.WorkspaceSource, rules.Source)
+		}
+		return nil
+	}
 	src, err := w.approvedImportSource()
 	if err != nil {
 		return err
@@ -569,8 +579,8 @@ func (w *Workspace) validateCorrectionIntent(filename string, intent correctionI
 	return nil
 }
 
-func (w *Workspace) orderedCorrectionIntents() ([]correctionIntent, error) {
-	intents, err := w.correctionIntents()
+func (w *Workspace) orderedCorrectionIntents(readOnly ...bool) ([]correctionIntent, error) {
+	intents, err := w.correctionIntents(readOnly...)
 	if err != nil || len(intents) == 0 {
 		return intents, err
 	}
@@ -682,10 +692,16 @@ func (w *Workspace) resyncCorrectionIntent(intent correctionIntent) error {
 	return nil
 }
 
-func (w *Workspace) correctionIntentStates(ctx context.Context, s *core.Store) ([]string, error) {
-	intents, err := w.orderedCorrectionIntents()
-	if err != nil || len(intents) == 0 || s == nil {
+func (w *Workspace) correctionIntentStates(ctx context.Context, s *core.Store, verified ...map[int64]bool) ([]string, error) {
+	intents, err := w.orderedCorrectionIntents(true)
+	if err != nil {
+		return []string{"conflict: " + err.Error()}, nil
+	}
+	if len(intents) == 0 || s == nil {
 		return nil, err
+	}
+	if _, err := w.approvedImportSource(); err != nil {
+		return []string{"verification blocked by approval: " + err.Error()}, nil
 	}
 	known := map[string]correctionIntent{}
 	for _, intent := range intents {
@@ -701,7 +717,7 @@ func (w *Workspace) correctionIntentStates(ctx context.Context, s *core.Store) (
 			out = append(out, fmt.Sprintf("conflict: correction intent %s for %s %s conflicts with edited legacy corrections", intent.EventKey, intent.Metric, intent.RootImportKey))
 			continue
 		}
-		state, err := inspectCorrectionIntent(ctx, s, intent, known)
+		state, err := w.inspectCorrectionIntent(ctx, s, intent, known, verified...)
 		if err != nil {
 			return nil, err
 		}
@@ -712,7 +728,7 @@ func (w *Workspace) correctionIntentStates(ctx context.Context, s *core.Store) (
 	return out, nil
 }
 
-func inspectCorrectionIntent(ctx context.Context, s *core.Store, intent correctionIntent, known map[string]correctionIntent) (string, error) {
+func (w *Workspace) inspectCorrectionIntent(ctx context.Context, s *core.Store, intent correctionIntent, known map[string]correctionIntent, verified ...map[int64]bool) (string, error) {
 	var state string
 	err := s.DryRun(ctx, intent.ActorSource, func(t *core.Tx) error {
 		id, err := t.MeasurementByKey(intent.ActorSource, intent.Metric, intent.EventKey)
@@ -720,8 +736,18 @@ func inspectCorrectionIntent(ctx context.Context, s *core.Store, intent correcti
 			return err
 		}
 		if id != 0 {
-			if err := verifyEventRow(t, intent, id, known); err != nil {
+			resolved := intent.RootImportKey
+			checkErr := verifyEventRow(t, intent, id, known)
+			if checkErr != nil {
+				resolved, checkErr = w.resolveCorrectionKey(intent.RootSource, t, intent.Metric, intent.RootImportKey)
+				if checkErr == nil {
+					checkErr = verifyEventRowWithRoot(t, intent, id, known, resolved)
+				}
+			}
+			if err := checkErr; err != nil {
 				state = fmt.Sprintf("conflict: correction intent %s for %s %s: %v", intent.EventKey, intent.Metric, intent.RootImportKey, err)
+			} else if len(verified) > 0 {
+				verified[0][id] = true
 			}
 			return nil
 		}
