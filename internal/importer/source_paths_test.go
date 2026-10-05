@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -62,7 +63,7 @@ func TestSourceFilenameIdentity(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if same(composedSibling, equivalentSibling) {
+	if same(filepath.Dir(composedSibling), filepath.Dir(equivalentSibling)) {
 		siblingDirsByteDistinct = false
 		t.Log("filesystem treats canonically equivalent sibling directories as the same path; byte-distinct sibling case skipped")
 	}
@@ -139,6 +140,80 @@ func TestSourceFilenameIdentity(t *testing.T) {
 	}
 	if res, err := w.ApplyVault(context.Background(), s); err != nil || res.Created != 0 || res.Saved != 0 || res.Appended != 0 {
 		t.Fatalf("repeat apply = %+v, %v", res, err)
+	}
+
+	target := filepath.Join(t.TempDir(), "life.db")
+	replay, err := w.Replay(context.Background(), s, target)
+	if err != nil || len(replay.Failures) != 0 || replay.Vault.Created == 0 {
+		t.Fatalf("replay = %+v, %v", replay, err)
+	}
+	targetDB, err := db.Open(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetStore := &core.Store{DB: targetDB}
+	defer targetDB.Close()
+	counts, err := targetStore.Counts(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var firstKey int64
+	if err := targetStore.Do(context.Background(), "import:notebook", func(tx *core.Tx) error {
+		var err error
+		firstKey, err = tx.ByImportKey("Journ\u00e9e/Caf\u00e9.md")
+		return err
+	}); err != nil || firstKey == 0 {
+		t.Fatalf("replayed import key = %d, %v", firstKey, err)
+	}
+	replay, err = w.Replay(context.Background(), s, target)
+	if err != nil || replay.Vault.Created != 0 || replay.Vault.Saved != 0 || replay.Vault.Appended != 0 {
+		t.Fatalf("repeat replay = %+v, %v", replay, err)
+	}
+	again, err := targetStore.Counts(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var secondKey int64
+	if err := targetStore.Do(context.Background(), "import:notebook", func(tx *core.Tx) error {
+		var err error
+		secondKey, err = tx.ByImportKey("Journ\u00e9e/Caf\u00e9.md")
+		return err
+	}); err != nil || secondKey != firstKey || !reflect.DeepEqual(again, counts) {
+		t.Fatalf("repeat replay changed key/counts: key %d->%d counts %+v->%+v err %v", firstKey, secondKey, counts, again, err)
+	}
+
+	missingTarget := filepath.Join(t.TempDir(), "life.db")
+	if err := os.Rename(physicalNote, physicalNote+".gone"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Replay(context.Background(), s, missingTarget); err == nil || !strings.Contains(err.Error(), "no source file Journ\u00e9e/Caf\u00e9.md") {
+		t.Fatalf("replay after source disappearance = %v", err)
+	}
+	if exists(missingTarget) {
+		t.Fatal("replay with a missing source file created the target")
+	}
+}
+
+func TestSourcePathSkipsIncompleteCandidates(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, "Notebook")
+	blockingFile := writeSourceFile(t, src, "Sib\u00e9", "not a directory\n")
+	nfdDir := filepath.Join(src, "Sibe\u0301")
+	if err := os.MkdirAll(nfdDir, 0o755); err != nil {
+		t.Log("filesystem does not expose a file and canonically equivalent directory as distinct paths; incomplete-candidate case skipped")
+		return
+	}
+	if same(blockingFile, nfdDir) {
+		t.Log("filesystem does not expose a file and canonically equivalent directory as distinct paths; incomplete-candidate case skipped")
+		return
+	}
+	if err := os.WriteFile(filepath.Join(nfdDir, "Only.md"), []byte("only\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	w, _ := setupSourcePathWorkspace(t, src)
+	got, err := w.ReadSource("Sib\u00e9/Only.md")
+	if err != nil || got != "only\n" {
+		t.Fatalf("resolver did not skip incomplete file candidate: %q, %v", got, err)
 	}
 }
 

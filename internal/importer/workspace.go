@@ -80,8 +80,10 @@ func (w *Workspace) SourcePath(rel string) (string, error) {
 	if !strings.HasPrefix(exact, w.Source+string(filepath.Separator)) {
 		return "", refuse("%q leaves the source", rel)
 	}
-	if _, err := os.Stat(exact); err == nil || !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(exact); err == nil {
 		return exact, nil
+	} else if !sourcePathMissing(err) {
+		return "", err
 	}
 	resolved, ok, err := w.resolveSourcePath(rel)
 	if err != nil || ok {
@@ -92,7 +94,8 @@ func (w *Workspace) SourcePath(rel string) (string, error) {
 
 func (w *Workspace) resolveSourcePath(rel string) (string, bool, error) {
 	candidates := []string{w.Source}
-	for _, part := range strings.Split(rel, "/") {
+	parts := strings.Split(rel, "/")
+	for i, part := range parts {
 		want := norm.NFC.String(part)
 		var next []string
 		for _, base := range candidates {
@@ -105,12 +108,20 @@ func (w *Workspace) resolveSourcePath(rel string) (string, bool, error) {
 			}
 			for _, e := range entries {
 				name := e.Name()
-				if strings.HasPrefix(name, ".") {
+				if strings.HasPrefix(name, ".") || norm.NFC.String(name) != want {
 					continue
 				}
-				if norm.NFC.String(name) == want {
-					next = append(next, filepath.Join(base, name))
+				candidate := filepath.Join(base, name)
+				if i < len(parts)-1 {
+					isDir, err := sourceDirCandidate(candidate)
+					if err != nil {
+						return "", false, err
+					}
+					if !isDir {
+						continue
+					}
 				}
+				next = append(next, candidate)
 			}
 		}
 		if len(next) == 0 {
@@ -123,6 +134,25 @@ func (w *Workspace) resolveSourcePath(rel string) (string, bool, error) {
 	}
 	sort.Strings(candidates)
 	return "", false, refuse("%q is ambiguous: multiple physical source paths have the same logical spelling (%s)", rel, strings.Join(sourceRelPaths(w.Source, candidates), ", "))
+}
+
+func sourcePathMissing(err error) bool {
+	if errors.Is(err, os.ErrNotExist) {
+		return true
+	}
+	var pathErr *os.PathError
+	return errors.As(err, &pathErr) && strings.Contains(strings.ToLower(pathErr.Err.Error()), "not a directory")
+}
+
+func sourceDirCandidate(p string) (bool, error) {
+	st, err := os.Stat(p)
+	if sourcePathMissing(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return st.IsDir(), nil
 }
 
 func sourceRelPaths(root string, paths []string) []string {
