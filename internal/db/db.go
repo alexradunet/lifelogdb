@@ -195,13 +195,19 @@ func reserveDatabasePath(path string) (os.FileInfo, error) {
 	}
 	info, statErr := f.Stat()
 	closeErr := f.Close()
-	if statErr != nil || closeErr != nil {
-		return nil, errors.Join(statErr, closeErr, os.Remove(path))
+	if statErr != nil {
+		return nil, errors.Join(fmt.Errorf("stat reserved database %s: %w", path, statErr), closeErr)
+	}
+	if closeErr != nil {
+		return nil, errors.Join(fmt.Errorf("closing reserved database %s: %w", path, closeErr), removeReservedDatabasePath(path, info))
 	}
 	return info, nil
 }
 
 func removeReservedDatabasePath(path string, reserved os.FileInfo) error {
+	if reserved == nil {
+		return nil
+	}
 	current, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {

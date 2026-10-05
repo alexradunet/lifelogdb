@@ -260,6 +260,22 @@ func TestInitApplyFailurePreservesReplacement(t *testing.T) {
 	}
 }
 
+func TestReservedCleanupWithoutIdentityPreservesPath(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "life.db")
+	want := []byte("unknown identity sentinel\n")
+	writeFile(t, p, want)
+	if err := removeReservedDatabasePath(p, nil); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatalf("path with unknown identity was removed: %v", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("path with unknown identity changed to %q", got)
+	}
+}
+
 func TestOpenRefusesForeignFile(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "other.db")
 	o, _ := sql.Open("lifelog", dsn(p, false))
