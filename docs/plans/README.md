@@ -4,14 +4,52 @@ A plan is a dated record ([how a change happens](../process.md)): a change large
 written as a self-contained brief with done criteria. It cites the docs as they were at the commit it names. One file
 per plan, `NNN-short-slug.md`, numbered on from the last: plans up to 028, 030, 031 and 033 are done, 032 rejected (the owner keeps the few photos chosen for a day, from any
 source), and live in git history
-(`git log -- docs/plans`), so the next one is **034**.
+(`git log -- docs/plans`), so the next one is **048**.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| [029](029-google-takeout.md) | Google Takeout: places and daily health totals, with no schema change | P1 | L | — | TODO |
+| [029](029-google-takeout.md) | Google Takeout: places and daily health totals, with no schema change | P1 | L | Import safety below before the real apply/replay | TODO |
+| [034](034-browser-write-origin-protection.md) | Reject cross-origin browser writes | P1 | S | — | TODO |
+| [035](035-correction-value-validation.md) | Enforce mood and habit domains on corrections | P1 | S | — | TODO |
+| [036](036-unique-find-actions.md) | Give page lookup and import lookup distinct actions | P1 | S | — | TODO |
+| [037](037-import-correction-lineage.md) | Carry repeated imported corrections through replay | P1 | M | 035 | TODO |
+| [038](038-reading-source-evidence.md) | Check complete reading values and source units | P1 | M | — | TODO |
+| [039](039-metric-note-wikilinks.md) | Synchronize wikilinks in newly registered metric notes | P2 | S | — | TODO |
+| [040](040-ad-hoc-query-isolation.md) | Keep ad-hoc SQL read-only and isolated from pooled readers | P1 | M | 045 | TODO |
+| [041](041-durable-import-corrections.md) | Make database corrections and replay intent recoverable | P1 | L | 035, 037 | TODO |
+| [042](042-bounded-heif-metadata.md) | Parse HEIF item locations correctly and within bounds | P1 | M | — | TODO |
+| [043](043-canonical-reading-keys.md) | Use canonical metric identity in derived reading keys | P1 | L | 037, 038, 041, 044 | TODO |
+| [044](044-source-filename-identity.md) | Resolve normalized source names to their physical filenames | P2 | M | — | TODO |
+| [045](045-literal-sqlite-paths.md) | Open literal filenames through escaped SQLite URIs | P1 | S | — | TODO |
+| [046](046-exclusive-database-init.md) | Reserve new database paths exclusively before initialization | P1 | S | 045 | TODO |
+| [047](047-file-promotion-day.md) | Fill the missing day when an embed ghost becomes a file | P2 | S | — | TODO |
 
 Status values: TODO | IN PROGRESS | IN REVIEW (owner) | DONE | BLOCKED (with one-line reason) |
-REJECTED (with one-line rationale). A plan that is DONE or REJECTED is deleted; git is the log.
+REJECTED (with one-line rationale). An executor sets IN REVIEW (owner); the owner accepts or rejects. A plan that is DONE or REJECTED is deleted; git is the log.
+
+## Audit plans (2026-10-05)
+
+Plans 034–047 cover all fourteen owner-selected findings from the read-only audit at `726ffab`, after photo plan 033 landed. No implementation was performed by the advisor. Verification at that baseline: `go vet -mod=readonly ./...` and `go test -mod=readonly ./...` passed. No real database, import source or workspace was inspected; no race/fuzz, vulnerability-advisory or sustained-performance audit was run.
+
+### Execution order and dependencies
+
+Numbering preserves the finding order; execution follows dependencies, not strictly ascending numbers:
+
+1. **Small independent fixes:** 034, 035, 036, 039, 042, 044, 045, 047. Start 034–036 and 045 first. Independent does not mean safe simultaneous edits: 039/047 share core tests, and 042/047 share API file tests; serialize overlapping changes.
+2. **After their prerequisites:** 037 after 035; 040 and 046 after 045. Run 038 before changing import identity.
+3. **Recovery:** 041 after 035/037, with the explicit protocol review gate. This is not a two-write reorder masquerading as atomicity.
+4. **Identity:** 043 after 037/038/041/044, with legacy-key/correction compatibility tests before any key change. It must not rewrite stored facts or silently merge historical roots.
+5. **Owner's rebuild/import:** settle 037/038/041/043 and database path/creation safety (045/046) before the canonical rebuild or plan 029's real apply/replay. Plan 029's inventory/converter design can proceed separately, subject to the owner's current photo decisions; do not revive archive-wide photo inventory from its older dated brief.
+
+Plans cite one baseline, so prerequisite edits are expected drift. Each executor must verify those changes, rebaseline its plan excerpts/interfaces, and stop on unrelated drift. Use synthetic temporary data only; no DDL or migration is authorized by these plans. If a schema or new contract decision is needed, stop for the [change process](../process.md).
+
+### Considered and not planned
+
+- **Authentication/encryption as a redesign:** the local unauthenticated application and plaintext database are accepted tradeoffs ([non-goals](../architecture/non-goals.md)); 034 addresses browser request authenticity without reopening them.
+- **Migration runner:** explicitly forbidden before the [freeze](../decisions/D13-migrations-and-freeze.md).
+- **Photo-library inventory and automatic HEIC preview decoding:** the owner keeps selected photos from any source ([D9](../decisions/D09-binary-files.md)); the current writer accepts a supplied JPEG preview for unsupported image/video formats. Plan 033 is complete. Plan 042 concerns metadata parser correctness, not a replacement photo product.
+- **Millisecond version collisions, whole-replay atomicity, person-date editing, restore CLI and CI:** already recorded below; not duplicated as new audit findings. The optional direction suggestions were not selected as additional implementation scope.
+- **Generic performance/architecture refactoring:** no measured bottleneck justified a separate plan. The concrete missing MCP coverage is included in 036.
 
 ## What is left (2026-10-04)
 
@@ -23,7 +61,7 @@ chosen for a day are kept together, from any library (plan 033 done). No open is
 
 ### Next step
 
-- **Rebuild the canonical `life.db` from today's `schema.sql`** (the owner, locally: a fresh file, then *replay*
+- After the import-safety dependencies above are accepted, **rebuild the canonical `life.db` from today's `schema.sql`** (the owner, locally: a fresh file, then *replay*
   every workspace into it, [D13](../decisions/D13-migrations-and-freeze.md)). The file was made before
   `pages_fts_delete` was cut and before the `files` and `places` tables ([D9](../decisions/D09-binary-files.md), [D21](../decisions/D21-location-history.md)), and a canonical file is rebuilt, never migrated, until the freeze. A snapshot first
   ([D25](../decisions/D25-snapshots.md)).
