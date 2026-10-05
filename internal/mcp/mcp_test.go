@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -47,24 +48,26 @@ func TestFindToolsWithWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	serverTransport, clientTransport := mcpsdk.NewInMemoryTransports()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	errc := make(chan error, 1)
 	go func() { errc <- srv.Run(ctx, serverTransport) }()
-
-	session, err := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "lifelog-test", Version: "0"}, nil).Connect(ctx, clientTransport, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	var session *mcpsdk.ClientSession
 	defer func() {
-		if err := session.Close(); err != nil {
-			t.Errorf("close MCP session: %v", err)
+		if session != nil {
+			if err := session.Close(); err != nil {
+				t.Errorf("close MCP session: %v", err)
+			}
 		}
 		cancel()
-		if err := <-errc; err != nil && !errors.Is(err, context.Canceled) && ctx.Err() == nil {
+		if err := <-errc; err != nil && !errors.Is(err, context.Canceled) {
 			t.Errorf("MCP server stopped with %v", err)
 		}
 	}()
+
+	session, err = mcpsdk.NewClient(&mcpsdk.Implementation{Name: "lifelog-test", Version: "0"}, nil).Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	tools, err := session.ListTools(ctx, &mcpsdk.ListToolsParams{})
 	if err != nil {
