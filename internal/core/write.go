@@ -600,11 +600,18 @@ func (t *Tx) Correct(wrong int64, value *float64) (id int64, err error) {
 	return id, err
 }
 
-// MeasurementKey is the sender's key of a measurement: its source, import_key and metric ("" when it has none).
+// MeasurementKey is the sender's key of a measurement's oldest ancestor: its source, import_key and metric
+// ("" when it has none). A correction keeps its writer's provenance, but import replay records owner corrections
+// against the original imported row (docs/guides/importing.md).
 func (t *Tx) MeasurementKey(id int64) (source, key, metric string, err error) {
 	var k sql.NullString
-	err = t.tx.QueryRow(`SELECT me.source, me.import_key, m.title FROM measurements me JOIN pages m ON m.id = me.metric_id
-	                      WHERE me.id = ?`, id).Scan(&source, &k, &metric)
+	err = t.tx.QueryRow(`WITH RECURSIVE ancestors(id, source, import_key, metric_id, supersedes_id, depth) AS (
+	                       SELECT id, source, import_key, metric_id, supersedes_id, 0 FROM measurements WHERE id = ?
+	                       UNION ALL
+	                       SELECT me.id, me.source, me.import_key, me.metric_id, me.supersedes_id, depth + 1
+	                         FROM measurements me JOIN ancestors a ON me.id = a.supersedes_id)
+	                     SELECT a.source, a.import_key, m.title FROM ancestors a JOIN pages m ON m.id = a.metric_id
+	                      ORDER BY depth DESC LIMIT 1`, id).Scan(&source, &k, &metric)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", "", "", notFound("no measurement %d", id)
 	}

@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"path/filepath"
 	"strings"
@@ -197,6 +198,75 @@ func TestMeasurementsAreAppendOnly(t *testing.T) {
 	d, _ := s.Day(ctx, "2026-09-29")
 	if len(d.Readings) != 0 {
 		t.Errorf("a retracted reading is still current: %+v", d.Readings)
+	}
+}
+
+func TestCorrectionRootIdentity(t *testing.T) {
+	s := fresh(t)
+	root, err := s.Record(ctx, "import:notebook", Reading{Metric: "mood", Day: "2026-10-07", Value: 3, Key: "Medical/Mood.md|reading|mood|2026-10-07|1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertRoot := func(name string, id int64) int64 {
+		t.Helper()
+		fix, key, err := s.Correct(ctx, "cli", id, ptr(4))
+		if err != nil {
+			t.Fatalf("%s correction: %v", name, err)
+		}
+		if key.Source != "import:notebook" || key.Key != "Medical/Mood.md|reading|mood|2026-10-07|1" || key.Metric != "Mood" || key.Value == nil || *key.Value != 4 {
+			t.Fatalf("%s key = %+v, want imported root", name, key)
+		}
+		return fix
+	}
+	first := assertRoot("root", root)
+
+	newest, _, err := s.Correct(ctx, "cli", first, ptr(5))
+	if err != nil {
+		t.Fatal(err)
+	}
+	retracted, key, err := s.Correct(ctx, "agent:owner", newest, nil)
+	if err != nil {
+		t.Fatalf("retraction of newest row: %v", err)
+	}
+	if key.Source != "import:notebook" || key.Key != "Medical/Mood.md|reading|mood|2026-10-07|1" || key.Metric != "Mood" || key.Value != nil {
+		t.Fatalf("retraction key = %+v, want imported root with nil value", key)
+	}
+	var source string
+	var rowKey sql.NullString
+	if err := s.DB.R.QueryRowContext(ctx, `SELECT source, import_key FROM measurements WHERE id = ?`, retracted).Scan(&source, &rowKey); err != nil {
+		t.Fatal(err)
+	}
+	if source != "agent:owner" || rowKey.Valid {
+		t.Fatalf("corrected row provenance = source %q key %q, want writer source and no import key", source, rowKey.String)
+	}
+
+	plain, err := s.Record(ctx, "cli", Reading{Metric: "mood", Day: "2026-10-08", Value: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, key, err := s.Correct(ctx, "cli", plain, ptr(4)); err != nil {
+		t.Fatalf("unkeyed correction: %v", err)
+	} else if key.Source != "cli" || key.Key != "" || key.Metric != "Mood" {
+		t.Fatalf("unkeyed root key = %+v, want root without import key", key)
+	}
+
+	legacyRoot, err := s.Record(ctx, "cli", Reading{Metric: "mood", Day: "2026-10-09", Value: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var intermediate int64
+	if err := s.DB.W.QueryRowContext(ctx, `INSERT INTO measurements(metric_id, day, value, source, import_key, supersedes_id, created_at)
+		SELECT metric_id, day, 4, 'import:legacy', 'legacy-intermediate', id, `+Now+` FROM measurements WHERE id = ? RETURNING id`, legacyRoot).Scan(&intermediate); err != nil {
+		t.Fatal(err)
+	}
+	if _, key, err := s.Correct(ctx, "cli", intermediate, ptr(5)); err != nil {
+		t.Fatalf("keyed intermediate correction: %v", err)
+	} else if key.Source != "cli" || key.Key != "" || key.Metric != "Mood" {
+		t.Fatalf("keyed intermediate resolved to %+v, want oldest unkeyed root", key)
+	}
+
+	if _, _, err := s.Correct(ctx, "cli", 987654321, ptr(4)); status(err) != 404 {
+		t.Fatalf("unknown measurement: %v, want 404", err)
 	}
 }
 

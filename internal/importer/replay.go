@@ -242,17 +242,29 @@ func (w *Workspace) compareWithTrial(ctx context.Context, trial, ts *core.Store,
 	return nil
 }
 
-// replayCorrections brings each corrected imported reading to the value the owner gave it on the trial. A
-// correction whose reading the replay did not write makes none of them: the refusal names every such one.
+// replayCorrections brings each corrected imported reading to the final value the owner gave it on the trial
+// (docs/guides/importing.md). A correction whose reading the replay did not write makes none of them: the
+// refusal names every such one.
 func (w *Workspace) replayCorrections(ctx context.Context, ts *core.Store) (int, error) {
 	cs, err := w.Corrections()
 	if err != nil || len(cs) == 0 {
 		return 0, err
 	}
+	type correctionRoot struct{ source, metric, key string }
+	latest := map[correctionRoot]core.CorrectedKey{}
+	var order []correctionRoot
+	for _, c := range cs {
+		root := correctionRoot{c.Source, c.Metric, c.Key}
+		if _, seen := latest[root]; !seen {
+			order = append(order, root)
+		}
+		latest[root] = c
+	}
 	n := 0
 	err = ts.Do(ctx, "cli", func(t *core.Tx) error {
 		var missing []string
-		for _, c := range cs {
+		for _, root := range order {
+			c := latest[root]
 			id, err := t.MeasurementByKey(c.Source, c.Metric, c.Key)
 			if err != nil {
 				return err

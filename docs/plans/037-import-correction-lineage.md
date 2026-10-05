@@ -8,7 +8,7 @@
 
 - **Date / planned at:** 2026-10-05, commit `726ffab`.
 - **Priority:** P1. **Effort:** M. **Risk:** MED (correction history and replay idempotency).
-- **Status:** TODO. **Depends on:** [035](035-correction-value-validation.md). **Category:** bug. **Audit finding:** 4.
+- **Status:** IN REVIEW (owner). **Depends on:** [035](035-correction-value-validation.md). **Category:** bug. **Audit finding:** 4.
 
 ## Why
 
