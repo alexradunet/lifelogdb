@@ -231,6 +231,17 @@ func TestBrowserGetsHTMLAndSourceUI(t *testing.T) {
 	}
 }
 
+func TestQueryBoundaryIsReportedAs422(t *testing.T) {
+	c, _ := fresh(t)
+	query := find(must(c.Get("/")), "query")
+	if _, err := c.Do(query, map[string]string{"sql": "SELECT 1; SELECT 2"}); !clientStatus(err, 422) {
+		t.Fatalf("script query error = %v, want 422", err)
+	}
+	if got := fmtRows(must(c.Do(query, map[string]string{"sql": "SELECT ';' AS semi"}))); got != ";" {
+		t.Fatalf("literal semicolon query rows = %q, want ;", got)
+	}
+}
+
 func TestBrowserOriginProtection(t *testing.T) {
 	c, h := fresh(t)
 	postForm := func(path string, vals url.Values, headers map[string]string) *httptest.ResponseRecorder {

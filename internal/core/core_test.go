@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -396,30 +397,120 @@ func measurementRows(t *testing.T, s *Store) int {
 	return n
 }
 
-func TestQueryCannotWrite(t *testing.T) {
+func TestQueryStatementBoundary(t *testing.T) {
 	s := fresh(t)
-	if _, err := s.Query(ctx, "DELETE FROM link_kinds WHERE kind = 'related'", 10); status(err) != 422 {
-		t.Errorf("a write through Query: %v", err)
+	allowed := []string{
+		"SELECT ';' AS semi -- ; in a comment\n",
+		"WITH x(v) AS (VALUES ('literal ;')) SELECT v FROM x; -- final terminator and comment",
+		"VALUES (1)",
+		"EXPLAIN QUERY PLAN SELECT * FROM pages",
+		"PRAGMA trusted_schema",
+		"PRAGMA table_info(pages)",
 	}
+	for _, q := range allowed {
+		if _, err := s.Query(ctx, q, 10); err != nil {
+			t.Errorf("allowed query %q: %v", q, err)
+		}
+	}
+
+	rejected := []string{
+		"",
+		" -- only a comment\n /* and another */ ",
+		"SELECT 1; SELECT 2",
+		"DELETE FROM link_kinds WHERE kind = 'related'",
+		"BEGIN; SELECT count(*) FROM pages",
+		"COMMIT",
+		"ATTACH DATABASE ':memory:' AS aux",
+		"VACUUM",
+		"PRAGMA trusted_schema = ON",
+		"PRAGMA query_only(0)",
+		"PRAGMA writable_schema",
+		"EXPLAIN DELETE FROM link_kinds WHERE kind = 'related'",
+	}
+	for _, q := range rejected {
+		if _, err := s.Query(ctx, q, 10); status(err) != 422 {
+			t.Errorf("query %q status = %d (%v), want 422", q, status(err), err)
+		}
+	}
+
 	r, err := s.Query(ctx, "SELECT kind FROM link_kinds ORDER BY kind", 3)
 	if err != nil || len(r.Rows) != 3 || !r.Truncated {
 		t.Errorf("rows %v truncated %v err %v", r, r != nil && r.Truncated, err)
 	}
 }
 
-// A PRAGMA sent through Query never reaches the next reader: the connection gets its pragmas back first.
-func TestQueryRestoresTheReaderPragmas(t *testing.T) {
+func TestQueryDoesNotLeakReaderState(t *testing.T) {
 	s := fresh(t)
-	s.DB.R.SetMaxOpenConns(1) // the next query reuses the same connection
-	for _, p := range []string{"PRAGMA trusted_schema = ON", "PRAGMA query_only = OFF"} {
-		if _, err := s.Query(ctx, p, 10); err != nil {
-			t.Fatalf("%s: %v", p, err)
+	s.DB.R.SetMaxOpenConns(1) // force ordinary reads to reuse one pooled reader if Query touched it
+	assertReaderPragmas(t, s)
+
+	queries := []string{
+		"SELECT kind FROM link_kinds ORDER BY kind LIMIT 1",
+		"SELECT kind FROM link_kinds ORDER BY kind LIMIT 1; -- final terminator",
+		"SELECT kind FROM link_kinds ORDER BY kind",
+		"PRAGMA trusted_schema = ON",
+		"BEGIN; SELECT count(*) FROM pages",
+	}
+	for _, q := range queries {
+		_, _ = s.Query(ctx, q, 1) // includes success, truncation and refused statements
+		assertReaderPragmas(t, s)
+	}
+
+	if _, _, err := s.CreatePage(ctx, "cli", "Fresh after query", ""); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := s.DB.R.QueryRowContext(ctx, `SELECT count(*) FROM pages WHERE title = 'Fresh after query'`).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("ordinary reader after ad-hoc query sees %d fresh pages, %v; want 1", n, err)
+	}
+}
+
+func assertReaderPragmas(t *testing.T, s *Store) {
+	t.Helper()
+	for p, want := range map[string]int64{"PRAGMA trusted_schema": 0, "PRAGMA query_only": 1} {
+		var got int64
+		if err := s.DB.R.QueryRowContext(ctx, p).Scan(&got); err != nil || got != want {
+			t.Fatalf("ordinary reader %s = %d, %v; want %d", p, got, err, want)
 		}
 	}
-	for p, want := range map[string]int64{"PRAGMA trusted_schema": 0, "PRAGMA query_only": 1} {
-		r, err := s.Query(ctx, p, 10)
-		if err != nil || len(r.Rows) != 1 || r.Rows[0][0] != want {
-			t.Errorf("%s after a reset sent through Query: %v %v, want %d", p, r, err, want)
-		}
+}
+
+func TestQueryUsesLiteralReadOnlyPath(t *testing.T) {
+	root := t.TempDir()
+	requested := filepath.Join(root, "query literal # %23.db")
+	sentinel := filepath.Join(root, "query literal ")
+	if err := os.WriteFile(sentinel, []byte("sentinel"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Init(requested); err != nil {
+		t.Fatal(err)
+	}
+	d, err := db.Open(requested)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	s := &Store{d}
+	r, err := s.Query(ctx, `SELECT file FROM pragma_database_list WHERE name = 'main'`, 1)
+	if err != nil || len(r.Rows) != 1 {
+		t.Fatalf("database_list query = %+v, %v", r, err)
+	}
+	got, ok := r.Rows[0][0].(string)
+	if !ok {
+		t.Fatalf("database_list file has type %T, want string", r.Rows[0][0])
+	}
+	wantInfo, err := os.Stat(requested)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotInfo, err := os.Stat(got)
+	if err != nil {
+		t.Fatalf("reported query path %q cannot be statted: %v", got, err)
+	}
+	if !os.SameFile(wantInfo, gotInfo) {
+		t.Fatalf("query opened %q, not requested literal path %q", got, requested)
+	}
+	if b, err := os.ReadFile(sentinel); err != nil || string(b) != "sentinel" {
+		t.Fatalf("alternate sentinel changed to %q, %v", string(b), err)
 	}
 }

@@ -124,6 +124,7 @@ func sqliteURIPath(path string) string {
 // DB is one life.db: a single writing connection and a pool of read-only ones.
 type DB struct {
 	W, R *sql.DB
+	path string
 	keep bool // a snapshot under its restore check: Close leaves the file as it was
 }
 
@@ -144,7 +145,7 @@ func open(path string, keep bool) (*DB, error) {
 		w.Close()
 		return nil, err
 	}
-	d := &DB{W: w, R: r, keep: keep}
+	d := &DB{W: w, R: r, path: path, keep: keep}
 	var id int64
 	if err := w.QueryRow("PRAGMA application_id").Scan(&id); err != nil {
 		d.Close()
@@ -229,6 +230,17 @@ func (d *DB) Close() error {
 		d.W.Exec("PRAGMA optimize")
 	}
 	return errors.Join(d.R.Close(), d.W.Close())
+}
+
+// AdHocReader opens a short-lived read-only handle for one ad-hoc query. It uses the same literal SQLite URI helper
+// and connection hook as the ordinary reader pool, but is closed instead of pooled after the query finishes.
+func (d *DB) AdHocReader() (*sql.DB, error) {
+	r, err := sql.Open("lifelog", dsn(d.path, true))
+	if err != nil {
+		return nil, err
+	}
+	r.SetMaxOpenConns(1)
+	return r, nil
 }
 
 // Write runs fn in one BEGIN IMMEDIATE transaction, committed when fn returns nil.

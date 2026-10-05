@@ -67,8 +67,9 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **Provenance per surface.** `source` is `cli`, `api`, `ui` (a browser form) or `agent:<name>` (MCP);
   the `Lifelog-Source` header sets it.
 - **Optimistic saves.** A body save sends the `version` (`entities.updated_at`) it read; a newer one is a 409.
-- **Read-only queries.** `POST /query` runs one statement on a `mode=ro`, `query_only` connection, 5 s and
-  500 rows at most.
+- **Read-only queries.** `POST /query` runs one allowed read statement (`SELECT`, `WITH`, `VALUES`, `EXPLAIN` of
+  those reads, or an allowlisted introspection `PRAGMA`) on a short-lived `mode=ro`, `query_only` connection, 5 s
+  and 500 rows at most; scripts, transactions, setters and maintenance commands are refused.
 - **Connections** ([connection setup](docs/contract/connections.md)): one writing connection with the pragmas
   set by DSN and read back by a connection hook (a wrong value refuses the connection), `SQLITE_DBCONFIG_DEFENSIVE`,
   `BEGIN IMMEDIATE` via `_txlock=immediate`, the 3.51.3 floor checked; readers use `mode=ro` with `trusted_schema=OFF`, read back the same way.

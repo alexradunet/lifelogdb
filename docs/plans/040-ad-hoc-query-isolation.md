@@ -8,7 +8,7 @@
 
 - **Date / planned at:** 2026-10-05, commit `726ffab`.
 - **Priority:** P1. **Effort:** M. **Risk:** MED (SQL compatibility and connection lifetime).
-- **Status:** TODO. **Depends on:** [045](045-literal-sqlite-paths.md). **Category:** security / bug. **Audit finding:** 7.
+- **Status:** IN REVIEW (owner). **Depends on:** [045](045-literal-sqlite-paths.md). **Category:** security / bug. **Audit finding:** 7.
 
 ## Why
 
@@ -54,11 +54,11 @@ Only the drift-check paths and plan/index status. New `core/query.go`, `core/que
 
 ## Done criteria
 
-- [ ] Exactly one allowed read statement is executed; state-changing statement classes/setters are refused with 422.
-- [ ] String/comment punctuation does not cause false statement splits; SELECT/CTE/VALUES/EXPLAIN and supported introspection work.
-- [ ] Dedicated handles close on all paths; pooled reads remain fresh and their pragmas unchanged.
-- [ ] Timeout, max rows, truncation and API JSON remain compatible; full verification passes.
-- [ ] Only scope paths changed; index is IN REVIEW (owner).
+- [x] Exactly one allowed read statement is executed; state-changing statement classes/setters are refused with 422.
+- [x] String/comment punctuation does not cause false statement splits; SELECT/CTE/VALUES/EXPLAIN and supported introspection work.
+- [x] Dedicated handles close on all paths; pooled reads remain fresh and their pragmas unchanged.
+- [x] Timeout, max rows, truncation and API JSON remain compatible; full verification passes.
+- [x] Only scope paths changed; index is IN REVIEW (owner).
 
 ## STOP conditions
 

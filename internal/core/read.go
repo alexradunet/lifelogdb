@@ -3,7 +3,6 @@ package core
 import (
 	"context"
 	"database/sql"
-	"database/sql/driver"
 	"errors"
 	"sort"
 	"time"
@@ -424,23 +423,43 @@ type Result struct {
 	Truncated bool     `json:"truncated"`
 }
 
-// Query runs one statement on the read-only pool (mode=ro, query_only): any SQL may be sent, none can write. The
-// statement runs on a connection of its own, which gets query_only and trusted_schema=OFF back before it returns
-// to the pool (connections.md): a PRAGMA sent here never reaches the next reader.
+// Query runs exactly one allowed read-only statement on a short-lived mode=ro, query_only connection. The ad-hoc
+// connection is never returned to the ordinary reader pool (connections.md), so scripts, transaction state and PRAGMA
+// setters cannot leak into pooled reads.
 func (s *Store) Query(ctx context.Context, q string, maxRows int) (*Result, error) {
+	if err := validateAdHocSQL(q); err != nil {
+		return nil, invalid("%v", err)
+	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	conn, err := s.DB.R.Conn(ctx)
+	reader, err := s.DB.AdHocReader()
 	if err != nil {
 		return nil, err
 	}
-	defer restoreReader(conn)
+	defer reader.Close()
+	conn, err := reader.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
 	rows, err := conn.QueryContext(ctx, q)
 	if err != nil {
 		return nil, invalid("%v", err)
 	}
-	defer rows.Close()
-	cols, _ := rows.Columns()
+	closed := false
+	closeRows := func() error {
+		if closed {
+			return nil
+		}
+		closed = true
+		return rows.Close()
+	}
+	defer closeRows()
+	cols, err := rows.Columns()
+	if err != nil {
+		closeRows()
+		return nil, invalid("%v", err)
+	}
 	res := &Result{Columns: cols, Rows: [][]any{}}
 	for rows.Next() {
 		if len(res.Rows) == maxRows {
@@ -453,6 +472,7 @@ func (s *Store) Query(ctx context.Context, q string, maxRows int) (*Result, erro
 			ptrs[i] = &vals[i]
 		}
 		if err := rows.Scan(ptrs...); err != nil {
+			closeRows()
 			return nil, invalid("%v", err)
 		}
 		for i, v := range vals {
@@ -463,18 +483,11 @@ func (s *Store) Query(ctx context.Context, q string, maxRows int) (*Result, erro
 		res.Rows = append(res.Rows, vals)
 	}
 	if err := rows.Err(); err != nil {
+		closeRows()
+		return nil, invalid("%v", err)
+	}
+	if err := closeRows(); err != nil {
 		return nil, invalid("%v", err)
 	}
 	return res, nil
-}
-
-// restoreReader sets a read connection's pragmas again and returns it to the pool; one that cannot be restored is
-// closed instead, never reused.
-func restoreReader(conn *sql.Conn) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if _, err := conn.ExecContext(ctx, `PRAGMA query_only = ON; PRAGMA trusted_schema = OFF`); err != nil {
-		conn.Raw(func(any) error { return driver.ErrBadConn })
-	}
-	conn.Close()
 }
