@@ -480,6 +480,9 @@ func TestQueryDoesNotLeakReaderState(t *testing.T) {
 	if err == nil || (status(err) != 422 && !errors.Is(err, context.DeadlineExceeded)) {
 		t.Fatalf("deadline-bound query error = %v (status %d), want cancellation", err, status(err))
 	}
+	if !errors.Is(short.Err(), context.DeadlineExceeded) {
+		t.Fatalf("expensive query failed without reaching its deadline: %v", err)
+	}
 	assertReaderPragmas(t, s)
 
 	if _, _, err := s.CreatePage(ctx, "cli", "Fresh after query", ""); err != nil {
