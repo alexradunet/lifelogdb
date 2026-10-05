@@ -63,8 +63,14 @@ func TestInventorySummarizesPhaseAWithoutLeakingValuesDataKeysOrFilenames(t *tes
 	if got := families["Fit Sessions"].Records; got != 3 {
 		t.Fatalf("Fit Sessions records = %d, want CSV row + single object + wrapper session = 3", got)
 	}
+	if got := families["Fitbit Sleep"].Records; got != 2 {
+		t.Fatalf("Fitbit Sleep records = %d, want two sleep sessions, not their nested stages or wrapper metadata", got)
+	}
 	if got := families["Fitbit Weight"].Records; got != 1 {
 		t.Fatalf("Fitbit Weight records = %d, want only the public body-weight row; private data key is shape only", got)
+	}
+	if got, want := families["Fitbit Weight"].LastMonth, "2020-01"; got != want {
+		t.Fatalf("Fitbit Weight last month = %q, want %q; lastModified must not extend coverage", got, want)
 	}
 	if !hasShapePath(families["Fitbit Weight"], "$.<key>.dateTime") {
 		t.Fatalf("Fitbit Weight shapes did not fold a data-key object into <key>: %#v", families["Fitbit Weight"].Shapes)
@@ -92,6 +98,29 @@ func TestInventoryDoesNotInventStepsOverlapWhenFitStepsColumnIsAbsent(t *testing
 	}
 	if hasOverlap(report, "steps", "2020-01") {
 		t.Fatalf("steps overlap was invented without a Fit steps column: %#v", report.Overlaps)
+	}
+}
+
+func TestInventoryReportsUnsupportedShapeWithoutPrivateDetail(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "Fitbit/Sleep/sleep-unknown.json", `{"unexpected":[{"when":"2020-01-10","PRIVATE_MARKER_DATA_KEY":"PRIVATE_MARKER value"}]}`)
+	report, err := Inventory(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, _ := json.Marshal(report)
+	if strings.Contains(strings.ToLower(string(out)), strings.ToLower("PRIVATE_MARKER")) {
+		t.Fatalf("unsupported-shape report leaked private detail: %s", out)
+	}
+	f := familiesByName(report)["Fitbit Sleep"]
+	if f.Records != 0 || f.UnsupportedFiles != 1 || len(f.Shapes) == 0 {
+		t.Fatalf("unsupported shape = %+v, want zero records, one unsupported file, and shapes", f)
+	}
+}
+
+func TestTimestampMillisOutsideFourDigitYearsDoesNotBecomeCoverage(t *testing.T) {
+	if got := monthFromExplicitField("timestampMs", "9223372036854775807"); got != "" {
+		t.Fatalf("extreme timestampMs produced month %q, want none", got)
 	}
 }
 

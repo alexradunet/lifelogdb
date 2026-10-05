@@ -39,13 +39,14 @@ type ExtensionCount struct {
 }
 
 type Family struct {
-	Name       string      `json:"name"`
-	Files      int         `json:"files,omitempty"`
-	Records    int         `json:"records,omitempty"`
-	FirstMonth string      `json:"first_month,omitempty"`
-	LastMonth  string      `json:"last_month,omitempty"`
-	CSVColumns []CSVColumn `json:"csv_columns,omitempty"`
-	Shapes     []Shape     `json:"shapes,omitempty"`
+	Name             string      `json:"name"`
+	Files            int         `json:"files,omitempty"`
+	Records          int         `json:"records,omitempty"`
+	FirstMonth       string      `json:"first_month,omitempty"`
+	LastMonth        string      `json:"last_month,omitempty"`
+	CSVColumns       []CSVColumn `json:"csv_columns,omitempty"`
+	Shapes           []Shape     `json:"shapes,omitempty"`
+	UnsupportedFiles int         `json:"unsupported_files,omitempty"`
 }
 
 type CSVColumn struct {
@@ -88,6 +89,7 @@ type familyAcc struct {
 	name        string
 	files       int
 	records     int
+	unsupported int
 	months      map[string]bool
 	csv         map[string]map[string]int
 	csvCounts   map[string]int
@@ -261,6 +263,7 @@ func (i *inventory) addJSONFile(name, path, metric string) error {
 	defer fh.Close()
 	f := i.family(name)
 	f.files++
+	before := f.records
 	s := jsonScanner{inv: i, family: f, familyName: name, metric: metric}
 	dec := json.NewDecoder(fh)
 	dec.UseNumber()
@@ -270,6 +273,9 @@ func (i *inventory) addJSONFile(name, path, metric string) error {
 	if tok, err := dec.Token(); err != io.EOF || tok != nil {
 		return errPrivateInventory
 	}
+	if f.records == before && s.objects > 0 {
+		f.unsupported++
+	}
 	return nil
 }
 
@@ -278,6 +284,7 @@ type jsonScanner struct {
 	family     *familyAcc
 	familyName string
 	metric     string
+	objects    int
 }
 
 type jsonSummary struct {
@@ -287,7 +294,7 @@ type jsonSummary struct {
 
 func newSummary() jsonSummary { return jsonSummary{keys: map[string]bool{}, months: map[string]bool{}} }
 
-func (s jsonScanner) scanValue(dec *json.Decoder, path, parentKey string) (jsonSummary, error) {
+func (s *jsonScanner) scanValue(dec *json.Decoder, path, parentKey string) (jsonSummary, error) {
 	tok, err := dec.Token()
 	if err != nil {
 		return jsonSummary{}, err
@@ -298,6 +305,7 @@ func (s jsonScanner) scanValue(dec *json.Decoder, path, parentKey string) (jsonS
 		switch x {
 		case '{':
 			s.recordShape(path, "object")
+			s.objects++
 			for dec.More() {
 				ktok, err := dec.Token()
 				if err != nil {
@@ -307,7 +315,9 @@ func (s jsonScanner) scanValue(dec *json.Decoder, path, parentKey string) (jsonS
 				if !ok {
 					return jsonSummary{}, errors.New("non-string JSON object key")
 				}
-				sum.keys[key] = true
+				if recordKeys[key] {
+					sum.keys[key] = true
+				}
 				child, err := s.scanValue(dec, path+"."+publicJSONKey(key), key)
 				if err != nil {
 					return jsonSummary{}, err
@@ -367,7 +377,7 @@ func (s jsonScanner) scanValue(dec *json.Decoder, path, parentKey string) (jsonS
 	return sum, nil
 }
 
-func (s jsonScanner) isRecord(path string, keys map[string]bool) bool {
+func (s *jsonScanner) isRecord(path string, keys map[string]bool) bool {
 	switch s.familyName {
 	case "Timeline Semantic Visits":
 		return path == "$.timelineObjects[].placeVisit"
@@ -376,14 +386,20 @@ func (s jsonScanner) isRecord(path string, keys map[string]bool) bool {
 	case "Timeline On-Device":
 		return path == "$.semanticSegments[]" || path == "$.timelineObjects[]"
 	case "Fit Sessions":
-		return isKnownRecordPath(path) && hasAnyKey(keys, "startTime", "Start time", "startTimestamp", "startTimestampMs")
+		return (path == "$" || path == "$[]" || path == "$.sessions[]") && hasAnyKey(keys, "startTime", "Start time", "startTimestamp", "startTimestampMs")
+	case "Fitbit Sleep":
+		return (path == "$[]" || path == "$.sleep[]") && hasAnyKey(keys, "dateOfSleep", "startTime", "endTime")
+	case "Fitbit Steps":
+		return (path == "$[]" || path == "$.steps[]") && hasAnyKey(keys, "dateTime")
+	case "Fitbit Heart Rate":
+		return (path == "$[]" || path == "$.heartRate[]") && hasAnyKey(keys, "dateTime")
+	case "Fitbit Weight":
+		return (path == "$[]" || path == "$.body-weight[]" || path == "$.weight[]") && hasAnyKey(keys, "dateTime")
+	case "Fitbit Exercise":
+		return (path == "$[]" || path == "$.exercise[]") && hasAnyKey(keys, "startTime", "originalStartTime")
 	default:
-		return isKnownRecordPath(path) && hasAnyKey(keys, "dateTime", "dateOfSleep", "startTime", "originalStartTime", "date", "Date")
+		return false
 	}
-}
-
-func isKnownRecordPath(path string) bool {
-	return path == "$" || path == "$[]" || (strings.HasSuffix(path, "[]") && !strings.Contains(path, ".<key>"))
 }
 
 func hasAnyKey(keys map[string]bool, wants ...string) bool {
@@ -526,7 +542,11 @@ func monthFromMillis(value string) string {
 	if err != nil {
 		return ""
 	}
-	return time.UnixMilli(ms).UTC().Format("2006-01")
+	ts := time.UnixMilli(ms).UTC()
+	if ts.Year() < 0 || ts.Year() > 9999 {
+		return ""
+	}
+	return ts.Format("2006-01")
 }
 
 func validMonth(value string) string {
@@ -589,7 +609,7 @@ func (i *inventory) report() *Report {
 	}
 	sort.Slice(r.TopFolders, func(a, b int) bool { return r.TopFolders[a].Name < r.TopFolders[b].Name })
 	for _, f := range i.families {
-		fam := Family{Name: f.name, Files: f.files, Records: f.records}
+		fam := Family{Name: f.name, Files: f.files, Records: f.records, UnsupportedFiles: f.unsupported}
 		var months []string
 		for m := range f.months {
 			months = append(months, m)
@@ -700,7 +720,6 @@ var explicitDateKeys = map[string]bool{
 	"startTime":         true,
 	"endTime":           true,
 	"originalStartTime": true,
-	"lastModified":      true,
 	"dateOfSleep":       true,
 	"dateTime":          true,
 	"timestamp":         true,
@@ -709,6 +728,19 @@ var explicitDateKeys = map[string]bool{
 }
 
 var timestampMillisKeys = map[string]bool{"timestampMs": true, "startTimestampMs": true, "endTimestampMs": true}
+
+var recordKeys = map[string]bool{
+	"Start time":        true,
+	"Date":              true,
+	"date":              true,
+	"dateOfSleep":       true,
+	"dateTime":          true,
+	"endTime":           true,
+	"originalStartTime": true,
+	"startTime":         true,
+	"startTimestamp":    true,
+	"startTimestampMs":  true,
+}
 
 var safeJSONKeys = map[string]bool{
 	"timelineObjects":   true,
