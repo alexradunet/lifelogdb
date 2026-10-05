@@ -8,7 +8,7 @@
 
 - **Date / planned at:** 2026-10-05, commit `726ffab`.
 - **Priority:** P1. **Effort:** S. **Risk:** MED (browser and in-process client compatibility).
-- **Status:** TODO. **Depends on:** none. **Category:** security. **Audit finding:** 1.
+- **Status:** IN REVIEW (owner). **Depends on:** none. **Category:** security. **Audit finding:** 1.
 
 ## Why
 

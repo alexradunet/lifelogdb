@@ -3,6 +3,7 @@ package api_test
 import (
 	"context"
 	"errors"
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,8 +16,8 @@ import (
 	"lifelog/internal/importer"
 )
 
-// The replay action: dry_run=1 rehearses and writes nothing, an agent may run neither, and the real run writes.
-func TestReplayDryRunAction(t *testing.T) {
+func replayFixture(t *testing.T) (http.Handler, string) {
+	t.Helper()
 	ctx := context.Background()
 	root := t.TempDir()
 	src := filepath.Join(root, "Notes")
@@ -54,7 +55,12 @@ func TestReplayDryRunAction(t *testing.T) {
 	if _, err := ws.Apply(ctx, s, "a.md"); err != nil {
 		t.Fatal(err)
 	}
-	h := api.New(s, ws)
+	return api.New(s, ws), filepath.Join(t.TempDir(), "life.db")
+}
+
+// The replay action: dry_run=1 rehearses and writes nothing, an agent may run neither, and the real run writes.
+func TestReplayDryRunAction(t *testing.T) {
+	h, target := replayFixture(t)
 	replay := func(c *client.Client, vals map[string]string) (*api.Entity, error) {
 		actions, err := c.Catalog()
 		if err != nil {
@@ -69,7 +75,6 @@ func TestReplayDryRunAction(t *testing.T) {
 		return nil, nil
 	}
 	owner := client.InProcess(h, "cli")
-	target := filepath.Join(t.TempDir(), "life.db")
 
 	e, err := replay(owner, map[string]string{"to": target, "dry_run": "1"})
 	if err != nil {

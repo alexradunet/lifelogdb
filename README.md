@@ -102,7 +102,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   per group of photos near no place. Nothing reads an export's own files: the photo itself is the source, whatever
   library it comes from.
 - **`serve` binds 127.0.0.1** and has no authentication: `life.db` holds health data, and the API is for this
-  machine.
+  machine. Browser-origin protection rejects cross-origin writes while keeping same-origin forms and non-browser
+  clients that send no browser origin headers working.
 
 ## Layout
 

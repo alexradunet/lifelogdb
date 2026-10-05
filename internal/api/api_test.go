@@ -4,6 +4,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -117,6 +119,120 @@ func TestBrowserGetsHTMLAndSourceUI(t *testing.T) {
 	q := must(c.Do(find(must(c.Get("/")), "query"), map[string]string{"sql": "SELECT source FROM entities"}))
 	if !strings.Contains(fmtRows(q), "ui") {
 		t.Errorf("a browser form wrote as %s", fmtRows(q))
+	}
+}
+
+func TestBrowserOriginProtection(t *testing.T) {
+	c, h := fresh(t)
+	postForm := func(path string, vals url.Values, headers map[string]string) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest("POST", "http://lifelog.local"+path, strings.NewReader(vals.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		for k, v := range headers {
+			req.Header.Set(k, v)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+
+	sameOrigin := postForm("/days/2026-10-10/capture", url.Values{"text": {"same origin"}}, map[string]string{
+		"Accept":         "text/html,application/xhtml+xml",
+		"Origin":         "http://lifelog.local",
+		"Sec-Fetch-Site": "same-origin",
+	})
+	if sameOrigin.Code != http.StatusSeeOther || sameOrigin.Header().Get("Location") != "/days/2026-10-10" {
+		t.Fatalf("same-origin browser form got %d, Location %q", sameOrigin.Code, sameOrigin.Header().Get("Location"))
+	}
+
+	headerless := postForm("/days/2026-10-11/capture", url.Values{"text": {"cli"}}, map[string]string{
+		"Accept": "application/vnd.siren+json",
+	})
+	if headerless.Code != http.StatusOK {
+		t.Fatalf("headerless in-process-style POST got %d: %.200s", headerless.Code, headerless.Body.String())
+	}
+
+	for _, method := range []string{"GET", "HEAD"} {
+		req := httptest.NewRequest(method, "http://lifelog.local/", nil)
+		req.Header.Set("Origin", "https://evil.example")
+		req.Header.Set("Sec-Fetch-Site", "cross-site")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Errorf("safe cross-origin %s got %d", method, rec.Code)
+		}
+	}
+
+	denied := []struct {
+		name    string
+		path    string
+		vals    url.Values
+		headers map[string]string
+	}{
+		{
+			name: "cross-site day capture",
+			path: "/days/2026-10-12/capture",
+			vals: url.Values{"text": {"bad"}},
+			headers: map[string]string{
+				"Accept":         "application/vnd.siren+json",
+				"Origin":         "https://evil.example",
+				"Sec-Fetch-Site": "cross-site",
+			},
+		},
+		{
+			name: "cross-site measurement",
+			path: "/measurements",
+			vals: url.Values{"metric": {"Mood"}, "day": {"2026-10-13"}, "value": {"4"}},
+			headers: map[string]string{
+				"Accept":         "application/vnd.siren+json",
+				"Origin":         "https://evil.example",
+				"Sec-Fetch-Site": "cross-site",
+			},
+		},
+		{
+			name: "malformed origin day capture",
+			path: "/days/2026-10-14/capture",
+			vals: url.Values{"text": {"bad origin"}},
+			headers: map[string]string{
+				"Accept": "application/vnd.siren+json",
+				"Origin": "http://[::1",
+			},
+		},
+	}
+	for _, tc := range denied {
+		rec := postForm(tc.path, tc.vals, tc.headers)
+		if rec.Code != http.StatusForbidden {
+			t.Errorf("%s got %d, want 403: %.200s", tc.name, rec.Code, rec.Body.String())
+		}
+	}
+
+	root := must(c.Get("/"))
+	if got := fmtRows(must(c.Do(find(root, "query"), map[string]string{"sql": "SELECT CAST(count(*) AS text) FROM pages WHERE title IN ('2026-10-10','2026-10-11')"}))); got != "2" {
+		t.Errorf("allowed day pages count = %s, want 2", got)
+	}
+	if got := fmtRows(must(c.Do(find(root, "query"), map[string]string{"sql": "SELECT CAST(count(*) AS text) FROM pages WHERE title IN ('2026-10-12','2026-10-14')"}))); got != "0" {
+		t.Errorf("denied day pages count = %s, want 0", got)
+	}
+	if got := fmtRows(must(c.Do(find(root, "query"), map[string]string{"sql": "SELECT CAST(count(*) AS text) FROM measurements WHERE day='2026-10-13'"}))); got != "0" {
+		t.Errorf("denied readings count = %s, want 0", got)
+	}
+
+	importHandler, target := replayFixture(t)
+	rec := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest("POST", "http://lifelog.local/import/replay", strings.NewReader(url.Values{"to": {target}}.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("Accept", "application/vnd.siren+json")
+		req.Header.Set("Origin", "https://evil.example")
+		req.Header.Set("Sec-Fetch-Site", "cross-site")
+		rec := httptest.NewRecorder()
+		importHandler.ServeHTTP(rec, req)
+		return rec
+	}()
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("cross-site import replay got %d, want 403: %.200s", rec.Code, rec.Body.String())
+	}
+	if _, err := os.Stat(target); !os.IsNotExist(err) {
+		t.Errorf("denied import replay target exists or could not be checked: %v", err)
 	}
 }
 

@@ -92,7 +92,12 @@ func New(s *core.Store, ws *importer.Workspace) http.Handler {
 	if ws != nil {
 		h.mountImport(get, post)
 	}
-	return m
+	guard := http.NewCrossOriginProtection()
+	guard.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		e, status := errorEntity(&core.Error{Status: http.StatusForbidden, Msg: "cross-origin browser write refused"})
+		write(w, r, status, e)
+	}))
+	return guard.Handler(m)
 }
 
 // redirect is returned by a handler that answers with another resource's address.
