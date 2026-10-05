@@ -8,7 +8,7 @@
 
 - **Date / planned at:** 2026-10-05, commit `726ffab`.
 - **Priority:** P1. **Effort:** L (legacy compatibility, not just a casefold call). **Risk:** HIGH (immutable keys and correction references).
-- **Status:** TODO. **Depends on:** [037](037-import-correction-lineage.md), [038](038-reading-source-evidence.md), [041](041-durable-import-corrections.md), [044](044-source-filename-identity.md). **Category:** bug. **Audit finding:** 10.
+- **Status:** IN PROGRESS. **Depends on:** [037](037-import-correction-lineage.md), [038](038-reading-source-evidence.md), [041](041-durable-import-corrections.md), [044](044-source-filename-identity.md). **Category:** bug. **Audit finding:** 10.
 
 ## Why
 
@@ -31,6 +31,14 @@ Use `TestReadingsKeysAndReplay` for reordered/untimed facts, `TestRepeatedImport
 ## Scope
 
 Only the drift-check paths and plan/index status. No DDL/migrations, measurement UPDATE/DELETE, title-key algorithm changes, model-supplied keys, path normalization changes, row merging, unit conversion, source-position algorithm replacement, or real data. Preserve raw facts text and approvals.
+
+## Legacy compatibility policy
+
+The compatibility seam is one immutable-key alias layer, never an UPDATE or merge of old facts. The writer validates the whole checked reading group before accepting any row, including a row whose stored key exactly equals the newly derived canonical key. Exact textual key equality is not sufficient when historical mixed-spelling untimed groups could have made that key refer to a different source-position identity, or when a canonical root and a legacy root both match one identity. Original root value corroborates an identity; it is never the sole selector.
+
+A reading may be accepted only when the checked source facts and original root row metadata prove a bijection for the complete source-file/canonical-metric/day group. Portable metadata are the import source, source file, canonical metric title key, local day, timed instant when present, time zone when present, captured-with page identity rather than rebuilt database row id, and original root value or retraction. Corrections and durable correction events keep their stored root keys, immutable intent files, and legacy fingerprints; replay resolves those root references through the same in-memory one-to-one alias map before correcting, without mutating the identity used to verify an existing event row or fingerprint. Current leaf values after owner corrections are never alias evidence.
+
+Ambiguous historical groups fail closed with a diagnostic that names the source file and reading group. In particular, mixed raw spellings that formerly had separate untimed ordinal groups and now collapse into one canonical ordinal group are not auto-repaired when the stored key could name another source-position identity or when more than one historical root matches the checked facts. Untimed readings in one canonical source-file/metric/day group also fail closed when two facts have the same source quote position; the writer keeps the current source-position ranking algorithm and does not guess from facts-file order or values. Distinct quote positions continue to rank normally. Rehearsal reports the ambiguous root before the real target is opened for write, leaving the existing target and ledger unchanged. Repeated apply/replay must leave total measurement row counts unchanged.
 
 ## Commands
 
