@@ -518,67 +518,91 @@ func TestRewriteLinks(t *testing.T) {
 }
 
 func TestApprovedMetricNoteLinks(t *testing.T) {
-	register := func(t *testing.T, f *fixture) (string, int) {
-		t.Helper()
-		f.approveRules(t, rulesBody)
-		if err := f.w.ProposeMetric(Metric{Name: "Hydration", Unit: "cups", Note: "Discuss with [[Coach]] #training #Training [[Health/Diet]] [[Coach]]"}); err != nil {
-			t.Fatal(err)
-		}
-		if err := ownerApproves(f.w, "metrics.md"); err != nil {
-			t.Fatal(err)
-		}
-		done, err := f.w.RegisterMetrics(ctx, f.s)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got := strings.Join(done, "; "); got != "Hydration: registered" {
-			t.Fatalf("register metrics did %q", got)
-		}
-		return metricNoteGraph(t, f), wikilinkRowCount(t, f)
+	f := setup(t)
+	f.approveRules(t, rulesBody)
+	if err := f.w.ProposeMetric(Metric{Name: "Hydration", Unit: "cups", Note: "Discuss with [[Coach]] #training #Training [[Health/Diet]] [[Coach]]"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ownerApproves(f.w, "metrics.md"); err != nil {
+		t.Fatal(err)
+	}
+	done, err := f.w.RegisterMetrics(ctx, f.s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(done, "; "); got != "Hydration: registered" {
+		t.Fatalf("register metrics did %q", got)
+	}
+	trialGraph := metricNoteGraph(t, f.s)
+	trialLinks := wikilinkRowCount(t, f.s)
+
+	target := filepath.Join(t.TempDir(), "life.db")
+	res, err := f.w.Replay(ctx, f.s, target)
+	if err != nil || !res.Initialised || len(res.Failures) != 0 || !res.Integrity.OK {
+		t.Fatalf("replay to fresh target: %+v, %v", res, err)
+	}
+	if got := strings.Join(res.Metrics, "; "); got != "Hydration: registered" {
+		t.Fatalf("fresh replay registered metrics as %q", got)
+	}
+	targetStore := openTargetStore(t, target)
+	if graph := metricNoteGraph(t, targetStore); graph != trialGraph {
+		t.Fatalf("fresh replay graph = %q, want trial graph %q", graph, trialGraph)
+	}
+	linksAfterReplay := wikilinkRowCount(t, targetStore)
+	targetStore.DB.Close()
+	if linksAfterReplay != trialLinks {
+		t.Fatalf("fresh replay link rows = %d, want trial rows %d", linksAfterReplay, trialLinks)
 	}
 
-	first := setup(t)
-	graph1, _ := register(t, first)
-
-	replay := setup(t)
-	graph2, links2 := register(t, replay)
-	if graph2 != graph1 {
-		t.Fatalf("fresh replay graph = %q, want %q", graph2, graph1)
+	res, err = f.w.Replay(ctx, f.s, target)
+	if err != nil || len(res.Failures) != 0 || !res.Integrity.OK {
+		t.Fatalf("second replay: %+v, %v", res, err)
 	}
-	if done, err := replay.w.RegisterMetrics(ctx, replay.s); err != nil || strings.Join(done, "; ") != "Hydration: existing" {
-		t.Fatalf("approved metrics replay: %q %v", done, err)
+	if got := strings.Join(res.Metrics, "; "); got != "Hydration: existing" {
+		t.Fatalf("second replay registered metrics as %q", got)
 	}
-	if graph3 := metricNoteGraph(t, replay); graph3 != graph2 {
-		t.Fatalf("repeat replay graph = %q, want %q", graph3, graph2)
+	targetStore = openTargetStore(t, target)
+	if graph := metricNoteGraph(t, targetStore); graph != trialGraph {
+		t.Fatalf("second replay graph = %q, want trial graph %q", graph, trialGraph)
 	}
-	if links3 := wikilinkRowCount(t, replay); links3 != links2 {
-		t.Fatalf("repeat replay grew wikilinks from %d to %d", links2, links3)
+	if linksAfterSecondReplay := wikilinkRowCount(t, targetStore); linksAfterSecondReplay != linksAfterReplay {
+		t.Fatalf("second replay grew wikilinks from %d to %d", linksAfterReplay, linksAfterSecondReplay)
 	}
+	targetStore.DB.Close()
 }
 
-func metricNoteGraph(t *testing.T, f *fixture) string {
+func metricNoteGraph(t *testing.T, s *core.Store) string {
 	t.Helper()
-	metric := importerPageByTitle(t, f, "Hydration")
-	coach := importerPageByTitle(t, f, "Coach")
-	tag := importerPageByTitle(t, f, "training")
-	invalid, err := f.s.PageID(ctx, "Health/Diet")
+	metric := importerPageByTitle(t, s, "Hydration")
+	coach := importerPageByTitle(t, s, "Coach")
+	tag := importerPageByTitle(t, s, "training")
+	invalid, err := s.PageID(ctx, "Health/Diet")
 	if err != nil {
 		t.Fatal(err)
 	}
 	return fmt.Sprintf("metric=%s coachBack=%s tagBack=%s invalid=%d", importerTitles(metric.Out, "wikilink"), importerTitles(coach.In, "wikilink"), importerTitles(tag.In, "wikilink"), invalid)
 }
 
-func importerPageByTitle(t *testing.T, f *fixture, title string) *core.Page {
+func importerPageByTitle(t *testing.T, s *core.Store, title string) *core.Page {
 	t.Helper()
-	id, err := f.s.PageID(ctx, title)
+	id, err := s.PageID(ctx, title)
 	if err != nil || id == 0 {
 		t.Fatalf("page %q: id %d, %v", title, id, err)
 	}
-	p, err := f.s.PageByID(ctx, id)
+	p, err := s.PageByID(ctx, id)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return p
+}
+
+func openTargetStore(t *testing.T, path string) *core.Store {
+	t.Helper()
+	d, err := db.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &core.Store{DB: d}
 }
 
 func importerTitles(es []core.Edge, kind string) string {
@@ -591,10 +615,10 @@ func importerTitles(es []core.Edge, kind string) string {
 	return strings.Join(out, ",")
 }
 
-func wikilinkRowCount(t *testing.T, f *fixture) int {
+func wikilinkRowCount(t *testing.T, s *core.Store) int {
 	t.Helper()
 	var n int
-	if err := f.s.DB.R.QueryRowContext(ctx, `SELECT count(*) FROM links WHERE kind = 'wikilink'`).Scan(&n); err != nil {
+	if err := s.DB.R.QueryRowContext(ctx, `SELECT count(*) FROM links WHERE kind = 'wikilink'`).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
 	return n
