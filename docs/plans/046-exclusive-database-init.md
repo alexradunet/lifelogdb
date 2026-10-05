@@ -8,7 +8,7 @@
 
 - **Date / planned at:** 2026-10-05, commit `726ffab`.
 - **Priority:** P1. **Effort:** S. **Risk:** MED (reservation and failure cleanup).
-- **Status:** TODO. **Depends on:** [045](045-literal-sqlite-paths.md). **Category:** bug. **Audit finding:** 13.
+- **Status:** IN REVIEW (owner). **Depends on:** [045](045-literal-sqlite-paths.md). **Category:** bug. **Audit finding:** 13.
 
 ## Why
 
@@ -58,11 +58,11 @@ Only `internal/db/db.go`, `internal/db/db_test.go`, and plan/index status. A pac
 
 ## Done criteria
 
-- [ ] Existing paths are preserved; path reservation is exclusive and tested without sleeps.
-- [ ] Exactly one concurrent initializer succeeds; loser failures cannot remove the valid database.
-- [ ] Cleanup checks ownership after closing SQLite and reports failures; no replacement file is deleted.
-- [ ] Canonical DDL and Init callers remain unchanged in contract; full verification passes.
-- [ ] Only scope paths changed; index is IN REVIEW (owner).
+- [x] Existing paths are preserved; path reservation is exclusive and tested without sleeps.
+- [x] Exactly one concurrent initializer succeeds; loser failures cannot remove the valid database.
+- [x] Cleanup checks ownership after closing SQLite and reports failures; no replacement file is deleted.
+- [x] Canonical DDL and Init callers remain unchanged in contract; full verification passes.
+- [x] Only scope paths changed; plan is IN REVIEW (owner); parent owns the index.
 
 ## STOP conditions
 

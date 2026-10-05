@@ -159,21 +159,63 @@ func open(path string, keep bool) (*DB, error) {
 
 // Init creates a new life.db from the canonical DDL. It refuses an existing file.
 func Init(path string) error {
-	if _, err := os.Stat(path); err == nil {
-		return fmt.Errorf("%s already exists", path)
-	}
-	w, err := sql.Open("lifelog", dsn(path, false))
+	return initWith(path, func(w *sql.DB) error {
+		_, err := w.Exec(Schema)
+		return err
+	})
+}
+
+func initWith(path string, apply func(*sql.DB) error) error {
+	reserved, err := reserveDatabasePath(path)
 	if err != nil {
 		return err
 	}
-	defer w.Close()
-	if _, err := w.Exec(Schema); err != nil {
-		w.Close()
-		os.Remove(path)
-		return fmt.Errorf("applying schema.sql: %w", err)
+	w, err := sql.Open("lifelog", dsn(path, false))
+	if err != nil {
+		return errors.Join(err, removeReservedDatabasePath(path, reserved))
 	}
-	_, err = w.Exec("PRAGMA optimize")
-	return err
+	if err := apply(w); err != nil {
+		closeErr := w.Close()
+		cleanupErr := removeReservedDatabasePath(path, reserved)
+		return errors.Join(fmt.Errorf("applying schema.sql: %w", err), closeErr, cleanupErr)
+	}
+	if _, err := w.Exec("PRAGMA optimize"); err != nil {
+		return errors.Join(err, w.Close())
+	}
+	return w.Close()
+}
+
+func reserveDatabasePath(path string) (os.FileInfo, error) {
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o666)
+	if err != nil {
+		if os.IsExist(err) {
+			return nil, fmt.Errorf("%s already exists", path)
+		}
+		return nil, fmt.Errorf("reserving %s: %w", path, err)
+	}
+	info, statErr := f.Stat()
+	closeErr := f.Close()
+	if statErr != nil || closeErr != nil {
+		return nil, errors.Join(statErr, closeErr, os.Remove(path))
+	}
+	return info, nil
+}
+
+func removeReservedDatabasePath(path string, reserved os.FileInfo) error {
+	current, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("checking reserved database %s for cleanup: %w", path, err)
+	}
+	if !os.SameFile(reserved, current) {
+		return nil
+	}
+	if err := os.Remove(path); err != nil {
+		return fmt.Errorf("removing failed database %s: %w", path, err)
+	}
+	return nil
 }
 
 func (d *DB) Close() error {

@@ -1,12 +1,15 @@
 package db
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -36,10 +39,224 @@ func Fresh(t *testing.T) *DB {
 }
 
 func TestInitRefusesExistingFile(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "life.db")
-	os.WriteFile(p, nil, 0o644)
+	dir := t.TempDir()
+	cases := []struct {
+		name    string
+		path    string
+		prepare func(*testing.T, string)
+	}{
+		{
+			name: "empty file",
+			path: filepath.Join(dir, "empty.db"),
+			prepare: func(t *testing.T, p string) {
+				t.Helper()
+				writeFile(t, p, nil)
+			},
+		},
+		{
+			name: "nonempty file",
+			path: filepath.Join(dir, "nonempty.db"),
+			prepare: func(t *testing.T, p string) {
+				t.Helper()
+				writeFile(t, p, []byte("not a lifelog database\n"))
+			},
+		},
+		{
+			name:    "foreign sqlite file",
+			path:    filepath.Join(dir, "foreign.db"),
+			prepare: createForeignSQLiteFile,
+		},
+		{
+			name: "directory",
+			path: filepath.Join(dir, "directory.db"),
+			prepare: func(t *testing.T, p string) {
+				t.Helper()
+				if err := os.Mkdir(p, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.prepare(t, tc.path)
+			before := snapshotPath(t, tc.path)
+			if err := Init(tc.path); err == nil {
+				t.Fatal("Init accepted an existing path")
+			}
+			assertSnapshot(t, tc.path, before)
+		})
+	}
+}
+
+type pathSnapshot struct {
+	mode  os.FileMode
+	bytes []byte
+}
+
+func snapshotPath(t *testing.T, p string) pathSnapshot {
+	t.Helper()
+	info, err := os.Stat(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := pathSnapshot{mode: info.Mode()}
+	if !info.IsDir() {
+		s.bytes, err = os.ReadFile(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	return s
+}
+
+func assertSnapshot(t *testing.T, p string, want pathSnapshot) {
+	t.Helper()
+	info, err := os.Stat(p)
+	if err != nil {
+		t.Fatalf("existing path was removed: %v", err)
+	}
+	if info.Mode() != want.mode {
+		t.Fatalf("existing path mode changed from %v to %v", want.mode, info.Mode())
+	}
+	if info.IsDir() {
+		return
+	}
+	got, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatalf("existing file cannot be read: %v", err)
+	}
+	if !bytes.Equal(got, want.bytes) {
+		t.Fatalf("existing file changed from %q to %q", want.bytes, got)
+	}
+}
+
+func writeFile(t *testing.T, p string, b []byte) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func createForeignSQLiteFile(t *testing.T, p string) {
+	t.Helper()
+	d, err := sql.Open("sqlite", p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Exec("CREATE TABLE foreign_table(value TEXT)"); err != nil {
+		d.Close()
+		t.Fatal(err)
+	}
+	if err := d.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestInitRefusesPathWhenParentIsNotDirectory(t *testing.T) {
+	parent := filepath.Join(t.TempDir(), "not-a-directory")
+	want := []byte("parent sentinel")
+	writeFile(t, parent, want)
+	p := filepath.Join(parent, "life.db")
 	if err := Init(p); err == nil {
-		t.Fatal("Init overwrote an existing file")
+		t.Fatal("Init treated a non-directory parent as a free database path")
+	}
+	got, err := os.ReadFile(parent)
+	if err != nil {
+		t.Fatalf("parent sentinel was removed: %v", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("parent sentinel changed to %q", got)
+	}
+}
+
+func TestInitConcurrentReservation(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "life.db")
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	errs := make([]error, 2)
+	for i := range errs {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-start
+			errs[i] = Init(p)
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+
+	successes := 0
+	for _, err := range errs {
+		if err == nil {
+			successes++
+		}
+	}
+	if successes != 1 {
+		t.Fatalf("concurrent Init successes = %d, errors = %v; want exactly one", successes, errs)
+	}
+	d, err := Open(p)
+	if err != nil {
+		t.Fatalf("winner database was not preserved as a valid life.db: %v", err)
+	}
+	d.Close()
+}
+
+func TestInitReservationBlocksCompetingLazyOpen(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "life.db")
+	applyErr := errors.New("controlled apply failure")
+	var competitorErr error
+	err := initWith(p, func(*sql.DB) error {
+		competitorErr = Init(p)
+		return applyErr
+	})
+	if err == nil || !strings.Contains(err.Error(), applyErr.Error()) {
+		t.Fatalf("initWith error = %v, want controlled apply failure", err)
+	}
+	if competitorErr == nil || !strings.Contains(competitorErr.Error(), "already exists") {
+		_, statErr := os.Stat(p)
+		t.Fatalf("competing Init error = %v, file stat after cleanup = %v; want reservation refusal", competitorErr, statErr)
+	}
+	if _, err := os.Stat(p); !os.IsNotExist(err) {
+		t.Fatalf("failed reserved file remains after cleanup: %v", err)
+	}
+}
+
+func TestInitApplyFailureRemovesOwnedReservation(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "life.db")
+	applyErr := errors.New("controlled apply failure")
+	err := initWith(p, func(*sql.DB) error { return applyErr })
+	if err == nil || !strings.Contains(err.Error(), applyErr.Error()) {
+		t.Fatalf("initWith error = %v, want controlled apply failure", err)
+	}
+	if _, err := os.Stat(p); !os.IsNotExist(err) {
+		t.Fatalf("failed owned reservation remains: %v", err)
+	}
+}
+
+func TestInitApplyFailurePreservesReplacement(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "life.db")
+	replacement := []byte("replacement created after reservation\n")
+	applyErr := errors.New("controlled apply failure")
+	err := initWith(p, func(*sql.DB) error {
+		if err := os.Remove(p); err != nil {
+			t.Fatal(err)
+		}
+		writeFile(t, p, replacement)
+		return applyErr
+	})
+	if err == nil || !strings.Contains(err.Error(), applyErr.Error()) {
+		t.Fatalf("initWith error = %v, want controlled apply failure", err)
+	}
+	got, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatalf("replacement was removed: %v", err)
+	}
+	if !bytes.Equal(got, replacement) {
+		t.Fatalf("replacement changed to %q", got)
 	}
 }
 
