@@ -13,7 +13,7 @@ source), and live in git history
 | [035](035-correction-value-validation.md) | Enforce mood and habit domains on corrections | P1 | S | — | IN REVIEW (owner) |
 | [036](036-unique-find-actions.md) | Give page lookup and import lookup distinct actions | P1 | S | — | IN REVIEW (owner) |
 | [037](037-import-correction-lineage.md) | Carry repeated imported corrections through replay | P1 | M | 035 | TODO |
-| [038](038-reading-source-evidence.md) | Check complete reading values and source units | P1 | M | — | TODO |
+| [038](038-reading-source-evidence.md) | Check complete reading values and source units | P1 | M | — | IN REVIEW (owner) |
 | [039](039-metric-note-wikilinks.md) | Synchronize wikilinks in newly registered metric notes | P2 | S | — | IN REVIEW (owner) |
 | [040](040-ad-hoc-query-isolation.md) | Keep ad-hoc SQL read-only and isolated from pooled readers | P1 | M | 045 | TODO |
 | [041](041-durable-import-corrections.md) | Make database corrections and replay intent recoverable | P1 | L | 035, 037 | TODO |
