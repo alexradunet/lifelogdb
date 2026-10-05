@@ -450,9 +450,10 @@ writer-generated event key. A correction whose workspace intent cannot be publis
 a visible intent whose SQL commit result is unknown is reported as pending recovery and is retried before the next
 correction, rehearsal or replay. *status* only inspects and reports pending or conflicting intents; it does not repair
 them. Rehearsal and replay first recover the trial database, even for a target dry run, so the trial remains the
-source of what will be replayed. On an existing target, a correction event whose predecessor is not exactly the
-imported root or a known prior event is a conflict, even when the current numeric value happens to match the legacy
-baseline; the writer fails closed rather than guessing identity. A conflict is an owner-resolution gate: the writer
+source of what will be replayed. Before inserting an event into an existing target, its predecessor must be the
+imported root or a known prior event; an unrelated correction is a conflict even when its value matches the legacy
+baseline. Already-present verified events in copied targets are retained without rewinding their legacy history.
+The writer fails closed rather than guessing identity. A conflict is an owner-resolution gate: the writer
 names the intent and current reading chain and stops; it does not automatically repair, delete or overwrite
 append-only history. This is not cross-file ACID and makes no power-loss promise beyond process-crash recovery from
 synced local files.

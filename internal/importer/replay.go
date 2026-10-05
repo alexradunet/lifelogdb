@@ -434,49 +434,6 @@ func replayOneEventCorrection(ctx context.Context, ts *core.Store, intent correc
 	return wrote, err
 }
 
-func eventExists(ctx context.Context, ts *core.Store, intent correctionIntent, known map[string]correctionIntent) bool {
-	ok := false
-	_ = ts.DryRun(ctx, intent.ActorSource, func(t *core.Tx) error {
-		id, err := t.MeasurementByKey(intent.ActorSource, intent.Metric, intent.EventKey)
-		ok = err == nil && id != 0 && verifyEventRow(t, intent, id, known) == nil
-		return nil
-	})
-	return ok
-}
-
-func applyCorrectionBaseline(ctx context.Context, ts *core.Store, intent correctionIntent) (bool, error) {
-	wrote := false
-	err := ts.Do(ctx, "cli", func(t *core.Tx) error {
-		id, err := t.MeasurementByKey(intent.RootSource, intent.Metric, intent.RootImportKey)
-		if err != nil {
-			return err
-		}
-		if id == 0 {
-			return refuse("correction intent %s names a reading the replay did not write: %s", intent.EventKey, intent.RootImportKey)
-		}
-		last, got, ok, err := t.CurrentOf(id)
-		if err != nil {
-			return err
-		}
-		leaf, err := t.MeasurementRow(last)
-		if err != nil {
-			return err
-		}
-		if valueOK(intent.PredecessorValue, intent.PredecessorRetracted, got, ok) {
-			return nil
-		}
-		if leaf.Supersedes != 0 {
-			return refuse("correction intent %s target has an unrelated later correction", intent.EventKey)
-		}
-		if _, err := t.Correct(last, intent.PredecessorValue); err != nil {
-			return err
-		}
-		wrote = true
-		return nil
-	})
-	return wrote, err
-}
-
 func applyCorrectionValue(ctx context.Context, ts *core.Store, actor, source, metric, key string, value *float64) (bool, error) {
 	wrote := false
 	err := ts.Do(ctx, actor, func(t *core.Tx) error {

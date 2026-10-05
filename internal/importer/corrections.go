@@ -593,11 +593,9 @@ func (w *Workspace) orderedCorrectionIntents() ([]correctionIntent, error) {
 }
 
 func orderIntentChain(events []correctionIntent) ([]correctionIntent, error) {
-	byKey := map[string]correctionIntent{}
 	children := map[string][]correctionIntent{}
 	var first []correctionIntent
 	for _, event := range events {
-		byKey[event.EventKey] = event
 		if event.PredecessorKind == "legacy" {
 			first = append(first, event)
 		} else {
@@ -626,7 +624,6 @@ func orderIntentChain(events []correctionIntent) ([]correctionIntent, error) {
 	if len(out) != len(events) {
 		return nil, refuse("correction events for %s %s have missing predecessors", events[0].Metric, events[0].RootImportKey)
 	}
-	_ = byKey
 	return out, nil
 }
 
