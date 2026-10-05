@@ -180,7 +180,8 @@ day, so a note that is only frontmatter can still say that it is a person.
 - There is no `event` and no `task` kind ([D22](../decisions/D22-events.md), [D23](../decisions/D23-no-tasks.md)); a facts file that writes one is refused, with
   that reason.
 - `value` is the cell **as written**, unit included (`"48 ng/mL"`); when the file writes the unit
-  apart, `value` is the number and `unit` the unit. Nothing is converted. A censored, approximate,
+  apart, `value` is the number and `unit` the unit, and the unit must be explicit in the same table/CSV
+  row or in that value column's header. Nothing is converted. A censored, approximate,
   qualitative or comma-decimal value is refused: it goes in `kept_as_text`.
 - Days are `YYYY-MM-DD`, instants UTC ISO-8601 (`lifelog_meta.days`, `lifelog_meta.instants`).
 

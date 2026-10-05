@@ -8,7 +8,7 @@
 
 - **Date / planned at:** 2026-10-05, commit `726ffab`.
 - **Priority:** P1. **Effort:** M. **Risk:** MED (rejecting formerly accepted quote/header forms).
-- **Status:** TODO. **Depends on:** none. **Category:** bug. **Audit finding:** 5.
+- **Status:** IN REVIEW (owner). **Depends on:** none. **Category:** bug. **Audit finding:** 5.
 
 ## Why
 

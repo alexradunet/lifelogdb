@@ -427,14 +427,14 @@ func (w *Workspace) checkStatic(f *Facts, source string, rules *Rules, approved 
 			if r.TakenAt != "" && !core.IsInstant(r.TakenAt) {
 				bad(i, "taken_at %q is not a UTC instant", r.TakenAt)
 			}
-			num, numText, _, err := parseValue(r.Value, r.Unit)
+			num, numText, unit, err := parseValue(r.Value, r.Unit)
 			if err != nil {
 				bad(i, "%v", err)
 				continue
 			}
 			marker := m.Unit == "" && (num == 0 || num == 1)
-			if !marker && wholeIndex(q, numText) < 0 {
-				bad(i, "the value %s is not in the quote as a whole number", numText)
+			if err := checkReadingSourceEvidence(f.File, source, q, numText, unit, marker); err != nil {
+				bad(i, "%v", err)
 			}
 			if r.With != "" {
 				checkTitle(r.With)

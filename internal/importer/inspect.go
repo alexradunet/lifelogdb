@@ -111,7 +111,7 @@ func (w *Workspace) Inspect(file string) (*Inspection, error) {
 		in.Type = "binary"
 	case strings.HasSuffix(lower, ".csv"):
 		in.Type = "csv"
-		rows, err := csv.NewReader(strings.NewReader(src)).ReadAll()
+		rows, err := csvRows(src)
 		if err != nil {
 			return nil, refuse("%s: %v", file, err)
 		}
@@ -132,15 +132,7 @@ func (w *Workspace) Inspect(file string) (*Inspection, error) {
 			case *ast.Heading:
 				in.Headings = append(in.Headings, strings.Repeat("#", n.Level)+" "+plain(n, b))
 			case *east.Table:
-				var rows [][]string
-				for r := n.FirstChild(); r != nil; r = r.NextSibling() {
-					var cells []string
-					for c := r.FirstChild(); c != nil; c = c.NextSibling() {
-						cells = append(cells, plain(c, b))
-					}
-					rows = append(rows, cells)
-				}
-				in.Tables = append(in.Tables, rows)
+				in.Tables = append(in.Tables, tableRows(n, b))
 				return ast.WalkSkipChildren, nil
 			case *east.TaskCheckBox:
 				mark := "[ ] "
@@ -159,6 +151,39 @@ func (w *Workspace) Inspect(file string) (*Inspection, error) {
 		in.Text = src
 	}
 	return in, nil
+}
+
+func csvRows(src string) ([][]string, error) {
+	return csv.NewReader(strings.NewReader(src)).ReadAll()
+}
+
+func markdownTables(src string) [][][]string {
+	b := []byte(src)
+	doc := gfm.Parser().Parse(gtext.NewReader(b))
+	var tables [][][]string
+	ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		if n, ok := n.(*east.Table); ok {
+			tables = append(tables, tableRows(n, b))
+			return ast.WalkSkipChildren, nil
+		}
+		return ast.WalkContinue, nil
+	})
+	return tables
+}
+
+func tableRows(n *east.Table, src []byte) [][]string {
+	var rows [][]string
+	for r := n.FirstChild(); r != nil; r = r.NextSibling() {
+		var cells []string
+		for c := r.FirstChild(); c != nil; c = c.NextSibling() {
+			cells = append(cells, plain(c, src))
+		}
+		rows = append(rows, cells)
+	}
+	return rows
 }
 
 // frontmatter splits a leading --- block from a note.
