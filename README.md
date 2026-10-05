@@ -41,6 +41,7 @@ trial database inside it:
 ```
 lifelog import setup --workspace ~/import/Notebook.lifelog --from ~/life/life.db   # trial.db: a copy
 lifelog mcp --workspace ~/import/Notebook.lifelog --agent lmstudio                  # the model's tools
+lifelog do import-find text="Sam" --workspace ~/import/Notebook.lifelog             # import lookup; page lookup stays find
 lifelog import approve rules --workspace ~/import/Notebook.lifelog                  # the owner, at a terminal
 lifelog import status --workspace ~/import/Notebook.lifelog --human
 lifelog import replay --to ~/life/life.db --workspace ~/import/Notebook.lifelog     # the real run, when you say so

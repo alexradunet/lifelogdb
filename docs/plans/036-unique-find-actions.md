@@ -8,7 +8,7 @@
 
 - **Date / planned at:** 2026-10-05, commit `726ffab`.
 - **Priority:** P1. **Effort:** S. **Risk:** MED (one model-facing action name changes).
-- **Status:** TODO. **Depends on:** none. **Category:** bug / tests. **Audit finding:** 3.
+- **Status:** IN REVIEW (owner). **Depends on:** none. **Category:** bug / tests. **Audit finding:** 3.
 
 ## Why
 

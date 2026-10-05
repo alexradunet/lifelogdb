@@ -12,8 +12,11 @@ import (
 	"testing"
 	"time"
 
+	"lifelog/internal/api"
+	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db"
+	"lifelog/internal/importer"
 	"lifelog/internal/photo"
 	"lifelog/internal/photo/phototest"
 )
@@ -372,4 +375,71 @@ func TestABatchReportGroupsThePhotosNearNoPlace(t *testing.T) {
 	if d := b.Days["2019-06-03"]; d.Photos != 2 || strings.Join(d.At, ",") != "Lakeside" || strings.Join(d.Known, ",") != "Home" {
 		t.Errorf("a day: %+v", d)
 	}
+}
+
+func TestDoDispatchesPageAndImportFind(t *testing.T) {
+	c := commandClientWithWorkspace(t)
+	if _, err := do(c, "find", map[string]string{"title": "Ana"}); err != nil {
+		t.Fatalf("page find: %v", err)
+	}
+	matches, err := do(c, "import-find", map[string]string{"text": "Ana"})
+	if err != nil {
+		t.Fatalf("import find: %v", err)
+	}
+	if matches.Title != "Find Ana" || cmdHref(matches, "self") != "/import/find?text=Ana" {
+		t.Fatalf("import-find returned %+v", matches)
+	}
+}
+
+func commandClientWithWorkspace(t *testing.T) *client.Client {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "life.db")
+	if err := db.Init(p); err != nil {
+		t.Fatal(err)
+	}
+	d, err := db.Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { d.Close() })
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "Notebook"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ws, err := importer.Open(filepath.Join(root, "Notebook.lifelog"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := client.InProcess(api.New(&core.Store{DB: d}, ws), "cli")
+	if _, err := c.Do(cmdAction(t, mustEntity(c.Get("/")), "create-page"), map[string]string{"title": "Ana", "body": "Synthetic page"}); err != nil {
+		t.Fatal(err)
+	}
+	return c
+}
+
+func cmdAction(t *testing.T, e *api.Entity, name string) api.Action {
+	t.Helper()
+	for _, a := range e.Actions {
+		if a.Name == name {
+			return a
+		}
+	}
+	t.Fatalf("%s not found in %v", name, e.Actions)
+	return api.Action{}
+}
+
+func mustEntity(e *api.Entity, err error) *api.Entity {
+	if err != nil {
+		panic(err)
+	}
+	return e
+}
+
+func cmdHref(e *api.Entity, rel string) string {
+	for _, l := range e.Links {
+		if len(l.Rel) > 0 && l.Rel[0] == rel {
+			return l.Href
+		}
+	}
+	return ""
 }

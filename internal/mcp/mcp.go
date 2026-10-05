@@ -30,6 +30,9 @@ func New(c *client.Client, version string) (*mcp.Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := validateToolNames(actions); err != nil {
+		return nil, err
+	}
 	s := mcp.NewServer(&mcp.Implementation{Name: "lifelog", Version: version}, &mcp.ServerOptions{
 		Instructions: "life.db is a personal life log: a journal of day pages (one per local day, titled YYYY-MM-DD), " +
 			"pages linked by [[Title]] and #tag, people, places and health readings. Read before you write: get_day " +
@@ -72,6 +75,21 @@ func New(c *client.Client, version string) (*mcp.Server, error) {
 			return result(c.Get(args["href"]))
 		})
 	return s, nil
+}
+
+func validateToolNames(actions []api.Action) error {
+	seen := map[string]string{"get": "built-in tool get", "get_day": "built-in tool get_day"}
+	for _, a := range actions {
+		if a.Owner {
+			continue
+		}
+		name := toolName(a.Name)
+		if prev, ok := seen[name]; ok {
+			return fmt.Errorf("MCP tool name %q from action %q collides with %s", name, a.Name, prev)
+		}
+		seen[name] = fmt.Sprintf("action %q", a.Name)
+	}
+	return nil
 }
 
 func toolName(action string) string { return strings.ReplaceAll(action, "-", "_") }

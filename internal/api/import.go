@@ -22,7 +22,7 @@ var importCatalog = []spec{
 		"POST", "/import/skip", []Field{req("file", "text", "File"), req("reason", "text", "Reason")}, false},
 	{"inspect", "Inspect a file", "Read one source file's structure: frontmatter, headings, tables as rows, checkboxes, links (or a CSV's rows, or the text).",
 		"GET", "/import/inspect", []Field{req("file", "text", "File (relative to the source)")}, false},
-	{"find", "Find", "Look a name up before writing it: people, places, pages and metrics that match exactly, with the same words, more words or fewer words.",
+	{"import-find", "Find", "Look a name up before writing it: people, places, pages and metrics that match exactly, with the same words, more words or fewer words.",
 		"GET", "/import/find", []Field{req("text", "text", "Name")}, false},
 	{"draft-rules", "Draft rules", "Write rules.md for the owner to approve: a `source: import:<name>` line, then ## Folders, ## Aliases (\"name\" → \"Title\"), ## Distinct (\"a\" ≠ \"b\"), ## Decisions. Never a status line; any change waits for the owner's approval again.",
 		"POST", "/import/rules", []Field{req("body", "textarea", "rules.md without its status line")}, false},
