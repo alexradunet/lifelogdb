@@ -221,6 +221,20 @@ func TestNumericSourceEvidence(t *testing.T) {
 		assertReject(t, f, file, readingFacts(file, "dose", "2031-06-12", "48", "mg", "| 2031-06-12 | 48 |"), "source evidence")
 	})
 
+	t.Run("reject plain unit header conflict", func(t *testing.T) {
+		file := "Medical/PlainHeaderConflict.md"
+		body := "| day | dose (kg) |\n|---|---|\n| 2031-06-12 | 48 mg |\n"
+		f := setupEvidenceMetric(t, file, body, Metric{Name: "dose", Unit: "mg"})
+		assertReject(t, f, file, readingFacts(file, "dose", "2031-06-12", "48", "mg", "| 2031-06-12 | 48 mg |"), "source evidence")
+	})
+
+	t.Run("reject stripped explicit header unit for unitless metric", func(t *testing.T) {
+		file := "Medical/StrippedHeaderUnit.md"
+		body := "| day | dose (mg) |\n|---|---|\n| 2031-06-12 | 48 |\n"
+		f := setupEvidenceMetric(t, file, body, Metric{Name: "dose"})
+		assertReject(t, f, file, readingFacts(file, "dose", "2031-06-12", "48", "", "| 2031-06-12 | 48 |"), "source evidence")
+	})
+
 	t.Run("reject agreeing inline under conflicting header", func(t *testing.T) {
 		file := "Medical/InlineHeaderConflict.md"
 		body := "| day | dose (mg/L) |\n|---|---|\n| 2031-06-12 | 48 mg |\n"
@@ -268,6 +282,13 @@ func TestNumericSourceEvidence(t *testing.T) {
 		body := "Preamble | day | dose (mg) |\nnot a table | 2031-07-09 | 48 |\n\n| day | dose (mg) |\n|---|---|\n| 2031-07-09 | 48 |\n"
 		f := setupEvidenceMetric(t, file, body, Metric{Name: "dose", Unit: "mg"})
 		assertReject(t, f, file, readingFacts(file, "dose", "2031-07-09", "48", "mg", "not a table | 2031-07-09 | 48 |"), "source evidence")
+	})
+
+	t.Run("reject identical row borrowed from prose", func(t *testing.T) {
+		file := "Medical/IdenticalBorrow.md"
+		body := "Preamble | day | dose (mg) |\nnot a table | 2031-07-09 | 48 |\n\n| day | dose (mg) |\n|---|---|\n| 2031-07-09 | 48 |\n"
+		f := setupEvidenceMetric(t, file, body, Metric{Name: "dose", Unit: "mg"})
+		assertReject(t, f, file, readingFacts(file, "dose", "2031-07-09", "48", "mg", "| 2031-07-09 | 48 |"), "source evidence")
 	})
 
 	accepts := []struct {

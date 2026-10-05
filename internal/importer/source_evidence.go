@@ -264,8 +264,8 @@ type evidenceTable struct {
 	starts, ends []int
 }
 
-func tableValueEvidence(file, source, sourceCollapsed, quote string, quotePos int, numText string) bool {
-	for _, table := range sourceTables(file, source, sourceCollapsed) {
+func tableValueEvidence(file, source, _ string, quote string, quotePos int, numText string) bool {
+	for _, table := range sourceTables(file, source) {
 		for rowIndex, row := range table.rows[1:] {
 			absoluteRow := rowIndex + 1
 			if !rowAtQuote(table, absoluteRow, quotePos) || !quoteCoversRow(quote, row) {
@@ -279,8 +279,8 @@ func tableValueEvidence(file, source, sourceCollapsed, quote string, quotePos in
 	return false
 }
 
-func tableUnitEvidence(file, source, sourceCollapsed, quote string, quotePos int, numText, unit string) (bool, string) {
-	for _, table := range sourceTables(file, source, sourceCollapsed) {
+func tableUnitEvidence(file, source, _ string, quote string, quotePos int, numText, unit string) (bool, string) {
+	for _, table := range sourceTables(file, source) {
 		if len(table.rows) < 2 {
 			continue
 		}
@@ -336,25 +336,24 @@ func rowAtQuote(table evidenceTable, row int, quotePos int) bool {
 	return row < len(table.starts) && table.starts[row] >= 0 && quotePos >= table.starts[row] && quotePos < table.ends[row]
 }
 
-func sourceTables(file, source, sourceCollapsed string) []evidenceTable {
+func sourceTables(file, source string) []evidenceTable {
 	switch strings.ToLower(filepath.Ext(file)) {
 	case ".csv":
-		table, err := csvEvidenceTable(source, sourceCollapsed)
+		table, err := csvEvidenceTable(source)
 		if err != nil {
 			return nil
 		}
 		return []evidenceTable{table}
 	case ".md":
-		return markdownEvidenceTables(source, sourceCollapsed)
+		return markdownEvidenceTables(source)
 	}
 	return nil
 }
 
-func csvEvidenceTable(source, sourceCollapsed string) (evidenceTable, error) {
+func csvEvidenceTable(source string) (evidenceTable, error) {
 	r := csv.NewReader(strings.NewReader(source))
 	var rows [][]string
 	var starts, ends []int
-	cursor := 0
 	recordStart := int64(0)
 	for {
 		rec, err := r.Read()
@@ -365,27 +364,19 @@ func csvEvidenceTable(source, sourceCollapsed string) (evidenceTable, error) {
 			return evidenceTable{}, err
 		}
 		recordEnd := r.InputOffset()
-		raw := source[int(recordStart):int(recordEnd)]
-		recordStart = recordEnd
-		collapsed := collapse(raw)
-		start := strings.Index(sourceCollapsed[cursor:], collapsed)
-		if start >= 0 {
-			start += cursor
-		}
 		rows = append(rows, rec)
+		start := collapsedOffsetAt(source, int(recordStart))
+		end := collapsedOffsetAt(source, int(recordEnd))
+		recordStart = recordEnd
 		starts = append(starts, start)
-		ends = append(ends, start+len(collapsed))
-		if start >= 0 {
-			cursor = start + len(collapsed)
-		}
+		ends = append(ends, end)
 	}
 	return evidenceTable{rows: rows, starts: starts, ends: ends}, nil
 }
 
-func markdownEvidenceTables(source, sourceCollapsed string) []evidenceTable {
+func markdownEvidenceTables(source string) []evidenceTable {
 	b := []byte(source)
 	doc := gfm.Parser().Parse(gtext.NewReader(b))
-	cursor := 0
 	var out []evidenceTable
 	ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
@@ -399,13 +390,9 @@ func markdownEvidenceTables(source, sourceCollapsed string) []evidenceTable {
 		t := evidenceTable{rows: rows, starts: make([]int, len(rows)), ends: make([]int, len(rows))}
 		rowIndex := 0
 		for r := table.FirstChild(); r != nil && rowIndex < len(rows); r = r.NextSibling() {
-			line := collapse(lineAtByte(source, r.Pos()))
-			start := strings.Index(sourceCollapsed[cursor:], line)
-			if start >= 0 {
-				start += cursor
-				t.starts[rowIndex], t.ends[rowIndex] = start, start+len(line)
-				cursor = t.ends[rowIndex]
-			}
+			start, end := lineSpanAtByte(source, r.Pos())
+			t.starts[rowIndex] = collapsedOffsetAt(source, start)
+			t.ends[rowIndex] = collapsedOffsetAt(source, end)
 			rowIndex++
 		}
 		out = append(out, t)
@@ -414,16 +401,50 @@ func markdownEvidenceTables(source, sourceCollapsed string) []evidenceTable {
 	return out
 }
 
-func lineAtByte(source string, pos int) string {
+func lineSpanAtByte(source string, pos int) (int, int) {
 	if pos < 0 || pos > len(source) {
-		return ""
+		return 0, 0
 	}
 	start := strings.LastIndexByte(source[:pos], '\n') + 1
 	end := len(source)
 	if nl := strings.IndexByte(source[pos:], '\n'); nl >= 0 {
 		end = pos + nl
 	}
-	return source[start:end]
+	return start, end
+}
+
+func collapsedOffsetAt(source string, rawPos int) int {
+	if rawPos < 0 {
+		rawPos = 0
+	}
+	if rawPos > len(source) {
+		rawPos = len(source)
+	}
+	out := 0
+	inField := false
+	pendingSpace := false
+	for i, r := range source {
+		if i >= rawPos {
+			if !unicode.IsSpace(r) && pendingSpace && out > 0 {
+				return out + 1
+			}
+			return out
+		}
+		if unicode.IsSpace(r) {
+			if inField {
+				pendingSpace = true
+				inField = false
+			}
+			continue
+		}
+		if pendingSpace && out > 0 {
+			out++
+		}
+		pendingSpace = false
+		out += len(string(r))
+		inField = true
+	}
+	return out
 }
 
 func quoteCoversRow(quote string, row []string) bool {
@@ -499,13 +520,34 @@ func isUnitChar(r rune) bool {
 
 func unitLikeTokens(s string) []string {
 	var out []string
-	for _, field := range strings.Fields(s) {
-		field = strings.Trim(field, "()[]{}:;,")
-		if strings.ContainsAny(field, "/%µμ") {
-			out = append(out, field)
+	for _, pair := range [][2]rune{{'(', ')'}, {'[', ']'}} {
+		for rest := s; ; {
+			start := strings.IndexRune(rest, pair[0])
+			if start < 0 {
+				break
+			}
+			rest = rest[start+len(string(pair[0])):]
+			end := strings.IndexRune(rest, pair[1])
+			if end < 0 {
+				break
+			}
+			candidate := strings.TrimSpace(rest[:end])
+			if candidate != "" && explicitUnitToken(candidate) {
+				out = append(out, candidate)
+			}
+			rest = rest[end+len(string(pair[1])):]
 		}
 	}
 	return out
+}
+
+func explicitUnitToken(s string) bool {
+	for _, r := range s {
+		if unicode.IsSpace(r) || !isUnitChar(r) {
+			return false
+		}
+	}
+	return true
 }
 
 func rowHasSeparateUnit(head, row []string, valueCol int, unit string) (bool, string) {
