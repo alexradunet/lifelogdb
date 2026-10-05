@@ -235,21 +235,16 @@ func TestRepeatedImportedCorrectionsReplay(t *testing.T) {
 	if _, err := owner.Do(correct, map[string]string{"id": strconv.FormatInt(retracted, 10), "value": "45"}); err != nil {
 		t.Fatal(err)
 	}
-	corrections, err := ws.Corrections()
-	if err != nil {
-		t.Fatal(err)
+	intentsBefore := correctionIntentFiles(t, src+".lifelog")
+	if len(intentsBefore) != 4 {
+		t.Fatalf("correction intents have %d records, want 4", len(intentsBefore))
 	}
-	if len(corrections) != 4 {
-		t.Fatalf("corrections log has %d records, want 4", len(corrections))
-	}
-	for i, c := range corrections {
-		if c.Source != "import:notebook" || c.Key != "Medical/Ferritin.md|reading|Ferritin|2031-03-01|1" || c.Metric != "Ferritin" {
-			t.Fatalf("correction %d = %+v, want same imported root", i, c)
+	for name, body := range intentsBefore {
+		for _, want := range []string{`"root_source": "import:notebook"`, `"root_import_key": "Medical/Ferritin.md|reading|Ferritin|2031-03-01|1"`, `"metric": "Ferritin"`, `"actor_source": "cli"`} {
+			if !strings.Contains(body, want) {
+				t.Fatalf("intent %s = %s, want %s", name, body, want)
+			}
 		}
-	}
-	logBefore, err := os.ReadFile(filepath.Join(src+".lifelog", "corrections.json"))
-	if err != nil {
-		t.Fatal(err)
 	}
 
 	target := filepath.Join(t.TempDir(), "life.db")
@@ -257,11 +252,11 @@ func TestRepeatedImportedCorrectionsReplay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !res.Initialised || res.Corrections != 1 || len(res.Differences) != 0 || !res.Integrity.OK {
+	if !res.Initialised || res.Corrections != 4 || len(res.Differences) != 0 || !res.Integrity.OK {
 		t.Fatalf("first replay = %+v", res)
 	}
-	if value, rows := targetReadingState(t, target); value != 45 || rows != 2 {
-		t.Fatalf("target after first replay value %g rows %d, want value 45 with root+one correction", value, rows)
+	if value, rows := targetReadingState(t, target); value != 45 || rows != 5 {
+		t.Fatalf("target after first replay value %g rows %d, want value 45 with root+four correction events", value, rows)
 	}
 	res, err = ws.Replay(ctx, trial, target)
 	if err != nil {
@@ -270,11 +265,11 @@ func TestRepeatedImportedCorrectionsReplay(t *testing.T) {
 	if res.Corrections != 0 || len(res.Differences) != 0 {
 		t.Fatalf("second replay = %+v", res)
 	}
-	if value, rows := targetReadingState(t, target); value != 45 || rows != 2 {
+	if value, rows := targetReadingState(t, target); value != 45 || rows != 5 {
 		t.Fatalf("target after second replay value %g rows %d, want no total-row growth", value, rows)
 	}
-	if logAfter, err := os.ReadFile(filepath.Join(src+".lifelog", "corrections.json")); err != nil || string(logAfter) != string(logBefore) {
-		t.Fatalf("replay changed corrections log: err %v\nbefore %s\nafter %s", err, logBefore, logAfter)
+	if intentsAfter := correctionIntentFiles(t, src+".lifelog"); !sameStringMap(intentsAfter, intentsBefore) {
+		t.Fatalf("replay changed correction intents:\nbefore %#v\nafter %#v", intentsBefore, intentsAfter)
 	}
 
 	bad := 44.0
@@ -288,6 +283,39 @@ func TestRepeatedImportedCorrectionsReplay(t *testing.T) {
 	if after := targetMeasurementRows(t, target); after != before {
 		t.Fatalf("missing-root replay changed target rows from %d to %d", before, after)
 	}
+}
+
+func correctionIntentFiles(t *testing.T, workspace string) map[string]string {
+	t.Helper()
+	dir := filepath.Join(workspace, "correction-intents")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := map[string]string{}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		out[e.Name()] = string(b)
+	}
+	return out
+}
+
+func sameStringMap(a, b map[string]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, av := range a {
+		if b[k] != av {
+			return false
+		}
+	}
+	return true
 }
 
 func latestMeasurementID(t *testing.T, s *core.Store) int64 {

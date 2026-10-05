@@ -11,19 +11,20 @@ import (
 // Status is the guide's status: gates, ledger counts, questions, the next file, one "do now" sentence and the
 // mismatches between the workspace and the database.
 type Status struct {
-	Workspace  string            `json:"workspace"`
-	Database   string            `json:"database"`
-	Source     string            `json:"source,omitempty"`
-	Gates      map[string]string `json:"gates"`
-	Vault      string            `json:"vault,omitempty"`
-	Ledger     map[string]int    `json:"ledger"`
-	Questions  map[string]int    `json:"questions"`
-	ToApply    []string          `json:"answered_to_apply,omitempty"`
-	Next       string            `json:"next_file,omitempty"`
-	DoNow      string            `json:"do_now"`
-	Mismatches []string          `json:"mismatches"`
-	Outside    []string          `json:"written_outside_the_facts,omitempty"`
-	Counts     *core.Counts      `json:"counts,omitempty"`
+	Workspace   string            `json:"workspace"`
+	Database    string            `json:"database"`
+	Source      string            `json:"source,omitempty"`
+	Gates       map[string]string `json:"gates"`
+	Vault       string            `json:"vault,omitempty"`
+	Ledger      map[string]int    `json:"ledger"`
+	Questions   map[string]int    `json:"questions"`
+	ToApply     []string          `json:"answered_to_apply,omitempty"`
+	Next        string            `json:"next_file,omitempty"`
+	DoNow       string            `json:"do_now"`
+	Mismatches  []string          `json:"mismatches"`
+	Outside     []string          `json:"written_outside_the_facts,omitempty"`
+	Corrections []string          `json:"correction_intents,omitempty"`
+	Counts      *core.Counts      `json:"counts,omitempty"`
 
 	// Changed is, for each gate that is not approved, the lines changed since the owner's last approval.
 	Changed map[string][]string `json:"changed_since_approval,omitempty"`
@@ -85,6 +86,9 @@ func (w *Workspace) Status(ctx context.Context, s *core.Store, dbPath string) (*
 		}
 		if st.Source != "" && st.Gates["rules.md"] == "approved" {
 			w.mismatches(ctx, s, st, lines, plan)
+		}
+		if st.Corrections, err = w.correctionIntentStates(ctx, s); err != nil {
+			return nil, err
 		}
 	} else {
 		st.Mismatches = append(st.Mismatches, "no database was checked")

@@ -13,14 +13,18 @@ import (
 // correctTo corrects or retracts a reading; with an import workspace, a correction of an imported reading is
 // also written to the workspace, so a replay makes it again (docs/guides/importing.md).
 func (h *server) correctTo(r *http.Request, src string, id int64, value *float64) (*Entity, error) {
-	fix, key, err := h.s.Correct(r.Context(), src, id, value)
-	if err != nil {
-		return nil, err
-	}
-	if h.ws != nil && core.IsImport(key.Source) && key.Key != "" {
-		if err := h.ws.RecordCorrection(key); err != nil {
+	if h.ws != nil {
+		fix, handled, err := h.ws.CorrectImported(r.Context(), h.s, src, id, value)
+		if err != nil {
 			return nil, err
 		}
+		if handled {
+			return h.measurementEntity(r.Context(), fix)
+		}
+	}
+	fix, _, err := h.s.Correct(r.Context(), src, id, value)
+	if err != nil {
+		return nil, err
 	}
 	return h.measurementEntity(r.Context(), fix)
 }

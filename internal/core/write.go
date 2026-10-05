@@ -574,6 +574,15 @@ func (t *Tx) ReadingByKey(metric, key string) (value float64, ok, found bool, er
 
 // Correct supersedes a reading with a new value, or retracts it when value is nil (cookbook/correct-a-measurement.md).
 func (t *Tx) Correct(wrong int64, value *float64) (id int64, err error) {
+	return t.correct(wrong, value, "")
+}
+
+// CorrectKeyed is Correct with a writer-generated import_key for durable import-correction replay.
+func (t *Tx) CorrectKeyed(wrong int64, value *float64, importKey string) (id int64, err error) {
+	return t.correct(wrong, value, importKey)
+}
+
+func (t *Tx) correct(wrong int64, value *float64, importKey string) (id int64, err error) {
 	var metricTitle string
 	var habit bool
 	err = t.tx.QueryRow(`SELECT m.title, EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id)
@@ -591,13 +600,73 @@ func (t *Tx) Correct(wrong int64, value *float64) (id int64, err error) {
 	if value != nil {
 		v = *value
 	}
-	err = t.tx.QueryRow(`INSERT INTO measurements(metric_id, day, taken_at, tz, value, source, captured_with_id, supersedes_id, created_at)
-	                     SELECT metric_id, day, taken_at, tz, ?, ?, captured_with_id, id, `+Now+` FROM measurements WHERE id = ?
-	                     RETURNING id`, v, t.Source, wrong).Scan(&id)
+	err = t.tx.QueryRow(`INSERT INTO measurements(metric_id, day, taken_at, tz, value, source, import_key, captured_with_id, supersedes_id, created_at)
+	                     SELECT metric_id, day, taken_at, tz, ?, ?, ?, captured_with_id, id, `+Now+` FROM measurements WHERE id = ?
+	                     RETURNING id`, v, t.Source, nullIfEmpty(importKey), wrong).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, notFound("no measurement %d", wrong)
 	}
 	return id, err
+}
+
+// MeasurementRow is the portable identity and value of one measurement row.
+type MeasurementRow struct {
+	ID         int64
+	Source     string
+	ImportKey  string
+	Metric     string
+	Value      *float64
+	Supersedes int64
+}
+
+func (t *Tx) MeasurementRow(id int64) (MeasurementRow, error) {
+	var r MeasurementRow
+	var k sql.NullString
+	var v sql.NullFloat64
+	var supersedes sql.NullInt64
+	err := t.tx.QueryRow(`SELECT me.id, me.source, me.import_key, m.title, me.value, me.supersedes_id
+	                       FROM measurements me JOIN pages m ON m.id = me.metric_id WHERE me.id = ?`, id).
+		Scan(&r.ID, &r.Source, &k, &r.Metric, &v, &supersedes)
+	if errors.Is(err, sql.ErrNoRows) {
+		return r, notFound("no measurement %d", id)
+	}
+	if err != nil {
+		return r, err
+	}
+	r.ImportKey = k.String
+	if v.Valid {
+		r.Value = &v.Float64
+	}
+	if supersedes.Valid {
+		r.Supersedes = supersedes.Int64
+	}
+	return r, nil
+}
+
+// MeasurementRootAndLeaf returns the oldest ancestor and current leaf of a correction chain.
+func (t *Tx) MeasurementRootAndLeaf(id int64) (root, leaf MeasurementRow, err error) {
+	var rootID int64
+	err = t.tx.QueryRow(`WITH RECURSIVE ancestors(id, supersedes_id, depth) AS (
+	                       SELECT id, supersedes_id, 0 FROM measurements WHERE id = ?
+	                       UNION ALL
+	                       SELECT me.id, me.supersedes_id, depth + 1 FROM measurements me JOIN ancestors a ON me.id = a.supersedes_id)
+	                     SELECT id FROM ancestors ORDER BY depth DESC LIMIT 1`, id).Scan(&rootID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return root, leaf, notFound("no measurement %d", id)
+	}
+	if err != nil {
+		return root, leaf, err
+	}
+	root, err = t.MeasurementRow(rootID)
+	if err != nil {
+		return root, leaf, err
+	}
+	leafID, _, _, err := t.CurrentOf(rootID)
+	if err != nil {
+		return root, leaf, err
+	}
+	leaf, err = t.MeasurementRow(leafID)
+	return root, leaf, err
 }
 
 // MeasurementKey is the sender's key of a measurement's oldest ancestor: its source, import_key and metric

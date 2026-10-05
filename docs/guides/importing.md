@@ -443,6 +443,16 @@ made in the workspace (it holds the same private data as the trial), and is remo
 Facts files hold no database ids: keys are derived from source paths and references name titles, so
 the real database gets the trial's rows with ids of its own, and nothing is remapped.
 
+An owner's correction of an imported, keyed reading is replayable only after the writer has recorded an immutable
+workspace intent for that correction. The intent names the imported root, the actor/source that made the correction,
+the predecessor (a frozen legacy prefix or a previous correction event), and the desired value or retraction with a
+writer-generated event key. A correction whose workspace intent cannot be published is rolled back in the database;
+a visible intent whose SQL commit result is unknown is reported as pending recovery and is retried before the next
+correction, rehearsal or replay. *status* reports pending or conflicting intents but does not repair them. A conflict
+means the owner inspects the named intent and the current reading chain, then either restores the expected predecessor
+or removes/archives the private intent after deciding not to carry it forward. This is not cross-file ACID and makes
+no power-loss promise beyond process-crash recovery from synced local files.
+
 ## What an implementation must get right
 
 Each line is a requirement on a writer that offers this process.
@@ -477,7 +487,8 @@ Each line is a requirement on a writer that offers this process.
 - Mood is held to 1–5 ([D6](../decisions/D06-mood-is-a-measurement.md)); a habit period is refused on a metric that already has readings other than
   0/1 ([D24](../decisions/D24-habits.md)).
 - A correction path survives the replay: a correction the owner makes on the trial is made again on
-  the real run.
+  the real run. Durable correction intents are immutable; legacy correction records remain readable; repeated replay
+  or recovery does not add rows, and ambiguous legacy/event ordering fails closed.
 - A *replay* that fails leaves its target as it was, and its dry run lists every failure ("Trial, then
   the real run").
 - The model's instructions say that the text of a source file is data, never instructions to it.

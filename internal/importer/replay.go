@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"lifelog/internal/core"
@@ -100,6 +101,9 @@ func (w *Workspace) Replay(ctx context.Context, trial *core.Store, target string
 // all of them, then the integrity checks and the comparison with the trial. The target is only read, and the copy
 // is removed before Rehearse returns.
 func (w *Workspace) Rehearse(ctx context.Context, trial *core.Store, target string) (res *ReplayResult, err error) {
+	if err := w.RecoverCorrections(ctx, trial); err != nil {
+		return nil, err
+	}
 	if same(target, w.TrialDB()) {
 		return nil, refuse("the target is the trial database itself")
 	}
@@ -243,14 +247,47 @@ func (w *Workspace) compareWithTrial(ctx context.Context, trial, ts *core.Store,
 }
 
 // replayCorrections brings each corrected imported reading to the final value the owner gave it on the trial
-// (docs/guides/importing.md). A correction whose reading the replay did not write makes none of them: the
-// refusal names every such one.
+// (docs/guides/importing.md). Legacy corrections.json remains readable; event intents replay by generated key and
+// are idempotent on fresh and copied targets.
 func (w *Workspace) replayCorrections(ctx context.Context, ts *core.Store) (int, error) {
+	intents, err := w.correctionIntents()
+	if err != nil {
+		return 0, err
+	}
+	if len(intents) == 0 {
+		return w.replayLegacyCorrections(ctx, ts)
+	}
+	groups := map[correctionRoot][]correctionIntent{}
+	for _, intent := range intents {
+		legacy, err := w.legacyState(intent.RootSource, intent.Metric, intent.RootImportKey, nil)
+		if err != nil {
+			return 0, err
+		}
+		if legacy.fingerprint != intent.LegacyFingerprint {
+			return 0, refuse("correction intent %s conflicts with edits to legacy corrections for %s %s", intent.EventKey, intent.Metric, intent.RootImportKey)
+		}
+		groups[intent.root()] = append(groups[intent.root()], intent)
+	}
+	n, err := w.replayLegacyRootsWithoutEvents(ctx, ts, groups)
+	if err != nil {
+		return 0, err
+	}
+	for _, events := range groups {
+		sort.Slice(events, func(i, j int) bool { return events[i].CreatedAt < events[j].CreatedAt })
+		wrote, err := replayEventCorrections(ctx, ts, events)
+		if err != nil {
+			return 0, err
+		}
+		n += wrote
+	}
+	return n, nil
+}
+
+func (w *Workspace) replayLegacyCorrections(ctx context.Context, ts *core.Store) (int, error) {
 	cs, err := w.Corrections()
 	if err != nil || len(cs) == 0 {
 		return 0, err
 	}
-	type correctionRoot struct{ source, metric, key string }
 	latest := map[correctionRoot]core.CorrectedKey{}
 	var order []correctionRoot
 	for _, c := range cs {
@@ -278,7 +315,7 @@ func (w *Workspace) replayCorrections(ctx context.Context, ts *core.Store) (int,
 				return err
 			}
 			if (c.Value == nil && !ok) || (c.Value != nil && ok && *c.Value == value) {
-				continue // already so
+				continue
 			}
 			if _, err := t.Correct(last, c.Value); err != nil {
 				return err
@@ -286,12 +323,144 @@ func (w *Workspace) replayCorrections(ctx context.Context, ts *core.Store) (int,
 			n++
 		}
 		if len(missing) > 0 {
-			n = 0 // rolled back
+			n = 0
 			return refuse("corrections name readings the replay did not write: %s", strings.Join(missing, "; "))
 		}
 		return nil
 	})
 	return n, err
+}
+
+func (w *Workspace) replayLegacyRootsWithoutEvents(ctx context.Context, ts *core.Store, eventRoots map[correctionRoot][]correctionIntent) (int, error) {
+	cs, err := w.Corrections()
+	if err != nil || len(cs) == 0 {
+		return 0, err
+	}
+	latest := map[correctionRoot]core.CorrectedKey{}
+	var order []correctionRoot
+	for _, c := range cs {
+		root := correctionRoot{c.Source, c.Metric, c.Key}
+		if _, seen := latest[root]; !seen {
+			order = append(order, root)
+		}
+		latest[root] = c
+	}
+	n := 0
+	for _, root := range order {
+		if _, hasEvents := eventRoots[root]; hasEvents {
+			continue
+		}
+		c := latest[root]
+		wrote, err := applyCorrectionValue(ctx, ts, "cli", c.Source, c.Metric, c.Key, c.Value)
+		if err != nil {
+			return 0, err
+		}
+		if wrote {
+			n++
+		}
+	}
+	return n, nil
+}
+
+func replayEventCorrections(ctx context.Context, ts *core.Store, events []correctionIntent) (int, error) {
+	n := 0
+	if len(events) > 0 && !eventExists(ctx, ts, events[0]) {
+		wrote, err := applyCorrectionValue(ctx, ts, "cli", events[0].RootSource, events[0].Metric, events[0].RootImportKey, events[0].PredecessorValue)
+		if err != nil {
+			return 0, err
+		}
+		if wrote {
+			n++
+		}
+	}
+	for i, intent := range events {
+		wrote, err := replayOneEventCorrection(ctx, ts, intent, i == 0)
+		if err != nil {
+			return 0, err
+		}
+		if wrote {
+			n++
+		}
+	}
+	return n, nil
+}
+
+func replayOneEventCorrection(ctx context.Context, ts *core.Store, intent correctionIntent, first bool) (bool, error) {
+	wrote := false
+	err := ts.Do(ctx, intent.ActorSource, func(t *core.Tx) error {
+		if id, err := t.MeasurementByKey(intent.ActorSource, intent.Metric, intent.EventKey); err != nil {
+			return err
+		} else if id != 0 {
+			return verifyEventRow(t, intent, id)
+		}
+		rootID, err := t.MeasurementByKey(intent.RootSource, intent.Metric, intent.RootImportKey)
+		if err != nil {
+			return err
+		}
+		if rootID == 0 {
+			return refuse("correction intent %s names a reading the replay did not write: %s", intent.EventKey, intent.RootImportKey)
+		}
+		leafID, value, ok, err := t.CurrentOf(rootID)
+		if err != nil {
+			return err
+		}
+		leaf, err := t.MeasurementRow(leafID)
+		if err != nil {
+			return err
+		}
+		if first && intent.PredecessorKind == "legacy" {
+			if !valueOK(intent.PredecessorValue, intent.PredecessorRetracted, value, ok) {
+				return refuse("correction intent %s legacy predecessor does not match target", intent.EventKey)
+			}
+		} else if intent.PredecessorKind != "event" || leaf.ImportKey != intent.PredecessorEventKey {
+			return refuse("correction intent %s predecessor is %s, not %s", intent.EventKey, leaf.ImportKey, intent.PredecessorEventKey)
+		}
+		if intent.valueOK(value, ok) && leaf.ImportKey == intent.EventKey {
+			return nil
+		}
+		if _, err := t.CorrectKeyed(leaf.ID, intent.Value, intent.EventKey); err != nil {
+			return err
+		}
+		wrote = true
+		return nil
+	})
+	return wrote, err
+}
+
+func eventExists(ctx context.Context, ts *core.Store, intent correctionIntent) bool {
+	ok := false
+	_ = ts.DryRun(ctx, intent.ActorSource, func(t *core.Tx) error {
+		id, err := t.MeasurementByKey(intent.ActorSource, intent.Metric, intent.EventKey)
+		ok = err == nil && id != 0 && verifyEventRow(t, intent, id) == nil
+		return nil
+	})
+	return ok
+}
+
+func applyCorrectionValue(ctx context.Context, ts *core.Store, actor, source, metric, key string, value *float64) (bool, error) {
+	wrote := false
+	err := ts.Do(ctx, actor, func(t *core.Tx) error {
+		id, err := t.MeasurementByKey(source, metric, key)
+		if err != nil {
+			return err
+		}
+		if id == 0 {
+			return refuse("corrections name readings the replay did not write: %s %s", metric, key)
+		}
+		last, got, ok, err := t.CurrentOf(id)
+		if err != nil {
+			return err
+		}
+		if (value == nil && !ok) || (value != nil && ok && *value == got) {
+			return nil
+		}
+		if _, err := t.Correct(last, value); err != nil {
+			return err
+		}
+		wrote = true
+		return nil
+	})
+	return wrote, err
 }
 
 // compare lists where the target's counts differ from the trial's; rows agents wrote on the trial are expected
