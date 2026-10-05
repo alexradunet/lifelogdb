@@ -223,7 +223,7 @@ func (w *Workspace) mismatches(ctx context.Context, s *core.Store, st *Status, l
 			for i, wr := range f.Writes {
 				pos[i] = wholeIndex(collapse(src), collapse(wr.Quote))
 			}
-			_ = s.DryRun(ctx, st.Source, func(t *core.Tx) error {
+			if err := s.DryRun(ctx, st.Source, func(t *core.Tx) error {
 				keys, err := resolveReadingKeys(t, st.Source, f, pos)
 				if err != nil {
 					return err
@@ -232,7 +232,9 @@ func (w *Workspace) mismatches(ctx context.Context, s *core.Store, st *Status, l
 					expected[k] = true
 				}
 				return nil
-			})
+			}); err != nil {
+				st.Mismatches = append(st.Mismatches, l.File+": "+err.Error())
+			}
 		}
 	}
 	if plan != nil {

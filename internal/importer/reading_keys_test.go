@@ -49,6 +49,25 @@ func TestReadingKeyIdentity(t *testing.T) {
 }
 
 func TestLegacyReadingKeyCompatibility(t *testing.T) {
+	t.Run("fresh canonical equal-value mixed spellings rerun", func(t *testing.T) {
+		f := setupReadingKeyFixture(t)
+		file := "Medical/Equal.md"
+		writeSource(t, f, file, "2031-10-01 first: 5 ng/mL\n2031-10-01 second: 5 ng/mL\n")
+		mustLedger(t, f)
+		registerMetrics(t, f, Metric{Name: "ferritin", Unit: "ng/mL", Note: "Ferritin"})
+		facts := []any{
+			readingFact("Ferritin", "2031-10-01", "5 ng/mL", "2031-10-01 first: 5 ng/mL", nil),
+			readingFact("ferritin", "2031-10-01", "5 ng/mL", "2031-10-01 second: 5 ng/mL", nil),
+		}
+		applyFacts(t, f, file, facts)
+		if _, err := f.w.Apply(ctx, f.s, file); err != nil {
+			t.Fatalf("unchanged canonical rerun: %v", err)
+		}
+		if rows := importerMeasurementRows(t, f); rows != 2 {
+			t.Fatalf("rows %d, want 2", rows)
+		}
+	})
+
 	t.Run("tied source positions fail closed", func(t *testing.T) {
 		f := setupReadingKeyFixture(t)
 		file := "Medical/TiedPosition.md"
@@ -147,6 +166,72 @@ func TestLegacyReadingKeyCompatibility(t *testing.T) {
 		}
 		if got := importerMeasurementRows(t, f); got != before {
 			t.Fatalf("duplicate identity mutated measurements to %d, want %d", got, before)
+		}
+	})
+
+	t.Run("ambiguous historical trial without corrections refuses fresh replay", func(t *testing.T) {
+		f := setupReadingKeyFixture(t)
+		file := "Medical/OldEqual.md"
+		writeSource(t, f, file, "2031-10-01 first: 5 ng/mL\n2031-10-01 second: 5 ng/mL\n")
+		mustLedger(t, f)
+		registerMetrics(t, f, Metric{Name: "ferritin", Unit: "ng/mL", Note: "Ferritin"})
+		recordReading(t, f, "ferritin", "2031-10-01", "", 5, file+"|reading|Ferritin|2031-10-01|1")
+		recordReading(t, f, "ferritin", "2031-10-01", "", 5, file+"|reading|ferritin|2031-10-01|1")
+		facts := []any{
+			readingFact("Ferritin", "2031-10-01", "5 ng/mL", "2031-10-01 first: 5 ng/mL", nil),
+			readingFact("ferritin", "2031-10-01", "5 ng/mL", "2031-10-01 second: 5 ng/mL", nil),
+		}
+		if err := f.facts(t, file, map[string]any{"file": file, "writes": facts}); err != nil {
+			t.Fatal(err)
+		}
+		markLedgerDone(t, f, file)
+		target := filepath.Join(t.TempDir(), "life.db")
+		if _, err := f.w.Replay(ctx, f.s, target); err == nil || !strings.Contains(err.Error(), "ambiguous") {
+			t.Fatalf("ambiguous historical replay error = %v, want fail closed", err)
+		}
+		if _, err := os.Stat(target); !os.IsNotExist(err) {
+			t.Fatalf("refused target was created: %v", err)
+		}
+	})
+
+	t.Run("legacy lowercase shadow cannot correct another reading", func(t *testing.T) {
+		f := setupReadingKeyFixture(t)
+		file := "Medical/Shadow.md"
+		writeSource(t, f, file, "2031-10-01 first: 5 ng/mL\n2031-10-01 second: 6 ng/mL\n")
+		mustLedger(t, f)
+		registerMetrics(t, f, Metric{Name: "ferritin", Unit: "ng/mL", Note: "Ferritin"})
+		recordReading(t, f, "ferritin", "2031-10-01", "", 5, file+"|reading|Ferritin|2031-10-01|1")
+		second := recordReading(t, f, "ferritin", "2031-10-01", "", 6, file+"|reading|ferritin|2031-10-01|1")
+		corrected := 9.0
+		if _, key, err := f.s.Correct(ctx, "cli", second, &corrected); err != nil {
+			t.Fatal(err)
+		} else if err := f.w.RecordCorrection(key); err != nil {
+			t.Fatal(err)
+		}
+		facts := []any{
+			readingFact("Ferritin", "2031-10-01", "5 ng/mL", "2031-10-01 first: 5 ng/mL", nil),
+			readingFact("ferritin", "2031-10-01", "6 ng/mL", "2031-10-01 second: 6 ng/mL", nil),
+		}
+		if err := f.facts(t, file, map[string]any{"file": file, "writes": facts}); err != nil {
+			t.Fatal(err)
+		}
+		markLedgerDone(t, f, file)
+		target := filepath.Join(t.TempDir(), "life.db")
+		res, err := f.w.Replay(ctx, f.s, target)
+		if err != nil {
+			if _, statErr := os.Stat(target); !os.IsNotExist(statErr) {
+				t.Fatalf("ambiguity refusal created target: %v", statErr)
+			}
+			return
+		}
+		if len(res.Differences) != 0 {
+			t.Fatalf("shadow replay differences: %+v", res)
+		}
+		if got := targetReadingValue(t, target, file+"|reading|ferritin|2031-10-01|1"); got != 5 {
+			t.Fatalf("first reading became %g; correction belongs to second reading", got)
+		}
+		if got := targetReadingValue(t, target, file+"|reading|ferritin|2031-10-01|2"); got != 9 {
+			t.Fatalf("second reading value = %g, want 9", got)
 		}
 	})
 
@@ -292,7 +377,7 @@ func TestLegacyReadingKeyCompatibility(t *testing.T) {
 			t.Fatal(err)
 		}
 		res := newReplayResult(target)
-		if err := f.w.replayInto(ctx, ts, res, false); err != nil {
+		if err := f.w.replayInto(ctx, f.s, ts, res, false); err != nil {
 			t.Fatal(err)
 		}
 		capturedTarget, rootTarget, gotValue := importedReadingMetadata(t, ts, "ferritin", "2031-11-01")
@@ -476,6 +561,23 @@ func targetMeasurementRows(t *testing.T, dbPath string) int {
 		t.Fatal(err)
 	}
 	return n
+}
+
+func targetReadingValue(t *testing.T, dbPath, key string) float64 {
+	t.Helper()
+	d, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	var value float64
+	if err := d.R.QueryRowContext(ctx, `WITH RECURSIVE c(id, value) AS (
+		SELECT id, value FROM measurements WHERE import_key = ? AND source = 'import:notebook'
+		UNION ALL SELECT m.id, m.value FROM measurements m JOIN c ON m.supersedes_id = c.id)
+		SELECT value FROM c ORDER BY id DESC LIMIT 1`, key).Scan(&value); err != nil {
+		t.Fatal(err)
+	}
+	return value
 }
 
 func markLedgerDone(t *testing.T, f *fixture, file string) {

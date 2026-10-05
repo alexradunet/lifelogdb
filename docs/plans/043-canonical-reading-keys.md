@@ -30,7 +30,7 @@ Use `TestReadingsKeysAndReplay` for reordered/untimed facts, `TestRepeatedImport
 
 ## Scope
 
-Only the drift-check paths and plan/index status. No DDL/migrations, measurement UPDATE/DELETE, title-key algorithm changes, model-supplied keys, path normalization changes, row merging, unit conversion, source-position algorithm replacement, or real data. Preserve raw facts text and approvals.
+Only the drift-check paths, the status/API test call-site updates required by the canonical key change, and plan/index status. No DDL/migrations, measurement UPDATE/DELETE, title-key algorithm changes, model-supplied keys, path normalization changes, row merging, unit conversion, source-position algorithm replacement, or real data. Preserve raw facts text and approvals.
 
 ## Legacy compatibility policy
 

@@ -1,6 +1,7 @@
 package importer
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 
@@ -9,8 +10,11 @@ import (
 )
 
 type resolvedReadingKeys struct {
-	byWrite map[int]string
-	aliases map[string]string
+	byWrite          map[int]string
+	aliases          map[string]string
+	aliasWrite       map[string]int
+	storedKeyWrite   map[string]int
+	ambiguousAliases map[string]bool
 }
 
 func resolveReadingKeys(t *core.Tx, source string, f *Facts, pos []int) (resolvedReadingKeys, error) {
@@ -18,7 +22,7 @@ func resolveReadingKeys(t *core.Tx, source string, f *Facts, pos []int) (resolve
 	if err != nil {
 		return resolvedReadingKeys{}, err
 	}
-	res := resolvedReadingKeys{byWrite: map[int]string{}, aliases: map[string]string{}}
+	res := resolvedReadingKeys{byWrite: map[int]string{}, aliases: map[string]string{}, aliasWrite: map[string]int{}, storedKeyWrite: map[string]int{}, ambiguousAliases: map[string]bool{}}
 	byGroup := map[string][]readingIdentity{}
 	for _, id := range ids {
 		byGroup[id.metricKey+"|"+id.day] = append(byGroup[id.metricKey+"|"+id.day], id)
@@ -37,8 +41,8 @@ func resolveReadingKeys(t *core.Tx, source string, f *Facts, pos []int) (resolve
 		}
 		if len(groupRoots) == 0 {
 			for _, id := range group {
-				res.aliases[id.canonicalKey] = id.canonicalKey
-				res.aliases[id.legacyKey] = id.canonicalKey
+				res.setAlias(id.canonicalKey, id.canonicalKey, id.index)
+				res.setAlias(id.legacyKey, id.canonicalKey, id.index)
 			}
 			continue
 		}
@@ -53,10 +57,11 @@ func resolveReadingGroup(file string, group []readingIdentity, roots []core.Impo
 	matchesByRoot := map[string][]int64{}
 	rootsByID := map[int64]core.ImportedMeasurementRoot{}
 	rootsForWrite := map[int][]int64{}
+	canonicalStored := canonicalStoredGroup(file, group, roots)
 	for _, root := range roots {
 		rootsByID[root.ID] = root
 		for _, id := range group {
-			if readingRootMatches(file, id, root, group) {
+			if readingRootMatches(file, id, root, group, canonicalStored) {
 				matchesByRoot[root.ImportKey] = append(matchesByRoot[root.ImportKey], int64(id.index))
 				rootsForWrite[id.index] = append(rootsForWrite[id.index], root.ID)
 			}
@@ -73,14 +78,17 @@ func resolveReadingGroup(file string, group []readingIdentity, roots []core.Impo
 		switch len(roots) {
 		case 0:
 			res.byWrite[id.index] = id.canonicalKey
-			res.aliases[id.canonicalKey] = id.canonicalKey
-			res.aliases[id.legacyKey] = id.canonicalKey
+			res.setAlias(id.canonicalKey, id.canonicalKey, id.index)
+			res.setAlias(id.legacyKey, id.canonicalKey, id.index)
 		case 1:
 			root := rootsByID[roots[0]]
 			res.byWrite[id.index] = root.ImportKey
-			res.aliases[id.canonicalKey] = root.ImportKey
-			res.aliases[id.legacyKey] = root.ImportKey
-			res.aliases[root.ImportKey] = root.ImportKey
+			res.setAlias(id.canonicalKey, root.ImportKey, id.index)
+			if !canonicalStored {
+				res.setAlias(id.legacyKey, root.ImportKey, id.index)
+			}
+			res.setAlias(root.ImportKey, root.ImportKey, id.index)
+			res.storedKeyWrite[root.ImportKey] = id.index
 		default:
 			return refuse("%s: ambiguous legacy reading group %s on %s has multiple roots for one source reading", file, id.metricKey, id.day)
 		}
@@ -88,7 +96,48 @@ func resolveReadingGroup(file string, group []readingIdentity, roots []core.Impo
 	return nil
 }
 
-func readingRootMatches(file string, id readingIdentity, root core.ImportedMeasurementRoot, group []readingIdentity) bool {
+func (r resolvedReadingKeys) setAlias(alias, resolved string, index int) {
+	if alias == "" {
+		return
+	}
+	if prev, ok := r.aliasWrite[alias]; ok && prev != index {
+		r.ambiguousAliases[alias] = true
+		delete(r.aliases, alias)
+		return
+	}
+	r.aliasWrite[alias] = index
+	if !r.ambiguousAliases[alias] {
+		r.aliases[alias] = resolved
+	}
+}
+
+func canonicalStoredGroup(file string, group []readingIdentity, roots []core.ImportedMeasurementRoot) bool {
+	if len(roots) == 0 {
+		return false
+	}
+	seen := map[string]bool{}
+	for _, id := range group {
+		seen[id.canonicalKey] = false
+	}
+	for _, root := range roots {
+		parsed, ok := parseReadingKey(root.ImportKey)
+		if !ok || parsed.file != file || parsed.metric != group[0].metricKey || parsed.day != group[0].day {
+			return false
+		}
+		if _, ok := seen[root.ImportKey]; !ok {
+			return false
+		}
+		seen[root.ImportKey] = true
+	}
+	for _, found := range seen {
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+func readingRootMatches(file string, id readingIdentity, root core.ImportedMeasurementRoot, group []readingIdentity, canonicalStored bool) bool {
 	parsed, ok := parseReadingKey(root.ImportKey)
 	if !ok || parsed.file != file || text.TitleKey(parsed.metric) != id.metricKey || parsed.day != id.day {
 		return false
@@ -98,6 +147,9 @@ func readingRootMatches(file string, id readingIdentity, root core.ImportedMeasu
 	}
 	if !sameReadingValue(root.Value, id.value) {
 		return false
+	}
+	if canonicalStored {
+		return root.ImportKey == id.canonicalKey
 	}
 	if root.ImportKey == id.canonicalKey || root.ImportKey == id.legacyKey {
 		return true
@@ -147,6 +199,9 @@ func (w *Workspace) resolveCorrectionKey(ctxSource string, t *core.Tx, metric, k
 	resolved, err := resolveReadingKeys(t, ctxSource, f, pos)
 	if err != nil {
 		return "", err
+	}
+	if resolved.ambiguousAliases[key] {
+		return "", refuse("%s: ambiguous legacy correction root %s for %s", parsed.file, key, metric)
 	}
 	if alias, ok := resolved.aliases[key]; ok {
 		return alias, nil
@@ -203,6 +258,108 @@ func uniqueStrings(in []string) []string {
 		}
 		seen[s] = true
 		out = append(out, s)
+	}
+	return out
+}
+
+func (w *Workspace) validateTrialReadingIdentity(ctx context.Context, trial *core.Store) error {
+	lines, _, err := w.Ledger()
+	if err != nil {
+		return nil
+	}
+	for _, line := range lines {
+		if line.State != "x" && line.State != "?" {
+			continue
+		}
+		f, pos, rules, err := w.prepare(line.File)
+		if err != nil {
+			continue
+		}
+		if err := trial.DryRun(ctx, rules.Source, func(t *core.Tx) error {
+			_, err := resolveReadingKeys(t, rules.Source, f, pos)
+			return err
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (w *Workspace) resolveCorrectionKeyFromTrial(ctx context.Context, trial *core.Store, target *core.Tx, source, metric, key string) (string, error) {
+	if trial == nil {
+		return w.resolveCorrectionKey(source, target, metric, key)
+	}
+	parsed, ok := parseReadingKey(key)
+	if !ok {
+		return key, nil
+	}
+	f, pos, _, err := w.prepare(parsed.file)
+	if err != nil {
+		return "", err
+	}
+	writeIndex := -1
+	err = trial.DryRun(ctx, source, func(t *core.Tx) error {
+		resolved, err := resolveReadingKeys(t, source, f, pos)
+		if err != nil {
+			return err
+		}
+		if idx, ok := resolved.storedKeyWrite[key]; ok {
+			writeIndex = idx
+			return nil
+		}
+		if resolved.ambiguousAliases[key] {
+			return refuse("%s: ambiguous legacy correction root %s for %s", parsed.file, key, metric)
+		}
+		if idx, ok := resolved.aliasWrite[key]; ok {
+			writeIndex = idx
+			return nil
+		}
+		ids, err := readingIdentities(f, pos)
+		if err != nil {
+			return err
+		}
+		var matches []int
+		for _, id := range ids {
+			if text.TitleKey(metric) != id.metricKey || parsed.day != id.day || text.TitleKey(parsed.metric) != id.metricKey {
+				continue
+			}
+			if historicalKeyCouldName(parsed, id, ids) {
+				matches = append(matches, id.index)
+			}
+		}
+		matches = uniqueInts(matches)
+		if len(matches) != 1 {
+			return refuse("%s: ambiguous legacy correction root %s for %s", parsed.file, key, metric)
+		}
+		writeIndex = matches[0]
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+	if writeIndex < 0 {
+		return "", refuse("%s: ambiguous legacy correction root %s for %s", parsed.file, key, metric)
+	}
+	resolvedTarget, err := resolveReadingKeys(target, source, f, pos)
+	if err != nil {
+		return "", err
+	}
+	mapped := resolvedTarget.byWrite[writeIndex]
+	if mapped == "" {
+		return "", refuse("%s: correction root %s did not map to a replayed reading", parsed.file, key)
+	}
+	return mapped, nil
+}
+
+func uniqueInts(in []int) []int {
+	seen := map[int]bool{}
+	var out []int
+	for _, n := range in {
+		if seen[n] {
+			continue
+		}
+		seen[n] = true
+		out = append(out, n)
 	}
 	return out
 }

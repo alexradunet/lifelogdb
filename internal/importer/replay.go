@@ -88,7 +88,7 @@ func (w *Workspace) Replay(ctx context.Context, trial *core.Store, target string
 	}
 	defer d.Close()
 	ts := &core.Store{DB: d}
-	if err := w.replayInto(ctx, ts, res, false); err != nil {
+	if err := w.replayInto(ctx, trial, ts, res, false); err != nil {
 		return res, fmt.Errorf("the replay into %s failed after a clean rehearsal, and what it wrote before stays "+
 			"(every write is idempotent: fix the cause and replay again): %w", target, err)
 	}
@@ -101,6 +101,9 @@ func (w *Workspace) Replay(ctx context.Context, trial *core.Store, target string
 // is removed before Rehearse returns.
 func (w *Workspace) Rehearse(ctx context.Context, trial *core.Store, target string) (res *ReplayResult, err error) {
 	if err := w.RecoverCorrections(ctx, trial); err != nil {
+		return nil, err
+	}
+	if err := w.validateTrialReadingIdentity(ctx, trial); err != nil {
 		return nil, err
 	}
 	if same(target, w.TrialDB()) {
@@ -132,7 +135,7 @@ func (w *Workspace) Rehearse(ctx context.Context, trial *core.Store, target stri
 	}
 	defer d.Close() // before the folder is removed: deferred calls run last in, first out
 	ts := &core.Store{DB: d}
-	if err := w.replayInto(ctx, ts, res, true); err != nil {
+	if err := w.replayInto(ctx, trial, ts, res, true); err != nil {
 		return nil, err
 	}
 	if err := w.compareWithTrial(ctx, trial, ts, res); err != nil {
@@ -148,7 +151,7 @@ func (w *Workspace) Rehearse(ctx context.Context, trial *core.Store, target stri
 // in ledger order (a file that names a row not written yet, or links a plain page another file promotes, is retried
 // after the rest), then the owner's corrections. Rehearsing, a failing step or file is recorded and the rest goes
 // on; otherwise the first stops it.
-func (w *Workspace) replayInto(ctx context.Context, ts *core.Store, res *ReplayResult, rehearse bool) error {
+func (w *Workspace) replayInto(ctx context.Context, trial, ts *core.Store, res *ReplayResult, rehearse bool) error {
 	if p, ok, err := w.LoadPlan(); err != nil {
 		return err
 	} else if ok {
@@ -219,7 +222,7 @@ func (w *Workspace) replayInto(ctx context.Context, ts *core.Store, res *ReplayR
 		}
 		pending = later
 	}
-	if res.Corrections, err = w.replayCorrections(ctx, ts); err != nil {
+	if res.Corrections, err = w.replayCorrections(ctx, trial, ts); err != nil {
 		if err := res.failed(rehearse, "corrections", "", err); err != nil {
 			return err
 		}
@@ -248,13 +251,17 @@ func (w *Workspace) compareWithTrial(ctx context.Context, trial, ts *core.Store,
 // replayCorrections brings each corrected imported reading to the final value the owner gave it on the trial
 // (docs/guides/importing.md). Legacy corrections.json remains readable; event intents replay by generated key and
 // are idempotent on fresh and copied targets.
-func (w *Workspace) replayCorrections(ctx context.Context, ts *core.Store) (int, error) {
+func (w *Workspace) replayCorrections(ctx context.Context, first *core.Store, rest ...*core.Store) (int, error) {
+	trial, ts := first, first
+	if len(rest) > 0 {
+		ts = rest[0]
+	}
 	intents, err := w.orderedCorrectionIntents()
 	if err != nil {
 		return 0, err
 	}
 	if len(intents) == 0 {
-		return w.replayLegacyCorrections(ctx, ts)
+		return w.replayLegacyCorrections(ctx, trial, ts)
 	}
 	groups := map[correctionRoot][]correctionIntent{}
 	for _, intent := range intents {
@@ -267,7 +274,7 @@ func (w *Workspace) replayCorrections(ctx context.Context, ts *core.Store) (int,
 		}
 		groups[intent.root()] = append(groups[intent.root()], intent)
 	}
-	n, err := w.replayLegacyRootsWithoutEvents(ctx, ts, groups)
+	n, err := w.replayLegacyRootsWithoutEvents(ctx, trial, ts, groups)
 	if err != nil {
 		return 0, err
 	}
@@ -276,7 +283,7 @@ func (w *Workspace) replayCorrections(ctx context.Context, ts *core.Store) (int,
 		known[intent.EventKey] = intent
 	}
 	for _, events := range groups {
-		wrote, err := w.replayEventCorrections(ctx, ts, events, known)
+		wrote, err := w.replayEventCorrections(ctx, trial, ts, events, known)
 		if err != nil {
 			return 0, err
 		}
@@ -285,7 +292,7 @@ func (w *Workspace) replayCorrections(ctx context.Context, ts *core.Store) (int,
 	return n, nil
 }
 
-func (w *Workspace) replayLegacyCorrections(ctx context.Context, ts *core.Store) (int, error) {
+func (w *Workspace) replayLegacyCorrections(ctx context.Context, trial, ts *core.Store) (int, error) {
 	cs, err := w.Corrections()
 	if err != nil || len(cs) == 0 {
 		return 0, err
@@ -305,12 +312,19 @@ func (w *Workspace) replayLegacyCorrections(ctx context.Context, ts *core.Store)
 		for _, root := range order {
 			c := latest[root]
 			resolvedKey := c.Key
+			var err error
+			if trial != ts {
+				resolvedKey, err = w.resolveCorrectionKeyFromTrial(ctx, trial, t, c.Source, c.Metric, c.Key)
+				if err != nil {
+					return err
+				}
+			}
 			id, err := t.MeasurementByKey(c.Source, c.Metric, resolvedKey)
 			if err != nil {
 				return err
 			}
-			if id == 0 {
-				resolvedKey, err = w.resolveCorrectionKey(c.Source, t, c.Metric, c.Key)
+			if id == 0 && trial == ts {
+				resolvedKey, err = w.resolveCorrectionKeyFromTrial(ctx, trial, t, c.Source, c.Metric, c.Key)
 				if err != nil {
 					return err
 				}
@@ -344,7 +358,7 @@ func (w *Workspace) replayLegacyCorrections(ctx context.Context, ts *core.Store)
 	return n, err
 }
 
-func (w *Workspace) replayLegacyRootsWithoutEvents(ctx context.Context, ts *core.Store, eventRoots map[correctionRoot][]correctionIntent) (int, error) {
+func (w *Workspace) replayLegacyRootsWithoutEvents(ctx context.Context, trial, ts *core.Store, eventRoots map[correctionRoot][]correctionIntent) (int, error) {
 	cs, err := w.Corrections()
 	if err != nil || len(cs) == 0 {
 		return 0, err
@@ -364,7 +378,7 @@ func (w *Workspace) replayLegacyRootsWithoutEvents(ctx context.Context, ts *core
 			continue
 		}
 		c := latest[root]
-		wrote, err := w.applyCorrectionValue(ctx, ts, "cli", c.Source, c.Metric, c.Key, c.Value)
+		wrote, err := w.applyCorrectionValue(ctx, trial, ts, "cli", c.Source, c.Metric, c.Key, c.Value)
 		if err != nil {
 			return 0, err
 		}
@@ -375,10 +389,10 @@ func (w *Workspace) replayLegacyRootsWithoutEvents(ctx context.Context, ts *core
 	return n, nil
 }
 
-func (w *Workspace) replayEventCorrections(ctx context.Context, ts *core.Store, events []correctionIntent, known map[string]correctionIntent) (int, error) {
+func (w *Workspace) replayEventCorrections(ctx context.Context, trial, ts *core.Store, events []correctionIntent, known map[string]correctionIntent) (int, error) {
 	n := 0
 	for i, intent := range events {
-		wrote, err := w.replayOneEventCorrection(ctx, ts, intent, i == 0, known)
+		wrote, err := w.replayOneEventCorrection(ctx, trial, ts, intent, i == 0, known)
 		if err != nil {
 			return 0, err
 		}
@@ -389,28 +403,37 @@ func (w *Workspace) replayEventCorrections(ctx context.Context, ts *core.Store, 
 	return n, nil
 }
 
-func (w *Workspace) replayOneEventCorrection(ctx context.Context, ts *core.Store, intent correctionIntent, first bool, known map[string]correctionIntent) (bool, error) {
+func (w *Workspace) replayOneEventCorrection(ctx context.Context, trial, ts *core.Store, intent correctionIntent, first bool, known map[string]correctionIntent) (bool, error) {
 	wrote := false
 	err := ts.Do(ctx, intent.ActorSource, func(t *core.Tx) error {
-		if id, err := t.MeasurementByKey(intent.ActorSource, intent.Metric, intent.EventKey); err != nil {
-			return err
-		} else if id != 0 {
-			if err := verifyEventRow(t, intent, id, known); err == nil {
-				return nil
-			}
-			resolvedRootKey, err := w.resolveCorrectionKey(intent.RootSource, t, intent.Metric, intent.RootImportKey)
+		resolvedRootKey := intent.RootImportKey
+		var err error
+		if trial != ts {
+			resolvedRootKey, err = w.resolveCorrectionKeyFromTrial(ctx, trial, t, intent.RootSource, intent.Metric, intent.RootImportKey)
 			if err != nil {
 				return err
 			}
+		}
+		if id, err := t.MeasurementByKey(intent.ActorSource, intent.Metric, intent.EventKey); err != nil {
+			return err
+		} else if id != 0 {
+			if trial == ts {
+				if err := verifyEventRow(t, intent, id, known); err == nil {
+					return nil
+				}
+				resolvedRootKey, err = w.resolveCorrectionKeyFromTrial(ctx, trial, t, intent.RootSource, intent.Metric, intent.RootImportKey)
+				if err != nil {
+					return err
+				}
+			}
 			return verifyEventRowWithRoot(t, intent, id, known, resolvedRootKey)
 		}
-		resolvedRootKey := intent.RootImportKey
 		rootID, err := t.MeasurementByKey(intent.RootSource, intent.Metric, resolvedRootKey)
 		if err != nil {
 			return err
 		}
-		if rootID == 0 {
-			resolvedRootKey, err = w.resolveCorrectionKey(intent.RootSource, t, intent.Metric, intent.RootImportKey)
+		if rootID == 0 && trial == ts {
+			resolvedRootKey, err = w.resolveCorrectionKeyFromTrial(ctx, trial, t, intent.RootSource, intent.Metric, intent.RootImportKey)
 			if err != nil {
 				return err
 			}
@@ -463,16 +486,23 @@ func (w *Workspace) replayOneEventCorrection(ctx context.Context, ts *core.Store
 	return wrote, err
 }
 
-func (w *Workspace) applyCorrectionValue(ctx context.Context, ts *core.Store, actor, source, metric, key string, value *float64) (bool, error) {
+func (w *Workspace) applyCorrectionValue(ctx context.Context, trial, ts *core.Store, actor, source, metric, key string, value *float64) (bool, error) {
 	wrote := false
 	err := ts.Do(ctx, actor, func(t *core.Tx) error {
 		resolvedKey := key
+		var err error
+		if trial != ts {
+			resolvedKey, err = w.resolveCorrectionKeyFromTrial(ctx, trial, t, source, metric, key)
+			if err != nil {
+				return err
+			}
+		}
 		id, err := t.MeasurementByKey(source, metric, resolvedKey)
 		if err != nil {
 			return err
 		}
-		if id == 0 {
-			resolvedKey, err = w.resolveCorrectionKey(source, t, metric, key)
+		if id == 0 && trial == ts {
+			resolvedKey, err = w.resolveCorrectionKeyFromTrial(ctx, trial, t, source, metric, key)
 			if err != nil {
 				return err
 			}
