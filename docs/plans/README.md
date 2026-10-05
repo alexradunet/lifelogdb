@@ -9,8 +9,8 @@ source), and live in git history
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
 | [029](029-google-takeout.md) | Google Takeout: places and daily health totals, with no schema change | P1 | L | Import safety below before the real apply/replay | TODO |
-| [034](034-browser-write-origin-protection.md) | Reject cross-origin browser writes | P1 | S | — | TODO |
-| [035](035-correction-value-validation.md) | Enforce mood and habit domains on corrections | P1 | S | — | TODO |
+| [034](034-browser-write-origin-protection.md) | Reject cross-origin browser writes | P1 | S | — | IN REVIEW (owner) |
+| [035](035-correction-value-validation.md) | Enforce mood and habit domains on corrections | P1 | S | — | IN REVIEW (owner) |
 | [036](036-unique-find-actions.md) | Give page lookup and import lookup distinct actions | P1 | S | — | TODO |
 | [037](037-import-correction-lineage.md) | Carry repeated imported corrections through replay | P1 | M | 035 | TODO |
 | [038](038-reading-source-evidence.md) | Check complete reading values and source units | P1 | M | — | TODO |
@@ -20,7 +20,7 @@ source), and live in git history
 | [042](042-bounded-heif-metadata.md) | Parse HEIF item locations correctly and within bounds | P1 | M | — | TODO |
 | [043](043-canonical-reading-keys.md) | Use canonical metric identity in derived reading keys | P1 | L | 037, 038, 041, 044 | TODO |
 | [044](044-source-filename-identity.md) | Resolve normalized source names to their physical filenames | P2 | M | — | TODO |
-| [045](045-literal-sqlite-paths.md) | Open literal filenames through escaped SQLite URIs | P1 | S | — | TODO |
+| [045](045-literal-sqlite-paths.md) | Open literal filenames through escaped SQLite URIs | P1 | S | — | IN REVIEW (owner) |
 | [046](046-exclusive-database-init.md) | Reserve new database paths exclusively before initialization | P1 | S | 045 | TODO |
 | [047](047-file-promotion-day.md) | Fill the missing day when an embed ghost becomes a file | P2 | S | — | TODO |
 
