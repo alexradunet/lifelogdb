@@ -12,16 +12,17 @@ type numberToken struct {
 	approximate bool
 }
 
-func checkReadingSourceEvidence(file, source, quote, numText, unit string, marker bool) error {
-	matches, approximate := matchingNumberTokens(quote, numText)
+func checkReadingSourceEvidence(file, source, sourceCollapsed, quote string, quotePos int, numText, unit string, marker bool) error {
+	matches, approximate := matchingNumberTokens(quote, numText, sourceCollapsed, quotePos)
+	tableValue := tableValueEvidence(file, source, sourceCollapsed, quote, quotePos, numText)
 	if marker {
-		if len(matches) == 0 {
+		if len(matches) == 0 && !tableValue {
 			if quoteHasMeasurementNumber(quote) {
 				return refuse("the result word marker %s is not in the quote; a numeric quantity in the quote is incompatible with the result-word exception", numText)
 			}
 			return nil
 		}
-	} else if len(matches) == 0 {
+	} else if len(matches) == 0 && !tableValue {
 		if approximate {
 			return refuse("the value %s is not in the quote exactly as written; censored, approximate, qualitative or converted values go in kept_as_text", numText)
 		}
@@ -30,32 +31,58 @@ func checkReadingSourceEvidence(file, source, quote, numText, unit string, marke
 	if unit == "" {
 		return nil
 	}
-	if inlineUnitEvidence(quote, matches, unit) {
+	if inlineUnitEvidence(sourceCollapsed, quotePos, matches, unit) {
 		return nil
 	}
-	if ok := tableUnitEvidence(file, source, quote, numText, unit); ok {
+	if ok, conflict := tableUnitEvidence(file, source, sourceCollapsed, quote, quotePos, numText, unit); ok {
 		return nil
+	} else if conflict != "" {
+		return refuse("the source evidence has unit %q at value %s, not %q; nothing is converted or relabeled", conflict, numText, unit)
 	}
-	if got := inlineUnitCandidate(quote, matches); got != "" && got != unit {
+	if got := inlineUnitCandidate(sourceCollapsed, quotePos, matches); got != "" && got != unit {
 		return refuse("the source evidence has unit %q at value %s, not %q; nothing is converted or relabeled", got, numText, unit)
 	}
 	return refuse("the unit %q has no unambiguous source evidence at value %s; ask the owner or keep the source text instead", unit, numText)
 }
 
-func matchingNumberTokens(quote, numText string) ([]numberToken, bool) {
+func matchingNumberTokens(quote, numText, context string, base int) ([]numberToken, bool) {
 	var matches []numberToken
 	approximate := false
 	for _, tok := range numberTokens(quote) {
 		if tok.text != numText {
 			continue
 		}
-		if tok.approximate {
+		if base >= 0 {
+			sourceTok, ok := sourceNumberTokenAt(context, base+tok.start)
+			if !ok || sourceTok.start != base+tok.start || sourceTok.text != numText {
+				if ok && sourceTok.approximate && sourceTok.text == numText {
+					approximate = true
+				}
+				continue
+			}
+			if sourceTok.approximate {
+				approximate = true
+				continue
+			}
+		} else if tok.approximate {
 			approximate = true
 			continue
 		}
 		matches = append(matches, tok)
 	}
 	return matches, approximate
+}
+
+func sourceNumberTokenAt(s string, pos int) (numberToken, bool) {
+	for _, tok := range numberTokens(s) {
+		if pos >= tok.start && pos < tok.end {
+			return tok, true
+		}
+		if tok.start > pos {
+			break
+		}
+	}
+	return numberToken{}, false
 }
 
 func quoteHasMeasurementNumber(quote string) bool {
@@ -156,7 +183,8 @@ func approximateNumberPrefix(s string, start int) bool {
 	if strings.ContainsRune("<>≤≥~≈≃≲≳±", r) {
 		return true
 	}
-	prefix := strings.ToLower(strings.TrimSpace(s[max(0, j-12):j]))
+	prefix := strings.ToLower(strings.TrimSpace(s[max(0, j-24):j]))
+	prefix = strings.TrimRight(prefix, ".:")
 	return strings.HasSuffix(prefix, "about") || strings.HasSuffix(prefix, "approx") || strings.HasSuffix(prefix, "approximately")
 }
 
@@ -174,9 +202,10 @@ func isDateYearToken(s string, tok numberToken) bool {
 	return len(tok.text) == 4 && tok.end+6 <= len(s) && s[tok.end] == '-' && isASCIIDigit(s[tok.end+1]) && isASCIIDigit(s[tok.end+2]) && s[tok.end+3] == '-' && isASCIIDigit(s[tok.end+4]) && isASCIIDigit(s[tok.end+5])
 }
 
-func inlineUnitEvidence(quote string, matches []numberToken, unit string) bool {
+func inlineUnitEvidence(context string, base int, matches []numberToken, unit string) bool {
 	for _, tok := range matches {
-		if hasUnitAt(quote[tok.end:], unit) {
+		end := base + tok.end
+		if end >= 0 && end <= len(context) && hasUnitAt(context[end:], unit) {
 			return true
 		}
 	}
@@ -195,9 +224,13 @@ func hasUnitAt(after, unit string) bool {
 	return next == 0 || unicode.IsSpace(next) || strings.ContainsRune("|,;.)]}", next)
 }
 
-func inlineUnitCandidate(quote string, matches []numberToken) string {
+func inlineUnitCandidate(context string, base int, matches []numberToken) string {
 	for _, tok := range matches {
-		after := strings.TrimLeftFunc(quote[tok.end:], unicode.IsSpace)
+		end := base + tok.end
+		if end < 0 || end > len(context) {
+			continue
+		}
+		after := strings.TrimLeftFunc(context[end:], unicode.IsSpace)
 		if after == "" {
 			continue
 		}
@@ -216,14 +249,35 @@ func inlineUnitCandidate(quote string, matches []numberToken) string {
 	return ""
 }
 
-func tableUnitEvidence(file, source, quote, numText, unit string) bool {
-	for _, table := range sourceTables(file, source) {
-		if len(table) < 2 {
+type evidenceTable struct {
+	rows         [][]string
+	starts, ends []int
+}
+
+func tableValueEvidence(file, source, sourceCollapsed, quote string, quotePos int, numText string) bool {
+	for _, table := range sourceTables(file, source, sourceCollapsed) {
+		for rowIndex, row := range table.rows[1:] {
+			absoluteRow := rowIndex + 1
+			if !rowAtQuote(table, absoluteRow, quotePos) || !quoteCoversRow(quote, row) {
+				continue
+			}
+			if len(numericColumns(row, numText)) == 1 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func tableUnitEvidence(file, source, sourceCollapsed, quote string, quotePos int, numText, unit string) (bool, string) {
+	for _, table := range sourceTables(file, source, sourceCollapsed) {
+		if len(table.rows) < 2 {
 			continue
 		}
-		head := table[0]
-		for _, row := range table[1:] {
-			if !quoteCoversRow(quote, row) {
+		head := table.rows[0]
+		for rowIndex, row := range table.rows[1:] {
+			absoluteRow := rowIndex + 1
+			if !rowAtQuote(table, absoluteRow, quotePos) || !quoteCoversRow(quote, row) {
 				continue
 			}
 			cols := numericColumns(row, numText)
@@ -233,38 +287,122 @@ func tableUnitEvidence(file, source, quote, numText, unit string) bool {
 			col := cols[0]
 			if col < len(row) {
 				cell := collapse(row[col])
-				matches, _ := matchingNumberTokens(cell, numText)
-				if inlineUnitEvidence(cell, matches, unit) {
-					return true
+				matches, _ := matchingNumberTokens(cell, numText, cell, 0)
+				if inlineUnitEvidence(cell, 0, matches, unit) {
+					return true, ""
+				}
+				if got := inlineUnitCandidate(cell, 0, matches); got != "" && got != unit {
+					return false, got
 				}
 			}
-			if col < len(head) && headerHasUnit(head[col], unit) {
-				return true
+			if col < len(head) {
+				if headerHasExactUnit(head[col], unit) {
+					return true, ""
+				}
+				if got := headerUnitConflict(head[col], unit); got != "" {
+					return false, got
+				}
 			}
-			if rowHasSeparateUnit(row, col, unit) {
-				return true
+			if ok, conflict := rowHasSeparateUnit(head, row, col, unit); ok || conflict != "" {
+				return ok, conflict
 			}
 		}
 	}
-	return false
+	return false, ""
 }
 
-func sourceTables(file, source string) [][][]string {
+func rowAtQuote(table evidenceTable, row int, quotePos int) bool {
+	return row < len(table.starts) && quotePos >= table.starts[row] && quotePos < table.ends[row]
+}
+
+func sourceTables(file, source, sourceCollapsed string) []evidenceTable {
 	switch strings.ToLower(filepath.Ext(file)) {
 	case ".csv":
 		rows, err := csvRows(source)
 		if err != nil {
 			return nil
 		}
-		return [][][]string{rows}
+		return []evidenceTable{withRowPositions(rows, source, sourceCollapsed)}
 	case ".md":
 		body := source
 		if _, rest, ok := frontmatter(source); ok {
 			body = rest
 		}
-		return markdownTables(body)
+		return markdownEvidenceTables(markdownTables(body), source, sourceCollapsed)
 	}
 	return nil
+}
+
+func withRowPositions(rows [][]string, source, sourceCollapsed string) evidenceTable {
+	t := evidenceTable{rows: rows, starts: make([]int, len(rows)), ends: make([]int, len(rows))}
+	cursor := 0
+	for i, line := range strings.Split(source, "\n") {
+		if i >= len(rows) {
+			break
+		}
+		line = collapse(line)
+		start := strings.Index(sourceCollapsed[cursor:], line)
+		if start < 0 {
+			continue
+		}
+		start += cursor
+		t.starts[i], t.ends[i] = start, start+len(line)
+		cursor = t.ends[i]
+	}
+	return t
+}
+
+func markdownEvidenceTables(tables [][][]string, source, sourceCollapsed string) []evidenceTable {
+	lines := strings.Split(source, "\n")
+	cursor := 0
+	lineIndex := 0
+	var out []evidenceTable
+	for _, rows := range tables {
+		t := evidenceTable{rows: rows, starts: make([]int, len(rows)), ends: make([]int, len(rows))}
+		for i, row := range rows {
+			for lineIndex < len(lines) {
+				line := strings.TrimSpace(lines[lineIndex])
+				lineIndex++
+				if !strings.Contains(line, "|") || markdownSeparatorLine(line) || !lineCoversCells(line, row) {
+					continue
+				}
+				collapsed := collapse(line)
+				start := strings.Index(sourceCollapsed[cursor:], collapsed)
+				if start >= 0 {
+					start += cursor
+					t.starts[i], t.ends[i] = start, start+len(collapsed)
+					cursor = t.ends[i]
+				}
+				break
+			}
+		}
+		out = append(out, t)
+	}
+	return out
+}
+
+func markdownSeparatorLine(line string) bool {
+	line = strings.Trim(line, " |")
+	if line == "" {
+		return false
+	}
+	for _, r := range line {
+		if r != '-' && r != ':' && r != '|' && !unicode.IsSpace(r) {
+			return false
+		}
+	}
+	return strings.Contains(line, "-")
+}
+
+func lineCoversCells(line string, row []string) bool {
+	line = collapse(line)
+	for _, cell := range row {
+		cell = collapse(cell)
+		if cell != "" && !strings.Contains(line, cell) {
+			return false
+		}
+	}
+	return true
 }
 
 func quoteCoversRow(quote string, row []string) bool {
@@ -283,7 +421,8 @@ func quoteCoversRow(quote string, row []string) bool {
 func numericColumns(row []string, numText string) []int {
 	var cols []int
 	for i, cell := range row {
-		matches, _ := matchingNumberTokens(collapse(cell), numText)
+		cell = collapse(cell)
+		matches, _ := matchingNumberTokens(cell, numText, cell, 0)
 		if len(matches) > 0 {
 			cols = append(cols, i)
 		}
@@ -291,19 +430,79 @@ func numericColumns(row []string, numText string) []int {
 	return cols
 }
 
-func headerHasUnit(header, unit string) bool {
-	return wholeIndex(collapse(header), unit) >= 0
+func headerHasExactUnit(header, unit string) bool {
+	return explicitUnitIndex(collapse(header), unit) >= 0
 }
 
-func rowHasSeparateUnit(row []string, valueCol int, unit string) bool {
-	count := 0
-	for i, cell := range row {
-		if i == valueCol {
-			continue
-		}
-		if collapse(cell) == unit {
-			count++
+func headerUnitConflict(header, unit string) string {
+	header = collapse(header)
+	if explicitUnitIndex(header, unit) >= 0 {
+		return ""
+	}
+	for _, candidate := range unitLikeTokens(header) {
+		if candidate != unit {
+			return candidate
 		}
 	}
-	return count == 1
+	return ""
+}
+
+func explicitUnitIndex(s, unit string) int {
+	if unit == "" {
+		return -1
+	}
+	for from := 0; from <= len(s)-len(unit); {
+		i := strings.Index(s[from:], unit)
+		if i < 0 {
+			return -1
+		}
+		i += from
+		before, after := rune(0), rune(0)
+		if i > 0 {
+			before = lastRune(s[:i])
+		}
+		if j := i + len(unit); j < len(s) {
+			after = firstRune(s[j:])
+		}
+		if !isUnitChar(before) && !isUnitChar(after) {
+			return i
+		}
+		from = i + 1
+	}
+	return -1
+}
+
+func isUnitChar(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsNumber(r) || strings.ContainsRune("/%µμ.", r)
+}
+
+func unitLikeTokens(s string) []string {
+	var out []string
+	for _, field := range strings.Fields(s) {
+		field = strings.Trim(field, "()[]{}:;,")
+		if strings.ContainsAny(field, "/%µμ") {
+			out = append(out, field)
+		}
+	}
+	return out
+}
+
+func rowHasSeparateUnit(head, row []string, valueCol int, unit string) (bool, string) {
+	for _, unitCol := range []int{valueCol - 1, valueCol + 1} {
+		if unitCol < 0 || unitCol >= len(row) || unitCol >= len(head) {
+			continue
+		}
+		h := strings.ToLower(collapse(head[unitCol]))
+		if h != "unit" && h != "units" {
+			continue
+		}
+		got := collapse(row[unitCol])
+		if got == unit {
+			return true, ""
+		}
+		if got != "" {
+			return false, got
+		}
+	}
+	return false, ""
 }

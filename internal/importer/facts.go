@@ -433,7 +433,7 @@ func (w *Workspace) checkStatic(f *Facts, source string, rules *Rules, approved 
 				continue
 			}
 			marker := m.Unit == "" && (num == 0 || num == 1)
-			if err := checkReadingSourceEvidence(f.File, source, q, numText, unit, marker); err != nil {
+			if err := checkReadingSourceEvidence(f.File, source, src, q, pos[i], numText, unit, marker); err != nil {
 				bad(i, "%v", err)
 			}
 			if r.With != "" {
