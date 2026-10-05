@@ -18,7 +18,7 @@ source), and live in git history
 | [040](040-ad-hoc-query-isolation.md) | Keep ad-hoc SQL read-only and isolated from pooled readers | P1 | M | 045 | IN REVIEW (owner) |
 | [041](041-durable-import-corrections.md) | Make database corrections and replay intent recoverable | P1 | L | 035, 037 | IN REVIEW (owner) |
 | [042](042-bounded-heif-metadata.md) | Parse HEIF item locations correctly and within bounds | P1 | M | — | IN REVIEW (owner) |
-| [043](043-canonical-reading-keys.md) | Use canonical metric identity in derived reading keys | P1 | L | 037, 038, 041, 044 | TODO |
+| [043](043-canonical-reading-keys.md) | Use canonical metric identity in derived reading keys | P1 | L | 037, 038, 041, 044 | IN REVIEW (owner) |
 | [044](044-source-filename-identity.md) | Resolve normalized source names to their physical filenames | P2 | M | — | IN REVIEW (owner) |
 | [045](045-literal-sqlite-paths.md) | Open literal filenames through escaped SQLite URIs | P1 | S | — | IN REVIEW (owner) |
 | [046](046-exclusive-database-init.md) | Reserve new database paths exclusively before initialization | P1 | S | 045 | IN REVIEW (owner) |

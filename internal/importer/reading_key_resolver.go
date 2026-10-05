@@ -336,7 +336,9 @@ type correctionProof struct {
 }
 
 type correctionProofEntry struct {
-	file       string
+	// Bind the index to this checked snapshot, never to a later read of the facts file.
+	facts      *Facts
+	positions  []int
 	writeIndex int
 }
 
@@ -365,7 +367,7 @@ func (w *Workspace) buildCorrectionProof(ctx context.Context, trial, target *cor
 		if err != nil {
 			return nil, err
 		}
-		entry := correctionProofEntry{file: parsed.file, writeIndex: -1}
+		entry := correctionProofEntry{facts: f, positions: pos, writeIndex: -1}
 		err = trial.DryRun(ctx, root.source, func(t *core.Tx) error {
 			resolved, err := resolveReadingKeys(t, root.source, f, pos)
 			if err != nil {
@@ -398,17 +400,13 @@ func (w *Workspace) resolveCorrectionKeyFromProof(proof *correctionProof, target
 	if !ok {
 		return "", refuse("%s: correction root %s for %s has no validated original trial reading", parsed.file, key, metric)
 	}
-	f, pos, _, err := w.prepare(entry.file)
-	if err != nil {
-		return "", err
-	}
-	resolvedTarget, err := resolveReadingKeys(target, source, f, pos)
+	resolvedTarget, err := resolveReadingKeys(target, source, entry.facts, entry.positions)
 	if err != nil {
 		return "", err
 	}
 	mapped := resolvedTarget.byWrite[entry.writeIndex]
 	if mapped == "" {
-		return "", refuse("%s: correction root %s did not map to a replayed reading", entry.file, key)
+		return "", refuse("%s: correction root %s did not map to a replayed reading", entry.facts.File, key)
 	}
 	return mapped, nil
 }
