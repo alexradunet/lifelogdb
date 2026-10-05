@@ -39,6 +39,7 @@ An import ([importing with a model](docs/guides/importing.md)) works in a worksp
 trial database inside it:
 
 ```
+lifelog import takeout inventory ~/takeout-x                                      # privacy-safe Timeline/Fit/Fitbit inventory
 lifelog import setup --workspace ~/import/Notebook.lifelog --from ~/life/life.db   # trial.db: a copy
 lifelog mcp --workspace ~/import/Notebook.lifelog --agent lmstudio                  # the model's tools
 lifelog do import-find text="Sam" --workspace ~/import/Notebook.lifelog             # import lookup; page lookup stays find

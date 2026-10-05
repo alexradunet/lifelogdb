@@ -190,6 +190,51 @@ func assertSnapshotSentinel(t *testing.T, p string) {
 	}
 }
 
+func TestImportTakeoutInventoryDoesNotNeedDatabaseOrLeakValues(t *testing.T) {
+	o, err := parse([]string{"import", "takeout", "inventory", filepath.Join("..", "..", "internal", "takeout", "testdata", "phase-a")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := captureStdout(t, func() {
+		if err := run(o); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if !strings.Contains(out, "Timeline Semantic Visits") || !strings.Contains(out, "Fitbit Steps") {
+		t.Fatalf("inventory output missed expected public families:\n%s", out)
+	}
+	if strings.Contains(out, "PRIVATE_MARKER") {
+		t.Fatalf("inventory output leaked a synthetic private marker:\n%s", out)
+	}
+}
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	old := os.Stdout
+	f, err := os.CreateTemp(t.TempDir(), "stdout-*.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed := false
+	os.Stdout = f
+	defer func() {
+		os.Stdout = old
+		if !closed {
+			f.Close()
+		}
+	}()
+	fn()
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	closed = true
+	b, err := os.ReadFile(f.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
 func TestSnapshotRefusesAGitWorkTree(t *testing.T) {
 	live := filepath.Join(t.TempDir(), "life.db")
 	if err := db.Init(live); err != nil {

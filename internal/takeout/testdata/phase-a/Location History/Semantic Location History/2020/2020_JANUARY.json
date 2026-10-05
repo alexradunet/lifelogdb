@@ -1,0 +1,6 @@
+{
+  "timelineObjects": [
+    {"placeVisit": {"location": {"name": "PRIVATE_MARKER Timeline Cafe", "address": "PRIVATE_MARKER Street", "placeId": "PRIVATE_MARKER_PLACE"}, "duration": {"startTimestamp": "2020-01-10T10:00:00Z", "endTimestamp": "2020-01-10T10:30:00Z"}}},
+    {"activitySegment": {"activityType": "PRIVATE_MARKER walking", "duration": {"startTimestamp": "2020-01-11T10:00:00Z", "endTimestamp": "2020-01-11T10:30:00Z"}}}
+  ]
+}

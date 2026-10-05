@@ -26,6 +26,7 @@ import (
 	"lifelog/internal/db"
 	"lifelog/internal/importer"
 	"lifelog/internal/mcp"
+	"lifelog/internal/takeout"
 )
 
 const version = "0.1.0"
@@ -67,6 +68,7 @@ Import (docs/guides/importing.md), with --workspace <source>.lifelog:
   lifelog import replay --to PATH         the real run: the whole workspace into another database,
                                           rehearsed on a copy first (nothing written unless it is clean)
   lifelog import replay --to PATH --dry-run   the rehearsal alone: every failure, nothing written
+  lifelog import takeout inventory FOLDER privacy-safe Timeline/Fit/Fitbit inventory (prints JSON, writes nothing)
   lifelog mcp --workspace DIR             the MCP server with the import tools added
 
 Global flags, anywhere on the line:
@@ -155,6 +157,9 @@ func run(o opts) error {
 	}
 	if cmd == "snapshot" {
 		return snapshot(o)
+	}
+	if cmd == "import" && len(args) > 0 && args[0] == "takeout" {
+		return importTakeout(o, args[1:])
 	}
 
 	var ws *importer.Workspace
@@ -780,6 +785,17 @@ func importOwner(o opts, ws *importer.Workspace, args []string) error {
 }
 
 // importCommand is the import's shortcuts; every other operation is `lifelog do <name> field=value`.
+func importTakeout(_ opts, args []string) error {
+	if len(args) == 2 && args[0] == "inventory" {
+		report, err := takeout.Inventory(args[1])
+		if err != nil {
+			return err
+		}
+		return printJSON(report)
+	}
+	return errors.New("import takeout inventory FOLDER")
+}
+
 func importCommand(o opts, c *client.Client, args []string) error {
 	if len(args) == 0 {
 		args = []string{"status"}
