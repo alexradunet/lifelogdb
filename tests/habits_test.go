@@ -120,6 +120,14 @@ func habits(s *S) {
 		again = again || r[0] == "vitamin_d"
 	}
 	s.K("...and not the habit's check-in again as a reading", !again, tab(rows))
+	c.must("UPDATE entities SET deleted_at="+NOW+" WHERE id=?", vd)
+	got, rows = pairs("2026-10-01")
+	s.K("cookbook/day-view hides tombstoned habits", !contains(got, "habit|vitamin_d: done"), tab(rows))
+	got, rows = pairs("2026-09-30")
+	s.K("cookbook/day-view retains tombstoned historical readings outside periods", contains(got, "vitamin_d|1.0 "), tab(rows))
+	c.must("UPDATE entities SET deleted_at=NULL WHERE id=?", vd)
+	got, rows = pairs("2026-10-01")
+	s.K("cookbook/day-view revival restores habits", contains(got, "habit|vitamin_d: done"), tab(rows))
 	got, rows = pairs("2026-09-30")
 	listed := false
 	for _, r := range rows {

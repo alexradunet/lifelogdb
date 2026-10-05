@@ -408,7 +408,7 @@ func TestABatchReportGroupsThePhotosNearNoPlace(t *testing.T) {
 	u := func(lat, lon float64) map[string]any {
 		return map[string]any{"lat": lat, "lon": lon, "map": core.MapLink(lat, lon)}
 	}
-	b := summarise([]keptFile{
+	b, err := summarise([]keptFile{
 		{Path: "a.jpg", Result: map[string]any{"day": "2019-06-04", "unmatched": u(41.1496, -8.6110)}},
 		{Path: "b.jpg", Result: map[string]any{"day": "2019-06-05", "unmatched": u(41.1510, -8.6100)}},
 		{Path: "c.jpg", Result: map[string]any{"day": "2019-06-05", "unmatched": u(38.7, -9.1)}},
@@ -416,6 +416,9 @@ func TestABatchReportGroupsThePhotosNearNoPlace(t *testing.T) {
 		{Path: "e.jpg", Result: map[string]any{"day": "2019-06-03", "place": "Home"}},
 		{Path: "f.jpg", Error: "422: refused"},
 	}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(b.Unmatched) != 2 || b.Unmatched[0].Count != 2 || strings.Join(b.Unmatched[0].Days, ",") != "2019-06-04,2019-06-05" ||
 		!strings.Contains(b.Unmatched[0].NameWith, `"a.jpg"`) {
 		t.Errorf("groups: %+v", b.Unmatched)
@@ -638,9 +641,18 @@ func TestSnapshotPhysicalDestination(t *testing.T) {
 func TestCommandCancellation(t *testing.T) {
 	for _, args := range [][]string{{"get", "blocked"}, {"capture", "synthetic"}, {"import", "status"}, {"actions"}} {
 		t.Run(strings.Join(args, "-"), func(t *testing.T) {
-			started, stopped := make(chan struct{}), make(chan struct{})
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { close(started); <-r.Context().Done(); close(stopped) }))
+			started, stopped, release := make(chan struct{}), make(chan struct{}), make(chan struct{})
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				close(started)
+				select {
+				case <-r.Context().Done():
+					close(stopped)
+				case <-release:
+				}
+			}))
 			defer srv.Close()
+			// This independent escape must run before server shutdown even on Fatal.
+			defer close(release)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			done := make(chan error, 1)
@@ -656,8 +668,13 @@ func TestCommandCancellation(t *testing.T) {
 			case <-time.After(10 * time.Second):
 				t.Fatal("handler not canceled")
 			}
-			if err := <-done; !errors.Is(err, context.Canceled) {
-				t.Fatal(err)
+			select {
+			case err := <-done:
+				if !errors.Is(err, context.Canceled) {
+					t.Fatal(err)
+				}
+			case <-time.After(10 * time.Second):
+				t.Fatal("command did not return after cancellation")
 			}
 		})
 	}

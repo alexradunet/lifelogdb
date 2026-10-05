@@ -9,6 +9,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -72,6 +73,8 @@ func fileForm(r *http.Request) (core.FileIn, bool, error) {
 		return bad("the form: " + err.Error())
 	}
 	vals := map[string]string{}
+	// Only accepted, bounded transcript text is retained for browser error recovery.
+	r.PostForm = make(url.Values)
 	var sum, typ string
 	var picture, given []byte
 	var meta photo.Meta
@@ -118,6 +121,9 @@ func fileForm(r *http.Request) (core.FileIn, bool, error) {
 				n = int64(len(b))
 				if err == nil && n <= maxField && textBytes+len(b) <= maxMultipartText {
 					vals[key] = string(b)
+					if key == "body" {
+						r.PostForm.Set("body", vals[key])
+					}
 				}
 			} else {
 				// Unknown values still consume the budget, but neither names nor values are retained.

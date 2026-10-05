@@ -2,7 +2,9 @@ package takeout
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -323,5 +325,95 @@ func TestInventoryPopulatedContainersAndExerciseOverlap(t *testing.T) {
 	}
 	if strings.Contains(r.String(), "PRIVATE_MARKER") {
 		t.Fatal("private marker leaked")
+	}
+}
+
+func TestInventorySymlinkRoot(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "Fitbit/Sleep/sleep.json", `{"sleep":[]}`)
+	link := filepath.Join(t.TempDir(), "PRIVATE_MARKER")
+	if err := os.Symlink(root, link); err != nil {
+		t.Skipf("platform or privilege does not support directory symlinks: %v", err)
+	}
+	direct, err := Inventory(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	linked, err := Inventory(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if direct.String() != linked.String() {
+		t.Fatal("symlink root differs from direct root")
+	}
+}
+
+// countedContext cancels at a deterministic cooperative checkpoint, without timers.
+type countedContext struct {
+	context.Context
+	calls, limit int
+	cause        error
+}
+
+func (c *countedContext) Err() error {
+	c.calls++
+	if c.calls >= c.limit {
+		return c.cause
+	}
+	return nil
+}
+
+func TestInventoryContextCancellation(t *testing.T) {
+	for _, cause := range []error{context.Canceled, context.DeadlineExceeded} {
+		t.Run(cause.Error(), func(t *testing.T) {
+			for _, kind := range []string{"traversal", "json", "csv"} {
+				t.Run(kind, func(t *testing.T) {
+					root := t.TempDir()
+					switch kind {
+					case "traversal":
+						for n := 0; n < 100; n++ {
+							writeFile(t, root, fmt.Sprintf("Other/%03d.txt", n), "PRIVATE_MARKER")
+						}
+					case "json":
+						writeFile(t, root, "Fitbit/Sleep/sleep.json", `{"sleep":[{"startTime":"2020-01-01"},{"startTime":"2020-01-02"}]}`)
+					case "csv":
+						writeFile(t, root, "Fit/Daily activity metrics/data.csv", `Date,Step count
+2020-01-01,1
+2020-01-02,2
+`)
+					}
+					ctx := &countedContext{Context: context.Background(), limit: 10, cause: cause}
+					report, err := InventoryContext(ctx, root)
+					if report != nil || !errors.Is(err, cause) {
+						t.Fatalf("report=%v error=%v checkpoints=%d", report, err, ctx.calls)
+					}
+					if strings.Contains(err.Error(), root) || strings.Contains(err.Error(), "PRIVATE_MARKER") {
+						t.Fatal("private error detail")
+					}
+				})
+			}
+		})
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	report, err := InventoryContext(ctx, "PRIVATE_MARKER_missing")
+	if report != nil || !errors.Is(err, context.Canceled) {
+		t.Fatalf("pre-canceled: %v %v", report, err)
+	}
+}
+
+func TestInventoryDoesNotFollowDescendantSymlinks(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	writeFile(t, outside, "sleep.json", `{"sleep":[]}`)
+	if err := os.Symlink(outside, filepath.Join(root, "Fitbit")); err != nil {
+		t.Skipf("platform or privilege does not support directory symlinks: %v", err)
+	}
+	r, err := Inventory(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Families) != 0 || len(r.TopFolders) != 0 {
+		t.Fatal("followed descendant symlink")
 	}
 }

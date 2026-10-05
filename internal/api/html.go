@@ -35,8 +35,13 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 	"weekday":  weekday,
 	"form":     formOf,
 	"group":    group,
-	"num":      func(v any) string { return fmt.Sprint(v) },
-	"pathesc":  url.PathEscape,
+	"num": func(v any) string {
+		if v == nil {
+			return ""
+		}
+		return fmt.Sprint(v)
+	},
+	"pathesc": url.PathEscape,
 }).ParseFS(views, "html/*.html"))
 
 // viewOf names the template that shows an entity of a class; a class without one is shown by "generic".
@@ -260,8 +265,19 @@ func chart(from, to string, readings any) template.HTML {
 	list, _ := readings.([]any)
 	f, err1 := time.Parse(time.DateOnly, from)
 	t, err2 := time.Parse(time.DateOnly, to)
-	if len(list) == 0 || err1 != nil || err2 != nil || !t.After(f) {
+	if len(list) == 0 || err1 != nil || err2 != nil || t.Before(f) {
 		return ""
+	}
+	// The all-readings sentinel selects the entire query range, but plotting starts
+	// at the first reading so modern observations remain distinguishable.
+	if from == "0001-01-01" {
+		for _, it := range list {
+			m, _ := it.(map[string]any)
+			day, _ := m["day"].(string)
+			if d, err := time.Parse(time.DateOnly, day); err == nil && (from == "0001-01-01" || d.Before(f)) {
+				f, from = d, day
+			}
+		}
 	}
 	type pt struct {
 		day   string
@@ -284,7 +300,12 @@ func chart(from, to string, readings any) template.HTML {
 		if i == 0 || v > hi {
 			hi = v
 		}
-		pts = append(pts, pt{day, d.Sub(f).Hours() / t.Sub(f).Hours(), v})
+		// Unix seconds cover the full supported date range without duration saturation.
+		x := 0.5
+		if t.After(f) {
+			x = float64(d.Unix()-f.Unix()) / float64(t.Unix()-f.Unix())
+		}
+		pts = append(pts, pt{day, x, v})
 	}
 	const w, h, pad, left, bottom = 640.0, 200.0, 14.0, 48.0, 22.0
 	span := hi - lo

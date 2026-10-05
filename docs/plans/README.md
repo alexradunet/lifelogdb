@@ -4,7 +4,7 @@ A plan is a dated record ([how a change happens](../process.md)): a change large
 written as a self-contained brief with done criteria. It cites the docs as they were at the commit it names. One file
 per plan, `NNN-short-slug.md`, numbered on from the last: plans up to 028, 030, 031 and 033 are done, 032 rejected (the owner keeps the few photos chosen for a day, from any
 source), and live in git history
-(`git log -- docs/plans`), so the next one is **071**.
+(`git log -- docs/plans`), so the next one is **072**.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
@@ -46,9 +46,23 @@ source), and live in git history
 | [068](068-import-setup-exit-status.md) | Fail setup when trial integrity is not clean | P2 | S | — | IN REVIEW (owner) |
 | [069](069-rehearsal-preflight-reporting.md) | Collect per-file rehearsal identity failures | P3 | M | 043; run after 056/066 | IN REVIEW (owner) |
 | [070](070-trial-capture-pilot.md) | Owner-run disposable capture pilot | P3 | S brief | Capture fixes and owner choice | BLOCKED (owner pilot/path/client approval) |
+| [071](071-audit-followups.md) | Integrate the 22 residual audit follow-ups | P1/P2 | L aggregate | Existing import/surface behavior retained | IN REVIEW (owner) |
 
 Status values: TODO | IN PROGRESS | IN REVIEW (owner) | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale). An executor sets IN REVIEW (owner); the owner accepts or rejects. A plan that is DONE or REJECTED is deleted; git is the log.
+
+## Residual audit handoff (2026-10-05, based on `e1d7959`)
+
+[071](071-audit-followups.md) records the 22 owner-authorized follow-ups, their implementation/test map,
+measured synthetic performance and evidence limits. Nine preserved component patches were assembled, followed by
+serialized CLI work and final integration review. All delivery remains unstaged on the isolated integration branch;
+no commit, push or merge was requested or performed. The failed initial workflow/recovery and harness-staged
+component artifact snapshots are recorded honestly in 071; integration's index is empty.
+
+The candidate is **IN REVIEW (owner), not DONE**. Existing historical briefs/statuses remain unchanged.
+029 B/C and 070 remain owner-gated. No real data, canonical replay/rebuild, freeze or migrations were performed.
+Schema/modules and plan-063 authority behavior are preserved. Final validation evidence is in the integration
+artifact; owner acceptance and any publication or real-data operation are separate decisions.
 
 ## Implementation handoff (2026-10-05, based on `0460379`)
 

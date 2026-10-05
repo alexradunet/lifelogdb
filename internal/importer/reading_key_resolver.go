@@ -29,6 +29,17 @@ func resolveReadingKeysWithLoader(source string, f *Facts, pos []int, load readi
 	if err != nil {
 		return resolvedReadingKeys{}, err
 	}
+	// Reject colliding timed identities before looking up roots or applying any writes.
+	seenTimed := map[string]bool{}
+	for _, id := range ids {
+		if id.takenAt == "" {
+			continue
+		}
+		if seenTimed[id.canonicalKey] {
+			return resolvedReadingKeys{}, refuse("%s: repeated timed reading identity %s on %s at %s", f.File, id.metricKey, id.day, id.takenAt)
+		}
+		seenTimed[id.canonicalKey] = true
+	}
 	res := resolvedReadingKeys{byWrite: map[int]string{}, aliases: map[string]string{}, aliasWrite: map[string]int{}, storedKeyWrite: map[string]int{}, ambiguousAliases: map[string]bool{}}
 	byGroup := map[string][]readingIdentity{}
 	for _, id := range ids {
@@ -354,7 +365,7 @@ func (w *Workspace) collectTrialReadingIdentityFailures(ctx context.Context, tri
 			if !hasReading {
 				return nil
 			}
-			src, err := w.ReadSource(line.File)
+			src, err := w.readRawSource(line.File)
 			if err != nil {
 				return err
 			}
@@ -403,33 +414,47 @@ func (w *Workspace) buildCorrectionProof(ctx context.Context, trial, target *cor
 	for _, intent := range intents {
 		needed[intent.root()] = true
 	}
+	return buildCorrectionProofEntries(needed, func(file string) (*Facts, []int, error) {
+		f, pos, _, err := w.prepare(file)
+		return f, pos, err
+	}, func(source string, f *Facts, pos []int) (resolvedReadingKeys, error) {
+		var resolved resolvedReadingKeys
+		err := trial.DryRun(ctx, source, func(t *core.Tx) error {
+			var err error
+			resolved, err = resolveReadingKeys(t, source, f, pos)
+			return err
+		})
+		return resolved, err
+	})
+}
+
+func buildCorrectionProofEntries(needed map[correctionRoot]bool, prepare func(string) (*Facts, []int, error), resolve func(string, *Facts, []int) (resolvedReadingKeys, error)) (*correctionProof, error) {
 	proof := &correctionProof{entries: map[correctionRoot]correctionProofEntry{}}
+	type groupKey struct{ source, file string }
+	groups := map[groupKey][]correctionRoot{}
 	for root := range needed {
-		parsed, ok := parseReadingKey(root.key)
-		if !ok {
-			continue
+		if parsed, ok := parseReadingKey(root.key); ok {
+			g := groupKey{root.source, parsed.file}
+			groups[g] = append(groups[g], root)
 		}
-		f, pos, _, err := w.prepare(parsed.file)
+	}
+	// One checked snapshot and trial resolution per source/file, scoped to this invocation.
+	for group, roots := range groups {
+		f, pos, err := prepare(group.file)
 		if err != nil {
 			return nil, err
 		}
-		entry := correctionProofEntry{facts: f, positions: pos, writeIndex: -1}
-		err = trial.DryRun(ctx, root.source, func(t *core.Tx) error {
-			resolved, err := resolveReadingKeys(t, root.source, f, pos)
-			if err != nil {
-				return err
-			}
+		resolved, err := resolve(group.source, f, pos)
+		if err != nil {
+			return nil, err
+		}
+		for _, root := range roots {
 			idx, ok := resolved.storedKeyWrite[root.key]
 			if !ok {
-				return refuse("%s: correction root %s for %s has no validated original trial reading", parsed.file, root.key, root.metric)
+				return nil, refuse("%s: correction root %s for %s has no validated original trial reading", group.file, root.key, root.metric)
 			}
-			entry.writeIndex = idx
-			return nil
-		})
-		if err != nil {
-			return nil, err
+			proof.entries[root] = correctionProofEntry{facts: f, positions: pos, writeIndex: idx}
 		}
-		proof.entries[root] = entry
 	}
 	return proof, nil
 }

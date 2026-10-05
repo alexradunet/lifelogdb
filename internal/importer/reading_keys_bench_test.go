@@ -1,8 +1,11 @@
 package importer
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -74,7 +77,7 @@ func TestReadingRootLookupCount(t *testing.T) {
 						return tx.ImportedMeasurementRootsByFile(source, file, metric)
 					})
 					if err == nil && len(resolved.storedKeyWrite) != len(f.Writes) {
-						t.Fatalf("matched %d roots, want %d", len(resolved.storedKeyWrite), len(f.Writes))
+						return fmt.Errorf("matched %d roots, want %d", len(resolved.storedKeyWrite), len(f.Writes))
 					}
 					return err
 				})
@@ -105,7 +108,7 @@ func TestReadingRootLookupSeesLaterWrite(t *testing.T) {
 		if err := s.DryRun(ctx, "import:scan", func(tx *core.Tx) error {
 			r, err := resolveReadingKeys(tx, "import:scan", f, pos)
 			if err == nil && len(r.storedKeyWrite) != want {
-				t.Fatalf("stored roots %d, want %d", len(r.storedKeyWrite), want)
+				return fmt.Errorf("stored roots %d, want %d", len(r.storedKeyWrite), want)
 			}
 			return err
 		}); err != nil {
@@ -129,5 +132,82 @@ func TestReadingRootLookupSeesLaterWrite(t *testing.T) {
 	}
 	if before != after {
 		t.Fatalf("repeat grew rows: %d -> %d", before, after)
+	}
+}
+
+// Exercise the actual workspace checks and trial transactions, not just key matching.
+func syntheticCorrectionProof(tb testing.TB, days, roots int) (*Workspace, *core.Store, []correctionIntent) {
+	tb.Helper()
+	s, facts, _ := syntheticReadingScan(tb, days)
+	root := tb.TempDir()
+	src := filepath.Join(root, "Synthetic")
+	if err := os.MkdirAll(filepath.Join(src, "Medical"), 0o755); err != nil {
+		tb.Fatal(err)
+	}
+	w, err := Open(src + ".lifelog")
+	if err != nil {
+		tb.Fatal(err)
+	}
+	var source strings.Builder
+	var intents []correctionIntent
+	for i := range facts.Writes {
+		r := facts.Writes[i].Reading
+		facts.Writes[i].Quote = fmt.Sprintf("%s %s: 5", r.Day, r.Metric)
+		source.WriteString(facts.Writes[i].Quote + "\n")
+		if i < roots {
+			intents = append(intents, correctionIntent{RootSource: "import:scan", Metric: r.Metric, RootImportKey: facts.File + "|reading|" + r.Metric + "|" + r.Day + "|1"})
+		}
+	}
+	if err := os.WriteFile(filepath.Join(src, filepath.FromSlash(facts.File)), []byte(source.String()), 0o600); err != nil {
+		tb.Fatal(err)
+	}
+	if err := w.DraftRules("source: import:scan\n\n## Aliases\n\n## Distinct\n"); err != nil {
+		tb.Fatal(err)
+	}
+	if err := ownerApproves(w, "rules.md"); err != nil {
+		tb.Fatal(err)
+	}
+	for _, metric := range []string{"alpha", "beta", "gamma"} {
+		if err := w.ProposeMetric(Metric{Name: metric, Note: "synthetic"}); err != nil {
+			tb.Fatal(err)
+		}
+	}
+	if err := ownerApproves(w, "metrics.md"); err != nil {
+		tb.Fatal(err)
+	}
+	if _, err := w.MakeLedger(); err != nil {
+		tb.Fatal(err)
+	}
+	p := filepath.Join(w.Dir, "facts", filepath.FromSlash(facts.File)+".json")
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		tb.Fatal(err)
+	}
+	data, err := json.Marshal(facts)
+	if err != nil {
+		tb.Fatal(err)
+	}
+	if err := os.WriteFile(p, data, 0o600); err != nil {
+		tb.Fatal(err)
+	}
+	return w, s, intents
+}
+
+func BenchmarkBuildCorrectionProof(b *testing.B) {
+	for _, roots := range []int{1, 3, 10} {
+		b.Run(fmt.Sprintf("facts_30_roots_%d", roots), func(b *testing.B) {
+			w, trial, intents := syntheticCorrectionProof(b, 10, roots)
+			target := &core.Store{}
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				proof, err := w.buildCorrectionProof(ctx, trial, target, intents)
+				if err != nil {
+					b.Fatal(err)
+				}
+				if len(proof.entries) != roots {
+					b.Fatalf("entries %d, want %d", len(proof.entries), roots)
+				}
+			}
+		})
 	}
 }

@@ -41,6 +41,7 @@ type Kept struct {
 	PreviewAdded bool      `json:"preview_added,omitempty"` // a file kept without a preview got this one
 	Promoted     bool      `json:"promoted,omitempty"`      // a plain page of the title (a ghost an embed made) became the file
 	Sync         *Sync     `json:"sync,omitempty"`          // the links its text names; none when nothing was written
+	DaySync      *Sync     `json:"day_sync,omitempty"`      // the links synchronized when appending to its day
 	Day          string    `json:"day,omitempty"`           // its own day: the caller's, or the one its metadata gives
 	Place        string    `json:"place,omitempty"`         // the place its position is in, or the one named for it
 	Linked       bool      `json:"linked,omitempty"`        // its day has an at link to that place
@@ -238,7 +239,7 @@ func (t *Tx) placeAndDay(k *Kept, f FileIn, title, day string, own, picture bool
 		k.Linked = true
 	}
 	if picture {
-		k.Embedded, err = t.embed(dayID, title)
+		k.Embedded, k.DaySync, err = t.embed(dayID, title)
 	}
 	return err
 }

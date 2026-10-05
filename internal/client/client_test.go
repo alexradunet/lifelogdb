@@ -144,15 +144,7 @@ func testQueuedWrite(t *testing.T, remote bool) {
 	}()
 	wait(t, held)
 	released := false
-	defer func() {
-		if released {
-			return
-		}
-		close(release)
-		if err := <-finished; err != nil {
-			t.Error(err)
-		}
-	}()
+
 	entered := make(chan struct{})
 	h := api.New(&core.Store{DB: d}, nil)
 	completed := make(chan struct{})
@@ -167,6 +159,15 @@ func testQueuedWrite(t *testing.T, remote bool) {
 		defer srv.Close()
 		c = Remote(srv.URL, "cli")
 	}
+	defer func() {
+		if released {
+			return
+		}
+		close(release)
+		if err := <-finished; err != nil {
+			t.Error(err)
+		}
+	}()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	result := make(chan error, 1)

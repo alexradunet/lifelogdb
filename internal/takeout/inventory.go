@@ -2,6 +2,7 @@
 package takeout
 
 import (
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"errors"
@@ -73,6 +74,7 @@ type Overlap struct {
 }
 
 type inventory struct {
+	ctx      context.Context
 	top      map[string]*topAcc
 	families map[string]*familyAcc
 	metrics  map[string]map[string]map[string]bool // metric -> month -> source set
@@ -100,13 +102,31 @@ type familyAcc struct {
 // Inventory reads folder read-only and returns a value-only summary for Timeline, Fit and Fitbit. It never returns
 // private paths or source values in its errors; callers may print the returned report as JSON.
 func Inventory(folder string) (*Report, error) {
-	info, err := os.Stat(folder)
+	return InventoryContext(context.Background(), folder)
+}
+
+// InventoryContext inventories the selected root without following descendant symlinks.
+// Cancellation returns no report and preserves the context error identity.
+func InventoryContext(ctx context.Context, folder string) (*Report, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	base, err := filepath.EvalSymlinks(folder)
+	if err != nil {
+		return nil, errors.New("takeout inventory needs an existing folder")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	info, err := os.Stat(base)
 	if err != nil || !info.IsDir() {
 		return nil, errors.New("takeout inventory needs an existing folder")
 	}
-	base := folder
-	inv := &inventory{top: map[string]*topAcc{}, families: map[string]*familyAcc{}, metrics: map[string]map[string]map[string]bool{}}
+	inv := &inventory{ctx: ctx, top: map[string]*topAcc{}, families: map[string]*familyAcc{}, metrics: map[string]map[string]map[string]bool{}}
 	err = filepath.WalkDir(base, func(path string, d fs.DirEntry, err error) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if err != nil {
 			return errPrivateInventory
 		}
@@ -119,6 +139,9 @@ func Inventory(folder string) (*Report, error) {
 			if rel != "." && publicTopFolder(rel) == "Google Photos" {
 				return filepath.SkipDir
 			}
+			return nil
+		}
+		if d.Type()&os.ModeSymlink != 0 {
 			return nil
 		}
 		info, err := d.Info()
@@ -136,9 +159,26 @@ func Inventory(folder string) (*Report, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, errPrivateInventory
+		return nil, inventoryError(err)
 	}
-	return inv.report(), nil
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	report := inv.report()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return report, nil
+}
+
+func inventoryError(err error) error {
+	if errors.Is(err, context.Canceled) {
+		return fmt.Errorf("takeout inventory canceled: %w", context.Canceled)
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return fmt.Errorf("takeout inventory canceled: %w", context.DeadlineExceeded)
+	}
+	return errPrivateInventory
 }
 
 func publicTopFolder(rel string) string {
@@ -248,6 +288,9 @@ func fitbitFamily(low string) (string, string) {
 }
 
 func (i *inventory) addJSONFile(name, path, metric string) error {
+	if err := i.ctx.Err(); err != nil {
+		return err
+	}
 	fh, err := os.Open(path)
 	if err != nil {
 		return errPrivateInventory
@@ -260,7 +303,10 @@ func (i *inventory) addJSONFile(name, path, metric string) error {
 	dec := json.NewDecoder(fh)
 	dec.UseNumber()
 	if _, err := s.scanValue(dec, "$", ""); err != nil {
-		return errPrivateInventory
+		return inventoryError(err)
+	}
+	if err := i.ctx.Err(); err != nil {
+		return err
 	}
 	if tok, err := dec.Token(); err != io.EOF || tok != nil {
 		return errPrivateInventory
@@ -290,6 +336,9 @@ type jsonSummary struct {
 func newSummary() jsonSummary { return jsonSummary{keys: map[string]bool{}, months: map[string]bool{}} }
 
 func (s *jsonScanner) scanValue(dec *json.Decoder, path, parentKey string) (jsonSummary, error) {
+	if err := s.inv.ctx.Err(); err != nil {
+		return jsonSummary{}, err
+	}
 	tok, err := dec.Token()
 	if err != nil {
 		return jsonSummary{}, err
@@ -302,6 +351,9 @@ func (s *jsonScanner) scanValue(dec *json.Decoder, path, parentKey string) (json
 			s.recordShape(path, "object")
 			s.objects++
 			for dec.More() {
+				if err := s.inv.ctx.Err(); err != nil {
+					return jsonSummary{}, err
+				}
 				ktok, err := dec.Token()
 				if err != nil {
 					return jsonSummary{}, err
@@ -352,6 +404,9 @@ func (s *jsonScanner) scanValue(dec *json.Decoder, path, parentKey string) (json
 				sum.supported = true
 			}
 			for dec.More() {
+				if err := s.inv.ctx.Err(); err != nil {
+					return jsonSummary{}, err
+				}
 				child, err := s.scanValue(dec, path+"[]", parentKey)
 				if err != nil {
 					return jsonSummary{}, err
@@ -462,6 +517,9 @@ func (s jsonScanner) recordShape(path, typ string) {
 }
 
 func (i *inventory) addCSVFile(name, path, source string) error {
+	if err := i.ctx.Err(); err != nil {
+		return err
+	}
 	fh, err := os.Open(path)
 	if err != nil {
 		return errPrivateInventory
@@ -469,6 +527,9 @@ func (i *inventory) addCSVFile(name, path, source string) error {
 	defer fh.Close()
 	r := csv.NewReader(fh)
 	r.FieldsPerRecord = -1
+	if err := i.ctx.Err(); err != nil {
+		return err
+	}
 	headers, err := r.Read()
 	if err != nil {
 		if errors.Is(err, io.EOF) {
@@ -479,6 +540,9 @@ func (i *inventory) addCSVFile(name, path, source string) error {
 	f := i.family(name)
 	f.files++
 	for {
+		if err := i.ctx.Err(); err != nil {
+			return err
+		}
 		row, err := r.Read()
 		if errors.Is(err, io.EOF) {
 			break
@@ -490,6 +554,9 @@ func (i *inventory) addCSVFile(name, path, source string) error {
 		vals := map[string]string{}
 		rowMonths := map[string]bool{}
 		for idx, h := range headers {
+			if err := i.ctx.Err(); err != nil {
+				return err
+			}
 			if idx >= len(row) {
 				continue
 			}

@@ -204,11 +204,42 @@ func headerCols(text string) []string {
 // approveRows turns every proposed row into an approved one.
 func approveRows(rest string) string {
 	lines := strings.Split(rest, "\n")
+	status := -1
 	for i, l := range lines {
-		if strings.HasPrefix(strings.TrimSpace(l), "|") {
-			c := tableCells(l)
-			if len(c) > 0 && c[0] == "proposed" {
-				lines[i] = strings.Replace(l, "proposed", "approved", 1)
+		if !strings.HasPrefix(strings.TrimSpace(l), "|") {
+			status = -1
+			continue
+		}
+		c := tableCells(l)
+		if status < 0 {
+			if contains(c, "status") && contains(c, "name") && contains(c, "unit") {
+				for j, col := range c {
+					if col == "status" {
+						status = j
+						break
+					}
+				}
+			}
+			continue
+		}
+		if status >= len(c) || c[status] != "proposed" {
+			continue
+		}
+		// Locate the raw cell using the same escaped-pipe grammar as tableCells,
+		// retaining all other bytes, including the cell's surrounding whitespace.
+		col, start := -1, 0
+		for j := 0; j <= len(l); j++ {
+			if j < len(l) && l[j] == '\\' && j+1 < len(l) && l[j+1] == '|' {
+				j++
+				continue
+			}
+			if j == len(l) || l[j] == '|' {
+				if col == status {
+					lines[i] = l[:start] + strings.Replace(l[start:j], "proposed", "approved", 1) + l[j:]
+					break
+				}
+				col++
+				start = j + 1
 			}
 		}
 	}

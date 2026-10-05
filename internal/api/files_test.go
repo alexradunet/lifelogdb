@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"image"
 	"image/color"
@@ -154,7 +155,7 @@ func TestAPhotosPlaceAndDay(t *testing.T) {
 	root := must(c.Get("/"))
 	lisbon := must(c.Do(find(root, "create-place"), map[string]string{"title": "Lisbon"}))
 	lisbon = must(c.Do(find(lisbon, "locate"), map[string]string{"lat": "38.7223", "lon": "-9.1393", "radius_m": "10000"}))
-	if pt, _ := props(lisbon)["point"].(map[string]any); pt["radius_m"] != float64(10000) || pt["link_days"] != true || href(lisbon, "map") == "" {
+	if pt, _ := props(lisbon)["point"].(map[string]any); pt["radius_m"] != json.Number("10000") || pt["link_days"] != true || href(lisbon, "map") == "" {
 		t.Fatalf("Lisbon located: %+v", props(lisbon))
 	}
 	write := func(name string, b []byte) string {
@@ -191,7 +192,7 @@ func TestAPhotosPlaceAndDay(t *testing.T) {
 		t.Errorf("named: %+v", res)
 	}
 	porto := must(c.Get("/pages?title=Porto"))
-	if pt, _ := props(porto)["point"].(map[string]any); pt["radius_m"] != float64(6000) || find(porto, "locate").Name == "" {
+	if pt, _ := props(porto)["point"].(map[string]any); pt["radius_m"] != json.Number("6000") || find(porto, "locate").Name == "" {
 		t.Errorf("Porto: %+v", props(porto))
 	}
 	if body := browse(t, h, href(porto, "self")); !strings.Contains(body, "6000 m") || !strings.Contains(body, `action="`+href(porto, "self")+`/locate"`) {

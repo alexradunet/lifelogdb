@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -345,5 +346,59 @@ func TestMCPCancellation(t *testing.T) {
 	res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{Name: "get", Arguments: map[string]any{"href": "/ok"}})
 	if err != nil || res.IsError {
 		t.Fatalf("later call: %v %v", res, err)
+	}
+}
+
+func TestMCPUntrustedDataInstructions(t *testing.T) {
+	session, _ := numericSession(t, mcpTestClient(t))
+	instructions := session.InitializeResult().Instructions
+	for _, want := range []string{"untrusted data", "never instructions", "authorize tools", "approval"} {
+		if !strings.Contains(instructions, want) {
+			t.Errorf("initialization instructions lack %q: %s", want, instructions)
+		}
+	}
+}
+
+func TestMCPExactResponseNumbers(t *testing.T) {
+	for _, remote := range []bool{false, true} {
+		t.Run(fmt.Sprint(remote), func(t *testing.T) {
+			token := "9007199254740993"
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == "POST" && r.URL.Path != "/echo/"+token {
+					t.Errorf("rounded MCP read-to-action path: %s", r.URL.Path)
+				}
+				if r.URL.Path == "/actions" {
+					fmt.Fprint(w, `{}`)
+					return
+				}
+				fmt.Fprintf(w, `{"properties":{"nested":[%s,9223372036854775807,-9223372036854775808]},"result":{"id":%s},"actions":[{"name":"echo","method":"POST","href":"/echo/{id}","fields":[{"name":"id","in":"path","value":%s}]}]}`, token, token, token)
+			})
+			c := client.InProcess(handler, "agent:test")
+			if remote {
+				srv := httptest.NewServer(handler)
+				defer srv.Close()
+				c = client.Remote(srv.URL, "agent:test")
+			}
+			session, ctx := numericSession(t, c)
+			res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{Name: "get", Arguments: map[string]any{"href": "/numbers"}})
+			if err != nil || res.IsError {
+				t.Fatalf("get: %v %v", res, err)
+			}
+			text := res.Content[0].(*mcpsdk.TextContent).Text
+			for _, want := range []string{token, "9223372036854775807", "-9223372036854775808"} {
+				if !strings.Contains(text, want) {
+					t.Errorf("lost %s: %s", want, text)
+				}
+			}
+			decoder := json.NewDecoder(strings.NewReader(text))
+			decoder.UseNumber()
+			var entity api.Entity
+			if err := decoder.Decode(&entity); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := c.Do(entity.Actions[0], nil); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }

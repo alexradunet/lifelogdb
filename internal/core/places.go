@@ -137,13 +137,13 @@ func (t *Tx) placeFor(title string) (int64, error) {
 
 // embed shows a file in a day's page once: `![[title]]` appended after a blank line unless the page shows it
 // already, then the page's links synced (cookbook/place-of-a-photo.md).
-func (t *Tx) embed(dayID int64, title string) (bool, error) {
+func (t *Tx) embed(dayID int64, title string) (bool, *Sync, error) {
 	var body string
 	if err := t.tx.QueryRow(`SELECT body FROM pages WHERE id = ?`, dayID).Scan(&body); err != nil {
-		return false, err
+		return false, nil, err
 	}
 	if text.HasEmbed(body, title) {
-		return false, nil
+		return false, nil, nil
 	}
 	body += func() string {
 		if body == "" {
@@ -159,15 +159,15 @@ func (t *Tx) embed(dayID int64, title string) (bool, error) {
 		}
 	}
 	if !text.HasEmbed(body, title) || !named {
-		return false, invalid("automatic photo embed cannot render and link here; edit the day's Markdown before keeping the photo")
+		return false, nil, invalid("automatic photo embed cannot render and link here; edit the day's Markdown before keeping the photo")
 	}
 	_, err := t.tx.Exec(`UPDATE pages SET body = ? WHERE id = ?`, body, dayID)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 
-	_, err = t.syncWikilinks(dayID, body)
-	return true, err
+	sync, err := t.syncWikilinks(dayID, body)
+	return true, &sync, err
 }
 
 // PlaceOf is the point of a place page, nil when it has none.

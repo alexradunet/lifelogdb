@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 )
 
 // The owner's review of a gate (docs/guides/importing.md, "Gates"): approve shows the lines changed since the
@@ -40,7 +41,7 @@ func (w *Workspace) lastApproved(name string) (stamp, body string, ok bool) {
 type Review struct {
 	File  string
 	Since string // the day of the last approval the diff is against; "" when there is none: Text is then the whole body
-	Text  string // the unified-style diff of the body since that approval ("" when no line changed), or the whole body
+	Text  string // display-only diff or whole body; terminal controls are visibly escaped, newlines and tabs preserved
 	Hash  string // the sha256 of the body Approve will stamp: it stamps nothing else
 }
 
@@ -56,7 +57,24 @@ func (w *Workspace) Review(name string) (*Review, error) {
 		r.Since = stampRE.FindStringSubmatch(stamp)[1]
 		r.Text = strings.Join(unified(body, rest, 2), "\n")
 	}
+	r.Text = reviewDisplay(r.Text)
 	return r, nil
+}
+
+func reviewDisplay(text string) string {
+	var b strings.Builder
+	for _, r := range text {
+		if (unicode.IsControl(r) && r != '\n' && r != '\t') || r == '\u061c' || r == '\u200e' || r == '\u200f' || (r >= '\u202a' && r <= '\u202e') || (r >= '\u2066' && r <= '\u2069') {
+			if r <= 0xff {
+				fmt.Fprintf(&b, `\x%02x`, r)
+			} else {
+				fmt.Fprintf(&b, `\u%04x`, r)
+			}
+		} else {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 // Changed is the short diff status shows for a gate that is not approved: the changed lines since the last

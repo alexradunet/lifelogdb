@@ -3,6 +3,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -245,7 +246,16 @@ func (c *Client) send(req *http.Request) (*api.Entity, error) {
 		return nil, err
 	}
 	var e api.Entity
-	if err := json.Unmarshal(body, &e); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.UseNumber()
+	err = decoder.Decode(&e)
+	if err == nil {
+		var trailing any
+		if next := decoder.Decode(&trailing); next != io.EOF {
+			err = fmt.Errorf("trailing JSON: %v", next)
+		}
+	}
+	if err != nil {
 		return nil, fmt.Errorf("HTTP %d, not a Siren entity: %.200s", res.StatusCode, body)
 	}
 	if res.StatusCode >= 300 {

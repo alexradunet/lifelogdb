@@ -203,6 +203,7 @@ SELECT what, at, detail FROM (
          CASE (SELECT max(v.value) FROM measurement_values v WHERE v.metric_id = m.id AND v.day = :day)
            WHEN 1 THEN 'done' WHEN 0 THEN 'not done' ELSE 'not recorded' END
     FROM habit_periods h JOIN pages m ON m.id = h.metric_id
+    JOIN entities e ON e.id = m.id AND e.deleted_at IS NULL
    WHERE h.start_day <= :day AND coalesce(h.end_day, '9999-12-31') >= :day
   UNION ALL
   SELECT p.title, me.taken_at, CAST(me.value AS TEXT) || ' ' || m.unit
@@ -326,7 +327,7 @@ func (s *Store) InUse(ctx context.Context, day string, n int) ([]string, error) 
 		return nil, invalid("day is YYYY-MM-DD")
 	}
 	rows, err := s.DB.R.QueryContext(ctx, `
-		SELECT m.title FROM pages m
+		SELECT m.title FROM pages m JOIN entities e ON e.id = m.id AND e.deleted_at IS NULL
 		 WHERE m.entity_type = 'metric' AND EXISTS (SELECT 1 FROM measurement_values v
 		                WHERE v.metric_id = m.id AND v.day > date(?, '-' || ? || ' day') AND v.day <= ?)
 		 ORDER BY m.title_key`, day, n, day)

@@ -787,3 +787,127 @@ func rootImportKeys(t *testing.T, f *fixture, file string) []string {
 	}
 	return out
 }
+
+func TestTimedReadingIdentityRefusedBeforeLookup(t *testing.T) {
+	for _, variant := range []string{"identical", "case", "NFC", "value", "tz", "with"} {
+		t.Run(variant, func(t *testing.T) {
+			a := ReadingW{Metric: "Café", Day: "2031-07-01", TakenAt: "2031-07-01T08:00:00.000Z", Value: "5"}
+			b := a
+			switch variant {
+			case "case":
+				b.Metric = "CAFÉ"
+			case "NFC":
+				b.Metric = "Cafe\u0301"
+			case "value":
+				b.Value = "6"
+			case "tz":
+				b.TZ = "Europe/Paris"
+			case "with":
+				b.With = "Synthetic Page"
+			}
+			f := &Facts{File: "Medical/Timed.md", Writes: []Write{{Reading: &a}, {Reading: &b}}}
+			lookups := 0
+			_, err := resolveReadingKeysWithLoader("import:synthetic", f, []int{0, 1}, func(_, _, _ string) ([]core.ImportedMeasurementRoot, error) {
+				lookups++
+				return nil, nil
+			})
+			if err == nil || !strings.Contains(err.Error(), "repeated timed reading identity") {
+				t.Errorf("error = %v, want repeated timed identity refusal", err)
+			}
+			if lookups != 0 {
+				t.Errorf("lookups = %d, want 0", lookups)
+			}
+		})
+	}
+}
+
+func TestTimedReadingIdentityCheckApplyAtomic(t *testing.T) {
+	for _, variant := range []string{"identical", "case", "NFC", "value", "tz", "with"} {
+		t.Run(variant, func(t *testing.T) {
+			f := setupReadingKeyFixture(t)
+			file := "Medical/Timed.md"
+			quote := "2031-07-01 Café timed: 5 ng/mL and 6 ng/mL with Synthetic Page"
+			writeSource(t, f, file, quote)
+			mustLedger(t, f)
+			registerMetrics(t, f, Metric{Name: "Café", Unit: "ng/mL", Note: "synthetic"})
+			metric, value := "Café", "5 ng/mL"
+			extra := map[string]string{"taken_at": "2031-07-01T08:00:00.000Z"}
+			switch variant {
+			case "case":
+				metric = "CAFÉ"
+			case "NFC":
+				metric = "Cafe\u0301"
+			case "value":
+				value = "6 ng/mL"
+			case "tz":
+				extra["tz"] = "Europe/Paris"
+			case "with":
+				extra["with"] = "Synthetic Page"
+			}
+			writes := []any{
+				map[string]any{"page": map[string]string{"title": "Synthetic Page"}, "quote": quote},
+				readingFact("Café", "2031-07-01", "5 ng/mL", quote, map[string]string{"taken_at": "2031-07-01T08:00:00.000Z"}),
+				readingFact(metric, "2031-07-01", value, quote, extra),
+			}
+			if err := f.facts(t, file, map[string]any{"file": file, "writes": writes}); err != nil {
+				t.Fatal(err)
+			}
+			ledgerPath := filepath.Join(f.w.Dir, "ledger.md")
+			before, err := os.ReadFile(ledgerPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var entities int
+			if err := f.s.DB.R.QueryRow("SELECT count(*) FROM entities").Scan(&entities); err != nil {
+				t.Fatal(err)
+			}
+			for run := 0; run < 2; run++ {
+				for _, op := range []struct {
+					name string
+					fn   func(context.Context, *core.Store, string) (*Report, error)
+				}{{"Check", f.w.Check}, {"Apply", f.w.Apply}} {
+					if _, err := op.fn(ctx, f.s, file); err == nil || !strings.Contains(err.Error(), "repeated timed reading identity") {
+						t.Errorf("%s: %v", op.name, err)
+					}
+				}
+			}
+			after, err := os.ReadFile(ledgerPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(before) != string(after) {
+				t.Error("refusal changed ledger")
+			}
+			var got int
+			if err := f.s.DB.R.QueryRow("SELECT count(*) FROM entities").Scan(&got); err != nil {
+				t.Fatal(err)
+			}
+			if got != entities || importerMeasurementRows(t, f) != 0 {
+				t.Error("refusal persisted writes")
+			}
+		})
+	}
+}
+
+func TestTimedReadingDistinctInstants(t *testing.T) {
+	f := setupReadingKeyFixture(t)
+	file := "Medical/DistinctTimed.md"
+	quote := "2031-07-01 Café timed: 5 ng/mL"
+	writeSource(t, f, file, quote)
+	mustLedger(t, f)
+	registerMetrics(t, f, Metric{Name: "Café", Unit: "ng/mL", Note: "synthetic"})
+	writes := []any{
+		readingFact("Café", "2031-07-01", "5 ng/mL", quote, map[string]string{"taken_at": "2031-07-01T08:00:00.000Z"}),
+		readingFact("CAFE\u0301", "2031-07-01", "5 ng/mL", quote, map[string]string{"taken_at": "2031-07-01T09:00:00.000Z"}),
+	}
+	applyFacts(t, f, file, writes)
+	if _, err := f.w.Check(ctx, f.s, file); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.w.Apply(ctx, f.s, file); err != nil {
+		t.Fatal(err)
+	}
+	if got := importerMeasurementRows(t, f); got != 2 {
+		t.Errorf("readings %d, want 2", got)
+	}
+}

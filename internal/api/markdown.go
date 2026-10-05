@@ -12,6 +12,7 @@ import (
 	"github.com/yuin/goldmark/ast"
 	gtext "github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
+	"golang.org/x/text/unicode/norm"
 
 	"lifelog/internal/text"
 )
@@ -87,7 +88,7 @@ func enhanceText(parent ast.Node, source []byte) {
 				}
 			}
 			decoded := util.ResolveEntityNames(util.ResolveNumericReferences(util.UnescapePunctuations(raw.Bytes())))
-			for _, node := range enhancedRun(string(decoded)) {
+			for _, node := range enhancedRun(norm.NFC.String(string(decoded))) {
 				parent.InsertBefore(parent, first, node)
 			}
 			if last.SoftLineBreak() || last.HardLineBreak() {

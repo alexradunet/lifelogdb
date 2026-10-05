@@ -235,6 +235,28 @@ func TestTombstonedHabits(t *testing.T) {
 		} else if len(h) != 1 || h[0].State != "done" || len(c) != 1 || c[0].Done != 1 || c[0].NotRecorded != 1 {
 			t.Errorf("live habit: %v %v", h, c)
 		}
+		d, err := s.Day(ctx, "2026-09-01")
+		if err != nil {
+			t.Fatal(err)
+		}
+		listed := false
+		for _, row := range d.Rows {
+			listed = listed || row.What == "habit" && row.Detail == "Walk: done"
+		}
+		if listed == hidden {
+			t.Errorf("day habit visibility hidden=%v: %+v", hidden, d.Rows)
+		}
+		used, err := s.InUse(ctx, "2026-09-01", 60)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if (len(used) == 1 && used[0] == "Walk") == hidden {
+			t.Errorf("in-use visibility hidden=%v: %v", hidden, used)
+		}
+		series, err := s.Series(ctx, "Walk", "2026-08-31", "2026-09-01")
+		if err != nil || len(series) != 1 || len(d.Readings) != 1 {
+			t.Errorf("history hidden=%v: %v %v %v", hidden, series, d.Readings, err)
+		}
 		var n int
 		s.DB.R.QueryRow(`SELECT count(*) FROM habit_periods WHERE metric_id = ?`, id).Scan(&n)
 		if n != 1 {

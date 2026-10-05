@@ -64,11 +64,11 @@ svg.chart circle{fill:var(--accent)}svg.chart .axis{stroke:var(--line)}svg.chart
 
 {{/* form draws one action of the entity (see formOf); nothing when the action is not offered */}}
 {{define "form"}}{{with .}}<form method="{{.Method}}" action="{{.Href}}"{{with .Class}} class="{{.}}"{{end}}{{if .Multipart}} enctype="multipart/form-data"{{end}}>
-{{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{with .Value}}{{num .}}{{end}}">{{end}}
+{{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{num .Value}}">{{end}}
 {{range .Shown}}<div class="field"><label for="f-{{$.Name}}-{{.Name}}">{{or .Title .Name}}{{if .Required}} *{{end}}</label>
 {{if .Options}}<select id="f-{{$.Name}}-{{.Name}}" name="{{.Name}}">{{$v := num .Value}}{{range .Options}}<option{{if eq . $v}} selected{{end}}>{{.}}</option>{{end}}</select>
-{{else if eq .Type "textarea"}}<textarea id="f-{{$.Name}}-{{.Name}}" name="{{.Name}}"{{if eq .Name "body"}} class="tall"{{end}}>{{with .Value}}{{.}}{{end}}</textarea>
-{{else}}<input id="f-{{$.Name}}-{{.Name}}" type="{{.Type}}" name="{{.Name}}" value="{{with .Value}}{{num .}}{{end}}"{{if .Required}} required{{end}}{{if eq .Type "number"}} step="any"{{end}}>{{end}}</div>
+{{else if eq .Type "textarea"}}<textarea id="f-{{$.Name}}-{{.Name}}" name="{{.Name}}"{{if eq .Name "body"}} class="tall"{{end}}>{{num .Value}}</textarea>
+{{else}}<input id="f-{{$.Name}}-{{.Name}}" type="{{.Type}}" name="{{.Name}}" value="{{num .Value}}"{{if .Required}} required{{end}}{{if eq .Type "number"}} step="any"{{end}}>{{end}}</div>
 {{end}}<button{{if eq .Name "tombstone"}} class="danger"{{end}}>{{.Button}}</button></form>{{end}}{{end}}
 
 {{/* an action in a closed box with its description */}}

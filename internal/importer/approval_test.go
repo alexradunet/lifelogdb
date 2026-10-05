@@ -221,3 +221,146 @@ func TestUnified(t *testing.T) {
 		t.Errorf("changedLines: %q", got)
 	}
 }
+
+func TestReviewEscapesControlsWithoutChangingApproval(t *testing.T) {
+	f := setup(t)
+	body := rulesBody + "\nCafé\t東京\x1b[2J\rhidden\b\x07\x00\x7f\u009b\u202e\n"
+	if err := f.w.DraftRules(body); err != nil {
+		t.Fatal(err)
+	}
+	for pass := 0; pass < 2; pass++ {
+		rv, err := f.w.Review("rules.md")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.ContainsAny(rv.Text, "\x1b\r\b\x07\x00\x7f\u009b\u202e") || !strings.Contains(rv.Text, `\x1b[2J`) || !strings.Contains(rv.Text, "Café\t東京") {
+			t.Fatalf("unsafe/unreadable review %q", rv.Text)
+		}
+		if rv.Hash != bodyHash(body) {
+			t.Fatalf("display changed hash: %q", rv.Hash)
+		}
+		if pass == 1 {
+			editLine(t, f.w, "rules.md", "hidden", "mutated")
+			if err := f.w.Approve("rules.md", time.Now(), rv.Hash); err == nil {
+				t.Fatal("stamped mutation after review")
+			}
+			editLine(t, f.w, "rules.md", "mutated", "hidden")
+		}
+		if err := f.w.Approve("rules.md", time.Now(), rv.Hash); err != nil {
+			t.Fatal(err)
+		}
+		text, _, err := f.w.read("rules.md")
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, got := splitStatus(text)
+		copyBytes, err := os.ReadFile(f.w.approvedPath("rules.md"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != body || string(copyBytes) != text {
+			t.Fatalf("approval changed original bytes: %q", got)
+		}
+		if g, _ := f.w.Gate("rules.md"); g != "approved" {
+			t.Fatal(g)
+		}
+		if pass == 0 {
+			body += "next\x1b[31m\n"
+			if err := os.WriteFile(f.w.file("rules.md"), []byte(strings.SplitN(text, "\n", 2)[0]+"\n"+body), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+}
+
+func TestApprovalUsesReorderedStatusColumn(t *testing.T) {
+	f := setup(t)
+	f.approveRules(t, rulesBody)
+	header := "status: draft\n\n| note | unit | status | name |\n|---|---|---|---|\n"
+	if err := os.WriteFile(f.w.file("metrics.md"), []byte(header), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.w.ProposeMetric(Metric{Name: "Ferritin", Unit: "ng/mL", Note: "proposed"}); err != nil {
+		t.Fatal(err)
+	}
+	rv, err := f.w.Review("metrics.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "\n| note | unit | status | name |\n|---|---|---|---|\n| proposed | ng/mL | approved | Ferritin |\n"
+	if rv.Text != want || rv.Hash != bodyHash(want) {
+		t.Fatalf("review %q hash %q", rv.Text, rv.Hash)
+	}
+	if err := f.w.Approve("metrics.md", time.Now(), rv.Hash); err != nil {
+		t.Fatal(err)
+	}
+	ms, err := f.w.Metrics()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ms) != 1 || ms[0].Status != "approved" || ms[0].Note != "proposed" {
+		t.Fatalf("metrics %q", ms)
+	}
+	done, err := f.w.RegisterMetrics(ctx, f.s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(done, ";") != "Ferritin: registered" {
+		t.Fatalf("registration %q", done)
+	}
+}
+
+func TestApproveRowsPreservesOtherCells(t *testing.T) {
+	body := `| note | status | name | unit |
+|---|---|---|---|
+  | proposed \| prose |  proposed	| Sample | proposed |
+`
+	want := strings.Replace(body, "  proposed	", "  approved	", 1)
+	if got := approveRows(body); got != want {
+		t.Fatalf("approveRows = %q, want %q", got, want)
+	}
+}
+
+func TestApprovalSeparatedMetricTableLayouts(t *testing.T) {
+	f := setup(t)
+	f.approveRules(t, rulesBody)
+	body := "\n| note | unit | status | name |\n|---|---|---|---|\n| proposed \\| first | ng/mL | proposed | Iron |\n\nSeparate tables.\n\n| status | name | note | unit |\n|---|---|---|---|\n| proposed | Ferritin | proposed | ng/mL |\n"
+	want := strings.Replace(body, "| ng/mL | proposed | Iron |", "| ng/mL | approved | Iron |", 1)
+	want = strings.Replace(want, "| proposed | Ferritin |", "| approved | Ferritin |", 1)
+	if err := os.WriteFile(f.w.file("metrics.md"), []byte("status: draft\n"+body), 0600); err != nil {
+		t.Fatal(err)
+	}
+	rv, err := f.w.Review("metrics.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rv.Text != want || rv.Hash != bodyHash(want) {
+		t.Errorf("review changed non-status cells or missed status: %q hash=%s", rv.Text, rv.Hash)
+	}
+	if err := f.w.Approve("metrics.md", time.Now(), rv.Hash); err != nil {
+		t.Fatal(err)
+	}
+	text, _, err := f.w.read("metrics.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stamp, got := splitStatus(text)
+	if got != want || !strings.Contains(stamp, bodyHash(want)) {
+		t.Errorf("stamped body=%q stamp=%q", got, stamp)
+	}
+	copyBytes, err := os.ReadFile(f.w.approvedPath("metrics.md"))
+	if err != nil || string(copyBytes) != text {
+		t.Fatalf("approved copy mismatch: %v", err)
+	}
+	ms, err := f.w.Metrics()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ms) != 2 || ms[0].Status != "approved" || ms[1].Status != "approved" || ms[0].Note != "proposed | first" || ms[1].Note != "proposed" {
+		t.Errorf("parsed metrics=%+v", ms)
+	}
+	done, err := f.w.RegisterMetrics(ctx, f.s)
+	if err != nil || strings.Join(done, ";") != "Ferritin: registered;Iron: registered" {
+		t.Errorf("registration=%v error=%v", done, err)
+	}
+}

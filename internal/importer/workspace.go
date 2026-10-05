@@ -190,7 +190,22 @@ func (w *Workspace) ReadSource(rel string) (string, error) {
 	return w.readSource(root, rel)
 }
 
+// readRawSource preserves syntax for evidence parsers; public/vault reads stay NFC.
+func (w *Workspace) readRawSource(rel string) (string, error) {
+	root, err := os.OpenRoot(w.Source)
+	if err != nil {
+		return "", err
+	}
+	defer root.Close()
+	return w.readRawSourceAt(root, rel)
+}
+
 func (w *Workspace) readSource(root *os.Root, rel string) (string, error) {
+	source, err := w.readRawSourceAt(root, rel)
+	return norm.NFC.String(source), err
+}
+
+func (w *Workspace) readRawSourceAt(root *os.Root, rel string) (string, error) {
 	p, err := w.sourcePath(root, rel)
 	if err != nil {
 		return "", err
@@ -199,7 +214,7 @@ func (w *Workspace) readSource(root *os.Root, rel string) (string, error) {
 	if errors.Is(err, os.ErrNotExist) {
 		return "", &core.Error{Status: 404, Msg: "no source file " + rel}
 	}
-	return norm.NFC.String(string(b)), err
+	return string(b), err
 }
 
 // writeAtomic replaces a workspace file in one step: a temporary file, then a rename.

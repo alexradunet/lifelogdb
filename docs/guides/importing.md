@@ -7,7 +7,7 @@ and the writer's code checks those decisions and writes them. The contract every
 [imports](../contract/imports.md); this guide adds the process around it and changes no rule. The process was first
 used in the 2026-10 trial import of a notes vault.
 
-Page text comes in only through a vault ("An Obsidian vault" below): facts files write rows, never a page's body. A
+In the checked facts workflow, page text comes in through a vault ("An Obsidian vault" below): facts files write rows, never a page's body. A
 journal or diary export is first converted to a folder of one Markdown file per day, named `YYYY-MM-DD.md`, and
 imported as a vault. A file — a recording, a PDF, a photo — is kept on its own ("Files" below).
 
@@ -18,13 +18,13 @@ Each party does only what it is reliable at.
 | who | does | never does |
 |---|---|---|
 | **the owner** | approves the rules, the metrics and the real run; answers questions | — |
-| **the model** (local by default) | reads one source file at a time and writes down what it states, as a **facts file**; drafts rules, metrics and questions | write to `life.db`, write SQL, approve its own work, write an answer |
+| **the model** (local by default) | reads one source file at a time and writes down what it states, as a **facts file**; drafts rules, metrics and questions | write SQL, approve its own work, create metrics directly, run replay, write an answer |
 | **the writer** (an implementation with an API: a CLI, a REST API, MCP tools) | checks each facts file against its source file and against `life.db`, writes it whole or not at all, keeps the ledger, replays the trial onto the real database | judge what a note means |
 
 The facts file sits between reading and writing. It is the one record of each decision: written once,
 checked by code, applied in one transaction, read again when the import resumes, and replayed
-unchanged onto the real database. No decision lives only in a model's context or only in the
-database. So an import is:
+unchanged onto the real database. For this checked workflow, no decision lives only in a model's context or only in the
+database. The facts workflow is:
 
 - **resumable** — all state is in plain files; any session, or another model, asks the writer for
   *status* and gets the next file;
@@ -34,7 +34,7 @@ database. So an import is:
   written by the writer from what was written;
 - **replayable** — facts hold no database ids, so the real run applies them with no model;
 - **auditable and correctable** — every row traces to a quote; an edit of the facts file and a second
-  *apply* adds what was missing; a reading whose value was wrong is corrected by the owner ([correct a measurement](../cookbook/correct-a-measurement.md)), and
+  *apply* adds what was missing; a reading whose value was wrong uses the correction operation ([correct a measurement](../cookbook/correct-a-measurement.md)), and
   that correction must reach the real run (see the last section).
 
 ## The workspace
@@ -189,8 +189,8 @@ day, so a note that is only frontmatter can still say that it is a person.
 
 ## The writer's operations
 
-The API surface an implementation offers to the model, named by what it does. Each runs on one
-database the caller names explicitly.
+The import operations, named by what they do, include owner-only operations as well as model tools.
+Each runs on one explicitly selected database.
 
 | operation | reads | checks | writes |
 |---|---|---|---|
@@ -210,9 +210,30 @@ Each write reports one status: `new` (created), `existing` (there already, as th
 `promoted` (a plain page became the person or place) or `updated` (an existing person was given a birth or
 death day it lacked). Applying the same facts again writes nothing.
 
-A model is never given *approve*. A model never writes SQL: every row reaches `life.db` through
-*apply facts*, *register metrics* or *apply a vault plan*. The owner's single-row corrections (a reading
-corrected by a later one, [correct a measurement](../cookbook/correct-a-measurement.md); a tombstone, [D11](../decisions/D11-tombstones.md)) are the owner's, outside the model's tools.
+### Direct writes and their limits
+
+The checked facts workflow is not a restriction on all model tools. A writer may also offer direct
+capture, body saves, record/correct/retract operations and tombstones during an import
+([capture](../cookbook/capture.md), [correct a measurement](../cookbook/correct-a-measurement.md),
+[D11](../decisions/D11-tombstones.md)). These use the writer's normal checks, not the facts file's
+source-quote checks. They are not owner-only operations. The instructions below guide the model's
+use of them; instructions do not enforce a facts-only boundary.
+
+Approval, direct metric creation and replay are owner-only: approval is not a model tool, and
+direct creation and replay refuse an agent caller. The plural workspace operation *register metrics*
+is different: it registers only the rows the owner approved in the stamped `metrics.md`, and is
+model-callable after that approval. It does not let the model approve rows or create unapproved
+metrics. The owner runs the real replay.
+
+Direct changes to trial rows or note bodies are allowed, but are not automatically import decisions.
+*status* reports writes outside the facts workflow, including direct agent entities, links and
+readings that replay will not carry. Replay carries the vault notes and checked facts, plus verified
+intent-backed corrections of imported, keyed readings ("Trial, then the real run"). A verified agent
+correction is therefore not counted as lost direct work. Ordinary unkeyed or non-imported corrections,
+tombstones and arbitrary direct body changes have no general replay guarantee. Review the report
+and the replay rehearsal rather than assuming the trial database will be copied into the target.
+With draft or stale approval, *status* reports blocked verification, not a clean replay guarantee;
+it diagnoses pending or conflicting intents without recovering them.
 
 ## The checks
 
@@ -240,17 +261,17 @@ corrected by a later one, [correct a measurement](../cookbook/correct-a-measurem
 - a title held by an entity of another type (a place written where a person is) is refused;
 - every reference resolves;
 - a reading's unit is its metric's; a key that already holds another value is refused (a correction is
-  the owner's, [correct a measurement](../cookbook/correct-a-measurement.md));
+  a separate operation, [correct a measurement](../cookbook/correct-a-measurement.md));
 - a person that already holds another birth or death day is refused: the facts never change one (a
-  correction is the owner's).
+  correction uses a separate operation).
 
 ## Gates
 
 | gate | opened by | closes |
 |---|---|---|
 | `rules.md`: `status: approved YYYY-MM-DD (owner)` | the owner, through *approve* | every *check facts* and *apply facts* |
-| `metrics.md`: the stamp, rows `approved` | the owner, through *approve* (every row still `proposed` becomes `approved`) | *register metrics*; every reading |
-| the real run | the owner, in words | the model runs *replay* onto the real database only when told |
+| `metrics.md`: the stamp, rows `approved` | the owner, through *approve* (every row still `proposed` becomes `approved`) | *register metrics*; every facts-file reading |
+| direct metric creation and the real run | the owner, through direct creation and *replay* | agent callers are refused |
 
 The model cannot open a gate: *approve* is not among its tools, and *approve* refuses unless a person is
 at the controls (an interactive terminal, a signed-in owner session). The honest limit: a stamp is a
@@ -269,8 +290,9 @@ diff hide a change, the same honest limit as the stamp, so the owner can always 
 
 ## The procedure for the model
 
-These are the model's instructions, written for a small local model: one file per turn, fixed
-tables, no judgement left implicit.
+These are instructions for the checked facts workflow, written for a small local model: one file
+per turn, fixed tables, no judgement left implicit. They are not access controls on direct tools;
+use those only for the capture or change the owner requested and report their replay limits.
 
 **Never break these rules.**
 
@@ -309,8 +331,8 @@ that exists; a title is never renamed), the `unit` exactly as written (empty for
 case (`aPTT.md` for `aptt`) — that note is the metric's page ([D27](../decisions/D27-a-metric-is-a-page.md)): the `name` is the note's title exactly
 as the plan gives it, and the `note` is left empty, since the page keeps the note's text. This is not a doubt and not a
 question; list these rows in the report as "metric pages from notes". A habit is a unitless row with note `1 = done that day`; leave `since` and
-`until` empty. Then **stop** and ask the owner to review and approve. After approval, *register
-metrics*. Never type a unit into an operation yourself.
+`until` empty. Then **stop** and ask the owner to review and approve. After approval, run the workspace
+operation *register metrics* to register those approved rows. Never type a unit into an operation yourself.
 
 **5. Make the ledger** with *ledger*, then mark each file a skip rule covers `[-]`, with the reason.
 
@@ -424,12 +446,12 @@ Everything runs on a trial database first — a copy of the real one, so the tri
 already has ([imports](../contract/imports.md) step 1). When the trial is finished, *status* on it
 gives the counts — rows by entity type, readings, links, metrics — to compare later.
 
-The real run, when the owner says so: *replay* as a dry run first and read its failures and its
-differences from the trial; then *replay* the workspace onto the real database, initialised only if it
+The owner runs *replay* as a dry run first and reads its failures and its
+differences from the trial; then runs *replay* of the workspace onto the real database, initialised only if it
 does not exist (never one that holds data); *status* against it shows the trial's counts and no
 mismatches; *replay* again writes nothing. *replay* applies, in order: the vault plan when there is
 one, the approved metrics, the facts file of every `[x]` and `[?]` ledger line in ledger order, the
-owner's corrections, then the four checks of [integrity checks](../contract/integrity-checks.md). A file refused as
+replayable corrections, then the four checks of [integrity checks](../contract/integrity-checks.md). A file refused as
 "not written yet" is applied again after the rest, pass after pass, so the ledger's order never decides the outcome;
 a pass that writes no file is a failure of every file still waiting. If anything differs from the trial, stop and
 report it.
@@ -447,7 +469,7 @@ made in the workspace (it holds the same private data as the trial), and is remo
 Facts files hold no database ids: keys are derived from source paths and references name titles, so
 the real database gets the trial's rows with ids of its own, and nothing is remapped.
 
-An owner's correction of an imported, keyed reading is replayable only after the writer has recorded an immutable
+A correction or retraction of an imported, keyed reading, including one made by an agent, is replayable only after the writer has recorded an immutable
 workspace intent for that correction. The intent names the imported root, the actor/source that made the correction,
 the predecessor (a frozen legacy prefix or a previous correction event), and the desired value or retraction with a
 writer-generated event key. A correction whose workspace intent cannot be published is rolled back in the database;
@@ -466,14 +488,15 @@ synced local files.
 
 Each line is a requirement on a writer that offers this process.
 
-- Every model-facing operation writes only facts the checks of this guide passed; no operation lets the
-  model write SQL, a key, an id or a ledger mark other than `[-]`.
-- A value reaches the database exactly as written or not at all; the writer, never the model, parses
+- *check facts* and *apply facts* enforce the facts checks; direct tools do not claim source-quote
+  verification. No tool offers arbitrary write SQL; import keys are writer-derived, and ledger marks
+  other than `[-]` are writer-maintained. Direct operations may address existing rows by id.
+- In the facts workflow, a value reaches the database exactly as written or not at all; the writer, never the model, parses
   it and compares its unit with the metric's.
 - A file's facts commit whole or not at all, and its ledger line is written from what was written.
 - Keys are derived by the writer and identical on every run; no key is invented by the model.
-- A question or row number in a name or note is refused.
-- A look-alike name is never merged or duplicated without the owner's decision.
+- In a facts file, a question or row number in a name or note is refused.
+- In the facts workflow, a look-alike name is never merged or duplicated without the owner's decision.
 - *approve* is out of the model's reach, and its stamp is never written by any other operation.
 - A database path that cannot be silently ignored: an operation given a path that does not exist, or
   none, says so; *status* says plainly when no database was checked.
@@ -495,8 +518,8 @@ Each line is a requirement on a writer that offers this process.
   makes the run exit non-zero; file names are read as they are on disk (NFD on some filesystems).
 - Mood is held to 1–5 ([D6](../decisions/D06-mood-is-a-measurement.md)); a habit period is refused on a metric that already has readings other than
   0/1 ([D24](../decisions/D24-habits.md)).
-- A correction path survives the replay: a correction the owner makes on the trial is made again on
-  the real run. Durable correction intents are immutable; legacy correction records remain readable; repeated replay
+- An intent-backed correction of an imported, keyed reading survives replay, regardless of whether
+  the caller is the owner or an agent. Durable correction intents are immutable; legacy correction records remain readable; repeated replay
   or recovery does not add rows, and ambiguous legacy/event ordering fails closed.
 - A *replay* that fails leaves its target as it was, and its dry run lists every failure ("Trial, then
   the real run").

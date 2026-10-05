@@ -247,11 +247,8 @@ func firstRune(s string) rune {
 }
 
 func lastRune(s string) rune {
-	rs := []rune(s)
-	if len(rs) == 0 {
-		return 0
-	}
-	return rs[len(rs)-1]
+	r, _ := lastRuneSize(s)
+	return r
 }
 
 // containsFold is a whole-word match ignoring case.
@@ -319,7 +316,8 @@ func (w *Workspace) ownTitle(file string) string {
 // checkStatic is the guide's first list of checks: against the source file and the workspace only.
 // It also resolves aliases and returns, per write, the position of its quote in the source (for reading keys).
 func (w *Workspace) checkStatic(f *Facts, source string, rules *Rules, approved map[string]Metric) (pos []int, errs []string) {
-	src := collapse(source)
+	evidence := newReadingEvidence(f.File, source)
+	src := evidence.collapsed
 	srcLower := strings.ToLower(src)
 	day := fileDay(f.File, source)
 	own := w.ownTitle(f.File)
@@ -439,8 +437,12 @@ func (w *Workspace) checkStatic(f *Facts, source string, rules *Rules, approved 
 				bad(i, "%v", err)
 				continue
 			}
+			if unit != m.Unit {
+				bad(i, "the source evidence submitted unit %q is not the approved metric unit %q", unit, m.Unit)
+				continue
+			}
 			marker := m.Unit == "" && (num == 0 || num == 1)
-			if err := checkReadingSourceEvidence(f.File, source, src, q, pos[i], numText, unit, marker, approved); err != nil {
+			if err := evidence.check(q, pos[i], numText, unit, marker, approved); err != nil {
 				bad(i, "%v", err)
 			}
 			if r.With != "" {

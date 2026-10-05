@@ -82,7 +82,7 @@ Global flags, anywhere on the line:
 
 type opts struct {
 	db, url, source, addr, agent, mood, day, workspace, from, to, title, text, preview, mime, at, radius string
-	human, dryRun                                                                                        bool
+	human, dryRun, dbExplicit                                                                            bool
 	args                                                                                                 []string
 }
 
@@ -116,6 +116,9 @@ func parse(argv []string) (opts, error) {
 				val = argv[i]
 			}
 			*p = val
+			if name == "--db" {
+				o.dbExplicit = true
+			}
 			continue
 		}
 		if strings.HasPrefix(a, "--") {
@@ -141,7 +144,33 @@ func main() {
 	}
 }
 
+// Only intercept interrupts on paths that consume the resulting context. Owner-local
+// operations without cancellation support retain the OS's normal interrupt behavior.
+func commandConsumesContext(o opts) bool {
+	if len(o.args) == 0 {
+		return false
+	}
+	switch o.args[0] {
+	case "serve", "mcp", "get", "actions", "do", "capture", "day", "page", "search", "query", "habits", "done", "skip", "rename", "file":
+		return true
+	case "import":
+		if len(o.args) == 1 {
+			return true
+		}
+		switch o.args[1] {
+		case "status", "check", "apply", "replay":
+			return true
+		case "takeout":
+			return len(o.args) == 4 && o.args[2] == "inventory"
+		}
+	}
+	return false
+}
+
 func run(o opts) error {
+	if !commandConsumesContext(o) {
+		return runContext(context.Background(), o)
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	return runContext(ctx, o)
@@ -169,11 +198,8 @@ func runContext(ctx context.Context, o opts) error {
 		fmt.Println("created", o.db)
 		return nil
 	}
-	if cmd == "snapshot" {
-		return snapshot(o)
-	}
 	if cmd == "import" && len(args) > 0 && args[0] == "takeout" {
-		return importTakeout(o, args[1:])
+		return importTakeoutContext(ctx, o, args[1:])
 	}
 
 	var ws *importer.Workspace
@@ -182,9 +208,12 @@ func runContext(ctx context.Context, o opts) error {
 		if ws, err = importer.Open(o.workspace); err != nil {
 			return err
 		}
-		if o.db == "" || os.Getenv("LIFELOG_DB") == o.db {
+		if !o.dbExplicit {
 			o.db = ws.TrialDB() // an import works on its trial database unless --db names another
 		}
+	}
+	if cmd == "snapshot" {
+		return snapshot(o)
 	}
 	if cmd == "import" && len(args) > 0 && (args[0] == "setup" || args[0] == "approve") {
 		return importOwner(o, ws, args)
@@ -420,7 +449,10 @@ func keepFileContext(ctx context.Context, o opts, c *client.Client, args []strin
 		}
 		kept = append(kept, k)
 	}
-	s := summarise(kept, o.dryRun)
+	s, err := summarise(kept, o.dryRun)
+	if err != nil {
+		return err
+	}
 	if o.human {
 		s.print(os.Stdout)
 	} else if err := printJSON(s); err != nil {
@@ -508,7 +540,29 @@ type group struct {
 	NameWith string   `json:"name_it_with"`
 }
 
-func summarise(files []keptFile, dry bool) *batch {
+// Coordinates are a floating-point domain; leave all other response numbers (IDs
+// in particular) in their lossless client representation.
+func coordinate(v any) (float64, error) {
+	var n float64
+	var err error
+	switch v := v.(type) {
+	case json.Number:
+		n, err = v.Float64()
+	case float64:
+		n = v
+	default:
+		return 0, fmt.Errorf("invalid photo coordinate %v", v)
+	}
+	if err != nil {
+		return 0, fmt.Errorf("invalid photo coordinate: %w", err)
+	}
+	if math.IsNaN(n) || math.IsInf(n, 0) {
+		return 0, errors.New("photo coordinate must be finite")
+	}
+	return n, nil
+}
+
+func summarise(files []keptFile, dry bool) (*batch, error) {
 	b := &batch{DryRun: dry, Days: map[string]*daySo{}, Files: files}
 	add := func(list []string, s string) []string {
 		for _, x := range list {
@@ -554,8 +608,14 @@ func summarise(files []keptFile, dry bool) *batch {
 		if u == nil {
 			continue
 		}
-		lat, _ := u["lat"].(float64)
-		lon, _ := u["lon"].(float64)
+		lat, err := coordinate(u["lat"])
+		if err != nil {
+			return nil, err
+		}
+		lon, err := coordinate(u["lon"])
+		if err != nil {
+			return nil, err
+		}
 		var g *group
 		for _, x := range b.Unmatched {
 			if haversine(lat, lon, x.Lat, x.Lon) <= 500 {
@@ -577,7 +637,7 @@ func summarise(files []keptFile, dry bool) *batch {
 	for _, g := range b.Unmatched {
 		sort.Strings(g.Days)
 	}
-	return b
+	return b, nil
 }
 
 func (b *batch) print(w io.Writer) {
@@ -827,9 +887,9 @@ func importOwner(o opts, ws *importer.Workspace, args []string) error {
 }
 
 // importCommand is the import's shortcuts; every other operation is `lifelog do <name> field=value`.
-func importTakeout(_ opts, args []string) error {
+func importTakeoutContext(ctx context.Context, _ opts, args []string) error {
 	if len(args) == 2 && args[0] == "inventory" {
-		report, err := takeout.Inventory(args[1])
+		report, err := takeout.InventoryContext(ctx, args[1])
 		if err != nil {
 			return err
 		}

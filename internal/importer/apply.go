@@ -89,7 +89,7 @@ func (w *Workspace) prepare(file string) (*Facts, []int, *Rules, error) {
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	src, err := w.ReadSource(file)
+	src, err := w.readRawSource(file)
 	if err != nil {
 		return nil, nil, nil, err
 	}

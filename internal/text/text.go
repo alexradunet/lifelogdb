@@ -195,7 +195,7 @@ func renderedTextRuns(body string) []string {
 						break
 					}
 				}
-				runs = append(runs, string(util.ResolveEntityNames(util.ResolveNumericReferences(util.UnescapePunctuations(raw.Bytes())))))
+				runs = append(runs, norm.NFC.String(string(util.ResolveEntityNames(util.ResolveNumericReferences(util.UnescapePunctuations(raw.Bytes()))))))
 			default:
 				walk(c)
 				c = c.NextSibling()

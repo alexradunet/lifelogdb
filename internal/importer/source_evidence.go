@@ -4,12 +4,15 @@ import (
 	"encoding/csv"
 	"io"
 	"path/filepath"
+	"sort"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/yuin/goldmark/ast"
 	east "github.com/yuin/goldmark/extension/ast"
 	gtext "github.com/yuin/goldmark/text"
+	"golang.org/x/text/unicode/norm"
 )
 
 type numberToken struct {
@@ -18,9 +21,21 @@ type numberToken struct {
 	approximate bool
 }
 
-func checkReadingSourceEvidence(file, source, sourceCollapsed, quote string, quotePos int, numText, unit string, marker bool, approved map[string]Metric) error {
-	matches, approximate := matchingNumberTokens(quote, numText, sourceCollapsed, quotePos)
-	tableValue := tableValueEvidence(file, source, sourceCollapsed, quote, quotePos, numText)
+// readingEvidence is invocation-local and never retained across source snapshots.
+type readingEvidence struct {
+	collapsed string
+	tokens    []numberToken
+	tables    []evidenceTable
+}
+
+func newReadingEvidence(file, source string) *readingEvidence {
+	collapsed := collapse(source)
+	return &readingEvidence{collapsed: collapsed, tokens: numberTokens(collapsed), tables: sourceTables(file, source)}
+}
+
+func (e *readingEvidence) check(quote string, quotePos int, numText, unit string, marker bool, approved map[string]Metric) error {
+	matches, approximate := matchingNumberTokensWithSource(quote, numText, e.tokens, quotePos)
+	tableValue := tableValueEvidence(e.tables, quote, quotePos, numText)
 	if marker {
 		if len(matches) == 0 && !tableValue {
 			if quoteHasMeasurementNumber(quote) {
@@ -38,27 +53,31 @@ func checkReadingSourceEvidence(file, source, sourceCollapsed, quote string, quo
 		if got := inlineUnitCandidate(quote, 0, matches); got != "" {
 			return refuse("the source evidence has unit %q at value %s, but the facts omit the unit", got, numText)
 		}
-		if got := omittedInlineUnit(sourceCollapsed, quotePos, matches, approved); got != "" {
+		if got := omittedInlineUnit(e.collapsed, quotePos, matches, approved); got != "" {
 			return refuse("the source evidence has unit %q at value %s, but the facts omit the unit", got, numText)
 		}
-		if _, conflict := tableUnitEvidence(file, source, sourceCollapsed, quote, quotePos, numText, unit); conflict != "" {
+		if _, conflict := tableUnitEvidence(e.tables, quote, quotePos, numText, unit, matches); conflict != "" {
 			return refuse("the source evidence has unit %q at value %s, but the facts omit the unit", conflict, numText)
 		}
 		return nil
 	}
-	inlineOK := inlineUnitEvidence(sourceCollapsed, quotePos, matches, unit)
-	if ok, conflict := tableUnitEvidence(file, source, sourceCollapsed, quote, quotePos, numText, unit); conflict != "" {
+	inlineOK := inlineUnitEvidence(e.collapsed, quotePos, matches, unit)
+	if ok, conflict := tableUnitEvidence(e.tables, quote, quotePos, numText, unit, matches); conflict != "" {
 		return refuse("the source evidence has unit %q at value %s, not %q; nothing is converted or relabeled", conflict, numText, unit)
 	} else if ok || inlineOK {
 		return nil
 	}
-	if got := inlineUnitCandidate(sourceCollapsed, quotePos, matches); got != "" && got != unit {
+	if got := inlineUnitCandidate(e.collapsed, quotePos, matches); got != "" && got != unit {
 		return refuse("the source evidence has unit %q at value %s, not %q; nothing is converted or relabeled", got, numText, unit)
 	}
 	return refuse("the unit %q has no unambiguous source evidence at value %s; ask the owner or keep the source text instead", unit, numText)
 }
 
 func matchingNumberTokens(quote, numText, context string, base int) ([]numberToken, bool) {
+	return matchingNumberTokensWithSource(quote, numText, numberTokens(context), base)
+}
+
+func matchingNumberTokensWithSource(quote, numText string, sourceTokens []numberToken, base int) ([]numberToken, bool) {
 	var matches []numberToken
 	approximate := false
 	for _, tok := range numberTokens(quote) {
@@ -66,7 +85,7 @@ func matchingNumberTokens(quote, numText, context string, base int) ([]numberTok
 			continue
 		}
 		if base >= 0 {
-			sourceTok, ok := sourceNumberTokenAt(context, base+tok.start)
+			sourceTok, ok := sourceNumberTokenAt(sourceTokens, base+tok.start)
 			if !ok || sourceTok.start != base+tok.start || sourceTok.text != numText {
 				if ok && sourceTok.approximate && sourceTok.text == numText {
 					approximate = true
@@ -86,14 +105,10 @@ func matchingNumberTokens(quote, numText, context string, base int) ([]numberTok
 	return matches, approximate
 }
 
-func sourceNumberTokenAt(s string, pos int) (numberToken, bool) {
-	for _, tok := range numberTokens(s) {
-		if pos >= tok.start && pos < tok.end {
-			return tok, true
-		}
-		if tok.start > pos {
-			break
-		}
+func sourceNumberTokenAt(tokens []numberToken, pos int) (numberToken, bool) {
+	i := sort.Search(len(tokens), func(i int) bool { return tokens[i].end > pos })
+	if i < len(tokens) && tokens[i].start <= pos {
+		return tokens[i], true
 	}
 	return numberToken{}, false
 }
@@ -202,13 +217,10 @@ func approximateNumberPrefix(s string, start int) bool {
 }
 
 func lastRuneSize(s string) (rune, int) {
-	var last rune
-	var size int
-	for i, r := range s {
-		last = r
-		size = len(s) - i
+	if s == "" {
+		return 0, 0
 	}
-	return last, size
+	return utf8.DecodeLastRuneInString(s)
 }
 
 func isDateYearToken(s string, tok numberToken) bool {
@@ -287,8 +299,11 @@ type evidenceTable struct {
 	starts, ends []int
 }
 
-func tableValueEvidence(file, source, _ string, quote string, quotePos int, numText string) bool {
-	for _, table := range sourceTables(file, source) {
+func tableValueEvidence(tables []evidenceTable, quote string, quotePos int, numText string) bool {
+	for _, table := range tables {
+		if len(table.rows) < 2 {
+			continue
+		}
 		for rowIndex, row := range table.rows[1:] {
 			absoluteRow := rowIndex + 1
 			if !rowAtQuote(table, absoluteRow, quotePos) || !quoteCoversRow(quote, row) {
@@ -302,19 +317,28 @@ func tableValueEvidence(file, source, _ string, quote string, quotePos int, numT
 	return false
 }
 
-func tableUnitEvidence(file, source, _ string, quote string, quotePos int, numText, unit string) (bool, string) {
-	for _, table := range sourceTables(file, source) {
+func tableUnitEvidence(tables []evidenceTable, quote string, quotePos int, numText, unit string, matches []numberToken) (bool, string) {
+	for _, table := range tables {
 		if len(table.rows) < 2 {
 			continue
 		}
 		head := table.rows[0]
 		for rowIndex, row := range table.rows[1:] {
 			absoluteRow := rowIndex + 1
-			if !rowAtQuote(table, absoluteRow, quotePos) || !quoteCoversRow(quote, row) {
+			associated := false
+			for _, tok := range matches {
+				associated = associated || rowAtQuote(table, absoluteRow, quotePos+tok.start)
+			}
+			// CSV quoting can prevent lexical matching; the complete row remains evidence.
+			associated = associated || (rowAtQuote(table, absoluteRow, quotePos) && quoteCoversRow(quote, row))
+			if !associated {
 				continue
 			}
 			cols := numericColumns(row, numText)
-			if len(cols) != 1 {
+			if len(cols) > 1 {
+				return false, "ambiguous repeated numeric cells"
+			}
+			if len(cols) == 0 {
 				continue
 			}
 			col := cols[0]
@@ -360,20 +384,21 @@ func rowAtQuote(table evidenceTable, row int, quotePos int) bool {
 }
 
 func sourceTables(file, source string) []evidenceTable {
+	offsets := sourceCollapsedOffsets(source)
 	switch strings.ToLower(filepath.Ext(file)) {
 	case ".csv":
-		table, err := csvEvidenceTable(source)
+		table, err := csvEvidenceTable(source, offsets)
 		if err != nil {
 			return nil
 		}
 		return []evidenceTable{table}
 	case ".md":
-		return markdownEvidenceTables(source)
+		return markdownEvidenceTables(source, offsets)
 	}
 	return nil
 }
 
-func csvEvidenceTable(source string) (evidenceTable, error) {
+func csvEvidenceTable(source string, offsets []int) (evidenceTable, error) {
 	r := csv.NewReader(strings.NewReader(source))
 	var rows [][]string
 	var starts, ends []int
@@ -387,9 +412,12 @@ func csvEvidenceTable(source string) (evidenceTable, error) {
 			return evidenceTable{}, err
 		}
 		recordEnd := r.InputOffset()
+		for i := range rec {
+			rec[i] = norm.NFC.String(rec[i])
+		}
 		rows = append(rows, rec)
-		start := collapsedOffsetAt(source, int(recordStart))
-		end := collapsedOffsetAt(source, int(recordEnd))
+		start := offsets[int(recordStart)]
+		end := offsets[int(recordEnd)]
 		recordStart = recordEnd
 		starts = append(starts, start)
 		ends = append(ends, end)
@@ -397,7 +425,7 @@ func csvEvidenceTable(source string) (evidenceTable, error) {
 	return evidenceTable{rows: rows, starts: starts, ends: ends}, nil
 }
 
-func markdownEvidenceTables(source string) []evidenceTable {
+func markdownEvidenceTables(source string, offsets []int) []evidenceTable {
 	b := []byte(source)
 	doc := gfm.Parser().Parse(gtext.NewReader(b))
 	var out []evidenceTable
@@ -410,12 +438,17 @@ func markdownEvidenceTables(source string) []evidenceTable {
 			return ast.WalkContinue, nil
 		}
 		rows := tableRows(table, b)
+		for _, row := range rows {
+			for i := range row {
+				row[i] = norm.NFC.String(row[i])
+			}
+		}
 		t := evidenceTable{rows: rows, starts: make([]int, len(rows)), ends: make([]int, len(rows))}
 		rowIndex := 0
 		for r := table.FirstChild(); r != nil && rowIndex < len(rows); r = r.NextSibling() {
 			start, end := lineSpanAtByte(source, r.Pos())
-			t.starts[rowIndex] = collapsedOffsetAt(source, start)
-			t.ends[rowIndex] = collapsedOffsetAt(source, end)
+			t.starts[rowIndex] = offsets[start]
+			t.ends[rowIndex] = offsets[end]
 			rowIndex++
 		}
 		out = append(out, t)
@@ -436,38 +469,57 @@ func lineSpanAtByte(source string, pos int) (int, int) {
 	return start, end
 }
 
-func collapsedOffsetAt(source string, rawPos int) int {
-	if rawPos < 0 {
-		rawPos = 0
+// Map original parser boundaries through NFC segments, then whitespace collapse.
+// Parser row/record boundaries do not split a normalization segment. Building
+// this map once avoids normalizing every source prefix or every reading.
+func sourceCollapsedOffsets(source string) []int {
+	var iter norm.Iter
+	iter.InitString(norm.NFC, source)
+	var normalized strings.Builder
+	offsets := make([]int, len(source)+1)
+	for !iter.Done() {
+		start, at := iter.Pos(), normalized.Len()
+		segment := iter.Next()
+		for i := start; i < iter.Pos(); i++ {
+			offsets[i] = at
+		}
+		normalized.Write(segment)
+		offsets[iter.Pos()] = normalized.Len()
 	}
-	if rawPos > len(source) {
-		rawPos = len(source)
+	collapsed := collapsedOffsets(normalized.String())
+	for i, at := range offsets {
+		offsets[i] = collapsed[at]
 	}
+	return offsets
+}
+
+// Offsets use whitespace collapse on already-normalized comparison text.
+func collapsedOffsets(source string) []int {
+	offsets := make([]int, len(source)+1)
 	out := 0
-	inField := false
-	pendingSpace := false
+	pending := false
 	for i, r := range source {
-		if i >= rawPos {
-			if !unicode.IsSpace(r) && pendingSpace && out > 0 {
-				return out + 1
-			}
-			return out
+		space := unicode.IsSpace(r)
+		at := out
+		if !space && pending && out > 0 {
+			at++
 		}
-		if unicode.IsSpace(r) {
-			if inField {
-				pendingSpace = true
-				inField = false
-			}
-			continue
+		size := utf8.RuneLen(r)
+		if r == utf8.RuneError {
+			_, size = utf8.DecodeRuneInString(source[i:])
 		}
-		if pendingSpace && out > 0 {
-			out++
+		for j := i; j < i+size; j++ {
+			offsets[j] = at
 		}
-		pendingSpace = false
-		out += len(string(r))
-		inField = true
+		if space {
+			pending = out > 0
+		} else {
+			out = at + size
+			pending = false
+		}
 	}
-	return out
+	offsets[len(source)] = out
+	return offsets
 }
 
 func quoteCoversRow(quote string, row []string) bool {
