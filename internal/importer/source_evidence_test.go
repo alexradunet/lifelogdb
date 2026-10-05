@@ -57,6 +57,15 @@ func ferritinFacts(file, day, value, unit, quote string) map[string]any {
 	return readingFacts(file, "ferritin", day, value, unit, quote)
 }
 
+func totalMeasurements(t *testing.T, f *fixture) int {
+	t.Helper()
+	var n int
+	if err := f.s.DB.R.QueryRowContext(ctx, `SELECT count(*) FROM measurements`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
 func TestNumericSourceEvidence(t *testing.T) {
 	rejects := []struct {
 		name string
@@ -179,6 +188,7 @@ func TestNumericSourceEvidence(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		beforeTotal := totalMeasurements(t, f)
 		_, err = f.w.Apply(ctx, f.s, file)
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Fatalf("Apply error = %v, want containing %q", err, want)
@@ -189,6 +199,9 @@ func TestNumericSourceEvidence(t *testing.T) {
 		}
 		if after.Readings != before.Readings {
 			t.Fatalf("rejected apply wrote readings: before %d after %d", before.Readings, after.Readings)
+		}
+		if afterTotal := totalMeasurements(t, f); afterTotal != beforeTotal {
+			t.Fatalf("rejected apply wrote measurements: before %d after %d", beforeTotal, afterTotal)
 		}
 		if st, err := f.w.ledgerState(file); err != nil || st != " " {
 			t.Fatalf("rejected apply changed ledger state to %q: %v", st, err)
@@ -208,11 +221,32 @@ func TestNumericSourceEvidence(t *testing.T) {
 		assertReject(t, f, file, readingFacts(file, "dose", "2031-06-12", "48", "mg", "| 2031-06-12 | 48 |"), "source evidence")
 	})
 
+	t.Run("reject agreeing inline under conflicting header", func(t *testing.T) {
+		file := "Medical/InlineHeaderConflict.md"
+		body := "| day | dose (mg/L) |\n|---|---|\n| 2031-06-12 | 48 mg |\n"
+		f := setupEvidenceMetric(t, file, body, Metric{Name: "dose", Unit: "mg"})
+		assertReject(t, f, file, readingFacts(file, "dose", "2031-06-12", "48", "mg", "| 2031-06-12 | 48 mg |"), "source evidence")
+	})
+
 	t.Run("reject conflicting inline over agreeing header", func(t *testing.T) {
 		file := "Medical/ConflictingInline.md"
 		body := "| day | dose (mg) |\n|---|---:|\n| 2031-06-13 | 48 mg/L |\n"
 		f := setupEvidenceMetric(t, file, body, Metric{Name: "dose", Unit: "mg"})
 		assertReject(t, f, file, readingFacts(file, "dose", "2031-06-13", "48", "mg", "| 2031-06-13 | 48 mg/L |"), "source evidence")
+	})
+
+	t.Run("reject agreeing header conflicting unit cell", func(t *testing.T) {
+		file := "Medical/HeaderUnitCellConflict.md"
+		body := "| day | dose (mg) | unit |\n|---|---|---|\n| 2031-06-13 | 48 | ng/mL |\n"
+		f := setupEvidenceMetric(t, file, body, Metric{Name: "dose", Unit: "mg"})
+		assertReject(t, f, file, readingFacts(file, "dose", "2031-06-13", "48", "mg", "| 2031-06-13 | 48 | ng/mL |"), "source evidence")
+	})
+
+	t.Run("reject stripped explicit unit for unitless metric", func(t *testing.T) {
+		file := "Medical/StrippedUnit.md"
+		body := "| day | dose | unit |\n|---|---|---|\n| 2031-06-13 | 48 | mg |\n"
+		f := setupEvidenceMetric(t, file, body, Metric{Name: "dose"})
+		assertReject(t, f, file, readingFacts(file, "dose", "2031-06-13", "48", "", "| 2031-06-13 | 48 | mg |"), "source evidence")
 	})
 
 	t.Run("reject unrelated same-row unit cell", func(t *testing.T) {
@@ -227,6 +261,13 @@ func TestNumericSourceEvidence(t *testing.T) {
 		body := "| day | ferritin (mg/L) |\n|---|---:|\n| 2031-06-15 | 48 |\n\n| day | ferritin (ng/mL) |\n|---|---:|\n| 2031-06-15 | 48 |\n"
 		f := setupEvidence(t, file, body)
 		assertReject(t, f, file, ferritinFacts(file, "2031-06-15", "48", "ng/mL", "| 2031-06-15 | 48 |"), "source evidence")
+	})
+
+	t.Run("reject prose borrowing later table", func(t *testing.T) {
+		file := "Medical/BorrowTable.md"
+		body := "Preamble | day | dose (mg) |\nnot a table | 2031-07-09 | 48 |\n\n| day | dose (mg) |\n|---|---|\n| 2031-07-09 | 48 |\n"
+		f := setupEvidenceMetric(t, file, body, Metric{Name: "dose", Unit: "mg"})
+		assertReject(t, f, file, readingFacts(file, "dose", "2031-07-09", "48", "mg", "not a table | 2031-07-09 | 48 |"), "source evidence")
 	})
 
 	accepts := []struct {

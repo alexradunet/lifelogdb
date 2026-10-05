@@ -1,9 +1,15 @@
 package importer
 
 import (
+	"encoding/csv"
+	"io"
 	"path/filepath"
 	"strings"
 	"unicode"
+
+	"github.com/yuin/goldmark/ast"
+	east "github.com/yuin/goldmark/extension/ast"
+	gtext "github.com/yuin/goldmark/text"
 )
 
 type numberToken struct {
@@ -29,15 +35,19 @@ func checkReadingSourceEvidence(file, source, sourceCollapsed, quote string, quo
 		return refuse("the value %s is not in the quote exactly as written; partial, converted or reformatted values go in kept_as_text", numText)
 	}
 	if unit == "" {
+		if got := inlineUnitCandidate(quote, 0, matches); got != "" {
+			return refuse("the source evidence has unit %q at value %s, but the facts omit the unit", got, numText)
+		}
+		if _, conflict := tableUnitEvidence(file, source, sourceCollapsed, quote, quotePos, numText, unit); conflict != "" {
+			return refuse("the source evidence has unit %q at value %s, but the facts omit the unit", conflict, numText)
+		}
 		return nil
 	}
-	if inlineUnitEvidence(sourceCollapsed, quotePos, matches, unit) {
-		return nil
-	}
-	if ok, conflict := tableUnitEvidence(file, source, sourceCollapsed, quote, quotePos, numText, unit); ok {
-		return nil
-	} else if conflict != "" {
+	inlineOK := inlineUnitEvidence(sourceCollapsed, quotePos, matches, unit)
+	if ok, conflict := tableUnitEvidence(file, source, sourceCollapsed, quote, quotePos, numText, unit); conflict != "" {
 		return refuse("the source evidence has unit %q at value %s, not %q; nothing is converted or relabeled", conflict, numText, unit)
+	} else if ok || inlineOK {
+		return nil
 	}
 	if got := inlineUnitCandidate(sourceCollapsed, quotePos, matches); got != "" && got != unit {
 		return refuse("the source evidence has unit %q at value %s, not %q; nothing is converted or relabeled", got, numText, unit)
@@ -285,26 +295,37 @@ func tableUnitEvidence(file, source, sourceCollapsed, quote string, quotePos int
 				continue
 			}
 			col := cols[0]
+			ok := false
+			var conflict string
 			if col < len(row) {
 				cell := collapse(row[col])
 				matches, _ := matchingNumberTokens(cell, numText, cell, 0)
 				if inlineUnitEvidence(cell, 0, matches, unit) {
-					return true, ""
+					ok = true
 				}
 				if got := inlineUnitCandidate(cell, 0, matches); got != "" && got != unit {
-					return false, got
+					conflict = got
 				}
 			}
 			if col < len(head) {
 				if headerHasExactUnit(head[col], unit) {
-					return true, ""
+					ok = true
 				}
 				if got := headerUnitConflict(head[col], unit); got != "" {
-					return false, got
+					conflict = got
 				}
 			}
-			if ok, conflict := rowHasSeparateUnit(head, row, col, unit); ok || conflict != "" {
-				return ok, conflict
+			if separateOK, got := rowHasSeparateUnit(head, row, col, unit); separateOK || got != "" {
+				ok = ok || separateOK
+				if got != "" {
+					conflict = got
+				}
+			}
+			if conflict != "" {
+				return false, conflict
+			}
+			if ok {
+				return true, ""
 			}
 		}
 	}
@@ -312,97 +333,97 @@ func tableUnitEvidence(file, source, sourceCollapsed, quote string, quotePos int
 }
 
 func rowAtQuote(table evidenceTable, row int, quotePos int) bool {
-	return row < len(table.starts) && quotePos >= table.starts[row] && quotePos < table.ends[row]
+	return row < len(table.starts) && table.starts[row] >= 0 && quotePos >= table.starts[row] && quotePos < table.ends[row]
 }
 
 func sourceTables(file, source, sourceCollapsed string) []evidenceTable {
 	switch strings.ToLower(filepath.Ext(file)) {
 	case ".csv":
-		rows, err := csvRows(source)
+		table, err := csvEvidenceTable(source, sourceCollapsed)
 		if err != nil {
 			return nil
 		}
-		return []evidenceTable{withRowPositions(rows, source, sourceCollapsed)}
+		return []evidenceTable{table}
 	case ".md":
-		body := source
-		if _, rest, ok := frontmatter(source); ok {
-			body = rest
-		}
-		return markdownEvidenceTables(markdownTables(body), source, sourceCollapsed)
+		return markdownEvidenceTables(source, sourceCollapsed)
 	}
 	return nil
 }
 
-func withRowPositions(rows [][]string, source, sourceCollapsed string) evidenceTable {
-	t := evidenceTable{rows: rows, starts: make([]int, len(rows)), ends: make([]int, len(rows))}
+func csvEvidenceTable(source, sourceCollapsed string) (evidenceTable, error) {
+	r := csv.NewReader(strings.NewReader(source))
+	var rows [][]string
+	var starts, ends []int
 	cursor := 0
-	for i, line := range strings.Split(source, "\n") {
-		if i >= len(rows) {
+	recordStart := int64(0)
+	for {
+		rec, err := r.Read()
+		if err == io.EOF {
 			break
 		}
-		line = collapse(line)
-		start := strings.Index(sourceCollapsed[cursor:], line)
-		if start < 0 {
-			continue
+		if err != nil {
+			return evidenceTable{}, err
 		}
-		start += cursor
-		t.starts[i], t.ends[i] = start, start+len(line)
-		cursor = t.ends[i]
+		recordEnd := r.InputOffset()
+		raw := source[int(recordStart):int(recordEnd)]
+		recordStart = recordEnd
+		collapsed := collapse(raw)
+		start := strings.Index(sourceCollapsed[cursor:], collapsed)
+		if start >= 0 {
+			start += cursor
+		}
+		rows = append(rows, rec)
+		starts = append(starts, start)
+		ends = append(ends, start+len(collapsed))
+		if start >= 0 {
+			cursor = start + len(collapsed)
+		}
 	}
-	return t
+	return evidenceTable{rows: rows, starts: starts, ends: ends}, nil
 }
 
-func markdownEvidenceTables(tables [][][]string, source, sourceCollapsed string) []evidenceTable {
-	lines := strings.Split(source, "\n")
+func markdownEvidenceTables(source, sourceCollapsed string) []evidenceTable {
+	b := []byte(source)
+	doc := gfm.Parser().Parse(gtext.NewReader(b))
 	cursor := 0
-	lineIndex := 0
 	var out []evidenceTable
-	for _, rows := range tables {
+	ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		table, ok := n.(*east.Table)
+		if !ok {
+			return ast.WalkContinue, nil
+		}
+		rows := tableRows(table, b)
 		t := evidenceTable{rows: rows, starts: make([]int, len(rows)), ends: make([]int, len(rows))}
-		for i, row := range rows {
-			for lineIndex < len(lines) {
-				line := strings.TrimSpace(lines[lineIndex])
-				lineIndex++
-				if !strings.Contains(line, "|") || markdownSeparatorLine(line) || !lineCoversCells(line, row) {
-					continue
-				}
-				collapsed := collapse(line)
-				start := strings.Index(sourceCollapsed[cursor:], collapsed)
-				if start >= 0 {
-					start += cursor
-					t.starts[i], t.ends[i] = start, start+len(collapsed)
-					cursor = t.ends[i]
-				}
-				break
+		rowIndex := 0
+		for r := table.FirstChild(); r != nil && rowIndex < len(rows); r = r.NextSibling() {
+			line := collapse(lineAtByte(source, r.Pos()))
+			start := strings.Index(sourceCollapsed[cursor:], line)
+			if start >= 0 {
+				start += cursor
+				t.starts[rowIndex], t.ends[rowIndex] = start, start+len(line)
+				cursor = t.ends[rowIndex]
 			}
+			rowIndex++
 		}
 		out = append(out, t)
-	}
+		return ast.WalkSkipChildren, nil
+	})
 	return out
 }
 
-func markdownSeparatorLine(line string) bool {
-	line = strings.Trim(line, " |")
-	if line == "" {
-		return false
+func lineAtByte(source string, pos int) string {
+	if pos < 0 || pos > len(source) {
+		return ""
 	}
-	for _, r := range line {
-		if r != '-' && r != ':' && r != '|' && !unicode.IsSpace(r) {
-			return false
-		}
+	start := strings.LastIndexByte(source[:pos], '\n') + 1
+	end := len(source)
+	if nl := strings.IndexByte(source[pos:], '\n'); nl >= 0 {
+		end = pos + nl
 	}
-	return strings.Contains(line, "-")
-}
-
-func lineCoversCells(line string, row []string) bool {
-	line = collapse(line)
-	for _, cell := range row {
-		cell = collapse(cell)
-		if cell != "" && !strings.Contains(line, cell) {
-			return false
-		}
-	}
-	return true
+	return source[start:end]
 }
 
 func quoteCoversRow(quote string, row []string) bool {
