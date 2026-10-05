@@ -10,9 +10,10 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 )
 
 var errPrivateInventory = errors.New("takeout inventory could not read one file; no filename or value is reported")
@@ -107,20 +108,23 @@ func Inventory(folder string) (*Report, error) {
 		if err != nil {
 			return errPrivateInventory
 		}
+		rel, err := filepath.Rel(base, path)
+		if err != nil {
+			return errPrivateInventory
+		}
+		rel = filepath.ToSlash(rel)
 		if d.IsDir() {
+			if rel != "." && publicTopFolder(rel) == "Google Photos" {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		info, err := d.Info()
 		if err != nil {
 			return errPrivateInventory
 		}
-		rel, err := filepath.Rel(base, path)
-		if err != nil {
-			return errPrivateInventory
-		}
-		rel = filepath.ToSlash(rel)
 		top := publicTopFolder(rel)
-		if top == "" {
+		if top == "Google Photos" || top == "" {
 			return nil
 		}
 		inv.addTop(top, filepath.Ext(rel), info.Size())
@@ -161,13 +165,13 @@ func publicTopFolder(rel string) string {
 }
 
 func (i *inventory) addTop(name, ext string, size int64) {
-	if name == "Google Photos" { // Plan input narrowed Phase A to Timeline/Fit/Fitbit; photo gap is owner-gated.
-		return
-	}
 	if ext == "" {
 		ext = "(none)"
 	}
 	ext = strings.ToLower(ext)
+	if !safeExtensions[ext] {
+		ext = "<other>"
+	}
 	t := i.top[name]
 	if t == nil {
 		t = &topAcc{name: name, exts: map[string]int{}}
@@ -188,7 +192,7 @@ func (i *inventory) family(name string) *familyAcc {
 }
 
 func (i *inventory) addKnownFile(path, rel, top string) error {
-	if top == "Google Photos" || top == "Other" {
+	if top == "Other" {
 		return nil
 	}
 	low := strings.ToLower(rel)
@@ -197,11 +201,11 @@ func (i *inventory) addKnownFile(path, rel, top string) error {
 	case "Location History":
 		switch {
 		case ext == ".json" && strings.Contains(low, "semantic location history"):
-			return i.addTimelineSemantic(path)
+			return i.addJSONFile("Timeline Semantic Visits", path, "")
 		case ext == ".json" && filepath.Base(low) == "records.json":
-			return i.addJSONFile("Timeline Records", path, countLocations, nil)
+			return i.addJSONFile("Timeline Records", path, "")
 		case ext == ".json" && filepath.Base(low) == "timeline.json":
-			return i.addJSONFile("Timeline On-Device", path, countOnDeviceTimeline, nil)
+			return i.addJSONFile("Timeline On-Device", path, "")
 		}
 	case "Fit":
 		switch {
@@ -210,17 +214,12 @@ func (i *inventory) addKnownFile(path, rel, top string) error {
 			f.files++
 			return nil
 		case ext == ".csv" && (strings.Contains(low, "daily") || strings.Contains(low, "activity metrics")):
-			return i.addCSVFile("Fit Daily Aggregates", path, func(row map[string]string) {
-				m := monthFromRow(row, "Date", "date")
-				if m != "" {
-					i.addMetricMonth("steps", "Fit", m)
-				}
-			})
+			return i.addCSVFile("Fit Daily Aggregates", path, "Fit")
 		case (ext == ".csv" || ext == ".json") && strings.Contains(low, "session"):
 			if ext == ".csv" {
-				return i.addCSVFile("Fit Sessions", path, nil)
+				return i.addCSVFile("Fit Sessions", path, "")
 			}
-			return i.addJSONFile("Fit Sessions", path, countTopRecords, nil)
+			return i.addJSONFile("Fit Sessions", path, "")
 		}
 	case "Fitbit":
 		name, metric := fitbitFamily(low)
@@ -228,22 +227,10 @@ func (i *inventory) addKnownFile(path, rel, top string) error {
 			return nil
 		}
 		if ext == ".csv" {
-			return i.addCSVFile(name, path, func(row map[string]string) {
-				if metric != "" {
-					if m := firstMonthInRow(row); m != "" {
-						i.addMetricMonth(metric, "Fitbit", m)
-					}
-				}
-			})
+			return i.addCSVFile(name, path, "Fitbit:"+metric)
 		}
 		if ext == ".json" {
-			return i.addJSONFile(name, path, countTopRecords, func(v any) {
-				if metric != "" {
-					for _, m := range monthsFromValue(v) {
-						i.addMetricMonth(metric, "Fitbit", m)
-					}
-				}
-			})
+			return i.addJSONFile(name, path, metric)
 		}
 	}
 	return nil
@@ -266,100 +253,157 @@ func fitbitFamily(low string) (string, string) {
 	}
 }
 
-func (i *inventory) addTimelineSemantic(path string) error {
-	return i.addJSONFile("Timeline Semantic Visits", path, func(v any) (int, []string) {
-		var count int
-		var months []string
-		if root, ok := v.(map[string]any); ok {
-			for _, item := range asSlice(root["timelineObjects"]) {
-				obj, _ := item.(map[string]any)
-				pv, ok := obj["placeVisit"]
-				if !ok {
-					continue
-				}
-				count++
-				months = append(months, monthsFromValue(pv)...)
-			}
-		}
-		return count, months
-	}, nil)
-}
-
-func (i *inventory) addJSONFile(name, path string, count func(any) (int, []string), visit func(any)) error {
-	b, err := os.ReadFile(path)
+func (i *inventory) addJSONFile(name, path, metric string) error {
+	fh, err := os.Open(path)
 	if err != nil {
 		return errPrivateInventory
 	}
-	var v any
-	dec := json.NewDecoder(strings.NewReader(string(b)))
-	dec.UseNumber()
-	if err := dec.Decode(&v); err != nil {
-		return errPrivateInventory
-	}
+	defer fh.Close()
 	f := i.family(name)
 	f.files++
-	if visit != nil {
-		visit(v)
+	s := jsonScanner{inv: i, family: f, familyName: name, metric: metric}
+	dec := json.NewDecoder(fh)
+	dec.UseNumber()
+	if _, err := s.scanValue(dec, "$", ""); err != nil {
+		return errPrivateInventory
 	}
-	records, months := count(v)
-	f.records += records
-	for _, m := range months {
-		f.months[m] = true
+	if tok, err := dec.Token(); err != io.EOF || tok != nil {
+		return errPrivateInventory
 	}
-	collectShapes(v, "$", f)
 	return nil
 }
 
-func countLocations(v any) (int, []string) {
-	root, _ := v.(map[string]any)
-	locs := asSlice(root["locations"])
-	return len(locs), nil
+type jsonScanner struct {
+	inv        *inventory
+	family     *familyAcc
+	familyName string
+	metric     string
 }
 
-func countOnDeviceTimeline(v any) (int, []string) {
-	root, _ := v.(map[string]any)
-	var count int
-	var months []string
-	for _, item := range asSlice(root["semanticSegments"]) {
-		count++
-		months = append(months, monthsFromValue(item)...)
-	}
-	if count == 0 {
-		for _, item := range asSlice(root["timelineObjects"]) {
-			count++
-			months = append(months, monthsFromValue(item)...)
-		}
-	}
-	return count, months
+type jsonSummary struct {
+	keys   map[string]bool
+	months map[string]bool
 }
 
-func countTopRecords(v any) (int, []string) {
-	switch x := v.(type) {
-	case []any:
-		return len(x), monthsFromValue(v)
-	case map[string]any:
-		var n int
-		for _, val := range x {
-			if a, ok := val.([]any); ok {
-				n += len(a)
-			} else {
-				n++
+func newSummary() jsonSummary { return jsonSummary{keys: map[string]bool{}, months: map[string]bool{}} }
+
+func (s jsonScanner) scanValue(dec *json.Decoder, path, parentKey string) (jsonSummary, error) {
+	tok, err := dec.Token()
+	if err != nil {
+		return jsonSummary{}, err
+	}
+	sum := newSummary()
+	switch x := tok.(type) {
+	case json.Delim:
+		switch x {
+		case '{':
+			s.recordShape(path, "object")
+			for dec.More() {
+				ktok, err := dec.Token()
+				if err != nil {
+					return jsonSummary{}, err
+				}
+				key, ok := ktok.(string)
+				if !ok {
+					return jsonSummary{}, errors.New("non-string JSON object key")
+				}
+				sum.keys[key] = true
+				child, err := s.scanValue(dec, path+"."+publicJSONKey(key), key)
+				if err != nil {
+					return jsonSummary{}, err
+				}
+				mergeMonths(sum.months, child.months)
 			}
+			end, err := dec.Token()
+			if err != nil || end != json.Delim('}') {
+				return jsonSummary{}, errors.New("bad JSON object")
+			}
+			if s.isRecord(path, sum.keys) {
+				s.family.records++
+				if s.familyName != "Timeline Records" {
+					mergeMonths(s.family.months, sum.months)
+				}
+				if s.metric != "" {
+					for month := range sum.months {
+						s.inv.addMetricMonth(s.metric, "Fitbit", month)
+					}
+				}
+			}
+			return sum, nil
+		case '[':
+			s.recordShape(path, "array")
+			for dec.More() {
+				child, err := s.scanValue(dec, path+"[]", parentKey)
+				if err != nil {
+					return jsonSummary{}, err
+				}
+				mergeMonths(sum.months, child.months)
+			}
+			end, err := dec.Token()
+			if err != nil || end != json.Delim(']') {
+				return jsonSummary{}, errors.New("bad JSON array")
+			}
+			return sum, nil
 		}
-		return n, monthsFromValue(v)
+	case string:
+		s.recordShape(path, "string")
+		if month := monthFromExplicitField(parentKey, x); month != "" {
+			sum.months[month] = true
+		}
+	case json.Number:
+		s.recordShape(path, "number")
+		if month := monthFromExplicitField(parentKey, x.String()); month != "" {
+			sum.months[month] = true
+		}
+	case float64:
+		s.recordShape(path, "number")
+	case bool:
+		s.recordShape(path, "boolean")
+	case nil:
+		s.recordShape(path, "null")
 	default:
-		return 1, monthsFromValue(v)
+		return jsonSummary{}, errors.New("unknown JSON token")
+	}
+	return sum, nil
+}
+
+func (s jsonScanner) isRecord(path string, keys map[string]bool) bool {
+	switch s.familyName {
+	case "Timeline Semantic Visits":
+		return path == "$.timelineObjects[].placeVisit"
+	case "Timeline Records":
+		return path == "$.locations[]"
+	case "Timeline On-Device":
+		return path == "$.semanticSegments[]" || path == "$.timelineObjects[]"
+	case "Fit Sessions":
+		return isKnownRecordPath(path) && hasAnyKey(keys, "startTime", "Start time", "startTimestamp", "startTimestampMs")
+	default:
+		return isKnownRecordPath(path) && hasAnyKey(keys, "dateTime", "dateOfSleep", "startTime", "originalStartTime", "date", "Date")
 	}
 }
 
-func asSlice(v any) []any {
-	if a, ok := v.([]any); ok {
-		return a
-	}
-	return nil
+func isKnownRecordPath(path string) bool {
+	return path == "$" || path == "$[]" || (strings.HasSuffix(path, "[]") && !strings.Contains(path, ".<key>"))
 }
 
-func (i *inventory) addCSVFile(name, path string, visit func(map[string]string)) error {
+func hasAnyKey(keys map[string]bool, wants ...string) bool {
+	for _, k := range wants {
+		if keys[k] {
+			return true
+		}
+	}
+	return false
+}
+
+func (s jsonScanner) recordShape(path, typ string) {
+	if s.family.shapes[path] == nil {
+		s.family.shapes[path] = map[string]int{}
+	}
+	s.family.shapes[path][typ]++
+	s.family.shapeCounts[path]++
+}
+
+func (i *inventory) addCSVFile(name, path, source string) error {
 	fh, err := os.Open(path)
 	if err != nil {
 		return errPrivateInventory
@@ -386,29 +430,60 @@ func (i *inventory) addCSVFile(name, path string, visit func(map[string]string))
 		}
 		f.records++
 		vals := map[string]string{}
+		rowMonths := map[string]bool{}
 		for idx, h := range headers {
 			if idx >= len(row) {
 				continue
 			}
 			vals[h] = row[idx]
 			col := publicCSVHeader(h)
-			if col == "" {
-				continue
+			if col != "" {
+				if f.csv[col] == nil {
+					f.csv[col] = map[string]int{}
+				}
+				f.csv[col][scalarType(row[idx])]++
+				f.csvCounts[col]++
 			}
-			if f.csv[col] == nil {
-				f.csv[col] = map[string]int{}
+			if month := monthFromExplicitField(h, row[idx]); month != "" {
+				rowMonths[month] = true
 			}
-			f.csv[col][scalarType(row[idx])]++
-			f.csvCounts[col]++
 		}
-		if visit != nil {
-			visit(vals)
-		}
-		if m := firstMonthInRow(vals); m != "" {
-			f.months[m] = true
-		}
+		mergeMonths(f.months, rowMonths)
+		i.addCSVMetrics(source, vals, rowMonths)
 	}
 	return nil
+}
+
+func (i *inventory) addCSVMetrics(source string, row map[string]string, rowMonths map[string]bool) {
+	if len(rowMonths) == 0 || source == "" {
+		return
+	}
+	if strings.HasPrefix(source, "Fitbit:") {
+		metric := strings.TrimPrefix(source, "Fitbit:")
+		for month := range rowMonths {
+			i.addMetricMonth(metric, "Fitbit", month)
+		}
+		return
+	}
+	if source != "Fit" {
+		return
+	}
+	for header, metric := range fitDailyMetrics {
+		if nonEmpty(row, header) {
+			for month := range rowMonths {
+				i.addMetricMonth(metric, "Fit", month)
+			}
+		}
+	}
+}
+
+func nonEmpty(row map[string]string, header string) bool {
+	for h, v := range row {
+		if strings.EqualFold(strings.TrimSpace(h), header) && strings.TrimSpace(v) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func publicCSVHeader(h string) string {
@@ -422,25 +497,6 @@ func publicCSVHeader(h string) string {
 	return "<column>"
 }
 
-func collectShapes(v any, path string, f *familyAcc) {
-	t := jsonType(v)
-	if f.shapes[path] == nil {
-		f.shapes[path] = map[string]int{}
-	}
-	f.shapes[path][t]++
-	f.shapeCounts[path]++
-	switch x := v.(type) {
-	case []any:
-		for _, item := range x {
-			collectShapes(item, path+"[]", f)
-		}
-	case map[string]any:
-		for key, val := range x {
-			collectShapes(val, path+"."+publicJSONKey(key), f)
-		}
-	}
-}
-
 func publicJSONKey(k string) string {
 	if safeJSONKeys[k] {
 		return k
@@ -448,85 +504,49 @@ func publicJSONKey(k string) string {
 	return "<key>"
 }
 
-func jsonType(v any) string {
-	switch v.(type) {
-	case nil:
-		return "null"
-	case bool:
-		return "boolean"
-	case json.Number:
-		return "number"
-	case float64:
-		return "number"
-	case string:
-		return "string"
-	case []any:
-		return "array"
-	case map[string]any:
-		return "object"
-	default:
-		return "unknown"
+func mergeMonths(dst, src map[string]bool) {
+	for month := range src {
+		dst[month] = true
 	}
 }
 
-var monthRE = regexp.MustCompile(`\b\d{4}-\d{2}`)
-
-func monthsFromValue(v any) []string {
-	seen := map[string]bool{}
-	var out []string
-	var walk func(any)
-	walk = func(v any) {
-		switch x := v.(type) {
-		case string:
-			m := monthRE.FindString(x)
-			if m != "" && !seen[m] {
-				seen[m] = true
-				out = append(out, m)
-			}
-		case []any:
-			for _, item := range x {
-				walk(item)
-			}
-		case map[string]any:
-			for _, val := range x {
-				walk(val)
-			}
-		}
+func monthFromExplicitField(key, value string) string {
+	key = strings.TrimSpace(key)
+	if timestampMillisKeys[key] {
+		return monthFromMillis(value)
 	}
-	walk(v)
-	sort.Strings(out)
-	return out
+	if !explicitDateKeys[key] {
+		return ""
+	}
+	return validMonth(value)
 }
 
-func monthFromRow(row map[string]string, keys ...string) string {
-	for _, want := range keys {
-		for h, v := range row {
-			if strings.EqualFold(strings.TrimSpace(h), want) {
-				if m := monthRE.FindString(v); m != "" {
-					return m
-				}
-			}
+func monthFromMillis(value string) string {
+	ms, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
+	if err != nil {
+		return ""
+	}
+	return time.UnixMilli(ms).UTC().Format("2006-01")
+}
+
+func validMonth(value string) string {
+	v := strings.TrimSpace(value)
+	if v == "" {
+		return ""
+	}
+	for _, layout := range []string{
+		time.RFC3339Nano,
+		"2006-01-02T15:04:05.000",
+		"2006-01-02T15:04:05",
+		"2006-01-02 15:04:05",
+		"2006-01-02 15:04",
+		"2006-01-02",
+	} {
+		if ts, err := time.Parse(layout, v); err == nil {
+			return ts.Format("2006-01")
 		}
 	}
 	return ""
-}
-
-func firstMonthInRow(row map[string]string) string {
-	months := map[string]bool{}
-	for _, v := range row {
-		if m := monthRE.FindString(v); m != "" {
-			months[m] = true
-		}
-	}
-	var out []string
-	for m := range months {
-		out = append(out, m)
-	}
-	sort.Strings(out)
-	if len(out) == 0 {
-		return ""
-	}
-	return out[0]
 }
 
 func scalarType(s string) string {
@@ -633,23 +653,62 @@ func sorted(s []string) []string {
 	return s
 }
 
-var safeCSVHeaders = map[string]bool{
-	"date":               true,
-	"start time":         true,
-	"end time":           true,
-	"activity type":      true,
-	"duration (ms)":      true,
-	"step count":         true,
-	"move minutes count": true,
-	"distance":           true,
-	"calories":           true,
-	"average heart rate": true,
-	"min heart rate":     true,
-	"max heart rate":     true,
-	"weight":             true,
-	"bmi":                true,
-	"sleep minutes":      true,
+var safeExtensions = map[string]bool{".json": true, ".csv": true, ".txt": true, "(none)": true}
+
+var fitDailyMetrics = map[string]string{
+	"Step count":          "steps",
+	"Move Minutes count":  "active-minutes",
+	"Average heart rate":  "heart-rate",
+	"Min heart rate":      "heart-rate",
+	"Max heart rate":      "heart-rate",
+	"Weight":              "weight",
+	"Calories":            "calories",
+	"Calories (kcal)":     "calories",
+	"Distance":            "distance",
+	"Distance (m)":        "distance",
+	"Heart Points":        "heart-points",
+	"Heart Minutes count": "heart-minutes",
 }
+
+var safeCSVHeaders = map[string]bool{
+	"date":                true,
+	"start time":          true,
+	"end time":            true,
+	"activity type":       true,
+	"duration (ms)":       true,
+	"step count":          true,
+	"move minutes count":  true,
+	"distance":            true,
+	"distance (m)":        true,
+	"calories":            true,
+	"calories (kcal)":     true,
+	"heart points":        true,
+	"heart minutes count": true,
+	"average heart rate":  true,
+	"min heart rate":      true,
+	"max heart rate":      true,
+	"weight":              true,
+	"bmi":                 true,
+	"sleep minutes":       true,
+}
+
+var explicitDateKeys = map[string]bool{
+	"Date":              true,
+	"date":              true,
+	"Start time":        true,
+	"End time":          true,
+	"startTime":         true,
+	"endTime":           true,
+	"originalStartTime": true,
+	"lastModified":      true,
+	"dateOfSleep":       true,
+	"dateTime":          true,
+	"timestamp":         true,
+	"startTimestamp":    true,
+	"endTimestamp":      true,
+}
+
+var timestampMillisKeys = map[string]bool{"timestampMs": true, "startTimestampMs": true, "endTimestampMs": true}
 
 var safeJSONKeys = map[string]bool{
 	"timelineObjects":   true,
@@ -667,6 +726,7 @@ var safeJSONKeys = map[string]bool{
 	"activityType":      true,
 	"locations":         true,
 	"timestamp":         true,
+	"timestampMs":       true,
 	"latitudeE7":        true,
 	"longitudeE7":       true,
 	"semanticSegments":  true,
@@ -689,6 +749,7 @@ var safeJSONKeys = map[string]bool{
 	"body-weight":       true,
 	"activityName":      true,
 	"exercise":          true,
+	"sessions":          true,
 	"sleep":             true,
 	"steps":             true,
 	"heartRate":         true,
@@ -706,6 +767,7 @@ var safeJSONKeys = map[string]bool{
 	"intVal":            true,
 	"stringVal":         true,
 	"mapVal":            true,
+	"exportDate":        true,
 }
 
 func (r *Report) String() string {

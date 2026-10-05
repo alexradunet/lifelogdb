@@ -4,7 +4,7 @@
 - **Priority:** P1. **Effort:** L (four phases; the last is the owner's).
 - **Status:** Phase A code implemented for Timeline/Fit/Fitbit inventory; owner inventory output is still needed before any Phase B/C format support. The whole plan is not done.
 
-Implementation note: this Phase A slice intentionally stops before converter/facts generation and does not inspect real exports. The authorized inventory reports public product-family counts, month ranges, overlaps and shape paths from synthetic/public formats only; archive-wide photo gap measurement remains blocked until the owner supplies approved inventory shape/output.
+Implementation note: this Phase A slice intentionally stops before converter/facts generation and does not inspect real exports. The authorized inventory reports public product-family counts, month ranges, overlaps and shape paths from synthetic/public formats only; archive-wide photo inventory and photo gap measurement are out of scope under the current owner decisions.
 
 ## Why
 
