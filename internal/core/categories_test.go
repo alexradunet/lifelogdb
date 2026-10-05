@@ -2,8 +2,92 @@ package core
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 )
+
+func TestMetricNoteLinks(t *testing.T) {
+	s := fresh(t)
+	if _, err := s.CreatePerson(ctx, "cli", "Bob Sample", "", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.CreatePage(ctx, "cli", "Diet Plan", "owner note"); err != nil {
+		t.Fatal(err)
+	}
+	note := "Discuss with [[Bob Sample]], [[Diet Plan]], [[diet plan|again]], #health #Health and [[Health/Diet]]."
+	want := "Bob Sample,Diet Plan,health"
+	if added, err := s.RegisterMetric(ctx, "cli", "Fresh Link Metric", "count", note); err != nil || !added {
+		t.Fatalf("fresh metric with a note: %v %v", added, err)
+	}
+	fresh := pageByTitle(t, s, "Fresh Link Metric")
+	if fresh.Body != note || titles(fresh.Out, "wikilink") != want {
+		t.Fatalf("fresh metric links: body %q links %v", fresh.Body, fresh.Out)
+	}
+	for _, target := range []string{"Bob Sample", "Diet Plan", "health"} {
+		assertBacklinks(t, s, target, "Fresh Link Metric")
+	}
+	if id, err := s.PageID(ctx, "Health/Diet"); err != nil || id != 0 {
+		t.Fatalf("invalid target became page %d: %v", id, err)
+	}
+
+	ghost, _, err := s.CreatePage(ctx, "cli", "Promoted Link Metric", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if added, err := s.RegisterMetric(ctx, "cli", "promoted link metric", "count", note); err != nil || !added {
+		t.Fatalf("promoted metric with a note: %v %v", added, err)
+	}
+	promoted, err := s.PageByID(ctx, ghost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if promoted.Type != "metric" || promoted.Body != note || titles(promoted.Out, "wikilink") != want {
+		t.Fatalf("promoted metric links: %+v", promoted)
+	}
+	for _, target := range []string{"Bob Sample", "Diet Plan", "health"} {
+		assertBacklinks(t, s, target, "Fresh Link Metric,Promoted Link Metric")
+	}
+
+	if added, err := s.RegisterMetric(ctx, "cli", "Fresh Link Metric", "count", "Replacement [[Changed Target]] #other"); err != nil || added {
+		t.Fatalf("re-registering a metric with a body: %v %v", added, err)
+	}
+	fresh = pageByTitle(t, s, "Fresh Link Metric")
+	if fresh.Body != note || titles(fresh.Out, "wikilink") != want {
+		t.Errorf("re-registration changed the body or links: body %q links %v", fresh.Body, fresh.Out)
+	}
+	if id, err := s.PageID(ctx, "Changed Target"); err != nil || id != 0 {
+		t.Errorf("re-registration linked the replacement note to page %d: %v", id, err)
+	}
+}
+
+func pageByTitle(t *testing.T, s *Store, title string) *Page {
+	t.Helper()
+	id, err := s.PageID(ctx, title)
+	if err != nil || id == 0 {
+		t.Fatalf("page %q: id %d, %v", title, id, err)
+	}
+	p, err := s.PageByID(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func assertBacklinks(t *testing.T, s *Store, title, want string) {
+	t.Helper()
+	p := pageByTitle(t, s, title)
+	if got := titles(p.In, "wikilink"); got != want {
+		t.Fatalf("%s backlinks = %q, want %q (all backlinks: %s)", title, got, want, strings.Join(edgeTitles(p.In), ","))
+	}
+}
+
+func edgeTitles(es []Edge) []string {
+	out := make([]string, 0, len(es))
+	for _, e := range es {
+		out = append(out, e.Title)
+	}
+	return out
+}
 
 func TestMetricsArePagesFiledInCategories(t *testing.T) {
 	s := fresh(t)

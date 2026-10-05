@@ -22,11 +22,14 @@ func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
 	}
 	switch {
 	case p == nil:
-		id, _, err := t.insertPage("metric", name, text.TitleKey(name), nil, note, "")
+		id, _, err := t.insertPage("metric", name, text.TitleKey(name), nil, "", "")
 		if err != nil {
 			return false, err
 		}
-		_, err = t.tx.Exec(`INSERT INTO metrics(id, unit) VALUES (?, ?)`, id, unit)
+		if _, err = t.tx.Exec(`INSERT INTO metrics(id, unit) VALUES (?, ?)`, id, unit); err != nil {
+			return false, err
+		}
+		_, err = t.SetBody(id, note)
 		return err == nil, err
 	case p.Type == "metric":
 		var have string

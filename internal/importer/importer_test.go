@@ -517,6 +517,89 @@ func TestRewriteLinks(t *testing.T) {
 	}
 }
 
+func TestApprovedMetricNoteLinks(t *testing.T) {
+	register := func(t *testing.T, f *fixture) (string, int) {
+		t.Helper()
+		f.approveRules(t, rulesBody)
+		if err := f.w.ProposeMetric(Metric{Name: "Hydration", Unit: "cups", Note: "Discuss with [[Coach]] #training #Training [[Health/Diet]] [[Coach]]"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := ownerApproves(f.w, "metrics.md"); err != nil {
+			t.Fatal(err)
+		}
+		done, err := f.w.RegisterMetrics(ctx, f.s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Join(done, "; "); got != "Hydration: registered" {
+			t.Fatalf("register metrics did %q", got)
+		}
+		return metricNoteGraph(t, f), wikilinkRowCount(t, f)
+	}
+
+	first := setup(t)
+	graph1, _ := register(t, first)
+
+	replay := setup(t)
+	graph2, links2 := register(t, replay)
+	if graph2 != graph1 {
+		t.Fatalf("fresh replay graph = %q, want %q", graph2, graph1)
+	}
+	if done, err := replay.w.RegisterMetrics(ctx, replay.s); err != nil || strings.Join(done, "; ") != "Hydration: existing" {
+		t.Fatalf("approved metrics replay: %q %v", done, err)
+	}
+	if graph3 := metricNoteGraph(t, replay); graph3 != graph2 {
+		t.Fatalf("repeat replay graph = %q, want %q", graph3, graph2)
+	}
+	if links3 := wikilinkRowCount(t, replay); links3 != links2 {
+		t.Fatalf("repeat replay grew wikilinks from %d to %d", links2, links3)
+	}
+}
+
+func metricNoteGraph(t *testing.T, f *fixture) string {
+	t.Helper()
+	metric := importerPageByTitle(t, f, "Hydration")
+	coach := importerPageByTitle(t, f, "Coach")
+	tag := importerPageByTitle(t, f, "training")
+	invalid, err := f.s.PageID(ctx, "Health/Diet")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fmt.Sprintf("metric=%s coachBack=%s tagBack=%s invalid=%d", importerTitles(metric.Out, "wikilink"), importerTitles(coach.In, "wikilink"), importerTitles(tag.In, "wikilink"), invalid)
+}
+
+func importerPageByTitle(t *testing.T, f *fixture, title string) *core.Page {
+	t.Helper()
+	id, err := f.s.PageID(ctx, title)
+	if err != nil || id == 0 {
+		t.Fatalf("page %q: id %d, %v", title, id, err)
+	}
+	p, err := f.s.PageByID(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func importerTitles(es []core.Edge, kind string) string {
+	var out []string
+	for _, e := range es {
+		if e.Kind == kind {
+			out = append(out, e.Title)
+		}
+	}
+	return strings.Join(out, ",")
+}
+
+func wikilinkRowCount(t *testing.T, f *fixture) int {
+	t.Helper()
+	var n int
+	if err := f.s.DB.R.QueryRowContext(ctx, `SELECT count(*) FROM links WHERE kind = 'wikilink'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
 func TestMetricsAreFiledFromTheirCategory(t *testing.T) {
 	f := setup(t)
 	f.approveRules(t, rulesBody)

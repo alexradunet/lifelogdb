@@ -8,7 +8,7 @@
 
 - **Date / planned at:** 2026-10-05, commit `726ffab`.
 - **Priority:** P2. **Effort:** S. **Risk:** LOW (existing link-sync machinery).
-- **Status:** TODO. **Depends on:** none. **Category:** bug. **Audit finding:** 6.
+- **Status:** IN REVIEW (owner). **Depends on:** none. **Category:** bug. **Audit finding:** 6.
 
 ## Why
 
