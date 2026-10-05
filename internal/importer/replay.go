@@ -366,15 +366,6 @@ func (w *Workspace) replayLegacyRootsWithoutEvents(ctx context.Context, ts *core
 
 func replayEventCorrections(ctx context.Context, ts *core.Store, events []correctionIntent, known map[string]correctionIntent) (int, error) {
 	n := 0
-	if len(events) > 0 && !eventExists(ctx, ts, events[0], known) {
-		wrote, err := applyCorrectionBaseline(ctx, ts, events[0])
-		if err != nil {
-			return 0, err
-		}
-		if wrote {
-			n++
-		}
-	}
 	for i, intent := range events {
 		wrote, err := replayOneEventCorrection(ctx, ts, intent, i == 0, known)
 		if err != nil {
@@ -411,8 +402,22 @@ func replayOneEventCorrection(ctx context.Context, ts *core.Store, intent correc
 			return err
 		}
 		if first && intent.PredecessorKind == "legacy" {
+			if leaf.Supersedes != 0 {
+				return refuse("correction intent %s target has an unrelated later correction", intent.EventKey)
+			}
 			if !valueOK(intent.PredecessorValue, intent.PredecessorRetracted, value, ok) {
-				return refuse("correction intent %s legacy predecessor does not match target", intent.EventKey)
+				if _, err := t.Correct(leaf.ID, intent.PredecessorValue); err != nil {
+					return err
+				}
+				wrote = true
+				leafID, value, ok, err = t.CurrentOf(rootID)
+				if err != nil {
+					return err
+				}
+				leaf, err = t.MeasurementRow(leafID)
+				if err != nil {
+					return err
+				}
 			}
 		} else if intent.PredecessorKind != "event" || leaf.ImportKey != intent.PredecessorEventKey {
 			return refuse("correction intent %s predecessor is %s, not %s", intent.EventKey, leaf.ImportKey, intent.PredecessorEventKey)

@@ -11,7 +11,7 @@ import (
 	"lifelog/internal/core"
 )
 
-func TestParentCorrectionReview(t *testing.T) {
+func TestCorrectionIntentInvariants(t *testing.T) {
 	t.Run("actual commit failure is pending", func(t *testing.T) {
 		resetCorrectionHooks(t)
 		f, id := importedMoodCorrectionFixture(t)

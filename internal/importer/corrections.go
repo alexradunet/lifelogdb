@@ -73,9 +73,13 @@ func pendingCorrection(format string, a ...any) error {
 }
 
 var (
-	correctionAfterReadyHook  func(correctionIntent) error
-	correctionAfterCommitHook func(correctionIntent) error
-	correctionResyncHook      func(correctionIntent) error
+	correctionAfterReadyHook     func(correctionIntent) error
+	correctionAfterCommitHook    func(correctionIntent) error
+	correctionTempWriteHook      func(correctionIntent) error
+	correctionFileSyncHook       func(correctionIntent) error
+	correctionPreRenameHook      func(correctionIntent) error
+	correctionPostRenameSyncHook func(correctionIntent) error
+	correctionResyncHook         func(correctionIntent) error
 )
 
 // CorrectImported corrects a replayable imported reading through a durable workspace intent. handled is false for
@@ -305,9 +309,21 @@ func (w *Workspace) publishCorrectionIntent(intent correctionIntent) (postRename
 			os.Remove(tmpName)
 		}
 	}()
+	if correctionTempWriteHook != nil {
+		if err := correctionTempWriteHook(intent); err != nil {
+			tmp.Close()
+			return false, err
+		}
+	}
 	if _, err := tmp.Write(data); err != nil {
 		tmp.Close()
 		return false, err
+	}
+	if correctionFileSyncHook != nil {
+		if err := correctionFileSyncHook(intent); err != nil {
+			tmp.Close()
+			return false, err
+		}
 	}
 	if err := tmp.Sync(); err != nil {
 		tmp.Close()
@@ -317,10 +333,20 @@ func (w *Workspace) publishCorrectionIntent(intent correctionIntent) (postRename
 		return false, err
 	}
 	ready := filepath.Join(dir, intent.EventKey+".json")
+	if correctionPreRenameHook != nil {
+		if err := correctionPreRenameHook(intent); err != nil {
+			return false, err
+		}
+	}
 	if err := os.Rename(tmpName, ready); err != nil {
 		return false, err
 	}
 	cleanup = false
+	if correctionPostRenameSyncHook != nil {
+		if err := correctionPostRenameSyncHook(intent); err != nil {
+			return true, err
+		}
+	}
 	if err := syncDir(dir); err != nil {
 		return true, err
 	}
@@ -335,8 +361,9 @@ func syncDir(dir string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	return f.Sync()
+	syncErr := f.Sync()
+	closeErr := f.Close()
+	return errors.Join(syncErr, closeErr)
 }
 
 func directorySyncKnownUnsupported() bool {
@@ -448,6 +475,13 @@ func verifyEventRow(t *core.Tx, intent correctionIntent, id int64, known map[str
 		if pred.ImportKey != intent.PredecessorEventKey {
 			return refuse("correction intent %s predecessor is %s, not %s", intent.EventKey, pred.ImportKey, intent.PredecessorEventKey)
 		}
+		parent, ok := known[intent.PredecessorEventKey]
+		if !ok {
+			return refuse("correction intent %s predecessor %s is not a known intent", intent.EventKey, intent.PredecessorEventKey)
+		}
+		if parent.RootSource != intent.RootSource || parent.RootImportKey != intent.RootImportKey || text.TitleKey(parent.Metric) != text.TitleKey(intent.Metric) || pred.Source != parent.ActorSource || !valueOK(parent.Value, parent.Retracted, valueOfRow(pred), pred.Value != nil) {
+			return refuse("correction intent %s predecessor event %s does not match its intent", intent.EventKey, intent.PredecessorEventKey)
+		}
 	default:
 		return refuse("correction intent %s has unknown predecessor kind %q", intent.EventKey, intent.PredecessorKind)
 	}
@@ -521,7 +555,11 @@ func (w *Workspace) validateCorrectionIntent(filename string, intent correctionI
 	case intent.PredecessorKind == "event" && intent.PredecessorEventKey == "":
 		return refuse("correction intent %s has no predecessor event key", intent.EventKey)
 	}
-	if src, err := w.approvedImportSource(); err == nil && src != intent.WorkspaceSource {
+	src, err := w.approvedImportSource()
+	if err != nil {
+		return err
+	}
+	if src != intent.WorkspaceSource {
 		return refuse("correction intent %s belongs to %s, not workspace %s", intent.EventKey, intent.WorkspaceSource, src)
 	}
 	return nil
