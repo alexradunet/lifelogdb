@@ -445,6 +445,10 @@ func recoverOneCorrection(t *core.Tx, intent correctionIntent, known map[string]
 }
 
 func verifyEventRow(t *core.Tx, intent correctionIntent, id int64, known map[string]correctionIntent) error {
+	return verifyEventRowWithRoot(t, intent, id, known, intent.RootImportKey)
+}
+
+func verifyEventRowWithRoot(t *core.Tx, intent correctionIntent, id int64, known map[string]correctionIntent, rootKey string) error {
 	root, _, err := t.MeasurementRootAndLeaf(id)
 	if err != nil {
 		return err
@@ -456,7 +460,7 @@ func verifyEventRow(t *core.Tx, intent correctionIntent, id int64, known map[str
 	if row.Source != intent.ActorSource || row.ImportKey != intent.EventKey {
 		return refuse("correction intent %s matches a row with another event identity", intent.EventKey)
 	}
-	if root.Source != intent.RootSource || root.ImportKey != intent.RootImportKey || text.TitleKey(root.Metric) != text.TitleKey(intent.Metric) {
+	if root.Source != intent.RootSource || root.ImportKey != rootKey || text.TitleKey(root.Metric) != text.TitleKey(intent.Metric) {
 		return refuse("correction intent %s matches a row with another root", intent.EventKey)
 	}
 	if (intent.Retracted && row.Value != nil) || (!intent.Retracted && (row.Value == nil || intent.Value == nil || *row.Value != *intent.Value)) {

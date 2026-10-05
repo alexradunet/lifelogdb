@@ -276,7 +276,7 @@ func (w *Workspace) replayCorrections(ctx context.Context, ts *core.Store) (int,
 		known[intent.EventKey] = intent
 	}
 	for _, events := range groups {
-		wrote, err := replayEventCorrections(ctx, ts, events, known)
+		wrote, err := w.replayEventCorrections(ctx, ts, events, known)
 		if err != nil {
 			return 0, err
 		}
@@ -304,12 +304,23 @@ func (w *Workspace) replayLegacyCorrections(ctx context.Context, ts *core.Store)
 		var missing []string
 		for _, root := range order {
 			c := latest[root]
-			id, err := t.MeasurementByKey(c.Source, c.Metric, c.Key)
+			resolvedKey := c.Key
+			id, err := t.MeasurementByKey(c.Source, c.Metric, resolvedKey)
 			if err != nil {
 				return err
 			}
 			if id == 0 {
-				missing = append(missing, c.Metric+" "+c.Key)
+				resolvedKey, err = w.resolveCorrectionKey(c.Source, t, c.Metric, c.Key)
+				if err != nil {
+					return err
+				}
+				id, err = t.MeasurementByKey(c.Source, c.Metric, resolvedKey)
+				if err != nil {
+					return err
+				}
+			}
+			if id == 0 {
+				missing = append(missing, c.Metric+" "+describeResolvedKey(c.Key, resolvedKey))
 				continue
 			}
 			last, value, ok, err := t.CurrentOf(id)
@@ -353,7 +364,7 @@ func (w *Workspace) replayLegacyRootsWithoutEvents(ctx context.Context, ts *core
 			continue
 		}
 		c := latest[root]
-		wrote, err := applyCorrectionValue(ctx, ts, "cli", c.Source, c.Metric, c.Key, c.Value)
+		wrote, err := w.applyCorrectionValue(ctx, ts, "cli", c.Source, c.Metric, c.Key, c.Value)
 		if err != nil {
 			return 0, err
 		}
@@ -364,10 +375,10 @@ func (w *Workspace) replayLegacyRootsWithoutEvents(ctx context.Context, ts *core
 	return n, nil
 }
 
-func replayEventCorrections(ctx context.Context, ts *core.Store, events []correctionIntent, known map[string]correctionIntent) (int, error) {
+func (w *Workspace) replayEventCorrections(ctx context.Context, ts *core.Store, events []correctionIntent, known map[string]correctionIntent) (int, error) {
 	n := 0
 	for i, intent := range events {
-		wrote, err := replayOneEventCorrection(ctx, ts, intent, i == 0, known)
+		wrote, err := w.replayOneEventCorrection(ctx, ts, intent, i == 0, known)
 		if err != nil {
 			return 0, err
 		}
@@ -378,20 +389,38 @@ func replayEventCorrections(ctx context.Context, ts *core.Store, events []correc
 	return n, nil
 }
 
-func replayOneEventCorrection(ctx context.Context, ts *core.Store, intent correctionIntent, first bool, known map[string]correctionIntent) (bool, error) {
+func (w *Workspace) replayOneEventCorrection(ctx context.Context, ts *core.Store, intent correctionIntent, first bool, known map[string]correctionIntent) (bool, error) {
 	wrote := false
 	err := ts.Do(ctx, intent.ActorSource, func(t *core.Tx) error {
 		if id, err := t.MeasurementByKey(intent.ActorSource, intent.Metric, intent.EventKey); err != nil {
 			return err
 		} else if id != 0 {
-			return verifyEventRow(t, intent, id, known)
+			if err := verifyEventRow(t, intent, id, known); err == nil {
+				return nil
+			}
+			resolvedRootKey, err := w.resolveCorrectionKey(intent.RootSource, t, intent.Metric, intent.RootImportKey)
+			if err != nil {
+				return err
+			}
+			return verifyEventRowWithRoot(t, intent, id, known, resolvedRootKey)
 		}
-		rootID, err := t.MeasurementByKey(intent.RootSource, intent.Metric, intent.RootImportKey)
+		resolvedRootKey := intent.RootImportKey
+		rootID, err := t.MeasurementByKey(intent.RootSource, intent.Metric, resolvedRootKey)
 		if err != nil {
 			return err
 		}
 		if rootID == 0 {
-			return refuse("correction intent %s names a reading the replay did not write: %s", intent.EventKey, intent.RootImportKey)
+			resolvedRootKey, err = w.resolveCorrectionKey(intent.RootSource, t, intent.Metric, intent.RootImportKey)
+			if err != nil {
+				return err
+			}
+			rootID, err = t.MeasurementByKey(intent.RootSource, intent.Metric, resolvedRootKey)
+			if err != nil {
+				return err
+			}
+		}
+		if rootID == 0 {
+			return refuse("correction intent %s names a reading the replay did not write: %s", intent.EventKey, describeResolvedKey(intent.RootImportKey, resolvedRootKey))
 		}
 		leafID, value, ok, err := t.CurrentOf(rootID)
 		if err != nil {
@@ -434,15 +463,26 @@ func replayOneEventCorrection(ctx context.Context, ts *core.Store, intent correc
 	return wrote, err
 }
 
-func applyCorrectionValue(ctx context.Context, ts *core.Store, actor, source, metric, key string, value *float64) (bool, error) {
+func (w *Workspace) applyCorrectionValue(ctx context.Context, ts *core.Store, actor, source, metric, key string, value *float64) (bool, error) {
 	wrote := false
 	err := ts.Do(ctx, actor, func(t *core.Tx) error {
-		id, err := t.MeasurementByKey(source, metric, key)
+		resolvedKey := key
+		id, err := t.MeasurementByKey(source, metric, resolvedKey)
 		if err != nil {
 			return err
 		}
 		if id == 0 {
-			return refuse("corrections name readings the replay did not write: %s %s", metric, key)
+			resolvedKey, err = w.resolveCorrectionKey(source, t, metric, key)
+			if err != nil {
+				return err
+			}
+			id, err = t.MeasurementByKey(source, metric, resolvedKey)
+			if err != nil {
+				return err
+			}
+		}
+		if id == 0 {
+			return refuse("corrections name readings the replay did not write: %s %s", metric, describeResolvedKey(key, resolvedKey))
 		}
 		last, got, ok, err := t.CurrentOf(id)
 		if err != nil {

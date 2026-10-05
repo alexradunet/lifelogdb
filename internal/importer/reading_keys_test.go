@@ -8,6 +8,7 @@ import (
 
 	"lifelog/internal/core"
 	"lifelog/internal/db"
+	"lifelog/internal/text"
 )
 
 func TestReadingKeyIdentity(t *testing.T) {
@@ -175,9 +176,17 @@ func TestLegacyReadingKeyCompatibility(t *testing.T) {
 			t.Fatal(err)
 		}
 		v59 := 59.0
-		if _, handled, err := f.w.CorrectImported(ctx, f.s, "agent:owner", eventID, &v59); !handled || err != nil {
-			t.Fatalf("event correction on legacy root: handled %v err %v", handled, err)
+		if _, key, err := f.s.Correct(ctx, "cli", eventID, &v59); err != nil {
+			t.Fatal(err)
+		} else if err := f.w.RecordCorrection(key); err != nil {
+			t.Fatal(err)
 		}
+		v58 := 58.0
+		if _, handled, err := f.w.CorrectImported(ctx, f.s, "agent:owner", latestMeasurementIDImporter(t, f), &v58); !handled || err != nil {
+			t.Fatalf("event correction after legacy correction on legacy root: handled %v err %v", handled, err)
+		}
+		artifactsBefore := legacyCorrectionArtifacts(t, f)
+		keysBefore := rootImportKeys(t, f, file)
 
 		writes := []any{
 			readingFact("ferritin", "2031-09-01", "48 ng/mL", "2031-09-01 correction: 48 ng/mL", nil),
@@ -210,17 +219,88 @@ func TestLegacyReadingKeyCompatibility(t *testing.T) {
 		if res.Corrections != 0 || len(res.Differences) != 0 {
 			t.Fatalf("second legacy replay result: %+v", res)
 		}
-		copied := filepath.Join(t.TempDir(), "copied.db")
-		if err := db.Copy(target, copied); err != nil {
+		copiedLegacy := filepath.Join(t.TempDir(), "copied-legacy.db")
+		if err := db.Copy(f.trial, copiedLegacy); err != nil {
 			t.Fatal(err)
 		}
-		copiedRows := targetMeasurementRows(t, copied)
-		res, err = f.w.Replay(ctx, f.s, copied)
+		copiedRows := targetMeasurementRows(t, copiedLegacy)
+		res, err = f.w.Replay(ctx, f.s, copiedLegacy)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := targetMeasurementRows(t, copied); got != copiedRows || res.Corrections != 0 || len(res.Differences) != 0 {
-			t.Fatalf("copied target replay rows %d->%d result %+v", copiedRows, got, res)
+		if got := targetMeasurementRows(t, copiedLegacy); got != copiedRows || res.Corrections != 0 || len(res.Differences) != 0 {
+			t.Fatalf("copied legacy target replay rows %d->%d result %+v", copiedRows, got, res)
+		}
+		res, err = f.w.Replay(ctx, f.s, copiedLegacy)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := targetMeasurementRows(t, copiedLegacy); got != copiedRows || res.Corrections != 0 || len(res.Differences) != 0 {
+			t.Fatalf("second copied legacy replay rows %d->%d result %+v", copiedRows, got, res)
+		}
+		if got := legacyCorrectionArtifacts(t, f); !equalByteMaps(got, artifactsBefore) {
+			t.Fatalf("legacy correction artifacts changed")
+		}
+		if got := rootImportKeys(t, f, file); strings.Join(got, "\n") != strings.Join(keysBefore, "\n") {
+			t.Fatalf("trial root import keys changed\n got: %v\nwant: %v", got, keysBefore)
+		}
+	})
+
+	t.Run("captured-with aliases use page identity not rebuilt ids", func(t *testing.T) {
+		f := setupReadingKeyFixture(t)
+		file := "Medical/With.md"
+		writeSource(t, f, file, "Context captured 48 ng/mL on 2031-11-01\n")
+		mustLedger(t, f)
+		registerMetrics(t, f, Metric{Name: "ferritin", Unit: "ng/mL", Note: "Ferritin"})
+		capturedTrial := createImportedPage(t, f, file, "Context")
+		legacyKey := file + "|reading|Ferritin|2031-11-01|1"
+		root := recordReadingWith(t, f, "ferritin", "2031-11-01", 48, legacyKey, capturedTrial)
+		v47 := 47.0
+		if _, key, err := f.s.Correct(ctx, "cli", root, &v47); err != nil {
+			t.Fatal(err)
+		} else if err := f.w.RecordCorrection(key); err != nil {
+			t.Fatal(err)
+		}
+		writes := []any{
+			map[string]any{"page": map[string]any{"title": "Context"}, "quote": "Context captured"},
+			readingFact("ferritin", "2031-11-01", "48 ng/mL", "Context captured 48 ng/mL on 2031-11-01", map[string]string{"with": "Context"}),
+		}
+		if err := f.facts(t, file, map[string]any{"file": file, "writes": writes}); err != nil {
+			t.Fatal(err)
+		}
+		if r, err := f.w.Apply(ctx, f.s, file); err != nil || !strings.Contains(r.Summary, "2 existing") {
+			t.Fatalf("captured-with trial apply: %v, %v", r, err)
+		}
+
+		target := filepath.Join(t.TempDir(), "life.db")
+		if err := db.Init(target); err != nil {
+			t.Fatal(err)
+		}
+		d, err := db.Open(target)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer d.Close()
+		ts := &core.Store{DB: d}
+		if _, _, err := ts.CreatePage(ctx, "cli", "Offset Page", "id offset"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ts.RegisterMetric(ctx, "cli", "mood", "", "id offset"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ts.Record(ctx, "cli", core.Reading{Metric: "mood", Day: "2031-01-01", Value: 1}); err != nil {
+			t.Fatal(err)
+		}
+		res := newReplayResult(target)
+		if err := f.w.replayInto(ctx, ts, res, false); err != nil {
+			t.Fatal(err)
+		}
+		capturedTarget, rootTarget, gotValue := importedReadingMetadata(t, ts, "ferritin", "2031-11-01")
+		if capturedTarget == capturedTrial || rootTarget == root {
+			t.Fatalf("test did not rebuild ids: captured %d->%d root %d->%d", capturedTrial, capturedTarget, root, rootTarget)
+		}
+		if gotValue != 47 {
+			t.Fatalf("captured-with correction value = %g, want 47", gotValue)
 		}
 	})
 
@@ -326,7 +406,16 @@ func applyFacts(t *testing.T, f *fixture, file string, writes []any) {
 
 func recordReading(t *testing.T, f *fixture, metric, day, takenAt string, value float64, key string) int64 {
 	t.Helper()
-	id, err := f.s.Record(ctx, "import:notebook", core.Reading{Metric: metric, Day: day, TakenAt: takenAt, Value: value, Key: key})
+	return recordReadingWith(t, f, metric, day, value, key, 0, takenAt)
+}
+
+func recordReadingWith(t *testing.T, f *fixture, metric, day string, value float64, key string, capturedWith int64, takenAt ...string) int64 {
+	t.Helper()
+	var at string
+	if len(takenAt) > 0 {
+		at = takenAt[0]
+	}
+	id, err := f.s.Record(ctx, "import:notebook", core.Reading{Metric: metric, Day: day, TakenAt: at, Value: value, Key: key, CapturedWith: capturedWith})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -334,6 +423,36 @@ func recordReading(t *testing.T, f *fixture, metric, day, takenAt string, value 
 		t.Fatalf("legacy reading %s already existed", key)
 	}
 	return id
+}
+
+func createImportedPage(t *testing.T, f *fixture, file, title string) int64 {
+	t.Helper()
+	var id int64
+	if err := f.s.Do(ctx, "import:notebook", func(tx *core.Tx) error {
+		var err error
+		id, _, err = tx.CreateImported(title, nil, entityKey(file, "page", title))
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func importedReadingMetadata(t *testing.T, s *core.Store, metric, day string) (capturedWith int64, rootID int64, currentValue float64) {
+	t.Helper()
+	if err := s.DB.R.QueryRowContext(ctx, `SELECT me.id, coalesce(me.captured_with_id, 0)
+		FROM measurements me JOIN pages m ON m.id = me.metric_id
+		WHERE me.source = 'import:notebook' AND m.title_key = ? AND me.day = ? AND me.supersedes_id IS NULL`, text.TitleKey(metric), day).
+		Scan(&rootID, &capturedWith); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DB.R.QueryRowContext(ctx, `WITH RECURSIVE chain(id, value, depth) AS (
+		SELECT id, value, 0 FROM measurements WHERE id = ?
+		UNION ALL SELECT x.id, x.value, depth + 1 FROM measurements x JOIN chain c ON x.supersedes_id = c.id)
+		SELECT value FROM chain ORDER BY depth DESC LIMIT 1`, rootID).Scan(&currentValue); err != nil {
+		t.Fatal(err)
+	}
+	return capturedWith, rootID, currentValue
 }
 
 func importerMeasurementRows(t *testing.T, f *fixture) int {
@@ -377,4 +496,68 @@ func ledgerSnapshot(t *testing.T, f *fixture) string {
 		t.Fatal(err)
 	}
 	return string(b)
+}
+
+func legacyCorrectionArtifacts(t *testing.T, f *fixture) map[string][]byte {
+	t.Helper()
+	out := map[string][]byte{}
+	for _, rel := range []string{"corrections.json"} {
+		p := filepath.Join(f.w.Dir, rel)
+		if b, err := os.ReadFile(p); err == nil {
+			out[rel] = b
+		} else if !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
+	}
+	dir := filepath.Join(f.w.Dir, correctionIntentDir)
+	entries, err := os.ReadDir(dir)
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		rel := filepath.Join(correctionIntentDir, entry.Name())
+		b, err := os.ReadFile(filepath.Join(f.w.Dir, rel))
+		if err != nil {
+			t.Fatal(err)
+		}
+		out[rel] = b
+	}
+	return out
+}
+
+func equalByteMaps(a, b map[string][]byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, av := range a {
+		bv, ok := b[k]
+		if !ok || string(av) != string(bv) {
+			return false
+		}
+	}
+	return true
+}
+
+func rootImportKeys(t *testing.T, f *fixture, file string) []string {
+	t.Helper()
+	rows, err := f.s.DB.R.QueryContext(ctx, `SELECT import_key FROM measurements WHERE source = 'import:notebook' AND import_key LIKE ? AND supersedes_id IS NULL ORDER BY import_key`, file+"|reading|%")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, k)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return out
 }

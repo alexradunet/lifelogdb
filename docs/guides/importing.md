@@ -170,7 +170,9 @@ day, so a note that is only frontmatter can still say that it is a person.
   path and the write: the kind and title for a person, place or page; for a reading, the day and
   whatever tells apart two readings of one metric on one day in one file (its `taken_at`; else its place, counted from 1,
   among that metric's readings of that day in the **source** file, by where its quote first appears — so editing the
-  facts file never changes a key). A row that already exists keeps its id and key. The key is stable on every run
+  facts file never changes a key). A reading uses the metric's canonical `title_key`, not the spelling in one facts file;
+  if two untimed readings of that metric/day have the same quote position, the file is refused rather than ordered by
+  facts-file position or value. A row that already exists keeps its id and key. The key is stable on every run
   ([imports](../contract/imports.md) step 3, [import a row once](../cookbook/import-a-row-once.md)).
 - **References are titles.** `from`, `to` and `with` name a person, a place, a plain page or a day
   page by its title (`"2031-04-12"`, `"Bob Sample"`). A reference to a row not written yet is refused
@@ -474,7 +476,7 @@ Each line is a requirement on a writer that offers this process.
 - A database path that cannot be silently ignored: an operation given a path that does not exist, or
   none, says so; *status* says plainly when no database was checked.
 - A habit's period is re-sent with its `end_day` ([habits](../cookbook/habits.md)).
-- A reading's key tells apart two readings of one metric on one day in one file.
+- A reading's key tells apart two readings of one canonical metric on one day in one file.
 - A daily note appended to an existing day page is appended once: a re-run or a *replay* finds its record and writes
   nothing; the record is written by the writer, in the same transaction as the append.
 - Quotes match as whole words or tokens; a value matches as a whole number in its quote; a quote too

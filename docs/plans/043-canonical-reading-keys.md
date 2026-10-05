@@ -8,7 +8,7 @@
 
 - **Date / planned at:** 2026-10-05, commit `726ffab`.
 - **Priority:** P1. **Effort:** L (legacy compatibility, not just a casefold call). **Risk:** HIGH (immutable keys and correction references).
-- **Status:** IN PROGRESS. **Depends on:** [037](037-import-correction-lineage.md), [038](038-reading-source-evidence.md), [041](041-durable-import-corrections.md), [044](044-source-filename-identity.md). **Category:** bug. **Audit finding:** 10.
+- **Status:** IN REVIEW (owner). **Depends on:** [037](037-import-correction-lineage.md), [038](038-reading-source-evidence.md), [041](041-durable-import-corrections.md), [044](044-source-filename-identity.md). **Category:** bug. **Audit finding:** 10.
 
 ## Why
 
@@ -61,11 +61,11 @@ Ambiguous historical groups fail closed with a diagnostic that names the source 
 
 ## Done criteria
 
-- [ ] Casefold/NFC-equivalent names yield the same new reading identity and canonical untimed grouping.
-- [ ] Supported old keys remain stable/discoverable; no stored fact/provenance is rewritten.
-- [ ] Legacy and event correction references survive fresh replay; repeat apply/replay adds zero measurement rows.
-- [ ] Ambiguous historical groups fail closed during rehearsal rather than merging or dropping readings.
-- [ ] Full verification passes; only scope paths changed; index is IN REVIEW (owner).
+- [x] Casefold/NFC-equivalent names yield the same new reading identity and canonical untimed grouping.
+- [x] Supported old keys remain stable/discoverable; no stored fact/provenance is rewritten.
+- [x] Legacy and event correction references survive fresh replay; repeat apply/replay adds zero measurement rows.
+- [x] Ambiguous historical groups fail closed during rehearsal rather than merging or dropping readings.
+- [x] Full verification passes; only scope paths changed; index is IN REVIEW (owner).
 
 ## STOP conditions
 

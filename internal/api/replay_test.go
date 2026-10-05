@@ -208,7 +208,7 @@ func TestRepeatedImportedCorrectionsReplay(t *testing.T) {
 	var imported int64
 	if err := trial.Do(ctx, "import:notebook", func(tx *core.Tx) error {
 		var err error
-		imported, err = tx.MeasurementByKey("import:notebook", "Ferritin", "Medical/Ferritin.md|reading|Ferritin|2031-03-01|1")
+		imported, err = tx.MeasurementByKey("import:notebook", "Ferritin", "Medical/Ferritin.md|reading|ferritin|2031-03-01|1")
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -240,7 +240,7 @@ func TestRepeatedImportedCorrectionsReplay(t *testing.T) {
 		t.Fatalf("correction intents have %d records, want 4", len(intentsBefore))
 	}
 	for name, body := range intentsBefore {
-		for _, want := range []string{`"root_source": "import:notebook"`, `"root_import_key": "Medical/Ferritin.md|reading|Ferritin|2031-03-01|1"`, `"metric": "Ferritin"`, `"actor_source": "cli"`} {
+		for _, want := range []string{`"root_source": "import:notebook"`, `"root_import_key": "Medical/Ferritin.md|reading|ferritin|2031-03-01|1"`, `"metric": "Ferritin"`, `"actor_source": "cli"`} {
 			if !strings.Contains(body, want) {
 				t.Fatalf("intent %s = %s, want %s", name, body, want)
 			}

@@ -223,9 +223,16 @@ func (w *Workspace) mismatches(ctx context.Context, s *core.Store, st *Status, l
 			for i, wr := range f.Writes {
 				pos[i] = wholeIndex(collapse(src), collapse(wr.Quote))
 			}
-			for _, k := range readingKeys(f, pos) {
-				expected[k] = true
-			}
+			_ = s.DryRun(ctx, st.Source, func(t *core.Tx) error {
+				keys, err := resolveReadingKeys(t, st.Source, f, pos)
+				if err != nil {
+					return err
+				}
+				for _, k := range keys.byWrite {
+					expected[k] = true
+				}
+				return nil
+			})
 		}
 	}
 	if plan != nil {

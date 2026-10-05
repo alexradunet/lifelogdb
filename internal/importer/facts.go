@@ -456,34 +456,112 @@ func (w *Workspace) checkStatic(f *Facts, source string, rules *Rules, approved 
 	return pos, errs
 }
 
-// readingKeys derives each reading's key: the path, the metric, the day, and its taken_at or its place among
-// that metric's readings of that day in the source file, by where its quote first appears (so reordering the
-// facts file never changes a key).
-func readingKeys(f *Facts, pos []int) map[int]string {
+// readingKeys derives each reading's canonical key: the path, the canonical metric title key, the day, and its
+// taken_at or its place among that canonical metric's readings of that day in the source file, by where its quote
+// first appears. Equal quote positions in one untimed group are ambiguous: facts order and values are not identity.
+func readingKeys(f *Facts, pos []int) (map[int]string, error) {
+	ids, err := readingIdentities(f, pos)
+	if err != nil {
+		return nil, err
+	}
+	keys := map[int]string{}
+	for _, id := range ids {
+		keys[id.index] = id.canonicalKey
+	}
+	return keys, nil
+}
+
+type readingIdentity struct {
+	index            int
+	rawMetric        string
+	metricKey        string
+	day              string
+	takenAt          string
+	tz               string
+	withKey          string
+	value            *float64
+	pos              int
+	canonicalOrdinal int
+	legacyOrdinal    int
+	canonicalKey     string
+	legacyKey        string
+}
+
+type parsedReadingKey struct {
+	file   string
+	metric string
+	day    string
+	token  string
+}
+
+func readingIdentities(f *Facts, pos []int) ([]readingIdentity, error) {
 	type rk struct {
 		i, pos int
 	}
-	groups := map[string][]rk{}
-	keys := map[int]string{}
+	canonicalGroups := map[string][]rk{}
+	legacyGroups := map[string][]rk{}
+	ids := map[int]*readingIdentity{}
 	for i, wr := range f.Writes {
 		if wr.Reading == nil {
 			continue
 		}
 		r := wr.Reading
+		num, _, _, err := parseValue(r.Value, r.Unit)
+		if err != nil {
+			return nil, err
+		}
+		id := &readingIdentity{index: i, rawMetric: r.Metric, metricKey: text.TitleKey(r.Metric), day: r.Day, takenAt: r.TakenAt, tz: r.TZ, pos: pos[i], value: &num}
+		if r.With != "" {
+			id.withKey = text.TitleKey(r.With)
+		}
+		ids[i] = id
 		if r.TakenAt != "" {
-			keys[i] = strings.Join([]string{f.File, "reading", r.Metric, r.Day, r.TakenAt}, "|")
+			id.canonicalKey = strings.Join([]string{f.File, "reading", id.metricKey, r.Day, r.TakenAt}, "|")
+			id.legacyKey = strings.Join([]string{f.File, "reading", r.Metric, r.Day, r.TakenAt}, "|")
 			continue
 		}
-		g := r.Metric + "|" + r.Day
-		groups[g] = append(groups[g], rk{i, pos[i]})
+		canonicalGroups[id.metricKey+"|"+r.Day] = append(canonicalGroups[id.metricKey+"|"+r.Day], rk{i, pos[i]})
+		legacyGroups[r.Metric+"|"+r.Day] = append(legacyGroups[r.Metric+"|"+r.Day], rk{i, pos[i]})
 	}
-	for g, rs := range groups {
+	for g, rs := range canonicalGroups {
 		sort.SliceStable(rs, func(a, b int) bool { return rs[a].pos < rs[b].pos })
 		for n, x := range rs {
-			keys[x.i] = strings.Join([]string{f.File, "reading", g, strconv.Itoa(n + 1)}, "|")
+			if n > 0 && x.pos == rs[n-1].pos {
+				parts := strings.Split(g, "|")
+				return nil, refuse("%s: reading group %s on %s has tied source positions; use distinct quotes", f.File, parts[0], parts[1])
+			}
+			id := ids[x.i]
+			id.canonicalOrdinal = n + 1
+			id.canonicalKey = strings.Join([]string{f.File, "reading", g, strconv.Itoa(n + 1)}, "|")
 		}
 	}
-	return keys
+	for g, rs := range legacyGroups {
+		sort.SliceStable(rs, func(a, b int) bool { return rs[a].pos < rs[b].pos })
+		for n, x := range rs {
+			id := ids[x.i]
+			id.legacyOrdinal = n + 1
+			id.legacyKey = strings.Join([]string{f.File, "reading", g, strconv.Itoa(n + 1)}, "|")
+		}
+	}
+	out := make([]readingIdentity, 0, len(ids))
+	for i := range f.Writes {
+		if id := ids[i]; id != nil {
+			out = append(out, *id)
+		}
+	}
+	return out, nil
+}
+
+func parseReadingKey(key string) (parsedReadingKey, bool) {
+	file, rest, ok := strings.Cut(key, "|reading|")
+	if !ok {
+		return parsedReadingKey{}, false
+	}
+	parts := strings.Split(rest, "|")
+	if len(parts) != 3 {
+		return parsedReadingKey{}, false
+	}
+	return parsedReadingKey{file: file, metric: parts[0], day: parts[1], token: parts[2]}, true
 }
 
 func entityKey(file, kind, title string) string {

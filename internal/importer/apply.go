@@ -103,11 +103,14 @@ func (w *Workspace) prepare(file string) (*Facts, []int, *Rules, error) {
 // write applies a checked facts file in one transaction (rolled back when dry): the guide's checks against
 // life.db, then each write through the same core operations the API runs.
 func (w *Workspace) write(ctx context.Context, s *core.Store, f *Facts, pos []int, rules *Rules, dry bool) (*Report, error) {
-	keys := readingKeys(f, pos)
 	r := &Report{File: f.File, Kept: len(f.KeptAsText), Waiting: f.Waiting, Outcomes: []Outcome{}}
 	fn := func(t *core.Tx) error {
+		keys, err := resolveReadingKeys(t, rules.Source, f, pos)
+		if err != nil {
+			return err
+		}
 		for i, wr := range f.Writes {
-			o, err := applyWrite(t, f.File, wr, keys[i], rules)
+			o, err := applyWrite(t, f.File, wr, keys.byWrite[i], rules)
 			if err != nil {
 				e := refuse("%s: write %d (%s): %v", f.File, i+1, wr.kind(), err)
 				if errors.Is(err, errNotYet) {

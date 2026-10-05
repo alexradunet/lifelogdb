@@ -80,6 +80,52 @@ func (t *Tx) MeasurementByKey(source, metric, key string) (int64, error) {
 	return id, err
 }
 
+// ImportedMeasurementRoot is the portable identity of an imported root reading, for import-key compatibility checks.
+type ImportedMeasurementRoot struct {
+	ID              int64
+	ImportKey       string
+	Metric          string
+	MetricKey       string
+	Day             string
+	TakenAt         string
+	TZ              string
+	CapturedWithKey string
+	Value           *float64
+}
+
+// ImportedMeasurementRootsByFile lists root readings for one imported source, source file and canonical metric key.
+func (t *Tx) ImportedMeasurementRootsByFile(source, file, metricKey string) ([]ImportedMeasurementRoot, error) {
+	rows, err := t.tx.Query(`SELECT me.id, me.import_key, m.title, m.title_key, me.day,
+	                              coalesce(me.taken_at, ''), coalesce(me.tz, ''),
+	                              coalesce(captured.title_key, ''), me.value
+	                         FROM measurements me
+	                         JOIN pages m ON m.id = me.metric_id
+	                         LEFT JOIN pages captured ON captured.id = me.captured_with_id
+	                        WHERE me.source = ? AND me.import_key IS NOT NULL
+	                          AND m.title_key = ? AND me.supersedes_id IS NULL`, source, metricKey)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	prefix := file + "|reading|"
+	var out []ImportedMeasurementRoot
+	for rows.Next() {
+		var r ImportedMeasurementRoot
+		var v sql.NullFloat64
+		if err := rows.Scan(&r.ID, &r.ImportKey, &r.Metric, &r.MetricKey, &r.Day, &r.TakenAt, &r.TZ, &r.CapturedWithKey, &v); err != nil {
+			return nil, err
+		}
+		if !strings.HasPrefix(r.ImportKey, prefix) {
+			continue
+		}
+		if v.Valid {
+			r.Value = &v.Float64
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
 // CurrentOf follows a reading's corrections to the last one: its id and value (ok false = retracted).
 func (t *Tx) CurrentOf(id int64) (last int64, value float64, ok bool, err error) {
 	var v sql.NullFloat64

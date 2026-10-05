@@ -91,7 +91,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   or retry a correction after resolving any conflict. This is recovery across process failures, not cross-file ACID
   or a power-loss guarantee.
 - **Imported keys** are derived, never sent: `path|person|<title_key>` (and place, page), a note's path, and
-  `path|reading|<metric>|<day>|<taken_at, or its place in the source file>`.
+  `path|reading|<metric_title_key>|<day>|<taken_at, or its place in the source file>`.
 - **The schema is embedded.** `go generate ./...` copies `docs/schema/schema.sql` into `internal/db`; a test fails
   when the copy is stale. `lifelog init` refuses an existing file; `Open` refuses a file without Lifelog's
   `application_id`.
