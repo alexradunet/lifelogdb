@@ -58,10 +58,11 @@ func resolveReadingGroup(file string, group []readingIdentity, roots []core.Impo
 	rootsByID := map[int64]core.ImportedMeasurementRoot{}
 	rootsForWrite := map[int][]int64{}
 	canonicalStored := canonicalStoredGroup(file, group, roots)
+	storedOrdinal := completeSingleStoredOrdinalGroup(file, group, roots)
 	for _, root := range roots {
 		rootsByID[root.ID] = root
 		for _, id := range group {
-			if readingRootMatches(file, id, root, group, canonicalStored) {
+			if readingRootMatches(file, id, root, group, canonicalStored, storedOrdinal) {
 				matchesByRoot[root.ImportKey] = append(matchesByRoot[root.ImportKey], int64(id.index))
 				rootsForWrite[id.index] = append(rootsForWrite[id.index], root.ID)
 			}
@@ -137,7 +138,35 @@ func canonicalStoredGroup(file string, group []readingIdentity, roots []core.Imp
 	return true
 }
 
-func readingRootMatches(file string, id readingIdentity, root core.ImportedMeasurementRoot, group []readingIdentity, canonicalStored bool) bool {
+func completeSingleStoredOrdinalGroup(file string, group []readingIdentity, roots []core.ImportedMeasurementRoot) bool {
+	if len(roots) != len(group) {
+		return false
+	}
+	storedMetric := ""
+	ordinals := map[int]bool{}
+	for _, root := range roots {
+		parsed, ok := parseReadingKey(root.ImportKey)
+		if !ok || parsed.file != file || parsed.day != group[0].day || text.TitleKey(parsed.metric) != group[0].metricKey {
+			return false
+		}
+		if storedMetric == "" {
+			storedMetric = parsed.metric
+		} else if parsed.metric != storedMetric {
+			return false
+		}
+		if parsed.token == "" || group[0].takenAt != "" {
+			return false
+		}
+		n, err := strconv.Atoi(parsed.token)
+		if err != nil || n < 1 || n > len(group) || ordinals[n] {
+			return false
+		}
+		ordinals[n] = true
+	}
+	return len(ordinals) == len(group)
+}
+
+func readingRootMatches(file string, id readingIdentity, root core.ImportedMeasurementRoot, group []readingIdentity, canonicalStored, storedOrdinal bool) bool {
 	parsed, ok := parseReadingKey(root.ImportKey)
 	if !ok || parsed.file != file || text.TitleKey(parsed.metric) != id.metricKey || parsed.day != id.day {
 		return false
@@ -151,15 +180,18 @@ func readingRootMatches(file string, id readingIdentity, root core.ImportedMeasu
 	if canonicalStored {
 		return root.ImportKey == id.canonicalKey
 	}
-	if root.ImportKey == id.canonicalKey || root.ImportKey == id.legacyKey {
-		return true
-	}
 	if id.takenAt != "" {
-		return parsed.token == id.takenAt
+		return root.ImportKey == id.canonicalKey || root.ImportKey == id.legacyKey || parsed.token == id.takenAt
 	}
 	ordinal, err := strconv.Atoi(parsed.token)
 	if err != nil {
 		return false
+	}
+	if storedOrdinal {
+		return ordinal == id.canonicalOrdinal
+	}
+	if root.ImportKey == id.canonicalKey || root.ImportKey == id.legacyKey {
+		return true
 	}
 	if parsed.metric == id.rawMetric {
 		return ordinal == id.legacyOrdinal
@@ -271,9 +303,23 @@ func (w *Workspace) validateTrialReadingIdentity(ctx context.Context, trial *cor
 		if line.State != "x" && line.State != "?" {
 			continue
 		}
+		facts, loadErr := w.LoadFacts(line.File)
+		if loadErr != nil {
+			return loadErr
+		}
+		hasReading := false
+		for _, wr := range facts.Writes {
+			if wr.Reading != nil {
+				hasReading = true
+				break
+			}
+		}
+		if !hasReading {
+			continue
+		}
 		f, pos, rules, err := w.prepare(line.File)
 		if err != nil {
-			continue
+			return err
 		}
 		if err := trial.DryRun(ctx, rules.Source, func(t *core.Tx) error {
 			_, err := resolveReadingKeys(t, rules.Source, f, pos)
@@ -307,32 +353,7 @@ func (w *Workspace) resolveCorrectionKeyFromTrial(ctx context.Context, trial *co
 			writeIndex = idx
 			return nil
 		}
-		if resolved.ambiguousAliases[key] {
-			return refuse("%s: ambiguous legacy correction root %s for %s", parsed.file, key, metric)
-		}
-		if idx, ok := resolved.aliasWrite[key]; ok {
-			writeIndex = idx
-			return nil
-		}
-		ids, err := readingIdentities(f, pos)
-		if err != nil {
-			return err
-		}
-		var matches []int
-		for _, id := range ids {
-			if text.TitleKey(metric) != id.metricKey || parsed.day != id.day || text.TitleKey(parsed.metric) != id.metricKey {
-				continue
-			}
-			if historicalKeyCouldName(parsed, id, ids) {
-				matches = append(matches, id.index)
-			}
-		}
-		matches = uniqueInts(matches)
-		if len(matches) != 1 {
-			return refuse("%s: ambiguous legacy correction root %s for %s", parsed.file, key, metric)
-		}
-		writeIndex = matches[0]
-		return nil
+		return refuse("%s: correction root %s for %s has no validated original trial reading", parsed.file, key, metric)
 	})
 	if err != nil {
 		return "", err

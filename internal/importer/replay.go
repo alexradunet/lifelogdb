@@ -324,7 +324,7 @@ func (w *Workspace) replayLegacyCorrections(ctx context.Context, trial, ts *core
 				return err
 			}
 			if id == 0 && trial == ts {
-				resolvedKey, err = w.resolveCorrectionKeyFromTrial(ctx, trial, t, c.Source, c.Metric, c.Key)
+				resolvedKey, err = w.resolveCorrectionKey(c.Source, t, c.Metric, c.Key)
 				if err != nil {
 					return err
 				}
@@ -433,7 +433,7 @@ func (w *Workspace) replayOneEventCorrection(ctx context.Context, trial, ts *cor
 			return err
 		}
 		if rootID == 0 && trial == ts {
-			resolvedRootKey, err = w.resolveCorrectionKeyFromTrial(ctx, trial, t, intent.RootSource, intent.Metric, intent.RootImportKey)
+			resolvedRootKey, err = w.resolveCorrectionKey(intent.RootSource, t, intent.Metric, intent.RootImportKey)
 			if err != nil {
 				return err
 			}
@@ -502,7 +502,7 @@ func (w *Workspace) applyCorrectionValue(ctx context.Context, trial, ts *core.St
 			return err
 		}
 		if id == 0 && trial == ts {
-			resolvedKey, err = w.resolveCorrectionKeyFromTrial(ctx, trial, t, source, metric, key)
+			resolvedKey, err = w.resolveCorrectionKey(source, t, metric, key)
 			if err != nil {
 				return err
 			}

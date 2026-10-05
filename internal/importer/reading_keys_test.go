@@ -1,10 +1,12 @@
 package importer
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"lifelog/internal/core"
 	"lifelog/internal/db"
@@ -87,6 +89,29 @@ func TestLegacyReadingKeyCompatibility(t *testing.T) {
 		}
 		if got := importerMeasurementRows(t, f); got != before {
 			t.Fatalf("tied source-position apply mutated measurements to %d, want %d", got, before)
+		}
+	})
+
+	t.Run("single legacy spelling equal values can use mixed new spellings", func(t *testing.T) {
+		f := setupReadingKeyFixture(t)
+		file := "Medical/SingleLegacy.md"
+		writeSource(t, f, file, "2031-10-01 first: 5 ng/mL\n2031-10-01 second: 5 ng/mL\n")
+		mustLedger(t, f)
+		registerMetrics(t, f, Metric{Name: "ferritin", Unit: "ng/mL", Note: "Ferritin"})
+		recordReading(t, f, "ferritin", "2031-10-01", "", 5, file+"|reading|Ferritin|2031-10-01|1")
+		recordReading(t, f, "ferritin", "2031-10-01", "", 5, file+"|reading|Ferritin|2031-10-01|2")
+		facts := []any{
+			readingFact("Ferritin", "2031-10-01", "5 ng/mL", "2031-10-01 first: 5 ng/mL", nil),
+			readingFact("ferritin", "2031-10-01", "5 ng/mL", "2031-10-01 second: 5 ng/mL", nil),
+		}
+		if err := f.facts(t, file, map[string]any{"file": file, "writes": facts}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.w.Apply(ctx, f.s, file); err != nil {
+			t.Fatal(err)
+		}
+		if n := importerMeasurementRows(t, f); n != 2 {
+			t.Fatalf("rows %d, want 2", n)
 		}
 	})
 
@@ -386,6 +411,48 @@ func TestLegacyReadingKeyCompatibility(t *testing.T) {
 		}
 		if gotValue != 47 {
 			t.Fatalf("captured-with correction value = %g, want 47", gotValue)
+		}
+	})
+
+	t.Run("correction requires actual original trial root evidence", func(t *testing.T) {
+		f := setupReadingKeyFixture(t)
+		file := "Medical/MissingRoot.md"
+		writeSource(t, f, file, "2031-10-01 value: 5 ng/mL\n")
+		mustLedger(t, f)
+		registerMetrics(t, f, Metric{Name: "ferritin", Unit: "ng/mL", Note: "Ferritin"})
+		facts := []any{readingFact("Ferritin", "2031-10-01", "5 ng/mL", "2031-10-01 value: 5 ng/mL", nil)}
+		if err := f.facts(t, file, map[string]any{"file": file, "writes": facts}); err != nil {
+			t.Fatal(err)
+		}
+		markLedgerDone(t, f, file)
+		corrected := 4.0
+		if err := f.w.RecordCorrection(core.CorrectedKey{Source: "import:notebook", Metric: "ferritin", Key: file + "|reading|Ferritin|2031-10-01|1", Value: &corrected}); err != nil {
+			t.Fatal(err)
+		}
+		target := filepath.Join(t.TempDir(), "life.db")
+		if _, err := f.w.Replay(ctx, f.s, target); err == nil || !strings.Contains(err.Error(), "no validated original trial reading") {
+			t.Fatalf("missing-root replay error = %v, want proof refusal", err)
+		}
+		if _, err := os.Stat(target); !os.IsNotExist(err) {
+			t.Fatalf("refusal created target: %v", err)
+		}
+	})
+
+	t.Run("same store alias resolver does not acquire nested writer", func(t *testing.T) {
+		f := setupReadingKeyFixture(t)
+		file := "Medical/SameStore.md"
+		writeSource(t, f, file, "2031-10-01 value: 5 ng/mL\n")
+		mustLedger(t, f)
+		registerMetrics(t, f, Metric{Name: "ferritin", Unit: "ng/mL", Note: "Ferritin"})
+		applyFacts(t, f, file, []any{readingFact("Ferritin", "2031-10-01", "5 ng/mL", "2031-10-01 value: 5 ng/mL", nil)})
+		corrected := 4.0
+		if err := f.w.RecordCorrection(core.CorrectedKey{Source: "import:notebook", Metric: "ferritin", Key: file + "|reading|Ferritin|2031-10-01|1", Value: &corrected}); err != nil {
+			t.Fatal(err)
+		}
+		short, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+		defer cancel()
+		if _, err := f.w.replayCorrections(short, f.s); err != nil {
+			t.Fatalf("same-store alias replay blocked/failed: %v", err)
 		}
 	})
 
