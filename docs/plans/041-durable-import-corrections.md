@@ -38,6 +38,33 @@ Existing measurements have an optional `import_key` and a unique `(source, impor
 
 Only the drift-check paths, this plan's protocol notes, and index status. New importer correction helpers/tests are allowed. No database schema/outbox table/migration, generic workspace locking project, whole-replay atomicity redesign, model-supplied keys, source-file edits, or real data access. Plan 043 must preserve references to both legacy and new records later.
 
+## Protocol and failure matrix
+
+Protocol to implement after owner approval:
+
+1. A correction request that reaches an import workspace first acquires `Workspace.mu`, before any database write transaction. While holding that workspace coordination, recover every ready correction intent in the workspace against the trial database. If recovery reports a conflict or pending ambiguity, the new correction is refused until the owner resolves it. `status` remains read-only and reports those states; rehearsal and replay also run recovery first.
+2. The workspace source from approved `rules.md` must equal the imported root's `source`. A missing approved source, a non-imported root, a root without an `import_key`, or a source mismatch is refused before writing either persistence domain.
+3. The writer builds an immutable generated correction event id and intent from data already verified in the open SQL transaction: workspace source, actor/source making the correction, root `(source, import_key, metric)`, predecessor identity, desired value or retraction, and ordering. Legacy predecessors are the imported root's current final state in this workspace; event predecessors name the generated event key of the prior correction. The event id is private writer provenance, stored as the correction row's `import_key`; no request supplies it.
+4. Inside one `Store.Do`, insert the correction row with the generated event key but keep SQL uncommitted. While SQL is still uncommitted, write, sync and publish a ready intent file under `correction-intents/`. Publication is all-or-absent: temporary file, file sync, atomic rename, directory sync where supported. A publication error returns from the transaction callback so SQL rolls back.
+5. Commit SQL after the ready intent is published. If commit reports failure after publication, return a pending-recovery error, not success and not “nothing changed”. The accepted intent is never discarded.
+6. Recovery is idempotent. If the event row already exists with matching actor, source, root, predecessor and value, mark it recovered and do not insert another row. If no event row exists, apply the intent only when the recorded predecessor still matches; otherwise report a conflict for owner resolution. Re-running recovery after success changes no rows.
+7. Replay reads legacy `corrections.json` and new event intents without rewriting either. Legacy rows are coalesced to each root's final state from the trial. Event rows replay in recorded predecessor order, matching events already present in a copied target by generated event key and actor/source, not only events replay created in the current run. Ambiguous mixed legacy/event ordering is refused fail-closed.
+
+Failure matrix:
+
+| Case | Detection point | Required safe outcome |
+|---|---|---|
+| Pre-insert refusal: invalid value, missing reading, unapproved/mismatched workspace source, non-imported or unkeyed root | Before event id publication and before SQL insert | Return a refusal; no intent file; no measurement row; no legacy `corrections.json` append. |
+| Workspace coordination cannot be acquired without reversing lock order | Before `Store.Do` | Wait or fail without taking the DB write lock; never hold DB then workspace locks. |
+| Intent directory blocked (for example `correction-intents` is a file), temporary write fails, file sync fails, rename/publish fails, or directory sync returns a hard error | Inside `Store.Do` after the SQL insert but before commit | Return the file error from the transaction callback; SQL rolls back; current leaf and row count stay unchanged; no partial ready intent is considered accepted. |
+| SQL commit succeeds after the intent is ready | After `Store.Do` returns nil | Report success with the measurement entity; recovery sees matching event row and is a no-op. |
+| SQL commit fails or returns ambiguous after the intent is ready | After publication, when `Store.Do` commits | Return pending recovery; leave ready intent in place; subsequent correction/rehearsal/replay runs recovery exactly once before doing other work. |
+| Crash after intent ready and before/after SQL commit is observed | Next correction, rehearsal or replay | Recovery matches an existing event row by generated key and actor/source, or inserts it only if the recorded predecessor still matches; repeated recovery does not add rows. No untested power-loss durability beyond synced local-file publication is claimed. |
+| Ready intent conflicts: predecessor no longer current, root/value mismatch, actor/source mismatch, copied target has different generated event row | Recovery or replay | Fail closed with a conflict visible to owner; do not overwrite unrelated later corrections and do not silently skip the intent. |
+| Concurrent correction requests for one workspace | Workspace entry | Serialized by `Workspace.mu` before DB write lock; the second sees the first through recovery/current predecessor checks and either records the next event or reports conflict. |
+| Rehearsal/replay with legacy and event correction records | Before applying corrections in rehearsal/replay | Legacy roots replay to their coalesced final state, then unambiguous event-to-event successors replay by generated event key; insufficient mixed ordering is a failure and leaves the target unchanged after rehearsal. |
+| GET/status sees pending intents | Status read | Report pending/conflicting intents without recovery side effects. |
+
 ## Commands
 
 - API: `go test -mod=readonly -count=1 ./internal/api -run 'TestCorrectionWorkspaceFailure|TestRepeatedImportedCorrectionsReplay|TestCorrectionDomainActions'`.

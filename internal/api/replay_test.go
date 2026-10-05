@@ -65,6 +65,100 @@ func replayFixture(t *testing.T) (http.Handler, string) {
 	return api.New(s, ws), filepath.Join(t.TempDir(), "life.db")
 }
 
+type importedCorrectionFixture struct {
+	store   *core.Store
+	ws      *importer.Workspace
+	client  *client.Client
+	reading int64
+}
+
+func newImportedCorrectionFixture(t *testing.T, workspaceName, workspaceSource string) importedCorrectionFixture {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, workspaceName), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ws, err := importer.Open(filepath.Join(root, workspaceName+".lifelog"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ws.Setup(""); err != nil {
+		t.Fatal(err)
+	}
+	if err := ws.DraftRules("source: " + workspaceSource + "\n"); err != nil {
+		t.Fatal(err)
+	}
+	approveWorkspaceFile(t, ws, "rules.md")
+	p := filepath.Join(t.TempDir(), "life.db")
+	if err := db.Init(p); err != nil {
+		t.Fatal(err)
+	}
+	d, err := db.Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { d.Close() })
+	store := &core.Store{DB: d}
+	reading, err := store.Record(context.Background(), "import:notebook", core.Reading{Metric: "Mood", Day: "2031-03-01", Value: 3, Key: "Medical/Mood.md|reading|Mood|2031-03-01|1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return importedCorrectionFixture{store: store, ws: ws, client: client.InProcess(api.New(store, ws), "cli"), reading: reading}
+}
+
+func correctionAction(t *testing.T, c *client.Client) api.Action {
+	t.Helper()
+	catalog, err := c.Catalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return find(&api.Entity{Actions: catalog}, "correct")
+}
+
+func measurementState(t *testing.T, s *core.Store) (rows int, current float64) {
+	t.Helper()
+	if err := s.DB.R.QueryRowContext(context.Background(), `SELECT count(*) FROM measurements`).Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DB.R.QueryRowContext(context.Background(), `SELECT value FROM measurement_values WHERE day = '2031-03-01'`).Scan(&current); err != nil {
+		t.Fatal(err)
+	}
+	return rows, current
+}
+
+func TestCorrectionWorkspaceFailure(t *testing.T) {
+	f := newImportedCorrectionFixture(t, "Notebook", "import:notebook")
+	beforeRows, beforeValue := measurementState(t, f.store)
+	if err := os.WriteFile(filepath.Join(f.ws.Dir, "correction-intents"), []byte("not a directory"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := f.client.Do(correctionAction(t, f.client), map[string]string{"id": strconv.FormatInt(f.reading, 10), "value": "4"})
+	if err == nil {
+		t.Fatal("correction with an unpublishable workspace intent succeeded")
+	}
+	if rows, value := measurementState(t, f.store); rows != beforeRows || value != beforeValue {
+		t.Fatalf("workspace failure changed measurements: rows/value %d/%g, want %d/%g", rows, value, beforeRows, beforeValue)
+	}
+}
+
+func TestCorrectionWrongWorkspaceRefusesBeforeWrites(t *testing.T) {
+	f := newImportedCorrectionFixture(t, "Other", "import:other")
+	beforeRows, beforeValue := measurementState(t, f.store)
+	_, err := f.client.Do(correctionAction(t, f.client), map[string]string{"id": strconv.FormatInt(f.reading, 10), "value": "4"})
+	if err == nil || !strings.Contains(err.Error(), "workspace") {
+		t.Fatalf("wrong workspace correction error = %v, want workspace source refusal", err)
+	}
+	if rows, value := measurementState(t, f.store); rows != beforeRows || value != beforeValue {
+		t.Fatalf("wrong workspace changed measurements: rows/value %d/%g, want %d/%g", rows, value, beforeRows, beforeValue)
+	}
+	if _, err := os.Stat(filepath.Join(f.ws.Dir, "corrections.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("wrong workspace wrote corrections.json: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(f.ws.Dir, "correction-intents")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("wrong workspace wrote correction intents: %v", err)
+	}
+}
+
 // The replay action: dry_run=1 rehearses and writes nothing, an agent may run neither, and the real run writes.
 func TestRepeatedImportedCorrectionsReplay(t *testing.T) {
 	ctx := context.Background()
