@@ -8,7 +8,7 @@
 
 - **Date / planned at:** 2026-10-05, commit `726ffab`.
 - **Priority:** P1. **Effort:** M. **Risk:** MED (valid metadata compatibility).
-- **Status:** TODO. **Depends on:** none. **Category:** bug / security. **Audit finding:** 9.
+- **Status:** IN REVIEW (owner). **Depends on:** none. **Category:** bug / security. **Audit finding:** 9.
 
 ## Why
 

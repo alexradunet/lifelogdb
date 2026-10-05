@@ -143,31 +143,63 @@ func box(typ string, body ...[]byte) []byte {
 // HEIC is the box tree of a HEIC whose Exif item says what m says: in mdat (construction method 0), or in the meta
 // box's idat (method 1).
 func HEIC(m photo.Meta, little, inIdat bool) []byte {
+	return HEICLocationVersion(m, little, inIdat, 1)
+}
+
+// HEICLocationVersion is HEIC with a selected iloc version. Version 0 has no construction method field, so its Exif
+// item is always located in the file.
+func HEICLocationVersion(m photo.Meta, little, inIdat bool, version byte) []byte {
 	item := append(binary.BigEndian.AppendUint32(nil, 6), "Exif\x00\x00"...)
 	item = append(item, TIFF(m, little)...)
 	picture := make([]byte, 64) // a placeholder for the coded image
-	infe := func(id uint16, typ string) []byte {
-		b := []byte{2, 0, 0, 0}
-		b = binary.BigEndian.AppendUint16(b, id)
+	exifID := uint32(102)
+	pictureID := uint32(101)
+	if version == 2 {
+		exifID = 0x10002
+		pictureID = 0x10001
+	}
+	if version == 0 {
+		inIdat = false
+	}
+	infe := func(id uint32, typ string) []byte {
+		var b []byte
+		if id > math.MaxUint16 {
+			b = []byte{3, 0, 0, 0}
+			b = binary.BigEndian.AppendUint32(b, id)
+		} else {
+			b = []byte{2, 0, 0, 0}
+			b = binary.BigEndian.AppendUint16(b, uint16(id))
+		}
 		b = binary.BigEndian.AppendUint16(b, 0)
 		return box("infe", append(append(b, typ...), 0))
 	}
 	build := func(picOff, exifOff uint32) []byte {
-		iloc := []byte{1, 0, 0, 0, 0x44, 0x00} // version 1; offsets and lengths of 4 bytes, no base offset, no index
-		iloc = binary.BigEndian.AppendUint16(iloc, 2)
+		iloc := []byte{version, 0, 0, 0, 0x44, 0x00} // offsets and lengths of 4 bytes, no base offset, no index
+		if version == 2 {
+			iloc = binary.BigEndian.AppendUint32(iloc, 2)
+		} else {
+			iloc = binary.BigEndian.AppendUint16(iloc, 2)
+		}
 		for _, it := range []struct {
-			id, method uint16
-			off, n     uint32
-		}{{1, 0, picOff, uint32(len(picture))}, {2, map[bool]uint16{false: 0, true: 1}[inIdat], exifOff, uint32(len(item))}} {
-			iloc = binary.BigEndian.AppendUint16(iloc, it.id)
-			iloc = binary.BigEndian.AppendUint16(iloc, it.method)
+			id     uint32
+			method uint16
+			off, n uint32
+		}{{pictureID, 0, picOff, uint32(len(picture))}, {exifID, map[bool]uint16{false: 0, true: 1}[inIdat], exifOff, uint32(len(item))}} {
+			if version == 2 {
+				iloc = binary.BigEndian.AppendUint32(iloc, it.id)
+			} else {
+				iloc = binary.BigEndian.AppendUint16(iloc, uint16(it.id))
+			}
+			if version == 1 || version == 2 {
+				iloc = binary.BigEndian.AppendUint16(iloc, it.method)
+			}
 			iloc = binary.BigEndian.AppendUint16(iloc, 0) // data_reference_index
 			iloc = binary.BigEndian.AppendUint16(iloc, 1) // one extent
 			iloc = binary.BigEndian.AppendUint32(iloc, it.off)
 			iloc = binary.BigEndian.AppendUint32(iloc, it.n)
 		}
 		hdlr := box("hdlr", []byte{0, 0, 0, 0, 0, 0, 0, 0}, []byte("pict"), make([]byte, 13))
-		iinf := box("iinf", []byte{0, 0, 0, 0, 0, 2}, infe(1, "hvc1"), infe(2, "Exif"))
+		iinf := box("iinf", []byte{0, 0, 0, 0, 0, 2}, infe(pictureID, "hvc1"), infe(exifID, "Exif"))
 		parts := [][]byte{{0, 0, 0, 0}, hdlr, iinf, box("iloc", iloc)}
 		if inIdat {
 			parts = append(parts, box("idat", item))
@@ -189,4 +221,33 @@ func HEIC(m photo.Meta, little, inIdat bool) []byte {
 		exifOff = 0
 	}
 	return build(mdatPayload, exifOff)
+}
+
+// HEICOverflowingLocation is a HEIC-shaped metadata fixture whose Exif item extent wraps uint64 arithmetic.
+func HEICOverflowingLocation() []byte {
+	infe := func(id uint16, typ string) []byte {
+		b := []byte{2, 0, 0, 0}
+		b = binary.BigEndian.AppendUint16(b, id)
+		b = binary.BigEndian.AppendUint16(b, 0)
+		return box("infe", append(append(b, typ...), 0))
+	}
+	iloc := []byte{1, 0, 0, 0, 0x88, 0x00} // version 1; 8-byte offsets and lengths
+	iloc = binary.BigEndian.AppendUint16(iloc, 1)
+	iloc = binary.BigEndian.AppendUint16(iloc, 102)
+	iloc = binary.BigEndian.AppendUint16(iloc, 1) // construction method: idat
+	iloc = binary.BigEndian.AppendUint16(iloc, 0) // data_reference_index
+	iloc = binary.BigEndian.AppendUint16(iloc, 1) // one extent
+	iloc = appendUint(iloc, 8, ^uint64(0)-1)
+	iloc = appendUint(iloc, 8, 8)
+	hdlr := box("hdlr", []byte{0, 0, 0, 0, 0, 0, 0, 0}, []byte("pict"), make([]byte, 13))
+	iinf := box("iinf", []byte{0, 0, 0, 0, 0, 1}, infe(102, "Exif"))
+	meta := box("meta", []byte{0, 0, 0, 0}, hdlr, iinf, box("iloc", iloc), box("idat", make([]byte, 16)))
+	return append(box("ftyp", []byte("heic\x00\x00\x00\x00mif1heic")), meta...)
+}
+
+func appendUint(b []byte, size int, v uint64) []byte {
+	for i := size - 1; i >= 0; i-- {
+		b = append(b, byte(v>>uint(i*8)))
+	}
+	return b
 }

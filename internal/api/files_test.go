@@ -108,6 +108,24 @@ func TestAddFileFromAnAgentAndWithAPicture(t *testing.T) {
 	}
 }
 
+func TestAddFileKeepsMalformedHEIFWithUnknownMetadata(t *testing.T) {
+	c, _ := fresh(t)
+	add := find(must(c.Get("/")), "add-file")
+	heic := filepath.Join(t.TempDir(), "bad.HEIC")
+	if err := os.WriteFile(heic, phototest.HEICOverflowingLocation(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	e := must(c.DoFiles(add, map[string]string{"title": "bad.HEIC", "body": "kept despite bad metadata"}, map[string]string{"original": heic}))
+	file, _ := props(e)["file"].(map[string]any)
+	res, _ := e.Result.(map[string]any)
+	if file["mime"] != "image/heic" || file["preview"] != false || props(e)["body"] != "kept despite bad metadata" {
+		t.Fatalf("malformed HEIF was not kept as an unknown file: props=%+v result=%+v", props(e), res)
+	}
+	if res["day"] != nil || res["place"] != nil || res["unmatched"] != nil || res["linked"] == true {
+		t.Errorf("bad metadata derived photo facts: %+v", res)
+	}
+}
+
 func TestFileViews(t *testing.T) {
 	c, h := fresh(t)
 	root := must(c.Get("/"))

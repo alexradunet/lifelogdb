@@ -165,26 +165,43 @@ func exifItem(iinf []byte) (uint32, bool) {
 	return id, found
 }
 
+// maxHEIFItemData bounds iloc reconstruction to the metadata head the API keeps. A photo's position is only a
+// transient input to D21 place matching, so metadata outside the supplied head stays unknown rather than being fetched.
+const maxHEIFItemData = 1 << 20
+
 // itemData is an item's bytes, by its iloc entry; nil when they are not all in file (the head given) or idat.
 func itemData(file, iloc, idat []byte, item uint32) []byte {
 	if len(iloc) < 8 {
 		return nil
 	}
 	v := iloc[0]
+	if v > 2 {
+		return nil
+	}
 	r := reader{b: iloc, p: 4}
 	sizes := r.n(2)
 	offSize, lenSize, baseSize, idxSize := int(sizes>>12&15), int(sizes>>8&15), int(sizes>>4&15), int(sizes&15)
 	if v == 0 {
 		idxSize = 0
 	}
-	count := r.n(2)
+	if !validItemLocationSize(offSize) || !validItemLocationSize(lenSize) || !validItemLocationSize(baseSize) || !validItemLocationSize(idxSize) {
+		return nil
+	}
+	var count uint64
 	if v == 2 {
 		count = r.n(4)
+	} else {
+		count = r.n(2)
+	}
+	if r.bad {
+		return nil
 	}
 	for range count {
-		id := r.n(2)
+		var id uint64
 		if v == 2 {
 			id = r.n(4)
+		} else {
+			id = r.n(2)
 		}
 		method := uint64(0)
 		if v == 1 || v == 2 {
@@ -193,29 +210,48 @@ func itemData(file, iloc, idat []byte, item uint32) []byte {
 		r.n(2) // data_reference_index
 		base := r.n(baseSize)
 		extents := r.n(2)
-		var out []byte
-		for range extents {
-			r.n(idxSize)
-			off, n := base+r.n(offSize), r.n(lenSize)
-			src := file
-			if method == 1 {
-				src = idat
-			} else if method != 0 {
-				return nil
-			}
-			if r.bad || n == 0 || off+n > uint64(len(src)) {
-				return nil
-			}
-			out = append(out, src[off:off+n]...)
-		}
 		if r.bad {
 			return nil
 		}
-		if uint32(id) == item {
+		target := uint32(id) == item
+		var out []byte
+		for range extents {
+			r.n(idxSize)
+			rel := r.n(offSize)
+			n := r.n(lenSize)
+			if r.bad {
+				return nil
+			}
+			if !target {
+				continue
+			}
+			src := file
+			switch method {
+			case 0:
+			case 1:
+				src = idat
+			default:
+				return nil
+			}
+			if n == 0 || base > math.MaxUint64-rel {
+				return nil
+			}
+			off := base + rel
+			if off > uint64(len(src)) || n > uint64(len(src))-off || n > uint64(maxHEIFItemData-len(out)) {
+				return nil
+			}
+			start, end := int(off), int(off+n)
+			out = append(out, src[start:end]...)
+		}
+		if target {
 			return out
 		}
 	}
 	return nil
+}
+
+func validItemLocationSize(size int) bool {
+	return size == 0 || size == 2 || size == 4 || size == 8
 }
 
 // reader reads big-endian numbers of 0, 2, 4 or 8 bytes; past the end it reads 0 and marks bad.

@@ -1,6 +1,7 @@
 package photo_test
 
 import (
+	"encoding/binary"
 	"math"
 	"testing"
 
@@ -54,4 +55,171 @@ func TestSaysNothingItDoesNotKnow(t *testing.T) {
 	if (photo.Meta{}).Day() != "" {
 		t.Error("no date, no day")
 	}
+}
+
+func TestHEIFLocationVersions(t *testing.T) {
+	want := photo.Meta{Taken: "2026-10-05 12:34:56", Lat: 38.7139, Lon: -9.1394, HasGPS: true, Orientation: 8}
+	item := heifExifItem(want, true, 0)
+	split := len(item) / 2
+	for name, b := range map[string][]byte{
+		"version 0 in file":          phototest.HEICLocationVersion(want, true, false, 0),
+		"version 1 in file":          phototest.HEICLocationVersion(want, true, false, 1),
+		"version 1 in idat":          phototest.HEICLocationVersion(want, true, true, 1),
+		"version 2 in file":          phototest.HEICLocationVersion(want, true, false, 2),
+		"version 2 in idat":          phototest.HEICLocationVersion(want, true, true, 2),
+		"version 1 repeated extents": heifWithLocations(1, 4, 4, 0, 0, item, heifLocation{id: 102, typ: "Exif", method: 1, extents: []heifExtent{{n: uint64(split)}, {off: uint64(split), n: uint64(len(item) - split)}}}),
+	} {
+		got := readPhoto(t, b)
+		if got.Taken != want.Taken || !got.HasGPS || !near(got.Lat, want.Lat) || !near(got.Lon, want.Lon) || got.Orientation != want.Orientation {
+			t.Errorf("%s: %+v", name, got)
+		}
+	}
+}
+
+func TestHEIFLocationBounds(t *testing.T) {
+	want := photo.Meta{Taken: "2026-10-05 12:34:56", Lat: 1, Lon: 2, HasGPS: true, Orientation: 6}
+	item := heifExifItem(want, false, 0)
+	valid := heifWithLocations(1, 4, 4, 0, 0, item, heifLocation{id: 102, typ: "Exif", method: 1, extents: []heifExtent{{n: uint64(len(item))}}})
+	overlapIDAT := append([]byte{0}, item...)
+	repeated := make([]byte, (1<<19)+1)
+	unknown := map[string][]byte{
+		"truncated fields":       valid[:len(valid)-1],
+		"unsupported version":    heifWithLocations(3, 4, 4, 0, 0, item, heifLocation{id: 102, typ: "Exif", method: 1, extents: []heifExtent{{n: uint64(len(item))}}}),
+		"unsupported size":       heifWithLocations(1, 3, 4, 0, 0, item, heifLocation{id: 102, typ: "Exif", method: 1, extents: []heifExtent{{n: uint64(len(item))}}}),
+		"unsupported method":     heifWithLocations(1, 4, 4, 0, 0, item, heifLocation{id: 102, typ: "Exif", method: 2, extents: []heifExtent{{n: uint64(len(item))}}}),
+		"base plus offset wraps": heifWithLocations(1, 8, 8, 8, 0, overlapIDAT, heifLocation{id: 102, typ: "Exif", method: 1, base: ^uint64(0) - 1, extents: []heifExtent{{off: 2, n: uint64(len(item))}}}),
+		"extent end wraps":       heifWithLocations(1, 8, 8, 0, 0, make([]byte, 16), heifLocation{id: 102, typ: "Exif", method: 1, extents: []heifExtent{{off: ^uint64(0) - 1, n: 8}}}),
+		"over budget repeats":    heifWithLocations(1, 4, 4, 0, 0, repeated, heifLocation{id: 102, typ: "Exif", method: 1, extents: []heifExtent{{n: uint64(len(repeated))}, {n: uint64(len(repeated))}}}),
+	}
+	for name, b := range unknown {
+		got := readPhoto(t, b)
+		if got.Taken != "" || got.HasGPS || got.Orientation != 1 {
+			t.Errorf("%s: %+v", name, got)
+		}
+	}
+
+	withSkippedImage := heifWithLocations(1, 8, 8, 0, 0, item,
+		heifLocation{id: 101, typ: "hvc1", method: 0, extents: []heifExtent{{off: 1 << 40, n: 64}}},
+		heifLocation{id: 102, typ: "Exif", method: 1, extents: []heifExtent{{n: uint64(len(item))}}},
+	)
+	if got := readPhoto(t, withSkippedImage); got.Taken != want.Taken || !got.HasGPS {
+		t.Errorf("Exif after unavailable image item: %+v", got)
+	}
+
+	budgetItem := heifExifItem(want, false, 1<<20-4-6-len(phototest.TIFF(want, false)))
+	atBudget := heifWithLocations(1, 4, 4, 0, 0, budgetItem, heifLocation{id: 102, typ: "Exif", method: 1, extents: []heifExtent{{n: uint64(len(budgetItem))}}})
+	if got := readPhoto(t, atBudget); got.Taken != want.Taken || !got.HasGPS || got.Orientation != want.Orientation {
+		t.Errorf("budget boundary: %+v", got)
+	}
+}
+
+func FuzzRead(f *testing.F) {
+	meta := photo.Meta{Taken: "2026-10-05 12:34:56", Lat: 38.7139, Lon: -9.1394, HasGPS: true, Orientation: 6}
+	for _, seed := range [][]byte{
+		{},
+		[]byte("%PDF-1.7 hello"),
+		phototest.JPEG(8, 8, meta, false),
+		phototest.HEIC(meta, false, false),
+		phototest.HEICLocationVersion(meta, false, true, 2),
+		heifWithLocations(1, 8, 8, 0, 0, make([]byte, 16), heifLocation{id: 102, typ: "Exif", method: 1, extents: []heifExtent{{off: ^uint64(0) - 1, n: 8}}}),
+	} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, b []byte) { photo.Read(b) })
+}
+
+type heifExtent struct{ off, n uint64 }
+
+type heifLocation struct {
+	id      uint32
+	typ     string
+	method  uint16
+	base    uint64
+	extents []heifExtent
+}
+
+func readPhoto(t *testing.T, b []byte) (m photo.Meta) {
+	t.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("photo.Read panicked: %v", r)
+		}
+	}()
+	return photo.Read(b)
+}
+
+func heifExifItem(m photo.Meta, little bool, pad int) []byte {
+	tiff := phototest.TIFF(m, little)
+	item := binary.BigEndian.AppendUint32(nil, uint32(6+pad))
+	item = append(item, "Exif\x00\x00"...)
+	item = append(item, make([]byte, pad)...)
+	return append(item, tiff...)
+}
+
+func heifWithLocations(version byte, offSize, lenSize, baseSize, idxSize int, idat []byte, entries ...heifLocation) []byte {
+	iloc := []byte{version, 0, 0, 0, byte(offSize<<4 | lenSize), byte(baseSize<<4 | idxSize)}
+	if version == 2 {
+		iloc = binary.BigEndian.AppendUint32(iloc, uint32(len(entries)))
+	} else {
+		iloc = binary.BigEndian.AppendUint16(iloc, uint16(len(entries)))
+	}
+	for _, e := range entries {
+		if version == 2 {
+			iloc = binary.BigEndian.AppendUint32(iloc, e.id)
+		} else {
+			iloc = binary.BigEndian.AppendUint16(iloc, uint16(e.id))
+		}
+		if version == 1 || version == 2 {
+			iloc = binary.BigEndian.AppendUint16(iloc, e.method)
+		}
+		iloc = binary.BigEndian.AppendUint16(iloc, 0)
+		iloc = appendSized(iloc, baseSize, e.base)
+		iloc = binary.BigEndian.AppendUint16(iloc, uint16(len(e.extents)))
+		for _, ex := range e.extents {
+			iloc = appendSized(iloc, idxSize, 0)
+			iloc = appendSized(iloc, offSize, ex.off)
+			iloc = appendSized(iloc, lenSize, ex.n)
+		}
+	}
+	hdlr := heifTestBox("hdlr", []byte{0, 0, 0, 0, 0, 0, 0, 0}, []byte("pict"), make([]byte, 13))
+	iinf := []byte{0, 0, 0, 0}
+	iinf = binary.BigEndian.AppendUint16(iinf, uint16(len(entries)))
+	for _, e := range entries {
+		iinf = append(iinf, heifTestInfe(e.id, e.typ)...)
+	}
+	parts := [][]byte{{0, 0, 0, 0}, hdlr, heifTestBox("iinf", iinf), heifTestBox("iloc", iloc)}
+	if idat != nil {
+		parts = append(parts, heifTestBox("idat", idat))
+	}
+	return append(heifTestBox("ftyp", []byte("heic\x00\x00\x00\x00mif1heic")), heifTestBox("meta", parts...)...)
+}
+
+func appendSized(b []byte, size int, v uint64) []byte {
+	for i := size - 1; i >= 0; i-- {
+		b = append(b, byte(v>>uint(i*8)))
+	}
+	return b
+}
+
+func heifTestInfe(id uint32, typ string) []byte {
+	var b []byte
+	if id > math.MaxUint16 {
+		b = []byte{3, 0, 0, 0}
+		b = binary.BigEndian.AppendUint32(b, id)
+	} else {
+		b = []byte{2, 0, 0, 0}
+		b = binary.BigEndian.AppendUint16(b, uint16(id))
+	}
+	b = binary.BigEndian.AppendUint16(b, 0)
+	return heifTestBox("infe", append(append(b, typ...), 0))
+}
+
+func heifTestBox(typ string, body ...[]byte) []byte {
+	b := binary.BigEndian.AppendUint32(nil, 0)
+	b = append(b, typ...)
+	for _, x := range body {
+		b = append(b, x...)
+	}
+	binary.BigEndian.PutUint32(b, uint32(len(b)))
+	return b
 }
