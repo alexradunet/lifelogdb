@@ -40,8 +40,17 @@ SQLite **3.51.3** passed all **39 subject suites and 404 mutants** in an isolate
 driver adapter and explicit newer-engine evolution exclusions. The appendix preserves the reproduction and its limits.
 
 A manual Windows workflow runs generation, generated-copy verification, vet and the full baseline on `windows-2025`.
-Actions are pinned to reviewed commits with read-only repository permissions. Actual Windows results are pending dispatch
-after this workflow reaches the default branch; adding the workflow alone is not platform coverage.
+Actions are pinned to reviewed commits with read-only repository permissions.
+The [first Windows run at 5543bc1](https://github.com/alexradunet/lifelogdb/actions/runs/37635367862)
+passed generation, vet and every package except two CLI snapshot assertions. Both compared the caller's short parent
+path (`RUNNER~1`) to the correctly resolved long path (`runneradmin`). Snapshot creation and restore succeeded;
+the tests must compare the exact dated leaf and filesystem identity, preserving all literal-name sentinels and
+symlink safety checks. No production path behavior changes. The full Windows rerun will validate those repairs.
+
+The first Windows contract package passed all suites and mutants in 889.908 seconds; importer tests took
+1096.961 seconds. The workflow now prints individual test results and skips, and allows 30 minutes per package
+and 45 minutes per job to leave headroom over this observed Windows runtime. No test or mutant is removed;
+timeouts guard stalled runs rather than impose an unagreed speed requirement.
 
 The existing production-writer scale runner was built at `6f2bfe8`, Go 1.27.1, modernc.org/sqlite v1.60.1 / SQLite 3.53.4.
 Its dirty flag comes from pre-existing untracked Python caches; tracked source was clean when built. Runs use seed 2075,
@@ -66,6 +75,54 @@ Completed scale runs verified independent metric identities/values/days/order, e
 malformed-batch rollback, all four integrity groups and the same known answers after snapshot restore.
 Metadata-only runs make no preview-capacity claim. The runner's keyed replay measures core recording, not workspace import throughput.
 
+### Bounded fuzz campaigns and progress diagnosis
+
+At `5543bc1`, Go 1.27.1 / Linux amd64, both existing targets ran for 30 seconds,
+sequentially with one worker and synthetic seeds. `FuzzRead` passed **2,054,237
+executions** in 30.024 seconds; it checks parser crashes, not metadata semantics.
+`FuzzSourceJSONIdentity` passed **1,188 executions** in 31.034 seconds, but its
+counter stopped advancing after three seconds. That observation was investigated.
+
+A fresh-corpus run with `GODEBUG=fuzzdebug=1` reproduced the stall at **24,374
+executions**. Its log identifies a coverage-minimization task (`198cb250`,
+`keepCoverage=true`, `crasher=false`) outstanding until the campaign deadline.
+The local Go 1.27.1 sources, also available in the official
+[fuzz coordinator](https://go.dev/src/internal/fuzz/fuzz.go#L317) and
+[testing defaults](https://go.dev/src/testing/fuzz.go#L33), show that coverage
+discoveries are minimized under the default 60-second budget and displayed
+counts update when worker results arrive (`updateStats`, line 722).
+With the same binary and assertions, disabling minimization passed **103,981
+executions / 277 new interesting inputs** with continuous progress; limiting
+minimization to 100 ms passed **73,925 executions / 164 new interesting inputs**,
+also with continuing progress. All 164 retained inputs from that last run,
+including 51 originals returned after interrupted minimization, plus six seeds
+passed ordinary direct replay in 0.02 seconds. These controls locate the
+reproduced stall in coverage minimization; no slow or hanging validator input was
+reproduced. The original untraced run cannot identify its particular input.
+No assertion, production code or permanent fuzz setting changed.
+
+Successful commands (from the repository root unless `cd` selects another path):
+
+```sh
+GOCACHE=/tmp/lifelog-analysis-tools/build-cache /home/alex/.local/share/mise/installs/go/1.27.1/bin/go test ./internal/photo -run '^$' -fuzz '^FuzzRead$' -fuzztime=30s -parallel=1
+GOCACHE=/tmp/lifelog-analysis-tools/build-cache /home/alex/.local/share/mise/installs/go/1.27.1/bin/go test ./internal/importer -run '^$' -fuzz '^FuzzSourceJSONIdentity$' -fuzztime=30s -parallel=1
+GOCACHE=/tmp/lifelog-analysis-tools/build-cache /home/alex/.local/share/mise/installs/go/1.27.1/bin/go test ./internal/importer -c -fuzz '^FuzzSourceJSONIdentity$' -o /tmp/lifelog-source-json-fuzz.test
+cd internal/importer
+GODEBUG=fuzzdebug=1 /tmp/lifelog-source-json-fuzz.test -test.run '^$' -test.fuzz '^FuzzSourceJSONIdentity$' -test.fuzztime=30s -test.parallel=1 -test.fuzzcachedir=/tmp/lifelog-source-json-fuzz-debug-cache
+GODEBUG=fuzzdebug=1 /tmp/lifelog-source-json-fuzz.test -test.run '^$' -test.fuzz '^FuzzSourceJSONIdentity$' -test.fuzztime=30s -test.fuzzminimizetime=0 -test.parallel=1 -test.fuzzcachedir=/tmp/lifelog-source-json-fuzz-no-min-cache
+GODEBUG=fuzzdebug=1 /tmp/lifelog-source-json-fuzz.test -test.run '^$' -test.fuzz '^FuzzSourceJSONIdentity$' -test.fuzztime=30s -test.fuzzminimizetime=100ms -test.parallel=1 -test.fuzzcachedir=/tmp/lifelog-source-json-fuzz-bounded-min-cache
+# The 164 cached corpus files were copied into this scratch directory's
+# testdata/fuzz/FuzzSourceJSONIdentity/ before direct replay.
+cd /tmp/lifelog-source-json-replay-scevlf_r
+/tmp/lifelog-source-json-fuzz.test -test.run '^FuzzSourceJSONIdentity$' -test.timeout=20s -test.v
+```
+
+Logs: `/tmp/lifelog-gap-fuzz-photo.log`, `/tmp/lifelog-gap-fuzz-source-json.log`
+and `/tmp/lifelog-source-json-fuzz-{debug,no-min,bounded-min,replay}.log`.
+Every command exited zero. Counts are engine-reported executions, not unique
+admitted inputs; bounded and invalid-Unicode skips remain part of the target.
+These short campaigns extend evidence without proving exhaustive input coverage.
+
 ## Validation and remaining limits
 
 Passed on Linux:
@@ -75,19 +132,45 @@ Passed on Linux:
   contract package 93.085 seconds.
 - `TMPDIR=/var/tmp CGO_ENABLED=1 go test -race -count=1 -timeout=20m ./...` at `6f2bfe8`:
   all packages passed; contract package 930.209 seconds.
+- The same full race command with the final Go edits passed every application package, including the new
+  Linux write-failure tests; its contract package timed out as recorded below.
+- The complete contract race retry at `5543bc1`, with `-parallel=4 -timeout=40m -json`, exited zero in
+  **1148.387 seconds**. All 39 subject suites, 404 mutants, fixture/witness tests and three graph-fuzz seed
+  cases passed. Only the standalone subprocess helper and opt-in Mermaid renderer skipped; no race was reported.
 - `TMPDIR=/var/tmp go test -count=1 -shuffle=on ./...`: all packages passed with the final Go edits;
   contract package 162.732 seconds while concurrent validation and scale work ran.
-- `staticcheck ./...` using v0.8.1: no findings; `govulncheck ./...` using v1.8.0: no known vulnerabilities.
+- `staticcheck ./...` using v0.8.1: no findings; `govulncheck ./...` and final `govulncheck -test ./...`
+  using v1.8.0 in text mode: no known vulnerabilities, exit zero.
 - Write-failure tests repeated 20 times and under the race detector; all affected package tests and identity/wikilinks/files suites.
 - SQLite floor matrix and supporting fixtures/seeds, as detailed below.
 - Document suite and `git diff --check`.
 
-A second full race run with the final Go edits passed every application package but hit the 20-minute timeout
-in the contract package. No data race was reported; the dump shows active SQLite work in five subject suites.
-That run overlapped shuffled tests, the stress fixture and other host work. This is an incomplete check, not a pass;
-the contract race run is being investigated and will be repeated with adequate resources/time.
+After repairing the two Windows path-identity assertions, generation and vet passed again, the full Linux baseline
+passed (contract package 97.146 seconds), and Staticcheck remained clean. Focused literal-path, destination-symlink
+and physical-destination tests passed in 1.519 seconds. The two changed snapshot cases also passed under `-race`
+in 3.042 seconds using `TMPDIR=/var/tmp`; production code was unchanged by this repair.
 
-Final race, Windows execution and lifetime preview results will be recorded before closing this plan.
+A second full race run with the final Go edits passed every application package but hit the 20-minute timeout
+in the contract package. No data race or assertion failure was reported. Five subject suites remained, each active
+for only 45–66 seconds when the package-wide alarm fired. Four goroutines were runnable in SQLite work; one waited
+on the driver's shared allocation mutex while another was actively unlocking it. The concurrent-writer save case
+had already completed its synchronization and reached per-vector fixture construction. The run overlapped shuffled
+tests, the stress fixture and other host work; application package durations were approximately twice the earlier
+run. This evidence supports computation and allocation contention rather than an observed deadlock. The timed-out
+invocation remains an incomplete check, not a pass.
+
+The successful retry reduced parallelism between independent subtests without changing concurrency inside the
+tests, filtering cases or removing mutants. Its exact command was:
+
+```sh
+PATH=/home/alex/.local/share/mise/installs/go/1.27.1/bin:$PATH TMPDIR=/var/tmp CGO_ENABLED=1 go test -race -count=1 -parallel=4 -timeout=40m -json ./tests > /tmp/lifelog-gap-contract-race.jsonl 2>&1
+```
+
+Together, the successful final-code application packages in `/tmp/lifelog-gap-final-race.log` and this complete
+contract retry provide race coverage for every tested package, including the new I/O regressions. Lifetime-preview
+generation ran concurrently with the retry; it is not an isolated performance measurement.
+
+Windows execution and lifetime preview results will be recorded before closing this plan.
 Real power-loss behavior, sync faults and torn writes require a separate fault-capable environment and remain untested.
 No real owner data was accessed. This work cannot establish freedom from every bug or every form of file tampering.
 

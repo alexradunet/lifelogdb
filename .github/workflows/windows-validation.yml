@@ -9,7 +9,7 @@ permissions:
 jobs:
   baseline:
     runs-on: windows-2025
-    timeout-minutes: 30
+    timeout-minutes: 45
     defaults:
       run:
         shell: pwsh
@@ -33,4 +33,4 @@ jobs:
       - name: Vet
         run: go vet ./...
       - name: Full baseline including mutants
-        run: go test -count=1 -timeout=20m -parallel=4 ./...
+        run: go test -v -count=1 -timeout=30m -parallel=4 ./...

@@ -41,8 +41,10 @@ func TestSnapshotNeverFollowsDestinationFileSymlinks(t *testing.T) {
 			now := time.Date(2031, 2, 3, 4, 5, 6, 0, time.UTC)
 			path, result, err := takeSnapshot(context.Background(), live, dir, now)
 			if occupied == "daily" {
-				if err != nil || result == nil || !result.OK || path != timestamp {
+				if err != nil || result == nil || !result.OK {
 					t.Errorf("occupied daily entry: path=%q result=%+v error=%v; want a valid timestamp snapshot", path, result, err)
+				} else {
+					assertSnapshotDestination(t, path, timestamp)
 				}
 			} else {
 				if err == nil {

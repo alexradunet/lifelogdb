@@ -151,14 +151,9 @@ func TestSnapshotLiteralSpecialCharacterPaths(t *testing.T) {
 		t.Fatalf("takeSnapshot(%q, %q) failed: %v", live, dir, err)
 	}
 	want := filepath.Join(dir, "life-2026-10-05.db")
-	if got != want {
-		t.Fatalf("snapshot path = %q, want literal destination %q", got, want)
-	}
+	assertSnapshotDestination(t, got, want)
 	if !res.OK {
 		t.Fatalf("restore check failed on literal snapshot path: %+v", res)
-	}
-	if _, err := os.Stat(want); err != nil {
-		t.Fatalf("literal snapshot destination %q does not exist: %v", want, err)
 	}
 	assertSnapshotSentinel(t, filepath.Join(liveDir, "life #.db"))
 	assertSnapshotSentinel(t, destinationSentinel)
@@ -174,6 +169,28 @@ func TestSnapshotLiteralSpecialCharacterPaths(t *testing.T) {
 }
 
 const snapshotSentinel = "literal snapshot sentinel\n"
+
+func assertSnapshotDestination(t *testing.T, got, want string) {
+	t.Helper()
+	// Resolving the destination directory can expand Windows short names. The
+	// dated filename and actual destination file must still match exactly.
+	if filepath.Base(got) != filepath.Base(want) {
+		t.Errorf("snapshot filename = %q, want %q", filepath.Base(got), filepath.Base(want))
+	}
+	gotInfo, err := os.Lstat(got)
+	if err != nil {
+		t.Errorf("returned snapshot %q does not exist: %v", got, err)
+		return
+	}
+	wantInfo, err := os.Lstat(want)
+	if err != nil {
+		t.Errorf("literal snapshot destination %q does not exist: %v", want, err)
+		return
+	}
+	if !gotInfo.Mode().IsRegular() || !wantInfo.Mode().IsRegular() || !os.SameFile(gotInfo, wantInfo) {
+		t.Errorf("snapshot %q is not the regular file at literal destination %q", got, want)
+	}
+}
 
 func writeSnapshotSentinel(t *testing.T, p string) {
 	t.Helper()
