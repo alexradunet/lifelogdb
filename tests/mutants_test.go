@@ -84,6 +84,10 @@ var mutants = []struct {
 	suite, name, witness string
 	change               change
 }{
+	{"temporal-model", "category traversal starts at a tombstoned root", "category tombstoned root hides live descendant metrics", edit("SELECT id FROM entities WHERE id = :parent_id AND deleted_at IS NULL", "SELECT :parent_id")},
+	{"temporal-model", "category traversal crosses a tombstoned intermediate", "category tombstoned intermediate stops descendant traversal", edit("JOIN entities child ON child.id = l.from_id AND child.deleted_at IS NULL", "JOIN entities child ON child.id = l.from_id")},
+	{"schema-adversarial", "scoped import admission rejects skipped replay", "scoped import replay after session tombstone is an unchanged no-op", edit("CREATE TRIGGER measurements_session_live AFTER INSERT ON measurements", "CREATE TRIGGER measurements_session_live BEFORE INSERT ON measurements")},
+	{"temporal-model", "containment starts at a tombstoned root", "containment tombstoned root hides live descendant days", edit("SELECT id FROM entities WHERE id = :place_id AND entity_type = 'place' AND deleted_at IS NULL", "SELECT :place_id")},
 	{"schema-safeguards", "people identity guard omitted", "people id combined=false identity refusal is atomic", notrigger("people_identity_fixed")},
 	{"schema-safeguards", "files identity guard omitted", "files id combined=false identity refusal is atomic", notrigger("files_identity_fixed")},
 	{"schema-safeguards", "metrics identity guard omitted", "metrics id combined=false identity refusal is atomic", notrigger("metrics_identity_fixed")},
@@ -338,8 +342,8 @@ var mutants = []struct {
 	{"links", "at accepts any endpoint", "link at person->place (at comes from a page): ERR", edit("  ('at',       0, 'page',      'place',", "  ('at',       0, NULL,        NULL,")},
 	{"links", "link kinds may change structure", "link_kinds: symmetric is fixed (by the trigger: located-in could be symmetric by its CHECK)", edit("  WHEN NEW.symmetric IS NOT OLD.symmetric OR NEW.from_types IS NOT OLD.from_types OR NEW.to_types IS NOT OLD.to_types\n", "  WHEN 0\n")},
 	{"journal", "cookbook/where-was-i lists the places of a tombstoned day", "cookbook/where-was-i where was I on a tombstoned day: nowhere", editNth("WHERE d.preferred_name_key = :day AND d.day = :day AND d.deleted_at IS NULL", "WHERE d.preferred_name_key = :day AND d.day = :day", 1)},
-	{"links", "cookbook/inside-a-place lists a tombstoned place", "cookbook/inside-a-place asked about a tombstoned place itself lists nothing", edit("JOIN entities epl ON epl.id = inside.id AND epl.deleted_at IS NULL", "JOIN entities epl ON epl.id = inside.id")},
-	{"links", "cookbook/inside-a-place walks with UNION ALL", "cookbook/inside-a-place terminates on a cycle (UNION)", edit("  SELECT :place_id\n  UNION\n", "  SELECT :place_id\n  UNION ALL\n")},
+	{"temporal-model", "containment crosses a tombstoned intermediate", "containment tombstoned intermediate stops descendant traversal", edit("JOIN entities ep ON ep.id = l.from_id AND ep.deleted_at IS NULL", "JOIN entities ep ON ep.id = l.from_id")},
+	{"links", "cookbook/inside-a-place walks with UNION ALL", "cookbook/inside-a-place terminates on a cycle (UNION)", edit("  SELECT id FROM entities WHERE id = :place_id AND entity_type = 'place' AND deleted_at IS NULL\n  UNION\n", "  SELECT id FROM entities WHERE id = :place_id AND entity_type = 'place' AND deleted_at IS NULL\n  UNION ALL\n")},
 	{"facts", "a correction may be of another metric", "a correction of another metric is refused", edit("   WHERE (SELECT metric_id FROM measurements WHERE id = NEW.supersedes_id) IS NOT NEW.metric_id;", "   WHERE 0;")},
 	{"facts", "measurement values may be infinite", "+Infinity refused", edit("CHECK (value IS NULL OR abs(value) <= 1.7976931348623157e308)", "CHECK (value IS NULL OR value = value)")},
 	{"facts", "measurements may be updated", "UPDATE of a value refused", edit("CREATE TRIGGER measurements_no_update BEFORE UPDATE ON measurements\nBEGIN\n", "CREATE TRIGGER measurements_no_update BEFORE UPDATE ON measurements WHEN 0\nBEGIN\n")},

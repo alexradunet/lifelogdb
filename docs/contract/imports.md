@@ -43,9 +43,18 @@ DETACH s;
    the hash of its original, `files.sha256`, whatever its source, and kept once ([keep a file](../cookbook/keep-a-file.md)). A place's point
    comes from the owner, who names the place a photo was taken at ([the place of a photo](../cookbook/place-of-a-photo.md)): an
    import never guesses one.
-4. **What a failure does.** `ON CONFLICT … DO NOTHING` skips only a duplicate key: a malformed
-   day, an impossible value or a dangling foreign key still raises and the **whole batch rolls back**.
-   Fix the data and run the batch again.
+4. **What a failure does.** `ON CONFLICT … DO NOTHING` handles the named duplicate key; it is not
+   validation of a skipped payload. A malformed day or impossible value can still raise before the
+   duplicate is skipped. A duplicate with a dangling reference can be skipped without testing that
+   reference; a genuinely new row with the same dangling reference fails (executed). Validate input
+   before insertion when a changed duplicate payload must be diagnosed.
+
+   **On any statement or commit error, the writer stops and explicitly rolls back the whole batch.**
+   SQLite's ordinary constraint `ABORT` undoes the failing statement, including its trigger effects,
+   but leaves earlier statements and the transaction active (executed). Do not continue to `COMMIT`
+   after an error. Fix the data and run the batch again. An admitted scoped reading requires a live
+   session; a skipped retry retains its existing row even after that session is tombstoned
+   ([measurement scope](measurement-scope.md), executed).
 5. **Check afterwards:** the four checks of [integrity checks](integrity-checks.md), per-source counts (`SELECT source, count(*),
    min(day), max(day) FROM measurements GROUP BY source`), and **run the importer a second time — it
    must insert nothing.**

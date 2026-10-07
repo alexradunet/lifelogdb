@@ -735,8 +735,9 @@ CREATE TRIGGER measurements_supersede_scope AFTER INSERT ON measurements WHEN NE
  SELECT RAISE(ABORT,'correction must retain the same session scope')
  WHERE (SELECT session_id FROM measurements WHERE id=NEW.supersedes_id) IS NOT NEW.session_id;
 END;
-CREATE TRIGGER measurements_session_live BEFORE INSERT ON measurements
+CREATE TRIGGER measurements_session_live AFTER INSERT ON measurements
  WHEN NEW.value IS NOT NULL AND NEW.session_id IS NOT NULL BEGIN
+ -- Check admitted rows: a duplicate import key remains a no-op after a session is tombstoned.
  SELECT RAISE(ABORT,'new associated value requires a live session')
  WHERE NOT EXISTS (SELECT 1 FROM sessions s WHERE s.id=NEW.session_id AND s.deleted_at IS NULL);
 END;

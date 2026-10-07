@@ -7,7 +7,7 @@ a place inside it ([where was I](where-was-i.md)):
 
 ```sql
 WITH RECURSIVE inside(id) AS (
-  SELECT :place_id
+  SELECT id FROM entities WHERE id = :place_id AND entity_type = 'place' AND deleted_at IS NULL
   UNION
   SELECT l.from_id FROM links l JOIN inside ON l.to_id = inside.id
     JOIN entities ep ON ep.id = l.from_id AND ep.deleted_at IS NULL

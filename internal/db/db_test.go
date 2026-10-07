@@ -463,9 +463,49 @@ func TestPragmasAndReaders(t *testing.T) {
 	if err := Copy(path, cp); err != nil {
 		t.Errorf("Copy through a reader with trusted_schema=OFF: %v", err)
 	}
-	if _, err := d.W.Exec("INSERT INTO pages_fts_data VALUES (99, 'x')"); err == nil {
-		t.Error("defensive mode is off: an FTS shadow table was writable")
+	checkShadowWrite := func(conn *sql.DB, defensive bool) {
+		t.Helper()
+		var tableCount, id int64
+		var before []byte
+		if err := conn.QueryRow("SELECT count(*) FROM sqlite_schema WHERE type='table' AND name='entities_fts_data'").Scan(&tableCount); err != nil || tableCount != 1 {
+			t.Fatalf("shadow table fixture: count=%d err=%v", tableCount, err)
+		}
+		if err := conn.QueryRow("SELECT id, block FROM entities_fts_data ORDER BY id LIMIT 1").Scan(&id, &before); err != nil {
+			t.Fatal(err)
+		}
+		result, err := conn.Exec("UPDATE entities_fts_data SET block=block WHERE id=?", id)
+		if defensive {
+			if err == nil {
+				t.Error("defensive connection allowed a write to an existing FTS shadow row")
+			}
+		} else {
+			if err != nil {
+				t.Fatalf("non-defensive control refused the same valid shadow write: %v", err)
+			}
+			if n, err := result.RowsAffected(); err != nil || n != 1 {
+				t.Fatalf("non-defensive control affected=%d err=%v", n, err)
+			}
+		}
+		var after []byte
+		if err := conn.QueryRow("SELECT block FROM entities_fts_data WHERE id=?", id).Scan(&after); err != nil || !bytes.Equal(before, after) {
+			t.Fatalf("shadow row changed: err=%v", err)
+		}
 	}
+	checkShadowWrite(d.W, true)
+	controlPath := filepath.Join(t.TempDir(), "non-defensive.db")
+	if err := Init(controlPath); err != nil {
+		t.Fatal(err)
+	}
+	control, err := sql.Open("sqlite", sqliteFileURI(controlPath, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := control.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	checkShadowWrite(control, false)
 }
 
 func TestWriteTakesTheLockUpFront(t *testing.T) {

@@ -18,9 +18,10 @@ ON CONFLICT(from_id, to_id, kind) DO NOTHING;
 -- the metrics filed in the category :parent_id and in every category under it, at any depth; UNION, not
 -- UNION ALL: part-of links can close a cycle, and a page met twice ends the walk
 WITH RECURSIVE tree(id) AS (
-  SELECT :parent_id
+  SELECT id FROM entities WHERE id = :parent_id AND deleted_at IS NULL
   UNION
   SELECT l.from_id FROM links l JOIN tree t ON l.to_id = t.id AND l.kind = 'part-of'
+    JOIN entities child ON child.id = l.from_id AND child.deleted_at IS NULL
 )
 SELECT c.title AS category, mp.title AS metric, m.unit
   FROM tree t

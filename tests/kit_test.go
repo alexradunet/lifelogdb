@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -291,7 +292,11 @@ func dsn(p string, params ...string) string {
 	if p == "" || p == ":memory:" {
 		p = ":memory:"
 	} else {
-		p = filepath.ToSlash(p)
+		parts := strings.Split(filepath.ToSlash(p), "/")
+		for i := range parts {
+			parts[i] = url.PathEscape(parts[i])
+		}
+		p = strings.Join(parts, "/")
 	}
 	q := append([]string{"_pragma=busy_timeout(5000)", "_txlock=immediate"}, params...)
 	return "file:" + p + "?" + strings.Join(q, "&")

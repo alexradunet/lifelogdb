@@ -28,6 +28,11 @@ the document (a broken block makes a later step impossible) reports that as one 
 |---|---|---|
 | `dates_test.go` | `dates` | instants, local days, the round-trip CHECKs and why `IS`, the zone (lifelog_meta.instants and .days, D10) |
 | `schema_safeguards_test.go` | `schema-safeguards` | NUL-free constrained text; immutable typed-detail/habit identities and entity creation evidence; rowid-alias atomicity; Unicode search distinctions; cleanup excludes retained session and measurement references |
+| `schema_adversarial_test.go` | `schema-adversarial` | Scoped import replay after tombstones; new-row refusal and multi-row atomicity; skipped duplicate validation limits; statement ABORT versus caller transaction rollback |
+| `graph_model_test.go` | `graph-model`, `FuzzGraphTransitions` | Independent directed/undirected graph model, NULL/empty notes, self-links, retry/edit/delete sequences, endpoint revisions, savepoint and transaction rollback, typed batch refusal and read-only reopen |
+| `temporal_model_test.go` | `temporal-model` | Recursive lifecycle reads, independent correction-chain cutoff model, bounded calendar/deadline model with persisted overrides, tombstones, recurrence ends and extreme years |
+| `storage_resilience_test.go` | `storage-resilience` | FTS term-position equality across trigger reordering, rejected edits, rollback, reopen and rebuild; WAL reader body/index snapshot isolation and checkpoint release |
+| `connection_fixture_test.go` | `TestSchemaFixtureUsesLiteralFilename` | Literal URI-sensitive filenames in isolated schema fixtures and read-only reopen |
 | `id_guards_test.go` | `id-guards` | file-backed declared/rowid/_rowid_/oid identity guards; forbidden combined edits, no-ops, revisions, mirrors, FTS and reopen controls |
 | `name_grammar_test.go` | `name-grammar` | documented raw/NFC addressability vectors under mutation; canonical key and bracket-storage probes, separate from production pipeline tests |
 | `sessions_test.go` | `recorded-sessions`, `measurement-scopes` | shared endpoint vectors, immutable session identity/provenance, revisions/kinds, correction scope/liveness and actual semantic damage probes |
@@ -57,7 +62,7 @@ the document (a broken block makes a later step impossible) reports that as one 
 | `wikilinks_test.go` | `doc-save-contract` | the save contract as the docs print it: the vector table of contract/titles-and-wikilinks, cookbook/save-a-body run literally (and equal to a writer's own save after 400 random edits), cookbook/backlinks |
 | | `save-contract` | the save contract through a writer's own save against the DDL: invalid targets, the `SAVEPOINT` backstop, set equality, ordinary REDIRECT prose, revival, 400 random edits against a rebuild, 4 concurrent writers, every vector |
 | | `title-fuzz` | writer acceptance is a subset of the DDL's filename checks over 60 000 generated strings; DB-only names independently fail reference addressability |
-| `mutants_test.go` | `TestMutants` | 400 broken copies of the docs tree, one rule each; a completed owning suite must fail the mutant's explicit rule witness |
+| `mutants_test.go` | `TestMutants` | 404 broken copies of the docs tree, one rule each; a completed owning suite must fail the mutant's explicit rule witness |
 | `render_test.go` | `TestMermaidRender` | optional: every diagram renders |
 | `kit_test.go`, `suites_test.go` | | reading the tree (a page, the cookbook blocks by recipe key, an overlay of broken files for a mutant); fresh databases and the insert conventions (entity first, `RETURNING`, named entities); the runner |
 
@@ -72,6 +77,14 @@ The core planning tests exercise the production writer, deadline merging, retrie
 Its calendar fuzz target compares bounded expansion with an independent day-by-day oracle; baseline runs its seeds.
 Run a bounded campaign explicitly with
 `go test ./internal/core -run '^$' -fuzz '^FuzzTaskCalendarWindow$' -fuzztime=20s -parallel=2`.
+
+The graph model runs three deterministic 160-operation sequences in the baseline. Its separate fuzz target accepts
+minimizable byte-encoded operations, caps each input at 64 transitions, and creates a fresh hardened file for every
+input. Seeds run normally; a campaign is explicit:
+`go test ./tests -run '^$' -fuzz '^FuzzGraphTransitions$' -fuzztime=30s -parallel=2`.
+The temporal model compares 40 correction chains at 17 clock cutoffs with independent insertion-order histories,
+and deadline results with an anchor-generated calendar oracle. These bounded models supplement the contract's literal
+vectors and rule mutants; agreement does not prove every possible input or SQLite version correct.
 
 **Fixture ownership.** Semantic fact and integrity mutants run their small behavior fixtures; the baseline
 `measurement-query-plan` and `physical-integrity` suites own the large query-plan and byte-corruption fixtures.

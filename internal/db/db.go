@@ -28,6 +28,7 @@ var Schema string
 const MinVersion = 3051003
 
 const applicationID = 0x4C494645
+const schemaVersion = 1 // docs/decisions/D13-migrations-and-freeze.md
 
 // The pragmas every writing connection sets and reads back, with the value it must read back.
 var pragmas = []struct {
@@ -151,17 +152,26 @@ func open(path string, keep bool) (*DB, error) {
 		w.Close()
 		return nil, err
 	}
-	d := &DB{W: w, R: r, path: path, keep: keep}
 	var id int64
-	if err := w.QueryRow("PRAGMA application_id").Scan(&id); err != nil {
-		d.Close()
-		return nil, err
+	// Validate compatibility before activating the writer. Refusal must not run
+	// Close's maintenance against a file this application does not understand.
+	if err := r.QueryRow("PRAGMA application_id").Scan(&id); err != nil {
+		return nil, errors.Join(err, r.Close(), w.Close())
 	}
 	if id != applicationID {
-		d.Close()
-		return nil, fmt.Errorf("%s is not a Lifelog database (application_id %#x)", path, id)
+		return nil, errors.Join(fmt.Errorf("%s is not a Lifelog database (application_id %#x)", path, id), r.Close(), w.Close())
 	}
-	return d, nil
+	var version int64
+	if err := r.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
+		return nil, errors.Join(err, r.Close(), w.Close())
+	}
+	if version != schemaVersion {
+		return nil, errors.Join(fmt.Errorf("unsupported user_version %d (supported: %d)", version, schemaVersion), r.Close(), w.Close())
+	}
+	if err := w.Ping(); err != nil {
+		return nil, errors.Join(err, r.Close(), w.Close())
+	}
+	return &DB{W: w, R: r, path: path, keep: keep}, nil
 }
 
 // Init creates a new life.db from the canonical DDL. It refuses an existing file.
