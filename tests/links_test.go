@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -70,8 +71,31 @@ func links(s *S) {
 	s.K("a kind name in upper case is refused", strings.HasPrefix(c.tryx("INSERT INTO link_kinds(kind,symmetric) VALUES ('Boss',0)"), "ERR"))
 	s.K("a symmetric kind with different endpoint types is refused", strings.HasPrefix(c.tryx("INSERT INTO link_kinds(kind,symmetric,from_types,to_types) VALUES ('mentor',1,'person','place')"), "ERR"))
 	s.K("a malformed type list is refused", strings.HasPrefix(c.tryx("INSERT INTO link_kinds(kind,symmetric,from_types,to_types) VALUES ('k2',0,'Person','page')"), "ERR"))
-	s.K("a misspelt type token fails closed: every link of that kind is refused", c.tryx("INSERT INTO link_kinds(kind,symmetric,from_types,to_types) VALUES ('godparent',0,'persn','person')") == "OK" &&
+	s.K("a misspelt type token matches nothing: alone, every link of that kind is refused", c.tryx("INSERT INTO link_kinds(kind,symmetric,from_types,to_types) VALUES ('godparent',0,'persn','person')") == "OK" &&
 		strings.HasPrefix(c.link(pa, pb, "godparent"), "ERR"))
+	s.K("...beside a valid token, the valid one still admits its type (tokens match one by one)", c.tryx("INSERT INTO link_kinds(kind,symmetric,from_types,to_types) VALUES ('mixed',0,'person,persn','person')") == "OK" &&
+		c.link(pa, pb, "mixed") == "OK" && strings.HasPrefix(c.link(c.named("place", ""), pb, "mixed"), "ERR"))
+
+	// ---- a used kind cannot be replaced past link_kinds_structure_fixed: REPLACE deletes the row first
+	cr := s.fresh()
+	ra, rb := cr.named("person", ""), cr.named("person", "")
+	cr.link(ra, rb, "friend")
+	graph := func() string {
+		return fmt.Sprint(cr.rows("SELECT id, from_id, to_id, kind, note FROM links ORDER BY id"))
+	}
+	before := graph()
+	for _, r := range []struct{ label, sql string }{
+		{"the symmetric flag", "REPLACE INTO link_kinds(kind, symmetric, from_types, to_types) VALUES ('friend', 0, 'person', 'person')"},
+		{"the endpoint types", "REPLACE INTO link_kinds(kind, symmetric, from_types, to_types) VALUES ('friend', 1, 'place', 'place')"},
+		{"nothing (same definition)", "REPLACE INTO link_kinds(kind, symmetric, from_types, to_types) VALUES ('friend', 1, 'person', 'person')"},
+		{"nothing, as INSERT OR REPLACE", "INSERT OR REPLACE INTO link_kinds(kind, symmetric, from_types, to_types) VALUES ('friend', 1, 'person', 'person')"},
+	} {
+		s.K("REPLACE of a used kind changing "+r.label+" is refused by the links FK", strings.Contains(strings.ToUpper(cr.tryx(r.sql)), "FOREIGN KEY"))
+	}
+	s.K("...and the registry and graph are unchanged", cr.str("SELECT symmetric || from_types || to_types FROM link_kinds WHERE kind='friend'") == "1personperson" && graph() == before, graph())
+	s.K("...so deleting one side still deletes its mirror", cr.tryx("DELETE FROM links WHERE kind='friend' AND from_id=?", ra) == "OK" && cr.n("SELECT count(*) FROM links") == 0)
+	s.K("an unused kind may still be replaced", cr.tryx("REPLACE INTO link_kinds(kind, symmetric, from_types, to_types) VALUES ('friend', 0, 'person', 'person')") == "OK" &&
+		cr.n("SELECT symmetric FROM link_kinds WHERE kind='friend'") == 0)
 	cn := s.freshWith(F{FKOff: true})
 	s.K("with foreign_keys=OFF, a typed link to an id that does not exist is refused", strings.Contains(cn.link(cn.dayPage("2026-09-30", "x"), 99999, "at"), "endpoint type"))
 	c2 := s.freshWith(F{FKOff: true})

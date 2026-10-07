@@ -204,8 +204,10 @@ SELECT what, at, detail FROM (
    WHERE d.id = (SELECT entity_id FROM entity_names WHERE name_key = :day) AND d.deleted_at IS NULL
   UNION ALL
   SELECT 'habit', NULL, m_name.title || ': ' ||
-         CASE (SELECT max(v.value) FROM measurement_values v WHERE v.metric_id = m.id AND v.day = :day AND v.session_id IS NULL)
-           WHEN 1 THEN 'done' WHEN 0 THEN 'not done' ELSE 'not recorded' END
+         CASE WHEN EXISTS (SELECT 1 FROM measurement_values v WHERE v.metric_id = m.id AND v.day = :day AND v.session_id IS NULL AND v.value NOT IN (0, 1))
+           THEN 'invalid'
+           ELSE CASE (SELECT max(v.value) FROM measurement_values v WHERE v.metric_id = m.id AND v.day = :day AND v.session_id IS NULL)
+             WHEN 1 THEN 'done' WHEN 0 THEN 'not done' ELSE 'not recorded' END END
     FROM habit_periods h JOIN entities m ON m.id = h.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key AND m.deleted_at IS NULL
    WHERE h.start_day <= :day AND coalesce(h.end_day, '9999-12-31') >= :day
   UNION ALL

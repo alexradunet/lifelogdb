@@ -806,8 +806,10 @@ CREATE TABLE link_kinds (
   -- structure (symmetric flag, allowed endpoint entity types) is fixed at registration and enforced
   -- by a trigger on every link. Registering a kind is a deliberate INSERT, so a typo cannot create
   -- one. from_types / to_types: NULL = any entity type, else a comma list of entities.entity_type values
-  -- ('person,place'); a misspelt token fails CLOSED (every link of that kind is rejected).
-  -- an unreferenced kind may be deleted by the owner; a used one is refused by the links FK
+  -- ('person,place'), matched token by token: a misspelt token admits nothing, so it never widens a kind,
+  -- but the other tokens of its list still admit their types.
+  -- an unreferenced kind may be deleted or replaced by the owner; a used one is refused by the links FK, which is
+  -- RESTRICT because REPLACE deletes the row first and would otherwise change its structure past the trigger
   kind       TEXT PRIMARY KEY CONSTRAINT link_kinds_kind CHECK (instr(kind, char(0)) = 0 AND kind = lower(kind) AND length(kind) > 0 AND kind NOT GLOB '*[^a-z0-9_-]*'),
   symmetric  INTEGER NOT NULL DEFAULT 0 CONSTRAINT link_kinds_symmetric CHECK (symmetric IN (0,1)),
   from_types TEXT CONSTRAINT link_kinds_from_types CHECK (from_types IS NULL OR (instr(from_types, char(0)) = 0 AND from_types NOT GLOB '*[^a-z,]*' AND from_types NOT GLOB ',*'
@@ -845,7 +847,7 @@ CREATE TABLE links (
   id         INTEGER PRIMARY KEY,
   from_id    INTEGER NOT NULL REFERENCES entities(id),
   to_id      INTEGER NOT NULL REFERENCES entities(id),
-  kind       TEXT NOT NULL REFERENCES link_kinds(kind),  -- closed registry
+  kind       TEXT NOT NULL REFERENCES link_kinds(kind) ON DELETE RESTRICT,  -- closed registry; a used kind is never deleted or replaced
   note       TEXT,
   created_at TEXT NOT NULL CONSTRAINT links_created_at CHECK (length(created_at) = 24 AND created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z' AND substr(created_at,12,2) BETWEEN '00' AND '23' AND strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at),
   source     TEXT NOT NULL CONSTRAINT links_source CHECK (instr(source, char(0)) = 0 AND length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*'),   -- the writer (lifelog_meta.source)

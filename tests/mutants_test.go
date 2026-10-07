@@ -295,6 +295,7 @@ var mutants = []struct {
 	{"links", "link ID can change", "links are immutable: id", edit("WHEN NEW.id IS NOT OLD.id OR NEW.from_id", "WHEN NEW.from_id")},
 	{"links", "link creation time can change", "links are immutable: created_at", edit("OR NEW.created_at IS NOT OLD.created_at OR NEW.source", "OR NEW.source")},
 	{"links", "symmetric notes do not mirror", "symmetric note edit mirrors forward", notrigger("links_mirror_note")},
+	{"links", "a used kind can be replaced past its fixed structure", "REPLACE of a used kind changing the symmetric flag is refused by the links FK", edit("REFERENCES link_kinds(kind) ON DELETE RESTRICT,", "REFERENCES link_kinds(kind),")},
 	{"evolution", "type changes strand retained typed links", "type change refuses a retained incoming typed edge", notrigger("entities_endpoint_types")},
 	{"habits", "Mood accepts habit insertion", "Mood identity cannot start a habit", edit("WHERE NEW.metric_id = 1;", "WHERE 0;")},
 	{"habits", "habit can be reassigned to Mood", "habit update cannot reassign to Mood identity", editNth("WHERE NEW.metric_id = 1;", "WHERE 0;", 1)},

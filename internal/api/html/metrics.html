@@ -36,9 +36,9 @@
 <div class="pager"><a href="{{.Link "prev"}}" rel="prev">← Previous day</a><a href="{{.Link "next"}}" rel="next">Next day →</a></div>
 {{with $h.habits}}<ul class="plain">{{range .}}{{$href := printf "/metrics/%s" (pathesc .metric)}}
 <li class="row"><a class="grow" href="{{$href}}">{{.metric}}</a>
-<span class="{{if eq .state "done"}}done{{else if eq .state "not done"}}notdone{{else}}muted{{end}}">{{.state}}</span>
+<span class="{{if eq .state "done"}}done{{else if or (eq .state "not done") (eq .state "invalid")}}notdone{{else}}muted{{end}}">{{.state}}</span>
 {{with $.ActionFor "check-in" $href}}{{template "form" (form . "done" "1" "hide" "day" "button" "Done" "class" "tiny")}}{{template "form" (form . "done" "0" "hide" "day" "button" "Not done" "class" "tiny")}}{{end}}</li>{{end}}</ul>
 {{else}}<p class="muted">No habit is active on this day. A habit is a unitless metric with a period: start one from its metric's page.</p>{{end}}
-{{with $h.completion}}<h2>{{$h.from}} – {{$h.to}}</h2><div class="scroll"><table><tr><th>habit</th><th class="num">done</th><th class="num">not done</th><th class="num">not recorded</th><th class="num">active days</th></tr>
-{{range .}}<tr><td>{{.metric}}</td><td class="num">{{num .done}}</td><td class="num">{{num .not_done}}</td><td class="num">{{num .not_recorded}}</td><td class="num">{{num .active_days}}</td></tr>{{end}}</table></div>{{end}}
+{{with $h.completion}}<h2>{{$h.from}} – {{$h.to}}</h2><div class="scroll"><table><tr><th>habit</th><th class="num">done</th><th class="num">not done</th><th class="num">not recorded</th><th class="num">invalid</th><th class="num">active days</th></tr>
+{{range .}}<tr><td>{{.metric}}</td><td class="num">{{num .done}}</td><td class="num">{{num .not_done}}</td><td class="num">{{num .not_recorded}}</td><td class="num">{{num .invalid}}</td><td class="num">{{num .active_days}}</td></tr>{{end}}</table></div>{{end}}
 {{template "foot" .}}{{end}}

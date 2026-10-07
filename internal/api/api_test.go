@@ -3,6 +3,7 @@ package api_test
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -617,4 +618,58 @@ func feedbackLocation(location, path string) bool {
 	}
 	_, err = hex.DecodeString(values[0])
 	return err == nil
+}
+
+// Another writer's file can hold a daily habit check-in outside 0/1; every presentation of the habits labels
+// that day invalid and counts it (cookbook/habits.md). The CLI and MCP serve this same JSON.
+func TestHabitsShowInvalidCheckIns(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "life.db")
+	if err := db.Init(p); err != nil {
+		t.Fatal(err)
+	}
+	d, err := db.Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { d.Close() })
+	h := api.New(&core.Store{DB: d}, nil)
+	c := client.InProcess(h, "cli")
+	root := must(c.Get("/"))
+	must(c.Do(find(root, "register-metric"), map[string]string{"name": "Walk"}))
+	must(c.Do(find(must(c.Get("/metrics/Walk")), "start-habit"), map[string]string{"start_day": "2026-10-01"}))
+	must(c.Do(find(root, "record"), map[string]string{"metric": "Walk", "day": "2026-10-02", "value": "1"}))
+	if _, err := d.W.Exec(`INSERT INTO measurements(metric_id, day, value, created_at, source)
+	                       SELECT entity_id, '2026-10-01', 2, '2026-10-07T00:00:00.000Z', 'other-writer'
+	                         FROM entity_names WHERE title = 'Walk'`); err != nil {
+		t.Fatal(err)
+	}
+
+	habits := must(c.Get("/habits?day=2026-10-01&from=2026-10-01&to=2026-10-02"))
+	props := habits.Properties.(map[string]any)
+	if got := props["habits"].([]any); len(got) != 1 || got[0].(map[string]any)["state"] != "invalid" {
+		t.Errorf("habits of the day: %v", got)
+	}
+	comp := props["completion"].([]any)
+	if len(comp) != 1 {
+		t.Fatalf("completion: %v", comp)
+	}
+	for field, want := range map[string]string{"active_days": "2", "done": "1", "not_done": "0", "not_recorded": "0", "invalid": "1"} {
+		if got := fmt.Sprint(comp[0].(map[string]any)[field]); got != want {
+			t.Errorf("completion %s = %v, want %v", field, got, want)
+		}
+	}
+	listed := false
+	for _, v := range must(c.Get("/days/2026-10-01")).Properties.(map[string]any)["view"].([]any) {
+		row := v.(map[string]any)
+		listed = listed || row["what"] == "habit" && row["detail"] == "Walk: invalid"
+	}
+	if !listed {
+		t.Error("the day view does not label the habit invalid")
+	}
+	body := browse(t, h, "/habits?day=2026-10-01&from=2026-10-01&to=2026-10-02")
+	for _, w := range []string{`<span class="notdone">invalid</span>`, `<th class="num">invalid</th>`} {
+		if !strings.Contains(body, w) {
+			t.Errorf("the habits page does not show %s", w)
+		}
+	}
 }

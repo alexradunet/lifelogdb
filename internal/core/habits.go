@@ -131,7 +131,7 @@ func (s *Store) StopHabit(ctx context.Context, source, metric, day string) error
 	return s.Do(ctx, source, func(t *Tx) error { return t.StopHabit(metric, day) })
 }
 
-// HabitState is one habit of a day: done, not done or not recorded.
+// HabitState is one habit of a day: done, not done, not recorded or invalid.
 type HabitState struct {
 	Metric string `json:"metric"`
 	State  string `json:"state"`
@@ -144,8 +144,10 @@ func (s *Store) Habits(ctx context.Context, day string) ([]HabitState, error) {
 	}
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT m_name.title,
-		       CASE (SELECT max(v.value) FROM measurement_values v WHERE v.metric_id = m.id AND v.day = :day AND v.session_id IS NULL)
-		         WHEN 1 THEN 'done' WHEN 0 THEN 'not done' ELSE 'not recorded' END AS state
+		       CASE WHEN EXISTS (SELECT 1 FROM measurement_values v WHERE v.metric_id = m.id AND v.day = :day AND v.session_id IS NULL AND v.value NOT IN (0, 1))
+		         THEN 'invalid'
+		         ELSE CASE (SELECT max(v.value) FROM measurement_values v WHERE v.metric_id = m.id AND v.day = :day AND v.session_id IS NULL)
+		           WHEN 1 THEN 'done' WHEN 0 THEN 'not done' ELSE 'not recorded' END END AS state
 		  FROM habit_periods h JOIN entities m ON m.id = h.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key AND m.deleted_at IS NULL
 		 WHERE h.start_day <= :day AND coalesce(h.end_day, '9999-12-31') >= :day
 		 ORDER BY m.preferred_name_key`, sql.Named("day", day))
@@ -171,6 +173,7 @@ type Completion struct {
 	Done        int    `json:"done"`
 	NotDone     int    `json:"not_done"`
 	NotRecorded int    `json:"not_recorded"`
+	Invalid     int    `json:"invalid"`
 }
 
 func (s *Store) Completion(ctx context.Context, from, to string) ([]Completion, error) {
@@ -188,10 +191,12 @@ func (s *Store) Completion(ctx context.Context, from, to string) ([]Completion, 
 		    FROM days d JOIN habit_periods h ON h.start_day <= d.day AND coalesce(h.end_day, '9999-12-31') >= d.day
 		)
 		SELECT m_name.title, count(*) AS active_days,
-		       sum(s.value IS 1) AS done, sum(s.value IS 0) AS not_done, sum(s.value IS NULL) AS not_recorded
+		       sum(s.value IS 1 AND s.invalid IS 0) AS done, sum(s.value IS 0 AND s.invalid IS 0) AS not_done,
+		       sum(s.value IS NULL) AS not_recorded, sum(s.invalid IS 1) AS invalid
 		  FROM active a
 		  JOIN entities m ON m.id = a.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key AND m.deleted_at IS NULL
-		  LEFT JOIN (SELECT metric_id, day, max(value) AS value FROM measurement_values WHERE session_id IS NULL GROUP BY metric_id, day) s
+		  LEFT JOIN (SELECT metric_id, day, max(value) AS value, max(value NOT IN (0, 1)) AS invalid
+		             FROM measurement_values WHERE session_id IS NULL GROUP BY metric_id, day) s
 		         ON s.metric_id = a.metric_id AND s.day = a.day
 		 GROUP BY m.id
 		 ORDER BY m.preferred_name_key`, sql.Named("from_day", from), sql.Named("to_day", to))
@@ -202,7 +207,7 @@ func (s *Store) Completion(ctx context.Context, from, to string) ([]Completion, 
 	out := []Completion{}
 	for rows.Next() {
 		var c Completion
-		if err := rows.Scan(&c.Metric, &c.ActiveDays, &c.Done, &c.NotDone, &c.NotRecorded); err != nil {
+		if err := rows.Scan(&c.Metric, &c.ActiveDays, &c.Done, &c.NotDone, &c.NotRecorded, &c.Invalid); err != nil {
 			return nil, err
 		}
 		out = append(out, c)

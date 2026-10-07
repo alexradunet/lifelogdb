@@ -4,7 +4,7 @@ An issue records an incident from real use — a failed import, a bug in the wri
 data could not answer, a rule that is ambiguous or untestable. It is the evidence a schema change needs
 ([how a change happens](../process.md)). One file per incident, named `NNNN-short-slug.md`, written from the
 [template](template.md), numbered on from the last: issues up to 0010 are closed and live in git history
-(`git log -- docs/issues`). Issues 0011–0036 are listed below; the next one is **0037**. Close an issue with its resolution and status, retaining the dated incident as
+(`git log -- docs/issues`). Issues 0011–0038 are listed below; the next one is **0039**. Close an issue with its resolution and status, retaining the dated incident as
 [the process](../process.md) requires. Earlier closed records remain available in git history.
 
 | id | title | status |
@@ -13,6 +13,8 @@ data could not answer, a rule that is ambiguous or untestable. It is the evidenc
 | [0034](0034-scoped-import-retry-rejected-after-tombstone.md) | Scoped import retry is rejected after a session tombstone | resolved |
 | [0035](0035-test-fixtures-can-open-the-wrong-file.md) | Validation fixtures open the wrong file or credit an unrelated error | resolved |
 | [0036](0036-writer-opens-unsupported-schema-versions.md) | Writer opens unsupported schema versions | resolved |
+| [0037](0037-replace-changes-a-used-link-kind.md) | REPLACE changes a used link kind's fixed structure | resolved |
+| [0038](0038-habit-readers-hide-invalid-check-ins.md) | Habit readers hide invalid check-ins | resolved |
 | [0011](0011-renames-lose-identity-and-backlinks.md) | Renames change identity and repeated renames lose backlinks | proposed |
 | [0012](0012-timestamps-allow-stale-overwrites.md) | A timestamp used as an edit version permits a stale overwrite | proposed |
 | [0013](0013-promotion-strands-typed-links.md) | Promotion can strand a typed link while integrity reports success | proposed |

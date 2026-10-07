@@ -289,3 +289,110 @@ func TestTombstonedHabits(t *testing.T) {
 		}
 	}
 }
+
+// A current unassociated check-in outside 0/1 breaks the writer's habit contract; only another writer's file
+// can hold one. The readers label such a day invalid, even beside a valid check-in, so the four completion
+// categories still sum to the active days (cookbook/habits.md, cookbook/day-view.md).
+func TestHabitReadersReportInvalidCheckIns(t *testing.T) {
+	s := fresh(t)
+	if _, err := s.RegisterMetric(ctx, "cli", "Walk", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.StartHabit(ctx, "cli", "Walk", "2026-10-01", "2026-10-06"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.CreatePage(ctx, "cli", "Workout", ""); err != nil {
+		t.Fatal(err)
+	}
+	var session int64
+	if err := s.Do(ctx, "cli", func(tx *Tx) error {
+		var err error
+		session, _, err = tx.CaptureSession(SessionInput{Kind: "Workout", Day: "2026-10-05", StartLocal: "2026-10-05T08:00:00.000"})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	metric, err := s.PageID(ctx, "Walk")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// deliberately nonconforming rows, as another writer could leave them; the readers are under test
+	external := func(day string, value float64, sessionID any) int64 {
+		t.Helper()
+		res, err := s.DB.W.Exec(`INSERT INTO measurements(metric_id, session_id, day, value, created_at, source)
+		                         VALUES (?, ?, ?, ?, '2026-10-07T00:00:00.000Z', 'other-writer')`, metric, sessionID, day, value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		id, err := res.LastInsertId()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	record := func(day string, value float64) {
+		t.Helper()
+		if _, err := s.Record(ctx, "cli", Reading{Metric: "Walk", Day: day, Value: value}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	external("2026-10-01", 2, nil) // invalid only
+	record("2026-10-02", 1)        // a valid check-in does not hide an invalid one
+	external("2026-10-02", -1, nil)
+	one := 1.0 // a corrected invalid reading is no longer current
+	if _, _, err := s.Correct(ctx, "cli", external("2026-10-03", 2, nil), &one); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.Correct(ctx, "cli", external("2026-10-04", 2, nil), nil); err != nil { // nor is a retracted one
+		t.Fatal(err)
+	}
+	external("2026-10-05", 2, session) // session-scoped facts are not daily check-ins
+	record("2026-10-06", 0)
+
+	want := map[string]string{"2026-10-01": "invalid", "2026-10-02": "invalid", "2026-10-03": "done",
+		"2026-10-04": "not recorded", "2026-10-05": "not recorded", "2026-10-06": "not done"}
+	for day, state := range want {
+		h, err := s.Habits(ctx, day)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(h) != 1 || h[0].State != state {
+			t.Errorf("habits of %s = %+v, want Walk %s", day, h, state)
+		}
+		d, err := s.Day(ctx, day)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var listed []string
+		for _, row := range d.Rows {
+			if row.What == "habit" {
+				listed = append(listed, row.Detail)
+			}
+		}
+		if len(listed) != 1 || listed[0] != "Walk: "+state {
+			t.Errorf("day view of %s lists habits %q, want Walk: %s", day, listed, state)
+		}
+	}
+	c, err := s.Completion(ctx, "2026-10-01", "2026-10-06")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wantC := (Completion{Metric: "Walk", ActiveDays: 6, Done: 1, NotDone: 1, NotRecorded: 2, Invalid: 2}); len(c) != 1 || c[0] != wantC {
+		t.Errorf("completion = %+v, want %+v", c, wantC)
+	}
+
+	if err := s.Tombstone(ctx, "cli", metric); err != nil {
+		t.Fatal(err)
+	}
+	h, err := s.Habits(ctx, "2026-10-01")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err = s.Completion(ctx, "2026-10-01", "2026-10-06")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(h) != 0 || len(c) != 0 {
+		t.Errorf("a tombstoned habit with invalid data is listed: %+v %+v", h, c)
+	}
+}

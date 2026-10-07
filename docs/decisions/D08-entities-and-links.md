@@ -7,7 +7,9 @@
   between — a link, a ghost page, a measurement — and the next row silently points at the wrong entity (executed). All relationships live
   in one `links(from_id, to_id, kind)` table with real foreign keys (`UNIQUE(from_id, to_id, kind)`
   allows several kinds between one pair, never a duplicate edge). `links.kind` references the closed
-  registry `link_kinds`, whose structure is fixed at registration (`link_kinds_structure_fixed`);
+  registry `link_kinds`, whose structure is fixed at registration (`link_kinds_structure_fixed`); the foreign key is
+  `ON DELETE RESTRICT`, so a used kind can be neither deleted nor replaced — `REPLACE` deletes the row before
+  re-inserting it, which the update trigger never sees and a final-state foreign key would not stop (executed);
   `links_endpoint_types` checks the kind and both endpoint types on every insert, including mirror rows
   — also on a connection with `foreign_keys=OFF`, executed in autocommit. `entities_endpoint_types`
   refuses type changes that would invalidate retained incoming or outgoing edges;
