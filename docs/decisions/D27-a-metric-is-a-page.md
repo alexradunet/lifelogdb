@@ -9,7 +9,8 @@
 - **Decision.** A metric is an entity of type `metric` with its prose and owned names plus a `metrics` row, one id, as a person is
   ([D20](D20-named-pages.md)): `metrics(id, entity_type)` references `entities(id, entity_type)`. The page title is the
   metric's preferred name — normalized owned keys keep its aliases on one series, and rename retains the id — and the page body is what the owner writes about it. `metrics` keeps only what is the
-  metric's own: its `unit`, fixed (`metrics_unit_fixed`). A metric is never deleted (`metrics_no_delete`); one
+  metric's own: its `unit`, fixed (`metrics_unit_fixed`). `metrics_identity_fixed` also prevents moving that unit
+  to another named identity, even before the first reading. A metric is never deleted (`metrics_no_delete`); one
   registered by mistake is tombstoned ([D11](D11-tombstones.md)). It is filed in a category by a `part-of` link, as
   anything is ([D26](D26-metric-categories.md)); `[[Weight]]` in the journal is a backlink of the metric. Mood is
   seeded as the metric page `Mood` ([D6](D06-mood-is-a-measurement.md)). A plain page of the metric's title becomes

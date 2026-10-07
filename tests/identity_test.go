@@ -128,7 +128,7 @@ func identity(s *S) {
 	// ---- updated_at, kept by triggers
 	c = s.fresh()
 	byType = map[string]int64{"page": c.thing("page"), "person": c.thing("person"), "place": c.thing("place")}
-	c.must("UPDATE entities SET updated_at='2000-01-01T00:00:00.000Z', created_at='2000-01-01T00:00:00.000Z'")
+	c.must("UPDATE entities SET updated_at='2000-01-01T00:00:00.000Z'")
 	for _, x := range [][2]string{{"page", "UPDATE entities SET body='y' WHERE id=?"}, {"person", "UPDATE people SET birth_day='1990-01-01' WHERE id=?"}, {"place", "UPDATE entities SET body='a café' WHERE id=?"}} {
 		c.must(x[1], byType[x[0]])
 		s.K("updating a "+x[0]+" bumps entities.updated_at", c.n("select updated_at > created_at from entities where id=?", byType[x[0]]) == 1)

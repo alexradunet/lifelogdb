@@ -105,7 +105,8 @@ func exactTimeBoundaries(s *S) {
 			queries["habit_periods.start_day"] = fmt.Sprintf("INSERT INTO habit_periods(metric_id,start_day,source) VALUES(%d,?,'ui')", otherHabit)
 			queries["habit_periods.end_day"] = fmt.Sprintf("UPDATE habit_periods SET end_day=? WHERE metric_id=%d", habit)
 		} else {
-			for _, col := range []string{"created_at", "updated_at", "deleted_at"} {
+			queries["entities.created_at"] = "" // creation evidence is tested at insert, never by rewriting it
+			for _, col := range []string{"updated_at", "deleted_at"} {
 				queries["entities."+col] = fmt.Sprintf("UPDATE entities SET %s=? WHERE id=%d", col, entity)
 			}
 			queries["measurements.created_at"] = "INSERT INTO measurements(metric_id,day,value,source,created_at) VALUES(1,'2026-01-01',3,'ui',?)"
@@ -141,7 +142,14 @@ func exactTimeBoundaries(s *S) {
 		sort.Strings(keys)
 		for _, col := range keys {
 			c.must("SAVEPOINT boundary_probe")
-			got := c.tryx(queries[col], value)
+			got := "OK"
+			if col == "entities.created_at" {
+				if _, err := c.tryIdentity("page", "Creation boundary", M{"created_at": value}); err != nil {
+					got = "ERR " + err.Error()
+				}
+			} else {
+				got = c.tryx(queries[col], value)
+			}
 			c.must("ROLLBACK TO boundary_probe")
 			c.must("RELEASE boundary_probe")
 			s.K(fmt.Sprintf("exact %s %q accepted=%v", col, value, want), (got == "OK") == want, got)

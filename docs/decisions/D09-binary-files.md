@@ -16,11 +16,16 @@
   - `sha256`, the hash of the original, unique (`files_sha256`): a writer looks it up before it writes, so a file is
     kept once whatever writer sends it — which `entities.import_key`, unique per `source`, cannot promise;
   - `mime`, the original's type (`files_mime`): `audio/mp4` tells a reader the body is a transcript;
-  - `preview`, the picture kept for good (`files_preview`): a JPEG of at most 1 MB whose long edge the writer scales
+  - `preview`, the retained current picture (`files_preview`): a JPEG of at most 1 MB whose long edge the writer scales
     to at most 1600 px, made by the writer with no metadata — a photo's GPS would be the location history
     [D21](D21-location-history.md) leaves out — or NULL where the text is the point. A video keeps one frame.
 
-  The hash and the type never change (`files_original_fixed`); a missing preview may be added later. A file is never
+  The original remains attached to the same page (`files_identity_fixed`); otherwise two valid file rows could
+  exchange originals while every foreign key still passed. The hash and the type never change (`files_original_fixed`);
+  a missing preview may be added later. The preview
+  is mutable, like the body: a correction may replace or clear it. It is not a disposable cache, since the original
+  may no longer exist; replacing it does not retain the previous picture. Re-import only fills a missing preview
+  ([keep a file](../cookbook/keep-a-file.md)); the database retains earlier pictures only in snapshots that contain them ([D12](D12-no-revision-tables.md)). A file is never
   deleted (`files_no_delete`); one kept by mistake is tombstoned ([D11](D11-tombstones.md)). The original is never
   stored in `life.db` and never managed by its writer. A plain page of the file's title — a ghost an earlier embed
   made — becomes the file by the promotion a person takes, its text kept ([keep a file](../cookbook/keep-a-file.md)).

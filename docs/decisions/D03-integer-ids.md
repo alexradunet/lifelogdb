@@ -10,7 +10,11 @@
   inserts across the B-tree) and larger; their only real advantage — collision-free IDs for
   multi-device merge — buys nothing while sync is a non-goal ([non-goals](../architecture/non-goals.md)) [R26](../research/references.md#r26)[R27](../research/references.md#r27).
 - **An id is a permanent reference.** Nothing but `links` rows is deleted, so an entity id is never
-  reused, and a named entity also has its retained owned names ([D20](D20-named-pages.md)).
+  reused, and a named entity also has its retained owned names ([D20](D20-named-pages.md)). Typed extension
+  ownership is guarded separately from foreign-key validity (`people_identity_fixed`, `places_fixed`,
+  `metrics_identity_fixed`, `files_identity_fixed`, `periods_fixed`): a foreign key alone would allow details
+  to move to another identity of the same type. Stable ownership keeps the name, prose, details and edit token
+  about the same thing.
 - **Trade accepted.** If merging two databases ever becomes real, integer IDs can collide.
   Mitigation then: re-key with one script, or add an `entities.uid` column — additive after the
   freeze up to unique and `NOT NULL` (`ADD COLUMN`, a backfill, a unique index, `ALTER COLUMN uid SET

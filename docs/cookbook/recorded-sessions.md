@@ -17,14 +17,17 @@ with the [period profile](../contract/period-boundaries.md) only as named day at
 ```sql
 SELECT me.id,me.day,me.value,me.session_id,
        CASE WHEN me.session_id IS NULL THEN 'unassociated' ELSE 'session' END AS scope,
+       e.deleted_at AS metric_deleted_at,
        s.deleted_at AS session_deleted_at
 FROM measurement_values me
+JOIN entities e ON e.id=me.metric_id
 JOIN entity_names n ON n.entity_id=me.metric_id AND n.name_key=:metric
 LEFT JOIN sessions s ON s.id=me.session_id
-WHERE :include_deleted=1 OR me.session_id IS NULL OR s.deleted_at IS NULL
+WHERE :include_deleted=1 OR (e.deleted_at IS NULL AND (me.session_id IS NULL OR s.deleted_at IS NULL))
 ORDER BY me.day,me.taken_at,me.id;
 ```
 
 This is an explicit labeled all-scope query, not a daily total or a sum. For a single session add `me.session_id`
 as an explicit filter; the ordinary [metric series](metric-series.md) selects unassociated facts only.
 Historical queries retain [scope and lifecycle](../contract/measurement-scope.md) rather than erasing facts.
+Here `:include_deleted=1` includes facts of deleted metrics and deleted sessions and labels both current tombstones.

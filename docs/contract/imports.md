@@ -49,10 +49,10 @@ DETACH s;
 5. **Check afterwards:** the four checks of [integrity checks](integrity-checks.md), per-source counts (`SELECT source, count(*),
    min(day), max(day) FROM measurements GROUP BY source`), and **run the importer a second time — it
    must insert nothing.**
-6. **Before the freeze**, import a real export once into the file that will become canonical (steps 1–5); while that
-   file holds only replayable imports it can still be rebuilt ([D13](../decisions/D13-migrations-and-freeze.md)). The
-   2026-10 trial — a real vault, imported into a copy — already taught [D5](../decisions/D05-pages-and-day-pages.md), [D22](../decisions/D22-events.md), [D23](../decisions/D23-no-tasks.md) and [D24](../decisions/D24-habits.md); an
-   import into `life.db` itself is the one test this schema has never had.
+6. **Before the freeze**, validate a real export with steps 1–5 and retain its replayable import workspace.
+   A canonical file that holds only replayable imports can still be rebuilt ([D13](../decisions/D13-migrations-and-freeze.md)).
+   The [docs index](../README.md) records the current freeze/import status; the
+   [freeze checklist](../process.md#before-the-freeze) governs the first unreplayable write.
 
 ## Explicit planning imports
 

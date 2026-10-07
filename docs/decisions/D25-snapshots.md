@@ -28,7 +28,8 @@
     ([non-goals](../architecture/non-goals.md)). Getting a snapshot off the machine is the owner's business, with
     the owner's tools.
 - **Trade accepted.** A snapshot is as old as its date: what was written after it is lost on a restore. Next to
-  `life.db` it shares that disk's fate; the mitigation is the owner's copy elsewhere. The restore check runs on a
+  `life.db` it shares that disk's fate; the mitigation is the owner's copy elsewhere. Snapshots preserve sampled
+  database states, not every edit between them ([D12](D12-no-revision-tables.md)). The restore check runs on a
   writer's connection to the snapshot (the FTS5 check is an `INSERT`), so it must close without `PRAGMA optimize`.
 - **Sources.** Executed: a read-only connection makes the copy while a write transaction is open, with every
   committed row and nothing uncommitted, where a copy of `life.db` alone misses the rows still in its `-wal`; an

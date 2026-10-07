@@ -106,7 +106,7 @@ func journal(s *S) {
 	c.link(d28, home, "at")
 	essay := c.pageW("Essay", "2026-09-29", "text")
 	// Establish an explicitly unedited fixture; name insertion is revision-bearing.
-	c.must("UPDATE entities SET created_at=updated_at WHERE id=?", essay)
+	c.must("UPDATE entities SET updated_at=created_at WHERE id=?", essay)
 	c.page("Link target")
 	c.pageW("Yesterday essay", "2026-09-28", "x")
 	c.named("person", "Sam")
@@ -145,7 +145,6 @@ func journal(s *S) {
 	}
 	s.K("...undated items first, the day page leading", order, tab(rows))
 	pid := c.n("select entity_id from entity_names where name_key='essay'")
-	c.must("UPDATE entities SET created_at='2026-09-29T08:00:00.000Z' WHERE id=?", pid)
 	c.must("UPDATE entities SET body='text 2' WHERE id=?", pid)
 	edited := false
 	for _, r := range c.rows(DV, P{"day": "2026-09-29"}) {

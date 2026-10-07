@@ -41,7 +41,7 @@ func named(s *S) {
 		stop("missing literal integrity block")
 	}
 	integrityStatements := statements(integrityBlocks[0])
-	if len(integrityStatements) != 10 {
+	if len(integrityStatements) != 15 {
 		stop("unexpected integrity statement count")
 	}
 	s.K("a named person missing its extension is found by the semantic query", c.n("SELECT count(*) FROM people WHERE id=?", half) == 0 && contains(c.col(integrityStatements[2]), ids(half)))
@@ -250,12 +250,12 @@ func named(s *S) {
 	if c.link(st, tgt, "wikilink") != "OK" {
 		stop("ordinary redirect-text graph setup")
 	}
-	c.must("UPDATE entities SET created_at = strftime('%Y-%m-%dT%H:%M:%fZ','now','-40 day')")
 	gh := c.col("select title from ghost_pages")
-	gnew := c.page("Brand new")
-	c.must("UPDATE entities SET created_at="+NOW+" WHERE id=?", gnew)
+	gnew, createErr := c.tryIdentity("page", "Brand new", M{"created_at": c.str("SELECT " + NOW)})
+	if createErr != nil {
+		stop("new ghost fixture: %v", createErr)
+	}
 	gdead := c.page("Tombstoned ghost")
-	c.must("UPDATE entities SET created_at = strftime('%Y-%m-%dT%H:%M:%fZ','now','-40 day') WHERE id=?", gdead)
 	c.must("UPDATE entities SET deleted_at="+NOW+" WHERE id=?", gdead)
 	gh2 := c.col("select id from ghost_pages")
 	s.K("ghost_pages leaves a page younger than 30 days alone", !contains(gh2, ids(gnew)), gh2)

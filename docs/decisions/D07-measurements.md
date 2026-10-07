@@ -4,16 +4,21 @@
 
 - **Decision.** A metric is a page ([D27](D27-a-metric-is-a-page.md)), so its title keeps a series canonical ('Weight'
   and 'weight' resolve through one owned normalized name; rename retains the series id), and its unit never changes (`metrics_unit_fixed`). `measurements` holds one row per data point
-  and is **bitemporal** [R68](../research/references.md#r68): `day`/`taken_at` is *valid time*, `created_at` and the append-only
-  rows are *transaction time*, so "what did I believe my weight was on 1 March, as of 1 April" stays
-  answerable. The table is append-only (`measurements_no_update`, `measurements_no_delete`); a
+  and retains **valid time and recorded time**, following the distinction in temporal databases
+  [R68](../research/references.md#r68): `day`/`taken_at` describes the observation; `created_at` is the
+  writer-supplied recording timestamp. The append-only chain preserves corrections, so a recorded-time
+  cutoff can answer which version was recorded by a stated instant. This is not database-managed transaction
+  time: equal timestamps, clock regressions and writes in the same transaction prevent exact commit-history
+  reconstruction from `created_at`. The table is append-only (`measurements_no_update`, `measurements_no_delete`); a
   correction supersedes (`measurements_one_correction`, `measurements_supersede_metric` and `measurements_supersede_scope` — the one
   supersede invariant that could silently corrupt a series); a NULL value retracts
   (`measurements_first_has_value`); values are finite (`measurements_value_finite`: a `REAL` column
   stores `1e999` as infinity, and one such row poisons every average). SQLite turns a bound `NaN` into
   NULL before any CHECK sees it: as a first reading that is rejected, but as a correction it is a
   retraction the database cannot tell from an intended one (executed) — so the app never binds NaN.
-  `measurement_values` is the one read rule; two independent readings on one day are both returned.
+  `measurement_values` selects the current non-retracted leaves; two independent readings on one day are both returned.
+  Historical cutoff reads select leaves within the eligible append-only rows, not a timestamp-filtered current view
+  ([a metric series](../cookbook/metric-series.md)). Lifecycle filters belong to the read's stated purpose.
   The unique index on `supersedes_id` doubles as the index the view's `NOT EXISTS` needs (executed:
   the plan uses it).
 - **Session scope** is distinct from capture provenance ([scope](../contract/measurement-scope.md)); the

@@ -84,7 +84,7 @@ func files(s *S) {
 	s.K("files.sha256 cannot change", strings.Contains(c.tryx("UPDATE files SET sha256=? WHERE id=?", hash(9), id), "never change"))
 	s.K("files.mime cannot change", strings.Contains(c.tryx("UPDATE files SET mime='audio/mpeg' WHERE id=?", id), "never change"))
 	s.K("a no-op full-row update passes", c.tryx("UPDATE files SET sha256=sha256, mime=mime WHERE id=?", id) == "OK")
-	c.must("UPDATE entities SET updated_at='2000-01-01T00:00:00.000Z', created_at='2000-01-01T00:00:00.000Z' WHERE id=?", id)
+	c.must("UPDATE entities SET updated_at='2000-01-01T00:00:00.000Z' WHERE id=?", id)
 	s.K("a missing preview may be added", c.tryx("UPDATE files SET preview=? WHERE id=?", jpegBytes, id) == "OK")
 	s.K("adding it bumps entities.updated_at (files_touch)", c.n("select updated_at > created_at from entities where id=?", id) == 1)
 	s.K("a file is never deleted", err(c.tryx("DELETE FROM files WHERE id=?", id)) && err(c.tryx("DELETE FROM entity_names WHERE entity_id=?", id)))
@@ -122,9 +122,7 @@ func files(s *S) {
 		c.n("select count(*) from links where from_id=? and to_id=?", sd, g) == 1)
 	s.K("a file cannot be turned back into a plain page (the files row's FK)", err(c.tryx("UPDATE entities SET entity_type='page' WHERE id=?", g)))
 	s.K("a day page cannot become a file (entities_day_page_plain)", strings.Contains(c.tryx("UPDATE entities SET entity_type='file' WHERE id=?", day), "entities_day_page_plain"))
-	c.must("UPDATE entities SET created_at='2000-01-01T00:00:00.000Z' WHERE id IN (SELECT id FROM files)")
 	empty := c.named("file", "Empty.pdf")
-	c.must("UPDATE entities SET created_at='2000-01-01T00:00:00.000Z' WHERE id=?", empty)
 	s.K("ghost_pages never lists a file page, however empty and alone", c.n("select count(*) from ghost_pages where id=?", empty) == 0)
 	s.K("integrity and foreign keys clean", c.integrityOK())
 

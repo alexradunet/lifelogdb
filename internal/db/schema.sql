@@ -19,21 +19,22 @@ CREATE TABLE lifelog_meta (
   value TEXT NOT NULL
 ) STRICT;
 INSERT INTO lifelog_meta(key, value) VALUES
-  ('schema',    'lifelog v1: the journal (one page per day), wiki, people, places, recorded life periods, health metrics and the files kept as their text and a small picture, of one person: a life log with explicit personal task intentions, recurring outcomes and reminder intent, not a general project manager; the rules of each table are comments inside its CREATE statement (.schema), the rules that span tables are these rows'),
-  ('instants',  'every *_at column is an exact 24-character ASCII UTC ISO-8601 TEXT instant, years 0000..9999 and hours 00..23, with milliseconds, e.g. 2026-06-09T21:14:03.482Z, written by the app, never by a SQLite default (CURRENT_TIMESTAMP has no milliseconds and is not ISO-8601; a trigger writes strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')); fixed width, so it sorts as text; CHECK strftime(''%Y-%m-%dT%H:%M:%fZ'', x) IS x; created_at, on every table that has it, is when the row was written to life.db, never back-dated; task completed_at is supplied completion evidence and reminder_override_at is a chosen future or past reminder instant, not an assertion that an event happened'),
+  ('schema',    'lifelog v1: the journal (one page per day), wiki, people, places, recorded life periods, health metrics and the files kept as their text and a small picture, of one person: a life log with explicit personal task intentions, recurring outcomes and reminder intent, not a general project manager; the rules of each table are comments inside its CREATE statement (.schema), the rules that span tables are these rows; this is an in-file reading summary: a conforming writer also needs the matching docs contract and vectors'),
+  ('instants',  'every *_at column is an exact 24-character ASCII UTC ISO-8601 TEXT instant, years 0000..9999 and hours 00..23, with milliseconds, e.g. 2026-06-09T21:14:03.482Z, written by the app, never by a SQLite default (CURRENT_TIMESTAMP has no milliseconds and is not ISO-8601; a trigger writes strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')); fixed width, so it sorts as text; supplied clock timestamps may coincide or regress and do not encode commit order; CHECK strftime(''%Y-%m-%dT%H:%M:%fZ'', x) IS x; created_at, on every table that has it, is when the row was written to life.db, never back-dated; task completed_at is supplied completion evidence and reminder_override_at is a chosen future or past reminder instant, not an assertion that an event happened'),
   ('days',      'every *_day column (and day) is the LOCAL exact 10-character ASCII calendar date YYYY-MM-DD, years 0000..9999, where the thing happened for recorded facts, written by the app from the local calendar of the device that captured it (never a server''s), never recomputed from an instant; tasks.anchor_day, tasks.repeat_until_day, task_occurrences.due_day and date occurrence_key are chosen planning calendar days, not claims that an event happened; CHECK explicit ASCII shape and date(x) IS x (IS, not =: a CHECK passes on NULL, and date(''2026-9-3'') is NULL)'),
   ('measurement_scope', 'a new non-NULL measurement associated by session_id requires a live session; tombstones retain facts, NULL retraction remains allowed; active queries exclude tombstoned-session facts, explicit historical reads retain scope and lifecycle'),
   ('planning', 'task project admission requires a live non-journal plain page; retained references forbid incompatible type changes and exclude ghost cleanup, while tombstones retain context; a one-off task commits with exactly one occurrence keyed once; occurrence admission requires a live task and a key in its immutable anchored sequence; open keys cannot exceed its current end, while explicit historical done/skipped outcomes may; shortening the end atomically skips existing open keys beyond it, preserves other outcomes, and forbids reopening those later keys; active planning reads and reminders exclude tombstoned tasks and occurrences, and reminders require an open occurrence'),
-  ('deletes',   'life data is never deleted except links rows: an entity is a tombstone (entities.deleted_at), a measurement is corrected by inserting a row; BEFORE DELETE triggers enforce it on entities and every domain row; ordinary active reads filter lifecycle tombstones; explicit historical and append-only audits retain them; the registries (link_kinds, lifelog_meta) are the owner''s administrative rows, deletable while nothing references them (each CREATE comment says so)'),
-  ('source',    'entities, sessions, tasks, task_occurrences, links, measurements and habit_periods: source names the writer of the row (ui, cli, api, agent:<name>, import:<name>; schema for the rows this file seeds); written at insert, never changed; import_key is unique per source on entities, sessions, tasks and task_occurrences, and per source and metric on measurements'),
+  ('deletes',   'life data is never deleted except links rows: an entity is a tombstone (entities.deleted_at); revival clears the tombstone, so lifecycle transitions are not retained history; a measurement is corrected by inserting a row; BEFORE DELETE triggers enforce it on entities and every domain row; ordinary active reads filter lifecycle tombstones; explicit historical and append-only audits retain them; the registries (link_kinds, lifelog_meta) are the owner''s administrative rows, deletable while nothing references them (each CREATE comment says so)'),
+  ('source',    'entities, sessions, tasks, task_occurrences, links, measurements and habit_periods: source names the original inserter of the row, not the last editor or an audit trail (ui, cli, api, agent:<name>, import:<name>; schema for the rows this file seeds); written at insert, never changed; import_key is unique per source on entities, sessions, tasks and task_occurrences, and per source and metric on measurements'),
   ('edit_revisions', 'entities.revision, sessions.revision, tasks.revision and task_occurrences.revision are monotonic integer edit tokens independent of updated_at; names, body, day, type, lifecycle, typed detail, habit period and incident link changes advance it; no-ops do not, rollback restores it, exhaustion refuses; clients compare the token inside BEGIN IMMEDIATE, never a timestamp; exact increment counts are not meaningful; planning edits advance the edited row; resolving inherited task context, lifecycle or reminder defaults requires comparing both task and occurrence tokens'),
   ('typed_links', 'both endpoints of every retained link must satisfy link_kinds; a type change refuses invalid incoming or outgoing edges atomically; semantic integrity checks the registry independently of structural integrity'),
   ('writers',   'one writing application; every connection sets foreign_keys=ON, recursive_triggers=ON, synchronous=FULL, trusted_schema=OFF and starts write transactions with BEGIN IMMEDIATE; every other tool opens the file read-only; imports use INSERT ... ON CONFLICT DO NOTHING, never OR IGNORE (skips CHECK/NOT NULL violations silently) or OR REPLACE (a delete)'),
   ('sqlite',    'writers need SQLite >= 3.51.3 (fixes a WAL race between concurrent writers and checkpoints); migrations need >= 3.53 (ALTER TABLE ADD/DROP CONSTRAINT); CHECKs use only functions every such version has'),
-  ('evolution', 'after the freeze (the first row written that cannot be replayed from an import; before it a file is rebuilt, not migrated): numbered forward-only SQL migrations, additive only (new tables, columns and indexes; a named CHECK may be replaced with ALTER TABLE DROP/ADD CONSTRAINT, so every CHECK is named), counted in PRAGMA user_version');
+  ('evolution', 'after the freeze (the first row written that cannot be replayed from an import; before it a file is rebuilt, not migrated): numbered forward-only SQL migrations, additive only (new tables, columns and indexes; a named CHECK may be replaced with ALTER TABLE DROP/ADD CONSTRAINT, so every CHECK is named), counted in PRAGMA user_version; additive means data-preserving, not reader-compatible: renames can break readers and replaced CHECKs can break writers; check user_version and select explicit columns');
 
 CREATE TABLE entities (
   -- One named identity and prose body per linkable thing (page, person, place, metric, file, period).
+  -- Creation time is immutable evidence of initial recording (entities_provenance_fixed).
   -- Insert this row first with RETURNING id, then its owned preferred entity_names row in the same
   -- BEGIN IMMEDIATE transaction; preferred ownership is NOT NULL and checked by the deferred composite FK.
   -- Never carry last_insert_rowid() across statements. Typed extension rows use this same id and
@@ -135,8 +136,11 @@ CREATE VIEW entity_search_content AS
 CREATE VIRTUAL TABLE entities_fts USING fts5(
   -- Derived, one document per entity: body once, all names deterministically ordered.
   -- A phrase may cross adjacent aliases in all_names; exact resolution uses entity_names instead.
-  -- unicode61 folds accents; a CJK run is one token. Rebuild from entity_search_content.
-  preferred, all_names, body, content='entity_search_content', content_rowid='id'
+  -- unicode61 remove_diacritics 2 folds Latin accents, including compound diacritics; a CJK run is one token.
+  -- Token folding is not the full Unicode casefold used by name keys (Straße differs from strasse).
+  -- Rebuild from entity_search_content; this is a derived index, never name identity.
+  preferred, all_names, body, content='entity_search_content', content_rowid='id',
+  tokenize='unicode61 remove_diacritics 2'
 );
 CREATE TRIGGER entity_names_fts_insert AFTER INSERT ON entity_names BEGIN
   -- AFTER an actual insert: skipped INSERT/UPSERT must not delete an existing document.
@@ -169,6 +173,7 @@ CREATE TRIGGER entities_fts_update AFTER UPDATE OF body, preferred_name_key ON e
 END;
 
 CREATE TABLE people (
+  -- The owning id is immutable (people_identity_fixed), including through rowid aliases.
   -- people in the owner's life; relationships between them are links (friend, family, parent-of).
   -- A person is also a page with the same id (D20): registry names are the handles [[wikilinks]] write
   -- ('Sam (barber)' tells two Sams apart), its body holds the prose; name is the editable full name.
@@ -180,6 +185,10 @@ CREATE TABLE people (
   FOREIGN KEY (id, entity_type) REFERENCES entities(id, entity_type),
   CONSTRAINT people_death_day_order CHECK (death_day IS NULL OR birth_day IS NULL OR death_day >= birth_day)
 ) STRICT;
+
+CREATE TRIGGER people_identity_fixed BEFORE UPDATE ON people
+ WHEN NEW.id IS NOT OLD.id
+BEGIN SELECT RAISE(ABORT, 'people identity and ownership are immutable'); END;
 
 CREATE TABLE places (
   -- where a place is (D21): one point and a radius, never where the owner was — that is the at links of the day
@@ -206,7 +215,9 @@ BEGIN SELECT RAISE(ABORT, 'place point ownership is immutable'); END;
 
 CREATE TABLE periods (
   -- Named recorded spans. Boundaries follow contract/period-boundaries.md, not exact entities.day.
-  -- Unknown is NULL; only an end may be ongoing '..'. Partial precision and qualifiers retain evidence.
+  -- Unknown is NULL; only an end may be ongoing '..', evaluated at an explicit as_of day.
+  -- Qualifiers: ? uncertain, ~ approximate, % both. Qualified/unknown boundaries are incomparable,
+  -- unless the opposite finite unqualified bound proves the queried day outside. Partial precision retains a range.
   -- Overlap is allowed; comparisons derive ranges, never store dates guessed from partial observations.
   -- Classify with ordinary optional part-of links. No primary kind, duration or membership is stored.
   id INTEGER PRIMARY KEY,
@@ -300,6 +311,7 @@ BEGIN
 END;
 
 CREATE TABLE metrics (
+  -- The owning id is immutable (metrics_identity_fixed), including through rowid aliases.
   -- what is measured (D7). A metric is also a page with the same id (D27), as a person is: its title is
   -- its preferred name, one series forever under stable id and retained aliases; its body is what the owner
   -- writes about it, and [[Weight]] in the journal reaches it after renaming. The unit
@@ -318,6 +330,10 @@ BEGIN
   -- changing the unit would silently reinterpret the whole series
   SELECT RAISE(ABORT, 'metrics.unit is fixed: it defines what every stored value means; register a new metric instead');
 END;
+CREATE TRIGGER metrics_identity_fixed BEFORE UPDATE ON metrics
+ WHEN NEW.id IS NOT OLD.id
+BEGIN SELECT RAISE(ABORT, 'metrics identity and ownership are immutable'); END;
+
 BEGIN IMMEDIATE;
 INSERT INTO entities(id, entity_type, preferred_name_key, body, created_at, updated_at, source) VALUES
   (1, 'metric', 'mood', '1-5; attached to its day page via measurements.captured_with_id when posted', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'schema');
@@ -326,16 +342,17 @@ COMMIT;
 INSERT INTO metrics(id, unit) VALUES (1, '');
 
 CREATE TABLE files (
+  -- The owning id is immutable (files_identity_fixed), including through rowid aliases.
   -- a file the owner keeps (D9): a recording, a PDF, a scan, a photo, a video. A file is also a page with the same
   -- id, as a person is (D20): its title is its handle (![[2026-10-04 Lake.jpg]] in a day page is a wikilink to it),
   -- its body the file's text — a transcript, the text of a PDF or a scan, a caption — so search finds it.
   -- The ORIGINAL is never stored in life.db and never managed by its writer: it stays outside (a photo library), or
   -- is deleted once its text is kept here. sha256 names the original: one page per original, whatever writer sends
   -- it — look it up first (WHERE sha256 = :sha256) and link the page found; files_sha256 refuses a second row.
-  -- preview is the picture kept for good: a JPEG, its long edge at most 1600 px (the writer scales it), at most 1 MB,
+  -- preview is the retained current picture, replaceable or clearable as a correction, not a version archive: a JPEG, its long edge at most 1600 px (the writer scales it), at most 1 MB,
   -- with no metadata (a photo's GPS is the location history D21 leaves out); NULL where the text is the point (a
   -- recording, a PDF). A video keeps one frame. sha256 and mime never change
-  -- (files_original_fixed); a missing preview may be added later. Never deleted: tombstone the entity (D11).
+  -- (files_original_fixed); a missing preview may be added later. Snapshots preserve only sampled prior states. Never deleted: tombstone the entity (D11).
   id          INTEGER PRIMARY KEY,
   entity_type TEXT NOT NULL DEFAULT 'file' CONSTRAINT files_entity_type CHECK (entity_type = 'file'),
   sha256      TEXT NOT NULL CONSTRAINT files_sha256 CHECK (instr(sha256, char(0)) = 0 AND length(sha256) = 64 AND sha256 NOT GLOB '*[^0-9a-f]*'),   -- of the original's bytes, lowercase hex
@@ -352,6 +369,10 @@ BEGIN
   -- the hash and the type name the original; another original is another file
   SELECT RAISE(ABORT, 'files.sha256 and mime name the original and never change: another original is another file');
 END;
+
+CREATE TRIGGER files_identity_fixed BEFORE UPDATE ON files
+ WHEN NEW.id IS NOT OLD.id
+BEGIN SELECT RAISE(ABORT, 'files identity and ownership are immutable'); END;
 
 CREATE TABLE sessions (
  -- Lightweight recorded sessions, not named/graph objects. kind is a plain non-journal page.
@@ -449,6 +470,7 @@ CREATE TABLE sessions (
 ) STRICT;
 CREATE UNIQUE INDEX sessions_import ON sessions(source,import_key) WHERE import_key IS NOT NULL;
 CREATE INDEX sessions_day_kind ON sessions(day,kind_id);
+CREATE INDEX sessions_kind ON sessions(kind_id); -- retained kind references and ghost exclusion
 CREATE TRIGGER sessions_fixed BEFORE UPDATE ON sessions
  WHEN NEW.id IS NOT OLD.id OR NEW.source IS NOT OLD.source OR NEW.import_key IS NOT OLD.import_key
  OR NEW.created_at IS NOT OLD.created_at OR NEW.kind_entity_type IS NOT OLD.kind_entity_type
@@ -489,7 +511,8 @@ CREATE TABLE tasks (
  -- Unit, interval and anchor never change: another cadence needs another definition. The end only shortens.
  -- An end before the anchor means an empty sequence; stopping and retained outcomes follow lifelog_meta.planning.
  -- A default reminder is one local minute clock on the current due day in a chosen IANA zone. Both are absent
- -- or present; unknown zones remain unresolved, never silently UTC. Resolution is contract/planning.md.
+ -- or present; unknown zones remain unresolved, never silently UTC. A repeated clock uses the earlier instant;
+ -- a missing clock shifts by the gap; a skipped entire local date is unresolved. Full resolution: contract/planning.md.
  -- Tombstones retain this record; cross-table active-read exclusions are lifelog_meta.planning.
  id INTEGER PRIMARY KEY,
  label TEXT NOT NULL CONSTRAINT tasks_label CHECK (instr(label,char(0))=0 AND length(trim(label))>=1),
@@ -661,7 +684,9 @@ CREATE TABLE measurements (
   -- per row (chain: correct the correction); a correction with a NULL value RETRACTS the row it corrects.
   -- session_id is explicit scope, never captured_with provenance; corrections retain metric and NULL-safe scope.
   -- Cross-table liveness is lifelog_meta.measurement_scope. Relocation is retract/new-root, not a cross-scope chain.
-  -- Read through the view measurement_values. day is when the value was true, created_at when it was written
+  -- measurement_values selects current unretracted leaves, with no lifecycle filtering. A recorded-time cutoff
+  -- selects eligible chain leaves from measurements, never by filtering the current view; clock order is not commit order.
+  -- day is when the value was true, created_at when it was written
   -- down, taken_at + tz when and where it was measured (tz: IANA zone; NULL = unknown).
   -- Imports: INSERT ... ON CONFLICT(source, import_key, metric_id) WHERE import_key IS NOT NULL DO NOTHING;
   -- never OR IGNORE (it silently skips CHECK / NOT NULL violations).
@@ -687,6 +712,8 @@ CREATE UNIQUE INDEX measurements_import
 CREATE UNIQUE INDEX measurements_one_correction
   ON measurements(supersedes_id) WHERE supersedes_id IS NOT NULL;  -- one correction per row; also serves measurement_values
 CREATE INDEX measurements_day ON measurements(day);                -- day view
+CREATE INDEX measurements_capture ON measurements(captured_with_id) WHERE captured_with_id IS NOT NULL;
+CREATE INDEX measurements_session ON measurements(session_id,metric_id,day) WHERE session_id IS NOT NULL;
 CREATE TRIGGER measurements_no_update BEFORE UPDATE ON measurements
 BEGIN
   SELECT RAISE(ABORT, 'measurements are append-only: correct by inserting a row with supersedes_id');
@@ -721,6 +748,7 @@ CREATE VIEW measurement_values AS
      AND NOT EXISTS (SELECT 1 FROM measurements x WHERE x.supersedes_id = me.id);
 
 CREATE TABLE habit_periods (
+  -- The row id is immutable (habit_periods_identity_fixed), including through rowid aliases.
   -- a metric is a HABIT while it has a period: the local days the owner meant to do it (D24). Check-ins
   -- stay in measurements (1 = done, 0 = not done that day); a day inside a period with no check-in is
   -- NOT RECORDED, never assumed done or not done. A habit is unitless (0/1). A restarted habit has several
@@ -767,6 +795,10 @@ BEGIN
   -- the WHEN clause lets full-row updates through
   SELECT RAISE(ABORT, 'habit_periods.source is written at insert and never changed');
 END;
+
+CREATE TRIGGER habit_periods_identity_fixed BEFORE UPDATE ON habit_periods
+ WHEN NEW.id IS NOT OLD.id
+BEGIN SELECT RAISE(ABORT, 'habit-period identity is immutable'); END;
 
 CREATE TABLE link_kinds (
   -- the CLOSED registry of link kinds: a link's kind must be registered first (FK), and a kind's
@@ -947,12 +979,12 @@ BEGIN
          OR (l.to_id = OLD.id AND k.to_types IS NOT NULL
              AND instr(',' || k.to_types || ',', ',' || NEW.entity_type || ',') = 0));
 END;
-CREATE TRIGGER entities_provenance_fixed BEFORE UPDATE OF source, import_key ON entities
-  WHEN NEW.source IS NOT OLD.source OR NEW.import_key IS NOT OLD.import_key
+CREATE TRIGGER entities_provenance_fixed BEFORE UPDATE OF source, import_key, created_at ON entities
+  WHEN NEW.source IS NOT OLD.source OR NEW.import_key IS NOT OLD.import_key OR NEW.created_at IS NOT OLD.created_at
 BEGIN
   -- provenance is captured at insert, and a changed key would let a re-run import the row again;
   -- the WHEN clause lets full-row updates through
-  SELECT RAISE(ABORT, 'entities.source and import_key are written at insert and never changed');
+  SELECT RAISE(ABORT, 'entities.source, import_key and created_at are written at insert and never changed');
 END;
 
 CREATE TRIGGER entities_no_delete BEFORE DELETE ON entities

@@ -10,6 +10,7 @@ import (
 // day's habits done / not done / not recorded, completion over a period); the cookbook/day-view day view lists the
 // day's habits and not their check-ins again; a day without a check-in is never assumed.
 func habits(s *S) {
+	habitInvalidReads(s)
 	mood := s.fresh()
 	s.K("Mood identity cannot start a habit", strings.HasPrefix(mood.habit(1, "2026-01-01", nil), "ERR") && mood.n("SELECT count(*) FROM habit_periods WHERE metric_id=1") == 0)
 	otherMood := mood.metric("Other binary", "")
@@ -88,7 +89,7 @@ func habits(s *S) {
 		day("2026-10-05") == "water_before_coffee|not recorded", day("2026-10-04"), day("2026-10-05"))
 	s.K("...and a restart is a new period", c.tryx(start, P{"metric": "vitamin_d", "day": "2026-10-10"}) == "OK" && strings.HasPrefix(day("2026-10-10"), "vitamin_d|not recorded"))
 	comp := c.tab(completion, P{"from_day": "2026-09-28", "to_day": "2026-10-11"})
-	s.K("cookbook/habits completion counts only active days: done, not done, not recorded", comp == "vitamin_d|6|2|1|3; water_before_coffee|9|1|0|8", comp)
+	s.K("cookbook/habits completion counts only active days: done, not done, not recorded", comp == "vitamin_d|6|2|1|3|0; water_before_coffee|9|1|0|8|0", comp)
 	c.must("INSERT INTO measurements(metric_id,day,value,source,supersedes_id,created_at) VALUES (?, '2026-10-02', 1, 'ui', ?, "+NOW+")",
 		vd, c.n("select id from measurements where day='2026-10-02'"))
 	s.K("a corrected check-in counts as corrected (measurement_values)", day("2026-10-02") == "vitamin_d|done", day("2026-10-02"))
@@ -98,7 +99,7 @@ func habits(s *S) {
 	periods, readings := c.n("select count(*) from habit_periods"), c.n("select count(*) from measurements")
 	c.must("UPDATE entities SET deleted_at="+NOW+" WHERE id=?", vd)
 	s.K("cookbook/habits hides tombstoned daily rows", day("2026-10-01") == "")
-	s.K("cookbook/habits hides tombstoned completion rows", c.tab(completion, P{"from_day": "2026-09-28", "to_day": "2026-10-11"}) == "water_before_coffee|9|1|0|8")
+	s.K("cookbook/habits hides tombstoned completion rows", c.tab(completion, P{"from_day": "2026-09-28", "to_day": "2026-10-11"}) == "water_before_coffee|9|1|0|8|0")
 	c.must(stopSQL, P{"metric": "vitamin_d", "day": "2026-10-10"})
 	s.K("cookbook/habits stop does not change a tombstoned metric", c.str("select end_day from habit_periods where metric_id=? and start_day='2026-10-10'", vd) == "None")
 	s.K("cookbook/habits start does not add a tombstoned metric", c.tryx(start, P{"metric": "vitamin_d", "day": "2027-01-01"}) == "OK" && c.n("select count(*) from habit_periods") == periods)
@@ -129,7 +130,7 @@ func habits(s *S) {
 	got, rows = pairs("2026-10-01")
 	s.K("cookbook/day-view hides tombstoned habits", !contains(got, "habit|vitamin_d: done"), tab(rows))
 	got, rows = pairs("2026-09-30")
-	s.K("cookbook/day-view retains tombstoned historical readings outside periods", contains(got, "vitamin_d|1.0 "), tab(rows))
+	s.K("cookbook/day-view hides tombstoned readings outside habit periods", !contains(got, "vitamin_d|1.0 ") && c.n("SELECT count(*) FROM measurement_values WHERE metric_id=? AND day='2026-09-30'", vd) == 1, tab(rows))
 	c.must("UPDATE entities SET deleted_at=NULL WHERE id=?", vd)
 	got, rows = pairs("2026-10-01")
 	s.K("cookbook/day-view revival restores habits", contains(got, "habit|vitamin_d: done"), tab(rows))
@@ -139,4 +140,18 @@ func habits(s *S) {
 		listed = listed || r[0] == "habit"
 	}
 	s.K("...outside every period a 0/1 reading is just a reading, and no habit is listed", contains(got, "vitamin_d|1.0 ") && !listed, tab(rows))
+}
+
+func habitInvalidReads(s *S) {
+	c := s.fresh()
+	metric := c.metric("Stretch", "")
+	c.must("INSERT INTO habit_periods(metric_id,start_day,end_day,source) VALUES (?,'2026-10-01','2026-10-02','ui')", metric)
+	// Deliberate writer-contract violations: direct SQL can store a non-binary value.
+	for _, v := range []int{1, -1, 2} {
+		c.must("INSERT INTO measurements(metric_id,day,value,source,created_at) VALUES (?,'2026-10-01',?,'ui',"+NOW+")", metric, v)
+	}
+	queries := statements(s.d.Block("habits"))
+	s.K("habit day labels non-binary current check-ins invalid", c.tab(queries[2], P{"day": "2026-10-01"}) == "Stretch|invalid")
+	s.K("habit completion counts invalid days separately and reconciles active days", c.tab(queries[3], P{"from_day": "2026-10-01", "to_day": "2026-10-02"}) == "Stretch|2|0|0|1|1")
+	s.K("day view labels non-binary current habit check-ins invalid", c.tab(s.d.Block("day-view"), P{"day": "2026-10-01"}) == "habit|None|Stretch: invalid")
 }

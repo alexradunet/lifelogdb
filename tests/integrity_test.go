@@ -29,9 +29,9 @@ func newIntegrityFile(s *S, pageRows int) *integrityFile {
 		}
 	}
 	s.K("contract/integrity-checks has four groups: structure, foreign keys, domain/typed-edge semantics, FTS5",
-		len(sts) == 10 && strings.HasPrefix(strings.ToLower(sts[0]), "pragma integrity_check") && strings.HasPrefix(strings.ToLower(sts[1]), "pragma foreign_key_check") &&
-			strings.HasPrefix(strings.ToUpper(sts[2]), "SELECT ID FROM ENTITIES") && strings.HasPrefix(sts[3], "SELECT l.id FROM links") && strings.HasPrefix(sts[4], "SELECT s.id FROM sessions") && strings.HasPrefix(sts[5], "SELECT m.id FROM measurements") && strings.HasPrefix(sts[6], "SELECT t.id FROM tasks") && strings.HasPrefix(sts[7], "SELECT t.id FROM tasks") && strings.HasPrefix(sts[8], "SELECT o.id FROM task_occurrences") && strings.Contains(sts[9], "'integrity-check', 1"), sts)
-	if len(sts) != 10 {
+		len(sts) == 15 && strings.HasPrefix(strings.ToLower(sts[0]), "pragma integrity_check") && strings.HasPrefix(strings.ToLower(sts[1]), "pragma foreign_key_check") &&
+			strings.HasPrefix(strings.ToUpper(sts[2]), "SELECT ID FROM ENTITIES") && strings.HasPrefix(sts[3], "SELECT l.id FROM links") && strings.HasPrefix(sts[4], "SELECT s.id FROM sessions") && strings.HasPrefix(sts[5], "SELECT m.id FROM measurements") && strings.HasPrefix(sts[6], "SELECT t.id FROM tasks") && strings.HasPrefix(sts[7], "SELECT t.id FROM tasks") && strings.HasPrefix(sts[8], "SELECT o.id FROM task_occurrences") && strings.Contains(sts[len(sts)-1], "'integrity-check', 1"), sts)
+	if len(sts) != 15 {
 		return nil
 	}
 	base := filepath.Join(s.dir, "base.db")
@@ -256,6 +256,7 @@ func integrity(s *S) {
 		return
 	}
 	sts := f.statements
+	semanticIntegrity(s, sts)
 	orphan := strings.TrimSuffix(sts[2], ";")
 	r := f.checks(f.base)
 	s.K("a clean file with a row of every type: integrity ok, foreign_key_check empty, orphan query empty", r == integrityChecksResult{"ok", "", ""}, r)
@@ -322,13 +323,13 @@ func integrity(s *S) {
 	s.K("on a clean file every statement of contract/integrity-checks runs without error", clean)
 	c.must("INSERT INTO entities_fts(rowid, preferred, all_names, body) VALUES (999, 'ghost', 'ghost', 'drifted')")
 	s.K("a drifted FTS index: PRAGMA integrity_check still says ok", c.tab("PRAGMA integrity_check") == "ok")
-	s.K("...and the FTS5 integrity-check of contract/integrity-checks fails", strings.HasPrefix(c.tryx(sts[9]), "ERR"))
+	s.K("...and the FTS5 integrity-check of contract/integrity-checks fails", strings.HasPrefix(c.tryx(sts[len(sts)-1]), "ERR"))
 	c.must("INSERT INTO entities_fts(entities_fts) VALUES('rebuild')")
-	s.K("...until 'rebuild' repairs it", c.tryx(sts[9]) == "OK")
+	s.K("...until 'rebuild' repairs it", c.tryx(sts[len(sts)-1]) == "OK")
 
 	gone := c.page("Gone")
 	c.must("PRAGMA foreign_keys=OFF")
 	c.must("DROP TRIGGER entities_no_delete")
 	c.must("DELETE FROM entities WHERE id=?", gone)
-	s.K("an identity deleted past its guard leaves stale FTS content", strings.HasPrefix(c.tryx(sts[9]), "ERR"))
+	s.K("an identity deleted past its guard leaves stale FTS content", strings.HasPrefix(c.tryx(sts[len(sts)-1]), "ERR"))
 }

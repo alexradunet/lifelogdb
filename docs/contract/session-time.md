@@ -186,7 +186,8 @@ A source key is lossless TEXT, never a numeric/float conversion. Same source/key
 canonical payload on a live session returns the same unchanged identity; changed payload or tombstone conflicts.
 Compare kind IDs, not preferred spelling. Different sources remain distinct. Metadata and lifecycle mutations
 use the exact-string revision inside the write transaction; no-ops/rollback preserve counters and exhaustion refuses.
-No hard delete or stored edit history; snapshots retain prior contents.
+No hard delete or stored edit history; snapshots retain the contents present when each copy was taken
+([D12](../decisions/D12-no-revision-tables.md)).
 
 For [period](period-boundaries.md) comparisons, explicitly choose reporting-day attribution; it is not proof
 of physical interval overlap/location. [Measurement scope](measurement-scope.md) distinguishes associated

@@ -34,8 +34,8 @@ func snapshots(s *S) {
 			checks = append(checks, code(st))
 		}
 	}
-	if len(checks) != 10 {
-		stop("contract/integrity-checks does not contain the ten statements in four check groups: %v", checks)
+	if len(checks) != 15 {
+		stop("contract/integrity-checks does not contain the fifteen statements in four check groups: %v", checks)
 	}
 	// checkStatements includes both domain and typed-edge semantic queries in the four check groups.
 	checkStatements := func(c *C) []string {
@@ -51,7 +51,7 @@ func snapshots(s *S) {
 		return out
 	}
 	clean := func(r []string) bool {
-		if len(r) != 10 || r[0] != "ok" {
+		if len(r) != 15 || r[0] != "ok" {
 			return false
 		}
 		for _, result := range r[1:] {
@@ -149,8 +149,12 @@ func snapshots(s *S) {
 
 	// 2. the restore check
 	r := checkStatements(sr)
+	readChecksOK := len(r) == len(checks) && r[0] == "ok"
+	for _, diagnostic := range r[1 : len(r)-1] {
+		readChecksOK = readChecksOK && diagnostic == ""
+	}
 	s.K("on a mode=ro connection the first three checks pass and the FTS5 check is refused (attempt to write a readonly database)",
-		r[0] == "ok" && r[1] == "" && r[2] == "" && r[3] == "" && r[4] == "" && r[5] == "" && r[6] == "" && r[7] == "" && r[8] == "" && strings.Contains(r[9], "readonly"), r)
+		readChecksOK && strings.Contains(r[len(r)-1], "readonly"), r)
 	sr.Close()
 	before := read(snap)
 	sc := writer(snap)

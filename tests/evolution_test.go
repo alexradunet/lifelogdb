@@ -13,6 +13,7 @@ import (
 // link kind widens by migration; a promotion refuses invalid retained links; an entity uid is additive (D3); a comment outside
 // a statement is not stored.
 func evolution(s *S) {
+	evolutionReaderCompatibility(s)
 	err := func(r string) bool { return strings.HasPrefix(r, "ERR") }
 	populated := func() *C {
 		c := s.fresh()

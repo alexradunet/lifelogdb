@@ -4,7 +4,7 @@ An issue records an incident from real use — a failed import, a bug in the wri
 data could not answer, a rule that is ambiguous or untestable. It is the evidence a schema change needs
 ([how a change happens](../process.md)). One file per incident, named `NNNN-short-slug.md`, written from the
 [template](template.md), numbered on from the last: issues up to 0010 are closed and live in git history
-(`git log -- docs/issues`). Issues 0011–0025 are listed below; the next one is **0026**. Close an issue with its resolution and status, retaining the dated incident as
+(`git log -- docs/issues`). Issues 0011–0032 are listed below; the next one is **0033**. Close an issue with its resolution and status, retaining the dated incident as
 [the process](../process.md) requires. Earlier closed records remain available in git history.
 
 | id | title | status |
@@ -24,5 +24,12 @@ data could not answer, a rule that is ambiguous or untestable. It is the evidenc
 | [0023](0023-place-point-ownership-bypasses-revisions.md) | Moving a place point bypasses both owners' edit revisions | resolved |
 | [0024](0024-ghost-cleanup-includes-referenced-pages.md) | Ghost cleanup includes pages referenced by sessions and measurements | resolved |
 | [0025](0025-personal-planning-has-no-durable-task-model.md) | Personal planning has no durable task and reminder model | resolved |
+| [0026](0026-detail-identities-can-be-reassigned.md) | Typed detail identities can be reassigned | resolved |
+| [0027](0027-entity-creation-time-can-be-rewritten.md) | Entity creation time can be rewritten | resolved |
+| [0028](0028-semantic-integrity-misses-damaged-relationships.md) | Semantic integrity misses damaged relationships | resolved |
+| [0029](0029-read-recipes-disagree-with-lifecycle-and-ties.md) | Read recipes disagree with lifecycle and deterministic selection | resolved |
+| [0030](0030-retained-reference-lookups-scan-facts.md) | Retained reference lookups scan full fact tables | resolved |
+| [0031](0031-compound-diacritics-escape-search-folding.md) | Compound diacritics escape search folding | resolved |
+| [0032](0032-history-and-preservation-promises-exceed-storage.md) | History and preservation promises exceed stored evidence | resolved |
 
 Status values: open | proposed (an RFC exists) | resolved | won't-fix.

@@ -1,7 +1,8 @@
 # Query cookbook
 
 Proof that the schema serves the product with plain SQL. `:named` are bind parameters.
-All examples filter tombstones (`e.deleted_at IS NULL`). Every write transaction starts with
+Active views filter tombstones (`e.deleted_at IS NULL`); explicitly labeled historical queries retain them.
+Every write transaction starts with
 `BEGIN IMMEDIATE` ([connection setup](../contract/connections.md)); a block that writes one statement and reads nothing before it (start a habit, a correction, an `at` link) is shown alone
 — it is its own transaction; inside a larger write it goes between that write's `BEGIN IMMEDIATE` and `COMMIT`; and every block runs in `tests/`.
 

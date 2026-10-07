@@ -19,12 +19,23 @@ type IntegrityResult struct {
 	InvalidTaskProjects      []int64  `json:"invalid_task_projects"`
 	InvalidOneOffTasks       []int64  `json:"invalid_one_off_tasks"`
 	InvalidTaskOccurrences   []int64  `json:"invalid_task_occurrences"`
+	InvalidSymmetricLinks    []int64  `json:"invalid_symmetric_links"`
+	InvalidMeasurementChains []int64  `json:"invalid_measurement_chains"`
+	InvalidHabitPeriods      []int64  `json:"invalid_habit_periods"`
+	InvalidHabitReadings     []int64  `json:"invalid_habit_readings"`
+	InvalidJournalNames      []int64  `json:"invalid_journal_names"`
 	FullTextIndexOK          bool     `json:"full_text_index_ok"`
 	FullTextError            string   `json:"full_text_error,omitempty"`
 }
 
 func (s *Store) Integrity(ctx context.Context) (*IntegrityResult, error) {
-	r := &IntegrityResult{IntegrityCheck: []string{}, OrphanEntities: []int64{}, InvalidTypedLinks: []int64{}, InvalidSessionKinds: []int64{}, InvalidMeasurementScopes: []int64{}, InvalidTaskProjects: []int64{}, InvalidOneOffTasks: []int64{}, InvalidTaskOccurrences: []int64{}}
+	r := &IntegrityResult{
+		IntegrityCheck: []string{}, OrphanEntities: []int64{}, InvalidTypedLinks: []int64{},
+		InvalidSessionKinds: []int64{}, InvalidMeasurementScopes: []int64{},
+		InvalidTaskProjects: []int64{}, InvalidOneOffTasks: []int64{}, InvalidTaskOccurrences: []int64{},
+		InvalidSymmetricLinks: []int64{}, InvalidMeasurementChains: []int64{},
+		InvalidHabitPeriods: []int64{}, InvalidHabitReadings: []int64{}, InvalidJournalNames: []int64{},
+	}
 	if err := s.integrityRead(ctx, "integrity_check", `PRAGMA integrity_check`, func(rows *sql.Rows) error {
 		var line string
 		if err := rows.Scan(&line); err != nil {
@@ -146,6 +157,72 @@ func (s *Store) Integrity(ctx context.Context) (*IntegrityResult, error) {
 	}); err != nil {
 		return nil, err
 	}
+	if err := s.integrityRead(ctx, "symmetric link pairs", `SELECT l.id FROM links l JOIN link_kinds k ON k.kind=l.kind
+ LEFT JOIN links r ON r.from_id=l.to_id AND r.to_id=l.from_id AND r.kind=l.kind
+ WHERE k.symmetric=1 AND (r.id IS NULL OR r.note IS NOT l.note) ORDER BY l.id`, func(rows *sql.Rows) error {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		r.InvalidSymmetricLinks = append(r.InvalidSymmetricLinks, id)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	if err := s.integrityRead(ctx, "measurement correction chains", `WITH RECURSIVE rooted(id) AS (
+ SELECT id FROM measurements WHERE supersedes_id IS NULL
+ UNION
+ SELECT m.id FROM measurements m JOIN rooted r ON m.supersedes_id=r.id
+)
+SELECT id FROM measurements EXCEPT SELECT id FROM rooted ORDER BY id`, func(rows *sql.Rows) error {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		r.InvalidMeasurementChains = append(r.InvalidMeasurementChains, id)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	if err := s.integrityRead(ctx, "habit period semantics", `SELECT h.id FROM habit_periods h LEFT JOIN metrics m ON m.id=h.metric_id
+ WHERE m.id IS NULL OR m.id=1 OR m.unit<>'' OR EXISTS
+ (SELECT 1 FROM habit_periods p WHERE p.metric_id=h.metric_id AND p.id<>h.id
+  AND p.start_day<=coalesce(h.end_day,'9999-12-31') AND coalesce(p.end_day,'9999-12-31')>=h.start_day)
+ ORDER BY h.id`, func(rows *sql.Rows) error {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		r.InvalidHabitPeriods = append(r.InvalidHabitPeriods, id)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	if err := s.integrityRead(ctx, "habit reading values", `SELECT v.id FROM measurement_values v WHERE v.value NOT IN (0,1)
+ AND EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id=v.metric_id) ORDER BY v.id`, func(rows *sql.Rows) error {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		r.InvalidHabitReadings = append(r.InvalidHabitReadings, id)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	if err := s.integrityRead(ctx, "journal name ownership", `SELECT n.id FROM entity_names n JOIN entities e ON e.id=n.entity_id
+ WHERE (length(n.name_key)=10 AND date(n.name_key) IS n.name_key
+   AND (e.entity_type<>'page' OR e.preferred_name_key IS NOT n.name_key OR e.day IS NOT n.name_key OR n.title IS NOT n.name_key))
+ OR (length(e.preferred_name_key)=10 AND date(e.preferred_name_key) IS e.preferred_name_key
+   AND (n.name_key IS NOT e.preferred_name_key OR n.title IS NOT e.preferred_name_key)) ORDER BY n.id`, func(rows *sql.Rows) error {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		r.InvalidJournalNames = append(r.InvalidJournalNames, id)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
 	// the FTS check is an INSERT that writes nothing, so it runs on the writing connection
 	if _, err := s.DB.W.ExecContext(ctx, `INSERT INTO entities_fts(entities_fts, rank) VALUES ('integrity-check', 1)`); err != nil {
 		r.FullTextError = fmt.Sprint(err)
@@ -154,7 +231,8 @@ func (s *Store) Integrity(ctx context.Context) (*IntegrityResult, error) {
 	}
 	r.OK = len(r.IntegrityCheck) == 1 && r.IntegrityCheck[0] == "ok" && r.ForeignKeys == 0 &&
 		len(r.OrphanEntities) == 0 && len(r.InvalidTypedLinks) == 0 && len(r.InvalidSessionKinds) == 0 && len(r.InvalidMeasurementScopes) == 0 &&
-		len(r.InvalidTaskProjects) == 0 && len(r.InvalidOneOffTasks) == 0 && len(r.InvalidTaskOccurrences) == 0 && r.FullTextIndexOK
+		len(r.InvalidTaskProjects) == 0 && len(r.InvalidOneOffTasks) == 0 && len(r.InvalidTaskOccurrences) == 0 &&
+		len(r.InvalidSymmetricLinks) == 0 && len(r.InvalidMeasurementChains) == 0 && len(r.InvalidHabitPeriods) == 0 && len(r.InvalidHabitReadings) == 0 && len(r.InvalidJournalNames) == 0 && r.FullTextIndexOK
 	return r, nil
 }
 

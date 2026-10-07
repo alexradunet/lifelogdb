@@ -83,7 +83,7 @@ type Match struct {
 	LinkDays bool
 }
 
-// matchSQL is cookbook/place-of-a-photo.md's match: the smallest circle that holds the position, then the nearest.
+// matchSQL implements cookbook/place-of-a-photo.md's deterministic position match.
 const matchSQL = `
 SELECT id, title, link_days, d2
   FROM (SELECT pl.id, pg_name.title, pl.link_days, pl.radius_m,
@@ -92,7 +92,7 @@ SELECT id, title, link_days, d2
           FROM places pl
           JOIN entities pg ON pg.id = pl.id JOIN entity_names pg_name ON pg_name.entity_id = pg.id AND pg_name.name_key = pg.preferred_name_key AND pg.deleted_at IS NULL)
  WHERE d2 <= radius_m * radius_m
- ORDER BY radius_m, d2
+ ORDER BY radius_m, d2, id
  LIMIT 1`
 
 // MatchPlace is the place a position is in, nil when none holds it.

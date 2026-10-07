@@ -12,7 +12,7 @@ sqlite3 life.db < docs/schema/schema.sql
 `CREATE` statement, so `.schema` prints them; the rules that span tables are the rows of `lifelog_meta`.
 
 **15 tables + 1 FTS5 virtual table + 3 views** (`measurement_values`, `ghost_pages`, `entity_search_content`)
-**+ 75 triggers.** That is the entire system. Every `CHECK` is named (`CONSTRAINT <table>_<rule>`), so
+**+ 79 triggers.** That is the entire system. Every `CHECK` is named (`CONSTRAINT <table>_<rule>`), so
 any rule can be dropped or re-added by name after the freeze ([D13](../decisions/D13-migrations-and-freeze.md)).
 
 ## The objects

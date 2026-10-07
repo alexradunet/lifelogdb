@@ -191,6 +191,7 @@ func facts(s *S) {
 // The bulk fixture belongs only to the query-plan probe; semantic fact mutants
 // retain all their small behavior cases without rebuilding 20,000 readings.
 func measurementQueryPlan(s *S) {
+	retainedReferencePlans(s)
 	c := s.fresh()
 	c.metric("w", "kg")
 	// Deliberate direct-SQL bulk setup measures query planning, not writer throughput.
@@ -212,4 +213,27 @@ func measurementQueryPlan(s *S) {
 	plan := c.plan("SELECT count(*) FROM measurement_values")
 	s.K("measurement_values uses measurements_one_correction for its NOT EXISTS", strings.Contains(plan, "measurements_one_correction"), plan)
 	s.K("...and counts 20 000 rows", c.n("select count(*) from measurement_values") == 20000)
+}
+
+func retainedReferencePlans(s *S) {
+	c := s.fresh()
+	kind := c.page("Recorded kind")
+	capture := c.page("Capture context")
+	c.must("INSERT INTO sessions(id,kind_id,day,start_at,source,created_at,updated_at) VALUES(1,?,'2026-01-01','2026-01-01T00:00:00.000Z','ui',"+NOW+","+NOW+")", kind)
+	c.must("INSERT INTO measurements(metric_id,session_id,captured_with_id,day,value,source,created_at) VALUES(1,1,?,'2026-01-01',3,'ui',"+NOW+")", capture)
+	for _, probe := range []struct {
+		index, q string
+		id       int64
+	}{
+		{"sessions_kind", "SELECT count(*) FROM sessions WHERE kind_id=?", kind},
+		{"measurements_capture", "SELECT count(*) FROM measurements WHERE captured_with_id=?", capture},
+		{"measurements_session", "SELECT count(*) FROM measurement_values WHERE session_id=?", 1},
+	} {
+		plan := c.plan(probe.q, probe.id)
+		s.K(probe.index+" supports retained reference lookup", strings.Contains(plan, "SEARCH") && strings.Contains(plan, probe.index), plan)
+		s.K(probe.index+" lookup retains the expected row", c.n(probe.q, probe.id) == 1)
+		s.K(probe.index+" lookup handles an absent reference", c.n(probe.q, int64(999999)) == 0)
+	}
+	plan := c.plan("SELECT count(*) FROM ghost_pages")
+	s.K("ghost reference probes use both retained reference indexes", strings.Contains(plan, "sessions_kind") && strings.Contains(plan, "measurements_capture"), plan)
 }

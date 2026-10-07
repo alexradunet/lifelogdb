@@ -87,7 +87,7 @@ model and the owner.
   ```
 
 **metrics.md.** A table found by its header; `status`, `name` and `unit` are required. `name` is the metric's
-page title, its name for good ([D27](../decisions/D27-a-metric-is-a-page.md)): `Ferritin`, or `ferritin` (a reading may name it in any case);
+page title, an owned name retained through later rename ([D27](../decisions/D27-a-metric-is-a-page.md)): `Ferritin`, or `ferritin` (a reading may name it in any case);
 `note` becomes the page's body. An empty unit is a unitless metric ([D7](../decisions/D07-measurements.md)). `since` and `until` are the owner's days and make a unitless row a habit ([D24](../decisions/D24-habits.md));
 the model leaves them empty. `category`, optional, files the metric ([D26](../decisions/D26-metric-categories.md)): the titles of the category pages
 from the top, joined by `/` (a title never holds one), `Biomarkers/Iron`; a file without the column files nothing.
@@ -427,7 +427,8 @@ A file the owner keeps is a page of its own, written by one operation the writer
    which the writer scales. The preview keeps no metadata: a photo's GPS stays out.
 3. **Keep it.** The writer hashes the original (SHA-256), names its type, and writes the page, its text and its picture
    in one transaction — or finds the file kept already, whatever source sent it, and writes nothing but a missing
-   picture. The title is the owner's: a writer may propose the file's name, and a title is permanent.
+   picture. The title is the owner's: a writer may propose the file's name; a later rename retains the old name
+   as an alias ([rename a page](../cookbook/rename-a-page.md)).
    A photo's own day and position come from its metadata: its page is on the day it was taken and shown in that day's
    page, and the day gets an `at` link to the place its position is in ([the place of a photo](../cookbook/place-of-a-photo.md)).
    A position near no place writes no link: the writer reports it, and the owner names the place, which takes that
@@ -540,5 +541,5 @@ This guide restates none of them; each is in the docs:
 - [threat model](../contract/threat-model.md) and [imports](../contract/imports.md) — the threat model and the import steps (trial on a copy, `ON CONFLICT … DO NOTHING`, keys,
   re-runs);
 - [save a body](../cookbook/save-a-body.md) — saving a body with wikilinks; [import a row once](../cookbook/import-a-row-once.md);
-- [D5](../decisions/D05-pages-and-day-pages.md) — day pages and permanent titles; [D7](../decisions/D07-measurements.md) — measurements, units, corrections;
+- [D5](../decisions/D05-pages-and-day-pages.md) — day pages and retained names; [D7](../decisions/D07-measurements.md) — measurements, units, corrections;
 - [D22](../decisions/D22-events.md), [D23](../decisions/D23-no-tasks.md), [D24](../decisions/D24-habits.md) — recorded observations, explicit tasks, habits as metrics with periods.

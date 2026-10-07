@@ -8,9 +8,10 @@
   everything else. Tombstoning and un-tombstoning bump
   `entities.updated_at` (`entities_touch`, watching `deleted_at` and `entity_type`, so it cannot re-fire itself
   under `recursive_triggers=ON`, executed).
-- **Rationale.** In a biography database, *erasure is itself biographical*: in 20 years it should be
-  possible to see what the 2027 version of the owner deleted, and when. Hard deletes also break the
-  `links` graph. Storage cost is irrelevant at this scale.
+- **Rationale.** Retaining a tombstoned row preserves its contents and references for recovery and explicit
+  historical reads. A currently tombstoned row says when its current deletion was recorded. Revival clears that
+  tombstone, and deleting it again replaces the deletion time; no sequence of deletion and revival events is
+  retained ([D12](D12-no-revision-tables.md)). Hard deletes also break the `links` graph. Storage cost is irrelevant at this scale.
 - **Alternatives.** Hard delete + `ON DELETE CASCADE` (destroys evidence, cascades surprises);
   trash-with-expiry (a policy layer that can be added on top of tombstones later).
 - **Facts.** `measurements` are not even tombstoned: they are corrected by inserting rows, as medical

@@ -8,6 +8,13 @@
   in `PRAGMA user_version` [R20](../research/references.md#r20)[R21](../research/references.md#r21)[R22](../research/references.md#r22); additive only — new tables, columns and indexes, a column rename
   (recorded in its migration), and replacing a named CHECK (the named-CHECK bullet below); never a dropped table or column. `PRAGMA application_id = 0x4C494645` ('LIFE') lets
   `file(1)` and future tools recognize the database [R1](../research/references.md#r1).
+- **Compatibility.** Here additive means data-preserving, not that every prior query or write remains valid.
+  A column rename can break an old query; a tightened CHECK can refuse a write that used to succeed; adding
+  a column changes `SELECT *` and inserts without explicit column lists (executed by the `evolution` suite). Readers and writers check
+  `application_id` and supported `user_version`, select explicit columns, and refuse unsupported versions
+  until their queries and writes are validated against that version. A migration records any compatibility
+  break as well as preserving existing data. The frozen version's full DDL and contract remain the reference
+  for interpreting files at that version.
 - **The freeze.** The freeze is the first write to the canonical `life.db` of a row that cannot be replayed from an
   import workspace: a capture, a correction, a tombstone, anything typed into the file. Before it, a file holding only
   replayable imports is rebuilt (a new `schema.sql`, then a *replay*, [importing with a model](../guides/importing.md))

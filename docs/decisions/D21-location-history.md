@@ -11,6 +11,8 @@
   radius a position must fall in (`places_radius`) and `link_days` (`places_link_days`). When a photo is kept, its
   position is matched to the live places whose circle holds it, the smallest circle first, then the nearest — Café
   Lume before Lisbon; "where was I" reaches Lisbon by `located-in` ([inside a place](../cookbook/inside-a-place.md)).
+  Exact ties use stable place identity, so an otherwise equivalent match cannot unpredictably change whether
+  the day is linked ([the matching query](../cookbook/place-of-a-photo.md), executed).
   A match with `link_days = 1` is an `at` link from the photo's day page; `link_days = 0` marks a place recognised and
   never linked (home, work: they would mark nearly every day). A position no circle holds writes nothing and is
   asked about: the owner names the place, which takes that position as its point if it has none

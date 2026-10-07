@@ -4,11 +4,15 @@
 
 - **Decision.** The rules are `lifelog_meta.instants` and `lifelog_meta.days`, and the round-trip CHECK on every
   `*_at` and `*_day` column, with shared [exact-time boundary vectors](../contract/exact-time.md).
+  `entities_provenance_fixed` protects initial recording time alongside import provenance: editing current content
+  must not rewrite when the identity first entered the file.
   Explicit ASCII shape and hour bounds are necessary because SQLite's round trip alone accepts negative
   years and hour-24 spellings that canonical civil dates and UTC clocks do not (executed).
   An instant has milliseconds because `%f` always renders `SS.SSS`: one
-  fixed-width string that the round-trip CHECK can compare, that sorts chronologically as plain text, and
-  that keeps rows written within the same second in order, a reading and its correction (executed). The
+  fixed-width string that the round-trip CHECK can compare and that sorts recorded instants chronologically as
+  plain text (executed). Millisecond precision does not establish causal or commit order: timestamps may coincide
+  or the writing clock may move backward. Correction edges establish reading ancestry; revision tokens reject
+  stale mutable edits ([D7](D07-measurements.md), [D12](D12-no-revision-tables.md)). The
   CHECK uses `IS`, because a CHECK passes when it evaluates to NULL and `date()` returns NULL for malformed
   input: `date(x) = x` silently accepts `2026-9-3` (executed). A recorded local day is written in the zone of the
   device that captured it — a phone's, never the clock or zone of a hub on a server ([D3](D03-integer-ids.md)) — and never
@@ -21,7 +25,8 @@
   renamed zones (`Europe/Kiev` → `Europe/Kyiv`) as links. The standard way to write an instant with
   its zone is RFC 9557 [R69](../research/references.md#r69): `2026-06-09T21:14:03.482Z[Europe/Berlin]` — exactly `*_at` plus `tz`.
   Provenance (`source`, `lifelog_meta.source`) is a column for the same reason as the zone: only the moment of writing
-  knows it, and with agents among the writers ([D3](D03-integer-ids.md)) it is how a wrong row is traced to the writer that made it.
+  knows it, and with agents among the writers ([D3](D03-integer-ids.md)) it identifies the original inserting writer.
+  It does not identify later editors of mutable content ([D12](D12-no-revision-tables.md)).
 - **Recorded-session evidence** is separate from exact write instants: [session time](../contract/session-time.md)
   preserves unresolved local clocks and unverified zone labels, without host-zone inference. Reporting days are
   independent attribution, not inferred from endpoints. Period boundaries use a separate [profile](../contract/period-boundaries.md).

@@ -12,6 +12,7 @@ import (
 // (SQLITE_DBCONFIG_DEFENSIVE + trusted_schema=OFF, contract/connections); and every block that only reads runs on
 // a reader (mode=ro + trusted_schema=OFF, contract/connections).
 func cookbook(s *S) {
+	cookbookMeasurementReads(s)
 	bl := s.d.CookbookBlocks()
 	first, order := s.d.Blocks()
 	s.K("the cookbook has at least 24 SQL blocks, one or more per recipe, 24 recipes", len(bl) >= 24 && len(first) == 24 && eq(order, s.d.CookbookOrder()), order)
@@ -40,7 +41,7 @@ func cookbook(s *S) {
 		return c, P{"include_deleted": 0, "old_id": old, "new_title": "Sourdough starter", "new_key": "sourdough starter", "found_id": wp, "target_id": wp, "target_ids": "[]", "place_id": pl, "day_page_id": dp, "mistaken_row_id": 2, "from_day": "2026-01-15", "to_day": "2026-09-10",
 			"day": "2026-09-29", "page_id": wp, "person_id": pe, "entity_id": pe, "handle_title": "Bob Sample", "handle_key": "bob sample", "ghost_id": gh,
 			"due_day": "2026-10-05", "query": "schema", "key": "newpage", "title": "Newpage", "metric_id": w, "wrong_row_id": 1, "source": "ui",
-			"import_key": "notes/sourdough.md", "metric": "vitamin_d", "parent_id": cat,
+			"import_key": "notes/sourdough.md", "metric": "vitamin_d", "as_of": "2099-01-01T00:00:00.000Z", "parent_id": cat,
 			"task_label": "Garden supplies", "project_page_id": planningProject, "planning_task_id": planningID, "planning_clock": "09:00",
 			"planning_task_version": 1, "planning_occurrence_version": 1, "planning_state": "open", "planning_completed_at": nil,
 			"planning_reminder_mode": "inherit", "planning_reminder_at": nil, "planning_until": "2026-10-31",

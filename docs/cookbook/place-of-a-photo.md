@@ -14,7 +14,8 @@ INSERT INTO places(id, lat, lon, radius_m, link_days) VALUES (:place_id, :lat, :
 ON CONFLICT(id) DO NOTHING;
 ```
 
-**Match the position**: the live place whose circle holds it, the smallest circle first, then the nearest. The app binds
+**Match the position**: the live place whose circle holds it, the smallest circle first, then the nearest, then the
+lowest stable entity ID to settle equal circles and distances. The app binds
 `:m_per_deg_lon` = 111320 · cos(`:lat` in radians), so the query needs no math function; `d2` is the squared distance in
 metres. No row: the position is near no place — nothing is written, and the writer reports it for the owner to name.
 
@@ -27,7 +28,7 @@ SELECT id, title, link_days, d2
           JOIN entities e ON e.id = pl.id AND e.deleted_at IS NULL
           JOIN entity_names pg ON pg.entity_id = e.id AND pg.name_key = e.preferred_name_key)
  WHERE d2 <= radius_m * radius_m
- ORDER BY radius_m, d2
+ ORDER BY radius_m, d2, id
  LIMIT 1;
 ```
 

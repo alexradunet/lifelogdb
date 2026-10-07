@@ -42,9 +42,9 @@ func places(s *S) {
 	s.K("link_days is 0 or 1", err(point(c, c.named("place", ""), 10, 10, 100, 2)) && err(point(c, c.named("place", ""), 10, 10, 100, nil)))
 	s.K("link_days defaults to 1", c.tryx("INSERT INTO places(id,lat,lon,radius_m) VALUES (?,1,1,100)", c.named("place", "Default")) == "OK" &&
 		c.n("select pl.link_days from places pl join entity_names n on n.entity_id=pl.id where n.name_key='default'") == 1)
-	c.must("UPDATE entities SET updated_at='2000-01-01T00:00:00.000Z', created_at='2000-01-01T00:00:00.000Z' WHERE id=?", pl)
+	c.must("UPDATE entities SET updated_at='2000-01-01T00:00:00.000Z' WHERE id=?", pl)
 	s.K("a wrong point is fixed by UPDATE", c.tryx("UPDATE places SET lat=46.11, radius_m=400 WHERE id=?", pl) == "OK")
-	s.K("...which bumps entities.updated_at (places_touch)", c.n("select updated_at > created_at from entities where id=?", pl) == 1)
+	s.K("...which bumps entities.updated_at (places_touch)", c.n("select updated_at > '2000-01-01T00:00:00.000Z' from entities where id=?", pl) == 1)
 	s.K("a point is never deleted", err(c.tryx("DELETE FROM places WHERE id=?", pl)))
 	s.K("a place with a point cannot become a person (the places row's FK)", err(c.tryx("UPDATE entities SET entity_type='person' WHERE id=?", pl)))
 	s.K("integrity and foreign keys clean", c.integrityOK())
@@ -90,6 +90,23 @@ func places(s *S) {
 	s.K("a position at home: matched, with link_days 0 (recognised, not linked)", title(h) == "Home" && val(h[0][2]) == "0", tab(h))
 	c.must("UPDATE entities SET deleted_at = "+NOW+" WHERE id=?", cafe)
 	s.K("a tombstoned place is never the answer", title(at(c, 38.7111, -9.1421)) == "Lisbon")
+
+	tied := s.fresh()
+	first, second := tied.named("place", "Zulu"), tied.named("place", "Alpha")
+	tied.must("INSERT INTO places(id,lat,lon,radius_m,link_days) VALUES (?,46,7,100,0),(?,46,7,100,1)", first, second)
+	// A replacement writer may add indexes. Stable attribution must survive a different visit order.
+	tied.must("CREATE INDEX place_match_fixture_order ON places(radius_m,id DESC)")
+	tied.must("ANALYZE")
+	tied.must("PRAGMA reverse_unordered_selects=ON")
+	winner := at(tied, 46, 7)
+	s.K("equal place circles resolve by stable id, including link_days", len(winner) == 1 && val(winner[0][0]) == val(first) && val(winner[0][2]) == "0", tab(winner))
+	var writerMatch *core.Match
+	matchErr := tied.store().Do(context.Background(), "ui", func(t *core.Tx) error {
+		var err error
+		writerMatch, err = t.MatchPlace(46, 7)
+		return err
+	})
+	s.K("the writer resolves equal place circles by stable id", matchErr == nil && writerMatch != nil && writerMatch.ID == first && !writerMatch.LinkDays, matchErr, writerMatch)
 
 	// the match against a haversine oracle: the smallest circle that holds the position, then the nearest
 	hav := func(a, b, c2, d float64) float64 {

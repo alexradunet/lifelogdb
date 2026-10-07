@@ -2,7 +2,7 @@
 
 **Status:** accepted
 
-- **Decision.** The five linkable types (page, person, place, metric, file; `entities_entity_type`) share one ID space through `entities`. A domain row takes its id
+- **Decision.** The six linkable types (page, person, place, metric, file, period; `entities_entity_type`) share one ID space through `entities`. A domain row takes its id
   from the `entities` insert by `RETURNING id`: `last_insert_rowid()` across statements is moved by any insert in
   between — a link, a ghost page, a measurement — and the next row silently points at the wrong entity (executed). All relationships live
   in one `links(from_id, to_id, kind)` table with real foreign keys (`UNIQUE(from_id, to_id, kind)`

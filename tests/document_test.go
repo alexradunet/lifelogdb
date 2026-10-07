@@ -10,8 +10,8 @@ import (
 	"strings"
 )
 
-// document: the docs themselves — the 2075 test of the threat model against a fresh database; the rules live in
-// the file (each table's inside its CREATE statement, the cross-table ones in a few lifelog_meta rows); the tree
+// document: the docs themselves — presence of the threat model's 2075 reading summaries in a fresh database
+// (each table's inside its CREATE statement, the cross-table ones in a few lifelog_meta rows); the tree
 // holds together (every decision D1..Dn in its own record, every relative link resolves, every page is reachable
 // from docs/README.md); the totals in schema/README.md match.
 func document(s *S) {

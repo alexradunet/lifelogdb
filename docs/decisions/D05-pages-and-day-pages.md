@@ -16,4 +16,9 @@
   - ASCII-only uniqueness or an application collation: rejected — Unicode names need the shared normalization, and a stored index must remain usable without a private collation (executed).
   - Id-named handles without filename checks: rejected — relaxing a restriction later is possible; tightening it after freeze can meet existing incompatible names ([D13](D13-migrations-and-freeze.md)).
 - **Costs accepted.** A day-page entry has no separate timestamp; a time worth keeping stays in prose. There is no inbox. Retained names consume the global namespace, including after tombstoning. Empty unreferenced pages appear in `ghost_pages` for the owner's review; retained session kinds and capture provenance keep meaningful empty pages out of cleanup.
-- **Sources.** Kaydet [R41](../research/references.md#r41); FxLifeSheet [R9](../research/references.md#r9)[R42](../research/references.md#r42); Windows reserved names [R58](../research/references.md#r58); Unicode security [R63](../research/references.md#r63).
+- **Search and names.** `entities_fts` is a derived token index, separate from exact owned-name resolution.
+  Its tokenizer avoids SQLite's compatibility default that leaves compound Latin diacritics folded inconsistently;
+  the tokenizer choice lives in its `CREATE` statement. It still does not implement the full casefold used by name
+  keys: `Straße` and `strasse` resolve to one name key but are different FTS tokens (executed). A search miss is
+  therefore not proof that a name is unowned, and FTS must not decide identity.
+- **Sources.** Kaydet [R41](../research/references.md#r41); FxLifeSheet [R9](../research/references.md#r9)[R42](../research/references.md#r42); Windows reserved names [R58](../research/references.md#r58); Unicode security [R63](../research/references.md#r63); [SQLite's Unicode61 tokenizer](https://sqlite.org/fts5.html#unicode61_tokenizer).

@@ -45,6 +45,16 @@ func (c *integrityConn) QueryContext(_ context.Context, query string, _ []driver
 		check = "integrity_check"
 	} else if strings.Contains(query, "PRAGMA foreign_key_check") {
 		check = "foreign_key_check"
+	} else if strings.Contains(query, "SELECT l.id FROM links l JOIN") {
+		check = "symmetric link pairs"
+	} else if strings.Contains(query, "WITH RECURSIVE rooted") {
+		check = "measurement correction chains"
+	} else if strings.Contains(query, "SELECT h.id FROM habit_periods") {
+		check = "habit period semantics"
+	} else if strings.Contains(query, "SELECT v.id FROM measurement_values") {
+		check = "habit reading values"
+	} else if strings.Contains(query, "SELECT n.id FROM entity_names") {
+		check = "journal name ownership"
 	} else if strings.Contains(query, "SELECT l.id FROM links") {
 		check = "typed link endpoints"
 	} else if strings.Contains(query, "SELECT s.id FROM sessions") {
@@ -141,7 +151,7 @@ func faultIntegrityStore(t *testing.T, c *integrityConnector) *Store {
 	return &Store{DB: &db.DB{R: d, W: d}}
 }
 func TestIntegrityReadFailures(t *testing.T) {
-	for i, check := range []string{"integrity_check", "foreign_key_check", "orphan entities", "typed link endpoints", "session kind endpoints", "measurement scopes", "task project endpoints", "one-off task ownership", "task occurrence membership"} {
+	for i, check := range []string{"integrity_check", "foreign_key_check", "orphan entities", "typed link endpoints", "session kind endpoints", "measurement scopes", "task project endpoints", "one-off task ownership", "task occurrence membership", "symmetric link pairs", "measurement correction chains", "habit period semantics", "habit reading values", "journal name ownership"} {
 		for _, fault := range []string{"query", "late", "scan", "close", "scan-close"} {
 			t.Run(check+"/"+fault, func(t *testing.T) {
 				c := &integrityConnector{check: check, fault: fault}
@@ -174,7 +184,7 @@ func TestIntegrityResultSemantics(t *testing.T) {
 			if r.OK != (fault == "") || r.FullTextIndexOK != (fault == "") || (r.FullTextError != "") != (fault == "fts") || len(r.IntegrityCheck) != 1 || r.IntegrityCheck[0] != "ok" || r.ForeignKeys != 0 || len(r.OrphanEntities) != 0 || len(r.InvalidTaskProjects) != 0 || len(r.InvalidOneOffTasks) != 0 || len(r.InvalidTaskOccurrences) != 0 {
 				t.Errorf("unexpected result: %+v", r)
 			}
-			if c.closed != 9 || c.execs != 1 {
+			if c.closed != 14 || c.execs != 1 {
 				t.Errorf("closed=%d execs=%d", c.closed, c.execs)
 			}
 		})
@@ -182,7 +192,7 @@ func TestIntegrityResultSemantics(t *testing.T) {
 }
 
 func TestIntegrityDiagnostics(t *testing.T) {
-	for _, check := range []string{"integrity_check", "foreign_key_check", "orphan entities", "typed link endpoints", "session kind endpoints", "measurement scopes", "task project endpoints", "one-off task ownership", "task occurrence membership"} {
+	for _, check := range []string{"integrity_check", "foreign_key_check", "orphan entities", "typed link endpoints", "session kind endpoints", "measurement scopes", "task project endpoints", "one-off task ownership", "task occurrence membership", "symmetric link pairs", "measurement correction chains", "habit period semantics", "habit reading values", "journal name ownership"} {
 		t.Run(check, func(t *testing.T) {
 			c := &integrityConnector{check: check, fault: "diagnostic"}
 			r, err := faultIntegrityStore(t, c).Integrity(context.Background())
@@ -225,12 +235,32 @@ func TestIntegrityDiagnostics(t *testing.T) {
 				if len(r.InvalidTaskOccurrences) != 1 || r.InvalidTaskOccurrences[0] != 42 {
 					t.Errorf("occurrence membership diagnostic lost: %+v", r)
 				}
+			case "symmetric link pairs":
+				if len(r.InvalidSymmetricLinks) != 1 || r.InvalidSymmetricLinks[0] != 42 {
+					t.Errorf("semantic diagnostic lost: %+v", r)
+				}
+			case "measurement correction chains":
+				if len(r.InvalidMeasurementChains) != 1 || r.InvalidMeasurementChains[0] != 42 {
+					t.Errorf("semantic diagnostic lost: %+v", r)
+				}
+			case "habit period semantics":
+				if len(r.InvalidHabitPeriods) != 1 || r.InvalidHabitPeriods[0] != 42 {
+					t.Errorf("semantic diagnostic lost: %+v", r)
+				}
+			case "habit reading values":
+				if len(r.InvalidHabitReadings) != 1 || r.InvalidHabitReadings[0] != 42 {
+					t.Errorf("semantic diagnostic lost: %+v", r)
+				}
+			case "journal name ownership":
+				if len(r.InvalidJournalNames) != 1 || r.InvalidJournalNames[0] != 42 {
+					t.Errorf("semantic diagnostic lost: %+v", r)
+				}
 			case "orphan entities":
 				if len(r.OrphanEntities) != 1 || r.OrphanEntities[0] != 42 {
 					t.Errorf("orphan diagnostic lost: %+v", r)
 				}
 			}
-			if c.closed != 9 || c.execs != 1 {
+			if c.closed != 14 || c.execs != 1 {
 				t.Errorf("closed=%d execs=%d", c.closed, c.execs)
 			}
 		})
