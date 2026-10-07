@@ -1,26 +1,26 @@
 # Habits: start and stop one, the habits of a day, completion over a period (D24)
 
-`:metric` is the `title_key` of a unitless metric (a metric is a page, [D27](../decisions/D27-a-metric-is-a-page.md)); a check-in is a measurement of it, 1 or 0 ([correct a measurement](correct-a-measurement.md) corrects one).
+`:metric` is the `name_key` of a unitless metric (a metric is a page, [D27](../decisions/D27-a-metric-is-a-page.md)); a check-in is a measurement of it, 1 or 0 ([correct a measurement](correct-a-measurement.md) corrects one).
 
 ```sql
 -- start the habit on :day; no end yet
 INSERT INTO habit_periods(metric_id, start_day, source)
-SELECT p.id, :day, 'ui' FROM pages p JOIN entities e ON e.id = p.id AND e.deleted_at IS NULL
- WHERE p.title_key = :metric AND p.entity_type = 'metric';
+SELECT e.id, :day, 'ui' FROM entity_names n JOIN entities e ON e.id = n.entity_id AND e.deleted_at IS NULL
+ WHERE n.name_key = :metric AND e.entity_type = 'metric';
 
 -- stop it: the open period ends on :day
 UPDATE habit_periods SET end_day = :day
- WHERE metric_id = (SELECT p.id FROM pages p JOIN entities e ON e.id = p.id AND e.deleted_at IS NULL
-                    WHERE p.title_key = :metric AND p.entity_type = 'metric') AND end_day IS NULL;
+ WHERE metric_id = (SELECT e.id FROM entity_names n JOIN entities e ON e.id = n.entity_id AND e.deleted_at IS NULL
+                    WHERE n.name_key = :metric AND e.entity_type = 'metric') AND end_day IS NULL;
 
 -- the habits of :day: done, not done, or not recorded
 SELECT m.title,
-       CASE (SELECT max(v.value) FROM measurement_values v WHERE v.metric_id = m.id AND v.day = :day)
+       CASE (SELECT max(v.value) FROM measurement_values v WHERE v.metric_id = e.id AND v.day = :day AND v.session_id IS NULL)
          WHEN 1 THEN 'done' WHEN 0 THEN 'not done' ELSE 'not recorded' END AS state
-  FROM habit_periods h JOIN pages m ON m.id = h.metric_id
-  JOIN entities e ON e.id = m.id AND e.deleted_at IS NULL
+  FROM habit_periods h JOIN entities e ON e.id = h.metric_id AND e.deleted_at IS NULL
+  JOIN entity_names m ON m.entity_id = e.id AND m.name_key = e.preferred_name_key
  WHERE h.start_day <= :day AND coalesce(h.end_day, '9999-12-31') >= :day
- ORDER BY m.title_key;
+ ORDER BY m.name_key;
 
 -- completion between :from_day and :to_day, per habit: the days it was active, and of those the
 -- days done, not done and not recorded (a rate is done / (done + not done))
@@ -36,12 +36,12 @@ active AS (
 SELECT m.title, count(*) AS active_days,
        sum(s.value IS 1) AS done, sum(s.value IS 0) AS not_done, sum(s.value IS NULL) AS not_recorded
   FROM active a
-  JOIN pages m ON m.id = a.metric_id
-  JOIN entities e ON e.id = m.id AND e.deleted_at IS NULL
-  LEFT JOIN (SELECT metric_id, day, max(value) AS value FROM measurement_values GROUP BY metric_id, day) s
+  JOIN entities e ON e.id = a.metric_id AND e.deleted_at IS NULL
+  JOIN entity_names m ON m.entity_id = e.id AND m.name_key = e.preferred_name_key
+  LEFT JOIN (SELECT metric_id, day, max(value) AS value FROM measurement_values WHERE session_id IS NULL GROUP BY metric_id, day) s
          ON s.metric_id = a.metric_id AND s.day = a.day
- GROUP BY m.id
- ORDER BY m.title_key;
+ GROUP BY e.id
+ ORDER BY m.name_key;
 ```
 
 A day outside every period is not a habit day at all: it is in no count. Two check-ins on one day

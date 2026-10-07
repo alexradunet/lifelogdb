@@ -12,5 +12,6 @@ becomes a [decision](../decisions/README.md). One file per proposal, named `NNNN
 | [0003](0003-a-metric-is-a-page.md) | A metric is a page; anything is filed in a category by `part-of` | accepted | 0008 | [D27](../decisions/D27-a-metric-is-a-page.md), [D26](../decisions/D26-metric-categories.md) |
 | [0004](0004-a-file-is-a-page.md) | A file is a page: its text in the body, a small picture kept, the original outside | accepted | 0009 | [D9](../decisions/D09-binary-files.md) |
 | [0005](0005-a-place-has-a-point.md) | A place has a point and a radius; a photo's place and day are taken when it is kept | accepted | 0010 | [D21](../decisions/D21-location-history.md) |
+| [0006](0006-stable-names-and-life-periods.md) | Stable names, one named-object core, and recorded life periods | draft | [0011–0021](../issues/README.md) | pending owner review |
 
 Status values: draft | accepted | rejected (with a one-line reason) | withdrawn.

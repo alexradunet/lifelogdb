@@ -335,7 +335,7 @@ func targetReadingState(t *testing.T, path string) (float64, int) {
 	}
 	defer d.Close()
 	var value float64
-	if err := d.R.QueryRowContext(context.Background(), `SELECT me.value FROM measurement_values me JOIN pages p ON p.id = me.metric_id WHERE p.title = 'Ferritin'`).Scan(&value); err != nil {
+	if err := d.R.QueryRowContext(context.Background(), `SELECT me.value FROM measurement_values me JOIN entity_names n ON n.entity_id = me.metric_id WHERE n.name_key = 'ferritin'`).Scan(&value); err != nil {
 		t.Fatal(err)
 	}
 	return value, targetMeasurementRowsOpen(t, d)

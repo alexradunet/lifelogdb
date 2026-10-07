@@ -24,8 +24,8 @@ SELECT id, title, link_days, d2
                ((pl.lat - :lat) * 111320.0) * ((pl.lat - :lat) * 111320.0)
              + ((pl.lon - :lon) * :m_per_deg_lon) * ((pl.lon - :lon) * :m_per_deg_lon) AS d2
           FROM places pl
-          JOIN pages pg   ON pg.id = pl.id
-          JOIN entities e ON e.id = pl.id AND e.deleted_at IS NULL)
+          JOIN entities e ON e.id = pl.id AND e.deleted_at IS NULL
+          JOIN entity_names pg ON pg.entity_id = e.id AND pg.name_key = e.preferred_name_key)
  WHERE d2 <= radius_m * radius_m
  ORDER BY radius_m, d2
  LIMIT 1;
@@ -40,7 +40,7 @@ cannot name that handle, refuse the whole keep, including promotion, preview fil
 an explicit representable title for a new file; never rename an existing handle. Keeps needing no embed remain allowed.
 
 The writer binds `:append_embed` to 1 only when parsed CommonMark rendering contains no wiki embed naming the file's
-canonical title identity. Aliases and NFC/case equivalents count; code, ordinary Markdown links/images and plain
+resolved stable identity. Aliases and NFC/case equivalents count; code, ordinary Markdown links/images and plain
 wikilinks do not. Check that the proposed append actually renders the intended embed in the existing body context;
 otherwise refuse and roll back the keep. Preserve existing body bytes. Dry runs apply the same checks without writes.
 
@@ -48,17 +48,17 @@ otherwise refuse and roll back the keep. Preserve existing body bytes. Dry runs 
 BEGIN IMMEDIATE;
 -- the day page of :taken_day: found, the app keeps its id as :photo_day_id and skips the two INSERTs; found tombstoned,
 -- it revives it (cookbook/capture.md)
-SELECT p.id, e.deleted_at FROM pages p JOIN entities e ON e.id = p.id WHERE p.title_key = :taken_day;
-INSERT INTO entities(entity_type, created_at, updated_at, source)
-VALUES ('page', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), :source)
+SELECT e.id, e.deleted_at FROM entities e WHERE e.preferred_name_key = :taken_day AND e.day = :taken_day;
+INSERT INTO entities(entity_type, preferred_name_key, day, created_at, updated_at, source)
+VALUES ('page', :taken_day, :taken_day, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), :source)
 RETURNING id;   -- the app keeps it as :photo_day_id
-INSERT INTO pages(id, title, title_key, day) VALUES (:photo_day_id, :taken_day, :taken_day, :taken_day);
+INSERT INTO entity_names(entity_id, title, name_key) VALUES (:photo_day_id, :taken_day, :taken_day);
 -- where the day was, once
 INSERT INTO links(from_id, to_id, kind, created_at, source)
 VALUES (:photo_day_id, :place_id, 'at', strftime('%Y-%m-%dT%H:%M:%fZ','now'), :source)
 ON CONFLICT(from_id, to_id, kind) DO NOTHING;
 -- the photo in its day, once: after a blank line, unless the page shows it already
-UPDATE pages SET body = body || CASE WHEN body = '' THEN '' ELSE char(10, 10) END || '![[' || :file_title || ']]'
+UPDATE entities SET body = body || CASE WHEN body = '' THEN '' ELSE char(10, 10) END || '![[' || :file_title || ']]'
  WHERE id = :photo_day_id AND :append_embed = 1;
 -- the body names the photo: the link sync of cookbook/save-a-body.md runs here for :photo_day_id
 COMMIT;
@@ -67,3 +67,7 @@ COMMIT;
 Ten photos of one day at one place make one `at` link (its unique key) and ten embeds; a photo kept again adds nothing.
 A place with `link_days = 0` is matched — so its photos are never asked about — and links no day. A photo matched before
 its place had a point is linked when it is kept again, or by an import's next run.
+
+Unknown capture-local day withholds this recipe's day creation, embeds and `at` links. It must also withhold
+place creation/promotion/point writes: existing stored attribution is not new capture evidence. An explicit
+place with unknown day refuses before mutation. The selected file's text/preview can be kept with a NULL day.

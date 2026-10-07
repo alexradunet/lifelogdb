@@ -38,6 +38,12 @@ var importCatalog = []spec{
 		"POST", "/import/facts/check", []Field{req("file", "text", "File")}, false},
 	{"apply-facts", "Apply facts", "Check and write a file's facts in one transaction, then its ledger line.",
 		"POST", "/import/facts/apply", []Field{req("file", "text", "File")}, false},
+	{"draft-prepared", "Draft supported source", "Derive a bounded fixed-profile batch for owner review. Bindings/mappings are JSON; this cannot approve it.", "POST", "/import/prepared", []Field{req("file", "text", "Source file"), req("profile", "text", "Fixed profile"), opt("kind", "text", "Session kind"), opt("binding", "textarea", "Fit owner-assigned identity/day/activity"), req("metrics", "textarea", "Quantity code to metric handle JSON")}, false},
+	{"check-prepared", "Check prepared source", "Validate the stamped source-derived batch and roll all writes back.", "POST", "/import/prepared/check", nil, false},
+	{"apply-prepared", "Apply prepared source", "Apply the owner-stamped source-derived batch atomically, then publish ledger.", "POST", "/import/prepared/apply", nil, false},
+	{"draft-selected-photo", "Draft selected photo pair", "Review an explicit original/optional sidecar pair, exact fingerprints, capture/creation evidence and choices. No automatic precedence.", "POST", "/import/selected-photo", []Field{req("file", "text", "Original"), opt("sidecar", "text", "Explicit sidecar"), req("title", "text", "Title"), opt("body", "textarea", "Caption"), req("choices", "textarea", "Capture/GPS choices and optional owner day/offset/place JSON")}, false},
+	{"check-selected-photo", "Check selected photo", "Check the owner-stamped pair without writes.", "POST", "/import/selected-photo/check", nil, false},
+	{"apply-selected-photo", "Apply selected photo", "Keep the stamped selected pair through the existing file writer.", "POST", "/import/selected-photo/apply", nil, false},
 	{"register-metrics", "Register metrics", "Register the metrics the owner approved in metrics.md, and each habit's period.",
 		"POST", "/import/register-metrics", nil, false},
 	{"plan-vault", "Plan the vault", "Draft plan.json: every note becomes one page titled by its file name; every problem is listed.",
@@ -59,6 +65,8 @@ func (h *server) mountImport(get func(string, func(*http.Request) (*Entity, erro
 	get("/import/ledger", h.ledger)
 	get("/import/plan", h.plan)
 	get("/import/facts", h.facts)
+	get("/import/prepared", h.preparedReview)
+	get("/import/selected-photo", h.selectedPhotoReview)
 	post("/import/ledger", h.makeLedger)
 	post("/import/skip", h.skip)
 	post("/import/rules", h.draftRules)
@@ -68,6 +76,12 @@ func (h *server) mountImport(get func(string, func(*http.Request) (*Entity, erro
 	post("/import/facts", h.writeFacts)
 	post("/import/facts/check", h.factsOp(false))
 	post("/import/facts/apply", h.factsOp(true))
+	post("/import/prepared", h.draftPrepared)
+	post("/import/prepared/check", h.preparedOp(true))
+	post("/import/prepared/apply", h.preparedOp(false))
+	post("/import/selected-photo", h.draftSelectedPhoto)
+	post("/import/selected-photo/check", h.selectedPhotoOp(true))
+	post("/import/selected-photo/apply", h.selectedPhotoOp(false))
 	post("/import/register-metrics", h.registerMetrics)
 	post("/import/vault/plan", h.planVault)
 	post("/import/vault/fix", h.fixPlan)
@@ -77,7 +91,9 @@ func (h *server) mountImport(get func(string, func(*http.Request) (*Entity, erro
 
 func importLinks(self string) []Link {
 	return []Link{link("self", self, "This"), link("status", "/import", "Import status"), link("ledger", "/import/ledger", "Ledger"),
-		link("questions", "/import/questions", "Questions"), link("plan", "/import/plan", "Vault plan"), link("index", "/", "Home")}
+		link("questions", "/import/questions", "Questions"), link("plan", "/import/plan", "Vault plan"),
+		link("prepared-review", "/import/prepared", "Prepared source review"),
+		link("selected-photo-review", "/import/selected-photo", "Selected photo review"), link("index", "/", "Home")}
 }
 
 func (h *server) importEntity(class, title, self string, props any, next ...string) *Entity {
@@ -369,4 +385,67 @@ func (h *server) replay(r *http.Request, _ string) (*Entity, error) {
 		return nil, err
 	}
 	return h.importEntity("replay", "Replayed into "+v.Get("to"), "/import", res), nil
+}
+
+func (h *server) draftPrepared(r *http.Request, _ string) (*Entity, error) {
+	v, err := form(r)
+	if err != nil {
+		return nil, err
+	}
+	if err = required(v, "file", "profile", "metrics"); err != nil {
+		return nil, err
+	}
+	b, err := h.ws.DraftPreparedJSON(r.Context(), v.Get("file"), v.Get("profile"), v.Get("kind"), v.Get("binding"), v.Get("metrics"))
+	if err != nil {
+		return nil, err
+	}
+	return h.importEntity("prepared", "Draft supported source", "/import/prepared", b), nil
+}
+func (h *server) preparedOp(dry bool) func(*http.Request, string) (*Entity, error) {
+	return func(r *http.Request, _ string) (*Entity, error) {
+		rep, err := h.ws.Prepared(r.Context(), h.s, dry)
+		if err != nil {
+			return nil, err
+		}
+		return h.importEntity("report", "Prepared source", "/import", rep), nil
+	}
+}
+
+func (h *server) draftSelectedPhoto(r *http.Request, _ string) (*Entity, error) {
+	v, err := form(r)
+	if err != nil {
+		return nil, err
+	}
+	if err = required(v, "file", "title", "choices"); err != nil {
+		return nil, err
+	}
+	p, err := h.ws.DraftSelectedPhotoJSON(r.Context(), v.Get("file"), v.Get("sidecar"), v.Get("title"), v.Get("body"), v.Get("choices"))
+	if err != nil {
+		return nil, err
+	}
+	return h.importEntity("selected-photo", "Draft selected pair", "/import/selected-photo", p), nil
+}
+func (h *server) selectedPhotoOp(dry bool) func(*http.Request, string) (*Entity, error) {
+	return func(r *http.Request, _ string) (*Entity, error) {
+		rep, err := h.ws.SelectedPhoto(r.Context(), h.s, dry)
+		if err != nil {
+			return nil, err
+		}
+		return h.importEntity("report", "Selected photo", "/import", rep), nil
+	}
+}
+
+func (h *server) preparedReview(r *http.Request) (*Entity, error) {
+	b, err := h.ws.PreparedReview(r.Context())
+	if err != nil {
+		return nil, err
+	}
+	return h.importEntity("prepared", "Source interpretation (owner stamp required)", "/import/prepared", b, "check-prepared", "apply-prepared"), nil
+}
+func (h *server) selectedPhotoReview(r *http.Request) (*Entity, error) {
+	p, err := h.ws.SelectedPhotoReview(r.Context())
+	if err != nil {
+		return nil, err
+	}
+	return h.importEntity("selected-photo", "Selected claims and choices (owner stamp required)", "/import/selected-photo", p, "check-selected-photo", "apply-selected-photo"), nil
 }

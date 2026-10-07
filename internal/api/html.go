@@ -46,7 +46,7 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 
 // viewOf names the template that shows an entity of a class; a class without one is shown by "generic".
 var viewOf = map[string]string{
-	"root": "root", "day": "day", "page": "page", "person": "page", "place": "page", "file": "page",
+	"root": "root", "day": "day", "page": "page", "person": "page", "place": "page", "file": "page", "period": "page",
 	"days": "list", "people": "list", "places": "list", "files": "list", "ghosts": "list", "search": "search",
 	"metrics": "metrics", "series": "series", "habits": "habits", "measurement": "measurement", "error": "error",
 }
@@ -263,21 +263,21 @@ func group(list any, key string) []bucket {
 // chart draws a series as an inline SVG: one point per reading, placed by its day between from and to.
 func chart(from, to string, readings any) template.HTML {
 	list, _ := readings.([]any)
+	// An absent lower bound is explicit all-history mode. Plot from the earliest
+	// returned observation, without giving an ordinary calendar date sentinel meaning.
+	if from == "" {
+		for _, it := range list {
+			m, _ := it.(map[string]any)
+			day, _ := m["day"].(string)
+			if _, err := time.Parse(time.DateOnly, day); err == nil && (from == "" || day < from) {
+				from = day
+			}
+		}
+	}
 	f, err1 := time.Parse(time.DateOnly, from)
 	t, err2 := time.Parse(time.DateOnly, to)
 	if len(list) == 0 || err1 != nil || err2 != nil || t.Before(f) {
 		return ""
-	}
-	// The all-readings sentinel selects the entire query range, but plotting starts
-	// at the first reading so modern observations remain distinguishable.
-	if from == "0001-01-01" {
-		for _, it := range list {
-			m, _ := it.(map[string]any)
-			day, _ := m["day"].(string)
-			if d, err := time.Parse(time.DateOnly, day); err == nil && (from == "0001-01-01" || d.Before(f)) {
-				f, from = d, day
-			}
-		}
 	}
 	type pt struct {
 		day   string
@@ -363,10 +363,18 @@ func writeValue(sb *strings.Builder, x any) {
 			sb.WriteString(`<span class="muted">none</span>`)
 			return
 		}
-		if first, ok := x[0].(map[string]any); ok {
+		if _, ok := x[0].(map[string]any); ok {
 			var cols []string
-			for k := range first {
-				cols = append(cols, k)
+			seen := map[string]bool{}
+			for _, row := range x {
+				if m, ok := row.(map[string]any); ok {
+					for k := range m {
+						if !seen[k] {
+							cols = append(cols, k)
+							seen[k] = true
+						}
+					}
+				}
 			}
 			sort.Strings(cols)
 			sb.WriteString("<table><tr>")

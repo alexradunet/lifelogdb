@@ -10,7 +10,7 @@
   inserts across the B-tree) and larger; their only real advantage — collision-free IDs for
   multi-device merge — buys nothing while sync is a non-goal ([non-goals](../architecture/non-goals.md)) [R26](../research/references.md#r26)[R27](../research/references.md#r27).
 - **An id is a permanent reference.** Nothing but `links` rows is deleted, so an entity id is never
-  reused, and a named entity also has its permanent title ([D20](D20-named-pages.md)).
+  reused, and a named entity also has its retained owned names ([D20](D20-named-pages.md)).
 - **Trade accepted.** If merging two databases ever becomes real, integer IDs can collide.
   Mitigation then: re-key with one script, or add an `entities.uid` column — additive after the
   freeze up to unique and `NOT NULL` (`ADD COLUMN`, a backfill, a unique index, `ALTER COLUMN uid SET
@@ -26,6 +26,6 @@
   twice: the client gives each new row an `import_key`, the key facts and entities have ([import a row once](../cookbook/import-a-row-once.md)).
 - **Rejected: devices that each hold a copy and merge (CRDTs).** cr-sqlite, the SQLite extension for
   it, allows no checked foreign keys, no UNIQUE constraint but the primary key and no CHECK across
-  columns in a merged table [R75](../research/references.md#r75) — the composite FKs, the unique `title_key` and the paired CHECKs
+  columns in a merged table [R75](../research/references.md#r75) — the composite FKs, the unique `name_key` and the paired CHECKs
   this schema rests on.
 - **Sources.** [R4](../research/references.md#r4)[R26](../research/references.md#r26)[R27](../research/references.md#r27)[R75](../research/references.md#r75).

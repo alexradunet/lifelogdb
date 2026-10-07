@@ -3,6 +3,8 @@ package importer
 import (
 	"context"
 	"fmt"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -19,7 +21,28 @@ type resolvedReadingKeys struct {
 }
 
 func resolveReadingKeys(t *core.Tx, source string, f *Facts, pos []int) (resolvedReadingKeys, error) {
-	return resolveReadingKeysWithLoader(source, f, pos, t.ImportedMeasurementRootsByFile)
+	ids, err := readingIdentities(f, pos)
+	if err != nil {
+		return resolvedReadingKeys{}, err
+	}
+	owners := map[string]string{}
+	for i := range ids {
+		key := ids[i].metricKey
+		owner, loaded := owners[key]
+		if !loaded {
+			p, err := t.Lookup(key)
+			if err != nil {
+				return resolvedReadingKeys{}, err
+			}
+			owner = "name:" + key
+			if p != nil {
+				owner = "entity:" + strconv.FormatInt(p.ID, 10)
+			}
+			owners[key] = owner
+		}
+		ids[i].groupKey = owner
+	}
+	return resolveReadingIdentitiesWithLoader(source, f, ids, t.ImportedMeasurementRootsByFile)
 }
 
 type readingRootLoader func(source, file, metricKey string) ([]core.ImportedMeasurementRoot, error)
@@ -29,28 +52,48 @@ func resolveReadingKeysWithLoader(source string, f *Facts, pos []int, load readi
 	if err != nil {
 		return resolvedReadingKeys{}, err
 	}
-	// Reject colliding timed identities before looking up roots or applying any writes.
+	return resolveReadingIdentitiesWithLoader(source, f, ids, load)
+}
+
+func resolveReadingIdentitiesWithLoader(source string, f *Facts, ids []readingIdentity, load readingRootLoader) (resolvedReadingKeys, error) {
+	// Reject colliding timed identities after name resolution, before any writes.
 	seenTimed := map[string]bool{}
 	for _, id := range ids {
 		if id.takenAt == "" {
 			continue
 		}
-		if seenTimed[id.canonicalKey] {
+		identity := id.groupKey + "|" + id.day + "|" + id.takenAt
+		if seenTimed[identity] {
 			return resolvedReadingKeys{}, refuse("%s: repeated timed reading identity %s on %s at %s", f.File, id.metricKey, id.day, id.takenAt)
 		}
-		seenTimed[id.canonicalKey] = true
+		seenTimed[identity] = true
 	}
 	res := resolvedReadingKeys{byWrite: map[int]string{}, aliases: map[string]string{}, aliasWrite: map[string]int{}, storedKeyWrite: map[string]int{}, ambiguousAliases: map[string]bool{}}
 	byGroup := map[string][]readingIdentity{}
 	for _, id := range ids {
-		byGroup[id.metricKey+"|"+id.day] = append(byGroup[id.metricKey+"|"+id.day], id)
+		byGroup[id.groupKey+"|"+id.day] = append(byGroup[id.groupKey+"|"+id.day], id)
 		res.byWrite[id.index] = id.canonicalKey
 	}
 	// Roots belong only to this call's checked facts and transaction snapshot.
 	rootsByMetricDay := map[string]map[string][]core.ImportedMeasurementRoot{}
 	for _, group := range byGroup {
+		sort.SliceStable(group, func(i, j int) bool { return group[i].pos < group[j].pos })
+		ordinal, previous := 0, -1
+		for i := range group {
+			if group[i].takenAt != "" {
+				continue
+			}
+			if ordinal > 0 && group[i].pos == previous {
+				return resolvedReadingKeys{}, refuse("%s: reading group has tied source positions; use distinct quotes", f.File)
+			}
+			ordinal++
+			previous = group[i].pos
+			group[i].canonicalOrdinal = ordinal
+			group[i].canonicalKey = strings.Join([]string{f.File, "reading", group[i].metricKey, group[i].day, strconv.Itoa(ordinal)}, "|")
+			res.byWrite[group[i].index] = group[i].canonicalKey
+		}
 		metric := group[0].metricKey
-		byDay, loaded := rootsByMetricDay[metric]
+		byDay, loaded := rootsByMetricDay[group[0].groupKey]
 		if !loaded {
 			roots, err := load(source, f.File, metric)
 			if err != nil {
@@ -60,7 +103,7 @@ func resolveReadingKeysWithLoader(source string, f *Facts, pos []int, load readi
 			for _, root := range roots {
 				byDay[root.Day] = append(byDay[root.Day], root)
 			}
-			rootsByMetricDay[metric] = byDay
+			rootsByMetricDay[group[0].groupKey] = byDay
 		}
 		groupRoots := byDay[group[0].day]
 		if len(groupRoots) == 0 {
@@ -166,18 +209,19 @@ func completeSingleStoredOrdinalGroup(file string, group []readingIdentity, root
 	if len(roots) != len(group) {
 		return false
 	}
-	storedMetric := ""
 	ordinals := map[int]bool{}
+	storedMetric, mixedRaw, allCanonical := "", false, true
 	for _, root := range roots {
 		parsed, ok := parseReadingKey(root.ImportKey)
-		if !ok || parsed.file != file || parsed.day != group[0].day || text.TitleKey(parsed.metric) != group[0].metricKey {
+		if !ok || parsed.file != file || parsed.day != group[0].day || !rootMetricNames(root, text.TitleKey(parsed.metric)) {
 			return false
 		}
 		if storedMetric == "" {
 			storedMetric = parsed.metric
-		} else if parsed.metric != storedMetric {
-			return false
+		} else if storedMetric != parsed.metric {
+			mixedRaw = true
 		}
+		allCanonical = allCanonical && parsed.metric == text.TitleKey(parsed.metric)
 		if parsed.token == "" || group[0].takenAt != "" {
 			return false
 		}
@@ -187,15 +231,19 @@ func completeSingleStoredOrdinalGroup(file string, group []readingIdentity, root
 		}
 		ordinals[n] = true
 	}
-	return len(ordinals) == len(group)
+	// Distinct historical raw spelling namespaces cannot establish canonical
+	// ordinals merely by casefolding. Only already-canonical owned alias keys may
+	// share a complete ordinal range; retain the single-raw-namespace legacy path.
+	return len(ordinals) == len(group) && (!mixedRaw || allCanonical)
 }
 
 func readingRootMatches(file string, id readingIdentity, root core.ImportedMeasurementRoot, group []readingIdentity, canonicalStored, storedOrdinal bool) bool {
 	parsed, ok := parseReadingKey(root.ImportKey)
-	if !ok || parsed.file != file || text.TitleKey(parsed.metric) != id.metricKey || parsed.day != id.day {
+	if !ok || parsed.file != file || !rootMetricNames(root, text.TitleKey(parsed.metric)) || parsed.day != id.day {
 		return false
 	}
-	if root.MetricKey != id.metricKey || root.Day != id.day || root.TakenAt != id.takenAt || root.TZ != id.tz || root.CapturedWithKey != id.withKey {
+	if !rootMetricNames(root, id.metricKey) || root.Day != id.day || root.TakenAt != id.takenAt || root.TZ != id.tz ||
+		!(id.withKey == "" && root.CapturedWithKey == "" || slices.Contains(root.CapturedWithKeys, id.withKey)) {
 		return false
 	}
 	if !sameReadingValue(root.Value, id.value) {
@@ -221,6 +269,10 @@ func readingRootMatches(file string, id readingIdentity, root core.ImportedMeasu
 		return ordinal == id.legacyOrdinal
 	}
 	return singleRawMetric(group) && ordinal == id.canonicalOrdinal
+}
+
+func rootMetricNames(root core.ImportedMeasurementRoot, key string) bool {
+	return slices.Contains(root.MetricKeys, key)
 }
 
 func sameReadingValue(a, b *float64) bool {
@@ -342,12 +394,45 @@ func (w *Workspace) collectTrialReadingIdentityFailures(ctx context.Context, tri
 	if err != nil {
 		return nil, err
 	}
+	selectedFiles := map[string]bool{}
+	batches, e := w.appliedPrepared(ctx)
+	if e != nil {
+		return nil, e
+	}
+	for _, b := range batches {
+		if e = w.admitSource(b.File); e != nil {
+			return nil, e
+		}
+		if e = verifyPrepared(ctx, trial, b); e != nil {
+			return nil, e
+		}
+		selectedFiles[b.File] = true
+	}
+	photos, e := w.appliedSelectedPhotos(ctx)
+	if e != nil {
+		return nil, e
+	}
+	for _, p := range photos {
+		if e = w.admitSource(p.File); e != nil {
+			return nil, e
+		}
+		if _, e = w.verifySelectedPhoto(ctx, trial, p, false); e != nil {
+			return nil, e
+		}
+		selectedFiles[p.File] = true
+		if p.Sidecar != "" {
+			selectedFiles[p.Sidecar] = true
+		}
+	}
 	var failures []Failure
 	for _, line := range lines {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		if line.State != "x" && line.State != "?" {
+			continue
+		}
+		if selectedFiles[line.File] {
 			continue
 		}
 		err := func() error {

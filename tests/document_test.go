@@ -76,15 +76,15 @@ func document(s *S) {
 	for k := range meta {
 		keys = append(keys, k)
 	}
-	s.K("lifelog_meta holds only the few cross-table rules (at most 8 keys)", len(meta) <= 8, sorted(keys))
+	s.K("lifelog_meta holds only the few cross-table rules (at most 11 keys)", len(meta) <= 11, sorted(keys))
 	head := ddlHeader(s.ddl)
 	s.K("the DDL header before the first statement is a short pointer (<= 12 lines) naming lifelog_meta", strings.Count(head, "\n") <= 12 && strings.Contains(head, "lifelog_meta"))
 	inner := regexp.MustCompile(`\n\s*--`)
-	for _, t := range []string{"entities", "pages", "people", "metrics", "measurements", "habit_periods", "link_kinds", "links", "lifelog_meta"} {
+	for _, t := range []string{"entities", "entity_names", "people", "metrics", "measurements", "habit_periods", "link_kinds", "links", "lifelog_meta"} {
 		s.K(t+": its CREATE statement carries its rules as comments", inner.MatchString(schema[t]))
 	}
 	count := func(k string) int64 {
-		return c.n("select count(*) from sqlite_schema where type=? and name not like 'sqlite_%' and not (type='table' and name like 'pages_fts_%')", k)
+		return c.n("select count(*) from sqlite_schema where type=? and name not like 'sqlite_%' and name NOT IN (SELECT name FROM pragma_table_list WHERE type='shadow')", k)
 	}
 	nt, nv, ng := count("table"), count("view"), count("trigger")
 	tot := regexp.MustCompile(`(?s)\*\*(\d+) tables \+ 1 FTS5 virtual table \+ (\d+) views\*\*.*?\*\*\+ (\d+) triggers\.\*\*`).FindStringSubmatch(s.d.Text())

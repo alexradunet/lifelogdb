@@ -6,6 +6,7 @@
 {{template "form" (form (.Action "capture") "choices:mood" "1 2 3 4 5" "button" "Add to today")}}
 
 <h2 id="new">New</h2>
+{{template "boxed" (form (.Action "create-period"))}}
 {{template "boxed" (form (.Action "create-page"))}}
 {{template "boxed" (form (.Action "create-person"))}}
 {{template "boxed" (form (.Action "create-place"))}}

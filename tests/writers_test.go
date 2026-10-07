@@ -47,7 +47,7 @@ func (s *S) writerConn(p string) *C {
 // connections, the pragmas and what they do, read-only readers under WAL, the minimum SQLite as data, and a
 // hardened connection.
 func writers(s *S) {
-	const resolve = "SELECT p.id FROM pages p WHERE p.title_key = ?"
+	const resolve = "SELECT entity_id FROM entity_names WHERE name_key = ?"
 	s.K("journal_mode=WAL is stored in the file by the DDL", s.connect(s.mkdb()).str("PRAGMA journal_mode") == "wal")
 
 	// ---- the race of cookbook/save-a-body
@@ -99,7 +99,7 @@ func writers(s *S) {
 	case <-time.After(30 * time.Second):
 		stop("second writer did not complete after commit")
 	}
-	s.K("...one page", B.n("select count(*) from pages where title_key='diet'") == 1)
+	s.K("...one page", B.n("select count(*) from entity_names where name_key='diet'") == 1)
 	var all []string
 	for _, b := range s.d.CookbookBlocks() {
 		all = append(all, b.sql)
@@ -147,7 +147,7 @@ func writers(s *S) {
 	p = s.mkdb()
 	w := s.writerConn(p)
 	w.must("BEGIN IMMEDIATE")
-	w.ent("page")
+	w.anyIdentity("page")
 	ro := s.readOnly(p)
 	s.K("a mode=ro reader is not blocked by an open write transaction", ro.n("select count(*) from entities where entity_type = 'page'") == 0)
 	w.must("COMMIT")
@@ -194,13 +194,13 @@ func writers(s *S) {
 		}
 		c.must(s.ddl)
 		pg := c.page("Hardened")
-		c.must("UPDATE pages SET body='searchable words' WHERE id=?", pg)
+		c.must("UPDATE entities SET body='searchable words' WHERE id=?", pg)
 		mm := c.pageW("Another", nil, "another")
 		c.link(mm, pg, "wikilink")
 		c.named("person", "Ada")
 		c.must("DELETE FROM links WHERE from_id=? AND kind='wikilink' AND to_id NOT IN (SELECT value FROM json_each('[]'))", mm)
-		got = fmt.Sprint(c.n("SELECT count(*) FROM pages_fts WHERE pages_fts MATCH 'searchable'"), c.n("SELECT count(*) FROM ghost_pages"), c.n("SELECT count(*) FROM measurement_values"))
+		got = fmt.Sprint(c.n("SELECT count(*) FROM entities_fts WHERE entities_fts MATCH 'searchable'"), c.n("SELECT count(*) FROM ghost_pages"), c.n("SELECT count(*) FROM measurement_values"))
 	})
 	s.K("with DEFENSIVE and trusted_schema=OFF: DDL, writes, FTS, views, json_each and a named entity all work", hard == "OK" && got == "1 0 0", hard, got)
-	s.K("...and a write to an FTS shadow table is refused", strings.HasPrefix(c.tryx("DELETE FROM pages_fts_data"), "ERR"))
+	s.K("...and a write to an FTS shadow table is refused", strings.HasPrefix(c.tryx("DELETE FROM entities_fts_data"), "ERR"))
 }

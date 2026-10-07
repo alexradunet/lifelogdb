@@ -48,7 +48,7 @@ func (t *Tx) Locate(id int64, p Point) error {
 		return err
 	}
 	var typ string
-	if err := t.tx.QueryRow(`SELECT entity_type FROM pages WHERE id = ?`, id).Scan(&typ); errors.Is(err, sql.ErrNoRows) {
+	if err := t.tx.QueryRow(`SELECT entity_type FROM entities WHERE id = ?`, id).Scan(&typ); errors.Is(err, sql.ErrNoRows) {
 		return notFound("no page %d", id)
 	} else if err != nil {
 		return err
@@ -86,11 +86,11 @@ type Match struct {
 // matchSQL is cookbook/place-of-a-photo.md's match: the smallest circle that holds the position, then the nearest.
 const matchSQL = `
 SELECT id, title, link_days, d2
-  FROM (SELECT pl.id, pg.title, pl.link_days, pl.radius_m,
+  FROM (SELECT pl.id, pg_name.title, pl.link_days, pl.radius_m,
                ((pl.lat - :lat) * 111320.0) * ((pl.lat - :lat) * 111320.0)
              + ((pl.lon - :lon) * :m_per_deg_lon) * ((pl.lon - :lon) * :m_per_deg_lon) AS d2
           FROM places pl
-          JOIN pages pg   ON pg.id = pl.id
+          JOIN entities pg ON pg.id = pl.id JOIN entity_names pg_name ON pg_name.entity_id = pg.id AND pg_name.name_key = pg.preferred_name_key
           JOIN entities e ON e.id = pl.id AND e.deleted_at IS NULL)
  WHERE d2 <= radius_m * radius_m
  ORDER BY radius_m, d2
@@ -129,7 +129,7 @@ func (t *Tx) placeFor(title string) (int64, error) {
 			return 0, conflict("the place %s is deleted: revive it first", p.Title)
 		}
 		return p.ID, nil
-	case p.Type == "page" && !p.DayPage && !p.Stub:
+	case p.Type == "page" && !p.DayPage:
 		return p.ID, t.Promote(p.ID, "place", "")
 	}
 	return 0, &ExistsError{p.ID, p.Title}
@@ -139,10 +139,14 @@ func (t *Tx) placeFor(title string) (int64, error) {
 // already, then the page's links synced (cookbook/place-of-a-photo.md).
 func (t *Tx) embed(dayID int64, title string) (bool, *Sync, error) {
 	var body string
-	if err := t.tx.QueryRow(`SELECT body FROM pages WHERE id = ?`, dayID).Scan(&body); err != nil {
+	if err := t.tx.QueryRow(`SELECT body FROM entities WHERE id = ?`, dayID).Scan(&body); err != nil {
 		return false, nil, err
 	}
-	if text.HasEmbed(body, title) {
+	shown, err := t.hasEmbed(body, title)
+	if err != nil {
+		return false, nil, err
+	}
+	if shown {
 		return false, nil, nil
 	}
 	body += func() string {
@@ -161,7 +165,7 @@ func (t *Tx) embed(dayID int64, title string) (bool, *Sync, error) {
 	if !text.HasEmbed(body, title) || !named {
 		return false, nil, invalid("automatic photo embed cannot render and link here; edit the day's Markdown before keeping the photo")
 	}
-	_, err := t.tx.Exec(`UPDATE pages SET body = ? WHERE id = ?`, body, dayID)
+	_, err = t.tx.Exec(`UPDATE entities SET body = ? WHERE id = ?`, body, dayID)
 	if err != nil {
 		return false, nil, err
 	}
@@ -204,12 +208,41 @@ func automaticEmbedTitle(title string) error {
 
 func (t *Tx) preflightEmbed(day, title string) error {
 	var body string
-	err := t.tx.QueryRow(`SELECT body FROM pages WHERE title_key = ?`, day).Scan(&body)
+	err := t.tx.QueryRow(`SELECT body FROM entities WHERE preferred_name_key = ?`, day).Scan(&body)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
-	if err == nil && text.HasEmbed(body, title) {
-		return nil
+	if err == nil {
+		shown, err := t.hasEmbed(body, title)
+		if err != nil {
+			return err
+		}
+		if shown {
+			return nil
+		}
 	}
 	return automaticEmbedTitle(title)
+}
+
+func (t *Tx) hasEmbed(body, title string) (bool, error) {
+	owner, err := t.Lookup(title)
+	if err != nil {
+		return false, err
+	}
+	for _, target := range text.EmbeddedTitles(body) {
+		if owner == nil {
+			if text.TitleKey(target) == text.TitleKey(title) {
+				return true, nil
+			}
+			continue
+		}
+		p, err := t.Lookup(target)
+		if err != nil {
+			return false, err
+		}
+		if p != nil && p.ID == owner.ID {
+			return true, nil
+		}
+	}
+	return false, nil
 }

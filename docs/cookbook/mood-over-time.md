@@ -3,6 +3,7 @@
 ```sql
 SELECT me.day, me.value
   FROM measurement_values me
-  JOIN pages m ON m.id = me.metric_id AND m.title_key = 'mood'
+  JOIN entity_names n ON n.entity_id = me.metric_id AND n.name_key = 'mood'
+ WHERE me.session_id IS NULL
  ORDER BY me.day;
 ```

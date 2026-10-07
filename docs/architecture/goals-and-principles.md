@@ -25,12 +25,11 @@ and *canonical data being corrupted by uncontrolled writers*.
    additive ([D13](../decisions/D13-migrations-and-freeze.md) says what that allows), in numbered forward-only migrations.
    SQLite explicitly blesses additive change as its compatibility mechanism
    ("adding new tables or columns does not change the meaning of prior queries" [R1](../research/references.md#r1)).
-5. **Derived data is disposable.** The FTS index and `title_key` can be dropped and rebuilt
-   from canonical data at any time; nothing else is derived. `life.db` is irreplaceable.
+5. **Derived data is disposable.** The FTS index can be rebuilt from canonical data. Normalized name keys are computed from their owned spellings; recomputing them must preserve ownership and reject collisions. `life.db` is irreplaceable.
    (A file's preview is not derived data: its original is not in the file, so the preview is the copy kept, never
    rebuilt — [D9](../decisions/D09-binary-files.md).)
 6. **One home per concept, one home per rule.** A concept is stored once ([D6](../decisions/D06-mood-is-a-measurement.md): mood lives in
-   `measurements` and nowhere else; a named entity's name is its page title, [D20](../decisions/D20-named-pages.md)), and a rule is
+   `measurements` and nowhere else; a named entity's preferred name is its owned registry spelling, [D20](../decisions/D20-named-pages.md)), and a rule is
    written once ([the docs index](../README.md) says where each kind of rule lives). A fact that can be derived from another column is not
    stored beside it.
 7. **Real use drives change.** A new constraint, trigger or convention needs a real incident behind

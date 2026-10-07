@@ -1,49 +1,19 @@
-# D5 — One `pages` table for all prose; the journal is a page per day; titles are permanent.
+# D5 — One prose body per identity; the journal is a page per day; names are owned aliases.
 
 **Status:** accepted
 
-- **Decision.** One text entity `pages`, every row titled, unique and linkable — an essay, a reference
-  page, a tag, a person, a place, and the journal.
-  - The journal is **one day page per local day**, titled with the day (`2026-09-29`); its `day` is
-    its title (`pages_day_page`), so `[[2026-09-29]]` reaches it and the day page of a day is one
-    lookup by key. Capture appends to today's page and creates it on the first write ([capture](../cookbook/capture.md), [titles and wikilinks](../contract/titles-and-wikilinks.md)).
-  - *Dated is a property, not a type:* the app sets `day` on a page the owner creates on purpose and
-    leaves it NULL on a page it creates as a link target, so the day view ([the day view](../cookbook/day-view.md)) shows what was
-    **written** that day, not what was **mentioned** — except a day page, whose title is its day.
-  - **Tags are pages**: one graph, one syntax.
-  - **Titles** are permanent (`pages_title_fixed`), unique by `title_key` ([titles and wikilinks](../contract/titles-and-wikilinks.md)) and safe as a file
-    name everywhere (`pages_title_safe`).
-- **Why a page per day.** The first real import, an Obsidian vault of one note per day, met untitled
-  journal entries: no day could be linked, and every `[[2026-08-20]]` the vault wrote made a second,
-  empty page beside that day's entries — two homes for one day. Untitled entries also needed a second
-  kind of page with its own CHECKs, and an inbox column nobody used.
+- **Decision.** A page is a named, linkable identity with its prose in `entities` and its spellings in `entity_names`; people, places, metrics and files use the same prose home. See [titles and wikilinks](../contract/titles-and-wikilinks.md) for the shared predicate and save grammar.
+  - The journal is one canonical identity per local day (`entities_day_page`, `entities_day_page_plain`, `entities_day_identity`, `entity_names_day_insert`, `entity_names_day_update`). Capture appends to that identity ([capture](../cookbook/capture.md)); dated ordinary pages remain distinct.
+  - Dated is a property, not a type: a link target normally has no day; a page deliberately written has the day its owner gives it ([day view](../cookbook/day-view.md)).
+  - Tags and explicit references are read from prose and resolve owned names to ids; tags are never expanded into rewritten body text.
+  - Stable-id rename selects an owned preferred spelling and retains old names ([rename a page](../cookbook/rename-a-page.md)). `entity_names_fixed` and `entity_names_no_delete` reserve ownership; `entity_names_title_safe` supports portable, reference-addressable handles. A rename never merges another owner's ghost or tombstone.
+- **Why.** The first vault import exposed two homes for a day: an untitled journal entry and the empty date page made by a reference. One canonical journal identity removes that ambiguity. Later name corrections exposed the cost of permanent titles and redirect identities: moving prose and incident links changes the identity of the thing named. Owned aliases preserve old references without rewriting decades of prose.
 - **Alternatives.**
-  - *Untitled memos, the day page a query over them (a Memos-style stream, which is also the inbox)*:
-    rejected — the incident above; and a page needs no second state.
-  - *A `journal` table beside `pages`*: rejected — a day would not be linkable (`[[…]]` reaches only
-    pages), and prose would have two homes.
-  - *A day page with a free title and a unique `day`*: rejected — `[[2026-09-29]]` could not find it
-    without a second lookup rule, and two pages could claim one day by title and by column.
-  - *Separate `note` and `wiki` kinds*: rejected — they would differ only in the day rule and share
-    one title namespace; a `[[link]]` to a title that does not exist yet creates a page, and anything
-    linked before it was written would keep whatever kind the link guessed.
-  - *Renames*: rejected — renaming silently repoints every `[[Old Title]]` in decades of prose, or
-    leaves ghosts if it doesn't; a redirect stub keeps both working ([titles and wikilinks](../contract/titles-and-wikilinks.md)).
-  - *A stub that keeps the old text or the typed links it starts*: rejected — the page would live under two titles,
-    and a choice left to each writer gives two writers different rows for the same rename. *A rename into a taken title
-    that merges the two texts*: rejected — no merge is the same in every writer; only an empty page, the ghost of a
-    typo, is taken in ([rename a page](../cookbook/rename-a-page.md)).
-  - *ASCII-only case-insensitive uniqueness (`COLLATE NOCASE`)*: rejected — `Café notes` and
-    `CAFÉ NOTES` (and NFC vs NFD spellings) would be distinct rows. *ASCII-only titles*: rejected —
-    a life log has `日本語` and `Zürich` in it.
-  - *An ICU or app-registered collation*: rejected — a database whose index needs a collation only one
-    program supplies can be read by anyone but not written or integrity-checked (`no such collation
-    sequence`, executed).
-  - *Id-named files, so that titles need no file-name rules*: rejected — the rules are the strict
-    direction: loosening `pages_title_safe` after the freeze is one `DROP CONSTRAINT` + `ADD
-    CONSTRAINT` ([D13](D13-migrations-and-freeze.md)), while tightening it later would meet titles that already break the new rule.
-    *Reopen only if* a title you actually want is forbidden (`Re: plan`) often enough to hurt.
-- **Costs accepted.** An entry in a day page has no time of its own: a time worth keeping is written
-  in the text. There is no inbox. A title cannot be corrected in place: a new page and a stub. An
-  empty page created on purpose that nothing links to shows in `ghost_pages`.
+  - Untitled memos or separate journal/note/wiki prose stores: rejected — a day must be linkable and prose has one home.
+  - A journal page with a free title and unique day: rejected — it introduces a second resolution rule for date references.
+  - Redirect identities and chains: rejected — names belong directly to the same identity; ordinary `#REDIRECT` text has no special state.
+  - Rename into another owner's name, even an empty ghost: rejected — rename is not merge.
+  - ASCII-only uniqueness or an application collation: rejected — Unicode names need the shared normalization, and a stored index must remain usable without a private collation (executed).
+  - Id-named handles without filename checks: rejected — relaxing a restriction later is possible; tightening it after freeze can meet existing incompatible names ([D13](D13-migrations-and-freeze.md)).
+- **Costs accepted.** A day-page entry has no separate timestamp; a time worth keeping stays in prose. There is no inbox. Retained names consume the global namespace, including after tombstoning. Empty unreferenced pages appear in `ghost_pages` for the owner's review.
 - **Sources.** Kaydet [R41](../research/references.md#r41); FxLifeSheet [R9](../research/references.md#r9)[R42](../research/references.md#r42); Windows reserved names [R58](../research/references.md#r58); Unicode security [R63](../research/references.md#r63).

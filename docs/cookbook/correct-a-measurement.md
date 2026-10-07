@@ -1,20 +1,20 @@
 # Correct a wrong measurement (append-only)
 
 ```sql
--- never UPDATE the value; supersede it:
-INSERT INTO measurements(metric_id, day, taken_at, value, source, supersedes_id, created_at)
-VALUES (:metric_id, :day, NULL, 71.4, 'ui', :wrong_row_id, strftime('%Y-%m-%dT%H:%M:%fZ','now'));
--- rejected if :wrong_row_id belongs to a different metric, does not exist, or
--- was already corrected once (correct the correction instead)
+-- Ordinary value correction copies scope and attribution from the prior row.
+INSERT INTO measurements(metric_id,session_id,day,taken_at,tz,value,source,captured_with_id,supersedes_id,created_at)
+SELECT metric_id,session_id,day,taken_at,tz,71.4,'ui',captured_with_id,id,strftime('%Y-%m-%dT%H:%M:%fZ','now')
+FROM measurements WHERE id=:wrong_row_id;
+-- Refuses a repeated correction; correct the leaf instead.
 
--- a row that should never have existed (a mis-tap): RETRACT it — a correction with a NULL value.
--- measurement_values then hides both rows; to bring a value back, correct the retraction.
-INSERT INTO measurements(metric_id, day, value, source, supersedes_id, created_at)
-VALUES (:metric_id, :day, NULL, 'ui', :mistaken_row_id, strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+-- NULL retracts, retaining the same metric/session chain and attribution.
+INSERT INTO measurements(metric_id,session_id,day,taken_at,tz,value,source,captured_with_id,supersedes_id,created_at)
+SELECT metric_id,session_id,day,taken_at,tz,NULL,'ui',captured_with_id,id,strftime('%Y-%m-%dT%H:%M:%fZ','now')
+FROM measurements WHERE id=:mistaken_row_id;
 ```
 
-**A correction never overwrites.** One reading, corrected, retracted and restored — what
-`measurement_values` shows after each insert.
+A correction never overwrites. [Scope relocation](../contract/measurement-scope.md) instead retracts the old
+leaf and writes a new independent root atomically; it is not this value-correction operation.
 
 ```mermaid
 %% diagram: correct-measurement

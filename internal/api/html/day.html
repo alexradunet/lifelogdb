@@ -18,7 +18,7 @@
 {{if $habit}}<h2>Habits</h2><ul class="plain">{{range $d.view}}{{if eq .what "habit"}}<li>{{.detail}}</li>{{end}}{{end}}</ul>
 <p class="sub"><a href="/habits?day={{$.Title}}">Check in</a></p>{{end}}
 
-{{with $d.readings}}<h2>Readings</h2><ul class="plain">{{range .}}<li class="row"><a class="grow" href="/metrics/{{pathesc .metric}}">{{.metric}}</a><a href="/measurements/{{num .id}}">{{num .value}}</a>{{with .taken_at}}<span class="muted">{{.}}</span>{{end}}</li>{{end}}</ul>{{end}}
+{{with $d.readings}}<h2>Readings</h2><ul class="plain">{{range .}}<li class="row"><a class="grow" href="/metrics/{{pathesc .metric}}">{{.metric}}</a><a href="/measurements/{{num .id}}">{{num .value}}</a><span>{{.scope}}</span>{{with .session_id}}<a href="/sessions/{{num .}}">session {{num .}}</a>{{end}}{{with .taken_at}}<span class="muted">{{.}}</span>{{end}}</li>{{end}}</ul>{{end}}
 
 {{$pages := false}}{{range $d.view}}{{if eq .what "page" "page (edited)"}}{{$pages = true}}{{end}}{{end}}
 {{if $pages}}<h2>Pages written this day</h2><ul class="plain">{{range $d.view}}{{if eq .what "page" "page (edited)"}}<li><a href="{{title .detail}}">{{.detail}}</a>{{if ne .what "page"}} <span class="muted">edited</span>{{end}}</li>{{end}}{{end}}</ul>{{end}}

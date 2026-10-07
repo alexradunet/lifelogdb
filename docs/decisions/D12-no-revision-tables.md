@@ -4,7 +4,8 @@
 
 - **Decision.** No revision or history tables. The temporal metadata is row-level: `created_at`
   (on every table that has it — entities, links, measurements), `updated_at`, the tombstone, `source`,
-  and the append-only facts. A commit must survive power loss, so connections use
+  and the append-only facts. `lifelog_meta.edit_revisions` supplies clock-independent stale-edit
+  protection without retaining any previous body or typed value. A commit must survive power loss, so connections use
   `synchronous = FULL` ([connection setup](../contract/connections.md)) [R54](../research/references.md#r54).
 - **Alternatives.** *Full revision snapshots per edit*: rejected — significant code for a history
   nobody has asked to query. *Trigger-based history tables* (`sqlite-history` [R48](../research/references.md#r48)): rejected **for

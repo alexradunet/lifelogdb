@@ -35,7 +35,7 @@ type Status struct {
 func (w *Workspace) Status(ctx context.Context, s *core.Store, dbPath string) (*Status, error) {
 	st := &Status{Workspace: w.Dir, Database: dbPath, Gates: map[string]string{}, Ledger: map[string]int{},
 		Questions: map[string]int{}, Mismatches: []string{}}
-	for _, f := range []string{"rules.md", "metrics.md"} {
+	for _, f := range []string{"rules.md", "metrics.md", preparedFile, selectedPhotoFile} {
 		g, err := w.Gate(f)
 		if err != nil {
 			return nil, err
@@ -201,8 +201,59 @@ func waitsOn(note string, open map[string]bool) bool {
 
 func (w *Workspace) mismatches(ctx context.Context, s *core.Store, st *Status, lines []Line, plan *Plan) {
 	expected := map[string]bool{}
+	batches, e := w.appliedPrepared(ctx)
+	preparedFiles := map[string]bool{}
+	if e != nil {
+		st.Mismatches = append(st.Mismatches, "immutable prepared source verification failed")
+	} else {
+		for _, b := range batches {
+			preparedFiles[b.File] = true
+			if e := w.admitSource(b.File); e != nil {
+				st.Mismatches = append(st.Mismatches, "completed prepared source admission failed")
+			}
+			if e := verifyPrepared(ctx, s, b); e != nil {
+				st.Mismatches = append(st.Mismatches, "prepared source database verification failed")
+			}
+			for _, r := range b.Records {
+				if b.Profile != "fit-date-csv-v1" {
+					expected[preparedKey(b.Profile, r.Key, "session")] = true
+				}
+				for _, q := range r.Quantities {
+					expected[preparedKey(b.Profile, r.Key, q.Code)] = true
+				}
+			}
+		}
+	}
+	photos, e := w.appliedSelectedPhotos(ctx)
+	if e != nil {
+		st.Mismatches = append(st.Mismatches, "completed selected history verification failed")
+	} else {
+		for _, p := range photos {
+			preparedFiles[p.File] = true
+			if p.Sidecar != "" {
+				preparedFiles[p.Sidecar] = true
+			}
+			if _, e = w.verifySelectedPhoto(ctx, s, p, true); e != nil {
+				st.Mismatches = append(st.Mismatches, "completed selected original database verification failed")
+			}
+		}
+	}
+	// A current draft/reservation remains gate evidence, never evidence of completed history.
+	if _, ok, e := w.read(selectedPhotoFile); e != nil {
+		st.Mismatches = append(st.Mismatches, "selected artifact cannot be read")
+	} else if ok {
+		p, _, e := w.readSelectedPhoto(ctx, true)
+		if e != nil {
+			st.Mismatches = append(st.Mismatches, "selected pair verification failed")
+		} else if e = w.bindSelectedPhoto(p, false); e != nil {
+			st.Mismatches = append(st.Mismatches, "selected pair binding verification failed")
+		}
+	}
 	for _, l := range lines {
 		if l.State != "x" && l.State != "?" {
+			continue
+		}
+		if preparedFiles[l.File] {
 			continue
 		}
 		r, err := w.Check(ctx, s, l.File)
@@ -255,7 +306,8 @@ func (w *Workspace) mismatches(ctx context.Context, s *core.Store, st *Status, l
 	}
 	src := strings.ReplaceAll(st.Source, "'", "")
 	res, err := s.Query(ctx, `SELECT import_key FROM entities WHERE source = '`+src+`' AND import_key IS NOT NULL
-	                          UNION ALL SELECT import_key FROM measurements WHERE source = '`+src+`' AND import_key IS NOT NULL`, 100000)
+	                          UNION ALL SELECT import_key FROM measurements WHERE source = '`+src+`' AND import_key IS NOT NULL
+ UNION ALL SELECT import_key FROM sessions WHERE source = '`+src+`' AND import_key IS NOT NULL`, 100000)
 	if err == nil {
 		outside := 0
 		for _, row := range res.Rows {

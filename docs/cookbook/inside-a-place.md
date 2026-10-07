@@ -16,10 +16,9 @@ WITH RECURSIVE inside(id) AS (
 SELECT d.day, pl.title AS place
   FROM inside
   JOIN links l    ON l.to_id = inside.id AND l.kind = 'at'
-  JOIN pages d    ON d.id = l.from_id AND d.title = d.day
-  JOIN entities e ON e.id = d.id AND e.deleted_at IS NULL
-  JOIN pages pl   ON pl.id = inside.id
-  JOIN entities epl ON epl.id = pl.id AND epl.deleted_at IS NULL
+  JOIN entities d ON d.id = l.from_id AND d.preferred_name_key = d.day AND d.deleted_at IS NULL
+  JOIN entities epl ON epl.id = inside.id AND epl.deleted_at IS NULL
+  JOIN entity_names pl ON pl.entity_id = epl.id AND pl.name_key = epl.preferred_name_key
  WHERE d.day BETWEEN :from_day AND :to_day
  ORDER BY d.day, pl.title;
 ```

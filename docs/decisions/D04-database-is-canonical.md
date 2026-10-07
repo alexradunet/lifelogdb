@@ -7,7 +7,7 @@
   corruption. Evidence: the Logseq↔Obsidian ecosystem needs dedicated conversion tools (journal
   filename formats, URL-encoded filenames, block-reference syntax, property formats, task
   statuses) [R29](../research/references.md#r29)[R30](../research/references.md#r30)[R31](../research/references.md#r31)[R32](../research/references.md#r32). *DB canonical*: the fear of meaning trapped in the app.
-- **Decision.** `pages.body` in SQLite is the single source of truth for prose. No folder of
+- **Decision.** `entities.body` in SQLite is the single source of truth for prose. No folder of
   files holds canonical text, and nothing may write canonical data except this app. The ability to
   leave rests on the file format itself ([D1](D01-single-sqlite-file.md)) and on the schema being its own documentation.
 - **Why not files-canonical with discipline (linters + git as recovery net)?** Git is a

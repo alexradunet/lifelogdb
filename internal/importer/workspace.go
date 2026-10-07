@@ -27,9 +27,10 @@ import (
 // Workspace is one source's import workspace: the folder <source>.lifelog beside the source. It is fixed when
 // the process starts; no request names a path outside it or the source.
 type Workspace struct {
-	Dir    string // the workspace, …/Notebook.lifelog
-	Source string // the source, …/Notebook
-	mu     sync.Mutex
+	Dir         string       // the workspace, …/Notebook.lifelog
+	Source      string       // the source, …/Notebook
+	selectionMu sync.RWMutex // Replay excludes workspace selection changes through its full rehearsal/application.
+	mu          sync.Mutex
 }
 
 // Error is a refusal with a status, like core.Error.
@@ -236,6 +237,13 @@ func writeAtomic(path string, data []byte) error {
 }
 
 func (w *Workspace) read(name string) (string, bool, error) {
+	if name == preparedFile || name == selectedPhotoFile {
+		b, err := w.readBoundedWorkspace(name, 4*maxProfileBytes)
+		if errors.Is(err, os.ErrNotExist) {
+			return "", false, nil
+		}
+		return strings.ReplaceAll(string(b), string([]byte{13, 10}), string(rune(10))), err == nil, err
+	}
 	b, err := os.ReadFile(w.file(name))
 	if errors.Is(err, os.ErrNotExist) {
 		return "", false, nil
@@ -285,6 +293,8 @@ func (w *Workspace) Gate(name string) (string, error) {
 // shown is the Hash of the Review the owner read: a body that changed since is refused, never stamped. The
 // approved file is then copied for the next review (approval.go).
 func (w *Workspace) Approve(name string, today time.Time, shown string) error {
+	w.selectionMu.RLock()
+	defer w.selectionMu.RUnlock()
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	rest, err := w.toStamp(name)
@@ -335,6 +345,9 @@ func (w *Workspace) Rules() (*Rules, error) {
 	if !ok {
 		return nil, refuse("no rules.md yet: survey the source and draft it (guide step 2)")
 	}
+	return parseRules(text)
+}
+func parseRules(text string) (*Rules, error) {
 	r := &Rules{Aliases: map[string]string{}, Distinct: map[[2]string]bool{}}
 	if m := sourceLine.FindStringSubmatch(text); m != nil {
 		r.Source = m[1]
@@ -376,6 +389,8 @@ func (w *Workspace) Name() (string, error) {
 // again, so a change after approval (an alias from an answer, guide step 8) closes the gate until the owner
 // approves it again.
 func (w *Workspace) DraftRules(body string) error {
+	w.selectionMu.RLock()
+	defer w.selectionMu.RUnlock()
 	body = strings.ReplaceAll(body, "\r\n", "\n")
 	if statusLine.MatchString(strings.TrimSpace(strings.SplitN(body, "\n", 2)[0])) {
 		return refuse("write the rules without a status line: the writer keeps it")

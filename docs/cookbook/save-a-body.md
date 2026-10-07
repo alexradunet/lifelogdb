@@ -10,12 +10,12 @@ any reason is rolled back alone (no link, no orphan `entities` row) and the save
 %% diagram: save-flow
 flowchart TD
     start(["save a page body"]) --> begin["BEGIN IMMEDIATE"]
-    begin --> body["0. write the body<br/>INSERT (cookbook/capture.md) or UPDATE pages SET body"]
+    begin --> body["0. write the body<br/>INSERT (cookbook/capture.md) or UPDATE entities SET body"]
     body --> more{"another distinct<br/>valid target?"}
     more -->|"yes"| sp["SAVEPOINT target"]
-    sp --> resolve["1. resolve<br/>WHERE title_key = :key"]
+    sp --> resolve["1. resolve<br/>entity_names.name_key = :key"]
     resolve --> found{"found?"}
-    found -->|"no"| create["2b. INSERT entities and pages<br/>an empty page: no day, or a day page's own"]
+    found -->|"no"| create["2b. INSERT entities and owned name<br/>an empty page: no day, or a day page's own"]
     found -->|"yes, tombstoned"| revive["2a. entities.deleted_at = NULL"]
     found -->|"yes, live"| link
     create --> link["3. INSERT links wikilink<br/>ON CONFLICT DO NOTHING"]
@@ -30,24 +30,25 @@ flowchart TD
 
 ```sql
 BEGIN IMMEDIATE;
--- 0) the body itself: the INSERT of cookbook/capture.md, or  UPDATE pages SET body = :body WHERE id = :page_id;
+-- 0) the body itself: the INSERT of cookbook/capture.md, or UPDATE entities SET body = :body WHERE id = :page_id;
 
--- for each target (skip a target whose :key is the page's own title_key):
+-- for each target; after resolving, skip self and deduplicate by entity id, including aliases:
 SAVEPOINT target;
--- 1) resolve (a search on the unique index pages_title)
-SELECT p.id, p.title, e.deleted_at
-  FROM pages p JOIN entities e ON e.id = p.id
- WHERE p.title_key = :key;
+-- 1) resolve an exact registry key; spelling is not identity
+SELECT e.id, n.title, e.deleted_at
+  FROM entity_names n JOIN entities e ON e.id = n.entity_id
+ WHERE n.name_key = :key;
 
 -- 2a) found, but tombstoned: revive it (the UI tells the owner the save revives a deleted page)
 UPDATE entities SET deleted_at = NULL WHERE id = :found_id;
 -- 2b) none found: create the empty page; no day (a link target is not something written today),
---     except a day page, whose day is its title (pages_day_page)
-INSERT INTO entities(entity_type, created_at, updated_at, source)
-VALUES ('page', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), :source)
+--     except a day page, whose day is its title (entities_day_page)
+INSERT INTO entities(entity_type, preferred_name_key, day, created_at, updated_at, source)
+VALUES ('page', :key, CASE WHEN date(:title) IS :title THEN :title END,
+        strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), :source)
 RETURNING id;   -- the app keeps it as :target_id
-INSERT INTO pages(id, title, title_key, day)
-VALUES (:target_id, :title, :key, CASE WHEN date(:title) IS :title THEN :title END);
+INSERT INTO entity_names(entity_id, title, name_key)
+VALUES (:target_id, :title, :key);
 
 -- 3) link it (:target_id is :found_id, or the id 2b returned)
 INSERT INTO links(from_id, to_id, kind, created_at, source)

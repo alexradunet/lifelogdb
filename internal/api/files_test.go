@@ -75,8 +75,8 @@ func TestAddFileKeepsAPhotoAndItsPicture(t *testing.T) {
 	if res, _ := again.Result.(map[string]any); err != nil || res["existing"] != true || href(again, "self") != href(e, "self") {
 		t.Errorf("the same original again: %v %+v", err, again.Result)
 	}
-	if got := names(e); got != "save-body,link,unlink,tombstone" {
-		t.Errorf("a file page offers %s (never promote or rename)", got)
+	if got := names(e); got != "save-body,rename,link,unlink,tombstone" {
+		t.Errorf("a file page offers %s (never promote)", got)
 	}
 	if list := must(c.Get("/files")); len(list.Entities) != 1 || list.Entities[0].Title != "2026-10-04 Lake.jpg" {
 		t.Errorf("/files: %+v", list.Entities)
@@ -354,7 +354,7 @@ func TestAutomaticEmbedAPIRefusal(t *testing.T) {
 	path, _ := jpegFile(t, "Lake [1].jpg", 40, 30)
 	for _, dry := range []string{"1", "0"} {
 		_, err := c.DoFiles(add, map[string]string{"title": "Lake [1].jpg", "day": "2026-10-04", "dry_run": dry}, map[string]string{"original": path})
-		if err == nil || !strings.Contains(err.Error(), "explicit") {
+		if !clientStatus(err, 422) {
 			t.Fatalf("dry=%s: %v", dry, err)
 		}
 	}

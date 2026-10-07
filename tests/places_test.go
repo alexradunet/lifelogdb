@@ -25,7 +25,7 @@ func places(s *S) {
 	c := s.fresh()
 	pl := c.named("place", "Lakeside")
 	s.K("a place's point is a row of its own, keyed by its page", point(c, pl, 46.1, 7.2, 300, 1) == "OK" &&
-		c.tab("select p.entity_type, pl.lat, pl.lon, pl.radius_m, pl.link_days from places pl join pages p using(id)") == "place|46.1|7.2|300|1")
+		c.tab("select e.entity_type, pl.lat, pl.lon, pl.radius_m, pl.link_days from places pl join entities e using(id)") == "place|46.1|7.2|300|1")
 	s.K("a place needs no row: a place without a point is whole", c.n("select count(*) from places where id=?", c.named("place", "Nowhere")) == 0 && c.integrityOK())
 	s.K("a places row needs a page of type place", err(point(c, c.page("Plain"), 1, 1, 100, 1)) && err(point(c, c.named("person", "Ann"), 1, 1, 100, 1)))
 	s.K("...and cannot claim another type", err(c.tryx("INSERT INTO places(id,entity_type,lat,lon,radius_m) VALUES (?,'person',1,1,100)", c.named("person", "Bo"))))
@@ -41,7 +41,7 @@ func places(s *S) {
 	s.K("a radius of 10 m and of 100 km are accepted", point(c, c.named("place", ""), 10, 10, 10, 1) == "OK" && point(c, c.named("place", ""), 10, 10, 100000, 0) == "OK")
 	s.K("link_days is 0 or 1", err(point(c, c.named("place", ""), 10, 10, 100, 2)) && err(point(c, c.named("place", ""), 10, 10, 100, nil)))
 	s.K("link_days defaults to 1", c.tryx("INSERT INTO places(id,lat,lon,radius_m) VALUES (?,1,1,100)", c.named("place", "Default")) == "OK" &&
-		c.n("select link_days from places join pages using(id) where title='Default'") == 1)
+		c.n("select pl.link_days from places pl join entity_names n on n.entity_id=pl.id where n.name_key='default'") == 1)
 	c.must("UPDATE entities SET updated_at='2000-01-01T00:00:00.000Z', created_at='2000-01-01T00:00:00.000Z' WHERE id=?", pl)
 	s.K("a wrong point is fixed by UPDATE", c.tryx("UPDATE places SET lat=46.11, radius_m=400 WHERE id=?", pl) == "OK")
 	s.K("...which bumps entities.updated_at (places_touch)", c.n("select updated_at > created_at from entities where id=?", pl) == 1)
@@ -178,8 +178,8 @@ func places(s *S) {
 	}
 	dp := p["photo_day_id"]
 	s.K("cookbook/place-of-a-photo: a day with no page gets one, its at link and the photo's embed",
-		c.tab("select title, day, body from pages where id=?", dp) == "2019-06-03|2019-06-03|![[2019-06-03 IMG_1.jpg]]" &&
-			c.n("select count(*) from links where from_id=? and to_id=? and kind='at'", dp, lake) == 1, c.tab("select title, day, body from pages where id=?", dp))
+		c.tab("select n.title, e.day, e.body from entities e join entity_names n on n.entity_id=e.id and n.name_key=e.preferred_name_key where e.id=?", dp) == "2019-06-03|2019-06-03|![[2019-06-03 IMG_1.jpg]]" &&
+			c.n("select count(*) from links where from_id=? and to_id=? and kind='at'", dp, lake) == 1, c.tab("select n.title, e.day, e.body from entities e join entity_names n on n.entity_id=e.id and n.name_key=e.preferred_name_key where e.id=?", dp))
 	sts := statements(day)
 	again := []string{sts[0], sts[4], sts[5], sts[6]} // the day page found: the two INSERTs skipped, as a writer does
 	p["append_embed"] = 0
@@ -187,15 +187,15 @@ func places(s *S) {
 		stop("place-of-a-photo day again: %v", e)
 	}
 	s.K("...and a second photo of that day at that place, or the same photo again, adds no link and no second embed",
-		c.n("select count(*) from links where from_id=? and kind='at'", dp) == 1 && c.str("select body from pages where id=?", dp) == "![[2019-06-03 IMG_1.jpg]]")
-	c.must("UPDATE pages SET body = 'Swam at dawn.' WHERE id=?", dp)
+		c.n("select count(*) from links where from_id=? and kind='at'", dp) == 1 && c.str("select body from entities where id=?", dp) == "![[2019-06-03 IMG_1.jpg]]")
+	c.must("UPDATE entities SET body = 'Swam at dawn.' WHERE id=?", dp)
 	p["file_title"] = "2019-06-03 IMG_2.jpg"
 	p["append_embed"] = 1
 	c.runBlock(strings.Join(again, "\n"), p, nil)
-	s.K("another photo is appended after a blank line", c.str("select body from pages where id=?", dp) == "Swam at dawn.\n\n![[2019-06-03 IMG_2.jpg]]")
+	s.K("another photo is appended after a blank line", c.str("select body from entities where id=?", dp) == "Swam at dawn.\n\n![[2019-06-03 IMG_2.jpg]]")
 
 	for _, body := range []string{"![[2019-06-03 IMG_2.jpg|lake]]", "`![[2019-06-03 IMG_2.jpg]]`", "[[2019-06-03 IMG_2.jpg]]"} {
-		c.must("UPDATE pages SET body = ? WHERE id=?", body, dp)
+		c.must("UPDATE entities SET body = ? WHERE id=?", body, dp)
 		p["append_embed"] = 1
 		want := body + "\n\n![[2019-06-03 IMG_2.jpg]]"
 		if text.HasEmbed(body, p["file_title"].(string)) {
@@ -203,20 +203,22 @@ func places(s *S) {
 			want = body
 		}
 		_, e := c.runBlock(strings.Join(again, "\n"), p, nil)
-		s.K("cookbook parsed embed binding preserves aliases but appends after literal code/plain links", e == nil && c.str("select body from pages where id=?", dp) == want, e)
+		s.K("cookbook parsed embed binding preserves aliases but appends after literal code/plain links", e == nil && c.str("select body from entities where id=?", dp) == want, e)
 	}
 	s.K("integrity and foreign keys clean", c.integrityOK())
 
 	// the writer's own keep of a photo writes what the recipe writes
 	cw := s.fresh()
 	lk := cw.named("place", "Lakeside")
-	cw.runBlock(give, P{"place_id": lk, "lat": 46.1, "lon": 7.2, "radius_m": 300, "link_days": 1}, nil)
+	if _, e := cw.runBlock(give, P{"place_id": lk, "lat": 46.1, "lon": 7.2, "radius_m": 300, "link_days": 1}, nil); e != nil {
+		stop("photo writer point: %v", e)
+	}
 	k, ew := cw.store().AddFile(context.Background(), "ui", core.FileIn{Title: "2019-06-03 IMG_1.jpg", SHA256: strings.Repeat("ab", 32), MIME: "image/jpeg",
 		Taken: "2019-06-03", Lat: 46.1001, Lon: 7.2001, HasGPS: true, Preview: jpegBytes})
 	s.K("the writer's own keep of a photo links its day, shows it there once and puts its page on that day, as the recipe does",
-		ew == nil && k.Linked && cw.tab("select title, day, body from pages where title = '2019-06-03'") == "2019-06-03|2019-06-03|![[2019-06-03 IMG_1.jpg]]" &&
-			cw.n("select count(*) from links l join pages d on d.id = l.from_id where d.title = '2019-06-03' and l.kind = 'at' and l.to_id = ?", lk) == 1 &&
-			cw.str("select day from pages where title = '2019-06-03 IMG_1.jpg'") == "2019-06-03", ew, k)
+		ew == nil && k.Linked && cw.tab("select n.title,e.day,e.body from entities e join entity_names n on n.entity_id=e.id and n.name_key=e.preferred_name_key where n.name_key='2019-06-03'") == "2019-06-03|2019-06-03|![[2019-06-03 IMG_1.jpg]]" &&
+			cw.n("select count(*) from links l join entities d on d.id=l.from_id where d.preferred_name_key='2019-06-03' and l.kind = 'at' and l.to_id = ?", lk) == 1 &&
+			cw.str("select e.day from entities e join entity_names n on n.entity_id=e.id where n.name_key='2019-06-03 img_1.jpg'") == "2019-06-03", ew, k)
 	s.K("...and stores no position of the photo: the only coordinates are the place's", cw.n("select count(*) from places") == 1 &&
-		cw.n("select count(*) from pages where body like '%46.1001%'") == 0)
+		cw.n("select count(*) from entities where body like '%46.1001%'") == 0)
 }

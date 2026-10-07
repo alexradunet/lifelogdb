@@ -192,7 +192,7 @@ func testQueuedWrite(t *testing.T, remote bool) {
 		t.Fatal(err)
 	}
 	var n int
-	if err := d.R.QueryRow("SELECT count(*) FROM pages WHERE title = ?", "2026-10-05").Scan(&n); err != nil {
+	if err := d.R.QueryRow("SELECT count(*) FROM entity_names WHERE name_key = ?", "2026-10-05").Scan(&n); err != nil {
 		t.Fatal(err)
 	}
 	if n != 0 {

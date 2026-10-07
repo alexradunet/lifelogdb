@@ -120,6 +120,25 @@ func TestBrowserKeepsWhatAFailedSaveSent(t *testing.T) {
 	}
 }
 
+func TestFeedbackURLPrivacyUsesStructureNotRandomSubstrings(t *testing.T) {
+	opaque := "bad" + strings.Repeat("0", 61)
+	if !feedbackLocation("/pages/1?feedback="+opaque, "/pages/1") {
+		t.Fatal("valid random hex may contain the substring bad")
+	}
+	for _, location := range []string{
+		"/pages/1?feedback=" + opaque + "&message=bad",
+		"/pages/1?feedback=" + opaque + "&body=private%GG",
+		"/pages/1?feedback=" + opaque + "&private%GG=value",
+		"/pages/1?feedback=" + opaque + "&note=private%",
+		"/pages/1?feedback=bad",
+		"/pages/Revived?feedback=" + opaque,
+	} {
+		if feedbackLocation(location, "/pages/1") {
+			t.Fatalf("accepted private or malformed URL %s", location)
+		}
+	}
+}
+
 func TestBrowserMutationFeedback(t *testing.T) {
 	c, h := fresh(t)
 	root := must(c.Get("/"))
@@ -139,7 +158,8 @@ func TestBrowserMutationFeedback(t *testing.T) {
 	if strings.Contains(browse(t, h, location), "<h2>Result</h2>") {
 		t.Error("receipt replayed")
 	}
-	if strings.Contains(location, "Revived") || strings.Contains(location, "bad") {
-		t.Error("private URL")
+	page := must(c.Get("/pages?title=Feedback%20page"))
+	if !feedbackLocation(location, href(page, "self")) {
+		t.Errorf("feedback URL must contain only the resource path and opaque receipt: %s", location)
 	}
 }

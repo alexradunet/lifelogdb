@@ -11,12 +11,12 @@
 
 {{define "series"}}{{template "head" .}}
 {{$s := .Props}}
-<h1>{{.Title}}</h1>
-<div class="sub"><span>{{$s.from}} – {{$s.to}}</span>{{range $s.categories}}<span class="badge">{{.}}</span>{{end}}{{with .Link "page"}}<a href="{{.}}">Page</a>{{end}}<a href="/metrics">All metrics</a>
-<a href="/metrics/{{pathesc $s.metric}}?from=0001-01-01&amp;to={{$s.to}}">All readings</a></div>
-{{with $s.readings}}{{chart $s.from $s.to .}}
-<div class="scroll"><table><tr><th>day</th><th class="num">value</th><th>taken at</th></tr>
-{{range .}}<tr><td><a href="/days/{{.day}}">{{.day}}</a></td><td class="num"><a href="/measurements/{{num .id}}">{{num .value}}</a></td><td class="muted">{{.taken_at}}</td></tr>{{end}}
+<h1>{{.Title}}</h1><p class="desc">Scope: {{$s.scope}} (unassociated is not a daily total).</p>
+<div class="sub"><span>{{if $s.all_history}}All history through {{$s.to}}{{else}}{{$s.from}} – {{$s.to}}{{end}}</span>{{range $s.categories}}<span class="badge">{{.}}</span>{{end}}{{with .Link "page"}}<a href="{{.}}">Page</a>{{end}}<a href="/metrics">All metrics</a>
+<a href="{{.Link "all-readings"}}">All readings</a></div>
+{{with $s.readings}}{{if ne $s.scope "all"}}{{chart $s.from $s.to .}}{{end}}
+<div class="scroll"><table><tr><th>day</th><th class="num">value</th><th>scope</th><th>taken at</th></tr>
+{{range .}}<tr><td><a href="/days/{{.day}}">{{.day}}</a></td><td class="num"><a href="/measurements/{{num .id}}">{{num .value}}</a></td><td>{{.scope}}{{with .session_id}} · <a href="/sessions/{{num .}}">session {{num .}}</a>{{end}}{{with .session_deleted_at}} · tombstoned {{.}}{{end}}</td><td class="muted">{{.taken_at}}</td></tr>{{end}}
 </table></div>{{else}}<p class="muted">No readings in this range.</p>{{end}}
 
 {{with $s.habit_periods}}<h2>Habit periods</h2><ul class="plain">{{range .}}<li>from {{.start_day}}{{with .end_day}} to {{.}}{{else}}, ongoing{{end}}</li>{{end}}</ul>{{end}}

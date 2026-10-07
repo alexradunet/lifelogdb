@@ -484,6 +484,7 @@ type readingIdentity struct {
 	index            int
 	rawMetric        string
 	metricKey        string
+	groupKey         string // invocation-local metric identity; never persisted in an import key
 	day              string
 	takenAt          string
 	tz               string
@@ -519,7 +520,7 @@ func readingIdentities(f *Facts, pos []int) ([]readingIdentity, error) {
 		if err != nil {
 			return nil, err
 		}
-		id := &readingIdentity{index: i, rawMetric: r.Metric, metricKey: text.TitleKey(r.Metric), day: r.Day, takenAt: r.TakenAt, tz: r.TZ, pos: pos[i], value: &num}
+		id := &readingIdentity{index: i, rawMetric: r.Metric, metricKey: text.TitleKey(r.Metric), groupKey: text.TitleKey(r.Metric), day: r.Day, takenAt: r.TakenAt, tz: r.TZ, pos: pos[i], value: &num}
 		if r.With != "" {
 			id.withKey = text.TitleKey(r.With)
 		}

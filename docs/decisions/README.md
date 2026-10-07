@@ -10,8 +10,8 @@ reused, and a decision that changes is rewritten in place (git is its history).
 | [D2](D02-typed-strict-tables.md) | Typed tables with real columns, `STRICT` mode; no JSON property bags, no EAV. | accepted |
 | [D3](D03-integer-ids.md) | IDs: `INTEGER PRIMARY KEY`; UUIDs rejected. | accepted |
 | [D4](D04-database-is-canonical.md) | Text ownership: the database is canonical. | accepted |
-| [D5](D05-pages-and-day-pages.md) | One `pages` table for all prose; the journal is a page per day; titles are permanent. | accepted |
-| [D6](D06-mood-is-a-measurement.md) | Mood: the `mood` metric in `measurements`, not a column on `pages`. | accepted |
+| [D5](D05-pages-and-day-pages.md) | One prose body per identity; the journal is a page per day; names are owned aliases. | accepted |
+| [D6](D06-mood-is-a-measurement.md) | Mood: the `mood` metric in `measurements`, not a prose column. | accepted |
 | [D7](D07-measurements.md) | Measurements: one FxLifeSheet-shaped table + tiny metric registry; append-only. | accepted |
 | [D8](D08-entities-and-links.md) | One `entities` supertype + one polymorphic `links` graph; a closed kind registry; symmetry in-DB. | accepted |
 | [D9](D09-binary-files.md) | Files: a file the owner keeps is a page; its text is the body, a small JPEG its picture, and the original stays outside. | accepted |
@@ -27,7 +27,7 @@ reused, and a decision that changes is rewritten in place (git is its history).
 | [D19](D19-wikilink-save-contract.md) | The wikilink save contract: one transaction, links follow the body, a bad target never blocks a save. | accepted |
 | [D20](D20-named-pages.md) | A person or a place is a page: one id, and `[[Name]]` reaches it directly. | accepted |
 | [D21](D21-location-history.md) | Location: a place has a point and a radius; a photo's place becomes an `at` link when it is kept; no track. | accepted |
-| [D22](D22-events.md) | Events: DEFERRED out of v1. The design is kept here for the day it returns. | deferred |
+| [D22](D22-events.md) | Recorded life periods and independent sessions, not a generic event framework | accepted |
 | [D23](D23-no-tasks.md) | A life log, not a project manager: no tasks. | accepted |
 | [D24](D24-habits.md) | Habits: a metric with active periods. | accepted |
 | [D25](D25-snapshots.md) | Snapshots: a dated `VACUUM INTO` copy, trusted once its restore check passes. | accepted |

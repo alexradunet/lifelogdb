@@ -6,7 +6,7 @@
   `foreign_keys` (executed), and under `recursive_triggers=ON` stop `INSERT OR REPLACE` from deleting a row
   (executed, [connection setup](../contract/connections.md)). Junk captured by accident is tombstoned like
   everything else. Tombstoning and un-tombstoning bump
-  `entities.updated_at` (`entities_touch`, watching `deleted_at` only, so it cannot re-fire itself
+  `entities.updated_at` (`entities_touch`, watching `deleted_at` and `entity_type`, so it cannot re-fire itself
   under `recursive_triggers=ON`, executed).
 - **Rationale.** In a biography database, *erasure is itself biographical*: in 20 years it should be
   possible to see what the 2027 version of the owner deleted, and when. Hard deletes also break the

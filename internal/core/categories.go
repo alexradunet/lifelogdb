@@ -22,11 +22,11 @@ type Category struct {
 // categories are the live pages something is part-of, by id, each with its path.
 func (s *Store) categories(ctx context.Context) (map[int64]*Category, error) {
 	rows, err := s.DB.R.QueryContext(ctx, `
-		SELECT l.from_id, p.id, p.title, p.title_key
-		  FROM links l JOIN pages p ON p.id = l.to_id
+		SELECT l.from_id, p.id, p_name.title, p.preferred_name_key
+		  FROM links l JOIN entities p ON p.id = l.to_id JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
 		  JOIN entities e ON e.id = p.id AND e.deleted_at IS NULL
 		 WHERE l.kind = 'part-of'
-		 ORDER BY p.title_key`)
+		 ORDER BY p.preferred_name_key`)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +95,7 @@ func (t *Tx) File(id int64, path string) (added bool, err error) {
 			if c, _, err = t.insertPage("page", title, text.TitleKey(title), nil, "", ""); err != nil {
 				return false, err
 			}
-		case p.Type != "page" || p.DayPage || p.Stub || p.Deleted:
+		case p.Type != "page" || p.DayPage || p.Deleted:
 			return false, conflict("%s is not a live plain page: a category is one (D26)", p.Title)
 		default:
 			c = p.ID

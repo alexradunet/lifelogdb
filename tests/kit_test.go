@@ -516,12 +516,48 @@ func (m M) split() (cols []string, marks string, vals []any) {
 	return cols, strings.TrimSuffix(strings.Repeat("?,", len(cols)), ","), vals
 }
 
-// ent is the entities row, id by RETURNING.
-func (c *C) ent(typ string) int64 { return c.entSrc(typ, "ui") }
+// identity constructs the actual preferred spelling with its owner in a nested
+// savepoint. It works inside an existing transaction without changing its ownership.
+// Typed detail is separate only for explicit extension-insertion/orphan probes.
+func (c *C) identity(typ, source, title string, day any, body string) int64 {
+	id, err := c.tryIdentity(typ, title, M{"source": source, "day": day, "body": body})
+	if err != nil {
+		stop("construct %s identity: %v", typ, err)
+	}
+	return id
+}
 
-func (c *C) entSrc(typ, source string) int64 {
-	r := c.rows("INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES (?,"+NOW+","+NOW+",?) RETURNING id", typ, source)
-	return r[0][0].(int64)
+// tryIdentity is a DDL probe with explicit owner/spelling, not a writer save.
+// Even refusal at deferred-FK release rolls back the entire probe, not its caller.
+func (c *C) tryIdentity(typ, title string, overrides M) (int64, error) {
+	c.must("SAVEPOINT fixture_identity")
+	key := text.TitleKey(title)
+	cols := M{"entity_type": typ, "preferred_name_key": key, "source": "ui", "created_at": "2026-01-01T00:00:00.000Z", "updated_at": "2026-01-01T00:00:00.000Z"}
+	for k, v := range overrides {
+		cols[k] = v
+	}
+	names, marks, vals := cols.split()
+	rows, err := c.query("INSERT INTO entities("+strings.Join(names, ",")+") VALUES ("+marks+") RETURNING id", vals...)
+	var id int64
+	if err == nil {
+		id = rows[0][0].(int64)
+		_, err = c.query("INSERT INTO entity_names(entity_id,title,name_key) VALUES (?,?,?)", id, title, key)
+	}
+	if err == nil {
+		_, err = c.query("RELEASE fixture_identity")
+	}
+	if err != nil {
+		c.must("ROLLBACK TO fixture_identity")
+		c.must("RELEASE fixture_identity")
+		return 0, err
+	}
+	return id, nil
+}
+
+// anyIdentity is a synthetic named identity when the subject needs no particular
+// spelling. This is its sole actual name, not a temporary alias or missing owner.
+func (c *C) anyIdentity(typ string) int64 {
+	return c.identity(typ, "ui", fmt.Sprintf("%s fixture %d", typ, c.s.next()), nil, "")
 }
 
 // page is a plain page titled title, key title_key(title), no day, an empty body.
@@ -529,9 +565,7 @@ func (c *C) page(title string) int64 { return c.pageW(title, nil, "") }
 
 // pageW is a page with a day and a body.
 func (c *C) pageW(title string, day any, body string) int64 {
-	i := c.ent("page")
-	c.must("INSERT INTO pages(id,title,title_key,day,body) VALUES (?, ?, ?, ?, ?)", i, title, text.TitleKey(title), day, body)
-	return i
+	return c.identity("page", "ui", title, day, body)
 }
 
 // dayPage is the journal page of a local day (D5): titled with the day, its day the title.
@@ -542,13 +576,14 @@ func (c *C) named(typ, handle string, cols ...M) int64 {
 	if handle == "" {
 		handle = fmt.Sprintf("%s %d", strings.ToUpper(typ[:1])+typ[1:], c.s.next())
 	}
-	i := c.ent(typ)
-	c.must("INSERT INTO pages(id,entity_type,title,title_key) VALUES (?, ?, ?, ?)", i, typ, handle, text.TitleKey(handle))
+	c.must("SAVEPOINT fixture_named")
+	i := c.identity(typ, "ui", handle, nil, "")
 	var m M
 	if len(cols) > 0 {
 		m = cols[0]
 	}
 	c.domain(typ, i, m)
+	c.must("RELEASE fixture_named")
 	return i
 }
 
@@ -790,7 +825,7 @@ func (s *S) saveSteps() (saveSteps, bool) {
 		to           *string
 	}{
 		{"begin", "BEGIN IMMEDIATE", &st.begin}, {"sp", "SAVEPOINT", &st.sp}, {"sel", "SELECT", &st.sel},
-		{"rev", "UPDATE ENTITIES", &st.rev}, {"ent", "INSERT INTO ENTITIES", &st.ent}, {"pg", "INSERT INTO PAGES", &st.pg},
+		{"rev", "UPDATE ENTITIES", &st.rev}, {"ent", "INSERT INTO ENTITIES", &st.ent}, {"pg", "INSERT INTO ENTITY_NAMES", &st.pg},
 		{"ln", "INSERT INTO LINKS", &st.ln}, {"rel", "RELEASE", &st.rel}, {"dele", "DELETE FROM LINKS", &st.dele},
 		{"commit", "COMMIT", &st.commit},
 	} {
@@ -829,6 +864,7 @@ func (c *C) docSave(st saveSteps, pageID int64, body, ownKey string, validate bo
 			keys, titles = append(keys, k), append(titles, t)
 		}
 	}
+	linkedIDs := map[int64]bool{}
 	for i, key := range keys {
 		title := titles[i]
 		c.must(st.sp)
@@ -839,7 +875,7 @@ func (c *C) docSave(st saveSteps, pageID int64, body, ownKey string, validate bo
 			}
 			var tid int64
 			if len(r) == 0 {
-				e, err := c.query(st.ent, P{"source": "ui"})
+				e, err := c.query(st.ent, P{"source": "ui", "key": key, "title": title})
 				if err != nil {
 					return 0, err
 				}
@@ -849,6 +885,10 @@ func (c *C) docSave(st saveSteps, pageID int64, body, ownKey string, validate bo
 				}
 			} else {
 				tid = r[0][0].(int64)
+				if tid == pageID || linkedIDs[tid] {
+					_, e := c.query(st.rel)
+					return 0, e
+				}
 				if r[0][2] != nil {
 					if _, err := c.query(st.rev, P{"found_id": tid}); err != nil {
 						return 0, err
@@ -867,7 +907,10 @@ func (c *C) docSave(st saveSteps, pageID int64, body, ownKey string, validate bo
 			skipped = append(skipped, title)
 			continue
 		}
-		linked = append(linked, tid)
+		if tid != 0 {
+			linked = append(linked, tid)
+			linkedIDs[tid] = true
+		}
 	}
 	j, _ := json.Marshal(append([]int64{}, linked...))
 	c.must(st.dele, P{"page_id": pageID, "target_ids": string(j)})
@@ -911,7 +954,7 @@ func (c *C) capture(entry, day string) int64 {
 
 // linksOf is the titles a page links to by wikilink, sorted.
 func (c *C) linksOf(pid int64) []string {
-	return sorted(c.col("SELECT p.title FROM links l JOIN pages p ON p.id=l.to_id WHERE l.from_id=? AND l.kind='wikilink'", pid))
+	return sorted(c.col("SELECT n.title FROM links l JOIN entities e ON e.id=l.to_id JOIN entity_names n ON n.entity_id=e.id AND n.name_key=e.preferred_name_key WHERE l.from_id=? AND l.kind='wikilink'", pid))
 }
 
 func sorted(xs []string) []string {

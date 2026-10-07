@@ -417,3 +417,24 @@ func TestInventoryDoesNotFollowDescendantSymlinks(t *testing.T) {
 		t.Fatal("followed descendant symlink")
 	}
 }
+
+func TestGoogleHealthRecognitionAndFitCSVHeaderFamilies(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "Google Health/Sleep/PRIVATE_MARKER.json", `[{"logId":9007199254740993,"dateOfSleep":"2020-01-02","startTime":"2020-01-01T23:00:00","minutesAsleep":420}]`)
+	writeFile(t, root, "Google Health/Weight/PRIVATE_MARKER.csv", "timestamp,weight grams,data source\n2020-01-02T00:00:00Z,70000,PRIVATE_MARKER\n")
+	writeFile(t, root, "Fit/Activity metrics/PRIVATE_MARKER.csv", "Start time,End time,Step count\n2020-01-02T00:00:00Z,2020-01-02T01:00:00Z,4000\n")
+	writeFile(t, root, "Fit/Sessions/daily.csv", "Date,Step count,Average heart rate (bpm)\n2020-01-02,10000,60\n")
+	report, err := Inventory(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	families := familiesByName(report)
+	for _, name := range []string{"Google Health Legacy Sleep", "Google Health CSV (preparation unsupported)", "Fit Sessions", "Fit Daily Aggregates"} {
+		if families[name].Records != 1 {
+			t.Fatalf("header/family missing %s %+v", name, report)
+		}
+	}
+	if strings.Contains(report.String(), "PRIVATE_MARKER") || strings.Contains(report.String(), "9007199254740993") || strings.Contains(report.String(), "70000") {
+		t.Fatal("private inventory values leaked")
+	}
+}

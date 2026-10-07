@@ -268,8 +268,11 @@ func TestAddFileRefuses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Rename(ctx, "cli", k.ID, "Lake 2.jpg"); status(err) != 409 {
-		t.Errorf("a file page was renamed: %v", err)
+	if renamed, err := s.Rename(ctx, "cli", k.ID, "Lake 2.jpg"); err != nil || renamed != k.ID {
+		t.Fatalf("stable file rename: %d %v", renamed, err)
+	}
+	if old, err := s.PageID(ctx, "Lake.jpg"); err != nil || old != k.ID {
+		t.Fatalf("old file handle: %d %v", old, err)
 	}
 	if err := s.Promote(ctx, "cli", k.ID, "person", ""); status(err) != 409 {
 		t.Errorf("a file page was promoted: %v", err)

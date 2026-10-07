@@ -18,7 +18,7 @@ import (
 // autoKey asks addPage for the title_key of the title.
 const autoKey = "\x00auto"
 
-// addPage is an entities + pages row inside a savepoint: the id, or 0 when the DDL refused it.
+// addPage probes the entity/name pair atomically: the id, or 0 on a DDL refusal.
 func (c *C) addPage(title any, day any, body string, key any) int64 {
 	if key == autoKey {
 		key = nil
@@ -27,14 +27,21 @@ func (c *C) addPage(title any, day any, body string, key any) int64 {
 		}
 	}
 	c.must("SAVEPOINT a")
-	i := c.ent("page")
-	if c.tryx("INSERT INTO pages(id,title,title_key,day,body) VALUES (?,?,?,?,?)", i, title, key, day, body) != "OK" {
+	rows, e := c.query("INSERT INTO entities(entity_type,preferred_name_key,day,body,created_at,updated_at,source) VALUES ('page',?,?,?,"+NOW+","+NOW+",'ui') RETURNING id", key, day, body)
+	var id int64
+	if e == nil {
+		id = rows[0][0].(int64)
+		_, e = c.query("INSERT INTO entity_names(entity_id,title,name_key) VALUES (?,?,?)", id, title, key)
+	}
+	if e == nil {
+		_, e = c.query("RELEASE a")
+	}
+	if e != nil {
 		c.must("ROLLBACK TO a")
 		c.must("RELEASE a")
 		return 0
 	}
-	c.must("RELEASE a")
-	return i
+	return id
 }
 
 func (c *C) add(title string) int64 { return c.addPage(title, nil, "", autoKey) }
@@ -60,7 +67,7 @@ func pages(s *S) {
 	s.K("NFD Café collides with NFC Café", c.add("Cafe\u0301") != 0 && c.add("Café") == 0)
 	s.K("Straße and STRASSE are one page", c.add("Straße") != 0 && c.add("STRASSE") == 0)
 	s.K("a different title is fine", c.add("Cafe") != 0)
-	c.tryx("UPDATE entities SET deleted_at=" + NOW + " WHERE id=(select id from pages where title='Diet')")
+	c.must("UPDATE entities SET deleted_at=" + NOW + " WHERE id=(select entity_id from entity_names where name_key='diet')")
 	s.K("a tombstoned page still holds its title (the index covers tombstones)", c.add("diet") == 0)
 
 	// ---- filename-safe titles (pages_title_len, pages_title_safe)
@@ -162,8 +169,8 @@ func pages(s *S) {
 	// ---- fixed title
 	c = s.fresh()
 	p := c.add("Fixed")
-	s.K("a title cannot change", strings.Contains(c.tryx("UPDATE pages SET title='Changed' WHERE id=?", p), "immutable"))
-	s.K("a no-op SET title = title passes", c.tryx("UPDATE pages SET title=title, body='b' WHERE id=?", p) == "OK")
+	s.K("an owned name key cannot change", strings.Contains(c.tryx("UPDATE entity_names SET name_key='changed',title='Changed' WHERE entity_id=?", p), "immutable"))
+	s.K("a no-op SET title=title passes", c.tryx("UPDATE entity_names SET title=title WHERE entity_id=?", p) == "OK")
 
 	// ---- lookups by key
 	c = s.fresh()
@@ -182,19 +189,19 @@ func pages(s *S) {
 	s.K("cookbook/save-a-body has one resolve", len(sel) == 1, sel)
 	if len(sel) == 1 {
 		plan := c.plan(sel[0], P{"key": "diet"})
-		s.K("...and is a SEARCH on pages_title", strings.Contains(plan, "SEARCH") && strings.Contains(plan, "pages_title") && !strings.Contains(plan, "SCAN p"), plan)
+		s.K("...and is an indexed SEARCH on the registry", strings.Contains(plan, "SEARCH") && strings.Contains(plan, "INDEX") && !strings.Contains(plan, "SCAN n"), plan)
 		r, e := c.query(sel[0], P{"key": "zürich"})
 		s.K("...and finds the page", e == nil && len(r) == 1 && r[0][1] == "Zürich", e)
 	}
-	s.K("control: a lookup by lower(title) is a SCAN", strings.Contains(c.plan("SELECT id FROM pages WHERE lower(title)='diet'"), "SCAN"))
+	s.K("control: a lookup by lower(title) is a SCAN", strings.Contains(c.plan("SELECT entity_id FROM entity_names WHERE lower(title)='diet'"), "SCAN"))
 
 	// ---- link first, write later
 	c = s.fresh()
-	mm, _ := c.savePage("Planning #japan-trip for spring", "Plans")
-	row := c.rows("select id, day, body from pages where title_key='japan-trip'")
+	mm, _ := c.savePage("Planning [[japan-trip]] for spring", "Plans")
+	row := c.rows("select e.id,e.day,e.body from entities e join entity_names n on n.entity_id=e.id where n.name_key='japan-trip'")
 	s.K("a link made its target a page, empty, with no day", len(row) == 1 && tab([][]any{row[0][1:]}) == "None|", tab(row))
 	if len(row) == 1 {
-		s.K("writing the ghost needs no new page and no redirect", c.tryx("UPDATE pages SET body='Trip report' WHERE id=?", row[0][0]) == "OK" && c.n("select count(*) from pages where title_key='japan-trip'") == 1)
+		s.K("writing the ghost needs no new page and no redirect", c.tryx("UPDATE entities SET body='Trip report' WHERE id=?", row[0][0]) == "OK" && c.n("select count(*) from entity_names where name_key='japan-trip'") == 1)
 		s.K("the page still links to it", c.n("select count(*) from links where from_id=? and to_id=? and kind='wikilink'", mm, row[0][0]) == 1)
 	}
 
@@ -202,18 +209,18 @@ func pages(s *S) {
 	c = s.fresh()
 	c.add("Notes")
 	mo := c.addPage("Words", nil, "first words about Zürich", autoKey)
-	hits := func(q string) int64 { return c.n("select count(*) from pages_fts where pages_fts match ?", q) }
+	hits := func(q string) int64 { return c.n("select count(*) from entities_fts where entities_fts match ?", q) }
 	s.K("an insert is indexed; unicode61 folds accents (zurich finds Zürich)", hits("first") == 1 && hits("zurich") == 1)
 	before := c.n("select total_changes()")
-	c.must("UPDATE pages SET day='2026-06-09' WHERE id=?", mo)
+	c.must("UPDATE entities SET day='2026-06-09' WHERE id=?", mo)
 	d := c.n("select total_changes()") - before
-	s.K("a new day touches pages and entities only, not the index (pages_fts_update watches title and body)", d == 2, d)
-	c.must("UPDATE pages SET body='second words' WHERE id=?", mo)
+	s.K("a new day touches the entity revision only, not the derived index", d == 2, d)
+	c.must("UPDATE entities SET body='second words' WHERE id=?", mo)
 	s.K("a body change re-indexes: old word gone, new word found", hits("first") == 0 && hits("second") == 1)
 	c.addPage("CJK", nil, "日本語のノートを書く", autoKey)
 	s.K("a CJK run is one token (the known limit of unicode61)", hits("日本語のノートを書く") == 1 && hits("本語") == 0)
-	c.must("INSERT INTO pages_fts(pages_fts) VALUES('rebuild')")
-	s.K("the index rebuilds from pages and passes its integrity-check", hits("second") == 1 && c.tryx("INSERT INTO pages_fts(pages_fts, rank) VALUES('integrity-check', 1)") == "OK")
+	c.must("INSERT INTO entities_fts(entities_fts) VALUES('rebuild')")
+	s.K("the index rebuilds from pages and passes its integrity-check", hits("second") == 1 && c.tryx("INSERT INTO entities_fts(entities_fts, rank) VALUES('integrity-check', 1)") == "OK")
 	s.K("cookbook/full-text-search finds a page by a word of its body", eq(c.col(s.d.Block("full-text-search"), P{"query": "second"}), []string{ids(mo)}))
 
 	// ---- why not a collation: an index on a collation only one program has. Another process (this test binary,

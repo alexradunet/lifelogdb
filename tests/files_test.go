@@ -9,10 +9,10 @@ import (
 	"lifelog/internal/core"
 )
 
-// files: a file the owner keeps is a page (schema.sql, D9) — one id with an entities row, a titled pages row and a
+// files: a file the owner keeps is a page (schema.sql, D9) — one identity with owned names and a
 // files row: the hash and type of the original, never stored, and a small JPEG.
 // A  the keys and CHECKs: sha256, mime, preview (and why IS, not =), what never changes, never deleted;
-// B  the graph: an embed lands on a file, a caption links out, about, part-of, redirect; a ghost becomes a file;
+// B  the graph: an embed lands on a file, a caption links out, about, part-of, refused redirect; a ghost becomes a file;
 // C  cookbook/keep-a-file as a writer runs it: create, the same original again, a missing preview, a tombstone,
 //
 //	another source, a promoted ghost, the refusals; the pictures a day shows.
@@ -23,8 +23,7 @@ func files(s *S) {
 		if title == "" {
 			title = "File " + val(c.s.next())
 		}
-		id := c.ent("file")
-		c.must("INSERT INTO pages(id,entity_type,title,title_key) VALUES (?, 'file', ?, ?)", id, title, strings.ToLower(title))
+		id := c.identity("file", "ui", title, nil, "")
 		m := M{"id": id, "sha256": fmt.Sprintf("%064x", 1000+id), "mime": "image/jpeg"}
 		for k, v := range cols {
 			m[k] = v
@@ -37,7 +36,7 @@ func files(s *S) {
 	c := s.fresh()
 	f := c.named("file", "Lake.jpg")
 	s.K("a file is one id: entities, a page of type file and a files row",
-		c.tab("select e.entity_type, p.entity_type, p.title from entities e join pages p using(id) join files using(id) where id=?", f) == "file|file|Lake.jpg")
+		c.tab("select e.entity_type, f.entity_type, n.title from entities e join entity_names n on n.entity_id=e.id and n.name_key=e.preferred_name_key join files f on f.id=e.id where e.id=?", f) == "file|file|Lake.jpg")
 	s.K("a files row needs a page of type file", err(c.tryx("INSERT INTO files(id,sha256,mime) VALUES (?,?,?)", c.page("Plain"), hash(1), "image/jpeg")))
 	s.K("...and cannot claim another type to hang off a person's page",
 		err(c.tryx("INSERT INTO files(id,entity_type,sha256,mime) VALUES (?,'person',?,?)", c.named("person", "Ann"), hash(2), "image/jpeg")))
@@ -88,9 +87,12 @@ func files(s *S) {
 	c.must("UPDATE entities SET updated_at='2000-01-01T00:00:00.000Z', created_at='2000-01-01T00:00:00.000Z' WHERE id=?", id)
 	s.K("a missing preview may be added", c.tryx("UPDATE files SET preview=? WHERE id=?", jpegBytes, id) == "OK")
 	s.K("adding it bumps entities.updated_at (files_touch)", c.n("select updated_at > created_at from entities where id=?", id) == 1)
-	s.K("a file is never deleted", err(c.tryx("DELETE FROM files WHERE id=?", id)) && err(c.tryx("DELETE FROM pages WHERE id=?", id)))
+	s.K("a file is never deleted", err(c.tryx("DELETE FROM files WHERE id=?", id)) && err(c.tryx("DELETE FROM entity_names WHERE entity_id=?", id)))
+
+	renamed, renameErr := c.store().Rename(context.Background(), "ui", id, "Memo 2.m4a")
+	s.K("a file rename retains its identity and owned old handle", renameErr == nil && renamed == id && c.n("SELECT count(*) FROM entity_names WHERE entity_id=?", id) == 2, renameErr)
 	s.K("...it is tombstoned", c.tryx("UPDATE entities SET deleted_at="+NOW+" WHERE id=?", id) == "OK")
-	s.K("a file's title is a handle: it never changes", err(c.tryx("UPDATE pages SET title='Memo 2.m4a' WHERE id=?", id)))
+
 	s.K("integrity and foreign keys clean", c.integrityOK())
 
 	// ---- B  the graph
@@ -103,23 +105,23 @@ func files(s *S) {
 	s.K("a file may be about a person", c.link(f, bob, "about") == "OK")
 	s.K("a file may be filed in a category page (an album)", c.link(f, c.page("Holidays"), "part-of") == "OK")
 	s.K("a file page is not a day page: it starts no at link", err(c.link(f, c.named("place", "Lakeside"), "at")))
-	s.K("a redirect stub may point at a file page (a rename into its title)", c.link(c.page("Lake photo"), f, "redirect") == "OK")
+	s.K("redirect is not a registered kind", err(c.link(c.page("Lake photo"), f, "redirect")))
 	sd, _ := c.savePage("![[2026-06-01 Lake.jpg|the lake]] and ![[Unseen.png]]", "")
 	s.K("the writer's save links an embed to the file page, and makes a ghost of a file not kept yet",
-		eq(c.linksOf(sd), []string{"2026-06-01 Lake.jpg", "Unseen.png"}) && c.str("select entity_type from pages where title='Unseen.png'") == "page", c.linksOf(sd))
-	c.must("UPDATE pages SET body='The lake at dawn' WHERE id=?", f)
-	s.K("search finds a file's text", c.n("select count(*) from pages_fts where pages_fts match 'dawn' and rowid=?", f) == 1)
+		eq(c.linksOf(sd), []string{"2026-06-01 Lake.jpg", "Unseen.png"}) && c.str("select e.entity_type from entities e join entity_names n on n.entity_id=e.id where n.name_key='unseen.png'") == "page", c.linksOf(sd))
+	c.must("UPDATE entities SET body='The lake at dawn' WHERE id=?", f)
+	s.K("search finds a file's text", c.n("select count(*) from entities_fts where entities_fts match 'dawn' and rowid=?", f) == 1)
 
 	// promotion: a ghost an embed made becomes the file
-	g := c.n("select id from pages where title='Unseen.png'")
+	g := c.n("select entity_id from entity_names where name_key='unseen.png'")
 	r1 := c.tryx("UPDATE entities SET entity_type='file' WHERE id=? AND entity_type='page'", g)
 	r2 := c.tryx("INSERT INTO files(id,sha256,mime) VALUES (?,?,'image/png')", g, hash(11))
 	s.K("a ghost page becomes a file: the UPDATE cascades to its page, then the files row", r1 == "OK" && r2 == "OK" &&
-		c.tab("select e.entity_type, p.entity_type from entities e join pages p using(id) where id=?", g) == "file|file", r1, r2)
+		c.tab("select e.entity_type, f.entity_type from entities e join files f using(id) where id=?", g) == "file|file", r1, r2)
 	s.K("...and the embed that made it now lands on the file (the id did not change)", contains(c.linksOf(sd), "Unseen.png") &&
 		c.n("select count(*) from links where from_id=? and to_id=?", sd, g) == 1)
 	s.K("a file cannot be turned back into a plain page (the files row's FK)", err(c.tryx("UPDATE entities SET entity_type='page' WHERE id=?", g)))
-	s.K("a day page cannot become a file (pages_day_page_plain)", strings.Contains(c.tryx("UPDATE entities SET entity_type='file' WHERE id=?", day), "pages_day_page_plain"))
+	s.K("a day page cannot become a file (entities_day_page_plain)", strings.Contains(c.tryx("UPDATE entities SET entity_type='file' WHERE id=?", day), "entities_day_page_plain"))
 	c.must("UPDATE entities SET created_at='2000-01-01T00:00:00.000Z' WHERE id IN (SELECT id FROM files)")
 	empty := c.named("file", "Empty.pdf")
 	c.must("UPDATE entities SET created_at='2000-01-01T00:00:00.000Z' WHERE id=?", empty)
@@ -163,11 +165,11 @@ func files(s *S) {
 	p := params(hash(1), "2026-06-02 Lake.jpg", jpegBytes)
 	e := run(c, p, sts...)
 	s.K("cookbook/keep-a-file run literally keeps a new file: its entity, its page with the text and the day, its files row",
-		e == nil && c.tab("select e.entity_type, p.title, p.day, p.body, f.mime, f.preview = ?, e.source from entities e join pages p using(id) join files f using(id)", jpegBytes) ==
+		e == nil && c.tab("select e.entity_type, n.title, e.day, e.body, f.mime, f.preview = ?, e.source from entities e join entity_names n on n.entity_id=e.id and n.name_key=e.preferred_name_key join files f on f.id=e.id", jpegBytes) ==
 			"file|2026-06-02 Lake.jpg|2026-06-02|The lake at dawn.|image/heic|1|ui", e)
 	shape := func(c *C) string {
-		return c.tab(`select e.entity_type, e.source, p.title, p.title_key, p.day, p.body, f.sha256, f.mime, hex(f.preview)
-		                from entities e join pages p using(id) join files f using(id)`)
+		return c.tab(`select e.entity_type, e.source, n.title, n.name_key, e.day, e.body, f.sha256, f.mime, hex(f.preview)
+ from entities e join entity_names n on n.entity_id=e.id and n.name_key=e.preferred_name_key join files f on f.id=e.id`)
 	}
 	cw := s.fresh()
 	k, ew := cw.store().AddFile(context.Background(), "ui", core.FileIn{Title: "2026-06-02 Lake.jpg", SHA256: hash(1), MIME: "image/heic",
@@ -186,42 +188,52 @@ func files(s *S) {
 		e == nil && e2 == nil && len(found) == 1 && found[0][0] == p["file_id"] && count(c) == before, found, count(c))
 
 	c.must("UPDATE files SET preview = NULL WHERE id = ?", p["file_id"]) // a file kept before its picture was made
-	_ = run(c, again, begin, look, fill, commit)
+	if setupErr := run(c, again, begin, look, fill, commit); setupErr != nil {
+		stop("file recipe setup: %v", setupErr)
+	}
 	s.K("a missing preview is filled by a re-send that has one", c.n("select preview IS NOT NULL from files") == 1)
 	other := append([]byte{}, jpegBytes...)
 	other = append(other[:len(other)-2], 0, 0xFF, 0xD9)
-	_ = run(c, params(hash(1), "x", other), begin, look, fill, commit)
+	if setupErr := run(c, params(hash(1), "x", other), begin, look, fill, commit); setupErr != nil {
+		stop("file recipe setup: %v", setupErr)
+	}
 	s.K("...and an existing preview is never replaced", c.n("select preview = ? from files", jpegBytes) == 1)
 	c.must("UPDATE files SET preview = NULL WHERE id = ?", p["file_id"])
 	c.must("UPDATE entities SET deleted_at = "+NOW+" WHERE id = ?", p["file_id"])
-	_ = run(c, again, begin, look, fill, commit)
+	if setupErr := run(c, again, begin, look, fill, commit); setupErr != nil {
+		stop("file recipe setup: %v", setupErr)
+	}
 	s.K("a tombstoned file is left alone: no preview is filled", c.n("select preview IS NULL from files") == 1)
 	e = run(c, params(hash(1), "Third.jpg", nil), sts...)
 	s.K("a writer that skips step 0 is refused by files_sha256, and the transaction rolls back whole",
-		e != nil && strings.Contains(e.Error(), "UNIQUE") && c.n("select count(*) from pages where title='Third.jpg'") == 0, e)
+		e != nil && strings.Contains(e.Error(), "UNIQUE") && c.n("select count(*) from entity_names where name_key='third.jpg'") == 0, e)
 
 	// a ghost an earlier embed made is promoted
 	c = s.fresh()
 	d, _ := c.savePage("Dawn at the lake: ![[Lake.jpg]]", "2026-06-03")
-	ghost := c.n("select id from pages where title='Lake.jpg'")
+	ghost := c.n("select entity_id from entity_names where name_key='lake.jpg'")
 	p = params(hash(2), "Lake.jpg", nil)
-	_ = run(c, p, begin)
+	if setupErr := run(c, p, begin); setupErr != nil {
+		stop("file recipe setup: %v", setupErr)
+	}
 	held := c.rows(resolve, p)
 	s.K("step 1 finds the ghost: a plain page, empty, not a day page, not a stub",
-		len(held) == 1 && tab(held) == ids(ghost)+"|page|0|1|0", tab(held))
+		len(held) == 1 && tab(held) == ids(ghost)+"|page|0|1", tab(held))
 	p["file_id"] = ghost
 	e = run(c, p, []string{promote[0], promote[1], promote[2], row, commit}...)
 	s.K("1b promotes it: one id, a file page with the text, a files row; the day's embed lands on the file",
-		e == nil && c.tab("select e.entity_type, p.body, f.sha256 = ? from entities e join pages p using(id) join files f using(id) where id=?", hash(2), ghost) == "file|The lake at dawn.|1" &&
+		e == nil && c.tab("select e.entity_type, e.body, f.sha256 = ? from entities e join files f using(id) where id=?", hash(2), ghost) == "file|The lake at dawn.|1" &&
 			c.n("select count(*) from links where from_id=? and to_id=? and kind='wikilink'", d, ghost) == 1, e)
 	read, e := c.query(blocks[1][1], P{"day": "2026-06-03"})
 	s.K("the pictures a day shows: the file pages its day page links", e == nil && tab(read) == ids(ghost)+"|Lake.jpg|image/heic|0", tab(read), e)
 	written := c.pageW("Notes.pdf", nil, "my own words")
 	p = params(hash(3), "Notes.pdf", nil)
 	p["file_id"] = written
-	_ = run(c, p, begin, promote[0], promote[1], promote[2], row, commit)
+	if setupErr := run(c, p, begin, promote[0], promote[1], promote[2], row, commit); setupErr != nil {
+		stop("file recipe setup: %v", setupErr)
+	}
 	s.K("a page with text becomes the file with its text kept; :body fills only an empty body",
-		c.str("select body from pages where id=?", written) == "my own words" && c.str("select entity_type from entities where id=?", written) == "file")
+		c.str("select body from entities where id=?", written) == "my own words" && c.str("select entity_type from entities where id=?", written) == "file")
 	// Promotion row parity: date filling is independent of whether the page has text.
 	for _, tc := range []struct{ name, day, body, incoming string }{
 		{"missing day", "", "", "The lake at dawn."},
@@ -231,8 +243,8 @@ func files(s *S) {
 		cr, cw := s.fresh(), s.fresh()
 		seed := func(c *C) (int64, int64) {
 			d, _ := c.savePage("![[Promotion.jpg]]", "2026-06-03")
-			id := c.n("select id from pages where title='Promotion.jpg'")
-			c.must("UPDATE pages SET day=NULLIF(?, ''), body=? WHERE id=?", tc.day, tc.body, id)
+			id := c.n("select entity_id from entity_names where name_key='promotion.jpg'")
+			c.must("UPDATE entities SET day=NULLIF(?, ''), body=? WHERE id=?", tc.day, tc.body, id)
 			return id, d
 		}
 		rid, rd := seed(cr)
@@ -248,14 +260,14 @@ func files(s *S) {
 			wantDay = "2026-06-02"
 		}
 		s.K("promotion "+tc.name+": recipe and writer agree, filling only a missing day",
-			er == nil && ew == nil && shape(cr) == shape(cw) && cr.str("select day from pages where id=?", rid) == wantDay,
+			er == nil && ew == nil && shape(cr) == shape(cw) && cr.str("select day from entities where id=?", rid) == wantDay,
 			er, ew, shape(cr), shape(cw))
 		s.K("promotion "+tc.name+": identity, text and backlinks survive without inferred photo links",
 			kw.Promoted && kw.ID == wid && cr.n("select id from files") == rid &&
 				cr.n("select count(*) from links where from_id=? and to_id=? and kind='wikilink'", rd, rid) == 1 &&
 				cw.n("select count(*) from links where from_id=? and to_id=? and kind='wikilink'", wd, wid) == 1 &&
 				cr.n("select count(*) from links") == 1 && cw.n("select count(*) from links") == 1 &&
-				cr.str("select body from pages where id=?", rid) == tc.body+tc.incoming)
+				cr.str("select body from entities where id=?", rid) == tc.body+tc.incoming)
 	}
 	for _, x := range []struct{ what, title string }{{"a person", "Bob Sample"}, {"a day page", "2026-06-03"}} {
 		var held int64
@@ -270,11 +282,13 @@ func files(s *S) {
 		s.K("a title held by "+x.what+": 1b changes nothing and the files row is refused, so the whole write rolls back",
 			e != nil && c.str("select entity_type from entities where id=?", held) != "file" && c.n("select count(*) from files where sha256=?", hash(4)) == 0, e)
 	}
-	stub := c.page("Old Lake")
-	c.link(stub, ghost, "redirect")
+
+	prose := c.pageW("Old Lake", nil, "#REDIRECT [[Lake.jpg]]")
 	p = params(hash(5), "Old Lake", nil)
-	p["file_id"] = stub
-	e = run(c, p, []string{promote[0], promote[1], promote[2], row, commit}...)
-	s.K("a redirect stub is never promoted", e != nil && c.str("select entity_type from entities where id=?", stub) == "page", e)
+	p["file_id"] = prose
+	p["body"] = ""
+	e = run(c, p, begin, promote[0], promote[1], promote[2], row, commit)
+	s.K("REDIRECT prose has no special promotion state", e == nil && c.str("SELECT body FROM entities WHERE id=?", prose) == "#REDIRECT [[Lake.jpg]]", e)
+
 	s.K("integrity and foreign keys clean after the refusals", c.integrityOK())
 }

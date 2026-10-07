@@ -87,11 +87,13 @@ func TestRename(t *testing.T) {
 	if p.Body != "Feed the starter. [[Baking]]" || titles(p.Out, "wikilink") != "Baking" || titles(p.Out, "related") != "Baking" {
 		t.Errorf("the new page: %+v", p)
 	}
-	stub, _ := s.PageByID(ctx, old)
-	if stub.Body != "#REDIRECT [[Sourdough]]" || !stub.IsStub || titles(stub.Out, "wikilink") != "" || titles(stub.Out, "related") != "" {
-		t.Errorf("the stub: %+v", stub)
+	if to != old {
+		t.Fatalf("rename changed id: %d to %d", old, to)
 	}
-	// backlinks follow one redirect hop: the day that names the old title counts for the new page
+	if got, err := s.PageID(ctx, "Sourdogh"); err != nil || got != old {
+		t.Fatalf("old alias = %d %v", got, err)
+	}
+	// Backlinks retain their endpoint; no redirect traversal is needed.
 	if !strings.Contains(titles(p.In, "wikilink"), "2026-09-29") {
 		t.Errorf("backlinks of the new page: %+v", p.In)
 	}
@@ -100,9 +102,7 @@ func TestRename(t *testing.T) {
 		title string
 		want  int
 	}{
-		{old, "Sour dough", 409}, // a stub is not renamed again
 		{day, "Day one", 409},    // a day page keeps its title
-		{to, "SOURDOUGH", 422},   // same key: a title never changes, not even its case
 		{to, "Baking", 409},      // into an existing page with text of its own
 		{to, "Health/Diet", 422}, // not a valid title
 	} {
@@ -114,12 +114,16 @@ func TestRename(t *testing.T) {
 	s.Capture(ctx, "cli", "2026-09-30", "met [[Sm]]", nil)
 	ghost, _ := s.PageID(ctx, "Sm")
 	sam, _ := s.CreatePerson(ctx, "cli", "Sam", "Sam Example", "", "")
-	if to, err := s.Rename(ctx, "cli", ghost, "Sam"); err != nil || to != sam {
-		t.Errorf("a ghost into a person: %d, %v", to, err)
+	if to, err := s.Rename(ctx, "cli", ghost, "Sam"); !isExists(err) || to != 0 {
+		t.Errorf("ghost conflict must refuse without merging: %d, %v", to, err)
 	}
-	pe, _ := s.PageByID(ctx, sam)
-	if !strings.Contains(titles(pe.In, "wikilink"), "2026-09-30") {
-		t.Errorf("the person's backlinks after the rename: %+v", pe.In)
+	pe, err := s.PageByID(ctx, sam)
+	if err != nil || len(pe.In) != 0 {
+		t.Fatalf("conflict changed person: %+v %v", pe, err)
+	}
+	g, err := s.PageByID(ctx, ghost)
+	if err != nil || !strings.Contains(titles(g.In, "wikilink"), "2026-09-30") {
+		t.Fatalf("conflict lost ghost backlink: %+v %v", g, err)
 	}
 }
 
@@ -130,7 +134,10 @@ func isExists(err error) bool {
 
 func TestCaptureHabitDomain(t *testing.T) {
 	s := fresh(t)
-	if err := s.StartHabit(ctx, "cli", "Mood", "2026-09-01", ""); err != nil {
+	// Deliberate damage: ordinary registration now refuses Mood by identity.
+	// Preserve the capture rollback witness for an externally damaged classification.
+	if _, err := s.DB.W.Exec(`DROP TRIGGER habit_periods_check_insert;
+ INSERT INTO habit_periods(metric_id,start_day,source) VALUES(1,'2026-09-01','cli')`); err != nil {
 		t.Fatal(err)
 	}
 	day, _, err := s.Capture(ctx, "cli", "2026-09-29", "original [[Kept]]", nil)
@@ -156,18 +163,24 @@ func TestCaptureHabitDomain(t *testing.T) {
 		t.Errorf("day revival persisted: %v %v", deleted, err)
 	}
 	var n int
-	s.DB.R.QueryRow(`SELECT count(*) FROM pages WHERE title_key = 'rollback target'`).Scan(&n)
+	if err := s.DB.R.QueryRow(`SELECT count(*) FROM entity_names WHERE name_key = 'rollback target'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
 	if n != 0 {
 		t.Error("target creation persisted")
 	}
-	s.DB.R.QueryRow(`SELECT count(*) FROM measurements`).Scan(&n)
+	if err := s.DB.R.QueryRow(`SELECT count(*) FROM measurements`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
 	if n != 0 {
 		t.Error("reading persisted")
 	}
 	if _, _, err := s.Capture(ctx, "cli", "2026-09-30", "new day", &four); status(err) != 422 {
 		t.Errorf("new day habit mood: %v", err)
 	}
-	s.DB.R.QueryRow(`SELECT count(*) FROM pages WHERE title_key = '2026-09-30'`).Scan(&n)
+	if err := s.DB.R.QueryRow(`SELECT count(*) FROM entity_names WHERE name_key = '2026-09-30'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
 	if n != 0 {
 		t.Error("new day persisted")
 	}
@@ -175,7 +188,9 @@ func TestCaptureHabitDomain(t *testing.T) {
 	if _, _, err := s.Capture(ctx, "cli", "2026-09-29", "accepted", &one); err != nil {
 		t.Fatal(err)
 	}
-	s.DB.R.QueryRow(`SELECT count(*) FROM measurements WHERE value = 1 AND source = 'cli' AND captured_with_id = ?`, day).Scan(&n)
+	if err := s.DB.R.QueryRow(`SELECT count(*) FROM measurements WHERE value = 1 AND source = 'cli' AND captured_with_id = ?`, day).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
 	if n != 1 {
 		t.Error("capture provenance lost")
 	}
@@ -189,7 +204,9 @@ func TestCaptureHabitDomain(t *testing.T) {
 	if _, _, err := s.Capture(ctx, "cli", "2026-10-01", "refused", &one); status(err) != 404 {
 		t.Errorf("tombstoned mood: %v", err)
 	}
-	s.DB.R.QueryRow(`SELECT count(*) FROM pages WHERE title_key = '2026-10-01'`).Scan(&n)
+	if err := s.DB.R.QueryRow(`SELECT count(*) FROM entity_names WHERE name_key = '2026-10-01'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
 	if n != 0 {
 		t.Error("missing mood capture persisted")
 	}
@@ -258,11 +275,15 @@ func TestTombstonedHabits(t *testing.T) {
 			t.Errorf("history hidden=%v: %v %v %v", hidden, series, d.Readings, err)
 		}
 		var n int
-		s.DB.R.QueryRow(`SELECT count(*) FROM habit_periods WHERE metric_id = ?`, id).Scan(&n)
+		if err := s.DB.R.QueryRow(`SELECT count(*) FROM habit_periods WHERE metric_id = ?`, id).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
 		if n != 1 {
 			t.Error("period lost")
 		}
-		s.DB.R.QueryRow(`SELECT count(*) FROM measurements WHERE metric_id = ? AND value = 1`, id).Scan(&n)
+		if err := s.DB.R.QueryRow(`SELECT count(*) FROM measurements WHERE metric_id = ? AND value = 1`, id).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
 		if n != 1 {
 			t.Error("reading lost")
 		}

@@ -17,6 +17,11 @@ import (
 	"time"
 )
 
+const inventoryBytes = 16 << 20
+const inventoryNodes = 65536
+const inventoryColumns = 256
+const inventoryRecords = 8192
+
 var errPrivateInventory = errors.New("takeout inventory could not read one file; no filename or value is reported")
 
 // Report is the privacy-safe Phase A summary. It names known public product families, counts records and files,
@@ -189,6 +194,8 @@ func publicTopFolder(rel string) string {
 		return "Location History"
 	case low == "fit" || strings.Contains(low, "google fit"):
 		return "Fit"
+	case low == "google health":
+		return "Google Health"
 	case strings.Contains(low, "fitbit"):
 		return "Fitbit"
 	case strings.Contains(low, "photo"):
@@ -255,6 +262,18 @@ func (i *inventory) addKnownFile(path, rel, top string) error {
 			}
 			return i.addJSONFile("Fit Sessions", path, "exercise")
 		}
+	case "Google Health":
+		if ext == ".csv" {
+			return i.addCSVFile("Google Health CSV (preparation unsupported)", path, "")
+		}
+		if ext == ".json" {
+			if strings.Contains(low, "sleep") {
+				return i.addJSONFile("Google Health Legacy Sleep", path, "")
+			}
+			if strings.Contains(low, "exercise") {
+				return i.addJSONFile("Google Health Legacy Exercise (preparation unsupported)", path, "")
+			}
+		}
 	case "Fitbit":
 		name, metric := fitbitFamily(low)
 		if name == "" {
@@ -296,11 +315,15 @@ func (i *inventory) addJSONFile(name, path, metric string) error {
 		return errPrivateInventory
 	}
 	defer fh.Close()
+	info, e := fh.Stat()
+	if e != nil || !info.Mode().IsRegular() || info.Size() > inventoryBytes {
+		return errPrivateInventory
+	}
 	f := i.family(name)
 	f.files++
 	before := f.records
 	s := jsonScanner{inv: i, family: f, familyName: name, metric: metric}
-	dec := json.NewDecoder(fh)
+	dec := json.NewDecoder(io.LimitReader(fh, inventoryBytes+1))
 	dec.UseNumber()
 	if _, err := s.scanValue(dec, "$", ""); err != nil {
 		return inventoryError(err)
@@ -325,6 +348,8 @@ type jsonScanner struct {
 	objects     int
 	recognized  bool
 	unsupported bool
+	depth       int
+	nodes       int
 }
 
 type jsonSummary struct {
@@ -336,6 +361,12 @@ type jsonSummary struct {
 func newSummary() jsonSummary { return jsonSummary{keys: map[string]bool{}, months: map[string]bool{}} }
 
 func (s *jsonScanner) scanValue(dec *json.Decoder, path, parentKey string) (jsonSummary, error) {
+	s.depth++
+	s.nodes++
+	defer func() { s.depth-- }()
+	if s.depth > 64 || s.nodes > inventoryNodes {
+		return jsonSummary{}, errPrivateInventory
+	}
 	if err := s.inv.ctx.Err(); err != nil {
 		return jsonSummary{}, err
 	}
@@ -459,7 +490,7 @@ func (s *jsonScanner) isRecognizedContainer(path string) bool {
 		return path == "$.semanticSegments" || path == "$.timelineObjects"
 	case "Fit Sessions":
 		return path == "$" || path == "$.sessions"
-	case "Fitbit Sleep":
+	case "Fitbit Sleep", "Google Health Legacy Sleep":
 		return path == "$" || path == "$.sleep"
 	case "Fitbit Steps":
 		return path == "$" || path == "$.steps"
@@ -467,7 +498,7 @@ func (s *jsonScanner) isRecognizedContainer(path string) bool {
 		return path == "$" || path == "$.heartRate"
 	case "Fitbit Weight":
 		return path == "$" || path == "$.body-weight" || path == "$.weight"
-	case "Fitbit Exercise":
+	case "Fitbit Exercise", "Google Health Legacy Exercise (preparation unsupported)":
 		return path == "$" || path == "$.exercise"
 	default:
 		return false
@@ -484,7 +515,7 @@ func (s *jsonScanner) isRecord(path string, keys map[string]bool) bool {
 		return (path == "$.semanticSegments[]" || path == "$.timelineObjects[]") && hasAnyKey(keys, "startTime", "startTimestamp")
 	case "Fit Sessions":
 		return (path == "$" || path == "$[]" || path == "$.sessions[]") && hasAnyKey(keys, "startTime", "Start time", "startTimestamp", "startTimestampMs")
-	case "Fitbit Sleep":
+	case "Fitbit Sleep", "Google Health Legacy Sleep":
 		return (path == "$[]" || path == "$.sleep[]") && hasAnyKey(keys, "dateOfSleep", "startTime", "endTime")
 	case "Fitbit Steps":
 		return (path == "$[]" || path == "$.steps[]") && hasAnyKey(keys, "dateTime")
@@ -492,7 +523,7 @@ func (s *jsonScanner) isRecord(path string, keys map[string]bool) bool {
 		return (path == "$[]" || path == "$.heartRate[]") && hasAnyKey(keys, "dateTime")
 	case "Fitbit Weight":
 		return (path == "$[]" || path == "$.body-weight[]" || path == "$.weight[]") && hasAnyKey(keys, "dateTime")
-	case "Fitbit Exercise":
+	case "Fitbit Exercise", "Google Health Legacy Exercise (preparation unsupported)":
 		return (path == "$[]" || path == "$.exercise[]") && hasAnyKey(keys, "startTime", "originalStartTime")
 	default:
 		return false
@@ -525,7 +556,11 @@ func (i *inventory) addCSVFile(name, path, source string) error {
 		return errPrivateInventory
 	}
 	defer fh.Close()
-	r := csv.NewReader(fh)
+	info, e := fh.Stat()
+	if e != nil || !info.Mode().IsRegular() || info.Size() > inventoryBytes {
+		return errPrivateInventory
+	}
+	r := csv.NewReader(io.LimitReader(fh, inventoryBytes+1))
 	r.FieldsPerRecord = -1
 	if err := i.ctx.Err(); err != nil {
 		return err
@@ -537,8 +572,39 @@ func (i *inventory) addCSVFile(name, path, source string) error {
 		}
 		return errPrivateInventory
 	}
+	if len(headers) > inventoryColumns {
+		return errPrivateInventory
+	}
+	for _, h := range headers {
+		if len(h) > 256 {
+			return errPrivateInventory
+		}
+	}
+	if strings.HasPrefix(name, "Fit ") {
+		hasDate, hasStart, hasEnd := false, false, false
+		for _, header := range headers {
+			hasDate = hasDate || header == "Date"
+			hasStart = hasStart || header == "Start time"
+			hasEnd = hasEnd || header == "End time"
+		}
+		switch {
+		case hasDate && !hasStart && !hasEnd:
+			name = "Fit Daily Aggregates"
+			source = "Fit"
+		case !hasDate && (hasStart || hasEnd):
+			name = "Fit Sessions"
+			source = "Fit:exercise"
+		default:
+			name = "Fit Unsupported CSV"
+			source = ""
+		}
+	}
 	f := i.family(name)
 	f.files++
+	if strings.Contains(name, "preparation unsupported") || name == "Fit Unsupported CSV" {
+		f.unsupported++
+	}
+	rowsRead := 0
 	for {
 		if err := i.ctx.Err(); err != nil {
 			return err
@@ -549,6 +615,15 @@ func (i *inventory) addCSVFile(name, path, source string) error {
 		}
 		if err != nil {
 			return errPrivateInventory
+		}
+		rowsRead++
+		if rowsRead > inventoryRecords || len(row) > inventoryColumns {
+			return errPrivateInventory
+		}
+		for _, v := range row {
+			if len(v) > 65536 {
+				return errPrivateInventory
+			}
 		}
 		f.records++
 		vals := map[string]string{}
@@ -785,40 +860,46 @@ func sorted(s []string) []string {
 var safeExtensions = map[string]bool{".json": true, ".csv": true, ".txt": true, "(none)": true}
 
 var fitDailyMetrics = map[string]string{
-	"Step count":          "steps",
-	"Move Minutes count":  "active-minutes",
-	"Average heart rate":  "heart-rate",
-	"Min heart rate":      "heart-rate",
-	"Max heart rate":      "heart-rate",
-	"Weight":              "weight",
-	"Calories":            "calories",
-	"Calories (kcal)":     "calories",
-	"Distance":            "distance",
-	"Distance (m)":        "distance",
-	"Heart Points":        "heart-points",
-	"Heart Minutes count": "heart-minutes",
+	"Step count":               "steps",
+	"Move Minutes count":       "active-minutes",
+	"Average heart rate":       "heart-rate",
+	"Average heart rate (bpm)": "heart-rate",
+	"Min heart rate":           "heart-rate",
+	"Max heart rate":           "heart-rate",
+	"Weight":                   "weight",
+	"Calories":                 "calories",
+	"Calories (kcal)":          "calories",
+	"Distance":                 "distance",
+	"Distance (m)":             "distance",
+	"Heart Points":             "heart-points",
+	"Heart Minutes count":      "heart-minutes",
 }
 
 var safeCSVHeaders = map[string]bool{
-	"date":                true,
-	"start time":          true,
-	"end time":            true,
-	"activity type":       true,
-	"duration (ms)":       true,
-	"step count":          true,
-	"move minutes count":  true,
-	"distance":            true,
-	"distance (m)":        true,
-	"calories":            true,
-	"calories (kcal)":     true,
-	"heart points":        true,
-	"heart minutes count": true,
-	"average heart rate":  true,
-	"min heart rate":      true,
-	"max heart rate":      true,
-	"weight":              true,
-	"bmi":                 true,
-	"sleep minutes":       true,
+	"date":                     true,
+	"start time":               true,
+	"end time":                 true,
+	"activity type":            true,
+	"duration (ms)":            true,
+	"step count":               true,
+	"move minutes count":       true,
+	"distance":                 true,
+	"distance (m)":             true,
+	"calories":                 true,
+	"calories (kcal)":          true,
+	"heart points":             true,
+	"heart minutes count":      true,
+	"average heart rate":       true,
+	"average heart rate (bpm)": true,
+	"weight grams":             true,
+	"beats per minute":         true,
+	"data source":              true,
+	"timestamp":                true,
+	"min heart rate":           true,
+	"max heart rate":           true,
+	"weight":                   true,
+	"bmi":                      true,
+	"sleep minutes":            true,
 }
 
 var explicitDateKeys = map[string]bool{
@@ -854,6 +935,13 @@ var recordKeys = map[string]bool{
 }
 
 var safeJSONKeys = map[string]bool{
+	"fitnessActivity":   true,
+	"aggregate":         true,
+	"metricName":        true,
+	"floatValue":        true,
+	"intValue":          true,
+	"segment":           true,
+	"timeInBed":         true,
 	"timelineObjects":   true,
 	"placeVisit":        true,
 	"activitySegment":   true,
@@ -880,7 +968,6 @@ var safeJSONKeys = map[string]bool{
 	"endTime":           true,
 	"dateOfSleep":       true,
 	"minutesAsleep":     true,
-	"timeInBed":         true,
 	"levels":            true,
 	"data":              true,
 	"dateTime":          true,

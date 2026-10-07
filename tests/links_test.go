@@ -23,9 +23,9 @@ func links(s *S) {
 		{"subtask is not a kind (D23)", "ERR", m1, pw, "subtask"}, {"spawned is not a kind (D23)", "ERR", pw, m1, "spawned"},
 		{"wikilink day page->page", "OK", m1, pw, "wikilink"}, {"wikilink day page->person (a person is a page)", "OK", m1, pa, "wikilink"},
 		{"wikilink day page->place", "OK", m1, pl, "wikilink"}, {"wikilink person page->page", "OK", pa, pw, "wikilink"},
-		{"redirect page->page", "OK", m1, pw, "redirect"},
-		{"redirect page->person (the replacement may be named)", "OK", pw, pa, "redirect"},
-		{"redirect page->place", "OK", m1, pl, "redirect"}, {"redirect person->page (a stub is a plain page)", "ERR", pa, pw, "redirect"},
+		{"redirect is not a registered kind", "ERR", m1, pw, "redirect"},
+		{"redirect page->person is refused", "ERR", pw, pa, "redirect"},
+		{"redirect page->place is refused", "ERR", m1, pl, "redirect"}, {"redirect person->page (a stub is a plain page)", "ERR", pa, pw, "redirect"},
 		{"about day page->person", "OK", m1, pb, "about"}, {"about person->place", "OK", pa, pl, "about"},
 		{"about day page->page", "ERR", m1, pw, "about"}, {"related page-person", "OK", pw, pa, "related"},
 		{"at day page->place", "OK", m1, pl, "at"}, {"at person->place (at comes from a page)", "ERR", pa, pl, "at"}, {"at page->person", "ERR", pw, pa, "at"},
@@ -36,16 +36,29 @@ func links(s *S) {
 		s.K("link "+x.lbl+": "+x.exp, strings.HasPrefix(r, x.exp), r)
 	}
 	g, t := c.page("Sam Bee"), c.page("Sam B")
-	s.K("a redirect to a plain page", c.link(g, t, "redirect") == "OK")
-	c.must("UPDATE entities SET entity_type='person' WHERE id=?", t)
-	c.must("INSERT INTO people(id,name) VALUES (?,?)", t, "Sam B")
-	c.must("DELETE FROM links WHERE from_id=? AND kind='redirect'", g)
-	s.K("...survives the promotion of its target: the same row inserts again", c.link(g, t, "redirect") == "OK")
+	s.K("a wikilink to a plain page", c.link(g, t, "wikilink") == "OK")
+	promoted := c.tryx("UPDATE entities SET entity_type='person' WHERE id=?", t)
+	if promoted == "OK" {
+		c.must("INSERT INTO people(id,name) VALUES (?,?)", t, "Sam B")
+	}
+	c.must("DELETE FROM links WHERE from_id=? AND kind='wikilink'", g)
+	s.K("...survives the promotion of its target: the same row inserts again", promoted == "OK" && c.link(g, t, "wikilink") == "OK")
 	s.K("a duplicate edge is refused (UNIQUE from, to, kind)", strings.HasPrefix(c.link(m1, pl, "at"), "ERR"))
 	s.K("a symmetric kind is stored in both directions", c.n("select count(*) from links where kind='friend'") == 2)
 	s.K("links are immutable: kind", strings.Contains(c.tryx("UPDATE links SET kind='related' WHERE kind='friend'"), "immutable"))
 	s.K("links are immutable: an endpoint", strings.Contains(c.tryx("UPDATE links SET to_id=? WHERE kind='at'", pb), "immutable"))
 	s.K("a full-row update that changes only the note passes", c.tryx("UPDATE links SET note='hi', from_id=from_id, to_id=to_id, kind=kind WHERE kind='at'") == "OK")
+	s.K("links are immutable: id", strings.Contains(c.tryx("UPDATE links SET id=id+10000 WHERE kind='friend'"), "immutable"))
+	s.K("links are immutable: created_at", strings.Contains(c.tryx("UPDATE links SET created_at='2020-01-01T00:00:00.000Z' WHERE kind='friend'"), "immutable"))
+	c.must("UPDATE links SET note='shared' WHERE kind='friend' AND from_id=?", pa)
+	s.K("symmetric note edit mirrors forward", c.n("SELECT count(*) FROM links WHERE kind='friend' AND note='shared'") == 2)
+	c.must("UPDATE links SET note=NULL WHERE kind='friend' AND from_id=?", pb)
+	s.K("symmetric note edit mirrors reverse NULL", c.n("SELECT count(*) FROM links WHERE kind='friend' AND note IS NULL") == 2)
+	s.K("symmetric note no-op terminates", c.tryx("UPDATE links SET note=note WHERE kind='friend'") == "OK")
+	c.must("BEGIN IMMEDIATE")
+	c.must("UPDATE links SET note='rolled back' WHERE kind='friend' AND from_id=?", pa)
+	c.must("ROLLBACK")
+	s.K("symmetric note rollback restores both directions", c.n("SELECT count(*) FROM links WHERE kind='friend' AND note IS NULL") == 2)
 	c.must("DELETE FROM links WHERE kind='friend' AND from_id=?", pa)
 	s.K("deleting one side of a symmetric edge deletes its mirror", c.n("select count(*) from links where kind='friend'") == 0)
 

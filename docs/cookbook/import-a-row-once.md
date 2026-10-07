@@ -8,17 +8,17 @@ cannot arrive twice and has none. The same holds for measurements.
 
 ```sql
 BEGIN IMMEDIATE;
-INSERT INTO entities(entity_type, created_at, updated_at, source, import_key)
-VALUES ('page', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'import:vault', :import_key)
+INSERT INTO entities(entity_type, preferred_name_key, body, created_at, updated_at, source, import_key)
+VALUES ('page', 'sourdough', 'Feed the starter the night before.', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'import:vault', :import_key)
 ON CONFLICT(source, import_key) WHERE import_key IS NOT NULL DO NOTHING
 RETURNING id;   -- the app keeps it as :page_id; no row back = imported before: skip the next INSERT
-INSERT INTO pages(id, title, title_key, body)
-VALUES (:page_id, 'Sourdough', 'sourdough', 'Feed the starter the night before.');
+INSERT INTO entity_names(entity_id, title, name_key)
+VALUES (:page_id, 'Sourdough', 'sourdough');
 COMMIT;
 
 -- a later run finds the note changed: update the live page that has the key; a tombstoned one stays gone
 BEGIN IMMEDIATE;
-UPDATE pages
+UPDATE entities
    SET body = 'Feed the starter the night before; 75% water.'
  WHERE id = (SELECT id FROM entities
               WHERE source = 'import:vault' AND import_key = :import_key AND deleted_at IS NULL);

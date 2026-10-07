@@ -50,8 +50,25 @@ func TitleKey(t string) string {
 	return norm.NFC.String(fold.String(norm.NFC.String(t)))
 }
 
-// ValidTitle is the DDL's title CHECKs (pages_title_len, pages_title_safe) plus the writer's own Cn rule.
+// ValidTitle implements the reference-name predicate in the titles-and-wikilinks contract.
+// The extraction check uses Candidates, not Targets, to avoid recursive validation.
 func ValidTitle(t string) bool {
+	if !validFilename(t) || strings.ContainsAny(t, "[]") {
+		return false
+	}
+	key := TitleKey(t)
+	for _, spelling := range []string{t, norm.NFC.String(t)} {
+		for _, body := range []string{"See [[" + spelling + "]].", "See ![[" + spelling + "]].", "See [[" + spelling + "|display]]."} {
+			got := Candidates(body)
+			if len(got) != 1 || !validFilename(got[0]) || strings.ContainsAny(got[0], "[]") || TitleKey(got[0]) != key {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func validFilename(t string) bool {
 	if t == "" || t != strings.Trim(t, " ") || len(t) > 240 {
 		return false
 	}
@@ -79,23 +96,8 @@ func asciiUpper(s string) string {
 	}, s)
 }
 
-// IsStub reports a #REDIRECT rename stub: #REDIRECT (any case) after optional whitespace, then whitespace, then [[.
-func IsStub(body string) bool {
-	s := strings.TrimLeftFunc(body, unicode.IsSpace)
-	const word = "#redirect"
-	if len(s) < len(word) || !strings.EqualFold(s[:len(word)], word) {
-		return false
-	}
-	rest := s[len(word):]
-	after := strings.TrimLeftFunc(rest, unicode.IsSpace)
-	return len(after) < len(rest) && strings.HasPrefix(after, "[[")
-}
-
 // Candidates returns the titles a body names, in order of appearance, valid or not and not de-duplicated.
 func Candidates(body string) []string {
-	if IsStub(body) {
-		return nil
-	}
 	var out []string
 	for _, run := range textRuns(body) {
 		type hit struct {
@@ -156,6 +158,17 @@ func Targets(body, ownKey string) (keys, titles, rejected []string) {
 // HasEmbed reports a rendered wiki embed naming title, using CommonMark's inline precedence.
 func HasEmbed(body, title string) bool {
 	key := TitleKey(title)
+	for _, target := range EmbeddedTitles(body) {
+		if TitleKey(target) == key {
+			return true
+		}
+	}
+	return false
+}
+
+// EmbeddedTitles returns valid rendered embed names before identity resolution.
+func EmbeddedTitles(body string) []string {
+	var titles []string
 	for _, run := range renderedTextRuns(body) {
 		for _, m := range wiki.FindAllStringSubmatchIndex(run, -1) {
 			if m[0] == 0 || run[m[0]-1] != '!' {
@@ -163,12 +176,12 @@ func HasEmbed(body, title string) bool {
 			}
 			target, _, _ := strings.Cut(run[m[2]:m[3]], "|")
 			target = strings.Trim(target, " ")
-			if ValidTitle(target) && TitleKey(target) == key {
-				return true
+			if ValidTitle(target) {
+				titles = append(titles, target)
 			}
 		}
 	}
-	return false
+	return titles
 }
 
 func renderedTextRuns(body string) []string {
@@ -221,9 +234,9 @@ func TagAt(prev rune, s string) (tag string, n int) {
 	return "", 0
 }
 
-// namesPage reports a scanned #tag that names a page: not all digits, not the #REDIRECT word.
+// namesPage reports a scanned #tag that names a page: not all decimal digits.
 func namesPage(tag string) bool {
-	return !allDigits(tag) && strings.ToLower(tag) != "redirect"
+	return !allDigits(tag)
 }
 
 func tagChar(r rune) bool {

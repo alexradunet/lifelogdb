@@ -10,7 +10,7 @@ import (
 // evolution: evolution after the freeze (D13, D17, architecture/non-goals) — every CHECK is named and droppable by
 // name; an unnamed one is not, a looser second CHECK does not relax the first, ADD CONSTRAINT checks existing rows;
 // enums widen on a populated database; the partial-date and tokenizer paths of architecture/non-goals work; a
-// link kind widens by migration; a promotion can strand a link; an entity uid is additive (D3); a comment outside
+// link kind widens by migration; a promotion refuses invalid retained links; an entity uid is additive (D3); a comment outside
 // a statement is not stored.
 func evolution(s *S) {
 	err := func(r string) bool { return strings.HasPrefix(r, "ERR") }
@@ -85,7 +85,11 @@ func evolution(s *S) {
 
 	// ---- widening enums on a populated database
 	use := func(c *C) string {
-		return c.tryx("INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES ('vehicle'," + NOW + "," + NOW + ",'ui')")
+		_, e := c.tryIdentity("vehicle", "Vehicle witness", nil)
+		if e != nil {
+			return "ERR " + e.Error()
+		}
+		return "OK"
 	}
 	c = populated()
 	s.K("entities_entity_type: the new value is refused before", err(use(c)))
@@ -122,20 +126,20 @@ func evolution(s *S) {
 	for i, b := range []string{jp, "Zürich café notes", "plain english text"} {
 		c.pageW(fmt.Sprintf("Text %d", i), nil, b)
 	}
-	hits := func(q string) int64 { return c.n("select count(*) from pages_fts where pages_fts match ?", q) }
+	hits := func(q string) int64 { return c.n("select count(*) from entities_fts where entities_fts match ?", q) }
 	s.K("before: unicode61 finds the whole CJK run and accented words, not a part of the run", hits(jp) == 1 && hits("zurich") == 1 && hits("本語") == 0 && hits("ノート") == 0)
 	c.must("BEGIN IMMEDIATE")
-	c.must("DROP TABLE pages_fts")
-	c.must("CREATE VIRTUAL TABLE pages_fts USING fts5(title, body, content='pages', content_rowid='id', tokenize='trigram remove_diacritics 1')")
-	c.must("INSERT INTO pages_fts(pages_fts) VALUES('rebuild')")
+	c.must("DROP TABLE entities_fts")
+	c.must("CREATE VIRTUAL TABLE entities_fts USING fts5(preferred, all_names, body, content='entity_search_content', content_rowid='id', tokenize='trigram remove_diacritics 1')")
+	c.must("INSERT INTO entities_fts(entities_fts) VALUES('rebuild')")
 	c.must("COMMIT")
 	s.K("after: trigram finds 3+-character parts and still folds accents", hits("本語の") == 1 && hits("ノート") == 1 && hits("日本語") == 1 && hits("zurich") == 1)
 	s.K("...but not a two-character word (the known limit)", hits("本語") == 0)
 	m := c.pageW("New text", nil, "これは新しい記録です")
 	n1 := hits("新しい")
-	c.must("UPDATE pages SET body='全く別の内容' WHERE id=?", m)
+	c.must("UPDATE entities SET body='全く別の内容' WHERE id=?", m)
 	s.K("the sync triggers keep working after the switch", n1 == 1 && hits("新しい") == 0 && hits("別の内") == 1)
-	s.K("...and the FTS integrity-check passes", c.tryx("INSERT INTO pages_fts(pages_fts, rank) VALUES('integrity-check', 1)") == "OK")
+	s.K("...and the FTS integrity-check passes", c.tryx("INSERT INTO entities_fts(entities_fts, rank) VALUES('integrity-check', 1)") == "OK")
 
 	// ---- a link kind is widened by a migration (D8): drop the guard, update the row, recreate the guard
 	c = populated()
@@ -148,15 +152,15 @@ func evolution(s *S) {
 	s.K("after the migration a day page may be at a person's home page", c.link(c.dayPage("2026-09-30", "x"), c.named("person", ""), "at") == "OK")
 	s.K("...and the guard is back: the next change is refused", strings.Contains(c.tryx("UPDATE link_kinds SET to_types = NULL WHERE kind = 'at'"), "fixed at registration"))
 
-	// ---- a promotion can leave a link its kind now refuses (architecture/non-goals): links are checked at insert only
+	// ---- type changes preserve the registry's endpoint rules.
 	c = s.fresh()
 	d := c.dayPage("2026-07-31", "x")
 	w := c.named("place", "Lakeside")
 	s.K("a day page at the place [[Lakeside]]", c.link(d, w, "at") == "OK")
-	c.must("UPDATE entities SET entity_type = 'person' WHERE id = ?", w)
-	c.domain("person", w, nil)
-	s.K("turning Lakeside into a person keeps the old at edge, which a new insert would refuse",
-		c.n("select count(*) from links where to_id = ? and kind = 'at'", w) == 1 && strings.Contains(c.link(c.dayPage("2026-08-01", "x"), w, "at"), "endpoint type not allowed"))
+	s.K("type change refuses a retained incoming typed edge", strings.Contains(c.tryx("UPDATE entities SET entity_type='person' WHERE id=?", w), "retained link endpoint") && c.str("SELECT entity_type FROM entities WHERE id=?", w) == "place" && c.n("SELECT count(*) FROM links WHERE to_id=? AND kind='at'", w) == 1)
+	out := c.page("Outgoing context")
+	c.link(out, w, "at")
+	s.K("type change refuses a retained outgoing typed edge", strings.Contains(c.tryx("UPDATE entities SET entity_type='person' WHERE id=?", out), "retained link endpoint") && c.str("SELECT entity_type FROM entities WHERE id=?", out) == "page")
 
 	// ---- an entity uid is additive after the freeze (D3): add, backfill, unique index, then NOT NULL
 	c = populated()
@@ -169,7 +173,10 @@ func evolution(s *S) {
 	c.must("ALTER TABLE entities ALTER COLUMN uid SET NOT NULL")
 	c.must("COMMIT")
 	s.K("every existing entity has a unique uid, and an entity without one is refused afterwards",
-		c.n("select count(distinct uid) = count(*) from entities") == 1 && strings.Contains(c.tryx("INSERT INTO entities(entity_type,created_at,updated_at,source) VALUES ('page',"+NOW+","+NOW+",'ui')"), "NOT NULL"))
+		c.n("select count(distinct uid) = count(*) from entities") == 1 && func() bool {
+			_, e := c.tryIdentity("page", "Missing uid witness", nil)
+			return e != nil && strings.Contains(e.Error(), "entities.uid")
+		}())
 	s.K("...with integrity and foreign keys clean", c.integrityOK())
 
 	// ---- comments: inside a statement kept, outside dropped (why the rules live inside)

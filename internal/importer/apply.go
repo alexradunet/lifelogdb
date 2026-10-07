@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
 	"slices"
 	"sort"
 	"strings"
@@ -260,7 +259,7 @@ func named(t *core.Tx, rules *Rules, typ, title, key string, create func(string)
 		}
 		o.Status = "existing"
 		return filled(p.ID)
-	case p.Type == "page" && (p.DayPage || p.Stub):
+	case p.Type == "page" && p.DayPage:
 		return o, fmt.Errorf("%q is a day page or a redirect stub, never a %s", title, typ)
 	case p.Type == "page":
 		o.Status = "promoted"
@@ -324,7 +323,7 @@ func notPromotedYet(t *core.Tx, l *LinkW) error {
 		if err != nil {
 			return err
 		}
-		if len(wanted) == 0 || p.Type != "page" || p.DayPage || p.Stub {
+		if len(wanted) == 0 || p.Type != "page" || p.DayPage {
 			continue
 		}
 		need := strings.Join(wanted, " or ")
@@ -390,7 +389,7 @@ func lookAlike(t *core.Tx, rules *Rules, title string) error {
 		return err
 	}
 	for _, n := range names {
-		for _, cand := range []string{n.Title, n.Name} {
+		for _, cand := range append([]string{n.Title, n.Name}, n.Aliases...) {
 			if cand == "" {
 				continue
 			}
@@ -421,24 +420,23 @@ func Find(ctx context.Context, s *core.Store, q string) ([]Match, error) {
 	out := []Match{}
 	for _, n := range names {
 		best := ""
-		for _, cand := range []string{n.Title, n.Name} {
-			if cand != "" {
-				if rel := relation(q, cand); rel != "" && (best == "" || rank(rel) < rank(best)) {
-					best = rel
+		for _, cand := range append([]string{n.Title, n.Name}, n.Aliases...) {
+			if cand == "" {
+				continue
+			}
+			rel := relation(q, cand)
+			if n.Type == "metric" {
+				normalized := relation(strings.ReplaceAll(q, "_", " "), strings.ReplaceAll(cand, "_", " "))
+				if normalized != "" && (rel == "" || rank(normalized) < rank(rel)) {
+					rel = normalized
 				}
+			}
+			if rel != "" && (best == "" || rank(rel) < rank(best)) {
+				best = rel
 			}
 		}
 		if best != "" {
 			out = append(out, Match{n.Type, n.Title, fmt.Sprintf("/pages/%d", n.ID), best})
-		}
-	}
-	ms, err := s.Metrics(ctx)
-	if err != nil {
-		return nil, err
-	}
-	for _, m := range ms {
-		if rel := relation(strings.ReplaceAll(q, "_", " "), strings.ReplaceAll(m.Name, "_", " ")); rel != "" {
-			out = append(out, Match{"metric", m.Name, "/metrics/" + url.PathEscape(m.Name), rel})
 		}
 	}
 	sort.SliceStable(out, func(a, b int) bool { return rank(out[a].Relation) < rank(out[b].Relation) })

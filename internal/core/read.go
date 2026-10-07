@@ -5,28 +5,30 @@ import (
 	"database/sql"
 	"errors"
 	"sort"
+	"strings"
 	"time"
 
 	"lifelog/internal/text"
 )
 
-// Page is one page with what surrounds it. Version is entities.updated_at: pass it back to SaveBody.
+// Page is one page with what surrounds it. Version is the decimal entities.revision token: pass it back to SaveBody.
 type Page struct {
-	ID        int64   `json:"id"`
-	Type      string  `json:"entity_type"`
-	Title     string  `json:"title"`
-	Day       string  `json:"day,omitempty"`
-	Body      string  `json:"body"`
-	CreatedAt string  `json:"created_at"`
-	Version   string  `json:"version"`
-	DeletedAt string  `json:"deleted_at,omitempty"`
-	IsDayPage bool    `json:"is_day_page"`
-	IsStub    bool    `json:"is_redirect_stub"`
-	Person    *Person `json:"person,omitempty"`
-	File      *File   `json:"file,omitempty"`
-	Point     *Point  `json:"point,omitempty"` // a place's, when it has one (D21)
-	Out       []Edge  `json:"links"`
-	In        []Edge  `json:"backlinks"`
+	SessionKind bool        `json:"session_kind"`
+	ID          int64       `json:"id"`
+	Type        string      `json:"entity_type"`
+	Title       string      `json:"title"`
+	Day         string      `json:"day,omitempty"`
+	Body        string      `json:"body"`
+	CreatedAt   string      `json:"created_at"`
+	Version     string      `json:"version"`
+	DeletedAt   string      `json:"deleted_at,omitempty"`
+	IsDayPage   bool        `json:"is_day_page"`
+	Period      *LifePeriod `json:"period,omitempty"`
+	Person      *Person     `json:"person,omitempty"`
+	File        *File       `json:"file,omitempty"`
+	Point       *Point      `json:"point,omitempty"` // a place's, when it has one (D21)
+	Out         []Edge      `json:"links"`
+	In          []Edge      `json:"backlinks"`
 }
 
 type Person struct {
@@ -49,10 +51,9 @@ func (s *Store) PageByID(ctx context.Context, id int64) (*Page, error) {
 	p := &Page{ID: id}
 	var day, deleted sql.NullString
 	err := s.DB.R.QueryRowContext(ctx, `
-		SELECT p.entity_type, p.title, p.day, p.body, e.created_at, e.updated_at, e.deleted_at,
-		       EXISTS (SELECT 1 FROM links r WHERE r.from_id = p.id AND r.kind = 'redirect')
-		  FROM pages p JOIN entities e ON e.id = p.id WHERE p.id = ?`, id).
-		Scan(&p.Type, &p.Title, &day, &p.Body, &p.CreatedAt, &p.Version, &deleted, &p.IsStub)
+		SELECT e.entity_type, n.title, e.day, e.body, e.created_at, CAST(e.revision AS TEXT), e.deleted_at,EXISTS(SELECT 1 FROM sessions WHERE kind_id=e.id)
+		  FROM entities e JOIN entity_names n ON n.entity_id = e.id AND n.name_key = e.preferred_name_key WHERE e.id = ?`, id).
+		Scan(&p.Type, &p.Title, &day, &p.Body, &p.CreatedAt, &p.Version, &deleted, &p.SessionKind)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, notFound("no page %d", id)
 	}
@@ -61,6 +62,12 @@ func (s *Store) PageByID(ctx context.Context, id int64) (*Page, error) {
 	}
 	p.Day, p.DeletedAt = day.String, deleted.String
 	p.IsDayPage = p.Day != "" && p.Day == p.Title
+	if p.Type == "period" {
+		p.Period = &LifePeriod{ID: id, Title: p.Title, Version: p.Version, DeletedAt: p.DeletedAt}
+		if err := s.DB.R.QueryRowContext(ctx, `SELECT start_boundary,end_boundary FROM periods WHERE id=?`, id).Scan(&p.Period.Start, &p.Period.End); err != nil {
+			return nil, err
+		}
+	}
 	if p.Type == "person" {
 		var b, d sql.NullString
 		p.Person = &Person{}
@@ -84,22 +91,21 @@ func (s *Store) PageByID(ctx context.Context, id int64) (*Page, error) {
 	}
 	// outgoing edges to live entities; a symmetric kind's mirror is the same edge, so it shows once here
 	if p.Out, err = s.edges(ctx, `
-		SELECT l.kind, l.to_id, pg.title, e.entity_type, coalesce(l.note, '')
-		  FROM links l JOIN entities e ON e.id = l.to_id AND e.deleted_at IS NULL JOIN pages pg ON pg.id = l.to_id
-		 WHERE l.from_id = ? ORDER BY l.kind, pg.title`, id); err != nil {
+		SELECT l.kind, l.to_id, pg_name.title, e.entity_type, coalesce(l.note, '')
+		  FROM links l JOIN entities e ON e.id = l.to_id AND e.deleted_at IS NULL JOIN entities pg ON pg.id = l.to_id JOIN entity_names pg_name ON pg_name.entity_id = pg.id AND pg_name.name_key = pg.preferred_name_key
+		 WHERE l.from_id = ? ORDER BY l.kind, pg_name.title`, id); err != nil {
 		return nil, err
 	}
-	// cookbook/backlinks.md: one redirect hop, the redirect row itself is not a backlink; a symmetric edge is
-	// already in Out, so it is not listed twice
+	// cookbook/backlinks.md: owned names resolve to this id; a symmetric edge
+	// already in Out is not listed twice
 	if p.In, err = s.edges(ctx, `
-		SELECT l.kind, l.from_id, pg.title, e.entity_type, coalesce(l.note, '')
+		SELECT l.kind, l.from_id, pg_name.title, e.entity_type, coalesce(l.note, '')
 		  FROM links l
 		  JOIN entities e  ON e.id = l.from_id AND e.deleted_at IS NULL
-		  JOIN pages    pg ON pg.id = l.from_id
-		 WHERE l.to_id IN (SELECT ?1 UNION SELECT r.from_id FROM links r WHERE r.to_id = ?1 AND r.kind = 'redirect')
-		   AND l.kind <> 'redirect'
+		  JOIN entities pg ON pg.id = l.from_id JOIN entity_names pg_name ON pg_name.entity_id = pg.id AND pg_name.name_key = pg.preferred_name_key
+		 WHERE l.to_id = ?
 		   AND l.kind NOT IN (SELECT kind FROM link_kinds WHERE symmetric = 1)
-		 ORDER BY pg.title`, id); err != nil {
+		 ORDER BY pg_name.title`, id); err != nil {
 		return nil, err
 	}
 	return p, nil
@@ -125,7 +131,7 @@ func (s *Store) edges(ctx context.Context, q string, args ...any) ([]Edge, error
 // PageID resolves a title through its title_key; 0 when no page has it.
 func (s *Store) PageID(ctx context.Context, title string) (int64, error) {
 	var id int64
-	err := s.DB.R.QueryRowContext(ctx, `SELECT id FROM pages WHERE title_key = ?`, text.TitleKey(title)).Scan(&id)
+	err := s.DB.R.QueryRowContext(ctx, `SELECT entity_id FROM entity_names WHERE name_key = ?`, text.TitleKey(title)).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, nil
 	}
@@ -153,8 +159,8 @@ func (s *Store) Day(ctx context.Context, day string) (*Day, error) {
 		return nil, invalid("day %q is not YYYY-MM-DD", day)
 	}
 	d := &Day{Day: day, Rows: []DayRow{}}
-	err := s.DB.R.QueryRowContext(ctx, `SELECT p.id FROM pages p JOIN entities e ON e.id = p.id
-	                                     WHERE p.title_key = ? AND e.deleted_at IS NULL`, day).Scan(&d.PageID)
+	err := s.DB.R.QueryRowContext(ctx, `SELECT p.id FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key  JOIN entities e ON e.id = p.id
+	                                     WHERE p.id = (SELECT entity_id FROM entity_names WHERE name_key = ?) AND e.deleted_at IS NULL`, day).Scan(&d.PageID)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
@@ -179,45 +185,50 @@ func (s *Store) Day(ctx context.Context, day string) (*Day, error) {
 	return d, err
 }
 
-// dayView is cookbook/day-view.md verbatim.
+// dayView implements cookbook/day-view.md with registry lookup and preferred display.
 const dayView = `
 SELECT what, at, detail FROM (
   SELECT 'day page' AS what, NULL AS at, p.body AS detail
-    FROM pages p JOIN entities e ON e.id = p.id
-   WHERE p.title_key = :day AND e.deleted_at IS NULL
+    FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key  JOIN entities e ON e.id = p.id
+   WHERE p.id = (SELECT entity_id FROM entity_names WHERE name_key = :day) AND e.deleted_at IS NULL
   UNION ALL
   SELECT 'page' || CASE WHEN e.updated_at > e.created_at THEN ' (edited)' ELSE '' END,
-         e.updated_at, p.title
-    FROM pages p JOIN entities e ON e.id = p.id
-   WHERE p.day = :day AND p.title <> :day AND e.deleted_at IS NULL
+         e.updated_at, p_name.title
+    FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key  JOIN entities e ON e.id = p.id
+   WHERE p.day = :day AND p_name.title <> :day AND e.deleted_at IS NULL
   UNION ALL
-  SELECT 'at', NULL, pl.title
-    FROM pages d
+  SELECT 'at', NULL, pl_name.title
+    FROM entities d JOIN entity_names d_name ON d_name.entity_id = d.id AND d_name.name_key = d.preferred_name_key
     JOIN entities de ON de.id = d.id AND de.deleted_at IS NULL
     JOIN links l    ON l.from_id = d.id AND l.kind = 'at'
-    JOIN pages pl   ON pl.id = l.to_id
+    JOIN entities pl ON pl.id = l.to_id JOIN entity_names pl_name ON pl_name.entity_id = pl.id AND pl_name.name_key = pl.preferred_name_key
     JOIN entities e ON e.id = pl.id AND e.deleted_at IS NULL
-   WHERE d.title_key = :day
+   WHERE d.id = (SELECT entity_id FROM entity_names WHERE name_key = :day)
   UNION ALL
-  SELECT 'habit', NULL, m.title || ': ' ||
-         CASE (SELECT max(v.value) FROM measurement_values v WHERE v.metric_id = m.id AND v.day = :day)
+  SELECT 'habit', NULL, m_name.title || ': ' ||
+         CASE (SELECT max(v.value) FROM measurement_values v WHERE v.metric_id = m.id AND v.day = :day AND v.session_id IS NULL)
            WHEN 1 THEN 'done' WHEN 0 THEN 'not done' ELSE 'not recorded' END
-    FROM habit_periods h JOIN pages m ON m.id = h.metric_id
+    FROM habit_periods h JOIN entities m ON m.id = h.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key
     JOIN entities e ON e.id = m.id AND e.deleted_at IS NULL
    WHERE h.start_day <= :day AND coalesce(h.end_day, '9999-12-31') >= :day
   UNION ALL
-  SELECT p.title, me.taken_at, CAST(me.value AS TEXT) || ' ' || m.unit
-    FROM measurement_values me JOIN metrics m ON m.id = me.metric_id JOIN pages p ON p.id = m.id
-   WHERE me.day = :day
+  SELECT p_name.title, me.taken_at, CAST(me.value AS TEXT) || ' ' || m.unit
+    FROM measurement_values me JOIN metrics m ON m.id = me.metric_id JOIN entities p ON p.id = m.id JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
+   WHERE me.day = :day AND me.session_id IS NULL
      AND NOT EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = me.metric_id
                         AND h.start_day <= :day AND coalesce(h.end_day, '9999-12-31') >= :day)
 )
 ORDER BY (at IS NOT NULL), at;`
 
 func (s *Store) readings(ctx context.Context, where string, args ...any) ([]Reading, error) {
+	return s.readingsWithLifecycle(ctx, false, where, args...)
+}
+func (s *Store) readingsWithLifecycle(ctx context.Context, includeDeleted bool, where string, args ...any) ([]Reading, error) {
+	where = `WHERE (? OR me.session_id IS NULL OR ss.deleted_at IS NULL) AND ` + strings.TrimPrefix(where, "WHERE ")
+	args = append([]any{includeDeleted}, args...)
 	rows, err := s.DB.R.QueryContext(ctx, `
-		SELECT me.id, m.title, me.day, coalesce(me.taken_at, ''), coalesce(me.tz, ''), me.value, coalesce(me.captured_with_id, 0)
-		  FROM measurement_values me JOIN pages m ON m.id = me.metric_id `+where, args...)
+		SELECT me.id, m_name.title, me.day, coalesce(me.taken_at, ''), coalesce(me.tz, ''), me.value, coalesce(me.captured_with_id, 0),coalesce(me.session_id,0),coalesce(ss.deleted_at,'')
+		  FROM measurement_values me LEFT JOIN sessions ss ON ss.id=me.session_id JOIN entities m ON m.id = me.metric_id  JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key `+where, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -225,8 +236,12 @@ func (s *Store) readings(ctx context.Context, where string, args ...any) ([]Read
 	out := []Reading{}
 	for rows.Next() {
 		var r Reading
-		if err := rows.Scan(&r.ID, &r.Metric, &r.Day, &r.TakenAt, &r.TZ, &r.Value, &r.CapturedWith); err != nil {
+		if err := rows.Scan(&r.ID, &r.Metric, &r.Day, &r.TakenAt, &r.TZ, &r.Value, &r.CapturedWith, &r.SessionID, &r.SessionDeletedAt); err != nil {
 			return nil, err
+		}
+		r.Scope = "unassociated"
+		if r.SessionID != 0 {
+			r.Scope = "session"
 		}
 		out = append(out, r)
 	}
@@ -242,12 +257,12 @@ type Hit struct {
 
 func (s *Store) Search(ctx context.Context, q string, limit int) ([]Hit, error) {
 	rows, err := s.DB.R.QueryContext(ctx, `
-		SELECT p.id, p.title, snippet(pages_fts, 1, '[', ']', '…', 24)
-		  FROM pages_fts
-		  JOIN pages p    ON p.id = pages_fts.rowid
+		SELECT p.id, p_name.title, snippet(entities_fts, 2, '[', ']', '…', 24)
+		  FROM entities_fts
+		  JOIN entities p ON p.id = entities_fts.rowid JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
 		  JOIN entities e ON e.id = p.id AND e.deleted_at IS NULL
-		 WHERE pages_fts MATCH ?
-		 ORDER BY rank LIMIT ?`, q, limit)
+		 WHERE entities_fts MATCH ?
+		 ORDER BY rank, p.id LIMIT ?`, q, limit)
 	if err != nil {
 		return nil, invalid("search %q: %v", q, err)
 	}
@@ -276,9 +291,9 @@ type Metric struct {
 
 func (s *Store) Metrics(ctx context.Context) ([]Metric, error) {
 	rows, err := s.DB.R.QueryContext(ctx, `
-		SELECT m.id, p.title, m.unit, p.body, EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id)
-		  FROM metrics m JOIN pages p ON p.id = m.id JOIN entities e ON e.id = m.id AND e.deleted_at IS NULL
-		 ORDER BY p.title_key`)
+		SELECT m.id, p_name.title, m.unit, p.body, EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id)
+		  FROM metrics m JOIN entities p ON p.id = m.id JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key  JOIN entities e ON e.id = m.id AND e.deleted_at IS NULL
+		 ORDER BY p.preferred_name_key`)
 	if err != nil {
 		return nil, err
 	}
@@ -327,10 +342,10 @@ func (s *Store) InUse(ctx context.Context, day string, n int) ([]string, error) 
 		return nil, invalid("day is YYYY-MM-DD")
 	}
 	rows, err := s.DB.R.QueryContext(ctx, `
-		SELECT m.title FROM pages m JOIN entities e ON e.id = m.id AND e.deleted_at IS NULL
+		SELECT m_name.title FROM entities m JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key  JOIN entities e ON e.id = m.id AND e.deleted_at IS NULL
 		 WHERE m.entity_type = 'metric' AND EXISTS (SELECT 1 FROM measurement_values v
 		                WHERE v.metric_id = m.id AND v.day > date(?, '-' || ? || ' day') AND v.day <= ?)
-		 ORDER BY m.title_key`, day, n, day)
+		 ORDER BY m.preferred_name_key`, day, n, day)
 	if err != nil {
 		return nil, err
 	}
@@ -351,7 +366,7 @@ func (s *Store) Series(ctx context.Context, metric, from, to string) ([]Reading,
 	if !IsDay(from) || !IsDay(to) {
 		return nil, invalid("from and to are YYYY-MM-DD days")
 	}
-	return s.readings(ctx, `WHERE m.title_key = ? AND me.day > ? AND me.day <= ? ORDER BY me.day, me.taken_at`, text.TitleKey(metric), from, to)
+	return s.SeriesScope(ctx, metric, from, to, "unassociated", 0, false)
 }
 
 // Measurement reads one row of the append-only table, current or not, and what corrected it.
@@ -367,14 +382,18 @@ func (s *Store) Measurement(ctx context.Context, id int64) (*Measurement, error)
 	m := &Measurement{}
 	var value sql.NullFloat64
 	err := s.DB.R.QueryRowContext(ctx, `
-		SELECT me.id, m.title, me.day, coalesce(me.taken_at, ''), coalesce(me.tz, ''), me.value,
-		       coalesce(me.captured_with_id, 0), coalesce(me.supersedes_id, 0),
+		SELECT me.id, m_name.title, me.day, coalesce(me.taken_at, ''), coalesce(me.tz, ''), me.value,
+		       coalesce(me.captured_with_id, 0),coalesce(me.session_id,0),coalesce(ss.deleted_at,''), coalesce(me.supersedes_id, 0),
 		       coalesce((SELECT x.id FROM measurements x WHERE x.supersedes_id = me.id), 0),
 		       EXISTS (SELECT 1 FROM measurement_values v WHERE v.id = me.id)
-		  FROM measurements me JOIN pages m ON m.id = me.metric_id WHERE me.id = ?`, id).
-		Scan(&m.ID, &m.Metric, &m.Day, &m.TakenAt, &m.TZ, &value, &m.CapturedWith, &m.Supersedes, &m.SupersededBy, &m.Current)
+		  FROM measurements me LEFT JOIN sessions ss ON ss.id=me.session_id JOIN entities m ON m.id = me.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key  WHERE me.id = ?`, id).
+		Scan(&m.ID, &m.Metric, &m.Day, &m.TakenAt, &m.TZ, &value, &m.CapturedWith, &m.SessionID, &m.SessionDeletedAt, &m.Supersedes, &m.SupersededBy, &m.Current)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, notFound("no measurement %d", id)
+	}
+	m.Scope = "unassociated"
+	if m.SessionID != 0 {
+		m.Scope = "session"
 	}
 	m.Value, m.Retraction = value.Float64, !value.Valid
 	return m, err
@@ -406,15 +425,15 @@ func (s *Store) Ghosts(ctx context.Context) ([]Ghost, error) {
 
 // Recent lists the latest day pages, newest first.
 func (s *Store) RecentDays(ctx context.Context, limit int) ([]Edge, error) {
-	return s.edges(ctx, `SELECT 'day', p.id, p.title, 'page', '' FROM pages p JOIN entities e ON e.id = p.id
-	                      WHERE p.title = p.day AND e.deleted_at IS NULL ORDER BY p.day DESC LIMIT ?`, limit)
+	return s.edges(ctx, `SELECT 'day', p.id, p_name.title, 'page', '' FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key  JOIN entities e ON e.id = p.id
+	                      WHERE p_name.title = p.day AND e.deleted_at IS NULL ORDER BY p.day DESC LIMIT ?`, limit)
 }
 
 // Named lists the live people or places.
 func (s *Store) Named(ctx context.Context, typ string) ([]Edge, error) {
-	return s.edges(ctx, `SELECT p.entity_type, p.id, p.title, p.entity_type, coalesce(pe.name, '')
-	                       FROM pages p JOIN entities e ON e.id = p.id LEFT JOIN people pe ON pe.id = p.id
-	                      WHERE p.entity_type = ? AND e.deleted_at IS NULL ORDER BY p.title`, typ)
+	return s.edges(ctx, `SELECT p.entity_type, p.id, p_name.title, p.entity_type, coalesce(pe.name, '')
+	                       FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key  JOIN entities e ON e.id = p.id LEFT JOIN people pe ON pe.id = p.id
+	                      WHERE p.entity_type = ? AND e.deleted_at IS NULL ORDER BY p_name.title`, typ)
 }
 
 // Result is the answer to an ad-hoc read-only query.

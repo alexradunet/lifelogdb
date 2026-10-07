@@ -31,7 +31,7 @@ func TestAppliedVaultPlanIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	snapshot := func() string {
-		rows, err := f.s.DB.R.Query(`SELECT p.id, p.title, coalesce(p.day, '<null>'), p.body, e.source, e.import_key FROM pages p JOIN entities e ON e.id=p.id ORDER BY p.id`)
+		rows, err := f.s.DB.R.Query(`SELECT e.id, n.title, coalesce(e.day, '<null>'), e.body, e.source, e.import_key FROM entities e JOIN entity_names n ON n.entity_id=e.id AND n.name_key=e.preferred_name_key ORDER BY e.id`)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -49,7 +49,7 @@ const usage = `lifelog — the writer of a life.db
   lifelog query SQL                   one read-only SQL statement
   lifelog habits [YYYY-MM-DD]         the day's habits and completion
   lifelog done METRIC [--day D]       check a habit in as done (skip METRIC: not done)
-  lifelog rename PAGE-ID TITLE        rename a plain page (the old one becomes a redirect stub)
+  lifelog rename PAGE-ID TITLE        rename a named object, retaining its id and old-name aliases
   lifelog file PATH... [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day D] [--at PLACE [--radius M]] [--dry-run]
                                       keep a file (docs/cookbook/keep-a-file.md): the original is hashed,
                                       never stored; its text from FILE; a picture made from a JPEG, PNG or
@@ -63,7 +63,7 @@ const usage = `lifelog — the writer of a life.db
 
 Import (docs/guides/importing.md), with --workspace <source>.lifelog:
   lifelog import setup [--from life.db]   make trial.db: a copy of the real database, or a new one
-  lifelog import approve rules|metrics    the owner's stamp (an interactive terminal only)
+  lifelog import approve rules|metrics|prepared|selected-photo    the owner's stamp (an interactive terminal only)
   lifelog import status                   gates, ledger, questions, next file, what to do now
   lifelog import check FILE | apply FILE  check or apply one facts file
   lifelog import replay --to PATH         the real run: the whole workspace into another database,
@@ -852,8 +852,8 @@ func importOwner(o opts, ws *importer.Workspace, args []string) error {
 		fmt.Println("integrity: ok")
 		return nil
 	case "approve":
-		if len(args) != 2 || (args[1] != "rules" && args[1] != "metrics") {
-			return errors.New("import approve rules|metrics")
+		if len(args) != 2 || (args[1] != "rules" && args[1] != "metrics" && args[1] != "prepared" && args[1] != "selected-photo") {
+			return errors.New("import approve rules|metrics|prepared|selected-photo")
 		}
 		if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
 			return errors.New("approve runs only at an interactive terminal: the owner approves, never a script or a model")

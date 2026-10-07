@@ -3,7 +3,10 @@
 **Status:** accepted
 
 - **Decision.** The rules are `lifelog_meta.instants` and `lifelog_meta.days`, and the round-trip CHECK on every
-  `*_at` and `*_day` column. An instant has milliseconds because `%f` always renders `SS.SSS`: one
+  `*_at` and `*_day` column, with shared [exact-time boundary vectors](../contract/exact-time.md).
+  Explicit ASCII shape and hour bounds are necessary because SQLite's round trip alone accepts negative
+  years and hour-24 spellings that canonical civil dates and UTC clocks do not (executed).
+  An instant has milliseconds because `%f` always renders `SS.SSS`: one
   fixed-width string that the round-trip CHECK can compare, that sorts chronologically as plain text, and
   that keeps rows written within the same second in order, a reading and its correction (executed). The
   CHECK uses `IS`, because a CHECK passes when it evaluates to NULL and `date()` returns NULL for malformed
@@ -18,6 +21,9 @@
   its zone is RFC 9557 [R69](../research/references.md#r69): `2026-06-09T21:14:03.482Z[Europe/Berlin]` — exactly `*_at` plus `tz`.
   Provenance (`source`, `lifelog_meta.source`) is a column for the same reason as the zone: only the moment of writing
   knows it, and with agents among the writers ([D3](D03-integer-ids.md)) it is how a wrong row is traced to the writer that made it.
+- **Recorded-session evidence** is separate from exact write instants: [session time](../contract/session-time.md)
+  preserves unresolved local clocks and unverified zone labels, without host-zone inference. Reporting days are
+  independent attribution, not inferred from endpoints. Period boundaries use a separate [profile](../contract/period-boundaries.md).
 - **Alternatives.**
   - *Instants only, local day computed at query time*: rejected — a timezone move or DST rule
     silently rewrites history. This is why FxLifeSheet needed a dedicated `tag_days` importer to

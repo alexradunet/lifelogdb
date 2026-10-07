@@ -52,6 +52,17 @@ func New(s *core.Store, ws *importer.Workspace) http.Handler {
 	get("/pages/{id}", h.page)
 	get("/people", h.named("person", "people", "create-person"))
 	get("/places", h.named("place", "places", "create-place"))
+	post("/measurements/{id}/relocate", ownerOnly(h.relocateReading))
+	get("/sessions", h.sessions)
+	get("/sessions/{id}", h.session)
+	post("/sessions", h.captureSession)
+	post("/sessions/{id}/edit", h.editSession)
+	post("/sessions/{id}/tombstone", h.tombstoneSession)
+	post("/sessions/{id}/revive", h.reviveSession)
+	get("/periods", h.periods)
+	post("/periods", h.createPeriod)
+	post("/pages/{id}/period", h.editPeriod)
+	post("/pages/{id}/promote-period", h.promotePeriod)
 	get("/files", h.named("file", "files", "add-file"))
 	m.HandleFunc("GET /pages/{id}/preview", picture(func(r *http.Request) ([]byte, error) {
 		id, err := idOf(r)
@@ -305,11 +316,11 @@ func (h *server) root(r *http.Request) (*Entity, error) {
 		Class: []string{"root"}, Title: "Lifelog",
 		Properties: map[string]any{"today": today},
 		Links: []Link{link("self", "/", "Lifelog"), link("today", dayHref(today), "Today"), link("days", "/days", "Days"),
-			link("people", "/people", "People"), link("places", "/places", "Places"), link("files", "/files", "Files"), link("metrics", "/metrics", "Metrics"),
+			link("sessions", "/sessions", "Sessions"), link("periods", "/periods", "Periods"), link("people", "/people", "People"), link("places", "/places", "Places"), link("files", "/files", "Files"), link("metrics", "/metrics", "Metrics"),
 			link("habits", "/habits", "Habits"), link("ghosts", "/ghosts", "Ghost pages"), link("actions", "/actions", "All actions")},
 		Actions: []Action{
 			action("capture", map[string]string{"day": today}, nil), action("search", nil, nil), action("find", nil, nil),
-			action("create-page", nil, nil), action("create-person", nil, nil), action("create-place", nil, nil), action("add-file", nil, nil),
+			action("capture-session", nil, nil), action("create-period", nil, nil), action("create-page", nil, nil), action("create-person", nil, nil), action("create-place", nil, nil), action("add-file", nil, nil),
 			h.recordAction(r.Context(), "", today), action("register-metric", nil, nil), action("query", nil, nil)},
 	}, nil
 }
@@ -415,26 +426,35 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 		e.Actions = []Action{action("revive", ids, nil)}
 		return e, nil
 	}
-	if p.IsStub {
-		e.Class = append(e.Class, "redirect-stub")
-	} else {
-		e.Actions = append(e.Actions, action("save-body", ids, map[string]any{"body": p.Body, "version": p.Version}))
-		if p.Type == "page" && !p.IsDayPage {
-			e.Actions = append(e.Actions, action("promote", ids, nil), action("rename", ids, nil))
+	e.Actions = append(e.Actions, action("save-body", ids, map[string]any{"body": p.Body, "version": p.Version}))
+	if !p.IsDayPage {
+		if p.Type == "page" && !p.SessionKind {
+			e.Actions = append(e.Actions, action("promote", ids, nil), action("promote-period", ids, map[string]any{"version": p.Version}))
 		}
-		if p.Type == "place" {
-			values := map[string]any{"radius_m": core.DefaultRadius, "link_days": "1"}
-			if pt := p.Point; pt != nil {
-				values = map[string]any{"lat": pt.Lat, "lon": pt.Lon, "radius_m": pt.RadiusM, "link_days": map[bool]string{true: "1", false: "0"}[pt.LinkDays]}
-			}
-			e.Actions = append(e.Actions, action("locate", ids, values))
+		e.Actions = append(e.Actions, action("rename", ids, nil))
+	}
+	if p.Period != nil {
+		values := map[string]any{"version": p.Version}
+		if p.Period.Start != nil {
+			values["start_boundary"] = *p.Period.Start
 		}
+		if p.Period.End != nil {
+			values["end_boundary"] = *p.Period.End
+		}
+		e.Actions = append(e.Actions, action("edit-period", ids, values))
+	}
+	if p.Type == "place" {
+		values := map[string]any{"radius_m": core.DefaultRadius, "link_days": "1"}
+		if pt := p.Point; pt != nil {
+			values = map[string]any{"lat": pt.Lat, "lon": pt.Lon, "radius_m": pt.RadiusM, "link_days": map[bool]string{true: "1", false: "0"}[pt.LinkDays]}
+		}
+		e.Actions = append(e.Actions, action("locate", ids, values))
 	}
 	kinds, err := h.linkKinds(ctx, p.Type, p.IsDayPage)
 	if err != nil {
 		return nil, err
 	}
-	if len(kinds) > 0 && !p.IsStub {
+	if len(kinds) > 0 {
 		e.Actions = append(e.Actions, withOptions(action("link", ids, nil), "kind", kinds))
 		e.Actions = append(e.Actions, withOptions(action("unlink", ids, nil), "kind", kinds))
 	}
@@ -445,7 +465,7 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 // linkKinds are the kinds a page of this type may start (link_kinds.from_types), minus the two the save
 // contract and renames own; `at` only from a day page (D16).
 func (h *server) linkKinds(ctx context.Context, typ string, dayPage bool) ([]string, error) {
-	res, err := h.s.Query(ctx, `SELECT kind FROM link_kinds WHERE kind NOT IN ('wikilink', 'redirect')
+	res, err := h.s.Query(ctx, `SELECT kind FROM link_kinds WHERE kind <> 'wikilink'
 	                             AND (from_types IS NULL OR instr(','||from_types||',', ','||'`+typ+`'||',') > 0) ORDER BY kind`, 100)
 	if err != nil {
 		return nil, err
@@ -537,12 +557,44 @@ func (h *server) series(r *http.Request) (*Entity, error) {
 	if to == "" {
 		to = core.Today()
 	}
-	from := q.Get("from")
-	if from == "" {
-		t, _ := time.Parse(time.DateOnly, to)
-		from = t.AddDate(0, 0, -90).Format(time.DateOnly)
+	if !core.IsDay(to) {
+		return nil, &core.Error{Status: 422, Msg: "to must be an exact day"}
 	}
-	rows, err := h.s.Series(r.Context(), name, from, to)
+	history := q.Get("all_history")
+	if history != "" && history != "0" && history != "1" {
+		return nil, &core.Error{Status: 422, Msg: "all_history must be 0 or 1"}
+	}
+	allHistory := history == "1"
+	from := q.Get("from")
+	if allHistory && from != "" {
+		return nil, &core.Error{Status: 422, Msg: "all_history cannot select a lower bound"}
+	}
+	if !allHistory && from == "" {
+		t, _ := time.Parse(time.DateOnly, to) // canonical day was checked above
+		lower := t.AddDate(0, 0, -90)
+		if lower.Year() < 0 {
+			allHistory = true // the default window reaches the minimum admitted calendar day
+		} else {
+			from = lower.Format(time.DateOnly)
+		}
+	}
+	sessionID, err := optionalID(q, "session_id")
+	if err != nil {
+		return nil, err
+	}
+	if q.Get("include_deleted") != "" && q.Get("include_deleted") != "0" && q.Get("include_deleted") != "1" {
+		return nil, &core.Error{Status: 422, Msg: "include_deleted must be 0 or 1"}
+	}
+	scope := q.Get("scope")
+	if scope == "" {
+		scope = "unassociated"
+	}
+	var rows []core.Reading
+	if allHistory {
+		rows, err = h.s.SeriesHistory(r.Context(), name, to, scope, sessionID, q.Get("include_deleted") == "1")
+	} else {
+		rows, err = h.s.SeriesScope(r.Context(), name, from, to, scope, sessionID, q.Get("include_deleted") == "1")
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -550,16 +602,37 @@ func (h *server) series(r *http.Request) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	self := "/metrics/" + url.PathEscape(name) + "?from=" + from + "&to=" + to
+	selfQuery := url.Values{"to": {to}, "scope": {scope}, "session_id": {strconv.FormatInt(sessionID, 10)}, "include_deleted": {q.Get("include_deleted")}}
+	if allHistory {
+		selfQuery.Set("all_history", "1")
+	} else {
+		selfQuery.Set("from", from)
+	}
+	self := "/metrics/" + url.PathEscape(name) + "?" + selfQuery.Encode()
+	allURL, err := url.Parse(self)
+	if err != nil {
+		return nil, err
+	}
+	allQuery := allURL.Query()
+	allQuery.Del("from")
+	allQuery.Set("all_history", "1")
+	allURL.RawQuery = allQuery.Encode()
 	m := h.metricOf(r.Context(), name)
 	var categories []string
 	if m != nil {
 		categories = m.Categories
 	}
 	e := &Entity{Class: []string{"series"}, Title: name,
-		Properties: map[string]any{"metric": name, "from": from, "to": to, "readings": rows, "habit_periods": periods, "categories": categories},
-		Links:      []Link{link("self", self, name), link("up", "/metrics", "Metrics"), link("habits", "/habits", "Habits"), link("index", "/", "Home")},
+		Properties: map[string]any{"metric": name, "from": from, "to": to, "readings": rows, "habit_periods": periods, "categories": categories, "scope": scope, "session_id": sessionID, "include_deleted": q.Get("include_deleted") == "1", "all_history": allHistory},
+		Links:      []Link{link("all-readings", allURL.String(), "All readings"), link("self", self, name), link("up", "/metrics", "Metrics"), link("habits", "/habits", "Habits"), link("index", "/", "Home")},
 		Actions:    []Action{h.recordAction(r.Context(), name, core.Today())}}
+	if scope == "session" {
+		for i := range e.Actions[0].Fields {
+			if e.Actions[0].Fields[i].Name == "session_id" {
+				e.Actions[0].Fields[i].Value = sessionID
+			}
+		}
+	}
 	ids := map[string]string{"name": url.PathEscape(name)}
 	if len(periods) > 0 && periods[len(periods)-1].End == "" {
 		e.Actions = append(e.Actions, action("stop-habit", ids, map[string]any{"day": core.Today()}),
@@ -600,10 +673,23 @@ func (h *server) measurementEntity(ctx context.Context, id int64) (*Entity, erro
 		e.Links = append(e.Links, link("superseded-by", measurementHref(m.SupersededBy), "Corrected by"))
 	} else {
 		ids := map[string]string{"id": strconv.FormatInt(id, 10)}
-		e.Actions = []Action{action("correct", ids, nil)}
+		e.Actions = []Action{}
+		if m.SessionDeletedAt == "" {
+			e.Actions = append(e.Actions, action("correct", ids, nil))
+		}
 		if !m.Retraction {
 			e.Actions = append(e.Actions, action("retract", ids, nil))
 		}
+	}
+	if m.SessionID != 0 {
+		e.Links = append(e.Links, link("session", "/sessions/"+strconv.FormatInt(m.SessionID, 10), "Session scope"))
+	}
+	allowed, err := h.s.RelocationAllowed(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if allowed {
+		e.Actions = append(e.Actions, action("relocate-reading", map[string]string{"id": strconv.FormatInt(id, 10)}, map[string]any{"metric": m.Metric, "day": m.Day, "value": m.Value, "taken_at": m.TakenAt, "tz": m.TZ, "captured_with_id": m.CapturedWith}))
 	}
 	if m.CapturedWith != 0 {
 		e.Links = append(e.Links, link("captured-with", pageHref(m.CapturedWith), "Captured with"))
@@ -817,7 +903,11 @@ func (h *server) record(r *http.Request, src string) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	id, err := h.s.Record(r.Context(), src, core.Reading{Metric: v.Get("metric"), Day: v.Get("day"), Value: *value,
+	sessionID, err := optionalID(v, "session_id")
+	if err != nil {
+		return nil, err
+	}
+	id, err := h.s.Record(r.Context(), src, core.Reading{SessionID: sessionID, Metric: v.Get("metric"), Day: v.Get("day"), Value: *value,
 		TakenAt: v.Get("taken_at"), TZ: v.Get("tz"), Key: v.Get("import_key")})
 	if err != nil {
 		return nil, err

@@ -64,13 +64,13 @@ func TestWorkspaceRegistrationPolicy(t *testing.T) {
 		t.Fatal("unapproved workspace registration accepted")
 	}
 	var count int
-	if err := d.R.QueryRow("SELECT count(*) FROM pages WHERE title = 'Synthetic Dose'").Scan(&count); err != nil || count != 0 {
+	if err := d.R.QueryRow("SELECT count(*) FROM entity_names WHERE name_key = 'synthetic dose'").Scan(&count); err != nil || count != 0 {
 		t.Fatalf("unapproved registration wrote metric: %d %v", count, err)
 	}
 	approveWorkspaceFile(t, ws, "metrics.md")
 	must(agent.Do(plural, nil))
 	var source, unit string
-	if err := d.R.QueryRow("SELECT e.source, m.unit FROM pages p JOIN entities e ON e.id=p.id JOIN metrics m ON m.id=p.id WHERE p.title='Synthetic Dose'").Scan(&source, &unit); err != nil || source != "import:synthetic-policy" || unit != "mg" {
+	if err := d.R.QueryRow("SELECT e.source,m.unit FROM entities e JOIN entity_names n ON n.entity_id=e.id JOIN metrics m ON m.id=e.id WHERE n.name_key='synthetic dose'").Scan(&source, &unit); err != nil || source != "import:synthetic-policy" || unit != "mg" {
 		t.Fatalf("approved registration: source=%s unit=%s error=%v", source, unit, err)
 	}
 	for _, op := range []struct {

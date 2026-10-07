@@ -11,19 +11,17 @@ ON CONFLICT(from_id, to_id, kind) DO NOTHING;
 
 -- where was I on :day?
 SELECT pl.title, l.note
-  FROM pages d
-  JOIN entities de ON de.id = d.id AND de.deleted_at IS NULL
+  FROM entities d
   JOIN links l    ON l.from_id = d.id AND l.kind = 'at'
-  JOIN pages pl   ON pl.id = l.to_id
-  JOIN entities e ON e.id = pl.id AND e.deleted_at IS NULL
- WHERE d.title_key = :day
+  JOIN entities e ON e.id = l.to_id AND e.deleted_at IS NULL
+  JOIN entity_names pl ON pl.entity_id = e.id AND pl.name_key = e.preferred_name_key
+ WHERE d.preferred_name_key = :day AND d.day = :day AND d.deleted_at IS NULL
  ORDER BY pl.title;
 
 -- the days I was at a place, newest first (links_to serves the place)
 SELECT d.day, l.note
   FROM links l
-  JOIN pages d    ON d.id = l.from_id AND d.title = d.day
-  JOIN entities e ON e.id = d.id AND e.deleted_at IS NULL
+  JOIN entities d ON d.id = l.from_id AND d.preferred_name_key = d.day AND d.deleted_at IS NULL
  WHERE l.to_id = :place_id AND l.kind = 'at'
  ORDER BY d.day DESC;
 ```

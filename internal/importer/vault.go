@@ -120,7 +120,7 @@ func (w *Workspace) validatePlan(ctx context.Context, s *core.Store, p *Plan) er
 			if len(byKey[text.TitleKey(n.Title)]) > 1 {
 				n.Problems = append(n.Problems, "another note has the same title: change one")
 			}
-			if err := checkVaultIdentity(t, n); err != nil {
+			if err := w.checkVaultIdentity(t, n); err != nil {
 				return err
 			}
 			if n.Appended {
@@ -150,20 +150,12 @@ func (w *Workspace) validatePlan(ctx context.Context, s *core.Store, p *Plan) er
 	})
 }
 
-func checkVaultIdentity(t *core.Tx, n *Note) error {
-	title, day, found, err := t.ImportedPageIdentity(n.Path)
+func (w *Workspace) checkVaultIdentity(t *core.Tx, n *Note) error {
+	r, err := w.loadVaultReceipt()
 	if err != nil {
 		return err
 	}
-	if !found {
-		return nil
-	}
-	plannedDay := n.Day
-	sameDay := (day == nil && plannedDay == "") || (day != nil && *day == plannedDay)
-	if title != n.Title || !sameDay {
-		return refuse("%s: applied page identity conflicts with the plan; titles and days cannot change after apply: ask the owner to replan in a fresh trial workspace", n.Path)
-	}
-	return nil
+	return checkVaultReceiptIdentity(t, n, r, false)
 }
 
 // FixPlan changes one note's title and day: the only fields the model may edit.
@@ -237,9 +229,14 @@ func (w *Workspace) ApplyVault(ctx context.Context, s *core.Store) (*VaultResult
 	return w.applyPlan(ctx, s, p, true)
 }
 
-// applyPlan writes a checked plan into a database; record says whether appends are recorded in plan.json
-// (the trial does, a replay reads them).
+// applyPlan writes a checked plan; record persists the trial's plan/identity/completion
+// evidence. Replay consumes verified evidence and never replaces it from target state.
 func (w *Workspace) applyPlan(ctx context.Context, s *core.Store, p *Plan, record bool) (*VaultResult, error) {
+	return w.applyPlanPublishing(ctx, s, p, record, publishVaultReceipt)
+}
+
+// The publisher is the narrow filesystem boundary for deterministic receipt failures.
+func (w *Workspace) applyPlanPublishing(ctx context.Context, s *core.Store, p *Plan, record bool, publish func(string, *vaultIdentityReceipt) error) (*VaultResult, error) {
 	src, err := w.Name()
 	if err != nil {
 		return nil, err
@@ -261,8 +258,13 @@ func (w *Workspace) applyPlan(ctx context.Context, s *core.Store, p *Plan, recor
 	// 1. every page, in one transaction
 	err = s.Do(ctx, src, func(t *core.Tx) error {
 		res.Created = 0
+		if record {
+			if err := w.prepareVaultReceiptPublishing(t, p, publish); err != nil {
+				return err
+			}
+		}
 		for i := range p.Notes {
-			if err := checkVaultIdentity(t, &p.Notes[i]); err != nil {
+			if err := w.checkVaultIdentity(t, &p.Notes[i]); err != nil {
 				return err
 			}
 		}
@@ -322,6 +324,14 @@ func (w *Workspace) applyPlan(ctx context.Context, s *core.Store, p *Plan, recor
 			if err := writeJSON(w.planPath(), p); err != nil {
 				return res, err
 			}
+		}
+	}
+	if record {
+		if err := writeJSON(w.planPath(), p); err != nil {
+			return res, err
+		}
+		if err := s.DryRun(ctx, src, func(t *core.Tx) error { return w.completeVaultReceipt(t, p, publish) }); err != nil {
+			return res, err
 		}
 	}
 	return res, nil

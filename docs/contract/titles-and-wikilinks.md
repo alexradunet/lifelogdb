@@ -1,6 +1,6 @@
 # Prose, wikilinks and titles
 
-`pages.body` is CommonMark text. Wiki references are written inline as `[[Page Title]]`; a `#tag`
+`entities.body` is CommonMark text. Wiki references are written inline as `[[Page Title]]`; a `#tag`
 is read as `[[tag]]`, so tags are just pages ([D5](../decisions/D05-pages-and-day-pages.md)). The app never rewrites the body: `#health` stays
 `#health` in the database.
 
@@ -11,7 +11,7 @@ and every link can be rebuilt from the bodies alone. The `links` table is the so
 graph; the body text is the source of truth for prose. The rules, all executed against the vectors
 below:
 
-- *What is read.* The CommonMark **text** of `pages.body`: the stored body is parsed as it is, and
+- *What is read.* The CommonMark **text** of `entities.body`: the stored body is parsed as it is, and
   each run of text is then NFC-normalised — so a character whose NFC form is CommonMark syntax
   (U+1FEF becomes a backtick) never acts as syntax. Not read: code spans, code blocks, raw HTML,
   link destinations or image alt text. A conformant CommonMark parser
@@ -32,16 +32,11 @@ below:
   is not re-read for tags (`[[Project #alpha]]` is one title). `# Heading` (with a space) is a
   heading; `#Heading` is not a CommonMark heading, so it is a tag. `#Health` and `#health` are
   one page.
-- *Stub pages.* A body that starts — after any whitespace — with `#REDIRECT` (any case), then at
-  least one whitespace character (a line break counts), then `[[`, is a rename stub (below).
-  "Whitespace" here is Unicode White_Space, U+00A0 included — not ASCII-only `\s` and not
-  JavaScript's `\s` (which adds U+FEFF and lacks U+0085). A stub gets no wikilinks and no tags — its one edge is
-  the `redirect` link the app writes — so a stub never shows up as a backlink. Elsewhere the word `#redirect` alone
-  is never a tag, so nothing can create a page called `redirect`.
-- *An invalid target makes no link and never blocks a save.* A title `pages_title_safe` rejects
+- *No redirect marker.* `#REDIRECT` is ordinary text/tag syntax; no body prefix suppresses extraction.
+- *An invalid target makes no link and never blocks a save.* A title `entity_names_title_safe` rejects
   (`[[Health/Diet]]`, `[[Re: plan]]`, the tag `#con`) is skipped. Targets are checked first and then de-duplicated by `title_key`, so the first **valid** spelling of a key is the one linked and created. A writer checks the title rules
-  before inserting — a writer's predicate, checked in `tests/`, agrees with the DDL's CHECKs on more than
-  40 000 generated strings — and creates each target inside its own `SAVEPOINT` ([save a body](../cookbook/save-a-body.md)), so even a
+  before inserting — a writer's predicate is a subset of the DDL's accepted spellings, checked on more than
+  40 000 generated strings; SQLite cannot parse the addressability forms — and creates each target inside its own `SAVEPOINT` ([save a body](../cookbook/save-a-body.md)), so even a
   target the predicate wrongly let through is rolled back alone: the page is saved and no orphan
   `entities` row is left. The UI reports skipped targets; nothing is stored about them.
 - *A page never links to itself* (`[[Diet]]` inside the page `Diet` is ignored), and *a
@@ -111,16 +106,16 @@ Test vectors — every writer must reproduce them. A body is shown in a code spa
 | `#हिन्दी and #ひらがな` | `हिन्दी`, `ひらがな` |
 | `e\u0301#tag` | — |
 | `[[Cafe\u0301 notes]]` | `Café notes` |
-| `#REDIRECT [[New Title]]` | — |
-| `  #redirect  [[New Title]]\nmore #tag` | — |
-| `see #REDIRECT [[New Title]]` | `New Title` |
+| `#REDIRECT [[New Title]]` | `REDIRECT`, `New Title` |
+| `  #redirect  [[New Title]]\nmore #tag` | `redirect`, `New Title`, `tag` |
+| `see #REDIRECT [[New Title]]` | `REDIRECT`, `New Title` |
 | `#redirectors are fun` | `redirectors` |
 | `#2026-09-29 and #2024-12` | `2026-09-29`, `2024-12` |
 | `#½ #² #Ⅻ` | `½`, `²`, `Ⅻ` |
-| `#REDIRECT\n[[x]]` | — |
-| `#REDIRECT\t[[x]]` | — |
-| `\u00a0#REDIRECT [[x]]` | — |
-| `#REDIRECT[[x]]` | `x` |
+| `#REDIRECT\n[[x]]` | `REDIRECT`, `x` |
+| `#REDIRECT\t[[x]]` | `REDIRECT`, `x` |
+| `\u00a0#REDIRECT [[x]]` | `REDIRECT`, `x` |
+| `#REDIRECT[[x]]` | `REDIRECT`, `x` |
 | `\u1fef[[x]]\u1fef` | `x` |
 | `[[a\u2028b]]` | `a\u2028b` |
 | `[[a\rb]]` | — |
@@ -130,24 +125,58 @@ Test vectors — every writer must reproduce them. A body is shown in a code spa
 
 (Also: a 240-byte title is a link, a 241-byte one is not; 80 × `日` = 240 bytes is, 81 is not; `[[ẞ…]] [[ss…]]` with each spelling 81 times links `ss…`: the first is 243 bytes, invalid, and dropped before de-duplication.)
 
-**Renames.** A title never changes (`pages_title_fixed`, [D5](../decisions/D05-pages-and-day-pages.md)). To fix one, a rename moves the page to the
-new title in one transaction ([rename a page](../cookbook/rename-a-page.md)): the old page's text goes to the page that holds the
-new title, and so do its typed links, the ones it starts and the ones that end at it (`about`, `related`, `part-of`, …; a
-symmetric kind's mirror with them; what is filed in a category's page is its `part-of` links, [D26](../decisions/D26-metric-categories.md)); the old
-page keeps only the one-line body `#REDIRECT [[New Title]]` (the replacement's own spelling) and
-`links(kind='redirect', from=old, to=new)`. A free title gets a new page with the old page's text and `day` (a title that
-is a day has that day). A title that exists already is taken only by an empty old page (`body = ''`, the ghost of a
-typo) and only when the page holding it is live and not a stub; any other rename into it is refused — two texts are
-never merged. A new title with the old one's `title_key` is no rename. Only a live plain page is renamed: not a
-day page (its title is its day), not a stub, and not a person, a place, a metric or a file — their title is a permanent handle (a person's
-display name is `people.name`, [D20](../decisions/D20-named-pages.md); a metric's title names its series, [D27](../decisions/D27-a-metric-is-a-page.md); a file's is what embeds it, [D9](../decisions/D09-binary-files.md)). The stub is a plain page; the replacement may be a page, a person, a
-place, a metric or a file, so a ghost made by a misspelt `[[Name]]` can point at the person, and a replacement promoted later
-([a person or a place](../cookbook/person-or-place.md)) keeps its redirect. Consumers follow one hop — the days that name someone and backlinks count a stub's mentions as its replacement's
-([the days that name someone](../cookbook/days-that-name.md), [backlinks](../cookbook/backlinks.md)); the `redirect` row itself is never a backlink.
+**Renames.** Select a new preferred spelling on the same identity in one transaction
+([rename a page](../cookbook/rename-a-page.md)). Previous names remain direct aliases;
+body, day, provenance, typed details, readings and every incoming/outgoing link keep their identities.
+Names are reserved even for ghosts and tombstones: another owner's key is refused, never merged.
+Case-only spelling changes and selecting an already-owned alias are supported; selecting the current
+spelling is a no-op. A deleted identity must first be revived. A canonical journal identity has only
+its date name and cannot rename; other dated notes/files remain aliasable. No rename creates or scans
+a redirect stub, and consumers resolve old names directly, not by traversing links.
 
-**Titles.** The rules are the CHECKs `pages_title_len` and `pages_title_safe` ([schema](../schema/README.md)): 1–240 bytes,
+**Reference-name addressability.** In addition to the filename and pinned Unicode rules, a writer rejects brackets. For both the supplied spelling and its NFC spelling, parse each of `See [[name]].`, `See ![[name]].` and `See [[name\|display]].` as CommonMark, then use the extraction rules above: there must be exactly one extracted candidate with the supplied spelling's normalized key. This test uses lower-level extraction, not a recursive call to the validity predicate. Safe intraword underscores, bare ampersands and an isolated single backtick remain allowed. Two individually addressable single-backtick references can form one code span together; isolated addressability does not guarantee safety in arbitrary surrounding Markdown. Spelling changes must still reproduce the registry key.
+
+The independent addressability vectors below use JSON strings (Unicode escapes have their JSON meanings). `accepted` is the writer predicate; `key` is the independently expected lookup key for accepted names. Every accepted vector is exercised through actual create/save/re-save/resolve and the three literal forms; rejected names must leave no identity or body target behind.
+
+<!-- reference-name-vectors -->
+```json
+[
+  {"name":"Lab (old)","key":"lab (old)","accepted":true},
+  {"name":"C#","key":"c#","accepted":true},
+  {"name":"a!b","key":"a!b","accepted":true},
+  {"name":"a'b","key":"a'b","accepted":true},
+  {"name":"a-b","key":"a-b","accepted":true},
+  {"name":"a+b","key":"a+b","accepted":true},
+  {"name":"a=b","key":"a=b","accepted":true},
+  {"name":"a,b","key":"a,b","accepted":true},
+  {"name":"a;b","key":"a;b","accepted":true},
+  {"name":"a$b","key":"a$b","accepted":true},
+  {"name":"a%b","key":"a%b","accepted":true},
+  {"name":"a@b","key":"a@b","accepted":true},
+  {"name":"a^b","key":"a^b","accepted":true},
+  {"name":"a~b","key":"a~b","accepted":true},
+  {"name":"a{b}","key":"a{b}","accepted":true},
+  {"name":"Café","key":"café","accepted":true},
+  {"name":"Cafe\u0301","key":"café","accepted":true},
+  {"name":"日本語","key":"日本語","accepted":true},
+  {"name":"👩‍💻","key":"👩‍💻","accepted":true},
+  {"name":"a\u2028b","key":"a\u2028b","accepted":true},
+  {"name":"a\u2029b","key":"a\u2029b","accepted":true},
+  {"name":"a_b","key":"a_b","accepted":true},
+  {"name":"R&D","key":"r&d","accepted":true},
+  {"name":"a`b","key":"a`b","accepted":true},
+  {"name":"a\u1fefb","key":"a`b","accepted":true},
+  {"name":"_old_","accepted":false},
+  {"name":"a`b`c","accepted":false},
+  {"name":"R&amp;D","accepted":false},
+  {"name":"Lab [old]","accepted":false},
+  {"name":"a\u1fefb\u1fefc","accepted":false}
+]
+```
+
+**Titles.** The rules are the CHECKs `entity_names_title_len` and `entity_names_title_safe` ([schema](../schema/README.md)): 1–240 bytes,
 trimmed, and a valid file name on Linux, macOS and Windows — the strict direction on purpose ([D5](../decisions/D05-pages-and-day-pages.md)).
-Every writer must be stricter than the DDL in one way: it also rejects code points that **Unicode 15.0** has not
+Every writer must be stricter than the DDL: besides the addressability predicate above it rejects code points that **Unicode 15.0** has not
 assigned (category `Cn` there), whose case fold a later Unicode version could define — which would silently change
 `title_key` (executed). The version is named, not "the newest", so the titles a writer accepts do not change when its
 language or library ships newer Unicode tables: a writer refuses `U+0378` (unassigned), `U+2EBF0` (assigned in
@@ -170,13 +199,13 @@ language must reproduce these vectors exactly:
 | `İstanbul` | `i̇stanbul` (`i` + U+0307) |
 | `日本語 ノート`, `Diet` | `日本語 ノート`, `diet` |
 
-The database verifies what it can (`pages_key_*`: trimmed, no ASCII capitals, `lower(title)` for a
+The database verifies what it can (`entity_names_key_*`: trimmed, no ASCII capitals, `lower(title)` for a
 pure-ASCII title); that a non-ASCII key is the *right* fold is the writing application's duty
 (principle 3) — a writer that computes it wrongly gets uniqueness wrong and nothing else. Resolve a
-`[[wikilink]]` with `WHERE title_key = :key`, a search on the unique index `pages_title` (executed).
+`[[wikilink]]` with `WHERE entity_names.name_key = :key`, a search on its unique registry key (executed).
 
 **Day pages.** The journal is one page per local day, titled with that day: `2026-09-29`. Its `day`
-is its title (`pages_day_page`), so a day page is the page whose title equals its day, and its key is
+is its title (`entities_day_page`), so a day page is the page whose title equals its day, and its key is
 its title (a pure-ASCII title). Capture appends to today's page and creates it on the first write
 ([capture](../cookbook/capture.md)); `[[2026-09-29]]` reaches it like any other title, and a link that names a day before anything
 was written that day creates that day's page, empty ([save a body](../cookbook/save-a-body.md)). A day page is an ordinary page in every

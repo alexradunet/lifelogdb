@@ -39,7 +39,7 @@ func limitsHandler(t *testing.T) (http.Handler, func()) {
 	t.Cleanup(func() { d.Close() })
 	counts := func() string {
 		var out string
-		for _, table := range []string{"entities", "pages", "measurements", "files"} {
+		for _, table := range []string{"entities", "entity_names", "measurements", "files"} {
 			var n int
 			if err := d.R.QueryRow("SELECT count(*) FROM " + table).Scan(&n); err != nil && err != sql.ErrNoRows {
 				t.Fatal(err)

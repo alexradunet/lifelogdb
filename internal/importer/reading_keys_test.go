@@ -650,8 +650,8 @@ func createImportedPage(t *testing.T, f *fixture, file, title string) int64 {
 func importedReadingMetadata(t *testing.T, s *core.Store, metric, day string) (capturedWith int64, rootID int64, currentValue float64) {
 	t.Helper()
 	if err := s.DB.R.QueryRowContext(ctx, `SELECT me.id, coalesce(me.captured_with_id, 0)
-		FROM measurements me JOIN pages m ON m.id = me.metric_id
-		WHERE me.source = 'import:notebook' AND m.title_key = ? AND me.day = ? AND me.supersedes_id IS NULL`, text.TitleKey(metric), day).
+		FROM measurements me JOIN entity_names m ON m.entity_id = me.metric_id
+		WHERE me.source = 'import:notebook' AND m.name_key = ? AND me.day = ? AND me.supersedes_id IS NULL`, text.TitleKey(metric), day).
 		Scan(&rootID, &capturedWith); err != nil {
 		t.Fatal(err)
 	}

@@ -63,7 +63,20 @@ func (r *ReplayResult) failed(rehearse bool, step, file string, err error) error
 // integrity checks were clean; otherwise the target is left as it was, not even created, and the refusal lists
 // every failure. A target that does not exist is initialised; an existing one is never re-initialised.
 func (w *Workspace) Replay(ctx context.Context, trial *core.Store, target string) (*ReplayResult, error) {
-	rehearsal, err := w.Rehearse(ctx, trial, target)
+	return w.replayAfterRehearsal(ctx, trial, target, nil)
+}
+func (w *Workspace) replayAfterRehearsal(ctx context.Context, trial *core.Store, target string, after func() error) (*ReplayResult, error) {
+	w.selectionMu.Lock()
+	defer w.selectionMu.Unlock()
+	before, err := w.selectionSnapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	plan, err := w.vaultReplayPlan(ctx, trial, true)
+	if err != nil {
+		return nil, err
+	}
+	rehearsal, err := w.rehearsePlan(ctx, trial, target, plan)
 	if err != nil {
 		return nil, err
 	}
@@ -74,6 +87,27 @@ func (w *Workspace) Replay(ctx context.Context, trial *core.Store, target string
 		}
 		return nil, refuse("the replay failed when rehearsed on a copy of %s, so nothing was written to it:\n%s",
 			target, strings.Join(lines, "\n"))
+	}
+	if after != nil {
+		if err = after(); err != nil {
+			return nil, err
+		}
+	}
+	current, err := w.selectionSnapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if current != before {
+		return nil, refuse("workspace selections changed after rehearsal; target untouched")
+	}
+	if failures, err := w.collectTrialReadingIdentityFailures(ctx, trial); err != nil {
+		return nil, err
+	} else if len(failures) != 0 {
+		return nil, refuse("trial source identities changed after rehearsal")
+	}
+	selections, err := w.loadSelectionPlan(ctx, trial)
+	if err != nil {
+		return nil, err
 	}
 	res := newReplayResult(target)
 	if !exists(target) {
@@ -88,7 +122,7 @@ func (w *Workspace) Replay(ctx context.Context, trial *core.Store, target string
 	}
 	defer d.Close()
 	ts := &core.Store{DB: d}
-	if err := w.replayInto(ctx, trial, ts, res, false); err != nil {
+	if err := w.replayIntoPlan(ctx, trial, ts, res, false, plan, selections); err != nil {
 		return res, fmt.Errorf("the replay into %s failed after a clean rehearsal, and what it wrote before stays "+
 			"(every write is idempotent: fix the cause and replay again): %w", target, err)
 	}
@@ -99,14 +133,17 @@ func (w *Workspace) Replay(ctx context.Context, trial *core.Store, target string
 // was made; a new database when the target does not exist), going on past each failure so that the result lists
 // all of them, then the integrity checks and the comparison with the trial. The target is only read, and the copy
 // is removed before Rehearse returns.
-func (w *Workspace) Rehearse(ctx context.Context, trial *core.Store, target string) (res *ReplayResult, err error) {
-	if p, ok, err := w.LoadPlan(); err != nil {
+func (w *Workspace) Rehearse(ctx context.Context, trial *core.Store, target string) (*ReplayResult, error) {
+	w.selectionMu.Lock()
+	defer w.selectionMu.Unlock()
+	plan, err := w.vaultReplayPlan(ctx, trial, false)
+	if err != nil {
 		return nil, err
-	} else if ok {
-		if err := w.validatePlan(ctx, trial, p); err != nil {
-			return nil, err
-		}
 	}
+	return w.rehearsePlan(ctx, trial, target, plan)
+}
+
+func (w *Workspace) rehearsePlan(ctx context.Context, trial *core.Store, target string, plan *Plan) (res *ReplayResult, err error) {
 	if err := w.RecoverCorrections(ctx, trial); err != nil {
 		return nil, err
 	}
@@ -149,7 +186,7 @@ func (w *Workspace) Rehearse(ctx context.Context, trial *core.Store, target stri
 	}
 	defer d.Close() // before the folder is removed: deferred calls run last in, first out
 	ts := &core.Store{DB: d}
-	if err := w.replayInto(ctx, trial, ts, res, true); err != nil {
+	if err := w.replayIntoPlan(ctx, trial, ts, res, true, plan); err != nil {
 		return nil, err
 	}
 	if err := w.compareWithTrial(ctx, trial, ts, res); err != nil {
@@ -166,9 +203,16 @@ func (w *Workspace) Rehearse(ctx context.Context, trial *core.Store, target stri
 // after the rest), then the owner's corrections. Rehearsing, a failing step or file is recorded and the rest goes
 // on; otherwise the first stops it.
 func (w *Workspace) replayInto(ctx context.Context, trial, ts *core.Store, res *ReplayResult, rehearse bool) error {
-	if p, ok, err := w.LoadPlan(); err != nil {
+	plan, err := w.vaultReplayPlan(ctx, trial, !rehearse)
+	if err != nil {
 		return err
-	} else if ok {
+	}
+	return w.replayIntoPlan(ctx, trial, ts, res, rehearse, plan)
+}
+
+func (w *Workspace) replayIntoPlan(ctx context.Context, trial, ts *core.Store, res *ReplayResult, rehearse bool, p *Plan, frozen ...*selectionPlan) error {
+	var err error
+	if p != nil {
 		fresh := &Plan{Notes: make([]Note, len(p.Notes))}
 		copy(fresh.Notes, p.Notes)
 		for i := range fresh.Notes {
@@ -189,13 +233,21 @@ func (w *Workspace) replayInto(ctx context.Context, trial, ts *core.Store, res *
 			}
 		}
 	}
+	var selections *selectionPlan
+	if len(frozen) > 0 {
+		selections = frozen[0]
+	}
+	preparedFiles, err := w.replaySelections(ctx, trial, ts, res, rehearse, selections)
+	if err != nil {
+		return err
+	}
 	lines, _, err := w.Ledger()
 	if err != nil {
 		return err
 	}
 	var pending []string
 	for _, l := range lines {
-		if l.State == "x" || l.State == "?" {
+		if (l.State == "x" || l.State == "?") && !preparedFiles[l.File] {
 			pending = append(pending, l.File)
 		}
 	}
@@ -555,6 +607,9 @@ func compare(a, b *core.Counts) []string {
 	if a.Pages != b.Pages {
 		out = append(out, fmt.Sprintf("pages: trial %d, target %d", a.Pages, b.Pages))
 	}
+	if a.Sessions != b.Sessions {
+		out = append(out, fmt.Sprintf("sessions: trial %d, target %d", a.Sessions, b.Sessions))
+	}
 	if a.Readings != b.Readings {
 		out = append(out, fmt.Sprintf("current readings: trial %d, target %d", a.Readings, b.Readings))
 	}
@@ -593,4 +648,115 @@ func same(a, b string) bool {
 	sa, err1 := os.Stat(a)
 	sb, err2 := os.Stat(b)
 	return err1 == nil && err2 == nil && os.SameFile(sa, sb)
+}
+
+type selectedPhotoPlan struct {
+	selection *SelectedPhoto
+	input     core.FileIn
+}
+type selectionPlan struct {
+	batches []*PreparedBatch
+	photos  []selectedPhotoPlan
+	files   map[string]bool
+}
+
+func (w *Workspace) loadSelectionPlan(ctx context.Context, trial *core.Store) (*selectionPlan, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	plan := &selectionPlan{files: map[string]bool{}}
+	batches, err := w.appliedPrepared(ctx)
+	if err != nil {
+		return nil, err
+	}
+	plan.batches = batches
+	if _, ok, e := w.read(preparedFile); e != nil {
+		return nil, e
+	} else if ok {
+		current, e := w.readPrepared(ctx, true)
+		if e != nil {
+			return nil, e
+		}
+		if e = w.bindPrepared(current, false); e != nil {
+			return nil, e
+		}
+		found := false
+		for _, b := range batches {
+			if b.File == current.File && b.Profile == current.Profile {
+				found = true
+			}
+		}
+		if !found {
+			return nil, refuse("current prepared batch is reserved or unapplied; apply before replay")
+		}
+	}
+	for _, b := range batches {
+		if err = w.admitSource(b.File); err != nil {
+			return nil, err
+		}
+		if err = verifyPrepared(ctx, trial, b); err != nil {
+			return nil, err
+		}
+		plan.files[b.File] = true
+	}
+	photos, err := w.appliedSelectedPhotos(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range photos {
+		in, e := w.verifySelectedPhoto(ctx, trial, p, false)
+		if e != nil {
+			return nil, e
+		}
+		plan.photos = append(plan.photos, selectedPhotoPlan{p, in})
+		plan.files[p.File] = true
+		if p.Sidecar != "" {
+			plan.files[p.Sidecar] = true
+		}
+	}
+	if _, ok, e := w.read(selectedPhotoFile); e != nil {
+		return nil, e
+	} else if ok {
+		p, _, e := w.readSelectedPhoto(ctx, true)
+		if e != nil {
+			return nil, e
+		}
+		if e = w.bindSelectedPhoto(p, false); e != nil {
+			return nil, e
+		}
+		found := false
+		for _, have := range photos {
+			if have.OriginalSHA256 == p.OriginalSHA256 {
+				found = true
+			}
+		}
+		if !found {
+			return nil, refuse("current selected pair is unapplied; apply before replay")
+		}
+	}
+	return plan, nil
+}
+func (w *Workspace) replaySelections(ctx context.Context, trial, ts *core.Store, res *ReplayResult, rehearse bool, frozen *selectionPlan) (map[string]bool, error) {
+	plan := frozen
+	var err error
+	if plan == nil {
+		plan, err = w.loadSelectionPlan(ctx, trial)
+		if err != nil {
+			return nil, err
+		}
+	}
+	for _, b := range plan.batches {
+		if _, err = writePrepared(ctx, ts, b, false); err != nil {
+			if e := res.failed(rehearse, "prepared", b.File, err); e != nil {
+				return nil, e
+			}
+		}
+	}
+	for _, photo := range plan.photos {
+		if _, err = keepSelectedPhoto(ctx, ts, photo.selection.Source, photo.input, false); err != nil {
+			if e := res.failed(rehearse, "selected-photo", photo.selection.File, err); e != nil {
+				return nil, e
+			}
+		}
+	}
+	return plan.files, nil
 }

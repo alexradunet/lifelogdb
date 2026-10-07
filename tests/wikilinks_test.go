@@ -1,7 +1,9 @@
 package tests
 
 import (
+	"context"
 	"fmt"
+	"golang.org/x/text/unicode/norm"
 	"math/rand/v2"
 	"path/filepath"
 	"regexp"
@@ -128,16 +130,15 @@ func docSaveContract(s *S) {
 	if ok {
 		docPage := func(c *C, body, title string) int64 {
 			c.must(st.begin)
-			pid := c.ent("page")
-			c.must("INSERT INTO pages(id,title,title_key,body) VALUES(?, ?, ?, ?)", pid, title, text.TitleKey(title), body)
+			pid := c.pageW(title, nil, body)
 			c.docSave(st, pid, body, text.TitleKey(title), true)
 			c.must(st.commit)
 			return pid
 		}
 		docEdit := func(c *C, pid int64, body string) {
 			c.must(st.begin)
-			c.must("UPDATE pages SET body=? WHERE id=?", body, pid)
-			c.docSave(st, pid, body, c.str("select title_key from pages where id=?", pid), true)
+			c.must("UPDATE entities SET body=? WHERE id=?", body, pid)
+			c.docSave(st, pid, body, c.str("SELECT preferred_name_key FROM entities WHERE id=?", pid), true)
 			c.must(st.commit)
 		}
 		all := append(rows, computed()...)
@@ -146,7 +147,7 @@ func docSaveContract(s *S) {
 		for _, v := range all {
 			c := s.fresh()
 			pid := docPage(c, v.body, "Vector body")
-			orph += c.n("select count(*) from entities e where not exists (select 1 from pages p where p.id=e.id)")
+			orph += c.n("select count(*) from entities e where not exists (select 1 from entity_names n where n.entity_id=e.id AND n.name_key=e.preferred_name_key)")
 			if got := c.linksOf(pid); !eq(got, sorted(v.want)) {
 				okv = false
 				differs = append(differs, fmt.Sprintf("%q: %q", v.body, got))
@@ -157,10 +158,10 @@ func docSaveContract(s *S) {
 		s.K("B ...and leaves no orphan entities row", orph == 0)
 		c := s.fresh()
 		c.must("BEGIN IMMEDIATE")
-		eid := c.rows(st.ent, P{"source": "ui"})[0][0]
+		eid := c.rows(st.ent, P{"source": "ui", "key": "zed", "title": "Zed"})[0][0]
 		c.must(st.pg, P{"title": "Zed", "key": "zed", "target_id": eid})
 		c.must("COMMIT")
-		s.K("B the id step 2b RETURNs is the new page's id", c.one("select id from pages where title='Zed'") == eid)
+		s.K("B the id step 2b RETURNs is the new page's id", c.one("select entity_id from entity_names where title='Zed'") == eid)
 		frags := []string{"[[Alpha]]", "[[alpha|a]]", "#beta", "`[[code]]`", "[[Bad/Name]]", "~~~\n[[fence]]\n~~~", "[[Ünï]]", "[[UNÏ]]", "text", "#Beta",
 			"[[Gamma delta]]", "#12", "[[CON]]", "#REDIRECTED", "#REDIRECT [[Alpha]]"}
 		rng := rand.New(rand.NewPCG(10, 10))
@@ -186,44 +187,43 @@ func docSaveContract(s *S) {
 			same = same && eq(ca.linksOf(pa[i]), cb.linksOf(pb[i]))
 		}
 		s.K("B the document's SQL equals the writer's own save after 400 random edits", same)
-		keys := "select title_key from pages where title_key is not null order by 1"
+		keys := "select name_key from entity_names order by 1"
 		s.K("B ...with the same set of pages", eq(ca.col(keys), cb.col(keys)))
 	}
 
-	// ---- C  cookbook/backlinks drops redirect rows
+	// ---- C  retained names share one backlink endpoint.
 	c := s.fresh()
-	c.must("BEGIN IMMEDIATE")
-	nw := c.page("Diet plan")
-	old := c.pageW("Diet", nil, "#REDIRECT [[Diet plan]]")
-	mm := c.dayPage("2026-09-30", "[[Diet plan]]")
-	c.link(old, nw, "redirect")
-	c.link(mm, nw, "wikilink")
+	old := c.page("Diet")
+	mm := c.dayPage("2026-09-30", "[[Diet]]")
 	dd := c.dayPage("2026-09-29", "[[Diet]]")
+	c.link(mm, old, "wikilink")
 	c.link(dd, old, "wikilink")
-	c.must("COMMIT")
-	r := c.rows(s.d.Block("backlinks"), P{"page_id": nw})
+	if _, err := c.store().Rename(context.Background(), "ui", old, "Diet plan"); err != nil {
+		stop("rename backlink fixture: %v", err)
+	}
+	r := c.rows(s.d.Block("backlinks"), P{"page_id": old})
 	var got []string
 	for _, x := range r {
 		got = append(got, val(x[0])+"|"+val(x[2]))
 	}
-	s.K("C cookbook/backlinks lists the wikilinks to the page and to its stub, not the stub's redirect row",
-		eq(sorted(got), sorted([]string{"wikilink|" + ids(mm), "wikilink|" + ids(dd)})), tab(r))
+	s.K("C cookbook/backlinks keeps old-name mentions on the same identity", eq(sorted(got), sorted([]string{"wikilink|" + ids(mm), "wikilink|" + ids(dd)})), tab(r))
+
 }
 
 // saveContract: the save contract through the writer's own save, against the DDL under test. Expected outcome in each label.
 func saveContract(s *S) {
 	orphans := func(c *C) int64 {
-		return c.n("SELECT count(*) FROM entities e WHERE entity_type='page' AND NOT EXISTS (SELECT 1 FROM pages p WHERE p.id=e.id)")
+		return c.n("SELECT count(*) FROM entities e WHERE entity_type='page' AND NOT EXISTS (SELECT 1 FROM entity_names n WHERE n.entity_id=e.id AND n.name_key=e.preferred_name_key)")
 	}
 
 	// P1 valid and invalid targets in one page: the page IS saved, valid links made, invalid ones skipped
 	c := s.fresh()
 	pid, r := c.savePage("Diet: [[Health/Diet]], [[Re: plan]], [[Target|alias]], [[Good page]], #health #con #C", "")
-	s.K("P1a the page is saved although two targets are invalid", c.n("select count(*) from pages where id=?", pid) == 1)
+	s.K("P1a the page is saved although two targets are invalid", c.n("select count(*) from entities where id=?", pid) == 1)
 	s.K("P1b links = C, Good page, Target, health (#C is a valid one-letter tag)", eq(c.linksOf(pid), []string{"C", "Good page", "Target", "health"}), c.linksOf(pid))
 	s.K("P1c skipped (reported, not stored): Health/Diet, Re: plan, con", eq(sorted(r.Skipped), []string{"Health/Diet", "Re: plan", "con"}), r.Skipped)
 	s.K("P1d no orphan entities row, DB consistent", orphans(c) == 0 && c.integrityOK())
-	s.K("P1e the body keeps the text verbatim", strings.HasPrefix(c.str("select body from pages where id=?", pid), "Diet: [[Health/Diet]]"))
+	s.K("P1e the body keeps the text verbatim", strings.HasPrefix(c.str("select body from entities where id=?", pid), "Diet: [[Health/Diet]]"))
 
 	// P2 backstop: with the title predicate skipped the save survives, and leaves no orphan (cookbook/save-a-body's SAVEPOINT)
 	if st, ok := s.saveSteps(); ok {
@@ -232,12 +232,11 @@ func saveContract(s *S) {
 		var p2 int64
 		out := try(func() {
 			c.must(st.begin)
-			p2 = c.ent("page")
-			c.must("INSERT INTO pages(id,title,title_key,body) VALUES (?, 'Backstop', 'backstop', 'x [[Health/Diet]] [[fine]]')", p2)
+			p2 = c.pageW("Backstop", nil, "x [[Health/Diet]] [[fine]]")
 			_, skipped = c.docSave(st, p2, "x [[Health/Diet]] [[fine]]", "backstop", false)
 			c.must(st.commit)
 		})
-		s.K("P2a predicate off: the page is still committed", out == "OK" && c.n("select count(*) from pages where id=?", p2) == 1, out)
+		s.K("P2a predicate off: the page is still committed", out == "OK" && c.n("select count(*) from entities where id=?", p2) == 1, out)
 		s.K("P2b predicate off: bad target skipped, good target linked", eq(c.linksOf(p2), []string{"fine"}) && contains(skipped, "Health/Diet"), c.linksOf(p2), skipped)
 		s.K("P2c predicate off: no orphan entities row", orphans(c) == 0, orphans(c))
 	} else {
@@ -256,37 +255,31 @@ func saveContract(s *S) {
 	s.K("P3c re-saving the same body changes nothing (idempotent, no new rows)", n1 == n2, n1, n2)
 	c.editBody(pid, "no links at all")
 	s.K("P3d body without links: all wikilinks removed", len(c.linksOf(pid)) == 0)
-	s.K("P3e dropped targets survive as pages (and may become ghosts, cookbook/ghost-pages)", c.n("select count(*) from pages where id<>? and entity_type = 'page'", pid) == 4)
+	s.K("P3e dropped targets survive as pages (and may become ghosts, cookbook/ghost-pages)", c.n("select count(*) from entities where id<>? and entity_type = 'page'", pid) == 4)
 
 	// P4 self link, stub
 	c = s.fresh()
 	c.must("BEGIN IMMEDIATE")
-	wid := c.ent("page")
-	c.must("INSERT INTO pages(id,title,title_key,body) VALUES(?, 'Diet','diet','')", wid)
+	wid := c.page("Diet")
 	c.must("COMMIT")
 	c.editBody(wid, "About [[Diet]] and [[diet]] and [[Food]]")
 	s.K("P4a a page never links to itself", eq(c.linksOf(wid), []string{"Food"}), c.linksOf(wid))
 	c.must("BEGIN IMMEDIATE")
-	old := c.ent("page")
-	c.must("INSERT INTO pages(id,title,title_key,body) VALUES(?, 'Old diet','old diet','[[Food]] [[Stuff]]')", old)
+	old := c.pageW("Old diet", nil, "[[Food]] [[Stuff]]")
 	c.must("COMMIT")
 	c.editBody(old, "[[Food]] [[Stuff]]")
 	nBefore := len(c.linksOf(old))
 	c.editBody(old, "#REDIRECT [[Diet]]")
-	c.must("BEGIN IMMEDIATE")
-	c.must("INSERT INTO links(from_id,to_id,kind,created_at,source) VALUES(?,?, 'redirect', "+NOW+", 'ui')", old, wid)
-	c.must("COMMIT")
-	s.K(`P4b a stub has no wikilink edges (old links dropped, new not made) and no page "REDIRECT"`, nBefore == 2 && len(c.linksOf(old)) == 0 &&
-		c.n("select count(*) from pages where title_key='redirect'") == 0, nBefore, c.linksOf(old))
-	s.K("P4c the stub's one edge is the redirect link", c.n("select count(*) from links where from_id=? and kind='redirect'", old) == 1)
+	s.K("P4b REDIRECT is literal tag/text, not a stub", nBefore == 2 && eq(c.linksOf(old), []string{"Diet", "REDIRECT"}), c.linksOf(old))
+	s.K("P4c redirect edges are not registered", strings.HasPrefix(c.link(old, wid, "redirect"), "ERR"))
 
 	// P5 tombstoned target is revived, not duplicated
 	c = s.fresh()
 	pid, _ = c.savePage("[[Junk]]", "")
-	jid := c.n("select id from pages where title='Junk'")
+	jid := c.n("select entity_id from entity_names where title='Junk'")
 	c.must("UPDATE entities SET deleted_at="+NOW+" WHERE id=?", jid)
 	pid2, _ := c.savePage("again [[JUNK]]", "")
-	s.K("P5a one page, revived", c.n("select count(*) from pages where title_key='junk'") == 1 && c.str("select deleted_at from entities where id=?", jid) == "None")
+	s.K("P5a one page, revived", c.n("select count(*) from entity_names where name_key='junk'") == 1 && c.str("select deleted_at from entities where id=?", jid) == "None")
 	s.K("P5b both pages link to it", eq(c.linksOf(pid), []string{"Junk"}) && eq(c.linksOf(pid2), []string{"Junk"}))
 
 	// P6 incremental == rebuild, over random edit sequences
@@ -308,12 +301,12 @@ func saveContract(s *S) {
 	c2 := s.fresh()
 	same := true
 	for _, p := range pgs {
-		q, _ := c2.savePage(c.str("select body from pages where id=?", p), "")
+		q, _ := c2.savePage(c.str("select body from entities where id=?", p), "")
 		same = same && eq(c.linksOf(p), c2.linksOf(q))
 	}
 	s.K("P6a incremental maintenance == rebuild from bodies (6 pages, 400 random edits)", same)
 	s.K("P6b no orphans, integrity ok after 400 edits", orphans(c) == 0 && c.integrityOK())
-	s.K("P6c at most one page per title_key", c.n("select count(*) from (select title_key from pages where title_key is not null group by 1 having count(*)>1)") == 0)
+	s.K("P6c at most one page per title_key", c.n("select count(*) from (select name_key from entity_names group by 1 having count(*)>1)") == 0)
 
 	// P7 four real writers save pages with the same new tag and target at the same time
 	path := filepath.Join(s.dir, "p7.db")
@@ -337,7 +330,7 @@ func saveContract(s *S) {
 	wg.Wait()
 	cv := s.writerConn(path)
 	s.K("P7a four concurrent saves: no errors", len(errs) == 0, errs)
-	s.K("P7b one page per shared target, four pages linked to each", cv.n("select count(*) from pages where title_key in ('shared topic','shared')") == 2 &&
+	s.K("P7b one page per shared target, four pages linked to each", cv.n("select count(*) from entity_names where name_key in ('shared topic','shared')") == 2 &&
 		cv.n("select count(*) from links where kind='wikilink'") == 8)
 
 	// P8 the vectors, end to end through the database (links == vector result); P9 the extraction alone
@@ -399,13 +392,14 @@ func titleFuzz(s *S) {
 		cases = append(cases, rnd())
 	}
 	c := s.fresh()
-	ins, err := c.Prepare("INSERT INTO pages(id,title,title_key,day) VALUES(?, ?, ?, CASE WHEN date(?) IS ? THEN ? END)")
+	ins, err := c.Prepare("INSERT INTO entity_names(entity_id,title,name_key) VALUES(?,?,?)")
 	if err != nil {
 		stop("prepare: %v", err)
 	}
 	defer ins.Close()
 	seen := map[string]bool{}
 	var block, loose []string
+	unexplained := 0
 	accepted := 0
 	for _, t := range cases {
 		if seen[t] {
@@ -414,8 +408,11 @@ func titleFuzz(s *S) {
 		seen[t] = true
 		app := text.ValidTitle(t)
 		c.must("SAVEPOINT f")
-		pid := c.ent("page")
-		_, e := ins.Exec(pid, t, text.TitleKey(t), t, t, t)
+		key := text.TitleKey(t)
+		owners, e := c.query("INSERT INTO entities(entity_type,preferred_name_key,day,created_at,updated_at,source) VALUES ('page',?,CASE WHEN date(?) IS ? THEN ? END,"+NOW+","+NOW+",'ui') RETURNING id", key, t, t, t)
+		if e == nil {
+			_, e = ins.Exec(owners[0][0], t, key)
+		}
 		c.must("ROLLBACK TO f")
 		c.must("RELEASE f")
 		db := e == nil
@@ -427,9 +424,21 @@ func titleFuzz(s *S) {
 		}
 		if db && !app {
 			loose = append(loose, fmt.Sprintf("%q", clip(t, 30)))
+			addressable := true
+			for _, spelling := range []string{t, norm.NFC.String(t)} {
+				for _, body := range []string{"See [[" + spelling + "]].", "See ![[" + spelling + "]].", "See [[" + spelling + "|display]]."} {
+					candidates := text.Candidates(body)
+					if len(candidates) != 1 || text.TitleKey(candidates[0]) != text.TitleKey(t) {
+						addressable = false
+					}
+				}
+			}
+			if addressable {
+				unexplained++
+			}
 		}
 	}
 	s.K("more than 40 000 distinct strings, some accepted by the DB and some refused", len(seen) > 40000 && accepted > 0 && accepted < len(seen), len(seen), accepted)
 	s.K("no string the writer accepts is refused by the DB (that would block a save)", len(block) == 0, len(block), block[:min(5, len(block))])
-	s.K("no string the DB accepts is refused by the writer (the predicate mirrors the CHECKs)", len(loose) == 0, len(loose), loose[:min(8, len(loose))])
+	s.K("DB-only generated names fail the contract addressability forms, not an unexplained filename rule", unexplained == 0, len(loose), loose[:min(8, len(loose))])
 }

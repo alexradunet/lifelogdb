@@ -129,7 +129,7 @@ func TestActionsAreOfferedOnlyWhereLegal(t *testing.T) {
 		t.Error("a day page does not offer an at link")
 	}
 	ana := must(c.Get(dayPage.Entities[0].Href))
-	if got := names(ana); got != "save-body,promote,rename,link,unlink,tombstone" {
+	if got := names(ana); got != "save-body,promote,promote-period,rename,link,unlink,tombstone" {
 		t.Errorf("a plain page offers %s", got)
 	}
 	if hasOption(find(ana, "link"), "kind", "at") {
@@ -328,10 +328,10 @@ func TestBrowserOriginProtection(t *testing.T) {
 	}
 
 	root := must(c.Get("/"))
-	if got := fmtRows(must(c.Do(find(root, "query"), map[string]string{"sql": "SELECT CAST(count(*) AS text) FROM pages WHERE title IN ('2026-10-10','2026-10-11')"}))); got != "2" {
+	if got := fmtRows(must(c.Do(find(root, "query"), map[string]string{"sql": "SELECT CAST(count(*) AS text) FROM entity_names WHERE title IN ('2026-10-10','2026-10-11')"}))); got != "2" {
 		t.Errorf("allowed day pages count = %s, want 2", got)
 	}
-	if got := fmtRows(must(c.Do(find(root, "query"), map[string]string{"sql": "SELECT CAST(count(*) AS text) FROM pages WHERE title IN ('2026-10-12','2026-10-14')"}))); got != "0" {
+	if got := fmtRows(must(c.Do(find(root, "query"), map[string]string{"sql": "SELECT CAST(count(*) AS text) FROM entity_names WHERE title IN ('2026-10-12','2026-10-14')"}))); got != "0" {
 		t.Errorf("denied day pages count = %s, want 0", got)
 	}
 	if got := fmtRows(must(c.Do(find(root, "query"), map[string]string{"sql": "SELECT CAST(count(*) AS text) FROM measurements WHERE day='2026-10-13'"}))); got != "0" {
@@ -575,33 +575,30 @@ func TestMetricCanonicalActions(t *testing.T) {
 	}
 }
 
-func TestRedirectStubWrites(t *testing.T) {
+func TestRenamedIdentityRetainsActionsAndAliasWrites(t *testing.T) {
 	c, _ := fresh(t)
 	root := must(c.Get("/"))
 	p := must(c.Do(find(root, "create-page"), map[string]string{"title": "Typo", "body": "prose"}))
 	oldHref := href(p, "self")
-	save, link, unlink := find(p, "save-body"), find(p, "link"), find(p, "unlink")
-	must(c.Do(find(p, "rename"), map[string]string{"title": "Correct"}))
+	renamed := must(c.Do(find(p, "rename"), map[string]string{"title": "Correct"}))
+	if href(renamed, "self") != oldHref {
+		t.Fatal("rename changed id")
+	}
 	other := must(c.Do(find(root, "create-page"), map[string]string{"title": "Other", "body": "[[Typo]]"}))
-	for _, name := range []string{"link", "unlink"} {
-		_, err := c.Do(find(other, name), map[string]string{"to": "Typo", "kind": "related"})
-		if !clientStatus(err, 409) {
-			t.Errorf("stub target %s: %v", name, err)
-		}
+	current := must(c.Get(oldHref))
+	if current.Title != "Correct" || names(current) != "save-body,promote,promote-period,rename,link,unlink,tombstone" {
+		t.Fatalf("renamed actions: %+v", current)
 	}
-	stub := must(c.Get(oldHref))
-	if names(stub) != "tombstone" {
-		t.Errorf("stub actions: %s", names(stub))
+	version := current.Properties.(map[string]any)["version"].(string)
+	must(c.Do(find(current, "save-body"), map[string]string{"body": "#REDIRECT [[Other]]", "version": version}))
+	must(c.Do(find(other, "link"), map[string]string{"to": "Typo", "kind": "related"}))
+	must(c.Do(find(must(c.Get(oldHref)), "unlink"), map[string]string{"to": "Other", "kind": "related"}))
+	alias := must(c.Get("/pages?title=Typo"))
+	if href(alias, "self") != oldHref || alias.Title != "Correct" || alias.Properties.(map[string]any)["body"] != "#REDIRECT [[Other]]" {
+		t.Fatalf("retained alias: %+v", alias)
 	}
-	for _, a := range []api.Action{save, link, unlink} {
-		values := map[string]string{"to": "Correct", "kind": "related"}
-		if a.Name == "save-body" {
-			values = map[string]string{"body": "bad", "version": stub.Properties.(map[string]any)["version"].(string)}
-		}
-		_, err := c.Do(a, values)
-		if !clientStatus(err, 409) {
-			t.Errorf("%s bypass: %v", a.Name, err)
-		}
+	if _, err := c.Do(find(alias, "link"), map[string]string{"to": "Other", "kind": "redirect"}); !clientStatus(err, 422) {
+		t.Fatalf("removed kind: %v", err)
 	}
 }
 
@@ -610,7 +607,10 @@ func feedbackLocation(location, path string) bool {
 	if err != nil || u.Scheme != "" || u.Host != "" || u.Path != path || u.Fragment != "" {
 		return false
 	}
-	q := u.Query()
+	q, err := url.ParseQuery(u.RawQuery)
+	if err != nil {
+		return false
+	}
 	values := q["feedback"]
 	if len(q) != 1 || len(values) != 1 || len(values[0]) != 64 {
 		return false

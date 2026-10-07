@@ -2,34 +2,39 @@
 
 The diagrams draw tables, keys and relationships only; the other columns are in [schema](../schema/README.md). They are part of
 the contract: `tests/` checks every table, key column and foreign key they draw against [schema](../schema/README.md), so a
-diagram cannot drift from the DDL without a test failing. (`pages_fts`, the FTS5 index over `pages`,
+diagram cannot drift from the DDL without a test failing. (`entities_fts`, the FTS5 index over `entity_search_content`,
 is derived and rebuildable and is not drawn.)
 
 ## Entities and the graph
 
-One supertype row per linkable thing (`entities`), one domain row per entity with the *same* id — the
-composite foreign key `(id, entity_type)` makes the type and the table agree — and one polymorphic graph
-(`links`) over the supertype, whose `kind` is a foreign key to the closed registry `link_kinds`. A
-person, a place, a metric or a file is also a page ([D20](../decisions/D20-named-pages.md), [D27](../decisions/D27-a-metric-is-a-page.md), [D9](../decisions/D09-binary-files.md)): a person's `people` row hangs off its `pages` row, which hangs
-off its `entities` row — one id, three rows; a metric's `metrics` row and a file's `files` row hang off their page the
-same way; a place is its `entities` and `pages` rows ([D16](../decisions/D16-places.md)), and a `places` row when it has a point
-([D21](../decisions/D21-location-history.md)).
+One named identity and prose body per linkable thing (`entities`), with authoritative spellings in
+`entity_names` and a preferred selection checked by a deferred owner FK. A person, place, metric, file or
+period is a page concept, not a separate prose row. Typed extensions reference `(id, entity_type)`
+directly on `entities`; a place's point remains optional. The polymorphic `links` graph references
+the same stable id and the closed `link_kinds` registry.
 
 ```mermaid
 %% diagram: er-core
 erDiagram
-    entities ||--o| pages    : "id"
-    pages    ||--o| people   : "id"
-    pages    ||--o| files    : "id"
-    pages    ||--o| places   : "id"
+    entities ||--o{ entity_names : "entity_id"
+    entity_names ||--o| entities : "id"
+    entities ||--o| periods : "id"
+    entities ||--o| people : "id"
+    entities ||--o| files : "id"
+    entities ||--o| places : "id"
     entities ||--o{ links    : "from_id"
     entities ||--o{ links    : "to_id"
     link_kinds ||--o{ links  : "kind"
 
     entities {
-        INTEGER id PK
+        INTEGER id PK, FK
+        TEXT preferred_name_key FK
     }
-    pages {
+    entity_names {
+        INTEGER id PK
+        INTEGER entity_id FK
+    }
+    periods {
         INTEGER id PK, FK
         TEXT entity_type FK
     }
@@ -68,27 +73,33 @@ tables ([D17](../decisions/D17-contract-as-data.md)).
 ```mermaid
 %% diagram: er-facts
 erDiagram
-    pages       ||--o| metrics : "id"
+    entities    ||--o| metrics : "id"
+    entities ||--o{ sessions : "kind_id"
+    sessions |o--o{ measurements : "session_id"
     metrics     ||--o{ measurements : "metric_id"
     entities    |o--o{ measurements : "captured_with_id"
     measurements |o--o| measurements : "supersedes_id"
     metrics     ||--o{ habit_periods : "metric_id"
 
-    pages {
-        INTEGER id PK, FK
-    }
     metrics {
         INTEGER id PK, FK
         TEXT entity_type FK
     }
+    sessions {
+        INTEGER id PK
+        INTEGER kind_id FK
+        TEXT kind_entity_type FK
+    }
     measurements {
         INTEGER id PK
+        INTEGER session_id FK
         INTEGER metric_id FK
         INTEGER captured_with_id FK
         INTEGER supersedes_id FK
     }
     entities {
-        INTEGER id PK
+        INTEGER id PK, FK
+        TEXT preferred_name_key FK
     }
     habit_periods {
         INTEGER id PK

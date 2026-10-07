@@ -3,11 +3,11 @@
 **Status:** accepted
 
 - **Decision.** A metric is a page ([D27](D27-a-metric-is-a-page.md)), so its title keeps a series canonical ('Weight'
-  and 'weight' are one `title_key`, and a title never changes), and its unit never changes (`metrics_unit_fixed`). `measurements` holds one row per data point
+  and 'weight' resolve through one owned normalized name; rename retains the series id), and its unit never changes (`metrics_unit_fixed`). `measurements` holds one row per data point
   and is **bitemporal** [R68](../research/references.md#r68): `day`/`taken_at` is *valid time*, `created_at` and the append-only
   rows are *transaction time*, so "what did I believe my weight was on 1 March, as of 1 April" stays
   answerable. The table is append-only (`measurements_no_update`, `measurements_no_delete`); a
-  correction supersedes (`measurements_one_correction`, `measurements_supersede_metric` — the one
+  correction supersedes (`measurements_one_correction`, `measurements_supersede_metric` and `measurements_supersede_scope` — the one
   supersede invariant that could silently corrupt a series); a NULL value retracts
   (`measurements_first_has_value`); values are finite (`measurements_value_finite`: a `REAL` column
   stores `1e999` as infinity, and one such row poisons every average). SQLite turns a bound `NaN` into
@@ -16,6 +16,9 @@
   `measurement_values` is the one read rule; two independent readings on one day are both returned.
   The unique index on `supersedes_id` doubles as the index the view's `NOT EXISTS` needs (executed:
   the plan uses it).
+- **Session scope** is distinct from capture provenance ([scope](../contract/measurement-scope.md)); the
+  append-only chain keeps its metric and association. Wrong-scope owner correction retracts and creates an
+  independent root atomically. Existing imported correction intent does not authorize imported/keyed relocation.
 - **Habits** are 0/1 metrics with active periods ([D24](D24-habits.md)): their check-ins are ordinary rows here.
 - **Categories** file metrics in pages nested by `part-of` links (Biomarkers, Lipids, Substances) ([D26](D26-metric-categories.md)).
 - **`captured_with_id`** is provenance (the day page the reading was captured with), not "about

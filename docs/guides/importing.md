@@ -11,6 +11,12 @@ In the checked facts workflow, page text comes in through a vault ("An Obsidian 
 journal or diary export is first converted to a folder of one Markdown file per day, named `YYYY-MM-DD.md`, and
 imported as a vault. A file — a recording, a PDF, a photo — is kept on its own ("Files" below).
 
+A bounded typed source interpretation can supplement quoted-note facts when a supported source profile
+provides evidence the writer can derive independently. Its owner review binds source bytes, meanings, identities,
+metrics and portable scope associations; arbitrary normalized records next to a hash are not proof. Changed
+interpretation is not correction authority. Such artifacts use the same approvals, transactional writer,
+ledger and replay checks; their implementation-specific formats belong to the writer's application guidance.
+
 ## Three parties
 
 Each party does only what it is reliable at.

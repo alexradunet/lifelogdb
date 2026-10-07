@@ -11,8 +11,15 @@ var suites = []struct {
 	run  func(*S)
 }{
 	{"dates", dates},
+	{"recorded-periods", recordedPeriods},
+	{"recorded-sessions", recordedSessions},
+	{"measurement-scopes", measurementScopes},
 	{"identity", identity},
+	{"id-guards", idGuards},
 	{"named", named},
+	{"names", names},
+	{"name-grammar", nameGrammar},
+	{"name-ownership", nameOwnership},
 	{"files", files},
 	{"places", places},
 	{"pages", pages},

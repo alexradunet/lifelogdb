@@ -62,7 +62,7 @@ func diagrams(s *S) {
 	// ---- B
 	c := s.connect("")
 	c.must(s.ddl)
-	tables := c.col("select name from sqlite_master where type='table' and name not like 'sqlite_%' and name not like 'pages_fts%'")
+	tables := c.col("select name from pragma_table_list where schema='main' and type='table' and name not like 'sqlite_%'")
 	type colInfo struct {
 		typ     string
 		notnull bool
@@ -333,7 +333,7 @@ func diagrams(s *S) {
 	known := true
 	for _, ts := range nodes {
 		for _, t := range ts {
-			known = known && contains([]string{"any", "page", "person", "place", "metric", "file"}, t)
+			known = known && contains([]string{"any", "page", "person", "place", "metric", "file", "period"}, t)
 		}
 	}
 	s.K("every node of the map names entity types or `any entity`", known, nodes)

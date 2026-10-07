@@ -13,7 +13,7 @@ func TestMarkdownLinksWhatNamesAPage(t *testing.T) {
 		{"`[[Ana]]`", "<code>[[Ana]]</code>", "wikilink"},
 		{"[[a/b]]", "[[a/b]]", "wikilink"},
 		{"ran #run-club", `<a href="/pages?title=run-club" class="wikilink">#run-club</a>`, ""},
-		{"a#b #123 #redirect", "a#b #123 #redirect", "wikilink"},
+		{"a#b #123 #redirect", `<a href="/pages?title=redirect" class="wikilink">#redirect</a>`, ""},
 		{"[[<b>x]]", "", "<b>"},
 		{"<script>alert(1)</script>", "raw HTML omitted", "<script>"},
 		{"[x](javascript:alert(1))", `<a href="">x</a>`, "javascript"},

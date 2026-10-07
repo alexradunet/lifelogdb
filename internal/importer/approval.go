@@ -1,6 +1,7 @@
 package importer
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -48,6 +49,8 @@ type Review struct {
 // Review prepares the owner's review of rules.md or metrics.md: the body that approving it stamps (in
 // metrics.md every row still proposed reads approved), as a diff against the last approval.
 func (w *Workspace) Review(name string) (*Review, error) {
+	w.selectionMu.RLock()
+	defer w.selectionMu.RUnlock()
 	rest, err := w.toStamp(name)
 	if err != nil {
 		return nil, err
@@ -98,17 +101,23 @@ func (w *Workspace) Changed(name string, max int) []string {
 
 // toStamp is the body approving a file would stamp.
 func (w *Workspace) toStamp(name string) (string, error) {
-	if name != "rules.md" && name != "metrics.md" {
+	if name != "rules.md" && name != "metrics.md" && name != preparedFile && name != selectedPhotoFile {
 		return "", fmt.Errorf("approve rules.md or metrics.md, not %s", name)
 	}
-	text, ok, err := w.read(name)
+	rest, err := w.artifactBody(name, false)
 	if err != nil {
 		return "", err
 	}
-	if !ok {
-		return "", fmt.Errorf("no %s to approve", name)
+	if name == preparedFile {
+		if _, err := w.parsePrepared(context.Background(), rest); err != nil {
+			return "", err
+		}
 	}
-	_, rest := splitStatus(text)
+	if name == selectedPhotoFile {
+		if _, _, err := w.parseSelectedPhoto(context.Background(), rest); err != nil {
+			return "", err
+		}
+	}
 	if name == "metrics.md" {
 		rest = approveRows(rest)
 	}

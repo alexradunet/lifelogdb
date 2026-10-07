@@ -56,12 +56,13 @@ type Sync struct {
 // syncWikilinks is cookbook/save-a-body.md steps 1-4, after the body is written.
 func (t *Tx) syncWikilinks(pageID int64, body string) (Sync, error) {
 	var own string
-	if err := t.tx.QueryRow(`SELECT title_key FROM pages WHERE id = ?`, pageID).Scan(&own); err != nil {
+	if err := t.tx.QueryRow(`SELECT preferred_name_key FROM entities WHERE id = ?`, pageID).Scan(&own); err != nil {
 		return Sync{}, err
 	}
 	keys, titles, rejected := text.Targets(body, own)
 	r := Sync{Linked: []string{}, Skipped: rejected}
 	ids := []int64{}
+	seen := map[int64]bool{pageID: true}
 	for i, key := range keys {
 		title := titles[i]
 		if _, err := t.tx.Exec(`SAVEPOINT target`); err != nil {
@@ -81,6 +82,10 @@ func (t *Tx) syncWikilinks(pageID int64, body string) (Sync, error) {
 		if _, err := t.tx.Exec(`RELEASE target`); err != nil {
 			return r, err
 		}
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
 		ids = append(ids, id)
 		r.Linked = append(r.Linked, title)
 		if created {
@@ -98,7 +103,7 @@ func (t *Tx) syncWikilinks(pageID int64, body string) (Sync, error) {
 
 func (t *Tx) linkTarget(pageID int64, key, title string) (id int64, created, revived bool, err error) {
 	var deleted sql.NullString
-	err = t.tx.QueryRow(`SELECT p.id, e.deleted_at FROM pages p JOIN entities e ON e.id = p.id WHERE p.title_key = ?`, key).
+	err = t.tx.QueryRow(`SELECT p.id, e.deleted_at FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key  JOIN entities e ON e.id = p.id WHERE p.id = (SELECT entity_id FROM entity_names WHERE name_key = ?)`, key).
 		Scan(&id, &deleted)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
@@ -108,6 +113,8 @@ func (t *Tx) linkTarget(pageID int64, key, title string) (id int64, created, rev
 		created = true
 	case err != nil:
 		return
+	case id == pageID:
+		return id, false, false, nil
 	case deleted.Valid:
 		if _, err = t.tx.Exec(`UPDATE entities SET deleted_at = NULL WHERE id = ?`, id); err != nil {
 			return
@@ -131,9 +138,10 @@ func dayOfTitle(title string) any {
 // pages row with that id. With an importKey a re-send inserts nothing and returns the row the key already names
 // (cookbook/import-a-row-once.md); existing says so.
 func (t *Tx) insertPage(typ, title, key string, day any, body, importKey string) (id int64, existing bool, err error) {
-	err = t.tx.QueryRow(`INSERT INTO entities(entity_type, created_at, updated_at, source, import_key) VALUES (?, `+Now+`, `+Now+`, ?, ?)
+	err = t.tx.QueryRow(`INSERT INTO entities(entity_type, preferred_name_key, day, body, created_at, updated_at, source, import_key)
+                         VALUES (?, ?, ?, ?, `+Now+`, `+Now+`, ?, ?)
 	                     ON CONFLICT(source, import_key) WHERE import_key IS NOT NULL DO NOTHING
-	                     RETURNING id`, typ, t.Source, nullIfEmpty(importKey)).Scan(&id)
+	                     RETURNING id`, typ, key, day, body, t.Source, nullIfEmpty(importKey)).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = t.tx.QueryRow(`SELECT id FROM entities WHERE source = ? AND import_key = ?`, t.Source, importKey).Scan(&id)
 		return id, true, err
@@ -141,8 +149,7 @@ func (t *Tx) insertPage(typ, title, key string, day any, body, importKey string)
 	if err != nil {
 		return 0, false, err
 	}
-	_, err = t.tx.Exec(`INSERT INTO pages(id, entity_type, title, title_key, day, body) VALUES (?, ?, ?, ?, ?, ?)`,
-		id, typ, title, key, day, body)
+	_, err = t.tx.Exec(`INSERT INTO entity_names(entity_id, title, name_key) VALUES (?, ?, ?)`, id, title, key)
 	return id, false, err
 }
 
@@ -153,7 +160,6 @@ type PageRef struct {
 	Title   string
 	Body    string
 	DayPage bool
-	Stub    bool
 	Deleted bool
 }
 
@@ -165,10 +171,10 @@ func (t *Tx) Lookup(title string) (*PageRef, error) {
 func (t *Tx) lookupKey(key string) (*PageRef, error) {
 	p := &PageRef{}
 	var day sql.NullString
-	err := t.tx.QueryRow(`SELECT p.id, p.entity_type, p.title, p.body, p.day, e.deleted_at IS NOT NULL,
-	                             EXISTS (SELECT 1 FROM links r WHERE r.from_id = p.id AND r.kind = 'redirect')
-	                        FROM pages p JOIN entities e ON e.id = p.id WHERE p.title_key = ?`, key).
-		Scan(&p.ID, &p.Type, &p.Title, &p.Body, &day, &p.Deleted, &p.Stub)
+	err := t.tx.QueryRow(`SELECT e.id, e.entity_type, n.title, e.body, e.day, e.deleted_at IS NOT NULL
+                          FROM entities e JOIN entity_names n ON n.entity_id = e.id AND n.name_key = e.preferred_name_key
+                         WHERE e.id = (SELECT entity_id FROM entity_names WHERE name_key = ?)`, key).
+		Scan(&p.ID, &p.Type, &p.Title, &p.Body, &day, &p.Deleted)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -178,7 +184,7 @@ func (t *Tx) lookupKey(key string) (*PageRef, error) {
 
 func (t *Tx) pageByID(id int64) (*PageRef, error) {
 	var key string
-	err := t.tx.QueryRow(`SELECT title_key FROM pages WHERE id = ?`, id).Scan(&key)
+	err := t.tx.QueryRow(`SELECT preferred_name_key FROM entities WHERE id = ?`, id).Scan(&key)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, notFound("no page %d", id)
 	}
@@ -203,13 +209,13 @@ func (t *Tx) Capture(day, entry string, mood *float64) (id int64, r Sync, err er
 		return 0, r, err
 	}
 	if entry != "" {
-		if _, err := t.tx.Exec(`UPDATE pages SET body = body || CASE WHEN body = '' THEN '' ELSE char(10, 10) END || ?
+		if _, err := t.tx.Exec(`UPDATE entities SET body = body || CASE WHEN body = '' THEN '' ELSE char(10, 10) END || ?
 		                        WHERE id = ?`, entry, id); err != nil {
 			return 0, r, err
 		}
 	}
 	var body string
-	if err := t.tx.QueryRow(`SELECT body FROM pages WHERE id = ?`, id).Scan(&body); err != nil {
+	if err := t.tx.QueryRow(`SELECT body FROM entities WHERE id = ?`, id).Scan(&body); err != nil {
 		return 0, r, err
 	}
 	if r, err = t.syncWikilinks(id, body); err != nil {
@@ -223,14 +229,14 @@ func (t *Tx) Capture(day, entry string, mood *float64) (id int64, r Sync, err er
 
 func isMood(v float64) bool { return v >= 1 && v <= 5 && v == math.Trunc(v) }
 
-func validateMeasurementValue(metric string, habit bool, value *float64) error {
+func validateMeasurementValue(metricID int64, metric string, habit bool, value *float64) error {
 	if value == nil {
 		return nil
 	}
 	if math.IsNaN(*value) || math.IsInf(*value, 0) {
 		return invalid("value must be a finite number")
 	}
-	if text.TitleKey(metric) == "mood" && !isMood(*value) {
+	if metricID == 1 && !isMood(*value) {
 		return invalid("mood is 1-5")
 	}
 	if habit && *value != 0 && *value != 1 {
@@ -256,12 +262,12 @@ func (t *Tx) dayPage(day string) (int64, error) {
 }
 
 // SaveBody replaces a page's body and syncs its wikilinks (cookbook/save-a-body.md). version is the
-// entities.updated_at the caller read; a newer one means someone else saved in between.
+// entities.revision token the caller read; the clock is audit metadata, not a version.
 func (t *Tx) SaveBody(id int64, body, version string) (Sync, error) {
-	var updated string
+	var currentVersion string
 	var deleted sql.NullString
-	err := t.tx.QueryRow(`SELECT e.updated_at, e.deleted_at FROM entities e JOIN pages p ON p.id = e.id WHERE e.id = ?`, id).
-		Scan(&updated, &deleted)
+	err := t.tx.QueryRow(`SELECT CAST(e.revision AS TEXT), e.deleted_at FROM entities e JOIN entities p ON p.id = e.id JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key  WHERE e.id = ?`, id).
+		Scan(&currentVersion, &deleted)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Sync{}, notFound("no page %d", id)
 	}
@@ -271,31 +277,15 @@ func (t *Tx) SaveBody(id int64, body, version string) (Sync, error) {
 	if deleted.Valid {
 		return Sync{}, conflict("page %d is deleted: revive it first", id)
 	}
-	if version != updated {
-		return Sync{}, conflict("page %d changed since version %q (now %q): read it again", id, version, updated)
+	if version != currentVersion {
+		return Sync{}, conflict("page %d changed since version %q (now %q): read it again", id, version, currentVersion)
 	}
 	return t.SetBody(id, body)
 }
 
-// refuseStubMutation keeps caller writes separate from the rename transition.
-func (t *Tx) refuseStubMutation(id int64) error {
-	var target int64
-	err := t.tx.QueryRow(`SELECT to_id FROM links WHERE from_id = ? AND kind = 'redirect'`, id).Scan(&target)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	return conflict("page %d is a redirect stub: write to target %d instead", id, target)
-}
-
 // SetBody is SaveBody without the version check, for a writer that owns the body it sets (an import).
 func (t *Tx) SetBody(id int64, body string) (Sync, error) {
-	if err := t.refuseStubMutation(id); err != nil {
-		return Sync{}, err
-	}
-	if _, err := t.tx.Exec(`UPDATE pages SET body = ? WHERE id = ? AND body IS NOT ?`, body, id, body); err != nil {
+	if _, err := t.tx.Exec(`UPDATE entities SET body = ? WHERE id = ? AND body IS NOT ?`, body, id, body); err != nil {
 		return Sync{}, err
 	}
 	return t.syncWikilinks(id, body)
@@ -392,18 +382,16 @@ func (t *Tx) Promote(id int64, typ, name string) error {
 	if typ != "person" && typ != "place" {
 		return invalid("promote to person or place, not %q", typ)
 	}
-	res, err := t.tx.Exec(`UPDATE entities SET entity_type = ?, deleted_at = NULL
-	                        WHERE id = ? AND entity_type = 'page'
-	                          AND NOT EXISTS (SELECT 1 FROM links WHERE from_id = ? AND kind = 'redirect')`, typ, id, id)
+	res, err := t.tx.Exec(`UPDATE entities SET entity_type = ?, deleted_at = NULL WHERE id = ? AND entity_type = 'page'`, typ, id)
 	if err != nil {
 		return err
 	}
 	if n, _ := res.RowsAffected(); n != 1 {
-		return conflict("page %d is not a plain page that can be promoted (missing, already named, or a redirect stub)", id)
+		return conflict("page %d is not a plain page that can be promoted (missing or already typed)", id)
 	}
 	if typ == "person" {
 		if name == "" {
-			if err := t.tx.QueryRow(`SELECT title FROM pages WHERE id = ?`, id).Scan(&name); err != nil {
+			if err := t.tx.QueryRow(`SELECT title FROM entity_names WHERE entity_id = ? AND name_key = (SELECT preferred_name_key FROM entities WHERE id = entity_id)`, id).Scan(&name); err != nil {
 				return err
 			}
 		}
@@ -462,35 +450,44 @@ func (t *Tx) setDeleted(id int64, q string) error {
 }
 
 // Link adds an edge of a registered kind (D8); added reports whether it was new. wikilink rows belong to the
-// save contract and redirect rows to a rename, so neither is written here. An `at` link starts at a day page,
+// save contract; redirect is unsupported, so neither is written here. An `at` link starts at a day page,
 // which the app checks (D16).
 func (t *Tx) Link(from, to int64, kind, note string) (added bool, err error) {
-	if kind == "wikilink" || kind == "redirect" {
-		return false, invalid("%s links are written by saving a body or a rename, not directly", kind)
+	if kind == "redirect" {
+		return false, invalid("redirect is not a supported link kind")
 	}
-	if err := t.refuseStubMutation(from); err != nil {
-		return false, err
-	}
-	if err := t.refuseStubMutation(to); err != nil {
-		return false, err
+	if kind == "wikilink" {
+		return false, invalid("wikilink links are written by saving a body, not directly")
 	}
 	if kind == "at" {
 		var isDay bool
-		if err := t.tx.QueryRow(`SELECT coalesce((SELECT title = day FROM pages WHERE id = ?), 0)`, from).Scan(&isDay); err != nil {
+		if err := t.tx.QueryRow(`SELECT coalesce((SELECT preferred_name_key = day FROM entities WHERE id = ?), 0)`, from).Scan(&isDay); err != nil {
 			return false, err
 		}
 		if !isDay {
 			return false, invalid("an at link starts at a day page (D16)")
 		}
 	}
-	if kind == "part-of" { // the table allows any plain page; a category is never a day or a redirect stub (D26)
+	if kind == "part-of" {
+		var invalidSelection bool
+		err := t.tx.QueryRow(`SELECT EXISTS (
+            SELECT 1 FROM entities p JOIN entities category ON category.id=?
+            WHERE p.id=? AND p.entity_type='period' AND category.deleted_at IS NOT NULL
+              AND NOT EXISTS (SELECT 1 FROM links WHERE from_id=p.id AND to_id=category.id AND kind='part-of')
+        )`, to, from).Scan(&invalidSelection)
+		if err != nil {
+			return false, err
+		}
+		if invalidSelection {
+			return false, invalid("a new period category must be live")
+		}
+		// A category is never a journal page (D26).
 		var odd bool
-		if err := t.tx.QueryRow(`SELECT coalesce((SELECT title = day OR EXISTS (SELECT 1 FROM links r WHERE r.from_id = p.id AND r.kind = 'redirect')
-		                           FROM pages p WHERE id = ?), 0)`, to).Scan(&odd); err != nil {
+		if err := t.tx.QueryRow(`SELECT coalesce((SELECT preferred_name_key = day FROM entities WHERE id = ?), 0)`, to).Scan(&odd); err != nil {
 			return false, err
 		}
 		if odd {
-			return false, invalid("a category is a plain page, never a day page or a redirect stub (D26)")
+			return false, invalid("a category is a plain page, never a day page (D26)")
 		}
 	}
 	res, err := t.tx.Exec(`INSERT INTO links(from_id, to_id, kind, note, created_at, source) VALUES (?, ?, ?, ?, `+Now+`, ?)
@@ -505,14 +502,11 @@ func (t *Tx) Link(from, to int64, kind, note string) (added bool, err error) {
 // Unlink deletes one edge (links rows are the one table whose rows are deleted, D11); a symmetric kind's
 // mirror goes with it (links_mirror_delete).
 func (t *Tx) Unlink(from, to int64, kind string) error {
-	if kind == "wikilink" || kind == "redirect" {
-		return invalid("%s links are removed by saving a body, not directly", kind)
+	if kind == "redirect" {
+		return invalid("redirect is not a supported link kind")
 	}
-	if err := t.refuseStubMutation(from); err != nil {
-		return err
-	}
-	if err := t.refuseStubMutation(to); err != nil {
-		return err
+	if kind == "wikilink" {
+		return invalid("wikilink links are removed by saving a body, not directly")
 	}
 	res, err := t.tx.Exec(`DELETE FROM links WHERE from_id = ? AND to_id = ? AND kind = ?`, from, to, kind)
 	if err != nil {
@@ -526,33 +520,69 @@ func (t *Tx) Unlink(from, to int64, kind string) error {
 
 // Reading is one measurement to record (D7).
 type Reading struct {
-	ID           int64   `json:"id,omitempty"`
-	Metric       string  `json:"metric"`
-	Day          string  `json:"day"`
-	TakenAt      string  `json:"taken_at,omitempty"`
-	TZ           string  `json:"tz,omitempty"`
-	Key          string  `json:"import_key,omitempty"`
-	Value        float64 `json:"value"`
-	CapturedWith int64   `json:"captured_with_id,omitempty"`
+	ID               int64   `json:"id,omitempty"`
+	Metric           string  `json:"metric"`
+	Day              string  `json:"day"`
+	TakenAt          string  `json:"taken_at,omitempty"`
+	TZ               string  `json:"tz,omitempty"`
+	Key              string  `json:"import_key,omitempty"`
+	Value            float64 `json:"value"`
+	CapturedWith     int64   `json:"captured_with_id,omitempty"`
+	SessionID        int64   `json:"session_id,omitempty"`
+	SessionDeletedAt string  `json:"session_deleted_at,omitempty"`
+	Scope            string  `json:"scope,omitempty"`
 }
 
 // Record appends a measurement. A Key makes a re-send a no-op (ON CONFLICT ... DO NOTHING, docs/contract/imports.md);
 // the id is 0 when the row was recorded before.
 func (t *Tx) Record(m Reading) (id int64, err error) {
+	metric, err := t.prepareReading(m)
+	if err != nil {
+		return 0, err
+	}
+	if m.Key != "" {
+		var previous sql.NullInt64
+		err := t.tx.QueryRow(`SELECT session_id FROM measurements WHERE source=? AND import_key=? AND metric_id=?`, t.Source, m.Key, metric).Scan(&previous)
+		if err == nil && previous.Int64 != m.SessionID {
+			return 0, conflict("measurement source identity cannot change session scope")
+		}
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return 0, err
+		}
+	}
+	var session any
+	if m.SessionID != 0 {
+		session = m.SessionID
+	}
+	var with any
+	if m.CapturedWith != 0 {
+		with = m.CapturedWith
+	}
+	err = t.tx.QueryRow(`INSERT INTO measurements(metric_id, day, taken_at, tz, value, source, import_key, captured_with_id,session_id, created_at)
+	                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, `+Now+`)
+	                     ON CONFLICT(source, import_key, metric_id) WHERE import_key IS NOT NULL DO NOTHING
+	                     RETURNING id`,
+		metric, m.Day, nullIfEmpty(m.TakenAt), nullIfEmpty(m.TZ), m.Value, t.Source, nullIfEmpty(m.Key), with, session).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil // sent before
+	}
+	return id, err
+}
+
+func (t *Tx) prepareReading(m Reading) (metric int64, err error) {
 	if !IsDay(m.Day) {
 		return 0, invalid("day %q is not YYYY-MM-DD", m.Day)
 	}
 	if m.TakenAt != "" && !IsInstant(m.TakenAt) {
 		return 0, invalid("taken_at %q is not a UTC instant like 2026-06-09T21:14:03.482Z", m.TakenAt)
 	}
-	if err := validateMeasurementValue("", false, &m.Value); err != nil {
+	if err := validateMeasurementValue(0, "", false, &m.Value); err != nil {
 		return 0, err
 	}
-	var metric int64
 	var metricTitle string
 	var habit bool
-	err = t.tx.QueryRow(`SELECT m.id, m.title, EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id) FROM pages m
-		  JOIN entities e ON e.id = m.id AND e.deleted_at IS NULL WHERE m.title_key = ? AND m.entity_type = 'metric'`,
+	err = t.tx.QueryRow(`SELECT m.id, m_name.title, EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id) FROM entities m JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key
+		  JOIN entities e ON e.id = m.id AND e.deleted_at IS NULL WHERE m.id = (SELECT entity_id FROM entity_names WHERE name_key = ?) AND m.entity_type = 'metric'`,
 		text.TitleKey(m.Metric)).Scan(&metric, &metricTitle, &habit)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, notFound("no metric %q: the owner registers metrics", m.Metric)
@@ -560,30 +590,18 @@ func (t *Tx) Record(m Reading) (id int64, err error) {
 	if err != nil {
 		return 0, err
 	}
-	if err := validateMeasurementValue(metricTitle, habit, &m.Value); err != nil {
+	if err := validateMeasurementValue(metric, metricTitle, habit, &m.Value); err != nil {
 		return 0, err
 	}
-	var with any
-	if m.CapturedWith != 0 {
-		with = m.CapturedWith
-	}
-	err = t.tx.QueryRow(`INSERT INTO measurements(metric_id, day, taken_at, tz, value, source, import_key, captured_with_id, created_at)
-	                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, `+Now+`)
-	                     ON CONFLICT(source, import_key, metric_id) WHERE import_key IS NOT NULL DO NOTHING
-	                     RETURNING id`,
-		metric, m.Day, nullIfEmpty(m.TakenAt), nullIfEmpty(m.TZ), m.Value, t.Source, nullIfEmpty(m.Key), with).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return 0, nil // sent before
-	}
-	return id, err
+	return metric, nil
 }
 
 // ReadingByKey is the current value of the reading a sender's key names; found is false when there is none.
 // A retracted reading is found, with ok false.
 func (t *Tx) ReadingByKey(metric, key string) (value float64, ok, found bool, err error) {
 	var id int64
-	err = t.tx.QueryRow(`SELECT me.id FROM measurements me JOIN pages m ON m.id = me.metric_id
-	                      WHERE me.source = ? AND me.import_key = ? AND m.title_key = ?`, t.Source, key, text.TitleKey(metric)).Scan(&id)
+	err = t.tx.QueryRow(`SELECT me.id FROM measurements me JOIN entities m ON m.id = me.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key
+	                      WHERE me.source = ? AND me.import_key = ? AND m.id = (SELECT entity_id FROM entity_names WHERE name_key = ?)`, t.Source, key, text.TitleKey(metric)).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, false, false, nil
 	}
@@ -610,25 +628,26 @@ func (t *Tx) CorrectKeyed(wrong int64, value *float64, importKey string) (id int
 }
 
 func (t *Tx) correct(wrong int64, value *float64, importKey string) (id int64, err error) {
+	var metric int64
 	var metricTitle string
 	var habit bool
-	err = t.tx.QueryRow(`SELECT m.title, EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id)
-	                       FROM measurements me JOIN pages m ON m.id = me.metric_id WHERE me.id = ?`, wrong).Scan(&metricTitle, &habit)
+	err = t.tx.QueryRow(`SELECT m.id, m_name.title, EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id)
+	                       FROM measurements me JOIN entities m ON m.id = me.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key WHERE me.id = ?`, wrong).Scan(&metric, &metricTitle, &habit)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, notFound("no measurement %d", wrong)
 	}
 	if err != nil {
 		return 0, err
 	}
-	if err := validateMeasurementValue(metricTitle, habit, value); err != nil {
+	if err := validateMeasurementValue(metric, metricTitle, habit, value); err != nil {
 		return 0, err
 	}
 	var v any
 	if value != nil {
 		v = *value
 	}
-	err = t.tx.QueryRow(`INSERT INTO measurements(metric_id, day, taken_at, tz, value, source, import_key, captured_with_id, supersedes_id, created_at)
-	                     SELECT metric_id, day, taken_at, tz, ?, ?, ?, captured_with_id, id, `+Now+` FROM measurements WHERE id = ?
+	err = t.tx.QueryRow(`INSERT INTO measurements(metric_id, day, taken_at, tz, value, source, import_key, captured_with_id,session_id, supersedes_id, created_at)
+	                     SELECT metric_id, day, taken_at, tz, ?, ?, ?, captured_with_id,session_id, id, `+Now+` FROM measurements WHERE id = ?
 	                     RETURNING id`, v, t.Source, nullIfEmpty(importKey), wrong).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, notFound("no measurement %d", wrong)
@@ -651,8 +670,8 @@ func (t *Tx) MeasurementRow(id int64) (MeasurementRow, error) {
 	var k sql.NullString
 	var v sql.NullFloat64
 	var supersedes sql.NullInt64
-	err := t.tx.QueryRow(`SELECT me.id, me.source, me.import_key, m.title, me.value, me.supersedes_id
-	                       FROM measurements me JOIN pages m ON m.id = me.metric_id WHERE me.id = ?`, id).
+	err := t.tx.QueryRow(`SELECT me.id, me.source, me.import_key, m_name.title, me.value, me.supersedes_id
+	                       FROM measurements me JOIN entities m ON m.id = me.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key  WHERE me.id = ?`, id).
 		Scan(&r.ID, &r.Source, &k, &r.Metric, &v, &supersedes)
 	if errors.Is(err, sql.ErrNoRows) {
 		return r, notFound("no measurement %d", id)
@@ -706,7 +725,7 @@ func (t *Tx) MeasurementKey(id int64) (source, key, metric string, err error) {
 	                       UNION ALL
 	                       SELECT me.id, me.source, me.import_key, me.metric_id, me.supersedes_id, depth + 1
 	                         FROM measurements me JOIN ancestors a ON me.id = a.supersedes_id)
-	                     SELECT a.source, a.import_key, m.title FROM ancestors a JOIN pages m ON m.id = a.metric_id
+	                     SELECT a.source, a.import_key, m_name.title FROM ancestors a JOIN entities m ON m.id = a.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key
 	                      ORDER BY depth DESC LIMIT 1`, id).Scan(&source, &k, &metric)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", "", "", notFound("no measurement %d", id)

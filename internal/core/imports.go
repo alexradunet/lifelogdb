@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"strings"
 
@@ -40,7 +41,7 @@ func (t *Tx) ByImportKey(importKey string) (int64, error) {
 // found is false when the key has not been applied.
 func (t *Tx) ImportedPageIdentity(importKey string) (title string, day *string, found bool, err error) {
 	var d sql.NullString
-	err = t.tx.QueryRow(`SELECT p.title, p.day FROM pages p JOIN entities e ON e.id = p.id WHERE e.source = ? AND e.import_key = ?`, t.Source, importKey).Scan(&title, &d)
+	err = t.tx.QueryRow(`SELECT p_name.title, p.day FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key  JOIN entities e ON e.id = p.id WHERE e.source = ? AND e.import_key = ?`, t.Source, importKey).Scan(&title, &d)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil, false, nil
 	}
@@ -52,7 +53,7 @@ func (t *Tx) ImportedPageIdentity(importKey string) (title string, day *string, 
 
 // MetricUnit is a registered metric's unit; found is false when no metric has the name.
 func (t *Tx) MetricUnit(name string) (unit string, found bool, err error) {
-	err = t.tx.QueryRow(`SELECT m.unit FROM metrics m JOIN pages p ON p.id = m.id WHERE p.title_key = ?`, text.TitleKey(name)).Scan(&unit)
+	err = t.tx.QueryRow(`SELECT m.unit FROM metrics m JOIN entities p ON p.id = m.id JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key  WHERE p.id = (SELECT entity_id FROM entity_names WHERE name_key = ?)`, text.TitleKey(name)).Scan(&unit)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", false, nil
 	}
@@ -79,15 +80,15 @@ func (t *Tx) LinkEnds(kind string) (from, to []string, found bool, err error) {
 // Body is a page's body.
 func (t *Tx) Body(id int64) (string, error) {
 	var b string
-	err := t.tx.QueryRow(`SELECT body FROM pages WHERE id = ?`, id).Scan(&b)
+	err := t.tx.QueryRow(`SELECT body FROM entities WHERE id = ?`, id).Scan(&b)
 	return b, err
 }
 
 // MeasurementByKey is the id of the reading a sender's key names under a source; 0 when none.
 func (t *Tx) MeasurementByKey(source, metric, key string) (int64, error) {
 	var id int64
-	err := t.tx.QueryRow(`SELECT me.id FROM measurements me JOIN pages m ON m.id = me.metric_id
-	                       WHERE me.source = ? AND me.import_key = ? AND m.title_key = ?`, source, key, text.TitleKey(metric)).Scan(&id)
+	err := t.tx.QueryRow(`SELECT me.id FROM measurements me JOIN entities m ON m.id = me.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key
+	                       WHERE me.source = ? AND me.import_key = ? AND m.id = (SELECT entity_id FROM entity_names WHERE name_key = ?)`, source, key, text.TitleKey(metric)).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, nil
 	}
@@ -96,27 +97,31 @@ func (t *Tx) MeasurementByKey(source, metric, key string) (int64, error) {
 
 // ImportedMeasurementRoot is the portable identity of an imported root reading, for import-key compatibility checks.
 type ImportedMeasurementRoot struct {
-	ID              int64
-	ImportKey       string
-	Metric          string
-	MetricKey       string
-	Day             string
-	TakenAt         string
-	TZ              string
-	CapturedWithKey string
-	Value           *float64
+	ID               int64
+	ImportKey        string
+	Metric           string
+	MetricKey        string
+	Day              string
+	TakenAt          string
+	TZ               string
+	CapturedWithKey  string
+	MetricKeys       []string
+	CapturedWithKeys []string
+	Value            *float64
 }
 
 // ImportedMeasurementRootsByFile lists root readings for one imported source, source file and canonical metric key.
 func (t *Tx) ImportedMeasurementRootsByFile(source, file, metricKey string) ([]ImportedMeasurementRoot, error) {
-	rows, err := t.tx.Query(`SELECT me.id, me.import_key, m.title, m.title_key, me.day,
+	rows, err := t.tx.Query(`SELECT me.id, me.import_key, m_name.title, m.preferred_name_key, me.day,
 	                              coalesce(me.taken_at, ''), coalesce(me.tz, ''),
-	                              coalesce(captured.title_key, ''), me.value
+	                              coalesce(captured.preferred_name_key, ''), me.value,
+                                  (SELECT json_group_array(name_key ORDER BY name_key) FROM entity_names WHERE entity_id = m.id),
+                                  (SELECT json_group_array(name_key ORDER BY name_key) FROM entity_names WHERE entity_id = me.captured_with_id)
 	                         FROM measurements me
-	                         JOIN pages m ON m.id = me.metric_id
-	                         LEFT JOIN pages captured ON captured.id = me.captured_with_id
+	                         JOIN entities m ON m.id = me.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key
+	                         LEFT JOIN entities captured ON captured.id = me.captured_with_id LEFT JOIN entity_names captured_name ON captured_name.entity_id = captured.id AND captured_name.name_key = captured.preferred_name_key
 	                        WHERE me.source = ? AND me.import_key IS NOT NULL
-	                          AND m.title_key = ? AND me.supersedes_id IS NULL`, source, metricKey)
+	                          AND m.id = (SELECT entity_id FROM entity_names WHERE name_key = ?) AND me.supersedes_id IS NULL`, source, metricKey)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +131,14 @@ func (t *Tx) ImportedMeasurementRootsByFile(source, file, metricKey string) ([]I
 	for rows.Next() {
 		var r ImportedMeasurementRoot
 		var v sql.NullFloat64
-		if err := rows.Scan(&r.ID, &r.ImportKey, &r.Metric, &r.MetricKey, &r.Day, &r.TakenAt, &r.TZ, &r.CapturedWithKey, &v); err != nil {
+		var metricKeys, withKeys string
+		if err := rows.Scan(&r.ID, &r.ImportKey, &r.Metric, &r.MetricKey, &r.Day, &r.TakenAt, &r.TZ, &r.CapturedWithKey, &v, &metricKeys, &withKeys); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(metricKeys), &r.MetricKeys); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(withKeys), &r.CapturedWithKeys); err != nil {
 			return nil, err
 		}
 		if !strings.HasPrefix(r.ImportKey, prefix) {
@@ -155,6 +167,7 @@ type Counts struct {
 	Pages    int            `json:"pages"`
 	ByType   map[string]int `json:"entities_by_type"`
 	Readings int            `json:"current_readings"`
+	Sessions int            `json:"sessions"`
 	Links    map[string]int `json:"links_by_kind"`
 	Metrics  int            `json:"metrics"`
 	Habits   int            `json:"habit_periods"`
@@ -188,23 +201,25 @@ func (s *Store) Counts(ctx context.Context) (*Counts, error) {
 	if err := q(`SELECT source, count(*) FROM entities GROUP BY 1`, c.BySource); err != nil {
 		return nil, err
 	}
-	err := s.DB.R.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM pages WHERE entity_type <> 'metric'), (SELECT count(*) FROM measurement_values),
-	                                           (SELECT count(*) FROM metrics), (SELECT count(*) FROM habit_periods)`).
-		Scan(&c.Pages, &c.Readings, &c.Metrics, &c.Habits)
+	err := s.DB.R.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM entities WHERE entity_type <> 'metric'), (SELECT count(*) FROM measurement_values),
+	                                           (SELECT count(*) FROM metrics), (SELECT count(*) FROM habit_periods),(SELECT count(*) FROM sessions)`).
+		Scan(&c.Pages, &c.Readings, &c.Metrics, &c.Habits, &c.Sessions)
 	return c, err
 }
 
 // Name is a live page's title (and a person's name), for finding look-alikes.
 type Name struct {
-	ID    int64  `json:"id"`
-	Title string `json:"title"`
-	Type  string `json:"entity_type"`
-	Name  string `json:"name,omitempty"`
+	ID      int64    `json:"id"`
+	Title   string   `json:"title"`
+	Type    string   `json:"entity_type"`
+	Name    string   `json:"name,omitempty"`
+	Aliases []string `json:"aliases,omitempty"`
 }
 
-const namesSQL = `SELECT p.id, p.title, p.entity_type, coalesce(pe.name, '')
-                    FROM pages p JOIN entities e ON e.id = p.id LEFT JOIN people pe ON pe.id = p.id
-                   WHERE e.deleted_at IS NULL`
+const namesSQL = `SELECT e.id, n.title, e.entity_type, coalesce(pe.name, ''),
+                        (SELECT json_group_array(title ORDER BY name_key) FROM entity_names WHERE entity_id=e.id AND name_key<>e.preferred_name_key)
+                    FROM entities e JOIN entity_names n ON n.entity_id=e.id AND n.name_key=e.preferred_name_key LEFT JOIN people pe ON pe.id=e.id
+                   WHERE e.deleted_at IS NULL ORDER BY e.id`
 
 func scanNames(rows *sql.Rows, err error) ([]Name, error) {
 	if err != nil {
@@ -214,7 +229,11 @@ func scanNames(rows *sql.Rows, err error) ([]Name, error) {
 	var out []Name
 	for rows.Next() {
 		var n Name
-		if err := rows.Scan(&n.ID, &n.Title, &n.Type, &n.Name); err != nil {
+		var aliases string
+		if err := rows.Scan(&n.ID, &n.Title, &n.Type, &n.Name, &aliases); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(aliases), &n.Aliases); err != nil {
 			return nil, err
 		}
 		out = append(out, n)
@@ -231,8 +250,8 @@ func (s *Store) Names(ctx context.Context) ([]Name, error) {
 
 // KeyedValue is the value the reading a sender's key names was first written with (not its correction).
 func (t *Tx) KeyedValue(metric, key string) (value float64, found bool, err error) {
-	err = t.tx.QueryRow(`SELECT me.value FROM measurements me JOIN pages m ON m.id = me.metric_id
-	                      WHERE me.source = ? AND me.import_key = ? AND m.title_key = ?`, t.Source, key, text.TitleKey(metric)).Scan(&value)
+	err = t.tx.QueryRow(`SELECT me.value FROM measurements me JOIN entities m ON m.id = me.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key
+	                      WHERE me.source = ? AND me.import_key = ? AND m.id = (SELECT entity_id FROM entity_names WHERE name_key = ?)`, t.Source, key, text.TitleKey(metric)).Scan(&value)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, false, nil
 	}
@@ -242,7 +261,7 @@ func (t *Tx) KeyedValue(metric, key string) (value float64, found bool, err erro
 // DirectAgentRows counts outside writes, excluding only verified durable measurement events.
 func (s *Store) DirectAgentRows(ctx context.Context, verified map[int64]bool) (int, error) {
 	var n int
-	if err := s.DB.R.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM entities WHERE source LIKE 'agent:%') + (SELECT count(*) FROM links WHERE source LIKE 'agent:%')`).Scan(&n); err != nil {
+	if err := s.DB.R.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM entities WHERE source LIKE 'agent:%') + (SELECT count(*) FROM links WHERE source LIKE 'agent:%')+(SELECT count(*) FROM sessions WHERE source LIKE 'agent:%')`).Scan(&n); err != nil {
 		return 0, err
 	}
 	rows, err := s.DB.R.QueryContext(ctx, `SELECT id FROM measurements WHERE source LIKE 'agent:%'`)

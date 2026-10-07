@@ -181,7 +181,7 @@ func TestAutomaticEmbedRepresentability(t *testing.T) {
 	for _, mode := range []string{"new", "ghost", "existing"} {
 		t.Run(mode, func(t *testing.T) {
 			s := fresh(t)
-			f := photo(t, 'a', "Lake [1].jpg", "2019-06-03", 46.1, 7.2)
+			f := photo(t, 'a', "Lake.jpg", "2019-06-03", 46.1, 7.2)
 			f.At = "Lakeside"
 			if mode == "ghost" {
 				if err := s.Do(ctx, "cli", func(tx *Tx) error {
@@ -191,6 +191,7 @@ func TestAutomaticEmbedRepresentability(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
+			var existingID int64
 			if mode == "existing" {
 				seed := f
 				seed.Preview = nil
@@ -198,11 +199,14 @@ func TestAutomaticEmbedRepresentability(t *testing.T) {
 				seed.Day = "2001-02-03"
 				seed.At = ""
 				seed.HasGPS = false
-				if _, err := s.AddFile(ctx, "cli", seed); err != nil {
+				kept, err := s.AddFile(ctx, "cli", seed)
+				if err != nil {
 					t.Fatal(err)
 				}
-				f.Title = "Safe.jpg"
+				existingID = kept.ID
+
 			}
+			f.Title = "Lake [1].jpg"
 			for _, dry := range []bool{true, false} {
 				var err error
 				if dry {
@@ -210,8 +214,29 @@ func TestAutomaticEmbedRepresentability(t *testing.T) {
 				} else {
 					_, err = s.AddFile(ctx, "cli", f)
 				}
-				if err == nil || !strings.Contains(err.Error(), "explicit") {
-					t.Fatalf("dry=%v: expected explicit-title refusal, got %v", dry, err)
+				if mode == "existing" {
+					if err != nil {
+						t.Fatal(err)
+					}
+					selected, readErr := s.PageByID(ctx, existingID)
+					if readErr != nil || selected.Title != "Lake.jpg" || selected.Day != "2001-02-03" {
+						t.Fatalf("selected original changed: %+v %v", selected, readErr)
+					}
+					if dry {
+						preview, readErr := s.Preview(ctx, existingID)
+						if readErr != nil || preview != nil || dayOf(t, s, "2019-06-03") != nil {
+							t.Fatalf("dry run changed original/day: %v", readErr)
+						}
+					} else {
+						day := dayOf(t, s, "2019-06-03")
+						if day == nil || day.Body != "![[Lake.jpg]]" {
+							t.Fatalf("selected valid handle embed: %+v", day)
+						}
+					}
+					continue // The already-kept original selects its valid stored handle, not incoming text.
+				}
+				if status(err) != 422 {
+					t.Fatalf("dry=%v: expected invalid reference-name refusal, got %v", dry, err)
 				}
 				if dayOf(t, s, "2019-06-03") != nil {
 					t.Fatal("refusal created day")
@@ -220,14 +245,14 @@ func TestAutomaticEmbedRepresentability(t *testing.T) {
 					t.Fatal("refusal created place")
 				}
 				if mode == "ghost" {
-					id, _ := s.PageID(ctx, "Lake [1].jpg")
+					id, _ := s.PageID(ctx, "Lake.jpg")
 					p, _ := s.PageByID(ctx, id)
 					if p.Type != "page" || p.Day != "2001-02-03" {
 						t.Fatalf("changed ghost: %+v", p)
 					}
 				}
 				if mode == "existing" {
-					id, _ := s.PageID(ctx, "Lake [1].jpg")
+					id, _ := s.PageID(ctx, "Lake.jpg")
 					p, _ := s.PageByID(ctx, id)
 					if p.Day != "2001-02-03" {
 						t.Fatalf("changed existing date: %+v", p)
@@ -306,7 +331,7 @@ func TestAutomaticEmbedNotNeeded(t *testing.T) {
 	}{{"2019-06-03", false}, {"", true}} {
 		t.Run(tc.day, func(t *testing.T) {
 			s := fresh(t)
-			f := FileIn{Title: "Lake [1].jpg", SHA256: sha('a'), MIME: "image/jpeg", Taken: tc.day}
+			f := FileIn{Title: "Lake.jpg", SHA256: sha('a'), MIME: "image/jpeg", Taken: tc.day}
 			if tc.preview {
 				f.Preview = smallJPEG(t)
 			}
@@ -320,12 +345,12 @@ func TestAutomaticEmbedNotNeeded(t *testing.T) {
 
 func TestAutomaticEmbedEscapedExistingHandle(t *testing.T) {
 	s := fresh(t)
-	f := FileIn{Title: "&copy;.jpg", SHA256: sha('a'), MIME: "image/jpeg"}
+	f := FileIn{Title: "Copy & lake.jpg", SHA256: sha('a'), MIME: "image/jpeg"}
 	k, err := s.AddFile(ctx, "cli", f)
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := `![[&amp;copy;.jpg]]`
+	body := `![[Copy &amp; lake.jpg]]`
 	if _, _, err := s.CreatePage(ctx, "cli", "2019-06-03", body); err != nil {
 		t.Fatal(err)
 	}
@@ -336,7 +361,7 @@ func TestAutomaticEmbedEscapedExistingHandle(t *testing.T) {
 	if err != nil || !again.Existing || !again.PreviewAdded || again.Embedded || again.ID != k.ID {
 		t.Fatalf("existing escaped embed: %+v %v", again, err)
 	}
-	if d := dayOf(t, s, "2019-06-03"); d.Body != body || titles(d.Out, "wikilink") != "&copy;.jpg" {
+	if d := dayOf(t, s, "2019-06-03"); d.Body != body || titles(d.Out, "wikilink") != "Copy & lake.jpg" {
 		t.Fatalf("changed day: %+v", d)
 	}
 }

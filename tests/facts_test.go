@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"strings"
@@ -15,14 +16,16 @@ func facts(s *S) {
 	// ---- metrics: a metric is a page (D27)
 	c := s.fresh()
 	w := c.metric("Weight", "kg")
-	s.K("Mood is seeded (D6): a metric, its page and its entity, one id", c.tab(`select e.entity_type, p.title, p.entity_type, m.unit
-	      from metrics m join pages p on p.id = m.id join entities e on e.id = m.id where p.title_key = 'mood'`) == "metric|Mood|metric|")
+	s.K("Mood is seeded (D6): a metric, its page and its entity, one id", c.tab(`select e.entity_type, n.title, m.entity_type, m.unit
+ from metrics m join entities e on e.id=m.id join entity_names n on n.entity_id=e.id and n.name_key=e.preferred_name_key where n.name_key='mood'`) == "metric|Mood|metric|")
 	c.measure(w, "2026-06-01", 70)
 	s.K("metrics.unit cannot change", err(c.tryx("UPDATE metrics SET unit='lb' WHERE id=?", w)))
 	s.K("a no-op SET unit=unit passes", c.tryx("UPDATE metrics SET unit=unit WHERE id=?", w) == "OK")
-	s.K("a metric's note is its page's body", c.tryx("UPDATE pages SET body='body weight, morning' WHERE id=?", w) == "OK")
-	s.K("a metric's name is its title, which never changes", err(c.tryx("UPDATE pages SET title='Body weight' WHERE id=?", w)))
-	s.K("a metric name is registered once, whatever its case (title_key)", err(c.tryx("INSERT INTO pages(id,entity_type,title,title_key) VALUES (?,'metric','WEIGHT','weight')", c.ent("metric"))))
+	s.K("a metric's note is its page's body", c.tryx("UPDATE entities SET body='body weight, morning' WHERE id=?", w) == "OK")
+	renamed, renameErr := c.store().Rename(context.Background(), "ui", w, "Body weight")
+	s.K("a metric rename preserves its id, readings and owned prior handle", renameErr == nil && renamed == w && c.n("SELECT count(*) FROM entity_names WHERE entity_id=?", w) == 2 && c.n("SELECT count(*) FROM measurements WHERE metric_id=?", w) == 1, renameErr)
+	_, duplicateErr := c.tryIdentity("metric", "WEIGHT", nil)
+	s.K("a metric name is reserved once across owned aliases, whatever its case", duplicateErr != nil && strings.Contains(duplicateErr.Error(), "UNIQUE"), duplicateErr)
 	pg := c.page("Steps")
 	s.K("a metrics row needs a page of type metric", err(c.tryx("INSERT INTO metrics(id,unit) VALUES (?,'n')", pg)))
 	s.K("...and cannot claim another type to hang off a person's page", err(c.tryx("INSERT INTO metrics(id,entity_type,unit) VALUES (?,'person','n')", c.named("person", "Ann"))))

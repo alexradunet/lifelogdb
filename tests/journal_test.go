@@ -14,13 +14,17 @@ func journal(s *S) {
 	// ---- the day page (pages_day_page)
 	c := s.fresh()
 	add := func(title string, day any) int64 { return c.addPage(title, day, "", text.TitleKey(title)) }
-	s.K("a page titled with a day, whose day is its title, is accepted", add("2026-09-29", "2026-09-29") != 0)
+	journalID := add("2026-09-29", "2026-09-29")
+	s.K("a page titled with a day, whose day is its title, is accepted", journalID != 0)
+	cleared := c.tryx("UPDATE entities SET day=NULL WHERE id=?", journalID)
+	s.K("journal day cannot be cleared", strings.HasPrefix(cleared, "ERR"), cleared)
+	c.must("UPDATE entities SET day='2026-09-29' WHERE id=?", journalID)
 	s.K("a page titled with a day but no day is refused (pages_day_page)", add("2026-09-28", nil) == 0)
 	s.K("...and one whose day is another day", add("2026-09-27", "2026-09-26") == 0)
 	s.K("a second page for the same day is refused (the title is unique)", add("2026-09-29", "2026-09-29") == 0)
 	s.K("a title that only looks like a day is an ordinary page (2026-02-30, 2026-9-3)", add("2026-02-30", nil) != 0 && add("2026-9-3", nil) != 0)
 	s.K("an ordinary page may have a day of its own", add("Trip report", "2026-09-29") != 0)
-	cols := c.col("select name from pragma_table_info('pages')")
+	cols := c.col("select name from pragma_table_info('entities')")
 	s.K("pages have no kind and no inbox column (D5)", !contains(cols, "kind") && !contains(cols, "triaged_at"))
 	s.K("there is no events table (D22)", c.n("select count(*) from sqlite_schema where name='events'") == 0)
 
@@ -33,16 +37,16 @@ func journal(s *S) {
 	}
 	p := P{}
 	sync := func(st string) { // the cookbook/save-a-body link sync, inside cookbook/capture's transaction
-		if strings.HasPrefix(strings.ToUpper(st), "UPDATE PAGES SET BODY") {
+		if strings.HasPrefix(strings.ToUpper(st), "UPDATE ENTITIES SET BODY") {
 			id := p["page_id"].(int64)
-			c.docSave(steps, id, c.str("select body from pages where id=?", id), c.str("select title_key from pages where id=?", id), true)
+			c.docSave(steps, id, c.str("select body from entities where id=?", id), c.str("select preferred_name_key from entities where id=?", id), true)
 		}
 	}
 	_, e := c.runBlock(s.d.Block("capture"), p, sync)
-	row := c.tab("select title, day, body from pages where id=?", p["page_id"])
+	row := c.tab("select n.title,e.day,e.body from entities e join entity_names n on n.entity_id=e.id and n.name_key=e.preferred_name_key where e.id=?", p["page_id"])
 	s.K("cookbook/capture run literally on a new day creates the day page with the entry", e == nil && row == "2026-09-29|2026-09-29|Shipped the schema doc. Review pending. [[Lifelog]]", e, row)
 	s.K("...links it to what the entry names, and attaches the mood to it",
-		c.n("select count(*) from links l join pages p on p.id=l.to_id where l.from_id=? and p.title='Lifelog'", p["page_id"]) == 1 &&
+		c.n("select count(*) from links l join entity_names n on n.entity_id=l.to_id where l.from_id=? and n.name_key='lifelog'", p["page_id"]) == 1 &&
 			c.tab("select captured_with_id from measurements") == val(p["page_id"]))
 	var moodInsert string
 	for _, st := range statements(s.d.Block("capture")) {
@@ -50,7 +54,7 @@ func journal(s *S) {
 			moodInsert = st
 		}
 	}
-	mood := c.n("select id from pages where title_key='mood'")
+	mood := c.n("select entity_id from entity_names where name_key='mood'")
 	c.must("UPDATE entities SET deleted_at="+NOW+" WHERE id=?", mood)
 	c.must(moodInsert, p)
 	s.K("cookbook/capture does not write tombstoned Mood", c.n("select count(*) from measurements") == 1)
@@ -63,7 +67,7 @@ func journal(s *S) {
 		switch u := strings.ToUpper(code(st)); {
 		case strings.HasPrefix(u, "SELECT"):
 			sel = append(sel, st)
-		case strings.HasPrefix(u, "UPDATE PAGES"):
+		case strings.HasPrefix(u, "UPDATE ENTITIES"):
 			upd = append(upd, st)
 		}
 	}
@@ -72,26 +76,26 @@ func journal(s *S) {
 	if len(sel) > 0 {
 		plan = c.plan(sel[0])
 	}
-	s.K("...a search on pages_title", strings.Contains(plan, "pages_title"), plan)
+	s.K("...an indexed exact registry lookup", strings.Contains(strings.ToUpper(plan), "SEARCH") && strings.Contains(strings.ToUpper(plan), "INDEX"), plan)
 	if len(upd) == 0 {
-		stop("cookbook/capture has no UPDATE pages")
+		stop("cookbook/capture has no UPDATE entities")
 	}
 	c.must(upd[0], P{"page_id": p["page_id"]})
-	body := c.str("select body from pages where id=?", p["page_id"])
+	body := c.str("select body from entities where id=?", p["page_id"])
 	s.K("a second capture that day appends after a blank line, in the same page", strings.Count(body, "Review pending.") == 2 &&
-		strings.Contains(body, "[[Lifelog]]\n\nShipped") && c.n("select count(*) from pages where day=?", "2026-09-29") == 1)
+		strings.Contains(body, "[[Lifelog]]\n\nShipped") && c.n("select count(*) from entities where day=?", "2026-09-29") == 1)
 	c = s.fresh()
 	a := c.capture("first", "2026-09-30")
 	b := c.capture("met [[Ana]]", "2026-09-30")
 	d := c.capture("next day", "2026-10-01")
-	s.K("capture: one page per day, entries in order", a == b && b != d && c.str("select body from pages where id=?", a) == "first\n\nmet [[Ana]]")
+	s.K("capture: one page per day, entries in order", a == b && b != d && c.str("select body from entities where id=?", a) == "first\n\nmet [[Ana]]")
 	c.must("UPDATE entities SET deleted_at="+NOW+" WHERE id=?", d)
 	e2 := c.capture("again", "2026-10-01")
 	s.K("capture on a tombstoned day page revives it, never a second page for the day", e2 == d && c.str("select deleted_at from entities where id=?", d) == "None")
 	c.savePage("see [[2026-12-02]]", "")
-	g := c.n("select id from pages where title='2026-12-02'")
-	s.K("a link that names a day before anything was written makes that day's page, with its day", c.tab("select day, body from pages where id=?", g) == "2026-12-02|")
-	s.K("...and the first capture of that day writes into it", c.capture("it came", "2026-12-02") == g && c.str("select body from pages where id=?", g) == "it came")
+	g := c.n("select entity_id from entity_names where name_key='2026-12-02'")
+	s.K("a link that names a day before anything was written makes that day's page, with its day", c.tab("select day, body from entities where id=?", g) == "2026-12-02|")
+	s.K("...and the first capture of that day writes into it", c.capture("it came", "2026-12-02") == g && c.str("select body from entities where id=?", g) == "it came")
 
 	// ---- cookbook/day-view
 	DV := s.d.Block("day-view")
@@ -100,7 +104,9 @@ func journal(s *S) {
 	office, home := c.named("place", "Office"), c.named("place", "Home")
 	c.link(d29, office, "at")
 	c.link(d28, home, "at")
-	c.pageW("Essay", "2026-09-29", "text")
+	essay := c.pageW("Essay", "2026-09-29", "text")
+	// Establish an explicitly unedited fixture; name insertion is revision-bearing.
+	c.must("UPDATE entities SET created_at=updated_at WHERE id=?", essay)
 	c.page("Link target")
 	c.pageW("Yesterday essay", "2026-09-28", "x")
 	c.named("person", "Sam")
@@ -138,9 +144,9 @@ func journal(s *S) {
 		}
 	}
 	s.K("...undated items first, the day page leading", order, tab(rows))
-	pid := c.n("select id from pages where title='Essay'")
+	pid := c.n("select entity_id from entity_names where name_key='essay'")
 	c.must("UPDATE entities SET created_at='2026-09-29T08:00:00.000Z' WHERE id=?", pid)
-	c.must("UPDATE pages SET body='text 2' WHERE id=?", pid)
+	c.must("UPDATE entities SET body='text 2' WHERE id=?", pid)
 	edited := false
 	for _, r := range c.rows(DV, P{"day": "2026-09-29"}) {
 		edited = edited || (r[0] == "page (edited)" && r[2] == "Essay")
@@ -213,6 +219,6 @@ func journal(s *S) {
 	}
 	s.K(`"did I do it each month" is a 0/1 habit metric`, c.str("select group_concat(value) from (select value from measurement_values where metric_id=? order by day)", mid) == "1.0,0.0,1.0")
 	c.named("person", "Ada", M{"birth_day": "1815-12-10"})
-	s.K("birthdays are a query over people.birth_day", c.tab("SELECT p.title FROM people pe JOIN pages p USING(id) WHERE strftime('%m-%d', pe.birth_day) = '12-10'") == "Ada")
+	s.K("birthdays are a query over people.birth_day", c.tab("SELECT n.title FROM people pe JOIN entities e on e.id=pe.id JOIN entity_names n on n.entity_id=e.id and n.name_key=e.preferred_name_key WHERE strftime('%m-%d',pe.birth_day)='12-10'") == "Ada")
 	s.K("no event kinds are registered: attended and is-a are gone with events (D22)", c.n("select count(*) from link_kinds where kind in ('attended','is-a')") == 0)
 }

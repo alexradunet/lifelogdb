@@ -64,7 +64,7 @@ func fileForm(r *http.Request) (core.FileIn, bool, error) {
 			return core.FileIn{}, false, err
 		}
 		r, err := radius(v.Get("radius"))
-		return core.FileIn{Title: v.Get("title"), SHA256: v.Get("sha256"), MIME: v.Get("mime"), Body: v.Get("body"), Day: v.Get("day"),
+		return core.FileIn{UnknownCaptureDay: strings.HasPrefix(core.NormalMIME(v.Get("mime")), "image/") && v.Get("day") == "", Title: v.Get("title"), SHA256: v.Get("sha256"), MIME: v.Get("mime"), Body: v.Get("body"), Day: v.Get("day"),
 			At: v.Get("at"), Radius: r}, v.Get("dry_run") == "1", err
 	}
 	defer r.Body.Close()
@@ -165,6 +165,7 @@ func fileForm(r *http.Request) (core.FileIn, bool, error) {
 		}
 		in.Preview = p
 	}
+	in.UnknownCaptureDay = strings.HasPrefix(core.NormalMIME(in.MIME), "image/") && in.Day == "" && in.Taken == ""
 	return in, vals["dry_run"] == "1", nil
 }
 

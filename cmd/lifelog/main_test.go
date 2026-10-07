@@ -74,7 +74,7 @@ func TestSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	var n int
-	r.R.QueryRow("SELECT count(*) FROM pages WHERE title IN ('2026-10-02', 'Lakeside', 'Sam')").Scan(&n)
+	r.R.QueryRow("SELECT count(*) FROM entity_names WHERE title IN ('2026-10-02', 'Lakeside', 'Sam')").Scan(&n)
 	if res, err := (&core.Store{DB: r}).Integrity(ctx); err != nil || !res.OK {
 		t.Errorf("the restore check on the snapshot: %+v %v", res, err)
 	}
@@ -168,7 +168,7 @@ func TestSnapshotLiteralSpecialCharacterPaths(t *testing.T) {
 	}
 	defer snap.Close()
 	var n int
-	if err := snap.R.QueryRow(`SELECT count(*) FROM pages WHERE title IN ('2026-10-05', 'Sam')`).Scan(&n); err != nil || n != 2 {
+	if err := snap.R.QueryRow(`SELECT count(*) FROM entity_names WHERE title IN ('2026-10-05', 'Sam')`).Scan(&n); err != nil || n != 2 {
 		t.Fatalf("literal snapshot %q has %d captured pages (%v), want 2", want, n, err)
 	}
 }
@@ -381,10 +381,10 @@ func TestKeepTheFewPhotosOfADay(t *testing.T) {
 		t.Errorf("%d files kept, want 6 (the text file is no photo)", n)
 	}
 	at := func(day string) int {
-		return count(`SELECT count(*) FROM links l JOIN pages p ON p.id = l.from_id WHERE p.title = ? AND l.kind = 'at'`, day)
+		return count(`SELECT count(*) FROM links l JOIN entities e ON e.id = l.from_id WHERE e.preferred_name_key = ? AND l.kind = 'at'`, day)
 	}
 	body := func(day string) int {
-		return count(`SELECT (length(body) - length(replace(body, '![[', ''))) / 3 FROM pages WHERE title = ?`, day)
+		return count(`SELECT (length(body) - length(replace(body, '![[', ''))) / 3 FROM entities WHERE preferred_name_key = ?`, day)
 	}
 	if at("2019-06-03") != 1 || body("2019-06-03") != 2 || at("2019-06-04") != 0 || at("2019-06-05") != 0 {
 		t.Errorf("after the batch: at %d/%d/%d, embeds on the 3rd %d (the HEIC has no picture)", at("2019-06-03"), at("2019-06-04"), at("2019-06-05"), body("2019-06-03"))
@@ -728,7 +728,7 @@ func TestImportSetupIntegrity(t *testing.T) {
 				t.Fatal(err)
 			}
 			if kind == "orphan" || kind == "output-error" {
-				_, err = d.W.Exec(`INSERT INTO entities(id, entity_type, created_at, updated_at, source) VALUES(999, 'page', '2026-10-05T00:00:00.000Z', '2026-10-05T00:00:00.000Z', 'cli')`)
+				_, err = d.W.Exec(`PRAGMA foreign_keys=OFF; INSERT INTO entities(id, entity_type, preferred_name_key, created_at, updated_at, source) VALUES(999, 'page', 'missing-name', '2026-10-05T00:00:00.000Z', '2026-10-05T00:00:00.000Z', 'cli')`)
 			} else if kind == "execution-error" {
 				// A missing domain table makes the orphan query fail, rather than return OK=false.
 				_, err = d.W.Exec(`DROP TABLE people`)
@@ -788,7 +788,7 @@ func TestImportSetupIntegrity(t *testing.T) {
 			if err := trial.R.QueryRow(`SELECT count(*) FROM entities`).Scan(&entities); err != nil {
 				t.Fatal(err)
 			}
-			if err := trial.R.QueryRow(`SELECT count(*) FROM pages`).Scan(&pages); err != nil {
+			if err := trial.R.QueryRow(`SELECT count(*) FROM entity_names`).Scan(&pages); err != nil {
 				t.Fatal(err)
 			}
 			trial.Close()

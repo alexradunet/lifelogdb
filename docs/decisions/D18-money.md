@@ -5,7 +5,7 @@
 - **Decision.** No `currencies`, `holdings` or `balances`. The first real import kept the owner's
   money notes as text, and no question has needed them as rows yet; what the schema holds at
   the freeze stays for good ([D13](D13-migrations-and-freeze.md)), while these tables are additive later (they reference only
-  `entities` and `pages`).
+  `entities` and its owned names).
 - **The deferred design.**
   - **Exact integers** in minor units of a holding's currency; a closed `currencies` registry whose
     `subunits` (immutable) gives an amount its meaning — any integer, so a 1/5 subunit like MRU works.

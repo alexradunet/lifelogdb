@@ -24,32 +24,32 @@ WITH RECURSIVE tree(id) AS (
 )
 SELECT c.title AS category, mp.title AS metric, m.unit
   FROM tree t
-  JOIN pages c     ON c.id = t.id
   JOIN entities ce ON ce.id = t.id AND ce.deleted_at IS NULL
+  JOIN entity_names c ON c.entity_id = ce.id AND c.name_key = ce.preferred_name_key
   JOIN links l     ON l.to_id = t.id AND l.kind = 'part-of'
   JOIN metrics m   ON m.id = l.from_id
-  JOIN pages mp    ON mp.id = m.id
   JOIN entities me ON me.id = m.id AND me.deleted_at IS NULL
- ORDER BY c.title_key, mp.title_key;
+  JOIN entity_names mp ON mp.entity_id = me.id AND mp.name_key = me.preferred_name_key
+ ORDER BY c.name_key, mp.name_key;
 
 -- every metric with each category it is filed in ('' = none) and whether it is a habit: the habits first,
 -- then by category, the metrics filed nowhere last; a metric in two categories is listed under each
 SELECT EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id) AS habit,
        coalesce(c.title, '') AS category, mp.title AS metric, m.unit
   FROM metrics m
-  JOIN pages mp    ON mp.id = m.id
   JOIN entities me ON me.id = m.id AND me.deleted_at IS NULL
-  LEFT JOIN (SELECT l.from_id, p.title, p.title_key
-               FROM links l JOIN pages p ON p.id = l.to_id
-               JOIN entities e ON e.id = p.id AND e.deleted_at IS NULL
+  JOIN entity_names mp ON mp.entity_id = me.id AND mp.name_key = me.preferred_name_key
+  LEFT JOIN (SELECT l.from_id, p.title, p.name_key
+               FROM links l JOIN entities e ON e.id = l.to_id AND e.deleted_at IS NULL
+               JOIN entity_names p ON p.entity_id = e.id AND p.name_key = e.preferred_name_key
               WHERE l.kind = 'part-of') c ON c.from_id = m.id
- ORDER BY habit DESC, c.title_key IS NULL, c.title_key, mp.title_key;
+ ORDER BY habit DESC, c.name_key IS NULL, c.name_key, mp.name_key;
 ```
 
 A category's page is an ordinary page: its body is what the owner writes about the category, and a `[[Lipids]]` in
 the journal is one of its backlinks ([backlinks](backlinks.md)). The same link files anything else in a category — a
 page, a person, a place. A habit is not a category: it is a metric with a period ([habits](habits.md)), and it may be
-filed in a category as well. Renaming a category's page moves the `part-of` links that end at it
+filed in a category as well. Renaming a category's page retains the id and all `part-of` links that end at it
 ([rename a page](rename-a-page.md)). Nothing keeps the `part-of` links a tree: a page may belong to two categories,
 and links may close a cycle, as `located-in` may (D8); a writer that draws the tree follows one parent and stops at a
 page it has seen.

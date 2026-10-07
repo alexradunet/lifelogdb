@@ -1,4 +1,4 @@
-# D6 — Mood: the `mood` metric in `measurements`, not a column on `pages`.
+# D6 — Mood: the `mood` metric in `measurements`, not a prose column.
 
 **Status:** accepted
 

@@ -48,6 +48,17 @@ lifelog import status --workspace ~/import/Notebook.lifelog --human
 lifelog import replay --to ~/life/life.db --workspace ~/import/Notebook.lifelog     # the real run, when you say so
 ```
 
+For a vault plan, apply every note to the trial before a real replay. Draft rehearsal can evaluate a plan
+without applying it, but does not authorize writing a real target. The writer keeps the exact original
+source, note path, title and day in `applied-plan.json` in the workspace; facts and fix-plan operations
+cannot edit this receipt. Owner renames keep reapply working through retained names without permitting
+applied-plan title/day edits. Missing or conflicting evidence refuses rather than inferring intent from
+aliases. This is filesystem evidence, not a cryptographic seal against arbitrary disk writers. Receipt
+preparation does not prove a database commit. A receipt's `applied` marker means that exact binding completed
+an ApplyVault pass, not owner approval, current prose/source equality or joint filesystem/SQLite atomicity.
+Real replay requires the marker and the trial's identity/append evidence. Completion metadata failure is
+reported even though SQL may already have committed; unchanged retry repairs it without duplicate appends.
+
 ## Decisions
 
 These are this application's own engineering decisions ([D14](docs/decisions/D14-ui-and-tools.md)).
@@ -66,7 +77,11 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   resource it changed, so a reload never posts twice; a refused one shows the text it sent.
 - **Provenance per surface.** `source` is `cli`, `api`, `ui` (a browser form) or `agent:<name>` (MCP);
   the `Lifelog-Source` header sets it.
-- **Optimistic saves.** A body save sends the `version` (`entities.updated_at`) it read; a newer one is a 409.
+- **Optimistic saves.** A body save sends the `version` (the decimal `entities.revision` token) it read; a newer one is a 409.
+- **Metric ranges.** `/metrics/{name}` selects `(from, to]`; omitted `from` defaults to 90 days before `to`.
+  `all_history=1` selects all admitted days through `to`, with no `from` allowed, preserving scope/session and
+  `include_deleted`. The All readings link uses this mode. A default window reaching before year0000 uses
+  the same all-history mode rather than inventing a negative-year bound.
 - **Read-only queries.** `POST /query` runs one allowed read statement (`SELECT`, `WITH`, `VALUES`, `EXPLAIN` of
   those reads, or an allowlisted introspection `PRAGMA`) on a short-lived `mode=ro`, `query_only` connection, 5 s
   and 500 rows at most; scripts, transactions, setters and maintenance commands are refused.
@@ -80,9 +95,9 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **Owner-only actions.** `register-metric` and `replay` are refused to an `agent:*` writer and are never MCP tools.
   `approve` is not in the API at all: `lifelog import approve` refuses without an interactive terminal, and its stamp
   (`status: approved YYYY-MM-DD (owner) sha256:…`) hashes the rest of the file, so an edit closes the gate again.
-- **Renames move the text and the typed links**, as [titles and wikilinks](docs/contract/titles-and-wikilinks.md)
-  ("Renames") requires and [rename a page](docs/cookbook/rename-a-page.md) writes; `lifelog rename` and the API's
-  `rename` action run it.
+- **Renames select a preferred name on the same identity**, retaining direct aliases as
+  [titles and wikilinks](docs/contract/titles-and-wikilinks.md) ("Renames") requires and
+  [rename a page](docs/cookbook/rename-a-page.md) writes; `lifelog rename` and the API's `rename` action run it.
 - **The import workspace is fixed at startup** (`--workspace`); a request names files relative to the source and
   never leaves it. Rows are written as rules.md's `source:`. A row or a note page an agent changes directly during
   an import is allowed and reported by *status*: a replay carries only the facts and the notes.
@@ -107,8 +122,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   (`internal/photo`: a JPEG's APP1, a HEIC's Exif item, read from the original's first megabyte): its day links the
   place its position is in, `at` names one, `locate` sets or moves a place's point; the position is never stored.
   `lifelog file` keeps several (paths, or a folder's photos and videos), with `--dry-run` and a report per day and
-  per group of photos near no place. Nothing reads an export's own files: the photo itself is the source, whatever
-  library it comes from.
+  per group of photos near no place. Unknown capture-local day follows [keep a file](docs/cookbook/keep-a-file.md).
+  The owner-stamped selected-pair preparation below is the only supplementary sidecar path.
 - **`serve` is local-only** and has no authentication: `life.db` holds health data, and the API is for this
   machine. The default bind is `127.0.0.1:7777`; `--addr` accepts numeric loopback IPs or `localhost` with a numeric
   port (0 selects an ephemeral port, printed at startup). `localhost` binds to `127.0.0.1` without DNS resolution.
@@ -151,3 +166,73 @@ and at most one original and one preview part. A supplied preview may be up to
 64 MiB. Over-limit requests return HTTP 413 without writing. Originals are
 hashed as streams without a total size limit; originals above the 64 MiB picture
 budget are kept without an automatically generated preview.
+
+
+### Bounded source preparations
+
+With an import workspace, `draft-prepared`, `check-prepared`, and `apply-prepared` share the same core writes.
+`draft-prepared` takes a selected source `file`, fixed `profile`, optional session `kind` and Fit `binding` JSON,
+and a `metrics` JSON object mapping quantity codes to existing registered metric handles. It derives the
+review records from the confined snapshot, not caller-provided normalized facts. The namespace comes from
+approved rules; ordinary note facts keep their quote-evidence checks. The owner reads and stamps with
+`lifelog import approve prepared` at an interactive terminal. No API/MCP action can stamp.
+
+Supported profiles:
+
+| profile | interpretation | quantity codes / units |
+|---|---|---|
+| `fit-date-csv-v1` | exact Date rows, unassociated readings; duplicate days refuse | `steps` / steps, `distance` / m, `reported-calories` / kcal, `mean-heart-rate` / bpm |
+| `legacy-sleep-array-v1` | observed root array; exact logId, independent dateOfSleep, local or offset endpoints | `asleep-minutes`, `in-bed-minutes` / min |
+| `fit-session-object-v1` | root-object session clocks only, explicit immutable key/day/exact fitnessActivity binding | none; aggregates/segments/duration excluded |
+
+Source-reported mean HR is not resting or point HR; calories have no established active/basal/total subtype.
+Missing readings remain missing, literal zero remains zero, nonzero binary64 underflow refuses. Large digit
+IDs remain TEXT (string leading zeros remain distinct); malformed Unicode cannot become another identity.
+Health timestamp CSV, slash-date exercise, sleep wrappers, Start/End CSV and automatic Fit aggregate meanings
+remain preparation-unsupported even if structurally inventoried. Cross-provider overlap never merges or sums.
+These profiles reflect limited shape evidence, not general Takeout or provider API coverage.
+
+Sources are bounded to 1 MiB / 8192 records. Inventory is bounded per parsed file to 16 MiB, depth64,
+65536 nodes, 256 columns, 8192 CSV records; exceeding a bound refuses, not successful partial import.
+The stamped `prepared.md` closes on interpretation/source/mapping changes. `.prepared-binding-*` records
+reserve immutable workspace logical-source interpretations before SQL; a reservation alone proves no commit.
+A separate `.complete` checksum is published after SQL and before the ledger. Missing completion requires a
+verified unchanged apply retry; corrupt evidence refuses replay. These are recovery evidence, not cryptographic
+protection. Reapproval cannot reassign a workspace's established file namespace/profile/identity/mapping;
+genuinely separate provider/account workspaces remain independent.
+Preparation does not persist trial IDs: sessions resolve `(source, import_key)` in the target transaction.
+Readings verify original root value/day/metric/scope, so unchanged retry preserves corrections; reapproval
+cannot remap an applied quantity. Supporting writes and readings commit together; ledger publication follows
+SQL commit and can fail independently. Retry verifies committed roots before finishing publication.
+Replay verifies required existing trial roots and target source roots before replaying correction intents.
+Workspace selection operations are serialized against the entire rehearsal/application; externally editable
+selection bytes and source claims are revalidated before target effects. The admitted source-derived batches
+and selected inputs are then held as an in-memory snapshot, not reopened to choose different interpretations.
+The intent format and imported-scope relocation restrictions are unchanged. Status includes artifact gates and
+binding checks. Status verifies required persisted original roots and completed selected history without
+publishing recovery evidence. Review links are available from import status. An owner-tombstoned selected
+trial file refuses replay before target effects: this bounded profile does not transport owner tombstone
+history. Same-store checks/retries preserve tombstones. SQL and filesystem publication are not jointly atomic.
+
+### Reviewed selected photo pairs
+
+`draft-selected-photo` takes one confined selected `file`, at most one explicitly selected `sidecar`, title/text,
+and JSON `choices`: `capture` is `none`, `exif`, `sidecar`, or `owner`; `gps` is `none`, `exif`, or `sidecar`.
+Optional `offset`, `day`, `at`, and `radius` are explicit attribution/place choices. The owner reads exact
+original/sidecar fingerprints, title-association evidence, separate claims and comparison results, then stamps
+`lifelog import approve selected-photo`. `check-selected-photo` rolls back; `apply-selected-photo` uses the
+existing file writer. Completed minimal selected receipts retain multiple applied pairs, fingerprints,
+namespace and choices without copying originals or coordinate evidence. Verified unchanged retry finishes
+interrupted marker/ledger publication; reapproval is not authority to repair prior owner history. Browser
+review pages expose claims and choices; the terminal remains the only stamp boundary. A matching title is
+not identity proof; mismatched/truncated title stays visible. There is
+no directory search, guessed pairing, automatic claim precedence, URL following or original modification.
+
+`photoTakenTime.timestamp` is interpreted only as a source-claimed integral Unix-seconds capture instant,
+not certified camera truth. `creationTime` is a separate creation claim with unestablished Photos Takeout
+meaning, never verified upload/import time or capture fallback. Local EXIF versus UTC epoch is unresolved
+without offset evidence; genuinely comparable disagreement requires a stamped explicit choice. A supplied
+day is attribution, not a timezone. Conflicting positions require an explicit reviewed selection; no proximity
+tolerance asserts equality. Coordinates are transient matching evidence and only bounded review evidence
+outside SQLite; previews are regenerated without metadata and originals remain untouched. Missing capture-local
+attribution follows [keep a file](docs/cookbook/keep-a-file.md) and [the place of a photo](docs/cookbook/place-of-a-photo.md).

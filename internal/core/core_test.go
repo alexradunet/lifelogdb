@@ -404,12 +404,12 @@ func TestQueryStatementBoundary(t *testing.T) {
 		"SELECT ';' AS semi -- ; in a comment\n",
 		"SELECT \"semi;colon\" FROM (SELECT 1 AS \"semi;colon\") /* ; inside a block comment */",
 		"WITH x(v) AS (VALUES ('literal ;')) SELECT v FROM x; -- final terminator and comment",
-		"WITH backlinks(id, title) AS (SELECT p.id, p.title FROM pages p WHERE p.title = 'Nowhere') SELECT count(*) FROM backlinks",
-		"SELECT name FROM pragma_table_info('pages') WHERE name = 'title'",
+		"WITH backlinks(id, title) AS (SELECT n.entity_id, n.title FROM entity_names n WHERE n.name_key = 'nowhere') SELECT count(*) FROM backlinks",
+		"SELECT name FROM pragma_table_info('entity_names') WHERE name = 'title'",
 		"VALUES (1)",
-		"EXPLAIN QUERY PLAN SELECT * FROM pages",
+		"EXPLAIN QUERY PLAN SELECT * FROM entities",
 		"PRAGMA trusted_schema",
-		"PRAGMA table_info(pages)",
+		"PRAGMA table_info(entity_names)",
 	}
 	for _, q := range allowed {
 		if _, err := s.Query(ctx, q, 10); err != nil {
@@ -489,7 +489,7 @@ func TestQueryDoesNotLeakReaderState(t *testing.T) {
 		t.Fatal(err)
 	}
 	var n int
-	if err := s.DB.R.QueryRowContext(ctx, `SELECT count(*) FROM pages WHERE title = 'Fresh after query'`).Scan(&n); err != nil || n != 1 {
+	if err := s.DB.R.QueryRowContext(ctx, `SELECT count(*) FROM entity_names WHERE name_key = 'fresh after query'`).Scan(&n); err != nil || n != 1 {
 		t.Fatalf("ordinary reader after ad-hoc query sees %d fresh pages, %v; want 1", n, err)
 	}
 }
@@ -595,52 +595,61 @@ func TestQueryUsesLiteralReadOnlyPath(t *testing.T) {
 	}
 }
 
-func TestRedirectStubWrites(t *testing.T) {
+func TestRenamedIdentityWritesThroughRetainedHandle(t *testing.T) {
 	s := fresh(t)
-	old, _, err := s.CreatePage(ctx, "cli", "Typo", "prose")
+	id, _, err := s.CreatePage(ctx, "cli", "Typo", "prose")
 	if err != nil {
 		t.Fatal(err)
 	}
-	target, err := s.Rename(ctx, "cli", old, "Correct")
-	if err != nil {
-		t.Fatal(err)
+	renamed, err := s.Rename(ctx, "cli", id, "Correct")
+	if err != nil || renamed != id {
+		t.Fatalf("rename: %d %v", renamed, err)
 	}
 	other, _, err := s.CreatePage(ctx, "cli", "Other", "[[Typo]]")
 	if err != nil {
 		t.Fatal(err)
 	}
-	before, _ := s.PageByID(ctx, old)
-	dest, _ := s.PageByID(ctx, target)
-	cases := []struct {
-		name string
-		run  func() error
-	}{
-		{"save", func() error { _, e := s.SaveBody(ctx, "cli", old, "bad", before.Version); return e }},
-		{"import", func() error {
-			return s.Do(ctx, "import:synthetic", func(tx *Tx) error { _, e := tx.SetBody(old, "bad"); return e })
-		}},
-		{"source", func() error { return s.Link(ctx, "cli", old, other, "related", "") }},
-		{"target", func() error { return s.Link(ctx, "cli", other, old, "related", "") }},
-		{"unlink source", func() error { return s.Unlink(ctx, "cli", old, other, "related") }},
-		{"unlink target", func() error { return s.Unlink(ctx, "cli", other, old, "related") }},
+	before, err := s.PageByID(ctx, id)
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if e := tc.run(); status(e) != 409 || !strings.Contains(e.Error(), "target") {
-				t.Errorf("refusal: %v", e)
-			}
-		})
+	if _, err := s.SaveBody(ctx, "cli", id, "#REDIRECT [[Other]]", before.Version); err != nil {
+		t.Fatal(err)
 	}
-	if e := s.Unlink(ctx, "cli", old, target, "redirect"); e == nil {
-		t.Error("removed redirect")
+	after, err := s.PageByID(ctx, id)
+	if err != nil {
+		t.Fatal(err)
 	}
-	after, _ := s.PageByID(ctx, old)
-	destination, _ := s.PageByID(ctx, target)
-	if after.Body != before.Body || titles(after.Out, "redirect") != "Correct" || len(after.Out) != 1 || destination.Body != dest.Body || destination.Version != dest.Version {
-		t.Fatal("mutation changed stub or target")
+	if after.Body != "#REDIRECT [[Other]]" || titles(after.Out, "wikilink") != "Other,REDIRECT" || len(after.Out) != 2 {
+		t.Fatalf("ordinary prose: %+v", after)
 	}
-	mention, _ := s.PageByID(ctx, other)
-	if titles(mention.Out, "wikilink") != "Typo" {
-		t.Fatal("old wikilink changed")
+	if err := s.Do(ctx, "import:synthetic", func(tx *Tx) error { _, err := tx.SetBody(id, "imported [[Other]]"); return err }); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Link(ctx, "cli", id, other, "related", "note"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Unlink(ctx, "cli", other, id, "related"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Link(ctx, "cli", other, id, "related", "reverse"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Unlink(ctx, "cli", id, other, "related"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Link(ctx, "cli", other, id, "redirect", ""); status(err) != 422 {
+		t.Fatalf("removed kind: %v", err)
+	}
+	mention, err := s.PageByID(ctx, other)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if titles(mention.Out, "wikilink") != "Correct" || len(mention.Out) != 1 {
+		t.Fatalf("old handle endpoint: %+v", mention)
+	}
+	old, err := s.PageID(ctx, "Typo")
+	if err != nil || old != id {
+		t.Fatalf("retained handle: %d %v", old, err)
 	}
 }

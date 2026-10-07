@@ -10,13 +10,18 @@ import (
 // day's habits done / not done / not recorded, completion over a period); the cookbook/day-view day view lists the
 // day's habits and not their check-ins again; a day without a check-in is never assumed.
 func habits(s *S) {
+	mood := s.fresh()
+	s.K("Mood identity cannot start a habit", strings.HasPrefix(mood.habit(1, "2026-01-01", nil), "ERR") && mood.n("SELECT count(*) FROM habit_periods WHERE metric_id=1") == 0)
+	otherMood := mood.metric("Other binary", "")
+	mood.must("INSERT INTO habit_periods(metric_id,start_day,source) VALUES(?,'2026-01-01','ui')", otherMood)
+	s.K("habit update cannot reassign to Mood identity", strings.HasPrefix(mood.tryx("UPDATE habit_periods SET metric_id=1 WHERE metric_id=?", otherMood), "ERR") && mood.n("SELECT metric_id FROM habit_periods") == otherMood)
 	err := func(r string) bool { return strings.HasPrefix(r, "ERR") }
 
 	// ---- the table's rules
 	c := s.fresh()
 	vd, kg := c.metric("vitamin_d", ""), c.metric("weight_x", "kg")
 	s.K("a period on a unitless metric is accepted", c.habit(vd, "2026-10-01", "2026-10-31") == "OK")
-	for _, bad := range []string{"2026-9-3", "2026-02-31", "today"} {
+	for _, bad := range []string{"2026-9-3", "2026-13-03", "2026-02-31", "today"} {
 		s.K(fmt.Sprintf("start_day %q refused", bad), err(c.habit(vd, bad, nil)))
 	}
 	s.K("an end before the start refused (habit_periods_order)", err(c.habit(vd, "2027-01-10", "2027-01-09")))
@@ -49,7 +54,7 @@ func habits(s *S) {
 	s.K("a period is never deleted", err(c.tryx("DELETE FROM habit_periods")) && c.n("select count(*) from habit_periods") == 3)
 	s.K("a period's source never changes", strings.Contains(c.tryx("UPDATE habit_periods SET source='cli' WHERE start_day='2026-10-01'"), "never changed"))
 	s.K("...a full-row update that keeps it accepted", c.tryx("UPDATE habit_periods SET source='ui', end_day=end_day WHERE start_day='2026-10-01'") == "OK")
-	s.K("mood is not a habit: it has no period", c.n("select count(*) from habit_periods h join pages m on m.id=h.metric_id where m.title_key='mood'") == 0)
+	s.K("mood is not a habit: it has no period", c.n("select count(*) from habit_periods h join entity_names n on n.entity_id=h.metric_id where n.name_key='mood'") == 0)
 	s.K("the database is clean", c.integrityOK())
 
 	// ---- cookbook/habits run literally

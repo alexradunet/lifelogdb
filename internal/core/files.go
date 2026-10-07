@@ -16,25 +16,29 @@ import (
 
 // FileIn is a file to keep (docs/cookbook/keep-a-file.md, D9): the hash and type of the original, which is never
 // stored; the title and text of its page; its preview, a JPEG preview.Make made (nil for none). Its day is Day when
-// the caller gives one, else Taken, the day its metadata says it was made, else today. Its position (HasGPS) is
+// the caller gives one, else Taken, else today for ordinary files. Unknown-capture mode follows
+// docs/cookbook/keep-a-file.md and withholds incidental place writes. Its position (HasGPS) is
 // matched to a place and never stored; At names the place instead, which takes the position as its point if it has
 // none, with Radius (cookbook/place-of-a-photo.md).
 type FileIn struct {
-	Title    string
-	SHA256   string
-	MIME     string
-	Body     string
-	Day      string
-	Taken    string
-	Preview  []byte
-	Lat, Lon float64
-	HasGPS   bool
-	At       string
-	Radius   int
+	RequireCaptureDayAgreement bool // Selected capture claims cannot change retained owner attribution.
+	UnknownCaptureDay          bool // Explicit selected-photo mode: no inferred attribution or incidental place writes.
+	Title                      string
+	SHA256                     string
+	MIME                       string
+	Body                       string
+	Day                        string
+	Taken                      string
+	Preview                    []byte
+	Lat, Lon                   float64
+	HasGPS                     bool
+	At                         string
+	Radius                     int
 }
 
 // Kept is what keeping a file did.
 type Kept struct {
+	StoredDay    string    `json:"stored_day,omitempty"`    // Existing attribution, not new capture evidence.
 	ID           int64     `json:"id,omitempty"`            // none in a dry run that would create the page
 	Existing     bool      `json:"existing,omitempty"`      // the original was kept already: that page, nothing else written
 	Deleted      bool      `json:"deleted,omitempty"`       // ...and it is tombstoned, so not even a preview was added
@@ -90,8 +94,13 @@ func (t *Tx) AddFile(f FileIn) (k Kept, err error) {
 			return k, err
 		}
 	}
+	if f.UnknownCaptureDay && (f.Day != "" || f.Taken != "" || f.At != "") {
+		return k, invalid("unknown capture day requires no day attribution or selected place")
+	}
 	day, own := f.Day, true
 	switch {
+	case f.UnknownCaptureDay:
+		own = false
 	case day != "":
 	case f.Taken != "":
 		day = f.Taken
@@ -102,12 +111,19 @@ func (t *Tx) AddFile(f FileIn) (k Kept, err error) {
 	var hasPreview bool
 	var deleted sql.NullString
 	var title string
-	err = t.tx.QueryRow(`SELECT f.id, f.preview IS NOT NULL, e.deleted_at, p.title FROM files f
-	                       JOIN entities e ON e.id = f.id JOIN pages p ON p.id = f.id WHERE f.sha256 = ?`, f.SHA256).
-		Scan(&k.ID, &hasPreview, &deleted, &title)
+	var storedDay sql.NullString
+	err = t.tx.QueryRow(`SELECT f.id, f.preview IS NOT NULL, e.deleted_at, p_name.title,e.day FROM files f
+	                       JOIN entities e ON e.id = f.id JOIN entities p ON p.id = f.id JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key  WHERE f.sha256 = ?`, f.SHA256).
+		Scan(&k.ID, &hasPreview, &deleted, &title, &storedDay)
 	switch {
 	case err == nil:
+		if f.RequireCaptureDayAgreement && day != "" && storedDay.Valid && storedDay.String != day {
+			return k, conflict("selected capture attribution conflicts with retained owner day")
+		}
 		k.Existing, k.Deleted = true, deleted.Valid
+		if f.UnknownCaptureDay {
+			k.StoredDay = storedDay.String
+		}
 		if k.Deleted {
 			return k, nil
 		}
@@ -134,6 +150,15 @@ func (t *Tx) AddFile(f FileIn) (k Kept, err error) {
 	if err != nil {
 		return k, err
 	}
+	if f.RequireCaptureDayAgreement && day != "" && p != nil {
+		var retained sql.NullString
+		if err := t.tx.QueryRow(`SELECT day FROM entities WHERE id=?`, p.ID).Scan(&retained); err != nil {
+			return k, err
+		}
+		if retained.Valid && retained.String != day {
+			return k, conflict("selected capture attribution conflicts with retained owner day")
+		}
+	}
 	title = f.Title
 	if p != nil {
 		title = p.Title
@@ -146,11 +171,11 @@ func (t *Tx) AddFile(f FileIn) (k Kept, err error) {
 	body := f.Body
 	switch {
 	case p == nil:
-		if k.ID, _, err = t.insertPage("file", f.Title, text.TitleKey(f.Title), day, f.Body, ""); err != nil {
+		if k.ID, _, err = t.insertPage("file", f.Title, text.TitleKey(f.Title), nullIfEmpty(day), f.Body, ""); err != nil {
 			return k, err
 		}
 		title = f.Title
-	case p.Type == "page" && !p.DayPage && !p.Stub:
+	case p.Type == "page" && !p.DayPage:
 		if p.Body != "" && f.Body != "" && p.Body != f.Body {
 			return k, conflict("%s already has text of its own: give the file another title (two texts are never merged)", p.Title)
 		}
@@ -162,16 +187,21 @@ func (t *Tx) AddFile(f FileIn) (k Kept, err error) {
 			return k, conflict("page %d could not become the file", p.ID)
 		}
 		if p.Body == "" && f.Body != "" {
-			if _, err := t.tx.Exec(`UPDATE pages SET body = ? WHERE id = ?`, f.Body, p.ID); err != nil {
+			if _, err := t.tx.Exec(`UPDATE entities SET body = ? WHERE id = ?`, f.Body, p.ID); err != nil {
 				return k, err
 			}
 		} else {
 			body = p.Body
 		}
-		if _, err := t.tx.Exec(`UPDATE pages SET day = ? WHERE id = ? AND day IS NULL`, day, p.ID); err != nil {
+		if _, err := t.tx.Exec(`UPDATE entities SET day = ? WHERE id = ? AND day IS NULL`, nullIfEmpty(day), p.ID); err != nil {
 			return k, err
 		}
 		k.ID, k.Promoted, title = p.ID, true, p.Title
+		if f.UnknownCaptureDay {
+			if err := t.tx.QueryRow("SELECT coalesce(day,'') FROM entities WHERE id=?", p.ID).Scan(&k.StoredDay); err != nil {
+				return k, err
+			}
+		}
 	default:
 		return k, &ExistsError{p.ID, p.Title}
 	}
@@ -195,6 +225,9 @@ func (t *Tx) placeAndDay(k *Kept, f FileIn, title, day string, own, picture bool
 	if own {
 		k.Day = day
 	}
+	if f.UnknownCaptureDay {
+		return nil
+	}
 	var place int64
 	link := false
 	switch {
@@ -209,7 +242,7 @@ func (t *Tx) placeAndDay(k *Kept, f FileIn, title, day string, own, picture bool
 			}
 		}
 		var days sql.NullBool // a place with no point yet is linked: the owner named it
-		if err := t.tx.QueryRow(`SELECT p.title, pl.link_days FROM pages p LEFT JOIN places pl ON pl.id = p.id WHERE p.id = ?`, id).
+		if err := t.tx.QueryRow(`SELECT p_name.title, pl.link_days FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key  LEFT JOIN places pl ON pl.id = p.id WHERE p.id = ?`, id).
 			Scan(&k.Place, &days); err != nil {
 			return err
 		}
@@ -266,8 +299,8 @@ func (s *Store) Preview(ctx context.Context, id int64) ([]byte, error) {
 
 // PreviewByTitle is the picture of the live file page a title names (an embed); nil when there is none.
 func (s *Store) PreviewByTitle(ctx context.Context, title string) ([]byte, error) {
-	return s.preview(ctx, `SELECT f.preview FROM files f JOIN pages p ON p.id = f.id
-	                         JOIN entities e ON e.id = f.id AND e.deleted_at IS NULL WHERE p.title_key = ?`, text.TitleKey(title))
+	return s.preview(ctx, `SELECT f.preview FROM files f JOIN entities p ON p.id = f.id JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
+	                         JOIN entities e ON e.id = f.id AND e.deleted_at IS NULL WHERE p.id = (SELECT entity_id FROM entity_names WHERE name_key = ?)`, text.TitleKey(title))
 }
 
 func (s *Store) preview(ctx context.Context, q string, arg any) ([]byte, error) {

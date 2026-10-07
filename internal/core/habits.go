@@ -40,8 +40,8 @@ func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
 			return false, conflict("metric %s exists with unit %q, not %q: a unit never changes; register a new metric", p.Title, have, unit)
 		}
 		return false, nil
-	case p.Type != "page" || p.DayPage || p.Stub:
-		return false, conflict("%s is taken by a %s, a day page or a redirect stub: a metric's title must be free or a plain page (D27)", p.Title, p.Type)
+	case p.Type != "page" || p.DayPage:
+		return false, conflict("%s is taken by a %s or a day page: a metric's title must be free or a plain page (D27)", p.Title, p.Type)
 	}
 	if _, err := t.tx.Exec(`UPDATE entities SET entity_type = 'metric', deleted_at = NULL WHERE id = ?`, p.ID); err != nil {
 		return false, err
@@ -60,8 +60,8 @@ func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
 // metricID finds a live metric by its name, in any case (its title_key).
 func (t *Tx) metricID(name string) (int64, error) {
 	var id int64
-	err := t.tx.QueryRow(`SELECT p.id FROM pages p JOIN entities e ON e.id = p.id AND e.deleted_at IS NULL
-	                       WHERE p.title_key = ? AND p.entity_type = 'metric'`, text.TitleKey(name)).Scan(&id)
+	err := t.tx.QueryRow(`SELECT p.id FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key  JOIN entities e ON e.id = p.id AND e.deleted_at IS NULL
+	                       WHERE p.id = (SELECT entity_id FROM entity_names WHERE name_key = ?) AND p.entity_type = 'metric'`, text.TitleKey(name)).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, notFound("no metric %q: the owner registers metrics", name)
 	}
@@ -78,6 +78,9 @@ func (t *Tx) StartHabit(metric, start, end string) error {
 	id, err := t.metricID(metric)
 	if err != nil {
 		return err
+	}
+	if id == 1 {
+		return invalid("the seeded Mood metric cannot be a habit")
 	}
 	var other bool
 	if err := t.tx.QueryRow(`SELECT EXISTS (SELECT 1 FROM measurement_values WHERE metric_id = ? AND value NOT IN (0, 1))`, id).
@@ -140,13 +143,13 @@ func (s *Store) Habits(ctx context.Context, day string) ([]HabitState, error) {
 		return nil, invalid("day %q is not YYYY-MM-DD", day)
 	}
 	rows, err := s.DB.R.QueryContext(ctx, `
-		SELECT m.title,
-		       CASE (SELECT max(v.value) FROM measurement_values v WHERE v.metric_id = m.id AND v.day = :day)
+		SELECT m_name.title,
+		       CASE (SELECT max(v.value) FROM measurement_values v WHERE v.metric_id = m.id AND v.day = :day AND v.session_id IS NULL)
 		         WHEN 1 THEN 'done' WHEN 0 THEN 'not done' ELSE 'not recorded' END AS state
-		  FROM habit_periods h JOIN pages m ON m.id = h.metric_id
+		  FROM habit_periods h JOIN entities m ON m.id = h.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key
 		  JOIN entities e ON e.id = m.id AND e.deleted_at IS NULL
 		 WHERE h.start_day <= :day AND coalesce(h.end_day, '9999-12-31') >= :day
-		 ORDER BY m.title_key`, sql.Named("day", day))
+		 ORDER BY m.preferred_name_key`, sql.Named("day", day))
 	if err != nil {
 		return nil, err
 	}
@@ -185,15 +188,15 @@ func (s *Store) Completion(ctx context.Context, from, to string) ([]Completion, 
 		  SELECT h.metric_id, d.day
 		    FROM days d JOIN habit_periods h ON h.start_day <= d.day AND coalesce(h.end_day, '9999-12-31') >= d.day
 		)
-		SELECT m.title, count(*) AS active_days,
+		SELECT m_name.title, count(*) AS active_days,
 		       sum(s.value IS 1) AS done, sum(s.value IS 0) AS not_done, sum(s.value IS NULL) AS not_recorded
 		  FROM active a
-		  JOIN pages m ON m.id = a.metric_id
+		  JOIN entities m ON m.id = a.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key
 		  JOIN entities e ON e.id = m.id AND e.deleted_at IS NULL
-		  LEFT JOIN (SELECT metric_id, day, max(value) AS value FROM measurement_values GROUP BY metric_id, day) s
+		  LEFT JOIN (SELECT metric_id, day, max(value) AS value FROM measurement_values WHERE session_id IS NULL GROUP BY metric_id, day) s
 		         ON s.metric_id = a.metric_id AND s.day = a.day
 		 GROUP BY m.id
-		 ORDER BY m.title_key`, sql.Named("from_day", from), sql.Named("to_day", to))
+		 ORDER BY m.preferred_name_key`, sql.Named("from_day", from), sql.Named("to_day", to))
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +221,7 @@ type Period struct {
 // Periods lists a metric's habit periods, oldest first.
 func (s *Store) Periods(ctx context.Context, metric string) ([]Period, error) {
 	rows, err := s.DB.R.QueryContext(ctx, `SELECT h.start_day, coalesce(h.end_day, '') FROM habit_periods h
-	                                         JOIN pages m ON m.id = h.metric_id WHERE m.title_key = ? ORDER BY h.start_day`, text.TitleKey(metric))
+	                                         JOIN entities m ON m.id = h.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key  WHERE m.id = (SELECT entity_id FROM entity_names WHERE name_key = ?) ORDER BY h.start_day`, text.TitleKey(metric))
 	if err != nil {
 		return nil, err
 	}

@@ -1,11 +1,11 @@
 # Full-text search
 
 ```sql
-SELECT p.id, p.title,
-       snippet(pages_fts, 1, '<b>', '</b>', '…', 24) AS ctx
-  FROM pages_fts
-  JOIN pages p    ON p.id = pages_fts.rowid
-  JOIN entities e ON e.id = p.id AND e.deleted_at IS NULL
- WHERE pages_fts MATCH :query
+SELECT e.id, n.title,
+       snippet(entities_fts, 2, '<b>', '</b>', '…', 24) AS ctx
+  FROM entities_fts
+  JOIN entities e ON e.id = entities_fts.rowid AND e.deleted_at IS NULL
+  JOIN entity_names n ON n.entity_id = e.id AND n.name_key = e.preferred_name_key
+ WHERE entities_fts MATCH :query
  ORDER BY rank;
 ```

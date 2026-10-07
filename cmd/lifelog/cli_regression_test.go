@@ -88,7 +88,7 @@ func TestWorkspaceDatabasePrecedence(t *testing.T) {
 				}
 				defer d.Close()
 				var title string
-				if err := d.R.QueryRow("SELECT title FROM pages WHERE title IN ('Trial','Explicit','Environment')").Scan(&title); err != nil || title != tc.want {
+				if err := d.R.QueryRow("SELECT title FROM entity_names WHERE title IN ('Trial','Explicit','Environment')").Scan(&title); err != nil || title != tc.want {
 					t.Fatalf("snapshot title=%q err=%v want=%q", title, err, tc.want)
 				}
 			})

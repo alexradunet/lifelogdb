@@ -95,7 +95,7 @@ func TestSourceConfinementJunction(t *testing.T) {
 		t.Fatal("apply accepted junction")
 	}
 	var n int
-	if err := store.DB.R.QueryRowContext(ctx, "SELECT count(*) FROM pages WHERE title = 'Outside'").Scan(&n); err != nil {
+	if err := store.DB.R.QueryRowContext(ctx, "SELECT count(*) FROM entity_names WHERE title = 'Outside'").Scan(&n); err != nil {
 		t.Fatal(err)
 	}
 	if n != 0 {

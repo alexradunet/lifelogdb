@@ -27,12 +27,17 @@ the document (a broken block makes a later step impossible) reports that as one 
 | file | suite | subject |
 |---|---|---|
 | `dates_test.go` | `dates` | instants, local days, the round-trip CHECKs and why `IS`, the zone (lifelog_meta.instants and .days, D10) |
+| `id_guards_test.go` | `id-guards` | file-backed declared/rowid/_rowid_/oid identity guards; forbidden combined edits, no-ops, revisions, mirrors, FTS and reopen controls |
+| `name_grammar_test.go` | `name-grammar` | documented raw/NFC addressability vectors under mutation; canonical key and bracket-storage probes, separate from production pipeline tests |
+| `sessions_test.go` | `recorded-sessions`, `measurement-scopes` | shared endpoint vectors, immutable session identity/provenance, revisions/kinds, correction scope/liveness and actual semantic damage probes |
+| `periods_test.go` | `recorded-periods` | boundary storage/revision/ID guards and shared membership vectors |
 | `identity_test.go` | `identity` | the supertype and its composite FKs, ids by `RETURNING`, `source` on every row, no hard deletes, `updated_at` (schema.sql, D8, D10, D11) |
+| `names_test.go` | `names`, `name-ownership` | mandatory deferred preferred ownership; direct reserved names and immutable owner/key/id; actual alias/preferred/spelling/body FTS maintenance and journal-name reservations |
 | `named_test.go` | `named` | a person or a place is a page: one id, promotion, cookbook/person-or-place, cookbook/days-that-name and cookbook/everything-about run literally, two Sams (D16, D20) |
-| `files_test.go` | `files` | a file is a page: one id, the hash, type and preview of the original and their CHECKs (`IS` for the JPEG bytes: `substr` of an empty blob is NULL), what never changes, never deleted, the graph (an embed, a caption, `about`, `part-of`, a redirect), a ghost promoted, cookbook/keep-a-file as a writer runs it (D9) |
+| `files_test.go` | `files` | a file is a page: one id, the hash, type and preview of the original and their CHECKs (`IS` for the JPEG bytes: `substr` of an empty blob is NULL), what never changes, never deleted, the graph (an embed, a caption, `about`, `part-of`, refused redirect), a ghost promoted, cookbook/keep-a-file as a writer runs it (D9) |
 | `places_test.go` | `places` | where a place is: its point, radius and `link_days` and their CHECKs (NaN, infinity and 0°, 0° refused), fixed by UPDATE, never deleted; cookbook/place-of-a-photo run literally: a point given once, the match against a haversine oracle (the smallest circle, then the nearest), the antimeridian limit, the day linked and the photo shown once (D21) |
-| `pages_test.go` | `pages` | every page titled, the day rule, filename-safe titles, `title_key` and its vectors, lookups, FTS, why not a collation (contract/titles-and-wikilinks, D5) |
-| `renames_test.go` | `renames` | cookbook/rename-a-page run literally: the text, the day and the typed links (both ways) move, a category page's metrics with them, the stub keeps its redirect alone, a typo ghost into an existing person, the refusals; the writer's own rename writes the same rows (contract/titles-and-wikilinks, D5) |
+| `pages_test.go` | `pages` | every page titled, the day rule, filename-safe titles, normalized owned keys and their vectors, lookups, FTS, why not a collation (contract/titles-and-wikilinks, D5) |
+| `renames_test.go` | `renames` | cookbook/rename-a-page run literally: id, prose, day, provenance, typed detail and incident links retained; direct aliases, owned-name selection, case-only rename and no-effect refusals; writer parity (contract/titles-and-wikilinks, D5) |
 | `links_test.go` | `links` | the closed kind registry, endpoint types, mirrors, `at`, containment over day pages with its cycle guard (D8, D16) |
 | `habits_test.go` | `habits` | habit periods: their days, order, no overlap, unitless only, never deleted; cookbook/habits and the cookbook/day-view habit leg — done, not done, not recorded (D24) |
 | `facts_test.go` | `facts` | metrics and measurements: append-only, supersede, retract, finite values, never `OR IGNORE`/`OR REPLACE` (D7); categories as pages and cookbook/metrics-by-category (D26) |
@@ -46,9 +51,9 @@ the document (a broken block makes a later step impossible) reports that as one 
 | `document_test.go` | `document` | the 2075 test, the rules live in the file, the tree holds together (one record per decision, every relative link and anchor resolves, every page reachable from `docs/README.md`), the totals in `schema/README.md` |
 | `diagrams_test.go` | `diagrams` | the seven mermaid diagrams say what the DDL says (keys, relationships, the link map, the correction story) |
 | `wikilinks_test.go` | `doc-save-contract` | the save contract as the docs print it: the vector table of contract/titles-and-wikilinks, cookbook/save-a-body run literally (and equal to a writer's own save after 400 random edits), cookbook/backlinks |
-| | `save-contract` | the save contract through a writer's own save against the DDL: invalid targets, the `SAVEPOINT` backstop, set equality, stubs, revival, 400 random edits against a rebuild, 4 concurrent writers, every vector |
-| | `title-fuzz` | the writer's title predicate equals the DDL's CHECKs on more than 40 000 generated strings |
-| `mutants_test.go` | `TestMutants` | 191 broken copies of the docs tree, one rule each; a completed owning suite must fail the mutant's explicit rule witness |
+| | `save-contract` | the save contract through a writer's own save against the DDL: invalid targets, the `SAVEPOINT` backstop, set equality, ordinary REDIRECT prose, revival, 400 random edits against a rebuild, 4 concurrent writers, every vector |
+| | `title-fuzz` | writer acceptance is a subset of the DDL's filename checks over 60 000 generated strings; DB-only names independently fail reference addressability |
+| `mutants_test.go` | `TestMutants` | 281 broken copies of the docs tree, one rule each; a completed owning suite must fail the mutant's explicit rule witness |
 | `render_test.go` | `TestMermaidRender` | optional: every diagram renders |
 | `kit_test.go`, `suites_test.go` | | reading the tree (a page, the cookbook blocks by recipe key, an overlay of broken files for a mutant); fresh databases and the insert conventions (entity first, `RETURNING`, named entities); the runner |
 

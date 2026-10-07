@@ -37,12 +37,11 @@ func snapshots(s *S) {
 			}
 		}
 	}
-	if len(checks) != 4 {
-		stop("contract/integrity-checks has not the four checks: %v", checks)
+	if len(checks) != 7 {
+		stop("contract/integrity-checks does not contain the seven statements in four check groups: %v", checks)
 	}
-	// fourChecks is the restore check's four results on one connection: integrity_check, foreign_key_check, the
-	// orphan query, the FTS5 check (each its rows, or its error).
-	fourChecks := func(c *C) []string {
+	// checkStatements includes both domain and typed-edge semantic queries in the four check groups.
+	checkStatements := func(c *C) []string {
 		var out []string
 		for _, q := range checks {
 			rows, err := c.query(q)
@@ -54,7 +53,9 @@ func snapshots(s *S) {
 		}
 		return out
 	}
-	clean := func(r []string) bool { return len(r) == 4 && r[0] == "ok" && r[1] == "" && r[2] == "" && r[3] == "" }
+	clean := func(r []string) bool {
+		return len(r) == 7 && r[0] == "ok" && r[1] == "" && r[2] == "" && r[3] == "" && r[4] == "" && r[5] == "" && r[6] == ""
+	}
 	writer := func(p string) *C { // the writer's settings (contract/connections)
 		return s.connect(p, "_defensive=1", "_pragma=foreign_keys(1)", "_pragma=recursive_triggers(1)", "_pragma=synchronous(2)", "_pragma=trusted_schema(0)")
 	}
@@ -104,7 +105,7 @@ func snapshots(s *S) {
 	w.must("PRAGMA wal_checkpoint(TRUNCATE)")
 	w.dayPage("2026-10-01", "Written after the checkpoint: only in life.db-wal.")
 	w.measure(wt, "2026-10-01", 70.9)
-	inWal := "SELECT count(*) FROM pages WHERE title = '2026-10-01'"
+	inWal := "SELECT count(*) FROM entity_names WHERE name_key = '2026-10-01'"
 
 	// a copy of life.db alone, while rows wait in its -wal
 	plain := filepath.Join(dir, "plain", "life.db")
@@ -128,7 +129,7 @@ func snapshots(s *S) {
 	got := dump(sr)
 	s.K("the snapshot holds the same rows as the live file, every table (the FTS shadow tables too)", got == want && strings.Contains(got, "Note 299"), clip(got, 200))
 	s.K("the snapshot holds the rows still only in life.db-wal", sr.n(inWal) == 1)
-	s.K("the snapshot holds nothing of the open transaction", sr.n("SELECT count(*) FROM pages WHERE title = 'Not committed'") == 0)
+	s.K("the snapshot holds nothing of the open transaction", sr.n("SELECT count(*) FROM entity_names WHERE name_key = 'not committed'") == 0)
 	s.K("the snapshot is in rollback-journal mode: journal_mode reads delete, and no -wal beside it", sr.str("PRAGMA journal_mode") == "delete" && !exists(snap+"-wal"), sr.str("PRAGMA journal_mode"))
 	again := ro.tryx("VACUUM INTO ?", filepath.ToSlash(snap))
 	s.K("onto a file that has content: refused (output file already exists)", strings.Contains(again, "output file already exists"), again)
@@ -136,26 +137,26 @@ func snapshots(s *S) {
 	write(empty, nil)
 	ontoEmpty := ro.tryx("VACUUM INTO ?", filepath.ToSlash(empty))
 	s.K("onto an existing empty file: SQLite writes it, so the program that names a snapshot checks that the name is free",
-		ontoEmpty == "OK" && s.readOnly(empty).n("SELECT count(*) FROM pages") > 300, ontoEmpty)
+		ontoEmpty == "OK" && s.readOnly(empty).n("SELECT count(*) FROM entities") > 300, ontoEmpty)
 	qo := s.connect(live, "mode=ro", "_pragma=query_only(1)")
 	_, qerr := qo.runBlock(take, P{"snapshot": filepath.ToSlash(filepath.Join(dir, "query-only.db"))}, nil)
 	s.K("a connection with PRAGMA query_only = ON cannot take it (attempt to write a readonly database)", qerr != nil && strings.Contains(qerr.Error(), "readonly"), qerr)
 
 	// 2. the restore check
-	r := fourChecks(sr)
+	r := checkStatements(sr)
 	s.K("on a mode=ro connection the first three checks pass and the FTS5 check is refused (attempt to write a readonly database)",
-		r[0] == "ok" && r[1] == "" && r[2] == "" && strings.Contains(r[3], "readonly"), r)
+		r[0] == "ok" && r[1] == "" && r[2] == "" && r[3] == "" && r[4] == "" && r[5] == "" && strings.Contains(r[6], "readonly"), r)
 	sr.Close()
 	before := read(snap)
 	sc := writer(snap)
-	r = fourChecks(sc)
+	r = checkStatements(sc)
 	sc.Close()
 	s.K("with the writer's settings the four checks pass on the snapshot", clean(r), r)
 	s.K("the restore check leaves the snapshot as it was, byte for byte", bytes.Equal(before, read(snap)))
 	opt := filepath.Join(dir, "optimized.db")
 	write(opt, before)
 	oc := writer(opt)
-	fourChecks(oc)
+	checkStatements(oc)
 	oc.must("PRAGMA optimize")
 	oc.Close()
 	s.K("PRAGMA optimize at close can write to it: the restore check closes without it", !bytes.Equal(before, read(opt)))
@@ -170,7 +171,7 @@ func snapshots(s *S) {
 	_, rerr := rc.runBlock(restore, P{}, nil)
 	s.K("the restore block runs on the restored life.db", rerr == nil, rerr)
 	s.K("the restored life.db is in WAL mode again", rc.str("PRAGMA journal_mode") == "wal", rc.str("PRAGMA journal_mode"))
-	s.K("the restored life.db passes the four checks and holds the snapshot's rows", clean(fourChecks(rc)) && dump(rc) == want)
+	s.K("the restored life.db passes the four checks and holds the snapshot's rows", clean(checkStatements(rc)) && dump(rc) == want)
 	rc.Close()
 	crash := filepath.Join(dir, "beside-old-wal", "life.db")
 	write(crash+"-wal", read(live+"-wal"))

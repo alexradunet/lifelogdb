@@ -490,6 +490,8 @@ func (w *Workspace) SourceFiles() ([]string, error) {
 
 // Skip marks a file the model will not import ([-] with the reason): the one ledger mark the model writes.
 func (w *Workspace) Skip(file, reason string) error {
+	w.selectionMu.RLock()
+	defer w.selectionMu.RUnlock()
 	if strings.TrimSpace(reason) == "" {
 		return refuse("a skip needs its reason")
 	}
@@ -506,6 +508,9 @@ func (w *Workspace) Skip(file, reason string) error {
 func (w *Workspace) mark(file string, f func(*Line) error) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	return w.markLocked(file, f)
+}
+func (w *Workspace) markLocked(file string, f func(*Line) error) error {
 	lines, ok, err := w.Ledger()
 	if err != nil {
 		return err
