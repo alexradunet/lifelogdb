@@ -4,8 +4,8 @@ An issue records an incident from real use — a failed import, a bug in the wri
 data could not answer, a rule that is ambiguous or untestable. It is the evidence a schema change needs
 ([how a change happens](../process.md)). One file per incident, named `NNNN-short-slug.md`, written from the
 [template](template.md), numbered on from the last: issues up to 0010 are closed and live in git history
-(`git log -- docs/issues`). Issues 0011–0021 are listed below; the next one is **0022**. A resolved or won't-fix issue
-is deleted; git is the log.
+(`git log -- docs/issues`). Issues 0011–0024 are listed below; the next one is **0025**. Close an issue with its resolution and status, retaining the dated incident as
+[the process](../process.md) requires. Earlier closed records remain available in git history.
 
 | id | title | status |
 |---|---|---|
@@ -20,5 +20,8 @@ is deleted; git is the log.
 | [0019](0019-life-period-questions-have-no-structured-boundaries.md) | Jobs, study and trips cannot define honest query windows | proposed |
 | [0020](0020-imported-sessions-need-time-and-measurement-scope.md) | Session exports need time and measurement scope | proposed |
 | [0021](0021-selected-photo-sidecars-have-unhandled-time-evidence.md) | Selected photo sidecars have unhandled time evidence | proposed |
+| [0022](0022-nul-suffixes-bypass-text-checks.md) | NUL suffixes bypass constrained text checks | resolved |
+| [0023](0023-place-point-ownership-bypasses-revisions.md) | Moving a place point bypasses both owners' edit revisions | resolved |
+| [0024](0024-ghost-cleanup-includes-referenced-pages.md) | Ghost cleanup includes pages referenced by sessions and measurements | resolved |
 
-Status values: open | proposed (an RFC exists).
+Status values: open | proposed (an RFC exists) | resolved | won't-fix.

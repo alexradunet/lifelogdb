@@ -12,7 +12,7 @@ sqlite3 life.db < docs/schema/schema.sql
 `CREATE` statement, so `.schema` prints them; the rules that span tables are the rows of `lifelog_meta`.
 
 **13 tables + 1 FTS5 virtual table + 3 views** (`measurement_values`, `ghost_pages`, `entity_search_content`)
-**+ 60 triggers.** That is the entire system. Every `CHECK` is named (`CONSTRAINT <table>_<rule>`), so
+**+ 61 triggers.** That is the entire system. Every `CHECK` is named (`CONSTRAINT <table>_<rule>`), so
 any rule can be dropped or re-added by name after the freeze ([D13](../decisions/D13-migrations-and-freeze.md)).
 
 ## The objects
@@ -27,6 +27,8 @@ What each one is for, and where it is explained. Its rules are in its `CREATE` s
 | `places` | where a place is: its point, the radius a photo's position must fall in, whether its days are linked | [D21](../decisions/D21-location-history.md), [D16](../decisions/D16-places.md) | [the place of a photo](../cookbook/place-of-a-photo.md) |
 | `metrics` | the registry of what is measured, each metric filed in a category page | [D7](../decisions/D07-measurements.md), [D26](../decisions/D26-metric-categories.md) | [a metric series](../cookbook/metric-series.md), [metrics by category](../cookbook/metrics-by-category.md) |
 | `files` | what a file the owner keeps has beyond its page: the hash and type of the original, a small picture | [D9](../decisions/D09-binary-files.md) | [keep a file](../cookbook/keep-a-file.md) |
+| `periods` | boundaries of named recorded life spans | [D22](../decisions/D22-events.md) | [recorded periods](../cookbook/recorded-periods.md) |
+| `sessions` | independently scoped occurrences and their observed endpoint evidence | [D22](../decisions/D22-events.md) | [recorded sessions](../cookbook/recorded-sessions.md) |
 | `measurements` | readings, append-only | [D6](../decisions/D06-mood-is-a-measurement.md), [D7](../decisions/D07-measurements.md) | [correct a measurement](../cookbook/correct-a-measurement.md) |
 | `habit_periods` | when a metric is a habit | [D24](../decisions/D24-habits.md) | [habits](../cookbook/habits.md) |
 | `link_kinds` | the closed registry of link kinds and their endpoint types | [D8](../decisions/D08-entities-and-links.md) | [who may link what](../architecture/link-rules.md) |

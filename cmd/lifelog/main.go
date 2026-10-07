@@ -262,12 +262,8 @@ func runContext(ctx context.Context, o opts) error {
 			return err
 		}
 		srv := &http.Server{Addr: listener.Addr().String(), Handler: networkHandler, ReadHeaderTimeout: 10 * time.Second}
-		go func() { <-ctx.Done(); srv.Shutdown(context.Background()) }()
 		fmt.Fprintf(os.Stderr, "lifelog: serving %s on http://%s\n", o.db, listener.Addr())
-		if err := srv.Serve(listener); !errors.Is(err, http.ErrServerClosed) {
-			return err
-		}
-		return nil
+		return serveHTTP(ctx, srv, listener, 10*time.Second)
 	case "mcp":
 		return mcp.Serve(ctx, c, version)
 	case "get":
@@ -339,6 +335,39 @@ func runContext(ctx context.Context, o opts) error {
 		return importCommandContext(ctx, o, c, args)
 	}
 	return fmt.Errorf("unknown command %q (lifelog help)", cmd)
+}
+
+// serveHTTP owns shutdown until admitted requests finish or the drain deadline
+// expires. The caller must not close their database while Shutdown is still running.
+func serveHTTP(ctx context.Context, srv *http.Server, listener net.Listener, drainTimeout time.Duration) error {
+	stopped := make(chan struct{})
+	drained := make(chan struct{})
+	var drainErr error
+	go func() {
+		defer close(drained)
+		select {
+		case <-ctx.Done():
+		case <-stopped:
+		}
+		// An interrupt stops new work but lets admitted HTTP requests finish. This
+		// separate, bounded lifetime preserves command context values and is joined below.
+		drainCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), drainTimeout)
+		defer cancel()
+		err := srv.Shutdown(drainCtx)
+		if err != nil {
+			// Expiry closes connections and cancels their request contexts instead of
+			// leaving a blocked upload or reader alive after the server has returned.
+			err = errors.Join(err, srv.Close())
+		}
+		drainErr = err
+	}()
+	err := srv.Serve(listener)
+	close(stopped)
+	if errors.Is(err, http.ErrServerClosed) {
+		err = nil
+	}
+	<-drained
+	return errors.Join(err, drainErr)
 }
 
 func doAction(o opts, c *client.Client, name string, vals map[string]string) error {

@@ -33,15 +33,15 @@ func (t *Tx) Rename(id int64, newTitle string) (int64, error) {
 		return 0, &ExistsError{target.ID, target.Title}
 	}
 	if target == nil {
-		if _, err := t.tx.Exec(`INSERT INTO entity_names(entity_id, title, name_key) VALUES (?, ?, ?)`, id, newTitle, key); err != nil {
+		if _, err := t.tx.ExecContext(t.ctx, `INSERT INTO entity_names(entity_id, title, name_key) VALUES (?, ?, ?)`, id, newTitle, key); err != nil {
 			return 0, err
 		}
 	} else {
-		if _, err := t.tx.Exec(`UPDATE entity_names SET title = ? WHERE entity_id = ? AND name_key = ? AND title IS NOT ?`, newTitle, id, key, newTitle); err != nil {
+		if _, err := t.tx.ExecContext(t.ctx, `UPDATE entity_names SET title = ? WHERE entity_id = ? AND name_key = ? AND title IS NOT ?`, newTitle, id, key, newTitle); err != nil {
 			return 0, err
 		}
 	}
-	if _, err := t.tx.Exec(`UPDATE entities SET preferred_name_key = ? WHERE id = ? AND preferred_name_key IS NOT ?`, key, id, key); err != nil {
+	if _, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET preferred_name_key = ? WHERE id = ? AND preferred_name_key IS NOT ?`, key, id, key); err != nil {
 		return 0, err
 	}
 	return id, nil

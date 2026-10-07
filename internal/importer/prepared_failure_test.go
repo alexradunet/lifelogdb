@@ -28,6 +28,7 @@ func TestPreparedCancellationAfterObservedWriteAndPublicationRecovery(t *testing
 		t.Fatal(err)
 	}
 	request, cancel := context.WithCancel(ctx)
+	defer cancel()
 	observed := 0
 	if _, err = writePreparedAfter(request, f.s, b, false, func(tx *core.Tx) error {
 		id, e := tx.MeasurementByKey(b.Source, "Distance", preparedKey(b.Profile, b.Records[0].Key, "distance"))
@@ -45,7 +46,7 @@ func TestPreparedCancellationAfterObservedWriteAndPublicationRecovery(t *testing
 		cancel()
 		return nil
 	}); (!errors.Is(err, context.Canceled) && !errors.Is(err, sql.ErrTxDone)) || observed != 1 {
-		t.Fatalf("request cancellation %d %v", observed, err)
+		t.Errorf("request cancellation %d %v", observed, err)
 	}
 	if importerMeasurementRows(t, f) != 0 {
 		t.Fatal("partial canceled write committed")

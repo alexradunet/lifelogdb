@@ -112,8 +112,7 @@ func (t *Tx) AddFile(f FileIn) (k Kept, err error) {
 	var deleted sql.NullString
 	var title string
 	var storedDay sql.NullString
-	err = t.tx.QueryRow(`SELECT f.id, f.preview IS NOT NULL, e.deleted_at, p_name.title,e.day FROM files f
-	                       JOIN entities e ON e.id = f.id JOIN entities p ON p.id = f.id JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key  WHERE f.sha256 = ?`, f.SHA256).
+	err = t.tx.QueryRowContext(t.ctx, `SELECT f.id, f.preview IS NOT NULL, p.deleted_at, p_name.title,p.day FROM files f JOIN entities p ON p.id = f.id JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key  WHERE f.sha256 = ?`, f.SHA256).
 		Scan(&k.ID, &hasPreview, &deleted, &title, &storedDay)
 	switch {
 	case err == nil:
@@ -133,7 +132,7 @@ func (t *Tx) AddFile(f FileIn) (k Kept, err error) {
 			}
 		}
 		if !hasPreview && f.Preview != nil {
-			if _, err := t.tx.Exec(`UPDATE files SET preview = ? WHERE id = ? AND preview IS NULL`, f.Preview, k.ID); err != nil {
+			if _, err := t.tx.ExecContext(t.ctx, `UPDATE files SET preview = ? WHERE id = ? AND preview IS NULL`, f.Preview, k.ID); err != nil {
 				return k, err
 			}
 			k.PreviewAdded = true
@@ -152,7 +151,7 @@ func (t *Tx) AddFile(f FileIn) (k Kept, err error) {
 	}
 	if f.RequireCaptureDayAgreement && day != "" && p != nil {
 		var retained sql.NullString
-		if err := t.tx.QueryRow(`SELECT day FROM entities WHERE id=?`, p.ID).Scan(&retained); err != nil {
+		if err := t.tx.QueryRowContext(t.ctx, `SELECT day FROM entities WHERE id=?`, p.ID).Scan(&retained); err != nil {
 			return k, err
 		}
 		if retained.Valid && retained.String != day {
@@ -179,7 +178,7 @@ func (t *Tx) AddFile(f FileIn) (k Kept, err error) {
 		if p.Body != "" && f.Body != "" && p.Body != f.Body {
 			return k, conflict("%s already has text of its own: give the file another title (two texts are never merged)", p.Title)
 		}
-		res, err := t.tx.Exec(`UPDATE entities SET entity_type = 'file', deleted_at = NULL WHERE id = ? AND entity_type = 'page'`, p.ID)
+		res, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET entity_type = 'file', deleted_at = NULL WHERE id = ? AND entity_type = 'page'`, p.ID)
 		if err != nil {
 			return k, err
 		}
@@ -187,18 +186,18 @@ func (t *Tx) AddFile(f FileIn) (k Kept, err error) {
 			return k, conflict("page %d could not become the file", p.ID)
 		}
 		if p.Body == "" && f.Body != "" {
-			if _, err := t.tx.Exec(`UPDATE entities SET body = ? WHERE id = ?`, f.Body, p.ID); err != nil {
+			if _, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET body = ? WHERE id = ?`, f.Body, p.ID); err != nil {
 				return k, err
 			}
 		} else {
 			body = p.Body
 		}
-		if _, err := t.tx.Exec(`UPDATE entities SET day = ? WHERE id = ? AND day IS NULL`, nullIfEmpty(day), p.ID); err != nil {
+		if _, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET day = ? WHERE id = ? AND day IS NULL`, nullIfEmpty(day), p.ID); err != nil {
 			return k, err
 		}
 		k.ID, k.Promoted, title = p.ID, true, p.Title
 		if f.UnknownCaptureDay {
-			if err := t.tx.QueryRow("SELECT coalesce(day,'') FROM entities WHERE id=?", p.ID).Scan(&k.StoredDay); err != nil {
+			if err := t.tx.QueryRowContext(t.ctx, "SELECT coalesce(day,'') FROM entities WHERE id=?", p.ID).Scan(&k.StoredDay); err != nil {
 				return k, err
 			}
 		}
@@ -206,7 +205,7 @@ func (t *Tx) AddFile(f FileIn) (k Kept, err error) {
 		return k, &ExistsError{p.ID, p.Title}
 	}
 	// 2) the files row, then the links the text names
-	if _, err := t.tx.Exec(`INSERT INTO files(id, sha256, mime, preview) VALUES (?, ?, ?, ?)`, k.ID, f.SHA256, f.MIME, f.Preview); err != nil {
+	if _, err := t.tx.ExecContext(t.ctx, `INSERT INTO files(id, sha256, mime, preview) VALUES (?, ?, ?, ?)`, k.ID, f.SHA256, f.MIME, f.Preview); err != nil {
 		return k, err
 	}
 	sync, err := t.syncWikilinks(k.ID, body)
@@ -242,7 +241,7 @@ func (t *Tx) placeAndDay(k *Kept, f FileIn, title, day string, own, picture bool
 			}
 		}
 		var days sql.NullBool // a place with no point yet is linked: the owner named it
-		if err := t.tx.QueryRow(`SELECT p_name.title, pl.link_days FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key  LEFT JOIN places pl ON pl.id = p.id WHERE p.id = ?`, id).
+		if err := t.tx.QueryRowContext(t.ctx, `SELECT p_name.title, pl.link_days FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key  LEFT JOIN places pl ON pl.id = p.id WHERE p.id = ?`, id).
 			Scan(&k.Place, &days); err != nil {
 			return err
 		}
@@ -299,8 +298,7 @@ func (s *Store) Preview(ctx context.Context, id int64) ([]byte, error) {
 
 // PreviewByTitle is the picture of the live file page a title names (an embed); nil when there is none.
 func (s *Store) PreviewByTitle(ctx context.Context, title string) ([]byte, error) {
-	return s.preview(ctx, `SELECT f.preview FROM files f JOIN entities p ON p.id = f.id JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
-	                         JOIN entities e ON e.id = f.id AND e.deleted_at IS NULL WHERE p.id = (SELECT entity_id FROM entity_names WHERE name_key = ?)`, text.TitleKey(title))
+	return s.preview(ctx, `SELECT f.preview FROM files f JOIN entities p ON p.id = f.id JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key AND p.deleted_at IS NULL WHERE p.id = (SELECT entity_id FROM entity_names WHERE name_key = ?)`, text.TitleKey(title))
 }
 
 func (s *Store) preview(ctx context.Context, q string, arg any) ([]byte, error) {

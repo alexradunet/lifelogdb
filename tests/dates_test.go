@@ -79,6 +79,16 @@ func dates(s *S) {
 func exactTimeBoundaries(s *S) {
 	vectors := regexp.MustCompile(`(?m)^\| (day|instant) \| `+"`([^`]*)`"+` \| (yes|no) \|$`).FindAllStringSubmatch(s.d.Page("contract/exact-time.md"), -1)
 	s.K("exact-time contract contains boundary vectors", len(vectors) >= 20)
+	// One pristine fixture is enough: each column probe rolls back its own savepoint,
+	// including successful writes under a mutant, before the next independent case.
+	c := s.fresh()
+	entity := c.page("Time witness")
+	person := c.named("person", "")
+	habit := c.metric("Habit boundary", "")
+	otherHabit := c.metric("Other habit", "")
+	c.must("INSERT INTO habit_periods(metric_id,start_day,source) VALUES(?,'0000-01-01','ui')", habit)
+	sessionKind := c.page("Session calendar kind")
+	c.must("BEGIN IMMEDIATE")
 	for _, v := range vectors {
 		typ, value, want := v[1], v[2], v[3] == "yes"
 		accepted := core.IsDay(value)
@@ -86,18 +96,13 @@ func exactTimeBoundaries(s *S) {
 			accepted = core.IsInstant(value)
 		}
 		s.K(fmt.Sprintf("writer exact %s %q agrees with vector", typ, value), accepted == want)
-		c := s.fresh()
-		entity := c.page("Time witness")
-		person := c.named("person", "")
-		habit := c.metric("Habit boundary", "")
-		c.must("INSERT INTO habit_periods(metric_id,start_day,source) VALUES(?,'0000-01-01','ui')", habit)
 		queries := map[string]string{}
 		if typ == "day" {
 			queries["entities.day"] = fmt.Sprintf("UPDATE entities SET day=? WHERE id=%d", entity)
 			queries["people.birth_day"] = fmt.Sprintf("UPDATE people SET birth_day=? WHERE id=%d", person)
 			queries["people.death_day"] = fmt.Sprintf("UPDATE people SET death_day=? WHERE id=%d", person)
 			queries["measurements.day"] = "INSERT INTO measurements(metric_id,day,value,source,created_at) VALUES(1,?,3,'ui','2026-01-01T00:00:00.000Z')"
-			queries["habit_periods.start_day"] = fmt.Sprintf("INSERT INTO habit_periods(metric_id,start_day,source) VALUES(%d,?,'ui')", c.metric("Other habit", ""))
+			queries["habit_periods.start_day"] = fmt.Sprintf("INSERT INTO habit_periods(metric_id,start_day,source) VALUES(%d,?,'ui')", otherHabit)
 			queries["habit_periods.end_day"] = fmt.Sprintf("UPDATE habit_periods SET end_day=? WHERE metric_id=%d", habit)
 		} else {
 			for _, col := range []string{"created_at", "updated_at", "deleted_at"} {
@@ -108,7 +113,6 @@ func exactTimeBoundaries(s *S) {
 			queries["links.created_at"] = fmt.Sprintf("INSERT INTO links(from_id,to_id,kind,source,created_at) VALUES(%d,%d,'about','ui',?)", entity, person)
 		}
 
-		sessionKind := c.page(fmt.Sprintf("Session calendar kind %d", s.next()))
 		if typ == "day" {
 			queries["sessions.day"] = fmt.Sprintf("INSERT INTO sessions(kind_id,day,start_at,source,created_at,updated_at) VALUES(%d,?,'2026-01-01T00:00:00.000Z','ui','2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z')", sessionKind)
 		} else {
@@ -136,8 +140,12 @@ func exactTimeBoundaries(s *S) {
 		}
 		sort.Strings(keys)
 		for _, col := range keys {
+			c.must("SAVEPOINT boundary_probe")
 			got := c.tryx(queries[col], value)
+			c.must("ROLLBACK TO boundary_probe")
+			c.must("RELEASE boundary_probe")
 			s.K(fmt.Sprintf("exact %s %q accepted=%v", col, value, want), (got == "OK") == want, got)
 		}
 	}
+	c.must("ROLLBACK")
 }

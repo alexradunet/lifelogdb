@@ -92,7 +92,7 @@ func (s *Store) PageByID(ctx context.Context, id int64) (*Page, error) {
 	// outgoing edges to live entities; a symmetric kind's mirror is the same edge, so it shows once here
 	if p.Out, err = s.edges(ctx, `
 		SELECT l.kind, l.to_id, pg_name.title, e.entity_type, coalesce(l.note, '')
-		  FROM links l JOIN entities e ON e.id = l.to_id AND e.deleted_at IS NULL JOIN entities pg ON pg.id = l.to_id JOIN entity_names pg_name ON pg_name.entity_id = pg.id AND pg_name.name_key = pg.preferred_name_key
+		  FROM links l JOIN entities e ON e.id = l.to_id AND e.deleted_at IS NULL JOIN entity_names pg_name ON pg_name.entity_id = e.id AND pg_name.name_key = e.preferred_name_key
 		 WHERE l.from_id = ? ORDER BY l.kind, pg_name.title`, id); err != nil {
 		return nil, err
 	}
@@ -102,7 +102,7 @@ func (s *Store) PageByID(ctx context.Context, id int64) (*Page, error) {
 		SELECT l.kind, l.from_id, pg_name.title, e.entity_type, coalesce(l.note, '')
 		  FROM links l
 		  JOIN entities e  ON e.id = l.from_id AND e.deleted_at IS NULL
-		  JOIN entities pg ON pg.id = l.from_id JOIN entity_names pg_name ON pg_name.entity_id = pg.id AND pg_name.name_key = pg.preferred_name_key
+		  JOIN entity_names pg_name ON pg_name.entity_id = e.id AND pg_name.name_key = e.preferred_name_key
 		 WHERE l.to_id = ?
 		   AND l.kind NOT IN (SELECT kind FROM link_kinds WHERE symmetric = 1)
 		 ORDER BY pg_name.title`, id); err != nil {
@@ -128,7 +128,7 @@ func (s *Store) edges(ctx context.Context, q string, args ...any) ([]Edge, error
 	return out, rows.Err()
 }
 
-// PageID resolves a title through its title_key; 0 when no page has it.
+// PageID resolves an owned name through the registry; 0 when no entity owns it.
 func (s *Store) PageID(ctx context.Context, title string) (int64, error) {
 	var id int64
 	err := s.DB.R.QueryRowContext(ctx, `SELECT entity_id FROM entity_names WHERE name_key = ?`, text.TitleKey(title)).Scan(&id)
@@ -159,8 +159,7 @@ func (s *Store) Day(ctx context.Context, day string) (*Day, error) {
 		return nil, invalid("day %q is not YYYY-MM-DD", day)
 	}
 	d := &Day{Day: day, Rows: []DayRow{}}
-	err := s.DB.R.QueryRowContext(ctx, `SELECT p.id FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key  JOIN entities e ON e.id = p.id
-	                                     WHERE p.id = (SELECT entity_id FROM entity_names WHERE name_key = ?) AND e.deleted_at IS NULL`, day).Scan(&d.PageID)
+	err := s.DB.R.QueryRowContext(ctx, `SELECT id FROM entities WHERE id = (SELECT entity_id FROM entity_names WHERE name_key = ?) AND deleted_at IS NULL`, day).Scan(&d.PageID)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
@@ -189,27 +188,24 @@ func (s *Store) Day(ctx context.Context, day string) (*Day, error) {
 const dayView = `
 SELECT what, at, detail FROM (
   SELECT 'day page' AS what, NULL AS at, p.body AS detail
-    FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key  JOIN entities e ON e.id = p.id
-   WHERE p.id = (SELECT entity_id FROM entity_names WHERE name_key = :day) AND e.deleted_at IS NULL
+    FROM entities p
+   WHERE p.id = (SELECT entity_id FROM entity_names WHERE name_key = :day) AND p.deleted_at IS NULL
   UNION ALL
-  SELECT 'page' || CASE WHEN e.updated_at > e.created_at THEN ' (edited)' ELSE '' END,
-         e.updated_at, p_name.title
-    FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key  JOIN entities e ON e.id = p.id
-   WHERE p.day = :day AND p_name.title <> :day AND e.deleted_at IS NULL
+  SELECT 'page' || CASE WHEN p.updated_at > p.created_at THEN ' (edited)' ELSE '' END,
+         p.updated_at, p_name.title
+    FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
+   WHERE p.day = :day AND p_name.title <> :day AND p.deleted_at IS NULL
   UNION ALL
   SELECT 'at', NULL, pl_name.title
-    FROM entities d JOIN entity_names d_name ON d_name.entity_id = d.id AND d_name.name_key = d.preferred_name_key
-    JOIN entities de ON de.id = d.id AND de.deleted_at IS NULL
+    FROM entities d
     JOIN links l    ON l.from_id = d.id AND l.kind = 'at'
-    JOIN entities pl ON pl.id = l.to_id JOIN entity_names pl_name ON pl_name.entity_id = pl.id AND pl_name.name_key = pl.preferred_name_key
-    JOIN entities e ON e.id = pl.id AND e.deleted_at IS NULL
-   WHERE d.id = (SELECT entity_id FROM entity_names WHERE name_key = :day)
+    JOIN entities pl ON pl.id = l.to_id JOIN entity_names pl_name ON pl_name.entity_id = pl.id AND pl_name.name_key = pl.preferred_name_key AND pl.deleted_at IS NULL
+   WHERE d.id = (SELECT entity_id FROM entity_names WHERE name_key = :day) AND d.deleted_at IS NULL
   UNION ALL
   SELECT 'habit', NULL, m_name.title || ': ' ||
          CASE (SELECT max(v.value) FROM measurement_values v WHERE v.metric_id = m.id AND v.day = :day AND v.session_id IS NULL)
            WHEN 1 THEN 'done' WHEN 0 THEN 'not done' ELSE 'not recorded' END
-    FROM habit_periods h JOIN entities m ON m.id = h.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key
-    JOIN entities e ON e.id = m.id AND e.deleted_at IS NULL
+    FROM habit_periods h JOIN entities m ON m.id = h.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key AND m.deleted_at IS NULL
    WHERE h.start_day <= :day AND coalesce(h.end_day, '9999-12-31') >= :day
   UNION ALL
   SELECT p_name.title, me.taken_at, CAST(me.value AS TEXT) || ' ' || m.unit
@@ -259,8 +255,7 @@ func (s *Store) Search(ctx context.Context, q string, limit int) ([]Hit, error) 
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT p.id, p_name.title, snippet(entities_fts, 2, '[', ']', '…', 24)
 		  FROM entities_fts
-		  JOIN entities p ON p.id = entities_fts.rowid JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
-		  JOIN entities e ON e.id = p.id AND e.deleted_at IS NULL
+		  JOIN entities p ON p.id = entities_fts.rowid JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key AND p.deleted_at IS NULL
 		 WHERE entities_fts MATCH ?
 		 ORDER BY rank, p.id LIMIT ?`, q, limit)
 	if err != nil {
@@ -292,7 +287,7 @@ type Metric struct {
 func (s *Store) Metrics(ctx context.Context) ([]Metric, error) {
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT m.id, p_name.title, m.unit, p.body, EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id)
-		  FROM metrics m JOIN entities p ON p.id = m.id JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key  JOIN entities e ON e.id = m.id AND e.deleted_at IS NULL
+		  FROM metrics m JOIN entities p ON p.id = m.id JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key AND p.deleted_at IS NULL
 		 ORDER BY p.preferred_name_key`)
 	if err != nil {
 		return nil, err
@@ -342,7 +337,7 @@ func (s *Store) InUse(ctx context.Context, day string, n int) ([]string, error) 
 		return nil, invalid("day is YYYY-MM-DD")
 	}
 	rows, err := s.DB.R.QueryContext(ctx, `
-		SELECT m_name.title FROM entities m JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key  JOIN entities e ON e.id = m.id AND e.deleted_at IS NULL
+		SELECT m_name.title FROM entities m JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key AND m.deleted_at IS NULL
 		 WHERE m.entity_type = 'metric' AND EXISTS (SELECT 1 FROM measurement_values v
 		                WHERE v.metric_id = m.id AND v.day > date(?, '-' || ? || ' day') AND v.day <= ?)
 		 ORDER BY m.preferred_name_key`, day, n, day)
@@ -425,15 +420,15 @@ func (s *Store) Ghosts(ctx context.Context) ([]Ghost, error) {
 
 // Recent lists the latest day pages, newest first.
 func (s *Store) RecentDays(ctx context.Context, limit int) ([]Edge, error) {
-	return s.edges(ctx, `SELECT 'day', p.id, p_name.title, 'page', '' FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key  JOIN entities e ON e.id = p.id
-	                      WHERE p_name.title = p.day AND e.deleted_at IS NULL ORDER BY p.day DESC LIMIT ?`, limit)
+	return s.edges(ctx, `SELECT 'day', p.id, p_name.title, 'page', '' FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
+	                      WHERE p_name.title = p.day AND p.deleted_at IS NULL ORDER BY p.day DESC LIMIT ?`, limit)
 }
 
 // Named lists the live people or places.
 func (s *Store) Named(ctx context.Context, typ string) ([]Edge, error) {
 	return s.edges(ctx, `SELECT p.entity_type, p.id, p_name.title, p.entity_type, coalesce(pe.name, '')
-	                       FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key  JOIN entities e ON e.id = p.id LEFT JOIN people pe ON pe.id = p.id
-	                      WHERE p.entity_type = ? AND e.deleted_at IS NULL ORDER BY p_name.title`, typ)
+	                       FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key LEFT JOIN people pe ON pe.id = p.id
+	                      WHERE p.entity_type = ? AND p.deleted_at IS NULL ORDER BY p_name.title`, typ)
 }
 
 // Result is the answer to an ad-hoc read-only query.

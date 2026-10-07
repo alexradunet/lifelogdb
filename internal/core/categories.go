@@ -23,8 +23,7 @@ type Category struct {
 func (s *Store) categories(ctx context.Context) (map[int64]*Category, error) {
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT l.from_id, p.id, p_name.title, p.preferred_name_key
-		  FROM links l JOIN entities p ON p.id = l.to_id JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
-		  JOIN entities e ON e.id = p.id AND e.deleted_at IS NULL
+		  FROM links l JOIN entities p ON p.id = l.to_id JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key AND p.deleted_at IS NULL
 		 WHERE l.kind = 'part-of'
 		 ORDER BY p.preferred_name_key`)
 	if err != nil {

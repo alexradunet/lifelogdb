@@ -9,7 +9,7 @@ import (
 )
 
 // facts: measurements and metrics (schema.sql, D6, D7, D26) — the registry and its categories, append-only rows, supersede chains and
-// retraction, finite values and NaN, the read view and its index, and why never OR IGNORE / OR REPLACE.
+// retraction, finite values and NaN, the read view, and why never OR IGNORE / OR REPLACE.
 func facts(s *S) {
 	err := func(r string) bool { return strings.HasPrefix(r, "ERR") }
 
@@ -186,11 +186,15 @@ func facts(s *S) {
 		c.measure(w, d, 70)
 	}
 	s.K("cookbook/metric-series: the 90 days ending on :day, none after it", eq(c.col(s.d.Block("metric-series"), P{"day": "2026-10-02"}), []string{"2026-07-05", "2026-10-02"}))
+}
 
-	// ---- the read view is index-served
-	c = s.fresh()
+// The bulk fixture belongs only to the query-plan probe; semantic fact mutants
+// retain all their small behavior cases without rebuilding 20,000 readings.
+func measurementQueryPlan(s *S) {
+	c := s.fresh()
 	c.metric("w", "kg")
-	c.must("BEGIN")
+	// Deliberate direct-SQL bulk setup measures query planning, not writer throughput.
+	c.must("BEGIN IMMEDIATE")
 	ins, e := c.Prepare("INSERT INTO measurements(metric_id,day,value,source,created_at) VALUES (2,?,?,'ui'," + NOW + ")")
 	if e != nil {
 		stop("prepare: %v", e)
@@ -201,7 +205,9 @@ func facts(s *S) {
 			stop("insert: %v", e)
 		}
 	}
-	ins.Close()
+	if err := ins.Close(); err != nil {
+		stop("close measurement fixture insert: %v", err)
+	}
 	c.must("COMMIT")
 	plan := c.plan("SELECT count(*) FROM measurement_values")
 	s.K("measurement_values uses measurements_one_correction for its NOT EXISTS", strings.Contains(plan, "measurements_one_correction"), plan)

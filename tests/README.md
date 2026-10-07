@@ -7,16 +7,16 @@ re-run the checks* — is one command. **Nothing here is a migration and nothing
 a temporary folder and discards them.
 
 ```
-go test ./tests                                  # every suite and every mutant, ~20 s
-go test -short ./tests                           # the suites without the mutants, ~5 s
+go test ./tests                                  # every suite and every mutant
+go test -short ./tests                           # the suites without the mutants
 go test ./tests -run 'TestSuites/pages' -v       # one suite, with its count of expectations
 go test ./tests -run 'TestMutants/.*habits' -v   # the mutants of one suite
 LIFELOG_MERMAID=1 go test ./tests -run TestMermaidRender   # + render every mermaid diagram (needs mmdc + a Chromium)
 ```
 
 Needs Go ≥ 1.27 and nothing else: SQLite is the driver's own build (`modernc.org/sqlite`, pure Go, SQLite 3.53.4 with
-FTS5); the `writers` suite checks the floor of `lifelog_meta.sqlite` on it. The suites run migrations (`ALTER TABLE …
-DROP CONSTRAINT`), which need 3.53; a writer needs only 3.51.3. The rendering test also needs
+FTS5); the `writers` suite checks the floor of `lifelog_meta.sqlite` on it. The schema-evolution probes execute `ALTER TABLE …
+DROP CONSTRAINT` on disposable files and need 3.53; they are not a migration runner. A writer needs only 3.51.3. The rendering test also needs
 `npm i -g @mermaid-js/mermaid-cli` and a Chromium; point `MMDC` / `PUPPETEER_EXECUTABLE_PATH` at them if they are
 not on `PATH`.
 
@@ -27,6 +27,7 @@ the document (a broken block makes a later step impossible) reports that as one 
 | file | suite | subject |
 |---|---|---|
 | `dates_test.go` | `dates` | instants, local days, the round-trip CHECKs and why `IS`, the zone (lifelog_meta.instants and .days, D10) |
+| `schema_safeguards_test.go` | `schema-safeguards` | NUL-free constrained text; immutable place-point ownership through all rowid aliases; cleanup excludes retained session and measurement references |
 | `id_guards_test.go` | `id-guards` | file-backed declared/rowid/_rowid_/oid identity guards; forbidden combined edits, no-ops, revisions, mirrors, FTS and reopen controls |
 | `name_grammar_test.go` | `name-grammar` | documented raw/NFC addressability vectors under mutation; canonical key and bracket-storage probes, separate from production pipeline tests |
 | `sessions_test.go` | `recorded-sessions`, `measurement-scopes` | shared endpoint vectors, immutable session identity/provenance, revisions/kinds, correction scope/liveness and actual semantic damage probes |
@@ -40,10 +41,10 @@ the document (a broken block makes a later step impossible) reports that as one 
 | `renames_test.go` | `renames` | cookbook/rename-a-page run literally: id, prose, day, provenance, typed detail and incident links retained; direct aliases, owned-name selection, case-only rename and no-effect refusals; writer parity (contract/titles-and-wikilinks, D5) |
 | `links_test.go` | `links` | the closed kind registry, endpoint types, mirrors, `at`, containment over day pages with its cycle guard (D8, D16) |
 | `habits_test.go` | `habits` | habit periods: their days, order, no overlap, unitless only, never deleted; cookbook/habits and the cookbook/day-view habit leg — done, not done, not recorded (D24) |
-| `facts_test.go` | `facts` | metrics and measurements: append-only, supersede, retract, finite values, never `OR IGNORE`/`OR REPLACE` (D7); categories as pages and cookbook/metrics-by-category (D26) |
+| `facts_test.go` | `facts`, `measurement-query-plan` | metrics and measurements: append-only, supersede, retract, finite values, never `OR IGNORE`/`OR REPLACE` (D7); categories as pages and cookbook/metrics-by-category (D26); the independent query-plan suite retains the 20,000-reading index-use and count probe |
 | `journal_test.go` | `journal` | the day page and capture (cookbook/capture), the cookbook/day-view day view, the days that name someone (cookbook/days-that-name), where I was (cookbook/where-was-i), what stands in for recurrence, events and tasks (D5, D15, D16, D22, D23) |
 | `writers_test.go` | `writers` | the `BEGIN IMMEDIATE` race with real concurrent connections, pragmas, read-only readers and their `trusted_schema=OFF`, a hardened connection (contract/connections) |
-| `integrity_test.go` | `integrity` | the four checks of contract/integrity-checks on the live file, against real damage |
+| `integrity_test.go` | `integrity`, `physical-integrity` | semantic ownership, FK and FTS damage on small files; an independent fixture of 3,000 synthetic pages for zeroed pages, truncation, live-index damage and changed body bytes |
 | `imports_test.go` | `imports` | the import block of contract/imports on 1 000 CSV rows, and its traps |
 | `snapshots_test.go` | `snapshots` | cookbook/take-a-snapshot on a live file: `VACUUM INTO` through a read-only connection while the writer writes, its target, the restore check left byte for byte, the restore and the old `-wal` beside it (D25) |
 | `evolution_test.go` | `evolution` | named CHECKs, widening, partial dates, the tokenizer switch, comments inside statements (D13, D17, architecture/non-goals) |
@@ -53,7 +54,7 @@ the document (a broken block makes a later step impossible) reports that as one 
 | `wikilinks_test.go` | `doc-save-contract` | the save contract as the docs print it: the vector table of contract/titles-and-wikilinks, cookbook/save-a-body run literally (and equal to a writer's own save after 400 random edits), cookbook/backlinks |
 | | `save-contract` | the save contract through a writer's own save against the DDL: invalid targets, the `SAVEPOINT` backstop, set equality, ordinary REDIRECT prose, revival, 400 random edits against a rebuild, 4 concurrent writers, every vector |
 | | `title-fuzz` | writer acceptance is a subset of the DDL's filename checks over 60 000 generated strings; DB-only names independently fail reference addressability |
-| `mutants_test.go` | `TestMutants` | 281 broken copies of the docs tree, one rule each; a completed owning suite must fail the mutant's explicit rule witness |
+| `mutants_test.go` | `TestMutants` | 295 broken copies of the docs tree, one rule each; a completed owning suite must fail the mutant's explicit rule witness |
 | `render_test.go` | `TestMermaidRender` | optional: every diagram renders |
 | `kit_test.go`, `suites_test.go` | | reading the tree (a page, the cookbook blocks by recipe key, an overlay of broken files for a mutant); fresh databases and the insert conventions (entity first, `RETURNING`, named entities); the runner |
 
@@ -61,6 +62,11 @@ the document (a broken block makes a later step impossible) reports that as one 
 suites read them from the page (with the boundary cases the line under the table states) and run them through the
 writer's extraction (`internal/text`) and its save (`internal/core`); `internal/text` has its own tests against the
 same table. Every save path here runs against the DDL under test, so a mutant of `schema.sql` reaches it.
+
+**Fixture ownership.** Semantic fact and integrity mutants run their small behavior fixtures; the baseline
+`measurement-query-plan` and `physical-integrity` suites own the large query-plan and byte-corruption fixtures.
+Every original probe still runs in the baseline. Exact-time vectors share one baseline and roll back a savepoint
+after each column probe, including a successful write under a mutant, so no case changes the next one's setup.
 
 **When the docs change.** A DDL change: run everything. A new rule that spans tables: a `lifelog_meta` key and a row
 in the 2075 table of contract/threat-model (`document` fails until both exist); a table's own rule: a comment in its
@@ -77,3 +83,49 @@ commit signal before the second writer resolves the existing row. Reader progres
 snapshot and a 30-second deadlock guard, not a speed threshold. These probes do not measure automatic busy waiting.
 
 **What is not here:** power loss and real data have never been tested.
+
+## Synthetic scale runner
+
+`tools/lifescale` builds fresh file-backed databases through the production writer and emits a JSON report.
+The normal baseline includes only the small fixture and its independent known answers; larger profiles are opt-in.
+
+```
+go run ./tools/lifescale -profile small -seed 2075 -samples 5
+go run ./tools/lifescale -profile lifetime -seed 2075 -samples 5 -keep -storage "describe CPU, disk and filesystem"
+go run ./tools/lifescale -profile stress -seed 2075 -samples 5 -keep -storage "describe CPU, disk and filesystem"
+go run ./tools/lifescale -profile small -previews -seed 2075
+```
+
+Progress goes to stderr; redirect stdout to a JSON file outside the repository to retain measurements.
+For recorded comparisons, build the runner with `go build -o /tmp/lifescale ./tools/lifescale` and run that binary
+(choose an appropriate executable path on Windows). Build metadata records the revision and dirty state;
+`go run` leaves the revision unavailable rather than identifying an unrelated checkout.
+The runner creates a uniquely named subdirectory under the system temporary directory (or `-dir`), cleans it
+afterward by default, and prints its location. `-keep` retains the synthetic database, snapshot and restored copy.
+It never opens an existing user database. Ctrl-C cancels construction and normal cleanup still runs.
+
+Profiles have fixed parameters: **small** is 14 days, four readings/day, one file/day and eight imported notes;
+**lifetime** is 1970-01-01 through 2019-12-31 (18,262 days), 20 readings/day, three files/day and 4,000 notes;
+**stress** uses the same calendar, 80 readings/day, six files/day, 16,000 notes and four times the text sizes.
+Recorded dates include gaps, bursts and later writes of older facts. The fixture includes a journal, person/place
+references, a popular topic, rare search terms, a habit, Unicode notes, keyed retries, value corrections,
+retractions and a malformed batch with a valid prefix that must roll back. Notes arrive in batches of 50.
+The JSON records generator version, seed, payload-size schedule and a digest of the ordered logical inputs;
+write-clock timestamps are intentionally excluded from reproducibility.
+
+Default runs are explicitly **metadata-only**: files have unique synthetic text originals and no previews.
+Allow several GB of free space for lifetime metadata runs and substantially more for stress, including the live
+database/WAL plus snapshot and restored copies. These are planning allowances, not measured storage results.
+`-previews` instead generates unique valid JPEG images at 640×480, 1024×768 and 1600×900, quality 75.
+A lifetime preview run can require tens of GB per database and over 100 GB of free scratch space for all copies;
+stress previews require more. Preview generation and decoding also increase run time. Small previews establish
+correctness, not lifetime storage capacity. Do not run large preview profiles without choosing adequate scratch storage.
+
+The report includes Go/SQLite/driver/revision, OS/architecture/CPU, operator-supplied storage details, writer
+pragmas, Go allocation deltas, raw timing samples and database/WAL/SHM/copy sizes. Fixture construction is timed
+separately from capture/save, day view, rare search, popular backlinks, historical metric series and keyed root
+replay. The latter measures `core.Record` retries, **not** workspace import throughput. Capture/save includes
+commit; each sample performs a real new capture/edit. Queries are warm after fixture validation. Snapshot and
+copy/open restore each run once, regardless of `-samples`; restored contents and integrity are checked outside
+timing. Reopening a file is not a cold-disk benchmark, and Go allocation counts are not total process memory.
+Compare repeated reports under the same environment; there is no universal wall-clock pass/fail threshold.

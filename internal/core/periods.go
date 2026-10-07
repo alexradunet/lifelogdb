@@ -22,7 +22,7 @@ func (t *Tx) CreatePeriod(title, body string, start, end *string) (int64, error)
 		return 0, err
 	}
 	id, _, err := t.createNamed("period", title, "", func(id int64) error {
-		_, err := t.tx.Exec(`INSERT INTO periods(id,start_boundary,end_boundary) VALUES(?,?,?)`, id, start, end)
+		_, err := t.tx.ExecContext(t.ctx, `INSERT INTO periods(id,start_boundary,end_boundary) VALUES(?,?,?)`, id, start, end)
 		return err
 	})
 	if err != nil {
@@ -40,7 +40,7 @@ func (t *Tx) PromotePeriod(id int64, version string, start, end *string) error {
 	}
 	var typ, have string
 	var deleted bool
-	err := t.tx.QueryRow(`SELECT entity_type,CAST(revision AS TEXT),deleted_at IS NOT NULL FROM entities WHERE id=?`, id).Scan(&typ, &have, &deleted)
+	err := t.tx.QueryRowContext(t.ctx, `SELECT entity_type,CAST(revision AS TEXT),deleted_at IS NOT NULL FROM entities WHERE id=?`, id).Scan(&typ, &have, &deleted)
 	if errors.Is(err, sql.ErrNoRows) {
 		return notFound("no page %d", id)
 	}
@@ -50,10 +50,10 @@ func (t *Tx) PromotePeriod(id int64, version string, start, end *string) error {
 	if typ != "page" || deleted || have != version {
 		return conflict("plain live page and current version required")
 	}
-	if _, err = t.tx.Exec(`UPDATE entities SET entity_type='period' WHERE id=?`, id); err != nil {
+	if _, err = t.tx.ExecContext(t.ctx, `UPDATE entities SET entity_type='period' WHERE id=?`, id); err != nil {
 		return err
 	}
-	_, err = t.tx.Exec(`INSERT INTO periods(id,start_boundary,end_boundary) VALUES(?,?,?)`, id, start, end)
+	_, err = t.tx.ExecContext(t.ctx, `INSERT INTO periods(id,start_boundary,end_boundary) VALUES(?,?,?)`, id, start, end)
 	return err
 }
 
@@ -63,7 +63,7 @@ func (t *Tx) EditPeriod(id int64, version string, start, end *string) error {
 	}
 	var have string
 	var deleted bool
-	err := t.tx.QueryRow(`SELECT CAST(e.revision AS TEXT),e.deleted_at IS NOT NULL FROM periods p JOIN entities e ON e.id=p.id WHERE p.id=?`, id).Scan(&have, &deleted)
+	err := t.tx.QueryRowContext(t.ctx, `SELECT CAST(e.revision AS TEXT),e.deleted_at IS NOT NULL FROM periods p JOIN entities e ON e.id=p.id WHERE p.id=?`, id).Scan(&have, &deleted)
 	if errors.Is(err, sql.ErrNoRows) {
 		return notFound("no period %d", id)
 	}
@@ -73,7 +73,7 @@ func (t *Tx) EditPeriod(id int64, version string, start, end *string) error {
 	if deleted || version != have {
 		return conflict("live period and current version required")
 	}
-	_, err = t.tx.Exec(`UPDATE periods SET start_boundary=?,end_boundary=? WHERE id=?`, start, end, id)
+	_, err = t.tx.ExecContext(t.ctx, `UPDATE periods SET start_boundary=?,end_boundary=? WHERE id=?`, start, end, id)
 	return err
 }
 

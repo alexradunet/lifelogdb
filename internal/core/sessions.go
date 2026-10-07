@@ -85,7 +85,7 @@ func (t *Tx) CaptureSession(in SessionInput) (id int64, existing bool, err error
 		return 0, false, invalid("session kind must name a non-journal plain page")
 	}
 	if in.Key != "" {
-		have, e := scanSession(t.tx.QueryRow(sessionSelect+`WHERE s.source=? AND s.import_key=?`, t.Source, in.Key))
+		have, e := scanSession(t.tx.QueryRowContext(t.ctx, sessionSelect+`WHERE s.source=? AND s.import_key=?`, t.Source, in.Key))
 		if e == nil {
 			expected := have.SessionInput
 			expected.Kind = in.Kind
@@ -101,7 +101,7 @@ func (t *Tx) CaptureSession(in SessionInput) (id int64, existing bool, err error
 	if kind.Deleted {
 		return 0, false, conflict("session kind is tombstoned")
 	}
-	err = t.tx.QueryRow(`INSERT INTO sessions(kind_id,day,import_key,start_at,start_local,start_offset,start_zone_unverified,end_at,end_local,end_offset,end_zone_unverified,source,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,`+Now+`,`+Now+`) RETURNING id`, kind.ID, in.Day, nullIfEmpty(in.Key), nullIfEmpty(in.StartAt), nullIfEmpty(in.StartLocal), nullIfEmpty(in.StartOffset), nullIfEmpty(in.StartZoneUnverified), nullIfEmpty(in.EndAt), nullIfEmpty(in.EndLocal), nullIfEmpty(in.EndOffset), nullIfEmpty(in.EndZoneUnverified), t.Source).Scan(&id)
+	err = t.tx.QueryRowContext(t.ctx, `INSERT INTO sessions(kind_id,day,import_key,start_at,start_local,start_offset,start_zone_unverified,end_at,end_local,end_offset,end_zone_unverified,source,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,`+Now+`,`+Now+`) RETURNING id`, kind.ID, in.Day, nullIfEmpty(in.Key), nullIfEmpty(in.StartAt), nullIfEmpty(in.StartLocal), nullIfEmpty(in.StartOffset), nullIfEmpty(in.StartZoneUnverified), nullIfEmpty(in.EndAt), nullIfEmpty(in.EndLocal), nullIfEmpty(in.EndOffset), nullIfEmpty(in.EndZoneUnverified), t.Source).Scan(&id)
 	return id, false, err
 }
 
@@ -109,7 +109,7 @@ func (t *Tx) EditSession(id int64, version string, in SessionInput) error {
 	if err := validateSession(in); err != nil {
 		return err
 	}
-	have, err := scanSession(t.tx.QueryRow(sessionSelect+`WHERE s.id=?`, id))
+	have, err := scanSession(t.tx.QueryRowContext(t.ctx, sessionSelect+`WHERE s.id=?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return notFound("no session %d", id)
 	}
@@ -129,14 +129,14 @@ func (t *Tx) EditSession(id int64, version string, in SessionInput) error {
 	if kind == nil || kind.Type != "page" || kind.DayPage || kind.Deleted && kind.ID != have.KindID {
 		return invalid("session kind must name a live non-journal plain page when newly selected")
 	}
-	_, err = t.tx.Exec(`UPDATE sessions SET kind_id=?,day=?,start_at=?,start_local=?,start_offset=?,start_zone_unverified=?,end_at=?,end_local=?,end_offset=?,end_zone_unverified=? WHERE id=?`, kind.ID, in.Day, nullIfEmpty(in.StartAt), nullIfEmpty(in.StartLocal), nullIfEmpty(in.StartOffset), nullIfEmpty(in.StartZoneUnverified), nullIfEmpty(in.EndAt), nullIfEmpty(in.EndLocal), nullIfEmpty(in.EndOffset), nullIfEmpty(in.EndZoneUnverified), id)
+	_, err = t.tx.ExecContext(t.ctx, `UPDATE sessions SET kind_id=?,day=?,start_at=?,start_local=?,start_offset=?,start_zone_unverified=?,end_at=?,end_local=?,end_offset=?,end_zone_unverified=? WHERE id=?`, kind.ID, in.Day, nullIfEmpty(in.StartAt), nullIfEmpty(in.StartLocal), nullIfEmpty(in.StartOffset), nullIfEmpty(in.StartZoneUnverified), nullIfEmpty(in.EndAt), nullIfEmpty(in.EndLocal), nullIfEmpty(in.EndOffset), nullIfEmpty(in.EndZoneUnverified), id)
 	return err
 }
 
 func (t *Tx) SessionLifecycle(id int64, version string, deleted bool) error {
 	var have string
 	var tombstoned bool
-	err := t.tx.QueryRow(`SELECT CAST(revision AS TEXT),deleted_at IS NOT NULL FROM sessions WHERE id=?`, id).Scan(&have, &tombstoned)
+	err := t.tx.QueryRowContext(t.ctx, `SELECT CAST(revision AS TEXT),deleted_at IS NOT NULL FROM sessions WHERE id=?`, id).Scan(&have, &tombstoned)
 	if errors.Is(err, sql.ErrNoRows) {
 		return notFound("no session %d", id)
 	}
@@ -153,7 +153,7 @@ func (t *Tx) SessionLifecycle(id int64, version string, deleted bool) error {
 	if deleted {
 		q = `UPDATE sessions SET deleted_at=` + Now + ` WHERE id=?`
 	}
-	_, err = t.tx.Exec(q, id)
+	_, err = t.tx.ExecContext(t.ctx, q, id)
 	return err
 }
 

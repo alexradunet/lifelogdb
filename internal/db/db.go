@@ -186,9 +186,8 @@ func initWith(path string, apply func(*sql.DB) error) error {
 		cleanupErr := removeReservedDatabasePath(path, reserved)
 		return errors.Join(fmt.Errorf("applying schema.sql: %w", err), closeErr, cleanupErr)
 	}
-	if _, err := w.Exec("PRAGMA optimize"); err != nil {
-		return errors.Join(err, w.Close())
-	}
+	// Seed-only statistics make later bulk capture choose scans as the file grows.
+	// Let ordinary connection-close maintenance collect statistics from real data.
 	return w.Close()
 }
 
@@ -215,7 +214,7 @@ func removeReservedDatabasePath(path string, reserved os.FileInfo) error {
 	if reserved == nil {
 		return nil
 	}
-	current, err := os.Stat(path)
+	current, err := os.Lstat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -265,22 +264,40 @@ func (d *DB) Write(ctx context.Context, fn func(*sql.Tx) error) error {
 // Copy writes a copy of a life.db to a new file through a read-only connection (docs/contract/imports.md step 1:
 // VACUUM INTO). It refuses an existing target.
 func Copy(from, to string) error {
-	if _, err := os.Stat(to); err == nil {
-		return fmt.Errorf("%s already exists", to)
+	// An absolute path also keeps a relative filename beginning "file:" from
+	// becoming a SQLite URI with a different destination from our reservation.
+	to, err := filepath.Abs(to)
+	if err != nil {
+		return err
 	}
+	return copyWith(from, to, func(r *sql.DB) error {
+		_, err := r.Exec(`VACUUM INTO ?`, to)
+		return err
+	})
+}
+
+func copyWith(from, to string, copy func(*sql.DB) error) error {
 	if _, err := os.Stat(from); err != nil {
 		return fmt.Errorf("no database at %s: %w", from, err)
+	}
+	// VACUUM INTO accepts an existing empty file. Reserve that file exclusively:
+	// a separate existence check would follow dangling links and race other copies.
+	reserved, err := reserveDatabasePath(to)
+	if err != nil {
+		return err
 	}
 	q := url.Values{}
 	q.Set("mode", "ro")
 	q.Add("_pragma", "trusted_schema(0)")
 	r, err := sql.Open("lifelog", sqliteFileURI(from, q))
 	if err != nil {
-		return err
+		return errors.Join(err, removeReservedDatabasePath(to, reserved))
 	}
-	defer r.Close()
-	_, err = r.Exec(`VACUUM INTO ?`, to)
-	return err
+	copyErr := copy(r)
+	if err := errors.Join(copyErr, r.Close()); err != nil {
+		return errors.Join(err, removeReservedDatabasePath(to, reserved))
+	}
+	return nil
 }
 
 // Snapshot takes a snapshot of a life.db into dir (docs/cookbook/take-a-snapshot.md, D25): a Copy named by the local
@@ -308,11 +325,13 @@ func Snapshot(from, dir string, now time.Time) (string, error) {
 				"which git history cannot forget; choose a folder outside it", candidate, repo)
 		}
 	}
-	// Copy through the checked physical path, not a link that can be retargeted.
+	// Use the resolved directory path so the supplied directory symlink is no longer traversed.
 	dir = physical
 	to := filepath.Join(dir, "life-"+now.Format("2006-01-02")+".db")
-	if _, err := os.Stat(to); err == nil {
+	if _, err := os.Lstat(to); err == nil {
 		to = filepath.Join(dir, "life-"+now.Format("2006-01-02T150405")+".db")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("check snapshot path %s: %w", to, err)
 	}
 	return to, Copy(from, to)
 }

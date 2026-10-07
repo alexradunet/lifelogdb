@@ -125,7 +125,16 @@ func pages(s *S) {
 	s.K("a key with a leading space rejected", c.addPage("Diet4", nil, "", " diet4") == 0)
 	s.K("a non-ASCII title's key may not hold an ASCII capital", c.addPage("Café Q", nil, "", "Café Q") == 0)
 	s.K("a title with leading space refused (a key the writer folded to match)", c.addPage(" Pädded", nil, "", "pädded") == 0)
-	s.K("a title with a NUL byte refused", c.addPage("a\x00é", nil, "", text.TitleKey("a\x00é")) == 0)
+	s.K("a NUL title and its derived key are refused", c.addPage("a\x00é", nil, "", text.TitleKey("a\x00é")) == 0)
+	// Direct DDL probes keep the alternate writer's key NUL-free, so only the
+	// title guard can refuse it. Non-ASCII text precedes NUL to bypass ASCII key equality.
+	nulTitle := s.fresh()
+	nulTitle.must("BEGIN IMMEDIATE")
+	s.K("NUL title probe valid spelling and key control accepted", nulTitle.addPage("Café title", nil, "", "café title") != 0)
+	nulTitle.must("ROLLBACK")
+	nulTitle.must("BEGIN IMMEDIATE")
+	s.K("a title with a NUL byte refused", nulTitle.addPage("Café title\x00hidden", nil, "", "café title") == 0)
+	nulTitle.must("ROLLBACK")
 	s.K("a non-ASCII title with a plausible key accepted (the writer owns the fold)", c.addPage("Über", nil, "", "über") != 0)
 
 	// ---- title_key vectors of contract/titles-and-wikilinks

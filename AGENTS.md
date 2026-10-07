@@ -13,8 +13,9 @@ The docs state the current truth only.
 what happened and what was measured: a journal of day pages, notes, the people and places in them,
 where the owner was, health readings, and the files the owner keeps — as their text and a small picture, the
 original left outside ([D9](docs/decisions/D09-binary-files.md)). To-dos, reminders, projects and plans belong to the tools
-made for them; a plan written in a note stays that note's text ([D23](docs/decisions/D23-no-tasks.md)). Events, money and a location
-track are deferred ([D22](docs/decisions/D22-events.md), [D18](docs/decisions/D18-money.md), [D21](docs/decisions/D21-location-history.md)). A proposal that turns `life.db` into a
+made for them; a plan written in a note stays that note's text ([D23](docs/decisions/D23-no-tasks.md)). Recorded periods and
+sessions follow [D22](docs/decisions/D22-events.md); money and a location track remain deferred
+([D18](docs/decisions/D18-money.md), [D21](docs/decisions/D21-location-history.md)). A proposal that turns `life.db` into a
 planner, a tracker of open work or a finance ledger needs a real incident and the owner's word first. Any developer, in any language, may
 build an application around it; the contract they implement is `docs/` and nothing else.
 
@@ -275,15 +276,10 @@ Their homes are in `docs/`; this list is the checklist, not the rule.
 
 - **Time** (`lifelog_meta.instants` and `.days`, [D10](docs/decisions/D10-time-model.md)): UTC ISO-8601 instants and local-day TEXT columns with round-trip CHECKs
   (`date(x) IS x`, `strftime(...) IS x` — the `IS` matters).
-- **Identity** (the `entities` comment in [schema.sql](docs/schema/schema.sql), D20, D27, D9): every *entity* domain row is keyed by its
-  `entities` id through a composite FK `(id, entity_type)` — `pages` to `entities(id, entity_type)`, `people`, `metrics` and `files`
-  to `pages(id, entity_type)`, because a person, a metric or a file **is** a page; a place is its page, and a `places` row when it has a point (D16, D21). One id, whose page title
-  is its handle and its name (`pages.entity_type`, `ON UPDATE CASCADE` for promotion;
-  [a person or a place](docs/cookbook/person-or-place.md)). Ids are carried with `INSERT … RETURNING id`, never
-  `last_insert_rowid()` across statements.
-- **Provenance**: `source` (the writer: `ui`, `cli`, `api`, `agent:<name>`, `import:<name>`; `schema` for the rows the DDL seeds) is
-  required on `entities`, `links`, `measurements` and `habit_periods`, written at insert and never changed; `import_key`
-  is unique per `source`.
+- **Identity and provenance**: follow the `entities`, `entity_names`, typed-extension and `lifelog_meta.source`
+  rules in [schema.sql](docs/schema/schema.sql), with the insert conventions in
+  [a person or a place](docs/cookbook/person-or-place.md) and [imports](docs/contract/imports.md).
+  Review owned names, direct typed foreign keys, stable identity and provenance together.
 - **No deletes** (`lifelog_meta.deletes`, [D11](docs/decisions/D11-tombstones.md)): tombstones (BEFORE DELETE triggers);
   only `links` rows are deleted.
 - **Append-only facts**: measurements. A reading is corrected with `supersedes_id` and retracted with a
@@ -292,22 +288,19 @@ Their homes are in `docs/`; this list is the checklist, not the rule.
 - **CHECKs**: every one NAMED (`CONSTRAINT <table>_<rule> CHECK …`), using only functions the minimum
   SQLite has (`lifelog_meta.sqlite`) — no math functions, even where a build has them.
 - **Links**: a closed, endpoint-typed `link_kinds` registry (D8).
-- **Pages** ([titles and wikilinks](docs/contract/titles-and-wikilinks.md), D5): every page titled, with filename-safe,
-  immutable titles and a unique app-computed `title_key` (NFC + casefold, with vectors). The journal is one day page
-  per local day, titled `YYYY-MM-DD` (`pages_day_page`) and never promoted (`pages_day_page_plain`); where the owner
-  was that day is `at` links to places (D16). There are no events or tasks (D22, D23); nothing repeats (D15). A habit
-  is a 0/1 metric with active periods (D24).
+- **Names and journal identity**: use [titles and wikilinks](docs/contract/titles-and-wikilinks.md), its vectors,
+  and [D5](docs/decisions/D05-pages-and-day-pages.md). Check preferred-name changes, retained aliases and journal
+  reservations against those rules. Recorded sessions and periods follow [D22](docs/decisions/D22-events.md);
+  habits follow [D24](docs/decisions/D24-habits.md).
 - **Connections** ([connection setup](docs/contract/connections.md)): one writing application per file; per connection
   `PRAGMA foreign_keys=ON`, `recursive_triggers=ON`, `synchronous=FULL`, `trusted_schema=OFF` (the first three read back and refused
   if wrong); SQLite ≥ 3.51.3 for writers; every write transaction starts with `BEGIN IMMEDIATE`; the driver opens
   no transactions of its own. Readers open the file read-only (`mode=ro`, never `immutable=1`) and set
   `trusted_schema=OFF` too;
   exploration tools (Datasette) likewise, and nothing that edits rows is pointed at it.
-- **The wikilink save contract** ([titles and wikilinks](docs/contract/titles-and-wikilinks.md),
-  [save a body](docs/cookbook/save-a-body.md), D19): saving a body keeps the page's
-  `links(kind='wikilink')` equal to what its CommonMark text names (rows added **and deleted**), each
-  auto-created target in its own `SAVEPOINT`; an invalid target makes no link and never blocks a save;
-  `#tag` is read and never expanded; a `#REDIRECT [[` stub is not scanned.
+- **The wikilink save contract**: implement [titles and wikilinks](docs/contract/titles-and-wikilinks.md) and
+  [save a body](docs/cookbook/save-a-body.md), including reference resolution, target savepoints, set equality,
+  invalid targets, tags and ordinary REDIRECT prose. Keep the contract's vectors as their sole specification.
 - **Integrity**: the four [integrity checks](docs/contract/integrity-checks.md).
 - **Privacy**: `life.db` with its `-wal`/`-shm`, and every snapshot of it, never in git (health data, private notes and pictures cannot be scrubbed from history; `.gitignore` covers `*.db`, `*.db-journal`, `/import/`
   and an import workspace `*.lifelog/`). Never commit a real vault, real notes or real data as a fixture:

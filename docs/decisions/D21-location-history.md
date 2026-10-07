@@ -7,7 +7,7 @@
   Google Photos, Apple Photos ([issue 0010](../issues/README.md), [proposal 0005](../rfcs/0005-a-place-has-a-point.md)). A position can be linked
   only if something knows which place it is in, and the owner does not want movements kept.
 - **Decision.** A place may have one `places` row, keyed by its page (`places(id, entity_type)` references
-  `pages(id, entity_type)`): its point (`places_lat`, `places_lon`, never 0°, 0°: `places_not_null_island`), the
+  `entities(id, entity_type)`): its point (`places_lat`, `places_lon`, never 0°, 0°: `places_not_null_island`), the
   radius a position must fall in (`places_radius`) and `link_days` (`places_link_days`). When a photo is kept, its
   position is matched to the live places whose circle holds it, the smallest circle first, then the nearest — Café
   Lume before Lisbon; "where was I" reaches Lisbon by `located-in` ([inside a place](../cookbook/inside-a-place.md)).
@@ -15,7 +15,9 @@
   never linked (home, work: they would mark nearly every day). A position no circle holds writes nothing and is
   asked about: the owner names the place, which takes that position as its point if it has none
   ([the place of a photo](../cookbook/place-of-a-photo.md)). The photo's position itself is never stored: the link is
-  what is kept. A point is an attribute of the place, fixed by `UPDATE`, never deleted (`places_no_delete`).
+  what is kept. A point is an attribute of its original place (`places_fixed`), fixed by `UPDATE`,
+  never transferred or deleted (`places_no_delete`): changing its owner would silently reinterpret photo matching
+  and bypass that place's edit revision.
 - **Distance without math functions.** `sin` and `cos` exist only in builds with `SQLITE_ENABLE_MATH_FUNCTIONS`
   [R72](../research/references.md#r72), so the match uses `+ - *`: the writer binds the metres per degree of longitude at the position's
   latitude (`111320 · cos(lat)`) and compares the squared equirectangular distance with the squared radius. Within a

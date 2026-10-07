@@ -29,7 +29,7 @@ func (t *Tx) relocateReading(wrong int64, replacement Reading, afterRetraction f
 	var metric, scope int64
 	var current bool
 	var value sql.NullFloat64
-	err := t.tx.QueryRow(`SELECT metric_id,coalesce(session_id,0),value,NOT EXISTS(SELECT 1 FROM measurements x WHERE x.supersedes_id=me.id) FROM measurements me WHERE id=?`, wrong).Scan(&metric, &scope, &value, &current)
+	err := t.tx.QueryRowContext(t.ctx, `SELECT metric_id,coalesce(session_id,0),value,NOT EXISTS(SELECT 1 FROM measurements x WHERE x.supersedes_id=me.id) FROM measurements me WHERE id=?`, wrong).Scan(&metric, &scope, &value, &current)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ScopeRelocation{}, notFound("no measurement %d", wrong)
 	}
@@ -43,7 +43,7 @@ func (t *Tx) relocateReading(wrong int64, replacement Reading, afterRetraction f
 		return ScopeRelocation{}, invalid("same-scope request is not a relocation")
 	}
 	var imported bool
-	err = t.tx.QueryRow(`WITH RECURSIVE ancestors(id,source,import_key,supersedes_id) AS (SELECT id,source,import_key,supersedes_id FROM measurements WHERE id=? UNION SELECT m.id,m.source,m.import_key,m.supersedes_id FROM measurements m JOIN ancestors a ON a.supersedes_id=m.id) SELECT EXISTS(SELECT 1 FROM ancestors WHERE import_key IS NOT NULL OR source LIKE 'import:%')`, wrong).Scan(&imported)
+	err = t.tx.QueryRowContext(t.ctx, `WITH RECURSIVE ancestors(id,source,import_key,supersedes_id) AS (SELECT id,source,import_key,supersedes_id FROM measurements WHERE id=? UNION SELECT m.id,m.source,m.import_key,m.supersedes_id FROM measurements m JOIN ancestors a ON a.supersedes_id=m.id) SELECT EXISTS(SELECT 1 FROM ancestors WHERE import_key IS NOT NULL OR source LIKE 'import:%')`, wrong).Scan(&imported)
 	if err != nil {
 		return ScopeRelocation{}, err
 	}
@@ -59,7 +59,7 @@ func (t *Tx) relocateReading(wrong int64, replacement Reading, afterRetraction f
 	}
 	if replacement.SessionID != 0 {
 		var live bool
-		err = t.tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM sessions WHERE id=? AND deleted_at IS NULL)`, replacement.SessionID).Scan(&live)
+		err = t.tx.QueryRowContext(t.ctx, `SELECT EXISTS(SELECT 1 FROM sessions WHERE id=? AND deleted_at IS NULL)`, replacement.SessionID).Scan(&live)
 		if err != nil {
 			return ScopeRelocation{}, err
 		}
@@ -69,7 +69,7 @@ func (t *Tx) relocateReading(wrong int64, replacement Reading, afterRetraction f
 	}
 	if replacement.CapturedWith != 0 {
 		var exists bool
-		err = t.tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM entities WHERE id=?)`, replacement.CapturedWith).Scan(&exists)
+		err = t.tx.QueryRowContext(t.ctx, `SELECT EXISTS(SELECT 1 FROM entities WHERE id=?)`, replacement.CapturedWith).Scan(&exists)
 		if err != nil {
 			return ScopeRelocation{}, err
 		}
@@ -77,16 +77,7 @@ func (t *Tx) relocateReading(wrong int64, replacement Reading, afterRetraction f
 			return ScopeRelocation{}, invalid("replacement capture provenance does not exist")
 		}
 	}
-	if replacement.TZ != "" {
-		if len(replacement.TZ) > 64 {
-			return ScopeRelocation{}, invalid("invalid measurement zone")
-		}
-		for _, r := range replacement.TZ {
-			if !(r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || strings.ContainsRune("_/+-", r)) {
-				return ScopeRelocation{}, invalid("invalid measurement zone")
-			}
-		}
-	}
+
 	retract, err := t.Correct(wrong, nil)
 	if err != nil {
 		return ScopeRelocation{}, err

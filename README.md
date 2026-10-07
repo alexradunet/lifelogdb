@@ -66,6 +66,9 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **One handler, three surfaces.** `internal/api` is the only thing the surfaces call. `serve` mounts it on a
   socket; the CLI and the MCP server call it in-process (`internal/client`), or a running server with `--url`.
   Writes go through `internal/core` only: no generic UPDATE or DELETE exists anywhere.
+- **Server shutdown drains admitted requests.** An interrupt closes the listener, then allows ten seconds for active
+  requests to finish before closing their connections. Shutdown completes before the database closes; expiration
+  is reported as an error.
 - **Hypermedia (HATEOAS).** Every response is a Siren entity: properties, links, and the actions legal on that
   resource, with their fields prefilled (a page's `save-body` carries its body and `version`). `GET /actions` is
   the catalog; the CLI's `do` and the MCP tools are generated from it, so a new action needs no client change.
@@ -88,7 +91,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **Connections** ([connection setup](docs/contract/connections.md)): one writing connection with the pragmas
   set by DSN and read back by a connection hook (a wrong value refuses the connection), `SQLITE_DBCONFIG_DEFENSIVE`,
   `BEGIN IMMEDIATE` via `_txlock=immediate`, the 3.51.3 floor checked; readers use `mode=ro` with `trusted_schema=OFF`, read back the same way.
-- **Unicode.** `title_key` uses `x/text`'s full case fold; the `Cn` rule uses a pinned Unicode 15.0 assigned table,
+- **Unicode.** Registry name keys use `x/text`'s full case fold; the `Cn` rule uses a pinned Unicode 15.0 assigned table,
   not the tables Go ships, so the titles this writer accepts do not change with a Go upgrade.
 - **One transaction type.** Every write is a method on `core.Tx`; an operation alone is one transaction, and an
   import's *apply facts* runs several of the same methods in one. Nothing writes around them.

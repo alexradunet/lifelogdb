@@ -16,7 +16,8 @@
   [R7](../research/references.md#r7)[R8](../research/references.md#r8)[R9](../research/references.md#r9). A timed reading's zone is a column because only capture time can supply it: a
   UTC instant alone cannot say whether `22:30Z` was 14:30, 22:30 or 07:30 the next morning. Every
   other instant is a write time, and a write time needs no zone. The DB checks the
-  shape of a zone name, not that it is a real zone; readers convert with a tz database, which keeps
+  shape of a zone name, not that it is a real zone; `measurements_tz` explicitly rejects NUL because
+  SQLite TEXT `length` and `GLOB` otherwise ignore its suffix (executed). Readers convert with a tz database, which keeps
   renamed zones (`Europe/Kiev` → `Europe/Kyiv`) as links. The standard way to write an instant with
   its zone is RFC 9557 [R69](../research/references.md#r69): `2026-06-09T21:14:03.482Z[Europe/Berlin]` — exactly `*_at` plus `tz`.
   Provenance (`source`, `lifelog_meta.source`) is a column for the same reason as the zone: only the moment of writing

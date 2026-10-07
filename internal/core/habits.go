@@ -26,14 +26,14 @@ func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
 		if err != nil {
 			return false, err
 		}
-		if _, err = t.tx.Exec(`INSERT INTO metrics(id, unit) VALUES (?, ?)`, id, unit); err != nil {
+		if _, err = t.tx.ExecContext(t.ctx, `INSERT INTO metrics(id, unit) VALUES (?, ?)`, id, unit); err != nil {
 			return false, err
 		}
 		_, err = t.SetBody(id, note)
 		return err == nil, err
 	case p.Type == "metric":
 		var have string
-		if err := t.tx.QueryRow(`SELECT unit FROM metrics WHERE id = ?`, p.ID).Scan(&have); err != nil {
+		if err := t.tx.QueryRowContext(t.ctx, `SELECT unit FROM metrics WHERE id = ?`, p.ID).Scan(&have); err != nil {
 			return false, err
 		}
 		if have != unit {
@@ -43,10 +43,10 @@ func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
 	case p.Type != "page" || p.DayPage:
 		return false, conflict("%s is taken by a %s or a day page: a metric's title must be free or a plain page (D27)", p.Title, p.Type)
 	}
-	if _, err := t.tx.Exec(`UPDATE entities SET entity_type = 'metric', deleted_at = NULL WHERE id = ?`, p.ID); err != nil {
+	if _, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET entity_type = 'metric', deleted_at = NULL WHERE id = ?`, p.ID); err != nil {
 		return false, err
 	}
-	if _, err := t.tx.Exec(`INSERT INTO metrics(id, unit) VALUES (?, ?)`, p.ID, unit); err != nil {
+	if _, err := t.tx.ExecContext(t.ctx, `INSERT INTO metrics(id, unit) VALUES (?, ?)`, p.ID, unit); err != nil {
 		return false, err
 	}
 	if note != "" && p.Body == "" { // the owner's text is never overwritten
@@ -60,7 +60,7 @@ func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
 // metricID finds a live metric by its name, in any case (its title_key).
 func (t *Tx) metricID(name string) (int64, error) {
 	var id int64
-	err := t.tx.QueryRow(`SELECT p.id FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key  JOIN entities e ON e.id = p.id AND e.deleted_at IS NULL
+	err := t.tx.QueryRowContext(t.ctx, `SELECT p.id FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key AND p.deleted_at IS NULL
 	                       WHERE p.id = (SELECT entity_id FROM entity_names WHERE name_key = ?) AND p.entity_type = 'metric'`, text.TitleKey(name)).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, notFound("no metric %q: the owner registers metrics", name)
@@ -83,18 +83,18 @@ func (t *Tx) StartHabit(metric, start, end string) error {
 		return invalid("the seeded Mood metric cannot be a habit")
 	}
 	var other bool
-	if err := t.tx.QueryRow(`SELECT EXISTS (SELECT 1 FROM measurement_values WHERE metric_id = ? AND value NOT IN (0, 1))`, id).
+	if err := t.tx.QueryRowContext(t.ctx, `SELECT EXISTS (SELECT 1 FROM measurement_values WHERE metric_id = ? AND value NOT IN (0, 1))`, id).
 		Scan(&other); err != nil {
 		return err
 	}
 	if other {
 		return invalid("%s has readings other than 0 and 1: a habit is 1 = done, 0 = not done (D24)", metric)
 	}
-	if _, err := t.tx.Exec(`INSERT INTO habit_periods(metric_id, start_day, end_day, source) VALUES (?, ?, ?, ?)
+	if _, err := t.tx.ExecContext(t.ctx, `INSERT INTO habit_periods(metric_id, start_day, end_day, source) VALUES (?, ?, ?, ?)
 	                        ON CONFLICT(metric_id, start_day) DO NOTHING`, id, start, nullIfEmpty(end), t.Source); err != nil {
 		return err
 	}
-	_, err = t.tx.Exec(`UPDATE habit_periods SET end_day = ? WHERE metric_id = ? AND start_day = ? AND end_day IS NOT ?`,
+	_, err = t.tx.ExecContext(t.ctx, `UPDATE habit_periods SET end_day = ? WHERE metric_id = ? AND start_day = ? AND end_day IS NOT ?`,
 		nullIfEmpty(end), id, start, nullIfEmpty(end))
 	return err
 }
@@ -108,7 +108,7 @@ func (t *Tx) StopHabit(metric, day string) error {
 	if err != nil {
 		return err
 	}
-	res, err := t.tx.Exec(`UPDATE habit_periods SET end_day = ? WHERE metric_id = ? AND end_day IS NULL`, day, id)
+	res, err := t.tx.ExecContext(t.ctx, `UPDATE habit_periods SET end_day = ? WHERE metric_id = ? AND end_day IS NULL`, day, id)
 	if err != nil {
 		return err
 	}
@@ -146,8 +146,7 @@ func (s *Store) Habits(ctx context.Context, day string) ([]HabitState, error) {
 		SELECT m_name.title,
 		       CASE (SELECT max(v.value) FROM measurement_values v WHERE v.metric_id = m.id AND v.day = :day AND v.session_id IS NULL)
 		         WHEN 1 THEN 'done' WHEN 0 THEN 'not done' ELSE 'not recorded' END AS state
-		  FROM habit_periods h JOIN entities m ON m.id = h.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key
-		  JOIN entities e ON e.id = m.id AND e.deleted_at IS NULL
+		  FROM habit_periods h JOIN entities m ON m.id = h.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key AND m.deleted_at IS NULL
 		 WHERE h.start_day <= :day AND coalesce(h.end_day, '9999-12-31') >= :day
 		 ORDER BY m.preferred_name_key`, sql.Named("day", day))
 	if err != nil {
@@ -191,8 +190,7 @@ func (s *Store) Completion(ctx context.Context, from, to string) ([]Completion, 
 		SELECT m_name.title, count(*) AS active_days,
 		       sum(s.value IS 1) AS done, sum(s.value IS 0) AS not_done, sum(s.value IS NULL) AS not_recorded
 		  FROM active a
-		  JOIN entities m ON m.id = a.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key
-		  JOIN entities e ON e.id = m.id AND e.deleted_at IS NULL
+		  JOIN entities m ON m.id = a.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key AND m.deleted_at IS NULL
 		  LEFT JOIN (SELECT metric_id, day, max(value) AS value FROM measurement_values WHERE session_id IS NULL GROUP BY metric_id, day) s
 		         ON s.metric_id = a.metric_id AND s.day = a.day
 		 GROUP BY m.id

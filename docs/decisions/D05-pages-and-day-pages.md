@@ -15,5 +15,5 @@
   - Rename into another owner's name, even an empty ghost: rejected — rename is not merge.
   - ASCII-only uniqueness or an application collation: rejected — Unicode names need the shared normalization, and a stored index must remain usable without a private collation (executed).
   - Id-named handles without filename checks: rejected — relaxing a restriction later is possible; tightening it after freeze can meet existing incompatible names ([D13](D13-migrations-and-freeze.md)).
-- **Costs accepted.** A day-page entry has no separate timestamp; a time worth keeping stays in prose. There is no inbox. Retained names consume the global namespace, including after tombstoning. Empty unreferenced pages appear in `ghost_pages` for the owner's review.
+- **Costs accepted.** A day-page entry has no separate timestamp; a time worth keeping stays in prose. There is no inbox. Retained names consume the global namespace, including after tombstoning. Empty unreferenced pages appear in `ghost_pages` for the owner's review; retained session kinds and capture provenance keep meaningful empty pages out of cleanup.
 - **Sources.** Kaydet [R41](../research/references.md#r41); FxLifeSheet [R9](../research/references.md#r9)[R42](../research/references.md#r42); Windows reserved names [R58](../research/references.md#r58); Unicode security [R63](../research/references.md#r63).

@@ -261,6 +261,9 @@ func writePreparedAfter(ctx context.Context, s *core.Store, b *PreparedBatch, dr
 			seenMetrics[id] = true
 		}
 		for _, r := range b.Records {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			var session int64
 			if b.Profile != "fit-date-csv-v1" {
 				var err error
@@ -276,6 +279,9 @@ func writePreparedAfter(ctx context.Context, s *core.Store, b *PreparedBatch, dr
 				report.Outcomes = append(report.Outcomes, Outcome{Kind: "session", Status: status})
 			}
 			for _, q := range r.Quantities {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
 				metric := b.Metrics[q.Code]
 				unit, found, err := tx.MetricUnit(metric)
 				if err != nil {

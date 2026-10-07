@@ -57,7 +57,7 @@ CREATE TABLE entities (
   updated_at  TEXT NOT NULL CONSTRAINT entities_updated_at CHECK (length(updated_at) = 24 AND updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z' AND substr(updated_at,12,2) BETWEEN '00' AND '23' AND strftime('%Y-%m-%dT%H:%M:%fZ', updated_at) IS updated_at),   -- kept by the *_touch triggers
   revision    INTEGER NOT NULL DEFAULT 1 CONSTRAINT entities_revision CHECK (revision >= 1), -- edit token, independent of the clock; overflow refuses the write
   deleted_at  TEXT     CONSTRAINT entities_deleted_at CHECK (deleted_at IS NULL OR length(deleted_at) = 24 AND deleted_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z' AND substr(deleted_at,12,2) BETWEEN '00' AND '23' AND strftime('%Y-%m-%dT%H:%M:%fZ', deleted_at) IS deleted_at),   -- the tombstone
-  source      TEXT NOT NULL CONSTRAINT entities_source CHECK (length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*'),   -- the writer (lifelog_meta.source)
+  source      TEXT NOT NULL CONSTRAINT entities_source CHECK (instr(source, char(0)) = 0 AND length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*'),   -- the writer (lifelog_meta.source)
   import_key  TEXT,                        -- the sender's key, unique per source; NULL = sent once. Imported or not: source
   UNIQUE (id, entity_type),
   CONSTRAINT entities_day_page CHECK (NOT (length(preferred_name_key) = 10 AND date(preferred_name_key) IS preferred_name_key) OR day IS preferred_name_key),
@@ -80,7 +80,7 @@ CREATE TABLE entity_names (
   title       TEXT NOT NULL,              -- preferred spelling or retained alias; case-only edits retain the key
   name_key    TEXT NOT NULL UNIQUE,       -- NFC(casefold(NFC(title))), computed by the writer
   UNIQUE (entity_id, name_key),
-  CONSTRAINT entity_names_key_folded CHECK (length(name_key) >= 1 AND name_key = trim(name_key)
+  CONSTRAINT entity_names_key_folded CHECK (instr(name_key, char(0)) = 0 AND length(name_key) >= 1 AND name_key = trim(name_key)
                                AND name_key NOT GLOB '*[A-Z]*'),      -- a folded key has no ASCII capitals
   CONSTRAINT entity_names_key_ascii CHECK (title GLOB '*[^ -~]*' OR name_key = lower(title)),   -- pure-ASCII titles: the DB verifies the key
   CONSTRAINT entity_names_title_len CHECK (title = trim(title) AND length(title) >= 1
@@ -188,7 +188,7 @@ CREATE TABLE places (
   -- (111320 * cos(lat)) and compares the squared equirectangular distance with radius_m squared; a circle is not
   -- matched across the 180th meridian. link_days = 1: the photo's day gets an at link to the place; 0: the place is
   -- recognised (its photos are never asked about) and not linked — home, work. The photo's position is never stored.
-  -- A wrong point is fixed by UPDATE; never deleted: tombstone the entity (D11).
+  -- A wrong point is fixed by UPDATE; its owning id never changes. Never deleted: tombstone the entity (D11).
   id          INTEGER PRIMARY KEY,
   entity_type TEXT NOT NULL DEFAULT 'place' CONSTRAINT places_entity_type CHECK (entity_type = 'place'),
   lat         REAL NOT NULL CONSTRAINT places_lat CHECK (lat BETWEEN -90 AND 90),      -- WGS84 degrees
@@ -198,6 +198,10 @@ CREATE TABLE places (
   FOREIGN KEY (id, entity_type) REFERENCES entities(id, entity_type),
   CONSTRAINT places_not_null_island CHECK (lat <> 0 OR lon <> 0)   -- 0°, 0° is how photo metadata says "no location"
 ) STRICT;
+
+CREATE TRIGGER places_fixed BEFORE UPDATE ON places
+ WHEN NEW.id IS NOT OLD.id
+BEGIN SELECT RAISE(ABORT, 'place point ownership is immutable'); END;
 
 CREATE TABLE periods (
   -- Named recorded spans. Boundaries follow contract/period-boundaries.md, not exact entities.day.
@@ -333,8 +337,8 @@ CREATE TABLE files (
   -- (files_original_fixed); a missing preview may be added later. Never deleted: tombstone the entity (D11).
   id          INTEGER PRIMARY KEY,
   entity_type TEXT NOT NULL DEFAULT 'file' CONSTRAINT files_entity_type CHECK (entity_type = 'file'),
-  sha256      TEXT NOT NULL CONSTRAINT files_sha256 CHECK (length(sha256) = 64 AND sha256 NOT GLOB '*[^0-9a-f]*'),   -- of the original's bytes, lowercase hex
-  mime        TEXT NOT NULL CONSTRAINT files_mime CHECK (length(mime) <= 127 AND mime GLOB '[a-z]*/[a-z0-9]*'
+  sha256      TEXT NOT NULL CONSTRAINT files_sha256 CHECK (instr(sha256, char(0)) = 0 AND length(sha256) = 64 AND sha256 NOT GLOB '*[^0-9a-f]*'),   -- of the original's bytes, lowercase hex
+  mime        TEXT NOT NULL CONSTRAINT files_mime CHECK (instr(mime, char(0)) = 0 AND length(mime) <= 127 AND mime GLOB '[a-z]*/[a-z0-9]*'
                            AND mime NOT GLOB '*[^a-z0-9/.+-]*' AND mime NOT GLOB '*/*/*'),   -- of the original, lowercase: 'audio/mp4', 'image/heic', 'application/pdf'
   preview     BLOB CONSTRAINT files_preview CHECK (preview IS NULL OR (substr(preview, 1, 3) IS x'FFD8FF'
                            AND length(preview) <= 1048576)),   -- a JPEG; IS, not =: substr of an empty blob is NULL
@@ -491,10 +495,10 @@ CREATE TABLE measurements (
   session_id       INTEGER REFERENCES sessions(id), -- explicit nullable scope; NULL is unassociated, not a daily total
   day              TEXT NOT NULL CONSTRAINT measurements_day CHECK (length(day) = 10 AND day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(day) IS day),  -- local date the value refers to
   taken_at         TEXT CONSTRAINT measurements_taken_at CHECK (taken_at IS NULL OR length(taken_at) = 24 AND taken_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z' AND substr(taken_at,12,2) BETWEEN '00' AND '23' AND strftime('%Y-%m-%dT%H:%M:%fZ', taken_at) IS taken_at),
-  tz               TEXT CONSTRAINT measurements_tz CHECK (tz IS NULL OR (length(tz) BETWEEN 1 AND 64 AND tz NOT GLOB '*[^A-Za-z0-9_/+-]*')),
+  tz               TEXT CONSTRAINT measurements_tz CHECK (tz IS NULL OR (instr(tz, char(0)) = 0 AND length(tz) BETWEEN 1 AND 64 AND tz NOT GLOB '*[^A-Za-z0-9_/+-]*')),
   value            REAL,                        -- numeric only, by design (D7); NULL only on a correction: it RETRACTS the row it supersedes
   created_at       TEXT NOT NULL CONSTRAINT measurements_created_at CHECK (length(created_at) = 24 AND created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z' AND substr(created_at,12,2) BETWEEN '00' AND '23' AND strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at),
-  source           TEXT NOT NULL CONSTRAINT measurements_source CHECK (length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*'),   -- the writer (lifelog_meta.source)
+  source           TEXT NOT NULL CONSTRAINT measurements_source CHECK (instr(source, char(0)) = 0 AND length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*'),   -- the writer (lifelog_meta.source)
   import_key       TEXT,                        -- importer's dedup key, unique per (source, metric)
   captured_with_id INTEGER REFERENCES entities(id),      -- provenance: the page (a day page) this reading was captured with
   supersedes_id    INTEGER REFERENCES measurements(id),  -- optional: corrects an earlier row
@@ -551,7 +555,7 @@ CREATE TABLE habit_periods (
   metric_id  INTEGER NOT NULL REFERENCES metrics(id),
   start_day  TEXT NOT NULL CONSTRAINT habit_periods_start_day CHECK (length(start_day) = 10 AND start_day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(start_day) IS start_day),
   end_day    TEXT CONSTRAINT habit_periods_end_day CHECK (end_day IS NULL OR length(end_day) = 10 AND end_day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(end_day) IS end_day),   -- the last day, inclusive; NULL = still going
-  source     TEXT NOT NULL CONSTRAINT habit_periods_source CHECK (length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*'),   -- the writer (lifelog_meta.source)
+  source     TEXT NOT NULL CONSTRAINT habit_periods_source CHECK (instr(source, char(0)) = 0 AND length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*'),   -- the writer (lifelog_meta.source)
   CONSTRAINT habit_periods_order CHECK (end_day IS NULL OR end_day >= start_day),
   UNIQUE (metric_id, start_day)
 ) STRICT;
@@ -596,11 +600,11 @@ CREATE TABLE link_kinds (
   -- one. from_types / to_types: NULL = any entity type, else a comma list of entities.entity_type values
   -- ('person,place'); a misspelt token fails CLOSED (every link of that kind is rejected).
   -- an unreferenced kind may be deleted by the owner; a used one is refused by the links FK
-  kind       TEXT PRIMARY KEY CONSTRAINT link_kinds_kind CHECK (kind = lower(kind) AND length(kind) > 0 AND kind NOT GLOB '*[^a-z0-9_-]*'),
+  kind       TEXT PRIMARY KEY CONSTRAINT link_kinds_kind CHECK (instr(kind, char(0)) = 0 AND kind = lower(kind) AND length(kind) > 0 AND kind NOT GLOB '*[^a-z0-9_-]*'),
   symmetric  INTEGER NOT NULL DEFAULT 0 CONSTRAINT link_kinds_symmetric CHECK (symmetric IN (0,1)),
-  from_types TEXT CONSTRAINT link_kinds_from_types CHECK (from_types IS NULL OR (from_types NOT GLOB '*[^a-z,]*' AND from_types NOT GLOB ',*'
+  from_types TEXT CONSTRAINT link_kinds_from_types CHECK (from_types IS NULL OR (instr(from_types, char(0)) = 0 AND from_types NOT GLOB '*[^a-z,]*' AND from_types NOT GLOB ',*'
                          AND from_types NOT GLOB '*,' AND from_types NOT GLOB '*,,*')),
-  to_types   TEXT CONSTRAINT link_kinds_to_types CHECK (to_types   IS NULL OR (to_types   NOT GLOB '*[^a-z,]*' AND to_types   NOT GLOB ',*'
+  to_types   TEXT CONSTRAINT link_kinds_to_types CHECK (to_types   IS NULL OR (instr(to_types, char(0)) = 0 AND to_types   NOT GLOB '*[^a-z,]*' AND to_types   NOT GLOB ',*'
                          AND to_types   NOT GLOB '*,' AND to_types   NOT GLOB '*,,*')),
   note       TEXT,
   CONSTRAINT link_kinds_mirror_valid CHECK (symmetric = 0 OR from_types IS to_types)   -- a mirrored edge must be valid in both directions
@@ -636,7 +640,7 @@ CREATE TABLE links (
   kind       TEXT NOT NULL REFERENCES link_kinds(kind),  -- closed registry
   note       TEXT,
   created_at TEXT NOT NULL CONSTRAINT links_created_at CHECK (length(created_at) = 24 AND created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z' AND substr(created_at,12,2) BETWEEN '00' AND '23' AND strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at),
-  source     TEXT NOT NULL CONSTRAINT links_source CHECK (length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*'),   -- the writer (lifelog_meta.source)
+  source     TEXT NOT NULL CONSTRAINT links_source CHECK (instr(source, char(0)) = 0 AND length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*'),   -- the writer (lifelog_meta.source)
   UNIQUE (from_id, to_id, kind)
 ) STRICT;
 CREATE INDEX links_to ON links(to_id);   -- backlinks query (from_id is served by the UNIQUE index)
@@ -688,12 +692,15 @@ BEGIN
 END;
 
 CREATE VIEW ghost_pages AS
-  -- Empty, unlinked live plain objects older than 30 days; never a typed identity. Owner tombstones them.
+  -- Empty live plain objects older than 30 days without graph, session-kind or measurement-capture references,
+  -- including historical facts; never a typed identity. Owner tombstones them.
   SELECT e.id, n.title, e.created_at
     FROM entities e JOIN entity_names n ON n.entity_id = e.id AND n.name_key = e.preferred_name_key
    WHERE e.entity_type = 'page' AND e.body = '' AND e.deleted_at IS NULL
      AND e.created_at < strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 day')
-     AND NOT EXISTS (SELECT 1 FROM links l WHERE l.to_id = e.id OR l.from_id = e.id);
+     AND NOT EXISTS (SELECT 1 FROM links l WHERE l.to_id = e.id OR l.from_id = e.id)
+     AND NOT EXISTS (SELECT 1 FROM sessions s WHERE s.kind_id = e.id)
+     AND NOT EXISTS (SELECT 1 FROM measurements m WHERE m.captured_with_id = e.id);
 
 CREATE TRIGGER entity_names_touch_insert AFTER INSERT ON entity_names BEGIN
  UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), revision = revision + 1 WHERE id = NEW.entity_id;
