@@ -1,7 +1,7 @@
 # 076 — Exercise remaining validation gaps
 
 - **Date:** 2026-10-07
-- **Status:** IN PROGRESS
+- **Status:** DONE
 - **Baseline:** `6f2bfe8` (committed and pushed).
 - **Authorization:** owner requested continuing the remaining validation gaps after plan 075, while retaining commit/push authorization.
 - **Scope:** pinned static analysis, full race checks, minimum SQLite compatibility, actual Windows execution, lifetime/stress evidence and bounded storage failure probes. No migrations or private data.
@@ -45,35 +45,118 @@ The [first Windows run at 5543bc1](https://github.com/alexradunet/lifelogdb/acti
 passed generation, vet and every package except two CLI snapshot assertions. Both compared the caller's short parent
 path (`RUNNER~1`) to the correctly resolved long path (`runneradmin`). Snapshot creation and restore succeeded;
 the tests must compare the exact dated leaf and filesystem identity, preserving all literal-name sentinels and
-symlink safety checks. No production path behavior changes. The full Windows rerun will validate those repairs.
+symlink safety checks. No production path behavior changes.
+
+The [full Windows rerun at e44b8f5](https://github.com/alexradunet/lifelogdb/actions/runs/37644715040)
+passed generation, generated-copy verification, vet and every package, including **39 suites and 404 mutants**.
+The log confirms both repaired snapshot cases, all physical-destination symlink/junction cases and source-confinement
+symlink/junction cases actually ran and passed. Environment: Go **1.27.1 windows/amd64**, hosted runner image
+`windows-2025-vs2026` version `20260925.250.1`, current pinned SQLite 3.53.4 / driver v1.60.1.
+The exact baseline command was `go test -v -count=1 -timeout=30m -parallel=4 ./...`;
+contract tests took 904.660 seconds and importer tests 1125.706 seconds.
+
+Expected Windows skips were the subprocess helper entry points, optional Mermaid rendering, the literal-colon filename
+case (invalid on Windows), a trailing-space filename the filesystem cannot preserve, and the executable interrupt/drain
+case because sending `os.Interrupt` to another Windows process is unsupported by that harness. The Linux baseline covers
+the latter filesystem/signal cases and Linux-only write-error injection; this run does not prove Windows console shutdown.
 
 The first Windows contract package passed all suites and mutants in 889.908 seconds; importer tests took
 1096.961 seconds. The workflow now prints individual test results and skips, and allows 30 minutes per package
 and 45 minutes per job to leave headroom over this observed Windows runtime. No test or mutant is removed;
 timeouts guard stalled runs rather than impose an unagreed speed requirement.
 
+### Scale workloads
+
 The existing production-writer scale runner was built at `6f2bfe8`, Go 1.27.1, modernc.org/sqlite v1.60.1 / SQLite 3.53.4.
 Its dirty flag comes from pre-existing untracked Python caches; tracked source was clean when built. Runs use seed 2075,
-generator version 1, five samples and automatically cleaned `/var/tmp` storage. Hardware: AMD Ryzen 7 7840HS,
-Linux amd64, SKHynix HFS001TEJ9X115N NVMe, btrfs on encrypted `/dev/mapper/root`. Other validation ran concurrently;
-these warm samples are correctness evidence and indicative costs, not isolated comparative benchmarks.
+generator version 1, a fixed `1970-01-01` calendar anchor and automatically cleaned `/var/tmp` storage. Hardware:
+AMD Ryzen 7 7840HS, Linux amd64, SKHynix HFS001TEJ9X115N NVMe, btrfs on encrypted `/dev/mapper/root`.
+Connection settings were WAL, `synchronous=FULL`, foreign keys and recursive triggers enabled, `trusted_schema=OFF`,
+4096-byte pages, a 5000 ms busy timeout and a 1000-page automatic checkpoint.
 
-- **Lifetime metadata passed:** 18,262 days, 365,240 original readings, 21,485 corrections, 11,782 retractions and
-  54,786 files. Build 251.034 seconds; live database 407,543,808 bytes, WAL 13,015,112 bytes, SHM 32,768 bytes.
-  Historical-series samples 231.6–241.3 ms; snapshot 1.043 seconds; restore-copy/open 1.021 seconds.
-  Logical digest `b1bf076df011f4591427dbc931d33c62713531db436cb45fee42b1284f9eb502`.
-- **Small previews passed:** 14 unique valid JPEGs, 6,783,325 preview bytes; build 0.801 seconds.
-  Logical digest `db17e1a0f197a1b2d68e3cad84030bbcac19cb2cc61cfcb4d5698293cac586b2`.
-- **Metadata stress passed:** 1,460,960 original readings, 85,939 corrections, 47,128 retractions, 109,572 files,
-  16,000 notes and four times the text sizes. Build 980.335 seconds; live database 3,268,665,344 bytes,
-  WAL 193,916,072 bytes. Snapshot 9.960 seconds; restore-copy/open 10.430 seconds.
-  Logical digest `e604db2dc8678d37ffb735b9d278b8b16926b7dbafdc909d937fd04bba9d353c`.
-- **Lifetime previews:** starting with the same 50-year workload and representative unique JPEG payloads,
-  over 650 GiB initially free and automatic cleanup of all copies.
-
-Completed scale runs verified independent metric identities/values/days/order, exact file/preview totals, search/backlinks,
+All four runs passed independent metric identities/values/days/order, exact file/preview totals, search/backlinks,
 malformed-batch rollback, all four integrity groups and the same known answers after snapshot restore.
-Metadata-only runs make no preview-capacity claim. The runner's keyed replay measures core recording, not workspace import throughput.
+
+- **Lifetime metadata:** 18,262 days, 365,240 original readings, 21,485 corrections, 11,782 retractions,
+  54,786 files and 4,000 notes. Build 251.034 seconds.
+  Logical digest `b1bf076df011f4591427dbc931d33c62713531db436cb45fee42b1284f9eb502`.
+- **Small previews:** 14 days, 56 original readings, four corrections, two retractions, eight notes and
+  14 unique valid JPEGs containing 6,783,325 preview bytes. Build 0.801 seconds.
+  Logical digest `db17e1a0f197a1b2d68e3cad84030bbcac19cb2cc61cfcb4d5698293cac586b2`.
+- **Metadata stress:** 18,262 days with 80 original readings and six files per day; 1,460,960 original readings,
+  85,939 corrections, 47,128 retractions, 109,572 files, 16,000 notes and four times the text sizes.
+  Build 980.335 seconds.
+  Logical digest `e604db2dc8678d37ffb735b9d278b8b16926b7dbafdc909d937fd04bba9d353c`.
+- **Lifetime previews:** the lifetime workload above with 54,786 unique synthetic JPEGs at 640×480, 1024×768
+  and 1600×900, quality 75. Payloads total 27,964,022,156 bytes, averaging approximately 510,423 bytes per file.
+  Build 3,895.506 seconds; the full run finished at 15:29:13 UTC, approximately 69 minutes 45 seconds after launch.
+  Logical digest `5689695f35c43a13f9ae51d0f70a606544d3e8846337e968daa6574b21492e7f`.
+
+The logical digests cover ordered generated payloads, excluding write-clock timestamps. Build times include generation,
+JPEG encoding where selected, writer transactions, corrections and independent-oracle bookkeeping. Other validation
+ran alongside the metadata and small-preview runs. Early lifetime-preview construction overlapped race/fuzz checks;
+the full local contract race finished at 14:35:45 UTC, leaving later construction and warm measurements with less
+validation contention. These are workload characterization results, not isolated comparative benchmarks.
+
+Warm workflow ranges below are minimum–maximum milliseconds across five samples. Queries run after construction
+and validation; reopening a database does not establish a cold-disk measurement.
+
+| Workflow | Small previews | Lifetime metadata | Metadata stress | Lifetime previews |
+|---|---:|---:|---:|---:|
+| Capture and commit | 2.608–9.647 | 2.194–15.155 | 2.980–7.410 | 2.902–5.166 |
+| Save and commit | 2.057–9.739 | 1.302–1.457 | 1.944–5.154 | 1.286–1.687 |
+| Day view | 0.517–0.791 | 0.572–0.838 | 1.898–5.159 | 0.625–0.678 |
+| Rare search | 0.208–0.399 | 26.354–29.263 | 97.836–229.819 | 29.592–31.495 |
+| Page with popular backlinks | 0.257–0.350 | 96.591–109.338 | 778.761–1464.459 | 103.042–108.265 |
+| Historical metric series | 0.168–0.266 | 231.576–241.255 | 1551.441–3380.338 | 254.284–269.296 |
+| Keyed core replay, up to 128 roots | 9.042–10.787 | 14.898–21.878 | 30.729–110.194 | 15.979–21.166 |
+
+Representative Go allocation costs per sample show the cost of fully consuming large result sets. These counters
+measure allocations during each operation, not live heap size or total process memory.
+
+| Workflow | Lifetime previews: bytes / allocations | Metadata stress: bytes / allocations |
+|---|---:|---:|
+| Day view | 25,504–25,648 / 357–360 | 83,312–83,408 / 1,071–1,073 |
+| Page with popular backlinks | 10,727,248 / 157,309 | 17,688,896–17,689,024 / 253,333–253,335 |
+| Historical metric series | 91,001,616–91,001,648 / 618,370 | 359,265,728–359,265,904 / 2,473,437–2,473,439 |
+| Keyed core replay, up to 128 roots | 491,488–492,768 / 11,790–11,803 | 491,504–492,016 / 11,787–11,792 |
+
+Snapshot and restore timings are one sample each, in seconds. They include copy/open work; correctness and integrity
+checks run outside the timed portion. Keyed replay measures core recording, not workspace/source-file import throughput.
+
+| Operation | Small previews | Lifetime metadata | Metadata stress | Lifetime previews |
+|---|---:|---:|---:|---:|
+| Snapshot copy | 0.038 | 1.043 | 9.960 | 57.037 |
+| Restore copy/open | 0.043 | 1.021 | 10.430 | 57.479 |
+
+Recorded file sizes are bytes, before automatic cleanup. These are file lengths, not peak filesystem allocation or
+an inventory of SQLite's transient internal files. Metadata-only runs make no preview-capacity claim.
+
+| File | Small previews | Lifetime metadata | Metadata stress | Lifetime previews |
+|---|---:|---:|---:|---:|
+| `life.db` | 7,331,840 | 407,543,808 | 3,268,665,344 | 28,439,715,840 |
+| `life.db-wal` | 4,532,032 | 13,015,112 | 193,916,072 | 16,142,192 |
+| `life.db-shm` | 32,768 | 32,768 | 393,216 | 32,768 |
+| `snapshot.db` | 7,282,688 | 403,435,520 | 3,253,293,056 | 28,434,440,192 |
+| `restored.db` | 7,290,880 | 403,443,712 | 3,253,301,248 | 28,434,448,384 |
+| `restored.db-wal` | 0 | 0 | 0 | 0 |
+| `restored.db-shm` | 0 | 0 | 0 | 0 |
+
+The lifetime-preview files above sum to 85,324,779,376 bytes. That run started with approximately 651 GiB free;
+all scratch copies were removed automatically, and its process exited zero. No generated database or large log is
+committed. Exact runner invocations from the repository root were:
+
+```sh
+/tmp/lifelog-gap-lifescale -profile lifetime -seed 2075 -samples 5 -dir /var/tmp -storage 'AMD Ryzen 7 7840HS; Linux amd64; SKHynix HFS001TEJ9X115N NVMe; btrfs on encrypted /dev/mapper/root; warm writer-built fixture; concurrent repository validation' > /tmp/lifelog-gap-lifetime.json 2> /tmp/lifelog-gap-lifetime-progress.log
+/tmp/lifelog-gap-lifescale -profile small -previews -seed 2075 -samples 5 -dir /var/tmp -storage 'AMD Ryzen 7 7840HS; Linux amd64; SKHynix HFS001TEJ9X115N NVMe; btrfs on encrypted /dev/mapper/root; warm writer-built fixture; concurrent repository validation and stress fixture build' > /tmp/lifelog-gap-small-previews.json 2> /tmp/lifelog-gap-small-previews-progress.log
+/tmp/lifelog-gap-lifescale -profile stress -seed 2075 -samples 5 -dir /var/tmp -storage 'AMD Ryzen 7 7840HS; Linux amd64; SKHynix HFS001TEJ9X115N NVMe; btrfs on encrypted /dev/mapper/root; warm writer-built fixture; concurrent repository validation' > /tmp/lifelog-gap-stress.json 2> /tmp/lifelog-gap-stress-progress.log
+/tmp/lifelog-gap-lifescale -profile lifetime -previews -seed 2075 -samples 5 -dir /var/tmp -storage 'AMD Ryzen 7 7840HS; Linux amd64; SKHynix HFS001TEJ9X115N NVMe; btrfs on encrypted /dev/mapper/root; warm writer-built fixture; concurrent validation' > /tmp/lifelog-gap-lifetime-previews.json 2> /tmp/lifelog-gap-lifetime-previews-progress.log
+```
+
+The scratch binary can be rebuilt from the recorded revision with
+`/home/alex/.local/share/mise/installs/go/1.27.1/bin/go build -o /tmp/lifelog-gap-lifescale ./tools/lifescale`.
+The four JSON reports retain individual timing samples, allocation counts, environment, settings, manifests and checks.
+These runs establish the stated synthetic envelope on this machine; they are not universal capacity or power-loss proof.
 
 ### Bounded fuzz campaigns and progress diagnosis
 
@@ -87,16 +170,17 @@ A fresh-corpus run with `GODEBUG=fuzzdebug=1` reproduced the stall at **24,374
 executions**. Its log identifies a coverage-minimization task (`198cb250`,
 `keepCoverage=true`, `crasher=false`) outstanding until the campaign deadline.
 The local Go 1.27.1 sources, also available in the official
-[fuzz coordinator](https://go.dev/src/internal/fuzz/fuzz.go#L317) and
-[testing defaults](https://go.dev/src/testing/fuzz.go#L33), show that coverage
+[fuzz coordinator](https://raw.githubusercontent.com/golang/go/go1.27.1/src/internal/fuzz/fuzz.go) and
+[testing defaults](https://raw.githubusercontent.com/golang/go/go1.27.1/src/testing/fuzz.go), show that coverage
 discoveries are minimized under the default 60-second budget and displayed
 counts update when worker results arrive (`updateStats`, line 722).
 With the same binary and assertions, disabling minimization passed **103,981
 executions / 277 new interesting inputs** with continuous progress; limiting
 minimization to 100 ms passed **73,925 executions / 164 new interesting inputs**,
-also with continuing progress. All 164 retained inputs from that last run,
+also with continuing progress. Ordinary direct replay of the 164 retained inputs from that last run,
 including 51 originals returned after interrupted minimization, plus six seeds
-passed ordinary direct replay in 0.02 seconds. These controls locate the
+completed in 0.02 seconds: 146 cases passed and 24 were skipped by the existing
+bounded-input/Unicode guards. The replay command passed. These controls locate the
 reproduced stall in coverage minimization; no slow or hanging validator input was
 reproduced. The original untraced run cannot identify its particular input.
 No assertion, production code or permanent fuzz setting changed.
@@ -170,9 +254,12 @@ Together, the successful final-code application packages in `/tmp/lifelog-gap-fi
 contract retry provide race coverage for every tested package, including the new I/O regressions. Lifetime-preview
 generation ran concurrently with the retry; it is not an isolated performance measurement.
 
-Windows execution and lifetime preview results will be recorded before closing this plan.
+The planned compatibility, analysis, race, fault-injection, fuzz and scale checks are complete, with the Windows
+assertion defects repaired and verified on Windows. Independent evidence review checked all recorded scale tables,
+digests and cleanup against the reports, and corrected the exact race finish time and fuzz replay skip counts.
 Real power-loss behavior, sync faults and torn writes require a separate fault-capable environment and remain untested.
-No real owner data was accessed. This work cannot establish freedom from every bug or every form of file tampering.
+No real owner data was accessed or imported. Windows console shutdown and the minimum-engine Windows matrix remain
+outside the exercised cases. This work cannot establish freedom from every bug or every form of file tampering.
 
 ### Minimum SQLite engine reproduction
 
