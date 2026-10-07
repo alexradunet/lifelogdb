@@ -1,6 +1,6 @@
 # Habits: start and stop one, the habits of a day, completion over a period (D24)
 
-`:metric` is the `name_key` of a unitless metric (a metric is a page, [D27](../decisions/D27-a-metric-is-a-page.md)); a check-in is a measurement of it, 1 or 0 ([correct a measurement](correct-a-measurement.md) corrects one).
+`:metric` is the `name_key` of a unitless metric (a scale names its range as its unit, so no scale is one; a metric is a page, [D27](../decisions/D27-a-metric-is-a-page.md)); a check-in is a measurement of it, 1 or 0 ([correct a measurement](correct-a-measurement.md) corrects one).
 
 ```sql
 -- start the habit on :day; no end yet

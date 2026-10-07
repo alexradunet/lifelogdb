@@ -5,7 +5,9 @@
 - **Decision.** `lifelog_meta.deletes`; the `*_no_delete` triggers, which also hold on a connection that forgot
   `foreign_keys` (executed), and under `recursive_triggers=ON` stop `INSERT OR REPLACE` from deleting a row
   (executed, [connection setup](../contract/connections.md)). Junk captured by accident is tombstoned like
-  everything else. Tombstoning and un-tombstoning bump
+  everything else. A tombstone is never earlier than its row's creation (`entities_deleted_after_created`,
+  `sessions_deleted_after_created`, `tasks_deleted_after_created`, `task_occurrences_deleted_after_created`): a
+  tombstone stamped by a clock that has stepped back behind `created_at` is refused. Tombstoning and un-tombstoning bump
   `entities.updated_at` (`entities_touch`, watching `deleted_at` and `entity_type`, so it cannot re-fire itself
   under `recursive_triggers=ON`, executed).
 - **Rationale.** Retaining a tombstoned row preserves its contents and references for recovery and explicit

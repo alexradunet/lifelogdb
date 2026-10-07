@@ -88,7 +88,7 @@ model and the owner.
 
 **metrics.md.** A table found by its header; `status`, `name` and `unit` are required. `name` is the metric's
 page title, an owned name retained through later rename ([D27](../decisions/D27-a-metric-is-a-page.md)): `Ferritin`, or `ferritin` (a reading may name it in any case);
-`note` becomes the page's body. An empty unit is a unitless metric ([D7](../decisions/D07-measurements.md)). `since` and `until` are the owner's days and make a unitless row a habit ([D24](../decisions/D24-habits.md));
+`note` becomes the page's body. An empty unit is a unitless metric ([D7](../decisions/D07-measurements.md)); a unit that is a range, two whole numbers around a hyphen with the lower below the upper (`1-5`, `0-10`), names a scale ([D7](../decisions/D07-measurements.md), [D6](../decisions/D06-mood-is-a-measurement.md)). `since` and `until` are the owner's days and make a unitless row a habit ([D24](../decisions/D24-habits.md));
 the model leaves them empty. `category`, optional, files the metric ([D26](../decisions/D26-metric-categories.md)): the titles of the category pages
 from the top, joined by `/` (a title never holds one), `Biomarkers/Iron`; a file without the column files nothing.
 
@@ -179,7 +179,8 @@ day, so a note that is only frontmatter can still say that it is a person.
   facts file never changes a key). A reading uses the metric's canonical `title_key`, not the spelling in one facts file;
   if two untimed readings of that metric/day have the same quote position, the file is refused rather than ordered by
   facts-file position or value. A row that already exists keeps its id and key. The key is stable on every run
-  ([imports](../contract/imports.md) step 3, [import a row once](../cookbook/import-a-row-once.md)).
+  ([imports](../contract/imports.md) step 3, [import a row once](../cookbook/import-a-row-once.md)). A key longer than
+  512 bytes is stored as `sha256:` and the 64 hex digits of the SHA-256 of its bytes, so it is the same on every run too.
 - **References are titles.** `from`, `to` and `with` name a person, a place, a plain page or a day
   page by its title (`"2031-04-12"`, `"Bob Sample"`). A reference to a row not written yet is refused
   as "not written yet": write it earlier in the file, or apply the other file first. So is a link end that is still
@@ -192,6 +193,11 @@ day, so a note that is only frontmatter can still say that it is a person.
   apart, `value` is the number and `unit` the unit, and the unit must be explicit in the same table/CSV
   row or in that value column's header. Nothing is converted. A censored, approximate,
   qualitative or comma-decimal value is refused: it goes in `kept_as_text`.
+- **A scale's range is not a unit the source writes.** A metric whose unit is a range (`1-5`, `0-10`) is a scale, and the
+  range describes the metric, not the number: `mood: 4` is `{"metric": "mood", "day": "…", "value": "4"}` with no `unit`,
+  and the number alone is the evidence. The reading takes the metric's range as its unit; any other unit is refused,
+  and so is a value that is not a whole number inside the range (`mood: 7`), with nothing stored. A word gives no
+  scale's number: the quote holds it. Every other unit must still be written beside its number, as above.
 - Days are `YYYY-MM-DD`, instants UTC ISO-8601 (`lifelog_meta.days`, `lifelog_meta.instants`).
 
 ## The writer's operations
@@ -205,7 +211,7 @@ Each runs on one explicitly selected database.
 | *ledger* | the source tree | that no ledger exists yet | `ledger.md`, every file `[ ]` |
 | *inspect a file* | one source file | — | nothing; returns its frontmatter, headings, tables as rows, checkboxes and links |
 | *find* | the database | — | nothing; pages, metrics or readings matching a text: exact, same words, more words, fewer words |
-| *register metrics* | `metrics.md` | its stamp; each approved row (name, unit, `since`/`until`, `category`); that each title of a path is a valid title of a plain page | the approved metrics, each a page titled by its `name` with its `note` as the body (a plain page of that title, a note of the vault included, is promoted and keeps its text: the `note` fills only an empty body, [D27](../decisions/D27-a-metric-is-a-page.md)); each page of a path that is missing (a plain page, top first), the `part-of` link from each to the one above, and from the metric to the last ([metrics by category](../cookbook/metrics-by-category.md)); each habit's period, re-sent with its `end_day` ([habits](../cookbook/habits.md)) |
+| *register metrics* | `metrics.md` | its stamp; each approved row (name, unit, `since`/`until`, `category`); that each title of a path is a valid title of a plain page | the approved metrics, each a page titled by its `name` with its `note` as the body (a plain page of that title, a note of the vault included, is promoted and keeps its text: the `note` fills only an empty body, [D27](../decisions/D27-a-metric-is-a-page.md)); a metric that exists with that unit is adopted as it is, and so is a scale (Mood) registered with no unit; any other unit is refused, since a unit never changes; each page of a path that is missing (a plain page, top first), the `part-of` link from each to the one above, and from the metric to the last ([metrics by category](../cookbook/metrics-by-category.md)); each habit's period, re-sent with its `end_day` ([habits](../cookbook/habits.md)) |
 | *check facts* | one facts file, its source file, the workspace, the database | every check below, in a transaction it rolls back | nothing; prints what *apply* would do |
 | *apply facts* | the same | the same checks | every write in one `BEGIN IMMEDIATE` transaction ([connection setup](../contract/connections.md)), then the file's ledger line |
 | *plan a vault* / *apply a vault plan* | the vault; `plan.json` | titles ([titles and wikilinks](../contract/titles-and-wikilinks.md)), duplicates, titles the database holds | the notes' pages and bodies (see "An Obsidian vault") |
@@ -253,7 +259,7 @@ it diagnoses pending or conflicting intents without recovering them.
 - a day that is not `YYYY-MM-DD`;
 - a link without a kind, of kind `wikilink`, or with an end that is not a title;
 - a reading whose metric is not approved in a stamped `metrics.md`; whose `value` is not in its quote
-  (for a unitless 0/1 marker, the quote holds the result word instead); whose `day` is neither in its
+  (for a unitless 0/1 marker, the quote holds the result word instead; a scale's number is always in the quote); whose `day` is neither in its
   quote nor the file's own day (a `YYYY-MM-DD` file name, or a date in its frontmatter);
 - a person's `birth_day` or `death_day` that is not in its quote, as written;
 - a `kept_as_text` entry without a quote and a why, or whose quote is not in the file; a `waiting`
@@ -267,7 +273,8 @@ it diagnoses pending or conflicting intents without recovering them.
   duplicated by the model;
 - a title held by an entity of another type (a place written where a person is) is refused;
 - every reference resolves;
-- a reading's unit is its metric's; a key that already holds another value is refused (a correction is
+- a reading's unit is its metric's (a reading of a scale takes the scale's range), and the value of a scale is a whole
+  number inside it; a key that already holds another value is refused (a correction is
   a separate operation, [correct a measurement](../cookbook/correct-a-measurement.md));
 - a person that already holds another birth or death day is refused: the facts never change one (a
   correction uses a separate operation).
@@ -333,7 +340,7 @@ question. Then **stop**: tell the owner the rules are ready and that they approv
 
 **4. Propose the metrics** (only if a rule says "readings" or "habits"). For each readings file:
 *inspect* it, *find* the metric. Add one `proposed` row: a `name`, the metric's page title (reuse one
-that exists; a title is never renamed), the `unit` exactly as written (empty for a unitless scale), a `note` in words, the
+that exists; a title is never renamed), the `unit` exactly as written (empty when the source writes none, as for a 0/1 habit). A scale's range (`1-5`, `0-10`) is its unit and no source line writes it: propose a new scale with the range the source or the owner states, never one you guess ([D7](../decisions/D07-measurements.md)). A metric that exists is reused as it is: Mood is seeded as `1-5`, so propose `Mood` with an empty unit or with `1-5`, and registering it adopts the seeded metric; any other unit for a metric that exists is a conflict, since a unit never changes. A `note` in words, the
 `from` file, any `doubts`. When a note of the source is about that metric — its file name is the metric's name, in any
 case (`aPTT.md` for `aptt`) — that note is the metric's page ([D27](../decisions/D27-a-metric-is-a-page.md)): the `name` is the note's title exactly
 as the plan gives it, and the `note` is left empty, since the page keeps the note's text. This is not a doubt and not a
@@ -395,11 +402,14 @@ What is specific to a vault, beside the steps above:
   [titles and wikilinks](../contract/titles-and-wikilinks.md) predicate refuses, two notes with one title, a title `life.db` already holds for a note
   that is not a daily note (when unsure, ask). A **daily note whose day page already exists** is not a problem: the
   plan marks it `append`.
-- **All pages are created first**, then each note's text is saved in its own transaction through the
-  save contract ([save a body](../cookbook/save-a-body.md)), so a link between notes lands on the note. A note marked `append`
+- **All pages are created first**, each with its note's text, in one transaction: creation is one write, so an imported
+  page is at revision 1 and the day view does not call it edited ([D12](../decisions/D12-no-revision-tables.md)). Then
+  each note's links are synced in its own transaction through the save contract ([save a body](../cookbook/save-a-body.md)),
+  so a link between notes lands on the note and not on a stub; a note changed since is saved as an edit of its page, and a
+  run that ended between the two is completed by the next. A note marked `append`
   creates no page: its text is appended to the existing day page after a blank line, as [capture](../cookbook/capture.md) appends,
   through the save contract, and the writer records the note's path against that page in `plan.json`. The note's path is its
-  `import_key` (an appended note has none: its record in `plan.json` stands in); an unchanged body is left alone, so a second run
+  `import_key` (hashed when longer than 512 bytes; an appended note has none: its record in `plan.json` stands in); an unchanged body is left alone, so a second run
   writes nothing — an appended note is found by its record and appended again never — also after a note's
   page is promoted to a person or a place.
 - **Obsidian's link forms are rewritten before the save**: a link with a folder, a heading, a block
@@ -500,9 +510,10 @@ Each line is a requirement on a writer that offers this process.
   verification. No tool offers arbitrary write SQL; import keys are writer-derived, and ledger marks
   other than `[-]` are writer-maintained. Direct operations may address existing rows by id.
 - In the facts workflow, a value reaches the database exactly as written or not at all; the writer, never the model, parses
-  it and compares its unit with the metric's.
+  it and compares its unit with the metric's; a scale's range is the metric's, so only its number is compared with the source.
 - A file's facts commit whole or not at all, and its ledger line is written from what was written.
-- Keys are derived by the writer and identical on every run; no key is invented by the model.
+- Keys are derived by the writer and identical on every run; no key is invented by the model. A key that does not fit the
+  file's 1 to 512 bytes is hashed, never cut, and none is empty.
 - In a facts file, a question or row number in a name or note is refused.
 - In the facts workflow, a look-alike name is never merged or duplicated without the owner's decision.
 - *approve* is out of the model's reach, and its stamp is never written by any other operation.
@@ -524,7 +535,7 @@ Each line is a requirement on a writer that offers this process.
   later file.
 - A vault plan's paths, source and vault cannot be edited to point outside the source; every failure
   makes the run exit non-zero; file names are read as they are on disk (NFD on some filesystems).
-- Mood is held to 1–5 ([D6](../decisions/D06-mood-is-a-measurement.md)); a habit period is refused on a metric that already has readings other than
+- A metric whose unit is a range (`1-5`, `0-10`), Mood among them, is held to whole numbers inside it ([D6](../decisions/D06-mood-is-a-measurement.md), [D7](../decisions/D07-measurements.md)); a habit period is refused on a metric that already has readings other than
   0/1 ([D24](../decisions/D24-habits.md)).
 - An intent-backed correction of an imported, keyed reading survives replay, regardless of whether
   the caller is the owner or an agent. Durable correction intents are immutable; legacy correction records remain readable; repeated replay

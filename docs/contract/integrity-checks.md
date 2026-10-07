@@ -10,9 +10,9 @@ PRAGMA integrity_check;      -- one row: ok
 PRAGMA foreign_key_check;    -- no rows
 SELECT id FROM entities e WHERE NOT EXISTS (SELECT 1 FROM entity_names n WHERE n.entity_id=e.id AND n.name_key=e.preferred_name_key) OR (e.entity_type='person' AND NOT EXISTS (SELECT 1 FROM people p WHERE p.id=e.id)) OR (e.entity_type='metric' AND NOT EXISTS (SELECT 1 FROM metrics m WHERE m.id=e.id)) OR (e.entity_type='period' AND NOT EXISTS (SELECT 1 FROM periods p WHERE p.id=e.id)) OR (e.entity_type='file' AND NOT EXISTS (SELECT 1 FROM files f WHERE f.id=e.id));   -- no rows
 SELECT l.id FROM links l LEFT JOIN link_kinds k ON k.kind=l.kind LEFT JOIN entities f ON f.id=l.from_id LEFT JOIN entities t ON t.id=l.to_id WHERE k.kind IS NULL OR f.id IS NULL OR t.id IS NULL OR (k.from_types IS NOT NULL AND instr(',' || k.from_types || ',', ',' || f.entity_type || ',')=0) OR (k.to_types IS NOT NULL AND instr(',' || k.to_types || ',', ',' || t.entity_type || ',')=0) ORDER BY l.id; -- no rows
-SELECT s.id FROM sessions s LEFT JOIN entities e ON e.id=s.kind_id WHERE e.id IS NULL OR e.entity_type<>'page' OR (length(e.preferred_name_key)=10 AND date(e.preferred_name_key) IS e.preferred_name_key) ORDER BY s.id; -- no rows
+SELECT s.id FROM sessions s LEFT JOIN entities e ON e.id=s.kind_id WHERE e.id IS NULL OR e.entity_type<>'page' OR e.is_journal ORDER BY s.id; -- no rows
 SELECT m.id FROM measurements m LEFT JOIN sessions s ON s.id=m.session_id LEFT JOIN measurements p ON p.id=m.supersedes_id WHERE (m.session_id IS NOT NULL AND s.id IS NULL) OR (m.supersedes_id IS NOT NULL AND (p.id IS NULL OR p.metric_id IS NOT m.metric_id OR p.session_id IS NOT m.session_id)) ORDER BY m.id; -- no rows
-SELECT t.id FROM tasks t LEFT JOIN entities e ON e.id=t.project_page_id WHERE t.project_page_id IS NOT NULL AND (e.id IS NULL OR e.entity_type<>'page' OR (length(e.preferred_name_key)=10 AND date(e.preferred_name_key) IS e.preferred_name_key)) ORDER BY t.id; -- no rows
+SELECT t.id FROM tasks t LEFT JOIN entities e ON e.id=t.project_page_id WHERE t.project_page_id IS NOT NULL AND (e.id IS NULL OR e.entity_type<>'page' OR e.is_journal) ORDER BY t.id; -- no rows
 SELECT t.id FROM tasks t WHERE t.repeat_unit IS NULL AND (SELECT count(*) FROM task_occurrences o WHERE o.task_id=t.id AND o.occurrence_key='once')<>1 ORDER BY t.id; -- no rows
 SELECT o.id FROM task_occurrences o WHERE NOT EXISTS
 (SELECT 1 FROM tasks t WHERE t.id=o.task_id AND
@@ -42,7 +42,7 @@ WITH RECURSIVE rooted(id) AS (
 )
 SELECT id FROM measurements EXCEPT SELECT id FROM rooted ORDER BY id; -- no rows
 SELECT h.id FROM habit_periods h LEFT JOIN metrics m ON m.id=h.metric_id
- WHERE m.id IS NULL OR m.id=1 OR m.unit<>'' OR EXISTS
+ WHERE m.id IS NULL OR m.unit<>'' OR EXISTS
  (SELECT 1 FROM habit_periods p WHERE p.metric_id=h.metric_id AND p.id<>h.id
   AND p.start_day<=coalesce(h.end_day,'9999-12-31') AND coalesce(p.end_day,'9999-12-31')>=h.start_day)
  ORDER BY h.id; -- no rows
@@ -51,7 +51,7 @@ SELECT v.id FROM measurement_values v WHERE v.value NOT IN (0,1)
 SELECT n.id FROM entity_names n JOIN entities e ON e.id=n.entity_id
  WHERE (length(n.name_key)=10 AND date(n.name_key) IS n.name_key
    AND (e.entity_type<>'page' OR e.preferred_name_key IS NOT n.name_key OR e.day IS NOT n.name_key OR n.title IS NOT n.name_key))
- OR (length(e.preferred_name_key)=10 AND date(e.preferred_name_key) IS e.preferred_name_key
+ OR (e.is_journal
    AND (n.name_key IS NOT e.preferred_name_key OR n.title IS NOT e.preferred_name_key)) ORDER BY n.id; -- no rows
 INSERT INTO entities_fts(entities_fts, rank) VALUES ('integrity-check', 1);   -- no error
 ```
@@ -66,9 +66,12 @@ INSERT INTO entities_fts(entities_fts, rank) VALUES ('integrity-check', 1);   --
   the closed kind registry, even when a damaged file bypassed the insertion and type-change guards (executed).
   Planning queries independently check project type, one-off ownership and occurrence membership/end semantics
   ([planning](planning.md)). They retain tombstoned parents and completed historical slots beyond an end; those
-  are valid history, not damage. The remaining semantic queries detect missing symmetric reverse links or
+  are valid history, not damage. The occurrence-membership query restates the expression of the
+  `task_occurrences_admit` trigger, so it detects rows admitted while the trigger was bypassed, not an error in the
+  expression itself; the independent check of that expression is the anchor-generated calendar oracle of the
+  planning suites ([the suite guide](../../tests/README.md)). The remaining semantic queries detect missing symmetric reverse links or
   unequal shared notes, correction rows unreachable from an original reading (cycles or dangling chains),
-  overlapping or wrongly typed habit periods, current nonbinary habit values, and invalid journal-name ownership
+  overlapping habit periods and periods on a metric with a unit (a scale, Mood included), current nonbinary habit values, and invalid journal-name ownership
   (executed with deliberately bypassed guards restored before checking). The rooted-chain query visits each
   reachable reading once; it does not follow every row's full ancestry. Habit range checks include every current
   reading of a metric with a habit period; corrected or retracted invalid values remain legitimate history.

@@ -73,6 +73,44 @@ func TestHabits(t *testing.T) {
 	}
 }
 
+// A scale names its range as its unit, so the one rule "a habit is a unitless metric" keeps Mood and every
+// registered scale out of habits, and the writer holds a '1-5' scale to whole numbers from 1 to 5 whichever
+// metric it is (D6, D24, issue 0015).
+func TestScalesAreNotHabitsAndAreRangeChecked(t *testing.T) {
+	s := fresh(t)
+	for _, m := range []struct{ name, unit string }{{"Energy", "1-5"}, {"Pain", "0-10"}} {
+		if _, err := s.RegisterMetric(ctx, "cli", m.name, m.unit, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, name := range []string{"Mood", "Energy", "Pain"} {
+		if err := s.StartHabit(ctx, "cli", name, "2026-09-01", ""); status(err) != 422 {
+			t.Errorf("a habit on the %s scale: %v, want 422", name, err)
+		}
+		var periods int
+		if err := s.DB.R.QueryRowContext(ctx, `SELECT count(*) FROM habit_periods`).Scan(&periods); err != nil || periods != 0 {
+			t.Errorf("the refused %s habit left %d periods behind (%v)", name, periods, err)
+		}
+	}
+	for _, v := range []float64{0, 6, 2.5} {
+		if _, err := s.Record(ctx, "cli", Reading{Metric: "Energy", Day: "2026-09-01", Value: v}); status(err) != 422 {
+			t.Errorf("Energy 1-5 reading %g: %v, want 422", v, err)
+		}
+	}
+	if _, err := s.Record(ctx, "cli", Reading{Metric: "Energy", Day: "2026-09-01", Value: 4}); err != nil {
+		t.Errorf("Energy 1-5 reading 4: %v", err)
+	}
+	if err := s.StartHabit(ctx, "cli", "steps_free", "2026-09-01", ""); status(err) != 404 {
+		t.Fatalf("an unregistered metric: %v", err)
+	}
+	if _, err := s.RegisterMetric(ctx, "cli", "steps_free", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.StartHabit(ctx, "cli", "steps_free", "2026-09-01", ""); err != nil {
+		t.Errorf("a unitless metric still starts a habit: %v", err)
+	}
+}
+
 func TestRename(t *testing.T) {
 	s := fresh(t)
 	old, _, _ := s.CreatePage(ctx, "cli", "Sourdogh", "Feed the starter. [[Baking]]")
@@ -134,7 +172,7 @@ func isExists(err error) bool {
 
 func TestCaptureHabitDomain(t *testing.T) {
 	s := fresh(t)
-	// Deliberate damage: ordinary registration now refuses Mood by identity.
+	// Deliberate damage: ordinary registration refuses Mood, a metric with a unit (a scale names its range).
 	// Preserve the capture rollback witness for an externally damaged classification.
 	if _, err := s.DB.W.Exec(`DROP TRIGGER habit_periods_check_insert;
  INSERT INTO habit_periods(metric_id,start_day,source) VALUES(1,'2026-09-01','cli')`); err != nil {

@@ -112,7 +112,11 @@ func planningBoundaries(s *S) {
 		}
 		for _, table := range []string{"tasks", "task_occurrences"} {
 			for _, field := range []string{"created_at", "updated_at", "deleted_at"} {
-				probe(fmt.Sprintf("exact %s.%s %q accepted=%v", table, field, value, accepted), table, M{field: value}, accepted)
+				fields := M{field: value}
+				if field == "deleted_at" { // created at the earliest instant: the probe tests shape, not order
+					fields["created_at"] = "0000-01-01T00:00:00.000Z"
+				}
+				probe(fmt.Sprintf("exact %s.%s %q accepted=%v", table, field, value, accepted), table, fields, accepted)
 			}
 		}
 		probe(fmt.Sprintf("exact task_occurrences.completed_at %q accepted=%v", value, accepted), "task_occurrences", M{"state": "done", "completed_at": value}, accepted)

@@ -68,7 +68,7 @@ func (w *Workspace) loadVaultReceipt() (*vaultIdentityReceipt, error) {
 }
 
 func checkVaultReceiptIdentity(t *core.Tx, n *Note, r *vaultIdentityReceipt, requireApplied bool) error {
-	_, day, found, err := t.ImportedPageIdentity(n.Path)
+	_, day, found, err := t.ImportedPageIdentity(n.key())
 	if err != nil {
 		return err
 	}
@@ -94,7 +94,7 @@ func checkVaultReceiptIdentity(t *core.Tx, n *Note, r *vaultIdentityReceipt, req
 	}
 	if found {
 		sameDay := day == nil && n.Day == "" || day != nil && *day == n.Day
-		id, err := t.ByImportKey(n.Path)
+		id, err := t.ByImportKey(n.key())
 		if err != nil {
 			return err
 		}
@@ -137,7 +137,7 @@ func (w *Workspace) prepareVaultReceiptPublishing(t *core.Tx, p *Plan, publish f
 		if err := checkVaultReceiptIdentity(t, n, r, false); err != nil {
 			return err
 		}
-		_, _, found, err := t.ImportedPageIdentity(n.Path)
+		_, _, found, err := t.ImportedPageIdentity(n.key())
 		if err != nil {
 			return err
 		}
@@ -176,7 +176,7 @@ func (w *Workspace) completeVaultReceipt(t *core.Tx, p *Plan, publish func(strin
 		if err := checkVaultReceiptIdentity(t, n, r, false); err != nil {
 			return err
 		}
-		_, _, found, err := t.ImportedPageIdentity(n.Path)
+		_, _, found, err := t.ImportedPageIdentity(n.key())
 		if err != nil {
 			return err
 		}

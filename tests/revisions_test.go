@@ -1,12 +1,45 @@
 package tests
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 func editRevisions(s *S) {
 	c := s.fresh()
 	page := c.page("Revision witness")
 	revision := func(id int64) int64 { return c.n("SELECT revision FROM entities WHERE id=?", id) }
+	stamp := func(id int64) string { return c.str("SELECT updated_at FROM entities WHERE id=?", id) }
 	s.K("an edit revision starts positive", revision(page) > 0)
+
+	// ---- creation is not an edit: the entity, its owned preferred name and its typed row are one write
+	created := true
+	for i := range 25 { // cookbook/capture's two statements, the clock supplied by the statement
+		id := c.addPage(fmt.Sprintf("Created page %d", i), nil, "body", autoKey)
+		created = created && id != 0 && revision(id) == 1 && c.str("SELECT updated_at = created_at FROM entities WHERE id=?", id) == "1"
+	}
+	s.K("creation is not an edit: a page made by cookbook/capture's entity and owned-name statements is at revision 1 with updated_at = created_at", created)
+	var edited []string
+	for _, typ := range []string{"page", "person", "place", "metric", "file", "period"} {
+		id := c.identity(typ, "ui", "Created "+typ, nil, "")
+		switch typ {
+		case "person", "metric", "file":
+			c.domain(typ, id, nil)
+		case "place":
+			c.must("INSERT INTO places(id,lat,lon,radius_m) VALUES(?,1,2,30)", id)
+		case "period":
+			c.must("INSERT INTO periods(id) VALUES(?)", id)
+		}
+		if revision(id) != 1 || c.str("SELECT updated_at = created_at FROM entities WHERE id=?", id) != "1" {
+			edited = append(edited, typ)
+		}
+	}
+	s.K("creation is not an edit: a page, person, place with a point, metric, file and period stay at revision 1 with updated_at = created_at after their typed row", len(edited) == 0, edited)
+	renamed := c.page("Rename witness")
+	renameBefore := revision(renamed)
+	c.must("INSERT INTO entity_names(entity_id,title,name_key) VALUES (?,'Renamed witness','renamed witness')", renamed)
+	c.must("UPDATE entities SET preferred_name_key='renamed witness' WHERE id=?", renamed)
+	s.K("a rename, the new spelling and then its selection, advances revision", revision(renamed) > renameBefore)
 	nameBefore := revision(page)
 	c.must("INSERT INTO entity_names(entity_id,title,name_key) VALUES (?,'Revision alias','revision alias')", page)
 	s.K("owned alias insertion advances revision", revision(page) > nameBefore)
@@ -48,9 +81,7 @@ func editRevisions(s *S) {
 	s.K("clock alone does not advance revision", revision(page) == before)
 	for _, typ := range []string{"person", "metric", "file"} {
 		id := c.identity(typ, "ui", "Detail "+typ, nil, "")
-		before = revision(id)
 		c.domain(typ, id, nil)
-		s.K(typ+" detail insertion advances revision", revision(id) > before)
 		if typ == "person" {
 			before = revision(id)
 			c.must("UPDATE people SET name='changed' WHERE id=?", id)
@@ -63,9 +94,7 @@ func editRevisions(s *S) {
 		}
 	}
 	place := c.named("place", "")
-	before = revision(place)
 	c.must("INSERT INTO places(id,lat,lon,radius_m) VALUES(?,1,2,30)", place)
-	s.K("place detail insertion advances revision", revision(place) > before)
 	before = revision(place)
 	c.must("UPDATE places SET lat=3 WHERE id=?", place)
 	s.K("place details advance revision", revision(place) > before)
@@ -77,15 +106,40 @@ func editRevisions(s *S) {
 	c.must("UPDATE habit_periods SET end_day='2026-01-02' WHERE metric_id=?", metric)
 	s.K("habit edits advance revision", revision(metric) > before)
 	other := c.page("Other endpoint")
-	before = revision(page)
+	// a link is an edit of the page it leaves and of no page it points at
+	before, otherBefore, otherStamp := revision(page), revision(other), stamp(other)
 	c.must("INSERT INTO links(from_id,to_id,kind,created_at,source) VALUES(?,?,'part-of',"+NOW+",'ui')", page, other)
-	s.K("link insertion advances revision", revision(page) > before)
+	s.K("a link insertion advances the page it leaves", revision(page) > before)
+	s.K("a link insertion advances no page it points at", revision(other) == otherBefore && stamp(other) == otherStamp)
 	before = revision(page)
 	c.must("UPDATE links SET note='note' WHERE from_id=? AND to_id=?", page, other)
-	s.K("link note edit advances revision", revision(page) > before)
+	s.K("a link note edit advances the page it leaves", revision(page) > before)
+	s.K("a link note edit advances no page it points at", revision(other) == otherBefore && stamp(other) == otherStamp)
 	before = revision(page)
 	c.must("DELETE FROM links WHERE from_id=? AND to_id=?", page, other)
-	s.K("link deletion advances revision", revision(page) > before)
+	s.K("a link deletion advances the page it leaves", revision(page) > before)
+	s.K("a link deletion advances no page it points at", revision(other) == otherBefore && stamp(other) == otherStamp)
+	// a wikilink is derived from the body, whose own change advanced the page
+	before, otherBefore = revision(page), revision(other)
+	pageStamp, otherStamp := stamp(page), stamp(other)
+	untouched := func() bool {
+		return revision(page) == before && stamp(page) == pageStamp && revision(other) == otherBefore && stamp(other) == otherStamp
+	}
+	c.must("INSERT INTO links(from_id,to_id,kind,created_at,source) VALUES(?,?,'wikilink',"+NOW+",'ui')", page, other)
+	s.K("a wikilink insertion advances no page: it is derived from the body", untouched())
+	c.must("DELETE FROM links WHERE from_id=? AND to_id=? AND kind='wikilink'", page, other)
+	s.K("a wikilink deletion advances no page: it is derived from the body", untouched())
+	// the two rows of a symmetric link are two inserts, two note updates, two deletes: both pages advance
+	ana, bob := c.named("person", "Revision Ana"), c.named("person", "Revision Bob")
+	ra, rb := revision(ana), revision(bob)
+	c.must("INSERT INTO links(from_id,to_id,kind,created_at,source) VALUES(?,?,'friend',"+NOW+",'ui')", ana, bob)
+	s.K("a symmetric link insertion advances both pages: the mirror row is its own insert", revision(ana) > ra && revision(bob) > rb)
+	ra, rb = revision(ana), revision(bob)
+	c.must("UPDATE links SET note='shared' WHERE from_id=? AND to_id=? AND kind='friend'", ana, bob)
+	s.K("a symmetric link note edit advances both pages: the mirror note is its own update", revision(ana) > ra && revision(bob) > rb)
+	ra, rb = revision(ana), revision(bob)
+	c.must("DELETE FROM links WHERE from_id=? AND to_id=? AND kind='friend'", ana, bob)
+	s.K("a symmetric link deletion advances both pages: the mirror row is its own delete", revision(ana) > ra && revision(bob) > rb)
 	c.must("UPDATE entities SET revision=9223372036854775807 WHERE id=?", page)
 	s.K("revision exhaustion refuses edit", strings.HasPrefix(c.tryx("UPDATE entities SET body='overflow' WHERE id=?", page), "ERR") && c.str("SELECT body FROM entities WHERE id=?", page) == "committed" && revision(page) == 9223372036854775807)
 }

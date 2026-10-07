@@ -2,6 +2,8 @@ package importer
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -437,12 +439,23 @@ func (w *Workspace) checkStatic(f *Facts, source string, rules *Rules, approved 
 				bad(i, "%v", err)
 				continue
 			}
+			// A scale's range is the metric's, not a quantity the source writes next to the number: the reading takes it,
+			// and the number alone is the evidence. Every other unit has to be written in the source (no relabeling).
+			_, _, scale := core.RangeUnit(m.Unit)
+			if scale && unit == "" {
+				unit = m.Unit
+			}
 			if unit != m.Unit {
 				bad(i, "the source evidence submitted unit %q is not the approved metric unit %q", unit, m.Unit)
 				continue
 			}
-			marker := m.Unit == "" && (num == 0 || num == 1)
-			if err := evidence.check(q, pos[i], numText, unit, marker, approved); err != nil {
+			if scale {
+				err = evidence.checkScale(q, pos[i], numText)
+			} else {
+				marker := m.Unit == "" && (num == 0 || num == 1)
+				err = evidence.check(q, pos[i], numText, unit, marker, approved)
+			}
+			if err != nil {
 				bad(i, "%v", err)
 			}
 			if r.With != "" {
@@ -514,8 +527,8 @@ func readingIdentities(f *Facts, pos []int) ([]readingIdentity, error) {
 		}
 		ids[i] = id
 		if r.TakenAt != "" {
-			id.canonicalKey = strings.Join([]string{f.File, "reading", id.metricKey, r.Day, r.TakenAt}, "|")
-			id.legacyKey = strings.Join([]string{f.File, "reading", r.Metric, r.Day, r.TakenAt}, "|")
+			id.canonicalKey = readingKey(f.File, id.metricKey+"|"+r.Day, r.TakenAt)
+			id.legacyKey = readingKey(f.File, r.Metric+"|"+r.Day, r.TakenAt)
 			continue
 		}
 		canonicalGroups[id.metricKey+"|"+r.Day] = append(canonicalGroups[id.metricKey+"|"+r.Day], rk{i, pos[i]})
@@ -530,7 +543,7 @@ func readingIdentities(f *Facts, pos []int) ([]readingIdentity, error) {
 			}
 			id := ids[x.i]
 			id.canonicalOrdinal = n + 1
-			id.canonicalKey = strings.Join([]string{f.File, "reading", g, strconv.Itoa(n + 1)}, "|")
+			id.canonicalKey = readingKey(f.File, g, strconv.Itoa(n+1))
 		}
 	}
 	for g, rs := range legacyGroups {
@@ -538,7 +551,7 @@ func readingIdentities(f *Facts, pos []int) ([]readingIdentity, error) {
 		for n, x := range rs {
 			id := ids[x.i]
 			id.legacyOrdinal = n + 1
-			id.legacyKey = strings.Join([]string{f.File, "reading", g, strconv.Itoa(n + 1)}, "|")
+			id.legacyKey = readingKey(f.File, g, strconv.Itoa(n+1))
 		}
 	}
 	out := make([]readingIdentity, 0, len(ids))
@@ -563,5 +576,29 @@ func parseReadingKey(key string) (parsedReadingKey, bool) {
 }
 
 func entityKey(file, kind, title string) string {
-	return file + "|" + kind + "|" + text.TitleKey(title)
+	return importKey(file + "|" + kind + "|" + text.TitleKey(title))
+}
+
+// readingKey is the import key of a reading: its file, its metric and day as "metric|day" (the canonical title key of
+// the metric; the title as the facts spell it in the legacy form), and its token, the taken_at or the ordinal among
+// that metric's readings of that day.
+func readingKey(file, metricDay, token string) string {
+	return importKey(strings.Join([]string{file, "reading", metricDay, token}, "|"))
+}
+
+// maxImportKey is the longest import key the file holds, in bytes (entities_import_key and the same CHECK on sessions,
+// tasks, task_occurrences and measurements).
+const maxImportKey = 512
+
+// importKey is the import_key under which every row of an import is stored: the source's own identifier when it is
+// 1 to 512 bytes without NUL, otherwise "sha256:" and the 64 lowercase hex digits of the SHA-256 of its exact bytes
+// (docs/contract/imports.md). The same identifier gives the same key on every run, so a replay finds its rows.
+// Every key the importer builds goes through here; none leaves it empty or with a NUL, and a stored key
+// (71 bytes when hashed) put through it again is unchanged.
+func importKey(raw string) string {
+	if n := len(raw); n >= 1 && n <= maxImportKey && !strings.ContainsRune(raw, 0) {
+		return raw
+	}
+	sum := sha256.Sum256([]byte(raw))
+	return "sha256:" + hex.EncodeToString(sum[:])
 }

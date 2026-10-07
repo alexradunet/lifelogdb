@@ -36,7 +36,10 @@ func recordedPeriods(s *S) {
 	for i, v := range vectors {
 		c := s.freshWith(F{Path: filepath.Join(s.dir, fmt.Sprintf("period-%d.db", i)), Hardened: true})
 		id := c.identity("period", "ui", "Synthetic study", nil, "")
-		c.must("INSERT INTO periods(id,start_boundary,end_boundary) VALUES(?,?,?)", id, v.Start, v.End)
+		if outcome := c.tryx("INSERT INTO periods(id,start_boundary,end_boundary) VALUES(?,?,?)", id, v.Start, v.End); outcome != "OK" {
+			s.K(fmt.Sprintf("period membership vector %d", i), false, outcome) // a refused boundary is a failed vector, not the end of the suite
+			continue
+		}
 		store := core.Store{DB: &db.DB{R: c.DB}}
 		got, err := store.LifePeriods(context.Background(), v.Day, v.AsOf, false)
 		s.K(fmt.Sprintf("period membership vector %d", i), err == nil && len(got) == 1 && got[0].Membership == v.Result, got, err)
@@ -108,9 +111,8 @@ func recordedPeriods(s *S) {
 	c.must("ROLLBACK TO period_owner_probe")
 	c.must("RELEASE period_owner_probe")
 	id := c.identity("period", "ui", "Synthetic trip", nil, "")
-	beforeInsert := c.n("SELECT revision FROM entities WHERE id=?", id)
 	c.must("INSERT INTO periods(id) VALUES(?)", id)
-	s.K("period detail insertion advances revision", c.n("SELECT revision FROM entities WHERE id=?", id) > beforeInsert)
+	s.K("period detail insertion is part of creation: revision 1 and updated_at = created_at", c.tab("SELECT revision, updated_at = created_at FROM entities WHERE id=?", id) == "1|1")
 	// Deliberately prepared owner without detail: a valid composite-FK target
 	// makes this a real identity-reassignment witness, not an error-prose test.
 	target := c.identity("period", "ui", "Alternate recorded trip", nil, "")
@@ -133,4 +135,92 @@ func recordedPeriods(s *S) {
 	s.K("period boundary edit advances revision", after.(int64) > before.(int64))
 	c.must("UPDATE periods SET start_boundary='2018' WHERE id=?", id)
 	s.K("period boundary no-op preserves revision", c.one("SELECT revision FROM entities WHERE id=?", id) == after)
+	periodBoundaryGrammar(s)
+}
+
+// boundaryVectors is the grammar of contract/period-boundaries.md written out, one raw string at a time, with what
+// each column must say: YYYY, YYYY-MM or YYYY-MM-DD in ASCII, a valid calendar value, at most one trailing ?, ~ or %,
+// and ".." only as an end. The answers are hand-checked against that grammar, not computed by the CHECKs: they were
+// recorded against the long CASE form of periods_start_boundary and periods_end_boundary first and are the
+// regression for the compact rtrim form that replaced it.
+var boundaryVectors = []struct {
+	boundary   string
+	start, end bool // accepted as start_boundary, as end_boundary
+}{
+	// accepted: the three precisions, each qualifier, the calendar's edges
+	{"2020", true, true}, {"2020?", true, true}, {"2020~", true, true}, {"2020%", true, true},
+	{"0000", true, true}, {"9999", true, true}, {"0000-01-01", true, true}, {"9999-12-31", true, true},
+	{"2020-01", true, true}, {"2020-12", true, true}, {"2020-06~", true, true}, {"2020-12?", true, true},
+	{"2020-12-31", true, true}, {"2020-12-31~", true, true}, {"2020-12-31%", true, true}, {"2020-12-31?", true, true},
+	{"2020-02-29", true, true}, {"2020-02-29?", true, true}, {"2000-02-29", true, true}, {"2019-02-28%", true, true},
+	{"2020-04-30", true, true}, {"2020-01-31", true, true},
+	// refused: a nominal value that is not a calendar value, qualified or not
+	{"2020-13", false, false}, {"2020-00", false, false}, {"2020-13?", false, false}, {"2020-00~", false, false},
+	{"2020-02-30", false, false}, {"2019-02-29", false, false}, {"2019-02-29?", false, false},
+	{"1900-02-29", false, false}, {"2100-02-29%", false, false}, {"2020-04-31", false, false},
+	{"2020-00-10", false, false}, {"2020-01-00", false, false}, {"2020-01-32", false, false}, {"2020-13-01", false, false},
+	// refused: not exactly four, seven or ten ASCII characters of the grammar
+	{"", false, false}, {"2020-", false, false}, {"-2020", false, false}, {"2020-1", false, false}, {"202", false, false},
+	{"20201", false, false}, {"2020-1-01", false, false}, {"2020-01-1", false, false}, {"2020-12-31 ", false, false},
+	{" 2020", false, false}, {"2020 ", false, false}, {"2020 ?", false, false}, {"2020-12-31T", false, false},
+	{"2020/01/01", false, false}, {"20200101", false, false}, {"2020-W01", false, false}, {"2020-12-311", false, false},
+	{"12020", false, false}, {"+2020", false, false}, {"-0001", false, false}, {"２０２０", false, false}, {"2020-１２", false, false},
+	{"2020é", false, false}, {"abcd", false, false}, {"20x0", false, false}, {"2020x12", false, false}, {"2020/12", false, false},
+	{"2020-1x", false, false}, {"2020-12-3x", false, false},
+	// refused: a qualifier is one character, last, and nothing else
+	{"?", false, false}, {"~", false, false}, {"%", false, false}, {"??", false, false}, {"2020??", false, false},
+	{"2020?~", false, false}, {"2020~?", false, false}, {"2020%%", false, false}, {"2020-12-31%%", false, false},
+	{"2020-12-31?~", false, false}, {"?2020", false, false}, {"20?20", false, false}, {"2020-?1", false, false},
+	{"2020?-01", false, false}, {"2020-01?-01", false, false}, {"2020-12*", false, false}, {"2020!", false, false},
+	// ".." is ongoing, an end only, and unqualified
+	{"..", false, true}, {"..?", false, false}, {"..~", false, false}, {"...", false, false}, {".", false, false},
+	{"2020..", false, false}, {"..2020", false, false}, {".. ", false, false},
+	// a NUL is not canonical ASCII, wherever it is. GLOB, length() and date() stop reading at it, so "2018\x00hidden"
+	// looks like the year 2018 to them: only the NUL guard refuses it ("2018?\x00hidden" the shape rule refuses too)
+	{"\x00", false, false}, {"2018\x00", false, false}, {"2018\x00hidden", false, false}, {"2018?\x00hidden", false, false},
+	{"2018-09\x00", false, false}, {"2018-09\x00hidden", false, false}, {"2018-09-15\x00x", false, false},
+	{"2018-09-15%\x00hidden", false, false}, {"\x002018", false, false}, {"2018\x00?", false, false}, {"..\x00hidden", false, false},
+}
+
+// periodBoundaryGrammar runs every vector through both boundary columns, on insert and on update, and checks that a
+// refused value leaves nothing behind. NULL is unknown and is accepted by both.
+func periodBoundaryGrammar(s *S) {
+	c := s.fresh()
+	for _, col := range []string{"start_boundary", "end_boundary"} {
+		for _, v := range boundaryVectors {
+			want := v.start
+			if col == "end_boundary" {
+				want = v.end
+			}
+			c.must("SAVEPOINT boundary_probe")
+			id := c.identity("period", "ui", "Boundary grammar", nil, "")
+			outcome := c.tryx("INSERT INTO periods(id,"+col+") VALUES(?,?)", id, v.boundary)
+			s.K(fmt.Sprintf("%s insert %q accepted=%v", col, v.boundary, want), (outcome == "OK") == want, outcome)
+			c.must("ROLLBACK TO boundary_probe")
+			c.must("RELEASE boundary_probe")
+		}
+	}
+	c.must("SAVEPOINT boundary_probe")
+	id := c.identity("period", "ui", "Boundary grammar update", nil, "")
+	c.must("INSERT INTO periods(id) VALUES(?)", id)
+	for _, col := range []string{"start_boundary", "end_boundary"} {
+		for _, v := range boundaryVectors {
+			want := v.start
+			if col == "end_boundary" {
+				want = v.end
+			}
+			outcome := c.tryx("UPDATE periods SET "+col+"=? WHERE id=?", v.boundary, id)
+			s.K(fmt.Sprintf("%s update %q accepted=%v", col, v.boundary, want), (outcome == "OK") == want, outcome)
+			c.must("UPDATE periods SET " + col + "=NULL")
+		}
+	}
+	c.must("ROLLBACK TO boundary_probe")
+	c.must("RELEASE boundary_probe")
+	for _, col := range []string{"start_boundary", "end_boundary"} {
+		c.must("SAVEPOINT boundary_probe")
+		id := c.identity("period", "ui", "Boundary unknown", nil, "")
+		s.K(col+" NULL is unknown and accepted", c.tryx("INSERT INTO periods(id,"+col+") VALUES(?,NULL)", id) == "OK")
+		c.must("ROLLBACK TO boundary_probe")
+		c.must("RELEASE boundary_probe")
+	}
 }

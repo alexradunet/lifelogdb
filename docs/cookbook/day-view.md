@@ -11,7 +11,7 @@ SELECT what, at, detail FROM (
     FROM entities e
    WHERE e.preferred_name_key = :day AND e.day = :day AND e.deleted_at IS NULL
   UNION ALL
-  SELECT 'page' || CASE WHEN e.updated_at > e.created_at THEN ' (edited)' ELSE '' END,
+  SELECT 'page' || CASE WHEN e.revision > 1 THEN ' (edited)' ELSE '' END,
          e.updated_at, p.title
     FROM entities e JOIN entity_names p ON p.entity_id = e.id AND p.name_key = e.preferred_name_key
    WHERE e.day = :day AND e.preferred_name_key <> :day AND e.deleted_at IS NULL
@@ -44,4 +44,6 @@ ORDER BY (at IS NOT NULL), at;
 ```
 
 A page shows on the day it was *written* (a link target the app created has no day, [D5](../decisions/D05-pages-and-day-pages.md)), flagged if
-edited since.
+edited since. "Edited" is the edit revision above 1, never two clock values compared: creating a page, with its owned
+name and typed row, leaves revision 1, and the clocks of separate statements need not agree
+(`lifelog_meta.edit_revisions`).

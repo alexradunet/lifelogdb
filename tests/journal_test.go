@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"fmt"
 	"strings"
 
 	"lifelog/internal/text"
@@ -11,6 +12,8 @@ import (
 // (cookbook/days-that-name), where the owner was (cookbook/where-was-i), and what stands in for recurrence,
 // events, with explicit planning kept separate from observed habits.
 func journal(s *S) {
+	journalDefinition(s)
+
 	// ---- the day page (pages_day_page)
 	c := s.fresh()
 	add := func(title string, day any) int64 { return c.addPage(title, day, "", text.TitleKey(title)) }
@@ -105,8 +108,11 @@ func journal(s *S) {
 	c.link(d29, office, "at")
 	c.link(d28, home, "at")
 	essay := c.pageW("Essay", "2026-09-29", "text")
-	// Establish an explicitly unedited fixture; name insertion is revision-bearing.
-	c.must("UPDATE entities SET updated_at=created_at WHERE id=?", essay)
+	// a page whose creation wrote two different clocks (an import keeps the note's own creation time) was never edited
+	imported, importErr := c.tryIdentity("page", "Imported note", M{"day": "2026-09-29", "body": "kept", "created_at": "2020-05-01T08:00:00.000Z", "updated_at": "2026-10-01T09:00:00.000Z", "source": "import:vault", "import_key": "notes/imported.md"})
+	if importErr != nil {
+		stop("imported fixture: %v", importErr)
+	}
 	c.page("Link target")
 	c.pageW("Yesterday essay", "2026-09-28", "x")
 	c.named("person", "Sam")
@@ -144,13 +150,19 @@ func journal(s *S) {
 		}
 	}
 	s.K("...undated items first, the day page leading", order, tab(rows))
+	flagged := func() []string {
+		var out []string
+		for _, r := range c.rows(DV, P{"day": "2026-09-29"}) {
+			if strings.Contains(val(r[0]), "(edited)") {
+				out = append(out, val(r[2]))
+			}
+		}
+		return out
+	}
+	s.K(`a page that was only created, with its owned name, is not flagged "(edited)", whatever its two clocks say`, len(flagged()) == 0 && c.n("select count(*) from entities where id in (?,?) and revision = 1", essay, imported) == 2, flagged())
 	pid := c.n("select entity_id from entity_names where name_key='essay'")
 	c.must("UPDATE entities SET body='text 2' WHERE id=?", pid)
-	edited := false
-	for _, r := range c.rows(DV, P{"day": "2026-09-29"}) {
-		edited = edited || (r[0] == "page (edited)" && r[2] == "Essay")
-	}
-	s.K(`an edited page is flagged "(edited)"`, edited)
+	s.K(`an edited page is flagged "(edited)"`, eq(flagged(), []string{"Essay"}), flagged())
 
 	// ---- cookbook/days-that-name: the days that name someone or somewhere
 	c = s.fresh()
@@ -220,4 +232,47 @@ func journal(s *S) {
 	c.named("person", "Ada", M{"birth_day": "1815-12-10"})
 	s.K("birthdays are a query over people.birth_day", c.tab("SELECT n.title FROM people pe JOIN entities e on e.id=pe.id JOIN entity_names n on n.entity_id=e.id and n.name_key=e.preferred_name_key WHERE strftime('%m-%d',pe.birth_day)='12-10'") == "Ada")
 	s.K("no event kinds are registered: attended and is-a are gone with events (D22)", c.n("select count(*) from link_kinds where kind in ('attended','is-a')") == 0)
+}
+
+// journalDefinition: entities.is_journal is the one stored definition of a journal day page (D5): the preferred key
+// is ten characters that round-trip through date(). The vectors are hand-checked, including a Julian day number that
+// date() accepts but does not give back. The scratch table below executes what the DDL relies on in SQLite: a CHECK
+// may read a VIRTUAL generated column, a trigger's NEW and OLD expose it, and it cannot be inserted into (so a writer
+// names its columns).
+func journalDefinition(s *S) {
+	c := s.fresh()
+	for _, v := range []struct {
+		key  string
+		want int64
+	}{
+		{"2026-01-01", 1}, {"0000-01-01", 1}, {"9999-12-31", 1}, {"2024-02-29", 1}, {"2026-12-31", 1},
+		{"2026-02-30", 0}, {"2026-13-01", 0}, {"2026-00-10", 0}, {"2023-02-29", 0}, {"2026-1-011", 0}, {"2026-01-0x", 0},
+		{"2026_01_01", 0}, {"abcdefghij", 0}, {"２０２６-01-01", 0}, {"2459000.50", 0}, {"1234567890", 0},
+		{"2026-9-3", 0}, {"2026-01-011", 0}, {"20260101", 0}, {"Diet", 0},
+	} {
+		day := any(nil)
+		if v.want == 1 {
+			day = v.key // a journal day page is its own day (entities_day_page)
+		}
+		id, err := c.tryIdentity("page", v.key, M{"day": day})
+		s.K(fmt.Sprintf("entities.is_journal of %q is %d", v.key, v.want), err == nil && c.n("SELECT is_journal FROM entities WHERE id=?", id) == v.want, err)
+	}
+	s.K("SELECT * returns the generated column, between day and created_at", c.col("SELECT name FROM pragma_table_xinfo('entities') ORDER BY cid")[4] == "is_journal" && c.n("SELECT count(*) FROM (SELECT * FROM entities) WHERE is_journal=1") == 5)
+
+	g := s.connect("")
+	g.must(`CREATE TABLE g(id INTEGER PRIMARY KEY, k TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'page',
+	  is_journal INTEGER NOT NULL GENERATED ALWAYS AS (length(k) = 10 AND date(k) IS k) VIRTUAL,
+	  CONSTRAINT g_plain CHECK (NOT is_journal OR kind = 'page')) STRICT;
+	  CREATE TABLE seen(what TEXT);
+	  CREATE TRIGGER g_insert BEFORE INSERT ON g BEGIN INSERT INTO seen VALUES ('insert ' || NEW.is_journal); END;
+	  CREATE TRIGGER g_update BEFORE UPDATE OF k ON g BEGIN INSERT INTO seen VALUES ('update ' || OLD.is_journal || '>' || NEW.is_journal); END;`)
+	s.K("a CHECK may read a VIRTUAL generated column: it refuses a journal key of another type", strings.Contains(g.tryx("INSERT INTO g(k,kind) VALUES ('2026-01-02','person')"), "g_plain"))
+	s.K("...and accepts a key that is not a date", g.tryx("INSERT INTO g(k,kind) VALUES ('foo','person')") == "OK")
+	s.K("...on UPDATE too", strings.Contains(g.tryx("UPDATE g SET k='2026-01-03' WHERE k='foo'"), "g_plain"))
+	g.must("INSERT INTO g(k) VALUES ('2026-01-01')")
+	s.K("a BEFORE INSERT trigger's NEW exposes the generated column", g.str("SELECT what FROM seen ORDER BY rowid DESC LIMIT 1") == "insert 1")
+	g.must("INSERT INTO g(k) VALUES ('bar')")
+	g.must("UPDATE g SET k='2026-03-03' WHERE k='bar'")
+	s.K("a BEFORE UPDATE OF trigger's OLD and NEW expose it, NEW from the new value", g.str("SELECT what FROM seen ORDER BY rowid DESC LIMIT 1") == "update 0>1")
+	s.K("a generated column cannot be inserted into, so a writer names its columns", strings.Contains(g.tryx("INSERT INTO g(k,is_journal) VALUES ('x',1)"), "generated"))
 }

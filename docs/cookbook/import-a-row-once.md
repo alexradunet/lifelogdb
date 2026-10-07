@@ -4,7 +4,8 @@
 fresh export years later), a phone replaying its offline queue, an agent retrying after a timeout whose
 first attempt did commit. It is the key the *sender* gives the row: the source's own id when there is
 one ([imports](../contract/imports.md) step 3), else a UUID the client makes once and resends unchanged. A row typed on the hub itself
-cannot arrive twice and has none. The same holds for measurements.
+cannot arrive twice and has none. The same holds for measurements. A key is 1 to 512 bytes without NUL
+(`entities_import_key`): an empty one is refused, and a longer source key is hashed by the sender.
 
 ```sql
 BEGIN IMMEDIATE;

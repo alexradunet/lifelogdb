@@ -3,7 +3,7 @@
 **Status:** accepted
 
 - **Decision.** A metric is a page ([D27](D27-a-metric-is-a-page.md)), so its title keeps a series canonical ('Weight'
-  and 'weight' resolve through one owned normalized name; rename retains the series id), and its unit never changes (`metrics_unit_fixed`). `measurements` holds one row per data point
+  and 'weight' resolve through one owned normalized name; rename retains the series id), and its unit never changes (`metrics_unit_fixed`) and is trimmed text of at most 32 bytes without NUL, empty only for a 0/1 habit: a scale names its range (`1-5`, `0-10`) (`metrics_unit`). `measurements` holds one row per data point
   and retains **valid time and recorded time**, following the distinction in temporal databases
   [R68](../research/references.md#r68): `day`/`taken_at` describes the observation; `created_at` is the
   writer-supplied recording timestamp. The append-only chain preserves corrections, so a recorded-time

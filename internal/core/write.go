@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
+	"strconv"
 	"strings"
 
 	"lifelog/internal/text"
@@ -230,15 +231,45 @@ func (t *Tx) Capture(day, entry string, mood *float64) (id int64, r Sync, err er
 
 func isMood(v float64) bool { return v >= 1 && v <= 5 && v == math.Trunc(v) }
 
-func validateMeasurementValue(metricID int64, metric string, habit bool, value *float64) error {
+// RangeUnit says whether a metric's unit names a scale's range: two numbers of ASCII digits around one hyphen with
+// the lower below the upper (`1-5`, `0-10`), and returns the two bounds. The range describes the metric, so a source
+// never writes it beside a number: the importer takes the number alone as the evidence of a reading, and the writer
+// holds every value of the metric to the whole numbers inside it. Only a 0/1 habit has no unit (D7, D24).
+func RangeUnit(unit string) (lo, hi float64, ok bool) {
+	a, b, found := strings.Cut(unit, "-")
+	if !found || !asciiDigits(a) || !asciiDigits(b) {
+		return 0, 0, false
+	}
+	// compared as digit strings, so a bound too large for a float64 still orders exactly (a unit is at most 32 bytes)
+	if a, b = strings.TrimLeft(a, "0"), strings.TrimLeft(b, "0"); len(a) > len(b) || len(a) == len(b) && a >= b {
+		return 0, 0, false
+	}
+	lo, _ = strconv.ParseFloat("0"+a, 64)
+	hi, _ = strconv.ParseFloat(b, 64)
+	return lo, hi, true
+}
+
+func asciiDigits(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return s != ""
+}
+
+// validateMeasurementValue checks a value against its metric's unit and habit state; a call with no metric yet
+// (an empty unit and no name) checks only that the value is a finite number.
+func validateMeasurementValue(unit, metric string, habit bool, value *float64) error {
 	if value == nil {
 		return nil
 	}
 	if math.IsNaN(*value) || math.IsInf(*value, 0) {
 		return invalid("value must be a finite number")
 	}
-	if metricID == 1 && !isMood(*value) {
-		return invalid("mood is 1-5")
+	if lo, hi, ok := RangeUnit(unit); ok && (*value != math.Trunc(*value) || *value < lo || *value > hi) {
+		from, to, _ := strings.Cut(unit, "-")
+		return invalid("%s is a %s scale: a whole number from %s to %s (D7)", metric, unit, from, to)
 	}
 	if habit && *value != 0 && *value != 1 {
 		return invalid("%s is a habit: 1 = done, 0 = not done (D24)", metric)
@@ -326,7 +357,7 @@ func (t *Tx) CreatePerson(title, name, birth, death, importKey string) (int64, b
 	if name == "" {
 		name = title
 	}
-	return t.createNamed("person", title, importKey, func(id int64) error {
+	return t.createNamed("person", title, "", importKey, func(id int64) error {
 		_, err := t.tx.ExecContext(t.ctx, `INSERT INTO people(id, name, birth_day, death_day) VALUES (?, ?, ?, ?)`,
 			id, name, nullIfEmpty(birth), nullIfEmpty(death))
 		return err
@@ -334,10 +365,12 @@ func (t *Tx) CreatePerson(title, name, birth, death, importKey string) (int64, b
 }
 
 func (t *Tx) CreatePlace(title, importKey string) (int64, bool, error) {
-	return t.createNamed("place", title, importKey, nil)
+	return t.createNamed("place", title, "", importKey, nil)
 }
 
-func (t *Tx) createNamed(typ, title, importKey string, extra func(int64) error) (int64, bool, error) {
+// createNamed inserts the entity with its whole body: creation is one write, so the new page is at revision 1
+// (lifelog_meta.edit_revisions). The caller syncs the body's wikilinks once the typed row exists.
+func (t *Tx) createNamed(typ, title, body, importKey string, extra func(int64) error) (int64, bool, error) {
 	if !text.ValidTitle(title) {
 		return 0, false, invalid("title %q is not a valid title (docs/contract/titles-and-wikilinks.md)", title)
 	}
@@ -350,7 +383,7 @@ func (t *Tx) createNamed(typ, title, importKey string, extra func(int64) error) 
 			return 0, false, orExists(err, p, title)
 		}
 	}
-	id, existing, err := t.insertPage(typ, title, text.TitleKey(title), nil, "", importKey)
+	id, existing, err := t.insertPage(typ, title, text.TitleKey(title), nil, body, importKey)
 	if err != nil || existing || extra == nil {
 		return id, existing, err
 	}
@@ -582,20 +615,20 @@ func (t *Tx) prepareReading(m Reading) (metric int64, err error) {
 	if m.TakenAt != "" && !IsInstant(m.TakenAt) {
 		return 0, invalid("taken_at %q is not a UTC instant like 2026-06-09T21:14:03.482Z", m.TakenAt)
 	}
-	if err := validateMeasurementValue(0, "", false, &m.Value); err != nil {
+	if err := validateMeasurementValue("", "", false, &m.Value); err != nil {
 		return 0, err
 	}
-	var metricTitle string
+	var metricTitle, unit string
 	var habit bool
-	err = t.tx.QueryRowContext(t.ctx, `SELECT m.id, m_name.title, EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id) FROM entities m JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key AND m.deleted_at IS NULL WHERE m.id = (SELECT entity_id FROM entity_names WHERE name_key = ?) AND m.entity_type = 'metric'`,
-		text.TitleKey(m.Metric)).Scan(&metric, &metricTitle, &habit)
+	err = t.tx.QueryRowContext(t.ctx, `SELECT m.id, m_name.title, coalesce((SELECT unit FROM metrics WHERE id = m.id), ''), EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id) FROM entities m JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key AND m.deleted_at IS NULL WHERE m.id = (SELECT entity_id FROM entity_names WHERE name_key = ?) AND m.entity_type = 'metric'`,
+		text.TitleKey(m.Metric)).Scan(&metric, &metricTitle, &unit, &habit)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, notFound("no metric %q: the owner registers metrics", m.Metric)
 	}
 	if err != nil {
 		return 0, err
 	}
-	if err := validateMeasurementValue(metric, metricTitle, habit, &m.Value); err != nil {
+	if err := validateMeasurementValue(unit, metricTitle, habit, &m.Value); err != nil {
 		return 0, err
 	}
 	return metric, nil
@@ -646,17 +679,17 @@ func (t *Tx) CorrectKeyed(wrong int64, value *float64, importKey string) (id int
 
 func (t *Tx) correct(wrong int64, value *float64, importKey string) (id int64, err error) {
 	var metric int64
-	var metricTitle string
+	var metricTitle, unit string
 	var habit bool
-	err = t.tx.QueryRowContext(t.ctx, `SELECT m.id, m_name.title, EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id)
-	                       FROM measurements me JOIN entities m ON m.id = me.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key WHERE me.id = ?`, wrong).Scan(&metric, &metricTitle, &habit)
+	err = t.tx.QueryRowContext(t.ctx, `SELECT m.id, m_name.title, coalesce((SELECT unit FROM metrics WHERE id = m.id), ''), EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id)
+	                       FROM measurements me JOIN entities m ON m.id = me.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key WHERE me.id = ?`, wrong).Scan(&metric, &metricTitle, &unit, &habit)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, notFound("no measurement %d", wrong)
 	}
 	if err != nil {
 		return 0, err
 	}
-	if err := validateMeasurementValue(metric, metricTitle, habit, value); err != nil {
+	if err := validateMeasurementValue(unit, metricTitle, habit, value); err != nil {
 		return 0, err
 	}
 	var v any

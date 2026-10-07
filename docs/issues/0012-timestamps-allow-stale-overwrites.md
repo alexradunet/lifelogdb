@@ -37,4 +37,6 @@ SQLite/filesystem I/O depend on a fake-clock scheduler.
 
 Open. [RFC 0006](../rfcs/0006-stable-names-and-life-periods.md) proposes a monotonic edit revision independent of
 wall-clock timestamps. Validation must cover committed changes, no-ops, rollback, cancellation and stale-write
-refusal through applicable client surfaces. No fix or permanent regression test has been added.
+refusal through applicable client surfaces. No fix or permanent regression test has been added. Which writes advance
+that revision, a page's creation and an incoming link, is the subject of [0041](0041-fresh-pages-read-as-edited.md)
+and [0042](0042-incoming-link-invalidates-an-open-edit.md).

@@ -11,7 +11,9 @@ import (
 // RegisterMetric makes a metric (D27): a page titled name, whose body is the note, and its metrics row with the
 // unit, one id. A plain page of that title becomes the metric, as a person is promoted (D20): a ghost, or a note
 // the owner wrote about it, whose text is kept — the note is written only to an empty body. Registering one that
-// exists with the same unit is a no-op; another unit is refused: a unit never changes (metrics_unit_fixed).
+// exists with the same unit is a no-op, and so is one with no unit where the existing metric is a scale: a source
+// that names Mood does not write its range (RangeUnit), so the request takes the metric as it is. Another unit is
+// refused: a unit never changes (metrics_unit_fixed).
 func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
 	if !text.ValidTitle(name) {
 		return false, invalid("metric name %q is not a valid title (docs/contract/titles-and-wikilinks.md)", name)
@@ -22,21 +24,22 @@ func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
 	}
 	switch {
 	case p == nil:
-		id, _, err := t.insertPage("metric", name, text.TitleKey(name), nil, "", "")
+		// the note is written by the insert: creation is one write, so the metric starts at revision 1
+		id, _, err := t.insertPage("metric", name, text.TitleKey(name), nil, note, "")
 		if err != nil {
 			return false, err
 		}
 		if _, err = t.tx.ExecContext(t.ctx, `INSERT INTO metrics(id, unit) VALUES (?, ?)`, id, unit); err != nil {
 			return false, err
 		}
-		_, err = t.SetBody(id, note)
+		_, err = t.syncWikilinks(id, note)
 		return err == nil, err
 	case p.Type == "metric":
 		var have string
 		if err := t.tx.QueryRowContext(t.ctx, `SELECT unit FROM metrics WHERE id = ?`, p.ID).Scan(&have); err != nil {
 			return false, err
 		}
-		if have != unit {
+		if _, _, scale := RangeUnit(have); have != unit && !(scale && unit == "") {
 			return false, conflict("metric %s exists with unit %q, not %q: a unit never changes; register a new metric", p.Title, have, unit)
 		}
 		return false, nil
@@ -78,9 +81,6 @@ func (t *Tx) StartHabit(metric, start, end string) error {
 	id, err := t.metricID(metric)
 	if err != nil {
 		return err
-	}
-	if id == 1 {
-		return invalid("the seeded Mood metric cannot be a habit")
 	}
 	var other bool
 	if err := t.tx.QueryRowContext(t.ctx, `SELECT EXISTS (SELECT 1 FROM measurement_values WHERE metric_id = ? AND value NOT IN (0, 1))`, id).

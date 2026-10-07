@@ -115,7 +115,7 @@ var catalog = []spec{
 		"POST", "/measurements/{id}/retract", []Field{path("id", "number", "Measurement id")}, false},
 	{"rename", "Rename", "Select a new preferred reference name without changing this identity, body or links. Previous names remain aliases. Another identity's name and journal dates are refused.",
 		"POST", "/pages/{id}/rename", []Field{path("id", "number", "Page id"), req("title", "text", "New title")}, false},
-	{"register-metric", "New metric", "Register a metric with a preferred reference name; its unit never changes ('' for a unitless 1-5 scale or a 0/1 habit); the note is the page's text.",
+	{"register-metric", "New metric", "Register a metric with a preferred reference name; its unit never changes ('' only for a 0/1 habit; a scale names its range, '1-5'); the note is the page's text. A metric that exists is returned as it is when the unit is the same, or when it is a scale and the unit is empty.",
 		"POST", "/metrics", []Field{req("name", "text", "Name"), opt("unit", "text", "Unit"), opt("note", "text", "Note")}, true},
 	{"start-habit", "Start habit", "Make a unitless metric a habit from a day on (end_day: the last day of a past period).",
 		"POST", "/metrics/{name}/periods", []Field{path("name", "text", "Metric"), req("start_day", "date", "From"), opt("end_day", "date", "Until")}, false},

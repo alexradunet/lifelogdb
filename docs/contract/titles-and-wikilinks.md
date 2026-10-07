@@ -204,7 +204,9 @@ pure-ASCII title); that a non-ASCII key is the *right* fold is the writing appli
 (principle 3) — a writer that computes it wrongly gets uniqueness wrong and nothing else. Resolve a
 `[[wikilink]]` with `WHERE entity_names.name_key = :key`, a search on its unique registry key (executed).
 
-**Day pages.** The journal is one page per local day, titled with that day: `2026-09-29`. Its `day`
+**Day pages.** The journal is one page per local day, titled with that day: `2026-09-29`. A page is a journal
+day page when its preferred key is a canonical local date, and the stored column `entities.is_journal` is that one
+definition (the day-page CHECKs, the triggers and the [integrity SQL](integrity-checks.md) read it). Its `day`
 is its title (`entities_day_page`), so a day page is the page whose title equals its day, and its key is
 its title (a pure-ASCII title). Capture appends to today's page and creates it on the first write
 ([capture](../cookbook/capture.md)); `[[2026-09-29]]` reaches it like any other title, and a link that names a day before anything

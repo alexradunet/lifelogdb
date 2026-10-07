@@ -46,9 +46,9 @@ func idGuards(s *S) {
 			s.K(table+" "+alias+" identity no-op preserves state", r == "OK" && state() == before && indexed(), r)
 		}
 	}
-	before := c.n("SELECT revision FROM entities WHERE id=?", a)
+	before, beforeMirror := c.n("SELECT revision FROM entities WHERE id=?", a), c.n("SELECT revision FROM entities WHERE id=?", b)
 	c.must("UPDATE links SET note='allowed' WHERE id=?", linkID)
-	s.K("permitted note edit preserves mirror identities and advances revisions", c.n("SELECT count(*) FROM links WHERE kind='friend' AND note='allowed'") == 2 && c.n("SELECT id FROM links WHERE from_id=? AND to_id=?", a, b) == linkID && c.n("SELECT revision FROM entities WHERE id=?", a) > before)
+	s.K("permitted note edit preserves mirror identities and advances revisions", c.n("SELECT count(*) FROM links WHERE kind='friend' AND note='allowed'") == 2 && c.n("SELECT id FROM links WHERE from_id=? AND to_id=?", a, b) == linkID && c.n("SELECT revision FROM entities WHERE id=?", a) > before && c.n("SELECT revision FROM entities WHERE id=?", b) > beforeMirror)
 	before = c.n("SELECT revision FROM entities WHERE id=?", name)
 	c.must("UPDATE entity_names SET title='STRASSE' WHERE id=?", nameID)
 	s.K("permitted equivalent spelling preserves registry identity and FTS", c.n("SELECT entity_id FROM entity_names WHERE id=?", nameID) == name && c.n("SELECT revision FROM entities WHERE id=?", name) > before && c.tryx("INSERT INTO entities_fts(entities_fts,rank) VALUES('integrity-check',1)") == "OK" && c.n("SELECT count(*) FROM entities_fts WHERE entities_fts MATCH 'strasse' AND rowid=?", name) == 1)

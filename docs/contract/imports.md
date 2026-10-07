@@ -29,8 +29,8 @@ DETACH s;
    and `'12.5kg'` into `12.5`, silently — a plain insert into the STRICT column converts `'12.5'` and
    rejects `'abc'` and `''`. A CSV empty field is `''`, not NULL, so optional columns go through
    `NULLIF(…, '')`; a `''` in `taken_at` fails its CHECK. A fourth, for links: **never `INSERT OR
-   REPLACE` into `links`** — on a symmetric kind the replace and the two mirror triggers keep firing
-   each other, and SQLite stops with `too many levels of trigger recursion` (executed). Use
+   REPLACE` into `links`** — it deletes the pair (and, on a symmetric kind, its mirror) and writes it again
+   under new ids (executed). Use
    `ON CONFLICT(from_id, to_id, kind) DO NOTHING`.
 3. **Identity and time.** `source` names the importer (`import:<name>`), `import_key` is the source's
    own id, `day` / `taken_at` / `tz` say when it happened, `created_at` is when you imported it — on
@@ -38,7 +38,16 @@ DETACH s;
    carries its key on `entities` ([import a row once](../cookbook/import-a-row-once.md)). **The key must come out the same on every run**: the source's own id
    (a Health Connect record's id; a note's path in its vault). A source without ids gets a key built from
    fields it never changes (a note's file name, the day of a reading) — and a change to one of them then
-   looks like a new row. The key deduplicates within one `source` only: the same reading from two
+   looks like a new row. **A key is 1 to 512 bytes without NUL** (`entities_import_key` and the same CHECK on
+   `sessions`, `tasks`, `task_occurrences` and `measurements`): the empty string is refused, not stored —
+   it would enter the unique index, and every later row of the source would be skipped as imported before.
+   A source key that can be longer is hashed by the importer, the same way on every run: the key becomes `sha256:`
+   followed by the 64 lowercase hexadecimal digits of the SHA-256 of the key's exact bytes (71 bytes in all). A key
+   that is 1 to 512 bytes without NUL is stored as it is, so exactly 512 bytes is not hashed and 513 is; a key with a
+   NUL byte is hashed too, never refused or cut. Hash the whole key, never a part, and a stored hashed key put through
+   the same rule is unchanged. An importer builds every key from fields the source never changes, so none is empty.
+   A CSV empty field is `''`, so an optional key goes through `NULLIF(…, '')` like the other optional columns.
+   The key deduplicates within one `source` only: the same reading from two
    sources is two rows, for the app to match and the owner to retract one. A file is the exception: it is found by
    the hash of its original, `files.sha256`, whatever its source, and kept once ([keep a file](../cookbook/keep-a-file.md)). A place's point
    comes from the owner, who names the place a photo was taken at ([the place of a photo](../cookbook/place-of-a-photo.md)): an

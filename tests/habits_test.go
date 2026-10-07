@@ -11,11 +11,19 @@ import (
 // day's habits and not their check-ins again; a day without a check-in is never assumed.
 func habits(s *S) {
 	habitInvalidReads(s)
-	mood := s.fresh()
-	s.K("Mood identity cannot start a habit", strings.HasPrefix(mood.habit(1, "2026-01-01", nil), "ERR") && mood.n("SELECT count(*) FROM habit_periods WHERE metric_id=1") == 0)
-	otherMood := mood.metric("Other binary", "")
-	mood.must("INSERT INTO habit_periods(metric_id,start_day,source) VALUES(?,'2026-01-01','ui')", otherMood)
-	s.K("habit update cannot reassign to Mood identity", strings.HasPrefix(mood.tryx("UPDATE habit_periods SET metric_id=1 WHERE metric_id=?", otherMood), "ERR") && mood.n("SELECT metric_id FROM habit_periods") == otherMood)
+	// A scale names its range as its unit ('1-5', '0-10'), so the one rule "a habit is a unitless metric" keeps every
+	// scale out of habits: the seeded Mood and a scale the owner registers (issue 0015).
+	scales := s.fresh()
+	s.K("Mood is seeded with its range as its unit", scales.str("SELECT unit FROM metrics WHERE id=1") == "1-5")
+	energy, pain := scales.metric("Energy", "1-5"), scales.metric("Pain", "0-10")
+	s.K("Mood, a scale with a unit, cannot start a habit", strings.Contains(scales.habit(1, "2026-01-01", nil), "unitless") && scales.n("SELECT count(*) FROM habit_periods WHERE metric_id=1") == 0)
+	s.K("a registered Energy 1-5 cannot start a habit", strings.Contains(scales.habit(energy, "2026-01-01", nil), "unitless") && scales.n("SELECT count(*) FROM habit_periods WHERE metric_id=?", energy) == 0)
+	s.K("a registered Pain 0-10 cannot start a habit", strings.Contains(scales.habit(pain, "2026-01-01", nil), "unitless") && scales.n("SELECT count(*) FROM habit_periods WHERE metric_id=?", pain) == 0)
+	binary := scales.metric("Other binary", "")
+	s.K("a unitless metric can start a habit, beside the refused scales", scales.habit(binary, "2026-01-01", nil) == "OK")
+	s.K("a habit cannot be reassigned to Mood", strings.Contains(scales.tryx("UPDATE habit_periods SET metric_id=1 WHERE metric_id=?", binary), "unitless") && scales.n("SELECT metric_id FROM habit_periods") == binary)
+	s.K("a habit cannot be reassigned to a registered scale", strings.Contains(scales.tryx("UPDATE habit_periods SET metric_id=? WHERE metric_id=?", energy, binary), "unitless") && scales.n("SELECT metric_id FROM habit_periods") == binary)
+	s.K("the database holding refused scales is clean", scales.integrityOK())
 	err := func(r string) bool { return strings.HasPrefix(r, "ERR") }
 
 	// ---- the table's rules

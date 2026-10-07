@@ -58,7 +58,7 @@ behavioral vectors remain in the [storage contract](README.md).
 | 24 | Where are the photos, the recordings and the scans? | `files` | `never stored in life.db`, `sha256`, `JPEG` |
 | 25 | Where is a place, and why does a day have one? | `places` | `never where the owner was`, `radius`, `at link` |
 | 26 | Can a type change reinterpret retained edges? | `typed_links`, `entities_endpoint_types` | `incoming`, `outgoing`, `retained` |
-| 27 | How are stale edits rejected when write clocks coincide? | `edit_revisions` | `monotonic`, `independent`, `no-ops`, `rollback`, `exhaustion` |
+| 27 | How are stale edits rejected when write clocks coincide, and what counts as an edit? | `edit_revisions` | `monotonic`, `independent`, `no-ops`, `rollback`, `exhaustion`, `creation is not an edit`, `never the page it points at` |
 | 28 | How does a session tombstone affect readings? | `measurement_scope` | `live session`, `NULL retraction`, `historical`, `scope` |
 | 29 | How do planning identities, stopping and lifecycle agree? | `planning` | `task`, `occurrence`, `tombstone` |
 | 30 | What do partial, qualified and ongoing period boundaries mean? | `periods` | `? uncertain`, `~ approximate`, `% both`, `incomparable`, `as_of` |

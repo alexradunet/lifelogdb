@@ -639,7 +639,7 @@ func createImportedPage(t *testing.T, f *fixture, file, title string) int64 {
 	var id int64
 	if err := f.s.Do(ctx, "import:notebook", func(tx *core.Tx) error {
 		var err error
-		id, _, err = tx.CreateImported(title, nil, entityKey(file, "page", title))
+		id, _, err = tx.CreateImported(title, nil, "", entityKey(file, "page", title))
 		return err
 	}); err != nil {
 		t.Fatal(err)

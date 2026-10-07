@@ -240,7 +240,7 @@ func (w *Workspace) bindPrepared(b *PreparedBatch, publish bool) error {
 }
 func preparedKey(profile, key, quantity string) string {
 	b, _ := json.Marshal([]string{"prepared-v1", profile, key, quantity})
-	return string(b)
+	return importKey(string(b))
 }
 func writePrepared(ctx context.Context, s *core.Store, b *PreparedBatch, dry bool) (*Report, error) {
 	return writePreparedAfter(ctx, s, b, dry, nil)

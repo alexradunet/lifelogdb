@@ -67,10 +67,8 @@ func graphSequence(s *S, operations []byte, label string) {
 	}
 	for pos := 0; pos+3 < len(operations); pos += 4 {
 		op, a, b := operations[pos]%8, people[int(operations[pos+1])%len(people)], people[int(operations[pos+2])%len(people)]
-		kind := "friend"
-		if operations[pos+3]&1 != 0 {
-			kind = "wikilink"
-		}
+		// a symmetric kind, a kind derived from bodies, and a plain directed one
+		kind := [...]string{"friend", "wikilink", "parent-of"}[operations[pos+3]%3]
 		var note any
 		switch (operations[pos+3] >> 1) % 3 {
 		case 1:
@@ -113,14 +111,26 @@ func graphSequence(s *S, operations []byte, label string) {
 			s.K(step+" no-op preserves revisions", c.tab(selectVersions) == versions)
 		}
 		check(step + " inside transaction")
-		changed := !maps.Equal(want, saved)
+		// Which pages a graph change advances (lifelog_meta.edit_revisions), from the rule and not from the triggers:
+		// a link is an edit of the page it leaves; a friendship is two rows, so of both pages; a wikilink
+		// is derived from the body, so only editing its note is an edit; no page is advanced by a link it receives.
+		advanced := map[int64]bool{}
+		if !maps.Equal(want, saved) {
+			switch {
+			case kind == "friend":
+				advanced[a], advanced[b] = true, true
+			case kind == "wikilink" && op != 2:
+			default:
+				advanced[a] = true
+			}
+		}
 		for i, row := range c.rows(selectVersions) {
-			id, revision := row[0].(int64), row[1].(int64)
-			old := oldVersions[i][1].(int64)
-			if changed && (id == a || id == b) {
+			id, revision, updated := row[0].(int64), row[1].(int64), row[2]
+			old, oldUpdated := oldVersions[i][1].(int64), oldVersions[i][2]
+			if advanced[id] {
 				s.K(step+" changed endpoint revision advances", revision > old, id, revision, old)
 			} else {
-				s.K(step+" unchanged endpoint revision stays fixed", revision == old, id, revision, old)
+				s.K(step+" unchanged endpoint revision stays fixed", revision == old && updated == oldUpdated, id, revision, old, updated, oldUpdated)
 			}
 		}
 		if op == 6 {

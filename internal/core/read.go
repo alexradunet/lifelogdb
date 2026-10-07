@@ -192,7 +192,7 @@ SELECT what, at, detail FROM (
     FROM entities p
    WHERE p.id = (SELECT entity_id FROM entity_names WHERE name_key = :day) AND p.deleted_at IS NULL
   UNION ALL
-  SELECT 'page' || CASE WHEN p.updated_at > p.created_at THEN ' (edited)' ELSE '' END,
+  SELECT 'page' || CASE WHEN p.revision > 1 THEN ' (edited)' ELSE '' END,
          p.updated_at, p_name.title
     FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
    WHERE p.day = :day AND p_name.title <> :day AND p.deleted_at IS NULL

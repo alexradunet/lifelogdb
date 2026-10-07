@@ -20,7 +20,7 @@ func addSourceFile(t *testing.T, f *fixture, file, body string) {
 
 func setupEvidence(t *testing.T, file, body string) *fixture {
 	t.Helper()
-	return setupEvidenceMetric(t, file, body, Metric{Name: "ferritin", Unit: "ng/mL", Note: "Ferritin (blood)"}, Metric{Name: "mood", Note: "1-5"})
+	return setupEvidenceMetric(t, file, body, Metric{Name: "ferritin", Unit: "ng/mL", Note: "Ferritin (blood)"}, Metric{Name: "mood", Note: "1-5"}, Metric{Name: "walk", Note: "1 = done that day"})
 }
 
 func setupEvidenceMetric(t *testing.T, file, body string, metrics ...Metric) *fixture {
@@ -419,7 +419,7 @@ func TestNumericSourceEvidence(t *testing.T) {
 	t.Run("unitless result word accepts without numeric token", func(t *testing.T) {
 		file := "Journal/2031-07-06.md"
 		f := setupEvidence(t, file, "evening walk done\n")
-		reading := map[string]any{"metric": "mood", "day": "2031-07-06", "value": "1"}
+		reading := map[string]any{"metric": "walk", "day": "2031-07-06", "value": "1"}
 		facts := map[string]any{"file": file, "writes": []any{map[string]any{"reading": reading, "quote": "evening walk done"}}}
 		if err := f.facts(t, file, facts); err != nil {
 			t.Fatal(err)
@@ -432,7 +432,7 @@ func TestNumericSourceEvidence(t *testing.T) {
 	t.Run("unitless result word rejects incompatible numeric token", func(t *testing.T) {
 		file := "Journal/2031-07-07.md"
 		f := setupEvidence(t, file, "evening walk 30 minutes\n")
-		reading := map[string]any{"metric": "mood", "day": "2031-07-07", "value": "1"}
+		reading := map[string]any{"metric": "walk", "day": "2031-07-07", "value": "1"}
 		facts := map[string]any{"file": file, "writes": []any{map[string]any{"reading": reading, "quote": "evening walk 30 minutes"}}}
 		if err := f.facts(t, file, facts); err != nil {
 			t.Fatal(err)

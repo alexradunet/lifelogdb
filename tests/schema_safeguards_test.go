@@ -15,6 +15,7 @@ func schemaSafeguards(s *S) {
 	fixedDetailOwnership(s)
 	fixedEntityCreation(s)
 	searchAccentSemantics(s)
+	schemaBounds(s)
 }
 
 func schemaTextNUL(s *S) {
@@ -166,7 +167,7 @@ func fixedEntityCreation(s *S) {
 	}
 	s.K("entity creation no-op allowed", c.tryx("UPDATE entities SET created_at=created_at WHERE id=?", id) == "OK" && c.tab("SELECT * FROM entities ORDER BY id") == before)
 	c.must("UPDATE entities SET body='Allowed edit' WHERE id=?", id)
-	s.K("ordinary body edit preserves creation time", c.str("SELECT created_at FROM entities WHERE id=?", id) == "2026-01-01T00:00:00.000Z" && c.n("SELECT revision FROM entities WHERE id=?", id) > 2)
+	s.K("ordinary body edit preserves creation time", c.str("SELECT created_at FROM entities WHERE id=?", id) == "2026-01-01T00:00:00.000Z" && c.n("SELECT revision FROM entities WHERE id=?", id) > 1)
 }
 
 func searchAccentSemantics(s *S) {

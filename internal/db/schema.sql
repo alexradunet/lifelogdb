@@ -23,10 +23,10 @@ INSERT INTO lifelog_meta(key, value) VALUES
   ('instants',  'every *_at column is an exact 24-character ASCII UTC ISO-8601 TEXT instant, years 0000..9999 and hours 00..23, with milliseconds, e.g. 2026-06-09T21:14:03.482Z, written by the app, never by a SQLite default (CURRENT_TIMESTAMP has no milliseconds and is not ISO-8601; a trigger writes strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')); fixed width, so it sorts as text; supplied clock timestamps may coincide or regress and do not encode commit order; CHECK strftime(''%Y-%m-%dT%H:%M:%fZ'', x) IS x; created_at, on every table that has it, is when the row was written to life.db, never back-dated; task completed_at is supplied completion evidence and reminder_override_at is a chosen future or past reminder instant, not an assertion that an event happened'),
   ('days',      'every *_day column (and day) is the LOCAL exact 10-character ASCII calendar date YYYY-MM-DD, years 0000..9999, where the thing happened for recorded facts, written by the app from the local calendar of the device that captured it (never a server''s), never recomputed from an instant; tasks.anchor_day, tasks.repeat_until_day, task_occurrences.due_day and date occurrence_key are chosen planning calendar days, not claims that an event happened; CHECK explicit ASCII shape and date(x) IS x (IS, not =: a CHECK passes on NULL, and date(''2026-9-3'') is NULL)'),
   ('measurement_scope', 'a new non-NULL measurement associated by session_id requires a live session; tombstones retain facts, NULL retraction remains allowed; active queries exclude tombstoned-session facts, explicit historical reads retain scope and lifecycle'),
-  ('planning', 'task project admission requires a live non-journal plain page; retained references forbid incompatible type changes and exclude ghost cleanup, while tombstones retain context; a one-off task commits with exactly one occurrence keyed once; occurrence admission requires a live task and a key in its immutable anchored sequence; open keys cannot exceed its current end, while explicit historical done/skipped outcomes may; shortening the end atomically skips existing open keys beyond it, preserves other outcomes, and forbids reopening those later keys; active planning reads and reminders exclude tombstoned tasks and occurrences, and reminders require an open occurrence'),
+  ('planning', 'task project admission requires a live non-journal plain page. Retained references forbid incompatible type changes and exclude ghost cleanup. Tombstones retain context. A one-off task commits with exactly one occurrence, keyed once. Occurrence admission requires a live task and a key in its immutable anchored sequence. Open keys cannot exceed the task''s current end; explicit historical done or skipped outcomes may. Shortening the end atomically skips existing open keys beyond it, preserves other outcomes and forbids reopening those later keys. Active planning reads and reminders exclude tombstoned tasks and occurrences. A reminder requires an open occurrence'),
   ('deletes',   'life data is never deleted except links rows: an entity is a tombstone (entities.deleted_at); revival clears the tombstone, so lifecycle transitions are not retained history; a measurement is corrected by inserting a row; BEFORE DELETE triggers enforce it on entities and every domain row; ordinary active reads filter lifecycle tombstones; explicit historical and append-only audits retain them; the registries (link_kinds, lifelog_meta) are the owner''s administrative rows, deletable while nothing references them (each CREATE comment says so)'),
-  ('source',    'entities, sessions, tasks, task_occurrences, links, measurements and habit_periods: source names the original inserter of the row, not the last editor or an audit trail (ui, cli, api, agent:<name>, import:<name>; schema for the rows this file seeds); written at insert, never changed; import_key is unique per source on entities, sessions, tasks and task_occurrences, and per source and metric on measurements'),
-  ('edit_revisions', 'entities.revision, sessions.revision, tasks.revision and task_occurrences.revision are monotonic integer edit tokens independent of updated_at; names, body, day, type, lifecycle, typed detail, habit period and incident link changes advance it; no-ops do not, rollback restores it, exhaustion refuses; clients compare the token inside BEGIN IMMEDIATE, never a timestamp; exact increment counts are not meaningful; planning edits advance the edited row; resolving inherited task context, lifecycle or reminder defaults requires comparing both task and occurrence tokens'),
+  ('source',    'entities, sessions, tasks, task_occurrences, links, measurements and habit_periods: source names the original inserter of the row, not the last editor or an audit trail (ui, cli, api, agent:<name>, import:<name>; schema for the rows this file seeds); written at insert, never changed; import_key is unique per source on entities, sessions, tasks and task_occurrences, and per source and metric on measurements; a present import_key is 1 to 512 bytes without NUL'),
+  ('edit_revisions', 'entities.revision, sessions.revision, tasks.revision and task_occurrences.revision are monotonic integer edit tokens independent of updated_at; creation is not an edit (nothing advances a row whose creation transaction is its only write: it keeps revision 1 and the updated_at its insert wrote, its owned preferred name and typed detail row included); a later change of the row''s own content advances it: names, body, day, type, lifecycle, typed detail, habit period and the links it leaves (a link advances only the page it leaves, never the page it points at; a wikilink is derived from the body and advances nothing; both rows of a symmetric link advance both pages); no-ops do not, rollback restores it, exhaustion refuses; clients compare the token inside BEGIN IMMEDIATE, never a timestamp; exact increment counts are not meaningful; planning edits advance the edited row; resolving inherited task context, lifecycle or reminder defaults requires comparing both task and occurrence tokens'),
   ('typed_links', 'both endpoints of every retained link must satisfy link_kinds; a type change refuses invalid incoming or outgoing edges atomically; semantic integrity checks the registry independently of structural integrity'),
   ('writers',   'one writing application; every connection sets foreign_keys=ON, recursive_triggers=ON, synchronous=FULL, trusted_schema=OFF and starts write transactions with BEGIN IMMEDIATE; every other tool opens the file read-only; imports use INSERT ... ON CONFLICT DO NOTHING, never OR IGNORE (skips CHECK/NOT NULL violations silently) or OR REPLACE (a delete)'),
   ('sqlite',    'writers need SQLite >= 3.51.3 (fixes a WAL race between concurrent writers and checkpoints); migrations need >= 3.53 (ALTER TABLE ADD/DROP CONSTRAINT); CHECKs use only functions every such version has'),
@@ -44,26 +44,35 @@ CREATE TABLE entities (
   -- may have a day without being journal days. Their aliases and preferred names remain editable.
   -- Body saves synchronize wikilinks by resolved entity id (D19); invalid names do not block a save.
   -- Type changes refuse any incoming or outgoing link whose registered endpoint types would become invalid;
-  -- no retained edge is silently removed. Nothing is ever deleted: deleted_at is the tombstone (D11).
+  -- no retained edge is silently removed. Nothing is ever deleted: deleted_at is the tombstone (D11), never
+  -- earlier than created_at (entities_deleted_after_created).
   -- import_key: the key a writer that may send the row twice gives it (an importer, an offline phone, a
   -- retrying agent); whether the row was imported is source, not import_key. Unique per source, written at
   -- insert and never changed. Insert with ON CONFLICT(source, import_key) WHERE import_key IS NOT NULL
-  -- DO NOTHING RETURNING id: no id back = imported before, so no domain row is inserted.
-  preferred_name_key TEXT NOT NULL,       -- selects exactly one owned registry row; spelling lives only there
-  day         TEXT CONSTRAINT entities_day CHECK (day IS NULL OR length(day) = 10 AND day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(day) IS day),
-  body        TEXT NOT NULL DEFAULT '',   -- CommonMark, including journal and file text
+  -- DO NOTHING RETURNING id: no id back = imported before, so no domain row is inserted. A key is 1 to 512
+  -- bytes without NUL (entities_import_key): an empty key would make every later row look imported before.
+  -- Column order is part of the file: body, the one large text, is last, so the small columns before it
+  -- (deleted_at, entity_type, ...) are read without walking the overflow pages of a long body.
   id          INTEGER PRIMARY KEY,
   entity_type TEXT NOT NULL CONSTRAINT entities_entity_type
                   CHECK (entity_type IN ('page','person','place','metric','file','period')),
+  preferred_name_key TEXT NOT NULL,       -- selects exactly one owned registry row; spelling lives only there
+  day         TEXT CONSTRAINT entities_day CHECK (day IS NULL OR length(day) = 10 AND day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(day) IS day),
+  -- The one definition of "a journal day page" (D5): the preferred key is a canonical local date. The CHECKs and
+  -- triggers on entities rows read this column, and so does the integrity SQL. entity_names.name_key has no such
+  -- column: a rule about a NAME being date-shaped spells the predicate out.
+  is_journal  INTEGER NOT NULL GENERATED ALWAYS AS (length(preferred_name_key) = 10 AND date(preferred_name_key) IS preferred_name_key) VIRTUAL,
   created_at  TEXT NOT NULL CONSTRAINT entities_created_at CHECK (length(created_at) = 24 AND created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z' AND substr(created_at,12,2) BETWEEN '00' AND '23' AND strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at),   -- the write time (lifelog_meta.instants)
   updated_at  TEXT NOT NULL CONSTRAINT entities_updated_at CHECK (length(updated_at) = 24 AND updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z' AND substr(updated_at,12,2) BETWEEN '00' AND '23' AND strftime('%Y-%m-%dT%H:%M:%fZ', updated_at) IS updated_at),   -- kept by the *_touch triggers
   revision    INTEGER NOT NULL DEFAULT 1 CONSTRAINT entities_revision CHECK (revision >= 1), -- edit token, independent of the clock; overflow refuses the write
   deleted_at  TEXT     CONSTRAINT entities_deleted_at CHECK (deleted_at IS NULL OR length(deleted_at) = 24 AND deleted_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z' AND substr(deleted_at,12,2) BETWEEN '00' AND '23' AND strftime('%Y-%m-%dT%H:%M:%fZ', deleted_at) IS deleted_at),   -- the tombstone
   source      TEXT NOT NULL CONSTRAINT entities_source CHECK (instr(source, char(0)) = 0 AND length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*'),   -- the writer (lifelog_meta.source)
-  import_key  TEXT,                        -- the sender's key, unique per source; NULL = sent once. Imported or not: source
+  import_key  TEXT CONSTRAINT entities_import_key CHECK (import_key IS NULL OR (instr(import_key, char(0)) = 0 AND length(CAST(import_key AS BLOB)) BETWEEN 1 AND 512)),   -- the sender's key, unique per source; NULL = sent once. Imported or not: source
+  body        TEXT NOT NULL DEFAULT '',   -- CommonMark, including journal and file text
   UNIQUE (id, entity_type),
-  CONSTRAINT entities_day_page CHECK (NOT (length(preferred_name_key) = 10 AND date(preferred_name_key) IS preferred_name_key) OR day IS preferred_name_key),
-  CONSTRAINT entities_day_page_plain CHECK (NOT (length(preferred_name_key) = 10 AND date(preferred_name_key) IS preferred_name_key) OR entity_type = 'page'),
+  CONSTRAINT entities_day_page CHECK (NOT is_journal OR day IS preferred_name_key),
+  CONSTRAINT entities_day_page_plain CHECK (NOT is_journal OR entity_type = 'page'),
+  CONSTRAINT entities_deleted_after_created CHECK (deleted_at IS NULL OR deleted_at >= created_at),
   FOREIGN KEY (id, preferred_name_key) REFERENCES entity_names(entity_id, name_key) DEFERRABLE INITIALLY DEFERRED
 ) STRICT;
 CREATE UNIQUE INDEX entities_import ON entities(source, import_key) WHERE import_key IS NOT NULL;
@@ -102,7 +111,7 @@ CREATE TABLE entity_names (
                'COM1','COM2','COM3','COM4','COM5','COM6','COM7','COM8','COM9','COM¹','COM²','COM³',
                'LPT1','LPT2','LPT3','LPT4','LPT5','LPT6','LPT7','LPT8','LPT9','LPT¹','LPT²','LPT³'))
 ) STRICT;
-CREATE INDEX entities_day ON entities(day);
+CREATE INDEX entities_day ON entities(day) WHERE day IS NOT NULL;   -- day view; a link-target page has no day
 CREATE TRIGGER entity_names_fixed BEFORE UPDATE ON entity_names
  WHEN NEW.id IS NOT OLD.id OR NEW.entity_id IS NOT OLD.entity_id OR NEW.name_key IS NOT OLD.name_key
 BEGIN SELECT RAISE(ABORT, 'name keys and ownership are immutable'); END;
@@ -111,7 +120,7 @@ BEGIN SELECT RAISE(ABORT, 'names remain reserved, including tombstones'); END;
 CREATE TRIGGER entity_names_day_insert BEFORE INSERT ON entity_names BEGIN
  SELECT RAISE(ABORT, 'a journal day has only its canonical date name')
  WHERE EXISTS (SELECT 1 FROM entities e WHERE e.id = NEW.entity_id
-   AND ((length(e.preferred_name_key) = 10 AND date(e.preferred_name_key) IS e.preferred_name_key
+   AND ((e.is_journal
          AND (NEW.name_key IS NOT e.preferred_name_key OR NEW.title IS NOT e.preferred_name_key))
      OR (length(NEW.name_key) = 10 AND date(NEW.name_key) IS NEW.name_key AND e.preferred_name_key IS NOT NEW.name_key)));
 END;
@@ -123,8 +132,8 @@ CREATE TRIGGER entities_day_identity BEFORE UPDATE OF preferred_name_key ON enti
  WHEN NEW.preferred_name_key IS NOT OLD.preferred_name_key
 BEGIN
  SELECT RAISE(ABORT, 'journal day identity cannot be renamed or acquired through aliases')
- WHERE (length(OLD.preferred_name_key) = 10 AND date(OLD.preferred_name_key) IS OLD.preferred_name_key)
-    OR (length(NEW.preferred_name_key) = 10 AND date(NEW.preferred_name_key) IS NEW.preferred_name_key
+ WHERE OLD.is_journal
+    OR (NEW.is_journal
         AND EXISTS (SELECT 1 FROM entity_names n WHERE n.entity_id = OLD.id AND n.name_key IS NOT NEW.preferred_name_key));
 END;
 
@@ -179,7 +188,8 @@ CREATE TABLE people (
   -- ('Sam (barber)' tells two Sams apart), its body holds the prose; name is the editable full name.
   id          INTEGER PRIMARY KEY,
   entity_type TEXT NOT NULL DEFAULT 'person' CONSTRAINT people_entity_type CHECK (entity_type = 'person'),
-  name        TEXT NOT NULL,
+  name        TEXT NOT NULL CONSTRAINT people_name CHECK (instr(name, char(0)) = 0 AND name = trim(name)
+                           AND length(CAST(name AS BLOB)) BETWEEN 1 AND 240),   -- bytes, like a title
   birth_day   TEXT CONSTRAINT people_birth_day CHECK (birth_day IS NULL OR length(birth_day) = 10 AND birth_day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(birth_day) IS birth_day),
   death_day   TEXT CONSTRAINT people_death_day CHECK (death_day IS NULL OR length(death_day) = 10 AND death_day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(death_day) IS death_day),
   FOREIGN KEY (id, entity_type) REFERENCES entities(id, entity_type),
@@ -224,73 +234,21 @@ CREATE TABLE periods (
   entity_type TEXT NOT NULL DEFAULT 'period' CONSTRAINT periods_entity_type CHECK (entity_type='period'),
   start_boundary TEXT CONSTRAINT periods_start_boundary CHECK (start_boundary IS NULL
       OR (instr(start_boundary, char(0)) = 0
-      AND (((CASE WHEN substr(start_boundary,-1) IN ('?','~','%')
-        THEN substr(start_boundary,1,length(start_boundary)-1)
-        ELSE start_boundary END) GLOB '[0-9][0-9][0-9][0-9]'
-      OR (CASE WHEN substr(start_boundary,-1) IN ('?','~','%')
-        THEN substr(start_boundary,1,length(start_boundary)-1)
-        ELSE start_boundary END) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'
-      OR (CASE WHEN substr(start_boundary,-1) IN ('?','~','%')
-        THEN substr(start_boundary,1,length(start_boundary)-1)
-        ELSE start_boundary END) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')
-      AND date((CASE length((CASE WHEN substr(start_boundary,-1) IN ('?','~','%')
-        THEN substr(start_boundary,1,length(start_boundary)-1)
-        ELSE start_boundary END)) WHEN 4
-        THEN (CASE WHEN substr(start_boundary,-1) IN ('?','~','%')
-        THEN substr(start_boundary,1,length(start_boundary)-1)
-        ELSE start_boundary END)||'-01-01' WHEN 7
-        THEN (CASE WHEN substr(start_boundary,-1) IN ('?','~','%')
-        THEN substr(start_boundary,1,length(start_boundary)-1)
-        ELSE start_boundary END)||'-01'
-        ELSE (CASE WHEN substr(start_boundary,-1) IN ('?','~','%')
-        THEN substr(start_boundary,1,length(start_boundary)-1)
-        ELSE start_boundary END) END)) IS (CASE length((CASE WHEN substr(start_boundary,-1) IN ('?','~','%')
-        THEN substr(start_boundary,1,length(start_boundary)-1)
-        ELSE start_boundary END)) WHEN 4
-        THEN (CASE WHEN substr(start_boundary,-1) IN ('?','~','%')
-        THEN substr(start_boundary,1,length(start_boundary)-1)
-        ELSE start_boundary END)||'-01-01' WHEN 7
-        THEN (CASE WHEN substr(start_boundary,-1) IN ('?','~','%')
-        THEN substr(start_boundary,1,length(start_boundary)-1)
-        ELSE start_boundary END)||'-01'
-        ELSE (CASE WHEN substr(start_boundary,-1) IN ('?','~','%')
-        THEN substr(start_boundary,1,length(start_boundary)-1)
-        ELSE start_boundary END) END)))),
+      AND length(start_boundary) - length(rtrim(start_boundary, '?~%')) <= 1   -- rtrim strips every trailing qualifier: at most one
+      AND CASE length(rtrim(start_boundary, '?~%'))
+        WHEN 4  THEN rtrim(start_boundary, '?~%') GLOB '[0-9][0-9][0-9][0-9]'
+        WHEN 7  THEN rtrim(start_boundary, '?~%') GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]' AND substr(start_boundary, 6, 2) BETWEEN '01' AND '12'
+        WHEN 10 THEN rtrim(start_boundary, '?~%') GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(rtrim(start_boundary, '?~%')) IS rtrim(start_boundary, '?~%')
+        ELSE 0 END)),
   end_boundary TEXT CONSTRAINT periods_end_boundary CHECK (end_boundary IS NULL
       OR (instr(end_boundary, char(0)) = 0
-      AND (end_boundary='..'
-      OR (((CASE WHEN substr(end_boundary,-1) IN ('?','~','%')
-        THEN substr(end_boundary,1,length(end_boundary)-1)
-        ELSE end_boundary END) GLOB '[0-9][0-9][0-9][0-9]'
-      OR (CASE WHEN substr(end_boundary,-1) IN ('?','~','%')
-        THEN substr(end_boundary,1,length(end_boundary)-1)
-        ELSE end_boundary END) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'
-      OR (CASE WHEN substr(end_boundary,-1) IN ('?','~','%')
-        THEN substr(end_boundary,1,length(end_boundary)-1)
-        ELSE end_boundary END) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')
-      AND date((CASE length((CASE WHEN substr(end_boundary,-1) IN ('?','~','%')
-        THEN substr(end_boundary,1,length(end_boundary)-1)
-        ELSE end_boundary END)) WHEN 4
-        THEN (CASE WHEN substr(end_boundary,-1) IN ('?','~','%')
-        THEN substr(end_boundary,1,length(end_boundary)-1)
-        ELSE end_boundary END)||'-01-01' WHEN 7
-        THEN (CASE WHEN substr(end_boundary,-1) IN ('?','~','%')
-        THEN substr(end_boundary,1,length(end_boundary)-1)
-        ELSE end_boundary END)||'-01'
-        ELSE (CASE WHEN substr(end_boundary,-1) IN ('?','~','%')
-        THEN substr(end_boundary,1,length(end_boundary)-1)
-        ELSE end_boundary END) END)) IS (CASE length((CASE WHEN substr(end_boundary,-1) IN ('?','~','%')
-        THEN substr(end_boundary,1,length(end_boundary)-1)
-        ELSE end_boundary END)) WHEN 4
-        THEN (CASE WHEN substr(end_boundary,-1) IN ('?','~','%')
-        THEN substr(end_boundary,1,length(end_boundary)-1)
-        ELSE end_boundary END)||'-01-01' WHEN 7
-        THEN (CASE WHEN substr(end_boundary,-1) IN ('?','~','%')
-        THEN substr(end_boundary,1,length(end_boundary)-1)
-        ELSE end_boundary END)||'-01'
-        ELSE (CASE WHEN substr(end_boundary,-1) IN ('?','~','%')
-        THEN substr(end_boundary,1,length(end_boundary)-1)
-        ELSE end_boundary END) END))))),
+      AND (end_boundary = '..'
+        OR (length(end_boundary) - length(rtrim(end_boundary, '?~%')) <= 1   -- rtrim strips every trailing qualifier: at most one
+        AND CASE length(rtrim(end_boundary, '?~%'))
+          WHEN 4  THEN rtrim(end_boundary, '?~%') GLOB '[0-9][0-9][0-9][0-9]'
+          WHEN 7  THEN rtrim(end_boundary, '?~%') GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]' AND substr(end_boundary, 6, 2) BETWEEN '01' AND '12'
+          WHEN 10 THEN rtrim(end_boundary, '?~%') GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(rtrim(end_boundary, '?~%')) IS rtrim(end_boundary, '?~%')
+          ELSE 0 END)))),
   CONSTRAINT periods_order CHECK (start_boundary IS NULL OR end_boundary IS NULL OR end_boundary='..'
     OR substr(start_boundary,-1) IN ('?','~','%') OR substr(end_boundary,-1) IN ('?','~','%')
     OR (CASE length(start_boundary) WHEN 4 THEN start_boundary||'-01-01' WHEN 7 THEN start_boundary||'-01' ELSE start_boundary END) <= (CASE length(end_boundary) WHEN 4 THEN end_boundary||'-12-31' WHEN 7 THEN CASE WHEN substr(end_boundary,6,2)='12' THEN end_boundary||'-31' ELSE date(end_boundary||'-01','+1 month','-1 day') END ELSE end_boundary END)),
@@ -301,9 +259,6 @@ CREATE TRIGGER periods_fixed BEFORE UPDATE ON periods
 BEGIN SELECT RAISE(ABORT,'period identity is immutable'); END;
 CREATE TRIGGER periods_no_delete BEFORE DELETE ON periods
 BEGIN SELECT RAISE(ABORT,'periods are tombstoned through their named identity'); END;
-CREATE TRIGGER periods_touch_insert AFTER INSERT ON periods BEGIN
- UPDATE entities SET revision=revision+1,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=NEW.id;
-END;
 CREATE TRIGGER periods_touch_update AFTER UPDATE OF start_boundary,end_boundary ON periods
  WHEN NEW.start_boundary IS NOT OLD.start_boundary OR NEW.end_boundary IS NOT OLD.end_boundary
 BEGIN
@@ -321,7 +276,8 @@ CREATE TABLE metrics (
   -- A metric registered by mistake is tombstoned, never deleted (D11); its readings stay life data.
   id          INTEGER PRIMARY KEY,
   entity_type TEXT NOT NULL DEFAULT 'metric' CONSTRAINT metrics_entity_type CHECK (entity_type = 'metric'),
-  unit        TEXT NOT NULL DEFAULT '',   -- 'kg', 'bpm', 'h'; '' for 1-5 scales and 0/1 habits
+  unit        TEXT NOT NULL DEFAULT '' CONSTRAINT metrics_unit CHECK (instr(unit, char(0)) = 0 AND unit = trim(unit)
+                           AND length(CAST(unit AS BLOB)) <= 32),   -- 'kg', 'bpm', 'h'; '' only for 0/1 habits; a scale names its range ('1-5', '0-10')
   FOREIGN KEY (id, entity_type) REFERENCES entities(id, entity_type)
 ) STRICT;
 CREATE TRIGGER metrics_unit_fixed BEFORE UPDATE OF unit ON metrics
@@ -338,8 +294,8 @@ BEGIN IMMEDIATE;
 INSERT INTO entities(id, entity_type, preferred_name_key, body, created_at, updated_at, source) VALUES
   (1, 'metric', 'mood', '1-5; attached to its day page via measurements.captured_with_id when posted', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'schema');
 INSERT INTO entity_names(entity_id, title, name_key) VALUES (1, 'Mood', 'mood');
+INSERT INTO metrics(id, unit) VALUES (1, '1-5');
 COMMIT;
-INSERT INTO metrics(id, unit) VALUES (1, '');
 
 CREATE TABLE files (
   -- The owning id is immutable (files_identity_fixed), including through rowid aliases.
@@ -378,8 +334,9 @@ CREATE TABLE sessions (
  -- Lightweight recorded sessions, not named/graph objects. kind is a plain non-journal page.
  -- UTC and unresolved local endpoints are exclusive; start required, end may be unavailable.
  -- Reporting day is independent attribution. Zone labels are supplied UNVERIFIED claims, never inferred.
- -- Source keys are lossless TEXT, unique per source, not parsed numbers or portable local IDs.
+ -- Source keys are lossless TEXT, unique per source, not parsed numbers or portable local IDs; 1 to 512 bytes, no NUL.
  -- Current editable contents plus snapshots; versioned lifecycle, immutable provenance and no hard deletes.
+ -- A tombstone is never earlier than created_at (sessions_deleted_after_created).
  id INTEGER PRIMARY KEY,
  kind_id INTEGER NOT NULL,
  kind_entity_type TEXT NOT NULL DEFAULT 'page' CONSTRAINT sessions_kind_entity_type CHECK (kind_entity_type='page'),
@@ -462,11 +419,12 @@ CREATE TABLE sessions (
       AND strftime('%Y-%m-%dT%H:%M:%fZ',deleted_at) IS deleted_at),
  revision INTEGER NOT NULL DEFAULT 1 CONSTRAINT sessions_revision CHECK (revision>=1),
  source TEXT NOT NULL CONSTRAINT sessions_source CHECK (instr(source, char(0)) = 0 AND length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*'),
- import_key TEXT,
+ import_key TEXT CONSTRAINT sessions_import_key CHECK (import_key IS NULL OR (instr(import_key, char(0)) = 0 AND length(CAST(import_key AS BLOB)) BETWEEN 1 AND 512)),
  FOREIGN KEY(kind_id,kind_entity_type) REFERENCES entities(id,entity_type),
  CONSTRAINT sessions_start_basis CHECK ((start_at IS NULL)<>(start_local IS NULL)),
  CONSTRAINT sessions_end_basis CHECK (end_at IS NULL OR end_local IS NULL),
- CONSTRAINT sessions_utc_order CHECK (start_at IS NULL OR end_at IS NULL OR end_at>=start_at)
+ CONSTRAINT sessions_utc_order CHECK (start_at IS NULL OR end_at IS NULL OR end_at>=start_at),
+ CONSTRAINT sessions_deleted_after_created CHECK (deleted_at IS NULL OR deleted_at>=created_at)
 ) STRICT;
 CREATE UNIQUE INDEX sessions_import ON sessions(source,import_key) WHERE import_key IS NOT NULL;
 CREATE INDEX sessions_day_kind ON sessions(day,kind_id);
@@ -480,12 +438,12 @@ BEGIN SELECT RAISE(ABORT,'sessions are tombstoned, never deleted'); END;
 CREATE TRIGGER sessions_kind_insert BEFORE INSERT ON sessions BEGIN
  SELECT RAISE(ABORT,'session kind must be a live non-journal plain page') WHERE NOT EXISTS
  (SELECT 1 FROM entities e WHERE e.id=NEW.kind_id AND e.entity_type='page' AND e.deleted_at IS NULL
- AND NOT (length(e.preferred_name_key)=10 AND date(e.preferred_name_key) IS e.preferred_name_key));
+ AND NOT e.is_journal);
 END;
 CREATE TRIGGER sessions_kind_update BEFORE UPDATE OF kind_id ON sessions WHEN NEW.kind_id IS NOT OLD.kind_id BEGIN
  SELECT RAISE(ABORT,'session kind must be a live non-journal plain page') WHERE NOT EXISTS
  (SELECT 1 FROM entities e WHERE e.id=NEW.kind_id AND e.entity_type='page' AND e.deleted_at IS NULL
- AND NOT (length(e.preferred_name_key)=10 AND date(e.preferred_name_key) IS e.preferred_name_key));
+ AND NOT e.is_journal);
 END;
 CREATE TRIGGER sessions_touch AFTER UPDATE OF kind_id,day,start_at,start_local,start_offset,start_zone_unverified,end_at,end_local,end_offset,end_zone_unverified,deleted_at ON sessions WHEN NEW.kind_id IS NOT OLD.kind_id
       OR NEW.day IS NOT OLD.day
@@ -513,9 +471,10 @@ CREATE TABLE tasks (
  -- A default reminder is one local minute clock on the current due day in a chosen IANA zone. Both are absent
  -- or present; unknown zones remain unresolved, never silently UTC. A repeated clock uses the earlier instant;
  -- a missing clock shifts by the gap; a skipped entire local date is unresolved. Full resolution: contract/planning.md.
- -- Tombstones retain this record; cross-table active-read exclusions are lifelog_meta.planning.
+ -- Tombstones retain this record, never earlier than created_at (tasks_deleted_after_created); cross-table
+ -- active-read exclusions are lifelog_meta.planning. import_key is 1 to 512 bytes without NUL, as on entities.
  id INTEGER PRIMARY KEY,
- label TEXT NOT NULL CONSTRAINT tasks_label CHECK (instr(label,char(0))=0 AND length(trim(label))>=1),
+ label TEXT NOT NULL CONSTRAINT tasks_label CHECK (instr(label,char(0))=0 AND label=trim(label) AND length(trim(label))>=1),
  project_page_id INTEGER,
  project_entity_type TEXT NOT NULL DEFAULT 'page' CONSTRAINT tasks_project_entity_type CHECK (project_entity_type='page'),
  repeat_unit TEXT CONSTRAINT tasks_repeat_unit CHECK (repeat_unit IS NULL OR repeat_unit IN ('day','week','month','year')),
@@ -541,11 +500,12 @@ CREATE TABLE tasks (
       AND strftime('%Y-%m-%dT%H:%M:%fZ',deleted_at) IS deleted_at)),
  revision INTEGER NOT NULL DEFAULT 1 CONSTRAINT tasks_revision CHECK (revision>=1),
  source TEXT NOT NULL CONSTRAINT tasks_source CHECK (instr(source,char(0))=0 AND length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*'),
- import_key TEXT,
+ import_key TEXT CONSTRAINT tasks_import_key CHECK (import_key IS NULL OR (instr(import_key,char(0))=0 AND length(CAST(import_key AS BLOB)) BETWEEN 1 AND 512)),
  once_key TEXT GENERATED ALWAYS AS (CASE WHEN repeat_unit IS NULL THEN 'once' END) VIRTUAL,
  CONSTRAINT tasks_recurrence CHECK ((repeat_unit IS NULL AND repeat_every IS NULL AND anchor_day IS NULL AND repeat_until_day IS NULL)
       OR (repeat_unit IS NOT NULL AND repeat_every IS NOT NULL AND anchor_day IS NOT NULL)),
  CONSTRAINT tasks_reminder_pair CHECK ((reminder_local_time IS NULL)=(reminder_zone IS NULL)),
+ CONSTRAINT tasks_deleted_after_created CHECK (deleted_at IS NULL OR deleted_at>=created_at),
  FOREIGN KEY(project_page_id,project_entity_type) REFERENCES entities(id,entity_type),
  FOREIGN KEY(id,once_key) REFERENCES task_occurrences(task_id,occurrence_key) DEFERRABLE INITIALLY DEFERRED
 ) STRICT;
@@ -567,13 +527,13 @@ END;
 CREATE TRIGGER tasks_project_insert BEFORE INSERT ON tasks WHEN NEW.project_page_id IS NOT NULL BEGIN
  SELECT RAISE(ABORT,'task project must be a live non-journal plain page') WHERE NOT EXISTS
  (SELECT 1 FROM entities e WHERE e.id=NEW.project_page_id AND e.entity_type='page' AND e.deleted_at IS NULL
- AND NOT (length(e.preferred_name_key)=10 AND date(e.preferred_name_key) IS e.preferred_name_key));
+ AND NOT e.is_journal);
 END;
 CREATE TRIGGER tasks_project_update BEFORE UPDATE OF project_page_id ON tasks
  WHEN NEW.project_page_id IS NOT OLD.project_page_id AND NEW.project_page_id IS NOT NULL BEGIN
  SELECT RAISE(ABORT,'task project must be a live non-journal plain page') WHERE NOT EXISTS
  (SELECT 1 FROM entities e WHERE e.id=NEW.project_page_id AND e.entity_type='page' AND e.deleted_at IS NULL
- AND NOT (length(e.preferred_name_key)=10 AND date(e.preferred_name_key) IS e.preferred_name_key));
+ AND NOT e.is_journal);
 END;
 CREATE TRIGGER tasks_no_delete BEFORE DELETE ON tasks
 BEGIN SELECT RAISE(ABORT,'tasks are tombstoned, never deleted'); END;
@@ -591,7 +551,8 @@ CREATE TABLE task_occurrences (
  -- recurring keys are original scheduled days in the anchored sequence. Moving/clearing due_day never moves
  -- the key. Day/week cadences advance calendar days; month/year cadences clamp each target to its last day
  -- from the original anchor, without February drift. Membership arithmetic never multiplies the interval.
- -- Admission, recurrence-end changes and cross-table lifecycle are lifelog_meta.planning.
+ -- Admission, recurrence-end changes and cross-table lifecycle are lifelog_meta.planning. A tombstone is never
+ -- earlier than created_at (task_occurrences_deleted_after_created); import_key is 1 to 512 bytes without NUL.
  -- Normal generation starts open/inherit with due_day=key; a repeated task/key insert must preserve existing
  -- contents, lifecycle and revision. Writers distinguish generation from explicitly evidenced imports.
  -- Missing recurring rows are virtual open slots in finite windows (contract/planning.md). A retained row,
@@ -628,9 +589,10 @@ CREATE TABLE task_occurrences (
       AND strftime('%Y-%m-%dT%H:%M:%fZ',deleted_at) IS deleted_at)),
  revision INTEGER NOT NULL DEFAULT 1 CONSTRAINT task_occurrences_revision CHECK (revision>=1),
  source TEXT NOT NULL CONSTRAINT task_occurrences_source CHECK (instr(source,char(0))=0 AND length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*'),
- import_key TEXT,
+ import_key TEXT CONSTRAINT task_occurrences_import_key CHECK (import_key IS NULL OR (instr(import_key,char(0))=0 AND length(CAST(import_key AS BLOB)) BETWEEN 1 AND 512)),
  UNIQUE(task_id,occurrence_key),
  CONSTRAINT task_occurrences_completion CHECK (completed_at IS NULL OR state='done'),
+ CONSTRAINT task_occurrences_deleted_after_created CHECK (deleted_at IS NULL OR deleted_at>=created_at),
  CONSTRAINT task_occurrences_reminder_pair CHECK ((reminder_mode='at')=(reminder_override_at IS NOT NULL))
 ) STRICT;
 CREATE UNIQUE INDEX task_occurrences_import ON task_occurrences(source,import_key) WHERE import_key IS NOT NULL;
@@ -699,7 +661,7 @@ CREATE TABLE measurements (
   value            REAL,                        -- numeric only, by design (D7); NULL only on a correction: it RETRACTS the row it supersedes
   created_at       TEXT NOT NULL CONSTRAINT measurements_created_at CHECK (length(created_at) = 24 AND created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z' AND substr(created_at,12,2) BETWEEN '00' AND '23' AND strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at),
   source           TEXT NOT NULL CONSTRAINT measurements_source CHECK (instr(source, char(0)) = 0 AND length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*'),   -- the writer (lifelog_meta.source)
-  import_key       TEXT,                        -- importer's dedup key, unique per (source, metric)
+  import_key       TEXT CONSTRAINT measurements_import_key CHECK (import_key IS NULL OR (instr(import_key, char(0)) = 0 AND length(CAST(import_key AS BLOB)) BETWEEN 1 AND 512)),   -- importer's dedup key, unique per (source, metric); 1 to 512 bytes, no NUL
   captured_with_id INTEGER REFERENCES entities(id),      -- provenance: the page (a day page) this reading was captured with
   supersedes_id    INTEGER REFERENCES measurements(id),  -- optional: corrects an earlier row
   CONSTRAINT measurements_not_self CHECK (supersedes_id IS NULL OR supersedes_id <> id),
@@ -752,9 +714,9 @@ CREATE TABLE habit_periods (
   -- The row id is immutable (habit_periods_identity_fixed), including through rowid aliases.
   -- a metric is a HABIT while it has a period: the local days the owner meant to do it (D24). Check-ins
   -- stay in measurements (1 = done, 0 = not done that day); a day inside a period with no check-in is
-  -- NOT RECORDED, never assumed done or not done. A habit is unitless (0/1). A restarted habit has several
-  -- periods, which never overlap. A wrong period is corrected by UPDATE, never deleted.
-  -- The seeded Mood identity (metric id 1) is never a habit: its 1-5 readings have a different meaning.
+  -- NOT RECORDED, never assumed done or not done. A habit is unitless (0/1): a scale names its range as its
+  -- unit (metrics.unit), so Mood and every other scale are refused here by that one rule. A restarted habit
+  -- has several periods, which never overlap. A wrong period is corrected by UPDATE, never deleted.
   id         INTEGER PRIMARY KEY,
   metric_id  INTEGER NOT NULL REFERENCES metrics(id),
   start_day  TEXT NOT NULL CONSTRAINT habit_periods_start_day CHECK (length(start_day) = 10 AND start_day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(start_day) IS start_day),
@@ -765,7 +727,6 @@ CREATE TABLE habit_periods (
 ) STRICT;
 CREATE TRIGGER habit_periods_check_insert BEFORE INSERT ON habit_periods
 BEGIN
-  SELECT RAISE(ABORT, 'the seeded Mood metric cannot be a habit') WHERE NEW.metric_id = 1;
   SELECT RAISE(ABORT, 'a habit is a unitless metric (0 = not done, 1 = done): this metric has a unit')
    WHERE (SELECT unit FROM metrics WHERE id = NEW.metric_id) IS NOT '';
   -- a period with the same start is left to UNIQUE, so ON CONFLICT DO NOTHING re-runs it (this trigger fires first)
@@ -777,7 +738,6 @@ BEGIN
 END;
 CREATE TRIGGER habit_periods_check_update BEFORE UPDATE OF metric_id, start_day, end_day ON habit_periods
 BEGIN
-  SELECT RAISE(ABORT, 'the seeded Mood metric cannot be a habit') WHERE NEW.metric_id = 1;
   SELECT RAISE(ABORT, 'a habit is a unitless metric (0 = not done, 1 = done): this metric has a unit')
    WHERE (SELECT unit FROM metrics WHERE id = NEW.metric_id) IS NOT '';
   SELECT RAISE(ABORT, 'periods of one habit never overlap')
@@ -816,7 +776,7 @@ CREATE TABLE link_kinds (
                          AND from_types NOT GLOB '*,' AND from_types NOT GLOB '*,,*')),
   to_types   TEXT CONSTRAINT link_kinds_to_types CHECK (to_types   IS NULL OR (instr(to_types, char(0)) = 0 AND to_types   NOT GLOB '*[^a-z,]*' AND to_types   NOT GLOB ',*'
                          AND to_types   NOT GLOB '*,' AND to_types   NOT GLOB '*,,*')),
-  note       TEXT,
+  note       TEXT CONSTRAINT link_kinds_note CHECK (note IS NULL OR instr(note, char(0)) = 0),
   CONSTRAINT link_kinds_mirror_valid CHECK (symmetric = 0 OR from_types IS to_types)   -- a mirrored edge must be valid in both directions
 ) STRICT;
 INSERT INTO link_kinds(kind, symmetric, from_types, to_types, note) VALUES
@@ -843,17 +803,21 @@ CREATE TABLE links (
   -- re-insert). Symmetric kinds are mirrored by trigger on insert AND delete, so a half-edge cannot
   -- exist and backlinks need only to_id. A symmetric relationship has one shared note: editing either
   -- direction updates the other atomically; directional kinds keep independent notes. Cycles are not prevented (D8).
+  -- Edit revisions (lifelog_meta.edit_revisions): a link is an edit of the page it leaves (from_id) and never of the
+  -- page it points at, so another writer's open edit of that page stays current. A wikilink is derived from the
+  -- body (D19), whose change already advanced its page, so adding or removing one advances nothing; its note is
+  -- still an edit. A symmetric kind's mirror row is its own insert, delete or note update: both pages advance.
   -- source names the writer, as on entities; written at insert, never changed.
   id         INTEGER PRIMARY KEY,
   from_id    INTEGER NOT NULL REFERENCES entities(id),
   to_id      INTEGER NOT NULL REFERENCES entities(id),
   kind       TEXT NOT NULL REFERENCES link_kinds(kind) ON DELETE RESTRICT,  -- closed registry; a used kind is never deleted or replaced
-  note       TEXT,
+  note       TEXT CONSTRAINT links_note CHECK (note IS NULL OR instr(note, char(0)) = 0),
   created_at TEXT NOT NULL CONSTRAINT links_created_at CHECK (length(created_at) = 24 AND created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z' AND substr(created_at,12,2) BETWEEN '00' AND '23' AND strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at),
   source     TEXT NOT NULL CONSTRAINT links_source CHECK (instr(source, char(0)) = 0 AND length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*'),   -- the writer (lifelog_meta.source)
   UNIQUE (from_id, to_id, kind)
 ) STRICT;
-CREATE INDEX links_to ON links(to_id);   -- backlinks query (from_id is served by the UNIQUE index)
+CREATE INDEX links_to ON links(to_id, kind);   -- backlinks, all or of one kind (from_id is served by the UNIQUE index)
 
 CREATE TRIGGER links_fixed BEFORE UPDATE ON links
   WHEN NEW.id IS NOT OLD.id OR NEW.from_id IS NOT OLD.from_id OR NEW.to_id IS NOT OLD.to_id OR NEW.kind IS NOT OLD.kind
@@ -882,9 +846,11 @@ CREATE TRIGGER links_mirror_insert AFTER INSERT ON links
   WHEN NEW.from_id <> NEW.to_id
    AND (SELECT symmetric FROM link_kinds WHERE kind = NEW.kind) = 1
 BEGIN
-  -- mirror a symmetric edge; OR IGNORE makes the re-fire find the row present and stop
-  INSERT OR IGNORE INTO links(from_id, to_id, kind, note, created_at, source)
-  VALUES (NEW.to_id, NEW.from_id, NEW.kind, NEW.note, NEW.created_at, NEW.source);
+  -- mirror a symmetric edge; DO NOTHING on the pair makes the re-fire find the row present and stop, and
+  -- unlike OR IGNORE it skips only that duplicate, never a CHECK or NOT NULL violation
+  INSERT INTO links(from_id, to_id, kind, note, created_at, source)
+  VALUES (NEW.to_id, NEW.from_id, NEW.kind, NEW.note, NEW.created_at, NEW.source)
+  ON CONFLICT(from_id, to_id, kind) DO NOTHING;
 END;
 CREATE TRIGGER links_mirror_note AFTER UPDATE OF note ON links
   WHEN NEW.note IS NOT OLD.note AND NEW.from_id <> NEW.to_id
@@ -913,7 +879,11 @@ CREATE VIEW ghost_pages AS
      AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.project_page_id = e.id)
      AND NOT EXISTS (SELECT 1 FROM measurements m WHERE m.captured_with_id = e.id);
 
-CREATE TRIGGER entity_names_touch_insert AFTER INSERT ON entity_names BEGIN
+CREATE TRIGGER entity_names_touch_insert AFTER INSERT ON entity_names
+ WHEN NEW.name_key IS NOT (SELECT preferred_name_key FROM entities WHERE id = NEW.entity_id)
+BEGIN
+ -- the owned preferred name inserted with its entity is part of creating it, not an edit; an alias added
+ -- later is one, and so is a rename's new spelling (not yet the preferred one when it is inserted)
  UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), revision = revision + 1 WHERE id = NEW.entity_id;
 END;
 CREATE TRIGGER entity_names_touch_update AFTER UPDATE OF title ON entity_names WHEN NEW.title IS NOT OLD.title BEGIN
@@ -942,18 +912,6 @@ END;
 CREATE TRIGGER entities_revision_monotonic BEFORE UPDATE OF revision ON entities
  WHEN NEW.revision < OLD.revision
 BEGIN SELECT RAISE(ABORT, 'edit revisions never decrease'); END;
-CREATE TRIGGER people_touch_insert AFTER INSERT ON people BEGIN
- UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), revision = revision + 1 WHERE id = NEW.id;
-END;
-CREATE TRIGGER places_touch_insert AFTER INSERT ON places BEGIN
- UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), revision = revision + 1 WHERE id = NEW.id;
-END;
-CREATE TRIGGER metrics_touch_insert AFTER INSERT ON metrics BEGIN
- UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), revision = revision + 1 WHERE id = NEW.id;
-END;
-CREATE TRIGGER files_touch_insert AFTER INSERT ON files BEGIN
- UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), revision = revision + 1 WHERE id = NEW.id;
-END;
 CREATE TRIGGER habit_periods_touch_insert AFTER INSERT ON habit_periods BEGIN
  UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), revision = revision + 1 WHERE id = NEW.metric_id;
 END;
@@ -962,14 +920,14 @@ CREATE TRIGGER habit_periods_touch_update AFTER UPDATE OF start_day,end_day,metr
 BEGIN
  UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), revision = revision + 1 WHERE id IN (OLD.metric_id,NEW.metric_id);
 END;
-CREATE TRIGGER links_touch_insert AFTER INSERT ON links BEGIN
- UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), revision = revision + 1 WHERE id IN (NEW.from_id,NEW.to_id);
+CREATE TRIGGER links_touch_insert AFTER INSERT ON links WHEN NEW.kind <> 'wikilink' BEGIN
+ UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), revision = revision + 1 WHERE id = NEW.from_id;
 END;
-CREATE TRIGGER links_touch_delete AFTER DELETE ON links BEGIN
- UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), revision = revision + 1 WHERE id IN (OLD.from_id,OLD.to_id);
+CREATE TRIGGER links_touch_delete AFTER DELETE ON links WHEN OLD.kind <> 'wikilink' BEGIN
+ UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), revision = revision + 1 WHERE id = OLD.from_id;
 END;
 CREATE TRIGGER links_touch_note AFTER UPDATE OF note ON links WHEN NEW.note IS NOT OLD.note BEGIN
- UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), revision = revision + 1 WHERE id IN (NEW.from_id,NEW.to_id);
+ UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), revision = revision + 1 WHERE id = NEW.from_id;
 END;
 CREATE TRIGGER entities_endpoint_types BEFORE UPDATE OF entity_type ON entities
   WHEN NEW.entity_type IS NOT OLD.entity_type

@@ -160,7 +160,7 @@ func applyWrite(t *core.Tx, file string, wr Write, key string, rules *Rules) (Ou
 		if err := lookAlike(t, rules, title); err != nil {
 			return Outcome{}, err
 		}
-		_, existing, err := t.CreateImported(title, nil, entityKey(file, "page", title))
+		_, existing, err := t.CreateImported(title, nil, "", entityKey(file, "page", title))
 		return Outcome{Kind: "page", What: title, Status: status(existing)}, err
 	case "link":
 		l := wr.Link
@@ -186,9 +186,20 @@ func applyWrite(t *core.Tx, file string, wr Write, key string, rules *Rules) (Ou
 		if !found {
 			return Outcome{}, fmt.Errorf("metric %s is approved but not registered: run register-metrics", rd.Metric)
 		}
-		num, _, u, err := parseValue(rd.Value, rd.Unit)
+		num, numText, u, err := parseValue(rd.Value, rd.Unit)
 		if err != nil {
 			return Outcome{}, err
+		}
+		// a scale's range is the metric's: a reading that writes none takes it (core.RangeUnit), and its value, held
+		// to the range by the writer, must still be written in the quote: a word gives no scale's number, even when
+		// metrics.md approved the metric without a unit
+		if _, _, scale := core.RangeUnit(unit); scale {
+			if u == "" {
+				u = unit
+			}
+			if tokens, _ := matchingNumberTokens(collapse(wr.Quote), numText, "", -1); len(tokens) == 0 {
+				return Outcome{}, fmt.Errorf("%s is a %s scale: the quote has to write its number %s", rd.Metric, unit, numText)
+			}
 		}
 		if u != unit {
 			return Outcome{}, fmt.Errorf("the unit %q is not %s's unit %q: nothing is converted", u, rd.Metric, unit)

@@ -11,8 +11,13 @@ import (
 )
 
 // CreateImported creates a page an importer writes: day is its day (nil for none; a day title's day is always the
-// title). importKey makes a re-send return the page the key already names, with existing = true.
-func (t *Tx) CreateImported(title string, day any, importKey string) (id int64, existing bool, err error) {
+// title) and body its whole text, written by the insert, so the page is at revision 1: creation is one write and
+// no edit (lifelog_meta.edit_revisions). importKey makes a re-send return the page the key already names, with
+// existing = true and nothing changed.
+//
+// The body's wikilinks are not synced here. An importer that creates a set of pages creates all of them first, so a
+// link lands on the page of the note it names and not on a stub, and then syncs each body's links once (SetBody).
+func (t *Tx) CreateImported(title string, day any, body, importKey string) (id int64, existing bool, err error) {
 	if !text.ValidTitle(title) {
 		return 0, false, invalid("title %q is not a valid title (docs/contract/titles-and-wikilinks.md)", title)
 	}
@@ -28,7 +33,7 @@ func (t *Tx) CreateImported(title string, day any, importKey string) (id int64, 
 			return 0, false, orExists(err, p, title)
 		}
 	}
-	return t.insertPage("page", title, text.TitleKey(title), day, "", importKey)
+	return t.insertPage("page", title, text.TitleKey(title), day, body, importKey)
 }
 
 // ByImportKey is the entity a sender's key names under this transaction's source; 0 when none.

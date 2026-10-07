@@ -56,7 +56,7 @@ func dates(s *S) {
 	// ---- the other instants and days
 	_, updateErr := c.tryIdentity("page", "Updated instant witness", M{"updated_at": "2026-01-01T00:00:00Z"})
 	s.K("entities.updated_at without milliseconds refused", updateErr != nil)
-	s.K("a tombstone that is not an instant refused", strings.HasPrefix(c.tryx("UPDATE entities SET deleted_at='2026-01-01' WHERE id=?", c.anyIdentity("page")), "ERR"))
+	s.K("a tombstone that is not an instant refused", strings.Contains(c.tryx("UPDATE entities SET deleted_at='2026-01-01' WHERE id=?", c.anyIdentity("page")), "entities_deleted_at"))
 	pa, pb := c.named("person", ""), c.named("person", "")
 	s.K("measurements.created_at must be an instant", strings.HasPrefix(c.tryx("INSERT INTO measurements(metric_id,day,value,source,created_at) VALUES (1,'2026-01-01',1,'ui','2026-01-01 10:00:00')"), "ERR"))
 	s.K("links.created_at must be an instant", strings.HasPrefix(c.tryx("INSERT INTO links(from_id,to_id,kind,created_at,source) VALUES (?,?,'related','2026-01-01 10:00:00','ui')", pa, pb), "ERR"))
@@ -82,7 +82,12 @@ func exactTimeBoundaries(s *S) {
 	// One pristine fixture is enough: each column probe rolls back its own savepoint,
 	// including successful writes under a mutant, before the next independent case.
 	c := s.fresh()
-	entity := c.page("Time witness")
+	// Created at the earliest instant, so that every valid vector is also a tombstone that follows creation
+	// (entities_deleted_after_created): these probes test the shape of deleted_at, not its order.
+	entity, err := c.tryIdentity("page", "Time witness", M{"created_at": "0000-01-01T00:00:00.000Z"})
+	if err != nil {
+		stop("time witness: %v", err)
+	}
 	person := c.named("person", "")
 	habit := c.metric("Habit boundary", "")
 	otherHabit := c.metric("Other habit", "")
@@ -122,9 +127,10 @@ func exactTimeBoundaries(s *S) {
 			for _, col := range []string{"created_at", "updated_at", "deleted_at"} {
 				columns := []string{"kind_id", "day", "start_at", "source", "created_at", "updated_at"}
 				values := []string{fmt.Sprint(sessionKind), "'2026-01-01'", "'2026-01-01T00:00:00.000Z'", "'ui'", "'2026-01-01T00:00:00.000Z'", "'2026-01-01T00:00:00.000Z'"}
-				if col == "deleted_at" {
+				if col == "deleted_at" { // created at the earliest instant: the probe tests shape, not order
 					columns = append(columns, col)
 					values = append(values, "?")
+					values[4] = "'0000-01-01T00:00:00.000Z'"
 				} else {
 					for i, name := range columns {
 						if name == col {

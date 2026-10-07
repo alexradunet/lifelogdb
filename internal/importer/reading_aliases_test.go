@@ -118,7 +118,7 @@ func TestReadingTimedAliasCollisionRollsBack(t *testing.T) {
 		{Reading: &ReadingW{Metric: "Iron panel", Day: "2031-07-02", Value: "8 ng/mL", TakenAt: "2031-07-02T08:00:00.000Z"}},
 	}}
 	err = f.s.Do(ctx, "import:notebook", func(tx *core.Tx) error {
-		if _, _, err := tx.CreateImported("Must roll back", nil, "rollback proof"); err != nil {
+		if _, _, err := tx.CreateImported("Must roll back", nil, "", "rollback proof"); err != nil {
 			return err
 		}
 		_, err := resolveReadingKeys(tx, "import:notebook", facts, []int{0, 1})

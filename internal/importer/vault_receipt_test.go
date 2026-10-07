@@ -202,7 +202,12 @@ func TestVaultReceiptPreparationRetry(t *testing.T) {
 	})
 	t.Run("partial application retains bindings", func(t *testing.T) {
 		f := draftReceiptFixture(t)
-		if _, err := f.s.DB.W.Exec(`CREATE TRIGGER injected_body_failure BEFORE UPDATE OF body ON entities WHEN OLD.preferred_name_key='recipes' AND NEW.body<>OLD.body BEGIN SELECT RAISE(ABORT,'synthetic body failure'); END`); err != nil {
+		// The pages are created, text included, in the first transaction; the second pass syncs the links of each note and
+		// appends a daily note to its existing day page. The append is where this pass is made to fail.
+		if _, _, err := f.s.Capture(ctx, "cli", "2031-04-12", "Written on the day.", nil); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.s.DB.W.Exec(`CREATE TRIGGER injected_body_failure BEFORE UPDATE OF body ON entities WHEN OLD.preferred_name_key='2031-04-12' AND NEW.body<>OLD.body BEGIN SELECT RAISE(ABORT,'synthetic body failure'); END`); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := f.w.ApplyVault(ctx, f.s); err == nil {

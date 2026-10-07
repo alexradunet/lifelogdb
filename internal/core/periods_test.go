@@ -59,7 +59,9 @@ func TestLifePeriodWriterQueryAndRollback(t *testing.T) {
 	if err != nil || p.Version != after || p.Period.End == nil || *p.Period.End != observed {
 		t.Fatalf("rollback %+v %v", p, err)
 	}
-	if _, err := s.DB.W.Exec(`CREATE TRIGGER period_body_failure BEFORE UPDATE OF body ON entities WHEN NEW.entity_type='period' BEGIN SELECT RAISE(ABORT,'injected post-extension failure'); END`); err != nil {
+	// Creation writes the entity with its whole body, so the failure to inject after the extension row is its own
+	// insert; a failure after CreatePeriod returned (the wikilink target it made) must undo the target as well.
+	if _, err := s.DB.W.Exec(`CREATE TRIGGER period_extension_failure AFTER INSERT ON periods BEGIN SELECT RAISE(ABORT,'injected post-extension failure'); END`); err != nil {
 		t.Fatal(err)
 	}
 	err = s.Do(ctx, "cli", func(tx *Tx) error {
@@ -69,12 +71,24 @@ func TestLifePeriodWriterQueryAndRollback(t *testing.T) {
 	if err == nil {
 		t.Fatal("accepted injected failure")
 	}
+	if _, err := s.DB.W.Exec(`DROP TRIGGER period_extension_failure`); err != nil {
+		t.Fatal(err)
+	}
+	err = s.Do(ctx, "cli", func(tx *Tx) error {
+		if _, err := tx.CreatePeriod("Failed period", "[[Atomic new name]]", nil, nil); err != nil {
+			return err
+		}
+		return rollback
+	})
+	if !errors.Is(err, rollback) {
+		t.Fatalf("rolled back creation: %v", err)
+	}
 	var count int
 	if err := s.DB.R.QueryRow(`SELECT count(*) FROM entity_names WHERE name_key IN ('failed period','atomic new name')`).Scan(&count); err != nil || count != 0 {
 		t.Fatalf("partial names: %d %v", count, err)
 	}
-	if _, err := s.DB.W.Exec(`DROP TRIGGER period_body_failure`); err != nil {
-		t.Fatal(err)
+	if err := s.DB.R.QueryRow(`SELECT count(*) FROM entities e JOIN periods p ON p.id=e.id WHERE e.body LIKE '%Atomic new name%'`).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("partial period: %d %v", count, err)
 	}
 }
 

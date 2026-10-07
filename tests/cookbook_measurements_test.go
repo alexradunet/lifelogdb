@@ -10,7 +10,8 @@ func cookbookMeasurementReads(s *S) {
 	params := P{"day": "2026-10-01", "metric": "weight", "include_deleted": 0}
 	labeled := sqlBlocks(s.d.Page("cookbook/recorded-sessions.md"))[1]
 	s.K("active measurement recipes expose live metrics", len(c.rows(series, params)) == 1 && len(c.rows(mood)) == 1 && len(c.rows(day, params)) == 2 && len(c.rows(labeled, params)) == 1)
-	c.must("UPDATE entities SET deleted_at='2026-10-02T00:00:00.000Z' WHERE id IN (1,?)", weight)
+	// Mood is seeded when the DDL is applied, so its tombstone is "now": a fixed date would precede its creation.
+	c.must("UPDATE entities SET deleted_at="+NOW+" WHERE id IN (1,?)", weight)
 	s.K("active measurement recipes hide tombstoned metrics", len(c.rows(series, params)) == 0 && len(c.rows(mood)) == 0 && len(c.rows(day, params)) == 0 && len(c.rows(labeled, params)) == 0)
 	params["include_deleted"] = 1
 	s.K("historical labeled readings retain tombstoned metric facts", len(c.rows(labeled, params)) == 1 && c.n("SELECT count(*) FROM measurement_values") == 2)

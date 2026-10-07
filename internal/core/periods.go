@@ -21,14 +21,14 @@ func (t *Tx) CreatePeriod(title, body string, start, end *string) (int64, error)
 	if _, _, err := periodSpan(start, end); err != nil {
 		return 0, err
 	}
-	id, _, err := t.createNamed("period", title, "", func(id int64) error {
+	id, _, err := t.createNamed("period", title, body, "", func(id int64) error {
 		_, err := t.tx.ExecContext(t.ctx, `INSERT INTO periods(id,start_boundary,end_boundary) VALUES(?,?,?)`, id, start, end)
 		return err
 	})
 	if err != nil {
 		return 0, err
 	}
-	if _, err = t.SetBody(id, body); err != nil {
+	if _, err = t.syncWikilinks(id, body); err != nil {
 		return 0, err
 	}
 	return id, nil

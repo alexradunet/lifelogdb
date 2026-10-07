@@ -3,7 +3,7 @@ package core
 import "testing"
 
 func TestIntegrityDetectsRestoredGuardSemanticDamage(t *testing.T) {
-	for _, damage := range []string{"missing mirror", "mirror note", "correction cycle", "habit overlap", "habit value", "journal alias", "journal owner"} {
+	for _, damage := range []string{"missing mirror", "mirror note", "correction cycle", "habit overlap", "habit value", "habit unit", "journal alias", "journal owner"} {
 		t.Run(damage, func(t *testing.T) {
 			s := fresh(t)
 			exec := func(q string, args ...any) {
@@ -68,6 +68,11 @@ func TestIntegrityDetectsRestoredGuardSemanticDamage(t *testing.T) {
 					// Deliberately bypass the writer's numeric-range validation, not a DDL guard.
 					exec("INSERT INTO measurements(metric_id,day,value,source,created_at) SELECT metric_id,'2026-10-02',2,'ui'," + Now + " FROM habit_periods")
 				}
+			case "habit unit":
+				// a period on Mood, a scale with a unit, written while the guard is dropped
+				bypass("habit_periods_check_insert", func() {
+					exec("INSERT INTO habit_periods(metric_id,start_day,source) SELECT id,'2026-10-01','cli' FROM metrics WHERE unit<>''")
+				})
 			case "journal alias":
 				id := page("2026-10-01")
 				bypass("entity_names_day_insert", func() { exec("INSERT INTO entity_names(entity_id,title,name_key) VALUES(?,'Extra','extra')", id) })
@@ -92,6 +97,8 @@ func TestIntegrityDetectsRestoredGuardSemanticDamage(t *testing.T) {
 				diagnostic, want = got.InvalidMeasurementChains, 2
 			case "habit overlap":
 				diagnostic, want = got.InvalidHabitPeriods, 2
+			case "habit unit":
+				diagnostic = got.InvalidHabitPeriods
 			case "habit value":
 				diagnostic = got.InvalidHabitReadings
 			case "journal alias", "journal owner":

@@ -90,7 +90,7 @@ func (s *Store) Integrity(ctx context.Context) (*IntegrityResult, error) {
 		return nil, err
 	}
 
-	if err := s.integrityRead(ctx, "session kind endpoints", `SELECT s.id FROM sessions s LEFT JOIN entities e ON e.id=s.kind_id WHERE e.id IS NULL OR e.entity_type<>'page' OR (length(e.preferred_name_key)=10 AND date(e.preferred_name_key) IS e.preferred_name_key) ORDER BY s.id`, func(rows *sql.Rows) error {
+	if err := s.integrityRead(ctx, "session kind endpoints", `SELECT s.id FROM sessions s LEFT JOIN entities e ON e.id=s.kind_id WHERE e.id IS NULL OR e.entity_type<>'page' OR e.is_journal ORDER BY s.id`, func(rows *sql.Rows) error {
 		var id int64
 		if err := rows.Scan(&id); err != nil {
 			return err
@@ -110,7 +110,7 @@ func (s *Store) Integrity(ctx context.Context) (*IntegrityResult, error) {
 	}); err != nil {
 		return nil, err
 	}
-	if err := s.integrityRead(ctx, "task project endpoints", `SELECT t.id FROM tasks t LEFT JOIN entities e ON e.id=t.project_page_id WHERE t.project_page_id IS NOT NULL AND (e.id IS NULL OR e.entity_type<>'page' OR (length(e.preferred_name_key)=10 AND date(e.preferred_name_key) IS e.preferred_name_key)) ORDER BY t.id`, func(rows *sql.Rows) error {
+	if err := s.integrityRead(ctx, "task project endpoints", `SELECT t.id FROM tasks t LEFT JOIN entities e ON e.id=t.project_page_id WHERE t.project_page_id IS NOT NULL AND (e.id IS NULL OR e.entity_type<>'page' OR e.is_journal) ORDER BY t.id`, func(rows *sql.Rows) error {
 		var id int64
 		if err := rows.Scan(&id); err != nil {
 			return err
@@ -185,7 +185,7 @@ SELECT id FROM measurements EXCEPT SELECT id FROM rooted ORDER BY id`, func(rows
 		return nil, err
 	}
 	if err := s.integrityRead(ctx, "habit period semantics", `SELECT h.id FROM habit_periods h LEFT JOIN metrics m ON m.id=h.metric_id
- WHERE m.id IS NULL OR m.id=1 OR m.unit<>'' OR EXISTS
+ WHERE m.id IS NULL OR m.unit<>'' OR EXISTS
  (SELECT 1 FROM habit_periods p WHERE p.metric_id=h.metric_id AND p.id<>h.id
   AND p.start_day<=coalesce(h.end_day,'9999-12-31') AND coalesce(p.end_day,'9999-12-31')>=h.start_day)
  ORDER BY h.id`, func(rows *sql.Rows) error {
@@ -212,7 +212,7 @@ SELECT id FROM measurements EXCEPT SELECT id FROM rooted ORDER BY id`, func(rows
 	if err := s.integrityRead(ctx, "journal name ownership", `SELECT n.id FROM entity_names n JOIN entities e ON e.id=n.entity_id
  WHERE (length(n.name_key)=10 AND date(n.name_key) IS n.name_key
    AND (e.entity_type<>'page' OR e.preferred_name_key IS NOT n.name_key OR e.day IS NOT n.name_key OR n.title IS NOT n.name_key))
- OR (length(e.preferred_name_key)=10 AND date(e.preferred_name_key) IS e.preferred_name_key
+ OR (e.is_journal
    AND (n.name_key IS NOT e.preferred_name_key OR n.title IS NOT e.preferred_name_key)) ORDER BY n.id`, func(rows *sql.Rows) error {
 		var id int64
 		if err := rows.Scan(&id); err != nil {

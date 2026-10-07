@@ -16,8 +16,8 @@ func facts(s *S) {
 	// ---- metrics: a metric is a page (D27)
 	c := s.fresh()
 	w := c.metric("Weight", "kg")
-	s.K("Mood is seeded (D6): a metric, its page and its entity, one id", c.tab(`select e.entity_type, n.title, m.entity_type, m.unit
- from metrics m join entities e on e.id=m.id join entity_names n on n.entity_id=e.id and n.name_key=e.preferred_name_key where n.name_key='mood'`) == "metric|Mood|metric|")
+	s.K("Mood is seeded (D6): a metric, its page and its entity, one id, its range as its unit", c.tab(`select e.entity_type, n.title, m.entity_type, m.unit
+ from metrics m join entities e on e.id=m.id join entity_names n on n.entity_id=e.id and n.name_key=e.preferred_name_key where n.name_key='mood'`) == "metric|Mood|metric|1-5")
 	c.measure(w, "2026-06-01", 70)
 	s.K("metrics.unit cannot change", err(c.tryx("UPDATE metrics SET unit='lb' WHERE id=?", w)))
 	s.K("a no-op SET unit=unit passes", c.tryx("UPDATE metrics SET unit=unit WHERE id=?", w) == "OK")
@@ -66,7 +66,7 @@ func facts(s *S) {
 	sub, all := tab(out[2]), tab(out[3])
 	s.K("cookbook/metrics-by-category: a category holds the metrics of every category under it", sub == "Lipids|LDL cholesterol|mg/dL; Vitamins|Vitamin D|", sub)
 	s.K("cookbook/metrics-by-category: habits first, then by category, the metrics filed nowhere last",
-		all == "1|Vitamins|Vitamin D|; 0|Body|Weight|kg; 0|Lipids|LDL cholesterol|mg/dL; 0||Mood|; 0||Steps|n", all)
+		all == "1|Vitamins|Vitamin D|; 0|Body|Weight|kg; 0|Lipids|LDL cholesterol|mg/dL; 0||Mood|1-5; 0||Steps|n", all)
 	walk := statements(s.d.Block("metrics-by-category"))[2]
 	c.link(bio, lip, "part-of") // a cycle: Biomarkers part-of Lipids part-of Biomarkers
 	cyc, e := c.query(walk, P{"parent_id": bio})
@@ -192,6 +192,7 @@ func facts(s *S) {
 // retain all their small behavior cases without rebuilding 20,000 readings.
 func measurementQueryPlan(s *S) {
 	retainedReferencePlans(s)
+	lookupPlans(s)
 	c := s.fresh()
 	c.metric("w", "kg")
 	// Deliberate direct-SQL bulk setup measures query planning, not writer throughput.

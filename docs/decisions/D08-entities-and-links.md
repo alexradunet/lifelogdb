@@ -17,7 +17,7 @@
   by trigger on insert *and* delete, so a half-edge cannot exist whatever the writer, and both mirror
   triggers terminate under `recursive_triggers=ON` (executed). `links_mirror_note` gives symmetric
   relationships one shared note, with a change guard that terminates recursively; directional notes stay independent (executed). Links are immutable except `note`
-  (`links_fixed`). Cycles (e.g. `located-in`) are not prevented; [inside a place](../cookbook/inside-a-place.md) walks it with `UNION`. Widening a
+  (`links_fixed`); a note, like a link kind's, holds no NUL (`links_note`, `link_kinds_note`). Cycles (e.g. `located-in`) are not prevented; [inside a place](../cookbook/inside-a-place.md) walks it with `UNION`. Widening a
   kind's endpoint types is a deliberate migration: drop `link_kinds_structure_fixed`, update the row,
   recreate the trigger, in one transaction (executed).
 - **Alternatives.**

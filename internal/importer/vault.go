@@ -36,6 +36,9 @@ type Note struct {
 	Problems []string `json:"problems,omitempty"`
 }
 
+// key is the import key of the note's page: its path in the vault (importKey hashes one too long to store).
+func (n Note) key() string { return importKey(n.Path) }
+
 func (w *Workspace) planPath() string { return w.file("plan.json") }
 
 func (w *Workspace) LoadPlan() (*Plan, bool, error) {
@@ -126,7 +129,7 @@ func (w *Workspace) validatePlan(ctx context.Context, s *core.Store, p *Plan) er
 			if n.Appended {
 				continue
 			}
-			mine, err := t.ByImportKey(n.Path)
+			mine, err := t.ByImportKey(n.key())
 			if err != nil {
 				return err
 			}
@@ -247,17 +250,23 @@ func (w *Workspace) applyPlanPublishing(ctx context.Context, s *core.Store, p *P
 		return nil, err
 	}
 	defer root.Close()
+	// Each note's text is final before the first write: its links are rewritten from the plan alone.
+	links := linkIndex(p)
 	bodies := make([]string, len(p.Notes))
-	for i, n := range p.Notes {
-		bodies[i], err = w.readSource(root, n.Path)
+	for i := range p.Notes {
+		raw, err := w.readSource(root, p.Notes[i].Path)
 		if err != nil {
 			return nil, err
 		}
+		bodies[i] = rewriteLinks(raw, &p.Notes[i], links)
 	}
 	res := &VaultResult{}
-	// 1. every page, in one transaction
+	// 1. every page with its note's text, in one transaction: creation is one write, so an imported page is at
+	// revision 1 and no edit (lifelog_meta.edit_revisions)
+	var created []bool
 	err = s.Do(ctx, src, func(t *core.Tx) error {
 		res.Created = 0
+		created = make([]bool, len(p.Notes))
 		if record {
 			if err := w.prepareVaultReceiptPublishing(t, p, publish); err != nil {
 				return err
@@ -268,7 +277,7 @@ func (w *Workspace) applyPlanPublishing(ctx context.Context, s *core.Store, p *P
 				return err
 			}
 		}
-		for _, n := range p.Notes {
+		for i, n := range p.Notes {
 			if n.Action != "create" {
 				continue
 			}
@@ -276,12 +285,13 @@ func (w *Workspace) applyPlanPublishing(ctx context.Context, s *core.Store, p *P
 			if n.Day != "" {
 				day = n.Day
 			}
-			_, existing, err := t.CreateImported(n.Title, day, n.Path)
+			_, existing, err := t.CreateImported(n.Title, day, bodies[i], n.key())
 			if err != nil {
 				return refuse("%s: %v", n.Path, err)
 			}
 			if !existing {
 				res.Created++
+				created[i] = true
 			}
 		}
 		return nil
@@ -289,17 +299,17 @@ func (w *Workspace) applyPlanPublishing(ctx context.Context, s *core.Store, p *P
 	if err != nil {
 		return nil, err
 	}
-	links := linkIndex(p)
-	// 2. each body, in its own transaction
+	// 2. each note's links, in its own transaction, now that every page exists, so a link between notes lands on the
+	// note. SetBody writes the text only where it differs from the page's (a note changed since) and syncs the
+	// links either way, so a run interrupted after step 1 is completed by the next.
 	for i := range p.Notes {
 		n := &p.Notes[i]
-		raw := bodies[i]
-		body := rewriteLinks(raw, n, links)
+		body := bodies[i]
 		err = s.Do(ctx, src, func(t *core.Tx) error {
 			if n.Action == "append" {
 				return appendOnce(t, n, body, res)
 			}
-			id, err := t.ByImportKey(n.Path)
+			id, err := t.ByImportKey(n.key())
 			if err != nil {
 				return err
 			}
@@ -307,14 +317,17 @@ func (w *Workspace) applyPlanPublishing(ctx context.Context, s *core.Store, p *P
 			if err != nil {
 				return err
 			}
-			if old == body {
+			sync, err := t.SetBody(id, body)
+			if err != nil {
+				return err
+			}
+			if written := old != body || created[i] && body != ""; !written {
 				res.Same++
 				return nil
 			}
-			sync, err := t.SetBody(id, body)
 			res.Saved++
 			res.Skipped = append(res.Skipped, sync.Skipped...)
-			return err
+			return nil
 		})
 		if err != nil {
 			return res, refuse("%s: %v", n.Path, err)

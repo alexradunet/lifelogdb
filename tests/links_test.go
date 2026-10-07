@@ -104,8 +104,11 @@ func links(s *S) {
 	s.K("the mirrors terminate under recursive_triggers=ON", c2.link(x, y, "family") == "OK" && c2.n("select count(*) from links where kind='family'") == 2 &&
 		c2.tryx("DELETE FROM links WHERE kind='family' AND from_id=?", x) == "OK" && c2.n("select count(*) from links") == 0)
 	c2.link(x, y, "friend")
-	s.K("INSERT OR REPLACE on a symmetric link: too many levels of trigger recursion", strings.Contains(
-		c2.tryx("INSERT OR REPLACE INTO links(from_id,to_id,kind,created_at,source) VALUES (?,?,'friend',"+NOW+",'ui')", x, y), "too many levels of trigger recursion"))
+	pair := func() string { return c2.tab("SELECT id FROM links WHERE kind='friend' ORDER BY id") }
+	was := pair()
+	replaced := c2.tryx("INSERT OR REPLACE INTO links(from_id,to_id,kind,created_at,source) VALUES (?,?,'friend',"+NOW+",'ui')", x, y)
+	s.K("INSERT OR REPLACE on a symmetric link deletes the pair and writes it again under new ids, without recursion",
+		replaced == "OK" && c2.n("SELECT count(*) FROM links WHERE kind='friend'") == 2 && pair() != was, replaced, was, pair())
 	s.K("ON CONFLICT DO NOTHING is the way", c2.tryx("INSERT INTO links(from_id,to_id,kind,created_at,source) VALUES (?,?,'friend',"+NOW+",'ui') ON CONFLICT(from_id,to_id,kind) DO NOTHING", x, y) == "OK")
 
 	// ---- containment (cookbook/inside-a-place) and one-way kinds

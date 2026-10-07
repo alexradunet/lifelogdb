@@ -43,6 +43,11 @@ func semanticIntegrity(s *S, checks []string) {
 	bypass(c, "habit_periods_check_update", func() { c.must("UPDATE habit_periods SET end_day='2026-10-04' WHERE start_day='2026-10-01'") })
 	s.K("habit integrity detects overlapping periods", c.integrityOK() && c.tab(checks[11]) == "1; 2")
 
+	// a period on a metric with a unit (Mood, a scale): the guard is dropped to write it, restored before the check
+	c = s.fresh()
+	bypass(c, "habit_periods_check_insert", func() { c.must("INSERT INTO habit_periods(metric_id,start_day,source) VALUES(1,'2026-10-01','ui')") })
+	s.K("habit integrity detects a period on a metric with a unit", c.integrityOK() && c.tab(checks[11]) == "1")
+
 	c = s.fresh()
 	metric = c.metric("Stretch", "")
 	c.must("INSERT INTO habit_periods(metric_id,start_day,end_day,source) VALUES(?,'2026-10-01','2026-10-03','ui')", metric)

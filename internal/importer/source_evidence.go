@@ -34,20 +34,9 @@ func newReadingEvidence(file, source string) *readingEvidence {
 }
 
 func (e *readingEvidence) check(quote string, quotePos int, numText, unit string, marker bool, approved map[string]Metric) error {
-	matches, approximate := matchingNumberTokensWithSource(quote, numText, e.tokens, quotePos)
-	tableValue := tableValueEvidence(e.tables, quote, quotePos, numText)
-	if marker {
-		if len(matches) == 0 && !tableValue {
-			if quoteHasMeasurementNumber(quote) {
-				return refuse("the result word marker %s is not in the quote; a numeric quantity in the quote is incompatible with the result-word exception", numText)
-			}
-			return nil
-		}
-	} else if len(matches) == 0 && !tableValue {
-		if approximate {
-			return refuse("the value %s is not in the quote exactly as written; censored, approximate, qualitative or converted values go in kept_as_text", numText)
-		}
-		return refuse("the value %s is not in the quote exactly as written; partial, converted or reformatted values go in kept_as_text", numText)
+	matches, done, err := e.valueEvidence(quote, quotePos, numText, marker)
+	if err != nil || done {
+		return err
 	}
 	if unit == "" {
 		if got := inlineUnitCandidate(quote, 0, matches); got != "" {
@@ -71,6 +60,36 @@ func (e *readingEvidence) check(quote string, quotePos int, numText, unit string
 		return refuse("the source evidence has unit %q at value %s, not %q; nothing is converted or relabeled", got, numText, unit)
 	}
 	return refuse("the unit %q has no unambiguous source evidence at value %s; ask the owner or keep the source text instead", unit, numText)
+}
+
+// checkScale is the evidence of a reading of a scale (a metric whose unit is a range, core.RangeUnit): the number
+// alone. The range describes the metric and no source writes it beside a number, so no unit is looked for, and a
+// word cannot give a scale's number the way "done" gives a habit its 1.
+func (e *readingEvidence) checkScale(quote string, quotePos int, numText string) error {
+	_, _, err := e.valueEvidence(quote, quotePos, numText, false)
+	return err
+}
+
+// valueEvidence is the part of the evidence that is the number itself: it is in the quote exactly as the source
+// wrote it, and not censored or approximate. done says that a result word stands for the value (marker) and there
+// is nothing more to check.
+func (e *readingEvidence) valueEvidence(quote string, quotePos int, numText string, marker bool) (matches []numberToken, done bool, err error) {
+	matches, approximate := matchingNumberTokensWithSource(quote, numText, e.tokens, quotePos)
+	tableValue := tableValueEvidence(e.tables, quote, quotePos, numText)
+	if marker {
+		if len(matches) == 0 && !tableValue {
+			if quoteHasMeasurementNumber(quote) {
+				return nil, false, refuse("the result word marker %s is not in the quote; a numeric quantity in the quote is incompatible with the result-word exception", numText)
+			}
+			return nil, true, nil
+		}
+	} else if len(matches) == 0 && !tableValue {
+		if approximate {
+			return nil, false, refuse("the value %s is not in the quote exactly as written; censored, approximate, qualitative or converted values go in kept_as_text", numText)
+		}
+		return nil, false, refuse("the value %s is not in the quote exactly as written; partial, converted or reformatted values go in kept_as_text", numText)
+	}
+	return matches, false, nil
 }
 
 func matchingNumberTokens(quote, numText, context string, base int) ([]numberToken, bool) {

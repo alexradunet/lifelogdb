@@ -64,7 +64,8 @@ func names(s *S) {
 func nameOwnership(s *S) {
 	c := s.fresh()
 	missing := c.tryx("INSERT INTO entities(entity_type,preferred_name_key,created_at,updated_at,source) VALUES ('page',NULL," + NOW + "," + NOW + ",'ui')")
-	s.K("preferred ownership is mandatory", strings.Contains(missing, "NOT NULL"), missing)
+	// the refusal must name the key itself: a NULL key would also fail NOT NULL on the generated entities.is_journal
+	s.K("preferred ownership is mandatory", strings.Contains(missing, "NOT NULL constraint failed: entities.preferred_name_key"), missing)
 	c.must("BEGIN IMMEDIATE")
 	missing = c.tryx("INSERT INTO entities(entity_type,preferred_name_key,created_at,updated_at,source) VALUES ('page','missing-name'," + NOW + "," + NOW + ",'ui')")
 	s.K("entity insertion defers actual owned-name completion", missing == "OK", missing)

@@ -298,7 +298,7 @@ func (w *Workspace) mismatches(ctx context.Context, s *core.Store, st *Status, l
 	}
 	if plan != nil {
 		for _, n := range plan.Notes {
-			expected[n.Path] = true
+			expected[n.key()] = true
 		}
 	}
 	if plan != nil {
@@ -329,7 +329,7 @@ func (w *Workspace) pendingNotes(ctx context.Context, s *core.Store, p *Plan, so
 		for _, note := range p.Notes {
 			switch note.Action {
 			case "create":
-				if id, _ := t.ByImportKey(note.Path); id == 0 {
+				if id, _ := t.ByImportKey(note.key()); id == 0 {
 					n++
 				}
 			case "append":
@@ -357,7 +357,7 @@ func (w *Workspace) editedNotes(ctx context.Context, s *core.Store, st *Status, 
 			want := rewriteLinks(raw, n, links)
 			switch {
 			case n.Action == "create":
-				id, _ := t.ByImportKey(n.Path)
+				id, _ := t.ByImportKey(n.key())
 				if id == 0 {
 					continue
 				}

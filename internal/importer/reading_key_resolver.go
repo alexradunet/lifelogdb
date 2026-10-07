@@ -89,7 +89,7 @@ func resolveReadingIdentitiesWithLoader(source string, f *Facts, ids []readingId
 			ordinal++
 			previous = group[i].pos
 			group[i].canonicalOrdinal = ordinal
-			group[i].canonicalKey = strings.Join([]string{f.File, "reading", group[i].metricKey, group[i].day, strconv.Itoa(ordinal)}, "|")
+			group[i].canonicalKey = readingKey(f.File, group[i].metricKey+"|"+group[i].day, strconv.Itoa(ordinal))
 			res.byWrite[group[i].index] = group[i].canonicalKey
 		}
 		metric := group[0].metricKey

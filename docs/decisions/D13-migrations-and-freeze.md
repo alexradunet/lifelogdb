@@ -15,6 +15,10 @@
   until their queries and writes are validated against that version. A migration records any compatibility
   break as well as preserving existing data. The frozen version's full DDL and contract remain the reference
   for interpreting files at that version.
+- **Column order is frozen with the file** (a migration can only append a column), so it is chosen before the
+  freeze: `entities.body`, the one large text, is the last column, so that reading `deleted_at` or `entity_type`
+  does not walk the overflow pages of a long body (the preview of `files` is last for the same reason). A column
+  added after the freeze follows the body.
 - **The freeze.** The freeze is the first write to the canonical `life.db` of a row that cannot be replayed from an
   import workspace: a capture, a correction, a tombstone, anything typed into the file. Before it, a file holding only
   replayable imports is rebuilt (a new `schema.sql`, then a *replay*, [importing with a model](../guides/importing.md))
