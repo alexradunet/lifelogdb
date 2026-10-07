@@ -19,13 +19,14 @@ CREATE TABLE lifelog_meta (
   value TEXT NOT NULL
 ) STRICT;
 INSERT INTO lifelog_meta(key, value) VALUES
-  ('schema',    'lifelog v1: the journal (one page per day), wiki, people, places, recorded life periods, health metrics and the files kept as their text and a small picture, of one person: a life log, not a project manager; the rules of each table are comments inside its CREATE statement (.schema), the rules that span tables are these rows'),
-  ('instants',  'every *_at column is an exact 24-character ASCII UTC ISO-8601 TEXT instant, years 0000..9999 and hours 00..23, with milliseconds, e.g. 2026-06-09T21:14:03.482Z, written by the app, never by a SQLite default (CURRENT_TIMESTAMP has no milliseconds and is not ISO-8601; a trigger writes strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')); fixed width, so it sorts as text; CHECK strftime(''%Y-%m-%dT%H:%M:%fZ'', x) IS x; created_at, on every table that has it, is when the row was written to life.db, never back-dated (when a thing happened is its day or its other *_at)'),
-  ('days',      'every *_day column (and day) is the LOCAL exact 10-character ASCII calendar date YYYY-MM-DD, years 0000..9999, where the thing happened, written by the app from the local calendar of the device that captured it (never a server''s), never recomputed from an instant; CHECK explicit ASCII shape and date(x) IS x (IS, not =: a CHECK passes on NULL, and date(''2026-9-3'') is NULL)'),
+  ('schema',    'lifelog v1: the journal (one page per day), wiki, people, places, recorded life periods, health metrics and the files kept as their text and a small picture, of one person: a life log with explicit personal task intentions, recurring outcomes and reminder intent, not a general project manager; the rules of each table are comments inside its CREATE statement (.schema), the rules that span tables are these rows'),
+  ('instants',  'every *_at column is an exact 24-character ASCII UTC ISO-8601 TEXT instant, years 0000..9999 and hours 00..23, with milliseconds, e.g. 2026-06-09T21:14:03.482Z, written by the app, never by a SQLite default (CURRENT_TIMESTAMP has no milliseconds and is not ISO-8601; a trigger writes strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')); fixed width, so it sorts as text; CHECK strftime(''%Y-%m-%dT%H:%M:%fZ'', x) IS x; created_at, on every table that has it, is when the row was written to life.db, never back-dated; task completed_at is supplied completion evidence and reminder_override_at is a chosen future or past reminder instant, not an assertion that an event happened'),
+  ('days',      'every *_day column (and day) is the LOCAL exact 10-character ASCII calendar date YYYY-MM-DD, years 0000..9999, where the thing happened for recorded facts, written by the app from the local calendar of the device that captured it (never a server''s), never recomputed from an instant; tasks.anchor_day, tasks.repeat_until_day, task_occurrences.due_day and date occurrence_key are chosen planning calendar days, not claims that an event happened; CHECK explicit ASCII shape and date(x) IS x (IS, not =: a CHECK passes on NULL, and date(''2026-9-3'') is NULL)'),
   ('measurement_scope', 'a new non-NULL measurement associated by session_id requires a live session; tombstones retain facts, NULL retraction remains allowed; active queries exclude tombstoned-session facts, explicit historical reads retain scope and lifecycle'),
+  ('planning', 'task project admission requires a live non-journal plain page; retained references forbid incompatible type changes and exclude ghost cleanup, while tombstones retain context; a one-off task commits with exactly one occurrence keyed once; occurrence admission requires a live task and a key in its immutable anchored sequence; open keys cannot exceed its current end, while explicit historical done/skipped outcomes may; shortening the end atomically skips existing open keys beyond it, preserves other outcomes, and forbids reopening those later keys; active planning reads and reminders exclude tombstoned tasks and occurrences, and reminders require an open occurrence'),
   ('deletes',   'life data is never deleted except links rows: an entity is a tombstone (entities.deleted_at), a measurement is corrected by inserting a row; BEFORE DELETE triggers enforce it on entities and every domain row; ordinary active reads filter lifecycle tombstones; explicit historical and append-only audits retain them; the registries (link_kinds, lifelog_meta) are the owner''s administrative rows, deletable while nothing references them (each CREATE comment says so)'),
-  ('source',    'entities, sessions, links, measurements and habit_periods: source names the writer of the row (ui, cli, api, agent:<name>, import:<name>; schema for the rows this file seeds); written at insert, never changed; import_key, on entities and on measurements, is unique per source'),
-  ('edit_revisions', 'entities.revision and sessions.revision are monotonic integer edit tokens independent of updated_at; names, body, day, type, lifecycle, typed detail, habit period and incident link changes advance it; no-ops do not, rollback restores it, exhaustion refuses; clients compare the token inside BEGIN IMMEDIATE, never a timestamp; exact increment counts are not meaningful'),
+  ('source',    'entities, sessions, tasks, task_occurrences, links, measurements and habit_periods: source names the writer of the row (ui, cli, api, agent:<name>, import:<name>; schema for the rows this file seeds); written at insert, never changed; import_key is unique per source on entities, sessions, tasks and task_occurrences, and per source and metric on measurements'),
+  ('edit_revisions', 'entities.revision, sessions.revision, tasks.revision and task_occurrences.revision are monotonic integer edit tokens independent of updated_at; names, body, day, type, lifecycle, typed detail, habit period and incident link changes advance it; no-ops do not, rollback restores it, exhaustion refuses; clients compare the token inside BEGIN IMMEDIATE, never a timestamp; exact increment counts are not meaningful; planning edits advance the edited row; resolving inherited task context, lifecycle or reminder defaults requires comparing both task and occurrence tokens'),
   ('typed_links', 'both endpoints of every retained link must satisfy link_kinds; a type change refuses invalid incoming or outgoing edges atomically; semantic integrity checks the registry independently of structural integrity'),
   ('writers',   'one writing application; every connection sets foreign_keys=ON, recursive_triggers=ON, synchronous=FULL, trusted_schema=OFF and starts write transactions with BEGIN IMMEDIATE; every other tool opens the file read-only; imports use INSERT ... ON CONFLICT DO NOTHING, never OR IGNORE (skips CHECK/NOT NULL violations silently) or OR REPLACE (a delete)'),
   ('sqlite',    'writers need SQLite >= 3.51.3 (fixes a WAL race between concurrent writers and checkpoints); migrations need >= 3.53 (ALTER TABLE ADD/DROP CONSTRAINT); CHECKs use only functions every such version has'),
@@ -480,6 +481,180 @@ END;
 CREATE TRIGGER sessions_revision_monotonic BEFORE UPDATE OF revision ON sessions WHEN NEW.revision<OLD.revision
 BEGIN SELECT RAISE(ABORT,'session revisions never decrease'); END;
 
+CREATE TABLE tasks (
+ -- Explicit personal intentions; repeated labels are allowed and are not named entities or graph endpoints.
+ -- Project context is optional; cross-table admission, cardinality and lifecycle are lifelog_meta.planning.
+ -- The generated-key deferred FK enforces one-off cardinality without storing a copied constant.
+ -- Recurrence is every N days/weeks/months/years from anchor_day, inclusive repeat_until_day when supplied.
+ -- Unit, interval and anchor never change: another cadence needs another definition. The end only shortens.
+ -- An end before the anchor means an empty sequence; stopping and retained outcomes follow lifelog_meta.planning.
+ -- A default reminder is one local minute clock on the current due day in a chosen IANA zone. Both are absent
+ -- or present; unknown zones remain unresolved, never silently UTC. Resolution is contract/planning.md.
+ -- Tombstones retain this record; cross-table active-read exclusions are lifelog_meta.planning.
+ id INTEGER PRIMARY KEY,
+ label TEXT NOT NULL CONSTRAINT tasks_label CHECK (instr(label,char(0))=0 AND length(trim(label))>=1),
+ project_page_id INTEGER,
+ project_entity_type TEXT NOT NULL DEFAULT 'page' CONSTRAINT tasks_project_entity_type CHECK (project_entity_type='page'),
+ repeat_unit TEXT CONSTRAINT tasks_repeat_unit CHECK (repeat_unit IS NULL OR repeat_unit IN ('day','week','month','year')),
+ repeat_every INTEGER CONSTRAINT tasks_repeat_every CHECK (repeat_every IS NULL OR repeat_every>=1),
+ anchor_day TEXT CONSTRAINT tasks_anchor_day CHECK (anchor_day IS NULL OR (length(anchor_day)=10 AND anchor_day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(anchor_day) IS anchor_day)),
+ repeat_until_day TEXT CONSTRAINT tasks_repeat_until_day CHECK (repeat_until_day IS NULL OR (length(repeat_until_day)=10 AND repeat_until_day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(repeat_until_day) IS repeat_until_day)),
+ reminder_local_time TEXT CONSTRAINT tasks_reminder_local_time CHECK (reminder_local_time IS NULL OR
+      (instr(reminder_local_time,char(0))=0 AND length(reminder_local_time)=5 AND reminder_local_time GLOB '[0-9][0-9]:[0-9][0-9]'
+      AND substr(reminder_local_time,1,2) BETWEEN '00' AND '23' AND substr(reminder_local_time,4,2) BETWEEN '00' AND '59')),
+ reminder_zone TEXT CONSTRAINT tasks_reminder_zone CHECK (reminder_zone IS NULL OR
+      (instr(reminder_zone,char(0))=0 AND length(reminder_zone) BETWEEN 1 AND 64 AND reminder_zone NOT GLOB '*[^A-Za-z0-9_/+-]*')),
+ created_at TEXT NOT NULL CONSTRAINT tasks_created_at CHECK (length(created_at)=24
+      AND created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z'
+      AND substr(created_at,12,2) BETWEEN '00' AND '23'
+      AND strftime('%Y-%m-%dT%H:%M:%fZ',created_at) IS created_at),
+ updated_at TEXT NOT NULL CONSTRAINT tasks_updated_at CHECK (length(updated_at)=24
+      AND updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z'
+      AND substr(updated_at,12,2) BETWEEN '00' AND '23'
+      AND strftime('%Y-%m-%dT%H:%M:%fZ',updated_at) IS updated_at),
+ deleted_at TEXT CONSTRAINT tasks_deleted_at CHECK (deleted_at IS NULL OR (length(deleted_at)=24
+      AND deleted_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z'
+      AND substr(deleted_at,12,2) BETWEEN '00' AND '23'
+      AND strftime('%Y-%m-%dT%H:%M:%fZ',deleted_at) IS deleted_at)),
+ revision INTEGER NOT NULL DEFAULT 1 CONSTRAINT tasks_revision CHECK (revision>=1),
+ source TEXT NOT NULL CONSTRAINT tasks_source CHECK (instr(source,char(0))=0 AND length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*'),
+ import_key TEXT,
+ once_key TEXT GENERATED ALWAYS AS (CASE WHEN repeat_unit IS NULL THEN 'once' END) VIRTUAL,
+ CONSTRAINT tasks_recurrence CHECK ((repeat_unit IS NULL AND repeat_every IS NULL AND anchor_day IS NULL AND repeat_until_day IS NULL)
+      OR (repeat_unit IS NOT NULL AND repeat_every IS NOT NULL AND anchor_day IS NOT NULL)),
+ CONSTRAINT tasks_reminder_pair CHECK ((reminder_local_time IS NULL)=(reminder_zone IS NULL)),
+ FOREIGN KEY(project_page_id,project_entity_type) REFERENCES entities(id,entity_type),
+ FOREIGN KEY(id,once_key) REFERENCES task_occurrences(task_id,occurrence_key) DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+CREATE UNIQUE INDEX tasks_import ON tasks(source,import_key) WHERE import_key IS NOT NULL;
+CREATE INDEX tasks_project ON tasks(project_page_id);
+CREATE TRIGGER tasks_fixed BEFORE UPDATE ON tasks
+ WHEN NEW.id IS NOT OLD.id OR NEW.source IS NOT OLD.source OR NEW.import_key IS NOT OLD.import_key
+ OR NEW.created_at IS NOT OLD.created_at OR NEW.project_entity_type IS NOT OLD.project_entity_type
+ OR NEW.repeat_unit IS NOT OLD.repeat_unit OR NEW.repeat_every IS NOT OLD.repeat_every OR NEW.anchor_day IS NOT OLD.anchor_day
+BEGIN SELECT RAISE(ABORT,'task identity, provenance and cadence are immutable'); END;
+CREATE TRIGGER tasks_end_shortens BEFORE UPDATE OF repeat_until_day ON tasks
+ WHEN OLD.repeat_until_day IS NOT NULL AND (NEW.repeat_until_day IS NULL OR NEW.repeat_until_day>OLD.repeat_until_day)
+BEGIN SELECT RAISE(ABORT,'a recurrence end may only shorten'); END;
+CREATE TRIGGER tasks_end_skip AFTER UPDATE OF repeat_until_day ON tasks
+ WHEN NEW.repeat_until_day IS NOT OLD.repeat_until_day AND NEW.repeat_until_day IS NOT NULL
+BEGIN
+ UPDATE task_occurrences SET state='skipped' WHERE task_id=NEW.id AND state='open' AND occurrence_key>NEW.repeat_until_day;
+END;
+CREATE TRIGGER tasks_project_insert BEFORE INSERT ON tasks WHEN NEW.project_page_id IS NOT NULL BEGIN
+ SELECT RAISE(ABORT,'task project must be a live non-journal plain page') WHERE NOT EXISTS
+ (SELECT 1 FROM entities e WHERE e.id=NEW.project_page_id AND e.entity_type='page' AND e.deleted_at IS NULL
+ AND NOT (length(e.preferred_name_key)=10 AND date(e.preferred_name_key) IS e.preferred_name_key));
+END;
+CREATE TRIGGER tasks_project_update BEFORE UPDATE OF project_page_id ON tasks
+ WHEN NEW.project_page_id IS NOT OLD.project_page_id AND NEW.project_page_id IS NOT NULL BEGIN
+ SELECT RAISE(ABORT,'task project must be a live non-journal plain page') WHERE NOT EXISTS
+ (SELECT 1 FROM entities e WHERE e.id=NEW.project_page_id AND e.entity_type='page' AND e.deleted_at IS NULL
+ AND NOT (length(e.preferred_name_key)=10 AND date(e.preferred_name_key) IS e.preferred_name_key));
+END;
+CREATE TRIGGER tasks_no_delete BEFORE DELETE ON tasks
+BEGIN SELECT RAISE(ABORT,'tasks are tombstoned, never deleted'); END;
+CREATE TRIGGER tasks_touch AFTER UPDATE OF label,project_page_id,repeat_until_day,reminder_local_time,reminder_zone,deleted_at ON tasks
+ WHEN NEW.label IS NOT OLD.label OR NEW.project_page_id IS NOT OLD.project_page_id OR NEW.repeat_until_day IS NOT OLD.repeat_until_day
+ OR NEW.reminder_local_time IS NOT OLD.reminder_local_time OR NEW.reminder_zone IS NOT OLD.reminder_zone OR NEW.deleted_at IS NOT OLD.deleted_at
+BEGIN
+ UPDATE tasks SET revision=revision+1,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=NEW.id;
+END;
+CREATE TRIGGER tasks_revision_monotonic BEFORE UPDATE OF revision ON tasks WHEN NEW.revision<OLD.revision
+BEGIN SELECT RAISE(ABORT,'task revisions never decrease'); END;
+
+CREATE TABLE task_occurrences (
+ -- A stable instance, unique forever within its definition, including after tombstoning. One-offs use 'once';
+ -- recurring keys are original scheduled days in the anchored sequence. Moving/clearing due_day never moves
+ -- the key. Day/week cadences advance calendar days; month/year cadences clamp each target to its last day
+ -- from the original anchor, without February drift. Membership arithmetic never multiplies the interval.
+ -- Admission, recurrence-end changes and cross-table lifecycle are lifelog_meta.planning.
+ -- Normal generation starts open/inherit with due_day=key; a repeated task/key insert must preserve existing
+ -- contents, lifecycle and revision. Writers distinguish generation from explicitly evidenced imports.
+ -- Missing recurring rows are virtual open slots in finite windows (contract/planning.md). A retained row,
+ -- including a tombstone, replaces its virtual slot before filtering by current deadline and state.
+ -- completed_at is optional supplied evidence only for done; reopening/skipping clears it. No transition
+ -- creates journal prose, a reading, a recorded session or a place claim. Snapshots preserve earlier states.
+ -- Reminder modes: inherit resolves the definition against due_day; off suppresses; at uses the absolute
+ -- reminder_override_at, including undated tasks. Eligibility is lifelog_meta.planning.
+ id INTEGER PRIMARY KEY,
+ task_id INTEGER NOT NULL REFERENCES tasks(id),
+ occurrence_key TEXT NOT NULL CONSTRAINT task_occurrences_key CHECK (occurrence_key='once' OR (length(occurrence_key)=10 AND occurrence_key GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(occurrence_key) IS occurrence_key)),
+ due_day TEXT CONSTRAINT task_occurrences_due_day CHECK (due_day IS NULL OR (length(due_day)=10 AND due_day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(due_day) IS due_day)),
+ state TEXT NOT NULL DEFAULT 'open' CONSTRAINT task_occurrences_state CHECK (state IN ('open','done','skipped')),
+ completed_at TEXT CONSTRAINT task_occurrences_completed_at CHECK (completed_at IS NULL OR (length(completed_at)=24
+      AND completed_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z'
+      AND substr(completed_at,12,2) BETWEEN '00' AND '23'
+      AND strftime('%Y-%m-%dT%H:%M:%fZ',completed_at) IS completed_at)),
+ reminder_mode TEXT NOT NULL DEFAULT 'inherit' CONSTRAINT task_occurrences_reminder_mode CHECK (reminder_mode IN ('inherit','off','at')),
+ reminder_override_at TEXT CONSTRAINT task_occurrences_reminder_override_at CHECK (reminder_override_at IS NULL OR (length(reminder_override_at)=24
+      AND reminder_override_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z'
+      AND substr(reminder_override_at,12,2) BETWEEN '00' AND '23'
+      AND strftime('%Y-%m-%dT%H:%M:%fZ',reminder_override_at) IS reminder_override_at)),
+ created_at TEXT NOT NULL CONSTRAINT task_occurrences_created_at CHECK (length(created_at)=24
+      AND created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z'
+      AND substr(created_at,12,2) BETWEEN '00' AND '23'
+      AND strftime('%Y-%m-%dT%H:%M:%fZ',created_at) IS created_at),
+ updated_at TEXT NOT NULL CONSTRAINT task_occurrences_updated_at CHECK (length(updated_at)=24
+      AND updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z'
+      AND substr(updated_at,12,2) BETWEEN '00' AND '23'
+      AND strftime('%Y-%m-%dT%H:%M:%fZ',updated_at) IS updated_at),
+ deleted_at TEXT CONSTRAINT task_occurrences_deleted_at CHECK (deleted_at IS NULL OR (length(deleted_at)=24
+      AND deleted_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z'
+      AND substr(deleted_at,12,2) BETWEEN '00' AND '23'
+      AND strftime('%Y-%m-%dT%H:%M:%fZ',deleted_at) IS deleted_at)),
+ revision INTEGER NOT NULL DEFAULT 1 CONSTRAINT task_occurrences_revision CHECK (revision>=1),
+ source TEXT NOT NULL CONSTRAINT task_occurrences_source CHECK (instr(source,char(0))=0 AND length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*'),
+ import_key TEXT,
+ UNIQUE(task_id,occurrence_key),
+ CONSTRAINT task_occurrences_completion CHECK (completed_at IS NULL OR state='done'),
+ CONSTRAINT task_occurrences_reminder_pair CHECK ((reminder_mode='at')=(reminder_override_at IS NOT NULL))
+) STRICT;
+CREATE UNIQUE INDEX task_occurrences_import ON task_occurrences(source,import_key) WHERE import_key IS NOT NULL;
+CREATE INDEX task_occurrences_due ON task_occurrences(due_day,task_id);
+CREATE TRIGGER task_occurrences_fixed BEFORE UPDATE ON task_occurrences
+ WHEN NEW.id IS NOT OLD.id OR NEW.task_id IS NOT OLD.task_id OR NEW.occurrence_key IS NOT OLD.occurrence_key
+ OR NEW.source IS NOT OLD.source OR NEW.import_key IS NOT OLD.import_key OR NEW.created_at IS NOT OLD.created_at
+BEGIN SELECT RAISE(ABORT,'occurrence identity and provenance are immutable'); END;
+CREATE TRIGGER task_occurrences_admit BEFORE INSERT ON task_occurrences BEGIN
+ SELECT RAISE(ABORT,'an occurrence requires a live task') WHERE NOT EXISTS
+ (SELECT 1 FROM tasks t WHERE t.id=NEW.task_id AND t.deleted_at IS NULL);
+ SELECT RAISE(ABORT,'an occurrence key must belong to its task cadence') WHERE NOT EXISTS
+ (SELECT 1 FROM tasks t WHERE t.id=NEW.task_id AND
+   ((t.repeat_unit IS NULL AND NEW.occurrence_key='once') OR
+    (t.repeat_unit IS NOT NULL AND NEW.occurrence_key>=t.anchor_day
+     AND CASE t.repeat_unit
+       WHEN 'day' THEN CAST(julianday(NEW.occurrence_key)-julianday(t.anchor_day) AS INTEGER)%t.repeat_every=0
+       WHEN 'week' THEN CAST(julianday(NEW.occurrence_key)-julianday(t.anchor_day) AS INTEGER)%7=0
+         AND (CAST(julianday(NEW.occurrence_key)-julianday(t.anchor_day) AS INTEGER)/7)%t.repeat_every=0
+       WHEN 'month' THEN ((CAST(substr(NEW.occurrence_key,1,4) AS INTEGER)-CAST(substr(t.anchor_day,1,4) AS INTEGER))*12
+         + CAST(substr(NEW.occurrence_key,6,2) AS INTEGER)-CAST(substr(t.anchor_day,6,2) AS INTEGER))%t.repeat_every=0
+       WHEN 'year' THEN (CAST(substr(NEW.occurrence_key,1,4) AS INTEGER)-CAST(substr(t.anchor_day,1,4) AS INTEGER))%t.repeat_every=0
+         AND substr(NEW.occurrence_key,6,2)=substr(t.anchor_day,6,2)
+     END
+     AND (t.repeat_unit IN ('day','week') OR CAST(substr(NEW.occurrence_key,9,2) AS INTEGER)=min(CAST(substr(t.anchor_day,9,2) AS INTEGER),
+       CASE WHEN substr(NEW.occurrence_key,6,2)='02' THEN 28+
+         (CAST(substr(NEW.occurrence_key,1,4) AS INTEGER)%4=0 AND
+          (CAST(substr(NEW.occurrence_key,1,4) AS INTEGER)%100<>0 OR CAST(substr(NEW.occurrence_key,1,4) AS INTEGER)%400=0))
+       WHEN substr(NEW.occurrence_key,6,2) IN ('04','06','09','11') THEN 30 ELSE 31 END)))));
+ SELECT RAISE(ABORT,'an open occurrence cannot follow its recurrence end') WHERE NEW.state='open' AND EXISTS
+ (SELECT 1 FROM tasks t WHERE t.id=NEW.task_id AND t.repeat_until_day IS NOT NULL AND NEW.occurrence_key>t.repeat_until_day);
+END;
+CREATE TRIGGER task_occurrences_open BEFORE UPDATE OF state ON task_occurrences WHEN NEW.state='open' BEGIN
+ SELECT RAISE(ABORT,'an occurrence after its recurrence end cannot reopen') WHERE EXISTS
+ (SELECT 1 FROM tasks t WHERE t.id=NEW.task_id AND t.repeat_until_day IS NOT NULL AND NEW.occurrence_key>t.repeat_until_day);
+END;
+CREATE TRIGGER task_occurrences_no_delete BEFORE DELETE ON task_occurrences
+BEGIN SELECT RAISE(ABORT,'occurrences are tombstoned, never deleted'); END;
+CREATE TRIGGER task_occurrences_touch AFTER UPDATE OF due_day,state,completed_at,reminder_mode,reminder_override_at,deleted_at ON task_occurrences
+ WHEN NEW.due_day IS NOT OLD.due_day OR NEW.state IS NOT OLD.state OR NEW.completed_at IS NOT OLD.completed_at
+ OR NEW.reminder_mode IS NOT OLD.reminder_mode OR NEW.reminder_override_at IS NOT OLD.reminder_override_at OR NEW.deleted_at IS NOT OLD.deleted_at
+BEGIN
+ UPDATE task_occurrences SET revision=revision+1,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=NEW.id;
+END;
+CREATE TRIGGER task_occurrences_revision_monotonic BEFORE UPDATE OF revision ON task_occurrences WHEN NEW.revision<OLD.revision
+BEGIN SELECT RAISE(ABORT,'occurrence revisions never decrease'); END;
+
 CREATE TABLE measurements (
   -- one row per data point (the FxLifeSheet shape). The table is append-only, enforced by triggers: never
   -- UPDATE or DELETE. A correction is a new row whose supersedes_id names the row it corrects, at most one
@@ -692,7 +867,7 @@ BEGIN
 END;
 
 CREATE VIEW ghost_pages AS
-  -- Empty live plain objects older than 30 days without graph, session-kind or measurement-capture references,
+  -- Empty live plain objects older than 30 days without graph, session-kind, task-project or measurement-capture references,
   -- including historical facts; never a typed identity. Owner tombstones them.
   SELECT e.id, n.title, e.created_at
     FROM entities e JOIN entity_names n ON n.entity_id = e.id AND n.name_key = e.preferred_name_key
@@ -700,6 +875,7 @@ CREATE VIEW ghost_pages AS
      AND e.created_at < strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 day')
      AND NOT EXISTS (SELECT 1 FROM links l WHERE l.to_id = e.id OR l.from_id = e.id)
      AND NOT EXISTS (SELECT 1 FROM sessions s WHERE s.kind_id = e.id)
+     AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.project_page_id = e.id)
      AND NOT EXISTS (SELECT 1 FROM measurements m WHERE m.captured_with_id = e.id);
 
 CREATE TRIGGER entity_names_touch_insert AFTER INSERT ON entity_names BEGIN

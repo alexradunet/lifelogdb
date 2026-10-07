@@ -2,7 +2,10 @@
 
 `lifelog` is one Go binary that keeps a lifetime-scale, single-user SQLite database, `life.db` — a life log and
 its backup: a journal of day pages, notes, the people and places in them, where you were, health readings, and the
-files you keep — a recording's transcript, a PDF's text, a photo's small picture. It serves the file three ways: a hypermedia API (with an HTML face for the browser), a CLI and an MCP server.
+files you keep — a recording's transcript, a PDF's text, a photo's small picture. The database also preserves
+[explicit personal tasks and reminder intent](docs/contract/planning.md); planning interfaces and notification
+delivery are separate application work. It serves the file three ways: a hypermedia API (with an HTML face for
+the browser), a CLI and an MCP server.
 
 The database it writes is specified independently of it, so another program — in any language — can read
 `life.db`, or write its own:
@@ -111,6 +114,10 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **Imported keys** are derived, never sent: `path|person|<title_key>` (and place, page), a note's path, and
   `path|reading|<metric_title_key>|<day>|<taken_at, or its place in the source file>`. Ambiguous old reading keys are
   refused during owner-local rehearsal; take a snapshot first if needed, because lifelog never auto-repairs them.
+- **Planning storage.** Core task operations implement the [planning contract](docs/contract/planning.md).
+  Deadline reads use an explicit inclusive window, limited to 10,000 persisted candidates and 10,000 returned
+  occurrences; larger reads refuse instead of silently truncating. No task UI, notification sender or phone
+  interface is exposed.
 - **The schema is embedded.** `go generate ./...` copies `docs/schema/schema.sql` into `internal/db`; a test fails
   when the copy is stale. `lifelog init` refuses an existing file; `Open` refuses a file without Lifelog's
   `application_id`.

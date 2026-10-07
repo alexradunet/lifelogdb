@@ -9,7 +9,7 @@ import (
 // journal: the journal (D5, D15, D16, D22, D23) — the day page and its CHECK, capture that appends to it
 // (cookbook/capture), the cookbook/day-view day view, the days that name someone or somewhere
 // (cookbook/days-that-name), where the owner was (cookbook/where-was-i), and what stands in for recurrence,
-// events and tasks.
+// events, with explicit planning kept separate from observed habits.
 func journal(s *S) {
 	// ---- the day page (pages_day_page)
 	c := s.fresh()
@@ -209,9 +209,9 @@ func journal(s *S) {
 	}
 	s.K("cookbook/day-view a tombstoned day lists none of its places", atRows == 0)
 
-	// ---- what stands in for recurrence (D15), events (D22) and tasks (D23)
+	// ---- observed habits and birthdays remain distinct from explicit tasks (D23)
 	c = s.fresh()
-	s.K("there is no tasks table and no task link kind (D23)", c.n("select count(*) from sqlite_schema where name='tasks'") == 0 &&
+	s.K("tasks have independent identities and no task graph kinds (D23)", c.n("select count(*) from sqlite_schema where type='table' and name in ('tasks','task_occurrences')") == 2 &&
 		c.n("select count(*) from link_kinds where kind in ('spawned','subtask')") == 0)
 	mid := c.metric("rent_paid", "")
 	for _, x := range [][2]any{{"2026-01-31", 1}, {"2026-02-28", 0}, {"2026-03-31", 1}} {

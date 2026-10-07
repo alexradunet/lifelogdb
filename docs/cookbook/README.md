@@ -32,4 +32,5 @@ The order below is the order the suites run the recipes in; the key is how a sui
 | [Metrics by category: file a metric, nest a category, a category's metrics, every metric grouped (D26)](metrics-by-category.md) | `metrics-by-category` |
 | [Recorded sessions and labeled scoped readings](recorded-sessions.md) | `recorded-sessions` |
 | [Read recorded periods](recorded-periods.md) | `recorded-periods` |
+| [Personal tasks, occurrences and deadlines](tasks.md) | `tasks` |
 | [Take a snapshot, check it, restore it (D25)](take-a-snapshot.md) | `take-a-snapshot` |

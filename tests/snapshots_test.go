@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 )
 
@@ -31,14 +30,12 @@ func snapshots(s *S) {
 	s.K("the shell form of the snapshot opens life.db read-only, with trusted_schema=OFF", strings.Contains(page, `sqlite3 -readonly -cmd "PRAGMA trusted_schema=OFF" life.db "VACUUM INTO`))
 	var checks []string
 	if ib := sqlBlocks(s.d.Page("contract/integrity-checks.md")); len(ib) > 0 {
-		for _, l := range strings.Split(ib[0], "\n") {
-			if l = strings.TrimSpace(regexp.MustCompile(`\s*--.*$`).ReplaceAllString(l, "")); l != "" {
-				checks = append(checks, strings.TrimSuffix(l, ";"))
-			}
+		for _, st := range statements(ib[0]) {
+			checks = append(checks, code(st))
 		}
 	}
-	if len(checks) != 7 {
-		stop("contract/integrity-checks does not contain the seven statements in four check groups: %v", checks)
+	if len(checks) != 10 {
+		stop("contract/integrity-checks does not contain the ten statements in four check groups: %v", checks)
 	}
 	// checkStatements includes both domain and typed-edge semantic queries in the four check groups.
 	checkStatements := func(c *C) []string {
@@ -54,7 +51,15 @@ func snapshots(s *S) {
 		return out
 	}
 	clean := func(r []string) bool {
-		return len(r) == 7 && r[0] == "ok" && r[1] == "" && r[2] == "" && r[3] == "" && r[4] == "" && r[5] == "" && r[6] == ""
+		if len(r) != 10 || r[0] != "ok" {
+			return false
+		}
+		for _, result := range r[1:] {
+			if result != "" {
+				return false
+			}
+		}
+		return true
 	}
 	writer := func(p string) *C { // the writer's settings (contract/connections)
 		return s.connect(p, "_defensive=1", "_pragma=foreign_keys(1)", "_pragma=recursive_triggers(1)", "_pragma=synchronous(2)", "_pragma=trusted_schema(0)")
@@ -145,7 +150,7 @@ func snapshots(s *S) {
 	// 2. the restore check
 	r := checkStatements(sr)
 	s.K("on a mode=ro connection the first three checks pass and the FTS5 check is refused (attempt to write a readonly database)",
-		r[0] == "ok" && r[1] == "" && r[2] == "" && r[3] == "" && r[4] == "" && r[5] == "" && strings.Contains(r[6], "readonly"), r)
+		r[0] == "ok" && r[1] == "" && r[2] == "" && r[3] == "" && r[4] == "" && r[5] == "" && r[6] == "" && r[7] == "" && r[8] == "" && strings.Contains(r[9], "readonly"), r)
 	sr.Close()
 	before := read(snap)
 	sc := writer(snap)

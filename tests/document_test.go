@@ -76,11 +76,11 @@ func document(s *S) {
 	for k := range meta {
 		keys = append(keys, k)
 	}
-	s.K("lifelog_meta holds only the few cross-table rules (at most 11 keys)", len(meta) <= 11, sorted(keys))
+	s.K("lifelog_meta holds only the few cross-table rules (at most 12 keys)", len(meta) <= 12, sorted(keys))
 	head := ddlHeader(s.ddl)
 	s.K("the DDL header before the first statement is a short pointer (<= 12 lines) naming lifelog_meta", strings.Count(head, "\n") <= 12 && strings.Contains(head, "lifelog_meta"))
 	inner := regexp.MustCompile(`\n\s*--`)
-	for _, t := range []string{"entities", "entity_names", "people", "metrics", "measurements", "habit_periods", "link_kinds", "links", "lifelog_meta"} {
+	for _, t := range []string{"entities", "entity_names", "people", "metrics", "measurements", "habit_periods", "link_kinds", "links", "lifelog_meta", "tasks", "task_occurrences"} {
 		s.K(t+": its CREATE statement carries its rules as comments", inner.MatchString(schema[t]))
 	}
 	count := func(k string) int64 {

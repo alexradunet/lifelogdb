@@ -10,6 +10,7 @@ spans tables — time, identity, provenance, deletion — in a row of `lifelog_m
 | [Session time evidence](session-time.md) | UTC/local exclusivity, reporting day and unverified evidence vectors |
 | [Measurement scope](measurement-scope.md) | scoped corrections, active/historical reads and owner relocation |
 | [Recorded period boundaries](period-boundaries.md) | partial/qualified boundary profile and day-membership vectors |
+| [Personal tasks and reminder intent](planning.md) | bounded recurrence, merged deadline reads, writer lifecycle and clock-resolution vectors |
 | [Integrity checks](integrity-checks.md) | the four checks that tell whether a file still obeys the schema |
 | [Connection setup](connections.md) | the pragmas every writer sets and reads back, the version floor, `BEGIN IMMEDIATE`, read-only readers |
 | [Threat model and the 2075 test](threat-model.md) | what is protected and from what; the questions the file alone must answer |

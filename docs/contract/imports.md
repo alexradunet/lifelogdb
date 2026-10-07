@@ -53,3 +53,12 @@ DETACH s;
    file holds only replayable imports it can still be rebuilt ([D13](../decisions/D13-migrations-and-freeze.md)). The
    2026-10 trial — a real vault, imported into a copy — already taught [D5](../decisions/D05-pages-and-day-pages.md), [D22](../decisions/D22-events.md), [D23](../decisions/D23-no-tasks.md) and [D24](../decisions/D24-habits.md); an
    import into `life.db` itself is the one test this schema has never had.
+
+## Explicit planning imports
+
+A source's prose, goals and checkboxes remain prose unless the owner explicitly selects structured task capture
+([D23](../decisions/D23-no-tasks.md)). The [planning writer operations](planning.md) govern creation and replay:
+source/import keys and task/occurrence keys must bind to the same identity, and an existing occurrence retains its
+edits and tombstone. Imported completion evidence is distinct from write time; unknown completion time stays NULL.
+The [model facts-file workflow](../guides/importing.md) does not provide task writes. A planning importer must use
+the task contract deliberately rather than interpreting an unsupported facts kind as permission to create work.

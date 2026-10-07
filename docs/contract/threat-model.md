@@ -7,7 +7,7 @@ the points of the owner's places, in one plaintext file ([D17](../decisions/D17-
 |---|---|---|
 | The file is damaged or lost | `synchronous=FULL` and WAL on SQLite ≥ 3.51.3, on a local disk ([connection setup](connections.md)); the integrity checks find damage ([integrity checks](integrity-checks.md)); a dated snapshot, trusted once its restore check passes, is the second copy ([take a snapshot](../cookbook/take-a-snapshot.md), [D25](../decisions/D25-snapshots.md)) | what was written after the last snapshot; a snapshot on the same disk is lost with it, and a copy off the machine is the owner's business ([non-goals](../architecture/non-goals.md)); power loss is documented, not simulated [R67](../research/references.md#r67) |
 | A changed value inside the file (bit rot) | a data-checksumming filesystem (btrfs, ZFS), never `chattr +C`, a periodic `scrub` ([integrity checks](integrity-checks.md)) | structural integrity alone cannot detect an arbitrary changed value; FTS content comparison detects changes to indexed tokens, but other undetectable value changes remain |
-| A buggy writer, importer or agent | one writing application; triggers for append-only facts, no hard deletes and fixed kinds and retained name ownership; `ON CONFLICT … DO NOTHING`; `BEGIN IMMEDIATE`; `source` on every entity, session, link, measurement and habit period; the foreign-key and orphan checks ([D11](../decisions/D11-tombstones.md), [connection setup](connections.md), [integrity checks](integrity-checks.md)) | the pragmas are per connection, so the application asserts them at connect |
+| A buggy writer, importer or agent | one writing application; triggers for append-only facts, no hard deletes and fixed kinds and retained name ownership; `ON CONFLICT … DO NOTHING`; `BEGIN IMMEDIATE`; `source` on every entity, session, task, task occurrence, link, measurement and habit period; the foreign-key and orphan checks ([D11](../decisions/D11-tombstones.md), [connection setup](connections.md), [integrity checks](integrity-checks.md)) | the pragmas are per connection, so the application asserts them at connect |
 | Instructions hidden in an imported source, read by a model ([importing with a model](../guides/importing.md)) | the checked facts workflow verifies source quotes, approved metrics and look-alike names; approval, direct metric creation and replay are owner-only operations; workspace metric registration is model-callable but requires owner-approved rows in the stamped metrics file; the model is instructed to treat source text as data, not instructions; the owner reviews status and the trial before replay ([workflow and direct-write limits](../guides/importing.md#direct-writes-and-their-limits)) | a stamp is a line in a file, so anything that can write the workspace can forge it; direct model writes are allowed and do not receive facts source-quote checks; instructions are not enforcement; status reports non-replayable writes, but does not undo them; a quoted but wrong fact can pass — the owner's review is what holds |
 | Another tool editing rows | exploration tools open the file read-only ([connection setup](connections.md), [D14](../decisions/D14-ui-and-tools.md)) | anything with write access to the file bypasses every control |
 | A stolen disk | the disk holding `life.db` is encrypted at rest ([D17](../decisions/D17-contract-as-data.md)) | a stolen *unlocked* machine has everything |
@@ -45,7 +45,7 @@ each phrase in the last column, and **every key of `lifelog_meta` must be used b
 | 17 | Where is the journal? What did I write on a given day? | `entities`, `days` | `plain journal-day identity`, `YYYY-MM-DD`, `neither may transfer` |
 | 18 | Which SQLite may write this file? | `sqlite` | `3.51.3`, `3.53` |
 | 19 | Who or what wrote this row? | `source` | `written at insert`, `agent` |
-| 20 | Does it keep to-dos and plans? | `schema` | `not a project manager` |
+| 20 | Does it keep personal planning distinct from recorded facts? | `schema`, `tasks`, `task_occurrences` | `personal task intentions`, `occurrence`, `reminder` |
 | 21 | Where was I on a given day? | `links`, `link_kinds` | `places the owner was at`, `kind='at'` |
 | 22 | Which metrics are habits, and was one meant to be done on a day? | `habit_periods` | `HABIT`, `NOT RECORDED` |
 | 23 | Which metrics are biomarkers, or what the owner took in? | `metrics` | `a category is a page`, `part-of`, `NOT a category` |
@@ -54,3 +54,8 @@ each phrase in the last column, and **every key of `lifelog_meta` must be used b
 | 26 | Can a type change reinterpret retained edges? | `typed_links`, `entities_endpoint_types` | `incoming`, `outgoing`, `retained` |
 | 27 | How are stale edits rejected when write clocks coincide? | `edit_revisions` | `monotonic`, `independent`, `no-ops`, `rollback`, `exhaustion` |
 | 28 | How does a session tombstone affect readings? | `measurement_scope` | `live session`, `NULL retraction`, `historical`, `scope` |
+| 29 | How do planning identities, stopping and lifecycle agree? | `planning` | `task`, `occurrence`, `tombstone` |
+
+Planning reads and reminders follow the [planning profile](planning.md), including retained outcomes after
+ending a recurrence. A clock that cannot be resolved remains visible as unresolved intent; restoring a snapshot
+does not send notifications or establish that old reminders should be delivered.

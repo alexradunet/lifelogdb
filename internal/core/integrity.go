@@ -16,12 +16,15 @@ type IntegrityResult struct {
 	InvalidTypedLinks        []int64  `json:"invalid_typed_links"`
 	InvalidSessionKinds      []int64  `json:"invalid_session_kinds"`
 	InvalidMeasurementScopes []int64  `json:"invalid_measurement_scopes"`
+	InvalidTaskProjects      []int64  `json:"invalid_task_projects"`
+	InvalidOneOffTasks       []int64  `json:"invalid_one_off_tasks"`
+	InvalidTaskOccurrences   []int64  `json:"invalid_task_occurrences"`
 	FullTextIndexOK          bool     `json:"full_text_index_ok"`
 	FullTextError            string   `json:"full_text_error,omitempty"`
 }
 
 func (s *Store) Integrity(ctx context.Context) (*IntegrityResult, error) {
-	r := &IntegrityResult{IntegrityCheck: []string{}, OrphanEntities: []int64{}, InvalidTypedLinks: []int64{}, InvalidSessionKinds: []int64{}, InvalidMeasurementScopes: []int64{}}
+	r := &IntegrityResult{IntegrityCheck: []string{}, OrphanEntities: []int64{}, InvalidTypedLinks: []int64{}, InvalidSessionKinds: []int64{}, InvalidMeasurementScopes: []int64{}, InvalidTaskProjects: []int64{}, InvalidOneOffTasks: []int64{}, InvalidTaskOccurrences: []int64{}}
 	if err := s.integrityRead(ctx, "integrity_check", `PRAGMA integrity_check`, func(rows *sql.Rows) error {
 		var line string
 		if err := rows.Scan(&line); err != nil {
@@ -96,6 +99,53 @@ func (s *Store) Integrity(ctx context.Context) (*IntegrityResult, error) {
 	}); err != nil {
 		return nil, err
 	}
+	if err := s.integrityRead(ctx, "task project endpoints", `SELECT t.id FROM tasks t LEFT JOIN entities e ON e.id=t.project_page_id WHERE t.project_page_id IS NOT NULL AND (e.id IS NULL OR e.entity_type<>'page' OR (length(e.preferred_name_key)=10 AND date(e.preferred_name_key) IS e.preferred_name_key)) ORDER BY t.id`, func(rows *sql.Rows) error {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		r.InvalidTaskProjects = append(r.InvalidTaskProjects, id)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	if err := s.integrityRead(ctx, "one-off task ownership", `SELECT t.id FROM tasks t WHERE t.repeat_unit IS NULL AND (SELECT count(*) FROM task_occurrences o WHERE o.task_id=t.id AND o.occurrence_key='once')<>1 ORDER BY t.id`, func(rows *sql.Rows) error {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		r.InvalidOneOffTasks = append(r.InvalidOneOffTasks, id)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	if err := s.integrityRead(ctx, "task occurrence membership", `SELECT o.id FROM task_occurrences o WHERE NOT EXISTS
+(SELECT 1 FROM tasks t WHERE t.id=o.task_id AND
+   ((t.repeat_unit IS NULL AND o.occurrence_key='once') OR
+    (t.repeat_unit IS NOT NULL AND o.occurrence_key>=t.anchor_day
+     AND CASE t.repeat_unit
+       WHEN 'day' THEN CAST(julianday(o.occurrence_key)-julianday(t.anchor_day) AS INTEGER)%t.repeat_every=0
+       WHEN 'week' THEN CAST(julianday(o.occurrence_key)-julianday(t.anchor_day) AS INTEGER)%7=0
+         AND (CAST(julianday(o.occurrence_key)-julianday(t.anchor_day) AS INTEGER)/7)%t.repeat_every=0
+       WHEN 'month' THEN ((CAST(substr(o.occurrence_key,1,4) AS INTEGER)-CAST(substr(t.anchor_day,1,4) AS INTEGER))*12
+         + CAST(substr(o.occurrence_key,6,2) AS INTEGER)-CAST(substr(t.anchor_day,6,2) AS INTEGER))%t.repeat_every=0
+       WHEN 'year' THEN (CAST(substr(o.occurrence_key,1,4) AS INTEGER)-CAST(substr(t.anchor_day,1,4) AS INTEGER))%t.repeat_every=0
+         AND substr(o.occurrence_key,6,2)=substr(t.anchor_day,6,2)
+     END
+     AND (t.repeat_unit IN ('day','week') OR CAST(substr(o.occurrence_key,9,2) AS INTEGER)=min(CAST(substr(t.anchor_day,9,2) AS INTEGER),
+       CASE WHEN substr(o.occurrence_key,6,2)='02' THEN 28+
+         (CAST(substr(o.occurrence_key,1,4) AS INTEGER)%4=0 AND
+          (CAST(substr(o.occurrence_key,1,4) AS INTEGER)%100<>0 OR CAST(substr(o.occurrence_key,1,4) AS INTEGER)%400=0))
+       WHEN substr(o.occurrence_key,6,2) IN ('04','06','09','11') THEN 30 ELSE 31 END))))) OR (o.state='open' AND EXISTS (SELECT 1 FROM tasks t WHERE t.id=o.task_id AND t.repeat_until_day IS NOT NULL AND o.occurrence_key>t.repeat_until_day)) ORDER BY o.id`, func(rows *sql.Rows) error {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		r.InvalidTaskOccurrences = append(r.InvalidTaskOccurrences, id)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
 	// the FTS check is an INSERT that writes nothing, so it runs on the writing connection
 	if _, err := s.DB.W.ExecContext(ctx, `INSERT INTO entities_fts(entities_fts, rank) VALUES ('integrity-check', 1)`); err != nil {
 		r.FullTextError = fmt.Sprint(err)
@@ -103,7 +153,8 @@ func (s *Store) Integrity(ctx context.Context) (*IntegrityResult, error) {
 		r.FullTextIndexOK = true
 	}
 	r.OK = len(r.IntegrityCheck) == 1 && r.IntegrityCheck[0] == "ok" && r.ForeignKeys == 0 &&
-		len(r.OrphanEntities) == 0 && len(r.InvalidTypedLinks) == 0 && len(r.InvalidSessionKinds) == 0 && len(r.InvalidMeasurementScopes) == 0 && r.FullTextIndexOK
+		len(r.OrphanEntities) == 0 && len(r.InvalidTypedLinks) == 0 && len(r.InvalidSessionKinds) == 0 && len(r.InvalidMeasurementScopes) == 0 &&
+		len(r.InvalidTaskProjects) == 0 && len(r.InvalidOneOffTasks) == 0 && len(r.InvalidTaskOccurrences) == 0 && r.FullTextIndexOK
 	return r, nil
 }
 

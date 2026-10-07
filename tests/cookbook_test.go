@@ -14,7 +14,7 @@ import (
 func cookbook(s *S) {
 	bl := s.d.CookbookBlocks()
 	first, order := s.d.Blocks()
-	s.K("the cookbook has at least 23 SQL blocks, one or more per recipe, 23 recipes", len(bl) >= 23 && len(first) == 23 && eq(order, s.d.CookbookOrder()), order)
+	s.K("the cookbook has at least 24 SQL blocks, one or more per recipe, 24 recipes", len(bl) >= 24 && len(first) == 24 && eq(order, s.d.CookbookOrder()), order)
 
 	seeded := func(hardened bool, path string) (*C, P) {
 		c := s.freshWith(F{Hardened: hardened, Path: path})
@@ -35,10 +35,16 @@ func cookbook(s *S) {
 		old := c.pageW("Sourdogh", nil, "Feed the starter. [[Lifelog]]")
 		c.link(old, wp, "wikilink")
 		c.link(old, pl, "about")
+		planningProject := c.page("Planning context")
+		planningID := planningTask(c, M{"project_page_id": planningProject, "repeat_unit": "month", "anchor_day": "2026-01-31"})
 		return c, P{"include_deleted": 0, "old_id": old, "new_title": "Sourdough starter", "new_key": "sourdough starter", "found_id": wp, "target_id": wp, "target_ids": "[]", "place_id": pl, "day_page_id": dp, "mistaken_row_id": 2, "from_day": "2026-01-15", "to_day": "2026-09-10",
 			"day": "2026-09-29", "page_id": wp, "person_id": pe, "entity_id": pe, "handle_title": "Bob Sample", "handle_key": "bob sample", "ghost_id": gh,
 			"due_day": "2026-10-05", "query": "schema", "key": "newpage", "title": "Newpage", "metric_id": w, "wrong_row_id": 1, "source": "ui",
 			"import_key": "notes/sourdough.md", "metric": "vitamin_d", "parent_id": cat,
+			"task_label": "Garden supplies", "project_page_id": planningProject, "planning_task_id": planningID, "planning_clock": "09:00",
+			"planning_task_version": 1, "planning_occurrence_version": 1, "planning_state": "open", "planning_completed_at": nil,
+			"planning_reminder_mode": "inherit", "planning_reminder_at": nil, "planning_until": "2026-10-31",
+			"planning_from": "2026-10-01", "planning_through": "2026-11-30",
 			"sha256": strings.Repeat("ab", 32), "mime": "image/heic", "preview": jpegBytes, "file_title": "2026-09-29 Lake.jpg", "append_embed": 1,
 			"file_key": "2026-09-29 lake.jpg", "body": "The lake at dawn with [[Sam]].",
 			"lat": 38.7139, "lon": -9.1394, "radius_m": 8000, "link_days": 1, "m_per_deg_lon": 111320 * math.Cos(38.7139*math.Pi/180), "taken_day": "2026-08-15",

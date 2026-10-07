@@ -185,8 +185,9 @@ day, so a note that is only frontmatter can still say that it is a person.
   as "not written yet": write it earlier in the file, or apply the other file first. So is a link end that is still
   a plain page where the kind needs a person or a place (`link_kinds`): the person or place that promotes it is
   not written yet. An end of a type no write can make fit (a day page where a person is needed) is refused outright.
-- There is no `event` and no `task` kind ([D22](../decisions/D22-events.md), [D23](../decisions/D23-no-tasks.md)); a facts file that writes one is refused, with
-  that reason.
+- This facts-file profile has no `event` or `task` kind; either is refused. Structured personal tasks have their
+  own [planning contract](../contract/planning.md) and require explicit capture; this workflow does not infer them
+  from historical prose or checkboxes ([D23](../decisions/D23-no-tasks.md)).
 - `value` is the cell **as written**, unit included (`"48 ng/mL"`); when the file writes the unit
   apart, `value` is the number and `unit` the unit, and the unit must be explicit in the same table/CSV
   row or in that value column's header. Nothing is converted. A censored, approximate,
@@ -351,7 +352,7 @@ operation *register metrics* to register those approved rows. Never type a unit 
 | the file says | write | never |
 |---|---|---|
 | something happened (a swim, a visit) | nothing of its own: a daily note is its day's page, and its text says what happened; write the people and places it names | an event ([D22](../decisions/D22-events.md)); a page that repeats the sentence |
-| something to do, a plan, a goal, a checkbox | nothing: the page keeps the words ([D23](../decisions/D23-no-tasks.md)) | a task |
+| something to do, a plan, a goal, a checkbox | the page keeps the words; structured task capture requires explicit intent ([D23](../decisions/D23-no-tasks.md)) | an automatically inferred task |
 | a habit ("every evening") | a habit metric when the rules say so (step 4) | |
 | a person by name | a **person**, titled as `rules.md` or an existing page has it | a person for a role with no name ("the dentist") |
 | a person's birth or death day, written `YYYY-MM-DD` | `birth_day` or `death_day` on that person's write, its line as the quote | a day rewritten from another form ("29 March 1980"): `kept_as_text` |
@@ -540,4 +541,4 @@ This guide restates none of them; each is in the docs:
   re-runs);
 - [save a body](../cookbook/save-a-body.md) — saving a body with wikilinks; [import a row once](../cookbook/import-a-row-once.md);
 - [D5](../decisions/D05-pages-and-day-pages.md) — day pages and permanent titles; [D7](../decisions/D07-measurements.md) — measurements, units, corrections;
-- [D22](../decisions/D22-events.md), [D23](../decisions/D23-no-tasks.md), [D24](../decisions/D24-habits.md) — no events, no tasks, habits as metrics with periods.
+- [D22](../decisions/D22-events.md), [D23](../decisions/D23-no-tasks.md), [D24](../decisions/D24-habits.md) — recorded observations, explicit tasks, habits as metrics with periods.

@@ -10,12 +10,12 @@
   fixed-width string that the round-trip CHECK can compare, that sorts chronologically as plain text, and
   that keeps rows written within the same second in order, a reading and its correction (executed). The
   CHECK uses `IS`, because a CHECK passes when it evaluates to NULL and `date()` returns NULL for malformed
-  input: `date(x) = x` silently accepts `2026-9-3` (executed). A local day is written in the zone of the
+  input: `date(x) = x` silently accepts `2026-9-3` (executed). A recorded local day is written in the zone of the
   device that captured it — a phone's, never the clock or zone of a hub on a server ([D3](D03-integer-ids.md)) — and never
   derived from the instant at query time: "the day I graduated" is a local-date fact, not an instant
   [R7](../research/references.md#r7)[R8](../research/references.md#r8)[R9](../research/references.md#r9). A timed reading's zone is a column because only capture time can supply it: a
-  UTC instant alone cannot say whether `22:30Z` was 14:30, 22:30 or 07:30 the next morning. Every
-  other instant is a write time, and a write time needs no zone. The DB checks the
+  UTC instant alone cannot say whether `22:30Z` was 14:30, 22:30 or 07:30 the next morning. A write time needs
+  no zone. The DB checks the
   shape of a zone name, not that it is a real zone; `measurements_tz` explicitly rejects NUL because
   SQLite TEXT `length` and `GLOB` otherwise ignore its suffix (executed). Readers convert with a tz database, which keeps
   renamed zones (`Europe/Kiev` → `Europe/Kyiv`) as links. The standard way to write an instant with
@@ -25,6 +25,9 @@
 - **Recorded-session evidence** is separate from exact write instants: [session time](../contract/session-time.md)
   preserves unresolved local clocks and unverified zone labels, without host-zone inference. Reporting days are
   independent attribution, not inferred from endpoints. Period boundaries use a separate [profile](../contract/period-boundaries.md).
+- **Planning time** retains a calendar deadline independently of reminder delivery. A reminder zone is a chosen
+  scheduling basis, not evidence of location. The [planning profile](../contract/planning.md) specifies clock
+  resolution and preserves unknown completion time without inventing an instant.
 - **Alternatives.**
   - *Instants only, local day computed at query time*: rejected — a timezone move or DST rule
     silently rewrites history. This is why FxLifeSheet needed a dedicated `tag_days` importer to

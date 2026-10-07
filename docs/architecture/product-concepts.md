@@ -13,10 +13,11 @@
 | Recorded sessions | independent lightweight kind-based records with reporting-day attribution and preserved [time evidence](../contract/session-time.md); [scope](../contract/measurement-scope.md) distinguishes summaries from daily facts |
 | Recorded periods | named overlapping spans with partial/qualified boundaries and explicit day-membership results ([profile](../contract/period-boundaries.md), [D22](../decisions/D22-events.md)) |
 | Habits | a 0/1 metric with active periods: the day's habits done, not done or not recorded, and completion over a period ([habits](../cookbook/habits.md), [D24](../decisions/D24-habits.md)) |
-| To-dos, reminders, projects | not here: a life log, not a project manager ([D23](../decisions/D23-no-tasks.md)) |
+| Personal tasks, recurring work and project context | independent definitions and occurrences, with ordinary pages for project grouping ([tasks](../cookbook/tasks.md), [D23](../decisions/D23-no-tasks.md)) |
+| Reminder intent | chosen local clock/zone defaults and per-occurrence overrides, resolved by the [planning profile](../contract/planning.md); delivery is separate |
 | Birthdays | a query over `people.birth_day` |
 | Biomarkers / quantified self | `metrics` + `measurements` ([a metric series](../cookbook/metric-series.md)), filed in category pages ([metrics by category](../cookbook/metrics-by-category.md), [D26](../decisions/D26-metric-categories.md)) |
 | Imported notes (a vault) | `entities.import_key`, unique per `source`: a re-run inserts nothing, a changed note updates its page ([import a row once](../cookbook/import-a-row-once.md)) |
 | Photos, recordings, scans | a file page: its text (a transcript, a caption) in the body, a small JPEG in `files.preview`, the original left outside; `![[Lake.jpg]]` in a day page links it ([keep a file](../cookbook/keep-a-file.md), [D9](../decisions/D09-binary-files.md)) |
 | Search | `entities_fts` ([full-text search](../cookbook/full-text-search.md)) |
-| "Which of my agents wrote this?" | `source` on every entity, session, link, measurement and habit period (`lifelog_meta.source`, [D10](../decisions/D10-time-model.md)) |
+| "Which of my agents wrote this?" | `source` on every entity, session, task, task occurrence, link, measurement and habit period (`lifelog_meta.source`, [D10](../decisions/D10-time-model.md)) |

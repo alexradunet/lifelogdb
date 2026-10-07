@@ -14,6 +14,7 @@
   not a unique title or graph identity for every sleep/workout. [Time evidence](../contract/session-time.md) keeps
   unresolved local clocks honest, with independent reporting-day attribution. [Scoped readings](../contract/measurement-scope.md)
   prevent session summaries from becoming extra daily totals.
-- **No generic events.** No events/attendance/recurrence/task framework. Day pages record ordinary outings with prose
+- **No generic events.** No events/attendance framework. Explicit personal tasks
+  ([D23](D23-no-tasks.md)) describe intentions; completing one does not create recorded sessions or presence. Day pages record ordinary outings with prose
   and links ([D5](D05-pages-and-day-pages.md)); structured recorded periods do not imply attendance or future presence.
   A period's membership on a supplied calendar day is not proof of physical interval overlap or location.

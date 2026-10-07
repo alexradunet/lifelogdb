@@ -77,7 +77,7 @@ func diagrams(s *S) {
 	var fks []fk
 	for _, t := range tables {
 		info[t] = map[string]colInfo{}
-		for _, r := range c.rows("select name, type, \"notnull\", pk from pragma_table_info(?)", t) {
+		for _, r := range c.rows("select name, type, \"notnull\", pk from pragma_table_xinfo(?)", t) {
 			info[t][val(r[0])] = colInfo{val(r[1]), r[2].(int64) != 0, r[3].(int64) != 0}
 		}
 		fkCols[t] = map[string]bool{}

@@ -428,7 +428,7 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 	}
 	e.Actions = append(e.Actions, action("save-body", ids, map[string]any{"body": p.Body, "version": p.Version}))
 	if !p.IsDayPage {
-		if p.Type == "page" && !p.SessionKind {
+		if p.Type == "page" && !p.SessionKind && !p.TaskProject {
 			e.Actions = append(e.Actions, action("promote", ids, nil), action("promote-period", ids, map[string]any{"version": p.Version}))
 		}
 		e.Actions = append(e.Actions, action("rename", ids, nil))

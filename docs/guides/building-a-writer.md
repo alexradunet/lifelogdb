@@ -15,7 +15,9 @@ What a writer needs from this repo:
 3. **The [cookbook](../cookbook/README.md)** as the canonical reads and writes; `lifelog_meta` and the comments inside
    `.schema` as the in-file summary.
 4. **The test vectors** printed in [titles and wikilinks](../contract/titles-and-wikilinks.md) as a conformance suite: the
-   page is their only copy, and the suites in `tests/` read them from it.
+   page is their only copy, and the suites in `tests/` read them from it. The [planning vectors](../contract/planning.md)
+   similarly define calendar expansion and reminder clock resolution; task writes use that page's transaction and
+   revision rules. Persisted outcomes supplement bounded virtual recurrence, without implying notification delivery.
 5. For imports with a model, the [importing guide](importing.md).
 
 Such an application changes nothing here. If it finds a rule that is ambiguous, untestable or missing, that is an

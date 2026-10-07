@@ -1,20 +1,20 @@
-# D23 — A life log, not a project manager: no tasks.
+# D23 — Explicit personal tasks, with projects as context pages
 
 **Status:** accepted
 
-- **Decision.** No `tasks` table and no task links (`spawned`, `subtask`). `life.db` keeps what
-  happened and what was measured — the day pages, notes, people, places and readings — and is the
-  backup of that record. What is still to be done belongs to the tools made for it (a to-do app, a
-  calendar); a plan the owner wrote stays the text of its page, where it is found by search ([full-text search](../cookbook/full-text-search.md)).
-- **Why** (the first real import, 2026-10). The vault's plans and goals became 53 open tasks with no
-  due day and no completion, the import asked question after question about which checkbox was a
-  task, a habit or a rule, and the owner's verdict was that this database is a journal and a backup,
-  not a project-management tool. A task is also the one entity whose rows go stale by design: open
-  until closed somewhere else.
-- **Alternatives.** *Keep tasks for reminders*: rejected — the owner's calendar and to-do app already
-  remind, and a second list drifts from them. *Tasks as pages*: rejected — a task's name is a label,
-  not a unique handle (`Dentist`), and it would collide.
-- **Costs accepted.** A habit is still a 0/1 metric ([D24](D24-habits.md)); a done thing worth remembering is written in
-  the day page. Tasks are additive later — a table hanging off `entities` and two link kinds — if the
-  owner ever wants to-dos here.
-- **Reopen trigger.** The owner wants to-dos, reminders or projects kept in this database.
+- **Decision.** Personal planning uses independent `tasks` and `task_occurrences`, with project context in ordinary
+  pages. Their storage constraints are in [schema.sql](../schema/schema.sql); bounded calendar, lifecycle and
+  reminder operations are in [planning](../contract/planning.md). Task labels do not consume owned page names or
+  become graph endpoints. Planned work remains distinguishable from recorded sessions, readings and presence.
+- **Why.** The owner wants projects, recurring tasks and reminder intent preserved in the same lifetime file,
+  independently of the eventual interface or notification provider. A repeating instruction and one occurrence's
+  outcome are different facts. Ordinary project pages provide useful grouping without a project workflow model.
+  Explicit task capture avoids turning historical prose and ambiguous checkboxes into unwanted obligations.
+- **Alternatives.** *Tasks as named entities*: repeated labels need no unique wiki handle. *Only one mutable due
+  date*: advancing it loses earlier outcomes. *A separate planning database*: it splits reference and restore
+  responsibilities. *Generic properties or a plugin schema*: they add compatibility machinery without a concrete
+  second use ([D2](D02-typed-strict-tables.md)).
+- **Costs accepted.** Task context and occurrence outcomes are current state plus snapshots, not a history of
+  every edit ([D12](D12-no-revision-tables.md)). Recurrence has a bounded profile ([D15](D15-recurrence.md)).
+  Project status/hierarchy, task dependencies and delivery machinery remain [non-goals](../architecture/non-goals.md).
+  Historical notes retain their prose unless the owner explicitly selects structured task capture.

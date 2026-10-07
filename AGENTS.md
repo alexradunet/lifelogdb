@@ -9,14 +9,16 @@
 cookbook, non-goals, research — so that `life.db` can be read, or written by another application, in any language.
 The docs state the current truth only.
 
-**What `life.db` is for: a life log and its backup — not a project-management database.** It keeps
+**What `life.db` is for: a life log and its backup, with explicit personal planning.** It keeps
 what happened and what was measured: a journal of day pages, notes, the people and places in them,
 where the owner was, health readings, and the files the owner keeps — as their text and a small picture, the
-original left outside ([D9](docs/decisions/D09-binary-files.md)). To-dos, reminders, projects and plans belong to the tools
-made for them; a plan written in a note stays that note's text ([D23](docs/decisions/D23-no-tasks.md)). Recorded periods and
-sessions follow [D22](docs/decisions/D22-events.md); money and a location track remain deferred
-([D18](docs/decisions/D18-money.md), [D21](docs/decisions/D21-location-history.md)). A proposal that turns `life.db` into a
-planner, a tracker of open work or a finance ledger needs a real incident and the owner's word first. Any developer, in any language, may
+original left outside ([D9](docs/decisions/D09-binary-files.md)). Explicit tasks and occurrences preserve personal
+planning and reminder intent; ordinary pages provide project context ([D23](docs/decisions/D23-no-tasks.md),
+[planning](docs/contract/planning.md)). A plan written in a note stays text unless explicitly captured as a task.
+Recorded periods and sessions follow [D22](docs/decisions/D22-events.md); money and a location track remain deferred
+([D18](docs/decisions/D18-money.md), [D21](docs/decisions/D21-location-history.md)). A proposal that adds project
+workflows, notification delivery or a finance ledger needs a real incident and the owner's word first.
+Any developer, in any language, may
 build an application around it; the contract they implement is `docs/` and nothing else.
 
 A writer is built against the docs ([building a writer](docs/guides/building-a-writer.md)): it implements the schema and
