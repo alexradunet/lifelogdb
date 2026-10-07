@@ -736,9 +736,9 @@ func (w *Workspace) inspectCorrectionIntent(ctx context.Context, s *core.Store, 
 			return err
 		}
 		if id != 0 {
-			resolved := intent.RootImportKey
 			checkErr := verifyEventRow(t, intent, id, known)
 			if checkErr != nil {
+				var resolved string
 				resolved, checkErr = w.resolveCorrectionKey(intent.RootSource, t, intent.Metric, intent.RootImportKey)
 				if checkErr == nil {
 					checkErr = verifyEventRowWithRoot(t, intent, id, known, resolved)

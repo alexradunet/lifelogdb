@@ -67,7 +67,7 @@ var wikiAtStart = regexp.MustCompile(`^(!?)\[\[([^\[\]\n\r]*)\]\]`)
 // container or line break. Existing anchors, images, code and HTML are left to CommonMark.
 func enhanceText(parent ast.Node, source []byte) {
 	for c := parent.FirstChild(); c != nil; {
-		switch c.(type) {
+		switch node := c.(type) {
 		case *ast.Link, *ast.Image, *ast.AutoLink, *ast.CodeSpan, *ast.RawHTML,
 			*ast.CodeBlock, *ast.FencedCodeBlock, *ast.HTMLBlock:
 			c = c.NextSibling()
@@ -75,11 +75,7 @@ func enhanceText(parent ast.Node, source []byte) {
 			var raw bytes.Buffer
 			first := c
 			var last *ast.Text
-			for c != nil {
-				t, ok := c.(*ast.Text)
-				if !ok {
-					break
-				}
+			for t := node; t != nil; t, _ = c.(*ast.Text) {
 				raw.Write(t.Segment.Value(source))
 				last = t
 				c = c.NextSibling()

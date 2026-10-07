@@ -1,0 +1,36 @@
+name: Windows validation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      CGO_ENABLED: '0'
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: Report environment
+        run: go version; go env GOOS GOARCH
+      - name: Generate embedded schema
+        run: go generate ./...
+      - name: Verify generated schema
+        run: git diff --exit-code -- internal/db/schema.sql
+      - name: Vet
+        run: go vet ./...
+      - name: Full baseline including mutants
+        run: go test -count=1 -timeout=20m -parallel=4 ./...

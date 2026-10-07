@@ -109,7 +109,6 @@ func TestSelectedReplayDoesNotRecreateTombstonedTrialFile(t *testing.T) {
 	if err != nil || page.DeletedAt == "" {
 		t.Fatalf("trial tombstone setup: %+v %v", page, err)
 	}
-	beforeFiles := statusWorkspaceFiles(t, f.w)
 	beforePage := page
 	for _, dry := range []bool{true, false} {
 		same, e := f.w.SelectedPhoto(ctx, f.s, dry)
@@ -122,7 +121,7 @@ func TestSelectedReplayDoesNotRecreateTombstonedTrialFile(t *testing.T) {
 		t.Fatal("same-store retry revived owner state")
 	}
 	// Apply may finish existing publication, but a subsequent status/check is strictly observational.
-	beforeFiles = statusWorkspaceFiles(t, f.w)
+	beforeFiles := statusWorkspaceFiles(t, f.w)
 	if _, e = f.w.Status(ctx, f.s, f.trial); e != nil {
 		t.Fatal(e)
 	}

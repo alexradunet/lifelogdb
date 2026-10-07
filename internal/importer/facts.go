@@ -465,21 +465,6 @@ func (w *Workspace) checkStatic(f *Facts, source string, rules *Rules, approved 
 	return pos, errs
 }
 
-// readingKeys derives each reading's canonical key: the path, the canonical metric title key, the day, and its
-// taken_at or its place among that canonical metric's readings of that day in the source file, by where its quote
-// first appears. Equal quote positions in one untimed group are ambiguous: facts order and values are not identity.
-func readingKeys(f *Facts, pos []int) (map[int]string, error) {
-	ids, err := readingIdentities(f, pos)
-	if err != nil {
-		return nil, err
-	}
-	keys := map[int]string{}
-	for _, id := range ids {
-		keys[id.index] = id.canonicalKey
-	}
-	return keys, nil
-}
-
 type readingIdentity struct {
 	index            int
 	rawMetric        string
@@ -504,6 +489,9 @@ type parsedReadingKey struct {
 	token  string
 }
 
+// readingIdentities derives each reading's canonical key: the path, the canonical metric title key, the day, and its
+// taken_at or its place among that canonical metric's readings of that day in the source file, by where its quote
+// first appears. Equal quote positions in one untimed group are ambiguous: facts order and values are not identity.
 func readingIdentities(f *Facts, pos []int) ([]readingIdentity, error) {
 	type rk struct {
 		i, pos int

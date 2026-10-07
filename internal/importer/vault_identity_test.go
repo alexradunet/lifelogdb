@@ -11,7 +11,7 @@ import (
 func TestAppliedVaultPlanIdentity(t *testing.T) {
 	f := setup(t)
 	f.approveRules(t, rulesBody)
-	p, err := f.w.PlanVault(ctx, f.s)
+	_, err := f.w.PlanVault(ctx, f.s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -22,7 +22,7 @@ func TestAppliedVaultPlanIdentity(t *testing.T) {
 	if _, err = f.w.ApplyVault(ctx, f.s); err != nil {
 		t.Fatal(err)
 	}
-	p, _, err = f.w.LoadPlan()
+	p, _, err := f.w.LoadPlan()
 	if err != nil {
 		t.Fatal(err)
 	}

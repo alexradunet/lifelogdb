@@ -36,7 +36,7 @@ func (*integrityConn) Prepare(string) (driver.Stmt, error) {
 func (*integrityConn) Begin() (driver.Tx, error) { return nil, errors.New("unexpected transaction") }
 func (*integrityConn) Close() error              { return nil }
 
-var integrityFault = errors.New("synthetic integrity execution failure")
+var errIntegrityFault = errors.New("synthetic integrity execution failure")
 
 func (c *integrityConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
 	c.c.queries++
@@ -73,14 +73,14 @@ func (c *integrityConn) QueryContext(_ context.Context, query string, _ []driver
 		fault = c.c.fault
 	}
 	if fault == "query" {
-		return nil, integrityFault
+		return nil, errIntegrityFault
 	}
 	return &integrityRows{c: c.c, check: check, fault: fault}, nil
 }
 func (c *integrityConn) ExecContext(context.Context, string, []driver.NamedValue) (driver.Result, error) {
 	c.c.execs++
 	if c.c.fault == "fts" {
-		return nil, integrityFault
+		return nil, errIntegrityFault
 	}
 	return driver.RowsAffected(0), nil
 }
@@ -100,7 +100,7 @@ func (r *integrityRows) Columns() []string {
 func (r *integrityRows) Close() error {
 	r.c.closed++
 	if r.fault == "close" || r.fault == "scan-close" {
-		return integrityFault
+		return errIntegrityFault
 	}
 	return nil
 }
@@ -114,7 +114,7 @@ func (r *integrityRows) Next(dest []driver.Value) error {
 	}
 	if r.index >= count {
 		if r.fault == "late" {
-			return integrityFault
+			return errIntegrityFault
 		}
 		return io.EOF
 	}
@@ -159,7 +159,7 @@ func TestIntegrityReadFailures(t *testing.T) {
 				if err == nil || !strings.Contains(err.Error(), check) {
 					t.Errorf("result=%+v error=%v; want identified execution failure", result, err)
 				}
-				if fault != "scan" && !errors.Is(err, integrityFault) {
+				if fault != "scan" && !errors.Is(err, errIntegrityFault) {
 					t.Errorf("lost fault: %v", err)
 				}
 				wantClosed := i + 1

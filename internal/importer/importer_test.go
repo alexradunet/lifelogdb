@@ -203,7 +203,7 @@ func TestApplyIsIdempotentAndChecked(t *testing.T) {
 	if c, _ := f.s.Counts(ctx); c.Pages != 0 {
 		t.Errorf("check wrote %d pages", c.Pages)
 	}
-	if r, err = f.w.Apply(ctx, f.s, "Journal/2031-04-11.md"); err != nil {
+	if _, err := f.w.Apply(ctx, f.s, "Journal/2031-04-11.md"); err != nil {
 		t.Fatal(err)
 	}
 	lines, _, _ := f.w.Ledger()

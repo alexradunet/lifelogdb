@@ -3,8 +3,6 @@
 package core
 
 import (
-	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"regexp"
@@ -73,8 +71,4 @@ func IsDay(s string) bool {
 func IsInstant(s string) bool {
 	t, err := time.Parse("2006-01-02T15:04:05.000Z", s)
 	return err == nil && t.Format("2006-01-02T15:04:05.000Z") == s
-}
-
-func (s *Store) write(ctx context.Context, fn func(*sql.Tx) error) error {
-	return refused(s.DB.Write(ctx, fn))
 }

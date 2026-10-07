@@ -4,10 +4,11 @@ A plan is a dated record ([how a change happens](../process.md)): a change large
 written as a self-contained brief with done criteria. It cites the docs as they were at the commit it names. One file
 per plan, `NNN-short-slug.md`, numbered on from the last.
 
-Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **076**.
+Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **077**.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
+| [076](076-validation-gaps.md) | Exercise remaining validation gaps | P1/P2 | L | Owner continuation; 6f2bfe8 | IN PROGRESS |
 | [075](075-schema-validation-depth.md) | Schema validation depth | P1/P2 | L | Owner authorization; 90c062e | DONE |
 | [074](074-schema-review-findings.md) | Repair schema review findings | P1/P2 | L | Issues 0026–0032; owner authorization | DONE |
 | [073](073-review-repairs.md) | Schema, reliability and validation repairs | P1/P2 | L | Reproduced review findings | DONE |

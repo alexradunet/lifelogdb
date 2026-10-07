@@ -191,17 +191,13 @@ func renderedTextRuns(body string) []string {
 	var walk func(ast.Node)
 	walk = func(parent ast.Node) {
 		for c := parent.FirstChild(); c != nil; {
-			switch c.(type) {
+			switch node := c.(type) {
 			case *ast.Link, *ast.Image, *ast.AutoLink, *ast.CodeSpan, *ast.RawHTML,
 				*ast.CodeBlock, *ast.FencedCodeBlock, *ast.HTMLBlock:
 				c = c.NextSibling()
 			case *ast.Text:
 				var raw bytes.Buffer
-				for c != nil {
-					t, ok := c.(*ast.Text)
-					if !ok {
-						break
-					}
+				for t := node; t != nil; t, _ = c.(*ast.Text) {
 					raw.Write(t.Segment.Value(src))
 					c = c.NextSibling()
 					if t.SoftLineBreak() || t.HardLineBreak() {

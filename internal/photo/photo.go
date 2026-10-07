@@ -76,7 +76,7 @@ func heifExif(b []byte) []byte {
 		return nil
 	}
 	meta := child(b, "meta")
-	if meta == nil || len(meta) < 4 {
+	if len(meta) < 4 {
 		return nil
 	}
 	meta = meta[4:] // a full box: version and flags

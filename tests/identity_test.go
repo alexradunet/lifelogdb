@@ -181,7 +181,8 @@ func identity(s *S) {
 			return e
 		}
 		s.K("the same import_key under another source is another row (per-source namespace)", importProbe("import:health", K) == nil)
-		s.K("rows without an import_key never collide", importProbe("import:vault", nil) == nil && importProbe("import:vault", nil) == nil)
+		firstUnkeyed, secondUnkeyed := importProbe("import:vault", nil), importProbe("import:vault", nil)
+		s.K("rows without an import_key never collide", firstUnkeyed == nil && secondUnkeyed == nil)
 		duplicate := importProbe("import:vault", K)
 		s.K("a plain INSERT of a known key is refused (the index is unique)", duplicate != nil && strings.Contains(duplicate.Error(), "UNIQUE"))
 

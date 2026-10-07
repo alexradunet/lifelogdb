@@ -157,23 +157,6 @@ func csvRows(src string) ([][]string, error) {
 	return csv.NewReader(strings.NewReader(src)).ReadAll()
 }
 
-func markdownTables(src string) [][][]string {
-	b := []byte(src)
-	doc := gfm.Parser().Parse(gtext.NewReader(b))
-	var tables [][][]string
-	ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
-		if !entering {
-			return ast.WalkContinue, nil
-		}
-		if n, ok := n.(*east.Table); ok {
-			tables = append(tables, tableRows(n, b))
-			return ast.WalkSkipChildren, nil
-		}
-		return ast.WalkContinue, nil
-	})
-	return tables
-}
-
 func tableRows(n *east.Table, src []byte) [][]string {
 	var rows [][]string
 	for r := n.FirstChild(); r != nil; r = r.NextSibling() {

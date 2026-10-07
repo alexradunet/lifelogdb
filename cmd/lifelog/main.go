@@ -370,10 +370,6 @@ func serveHTTP(ctx context.Context, srv *http.Server, listener net.Listener, dra
 	return errors.Join(err, drainErr)
 }
 
-func doAction(o opts, c *client.Client, name string, vals map[string]string) error {
-	return doActionContext(context.Background(), o, c, name, vals)
-}
-
 func doActionContext(ctx context.Context, o opts, c *client.Client, name string, vals map[string]string) error {
 	return show(o)(doContext(ctx, c, name, vals))
 }
@@ -395,12 +391,8 @@ func doContext(ctx context.Context, c *client.Client, name string, vals map[stri
 	return nil, fmt.Errorf("no action %q (lifelog actions)", name)
 }
 
-// keepFile is `lifelog file PATH`: the add-file action with the original streamed from disk (hashed by the API,
+// keepFileContext is `lifelog file PATH`: the add-file action with the original streamed from disk (hashed by the API,
 // never stored), its text read from --text, and a picture from --preview when the original is not one lifelog reads.
-func keepFile(o opts, c *client.Client, args []string) error {
-	return keepFileContext(context.Background(), o, c, args)
-}
-
 func keepFileContext(ctx context.Context, o opts, c *client.Client, args []string) error {
 	if len(args) == 0 {
 		return errors.New("file PATH... [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day YYYY-MM-DD] [--at PLACE [--radius M]] [--dry-run]")
@@ -717,10 +709,6 @@ func haversine(lat1, lon1, lat2, lon2 float64) float64 {
 	return 2 * 6371008.8 * math.Asin(math.Sqrt(h))
 }
 
-func listActions(o opts, c *client.Client) error {
-	return listActionsContext(context.Background(), o, c)
-}
-
 func listActionsContext(ctx context.Context, o opts, c *client.Client) error {
 	actions, err := c.CatalogContext(ctx)
 	if err != nil {
@@ -915,7 +903,6 @@ func importOwner(o opts, ws *importer.Workspace, args []string) error {
 	return nil
 }
 
-// importCommand is the import's shortcuts; every other operation is `lifelog do <name> field=value`.
 func importTakeoutContext(ctx context.Context, _ opts, args []string) error {
 	if len(args) == 2 && args[0] == "inventory" {
 		report, err := takeout.InventoryContext(ctx, args[1])
@@ -927,10 +914,7 @@ func importTakeoutContext(ctx context.Context, _ opts, args []string) error {
 	return errors.New("import takeout inventory FOLDER")
 }
 
-func importCommand(o opts, c *client.Client, args []string) error {
-	return importCommandContext(context.Background(), o, c, args)
-}
-
+// importCommandContext provides import shortcuts; every other operation is `lifelog do <name> field=value`.
 func importCommandContext(ctx context.Context, o opts, c *client.Client, args []string) error {
 	if len(args) == 0 {
 		args = []string{"status"}

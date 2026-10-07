@@ -14,6 +14,10 @@ go test ./tests -run 'TestMutants/.*habits' -v   # the mutants of one suite
 LIFELOG_MERMAID=1 go test ./tests -run TestMermaidRender   # + render every mermaid diagram (needs mmdc + a Chromium)
 ```
 
+The manually triggered [Windows validation workflow](../.github/workflows/windows-validation.yml) runs generation,
+vet and the complete baseline, including mutants, on `windows-2025` using the Go version in `go.mod`.
+It uses read-only repository permissions and does not publish a release.
+
 Needs Go ≥ 1.27 and nothing else: SQLite is the driver's own build (`modernc.org/sqlite`, pure Go, SQLite 3.53.4 with
 FTS5); the `writers` suite checks the floor of `lifelog_meta.sqlite` on it. The schema-evolution probes execute `ALTER TABLE …
 DROP CONSTRAINT` on disposable files and need 3.53; they are not a migration runner. A writer needs only 3.51.3. The rendering test also needs
@@ -106,6 +110,13 @@ commit signal before the second writer resolves the existing row. Reader progres
 snapshot and a 30-second deadlock guard, not a speed threshold. These probes do not measure automatic busy waiting.
 
 **What is not here:** power loss and real data have never been tested.
+
+The Linux storage-wrapper regression lives beside its implementation in
+[`internal/db/io_failure_linux_test.go`](../internal/db/io_failure_linux_test.go).
+Run `go test ./internal/db -run '^TestFilesystemWriteFailure$' -count=1` to exercise
+child-local file-size limits that produce actual `SQLITE_IOERR_WRITE` errors, followed by
+transaction rollback, reopen/retry and failed snapshot cleanup. This runs in the Linux baseline;
+it does not simulate disk exhaustion, sync failures, torn writes or power loss.
 
 ## Synthetic scale runner
 
