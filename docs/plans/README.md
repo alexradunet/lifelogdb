@@ -4,10 +4,11 @@ A plan is a dated record ([how a change happens](../process.md)): a change large
 written as a self-contained brief with done criteria. It cites the docs as they were at the commit it names. One file
 per plan, `NNN-short-slug.md`, numbered on from the last.
 
-Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **081**.
+Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **082**.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
+| [081](081-planning-on-every-surface.md) | Planning on every surface: tasks, occurrences and deadlines in the catalog | P1 | M | Owner decision 2026-10-08; adea9b8 | TODO |
 | [080](080-api-reference.md) | An API reference for client authors, kept true by a test | P2 | S | Plans 078, 079; 68ca8d1 | DONE |
 | [079](079-client-contract-hygiene.md) | Client contract hygiene: error codes, list pages, a connect timeout, one parameter | P2 | S | Plan 078; b28ee22 | DONE |
 | [078](078-network-server.md) | Serve the API beyond this machine: a token, allowed origins, optional TLS | P1 | M | Owner requirement 2026-10-08; 05790ec | DONE |

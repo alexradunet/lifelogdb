@@ -125,6 +125,14 @@ schema is frozen ([D13](docs/decisions/D13-migrations-and-freeze.md)):
 - **Preserve the existing application boundaries** ([README decisions](README.md#decisions)). Keep CLI, browser and
   MCP adapters thin, using the shared API/action catalog rather than duplicating validation or business rules. Reuse
   the existing core operations; a new surface must not become a second implementation of a write.
+- **Every capability on every surface.** The owner's rule (2026-10-08): whatever `lifelog` can do is reachable through
+  the API, the CLI, the MCP server and the browser alike. The way to get there is the one catalog: a capability is a
+  resource or an action of `GET /actions`, and so the CLI's `do`, the MCP tools and the browser's forms carry it
+  without further work; a shortcut on one surface (`lifelog capture`, a dedicated HTML view) wraps an action, never
+  replaces or extends it. A feature that exists on one surface only is a defect, not a convenience. The only
+  differences allowed are the ones the README names and tests assert: owner-only actions are refused to an
+  `agent:*` writer, the owner's approval stamp is given at an interactive terminal, and `snapshot` is still a CLI
+  command alone — the one remaining exception, to be brought into the catalog as an owner-only action.
 - **Contexts and ownership.** Pass the operation's `context.Context` explicitly, first, through blocking calls and SQL.
   Do not replace a request context with `Background` to evade cancellation, or use context values as dependency bags.
   Prefer synchronous APIs. Every goroutine needs an owner, bounded work, a shutdown path and a way to await completion;
