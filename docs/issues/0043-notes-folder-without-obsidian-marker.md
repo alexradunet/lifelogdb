@@ -1,7 +1,7 @@
 # 0043 — A folder of notes is only recognised when it is an Obsidian vault
 
 - **Date:** 2026-10-08
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the 2026-10 import of an exported notes folder: Markdown notes, images and PDFs in folders by year and
   month, with no `.obsidian` folder (the export left it out)
 
@@ -34,4 +34,4 @@ rules decide, instead of guessing from a marker of one application.
 
 ## Resolution
 
-Open.
+Resolved by [plan 077](../plans/077-ingest-folder-survey-and-passes.md): *status* reports the Markdown files among all files of a source with no plan and no ledger, and the approved rules decide; the guide's "An Obsidian vault" is "A folder of notes".

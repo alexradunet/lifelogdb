@@ -16,10 +16,12 @@ type Status struct {
 	Source      string            `json:"source,omitempty"`
 	Gates       map[string]string `json:"gates"`
 	Vault       string            `json:"vault,omitempty"`
+	Notes       *NotesCount       `json:"notes,omitempty"`
 	Ledger      map[string]int    `json:"ledger"`
 	Questions   map[string]int    `json:"questions"`
 	ToApply     []string          `json:"answered_to_apply,omitempty"`
 	Next        string            `json:"next_file,omitempty"`
+	Later       string            `json:"later_file,omitempty"`
 	DoNow       string            `json:"do_now"`
 	Mismatches  []string          `json:"mismatches"`
 	Outside     []string          `json:"written_outside_the_facts,omitempty"`
@@ -58,7 +60,7 @@ func (w *Workspace) Status(ctx context.Context, s *core.Store, dbPath string) (*
 	if err != nil {
 		return nil, err
 	}
-	names := map[string]string{" ": "to_do", "x": "done", "?": "waiting", "-": "skipped"}
+	names := map[string]string{" ": "to_do", "x": "done", "?": "waiting", ">": "later", "-": "skipped"}
 	for _, l := range lines {
 		st.Ledger[names[l.State]]++
 	}
@@ -101,7 +103,8 @@ func (w *Workspace) Status(ctx context.Context, s *core.Store, dbPath string) (*
 	} else {
 		st.Mismatches = append(st.Mismatches, "no database was checked")
 	}
-	// the next file: the first to do, else the first waiting whose questions are all answered
+	// the next file: the first to do, else the first waiting whose questions are all answered; a file held for
+	// a later pass is never the next file, only the first of its pass
 	for _, l := range lines {
 		if l.State == " " {
 			st.Next = l.File
@@ -114,6 +117,17 @@ func (w *Workspace) Status(ctx context.Context, s *core.Store, dbPath string) (*
 				st.Next = l.File
 				break
 			}
+		}
+	}
+	for _, l := range lines {
+		if l.State == ">" {
+			st.Later = l.File
+			break
+		}
+	}
+	if st.Gates["rules.md"] == "approved" && !hasPlan && !hasLedger {
+		if st.Notes, err = w.notesCount(); err != nil {
+			return nil, err
 		}
 	}
 	vaultApplied := false
@@ -133,8 +147,8 @@ func (w *Workspace) Status(ctx context.Context, s *core.Store, dbPath string) (*
 		st.DoNow = "Survey the source and draft rules.md (step 2), then stop for the owner."
 	case st.Gates["rules.md"] != "approved":
 		st.DoNow = "Stop: rules.md is " + st.Gates["rules.md"] + changedLines(st.Changed["rules.md"]) + "; the owner approves it (lifelog import approve rules)."
-	case w.IsVault() && !hasPlan:
-		st.DoNow = "Plan the vault (plan-vault), then fix every problem it lists (step 3)."
+	case st.Notes != nil && st.Notes.Markdown > 0:
+		st.DoNow = fmt.Sprintf("The source holds %d Markdown files among %d: if the rules say they are notes to keep as pages, plan them (plan-vault), then fix every problem the plan lists (step 3); else make the ledger (make-ledger).", st.Notes.Markdown, st.Notes.Files)
 	case hasPlan && !vaultApplied:
 		st.DoNow = "Fix the plan's problems (fix-plan) and apply the vault plan (apply-vault) (step 3)."
 	case st.Gates["metrics.md"] == "draft" || st.Gates["metrics.md"] == "stale":
@@ -147,6 +161,8 @@ func (w *Workspace) Status(ctx context.Context, s *core.Store, dbPath string) (*
 		st.DoNow = "Use the answer of " + st.ToApply[0] + ": rules, facts, check, apply, then close it (step 8)."
 	case st.Next != "":
 		st.DoNow = "Do " + st.Next + " (step 6): inspect it, find, write its facts, check, apply."
+	case st.Later != "":
+		st.DoNow = fmt.Sprintf("The later pass: %d files are held for it. Do %s as its rule says (keep it as a file with its text, or a selected photo), or skip it.", st.Ledger["later"], st.Later)
 	case st.Ledger["waiting"] > 0:
 		st.DoNow = fmt.Sprintf("Stop: %d files wait for questions only the owner can answer.", st.Ledger["waiting"])
 	default:

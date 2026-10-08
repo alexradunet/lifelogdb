@@ -1,7 +1,7 @@
 # 0046 — An ingest folder cannot be surveyed without reading it
 
 - **Date:** 2026-10-08
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the 2026-10 import: one folder holding a notes export, a Google Takeout extraction and a camera's
   memory card, surveyed by a hosted model that must not see any content
 
@@ -33,4 +33,4 @@ way, and the sources it recognises (a folder of Markdown notes, a Takeout extrac
 
 ## Resolution
 
-Open.
+Resolved by [plan 077](../plans/077-ingest-folder-survey-and-passes.md): `lifelog import inventory FOLDER` surveys any folder with no content read and no single file name printed.

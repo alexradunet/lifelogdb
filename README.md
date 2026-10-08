@@ -42,6 +42,7 @@ An import ([importing with a model](docs/guides/importing.md)) works in a worksp
 trial database inside it:
 
 ```
+lifelog import inventory ~/ingest                                                 # survey the ingest folder: folders, counts, patterns, archives, sources; no content
 lifelog import takeout inventory ~/takeout-x                                      # extraction root (including sibling Timeline.json), or Takeout folder; privacy-safe
 lifelog import setup --workspace ~/import/Notebook.lifelog --from ~/life/life.db   # trial.db: a copy
 lifelog mcp --workspace ~/import/Notebook.lifelog --agent lmstudio                  # the model's tools
@@ -154,6 +155,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 | `internal/core` | the cookbook's writes and reads; the save contract; habits; renames; files |
 | `internal/preview` | the picture a file page keeps: decode, scale to 1600 px, EXIF orientation, a JPEG of at most 1 MB with no metadata |
 | `internal/photo` | what a photo's metadata says: the day and time taken, the position, the orientation (JPEG and HEIC); `phototest` builds synthetic ones |
+| `internal/inventory` | the survey of an ingest folder without its contents ([importing](docs/guides/importing.md), "An ingest folder") |
 | `internal/importer` | the import workspace, the facts checks and apply, the vault plan, status, replay |
 | `internal/api` | the action catalog, the routes, Siren and HTML |
 | `internal/client` | the hypermedia client (in-process or remote) |

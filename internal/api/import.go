@@ -16,10 +16,12 @@ import (
 var importCatalog = []spec{
 	{"import-status", "Import status", "Start every turn here: the gates, the ledger, the questions, the next file, one 'do now' sentence and any mismatch. Do what it says.",
 		"GET", "/import", nil, false},
-	{"make-ledger", "Make the ledger", "Write ledger.md once: every file of the source, each to do.",
+	{"make-ledger", "Make the ledger", "Write ledger.md: every file of the source, each to do. Run again, it adds the files added to the source since and changes no line.",
 		"POST", "/import/ledger", nil, false},
-	{"skip-file", "Skip a file", "Mark a ledger file skipped, with the reason a rule gives (an attachment, a view file).",
-		"POST", "/import/skip", []Field{req("file", "text", "File"), req("reason", "text", "Reason")}, false},
+	{"skip-file", "Skip files", "Mark a ledger file skipped for good, with the reason a rule gives (a view file, not a life log); or a pattern (Drive/**, **/*.canvas): every file still to do that it matches.",
+		"POST", "/import/skip", []Field{req("file", "text", "File or pattern"), req("reason", "text", "Reason")}, false},
+	{"defer-file", "Hold files for a later pass", "Mark a ledger file, or every file still to do that a pattern matches (**/*.pdf, **/*.jpg), as later: an attachment to keep as a file with its text, a photo to select. Not now, not never.",
+		"POST", "/import/defer", []Field{req("file", "text", "File or pattern"), req("reason", "text", "Reason")}, false},
 	{"inspect", "Inspect a file", "Read one source file's structure: frontmatter, headings, tables as rows, checkboxes, links (or a CSV's rows, or the text).",
 		"GET", "/import/inspect", []Field{req("file", "text", "File (relative to the source)")}, false},
 	{"import-find", "Find", "Look a name up before writing it: people, places, pages and metrics that match exactly, with the same words, more words or fewer words.",
@@ -68,7 +70,8 @@ func (h *server) mountImport(get func(string, func(*http.Request) (*Entity, erro
 	get("/import/prepared", h.preparedReview)
 	get("/import/selected-photo", h.selectedPhotoReview)
 	post("/import/ledger", h.makeLedger)
-	post("/import/skip", h.skip)
+	post("/import/skip", h.markFiles("-"))
+	post("/import/defer", h.markFiles(">"))
 	post("/import/rules", h.draftRules)
 	post("/import/metrics", h.proposeMetric)
 	post("/import/questions", h.ask)
@@ -166,7 +169,7 @@ func (h *server) ledger(*http.Request) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	return h.importEntity("ledger", "Ledger", "/import/ledger", map[string]any{"files": lines}, "skip-file"), nil
+	return h.importEntity("ledger", "Ledger", "/import/ledger", map[string]any{"files": lines}, "skip-file", "defer-file"), nil
 }
 
 func (h *server) plan(*http.Request) (*Entity, error) {
@@ -192,29 +195,37 @@ func (h *server) facts(r *http.Request) (*Entity, error) {
 }
 
 func (h *server) makeLedger(r *http.Request, _ string) (*Entity, error) {
-	n, err := h.ws.MakeLedger()
+	res, err := h.ws.RefreshLedger()
 	if err != nil {
 		return nil, err
 	}
 	e, err := h.ledger(r)
 	if e != nil {
-		e.Result = map[string]any{"files": n}
+		e.Result = res
 	}
 	return e, err
 }
 
-func (h *server) skip(r *http.Request, _ string) (*Entity, error) {
-	v, err := form(r)
-	if err != nil {
-		return nil, err
+// markFiles is skip-file ("-") and defer-file (">"): one file, or every file still to do that a pattern matches.
+func (h *server) markFiles(state string) func(*http.Request, string) (*Entity, error) {
+	return func(r *http.Request, _ string) (*Entity, error) {
+		v, err := form(r)
+		if err != nil {
+			return nil, err
+		}
+		if err := required(v, "file", "reason"); err != nil {
+			return nil, err
+		}
+		n, err := h.ws.MarkFiles(v.Get("file"), state, v.Get("reason"))
+		if err != nil {
+			return nil, err
+		}
+		e, err := h.importStatus(r)
+		if e != nil {
+			e.Result = map[string]any{"marked": n}
+		}
+		return e, err
 	}
-	if err := required(v, "file", "reason"); err != nil {
-		return nil, err
-	}
-	if err := h.ws.Skip(v.Get("file"), v.Get("reason")); err != nil {
-		return nil, err
-	}
-	return h.importStatus(r)
 }
 
 func (h *server) draftRules(r *http.Request, _ string) (*Entity, error) {
@@ -329,10 +340,23 @@ func (h *server) registerMetrics(r *http.Request, _ string) (*Entity, error) {
 }
 
 func (h *server) planVault(r *http.Request, _ string) (*Entity, error) {
-	if _, err := h.ws.PlanVault(r.Context(), h.s); err != nil {
+	before, _, err := h.ws.LoadPlan()
+	if err != nil {
 		return nil, err
 	}
-	return h.plan(r)
+	p, err := h.ws.PlanVault(r.Context(), h.s)
+	if err != nil {
+		return nil, err
+	}
+	e, err := h.plan(r)
+	if e != nil {
+		added := len(p.Notes)
+		if before != nil {
+			added -= len(before.Notes)
+		}
+		e.Result = map[string]any{"notes": len(p.Notes), "added": added}
+	}
+	return e, err
 }
 
 func (h *server) fixPlan(r *http.Request, _ string) (*Entity, error) {

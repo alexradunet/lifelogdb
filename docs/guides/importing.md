@@ -7,9 +7,9 @@ and the writer's code checks those decisions and writes them. The contract every
 [imports](../contract/imports.md); this guide adds the process around it and changes no rule. The process was first
 used in the 2026-10 trial import of a notes vault.
 
-In the checked facts workflow, page text comes in through a vault ("An Obsidian vault" below): facts files write rows, never a page's body. A
+In the checked facts workflow, page text comes in through a folder of notes ("A folder of notes" below): facts files write rows, never a page's body. A
 journal or diary export is first converted to a folder of one Markdown file per day, named `YYYY-MM-DD.md`, and
-imported as a vault. A file — a recording, a PDF, a photo — is kept on its own ("Files" below).
+imported as such a folder. A file — a recording, a PDF, a photo — is kept on its own ("Files" below).
 
 A bounded typed source interpretation can supplement quoted-note facts when a supported source profile
 provides evidence the writer can derive independently. Its owner review binds source bytes, meanings, identities,
@@ -43,6 +43,17 @@ database. The facts workflow is:
   *apply* adds what was missing; a reading whose value was wrong uses the correction operation ([correct a measurement](../cookbook/correct-a-measurement.md)), and
   that correction must reach the real run (see the last section).
 
+## An ingest folder
+
+The owner keeps every export in one folder — a notes folder, a Takeout extraction, a camera's card, an archive not yet
+extracted — and adds to it over time. The import begins with a **survey** of that folder, *inventory*: which folders hold
+how many files of what kind, what the archives hold, where the sources are. It reads no content and prints no value
+and no single file's name (a name appears only as a pattern that repeats, `IMG_N_N.jpg`), so it is the one step a party
+that must never see the data can do — the owner at a terminal, or a model that is not local — and the rules of each
+source are drafted from it. Each source the survey names gets its own workspace, beside it; the sources stay where
+they are and are never changed. A file the owner adds to a source later is picked up by running *ledger* again (and
+*plan a vault* again, for a note): the ledger is the index of what was imported and what was not.
+
 ## The workspace
 
 The workspace is a folder beside the source, named after it: source `Notebook/`, workspace
@@ -54,8 +65,8 @@ outside every repository, or in a folder its `.gitignore` excludes (this reposit
 | `rules.md` | what each folder holds, the `source` name, aliases, distinct names, decisions | the model drafts; the owner approves |
 | `metrics.md` | the metrics proposed for readings and habits | the model proposes; the owner approves |
 | `questions.md` | what only the owner can say | the model asks; the owner answers |
-| `ledger.md` | every source file: to do, done, waiting, skipped | the writer, except skip marks |
-| `plan.json` | a vault only: each note's title and day (see "An Obsidian vault") | the writer drafts; the model fixes |
+| `ledger.md` | every source file: to do, done, waiting, later, skipped | the writer, except the skip and later marks |
+| `plan.json` | a folder of notes only: each note's title and day (see "A folder of notes") | the writer drafts; the model fixes |
 | `facts/<file>.json` | one facts file per source file, the source's tree mirrored | the model |
 | `trial.db` | the trial database | the writer |
 | `.approved/rules.md`, `.approved/metrics.md` | each stamped file as the owner last approved it, stamp included (see "Gates") | the writer, only when the owner approves |
@@ -117,14 +128,20 @@ status: draft
   answer:
   ```
 
-**ledger.md.** Written once, every file of the source (hidden folders left out), each `[ ]`; never
-rebuilt. `[x]` done and `[?]` waiting are written only by *apply*, with the counts of what was
-written; the model writes only `[-]`, with the skip reason.
+**ledger.md.** Every file of the source (hidden folders left out), each `[ ]`, written by *ledger*. Run again,
+*ledger* appends the files added to the source since and reports the listed files it no longer finds; it never
+changes or removes a line, so a line stays the record that a file was imported. `[x]` done and `[?]` waiting are
+written only by *apply*, with the counts of what was written. The model writes two marks: `[-]` skipped, with the
+reason, for what is never imported; and `[>]` later, for a file held for a later pass — an attachment to keep with
+its text, a photo to select ("Files" below) — not now and not never. Either takes one file or a pattern in the rules'
+glob language (`Drive/**`, `**/*.png`: `*` within a path segment, `**` across segments) and marks every file still to
+do that it matches, and no other line.
 
 ```
 - [x] Journal/2031/2031-04-11.md — 1 place, 1 link (2 new)
 - [?] Journal/2031/2031-04-12.md — 1 place, 1 person, 2 link (3 new, 1 existing); 1 kept as text; waiting: Q4
-- [-] Medical/Scans/knee.png — skip: attachment
+- [>] Medical/Scans/knee.png — later: an attachment, kept with its text
+- [-] Board.canvas — skip: a view file
 - [ ] Contacts/Bob Sample.md
 ```
 
@@ -207,14 +224,16 @@ Each runs on one explicitly selected database.
 
 | operation | reads | checks | writes |
 |---|---|---|---|
-| *status* | the workspace; the database when one is given | the gates; every done file dry-run against the database | nothing; prints gates (for a closed gate, the lines changed since its last approval), ledger counts, questions, the next file, one "do now" sentence, mismatches |
-| *ledger* | the source tree | that no ledger exists yet | `ledger.md`, every file `[ ]` |
+| *inventory* | one folder and the listings of its archives, nothing of their contents | — | nothing; prints every folder with its files by extension and by digit-masked name pattern, each archive's contents the same way, and the sources it recognises: a folder of notes (mostly Markdown files, with its `YYYY-MM-DD.md` count), a Takeout extraction with its product folders. Never a content, a value or one file's name |
+| *status* | the workspace; the database when one is given | the gates; every done file dry-run against the database | nothing; prints gates (for a closed gate, the lines changed since its last approval), ledger counts, questions, the next file (and the first of the later pass), one "do now" sentence, mismatches; before a plan or a ledger exists, how many Markdown files the source holds |
+| *ledger* | the source tree; `ledger.md` | — | `ledger.md`: every file `[ ]` the first time; after that the files added since, appended `[ ]`, and the listed files it no longer finds reported; no line changed or removed |
+| *skip* / *defer* | `ledger.md` | that the file, or some file the pattern matches, is in the ledger | `[-]` with "skip: reason", or `[>]` with "later: reason", on every matching file still to do |
 | *inspect a file* | one source file | — | nothing; returns its frontmatter, headings, tables as rows, checkboxes and links |
 | *find* | the database | — | nothing; pages, metrics or readings matching a text: exact, same words, more words, fewer words |
 | *register metrics* | `metrics.md` | its stamp; each approved row (name, unit, `since`/`until`, `category`); that each title of a path is a valid title of a plain page | the approved metrics, each a page titled by its `name` with its `note` as the body (a plain page of that title, a note of the vault included, is promoted and keeps its text: the `note` fills only an empty body, [D27](../decisions/D27-a-metric-is-a-page.md)); a metric that exists with that unit is adopted as it is, and so is a scale (Mood) registered with no unit; any other unit is refused, since a unit never changes; each page of a path that is missing (a plain page, top first), the `part-of` link from each to the one above, and from the metric to the last ([metrics by category](../cookbook/metrics-by-category.md)); each habit's period, re-sent with its `end_day` ([habits](../cookbook/habits.md)) |
 | *check facts* | one facts file, its source file, the workspace, the database | every check below, in a transaction it rolls back | nothing; prints what *apply* would do |
 | *apply facts* | the same | the same checks | every write in one `BEGIN IMMEDIATE` transaction ([connection setup](../contract/connections.md)), then the file's ledger line |
-| *plan a vault* / *apply a vault plan* | the vault; `plan.json` | titles ([titles and wikilinks](../contract/titles-and-wikilinks.md)), duplicates, titles the database holds | the notes' pages and bodies (see "An Obsidian vault") |
+| *plan a vault* / *apply a vault plan* | the folder of notes; `plan.json` | titles ([titles and wikilinks](../contract/titles-and-wikilinks.md)), duplicates, titles the database holds | the notes' pages and bodies (see "A folder of notes"); *plan a vault* run again appends the notes added since and leaves every entry as it is |
 | *approve* | `rules.md` or `metrics.md`; its copy in `.approved/` | that a person is at the controls; that the text it stamps is the text it showed | the owner's stamp; the copy in `.approved/` |
 | *replay* | the whole workspace | everything *apply* checks, then [integrity checks](../contract/integrity-checks.md), on a throwaway copy of the target first | the trial's decisions, into another database — only when the rehearsal is clean; as a dry run, nothing (it lists every failure) |
 | *integrity check* | the database | the four checks of [integrity checks](../contract/integrity-checks.md) | nothing |
@@ -336,7 +355,7 @@ the *integrity check* (green before the import). Start every turn with *status* 
 what its files are and what to record; every file falls under exactly one line. Where unsure, write a
 question. Then **stop**: tell the owner the rules are ready and that they approve them.
 
-**3. Copy the notes** (a vault only; see "An Obsidian vault"). Never retype a note.
+**3. Copy the notes** (a folder of notes; see "A folder of notes"). Never retype a note.
 
 **4. Propose the metrics** (only if a rule says "readings" or "habits"). For each readings file:
 *inspect* it, *find* the metric. Add one `proposed` row: a `name`, the metric's page title (reuse one
@@ -348,7 +367,9 @@ question; list these rows in the report as "metric pages from notes". A habit is
 `until` empty. Then **stop** and ask the owner to review and approve. After approval, run the workspace
 operation *register metrics* to register those approved rows. Never type a unit into an operation yourself.
 
-**5. Make the ledger** with *ledger*, then mark each file a skip rule covers `[-]`, with the reason.
+**5. Make the ledger** with *ledger*, then mark what the rules say, by pattern: *skip* (`[-]`) for what is never
+imported — a view file, a folder that is not a life log — and *defer* (`[>]`) for what a later pass keeps: attachments,
+photos ("Files" below). Files the owner adds later: *ledger* again, then the same marks.
 
 **6. The loop, one file per turn.**
 
@@ -385,15 +406,19 @@ in chat is copied into `answer:` verbatim, in quotes, adding nothing.
 `## Distinct` or `## Decisions`), so it is not asked again. Edit the file's facts (the answered writes
 in, the question out of `waiting`), check and apply again; then mark the question `done`.
 
-**9. Check and report.** When no `[ ]` is left and every `[?]` waits on a question the owner parked:
+**9. Check and report.** When no `[ ]` is left, every `[?]` waits on a question the owner parked, and the later pass
+is done or the owner has put it off:
 *status* shows no mismatches and the *integrity check* is green. Report the counts *status* prints and
 nothing else from the files. A mismatch is never explained away: apply its file again, or ask.
 
 **10. The real run** — only when the owner says so (see "Trial, then the real run").
 
-## An Obsidian vault
+## A folder of notes
 
-What is specific to a vault, beside the steps above:
+A folder of Markdown notes and their attachments: an Obsidian vault is one, and so is any export of one note per
+file. *status* says how many Markdown files a source holds; whether they are notes to keep as pages is the rules'
+word (a Takeout keeps a few `.md` files in Drive that are nothing of the kind), and the model plans them when they
+are. What is specific to such a folder, beside the steps above:
 
 - **Every note becomes one page, titled by its file name**, copied whole by the writer (*plan a vault*,
   *apply a vault plan*), never retyped by the model. A daily note `YYYY-MM-DD.md` is the day page of
@@ -412,7 +437,7 @@ What is specific to a vault, beside the steps above:
   `import_key` (hashed when longer than 512 bytes; an appended note has none: its record in `plan.json` stands in); an unchanged body is left alone, so a second run
   writes nothing — an appended note is found by its record and appended again never — also after a note's
   page is promoted to a person or a place.
-- **Obsidian's link forms are rewritten before the save**: a link with a folder, a heading, a block
+- **Obsidian's link forms, where a note uses them, are rewritten before the save**: a link with a folder, a heading, a block
   reference or a `.md` suffix, and a link to a note whose title changed, become `[[Title|what was
   written]]`, so a reader sees the same words; a link to a daily note lands on its day page; an
   embedded or linked attachment becomes a code span: the file is not part of the vault (it is kept on its own, "Files"
@@ -526,7 +551,9 @@ Each line is a requirement on a writer that offers this process.
 - Quotes match as whole words or tokens; a value matches as a whole number in its quote; a quote too
   short to state the fact is refused.
 - The ledger is checked **before** the database transaction (a skipped or unknown file is refused),
-  and written atomically.
+  and written atomically. *ledger* run again adds the files added since and never changes or removes a line; a
+  pattern mark touches only the files still to do; a `[>]` file is accepted wherever a `[ ]` one is.
+- *inventory* prints no content, no value and no single file's name: a name appears only as a pattern that repeats.
 - An approval covers the approved file's content, not only its status line: an edit after approval
   closes the gate again.
 - Look-alike checks cover pages too, not only people and places.

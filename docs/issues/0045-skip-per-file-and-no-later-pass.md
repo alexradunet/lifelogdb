@@ -1,7 +1,7 @@
 # 0045 — A folder is skipped one file at a time, and a file cannot wait for a later pass
 
 - **Date:** 2026-10-08
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the 2026-10 import of a Google Takeout extraction (about 81 000 files, 63 000 of them a photo library)
   and of a notes folder with about 100 attachments
 
@@ -38,4 +38,4 @@ counts it apart and names it only when nothing else is to do.
 
 ## Resolution
 
-Open.
+Resolved by [plan 077](../plans/077-ingest-folder-survey-and-passes.md): *skip* takes a file or a glob; *defer* marks `[>]` later, a file held for a later pass that *status* counts apart and names only when nothing else is to do.

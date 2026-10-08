@@ -7,7 +7,7 @@
 - **Date / baseline:** 2026-10-08, `fcb0f90` (master).
 - **Priority:** P1. **Effort:** M. **Risk:** LOW for the schema (untouched), MED for the import workflow (ledger
   semantics change).
-- **Status:** IN PROGRESS.
+- **Status:** DONE.
 - **Resolves:** issues [0043](../issues/0043-notes-folder-without-obsidian-marker.md),
   [0044](../issues/0044-ledger-and-plan-cannot-take-added-files.md),
   [0045](../issues/0045-skip-per-file-and-no-later-pass.md),
@@ -39,7 +39,7 @@ Each row is one thing the writer does; the guide is the home of the rule and the
 | **Skip by pattern; a later pass.** *skip* takes a file or a pattern in the rules' glob language (`*`, `**`): every `[ ]` or `[>]` file it matches becomes `[-]` with the reason; the count is returned. A new *defer* marks the same way `[>]` ("later: reason"): a file for a later pass. *status* counts `later` apart, never names a `[>]` file while a `[ ]` or a ready `[?]` exists, and when only `[>]` files remain says so and names the first. Every operation that accepts a `[ ]` file accepts a `[>]` one (facts, prepared, selected photo); a done file is never re-marked. | `internal/importer/files.go`, `status.go`, `internal/api/import.go`; the guide |
 | **The guide.** "The workspace": the ledger's four marks and the refresh; "The writer's operations": *inventory*, *ledger*, *skip*, *defer*; "The procedure for the model": step 5 skips and defers by pattern; a new short section "An ingest folder" (one folder, one workspace per source beside it, the inventory names them, *ledger* again for files added later); "What an implementation must get right": a refresh adds and never removes, a pattern mark touches only files still to do. | `docs/guides/importing.md`, `README.md` (usage) |
 
-## Done criteria
+## Done criteria (all met; checks on Windows: gofmt, go generate, go vet, go test -count=1 ./... green; staticcheck and govulncheck not run)
 
 1. `lifelog import inventory` on a synthetic folder with a notes folder, a Takeout-like tree, an archive and a camera
    dump prints the expected JSON and no content, no individual file name and no value; a cancelled context returns no

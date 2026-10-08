@@ -167,8 +167,8 @@ func TestLedger(t *testing.T) {
 	if !found {
 		t.Error("the em-dash file is not in the ledger")
 	}
-	if _, err := f.w.MakeLedger(); code(err) != 409 {
-		t.Errorf("a second ledger: %v", err)
+	if n, err := f.w.MakeLedger(); err != nil || n != 0 {
+		t.Errorf("a second ledger adds nothing when no file was added: %d, %v", n, err)
 	}
 	if err := f.w.Skip("photo.png", "attachment"); err != nil {
 		t.Fatal(err)

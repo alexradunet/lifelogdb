@@ -26,6 +26,7 @@ import (
 	"lifelog/internal/core"
 	"lifelog/internal/db"
 	"lifelog/internal/importer"
+	"lifelog/internal/inventory"
 	"lifelog/internal/mcp"
 	"lifelog/internal/takeout"
 )
@@ -69,6 +70,8 @@ Import (docs/guides/importing.md), with --workspace <source>.lifelog:
   lifelog import replay --to PATH         the real run: the whole workspace into another database,
                                           rehearsed on a copy first (nothing written unless it is clean)
   lifelog import replay --to PATH --dry-run   the rehearsal alone: every failure, nothing written
+  lifelog import inventory FOLDER         survey an ingest folder without reading a content: folders, counts by
+                                          extension and name pattern, archive listings, the sources found (JSON)
   lifelog import takeout inventory FOLDER privacy-safe Timeline/Fit/Fitbit inventory (prints JSON, writes nothing)
   lifelog mcp --workspace DIR             the MCP server with the import tools added
 
@@ -160,6 +163,8 @@ func commandConsumesContext(o opts) bool {
 		switch o.args[1] {
 		case "status", "check", "apply", "replay":
 			return true
+		case "inventory":
+			return len(o.args) == 3
 		case "takeout":
 			return len(o.args) == 4 && o.args[2] == "inventory"
 		}
@@ -200,6 +205,16 @@ func runContext(ctx context.Context, o opts) error {
 	}
 	if cmd == "import" && len(args) > 0 && args[0] == "takeout" {
 		return importTakeoutContext(ctx, o, args[1:])
+	}
+	if cmd == "import" && len(args) > 0 && args[0] == "inventory" {
+		if len(args) != 2 {
+			return errors.New("import inventory FOLDER")
+		}
+		report, err := inventory.Run(ctx, args[1])
+		if err != nil {
+			return err
+		}
+		return printJSON(report)
 	}
 
 	var ws *importer.Workspace

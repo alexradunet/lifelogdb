@@ -162,6 +162,7 @@ func TestCommandInterruptPolicy(t *testing.T) {
 		{[]string{"import", "setup"}, false}, {[]string{"import", "approve", "rules"}, false},
 		{[]string{"help"}, false}, {[]string{"unknown"}, false}, {[]string{"import", "unknown"}, false},
 		{[]string{"import", "takeout"}, false}, {[]string{"import", "takeout", "inventory", "folder"}, true},
+		{[]string{"import", "inventory"}, false}, {[]string{"import", "inventory", "folder"}, true},
 		{[]string{"import"}, true}, {[]string{"import", "status"}, true}, {[]string{"import", "check", "file"}, true},
 		{[]string{"import", "apply", "file"}, true}, {[]string{"import", "replay"}, true},
 	} {
@@ -232,4 +233,48 @@ func (c *inventoryTraversalContext) Err() error {
 		c.cancel()
 	}
 	return c.Context.Err()
+}
+
+func TestImportInventorySurveysWithoutContents(t *testing.T) {
+	root := t.TempDir()
+	for p, body := range map[string]string{
+		"Notes/2031-04-11.md": "SECRET_CONTENT swam",
+		"Notes/2031-04-12.md": "SECRET_CONTENT",
+		"Notes/Bob Sample.md": "SECRET_CONTENT",
+		"Camera/DSC00001.JPG": "SECRET_CONTENT",
+		"Camera/DSC00002.JPG": "SECRET_CONTENT",
+	} {
+		full := filepath.Join(root, filepath.FromSlash(p))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	o, err := parse([]string{"import", "inventory", root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := captureStdout(t, func() {
+		if err := run(o); err != nil {
+			t.Fatal(err)
+		}
+	})
+	for _, want := range []string{`"path": "Notes"`, `"kind": "notes"`, `"daily_notes": 2`, `"name": "N-N-N.md"`, `"name": "DSCN.JPG"`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("inventory output misses %s:\n%s", want, out)
+		}
+	}
+	for _, leak := range []string{"SECRET_CONTENT", "Bob Sample", "2031-04-11", "DSC00001"} {
+		if strings.Contains(out, leak) {
+			t.Errorf("inventory output holds %s:\n%s", leak, out)
+		}
+	}
+	if err := runContext(context.Background(), opts{args: []string{"import", "inventory"}}); err == nil || !strings.Contains(err.Error(), "import inventory FOLDER") {
+		t.Errorf("no folder: %v", err)
+	}
+	if err := runContext(context.Background(), opts{args: []string{"import", "inventory", filepath.Join(root, "absent")}}); err == nil || strings.Contains(err.Error(), "absent") {
+		t.Errorf("a missing folder is refused without its name: %v", err)
+	}
 }

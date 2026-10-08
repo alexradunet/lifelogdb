@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -371,16 +372,20 @@ func (w *Workspace) CloseQuestion(id string) error {
 
 // ---- ledger.md: every source file and its state
 
-// Line is one ledger line: State is " " (to do), "x" (done), "?" (waiting) or "-" (skipped).
+// Line is one ledger line: State is " " (to do), "x" (done), "?" (waiting), ">" (later: held for a later pass)
+// or "-" (skipped) — the guide's "ledger.md".
 type Line struct {
 	State string `json:"state"`
 	File  string `json:"file"`
 	Note  string `json:"note,omitempty"`
 }
 
+// toDo says whether a line is still to be imported: to do now, or held for a later pass.
+func (l Line) toDo() bool { return l.State == " " || l.State == ">" }
+
 // A ledger line is `- [state] file` with an optional note. A file name that contains the separator is
 // written quoted, so the note is always what follows the first " — ".
-var ledgerLine = regexp.MustCompile(`^- \[([ x?-])\] (.+)$`)
+var ledgerLine = regexp.MustCompile(`^- \[([ x?>-])\] (.+)$`)
 
 const ledgerSep = " — "
 
@@ -429,22 +434,57 @@ func (w *Workspace) writeLedger(lines []Line) error {
 	return writeAtomic(w.file("ledger.md"), []byte(b.String()))
 }
 
-// MakeLedger writes the ledger once: every file of the source, hidden folders left out, each to do.
+// LedgerResult is what *ledger* did: the files listed, the ones added by this run and the listed files the source
+// no longer holds (their lines stay: a line is the record that a file was imported).
+type LedgerResult struct {
+	Files   int      `json:"files"`
+	Added   int      `json:"added"`
+	Missing []string `json:"missing,omitempty"`
+}
+
+// MakeLedger writes the ledger, every file of the source (hidden folders left out) to do, and returns how many
+// files it added: all of them the first time, the files added to the source since on a later run (the guide's
+// "ledger.md"). An existing line is never changed or removed.
 func (w *Workspace) MakeLedger() (int, error) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if _, ok, _ := w.Ledger(); ok {
-		return 0, &core.Error{Status: 409, Msg: "the ledger exists; it is never rebuilt"}
-	}
-	files, err := w.SourceFiles()
+	r, err := w.RefreshLedger()
 	if err != nil {
 		return 0, err
 	}
-	lines := make([]Line, len(files))
-	for i, f := range files {
-		lines[i] = Line{" ", f, ""}
+	return r.Added, nil
+}
+
+// RefreshLedger is MakeLedger with its whole result.
+func (w *Workspace) RefreshLedger() (*LedgerResult, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	lines, _, err := w.Ledger()
+	if err != nil {
+		return nil, err
 	}
-	return len(lines), w.writeLedger(lines)
+	files, err := w.SourceFiles()
+	if err != nil {
+		return nil, err
+	}
+	listed := make(map[string]bool, len(lines))
+	for _, l := range lines {
+		listed[l.File] = true
+	}
+	present := make(map[string]bool, len(files))
+	res := &LedgerResult{}
+	for _, f := range files {
+		present[f] = true
+		if !listed[f] {
+			lines = append(lines, Line{" ", f, ""}) // after the old lines: their order is the replay's
+			res.Added++
+		}
+	}
+	for _, l := range lines {
+		if !present[l.File] {
+			res.Missing = append(res.Missing, l.File)
+		}
+	}
+	res.Files = len(lines)
+	return res, w.writeLedger(lines)
 }
 
 // SourceFiles lists the source's files, /-separated and NFC, hidden folders and files left out, in order.
@@ -488,20 +528,105 @@ func (w *Workspace) SourceFiles() ([]string, error) {
 	return out, err
 }
 
-// Skip marks a file the model will not import ([-] with the reason): the one ledger mark the model writes.
+// Skip marks a file the model will not import ([-] with the reason), or every file still to do that a pattern
+// matches; see MarkFiles.
 func (w *Workspace) Skip(file, reason string) error {
+	_, err := w.MarkFiles(file, "-", reason)
+	return err
+}
+
+// Defer holds a file, or every file still to do that a pattern matches, for a later pass ([>] with the reason):
+// an attachment to keep with its text, a photo to select.
+func (w *Workspace) Defer(file, reason string) error {
+	_, err := w.MarkFiles(file, ">", reason)
+	return err
+}
+
+// MarkFiles writes the two ledger marks the model writes, skip ("-") and later (">"), and returns how many lines
+// it marked. A literal path must be a ledger file still to do (or already so marked). A pattern — the rules'
+// glob language: `*` within a path segment, `**` across segments — marks every file still to do that it matches
+// and leaves every other line alone; it must match some file of the ledger.
+func (w *Workspace) MarkFiles(file, state, reason string) (int, error) {
 	w.selectionMu.RLock()
 	defer w.selectionMu.RUnlock()
-	if strings.TrimSpace(reason) == "" {
-		return refuse("a skip needs its reason")
+	word := map[string]string{"-": "skip", ">": "later"}[state]
+	if word == "" {
+		return 0, refuse("a ledger mark is - (skip) or > (later)")
 	}
-	return w.mark(file, func(l *Line) error {
-		if l.State != " " && l.State != "-" {
-			return refuse("%s is [%s]: only a file still to do can be skipped", file, l.State)
+	if strings.TrimSpace(reason) == "" {
+		return 0, refuse("a %s needs its reason", word)
+	}
+	note := word + ": " + oneLine(reason)
+	if !isGlob(file) {
+		return 1, w.mark(file, func(l *Line) error {
+			if !l.toDo() && l.State != state {
+				return refuse("%s is [%s]: only a file still to do can be marked %s", file, l.State, word)
+			}
+			l.State, l.Note = state, note
+			return nil
+		})
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	lines, ok, err := w.Ledger()
+	if err != nil {
+		return 0, err
+	}
+	if !ok {
+		return 0, refuse("no ledger yet: make it first")
+	}
+	matched, marked := 0, 0
+	for i := range lines {
+		if !matchGlob(file, lines[i].File) {
+			continue
 		}
-		l.State, l.Note = "-", "skip: "+oneLine(reason)
-		return nil
-	})
+		matched++
+		if lines[i].toDo() {
+			lines[i].State, lines[i].Note = state, note
+			marked++
+		}
+	}
+	if matched == 0 {
+		return 0, refuse("%s matches no file of the ledger", file)
+	}
+	if marked == 0 {
+		return 0, nil
+	}
+	return marked, w.writeLedger(lines)
+}
+
+// isGlob says whether a ledger reference is a pattern rather than one file's path.
+func isGlob(s string) bool { return strings.ContainsAny(s, "*?[") }
+
+// matchGlob matches a /-separated path against a pattern of the rules' glob language: `**` stands for any
+// number of path segments (none included), and inside a segment `*`, `?` and `[...]` are path.Match's. Paths
+// are compared as they are: case matters, since a path is an import identity.
+func matchGlob(pattern, name string) bool {
+	return matchSegments(strings.Split(pattern, "/"), strings.Split(name, "/"))
+}
+
+func matchSegments(pattern, name []string) bool {
+	for len(pattern) > 0 {
+		if pattern[0] == "**" {
+			if len(pattern) == 1 {
+				return len(name) > 0 // a trailing ** names what is inside a folder, not a file of that name
+			}
+			for i := 0; i <= len(name); i++ {
+				if matchSegments(pattern[1:], name[i:]) {
+					return true
+				}
+			}
+			return false
+		}
+		if len(name) == 0 {
+			return false
+		}
+		if ok, err := path.Match(pattern[0], name[0]); err != nil || !ok {
+			return false
+		}
+		pattern, name = pattern[1:], name[1:]
+	}
+	return len(name) == 0
 }
 
 // mark changes one file's ledger line.

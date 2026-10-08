@@ -1,7 +1,7 @@
 # 0044 — Files added to a source after the ledger is made are invisible to the import
 
 - **Date:** 2026-10-08
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the 2026-10 import: the owner keeps adding exports to one ingest folder, and expects the import to
   tell processed files from unprocessed ones
 
@@ -34,4 +34,4 @@ holds are reported, never removed: a line is the record that a file was imported
 
 ## Resolution
 
-Open.
+Resolved by [plan 077](../plans/077-ingest-folder-survey-and-passes.md): *ledger* run again appends the files added since and reports the missing ones, changing no line; *plan a vault* run again appends the notes added since and keeps every fixed entry.

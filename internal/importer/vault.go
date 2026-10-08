@@ -49,33 +49,55 @@ func (w *Workspace) LoadPlan() (*Plan, bool, error) {
 	return p, true, readJSON(w.planPath(), p)
 }
 
-// IsVault says whether the source is a vault: it has an .obsidian folder, or a plan was made.
-func (w *Workspace) IsVault() bool {
-	root, err := os.OpenRoot(w.Source)
-	if err != nil {
-		return exists(w.planPath())
-	}
-	defer root.Close()
-	_, err = root.Stat(".obsidian")
-	return err == nil || exists(w.planPath())
+// NotesCount is what a source holds before it is planned: the Markdown files among all its files. Whether they
+// are notes to keep as pages is the rules' word, never a guess from one application's marker (the guide's "A
+// folder of notes").
+type NotesCount struct {
+	Markdown int `json:"markdown"`
+	Files    int `json:"files"`
 }
 
+func (w *Workspace) notesCount() (*NotesCount, error) {
+	files, err := w.SourceFiles()
+	if err != nil {
+		return nil, err
+	}
+	n := &NotesCount{Files: len(files)}
+	for _, f := range files {
+		if isNote(f) {
+			n.Markdown++
+		}
+	}
+	return n, nil
+}
+
+// isNote says whether a source file is a Markdown note; .canvas and other view files and attachments are not.
+func isNote(f string) bool { return strings.HasSuffix(strings.ToLower(f), ".md") }
+
 // PlanVault drafts plan.json against the database: every note becomes one page titled by its file name, a
-// YYYY-MM-DD note is that day's page, and every problem is listed for the model to fix.
+// YYYY-MM-DD note is that day's page, and every problem is listed for the model to fix. Run again, it appends the
+// notes added to the source since and leaves every existing entry as it is (a title or day the model fixed stays).
 func (w *Workspace) PlanVault(ctx context.Context, s *core.Store) (*Plan, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if exists(w.planPath()) {
-		return nil, &core.Error{Status: 409, Msg: "plan.json exists: fix it with fix-plan, it is never redrafted"}
+	p, _, err := w.LoadPlan()
+	if err != nil {
+		return nil, err
+	}
+	if p == nil {
+		p = &Plan{Notes: []Note{}}
+	}
+	planned := make(map[string]bool, len(p.Notes))
+	for _, n := range p.Notes {
+		planned[n.Path] = true
 	}
 	files, err := w.SourceFiles()
 	if err != nil {
 		return nil, err
 	}
-	p := &Plan{Notes: []Note{}}
 	for _, f := range files {
-		if !strings.HasSuffix(strings.ToLower(f), ".md") {
-			continue // .canvas and other view files, attachments: not notes
+		if !isNote(f) || planned[f] {
+			continue
 		}
 		title := norm.NFC.String(strings.TrimSuffix(path.Base(f), path.Ext(f)))
 		n := Note{Path: f, Title: title, Action: "create"}
