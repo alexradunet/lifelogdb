@@ -15,6 +15,8 @@ The database it writes is specified independently of it, so another program — 
   It names no implementation; [building a writer](docs/guides/building-a-writer.md) is the way in for another one.
 - **[tests/](tests/README.md)** — the validation suites: every executed claim of the docs, run against the schema and
   against this writer's own extraction and save. `go test ./tests`.
+- **[API.md](API.md)** — the wire shape for client authors: every entity class and its properties, the errors, the
+  pages, how to reach a server; a test keeps it equal to the code.
 - **[AGENTS.md](AGENTS.md)** — the rules for anyone, human or agent, working in this repo.
 
 `lifelog` implements the contract and never defines it: a rule found missing or ambiguous here is an
