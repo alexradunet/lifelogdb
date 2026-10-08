@@ -39,6 +39,8 @@ func ingest(t *testing.T) string {
 		"Camera/DSC00001.MP4":                                           secret,
 		".hidden/x.md":                                                  secret,
 		"Notes/.obsidian/app.json":                                      secret,
+		"Notes.lifelog/rules.md":                                        secret, // a workspace beside its source is never a source
+		"Notes.lifelog/ledger.md":                                       secret,
 	}
 	for p, body := range files {
 		full := filepath.Join(root, filepath.FromSlash(p))
@@ -145,7 +147,7 @@ func TestRunSurveysWithoutContents(t *testing.T) {
 	} else if tk.Products[0] != (Count{"Drive", 2}) || tk.Products[1] != (Count{"Fit", 2}) || tk.Products[2] != (Count{"Google Photos", 3}) {
 		t.Errorf("products: %+v", tk.Products)
 	}
-	if _, ok := kinds["Takeout/Drive/repo"]; ok || len(r.Sources) != 2 {
+	if _, ok := kinds["Takeout/Drive/repo"]; ok || len(r.Sources) != 2 || byPath["Notes.lifelog"].Path != "" {
 		t.Errorf("stray notes inside a recognised source, or a camera dump, became a source: %+v", r.Sources)
 	}
 

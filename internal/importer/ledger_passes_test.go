@@ -157,6 +157,12 @@ func TestMatchGlob(t *testing.T) {
 		{"*.md", "a/b.md", false},
 		{"Notes/A — B.png", "Notes/A — B.png", true},
 		{"[", "[", false}, // a bad pattern matches nothing
+		{"**/*.{png,pdf}", "a/b.pdf", true},
+		{"**/*.{png,pdf}", "a/b.md", false},
+		{"{Journal,Contacts}/*.md", "Contacts/x.md", true},
+		{"{Journal,Contacts}/*.md", "Medical/x.md", false},
+		{"a/{b,c}/{d,e}.md", "a/c/e.md", true},
+		{"a/{b.md", "a/{b.md", true}, // an unclosed brace is literal
 	}
 	for _, c := range cases {
 		if got := matchGlob(c.pattern, c.name); got != c.want {

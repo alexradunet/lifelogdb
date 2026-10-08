@@ -599,10 +599,34 @@ func (w *Workspace) MarkFiles(file, state, reason string) (int, error) {
 func isGlob(s string) bool { return strings.ContainsAny(s, "*?[") }
 
 // matchGlob matches a /-separated path against a pattern of the rules' glob language: `**` stands for any
-// number of path segments (none included), and inside a segment `*`, `?` and `[...]` are path.Match's. Paths
-// are compared as they are: case matters, since a path is an import identity.
+// number of path segments (none included), `{a,b}` for either alternative, and inside a segment `*`, `?` and
+// `[...]` are path.Match's. Paths are compared as they are: case matters, since a path is an import identity.
 func matchGlob(pattern, name string) bool {
-	return matchSegments(strings.Split(pattern, "/"), strings.Split(name, "/"))
+	for _, alt := range expandBraces(pattern) {
+		if matchSegments(strings.Split(alt, "/"), strings.Split(name, "/")) {
+			return true
+		}
+	}
+	return false
+}
+
+// expandBraces writes out every alternative of a pattern's `{a,b}` groups: `*.{md,txt}` is `*.md` and `*.txt`.
+// Groups do not nest; an unclosed brace is taken as it is.
+func expandBraces(pattern string) []string {
+	open := strings.IndexByte(pattern, '{')
+	if open < 0 {
+		return []string{pattern}
+	}
+	close := strings.IndexByte(pattern[open:], '}')
+	if close < 0 {
+		return []string{pattern}
+	}
+	close += open
+	var out []string
+	for _, alt := range strings.Split(pattern[open+1:close], ",") {
+		out = append(out, expandBraces(pattern[:open]+alt+pattern[close+1:])...)
+	}
+	return out
 }
 
 func matchSegments(pattern, name []string) bool {

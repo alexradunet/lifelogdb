@@ -134,8 +134,8 @@ changes or removes a line, so a line stays the record that a file was imported. 
 written only by *apply*, with the counts of what was written. The model writes two marks: `[-]` skipped, with the
 reason, for what is never imported; and `[>]` later, for a file held for a later pass — an attachment to keep with
 its text, a photo to select ("Files" below) — not now and not never. Either takes one file or a pattern in the rules'
-glob language (`Drive/**`, `**/*.png`: `*` within a path segment, `**` across segments) and marks every file still to
-do that it matches, and no other line.
+glob language (`Drive/**`, `**/*.{png,pdf}`: `*` within a path segment, `**` across segments, `{a,b}` for either) and
+marks every file still to do that it matches, and no other line.
 
 ```
 - [x] Journal/2031/2031-04-11.md — 1 place, 1 link (2 new)

@@ -155,6 +155,9 @@ func (s *survey) walk() error {
 			return nil
 		}
 		name := d.Name()
+		if d.IsDir() && p != "." && strings.HasSuffix(name, ".lifelog") {
+			return fs.SkipDir // an import workspace beside its source: not a source
+		}
 		if p != "." && strings.HasPrefix(name, ".") {
 			if d.IsDir() {
 				s.rep.Hidden++
