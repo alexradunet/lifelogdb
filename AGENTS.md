@@ -50,6 +50,13 @@ fast feedback**. Safeguards should catch failures, not create ceremony.
   knobs or speculative extension points for hypothetical needs. Do not reorganize working code just for uniformity.
 - Keep application engineering guidance here and application decisions in [README.md](README.md); the database
   contract remains language-neutral in `docs/`. Explain non-obvious reasons and constraints, not what the syntax does.
+- **Write in Simplified Technical English** (ASD-STE100), in every page, comment, commit message and conversation:
+  short sentences with one idea each, the active voice, one approved word for one meaning, no synonyms for variety,
+  no idioms. The reader fifty years from now may not have English as a first language.
+- **Show a concept as a mermaid diagram, not as prose, whenever a diagram can carry it**: a flow of steps, the
+  states of a record, the relationships between tables, the shape of a process. Prose then says only what the
+  diagram cannot. Diagrams in `docs/` follow the conventions under [editing the docs](#editing-the-docs) and are
+  checked by the `diagrams` suite; a diagram in a conversation or a plan needs no id line.
 - Before finishing, inspect the diff and generated changes. Report what changed, exact checks run and their results,
   and anything blocked or untested. Include checks in a commit message when committing; never imply unrun checks passed.
 
@@ -262,7 +269,8 @@ or a promise of performance. Generate from scratch, never from private exports o
   the cookbook and the totals line in `docs/schema/README.md` in step. The mermaid diagrams are checked by
   the `diagrams` suite: the ER diagrams draw tables, key columns and foreign keys only, and the link map must
   equal `link_kinds`. Each diagram starts with a `%% diagram: <id>` line; keep to `erDiagram`, `flowchart`
-  and `stateDiagram-v2` with quoted labels.
+  and `stateDiagram-v2` with quoted labels. A new concept gets a diagram before it gets a paragraph (the working
+  agreement above says why); a new diagram in `docs/` is counted in `tests/README.md`.
 - **Suites change with the docs, never to make them pass.** The suites are grouped by subject
   (`tests/README.md`). If a suite must change because the docs legitimately changed, change it in
   the same edit and say so in the commit message — a suite loosened to pass proves nothing, and
