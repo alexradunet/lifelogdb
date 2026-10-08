@@ -4,11 +4,12 @@ An issue records an incident from real use — a failed import, a bug in the wri
 data could not answer, a rule that is ambiguous or untestable. It is the evidence a schema change needs
 ([how a change happens](../process.md)). One file per incident, named `NNNN-short-slug.md`, written from the
 [template](template.md), numbered on from the last: issues up to 0010 are closed and live in git history
-(`git log -- docs/issues`). Issues 0011–0046 are listed below; the next one is **0047**. Close an issue with its resolution and status, retaining the dated incident as
+(`git log -- docs/issues`). Issues 0011–0047 are listed below; the next one is **0048**. Close an issue with its resolution and status, retaining the dated incident as
 [the process](../process.md) requires. Earlier closed records remain available in git history.
 
 | id | title | status |
 |---|---|---|
+| [0047](0047-two-daily-notes-for-one-day-cannot-merge.md) | Two daily notes of one day in a folder of notes cannot be merged | open |
 | [0043](0043-notes-folder-without-obsidian-marker.md) | A folder of notes is only recognised when it is an Obsidian vault | resolved |
 | [0044](0044-ledger-and-plan-cannot-take-added-files.md) | Files added to a source after the ledger is made are invisible to the import | resolved |
 | [0045](0045-skip-per-file-and-no-later-pass.md) | A folder is skipped one file at a time, and a file cannot wait for a later pass | resolved |
