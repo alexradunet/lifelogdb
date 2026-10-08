@@ -7,7 +7,7 @@
 
 - **Date / baseline:** 2026-10-08, `b28ee22` (master).
 - **Priority:** P2. **Effort:** S. **Risk:** LOW; every change is additive on the wire.
-- **Status:** TODO.
+- **Status:** DONE.
 - **Resolves:** the review of 2026-10-08 (the owner's ask for Flutter, Android, web and React clients): a client
   cannot tell a stale version from an invalid title without parsing prose; the people, places, files and ghost lists
   return every row and the days and search lists a fixed count, with no way to ask for the rest; the remote client
@@ -34,7 +34,7 @@
 4. `internal/client`: the transport is configured (the timeout is bounded in code, not observed against a black
    hole: no network test).
 
-## Done criteria
+## Done criteria (all met; checks on Windows: gofmt, go generate, go vet, go test -count=1 ./... green; staticcheck and govulncheck not run)
 
 1. Every error answer carries a `code`; the listed specific codes appear where stated; no message changed.
 2. The six list routes page as described; the existing action-offer and view tests pass unchanged.

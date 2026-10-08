@@ -9,12 +9,14 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"lifelog/internal/api"
 )
@@ -31,9 +33,18 @@ func InProcess(h http.Handler, source string) *Client {
 	return &Client{hc: &http.Client{Transport: handlerTransport{h}}, base: "http://lifelog.local", source: source}
 }
 
-// Remote calls a running server, e.g. http://127.0.0.1:7777.
+// Remote calls a running server, e.g. http://127.0.0.1:7777. Connecting and the TLS handshake are bounded by
+// dialTimeout; the response is not, since a replay or an upload may take minutes, and the command's context
+// carries the interrupt.
 func Remote(base, source string) *Client {
-	return &Client{hc: http.DefaultClient, base: strings.TrimRight(base, "/"), source: source}
+	return &Client{hc: &http.Client{Transport: remoteTransport()}, base: strings.TrimRight(base, "/"), source: source}
+}
+
+const dialTimeout = 10 * time.Second
+
+func remoteTransport() *http.Transport {
+	return &http.Transport{Proxy: http.ProxyFromEnvironment, DialContext: (&net.Dialer{Timeout: dialTimeout}).DialContext,
+		TLSHandshakeTimeout: dialTimeout, ExpectContinueTimeout: time.Second, ForceAttemptHTTP2: true}
 }
 
 // SetToken makes every request carry the owner's token: what `lifelog serve --public` requires.

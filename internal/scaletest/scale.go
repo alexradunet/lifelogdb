@@ -494,7 +494,7 @@ func verify(ctx context.Context, s *core.Store, f *fixture) error {
 	if raw != f.manifest.Roots+f.manifest.Corrections+f.manifest.Retractions || files != f.manifest.Files || previews != f.manifest.PreviewBytes {
 		return fmt.Errorf("stored totals readings/files/preview bytes=%d/%d/%d", raw, files, previews)
 	}
-	hits, err := s.Search(ctx, "scaleraretoken", f.manifest.Profile.Days)
+	hits, err := s.Search(ctx, "scaleraretoken", f.manifest.Profile.Days, 0)
 	if err != nil {
 		return err
 	}
@@ -677,7 +677,7 @@ func exercise(ctx context.Context, s *core.Store, f *fixture, samples int, repor
 		var hits []core.Hit
 		if err := record(report, "search_rare", func() error {
 			var e error
-			hits, e = s.Search(ctx, "scaleraretoken", f.manifest.Profile.Days)
+			hits, e = s.Search(ctx, "scaleraretoken", f.manifest.Profile.Days, 0)
 			return e
 		}); err != nil {
 			return err

@@ -31,6 +31,7 @@
 {{$items := .Embedded "item"}}
 {{if $items}}<ul class="plain">{{range $items}}<li><a href="{{.Href}}">{{.Title}}</a>{{if eq $.Title "Days"}} <span class="muted">{{weekday .Title}}</span>{{end}}</li>{{end}}</ul>
 {{else}}<p class="muted">Nothing yet.</p>{{end}}
+{{template "pager" .}}
 {{with .Action "create-person"}}<h2>New</h2>{{template "form" (form .)}}{{end}}
 {{with .Action "create-place"}}<h2>New</h2>{{template "form" (form . "class" "inline")}}{{end}}
 {{with .Action "add-file"}}<h2>New</h2><p class="desc">{{.Description}}</p>{{template "form" (form . "hide" "sha256,mime")}}{{end}}
@@ -41,6 +42,7 @@
 {{template "form" (form (.Action "search") "class" "inline")}}
 {{with .Props}}{{with .hits}}<ul class="plain">{{range .}}<li><a href="/pages/{{num .id}}">{{.title}}</a><div class="muted">{{.snippet}}</div></li>{{end}}</ul>
 {{else}}<p class="muted">No page matches.</p>{{end}}{{end}}
+{{template "pager" .}}
 <p class="desc">FTS5 syntax: words, "a phrase", prefix*, a OR b.</p>
 {{template "foot" .}}{{end}}
 

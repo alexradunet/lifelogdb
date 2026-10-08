@@ -254,13 +254,14 @@ type Hit struct {
 	Snippet string `json:"snippet"`
 }
 
-func (s *Store) Search(ctx context.Context, q string, limit int) ([]Hit, error) {
+// Search is the hits of an FTS5 query, best first; limit and offset select one page of them.
+func (s *Store) Search(ctx context.Context, q string, limit, offset int) ([]Hit, error) {
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT p.id, p_name.title, snippet(entities_fts, 2, '[', ']', '…', 24)
 		  FROM entities_fts
 		  JOIN entities p ON p.id = entities_fts.rowid JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key AND p.deleted_at IS NULL
 		 WHERE entities_fts MATCH ?
-		 ORDER BY rank, p.id LIMIT ?`, q, limit)
+		 ORDER BY rank, p.id LIMIT ? OFFSET ?`, q, limit, offset)
 	if err != nil {
 		return nil, invalid("search %q: %v", q, err)
 	}
@@ -404,8 +405,9 @@ type Ghost struct {
 	CreatedAt string `json:"created_at"`
 }
 
-func (s *Store) Ghosts(ctx context.Context) ([]Ghost, error) {
-	rows, err := s.DB.R.QueryContext(ctx, `SELECT id, title, created_at FROM ghost_pages ORDER BY created_at`)
+// Ghosts is one page of the ghost_pages view, oldest first.
+func (s *Store) Ghosts(ctx context.Context, limit, offset int) ([]Ghost, error) {
+	rows, err := s.DB.R.QueryContext(ctx, `SELECT id, title, created_at FROM ghost_pages ORDER BY created_at, id LIMIT ? OFFSET ?`, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -421,17 +423,37 @@ func (s *Store) Ghosts(ctx context.Context) ([]Ghost, error) {
 	return out, rows.Err()
 }
 
-// Recent lists the latest day pages, newest first.
-func (s *Store) RecentDays(ctx context.Context, limit int) ([]Edge, error) {
+// RecentDays is one page of the day pages, newest first.
+func (s *Store) RecentDays(ctx context.Context, limit, offset int) ([]Edge, error) {
 	return s.edges(ctx, `SELECT 'day', p.id, p_name.title, 'page', '' FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
-	                      WHERE p_name.title = p.day AND p.deleted_at IS NULL ORDER BY p.day DESC LIMIT ?`, limit)
+	                      WHERE p_name.title = p.day AND p.deleted_at IS NULL ORDER BY p.day DESC LIMIT ? OFFSET ?`, limit, offset)
 }
 
-// Named lists the live people or places.
-func (s *Store) Named(ctx context.Context, typ string) ([]Edge, error) {
+// Named is one page of the live people, places or files, by title.
+func (s *Store) Named(ctx context.Context, typ string, limit, offset int) ([]Edge, error) {
 	return s.edges(ctx, `SELECT p.entity_type, p.id, p_name.title, p.entity_type, coalesce(pe.name, '')
 	                       FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key LEFT JOIN people pe ON pe.id = p.id
-	                      WHERE p.entity_type = ? AND p.deleted_at IS NULL ORDER BY p_name.title`, typ)
+	                      WHERE p.entity_type = ? AND p.deleted_at IS NULL ORDER BY p_name.title LIMIT ? OFFSET ?`, typ, limit, offset)
+}
+
+// LinkKindsFrom are the registered kinds a page of this type may start (link_kinds.from_types, NULL for any),
+// the save contract's wikilink excluded, in kind order.
+func (s *Store) LinkKindsFrom(ctx context.Context, typ string) ([]string, error) {
+	rows, err := s.DB.R.QueryContext(ctx, `SELECT kind FROM link_kinds WHERE kind <> 'wikilink'
+	    AND (from_types IS NULL OR instr(',' || from_types || ',', ',' || ? || ',') > 0) ORDER BY kind`, typ)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err != nil {
+			return nil, err
+		}
+		out = append(out, k)
+	}
+	return out, rows.Err()
 }
 
 // Result is the answer to an ad-hoc read-only query.

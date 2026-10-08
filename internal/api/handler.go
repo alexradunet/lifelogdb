@@ -114,7 +114,7 @@ func New(s *core.Store, ws *importer.Workspace, trustedOrigins ...string) http.H
 		}
 	}
 	guard.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		e, status := errorEntity(&core.Error{Status: http.StatusForbidden, Msg: "cross-origin browser write refused"})
+		e, status := errorEntity(&core.Error{Status: http.StatusForbidden, Msg: "cross-origin browser write refused", Code: "cross_origin"})
 		write(w, r, status, e)
 	}))
 	return guard.Handler(m)
@@ -177,22 +177,101 @@ func selfOf(e *Entity) string {
 	return ""
 }
 
+// errorEntity is the one error representation: status, a code a client branches on, and the message.
 func errorEntity(err error) (*Entity, int) {
-	status := http.StatusInternalServerError
+	status, code := http.StatusInternalServerError, ""
 	e := &Entity{Class: []string{"error"}, Title: "Error", Links: []Link{{Rel: []string{"index"}, Href: "/", Title: "Home"}}}
 	var ce *core.Error
 	var ex *core.ExistsError
 	switch {
 	case errors.As(err, &ex):
-		status = http.StatusConflict
+		status, code = http.StatusConflict, "exists"
 		e.Links = append(e.Links, Link{Rel: []string{"existing"}, Href: pageHref(ex.ID), Title: ex.Title})
 	case errors.As(err, &ce):
-		status = ce.Status
+		status, code = ce.Status, ce.Code
 	case errors.Is(err, context.DeadlineExceeded):
 		status = http.StatusGatewayTimeout
 	}
-	e.Properties = map[string]any{"status": status, "message": err.Error()}
+	if code == "" {
+		code = codeOf(status)
+	}
+	e.Properties = map[string]any{"status": status, "code": code, "message": err.Error()}
 	return e, status
+}
+
+// codeOf is the general code of a status, for an error that names no more specific one.
+func codeOf(status int) string {
+	switch status {
+	case http.StatusBadRequest:
+		return "bad_request"
+	case http.StatusUnauthorized:
+		return "unauthorized"
+	case http.StatusForbidden:
+		return "forbidden"
+	case http.StatusNotFound:
+		return "not_found"
+	case http.StatusConflict:
+		return "conflict"
+	case http.StatusRequestEntityTooLarge:
+		return "too_large"
+	case http.StatusUnprocessableEntity:
+		return "invalid"
+	case http.StatusGatewayTimeout:
+		return "timeout"
+	}
+	return "internal"
+}
+
+// The lists page (docs/plans/079-client-contract-hygiene.md): limit and offset select a page, and the entity
+// links the next one when a further row exists, the previous one when offset > 0.
+const maxPageLimit = 500
+
+// pageOf reads limit (1–maxPageLimit, def when absent) and offset (≥ 0) from the query.
+func pageOf(r *http.Request, def int) (limit, offset int, err error) {
+	q := r.URL.Query()
+	limit = def
+	if s := q.Get("limit"); s != "" {
+		if limit, err = strconv.Atoi(s); err != nil || limit < 1 || limit > maxPageLimit {
+			return 0, 0, &core.Error{Status: 422, Msg: fmt.Sprintf("limit must be 1 to %d", maxPageLimit)}
+		}
+	}
+	if s := q.Get("offset"); s != "" {
+		if offset, err = strconv.Atoi(s); err != nil || offset < 0 {
+			return 0, 0, &core.Error{Status: 422, Msg: "offset must be 0 or more"}
+		}
+	}
+	return limit, offset, nil
+}
+
+// paged trims a read of limit+1 rows to the page, records limit and offset in the properties and adds the next
+// and prev links; path and q are the list's own address.
+func paged[T any](e *Entity, rows []T, path string, q url.Values, limit, offset int) []T {
+	more := len(rows) > limit
+	if more {
+		rows = rows[:limit]
+	}
+	props, _ := e.Properties.(map[string]any)
+	if props == nil {
+		props = map[string]any{}
+		e.Properties = props
+	}
+	props["limit"], props["offset"] = limit, offset
+	href := func(offset int) string {
+		v := url.Values{}
+		for k, vs := range q {
+			v[k] = vs
+		}
+		v.Set("limit", strconv.Itoa(limit))
+		v.Set("offset", strconv.Itoa(offset))
+		return path + "?" + v.Encode()
+	}
+	if offset > 0 {
+		e.Links = append(e.Links, link("prev", href(max(offset-limit, 0)), "Previous page"))
+	}
+	if more {
+		e.Links = append(e.Links, link("next", href(offset+limit), "Next page"))
+	}
+	return rows
 }
 
 func write(w http.ResponseWriter, r *http.Request, status int, e *Entity) {
@@ -348,11 +427,16 @@ func (h *server) actions(*http.Request) (*Entity, error) {
 func (h *server) today(*http.Request) (*Entity, error) { return nil, redirect{dayHref(core.Today())} }
 
 func (h *server) days(r *http.Request) (*Entity, error) {
-	days, err := h.s.RecentDays(r.Context(), 60)
+	limit, offset, err := pageOf(r, 60)
+	if err != nil {
+		return nil, err
+	}
+	days, err := h.s.RecentDays(r.Context(), limit+1, offset)
 	if err != nil {
 		return nil, err
 	}
 	e := &Entity{Class: []string{"days"}, Title: "Days", Links: []Link{link("self", "/days", "Days"), link("index", "/", "Home")}}
+	days = paged(e, days, "/days", nil, limit, offset)
 	for _, d := range days {
 		e.Entities = append(e.Entities, link("item", dayHref(d.Title), d.Title))
 	}
@@ -472,14 +556,12 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 // linkKinds are the kinds a page of this type may start (link_kinds.from_types), minus the two the save
 // contract and renames own; `at` only from a day page (D16).
 func (h *server) linkKinds(ctx context.Context, typ string, dayPage bool) ([]string, error) {
-	res, err := h.s.Query(ctx, `SELECT kind FROM link_kinds WHERE kind <> 'wikilink'
-	                             AND (from_types IS NULL OR instr(','||from_types||',', ','||'`+typ+`'||',') > 0) ORDER BY kind`, 100)
+	kinds, err := h.s.LinkKindsFrom(ctx, typ)
 	if err != nil {
 		return nil, err
 	}
 	var out []string
-	for _, row := range res.Rows {
-		k := row[0].(string)
+	for _, k := range kinds {
 		if k == "at" && !dayPage {
 			continue
 		}
@@ -520,13 +602,18 @@ func (h *server) recordAction(ctx context.Context, metric, day string) Action {
 
 func (h *server) named(typ, plural, create string) func(*http.Request) (*Entity, error) {
 	return func(r *http.Request) (*Entity, error) {
-		list, err := h.s.Named(r.Context(), typ)
+		limit, offset, err := pageOf(r, 200)
+		if err != nil {
+			return nil, err
+		}
+		list, err := h.s.Named(r.Context(), typ, limit+1, offset)
 		if err != nil {
 			return nil, err
 		}
 		e := &Entity{Class: []string{plural}, Title: strings.ToUpper(plural[:1]) + plural[1:],
 			Links:   []Link{link("self", "/"+plural, plural), link("index", "/", "Home")},
 			Actions: []Action{action(create, nil, nil)}}
+		list = paged(e, list, "/"+plural, nil, limit, offset)
 		for _, p := range list {
 			e.Entities = append(e.Entities, Link{Rel: []string{"item"}, Href: pageHref(p.ID), Title: p.Title, Class: []string{typ}})
 		}
@@ -705,11 +792,16 @@ func (h *server) measurementEntity(ctx context.Context, id int64) (*Entity, erro
 }
 
 func (h *server) ghosts(r *http.Request) (*Entity, error) {
-	gs, err := h.s.Ghosts(r.Context())
+	limit, offset, err := pageOf(r, 200)
+	if err != nil {
+		return nil, err
+	}
+	gs, err := h.s.Ghosts(r.Context(), limit+1, offset)
 	if err != nil {
 		return nil, err
 	}
 	e := &Entity{Class: []string{"ghosts"}, Title: "Ghost pages", Links: []Link{link("self", "/ghosts", "Ghost pages"), link("index", "/", "Home")}}
+	gs = paged(e, gs, "/ghosts", nil, limit, offset)
 	for _, g := range gs {
 		e.Entities = append(e.Entities, link("item", pageHref(g.ID), g.Title))
 	}
@@ -724,11 +816,17 @@ func (h *server) search(r *http.Request) (*Entity, error) {
 	if q == "" {
 		return e, nil
 	}
-	hits, err := h.s.Search(r.Context(), q, 50)
+	limit, offset, err := pageOf(r, 50)
 	if err != nil {
 		return nil, err
 	}
-	e.Properties = map[string]any{"q": q, "hits": hits}
+	hits, err := h.s.Search(r.Context(), q, limit+1, offset)
+	if err != nil {
+		return nil, err
+	}
+	e.Properties = map[string]any{"q": q}
+	hits = paged(e, hits, "/search", url.Values{"q": {q}}, limit, offset)
+	e.Properties.(map[string]any)["hits"] = hits
 	for _, x := range hits {
 		e.Entities = append(e.Entities, link("item", pageHref(x.ID), x.Title))
 	}

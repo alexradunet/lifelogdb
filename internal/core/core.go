@@ -20,17 +20,31 @@ const Now = "strftime('%Y-%m-%dT%H:%M:%fZ','now')"
 // Store is one open life.db.
 type Store struct{ DB *db.DB }
 
-// Error carries an HTTP-shaped status so every surface reports the same failure the same way.
+// Error carries an HTTP-shaped status so every surface reports the same failure the same way. Code, when set,
+// names the failure for a client that branches on it (docs/plans/079-client-contract-hygiene.md); the API fills
+// a general one from the status otherwise.
 type Error struct {
 	Status int
 	Msg    string
+	Code   string
 }
 
 func (e *Error) Error() string { return e.Msg }
 
-func notFound(format string, a ...any) error { return &Error{404, fmt.Sprintf(format, a...)} }
-func invalid(format string, a ...any) error  { return &Error{422, fmt.Sprintf(format, a...)} }
-func conflict(format string, a ...any) error { return &Error{409, fmt.Sprintf(format, a...)} }
+func notFound(format string, a ...any) error {
+	return &Error{Status: 404, Msg: fmt.Sprintf(format, a...)}
+}
+func invalid(format string, a ...any) error {
+	return &Error{Status: 422, Msg: fmt.Sprintf(format, a...)}
+}
+func conflict(format string, a ...any) error {
+	return &Error{Status: 409, Msg: fmt.Sprintf(format, a...)}
+}
+
+// conflictCode is a 409 with a code a client branches on (e.g. stale_version).
+func conflictCode(code, format string, a ...any) error {
+	return &Error{Status: 409, Msg: fmt.Sprintf(format, a...), Code: code}
+}
 
 // refused turns a constraint or trigger failure of the DDL into a 422 with SQLite's own message.
 func refused(err error) error {
@@ -43,7 +57,7 @@ func refused(err error) error {
 	}
 	var se *sqlite.Error
 	if errors.As(err, &se) && se.Code()&0xff == sqlite3.SQLITE_CONSTRAINT { // CHECKs, FKs, UNIQUE and RAISE(ABORT)
-		return &Error{422, se.Error()}
+		return &Error{Status: 422, Msg: se.Error()}
 	}
 	return err
 }

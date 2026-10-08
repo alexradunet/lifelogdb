@@ -310,7 +310,7 @@ func (t *Tx) SaveBody(id int64, body, version string) (Sync, error) {
 		return Sync{}, conflict("page %d is deleted: revive it first", id)
 	}
 	if version != currentVersion {
-		return Sync{}, conflict("page %d changed since version %q (now %q): read it again", id, version, currentVersion)
+		return Sync{}, conflictCode("stale_version", "page %d changed since version %q (now %q): read it again", id, version, currentVersion)
 	}
 	return t.SetBody(id, body)
 }

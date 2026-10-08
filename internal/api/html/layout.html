@@ -62,6 +62,9 @@ svg.chart circle{fill:var(--accent)}svg.chart .axis{stroke:var(--line)}svg.chart
 
 {{define "foot"}}</main></body></html>{{end}}
 
+{{/* pager draws a list's prev and next links, when it has them */}}
+{{define "pager"}}{{$prev := .Link "prev"}}{{$next := .Link "next"}}{{if or $prev $next}}<div class="pager">{{with $prev}}<a href="{{.}}" rel="prev">← Previous</a>{{else}}<span></span>{{end}}{{with $next}}<a href="{{.}}" rel="next">Next →</a>{{end}}</div>{{end}}{{end}}
+
 {{/* form draws one action of the entity (see formOf); nothing when the action is not offered */}}
 {{define "form"}}{{with .}}<form method="{{.Method}}" action="{{.Href}}"{{with .Class}} class="{{.}}"{{end}}{{if .Multipart}} enctype="multipart/form-data"{{end}}>
 {{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{num .Value}}">{{end}}
