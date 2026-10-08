@@ -36,20 +36,23 @@ pagination and error codes (the next plan), planning routes.
 
 Replace the README bullet **"`serve` is local-only"** with this, rewritten in place:
 
-> **`serve` is local-only unless the owner opens it.** The default bind is `127.0.0.1:7777`; `--addr` accepts a
-> loopback IP or `localhost` with a numeric port as before, and nothing else without a token. A **token** opens the
-> listener: `--token-file PATH` (a file holding one line of at least 32 characters; the command line never carries
-> the secret), or `LIFELOG_TOKEN`. With a token, `--addr` may name any IP of this machine (`0.0.0.0:7777` for all
-> of them), every request must carry `Authorization: Bearer <token>` or the browser cookie `/login` sets, a
-> request without one is answered 401 with no entity of the database, and the `Host` check is dropped: it existed
-> to keep an unauthenticated local server from a rebinding page, and a bearer token defends against that page on
-> its own. A token holder is the owner: owner-only actions are refused by `Lifelog-Source: agent:*` as before, not
-> by the token. **Origins**: `--allow-origin ORIGIN` (repeatable, exact scheme://host[:port]) answers CORS
-> preflights and marks the origin trusted for browser writes; any other origin is refused as today. **TLS**:
-> `--tls-cert` and `--tls-key` serve HTTPS with the standard library; without them a token on a network is sent in
-> clear, which is acceptable only on a private network (a VPN, a mesh such as Tailscale) and the startup line says
-> so. Forwarded headers still confer no trust; a reverse proxy that terminates TLS is supported only because it
-> forwards the bearer header unchanged. The CLI and the MCP server with `--url` send `LIFELOG_TOKEN`.
+> **`serve` is local-only unless the owner says `--public`.** Without the flag `serve` is exactly what it was: the
+> default bind is `127.0.0.1:7777`, `--addr` accepts a loopback IP or `localhost` with a numeric port and nothing
+> else, the `Host` check and the cross-origin guard stand, and `--token-file`, `--allow-origin`, `--tls-cert` and
+> `--tls-key` are refused as flags of `--public`. **`--public`** opens the listener and requires a **token**:
+> `--token-file PATH` (a file holding one line of at least 32 characters; the command line never carries the
+> secret), or `LIFELOG_TOKEN`; `--public` without one is refused before the listener opens. With `--public` the
+> default bind is `0.0.0.0:7777` and `--addr` may name any IP of this machine; every request must carry
+> `Authorization: Bearer <token>` or the browser cookie `/login` sets, a request without one is answered 401 with
+> no entity of the database, and the `Host` check is dropped: it existed to keep an unauthenticated local server
+> from a rebinding page, and a bearer token defends against that page on its own. A token holder is the owner:
+> owner-only actions are refused by `Lifelog-Source: agent:*` as before, not by the token. **Origins**:
+> `--allow-origin ORIGIN` (repeatable, exact scheme://host[:port]) answers CORS preflights and marks the origin
+> trusted for browser writes; any other origin is refused as today. **TLS**: `--tls-cert` and `--tls-key` serve
+> HTTPS with the standard library; without them a token on a network is sent in clear, which is acceptable only on
+> a private network (a VPN, a mesh such as Tailscale) and the startup line says so. Forwarded headers still confer
+> no trust; a reverse proxy that terminates TLS is supported only because it forwards the bearer header unchanged.
+> The CLI and the MCP server with `--url` send `LIFELOG_TOKEN`.
 
 The browser cookie: `GET /login` shows a form (the only page served without a credential, with the home link);
 `POST /login` with the token sets `lifelog_token` (HttpOnly, SameSite=Strict, Secure when served over TLS, path `/`)
@@ -61,16 +64,16 @@ is a presentation convenience for the HTML face on a phone; a program sends the 
 
 | what | where |
 |---|---|
-| **Flags and startup.** `--token-file`, `--allow-origin` (repeatable), `--tls-cert`, `--tls-key` in `parse`. A non-loopback `--addr` without a token is refused before the listener opens, with a message naming the two ways to supply one. A token shorter than 32 characters, or with a trailing newline other than one, is refused. The startup line names the bind, whether TLS is on, and "token required". `LIFELOG_TOKEN` on `--url` commands is sent by the remote client. | `cmd/lifelog/main.go`, `internal/client/client.go` |
-| **Bind validation.** `LoopbackAddress` stays for the loopback case. A new `ListenAddress(authority, token bool)` admits any numeric IP with a numeric port when a token is set, and otherwise behaves as `LoopbackAddress`. No DNS, no service names, as before. | `internal/api/authority.go` |
-| **The guard.** `NetworkAuthority` becomes `Network(addr, next, Options{Token, Origins, TLS})`: without a token it is today's handler unchanged; with one it (1) answers `OPTIONS` preflights for allowed origins (`Access-Control-Allow-Origin: <origin>`, `Vary: Origin`, methods `GET, POST`, headers `Authorization, Content-Type, Accept, Lifelog-Source`, max-age), (2) adds `Access-Control-Allow-Origin` and `Vary: Origin` to every answer for an allowed origin, (3) exempts `GET /login` and `POST /login` only, (4) requires the bearer header or the cookie, compared with `crypto/subtle.ConstantTimeCompare`, answering 401 with `WWW-Authenticate: Bearer` and an error entity that holds nothing but the status and "token required", (5) still refuses absolute-form targets. Allowed origins are also passed to `CrossOriginProtection.AddTrustedOrigin`. The in-process client never sees any of this. | `internal/api/authority.go`, `internal/api/handler.go` (`New` takes the trusted origins) |
-| **Login pages.** `GET /login`, `POST /login`, `POST /logout`, one small template in `html/`. Served only when a token is set; a 404 otherwise. | `internal/api/login.go`, `internal/api/html/login.html` |
+| **Flags and startup.** `--public` (boolean), `--token-file`, `--allow-origin` (repeatable), `--tls-cert`, `--tls-key` in `parse`. `--public` without a token is refused before the listener opens, with a message naming the two ways to supply one; any of the four other flags without `--public` is refused, so nothing is silently ignored. A token shorter than 32 characters, or with a trailing newline other than one, is refused. With `--public` the startup line names the bind, whether TLS is on, and "token required". `LIFELOG_TOKEN` on `--url` commands is sent by the remote client. | `cmd/lifelog/main.go`, `internal/client/client.go` |
+| **Bind validation.** `LoopbackAddress` stays for the local case. A new `PublicAddress(authority)` admits any numeric IP with a numeric port, used only under `--public`; its default is `0.0.0.0:7777`. No DNS, no service names, as before. | `internal/api/authority.go` |
+| **The guard.** `NetworkAuthority` stays the local guard, unchanged. A new `Public(next, Options{Token, Origins, TLS})` is mounted instead of it under `--public`; it (1) answers `OPTIONS` preflights for allowed origins (`Access-Control-Allow-Origin: <origin>`, `Vary: Origin`, methods `GET, POST`, headers `Authorization, Content-Type, Accept, Lifelog-Source`, max-age), (2) adds `Access-Control-Allow-Origin` and `Vary: Origin` to every answer for an allowed origin, (3) exempts `GET /login` and `POST /login` only, (4) requires the bearer header or the cookie, compared with `crypto/subtle.ConstantTimeCompare`, answering 401 with `WWW-Authenticate: Bearer` and an error entity that holds nothing but the status and "token required", (5) still refuses absolute-form targets. Allowed origins are also passed to `CrossOriginProtection.AddTrustedOrigin`. The in-process client never sees any of this. | `internal/api/authority.go`, `internal/api/handler.go` (`New` takes the trusted origins) |
+| **Login pages.** `GET /login`, `POST /login`, `POST /logout`, one small template in `html/`. Mounted by `Public` only; a 404 without `--public`. | `internal/api/login.go`, `internal/api/html/login.html` |
 | **Docs.** The README bullet above, the usage text of `lifelog serve`, the `Layout` row of `internal/api`. Nothing in `docs/` changes: the contract knows no listener. | `README.md`, `cmd/lifelog/main.go` |
 
 ## Tests (with their subject; synthetic databases only)
 
-1. `internal/api`: with no token, `Network` is byte-for-byte today's behavior (the existing `authority_test.go` and
-   `TestBrowserOriginProtection` pass unchanged). With a token: a request without a credential is 401 with no
+1. `internal/api`: `NetworkAuthority` and the existing `authority_test.go` and `TestBrowserOriginProtection` pass
+   unchanged. Under `Public`: a request without a credential is 401 with no
    database content, with a wrong token 401, with the right header 200, with the cookie 200; a token that differs
    only in its last byte is refused; `Host` is not checked; a cross-site form with the cookie is refused;
    `GET /login` is 200 without a credential and `GET /` is not.
@@ -78,17 +81,19 @@ is a presentation convenience for the HTML face on a phone; a program sends the 
    write is refused; a GET from an allowed origin carries `Access-Control-Allow-Origin` and `Vary: Origin`.
 3. Parity: a write sent with the token through `client.Remote` against an `httptest` server persists the same rows
    as the in-process client (`names_parity_test.go` gains the token case).
-4. `cmd/lifelog`: `serve --addr 0.0.0.0:0` without a token exits 1 before listening; `parse` reads the flags; a
-   short token file is refused. One process smoke test: `serve` on loopback with `--token-file`, a request without
-   the header is 401 and with it 200. Loopback keeps this test free of the Windows firewall prompt; the
-   non-loopback bind is covered by `ListenAddress` unit tests, and the OS actually tested is named in the commit.
+4. `cmd/lifelog`: `serve --addr 0.0.0.0:0` without `--public` is refused as today; `serve --public` without a
+   token exits 1 before listening; `--token-file` without `--public` is refused; `parse` reads the flags; a short
+   token file is refused. One process smoke test: `serve --public --addr 127.0.0.1:0 --token-file`, a request
+   without the header is 401 and with it 200. Loopback keeps this test free of the Windows firewall prompt; the
+   non-loopback bind is covered by `PublicAddress` unit tests, and the OS actually tested is named in the commit.
 5. TLS: `httptest.NewTLSServer` is enough to show the cookie gets `Secure` over TLS and not otherwise; the
    `--tls-cert/--tls-key` path is exercised once with a test certificate generated in `t.TempDir()`.
 
 ## Done criteria
 
-1. `lifelog serve` with no new flag behaves exactly as at the baseline: same bind, same refusals, same tests.
-2. With a token file and `--addr 0.0.0.0:7777`, a client on another device reaches every route with the header,
+1. `lifelog serve` without `--public` behaves exactly as at the baseline: same bind, same refusals, same tests;
+   the new flags are refused rather than ignored.
+2. With `--public` and a token file, a client on another device reaches every route with the header,
    and a browser on that device uses the HTML face after `/login`; a request without a credential learns nothing
    but 401.
 3. A browser application on an allowed origin can read and write with the header; one on any other origin is
