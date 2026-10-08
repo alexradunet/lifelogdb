@@ -130,6 +130,9 @@ type DB struct {
 	keep bool // a snapshot under its restore check: Close leaves the file as it was
 }
 
+// Path is the file this DB opened.
+func (d *DB) Path() string { return d.path }
+
 // Open opens an existing life.db.
 func Open(path string) (*DB, error) { return open(path, false) }
 
@@ -314,6 +317,24 @@ func copyWith(from, to string, copy func(*sql.DB) error) error {
 // day of now, life-YYYY-MM-DD.db, or life-YYYY-MM-DDTHHMMSS.db when the day has one already. It never overwrites a
 // file and refuses a folder inside a git work tree. It returns the snapshot's path.
 func Snapshot(from, dir string, now time.Time) (string, error) {
+	// Use the resolved directory path so the supplied directory symlink is no longer traversed.
+	dir, err := CheckSnapshotDir(dir)
+	if err != nil {
+		return "", err
+	}
+	to := filepath.Join(dir, "life-"+now.Format("2006-01-02")+".db")
+	if _, err := os.Lstat(to); err == nil {
+		to = filepath.Join(dir, "life-"+now.Format("2006-01-02T150405")+".db")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("check snapshot path %s: %w", to, err)
+	}
+	return to, Copy(from, to)
+}
+
+// CheckSnapshotDir is the folder a snapshot may land in, resolved to its physical path: it must exist, and
+// neither it nor what it resolves to may lie inside a git work tree (a snapshot holds health data and private
+// notes, which git history cannot forget). A command checks it before it opens anything.
+func CheckSnapshotDir(dir string) (string, error) {
 	dir, err := filepath.Abs(dir)
 	if err != nil {
 		return "", err
@@ -335,15 +356,7 @@ func Snapshot(from, dir string, now time.Time) (string, error) {
 				"which git history cannot forget; choose a folder outside it", candidate, repo)
 		}
 	}
-	// Use the resolved directory path so the supplied directory symlink is no longer traversed.
-	dir = physical
-	to := filepath.Join(dir, "life-"+now.Format("2006-01-02")+".db")
-	if _, err := os.Lstat(to); err == nil {
-		to = filepath.Join(dir, "life-"+now.Format("2006-01-02T150405")+".db")
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return "", fmt.Errorf("check snapshot path %s: %w", to, err)
-	}
-	return to, Copy(from, to)
+	return physical, nil
 }
 
 // snapshotPhysicalDir also follows Windows junctions, which Go 1.27 marks

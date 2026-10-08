@@ -37,7 +37,7 @@ const version = "0.1.0"
 const usage = `lifelog — the writer of a life.db
 
   lifelog init                        create a new life.db from docs/schema/schema.sql
-  lifelog serve [--addr 127.0.0.1:7777]   the API: Siren JSON, or HTML in a browser; this machine only
+  lifelog serve [--addr 127.0.0.1:7777] [--snapshots DIR]   the API: Siren JSON, or HTML in a browser; this machine only
   lifelog serve --public [--addr 0.0.0.0:7777] [--allow-origin O]... [--tls-cert F --tls-key F]
                                       the API for other devices: every request needs the owner's token
                                       (--token-file PATH or $LIFELOG_TOKEN); a browser logs in at /login
@@ -66,7 +66,8 @@ const usage = `lifelog — the writer of a life.db
                                       Several paths, or a folder's photos: the few chosen for a day, kept
                                       together, with a report; --dry-run writes nothing
   lifelog snapshot [--to DIR]         a dated copy of life.db (life-YYYY-MM-DD.db, beside it or in DIR),
-                                      then its restore check (docs/cookbook/take-a-snapshot.md)
+                                      then its restore check (docs/cookbook/take-a-snapshot.md); with --url the
+                                      server's folder (serve --snapshots), and --to is refused
 
 Import (docs/guides/importing.md), with --workspace <source>.lifelog:
   lifelog import setup [--from life.db]   make trial.db: a copy of the real database, or a new one
@@ -91,7 +92,7 @@ Global flags, anywhere on the line:
 
 type opts struct {
 	db, url, source, addr, agent, mood, day, workspace, from, to, title, text, preview, mime, at, radius string
-	tokenFile, tlsCert, tlsKey                                                                           string
+	tokenFile, tlsCert, tlsKey, snapshots                                                                string
 	allowOrigins                                                                                         []string
 	human, dryRun, dbExplicit, addrExplicit, public                                                      bool
 	args                                                                                                 []string
@@ -103,7 +104,7 @@ func parse(argv []string) (opts, error) {
 	vals := map[string]*string{"--db": &o.db, "--url": &o.url, "--source": &o.source, "--addr": &o.addr,
 		"--agent": &o.agent, "--mood": &o.mood, "--day": &o.day, "--workspace": &o.workspace, "--from": &o.from, "--to": &o.to,
 		"--title": &o.title, "--text": &o.text, "--preview": &o.preview, "--mime": &o.mime, "--at": &o.at, "--radius": &o.radius,
-		"--token-file": &o.tokenFile, "--tls-cert": &o.tlsCert, "--tls-key": &o.tlsKey}
+		"--token-file": &o.tokenFile, "--tls-cert": &o.tlsCert, "--tls-key": &o.tlsKey, "--snapshots": &o.snapshots}
 	for i := 0; i < len(argv); i++ {
 		a := argv[i]
 		if a == "--human" {
@@ -181,7 +182,7 @@ func commandConsumesContext(o opts) bool {
 		return false
 	}
 	switch o.args[0] {
-	case "serve", "mcp", "get", "actions", "do", "capture", "day", "page", "search", "query", "habits", "done", "skip", "rename", "file", "tasks", "due":
+	case "serve", "mcp", "get", "actions", "do", "capture", "day", "page", "search", "query", "habits", "done", "skip", "rename", "file", "tasks", "due", "snapshot":
 		return true
 	case "import":
 		if len(o.args) == 1 {
@@ -265,8 +266,17 @@ func runContext(ctx context.Context, o opts) error {
 			o.db = ws.TrialDB() // an import works on its trial database unless --db names another
 		}
 	}
-	if cmd == "snapshot" {
-		return snapshot(o)
+	if cmd == "snapshot" && o.url != "" && o.to != "" {
+		return errors.New("snapshot over --url lands in the server's folder (serve --snapshots): drop --to")
+	}
+	if cmd == "snapshot" && o.url == "" {
+		o.snapshots = o.to
+	}
+	if (cmd == "serve" || cmd == "snapshot") && o.snapshots != "" {
+		// Refused before the database is opened: a mistaken folder leaves life.db untouched.
+		if _, err := db.CheckSnapshotDir(o.snapshots); err != nil {
+			return err
+		}
 	}
 	if cmd == "import" && len(args) > 0 && (args[0] == "setup" || args[0] == "approve") {
 		return importOwner(o, ws, args)
@@ -303,7 +313,7 @@ func runContext(ctx context.Context, o opts) error {
 		if pub != nil {
 			origins = pub.Origins
 		}
-		handler = api.New(&core.Store{DB: d}, ws, origins...)
+		handler = api.New(&core.Store{DB: d, SnapshotDir: o.snapshots}, ws, origins...)
 		c = client.InProcess(handler, o.source)
 	}
 
@@ -397,6 +407,17 @@ func runContext(ctx context.Context, o opts) error {
 		}
 		done := map[string]string{"done": "1", "skip": "0"}[cmd]
 		return doActionContext(ctx, o, c, "check-in", map[string]string{"name": args[0], "day": day, "done": done})
+	case "snapshot":
+		e, err := doContext(ctx, c, "snapshot", nil)
+		if err := show(o)(e, err); err != nil {
+			return err
+		}
+		p, _ := e.Properties.(map[string]any)
+		check, _ := p["restore_check"].(map[string]any)
+		if check["ok"] != true {
+			return fmt.Errorf("%v failed its restore check: it is kept, but it is not one to restore", p["snapshot"])
+		}
+		return nil
 	case "tasks":
 		return show(o)(c.GetContext(ctx, "/tasks"))
 	case "due":
@@ -924,52 +945,6 @@ func human(e *api.Entity) {
 }
 
 func indent(s string) string { return "    " + strings.ReplaceAll(s, "\n", "\n    ") }
-
-// snapshot is the owner's `lifelog snapshot [--to DIR]` (docs/cookbook/take-a-snapshot.md, D25): a file on this
-// machine, never an API action or an MCP tool. The folder defaults to the one that holds life.db.
-func snapshot(o opts) error {
-	if o.url != "" {
-		return errors.New("snapshot reads the file itself: drop --url")
-	}
-	if o.db == "" {
-		return errors.New("no database: pass --db PATH or set LIFELOG_DB")
-	}
-	dir := o.to
-	if dir == "" {
-		dir = filepath.Dir(o.db)
-	}
-	path, res, err := takeSnapshot(context.Background(), o.db, dir, time.Now())
-	if err != nil {
-		return err
-	}
-	if o.human && res.OK {
-		fmt.Printf("snapshot: %s\nrestore check: ok\n", path)
-	} else if err := printJSON(map[string]any{"snapshot": path, "restore_check": res}); err != nil {
-		return err
-	}
-	if !res.OK {
-		return fmt.Errorf("%s failed its restore check: it is kept, but it is not one to restore", path)
-	}
-	return nil
-}
-
-// takeSnapshot takes the snapshot and runs its restore check: the four integrity checks, which leave it as it was.
-func takeSnapshot(ctx context.Context, from, dir string, now time.Time) (string, *core.IntegrityResult, error) {
-	path, err := db.Snapshot(from, dir, now)
-	if err != nil {
-		return "", nil, err
-	}
-	d, err := db.OpenSnapshot(path)
-	if err != nil {
-		return path, nil, fmt.Errorf("the snapshot %s cannot be checked: %w", path, err)
-	}
-	defer d.Close()
-	res, err := (&core.Store{DB: d}).Integrity(ctx)
-	if err != nil {
-		return path, nil, fmt.Errorf("the restore check of %s: %w", path, err)
-	}
-	return path, res, nil
-}
 
 // importOwner runs the import steps that need no running API: setup makes the trial database, approve is the
 // owner's stamp and is never reachable by the API or a model.

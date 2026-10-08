@@ -133,9 +133,14 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **The schema is embedded.** `go generate ./...` copies `docs/schema/schema.sql` into `internal/db`; a test fails
   when the copy is stale. `lifelog init` refuses an existing file; `Open` refuses a file without Lifelog's
   `application_id`.
-- **Snapshots are the owner's** ([take a snapshot](docs/cookbook/take-a-snapshot.md)). `lifelog snapshot` is a CLI
-  command only, never an API action or an MCP tool: it writes a file on this machine. It refuses a folder inside a
-  git work tree, and its restore check opens the snapshot with `Close` skipping `PRAGMA optimize`.
+- **Snapshots are the owner's, from any surface** ([take a snapshot](docs/cookbook/take-a-snapshot.md),
+  [plan 082](docs/plans/082-snapshot-in-the-catalog.md)). `snapshot` is an owner-only action of the catalog
+  (`POST /snapshots`): refused to an `agent:*` writer, never an MCP tool, offered at the root to the owner. It takes
+  no path: the file lands in the folder `serve --snapshots DIR` names, or beside `life.db`, named by the local day
+  and never overwritten; it refuses a folder inside a git work tree, and its restore check opens the snapshot with
+  `Close` skipping `PRAGMA optimize`. The answer carries the path and the check. `lifelog snapshot [--to DIR]` is the
+  action in-process, `--to` choosing the folder; with `--url` the server's folder is the one, and `--to` is refused.
+  Restoring stays the manual procedure of the cookbook.
 - **Files** ([keep a file](docs/cookbook/keep-a-file.md), D9). `add-file` (`POST /files`, `lifelog file`) streams
   the original through SHA-256 and drops it; nothing of it is stored. `internal/preview` makes every picture itself —
   from a JPEG, PNG or GIF, or a JPEG sent for a HEIC or a video frame: scaled to 1600 px, turned upright by EXIF,
@@ -177,7 +182,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 
 | path | what |
 |---|---|
-| `cmd/lifelog` | the binary: `init`, `serve`, `mcp`, `get`, `do`, `actions` and the shortcuts (`file` among them) |
+| `cmd/lifelog` | the binary: `init`, `serve`, `mcp`, `get`, `do`, `actions` and the shortcuts (`file`, `snapshot` among them) |
 | `internal/db` | open, pragmas, `BEGIN IMMEDIATE`, the embedded schema |
 | `internal/text` | the title predicate, `title_key`, wikilink and `#tag` extraction; tested against the vectors of [titles and wikilinks](docs/contract/titles-and-wikilinks.md) |
 | `internal/core` | the cookbook's writes and reads; the save contract; habits; renames; files |

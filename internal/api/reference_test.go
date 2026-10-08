@@ -40,6 +40,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		"task":                                map[string]any{"task": core.Task{}, "from": "", "through": "", "include_deleted": false, "occurrences": []occurrenceView{}},
 		"occurrence":                          occurrenceView{},
 		"deadlines":                           map[string]any{"from": "", "through": "", "state": "", "include_deleted": false, "occurrences": []occurrenceView{}},
+		"snapshot":                            map[string]any{"snapshot": "", "restore_check": core.IntegrityResult{}},
 		"integrity":                           core.IntegrityResult{},
 		"result":                              core.Result{},
 		"login":                               map[string]any{"failed": false, "logged_in": false},
@@ -95,6 +96,11 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 			if !named(l.section, k) {
 				t.Errorf("GET %s sends %q, which API.md %q does not name", l.route, k, l.section)
 			}
+		}
+	}
+	for k := range properties(t, h, "POST", "/snapshots", "") {
+		if !named("snapshot", k) {
+			t.Errorf("POST /snapshots sends %q, which API.md \"snapshot\" does not name", k)
 		}
 	}
 	for k := range properties(t, h, "POST", "/query", "sql=SELECT+1") {

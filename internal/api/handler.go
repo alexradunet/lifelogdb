@@ -99,6 +99,7 @@ func New(s *core.Store, ws *importer.Workspace, trustedOrigins ...string) http.H
 	post("/pages/{id}/rename", h.rename)
 	post("/pages/{id}/locate", h.locate)
 	post("/metrics", ownerOnly(h.registerMetric))
+	post("/snapshots", ownerOnly(h.snapshot))
 	post("/metrics/{name}/periods", h.startHabit)
 	post("/metrics/{name}/stop", h.stopHabit)
 	post("/metrics/{name}/check-in", h.checkIn)
@@ -421,7 +422,7 @@ func (h *server) root(r *http.Request) (*Entity, error) {
 		Actions: []Action{
 			action("capture", map[string]string{"day": today}, nil), action("search", nil, nil), action("find", nil, nil), action("deadlines", nil, nil), action("create-task", nil, nil),
 			action("capture-session", nil, nil), action("create-period", nil, nil), action("create-page", nil, nil), action("create-person", nil, nil), action("create-place", nil, nil), action("add-file", nil, nil),
-			h.recordAction(r.Context(), "", today), action("register-metric", nil, nil), action("query", nil, nil)},
+			h.recordAction(r.Context(), "", today), action("register-metric", nil, nil), action("query", nil, nil), action("snapshot", nil, nil)},
 	}, nil
 }
 
@@ -1081,6 +1082,19 @@ func (h *server) query(r *http.Request, _ string) (*Entity, error) {
 	return &Entity{Class: []string{"result"}, Title: "Query", Properties: res,
 		Links:   []Link{link("index", "/", "Home")},
 		Actions: []Action{action("query", nil, map[string]any{"sql": v.Get("sql")})}}, nil
+}
+
+// snapshot is the owner's action (docs/plans/082-snapshot-in-the-catalog.md): the file lands on this machine, in
+// the store's folder; the answer is the path and the restore check, with self at the root so a browser form is
+// answered home with them as feedback.
+func (h *server) snapshot(r *http.Request, _ string) (*Entity, error) {
+	path, res, err := h.s.TakeSnapshot(r.Context(), time.Now())
+	if err != nil {
+		return nil, &core.Error{Status: 422, Msg: err.Error(), Code: "snapshot_refused"}
+	}
+	props := map[string]any{"snapshot": path, "restore_check": res}
+	return &Entity{Class: []string{"snapshot"}, Title: "Snapshot", Properties: props, Result: props,
+		Links: []Link{link("self", "/", "Home"), link("index", "/", "Home")}}, nil
 }
 
 func withResult(e *Entity, err error) func(any) (*Entity, error) {

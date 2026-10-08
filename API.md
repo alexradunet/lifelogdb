@@ -569,6 +569,35 @@ The class of an answer that is not a resource: `POST /query` (one read-only stat
 
 A dry run's properties are `title`, `sha256`, `mime` and `picture` (boolean: a picture was sent).
 
+### snapshot
+
+`POST /snapshots` (the owner's action `snapshot`, refused to an `agent:*` writer): a dated copy of the database into
+the server's snapshot folder, then its restore check. The same two values are in `result`; `self` is `/`, so a
+browser form is answered home with them as feedback. A refusal (a folder inside a git work tree, a name in use) is
+422 `snapshot_refused`.
+
+| property | type | meaning |
+|---|---|---|
+| `snapshot` | string | the file written, on the server's machine |
+| `restore_check` | object | the integrity result of the copy (the integrity shape); `ok` says whether it is one to restore |
+| `restore_check.ok` | boolean | |
+| `restore_check.integrity_check` | list | |
+| `restore_check.foreign_key_violations` | integer | |
+| `restore_check.entities_without_domain_row` | list | |
+| `restore_check.invalid_typed_links` | list | |
+| `restore_check.invalid_session_kinds` | list | |
+| `restore_check.invalid_measurement_scopes` | list | |
+| `restore_check.invalid_task_projects` | list | |
+| `restore_check.invalid_one_off_tasks` | list | |
+| `restore_check.invalid_task_occurrences` | list | |
+| `restore_check.invalid_symmetric_links` | list | |
+| `restore_check.invalid_measurement_chains` | list | |
+| `restore_check.invalid_habit_periods` | list | |
+| `restore_check.invalid_habit_readings` | list | |
+| `restore_check.invalid_journal_names` | list | |
+| `restore_check.full_text_index_ok` | boolean | |
+| `restore_check.full_text_error` | string | |
+
 ### login
 
 `GET /login` on a public listener: the one page served without a credential. `POST /login` with `token` sets the

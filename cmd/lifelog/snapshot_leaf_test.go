@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"lifelog/internal/core"
 	"lifelog/internal/db"
 )
 
@@ -39,7 +40,7 @@ func TestSnapshotNeverFollowsDestinationFileSymlinks(t *testing.T) {
 				t.Skipf("cannot create test-owned file symlink: %v", err)
 			}
 			now := time.Date(2031, 2, 3, 4, 5, 6, 0, time.UTC)
-			path, result, err := takeSnapshot(context.Background(), live, dir, now)
+			path, result, err := core.Snapshot(context.Background(), live, dir, now)
 			if occupied == "daily" {
 				if err != nil || result == nil || !result.OK {
 					t.Errorf("occupied daily entry: path=%q result=%+v error=%v; want a valid timestamp snapshot", path, result, err)

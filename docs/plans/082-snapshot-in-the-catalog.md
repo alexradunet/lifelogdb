@@ -8,7 +8,7 @@
 - **Date / baseline:** 2026-10-08, `37767bb` (master).
 - **Priority:** P2. **Effort:** S. **Risk:** LOW; the copy, the naming, the git-work-tree refusal and the restore
   check are the same code, called from one more place.
-- **Status:** TODO.
+- **Status:** DONE.
 - **Resolves:** the last exception to the parity rule ([AGENTS.md](../../AGENTS.md), "Every capability on every
   surface"): `lifelog snapshot` was a CLI command only, so a phone or a browser on a `--public` listener could not
   take a backup. The owner agreed on 2026-10-08.
@@ -45,7 +45,7 @@ Replace the README bullet **"Snapshots are the owner's"** with:
    refused before listening.
 4. The reference test covers the class.
 
-## Done criteria
+## Done criteria (all met; checks on Windows: gofmt, go generate, go vet, go test -count=1 ./... green; staticcheck and govulncheck not run)
 
 1. `snapshot` reaches every surface the owner uses, is refused to agents, and is not an MCP tool.
 2. The CLI's behaviour (naming, refusals, exit status) is unchanged for the owner at a terminal.

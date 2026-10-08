@@ -131,6 +131,8 @@ var catalog = []spec{
 		"GET", "/pages", []Field{req("title", "text", "Title")}, false},
 	{"query", "Query", "Run one read-only SQL statement (SQLite; see docs/cookbook for the canonical queries). At most 500 rows.",
 		"POST", "/query", []Field{req("sql", "textarea", "SQL")}, false},
+	{"snapshot", "Take a snapshot", "The owner's dated copy of life.db (docs/cookbook/take-a-snapshot.md) into the server's snapshot folder, never overwriting, then its restore check. The answer names the file and the check.",
+		"POST", "/snapshots", nil, true},
 	// Planning (docs/contract/planning.md): explicit tasks, their occurrences, the deadlines of a window.
 	{"create-task", "New task", "Create a task: a one-off (due on due_day, or undated), or a series when repeat_unit is day, week, month or year, every repeat_every units from anchor_day, until repeat_until_day. project names an existing page as its context. reminder_time (HH:MM) and reminder_zone (IANA) are the default reminder of each occurrence. Planning never records what happened.",
 		"POST", "/tasks", []Field{req("label", "text", "Label"), opt("project", "text", "Project page (title)"), opt("repeat_unit", "text", "Repeat: day, week, month or year (blank: one-off)"),

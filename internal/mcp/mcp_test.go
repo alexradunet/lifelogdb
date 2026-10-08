@@ -88,7 +88,7 @@ func TestFindToolsWithWorkspace(t *testing.T) {
 			t.Fatalf("MCP tools lack %q; have %v", name, seen)
 		}
 	}
-	for _, ownerOnly := range []string{"register_metric", "replay"} {
+	for _, ownerOnly := range []string{"register_metric", "replay", "snapshot"} {
 		if seen[ownerOnly] {
 			t.Fatalf("owner-only action %q was exposed as an MCP tool", ownerOnly)
 		}

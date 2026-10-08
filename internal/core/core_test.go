@@ -26,7 +26,7 @@ func fresh(t *testing.T) *Store {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { d.Close() })
-	return &Store{d}
+	return &Store{DB: d}
 }
 
 func status(err error) int {
@@ -536,7 +536,7 @@ func TestQueryKeepsOpenedRelativeDatabaseAfterChdir(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s := &Store{d}
+	s := &Store{DB: d}
 	r, err := s.Query(ctx, `SELECT value FROM lifelog_meta WHERE key = 'cwd-marker'`, 1)
 	if err != nil || len(r.Rows) != 1 || r.Rows[0][0] != "original" {
 		t.Fatalf("ad-hoc query after chdir = %+v, %v; want original database", r, err)
@@ -570,7 +570,7 @@ func TestQueryUsesLiteralReadOnlyPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer d.Close()
-	s := &Store{d}
+	s := &Store{DB: d}
 	r, err := s.Query(ctx, `SELECT file FROM pragma_database_list WHERE name = 'main'`, 1)
 	if err != nil || len(r.Rows) != 1 {
 		t.Fatalf("database_list query = %+v, %v", r, err)

@@ -17,8 +17,11 @@ import (
 // Now is the instant format of lifelog_meta.instants, written by SQLite so every row of a statement agrees.
 const Now = "strftime('%Y-%m-%dT%H:%M:%fZ','now')"
 
-// Store is one open life.db.
-type Store struct{ DB *db.DB }
+// Store is one open life.db. SnapshotDir is the folder the snapshot action writes to; empty means beside the file.
+type Store struct {
+	DB          *db.DB
+	SnapshotDir string
+}
 
 // Error carries an HTTP-shaped status so every surface reports the same failure the same way. Code, when set,
 // names the failure for a client that branches on it (docs/plans/079-client-contract-hygiene.md); the API fills
