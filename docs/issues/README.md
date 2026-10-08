@@ -4,11 +4,15 @@ An issue records an incident from real use — a failed import, a bug in the wri
 data could not answer, a rule that is ambiguous or untestable. It is the evidence a schema change needs
 ([how a change happens](../process.md)). One file per incident, named `NNNN-short-slug.md`, written from the
 [template](template.md), numbered on from the last: issues up to 0010 are closed and live in git history
-(`git log -- docs/issues`). Issues 0011–0042 are listed below; the next one is **0043**. Close an issue with its resolution and status, retaining the dated incident as
+(`git log -- docs/issues`). Issues 0011–0046 are listed below; the next one is **0047**. Close an issue with its resolution and status, retaining the dated incident as
 [the process](../process.md) requires. Earlier closed records remain available in git history.
 
 | id | title | status |
 |---|---|---|
+| [0043](0043-notes-folder-without-obsidian-marker.md) | A folder of notes is only recognised when it is an Obsidian vault | open |
+| [0044](0044-ledger-and-plan-cannot-take-added-files.md) | Files added to a source after the ledger is made are invisible to the import | open |
+| [0045](0045-skip-per-file-and-no-later-pass.md) | A folder is skipped one file at a time, and a file cannot wait for a later pass | open |
+| [0046](0046-no-inventory-of-an-ingest-folder.md) | An ingest folder cannot be surveyed without reading it | open |
 | [0033](0033-containment-starts-from-deleted-root.md) | Recursive active reads traverse deleted roots or intermediates | resolved |
 | [0034](0034-scoped-import-retry-rejected-after-tombstone.md) | Scoped import retry is rejected after a session tombstone | resolved |
 | [0035](0035-test-fixtures-can-open-the-wrong-file.md) | Validation fixtures open the wrong file or credit an unrelated error | resolved |
