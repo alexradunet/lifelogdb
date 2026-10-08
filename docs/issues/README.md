@@ -4,11 +4,13 @@ An issue records an incident from real use — a failed import, a bug in the wri
 data could not answer, a rule that is ambiguous or untestable. It is the evidence a schema change needs
 ([how a change happens](../process.md)). One file per incident, named `NNNN-short-slug.md`, written from the
 [template](template.md), numbered on from the last: issues up to 0010 are closed and live in git history
-(`git log -- docs/issues`). Issues 0011–0049 are listed below; the next one is **0050**. Close an issue with its resolution and status, retaining the dated incident as
+(`git log -- docs/issues`). Issues 0011–0051 are listed below; the next one is **0052**. Close an issue with its resolution and status, retaining the dated incident as
 [the process](../process.md) requires. Earlier closed records remain available in git history.
 
 | id | title | status |
 |---|---|---|
+| [0050](0050-one-doubtful-write-refuses-a-whole-file.md) | One doubtful write refuses a whole facts file, and the refusal names only the first | open |
+| [0051](0051-look-alikes-compare-with-every-entity-type.md) | A new name is a look-alike of a day page, a metric or a file that shares a word | open |
 | [0049](0049-replay-refuses-a-large-ledger.md) | A real replay refuses a source whose ledger is larger than a prepared artifact may be | resolved |
 | [0048](0048-writer-opens-a-file-of-another-ddl.md) | The writer opens a file built from another DDL and fails only at the integrity check | open |
 | [0047](0047-two-daily-notes-for-one-day-cannot-merge.md) | Two daily notes of one day in a folder of notes cannot be merged | resolved |
