@@ -27,7 +27,8 @@ export LIFELOG_DB=~/life/life.db           # or --db on any command
 
 lifelog capture "Ran 5k with [[Sam]] #running" --mood 4
 lifelog day --human
-lifelog serve                              # http://127.0.0.1:7777 — open it in a browser
+lifelog serve                              # http://127.0.0.1:7777 — open it in a browser; this machine only
+lifelog serve --public --token-file ~/life/token   # for your other devices: every request needs the token
 lifelog mcp --agent lmstudio               # MCP on stdio; rows are written as agent:lmstudio
 lifelog habits --human                     # today's habits; lifelog done evening_walk
 lifelog snapshot --to ~/snapshots --human  # life-YYYY-MM-DD.db and its restore check
@@ -135,15 +136,32 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   `lifelog file` keeps several (paths, or a folder's photos and videos), with `--dry-run` and a report per day and
   per group of photos near no place. Unknown capture-local day follows [keep a file](docs/cookbook/keep-a-file.md).
   The owner-stamped selected-pair preparation below is the only supplementary sidecar path.
-- **`serve` is local-only** and has no authentication: `life.db` holds health data, and the API is for this
-  machine. The default bind is `127.0.0.1:7777`; `--addr` accepts numeric loopback IPs or `localhost` with a numeric
-  port (0 selects an ephemeral port, printed at startup). `localhost` binds to `127.0.0.1` without DNS resolution.
-  Network requests must name a loopback IP or ASCII case-insensitive `localhost` at the actual listener port, with
-  brackets for IPv6. An omitted HTTP port means 80, not the listener's port. Wildcard/empty-host/non-loopback binds,
-  custom hostnames, service-name ports and proxy deployments are unsupported. Forwarded headers confer no trust;
-  absolute-form request targets are refused. The network guard protects reads, previews and writes; in-process CLI/MCP dispatch is unchanged.
-  Browser-origin protection inside it rejects cross-origin writes while keeping same-origin forms and non-browser
-  clients that send no browser origin headers working.
+- **`serve` is local-only unless the owner says `--public`.** Without the flag `serve` is what it was: `life.db`
+  holds health data, and the API is for this machine. The default bind is `127.0.0.1:7777`; `--addr` accepts numeric
+  loopback IPs or `localhost` with a numeric port (0 selects an ephemeral port, printed at startup), and nothing else.
+  `localhost` binds to `127.0.0.1` without DNS resolution. Network requests must name a loopback IP or ASCII
+  case-insensitive `localhost` at the actual listener port, with brackets for IPv6. An omitted HTTP port means 80, not
+  the listener's port. Custom hostnames, service-name ports and proxy deployments are unsupported. Forwarded headers
+  confer no trust; absolute-form request targets are refused. The network guard protects reads, previews and writes;
+  in-process CLI/MCP dispatch is unchanged. Browser-origin protection inside it rejects cross-origin writes while
+  keeping same-origin forms and non-browser clients that send no browser origin headers working. `--token-file`,
+  `--allow-origin`, `--tls-cert` and `--tls-key` are refused without `--public`, never ignored.
+- **`--public` opens the listener to other devices** ([plan 078](docs/plans/078-network-server.md)) and requires a
+  **token**: `--token-file PATH` (one line of at least 32 characters; the command line never carries the secret) or
+  `LIFELOG_TOKEN`; `--public` without one is refused before the listener opens. The default bind becomes `0.0.0.0:7777`
+  and `--addr` may name any numeric IP of this machine. Every request must carry `Authorization: Bearer <token>` or
+  the cookie `/login` sets; one without is answered 401 with nothing of the database, and a browser is sent to
+  `/login`. The `Host` check is dropped: it kept an unauthenticated local server from a DNS-rebinding page, and the
+  token defeats that page on its own; absolute-form targets stay refused. A token holder is the owner: owner-only
+  actions are still refused by `Lifelog-Source: agent:*`, not by the token. **Origins:** `--allow-origin ORIGIN`
+  (repeatable, exact `scheme://host[:port]`) answers CORS preflights, adds the CORS headers for that origin and makes
+  it a trusted origin for browser writes; any other origin is refused as before. **TLS:** `--tls-cert` and `--tls-key`
+  serve HTTPS with the standard library; without them the token travels in clear, which is acceptable only on a
+  private network (a VPN, a mesh such as Tailscale), and the startup line says so. A reverse proxy that terminates
+  TLS works only because it forwards the bearer header unchanged. **The browser:** `GET /login` is the one page served
+  without a credential; `POST /login` with the token sets `lifelog_token` (HttpOnly, SameSite=Strict, Secure over
+  TLS) and `POST /logout` clears it; cross-site forms with the cookie are what the origin guard refuses. The CLI and
+  the MCP server with `--url` send `LIFELOG_TOKEN`.
 
 ## Layout
 
@@ -157,7 +175,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 | `internal/photo` | what a photo's metadata says: the day and time taken, the position, the orientation (JPEG and HEIC); `phototest` builds synthetic ones |
 | `internal/inventory` | the survey of an ingest folder without its contents ([importing](docs/guides/importing.md), "An ingest folder") |
 | `internal/importer` | the import workspace, the facts checks and apply, the vault plan, status, replay |
-| `internal/api` | the action catalog, the routes, Siren and HTML |
+| `internal/api` | the action catalog, the routes, Siren and HTML; the local and the `--public` network guards |
 | `internal/client` | the hypermedia client (in-process or remote) |
 | `internal/mcp` | the catalog as MCP tools |
 | `tools/copyschema` | `go generate`'s copy of `docs/schema/schema.sql` into `internal/db` |

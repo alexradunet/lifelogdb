@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -36,7 +37,10 @@ const version = "0.1.0"
 const usage = `lifelog — the writer of a life.db
 
   lifelog init                        create a new life.db from docs/schema/schema.sql
-  lifelog serve [--addr 127.0.0.1:7777]   the API: Siren JSON, or HTML in a browser
+  lifelog serve [--addr 127.0.0.1:7777]   the API: Siren JSON, or HTML in a browser; this machine only
+  lifelog serve --public [--addr 0.0.0.0:7777] [--allow-origin O]... [--tls-cert F --tls-key F]
+                                      the API for other devices: every request needs the owner's token
+                                      (--token-file PATH or $LIFELOG_TOKEN); a browser logs in at /login
   lifelog mcp [--agent NAME]          the MCP server on stdio (writes as agent:NAME)
 
   lifelog get PATH                    fetch a resource, e.g. /, /days/today, /pages/12 (or pages/12: Git Bash rewrites a leading /)
@@ -77,7 +81,7 @@ Import (docs/guides/importing.md), with --workspace <source>.lifelog:
 
 Global flags, anywhere on the line:
   --db PATH      the life.db (default $LIFELOG_DB)
-  --url URL      talk to a running "lifelog serve" instead of opening the file
+  --url URL      talk to a running "lifelog serve" instead of opening the file ($LIFELOG_TOKEN if it is --public)
   --source NAME  the writer recorded on new rows (default cli; lifelog_meta.source)
   --human        print a readable summary instead of JSON
   --workspace D  an import workspace (<source>.lifelog); the database defaults to its trial.db
@@ -85,7 +89,9 @@ Global flags, anywhere on the line:
 
 type opts struct {
 	db, url, source, addr, agent, mood, day, workspace, from, to, title, text, preview, mime, at, radius string
-	human, dryRun, dbExplicit                                                                            bool
+	tokenFile, tlsCert, tlsKey                                                                           string
+	allowOrigins                                                                                         []string
+	human, dryRun, dbExplicit, addrExplicit, public                                                      bool
 	args                                                                                                 []string
 }
 
@@ -94,7 +100,8 @@ func parse(argv []string) (opts, error) {
 	o := opts{db: os.Getenv("LIFELOG_DB"), source: "cli", addr: "127.0.0.1:7777"}
 	vals := map[string]*string{"--db": &o.db, "--url": &o.url, "--source": &o.source, "--addr": &o.addr,
 		"--agent": &o.agent, "--mood": &o.mood, "--day": &o.day, "--workspace": &o.workspace, "--from": &o.from, "--to": &o.to,
-		"--title": &o.title, "--text": &o.text, "--preview": &o.preview, "--mime": &o.mime, "--at": &o.at, "--radius": &o.radius}
+		"--title": &o.title, "--text": &o.text, "--preview": &o.preview, "--mime": &o.mime, "--at": &o.at, "--radius": &o.radius,
+		"--token-file": &o.tokenFile, "--tls-cert": &o.tlsCert, "--tls-key": &o.tlsKey}
 	for i := 0; i < len(argv); i++ {
 		a := argv[i]
 		if a == "--human" {
@@ -103,6 +110,10 @@ func parse(argv []string) (opts, error) {
 		}
 		if a == "--dry-run" {
 			o.dryRun = true
+			continue
+		}
+		if a == "--public" {
+			o.public = true
 			continue
 		}
 		if a == "--" {
@@ -122,6 +133,20 @@ func parse(argv []string) (opts, error) {
 			if name == "--db" {
 				o.dbExplicit = true
 			}
+			if name == "--addr" {
+				o.addrExplicit = true
+			}
+			continue
+		}
+		if name == "--allow-origin" {
+			if !hasVal {
+				if i+1 >= len(argv) {
+					return o, fmt.Errorf("%s needs a value", name)
+				}
+				i++
+				val = argv[i]
+			}
+			o.allowOrigins = append(o.allowOrigins, val)
 			continue
 		}
 		if strings.HasPrefix(a, "--") {
@@ -183,9 +208,20 @@ func run(o opts) error {
 
 func runContext(ctx context.Context, o opts) error {
 	cmd, args := o.args[0], o.args[1:]
+	var pub *api.PublicOptions
 	if cmd == "serve" {
 		var err error
-		o.addr, err = api.LoopbackAddress(o.addr)
+		if pub, err = publicOptions(o); err != nil {
+			return err
+		}
+		if pub == nil {
+			o.addr, err = api.LoopbackAddress(o.addr)
+		} else {
+			if !o.addrExplicit {
+				o.addr = "0.0.0.0:7777"
+			}
+			o.addr, err = api.PublicAddress(o.addr)
+		}
 		if err != nil {
 			return err
 		}
@@ -249,6 +285,9 @@ func runContext(ctx context.Context, o opts) error {
 	var handler http.Handler
 	if o.url != "" && cmd != "serve" {
 		c = client.Remote(o.url, o.source)
+		if token := os.Getenv("LIFELOG_TOKEN"); token != "" {
+			c.SetToken(token)
+		}
 	} else {
 		if o.db == "" {
 			return errors.New("no database: pass --db PATH or set LIFELOG_DB")
@@ -258,7 +297,11 @@ func runContext(ctx context.Context, o opts) error {
 			return err
 		}
 		defer d.Close()
-		handler = api.New(&core.Store{DB: d}, ws)
+		var origins []string
+		if pub != nil {
+			origins = pub.Origins
+		}
+		handler = api.New(&core.Store{DB: d}, ws, origins...)
 		c = client.InProcess(handler, o.source)
 	}
 
@@ -272,12 +315,25 @@ func runContext(ctx context.Context, o opts) error {
 			return err
 		}
 		defer listener.Close()
-		networkHandler, err := api.NetworkAuthority(listener.Addr(), handler)
+		var networkHandler http.Handler
+		scheme, note := "http", ""
+		if pub == nil {
+			networkHandler, err = api.NetworkAuthority(listener.Addr(), handler)
+		} else {
+			networkHandler, err = api.Public(handler, *pub)
+			note = " (public: token required; the token travels in clear, use a private network)"
+			if pub.TLS {
+				scheme, note = "https", " (public: token required)"
+				if listener, err = tlsListener(listener, o.tlsCert, o.tlsKey); err != nil {
+					return err
+				}
+			}
+		}
 		if err != nil {
 			return err
 		}
 		srv := &http.Server{Addr: listener.Addr().String(), Handler: networkHandler, ReadHeaderTimeout: 10 * time.Second}
-		fmt.Fprintf(os.Stderr, "lifelog: serving %s on http://%s\n", o.db, listener.Addr())
+		fmt.Fprintf(os.Stderr, "lifelog: serving %s on %s://%s%s\n", o.db, scheme, listener.Addr(), note)
 		return serveHTTP(ctx, srv, listener, 10*time.Second)
 	case "mcp":
 		return mcp.Serve(ctx, c, version)
@@ -350,6 +406,55 @@ func runContext(ctx context.Context, o opts) error {
 		return importCommandContext(ctx, o, c, args)
 	}
 	return fmt.Errorf("unknown command %q (lifelog help)", cmd)
+}
+
+// publicOptions reads the --public flags (docs/plans/078-network-server.md): nil without --public, when the
+// flags that belong to it are refused rather than ignored; with it, the token from --token-file or $LIFELOG_TOKEN
+// is required before any listener opens.
+func publicOptions(o opts) (*api.PublicOptions, error) {
+	if !o.public {
+		switch {
+		case o.tokenFile != "":
+			return nil, errors.New("--token-file needs --public")
+		case len(o.allowOrigins) > 0:
+			return nil, errors.New("--allow-origin needs --public")
+		case o.tlsCert != "" || o.tlsKey != "":
+			return nil, errors.New("--tls-cert and --tls-key need --public")
+		}
+		return nil, nil
+	}
+	token := os.Getenv("LIFELOG_TOKEN")
+	if o.tokenFile != "" {
+		b, err := os.ReadFile(o.tokenFile)
+		if err != nil {
+			return nil, fmt.Errorf("token file: %w", err)
+		}
+		token = strings.TrimSuffix(strings.TrimSuffix(string(b), "\n"), "\r")
+	}
+	if token == "" {
+		return nil, errors.New("--public needs a token: --token-file PATH (one line, 32 characters or more) or $LIFELOG_TOKEN")
+	}
+	if err := api.CheckToken(token); err != nil {
+		return nil, fmt.Errorf("token: %w", err)
+	}
+	for _, origin := range o.allowOrigins {
+		if err := api.CheckOrigin(origin); err != nil {
+			return nil, err
+		}
+	}
+	if (o.tlsCert == "") != (o.tlsKey == "") {
+		return nil, errors.New("--tls-cert and --tls-key go together")
+	}
+	return &api.PublicOptions{Token: token, Origins: o.allowOrigins, TLS: o.tlsCert != ""}, nil
+}
+
+// tlsListener serves TLS on a public listener with the owner's certificate; the standard library does the rest.
+func tlsListener(l net.Listener, certFile, keyFile string) (net.Listener, error) {
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("tls: %w", err)
+	}
+	return tls.NewListener(l, &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12, NextProtos: []string{"http/1.1"}}), nil
 }
 
 // serveHTTP owns shutdown until admitted requests finish or the drain deadline

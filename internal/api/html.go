@@ -48,7 +48,7 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 var viewOf = map[string]string{
 	"root": "root", "day": "day", "page": "page", "person": "page", "place": "page", "file": "page", "period": "page",
 	"days": "list", "people": "list", "places": "list", "files": "list", "ghosts": "list", "search": "search",
-	"metrics": "metrics", "series": "series", "habits": "habits", "measurement": "measurement", "error": "error",
+	"metrics": "metrics", "series": "series", "habits": "habits", "measurement": "measurement", "error": "error", "login": "login",
 }
 
 // view is what a template gets: the entity, its properties as the JSON client reads them, and for an error

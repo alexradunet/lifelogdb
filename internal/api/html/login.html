@@ -1,0 +1,11 @@
+{{define "login"}}{{template "head" .}}
+{{$p := .Props}}
+<h1>Log in</h1>
+<p class="desc">This lifelog is served beyond its machine. Paste the owner's token to use it in this browser; a program sends it as a bearer header instead.</p>
+{{if $p.failed}}<div class="note warn">That token was refused.</div>{{end}}
+{{if $p.logged_in}}<div class="note">This browser is logged in.</div>
+<form method="POST" action="/logout" class="inline"><button class="quiet">Log out</button></form>
+{{else}}<form method="POST" action="/login">
+<div class="field"><label for="f-login-token">Token *</label><input id="f-login-token" type="password" name="token" required autocomplete="current-password"></div>
+<button>Log in</button></form>{{end}}
+{{template "foot" .}}{{end}}

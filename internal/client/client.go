@@ -23,6 +23,7 @@ type Client struct {
 	hc     *http.Client
 	base   string
 	source string
+	token  string // sent as a bearer credential to a public listener (docs/plans/078-network-server.md)
 }
 
 // InProcess calls h directly; no socket is opened.
@@ -34,6 +35,9 @@ func InProcess(h http.Handler, source string) *Client {
 func Remote(base, source string) *Client {
 	return &Client{hc: http.DefaultClient, base: strings.TrimRight(base, "/"), source: source}
 }
+
+// SetToken makes every request carry the owner's token: what `lifelog serve --public` requires.
+func (c *Client) SetToken(token string) { c.token = token }
 
 type handlerTransport struct{ h http.Handler }
 
@@ -235,6 +239,9 @@ func (c *Client) send(req *http.Request) (*api.Entity, error) {
 	req.Header.Set("Accept", "application/vnd.siren+json")
 	if c.source != "" {
 		req.Header.Set(api.SourceHeader, c.source)
+	}
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
 	res, err := c.hc.Do(req)
 	if err != nil {

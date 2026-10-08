@@ -29,8 +29,10 @@ type server struct {
 }
 
 // New returns the whole API as one handler: lifelog serve mounts it on a socket, the CLI and the MCP server
-// call it in-process. With an import workspace the /import routes are mounted too.
-func New(s *core.Store, ws *importer.Workspace) http.Handler {
+// call it in-process. With an import workspace the /import routes are mounted too. trustedOrigins are the
+// browser origins a public listener allows to write (docs/plans/078-network-server.md); a local listener and the
+// in-process client pass none.
+func New(s *core.Store, ws *importer.Workspace, trustedOrigins ...string) http.Handler {
 	h := &server{s: s, ws: ws}
 	m := http.NewServeMux()
 	get := func(p string, f func(*http.Request) (*Entity, error)) { m.HandleFunc("GET "+p, h.serve(f)) }
@@ -106,6 +108,11 @@ func New(s *core.Store, ws *importer.Workspace) http.Handler {
 		h.mountImport(get, post)
 	}
 	guard := http.NewCrossOriginProtection()
+	for _, origin := range trustedOrigins {
+		if err := guard.AddTrustedOrigin(origin); err != nil {
+			panic(err) // Public checked every origin before New was called
+		}
+	}
 	guard.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		e, status := errorEntity(&core.Error{Status: http.StatusForbidden, Msg: "cross-origin browser write refused"})
 		write(w, r, status, e)

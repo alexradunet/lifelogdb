@@ -8,7 +8,7 @@
 - **Date / baseline:** 2026-10-08, `05790ec` (master).
 - **Priority:** P1. **Effort:** M. **Risk:** LOW for the schema (untouched), HIGH for privacy if done wrong
   (`life.db` holds health data): the default must stay exactly as it is today.
-- **Status:** TODO.
+- **Status:** DONE.
 - **Resolves:** the owner's requirement of 2026-10-08 that `lifelog` run as the backend of clients on other
   devices and origins (a phone app, a browser app served from elsewhere) without a second implementation of
   any write. No issue: nothing broke; the API was never reachable from elsewhere by design.
@@ -79,8 +79,8 @@ is a presentation convenience for the HTML face on a phone; a program sends the 
    `GET /login` is 200 without a credential and `GET /` is not.
 2. CORS: a preflight from an allowed origin gets the headers and 204; from another origin no CORS headers and the
    write is refused; a GET from an allowed origin carries `Access-Control-Allow-Origin` and `Vary: Origin`.
-3. Parity: a write sent with the token through `client.Remote` against an `httptest` server persists the same rows
-   as the in-process client (`names_parity_test.go` gains the token case).
+3. Parity: a write sent with the token through `client.Remote` against an `httptest` server persists the same rows,
+   with the client's own source, as the in-process client (`public_test.go`).
 4. `cmd/lifelog`: `serve --addr 0.0.0.0:0` without `--public` is refused as today; `serve --public` without a
    token exits 1 before listening; `--token-file` without `--public` is refused; `parse` reads the flags; a short
    token file is refused. One process smoke test: `serve --public --addr 127.0.0.1:0 --token-file`, a request
@@ -89,7 +89,7 @@ is a presentation convenience for the HTML face on a phone; a program sends the 
 5. TLS: `httptest.NewTLSServer` is enough to show the cookie gets `Secure` over TLS and not otherwise; the
    `--tls-cert/--tls-key` path is exercised once with a test certificate generated in `t.TempDir()`.
 
-## Done criteria
+## Done criteria (all met; checks on Windows: gofmt, go generate, go vet, go test -count=1 ./... green; staticcheck and govulncheck not run)
 
 1. `lifelog serve` without `--public` behaves exactly as at the baseline: same bind, same refusals, same tests;
    the new flags are refused rather than ignored.
