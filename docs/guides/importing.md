@@ -426,7 +426,8 @@ are. What is specific to such a folder, beside the steps above:
 - **The plan lists every problem** for the model to fix by editing only titles and days: a title the
   [titles and wikilinks](../contract/titles-and-wikilinks.md) predicate refuses, two notes with one title, a title `life.db` already holds for a note
   that is not a daily note (when unsure, ask). A **daily note whose day page already exists** is not a problem: the
-  plan marks it `append`.
+  plan marks it `append`; nor is a **second daily note of one day** in the folder (one in the month's folder, one in a
+  week's): the first by path makes the day page and the others are marked `append` to it.
 - **All pages are created first**, each with its note's text, in one transaction: creation is one write, so an imported
   page is at revision 1 and the day view does not call it edited ([D12](../decisions/D12-no-revision-tables.md)). Then
   each note's links are synced in its own transaction through the save contract ([save a body](../cookbook/save-a-body.md)),

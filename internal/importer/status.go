@@ -363,14 +363,21 @@ func (w *Workspace) pendingNotes(ctx context.Context, s *core.Store, p *Plan, so
 // which a replay does not carry (it writes the note's text).
 func (w *Workspace) editedNotes(ctx context.Context, s *core.Store, st *Status, plan *Plan) {
 	links := linkIndex(plan)
+	own := make([]string, len(plan.Notes))
+	readable := make([]bool, len(plan.Notes))
+	for i := range plan.Notes {
+		if raw, err := w.ReadSource(plan.Notes[i].Path); err == nil {
+			own[i], readable[i] = rewriteLinks(raw, &plan.Notes[i], links), true
+		}
+	}
+	texts := pageTexts(plan, own)
 	s.DryRun(ctx, st.Source, func(t *core.Tx) error {
 		for i := range plan.Notes {
 			n := &plan.Notes[i]
-			raw, err := w.ReadSource(n.Path)
-			if err != nil {
+			if !readable[i] {
 				continue
 			}
-			want := rewriteLinks(raw, n, links)
+			want := texts[i]
 			switch {
 			case n.Action == "create":
 				id, _ := t.ByImportKey(n.key())

@@ -142,8 +142,18 @@ func (w *Workspace) validatePlan(ctx context.Context, s *core.Store, p *Plan) er
 			if core.IsDay(n.Title) && n.Day != n.Title {
 				n.Problems = append(n.Problems, "a title that is a day is that day's page: its day is its title")
 			}
-			if len(byKey[text.TitleKey(n.Title)]) > 1 {
-				n.Problems = append(n.Problems, "another note has the same title: change one")
+			if same := byKey[text.TitleKey(n.Title)]; len(same) > 1 {
+				if !core.IsDay(n.Title) {
+					n.Problems = append(n.Problems, "another note has the same title: change one")
+				} else if same[0] != i {
+					// a second daily note of one day: appended to the day page the first one makes, as a daily
+					// note of a day the database holds is (the guide, "A folder of notes")
+					n.Action = "append"
+					if err := w.checkVaultIdentity(t, n); err != nil {
+						return err
+					}
+					continue
+				}
 			}
 			if err := w.checkVaultIdentity(t, n); err != nil {
 				return err
@@ -274,14 +284,15 @@ func (w *Workspace) applyPlanPublishing(ctx context.Context, s *core.Store, p *P
 	defer root.Close()
 	// Each note's text is final before the first write: its links are rewritten from the plan alone.
 	links := linkIndex(p)
-	bodies := make([]string, len(p.Notes))
+	own := make([]string, len(p.Notes))
 	for i := range p.Notes {
 		raw, err := w.readSource(root, p.Notes[i].Path)
 		if err != nil {
 			return nil, err
 		}
-		bodies[i] = rewriteLinks(raw, &p.Notes[i], links)
+		own[i] = rewriteLinks(raw, &p.Notes[i], links)
 	}
+	bodies := pageTexts(p, own)
 	res := &VaultResult{}
 	// 1. every page with its note's text, in one transaction: creation is one write, so an imported page is at
 	// revision 1 and no edit (lifelog_meta.edit_revisions)
@@ -375,6 +386,32 @@ func (w *Workspace) applyPlanPublishing(ctx context.Context, s *core.Store, p *P
 // appendOnce appends a daily note to its day page, as capture appends, unless it was appended before: by its
 // record, or, should the record have been lost, by an exact body or complete trailing capture block.
 // Independently identical trailing text remains indistinguishable from a lost record.
+// pageTexts is the text each note's page holds once the plan is applied: the note's own text and, for a daily
+// note that later notes of the plan are appended to (a second note of one day), each of their texts after a blank
+// line, in plan order, as capture appends them. The page is written whole at creation and compared whole on every
+// run, so a re-run never drops an appended note.
+func pageTexts(p *Plan, own []string) []string {
+	texts := make([]string, len(p.Notes))
+	copy(texts, own)
+	for i := range p.Notes {
+		n := &p.Notes[i]
+		if n.Action != "create" || !core.IsDay(n.Title) {
+			continue
+		}
+		for j := i + 1; j < len(p.Notes); j++ {
+			m := &p.Notes[j]
+			if m.Action == "append" && text.TitleKey(m.Title) == text.TitleKey(n.Title) && strings.TrimSpace(own[j]) != "" {
+				if texts[i] == "" { // as capture joins: a blank line only after some text
+					texts[i] = own[j]
+					continue
+				}
+				texts[i] += "\n\n" + own[j]
+			}
+		}
+	}
+	return texts
+}
+
 func appendOnce(t *core.Tx, n *Note, body string, res *VaultResult) error {
 	if strings.TrimSpace(body) == "" {
 		res.Same++

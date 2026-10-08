@@ -1,6 +1,8 @@
 package importer
 
 import (
+	"lifelog/internal/core"
+
 	"os"
 	"path/filepath"
 	"strings"
@@ -304,5 +306,63 @@ func TestLiteralMarkKeepsASkipFinal(t *testing.T) {
 	}
 	if l := f.ledgerState(t, "photo.png"); l.State != "-" || l.Note != "skip: a better reason" {
 		t.Errorf("%+v", l)
+	}
+}
+
+func TestPlanSecondDailyNoteOfOneDayAppends(t *testing.T) {
+	f := setup(t)
+	f.approveRules(t, rulesBody)
+	f.addSource(t, "Journal/Week-15/2031-04-11.md", "Later that day: the lake.\n")
+	f.addSource(t, "Topics/Recipes.md", "another note titled Recipes\n")
+	p, err := f.w.PlanVault(ctx, f.s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byPath := map[string]Note{}
+	for _, n := range p.Notes {
+		byPath[n.Path] = n
+	}
+	if n := byPath["Journal/2031-04-11.md"]; n.Action != "create" || len(n.Problems) != 0 {
+		t.Errorf("the first daily note makes the page: %+v", n)
+	}
+	if n := byPath["Journal/Week-15/2031-04-11.md"]; n.Action != "append" || len(n.Problems) != 0 {
+		t.Errorf("the second daily note is appended: %+v", n)
+	}
+	// two notes sharing a title that is not a day stay a problem for the model
+	for _, path := range []string{"Recipes.md", "Topics/Recipes.md"} {
+		if n := byPath[path]; len(n.Problems) != 1 || !strings.Contains(n.Problems[0], "same title") {
+			t.Errorf("%s: %+v", path, n.Problems)
+		}
+	}
+	if _, err := f.w.FixPlan(ctx, f.s, "Topics/Recipes.md", "Recipes (topics)", ""); err != nil {
+		t.Fatal(err)
+	}
+	res, err := f.w.ApplyVault(ctx, f.s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Created != 7 || res.Appended != 0 {
+		// the second note's text is part of the day page from its creation; nothing is captured after the fact
+		t.Errorf("apply: %+v", res)
+	}
+	var body string
+	f.s.DryRun(ctx, "import:notebook", func(tx *core.Tx) error {
+		pg, err := tx.Lookup("2031-04-11")
+		if err != nil || pg == nil {
+			t.Fatalf("the day page: %v %v", pg, err)
+		}
+		body = pg.Body
+		return nil
+	})
+	if !strings.Contains(body, "Swam at Riverside Pool") || !strings.HasSuffix(body, "\n\nLater that day: the lake.\n") {
+		t.Errorf("both notes on the day page:\n%s", body)
+	}
+	again, err := f.w.ApplyVault(ctx, f.s)
+	if err != nil || again.Appended != 0 || again.Saved != 0 || again.Created != 0 {
+		t.Errorf("a second apply writes nothing: %+v, %v", again, err)
+	}
+	st, err := f.w.Status(ctx, f.s, f.trial)
+	if err != nil || !strings.Contains(st.Vault, "0 problems, 0 not applied") {
+		t.Errorf("status: %q %v", st.Vault, err)
 	}
 }

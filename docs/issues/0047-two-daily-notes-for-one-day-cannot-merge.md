@@ -1,7 +1,7 @@
 # 0047 — Two daily notes of one day in a folder of notes cannot be merged
 
 - **Date:** 2026-10-08
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the 2026-10 import of a notes folder: three days each had two notes (one in the month's folder, one
   in a week's folder), named `2031-04-11.md` and `2031-04-11 2.md` or `2031-04-11-Thursday.md`
 
@@ -31,4 +31,4 @@ problem for the model to fix.
 
 ## Resolution
 
-Open.
+A second daily note of one day in the plan is marked `append` and its text is part of the day page from its creation; the page is compared whole on every run, so a re-run drops nothing ([a folder of notes](../guides/importing.md#a-folder-of-notes)). Two notes sharing a title that is not a day remain a problem for the model.
