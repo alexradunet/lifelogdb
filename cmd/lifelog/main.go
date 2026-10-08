@@ -54,6 +54,8 @@ const usage = `lifelog — the writer of a life.db
   lifelog query SQL                   one read-only SQL statement
   lifelog habits [YYYY-MM-DD]         the day's habits and completion
   lifelog done METRIC [--day D]       check a habit in as done (skip METRIC: not done)
+  lifelog tasks                       every task; lifelog do create-task label=... makes one
+  lifelog due [--from D] [--to D]     what is due: every task's open occurrences in the window
   lifelog rename PAGE-ID TITLE        rename a named object, retaining its id and old-name aliases
   lifelog file PATH... [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day D] [--at PLACE [--radius M]] [--dry-run]
                                       keep a file (docs/cookbook/keep-a-file.md): the original is hashed,
@@ -179,7 +181,7 @@ func commandConsumesContext(o opts) bool {
 		return false
 	}
 	switch o.args[0] {
-	case "serve", "mcp", "get", "actions", "do", "capture", "day", "page", "search", "query", "habits", "done", "skip", "rename", "file":
+	case "serve", "mcp", "get", "actions", "do", "capture", "day", "page", "search", "query", "habits", "done", "skip", "rename", "file", "tasks", "due":
 		return true
 	case "import":
 		if len(o.args) == 1 {
@@ -395,6 +397,17 @@ func runContext(ctx context.Context, o opts) error {
 		}
 		done := map[string]string{"done": "1", "skip": "0"}[cmd]
 		return doActionContext(ctx, o, c, "check-in", map[string]string{"name": args[0], "day": day, "done": done})
+	case "tasks":
+		return show(o)(c.GetContext(ctx, "/tasks"))
+	case "due":
+		vals := map[string]string{}
+		if o.from != "" {
+			vals["from"] = o.from
+		}
+		if o.to != "" {
+			vals["through"] = o.to
+		}
+		return doActionContext(ctx, o, c, "deadlines", vals)
 	case "rename":
 		if len(args) != 2 {
 			return errors.New("rename PAGE-ID NEW-TITLE")

@@ -377,6 +377,160 @@ Embedded: `item` links to the period pages. Action: `create-period`.
 | `membership_basis` | string | a note: membership is by the supplied day, not by interval overlap |
 | `include_deleted` | boolean | tombstoned periods were included |
 
+### tasks
+
+`GET /tasks?include_deleted=`: every task definition, by id. Embedded: `item` links. Links: `deadlines`. Actions:
+`create-task`, `deadlines`. Planning is the [planning contract](docs/contract/planning.md): explicit intent, never a
+record of what happened.
+
+| property | type | meaning |
+|---|---|---|
+| `tasks[]` | list | the definitions (the task shape below) |
+| `tasks[].label` | string |  |
+| `tasks[].project_page_id` | integer |  |
+| `tasks[].repeat_unit` | string |  |
+| `tasks[].repeat_every` | integer |  |
+| `tasks[].anchor_day` | day |  |
+| `tasks[].repeat_until_day` | day |  |
+| `tasks[].reminder_time` | string |  |
+| `tasks[].reminder_zone` | string |  |
+| `tasks[].id` | integer |  |
+| `tasks[].import_key` | string |  |
+| `tasks[].source` | string |  |
+| `tasks[].version` | string |  |
+| `tasks[].created_at` | instant |  |
+| `tasks[].updated_at` | instant |  |
+| `tasks[].deleted_at` | instant |  |
+| `tasks[].project_title` | string |  |
+| `tasks[].project_deleted_at` | instant |  |
+| `include_deleted` | boolean | tombstoned tasks were included |
+
+### task
+
+`GET /tasks/{id}?from=&through=&include_deleted=`: one definition and its occurrences over an inclusive window
+(default 30 days back to 90 days on): the rows written, and for a live series the virtual slots not yet written.
+Links: `up` (tasks), `deadlines`, `project` (the project page). Embedded: an `occurrence` link per occurrence,
+class `occurrence` or `virtual`. Actions: `edit-task`, `stop-task` (a series), `capture-occurrence`,
+`tombstone-task`; `revive-task` alone on a tombstoned one (class `task deleted`).
+
+| property | type | meaning |
+|---|---|---|
+| `task` | object | the definition |
+| `task.label` | string | the label; repeated labels are allowed, a label is not a page |
+| `task.project_page_id` | integer | the project page; absent when none |
+| `task.repeat_unit` | string | `day`, `week`, `month` or `year`; absent for a one-off |
+| `task.repeat_every` | integer | the interval in units; absent for a one-off |
+| `task.anchor_day` | day | the first slot; absent for a one-off |
+| `task.repeat_until_day` | day | the last slot, inclusive; absent while open-ended |
+| `task.reminder_time` | string | the default reminder clock, `HH:MM`; absent when none |
+| `task.reminder_zone` | string | its IANA zone; absent when none |
+| `task.id` | integer | the task's id (its own namespace, not a page id) |
+| `task.import_key` | string | an import's key; absent otherwise |
+| `task.source` | string | the writer |
+| `task.version` | string | the version token every task write sends back |
+| `task.created_at` | instant |  |
+| `task.updated_at` | instant |  |
+| `task.deleted_at` | instant | when it was tombstoned; absent while it lives |
+| `task.project_title` | string | the project page's title; absent when none |
+| `task.project_deleted_at` | instant | when the project page was tombstoned; absent while it lives |
+| `from` | day | the window's first day |
+| `through` | day | its last day |
+| `include_deleted` | boolean | tombstoned occurrences (and a tombstoned task's) were included |
+| `occurrences[]` | list | the occurrences in the window, by due day then key (the occurrence shape below) |
+| `occurrences[].due_day` | day |  |
+| `occurrences[].state` | string |  |
+| `occurrences[].completed_at` | instant |  |
+| `occurrences[].reminder_mode` | string |  |
+| `occurrences[].reminder_at` | instant |  |
+| `occurrences[].id` | integer |  |
+| `occurrences[].task_id` | integer |  |
+| `occurrences[].key` | string |  |
+| `occurrences[].import_key` | string |  |
+| `occurrences[].source` | string |  |
+| `occurrences[].version` | string |  |
+| `occurrences[].created_at` | instant |  |
+| `occurrences[].updated_at` | instant |  |
+| `occurrences[].deleted_at` | instant |  |
+| `occurrences[].task_version` | string |  |
+| `occurrences[].task_deleted_at` | instant |  |
+| `occurrences[].project_title` | string |  |
+| `occurrences[].project_deleted_at` | instant |  |
+| `occurrences[].virtual` | boolean |  |
+| `occurrences[].label` | string | absent here: this is the task's own view |
+| `occurrences[].reminder` | object |  |
+| `occurrences[].reminder.state` | string |  |
+| `occurrences[].reminder.at` | instant |  |
+
+### occurrence
+
+`GET /tasks/{id}/occurrences/{key}`: one occurrence, written or (class `occurrence virtual`) a slot of a live
+series not yet written. Links: `task`, `deadlines`, `project`. Actions: on a virtual slot `capture-occurrence`
+with its key filled; on a written one `edit-occurrence` (every current value filled) and `tombstone-occurrence`;
+`revive-occurrence` alone on a tombstoned one; none under a tombstoned task.
+
+| property | type | meaning |
+|---|---|---|
+| `due_day` | day | the current deadline; absent when undated |
+| `state` | string | `open`, `done` or `skipped` |
+| `completed_at` | instant | when it was done, if known; absent otherwise |
+| `reminder_mode` | string | `inherit` (the task's default), `off`, or `at` |
+| `reminder_at` | instant | the absolute reminder, with mode `at`; absent otherwise |
+| `id` | integer | the row's id; absent for a virtual slot |
+| `task_id` | integer | the task |
+| `key` | string | the slot: a day of the series, or `once` |
+| `import_key` | string | an import's key; absent otherwise |
+| `source` | string | the writer; absent for a virtual slot |
+| `version` | string | the token every occurrence write sends back; absent for a virtual slot |
+| `created_at` | instant | absent for a virtual slot |
+| `updated_at` | instant | absent for a virtual slot |
+| `deleted_at` | instant | when it was tombstoned; absent while it lives |
+| `task_version` | string | the task's token, sent back with every occurrence write |
+| `task_deleted_at` | instant | the task's tombstone; absent while it lives |
+| `project_title` | string | the project page's title; absent when none |
+| `project_deleted_at` | instant | the project page's tombstone; absent while it lives |
+| `virtual` | boolean | not written yet: open work the series implies |
+| `label` | string | the task's label |
+| `reminder` | object | the reminder resolved from this intent |
+| `reminder.state` | string | `none` (no reminder), `resolved`, or `unresolved` (a clock the zone cannot name) |
+| `reminder.at` | instant | the UTC instant, when resolved |
+
+### deadlines
+
+`GET /deadlines?from=&through=&state=&include_deleted=`: every task's occurrences due in the window (default 30 days
+back to 90 days on), `open` ones unless `state` is `done`, `skipped` or `all`. Overdue is this read with an earlier
+`from`. Embedded: an `occurrence` link each. Links: `tasks`. Actions: `deadlines`, `create-task`.
+
+| property | type | meaning |
+|---|---|---|
+| `from` | day | the window's first day |
+| `through` | day | its last day |
+| `state` | string | the filter applied |
+| `include_deleted` | boolean | tombstoned rows and tasks were included |
+| `occurrences[]` | list | the occurrences (the occurrence shape, with `label`), by due day, key, task |
+| `occurrences[].due_day` | day |  |
+| `occurrences[].state` | string |  |
+| `occurrences[].completed_at` | instant |  |
+| `occurrences[].reminder_mode` | string |  |
+| `occurrences[].reminder_at` | instant |  |
+| `occurrences[].id` | integer |  |
+| `occurrences[].task_id` | integer |  |
+| `occurrences[].key` | string |  |
+| `occurrences[].import_key` | string |  |
+| `occurrences[].source` | string |  |
+| `occurrences[].version` | string |  |
+| `occurrences[].created_at` | instant |  |
+| `occurrences[].updated_at` | instant |  |
+| `occurrences[].deleted_at` | instant |  |
+| `occurrences[].task_version` | string |  |
+| `occurrences[].task_deleted_at` | instant |  |
+| `occurrences[].project_title` | string |  |
+| `occurrences[].project_deleted_at` | instant |  |
+| `occurrences[].virtual` | boolean |  |
+| `occurrences[].label` | string | the task's label |
+| `occurrences[].reminder` | object |  |
+| `occurrences[].reminder.state` | string |  |
+| `occurrences[].reminder.at` | instant |  |
+
 ### integrity
 
 `GET /integrity`: the four integrity checks of the contract, and this writer's own.

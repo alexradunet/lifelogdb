@@ -36,6 +36,10 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		"sessions":                            map[string]any{"sessions": []core.Session{}, "include_deleted": false, "order": ""},
 		"session":                             core.Session{},
 		"periods":                             map[string]any{"periods": []core.LifePeriod{}, "day": "", "as_of": "", "membership_basis": "", "include_deleted": false},
+		"tasks":                               map[string]any{"tasks": []core.Task{}, "include_deleted": false},
+		"task":                                map[string]any{"task": core.Task{}, "from": "", "through": "", "include_deleted": false, "occurrences": []occurrenceView{}},
+		"occurrence":                          occurrenceView{},
+		"deadlines":                           map[string]any{"from": "", "through": "", "state": "", "include_deleted": false, "occurrences": []occurrenceView{}},
 		"integrity":                           core.IntegrityResult{},
 		"result":                              core.Result{},
 		"login":                               map[string]any{"failed": false, "logged_in": false},
@@ -80,6 +84,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		{"page, person, place, file, period", ids["place"]}, {"page, person, place, file, period", ids["file"]}, {"page, person, place, file, period", ids["period"]},
 		{"measurement", ids["measurement"]}, {"series", "/metrics/Weight"}, {"metrics", "/metrics"}, {"habits", "/habits?day=2031-05-01"},
 		{"sessions", "/sessions"}, {"session", ids["session"]}, {"periods", "/periods?day=2031-05-01"}, {"integrity", "/integrity"},
+		{"tasks", "/tasks"}, {"task", ids["task"]}, {"occurrence", ids["task"] + "/occurrences/once"}, {"deadlines", "/deadlines?from=2031-05-01&through=2031-05-31"},
 	}
 	named := func(section, key string) bool { // a list is documented as "name[]"
 		return documented[section][key] || documented[section][key+"[]"]
@@ -276,6 +281,14 @@ func fixture(t *testing.T) (http.Handler, *core.Store, map[string]string) {
 		t.Fatalf("capture-session: %d %.300s", rec.Code, rec.Body.String())
 	}
 	ids["session"] = rec.Header().Get("Location")
+	req = httptest.NewRequest("POST", "/tasks", strings.NewReader("label=Plant+beans&project=A+note&due_day=2031-05-02"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("create-task: %d %.300s", rec.Code, rec.Body.String())
+	}
+	ids["task"] = strings.SplitN(rec.Header().Get("Location"), "?", 2)[0]
 	return h, s, ids
 }
 

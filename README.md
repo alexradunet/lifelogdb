@@ -122,10 +122,14 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **Imported keys** are derived, never sent: `path|person|<title_key>` (and place, page), a note's path, and
   `path|reading|<metric_title_key>|<day>|<taken_at, or its place in the source file>`. Ambiguous old reading keys are
   refused during owner-local rehearsal; take a snapshot first if needed, because lifelog never auto-repairs them.
-- **Planning storage.** Core task operations implement the [planning contract](docs/contract/planning.md).
-  Deadline reads use an explicit inclusive window, limited to 10,000 persisted candidates and 10,000 returned
-  occurrences; larger reads refuse instead of silently truncating. No task UI, notification sender or phone
-  interface is exposed.
+- **Planning on every surface** ([plan 081](docs/plans/081-planning-on-every-surface.md)). Core task operations
+  implement the [planning contract](docs/contract/planning.md), and the catalog carries them: `/tasks`, a task with
+  its occurrences over a window, an occurrence (written, or a virtual slot of a series), `/deadlines` across tasks;
+  `create-task`, `edit-task`, `stop-task`, `capture-occurrence`, `edit-occurrence`, the tombstones and revives
+  ([API.md](API.md)). `lifelog tasks` and `lifelog due` are shortcuts; the MCP tools and the browser's generic view
+  carry the rest. Deadline reads use an explicit inclusive window (default 30 days back, 90 on), limited to 10,000
+  persisted candidates and 10,000 returned occurrences; larger reads refuse instead of silently truncating. A
+  reminder is resolved intent in the answer (`reminder.state`, `reminder.at`); no notification is sent by anything.
 - **The schema is embedded.** `go generate ./...` copies `docs/schema/schema.sql` into `internal/db`; a test fails
   when the copy is stale. `lifelog init` refuses an existing file; `Open` refuses a file without Lifelog's
   `application_id`.

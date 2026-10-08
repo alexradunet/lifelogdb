@@ -104,6 +104,19 @@ func New(s *core.Store, ws *importer.Workspace, trustedOrigins ...string) http.H
 	post("/metrics/{name}/check-in", h.checkIn)
 	get("/habits", h.habits)
 	get("/integrity", h.integrity)
+	get("/tasks", h.tasks)
+	get("/tasks/{id}", h.task)
+	get("/tasks/{id}/occurrences/{key}", h.occurrence)
+	get("/deadlines", h.deadlines)
+	post("/tasks", h.createTask)
+	post("/tasks/{id}/edit", h.editTask)
+	post("/tasks/{id}/stop", h.stopTask)
+	post("/tasks/{id}/tombstone", h.taskLifecycle(true))
+	post("/tasks/{id}/revive", h.taskLifecycle(false))
+	post("/tasks/{id}/occurrences", h.captureOccurrence)
+	post("/tasks/{id}/occurrences/{key}/edit", h.editOccurrence)
+	post("/tasks/{id}/occurrences/{key}/tombstone", h.occurrenceLifecycle(true))
+	post("/tasks/{id}/occurrences/{key}/revive", h.occurrenceLifecycle(false))
 	if ws != nil {
 		h.mountImport(get, post)
 	}
@@ -403,9 +416,10 @@ func (h *server) root(r *http.Request) (*Entity, error) {
 		Properties: map[string]any{"today": today},
 		Links: []Link{link("self", "/", "Lifelog"), link("today", dayHref(today), "Today"), link("days", "/days", "Days"),
 			link("sessions", "/sessions", "Sessions"), link("periods", "/periods", "Periods"), link("people", "/people", "People"), link("places", "/places", "Places"), link("files", "/files", "Files"), link("metrics", "/metrics", "Metrics"),
-			link("habits", "/habits", "Habits"), link("ghosts", "/ghosts", "Ghost pages"), link("actions", "/actions", "All actions")},
+			link("habits", "/habits", "Habits"), link("tasks", "/tasks", "Tasks"), link("deadlines", "/deadlines", "Deadlines"),
+			link("ghosts", "/ghosts", "Ghost pages"), link("actions", "/actions", "All actions")},
 		Actions: []Action{
-			action("capture", map[string]string{"day": today}, nil), action("search", nil, nil), action("find", nil, nil),
+			action("capture", map[string]string{"day": today}, nil), action("search", nil, nil), action("find", nil, nil), action("deadlines", nil, nil), action("create-task", nil, nil),
 			action("capture-session", nil, nil), action("create-period", nil, nil), action("create-page", nil, nil), action("create-person", nil, nil), action("create-place", nil, nil), action("add-file", nil, nil),
 			h.recordAction(r.Context(), "", today), action("register-metric", nil, nil), action("query", nil, nil)},
 	}, nil

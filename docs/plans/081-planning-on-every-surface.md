@@ -9,7 +9,7 @@
 - **Date / baseline:** 2026-10-08, `adea9b8` (master).
 - **Priority:** P1. **Effort:** M. **Risk:** LOW for data (the core operations and their tests are unchanged);
   MED for the catalog (new actions reach the CLI, the MCP tools and the browser at once).
-- **Status:** TODO.
+- **Status:** DONE.
 - **Resolves:** the owner's decision of 2026-10-08 that every capability is on every surface
   ([AGENTS.md](../../AGENTS.md), "Every capability on every surface"). Planning was the one capability core
   carried that no surface reached ("No task UI … is exposed", README).
@@ -47,7 +47,7 @@ next plan).
 5. `internal/api`: the generic HTML view renders `/tasks`, `/tasks/{id}`, an occurrence and `/deadlines` with their
    forms; the reference test covers the new classes.
 
-## Done criteria
+## Done criteria (all met; checks on Windows: gofmt, go generate, go vet, go test -count=1 ./... green; staticcheck and govulncheck not run)
 
 1. Every planning operation of core is an action or resource of the catalog; none is reachable on one surface only.
 2. The tests above pass; the existing planning tests of core and the contract suites are unchanged.

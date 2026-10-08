@@ -9,27 +9,38 @@ import (
 	"unicode/utf8"
 )
 
-// TaskSpec is the current definition described by docs/contract/planning.md.
+// TaskSpec is the current definition described by docs/contract/planning.md. The JSON names are the wire
+// shape of the API (API.md, "task").
 type TaskSpec struct {
-	Label             string
-	ProjectPageID     *int64
-	RepeatUnit        string
-	RepeatEvery       int64
-	AnchorDay         string
-	RepeatUntilDay    string
-	ReminderLocalTime string
-	ReminderZone      string
+	Label             string `json:"label"`
+	ProjectPageID     *int64 `json:"project_page_id,omitempty"`
+	RepeatUnit        string `json:"repeat_unit,omitempty"`
+	RepeatEvery       int64  `json:"repeat_every,omitempty"`
+	AnchorDay         string `json:"anchor_day,omitempty"`
+	RepeatUntilDay    string `json:"repeat_until_day,omitempty"`
+	ReminderLocalTime string `json:"reminder_time,omitempty"`
+	ReminderZone      string `json:"reminder_zone,omitempty"`
 }
 
 type Task struct {
 	TaskSpec
-	ID                                                    int64
-	Key, Source, Version, CreatedAt, UpdatedAt, DeletedAt string
-	ProjectTitle, ProjectDeletedAt                        string
+	ID               int64  `json:"id"`
+	Key              string `json:"import_key,omitempty"`
+	Source           string `json:"source"`
+	Version          string `json:"version"`
+	CreatedAt        string `json:"created_at"`
+	UpdatedAt        string `json:"updated_at"`
+	DeletedAt        string `json:"deleted_at,omitempty"`
+	ProjectTitle     string `json:"project_title,omitempty"`
+	ProjectDeletedAt string `json:"project_deleted_at,omitempty"`
 }
 
 type OccurrenceChanges struct {
-	DueDay, State, CompletedAt, ReminderMode, ReminderOverrideAt string
+	DueDay             string `json:"due_day,omitempty"`
+	State              string `json:"state"`
+	CompletedAt        string `json:"completed_at,omitempty"`
+	ReminderMode       string `json:"reminder_mode"`
+	ReminderOverrideAt string `json:"reminder_at,omitempty"`
 }
 
 // OccurrenceInput is an explicitly captured outcome, including historical imports.
@@ -41,10 +52,20 @@ type OccurrenceInput struct {
 
 type TaskOccurrence struct {
 	OccurrenceChanges
-	ID, TaskID                                                                 int64
-	OccurrenceKey, ImportKey, Source, Version, CreatedAt, UpdatedAt, DeletedAt string
-	TaskVersion, TaskDeletedAt, ProjectTitle, ProjectDeletedAt                 string
-	Virtual                                                                    bool
+	ID               int64  `json:"id,omitempty"`
+	TaskID           int64  `json:"task_id"`
+	OccurrenceKey    string `json:"key"`
+	ImportKey        string `json:"import_key,omitempty"`
+	Source           string `json:"source,omitempty"`
+	Version          string `json:"version,omitempty"`
+	CreatedAt        string `json:"created_at,omitempty"`
+	UpdatedAt        string `json:"updated_at,omitempty"`
+	DeletedAt        string `json:"deleted_at,omitempty"`
+	TaskVersion      string `json:"task_version"`
+	TaskDeletedAt    string `json:"task_deleted_at,omitempty"`
+	ProjectTitle     string `json:"project_title,omitempty"`
+	ProjectDeletedAt string `json:"project_deleted_at,omitempty"`
+	Virtual          bool   `json:"virtual"`
 }
 
 func validateTaskSpec(in TaskSpec) error {
@@ -119,6 +140,66 @@ func (s *Store) Task(ctx context.Context, id int64) (*Task, error) {
 		return nil, notFound("no task %d", id)
 	}
 	return p, err
+}
+
+// Tasks lists the definitions by id, the live ones unless includeDeleted.
+func (s *Store) Tasks(ctx context.Context, includeDeleted bool) ([]Task, error) {
+	rows, err := s.DB.R.QueryContext(ctx, taskSelect+`WHERE (? OR t.deleted_at IS NULL) ORDER BY t.id`, includeDeleted)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Task{}
+	for rows.Next() {
+		p, err := scanTask(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *p)
+	}
+	return out, rows.Err()
+}
+
+// Deadline is an occurrence of any task in a window, with its task's label.
+type Deadline struct {
+	TaskOccurrence
+	Label string `json:"label"`
+}
+
+// Deadlines merges every task's TaskOccurrences over the window (the live tasks, or all of them when
+// includeDeleted), ordered by due day, key and task, bounded like a single task's read.
+func (s *Store) Deadlines(ctx context.Context, from, through string, includeDeleted bool) ([]Deadline, error) {
+	if !IsDay(from) || !IsDay(through) || from > through {
+		return nil, invalid("task deadline window must have ordered exact days")
+	}
+	tasks, err := s.Tasks(ctx, includeDeleted)
+	if err != nil {
+		return nil, err
+	}
+	out := []Deadline{}
+	for _, p := range tasks {
+		os, err := s.TaskOccurrences(ctx, p.ID, from, through, includeDeleted)
+		if err != nil {
+			return nil, err
+		}
+		for _, o := range os {
+			if len(out) >= maxTaskOccurrences {
+				return nil, invalid("deadline window exceeds 10000 occurrence limit")
+			}
+			out = append(out, Deadline{o, p.Label})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		a, b := out[i], out[j]
+		if a.DueDay != b.DueDay {
+			return a.DueDay < b.DueDay
+		}
+		if a.OccurrenceKey != b.OccurrenceKey {
+			return a.OccurrenceKey < b.OccurrenceKey
+		}
+		return a.TaskID < b.TaskID
+	})
+	return out, nil
 }
 
 func (t *Tx) TaskOccurrence(taskID int64, key string) (*TaskOccurrence, error) {

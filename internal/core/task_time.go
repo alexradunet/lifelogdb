@@ -135,8 +135,8 @@ func validPlanningZone(zone string) bool {
 
 // TaskReminder distinguishes absent intent from a clock that cannot be resolved.
 type TaskReminder struct {
-	State string
-	At    string
+	State string `json:"state"` // none, resolved or unresolved
+	At    string `json:"at,omitempty"`
 }
 
 // ResolveTaskReminder resolves intent only; it never schedules or sends a notification.
