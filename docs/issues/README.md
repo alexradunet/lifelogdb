@@ -9,7 +9,7 @@ data could not answer, a rule that is ambiguous or untestable. It is the evidenc
 
 | id | title | status |
 |---|---|---|
-| [0049](0049-replay-refuses-a-large-ledger.md) | A real replay refuses a source whose ledger is larger than a prepared artifact may be | open |
+| [0049](0049-replay-refuses-a-large-ledger.md) | A real replay refuses a source whose ledger is larger than a prepared artifact may be | resolved |
 | [0048](0048-writer-opens-a-file-of-another-ddl.md) | The writer opens a file built from another DDL and fails only at the integrity check | open |
 | [0047](0047-two-daily-notes-for-one-day-cannot-merge.md) | Two daily notes of one day in a folder of notes cannot be merged | resolved |
 | [0043](0043-notes-folder-without-obsidian-marker.md) | A folder of notes is only recognised when it is an Obsidian vault | resolved |

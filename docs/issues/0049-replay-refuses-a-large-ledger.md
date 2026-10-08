@@ -1,7 +1,7 @@
 # 0049 — A real replay refuses a source whose ledger is larger than a prepared artifact may be
 
 - **Date:** 2026-10-08
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the 2026-10 import of a Google Takeout extraction (80 412 files, a `ledger.md` of about 6 MB)
 
 ## What happened
@@ -30,4 +30,4 @@ from another artifact; the bound stays on the artifacts it was written for.
 
 ## Resolution
 
-Open.
+The evidence snapshot hashes `rules.md` and `ledger.md` as a stream, with no bound; the prepared and selected-photo artifacts and their bindings keep theirs. Regression: `TestSelectionSnapshotHashesALargeLedger` (a 5 MiB ledger is evidence like any other, an oversized prepared artifact is still refused).

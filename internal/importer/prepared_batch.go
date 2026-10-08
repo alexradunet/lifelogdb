@@ -2,6 +2,8 @@ package importer
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -365,6 +367,27 @@ func (w *Workspace) appliedPrepared(ctx context.Context) ([]*PreparedBatch, erro
 	sort.Slice(out, func(i, j int) bool { return out[i].File < out[j].File })
 	return out, nil
 }
+
+// hashWorkspaceFile is the evidence hash of a workspace file of any size, read as a stream (CRLF kept as it is:
+// the hash is compared with itself, never with a stamp).
+func (w *Workspace) hashWorkspaceFile(name string) (string, error) {
+	root, err := os.OpenRoot(w.Dir)
+	if err != nil {
+		return "", err
+	}
+	defer root.Close()
+	f, err := root.Open(name)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
 func (w *Workspace) readBoundedWorkspace(name string, limit int64) ([]byte, error) {
 	root, err := os.OpenRoot(w.Dir)
 	if err != nil {
@@ -482,11 +505,21 @@ func (w *Workspace) selectionSnapshot(ctx context.Context) (string, error) {
 		if name != "rules.md" && name != "ledger.md" && name != preparedFile && name != selectedPhotoFile && !strings.HasPrefix(name, ".prepared-binding-") && !strings.HasPrefix(name, ".selected-binding-") {
 			continue
 		}
-		raw, e := w.readBoundedWorkspace(name, 4*maxProfileBytes)
-		if e != nil {
-			return "", e
+		// the rules and the ledger grow with the source (one ledger line per file): hashed as a stream, with
+		// no bound borrowed from the prepared artifacts (issue 0049)
+		var h string
+		var herr error
+		if name == "rules.md" || name == "ledger.md" {
+			h, herr = w.hashWorkspaceFile(name)
+		} else {
+			var raw []byte
+			raw, herr = w.readBoundedWorkspace(name, 4*maxProfileBytes)
+			h = bodyHash(string(raw))
 		}
-		evidence = append(evidence, name+":"+bodyHash(string(raw)))
+		if herr != nil {
+			return "", herr
+		}
+		evidence = append(evidence, name+":"+h)
 	}
 	if _, ok, e := w.read(preparedFile); e != nil {
 		return "", e
