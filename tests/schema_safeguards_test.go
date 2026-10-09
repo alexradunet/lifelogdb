@@ -113,7 +113,7 @@ func referencedGhosts(s *S) {
 	s.K("ghost pages retain unused empty page control", c.n("SELECT count(*) FROM ghost_pages WHERE id=?", unused) == 1)
 	c.must("UPDATE sessions SET deleted_at="+NOW+" WHERE kind_id=?", kind)
 	reading := c.n("SELECT id FROM measurements WHERE captured_with_id=?", day)
-	if _, _, err := store.Correct(ctx, "cli", reading, nil); err != nil {
+	if _, err := store.Correct(ctx, "cli", reading, nil); err != nil {
 		stop("ghost retraction: %v", err)
 	}
 	s.K("ghost pages retain historical session references", c.n("SELECT count(*) FROM ghost_pages WHERE id=?", kind) == 0)

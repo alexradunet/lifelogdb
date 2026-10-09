@@ -14,7 +14,7 @@ func TestPlanningShortcutsAndActions(t *testing.T) {
 	if o, _ := parse([]string{"tasks"}); !commandConsumesContext(o) {
 		t.Fatal("tasks does not consume the context")
 	}
-	c := commandClientWithWorkspace(t)
+	c := commandClient(t)
 	task, err := do(c, "create-task", map[string]string{"label": "Write back", "project": "Ana", "repeat_unit": "week", "repeat_every": "2", "anchor_day": "2031-02-03"})
 	if err != nil {
 		t.Fatal(err)

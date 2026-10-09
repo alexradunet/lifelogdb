@@ -49,7 +49,7 @@ func limitsHandler(t *testing.T) (http.Handler, func()) {
 		return out
 	}
 	before := counts()
-	return api.New(&core.Store{DB: d}, nil), func() {
+	return api.New(&core.Store{DB: d}), func() {
 		t.Helper()
 		if after := counts(); after != before {
 			t.Fatalf("writes on refusal: %s -> %s", before, after)

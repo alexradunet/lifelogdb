@@ -1,7 +1,7 @@
 # 0058 — The import machinery is larger than the life log, for a backfill done once
 
 - **Date:** 2026-10-09
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the 2026-10 rebuild of a life log from a notes folder (559 notes) and a Takeout extraction, and the
   owner's review of it the same day
 
@@ -46,4 +46,9 @@ against `internal/core` and `internal/api`; the table above is the rebuild's own
 
 ## Resolution
 
-Filled in when it closes.
+Resolved by [plan 089](../plans/089-no-import-process.md) (RFC [0011](../rfcs/0011-no-import-process.md), option C):
+the import process is removed (the workspace, the facts files, the trial, the replay, the stamps, the import commands
+and actions, the Takeout and ingest inventories, and the import guide). An importer is a program that loads rows
+itself, or an agent that works with the owner through the catalog's MCP tools; one fixed action,
+`readings-from-table`, turns a page's table into readings. The freeze of D13 is the first kept write that a rebuild
+would lose.

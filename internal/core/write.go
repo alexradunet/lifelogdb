@@ -681,15 +681,6 @@ func (t *Tx) ReadingByKey(metric, key string) (value float64, ok, found bool, er
 
 // Correct supersedes a reading with a new value, or retracts it when value is nil (cookbook/correct-a-measurement.md).
 func (t *Tx) Correct(wrong int64, value *float64) (id int64, err error) {
-	return t.correct(wrong, value, "")
-}
-
-// CorrectKeyed is Correct with a writer-generated import_key for durable import-correction replay.
-func (t *Tx) CorrectKeyed(wrong int64, value *float64, importKey string) (id int64, err error) {
-	return t.correct(wrong, value, importKey)
-}
-
-func (t *Tx) correct(wrong int64, value *float64, importKey string) (id int64, err error) {
 	var metric int64
 	var metricTitle, unit string
 	var habit bool
@@ -708,91 +699,13 @@ func (t *Tx) correct(wrong int64, value *float64, importKey string) (id int64, e
 	if value != nil {
 		v = *value
 	}
-	err = t.tx.QueryRowContext(t.ctx, `INSERT INTO measurements(metric_id, day, taken_at, tz, value, source, import_key, captured_with_id,session_id, supersedes_id, created_at)
-	                     SELECT metric_id, day, taken_at, tz, ?, ?, ?, captured_with_id,session_id, id, `+Now+` FROM measurements WHERE id = ?
-	                     RETURNING id`, v, t.Source, nullIfEmpty(importKey), wrong).Scan(&id)
+	err = t.tx.QueryRowContext(t.ctx, `INSERT INTO measurements(metric_id, day, taken_at, tz, value, source, captured_with_id,session_id, supersedes_id, created_at)
+	                     SELECT metric_id, day, taken_at, tz, ?, ?, captured_with_id,session_id, id, `+Now+` FROM measurements WHERE id = ?
+	                     RETURNING id`, v, t.Source, wrong).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, notFound("no measurement %d", wrong)
 	}
 	return id, err
-}
-
-// MeasurementRow is the portable identity and value of one measurement row.
-type MeasurementRow struct {
-	ID         int64
-	Source     string
-	ImportKey  string
-	Metric     string
-	Value      *float64
-	Supersedes int64
-}
-
-func (t *Tx) MeasurementRow(id int64) (MeasurementRow, error) {
-	var r MeasurementRow
-	var k sql.NullString
-	var v sql.NullFloat64
-	var supersedes sql.NullInt64
-	err := t.tx.QueryRowContext(t.ctx, `SELECT me.id, me.source, me.import_key, m_name.title, me.value, me.supersedes_id
-	                       FROM measurements me JOIN entities m ON m.id = me.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key  WHERE me.id = ?`, id).
-		Scan(&r.ID, &r.Source, &k, &r.Metric, &v, &supersedes)
-	if errors.Is(err, sql.ErrNoRows) {
-		return r, notFound("no measurement %d", id)
-	}
-	if err != nil {
-		return r, err
-	}
-	r.ImportKey = k.String
-	if v.Valid {
-		r.Value = &v.Float64
-	}
-	if supersedes.Valid {
-		r.Supersedes = supersedes.Int64
-	}
-	return r, nil
-}
-
-// MeasurementRootAndLeaf returns the oldest ancestor and current leaf of a correction chain.
-func (t *Tx) MeasurementRootAndLeaf(id int64) (root, leaf MeasurementRow, err error) {
-	var rootID int64
-	err = t.tx.QueryRowContext(t.ctx, `WITH RECURSIVE ancestors(id, supersedes_id, depth) AS (
-	                       SELECT id, supersedes_id, 0 FROM measurements WHERE id = ?
-	                       UNION ALL
-	                       SELECT me.id, me.supersedes_id, depth + 1 FROM measurements me JOIN ancestors a ON me.id = a.supersedes_id)
-	                     SELECT id FROM ancestors ORDER BY depth DESC LIMIT 1`, id).Scan(&rootID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return root, leaf, notFound("no measurement %d", id)
-	}
-	if err != nil {
-		return root, leaf, err
-	}
-	root, err = t.MeasurementRow(rootID)
-	if err != nil {
-		return root, leaf, err
-	}
-	leafID, _, _, err := t.CurrentOf(rootID)
-	if err != nil {
-		return root, leaf, err
-	}
-	leaf, err = t.MeasurementRow(leafID)
-	return root, leaf, err
-}
-
-// MeasurementKey is the sender's key of a measurement's oldest ancestor: its source, import_key and metric
-// ("" when it has none). A correction keeps its writer's provenance, but import replay records owner corrections
-// against the original imported row (docs/guides/importing.md).
-func (t *Tx) MeasurementKey(id int64) (source, key, metric string, err error) {
-	var k sql.NullString
-	err = t.tx.QueryRowContext(t.ctx, `WITH RECURSIVE ancestors(id, source, import_key, metric_id, supersedes_id, depth) AS (
-	                       SELECT id, source, import_key, metric_id, supersedes_id, 0 FROM measurements WHERE id = ?
-	                       UNION ALL
-	                       SELECT me.id, me.source, me.import_key, me.metric_id, me.supersedes_id, depth + 1
-	                         FROM measurements me JOIN ancestors a ON me.id = a.supersedes_id)
-	                     SELECT a.source, a.import_key, m_name.title FROM ancestors a JOIN entities m ON m.id = a.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key
-	                      ORDER BY depth DESC LIMIT 1`, id).Scan(&source, &k, &metric)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", "", "", notFound("no measurement %d", id)
-	}
-	return source, k.String, metric, err
 }
 
 // ---- the same operations alone, each its own transaction
@@ -862,29 +775,10 @@ func (s *Store) Record(ctx context.Context, source string, m Reading) (id int64,
 	return
 }
 
-// Correct also reports the corrected row's sender key, so an import workspace can carry the correction to a replay.
-func (s *Store) Correct(ctx context.Context, source string, wrong int64, value *float64) (id int64, key CorrectedKey, err error) {
-	err = s.Do(ctx, source, func(t *Tx) (e error) {
-		if key.Source, key.Key, key.Metric, e = t.MeasurementKey(wrong); e != nil {
-			return e
-		}
-		id, e = t.Correct(wrong, value)
-		return
-	})
+func (s *Store) Correct(ctx context.Context, source string, wrong int64, value *float64) (id int64, err error) {
+	err = s.Do(ctx, source, func(t *Tx) (e error) { id, e = t.Correct(wrong, value); return })
 	if err != nil {
 		id = 0
 	}
-	key.Value = value
 	return
 }
-
-// CorrectedKey names a corrected reading by its sender's key, and the value it now has (nil = retracted).
-type CorrectedKey struct {
-	Source string   `json:"source"`
-	Key    string   `json:"import_key"`
-	Metric string   `json:"metric"`
-	Value  *float64 `json:"value"`
-}
-
-// IsImport reports a row written by an importer (lifelog_meta.source: import:<name>).
-func IsImport(source string) bool { return strings.HasPrefix(source, "import:") }

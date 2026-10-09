@@ -187,14 +187,14 @@ func TestMeasurementsAreAppendOnly(t *testing.T) {
 	if again, err := s.Record(ctx, "agent:x", m); err != nil || again != 0 {
 		t.Errorf("a re-send with the same key: %d, %v", again, err)
 	}
-	fix, _, err := s.Correct(ctx, "cli", id, ptr(4))
+	fix, err := s.Correct(ctx, "cli", id, ptr(4))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.Correct(ctx, "cli", id, ptr(5)); status(err) != 422 {
+	if _, err := s.Correct(ctx, "cli", id, ptr(5)); status(err) != 422 {
 		t.Errorf("a second correction of one row: %v", err)
 	}
-	if _, _, err := s.Correct(ctx, "cli", fix, nil); err != nil {
+	if _, err := s.Correct(ctx, "cli", fix, nil); err != nil {
 		t.Fatal(err)
 	}
 	d, _ := s.Day(ctx, "2026-09-29")
@@ -203,71 +203,35 @@ func TestMeasurementsAreAppendOnly(t *testing.T) {
 	}
 }
 
-func TestCorrectionRootIdentity(t *testing.T) {
+// A correction of an imported, keyed reading is the corrector's row: its writer's source and no import key.
+func TestACorrectionKeepsItsWritersProvenance(t *testing.T) {
 	s := fresh(t)
 	root, err := s.Record(ctx, "import:notebook", Reading{Metric: "mood", Day: "2026-10-07", Value: 3, Key: "Medical/Mood.md|reading|mood|2026-10-07|1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertRoot := func(name string, id int64) int64 {
-		t.Helper()
-		fix, key, err := s.Correct(ctx, "cli", id, ptr(4))
-		if err != nil {
-			t.Fatalf("%s correction: %v", name, err)
-		}
-		if key.Source != "import:notebook" || key.Key != "Medical/Mood.md|reading|mood|2026-10-07|1" || key.Metric != "Mood" || key.Value == nil || *key.Value != 4 {
-			t.Fatalf("%s key = %+v, want imported root", name, key)
-		}
-		return fix
-	}
-	first := assertRoot("root", root)
-
-	newest, _, err := s.Correct(ctx, "cli", first, ptr(5))
+	first, err := s.Correct(ctx, "cli", root, ptr(4))
 	if err != nil {
 		t.Fatal(err)
 	}
-	retracted, key, err := s.Correct(ctx, "agent:owner", newest, nil)
+	newest, err := s.Correct(ctx, "cli", first, ptr(5))
+	if err != nil {
+		t.Fatal(err)
+	}
+	retracted, err := s.Correct(ctx, "agent:owner", newest, nil)
 	if err != nil {
 		t.Fatalf("retraction of newest row: %v", err)
 	}
-	if key.Source != "import:notebook" || key.Key != "Medical/Mood.md|reading|mood|2026-10-07|1" || key.Metric != "Mood" || key.Value != nil {
-		t.Fatalf("retraction key = %+v, want imported root with nil value", key)
-	}
 	var source string
 	var rowKey sql.NullString
-	if err := s.DB.R.QueryRowContext(ctx, `SELECT source, import_key FROM measurements WHERE id = ?`, retracted).Scan(&source, &rowKey); err != nil {
+	var value sql.NullFloat64
+	if err := s.DB.R.QueryRowContext(ctx, `SELECT source, import_key, value FROM measurements WHERE id = ?`, retracted).Scan(&source, &rowKey, &value); err != nil {
 		t.Fatal(err)
 	}
-	if source != "agent:owner" || rowKey.Valid {
-		t.Fatalf("corrected row provenance = source %q key %q, want writer source and no import key", source, rowKey.String)
+	if source != "agent:owner" || rowKey.Valid || value.Valid {
+		t.Fatalf("retraction provenance = source %q key %q value %v, want the writer's source, no key and no value", source, rowKey.String, value)
 	}
-
-	plain, err := s.Record(ctx, "cli", Reading{Metric: "mood", Day: "2026-10-08", Value: 3})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, key, err := s.Correct(ctx, "cli", plain, ptr(4)); err != nil {
-		t.Fatalf("unkeyed correction: %v", err)
-	} else if key.Source != "cli" || key.Key != "" || key.Metric != "Mood" {
-		t.Fatalf("unkeyed root key = %+v, want root without import key", key)
-	}
-
-	legacyRoot, err := s.Record(ctx, "cli", Reading{Metric: "mood", Day: "2026-10-09", Value: 3})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var intermediate int64
-	if err := s.DB.W.QueryRowContext(ctx, `INSERT INTO measurements(metric_id, day, value, source, import_key, supersedes_id, created_at)
-		SELECT metric_id, day, 4, 'import:legacy', 'legacy-intermediate', id, `+Now+` FROM measurements WHERE id = ? RETURNING id`, legacyRoot).Scan(&intermediate); err != nil {
-		t.Fatal(err)
-	}
-	if _, key, err := s.Correct(ctx, "cli", intermediate, ptr(5)); err != nil {
-		t.Fatalf("keyed intermediate correction: %v", err)
-	} else if key.Source != "cli" || key.Key != "" || key.Metric != "Mood" {
-		t.Fatalf("keyed intermediate resolved to %+v, want oldest unkeyed root", key)
-	}
-
-	if _, _, err := s.Correct(ctx, "cli", 987654321, ptr(4)); status(err) != 404 {
+	if _, err := s.Correct(ctx, "cli", 987654321, ptr(4)); status(err) != 404 {
 		t.Fatalf("unknown measurement: %v, want 404", err)
 	}
 }
@@ -301,7 +265,7 @@ func TestCorrectionDomains(t *testing.T) {
 			t.Fatalf("%s record: %v", name, err)
 		}
 		before := measurementRows(t, s)
-		if _, _, err := s.Correct(ctx, "cli", id, ptr(value)); status(err) != 422 {
+		if _, err := s.Correct(ctx, "cli", id, ptr(value)); status(err) != 422 {
 			t.Fatalf("%s correct to %g: %v, want 422", name, value, err)
 		}
 		if got := measurementRows(t, s); got != before {
@@ -322,7 +286,7 @@ func TestCorrectionDomains(t *testing.T) {
 	assertRejectedCorrection("ended habit", Reading{Metric: "winter_vitamin", Day: "2026-02-05", Value: 0}, 2)
 
 	unknownRows := measurementRows(t, s)
-	if _, _, err := s.Correct(ctx, "cli", 987654321, ptr(1)); status(err) != 404 {
+	if _, err := s.Correct(ctx, "cli", 987654321, ptr(1)); status(err) != 404 {
 		t.Fatalf("unknown measurement: %v, want 404", err)
 	}
 	if got := measurementRows(t, s); got != unknownRows {
@@ -333,7 +297,7 @@ func TestCorrectionDomains(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	loFix, _, err := s.Correct(ctx, "cli", lo, ptr(1))
+	loFix, err := s.Correct(ctx, "cli", lo, ptr(1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -349,11 +313,11 @@ func TestCorrectionDomains(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hiFix, _, err := s.Correct(ctx, "cli", hi, ptr(5))
+	hiFix, err := s.Correct(ctx, "cli", hi, ptr(5))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.Correct(ctx, "cli", hiFix, nil); err != nil {
+	if _, err := s.Correct(ctx, "cli", hiFix, nil); err != nil {
 		t.Fatalf("nil retraction: %v", err)
 	}
 	d, err := s.Day(ctx, "2026-10-04")
@@ -368,11 +332,11 @@ func TestCorrectionDomains(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	middle, _, err := s.Correct(ctx, "cli", start, ptr(4))
+	middle, err := s.Correct(ctx, "cli", start, ptr(4))
 	if err != nil {
 		t.Fatal(err)
 	}
-	end, _, err := s.Correct(ctx, "cli", middle, ptr(5))
+	end, err := s.Correct(ctx, "cli", middle, ptr(5))
 	if err != nil {
 		t.Fatalf("correction of a correction: %v", err)
 	}
@@ -384,7 +348,7 @@ func TestCorrectionDomains(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.Correct(ctx, "cli", focus, ptr(2.5)); err != nil {
+	if _, err := s.Correct(ctx, "cli", focus, ptr(2.5)); err != nil {
 		t.Fatalf("finite non-habit unitless correction: %v", err)
 	}
 }

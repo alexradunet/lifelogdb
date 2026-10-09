@@ -34,7 +34,7 @@ func TestTaskProjectPromotionActionsMatchRetainedReferences(t *testing.T) {
 				}
 			})
 			s := &core.Store{DB: d}
-			h := api.New(s, nil)
+			h := api.New(s)
 			c := client.InProcess(h, "cli")
 			if remote {
 				server := httptest.NewServer(h)

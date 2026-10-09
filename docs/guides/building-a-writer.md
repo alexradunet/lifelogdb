@@ -24,7 +24,8 @@ compatibility follows [D13](../decisions/D13-migrations-and-freeze.md).
    the different meanings of recorded time evidence. The [planning vectors](../contract/planning.md)
    similarly define calendar expansion and reminder clock resolution; task writes use that page's transaction and
    revision rules. Persisted outcomes supplement bounded virtual recurrence, without implying notification delivery.
-5. For imports with a model, the [importing guide](importing.md).
+5. For imports, [imports](../contract/imports.md): a program loads rows itself; an agent works with the owner through the
+   writer's operations.
 
 Such an application changes nothing here. If it finds a rule that is ambiguous, untestable or missing, that is an
 [issue](../issues/README.md): the fix goes into the docs (and their suites), not just into the application.

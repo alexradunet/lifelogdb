@@ -36,7 +36,7 @@ func TestStableNameTransportParity(t *testing.T) {
 					}
 				})
 				s := &core.Store{DB: d}
-				h := api.New(s, nil)
+				h := api.New(s)
 				c := client.InProcess(h, "agent:names")
 				if remote {
 					server := httptest.NewServer(h)
@@ -172,7 +172,7 @@ func TestBrowserStableNameResolution(t *testing.T) {
 		}
 	})
 	s := &core.Store{DB: d}
-	h := api.New(s, nil)
+	h := api.New(s)
 	id, err := s.CreatePerson(context.Background(), "cli", "Old person", "Synthetic Person", "", "")
 	if err != nil {
 		t.Fatal(err)

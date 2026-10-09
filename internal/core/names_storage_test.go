@@ -164,7 +164,7 @@ func TestMoodIdentitySurvivesRename(t *testing.T) {
 		t.Fatalf("alias series: %+v %v", rows, err)
 	}
 	bad := float64(0)
-	if _, _, err := s.Correct(ctx, "cli", rows[0].ID, &bad); status(err) != 422 {
+	if _, err := s.Correct(ctx, "cli", rows[0].ID, &bad); status(err) != 422 {
 		t.Fatalf("invalid renamed Mood correction: %v", err)
 	}
 }

@@ -22,7 +22,6 @@ import (
 	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db"
-	"lifelog/internal/importer"
 	"lifelog/internal/photo"
 	"lifelog/internal/photo/phototest"
 )
@@ -210,24 +209,6 @@ func assertSnapshotSentinel(t *testing.T, p string) {
 	}
 	if string(b) != snapshotSentinel {
 		t.Fatalf("alternate sentinel %q changed to %q", p, string(b))
-	}
-}
-
-func TestImportTakeoutInventoryDoesNotNeedDatabaseOrLeakValues(t *testing.T) {
-	o, err := parse([]string{"import", "takeout", "inventory", filepath.Join("..", "..", "internal", "takeout", "testdata", "phase-a")})
-	if err != nil {
-		t.Fatal(err)
-	}
-	out := captureStdout(t, func() {
-		if err := run(o); err != nil {
-			t.Fatal(err)
-		}
-	})
-	if !strings.Contains(out, "Timeline Semantic Visits") || !strings.Contains(out, "Fitbit Steps") {
-		t.Fatalf("inventory output missed expected public families:\n%s", out)
-	}
-	if strings.Contains(out, "PRIVATE_MARKER") {
-		t.Fatalf("inventory output leaked a synthetic private marker:\n%s", out)
 	}
 }
 
@@ -448,21 +429,18 @@ func TestABatchReportGroupsThePhotosNearNoPlace(t *testing.T) {
 	}
 }
 
-func TestDoDispatchesPageAndImportFind(t *testing.T) {
-	c := commandClientWithWorkspace(t)
-	if _, err := do(c, "find", map[string]string{"title": "Ana"}); err != nil {
+func TestDoDispatchesPageFind(t *testing.T) {
+	c := commandClient(t)
+	page, err := do(c, "find", map[string]string{"title": "Ana"})
+	if err != nil {
 		t.Fatalf("page find: %v", err)
 	}
-	matches, err := do(c, "import-find", map[string]string{"text": "Ana"})
-	if err != nil {
-		t.Fatalf("import find: %v", err)
-	}
-	if matches.Title != "Find Ana" || cmdHref(matches, "self") != "/import/find?text=Ana" {
-		t.Fatalf("import-find returned %+v", matches)
+	if page.Title != "Ana" || cmdHref(page, "self") == "" {
+		t.Fatalf("find returned %+v", page)
 	}
 }
 
-func commandClientWithWorkspace(t *testing.T) *client.Client {
+func commandClient(t *testing.T) *client.Client {
 	t.Helper()
 	p := filepath.Join(t.TempDir(), "life.db")
 	if err := db.Init(p); err != nil {
@@ -473,15 +451,7 @@ func commandClientWithWorkspace(t *testing.T) *client.Client {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { d.Close() })
-	root := t.TempDir()
-	if err := os.Mkdir(filepath.Join(root, "Notebook"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	ws, err := importer.Open(filepath.Join(root, "Notebook.lifelog"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	c := client.InProcess(api.New(&core.Store{DB: d}, ws), "cli")
+	c := client.InProcess(api.New(&core.Store{DB: d}), "cli")
 	if _, err := c.Do(cmdAction(t, mustEntity(c.Get("/")), "create-page"), map[string]string{"title": "Ana", "body": "Synthetic page"}); err != nil {
 		t.Fatal(err)
 	}
@@ -513,43 +483,6 @@ func cmdHref(e *api.Entity, rel string) string {
 		}
 	}
 	return ""
-}
-
-func TestImportTakeoutInventoryExtractionRoot(t *testing.T) {
-	root := t.TempDir()
-	for rel, body := range map[string]string{
-		"Takeout/Fit/Sessions/PRIVATE_MARKER.json":    `{"sessions":[{"startTime":"2020-01-10","PRIVATE_MARKER":"PRIVATE_MARKER"}]}`,
-		"Takeout/Fitbit/exercise-PRIVATE_MARKER.json": `[{"startTime":"2020-01-10"},{"PRIVATE_MARKER":"PRIVATE_MARKER"}]`,
-		"Timeline.json": `{"semanticSegments":[{"startTime":"2020-01-10","visit":{},"PRIVATE_MARKER":"PRIVATE_MARKER"}]}`,
-	} {
-		p := filepath.Join(root, filepath.FromSlash(rel))
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	o, err := parse([]string{"import", "takeout", "inventory", root})
-	if err != nil {
-		t.Fatal(err)
-	}
-	out := captureStdout(t, func() {
-		if err := run(o); err != nil {
-			t.Fatal(err)
-		}
-	})
-	for _, want := range []string{"Timeline On-Device", `"unsupported_files": 1`, `"metric": "exercise"`} {
-		if !strings.Contains(out, want) {
-			t.Errorf("missing %s: %s", want, out)
-		}
-	}
-	if strings.Contains(out, "PRIVATE_MARKER") || strings.Contains(out, root) {
-		t.Fatal("private inventory detail leaked")
-	}
-	if _, err := os.Stat(filepath.Join(root, "life.db")); !os.IsNotExist(err) {
-		t.Fatal("inventory created database")
-	}
 }
 
 func TestSnapshotPhysicalDestination(t *testing.T) {
@@ -656,7 +589,7 @@ func TestSnapshotPhysicalDestination(t *testing.T) {
 }
 
 func TestCommandCancellation(t *testing.T) {
-	for _, args := range [][]string{{"get", "blocked"}, {"capture", "synthetic"}, {"import", "status"}, {"actions"}} {
+	for _, args := range [][]string{{"get", "blocked"}, {"capture", "synthetic"}, {"readings", "Weighings", "Weight"}, {"actions"}} {
 		t.Run(strings.Join(args, "-"), func(t *testing.T) {
 			started, stopped, release := make(chan struct{}), make(chan struct{}), make(chan struct{})
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -723,125 +656,6 @@ func TestCommandCancellationFileBatch(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatalf("started %d files after cancellation", calls)
-	}
-}
-
-// TestImportSetupIntegrity uses only disposable synthetic source files and workspaces.
-func TestImportSetupIntegrity(t *testing.T) {
-	if os.Getenv("LIFELOG_SETUP_TEST_CHILD") == "1" {
-		os.Args = append([]string{"lifelog"}, strings.Split(os.Getenv("LIFELOG_SETUP_TEST_ARGS"), "|")...)
-		main()
-		return
-	}
-	for _, kind := range []string{"clean", "orphan", "execution-error", "output-error"} {
-		t.Run(kind, func(t *testing.T) {
-			root := t.TempDir()
-			from := filepath.Join(root, "synthetic.db")
-			if err := db.Init(from); err != nil {
-				t.Fatal(err)
-			}
-			d, err := db.Open(from)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if kind == "orphan" || kind == "output-error" {
-				_, err = d.W.Exec(`PRAGMA foreign_keys=OFF; INSERT INTO entities(id, entity_type, preferred_name_key, created_at, updated_at, source) VALUES(999, 'page', 'missing-name', '2026-10-05T00:00:00.000Z', '2026-10-05T00:00:00.000Z', 'cli')`)
-			} else if kind == "execution-error" {
-				// A missing domain table makes the orphan query fail, rather than return OK=false.
-				_, err = d.W.Exec(`DROP TABLE people`)
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := d.Close(); err != nil {
-				t.Fatal(err)
-			}
-			source := filepath.Join(root, "Synthetic")
-			if err := os.Mkdir(source, 0700); err != nil {
-				t.Fatal(err)
-			}
-			ws, err := importer.Open(source + ".lifelog")
-			if err != nil {
-				t.Fatal(err)
-			}
-			var setupErr error
-			var out string
-			if kind == "output-error" {
-				f, err := os.CreateTemp(root, "closed-output")
-				if err != nil {
-					t.Fatal(err)
-				}
-				f.Close()
-				old := os.Stdout
-				os.Stdout = f
-				defer func() { os.Stdout = old }()
-				setupErr = importOwner(opts{from: from}, ws, []string{"setup"})
-				os.Stdout = old
-				if !errors.Is(setupErr, os.ErrClosed) {
-					t.Fatalf("output error = %v, want closed-file error", setupErr)
-				}
-			} else {
-				out = captureStdout(t, func() { setupErr = importOwner(opts{from: from}, ws, []string{"setup"}) })
-				switch kind {
-				case "clean":
-					if setupErr != nil || !strings.Contains(out, "integrity: ok") {
-						t.Fatalf("clean setup: %v; %s", setupErr, out)
-					}
-				case "orphan":
-					if setupErr == nil || !strings.Contains(setupErr.Error(), "failed trial integrity") || !strings.Contains(out, `"ok": false`) || !strings.Contains(out, "999") {
-						t.Errorf("failed setup: %v; %s", setupErr, out)
-					}
-				case "execution-error":
-					if setupErr == nil || !strings.Contains(setupErr.Error(), "people") || strings.Contains(out, "integrity: ok") {
-						t.Fatalf("execution error: %v; %s", setupErr, out)
-					}
-				}
-			}
-			trial, err := db.Open(ws.TrialDB())
-			if err != nil {
-				t.Fatalf("diagnostic trial not retained: %v", err)
-			}
-			var entities, pages int
-			if err := trial.R.QueryRow(`SELECT count(*) FROM entities`).Scan(&entities); err != nil {
-				t.Fatal(err)
-			}
-			if err := trial.R.QueryRow(`SELECT count(*) FROM entity_names`).Scan(&pages); err != nil {
-				t.Fatal(err)
-			}
-			trial.Close()
-			want := 1
-			if kind == "orphan" || kind == "output-error" {
-				want = 2
-			}
-			if entities != want || pages != 1 {
-				t.Fatalf("setup repaired or imported rows: entities=%d pages=%d", entities, pages)
-			}
-			entries, err := os.ReadDir(ws.Dir)
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, e := range entries {
-				if e.Name() != "facts" && e.Name() != "trial.db" {
-					t.Errorf("unexpected setup side effect: %s", e.Name())
-				}
-			}
-			if kind == "orphan" {
-				childSource := filepath.Join(root, "Child")
-				if err := os.Mkdir(childSource, 0700); err != nil {
-					t.Fatal(err)
-				}
-				cmd := exec.Command(os.Args[0], "-test.run=^TestImportSetupIntegrity$")
-				cmd.Env = append(os.Environ(), "LIFELOG_SETUP_TEST_CHILD=1", "LIFELOG_SETUP_TEST_ARGS="+strings.Join([]string{"import", "setup", "--from", from, "--workspace", childSource + ".lifelog"}, "|"))
-				output, err := cmd.CombinedOutput()
-				var exit *exec.ExitError
-				if !errors.As(err, &exit) || exit.ExitCode() != 1 || !strings.Contains(string(output), `"ok": false`) || !strings.Contains(string(output), "failed trial integrity") {
-					t.Errorf("entrypoint: %v; %s", err, output)
-				}
-				if _, err := os.Stat(filepath.Join(childSource+".lifelog", "trial.db")); err != nil {
-					t.Fatal(err)
-				}
-			}
-		})
 	}
 }
 

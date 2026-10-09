@@ -3,7 +3,7 @@
 **Status:** accepted
 
 - **Context.** `life.db` is a lifetime file with one writer ([D1](D01-single-sqlite-file.md), [D3](D03-integer-ids.md)), and
-  from the freeze on it holds rows that no import can replay ([D13](D13-migrations-and-freeze.md)). The integrity checks
+  from the freeze on it holds rows that no program can write again ([D13](D13-migrations-and-freeze.md)). The integrity checks
   find damage but repair nothing ([integrity checks](../contract/integrity-checks.md)), and a writer bug or a lost disk
   had nothing to fall back on: the [threat model](../contract/threat-model.md) said "no second copy of the file is
   kept". The freeze checklist asked the owner to decide the export, snapshot and off-box copy row of the
@@ -21,7 +21,7 @@
     without it does not hold them.
   - *The SQLite online backup API*: rejected as the rule — it gives the same consistent copy, but only through a C
     interface each language binds differently; `VACUUM INTO` is one statement any connection can run, and it is the
-    copy the [imports](../contract/imports.md) trial already uses.
+    copy an import takes first ([imports](../contract/imports.md)).
   - *A snapshot on a schedule, kept N deep, rotated*: not decided here — when and how many is the owner's routine;
     a snapshot is never overwritten, so nothing is lost by taking one more.
   - *A markdown export, a CSV dump, an off-box copy, continuous replication*: kept out

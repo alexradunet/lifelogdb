@@ -47,6 +47,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		"result of capture, create-page, save-body": core.Sync{},
 		"result of add-file":                        core.Kept{},
 		"result of relocate-reading":                core.ScopeRelocation{},
+		"readings-from-table":                       core.TableReadings{},
 	}
 	for section, shape := range shapes {
 		want := map[string]bool{}
@@ -270,7 +271,7 @@ func fixture(t *testing.T) (http.Handler, *core.Store, map[string]string) {
 	if err := s.StartHabit(ctx, "cli", "Walk", "2031-04-01", ""); err != nil {
 		t.Fatal(err)
 	}
-	h := New(s, nil)
+	h := New(s)
 	req := httptest.NewRequest("POST", "/periods", strings.NewReader("title=School&start_boundary=2030-01-01&end_boundary=2032-01-01"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()

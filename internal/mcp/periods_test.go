@@ -26,7 +26,7 @@ func TestMCPRecordedPeriodActions(t *testing.T) {
 		}
 	})
 	s := &core.Store{DB: d}
-	session, ctx := numericSession(t, client.InProcess(api.New(s, nil), "agent:period"))
+	session, ctx := numericSession(t, client.InProcess(api.New(s), "agent:period"))
 	created := callTool(t, ctx, session, "create_period", map[string]any{"title": "Synthetic study", "start_boundary": "2018-09", "end_boundary": ".."})
 	properties := created.Properties.(map[string]any)
 	id := properties["id"]

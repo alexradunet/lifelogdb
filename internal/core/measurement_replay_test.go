@@ -63,7 +63,7 @@ func TestRecordReplayAfterSessionTombstone(t *testing.T) {
 	if err != nil || after.Version != tombstoned.Version || after.DeletedAt != tombstoned.DeletedAt || after.DeletedAt == "" {
 		t.Fatalf("retry changed session lifecycle or revision: %+v err=%v", after, err)
 	}
-	if retraction, _, err := s.Correct(ctx, "cli", root, nil); err != nil || retraction == 0 {
+	if retraction, err := s.Correct(ctx, "cli", root, nil); err != nil || retraction == 0 {
 		t.Fatalf("same-scope NULL retraction remains allowed: id=%d err=%v", retraction, err)
 	}
 	if err := s.DB.R.QueryRowContext(ctx, "SELECT count(*) FROM measurement_values WHERE session_id=?", session).Scan(&count); err != nil || count != 0 {

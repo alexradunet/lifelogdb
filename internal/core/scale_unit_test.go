@@ -37,11 +37,11 @@ func TestAnyRangeUnitHoldsItsValuesToTheRange(t *testing.T) {
 		t.Fatal(err)
 	}
 	eleven := 11.0
-	if _, _, err := s.Correct(ctx, "cli", id, &eleven); status(err) != 422 {
+	if _, err := s.Correct(ctx, "cli", id, &eleven); status(err) != 422 {
 		t.Errorf("a correction of Pain to 11: %v, want a 422", err)
 	}
 	four := 4.0
-	if _, _, err := s.Correct(ctx, "cli", id, &four); err != nil {
+	if _, err := s.Correct(ctx, "cli", id, &four); err != nil {
 		t.Errorf("a correction of Pain to 4: %v", err)
 	}
 	// a metric without a range unit takes any finite number

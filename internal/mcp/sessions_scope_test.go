@@ -30,7 +30,7 @@ func TestMCPSessionScopeAndOwnerRelocationBoundary(t *testing.T) {
 	if _, err := s.RegisterMetric(context.Background(), "cli", "Steps", "steps", ""); err != nil {
 		t.Fatal(err)
 	}
-	session, ctx := numericSession(t, client.InProcess(api.New(s, nil), "agent:session"))
+	session, ctx := numericSession(t, client.InProcess(api.New(s), "agent:session"))
 	callTool(t, ctx, session, "create_page", map[string]any{"title": "Workout"})
 	captured := callTool(t, ctx, session, "capture_session", map[string]any{"kind": "Workout", "day": "2020-01-02", "start_at": "2020-01-02T08:00:00.000Z", "start_offset": "+23:59", "start_zone_unverified": "Claimed/Zone", "import_key": "18446744073709551615"})
 	props := captured.Properties.(map[string]any)

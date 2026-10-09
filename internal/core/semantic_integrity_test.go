@@ -47,7 +47,7 @@ func TestIntegrityDetectsRestoredGuardSemanticDamage(t *testing.T) {
 					t.Fatal(err)
 				}
 				value := 4.0
-				child, _, err := s.Correct(ctx, "cli", root, &value)
+				child, err := s.Correct(ctx, "cli", root, &value)
 				if err != nil {
 					t.Fatal(err)
 				}

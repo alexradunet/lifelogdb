@@ -30,7 +30,7 @@ func publicHandler(t *testing.T, o api.PublicOptions) (http.Handler, *core.Store
 	}
 	t.Cleanup(func() { d.Close() })
 	s := &core.Store{DB: d}
-	h, err := api.Public(api.New(s, nil, o.Origins...), o)
+	h, err := api.Public(api.New(s, o.Origins...), o)
 	if err != nil {
 		t.Fatal(err)
 	}

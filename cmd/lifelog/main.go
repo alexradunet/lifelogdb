@@ -17,21 +17,14 @@ import (
 	"os/signal"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
-
-	"golang.org/x/term"
 
 	"lifelog/internal/api"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db"
-	"lifelog/internal/importer"
-	"lifelog/internal/importrun"
-	"lifelog/internal/inventory"
 	"lifelog/internal/mcp"
-	"lifelog/internal/takeout"
 )
 
 const version = "0.1.0"
@@ -71,49 +64,34 @@ const usage = `lifelog — the writer of a life.db
                                       then its restore check (docs/cookbook/take-a-snapshot.md); with --url the
                                       server's folder (serve --snapshots), and --to is refused
 
-Import (docs/guides/importing.md), with --workspace <source>.lifelog:
-  lifelog import setup [--from life.db]   make trial.db: a copy of the real database, or a new one
-  lifelog import approve rules|metrics|entities|prepared|selected-photo    the owner's stamp (an interactive terminal only)
-  lifelog import status                   gates, ledger, questions, next file, what to do now
-  lifelog import check FILE | apply FILE  check or apply one facts file
-  lifelog import run [--model-url URL] [--model NAME] [--max N] [--files A,B] [--max-tokens N]
-                                          the facts pass: follows status, does each step that needs no
-                                          judgement, and asks a model on this machine (default
-                                          http://127.0.0.1:8080/v1) for the facts of each file; stops for the
-                                          owner. Progress: counts and paths; details in run-refused.md
-  lifelog import replay --to PATH         the real run: the whole workspace into another database,
-                                          rehearsed on a copy first (nothing written unless it is clean)
-  lifelog import replay --to PATH --dry-run   the rehearsal alone: every failure, nothing written
-  lifelog import inventory FOLDER         survey an ingest folder without reading a content: folders, counts by
-                                          extension and name pattern, archive listings, the sources found (JSON)
-  lifelog import takeout inventory FOLDER privacy-safe Timeline/Fit/Fitbit inventory (prints JSON, writes nothing)
-  lifelog mcp --workspace DIR             the MCP server with the import tools added
+An import is done by a local agent with the owner, through the catalog (lifelog mcp --agent NAME;
+docs/plans/089-no-import-process.md). One action helps it:
+  lifelog readings PAGE METRIC [--column NAME]   readings of METRIC from the table of PAGE (readings-from-table):
+                                      a row with a day and a plain number in the metric's unit; the
+                                      others are reported; a second run writes nothing
 
 Global flags, anywhere on the line:
   --db PATH      the life.db (default $LIFELOG_DB)
   --url URL      talk to a running "lifelog serve" instead of opening the file ($LIFELOG_TOKEN if it is --public)
   --source NAME  the writer recorded on new rows (default cli; lifelog_meta.source)
   --human        print a readable summary instead of JSON
-  --workspace D  an import workspace (<source>.lifelog); the database defaults to its trial.db
 `
 
 type opts struct {
-	db, url, source, addr, agent, mood, day, workspace, from, to, title, text, preview, mime, at, radius string
-	tokenFile, tlsCert, tlsKey, snapshots                                                                string
-	modelURL, model, files, maxFiles, maxTokens                                                          string
-	allowOrigins                                                                                         []string
-	human, dryRun, dbExplicit, addrExplicit, public                                                      bool
-	args                                                                                                 []string
+	db, url, source, addr, agent, mood, day, from, to, title, text, preview, mime, at, radius, column string
+	tokenFile, tlsCert, tlsKey, snapshots                                                             string
+	allowOrigins                                                                                      []string
+	human, dryRun, dbExplicit, addrExplicit, public                                                   bool
+	args                                                                                              []string
 }
 
 // parse takes flags anywhere on the line (an old CLI ignored --db after the subcommand).
 func parse(argv []string) (opts, error) {
 	o := opts{db: os.Getenv("LIFELOG_DB"), source: "cli", addr: "127.0.0.1:7777"}
 	vals := map[string]*string{"--db": &o.db, "--url": &o.url, "--source": &o.source, "--addr": &o.addr,
-		"--agent": &o.agent, "--mood": &o.mood, "--day": &o.day, "--workspace": &o.workspace, "--from": &o.from, "--to": &o.to,
+		"--agent": &o.agent, "--mood": &o.mood, "--day": &o.day, "--from": &o.from, "--to": &o.to,
 		"--title": &o.title, "--text": &o.text, "--preview": &o.preview, "--mime": &o.mime, "--at": &o.at, "--radius": &o.radius,
-		"--token-file": &o.tokenFile, "--tls-cert": &o.tlsCert, "--tls-key": &o.tlsKey, "--snapshots": &o.snapshots,
-		"--model-url": &o.modelURL, "--model": &o.model, "--files": &o.files, "--max": &o.maxFiles, "--max-tokens": &o.maxTokens}
+		"--token-file": &o.tokenFile, "--tls-cert": &o.tlsCert, "--tls-key": &o.tlsKey, "--snapshots": &o.snapshots, "--column": &o.column}
 	for i := 0; i < len(argv); i++ {
 		a := argv[i]
 		if a == "--human" {
@@ -191,20 +169,8 @@ func commandConsumesContext(o opts) bool {
 		return false
 	}
 	switch o.args[0] {
-	case "serve", "mcp", "get", "actions", "do", "capture", "day", "page", "search", "query", "habits", "done", "skip", "rename", "file", "tasks", "due", "snapshot":
+	case "serve", "mcp", "get", "actions", "do", "capture", "day", "page", "search", "query", "habits", "done", "skip", "rename", "file", "tasks", "due", "snapshot", "readings":
 		return true
-	case "import":
-		if len(o.args) == 1 {
-			return true
-		}
-		switch o.args[1] {
-		case "status", "check", "apply", "replay", "run":
-			return true
-		case "inventory":
-			return len(o.args) == 3
-		case "takeout":
-			return len(o.args) == 4 && o.args[2] == "inventory"
-		}
 	}
 	return false
 }
@@ -251,30 +217,6 @@ func runContext(ctx context.Context, o opts) error {
 		fmt.Println("created", o.db)
 		return nil
 	}
-	if cmd == "import" && len(args) > 0 && args[0] == "takeout" {
-		return importTakeoutContext(ctx, o, args[1:])
-	}
-	if cmd == "import" && len(args) > 0 && args[0] == "inventory" {
-		if len(args) != 2 {
-			return errors.New("import inventory FOLDER")
-		}
-		report, err := inventory.Run(ctx, args[1])
-		if err != nil {
-			return err
-		}
-		return printJSON(report)
-	}
-
-	var ws *importer.Workspace
-	if o.workspace != "" {
-		var err error
-		if ws, err = importer.Open(o.workspace); err != nil {
-			return err
-		}
-		if !o.dbExplicit {
-			o.db = ws.TrialDB() // an import works on its trial database unless --db names another
-		}
-	}
 	if cmd == "snapshot" && o.url != "" && o.to != "" {
 		return errors.New("snapshot over --url lands in the server's folder (serve --snapshots): drop --to")
 	}
@@ -286,9 +228,6 @@ func runContext(ctx context.Context, o opts) error {
 		if _, err := db.CheckSnapshotDir(o.snapshots); err != nil {
 			return err
 		}
-	}
-	if cmd == "import" && len(args) > 0 && (args[0] == "setup" || args[0] == "approve") {
-		return importOwner(o, ws, args)
 	}
 
 	if cmd == "mcp" {
@@ -322,7 +261,7 @@ func runContext(ctx context.Context, o opts) error {
 		if pub != nil {
 			origins = pub.Origins
 		}
-		handler = api.New(&core.Store{DB: d, SnapshotDir: o.snapshots}, ws, origins...)
+		handler = api.New(&core.Store{DB: d, SnapshotDir: o.snapshots}, origins...)
 		c = client.InProcess(handler, o.source)
 	}
 
@@ -445,11 +384,15 @@ func runContext(ctx context.Context, o opts) error {
 		return doActionContext(ctx, o, c, "rename", map[string]string{"id": args[0], "title": args[1]})
 	case "file":
 		return keepFileContext(ctx, o, c, args)
-	case "import":
-		if len(args) > 0 && args[0] == "run" {
-			return importRunContext(ctx, o, c, ws)
+	case "readings":
+		if len(args) != 2 {
+			return errors.New("readings PAGE METRIC [--column NAME]")
 		}
-		return importCommandContext(ctx, o, c, args)
+		vals := map[string]string{"page": args[0], "metric": args[1]}
+		if o.column != "" {
+			vals["column"] = o.column
+		}
+		return doActionContext(ctx, o, c, "readings-from-table", vals)
 	}
 	return fmt.Errorf("unknown command %q (lifelog help)", cmd)
 }
@@ -957,155 +900,3 @@ func human(e *api.Entity) {
 }
 
 func indent(s string) string { return "    " + strings.ReplaceAll(s, "\n", "\n    ") }
-
-// importOwner runs the import steps that need no running API: setup makes the trial database, approve is the
-// owner's stamp and is never reachable by the API or a model.
-func importOwner(o opts, ws *importer.Workspace, args []string) error {
-	if ws == nil {
-		return errors.New("import needs --workspace <source>.lifelog")
-	}
-	switch args[0] {
-	case "setup":
-		what, err := ws.Setup(o.from)
-		if err != nil {
-			return err
-		}
-		fmt.Printf("trial.db %s: %s\n", what, ws.TrialDB())
-		d, err := db.Open(ws.TrialDB())
-		if err != nil {
-			return err
-		}
-		defer d.Close()
-		res, err := (&core.Store{DB: d}).Integrity(context.Background())
-		if err != nil {
-			return err
-		}
-		if !res.OK {
-			if err := printJSON(res); err != nil {
-				return err
-			}
-			return fmt.Errorf("%s failed trial integrity: the trial is kept for diagnosis", ws.TrialDB())
-		}
-		fmt.Println("integrity: ok")
-		return nil
-	case "approve":
-		if len(args) != 2 || (args[1] != "rules" && args[1] != "metrics" && args[1] != "entities" && args[1] != "prepared" && args[1] != "selected-photo") {
-			return errors.New("import approve rules|metrics|entities|prepared|selected-photo")
-		}
-		if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
-			return errors.New("approve runs only at an interactive terminal: the owner approves, never a script or a model")
-		}
-		file := args[1] + ".md"
-		rv, err := ws.Review(file)
-		if err != nil {
-			return err
-		}
-		switch {
-		case rv.Since == "":
-			fmt.Printf("%s, the whole text (no earlier approval to compare with):\n\n%s\n---\n", file, rv.Text)
-		case rv.Text == "":
-			fmt.Printf("%s: no line changed since your approval of %s.\n---\n", file, rv.Since)
-		default:
-			fmt.Printf("%s: the lines changed since your approval of %s (- as you approved it, + now; line numbers of the file):\n\n%s\n---\n", file, rv.Since, rv.Text)
-		}
-		fmt.Printf("Type approve to stamp %s as yours: ", file)
-		var answer string
-		fmt.Scanln(&answer)
-		if answer != "approve" {
-			return errors.New("not approved")
-		}
-		if err := ws.Approve(file, time.Now(), rv.Hash); err != nil {
-			return err
-		}
-		fmt.Println(file, "approved")
-		return nil
-	}
-	return nil
-}
-
-func importTakeoutContext(ctx context.Context, _ opts, args []string) error {
-	if len(args) == 2 && args[0] == "inventory" {
-		report, err := takeout.InventoryContext(ctx, args[1])
-		if err != nil {
-			return err
-		}
-		return printJSON(report)
-	}
-	return errors.New("import takeout inventory FOLDER")
-}
-
-// importCommandContext provides import shortcuts; every other operation is `lifelog do <name> field=value`.
-func importCommandContext(ctx context.Context, o opts, c *client.Client, args []string) error {
-	if len(args) == 0 {
-		args = []string{"status"}
-	}
-	switch args[0] {
-	case "status":
-		return show(o)(c.GetContext(ctx, "/import"))
-	case "check", "apply":
-		if len(args) != 2 {
-			return fmt.Errorf("import %s FILE", args[0])
-		}
-		return doActionContext(ctx, o, c, args[0]+"-facts", map[string]string{"file": args[1]})
-	case "replay":
-		if o.to == "" {
-			return errors.New("import replay --to PATH [--dry-run]")
-		}
-		if !o.dryRun {
-			return doActionContext(ctx, o, c, "replay", map[string]string{"to": o.to})
-		}
-		e, err := doContext(ctx, c, "replay", map[string]string{"to": o.to, "dry_run": "1"})
-		if err := show(o)(e, err); err != nil {
-			return err
-		}
-		if p, ok := e.Properties.(map[string]any); ok {
-			if fs, _ := p["failures"].([]any); len(fs) > 0 {
-				return fmt.Errorf("the rehearsal found %d failures; nothing was written to %s", len(fs), o.to)
-			}
-		}
-		return nil
-	}
-	return fmt.Errorf("unknown import step %q (lifelog help)", args[0])
-}
-
-// importRunContext is `lifelog import run` (plan 088): the facts pass with a model on this machine. It is a command
-// of the owner at a terminal, not an action of the catalog, because it decides where a source's text goes.
-func importRunContext(ctx context.Context, o opts, c *client.Client, ws *importer.Workspace) error {
-	if ws == nil {
-		return errors.New("import run needs --workspace <source>.lifelog")
-	}
-	if o.url != "" {
-		return errors.New("import run reads this machine's workspace and source: drop --url")
-	}
-	opt := importrun.Options{Out: os.Stdout}
-	for _, n := range []struct {
-		flag, val string
-		to        *int
-	}{{"--max", o.maxFiles, &opt.Max}, {"--max-tokens", o.maxTokens, &opt.MaxTokens}} {
-		if n.val == "" {
-			continue
-		}
-		v, err := strconv.Atoi(n.val)
-		if err != nil || v < 1 {
-			return fmt.Errorf("%s needs a whole number above 0", n.flag)
-		}
-		*n.to = v
-	}
-	if o.files != "" {
-		for _, f := range strings.Split(o.files, ",") {
-			if f = strings.TrimSpace(f); f != "" {
-				opt.Files = append(opt.Files, f)
-			}
-		}
-	}
-	modelURL := o.modelURL
-	if modelURL == "" {
-		modelURL = "http://127.0.0.1:8080/v1"
-	}
-	model, err := importrun.NewLocal(ctx, modelURL, o.model)
-	if err != nil {
-		return err
-	}
-	_, err = importrun.Run(ctx, c, ws, model, opt)
-	return err
-}

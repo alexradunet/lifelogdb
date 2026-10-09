@@ -8,7 +8,7 @@
 - **Date / baseline:** 2026-10-09, `2a5fcc0` (master).
 - **Priority:** P1. **Effort:** L. **Risk:** MEDIUM: a large removal of working, tested code; LOW for the schema
   (one `lifelog_meta` text; no table or column).
-- **Status:** PROPOSED.
+- **Status:** DONE.
 - **Resolves:** issue [0058](../issues/0058-the-import-machine-outweighs-the-backfill.md); RFC
   [0011](../rfcs/0011-no-import-process.md), option C. It replaces the commands of plans 083–088.
 

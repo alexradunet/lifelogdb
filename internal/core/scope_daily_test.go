@@ -38,7 +38,7 @@ func TestDailyHabitAndMoodRemainIndependentOfSessionFacts(t *testing.T) {
 	}
 	assertHabit("not recorded", 0, 0, 1)
 	zero := 0.0
-	corrected, _, err := s.Correct(ctx, "cli", scoped, &zero)
+	corrected, err := s.Correct(ctx, "cli", scoped, &zero)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func TestDailyHabitAndMoodRemainIndependentOfSessionFacts(t *testing.T) {
 	}
 	assertHabit("not done", 0, 1, 0)
 	one := 1.0
-	if _, _, err := s.Correct(ctx, "cli", moved.ReplacementID, &one); err != nil {
+	if _, err := s.Correct(ctx, "cli", moved.ReplacementID, &one); err != nil {
 		t.Fatal(err)
 	}
 	assertHabit("done", 1, 0, 0)
@@ -78,7 +78,7 @@ func TestDailyHabitAndMoodRemainIndependentOfSessionFacts(t *testing.T) {
 		t.Fatal(err)
 	}
 	bad := 6.0
-	if _, _, err := s.Correct(ctx, "cli", sessionMood, &bad); err == nil {
+	if _, err := s.Correct(ctx, "cli", sessionMood, &bad); err == nil {
 		t.Fatal("scoped correction bypassed Mood domain")
 	}
 	assertMood := func() {

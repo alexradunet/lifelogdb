@@ -32,7 +32,7 @@ func TestMCPRevisionTokenRoundTripAndStaleRefusal(t *testing.T) {
 				}
 			})
 			store := &core.Store{DB: d}
-			h := api.New(store, nil)
+			h := api.New(store)
 			c := client.InProcess(h, "agent:test")
 			if remote {
 				server := httptest.NewServer(h)

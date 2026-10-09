@@ -19,11 +19,11 @@
   freeze: `entities.body`, the one large text, is the last column, so that reading `deleted_at` or `entity_type`
   does not walk the overflow pages of a long body (the preview of `files` is last for the same reason). A column
   added after the freeze follows the body.
-- **The freeze.** The freeze is the first write to the canonical `life.db` of a row that cannot be replayed from an
-  import workspace: a capture, a correction, a tombstone that no rejected name of a workspace carries, anything typed
-  into the file. Before it, a file holding only
-  replayable imports is rebuilt (a new `schema.sql`, then a *replay*, [importing with a model](../guides/importing.md))
-  instead of migrated. At the freeze, the commit of `schema.sql` that made the file is recorded in the status line of
+- **The freeze.** The freeze is the first write to the canonical `life.db` that the owner keeps and that a rebuild
+  would lose: a row that no program can write again from its source. A capture, a correction, a tombstone, anything
+  typed into the file, and an import made by hand or with an agent in a conversation are such writes. Before it, a
+  file holding only what programs can write again is rebuilt (a new `schema.sql`, then the imports run again,
+  [imports](../contract/imports.md)) instead of migrated. At the freeze, the commit of `schema.sql` that made the file is recorded in the status line of
   [the docs index](../README.md). After it every change is a numbered migration under `db/migrations/`, starting at
   `0002_`, run on a copy first (below); `schema.sql` never changes without one.
 - **One full DDL after the freeze.** `schema.sql` stays the full current DDL: each migration also edits `schema.sql` in
@@ -42,8 +42,8 @@
 - **Down-migrations** are rejected as a category. A migration runs on a *copy* first (`VACUUM INTO`,
   as for an importer, [imports](../contract/imports.md)) and the four checks of [integrity checks](../contract/integrity-checks.md) must pass on the copy before it touches
   `life.db`.
-- **Alternatives.** *Freeze at the first import* — rejected: an import alone is replayable, so freezing then would lock
-  in a schema that no unreplayable data depends on yet. *Freeze `schema.sql` as `0001_init.sql` and make a new file by
+- **Alternatives.** *Freeze at the first import* — rejected: an import that a program can run again leaves the file
+  rebuildable, so freezing then would lock in a schema that no data depends on yet. *Freeze `schema.sql` as `0001_init.sql` and make a new file by
   replaying every migration on it* — rejected: today's schema would exist only as the sum of the files, so no single
   file would show it, and the comments inside its `CREATE` statements would keep the frozen text.
 - **Sources.** [R1](../research/references.md#r1)[R20](../research/references.md#r20)[R21](../research/references.md#r21)[R22](../research/references.md#r22)[R55](../research/references.md#r55).

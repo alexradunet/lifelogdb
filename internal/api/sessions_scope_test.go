@@ -29,7 +29,7 @@ func TestSessionAndScopeTransportParity(t *testing.T) {
 				}
 			})
 			s := &core.Store{DB: d}
-			h := api.New(s, nil)
+			h := api.New(s)
 			c := client.InProcess(h, "cli")
 			agent := client.InProcess(h, "agent:test")
 			if remote {

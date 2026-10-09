@@ -26,7 +26,7 @@ func TestSnapshotIsTheOwnersFromAnySurface(t *testing.T) {
 	}
 	t.Cleanup(func() { d.Close() })
 	dir := t.TempDir()
-	h := api.New(&core.Store{DB: d, SnapshotDir: dir}, nil)
+	h := api.New(&core.Store{DB: d, SnapshotDir: dir})
 	owner := client.InProcess(h, "cli")
 	agent := client.InProcess(h, "agent:lmstudio")
 	root := must(owner.Get("/"))

@@ -1,11 +1,16 @@
 # Imports
 
 **Imports** — the path for data that already exists elsewhere (a journal archive, a health export,
-lab results). Every step was executed on 1 000 synthetic rows:
+lab results). An importer is a program, or an agent working with the owner in a conversation; either one writes
+through the writer's operations (an agent through its tools, [D14](../decisions/D14-ui-and-tools.md)), never around
+them. The steps below are for a program that loads rows itself; every step was executed on 1 000 synthetic rows:
 
-1. **Trial run first.** Rows are never deleted, so a bad import can only be retracted row by row
-   (a NULL-value correction for a measurement, a tombstone for an entity). Do the
-   first run of any new importer on a *copy*: `sqlite3 -readonly -cmd "PRAGMA trusted_schema=OFF" life.db "VACUUM INTO '/tmp/trial.db'"` — a read-only connection may make the copy (*executed*).
+1. **A snapshot first.** Rows are never deleted, so a bad import is undone by restoring the copy taken before
+   it; otherwise it can only be retracted row by row (a NULL-value correction for a measurement, a tombstone for an
+   entity). Take the copy before every import, and run a new importer's first run on such a copy instead of
+   `life.db`: `sqlite3 -readonly -cmd "PRAGMA trusted_schema=OFF" life.db "VACUUM INTO '/tmp/trial.db'"` — a
+   read-only connection may make the copy (*executed*). A writer's snapshot ([take a snapshot](../cookbook/take-a-snapshot.md))
+   is the same copy with its restore check.
 2. **Load the rows into a scratch database, never into `life.db`** (`sqlite3 scratch.db ".import
    --csv weights.csv staging"`), then insert in one `BEGIN IMMEDIATE` transaction per batch, on the writer's own connection set up as [connection setup](connections.md) requires (the `sqlite3` shell sets none of it: `foreign_keys` is off there):
 
@@ -67,10 +72,11 @@ DETACH s;
 5. **Check afterwards:** the four checks of [integrity checks](integrity-checks.md), per-source counts (`SELECT source, count(*),
    min(day), max(day) FROM measurements GROUP BY source`), and **run the importer a second time — it
    must insert nothing.**
-6. **Before the freeze**, validate a real export with steps 1–5 and retain its replayable import workspace.
-   A canonical file that holds only replayable imports can still be rebuilt ([D13](../decisions/D13-migrations-and-freeze.md)).
-   The [docs index](../README.md) records the current freeze/import status; the
-   [freeze checklist](../process.md#before-the-freeze) governs the first unreplayable write.
+6. **Before the freeze**, a file is rebuilt from its sources: a new `schema.sql`, then the imports run again
+   ([D13](../decisions/D13-migrations-and-freeze.md)). An import that the owner makes by hand or with an agent, in a
+   conversation, cannot be run again by a program, so the freeze comes before the first such import the owner keeps.
+   The [docs index](../README.md) records the current freeze status; the
+   [freeze checklist](../process.md#before-the-freeze) governs the first write that a rebuild would lose.
 
 ## Explicit planning imports
 
@@ -78,5 +84,5 @@ A source's prose, goals and checkboxes remain prose unless the owner explicitly 
 ([D23](../decisions/D23-no-tasks.md)). The [planning writer operations](planning.md) govern creation and replay:
 source/import keys and task/occurrence keys must bind to the same identity, and an existing occurrence retains its
 edits and tombstone. Imported completion evidence is distinct from write time; unknown completion time stays NULL.
-The [model facts-file workflow](../guides/importing.md) does not provide task writes. A planning importer must use
-the task contract deliberately rather than interpreting an unsupported facts kind as permission to create work.
+A planning importer, a program or an agent, uses the task contract deliberately, on the owner's word, and never reads
+a checkbox in a note as permission to create work.

@@ -36,7 +36,7 @@ func TestRevisionTokenParity(t *testing.T) {
 					}
 				})
 				store := &core.Store{DB: d}
-				h := api.New(store, nil)
+				h := api.New(store)
 				c := client.InProcess(h, source)
 				if remote {
 					server := httptest.NewServer(h)
@@ -141,7 +141,7 @@ func TestBrowserFormCarriesRevisionAndRefusesOldClockToken(t *testing.T) {
 		}
 	})
 	store := &core.Store{DB: d}
-	h := api.New(store, nil)
+	h := api.New(store)
 	id, _, err := store.CreatePage(context.Background(), "cli", "Browser version", "first")
 	if err != nil {
 		t.Fatal(err)

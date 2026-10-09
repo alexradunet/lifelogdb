@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -19,7 +18,6 @@ import (
 	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db"
-	"lifelog/internal/importer"
 )
 
 func TestValidateToolNamesRejectsNormalizedDuplicates(t *testing.T) {
@@ -44,7 +42,9 @@ func TestValidateToolNamesRejectsNormalizedDuplicates(t *testing.T) {
 	}
 }
 
-func TestFindToolsWithWorkspace(t *testing.T) {
+// The find tools and readings_from_table, the tool an agent uses during an import (docs/plans/089-no-import-process.md),
+// are MCP tools; the owner-only actions are not.
+func TestFindAndReadingsTools(t *testing.T) {
 	c := mcpTestClient(t)
 	srv, err := New(c, "test")
 	if err != nil {
@@ -83,7 +83,7 @@ func TestFindToolsWithWorkspace(t *testing.T) {
 		}
 		seen[tool.Name] = true
 	}
-	for _, name := range []string{"find", "import_find", "get", "get_day"} {
+	for _, name := range []string{"find", "get", "get_day", "readings_from_table"} {
 		if !seen[name] {
 			t.Fatalf("MCP tools lack %q; have %v", name, seen)
 		}
@@ -98,9 +98,11 @@ func TestFindToolsWithWorkspace(t *testing.T) {
 	if page.Title != "Ana" || href(page, "self") == "" {
 		t.Fatalf("find returned %+v", page)
 	}
-	matches := callTool(t, ctx, session, "import_find", map[string]any{"text": "Ana"})
-	if matches.Title != "Find Ana" || href(matches, "self") != "/import/find?text=Ana" {
-		t.Fatalf("import_find returned %+v", matches)
+	callTool(t, ctx, session, "create_page", map[string]any{"title": "Weighings", "body": "| day | weight (kg) |\n|---|---|\n| 2031-01-01 | 70.5 |\n"})
+	readings := callTool(t, ctx, session, "readings_from_table", map[string]any{"page": "Weighings", "metric": "weight"})
+	result, _ := readings.Result.(map[string]any)
+	if readings.Title != "Readings from Weighings" || fmt.Sprint(result["written"]) != "1" {
+		t.Fatalf("readings_from_table returned %+v", readings)
 	}
 }
 
@@ -115,15 +117,7 @@ func mcpTestClient(t *testing.T) *client.Client {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { d.Close() })
-	root := t.TempDir()
-	if err := os.Mkdir(filepath.Join(root, "Notebook"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	ws, err := importer.Open(filepath.Join(root, "Notebook.lifelog"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	handler := api.New(&core.Store{DB: d}, ws)
+	handler := api.New(&core.Store{DB: d})
 	owner := client.InProcess(handler, "cli")
 	for _, fields := range []map[string]string{{"name": "walk"}, {"name": "weight", "unit": "kg"}} {
 		must(owner.Do(actionByName(t, must(owner.Get("/")), "register-metric"), fields))

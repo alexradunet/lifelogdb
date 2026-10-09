@@ -36,7 +36,7 @@ func TestMCPStableNames(t *testing.T) {
 					}
 				})
 				s := &core.Store{DB: d}
-				h := api.New(s, nil)
+				h := api.New(s)
 				c := client.InProcess(h, "agent:names")
 				if remote {
 					server := httptest.NewServer(h)

@@ -146,7 +146,7 @@ func testQueuedWrite(t *testing.T, remote bool) {
 	released := false
 
 	entered := make(chan struct{})
-	h := api.New(&core.Store{DB: d}, nil)
+	h := api.New(&core.Store{DB: d})
 	completed := make(chan struct{})
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		close(entered)

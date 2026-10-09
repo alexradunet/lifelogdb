@@ -11,7 +11,7 @@ import (
 // have, and it is what a browser draws from — never an action's name read by a template.
 func TestDangerIsACatalogAction(t *testing.T) {
 	known := map[string]bool{}
-	for _, s := range append(append([]spec{}, catalog...), importCatalog...) {
+	for _, s := range catalog {
 		known[s.Name] = true
 	}
 	for name := range dangerous {

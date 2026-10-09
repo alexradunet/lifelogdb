@@ -1,6 +1,6 @@
 # Lifelog — database architecture
 
-**Status:** freeze candidate. The canonical `life.db` exists and holds only imports, every row replayable from its import workspace; until a row that cannot be replayed is written — the freeze — [schema.sql](schema/schema.sql) is edited in place, and the canonical file is rebuilt (a fresh file from `schema.sql`, then a *replay*) rather than migrated ([D13](decisions/D13-migrations-and-freeze.md)). The 2026-10 trial import (a real vault, into a copy — [imports](contract/imports.md)) has already taught [D5](decisions/D05-pages-and-day-pages.md), [D22](decisions/D22-events.md), [D23](decisions/D23-no-tasks.md) and [D24](decisions/D24-habits.md); the next steps are the capture path and the rest of the imports, not another review. The checklist before the freeze: [process](process.md#before-the-freeze).
+**Status:** freeze candidate. Until the first kept write that a rebuild would lose — the freeze — [schema.sql](schema/schema.sql) is edited in place, and the canonical file is rebuilt (a fresh file from `schema.sql`, then the imports run again) rather than migrated ([D13](decisions/D13-migrations-and-freeze.md)). The 2026-10 imports of a real notes folder have already taught [D5](decisions/D05-pages-and-day-pages.md), [D22](decisions/D22-events.md), [D23](decisions/D23-no-tasks.md) and [D24](decisions/D24-habits.md); the owner's import with an agent comes after the freeze ([imports](contract/imports.md)). The checklist before the freeze: [process](process.md#before-the-freeze).
 
 **Scope of the project:** A lifetime personal database — a life log and its backup, with explicit personal
 planning ([D23](decisions/D23-no-tasks.md)): a journal of day pages, notes and wiki pages, people, places,
@@ -51,7 +51,6 @@ connection settings, imports) are in the [storage contract](contract/README.md);
 **Guides** — for people building on the schema.
 
 - [Building a writer](guides/building-a-writer.md)
-- [Importing with a model](guides/importing.md)
 
 **Research** — the evidence behind the decisions.
 

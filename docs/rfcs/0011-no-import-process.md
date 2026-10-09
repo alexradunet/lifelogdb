@@ -1,7 +1,7 @@
 # 0011 — No import process: the owner imports with an agent, through the catalog
 
 - **Date:** 2026-10-09
-- **Status:** draft
+- **Status:** accepted
 - **Answers:** [0058](../issues/0058-the-import-machine-outweighs-the-backfill.md)
 
 ## Problem
@@ -62,4 +62,7 @@ guide. No new SQLite behaviour is claimed.
 
 ## Outcome
 
-Filled in when it closes.
+Accepted 2026-10-09: option C, as the owner decided. Implemented by [plan 089](../plans/089-no-import-process.md).
+It rewrites [D13](../decisions/D13-migrations-and-freeze.md) (the freeze) and [D11](../decisions/D11-tombstones.md)
+(what an import revives) in place, with the `lifelog_meta.evolution` row and [imports](../contract/imports.md); it
+replaces the commands of RFC [0010](0010-the-writer-drives-a-local-model.md) and of plans 083–088.

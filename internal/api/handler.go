@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"lifelog/internal/core"
-	"lifelog/internal/importer"
 )
 
 // SourceHeader names the writer of a request's rows (lifelog_meta.source). Without it a browser form writes as
@@ -24,16 +23,14 @@ const SourceHeader = "Lifelog-Source"
 
 type server struct {
 	s        *core.Store
-	ws       *importer.Workspace // nil unless started with --workspace
 	feedback feedbackStore
 }
 
 // New returns the whole API as one handler: lifelog serve mounts it on a socket, the CLI and the MCP server
-// call it in-process. With an import workspace the /import routes are mounted too. trustedOrigins are the
-// browser origins a public listener allows to write (docs/plans/078-network-server.md); a local listener and the
-// in-process client pass none.
-func New(s *core.Store, ws *importer.Workspace, trustedOrigins ...string) http.Handler {
-	h := &server{s: s, ws: ws}
+// call it in-process. trustedOrigins are the browser origins a public listener allows to write
+// (docs/plans/078-network-server.md); a local listener and the in-process client pass none.
+func New(s *core.Store, trustedOrigins ...string) http.Handler {
+	h := &server{s: s}
 	m := http.NewServeMux()
 	get := func(p string, f func(*http.Request) (*Entity, error)) { m.HandleFunc("GET "+p, h.serve(f)) }
 	post := func(p string, f func(*http.Request, string) (*Entity, error)) {
@@ -93,6 +90,7 @@ func New(s *core.Store, ws *importer.Workspace, trustedOrigins ...string) http.H
 	post("/pages/{id}/links", h.link)
 	post("/pages/{id}/unlink", h.unlink)
 	post("/measurements", h.record)
+	post("/measurements/from-table", h.readingsFromTable)
 	post("/measurements/{id}/correct", h.correct)
 	post("/measurements/{id}/retract", h.retract)
 	post("/query", h.query)
@@ -118,9 +116,6 @@ func New(s *core.Store, ws *importer.Workspace, trustedOrigins ...string) http.H
 	post("/tasks/{id}/occurrences/{key}/edit", h.editOccurrence)
 	post("/tasks/{id}/occurrences/{key}/tombstone", h.occurrenceLifecycle(true))
 	post("/tasks/{id}/occurrences/{key}/revive", h.occurrenceLifecycle(false))
-	if ws != nil {
-		h.mountImport(get, post)
-	}
 	guard := http.NewCrossOriginProtection()
 	for _, origin := range trustedOrigins {
 		if err := guard.AddTrustedOrigin(origin); err != nil {
@@ -428,12 +423,7 @@ func (h *server) root(r *http.Request) (*Entity, error) {
 
 func (h *server) actions(*http.Request) (*Entity, error) {
 	e := &Entity{Class: []string{"actions"}, Title: "Actions", Links: []Link{link("self", "/actions", "Actions"), link("index", "/", "Home")}}
-	specs := catalog
-	if h.ws != nil {
-		specs = append(append([]spec{}, catalog...), importCatalog...)
-		e.Links = append(e.Links, link("import", "/import", "Import status"))
-	}
-	for _, s := range specs {
+	for _, s := range catalog {
 		e.Actions = append(e.Actions, templated(s))
 	}
 	return e, nil
@@ -563,6 +553,9 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 	if len(kinds) > 0 {
 		e.Actions = append(e.Actions, withOptions(action("link", ids, nil), "kind", kinds))
 		e.Actions = append(e.Actions, withOptions(action("unlink", ids, nil), "kind", kinds))
+	}
+	if core.HasTable(p.Body) {
+		e.Actions = append(e.Actions, action("readings-from-table", nil, map[string]any{"page": p.Title}))
 	}
 	e.Actions = append(e.Actions, action("tombstone", ids, nil))
 	return e, nil
@@ -1009,6 +1002,25 @@ func (h *server) unlink(r *http.Request, src string) (*Entity, error) {
 		return nil, err
 	}
 	return h.pageEntity(r.Context(), from)
+}
+
+// readingsFromTable is readings-from-table: the readings a page's table gives, under the fixed source of
+// core.TableSource, so a run from any surface finds what an earlier one wrote. The answer returns to the page.
+func (h *server) readingsFromTable(r *http.Request, _ string) (*Entity, error) {
+	v, err := form(r)
+	if err != nil {
+		return nil, err
+	}
+	if err := required(v, "page", "metric"); err != nil {
+		return nil, err
+	}
+	res, err := h.s.ReadingsFromTable(r.Context(), v.Get("page"), v.Get("metric"), v.Get("column"))
+	if err != nil {
+		return nil, err
+	}
+	self := pageHref(res.PageID)
+	return &Entity{Class: []string{"readings-from-table"}, Title: "Readings from " + res.Page, Properties: res, Result: res,
+		Links: []Link{link("self", self, res.Page), link("metric", "/metrics/"+url.PathEscape(res.Metric), res.Metric), link("index", "/", "Home")}}, nil
 }
 
 func (h *server) record(r *http.Request, src string) (*Entity, error) {

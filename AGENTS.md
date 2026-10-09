@@ -30,7 +30,7 @@ language-neutral, so a rule lives in the docs and the Go code cites it.
 |---|---|---|
 | `docs/schema/schema.sql` | the one canonical DDL | real use (below) |
 | `docs/architecture/`, `docs/contract/`, `docs/decisions/`, `docs/cookbook/`, `docs/research/` | the contract around it: why, what the DDL cannot hold, the SQL in use, the evidence | real use |
-| `docs/guides/` | for people building on the schema: [building a writer](docs/guides/building-a-writer.md), [importing with a model](docs/guides/importing.md) | the contract |
+| `docs/guides/` | for people building on the schema: [building a writer](docs/guides/building-a-writer.md) | the contract |
 | `docs/issues/`, `docs/rfcs/`, `docs/plans/` | the process records: incidents, proposals, execution plans ([how a change happens](docs/process.md)) | — |
 | `tests/` | the validation suites (Go tests): every *executed* claim of the docs, run against the DDL in `docs/` and through the writer's own extraction and save | the docs |
 | `cmd/`, `internal/`, `tools/`, `go.mod` | the product: `lifelog` (Go) — hypermedia API, CLI, MCP server ([README](README.md)) | the docs |
@@ -138,8 +138,7 @@ schema is frozen ([D13](docs/decisions/D13-migrations-and-freeze.md)):
   without further work; a shortcut on one surface (`lifelog capture`, a dedicated HTML view) wraps an action, never
   replaces or extends it. A feature that exists on one surface only is a defect, not a convenience. The only
   differences allowed are the ones the README names and tests assert: owner-only actions (`register-metric`,
-  `replay`, `snapshot`) are refused to an `agent:*` writer and are never MCP tools, and the owner's approval stamp
-  is given at an interactive terminal.
+  `relocate-reading`, `snapshot`) are refused to an `agent:*` writer and are never MCP tools.
 - **Contexts and ownership.** Pass the operation's `context.Context` explicitly, first, through blocking calls and SQL.
   Do not replace a request context with `Background` to evade cancellation, or use context values as dependency bags.
   Prefer synchronous APIs. Every goroutine needs an owner, bounded work, a shutdown path and a way to await completion;
@@ -233,14 +232,14 @@ or a promise of performance. Generate from scratch, never from private exports o
 ## Performance evidence, not speculative optimization
 
 - Measure important workflows at small and lifetime sizes: capture/save, day view, search/backlinks, historical
-  measurements, import/replay and snapshot/restore. Check correctness as well as cost. Establish reproducible baselines
+  measurements, imports and snapshot/restore. Check correctness as well as cost. Establish reproducible baselines
   before adding caches, indexes or concurrency; contract/schema changes still need the normal evidence and approval.
 - Keep fixture construction and correctness-oracle work outside timed query operations. Prefer `for b.Loop()` for new
   Go benchmarks; report allocations. Fully consume results and check errors. Define whether preparation, commit,
   decoding or preview creation is included. Reset mutable state outside timing or measure an explicitly bounded growth
   trace; repeated iterations must not silently turn writes into no-ops or change the workload.
-- Compare repeated samples with `benchstat`, not one run; profile with `pprof` before optimizing. An existing benchmark:
-  `go test ./internal/importer -run '^$' -bench '^BenchmarkResolveReadingKeys$' -benchmem -count=10`.
+- Compare repeated samples with `benchstat`, not one run; profile with `pprof` before optimizing. Every benchmark runs
+  with `go test ./... -run '^$' -bench . -benchmem -count=10`; none exists today (the import's went with it, plan 089).
 - Record scenario/seed, revision, Go and SQLite/driver versions, OS, hardware/storage, connection/maintenance settings
   and cache conditions. Report latency, allocations, import throughput and storage (database, WAL/SHM and relevant
   temporary files). Go allocation counts are not total process memory. Label warm versus fresh-process runs; do not
@@ -320,8 +319,8 @@ Their homes are in `docs/`; this list is the checklist, not the rule.
   [save a body](docs/cookbook/save-a-body.md), including reference resolution, target savepoints, set equality,
   invalid targets, tags and ordinary REDIRECT prose. Keep the contract's vectors as their sole specification.
 - **Integrity**: the four [integrity checks](docs/contract/integrity-checks.md).
-- **Privacy**: `life.db` with its `-wal`/`-shm`, and every snapshot of it, never in git (health data, private notes and pictures cannot be scrubbed from history; `.gitignore` covers `*.db`, `*.db-journal`, `/import/`
-  and an import workspace `*.lifelog/`). Never commit a real vault, real notes or real data as a fixture:
+- **Privacy**: `life.db` with its `-wal`/`-shm`, and every snapshot of it, never in git (health data, private notes and pictures cannot be scrubbed from history; `.gitignore` covers `*.db`, `*.db-journal`
+  and `/import/`). Never commit a real vault, real notes or real data as a fixture:
   tests use synthetic data only.
 
 ## Empiricism over intuition

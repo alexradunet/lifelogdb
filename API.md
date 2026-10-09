@@ -141,8 +141,8 @@ The **reading** shape (`readings[]` here and in a series; a measurement's own pr
 tombstoned page adds `deleted`. Links: `day` (a day page's day view), `preview` (a file's picture), `map` (a place's
 point). Embedded: every outgoing link under its kind, every incoming one under `backlink` and its kind. Actions by
 what is legal: `save-body` (with the current `body` and `version` filled), `promote`, `promote-period`, `rename`,
-`edit-period`, `locate`, `link` and `unlink` (with the kinds this type may start), `tombstone`, or `revive` alone on
-a deleted page. The writes answer with this entity; `create-page` and `save-body` carry a `result` of the sync shape,
+`edit-period`, `locate`, `link` and `unlink` (with the kinds this type may start), `readings-from-table` (when the
+body holds a table, with `page` filled), `tombstone`, or `revive` alone on a deleted page. The writes answer with this entity; `create-page` and `save-body` carry a `result` of the sync shape,
 `add-file` the kept shape.
 
 | property | type | meaning |
@@ -608,12 +608,6 @@ cookie and redirects home; `POST /logout` clears it.
 | `failed` | boolean | the last attempt was refused |
 | `logged_in` | boolean | this browser already carries the cookie |
 
-### import, …
-
-With `--workspace`, the `/import` routes answer with class `import` and a second word (`status`, `ledger`,
-`questions`, `find`, …). They are the model's surface during an import and are described by
-[importing with a model](docs/guides/importing.md), not here.
-
 ## Result shapes
 
 ### result of capture, create-page, save-body
@@ -663,3 +657,24 @@ What the save contract did with the body's `[[wikilinks]]` and `#tags`:
 |---|---|---|
 | `retraction_id` | integer | the retraction written for the old scope |
 | `replacement_id` | integer | the independent replacement reading |
+
+### readings-from-table
+
+`POST /measurements/from-table` (`page`, `metric`, optional `column`): the readings a page's table gives, written
+under the source `import:table`. The answer has class `readings-from-table`, links `self` (the page) and `metric`, and
+this shape as its properties and its `result`:
+
+| property | type | meaning |
+|---|---|---|
+| `page_id` | integer | the page read |
+| `page` | string | its title |
+| `metric` | string | the metric named |
+| `unit` | string | the metric's unit, which every row had to state |
+| `column` | string | the header of the value column read |
+| `written` | integer | readings written now |
+| `existing` | integer | readings an earlier run wrote |
+| `reported[]` | list | the rows that gave no reading |
+| `reported[].row` | integer | the row, 1 under the header |
+| `reported[].day` | string | its day cell, when it has one |
+| `reported[].cell` | string | its value cell |
+| `reported[].reason` | string | why it gave no reading |

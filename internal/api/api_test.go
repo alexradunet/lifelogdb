@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -16,7 +15,6 @@ import (
 	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db"
-	"lifelog/internal/importer"
 )
 
 func fresh(t *testing.T) (*client.Client, http.Handler) {
@@ -30,7 +28,7 @@ func fresh(t *testing.T) (*client.Client, http.Handler) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { d.Close() })
-	h := api.New(&core.Store{DB: d}, nil)
+	h := api.New(&core.Store{DB: d})
 	return client.InProcess(h, "cli"), h
 }
 
@@ -51,68 +49,30 @@ func find(e *api.Entity, name string) api.Action {
 	return api.Action{}
 }
 
-func freshWorkspace(t *testing.T) (*client.Client, http.Handler) {
-	t.Helper()
-	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(p); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { d.Close() })
-	root := t.TempDir()
-	if err := os.Mkdir(filepath.Join(root, "Notebook"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	ws, err := importer.Open(filepath.Join(root, "Notebook.lifelog"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	h := api.New(&core.Store{DB: d}, ws)
-	return client.InProcess(h, "cli"), h
-}
-
 func TestCatalogNamesAreUnique(t *testing.T) {
-	for _, tc := range []struct {
-		name      string
-		client    func(*testing.T) *client.Client
-		workspace bool
-	}{
-		{"ordinary", func(t *testing.T) *client.Client { c, _ := fresh(t); return c }, false},
-		{"workspace", func(t *testing.T) *client.Client { c, _ := freshWorkspace(t); return c }, true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			actions, err := tc.client(t).Catalog()
-			if err != nil {
-				t.Fatal(err)
-			}
-			seen, normalized := map[string]api.Action{}, map[string]api.Action{}
-			for _, a := range actions {
-				if prev, ok := seen[a.Name]; ok {
-					t.Errorf("catalog action name %q is used by both %s and %s", a.Name, prev.Href, a.Href)
-				}
-				seen[a.Name] = a
-				tool := strings.ReplaceAll(a.Name, "-", "_")
-				if prev, ok := normalized[tool]; ok {
-					t.Errorf("MCP tool name %q is used by both actions %q and %q", tool, prev.Name, a.Name)
-				}
-				normalized[tool] = a
-			}
-			page := seen["find"]
-			if page.Href != "/pages" || len(page.Fields) != 1 || page.Fields[0].Name != "title" {
-				t.Errorf("page find = %+v, want /pages with title", page)
-			}
-			importFind, ok := seen["import-find"]
-			if tc.workspace {
-				if !ok || importFind.Href != "/import/find" || len(importFind.Fields) != 1 || importFind.Fields[0].Name != "text" {
-					t.Errorf("import-find = %+v, present %v; want /import/find with text", importFind, ok)
-				}
-			} else if ok {
-				t.Errorf("ordinary catalog includes workspace-only %q", importFind.Name)
-			}
-		})
+	c, _ := fresh(t)
+	actions, err := c.Catalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen, normalized := map[string]api.Action{}, map[string]api.Action{}
+	for _, a := range actions {
+		if prev, ok := seen[a.Name]; ok {
+			t.Errorf("catalog action name %q is used by both %s and %s", a.Name, prev.Href, a.Href)
+		}
+		seen[a.Name] = a
+		tool := strings.ReplaceAll(a.Name, "-", "_")
+		if prev, ok := normalized[tool]; ok {
+			t.Errorf("MCP tool name %q is used by both actions %q and %q", tool, prev.Name, a.Name)
+		}
+		normalized[tool] = a
+		if strings.HasPrefix(a.Href, "/import") {
+			t.Errorf("the import process is removed (plan 089), but the catalog has %q at %s", a.Name, a.Href)
+		}
+	}
+	page := seen["find"]
+	if page.Href != "/pages" || len(page.Fields) != 1 || page.Fields[0].Name != "title" {
+		t.Errorf("page find = %+v, want /pages with title", page)
 	}
 }
 
@@ -339,23 +299,6 @@ func TestBrowserOriginProtection(t *testing.T) {
 		t.Errorf("denied readings count = %s, want 0", got)
 	}
 
-	importHandler, target := replayFixture(t)
-	rec := func() *httptest.ResponseRecorder {
-		req := httptest.NewRequest("POST", "http://lifelog.local/import/replay", strings.NewReader(url.Values{"to": {target}}.Encode()))
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		req.Header.Set("Accept", "application/vnd.siren+json")
-		req.Header.Set("Origin", "https://evil.example")
-		req.Header.Set("Sec-Fetch-Site", "cross-site")
-		rec := httptest.NewRecorder()
-		importHandler.ServeHTTP(rec, req)
-		return rec
-	}()
-	if rec.Code != http.StatusForbidden {
-		t.Errorf("cross-site import replay got %d, want 403: %.200s", rec.Code, rec.Body.String())
-	}
-	if _, err := os.Stat(target); !os.IsNotExist(err) {
-		t.Errorf("denied import replay target exists or could not be checked: %v", err)
-	}
 }
 
 func fmtRows(e *api.Entity) string {
@@ -632,7 +575,7 @@ func TestHabitsShowInvalidCheckIns(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { d.Close() })
-	h := api.New(&core.Store{DB: d}, nil)
+	h := api.New(&core.Store{DB: d})
 	c := client.InProcess(h, "cli")
 	root := must(c.Get("/"))
 	must(c.Do(find(root, "register-metric"), map[string]string{"name": "Walk"}))

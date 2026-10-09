@@ -22,10 +22,6 @@ func TestSessionFullCalendarAndExactRevisionExhaustion(t *testing.T) {
 	if err != nil || have.ElapsedMilliseconds == nil || *have.ElapsedMilliseconds != 315569519999999 {
 		t.Fatalf("full calendar %+v %v", have, err)
 	}
-	outside, err := s.DirectAgentRows(ctx, map[int64]bool{id: true})
-	if err != nil || outside != 1 {
-		t.Fatalf("non-replayable session was suppressed by measurement-ID map: %d %v", outside, err)
-	}
 	page, err := s.PageByID(ctx, kind)
 	if err != nil || !page.SessionKind {
 		t.Fatalf("kind %+v %v", page, err)

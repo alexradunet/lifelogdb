@@ -378,10 +378,10 @@ func TestHabitReadersReportInvalidCheckIns(t *testing.T) {
 	record("2026-10-02", 1)        // a valid check-in does not hide an invalid one
 	external("2026-10-02", -1, nil)
 	one := 1.0 // a corrected invalid reading is no longer current
-	if _, _, err := s.Correct(ctx, "cli", external("2026-10-03", 2, nil), &one); err != nil {
+	if _, err := s.Correct(ctx, "cli", external("2026-10-03", 2, nil), &one); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.Correct(ctx, "cli", external("2026-10-04", 2, nil), nil); err != nil { // nor is a retracted one
+	if _, err := s.Correct(ctx, "cli", external("2026-10-04", 2, nil), nil); err != nil { // nor is a retracted one
 		t.Fatal(err)
 	}
 	external("2026-10-05", 2, session) // session-scoped facts are not daily check-ins

@@ -73,7 +73,7 @@ Create a one-off definition and its `once` occurrence in one transaction. Materi
 validates its membership and live parent, then inserts its initial open row with due day equal to the key and
 inherited reminder intent. On task/key conflict, read the existing row without resetting any field or reviving a
 tombstone. If an import key is also supplied, verify both identity bindings agree; either conflict is an error
-when it selects a different row. Import replay is not restoration.
+when it selects a different row. Running an import again is not restoration.
 
 Rescheduling preserves the original key. Reopening clears completion evidence; changing done to skipped clears
 it too. A known-done occurrence with unknown completion time remains NULL. Do not infer a completion instant from
