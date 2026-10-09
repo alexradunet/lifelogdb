@@ -4,11 +4,12 @@ An issue records an incident from real use — a failed import, a bug in the wri
 data could not answer, a rule that is ambiguous or untestable. It is the evidence a schema change needs
 ([how a change happens](../process.md)). One file per incident, named `NNNN-short-slug.md`, written from the
 [template](template.md), numbered on from the last: issues up to 0010 are closed and live in git history
-(`git log -- docs/issues`). Issues 0011–0051 are listed below; the next one is **0052**. Close an issue with its resolution and status, retaining the dated incident as
+(`git log -- docs/issues`). Issues 0011–0052 are listed below; the next one is **0053**. Close an issue with its resolution and status, retaining the dated incident as
 [the process](../process.md) requires. Earlier closed records remain available in git history.
 
 | id | title | status |
 |---|---|---|
+| [0052](0052-names-are-written-on-the-models-word.md) | People and places are written on the model's word, and each name decision closes the rules gate | proposed |
 | [0050](0050-one-doubtful-write-refuses-a-whole-file.md) | One doubtful write refuses a whole facts file, and the refusal names only the first | resolved |
 | [0051](0051-look-alikes-compare-with-every-entity-type.md) | A new name is a look-alike of a day page, a metric or a file that shares a word | resolved |
 | [0049](0049-replay-refuses-a-large-ledger.md) | A real replay refuses a source whose ledger is larger than a prepared artifact may be | resolved |
