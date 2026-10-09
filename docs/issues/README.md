@@ -9,7 +9,7 @@ data could not answer, a rule that is ambiguous or untestable. It is the evidenc
 
 | id | title | status |
 |---|---|---|
-| [0057](0057-the-import-loop-lives-outside-the-writer.md) | The import loop lives in scripts outside the writer, and it fails where no test sees it | open |
+| [0057](0057-the-import-loop-lives-outside-the-writer.md) | The import loop lives in scripts outside the writer, and it fails where no test sees it | resolved |
 | [0056](0056-proposed-names-fall-outside-the-table.md) | Proposed names fall outside the table of entities.md, and are proposed again | resolved |
 | [0055](0055-prepared-values-keep-every-decimal.md) | A prepared source writes every decimal of a value, and the owner cannot round it | resolved |
 | [0054](0054-rules-typed-twice-and-status-reads-the-ledger-per-file.md) | Skip and later rules are typed twice, and status reads the whole ledger once for each done file | resolved |

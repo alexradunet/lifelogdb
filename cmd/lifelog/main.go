@@ -17,6 +17,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 	"lifelog/internal/core"
 	"lifelog/internal/db"
 	"lifelog/internal/importer"
+	"lifelog/internal/importrun"
 	"lifelog/internal/inventory"
 	"lifelog/internal/mcp"
 	"lifelog/internal/takeout"
@@ -74,6 +76,11 @@ Import (docs/guides/importing.md), with --workspace <source>.lifelog:
   lifelog import approve rules|metrics|entities|prepared|selected-photo    the owner's stamp (an interactive terminal only)
   lifelog import status                   gates, ledger, questions, next file, what to do now
   lifelog import check FILE | apply FILE  check or apply one facts file
+  lifelog import run [--model-url URL] [--model NAME] [--max N] [--files A,B] [--max-tokens N]
+                                          the facts pass: follows status, does each step that needs no
+                                          judgement, and asks a model on this machine (default
+                                          http://127.0.0.1:8080/v1) for the facts of each file; stops for the
+                                          owner. Progress: counts and paths; details in run-refused.md
   lifelog import replay --to PATH         the real run: the whole workspace into another database,
                                           rehearsed on a copy first (nothing written unless it is clean)
   lifelog import replay --to PATH --dry-run   the rehearsal alone: every failure, nothing written
@@ -93,6 +100,7 @@ Global flags, anywhere on the line:
 type opts struct {
 	db, url, source, addr, agent, mood, day, workspace, from, to, title, text, preview, mime, at, radius string
 	tokenFile, tlsCert, tlsKey, snapshots                                                                string
+	modelURL, model, files, maxFiles, maxTokens                                                          string
 	allowOrigins                                                                                         []string
 	human, dryRun, dbExplicit, addrExplicit, public                                                      bool
 	args                                                                                                 []string
@@ -104,7 +112,8 @@ func parse(argv []string) (opts, error) {
 	vals := map[string]*string{"--db": &o.db, "--url": &o.url, "--source": &o.source, "--addr": &o.addr,
 		"--agent": &o.agent, "--mood": &o.mood, "--day": &o.day, "--workspace": &o.workspace, "--from": &o.from, "--to": &o.to,
 		"--title": &o.title, "--text": &o.text, "--preview": &o.preview, "--mime": &o.mime, "--at": &o.at, "--radius": &o.radius,
-		"--token-file": &o.tokenFile, "--tls-cert": &o.tlsCert, "--tls-key": &o.tlsKey, "--snapshots": &o.snapshots}
+		"--token-file": &o.tokenFile, "--tls-cert": &o.tlsCert, "--tls-key": &o.tlsKey, "--snapshots": &o.snapshots,
+		"--model-url": &o.modelURL, "--model": &o.model, "--files": &o.files, "--max": &o.maxFiles, "--max-tokens": &o.maxTokens}
 	for i := 0; i < len(argv); i++ {
 		a := argv[i]
 		if a == "--human" {
@@ -189,7 +198,7 @@ func commandConsumesContext(o opts) bool {
 			return true
 		}
 		switch o.args[1] {
-		case "status", "check", "apply", "replay":
+		case "status", "check", "apply", "replay", "run":
 			return true
 		case "inventory":
 			return len(o.args) == 3
@@ -437,6 +446,9 @@ func runContext(ctx context.Context, o opts) error {
 	case "file":
 		return keepFileContext(ctx, o, c, args)
 	case "import":
+		if len(args) > 0 && args[0] == "run" {
+			return importRunContext(ctx, o, c, ws)
+		}
 		return importCommandContext(ctx, o, c, args)
 	}
 	return fmt.Errorf("unknown command %q (lifelog help)", cmd)
@@ -1054,4 +1066,46 @@ func importCommandContext(ctx context.Context, o opts, c *client.Client, args []
 		return nil
 	}
 	return fmt.Errorf("unknown import step %q (lifelog help)", args[0])
+}
+
+// importRunContext is `lifelog import run` (plan 088): the facts pass with a model on this machine. It is a command
+// of the owner at a terminal, not an action of the catalog, because it decides where a source's text goes.
+func importRunContext(ctx context.Context, o opts, c *client.Client, ws *importer.Workspace) error {
+	if ws == nil {
+		return errors.New("import run needs --workspace <source>.lifelog")
+	}
+	if o.url != "" {
+		return errors.New("import run reads this machine's workspace and source: drop --url")
+	}
+	opt := importrun.Options{Out: os.Stdout}
+	for _, n := range []struct {
+		flag, val string
+		to        *int
+	}{{"--max", o.maxFiles, &opt.Max}, {"--max-tokens", o.maxTokens, &opt.MaxTokens}} {
+		if n.val == "" {
+			continue
+		}
+		v, err := strconv.Atoi(n.val)
+		if err != nil || v < 1 {
+			return fmt.Errorf("%s needs a whole number above 0", n.flag)
+		}
+		*n.to = v
+	}
+	if o.files != "" {
+		for _, f := range strings.Split(o.files, ",") {
+			if f = strings.TrimSpace(f); f != "" {
+				opt.Files = append(opt.Files, f)
+			}
+		}
+	}
+	modelURL := o.modelURL
+	if modelURL == "" {
+		modelURL = "http://127.0.0.1:8080/v1"
+	}
+	model, err := importrun.NewLocal(ctx, modelURL, o.model)
+	if err != nil {
+		return err
+	}
+	_, err = importrun.Run(ctx, c, ws, model, opt)
+	return err
 }

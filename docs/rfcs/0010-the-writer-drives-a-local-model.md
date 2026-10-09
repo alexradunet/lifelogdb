@@ -1,7 +1,7 @@
 # 0010 — The writer drives a local model for the facts pass
 
 - **Date:** 2026-10-09
-- **Status:** draft
+- **Status:** accepted
 - **Answers:** [0057](../issues/0057-the-import-loop-lives-outside-the-writer.md)
 
 ## Problem
@@ -51,4 +51,7 @@ before any request; the command is in no catalog and no MCP tool list. No SQLite
 
 ## Outcome
 
-Filled in when it closes.
+Accepted 2026-10-09: option A, as the owner decided (a driver in the writer; the model on this machine only,
+with no override). Implemented by [plan 088](../plans/088-the-writer-runs-the-facts-pass.md). No decision of `docs/decisions/`
+changes: the [non-goals](../architecture/non-goals.md) row on AI generation now says that a model reading a source
+for an import generates nothing, and the guide's "Three parties" says that a writer may drive the model itself.

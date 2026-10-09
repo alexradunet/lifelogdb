@@ -213,6 +213,28 @@ func writeJSON(p string, v any) error {
 // collapse is how quote and file are compared: NFC, runs of whitespace as one space.
 func collapse(s string) string { return strings.Join(strings.Fields(norm.NFC.String(s)), " ") }
 
+// keptQuoteIn says whether the check finds a kept_as_text quote in the collapsed source: as whole words, or in any
+// case.
+func keptQuoteIn(src, srcLower, quote string) bool {
+	q := collapse(quote)
+	return wholeIndex(src, q) >= 0 || strings.Contains(srcLower, strings.ToLower(q))
+}
+
+// KeptQuotesMissing returns the position of each quote that the check does not find in source: a kept_as_text
+// entry with words that are not the file's, which refuses the whole file. A driver of the facts pass drops those
+// entries before it writes the facts (plan 088); they write no row.
+func KeptQuotesMissing(source string, quotes []string) []int {
+	src := collapse(source)
+	lower := strings.ToLower(src)
+	var out []int
+	for i, q := range quotes {
+		if !keptQuoteIn(src, lower, q) {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
 func isWordChar(r rune) bool {
 	return unicode.IsLetter(r) || unicode.IsNumber(r) || unicode.IsMark(r) || r == '_'
 }
@@ -482,7 +504,7 @@ func (w *Workspace) checkStatic(f *Facts, source string, rules *Rules, approved 
 	for i, k := range f.KeptAsText {
 		if strings.TrimSpace(k.Quote) == "" || strings.TrimSpace(k.Why) == "" {
 			errs = append(errs, fmt.Sprintf("kept_as_text %d: needs a quote and a why", i+1))
-		} else if wholeIndex(src, collapse(k.Quote)) < 0 && !strings.Contains(srcLower, strings.ToLower(collapse(k.Quote))) {
+		} else if !keptQuoteIn(src, srcLower, k.Quote) {
 			errs = append(errs, fmt.Sprintf("kept_as_text %d: the quote is not in %s", i+1, f.File))
 		}
 	}

@@ -8,7 +8,7 @@
 - **Date / baseline:** 2026-10-09, `91f540f` (master).
 - **Priority:** P1. **Effort:** L. **Risk:** MEDIUM for the import process (a new driver of existing operations),
   none for the schema (untouched).
-- **Status:** PROPOSED.
+- **Status:** DONE.
 - **Resolves:** issue [0057](../issues/0057-the-import-loop-lives-outside-the-writer.md); RFC
   [0010](../rfcs/0010-the-writer-drives-a-local-model.md), option A. The owner decided on 2026-10-09: a driver in
   the writer; the model on this machine only, with no override.

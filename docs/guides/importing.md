@@ -27,6 +27,10 @@ Each party does only what it is reliable at.
 | **the model** (local by default) | reads one source file at a time and writes down what it states, as a **facts file**; drafts rules, metrics and questions | write SQL, approve its own work, create metrics directly, decide a name, run replay, write an answer |
 | **the writer** (an implementation with an API: a CLI, a REST API, MCP tools) | checks each facts file against its source file and against `life.db`, writes it whole or not at all, keeps the ledger, replays the trial onto the real database | judge what a note means |
 
+A writer may drive the model itself: it follows *status*, does each step that needs no judgement, and asks the
+model for the facts of one file at a time; the model still only reads and answers, and the writer still checks
+every fact. The model then runs on the owner's machine, since the source's text is sent to it.
+
 The facts file sits between reading and writing. It is the one record of each decision: written once,
 checked by code, applied in one transaction, read again when the import resumes, and replayed
 unchanged onto the real database. For this checked workflow, no decision lives only in a model's context or only in the

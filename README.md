@@ -55,6 +55,7 @@ lifelog do propose-entities --workspace ~/import/Notebook.lifelog               
 lifelog import approve entities --workspace ~/import/Notebook.lifelog               # the owner decides them, at a terminal
 lifelog do import-entities --workspace ~/import/Notebook.lifelog --human            # every name: decision, row, file and quote
 lifelog import status --workspace ~/import/Notebook.lifelog --human
+lifelog import run --workspace ~/import/Notebook.lifelog                            # the facts pass, with a model on this machine
 lifelog import replay --to ~/life/life.db --workspace ~/import/Notebook.lifelog     # the real run, when you say so
 ```
 
@@ -125,6 +126,17 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **Owner-only actions.** `register-metric` and `replay` are refused to an `agent:*` writer and are never MCP tools.
   `approve` is not in the API at all: `lifelog import approve` refuses without an interactive terminal, and its stamp
   (`status: approved YYYY-MM-DD (owner) sha256:…`) hashes the rest of the file, so an edit closes the gate again.
+- **The facts pass runs in the writer** ([plan 088](docs/plans/088-the-writer-runs-the-facts-pass.md)).
+  `lifelog import run` follows *status* by its one-word `step` (beside the `do_now` sentence) and does each step
+  that needs no judgement: moving old name lines, applying a vault plan with no problem, registering approved
+  metrics, making the ledger, tombstoning rejected rows, re-applying held files. For the facts of a file it asks a
+  model on this machine, one completion per file, then writes, checks and applies through the catalog; a refused
+  write is kept as text with its class, a held name stays for the owner, a `kept_as_text` quote that is not in the
+  file is dropped. Only `.md`, `.txt` and `.vcf` up to 60 000 characters reach the model; any other file, a
+  judgement or a gate stops the run. The model host must resolve to loopback addresses, and no flag overrides it: a
+  source's text never leaves the machine. It is a command of the owner at a terminal, not a catalog action or an
+  MCP tool, because it decides where a source's text goes; the actions it calls are on every surface. Its progress
+  holds counts and paths only; names and quotes go to `run-refused.md` in the workspace.
 - **Renames select a preferred name on the same identity**, retaining direct aliases as
   [titles and wikilinks](docs/contract/titles-and-wikilinks.md) ("Renames") requires and
   [rename a page](docs/cookbook/rename-a-page.md) writes; `lifelog rename` and the API's `rename` action run it.
@@ -219,6 +231,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 | `internal/photo` | what a photo's metadata says: the day and time taken, the position, the orientation (JPEG and HEIC); `phototest` builds synthetic ones |
 | `internal/inventory` | the survey of an ingest folder without its contents ([importing](docs/guides/importing.md), "An ingest folder") |
 | `internal/importer` | the import workspace, the facts checks and apply, the vault plan, status, replay |
+| `internal/importrun` | `lifelog import run`: the facts pass driven by the writer, and the client of a model on this machine |
 | `internal/api` | the action catalog, the routes, Siren and HTML; the local and the `--public` network guards |
 | `internal/client` | the hypermedia client (in-process or remote) |
 | `internal/mcp` | the catalog as MCP tools |

@@ -8,7 +8,7 @@ Earlier closed plans live in git history (`git log -- docs/plans`). The next pla
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| [088](088-the-writer-runs-the-facts-pass.md) | The writer runs the facts pass with a local model: `lifelog import run` | P1 | L | RFC 0010; issue 0057 | PROPOSED |
+| [088](088-the-writer-runs-the-facts-pass.md) | The writer runs the facts pass with a local model: `lifelog import run` | P1 | L | RFC 0010; issue 0057 | DONE |
 | [087](087-prepared-quantities-rounded-to-whole-units.md) | The owner rounds chosen prepared quantities to whole units | P2 | S | issue 0055 | DONE |
 | [086](086-rules-mark-the-ledger-and-status-reads-it-once.md) | The rules mark the ledger, and status reads it once | P2 | M | issue 0054 | DONE |
 | [085](085-rejected-names-are-skipped-and-tombstoned.md) | A rejected name is skipped, and its imported row tombstoned | P1 | M | RFC 0009; issue 0053 | DONE |

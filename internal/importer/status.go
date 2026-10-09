@@ -26,13 +26,16 @@ type Status struct {
 	// RejectedLive counts the live rows this import wrote under a name the owner rejects (tombstone-rejected
 	// tombstones them); Uncarried the rows this import wrote that are tombstoned while their name is not rejected,
 	// which a replay writes again.
-	RejectedLive int          `json:"rejected_live,omitempty"`
-	Uncarried    int          `json:"tombstoned_not_rejected,omitempty"`
-	DoNow        string       `json:"do_now"`
-	Mismatches   []string     `json:"mismatches"`
-	Outside      []string     `json:"written_outside_the_facts,omitempty"`
-	Corrections  []string     `json:"correction_intents,omitempty"`
-	Counts       *core.Counts `json:"counts,omitempty"`
+	RejectedLive int    `json:"rejected_live,omitempty"`
+	Uncarried    int    `json:"tombstoned_not_rejected,omitempty"`
+	DoNow        string `json:"do_now"`
+	// Step names the case of DoNow in one word, for a program that follows status (lifelog import run): the
+	// sentence is for a person or a model, the word for code.
+	Step        string       `json:"step"`
+	Mismatches  []string     `json:"mismatches"`
+	Outside     []string     `json:"written_outside_the_facts,omitempty"`
+	Corrections []string     `json:"correction_intents,omitempty"`
+	Counts      *core.Counts `json:"counts,omitempty"`
 
 	// Changed is, for each gate that is not approved, the lines changed since the owner's last approval.
 	Changed map[string][]string `json:"changed_since_approval,omitempty"`
@@ -174,40 +177,58 @@ func (w *Workspace) Status(ctx context.Context, s *core.Store, dbPath string) (*
 	}
 	switch {
 	case st.Gates["rules.md"] == "missing":
+		st.Step = "draft-rules"
 		st.DoNow = "Survey the source and draft rules.md (step 2), then stop for the owner."
 	case st.Gates["rules.md"] != "approved":
+		st.Step = "approve-rules"
 		st.DoNow = "Stop: rules.md is " + st.Gates["rules.md"] + changedLines(st.Changed["rules.md"]) + "; the owner approves it (lifelog import approve rules)."
 	case legacy > 0:
+		st.Step = "move-name-lines"
 		st.DoNow = fmt.Sprintf("rules.md holds %d alias or distinct lines: name decisions live in entities.md. Move them (propose-entities), then stop for the owner.", legacy)
 	case st.Notes != nil && st.Notes.Markdown > 0:
+		st.Step = "plan-or-ledger"
 		st.DoNow = fmt.Sprintf("The source holds %d Markdown files among %d: if the rules say they are notes to keep as pages, plan them (plan-vault), then fix every problem the plan lists (step 3); else make the ledger (make-ledger).", st.Notes.Markdown, st.Notes.Files)
 	case hasPlan && !vaultApplied:
+		st.Step = "apply-vault"
 		st.DoNow = "Fix the plan's problems (fix-plan) and apply the vault plan (apply-vault) (step 3)."
 	case st.Gates["metrics.md"] == "draft" || st.Gates["metrics.md"] == "stale":
+		st.Step = "approve-metrics"
 		st.DoNow = "Stop: metrics.md waits for the owner's approval" + changedLines(st.Changed["metrics.md"]) + " (lifelog import approve metrics)."
 	case !hasLedger:
+		st.Step = "make-ledger"
 		st.DoNow = "Make the ledger (make-ledger), then skip what the rules skip (step 5)."
 	case st.RejectedLive > 0:
+		st.Step = "tombstone-rejected"
 		st.DoNow = fmt.Sprintf("%d rows this import wrote are rejected in entities.md: tombstone them (tombstone-rejected).", st.RejectedLive)
 	case st.Uncarried > 0:
+		st.Step = "reject-or-revive"
 		st.DoNow = fmt.Sprintf("Stop: %d rows this import wrote are tombstoned here, but entities.md does not reject their names, so a replay writes them again. The owner rejects them in entities.md (lifelog import approve entities) or revives them.", st.Uncarried)
 	case len(st.Mismatches) > 0:
+		st.Step = "mismatches"
 		st.DoNow = "Mismatches: apply their files again, or ask. Never explain one away."
 	case len(st.ToApply) > 0:
+		st.Step = "use-answer"
 		st.DoNow = "Use the answer of " + st.ToApply[0] + ": rules, facts, check, apply, then close it (step 8)."
 	case st.Next != "":
+		st.Step = "facts"
 		st.DoNow = "Do " + st.Next + " (step 6): inspect it, find, write its facts, check, apply."
 	case missing > 0 && st.Gates[entitiesFile] != "draft" && st.Gates[entitiesFile] != "stale":
+		st.Step = "propose-names"
 		st.DoNow = fmt.Sprintf("%d files wait for %d names the owner has not decided: propose them (propose-entities), then stop for the owner.", heldFiles, missing)
 	case st.Gates[entitiesFile] == "draft" || st.Gates[entitiesFile] == "stale":
+		st.Step = "approve-entities"
 		st.DoNow = "Stop: entities.md waits for the owner's decisions" + changedLines(st.Changed[entitiesFile]) + " (lifelog import approve entities)."
 	case st.Later != "":
+		st.Step = "later-pass"
 		st.DoNow = fmt.Sprintf("The later pass: %d files are held for it. Do %s as its rule says (keep it as a file with its text, or a selected photo), or skip it.", st.Ledger["later"], st.Later)
 	case st.Ledger["waiting"] > 0:
+		st.Step = "answer-questions"
 		st.DoNow = fmt.Sprintf("Stop: %d files wait for questions only the owner can answer.", st.Ledger["waiting"])
 	case w.doneNamesUndecided(lines) > 0:
+		st.Step = "propose-names"
 		st.DoNow = "The done files write names entities.md does not decide, and a replay writes them only with the owner's decision: propose them (propose-entities), then stop for the owner."
 	default:
+		st.Step = "done"
 		st.DoNow = "Every file is done: run the integrity check and report the counts (step 9)."
 	}
 	return st, nil
