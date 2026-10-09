@@ -1,7 +1,7 @@
 # 0056 — Proposed names fall outside the table of entities.md, and are proposed again
 
 - **Date:** 2026-10-09
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the 2026-10 import of a notes folder: the second round of *propose entities*, after the owner had
   edited and saved `entities.md` in an editor
 
@@ -28,4 +28,6 @@ Expected: a proposed row goes after the last row of the table, whatever follows 
 
 ## Resolution
 
-Filled in when it closes.
+Resolved in the writer: *propose entities* puts its rows after the last row of the table of entities.md, so a
+blank line or the owner's words after the table stay after it, and a file with no table gets one at its end. No
+rule of the guide changes. Tests: `TestProposeAddsItsRowsInsideTheTable`, `TestInsertEntityRowsAfterTheLastRow`.

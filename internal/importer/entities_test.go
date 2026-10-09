@@ -275,3 +275,52 @@ func TestARejectedPageIsSkippedWithNoLookAlike(t *testing.T) {
 		t.Fatalf("a rejected page: %+v, %v", r, err)
 	}
 }
+
+// The owner's editor may leave a blank line, or a note, after the table of entities.md. A proposed row goes after the
+// table's last row, so the writer reads it, and a second propose finds it there.
+func TestProposeAddsItsRowsInsideTheTable(t *testing.T) {
+	f := setup(t)
+	f.approveRules(t, rulesBody+"\n## Aliases\n- \"Bobby\" → \"Bob Sample\"\n")
+	f.w.MakeLedger()
+	owner := "status: draft\n\n" + entitiesHeader + entityRow(Entity{Status: "rejected", Kind: "person", Name: "Dana"}) + "\nA note of the owner.\n\n"
+	if err := writeAtomic(f.w.file(entitiesFile), []byte(owner)); err != nil {
+		t.Fatal(err)
+	}
+	added, err := f.w.ProposeEntities(ctx, f.s)
+	if err != nil || len(added) != 1 {
+		t.Fatalf("propose: %+v, %v", added, err)
+	}
+	rows, err := f.w.Entities()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, e := range rows {
+		got[e.Name] = e.Status
+	}
+	if len(rows) != 2 || got["Dana"] != "rejected" || got["Bobby"] != "proposed" {
+		t.Fatalf("the rows the writer reads: %+v", rows)
+	}
+	text, _, _ := f.w.read(entitiesFile)
+	if !strings.HasSuffix(text, "\nA note of the owner.\n\n") {
+		t.Errorf("the owner's note after the table moved:\n%s", text)
+	}
+	if more, err := f.w.ProposeEntities(ctx, f.s); err != nil || len(more) != 0 {
+		t.Errorf("a second propose: %+v, %v", more, err)
+	}
+}
+
+func TestInsertEntityRowsAfterTheLastRow(t *testing.T) {
+	row := "| proposed | person | Bobby | | | | |\n"
+	for _, c := range []struct{ name, text, want string }{
+		{"the last row ends the file without a newline", "status: draft\n\n" + entitiesHeader + "| rejected | person | Dana | | | | |",
+			"status: draft\n\n" + entitiesHeader + "| rejected | person | Dana | | | | |\n" + row},
+		{"words after the table stay after it", "status: draft\n\n" + entitiesHeader + "\nwords\n",
+			"status: draft\n\n" + entitiesHeader + row + "\nwords\n"},
+		{"no table: the header comes first", "status: draft\n", "status: draft\n\n" + entitiesHeader + row},
+	} {
+		if got := insertEntityRows(c.text, row); got != c.want {
+			t.Errorf("%s:\ngot  %q\nwant %q", c.name, got, c.want)
+		}
+	}
+}

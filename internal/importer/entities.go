@@ -128,13 +128,11 @@ func (w *Workspace) ProposeEntities(ctx context.Context, s *core.Store) ([]Entit
 		if !ok {
 			text = "status: draft\n\n" + entitiesHeader
 		}
-		if !strings.HasSuffix(text, "\n") {
-			text += "\n"
-		}
+		var rows strings.Builder
 		for _, e := range added {
-			text += entityRow(e)
+			rows.WriteString(entityRow(e))
 		}
-		if err := writeAtomic(w.file(entitiesFile), []byte(text)); err != nil {
+		if err := writeAtomic(w.file(entitiesFile), []byte(insertEntityRows(text, rows.String()))); err != nil {
 			return nil, err
 		}
 	}
@@ -232,6 +230,37 @@ func (w *Workspace) namesStamped() error {
 }
 
 // entityRow is one row of entities.md, its columns in the header's order.
+// insertEntityRows puts rows after the last row of the table of entities.md. An editor may leave a blank line or the
+// owner's words after the table, and the writer reads a table only up to its first line that is not a row, so a row
+// added at the end of the file would not be read (issue 0056). A file with no such table gets one at its end.
+func insertEntityRows(text, rows string) string {
+	lines := strings.SplitAfter(text, "\n")
+	header := -1
+	for i, l := range lines {
+		if !strings.HasPrefix(strings.TrimSpace(l), "|") {
+			continue
+		}
+		if c := tableCells(l); contains(c, "status") && contains(c, "kind") && contains(c, "name") {
+			header = i
+			break
+		}
+	}
+	if header < 0 {
+		if !strings.HasSuffix(text, "\n") {
+			text += "\n"
+		}
+		return text + "\n" + entitiesHeader + rows
+	}
+	end := header + 1
+	for end < len(lines) && strings.HasPrefix(strings.TrimSpace(lines[end]), "|") {
+		end++
+	}
+	if !strings.HasSuffix(lines[end-1], "\n") {
+		lines[end-1] += "\n" // the last row ends the file without a newline
+	}
+	return strings.Join(lines[:end], "") + rows + strings.Join(lines[end:], "")
+}
+
 func entityRow(e Entity) string {
 	vals := map[string]string{"status": e.Status, "kind": e.Kind, "name": e.Name, "as": e.As, "like": e.Like, "from": e.From, "doubts": e.Doubts}
 	row := "|"
