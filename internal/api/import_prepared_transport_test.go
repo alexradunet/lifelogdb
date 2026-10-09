@@ -16,8 +16,13 @@ import (
 )
 
 func TestPreparedCatalogTransportOwnerGateAndPersistedMeaning(t *testing.T) {
-	for _, remote := range []bool{false, true} {
-		t.Run(map[bool]string{false: "in-process", true: "HTTP"}[remote], func(t *testing.T) {
+	for _, tc := range []struct {
+		remote bool
+		round  string  // the draft's round field: none, or the distance rounded to whole metres
+		want   float64 // the stored distance: 10.5 as the source states it, or 11
+	}{{false, "", 10.5}, {true, "", 10.5}, {false, `["distance"]`, 11}, {true, `["distance"]`, 11}} {
+		remote := tc.remote
+		t.Run(map[bool]string{false: "in-process", true: "HTTP"}[remote]+map[bool]string{false: "", true: "/rounded"}[tc.round != ""], func(t *testing.T) {
 			root := t.TempDir()
 			source := filepath.Join(root, "Source")
 			if err := os.Mkdir(source, 0700); err != nil {
@@ -73,7 +78,11 @@ func TestPreparedCatalogTransportOwnerGateAndPersistedMeaning(t *testing.T) {
 					t.Fatal("owner stamp exposed to agent")
 				}
 			}
-			if _, err = c.Do(byName["draft-prepared"], map[string]string{"file": "daily.csv", "profile": "fit-date-csv-v1", "metrics": `{"distance":"Distance"}`}); err != nil {
+			fields := map[string]string{"file": "daily.csv", "profile": "fit-date-csv-v1", "metrics": `{"distance":"Distance"}`}
+			if tc.round != "" {
+				fields["round"] = tc.round
+			}
+			if _, err = c.Do(byName["draft-prepared"], fields); err != nil {
 				t.Fatal(err)
 			}
 			if _, err = c.Do(byName["apply-prepared"], nil); err == nil {
@@ -95,7 +104,7 @@ func TestPreparedCatalogTransportOwnerGateAndPersistedMeaning(t *testing.T) {
 			var value float64
 			var day, sourceName string
 			var unscoped bool
-			if err = d.R.QueryRow(`SELECT value,day,source,session_id IS NULL FROM measurements`).Scan(&value, &day, &sourceName, &unscoped); err != nil || value != 10.5 || day != "2020-01-02" || sourceName != "import:synthetic" || !unscoped {
+			if err = d.R.QueryRow(`SELECT value,day,source,session_id IS NULL FROM measurements`).Scan(&value, &day, &sourceName, &unscoped); err != nil || value != tc.want || day != "2020-01-02" || sourceName != "import:synthetic" || !unscoped {
 				t.Fatalf("meaning %g %s %s %v %v", value, day, sourceName, unscoped, err)
 			}
 		})

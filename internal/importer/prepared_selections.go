@@ -8,7 +8,8 @@ import (
 )
 
 // DraftPreparedJSON keeps new supported-profile selectors lossless at all adapters.
-func (w *Workspace) DraftPreparedJSON(ctx context.Context, file, profile, kind, bindingRaw, metricsRaw string) (*PreparedBatch, error) {
+// roundRaw, when not empty, is a JSON list of the quantity codes rounded to whole units.
+func (w *Workspace) DraftPreparedJSON(ctx context.Context, file, profile, kind, bindingRaw, metricsRaw, roundRaw string) (*PreparedBatch, error) {
 	var binding *FitSessionBinding
 	if bindingRaw != "" {
 		if !utf8.ValidString(bindingRaw) || validateSourceJSON([]byte(bindingRaw)) != nil {
@@ -28,5 +29,15 @@ func (w *Workspace) DraftPreparedJSON(ctx context.Context, file, profile, kind, 
 	if json.Unmarshal([]byte(metricsRaw), &metrics) != nil {
 		return nil, refuse("invalid quantity mappings")
 	}
-	return w.DraftPrepared(ctx, file, profile, kind, binding, metrics)
+	var round []string
+	if roundRaw != "" {
+		if !utf8.ValidString(roundRaw) || validateSourceJSON([]byte(roundRaw)) != nil {
+			return nil, refuse("invalid lossless rounded quantities")
+		}
+		dec := json.NewDecoder(strings.NewReader(roundRaw))
+		if dec.Decode(&round) != nil || dec.More() {
+			return nil, refuse("round is a JSON list of quantity codes")
+		}
+	}
+	return w.draftPrepared(ctx, file, profile, kind, binding, metrics, round)
 }

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math"
 	"os"
 	"reflect"
 	"sort"
@@ -26,9 +27,17 @@ type PreparedBatch struct {
 	Source  string            `json:"source"`
 	Kind    string            `json:"kind,omitempty"`
 	Metrics map[string]string `json:"metrics"`
+	// Round lists, sorted and each once, the quantity codes whose values the owner writes as the nearest whole
+	// unit (issue 0055). It is part of the reviewed interpretation, so the binding keeps it.
+	Round []string `json:"round,omitempty"`
 }
 
 func (w *Workspace) DraftPrepared(ctx context.Context, file, profile, kind string, binding *FitSessionBinding, metrics map[string]string) (*PreparedBatch, error) {
+	return w.draftPrepared(ctx, file, profile, kind, binding, metrics, nil)
+}
+
+// draftPrepared is DraftPrepared with the quantity codes the owner rounds to whole units.
+func (w *Workspace) draftPrepared(ctx context.Context, file, profile, kind string, binding *FitSessionBinding, metrics map[string]string, round []string) (*PreparedBatch, error) {
 	w.selectionMu.RLock()
 	defer w.selectionMu.RUnlock()
 	w.mu.Lock()
@@ -42,6 +51,10 @@ func (w *Workspace) DraftPrepared(ctx context.Context, file, profile, kind strin
 		return nil, err
 	}
 	b := &PreparedBatch{PreparedSource: *derived, Source: rules.Source, Kind: kind, Metrics: metrics}
+	if len(round) > 0 {
+		b.Round = append([]string(nil), round...)
+		sort.Strings(b.Round)
+	}
 	data, err := json.MarshalIndent(b, "", "  ")
 	if err != nil {
 		return nil, err
@@ -93,6 +106,14 @@ func (w *Workspace) validatePrepared(ctx context.Context, b *PreparedBatch) erro
 			return refuse("distinct quantities cannot collapse onto a metric")
 		}
 		targets[key] = code
+	}
+	for i, code := range b.Round {
+		if _, ok := codes[code]; !ok {
+			return refuse("a rounded quantity is not a quantity of the source")
+		}
+		if i > 0 && b.Round[i-1] >= code {
+			return refuse("rounded quantities are listed once, sorted")
+		}
 	}
 	if b.Profile != "fit-date-csv-v1" && !text.ValidTitle(b.Kind) {
 		return refuse("prepared session kind required")
@@ -250,6 +271,10 @@ func writePrepared(ctx context.Context, s *core.Store, b *PreparedBatch, dry boo
 func writePreparedAfter(ctx context.Context, s *core.Store, b *PreparedBatch, dry bool, afterReading func(*core.Tx) error) (*Report, error) {
 
 	report := &Report{File: b.File, Outcomes: []Outcome{}, Summary: "prepared source; excluded metadata not imported"}
+	rounded := map[string]bool{}
+	for _, code := range b.Round {
+		rounded[code] = true
+	}
 	fn := func(tx *core.Tx) error {
 		seenMetrics := map[int64]bool{}
 		for _, name := range b.Metrics {
@@ -295,6 +320,12 @@ func writePreparedAfter(ctx context.Context, s *core.Store, b *PreparedBatch, dr
 				value, err := strconv.ParseFloat(q.Value, 64)
 				if err != nil {
 					return refuse("unrepresentable prepared quantity")
+				}
+				if rounded[q.Code] {
+					value = math.Round(value) // half away from zero
+					if value == 0 {
+						value = 0 // -0 is written as 0
+					}
 				}
 				id, err := tx.RecordPrepared(core.Reading{Metric: metric, Day: r.Day, Key: preparedKey(b.Profile, r.Key, q.Code), Value: value, SessionID: session})
 				if err != nil {

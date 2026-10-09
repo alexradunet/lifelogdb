@@ -9,7 +9,7 @@ data could not answer, a rule that is ambiguous or untestable. It is the evidenc
 
 | id | title | status |
 |---|---|---|
-| [0055](0055-prepared-values-keep-every-decimal.md) | A prepared source writes every decimal of a value, and the owner cannot round it | open |
+| [0055](0055-prepared-values-keep-every-decimal.md) | A prepared source writes every decimal of a value, and the owner cannot round it | resolved |
 | [0054](0054-rules-typed-twice-and-status-reads-the-ledger-per-file.md) | Skip and later rules are typed twice, and status reads the whole ledger once for each done file | resolved |
 | [0053](0053-a-rejected-name-is-not-removed.md) | A rejected name does not remove the row the import wrote, and it refuses every file that writes it | resolved |
 | [0052](0052-names-are-written-on-the-models-word.md) | People and places are written on the model's word, and each name decision closes the rules gate | resolved |

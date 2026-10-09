@@ -1,7 +1,7 @@
 # 0055 — A prepared source writes every decimal of a value, and the owner cannot round it
 
 - **Date:** 2026-10-09
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the 2026-10 import of a Takeout extraction: the Fit daily aggregate CSV through `fit-date-csv-v1`
 
 ## What happened
@@ -41,4 +41,8 @@ metric mapping.
 
 ## Resolution
 
-Filled in when it closes.
+Resolved by [plan 087](../plans/087-prepared-quantities-rounded-to-whole-units.md): *draft prepared* takes an
+optional `round`, a JSON list of the quantity codes written as the nearest whole unit (half away from zero). The
+list is sorted, each code once and a quantity of the file; the owner reads it in `prepared.md` and stamps it with the
+rest. Apply, check, *status* and *replay* round in the one place that writes the reading, and the binding keeps the
+list, so a different choice after the apply is refused. A batch without the list writes the source value, as before.

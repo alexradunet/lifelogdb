@@ -7,7 +7,7 @@
 - **Date / baseline:** 2026-10-09, `9fe97e5` (master).
 - **Priority:** P2. **Effort:** S. **Risk:** LOW: an optional field that is empty by default; none for the schema
   (untouched).
-- **Status:** PROPOSED.
+- **Status:** DONE.
 - **Resolves:** issue [0055](../issues/0055-prepared-values-keep-every-decimal.md). No RFC: no decision changes. The
   owner chose rounding at import, not at display, on 2026-10-09: calories, distance and mean heart rate.
 

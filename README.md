@@ -246,7 +246,9 @@ budget are kept without an automatically generated preview.
 
 With an import workspace, `draft-prepared`, `check-prepared`, and `apply-prepared` share the same core writes.
 `draft-prepared` takes a selected source `file`, fixed `profile`, optional session `kind` and Fit `binding` JSON,
-and a `metrics` JSON object mapping quantity codes to existing registered metric handles. It derives the
+and a `metrics` JSON object mapping quantity codes to existing registered metric handles. An optional `round` JSON
+list names the quantity codes written as the nearest whole unit (half away from zero, so a rounded value can be 0):
+for a computed value whose decimals are not a measured precision, such as Fit calories. It derives the
 review records from the confined snapshot, not caller-provided normalized facts. The namespace comes from
 approved rules; ordinary note facts keep their quote-evidence checks. The owner reads and stamps with
 `lifelog import approve prepared` at an interactive terminal. No API/MCP action can stamp.
@@ -272,7 +274,7 @@ The stamped `prepared.md` closes on interpretation/source/mapping changes. `.pre
 reserve immutable workspace logical-source interpretations before SQL; a reservation alone proves no commit.
 A separate `.complete` checksum is published after SQL and before the ledger. Missing completion requires a
 verified unchanged apply retry; corrupt evidence refuses replay. These are recovery evidence, not cryptographic
-protection. Reapproval cannot reassign a workspace's established file namespace/profile/identity/mapping;
+protection. Reapproval cannot reassign a workspace's established file namespace/profile/identity/mapping/rounding;
 genuinely separate provider/account workspaces remain independent.
 Preparation does not persist trial IDs: sessions resolve `(source, import_key)` in the target transaction.
 Readings verify original root value/day/metric/scope, so unchanged retry preserves corrections; reapproval

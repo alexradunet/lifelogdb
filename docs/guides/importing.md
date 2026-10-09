@@ -13,7 +13,7 @@ imported as such a folder. A file — a recording, a PDF, a photo — is kept on
 
 A bounded typed source interpretation can supplement quoted-note facts when a supported source profile
 provides evidence the writer can derive independently. Its owner review binds source bytes, meanings, identities,
-metrics and portable scope associations; arbitrary normalized records next to a hash are not proof. Changed
+metrics, any rounding the owner chose and portable scope associations; arbitrary normalized records next to a hash are not proof. Changed
 interpretation is not correction authority. Such artifacts use the same approvals, transactional writer,
 ledger and replay checks; their implementation-specific formats belong to the writer's application guidance.
 

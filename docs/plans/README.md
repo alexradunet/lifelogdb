@@ -8,7 +8,7 @@ Earlier closed plans live in git history (`git log -- docs/plans`). The next pla
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| [087](087-prepared-quantities-rounded-to-whole-units.md) | The owner rounds chosen prepared quantities to whole units | P2 | S | issue 0055 | PROPOSED |
+| [087](087-prepared-quantities-rounded-to-whole-units.md) | The owner rounds chosen prepared quantities to whole units | P2 | S | issue 0055 | DONE |
 | [086](086-rules-mark-the-ledger-and-status-reads-it-once.md) | The rules mark the ledger, and status reads it once | P2 | M | issue 0054 | DONE |
 | [085](085-rejected-names-are-skipped-and-tombstoned.md) | A rejected name is skipped, and its imported row tombstoned | P1 | M | RFC 0009; issue 0053 | DONE |
 | [084](084-owner-decides-names.md) | The owner decides each new name in `entities.md` | P1 | L | RFC 0008; issue 0052 | DONE |

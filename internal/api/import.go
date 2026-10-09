@@ -40,7 +40,7 @@ var importCatalog = []spec{
 		"POST", "/import/facts/check", []Field{req("file", "text", "File")}, false},
 	{"apply-facts", "Apply facts", "Check and write a file's facts in one transaction, then its ledger line.",
 		"POST", "/import/facts/apply", []Field{req("file", "text", "File")}, false},
-	{"draft-prepared", "Draft supported source", "Derive a bounded fixed-profile batch for owner review. Bindings/mappings are JSON; this cannot approve it.", "POST", "/import/prepared", []Field{req("file", "text", "Source file"), req("profile", "text", "Fixed profile"), opt("kind", "text", "Session kind"), opt("binding", "textarea", "Fit owner-assigned identity/day/activity"), req("metrics", "textarea", "Quantity code to metric handle JSON")}, false},
+	{"draft-prepared", "Draft supported source", "Derive a bounded fixed-profile batch for owner review. Bindings/mappings are JSON; round lists the quantity codes the owner wants as whole units; this cannot approve it.", "POST", "/import/prepared", []Field{req("file", "text", "Source file"), req("profile", "text", "Fixed profile"), opt("kind", "text", "Session kind"), opt("binding", "textarea", "Fit owner-assigned identity/day/activity"), req("metrics", "textarea", "Quantity code to metric handle JSON"), opt("round", "text", "Quantity codes rounded to whole units, JSON list")}, false},
 	{"check-prepared", "Check prepared source", "Validate the stamped source-derived batch and roll all writes back.", "POST", "/import/prepared/check", nil, false},
 	{"apply-prepared", "Apply prepared source", "Apply the owner-stamped source-derived batch atomically, then publish ledger.", "POST", "/import/prepared/apply", nil, false},
 	{"draft-selected-photo", "Draft selected photo pair", "Review an explicit original/optional sidecar pair, exact fingerprints, capture/creation evidence and choices. No automatic precedence.", "POST", "/import/selected-photo", []Field{req("file", "text", "Original"), opt("sidecar", "text", "Explicit sidecar"), req("title", "text", "Title"), opt("body", "textarea", "Caption"), req("choices", "textarea", "Capture/GPS choices and optional owner day/offset/place JSON")}, false},
@@ -469,7 +469,7 @@ func (h *server) draftPrepared(r *http.Request, _ string) (*Entity, error) {
 	if err = required(v, "file", "profile", "metrics"); err != nil {
 		return nil, err
 	}
-	b, err := h.ws.DraftPreparedJSON(r.Context(), v.Get("file"), v.Get("profile"), v.Get("kind"), v.Get("binding"), v.Get("metrics"))
+	b, err := h.ws.DraftPreparedJSON(r.Context(), v.Get("file"), v.Get("profile"), v.Get("kind"), v.Get("binding"), v.Get("metrics"), v.Get("round"))
 	if err != nil {
 		return nil, err
 	}
