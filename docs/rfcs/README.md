@@ -15,5 +15,6 @@ becomes a [decision](../decisions/README.md). One file per proposal, named `NNNN
 | [0006](0006-stable-names-and-life-periods.md) | Stable names, one named-object core, and recorded life periods | draft | [0011–0021](../issues/README.md) | pending owner review |
 | [0007](0007-personal-tasks-and-occurrences.md) | Personal tasks, recurring occurrences and reminder intent | accepted | [0025](../issues/0025-personal-planning-has-no-durable-task-model.md) | [D23](../decisions/D23-no-tasks.md), [D15](../decisions/D15-recurrence.md) |
 | [0008](0008-owner-decides-names-in-imports.md) | The owner decides each new name of an import in one stamped list | accepted | [0052](../issues/0052-names-are-written-on-the-models-word.md) | [D11](../decisions/D11-tombstones.md); the guide's "entities.md" |
+| [0009](0009-a-rejected-name-is-skipped-and-tombstoned.md) | A rejected name is skipped, and the row the import wrote under it is tombstoned | draft | [0053](../issues/0053-a-rejected-name-is-not-removed.md) | pending |
 
 Status values: draft | accepted | rejected (with a one-line reason) | withdrawn.
