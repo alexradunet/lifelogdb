@@ -1,86 +1,44 @@
 {{define "head"}}<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light dark">
 <title>{{.Title}} · Lifelog</title>
-<style>
-:root{--bg:#fbfaf7;--fg:#1f1e1b;--muted:#6f6b63;--line:#e3dfd6;--accent:#0b5cad;--panel:#f2efe8;--warn:#b3261e;--ok:#2e7d32;--mark:#fff1b8}
-@media (prefers-color-scheme:dark){:root{--bg:#17171a;--fg:#e9e7e2;--muted:#9b978f;--line:#34333a;--accent:#79b2ff;--panel:#222227;--warn:#ff8a80;--ok:#81c784;--mark:#4a4320}}
-*{box-sizing:border-box}
-body{background:var(--bg);color:var(--fg);font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif;max-width:760px;margin:0 auto;padding:0 16px 48px}
-a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
-header.top{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;padding:12px 0;border-bottom:1px solid var(--line);font-size:15px}
-header.top .brand{font-weight:700;color:var(--fg)}
-header.top form{margin-left:auto;flex:1 1 160px;max-width:240px}
-header.top input{padding:4px 8px;height:34px}
-h1{font-size:26px;line-height:1.25;margin:24px 0 2px;overflow-wrap:anywhere}
-h2{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:28px 0 8px;font-weight:600}
-.sub{color:var(--muted);font-size:14px;display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline}
-.badge{display:inline-block;font-size:12px;padding:0 8px;border-radius:10px;background:var(--panel);color:var(--muted);border:1px solid var(--line)}
-.muted{color:var(--muted)}
-.pager{display:flex;justify-content:space-between;gap:12px;font-size:14px;margin:4px 0 16px}
-section{margin:18px 0}
-.group h3{font-size:15px;margin:18px 0 6px;font-weight:600}.group h3 .muted{font-weight:400;font-size:13px}
-.group.depth-1{margin-left:12px}.group.depth-2{margin-left:24px}.group.depth-3,.group.depth-4,.group.depth-5{margin-left:36px}
-.prose{overflow-wrap:anywhere}.prose>:first-child{margin-top:0}.prose>:last-child{margin-bottom:0}
-.prose pre,pre{white-space:pre-wrap;background:var(--panel);padding:10px 12px;border-radius:6px;font-size:14px}
-.prose code{background:var(--panel);padding:1px 4px;border-radius:4px;font-size:.92em}.prose pre code{padding:0;background:none}
-.prose blockquote{margin:0;padding-left:14px;border-left:3px solid var(--line);color:var(--muted)}
-.prose img,img.preview{max-width:100%;height:auto;border-radius:6px}a.wikilink.embed{border-bottom:none}
-a.wikilink{border-bottom:1px dotted var(--accent)}a.wikilink:hover{text-decoration:none;border-bottom-style:solid}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:12px 0}
-.note{border-left:3px solid var(--accent);background:var(--panel);padding:8px 12px;border-radius:0 6px 6px 0;margin:12px 0;font-size:14px}
-.note.warn{border-left-color:var(--warn)}
-ul.plain{list-style:none;padding:0;margin:0}ul.plain li{padding:5px 0;border-bottom:1px solid var(--line)}
-ul.plain li:last-child{border-bottom:none}
-.row{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px}.row .grow{flex:1 1 auto}
-table{border-collapse:collapse;width:100%;font-size:14px}td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertical-align:top}
-th{color:var(--muted);font-weight:500}td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
-.scroll{overflow-x:auto}
-details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:10px 0}
-details>summary{cursor:pointer;font-weight:600;font-size:14px}details[open]>summary{margin-bottom:6px}
-form{margin:0}form .field{margin:8px 0}
-form label{display:block;margin:0 0 2px;font-size:13px;color:var(--muted)}
-input,textarea,select{width:100%;font:inherit;font-size:15px;padding:7px 9px;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px}
-input,select{height:40px}
-input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-offset:-1px}
-textarea{min-height:7em;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;line-height:1.5}
-textarea.tall{min-height:22em}
-button{font:inherit;font-size:15px;padding:7px 16px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:var(--bg);cursor:pointer}
-button.quiet{background:none;color:var(--accent)}button.danger{background:none;border-color:var(--warn);color:var(--warn)}
-form.inline{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px}form.inline .field{margin:0;flex:1 1 120px}
-form.inline button{flex:0 0 auto}form.tiny{display:inline}form.tiny button{padding:2px 10px;font-size:13px}
-.desc{font-size:13px;color:var(--muted);margin:0 0 6px}
-svg.chart{width:100%;height:auto;margin:8px 0}svg.chart polyline{fill:none;stroke:var(--accent);stroke-width:2}
-svg.chart circle{fill:var(--accent)}svg.chart .axis{stroke:var(--line)}svg.chart text{fill:var(--muted);font-size:12px;text-anchor:end}svg.chart text.x{text-anchor:middle}
-.done{color:var(--ok)}.notdone{color:var(--warn)}
-</style></head><body>
-<header class="top"><a class="brand" href="/">Lifelog</a><a href="/days/today">Today</a><a href="/days">Days</a><a href="/people">People</a><a href="/places">Places</a><a href="/files">Files</a><a href="/metrics">Metrics</a><a href="/habits">Habits</a><a href="/#new">New</a>
+<style data-sheet="base">{{basecss}}</style>
+<style data-sheet="app">{{appcss}}</style>
+</head><body>
+<a class="skip" href="#main">Skip to the content</a>
+<header class="top"><a class="brand" href="/">Lifelog</a>
+<nav aria-label="Sections">{{range .Nav}}<a href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}>{{.Title}}</a>{{end}}</nav>
 <form method="GET" action="/search" role="search"><input type="search" name="q" placeholder="Search" aria-label="Search"></form></header>
-<main>{{template "feedback" .}}{{end}}
+<main id="main">
+{{template "feedback" .}}{{end}}
 
-{{define "feedback"}}{{with .Result}}<div class="note" role="status"><h2>Result</h2>{{value .}}</div>{{end}}{{end}}
+{{/* feedback is what a browser form's POST did, carried across the redirect by a one-use receipt */}}
+{{define "feedback"}}{{with .Result}}<aside role="status"><h2>Result</h2>{{value .}}</aside>{{end}}{{end}}
 
-{{define "foot"}}</main></body></html>{{end}}
+{{define "foot"}}</main>
+<footer><p>Lifelog, the one writer of <code>life.db</code>. <a href="/actions">Every action</a> · <a href="/integrity">Integrity checks</a></p></footer>
+</body></html>{{end}}
 
 {{/* pager draws a list's prev and next links, when it has them */}}
-{{define "pager"}}{{$prev := .Link "prev"}}{{$next := .Link "next"}}{{if or $prev $next}}<div class="pager">{{with $prev}}<a href="{{.}}" rel="prev">← Previous</a>{{else}}<span></span>{{end}}{{with $next}}<a href="{{.}}" rel="next">Next →</a>{{end}}</div>{{end}}{{end}}
+{{define "pager"}}{{$prev := .Link "prev"}}{{$next := .Link "next"}}{{if or $prev $next}}<nav class="pager" aria-label="Pages">{{with $prev}}<a href="{{.}}" rel="prev">← Previous</a>{{else}}<span></span>{{end}}{{with $next}}<a href="{{.}}" rel="next">Next →</a>{{end}}</nav>{{end}}{{end}}
 
-{{/* form draws one action of the entity (see formOf); nothing when the action is not offered */}}
+{{/* form draws one action of the entity (see formOf); nothing when the action is not offered. A label wraps its
+     field, so a form needs no layout of its own; the catalog says how tall an area is and which action is a danger. */}}
 {{define "form"}}{{with .}}<form method="{{.Method}}" action="{{.Href}}"{{with .Class}} class="{{.}}"{{end}}{{if .Multipart}} enctype="multipart/form-data"{{end}}>
 {{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{num .Value}}">{{end}}
-{{range .Shown}}<div class="field"><label for="f-{{$.Name}}-{{.Name}}">{{or .Title .Name}}{{if .Required}} *{{end}}</label>
-{{if .Options}}<select id="f-{{$.Name}}-{{.Name}}" name="{{.Name}}">{{$v := num .Value}}{{range .Options}}<option{{if eq . $v}} selected{{end}}>{{.}}</option>{{end}}</select>
-{{else if eq .Type "textarea"}}<textarea id="f-{{$.Name}}-{{.Name}}" name="{{.Name}}"{{if eq .Name "body"}} class="tall"{{end}}>{{num .Value}}</textarea>
-{{else}}<input id="f-{{$.Name}}-{{.Name}}" type="{{.Type}}" name="{{.Name}}" value="{{num .Value}}"{{if .Required}} required{{end}}{{if eq .Type "number"}} step="any"{{end}}>{{end}}</div>
-{{end}}<button{{if eq .Name "tombstone"}} class="danger"{{end}}>{{.Button}}</button></form>{{end}}{{end}}
+{{range .Shown}}<label>{{or .Title .Name}}{{if .Required}} <abbr title="required">*</abbr>{{end}}
+{{if .Options}}<select name="{{.Name}}"{{if eq $.Focus .Name}} autofocus{{end}}>{{$v := num .Value}}{{range .Options}}<option{{if eq . $v}} selected{{end}}>{{.}}</option>{{end}}</select>
+{{else if eq .Type "textarea"}}<textarea name="{{.Name}}"{{with .Rows}} rows="{{.}}"{{end}}{{if eq $.Focus .Name}} autofocus{{end}}>{{num .Value}}</textarea>
+{{else}}<input type="{{.Type}}" name="{{.Name}}" value="{{num .Value}}"{{if .Required}} required{{end}}{{if eq .Type "number"}} step="any" inputmode="decimal"{{end}}{{if eq $.Focus .Name}} autofocus{{end}}>{{end}}</label>
+{{end}}<button{{if .Danger}} class="danger"{{end}}>{{.Button}}</button></form>{{end}}{{end}}
 
 {{/* an action in a closed box with its description */}}
-{{define "boxed"}}{{with .}}<details><summary>{{.Button}}</summary>{{with .Description}}<p class="desc">{{.}}</p>{{end}}{{template "form" .}}</details>{{end}}{{end}}
+{{define "boxed"}}{{with .}}<details><summary>{{.Button}}</summary>{{with .Description}}<small class="desc">{{.}}</small>{{end}}{{template "form" .}}</details>{{end}}{{end}}
 
+{{/* generic is the view of any class without a template of its own: the whole entity, and every action it offers */}}
 {{define "generic"}}{{template "head" .}}
-<h1>{{.Title}}</h1><div class="sub">{{rel .Class}}</div>
-<p class="sub">{{range .Links}}<a href="{{.Href}}" rel="{{rel .Rel}}">{{or .Title .Href}}</a>{{end}}</p>
-{{with .Properties}}<section class="scroll">{{value .}}</section>{{end}}
-{{with .Entities}}<h2>Links</h2><ul class="plain">{{range .}}<li><a href="{{.Href}}">{{or .Title .Href}}</a> <span class="muted">{{rel .Rel}}</span></li>{{end}}</ul>{{end}}
+<h1>{{.Title}}</h1>{{with .Class}}<p class="sub"><small>{{rel .}}</small></p>{{end}}
+{{with .Links}}<p class="sub">{{range .}}<a href="{{.Href}}" rel="{{rel .Rel}}">{{or .Title .Href}}</a>{{end}}</p>{{end}}
+{{with .Properties}}<h2>Properties</h2><section class="scroll">{{value .}}</section>{{end}}
+{{with .Entities}}<h2>Links</h2><ul class="plain">{{range .}}<li><a href="{{.Href}}">{{or .Title .Href}}</a> <small>{{rel .Rel}}</small></li>{{end}}</ul>{{end}}
 {{with .Actions}}<h2>Actions</h2>{{range .}}{{template "boxed" (form .)}}{{end}}{{end}}
 {{template "foot" .}}{{end}}

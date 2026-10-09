@@ -92,6 +92,19 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   shows where the action is legal and nowhere else. A body is CommonMark with goldmark's safe defaults (raw HTML
   omitted), its `[[wikilinks]]` and `#tags` linked. No JavaScript: a browser form posts and is answered 303 to the
   resource it changed, so a reload never posts twice; a refused one shows the text it sent.
+- **The page is semantic HTML, and the catalog says how to draw it.** A field is a `label` around its input, a card
+  is an `article`, a callout an `aside`, a series a `table` with a header row; no id or class is generated for a
+  template to find. What a template cannot know comes from the entity: `danger` marks a destructive action's button
+  and `rows` a textarea's height, so no view decides either by an action's or a field's name.
+- **The stylesheet is this application's own: two embedded sheets, no vendored framework and no CDN.** `base.css`
+  styles ordinary HTML by element — type, colour, forms, tables, buttons, a print sheet, light and dark by
+  `prefers-color-scheme` — and `app.css` only what this app's own vocabulary needs (`.wikilink`, `.badge`, `.chart`,
+  the dense rows); a test keeps the app's names out of the base sheet, and nothing is fetched at render time, so a
+  page looks the same offline in fifty years. **Rejected:** a vendored classless sheet (Simple.css, Pico). Its
+  `aside` is a floated sidebar and ours is a callout in flow, its `section` a bordered band, its `h2` 2.6rem where
+  ours labels a section, its tables bordered and zebra-striped where ours are dense, its form controls carry blanket
+  margins where ours sit two to a row, and its `body` is a 45rem grid: keeping one meant overriding most of it, and
+  re-pinning a file by hand at every upstream change.
 - **Provenance per surface.** `source` is `cli`, `api`, `ui` (a browser form) or `agent:<name>` (MCP);
   the `Lifelog-Source` header sets it.
 - **Optimistic saves.** A body save sends the `version` (the decimal `entities.revision` token) it read; a newer one is a 409.

@@ -26,11 +26,12 @@ type Link struct {
 	Class []string `json:"class,omitempty"`
 }
 
-// Action is a Siren action. Description (what the action does, for an agent) and Owner (the owner's alone) are
-// extensions.
+// Action is a Siren action. Description (what the action does, for an agent), Owner (the owner's alone) and
+// Danger (it hides or retracts what is there) are extensions.
 type Action struct {
 	Name        string  `json:"name"`
 	Owner       bool    `json:"owner,omitempty"`
+	Danger      bool    `json:"danger,omitempty"`
 	Title       string  `json:"title,omitempty"`
 	Description string  `json:"description,omitempty"`
 	Method      string  `json:"method"`
@@ -39,7 +40,8 @@ type Action struct {
 	Fields      []Field `json:"fields,omitempty"`
 }
 
-// Field is a Siren field. In "path" (an extension) marks a field of the catalog's templated href.
+// Field is a Siren field. In "path" (an extension) marks a field of the catalog's templated href; Rows (an
+// extension) is how many lines a browser draws of a textarea.
 type Field struct {
 	Name     string   `json:"name"`
 	Type     string   `json:"type"`
@@ -48,6 +50,7 @@ type Field struct {
 	Required bool     `json:"required,omitempty"`
 	Options  []string `json:"options,omitempty"`
 	In       string   `json:"in,omitempty"`
+	Rows     int      `json:"rows,omitempty"`
 }
 
 const formType = "application/x-www-form-urlencoded"
@@ -68,6 +71,26 @@ func req(name, typ, title string) Field {
 }
 func opt(name, typ, title string) Field { return Field{Name: name, Type: typ, Title: title} }
 
+// area is a multi-line field a browser draws rows lines tall.
+func area(name, title string, rows int) Field {
+	return Field{Name: name, Type: "textarea", Title: title, Rows: rows}
+}
+
+// areaReq is a multi-line field the action cannot do without.
+func areaReq(name, title string, rows int) Field {
+	f := area(name, title, rows)
+	f.Required = true
+	return f
+}
+
+// dangerous names the catalog's destructive actions: those that hide or retract what is already there. A browser
+// draws their button as a danger and any other client may warn the same way; no surface decides this by an
+// action's name. Every name here is a catalog action (TestDangerIsACatalogAction).
+var dangerous = map[string]bool{
+	"tombstone": true, "tombstone-session": true, "tombstone-task": true, "tombstone-occurrence": true,
+	"retract": true, "relocate-reading": true,
+}
+
 // catalog is every action the API has. GET /actions serves it, and the CLI and the MCP server are built from it.
 var catalog = []spec{
 	{"relocate-reading", "Move reading scope", "Owner-only atomic same-metric scope correction of a current unkeyed non-imported chain: retract old scope and append independent replacement, never a cross-scope supersedes edge.", "POST", "/measurements/{id}/relocate", []Field{path("id", "number", "Expected current leaf id"), req("metric", "text", "Same metric"), req("day", "date", "Replacement reading day"), req("value", "number", "Replacement value"), opt("session_id", "number", "New session id (blank unassociated)"), opt("taken_at", "text", "Replacement UTC instant"), opt("tz", "text", "Replacement supplied zone"), opt("captured_with_id", "number", "Replacement capture provenance")}, true},
@@ -75,22 +98,22 @@ var catalog = []spec{
 	{"edit-session", "Edit session", "Replace session metadata using its current revision; identity/provenance never change.", "POST", "/sessions/{id}/edit", append([]Field{path("id", "number", "Session id"), req("version", "hidden", "Version")}, sessionFields...), false},
 	{"tombstone-session", "Tombstone session", "Hide active session results, retaining facts and historical access.", "POST", "/sessions/{id}/tombstone", []Field{path("id", "number", "Session id"), req("version", "hidden", "Version")}, false},
 	{"revive-session", "Revive session", "Restore the same session identity and current facts.", "POST", "/sessions/{id}/revive", []Field{path("id", "number", "Session id"), req("version", "hidden", "Version")}, false},
-	{"create-period", "Record period", "Record a named historical span, with optional uncertain boundaries; classifications use ordinary part-of links.", "POST", "/periods", []Field{req("title", "text", "Title"), opt("body", "textarea", "Body"), opt("start_boundary", "text", "Start boundary (blank unknown)"), opt("end_boundary", "text", "End boundary (blank unknown; .. ongoing)")}, false},
+	{"create-period", "Record period", "Record a named historical span, with optional uncertain boundaries; classifications use ordinary part-of links.", "POST", "/periods", []Field{req("title", "text", "Title"), area("body", "Body", 5), opt("start_boundary", "text", "Start boundary (blank unknown)"), opt("end_boundary", "text", "End boundary (blank unknown; .. ongoing)")}, false},
 	{"edit-period", "Edit boundaries", "Replace period boundaries using the current named-object version.", "POST", "/pages/{id}/period", []Field{path("id", "number", "Period id"), req("version", "hidden", "Version"), opt("start_boundary", "text", "Start boundary"), opt("end_boundary", "text", "End boundary")}, false},
 	{"promote-period", "Record span", "Make this plain non-journal page a period without replacing its identity, body or links.", "POST", "/pages/{id}/promote-period", []Field{path("id", "number", "Page id"), req("version", "hidden", "Version"), opt("start_boundary", "text", "Start boundary"), opt("end_boundary", "text", "End boundary")}, false},
 	{"capture", "Capture", "Append an entry to the journal page of a local day (created on the first capture), with an optional mood 1-5. [[Title]] and #tag in the text link pages, creating them if new.",
-		"POST", "/days/{day}/capture", []Field{path("day", "date", "Local day, YYYY-MM-DD"), opt("text", "textarea", "Entry (CommonMark)"), opt("mood", "number", "Mood 1-5")}, false},
+		"POST", "/days/{day}/capture", []Field{path("day", "date", "Local day, YYYY-MM-DD"), area("text", "Entry (CommonMark)", 4), opt("mood", "number", "Mood 1-5")}, false},
 	{"create-page", "New page", "Create a page with a unique title (a valid file name) and a CommonMark body.",
-		"POST", "/pages", []Field{req("title", "text", "Title"), opt("body", "textarea", "Body")}, false},
+		"POST", "/pages", []Field{req("title", "text", "Title"), area("body", "Body", 12)}, false},
 	{"save-body", "Save", "Replace a page's whole body. version must be the page's current version (from the last read); wikilinks are re-synced.",
-		"POST", "/pages/{id}/body", []Field{path("id", "number", "Page id"), req("body", "textarea", "Body"), req("version", "hidden", "Version")}, false},
+		"POST", "/pages/{id}/body", []Field{path("id", "number", "Page id"), areaReq("body", "Body", 18), req("version", "hidden", "Version")}, false},
 	{"create-person", "New person", "Create a person: title is the permanent handle that [[wikilinks]] use (e.g. 'Sam (barber)'), name the full name.",
 		"POST", "/people", []Field{req("title", "text", "Handle"), opt("name", "text", "Full name"), opt("birth_day", "date", "Born"), opt("death_day", "date", "Died")}, false},
 	{"create-place", "New place", "Create a place; its title is its name and its handle.",
 		"POST", "/places", []Field{req("title", "text", "Name")}, false},
 	{"add-file", "Keep a file", "Keep a file the owner picked (a recording, a PDF, a scan, a photo) as a page: title is its permanent handle, and ![[title]] in a day page shows it; body is its text (a transcript, the text of a PDF, a caption). Send the original, which is read and never stored, or its sha256 and mime. A picture is made from the original when it is a JPEG, PNG or GIF; for any other (HEIC, a video's frame) send preview, a JPEG, PNG or GIF. A photo's own day (its EXIF date) and position are read from the original: its day page gets an at link to the place it was taken in, and shows it; a position near no place is reported, and at names the place, which takes the position as its point. The same original again finds its page and writes nothing but a missing picture, its place and its day.",
 		"POST", "/files", []Field{req("title", "text", "Title"), opt("original", "file", "The file (read, never stored)"), opt("sha256", "text", "SHA-256 of the original, when it is not sent"),
-			opt("mime", "text", "Type, e.g. audio/mp4"), opt("preview", "file", "Picture, when the original is not a JPEG, PNG or GIF"), opt("body", "textarea", "Text: a transcript, a caption"), opt("day", "date", "Its day (default: the photo's own, else today)"),
+			opt("mime", "text", "Type, e.g. audio/mp4"), opt("preview", "file", "Picture, when the original is not a JPEG, PNG or GIF"), area("body", "Text: a transcript, a caption", 6), opt("day", "date", "Its day (default: the photo's own, else today)"),
 			opt("at", "text", "The place it was taken at (names it)"), opt("radius", "number", "That place's radius in metres, when it takes this position (default 250)"),
 			{Name: "dry_run", Type: "number", Title: "Dry run: write nothing, say what keeping it would do", Options: []string{"0", "1"}}}, false},
 	{"locate", "Locate", "Give this place its point and radius, or move them: a photo kept inside the circle is matched to it, the smallest circle first. link_days 0 marks a place recognised and never linked (home, work).",
@@ -130,7 +153,7 @@ var catalog = []spec{
 	{"find", "Find page", "Open the page with this title (any case or normalisation).",
 		"GET", "/pages", []Field{req("title", "text", "Title")}, false},
 	{"query", "Query", "Run one read-only SQL statement (SQLite; see docs/cookbook for the canonical queries). At most 500 rows.",
-		"POST", "/query", []Field{req("sql", "textarea", "SQL")}, false},
+		"POST", "/query", []Field{areaReq("sql", "SQL", 6)}, false},
 	{"snapshot", "Take a snapshot", "The owner's dated copy of life.db (docs/cookbook/take-a-snapshot.md) into the server's snapshot folder, never overwriting, then its restore check. The answer names the file and the check.",
 		"POST", "/snapshots", nil, true},
 	// Planning (docs/contract/planning.md): explicit tasks, their occurrences, the deadlines of a window.
@@ -176,7 +199,8 @@ func specOf(name string) spec {
 // action instantiates a catalog action: path fields fill the href and drop out, values prefill the rest.
 func action(name string, params map[string]string, values map[string]any) Action {
 	s := specOf(name)
-	a := Action{Name: s.Name, Title: s.Title, Description: s.Description, Method: s.Method, Href: s.Path, Owner: s.Owner}
+	a := Action{Name: s.Name, Title: s.Title, Description: s.Description, Method: s.Method, Href: s.Path, Owner: s.Owner,
+		Danger: dangerous[s.Name]}
 	if s.Method == "POST" {
 		a.Type = formType
 	}
@@ -195,7 +219,8 @@ func action(name string, params map[string]string, values map[string]any) Action
 
 // templated is a catalog action as /actions shows it: the href keeps its {placeholders}.
 func templated(s spec) Action {
-	a := Action{Name: s.Name, Title: s.Title, Description: s.Description, Method: s.Method, Href: s.Path, Fields: s.Fields, Owner: s.Owner}
+	a := Action{Name: s.Name, Title: s.Title, Description: s.Description, Method: s.Method, Href: s.Path, Fields: s.Fields,
+		Owner: s.Owner, Danger: dangerous[s.Name]}
 	if s.Method == "POST" {
 		a.Type = formType
 	}

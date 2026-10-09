@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -21,14 +22,36 @@ import (
 // reads the properties by their JSON names and places the entity's own actions, so a form is shown only where
 // the API offers the action. There is no JavaScript: a form posts, and the server answers with a redirect.
 //
-//go:embed html/*.html
+// The look is two stylesheets of this application's own; no framework is vendored and nothing is fetched.
+// base.css styles ordinary HTML by element (its forms, tables, buttons, print sheet and dark palette); app.css
+// holds only what this app's own vocabulary needs (.wikilink, .badge, .chart, the dense rows), and a test keeps
+// the two apart.
+//
+//go:embed html/*.html html/*.css
 var views embed.FS
 
+// baseCSS and appCSS are the two stylesheets, in that order: the look of ordinary HTML, then this app's own.
+var (
+	baseCSS = template.CSS(mustView("base.css"))
+	appCSS  = template.CSS(mustView("app.css"))
+)
+
+func mustView(name string) []byte {
+	b, err := views.ReadFile("html/" + name)
+	if err != nil {
+		panic(err) // the sheets are embedded: one missing is a build defect, not a runtime condition
+	}
+	return b
+}
+
 var pages = template.Must(template.New("").Funcs(template.FuncMap{
+	"basecss":  func() template.CSS { return baseCSS },
+	"appcss":   func() template.CSS { return appCSS },
 	"value":    renderValue,
 	"rel":      func(r []string) string { return strings.Join(r, " ") },
 	"post":     func(a Action) bool { return a.Method == "POST" },
 	"markdown": markdown,
+	"mark":     mark,
 	"rejected": rejected,
 	"chart":    chart,
 	"title":    titleHref,
@@ -51,17 +74,19 @@ var viewOf = map[string]string{
 	"metrics": "metrics", "series": "series", "habits": "habits", "measurement": "measurement", "error": "error", "login": "login",
 }
 
-// view is what a template gets: the entity, its properties as the JSON client reads them, and for an error
-// answering a form, the text that form sent (so a refused save loses nothing) and the page it came from.
+// view is what a template gets: the entity, its properties as the JSON client reads them, the path the browser
+// asked for (which navigation link is current) and, for an error answering a form, the text that form sent (so
+// a refused save loses nothing) and the page it came from.
 type view struct {
 	*Entity
 	Props     any
+	Path      string
 	Submitted string
 	Back      string
 }
 
 func renderHTML(w http.ResponseWriter, r *http.Request, status int, e *Entity) {
-	v := &view{Entity: e, Props: jsonShape(e.Properties)}
+	v := &view{Entity: e, Props: jsonShape(e.Properties), Path: r.URL.Path}
 	if status >= 400 && r.Method == "POST" {
 		v.Submitted = r.PostForm.Get("body")
 		if v.Submitted == "" {
@@ -87,6 +112,53 @@ func renderHTML(w http.ResponseWriter, r *http.Request, status int, e *Entity) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	io.Copy(w, &b)
+}
+
+// navItems are the top navigation's links, in order. One of them is marked current per page (Nav); a page's own
+// neighbours need no entry here, since every template places them from the entity's links.
+var navItems = []struct{ Title, Href string }{
+	{"Home", "/"}, {"Today", "/days/today"}, {"Days", "/days"}, {"People", "/people"}, {"Places", "/places"},
+	{"Files", "/files"}, {"Metrics", "/metrics"}, {"Habits", "/habits"}, {"Tasks", "/tasks"}, {"New", "/#new"},
+}
+
+// navItem is one navigation link, marked when the browser is on it.
+type navItem struct {
+	Title, Href string
+	Current     bool
+}
+
+// Nav is the top navigation with the link of this page marked, so a reader knows where they are.
+func (v *view) Nav() []navItem {
+	out := make([]navItem, len(navItems))
+	best, at := -1, 0
+	for i, it := range navItems {
+		out[i] = navItem{Title: it.Title, Href: it.Href}
+		switch n := navMatch(v.Path, it.Href); {
+		case n > at: // a better match than the one held
+			best, at = i, n
+		case n == at && n > 0 && len(it.Href) > len(navItems[best].Href): // of two equal ones, the more specific
+			best = i
+		}
+	}
+	if best >= 0 {
+		out[best].Current = true
+	}
+	return out
+}
+
+// navMatch is how well a navigation href fits the request path: 2 when it is the path, 1 when the path is under
+// it, 0 when it is not. A fragment link never matches: it names a place on a page, not a page.
+func navMatch(path, href string) int {
+	if strings.Contains(href, "#") {
+		return 0
+	}
+	switch {
+	case path == href:
+		return 2
+	case href != "/" && strings.HasPrefix(path, href+"/"):
+		return 1
+	}
+	return 0
 }
 
 // Action is the entity's action of that name, nil when it is not offered.
@@ -137,11 +209,13 @@ func (v *view) Embedded(rel string) []Link {
 }
 
 // formView is an action as the "form" template draws it. formOf takes name/value pairs: "button" labels the
-// button, "class" styles the form, "hide" lists fields kept with their value but not shown, "choices:<field>"
-// offers a field's values as a list, and any other name fixes a field to a value (hidden).
+// button, "class" styles the form, "hide" lists fields kept with their value but not shown, "autofocus" names
+// the field the browser starts in, "choices:<field>" offers a field's values as a list, and any other name
+// fixes a field to a value (hidden).
 type formView struct {
 	*Action
 	Button, Class string
+	Focus         string
 	Shown         []Field
 	Hidden        []Field
 }
@@ -186,6 +260,8 @@ func formOf(x any, opts ...string) (*formView, error) {
 			for _, n := range strings.Split(v, ",") {
 				hide[n] = true
 			}
+		case k == "autofocus":
+			f.Focus = v
 		case strings.HasPrefix(k, "choices:"):
 			choices[strings.TrimPrefix(k, "choices:")] = strings.Fields(v)
 		default:
@@ -221,6 +297,14 @@ func jsonShape(v any) any {
 	json.Unmarshal(b, &x)
 	return x
 }
+
+// mark is a search snippet with its matched words marked: snippet() puts [ and ] around them. The text is
+// escaped first, so a snippet can never carry HTML of its own.
+func mark(snippet string) template.HTML {
+	return template.HTML(markRE.ReplaceAllString(template.HTMLEscapeString(snippet), "<mark>$1</mark>"))
+}
+
+var markRE = regexp.MustCompile(`\[([^[\]]+)\]`)
 
 // rejected are the [[…]] names in a body that make no link, because they are not valid titles.
 func rejected(body string) []string {
@@ -353,14 +437,14 @@ func writeValue(sb *strings.Builder, x any) {
 		sort.Strings(keys)
 		sb.WriteString("<table>")
 		for _, k := range keys {
-			sb.WriteString("<tr><th>" + esc(k) + "</th><td>")
+			sb.WriteString(`<tr><th scope="row">` + esc(k) + "</th><td>")
 			writeValue(sb, x[k])
 			sb.WriteString("</td></tr>")
 		}
 		sb.WriteString("</table>")
 	case []any:
 		if len(x) == 0 {
-			sb.WriteString(`<span class="muted">none</span>`)
+			sb.WriteString(`<small>none</small>`)
 			return
 		}
 		if _, ok := x[0].(map[string]any); ok {
@@ -377,11 +461,11 @@ func writeValue(sb *strings.Builder, x any) {
 				}
 			}
 			sort.Strings(cols)
-			sb.WriteString("<table><tr>")
+			sb.WriteString("<table><thead><tr>")
 			for _, c := range cols {
-				sb.WriteString("<th>" + esc(c) + "</th>")
+				sb.WriteString(`<th scope="col">` + esc(c) + "</th>")
 			}
-			sb.WriteString("</tr>")
+			sb.WriteString("</tr></thead><tbody>")
 			for _, row := range x {
 				m, _ := row.(map[string]any)
 				sb.WriteString("<tr>")
@@ -392,7 +476,7 @@ func writeValue(sb *strings.Builder, x any) {
 				}
 				sb.WriteString("</tr>")
 			}
-			sb.WriteString("</table>")
+			sb.WriteString("</tbody></table>")
 			return
 		}
 		sb.WriteString("<ul>")
@@ -409,7 +493,7 @@ func writeValue(sb *strings.Builder, x any) {
 			sb.WriteString(esc(x))
 		}
 	case nil:
-		sb.WriteString(`<span class="muted">—</span>`)
+		sb.WriteString(`<small>—</small>`)
 	default:
 		sb.WriteString(esc(fmt.Sprint(x)))
 	}

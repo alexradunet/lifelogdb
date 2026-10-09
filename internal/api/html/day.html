@@ -1,15 +1,15 @@
 {{define "day"}}{{template "head" .}}
 {{$d := .Props}}
 <h1>{{weekday .Title}}</h1>
-<div class="sub"><span>{{.Title}}</span><a href="/days/today">Today</a><a href="/habits?day={{.Title}}">Habits</a></div>
-<div class="pager"><a href="{{.Link "prev"}}" rel="prev">← Previous day</a><a href="{{.Link "next"}}" rel="next">Next day →</a></div>
+<p class="sub"><span>{{.Title}}</span><a href="/days/today">Today</a><a href="/habits?day={{.Title}}">Habits</a>{{with .Link "page"}}<a href="{{.}}">The day page</a>{{end}}</p>
+<nav class="pager" aria-label="Days"><a href="{{.Link "prev"}}" rel="prev">← Previous day</a><a href="{{.Link "next"}}" rel="next">Next day →</a></nav>
 
 <h2>Journal</h2>
-{{range $d.view}}{{if eq .what "day page"}}<div class="card prose">{{markdown .detail}}</div>{{end}}{{end}}
-{{with .Link "page"}}<p class="sub"><a href="{{.}}">Open or edit the day page</a></p>{{else}}<p class="muted">Nothing written on this day yet.</p>{{end}}
+{{range $d.view}}{{if eq .what "day page"}}<article class="prose">{{markdown .detail}}</article>{{end}}{{end}}
+{{with .Link "page"}}<p class="sub"><a href="{{.}}">Open or edit the day page</a></p>{{else}}<p><small>Nothing written on this day yet.</small></p>{{end}}
 
 <h2>Add to this day</h2>
-{{template "form" (form (.Action "capture") "choices:mood" "1 2 3 4 5")}}
+{{template "form" (form (.Action "capture") "choices:mood" "1 2 3 4 5" "autofocus" "text")}}
 
 {{$at := false}}{{range $d.view}}{{if eq .what "at"}}{{$at = true}}{{end}}{{end}}
 {{if $at}}<h2>Where</h2><ul class="plain">{{range $d.view}}{{if eq .what "at"}}<li><a href="{{title .detail}}">{{.detail}}</a></li>{{end}}{{end}}</ul>{{end}}
@@ -18,10 +18,19 @@
 {{if $habit}}<h2>Habits</h2><ul class="plain">{{range $d.view}}{{if eq .what "habit"}}<li>{{.detail}}</li>{{end}}{{end}}</ul>
 <p class="sub"><a href="/habits?day={{$.Title}}">Check in</a></p>{{end}}
 
-{{with $d.readings}}<h2>Readings</h2><ul class="plain">{{range .}}<li class="row"><a class="grow" href="/metrics/{{pathesc .metric}}">{{.metric}}</a><a href="/measurements/{{num .id}}">{{num .value}}</a><span>{{.scope}}</span>{{with .session_id}}<a href="/sessions/{{num .}}">session {{num .}}</a>{{end}}{{with .taken_at}}<span class="muted">{{.}}</span>{{end}}</li>{{end}}</ul>{{end}}
+{{with $d.readings}}<h2>Readings</h2>
+<div class="scroll"><table><caption>Every reading recorded on this day</caption>
+<thead><tr><th scope="col">metric</th><th scope="col" class="num">value</th><th scope="col">scope</th><th scope="col">taken at</th></tr></thead>
+<tbody>{{range .}}<tr>
+<td><a href="/metrics/{{pathesc .metric}}">{{.metric}}</a></td>
+<td class="num"><a href="/measurements/{{num .id}}">{{num .value}}</a></td>
+<td>{{.scope}}{{with .session_id}} · <a href="/sessions/{{num .}}">session {{num .}}</a>{{end}}</td>
+<td><small>{{with .taken_at}}{{.}}{{else}}—{{end}}</small></td>
+</tr>{{end}}</tbody></table></div>{{end}}
 
 {{$pages := false}}{{range $d.view}}{{if eq .what "page" "page (edited)"}}{{$pages = true}}{{end}}{{end}}
-{{if $pages}}<h2>Pages written this day</h2><ul class="plain">{{range $d.view}}{{if eq .what "page" "page (edited)"}}<li><a href="{{title .detail}}">{{.detail}}</a>{{if ne .what "page"}} <span class="muted">edited</span>{{end}}</li>{{end}}{{end}}</ul>{{end}}
+{{if $pages}}<h2>Pages written this day</h2><ul class="plain">{{range $d.view}}{{if eq .what "page" "page (edited)"}}<li><a href="{{title .detail}}">{{.detail}}</a>{{if ne .what "page"}} <small>edited</small>{{end}}</li>{{end}}{{end}}</ul>{{end}}
 
 {{template "boxed" (form (.Action "record") "button" "Record a reading")}}
+{{template "boxed" (form (.Action "capture-session") "button" "Record a session")}}
 {{template "foot" .}}{{end}}

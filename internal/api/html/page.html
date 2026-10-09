@@ -1,7 +1,7 @@
 {{define "page"}}{{template "head" .}}
 {{$p := .Props}}
 <h1>{{.Title}}</h1>
-<div class="sub">
+<p class="sub">
 {{if $p.is_day_page}}<span class="badge">day</span><a href="{{.Link "day"}}">{{weekday $p.day}} — the day view</a>
 {{else}}<span class="badge">{{$p.entity_type}}</span>{{end}}
 {{with $p.period}}<span>Start: {{if .start_boundary}}{{.start_boundary}}{{else}}unknown{{end}} · End: {{if .end_boundary}}{{.end_boundary}}{{else}}unknown{{end}}</span>{{end}}
@@ -9,27 +9,30 @@
 {{with $p.file}}<span>{{.mime}}</span><span title="SHA-256 of the original">{{slice .sha256 0 12}}…</span>{{end}}
 {{with $p.point}}<span>{{num .lat}}, {{num .lon}} · {{num .radius_m}} m{{if not .link_days}} · its days are not linked{{end}}</span>{{end}}
 {{with .Link "map"}}<a href="{{.}}" rel="noreferrer">map</a>{{end}}
-</div>
+</p>
 
-{{if $p.deleted_at}}<div class="note warn">Deleted {{$p.deleted_at}}. Nothing is ever removed: revive it to bring it back.
-{{template "form" (form (.Action "revive") "class" "tiny")}}</div>{{end}}
-{{with .Link "preview"}}<p><a href="{{.}}"><img class="preview" src="{{.}}" alt="{{$.Title}}"></a></p>{{end}}
+{{if $p.deleted_at}}<aside class="warn" role="alert"><p>Deleted {{$p.deleted_at}}. Nothing is ever removed: revive it to bring it back.</p>
+{{template "form" (form (.Action "revive") "class" "tiny")}}</aside>{{end}}
+{{with .Link "preview"}}<figure><a href="{{.}}"><img class="preview" src="{{.}}" alt="{{$.Title}}"></a><figcaption>{{$.Title}}</figcaption></figure>{{end}}
 
 <section>
-{{if $p.body}}<div class="prose">{{markdown $p.body}}</div>{{else}}<p class="muted">Nothing written here yet.</p>{{end}}
-{{with rejected $p.body}}<div class="note warn">These names make no link — a title cannot hold <code>/ \ : * ? " &lt; &gt; |</code>, or start or end with a dot or space:
-{{range $i, $t := .}}{{if $i}}, {{end}}<code>[[{{$t}}]]</code>{{end}}</div>{{end}}
+{{if $p.body}}<div class="prose">{{markdown $p.body}}</div>{{else}}<p><small>Nothing written here yet.</small></p>{{end}}
+{{with rejected $p.body}}<aside class="warn"><p>These names make no link — a title cannot hold <code>/ \ : * ? " &lt; &gt; |</code>, or start or end with a dot or space:</p>
+<p>{{range $i, $t := .}}{{if $i}}, {{end}}<code>[[{{$t}}]]</code>{{end}}</p></aside>{{end}}
 </section>
 
-{{with form (.Action "save-body") "button" "Save"}}<details{{if not $p.body}} open{{end}}><summary>Edit</summary>
-<p class="desc">CommonMark. [[Title]] links a page and #tag a tag page; both are created if new.</p>
+{{with form (.Action "save-body") "button" "Save" "autofocus" "body"}}<details{{if not $p.body}} open{{end}}><summary>Edit</summary>
+<small class="desc">CommonMark. [[Title]] links a page and #tag a tag page; both are created if new. Nothing is saved until the version you read is still the current one.</small>
 {{template "form" .}}</details>{{end}}
 
-{{with $p.links}}<h2>Links</h2>{{range group . "kind"}}<div class="row"><span class="muted">{{.Key}}</span>
-{{range .Items}}<a href="/pages/{{num .id}}">{{.title}}</a>{{with .note}} <span class="muted">({{.}})</span>{{end}}{{end}}</div>{{end}}{{end}}
+{{with $p.links}}<h2>Links</h2><dl>{{range group . "kind"}}<dt>{{.Key}}</dt>
+<dd>{{range .Items}}<a href="/pages/{{num .id}}">{{.title}}</a>{{with .note}} <small>({{.}})</small>{{end}}{{end}}</dd>{{end}}</dl>{{end}}
 
-{{with $p.backlinks}}<h2>Backlinks</h2>{{range group . "kind"}}<div class="muted">{{if eq .Key "wikilink"}}mentioned in{{else}}{{.Key}}{{end}}</div>
+{{with $p.backlinks}}<h2>Backlinks</h2>{{range group . "kind"}}<p class="sub"><small>{{if eq .Key "wikilink"}}mentioned in{{else}}{{.Key}}{{end}}</small></p>
 <ul class="plain">{{range .Items}}<li><a href="/pages/{{num .id}}">{{.title}}</a>{{if ne .entity_type "page"}} <span class="badge">{{.entity_type}}</span>{{end}}</li>{{end}}</ul>{{end}}{{end}}
+
+{{if $p.task_project}}<aside><p>A task uses this page as its project context, so it cannot become a person or a place.</p></aside>
+{{else if $p.session_kind}}<aside><p>This page names a kind of session, so it cannot become a person or a place.</p></aside>{{end}}
 
 {{if or (.Action "rename") (.Action "promote") (.Action "link") (.Action "locate") (.Action "tombstone")}}<h2>More</h2>
 {{template "boxed" (form (.Action "locate") "button" "Set its point")}}
@@ -40,21 +43,21 @@
 {{template "boxed" (form (.Action "promote-period"))}}
 {{template "boxed" (form (.Action "promote") "button" "Make it a person or a place")}}
 {{template "boxed" (form (.Action "tombstone"))}}{{end}}
-<p class="sub"><span>created {{$p.created_at}}</span><span>version {{$p.version}}</span></p>
+<p class="sub"><small>created {{$p.created_at}}</small><small>version {{$p.version}}</small></p>
 {{template "foot" .}}{{end}}
 
 {{define "measurement"}}{{template "head" .}}
 {{$m := .Props}}
+<h1>{{if $m.retraction}}Retracted{{else}}{{num $m.value}}{{end}} <small>{{$m.metric}}</small></h1>
+<p class="sub"><a href="{{.Link "day"}}">{{weekday $m.day}} {{$m.day}}</a><a href="{{.Link "series"}}">{{$m.metric}} series</a>
+{{with $m.taken_at}}<span>taken {{.}}{{with $m.tz}} ({{.}}){{end}}</span>{{end}}</p>
 <p>Scope: {{$m.scope}} (unassociated is not a daily total). {{with .Link "session"}}<a href="{{.}}">Session</a>{{end}}{{with $m.session_deleted_at}} · session tombstoned {{.}}{{end}}</p>
-<h1>{{if $m.retraction}}Retracted{{else}}{{num $m.value}}{{end}} <span class="muted">{{$m.metric}}</span></h1>
-<div class="sub"><a href="{{.Link "day"}}">{{weekday $m.day}} {{$m.day}}</a><a href="{{.Link "series"}}">{{$m.metric}} series</a>
-{{with $m.taken_at}}<span>taken {{.}}{{with $m.tz}} ({{.}}){{end}}</span>{{end}}</div>
-{{if $m.retraction}}<div class="note">This row retracts the reading before it: that reading never counts.</div>
-{{else if not $m.current}}<div class="note">This reading was corrected or retracted. {{with .Link "superseded-by"}}<a href="{{.}}">See what replaced it</a>.{{end}}</div>{{end}}
-<ul class="plain">
+{{if $m.retraction}}<aside role="note"><p>This row retracts the reading before it: that reading never counts.</p></aside>
+{{else if not $m.current}}<aside class="warn" role="note"><p>This reading was corrected or retracted. {{with .Link "superseded-by"}}<a href="{{.}}">See what replaced it</a>.{{end}}</p></aside>{{end}}
+{{if or (.Link "supersedes") (.Link "captured-with")}}<ul class="plain">
 {{with .Link "supersedes"}}<li><a href="{{.}}">The reading this corrects</a></li>{{end}}
 {{with .Link "captured-with"}}<li><a href="{{.}}">Captured with its day page</a></li>{{end}}
-</ul>
+</ul>{{end}}
 {{with .Action "correct"}}<h2>Correct</h2>{{template "form" (form . "class" "inline")}}{{end}}
 {{template "boxed" (form (.Action "retract"))}}
 {{template "boxed" (form (.Action "relocate-reading"))}}

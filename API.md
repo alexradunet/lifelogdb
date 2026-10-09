@@ -33,7 +33,7 @@ Every answer is one [Siren](https://github.com/kevinswiber/siren) entity:
 | `properties` | the resource's own data, per class below |
 | `entities` | embedded links: `{rel, href, title, class}` each, the things this resource lists or links to |
 | `links` | `{rel, href, title}`: `self`, `index` (home), `prev`/`next` (a neighbour or the next page), and the rels named per class |
-| `actions` | what may be done here: `{name, title, description, method, href, type, fields, owner}`, each field `{name, type, title, value, required, options, in}` with its current value filled in; `owner: true` marks the owner's alone; `in: "path"` marks a field of a templated href (`GET /actions` only) |
+| `actions` | what may be done here: `{name, title, description, method, href, type, fields, owner, danger}`, each field `{name, type, title, value, required, options, in, rows}` with its current value filled in; `owner: true` marks the owner's alone and `danger: true` marks one that hides or retracts what is there, so a client can warn before it sends; `in: "path"` marks a field of a templated href (`GET /actions` only) and `rows` is how many lines a `textarea` is drawn |
 | `result` | after a write: what it did (the result shapes below) |
 
 `GET /actions` is the catalog: every action with a templated `href` (`/pages/{id}/body`). A client fills the path

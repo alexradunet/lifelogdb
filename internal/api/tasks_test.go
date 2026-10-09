@@ -170,7 +170,7 @@ func TestPlanningViewsRender(t *testing.T) {
 	href := strings.SplitN(hrefOf(series, "self"), "?", 2)[0]
 	for path, want := range map[string][]string{
 		"/tasks": {"Water plants", `action="/tasks"`},
-		href + "?from=2031-01-01&through=2031-01-31":    {`action="` + href + `/stop"`, `name="version" value="`, "capture-occurrence", "2031-01-13"},
+		href + "?from=2031-01-01&through=2031-01-31":    {`action="` + href + `/stop"`, `name="version" value="`, `action="` + href + `/occurrences"`, "2031-01-13"},
 		href + "/occurrences/2031-01-13":                {`action="` + href + `/occurrences"`, `name="key" value="2031-01-13"`},
 		"/deadlines?from=2031-01-01&through=2031-01-31": {"Water plants", "2031-01-27", `action="/deadlines"`},
 	} {
