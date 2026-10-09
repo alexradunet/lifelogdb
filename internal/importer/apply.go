@@ -52,17 +52,23 @@ type Report struct {
 // write the writer would refuse is in the report, each run in its own savepoint so the ones after it are checked
 // too; a file-level refusal (a kept_as_text or waiting entry, a reading identity) is still an error.
 func (w *Workspace) Check(ctx context.Context, s *core.Store, file string) (*Report, error) {
-	return w.run(ctx, s, file, true)
+	return w.run(ctx, s, file, true, nil)
+}
+
+// check is Check for an operation that checks many files: it reads the file's state from the ledger it read once.
+func (w *Workspace) check(ctx context.Context, s *core.Store, file string, idx ledgerIndex) (*Report, error) {
+	return w.run(ctx, s, file, true, idx)
 }
 
 // Apply runs the same checks and writes the file's facts in one transaction, then its ledger line. A file is
 // written whole or not at all: the first refused write refuses the file, with its class on the error.
 func (w *Workspace) Apply(ctx context.Context, s *core.Store, file string) (*Report, error) {
-	return w.run(ctx, s, file, false)
+	return w.run(ctx, s, file, false, nil)
 }
 
-func (w *Workspace) run(ctx context.Context, s *core.Store, file string, dry bool) (*Report, error) {
-	f, pos, rules, refused, err := w.prepare(file, true)
+// run checks a file, and applies it when not dry. idx is the ledger an operation read once; nil reads it now.
+func (w *Workspace) run(ctx context.Context, s *core.Store, file string, dry bool, idx ledgerIndex) (*Report, error) {
+	f, pos, rules, refused, err := w.prepare(file, true, idx)
 	if err != nil {
 		return nil, err
 	}
@@ -101,9 +107,10 @@ func (w *Workspace) run(ctx context.Context, s *core.Store, file string, dry boo
 
 // prepare runs everything that needs no database: the ledger (before any database work), the rules gate, the
 // facts file and the checks against its source file. Lenient, it returns the writes those checks refuse (a check
-// reports them all); strict, any of them refuses the file (an apply writes whole or not at all).
-func (w *Workspace) prepare(file string, lenient bool) (*Facts, []int, *Rules, []Refusal, error) {
-	state, err := w.ledgerState(file)
+// reports them all); strict, any of them refuses the file (an apply writes whole or not at all). idx is the ledger an
+// operation read once; nil reads it now.
+func (w *Workspace) prepare(file string, lenient bool, idx ledgerIndex) (*Facts, []int, *Rules, []Refusal, error) {
+	state, err := w.stateOf(file, idx)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}

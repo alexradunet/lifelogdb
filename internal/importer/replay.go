@@ -252,6 +252,7 @@ func (w *Workspace) replayIntoPlan(ctx context.Context, trial, ts *core.Store, r
 	if err != nil {
 		return err
 	}
+	idx := indexLedger(lines)
 	var pending []string
 	for _, l := range lines {
 		if (l.State == "x" || l.State == "?") && !preparedFiles[l.File] {
@@ -263,7 +264,7 @@ func (w *Workspace) replayIntoPlan(ctx context.Context, trial, ts *core.Store, r
 		var lastErr error
 		waits := map[string]error{} // why each file of later waits
 		for _, file := range pending {
-			f, pos, rules, _, err := w.prepare(file, false)
+			f, pos, rules, _, err := w.prepare(file, false, idx)
 			if err != nil {
 				if err := res.failed(rehearse, "facts", file, err); err != nil {
 					return err

@@ -73,9 +73,11 @@ outside every repository, or in a folder its `.gitignore` excludes (this reposit
 | `.approved/rules.md`, `.approved/metrics.md`, `.approved/entities.md` | each stamped file as the owner last approved it, stamp included (see "Gates") | the writer, only when the owner approves |
 
 **rules.md.** The first line is the gate; `source:` gives the `entities.source` of every row
-(`import:<name>`, one per source, `lifelog_meta.source`). The writer reads nothing else of it: `## Folders` and
-`## Decisions` are for the model and the owner. A decision about one name is a row of `entities.md`, so a new name
-does not close the rules gate.
+(`import:<name>`, one per source, `lifelog_meta.source`). A `## Folders` line is `- `, its patterns in the glob
+language of *skip* (in backticks, or bare and separated by commas), a dash, then its words. The writer reads one more
+thing: a folder line whose words start with `skip:` or `later:` marks the files that *ledger* adds (see
+"ledger.md"). The other folder lines and `## Decisions` are for the model and the owner. A decision about one name
+is a row of `entities.md`, so a new name does not close the rules gate.
 
   ```markdown
   status: draft
@@ -85,7 +87,8 @@ does not close the rules gate.
   - `Journal/**/*.md` — one note per day: its day's page; the people it names, the places the owner was at
   - `Contacts/*.md` — one person per note
   - `Medical/Results/*.md` — readings: one metric per note, values from its table
-  - `**/*.png`, `**/*.pdf` — skip: an attachment is kept on its own, as a file
+  - `**/*.png`, `**/*.pdf` — later: an attachment, kept with its text
+  - `*.canvas` — skip: a view file
 
   ## Decisions
   - a result written as a word ("normal") stays text
@@ -181,11 +184,14 @@ is `open`, `answered`, `done` or `parked`. Each option shows the exact rows its 
 *ledger* appends the files added to the source since and reports the listed files it no longer finds; it never
 changes or removes a line, so a line stays the record that a file was imported. `[x]` done and `[?]` waiting are
 written only by *apply*, with the counts of what was written, and so is the `held:` note of a file still to do that
-waits for the owner's names. The model writes two marks: `[-]` skipped, with the reason, for what is never imported;
-and `[>]` later, for a file held for a later pass — an attachment to keep with its text, a photo to select ("Files"
-below) — not now and not never. Either takes one file or a pattern in the rules'
-glob language (`Drive/**`, `**/*.{png,pdf}`: `*` within a path segment, `**` across segments, `{a,b}` for either) and
-marks every file still to do that it matches, and no other line.
+waits for the owner's names. Two marks say what is not imported now: `[-]` skipped, with the reason, for what is
+never imported; and `[>]` later, for a file held for a later pass — an attachment to keep with its text, a photo to
+select ("Files" below) — not now and not never. *ledger* writes them when it adds a file that a `skip:` or `later:`
+line of the approved rules matches: the first folder line that matches the file decides, and its words are the note.
+A draft `rules.md` marks nothing, and a line written before stays as it is. The model writes the same marks with
+*skip* and *defer*, for one file or a pattern in the rules' glob language (`Drive/**`, `**/*.{png,pdf}`: `*` within
+a path segment, `**` across segments, `{a,b}` for either): a pattern marks every file still to do that it matches,
+and no other line.
 
 ```
 - [x] Journal/2031/2031-04-11.md — 1 place, 1 link (2 new)
@@ -277,7 +283,7 @@ Each runs on one explicitly selected database.
 |---|---|---|---|
 | *inventory* | one folder and the listings of its archives, nothing of their contents | — | nothing; prints every folder with its files by extension and by digit-masked name pattern, each archive's contents the same way, and the sources it recognises: a folder of notes (mostly Markdown files, with its `YYYY-MM-DD.md` count), a Takeout extraction with its product folders. Never a content, a value or one file's name |
 | *status* | the workspace; the database when one is given | the gates; every done file dry-run against the database | nothing; prints gates (for a closed gate, the lines changed since its last approval), ledger counts, questions, the next file (a held file only when the stamped `entities.md` decides each of its names; and the first of the later pass), the held files and their undecided names, the rows of rejected names still live and the tombstoned rows that a replay writes again, one "do now" sentence, mismatches; before a plan or a ledger exists, how many Markdown files the source holds |
-| *ledger* | the source tree; `ledger.md` | — | `ledger.md`: every file `[ ]` the first time; after that the files added since, appended `[ ]`, and the listed files it no longer finds reported; no line changed or removed |
+| *ledger* | the source tree; `ledger.md` | — | `ledger.md`: every file `[ ]` the first time; after that the files added since, appended `[ ]`, and the listed files it no longer finds reported; a file it adds is `[-]` or `[>]` when a `skip:` or `later:` line of the approved rules matches it; no line changed or removed |
 | *skip* / *defer* | `ledger.md` | that the file, or some file the pattern matches, is in the ledger | `[-]` with "skip: reason", or `[>]` with "later: reason", on every matching file still to do |
 | *inspect a file* | one source file | — | nothing; returns its frontmatter, headings, tables as rows, checkboxes and links |
 | *find* | the database | — | nothing; pages, metrics or readings matching a text: exact, same words, more words, fewer words |
@@ -434,9 +440,10 @@ question; list these rows in the report as "metric pages from notes". A habit is
 `until` empty. Then **stop** and ask the owner to review and approve. After approval, run the workspace
 operation *register metrics* to register those approved rows. Never type a unit into an operation yourself.
 
-**5. Make the ledger** with *ledger*, then mark what the rules say, by pattern: *skip* (`[-]`) for what is never
-imported — a view file, a folder that is not a life log — and *defer* (`[>]`) for what a later pass keeps: attachments,
-photos ("Files" below). Files the owner adds later: *ledger* again, then the same marks.
+**5. Make the ledger** with *ledger*. It marks what the approved rules skip or hold: write the rules so that a folder
+line says `skip:` for what is never imported — a view file, a folder that is not a life log — and `later:` for what
+a later pass keeps: attachments, photos ("Files" below). Mark what is left by pattern with *skip* (`[-]`) and
+*defer* (`[>]`) only when no rule says it. Files the owner adds later: *ledger* again.
 
 **6. The loop, one file per turn.**
 
@@ -629,7 +636,8 @@ Each line is a requirement on a writer that offers this process.
 - Quotes match as whole words or tokens; a value matches as a whole number in its quote; a quote too
   short to state the fact is refused.
 - The ledger is checked **before** the database transaction (a skipped or unknown file is refused),
-  and written atomically. *ledger* run again adds the files added since and never changes or removes a line; a
+  and written atomically. *ledger* run again adds the files added since and never changes or removes a line; it
+  marks a file it adds as the first matching folder line of the approved rules says, and only such a file; a
   pattern mark touches only the files still to do; a `[>]` file is accepted wherever a `[ ]` one is.
 - *inventory* prints no content, no value and no single file's name: a name appears only as a pattern that repeats.
 - An approval covers the approved file's content, not only its status line: an edit after approval

@@ -16,7 +16,7 @@ import (
 var importCatalog = []spec{
 	{"import-status", "Import status", "Start every turn here: the gates, the ledger, the questions, the next file, one 'do now' sentence and any mismatch. Do what it says.",
 		"GET", "/import", nil, false},
-	{"make-ledger", "Make the ledger", "Write ledger.md: every file of the source, each to do. Run again, it adds the files added to the source since and changes no line.",
+	{"make-ledger", "Make the ledger", "Write ledger.md: every file of the source, each to do, or skipped or held for later when a skip: or later: line of the approved rules matches it. Run again, it adds the files added to the source since and changes no line.",
 		"POST", "/import/ledger", nil, false},
 	{"skip-file", "Skip files", "Mark a ledger file skipped for good, with the reason a rule gives (a view file, not a life log); or a pattern (Drive/**, **/*.canvas): every file still to do that it matches.",
 		"POST", "/import/skip", []Field{req("file", "text", "File or pattern"), req("reason", "text", "Reason")}, false},
@@ -26,7 +26,7 @@ var importCatalog = []spec{
 		"GET", "/import/inspect", []Field{req("file", "text", "File (relative to the source)")}, false},
 	{"import-find", "Find", "Look a name up before writing it: people, places, pages and metrics that match exactly, with the same words, more words or fewer words.",
 		"GET", "/import/find", []Field{req("text", "text", "Name")}, false},
-	{"draft-rules", "Draft rules", "Write rules.md for the owner to approve: a `source: import:<name>` line, then ## Folders and ## Decisions. A decision about one name is a row of entities.md (propose-entities), never a line here. Never a status line; any change waits for the owner's approval again.",
+	{"draft-rules", "Draft rules", "Write rules.md for the owner to approve: a `source: import:<name>` line, then ## Folders (one line per folder: - `pattern` — what its files are; words that start with skip: or later: mark those files in the ledger) and ## Decisions. A decision about one name is a row of entities.md (propose-entities), never a line here. Never a status line; any change waits for the owner's approval again.",
 		"POST", "/import/rules", []Field{req("body", "textarea", "rules.md without its status line")}, false},
 	{"propose-metric", "Propose a metric", "Add a proposed metric to metrics.md for the owner: its name, the title its page will have for good (reuse one that exists), the unit exactly as written ('' when the source writes none; a scale's range such as '1-5', which no source line writes, is its unit: reuse Mood with '' or '1-5'; a habit is unitless with note '1 = done that day'); category, the path of the category to file it in (biomarkers/iron), when metrics.md has that column.",
 		"POST", "/import/metrics", []Field{req("name", "text", "Name"), opt("unit", "text", "Unit"), opt("note", "text", "Note"), opt("from", "text", "From file"), opt("doubts", "text", "Doubts"), opt("category", "text", "Category")}, false},

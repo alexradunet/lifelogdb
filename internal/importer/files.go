@@ -598,6 +598,8 @@ func (w *Workspace) writeLedger(lines []Line) error {
 type LedgerResult struct {
 	Files   int      `json:"files"`
 	Added   int      `json:"added"`
+	Skipped int      `json:"skipped,omitempty"` // of the added files, the ones a `skip:` rule marked
+	Later   int      `json:"later,omitempty"`   // of the added files, the ones a `later:` rule held
 	Missing []string `json:"missing,omitempty"`
 }
 
@@ -624,6 +626,17 @@ func (w *Workspace) RefreshLedger() (*LedgerResult, error) {
 	if err != nil {
 		return nil, err
 	}
+	// the approved rules mark what they skip or hold, as the files are added (a draft marks nothing)
+	var rules []folderRule
+	if g, err := w.Gate("rules.md"); err != nil {
+		return nil, err
+	} else if g == "approved" {
+		r, err := w.Rules()
+		if err != nil {
+			return nil, err
+		}
+		rules = r.Folders
+	}
 	listed := make(map[string]bool, len(lines))
 	for _, l := range lines {
 		listed[l.File] = true
@@ -633,7 +646,22 @@ func (w *Workspace) RefreshLedger() (*LedgerResult, error) {
 	for _, f := range files {
 		present[f] = true
 		if !listed[f] {
-			lines = append(lines, Line{" ", f, ""}) // after the old lines: their order is the replay's
+			l := Line{" ", f, ""}
+			for _, r := range rules {
+				if r.matches(f) { // the first line that matches decides
+					l.State, l.Note = r.mark, r.note
+					break
+				}
+			}
+			switch l.State {
+			case "":
+				l.State = " "
+			case "-":
+				res.Skipped++
+			case ">":
+				res.Later++
+			}
+			lines = append(lines, l) // after the old lines: their order is the replay's
 			res.Added++
 		}
 	}
@@ -670,8 +698,13 @@ func (w *Workspace) SourceFiles() ([]string, error) {
 		if d.IsDir() {
 			return nil
 		}
-		if _, err := root.Stat(filepath.FromSlash(p)); err != nil {
-			return err
+		// a link, a junction or another entry that is not a regular file can lead outside the source: opened
+		// through the root, it is refused there. A regular file found by the walk cannot, so it is not opened
+		// again (issue 0054).
+		if !d.Type().IsRegular() {
+			if _, err := root.Stat(filepath.FromSlash(p)); err != nil {
+				return err
+			}
 		}
 		rel := p
 		physical := filepath.ToSlash(rel)
@@ -835,6 +868,28 @@ func (w *Workspace) markLocked(file string, f func(*Line) error) error {
 		}
 	}
 	return refuse("%s is not in the ledger", file)
+}
+
+// ledgerIndex is each ledger file's state, from one read of the ledger: an operation that checks many files (status,
+// replay, propose entities) reads the ledger once, not once per file (issue 0054).
+type ledgerIndex map[string]string
+
+func indexLedger(lines []Line) ledgerIndex {
+	idx := make(ledgerIndex, len(lines))
+	for _, l := range lines {
+		if _, ok := idx[l.File]; !ok {
+			idx[l.File] = l.State
+		}
+	}
+	return idx
+}
+
+// stateOf is a file's state from idx, or from the ledger when idx is nil.
+func (w *Workspace) stateOf(file string, idx ledgerIndex) (string, error) {
+	if idx == nil {
+		return w.ledgerState(file)
+	}
+	return idx[file], nil
 }
 
 // ledgerState is a file's state, checked before any database work ("" when it is not in the ledger).

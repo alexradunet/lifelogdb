@@ -1,7 +1,7 @@
 # 0054 — Skip and later rules are typed twice, and status reads the whole ledger once for each done file
 
 - **Date:** 2026-10-09
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the 2026-10 import of a Takeout extraction (80 412 files) and a notes folder
 
 ## What happened
@@ -38,3 +38,11 @@ ledger once; the listing opens again only an entry that can lead outside the sou
 
 - [importing with a model](../guides/importing.md), "The workspace" (`rules.md`, `ledger.md`), "The writer's
   operations" (*ledger*, *skip* / *defer*, *status*), "The procedure for the model" (step 5)
+
+## Resolution
+
+Resolved by [plan 086](../plans/086-rules-mark-the-ledger-and-status-reads-it-once.md): *ledger* marks each file it
+adds as the first matching `## Folders` line of the approved `rules.md` says (`skip:` writes `[-]`, `later:` writes
+`[>]`, the line's words are the note); *status*, *replay* and *propose entities* read the ledger once; the listing
+opens again only an entry that is not a regular file. On the synthetic workspace, one *status* takes 0.21 s instead
+of 3.3–4.5 s, and listing 20 000 files 18 ms instead of 0.85 s (the plan has the measurements).

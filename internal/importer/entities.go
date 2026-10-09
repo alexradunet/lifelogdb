@@ -41,11 +41,12 @@ func (w *Workspace) ProposeEntities(ctx context.Context, s *core.Store) ([]Entit
 		return nil, err
 	}
 	// the names held files wait for, as a check sees them now: kind, name and look-alikes
+	idx := indexLedger(lines)
 	for _, l := range lines {
 		if !l.toDo() || len(heldNames(l.Note)) == 0 {
 			continue
 		}
-		r, err := w.Check(ctx, s, l.File)
+		r, err := w.check(ctx, s, l.File, idx)
 		if err != nil {
 			continue // a file the checks refuse as a whole waits for its facts, not for a name
 		}

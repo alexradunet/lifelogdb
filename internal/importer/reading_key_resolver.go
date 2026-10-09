@@ -301,7 +301,7 @@ func (w *Workspace) resolveCorrectionKey(ctxSource string, t *core.Tx, metric, k
 	if !ok {
 		return key, nil
 	}
-	f, pos, _, _, err := w.prepare(parsed.file, false)
+	f, pos, _, _, err := w.prepare(parsed.file, false, nil)
 	if err != nil {
 		return "", err
 	}
@@ -505,7 +505,7 @@ func (w *Workspace) buildCorrectionProof(ctx context.Context, trial, target *cor
 		needed[intent.root()] = true
 	}
 	return buildCorrectionProofEntries(needed, func(file string) (*Facts, []int, error) {
-		f, pos, _, _, err := w.prepare(file, false)
+		f, pos, _, _, err := w.prepare(file, false, nil)
 		return f, pos, err
 	}, func(source string, f *Facts, pos []int) (resolvedReadingKeys, error) {
 		var resolved resolvedReadingKeys

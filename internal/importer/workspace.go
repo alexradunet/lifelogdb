@@ -327,6 +327,96 @@ type Rules struct {
 	Aliases map[string]string
 	Names   names
 	Legacy  legacyNames
+	Folders []folderRule
+}
+
+// folderRule is one `## Folders` line of rules.md: its patterns, in the glob language of *skip*, and the mark its
+// words give a file that *ledger* adds: "-" for words that start with `skip:`, ">" for `later:`, "" for a rule that
+// the model follows (the guide's "rules.md").
+type folderRule struct {
+	patterns []string
+	mark     string
+	note     string
+}
+
+// matches says whether a ledger file falls under the rule.
+func (r folderRule) matches(file string) bool {
+	for _, p := range r.patterns {
+		if matchGlob(p, file) {
+			return true
+		}
+	}
+	return false
+}
+
+// backtickedPatterns is the start of a `## Folders` line whose patterns are in backticks: a pattern in backticks
+// may hold a dash or a comma, so they are read before the words.
+var backtickedPatterns = regexp.MustCompile("^((?:`[^`]+`\\s*,?\\s*)+)(.*)$")
+
+// parseFolderLine reads a `## Folders` line: `- `, one or more patterns (in backticks, or bare and separated by
+// commas), a dash, and the words.
+func parseFolderLine(line string) (folderRule, bool) {
+	if !strings.HasPrefix(line, "-") {
+		return folderRule{}, false
+	}
+	body := strings.TrimSpace(line[1:])
+	var r folderRule
+	var words string
+	if m := backtickedPatterns.FindStringSubmatch(body); m != nil {
+		for _, p := range strings.Split(m[1], "`") {
+			if p = strings.TrimSpace(p); p != "" && p != "," {
+				r.patterns = append(r.patterns, p)
+			}
+		}
+		words = m[2]
+	} else {
+		pats := body
+		for _, sep := range []string{" — ", " – ", " - "} {
+			if i := strings.Index(body, sep); i >= 0 {
+				pats, words = body[:i], body[i+len(sep):]
+				break
+			}
+		}
+		for _, p := range splitPatterns(pats) {
+			if p = strings.TrimSpace(p); p != "" {
+				r.patterns = append(r.patterns, p)
+			}
+		}
+	}
+	if len(r.patterns) == 0 {
+		return folderRule{}, false
+	}
+	words = oneLine(strings.TrimLeft(words, " \t—–-:"))
+	// the note reads as a *skip* or *defer* mark does: its word in lower case, then the rule's words
+	switch lower := strings.ToLower(words); {
+	case strings.HasPrefix(lower, "skip:"):
+		r.mark, r.note = "-", "skip:"+words[len("skip:"):]
+	case strings.HasPrefix(lower, "later:"):
+		r.mark, r.note = ">", "later:"+words[len("later:"):]
+	}
+	return r, true
+}
+
+// splitPatterns splits bare patterns at the commas outside `{a,b}` groups.
+func splitPatterns(s string) []string {
+	var out []string
+	depth, start := 0, 0
+	for i, c := range s {
+		switch c {
+		case '{':
+			depth++
+		case '}':
+			if depth > 0 {
+				depth--
+			}
+		case ',':
+			if depth == 0 {
+				out = append(out, s[start:i])
+				start = i + 1
+			}
+		}
+	}
+	return append(out, s[start:])
 }
 
 // legacyNames are the alias and distinct lines a rules.md wrote before name decisions moved to entities.md.
@@ -371,6 +461,10 @@ func parseRules(text string) (*Rules, error) {
 			continue
 		}
 		switch section {
+		case "Folders":
+			if f, ok := parseFolderLine(line); ok {
+				r.Folders = append(r.Folders, f)
+			}
 		case "Aliases":
 			if m := aliasLine.FindStringSubmatch(line); m != nil {
 				r.Legacy.Aliases = append(r.Legacy.Aliases, [2]string{m[1], m[2]})

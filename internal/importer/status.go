@@ -307,6 +307,7 @@ func (w *Workspace) mismatches(ctx context.Context, s *core.Store, st *Status, l
 			st.Mismatches = append(st.Mismatches, "selected pair binding verification failed")
 		}
 	}
+	idx := indexLedger(lines)
 	for _, l := range lines {
 		if l.State != "x" && l.State != "?" {
 			continue
@@ -314,7 +315,7 @@ func (w *Workspace) mismatches(ctx context.Context, s *core.Store, st *Status, l
 		if preparedFiles[l.File] {
 			continue
 		}
-		r, err := w.Check(ctx, s, l.File)
+		r, err := w.check(ctx, s, l.File, idx)
 		if err != nil {
 			st.Mismatches = append(st.Mismatches, l.File+": "+err.Error())
 			continue
