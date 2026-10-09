@@ -254,7 +254,7 @@ func TestRefusals(t *testing.T) {
 			}
 			continue
 		}
-		if _, err := f.w.Check(ctx, s, file); err == nil || !strings.Contains(err.Error(), c.want) {
+		if err := checkErr(f.w, s, file); err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: %v (want %q)", c.name, err, c.want)
 		}
 	}
@@ -264,7 +264,7 @@ func TestRefusals(t *testing.T) {
 	// a distinct line lets the second Cara through
 	f.approveRules(t, rulesBody+`- "Cara" ≠ "Cara Example"`+"\n")
 	f.facts(t, file, one(map[string]any{"person": map[string]any{"title": "Cara"}, "quote": "Coffee with Cara"}))
-	if _, err := f.w.Check(ctx, s, file); err != nil {
+	if err := checkErr(f.w, s, file); err != nil {
 		t.Errorf("a distinct name: %v", err)
 	}
 }
@@ -300,7 +300,7 @@ func TestReadingsKeysAndReplay(t *testing.T) {
 	}
 	bad := map[string]any{"reading": map[string]any{"metric": "ferritin", "day": "2031-03-01", "value": "48 mg/L"}, "quote": "| 2031-03-01 | 48 ng/mL |"}
 	f.facts(t, file, map[string]any{"file": file, "writes": []any{bad}})
-	if _, err := f.w.Check(ctx, f.s, file); err == nil {
+	if err := checkErr(f.w, f.s, file); err == nil {
 		t.Error("a value not in its quote, or a unit not the metric's, was accepted")
 	}
 	f.facts(t, file, map[string]any{"file": file, "writes": []any{r1, r2}})
@@ -424,7 +424,7 @@ func TestLinkBeforePromotion(t *testing.T) {
 	if err := f.facts(t, day, linkTo("Recipes")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.w.Check(ctx, f.s, day); !waitsForAnother(err) {
+	if err := checkErr(f.w, f.s, day); !waitsForAnother(err) {
 		t.Errorf("a link to a page no file promotes: %v", err)
 	}
 	if _, err := f.w.Replay(ctx, f.s, filepath.Join(t.TempDir(), "life.db")); err == nil || !strings.Contains(err.Error(), `"Recipes" is still a plain page`) {
@@ -435,7 +435,7 @@ func TestLinkBeforePromotion(t *testing.T) {
 	if err := f.facts(t, day, linkTo("2031-04-12")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.w.Check(ctx, f.s, day); err == nil || waitsForAnother(err) || !strings.Contains(err.Error(), "endpoint type not allowed") {
+	if err := checkErr(f.w, f.s, day); err == nil || waitsForAnother(err) || !strings.Contains(err.Error(), "endpoint type not allowed") {
 		t.Errorf("an about link to a day page: %v", err)
 	}
 }

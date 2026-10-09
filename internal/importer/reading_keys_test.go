@@ -901,7 +901,7 @@ func TestTimedReadingDistinctInstants(t *testing.T) {
 		readingFact("CAFE\u0301", "2031-07-01", "5 ng/mL", quote, map[string]string{"taken_at": "2031-07-01T09:00:00.000Z"}),
 	}
 	applyFacts(t, f, file, writes)
-	if _, err := f.w.Check(ctx, f.s, file); err != nil {
+	if err := checkErr(f.w, f.s, file); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.w.Apply(ctx, f.s, file); err != nil {

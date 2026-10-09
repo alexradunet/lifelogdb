@@ -26,9 +26,9 @@ func BenchmarkReadingSourceCheck(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				_, errs := w.checkStatic(f, source, &Rules{}, approved)
-				if len(errs) > 0 {
-					b.Fatal(errs)
+				_, refused, errs := w.checkStatic(f, source, &Rules{}, approved)
+				if len(errs) > 0 || len(refused) > 0 {
+					b.Fatal(errs, refused)
 				}
 			}
 		})

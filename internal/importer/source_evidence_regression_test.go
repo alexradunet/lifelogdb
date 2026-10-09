@@ -25,7 +25,7 @@ func assertEvidenceRefused(t *testing.T, f *fixture, file string, facts map[stri
 		if apply {
 			_, err = f.w.Apply(ctx, f.s, file)
 		} else {
-			_, err = f.w.Check(ctx, f.s, file)
+			err = checkErr(f.w, f.s, file)
 		}
 		if err == nil {
 			t.Errorf("apply=%v accepted unsafe evidence", apply)
@@ -94,15 +94,15 @@ func TestReadingEvidenceContextSnapshot(t *testing.T) {
 		}
 	}
 	w, f, _, metrics := syntheticEvidenceCheck(2)
-	if _, errs := w.checkStatic(f, source, &Rules{}, metrics); len(errs) == 0 {
+	if _, refused, _ := w.checkStatic(f, source, &Rules{}, metrics); len(refused) == 0 {
 		t.Fatal("unrelated source accepted")
 	}
 	facts := &Facts{File: "Synthetic.md", Writes: []Write{{Quote: quote, Reading: &ReadingW{Metric: "dose", Day: "2031-06-12", Value: "48", Unit: "mg"}}}}
-	if _, errs := w.checkStatic(facts, source, &Rules{}, approved); len(errs) != 0 {
-		t.Fatal(errs)
+	if _, refused, errs := w.checkStatic(facts, source, &Rules{}, approved); len(errs) != 0 || len(refused) != 0 {
+		t.Fatal(errs, refused)
 	}
 	changed := strings.ReplaceAll(source, "(mg)", "(kg)")
-	if _, errs := w.checkStatic(facts, changed, &Rules{}, approved); len(errs) == 0 {
+	if _, refused, _ := w.checkStatic(facts, changed, &Rules{}, approved); len(refused) == 0 {
 		t.Fatal("changed source reused old evidence")
 	}
 }
@@ -148,7 +148,7 @@ func TestCroppedTableQuantityControls(t *testing.T) {
 			if err := f.facts(t, tc.file, readingFacts(tc.file, "dose", "2031-06-12", "48", "mg", tc.quote)); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := f.w.Check(ctx, f.s, tc.file); err != nil {
+			if err := checkErr(f.w, f.s, tc.file); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := f.w.Apply(ctx, f.s, tc.file); err != nil {

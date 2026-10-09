@@ -77,7 +77,7 @@ func TestMoodOutsideItsRangeIsRefusedAndNothingIsStored(t *testing.T) {
 				t.Fatal(err)
 			}
 			for name, run := range map[string]func() error{
-				"check": func() error { _, err := f.w.Check(ctx, f.s, file); return err },
+				"check": func() error { return checkErr(f.w, f.s, file) },
 				"apply": func() error { _, err := f.w.Apply(ctx, f.s, file); return err },
 			} {
 				err := run()

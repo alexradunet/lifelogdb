@@ -315,17 +315,19 @@ func (w *Workspace) ownTitle(file string) string {
 	return norm.NFC.String(strings.TrimSuffix(path.Base(file), path.Ext(file)))
 }
 
-// checkStatic is the guide's first list of checks: against the source file and the workspace only.
-// It also resolves aliases and returns, per write, the position of its quote in the source (for reading keys).
-func (w *Workspace) checkStatic(f *Facts, source string, rules *Rules, approved map[string]Metric) (pos []int, errs []string) {
+// checkStatic is the guide's first list of checks: against the source file and the workspace only. It returns,
+// per write, the position of its quote in the source (for reading keys), every write it refuses with its class
+// (the guide's "The checks"), and the file-level errors (a kept_as_text or waiting entry) that refuse the file.
+func (w *Workspace) checkStatic(f *Facts, source string, rules *Rules, approved map[string]Metric) (pos []int, refused []Refusal, errs []string) {
 	evidence := newReadingEvidence(f.File, source)
 	src := evidence.collapsed
 	srcLower := strings.ToLower(src)
 	day := fileDay(f.File, source)
 	own := w.ownTitle(f.File)
 	pos = make([]int, len(f.Writes))
-	bad := func(i int, format string, a ...any) {
-		errs = append(errs, fmt.Sprintf("write %d: ", i+1)+fmt.Sprintf(format, a...))
+	bad := func(i int, class, format string, a ...any) {
+		wr := f.Writes[i]
+		refused = append(refused, Refusal{Write: i + 1, Kind: wr.kind(), What: what(wr), Quote: wr.Quote, Class: class, Reason: fmt.Sprintf(format, a...)})
 	}
 	for i, wr := range f.Writes {
 		q := collapse(wr.Quote)
@@ -333,22 +335,22 @@ func (w *Workspace) checkStatic(f *Facts, source string, rules *Rules, approved 
 		k := wr.kind()
 		switch {
 		case len(wr.Event) > 0 && k == "event":
-			bad(i, "there is no event (D22): a daily note is its day's page and its text says what happened")
+			bad(i, "event", "there is no event (D22): a daily note is its day's page and its text says what happened")
 			continue
 		case len(wr.Task) > 0 && k == "task":
-			bad(i, "there is no task (D23): the page keeps the words of a plan")
+			bad(i, "task", "there is no task (D23): the page keeps the words of a plan")
 			continue
 		case k == "":
-			bad(i, "a write has exactly one kind: person, place, page, link or reading")
+			bad(i, "kind", "a write has exactly one kind: person, place, page, link or reading")
 			continue
 		case q == "":
-			bad(i, "the quote is empty")
+			bad(i, "quote", "the quote is empty")
 			continue
 		case pos[i] < 0:
-			bad(i, "the quote %q is not in %s (as whole words)", wr.Quote, f.File)
+			bad(i, "quote", "the quote %q is not in %s (as whole words)", wr.Quote, f.File)
 			continue
 		case len([]rune(q)) < 3:
-			bad(i, "the quote %q is too short to state anything", wr.Quote)
+			bad(i, "quote", "the quote %q is too short to state anything", wr.Quote)
 			continue
 		}
 		hasNum := func(s string) bool {
@@ -367,76 +369,86 @@ func (w *Workspace) checkStatic(f *Facts, source string, rules *Rules, approved 
 		}
 		checkTitle := func(title string) {
 			if t, ok := rules.Aliases[nameKey(title)]; ok && nameKey(t) != nameKey(title) {
-				bad(i, "%q is an alias of %q in rules.md: write %q", title, t, t)
+				bad(i, "alias", "%q is an alias of %q in rules.md: write %q", title, t, t)
 			}
 			if hasNum(title) {
-				bad(i, "%q holds a question or row number its quote does not", title)
+				bad(i, "number", "%q holds a question or row number its quote does not", title)
+			}
+		}
+		// a row's own title must be one the file can hold (docs/contract/titles-and-wikilinks.md); a day is its day
+		// page's title and never a person's or a place's (D5)
+		checkOwnTitle := func(title string) {
+			checkTitle(title)
+			if !text.ValidTitle(title) {
+				bad(i, "invalid_title", "title %q is not a valid title (docs/contract/titles-and-wikilinks.md)", title)
+			} else if k != "page" && core.IsDay(title) {
+				bad(i, "taken", "%q is a day page's title, never a %s (D5)", title, k)
 			}
 		}
 		switch k {
 		case "person":
-			checkTitle(wr.Person.Title)
+			checkOwnTitle(wr.Person.Title)
 			if hasNum(wr.Person.Name) {
-				bad(i, "the name %q holds a question or row number", wr.Person.Name)
+				bad(i, "number", "the name %q holds a question or row number", wr.Person.Name)
 			}
 			if !states(wr.Person.Title) && (wr.Person.Name == "" || !containsFold(q, wr.Person.Name)) {
-				bad(i, "the quote does not name %q", wr.Person.Title)
+				bad(i, "not_named", "the quote does not name %q", wr.Person.Title)
 			}
 			for _, d := range [2][2]string{{"birth_day", wr.Person.BirthDay}, {"death_day", wr.Person.DeathDay}} {
 				switch {
 				case d[1] == "":
 				case !core.IsDay(d[1]):
-					bad(i, "%s %q is not YYYY-MM-DD", d[0], d[1])
+					bad(i, "day", "%s %q is not YYYY-MM-DD", d[0], d[1])
 				case !containsFold(q, d[1]):
-					bad(i, "the %s %s is not in the quote", d[0], d[1])
+					bad(i, "day", "the %s %s is not in the quote", d[0], d[1])
 				}
 			}
 		case "place":
-			checkTitle(wr.Place.Title)
+			checkOwnTitle(wr.Place.Title)
 			if !states(wr.Place.Title) {
-				bad(i, "the quote does not name %q", wr.Place.Title)
+				bad(i, "not_named", "the quote does not name %q", wr.Place.Title)
 			}
 		case "page":
-			checkTitle(wr.Page.Title)
+			checkOwnTitle(wr.Page.Title)
 			if !states(wr.Page.Title) {
-				bad(i, "the quote does not name %q", wr.Page.Title)
+				bad(i, "not_named", "the quote does not name %q", wr.Page.Title)
 			}
 		case "link":
 			l := wr.Link
 			switch {
 			case l.Kind == "":
-				bad(i, "a link needs its kind")
+				bad(i, "link", "a link needs its kind")
 			case l.Kind == "wikilink" || l.Kind == "redirect":
-				bad(i, "a %s link is never written by a facts file: the body's text makes wikilinks", l.Kind)
+				bad(i, "link", "a %s link is never written by a facts file: the body's text makes wikilinks", l.Kind)
 			case strings.TrimSpace(l.From) == "" || strings.TrimSpace(l.To) == "":
-				bad(i, "a link's ends are titles")
+				bad(i, "link", "a link's ends are titles")
 			}
 			checkTitle(l.From)
 			checkTitle(l.To)
 			if hasNum(l.Note) {
-				bad(i, "the note %q holds a question or row number", l.Note)
+				bad(i, "number", "the note %q holds a question or row number", l.Note)
 			}
 			if !states(l.To) && !states(l.From) {
-				bad(i, "the quote names neither end of the link")
+				bad(i, "not_named", "the quote names neither end of the link")
 			}
 		case "reading":
 			r := wr.Reading
 			m, ok := approved[text.TitleKey(r.Metric)]
 			if !ok {
-				bad(i, "metric %q is not approved in a stamped metrics.md", r.Metric)
+				bad(i, "metric", "metric %q is not approved in a stamped metrics.md", r.Metric)
 				continue
 			}
 			if !core.IsDay(r.Day) {
-				bad(i, "day %q is not YYYY-MM-DD", r.Day)
+				bad(i, "day", "day %q is not YYYY-MM-DD", r.Day)
 			} else if !containsFold(q, r.Day) && r.Day != day {
-				bad(i, "the day %s is neither in the quote nor the file's own day", r.Day)
+				bad(i, "day", "the day %s is neither in the quote nor the file's own day", r.Day)
 			}
 			if r.TakenAt != "" && !core.IsInstant(r.TakenAt) {
-				bad(i, "taken_at %q is not a UTC instant", r.TakenAt)
+				bad(i, "day", "taken_at %q is not a UTC instant", r.TakenAt)
 			}
 			num, numText, unit, err := parseValue(r.Value, r.Unit)
 			if err != nil {
-				bad(i, "%v", err)
+				bad(i, "value", "%v", err)
 				continue
 			}
 			// A scale's range is the metric's, not a quantity the source writes next to the number: the reading takes it,
@@ -446,7 +458,7 @@ func (w *Workspace) checkStatic(f *Facts, source string, rules *Rules, approved 
 				unit = m.Unit
 			}
 			if unit != m.Unit {
-				bad(i, "the source evidence submitted unit %q is not the approved metric unit %q", unit, m.Unit)
+				bad(i, "unit", "the source evidence submitted unit %q is not the approved metric unit %q", unit, m.Unit)
 				continue
 			}
 			if scale {
@@ -456,7 +468,7 @@ func (w *Workspace) checkStatic(f *Facts, source string, rules *Rules, approved 
 				err = evidence.check(q, pos[i], numText, unit, marker, approved)
 			}
 			if err != nil {
-				bad(i, "%v", err)
+				bad(i, "evidence", "%v", err)
 			}
 			if r.With != "" {
 				checkTitle(r.With)
@@ -475,7 +487,7 @@ func (w *Workspace) checkStatic(f *Facts, source string, rules *Rules, approved 
 			errs = append(errs, fmt.Sprintf("waiting: %q is not a question id (Q<n>)", q))
 		}
 	}
-	return pos, errs
+	return pos, refused, errs
 }
 
 type readingIdentity struct {

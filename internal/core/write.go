@@ -55,6 +55,26 @@ type Sync struct {
 	Skipped []string `json:"skipped,omitempty"`
 }
 
+// Savepoint runs fn inside a savepoint of the transaction: when fn fails, what it wrote is rolled back and the
+// transaction goes on; fn's error is returned, a constraint or trigger of the DDL as the 422 that Do would return.
+// A wikilink target that cannot be made, a facts write the writer refuses: the rest of the work is unaffected.
+func (t *Tx) Savepoint(fn func() error) error {
+	if _, err := t.tx.ExecContext(t.ctx, `SAVEPOINT step`); err != nil {
+		return err
+	}
+	if err := fn(); err != nil {
+		if _, e := t.tx.ExecContext(t.ctx, `ROLLBACK TO step`); e != nil {
+			return e
+		}
+		if _, e := t.tx.ExecContext(t.ctx, `RELEASE step`); e != nil {
+			return e
+		}
+		return refused(err)
+	}
+	_, err := t.tx.ExecContext(t.ctx, `RELEASE step`)
+	return err
+}
+
 // syncWikilinks is cookbook/save-a-body.md steps 1-4, after the body is written.
 func (t *Tx) syncWikilinks(pageID int64, body string) (Sync, error) {
 	var own string
@@ -67,22 +87,14 @@ func (t *Tx) syncWikilinks(pageID int64, body string) (Sync, error) {
 	seen := map[int64]bool{pageID: true}
 	for i, key := range keys {
 		title := titles[i]
-		if _, err := t.tx.ExecContext(t.ctx, `SAVEPOINT target`); err != nil {
-			return r, err
-		}
-		id, created, revived, err := t.linkTarget(pageID, key, title)
-		if err != nil {
-			if _, e := t.tx.ExecContext(t.ctx, `ROLLBACK TO target`); e != nil {
-				return r, e
-			}
-			if _, e := t.tx.ExecContext(t.ctx, `RELEASE target`); e != nil {
-				return r, e
-			}
+		var id int64
+		var created, revived bool
+		if err := t.Savepoint(func() (err error) {
+			id, created, revived, err = t.linkTarget(pageID, key, title)
+			return err
+		}); err != nil {
 			r.Skipped = append(r.Skipped, title)
 			continue
-		}
-		if _, err := t.tx.ExecContext(t.ctx, `RELEASE target`); err != nil {
-			return r, err
 		}
 		if seen[id] {
 			continue
@@ -529,7 +541,7 @@ func (t *Tx) Link(from, to int64, kind, note string) (added bool, err error) {
 	res, err := t.tx.ExecContext(t.ctx, `INSERT INTO links(from_id, to_id, kind, note, created_at, source) VALUES (?, ?, ?, ?, `+Now+`, ?)
 	                       ON CONFLICT(from_id, to_id, kind) DO NOTHING`, from, to, kind, nullIfEmpty(note), t.Source)
 	if err != nil {
-		return false, err
+		return false, refused(err) // the registry's endpoint types refuse the link: a 422, as Do would return it
 	}
 	n, _ := res.RowsAffected()
 	return n > 0, nil

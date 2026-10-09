@@ -282,6 +282,9 @@ func (w *Workspace) mismatches(ctx context.Context, s *core.Store, st *Status, l
 				st.Mismatches = append(st.Mismatches, fmt.Sprintf("%s: write %d (%s) is not in the database", l.File, o.Write, o.What))
 			}
 		}
+		for _, x := range r.Refused {
+			st.Mismatches = append(st.Mismatches, fmt.Sprintf("%s: write %d (%s) is refused now: %s", l.File, x.Write, x.What, x.Class))
+		}
 		if f, err := w.LoadFacts(l.File); err == nil {
 			for _, wr := range f.Writes {
 				switch {

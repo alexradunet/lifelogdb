@@ -231,7 +231,7 @@ Each runs on one explicitly selected database.
 | *inspect a file* | one source file | — | nothing; returns its frontmatter, headings, tables as rows, checkboxes and links |
 | *find* | the database | — | nothing; pages, metrics or readings matching a text: exact, same words, more words, fewer words |
 | *register metrics* | `metrics.md` | its stamp; each approved row (name, unit, `since`/`until`, `category`); that each title of a path is a valid title of a plain page | the approved metrics, each a page titled by its `name` with its `note` as the body (a plain page of that title, a note of the vault included, is promoted and keeps its text: the `note` fills only an empty body, [D27](../decisions/D27-a-metric-is-a-page.md)); a metric that exists with that unit is adopted as it is, and so is a scale (Mood) registered with no unit; any other unit is refused, since a unit never changes; each page of a path that is missing (a plain page, top first), the `part-of` link from each to the one above, and from the metric to the last ([metrics by category](../cookbook/metrics-by-category.md)); each habit's period, re-sent with its `end_day` ([habits](../cookbook/habits.md)) |
-| *check facts* | one facts file, its source file, the workspace, the database | every check below, in a transaction it rolls back | nothing; prints what *apply* would do |
+| *check facts* | one facts file, its source file, the workspace, the database | every check below, each write in its own savepoint of a transaction it rolls back | nothing; prints what *apply* would write and every write it would refuse, each with its class, a look-alike with its candidates, a reference not written yet with the title it waits for |
 | *apply facts* | the same | the same checks | every write in one `BEGIN IMMEDIATE` transaction ([connection setup](../contract/connections.md)), then the file's ledger line |
 | *plan a vault* / *apply a vault plan* | the folder of notes; `plan.json` | titles ([titles and wikilinks](../contract/titles-and-wikilinks.md)), duplicates, titles the database holds | the notes' pages and bodies (see "A folder of notes"); *plan a vault* run again appends the notes added since and leaves every entry as it is |
 | *approve* | `rules.md` or `metrics.md`; its copy in `.approved/` | that a person is at the controls; that the text it stamps is the text it showed | the owner's stamp; the copy in `.approved/` |
@@ -269,11 +269,21 @@ it diagnoses pending or conflicting intents without recovering them.
 
 ## The checks
 
-**Against the source file and the workspace** (no database). The file is refused for:
+Every check names the write it refuses and a class, so a client branches on the class and never on the words:
+`event`, `task`, `kind`, `quote`, `not_named`, `alias`, `number`, `day`, `invalid_title`, `link`, `metric`, `unit`,
+`value`, `evidence`, `look_alike`, `not_yet`, `taken`, `person_day`, `link_endpoint`. *check facts* reports every
+refused write of a file, the writes after a refused one included; *apply facts* refuses the file at the first of
+them, with its class on the error, and writes nothing. Two things refuse the file as a whole, not a write: a
+`kept_as_text` or `waiting` entry that is wrong, and a reading identity the file cannot settle (tied positions, a
+repeated timed identity).
+
+**Against the source file and the workspace** (no database). A write is refused for:
 
 - a write with no kind or more than one; an empty quote; a quote not in the source file;
 - a person, place or page whose title its quote does not name; a link whose quote names neither end;
-- a title that `## Aliases` maps to another title (write that title instead);
+- a title that `## Aliases` maps to another title (write that title instead); a title that is not a valid title
+  ([titles and wikilinks](../contract/titles-and-wikilinks.md)); a day as the title of a person or a place
+  ([D5](../decisions/D05-pages-and-day-pages.md));
 - a name, title or note holding a question or row number (`Q4`, `#5`) its quote does not hold;
 - a day that is not `YYYY-MM-DD`;
 - a link without a kind, of kind `wikilink`, or with an end that is not a title;
@@ -287,9 +297,9 @@ it diagnoses pending or conflicting intents without recovering them.
 **Against `life.db`** (a dry run inside the transaction that *apply* would use):
 
 - `rules.md` carries the owner's stamp;
-- **look-alikes**: a name that is not an exact match but shares its words with an existing person,
-  place or page is refused until the owner decides it (an alias, or `## Distinct`) — never merged or
-  duplicated by the model;
+- **look-alikes**: a name that is not an exact match but shares its words with a live person, place or plain
+  page — never with a day page, a metric, a file or a period — is refused until the owner decides it (an alias, or
+  `## Distinct`), every candidate named, the best relation first — never merged or duplicated by the model;
 - a title held by an entity of another type (a place written where a person is) is refused;
 - every reference resolves;
 - a reading's unit is its metric's (a reading of a scale takes the scale's range), and the value of a scale is a whole
@@ -532,7 +542,8 @@ synced local files.
 
 Each line is a requirement on a writer that offers this process.
 
-- *check facts* and *apply facts* enforce the facts checks; direct tools do not claim source-quote
+- *check facts* and *apply facts* enforce the facts checks; *check facts* reports every refused write with its
+  class, and *apply facts* refuses the file at the first. Direct tools do not claim source-quote
   verification. No tool offers arbitrary write SQL; import keys are writer-derived, and ledger marks
   other than `[-]` are writer-maintained. Direct operations may address existing rows by id.
 - In the facts workflow, a value reaches the database exactly as written or not at all; the writer, never the model, parses
@@ -557,7 +568,8 @@ Each line is a requirement on a writer that offers this process.
 - *inventory* prints no content, no value and no single file's name: a name appears only as a pattern that repeats.
 - An approval covers the approved file's content, not only its status line: an edit after approval
   closes the gate again.
-- Look-alike checks cover pages too, not only people and places.
+- Look-alike checks cover plain pages too, not only people and places, and nothing else: a day page, a metric, a
+  file or a period is never a candidate. Every candidate is reported.
 - *status* reports every row written outside the facts (entities and links, not only readings), treats
   an answered question as the model's to apply, and replays readings whose `with` page comes from a
   later file.

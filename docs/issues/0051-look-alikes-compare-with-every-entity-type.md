@@ -1,7 +1,7 @@
 # 0051 — A new name is a look-alike of a day page, a metric or a file that shares a word
 
 - **Date:** 2026-10-08
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the 2026-10 import of a notes folder (people named in daily notes) and a contacts export
 
 ## What happened
@@ -29,4 +29,4 @@ relation, so the owner's decision is made once.
 
 ## Resolution
 
-Open.
+Resolved by [plan 083](../plans/083-check-reports-every-refusal.md): a new person, place or page is compared with live persons, places and plain pages only, and every candidate is on the refusal, best relation first.

@@ -148,14 +148,14 @@ func TestPersonDays(t *testing.T) {
 		if err := f.facts(t, c.file, c.facts); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := f.w.Check(ctx, f.s, c.file); err == nil || !strings.Contains(err.Error(), c.want) {
+		if err := checkErr(f.w, f.s, c.file); err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: %v (want %q)", c.name, err, c.want)
 		}
 	}
 	// a day the person holds is never replaced by a facts file: a correction is the owner's
 	addSource(t, f, bobPerson, "---\ntype: Person\nbirthday: 1980-03-28\n---\n")
 	f.facts(t, bobPerson, personFacts(bobPerson, map[string]any{"title": "Bob Person", "birth_day": "1980-03-28"}, "birthday: 1980-03-28"))
-	if _, err := f.w.Check(ctx, f.s, bobPerson); err == nil || !strings.Contains(err.Error(), "correction is the owner's") {
+	if err := checkErr(f.w, f.s, bobPerson); err == nil || !strings.Contains(err.Error(), "correction is the owner's") {
 		t.Errorf("a different birth_day: %v", err)
 	}
 	if p := person(t, f.s, "Bob Person"); p.Person.Birth != "1980-03-29" {

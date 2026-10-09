@@ -21,32 +21,50 @@ type Outcome struct {
 	Status string `json:"status"`
 }
 
-// Report is what check-facts would do or apply-facts did with one file.
+// Refusal is one write the writer would not make, with the class a client branches on (the guide's "The
+// checks"): a look-alike lists its candidates, a reference not written yet names the title it waits for.
+type Refusal struct {
+	Write      int      `json:"write"`
+	Kind       string   `json:"kind,omitempty"`
+	What       string   `json:"what,omitempty"`
+	Quote      string   `json:"quote"`
+	Class      string   `json:"class"`
+	Reason     string   `json:"reason"`
+	Candidates []string `json:"candidates,omitempty"`
+	Waits      string   `json:"waits,omitempty"`
+}
+
+// Report is what check-facts would do or apply-facts did with one file. Refused is every write check-facts
+// would refuse, with its class; apply-facts refuses the whole file at the first of them instead.
 type Report struct {
 	File     string    `json:"file"`
 	Applied  bool      `json:"applied"`
 	Outcomes []Outcome `json:"writes"`
+	Refused  []Refusal `json:"refused,omitempty"`
 	Kept     int       `json:"kept_as_text"`
 	Waiting  []string  `json:"waiting,omitempty"`
 	Summary  string    `json:"summary"`
 }
 
-// Check runs every check of a facts file and what apply would write, then rolls the transaction back.
+// Check runs every check of a facts file and what apply would write, then rolls the transaction back. Every
+// write the writer would refuse is in the report, each run in its own savepoint so the ones after it are checked
+// too; a file-level refusal (a kept_as_text or waiting entry, a reading identity) is still an error.
 func (w *Workspace) Check(ctx context.Context, s *core.Store, file string) (*Report, error) {
 	return w.run(ctx, s, file, true)
 }
 
-// Apply runs the same checks and writes the file's facts in one transaction, then its ledger line.
+// Apply runs the same checks and writes the file's facts in one transaction, then its ledger line. A file is
+// written whole or not at all: the first refused write refuses the file, with its class on the error.
 func (w *Workspace) Apply(ctx context.Context, s *core.Store, file string) (*Report, error) {
 	return w.run(ctx, s, file, false)
 }
 
 func (w *Workspace) run(ctx context.Context, s *core.Store, file string, dry bool) (*Report, error) {
-	f, pos, rules, err := w.prepare(file)
+	f, pos, rules, refused, err := w.prepare(file, dry)
 	if err != nil {
 		return nil, err
 	}
-	r, err := w.write(ctx, s, f, pos, rules, dry)
+	r, err := w.write(ctx, s, f, pos, rules, dry, refused)
 	if err != nil || dry {
 		return r, err
 	}
@@ -62,63 +80,109 @@ func (w *Workspace) run(ctx context.Context, s *core.Store, file string, dry boo
 }
 
 // prepare runs everything that needs no database: the ledger (before any database work), the rules gate, the
-// facts file and the checks against its source file.
-func (w *Workspace) prepare(file string) (*Facts, []int, *Rules, error) {
+// facts file and the checks against its source file. Lenient, it returns the writes those checks refuse (a check
+// reports them all); strict, any of them refuses the file (an apply writes whole or not at all).
+func (w *Workspace) prepare(file string, lenient bool) (*Facts, []int, *Rules, []Refusal, error) {
 	state, err := w.ledgerState(file)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	if state == "" || state == "-" {
-		return nil, nil, nil, refuse("%s is not a ledger file to import (unknown or skipped)", file)
+		return nil, nil, nil, nil, refuse("%s is not a ledger file to import (unknown or skipped)", file)
 	}
 	if g, err := w.Gate("rules.md"); err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	} else if g != "approved" {
-		return nil, nil, nil, refuse("rules.md is %s: the owner approves it first (lifelog import approve rules)", g)
+		return nil, nil, nil, nil, refuse("rules.md is %s: the owner approves it first (lifelog import approve rules)", g)
 	}
 	rules, err := w.Rules()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	approved, err := w.ApprovedMetrics()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	f, err := w.LoadFacts(file)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	src, err := w.readRawSource(file)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
-	pos, errs := w.checkStatic(f, src, rules, approved)
+	pos, refused, errs := w.checkStatic(f, src, rules, approved)
 	if len(errs) > 0 {
-		return nil, nil, nil, refuse("%s: %s", file, strings.Join(errs, "; "))
+		return nil, nil, nil, nil, refuse("%s: %s", file, strings.Join(errs, "; "))
 	}
-	return f, pos, rules, nil
+	if len(refused) > 0 && !lenient {
+		return nil, nil, nil, nil, fileRefusal(file, refused)
+	}
+	return f, pos, rules, refused, nil
+}
+
+// fileRefusal is a file refused for its writes: every refusal in the message, the first one's class on the error.
+func fileRefusal(file string, refused []Refusal) error {
+	parts := make([]string, len(refused))
+	for i, x := range refused {
+		parts[i] = fmt.Sprintf("write %d: %s", x.Write, x.Reason)
+	}
+	e := refuse("%s: %s", file, strings.Join(parts, "; ")).(*core.Error)
+	e.Code = refused[0].Class
+	if refused[0].Class == "not_yet" {
+		return &notYet{e}
+	}
+	return e
 }
 
 // write applies a checked facts file in one transaction (rolled back when dry): the guide's checks against
-// life.db, then each write through the same core operations the API runs.
-func (w *Workspace) write(ctx context.Context, s *core.Store, f *Facts, pos []int, rules *Rules, dry bool) (*Report, error) {
-	r := &Report{File: f.File, Kept: len(f.KeptAsText), Waiting: f.Waiting, Outcomes: []Outcome{}}
+// life.db, then each write through the same core operations the API runs. Dry, every write runs in its own
+// savepoint and a refused one is reported, not fatal; the writes refused by the static checks are left out, so a
+// reading's place among its day's readings is counted among the writes that could be written.
+func (w *Workspace) write(ctx context.Context, s *core.Store, f *Facts, pos []int, rules *Rules, dry bool, refused []Refusal) (*Report, error) {
+	r := &Report{File: f.File, Kept: len(f.KeptAsText), Waiting: f.Waiting, Outcomes: []Outcome{}, Refused: refused}
+	skip := map[int]bool{}
+	for _, x := range refused {
+		skip[x.Write-1] = true
+	}
+	sub := &Facts{File: f.File}
+	var subPos, index []int
+	for i, wr := range f.Writes {
+		if skip[i] {
+			continue
+		}
+		sub.Writes = append(sub.Writes, wr)
+		subPos = append(subPos, pos[i])
+		index = append(index, i)
+	}
 	fn := func(t *core.Tx) error {
-		keys, err := resolveReadingKeys(t, rules.Source, f, pos)
+		keys, err := resolveReadingKeys(t, rules.Source, sub, subPos)
 		if err != nil {
 			return err
 		}
-		for i, wr := range f.Writes {
-			o, err := applyWrite(t, f.File, wr, keys.byWrite[i], rules)
-			if err != nil {
-				e := refuse("%s: write %d (%s): %v", f.File, i+1, wr.kind(), err)
-				if errors.Is(err, errNotYet) {
-					return &notYet{e.(*core.Error)}
+		for j, wr := range sub.Writes {
+			i := index[j]
+			one := func() error {
+				o, err := applyWrite(t, f.File, wr, keys.byWrite[j], rules)
+				if err != nil {
+					return err
 				}
-				return e
+				o.Write = i + 1
+				r.Outcomes = append(r.Outcomes, o)
+				return nil
 			}
-			o.Write = i + 1
-			r.Outcomes = append(r.Outcomes, o)
+			if !dry {
+				if err := one(); err != nil {
+					return fileRefusal(f.File, []Refusal{refusalOf(i, wr, err)})
+				}
+				continue
+			}
+			if err := t.Savepoint(one); err != nil {
+				if !isRefusal(err) {
+					return err // a failure of the database, not a refusal of the write: the check fails
+				}
+				r.Refused = append(r.Refused, refusalOf(i, wr, err))
+			}
 		}
 		return nil
 	}
@@ -128,8 +192,65 @@ func (w *Workspace) write(ctx context.Context, s *core.Store, f *Facts, pos []in
 	} else {
 		err = s.Do(ctx, rules.Source, fn)
 	}
+	sort.SliceStable(r.Refused, func(a, b int) bool { return r.Refused[a].Write < r.Refused[b].Write })
 	r.Summary = summary(r)
 	return r, err
+}
+
+// classed is a refusal with its class: what a client branches on, never the words.
+type classed struct {
+	class      string
+	err        error
+	candidates []string
+	waits      string
+}
+
+func (e *classed) Error() string { return e.err.Error() }
+func (e *classed) Unwrap() error { return e.err }
+
+func classify(class string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return &classed{class: class, err: err}
+}
+
+// isRefusal says whether an error refuses a write (a classed refusal, or a 4xx of core: a check or a constraint of
+// the DDL), as opposed to a failure of the database or the context.
+func isRefusal(err error) bool {
+	var c *classed
+	if errors.As(err, &c) {
+		return true
+	}
+	var ce *core.Error
+	return errors.As(err, &ce) && ce.Status >= 400 && ce.Status < 500
+}
+
+// refusalOf is a write's refusal from the error its apply returned: the class of a classed error, else "refused".
+func refusalOf(i int, wr Write, err error) Refusal {
+	x := Refusal{Write: i + 1, Kind: wr.kind(), What: what(wr), Quote: wr.Quote, Class: "refused", Reason: err.Error()}
+	var c *classed
+	if errors.As(err, &c) {
+		x.Class, x.Candidates, x.Waits = c.class, c.candidates, c.waits
+	}
+	return x
+}
+
+// what names a write the way the report does: the title, the link, the reading.
+func what(wr Write) string {
+	switch wr.kind() {
+	case "person":
+		return wr.Person.Title
+	case "place":
+		return wr.Place.Title
+	case "page":
+		return wr.Page.Title
+	case "link":
+		return fmt.Sprintf("%s %s %s", wr.Link.From, wr.Link.Kind, wr.Link.To)
+	case "reading":
+		return fmt.Sprintf("%s %s on %s", wr.Reading.Metric, wr.Reading.Value, wr.Reading.Day)
+	}
+	return ""
 }
 
 func applyWrite(t *core.Tx, file string, wr Write, key string, rules *Rules) (Outcome, error) {
@@ -153,7 +274,7 @@ func applyWrite(t *core.Tx, file string, wr Write, key string, rules *Rules) (Ou
 		}
 		if p != nil {
 			if p.Type != "page" {
-				return Outcome{}, fmt.Errorf("%q is held by a %s, not a page", title, p.Type)
+				return Outcome{}, classify("taken", fmt.Errorf("%q is held by a %s, not a page", title, p.Type))
 			}
 			return Outcome{Kind: "page", What: title, Status: "existing"}, nil
 		}
@@ -176,7 +297,14 @@ func applyWrite(t *core.Tx, file string, wr Write, key string, rules *Rules) (Ou
 			return Outcome{}, err
 		}
 		added, err := t.Link(from, to, l.Kind, l.Note)
-		return Outcome{Kind: "link", What: fmt.Sprintf("%s %s %s", l.From, l.Kind, l.To), Status: status(!added)}, err
+		if isRefusal(err) {
+			// a kind the registry does not accept between these ends, or a kind that is not a facts link
+			return Outcome{}, classify("link_endpoint", err)
+		}
+		if err != nil {
+			return Outcome{}, err
+		}
+		return Outcome{Kind: "link", What: fmt.Sprintf("%s %s %s", l.From, l.Kind, l.To), Status: status(!added)}, nil
 	case "reading":
 		rd := wr.Reading
 		unit, found, err := t.MetricUnit(rd.Metric)
@@ -184,11 +312,11 @@ func applyWrite(t *core.Tx, file string, wr Write, key string, rules *Rules) (Ou
 			return Outcome{}, err
 		}
 		if !found {
-			return Outcome{}, fmt.Errorf("metric %s is approved but not registered: run register-metrics", rd.Metric)
+			return Outcome{}, classify("metric", fmt.Errorf("metric %s is approved but not registered: run register-metrics", rd.Metric))
 		}
 		num, numText, u, err := parseValue(rd.Value, rd.Unit)
 		if err != nil {
-			return Outcome{}, err
+			return Outcome{}, classify("value", err)
 		}
 		// a scale's range is the metric's: a reading that writes none takes it (core.RangeUnit), and its value, held
 		// to the range by the writer, must still be written in the quote: a word gives no scale's number, even when
@@ -198,11 +326,11 @@ func applyWrite(t *core.Tx, file string, wr Write, key string, rules *Rules) (Ou
 				u = unit
 			}
 			if tokens, _ := matchingNumberTokens(collapse(wr.Quote), numText, "", -1); len(tokens) == 0 {
-				return Outcome{}, fmt.Errorf("%s is a %s scale: the quote has to write its number %s", rd.Metric, unit, numText)
+				return Outcome{}, classify("value", fmt.Errorf("%s is a %s scale: the quote has to write its number %s", rd.Metric, unit, numText))
 			}
 		}
 		if u != unit {
-			return Outcome{}, fmt.Errorf("the unit %q is not %s's unit %q: nothing is converted", u, rd.Metric, unit)
+			return Outcome{}, classify("unit", fmt.Errorf("the unit %q is not %s's unit %q: nothing is converted", u, rd.Metric, unit))
 		}
 		var with int64
 		if rd.With != "" {
@@ -215,14 +343,14 @@ func applyWrite(t *core.Tx, file string, wr Write, key string, rules *Rules) (Ou
 			return Outcome{}, err
 		} else if found {
 			if v != num {
-				return Outcome{}, fmt.Errorf("its key already holds %g, not %g: a correction is the owner's (correct a measurement)", v, num)
+				return Outcome{}, classify("value", fmt.Errorf("its key already holds %g, not %g: a correction is the owner's (correct a measurement)", v, num))
 			}
 			return Outcome{Kind: "reading", What: what, Status: "existing"}, nil
 		}
 		_, err = t.Record(core.Reading{Metric: rd.Metric, Day: rd.Day, TakenAt: rd.TakenAt, TZ: rd.TZ, Value: num, Key: key, CapturedWith: with})
 		return Outcome{Kind: "reading", What: what, Status: "new"}, err
 	}
-	return Outcome{}, fmt.Errorf("unknown write")
+	return Outcome{}, classify("kind", fmt.Errorf("unknown write"))
 }
 
 func status(existing bool) string {
@@ -249,6 +377,10 @@ func named(t *core.Tx, rules *Rules, typ, title, key string, create func(string)
 		if changed && o.Status == "existing" {
 			o.Status = "updated"
 		}
+		var ce *core.Error
+		if errors.As(err, &ce) && ce.Status == 422 {
+			return o, classify("person_day", err) // the person holds another day: a correction is the owner's
+		}
 		return o, err
 	}
 	switch {
@@ -271,7 +403,7 @@ func named(t *core.Tx, rules *Rules, typ, title, key string, create func(string)
 		o.Status = "existing"
 		return filled(p.ID)
 	case p.Type == "page" && p.DayPage:
-		return o, fmt.Errorf("%q is a day page or a redirect stub, never a %s", title, typ)
+		return o, classify("taken", fmt.Errorf("%q is a day page or a redirect stub, never a %s", title, typ))
 	case p.Type == "page":
 		o.Status = "promoted"
 		if err := t.Promote(p.ID, typ, name); err != nil {
@@ -279,7 +411,7 @@ func named(t *core.Tx, rules *Rules, typ, title, key string, create func(string)
 		}
 		return filled(p.ID)
 	}
-	return o, fmt.Errorf("%q is held by a %s, not a %s", title, p.Type, typ)
+	return o, classify("taken", fmt.Errorf("%q is held by a %s, not a %s", title, p.Type, typ))
 }
 
 // errNotYet is a reference to a row another write makes: a title no live row holds, or a plain page that a link
@@ -296,6 +428,11 @@ func (e *notYet) Unwrap() []error { return []error{e.refusal, errNotYet} }
 // waitsForAnother reports whether a file was refused only for a row another file writes.
 func waitsForAnother(err error) bool { return errors.Is(err, errNotYet) }
 
+// notYetFor is a write refused for a title not written yet: class not_yet, waiting for that title.
+func notYetFor(title string, err error) error {
+	return &classed{class: "not_yet", err: err, waits: title}
+}
+
 // resolve is a reference by title: it must name a live row already written.
 func resolve(t *core.Tx, title string) (int64, error) {
 	p, err := t.Lookup(title)
@@ -303,7 +440,7 @@ func resolve(t *core.Tx, title string) (int64, error) {
 		return 0, err
 	}
 	if p == nil || p.Deleted {
-		return 0, fmt.Errorf("%q is %w: write it earlier in the file, or apply the other file first", title, errNotYet)
+		return 0, notYetFor(title, fmt.Errorf("%q is %w: write it earlier in the file, or apply the other file first", title, errNotYet))
 	}
 	return p.ID, nil
 }
@@ -338,8 +475,8 @@ func notPromotedYet(t *core.Tx, l *LinkW) error {
 			continue
 		}
 		need := strings.Join(wanted, " or ")
-		return fmt.Errorf("%q is still a plain page, and the %s link needs a %s there: that %s is %w; write it earlier in the file, or apply the file that writes it first",
-			end.title, l.Kind, need, need, errNotYet)
+		return notYetFor(end.title, fmt.Errorf("%q is still a plain page, and the %s link needs a %s there: that %s is %w; write it earlier in the file, or apply the file that writes it first",
+			end.title, l.Kind, need, need, errNotYet))
 	}
 	return nil
 }
@@ -392,14 +529,34 @@ func set(xs []string) map[string]bool {
 	return m
 }
 
-// lookAlike refuses a new name that shares its words with an existing person, place or page, unless rules.md's
-// Distinct says they differ: the model never merges or duplicates without the owner.
+// lookAlike refuses a new name that shares its words with an existing person, place or plain page — the kinds
+// that can be the same identity (never a day page, a metric, a file or a period) — unless rules.md's Distinct says
+// they differ: the model never merges or duplicates without the owner. Every candidate is on the refusal.
 func lookAlike(t *core.Tx, rules *Rules, title string) error {
-	names, err := t.Names()
-	if err != nil {
+	c, err := lookAlikes(t, rules, title)
+	if err != nil || len(c) == 0 {
 		return err
 	}
+	return &classed{class: "look_alike", candidates: c,
+		err: fmt.Errorf("%q looks like %s: ask the owner, then add an alias or a Distinct line to rules.md", title, strings.Join(c, ", "))}
+}
+
+// lookAlikes lists every candidate a new name looks like, as "<kind> <title> (<relation>)", best relation first.
+func lookAlikes(t *core.Tx, rules *Rules, title string) ([]string, error) {
+	names, err := t.Names()
+	if err != nil {
+		return nil, err
+	}
+	type hit struct {
+		text string
+		rel  string
+	}
+	var hits []hit
 	for _, n := range names {
+		if (n.Type != "person" && n.Type != "place" && n.Type != "page") || core.IsDay(n.Title) {
+			continue
+		}
+		best := ""
 		for _, cand := range append([]string{n.Title, n.Name}, n.Aliases...) {
 			if cand == "" {
 				continue
@@ -408,10 +565,20 @@ func lookAlike(t *core.Tx, rules *Rules, title string) error {
 			if rel == "" || rel == "exact" || rules.Distinct[[2]string{nameKey(title), nameKey(cand)}] {
 				continue
 			}
-			return fmt.Errorf("%q looks like the %s %q (%s): ask the owner, then add an alias or a Distinct line to rules.md", title, n.Type, n.Title, rel)
+			if best == "" || rank(rel) < rank(best) {
+				best = rel
+			}
+		}
+		if best != "" {
+			hits = append(hits, hit{fmt.Sprintf("the %s %q (%s)", n.Type, n.Title, best), best})
 		}
 	}
-	return nil
+	sort.SliceStable(hits, func(a, b int) bool { return rank(hits[a].rel) < rank(hits[b].rel) })
+	out := make([]string, len(hits))
+	for i, h := range hits {
+		out[i] = h.text
+	}
+	return out, nil
 }
 
 // Match is one thing find found.
@@ -458,7 +625,7 @@ func rank(rel string) int {
 	return map[string]int{"exact": 0, "same words": 1, "more words": 2, "fewer words": 3}[rel]
 }
 
-// summary is the ledger's note for a file: counts by kind, then by status.
+// summary is the ledger's note for a file: counts by kind, then by status; a check adds what it refused.
 func summary(r *Report) string {
 	kinds := map[string]int{}
 	stat := map[string]int{}
@@ -484,6 +651,9 @@ func summary(r *Report) string {
 	}
 	if len(st) > 0 {
 		s += " (" + strings.Join(st, ", ") + ")"
+	}
+	if len(r.Refused) > 0 {
+		s += fmt.Sprintf("; %d refused", len(r.Refused))
 	}
 	if r.Kept > 0 {
 		s += fmt.Sprintf("; %d kept as text", r.Kept)

@@ -333,7 +333,7 @@ func TestSourceFilenameWhitespace(t *testing.T) {
 	if err := f.facts(t, " Note.md", facts); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := w.Check(context.Background(), store, " Note.md"); err == nil {
+	if err := checkErr(w, store, " Note.md"); err == nil {
 		t.Fatal("quote from whitespace-distinct sibling passed")
 	}
 	facts["writes"] = []any{map[string]any{"page": map[string]any{"title": "Evidence"}, "quote": "leading evidence"}}

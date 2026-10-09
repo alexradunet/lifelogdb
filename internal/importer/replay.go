@@ -256,14 +256,14 @@ func (w *Workspace) replayIntoPlan(ctx context.Context, trial, ts *core.Store, r
 		var lastErr error
 		waits := map[string]error{} // why each file of later waits
 		for _, file := range pending {
-			f, pos, rules, err := w.prepare(file)
+			f, pos, rules, _, err := w.prepare(file, false)
 			if err != nil {
 				if err := res.failed(rehearse, "facts", file, err); err != nil {
 					return err
 				}
 				continue
 			}
-			r, err := w.write(ctx, ts, f, pos, rules, false)
+			r, err := w.write(ctx, ts, f, pos, rules, false, nil)
 			if err != nil {
 				if waitsForAnother(err) {
 					later, lastErr = append(later, file), err

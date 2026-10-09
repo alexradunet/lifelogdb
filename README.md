@@ -119,6 +119,11 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   immutable workspace intent and then commits SQL; if the process reports pending recovery, run import status/replay
   or retry a correction after resolving any conflict. This is recovery across process failures, not cross-file ACID
   or a power-loss guarantee.
+- **A check reports every refusal.** `check-facts` runs each write in its own savepoint of the rolled-back dry run and
+  returns `refused`, every write the writer would refuse with a class a client branches on (`look_alike` with its
+  candidates, `not_yet` with the title it waits for, `unit`, `quote`, …); `apply-facts` keeps the file whole or not at
+  all and carries the first class on the error. Look-alikes compare a new name with people, places and plain pages
+  only.
 - **Imported keys** are derived, never sent: `path|person|<title_key>` (and place, page), a note's path, and
   `path|reading|<metric_title_key>|<day>|<taken_at, or its place in the source file>`. Ambiguous old reading keys are
   refused during owner-local rehearsal; take a snapshot first if needed, because lifelog never auto-repairs them.

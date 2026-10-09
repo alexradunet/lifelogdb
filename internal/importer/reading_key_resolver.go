@@ -300,7 +300,7 @@ func (w *Workspace) resolveCorrectionKey(ctxSource string, t *core.Tx, metric, k
 	if !ok {
 		return key, nil
 	}
-	f, pos, _, err := w.prepare(parsed.file)
+	f, pos, _, _, err := w.prepare(parsed.file, false)
 	if err != nil {
 		return "", err
 	}
@@ -454,9 +454,12 @@ func (w *Workspace) collectTrialReadingIdentityFailures(ctx context.Context, tri
 			if err != nil {
 				return err
 			}
-			pos, errs := w.checkStatic(f, src, rules, approved)
+			pos, refused, errs := w.checkStatic(f, src, rules, approved)
 			if len(errs) > 0 {
 				return refuse("%s: %s", line.File, strings.Join(errs, "; "))
+			}
+			if len(refused) > 0 {
+				return fileRefusal(line.File, refused)
 			}
 			return trial.DryRun(ctx, rules.Source, func(t *core.Tx) error {
 				_, err := resolveReadingKeys(t, rules.Source, f, pos)
@@ -500,7 +503,7 @@ func (w *Workspace) buildCorrectionProof(ctx context.Context, trial, target *cor
 		needed[intent.root()] = true
 	}
 	return buildCorrectionProofEntries(needed, func(file string) (*Facts, []int, error) {
-		f, pos, _, err := w.prepare(file)
+		f, pos, _, _, err := w.prepare(file, false)
 		return f, pos, err
 	}, func(source string, f *Facts, pos []int) (resolvedReadingKeys, error) {
 		var resolved resolvedReadingKeys

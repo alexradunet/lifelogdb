@@ -189,7 +189,7 @@ func TestNumericSourceEvidence(t *testing.T) {
 		if err := f.facts(t, file, facts); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := f.w.Check(ctx, f.s, file); err == nil || !strings.Contains(err.Error(), want) {
+		if err := checkErr(f.w, f.s, file); err == nil || !strings.Contains(err.Error(), want) {
 			t.Fatalf("Check error = %v, want %q", err, want)
 		}
 		before, err := f.s.Counts(ctx)

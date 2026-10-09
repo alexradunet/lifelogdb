@@ -7,7 +7,7 @@
 - **Date / baseline:** 2026-10-08, `5906b64` (master).
 - **Priority:** P1. **Effort:** M. **Risk:** LOW for the schema (untouched), LOW for the import contract (the
   file-level invariant is unchanged; *check* reports more).
-- **Status:** IN PROGRESS.
+- **Status:** DONE.
 - **Resolves:** issues [0050](../issues/0050-one-doubtful-write-refuses-a-whole-file.md),
   [0051](../issues/0051-look-alikes-compare-with-every-entity-type.md).
 

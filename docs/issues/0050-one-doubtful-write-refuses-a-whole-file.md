@@ -1,7 +1,7 @@
 # 0050 — One doubtful write refuses a whole facts file, and the refusal names only the first
 
 - **Date:** 2026-10-08
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the 2026-10 import of a notes folder and a contacts export (12 vCard files, one with 203 cards)
 
 ## What happened
@@ -31,4 +31,4 @@ class of the first refusal. The model, or any loop, fixes the facts in one round
 
 ## Resolution
 
-Open.
+Resolved by [plan 083](../plans/083-check-reports-every-refusal.md): *check facts* runs every write in its own savepoint inside the rolled-back dry run and returns every refused write with a class, its candidates and the title it waits for; *apply facts* refuses the file whole with the first class on the error.
