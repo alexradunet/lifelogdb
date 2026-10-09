@@ -101,8 +101,8 @@ func (w *Workspace) Changed(name string, max int) []string {
 
 // toStamp is the body approving a file would stamp.
 func (w *Workspace) toStamp(name string) (string, error) {
-	if name != "rules.md" && name != "metrics.md" && name != preparedFile && name != selectedPhotoFile {
-		return "", fmt.Errorf("approve rules.md or metrics.md, not %s", name)
+	if name != "rules.md" && name != "metrics.md" && name != entitiesFile && name != preparedFile && name != selectedPhotoFile {
+		return "", fmt.Errorf("approve rules.md, metrics.md, entities.md, prepared.md or selected-photo.md, not %s", name)
 	}
 	rest, err := w.artifactBody(name, false)
 	if err != nil {
@@ -118,7 +118,12 @@ func (w *Workspace) toStamp(name string) (string, error) {
 			return "", err
 		}
 	}
-	if name == "metrics.md" {
+	if name == entitiesFile {
+		if err := checkEntities(rest); err != nil {
+			return "", err
+		}
+	}
+	if name == "metrics.md" || name == entitiesFile {
 		rest = approveRows(rest)
 	}
 	return rest, nil

@@ -26,7 +26,7 @@ var importCatalog = []spec{
 		"GET", "/import/inspect", []Field{req("file", "text", "File (relative to the source)")}, false},
 	{"import-find", "Find", "Look a name up before writing it: people, places, pages and metrics that match exactly, with the same words, more words or fewer words.",
 		"GET", "/import/find", []Field{req("text", "text", "Name")}, false},
-	{"draft-rules", "Draft rules", "Write rules.md for the owner to approve: a `source: import:<name>` line, then ## Folders, ## Aliases (\"name\" → \"Title\"), ## Distinct (\"a\" ≠ \"b\"), ## Decisions. Never a status line; any change waits for the owner's approval again.",
+	{"draft-rules", "Draft rules", "Write rules.md for the owner to approve: a `source: import:<name>` line, then ## Folders and ## Decisions. A decision about one name is a row of entities.md (propose-entities), never a line here. Never a status line; any change waits for the owner's approval again.",
 		"POST", "/import/rules", []Field{req("body", "textarea", "rules.md without its status line")}, false},
 	{"propose-metric", "Propose a metric", "Add a proposed metric to metrics.md for the owner: its name, the title its page will have for good (reuse one that exists), the unit exactly as written ('' when the source writes none; a scale's range such as '1-5', which no source line writes, is its unit: reuse Mood with '' or '1-5'; a habit is unitless with note '1 = done that day'); category, the path of the category to file it in (biomarkers/iron), when metrics.md has that column.",
 		"POST", "/import/metrics", []Field{req("name", "text", "Name"), opt("unit", "text", "Unit"), opt("note", "text", "Note"), opt("from", "text", "From file"), opt("doubts", "text", "Doubts"), opt("category", "text", "Category")}, false},
@@ -46,6 +46,8 @@ var importCatalog = []spec{
 	{"draft-selected-photo", "Draft selected photo pair", "Review an explicit original/optional sidecar pair, exact fingerprints, capture/creation evidence and choices. No automatic precedence.", "POST", "/import/selected-photo", []Field{req("file", "text", "Original"), opt("sidecar", "text", "Explicit sidecar"), req("title", "text", "Title"), opt("body", "textarea", "Caption"), req("choices", "textarea", "Capture/GPS choices and optional owner day/offset/place JSON")}, false},
 	{"check-selected-photo", "Check selected photo", "Check the owner-stamped pair without writes.", "POST", "/import/selected-photo/check", nil, false},
 	{"apply-selected-photo", "Apply selected photo", "Keep the stamped selected pair through the existing file writer.", "POST", "/import/selected-photo/apply", nil, false},
+	{"propose-entities", "Propose names", "Add to entities.md a proposed row for each name the owner has not decided: the names held files wait for, the persons and places done files write, and the alias and distinct lines of rules.md (moved out of it). The owner decides them and approves (lifelog import approve entities); never edit a status yourself.",
+		"POST", "/import/entities/propose", nil, false},
 	{"register-metrics", "Register metrics", "Register the metrics the owner approved in metrics.md, and each habit's period.",
 		"POST", "/import/register-metrics", nil, false},
 	{"plan-vault", "Plan the vault", "Draft plan.json: every note becomes one page titled by its file name; every problem is listed.",
@@ -86,6 +88,7 @@ func (h *server) mountImport(get func(string, func(*http.Request) (*Entity, erro
 	post("/import/selected-photo/check", h.selectedPhotoOp(true))
 	post("/import/selected-photo/apply", h.selectedPhotoOp(false))
 	post("/import/register-metrics", h.registerMetrics)
+	post("/import/entities/propose", h.proposeEntities)
 	post("/import/vault/plan", h.planVault)
 	post("/import/vault/fix", h.fixPlan)
 	post("/import/vault/apply", h.applyVault)
@@ -329,6 +332,21 @@ func (h *server) factsOp(apply bool) func(*http.Request, string) (*Entity, error
 		}
 		return e, nil
 	}
+}
+
+func (h *server) proposeEntities(r *http.Request, _ string) (*Entity, error) {
+	added, err := h.ws.ProposeEntities(r.Context(), h.s)
+	if err != nil {
+		return nil, err
+	}
+	if added == nil {
+		added = []importer.Entity{}
+	}
+	e, err := h.importStatus(r)
+	if e != nil {
+		e.Result = map[string]any{"proposed": added}
+	}
+	return e, err
 }
 
 func (h *server) registerMetrics(r *http.Request, _ string) (*Entity, error) {

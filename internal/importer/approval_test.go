@@ -70,9 +70,12 @@ func TestFirstApprovalShowsTheWholeFile(t *testing.T) {
 	}
 }
 
+// longRulesBody has lines after the folder line, so a review of a change on line 5 shows where its hunk ends.
+const longRulesBody = rulesBody + "\n## Decisions\n- a result written as a word stays text\n- Bob Sample is a friend from school\n"
+
 func TestAStaleGateSaysWhatChanged(t *testing.T) {
 	f := setup(t)
-	f.approveRules(t, rulesBody)
+	f.approveRules(t, longRulesBody)
 	editLine(t, f.w, "rules.md", folderLine, folderLine2)
 	if g, _ := f.w.Gate("rules.md"); g != "stale" {
 		t.Fatalf("one edited word leaves the gate %s", g)
@@ -187,13 +190,13 @@ func TestTheApprovedCopyNeverOpensTheGate(t *testing.T) {
 
 func TestApproveStampsOnlyWhatWasShown(t *testing.T) {
 	f := setup(t)
-	f.approveRules(t, rulesBody)
+	f.approveRules(t, longRulesBody)
 	editLine(t, f.w, "rules.md", folderLine, folderLine2)
 	rv, err := f.w.Review("rules.md")
 	if err != nil {
 		t.Fatal(err)
 	}
-	editLine(t, f.w, "rules.md", "## Distinct", "## Distinct\n- \"Cara\" ≠ \"Cara Example\"")
+	editLine(t, f.w, "rules.md", "## Decisions", "## Decisions\n- Cara is a friend of Bob")
 	if err := f.w.Approve("rules.md", time.Now(), rv.Hash); err == nil {
 		t.Error("a body changed after the review was stamped")
 	}

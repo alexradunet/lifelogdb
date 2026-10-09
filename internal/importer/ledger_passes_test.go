@@ -87,6 +87,7 @@ func TestMarkFilesByPattern(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.approveRules(t, rulesBody)
+	f.decideNames(t, dayNames...)
 	f.metrics(t)
 	if err := f.facts(t, "Journal/2031-04-11.md", dayFacts); err != nil {
 		t.Fatal(err)

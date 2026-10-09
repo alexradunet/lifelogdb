@@ -62,11 +62,11 @@ the document (a broken block makes a later step impossible) reports that as one 
 | `evolution_test.go`, `evolution_compatibility_test.go` | `evolution` | named CHECKs, widening, partial dates, the tokenizer switch, reader compatibility, comments inside statements (D13, D17, architecture/non-goals) |
 | `cookbook_test.go`, `cookbook_measurements_test.go` | `cookbook` | measurement lifecycle and recorded-time cutoffs; every cookbook block prepares and runs, on a plain and on a hardened connection; every block that only reads runs on a reader (`mode=ro`, `trusted_schema=OFF`) |
 | `document_test.go` | `document` | the 2075 test, the rules live in the file, the tree holds together (one record per decision, every relative link and anchor resolves, every page reachable from `docs/README.md`), the totals in `schema/README.md` |
-| `diagrams_test.go` | `diagrams` | the seven mermaid diagrams say what the DDL says (keys, relationships, the link map, the correction story) |
+| `diagrams_test.go` | `diagrams` | the eight mermaid diagrams say what the DDL says (keys, relationships, the link map, the correction story) and what the guide relies on (the name decision) |
 | `wikilinks_test.go` | `doc-save-contract` | the save contract as the docs print it: the vector table of contract/titles-and-wikilinks, cookbook/save-a-body run literally (and equal to a writer's own save after 400 random edits), cookbook/backlinks |
 | | `save-contract` | the save contract through a writer's own save against the DDL: invalid targets, the `SAVEPOINT` backstop, set equality, ordinary REDIRECT prose, revival, 400 random edits against a rebuild, 4 concurrent writers, every vector |
 | | `title-fuzz` | writer acceptance is a subset of the DDL's filename checks over 60 000 generated strings; DB-only names independently fail reference addressability |
-| `mutants_test.go` | `TestMutants` | 481 broken copies of the docs tree, one rule each; a completed owning suite must fail the mutant's explicit rule witness |
+| `mutants_test.go` | `TestMutants` | 482 broken copies of the docs tree, one rule each; a completed owning suite must fail the mutant's explicit rule witness |
 | `render_test.go` | `TestMermaidRender` | optional: every diagram renders |
 | `kit_test.go`, `suites_test.go` | | reading the tree (a page, the cookbook blocks by recipe key, an overlay of broken files for a mutant); fresh databases and the insert conventions (entity first, `RETURNING`, named entities); the runner |
 

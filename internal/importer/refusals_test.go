@@ -50,7 +50,7 @@ func TestCheckReportsEveryRefusedWrite(t *testing.T) {
 	for _, x := range r.Refused {
 		got[x.Write] = x
 	}
-	want := map[int]string{2: "look_alike", 3: "not_yet", 4: "unit", 6: "not_named"}
+	want := map[int]string{2: "held", 3: "not_yet", 4: "unit", 5: "held", 6: "not_named"}
 	if len(got) != len(want) {
 		t.Fatalf("refused %d writes, want %d: %+v", len(got), len(want), r.Refused)
 	}
@@ -70,27 +70,28 @@ func TestCheckReportsEveryRefusedWrite(t *testing.T) {
 	for _, o := range r.Outcomes {
 		ok = append(ok, o.Write)
 	}
-	if len(ok) != 2 || ok[0] != 1 || ok[1] != 5 {
+	if len(ok) != 1 || ok[0] != 1 {
 		t.Errorf("the good writes: %v", ok)
 	}
-	if !strings.Contains(r.Summary, "4 refused") {
+	if !strings.Contains(r.Summary, "5 refused") {
 		t.Errorf("summary: %s", r.Summary)
 	}
 	// an apply refuses the file whole, with the first class, and writes nothing
 	before, _ := f.s.Counts(ctx)
 	_, err = f.w.Apply(ctx, f.s, file)
 	var ce *core.Error
-	if !errors.As(err, &ce) || ce.Status != 422 || ce.Code != "unit" || !strings.Contains(err.Error(), "write 4") || !strings.Contains(err.Error(), "write 6") {
+	if !errors.As(err, &ce) || ce.Status != 422 || ce.Code != "held" || !strings.Contains(err.Error(), "write 4") || !strings.Contains(err.Error(), "write 6") {
 		t.Errorf("apply: %v (code %q)", err, codeOf(err))
 	}
 	after, _ := f.s.Counts(ctx)
 	if after.Pages != before.Pages {
 		t.Errorf("a refused apply wrote rows: %d -> %d pages", before.Pages, after.Pages)
 	}
-	if lines, _, _ := f.w.Ledger(); ledgerState(lines, file) != " " {
-		t.Error("a refused file was marked")
+	if lines, _, _ := f.w.Ledger(); ledgerState(lines, file) != " " || ledgerNote(lines, file) != "" {
+		t.Error("a refused file was marked, or noted as held while it has other refusals")
 	}
-	// once the model drops the refused writes, the rest applies
+	// once the model drops the refused writes and the owner approves the place, the rest applies
+	f.decideNames(t, Entity{Kind: "place", Name: "the lake"})
 	facts["writes"] = []any{facts["writes"].([]any)[0], facts["writes"].([]any)[4]}
 	if err := f.facts(t, file, facts); err != nil {
 		t.Fatal(err)
@@ -98,6 +99,15 @@ func TestCheckReportsEveryRefusedWrite(t *testing.T) {
 	if r, err := f.w.Apply(ctx, f.s, file); err != nil || len(r.Refused) != 0 || !strings.Contains(r.Summary, "1 page, 1 place") {
 		t.Errorf("the good writes alone: %v, %v", r, err)
 	}
+}
+
+func ledgerNote(lines []Line, file string) string {
+	for _, l := range lines {
+		if l.File == file {
+			return l.Note
+		}
+	}
+	return ""
 }
 
 func codeOf(err error) string {
@@ -185,19 +195,17 @@ func TestLookAlikesByKindAllCandidates(t *testing.T) {
 	if len(c) != 2 || !strings.Contains(c[0], `the person "Cara Example" (more words)`) || !strings.Contains(c[1], `the page "Cara Example Notes" (more words)`) {
 		t.Errorf("candidates: person and page, best first; never the metric: %v", c)
 	}
-	// a name that shares words only with a day page (the journal), a metric or a file is new
-	for _, title := range []string{"2031 April", "Index"} {
-		if err := f.facts(t, day, map[string]any{"file": day, "writes": []any{map[string]any{"place": map[string]any{"title": title}, "quote": "Coffee with Cara"}}}); err != nil {
+	// a name that shares words only with a day page or a metric looks like nothing
+	if err := f.s.Do(ctx, "cli", func(tx *core.Tx) error { _, _, err := tx.Capture("2031-04-12", "Coffee.", nil); return err }); err != nil {
+		t.Fatal(err)
+	}
+	for _, title := range []string{"2031 04", "Index"} {
+		var like []string
+		if err := f.s.DryRun(ctx, "import:notebook", func(tx *core.Tx) (err error) { like, err = lookAlikes(tx, title); return err }); err != nil {
 			t.Fatal(err)
 		}
-		r, err := f.w.Check(ctx, f.s, day)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, x := range r.Refused {
-			if x.Class == "look_alike" {
-				t.Errorf("%q: a look-alike of a day page, a metric or a file: %s", title, x.Reason)
-			}
+		if len(like) != 0 {
+			t.Errorf("%q: a look-alike of a day page or a metric: %v", title, like)
 		}
 	}
 }

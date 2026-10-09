@@ -8,7 +8,7 @@ Earlier closed plans live in git history (`git log -- docs/plans`). The next pla
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| [084](084-owner-decides-names.md) | The owner decides each new name in `entities.md` | P1 | L | RFC 0008; issue 0052 | IN PROGRESS |
+| [084](084-owner-decides-names.md) | The owner decides each new name in `entities.md` | P1 | L | RFC 0008; issue 0052 | DONE |
 | [083](083-check-reports-every-refusal.md) | Check reports every refused write with a class; look-alikes by kind | P1 | M | issues 0050, 0051 | DONE |
 | [082](082-snapshot-in-the-catalog.md) | A snapshot from any surface: the owner-only snapshot action | P2 | S | Plan 081; 37767bb | DONE |
 | [081](081-planning-on-every-surface.md) | Planning on every surface: tasks, occurrences and deadlines in the catalog | P1 | M | Owner decision 2026-10-08; adea9b8 | DONE |

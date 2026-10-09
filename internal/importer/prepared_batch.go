@@ -502,14 +502,14 @@ func (w *Workspace) selectionSnapshot(ctx context.Context) (string, error) {
 	var evidence []string
 	for _, e := range entries {
 		name := e.Name()
-		if name != "rules.md" && name != "ledger.md" && name != preparedFile && name != selectedPhotoFile && !strings.HasPrefix(name, ".prepared-binding-") && !strings.HasPrefix(name, ".selected-binding-") {
+		if name != "rules.md" && name != "ledger.md" && name != entitiesFile && name != preparedFile && name != selectedPhotoFile && !strings.HasPrefix(name, ".prepared-binding-") && !strings.HasPrefix(name, ".selected-binding-") {
 			continue
 		}
 		// the rules and the ledger grow with the source (one ledger line per file): hashed as a stream, with
 		// no bound borrowed from the prepared artifacts (issue 0049)
 		var h string
 		var herr error
-		if name == "rules.md" || name == "ledger.md" {
+		if name == "rules.md" || name == "ledger.md" || name == entitiesFile {
 			h, herr = w.hashWorkspaceFile(name)
 		} else {
 			var raw []byte

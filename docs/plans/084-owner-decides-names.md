@@ -7,7 +7,7 @@
 - **Date / baseline:** 2026-10-09, `575a706` (master).
 - **Priority:** P1. **Effort:** L. **Risk:** MED for the import process (a new gate; aliases leave `rules.md`), none
   for the schema (untouched).
-- **Status:** IN PROGRESS.
+- **Status:** DONE.
 - **Implements:** RFC [0008](../rfcs/0008-owner-decides-names-in-imports.md); **resolves** issue
   [0052](../issues/0052-names-are-written-on-the-models-word.md).
 
@@ -17,7 +17,7 @@
 |---|---|
 | **`entities.md`**: a stamped table `status, kind, name, as, like, from, doubts`; statuses `proposed`, `approved`, `rejected`; kinds `person`, `place`, `page`. Decisions are read only under a valid stamp, as `metrics.md` is. | `internal/importer/files.go`, `approval.go` |
 | **Held writes.** A person or place write whose title no live row of that kind holds (new, tombstoned, or a plain page to promote), and a new page with look-alikes, need a decision: approved → written; rejected → refused (`rejected`); `as` → the title is rewritten to the existing title before the checks; none → refused (`held`, the look-alikes as candidates). *apply facts* writes nothing for a held file and notes its ledger line `held: …`; the line stays to do. | `internal/importer/apply.go`, `facts.go` |
-| **propose-entities** (catalog action; the model may call it, it chooses no name): adds a `proposed` row for each held name, for each person and place that the done facts files write, and for each `## Aliases` and `## Distinct` line of `rules.md`, which it removes from `rules.md`. | `files.go`, `internal/api/import.go` |
+| **propose-entities** (catalog action; the model may call it, it chooses no name): adds a `proposed` row for each held name, for each person and place that the done facts files write, and for each `## Aliases` and `## Distinct` line of `rules.md`, which it removes from `rules.md`. | `internal/importer/entities.go`, `internal/api/import.go` |
 | **approve entities** at the terminal: the stamp flips `proposed` to `approved`; `rejected` and `as` rows keep what the owner wrote. | `cmd/lifelog/main.go`, `approval.go` |
 | **status**: the gate; a held file is the next file only when each of its names has a decision under the stamp; "propose the held names" and "stop: entities.md waits for the owner" when nothing else is to do. | `internal/importer/status.go` |
 | **replay**: refuses while `entities.md` is a draft; the evidence snapshot hashes it. | `replay.go`, `prepared_batch.go` |

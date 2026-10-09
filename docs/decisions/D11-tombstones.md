@@ -5,11 +5,13 @@
 - **Decision.** `lifelog_meta.deletes`; the `*_no_delete` triggers, which also hold on a connection that forgot
   `foreign_keys` (executed), and under `recursive_triggers=ON` stop `INSERT OR REPLACE` from deleting a row
   (executed, [connection setup](../contract/connections.md)). Junk captured by accident is tombstoned like
-  everything else. A tombstone is never earlier than its row's creation (`entities_deleted_after_created`,
-  `sessions_deleted_after_created`, `tasks_deleted_after_created`, `task_occurrences_deleted_after_created`): a
-  tombstone stamped by a clock that has stepped back behind `created_at` is refused. Tombstoning and un-tombstoning bump
-  `entities.updated_at` (`entities_touch`, watching `deleted_at` and `entity_type`, so it cannot re-fire itself
-  under `recursive_triggers=ON`, executed).
+  everything else, and an import does not bring it back: a write of a facts file revives a tombstoned person or place
+  only on the owner's decision in the import's workspace ([importing with a model](../guides/importing.md)). A
+  tombstone is never earlier than its row's creation (`entities_deleted_after_created`, `sessions_deleted_after_created`,
+  `tasks_deleted_after_created`, `task_occurrences_deleted_after_created`): a tombstone stamped by a clock that has
+  stepped back behind `created_at` is refused. Tombstoning and un-tombstoning bump `entities.updated_at`
+  (`entities_touch`, watching `deleted_at` and `entity_type`, so it cannot re-fire itself under
+  `recursive_triggers=ON`, executed).
 - **Rationale.** Retaining a tombstoned row preserves its contents and references for recovery and explicit
   historical reads. A currently tombstoned row says when its current deletion was recorded. Revival clears that
   tombstone, and deleting it again replaces the deletion time; no sequence of deletion and revival events is

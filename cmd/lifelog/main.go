@@ -71,7 +71,7 @@ const usage = `lifelog — the writer of a life.db
 
 Import (docs/guides/importing.md), with --workspace <source>.lifelog:
   lifelog import setup [--from life.db]   make trial.db: a copy of the real database, or a new one
-  lifelog import approve rules|metrics|prepared|selected-photo    the owner's stamp (an interactive terminal only)
+  lifelog import approve rules|metrics|entities|prepared|selected-photo    the owner's stamp (an interactive terminal only)
   lifelog import status                   gates, ledger, questions, next file, what to do now
   lifelog import check FILE | apply FILE  check or apply one facts file
   lifelog import replay --to PATH         the real run: the whole workspace into another database,
@@ -977,8 +977,8 @@ func importOwner(o opts, ws *importer.Workspace, args []string) error {
 		fmt.Println("integrity: ok")
 		return nil
 	case "approve":
-		if len(args) != 2 || (args[1] != "rules" && args[1] != "metrics" && args[1] != "prepared" && args[1] != "selected-photo") {
-			return errors.New("import approve rules|metrics|prepared|selected-photo")
+		if len(args) != 2 || (args[1] != "rules" && args[1] != "metrics" && args[1] != "entities" && args[1] != "prepared" && args[1] != "selected-photo") {
+			return errors.New("import approve rules|metrics|entities|prepared|selected-photo")
 		}
 		if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
 			return errors.New("approve runs only at an interactive terminal: the owner approves, never a script or a model")

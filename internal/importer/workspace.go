@@ -319,11 +319,20 @@ func (w *Workspace) Approve(name string, today time.Time, shown string) error {
 
 // ---- rules.md
 
-// Rules is what the writer reads from rules.md: the source name, aliases and distinct pairs.
+// Rules is what the writer reads from rules.md, the source name, and what a write of this workspace may use: the
+// owner's name decisions of entities.md, and the aliases among them (normalised name -> title). rules.md holds no
+// name decision: its old `## Aliases` and `## Distinct` lines are Legacy, for propose-entities to move.
 type Rules struct {
-	Source   string
-	Aliases  map[string]string // normalised name -> title
-	Distinct map[[2]string]bool
+	Source  string
+	Aliases map[string]string
+	Names   names
+	Legacy  legacyNames
+}
+
+// legacyNames are the alias and distinct lines a rules.md wrote before name decisions moved to entities.md.
+type legacyNames struct {
+	Aliases  [][2]string // name, title
+	Distinct [][2]string
 }
 
 var (
@@ -348,7 +357,7 @@ func (w *Workspace) Rules() (*Rules, error) {
 	return parseRules(text)
 }
 func parseRules(text string) (*Rules, error) {
-	r := &Rules{Aliases: map[string]string{}, Distinct: map[[2]string]bool{}}
+	r := &Rules{Aliases: map[string]string{}}
 	if m := sourceLine.FindStringSubmatch(text); m != nil {
 		r.Source = m[1]
 	} else {
@@ -364,16 +373,32 @@ func parseRules(text string) (*Rules, error) {
 		switch section {
 		case "Aliases":
 			if m := aliasLine.FindStringSubmatch(line); m != nil {
-				r.Aliases[nameKey(m[1])] = m[2]
+				r.Legacy.Aliases = append(r.Legacy.Aliases, [2]string{m[1], m[2]})
 			}
 		case "Distinct":
 			if m := distinctLine.FindStringSubmatch(line); m != nil {
-				a, b := nameKey(m[1]), nameKey(m[2])
-				r.Distinct[[2]string{a, b}], r.Distinct[[2]string{b, a}] = true, true
+				r.Legacy.Distinct = append(r.Legacy.Distinct, [2]string{m[1], m[2]})
 			}
 		}
 	}
 	return r, nil
+}
+
+// withoutNameSections is a rules.md text without its `## Aliases` and `## Distinct` sections: what is left when
+// propose-entities has moved their lines to entities.md.
+func withoutNameSections(text string) string {
+	var out []string
+	skip := false
+	for _, line := range strings.Split(text, "\n") {
+		if t := strings.TrimSpace(line); strings.HasPrefix(t, "## ") {
+			s := strings.TrimSpace(t[3:])
+			skip = s == "Aliases" || s == "Distinct"
+		}
+		if !skip {
+			out = append(out, line)
+		}
+	}
+	return strings.Join(out, "\n")
 }
 
 // Name is the import's source (lifelog_meta.source), from rules.md.

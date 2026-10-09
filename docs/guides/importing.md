@@ -23,8 +23,8 @@ Each party does only what it is reliable at.
 
 | who | does | never does |
 |---|---|---|
-| **the owner** | approves the rules, the metrics and the real run; answers questions | — |
-| **the model** (local by default) | reads one source file at a time and writes down what it states, as a **facts file**; drafts rules, metrics and questions | write SQL, approve its own work, create metrics directly, run replay, write an answer |
+| **the owner** | approves the rules, the metrics, each new name and the real run; answers questions | — |
+| **the model** (local by default) | reads one source file at a time and writes down what it states, as a **facts file**; drafts rules, metrics and questions | write SQL, approve its own work, create metrics directly, decide a name, run replay, write an answer |
 | **the writer** (an implementation with an API: a CLI, a REST API, MCP tools) | checks each facts file against its source file and against `life.db`, writes it whole or not at all, keeps the ledger, replays the trial onto the real database | judge what a note means |
 
 The facts file sits between reading and writing. It is the one record of each decision: written once,
@@ -35,7 +35,7 @@ database. The facts workflow is:
 - **resumable** — all state is in plain files; any session, or another model, asks the writer for
   *status* and gets the next file;
 - **checked before it is written** — every fact quotes its source; a quote not in the file, a value
-  not in its quote, an unapproved metric or a look-alike name is refused before a row exists;
+  not in its quote, an unapproved metric or a name the owner has not decided is refused before a row exists;
 - **all or nothing per file** — a file's facts commit in one transaction, and its ledger line is
   written by the writer from what was written;
 - **replayable** — facts hold no database ids, so the real run applies them with no model;
@@ -62,20 +62,20 @@ outside every repository, or in a folder its `.gitignore` excludes (this reposit
 
 | file | what | who writes it |
 |---|---|---|
-| `rules.md` | what each folder holds, the `source` name, aliases, distinct names, decisions | the model drafts; the owner approves |
+| `rules.md` | what each folder holds, the `source` name, decisions in words | the model drafts; the owner approves |
 | `metrics.md` | the metrics proposed for readings and habits | the model proposes; the owner approves |
+| `entities.md` | the owner's decision on each new person, place and look-alike page | the writer proposes; the owner decides and approves |
 | `questions.md` | what only the owner can say | the model asks; the owner answers |
 | `ledger.md` | every source file: to do, done, waiting, later, skipped | the writer, except the skip and later marks |
 | `plan.json` | a folder of notes only: each note's title and day (see "A folder of notes") | the writer drafts; the model fixes |
 | `facts/<file>.json` | one facts file per source file, the source's tree mirrored | the model |
 | `trial.db` | the trial database | the writer |
-| `.approved/rules.md`, `.approved/metrics.md` | each stamped file as the owner last approved it, stamp included (see "Gates") | the writer, only when the owner approves |
+| `.approved/rules.md`, `.approved/metrics.md`, `.approved/entities.md` | each stamped file as the owner last approved it, stamp included (see "Gates") | the writer, only when the owner approves |
 
 **rules.md.** The first line is the gate; `source:` gives the `entities.source` of every row
-(`import:<name>`, one per source, `lifelog_meta.source`). The writer reads `## Aliases` (a name the notes write that
-means an existing title) and `## Distinct` (two names the owner said are different things), comparing
-names case-insensitively with runs of spaces collapsed. `## Folders` and `## Decisions` are for the
-model and the owner.
+(`import:<name>`, one per source, `lifelog_meta.source`). The writer reads nothing else of it: `## Folders` and
+`## Decisions` are for the model and the owner. A decision about one name is a row of `entities.md`, so a new name
+does not close the rules gate.
 
   ```markdown
   status: draft
@@ -86,12 +86,6 @@ model and the owner.
   - `Contacts/*.md` — one person per note
   - `Medical/Results/*.md` — readings: one metric per note, values from its table
   - `**/*.png`, `**/*.pdf` — skip: an attachment is kept on its own, as a file
-
-  ## Aliases
-  - "Bobby" → "Bob Sample"
-
-  ## Distinct
-  - "Cara" ≠ "Cara Example"
 
   ## Decisions
   - a result written as a word ("normal") stays text
@@ -112,34 +106,82 @@ status: draft
 | proposed | Evening walk | | 1 = done that day | Journal/2031/2031-03-01.md | | | | |
 ```
 
-**questions.md.** One question per doubt. The status after `·` is `open`, `answered`, `done` or
-`parked`. Each option shows the exact rows its answer writes.
+**entities.md.** The owner's decision on each name, one row per name of one kind. A write of a person, a place or
+a page meets it as follows:
+
+```mermaid
+%% diagram: name-decision
+flowchart TD
+  W["a person, place or page write"] --> AS{"an approved row names it, with an as title?"}
+  AS -->|"yes"| T["the write takes the as title"]
+  AS -->|"no"| L{"a live row of that kind holds the title?"}
+  T --> L
+  L -->|"yes"| X["existing: nothing to decide"]
+  L -->|"no"| D{"the row of the name in the stamped entities.md"}
+  D -->|"approved"| N["written: new, revived or promoted"]
+  D -->|"rejected"| R["refused: rejected"]
+  D -->|"none"| H["refused: held; the file writes nothing, its ledger line is noted held"]
+  H --> P["propose entities: a proposed row, with what the name looks like"]
+  P --> O["the owner edits the row and approves"]
+  O --> D
+```
+
+A table found by its header; `status`, `kind` and `name` are required. `kind` is `person`, `place` or `page`; a name
+is compared case-insensitively, after NFC, with runs of spaces collapsed. `status` is `proposed`, `approved` (write
+it) or `rejected` (never write it). `as` holds another title of that kind: the name is how the sources
+write that title, and every write of the name, as a link end and as a reading's `with` too, uses the title. An `as`
+row is a decision of the import, not a name of the page ([rename a page](../cookbook/rename-a-page.md) retains one).
+`like` (what the name looks like, or what the write would revive or promote), `from` (the first file that writes
+it) and `doubts` are for the owner. A person or a place needs a row whenever no live row of its kind holds its title;
+a new page needs one only when it looks like a live person, place or plain page (see "The checks"), or when a row
+names it already.
+
+The rows count only under the stamp, as the rows of `metrics.md` do. *propose entities* adds a `proposed` row for
+each name a held file waits for; for each person and place that a done facts file writes and no row names, since a
+replay into a database that lacks them needs the decision; and for each `## Aliases` or `## Distinct` line of an
+older `rules.md`, which it moves out of `rules.md` (the rules gate closes once). The owner writes `rejected` in a
+row's `status`, or a title in its `as`, then stamps: *approve* turns every row still `proposed` into `approved`. No
+other operation writes the file.
+
+```markdown
+status: draft
+
+| status | kind | name | as | like | from | doubts |
+|---|---|---|---|---|---|---|
+| proposed | person | Cara | | the person "Cara Example" (more words) | Journal/2031/2031-04-12.md | |
+| proposed | person | Bobby | Bob Sample | | Journal/2031/2031-04-12.md | |
+| rejected | person | The Dentist | | | Journal/2031/2031-04-20.md | a role, not a person |
+```
+
+**questions.md.** One question per doubt that is not a name (a name is a row of `entities.md`). The status after `·`
+is `open`, `answered`, `done` or `parked`. Each option shows the exact rows its answer writes.
 
   ```markdown
   ## Q4 · open
-  file: Journal/2031/2031-04-12.md, line 2
-  about: "Cara"
-  found: person "Cara Example" (find: more words)
-  question: Is "Cara" in this note the person "Cara Example"?
+  file: Journal/2031/2031-04-12.md, line 3
+  about: "lunch near the Old Mill"
+  found: place "Old Mill" (find: exact)
+  question: Were you at the Old Mill that day, or only near it?
   options:
-    a) yes — I write: link "2031-04-12" about "Cara Example"; alias "Cara" → "Cara Example"
-    b) no — I write: person "Cara" (new)
-    c) leave it — nothing is written about her
+    a) at it — I write: link "2031-04-12" at "Old Mill"
+    b) only near — nothing is written; the day page keeps the words
   answer:
   ```
 
 **ledger.md.** Every file of the source (hidden folders left out), each `[ ]`, written by *ledger*. Run again,
 *ledger* appends the files added to the source since and reports the listed files it no longer finds; it never
 changes or removes a line, so a line stays the record that a file was imported. `[x]` done and `[?]` waiting are
-written only by *apply*, with the counts of what was written. The model writes two marks: `[-]` skipped, with the
-reason, for what is never imported; and `[>]` later, for a file held for a later pass — an attachment to keep with
-its text, a photo to select ("Files" below) — not now and not never. Either takes one file or a pattern in the rules'
+written only by *apply*, with the counts of what was written, and so is the `held:` note of a file still to do that
+waits for the owner's names. The model writes two marks: `[-]` skipped, with the reason, for what is never imported;
+and `[>]` later, for a file held for a later pass — an attachment to keep with its text, a photo to select ("Files"
+below) — not now and not never. Either takes one file or a pattern in the rules'
 glob language (`Drive/**`, `**/*.{png,pdf}`: `*` within a path segment, `**` across segments, `{a,b}` for either) and
 marks every file still to do that it matches, and no other line.
 
 ```
 - [x] Journal/2031/2031-04-11.md — 1 place, 1 link (2 new)
 - [?] Journal/2031/2031-04-12.md — 1 place, 1 person, 2 link (3 new, 1 existing); 1 kept as text; waiting: Q4
+- [ ] Journal/2031/2031-04-13.md — held: person "Cara"
 - [>] Medical/Scans/knee.png — later: an attachment, kept with its text
 - [-] Board.canvas — skip: a view file
 - [ ] Contacts/Bob Sample.md
@@ -177,14 +219,14 @@ relative to the source). An unknown field is an error, so a misspelt key is neve
 Each write has **exactly one** kind and a **`quote`**: words copied from the source file, character
 for character, that state it. Quote and file are compared after NFC and with runs of whitespace
 collapsed; everything else counts. Frontmatter is part of the file and is quoted like the rest. A quote
-names a title when it holds the title or a name `## Aliases` maps to it; besides, a file names its own
+names a title when it holds the title or a name that an `as` row of `entities.md` maps to it; besides, a file names its own
 title — its title in the vault plan, else its file name without the extension — and a daily note its own
 day, so a note that is only frontmatter can still say that it is a person.
 
 | kind | fields | writes |
 |---|---|---|
-| `person` | `title`, `name`?, `birth_day`?, `death_day`? | a person; promotes the plain page holding that title ([a person or a place](../cookbook/person-or-place.md)), never a day page or a redirect stub; a tombstoned one is revived. A birth or death day is written where the person has none, and left alone where it holds that day |
-| `place` | `title` | a place ([D16](../decisions/D16-places.md)); promotes a plain page the same way |
+| `person` | `title`, `name`?, `birth_day`?, `death_day`? | a person, on the owner's decision when no live person holds the title ("entities.md"); promotes the plain page holding that title ([a person or a place](../cookbook/person-or-place.md)), never a day page or a redirect stub, or revives a tombstoned person. A birth or death day is written where the person has none, and left alone where it holds that day |
+| `place` | `title` | a place ([D16](../decisions/D16-places.md)), as a person is written: on the owner's decision, by promotion or by revival too |
 | `page` | `title` | a plain, empty page (a topic the file names); a title that is a day makes that day's page, its `day` its title ([D5](../decisions/D05-pages-and-day-pages.md)) |
 | `link` | `from`, `to`, `kind`, `note`? | a link of a `link_kinds` kind other than `wikilink`; `at` only from a day page |
 | `reading` | `metric`, `day`, `value`, `unit`?, `taken_at`?, `tz`?, `with`? | a measurement of an approved metric; `with` is the title of the page it was captured with |
@@ -225,16 +267,17 @@ Each runs on one explicitly selected database.
 | operation | reads | checks | writes |
 |---|---|---|---|
 | *inventory* | one folder and the listings of its archives, nothing of their contents | — | nothing; prints every folder with its files by extension and by digit-masked name pattern, each archive's contents the same way, and the sources it recognises: a folder of notes (mostly Markdown files, with its `YYYY-MM-DD.md` count), a Takeout extraction with its product folders. Never a content, a value or one file's name |
-| *status* | the workspace; the database when one is given | the gates; every done file dry-run against the database | nothing; prints gates (for a closed gate, the lines changed since its last approval), ledger counts, questions, the next file (and the first of the later pass), one "do now" sentence, mismatches; before a plan or a ledger exists, how many Markdown files the source holds |
+| *status* | the workspace; the database when one is given | the gates; every done file dry-run against the database | nothing; prints gates (for a closed gate, the lines changed since its last approval), ledger counts, questions, the next file (a held file only when the stamped `entities.md` decides each of its names; and the first of the later pass), the held files and their undecided names, one "do now" sentence, mismatches; before a plan or a ledger exists, how many Markdown files the source holds |
 | *ledger* | the source tree; `ledger.md` | — | `ledger.md`: every file `[ ]` the first time; after that the files added since, appended `[ ]`, and the listed files it no longer finds reported; no line changed or removed |
 | *skip* / *defer* | `ledger.md` | that the file, or some file the pattern matches, is in the ledger | `[-]` with "skip: reason", or `[>]` with "later: reason", on every matching file still to do |
 | *inspect a file* | one source file | — | nothing; returns its frontmatter, headings, tables as rows, checkboxes and links |
 | *find* | the database | — | nothing; pages, metrics or readings matching a text: exact, same words, more words, fewer words |
 | *register metrics* | `metrics.md` | its stamp; each approved row (name, unit, `since`/`until`, `category`); that each title of a path is a valid title of a plain page | the approved metrics, each a page titled by its `name` with its `note` as the body (a plain page of that title, a note of the vault included, is promoted and keeps its text: the `note` fills only an empty body, [D27](../decisions/D27-a-metric-is-a-page.md)); a metric that exists with that unit is adopted as it is, and so is a scale (Mood) registered with no unit; any other unit is refused, since a unit never changes; each page of a path that is missing (a plain page, top first), the `part-of` link from each to the one above, and from the metric to the last ([metrics by category](../cookbook/metrics-by-category.md)); each habit's period, re-sent with its `end_day` ([habits](../cookbook/habits.md)) |
-| *check facts* | one facts file, its source file, the workspace, the database | every check below, each write in its own savepoint of a transaction it rolls back | nothing; prints what *apply* would write and every write it would refuse, each with its class, a look-alike with its candidates, a reference not written yet with the title it waits for |
-| *apply facts* | the same | the same checks | every write in one `BEGIN IMMEDIATE` transaction ([connection setup](../contract/connections.md)), then the file's ledger line |
+| *check facts* | one facts file, its source file, the workspace, the database | every check below, each write in its own savepoint of a transaction it rolls back | nothing; prints what *apply* would write and every write it would refuse, each with its class, a held name with what it looks like, a reference not written yet with the title it waits for |
+| *apply facts* | the same | the same checks | every write in one `BEGIN IMMEDIATE` transaction ([connection setup](../contract/connections.md)), then the file's ledger line; nothing for a file that would refuse a write, and when it waits only for names, its line, still to do, noted `held:` with them |
+| *propose entities* | the ledger, the facts files of the held and done files, `entities.md`, `rules.md`, the database | each held file, as *check facts* does | `proposed` rows in `entities.md` ("entities.md"), never a decision; `rules.md` without its name lines, as a draft, when it held any |
 | *plan a vault* / *apply a vault plan* | the folder of notes; `plan.json` | titles ([titles and wikilinks](../contract/titles-and-wikilinks.md)), duplicates, titles the database holds | the notes' pages and bodies (see "A folder of notes"); *plan a vault* run again appends the notes added since and leaves every entry as it is |
-| *approve* | `rules.md` or `metrics.md`; its copy in `.approved/` | that a person is at the controls; that the text it stamps is the text it showed | the owner's stamp; the copy in `.approved/` |
+| *approve* | `rules.md`, `metrics.md` or `entities.md`; its copy in `.approved/` | that a person is at the controls; that the text it stamps is the text it showed | the owner's stamp; the copy in `.approved/` |
 | *replay* | the whole workspace | everything *apply* checks, then [integrity checks](../contract/integrity-checks.md), on a throwaway copy of the target first | the trial's decisions, into another database — only when the rehearsal is clean; as a dry run, nothing (it lists every failure) |
 | *integrity check* | the database | the four checks of [integrity checks](../contract/integrity-checks.md) | nothing |
 
@@ -270,8 +313,8 @@ it diagnoses pending or conflicting intents without recovering them.
 ## The checks
 
 Every check names the write it refuses and a class, so a client branches on the class and never on the words:
-`event`, `task`, `kind`, `quote`, `not_named`, `alias`, `number`, `day`, `invalid_title`, `link`, `metric`, `unit`,
-`value`, `evidence`, `look_alike`, `not_yet`, `taken`, `person_day`, `link_endpoint`. *check facts* reports every
+`event`, `task`, `kind`, `quote`, `not_named`, `number`, `day`, `invalid_title`, `link`, `metric`, `unit`,
+`value`, `evidence`, `held`, `rejected`, `not_yet`, `taken`, `person_day`, `link_endpoint`. *check facts* reports every
 refused write of a file, the writes after a refused one included; *apply facts* refuses the file at the first of
 them, with its class on the error, and writes nothing. Two things refuse the file as a whole, not a write: a
 `kept_as_text` or `waiting` entry that is wrong, and a reading identity the file cannot settle (tied positions, a
@@ -281,7 +324,7 @@ repeated timed identity).
 
 - a write with no kind or more than one; an empty quote; a quote not in the source file;
 - a person, place or page whose title its quote does not name; a link whose quote names neither end;
-- a title that `## Aliases` maps to another title (write that title instead); a title that is not a valid title
+- a title that is not a valid title
   ([titles and wikilinks](../contract/titles-and-wikilinks.md)); a day as the title of a person or a place
   ([D5](../decisions/D05-pages-and-day-pages.md));
 - a name, title or note holding a question or row number (`Q4`, `#5`) its quote does not hold;
@@ -297,9 +340,11 @@ repeated timed identity).
 **Against `life.db`** (a dry run inside the transaction that *apply* would use):
 
 - `rules.md` carries the owner's stamp;
-- **look-alikes**: a name that is not an exact match but shares its words with a live person, place or plain
-  page — never with a day page, a metric, a file or a period — is refused until the owner decides it (an alias, or
-  `## Distinct`), every candidate named, the best relation first — never merged or duplicated by the model;
+- **names** (`held`, `rejected`, "entities.md"): a person or a place that no live row of its kind holds, and a new page
+  that looks like one, is held until the owner decides its name, and refused when the owner rejected it. A
+  **look-alike** is a name that is not an exact match but shares its words with a live person, place or plain page —
+  never with a day page, a metric, a file or a period; every candidate is named, the best relation first, and the
+  name is never merged or duplicated by the model;
 - a title held by an entity of another type (a place written where a person is) is refused;
 - every reference resolves;
 - a reading's unit is its metric's (a reading of a scale takes the scale's range), and the value of a scale is a whole
@@ -314,6 +359,7 @@ repeated timed identity).
 |---|---|---|
 | `rules.md`: `status: approved YYYY-MM-DD (owner)` | the owner, through *approve* | every *check facts* and *apply facts* |
 | `metrics.md`: the stamp, rows `approved` | the owner, through *approve* (every row still `proposed` becomes `approved`) | *register metrics*; every facts-file reading |
+| `entities.md`: the stamp, rows `approved` or `rejected` | the owner, through *approve* (every row still `proposed` becomes `approved`) | every write of a name that needs a decision ("entities.md"); *replay* |
 | direct metric creation and the real run | the owner, through direct creation and *replay* | agent callers are refused |
 
 The model cannot open a gate: *approve* is not among its tools, and *approve* refuses unless a person is
@@ -398,28 +444,31 @@ photos ("Files" below). Files the owner adds later: *ledger* again, then the sam
 | in a daily note, a person named without `[[ ]]` | also a link `about` from the day page ([the days that name someone](../cookbook/days-that-name.md)) | that link when the note writes `[[Name]]`: the text links already |
 | a number in a table of readings | a **reading** of an approved metric, the cell copied whole | a reading from prose with no unit; a censored, approximate or word result: `kept_as_text` |
 
-- **d.** Look first. Check `## Aliases`, then *find* each person and place. Nothing found: write it.
-  `exact`: write it with that title. `same words`, `more words`, `fewer words`: ask, unless
-  `## Aliases` or `## Distinct` decides.
+- **d.** Look first: *find* each person and place. `exact`: write it with that title. Anything else: write the
+  name as the file writes it. Never choose a look-alike yourself: the writer holds a new or look-alike name until the
+  owner decides it in `entities.md`.
 - **e.** Write the facts file. Every row of a readings table is a reading or a `kept_as_text`: a row in
   neither is a row lost. Leave a doubtful item out of `writes` and list its question in `waiting`.
 - **f.** *check facts*. An error is information: a slip of yours, fix the facts file and check again;
-  anything else, ask. Never change a value, unit or quote to make a check pass. Read the warnings too.
-- **g.** *apply facts*. The writer marks the ledger line. The next turn begins at **a**.
+  anything else, ask. Never change a value, unit or quote to make a check pass. Read the warnings too. A `held`
+  write is not an error: leave it as it is.
+- **g.** *apply facts*. The writer marks the ledger line; a file that waits only for names stays to do, noted `held`.
+  The next turn begins at **a**. When *status* says that files wait for names, run *propose entities*, then stop: the
+  owner decides them.
 
-**7. Ask.** Add one question per doubt to `questions.md`: what you found, and options that show the
-exact rows each answer writes. When a question covers many items, list them all. Before asking, look
-for an answered question about the same thing and use it. The owner writes the answer; an answer given
-in chat is copied into `answer:` verbatim, in quotes, adding nothing.
+**7. Ask.** Add one question per doubt to `questions.md` (never about a name: names wait in `entities.md`): what
+you found, and options that show the exact rows each answer writes. When a question covers many items, list them
+all. Before asking, look for an answered question about the same thing and use it. The owner writes the answer; an
+answer given in chat is copied into `answer:` verbatim, in quotes, adding nothing.
 
-**8. Use the answers.** An answer that holds beyond one file goes into `rules.md` (`## Aliases`,
-`## Distinct` or `## Decisions`), so it is not asked again. Edit the file's facts (the answered writes
-in, the question out of `waiting`), check and apply again; then mark the question `done`.
+**8. Use the answers.** An answer that holds beyond one file goes into `rules.md` (`## Decisions`), so it is not
+asked again. Edit the file's facts (the answered writes in, the question out of `waiting`), check and apply again;
+then mark the question `done`.
 
-**9. Check and report.** When no `[ ]` is left, every `[?]` waits on a question the owner parked, and the later pass
-is done or the owner has put it off:
-*status* shows no mismatches and the *integrity check* is green. Report the counts *status* prints and
-nothing else from the files. A mismatch is never explained away: apply its file again, or ask.
+**9. Check and report.** When every `[ ]` left is held for names the owner has not decided, every `[?]` waits on a
+question the owner parked, and the later pass is done or the owner has put it off: *status* shows no mismatches and
+the *integrity check* is green. Report the counts *status* prints and nothing else from the files. A mismatch is
+never explained away: apply its file again, or ask.
 
 **10. The real run** — only when the owner says so (see "Trial, then the real run").
 
@@ -504,8 +553,9 @@ The owner runs *replay* as a dry run first and reads its failures and its
 differences from the trial; then runs *replay* of the workspace onto the real database, initialised only if it
 does not exist (never one that holds data); *status* against it shows the trial's counts and no
 mismatches; *replay* again writes nothing. *replay* applies, in order: the vault plan when there is
-one, the approved metrics, the facts file of every `[x]` and `[?]` ledger line in ledger order, the
-replayable corrections, then the four checks of [integrity checks](../contract/integrity-checks.md). A file refused as
+one, the approved metrics, the facts file of every `[x]` and `[?]` ledger line in ledger order with the names
+decided in the stamped `entities.md` (it refuses to start while that file is a draft), the replayable corrections,
+then the four checks of [integrity checks](../contract/integrity-checks.md). A file refused as
 "not written yet" is applied again after the rest, pass after pass, so the ledger's order never decides the outcome;
 a pass that writes no file is a failure of every file still waiting. If anything differs from the trial, stop and
 report it.
@@ -552,7 +602,9 @@ Each line is a requirement on a writer that offers this process.
 - Keys are derived by the writer and identical on every run; no key is invented by the model. A key that does not fit the
   file's 1 to 512 bytes is hashed, never cut, and none is empty.
 - In a facts file, a question or row number in a name or note is refused.
-- In the facts workflow, a look-alike name is never merged or duplicated without the owner's decision.
+- In the facts workflow, no person or place is created, revived or promoted, and no look-alike page is created,
+  without the owner's stamped decision in `entities.md`; a rejected name is never written; a look-alike is never
+  merged or duplicated by the model. *propose entities* writes `proposed` rows only.
 - *approve* is out of the model's reach, and its stamp is never written by any other operation.
 - A database path that cannot be silently ignored: an operation given a path that does not exist, or
   none, says so; *status* says plainly when no database was checked.

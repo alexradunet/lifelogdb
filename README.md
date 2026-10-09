@@ -51,6 +51,8 @@ lifelog import setup --workspace ~/import/Notebook.lifelog --from ~/life/life.db
 lifelog mcp --workspace ~/import/Notebook.lifelog --agent lmstudio                  # the model's tools
 lifelog do import-find text="Sam" --workspace ~/import/Notebook.lifelog             # import lookup; page lookup stays find
 lifelog import approve rules --workspace ~/import/Notebook.lifelog                  # the owner, at a terminal
+lifelog do propose-entities --workspace ~/import/Notebook.lifelog                   # the names held files wait for, as proposed rows
+lifelog import approve entities --workspace ~/import/Notebook.lifelog               # the owner decides them, at a terminal
 lifelog import status --workspace ~/import/Notebook.lifelog --human
 lifelog import replay --to ~/life/life.db --workspace ~/import/Notebook.lifelog     # the real run, when you say so
 ```
@@ -120,10 +122,15 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   or retry a correction after resolving any conflict. This is recovery across process failures, not cross-file ACID
   or a power-loss guarantee.
 - **A check reports every refusal.** `check-facts` runs each write in its own savepoint of the rolled-back dry run and
-  returns `refused`, every write the writer would refuse with a class a client branches on (`look_alike` with its
-  candidates, `not_yet` with the title it waits for, `unit`, `quote`, …); `apply-facts` keeps the file whole or not at
-  all and carries the first class on the error. Look-alikes compare a new name with people, places and plain pages
-  only.
+  returns `refused`, every write the writer would refuse with a class a client branches on (`held` with what the
+  name looks like, `rejected`, `not_yet` with the title it waits for, `unit`, `quote`, …); `apply-facts` keeps the file
+  whole or not at all and carries the first class on the error. Look-alikes compare a new name with people, places
+  and plain pages only.
+- **The owner decides each new name** in the workspace's stamped `entities.md` ([importing with a model](docs/guides/importing.md),
+  "entities.md"). `apply-facts` writes nothing for a file that waits for names and notes its ledger line `held:`;
+  `propose-entities` is a catalog action an agent may run, since it only adds `proposed` rows; the stamp is
+  `lifelog import approve entities`. A workspace made before this gate runs `propose-entities` once, which moves the
+  `## Aliases` and `## Distinct` lines of `rules.md` into `entities.md`; the owner then stamps both files.
 - **Imported keys** are derived, never sent: `path|person|<title_key>` (and place, page), a note's path, and
   `path|reading|<metric_title_key>|<day>|<taken_at, or its place in the source file>`. Ambiguous old reading keys are
   refused during owner-local rehearsal; take a snapshot first if needed, because lifelog never auto-repairs them.

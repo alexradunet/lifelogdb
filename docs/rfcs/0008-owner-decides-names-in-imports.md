@@ -1,7 +1,7 @@
 # 0008 — The owner decides each new name of an import in one stamped list
 
 - **Date:** 2026-10-08
-- **Status:** draft
+- **Status:** accepted
 - **Answers:** [0052](../issues/0052-names-are-written-on-the-models-word.md)
 
 ## Problem
@@ -60,4 +60,9 @@ counts the new diagram of the guide. No SQLite behaviour is claimed.
 
 ## Outcome
 
-Filled in when it closes.
+Accepted 2026-10-09: option A, as the owner decided on 2026-10-08 (one `entities.md` for people and places;
+the gate before the write; name decisions out of `rules.md`). Implemented by
+[plan 084](../plans/084-owner-decides-names.md). The rule lives in [importing with a model](../guides/importing.md)
+("entities.md", the `name-decision` diagram); [D11](../decisions/D11-tombstones.md) says that an import revives a
+row only by the owner's decision. A new page with no look-alike needs no row; a page row, once written, holds when
+nothing looks like the page any more.

@@ -25,12 +25,16 @@ func TestImporterDiscoveryIncludesOwnedNames(t *testing.T) {
 			t.Fatalf("discovery %q: %+v", query, matches)
 		}
 	}
-	err = f.s.DryRun(ctx, "import:notebook", func(tx *core.Tx) error { return lookAlike(tx, &Rules{}, "Old") })
-	if err == nil {
-		t.Fatal("look-alike check ignored retained alias")
+	var like []string
+	if err := f.s.DryRun(ctx, "import:notebook", func(tx *core.Tx) (err error) { like, err = lookAlikes(tx, "Old"); return err }); err != nil {
+		t.Fatal(err)
 	}
-	rules := &Rules{Distinct: map[[2]string]bool{{nameKey("Old"), nameKey("Old person")}: true}}
-	if err := f.s.DryRun(ctx, "import:notebook", func(tx *core.Tx) error { return lookAlike(tx, rules, "Old") }); err != nil {
+	if len(like) != 1 || like[0] != `the person "Current person" (more words)` {
+		t.Fatalf("the look-alikes of a name ignore a retained alias: %v", like)
+	}
+	// an approved decision in entities.md writes the name: the owner saw what it looks like
+	rules := &Rules{Names: names{{"person", nameKey("Old")}: {Status: "approved", Kind: "person", Name: "Old"}}}
+	if err := decide(rules, "person", "Old", "", like); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.s.RegisterMetric(ctx, "cli", "body_weight", "kg", "Synthetic weight"); err != nil {

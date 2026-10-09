@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -60,12 +62,30 @@ func (w *Workspace) Apply(ctx context.Context, s *core.Store, file string) (*Rep
 }
 
 func (w *Workspace) run(ctx context.Context, s *core.Store, file string, dry bool) (*Report, error) {
-	f, pos, rules, refused, err := w.prepare(file, dry)
+	f, pos, rules, refused, err := w.prepare(file, true)
 	if err != nil {
 		return nil, err
 	}
-	r, err := w.write(ctx, s, f, pos, rules, dry, refused)
+	// an apply checks first: a file with a refused write writes nothing; a file that waits only for the owner's
+	// name decisions says so on its ledger line, which stays to do
+	r, err := w.write(ctx, s, f, pos, rules, true, refused)
 	if err != nil || dry {
+		return r, err
+	}
+	if len(r.Refused) > 0 {
+		if note := heldNote(r.Refused); note != "" {
+			if err := w.mark(file, func(l *Line) error {
+				if l.toDo() {
+					l.Note = note
+				}
+				return nil
+			}); err != nil {
+				return r, err
+			}
+		}
+		return r, fileRefusal(file, r.Refused)
+	}
+	if r, err = w.write(ctx, s, f, pos, rules, false, nil); err != nil {
 		return r, err
 	}
 	newState := "x"
@@ -95,7 +115,7 @@ func (w *Workspace) prepare(file string, lenient bool) (*Facts, []int, *Rules, [
 	} else if g != "approved" {
 		return nil, nil, nil, nil, refuse("rules.md is %s: the owner approves it first (lifelog import approve rules)", g)
 	}
-	rules, err := w.Rules()
+	rules, err := w.factsRules()
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -107,6 +127,7 @@ func (w *Workspace) prepare(file string, lenient bool) (*Facts, []int, *Rules, [
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
+	f = withAliases(f, rules.Names)
 	src, err := w.readRawSource(file)
 	if err != nil {
 		return nil, nil, nil, nil, err
@@ -119,6 +140,70 @@ func (w *Workspace) prepare(file string, lenient bool) (*Facts, []int, *Rules, [
 		return nil, nil, nil, nil, fileRefusal(file, refused)
 	}
 	return f, pos, rules, refused, nil
+}
+
+// factsRules are the rules a facts file is checked and written under: rules.md's source, with the owner's name
+// decisions of a stamped entities.md and the aliases among them.
+func (w *Workspace) factsRules() (*Rules, error) {
+	rules, err := w.Rules()
+	if err != nil {
+		return nil, err
+	}
+	if rules.Names, err = w.nameDecisions(); err != nil {
+		return nil, err
+	}
+	rules.Aliases = rules.Names.aliases()
+	return rules, nil
+}
+
+// withAliases is the facts with every name the owner made an alias (an approved entities.md row with an as) written
+// as its title: a person, place or page under the alias of its kind, a link end or a reading's with under any
+// alias. The facts file is not changed; its quotes still name the alias, which the checks accept.
+func withAliases(f *Facts, n names) *Facts {
+	all := n.aliases()
+	if len(all) == 0 {
+		return f
+	}
+	of := func(kind, title string) string {
+		if e, ok := n.of(kind, title); ok && e.Status == "approved" && e.As != "" {
+			return e.As
+		}
+		return title
+	}
+	any := func(title string) string {
+		if t, ok := all[nameKey(title)]; ok {
+			return t
+		}
+		return title
+	}
+	out := *f
+	out.Writes = make([]Write, len(f.Writes))
+	for i, wr := range f.Writes {
+		switch {
+		case wr.Person != nil:
+			p := *wr.Person
+			p.Title = of("person", p.Title)
+			wr.Person = &p
+		case wr.Place != nil:
+			p := *wr.Place
+			p.Title = of("place", p.Title)
+			wr.Place = &p
+		case wr.Page != nil:
+			p := *wr.Page
+			p.Title = of("page", p.Title)
+			wr.Page = &p
+		case wr.Link != nil:
+			l := *wr.Link
+			l.From, l.To = any(l.From), any(l.To)
+			wr.Link = &l
+		case wr.Reading != nil && wr.Reading.With != "":
+			r := *wr.Reading
+			r.With = any(r.With)
+			wr.Reading = &r
+		}
+		out.Writes[i] = wr
+	}
+	return &out
 }
 
 // fileRefusal is a file refused for its writes: every refusal in the message, the first one's class on the error.
@@ -278,8 +363,16 @@ func applyWrite(t *core.Tx, file string, wr Write, key string, rules *Rules) (Ou
 			}
 			return Outcome{Kind: "page", What: title, Status: "existing"}, nil
 		}
-		if err := lookAlike(t, rules, title); err != nil {
+		// a new page needs the owner's decision when it looks like a person, a place or another page; a page the
+		// owner decided keeps that decision when nothing looks like it any more
+		like, err := lookAlikes(t, title)
+		if err != nil {
 			return Outcome{}, err
+		}
+		if _, decided := rules.Names.of("page", title); decided || len(like) > 0 {
+			if err := decide(rules, "page", title, "", like); err != nil {
+				return Outcome{}, err
+			}
 		}
 		_, existing, err := t.CreateImported(title, nil, "", entityKey(file, "page", title))
 		return Outcome{Kind: "page", What: title, Status: status(existing)}, err
@@ -360,9 +453,10 @@ func status(existing bool) string {
 	return "new"
 }
 
-// named writes a person or a place: an exact title is that row (revived if tombstoned), a plain page holding
-// the title is promoted (never a day page or a stub), a new title passes the look-alike check first. fill, when
-// given, writes what the row lacks (a person's days) and says whether it wrote: an existing row it fills is updated.
+// named writes a person or a place. A live row of that kind holding the title is that row. Every other case needs
+// the owner's decision in entities.md (decide): a new title, a tombstoned row of that kind (revived), a plain page
+// holding the title (promoted; never a day page or a stub). fill, when given, writes what the row lacks (a person's
+// days) and says whether it wrote: an existing row it fills is updated.
 func named(t *core.Tx, rules *Rules, typ, title, key string, create func(string) (int64, bool, error), name string, fill func(int64) (bool, error)) (Outcome, error) {
 	o := Outcome{Kind: typ, What: title}
 	p, err := t.Lookup(title)
@@ -383,9 +477,19 @@ func named(t *core.Tx, rules *Rules, typ, title, key string, create func(string)
 		}
 		return o, err
 	}
+	needs := func(why string) error {
+		like, err := lookAlikes(t, title)
+		if err != nil {
+			return err
+		}
+		return decide(rules, typ, title, why, like)
+	}
 	switch {
+	case p != nil && p.Type == typ && !p.Deleted:
+		o.Status = "existing"
+		return filled(p.ID)
 	case p == nil:
-		if err := lookAlike(t, rules, title); err != nil {
+		if err := needs(""); err != nil {
 			return o, err
 		}
 		id, existing, err := create(key)
@@ -395,16 +499,20 @@ func named(t *core.Tx, rules *Rules, typ, title, key string, create func(string)
 		}
 		return filled(id)
 	case p.Type == typ:
-		if p.Deleted {
-			if err := t.Revive(p.ID); err != nil {
-				return o, err
-			}
+		if err := needs(fmt.Sprintf("revives the tombstoned %s %q", typ, title)); err != nil {
+			return o, err
+		}
+		if err := t.Revive(p.ID); err != nil {
+			return o, err
 		}
 		o.Status = "existing"
 		return filled(p.ID)
 	case p.Type == "page" && p.DayPage:
 		return o, classify("taken", fmt.Errorf("%q is a day page or a redirect stub, never a %s", title, typ))
 	case p.Type == "page":
+		if err := needs(fmt.Sprintf("promotes the page %q", title)); err != nil {
+			return o, err
+		}
 		o.Status = "promoted"
 		if err := t.Promote(p.ID, typ, name); err != nil {
 			return o, err
@@ -412,6 +520,68 @@ func named(t *core.Tx, rules *Rules, typ, title, key string, create func(string)
 		return filled(p.ID)
 	}
 	return o, classify("taken", fmt.Errorf("%q is held by a %s, not a %s", title, p.Type, typ))
+}
+
+// decide is the owner's decision on a name a write needs (entities.md): nil to write it; else the write is refused,
+// as rejected, or held until the owner decides. why says what the write would do besides creating a row (revive a
+// tombstoned one, promote a page); like is what the name looks like. Both go to the owner as candidates.
+func decide(rules *Rules, kind, title, why string, like []string) error {
+	if e, ok := rules.Names.of(kind, title); ok {
+		if e.Status == "approved" {
+			return nil
+		}
+		return &classed{class: "rejected", err: fmt.Errorf("the %s %q is rejected in entities.md", kind, title)}
+	}
+	reason := fmt.Sprintf("the %s %q waits for the owner's decision in entities.md (propose-entities, then lifelog import approve entities)", kind, title)
+	candidates := like
+	if why != "" {
+		reason += "; it " + why
+		candidates = append([]string{why}, like...)
+	}
+	if len(like) > 0 {
+		reason += "; it looks like " + strings.Join(like, ", ")
+	}
+	return &classed{class: "held", candidates: candidates, err: errors.New(reason)}
+}
+
+// heldNote is the ledger note of a file that waits only for the owner's name decisions: `held: person "Cara",
+// place "Lake"`, the held names in order; "" when any refusal is of another class (a not_yet reference waits too).
+func heldNote(refused []Refusal) string {
+	var held []string
+	seen := map[string]bool{}
+	for _, x := range refused {
+		switch x.Class {
+		case "held":
+			if e := x.Kind + " " + strconv.Quote(x.What); !seen[e] {
+				seen[e] = true
+				held = append(held, e)
+			}
+		case "not_yet":
+		default:
+			return ""
+		}
+	}
+	if len(held) == 0 {
+		return ""
+	}
+	return "held: " + strings.Join(held, ", ")
+}
+
+var heldEntry = regexp.MustCompile(`(person|place|page) ("(?:[^"\\]|\\.)*")`)
+
+// heldNames are the kinds and names of a held file's ledger note.
+func heldNames(note string) [][2]string {
+	_, after, ok := strings.Cut(note, "held: ")
+	if !ok {
+		return nil
+	}
+	var out [][2]string
+	for _, m := range heldEntry.FindAllStringSubmatch(after, -1) {
+		if name, err := strconv.Unquote(m[2]); err == nil {
+			out = append(out, [2]string{m[1], name})
+		}
+	}
+	return out
 }
 
 // errNotYet is a reference to a row another write makes: a title no live row holds, or a plain page that a link
@@ -529,20 +699,10 @@ func set(xs []string) map[string]bool {
 	return m
 }
 
-// lookAlike refuses a new name that shares its words with an existing person, place or plain page — the kinds
-// that can be the same identity (never a day page, a metric, a file or a period) — unless rules.md's Distinct says
-// they differ: the model never merges or duplicates without the owner. Every candidate is on the refusal.
-func lookAlike(t *core.Tx, rules *Rules, title string) error {
-	c, err := lookAlikes(t, rules, title)
-	if err != nil || len(c) == 0 {
-		return err
-	}
-	return &classed{class: "look_alike", candidates: c,
-		err: fmt.Errorf("%q looks like %s: ask the owner, then add an alias or a Distinct line to rules.md", title, strings.Join(c, ", "))}
-}
-
-// lookAlikes lists every candidate a new name looks like, as "<kind> <title> (<relation>)", best relation first.
-func lookAlikes(t *core.Tx, rules *Rules, title string) ([]string, error) {
+// lookAlikes lists every live person, place or plain page a new name shares its words with — the kinds that can be
+// the same identity, never a day page, a metric, a file or a period — as "the <kind> "<title>" (<relation>)", the
+// best relation first. The owner reads them in entities.md; the model never merges or duplicates a name.
+func lookAlikes(t *core.Tx, title string) ([]string, error) {
 	names, err := t.Names()
 	if err != nil {
 		return nil, err
@@ -562,7 +722,7 @@ func lookAlikes(t *core.Tx, rules *Rules, title string) ([]string, error) {
 				continue
 			}
 			rel := relation(title, cand)
-			if rel == "" || rel == "exact" || rules.Distinct[[2]string{nameKey(title), nameKey(cand)}] {
+			if rel == "" || rel == "exact" {
 				continue
 			}
 			if best == "" || rank(rel) < rank(best) {

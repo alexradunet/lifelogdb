@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"os"
@@ -59,6 +60,14 @@ func replayFixture(t *testing.T) (http.Handler, string) {
 	}
 	t.Cleanup(func() { d.Close() })
 	s := &core.Store{DB: d}
+	// the place is a new name: held until the owner decides it in entities.md
+	if _, err := ws.Apply(ctx, s, "a.md"); err == nil {
+		t.Fatal("a new place was written without the owner's decision")
+	}
+	if _, err := ws.ProposeEntities(ctx, s); err != nil {
+		t.Fatal(err)
+	}
+	approveWorkspaceFile(t, ws, "entities.md")
 	if _, err := ws.Apply(ctx, s, "a.md"); err != nil {
 		t.Fatal(err)
 	}
@@ -501,5 +510,66 @@ func TestReplayDryRunActionAggregateIdentityFailures(t *testing.T) {
 	}
 	if _, err := os.Stat(target); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("diagnostics created target: %v", err)
+	}
+}
+
+// propose-entities is a catalog action, so the CLI's do, the MCP tools and the browser carry it: an agent may run
+// it, and it adds a proposed row for the name a held file waits for; only the owner's stamp decides it.
+func TestProposeEntitiesThroughTheCatalog(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	src := filepath.Join(root, "Notes")
+	os.MkdirAll(src, 0o755)
+	os.WriteFile(filepath.Join(src, "a.md"), []byte("Lunch at the Pier Cafe.\n"), 0o644)
+	ws, err := importer.Open(src + ".lifelog")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ws.Setup(""); err != nil {
+		t.Fatal(err)
+	}
+	if err := ws.DraftRules("source: import:notes\n"); err != nil {
+		t.Fatal(err)
+	}
+	approveWorkspaceFile(t, ws, "rules.md")
+	if _, err := ws.MakeLedger(); err != nil {
+		t.Fatal(err)
+	}
+	if err := ws.WriteFacts("a.md", []byte(`{"file":"a.md","writes":[{"place":{"title":"Pier Cafe"},"quote":"at the Pier Cafe"}]}`)); err != nil {
+		t.Fatal(err)
+	}
+	d, err := db.Open(ws.TrialDB())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { d.Close() })
+	s := &core.Store{DB: d}
+	if _, err := ws.Apply(ctx, s, "a.md"); err == nil {
+		t.Fatal("a new place was written without the owner's decision")
+	}
+	c := client.InProcess(api.New(s, ws), "agent:test")
+	actions, err := c.CatalogContext(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var propose api.Action
+	for _, a := range actions {
+		if a.Name == "propose-entities" {
+			propose = a
+		}
+	}
+	if propose.Name == "" {
+		t.Fatal("propose-entities is not in the catalog")
+	}
+	e, err := c.DoContext(ctx, propose, nil)
+	if err != nil {
+		t.Fatalf("an agent proposes: %v", err)
+	}
+	b, _ := json.Marshal(e.Result)
+	if !strings.Contains(string(b), `"name":"Pier Cafe"`) || !strings.Contains(string(b), `"status":"proposed"`) {
+		t.Errorf("the proposal: %s", b)
+	}
+	if g, _ := ws.Gate("entities.md"); g != "draft" {
+		t.Errorf("entities.md after an agent's proposal: %s", g)
 	}
 }

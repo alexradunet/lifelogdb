@@ -46,6 +46,19 @@ func noRehearsalLeft(t *testing.T, w *Workspace) {
 	}
 }
 
+// createMetric registers a metric in a target database the trial never saw.
+func createMetric(t *testing.T, path, name string) {
+	t.Helper()
+	d, err := db.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if _, err := (&core.Store{DB: d}).RegisterMetric(ctx, "cli", name, "", ""); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func createPage(t *testing.T, path, title string) {
 	t.Helper()
 	d, err := db.Open(path)
@@ -63,6 +76,7 @@ func createPage(t *testing.T, path, title string) {
 func TestReplayRehearsesBeforeItWrites(t *testing.T) {
 	f := setup(t)
 	f.approveRules(t, rulesBody)
+	f.decideNames(t, append(dayNames, Entity{Kind: "person", Name: "Cara"})...)
 	f.w.MakeLedger()
 	f.metrics(t)
 	for file, facts := range map[string]map[string]any{"Journal/2031-04-11.md": dayFacts, "Journal/2031-04-12.md": cafeFacts} {
@@ -94,14 +108,14 @@ func TestReplayRehearsesBeforeItWrites(t *testing.T) {
 	}
 	os.WriteFile(cafe, []byte(vault["Journal/2031-04-12.md"]), 0o644)
 
-	// into a database that holds pages the trial never had: a name the import writes now looks like one of them
+	// into a database that holds rows the trial never had: a metric holds a title the import writes as a person
 	target := filepath.Join(t.TempDir(), "life.db")
 	if err := db.Init(target); err != nil {
 		t.Fatal(err)
 	}
-	createPage(t, target, "Cara Example")
+	createMetric(t, target, "Cara")
 	before := fileSum(t, target)
-	if _, err := f.w.Replay(ctx, f.s, target); code(err) != 422 || !strings.Contains(err.Error(), "Cara Example") ||
+	if _, err := f.w.Replay(ctx, f.s, target); code(err) != 422 || !strings.Contains(err.Error(), `"Cara" is held by a metric`) ||
 		strings.Contains(err.Error(), "2031-04-11") {
 		t.Fatalf("a replay whose second file fails on the target: %v", err)
 	}
@@ -109,7 +123,7 @@ func TestReplayRehearsesBeforeItWrites(t *testing.T) {
 		t.Error("a replay that failed its rehearsal wrote to the target")
 	}
 	// the dry run reports every failure, not only the first
-	createPage(t, target, "Riverside")
+	createMetric(t, target, "Riverside Pool")
 	before = fileSum(t, target)
 	res, err = f.w.Rehearse(ctx, f.s, target)
 	if err != nil {
@@ -126,8 +140,15 @@ func TestReplayRehearsesBeforeItWrites(t *testing.T) {
 		t.Error("a dry run wrote to the target")
 	}
 
-	// the owner decides the look-alikes; the dry run is clean and the replay writes, once
-	f.approveRules(t, rulesBody+"- \"Cara\" ≠ \"Cara Example\"\n- \"Riverside Pool\" ≠ \"Riverside\"\n")
+	// a target whose pages look like the import's names: the owner's decisions hold there too; the dry run is clean
+	// and the replay writes, once
+	target = filepath.Join(t.TempDir(), "life.db")
+	if err := db.Init(target); err != nil {
+		t.Fatal(err)
+	}
+	createPage(t, target, "Cara Example")
+	createPage(t, target, "Riverside")
+	before = fileSum(t, target)
 	if res, err = f.w.Rehearse(ctx, f.s, target); err != nil || len(res.Failures) != 0 || len(res.Files) != 2 || !res.Integrity.OK {
 		t.Fatalf("a clean dry run: %+v, %v", res, err)
 	}

@@ -68,6 +68,9 @@ func (w *Workspace) Replay(ctx context.Context, trial *core.Store, target string
 func (w *Workspace) replayAfterRehearsal(ctx context.Context, trial *core.Store, target string, after func() error) (*ReplayResult, error) {
 	w.selectionMu.Lock()
 	defer w.selectionMu.Unlock()
+	if err := w.namesStamped(); err != nil {
+		return nil, err
+	}
 	before, err := w.selectionSnapshot(ctx)
 	if err != nil {
 		return nil, err
@@ -136,6 +139,9 @@ func (w *Workspace) replayAfterRehearsal(ctx context.Context, trial *core.Store,
 func (w *Workspace) Rehearse(ctx context.Context, trial *core.Store, target string) (*ReplayResult, error) {
 	w.selectionMu.Lock()
 	defer w.selectionMu.Unlock()
+	if err := w.namesStamped(); err != nil {
+		return nil, err
+	}
 	plan, err := w.vaultReplayPlan(ctx, trial, false)
 	if err != nil {
 		return nil, err

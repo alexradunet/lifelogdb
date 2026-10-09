@@ -28,6 +28,7 @@ func TestFactsJSONBoundary(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := setup(t)
 			f.approveRules(t, rulesBody)
+			f.decideNames(t, dayNames...)
 			if _, err := f.w.MakeLedger(); err != nil {
 				t.Fatal(err)
 			}

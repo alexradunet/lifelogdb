@@ -368,9 +368,6 @@ func (w *Workspace) checkStatic(f *Facts, source string, rules *Rules, approved 
 			return false
 		}
 		checkTitle := func(title string) {
-			if t, ok := rules.Aliases[nameKey(title)]; ok && nameKey(t) != nameKey(title) {
-				bad(i, "alias", "%q is an alias of %q in rules.md: write %q", title, t, t)
-			}
 			if hasNum(title) {
 				bad(i, "number", "%q holds a question or row number its quote does not", title)
 			}

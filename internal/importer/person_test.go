@@ -55,6 +55,7 @@ func TestPersonNoteWithOnlyFrontmatter(t *testing.T) {
 	f := setup(t)
 	addSource(t, f, bobPerson, "---\ntype: Person\nbirthday: 1980-03-29\n---\n")
 	f.approveRules(t, rulesBody)
+	f.decideNames(t, Entity{Kind: "person", Name: "Bob Person"})
 	f.w.MakeLedger()
 	if _, err := f.w.PlanVault(ctx, f.s); err != nil {
 		t.Fatal(err)

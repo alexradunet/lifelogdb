@@ -114,6 +114,7 @@ func TestLongFactsKeysAreHashedAndReplayWritesNothing(t *testing.T) {
 		map[string]any{"page": map[string]any{"title": page}, "quote": "Read " + page},
 		map[string]any{"reading": map[string]any{"metric": metric, "day": "2031-09-01", "value": "4"}, "quote": metric + ": 4"},
 	}}
+	f.decideNames(t, Entity{Kind: "person", Name: person}, Entity{Kind: "place", Name: place})
 	if err := f.facts(t, file, facts); err != nil {
 		t.Fatal(err)
 	}

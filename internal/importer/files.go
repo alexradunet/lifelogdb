@@ -202,7 +202,8 @@ func headerCols(text string) []string {
 	return metricCols
 }
 
-// approveRows turns every proposed row into an approved one.
+// approveRows turns every proposed row of a stamped table (metrics.md, entities.md) into an approved one; a row the
+// owner set to another status keeps it.
 func approveRows(rest string) string {
 	lines := strings.Split(rest, "\n")
 	status := -1
@@ -213,7 +214,7 @@ func approveRows(rest string) string {
 		}
 		c := tableCells(l)
 		if status < 0 {
-			if contains(c, "status") && contains(c, "name") && contains(c, "unit") {
+			if contains(c, "status") && contains(c, "name") {
 				for j, col := range c {
 					if col == "status" {
 						status = j
@@ -245,6 +246,133 @@ func approveRows(rest string) string {
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+// ---- entities.md: the owner's decision on each name an import would write (the guide's "entities.md")
+
+// Entity is one row of entities.md. Status is proposed (the writer wrote it), approved (the stamp turned a proposed
+// row into it) or rejected (the owner wrote it). As, when not empty, makes the name an alias of an existing title in
+// this workspace. Like and From help the owner decide; the writer does not read them back.
+type Entity struct {
+	Status string `json:"status"`
+	Kind   string `json:"kind"`
+	Name   string `json:"name"`
+	As     string `json:"as,omitempty"`
+	Like   string `json:"like,omitempty"`
+	From   string `json:"from,omitempty"`
+	Doubts string `json:"doubts,omitempty"`
+}
+
+const entitiesFile = "entities.md"
+
+var entityCols = []string{"status", "kind", "name", "as", "like", "from", "doubts"}
+
+const entitiesHeader = "| status | kind | name | as | like | from | doubts |\n|---|---|---|---|---|---|---|\n"
+
+// markdownTable reads the rows of the first markdown table whose header holds every required column, as maps by column.
+func markdownTable(text string, required ...string) []map[string]string {
+	var cols []string
+	var out []map[string]string
+	for _, line := range strings.Split(text, "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(line), "|") {
+			if cols != nil {
+				break
+			}
+			continue
+		}
+		cells := tableCells(line)
+		if cols == nil {
+			ok := true
+			for _, r := range required {
+				ok = ok && contains(cells, r)
+			}
+			if ok {
+				cols = cells
+			}
+			continue
+		}
+		if strings.HasPrefix(strings.TrimSpace(cells[0]), "---") {
+			continue
+		}
+		row := map[string]string{}
+		for i, c := range cols {
+			if i < len(cells) {
+				row[c] = cells[i]
+			}
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
+// Entities reads entities.md's rows.
+func (w *Workspace) Entities() ([]Entity, error) {
+	text, ok, err := w.read(entitiesFile)
+	if err != nil || !ok {
+		return nil, err
+	}
+	var out []Entity
+	for _, r := range markdownTable(text, "status", "kind", "name") {
+		out = append(out, Entity{Status: r["status"], Kind: r["kind"], Name: r["name"], As: r["as"], Like: r["like"], From: r["from"], Doubts: r["doubts"]})
+	}
+	return out, nil
+}
+
+// checkEntities refuses an entities.md the owner would stamp with a row the writer cannot read as a decision.
+func checkEntities(text string) error {
+	for i, r := range markdownTable(text, "status", "kind", "name") {
+		switch {
+		case r["status"] != "proposed" && r["status"] != "approved" && r["status"] != "rejected":
+			return refuse("entities.md row %d: status %q is not proposed, approved or rejected", i+1, r["status"])
+		case r["kind"] != "person" && r["kind"] != "place" && r["kind"] != "page":
+			return refuse("entities.md row %d: kind %q is not person, place or page", i+1, r["kind"])
+		case strings.TrimSpace(r["name"]) == "":
+			return refuse("entities.md row %d has no name", i+1)
+		case r["as"] != "" && r["status"] == "rejected":
+			return refuse("entities.md row %d: a rejected name is no alias: clear as, or approve the row", i+1)
+		case r["as"] != "" && !ltext.ValidTitle(r["as"]):
+			return refuse("entities.md row %d: as %q is not a valid title", i+1, r["as"])
+		}
+	}
+	return nil
+}
+
+// names are the owner's decisions of a stamped entities.md, by kind and name (nameKey); nil while the gate is
+// closed, so that nothing is written on a decision the owner has not stamped.
+type names map[[2]string]Entity
+
+func (w *Workspace) nameDecisions() (names, error) {
+	if g, err := w.Gate(entitiesFile); err != nil || g != "approved" {
+		return nil, err
+	}
+	rows, err := w.Entities()
+	if err != nil {
+		return nil, err
+	}
+	out := names{}
+	for _, e := range rows {
+		if e.Status == "approved" || e.Status == "rejected" {
+			out[[2]string{e.Kind, nameKey(e.Name)}] = e
+		}
+	}
+	return out, nil
+}
+
+// of is the decision on a name of a kind.
+func (n names) of(kind, name string) (Entity, bool) {
+	e, ok := n[[2]string{kind, nameKey(name)}]
+	return e, ok
+}
+
+// aliases are the approved rows with an as: a name of this workspace for an existing title.
+func (n names) aliases() map[string]string {
+	out := map[string]string{}
+	for k, e := range n {
+		if e.Status == "approved" && e.As != "" {
+			out[k[1]] = e.As
+		}
+	}
+	return out
 }
 
 // ---- questions.md

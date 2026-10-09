@@ -9,7 +9,7 @@ import (
 )
 
 // diagrams: the mermaid diagrams of the docs say what the DDL says.
-// A  structure: exactly the seven diagrams, each announced by a `%% diagram: <id>` line, each of a known type;
+// A  structure: exactly the eight diagrams, each announced by a `%% diagram: <id>` line, each of a known type;
 // B  the two ER diagrams draw keys only: every table is drawn; every drawn column is a PK or FK column with its
 //
 //	declared type and marks; every PK and FK column is drawn somewhere; every foreign key is a relationship and
@@ -33,7 +33,7 @@ func diagrams(s *S) {
 		}
 	}
 	want := map[string]string{"er-core": "erDiagram", "er-facts": "erDiagram", "link-map": "flowchart", "page-life": "stateDiagram-v2",
-		"correct-measurement": "stateDiagram-v2", "writers": "flowchart", "save-flow": "flowchart"}
+		"correct-measurement": "stateDiagram-v2", "writers": "flowchart", "save-flow": "flowchart", "name-decision": "flowchart"}
 	once := len(byID) == len(want)
 	counts := map[string]int{}
 	for k, v := range byID {
@@ -41,7 +41,7 @@ func diagrams(s *S) {
 		_, known := want[k]
 		once = once && known && len(v) == 1
 	}
-	s.K("exactly the seven diagrams, each once", once, counts)
+	s.K("exactly the eight diagrams, each once", once, counts)
 	var wantIDs []string
 	for k := range want {
 		wantIDs = append(wantIDs, k)
@@ -398,6 +398,8 @@ func diagrams(s *S) {
 	s.K("the save flow has BEGIN IMMEDIATE, SAVEPOINT, RELEASE, ROLLBACK TO and COMMIT, as cookbook/save-a-body", has(body("save-flow"), "BEGIN IMMEDIATE", "SAVEPOINT target", "RELEASE target", "ROLLBACK TO target", "COMMIT"))
 	s.K("the page diagram has the named state, promotion by type and the day page", has(body("page-life"), "Named", "entities.entity_type", "day page"))
 	s.K("the writers diagram names BEGIN IMMEDIATE, WAL, mode=ro", has(body("writers"), "BEGIN IMMEDIATE", "WAL", "mode=ro"))
+	s.K("the name-decision diagram names the stamped entities.md, approved, rejected, held and the as title",
+		has(body("name-decision"), "stamped entities.md", "approved", "rejected", "held", "as title"))
 }
 
 var mermaidBlock = regexp.MustCompile("(?s)```mermaid\n(.*?)\n```")

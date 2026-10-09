@@ -22,6 +22,7 @@ type Status struct {
 	ToApply     []string          `json:"answered_to_apply,omitempty"`
 	Next        string            `json:"next_file,omitempty"`
 	Later       string            `json:"later_file,omitempty"`
+	Held        map[string]int    `json:"held,omitempty"` // files that wait for name decisions, names without one
 	DoNow       string            `json:"do_now"`
 	Mismatches  []string          `json:"mismatches"`
 	Outside     []string          `json:"written_outside_the_facts,omitempty"`
@@ -37,7 +38,7 @@ type Status struct {
 func (w *Workspace) Status(ctx context.Context, s *core.Store, dbPath string) (*Status, error) {
 	st := &Status{Workspace: w.Dir, Database: dbPath, Gates: map[string]string{}, Ledger: map[string]int{},
 		Questions: map[string]int{}, Mismatches: []string{}}
-	for _, f := range []string{"rules.md", "metrics.md", preparedFile, selectedPhotoFile} {
+	for _, f := range []string{"rules.md", "metrics.md", entitiesFile, preparedFile, selectedPhotoFile} {
 		g, err := w.Gate(f)
 		if err != nil {
 			return nil, err
@@ -53,8 +54,14 @@ func (w *Workspace) Status(ctx context.Context, s *core.Store, dbPath string) (*
 			}
 		}
 	}
+	legacy := 0
 	if r, err := w.Rules(); err == nil {
 		st.Source = r.Source
+		legacy = len(r.Legacy.Aliases) + len(r.Legacy.Distinct)
+	}
+	decisions, err := w.nameDecisions()
+	if err != nil {
+		return nil, err
 	}
 	lines, hasLedger, err := w.Ledger()
 	if err != nil {
@@ -103,13 +110,26 @@ func (w *Workspace) Status(ctx context.Context, s *core.Store, dbPath string) (*
 	} else {
 		st.Mismatches = append(st.Mismatches, "no database was checked")
 	}
-	// the next file: the first to do, else the first waiting whose questions are all answered; a file held for
-	// a later pass is never the next file, only the first of its pass
+	// the next file: the first to do, else the first that waited for names the owner has now decided, else the first
+	// waiting whose questions are all answered; a file held for a later pass is never the next file, only the first
+	// of its pass
 	for _, l := range lines {
-		if l.State == " " {
+		if l.State == " " && len(heldNames(l.Note)) == 0 {
 			st.Next = l.File
 			break
 		}
+	}
+	if st.Next == "" {
+		for _, l := range lines {
+			if l.State == " " && len(heldNames(l.Note)) > 0 && decided(l, decisions) {
+				st.Next = l.File
+				break
+			}
+		}
+	}
+	heldFiles, missing := undecided(lines, decisions)
+	if heldFiles > 0 {
+		st.Held = map[string]int{"files": heldFiles, "undecided_names": missing}
 	}
 	if st.Next == "" {
 		for _, l := range lines {
@@ -147,6 +167,8 @@ func (w *Workspace) Status(ctx context.Context, s *core.Store, dbPath string) (*
 		st.DoNow = "Survey the source and draft rules.md (step 2), then stop for the owner."
 	case st.Gates["rules.md"] != "approved":
 		st.DoNow = "Stop: rules.md is " + st.Gates["rules.md"] + changedLines(st.Changed["rules.md"]) + "; the owner approves it (lifelog import approve rules)."
+	case legacy > 0:
+		st.DoNow = fmt.Sprintf("rules.md holds %d alias or distinct lines: name decisions live in entities.md. Move them (propose-entities), then stop for the owner.", legacy)
 	case st.Notes != nil && st.Notes.Markdown > 0:
 		st.DoNow = fmt.Sprintf("The source holds %d Markdown files among %d: if the rules say they are notes to keep as pages, plan them (plan-vault), then fix every problem the plan lists (step 3); else make the ledger (make-ledger).", st.Notes.Markdown, st.Notes.Files)
 	case hasPlan && !vaultApplied:
@@ -161,10 +183,16 @@ func (w *Workspace) Status(ctx context.Context, s *core.Store, dbPath string) (*
 		st.DoNow = "Use the answer of " + st.ToApply[0] + ": rules, facts, check, apply, then close it (step 8)."
 	case st.Next != "":
 		st.DoNow = "Do " + st.Next + " (step 6): inspect it, find, write its facts, check, apply."
+	case missing > 0 && st.Gates[entitiesFile] != "draft" && st.Gates[entitiesFile] != "stale":
+		st.DoNow = fmt.Sprintf("%d files wait for %d names the owner has not decided: propose them (propose-entities), then stop for the owner.", heldFiles, missing)
+	case st.Gates[entitiesFile] == "draft" || st.Gates[entitiesFile] == "stale":
+		st.DoNow = "Stop: entities.md waits for the owner's decisions" + changedLines(st.Changed[entitiesFile]) + " (lifelog import approve entities)."
 	case st.Later != "":
 		st.DoNow = fmt.Sprintf("The later pass: %d files are held for it. Do %s as its rule says (keep it as a file with its text, or a selected photo), or skip it.", st.Ledger["later"], st.Later)
 	case st.Ledger["waiting"] > 0:
 		st.DoNow = fmt.Sprintf("Stop: %d files wait for questions only the owner can answer.", st.Ledger["waiting"])
+	case w.doneNamesUndecided(lines) > 0:
+		st.DoNow = "The done files write names entities.md does not decide, and a replay writes them only with the owner's decision: propose them (propose-entities), then stop for the owner."
 	default:
 		st.DoNow = "Every file is done: run the integrity check and report the counts (step 9)."
 	}

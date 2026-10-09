@@ -386,7 +386,7 @@ func (w *Workspace) collectTrialReadingIdentityFailures(ctx context.Context, tri
 	} else if g != "approved" {
 		return nil, refuse("rules.md is %s: the owner approves it first (lifelog import approve rules)", g)
 	}
-	rules, err := w.Rules()
+	rules, err := w.factsRules()
 	if err != nil {
 		return nil, err
 	}
@@ -440,6 +440,7 @@ func (w *Workspace) collectTrialReadingIdentityFailures(ctx context.Context, tri
 			if err != nil {
 				return err
 			}
+			f = withAliases(f, rules.Names)
 			hasReading := false
 			for _, wr := range f.Writes {
 				if wr.Reading != nil {

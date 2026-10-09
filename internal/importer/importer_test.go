@@ -33,12 +33,40 @@ const rulesBody = `source: import:notebook
 
 ## Folders
 - Journal/*.md — one note per day
-
-## Aliases
-- "Bobby" → "Bob Sample"
-
-## Distinct
 `
+
+// dayNames are the owner's name decisions dayFacts needs: its place and person approved, and "Bobby" (the quote's
+// name for Bob) an alias of "Bob Sample".
+var dayNames = []Entity{{Kind: "place", Name: "Riverside Pool"}, {Kind: "person", Name: "Bob Sample"},
+	{Kind: "person", Name: "Bobby", As: "Bob Sample"}}
+
+// decideNames adds rows to entities.md and stamps it, as the owner leaves it after approve entities: a row without a
+// status is proposed, so the stamp approves it (test setup: the file written as the owner edits it).
+func (f *fixture) decideNames(t *testing.T, rows ...Entity) {
+	t.Helper()
+	text, ok, err := f.w.read(entitiesFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		_, text = splitStatus(text)
+		text = "status: draft\n" + text
+	} else {
+		text = "status: draft\n\n" + entitiesHeader
+	}
+	for _, e := range rows {
+		if e.Status == "" {
+			e.Status = "proposed"
+		}
+		text += entityRow(e)
+	}
+	if err := writeAtomic(f.w.file(entitiesFile), []byte(text)); err != nil {
+		t.Fatal(err)
+	}
+	if err := ownerApproves(f.w, entitiesFile); err != nil {
+		t.Fatal(err)
+	}
+}
 
 type fixture struct {
 	w     *Workspace
@@ -188,6 +216,7 @@ func TestLedger(t *testing.T) {
 func TestApplyIsIdempotentAndChecked(t *testing.T) {
 	f := setup(t)
 	f.approveRules(t, rulesBody)
+	f.decideNames(t, dayNames...)
 	f.w.MakeLedger()
 	f.metrics(t)
 	if err := f.facts(t, "Journal/2031-04-11.md", dayFacts); err != nil {
@@ -237,12 +266,12 @@ func TestRefusals(t *testing.T) {
 	}{
 		{"quote not in the file", one(map[string]any{"person": map[string]any{"title": "Cara"}, "quote": "tea with Cara"}), "not in"},
 		{"quote inside a word", one(map[string]any{"place": map[string]any{"title": "ake"}, "quote": "ake"}), "not in"},
-		{"an alias as a title", one(map[string]any{"person": map[string]any{"title": "Bobby"}, "quote": "Coffee with Cara"}), "alias"},
+		{"a name the quote does not name", one(map[string]any{"person": map[string]any{"title": "Bobby"}, "quote": "Coffee with Cara"}), "does not name"},
 		{"an event", one(map[string]any{"event": map[string]any{"title": "coffee"}, "quote": "Coffee with Cara"}), "D22"},
 		{"a task", one(map[string]any{"task": map[string]any{"title": "lake"}, "quote": "Next month we try the lake"}), "D23"},
 		{"two kinds", one(map[string]any{"person": map[string]any{"title": "Cara"}, "place": map[string]any{"title": "Cara"}, "quote": "Coffee with Cara"}), "exactly one kind"},
 		{"a question number", one(map[string]any{"person": map[string]any{"title": "Cara Q4"}, "quote": "Coffee with Cara"}), "question or row number"},
-		{"a look-alike", one(map[string]any{"person": map[string]any{"title": "Cara"}, "quote": "Coffee with Cara"}), "looks like"},
+		{"a look-alike", one(map[string]any{"person": map[string]any{"title": "Cara"}, "quote": "Coffee with Cara"}), "waits for the owner's decision"},
 		{"an unapproved metric", one(map[string]any{"reading": map[string]any{"metric": "caffeine", "day": "2031-04-12", "value": "1"}, "quote": "Coffee with Cara"}), "not approved"},
 		{"a wikilink", one(map[string]any{"link": map[string]any{"from": "2031-04-12", "to": "Cara Example", "kind": "wikilink"}, "quote": "Coffee with Cara"}), "wikilink"},
 		{"a reference not written", one(map[string]any{"link": map[string]any{"from": "2031-04-12", "to": "Cara", "kind": "about"}, "quote": "Coffee with Cara"}), "not written yet"},
@@ -261,8 +290,8 @@ func TestRefusals(t *testing.T) {
 	if err := f.w.WriteFacts(file, []byte(`{"file": "`+file+`", "writes": [], "colour": "red"}`)); err == nil {
 		t.Error("an unknown field was accepted")
 	}
-	// a distinct line lets the second Cara through
-	f.approveRules(t, rulesBody+`- "Cara" ≠ "Cara Example"`+"\n")
+	// the owner's approval in entities.md lets the second Cara through
+	f.decideNames(t, Entity{Kind: "person", Name: "Cara"})
 	f.facts(t, file, one(map[string]any{"person": map[string]any{"title": "Cara"}, "quote": "Coffee with Cara"}))
 	if err := checkErr(f.w, s, file); err != nil {
 		t.Errorf("a distinct name: %v", err)
@@ -272,6 +301,7 @@ func TestRefusals(t *testing.T) {
 func TestReadingsKeysAndReplay(t *testing.T) {
 	f := setup(t)
 	f.approveRules(t, rulesBody)
+	f.decideNames(t, dayNames...)
 	f.w.MakeLedger()
 	f.metrics(t)
 	file := "Medical/Ferritin.md"
@@ -354,6 +384,7 @@ func TestReadingsKeysAndReplay(t *testing.T) {
 func TestLinkBeforePromotion(t *testing.T) {
 	f := setup(t)
 	f.approveRules(t, rulesBody)
+	f.decideNames(t, Entity{Kind: "person", Name: "Bob Sample"})
 	f.w.MakeLedger()
 	if _, err := f.w.PlanVault(ctx, f.s); err != nil {
 		t.Fatal(err)

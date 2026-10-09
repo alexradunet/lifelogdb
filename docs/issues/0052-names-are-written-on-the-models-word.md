@@ -1,7 +1,7 @@
 # 0052 — People and places are written on the model's word, and each name decision closes the rules gate
 
 - **Date:** 2026-10-08
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the 2026-10 import of a notes folder and a contacts export (12 vCard files, 254 names)
 
 ## What happened
@@ -41,4 +41,9 @@ The rules gate closes only when the folder rules change. A tombstoned name is de
 
 ## Resolution
 
-Open.
+Resolved by [plan 084](../plans/084-owner-decides-names.md) under [RFC 0008](../rfcs/0008-owner-decides-names-in-imports.md):
+a person or a place that no live row of its kind holds, and a new page that looks like one, waits for the owner's
+row in the stamped `entities.md`; *apply facts* writes nothing for such a file and notes its ledger line `held:`;
+*propose entities* adds the names as `proposed` rows and moves the `## Aliases` and `## Distinct` lines out of
+`rules.md`, so a name decision no longer closes the rules gate; a tombstoned name is revived only when the owner
+approves it; *replay* refuses a draft `entities.md`.
