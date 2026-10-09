@@ -4,11 +4,12 @@ An issue records an incident from real use — a failed import, a bug in the wri
 data could not answer, a rule that is ambiguous or untestable. It is the evidence a schema change needs
 ([how a change happens](../process.md)). One file per incident, named `NNNN-short-slug.md`, written from the
 [template](template.md), numbered on from the last: issues up to 0010 are closed and live in git history
-(`git log -- docs/issues`). Issues 0011–0053 are listed below; the next one is **0054**. Close an issue with its resolution and status, retaining the dated incident as
+(`git log -- docs/issues`). Issues 0011–0054 are listed below; the next one is **0055**. Close an issue with its resolution and status, retaining the dated incident as
 [the process](../process.md) requires. Earlier closed records remain available in git history.
 
 | id | title | status |
 |---|---|---|
+| [0054](0054-rules-typed-twice-and-status-reads-the-ledger-per-file.md) | Skip and later rules are typed twice, and status reads the whole ledger once for each done file | open |
 | [0053](0053-a-rejected-name-is-not-removed.md) | A rejected name does not remove the row the import wrote, and it refuses every file that writes it | resolved |
 | [0052](0052-names-are-written-on-the-models-word.md) | People and places are written on the model's word, and each name decision closes the rules gate | resolved |
 | [0050](0050-one-doubtful-write-refuses-a-whole-file.md) | One doubtful write refuses a whole facts file, and the refusal names only the first | resolved |
