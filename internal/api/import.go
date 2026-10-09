@@ -48,6 +48,10 @@ var importCatalog = []spec{
 	{"apply-selected-photo", "Apply selected photo", "Keep the stamped selected pair through the existing file writer.", "POST", "/import/selected-photo/apply", nil, false},
 	{"propose-entities", "Propose names", "Add to entities.md a proposed row for each name the owner has not decided: the names held files wait for, the persons and places done files write, and the alias and distinct lines of rules.md (moved out of it). The owner decides them and approves (lifelog import approve entities); never edit a status yourself.",
 		"POST", "/import/entities/propose", nil, false},
+	{"import-entities", "Names", "List every name of this import: each row of entities.md and each person, place and page the done facts files write, with the owner's decision, the state of its row in the database (written, tombstoned, not written, or the type that holds the title), how many done files write it, and the first file and its quote.",
+		"GET", "/import/entities", nil, false},
+	{"tombstone-rejected", "Tombstone rejected rows", "Tombstone each live person, place or page that this import wrote under a name the owner rejects in the stamped entities.md. It touches only this import's rows and decides nothing: the rejection is the owner's.",
+		"POST", "/import/entities/tombstone-rejected", nil, false},
 	{"register-metrics", "Register metrics", "Register the metrics the owner approved in metrics.md, and each habit's period.",
 		"POST", "/import/register-metrics", nil, false},
 	{"plan-vault", "Plan the vault", "Draft plan.json: every note becomes one page titled by its file name; every problem is listed.",
@@ -67,6 +71,7 @@ func (h *server) mountImport(get func(string, func(*http.Request) (*Entity, erro
 	get("/import/find", h.importFind)
 	get("/import/questions", h.questions)
 	get("/import/ledger", h.ledger)
+	get("/import/entities", h.importNames)
 	get("/import/plan", h.plan)
 	get("/import/facts", h.facts)
 	get("/import/prepared", h.preparedReview)
@@ -89,6 +94,7 @@ func (h *server) mountImport(get func(string, func(*http.Request) (*Entity, erro
 	post("/import/selected-photo/apply", h.selectedPhotoOp(false))
 	post("/import/register-metrics", h.registerMetrics)
 	post("/import/entities/propose", h.proposeEntities)
+	post("/import/entities/tombstone-rejected", h.tombstoneRejected)
 	post("/import/vault/plan", h.planVault)
 	post("/import/vault/fix", h.fixPlan)
 	post("/import/vault/apply", h.applyVault)
@@ -97,7 +103,7 @@ func (h *server) mountImport(get func(string, func(*http.Request) (*Entity, erro
 
 func importLinks(self string) []Link {
 	return []Link{link("self", self, "This"), link("status", "/import", "Import status"), link("ledger", "/import/ledger", "Ledger"),
-		link("questions", "/import/questions", "Questions"), link("plan", "/import/plan", "Vault plan"),
+		link("questions", "/import/questions", "Questions"), link("names", "/import/entities", "Names"), link("plan", "/import/plan", "Vault plan"),
 		link("prepared-review", "/import/prepared", "Prepared source review"),
 		link("selected-photo-review", "/import/selected-photo", "Selected photo review"), link("index", "/", "Home")}
 }
@@ -345,6 +351,32 @@ func (h *server) proposeEntities(r *http.Request, _ string) (*Entity, error) {
 	e, err := h.importStatus(r)
 	if e != nil {
 		e.Result = map[string]any{"proposed": added}
+	}
+	return e, err
+}
+
+func (h *server) importNames(r *http.Request) (*Entity, error) {
+	rows, err := h.ws.Names(r.Context(), h.s)
+	if err != nil {
+		return nil, err
+	}
+	if rows == nil {
+		rows = []importer.NameRow{}
+	}
+	return h.importEntity("names", "Names", "/import/entities", map[string]any{"names": rows}, "propose-entities", "tombstone-rejected"), nil
+}
+
+func (h *server) tombstoneRejected(r *http.Request, _ string) (*Entity, error) {
+	done, err := h.ws.TombstoneRejected(r.Context(), h.s)
+	if err != nil {
+		return nil, err
+	}
+	if done == nil {
+		done = []string{}
+	}
+	e, err := h.importStatus(r)
+	if e != nil {
+		e.Result = map[string]any{"tombstoned": done}
 	}
 	return e, err
 }

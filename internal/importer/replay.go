@@ -22,6 +22,7 @@ type ReplayResult struct {
 	Vault       *VaultResult          `json:"vault,omitempty"`
 	Metrics     []string              `json:"metrics,omitempty"`
 	Files       []Report              `json:"files"`
+	Tombstoned  []string              `json:"tombstoned,omitempty"` // rows of this import under a rejected name
 	Corrections int                   `json:"corrections_made"`
 	Integrity   *core.IntegrityResult `json:"integrity"`
 	Trial       *core.Counts          `json:"trial_counts"`
@@ -29,8 +30,8 @@ type ReplayResult struct {
 	Differences []string              `json:"differences"`
 }
 
-// Failure is one part of a rehearsed replay that failed: a step (vault, metrics, corrections, integrity) or one
-// facts file.
+// Failure is one part of a rehearsed replay that failed: a step (vault, metrics, rejections, corrections,
+// integrity) or one facts file.
 type Failure struct {
 	Step  string `json:"step"`
 	File  string `json:"file,omitempty"`
@@ -293,6 +294,13 @@ func (w *Workspace) replayIntoPlan(ctx context.Context, trial, ts *core.Store, r
 			break
 		}
 		pending = later
+	}
+	// the owner's rejections: a row this import wrote under a rejected name, which the target holds from an earlier
+	// replay, is tombstoned (the facts above never write one)
+	if res.Tombstoned, err = w.TombstoneRejected(ctx, ts); err != nil {
+		if err := res.failed(rehearse, "rejections", "", err); err != nil {
+			return err
+		}
 	}
 	if res.Corrections, err = w.replayCorrections(ctx, trial, ts); err != nil {
 		if err := res.failed(rehearse, "corrections", "", err); err != nil {

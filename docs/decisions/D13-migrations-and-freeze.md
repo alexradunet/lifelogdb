@@ -20,7 +20,8 @@
   does not walk the overflow pages of a long body (the preview of `files` is last for the same reason). A column
   added after the freeze follows the body.
 - **The freeze.** The freeze is the first write to the canonical `life.db` of a row that cannot be replayed from an
-  import workspace: a capture, a correction, a tombstone, anything typed into the file. Before it, a file holding only
+  import workspace: a capture, a correction, a tombstone that no rejected name of a workspace carries, anything typed
+  into the file. Before it, a file holding only
   replayable imports is rebuilt (a new `schema.sql`, then a *replay*, [importing with a model](../guides/importing.md))
   instead of migrated. At the freeze, the commit of `schema.sql` that made the file is recorded in the status line of
   [the docs index](../README.md). After it every change is a numbered migration under `db/migrations/`, starting at

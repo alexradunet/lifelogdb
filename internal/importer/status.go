@@ -11,23 +11,28 @@ import (
 // Status is the guide's status: gates, ledger counts, questions, the next file, one "do now" sentence and the
 // mismatches between the workspace and the database.
 type Status struct {
-	Workspace   string            `json:"workspace"`
-	Database    string            `json:"database"`
-	Source      string            `json:"source,omitempty"`
-	Gates       map[string]string `json:"gates"`
-	Vault       string            `json:"vault,omitempty"`
-	Notes       *NotesCount       `json:"notes,omitempty"`
-	Ledger      map[string]int    `json:"ledger"`
-	Questions   map[string]int    `json:"questions"`
-	ToApply     []string          `json:"answered_to_apply,omitempty"`
-	Next        string            `json:"next_file,omitempty"`
-	Later       string            `json:"later_file,omitempty"`
-	Held        map[string]int    `json:"held,omitempty"` // files that wait for name decisions, names without one
-	DoNow       string            `json:"do_now"`
-	Mismatches  []string          `json:"mismatches"`
-	Outside     []string          `json:"written_outside_the_facts,omitempty"`
-	Corrections []string          `json:"correction_intents,omitempty"`
-	Counts      *core.Counts      `json:"counts,omitempty"`
+	Workspace string            `json:"workspace"`
+	Database  string            `json:"database"`
+	Source    string            `json:"source,omitempty"`
+	Gates     map[string]string `json:"gates"`
+	Vault     string            `json:"vault,omitempty"`
+	Notes     *NotesCount       `json:"notes,omitempty"`
+	Ledger    map[string]int    `json:"ledger"`
+	Questions map[string]int    `json:"questions"`
+	ToApply   []string          `json:"answered_to_apply,omitempty"`
+	Next      string            `json:"next_file,omitempty"`
+	Later     string            `json:"later_file,omitempty"`
+	Held      map[string]int    `json:"held,omitempty"` // files that wait for name decisions, names without one
+	// RejectedLive counts the live rows this import wrote under a name the owner rejects (tombstone-rejected
+	// tombstones them); Uncarried the rows this import wrote that are tombstoned while their name is not rejected,
+	// which a replay writes again.
+	RejectedLive int          `json:"rejected_live,omitempty"`
+	Uncarried    int          `json:"tombstoned_not_rejected,omitempty"`
+	DoNow        string       `json:"do_now"`
+	Mismatches   []string     `json:"mismatches"`
+	Outside      []string     `json:"written_outside_the_facts,omitempty"`
+	Corrections  []string     `json:"correction_intents,omitempty"`
+	Counts       *core.Counts `json:"counts,omitempty"`
 
 	// Changed is, for each gate that is not approved, the lines changed since the owner's last approval.
 	Changed map[string][]string `json:"changed_since_approval,omitempty"`
@@ -99,6 +104,11 @@ func (w *Workspace) Status(ctx context.Context, s *core.Store, dbPath string) (*
 		}
 		if st.Source != "" && st.Gates["rules.md"] == "approved" {
 			w.mismatches(ctx, s, st, lines, plan)
+			rejected, uncarried, err := w.rejectedRows(ctx, s, true)
+			if err != nil {
+				return nil, err
+			}
+			st.RejectedLive, st.Uncarried = len(rejected), uncarried
 		}
 		n, err := s.DirectAgentRows(ctx, verified)
 		if err != nil {
@@ -177,6 +187,10 @@ func (w *Workspace) Status(ctx context.Context, s *core.Store, dbPath string) (*
 		st.DoNow = "Stop: metrics.md waits for the owner's approval" + changedLines(st.Changed["metrics.md"]) + " (lifelog import approve metrics)."
 	case !hasLedger:
 		st.DoNow = "Make the ledger (make-ledger), then skip what the rules skip (step 5)."
+	case st.RejectedLive > 0:
+		st.DoNow = fmt.Sprintf("%d rows this import wrote are rejected in entities.md: tombstone them (tombstone-rejected).", st.RejectedLive)
+	case st.Uncarried > 0:
+		st.DoNow = fmt.Sprintf("Stop: %d rows this import wrote are tombstoned here, but entities.md does not reject their names, so a replay writes them again. The owner rejects them in entities.md (lifelog import approve entities) or revives them.", st.Uncarried)
 	case len(st.Mismatches) > 0:
 		st.DoNow = "Mismatches: apply their files again, or ask. Never explain one away."
 	case len(st.ToApply) > 0:
@@ -306,7 +320,7 @@ func (w *Workspace) mismatches(ctx context.Context, s *core.Store, st *Status, l
 			continue
 		}
 		for _, o := range r.Outcomes {
-			if o.Status != "existing" {
+			if o.Status != "existing" && o.Status != "rejected" {
 				st.Mismatches = append(st.Mismatches, fmt.Sprintf("%s: write %d (%s) is not in the database", l.File, o.Write, o.What))
 			}
 		}

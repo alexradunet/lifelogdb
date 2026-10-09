@@ -127,7 +127,7 @@ func (w *Workspace) prepare(file string, lenient bool) (*Facts, []int, *Rules, [
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	f = withAliases(f, rules.Names)
+	f = withDecisions(f, rules.Names)
 	src, err := w.readRawSource(file)
 	if err != nil {
 		return nil, nil, nil, nil, err
@@ -156,14 +156,16 @@ func (w *Workspace) factsRules() (*Rules, error) {
 	return rules, nil
 }
 
-// withAliases is the facts with every name the owner made an alias (an approved entities.md row with an as) written
-// as its title: a person, place or page under the alias of its kind, a link end or a reading's with under any
-// alias. The facts file is not changed; its quotes still name the alias, which the checks accept.
-func withAliases(f *Facts, n names) *Facts {
-	all := n.aliases()
-	if len(all) == 0 {
+// withDecisions is the facts with the owner's name decisions of entities.md applied. Every name the owner made an
+// alias (an approved row with an as) is written as its title: a person, place or page under the alias of its kind, a
+// link end or a reading's with under any alias. A reading's with that names a rejected name is taken out: the
+// reading stays. The writes of a rejected name are skipped later (names.rejects), so that they keep their numbers.
+// The facts file is not changed; its quotes still name the alias, which the checks accept.
+func withDecisions(f *Facts, n names) *Facts {
+	if len(n) == 0 {
 		return f
 	}
+	all := n.aliases()
 	of := func(kind, title string) string {
 		if e, ok := n.of(kind, title); ok && e.Status == "approved" && e.As != "" {
 			return e.As
@@ -199,6 +201,9 @@ func withAliases(f *Facts, n names) *Facts {
 		case wr.Reading != nil && wr.Reading.With != "":
 			r := *wr.Reading
 			r.With = any(r.With)
+			if n.rejected("", r.With) {
+				r.rejectedWith, r.With = r.With, ""
+			}
 			wr.Reading = &r
 		}
 		out.Writes[i] = wr
@@ -234,6 +239,10 @@ func (w *Workspace) write(ctx context.Context, s *core.Store, f *Facts, pos []in
 	var subPos, index []int
 	for i, wr := range f.Writes {
 		if skip[i] {
+			continue
+		}
+		if rules.Names.rejects(wr) {
+			r.Outcomes = append(r.Outcomes, Outcome{Write: i + 1, Kind: wr.kind(), What: what(wr), Status: "rejected"})
 			continue
 		}
 		sub.Writes = append(sub.Writes, wr)
@@ -278,6 +287,7 @@ func (w *Workspace) write(ctx context.Context, s *core.Store, f *Facts, pos []in
 		err = s.Do(ctx, rules.Source, fn)
 	}
 	sort.SliceStable(r.Refused, func(a, b int) bool { return r.Refused[a].Write < r.Refused[b].Write })
+	sort.SliceStable(r.Outcomes, func(a, b int) bool { return r.Outcomes[a].Write < r.Outcomes[b].Write })
 	r.Summary = summary(r)
 	return r, err
 }
@@ -363,13 +373,13 @@ func applyWrite(t *core.Tx, file string, wr Write, key string, rules *Rules) (Ou
 			}
 			return Outcome{Kind: "page", What: title, Status: "existing"}, nil
 		}
-		// a new page needs the owner's decision when it looks like a person, a place or another page; a page the
-		// owner decided keeps that decision when nothing looks like it any more
+		// a new page needs the owner's decision only when it looks like a person, a place or another page (a page the
+		// owner rejected never comes here: names.rejects skips its write)
 		like, err := lookAlikes(t, title)
 		if err != nil {
 			return Outcome{}, err
 		}
-		if _, decided := rules.Names.of("page", title); decided || len(like) > 0 {
+		if len(like) > 0 {
 			if err := decide(rules, "page", title, "", like); err != nil {
 				return Outcome{}, err
 			}
@@ -522,15 +532,13 @@ func named(t *core.Tx, rules *Rules, typ, title, key string, create func(string)
 	return o, classify("taken", fmt.Errorf("%q is held by a %s, not a %s", title, p.Type, typ))
 }
 
-// decide is the owner's decision on a name a write needs (entities.md): nil to write it; else the write is refused,
-// as rejected, or held until the owner decides. why says what the write would do besides creating a row (revive a
-// tombstoned one, promote a page); like is what the name looks like. Both go to the owner as candidates.
+// decide is the owner's decision on a name a write needs (entities.md): nil to write it; else the write is held
+// until the owner decides (a rejected name never comes here: its write is skipped before the checks, names.rejects).
+// why says what the write would do besides creating a row (revive a tombstoned one, promote a page); like is what
+// the name looks like. Both go to the owner as candidates.
 func decide(rules *Rules, kind, title, why string, like []string) error {
-	if e, ok := rules.Names.of(kind, title); ok {
-		if e.Status == "approved" {
-			return nil
-		}
-		return &classed{class: "rejected", err: fmt.Errorf("the %s %q is rejected in entities.md", kind, title)}
+	if e, ok := rules.Names.of(kind, title); ok && e.Status == "approved" {
+		return nil
 	}
 	reason := fmt.Sprintf("the %s %q waits for the owner's decision in entities.md (propose-entities, then lifelog import approve entities)", kind, title)
 	candidates := like
@@ -785,11 +793,16 @@ func rank(rel string) int {
 	return map[string]int{"exact": 0, "same words": 1, "more words": 2, "fewer words": 3}[rel]
 }
 
-// summary is the ledger's note for a file: counts by kind, then by status; a check adds what it refused.
+// summary is the ledger's note for a file: counts by kind, then by status, of what is written; then the writes the
+// owner's rejections skip; a check adds what it refused.
 func summary(r *Report) string {
 	kinds := map[string]int{}
 	stat := map[string]int{}
 	for _, o := range r.Outcomes {
+		if o.Status == "rejected" {
+			stat[o.Status]++
+			continue
+		}
 		kinds[o.Kind]++
 		stat[o.Status]++
 	}
@@ -811,6 +824,9 @@ func summary(r *Report) string {
 	}
 	if len(st) > 0 {
 		s += " (" + strings.Join(st, ", ") + ")"
+	}
+	if n := stat["rejected"]; n > 0 {
+		s += fmt.Sprintf("; %d rejected", n)
 	}
 	if len(r.Refused) > 0 {
 		s += fmt.Sprintf("; %d refused", len(r.Refused))

@@ -1,7 +1,7 @@
 # 0053 — A rejected name does not remove the row the import wrote, and it refuses every file that writes it
 
 - **Date:** 2026-10-09
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the 2026-10 import of a notes folder and a Takeout extraction; the names gate of
   [plan 084](../plans/084-owner-decides-names.md)
 
@@ -19,8 +19,9 @@ The names gate added `rejected`, and it is not enough:
 
 - A name the owner rejects after its row exists stops nothing: the row stays live, and every later write of the name
   finds it and links to it.
-- Every done file that writes a rejected name is refused as a whole (class `rejected`). *status* reports each such
-  file as a mismatch, and a replay fails it, with all its other writes.
+- Where its row is missing or tombstoned, every file that writes a rejected name is refused as a whole (class
+  `rejected`): a replay into a fresh database fails each such file, with all its other writes, and *status* reports
+  the file as a mismatch once the row is tombstoned on the trial.
 - A held file whose name the owner rejects stays to do: its apply refuses it, and only a change of its facts file
   lets it apply.
 
@@ -33,11 +34,22 @@ owner's decision, the state of its row, and the file and the quote that wrote it
 1. A notes source, the rules approved; a facts file writes the person "Cara" and a link to her; `entities.md`
    approves "Cara"; *apply facts*: the person and the link are written.
 2. Change the row of "Cara" to `rejected` and stamp `entities.md`.
-3. *status*: the file is a mismatch (`refused now: rejected`); the person "Cara" is still live.
-4. A replay into a fresh database fails the file.
+3. *status*: no mismatch; the person "Cara" is still live, and the file still links to her.
+4. Tombstone her on the trial: *status* reports the file as a mismatch (`refused now: rejected`). A replay into a
+   fresh database fails the file.
 
 ## Rules involved
 
 - [importing with a model](../guides/importing.md), "entities.md" (the `name-decision` diagram), "The checks",
   "Trial, then the real run"
 - [D11](../decisions/D11-tombstones.md) — an import revives a tombstoned row only by the owner's decision
+
+## Resolution
+
+Resolved by [plan 085](../plans/085-rejected-names-are-skipped-and-tombstoned.md) under
+[RFC 0009](../rfcs/0009-a-rejected-name-is-skipped-and-tombstoned.md): a rejected name's write and each link to it
+are skipped before the checks, and the rest of the file is written; a reading captured with it is written without
+its `with`. *tombstone rejected* tombstones the rows this import wrote under rejected names, and *replay* does the
+same on its target. *status* counts the rows to tombstone and the tombstones that a replay does not carry.
+*list names* lists each name with the owner's decision, the state of its row, and the file and quote that
+wrote it.

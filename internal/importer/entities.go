@@ -2,6 +2,8 @@ package importer
 
 import (
 	"context"
+	"fmt"
+	"sort"
 	"strings"
 
 	"lifelog/internal/core"
@@ -239,4 +241,199 @@ func entityRow(e Entity) string {
 		row += " |"
 	}
 	return row + "\n"
+}
+
+// written is one person, place or page that a done facts file writes: its kind and title as the owner's decisions
+// make it, the file, its quote, whether the owner rejects the name, and the import keys its row can hold (the key of
+// the title as written and as the decisions make it, since an alias can change after the write).
+type written struct {
+	kind, title, file, quote string
+	rejected                 bool
+	keys                     []string
+}
+
+// writtenNames is every person, place and page (not a day page) that the done facts files write, in ledger order.
+func (w *Workspace) writtenNames(lines []Line, n names) []written {
+	var out []written
+	for _, l := range lines {
+		if l.State != "x" && l.State != "?" {
+			continue
+		}
+		raw, err := w.LoadFacts(l.File)
+		if err != nil {
+			continue // a prepared source or a vault note has no facts file
+		}
+		f := withDecisions(raw, n)
+		for i, wr := range f.Writes {
+			kind := wr.kind()
+			if kind != "person" && kind != "place" && kind != "page" {
+				continue
+			}
+			title, was := what(wr), what(raw.Writes[i])
+			if core.IsDay(title) {
+				continue
+			}
+			keys := []string{entityKey(l.File, kind, title)}
+			if was != title {
+				keys = append(keys, entityKey(l.File, kind, was))
+			}
+			out = append(out, written{kind: kind, title: title, file: l.File, quote: wr.Quote, rejected: n.rejected(kind, title), keys: keys})
+		}
+	}
+	return out
+}
+
+// TombstoneRejected tombstones, in one transaction, each live person, place or page that this import wrote under a
+// name the owner rejects in a stamped entities.md (the guide's "entities.md"). A row is this import's when its
+// source is the rules' and its import key is one that a done facts file derives for the name: a row of another
+// source, a row the owner made, or a note page that the import promoted is never touched. The model may run it: it
+// carries only the owner's stamped decisions. It returns what it tombstoned; a second run tombstones nothing.
+func (w *Workspace) TombstoneRejected(ctx context.Context, s *core.Store) ([]string, error) {
+	done, _, err := w.rejectedRows(ctx, s, false)
+	return done, err
+}
+
+// rejectedRows tombstones (or, dry, only counts) the live rows of this import under rejected names, and counts the
+// rows of this import that are tombstoned while their name is not rejected: a replay writes those again.
+func (w *Workspace) rejectedRows(ctx context.Context, s *core.Store, dry bool) (rejected []string, uncarried int, err error) {
+	rules, err := w.factsRules()
+	if err != nil {
+		return nil, 0, err
+	}
+	lines, _, err := w.Ledger()
+	if err != nil {
+		return nil, 0, err
+	}
+	all := w.writtenNames(lines, rules.Names)
+	if len(all) == 0 {
+		return nil, 0, nil
+	}
+	fn := func(t *core.Tx) error {
+		rejected, uncarried = nil, 0
+		seen := map[int64]bool{}
+		for _, x := range all {
+			for _, k := range x.keys {
+				id, typ, deleted, err := t.ImportedEntity(k)
+				if err != nil {
+					return err
+				}
+				if id == 0 || typ != x.kind || seen[id] {
+					continue
+				}
+				seen[id] = true
+				switch {
+				case x.rejected && !deleted:
+					if !dry {
+						if err := t.Tombstone(id); err != nil {
+							return err
+						}
+					}
+					rejected = append(rejected, fmt.Sprintf("%s %q", x.kind, x.title))
+				case !x.rejected && deleted:
+					uncarried++
+				}
+			}
+		}
+		return nil
+	}
+	if dry {
+		err = s.DryRun(ctx, rules.Source, fn)
+	} else {
+		err = s.Do(ctx, rules.Source, fn)
+	}
+	return rejected, uncarried, err
+}
+
+// NameRow is one name of an import (the guide's "entities.md"): the owner's decision in entities.md, the state of
+// the row that holds its title in the database, and the done facts files that write it.
+type NameRow struct {
+	Kind     string `json:"kind"`
+	Name     string `json:"name"`
+	Decision string `json:"decision"` // the row's status in entities.md; "" when it has none
+	As       string `json:"as,omitempty"`
+	Row      string `json:"row"` // written, tombstoned, not written, or the type of the row that holds the title
+	Files    int    `json:"files"`
+	From     string `json:"from,omitempty"`
+	Quote    string `json:"quote,omitempty"`
+}
+
+// Names lists every name of this import: each row of entities.md and each person, place and page that a done facts
+// file writes, by kind and name, with the decision, the state of its row and the first file and quote that write it.
+// It writes nothing.
+func (w *Workspace) Names(ctx context.Context, s *core.Store) ([]NameRow, error) {
+	rows, err := w.Entities()
+	if err != nil {
+		return nil, err
+	}
+	n, err := w.nameDecisions()
+	if err != nil {
+		return nil, err
+	}
+	lines, _, err := w.Ledger()
+	if err != nil {
+		return nil, err
+	}
+	byKey := map[[2]string]*NameRow{}
+	var out []*NameRow
+	row := func(kind, name string) *NameRow {
+		k := [2]string{kind, nameKey(name)}
+		if r := byKey[k]; r != nil {
+			return r
+		}
+		r := &NameRow{Kind: kind, Name: name}
+		byKey[k] = r
+		out = append(out, r)
+		return r
+	}
+	for _, e := range rows {
+		r := row(e.Kind, e.Name)
+		r.Decision, r.As = e.Status, e.As
+	}
+	for _, x := range w.writtenNames(lines, n) {
+		r := row(x.kind, x.title)
+		r.Files++
+		if r.From == "" {
+			r.From, r.Quote = x.file, x.quote
+		}
+	}
+	source := "import"
+	if rules, err := w.Rules(); err == nil && rules.Source != "" {
+		source = rules.Source
+	}
+	err = s.DryRun(ctx, source, func(t *core.Tx) error {
+		for _, r := range out {
+			title := r.Name
+			if r.As != "" {
+				title = r.As
+			}
+			p, err := t.Lookup(title)
+			switch {
+			case err != nil:
+				return err
+			case p == nil:
+				r.Row = "not written"
+			case p.Type != r.Kind:
+				r.Row = "a " + p.Type
+			case p.Deleted:
+				r.Row = "tombstoned"
+			default:
+				r.Row = "written"
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.SliceStable(out, func(a, b int) bool {
+		if out[a].Kind != out[b].Kind {
+			return out[a].Kind < out[b].Kind
+		}
+		return nameKey(out[a].Name) < nameKey(out[b].Name)
+	})
+	list := make([]NameRow, len(out))
+	for i, r := range out {
+		list[i] = *r
+	}
+	return list, nil
 }

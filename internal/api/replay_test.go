@@ -513,14 +513,18 @@ func TestReplayDryRunActionAggregateIdentityFailures(t *testing.T) {
 	}
 }
 
-// propose-entities is a catalog action, so the CLI's do, the MCP tools and the browser carry it: an agent may run
-// it, and it adds a proposed row for the name a held file waits for; only the owner's stamp decides it.
-func TestProposeEntitiesThroughTheCatalog(t *testing.T) {
+// pierCafe is a notes workspace whose one file writes a new place, held until the owner decides it, and an agent's
+// in-process client with the catalog by action name.
+func pierCafe(t *testing.T) (*importer.Workspace, *core.Store, *client.Client, map[string]api.Action) {
+	t.Helper()
 	ctx := context.Background()
-	root := t.TempDir()
-	src := filepath.Join(root, "Notes")
-	os.MkdirAll(src, 0o755)
-	os.WriteFile(filepath.Join(src, "a.md"), []byte("Lunch at the Pier Cafe.\n"), 0o644)
+	src := filepath.Join(t.TempDir(), "Notes")
+	if err := os.MkdirAll(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "a.md"), []byte("Lunch at the Pier Cafe.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	ws, err := importer.Open(src + ".lifelog")
 	if err != nil {
 		t.Fatal(err)
@@ -552,13 +556,20 @@ func TestProposeEntitiesThroughTheCatalog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var propose api.Action
+	byName := map[string]api.Action{}
 	for _, a := range actions {
-		if a.Name == "propose-entities" {
-			propose = a
-		}
+		byName[a.Name] = a
 	}
-	if propose.Name == "" {
+	return ws, s, c, byName
+}
+
+// propose-entities is a catalog action, so the CLI's do, the MCP tools and the browser carry it: an agent may run
+// it, and it adds a proposed row for the name a held file waits for; only the owner's stamp decides it.
+func TestProposeEntitiesThroughTheCatalog(t *testing.T) {
+	ctx := context.Background()
+	ws, _, c, actions := pierCafe(t)
+	propose, ok := actions["propose-entities"]
+	if !ok {
 		t.Fatal("propose-entities is not in the catalog")
 	}
 	e, err := c.DoContext(ctx, propose, nil)
@@ -571,5 +582,56 @@ func TestProposeEntitiesThroughTheCatalog(t *testing.T) {
 	}
 	if g, _ := ws.Gate("entities.md"); g != "draft" {
 		t.Errorf("entities.md after an agent's proposal: %s", g)
+	}
+}
+
+// import-entities and tombstone-rejected are catalog capabilities too: an agent lists the names and carries the
+// owner's stamped rejection to the trial, and the list then shows the row tombstoned.
+func TestNamesAndTombstoneRejectedThroughTheCatalog(t *testing.T) {
+	ctx := context.Background()
+	ws, s, c, actions := pierCafe(t)
+	if _, err := ws.ProposeEntities(ctx, s); err != nil {
+		t.Fatal(err)
+	}
+	approveWorkspaceFile(t, ws, "entities.md")
+	if _, err := ws.Apply(ctx, s, "a.md"); err != nil {
+		t.Fatal(err)
+	}
+	p := filepath.Join(ws.Dir, "entities.md")
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(strings.Replace(string(b), "| approved | place | Pier Cafe |", "| rejected | place | Pier Cafe |", 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	approveWorkspaceFile(t, ws, "entities.md")
+	names := func() []importer.NameRow {
+		t.Helper()
+		e, err := c.DoContext(ctx, actions["import-entities"], nil)
+		if err != nil {
+			t.Fatalf("an agent lists the names: %v", err)
+		}
+		b, _ := json.Marshal(e.Properties)
+		var got struct{ Names []importer.NameRow }
+		if err := json.Unmarshal(b, &got); err != nil {
+			t.Fatal(err)
+		}
+		return got.Names
+	}
+	want := importer.NameRow{Kind: "place", Name: "Pier Cafe", Decision: "rejected", Row: "written", Files: 1, From: "a.md", Quote: "at the Pier Cafe"}
+	if got := names(); len(got) != 1 || got[0] != want {
+		t.Errorf("the names before: %+v", got)
+	}
+	e, err := c.DoContext(ctx, actions["tombstone-rejected"], nil)
+	if err != nil {
+		t.Fatalf("an agent tombstones the rejected rows: %v", err)
+	}
+	if b, _ := json.Marshal(e.Result); string(b) != `{"tombstoned":["place \"Pier Cafe\""]}` {
+		t.Errorf("the result: %s", b)
+	}
+	want.Row = "tombstoned"
+	if got := names(); len(got) != 1 || got[0] != want {
+		t.Errorf("the names after: %+v", got)
 	}
 }

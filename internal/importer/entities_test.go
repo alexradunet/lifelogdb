@@ -97,7 +97,7 @@ func TestANewNameHoldsTheFileUntilTheOwnerDecides(t *testing.T) {
 	}
 }
 
-func TestARejectedNameIsRefusedAndAnAliasIsWrittenUnderItsTitle(t *testing.T) {
+func TestARejectedNameIsSkippedAndAnAliasIsWrittenUnderItsTitle(t *testing.T) {
 	f := setup(t)
 	f.approveRules(t, rulesBody)
 	f.w.MakeLedger()
@@ -112,16 +112,10 @@ func TestARejectedNameIsRefusedAndAnAliasIsWrittenUnderItsTitle(t *testing.T) {
 	if err != nil || len(r.Refused) != 2 || r.Refused[0].Class != "held" || len(r.Refused[0].Candidates) != 1 || r.Refused[0].Candidates[0] != `the person "Cara Example" (more words)` || r.Refused[1].Class != "not_yet" || r.Refused[1].Waits != "Cara" {
 		t.Fatalf("a look-alike: %+v, %v", r, err)
 	}
-	// rejected: every write of the name is refused, and nothing is held
+	// rejected: the name's writes are skipped (the person and the link to her), nothing is refused or held
 	f.decideNames(t, Entity{Kind: "person", Name: "Cara", Status: "rejected"})
-	if r, err = f.w.Check(ctx, f.s, cafe); err != nil || len(r.Refused) == 0 || r.Refused[0].Class != "rejected" {
+	if r, err = f.w.Check(ctx, f.s, cafe); err != nil || len(r.Refused) != 0 || r.Summary != "1 page (1 new); 2 rejected" {
 		t.Errorf("a rejected name: %+v, %v", r, err)
-	}
-	if _, err := f.w.Apply(ctx, f.s, cafe); codeOf(err) != "rejected" {
-		t.Errorf("apply of a rejected name: %v", err)
-	}
-	if lines, _, _ := f.w.Ledger(); ledgerNote(lines, cafe) != "" {
-		t.Errorf("a rejected name is no held note: %q", ledgerNote(lines, cafe))
 	}
 	// the owner makes "Cara" an alias of Cara Example instead: the facts are written under the title
 	editLine(t, f.w, entitiesFile, "| rejected | person | Cara | |", "| proposed | person | Cara | Cara Example |")
@@ -264,7 +258,7 @@ func TestReplayWritesTheOwnersDecisionsAndRefusesADraft(t *testing.T) {
 	}
 }
 
-func TestARejectedPageIsRefusedWithNoLookAlike(t *testing.T) {
+func TestARejectedPageIsSkippedWithNoLookAlike(t *testing.T) {
 	f := setup(t)
 	f.approveRules(t, rulesBody)
 	f.w.MakeLedger()
@@ -275,9 +269,9 @@ func TestARejectedPageIsRefusedWithNoLookAlike(t *testing.T) {
 	if err := f.facts(t, cafe, lake); err != nil {
 		t.Fatal(err)
 	}
-	// nothing looks like "the lake": the decision alone refuses it
+	// nothing looks like "the lake": the decision alone skips it
 	r, err := f.w.Check(ctx, f.s, cafe)
-	if err != nil || len(r.Refused) != 1 || r.Refused[0].Class != "rejected" {
+	if err != nil || len(r.Refused) != 0 || len(r.Outcomes) != 1 || r.Outcomes[0].Status != "rejected" {
 		t.Fatalf("a rejected page: %+v, %v", r, err)
 	}
 }

@@ -364,6 +364,37 @@ func (n names) of(kind, name string) (Entity, bool) {
 	return e, ok
 }
 
+// rejected says whether the owner rejected a name: for its kind, or for any kind when kind is "".
+func (n names) rejected(kind, name string) bool {
+	if kind != "" {
+		e, ok := n.of(kind, name)
+		return ok && e.Status == "rejected"
+	}
+	for _, k := range []string{"person", "place", "page"} {
+		if n.rejected(k, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// rejects says whether a write is skipped by the owner's decision: a person, place or page whose name is rejected for
+// its kind, or a link with an end whose name is rejected for any kind. A reading is never skipped: withDecisions
+// takes a rejected name out of its with.
+func (n names) rejects(wr Write) bool {
+	switch {
+	case wr.Person != nil:
+		return n.rejected("person", wr.Person.Title)
+	case wr.Place != nil:
+		return n.rejected("place", wr.Place.Title)
+	case wr.Page != nil:
+		return n.rejected("page", wr.Page.Title)
+	case wr.Link != nil:
+		return n.rejected("", wr.Link.From) || n.rejected("", wr.Link.To)
+	}
+	return false
+}
+
 // aliases are the approved rows with an as: a name of this workspace for an existing title.
 func (n names) aliases() map[string]string {
 	out := map[string]string{}

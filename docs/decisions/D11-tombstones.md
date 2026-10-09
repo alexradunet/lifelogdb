@@ -6,7 +6,8 @@
   `foreign_keys` (executed), and under `recursive_triggers=ON` stop `INSERT OR REPLACE` from deleting a row
   (executed, [connection setup](../contract/connections.md)). Junk captured by accident is tombstoned like
   everything else, and an import does not bring it back: a write of a facts file revives a tombstoned person or place
-  only on the owner's decision in the import's workspace ([importing with a model](../guides/importing.md)). A
+  only on the owner's decision in the import's workspace, and a name the owner rejects there is a tombstone that the
+  import carries, on its trial and by each replay ([importing with a model](../guides/importing.md)). A
   tombstone is never earlier than its row's creation (`entities_deleted_after_created`, `sessions_deleted_after_created`,
   `tasks_deleted_after_created`, `task_occurrences_deleted_after_created`): a tombstone stamped by a clock that has
   stepped back behind `created_at` is refused. Tombstoning and un-tombstoning bump `entities.updated_at`

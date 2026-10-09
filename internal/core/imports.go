@@ -49,6 +49,17 @@ func (t *Tx) ByImportKey(importKey string) (int64, error) {
 	return id, err
 }
 
+// ImportedEntity is the entity a sender's key names under this transaction's source, with its type and whether it
+// is tombstoned; id 0 when none.
+func (t *Tx) ImportedEntity(importKey string) (id int64, typ string, deleted bool, err error) {
+	err = t.tx.QueryRowContext(t.ctx, `SELECT id, entity_type, deleted_at IS NOT NULL FROM entities WHERE source = ? AND import_key = ?`,
+		t.Source, importKey).Scan(&id, &typ, &deleted)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, "", false, nil
+	}
+	return id, typ, deleted, err
+}
+
 // ImportedPageIdentity reads the stored handle and nullable day for this source's key.
 // found is false when the key has not been applied.
 func (t *Tx) ImportedPageIdentity(importKey string) (title string, day *string, found bool, err error) {

@@ -69,6 +69,10 @@ type ReadingW struct {
 	TakenAt string `json:"taken_at,omitempty"`
 	TZ      string `json:"tz,omitempty"`
 	With    string `json:"with,omitempty"`
+
+	// rejectedWith is the with the owner's rejection took out (withDecisions): never written, but a reading written
+	// with it before the rejection is still the same reading.
+	rejectedWith string
 }
 
 type Kept struct {
@@ -332,6 +336,9 @@ func (w *Workspace) checkStatic(f *Facts, source string, rules *Rules, approved 
 	for i, wr := range f.Writes {
 		q := collapse(wr.Quote)
 		pos[i] = wholeIndex(src, q)
+		if rules.Names.rejects(wr) {
+			continue // the owner rejected its name: the write is skipped, not checked (the guide's "entities.md")
+		}
 		k := wr.kind()
 		switch {
 		case len(wr.Event) > 0 && k == "event":
@@ -496,6 +503,7 @@ type readingIdentity struct {
 	takenAt          string
 	tz               string
 	withKey          string
+	rejectedWithKey  string // the with a rejection took out; a stored reading captured with it still matches
 	value            *float64
 	pos              int
 	canonicalOrdinal int
@@ -533,6 +541,9 @@ func readingIdentities(f *Facts, pos []int) ([]readingIdentity, error) {
 		id := &readingIdentity{index: i, rawMetric: r.Metric, metricKey: text.TitleKey(r.Metric), groupKey: text.TitleKey(r.Metric), day: r.Day, takenAt: r.TakenAt, tz: r.TZ, pos: pos[i], value: &num}
 		if r.With != "" {
 			id.withKey = text.TitleKey(r.With)
+		}
+		if r.rejectedWith != "" {
+			id.rejectedWithKey = text.TitleKey(r.rejectedWith)
 		}
 		ids[i] = id
 		if r.TakenAt != "" {

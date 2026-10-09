@@ -242,8 +242,9 @@ func readingRootMatches(file string, id readingIdentity, root core.ImportedMeasu
 	if !ok || parsed.file != file || !rootMetricNames(root, text.TitleKey(parsed.metric)) || parsed.day != id.day {
 		return false
 	}
-	if !rootMetricNames(root, id.metricKey) || root.Day != id.day || root.TakenAt != id.takenAt || root.TZ != id.tz ||
-		!(id.withKey == "" && root.CapturedWithKey == "" || slices.Contains(root.CapturedWithKeys, id.withKey)) {
+	withMatches := id.withKey == "" && root.CapturedWithKey == "" || slices.Contains(root.CapturedWithKeys, id.withKey) ||
+		id.rejectedWithKey != "" && slices.Contains(root.CapturedWithKeys, id.rejectedWithKey)
+	if !rootMetricNames(root, id.metricKey) || root.Day != id.day || root.TakenAt != id.takenAt || root.TZ != id.tz || !withMatches {
 		return false
 	}
 	if !sameReadingValue(root.Value, id.value) {
@@ -440,7 +441,7 @@ func (w *Workspace) collectTrialReadingIdentityFailures(ctx context.Context, tri
 			if err != nil {
 				return err
 			}
-			f = withAliases(f, rules.Names)
+			f = withDecisions(f, rules.Names)
 			hasReading := false
 			for _, wr := range f.Writes {
 				if wr.Reading != nil {

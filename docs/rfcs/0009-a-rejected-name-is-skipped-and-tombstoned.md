@@ -1,7 +1,7 @@
 # 0009 — A rejected name is skipped, and the row the import wrote under it is tombstoned
 
 - **Date:** 2026-10-09
-- **Status:** draft
+- **Status:** accepted
 - **Answers:** [0053](../issues/0053-a-rejected-name-is-not-removed.md)
 
 ## Problem
@@ -31,7 +31,7 @@ flowchart LR
 - *replay* runs the same step on its target after the facts; the rehearsal lists the rows.
 - *status* says when rows of the import wait for *tombstone rejected*, and counts the rows of the import that are
   tombstoned on the trial while `entities.md` does not reject their names, since a replay writes them again.
-- *import entities* (read only) lists every name: the decision, the state of its row in the database, how many done
+- *list names* (read only) lists every name: the decision, the state of its row in the database, how many done
   files write it, the first file and its quote.
 - Cost: one action, one resource, one replay step. The class `rejected` goes away: a rejected name is not a refusal.
 
@@ -52,9 +52,14 @@ files stay the model's record; a row of another source is never touched.
 Go tests of the importer: a done file whose name is rejected later applies without the name's writes and is no
 mismatch; *tombstone rejected* tombstones only the rows this import wrote and writes nothing a second time; a replay
 into a target that holds the row tombstones it, and into a fresh target never creates it; *status* counts the rows
-to tombstone and the tombstones that a replay does not carry; *import entities* lists each name with its state and
+to tombstone and the tombstones that a replay does not carry; *list names* lists each name with its state and
 evidence; the catalog action runs for an agent. No SQLite behaviour is claimed.
 
 ## Outcome
 
-Filled in when it closes.
+Accepted 2026-10-09: option A, as the owner decided on 2026-10-08 (a rejection after the write is a tombstone that is
+never revived). Implemented by [plan 085](../plans/085-rejected-names-are-skipped-and-tombstoned.md). The rule lives
+in [importing with a model](../guides/importing.md) ("entities.md" and its `name-decision` diagram);
+[D11](../decisions/D11-tombstones.md) says that the import carries a rejected name as a tombstone, and
+[D13](../decisions/D13-migrations-and-freeze.md) that such a tombstone is replayable. A reading keeps the rejected
+`with` in its identity only, so that a reading written with it before the rejection is still found.
