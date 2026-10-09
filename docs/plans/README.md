@@ -8,7 +8,7 @@ Earlier closed plans live in git history (`git log -- docs/plans`). The next pla
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| [090](090-agentic-init.md) | `lifelog agentic-init`: the lifelog folder ready for any agent | P1 | M | issue 0059 | PROPOSED |
+| [090](090-agentic-init.md) | `lifelog agentic-init`: the lifelog folder ready for any agent | P1 | M | issue 0059 | DONE |
 | [089](089-no-import-process.md) | No import process: the owner imports with an agent, through the catalog | P1 | L | RFC 0011; issue 0058 | DONE |
 | [088](088-the-writer-runs-the-facts-pass.md) | The writer runs the facts pass with a local model: `lifelog import run` | P1 | L | RFC 0010; issue 0057 | DONE |
 | [087](087-prepared-quantities-rounded-to-whole-units.md) | The owner rounds chosen prepared quantities to whole units | P2 | S | issue 0055 | DONE |

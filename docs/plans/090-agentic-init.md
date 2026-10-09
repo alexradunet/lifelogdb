@@ -8,7 +8,7 @@
 - **Date / baseline:** 2026-10-09, `a143575` (master).
 - **Priority:** P1. **Effort:** M. **Risk:** LOW: a new command that writes only its own files, and a default
   database path that applies only when `--db` and `LIFELOG_DB` are absent; none for the schema.
-- **Status:** PROPOSED.
+- **Status:** DONE.
 - **Resolves:** issue [0059](../issues/0059-an-agent-in-the-lifelog-folder-knows-nothing.md). No RFC: the contract
   in `docs/` does not change.
 

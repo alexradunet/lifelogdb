@@ -24,8 +24,8 @@ The database it writes is specified independently of it, so another program — 
 
 ```
 go generate ./... && go build -o lifelog ./cmd/lifelog   # Go >= 1.27, no cgo
-lifelog init --db ~/life/life.db
-export LIFELOG_DB=~/life/life.db           # or --db on any command
+lifelog init                               # life.db beside the program; --db PATH or $LIFELOG_DB names another
+lifelog agentic-init                       # AGENTS.md, skills and MCP configs here, for a coding agent opened here
 
 lifelog capture "Ran 5k with [[Sam]] #running" --mood 4
 lifelog day --human
@@ -41,13 +41,14 @@ lifelog file ~/picks/2019-06 --dry-run --human   # the few photos chosen for som
 lifelog file ~/picks/2019-06 --human             # keep them: their days linked, the ones near no place grouped
 ```
 
-An import is done by a program that loads rows itself ([imports](docs/contract/imports.md)), or by a local agent
+An import is done by a program that loads rows itself ([imports](docs/contract/imports.md)), or by a coding agent
 with the owner, in a conversation: the agent reads a source with its own tools and writes through the catalog's MCP
 tools, and the owner says yes or no to each person, place and link ([plan 089](docs/plans/089-no-import-process.md)).
+`lifelog agentic-init` prepares the folder for it ([plan 090](docs/plans/090-agentic-init.md)); then open Claude
+Code, Codex, OpenCode or Pi in the folder.
 
 ```
 lifelog snapshot                                   # the owner, before an import session
-lifelog mcp --agent pi                             # the agent's tools; its rows are written as agent:pi
 lifelog readings "Ferritin results" Ferritin       # readings of a registered metric from the table of a page
 ```
 
@@ -105,6 +106,15 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **One transaction type.** Every write is a method on `core.Tx`; an operation alone is one transaction, and an
   operation that writes several rows (`readings-from-table`) runs several of the same methods in one. Nothing writes
   around them.
+- **The folder of the program** ([plan 090](docs/plans/090-agentic-init.md)). Without `--db`, `LIFELOG_DB` or
+  `--url`, a command uses the `life.db` beside the executable, and `lifelog init` with no path makes it there; a
+  missing file is still refused. `lifelog agentic-init [--force]` writes into that folder, from templates embedded
+  in the binary: `AGENTS.md` (the folder, the modes, the tools, the rules and a privacy note), a `CLAUDE.md` that
+  imports it, three skills in `.agents/skills/` and `.claude/skills/`, and the MCP config of Claude Code
+  (`.mcp.json`), Codex (`.codex/config.toml`), OpenCode (`opencode.json`) and Pi (`.pi/mcp.json`), each starting
+  `lifelog mcp --agent NAME` on that `life.db` with absolute paths. A file with another text is kept unless
+  `--force`; run it again after the folder moves. Like `init`, it is a setup command of the machine, not a catalog
+  action: it writes files beside the program.
 - **Owner-only actions.** `register-metric`, `relocate-reading` and `snapshot` are refused to an `agent:*` writer and
   are never MCP tools. An agent that imports with the owner asks for them in the conversation.
 - **Renames select a preferred name on the same identity**, retaining direct aliases as
@@ -184,6 +194,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 | `internal/api` | the action catalog, the routes, Siren and HTML; the local and the `--public` network guards |
 | `internal/client` | the hypermedia client (in-process or remote) |
 | `internal/mcp` | the catalog as MCP tools |
+| `internal/agentic` | `lifelog agentic-init`: the texts and MCP configs for a coding agent opened in the folder of the program |
 | `tools/copyschema` | `go generate`'s copy of `docs/schema/schema.sql` into `internal/db` |
 | `tests` | the validation suites of the docs ([tests/README.md](tests/README.md)) |
 

@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"lifelog/internal/agentic"
 	"lifelog/internal/api"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
@@ -31,7 +32,10 @@ const version = "0.1.0"
 
 const usage = `lifelog — the writer of a life.db
 
-  lifelog init                        create a new life.db from docs/schema/schema.sql
+  lifelog init [PATH]                 create a new life.db from docs/schema/schema.sql (default: beside this program)
+  lifelog agentic-init [--force]      make this program's folder ready for a coding agent: AGENTS.md, CLAUDE.md,
+                                      skills, and the MCP config of Claude Code, Codex, OpenCode and Pi; a file
+                                      with another text is kept unless --force
   lifelog serve [--addr 127.0.0.1:7777] [--snapshots DIR]   the API: Siren JSON, or HTML in a browser; this machine only
   lifelog serve --public [--addr 0.0.0.0:7777] [--allow-origin O]... [--tls-cert F --tls-key F]
                                       the API for other devices: every request needs the owner's token
@@ -71,7 +75,7 @@ docs/plans/089-no-import-process.md). One action helps it:
                                       others are reported; a second run writes nothing
 
 Global flags, anywhere on the line:
-  --db PATH      the life.db (default $LIFELOG_DB)
+  --db PATH      the life.db (default $LIFELOG_DB, else the life.db beside this program)
   --url URL      talk to a running "lifelog serve" instead of opening the file ($LIFELOG_TOKEN if it is --public)
   --source NAME  the writer recorded on new rows (default cli; lifelog_meta.source)
   --human        print a readable summary instead of JSON
@@ -81,7 +85,7 @@ type opts struct {
 	db, url, source, addr, agent, mood, day, from, to, title, text, preview, mime, at, radius, column string
 	tokenFile, tlsCert, tlsKey, snapshots                                                             string
 	allowOrigins                                                                                      []string
-	human, dryRun, dbExplicit, addrExplicit, public                                                   bool
+	human, dryRun, dbExplicit, addrExplicit, public, force                                            bool
 	args                                                                                              []string
 }
 
@@ -104,6 +108,10 @@ func parse(argv []string) (opts, error) {
 		}
 		if a == "--public" {
 			o.public = true
+			continue
+		}
+		if a == "--force" {
+			o.force = true
 			continue
 		}
 		if a == "--" {
@@ -204,12 +212,18 @@ func runContext(ctx context.Context, o opts) error {
 			return err
 		}
 	}
+	if cmd == "agentic-init" {
+		return agenticInit(o)
+	}
 	if cmd == "init" {
 		if o.db == "" && len(args) == 1 {
 			o.db = args[0]
 		}
 		if o.db == "" {
-			return errors.New("init needs --db PATH")
+			var err error
+			if o.db, err = besideExecutable("life.db"); err != nil {
+				return err
+			}
 		}
 		if err := db.Init(o.db); err != nil {
 			return err
@@ -250,7 +264,10 @@ func runContext(ctx context.Context, o opts) error {
 		}
 	} else {
 		if o.db == "" {
-			return errors.New("no database: pass --db PATH or set LIFELOG_DB")
+			var err error
+			if o.db, err = besideExecutable("life.db"); err != nil {
+				return err
+			}
 		}
 		d, err := db.Open(o.db)
 		if err != nil {
@@ -900,3 +917,52 @@ func human(e *api.Entity) {
 }
 
 func indent(s string) string { return "    " + strings.ReplaceAll(s, "\n", "\n    ") }
+
+// besideExecutable is a file in the folder of the running program, where life.db lives when no --db or LIFELOG_DB
+// names another (docs/plans/090-agentic-init.md).
+func besideExecutable(name string) (string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("the folder of this program: %w", err)
+	}
+	if real, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = real
+	}
+	return filepath.Join(filepath.Dir(exe), name), nil
+}
+
+// agenticInit is `lifelog agentic-init`: the folder of this program made ready for a coding agent opened in it.
+func agenticInit(o opts) error {
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("the path of this program: %w", err)
+	}
+	if real, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = real
+	}
+	dbPath := o.db
+	if dbPath == "" {
+		dbPath = filepath.Join(filepath.Dir(exe), "life.db")
+	}
+	if dbPath, err = filepath.Abs(dbPath); err != nil {
+		return err
+	}
+	dir := filepath.Dir(exe)
+	res, err := agentic.Init(agentic.Paths{Dir: dir, Exe: exe, DB: dbPath}, o.force)
+	for _, r := range res {
+		fmt.Printf("%-9s %s\n", r.State, filepath.Join(dir, filepath.FromSlash(r.Path)))
+	}
+	if err != nil {
+		return err
+	}
+	for _, r := range res {
+		if r.State == agentic.Kept {
+			fmt.Println("a kept file has another text; lifelog agentic-init --force replaces it")
+			break
+		}
+	}
+	if _, err := os.Stat(dbPath); err != nil {
+		fmt.Printf("no life.db yet: lifelog init makes %s\n", dbPath)
+	}
+	return nil
+}

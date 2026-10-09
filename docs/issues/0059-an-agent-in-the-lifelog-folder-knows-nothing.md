@@ -1,7 +1,7 @@
 # 0059 — An agent opened in the lifelog folder knows nothing about it
 
 - **Date:** 2026-10-09
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the owner's first imports with a local agent (Pi), the day the import process was removed (plan 089)
 
 ## What happened
@@ -36,4 +36,7 @@ database beside itself.
 
 ## Resolution
 
-Filled in when it closes.
+Resolved by [plan 090](../plans/090-agentic-init.md): `lifelog agentic-init` writes `AGENTS.md`, a `CLAUDE.md` that
+imports it, three skills in `.agents/skills/` and `.claude/skills/`, and the MCP config of Claude Code, Codex,
+OpenCode and Pi into the folder of the executable; a file with another text is kept unless `--force`. Without `--db`,
+`LIFELOG_DB` or `--url`, lifelog uses the `life.db` beside the executable, and `lifelog init` makes it there.
