@@ -4,10 +4,11 @@ A plan is a dated record ([how a change happens](../process.md)): a change large
 written as a self-contained brief with done criteria. It cites the docs as they were at the commit it names. One file
 per plan, `NNN-short-slug.md`, numbered on from the last.
 
-Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **089**.
+Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **090**.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
+| [089](089-no-import-process.md) | No import process: the owner imports with an agent, through the catalog | P1 | L | RFC 0011; issue 0058 | PROPOSED |
 | [088](088-the-writer-runs-the-facts-pass.md) | The writer runs the facts pass with a local model: `lifelog import run` | P1 | L | RFC 0010; issue 0057 | DONE |
 | [087](087-prepared-quantities-rounded-to-whole-units.md) | The owner rounds chosen prepared quantities to whole units | P2 | S | issue 0055 | DONE |
 | [086](086-rules-mark-the-ledger-and-status-reads-it-once.md) | The rules mark the ledger, and status reads it once | P2 | M | issue 0054 | DONE |

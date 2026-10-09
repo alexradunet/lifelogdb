@@ -4,11 +4,12 @@ An issue records an incident from real use — a failed import, a bug in the wri
 data could not answer, a rule that is ambiguous or untestable. It is the evidence a schema change needs
 ([how a change happens](../process.md)). One file per incident, named `NNNN-short-slug.md`, written from the
 [template](template.md), numbered on from the last: issues up to 0010 are closed and live in git history
-(`git log -- docs/issues`). Issues 0011–0057 are listed below; the next one is **0058**. Close an issue with its resolution and status, retaining the dated incident as
+(`git log -- docs/issues`). Issues 0011–0058 are listed below; the next one is **0059**. Close an issue with its resolution and status, retaining the dated incident as
 [the process](../process.md) requires. Earlier closed records remain available in git history.
 
 | id | title | status |
 |---|---|---|
+| [0058](0058-the-import-machine-outweighs-the-backfill.md) | The import machinery is larger than the life log, for a backfill done once | open |
 | [0057](0057-the-import-loop-lives-outside-the-writer.md) | The import loop lives in scripts outside the writer, and it fails where no test sees it | resolved |
 | [0056](0056-proposed-names-fall-outside-the-table.md) | Proposed names fall outside the table of entities.md, and are proposed again | resolved |
 | [0055](0055-prepared-values-keep-every-decimal.md) | A prepared source writes every decimal of a value, and the owner cannot round it | resolved |

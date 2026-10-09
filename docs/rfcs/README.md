@@ -17,5 +17,6 @@ becomes a [decision](../decisions/README.md). One file per proposal, named `NNNN
 | [0008](0008-owner-decides-names-in-imports.md) | The owner decides each new name of an import in one stamped list | accepted | [0052](../issues/0052-names-are-written-on-the-models-word.md) | [D11](../decisions/D11-tombstones.md); the guide's "entities.md" |
 | [0009](0009-a-rejected-name-is-skipped-and-tombstoned.md) | A rejected name is skipped, and the row the import wrote under it is tombstoned | accepted | [0053](../issues/0053-a-rejected-name-is-not-removed.md) | [D11](../decisions/D11-tombstones.md), [D13](../decisions/D13-migrations-and-freeze.md); the guide's "entities.md" |
 | [0010](0010-the-writer-drives-a-local-model.md) | The writer drives a local model for the facts pass | accepted | [0057](../issues/0057-the-import-loop-lives-outside-the-writer.md) | the non-goals row on AI generation; the guide's "Three parties" |
+| [0011](0011-no-import-process.md) | No import process: the owner imports with an agent, through the catalog | draft | [0058](../issues/0058-the-import-machine-outweighs-the-backfill.md) | pending |
 
 Status values: draft | accepted | rejected (with a one-line reason) | withdrawn.
