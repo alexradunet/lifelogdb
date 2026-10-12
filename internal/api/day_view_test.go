@@ -89,3 +89,56 @@ func captureForm(t *testing.T, body, action string) string {
 	t.Fatalf("no form posts to %s", action)
 	return ""
 }
+
+// TestTheDayIsALeafAndItsMargin (docs/plans/095-the-leaf-and-its-margin.md): the head of a day is a calendar leaf
+// that opens its month, beside the weekday, the week and "today"; the previous and next day keep their whole name for
+// a reader; the sheet (the journal, then Capture) comes before the margin (Due first) in the source, so a narrow
+// screen shows the writing first; Record a reading is in the margin's Readings, its optional fields folded.
+// 14 May 2031 is a Wednesday in ISO week 20 (1 January 2031 is a Wednesday, so week 1 starts on 30 December 2030).
+func TestTheDayIsALeafAndItsMargin(t *testing.T) {
+	_, h := freshOn(t, fixedToday)
+	body := browse(t, h, "/days/"+fixedToday)
+	for _, want := range []string{
+		`<a class="leaf" href="/months/2031-05" aria-label="May 2031, the calendar of the month"><span class="leaf-month">May 2031</span><span class="leaf-day">14</span></a>`,
+		`<h1>Wednesday</h1>`,
+		`<span class="date">week 20</span><span class="tag open">today</span>`,
+		`href="/days/2031-05-13" rel="prev" aria-label="Previous day, Tue 13 May"><span aria-hidden="true">‹</span><span class="step-day">Tue 13 May</span></a>`,
+		`href="/days/2031-05-15" rel="next" aria-label="Next day, Thu 15 May"><span class="step-day">Thu 15 May</span><span aria-hidden="true">›</span></a>`,
+		`<p class="empty">Nothing written today yet.</p>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the day lacks %s", want)
+		}
+	}
+	order := []string{`<div class="sheet">`, `<section class="journal"`, `<section class="capture"`, `<div class="margin">`,
+		`<section class="group" aria-label="Due">`, `<section class="group" aria-label="Readings">`}
+	at, prev := -1, "the start"
+	for _, mark := range order {
+		i := strings.Index(body, mark)
+		if i <= at {
+			t.Fatalf("%s is not after %s in the source (at %d, after %d)", mark, prev, i, at)
+		}
+		at, prev = i, mark
+	}
+	readings := body[strings.Index(body, `aria-label="Readings"`):]
+	readings = readings[:strings.Index(readings, "</section>")]
+	more := regexp.MustCompile(`(?s)<details class="more-fields"><summary>4 more fields</summary>(.*?)</details>`).FindStringSubmatch(readings)
+	if !strings.Contains(readings, `<summary class="button">Record a reading</summary>`) || more == nil ||
+		strings.Count(more[1], "<label>") != 4 || !strings.Contains(more[1], `name="taken_at"`) {
+		t.Errorf("Record a reading is not in the Readings, with 4 folded fields:\n%s", readings)
+	}
+	if !strings.Contains(readings, `<p class="empty">No readings on this day.</p>`) {
+		t.Errorf("a day with no reading does not say so:\n%s", readings)
+	}
+
+	past := browse(t, h, "/days/"+dayOf(-3))
+	for _, want := range []string{`<span class="leaf-day">11</span>`, `<h1>Sunday</h1>`, `<a href="/days/today">Go to today</a>`,
+		`<p class="empty">Nothing written on this day.</p>`, `<h2>Add to Sun 11 May</h2>`} {
+		if !strings.Contains(past, want) {
+			t.Errorf("a past day lacks %s", want)
+		}
+	}
+	if strings.Contains(past, `<span class="tag open">today</span>`) {
+		t.Error("a past day says today")
+	}
+}

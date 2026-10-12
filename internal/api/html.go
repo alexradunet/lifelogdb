@@ -75,6 +75,13 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 		}
 		return day
 	},
+	"dict": dict,
+	"monthOf": func(day string) string { // the band of the calendar leaf: "Oct 2026"
+		if t, err := time.Parse(time.DateOnly, day); err == nil {
+			return t.Format("Jan 2006")
+		}
+		return ""
+	},
 	"num":       num,
 	"pathesc":   url.PathEscape,
 	"icon":      icon,
@@ -85,6 +92,22 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 	"alert":     alertOf,
 	"capLater":  capLater,
 }).ParseFS(views, "html/*.html"))
+
+// dict is the arguments of a sub-template that needs more than one value: name/value pairs, each name a string.
+func dict(kv ...any) (map[string]any, error) {
+	if len(kv)%2 != 0 {
+		return nil, fmt.Errorf("dict: %d arguments, want name/value pairs", len(kv))
+	}
+	m := make(map[string]any, len(kv)/2)
+	for i := 0; i < len(kv); i += 2 {
+		k, ok := kv[i].(string)
+		if !ok {
+			return nil, fmt.Errorf("dict: name %v is not a string", kv[i])
+		}
+		m[k] = kv[i+1]
+	}
+	return m, nil
+}
 
 // num shows a property's value. A number is written in full, never with an exponent: the JSON client reads every
 // number as a float64, and an id of a million must still make the link /pages/1000000, not /pages/1e+06.

@@ -212,7 +212,7 @@ td form.tiny+form.tiny{margin-left:var(--space-1)}
 /* An occurrence of a task in a list: what and when on the left, its Done, Skip or Reopen on the right. A done or
    skipped one is quiet. */
 .occ{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--space-1) var(--space-3)}
-.occ>div:first-child{flex:1 1 16rem; min-width:0}
+.occ>div:first-child{flex:1 1 11rem; min-width:0}
 .occ>div:first-child>a{color:var(--ink); font-weight:700}
 .occ-facts{display:flex; flex-wrap:wrap; gap:0 var(--space-3); margin-top:2px; font-size:13px; line-height:19px; color:var(--muted)}
 .occ-facts .when{font-family:var(--mono); font-size:12px; font-variant-numeric:tabular-nums}
@@ -320,6 +320,8 @@ form>.editor{align-self:stretch}
 @media (min-width:1200px){
   .editor{display:grid; grid-template-columns:1fr 1fr; gap:var(--space-4); align-items:start}
   .editor .preview{max-height:80vh; overflow:auto; margin:0}
+  .sheet-margin .editor{display:block} /* a sheet beside its margin is too narrow for two columns */
+  .sheet-margin .editor .preview{margin:9px 0 0}
 }
 footer .keys{color:var(--muted)}
 
@@ -329,6 +331,7 @@ details.action{border:0; padding:0; background:none; position:relative}
 details.action>summary{list-style:none; cursor:pointer; font-weight:400}
 details.action>summary::-webkit-details-marker{display:none}
 details.action>summary::marker{content:""}
+details.action>summary::before{content:none}
 details.action[open]>summary{margin:0; border-color:var(--accent); color:var(--accent)}
 .action-form{display:flex; flex-direction:column; gap:var(--space-3); margin-top:var(--space-2); padding:var(--space-4);
   background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-lg)}
@@ -371,7 +374,7 @@ fieldset.segmented input:focus-visible+span{outline:2px solid var(--focus); outl
 
 /* Readings: a tile a reading, its metric and its value. */
 .readings{display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px}
-.reading-tile{display:flex; flex-direction:column; gap:2px; padding:10px var(--space-3); background:var(--ground); border-radius:var(--radius-md)}
+.reading-tile{display:flex; flex-direction:column; gap:2px; padding:10px var(--space-3); background:var(--surface); border:1px solid var(--line-soft); border-radius:var(--radius-md)}
 .reading-tile .name{font-size:13px; line-height:19px; color:var(--muted)}
 .reading-tile a.reading{font:400 22px/28px var(--mono); font-variant-numeric:tabular-nums; color:var(--ink)}
 .page-head .sub{margin-top:var(--space-1)}
@@ -416,3 +419,58 @@ dialog.palette li[aria-selected=true] .kind{color:var(--accent)}
 dialog.palette li.none{color:var(--muted); cursor:default}
 dialog.palette>.meta{flex:none; margin:0; padding:var(--space-2) var(--space-4); border-top:1px solid var(--line-soft)}
 @media (max-width:899px){dialog.palette{width:calc(100vw - 1rem); margin:var(--space-2) auto auto}}
+
+/* The leaf and its margin (docs/plans/095-the-leaf-and-its-margin.md). The head of a day, and of Home, is a calendar
+   leaf: the month on a band of ink blue, the day's number large in mono; it opens the month. */
+.day-head{align-items:center}
+.day-title{display:flex; align-items:center; gap:var(--space-4); min-width:0}
+.leaf{flex:none; display:flex; flex-direction:column; width:84px; overflow:hidden; text-align:center; color:var(--ink);
+  background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-md); box-shadow:var(--shadow-current)}
+.leaf:hover{color:var(--ink); border-color:var(--line-strong); text-decoration:none}
+.leaf-month{padding:3px 0; font:500 12px/16px var(--mono); background:var(--accent); color:var(--on-accent)}
+.leaf-day{padding:2px 0 6px; font:500 40px/48px var(--mono); font-variant-numeric:tabular-nums; letter-spacing:-.02em}
+.day-head h1 .mood{margin-left:var(--space-1)}
+.day-head .sub{margin-top:var(--space-1)}
+.day-head .sub .tag{align-self:center}
+.button.step{gap:var(--space-2)}
+.button.step>[aria-hidden]{font:400 20px/1 var(--sans)}
+
+/* The sheet holds what the page is for, on the surface; the margin beside it holds what the page asks of the owner,
+   on the ground, with no card. One column when the main column is narrow, the margin after the sheet. */
+.sheet-margin{display:grid; grid-template-columns:minmax(0,1fr) minmax(280px,360px); gap:var(--space-6) var(--space-8); align-items:start}
+.sheet{display:flex; flex-direction:column; gap:var(--space-6); min-width:0; padding:var(--space-6) var(--space-8); background:var(--surface);
+  border:1px solid var(--line); border-radius:var(--radius-lg)}
+.sheet>*+*{padding-top:var(--space-6); border-top:1px solid var(--line-soft)}
+.sheet>details{padding-top:var(--space-3)}
+.sheet>details:not([open])+*{margin-top:calc(-1 * var(--space-3))}
+.sheet h2{font-size:15px; line-height:22px}
+.sheet .panel-head{margin-bottom:var(--space-3)}
+.journal .panel-head h2{color:var(--muted); font-weight:400}
+.journal-text{max-width:var(--measure-read); font-size:18px; line-height:30px}
+.journal-text>*+*{margin-top:var(--space-4)}
+.capture>h2{margin-bottom:var(--space-3)}
+.empty{color:var(--muted); font-size:15px; line-height:22px}
+.margin{display:flex; flex-direction:column; gap:var(--space-8); min-width:0}
+.margin .group{gap:var(--space-2)}
+.margin .panel-head{padding-bottom:var(--space-1)}
+.margin ul.plain>li{padding:var(--space-3) 0; border-top:1px solid var(--line); border-bottom:0}
+.margin ul.plain>li:first-child{border-top:0; padding-top:var(--space-1)}
+.margin .occ{align-items:flex-start}
+.margin .habit{padding:var(--space-3) 0}
+.margin .habit+.habit{border-top:1px solid var(--line)}
+.margin .readings{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+.margin .group>details.action{margin-top:var(--space-2)}
+.also ul.plain>li{padding:var(--space-2) 0}
+@media (max-width:1179px){.sheet-margin{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:899px){
+  .day-head{align-items:flex-start}
+  .day-title{gap:var(--space-3)}
+  .leaf{width:64px}
+  .leaf-day{font-size:30px; line-height:38px}
+  .day-head .tools{width:100%}
+  .button.step{width:var(--control); padding:0}
+  .button.step .step-day{display:none}
+  .sheet{padding:var(--space-5) var(--space-4); gap:var(--space-5)}
+  .sheet>*+*{padding-top:var(--space-5)}
+  .journal-text{font-size:17px; line-height:28px}
+}

@@ -1,69 +1,81 @@
-{{/* The day (docs/plans/092-the-app-shell.md): the page header with the day's mood, its pager and its actions with
-     fields; then two columns. The first is what the owner writes and reads: Capture, the journal, the pages written
-     this day. The second is what the day asks of the owner: Due, the habits, the readings, the places. */}}
+{{/* The day (docs/plans/095-the-leaf-and-its-margin.md): a calendar leaf heads it, with the weekday, the mood, the
+     previous and next day and Go to a day. Then the sheet and its margin. The sheet is what the owner writes and
+     reads: the journal, Capture as its next part, the editor and the pages written this day. The margin is what the
+     day asks of the owner: Due, the habits, the readings (with Record a reading) and the places. On a narrow screen
+     the margin comes after the sheet. */}}
 {{define "day"}}{{template "head" .}}
 {{$d := .Props}}{{$today := eq .Title $d.today}}
-<header class="page-head">
-<div class="what"><span class="date">{{.Title}} · week {{week .Title}}{{if $today}} · today{{end}}</span>
-<h1>{{weekday .Title}}{{template "mood" $d.mood}}</h1>
-<p class="sub">{{if not $today}}<a href="/days/today">Today</a>{{end}}{{with .Link "month"}}<a href="{{.}}">{{$.LinkTitle "month"}}</a>{{end}}<a href="/habits?day={{.Title}}">The habits of this day</a>{{with .Link "page"}}<a href="{{.}}">The day page</a>{{end}}</p></div>
+<header class="page-head day-head">
+<div class="day-title">{{template "leaf" .Title}}
+<div class="what"><h1>{{weekday .Title}}{{template "mood" $d.mood}}</h1>
+<p class="sub"><span class="date">week {{week .Title}}</span>{{if $today}}<span class="tag open">today</span>{{else}}<a href="/days/today">Go to today</a>{{end}}<a href="/habits?day={{.Title}}">The habits of this day</a></p></div></div>
 <div class="tools">
-<a class="button step" href="{{.Link "prev"}}" rel="prev">← {{shortDay (addDays .Title -1)}}</a>
-<a class="button step" href="{{.Link "next"}}" rel="next">{{shortDay (addDays .Title 1)}} →</a>
-{{template "boxed" (form (.Action "record") "button" "Record a reading")}}
+{{template "step" (dict "href" (.Link "prev") "rel" "prev" "day" (addDays .Title -1))}}
+{{template "step" (dict "href" (.Link "next") "rel" "next" "day" (addDays .Title 1))}}
 {{template "boxed" (form (.Action "open-day") "button" "Go to a day")}}
 </div>
 </header>
 
-<div class="columns">
-<div class="stack">
-{{with .Action "capture"}}<section class="panel capture" aria-label="Capture">
+<div class="sheet-margin">
+<div class="sheet">
+<section class="journal" aria-label="Journal">
+<div class="panel-head"><h2>Journal</h2>{{with .Link "page"}}<a href="{{.}}">The day page</a>{{end}}</div>
+{{$written := false}}{{range $d.view}}{{if eq .what "day page"}}{{$written = true}}<div class="prose journal-text">{{markdown .detail}}</div>{{end}}{{end}}
+{{if not $written}}<p class="empty">{{if $today}}Nothing written today yet.{{else}}Nothing written on this day.{{end}}</p>{{end}}
+</section>
+
+{{with .Action "capture"}}<section class="capture" aria-label="Capture">
 <h2>{{if $today}}Add to today{{else}}Add to {{shortDay $.Title}}{{end}}</h2>
 {{template "form" (form . "autofocus" "text" "button" "Add" "back" $.Here)}}
 </section>{{end}}
 
-<section class="section" aria-label="Journal">
-<div class="panel-head"><h2>Journal</h2>{{with .Link "page"}}<a href="{{.}}">The day page</a>{{end}}</div>
-{{range $d.view}}{{if eq .what "day page"}}<article class="prose">{{markdown .detail}}</article>{{end}}{{end}}
 {{with form (.Action "save-body") "button" "Save"}}<details><summary>Edit the day page</summary>
 <small class="desc">CommonMark. [[Title]] links a page and #tag a tag page. Nothing is saved until the version you read is still the current one.</small>
-{{template "form" .}}</details>{{else}}<p><small>Nothing written on this day yet.</small></p>{{end}}
-</section>
+{{template "form" .}}</details>{{end}}
 
 {{$pages := false}}{{range $d.view}}{{if eq .what "page" "page (edited)"}}{{$pages = true}}{{end}}{{end}}
-{{if $pages}}<section class="section" aria-label="Pages written this day"><h2>Pages written this day</h2>
+{{if $pages}}<section class="also" aria-label="Pages written this day"><h2>Pages written this day</h2>
 <ul class="plain">{{range $d.view}}{{if eq .what "page" "page (edited)"}}<li><a href="{{title .detail}}">{{.detail}}</a>{{if ne .what "page"}} <span class="badge">edited</span>{{end}}</li>{{end}}{{end}}</ul></section>{{end}}
 </div>
 
-<div class="stack">
-{{if or $d.due $today}}<section class="panel flush" aria-label="Due">
+<div class="margin">
+{{if or $d.due $today}}<section class="group" aria-label="Due">
 <div class="panel-head"><h2>Due</h2><a href="/deadlines">The weeks ahead</a></div>
-{{with $d.due}}<ul class="plain due">{{range .}}{{template "occ" ($.Occ . 0)}}{{end}}</ul>{{else}}<p><small>Nothing is due today or overdue.</small></p>{{end}}
+{{with $d.due}}<ul class="plain due">{{range .}}{{template "occ" ($.Occ . 0)}}{{end}}</ul>{{else}}<p class="empty">Nothing is due today or overdue.</p>{{end}}
 </section>{{end}}
 
 {{template "checkins" .}}
 
-{{with $d.readings}}<section class="panel" aria-label="Readings">
+{{if or $d.readings (.Action "record")}}<section class="group" aria-label="Readings">
 <div class="panel-head"><h2>Readings</h2><a href="/metrics">Metrics</a></div>
 {{with $.ReadingTiles}}<div class="readings">{{range .}}<div class="reading-tile"><a class="name" href="/metrics/{{pathesc .Metric}}">{{.Metric}}</a>
 <a class="reading" href="/measurements/{{.ID}}">{{.Value}}{{with .Unit}} <span class="unit">{{.}}</span>{{end}}</a>
 {{.Line}}{{with .More}}<span class="meta">and {{.}} more this day</span>{{end}}</div>{{end}}</div>{{end}}
 {{with $.SessionReadings}}<ul class="plain">{{range .}}<li><a href="/measurements/{{num .id}}">{{.metric}} {{num .value}}</a> <span class="meta">session {{num .session_id}}{{with .taken_at}} · {{$.When .}}{{end}}</span></li>{{end}}</ul>{{end}}
+{{if not $d.readings}}<p class="empty">No readings on this day.</p>{{end}}
+{{template "boxed" (form (.Action "record") "button" "Record a reading" "more" "session_id,taken_at,tz,import_key")}}
 </section>{{end}}
 
 {{$at := false}}{{range $d.view}}{{if eq .what "at"}}{{$at = true}}{{end}}{{end}}
-{{if $at}}<section class="panel" aria-label="Where"><h2>Where</h2>
+{{if $at}}<section class="group" aria-label="Where"><h2>Where</h2>
 <ul class="plain">{{range $d.view}}{{if eq .what "at"}}<li><a href="{{title .detail}}">{{.detail}}</a></li>{{end}}{{end}}</ul></section>{{end}}
 </div>
 </div>
 {{template "foot" .}}{{end}}
 
+{{/* leaf is the calendar leaf of a day: the month on its band, the day's number under it; it opens that month */}}
+{{define "leaf"}}<a class="leaf" href="/months/{{slice . 0 7}}" aria-label="{{monthOf .}}, the calendar of the month"><span class="leaf-month">{{monthOf .}}</span><span class="leaf-day">{{dayOfMonth .}}</span></a>{{end}}
+
+{{/* step is the previous or next day: its day in words, which a phone shortens to the arrow (the link keeps the
+     whole name) */}}
+{{define "step"}}<a class="button step" href="{{.href}}" rel="{{.rel}}" aria-label="{{if eq .rel "prev"}}Previous day, {{else}}Next day, {{end}}{{shortDay .day}}">{{if eq .rel "prev"}}<span aria-hidden="true">‹</span><span class="step-day">{{shortDay .day}}</span>{{else}}<span class="step-day">{{shortDay .day}}</span><span aria-hidden="true">›</span>{{end}}</a>{{end}}
+
 {{/* mood is a day's mood beside its heading: each current reading, in the order it was recorded */}}
 {{define "mood"}}{{with .}} <span class="mood" title="Mood">mood {{range $i, $m := .}}{{if $i}}, {{end}}{{num $m}}{{end}}</span>{{end}}{{end}}
 
-{{/* checkins are the habits of the entity's day in a panel, each with its state and the Done and Not done of its
-     check-in: a day and the root carry both the habits and their check-in actions */}}
-{{define "checkins"}}{{with .Props.habits}}<section class="panel" aria-label="Habits">
+{{/* checkins are the habits of the entity's day in the margin, each with its state, its last 14 days and the Done
+     and Not done of its check-in: a day and the root carry both the habits and their check-in actions */}}
+{{define "checkins"}}{{with .Props.habits}}<section class="group" aria-label="Habits">
 <div class="panel-head"><h2>Habits</h2><a href="/habits">Every habit</a></div>
 {{range .}}{{$href := printf "/metrics/%s" (pathesc .metric)}}{{$name := .metric}}<div class="habit">
 <div class="habit-what"><a href="{{$href}}">{{.metric}}</a> <span class="tag{{if eq .state "done"}} done{{else if or (eq .state "not done") (eq .state "invalid")}} notdone{{end}}">{{.state}}</span>

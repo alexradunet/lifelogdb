@@ -1,33 +1,34 @@
-{{/* Home is today at a glance (docs/plans/092-the-app-shell.md): Capture and the last entries; what is due and the
-     habits; then the closed sections New and Owner. */}}
+{{/* Home is today at a glance (docs/plans/095-the-leaf-and-its-margin.md): the calendar leaf of today; the sheet
+     with Capture and the last entries; the margin with Due and the habits; then the closed sections New and Owner,
+     their long forms with their optional fields folded. */}}
 {{define "root"}}{{template "head" .}}
 {{$p := .Props}}
-<header class="page-head">
-<div class="what"><span class="date">{{$p.today}} · week {{week $p.today}}</span>
-<h1>{{weekday $p.today}}</h1>
-<p class="sub"><a href="/days/{{$p.today}}">Today's page</a><a href="/deadlines">What is due</a><a href="/tasks">Tasks</a></p></div>
+<header class="page-head day-head">
+<div class="day-title">{{template "leaf" $p.today}}
+<div class="what"><h1>{{weekday $p.today}}</h1>
+<p class="sub"><span class="date">week {{week $p.today}}</span><a href="/days/{{$p.today}}">Today's page</a><a href="/deadlines">What is due</a><a href="/tasks">Tasks</a></p></div></div>
 <div class="tools">
 {{template "boxed" (form (.Action "find") "button" "Open a page")}}
 {{template "boxed" (form (.Action "open-day") "button" "Go to a day")}}
 </div>
 </header>
 
-<div class="columns">
-<div class="stack">
-{{with .Action "capture"}}<section class="panel capture" aria-label="Capture"><h2>Add to today</h2>
+<div class="sheet-margin">
+<div class="sheet">
+{{with .Action "capture"}}<section class="capture first" aria-label="Capture"><h2>Add to today</h2>
 {{template "form" (form . "button" "Add" "autofocus" "text" "back" $.Here)}}</section>{{end}}
 
-{{with $p.recent}}<section class="section" aria-label="Last entries">
+{{with $p.recent}}<section class="also" aria-label="Last entries">
 <div class="panel-head"><h2>Last entries</h2><a href="/days">Every day</a></div>
 <div>{{range .}}<a class="entry" href="/days/{{.day}}"><span class="date">{{shortDay .day}}</span><span class="first">{{.first_line}}</span><span class="meta">{{with .mood}}mood {{range $i, $m := .}}{{if $i}}, {{end}}{{num $m}}{{end}}{{end}}</span></a>
 {{end}}</div></section>{{end}}
 </div>
 
-<div class="stack">
-<section class="panel flush" aria-label="Due">
+<div class="margin">
+<section class="group" aria-label="Due">
 <div class="panel-head"><h2>Due</h2><a href="/deadlines">The weeks ahead</a></div>
 {{with $p.due}}<ul class="plain due">{{range .}}{{template "occ" ($.Occ . 0)}}{{end}}</ul>
-{{else}}<p><small>Nothing is due today or overdue.</small></p>{{end}}
+{{else}}<p class="empty">Nothing is due today or overdue.</p>{{end}}
 </section>
 {{template "checkins" .}}
 </div>
@@ -36,12 +37,12 @@
 <details id="new"><summary>New: a page, a person, a place, a task, a file, a reading</summary>
 <div class="actions">
 {{template "boxed" (form (.Action "create-page"))}}
-{{template "boxed" (form (.Action "create-task"))}}
+{{template "boxed" (form (.Action "create-task") "more" "repeat_unit,repeat_every,anchor_day,repeat_until_day,reminder_time,reminder_zone,import_key")}}
 {{template "boxed" (form (.Action "create-person"))}}
 {{template "boxed" (form (.Action "create-place"))}}
-{{template "boxed" (form (.Action "add-file") "hide" "sha256,mime")}}
-{{template "boxed" (form (.Action "record"))}}
-{{template "boxed" (form (.Action "capture-session"))}}
+{{template "boxed" (form (.Action "add-file") "hide" "sha256,mime" "more" "preview,at,radius,dry_run")}}
+{{template "boxed" (form (.Action "record") "more" "session_id,taken_at,tz,import_key")}}
+{{template "boxed" (form (.Action "capture-session") "more" "start_at,start_offset,start_zone_unverified,end_at,end_offset,end_zone_unverified,import_key")}}
 {{template "boxed" (form (.Action "create-period"))}}
 </div></details>
 {{if or (.Action "register-metric") (.Action "snapshot") (.Action "query")}}<details id="owner"><summary>Owner: a metric, a snapshot, a query</summary>

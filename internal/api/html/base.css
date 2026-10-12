@@ -123,10 +123,12 @@ button{display:inline-flex; align-items:center; justify-content:center; gap:var(
 button:hover{border-color:var(--line-strong)}
 button:disabled{opacity:.55; cursor:not-allowed}
 
-/* A secondary thing in a closed box. */
-details{border:1px solid var(--line); border-radius:var(--radius-md); background:var(--surface); padding:10px 14px}
-details>summary{cursor:pointer; font-weight:700; color:var(--accent)}
-details>summary::marker{color:var(--muted)}
+/* A secondary thing, closed: one line with a chevron that turns when it opens, not a box. */
+details{border:0; padding:0; background:none}
+details>summary{display:flex; align-items:center; gap:var(--space-2); min-height:var(--control); cursor:pointer; list-style:none; font-weight:700; color:var(--accent)}
+details>summary::-webkit-details-marker{display:none}
+details>summary::before{content:""; flex:none; width:7px; height:7px; margin:0 3px; border:solid currentColor; border-width:0 2px 2px 0; transform:rotate(-45deg)}
+details[open]>summary::before{transform:rotate(45deg)}
 details[open]>summary{margin-bottom:var(--space-3)}
 
 /* Code and quotations. */
