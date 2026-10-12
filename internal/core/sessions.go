@@ -38,8 +38,8 @@ type Session struct {
 }
 
 func validateSession(in SessionInput) error {
-	if !IsDay(in.Day) {
-		return Invalid("session reporting day must be exact")
+	if err := checkDay("day", in.Day); err != nil {
+		return err
 	}
 	if err := validateSessionEndpoint(in.StartAt, in.StartLocal, in.StartOffset, in.StartZoneUnverified, true); err != nil {
 		return err
@@ -149,12 +149,7 @@ func (t *Tx) SessionLifecycle(id int64, version string, deleted bool) error {
 	if deleted == tombstoned {
 		return nil
 	}
-	q := `UPDATE sessions SET deleted_at=NULL WHERE id=?`
-	if deleted {
-		q = `UPDATE sessions SET deleted_at=` + nowSQL + ` WHERE id=?`
-	}
-	_, err = t.tx.ExecContext(t.ctx, q, id)
-	return err
+	return t.setDeletedAt("sessions", id, deleted)
 }
 
 func (s *Store) Session(ctx context.Context, id int64) (*Session, error) {
@@ -166,8 +161,8 @@ func (s *Store) Session(ctx context.Context, id int64) (*Session, error) {
 }
 
 func (s *Store) Sessions(ctx context.Context, day, kind string, includeDeleted bool) ([]Session, error) {
-	if day != "" && !IsDay(day) {
-		return nil, Invalid("session reporting day must be exact")
+	if err := checkDay("day", day); day != "" && err != nil {
+		return nil, err
 	}
 	query := sessionSelect + `WHERE (? OR s.deleted_at IS NULL)`
 	args := []any{includeDeleted}

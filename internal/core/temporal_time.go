@@ -84,11 +84,11 @@ func periodSpan(start, end *string) (periodRange, periodRange, error) {
 }
 
 func periodMembership(start, end *string, day, asOf string) (string, error) {
-	if !IsDay(day) {
-		return "", Invalid("membership day must be an exact day")
+	if err := checkDay("day", day); err != nil {
+		return "", err
 	}
-	if asOf != "" && !IsDay(asOf) {
-		return "", Invalid("as_of must be an exact day")
+	if err := checkDay("as_of", asOf); asOf != "" && err != nil {
+		return "", err
 	}
 	s, e, err := periodSpan(start, end)
 	if err != nil {
@@ -161,15 +161,8 @@ func validateSessionEndpoint(at, local, offset, zone string, required bool) erro
 			return Invalid("invalid known offset range")
 		}
 	}
-	if zone != "" {
-		if len(zone) > 64 {
-			return Invalid("unverified zone label is too long")
-		}
-		for _, r := range zone {
-			if !(r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || strings.ContainsRune("_/+-", r)) {
-				return Invalid("invalid unverified zone label")
-			}
-		}
+	if zone != "" && !zoneLabel(zone) {
+		return Invalid("invalid unverified zone label")
 	}
 	return nil
 }
@@ -186,11 +179,11 @@ func sessionElapsedMillis(startAt, endAt string) (*int64, error) {
 	if endAt < startAt {
 		return nil, Invalid("session UTC endpoints are reversed")
 	}
-	start, err := time.Parse("2006-01-02T15:04:05.000Z", startAt)
+	start, err := time.Parse(instantLayout, startAt)
 	if err != nil {
 		return nil, err
 	}
-	end, err := time.Parse("2006-01-02T15:04:05.000Z", endAt)
+	end, err := time.Parse(instantLayout, endAt)
 	if err != nil {
 		return nil, err
 	}

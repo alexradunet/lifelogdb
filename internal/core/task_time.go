@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"strings"
 	"time"
 	_ "time/tzdata" // The reminder contract also works where the OS has no zone database.
 )
@@ -12,8 +11,8 @@ func taskCalendar(ctx context.Context, in TaskSpec, from, through string, emit f
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if !IsDay(from) || !IsDay(through) || from > through {
-		return Invalid("task deadline window must have ordered exact days")
+	if err := checkWindow(from, through); err != nil {
+		return err
 	}
 	if err := validateTaskSchedule(in); err != nil {
 		return err
@@ -121,17 +120,7 @@ func validReminderClock(clock string) bool {
 	return clock[:2] <= "23" && clock[3:] <= "59"
 }
 
-func validPlanningZone(zone string) bool {
-	if len(zone) < 1 || len(zone) > 64 {
-		return false
-	}
-	for _, r := range zone {
-		if !(r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || strings.ContainsRune("_/+-", r)) {
-			return false
-		}
-	}
-	return true
-}
+func validPlanningZone(zone string) bool { return zoneLabel(zone) }
 
 // TaskReminder distinguishes absent intent from a clock that cannot be resolved.
 type TaskReminder struct {
@@ -237,5 +226,5 @@ func resolveTaskClock(day, clock, zone string) (string, bool) {
 	if !found || earliest.Year() < 0 || earliest.Year() > 9999 {
 		return "", false
 	}
-	return earliest.Format("2006-01-02T15:04:05.000Z"), true
+	return earliest.Format(instantLayout), true
 }

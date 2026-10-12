@@ -156,8 +156,8 @@ type Day struct {
 }
 
 func (s *Store) Day(ctx context.Context, day string) (*Day, error) {
-	if !IsDay(day) {
-		return nil, Invalid("day %q is not YYYY-MM-DD", day)
+	if err := checkDay("day", day); err != nil {
+		return nil, err
 	}
 	d := &Day{Day: day, Rows: []DayRow{}}
 	err := s.DB.R.QueryRowContext(ctx, `SELECT id FROM entities WHERE id = (SELECT entity_id FROM entity_names WHERE name_key = ?) AND deleted_at IS NULL`, day).Scan(&d.PageID)
@@ -189,8 +189,8 @@ func (s *Store) Day(ctx context.Context, day string) (*Day, error) {
 // in id order: cookbook/mood-over-time.md read for a window of days. The metric is found by its name key, so a
 // renamed Mood is still the mood. A day without a reading is absent.
 func (s *Store) Moods(ctx context.Context, from, through string) (map[string][]float64, error) {
-	if !IsDay(from) || !IsDay(through) || from > through {
-		return nil, Invalid("a mood window must have ordered exact days")
+	if err := checkWindow(from, through); err != nil {
+		return nil, err
 	}
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT me.day, me.value
@@ -226,8 +226,11 @@ type DayEntry struct {
 // DayEntries are the live day pages from from through through: in day order, or the newest first, and at most limit
 // of them.
 func (s *Store) DayEntries(ctx context.Context, from, through string, newestFirst bool, limit int) ([]DayEntry, error) {
-	if !IsDay(from) || !IsDay(through) || from > through || limit < 1 {
-		return nil, Invalid("day entries need ordered exact days and a limit")
+	if err := checkWindow(from, through); err != nil {
+		return nil, err
+	}
+	if limit < 1 {
+		return nil, Invalid("day entries need a limit of 1 or more")
 	}
 	order := "ASC"
 	if newestFirst {
@@ -249,7 +252,7 @@ func (s *Store) OnThisDay(ctx context.Context, day string, limit int) ([]DayEntr
 func (s *Store) dayEntries(ctx context.Context, cond, order string, limit int, args ...any) ([]DayEntry, error) {
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT p.day, p.id, p.body FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
-		 WHERE `+cond+` AND p_name.title = p.day AND p.deleted_at IS NULL
+		 WHERE `+cond+` AND p.is_journal AND p.deleted_at IS NULL
 		 ORDER BY p.day `+order+` LIMIT ?`, append(args, limit)...)
 	if err != nil {
 		return nil, err
@@ -362,6 +365,18 @@ SELECT what, at, detail FROM (
 )
 ORDER BY (at IS NOT NULL), at;`
 
+// readingColumns are a reading's columns as Reading scans them, from measurements me joined to its session ss and
+// its metric m with its name m_name.
+const readingColumns = `me.id, m_name.title, me.day, coalesce(me.taken_at, ''), coalesce(me.tz, ''), me.value, coalesce(me.captured_with_id, 0),coalesce(me.session_id,0),coalesce(ss.deleted_at,'')`
+
+// scopeOf is a reading's scope: a session's, or the day's (unassociated).
+func scopeOf(sessionID int64) string {
+	if sessionID != 0 {
+		return "session"
+	}
+	return "unassociated"
+}
+
 func (s *Store) readings(ctx context.Context, where string, args ...any) ([]Reading, error) {
 	return s.readingsWithLifecycle(ctx, false, where, args...)
 }
@@ -369,7 +384,7 @@ func (s *Store) readingsWithLifecycle(ctx context.Context, includeDeleted bool, 
 	where = `WHERE (? OR me.session_id IS NULL OR ss.deleted_at IS NULL) AND ` + strings.TrimPrefix(where, "WHERE ")
 	args = append([]any{includeDeleted}, args...)
 	rows, err := s.DB.R.QueryContext(ctx, `
-		SELECT me.id, m_name.title, me.day, coalesce(me.taken_at, ''), coalesce(me.tz, ''), me.value, coalesce(me.captured_with_id, 0),coalesce(me.session_id,0),coalesce(ss.deleted_at,'')
+		SELECT `+readingColumns+`
 		  FROM measurement_values me LEFT JOIN sessions ss ON ss.id=me.session_id JOIN entities m ON m.id = me.metric_id  JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key `+where, args...)
 	if err != nil {
 		return nil, err
@@ -381,10 +396,7 @@ func (s *Store) readingsWithLifecycle(ctx context.Context, includeDeleted bool, 
 		if err := rows.Scan(&r.ID, &r.Metric, &r.Day, &r.TakenAt, &r.TZ, &r.Value, &r.CapturedWith, &r.SessionID, &r.SessionDeletedAt); err != nil {
 			return nil, err
 		}
-		r.Scope = "unassociated"
-		if r.SessionID != 0 {
-			r.Scope = "session"
-		}
+		r.Scope = scopeOf(r.SessionID)
 		out = append(out, r)
 	}
 	return out, rows.Err()
@@ -514,8 +526,8 @@ func (s *Store) Series(ctx context.Context, metric, from, to string) ([]Reading,
 // ReadingsCount is how many current readings with no session fall on the days from through through, both included:
 // the readings that Series gives, for all metrics. A corrected reading counts once, and a retracted one not at all.
 func (s *Store) ReadingsCount(ctx context.Context, from, through string) (int, error) {
-	if !IsDay(from) || !IsDay(through) || from > through {
-		return 0, Invalid("a count needs ordered exact days")
+	if err := checkWindow(from, through); err != nil {
+		return 0, err
 	}
 	var n int
 	err := s.DB.R.QueryRowContext(ctx, `SELECT count(*) FROM measurement_values WHERE session_id IS NULL AND day BETWEEN ? AND ?`, from, through).Scan(&n)
@@ -535,8 +547,7 @@ func (s *Store) Measurement(ctx context.Context, id int64) (*Measurement, error)
 	m := &Measurement{}
 	var value sql.NullFloat64
 	err := s.DB.R.QueryRowContext(ctx, `
-		SELECT me.id, m_name.title, me.day, coalesce(me.taken_at, ''), coalesce(me.tz, ''), me.value,
-		       coalesce(me.captured_with_id, 0),coalesce(me.session_id,0),coalesce(ss.deleted_at,''), coalesce(me.supersedes_id, 0),
+		SELECT `+readingColumns+`, coalesce(me.supersedes_id, 0),
 		       coalesce((SELECT x.id FROM measurements x WHERE x.supersedes_id = me.id), 0),
 		       EXISTS (SELECT 1 FROM measurement_values v WHERE v.id = me.id)
 		  FROM measurements me LEFT JOIN sessions ss ON ss.id=me.session_id JOIN entities m ON m.id = me.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key  WHERE me.id = ?`, id).
@@ -544,10 +555,7 @@ func (s *Store) Measurement(ctx context.Context, id int64) (*Measurement, error)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, NotFound("no measurement %d", id)
 	}
-	m.Scope = "unassociated"
-	if m.SessionID != 0 {
-		m.Scope = "session"
-	}
+	m.Scope = scopeOf(m.SessionID)
 	m.Value, m.Retraction = value.Float64, !value.Valid
 	return m, err
 }
@@ -580,7 +588,7 @@ func (s *Store) Ghosts(ctx context.Context, limit, offset int) ([]Ghost, error) 
 // RecentDays is one page of the day pages, newest first.
 func (s *Store) RecentDays(ctx context.Context, limit, offset int) ([]Edge, error) {
 	return s.edges(ctx, `SELECT 'day', p.id, p_name.title, 'page', '' FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
-	                      WHERE p_name.title = p.day AND p.deleted_at IS NULL ORDER BY p.day DESC LIMIT ? OFFSET ?`, limit, offset)
+	                      WHERE p.is_journal AND p.deleted_at IS NULL ORDER BY p.day DESC LIMIT ? OFFSET ?`, limit, offset)
 }
 
 // Named is one page of the live people, places or files, by title.

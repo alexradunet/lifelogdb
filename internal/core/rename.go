@@ -18,8 +18,8 @@ func (t *Tx) Rename(id int64, newTitle string) (int64, error) {
 	if old.DayPage {
 		return 0, Conflict("a day page's canonical date is not renamed")
 	}
-	if !text.ValidTitle(newTitle) {
-		return 0, Invalid("title %q is not a valid reference name", newTitle)
+	if err := checkTitle("title", newTitle); err != nil {
+		return 0, err
 	}
 	if IsDay(newTitle) {
 		return 0, Conflict("a calendar date is reserved for its journal day")

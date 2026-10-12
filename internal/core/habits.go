@@ -15,8 +15,8 @@ import (
 // that names Mood does not write its range (RangeUnit), so the request takes the metric as it is. Another unit is
 // refused: a unit never changes (metrics_unit_fixed).
 func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
-	if !text.ValidTitle(name) {
-		return false, Invalid("metric name %q is not a valid title (docs/contract/titles-and-wikilinks.md)", name)
+	if err := checkTitle("metric name", name); err != nil {
+		return false, err
 	}
 	p, err := t.lookup(name)
 	if err != nil {
@@ -101,8 +101,8 @@ func (t *Tx) StartHabit(metric, start, end string) error {
 
 // StopHabit ends the open period of a habit on day (inclusive).
 func (t *Tx) StopHabit(metric, day string) error {
-	if !IsDay(day) {
-		return Invalid("day %q is not YYYY-MM-DD", day)
+	if err := checkDay("day", day); err != nil {
+		return err
 	}
 	id, err := t.metricID(metric)
 	if err != nil {
@@ -142,8 +142,8 @@ type HabitState struct {
 
 // Habits is cookbook/habits.md: the habits of a day.
 func (s *Store) Habits(ctx context.Context, day string) ([]HabitState, error) {
-	if !IsDay(day) {
-		return nil, Invalid("day %q is not YYYY-MM-DD", day)
+	if err := checkDay("day", day); err != nil {
+		return nil, err
 	}
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT m_name.title,
@@ -180,8 +180,8 @@ type Completion struct {
 }
 
 func (s *Store) Completion(ctx context.Context, from, to string) ([]Completion, error) {
-	if !IsDay(from) || !IsDay(to) || from > to {
-		return nil, Invalid("from and to are YYYY-MM-DD days, from <= to")
+	if err := checkWindow(from, to); err != nil {
+		return nil, err
 	}
 	rows, err := s.DB.R.QueryContext(ctx, `
 		WITH RECURSIVE days(day) AS (

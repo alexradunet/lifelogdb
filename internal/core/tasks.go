@@ -88,8 +88,8 @@ func validateTaskSpec(in TaskSpec) error {
 }
 
 func validateOccurrenceChanges(in OccurrenceChanges) error {
-	if in.DueDay != "" && !IsDay(in.DueDay) {
-		return Invalid("task due day must be exact")
+	if err := checkDay("due_day", in.DueDay); in.DueDay != "" && err != nil {
+		return err
 	}
 	if in.State != "open" && in.State != "done" && in.State != "skipped" {
 		return Invalid("unknown task occurrence state")
@@ -170,8 +170,8 @@ type Deadline struct {
 // Deadlines merges every task's TaskOccurrences over the window (the live tasks, or all of them when
 // includeDeleted), ordered by due day, key and task, bounded like a single task's read.
 func (s *Store) Deadlines(ctx context.Context, from, through string, includeDeleted bool) ([]Deadline, error) {
-	if !IsDay(from) || !IsDay(through) || from > through {
-		return nil, Invalid("task deadline window must have ordered exact days")
+	if err := checkWindow(from, through); err != nil {
+		return nil, err
 	}
 	tasks, err := s.Tasks(ctx, includeDeleted)
 	if err != nil {
@@ -458,8 +458,8 @@ func (t *Tx) EditTask(id int64, version string, in TaskSpec) error {
 }
 
 func (t *Tx) StopTask(id int64, version, through string) error {
-	if !IsDay(through) {
-		return Invalid("task recurrence end must be exact")
+	if err := checkDay("through", through); err != nil {
+		return err
 	}
 	p, err := t.liveTaskVersion(id, version)
 	if err != nil {
@@ -486,12 +486,7 @@ func (t *Tx) TaskLifecycle(id int64, version string, deleted bool) error {
 	if deleted == (p.DeletedAt != "") {
 		return nil
 	}
-	q := `UPDATE tasks SET deleted_at=NULL WHERE id=?`
-	if deleted {
-		q = `UPDATE tasks SET deleted_at=` + nowSQL + ` WHERE id=?`
-	}
-	_, err = t.tx.ExecContext(t.ctx, q, id)
-	return err
+	return t.setDeletedAt("tasks", id, deleted)
 }
 
 func (t *Tx) insertTaskOccurrence(taskID int64, in OccurrenceInput) (int64, error) {
@@ -592,12 +587,7 @@ func (t *Tx) TaskOccurrenceLifecycle(taskID int64, taskVersion, key, version str
 	if !deleted && o.State == "open" && p.RepeatUntilDay != "" && key > p.RepeatUntilDay {
 		return Invalid("occurrence cannot reopen after recurrence end")
 	}
-	q := `UPDATE task_occurrences SET deleted_at=NULL WHERE id=?`
-	if deleted {
-		q = `UPDATE task_occurrences SET deleted_at=` + nowSQL + ` WHERE id=?`
-	}
-	_, err = t.tx.ExecContext(t.ctx, q, o.ID)
-	return err
+	return t.setDeletedAt("task_occurrences", o.ID, deleted)
 }
 
 const maxTaskOccurrences = 10000
@@ -606,8 +596,8 @@ const maxTaskOccurrences = 10000
 // It includes outcomes, and explicit historical reads retain tombstones. Undated rows
 // remain available by identity. The contract's sparse merge runs before deadline filtering.
 func (s *Store) TaskOccurrences(ctx context.Context, taskID int64, from, through string, includeDeleted bool) (_ []TaskOccurrence, err error) {
-	if !IsDay(from) || !IsDay(through) || from > through {
-		return nil, Invalid("task deadline window must have ordered exact days")
+	if err := checkWindow(from, through); err != nil {
+		return nil, err
 	}
 	tx, err := s.DB.R.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {

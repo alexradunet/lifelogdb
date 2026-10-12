@@ -19,6 +19,13 @@ func (t *Tx) RelocateReading(wrong int64, replacement Reading) (ScopeRelocation,
 }
 
 // afterRetraction is a narrow fault boundary for testing cancellation of the two-insert operation.
+// relocationAncestors are a reading and the readings it corrects, with what says whether an import wrote them: a
+// chain an import wrote, or one with a sender's key, is never relocated.
+const relocationAncestors = `WITH RECURSIVE ancestors(id,source,import_key,supersedes_id) AS (SELECT id,source,import_key,supersedes_id FROM measurements WHERE id=? UNION SELECT m.id,m.source,m.import_key,m.supersedes_id FROM measurements m JOIN ancestors a ON a.supersedes_id=m.id)`
+
+// importedChain is the EXISTS over relocationAncestors that says an import or a key is in the chain.
+const importedChain = `EXISTS(SELECT 1 FROM ancestors WHERE import_key IS NOT NULL OR source LIKE 'import:%')`
+
 func (t *Tx) relocateReading(wrong int64, replacement Reading, afterRetraction func(int64) error) (ScopeRelocation, error) {
 	if strings.HasPrefix(t.Source, "agent:") || strings.HasPrefix(t.Source, "import:") {
 		return ScopeRelocation{}, Invalid("scope relocation is an owner operation, unavailable to agents/imports")
@@ -43,7 +50,7 @@ func (t *Tx) relocateReading(wrong int64, replacement Reading, afterRetraction f
 		return ScopeRelocation{}, Invalid("same-scope request is not a relocation")
 	}
 	var imported bool
-	err = t.tx.QueryRowContext(t.ctx, `WITH RECURSIVE ancestors(id,source,import_key,supersedes_id) AS (SELECT id,source,import_key,supersedes_id FROM measurements WHERE id=? UNION SELECT m.id,m.source,m.import_key,m.supersedes_id FROM measurements m JOIN ancestors a ON a.supersedes_id=m.id) SELECT EXISTS(SELECT 1 FROM ancestors WHERE import_key IS NOT NULL OR source LIKE 'import:%')`, wrong).Scan(&imported)
+	err = t.tx.QueryRowContext(t.ctx, relocationAncestors+` SELECT `+importedChain, wrong).Scan(&imported)
 	if err != nil {
 		return ScopeRelocation{}, err
 	}
@@ -147,6 +154,6 @@ func (s *Store) seriesScope(ctx context.Context, metric, from, to, scope string,
 
 func (s *Store) RelocationAllowed(ctx context.Context, id int64) (bool, error) {
 	var allowed bool
-	err := s.DB.R.QueryRowContext(ctx, `WITH RECURSIVE ancestors(id,source,import_key,supersedes_id) AS (SELECT id,source,import_key,supersedes_id FROM measurements WHERE id=? UNION SELECT m.id,m.source,m.import_key,m.supersedes_id FROM measurements m JOIN ancestors a ON a.supersedes_id=m.id) SELECT EXISTS(SELECT 1 FROM measurement_values WHERE id=?) AND NOT EXISTS(SELECT 1 FROM ancestors WHERE import_key IS NOT NULL OR source LIKE 'import:%')`, id, id).Scan(&allowed)
+	err := s.DB.R.QueryRowContext(ctx, relocationAncestors+` SELECT EXISTS(SELECT 1 FROM measurement_values WHERE id=?) AND NOT `+importedChain, id, id).Scan(&allowed)
 	return allowed, err
 }

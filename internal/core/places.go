@@ -113,8 +113,8 @@ func metresPerDegreeLon(lat float64) float64 { return 111320 * math.Cos(lat*math
 // placeFor is the place a photo's owner names (cookbook/place-of-a-photo.md): an existing place, a plain page
 // promoted to one, or a new place.
 func (t *Tx) placeFor(title string) (int64, error) {
-	if !text.ValidTitle(title) {
-		return 0, Invalid("title %q is not a valid title (docs/contract/titles-and-wikilinks.md)", title)
+	if err := checkTitle("title", title); err != nil {
+		return 0, err
 	}
 	p, err := t.lookup(title)
 	switch {

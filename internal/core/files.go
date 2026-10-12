@@ -81,8 +81,8 @@ func (t *Tx) AddFile(f FileIn) (k Kept, err error) {
 		}
 	}
 	for _, d := range []string{f.Day, f.Taken} {
-		if d != "" && !IsDay(d) {
-			return k, Invalid("day %q is not YYYY-MM-DD", d)
+		if err := checkDay("day", d); d != "" && err != nil {
+			return k, err
 		}
 	}
 	if f.Radius == 0 {
@@ -138,8 +138,8 @@ func (t *Tx) AddFile(f FileIn) (k Kept, err error) {
 		return k, err
 	}
 	// 1) the title: free, or a plain page to promote
-	if !text.ValidTitle(f.Title) {
-		return k, Invalid("title %q is not a valid title (docs/contract/titles-and-wikilinks.md)", f.Title)
+	if err := checkTitle("title", f.Title); err != nil {
+		return k, err
 	}
 	p, err := t.lookup(f.Title)
 	if err != nil {

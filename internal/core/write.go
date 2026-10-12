@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -210,14 +211,11 @@ func (t *Tx) pageByID(id int64) (*pageRef, error) {
 
 // Capture appends an entry to a day page, creating or reviving it, with an optional mood (cookbook/capture.md).
 func (t *Tx) Capture(day, entry string, mood *float64) (id int64, r Sync, err error) {
-	if !IsDay(day) {
-		return 0, r, Invalid("day %q is not YYYY-MM-DD", day)
+	if err := checkDay("day", day); err != nil {
+		return 0, r, err
 	}
 	if entry == "" && mood == nil {
 		return 0, r, Invalid("nothing to capture: give text, a mood or both")
-	}
-	if mood != nil && !isMood(*mood) {
-		return 0, r, Invalid("mood is 1-5")
 	}
 	if id, err = t.dayPage(day); err != nil {
 		return 0, r, err
@@ -240,8 +238,6 @@ func (t *Tx) Capture(day, entry string, mood *float64) (id int64, r Sync, err er
 	}
 	return id, r, err
 }
-
-func isMood(v float64) bool { return v >= 1 && v <= 5 && v == math.Trunc(v) }
 
 // rangeUnit says whether a metric's unit names a scale's range: two numbers of ASCII digits around one hyphen with
 // the lower below the upper (`1-5`, `0-10`), and returns the two bounds. The range describes the metric, so a source
@@ -338,8 +334,8 @@ func (t *Tx) SetBody(id int64, body string) (Sync, error) {
 // CreatePage creates a page written on purpose; day is the day it was written ("" = today). A title that is a
 // day makes that day's page. With an importKey, a page the key already names is returned with existing = true.
 func (t *Tx) CreatePage(title, body, day, importKey string) (id int64, existing bool, r Sync, err error) {
-	if !text.ValidTitle(title) {
-		return 0, false, r, Invalid("title %q is not a valid title (docs/contract/titles-and-wikilinks.md)", title)
+	if err := checkTitle("title", title); err != nil {
+		return 0, false, r, err
 	}
 	switch {
 	case IsDay(title):
@@ -347,16 +343,7 @@ func (t *Tx) CreatePage(title, body, day, importKey string) (id int64, existing 
 	case day == "":
 		day = Today()
 	}
-	have, err := t.byImportKey(importKey)
-	if err != nil {
-		return 0, false, r, err
-	}
-	if have == 0 {
-		if p, err := t.lookup(title); err != nil || p != nil {
-			return 0, false, r, orExists(err, p, title)
-		}
-	}
-	if id, existing, err = t.insertPage("page", title, text.TitleKey(title), day, body, importKey); err != nil || existing {
+	if id, existing, err = t.createNamed("page", title, body, day, importKey, nil); err != nil || existing {
 		return id, existing, r, err
 	}
 	r, err = t.syncWikilinks(id, body)
@@ -383,7 +370,7 @@ func (t *Tx) CreatePerson(title, name, birth, death, importKey string) (int64, b
 	if name == "" {
 		name = title
 	}
-	return t.createNamed("person", title, "", importKey, func(id int64) error {
+	return t.createNamed("person", title, "", nil, importKey, func(id int64) error {
 		_, err := t.tx.ExecContext(t.ctx, `INSERT INTO people(id, name, birth_day, death_day) VALUES (?, ?, ?, ?)`,
 			id, name, nullIfEmpty(birth), nullIfEmpty(death))
 		return err
@@ -391,25 +378,29 @@ func (t *Tx) CreatePerson(title, name, birth, death, importKey string) (int64, b
 }
 
 func (t *Tx) CreatePlace(title, importKey string) (int64, bool, error) {
-	return t.createNamed("place", title, "", importKey, nil)
+	return t.createNamed("place", title, "", nil, importKey, nil)
 }
 
 // createNamed inserts the entity with its whole body: creation is one write, so the new page is at revision 1
 // (lifelog_meta.edit_revisions). The caller syncs the body's wikilinks once the typed row exists.
-func (t *Tx) createNamed(typ, title, body, importKey string, extra func(int64) error) (int64, bool, error) {
-	if !text.ValidTitle(title) {
-		return 0, false, Invalid("title %q is not a valid title (docs/contract/titles-and-wikilinks.md)", title)
+// createNamed is one entity with its page: a title no live page has (a sender's key finds the row an earlier send
+// made, and writes nothing), its row in entities and entity_names, and extra for its typed row. day is a day page's
+// day, nil for every other page.
+func (t *Tx) createNamed(typ, title, body string, day any, importKey string, extra func(int64) error) (int64, bool, error) {
+	if err := checkTitle("title", title); err != nil {
+		return 0, false, err
 	}
 	have, err := t.byImportKey(importKey)
 	if err != nil {
 		return 0, false, err
 	}
-	if have == 0 {
-		if p, err := t.lookup(title); err != nil || p != nil {
-			return 0, false, orExists(err, p, title)
-		}
+	if have != 0 {
+		return have, true, nil
 	}
-	id, existing, err := t.insertPage(typ, title, text.TitleKey(title), nil, body, importKey)
+	if p, err := t.lookup(title); err != nil || p != nil {
+		return 0, false, orExists(err, p, title)
+	}
+	id, existing, err := t.insertPage(typ, title, text.TitleKey(title), day, body, importKey)
 	if err != nil || existing || extra == nil {
 		return id, existing, err
 	}
@@ -494,7 +485,7 @@ func (t *Tx) Link(from, to int64, kind, note string) (added bool, err error) {
 	}
 	if kind == "at" {
 		var isDay bool
-		if err := t.tx.QueryRowContext(t.ctx, `SELECT coalesce((SELECT preferred_name_key = day FROM entities WHERE id = ?), 0)`, from).Scan(&isDay); err != nil {
+		if err := t.tx.QueryRowContext(t.ctx, `SELECT coalesce((SELECT is_journal FROM entities WHERE id = ?), 0)`, from).Scan(&isDay); err != nil {
 			return false, err
 		}
 		if !isDay {
@@ -516,7 +507,7 @@ func (t *Tx) Link(from, to int64, kind, note string) (added bool, err error) {
 		}
 		// A category is never a journal page (D26).
 		var odd bool
-		if err := t.tx.QueryRowContext(t.ctx, `SELECT coalesce((SELECT preferred_name_key = day FROM entities WHERE id = ?), 0)`, to).Scan(&odd); err != nil {
+		if err := t.tx.QueryRowContext(t.ctx, `SELECT coalesce((SELECT is_journal FROM entities WHERE id = ?), 0)`, to).Scan(&odd); err != nil {
 			return false, err
 		}
 		if odd {
@@ -550,6 +541,9 @@ func (t *Tx) Unlink(from, to int64, kind string) error {
 	}
 	return nil
 }
+
+// metricRules select a metric's id, title, unit and whether it is a habit: the rules a value is held to.
+const metricRules = `SELECT m.id, m_name.title, coalesce((SELECT unit FROM metrics WHERE id = m.id), ''), EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id)`
 
 // Reading is one measurement to record (D7).
 type Reading struct {
@@ -606,8 +600,8 @@ func (t *Tx) prepareReading(m Reading) (metric int64, err error) {
 	if err := validateMeasurementZone(m.TZ); err != nil {
 		return 0, err
 	}
-	if !IsDay(m.Day) {
-		return 0, Invalid("day %q is not YYYY-MM-DD", m.Day)
+	if err := checkDay("day", m.Day); err != nil {
+		return 0, err
 	}
 	if m.TakenAt != "" && !IsInstant(m.TakenAt) {
 		return 0, Invalid("taken_at %q is not a UTC instant like 2026-06-09T21:14:03.482Z", m.TakenAt)
@@ -617,7 +611,7 @@ func (t *Tx) prepareReading(m Reading) (metric int64, err error) {
 	}
 	var metricTitle, unit string
 	var habit bool
-	err = t.tx.QueryRowContext(t.ctx, `SELECT m.id, m_name.title, coalesce((SELECT unit FROM metrics WHERE id = m.id), ''), EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id) FROM entities m JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key AND m.deleted_at IS NULL WHERE m.id = (SELECT entity_id FROM entity_names WHERE name_key = ?) AND m.entity_type = 'metric'`,
+	err = t.tx.QueryRowContext(t.ctx, metricRules+` FROM entities m JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key AND m.deleted_at IS NULL WHERE m.id = (SELECT entity_id FROM entity_names WHERE name_key = ?) AND m.entity_type = 'metric'`,
 		text.TitleKey(m.Metric)).Scan(&metric, &metricTitle, &unit, &habit)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, NotFound("no metric %q: the owner registers metrics", m.Metric)
@@ -632,13 +626,8 @@ func (t *Tx) prepareReading(m Reading) (metric int64, err error) {
 }
 
 func validateMeasurementZone(zone string) error {
-	if len(zone) > 64 {
+	if zone != "" && !zoneLabel(zone) {
 		return Invalid("invalid measurement zone")
-	}
-	for _, r := range zone {
-		if !(r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || strings.ContainsRune("_/+-", r)) {
-			return Invalid("invalid measurement zone")
-		}
 	}
 	return nil
 }
@@ -648,7 +637,7 @@ func (t *Tx) Correct(wrong int64, value *float64) (id int64, err error) {
 	var metric int64
 	var metricTitle, unit string
 	var habit bool
-	err = t.tx.QueryRowContext(t.ctx, `SELECT m.id, m_name.title, coalesce((SELECT unit FROM metrics WHERE id = m.id), ''), EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id)
+	err = t.tx.QueryRowContext(t.ctx, metricRules+`
 	                       FROM measurements me JOIN entities m ON m.id = me.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key WHERE me.id = ?`, wrong).Scan(&metric, &metricTitle, &unit, &habit)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, NotFound("no measurement %d", wrong)
@@ -748,4 +737,20 @@ func (s *Store) Correct(ctx context.Context, source string, wrong int64, value *
 		id = 0
 	}
 	return
+}
+
+// setDeletedAt sets or clears a row's deleted_at in one of the tables whose rows carry a version: the tombstone of
+// a task, an occurrence or a session (D11: nothing is deleted).
+func (t *Tx) setDeletedAt(table string, id int64, deleted bool) error {
+	switch table {
+	case "tasks", "task_occurrences", "sessions":
+	default:
+		return fmt.Errorf("setDeletedAt: %s is not a table with a tombstone", table)
+	}
+	q := `UPDATE ` + table + ` SET deleted_at=NULL WHERE id=?`
+	if deleted {
+		q = `UPDATE ` + table + ` SET deleted_at=` + nowSQL + ` WHERE id=?`
+	}
+	_, err := t.tx.ExecContext(t.ctx, q, id)
+	return err
 }

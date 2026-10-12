@@ -21,7 +21,7 @@ func (t *Tx) CreatePeriod(title, body string, start, end *string) (int64, error)
 	if _, _, err := periodSpan(start, end); err != nil {
 		return 0, err
 	}
-	id, _, err := t.createNamed("period", title, body, "", func(id int64) error {
+	id, _, err := t.createNamed("period", title, body, nil, "", func(id int64) error {
 		_, err := t.tx.ExecContext(t.ctx, `INSERT INTO periods(id,start_boundary,end_boundary) VALUES(?,?,?)`, id, start, end)
 		return err
 	})
@@ -78,11 +78,11 @@ func (t *Tx) EditPeriod(id int64, version string, start, end *string) error {
 }
 
 func (s *Store) LifePeriods(ctx context.Context, day, asOf string, includeDeleted bool) ([]LifePeriod, error) {
-	if day != "" && !IsDay(day) {
-		return nil, Invalid("membership day must be exact")
+	if err := checkDay("day", day); day != "" && err != nil {
+		return nil, err
 	}
-	if asOf != "" && !IsDay(asOf) {
-		return nil, Invalid("as_of must be exact")
+	if err := checkDay("as_of", asOf); asOf != "" && err != nil {
+		return nil, err
 	}
 	rows, err := s.DB.R.QueryContext(ctx, `SELECT p.id,n.title,p.start_boundary,p.end_boundary,CAST(e.revision AS TEXT),coalesce(e.deleted_at,'') FROM periods p JOIN entities e ON e.id=p.id JOIN entity_names n ON n.entity_id=e.id AND n.name_key=e.preferred_name_key WHERE (? OR e.deleted_at IS NULL) ORDER BY e.preferred_name_key,e.id`, includeDeleted)
 	if err != nil {
