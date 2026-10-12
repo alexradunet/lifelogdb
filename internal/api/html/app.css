@@ -1,6 +1,6 @@
 /* app.css — only what this app's own vocabulary needs, on top of what base.css says about ordinary HTML. Every
-   colour here names its fallback, so a rule still holds when the base sheet changes. There is no JavaScript and
-   no image: the chart is an inline <svg>. */
+   colour here names its fallback, so a rule still holds when the base sheet changes. There is no image: the chart
+   is an inline <svg>. The last rules are for what app.js adds to a page, which no page needs. */
 
 /* The way past the navigation, for a keyboard and its reader. */
 .skip{position:absolute; top:6px; left:6px; z-index:20; padding:8px 14px; border-radius:6px;
@@ -160,3 +160,22 @@ table.calendar tbody tr:hover{background:none}
 /* A day's mood, beside its heading or its line in a list. */
 .mood{font-size:.55em; font-weight:500; color:var(--muted,#6f6b63); white-space:nowrap; vertical-align:middle}
 small .mood{font-size:1em}
+
+/* What app.js adds. The names after [[, under the textarea that asks for them. */
+label{position:relative}
+ul.suggest{position:absolute; z-index:8; left:0; right:0; top:100%; max-height:16rem; overflow:auto; margin:2px 0 0;
+  padding:4px; list-style:none; background:var(--bg,#fbfaf7); border:1px solid var(--line,#e3dfd6);
+  border-radius:var(--radius,8px); box-shadow:0 8px 24px rgb(0 0 0 / .18); font-size:15px; color:var(--fg,#1f1e1b)}
+ul.suggest li{margin:0; padding:5px 9px; border-radius:6px; cursor:pointer}
+ul.suggest li[aria-selected=true]{background:var(--accent-weak,#e7eff9); color:var(--accent,#0b5cad)}
+
+/* The preview of a body: under its textarea, or beside it on a wide screen, where the open box of the editor leaves
+   the column. */
+.editor .preview{min-height:5rem; margin:9px 0; padding:10px 14px; border:1px dashed var(--line,#e3dfd6);
+  border-radius:var(--radius,8px)}
+@media (min-width:1200px){
+  .editor{display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start}
+  .editor .preview{max-height:80vh; overflow:auto}
+  details[open]:has(.editor){width:min(1180px, calc(100vw - 64px)); margin-left:calc((100% - min(1180px, calc(100vw - 64px))) / 2)}
+}
+footer .keys{color:var(--muted,#6f6b63)}

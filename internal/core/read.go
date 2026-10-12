@@ -275,6 +275,45 @@ func FirstLine(body string) string {
 	return ""
 }
 
+// TitleMatch is a name of a live page that starts with a prefix: the name, and the preferred title, id and type of
+// its page. For an alias the name and the title differ.
+type TitleMatch struct {
+	Name   string `json:"name"`
+	Title  string `json:"title"`
+	PageID int64  `json:"page_id"`
+	Type   string `json:"entity_type"`
+}
+
+// TitlesByPrefix are the names of live pages whose name key starts with the title key of prefix, in key order, and
+// at most limit of them: what an editor suggests after [[. The read is a range on the unique index of name_key:
+// every key with the prefix is at or after it, and before it followed by the byte 0xFF, which no UTF-8 text holds.
+func (s *Store) TitlesByPrefix(ctx context.Context, prefix string, limit int) ([]TitleMatch, error) {
+	key := text.TitleKey(strings.TrimSpace(prefix))
+	if key == "" || limit < 1 {
+		return nil, invalid("a title prefix needs text and a limit")
+	}
+	rows, err := s.DB.R.QueryContext(ctx, `
+		SELECT n.title, p.title, e.id, e.entity_type
+		  FROM entity_names n
+		  JOIN entities e ON e.id = n.entity_id AND e.deleted_at IS NULL
+		  JOIN entity_names p ON p.entity_id = e.id AND p.name_key = e.preferred_name_key
+		 WHERE n.name_key >= ? AND n.name_key < ?
+		 ORDER BY n.name_key LIMIT ?`, key, key+"\xff", limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []TitleMatch{}
+	for rows.Next() {
+		var m TitleMatch
+		if err := rows.Scan(&m.Name, &m.Title, &m.PageID, &m.Type); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
 // dayView implements cookbook/day-view.md with registry lookup and preferred display.
 const dayView = `
 SELECT what, at, detail FROM (

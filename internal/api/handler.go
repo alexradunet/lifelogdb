@@ -88,6 +88,8 @@ func newHandler(s *core.Store, localDay func() string, trustedOrigins ...string)
 	get("/measurements/{id}", h.measurement)
 	get("/ghosts", h.ghosts)
 	get("/search", h.search)
+	get("/titles", h.titles)
+	m.HandleFunc("POST /render", h.render)
 	post("/days/{day}/capture", h.capture)
 	post("/pages", h.createPage)
 	post("/pages/{id}/body", h.saveBody)
@@ -594,7 +596,7 @@ func (h *server) day(r *http.Request) (*Entity, error) {
 		if err != nil {
 			return nil, err
 		}
-		e.Actions = append(e.Actions, action("save-body", map[string]string{"id": strconv.FormatInt(d.PageID, 10)}, map[string]any{"body": p.Body, "version": p.Version}))
+		e.Actions = append(e.Actions, saveBody(d.PageID, p.Body, p.Version))
 	}
 	e.Actions = append(append(e.Actions, checkIns(hs, day)...), outcomesOf(due, today)...)
 	for _, m := range d.Readings {
@@ -655,7 +657,7 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 		e.Actions = []Action{action("revive", ids, nil)}
 		return e, nil
 	}
-	e.Actions = append(e.Actions, action("save-body", ids, map[string]any{"body": p.Body, "version": p.Version}))
+	e.Actions = append(e.Actions, saveBody(id, p.Body, p.Version))
 	if !p.IsDayPage {
 		if p.Type == "page" && !p.SessionKind && !p.TaskProject {
 			e.Actions = append(e.Actions, action("promote", ids, nil), action("promote-period", ids, map[string]any{"version": p.Version}))

@@ -88,6 +88,9 @@ func TestFindAndReadingsTools(t *testing.T) {
 			t.Fatalf("MCP tools lack %q; have %v", name, seen)
 		}
 	}
+	if seen["render"] {
+		t.Fatal("the browser's preview was exposed as an MCP tool")
+	}
 	for _, ownerOnly := range []string{"register_metric", "replay", "snapshot"} {
 		if seen[ownerOnly] {
 			t.Fatalf("owner-only action %q was exposed as an MCP tool", ownerOnly)
@@ -104,6 +107,9 @@ func TestFindAndReadingsTools(t *testing.T) {
 	}
 	if month := callTool(t, ctx, session, "get", map[string]any{"href": "/months/2031-05"}); month.Title != "May 2031" {
 		t.Fatalf("get /months/2031-05 returned %+v", month)
+	}
+	if titles := callTool(t, ctx, session, "get", map[string]any{"href": "/titles?prefix=an"}); len(titles.Entities) != 1 || titles.Entities[0].Title != "Ana" {
+		t.Fatalf("get /titles returned %+v", titles)
 	}
 	callTool(t, ctx, session, "create_page", map[string]any{"title": "Weighings", "body": "| day | weight (kg) |\n|---|---|\n| 2031-01-01 | 70.5 |\n"})
 	readings := callTool(t, ctx, session, "readings_from_table", map[string]any{"page": "Weighings", "metric": "weight"})

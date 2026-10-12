@@ -147,3 +147,23 @@ func TestTheBaseSheetCarriesNoAppVocabulary(t *testing.T) {
 
 // cssComments cuts a stylesheet's comments, so a test reads its rules and not its prose.
 var cssComments = regexp.MustCompile(`(?s)/\*.*?\*/`)
+
+// TestTheScriptReadsTitlesAndRenderOnly keeps the script's promise in its first comment: it reads /titles and
+// /render and nothing else, and it keeps nothing in the browser.
+func TestTheScriptReadsTitlesAndRenderOnly(t *testing.T) {
+	js := string(appJS)
+	calls := regexp.MustCompile(`fetch\(\s*"([^"?]*)`).FindAllStringSubmatch(js, -1)
+	var targets []string
+	for _, c := range calls {
+		targets = append(targets, c[1])
+	}
+	if strings.Join(targets, ",") != "/titles,/render" || strings.Count(js, "fetch(") != 2 {
+		t.Errorf("the script fetches %v (%d calls), want /titles and /render", targets, strings.Count(js, "fetch("))
+	}
+	for _, never := range []string{"XMLHttpRequest", "WebSocket", "sendBeacon", "localStorage", "sessionStorage", "indexedDB",
+		"document.cookie", "import(", "eval(", "new Function", "http:", "https:"} {
+		if strings.Contains(js, never) {
+			t.Errorf("the script uses %s", never)
+		}
+	}
+}

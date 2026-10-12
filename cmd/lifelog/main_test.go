@@ -440,7 +440,7 @@ func TestDoDispatchesPageFind(t *testing.T) {
 	}
 }
 
-// TestDoOpensADayAndGetsAMonth: the browser's "go to a day" and its calendar from the CLI
+// TestDoOpensADayAndGetsAMonth: the browser's "go to a day", its calendar and the names after [[ from the CLI
 // (docs/plans/091-the-browser-for-daily-use.md).
 func TestDoOpensADayAndGetsAMonth(t *testing.T) {
 	c := commandClient(t)
@@ -450,6 +450,9 @@ func TestDoOpensADayAndGetsAMonth(t *testing.T) {
 	}
 	if month := mustEntity(c.Get("/months/2031-05")); month.Title != "May 2031" {
 		t.Fatalf("get /months/2031-05: %+v", month)
+	}
+	if titles := mustEntity(c.Get("/titles?prefix=an")); len(titles.Entities) != 1 || titles.Entities[0].Title != "Ana" {
+		t.Fatalf("get /titles: %+v", titles)
 	}
 }
 

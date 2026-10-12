@@ -139,6 +139,24 @@ page (with `class` the page's type where it has one). `people`, `places` and `fi
 | `limit` | integer | the page size used |
 | `offset` | integer | the rows skipped |
 
+### titles
+
+`GET /titles?prefix=&limit=`: the names of live pages whose name key starts with the title key of `prefix` (as
+[titles and wikilinks](docs/contract/titles-and-wikilinks.md) folds a title), in key order: what an editor suggests
+after `[[`. `limit` is 1–20, default 10; an empty prefix is 422. Embedded: an `item` link to the page of each name,
+class its type. `POST /render` with the field `body` answers the HTML a page shows for that body once saved; it
+writes nothing, answers `text/html` only and is not a catalog action: it is the browser's preview.
+
+| property | type | meaning |
+|---|---|---|
+| `prefix` | string | the prefix, as sent |
+| `limit` | integer | at most this many names |
+| `titles[]` | list | the names, in key order |
+| `titles[].name` | string | the name that starts with the prefix: the page's title or one of its aliases |
+| `titles[].title` | string | the page's preferred title |
+| `titles[].page_id` | integer | the page |
+| `titles[].entity_type` | string | its type: `page`, `person`, `place`, `file`, … |
+
 ### day
 
 `GET /days/{day}` (`/days/today` redirects; `GET /days/go?day=`, the action `open-day`, redirects to the day it

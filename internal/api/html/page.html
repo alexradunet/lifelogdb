@@ -15,15 +15,16 @@
 {{template "form" (form (.Action "revive") "class" "tiny")}}</aside>{{end}}
 {{with .Link "preview"}}<figure><a href="{{.}}"><img class="preview" src="{{.}}" alt="{{$.Title}}"></a><figcaption>{{$.Title}}</figcaption></figure>{{end}}
 
+{{/* The editor is under the heading, so a long page is edited without a scroll to its end. */}}
+{{with form (.Action "save-body") "button" "Save" "autofocus" "body"}}<details{{if not $p.body}} open{{end}}><summary>Edit</summary>
+<small class="desc">CommonMark. [[Title]] links a page and #tag a tag page; both are created if new. Nothing is saved until the version you read is still the current one.</small>
+{{template "form" .}}</details>{{end}}
+
 <section>
 {{if $p.body}}<div class="prose">{{markdown $p.body}}</div>{{else}}<p><small>Nothing written here yet.</small></p>{{end}}
 {{with rejected $p.body}}<aside class="warn"><p>These names make no link — a title cannot hold <code>/ \ : * ? " &lt; &gt; |</code>, or start or end with a dot or space:</p>
 <p>{{range $i, $t := .}}{{if $i}}, {{end}}<code>[[{{$t}}]]</code>{{end}}</p></aside>{{end}}
 </section>
-
-{{with form (.Action "save-body") "button" "Save" "autofocus" "body"}}<details{{if not $p.body}} open{{end}}><summary>Edit</summary>
-<small class="desc">CommonMark. [[Title]] links a page and #tag a tag page; both are created if new. Nothing is saved until the version you read is still the current one.</small>
-{{template "form" .}}</details>{{end}}
 
 {{with $p.links}}<h2>Links</h2><dl>{{range group . "kind"}}<dt>{{.Key}}</dt>
 <dd>{{range .Items}}<a href="/pages/{{num .id}}">{{.title}}</a>{{with .note}} <small>({{.}})</small>{{end}}{{end}}</dd>{{end}}</dl>{{end}}

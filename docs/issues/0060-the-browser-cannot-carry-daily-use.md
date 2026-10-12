@@ -1,7 +1,7 @@
 # 0060 — The browser cannot carry daily planning, journaling, editing and navigation
 
 - **Date:** 2026-10-12
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the owner's attempt to use `lifelog serve` in a browser as the daily web application; reproduced on a
   synthetic database (five days of captures, two people, a habit, a metric, five tasks of which two are series)
 
@@ -38,4 +38,10 @@ synthetic database at 1280 px and at 390 px (a phone) in Edge on Windows.
 
 ## Resolution
 
-Filled in when it closes.
+Resolved by [plan 091](../plans/091-the-browser-for-daily-use.md), in four commits. The planning screens have their
+own views, grouped by the due day against today, with Done, Skip and Reopen on each due occurrence. The day view
+shows what is due, its mood and its habits with buttons, and edits its day page in place. Home is today at a
+glance. A month calendar and "go to a day" join the days, and the top bar holds the daily sections and a More menu.
+The editor is under the heading and as tall as its body. One embedded script, which no page needs, adds the names
+after `[[`, a preview, Ctrl+Enter, Escape, keys and a question before unsent text is lost. A form returns to the page
+that sent it.

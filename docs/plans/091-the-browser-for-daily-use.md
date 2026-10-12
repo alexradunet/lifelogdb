@@ -9,7 +9,7 @@
 - **Priority:** P1. **Effort:** L. **Risk:** MEDIUM: new properties and actions on four entities, three new
   resources, one new catalog action, a return path for browser forms, and the first script of the application.
   None for the schema.
-- **Status:** TODO.
+- **Status:** DONE (four commits: `ae48f64`, `c768dd4`, `bac47b0`, and the commit that closes this record).
 - **Resolves:** issue [0060](../issues/0060-the-browser-cannot-carry-daily-use.md). No RFC: the contract in `docs/`
   does not change, and [D14](../decisions/D14-ui-and-tools.md) leaves the screens to the application. The README
   decision "No JavaScript" changes by the owner's decision below.
@@ -115,3 +115,32 @@ flowchart LR
    (reported as not run if not).
 5. Four commits, one for each part, each with the baseline green. The issue is resolved and this plan is DONE in
    the commit of Part 4.
+
+## Result (2026-10-12)
+
+All four parts are done. These points differ from the text above, or add to it:
+
+| point | what was done, and why |
+|---|---|
+| the day's `due` | every state of the occurrences due on the day, not the open ones only: a past day shows what was done and skipped on it, with Reopen. On today, the open work of the 30 days before comes first. |
+| more properties | the day carries `habits` and `today`, so its view pairs each habit with its check-in and says "today" or "4 days ago". The task carries `today`, and a one-off's task carries `once`, its one occurrence whatever its due day: an undated one-off is in no window, and its page must offer Done. The month's days carry `first_line`, the title of a day's link. |
+| one clock | the handler reads the local day from one function: `New` passes `core.Today`, and a test makes a handler with a fixed day (`NewOn`, in `export_test.go`). The tests of what is due use fixed dates, so a run over midnight cannot change a group. |
+| outcomes | the outcome action is made from the occurrence alone: every read fills the task's version and tombstone on it from one snapshot. |
+| `num` | a template wrote a number with an exponent (`/pages/1e+06` for an id of a million). It now writes every number in full. |
+| the top bar | "New" (`/#new`) is in the More menu too. The menu's button names the page of it the browser is on. |
+| the script | Escape leaves a field: the day view and Home start in their capture box, and the keys work only outside a field. The browser check found this. |
+| the preview | on a screen 1200 px wide or more, the open box of the editor leaves the column and shows the editor and the preview side by side (CSS `:has`; a browser without it shows the two columns inside the column). Under 1200 px the preview is under the editor. |
+| the titles test | the prefix test uses cases made by hand (case, `ß`, a decomposed accent, an alias, a tombstone). The folding is `title_key`, which `internal/text` tests against the vectors of the contract. The query plan, checked once by hand: `SEARCH n USING INDEX sqlite_autoindex_entity_names_1 (name_key>? AND name_key<?)`. |
+
+**Checks** (Windows 11, Go 1.27.1): `go generate ./... && go vet ./... && go test ./...` passes, mutants included;
+`go test -count=1 -shuffle=on ./...` passes; `gofmt` is clean. staticcheck and govulncheck were not run: they are not
+installed. Nothing was run on Linux.
+
+**The script in a browser.** A program in a scratch folder (not in the repo) drove Edge 154 (headless, Chromium) on
+Windows 11 through its DevTools protocol, on a synthetic database, at 1400 px and 1000 px. 16 checks passed: the
+suggestions after `[[sa`; the arrow and Enter keys write `[[Sam Example]]`; the list closes; the preview shows the
+new link and omits raw HTML; leaving text that was not sent asks first, and "stay" stays; two columns at 1400 px and
+one at 1000 px; the day view starts in its capture box and Escape leaves it; `/` goes to the search; `[` opens the
+previous day; `c` goes to the capture; Ctrl+Enter sends the capture with no question; the footer names the keys. Not
+checked: the script at 390 px, and Firefox (not installed). Screenshots of the four areas before and after, at
+1280 px and 390 px, are in that scratch folder.

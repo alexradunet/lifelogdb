@@ -73,8 +73,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   person, place, metric, habits, search, lists; `internal/api/html/`, embedded) or a generic one for any other. A
   template reads only the properties the JSON carries and places only the actions the entity offers, so a form
   shows where the action is legal and nowhere else. A body is CommonMark with goldmark's safe defaults (raw HTML
-  omitted), its `[[wikilinks]]` and `#tags` linked. No JavaScript: a browser form posts and is answered 303 to the
-  resource it changed, so a reload never posts twice; a refused one shows the text it sent. A form may name the page
+  omitted), its `[[wikilinks]]` and `#tags` linked. A browser form posts and is answered 303 to the resource it
+  changed, so a reload never posts twice; a refused one shows the text it sent. A form may name the page
   to return to in `back` (a path on this server, not a field of any action): a Done button on a list returns to the
   list. A value that is not a plain path is ignored, and a JSON client never follows it
   ([plan 091](docs/plans/091-the-browser-for-daily-use.md)).
@@ -92,6 +92,17 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   page, its first line and its mood), and the catalog action `open-day` goes to a day by its date. The top bar holds
   what is used every day (Today, Calendar, Due, Tasks, the search) and a More menu the rest; on a phone it is two
   rows. The handler reads today from one clock, which a test fixes.
+- **One script, which no page needs** ([plan 091](docs/plans/091-the-browser-for-daily-use.md)). `app.js` is this
+  application's own, embedded and written into each page like the two sheets: no framework, no CDN, no build step.
+  It suggests the names of pages after `[[` (from `GET /titles`), shows a preview of a body as it will show when
+  saved (from `POST /render`), sends the form of a textarea with Ctrl+Enter, leaves a field with Escape, takes keys
+  outside a field (`/` search, `c` capture, `t` today, `[` and `]` the previous and next page), and asks before the
+  browser leaves text that was not sent. It reads nothing else, writes nothing and keeps nothing in the browser. Every form posts and every link
+  works without it; the tests check the pages without running it, and a test keeps its reads to those two routes.
+  `POST /render` is presentation, not a capability: no catalog action names it and it answers HTML only, so it is
+  the one route the CLI and the MCP server do not carry. **Rejected:** a separate web client. It would be a second
+  implementation of every view to keep equal to the catalog, it would hold the token where JavaScript can read it,
+  and it would bring a toolchain that changes every year.
 - **The stylesheet is this application's own: two embedded sheets, no vendored framework and no CDN.** `base.css`
   styles ordinary HTML by element — type, colour, forms, tables, buttons, a print sheet, light and dark by
   `prefers-color-scheme` — and `app.css` only what this app's own vocabulary needs (`.wikilink`, `.badge`, `.chart`,

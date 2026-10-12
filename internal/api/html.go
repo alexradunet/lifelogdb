@@ -21,20 +21,23 @@ import (
 // The browser view is a template per class of entity (html/*.html), and the generic one for any other class:
 // properties, links, and every action as a form. A template is a view of the entity the JSON client gets: it
 // reads the properties by their JSON names and places the entity's own actions, so a form is shown only where
-// the API offers the action. There is no JavaScript: a form posts, and the server answers with a redirect.
+// the API offers the action. A form posts, and the server answers with a redirect.
 //
 // The look is two stylesheets of this application's own; no framework is vendored and nothing is fetched.
 // base.css styles ordinary HTML by element (its forms, tables, buttons, print sheet and dark palette); app.css
 // holds only what this app's own vocabulary needs (.wikilink, .badge, .chart, the dense rows), and a test keeps
-// the two apart.
+// the two apart. app.js is the one script, written into each page the same way: it makes a page better and no
+// page needs it (docs/plans/091-the-browser-for-daily-use.md).
 //
-//go:embed html/*.html html/*.css
+//go:embed html/*.html html/*.css html/*.js
 var views embed.FS
 
 // baseCSS and appCSS are the two stylesheets, in that order: the look of ordinary HTML, then this app's own.
+// appJS is the script.
 var (
 	baseCSS = template.CSS(mustView("base.css"))
 	appCSS  = template.CSS(mustView("app.css"))
+	appJS   = template.JS(mustView("app.js"))
 )
 
 func mustView(name string) []byte {
@@ -48,6 +51,7 @@ func mustView(name string) []byte {
 var pages = template.Must(template.New("").Funcs(template.FuncMap{
 	"basecss":  func() template.CSS { return baseCSS },
 	"appcss":   func() template.CSS { return appCSS },
+	"appjs":    func() template.JS { return appJS },
 	"value":    renderValue,
 	"rel":      func(r []string) string { return strings.Join(r, " ") },
 	"post":     func(a Action) bool { return a.Method == "POST" },

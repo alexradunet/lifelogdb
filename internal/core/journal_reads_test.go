@@ -2,6 +2,7 @@ package core
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -134,5 +135,63 @@ func TestFirstLineIsPlainText(t *testing.T) {
 		if got := FirstLine(c.body); got != c.want {
 			t.Errorf("FirstLine(%q) = %q, want %q", c.body, got, c.want)
 		}
+	}
+}
+
+// TestTitlesByPrefixFoldsLikeATitleKey: a prefix finds the names whose key starts with its title key (case, ß, a
+// decomposed accent), an alias with its page's preferred title, never a tombstoned page, in key order, limited.
+func TestTitlesByPrefixFoldsLikeATitleKey(t *testing.T) {
+	s := fresh(t)
+	page := func(title string) int64 {
+		t.Helper()
+		id, _, err := s.CreatePage(ctx, "cli", title, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	page("Sam Example")
+	page("SAMUEL")
+	page("Sb")
+	page("Straße")
+	page("Café")
+	old := page("Samwise draft")
+	if _, err := s.Rename(ctx, "cli", old, "Gardener"); err != nil {
+		t.Fatal(err)
+	}
+	gone := page("Samantha")
+	if err := s.Tombstone(ctx, "cli", gone); err != nil {
+		t.Fatal(err)
+	}
+	show := func(prefix string, limit int) string {
+		t.Helper()
+		ms, err := s.TitlesByPrefix(ctx, prefix, limit)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, m := range ms {
+			out = append(out, m.Name+"="+m.Title)
+		}
+		return strings.Join(out, ", ")
+	}
+	for _, c := range []struct {
+		prefix string
+		limit  int
+		want   string
+	}{
+		{"sam", 10, "Sam Example=Sam Example, SAMUEL=SAMUEL, Samwise draft=Gardener"},
+		{"  SAM", 2, "Sam Example=Sam Example, SAMUEL=SAMUEL"},
+		{"sa", 10, "Sam Example=Sam Example, SAMUEL=SAMUEL, Samwise draft=Gardener"},
+		{"STRAS", 10, "Straße=Straße"},
+		{"cafe\u0301", 10, "Café=Café"},
+		{"zz", 10, ""},
+	} {
+		if got := show(c.prefix, c.limit); got != c.want {
+			t.Errorf("TitlesByPrefix(%q, %d) = %q, want %q", c.prefix, c.limit, got, c.want)
+		}
+	}
+	if _, err := s.TitlesByPrefix(ctx, "  ", 10); status(err) != 422 {
+		t.Errorf("a blank prefix: %v", err)
 	}
 }
