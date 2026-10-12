@@ -99,7 +99,7 @@ func TestDailyHabitAndMoodRemainIndependentOfSessionFacts(t *testing.T) {
 			t.Fatal(err)
 		}
 		assertMood()
-		rows, err := s.SeriesScope(ctx, "Mood", "2020-01-01", "2020-01-02", "session", session, false)
+		rows, err := s.SeriesScope(ctx, "Mood", "2020-01-01", "2020-01-02", Scope{Kind: "session", SessionID: session, IncludeDeleted: false})
 		if err != nil || len(rows) != map[bool]int{true: 0, false: 1}[deleted] {
 			t.Fatalf("session lifecycle %+v %v", rows, err)
 		}

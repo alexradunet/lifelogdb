@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"mime"
-	"net/http"
-	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -306,28 +304,6 @@ func NormalMIME(s string) string {
 	return t
 }
 
-// types names the files the owner keeps by their extension: fixed here, not the operating system's table, so every
-// machine names a file alike.
-var types = map[string]string{
-	".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".gif": "image/gif", ".webp": "image/webp",
-	".heic": "image/heic", ".heif": "image/heif", ".avif": "image/avif", ".tif": "image/tiff", ".tiff": "image/tiff",
-	".mp4": "video/mp4", ".m4v": "video/mp4", ".mov": "video/quicktime", ".webm": "video/webm", ".mkv": "video/x-matroska",
-	".3gp": "video/3gpp", ".m4a": "audio/mp4", ".mp3": "audio/mpeg", ".wav": "audio/wav", ".ogg": "audio/ogg",
-	".opus": "audio/ogg", ".flac": "audio/flac", ".aac": "audio/aac", ".amr": "audio/amr", ".pdf": "application/pdf",
-	".txt": "text/plain", ".md": "text/markdown", ".html": "text/html", ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-}
-
-// MimeOf names a file's type from its name, else from its first bytes (net/http's sniffing).
-func MimeOf(name string, head []byte) string {
-	if t, ok := types[strings.ToLower(filepath.Ext(name))]; ok {
-		return t
-	}
-	if t := NormalMIME(http.DetectContentType(head)); t != "" {
-		return t
-	}
-	return "application/octet-stream"
-}
-
 // TryAddFile is AddFile in a transaction that is rolled back: what keeping the file would do, writing nothing. A page
 // it would create has no id.
 func (s *Store) TryAddFile(ctx context.Context, source string, f FileIn) (k Kept, err error) {
@@ -336,4 +312,93 @@ func (s *Store) TryAddFile(ctx context.Context, source string, f FileIn) (k Kept
 		k.ID = 0
 	}
 	return
+}
+
+// embed shows a file in a day's page once: `![[title]]` appended after a blank line unless the page shows it
+// already, then the page's links synced (cookbook/place-of-a-photo.md).
+func (t *Tx) embed(dayID int64, title string) (bool, *Sync, error) {
+	var body string
+	if err := t.tx.QueryRowContext(t.ctx, `SELECT body FROM entities WHERE id = ?`, dayID).Scan(&body); err != nil {
+		return false, nil, err
+	}
+	shown, err := t.hasEmbed(body, title)
+	if err != nil {
+		return false, nil, err
+	}
+	if shown {
+		return false, nil, nil
+	}
+	body += func() string {
+		if body == "" {
+			return ""
+		}
+		return "\n\n"
+	}() + "![[" + title + "]]"
+	keys, _, _ := text.Targets(body, "")
+	named := false
+	for _, key := range keys {
+		if key == text.TitleKey(title) {
+			named = true
+		}
+	}
+	if !text.HasEmbed(body, title) || !named {
+		return false, nil, Invalid("automatic photo embed cannot render and link here; edit the day's Markdown before keeping the photo")
+	}
+	_, err = t.tx.ExecContext(t.ctx, `UPDATE entities SET body = ? WHERE id = ?`, body, dayID)
+	if err != nil {
+		return false, nil, err
+	}
+
+	sync, err := t.syncWikilinks(dayID, body)
+	return true, &sync, err
+}
+
+func automaticEmbedTitle(title string) error {
+	mark := "![[" + title + "]]"
+	keys, _, _ := text.Targets(mark, "")
+	if !text.HasEmbed(mark, title) || len(keys) != 1 || keys[0] != text.TitleKey(title) {
+		return Invalid("cannot automatically embed %q: give a new file an explicit representable title; an existing file's handle is not renamed", title)
+	}
+	return nil
+}
+
+func (t *Tx) preflightEmbed(day, title string) error {
+	var body string
+	err := t.tx.QueryRowContext(t.ctx, `SELECT body FROM entities WHERE preferred_name_key = ?`, day).Scan(&body)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	if err == nil {
+		shown, err := t.hasEmbed(body, title)
+		if err != nil {
+			return err
+		}
+		if shown {
+			return nil
+		}
+	}
+	return automaticEmbedTitle(title)
+}
+
+func (t *Tx) hasEmbed(body, title string) (bool, error) {
+	owner, err := t.lookup(title)
+	if err != nil {
+		return false, err
+	}
+	for _, target := range text.EmbeddedTitles(body) {
+		if owner == nil {
+			if text.TitleKey(target) == text.TitleKey(title) {
+				return true, nil
+			}
+			continue
+		}
+		p, err := t.lookup(target)
+		if err != nil {
+			return false, err
+		}
+		if p != nil && p.ID == owner.ID {
+			return true, nil
+		}
+	}
+	return false, nil
 }

@@ -103,11 +103,12 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 	if scope == "" {
 		scope = "unassociated"
 	}
+	sc := core.Scope{Kind: scope, SessionID: sessionID, IncludeDeleted: includeDeleted}
 	var rows []core.Reading
 	if allHistory {
-		rows, err = h.s.SeriesHistory(ctx, name, to, scope, sessionID, includeDeleted)
+		rows, err = h.s.SeriesHistory(ctx, name, to, sc)
 	} else {
-		rows, err = h.s.SeriesScope(ctx, name, from, to, scope, sessionID, includeDeleted)
+		rows, err = h.s.SeriesScope(ctx, name, from, to, sc)
 	}
 	if err != nil {
 		return nil, err
@@ -116,21 +117,17 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 	if err != nil {
 		return nil, err
 	}
-	selfQuery := url.Values{"to": {to}, "scope": {scope}, "session_id": {strconv.FormatInt(sessionID, 10)}, "include_deleted": {boolField(includeDeleted)}}
-	if allHistory {
-		selfQuery.Set("all_history", "1")
-	} else {
-		selfQuery.Set("from", from)
+	// The series' own address, and the address of all its history: the same query with no lower bound.
+	seriesHref := func(allHistory bool) string {
+		v := url.Values{"to": {to}, "scope": {scope}, "session_id": {strconv.FormatInt(sessionID, 10)}, "include_deleted": {boolField(includeDeleted)}}
+		if allHistory {
+			v.Set("all_history", "1")
+		} else {
+			v.Set("from", from)
+		}
+		return metricHref(name) + "?" + v.Encode()
 	}
-	self := metricHref(name) + "?" + selfQuery.Encode()
-	allURL, err := url.Parse(self)
-	if err != nil {
-		return nil, err
-	}
-	allQuery := allURL.Query()
-	allQuery.Del("from")
-	allQuery.Set("all_history", "1")
-	allURL.RawQuery = allQuery.Encode()
+	self, allHref := seriesHref(allHistory), seriesHref(true)
 	m, err := h.metricOf(ctx, name)
 	if err != nil {
 		return nil, err
@@ -145,7 +142,7 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 	}
 	e := &Entity{Class: []string{"series"}, Title: name,
 		Properties: map[string]any{"metric": name, "from": from, "to": to, "readings": rows, "habit_periods": periods, "categories": categories, "scope": scope, "session_id": sessionID, "include_deleted": includeDeleted, "all_history": allHistory},
-		Links:      []Link{link("all-readings", allURL.String(), "All readings"), link("self", self, name), link("up", "/metrics", "Metrics"), link("habits", "/habits", "Habits"), link("index", "/", "Home")},
+		Links:      []Link{link("all-readings", allHref, "All readings"), link("self", self, name), link("up", "/metrics", "Metrics"), link("habits", "/habits", "Habits"), link("index", "/", "Home")},
 		Actions:    []Action{record}}
 	if f := e.Actions[0].field("session_id"); scope == "session" && f != nil {
 		f.Value = sessionID

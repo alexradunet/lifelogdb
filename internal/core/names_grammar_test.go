@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"golang.org/x/text/unicode/norm"
+
 	"lifelog/internal/text"
 )
 

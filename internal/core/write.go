@@ -771,3 +771,16 @@ func (t *Tx) setDeletedAt(table string, id int64, deleted bool) error {
 	_, err := t.tx.ExecContext(t.ctx, q, id)
 	return err
 }
+
+// byImportKey is the entity a sender's key names under this transaction's source; 0 when none.
+func (t *Tx) byImportKey(importKey string) (int64, error) {
+	if importKey == "" {
+		return 0, nil
+	}
+	var id int64
+	err := t.tx.QueryRowContext(t.ctx, `SELECT id FROM entities WHERE source = ? AND import_key = ?`, t.Source, importKey).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	return id, err
+}

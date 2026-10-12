@@ -1,9 +1,10 @@
 package core
 
 import (
-	"lifelog/internal/text"
 	"strings"
 	"testing"
+
+	"lifelog/internal/text"
 )
 
 // photo is a file to keep as a photo taken on day at a position, with a small picture.

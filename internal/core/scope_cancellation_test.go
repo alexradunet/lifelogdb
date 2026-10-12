@@ -4,9 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"lifelog/internal/db"
 	"reflect"
 	"testing"
+
+	"lifelog/internal/db"
 )
 
 func TestScopeRelocationCancellationAfterRetraction(t *testing.T) {

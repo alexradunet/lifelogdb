@@ -129,7 +129,7 @@ func mediaPaths(args []string) ([]string, error) {
 		}
 		var found []string
 		for _, e := range entries {
-			t := core.MimeOf(e.Name(), nil)
+			t := api.MimeOf(e.Name(), nil)
 			if !e.IsDir() && (strings.HasPrefix(t, "image/") || strings.HasPrefix(t, "video/")) {
 				found = append(found, filepath.Join(a, e.Name()))
 			}

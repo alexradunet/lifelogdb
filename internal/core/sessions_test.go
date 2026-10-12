@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"lifelog/internal/db"
 	"path/filepath"
 	"testing"
+
+	"lifelog/internal/db"
 )
 
 func TestSessionCaptureRetryEditLifecycleAndReopen(t *testing.T) {

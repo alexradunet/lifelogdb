@@ -210,7 +210,7 @@ func readOriginal(part *multipart.Part) (sum, typ string, picture []byte, meta p
 	}
 	head = head[:n]
 	h.Write(head)
-	typ = core.MimeOf(part.FileName(), head)
+	typ = MimeOf(part.FileName(), head)
 	held := &capped{max: maxPicture}
 	first := &prefix{max: maxMeta}
 	first.Write(head)

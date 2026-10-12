@@ -41,7 +41,7 @@ func TestMeasurementScopesCorrectionsAndAtomicRelocation(t *testing.T) {
 	if err != nil || len(unassociated) != 1 || unassociated[0].ID != daily || unassociated[0].Value != 10000 || unassociated[0].Scope != "unassociated" {
 		t.Fatalf("unassociated %+v %v", unassociated, err)
 	}
-	all, err := s.SeriesScope(ctx, "Steps", "2020-01-01", "2020-01-02", "all", 0, false)
+	all, err := s.SeriesScope(ctx, "Steps", "2020-01-01", "2020-01-02", Scope{Kind: "all", SessionID: 0, IncludeDeleted: false})
 	if err != nil || len(all) != 3 {
 		t.Fatalf("all %+v %v", all, err)
 	}
@@ -87,11 +87,11 @@ func TestMeasurementScopesCorrectionsAndAtomicRelocation(t *testing.T) {
 	if err := s.Do(ctx, "cli", func(tx *Tx) error { return tx.SessionLifecycle(session.ID, session.Version, true) }); err != nil {
 		t.Fatal(err)
 	}
-	active, err := s.SeriesScope(ctx, "Steps", "2020-01-01", "2020-01-03", "all", 0, false)
+	active, err := s.SeriesScope(ctx, "Steps", "2020-01-01", "2020-01-03", Scope{Kind: "all", SessionID: 0, IncludeDeleted: false})
 	if err != nil || len(active) != 1 || active[0].ID != daily {
 		t.Fatalf("active %+v %v", active, err)
 	}
-	historical, err := s.SeriesScope(ctx, "Steps", "2020-01-01", "2020-01-03", "all", 0, true)
+	historical, err := s.SeriesScope(ctx, "Steps", "2020-01-01", "2020-01-03", Scope{Kind: "all", SessionID: 0, IncludeDeleted: true})
 	if err != nil || len(historical) != 3 {
 		t.Fatalf("historical %+v %v", historical, err)
 	}

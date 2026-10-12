@@ -1,8 +1,10 @@
 package core
 
 import (
+	"context"
 	"fmt"
 	"strings"
+	"time"
 )
 
 type sqlToken struct {
@@ -250,4 +252,83 @@ func isPunct(c byte) bool {
 	default:
 		return false
 	}
+}
+
+// Result is the answer to an ad-hoc read-only query.
+type Result struct {
+	Columns   []string `json:"columns"`
+	Rows      [][]any  `json:"rows"`
+	Truncated bool     `json:"truncated"`
+}
+
+// Query runs exactly one allowed read-only statement on a short-lived mode=ro, query_only connection. The ad-hoc
+// connection is never returned to the ordinary reader pool (connections.md), so scripts, transaction state and PRAGMA
+// setters cannot leak into pooled reads.
+func (s *Store) Query(ctx context.Context, q string, maxRows int) (*Result, error) {
+	if err := validateAdHocSQL(q); err != nil {
+		return nil, invalidCause(err, "%v", err)
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	reader, err := s.DB.AdHocReader()
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+	conn, err := reader.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	rows, err := conn.QueryContext(ctx, q)
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err() // the time ran out, or the client went away: not the statement's fault
+		}
+		return nil, invalidCause(err, "%v", err)
+	}
+	closed := false
+	closeRows := func() error {
+		if closed {
+			return nil
+		}
+		closed = true
+		return rows.Close()
+	}
+	defer closeRows()
+	cols, err := rows.Columns()
+	if err != nil {
+		closeRows()
+		return nil, invalidCause(err, "%v", err)
+	}
+	res := &Result{Columns: cols, Rows: [][]any{}}
+	for rows.Next() {
+		if len(res.Rows) == maxRows {
+			res.Truncated = true
+			break
+		}
+		vals := make([]any, len(cols))
+		ptrs := make([]any, len(cols))
+		for i := range vals {
+			ptrs[i] = &vals[i]
+		}
+		if err := rows.Scan(ptrs...); err != nil {
+			closeRows()
+			return nil, invalidCause(err, "%v", err)
+		}
+		for i, v := range vals {
+			if b, ok := v.([]byte); ok {
+				vals[i] = string(b)
+			}
+		}
+		res.Rows = append(res.Rows, vals)
+	}
+	if err := rows.Err(); err != nil {
+		closeRows()
+		return nil, invalidCause(err, "%v", err)
+	}
+	if err := closeRows(); err != nil {
+		return nil, invalidCause(err, "%v", err)
+	}
+	return res, nil
 }

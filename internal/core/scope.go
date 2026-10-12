@@ -110,16 +110,25 @@ func (s *Store) RelocateReading(ctx context.Context, source string, wrong int64,
 }
 
 // SeriesScope selects unassociated, one session, or explicitly labeled all scopes.
-func (s *Store) SeriesScope(ctx context.Context, metric, from, to, scope string, sessionID int64, includeDeleted bool) ([]Reading, error) {
-	return s.seriesScope(ctx, metric, from, to, scope, sessionID, includeDeleted, false)
+// Scope selects the readings of a series: Kind is "unassociated" (the day's own, the default), "session" (one
+// session's, SessionID) or "all"; IncludeDeleted keeps the readings of tombstoned sessions.
+type Scope struct {
+	Kind           string
+	SessionID      int64
+	IncludeDeleted bool
+}
+
+func (s *Store) SeriesScope(ctx context.Context, metric, from, to string, sc Scope) ([]Reading, error) {
+	return s.seriesScope(ctx, metric, from, to, sc, false)
 }
 
 // SeriesHistory has no lower day bound; to remains inclusive and scope is unchanged.
-func (s *Store) SeriesHistory(ctx context.Context, metric, to, scope string, sessionID int64, includeDeleted bool) ([]Reading, error) {
-	return s.seriesScope(ctx, metric, "", to, scope, sessionID, includeDeleted, true)
+func (s *Store) SeriesHistory(ctx context.Context, metric, to string, sc Scope) ([]Reading, error) {
+	return s.seriesScope(ctx, metric, "", to, sc, true)
 }
 
-func (s *Store) seriesScope(ctx context.Context, metric, from, to, scope string, sessionID int64, includeDeleted, allHistory bool) ([]Reading, error) {
+func (s *Store) seriesScope(ctx context.Context, metric, from, to string, sc Scope, allHistory bool) ([]Reading, error) {
+	scope, sessionID, includeDeleted := sc.Kind, sc.SessionID, sc.IncludeDeleted
 	if !IsDay(to) || !allHistory && !IsDay(from) {
 		return nil, Invalid("series bounds must be exact days")
 	}

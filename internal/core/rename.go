@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+
 	"lifelog/internal/text"
 )
 

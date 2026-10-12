@@ -6,8 +6,6 @@ import (
 	"errors"
 	"math"
 	"strconv"
-
-	"lifelog/internal/text"
 )
 
 // Point is a place's row (D21, the places table): where it is, the radius a photo's position must fall in, and
@@ -142,45 +140,6 @@ func (t *Tx) placeFor(title string) (int64, error) {
 	return 0, &ExistsError{p.ID, p.Title}
 }
 
-// embed shows a file in a day's page once: `![[title]]` appended after a blank line unless the page shows it
-// already, then the page's links synced (cookbook/place-of-a-photo.md).
-func (t *Tx) embed(dayID int64, title string) (bool, *Sync, error) {
-	var body string
-	if err := t.tx.QueryRowContext(t.ctx, `SELECT body FROM entities WHERE id = ?`, dayID).Scan(&body); err != nil {
-		return false, nil, err
-	}
-	shown, err := t.hasEmbed(body, title)
-	if err != nil {
-		return false, nil, err
-	}
-	if shown {
-		return false, nil, nil
-	}
-	body += func() string {
-		if body == "" {
-			return ""
-		}
-		return "\n\n"
-	}() + "![[" + title + "]]"
-	keys, _, _ := text.Targets(body, "")
-	named := false
-	for _, key := range keys {
-		if key == text.TitleKey(title) {
-			named = true
-		}
-	}
-	if !text.HasEmbed(body, title) || !named {
-		return false, nil, Invalid("automatic photo embed cannot render and link here; edit the day's Markdown before keeping the photo")
-	}
-	_, err = t.tx.ExecContext(t.ctx, `UPDATE entities SET body = ? WHERE id = ?`, body, dayID)
-	if err != nil {
-		return false, nil, err
-	}
-
-	sync, err := t.syncWikilinks(dayID, body)
-	return true, &sync, err
-}
-
 // placeOf is the point of a place page, nil when it has none.
 func (s *Store) placeOf(ctx context.Context, id int64) (*Point, error) {
 	p := &Point{}
@@ -203,53 +162,3 @@ func MapLink(lat, lon float64) string {
 
 // round6 is a coordinate as reported: six decimals, about 10 cm.
 func round6(x float64) float64 { return math.Round(x*1e6) / 1e6 }
-
-func automaticEmbedTitle(title string) error {
-	mark := "![[" + title + "]]"
-	keys, _, _ := text.Targets(mark, "")
-	if !text.HasEmbed(mark, title) || len(keys) != 1 || keys[0] != text.TitleKey(title) {
-		return Invalid("cannot automatically embed %q: give a new file an explicit representable title; an existing file's handle is not renamed", title)
-	}
-	return nil
-}
-
-func (t *Tx) preflightEmbed(day, title string) error {
-	var body string
-	err := t.tx.QueryRowContext(t.ctx, `SELECT body FROM entities WHERE preferred_name_key = ?`, day).Scan(&body)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return err
-	}
-	if err == nil {
-		shown, err := t.hasEmbed(body, title)
-		if err != nil {
-			return err
-		}
-		if shown {
-			return nil
-		}
-	}
-	return automaticEmbedTitle(title)
-}
-
-func (t *Tx) hasEmbed(body, title string) (bool, error) {
-	owner, err := t.lookup(title)
-	if err != nil {
-		return false, err
-	}
-	for _, target := range text.EmbeddedTitles(body) {
-		if owner == nil {
-			if text.TitleKey(target) == text.TitleKey(title) {
-				return true, nil
-			}
-			continue
-		}
-		p, err := t.lookup(target)
-		if err != nil {
-			return false, err
-		}
-		if p != nil && p.ID == owner.ID {
-			return true, nil
-		}
-	}
-	return false, nil
-}

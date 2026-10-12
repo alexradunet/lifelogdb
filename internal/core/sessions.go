@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
 
 	"lifelog/internal/text"
 )
@@ -209,4 +210,69 @@ func (s *Store) EditSession(ctx context.Context, source string, id int64, versio
 
 func (s *Store) SessionLifecycle(ctx context.Context, source string, id int64, version string, deleted bool) error {
 	return s.Do(ctx, source, func(t *Tx) error { return t.SessionLifecycle(id, version, deleted) })
+}
+
+func validateSessionEndpoint(at, local, offset, zone string, required bool) error {
+	if at != "" && local != "" {
+		return Invalid("session endpoint cannot be both UTC and local")
+	}
+	if at == "" && local == "" {
+		if required {
+			return Invalid("session start is required")
+		}
+		if offset != "" || zone != "" {
+			return Invalid("session evidence requires an endpoint")
+		}
+		return nil
+	}
+	if at != "" && !IsInstant(at) {
+		return Invalid("session UTC endpoint must be a canonical instant")
+	}
+	if local != "" && (len(local) != 23 || !IsInstant(local+"Z")) {
+		return Invalid("session local endpoint must be a canonical unresolved clock")
+	}
+	if offset != "" {
+		if at == "" {
+			return Invalid("known offset requires a UTC endpoint")
+		}
+		if len(offset) != 6 || (offset[0] != '+' && offset[0] != '-') || offset[3] != ':' || offset == "-00:00" {
+			return Invalid("invalid known offset spelling")
+		}
+		for _, i := range []int{1, 2, 4, 5} {
+			if offset[i] < '0' || offset[i] > '9' {
+				return Invalid("invalid known offset spelling")
+			}
+		}
+		if offset[1:3] > "23" || offset[4:6] > "59" {
+			return Invalid("invalid known offset range")
+		}
+	}
+	if zone != "" && !zoneLabel(zone) {
+		return Invalid("invalid unverified zone label")
+	}
+	return nil
+}
+
+// sessionElapsedMillis is exact across years0000–9999; time.Duration cannot
+// represent that span. Local clocks and mixed endpoints never establish elapsed.
+func sessionElapsedMillis(startAt, endAt string) (*int64, error) {
+	if startAt == "" || endAt == "" {
+		return nil, nil
+	}
+	if !IsInstant(startAt) || !IsInstant(endAt) {
+		return nil, Invalid("elapsed endpoints must be canonical UTC instants")
+	}
+	if endAt < startAt {
+		return nil, Invalid("session UTC endpoints are reversed")
+	}
+	start, err := time.Parse(instantLayout, startAt)
+	if err != nil {
+		return nil, err
+	}
+	end, err := time.Parse(instantLayout, endAt)
+	if err != nil {
+		return nil, err
+	}
+	result := end.UnixMilli() - start.UnixMilli()
+	return &result, nil
 }
