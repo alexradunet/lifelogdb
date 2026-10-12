@@ -1,8 +1,10 @@
 # Fonts
 
-The two faces of the browser view ([plan 092](../../../../docs/plans/092-the-app-shell.md)): Atkinson Hyperlegible for
-words, IBM Plex Mono for days, times, counts and values. Both are under the SIL Open Font License 1.1; each licence is
-the `OFL-*.txt` file beside its fonts, and it is embedded and served with them. `GET /assets/fonts/{file}` serves
+The three faces of the browser view ([plan 092](../../../../docs/plans/092-the-app-shell.md),
+[plan 096](../../../../docs/plans/096-bound-in-hearthwood.md)): Atkinson Hyperlegible for words, IBM Plex Mono for
+days, times, counts and values, Jersey 15 for the few large things (a page's title, the leaf's number, a reading's
+value), 20 px and above only. All are under the SIL Open Font License 1.1; each licence is the `OFL-*.txt` file beside
+its fonts, and it is embedded and served with them. `GET /assets/fonts/{file}` serves
 every file of this folder except this README, by its exact name, with a cache of one year, so **a changed file gets a
 new name**.
 
@@ -10,9 +12,10 @@ Each face is in two files, as Google Fonts serves it: `latin` and `latin-ext` (t
 Latin languages). `base.css` names both with their `unicode-range`, so a browser fetches `latin-ext` only for a page
 that needs it. Any other script is drawn in the system fonts.
 
-The files were fetched on 2026-10-12 from the Google Fonts stylesheet
-`https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500`.
-The licences are `ofl/atkinsonhyperlegible/OFL.txt` and `ofl/ibmplexmono/OFL.txt` of `github.com/google/fonts`.
+The files were fetched on 2026-10-12 from the Google Fonts stylesheets
+`https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500`
+and `https://fonts.googleapis.com/css2?family=Jersey+15`. The licences are `ofl/atkinsonhyperlegible/OFL.txt`,
+`ofl/ibmplexmono/OFL.txt` and `ofl/jersey15/OFL.txt` of `github.com/google/fonts`.
 
 | file | source | sha256 |
 |---|---|---|
@@ -26,3 +29,5 @@ The licences are `ofl/atkinsonhyperlegible/OFL.txt` and `ofl/ibmplexmono/OFL.txt
 | `ibm-plex-mono-400-latin-ext.woff2` | `fonts.gstatic.com/s/ibmplexmono/v20/-F63fjptAgt5VM-kVkqdyU8n1iEq129k.woff2` | `6bc0f226a5b7884a8170e3f62c63d7675609d4631bdc5931b5cdab81821f00eb` |
 | `ibm-plex-mono-500-latin.woff2` | `fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3twJwlBFgg.woff2` | `01d285447409c8a588692162439a038b8cbd7871309ee20267b0d2d91c6e8e22` |
 | `ibm-plex-mono-500-latin-ext.woff2` | `fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3twJwl5FgtIU.woff2` | `6bb06407c97584b0867a959e05e8874693bfeb8c317de190811c51598f2d99ea` |
+| `jersey-15-400-latin.woff2` | `fonts.gstatic.com/s/jersey15/v4/_6_9EDzuROGsUuk2TWjiZYAg.woff2` | `244065acc0429b77f9eb21b4f79ccb5547a8eec944ae1c07d4901f1e9ccd8f3b` |
+| `jersey-15-400-latin-ext.woff2` | `fonts.gstatic.com/s/jersey15/v4/_6_9EDzuROGsUuk2TWjia4AggCk.woff2` | `c2222da8ac1509998586b7c7d7eb377036fcdd3ed2808701c81e6bc2b2a78375` |

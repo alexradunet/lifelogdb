@@ -9,7 +9,7 @@
 - **Priority:** P1. **Effort:** L. **Risk:** MEDIUM: both sheets change in full and every page looks different; the
   tokens and their contrast pairs change, so the contrast test changes with them; one face is added to the embedded
   fonts. No template loses a form or a link. No entity changes, nothing on the wire, none for the schema.
-- **Status:** TODO.
+- **Status:** DONE (two commits: the records, then Parts 1 to 3 together, the commit that closes this record).
 - **Resolves:** issue [0065](../issues/0065-the-almanac-reads-as-a-generic-app.md). No RFC: the contract in `docs/`
   does not change.
 
@@ -101,3 +101,34 @@ flowchart LR
    `go test -count=1 -shuffle=on ./...`; staticcheck and govulncheck if available (reported as not run if not).
 4. One commit for the records, then one a part, each with the baseline green. The issue is resolved and this plan is
    DONE in the commit of Part 3.
+
+## Result (2026-10-12)
+
+The three parts are done in one commit: `app.css` draws every component on the tokens of `base.css`, so the tokens,
+ordinary HTML and the components had to change together (as in plan 092). These points differ from the text above,
+or add to it:
+
+| point | what was done, and why |
+|---|---|
+| a material sets its text | `base.css` names six aliases on `:root` for the oak (`--text`, `--text-strong`, `--text-muted`, `--text-link`, `--text-accent`, `--rule`); `article` and `aside` reset them for parchment, and one rule of `app.css` resets them for each parchment class and each wood class. One rule draws a link, a heading or a stitch on any material, and the contrast test resolves the aliases to their tokens. |
+| gold on wood | Balaur's `--gold` is dark in the light theme, where it would fail on the wood (2:1). The rail has its own `--rail-accent`, the bright gold in both themes, and `--accent` is the gold on the oak. |
+| the text shades | `--muted`, `--accent-ink` and `--link` are darker than Balaur's ink-muted, gold-ink and teal-ink, which sit at 3.8 to 4.5:1 on parchment; the focus ring is a teal that holds 3:1 on oak, wood and parchment at once (`#0e7f6b`). |
+| New | the rail's New is a wood slab with gold words, not the ember button: the template gives it `button primary`, and a rule of `app.css` on `.rail .rail-new.primary` takes that back, so Add stays the one loud button of Today. |
+| the one motion | a press sinks 3 px and turns the bevel; the chosen value of a segmented choice stays sunk. Reduced motion drops the transition and keeps the press. |
+| tables on the oak | a table directly in the column (a series, the habits, the metric tree) sits on a parchment slab (`main>.scroll`, `.group>.scroll`); the month's calendar is parchment cells on a wood slab (`.scroll:has(>table.calendar)`). No template changed. |
+| the margin | each group's rows are one parchment slip (`ul.plain`), each habit its own slip, each reading its tile; the headings and the empty words stay on the oak. |
+| the command list | the one ornate panel: gold corner brackets drawn by eight background gradients on `::before`, as Balaur draws them. |
+| not done | Forest and Dungeon and a theme switch (by decision); Balaur's pixel icons, avatars and uppercase labels (by the rules above). A habit's check-in still shows among the day's readings as a value of 1 with a sawtooth line: it is the day's `trends` as plan 093 defined them, and not this plan's. |
+
+**In a browser.** A program in a scratch folder (`shots.js`, not in the repo) drove Edge 154 (headless) on Windows 11
+through its DevTools protocol, on a synthetic database of 14 written days, four metrics, two habits and five tasks:
+screenshots of Today, Home, a past day, the month, a page, a person, a task, What is due, Tasks, People, Metrics, a
+series, Habits, the search and an error, then the toast after a capture and the command list after Ctrl K and
+three letters, at 1280 px and 390 px, light and dark. They are not kept in git. Reviewed on them: the sheet is the
+largest parchment on a day; one ember button a screen (after the New fix above); the leaf's number, the titles and
+the readings are Jersey 15; the phone's bars are wood and no page is wider than the screen. The press and the folded
+fields were checked in plan 095 and their markup did not change.
+
+**Checks** (Windows 11, Go 1.27.2): `go generate ./... && go vet ./... && go test ./...` passes, mutants included;
+`gofmt` is clean. staticcheck 2026.2.1 (`honnef.co/go/tools` v0.8.1): no finding. govulncheck v1.9.0, default text
+mode: no vulnerability. `go test -count=1 -shuffle=on ./...` passes. Nothing was run on Linux, and no browser but Edge was tried.

@@ -101,8 +101,8 @@ func TestTheFontsAreServedByExactName(t *testing.T) {
 		return rec
 	}
 	urls := regexp.MustCompile(`url\((/assets/fonts/[^)]+)\)`).FindAllStringSubmatch(page(t, h, "/"), -1)
-	if len(urls) != 10 {
-		t.Fatalf("base.css names %d font files, want 10 (5 faces, latin and latin-ext)", len(urls))
+	if len(urls) != 12 {
+		t.Fatalf("base.css names %d font files, want 12 (6 faces, latin and latin-ext)", len(urls))
 	}
 	for _, u := range urls {
 		rec := get("GET", u[1])
@@ -111,7 +111,7 @@ func TestTheFontsAreServedByExactName(t *testing.T) {
 			t.Errorf("GET %s: %d %q %q", u[1], rec.Code, rec.Header().Get("Content-Type"), rec.Header().Get("Cache-Control"))
 		}
 	}
-	for _, licence := range []string{"OFL-atkinson-hyperlegible.txt", "OFL-ibm-plex-mono.txt"} {
+	for _, licence := range []string{"OFL-atkinson-hyperlegible.txt", "OFL-ibm-plex-mono.txt", "OFL-jersey-15.txt"} {
 		if rec := get("GET", "/assets/fonts/"+licence); rec.Code != http.StatusOK || !strings.HasPrefix(rec.Header().Get("Content-Type"), "text/plain") ||
 			!strings.Contains(rec.Body.String(), "SIL Open Font License, Version 1.1") {
 			t.Errorf("the licence %s: %d %q", licence, rec.Code, rec.Header().Get("Content-Type"))

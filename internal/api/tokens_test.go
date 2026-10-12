@@ -9,8 +9,9 @@ import (
 )
 
 // TestTheTokensHoldTheirContrast reads the two token blocks of base.css, light and dark, and checks each pair that a
-// token's use names (docs/plans/092-the-app-shell.md): text 4.5:1 on its grounds, a field border and the focus ring
-// 3:1. The ratio is WCAG 2's, computed here and not by the application.
+// token's use names (docs/plans/096-bound-in-hearthwood.md): text 4.5:1 on its material (ink on parchment, the page's
+// ink on oak, the rail's ink on wood), an edge, the outline and the focus ring 3:1. The ratio is WCAG 2's, computed
+// here and not by the application.
 func TestTheTokensHoldTheirContrast(t *testing.T) {
 	css := cssComments.ReplaceAllString(string(baseCSS), "")
 	light := tokenBlock(t, css, regexp.MustCompile(`(?s)\n:root\{(.*?)\n\}`))
@@ -42,19 +43,29 @@ func TestTheTokensHoldTheirContrast(t *testing.T) {
 			pairs = append(pairs, pair{fg, bg, 3})
 		}
 	}
-	text("ink", "ground", "rail", "surface", "mark", "accent-soft")
-	text("muted", "ground", "rail", "surface", "line-soft")
-	text("accent", "ground", "rail", "surface", "accent-soft")
-	text("on-accent", "accent", "accent-hover")
-	text("warn", "ground", "surface")
-	text("warn-ink", "warn-soft", "surface")
+	text("ink", "surface", "surface-deep", "accent-soft", "mark", "warn-soft", "done-soft", "danger-soft")
+	text("muted", "surface", "surface-deep")
+	text("page-ink", "ground")
+	text("page-strong", "ground")
+	text("page-muted", "ground")
+	text("rail-ink", "rail", "rail-deep")
+	text("rail-accent", "rail", "rail-deep")
+	text("accent", "ground")
+	text("accent-ink", "surface", "surface-deep")
+	text("link", "surface", "surface-deep")
+	text("link-page", "ground")
+	text("on-accent", "accent", "primary", "primary-hover")
+	text("warn", "surface")
+	text("warn-ink", "warn-soft")
 	text("done", "surface")
 	text("done-ink", "done-soft")
 	text("danger", "surface")
 	text("danger-ink", "danger-soft")
 	text("toast-ink", "toast-bg")
 	text("toast-link", "toast-bg")
-	mark("line-strong", "ground", "rail", "surface")
+	mark("edge", "surface")
+	mark("outline", "surface", "surface-deep")
+	mark("danger-line", "surface")
 	mark("focus", "ground", "rail", "surface")
 	for theme, tokens := range map[string]map[string]string{"light": light, "dark": dark} {
 		for _, p := range pairs {

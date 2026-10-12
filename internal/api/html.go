@@ -23,11 +23,12 @@ import (
 // reads the properties by their JSON names and places the entity's own actions, so a form is shown only where
 // the API offers the action. A form posts, and the server answers with a redirect.
 //
-// The look is the Almanac design system (docs/plans/092-the-app-shell.md), in two stylesheets of this
-// application's own; no framework is vendored and nothing is fetched from another host. base.css holds the tokens
-// and styles ordinary HTML by element (its forms, tables, buttons and print sheet, light and dark); app.css holds
-// only what this app's own vocabulary needs (the shell, its components, .wikilink, .chart), and a test keeps the
-// two apart. The two faces are embedded files that /assets/fonts/ serves. app.js is the one script, written into
+// The look is the Almanac design system (docs/plans/092-the-app-shell.md) bound in Hearthwood, the materials of the
+// owner's Balaur design system (docs/plans/096-bound-in-hearthwood.md), in two stylesheets of this application's
+// own; no framework is vendored and nothing is fetched from another host. base.css holds the tokens and styles
+// ordinary HTML by element (its forms, tables, buttons and print sheet, light and dark); app.css holds only what
+// this app's own vocabulary needs (the shell, its components, .wikilink, .chart), and a test keeps the two apart.
+// The three faces are embedded files that /assets/fonts/ serves. app.js is the one script, written into
 // each page like the sheets: it makes a page better and no page needs it
 // (docs/plans/091-the-browser-for-daily-use.md).
 //

@@ -102,10 +102,16 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   which needs no script. The sidebar is the one part of a page that is not the
   page's entity: once a page, and for a browser only, the shell reads the Due count (the root's `due`) and this
   month (`GET /months/{month}`), which every client gets from those two resources. A page drawn before the handler
-  (the login, a refusal of the token) has no sidebar, so it shows nothing of the database. The look is the owner's
-  design system, Lifelog Almanac: cool paper, ink blue, words in Atkinson Hyperlegible and every day, time and number
-  in IBM Plex Mono; light first, dark by `prefers-color-scheme`. Its tokens are custom properties of `base.css`, and
-  a test holds every text pair at 4.5:1 and every field border and the focus ring at 3:1 in both themes. Each part
+  (the login, a refusal of the token) has no sidebar, so it shows nothing of the database. The look is the Almanac
+  bound in Hearthwood, the materials of the owner's Balaur design system
+  ([plan 096](docs/plans/096-bound-in-hearthwood.md)): the page is dark oak, the sidebar and the phone's bars are
+  wood, and everything written is parchment with ink; square corners, 2 px edges, bevels and 3 px hard drops, no
+  blur and no gradient; gold marks where the owner is and what is today, ember is the one loud button of a screen and
+  the word "overdue", teal is a link. Words are in Atkinson Hyperlegible, every day, time and number in IBM Plex Mono,
+  and a page's title, the leaf's number and a reading's value in Jersey 15; dark is the identity and light the
+  daylight study of the same room, by `prefers-color-scheme`. Its tokens are custom properties of `base.css`; a
+  material sets its own text through aliases (`--text`, `--text-link`, …), and a test holds every text pair at
+  4.5:1 and every edge and the focus ring at 3:1 in both themes. The one motion is a press that sinks. Each part
   of an entity has one component: the title and the `prev`/`next` links a page header, properties facts and
   panels, sub-entities rows (an occurrence's with Done and Skip), an action with no visible field a button, one with
   fields a button that opens its form, an error an alert, and a write's `result` a toast at the top of the page,
@@ -141,10 +147,10 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   the fonts (below) are the routes the CLI and the MCP server do not carry. **Rejected:** a separate web client. It would be a second
   implementation of every view to keep equal to the catalog, it would hold the token where JavaScript can read it,
   and it would bring a toolchain that changes every year.
-- **The stylesheet is this application's own: two embedded sheets, two embedded faces, no vendored framework and
+- **The stylesheet is this application's own: two embedded sheets, three embedded faces, no vendored framework and
   no CDN.** `base.css` holds the tokens and styles ordinary HTML by element — type, colour, forms, tables, buttons, a
   print sheet, light and dark — and `app.css` only what this app's own vocabulary needs (the shell and its
-  components, `.wikilink`, `.chart`); a test keeps the app's names out of the base sheet. The two faces are open
+  components, `.wikilink`, `.chart`); a test keeps the app's names out of the base sheet. The three faces are open
   fonts (SIL OFL 1.1), latin and latin-ext, embedded with their licences and served by exact name at
   `GET /assets/fonts/{file}` with a cache of a year; like `/render`, the route is presentation and not in the catalog.
   Nothing is fetched from another host, so a page looks the same offline in fifty years. **Rejected:** a vendored classless sheet (Simple.css, Pico). Its

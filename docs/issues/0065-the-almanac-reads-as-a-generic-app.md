@@ -1,7 +1,7 @@
 # 0065 — The browser's look is not the owner's own: the Almanac reads as a generic app
 
 - **Date:** 2026-10-12
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the owner's request "Let's revamp the almanac design … maybe we can update the almanac based on this
   look", pointing at the owner's own design system, **Balaur — Basm (Hearthwood)**, after
   [plan 095](../plans/095-the-leaf-and-its-margin.md); and a review of the browser on a synthetic database at
@@ -43,4 +43,9 @@ every form with no script, every colour a token with its contrast held by a test
 
 ## Resolution
 
-Filled in when it closes.
+Resolved by [plan 096](../plans/096-bound-in-hearthwood.md). The Almanac keeps its parts (the shell, the leaf, the
+sheet and its margin, one loud button, folded fields, words) and takes the materials of the owner's Balaur design
+system: oak, wood and parchment with ink, square corners, 2 px edges, bevels and hard drops; gold for where the owner
+is and what is today, ember for the one loud button and "overdue", teal for a link; Jersey 15 for a title, the leaf's
+number and a reading. Dark is the identity, light the daylight study, by the system setting. Every token pair is held
+by the contrast test; the fonts are embedded like the others.
