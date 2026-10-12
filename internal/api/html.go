@@ -83,15 +83,16 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 		}
 		return ""
 	},
-	"num":       num,
-	"pathesc":   url.PathEscape,
-	"icon":      icon,
-	"shortDay":  shortDay,
-	"addDays":   addDays,
-	"week":      isoWeek,
-	"segmented": segmented,
-	"alert":     alertOf,
-	"capLater":  capLater,
+	"num":          num,
+	"pathesc":      url.PathEscape,
+	"icon":         icon,
+	"shortDay":     shortDay,
+	"shortDayYear": shortDayYear,
+	"addDays":      addDays,
+	"week":         isoWeek,
+	"segmented":    segmented,
+	"alert":        alertOf,
+	"capLater":     capLater,
 }).ParseFS(views, "html/*.html"))
 
 // dict is the arguments of a sub-template that needs more than one value: name/value pairs, each name a string.
@@ -376,6 +377,7 @@ type formView struct {
 	Shown         []Field // the fields most writes need
 	More          []Field // optional fields, folded; still in the form, so a browser sends them with no script
 	Hidden        []Field
+	prompts       map[string]string // field name to placeholder words
 }
 
 // Multipart reports a form with a file field, shown or folded: a browser sends it as multipart/form-data.
@@ -391,7 +393,8 @@ func (f *formView) Multipart() bool {
 // fieldView is a field as the "field" template draws it: the field, and whether the browser starts in it.
 type fieldView struct {
 	Field
-	Focus bool
+	Focus       bool
+	Placeholder string // a quiet prompt in an empty box; it is an attribute, never sent
 }
 
 // Fields are the fields the form shows (folded false) or folds under "More fields" (folded true).
@@ -402,7 +405,7 @@ func (f *formView) Fields(folded bool) []fieldView {
 	}
 	out := make([]fieldView, len(list))
 	for i, fd := range list {
-		out[i] = fieldView{fd, fd.Name == f.Focus}
+		out[i] = fieldView{fd, fd.Name == f.Focus, f.prompts[fd.Name]}
 	}
 	return out
 }
@@ -456,6 +459,13 @@ func formOf(x any, opts ...string) (*formView, error) {
 			f.Focus = v
 		case k == "back":
 			f.Back = v
+		case k == "placeholder": // "field=words"
+			if name, words, ok := strings.Cut(v, "="); ok {
+				if f.prompts == nil {
+					f.prompts = map[string]string{}
+				}
+				f.prompts[name] = words
+			}
 		case k == "primary":
 			f.Primary, primary = v == "1", true
 		case strings.HasPrefix(k, "choices:"):

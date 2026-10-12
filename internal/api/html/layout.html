@@ -71,8 +71,8 @@
 {{define "field"}}{{if segmented .Field}}<fieldset class="segmented"><legend>{{or .Title .Name}}{{if .Required}} <small>required</small>{{end}}</legend>{{$v := num .Value}}{{$n := .Name}}{{$req := .Required}}{{range .Options}}<label><input type="radio" name="{{$n}}" value="{{.}}"{{if eq . $v}} checked{{end}}{{if $req}} required{{end}}><span>{{.}}</span></label>{{end}}</fieldset>
 {{else}}<label><span>{{or .Title .Name}}{{if .Required}} <small>required</small>{{end}}</span>
 {{if .Options}}<select name="{{.Name}}"{{if .Focus}} autofocus{{end}}>{{$v := num .Value}}{{range .Options}}<option{{if eq . $v}} selected{{end}}>{{.}}</option>{{end}}</select>
-{{else if eq .Type "textarea"}}<textarea name="{{.Name}}"{{with .Rows}} rows="{{.}}"{{end}}{{if .Focus}} autofocus{{end}}>{{num .Value}}</textarea>
-{{else}}<input type="{{.Type}}" name="{{.Name}}" value="{{num .Value}}"{{if .Required}} required{{end}}{{if eq .Type "number"}} step="any" inputmode="decimal"{{end}}{{if .Pages}} data-pages{{end}}{{if .Focus}} autofocus{{end}}>{{end}}</label>
+{{else if eq .Type "textarea"}}<textarea name="{{.Name}}"{{with .Rows}} rows="{{.}}"{{end}}{{with .Placeholder}} placeholder="{{.}}"{{end}}{{if .Focus}} autofocus{{end}}>{{num .Value}}</textarea>
+{{else}}<input type="{{.Type}}" name="{{.Name}}" value="{{num .Value}}"{{if .Required}} required{{end}}{{if eq .Type "number"}} step="any" inputmode="decimal"{{end}}{{if .Pages}} data-pages{{end}}{{with .Placeholder}} placeholder="{{.}}"{{end}}{{if .Focus}} autofocus{{end}}>{{end}}</label>
 {{end}}{{end}}
 
 {{/* boxed is an action as a button that opens its form (the ActionForm of the design system): with no script, a

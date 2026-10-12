@@ -233,10 +233,24 @@ func (s *Store) DayEntries(ctx context.Context, from, through string, newestFirs
 	if newestFirst {
 		order = "DESC"
 	}
+	return s.dayEntries(ctx, `p.day BETWEEN ? AND ?`, order, limit, from, through)
+}
+
+// OnThisDay are the live day pages of earlier years that have the month and the day of day, the newest first, and at
+// most limit of them. The text from the sixth character is "MM-DD", so 29 February matches 29 February only.
+func (s *Store) OnThisDay(ctx context.Context, day string, limit int) ([]DayEntry, error) {
+	if !IsDay(day) || limit < 1 {
+		return nil, invalid("on this day needs an exact day and a limit")
+	}
+	return s.dayEntries(ctx, `p.day < ? AND substr(p.day, 6) = substr(?, 6)`, "DESC", limit, day, day)
+}
+
+// dayEntries reads the live day pages that a condition on p.day selects. order is ASC or DESC, never user text.
+func (s *Store) dayEntries(ctx context.Context, cond, order string, limit int, args ...any) ([]DayEntry, error) {
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT p.day, p.id, p.body FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
-		 WHERE p.day BETWEEN ? AND ? AND p_name.title = p.day AND p.deleted_at IS NULL
-		 ORDER BY p.day `+order+` LIMIT ?`, from, through, limit)
+		 WHERE `+cond+` AND p_name.title = p.day AND p.deleted_at IS NULL
+		 ORDER BY p.day `+order+` LIMIT ?`, append(args, limit)...)
 	if err != nil {
 		return nil, err
 	}

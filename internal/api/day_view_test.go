@@ -104,7 +104,7 @@ func TestTheDayIsALeafAndItsMargin(t *testing.T) {
 		`<span class="date">week 20</span><span class="tag open">today</span>`,
 		`href="/days/2031-05-13" rel="prev" aria-label="Previous day, Tue 13 May"><span aria-hidden="true">‹</span><span class="step-day">Tue 13 May</span></a>`,
 		`href="/days/2031-05-15" rel="next" aria-label="Next day, Thu 15 May"><span class="step-day">Thu 15 May</span><span aria-hidden="true">›</span></a>`,
-		`<p class="empty">Nothing written today yet.</p>`,
+		`<p class="empty">Nothing written today yet. <a href="#capture">Add to today</a> below.</p>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the day lacks %s", want)
@@ -127,13 +127,13 @@ func TestTheDayIsALeafAndItsMargin(t *testing.T) {
 		strings.Count(more[1], "<label>") != 4 || !strings.Contains(more[1], `name="taken_at"`) {
 		t.Errorf("Record a reading is not in the Readings, with 4 folded fields:\n%s", readings)
 	}
-	if !strings.Contains(readings, `<p class="empty">No readings on this day.</p>`) {
+	if !strings.Contains(readings, `<p class="empty">No readings on this day. <a href="#record">Record one</a> below.</p>`) {
 		t.Errorf("a day with no reading does not say so:\n%s", readings)
 	}
 
 	past := browse(t, h, "/days/"+dayOf(-3))
 	for _, want := range []string{`<span class="leaf-day">11</span>`, `<h1>Sunday</h1>`, `<a href="/days/today">Go to today</a>`,
-		`<p class="empty">Nothing written on this day.</p>`, `<h2>Add to Sun 11 May</h2>`} {
+		`<p class="empty">Nothing written on this day. <a href="#capture">Add to it</a> below.</p>`, `<h2>Add to Sun 11 May</h2>`} {
 		if !strings.Contains(past, want) {
 			t.Errorf("a past day lacks %s", want)
 		}

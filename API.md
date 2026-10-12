@@ -109,6 +109,11 @@ filled in), and the outcome (see task) of each occurrence in `due`.
 | `recent[].page_id` | integer | the day page's id |
 | `recent[].first_line` | string | the first line of its body that has text, as plain text: a heading's or a list item's marker and the brackets of a wikilink cut, 160 characters at most; absent when the body is empty |
 | `recent[].mood` | list | the values of the day's current Mood readings with no session, in the order they were recorded; absent when none |
+| `on_this_day[]` | list | the live day pages of earlier years with the same month and day of the month, at most 10, the newest first; empty when none; 29 February matches 29 February only |
+| `on_this_day[].day` | day | the day |
+| `on_this_day[].page_id` | integer | the day page's id |
+| `on_this_day[].first_line` | string | the first line of its body (as `recent[]` of the root); absent when the body is empty |
+| `on_this_day[].mood` | list | the values of the day's current Mood readings with no session; absent when none |
 
 ### actions
 
@@ -206,12 +211,17 @@ answers with this entity and a `result` of the sync shape; its field `mood` has 
 | `habits[].metric` | string | the habit's metric |
 | `habits[].state` | string | `done`, `not done`, `not recorded` or `invalid` |
 | `habits[].recent` | list | its state on each of the 14 days through the day, oldest first: a state above, or `inactive` on a day no period of the habit holds |
-| `trends[]` | list | one for each metric with a current reading of no session on the day, in the order of `readings` |
+| `trends[]` | list | one for each metric with a current reading of no session on the day that is not a habit active on the day, in the order of `readings` |
 | `trends[].metric` | string | the metric's name |
 | `trends[].unit` | string | its unit (`''` for a habit, a range such as `1-5` for a scale) |
 | `trends[].readings[]` | list | its current readings of no session in the 14 days through the day, oldest first (the series of the cookbook) |
 | `trends[].readings[].day` | day |  |
 | `trends[].readings[].value` | number |  |
+| `on_this_day[]` | list | the live day pages of earlier years with the same month and day of the month, at most 10, the newest first; empty when none; 29 February matches 29 February only |
+| `on_this_day[].day` | day | the day |
+| `on_this_day[].page_id` | integer | the day page's id |
+| `on_this_day[].first_line` | string | the first line of its body (as `recent[]` of the root); absent when the body is empty |
+| `on_this_day[].mood` | list | the values of the day's current Mood readings with no session; absent when none |
 | `today` | day | this machine's local day |
 
 The **reading** shape (`readings[]` here and in a series; a measurement's own properties):

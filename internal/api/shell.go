@@ -150,3 +150,12 @@ func shortDay(day string) string {
 	}
 	return t.Format("Mon 2 Jan")
 }
+
+// shortDayYear is a day with its year: "Sun 12 Oct 2025". The margin uses it for the days of earlier years.
+func shortDayYear(day string) string {
+	t, err := time.Parse(time.DateOnly, day)
+	if err != nil {
+		return day
+	}
+	return t.Format("Mon 2 Jan 2006")
+}

@@ -11,12 +11,12 @@
 {{$p := .Props}}
 <header class="page-head"><div class="what"><h1>Tasks</h1>
 <p class="sub"><a href="/deadlines">What is due</a>{{if $p.include_deleted}}<a href="/tasks">Hide deleted tasks</a>{{else}}<a href="/tasks?include_deleted=1">Show deleted tasks</a>{{end}}</p></div>
-<div class="tools">{{template "boxed" (form (.Action "create-task") "more" "repeat_unit,repeat_every,anchor_day,repeat_until_day,reminder_time,reminder_zone,import_key")}}</div></header>
+<div class="tools" id="create">{{template "boxed" (form (.Action "create-task") "more" "repeat_unit,repeat_every,anchor_day,repeat_until_day,reminder_time,reminder_zone,import_key")}}</div></header>
 {{with $p.tasks}}<div class="sheet list">{{range group . "project_title"}}
 <section class="due-group" aria-label="{{with .Key}}{{.}}{{else}}No project{{end}}"><div class="panel-head"><h2>{{with .Key}}{{.}}{{else}}No project{{end}}</h2><span class="meta">{{len .Items}}</span></div>
 <ul class="plain">{{range .Items}}<li><a class="task" href="/tasks/{{num .id}}">{{.label}}</a>{{if .deleted_at}} <span class="tag deleted">deleted</span>{{end}}
 <div class="task-facts">{{$.Cadence .}}{{with $.Reminder .}}<span>reminder {{.}}</span>{{end}}</div></li>{{end}}</ul></section>
-{{end}}</div>{{else}}<p class="empty">No task yet. A task is explicit intent: something to do once, or again and again.</p>{{end}}
+{{end}}</div>{{else}}<p class="empty">No task yet. A task is explicit intent: something to do once, or again and again. <a href="#create">Create one</a> above.</p>{{end}}
 {{template "foot" .}}{{end}}
 
 {{define "task"}}{{template "head" .}}
@@ -63,9 +63,9 @@
 {{$p := .Props}}
 <header class="page-head"><div class="what"><span class="date">{{$.Date $p.from}} to {{$.Date $p.through}}{{if ne $p.state "open"}}, {{$p.state}} only{{end}}</span><h1>What is due</h1>
 <p class="sub"><a href="/tasks">Every task</a></p></div>
-<div class="tools">{{template "boxed" (form (.Action "deadlines") "button" "Another window")}}{{template "boxed" (form (.Action "create-task") "more" "repeat_unit,repeat_every,anchor_day,repeat_until_day,reminder_time,reminder_zone,import_key")}}</div></header>
+<div class="tools" id="window">{{template "boxed" (form (.Action "deadlines") "button" "Another window")}}{{template "boxed" (form (.Action "create-task") "more" "repeat_unit,repeat_every,anchor_day,repeat_until_day,reminder_time,reminder_zone,import_key")}}</div></header>
 {{with due $p.occurrences $p.today true}}<div class="sheet list">{{range .}}<section class="due-group{{if eq .Name "Overdue"}} overdue{{end}}" aria-label="{{.Name}}"><div class="panel-head"><h2>{{.Name}}</h2><span class="meta">{{len .Items}}</span></div>
 <ul class="plain due">{{range .Items}}{{template "occ" ($.Occ .Occurrence .More)}}{{end}}</ul></section>
-{{end}}</div>{{else}}<p class="empty">Nothing is due in this window.</p>{{end}}
+{{end}}</div>{{else}}<p class="empty">Nothing is due in this window. <a href="#window">Another window</a>, or <a href="/tasks">every task</a>.</p>{{end}}
 <p class="desc">A task with no due day is on <a href="/tasks">its own page</a>, not here.</p>
 {{template "foot" .}}{{end}}

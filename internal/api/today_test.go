@@ -8,7 +8,8 @@ import (
 
 // TestTheDayCarriesItsTrends: for each metric with a current reading of no session on the day, its unit and its
 // current readings of no session in the 14 days through the day, oldest first (docs/plans/093-words-phone-and-today.md).
-// A reading outside the window, a session's reading, a corrected value and a retracted reading stay out of it.
+// A reading outside the window, a session's reading, a corrected value and a retracted reading stay out of it, and
+// so does a habit: its strip tells it.
 func TestTheDayCarriesItsTrends(t *testing.T) {
 	c, h := freshOn(t, fixedToday)
 	root := must(c.Get("/"))
@@ -28,12 +29,23 @@ func TestTheDayCarriesItsTrends(t *testing.T) {
 	must(c.Do(find(must(c.Get(record(dayOf(-3), "90"))), "retract"), nil))
 	today := record(fixedToday, "71.1")
 	must(c.Do(find(root, "record"), map[string]string{"metric": "steps", "day": fixedToday, "value": "5000"}))
+	must(c.Do(find(root, "register-metric"), map[string]string{"name": "walk"}))
+	must(c.Do(find(must(c.Get("/metrics/walk")), "start-habit"), map[string]string{"start_day": dayOf(-4)}))
+	must(c.Do(find(must(c.Get("/metrics/walk")), "check-in"), map[string]string{"day": fixedToday, "done": "1"}))
 	must(c.Do(find(root, "create-page"), map[string]string{"title": "Run"}))
 	session := must(c.Do(find(root, "capture-session"), map[string]string{"kind": "Run", "day": fixedToday, "start_at": fixedToday + "T05:00:00.000Z"}))
 	record(fixedToday, "70.9", "session_id", strings.TrimPrefix(href(session, "self"), "/sessions/"))
 
+	dayProps := props(must(c.Get("/days/" + fixedToday)))
+	var habitNames []string
+	for _, x := range dayProps["habits"].([]any) {
+		habitNames = append(habitNames, x.(map[string]any)["metric"].(string))
+	}
+	if strings.Join(habitNames, ",") != "walk" {
+		t.Errorf("habits = %v, want [walk]", habitNames)
+	}
 	var got []string
-	for _, x := range props(must(c.Get("/days/" + fixedToday)))["trends"].([]any) {
+	for _, x := range dayProps["trends"].([]any) {
 		tr := x.(map[string]any)
 		var points []string
 		for _, p := range tr["readings"].([]any) {
@@ -120,5 +132,41 @@ func TestASeriesDoesNotFillItsOwnPage(t *testing.T) {
 	rareBody := browse(t, h, strings.SplitN(hrefOf(rare, "self"), "?", 2)[0])
 	if strings.Contains(rareBody, "more in this window") {
 		t.Error("a series with few slots is folded")
+	}
+}
+
+// TestTheDayAndHomeCarryOnThisDay: the day pages of earlier years on the month and day, the newest first, in the
+// property and in the margin after Due; none, an empty list and no group. The capture box carries its quiet prompt.
+func TestTheDayAndHomeCarryOnThisDay(t *testing.T) {
+	c, h := freshOn(t, fixedToday)
+	root := must(c.Get("/"))
+	older, old := strings.Replace(fixedToday, fixedToday[:4], "2029", 1), strings.Replace(fixedToday, fixedToday[:4], "2027", 1)
+	if got := props(root)["on_this_day"].([]any); len(got) != 0 {
+		t.Fatalf("on_this_day with no page = %v, want an empty list", got)
+	}
+	if body := browse(t, h, "/"); strings.Contains(body, "On this day") {
+		t.Error("Home draws On this day with no entry")
+	}
+	for day, text := range map[string]string{older: "Two years ago.", old: "Four years ago.", dayOf(-1): "Yesterday."} {
+		must(c.Do(find(must(c.Get("/days/"+day)), "capture"), map[string]string{"text": text}))
+	}
+	for _, route := range []string{"/", "/days/" + fixedToday} {
+		var got []string
+		for _, x := range props(must(c.Get(route)))["on_this_day"].([]any) {
+			m := x.(map[string]any)
+			got = append(got, fmt.Sprintf("%v %v", m["day"], m["first_line"]))
+		}
+		if want := []string{older + " Two years ago.", old + " Four years ago."}; strings.Join(got, "|") != strings.Join(want, "|") {
+			t.Errorf("%s on_this_day = %q, want %q", route, got, want)
+		}
+		body := browse(t, h, route)
+		for _, w := range []string{`aria-label="On this day"`, `<a class="entry" href="/days/` + older + `">`, `placeholder="What happened? Who was there?"`} {
+			if !strings.Contains(body, w) {
+				t.Errorf("%s lacks %s", route, w)
+			}
+		}
+		if i, j := strings.Index(body, `aria-label="Due"`), strings.Index(body, `aria-label="On this day"`); i < 0 || j < i {
+			t.Errorf("%s: On this day is not after Due", route)
+		}
 	}
 }

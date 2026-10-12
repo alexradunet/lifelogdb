@@ -197,6 +197,8 @@ ul.plain>li:last-child{border-bottom:0}
 .entry:hover{background:var(--surface-deep); color:var(--text); text-decoration:none}
 .entry .first{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 @media (max-width:519px){.entry{grid-template-columns:minmax(0,1fr) auto}.entry>.date{grid-column:1 / -1}}
+.margin .entry{grid-template-columns:minmax(0,1fr) auto}
+.margin .entry>.date{grid-column:1 / -1}
 
 /* A table wider than the screen scrolls; the page does not. A table on the oak is written on parchment first. */
 .scroll{overflow-x:auto}

@@ -516,6 +516,38 @@ type recentDay struct {
 	Mood []float64 `json:"mood,omitempty"`
 }
 
+// onThisDayMax is how many earlier years a day lists.
+const onThisDayMax = 10
+
+// withMoods adds to each day entry the day's moods.
+func (h *server) withMoods(ctx context.Context, entries []core.DayEntry) ([]recentDay, error) {
+	out := []recentDay{}
+	if len(entries) == 0 {
+		return out, nil
+	}
+	lo, hi := entries[0].Day, entries[0].Day
+	for _, d := range entries {
+		lo, hi = min(lo, d.Day), max(hi, d.Day)
+	}
+	moods, err := h.s.Moods(ctx, lo, hi)
+	if err != nil {
+		return nil, err
+	}
+	for _, d := range entries {
+		out = append(out, recentDay{DayEntry: d, Mood: moods[d.Day]})
+	}
+	return out, nil
+}
+
+// onThisDay are the day pages of earlier years on the month and day of a day, the newest first.
+func (h *server) onThisDay(ctx context.Context, day string) ([]recentDay, error) {
+	entries, err := h.s.OnThisDay(ctx, day, onThisDayMax)
+	if err != nil {
+		return nil, err
+	}
+	return h.withMoods(ctx, entries)
+}
+
 // The root is today at a glance (docs/plans/091-the-browser-for-daily-use.md): what is due today and is overdue,
 // today's habits, the newest day pages, and every action that starts something.
 func (h *server) root(r *http.Request) (*Entity, error) {
@@ -533,15 +565,13 @@ func (h *server) root(r *http.Request) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	recent := []recentDay{}
-	if len(entries) > 0 {
-		moods, err := h.s.Moods(ctx, entries[len(entries)-1].Day, entries[0].Day)
-		if err != nil {
-			return nil, err
-		}
-		for _, d := range entries {
-			recent = append(recent, recentDay{DayEntry: d, Mood: moods[d.Day]})
-		}
+	recent, err := h.withMoods(ctx, entries)
+	if err != nil {
+		return nil, err
+	}
+	onThisDay, err := h.onThisDay(ctx, today)
+	if err != nil {
+		return nil, err
 	}
 	actions := []Action{
 		action("capture", map[string]string{"day": today}, nil), action("search", nil, nil), action("find", nil, nil), action("open-day", nil, nil), action("deadlines", nil, nil), action("create-task", nil, nil),
@@ -549,7 +579,7 @@ func (h *server) root(r *http.Request) (*Entity, error) {
 		h.recordAction(ctx, "", today), action("register-metric", nil, nil), action("query", nil, nil), action("snapshot", nil, nil)}
 	return &Entity{
 		Class: []string{"root"}, Title: "Lifelog",
-		Properties: map[string]any{"today": today, "due": due, "habits": hs, "recent": recent},
+		Properties: map[string]any{"today": today, "due": due, "habits": hs, "recent": recent, "on_this_day": onThisDay},
 		Links: []Link{link("self", "/", "Lifelog"), link("today", dayHref(today), "Today"), link("days", "/days", "Days"),
 			link("sessions", "/sessions", "Sessions"), link("periods", "/periods", "Periods"), link("people", "/people", "People"), link("places", "/places", "Places"), link("files", "/files", "Files"), link("metrics", "/metrics", "Metrics"),
 			link("habits", "/habits", "Habits"), link("tasks", "/tasks", "Tasks"), link("deadlines", "/deadlines", "Deadlines"),
@@ -607,7 +637,9 @@ type dayView struct {
 	Mood   []float64        `json:"mood"`
 	Habits []habitView      `json:"habits"`
 	Trends []trend          `json:"trends"`
-	Today  string           `json:"today"`
+	// OnThisDay are the day pages of earlier years on this month and day.
+	OnThisDay []recentDay `json:"on_this_day"`
+	Today     string      `json:"today"`
 }
 
 func (h *server) day(r *http.Request) (*Entity, error) {
@@ -644,7 +676,11 @@ func (h *server) day(r *http.Request) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	trends, err := h.trends(ctx, day, d.Readings)
+	trends, err := h.trends(ctx, day, d.Readings, hs)
+	if err != nil {
+		return nil, err
+	}
+	onThisDay, err := h.onThisDay(ctx, day)
 	if err != nil {
 		return nil, err
 	}
@@ -654,7 +690,7 @@ func (h *server) day(r *http.Request) (*Entity, error) {
 	}
 	t, _ := time.Parse(time.DateOnly, day)
 	e := &Entity{
-		Class: []string{"day"}, Title: day, Properties: dayView{Day: *d, Due: due, Mood: mood, Habits: hs, Trends: trends, Today: today},
+		Class: []string{"day"}, Title: day, Properties: dayView{Day: *d, Due: due, Mood: mood, Habits: hs, Trends: trends, OnThisDay: onThisDay, Today: today},
 		Links: []Link{link("self", dayHref(day), day), link("prev", dayHref(t.AddDate(0, 0, -1).Format(time.DateOnly)), "Previous day"),
 			link("next", dayHref(t.AddDate(0, 0, 1).Format(time.DateOnly)), "Next day"), link("metrics", "/metrics", "Metrics"), link("index", "/", "Home"),
 			link("month", monthHref(t), t.Format("January 2006"))},
