@@ -9,7 +9,7 @@ data could not answer, a rule that is ambiguous or untestable. It is the evidenc
 
 | id | title | status |
 |---|---|---|
-| [0064](0064-every-group-of-a-page-has-the-same-weight.md) | Every group of a page has the same weight, and the page asks for many decisions at once | open |
+| [0064](0064-every-group-of-a-page-has-the-same-weight.md) | Every group of a page has the same weight, and the page asks for many decisions at once | resolved |
 | [0063](0063-ctrl-k-only-moves-to-the-search.md) | Ctrl K only moves to the search; an action of another page is many steps away | resolved |
 | [0062](0062-the-browser-still-shows-data-not-words.md) | The browser still shows data where it should show words, is heavy on a phone, and Today is thin | resolved |
 | [0061](0061-the-browser-does-not-feel-like-an-application.md) | The browser does not look or move like an application | resolved |

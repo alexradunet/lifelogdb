@@ -67,7 +67,6 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 	"group":    group,
 	"due":      dueGroups,
 	"dueWords": dueWords,
-	"cadence":  cadence,
 	"weeks":    weeks,
 	"dayOfMonth": func(day string) string {
 		if t, err := time.Parse(time.DateOnly, day); err == nil {
@@ -611,21 +610,23 @@ func chart(from, to string, readings any) template.HTML {
 	x := func(p pt) float64 { return left + p.x*(w-left-pad) }
 	y := func(v float64) float64 { return pad + (1-(v-lo)/span)*(h-2*pad-bottom) }
 	var sb strings.Builder
+	first, last := f.Format("Mon 2 Jan 2006"), t.Format("Mon 2 Jan 2006") // the ends in words, with the year: a range can span years
 	fmt.Fprintf(&sb, `<svg class="chart" viewBox="0 0 %g %g" role="img" aria-label="%d readings from %s to %s">`,
-		w, h, len(pts), from, to)
+		w, h, len(pts), first, last)
 	fmt.Fprintf(&sb, `<line class="axis" x1="%g" y1="%g" x2="%g" y2="%g"/><line class="axis" x1="%g" y1="%g" x2="%g" y2="%g"/>`,
 		left, y(hi), w-pad, y(hi), left, y(lo), w-pad, y(lo))
 	fmt.Fprintf(&sb, `<text x="%g" y="%g">%g</text><text x="%g" y="%g">%g</text>`, left-6, y(hi)+4, hi, left-6, y(lo)+4, lo)
 	fmt.Fprintf(&sb, `<text class="x" x="%g" y="%g">%s</text><text class="x" x="%g" y="%g">%s</text>`,
-		left+30, h-4, from, w-pad-30, h-4, to)
+		left+40, h-4, first, w-pad-40, h-4, last)
 	sb.WriteString(`<polyline points="`)
 	for _, p := range pts {
 		fmt.Fprintf(&sb, "%.1f,%.1f ", x(p), y(p.value))
 	}
 	sb.WriteString(`"/>`)
 	for _, p := range pts {
+		d, _ := time.Parse(time.DateOnly, p.day) // parsed above: a point is only made from a day
 		fmt.Fprintf(&sb, `<circle cx="%.1f" cy="%.1f" r="3"><title>%s: %g</title></circle>`, x(p), y(p.value),
-			template.HTMLEscapeString(p.day), p.value)
+			d.Format("Mon 2 Jan 2006"), p.value)
 	}
 	sb.WriteString(`</svg>`)
 	return template.HTML(sb.String())

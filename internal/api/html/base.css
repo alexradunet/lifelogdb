@@ -95,6 +95,7 @@ table{border-collapse:collapse; width:100%; font-size:14px; line-height:20px; fo
 caption{caption-side:bottom; text-align:left; color:var(--muted); font-size:13px; padding:var(--space-2) var(--space-2) 0}
 th,td{text-align:left; vertical-align:top; padding:var(--space-2); border-bottom:1px solid var(--line-soft)}
 thead th{color:var(--muted); font-weight:700; font-size:13px; border-bottom:1px solid var(--line); white-space:nowrap}
+thead th::first-letter{text-transform:uppercase} /* sentence case, also for the names the generic view takes from JSON */
 th[scope=row]{color:var(--muted); font-weight:400}
 tbody tr:hover{background:var(--ground)}
 table table{font-size:inherit}
@@ -142,6 +143,9 @@ figure{margin:0}
 figcaption{color:var(--muted); font-size:13px}
 mark{background:var(--mark); color:var(--ink); padding:0 2px; border-radius:3px}
 kbd{font:400 12px/16px var(--mono); padding:1px 6px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--ground); color:var(--muted); white-space:nowrap}
+
+/* A touch screen: a tall text box is capped, so the page around it stays in view. */
+@media (max-width:899px){textarea{max-height:45vh}}
 
 /* A narrow screen: a smaller title. */
 @media (max-width:640px){

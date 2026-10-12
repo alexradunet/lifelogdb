@@ -171,9 +171,12 @@ func dueWords(dueDay any, today string) string {
 	return clock{today: today}.relative(due)
 }
 
-// cadence says a task's cadence: "every 3 days from 2026-10-05", "every month from 2026-10-01 until 2027-06-30";
-// a one-off is "once".
-func cadence(task any) string {
+// Cadence says a task's cadence in the words of this view.
+func (v *view) Cadence(task any) string { return cadence(task, v.clock()) }
+
+// cadence says a task's cadence, its days as dates: "every 3 days from Mon 5 Oct", "every month from Thu 1 Oct until
+// Wed 30 Jun 2027"; a one-off is "once".
+func cadence(task any, c clock) string {
 	t, _ := task.(map[string]any)
 	unit, _ := t["repeat_unit"].(string)
 	if unit == "" {
@@ -185,10 +188,10 @@ func cadence(task any) string {
 		s = "every " + strconv.FormatFloat(n, 'f', -1, 64) + " " + unit + "s"
 	}
 	if from, _ := t["anchor_day"].(string); from != "" {
-		s += " from " + from
+		s += " from " + c.day(from)
 	}
 	if until, _ := t["repeat_until_day"].(string); until != "" {
-		s += " until " + until
+		s += " until " + c.day(until)
 	}
 	return s
 }

@@ -117,6 +117,22 @@ func TestOptionalFieldsFoldUnderMoreFields(t *testing.T) {
 	}
 }
 
+// TestTheChartSaysItsEndsInWords: the ends of a series' chart are dates in words with their year, on the axis and
+// for a reader, not ISO days (docs/plans/095-the-leaf-and-its-margin.md). 14 July 2026 is a Tuesday: 12 October 2026
+// is a Monday, 90 days later.
+func TestTheChartSaysItsEndsInWords(t *testing.T) {
+	got := string(chart("2026-07-14", "2026-10-12", []any{
+		map[string]any{"day": "2026-09-29", "value": 78.4}, map[string]any{"day": "2026-10-12", "value": 77.1}}))
+	for _, want := range []string{`aria-label="2 readings from Tue 14 Jul 2026 to Mon 12 Oct 2026"`, `>Tue 14 Jul 2026</text>`, `>Mon 12 Oct 2026</text>`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the chart lacks %s:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "2026-07-14") || strings.Contains(got, "2026-10-12") {
+		t.Errorf("the chart shows an ISO day:\n%s", got)
+	}
+}
+
 // TestNavMarksThePageTheBrowserIsOn says one navigation link is current: the one whose path is the page's, else the
 // one with the longest path the page is under, and never a fragment (a place on a page is not a page).
 func TestNavMarksThePageTheBrowserIsOn(t *testing.T) {

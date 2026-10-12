@@ -95,12 +95,12 @@ func TestCadenceAndReminderWords(t *testing.T) {
 		want string
 	}{
 		{map[string]any{"label": "Buy seeds"}, "once"},
-		{map[string]any{"repeat_unit": "day", "repeat_every": 3.0, "anchor_day": "2026-10-05"}, "every 3 days from 2026-10-05"},
+		{map[string]any{"repeat_unit": "day", "repeat_every": 3.0, "anchor_day": "2026-10-05"}, "every 3 days from Mon 5 Oct"},
 		{map[string]any{"repeat_unit": "month", "repeat_every": 1.0, "anchor_day": "2026-10-01", "repeat_until_day": "2027-06-30"},
-			"every month from 2026-10-01 until 2027-06-30"},
-		{map[string]any{"repeat_unit": "week", "repeat_every": 2.0, "anchor_day": "2026-10-05"}, "every 2 weeks from 2026-10-05"},
+			"every month from Thu 1 Oct until Wed 30 Jun 2027"},
+		{map[string]any{"repeat_unit": "week", "repeat_every": 2.0, "anchor_day": "2026-10-05"}, "every 2 weeks from Mon 5 Oct"},
 	} {
-		if got := cadence(c.task); got != c.want {
+		if got := cadence(c.task, clock{today: "2026-10-12"}); got != c.want {
 			t.Errorf("cadence(%v) = %q, want %q", c.task, got, c.want)
 		}
 	}

@@ -1,7 +1,7 @@
 # 0064 — Every group of a page has the same weight, and the page asks for many decisions at once
 
 - **Date:** 2026-10-12
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the owner's request "I want to refine and enhance the frontend design for this app" after
   [plan 094](../plans/094-the-command-list.md), and a review of the browser on a synthetic database (two weeks of
   captures, five tasks, three metrics, two habits) at 1280 px and 390 px, light and dark, in Edge on Windows
@@ -39,4 +39,8 @@ follow the best practices, be adhd friendly and have full functionality". Each i
 
 ## Resolution
 
-Open: [plan 095](../plans/095-the-leaf-and-its-margin.md).
+Resolved by [plan 095](../plans/095-the-leaf-and-its-margin.md), in three commits. A day and Home are headed by a
+calendar leaf, and every page is a sheet with its margin: the writing first, what the day asks of the owner beside it.
+Headings are in sentence case on a type scale; only the main write of a page is a filled button, a row's Done is an
+outline, and an overdue row says so in a word. Long forms fold their optional fields under "N more fields", which a
+browser still sends with no script. Days in the remaining views are words, and controls are 44 px on a phone.

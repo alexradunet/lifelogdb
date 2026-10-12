@@ -9,7 +9,8 @@
 - **Priority:** P1. **Effort:** L. **Risk:** MEDIUM: every template and both sheets change; the form template can fold
   optional fields; a row's Done is no longer a primary button. No entity changes, nothing on the wire, none for the
   schema.
-- **Status:** TODO.
+- **Status:** DONE (three commits: `9b7891d` for Part 1, `40499bf` for Part 2, and the commit that closes this
+  record).
 - **Resolves:** issue [0064](../issues/0064-every-group-of-a-page-has-the-same-weight.md). No RFC: the contract in
   `docs/` does not change.
 
@@ -101,3 +102,40 @@ flowchart LR
    `go test -count=1 -shuffle=on ./...`; staticcheck and govulncheck if available (reported as not run if not).
 4. One commit for the records, then one a part, each with the baseline green. The issue is resolved and this plan is
    DONE in the commit of Part 3.
+
+## Result (2026-10-12)
+
+All three parts are done, one commit each. These points differ from the text above, or add to it:
+
+| point | what was done, and why |
+|---|---|
+| the outcome classes | `outcome-done`, `outcome-skip` and `outcome-reopen`: the classes `done` and `skip` were taken (a state's colour, the skip link), and a form with the class `skip` was moved off the screen. |
+| Record a reading | it is in the margin's Readings, not in the head of the day. Readings is always shown on a day, so the action is beside what it makes. "The day page" is a link of the journal's head only. |
+| a plain `<details>` | a quiet line with a chevron, not a box: Home's New and Owner and a page's Edit need no class. |
+| a page | its facts (the kind, a person's days, a point, a file, created, version) are a group of the margin. An empty page's open editor has no "Nothing written here yet." under it. |
+| the lists | on one sheet, the full width of the column; a group has its count, and Overdue is in the warn colour. |
+| words | a task's cadence ("every 3 days from Mon 5 Oct"), the windows of What is due, a task, a series and Habits, and the chart's ends and points are dates in words. The Days list does not repeat the ISO day. |
+| the chart | at most 800 px wide, and its text larger on a phone, so its words are 11 to 15 px on any screen. |
+| a phone | a text box is at most 45% of the screen high. |
+| headers | the first letter of a table header and of a fact's name is a capital, for the names the generic view takes from JSON too. |
+| template functions | `dict` (the arguments of a sub-template) and `monthOf` (the band of the leaf). |
+| a folded field is sent | checked in the browser, not by a Go test: only a browser shows that a field inside a closed `<details>` is sent. |
+| Habits | its previous and next day are the step buttons of the day. |
+
+**Checks** (Windows 11, Go 1.27.1): `go generate ./... && go vet ./... && go test ./...` passes, mutants included;
+`go test -count=1 -shuffle=on ./...` passes; `gofmt` is clean. staticcheck 2026.2.1 (`honnef.co/go/tools` v0.8.1):
+no finding. govulncheck v1.9.0 (database of 2026-10-08), default text mode, exit 3: 12 vulnerabilities of the
+standard library of go1.27.1 are reachable (`net/http` and its HTTP/2, `html/template`, `crypto/tls`,
+`net/textproto`), all fixed in go1.27.2, none from this plan or from a module; GO-2026-6604 (`os.Root` on Windows) is
+in an imported package and not called. Disposition: open; the fix is the toolchain go1.27.2 (`go.mod`), a separate
+change for the owner to approve. Nothing was run on Linux, and no browser but Edge was tried.
+
+**In a browser.** A program in a scratch folder drove Edge 154 (headless) on Windows 11 through its DevTools protocol,
+on a synthetic database: 22 checks passed. Ctrl K opens the list from a field and Escape closes it; a capture is in
+the journal and the toast is on the surface; Reopen makes a settled row open; Done is an outline and settles its row
+(an overdue one leaves Due, one due today stays on the day, struck through, with Reopen); Record a reading folds 4
+fields, closed, and a `taken_at` set in the closed fold is stored; Today, Home, a page and a task have the same forms
+with the script off; at 390 px the sheet of sections starts closed, More opens it, Close and Escape close it, the
+controls are 44 px, a step button shows its arrow and keeps its day in its name, and no page is wider than the
+screen. Screenshots of Today, Home, a past day, the month, a page, a person, a task, What is due, Tasks, People,
+Metrics, a series, Habits, Sessions and an error, at 1280 px and 390 px, in light and in dark. They are not kept in git.

@@ -1,46 +1,51 @@
-{{/* A page, a person, a place, a file or a period (docs/plans/092-the-app-shell.md): the page header with its kind
-     and its facts, the editor under it, the body on a sheet, then its typed links, its backlinks and its other
-     actions. */}}
+{{/* A page, a person, a place, a file or a period (docs/plans/095-the-leaf-and-its-margin.md): the head with its
+     title (a day page's in words); the sheet with the editor under the head, so a long page is edited without a
+     scroll to its end, then the body; the margin with its facts, its typed links, its backlinks and its other
+     actions. A day page's title is a day in words wherever a page is listed. */}}
 {{define "page"}}{{template "head" .}}
 {{$p := .Props}}
 <header class="page-head"><div class="what">
-<span class="date">{{if $p.is_day_page}}day page{{else}}{{$p.entity_type}}{{end}}{{if $p.deleted_at}} · deleted{{end}}</span>
-<h1>{{.Title}}</h1>
-<p class="sub">
-{{if $p.is_day_page}}<a href="{{.Link "day"}}">{{weekday $p.day}}: the day view</a>{{end}}
-{{with $p.period}}<span>Start: {{if .start_boundary}}{{.start_boundary}}{{else}}unknown{{end}} · End: {{if .end_boundary}}{{.end_boundary}}{{else}}unknown{{end}}</span>{{end}}
-{{with $p.person}}{{with .name}}<span>{{.}}</span>{{end}}{{with .birth_day}}<span>born {{.}}</span>{{end}}{{with .death_day}}<span>died {{.}}</span>{{end}}{{end}}
-{{with $p.file}}<span>{{.mime}}</span><span title="SHA-256 of the original">{{slice .sha256 0 12}}…</span>{{end}}
-{{with $p.point}}<span>{{num .lat}}, {{num .lon}} · {{num .radius_m}} m{{if not .link_days}} · its days are not linked{{end}}</span>{{end}}
-{{with .Link "map"}}<a href="{{.}}" rel="noreferrer">map</a>{{end}}
-</p></div></header>
+<span class="kind">{{if $p.is_day_page}}day page{{else}}{{$p.entity_type}}{{end}}{{if $p.deleted_at}}, deleted{{end}}</span>
+<h1>{{if $p.is_day_page}}{{$.Date .Title}}{{else}}{{.Title}}{{end}}</h1>
+{{if or $p.is_day_page (.Link "map")}}<p class="sub">{{if $p.is_day_page}}<a href="{{.Link "day"}}">{{weekday $p.day}}: the day view</a>{{end}}{{with .Link "map"}}<a href="{{.}}" rel="noreferrer">Open the map</a>{{end}}</p>{{end}}
+</div></header>
 
 {{if $p.deleted_at}}<div class="alert" role="alert"><p><strong>Deleted {{$.When $p.deleted_at}}.</strong> Nothing is ever removed: revive it to bring it back.</p>
 {{template "form" (form (.Action "revive") "class" "tiny")}}</div>{{end}}
-{{with .Link "preview"}}<figure><a href="{{.}}"><img class="preview" src="{{.}}" alt="{{$.Title}}"></a><figcaption>{{$.Title}}</figcaption></figure>{{end}}
 
-{{/* The editor is under the heading, so a long page is edited without a scroll to its end. */}}
+<div class="sheet-margin">
+<div class="sheet">
+{{with .Link "preview"}}<figure><a href="{{.}}"><img class="preview" src="{{.}}" alt="{{$.Title}}"></a><figcaption>{{$.Title}}</figcaption></figure>{{end}}
 {{with form (.Action "save-body") "button" "Save" "autofocus" "body"}}<details{{if not $p.body}} open{{end}}><summary>Edit</summary>
 <small class="desc">CommonMark. [[Title]] links a page and #tag a tag page; both are created if new. Nothing is saved until the version you read is still the current one.</small>
 {{template "form" .}}</details>{{end}}
-
-<section class="section" aria-label="The page">
-{{if $p.body}}<article><div class="prose">{{markdown $p.body}}</div></article>{{else}}<p><small>Nothing written here yet.</small></p>{{end}}
+{{if or $p.body (not (.Action "save-body"))}}<section class="page-body" aria-label="The page">
+{{if $p.body}}<div class="prose">{{markdown $p.body}}</div>{{else}}<p class="empty">Nothing written here yet.</p>{{end}}
 {{with rejected $p.body}}<div class="alert" role="note"><p>These names make no link — a title cannot hold <code>/ \ : * ? " &lt; &gt; |</code>, or start or end with a dot or space:</p>
 <p>{{range $i, $t := .}}{{if $i}}, {{end}}<code>[[{{$t}}]]</code>{{end}}</p></div>{{end}}
-</section>
+</section>{{end}}
+</div>
 
-{{if or $p.links $p.backlinks}}<div class="columns">
-{{with $p.links}}<section class="panel" aria-label="Links"><h2>Links</h2><dl>{{range group . "kind"}}<dt>{{.Key}}</dt>
-<dd>{{range .Items}}<a href="/pages/{{num .id}}">{{.title}}</a>{{with .note}} <small>({{.}})</small>{{end}}{{end}}</dd>{{end}}</dl></section>{{end}}
-{{with $p.backlinks}}<section class="panel" aria-label="Backlinks"><h2>Backlinks</h2>{{range group . "kind"}}<p class="sub">{{if eq .Key "wikilink"}}mentioned in{{else}}{{.Key}}{{end}}</p>
-<ul class="plain">{{range .Items}}<li><a href="/pages/{{num .id}}">{{.title}}</a>{{if ne .entity_type "page"}} <span class="badge">{{.entity_type}}</span>{{end}}</li>{{end}}</ul>{{end}}</section>{{end}}
-</div>{{end}}
+<div class="margin">
+<section class="group" aria-label="Facts"><h2>Facts</h2>
+<dl class="facts">
+{{with $p.person}}{{with .name}}<dt>name</dt><dd class="words">{{.}}</dd>{{end}}{{with .birth_day}}<dt>born</dt><dd>{{$.Date .}}</dd>{{end}}{{with .death_day}}<dt>died</dt><dd>{{$.Date .}}</dd>{{end}}{{end}}
+{{with $p.period}}<dt>start</dt><dd>{{or .start_boundary "unknown"}}</dd><dt>end</dt><dd>{{or .end_boundary "unknown"}}</dd>{{end}}
+{{with $p.point}}<dt>point</dt><dd>{{num .lat}}, {{num .lon}}</dd><dt>radius</dt><dd>{{num .radius_m}} m</dd>{{if not .link_days}}<dt>its days</dt><dd class="words">not linked</dd>{{end}}{{end}}
+{{with $p.file}}<dt>type</dt><dd>{{.mime}}</dd><dt>SHA-256</dt><dd title="SHA-256 of the original">{{slice .sha256 0 12}}…</dd>{{end}}
+<dt>created</dt><dd>{{$.When $p.created_at}}</dd>
+<dt>version</dt><dd>{{$p.version}}</dd>
+</dl></section>
+
+{{with $p.links}}<section class="group" aria-label="Links"><h2>Links</h2><dl>{{range group . "kind"}}<dt>{{.Key}}</dt>
+<dd>{{range .Items}}<a href="/pages/{{num .id}}">{{$.Date .title}}</a>{{with .note}} <small>({{.}})</small>{{end}}{{end}}</dd>{{end}}</dl></section>{{end}}
+{{with $p.backlinks}}<section class="group" aria-label="Backlinks"><h2>Backlinks</h2>{{range group . "kind"}}<p class="sub">{{if eq .Key "wikilink"}}mentioned in{{else}}{{.Key}}{{end}}</p>
+<ul class="plain">{{range .Items}}<li><a href="/pages/{{num .id}}">{{$.Date .title}}</a>{{if ne .entity_type "page"}} <span class="badge">{{.entity_type}}</span>{{end}}</li>{{end}}</ul>{{end}}</section>{{end}}
 
 {{if $p.task_project}}<aside><p>A task uses this page as its project context, so it cannot become a person or a place.</p></aside>
 {{else if $p.session_kind}}<aside><p>This page names a kind of session, so it cannot become a person or a place.</p></aside>{{end}}
 
-{{if or (.Action "rename") (.Action "promote") (.Action "link") (.Action "locate") (.Action "tombstone")}}<section class="section" aria-label="More"><h2>More</h2><div class="actions">
+{{if or (.Action "rename") (.Action "promote") (.Action "link") (.Action "locate") (.Action "tombstone")}}<section class="group" aria-label="More"><h2>More</h2><div class="actions">
 {{template "boxed" (form (.Action "locate") "button" "Set its point")}}
 {{template "boxed" (form (.Action "link") "button" "Add a typed link")}}
 {{template "boxed" (form (.Action "unlink") "button" "Remove a typed link")}}
@@ -49,12 +54,13 @@
 {{template "boxed" (form (.Action "promote-period"))}}
 {{template "boxed" (form (.Action "promote") "button" "Make it a person or a place")}}
 {{template "boxed" (form (.Action "tombstone"))}}</div></section>{{end}}
-<p class="sub"><span class="meta">created {{$.When $p.created_at}}</span><span class="meta">version {{$p.version}}</span></p>
+</div>
+</div>
 {{template "foot" .}}{{end}}
 
 {{define "measurement"}}{{template "head" .}}
 {{$m := .Props}}
-<header class="page-head"><div class="what"><span class="date">{{$m.metric}} · {{$m.day}}</span>
+<header class="page-head"><div class="what"><span class="kind">{{$m.metric}}, {{$.Date $m.day}}</span>
 <h1>{{if $m.retraction}}Retracted{{else}}{{num $m.value}}{{end}}</h1></div></header>
 <dl class="facts">
 <dt>metric</dt><dd><a href="{{.Link "series"}}">{{$m.metric}}</a></dd>

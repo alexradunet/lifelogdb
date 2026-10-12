@@ -187,7 +187,7 @@ a.wikilink.embed{border-bottom:0}
 img.preview{border-radius:var(--radius-md); border:1px solid var(--line)}
 
 /* A series, drawn by the server as an inline <svg>: one point per reading. */
-svg.chart{width:100%; height:auto; padding:var(--space-2); color:var(--accent); background:var(--surface); border:1px solid var(--line);
+svg.chart{width:100%; max-width:800px; height:auto; padding:var(--space-2); color:var(--accent); background:var(--surface); border:1px solid var(--line);
   border-radius:var(--radius-lg)}
 svg.chart polyline{fill:none; stroke:currentColor; stroke-width:2; stroke-linejoin:round; stroke-linecap:round}
 svg.chart circle{fill:currentColor}
@@ -195,6 +195,7 @@ svg.chart circle:hover{fill:var(--warn)}
 svg.chart .axis{stroke:var(--line)}
 svg.chart text{fill:var(--muted); font:400 12px var(--mono); text-anchor:end}
 svg.chart text.x{text-anchor:middle}
+@media (max-width:640px){svg.chart text{font-size:20px}} /* the chart is scaled down to the screen: its words are not */
 
 /* A form of a few short fields, on one line: find, correct, check in, record on a series. */
 form.inline{display:flex; flex-wrap:wrap; align-items:flex-end; gap:var(--space-2)}
@@ -231,6 +232,7 @@ form.outcome-skip button:hover,form.outcome-reopen button:hover{color:var(--ink)
 /* The properties of an entity, typed: the name muted, the value in mono. */
 dl.facts{display:grid; grid-template-columns:minmax(90px,max-content) minmax(0,1fr); gap:var(--space-2) var(--space-4); align-items:baseline}
 dl.facts dt{margin:0; font-size:14px; line-height:20px; font-weight:400; letter-spacing:0; text-transform:none; color:var(--muted)}
+dl.facts dt::first-letter{text-transform:uppercase}
 dl.facts dd{margin:0; display:block; font:400 14px/20px var(--mono); font-variant-numeric:tabular-nums; color:var(--ink)}
 
 /* The state of a habit on a day, in words and in colour. */
@@ -442,6 +444,7 @@ dialog.palette>.meta{flex:none; margin:0; padding:var(--space-2) var(--space-4);
   border:1px solid var(--line); border-radius:var(--radius-lg)}
 .sheet>*+*{padding-top:var(--space-6); border-top:1px solid var(--line-soft)}
 .sheet>details{padding-top:var(--space-3)}
+.sheet>details:first-child{padding-top:0}
 .sheet>details:not([open])+*{margin-top:calc(-1 * var(--space-3))}
 .sheet h2{font-size:15px; line-height:22px}
 .sheet .panel-head{margin-bottom:var(--space-3)}
@@ -474,3 +477,28 @@ dialog.palette>.meta{flex:none; margin:0; padding:var(--space-2) var(--space-4);
   .sheet>*+*{padding-top:var(--space-5)}
   .journal-text{font-size:17px; line-height:28px}
 }
+
+/* Every other view on the sheet (docs/plans/095-the-leaf-and-its-margin.md). The kind of a page over its title, in
+   words; a word among the facts in the sans. */
+.kind{font-size:13px; line-height:19px; color:var(--muted)}
+dl.facts dd.words{font-family:var(--sans)}
+.page-body .prose{font-size:17px; line-height:28px}
+
+/* A list on a sheet: a list page, the search, Tasks, What is due, a task's slots, an occurrence. Its groups have a
+   heading and a count; Overdue is in its tone. */
+.sheet.list{padding:var(--space-2) var(--space-6); gap:0}
+.sheet.list>*+*{padding-top:0}
+.sheet.list>dl.facts{padding-block:var(--space-4)}
+.due-group{display:flex; flex-direction:column; padding-block:var(--space-4)}
+.due-group>.panel-head{margin-bottom:var(--space-2)}
+.due-group>.panel-head :is(h2,h3){font-size:18px; line-height:24px}
+.due-group>.panel-head .meta{font-size:13px}
+.due-group.overdue h2,.due-group.overdue h3{color:var(--warn-ink)}
+.due-group ul.plain>li{padding:var(--space-3) 0; border-top:1px solid var(--line-soft); border-bottom:0}
+a.task{color:var(--ink); font-weight:700}
+.task-facts{display:flex; flex-wrap:wrap; gap:0 var(--space-3); margin-top:2px; font-size:13px; line-height:19px; color:var(--muted)}
+.sheet.list ul.rows>li{border-bottom:1px solid var(--line-soft)}
+.sheet.list ul.rows>li:last-child{border-bottom:0}
+.sheet.list .entry{border-bottom:0}
+.snippet{margin-top:2px; font-size:14px; line-height:20px; color:var(--muted)}
+@media (max-width:899px){.sheet.list{padding:var(--space-1) var(--space-4)}}

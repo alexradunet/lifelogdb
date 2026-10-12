@@ -109,8 +109,13 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   of an entity has one component: the title and the `prev`/`next` links a page header, properties facts and
   panels, sub-entities rows (an occurrence's with Done and Skip), an action with no visible field a button, one with
   fields a button that opens its form, an error an alert, and a write's `result` a toast at the top of the page,
-  which stays until the next page because it may name what the write did not do. The day is the Today of the
-  design system: Capture, the journal and the pages of the day beside Due, the habits and the readings.
+  which stays until the next page because it may name what the write did not do. A day and Home are a calendar
+  leaf, a sheet and its margin ([plan 095](docs/plans/095-the-leaf-and-its-margin.md)): the leaf (the month on a
+  band, the day's number in mono) heads the page; the sheet holds what the page is for (the journal, then Capture);
+  the margin holds what the page asks of the owner (Due, the habits, the readings, the places), and comes after the
+  sheet on a narrow screen. A page, a list and the planning views use the same sheet. One button a screen is filled:
+  the main write; a row's Done is an outline, Skip is quiet, and an overdue row says so in a word. A view can fold an
+  action's optional fields under "N more fields", inside the form, so a browser sends them with no script.
   A value is drawn by its type, never by its property's name ([plan 093](docs/plans/093-words-phone-and-today.md)):
   a day in words near today ("yesterday · Sun 11 Oct"), an instant in the clock of the server's day ("today, 09:48",
   the exact instant kept in its `<time>` element), an object of the generic view as facts, and a write's result in
