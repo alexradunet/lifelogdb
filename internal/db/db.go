@@ -299,6 +299,8 @@ func copyWith(from, to string, copy func(*sql.DB) error) error {
 	if err != nil {
 		return err
 	}
+	// Not dsn(from, true): a reader's query_only refuses VACUUM INTO ("attempt to write a readonly database"),
+	// although the copy writes nothing to from. mode=ro and trusted_schema=OFF still hold.
 	q := url.Values{}
 	q.Set("mode", "ro")
 	q.Add("_pragma", "trusted_schema(0)")

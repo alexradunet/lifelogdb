@@ -607,7 +607,7 @@ func (s *Store) LinkKindsFrom(ctx context.Context, typ string) ([]string, error)
 		return nil, err
 	}
 	defer rows.Close()
-	var out []string
+	out := []string{}
 	for rows.Next() {
 		var k string
 		if err := rows.Scan(&k); err != nil {

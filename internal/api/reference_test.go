@@ -34,7 +34,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		"titles":                              map[string]any{"prefix": "", "limit": 0, "titles": []core.TitleMatch{}},
 		"page, person, place, file, period":   core.Page{},
 		"measurement":                         core.Measurement{},
-		"series":                              map[string]any{"metric": "", "from": "", "to": "", "readings": []core.Reading{}, "habit_periods": []core.Period{}, "categories": []string{}, "scope": "", "session_id": int64(0), "include_deleted": false, "all_history": false},
+		"series":                              map[string]any{"metric": "", "from": "", "to": "", "readings": []core.Reading{}, "habit_periods": []core.HabitPeriod{}, "categories": []string{}, "scope": "", "session_id": int64(0), "include_deleted": false, "all_history": false},
 		"metrics":                             map[string]any{"metrics": []core.Metric{}, "groups": []metricGroup{}},
 		"habits":                              map[string]any{"day": "", "habits": []core.HabitState{}, "from": "", "to": "", "completion": []core.Completion{}},
 		"sessions":                            map[string]any{"sessions": []core.Session{}, "include_deleted": false, "order": ""},

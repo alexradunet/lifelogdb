@@ -119,7 +119,7 @@ func TestScopeRelocationRejectsKeyedAncestorsAgentsAndRollback(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	root, err := s.Record(ctx, "import:synthetic", Reading{Metric: "Weight", Day: "2020-01-02", Value: 70, Key: "9007199254740993"})
+	root, err := s.Record(ctx, "import:synthetic", Reading{Metric: "Weight", Day: "2020-01-02", Value: 70, ImportKey: "9007199254740993"})
 	if err != nil {
 		t.Fatal(err)
 	}

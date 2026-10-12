@@ -121,7 +121,7 @@ func (t *Tx) ReadingsFromTable(page, metric, column string) (*TableReadings, err
 			report(day, cell, "not a plain number: kept as text")
 			continue
 		}
-		id, err := t.Record(Reading{Metric: metric, Day: day, Key: tableKey(p.Title, day), Value: v})
+		id, err := t.Record(Reading{Metric: metric, Day: day, ImportKey: tableKey(p.Title, day), Value: v})
 		var ce *Error
 		switch {
 		case errors.As(err, &ce):

@@ -91,10 +91,21 @@ func TestFindAndReadingsTools(t *testing.T) {
 	if seen["render"] {
 		t.Fatal("the browser's preview was exposed as an MCP tool")
 	}
-	for _, ownerOnly := range []string{"register_metric", "replay", "snapshot"} {
-		if seen[ownerOnly] {
-			t.Fatalf("owner-only action %q was exposed as an MCP tool", ownerOnly)
+	actions, err := c.Catalog(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := 0
+	for _, a := range actions {
+		if a.Owner {
+			owner++
+			if seen[toolName(a.Name)] {
+				t.Fatalf("owner-only action %q was exposed as an MCP tool", a.Name)
+			}
 		}
+	}
+	if owner == 0 {
+		t.Fatal("the catalog has no owner-only action: the check has nothing to check")
 	}
 
 	page := callTool(t, ctx, session, "find", map[string]any{"title": "Ana"})

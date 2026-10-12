@@ -216,8 +216,13 @@ func result(e *api.Entity, err error) (*mcp.CallToolResult, error) {
 	if e == nil && err != nil {
 		return failure(err), nil
 	}
-	b, _ := json.Marshal(e)
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(b)}}, IsError: err != nil}, nil
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false) // a body reads as it was written, as the API and the CLI give it
+	if err := enc.Encode(e); err != nil {
+		return failure(err), nil
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: strings.TrimSuffix(b.String(), "\n")}}, IsError: err != nil}, nil
 }
 
 func failure(err error) *mcp.CallToolResult {

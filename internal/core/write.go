@@ -552,7 +552,7 @@ type Reading struct {
 	Day              string  `json:"day"`
 	TakenAt          string  `json:"taken_at,omitempty"`
 	TZ               string  `json:"tz,omitempty"`
-	Key              string  `json:"import_key,omitempty"`
+	ImportKey        string  `json:"import_key,omitempty"`
 	Value            float64 `json:"value"`
 	CapturedWith     int64   `json:"captured_with_id,omitempty"`
 	SessionID        int64   `json:"session_id,omitempty"`
@@ -560,16 +560,16 @@ type Reading struct {
 	Scope            string  `json:"scope,omitempty"`
 }
 
-// Record appends a measurement. A Key makes a re-send a no-op (ON CONFLICT ... DO NOTHING, docs/contract/imports.md);
+// Record appends a measurement. An ImportKey makes a re-send a no-op (ON CONFLICT ... DO NOTHING, docs/contract/imports.md);
 // the id is 0 when the row was recorded before.
 func (t *Tx) Record(m Reading) (id int64, err error) {
 	metric, err := t.prepareReading(m)
 	if err != nil {
 		return 0, err
 	}
-	if m.Key != "" {
+	if m.ImportKey != "" {
 		var previous sql.NullInt64
-		err := t.tx.QueryRowContext(t.ctx, `SELECT session_id FROM measurements WHERE source=? AND import_key=? AND metric_id=?`, t.Source, m.Key, metric).Scan(&previous)
+		err := t.tx.QueryRowContext(t.ctx, `SELECT session_id FROM measurements WHERE source=? AND import_key=? AND metric_id=?`, t.Source, m.ImportKey, metric).Scan(&previous)
 		if err == nil && previous.Int64 != m.SessionID {
 			return 0, Conflict("measurement source identity cannot change session scope")
 		}
@@ -589,7 +589,7 @@ func (t *Tx) Record(m Reading) (id int64, err error) {
 	                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, `+nowSQL+`)
 	                     ON CONFLICT(source, import_key, metric_id) WHERE import_key IS NOT NULL DO NOTHING
 	                     RETURNING id`,
-		metric, m.Day, nullIfEmpty(m.TakenAt), nullIfEmpty(m.TZ), m.Value, t.Source, nullIfEmpty(m.Key), with, session).Scan(&id)
+		metric, m.Day, nullIfEmpty(m.TakenAt), nullIfEmpty(m.TZ), m.Value, t.Source, nullIfEmpty(m.ImportKey), with, session).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, nil // sent before
 	}

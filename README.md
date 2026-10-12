@@ -65,7 +65,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **Hypermedia (HATEOAS).** Every response is a Siren entity: properties, links, and the actions legal on that
   resource, with their fields prefilled (a page's `save-body` carries its body and `version`). `GET /actions` is
   the catalog; the CLI's `do` and the MCP tools are generated from it, so a new action needs no client change.
-  An error is an entity too: `status`, a `code` a client branches on (`stale_version`, `exists`, `not_found`,
+  An error is an entity too: `status`, a `code` a client branches on (`stale_version`, `exists`, `not_found`, `snapshot_refused`,
   `invalid`, `cross_origin`, `token_required`, or the status's general name) and the message. The lists `/days`,
   `/people`, `/places`, `/files`, `/ghosts` and `/search` take `limit` (1–500) and `offset` and link `next` and
   `prev` ([plan 079](docs/plans/079-client-contract-hygiene.md)).
@@ -172,7 +172,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   and every link works without it; the tests check the pages without running it, and a test keeps its reads to those
   three routes.
   `POST /render` is presentation, not a capability: no catalog action names it and it answers HTML only, so it, the
-  fonts, the style page, the manifest and the icon are the routes the CLI and the MCP server do not carry. **Rejected:** a separate web client. It would be a second
+  fonts, the style page, the manifest, the icon and the pictures (`GET /pages/{id}/preview`, `GET /previews`) are the
+  routes the CLI and the MCP server do not carry. **Rejected:** a separate web client. It would be a second
   implementation of every view to keep equal to the catalog, it would hold the token where JavaScript can read it,
   and it would bring a toolchain that changes every year.
 - **The stylesheet is this application's own: two embedded sheets, three embedded faces, no vendored framework and
@@ -293,7 +294,9 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 | `internal/client` | the hypermedia client (in-process or remote) |
 | `internal/mcp` | the catalog as MCP tools |
 | `internal/agentic` | `lifelog agentic-init`: the texts and MCP configs for a coding agent opened in the folder of the program |
+| `internal/scaletest` | the synthetic personas and the lifetime workload of `tools/lifescale`: generators, an oracle and the timed checks |
 | `tools/copyschema` | `go generate`'s copy of `docs/schema/schema.sql` into `internal/db` |
+| `tools/lifescale` | the lifetime and stress runner over `internal/scaletest` ([tests/README.md](tests/README.md)) |
 | `tests` | the validation suites of the docs ([tests/README.md](tests/README.md)) |
 
 ## Checks

@@ -20,7 +20,7 @@ var sessionFields = []Field{
 
 // sessionInput is the session a form describes.
 func sessionInput(v url.Values) core.SessionInput {
-	return core.SessionInput{Kind: v.Get("kind"), Day: v.Get("day"), Key: v.Get("import_key"),
+	return core.SessionInput{Kind: v.Get("kind"), Day: v.Get("day"), ImportKey: v.Get("import_key"),
 		StartAt: v.Get("start_at"), StartLocal: v.Get("start_local"), StartOffset: v.Get("start_offset"), StartZoneUnverified: v.Get("start_zone_unverified"),
 		EndAt: v.Get("end_at"), EndLocal: v.Get("end_local"), EndOffset: v.Get("end_offset"), EndZoneUnverified: v.Get("end_zone_unverified")}
 }

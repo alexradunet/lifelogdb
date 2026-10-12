@@ -65,7 +65,7 @@ func (h *server) shell(ctx context.Context) (*shellView, error) {
 // login, a refusal before the handler) has no shell, and so no sidebar: it shows nothing of the database.
 func (h *server) write(w http.ResponseWriter, r *http.Request, status int, e *Entity) {
 	if !wantsHTML(r) {
-		write(w, r, status, e)
+		writeEntity(w, r, status, e)
 		return
 	}
 	h.inShell(w, r, status, e)

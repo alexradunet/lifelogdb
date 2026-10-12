@@ -12,7 +12,7 @@ import (
 type SessionInput struct {
 	Kind                string `json:"kind"`
 	Day                 string `json:"day"`
-	Key                 string `json:"import_key,omitempty"`
+	ImportKey           string `json:"import_key,omitempty"`
 	StartAt             string `json:"start_at,omitempty"`
 	StartLocal          string `json:"start_local,omitempty"`
 	StartOffset         string `json:"start_offset,omitempty"`
@@ -55,7 +55,7 @@ const sessionSelect = `SELECT s.id,n.title,s.kind_id,coalesce(e.deleted_at,''),s
 
 func scanSession(row interface{ Scan(...any) error }) (*Session, error) {
 	s := &Session{}
-	if err := row.Scan(&s.ID, &s.Kind, &s.KindID, &s.KindDeletedAt, &s.Day, &s.Key, &s.StartAt, &s.StartLocal, &s.StartOffset, &s.StartZoneUnverified, &s.EndAt, &s.EndLocal, &s.EndOffset, &s.EndZoneUnverified, &s.Source, &s.Version, &s.CreatedAt, &s.UpdatedAt, &s.DeletedAt); err != nil {
+	if err := row.Scan(&s.ID, &s.Kind, &s.KindID, &s.KindDeletedAt, &s.Day, &s.ImportKey, &s.StartAt, &s.StartLocal, &s.StartOffset, &s.StartZoneUnverified, &s.EndAt, &s.EndLocal, &s.EndOffset, &s.EndZoneUnverified, &s.Source, &s.Version, &s.CreatedAt, &s.UpdatedAt, &s.DeletedAt); err != nil {
 		return nil, err
 	}
 	var err error
@@ -84,8 +84,8 @@ func (t *Tx) CaptureSession(in SessionInput) (id int64, existing bool, err error
 	if kind == nil || kind.Type != "page" || kind.DayPage {
 		return 0, false, Invalid("session kind must name a non-journal plain page")
 	}
-	if in.Key != "" {
-		have, e := scanSession(t.tx.QueryRowContext(t.ctx, sessionSelect+`WHERE s.source=? AND s.import_key=?`, t.Source, in.Key))
+	if in.ImportKey != "" {
+		have, e := scanSession(t.tx.QueryRowContext(t.ctx, sessionSelect+`WHERE s.source=? AND s.import_key=?`, t.Source, in.ImportKey))
 		if e == nil {
 			expected := have.SessionInput
 			expected.Kind = in.Kind
@@ -101,7 +101,7 @@ func (t *Tx) CaptureSession(in SessionInput) (id int64, existing bool, err error
 	if kind.Deleted {
 		return 0, false, Conflict("session kind is tombstoned")
 	}
-	err = t.tx.QueryRowContext(t.ctx, `INSERT INTO sessions(kind_id,day,import_key,start_at,start_local,start_offset,start_zone_unverified,end_at,end_local,end_offset,end_zone_unverified,source,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,`+nowSQL+`,`+nowSQL+`) RETURNING id`, kind.ID, in.Day, nullIfEmpty(in.Key), nullIfEmpty(in.StartAt), nullIfEmpty(in.StartLocal), nullIfEmpty(in.StartOffset), nullIfEmpty(in.StartZoneUnverified), nullIfEmpty(in.EndAt), nullIfEmpty(in.EndLocal), nullIfEmpty(in.EndOffset), nullIfEmpty(in.EndZoneUnverified), t.Source).Scan(&id)
+	err = t.tx.QueryRowContext(t.ctx, `INSERT INTO sessions(kind_id,day,import_key,start_at,start_local,start_offset,start_zone_unverified,end_at,end_local,end_offset,end_zone_unverified,source,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,`+nowSQL+`,`+nowSQL+`) RETURNING id`, kind.ID, in.Day, nullIfEmpty(in.ImportKey), nullIfEmpty(in.StartAt), nullIfEmpty(in.StartLocal), nullIfEmpty(in.StartOffset), nullIfEmpty(in.StartZoneUnverified), nullIfEmpty(in.EndAt), nullIfEmpty(in.EndLocal), nullIfEmpty(in.EndOffset), nullIfEmpty(in.EndZoneUnverified), t.Source).Scan(&id)
 	return id, false, err
 }
 
@@ -119,7 +119,7 @@ func (t *Tx) EditSession(id int64, version string, in SessionInput) error {
 	if have.Version != version || have.DeletedAt != "" {
 		return Conflict("live session and current version required")
 	}
-	if in.Key != "" && in.Key != have.Key {
+	if in.ImportKey != "" && in.ImportKey != have.ImportKey {
 		return Invalid("session import identity cannot be changed")
 	}
 	kind, err := t.lookup(in.Kind)

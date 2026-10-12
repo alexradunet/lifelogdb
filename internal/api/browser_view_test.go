@@ -10,13 +10,10 @@ import (
 // TestDangerIsACatalogAction keeps the destructive-action set honest: it names nothing the catalog does not
 // have, and it is what a browser draws from — never an action's name read by a template.
 func TestDangerIsACatalogAction(t *testing.T) {
-	known := map[string]bool{}
+	dangerous := map[string]bool{}
 	for _, s := range catalog {
-		known[s.Name] = true
-	}
-	for name := range dangerous {
-		if !known[name] {
-			t.Errorf("dangerous names %q, which is no catalog action", name)
+		if s.Danger {
+			dangerous[s.Name] = true
 		}
 	}
 	if len(dangerous) == 0 {

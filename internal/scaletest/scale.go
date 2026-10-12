@@ -196,10 +196,10 @@ func Run(ctx context.Context, options Options) (report *Report, err error) {
 	// A malformed batch must roll back its valid prefix. The independent row
 	// and leaf checks below detect leakage without timing this control.
 	bad := s.Do(ctx, "import:scale", func(tx *core.Tx) error {
-		if _, e := tx.Record(core.Reading{Metric: metricNames[0], Day: "1970-01-01", Value: 1, Key: "refused-prefix"}); e != nil {
+		if _, e := tx.Record(core.Reading{Metric: metricNames[0], Day: "1970-01-01", Value: 1, ImportKey: "refused-prefix"}); e != nil {
 			return e
 		}
-		_, e := tx.Record(core.Reading{Metric: metricNames[0], Day: "1970-02-30", Value: 1, Key: "refused-invalid"})
+		_, e := tx.Record(core.Reading{Metric: metricNames[0], Day: "1970-02-30", Value: 1, ImportKey: "refused-invalid"})
 		return e
 	})
 	var refusal *core.Error
@@ -346,7 +346,7 @@ func build(ctx context.Context, s *core.Store, p Profile, o Options) (*fixture, 
 				if metric == 3 {
 					value = float64(n % 2)
 				}
-				in := core.Reading{Metric: metricNames[metric], Day: anchor.AddDate(0, 0, when).Format(time.DateOnly), Value: value, Key: fmt.Sprintf("reading:%d", n)}
+				in := core.Reading{Metric: metricNames[metric], Day: anchor.AddDate(0, 0, when).Format(time.DateOnly), Value: value, ImportKey: fmt.Sprintf("reading:%d", n)}
 				id, e := tx.Record(in)
 				if e != nil {
 					return fmt.Errorf("reading %d: %w", n, e)

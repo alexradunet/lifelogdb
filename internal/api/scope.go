@@ -25,7 +25,7 @@ func (h *server) relocateReading(r *http.Request, src string) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	result, err := h.s.RelocateReading(r.Context(), src, id, core.Reading{Metric: v.Get("metric"), Day: v.Get("day"), Value: *value, SessionID: session, CapturedWith: captured, TakenAt: v.Get("taken_at"), TZ: v.Get("tz"), Key: v.Get("import_key")})
+	result, err := h.s.RelocateReading(r.Context(), src, id, core.Reading{Metric: v.Get("metric"), Day: v.Get("day"), Value: *value, SessionID: session, CapturedWith: captured, TakenAt: v.Get("taken_at"), TZ: v.Get("tz"), ImportKey: v.Get("import_key")})
 	if err != nil {
 		return nil, err
 	}

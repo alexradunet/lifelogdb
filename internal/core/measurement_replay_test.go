@@ -15,7 +15,7 @@ func TestRecordReplayAfterSessionTombstone(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	input := Reading{Metric: "Mood", Day: "2026-10-07", Value: 3, Key: "reading-1", SessionID: session}
+	input := Reading{Metric: "Mood", Day: "2026-10-07", Value: 3, ImportKey: "reading-1", SessionID: session}
 	root, err := s.Record(ctx, "import:synthetic", input)
 	if err != nil || root == 0 {
 		t.Fatalf("initial record: id=%d err=%v", root, err)
@@ -48,7 +48,7 @@ func TestRecordReplayAfterSessionTombstone(t *testing.T) {
 	if again, err := s.Record(ctx, "import:synthetic", input); err != nil || again != 0 {
 		t.Errorf("exact committed retry must remain a no-op after session tombstone: id=%d err=%v", again, err)
 	}
-	input.Key = "reading-2"
+	input.ImportKey = "reading-2"
 	if _, err := s.Record(ctx, "import:synthetic", input); err == nil {
 		t.Error("new value accepted on tombstoned session")
 	}

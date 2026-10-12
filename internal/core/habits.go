@@ -179,8 +179,8 @@ type Completion struct {
 	Invalid     int    `json:"invalid"`
 }
 
-func (s *Store) Completion(ctx context.Context, from, to string) ([]Completion, error) {
-	if err := checkWindow(from, to); err != nil {
+func (s *Store) Completion(ctx context.Context, from, through string) ([]Completion, error) {
+	if err := checkWindow(from, through); err != nil {
 		return nil, err
 	}
 	rows, err := s.DB.R.QueryContext(ctx, `
@@ -202,7 +202,7 @@ func (s *Store) Completion(ctx context.Context, from, to string) ([]Completion, 
 		             FROM measurement_values WHERE session_id IS NULL GROUP BY metric_id, day) s
 		         ON s.metric_id = a.metric_id AND s.day = a.day
 		 GROUP BY m.id
-		 ORDER BY m.preferred_name_key`, sql.Named("from_day", from), sql.Named("to_day", to))
+		 ORDER BY m.preferred_name_key`, sql.Named("from_day", from), sql.Named("to_day", through))
 	if err != nil {
 		return nil, err
 	}
@@ -218,23 +218,23 @@ func (s *Store) Completion(ctx context.Context, from, to string) ([]Completion, 
 	return out, rows.Err()
 }
 
-// Period is one habit period.
-type Period struct {
+// HabitPeriod is one habit period.
+type HabitPeriod struct {
 	Start string `json:"start_day"`
 	End   string `json:"end_day,omitempty"`
 }
 
 // Periods lists a metric's habit periods, oldest first.
-func (s *Store) Periods(ctx context.Context, metric string) ([]Period, error) {
+func (s *Store) HabitPeriods(ctx context.Context, metric string) ([]HabitPeriod, error) {
 	rows, err := s.DB.R.QueryContext(ctx, `SELECT h.start_day, coalesce(h.end_day, '') FROM habit_periods h
 	                                         JOIN entities m ON m.id = h.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key  WHERE m.id = (SELECT entity_id FROM entity_names WHERE name_key = ?) ORDER BY h.start_day`, text.TitleKey(metric))
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	out := []Period{}
+	out := []HabitPeriod{}
 	for rows.Next() {
-		var p Period
+		var p HabitPeriod
 		if err := rows.Scan(&p.Start, &p.End); err != nil {
 			return nil, err
 		}

@@ -28,13 +28,13 @@ func TestSessionCaptureRetryEditLifecycleAndReopen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	in := SessionInput{Kind: "Sleep", Day: "2020-01-02", Key: "18446744073709551615", StartLocal: "2020-01-01T23:00:00.000", EndLocal: "2020-01-02T07:00:00.000", StartZoneUnverified: "Claimed/Zone"}
+	in := SessionInput{Kind: "Sleep", Day: "2020-01-02", ImportKey: "18446744073709551615", StartLocal: "2020-01-01T23:00:00.000", EndLocal: "2020-01-02T07:00:00.000", StartZoneUnverified: "Claimed/Zone"}
 	var id int64
 	if err := s.Do(ctx, "import:synthetic", func(tx *Tx) error { var e error; id, _, e = tx.CaptureSession(in); return e }); err != nil {
 		t.Fatal(err)
 	}
 	have, err := s.Session(ctx, id)
-	if err != nil || have.Day != "2020-01-02" || have.StartAt != "" || have.ElapsedMilliseconds != nil || have.Key != in.Key || have.StartZoneUnverified != "Claimed/Zone" {
+	if err != nil || have.Day != "2020-01-02" || have.StartAt != "" || have.ElapsedMilliseconds != nil || have.ImportKey != in.ImportKey || have.StartZoneUnverified != "Claimed/Zone" {
 		t.Fatalf("stored %+v %v", have, err)
 	}
 	if _, err := s.Rename(ctx, "cli", kind, "Rest"); err != nil {
@@ -109,7 +109,7 @@ func TestSessionCaptureRetryEditLifecycleAndReopen(t *testing.T) {
 	if err != nil || revived.KindDeletedAt == "" || revived.DeletedAt != "" {
 		t.Fatalf("kind lifecycle %+v %v", revived, err)
 	}
-	in.Key = "9007199254740993"
+	in.ImportKey = "9007199254740993"
 	if err := s.Do(ctx, "cli", func(tx *Tx) error { _, _, err := tx.CaptureSession(in); return err }); err == nil {
 		t.Fatal("selected tombstoned kind")
 	}
@@ -122,7 +122,7 @@ func TestSessionCaptureRetryEditLifecycleAndReopen(t *testing.T) {
 	}
 	s.DB = d
 	reopened, err := s.Session(ctx, id)
-	if err != nil || reopened.Key != "18446744073709551615" || reopened.KindID != kind || reopened.StartLocal != in.StartLocal {
+	if err != nil || reopened.ImportKey != "18446744073709551615" || reopened.KindID != kind || reopened.StartLocal != in.StartLocal {
 		t.Fatalf("reopen %+v %v", reopened, err)
 	}
 }

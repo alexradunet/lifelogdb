@@ -52,7 +52,7 @@ func (h *server) render(w http.ResponseWriter, r *http.Request) {
 	v, err := form(r)
 	if err != nil {
 		e, status := errorEntity(err)
-		write(w, r, status, e)
+		writeEntity(w, r, status, e)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -62,7 +62,7 @@ func (h *server) render(w http.ResponseWriter, r *http.Request) {
 
 // saveBody is the save-body of a page, its body and version filled. Its textarea is as tall as the body, 12 to 40
 // lines, so a long page is edited without a scroll inside a small box.
-func saveBody(id int64, body, version string) Action {
+func saveBodyAction(id int64, body, version string) Action {
 	a := action("save-body", idParam(id), map[string]any{"body": body, "version": version})
 	a.field("body").Rows = min(max(strings.Count(body, "\n")+2, 12), 40)
 	return a

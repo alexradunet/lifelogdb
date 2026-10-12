@@ -179,7 +179,7 @@ func TestMeasurementsAreAppendOnly(t *testing.T) {
 	if _, err := s.Record(ctx, "cli", Reading{Metric: "weight", Day: "2026-09-29", Value: 70}); status(err) != 404 {
 		t.Errorf("an unregistered metric: %v", err)
 	}
-	m := Reading{Metric: "mood", Day: "2026-09-29", Value: 3, Key: "k1"}
+	m := Reading{Metric: "mood", Day: "2026-09-29", Value: 3, ImportKey: "k1"}
 	id, err := s.Record(ctx, "agent:x", m)
 	if err != nil || id == 0 {
 		t.Fatal(id, err)
@@ -206,7 +206,7 @@ func TestMeasurementsAreAppendOnly(t *testing.T) {
 // A correction of an imported, keyed reading is the corrector's row: its writer's source and no import key.
 func TestACorrectionKeepsItsWritersProvenance(t *testing.T) {
 	s := fresh(t)
-	root, err := s.Record(ctx, "import:notebook", Reading{Metric: "mood", Day: "2026-10-07", Value: 3, Key: "Medical/Mood.md|reading|mood|2026-10-07|1"})
+	root, err := s.Record(ctx, "import:notebook", Reading{Metric: "mood", Day: "2026-10-07", Value: 3, ImportKey: "Medical/Mood.md|reading|mood|2026-10-07|1"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -31,6 +31,7 @@ func (s *feedbackStore) clock() time.Time {
 	}
 	return time.Now()
 }
+
 func (s *feedbackStore) put(destination string, result any) string {
 	if result == nil {
 		return destination
@@ -81,6 +82,7 @@ func (s *feedbackStore) put(destination string, result any) string {
 	u.RawQuery = q.Encode()
 	return u.String()
 }
+
 func (s *feedbackStore) take(path, token string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()

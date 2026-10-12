@@ -26,7 +26,7 @@ type TaskSpec struct {
 type Task struct {
 	TaskSpec
 	ID               int64  `json:"id"`
-	Key              string `json:"import_key,omitempty"`
+	ImportKey        string `json:"import_key,omitempty"`
 	Source           string `json:"source"`
 	Version          string `json:"version"`
 	CreatedAt        string `json:"created_at"`
@@ -117,7 +117,7 @@ const occurrenceSelect = `SELECT o.id,o.task_id,o.occurrence_key,coalesce(o.due_
 
 func scanTask(row interface{ Scan(...any) error }) (*Task, error) {
 	p := &Task{}
-	err := row.Scan(&p.ID, &p.Label, &p.ProjectPageID, &p.RepeatUnit, &p.RepeatEvery, &p.AnchorDay, &p.RepeatUntilDay, &p.ReminderLocalTime, &p.ReminderZone, &p.Key, &p.Source, &p.Version, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt, &p.ProjectTitle, &p.ProjectDeletedAt)
+	err := row.Scan(&p.ID, &p.Label, &p.ProjectPageID, &p.RepeatUnit, &p.RepeatEvery, &p.AnchorDay, &p.RepeatUntilDay, &p.ReminderLocalTime, &p.ReminderZone, &p.ImportKey, &p.Source, &p.Version, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt, &p.ProjectTitle, &p.ProjectDeletedAt)
 	return p, err
 }
 
@@ -185,7 +185,7 @@ func (s *Store) Deadlines(ctx context.Context, from, through string, includeDele
 		}
 		for _, o := range os {
 			if len(out) >= maxTaskOccurrences {
-				return nil, Invalid("deadline window exceeds 10000 occurrence limit")
+				return nil, Invalid("deadline window exceeds %d occurrence limit", maxTaskOccurrences)
 			}
 			out = append(out, Deadline{o, p.Label})
 		}
@@ -625,7 +625,7 @@ func (s *Store) TaskOccurrences(ctx context.Context, taskID int64, from, through
 			return nil, errors.Join(e, rows.Close())
 		}
 		if len(persisted) >= maxTaskOccurrences {
-			return nil, errors.Join(Invalid("task window exceeds 10000 occurrence limit"), rows.Close())
+			return nil, errors.Join(Invalid("task window exceeds %d occurrence limit", maxTaskOccurrences), rows.Close())
 		}
 		o.withTask(p)
 		persisted[o.OccurrenceKey] = *o
@@ -640,7 +640,7 @@ func (s *Store) TaskOccurrences(ctx context.Context, taskID int64, from, through
 			return nil
 		}
 		if len(out) >= maxTaskOccurrences {
-			return Invalid("task window exceeds 10000 occurrence limit")
+			return Invalid("task window exceeds %d occurrence limit", maxTaskOccurrences)
 		}
 		out = append(out, o)
 		return nil

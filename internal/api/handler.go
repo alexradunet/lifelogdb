@@ -43,6 +43,9 @@ func newHandler(s *core.Store, localDay func() string, zone *time.Location, trus
 	h.mux = m
 	get := func(p string, f func(*http.Request) (*Entity, error)) { m.HandleFunc("GET "+p, h.serve(f)) }
 	post := func(p string, f func(*http.Request, string) (*Entity, error)) {
+		if ownerPath("POST", p) { // the catalog says whose the action is; the route refuses an agent
+			f = ownerOnly(f)
+		}
 		m.HandleFunc("POST "+p, h.serve(func(r *http.Request) (*Entity, error) {
 			src, err := source(r)
 			if err != nil {
@@ -67,7 +70,7 @@ func newHandler(s *core.Store, localDay func() string, zone *time.Location, trus
 	get("/pages/{id}", h.page)
 	get("/people", h.named("person", "people", "create-person"))
 	get("/places", h.named("place", "places", "create-place"))
-	post("/measurements/{id}/relocate", ownerOnly(h.relocateReading))
+	post("/measurements/{id}/relocate", h.relocateReading)
 	get("/sessions", h.sessions)
 	get("/sessions/{id}", h.session)
 	post("/sessions", h.captureSession)
@@ -109,8 +112,8 @@ func newHandler(s *core.Store, localDay func() string, zone *time.Location, trus
 	post("/pages/{id}/promote", h.promote)
 	post("/pages/{id}/tombstone", h.tombstone)
 	post("/pages/{id}/revive", h.revive)
-	post("/pages/{id}/links", h.link)
-	post("/pages/{id}/unlink", h.unlink)
+	post("/pages/{id}/links", h.linkPages)
+	post("/pages/{id}/unlink", h.unlinkPages)
 	post("/measurements", h.record)
 	post("/measurements/from-table", h.readingsFromTable)
 	post("/measurements/{id}/correct", h.correct)
@@ -118,8 +121,8 @@ func newHandler(s *core.Store, localDay func() string, zone *time.Location, trus
 	post("/query", h.query)
 	post("/pages/{id}/rename", h.rename)
 	post("/pages/{id}/locate", h.locate)
-	post("/metrics", ownerOnly(h.registerMetric))
-	post("/snapshots", ownerOnly(h.snapshot))
+	post("/metrics", h.registerMetric)
+	post("/snapshots", h.snapshot)
 	post("/metrics/{name}/periods", h.startHabit)
 	post("/metrics/{name}/stop", h.stopHabit)
 	post("/metrics/{name}/check-in", h.checkIn)
@@ -146,7 +149,7 @@ func newHandler(s *core.Store, localDay func() string, zone *time.Location, trus
 	}
 	guard.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		e, status := errorEntity(&core.Error{Status: http.StatusForbidden, Msg: "cross-origin browser write refused", Code: "cross_origin"})
-		write(w, r, status, e)
+		writeEntity(w, r, status, e)
 	}))
 	return guard.Handler(m)
 }
@@ -334,7 +337,8 @@ func codeOf(status int) string {
 	return "internal"
 }
 
-func write(w http.ResponseWriter, r *http.Request, status int, e *Entity) {
+// writeEntity answers with the entity as Siren JSON, or as a page when the client is a browser.
+func writeEntity(w http.ResponseWriter, r *http.Request, status int, e *Entity) {
 	if wantsHTML(r) {
 		renderHTML(w, r, status, e, nil)
 		return
@@ -573,7 +577,7 @@ func (h *server) dayEntity(ctx context.Context, day string) (*Entity, error) {
 		if err != nil {
 			return nil, err
 		}
-		e.Actions = append(e.Actions, saveBody(d.PageID, p.Body, p.Version))
+		e.Actions = append(e.Actions, saveBodyAction(d.PageID, p.Body, p.Version))
 	}
 	e.Actions = append(append(e.Actions, checkIns(states, day)...), outcomesOf(due, today)...)
 	for _, m := range d.Readings {
@@ -634,7 +638,7 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 		e.Actions = []Action{action("revive", ids, nil)}
 		return e, nil
 	}
-	e.Actions = append(e.Actions, saveBody(id, p.Body, p.Version))
+	e.Actions = append(e.Actions, saveBodyAction(id, p.Body, p.Version))
 	if !p.IsDayPage {
 		if p.Type == "page" && !p.SessionKind && !p.TaskProject {
 			e.Actions = append(e.Actions, action("promote", ids, nil), action("promote-period", ids, map[string]any{"version": p.Version}))
@@ -837,7 +841,7 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 	if err != nil {
 		return nil, err
 	}
-	periods, err := h.s.Periods(ctx, name)
+	periods, err := h.s.HabitPeriods(ctx, name)
 	if err != nil {
 		return nil, err
 	}
@@ -1103,7 +1107,7 @@ func (h *server) linkEnds(r *http.Request) (from, to int64, v url.Values, err er
 	return
 }
 
-func (h *server) link(r *http.Request, src string) (*Entity, error) {
+func (h *server) linkPages(r *http.Request, src string) (*Entity, error) {
 	from, to, v, err := h.linkEnds(r)
 	if err != nil {
 		return nil, err
@@ -1114,7 +1118,7 @@ func (h *server) link(r *http.Request, src string) (*Entity, error) {
 	return h.pageEntity(r.Context(), from)
 }
 
-func (h *server) unlink(r *http.Request, src string) (*Entity, error) {
+func (h *server) unlinkPages(r *http.Request, src string) (*Entity, error) {
 	from, to, v, err := h.linkEnds(r)
 	if err != nil {
 		return nil, err
@@ -1161,7 +1165,7 @@ func (h *server) record(r *http.Request, src string) (*Entity, error) {
 		return nil, err
 	}
 	id, err := h.s.Record(r.Context(), src, core.Reading{SessionID: sessionID, Metric: v.Get("metric"), Day: v.Get("day"), Value: *value,
-		TakenAt: v.Get("taken_at"), TZ: v.Get("tz"), Key: v.Get("import_key")})
+		TakenAt: v.Get("taken_at"), TZ: v.Get("tz"), ImportKey: v.Get("import_key")})
 	if err != nil {
 		return nil, err
 	}

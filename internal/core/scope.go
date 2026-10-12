@@ -30,7 +30,7 @@ func (t *Tx) relocateReading(wrong int64, replacement Reading, afterRetraction f
 	if strings.HasPrefix(t.Source, "agent:") || strings.HasPrefix(t.Source, "import:") {
 		return ScopeRelocation{}, Invalid("scope relocation is an owner operation, unavailable to agents/imports")
 	}
-	if replacement.Key != "" {
+	if replacement.ImportKey != "" {
 		return ScopeRelocation{}, Invalid("scope relocation cannot create a keyed/import-backed root")
 	}
 	var metric, scope int64

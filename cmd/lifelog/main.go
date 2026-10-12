@@ -55,7 +55,7 @@ const usage = `lifelog — the writer of a life.db
   lifelog done METRIC [--day D]       check a habit in as done (skip METRIC: not done)
   lifelog tasks                       every task; lifelog do create-task label=... makes one
   lifelog due [--from D] [--to D]     what is due: every task's open occurrences in the window
-  lifelog rename PAGE-ID TITLE        rename a named object, retaining its id and old-name aliases
+  lifelog rename PAGE-ID NEW-TITLE    rename a named object, retaining its id and old-name aliases
   lifelog file PATH... [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day D] [--at PLACE [--radius M]] [--dry-run]
                                       keep a file (docs/cookbook/keep-a-file.md): the original is hashed,
                                       never stored; its text from FILE; a picture made from a JPEG, PNG or
@@ -598,7 +598,7 @@ func keepFile(ctx context.Context, o opts, c *client.Client, args []string) erro
 	}
 	if o.human {
 		s.print(os.Stdout)
-	} else if err := printJSON(s); err != nil {
+	} else if err := printJSON(os.Stdout, s); err != nil {
 		return err
 	}
 	if failed > 0 {
@@ -837,7 +837,7 @@ func listActions(ctx context.Context, o opts, c *client.Client) error {
 		return err
 	}
 	if !o.human {
-		return printJSON(actions)
+		return printJSON(os.Stdout, actions)
 	}
 	for _, a := range actions {
 		var fs []string
@@ -860,26 +860,29 @@ func show(o opts) func(*api.Entity, error) error {
 			return err
 		}
 		if o.human {
-			human(e)
-		} else if perr := printJSON(e); perr != nil {
+			human(os.Stdout, e)
+		} else if perr := printJSON(os.Stdout, e); perr != nil {
 			return perr
 		}
 		return err
 	}
 }
 
-func printJSON(v any) error {
-	enc := json.NewEncoder(os.Stdout)
+// printJSON writes a value as indented JSON, as the API answers it: no HTML escaping, so a body reads as it was written.
+func printJSON(w io.Writer, v any) error {
+	enc := json.NewEncoder(w)
 	enc.SetEscapeHTML(false)
 	enc.SetIndent("", "  ")
 	return enc.Encode(v)
 }
 
-func human(e *api.Entity) {
-	fmt.Printf("# %s  (%s)\n", e.Title, strings.Join(e.Class, " "))
+// human writes an entity as a readable summary: its title and class, the result of a write, its properties, then
+// the embedded links, the links and the actions.
+func human(w io.Writer, e *api.Entity) {
+	fmt.Fprintf(w, "# %s  (%s)\n", e.Title, strings.Join(e.Class, " "))
 	if e.Result != nil {
 		b, _ := json.Marshal(e.Result)
-		fmt.Printf("result: %s\n", b)
+		fmt.Fprintf(w, "result: %s\n", b)
 	}
 	if p, ok := e.Properties.(map[string]any); ok {
 		keys := make([]string, 0, len(p))
@@ -891,24 +894,24 @@ func human(e *api.Entity) {
 			switch v := p[k].(type) {
 			case string:
 				if strings.Contains(v, "\n") {
-					fmt.Printf("%s:\n%s\n", k, indent(v))
+					fmt.Fprintf(w, "%s:\n%s\n", k, indent(v))
 				} else if v != "" {
-					fmt.Printf("%s: %s\n", k, v)
+					fmt.Fprintf(w, "%s: %s\n", k, v)
 				}
 			default:
 				b, _ := json.Marshal(v)
-				fmt.Printf("%s: %s\n", k, b)
+				fmt.Fprintf(w, "%s: %s\n", k, b)
 			}
 		}
 	}
 	for _, l := range e.Entities {
-		fmt.Printf("  → %-12s %-28s %s\n", strings.Join(l.Rel, " "), l.Title, l.Href)
+		fmt.Fprintf(w, "  → %-12s %-28s %s\n", strings.Join(l.Rel, " "), l.Title, l.Href)
 	}
 	for _, l := range e.Links {
-		fmt.Printf("  ↗ %-12s %s\n", strings.Join(l.Rel, " "), l.Href)
+		fmt.Fprintf(w, "  ↗ %-12s %s\n", strings.Join(l.Rel, " "), l.Href)
 	}
 	for _, a := range e.Actions {
-		fmt.Printf("  ! %-14s %s %s\n", a.Name, a.Method, a.Href)
+		fmt.Fprintf(w, "  ! %-14s %s %s\n", a.Name, a.Method, a.Href)
 	}
 }
 
@@ -958,7 +961,7 @@ func agenticInit(o opts) error {
 		}
 	}
 	if _, err := os.Stat(dbPath); err != nil {
-		fmt.Printf("no life.db yet: lifelog init makes %s\n", dbPath)
+		fmt.Printf("no life.db yet: lifelog init %s makes it\n", dbPath)
 	}
 	return nil
 }

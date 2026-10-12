@@ -86,7 +86,7 @@ func (h *server) checkIn(r *http.Request, src string) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	periods, err := h.s.Periods(r.Context(), name)
+	periods, err := h.s.HabitPeriods(r.Context(), name)
 	if err != nil {
 		return nil, err
 	}
