@@ -340,7 +340,7 @@ func TestBrowserMutationFeedbackPhoto(t *testing.T) {
 			}
 			body = browse(t, h, location)
 		}
-		for _, want := range []string{"Result", "unmatched", "41.1496"} {
+		for _, want := range []string{"Result", "Near no known place: 41.1496"} { // the toast says the result in words
 			if !strings.Contains(body, want) {
 				t.Errorf("photo feedback missing %q", want)
 			}

@@ -22,7 +22,7 @@ func TestTemporalCollectionEvidenceInEitherOrderAndMemberActions(t *testing.T) {
 			must(c.Do(find(kind, "tombstone"), nil))
 			list := must(c.Get("/sessions?include_deleted=1"))
 			body := browse(t, h, "/sessions?include_deleted=1")
-			for _, want := range []string{"2020-01-01T23:00:00.000", "2020-01-02T07:00:00.000", "Claimed/Zone", "Other/Claim", "kind_deleted_at", "deleted_at", "missing end", "unresolved", "Workout &amp; rest"} {
+			for _, want := range []string{"2020-01-01T23:00:00.000", "2020-01-02T07:00:00.000", "Claimed/Zone", "Other/Claim", "kind deleted at", "deleted at", "missing end", "unresolved", "Workout &amp; rest"} {
 				if !strings.Contains(body, want) {
 					t.Fatalf("collection omitted %q", want)
 				}

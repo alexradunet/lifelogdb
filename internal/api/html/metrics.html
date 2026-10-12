@@ -17,10 +17,10 @@
 {{with $s.readings}}{{if ne $s.scope "all"}}{{chart $s.from $s.to .}}{{end}}
 <div class="scroll"><table><caption>Every reading in this range</caption>
 <thead><tr><th scope="col">day</th><th scope="col" class="num">value</th><th scope="col">scope</th><th scope="col">taken at</th></tr></thead>
-<tbody>{{range .}}<tr><td><a href="/days/{{.day}}">{{.day}}</a></td><td class="num"><a href="/measurements/{{num .id}}">{{num .value}}</a></td><td>{{.scope}}{{with .session_id}} · <a href="/sessions/{{num .}}">session {{num .}}</a>{{end}}{{with .session_deleted_at}} · tombstoned {{.}}{{end}}</td><td><small>{{.taken_at}}</small></td></tr>{{end}}</tbody>
+<tbody>{{range .}}<tr><td><a href="/days/{{.day}}">{{$.Date .day}}</a></td><td class="num"><a href="/measurements/{{num .id}}">{{num .value}}</a></td><td>{{.scope}}{{with .session_id}} · <a href="/sessions/{{num .}}">session {{num .}}</a>{{end}}{{with .session_deleted_at}} · tombstoned {{$.When .}}{{end}}</td><td>{{with .taken_at}}{{$.When .}}{{end}}</td></tr>{{end}}</tbody>
 </table></div>{{else}}<p><small>No readings in this range.</small></p>{{end}}
 
-{{with $s.habit_periods}}<h2>Habit periods</h2><ul class="plain">{{range .}}<li>from {{.start_day}}{{with .end_day}} to {{.}}{{else}}, ongoing{{end}}</li>{{end}}</ul>{{end}}
+{{with $s.habit_periods}}<h2>Habit periods</h2><ul class="plain">{{range .}}<li>from {{$.Date .start_day}}{{with .end_day}} to {{$.Date .}}{{else}}, ongoing{{end}}</li>{{end}}</ul>{{end}}
 {{with .Action "check-in"}}<h2>Check in</h2>{{template "form" (form . "choices:done" "1 0" "class" "inline")}}{{end}}
 
 <h2>Record</h2>

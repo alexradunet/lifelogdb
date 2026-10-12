@@ -15,7 +15,7 @@
 {{with .Link "map"}}<a href="{{.}}" rel="noreferrer">map</a>{{end}}
 </p></div></header>
 
-{{if $p.deleted_at}}<div class="alert" role="alert"><p><strong>Deleted {{$p.deleted_at}}.</strong> Nothing is ever removed: revive it to bring it back.</p>
+{{if $p.deleted_at}}<div class="alert" role="alert"><p><strong>Deleted {{$.When $p.deleted_at}}.</strong> Nothing is ever removed: revive it to bring it back.</p>
 {{template "form" (form (.Action "revive") "class" "tiny")}}</div>{{end}}
 {{with .Link "preview"}}<figure><a href="{{.}}"><img class="preview" src="{{.}}" alt="{{$.Title}}"></a><figcaption>{{$.Title}}</figcaption></figure>{{end}}
 
@@ -49,7 +49,7 @@
 {{template "boxed" (form (.Action "promote-period"))}}
 {{template "boxed" (form (.Action "promote") "button" "Make it a person or a place")}}
 {{template "boxed" (form (.Action "tombstone"))}}</div></section>{{end}}
-<p class="sub"><span class="meta">created {{$p.created_at}}</span><span class="meta">version {{$p.version}}</span></p>
+<p class="sub"><span class="meta">created {{$.When $p.created_at}}</span><span class="meta">version {{$p.version}}</span></p>
 {{template "foot" .}}{{end}}
 
 {{define "measurement"}}{{template "head" .}}
@@ -58,9 +58,9 @@
 <h1>{{if $m.retraction}}Retracted{{else}}{{num $m.value}}{{end}}</h1></div></header>
 <dl class="facts">
 <dt>metric</dt><dd><a href="{{.Link "series"}}">{{$m.metric}}</a></dd>
-<dt>day</dt><dd><a href="{{.Link "day"}}">{{shortDay $m.day}} {{$m.day}}</a></dd>
-{{with $m.taken_at}}<dt>taken at</dt><dd>{{.}}{{with $m.tz}} ({{.}}){{end}}</dd>{{end}}
-<dt>scope</dt><dd>{{$m.scope}} <small>(unassociated is not a daily total)</small>{{with $.Link "session"}} · <a href="{{.}}">session</a>{{end}}{{with $m.session_deleted_at}} · session tombstoned {{.}}{{end}}</dd>
+<dt>day</dt><dd><a href="{{.Link "day"}}">{{$.Date $m.day}}</a></dd>
+{{with $m.taken_at}}<dt>taken at</dt><dd>{{$.When .}}{{with $m.tz}} ({{.}}){{end}}</dd>{{end}}
+<dt>scope</dt><dd>{{$m.scope}} <small>(unassociated is not a daily total)</small>{{with $.Link "session"}} · <a href="{{.}}">session</a>{{end}}{{with $m.session_deleted_at}} · session tombstoned {{$.When .}}{{end}}</dd>
 </dl>
 {{if $m.retraction}}<aside role="note"><p>This row retracts the reading before it: that reading never counts.</p></aside>
 {{else if not $m.current}}<div class="alert" role="note"><p>This reading was corrected or retracted. {{with .Link "superseded-by"}}<a href="{{.}}">See what replaced it</a>.{{end}}</p></div>{{end}}

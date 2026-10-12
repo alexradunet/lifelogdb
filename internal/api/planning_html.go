@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"net/url"
 	"strconv"
 	"strings"
@@ -44,10 +43,10 @@ func fieldValue(a *Action, name string) string {
 // occRow is one occurrence as a list draws it: the occurrence, its name and when it is due in words, the one-button
 // forms of its outcome when the entity offers it, and how many later slots of the same series it stands for.
 type occRow struct {
-	O          map[string]any
-	Name, When string
-	Forms      []*formView
-	More       int
+	O                    map[string]any
+	Name, When, Reminder string
+	Forms                []*formView
+	More                 int
 }
 
 // Occ is the row of an occurrence of this entity; its forms return to this page. In a list of many tasks the row is
@@ -59,13 +58,13 @@ func (v *view) Occ(item any, more int) (occRow, error) {
 	today, _ := props["today"].(string)
 	state, _ := o["state"].(string)
 	forms, err := outcomes(v.OccurrenceAction(item), state, v.Here)
-	row := occRow{O: o, Forms: forms, More: more, When: dueWords(o["due_day"], today)}
+	row := occRow{O: o, Forms: forms, More: more, When: dueWords(o["due_day"], today), Reminder: reminderWords(o, v.clock())}
 	row.Name, _ = o["label"].(string)
 	if row.Name == "" {
 		row.Name, row.When = strings.ToUpper(row.When[:1])+row.When[1:], ""
 		key, _ := o["key"].(string)
 		if due, _ := o["due_day"].(string); key != "once" && due != key {
-			row.When = "moved from the slot of " + dueWords(key, "")
+			row.When = "moved from the slot of " + clock{today: today}.day(key)
 		}
 	}
 	return row, err
@@ -156,36 +155,15 @@ func dueGroups(list any, today string, fold bool) []dueGroup {
 	return out
 }
 
-// dueWords says a due day against today: "today", "tomorrow (Tue 2026-10-13)", "in 3 days (Thu 2026-10-15)",
-// "4 days ago (Thu 2026-10-08)"; a day more than a week away is "Mon 2026-11-02"; no day is "no due day". The due
-// day is a property as the JSON client reads it: absent (nil) for an undated occurrence.
+// dueWords says a due day against today in the words of the design system: "today", "tomorrow · Tue 13 Oct",
+// "in 3 days · Thu 15 Oct", "4 days ago · Thu 8 Oct" within 7 days, else the date ("Tue 20 Oct", with the year when
+// it is not this year); "no due day" for none.
 func dueWords(dueDay any, today string) string {
 	due, _ := dueDay.(string)
-	d, err1 := time.Parse(time.DateOnly, due)
-	t, err2 := time.Parse(time.DateOnly, today)
-	switch {
-	case due == "":
+	if due == "" {
 		return "no due day"
-	case err1 != nil:
-		return due
-	case err2 != nil:
-		return d.Format("Mon 2006-01-02")
 	}
-	n := int(d.Sub(t).Hours() / 24)
-	date := d.Format("Mon 2006-01-02")
-	switch {
-	case n == 0:
-		return "today"
-	case n == 1:
-		return "tomorrow (" + date + ")"
-	case n == -1:
-		return "yesterday (" + date + ")"
-	case n > 1 && n <= 7:
-		return fmt.Sprintf("in %d days (%s)", n, date)
-	case n < -1 && n >= -7:
-		return fmt.Sprintf("%d days ago (%s)", -n, date)
-	}
-	return date
+	return clock{today: today}.relative(due)
 }
 
 // cadence says a task's cadence: "every 3 days from 2026-10-05", "every month from 2026-10-01 until 2027-06-30";
@@ -211,17 +189,15 @@ func cadence(task any) string {
 }
 
 // reminderWords says a reminder: a task's default clock ("09:00 Europe/Bucharest"), or an occurrence's resolved
-// reminder ("2026-11-01 07:00 UTC"; "unresolved" when its zone cannot name the clock); "" when there is none.
-func reminderWords(x any) string {
+// reminder in the words of an instant ("Sun 1 Nov, 09:00"; "unresolved" when its zone cannot name the clock); ""
+// when there is none.
+func reminderWords(x any, c clock) string {
 	m, _ := x.(map[string]any)
 	if r, ok := m["reminder"].(map[string]any); ok {
 		switch r["state"] {
 		case "resolved":
 			at, _ := r["at"].(string)
-			if t, err := time.Parse(time.RFC3339Nano, at); err == nil {
-				return t.UTC().Format("2006-01-02 15:04") + " UTC"
-			}
-			return at
+			return c.instant(at)
 		case "unresolved":
 			return "unresolved"
 		}

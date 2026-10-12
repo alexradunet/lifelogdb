@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -55,7 +54,6 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 	"basecss":  func() template.CSS { return baseCSS },
 	"appcss":   func() template.CSS { return appCSS },
 	"appjs":    func() template.JS { return appJS },
-	"value":    renderValue,
 	"rel":      func(r []string) string { return strings.Join(r, " ") },
 	"post":     func(a Action) bool { return a.Method == "POST" },
 	"markdown": markdown,
@@ -70,7 +68,6 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 	"due":      dueGroups,
 	"dueWords": dueWords,
 	"cadence":  cadence,
-	"reminder": reminderWords,
 	"weeks":    weeks,
 	"dayOfMonth": func(day string) string {
 		if t, err := time.Parse(time.DateOnly, day); err == nil {
@@ -570,84 +567,4 @@ func chart(from, to string, readings any) template.HTML {
 	}
 	sb.WriteString(`</svg>`)
 	return template.HTML(sb.String())
-}
-
-// renderValue shows any property value: objects as two-column tables, lists of objects as tables, long text as pre.
-func renderValue(v any) template.HTML {
-	var sb strings.Builder
-	writeValue(&sb, jsonShape(v))
-	return template.HTML(sb.String())
-}
-
-func writeValue(sb *strings.Builder, x any) {
-	esc := template.HTMLEscapeString
-	switch x := x.(type) {
-	case map[string]any:
-		keys := make([]string, 0, len(x))
-		for k := range x {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		sb.WriteString("<table>")
-		for _, k := range keys {
-			sb.WriteString(`<tr><th scope="row">` + esc(k) + "</th><td>")
-			writeValue(sb, x[k])
-			sb.WriteString("</td></tr>")
-		}
-		sb.WriteString("</table>")
-	case []any:
-		if len(x) == 0 {
-			sb.WriteString(`<small>none</small>`)
-			return
-		}
-		if _, ok := x[0].(map[string]any); ok {
-			var cols []string
-			seen := map[string]bool{}
-			for _, row := range x {
-				if m, ok := row.(map[string]any); ok {
-					for k := range m {
-						if !seen[k] {
-							cols = append(cols, k)
-							seen[k] = true
-						}
-					}
-				}
-			}
-			sort.Strings(cols)
-			sb.WriteString("<table><thead><tr>")
-			for _, c := range cols {
-				sb.WriteString(`<th scope="col">` + esc(c) + "</th>")
-			}
-			sb.WriteString("</tr></thead><tbody>")
-			for _, row := range x {
-				m, _ := row.(map[string]any)
-				sb.WriteString("<tr>")
-				for _, c := range cols {
-					sb.WriteString("<td>")
-					writeValue(sb, m[c])
-					sb.WriteString("</td>")
-				}
-				sb.WriteString("</tr>")
-			}
-			sb.WriteString("</tbody></table>")
-			return
-		}
-		sb.WriteString("<ul>")
-		for _, it := range x {
-			sb.WriteString("<li>")
-			writeValue(sb, it)
-			sb.WriteString("</li>")
-		}
-		sb.WriteString("</ul>")
-	case string:
-		if strings.Contains(x, "\n") || len(x) > 80 {
-			sb.WriteString("<pre>" + esc(x) + "</pre>")
-		} else {
-			sb.WriteString(esc(x))
-		}
-	case nil:
-		sb.WriteString(`<small>—</small>`)
-	default:
-		sb.WriteString(esc(fmt.Sprint(x)))
-	}
 }

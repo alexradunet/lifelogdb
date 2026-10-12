@@ -24,20 +24,21 @@ const SourceHeader = "Lifelog-Source"
 type server struct {
 	s        *core.Store
 	feedback feedbackStore
-	localDay func() string // the server's local day: what is due, overdue and today is read against it
+	localDay func() string  // the server's local day: what is due, overdue and today is read against it
+	zone     *time.Location // the zone of that day: a browser's words for a time use it
 }
 
 // New returns the whole API as one handler: lifelog serve mounts it on a socket, the CLI and the MCP server
 // call it in-process. trustedOrigins are the browser origins a public listener allows to write
 // (docs/plans/078-network-server.md); a local listener and the in-process client pass none.
 func New(s *core.Store, trustedOrigins ...string) http.Handler {
-	return newHandler(s, core.Today, trustedOrigins...)
+	return newHandler(s, core.Today, time.Local, trustedOrigins...)
 }
 
-// newHandler is New with the clock of the local day given: a test fixes it, so what is due and overdue is read
-// against a fixed day.
-func newHandler(s *core.Store, localDay func() string, trustedOrigins ...string) http.Handler {
-	h := &server{s: s, localDay: localDay}
+// newHandler is New with the clock of the local day and its zone given: a test fixes them, so what is due and
+// overdue is read against a fixed day, and a time is written in fixed words.
+func newHandler(s *core.Store, localDay func() string, zone *time.Location, trustedOrigins ...string) http.Handler {
+	h := &server{s: s, localDay: localDay, zone: zone}
 	m := http.NewServeMux()
 	get := func(p string, f func(*http.Request) (*Entity, error)) { m.HandleFunc("GET "+p, h.serve(f)) }
 	post := func(p string, f func(*http.Request, string) (*Entity, error)) {

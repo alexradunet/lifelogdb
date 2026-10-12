@@ -252,6 +252,8 @@ table.calendar tbody tr:hover{background:none}
 .toast h2{color:inherit}
 .toast a{color:var(--toast-link); font-weight:700}
 .toast pre,.toast table{background:none; border:0; padding:0; color:inherit}
+.toast code{background:none; color:inherit; border:1px solid currentColor; border-radius:4px}
+.toast p+p{margin-top:var(--space-1)}
 .toast th,.toast td{border-color:transparent}
 .toast tbody tr:hover{background:none}
 .toast>button.close{align-self:flex-end; height:var(--control-small); padding:0 var(--space-3); font-size:13px}

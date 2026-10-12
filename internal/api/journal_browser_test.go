@@ -104,7 +104,7 @@ func TestTheDayCarriesWhatIsDueItsMoodAndItsHabits(t *testing.T) {
 	// The browser: Done on the day returns to the day; a check-in too, and it is recorded.
 	body := browse(t, h, "/days/"+fixedToday)
 	for _, want := range []string{`<span class="mood" title="Mood">mood 4, 3</span>`, "<summary>Edit the day page</summary>", "<h2>Due</h2>",
-		"Book the dentist", "Sun 2031-05-04"} {
+		"Book the dentist", "Sun 4 May"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the day view lacks %q", want)
 		}

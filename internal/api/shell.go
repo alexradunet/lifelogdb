@@ -18,7 +18,8 @@ import (
 // month with the days that have a day page.
 type shellView struct {
 	Today     string
-	Month     string // "October 2026"
+	Zone      *time.Location // the zone of today: the words for a time use it
+	Month     string         // "October 2026"
 	MonthHref string
 	Due       int
 	Written   int
@@ -55,7 +56,7 @@ func (h *server) shell(ctx context.Context) (*shellView, error) {
 	for _, d := range entries {
 		written[d.Day] = true
 	}
-	sv := &shellView{Today: today, Month: first.Format("January 2006"), MonthHref: monthHref(first), Due: len(due), Written: len(entries)}
+	sv := &shellView{Today: today, Zone: h.zone, Month: first.Format("January 2006"), MonthHref: monthHref(first), Due: len(due), Written: len(entries)}
 	row := make([]*shellDay, (int(first.Weekday())+6)%7)
 	for d := first; !d.After(last); d = d.AddDate(0, 0, 1) {
 		day := d.Format(time.DateOnly)
@@ -80,7 +81,7 @@ func (h *server) write(w http.ResponseWriter, r *http.Request, status int, e *En
 	}
 	sv, err := h.shell(r.Context())
 	if err != nil {
-		sv = &shellView{}
+		sv = &shellView{Zone: h.zone}
 		if h.localDay != nil {
 			sv.Today = h.localDay()
 		}

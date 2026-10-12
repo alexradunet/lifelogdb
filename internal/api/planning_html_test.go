@@ -70,13 +70,13 @@ func TestDueGroupsPutEachOccurrenceInItsGroup(t *testing.T) {
 func TestDueWordsSayADayAgainstToday(t *testing.T) {
 	for _, c := range []struct{ due, want string }{
 		{"2026-10-12", "today"},
-		{"2026-10-13", "tomorrow (Tue 2026-10-13)"},
-		{"2026-10-11", "yesterday (Sun 2026-10-11)"},
-		{"2026-10-19", "in 7 days (Mon 2026-10-19)"},
-		{"2026-10-20", "Tue 2026-10-20"},
-		{"2026-10-05", "7 days ago (Mon 2026-10-05)"},
-		{"2026-10-04", "Sun 2026-10-04"},
-		{"2027-01-01", "Fri 2027-01-01"},
+		{"2026-10-13", "tomorrow · Tue 13 Oct"},
+		{"2026-10-11", "yesterday · Sun 11 Oct"},
+		{"2026-10-19", "in 7 days · Mon 19 Oct"},
+		{"2026-10-20", "Tue 20 Oct"},
+		{"2026-10-05", "7 days ago · Mon 5 Oct"},
+		{"2026-10-04", "Sun 4 Oct"},
+		{"2027-01-01", "Fri 1 Jan 2027"},
 		{"", "no due day"},
 		{"not a day", "not a day"},
 	} {
@@ -84,7 +84,7 @@ func TestDueWordsSayADayAgainstToday(t *testing.T) {
 			t.Errorf("dueWords(%q) = %q, want %q", c.due, got, c.want)
 		}
 	}
-	if got := dueWords("2026-10-13", ""); got != "Tue 2026-10-13" {
+	if got := dueWords("2026-10-13", ""); got != "Tue 13 Oct 2026" {
 		t.Errorf("without today: %q", got)
 	}
 }
@@ -110,11 +110,11 @@ func TestCadenceAndReminderWords(t *testing.T) {
 	}{
 		{map[string]any{"reminder_time": "09:00", "reminder_zone": "Europe/Bucharest"}, "09:00 Europe/Bucharest"},
 		{map[string]any{"label": "no reminder"}, ""},
-		{map[string]any{"reminder": map[string]any{"state": "resolved", "at": "2026-11-01T07:00:00.000Z"}}, "2026-11-01 07:00 UTC"},
+		{map[string]any{"reminder": map[string]any{"state": "resolved", "at": "2026-11-01T07:00:00.000Z"}}, "Sun 1 Nov, 07:00 UTC"},
 		{map[string]any{"reminder": map[string]any{"state": "none"}, "reminder_time": "09:00"}, ""},
 		{map[string]any{"reminder": map[string]any{"state": "unresolved"}}, "unresolved"},
 	} {
-		if got := reminderWords(c.x); got != c.want {
+		if got := reminderWords(c.x, clock{today: "2026-10-12"}); got != c.want {
 			t.Errorf("reminderWords(%v) = %q, want %q", c.x, got, c.want)
 		}
 	}
@@ -199,9 +199,9 @@ func TestARowIsNamedForItsList(t *testing.T) {
 		o          map[string]any
 		name, when string
 	}{
-		{map[string]any{"label": "Buy seeds", "key": "once", "due_day": "2026-10-15", "state": "open", "task_id": 4.0}, "Buy seeds", "in 3 days (Thu 2026-10-15)"},
+		{map[string]any{"label": "Buy seeds", "key": "once", "due_day": "2026-10-15", "state": "open", "task_id": 4.0}, "Buy seeds", "in 3 days · Thu 15 Oct"},
 		{map[string]any{"key": "2026-10-12", "due_day": "2026-10-12", "state": "open", "task_id": 2.0}, "Today", ""},
-		{map[string]any{"key": "2026-10-11", "due_day": "2026-10-14", "state": "open", "task_id": 2.0}, "In 2 days (Wed 2026-10-14)", "moved from the slot of Sun 2026-10-11"},
+		{map[string]any{"key": "2026-10-11", "due_day": "2026-10-14", "state": "open", "task_id": 2.0}, "In 2 days · Wed 14 Oct", "moved from the slot of Sun 11 Oct"},
 		{map[string]any{"key": "once", "state": "open", "task_id": 5.0}, "No due day", ""},
 	} {
 		row, err := v.Occ(c.o, 0)

@@ -35,7 +35,7 @@
 {{/* feedback is what a browser form's POST did, carried across the redirect by a one-use receipt: the toast of the
      design system, at the top of the page, where it stays until the next page, for it may name what the write did
      not do */}}
-{{define "feedback"}}{{with .Result}}<aside class="toast" role="status"><h2>Result</h2>{{value .}}</aside>{{end}}{{end}}
+{{define "feedback"}}{{if .Result}}<aside class="toast" role="status"><h2>Result</h2>{{range .ResultLines}}<p>{{.}}</p>{{end}}</aside>{{end}}{{end}}
 
 {{define "foot"}}</main>
 <footer><p>Lifelog, the one writer of <code>life.db</code>.</p></footer>
@@ -66,7 +66,7 @@
 {{define "generic"}}{{template "head" .}}
 <header class="page-head"><div class="what">{{with .Class}}<span class="date">{{rel .}}</span>{{end}}<h1>{{.Title}}</h1>
 {{with .Links}}<p class="sub">{{range .}}<a href="{{.Href}}" rel="{{rel .Rel}}">{{or .Title .Href}}</a>{{end}}</p>{{end}}</div></header>
-{{with .Properties}}<section class="panel" aria-label="Properties"><h2>Properties</h2><div class="scroll">{{value .}}</div></section>{{end}}
+{{with .Properties}}<section class="panel" aria-label="Properties"><h2>Properties</h2><div class="scroll">{{$.Value .}}</div></section>{{end}}
 {{with .Entities}}<section class="section" aria-label="Links"><h2>Links</h2><ul class="plain">{{range .}}<li><a href="{{.Href}}">{{or .Title .Href}}</a> <span class="badge">{{rel .Rel}}</span></li>{{end}}</ul></section>{{end}}
 {{with .Actions}}<section class="section" aria-label="Actions"><h2>Actions</h2><div class="actions">{{range .}}{{template "boxed" (form .)}}{{end}}</div></section>{{end}}
 {{template "foot" .}}{{end}}

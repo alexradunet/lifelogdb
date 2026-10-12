@@ -150,7 +150,7 @@ func TestBrowserMutationFeedback(t *testing.T) {
 	}
 	location := rec.Header().Get("Location")
 	body := browse(t, h, location)
-	for _, want := range []string{"Result", "revived", "skipped", "bad/name"} {
+	for _, want := range []string{"Result", `Revived <a href="/pages?title=Revived+target">Revived target</a>.`, "Not linked, not a valid title: <code>[[bad/name]]</code>."} {
 		if !strings.Contains(body, want) {
 			t.Errorf("missing %q in redirected feedback", want)
 		}

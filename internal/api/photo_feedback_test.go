@@ -55,7 +55,11 @@ func TestPhotoDaySyncJSONAndBrowserReceipt(t *testing.T) {
 			} else if w.Code != 200 && w.Code != 201 {
 				t.Fatalf("POST: %d %s", w.Code, body)
 			}
-			for _, want := range []string{"day_sync", "revived", "Old synthetic target", "File synthetic target"} {
+			wants := []string{"day_sync", "revived", "Old synthetic target", "File synthetic target"}
+			if browser { // the toast says the result in words
+				wants = []string{"In its day page: ", "Revived", "Old synthetic target", "File synthetic target"}
+			}
+			for _, want := range wants {
 				if !strings.Contains(body, want) {
 					t.Errorf("missing %s: %s", want, body)
 				}

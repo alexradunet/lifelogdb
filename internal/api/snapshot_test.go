@@ -87,7 +87,7 @@ func TestSnapshotIsTheOwnersFromAnySurface(t *testing.T) {
 	req.Header.Set("Accept", "text/html")
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if !strings.Contains(rec.Body.String(), "life-"+today) || !strings.Contains(rec.Body.String(), "restore_check") {
+	if !strings.Contains(rec.Body.String(), "life-"+today) || !strings.Contains(rec.Body.String(), "Took a snapshot: <code>") || !strings.Contains(rec.Body.String(), "<dt>restore check</dt>") {
 		t.Fatalf("feedback lacks the snapshot: %.500s", rec.Body.String())
 	}
 	if body := browse(t, h, "/"); !strings.Contains(body, `action="/snapshots"`) {
