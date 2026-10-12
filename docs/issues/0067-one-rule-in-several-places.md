@@ -1,7 +1,7 @@
 # 0067 — The code says one rule in several places, and keeps what plan 089 removed
 
 - **Date:** 2026-10-12
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the owner's request for a review of the whole codebase for inconsistencies, cohesion and redundant
   code; checked against the code at `ef29fe6` by reading every non-test Go file and by `x/tools/cmd/deadcode`
 
@@ -84,7 +84,7 @@ exists.
 
 ## Resolution
 
-Taken by [plan 098](../plans/098-the-codebase-made-cohesive.md): the dead code removed; one helper for each rule
+Resolved by [plan 098](../plans/098-the-codebase-made-cohesive.md): the dead code removed; one helper for each rule
 above, in core or in the api, and every copy replaced by a call; the `Store` wrappers as the one write path; the
 defects of the third table fixed with a reproducer each; `handler.go` and `main.go` split by concern, the CLI driven
-by one command table; the docs kept true to the code. Closed when the plan is DONE.
+by one command table; the docs kept true to the code.

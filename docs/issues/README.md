@@ -9,7 +9,7 @@ data could not answer, a rule that is ambiguous or untestable. It is the evidenc
 
 | id | title | status |
 |---|---|---|
-| [0067](0067-one-rule-in-several-places.md) | The code says one rule in several places, and keeps what plan 089 removed | open |
+| [0067](0067-one-rule-in-several-places.md) | The code says one rule in several places, and keeps what plan 089 removed | resolved |
 | [0066](0066-the-almanac-does-not-reflect-and-a-refusal-loses-the-form.md) | The Almanac never shows the owner their past, and a refused form loses its place | resolved |
 | [0065](0065-the-almanac-reads-as-a-generic-app.md) | The browser's look is not the owner's own: the Almanac reads as a generic app | resolved |
 | [0064](0064-every-group-of-a-page-has-the-same-weight.md) | Every group of a page has the same weight, and the page asks for many decisions at once | resolved |

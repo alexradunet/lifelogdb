@@ -9,7 +9,8 @@
 - **Priority:** P1. **Effort:** L. **Risk:** MEDIUM: many files move and many call sites change; a few answers on the
   wire change (`stale_version` on tasks, sessions and periods; a failed restore check answers an error; a missing
   entity is 404; a flag a command does not take is refused). Nothing for the schema, nothing for the contract.
-- **Status:** IN PROGRESS. One commit for the records, then one or more commits a part.
+- **Status:** DONE. One commit for the records, then one or more commits a part (parts 2, 3 and 5 in two each), then
+  the closing commit.
 - **Resolves:** issue [0067](../issues/0067-one-rule-in-several-places.md). No RFC: the contract in `docs/` does not
   change.
 
@@ -148,3 +149,37 @@ Only where Parts 2 to 7 touched the code: the session and period validators next
 2. `TestAPIReferenceMatchesTheCode` passes; the `document` suite finds every page.
 3. The parity suites pass: no surface loses a capability; the owner-only actions stay refused to an agent.
 4. The issue is resolved and this plan is DONE in the last commit, with a list of what was consciously left.
+
+## Result (2026-10-12)
+
+Fifteen commits after the records (`b028ed3` to `eba0838`), one or more a part, then the closing commit. These points
+differ from the text above, or add to it:
+
+| point | what was done, and why |
+|---|---|
+| the write style | `Store.CreateTask` and `EditTask` take a `TaskForm` (the project as a title, a one-off's due day, the key), and an outcome arrives as an `OccurrencePatch`: the rules "due_day is a one-off's" and "a slot is due on its day unless the outcome says" moved into core with the closures. |
+| the window read | `HabitStates` is the one statement over a window; `Habits` is that read of one day, so the rule of a state keeps one home. `Deadlines` reads every task inside one read transaction and each `Deadline` carries its `Task`. |
+| the words of a day | a day is written by `Date`, with its year when it is not this year's: the people list now says "last Fri 9 Oct" in the same year, where it said the year always. The month's previous and next are the shared step buttons. |
+| the MCP numbers | a number travels as its JSON text and the API's parser is the one rule for an id; the numeric test asserts the new dispatch. `query` keeps its read-only hint: it is the one POST that only reads. |
+| the owner | `core.IsOwner` is one rule: not an agent, not an import. The api's owner-only actions now refuse `import:*` too, as core's relocation did; the README and AGENTS.md say so. |
+| the snapshot's check | a failed restore check answers 500 `restore_check_failed` on every surface, the file kept; the CLI shortcut is a plain wrapper. API.md and the README name the code and `snapshot_refused`. |
+| the connection check | a `fakeConn` in the db tests drives the check without a database: a failed PRAGMA read refuses, and a folder named `mode=ro` does not make a reader. |
+| the scale test | its timed checks write as `import:scale-timed`: the oracle verifies the fixture's writer and must not see the probe rows. |
+
+**Consciously left**, each a small item for a later pass, none a rule written twice:
+
+- `errorEntity` still echoes an internal error's message on a 500: the server is the owner's, and the cause is the
+  owner's to read. A public listener behind a proxy is the day to hide it.
+- `weekHabit` stays a subset of `core.Completion`: the week's wire shape is API.md's, and a change there is a doc change.
+- The JSON encoders of `internal/agentic` and `tools/lifescale` stay their own: they write files, where HTML escaping
+  changes nothing a reader sees.
+- `AddFile`, `ReadingsFromTable`, `fileForm`, `resultSentences` and `week` are as long as they were: the plan named
+  seams, and a split that is not a move was not worth its risk in this pass.
+- `limit` and `offset` are still checked by the api's `pageOf` alone; the core list reads trust it.
+- `shortDay` stays for the three places that write a day without its year on purpose (the sidebar's today, a day's own
+  heading, the step to the day beside it).
+
+**Checks** (Windows 11, Go 1.27.2): `go generate ./... && go vet ./... && go test ./...` passes after every part;
+`go test -count=1 -shuffle=on ./...` passes on the final tree; `gofmt` is clean; staticcheck 2026.2.1
+(`honnef.co/go/tools` v0.8.1): no finding; govulncheck v1.9.0, default text mode: no vulnerability;
+`go run golang.org/x/tools/cmd/deadcode@v0.52.0 -test ./...` names nothing. Nothing was run on Linux.

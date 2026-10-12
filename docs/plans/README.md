@@ -8,7 +8,7 @@ Earlier closed plans live in git history (`git log -- docs/plans`). The next pla
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| [098](098-the-codebase-made-cohesive.md) | The codebase made cohesive: dead code out, one helper a rule, one convention a concept | P1 | L | issue 0067; owner decisions 2026-10-12 | IN PROGRESS |
+| [098](098-the-codebase-made-cohesive.md) | The codebase made cohesive: dead code out, one helper a rule, one convention a concept | P1 | L | issue 0067; owner decisions 2026-10-12 | DONE |
 | [097](097-the-almanac-reflects.md) | The Almanac reflects: the past on the page, a refusal on its form, the week and the year | P1 | L | issue 0066; owner decision 2026-10-12 | DONE |
 | [096](096-bound-in-hearthwood.md) | Bound in Hearthwood: the Almanac takes Balaur's materials | P1 | L | issue 0065; owner decisions 2026-10-12 | DONE |
 | [095](095-the-leaf-and-its-margin.md) | The leaf and its margin: a calm Almanac | P1 | L | issue 0064; owner decisions 2026-10-12 | DONE |
