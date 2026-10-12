@@ -101,7 +101,7 @@ func TestTheDayIsALeafAndItsMargin(t *testing.T) {
 	for _, want := range []string{
 		`<a class="leaf" href="/months/2031-05" aria-label="May 2031, the calendar of the month"><span class="leaf-month">May 2031</span><span class="leaf-day">14</span></a>`,
 		`<h1>Wednesday</h1>`,
-		`<span class="date">week 20</span><span class="tag open">today</span>`,
+		`<a class="date" href="/weeks/2031-W20">week 20</a><span class="tag open">today</span>`,
 		`href="/days/2031-05-13" rel="prev" aria-label="Previous day, Tue 13 May"><span aria-hidden="true">‹</span><span class="step-day">Tue 13 May</span></a>`,
 		`href="/days/2031-05-15" rel="next" aria-label="Next day, Thu 15 May"><span class="step-day">Thu 15 May</span><span aria-hidden="true">›</span></a>`,
 		`<p class="empty">Nothing written today yet. <a href="#capture">Add to today</a> below.</p>`,

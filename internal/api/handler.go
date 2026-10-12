@@ -61,6 +61,10 @@ func newHandler(s *core.Store, localDay func() string, zone *time.Location, trus
 	get("/days/{day}", h.day)
 	get("/months/current", h.currentMonth)
 	get("/months/{month}", h.month)
+	get("/weeks/current", h.currentWeek)
+	get("/weeks/{week}", h.week)
+	get("/years/current", h.currentYear)
+	get("/years/{year}", h.year)
 	get("/pages", h.find)
 	get("/pages/{id}", h.page)
 	get("/people", h.named("person", "people", "create-person"))
@@ -583,7 +587,8 @@ func (h *server) root(r *http.Request) (*Entity, error) {
 		Links: []Link{link("self", "/", "Lifelog"), link("today", dayHref(today), "Today"), link("days", "/days", "Days"),
 			link("sessions", "/sessions", "Sessions"), link("periods", "/periods", "Periods"), link("people", "/people", "People"), link("places", "/places", "Places"), link("files", "/files", "Files"), link("metrics", "/metrics", "Metrics"),
 			link("habits", "/habits", "Habits"), link("tasks", "/tasks", "Tasks"), link("deadlines", "/deadlines", "Deadlines"),
-			link("ghosts", "/ghosts", "Ghost pages"), link("actions", "/actions", "All actions"), link("calendar", "/months/current", "Calendar")},
+			link("ghosts", "/ghosts", "Ghost pages"), link("actions", "/actions", "All actions"), link("calendar", "/months/current", "Calendar"),
+			link("week", "/weeks/current", "This week"), link("year", "/years/current", "This year")},
 		Actions: append(append(actions, checkIns(states, today)...), outcomesOf(due, today)...),
 	}, nil
 }

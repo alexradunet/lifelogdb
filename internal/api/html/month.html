@@ -3,7 +3,7 @@
 {{define "month"}}{{template "head" .}}
 {{$m := .Props}}
 <header class="page-head"><div class="what"><h1>{{.Title}}</h1>
-<p class="sub"><a href="/days/{{$m.today}}">Today</a><a href="/months/current">This month</a><a href="/days">Every day, as a list</a></p></div>
+<p class="sub"><a href="/days/{{$m.today}}">Today</a><a href="/months/current">This month</a><a href="/weeks/current">This week</a><a href="/years/{{yearOf $m.month}}">The year</a><a href="/days">Every day, as a list</a></p></div>
 <div class="tools">
 <a class="button step" href="{{.Link "prev"}}" rel="prev">← {{.LinkTitle "prev"}}</a>
 <a class="button step" href="{{.Link "next"}}" rel="next">{{.LinkTitle "next"}} →</a>

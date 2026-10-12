@@ -8,7 +8,7 @@
 <header class="page-head day-head">
 <div class="day-title">{{template "leaf" .Title}}
 <div class="what"><h1>{{weekday .Title}}{{template "mood" $d.mood}}</h1>
-<p class="sub"><span class="date">week {{week .Title}}</span>{{if $today}}<span class="tag open">today</span>{{else}}<a href="/days/today">Go to today</a>{{end}}<a href="/habits?day={{.Title}}">The habits of this day</a></p></div></div>
+<p class="sub"><a class="date" href="/weeks/{{isoWeekKey .Title}}">week {{week .Title}}</a>{{if $today}}<span class="tag open">today</span>{{else}}<a href="/days/today">Go to today</a>{{end}}<a href="/habits?day={{.Title}}">The habits of this day</a></p></div></div>
 <div class="tools">
 {{template "step" (dict "href" (.Link "prev") "rel" "prev" "day" (addDays .Title -1))}}
 {{template "step" (dict "href" (.Link "next") "rel" "next" "day" (addDays .Title 1))}}

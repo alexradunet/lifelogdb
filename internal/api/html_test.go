@@ -58,7 +58,7 @@ func TestEveryViewRenders(t *testing.T) {
 	must(c.Do(find(gone, "tombstone"), nil))
 
 	for _, p := range []string{"/", "/actions", "/days", href(day, "self"), "/people", "/places", "/ghosts", "/metrics",
-		"/metrics/walk", "/measurements/1", "/search", "/search?q=ran", "/integrity", href(gone, "self"),
+		"/metrics/walk", "/measurements/1", "/search", "/search?q=ran", "/integrity", href(gone, "self"), "/weeks/2026-W40", "/years/2026",
 		href(draft, "self"), essay(t, h)} {
 		browse(t, h, p)
 	}

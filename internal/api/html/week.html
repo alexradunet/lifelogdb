@@ -1,0 +1,42 @@
+{{/* The week (docs/plans/097-the-almanac-reflects.md): a look back over seven days, Monday first. The sheet lists the
+     days, each a link to its day. The margin counts what the week held: habits, readings and the work that was due.
+     A habit is told by its count, with no strip. */}}
+{{define "week"}}{{template "head" .}}
+{{$w := .Props}}
+<header class="page-head"><div class="what"><span class="date">{{shortDay $w.from}} to {{shortDay $w.through}}</span><h1>{{.Title}}</h1>
+<p class="sub"><a href="{{.Link "month"}}">{{.LinkTitle "month"}}</a><a href="{{.Link "year"}}">{{.LinkTitle "year"}}</a><a href="/days/today">Today</a></p></div>
+<div class="tools">
+<a class="button step" href="{{.Link "prev"}}" rel="prev" aria-label="Previous week, {{.LinkTitle "prev"}}"><span aria-hidden="true">‹</span><span class="step-day">Week {{week (addDays $w.from -7)}}</span></a>
+<a class="button step" href="{{.Link "next"}}" rel="next" aria-label="Next week, {{.LinkTitle "next"}}"><span class="step-day">Week {{week (addDays $w.from 7)}}</span><span aria-hidden="true">›</span></a>
+{{template "boxed" (form (.Action "open-day") "button" "Go to a day")}}
+</div></header>
+
+<div class="sheet-margin">
+<div class="sheet">
+<section aria-label="The days">
+<div class="panel-head"><h2>The days</h2></div>
+<ul class="plain">{{range $w.days}}<li><a class="entry{{if not .page}} unwritten{{end}}" href="/days/{{.day}}"><span class="date">{{shortDay .day}}</span>{{if .page}}<span class="first">{{with .first_line}}{{.}}{{else}}no text{{end}}</span>{{else}}<span class="first"></span><span class="meta">nothing written</span>{{end}}{{with .mood}}<span class="meta">mood {{range $i, $v := .}}{{if $i}}, {{end}}{{num $v}}{{end}}</span>{{end}}</a></li>{{end}}</ul>
+</section>
+</div>
+
+<div class="margin">
+<section class="group" aria-label="Habits">
+<div class="panel-head"><h2>Habits</h2><a href="/habits">Every habit</a></div>
+{{with $w.habits}}<ul class="plain">{{range .}}<li><a class="entry" href="/metrics/{{pathesc .metric}}"><span class="first">{{.metric}}</span><span class="meta">{{daysOf .done .active_days}}</span></a></li>{{end}}</ul>
+{{else}}<p class="empty">No habit was active this week. <a href="/habits">Every habit</a>.</p>{{end}}
+</section>
+
+<section class="group" aria-label="Readings">
+<div class="panel-head"><h2>Readings</h2><a href="/metrics">Metrics</a></div>
+{{with $w.metrics}}<ul class="plain">{{range .}}<li><a class="entry" href="/metrics/{{pathesc .metric}}"><span class="first">{{.metric}}</span><span class="value">{{num .mean}}{{with .unit}} {{.}}{{end}}</span><span class="meta note">{{sinceLast .mean .previous_mean}}</span></a></li>{{end}}</ul>
+{{else}}<p class="empty">No reading this week. <a href="/metrics">Metrics</a>.</p>{{end}}
+</section>
+
+<section class="group" aria-label="Done and skipped">
+<div class="panel-head"><h2>Done and skipped</h2><a href="/deadlines">What is due</a></div>
+{{with $w.occurrences}}<ul class="plain due">{{range settledFirst .}}{{template "occ" ($.Occ . 0)}}{{end}}</ul>
+{{else}}<p class="empty">Nothing was due this week. <a href="/deadlines">What is due</a>.</p>{{end}}
+</section>
+</div>
+</div>
+{{template "foot" .}}{{end}}

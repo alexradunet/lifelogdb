@@ -67,7 +67,7 @@ first; search by rank.
 ### root
 
 `GET /`: today at a glance. Links: `today`, `days`, `sessions`, `periods`, `people`, `places`, `files`, `metrics`,
-`habits`, `tasks`, `deadlines`, `ghosts`, `actions`, `calendar` (this month). Actions: `capture` (for today), `search`,
+`habits`, `tasks`, `deadlines`, `ghosts`, `actions`, `calendar` (this month), `week` (this week), `year` (this year). Actions: `capture` (for today), `search`,
 `find`, `open-day`, `deadlines`,
 `create-task`, `capture-session`, `create-period`, `create-page`, `create-person`, `create-place`, `add-file`,
 `record`, `register-metric` (owner), `query`, `snapshot` (owner); then the `check-in` of each habit of today (today
@@ -255,6 +255,78 @@ link to each day of the month. Actions: `open-day`.
 | `days[].page` | boolean | a live day page exists for it |
 | `days[].first_line` | string | the first line of that page's body that has text, as plain text (as `recent[]` of the root); absent when none |
 | `days[].mood` | list | the values of the day's current Mood readings with no session, in the order they were recorded; absent when none |
+
+### week
+
+`GET /weeks/{YYYY-Www}` (`/weeks/current` redirects to this week; a value that is not a week, or a week number the
+year does not have, is 422): a look back over an ISO 8601 week, Monday first. Links: `prev`, `next` (the weeks before
+and after), `month` (the month of the week's Thursday), `year` (the ISO year), `index`. Embedded: a `day` link to each
+day of the week. Actions: `open-day`.
+
+| property | type | meaning |
+|---|---|---|
+| `week` | string | the week, `YYYY-Www` (the ISO year) |
+| `from` | day | the Monday |
+| `through` | day | the Sunday |
+| `today` | day | this machine's local day |
+| `days[]` | list | the seven days, in order (as `days[]` of the month) |
+| `days[].day` | day | the day |
+| `days[].page` | boolean | a live day page exists for it |
+| `days[].first_line` | string | the first line of that page's body that has text, as plain text; absent when none |
+| `days[].mood` | list | the values of the day's current Mood readings with no session, in the order they were recorded; absent when none |
+| `habits[]` | list | each habit active on a day of the week, by name, counted as `completion` of habits is |
+| `habits[].metric` | string | the habit's metric |
+| `habits[].done` | integer | the days of the week on which it was done |
+| `habits[].active_days` | integer | the days of the week on which it was active |
+| `metrics[]` | list | each metric, a habit excepted, with a current reading with no session in the week, by name |
+| `metrics[].metric` | string | the metric's name |
+| `metrics[].unit` | string | its unit; empty for a metric with none |
+| `metrics[].readings` | integer | how many such readings the week holds |
+| `metrics[].mean` | number | their mean, rounded to 2 decimals |
+| `metrics[].previous_mean` | number | the mean of the week before, in the same way; absent when that week had no reading |
+| `occurrences[]` | list | the occurrences due in the week, in every state (the occurrence shape, with `label`) |
+| `occurrences[].due_day` | day |  |
+| `occurrences[].state` | string |  |
+| `occurrences[].completed_at` | instant |  |
+| `occurrences[].reminder_mode` | string |  |
+| `occurrences[].reminder_at` | instant |  |
+| `occurrences[].id` | integer |  |
+| `occurrences[].task_id` | integer |  |
+| `occurrences[].key` | string |  |
+| `occurrences[].import_key` | string |  |
+| `occurrences[].source` | string |  |
+| `occurrences[].version` | string |  |
+| `occurrences[].created_at` | instant |  |
+| `occurrences[].updated_at` | instant |  |
+| `occurrences[].deleted_at` | instant |  |
+| `occurrences[].task_version` | string |  |
+| `occurrences[].task_deleted_at` | instant |  |
+| `occurrences[].project_title` | string |  |
+| `occurrences[].project_deleted_at` | instant |  |
+| `occurrences[].virtual` | boolean |  |
+| `occurrences[].label` | string | the task's label |
+| `occurrences[].reminder` | object |  |
+| `occurrences[].reminder.state` | string |  |
+| `occurrences[].reminder.at` | instant |  |
+
+### year
+
+`GET /years/{YYYY}` (`/years/current` redirects to this year; a value that is not a year, 0001 to 9999, is 422): the
+twelve months of a year. Links: `prev`, `next` (the years before and after), `index`. Embedded: a `month` link to each
+month. Actions: `open-day`.
+
+| property | type | meaning |
+|---|---|---|
+| `year` | string | the year, `YYYY` |
+| `today` | day | this machine's local day |
+| `written` | integer | the live day pages of the year |
+| `readings` | integer | the current readings with no session, of every metric, on the days of the year |
+| `months[]` | list | the twelve months, in order |
+| `months[].month` | string | the month, `YYYY-MM` |
+| `months[].written` | integer | the live day pages of the month |
+| `months[].days[]` | list | each day of the month, in order |
+| `months[].days[].day` | day | the day |
+| `months[].days[].page` | boolean | a live day page exists for it |
 
 ### page, person, place, file, period
 

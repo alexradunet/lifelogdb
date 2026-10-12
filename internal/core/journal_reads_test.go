@@ -258,3 +258,44 @@ func TestTitlesByPrefixFoldsLikeATitleKey(t *testing.T) {
 		t.Errorf("a blank prefix: %v", err)
 	}
 }
+
+// TestReadingsCountCountsTheCurrentReadingsOfAWindow: three weight readings, one of them corrected, and a steps
+// reading. A correction replaces its reading, so it counts once. The bounds are both included.
+func TestReadingsCountCountsTheCurrentReadingsOfAWindow(t *testing.T) {
+	s := fresh(t)
+	for name, unit := range map[string]string{"weight": "kg", "steps": "n"} {
+		if _, err := s.RegisterMetric(ctx, "cli", name, unit, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var fixed int64
+	for _, r := range []Reading{{Metric: "weight", Day: "2026-10-01", Value: 70}, {Metric: "weight", Day: "2026-10-05", Value: 71},
+		{Metric: "weight", Day: "2026-10-09", Value: 72}, {Metric: "steps", Day: "2026-10-06", Value: 900}} {
+		id, err := s.Record(ctx, "cli", r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if r.Day == "2026-10-05" {
+			fixed = id
+		}
+	}
+	value := 71.5
+	if _, err := s.Correct(ctx, "cli", fixed, &value); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		from, through string
+		want          int
+	}{
+		{"2026-10-01", "2026-10-31", 4}, {"2026-10-05", "2026-10-06", 2}, {"2026-10-01", "2026-10-01", 1},
+		{"2026-10-02", "2026-10-04", 0}, {"2026-09-01", "2026-09-30", 0},
+	} {
+		got, err := s.ReadingsCount(ctx, tc.from, tc.through)
+		if err != nil || got != tc.want {
+			t.Errorf("ReadingsCount(%s, %s) = %d, %v; want %d", tc.from, tc.through, got, err, tc.want)
+		}
+	}
+	if _, err := s.ReadingsCount(ctx, "2026-10-09", "2026-10-01"); status(err) != 422 {
+		t.Errorf("a reversed window: %v", err)
+	}
+}

@@ -90,9 +90,20 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 	"shortDayYear": shortDayYear,
 	"addDays":      addDays,
 	"week":         isoWeek,
-	"segmented":    segmented,
-	"alert":        alertOf,
-	"capLater":     capLater,
+	"isoWeekKey":   isoWeekKey,
+	"yearOf":       func(month string) string { return month[:min(4, len(month))] },
+	"settledFirst": settledFirst,
+	"sinceLast":    sinceLastWeek,
+	"daysOf":       daysOf,
+	"monthName": func(month string) string { // "2026-10" to "October"
+		if t, ok := monthOf(month); ok {
+			return t.Format("January")
+		}
+		return month
+	},
+	"segmented": segmented,
+	"alert":     alertOf,
+	"capLater":  capLater,
 }).ParseFS(views, "html/*.html"))
 
 // dict is the arguments of a sub-template that needs more than one value: name/value pairs, each name a string.
@@ -128,7 +139,7 @@ var viewOf = map[string]string{
 	"root": "root", "day": "day", "page": "page", "person": "page", "place": "page", "file": "page", "period": "page",
 	"days": "list", "people": "list", "places": "list", "files": "list", "ghosts": "list", "search": "search",
 	"metrics": "metrics", "series": "series", "habits": "habits", "measurement": "measurement", "error": "error", "login": "login",
-	"tasks": "tasks", "task": "task", "occurrence": "occurrence", "deadlines": "deadlines", "month": "month",
+	"tasks": "tasks", "task": "task", "occurrence": "occurrence", "deadlines": "deadlines", "month": "month", "week": "week", "year": "year",
 }
 
 // view is what a template gets: the entity, its properties as the JSON client reads them, the path the browser
@@ -219,7 +230,7 @@ var navItems = []struct {
 }{
 	{"Lifelog", "/", "", []string{"/"}, "home"},
 	{"Today", "/days/today", "today", []string{"/days/today"}, "day"},
-	{"Calendar", "/months/current", "calendar", []string{"/months", "/days"}, "day"},
+	{"Calendar", "/months/current", "calendar", []string{"/months", "/weeks", "/years", "/days"}, "day"},
 	{"Due", "/deadlines", "due", []string{"/deadlines"}, "day"},
 	{"Tasks", "/tasks", "tasks", []string{"/tasks"}, "day"},
 	{"People", "/people", "people", []string{"/people"}, "record"},
@@ -582,6 +593,60 @@ func isoWeek(day string) int {
 	}
 	_, w := t.ISOWeek()
 	return w
+}
+
+// isoWeekKey is the ISO 8601 week of a day as the address of the week writes it, "2026-W41"; "" for a day that is
+// not one.
+func isoWeekKey(day string) string {
+	t, err := time.Parse(time.DateOnly, day)
+	if err != nil {
+		return ""
+	}
+	return weekKey(t)
+}
+
+// settledFirst orders the occurrences of a week for reading back: done ones, then skipped ones, then open ones. The
+// order inside each state stays.
+func settledFirst(list any) []any {
+	items, _ := list.([]any)
+	rank := map[string]int{"done": 0, "skipped": 1}
+	out := slices.Clone(items)
+	slices.SortStableFunc(out, func(a, b any) int {
+		state := func(x any) int {
+			m, _ := x.(map[string]any)
+			s, _ := m["state"].(string)
+			if r, ok := rank[s]; ok {
+				return r
+			}
+			return 2
+		}
+		return state(a) - state(b)
+	})
+	return out
+}
+
+// sinceLastWeek says in words how a week's mean differs from the week before's: previous is nil when that week had
+// no reading.
+func sinceLastWeek(mean, previous any) string {
+	m, ok1 := mean.(float64)
+	p, ok2 := previous.(float64)
+	switch {
+	case !ok1 || !ok2:
+		return "first week with readings"
+	case m > p:
+		return "up from " + num(p)
+	case m < p:
+		return "down from " + num(p)
+	}
+	return "same as last week"
+}
+
+// daysOf writes a habit's count over a week: "5 of 7 days".
+func daysOf(done, active any) string {
+	if a, _ := active.(float64); a == 1 {
+		return num(done) + " of 1 day"
+	}
+	return num(done) + " of " + num(active) + " days"
 }
 
 func weekday(day string) string {

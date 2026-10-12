@@ -142,6 +142,8 @@ func TestNavMarksThePageTheBrowserIsOn(t *testing.T) {
 		"/days/2026-01-01": "/months/current",
 		"/days/today":      "/days/today",
 		"/months/2026-10":  "/months/current",
+		"/weeks/2026-W41":  "/months/current",
+		"/years/2026":      "/months/current",
 		"/deadlines":       "/deadlines",
 		"/integrity":       "/integrity",
 		"/people":          "/people",

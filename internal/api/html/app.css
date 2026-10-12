@@ -73,6 +73,11 @@ table.month a:hover{background:var(--surface-deep); text-decoration:none}
 table.month a.written{background:var(--accent-soft); color:var(--accent-ink); font-weight:500}
 table.month a[aria-current=date]{box-shadow:inset 0 0 0 2px var(--accent-ink)}
 
+/* The year: twelve of those month boxes in a grid. */
+.year{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:var(--space-4)}
+@media (max-width:899px){.year{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:519px){.year{grid-template-columns:minmax(0,1fr)}}
+
 /* A phone (docs/plans/093-words-phone-and-today.md): the head of the sidebar is a top bar; the sections of every
    day are a bottom bar with More; the rest is a sheet over the page while it is the target (#sections). All of it
    is the same wood. */
@@ -199,6 +204,8 @@ ul.plain>li:last-child{border-bottom:0}
 @media (max-width:519px){.entry{grid-template-columns:minmax(0,1fr) auto}.entry>.date{grid-column:1 / -1}}
 .margin .entry{grid-template-columns:minmax(0,1fr) auto}
 .margin .entry>.date{grid-column:1 / -1}
+.margin .entry .note{grid-column:1 / -1}
+.entry.unwritten{color:var(--text-muted)}
 
 /* A table wider than the screen scrolls; the page does not. A table on the oak is written on parchment first. */
 .scroll{overflow-x:auto}

@@ -511,6 +511,17 @@ func (s *Store) Series(ctx context.Context, metric, from, to string) ([]Reading,
 	return s.SeriesScope(ctx, metric, from, to, "unassociated", 0, false)
 }
 
+// ReadingsCount is how many current readings with no session fall on the days from through through, both included:
+// the readings that Series gives, for all metrics. A corrected reading counts once, and a retracted one not at all.
+func (s *Store) ReadingsCount(ctx context.Context, from, through string) (int, error) {
+	if !IsDay(from) || !IsDay(through) || from > through {
+		return 0, invalid("a count needs ordered exact days")
+	}
+	var n int
+	err := s.DB.R.QueryRowContext(ctx, `SELECT count(*) FROM measurement_values WHERE session_id IS NULL AND day BETWEEN ? AND ?`, from, through).Scan(&n)
+	return n, err
+}
+
 // Measurement reads one row of the append-only table, current or not, and what corrected it.
 type Measurement struct {
 	Reading
