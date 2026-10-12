@@ -4,11 +4,12 @@ An issue records an incident from real use — a failed import, a bug in the wri
 data could not answer, a rule that is ambiguous or untestable. It is the evidence a schema change needs
 ([how a change happens](../process.md)). One file per incident, named `NNNN-short-slug.md`, written from the
 [template](template.md), numbered on from the last: issues up to 0010 are closed and live in git history
-(`git log -- docs/issues`). Issues 0011–0059 are listed below; the next one is **0060**. Close an issue with its resolution and status, retaining the dated incident as
+(`git log -- docs/issues`). Issues 0011–0060 are listed below; the next one is **0061**. Close an issue with its resolution and status, retaining the dated incident as
 [the process](../process.md) requires. Earlier closed records remain available in git history.
 
 | id | title | status |
 |---|---|---|
+| [0060](0060-the-browser-cannot-carry-daily-use.md) | The browser cannot carry daily planning, journaling, editing and navigation | open |
 | [0059](0059-an-agent-in-the-lifelog-folder-knows-nothing.md) | An agent opened in the lifelog folder knows nothing about it | resolved |
 | [0058](0058-the-import-machine-outweighs-the-backfill.md) | The import machinery is larger than the life log, for a backfill done once | resolved |
 | [0057](0057-the-import-loop-lives-outside-the-writer.md) | The import loop lives in scripts outside the writer, and it fails where no test sees it | resolved |

@@ -4,10 +4,11 @@ A plan is a dated record ([how a change happens](../process.md)): a change large
 written as a self-contained brief with done criteria. It cites the docs as they were at the commit it names. One file
 per plan, `NNN-short-slug.md`, numbered on from the last.
 
-Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **091**.
+Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **092**.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
+| [091](091-the-browser-for-daily-use.md) | The browser for daily use: planning, the journal, navigation and editing | P1 | L | issue 0060; owner decisions 2026-10-12 | TODO |
 | [090](090-agentic-init.md) | `lifelog agentic-init`: the lifelog folder ready for any agent | P1 | M | issue 0059 | DONE |
 | [089](089-no-import-process.md) | No import process: the owner imports with an agent, through the catalog | P1 | L | RFC 0011; issue 0058 | DONE |
 | [088](088-the-writer-runs-the-facts-pass.md) | The writer runs the facts pass with a local model: `lifelog import run` | P1 | L | RFC 0010; issue 0057 | DONE |
