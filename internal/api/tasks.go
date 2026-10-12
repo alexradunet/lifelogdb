@@ -339,18 +339,16 @@ func (h *server) dueIn(ctx context.Context, from, through, state string, include
 
 // ---- writes: every one a core.Tx method inside one transaction, answered with the resource it changed
 
-// taskSpec reads a definition's fields; project is a page title, resolved to its id.
-func (h *server) taskSpec(ctx context.Context, v url.Values, base core.TaskSpec) (core.TaskSpec, error) {
+// taskSpec reads a definition's fields inside the write; project is a page title, resolved to its id, and a title
+// no page has makes an empty page in the same transaction.
+func taskSpec(t *core.Tx, v url.Values, base core.TaskSpec) (core.TaskSpec, error) {
 	spec := base
 	spec.Label = v.Get("label")
 	spec.ProjectPageID = nil
 	if title := v.Get("project"); title != "" {
-		id, err := h.s.PageID(ctx, title)
+		id, _, err := t.PageForTitle(title)
 		if err != nil {
 			return spec, err
-		}
-		if id == 0 {
-			return spec, &core.Error{Status: 404, Msg: "no page titled " + title + ": create the project page first"}
 		}
 		spec.ProjectPageID = &id
 	}
@@ -366,24 +364,24 @@ func (h *server) createTask(r *http.Request, src string) (*Entity, error) {
 	if err := required(v, "label"); err != nil {
 		return nil, err
 	}
-	spec, err := h.taskSpec(r.Context(), v, core.TaskSpec{})
-	if err != nil {
-		return nil, err
-	}
-	spec.RepeatUnit, spec.AnchorDay, spec.RepeatUntilDay = v.Get("repeat_unit"), v.Get("anchor_day"), v.Get("repeat_until_day")
+	var base core.TaskSpec // the cadence; the rest is read inside the write
+	base.RepeatUnit, base.AnchorDay, base.RepeatUntilDay = v.Get("repeat_unit"), v.Get("anchor_day"), v.Get("repeat_until_day")
 	if every := v.Get("repeat_every"); every != "" {
 		n, err := strconv.ParseInt(every, 10, 64)
 		if err != nil {
 			return nil, &core.Error{Status: 422, Msg: "repeat_every must be a whole number"}
 		}
-		spec.RepeatEvery = n
+		base.RepeatEvery = n
 	}
-	if spec.RepeatUnit != "" && v.Get("due_day") != "" {
+	if base.RepeatUnit != "" && v.Get("due_day") != "" {
 		return nil, &core.Error{Status: 422, Msg: "due_day is a one-off's; a series is due on its slots"}
 	}
 	var id int64
 	err = h.s.Do(r.Context(), src, func(t *core.Tx) error {
-		var e error
+		spec, e := taskSpec(t, v, base)
+		if e != nil {
+			return e
+		}
 		if spec.RepeatUnit == "" {
 			initial := core.OccurrenceInput{OccurrenceKey: "once", OccurrenceChanges: core.OccurrenceChanges{DueDay: v.Get("due_day"), State: "open", ReminderMode: "inherit"}}
 			id, _, e = t.CaptureOneOffTask(spec, v.Get("import_key"), initial)
@@ -415,7 +413,7 @@ func (h *server) editTask(r *http.Request, src string) (*Entity, error) {
 		if e != nil {
 			return e
 		}
-		spec, e := h.taskSpec(r.Context(), v, cur.TaskSpec) // the cadence is the current one: it is fixed
+		spec, e := taskSpec(t, v, cur.TaskSpec) // the cadence is the current one: it is fixed
 		if e != nil {
 			return e
 		}

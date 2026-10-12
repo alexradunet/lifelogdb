@@ -28,3 +28,33 @@ func TestBrowserFieldPresence(t *testing.T) {
 		}
 	}
 }
+
+// TestAFieldForAPageTitleCarriesDataPages: the catalog says which fields take a page's title (Pages), the form
+// marks them with data-pages, and the script hangs the list of names after [[ on exactly those inputs.
+func TestAFieldForAPageTitleCarriesDataPages(t *testing.T) {
+	var b bytes.Buffer
+	f, err := formOf(action("create-task", nil, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := pages.ExecuteTemplate(&b, "form", f); err != nil {
+		t.Fatal(err)
+	}
+	if got := b.String(); !strings.Contains(got, `name="project" value="" data-pages>`) || strings.Count(got, "data-pages") != 1 {
+		t.Errorf("the project field of create-task is not the one field marked data-pages:\n%s", got)
+	}
+	for _, name := range []string{"link", "unlink", "readings-from-table", "find", "edit-task"} {
+		marked := 0
+		for _, fd := range action(name, nil, nil).Fields {
+			if fd.Pages {
+				marked++
+			}
+		}
+		if marked != 1 {
+			t.Errorf("%s marks %d fields as a page's title, want 1", name, marked)
+		}
+	}
+	if js := string(appJS); !strings.Contains(js, `input[data-pages]`) {
+		t.Error("the script does not hang the list of names on input[data-pages]")
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"lifelog/internal/api"
 	"lifelog/internal/client"
 )
 
@@ -37,8 +38,30 @@ func TestPlanningLifeThroughTheCatalog(t *testing.T) {
 			if _, err := c.Do(find(root, "create-task"), map[string]string{"label": "Bad", "repeat_unit": "month", "due_day": "2031-06-10"}); !clientStatus(err, 422) {
 				t.Fatalf("a series with a due day: %v", err)
 			}
-			if _, err := c.Do(find(root, "create-task"), map[string]string{"label": "Bad", "project": "No such page"}); !clientStatus(err, 404) {
-				t.Fatalf("an unknown project: %v", err)
+			// A project no page has is made as an empty page in the same write, and so is a new one on an edit.
+			planted := must(c.Do(find(root, "create-task"), map[string]string{"label": "Plant trees", "project": "Orchard"}))
+			orchard := must(c.Get(hrefOf(planted, "project")))
+			if orchard.Title != "Orchard" || orchard.Class[0] != "page" || props(orchard)["body"] != "" || props(orchard)["is_day_page"] != false {
+				t.Fatalf("the project page made for a task: %s %v %v", orchard.Title, orchard.Class, props(orchard))
+			}
+			if props(planted)["task"].(map[string]any)["project_title"] != "Orchard" {
+				t.Fatalf("the task's project: %v", props(planted)["task"])
+			}
+			moved := must(c.Do(find(planted, "edit-task"), map[string]string{"label": "Plant trees", "project": "Greenhouse"}))
+			if page := must(c.Get(hrefOf(moved, "project"))); page.Title != "Greenhouse" || hrefOf(moved, "project") == hrefOf(planted, "project") {
+				t.Fatalf("the project page made on an edit: %s", page.Title)
+			}
+			if _, err := c.Do(find(root, "create-task"), map[string]string{"label": "Bad", "project": "[[Orchard]]"}); !clientStatus(err, 422) {
+				t.Fatalf("a project that is not a valid title: %v", err)
+			}
+			for _, a := range []api.Action{find(root, "create-task"), find(planted, "edit-task")} {
+				pages := false
+				for _, f := range a.Fields {
+					pages = pages || (f.Name == "project" && f.Pages)
+				}
+				if !pages {
+					t.Fatalf("the project field of %s does not say it is a page's title: %+v", a.Name, a.Fields)
+				}
 			}
 
 			// A monthly series: its slots are virtual until written.

@@ -82,8 +82,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   of 2 to 5 short options a `fieldset` of radio buttons), a card is an `article`, a callout an `aside`, an error a
   `role="alert"`, a series a `table` with a header row; no id or class is generated for a template to find. What a
   template cannot know comes from the entity: `danger` marks a destructive action's button, `owner` an owner-only
-  one, `rows` a textarea's height, `options` a field's choices and an error's `code` its first words, so no view
-  decides any of them by an action's or a field's name.
+  one, `rows` a textarea's height, `options` a field's choices, `pages` a field whose value is a page's title and an
+  error's `code` its first words, so no view decides any of them by an action's or a field's name.
 - **The browser for daily use** ([plan 091](docs/plans/091-the-browser-for-daily-use.md)). The root is today at a
   glance: what is due today and overdue, today's habits and the five newest day pages. A day carries what is due on
   it, its mood, its habits and the `save-body` of its day page, so the day view edits in place. The tasks, a task, an
@@ -130,7 +130,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   line and a habit its strip of 14 days; a series shows its next 5 later slots on its own page.
 - **One script, which no page needs** ([plan 091](docs/plans/091-the-browser-for-daily-use.md)). `app.js` is this
   application's own, embedded and written into each page like the two sheets: no framework, no CDN, no build step.
-  It suggests the names of pages after `[[` (from `GET /titles`), shows a preview of a body as it will show when
+  It suggests the names of pages after `[[` and in a field for a page's title (from `GET /titles`), shows a preview of a body as it will show when
   saved (from `POST /render`), sends the form of a textarea with Ctrl+Enter, leaves a field with Escape, takes keys
   outside a field (`/` search, `c` capture, `t` today, `[` and `]` the previous and next page), and asks before
   the browser leaves text that was not sent. It gives the toast a Close (and Escape), makes a danger button ask once

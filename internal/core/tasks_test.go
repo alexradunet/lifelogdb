@@ -500,3 +500,53 @@ func TestTaskConcurrentMaterializationRetainsOneOccurrence(t *testing.T) {
 		t.Fatalf("retried occurrence changed %+v", o)
 	}
 }
+
+// TestPageForTitleFindsOrMakesTheProject: the page a task names by title is found whatever its type or tombstone,
+// made as an empty page when none has the title, and refused when the title is not one.
+func TestPageForTitleFindsOrMakesTheProject(t *testing.T) {
+	s := fresh(t)
+	ana, err := s.CreatePerson(ctx, "cli", "Ana", "Ana Pop", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	gone, _, err := s.CreatePage(ctx, "cli", "Old plan", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Tombstone(ctx, "cli", gone); err != nil {
+		t.Fatal(err)
+	}
+	var orchard int64
+	err = s.Do(ctx, "cli", func(tx *Tx) error {
+		for _, c := range []struct {
+			title   string
+			want    int64
+			created bool
+		}{{"ana", ana, false}, {"Old plan", gone, false}, {"Orchard", 0, true}} {
+			id, created, err := tx.PageForTitle(c.title)
+			if err != nil || created != c.created || (c.want != 0 && id != c.want) || id == 0 {
+				return fmt.Errorf("%q: id %d created %v, %v; want %d %v", c.title, id, created, err, c.want, c.created)
+			}
+			if c.title == "Orchard" {
+				orchard = id
+			}
+		}
+		if id, created, err := tx.PageForTitle("orchard"); err != nil || created || id != orchard {
+			return fmt.Errorf("a second ask for the page made: id %d created %v, %v", id, created, err)
+		}
+		if _, _, err := tx.PageForTitle("[[Orchard]]"); status(err) != 422 {
+			return fmt.Errorf("a title that is not one: %v", err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := s.PageByID(ctx, orchard)
+	if err != nil || p.Type != "page" || p.Title != "Orchard" || p.Body != "" || p.IsDayPage || p.DeletedAt != "" {
+		t.Fatalf("the page made: %+v, %v", p, err)
+	}
+	if p, _ := s.PageByID(ctx, gone); p.DeletedAt == "" {
+		t.Error("finding a tombstoned page revived it")
+	}
+}

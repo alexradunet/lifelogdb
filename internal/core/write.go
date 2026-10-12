@@ -363,6 +363,20 @@ func (t *Tx) CreatePage(title, body, day, importKey string) (id int64, existing 
 	return id, false, r, err
 }
 
+// PageForTitle is the id of the page that holds a title, made as an empty page when no page has it: the context a
+// task names by its title, like the target of a wikilink. A tombstoned page keeps its id and its tombstone.
+func (t *Tx) PageForTitle(title string) (id int64, created bool, err error) {
+	p, err := t.Lookup(title)
+	if err != nil {
+		return 0, false, err
+	}
+	if p != nil {
+		return p.ID, false, nil
+	}
+	id, _, _, err = t.CreatePage(title, "", "", "")
+	return id, err == nil, err
+}
+
 // CreatePerson and CreatePlace are cookbook/person-or-place.md's create: one id, a page, and for a person a
 // people row.
 func (t *Tx) CreatePerson(title, name, birth, death, importKey string) (int64, bool, error) {

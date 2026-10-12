@@ -3,7 +3,8 @@
 // (docs/plans/091-the-browser-for-daily-use.md). It reads /titles (the names after [[, and the pages of the command
 // list), /render (the preview of a body) and / (the root's actions, for the command list), and nothing else; it
 // writes nothing. Six things:
-//   1. after [[ in a textarea, the names of the pages that start with what follows;
+//   1. after [[ in a textarea, and in a field for a page's title (data-pages), the names of the pages that start
+//      with what is typed;
 //   2. a preview of a body as it will show when saved;
 //   3. keys: Ctrl+K the command list from anywhere, Ctrl+Enter sends the form of a textarea, Escape leaves a
 //      field; outside a field, / search, c capture, t today, [ and ] the previous and next page, Escape closes the phone's sheet of
@@ -17,11 +18,13 @@
 
   var siren = { Accept: "application/vnd.siren+json" };
 
-  // ---- 1. Suggestions after [[
+  // ---- 1. Suggestions after [[, and in a field for a page's title
 
   // openLink is the open [[ before the caret: where its title starts and what is typed of it; null when the caret
-  // is not inside an open link (a ], a | or a line break closes it, as in the wikilink grammar).
+  // is not inside an open link (a ], a | or a line break closes it, as in the wikilink grammar). In a field for a
+  // page's title the whole value is the title: whole says so, and no brackets are written.
   function openLink(area) {
+    if (area.hasAttribute("data-pages")) return area.value ? { start: 0, typed: area.value, whole: true } : null;
     var before = area.value.slice(0, area.selectionStart);
     var at = before.lastIndexOf("[[");
     if (at < 0 || area.selectionStart !== area.selectionEnd) return null;
@@ -50,9 +53,16 @@
     items[open.index].scrollIntoView({ block: "nearest" });
   }
 
-  // choose writes the title chosen and closes the link, unless the text after the caret already closes it.
+  // choose writes the title chosen and closes the link, unless the text after the caret already closes it. In a
+  // field for a page's title it is the value, and the list stays closed: the title is chosen.
   function choose(open, i) {
     var area = open.area, title = open.titles[i].title, end = area.selectionStart;
+    if (open.link.whole) {
+      area.value = title;
+      close(area);
+      area.focus();
+      return;
+    }
     var after = area.value.slice(end);
     var close2 = after.slice(0, 2) === "]]" ? "" : "]]";
     area.setRangeText(title + close2, open.link.start, end, "end");
@@ -466,10 +476,11 @@
 
   // ---- Start
 
-  var areas = document.querySelectorAll("textarea:not([readonly])");
+  var areas = document.querySelectorAll("textarea:not([readonly]), input[data-pages]");
   for (var i = 0; i < areas.length; i++) {
     var area = areas[i];
     area.setAttribute("aria-autocomplete", "list");
+    if (area.hasAttribute("data-pages")) area.autocomplete = "off"; // the browser's own list would cover the names
     area.addEventListener("input", function (ev) { suggest(ev.target); });
     area.addEventListener("keydown", listKeys);
     area.addEventListener("blur", function (ev) { var a = ev.target; setTimeout(function () { close(a); }, 150); });

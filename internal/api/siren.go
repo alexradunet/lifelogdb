@@ -41,7 +41,8 @@ type Action struct {
 }
 
 // Field is a Siren field. In "path" (an extension) marks a field of the catalog's templated href; Rows (an
-// extension) is how many lines a browser draws of a textarea.
+// extension) is how many lines a browser draws of a textarea; Pages (an extension) says the value is a page's
+// title, so a browser can offer the names of the pages as it does after [[.
 type Field struct {
 	Name     string   `json:"name"`
 	Type     string   `json:"type"`
@@ -51,6 +52,7 @@ type Field struct {
 	Options  []string `json:"options,omitempty"`
 	In       string   `json:"in,omitempty"`
 	Rows     int      `json:"rows,omitempty"`
+	Pages    bool     `json:"pages,omitempty"`
 }
 
 const formType = "application/x-www-form-urlencoded"
@@ -70,6 +72,11 @@ func req(name, typ, title string) Field {
 	return Field{Name: name, Type: typ, Title: title, Required: true}
 }
 func opt(name, typ, title string) Field { return Field{Name: name, Type: typ, Title: title} }
+
+// page is a text field whose value is a page's title; required says whether the action needs one.
+func page(name, title string, required bool) Field {
+	return Field{Name: name, Type: "text", Title: title, Required: required, Pages: true}
+}
 
 // area is a multi-line field a browser draws rows lines tall.
 func area(name, title string, rows int) Field {
@@ -127,14 +134,14 @@ var catalog = []spec{
 	{"revive", "Revive", "Undo a tombstone.",
 		"POST", "/pages/{id}/revive", []Field{path("id", "number", "Page id")}, false},
 	{"link", "Link", "Add a typed link from this page to the page titled `to` (kinds: at = a day page was at a place; about; located-in; parent-of; part-of = filed in the category whose page is `to`; friend; family; related).",
-		"POST", "/pages/{id}/links", []Field{path("id", "number", "Page id"), req("to", "text", "To (title)"), req("kind", "text", "Kind"), opt("note", "text", "Note")}, false},
+		"POST", "/pages/{id}/links", []Field{path("id", "number", "Page id"), page("to", "To (title)", true), req("kind", "text", "Kind"), opt("note", "text", "Note")}, false},
 	{"unlink", "Unlink", "Remove a typed link from this page to the page titled `to`.",
-		"POST", "/pages/{id}/unlink", []Field{path("id", "number", "Page id"), req("to", "text", "To (title)"), req("kind", "text", "Kind")}, false},
+		"POST", "/pages/{id}/unlink", []Field{path("id", "number", "Page id"), page("to", "To (title)", true), req("kind", "text", "Kind")}, false},
 	{"record", "Record", "Record a reading of a registered metric for a local day. import_key makes a re-send a no-op. A view offers the metrics read in its last 60 days; /metrics lists them all.",
 		"POST", "/measurements", []Field{req("metric", "text", "Metric"), req("day", "date", "Day"), req("value", "number", "Value"),
 			opt("session_id", "number", "Session scope (blank unassociated, not a daily total)"), opt("taken_at", "text", "Taken at (UTC, 2026-06-09T21:14:03.482Z)"), opt("tz", "text", "Zone (IANA)"), opt("import_key", "text", "Key")}, false},
 	{"readings-from-table", "Readings from a table", "Turn the table of a page into readings of a registered metric: each row with a day (YYYY-MM-DD) and a plain number is one reading of that day. The unit (in the cell, a unit column, or the header in ( ) or [ ]) must be the metric's; nothing is converted. A sign (<5), a word, a comma decimal, another unit or a second value for one day is reported, not written. A second run writes nothing.",
-		"POST", "/measurements/from-table", []Field{req("page", "text", "Page (title)"), req("metric", "text", "Metric"), opt("column", "text", "Value column, when the table has several")}, false},
+		"POST", "/measurements/from-table", []Field{page("page", "Page (title)", true), req("metric", "text", "Metric"), opt("column", "text", "Value column, when the table has several")}, false},
 	{"correct", "Correct", "Correct a reading with a new value (a reading is corrected once; correct the correction after that).",
 		"POST", "/measurements/{id}/correct", []Field{path("id", "number", "Measurement id"), req("value", "number", "Value")}, false},
 	{"retract", "Retract", "Retract a reading that should never have existed.",
@@ -154,7 +161,7 @@ var catalog = []spec{
 	{"search", "Search", "Full-text search over page titles and bodies (FTS5 syntax).",
 		"GET", "/search", []Field{req("q", "search", "Search")}, false},
 	{"find", "Find page", "Open the page with this title (any case or normalisation).",
-		"GET", "/pages", []Field{req("title", "text", "Title")}, false},
+		"GET", "/pages", []Field{page("title", "Title", true)}, false},
 	{"open-day", "Go to a day", "Open the day view of a local day (YYYY-MM-DD): its journal, what was due, its habits and readings.",
 		"GET", "/days/go", []Field{req("day", "date", "Day")}, false},
 	{"query", "Query", "Run one read-only SQL statement (SQLite; see docs/cookbook for the canonical queries). At most 500 rows.",
@@ -162,12 +169,12 @@ var catalog = []spec{
 	{"snapshot", "Take a snapshot", "The owner's dated copy of life.db (docs/cookbook/take-a-snapshot.md) into the server's snapshot folder, never overwriting, then its restore check. The answer names the file and the check.",
 		"POST", "/snapshots", nil, true},
 	// Planning (docs/contract/planning.md): explicit tasks, their occurrences, the deadlines of a window.
-	{"create-task", "New task", "Create a task: a one-off (due on due_day, or undated), or a series when repeat_unit is day, week, month or year, every repeat_every units from anchor_day, until repeat_until_day. project names an existing page as its context. reminder_time (HH:MM) and reminder_zone (IANA) are the default reminder of each occurrence. Planning never records what happened.",
-		"POST", "/tasks", []Field{req("label", "text", "Label"), opt("project", "text", "Project page (title)"), opt("repeat_unit", "text", "Repeat: day, week, month or year (blank: one-off)"),
+	{"create-task", "New task", "Create a task: a one-off (due on due_day, or undated), or a series when repeat_unit is day, week, month or year, every repeat_every units from anchor_day, until repeat_until_day. project names the page that is its context, made as an empty page when no page has the title. reminder_time (HH:MM) and reminder_zone (IANA) are the default reminder of each occurrence. Planning never records what happened.",
+		"POST", "/tasks", []Field{req("label", "text", "Label"), page("project", "Project page (title)", false), opt("repeat_unit", "text", "Repeat: day, week, month or year (blank: one-off)"),
 			opt("repeat_every", "number", "Every N units"), opt("anchor_day", "date", "First occurrence"), opt("repeat_until_day", "date", "Last occurrence (inclusive)"),
 			opt("reminder_time", "text", "Reminder clock (HH:MM)"), opt("reminder_zone", "text", "Reminder zone (IANA)"), opt("due_day", "date", "Due (a one-off)"), opt("import_key", "text", "Key")}, false},
-	{"edit-task", "Edit task", "Change a task's label, project or default reminder; its cadence is fixed (stop-task shortens a series).",
-		"POST", "/tasks/{id}/edit", []Field{path("id", "number", "Task id"), req("version", "hidden", "Version"), req("label", "text", "Label"), opt("project", "text", "Project page (title)"),
+	{"edit-task", "Edit task", "Change a task's label, project (a page, made when no page has the title) or default reminder; its cadence is fixed (stop-task shortens a series).",
+		"POST", "/tasks/{id}/edit", []Field{path("id", "number", "Task id"), req("version", "hidden", "Version"), req("label", "text", "Label"), page("project", "Project page (title)", false),
 			opt("reminder_time", "text", "Reminder clock (HH:MM)"), opt("reminder_zone", "text", "Reminder zone (IANA)")}, false},
 	{"stop-task", "Stop series", "End a series on a day (inclusive): its open slots after it are skipped, done ones kept. An end only shortens.",
 		"POST", "/tasks/{id}/stop", []Field{path("id", "number", "Task id"), req("version", "hidden", "Version"), req("through", "date", "Last day")}, false},
