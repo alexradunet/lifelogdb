@@ -849,19 +849,41 @@ func (h *server) recordAction(ctx context.Context, metric, day string) Action {
 	return a
 }
 
+// namedRow is a row of the people and places lists: the page and how often the log mentions it.
+type namedRow struct {
+	ID       int64  `json:"id"`
+	Title    string `json:"title"`
+	Mentions int    `json:"mentions"`
+	LastDay  string `json:"last_day,omitempty"`
+}
+
 func (h *server) named(typ, plural, create string) func(*http.Request) (*Entity, error) {
 	return func(r *http.Request) (*Entity, error) {
 		limit, offset, err := pageOf(r, 200)
 		if err != nil {
 			return nil, err
 		}
+		e := &Entity{Class: []string{plural}, Title: strings.ToUpper(plural[:1]) + plural[1:],
+			Links:   []Link{link("self", "/"+plural, plural), link("index", "/", "Home")},
+			Actions: []Action{action(create, nil, nil)}}
+		if typ == "person" || typ == "place" { // these rows say how often the log mentions them
+			found, err := h.s.NamedMentions(r.Context(), typ, limit+1, offset)
+			if err != nil {
+				return nil, err
+			}
+			found = paged(e, found, "/"+plural, nil, limit, offset)
+			rows := []namedRow{}
+			for _, p := range found {
+				rows = append(rows, namedRow{ID: p.ID, Title: p.Title, Mentions: p.Mentions, LastDay: p.LastDay})
+				e.Entities = append(e.Entities, Link{Rel: []string{"item"}, Href: pageHref(p.ID), Title: p.Title, Class: []string{typ}})
+			}
+			e.Properties.(map[string]any)["rows"] = rows
+			return e, nil
+		}
 		list, err := h.s.Named(r.Context(), typ, limit+1, offset)
 		if err != nil {
 			return nil, err
 		}
-		e := &Entity{Class: []string{plural}, Title: strings.ToUpper(plural[:1]) + plural[1:],
-			Links:   []Link{link("self", "/"+plural, plural), link("index", "/", "Home")},
-			Actions: []Action{action(create, nil, nil)}}
 		list = paged(e, list, "/"+plural, nil, limit, offset)
 		for _, p := range list {
 			e.Entities = append(e.Entities, Link{Rel: []string{"item"}, Href: pageHref(p.ID), Title: p.Title, Class: []string{typ}})

@@ -130,6 +130,11 @@ page (with `class` the page's type where it has one). `people`, `places` and `fi
 |---|---|---|
 | `limit` | integer | the page size used |
 | `offset` | integer | the rows skipped |
+| `rows[]` | list | `people` and `places` only: one row for each `item` link, in the same order |
+| `rows[].id` | integer | the page's id |
+| `rows[].title` | string | its title |
+| `rows[].mentions` | integer | the live pages that link to it, of any kind, each counted once |
+| `rows[].last_day` | string | the day of the newest live day page among them; absent when there is none |
 
 ### search
 

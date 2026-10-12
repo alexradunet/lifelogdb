@@ -67,7 +67,9 @@
 {{with .Action "create-place"}}{{template "boxed" (form .)}}{{end}}
 {{with .Action "add-file"}}{{template "boxed" (form . "hide" "sha256,mime")}}{{end}}
 </div></header>
-{{if $items}}<div class="sheet list"><ul class="plain rows">{{range $items}}<li>{{if eq $.Title "Days"}}<a class="entry" href="{{.Href}}"><span class="date">{{$.Date .Title}}</span><span class="first">{{weekday .Title}}</span><span class="meta"></span></a>{{else}}<a href="{{.Href}}">{{$.Date .Title}}</a>{{end}}</li>{{end}}</ul></div>
+{{$named := ""}}{{with .Props}}{{$named = .rows}}{{end}}
+{{if $named}}<div class="sheet list"><ul class="plain rows">{{range $named}}<li><a class="entry named" href="/pages/{{num .id}}"><span class="first">{{.title}}</span><span class="meta">{{mentionWords .mentions .last_day}}</span></a></li>{{end}}</ul></div>
+{{else if $items}}<div class="sheet list"><ul class="plain rows">{{range $items}}<li>{{if eq $.Title "Days"}}<a class="entry" href="{{.Href}}"><span class="date">{{$.Date .Title}}</span><span class="first">{{weekday .Title}}</span><span class="meta"></span></a>{{else}}<a href="{{.Href}}">{{$.Date .Title}}</a>{{end}}</li>{{end}}</ul></div>
 {{else}}<p class="empty">Nothing yet. <a href="/#new">New</a> makes a page, a person, a place or a file.</p>{{end}}
 {{template "pager" .}}
 {{template "foot" .}}{{end}}

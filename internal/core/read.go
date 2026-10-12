@@ -674,3 +674,42 @@ func (s *Store) Query(ctx context.Context, q string, maxRows int) (*Result, erro
 	}
 	return res, nil
 }
+
+// NamedRow is a live person or place with how often the log mentions it.
+type NamedRow struct {
+	ID    int64
+	Title string
+	// Mentions is the number of live pages that link to this one, of any kind. A page counts once.
+	Mentions int
+	// LastDay is the day of the newest live day page among those pages. It is "" when there is none.
+	LastDay string
+}
+
+// NamedMentions is one page of the live people or places, in the order and with the paging of Named.
+// It reads the mentions in the same query, so the cost does not grow with the number of rows.
+func (s *Store) NamedMentions(ctx context.Context, typ string, limit, offset int) ([]NamedRow, error) {
+	rows, err := s.DB.R.QueryContext(ctx, `
+		SELECT p.id, p_name.title, count(DISTINCT lp.id),
+		       coalesce(max(CASE WHEN lp_name.title = lp.day THEN lp.day END), '')
+		  FROM entities p
+		  JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
+		  LEFT JOIN links l ON l.to_id = p.id
+		  LEFT JOIN entities lp ON lp.id = l.from_id AND lp.deleted_at IS NULL
+		  LEFT JOIN entity_names lp_name ON lp_name.entity_id = lp.id AND lp_name.name_key = lp.preferred_name_key
+		 WHERE p.entity_type = ? AND p.deleted_at IS NULL
+		 GROUP BY p.id, p_name.title
+		 ORDER BY p_name.title LIMIT ? OFFSET ?`, typ, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []NamedRow{}
+	for rows.Next() {
+		var r NamedRow
+		if err := rows.Scan(&r.ID, &r.Title, &r.Mentions, &r.LastDay); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
