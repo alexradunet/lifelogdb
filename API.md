@@ -103,6 +103,7 @@ filled in), and the outcome (see task) of each occurrence in `due`.
 | `habits[]` | list | the habits active today, by name (the habit shape of habits) |
 | `habits[].metric` | string | the habit's metric |
 | `habits[].state` | string | `done`, `not done`, `not recorded` or `invalid` |
+| `habits[].recent` | list | its state on each of the 14 days through today, oldest first: a state above, or `inactive` on a day no period of the habit holds |
 | `recent[]` | list | the 5 newest live day pages up to today, the newest first |
 | `recent[].day` | day | the day |
 | `recent[].page_id` | integer | the day page's id |
@@ -204,6 +205,13 @@ answers with this entity and a `result` of the sync shape; its field `mood` has 
 | `habits[]` | list | the habits active on the day, by name |
 | `habits[].metric` | string | the habit's metric |
 | `habits[].state` | string | `done`, `not done`, `not recorded` or `invalid` |
+| `habits[].recent` | list | its state on each of the 14 days through the day, oldest first: a state above, or `inactive` on a day no period of the habit holds |
+| `trends[]` | list | one for each metric with a current reading of no session on the day, in the order of `readings` |
+| `trends[].metric` | string | the metric's name |
+| `trends[].unit` | string | its unit (`''` for a habit, a range such as `1-5` for a scale) |
+| `trends[].readings[]` | list | its current readings of no session in the 14 days through the day, oldest first (the series of the cookbook) |
+| `trends[].readings[].day` | day |  |
+| `trends[].readings[].value` | number |  |
 | `today` | day | this machine's local day |
 
 The **reading** shape (`readings[]` here and in a series; a measurement's own properties):

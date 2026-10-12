@@ -184,3 +184,114 @@ func (h *server) integrity(r *http.Request) (*Entity, error) {
 	return &Entity{Class: []string{"integrity"}, Title: "Integrity checks", Properties: res,
 		Links: []Link{link("self", "/integrity", "Integrity"), link("index", "/", "Home")}}, nil
 }
+
+// glanceDays is how many days, the day itself the last, a habit's recent states and a reading's trend cover
+// (docs/plans/093-words-phone-and-today.md).
+const glanceDays = 14
+
+// habitView is a habit on a day with its state on each of the glanceDays days through it, oldest first.
+type habitView struct {
+	core.HabitState
+	Recent []string `json:"recent"`
+}
+
+// habitsOn are the habits active on day, each with its recent states: the state core.Habits reads on each day (so
+// the rule has one home), or "inactive" on a day no period of the habit holds. The plain states are returned too,
+// for the check-in actions.
+func (h *server) habitsOn(ctx context.Context, day string) ([]habitView, []core.HabitState, error) {
+	t, err := time.Parse(time.DateOnly, day)
+	if err != nil {
+		return nil, nil, &core.Error{Status: 422, Msg: "day must be a day, YYYY-MM-DD"}
+	}
+	byDay := make([]map[string]string, glanceDays)
+	var states []core.HabitState
+	for i := range byDay {
+		byDay[i] = map[string]string{}
+		d := t.AddDate(0, 0, i-(glanceDays-1)).Format(time.DateOnly)
+		if !core.IsDay(d) {
+			continue // before the first day a date can name: no habit was active
+		}
+		hs, err := h.s.Habits(ctx, d)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, x := range hs {
+			byDay[i][x.Metric] = x.State
+		}
+		if i == glanceDays-1 {
+			states = hs
+		}
+	}
+	out := []habitView{}
+	for _, x := range states {
+		v := habitView{HabitState: x, Recent: make([]string, glanceDays)}
+		for i, m := range byDay {
+			if s, ok := m[x.Metric]; ok {
+				v.Recent[i] = s
+			} else {
+				v.Recent[i] = "inactive"
+			}
+		}
+		out = append(out, v)
+	}
+	return out, states, nil
+}
+
+// trend is a metric read on a day: its unit, and its current unassociated readings of the glanceDays days through
+// the day, oldest first (the series of the cookbook).
+type trend struct {
+	Metric   string       `json:"metric"`
+	Unit     string       `json:"unit"`
+	Readings []trendPoint `json:"readings"`
+}
+
+// trendPoint is one reading of a trend.
+type trendPoint struct {
+	Day   string  `json:"day"`
+	Value float64 `json:"value"`
+}
+
+// trends are the trends of the metrics with a current unassociated reading among a day's readings, in the order of
+// those readings. A reading of a session is not a daily value, so it starts no trend.
+func (h *server) trends(ctx context.Context, day string, readings []core.Reading) ([]trend, error) {
+	out := []trend{}
+	seen := map[string]bool{}
+	var names []string
+	for _, r := range readings {
+		if r.SessionID == 0 && !seen[r.Metric] {
+			seen[r.Metric] = true
+			names = append(names, r.Metric)
+		}
+	}
+	if len(names) == 0 {
+		return out, nil
+	}
+	ms, err := h.s.Metrics(ctx)
+	if err != nil {
+		return nil, err
+	}
+	units := map[string]string{}
+	for _, m := range ms {
+		units[m.Name] = m.Unit
+	}
+	t, err := time.Parse(time.DateOnly, day)
+	if err != nil {
+		return nil, err
+	}
+	from := t.AddDate(0, 0, -glanceDays).Format(time.DateOnly) // a series is (from, to]
+	if !core.IsDay(from) {
+		from = "0000-01-01" // the first days a date can name: the trend starts the day after
+	}
+	for _, name := range names {
+		rows, err := h.s.Series(ctx, name, from, day)
+		if err != nil {
+			return nil, err
+		}
+		tr := trend{Metric: name, Unit: units[name], Readings: []trendPoint{}}
+		for _, r := range rows {
+			tr.Readings = append(tr.Readings, trendPoint{Day: r.Day, Value: r.Value})
+		}
+		out = append(out, tr)
+	}
+	return out, nil
+}

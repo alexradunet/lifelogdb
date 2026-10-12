@@ -47,6 +47,7 @@ type occRow struct {
 	Name, When, Reminder string
 	Forms                []*formView
 	More                 int
+	OwnPage              bool // the row is on its task's own page: its "more" are there already
 }
 
 // Occ is the row of an occurrence of this entity; its forms return to this page. In a list of many tasks the row is
@@ -58,7 +59,8 @@ func (v *view) Occ(item any, more int) (occRow, error) {
 	today, _ := props["today"].(string)
 	state, _ := o["state"].(string)
 	forms, err := outcomes(v.OccurrenceAction(item), state, v.Here)
-	row := occRow{O: o, Forms: forms, More: more, When: dueWords(o["due_day"], today), Reminder: reminderWords(o, v.clock())}
+	row := occRow{O: o, Forms: forms, More: more, When: dueWords(o["due_day"], today), Reminder: reminderWords(o, v.clock()),
+		OwnPage: v.Path == "/tasks/"+num(o["task_id"])}
 	row.Name, _ = o["label"].(string)
 	if row.Name == "" {
 		row.Name, row.When = strings.ToUpper(row.When[:1])+row.When[1:], ""

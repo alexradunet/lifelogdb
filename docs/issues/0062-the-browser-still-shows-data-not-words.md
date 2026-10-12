@@ -1,7 +1,7 @@
 # 0062 — The browser still shows data where it should show words, is heavy on a phone, and Today is thin
 
 - **Date:** 2026-10-12
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the owner's review of the browser after [plan 092](../plans/092-the-app-shell.md), on the synthetic
   database of plan 091, at 1280 px and 390 px in Edge on Windows
 
@@ -35,3 +35,11 @@ a fact of the code at `3fa2fb6`.
   says how to draw it", "The browser gets the same entity"
 - [AGENTS.md](../../AGENTS.md): "Every capability on every surface" and client parity
 - The design system's section "The Siren contract": a value, by its type
+
+## Resolution
+
+Resolved by [plan 093](../plans/093-words-phone-and-today.md), in three commits. Every value is drawn by its type: days
+and times in words, in the clock of the server's day, facts for the generic view, and a write's result in sentences.
+On a phone the shell is a top bar, a bottom bar of the sections of every day, and a sheet for the rest, with no script.
+The day carries each metric's trend and each habit's last 14 days, so Today shows units, lines and strips, and a series
+no longer fills its own page.

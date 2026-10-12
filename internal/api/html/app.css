@@ -363,3 +363,20 @@ fieldset.segmented input:focus-visible+span{outline:2px solid var(--focus); outl
   .tools details.action[open]{flex:1 1 100%}
   .tools details.action>.action-form{position:static; width:auto; box-shadow:none}
 }
+
+/* A trend: the line of a reading's last 14 days, its last value marked (docs/plans/093-words-phone-and-today.md). */
+svg.trend{display:block; width:100%; height:28px; margin-top:var(--space-1); color:var(--accent); overflow:visible}
+svg.trend polyline{fill:none; stroke:currentColor; stroke-width:1.5; stroke-linejoin:round; stroke-linecap:round}
+svg.trend circle{fill:currentColor}
+.reading-tile .unit{font-size:13px; color:var(--muted)}
+
+/* A habit's strip: a cell a day, oldest first. Each state has its own shape, so no state is told by colour alone:
+   done is a full cell, not done an empty frame, not recorded a low bar, inactive a dashed frame. */
+.habit-what{display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-1) var(--space-2); min-width:0}
+.habit-days{flex-basis:100%; display:flex; align-items:center; gap:var(--space-2)}
+.strip{display:inline-flex; align-items:flex-end; gap:2px; height:14px}
+.strip i{display:block; width:8px; height:14px; border-radius:2px}
+.strip i.done{background:var(--done)}
+.strip i.not-done,.strip i.invalid{border:1.5px solid var(--danger)}
+.strip i.not-recorded{height:4px; background:var(--line-strong)}
+.strip i.inactive{border:1px dashed var(--line)}

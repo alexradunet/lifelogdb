@@ -462,7 +462,7 @@ func (h *server) root(r *http.Request) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	hs, err := h.s.Habits(ctx, today)
+	hs, states, err := h.habitsOn(ctx, today)
 	if err != nil {
 		return nil, err
 	}
@@ -491,7 +491,7 @@ func (h *server) root(r *http.Request) (*Entity, error) {
 			link("sessions", "/sessions", "Sessions"), link("periods", "/periods", "Periods"), link("people", "/people", "People"), link("places", "/places", "Places"), link("files", "/files", "Files"), link("metrics", "/metrics", "Metrics"),
 			link("habits", "/habits", "Habits"), link("tasks", "/tasks", "Tasks"), link("deadlines", "/deadlines", "Deadlines"),
 			link("ghosts", "/ghosts", "Ghost pages"), link("actions", "/actions", "All actions"), link("calendar", "/months/current", "Calendar")},
-		Actions: append(append(actions, checkIns(hs, today)...), outcomesOf(due, today)...),
+		Actions: append(append(actions, checkIns(states, today)...), outcomesOf(due, today)...),
 	}, nil
 }
 
@@ -540,10 +540,11 @@ func (h *server) days(r *http.Request) (*Entity, error) {
 // (docs/plans/091-the-browser-for-daily-use.md).
 type dayView struct {
 	core.Day
-	Due    []occurrenceView  `json:"due"`
-	Mood   []float64         `json:"mood"`
-	Habits []core.HabitState `json:"habits"`
-	Today  string            `json:"today"`
+	Due    []occurrenceView `json:"due"`
+	Mood   []float64        `json:"mood"`
+	Habits []habitView      `json:"habits"`
+	Trends []trend          `json:"trends"`
+	Today  string           `json:"today"`
 }
 
 func (h *server) day(r *http.Request) (*Entity, error) {
@@ -576,7 +577,11 @@ func (h *server) day(r *http.Request) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	hs, err := h.s.Habits(ctx, day)
+	hs, states, err := h.habitsOn(ctx, day)
+	if err != nil {
+		return nil, err
+	}
+	trends, err := h.trends(ctx, day, d.Readings)
 	if err != nil {
 		return nil, err
 	}
@@ -586,7 +591,7 @@ func (h *server) day(r *http.Request) (*Entity, error) {
 	}
 	t, _ := time.Parse(time.DateOnly, day)
 	e := &Entity{
-		Class: []string{"day"}, Title: day, Properties: dayView{Day: *d, Due: due, Mood: mood, Habits: hs, Today: today},
+		Class: []string{"day"}, Title: day, Properties: dayView{Day: *d, Due: due, Mood: mood, Habits: hs, Trends: trends, Today: today},
 		Links: []Link{link("self", dayHref(day), day), link("prev", dayHref(t.AddDate(0, 0, -1).Format(time.DateOnly)), "Previous day"),
 			link("next", dayHref(t.AddDate(0, 0, 1).Format(time.DateOnly)), "Next day"), link("metrics", "/metrics", "Metrics"), link("index", "/", "Home"),
 			link("month", monthHref(t), t.Format("January 2006"))},
@@ -600,7 +605,7 @@ func (h *server) day(r *http.Request) (*Entity, error) {
 		}
 		e.Actions = append(e.Actions, saveBody(d.PageID, p.Body, p.Version))
 	}
-	e.Actions = append(append(e.Actions, checkIns(hs, day)...), outcomesOf(due, today)...)
+	e.Actions = append(append(e.Actions, checkIns(states, day)...), outcomesOf(due, today)...)
 	for _, m := range d.Readings {
 		e.Entities = append(e.Entities, link("reading", measurementHref(m.ID), fmt.Sprintf("%s %g", m.Metric, m.Value)))
 	}

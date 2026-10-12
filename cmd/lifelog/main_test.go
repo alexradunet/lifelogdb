@@ -454,6 +454,9 @@ func TestDoOpensADayAndGetsAMonth(t *testing.T) {
 	if titles := mustEntity(c.Get("/titles?prefix=an")); len(titles.Entities) != 1 || titles.Entities[0].Title != "Ana" {
 		t.Fatalf("get /titles: %+v", titles)
 	}
+	if day, ok := mustEntity(c.Get("/days/2031-05-14")).Properties.(map[string]any); !ok || day["trends"] == nil || day["habits"] == nil {
+		t.Fatalf("get /days/2031-05-14 lacks trends or habits: %v", day)
+	}
 }
 
 func commandClient(t *testing.T) *client.Client {

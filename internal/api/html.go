@@ -83,6 +83,7 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 	"week":      isoWeek,
 	"segmented": segmented,
 	"alert":     alertOf,
+	"capLater":  capLater,
 }).ParseFS(views, "html/*.html"))
 
 // num shows a property's value. A number is written in full, never with an exponent: the JSON client reads every

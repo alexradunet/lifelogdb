@@ -45,9 +45,10 @@
 
 {{with $d.readings}}<section class="panel" aria-label="Readings">
 <div class="panel-head"><h2>Readings</h2><a href="/metrics">Metrics</a></div>
-<div class="readings">{{range .}}<div class="reading-tile"><a class="name" href="/metrics/{{pathesc .metric}}">{{.metric}}</a>
-<a class="reading" href="/measurements/{{num .id}}">{{num .value}}</a>
-{{if or .session_id .taken_at}}<span class="meta">{{.scope}}{{with .session_id}} · <a href="/sessions/{{num .}}">session {{num .}}</a>{{end}}{{with .taken_at}} · {{$.When .}}{{end}}</span>{{end}}</div>{{end}}</div>
+{{with $.ReadingTiles}}<div class="readings">{{range .}}<div class="reading-tile"><a class="name" href="/metrics/{{pathesc .Metric}}">{{.Metric}}</a>
+<a class="reading" href="/measurements/{{.ID}}">{{.Value}}{{with .Unit}} <span class="unit">{{.}}</span>{{end}}</a>
+{{.Line}}{{with .More}}<span class="meta">and {{.}} more this day</span>{{end}}</div>{{end}}</div>{{end}}
+{{with $.SessionReadings}}<ul class="plain">{{range .}}<li><a href="/measurements/{{num .id}}">{{.metric}} {{num .value}}</a> <span class="meta">session {{num .session_id}}{{with .taken_at}} · {{$.When .}}{{end}}</span></li>{{end}}</ul>{{end}}
 </section>{{end}}
 
 {{$at := false}}{{range $d.view}}{{if eq .what "at"}}{{$at = true}}{{end}}{{end}}
@@ -65,7 +66,9 @@
 {{define "checkins"}}{{with .Props.habits}}<section class="panel" aria-label="Habits">
 <div class="panel-head"><h2>Habits</h2><a href="/habits">Every habit</a></div>
 {{range .}}{{$href := printf "/metrics/%s" (pathesc .metric)}}{{$name := .metric}}<div class="habit">
-<div class="habit-what"><a href="{{$href}}">{{.metric}}</a> <span class="tag{{if eq .state "done"}} done{{else if or (eq .state "not done") (eq .state "invalid")}} notdone{{end}}">{{.state}}</span></div>
+<div class="habit-what"><a href="{{$href}}">{{.metric}}</a> <span class="tag{{if eq .state "done"}} done{{else if or (eq .state "not done") (eq .state "invalid")}} notdone{{end}}">{{.state}}</span>
+{{with $.HabitStrip .recent}}<span class="habit-days"><span class="strip" role="img" aria-label="done on {{.Done}} of its {{.Active}} active days of the last 14">{{range .Cells}}<i class="{{.State}}" title="{{.Title}}"></i>{{end}}</span>
+<span class="meta">{{.Done}} of {{.Active}} days</span></span>{{end}}</div>
 {{with $.ActionFor "check-in" $href}}<div class="joined" role="group" aria-label="Check in {{$name}}">{{template "form" (form . "done" "1" "hide" "day" "button" "Done" "class" "tiny" "back" $.Here)}}{{template "form" (form . "done" "0" "hide" "day" "button" "Not done" "class" "tiny" "back" $.Here)}}</div>{{end}}
 </div>{{end}}
 </section>{{end}}{{end}}

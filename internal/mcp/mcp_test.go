@@ -111,6 +111,10 @@ func TestFindAndReadingsTools(t *testing.T) {
 	if titles := callTool(t, ctx, session, "get", map[string]any{"href": "/titles?prefix=an"}); len(titles.Entities) != 1 || titles.Entities[0].Title != "Ana" {
 		t.Fatalf("get /titles returned %+v", titles)
 	}
+	// A day's trends and each habit's last days are on this surface too (docs/plans/093-words-phone-and-today.md).
+	if day, ok := callTool(t, ctx, session, "get", map[string]any{"href": "/days/2031-05-14"}).Properties.(map[string]any); !ok || day["trends"] == nil || day["habits"] == nil {
+		t.Fatalf("get /days/2031-05-14 lacks trends or habits: %v", day)
+	}
 	callTool(t, ctx, session, "create_page", map[string]any{"title": "Weighings", "body": "| day | weight (kg) |\n|---|---|\n| 2031-01-01 | 70.5 |\n"})
 	readings := callTool(t, ctx, session, "readings_from_table", map[string]any{"page": "Weighings", "metric": "weight"})
 	result, _ := readings.Result.(map[string]any)

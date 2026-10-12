@@ -9,7 +9,8 @@
 - **Priority:** P1. **Effort:** L. **Risk:** MEDIUM: every view shows times and days in new words; the result of a
   write is read back as data; the shell gets a second layout for a phone; the day and the root get two new
   properties. None for the schema.
-- **Status:** TODO.
+- **Status:** DONE (three commits: `8a0d9e7` for Part 1, `58bcb10` for Part 2, and the commit that closes this
+  record).
 - **Resolves:** issue [0062](../issues/0062-the-browser-still-shows-data-not-words.md). No RFC: the contract in
   `docs/` does not change.
 
@@ -95,3 +96,33 @@ Presentation only: the same links and forms, in a second layout under 900 px.
    cost of the day's new reads is measured once on the synthetic database and recorded.
 4. Three commits, one for each part, each with the baseline green. The issue is resolved and this plan is DONE in the
    commit of Part 3.
+
+## Result (2026-10-12)
+
+All three parts are done, one commit each. These points differ from the text above, or add to it:
+
+| point | what was done, and why |
+|---|---|
+| an instant | said date first, then the time: "Mon 12 Oct, 09:48"; "today, 09:48" and "yesterday, 21:14" near today. A day before or after today by more than 7 days is its date, with the year when it is not this year. |
+| an occurrence moved off its slot | "moved from the slot of Sun 11 Oct": the slot as a date, not against today. |
+| the result | each title links its page; the sync shape of a file's page and of its day page are said "In its page:" and "In its day page:". A dry run of add-file has its result as an object, not a receipt, and is said the same way. |
+| the toast | its `[[code]]` is framed, not filled: a filled code chip was unreadable on the dark toast. |
+| the phone's shell | it is a block, not a grid, under 900 px: a grid stretched the top bar on a short page. The script no longer scrolls the sections' row: there is none. The footer's keys are not shown on a phone. |
+| More | marked when the page is in the sheet (`class="here"`, not `aria-current`: one link a page is the current one). |
+| a reading's tile | one tile a metric, from the day's `trends`: the last reading of the day (the one to correct), "and N more this day" when there are more. A scale `1-5` is "of 5". The day's readings of a session are a list under the tiles, as no trend holds them. |
+| a habit's strip | each state has its own shape (done a full cell, not done an empty frame, not recorded a low bar, inactive a dashed frame), so no state is told by colour alone; "6 of 12 days" counts the active days. |
+| a series on its own page | "and N more in this window", with no link: the page is the task's own. |
+| the test of a habit's days | it covers done, not done, not recorded and inactive. `invalid` needs a value that only another writer can store (deliberate damage); the state comes from `core.Habits`, whose own test covers it. |
+
+**Checks** (Windows 11, Go 1.27.1): `go generate ./... && go vet ./... && go test ./...` passes, mutants included;
+`go test -count=1 -shuffle=on ./...` passes; `gofmt` is clean. staticcheck and govulncheck were not run: they are not
+installed. Nothing was run on Linux, and no browser but Edge was tried.
+
+**In a browser.** The program of plan 091, in a scratch folder, drove Edge 154 (headless) on Windows 11 on a synthetic
+database: 25 checks passed, the 21 of plan 092 and, at 390 px, the sheet of sections starts closed, More opens it, and
+Close and Escape close it. Screenshots of Today, Home, a task, the sheet, People, a page and a write's result, at
+1280 px and 390 px (a full page and one phone screen), in light and in dark. They are not kept in git.
+
+**The cost of the day's new reads**, measured once with benchmarks that are not kept, on the synthetic database (one
+habit, two metrics), warm, on Windows 11 with Go 1.27.1: a habit's 14 days 0.66 to 0.68 ms (14 reads of the habits of
+a day), the trends 0.16 ms, each about 13 to 17 KB a call. This is a small database, not the lifetime workload.

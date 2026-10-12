@@ -9,7 +9,7 @@ data could not answer, a rule that is ambiguous or untestable. It is the evidenc
 
 | id | title | status |
 |---|---|---|
-| [0062](0062-the-browser-still-shows-data-not-words.md) | The browser still shows data where it should show words, is heavy on a phone, and Today is thin | open |
+| [0062](0062-the-browser-still-shows-data-not-words.md) | The browser still shows data where it should show words, is heavy on a phone, and Today is thin | resolved |
 | [0061](0061-the-browser-does-not-feel-like-an-application.md) | The browser does not look or move like an application | resolved |
 | [0060](0060-the-browser-cannot-carry-daily-use.md) | The browser cannot carry daily planning, journaling, editing and navigation | resolved |
 | [0059](0059-an-agent-in-the-lifelog-folder-knows-nothing.md) | An agent opened in the lifelog folder knows nothing about it | resolved |

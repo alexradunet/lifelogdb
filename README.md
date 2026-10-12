@@ -111,6 +111,12 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   fields a button that opens its form, an error an alert, and a write's `result` a toast at the top of the page,
   which stays until the next page because it may name what the write did not do. The day is the Today of the
   design system: Capture, the journal and the pages of the day beside Due, the habits and the readings.
+  A value is drawn by its type, never by its property's name ([plan 093](docs/plans/093-words-phone-and-today.md)):
+  a day in words near today ("yesterday · Sun 11 Oct"), an instant in the clock of the server's day ("today, 09:48",
+  the exact instant kept in its `<time>` element), an object of the generic view as facts, and a write's result in
+  sentences by the result shapes of API.md. The day carries `trends` (each metric read that day, its unit and its
+  readings of the 14 days through it) and each habit its `recent` states, so a reading's tile has its unit and its
+  line and a habit its strip of 14 days; a series shows its next 5 later slots on its own page.
 - **One script, which no page needs** ([plan 091](docs/plans/091-the-browser-for-daily-use.md)). `app.js` is this
   application's own, embedded and written into each page like the two sheets: no framework, no CDN, no build step.
   It suggests the names of pages after `[[` (from `GET /titles`), shows a preview of a body as it will show when
