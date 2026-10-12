@@ -1,7 +1,7 @@
 # 0061 — The browser does not look or move like an application
 
 - **Date:** 2026-10-12
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the owner's review of the browser after [plan 091](../plans/091-the-browser-for-daily-use.md), on the
   synthetic database of that plan, at 1280 px and 390 px in Edge on Windows
 
@@ -32,3 +32,11 @@ points stop the browser from feeling like an application. Each one is a fact of 
   how to draw it", "One script, which no page needs"
 - [AGENTS.md](../../AGENTS.md): "Every capability on every surface" and client parity
 - [D14](../decisions/D14-ui-and-tools.md): a thin custom application for capture and browsing
+
+## Resolution
+
+Resolved by [plan 092](../plans/092-the-app-shell.md), in three commits. The owner chose the Almanac direction of a
+design system built on the Siren entity (the artifact Lifelog Almanac). Every page is now in one shell: a sidebar with
+every section, today's date, the Due count and this month, which becomes a bar over the page on a phone. Each part of
+an entity has one component, and the day is drawn in two columns. The look is light first and dark by the system
+setting, with two embedded open fonts; a test holds the contrast of every named pair of colours.

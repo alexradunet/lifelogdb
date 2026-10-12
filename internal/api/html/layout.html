@@ -32,8 +32,10 @@
 
 {{define "navlink"}}<a href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}>{{icon .Icon}}{{.Title}}{{with .Count}}<span class="count" title="Open, overdue or due today">{{.}}</span>{{end}}</a>{{end}}
 
-{{/* feedback is what a browser form's POST did, carried across the redirect by a one-use receipt */}}
-{{define "feedback"}}{{with .Result}}<aside role="status"><h2>Result</h2>{{value .}}</aside>{{end}}{{end}}
+{{/* feedback is what a browser form's POST did, carried across the redirect by a one-use receipt: the toast of the
+     design system, at the top of the page, where it stays until the next page, for it may name what the write did
+     not do */}}
+{{define "feedback"}}{{with .Result}}<aside class="toast" role="status"><h2>Result</h2>{{value .}}</aside>{{end}}{{end}}
 
 {{define "foot"}}</main>
 <footer><p>Lifelog, the one writer of <code>life.db</code>.</p></footer>
@@ -62,9 +64,9 @@
 
 {{/* generic is the view of any class without a template of its own: the whole entity, and every action it offers */}}
 {{define "generic"}}{{template "head" .}}
-<h1>{{.Title}}</h1>{{with .Class}}<p class="sub"><small>{{rel .}}</small></p>{{end}}
-{{with .Links}}<p class="sub">{{range .}}<a href="{{.Href}}" rel="{{rel .Rel}}">{{or .Title .Href}}</a>{{end}}</p>{{end}}
-{{with .Properties}}<h2>Properties</h2><section class="scroll">{{value .}}</section>{{end}}
-{{with .Entities}}<h2>Links</h2><ul class="plain">{{range .}}<li><a href="{{.Href}}">{{or .Title .Href}}</a> <small>{{rel .Rel}}</small></li>{{end}}</ul>{{end}}
-{{with .Actions}}<h2>Actions</h2>{{range .}}{{template "boxed" (form .)}}{{end}}{{end}}
+<header class="page-head"><div class="what">{{with .Class}}<span class="date">{{rel .}}</span>{{end}}<h1>{{.Title}}</h1>
+{{with .Links}}<p class="sub">{{range .}}<a href="{{.Href}}" rel="{{rel .Rel}}">{{or .Title .Href}}</a>{{end}}</p>{{end}}</div></header>
+{{with .Properties}}<section class="panel" aria-label="Properties"><h2>Properties</h2><div class="scroll">{{value .}}</div></section>{{end}}
+{{with .Entities}}<section class="section" aria-label="Links"><h2>Links</h2><ul class="plain">{{range .}}<li><a href="{{.Href}}">{{or .Title .Href}}</a> <span class="badge">{{rel .Rel}}</span></li>{{end}}</ul></section>{{end}}
+{{with .Actions}}<section class="section" aria-label="Actions"><h2>Actions</h2><div class="actions">{{range .}}{{template "boxed" (form .)}}{{end}}</div></section>{{end}}
 {{template "foot" .}}{{end}}

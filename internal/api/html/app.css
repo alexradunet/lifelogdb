@@ -188,10 +188,6 @@ form:where(:not(.inline):not(.tiny):not([role=search]))>label{align-self:stretch
 form.tiny{display:inline-block}
 td form.tiny+form.tiny{margin-left:var(--space-1)}
 
-/* A callout the owner must read: a refusal, a deleted page, names that made no link. */
-aside.warn{background:var(--warn-soft); color:var(--warn-ink)}
-aside.warn a{color:inherit; text-decoration:underline}
-
 /* An occurrence of a task in a list: what and when on the left, its Done, Skip or Reopen on the right. A done or
    skipped one is quiet. */
 .occ{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--space-1) var(--space-3)}
@@ -225,18 +221,46 @@ dl.facts dd{margin:0; display:block; font:400 14px/20px var(--mono); font-varian
 dl:not(.facts) dt{font-size:12px; letter-spacing:.06em; text-transform:uppercase; font-weight:700; color:var(--muted); margin-top:var(--space-3)}
 dl:not(.facts) dd{margin:var(--space-1) 0 0; display:flex; flex-wrap:wrap; gap:2px 14px}
 
-/* The calendar of a month: a cell for each day; a day with a page is tinted, today framed. */
-table.calendar{table-layout:fixed; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-lg); border-collapse:separate; border-spacing:0; overflow:hidden}
-table.calendar th{text-align:left; padding:var(--space-2)}
-table.calendar td{height:72px; padding:0; vertical-align:top; border-bottom:1px solid var(--line-soft); border-left:1px solid var(--line-soft)}
+/* The calendar of a month: a cell for each day; a day with a page is tinted, with its first line and its mood;
+   today is framed. On a phone the cells keep the day and its tint. */
+table.calendar{width:100%; min-width:320px; table-layout:fixed; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-lg);
+  border-collapse:separate; border-spacing:0; overflow:hidden}
+table.calendar th{padding:var(--space-2); text-align:left; border-bottom:1px solid var(--line)}
+table.calendar td{height:96px; padding:0; vertical-align:top; border:0; border-bottom:1px solid var(--line-soft); border-left:1px solid var(--line-soft)}
 table.calendar td:first-child{border-left:0}
-table.calendar td a{display:block; padding:6px var(--space-2) 2px; font:500 13px/18px var(--mono); color:var(--ink)}
+table.calendar tbody tr:last-child td{border-bottom:0}
+table.calendar td>a{display:flex; flex-direction:column; gap:2px; height:100%; padding:6px var(--space-2); color:var(--ink)}
+table.calendar td>a:hover{background:var(--ground); text-decoration:none}
+table.calendar .n{font:500 13px/18px var(--mono); color:var(--muted)}
+table.calendar .first{font-size:12px; line-height:16px; overflow:hidden; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical}
 table.calendar td.written{background:var(--accent-soft)}
-table.calendar td.written a{color:var(--accent)}
+table.calendar td.written .n{color:var(--accent)}
 table.calendar td[aria-current=date]{box-shadow:inset 0 0 0 2px var(--accent)}
-table.calendar small{display:block; padding:0 var(--space-2); font:400 12px/16px var(--mono)}
 table.calendar tbody tr:hover{background:none}
-@media (max-width:599px){table.calendar td{height:48px} table.calendar th{padding:var(--space-1); text-align:center}}
+@media (max-width:599px){table.calendar td{height:52px} table.calendar .first,table.calendar .meta{display:none} table.calendar th{padding:var(--space-1); text-align:center}}
+
+/* An alert: an error entity in words, what went wrong and what to do; the tone is the code's. */
+.alert{display:flex; flex-direction:column; gap:var(--space-2); padding:var(--space-3) 14px; border-radius:var(--radius-md);
+  background:var(--warn-soft); color:var(--warn-ink); font-size:14px; line-height:20px}
+.alert.danger{background:var(--danger-soft); color:var(--danger-ink)}
+.alert a{color:inherit; text-decoration:underline}
+.alert code{background:none}
+
+/* The toast: what a write did, at the top of the page. */
+.toast{display:flex; flex-direction:column; gap:var(--space-2); padding:10px 14px; border-radius:var(--radius-md); background:var(--toast-bg);
+  color:var(--toast-ink); font-size:14px; line-height:20px; box-shadow:var(--shadow-float)}
+.toast h2{color:inherit}
+.toast a{color:var(--toast-link); font-weight:700}
+.toast pre,.toast table{background:none; border:0; padding:0; color:inherit}
+.toast th,.toast td{border-color:transparent}
+.toast tbody tr:hover{background:none}
+.toast>button.close{align-self:flex-end; height:var(--control-small); padding:0 var(--space-3); font-size:13px}
+
+/* A list of rows; a row's second line; the heading of a group inside a panel. */
+ul.rows>li{padding:0}
+ul.rows>li>a:not(.entry){display:block; padding:10px var(--space-1)}
+ul.plain .meta{display:block}
+.panel-head h3{font-size:15px; line-height:22px}
 
 /* A kept picture, on its own line. */
 figure a{display:block}

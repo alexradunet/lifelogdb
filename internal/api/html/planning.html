@@ -3,68 +3,69 @@
      when the entity offers that action. */}}
 
 {{define "occ"}}{{$o := .O}}<li{{if ne $o.state "open"}} class="settled"{{end}}><div class="occ"><div>
-<a href="/tasks/{{num $o.task_id}}/occurrences/{{pathesc $o.key}}">{{.Name}}</a>{{if ne $o.state "open"}} <span class="badge">{{$o.state}}</span>{{end}}
+<a href="/tasks/{{num $o.task_id}}/occurrences/{{pathesc $o.key}}">{{.Name}}</a>{{if ne $o.state "open"}} <span class="tag{{if eq $o.state "done"}} done{{end}}">{{$o.state}}</span>{{end}}
 <small class="occ-facts">{{with .When}}<span>{{.}}</span>{{end}}{{with reminder $o}}<span>reminder {{.}}</span>{{end}}{{with $o.project_title}}<span><a href="{{title .}}">{{.}}</a></span>{{end}}{{with .More}}<span><a href="/tasks/{{num $o.task_id}}">and {{.}} more</a></span>{{end}}</small>
 </div>{{with .Forms}}<div class="outcomes">{{range .}}{{template "form" .}}{{end}}</div>{{end}}</div></li>{{end}}
 
 {{define "tasks"}}{{template "head" .}}
 {{$p := .Props}}
-<h1>Tasks</h1>
-<p class="sub"><a href="/deadlines">What is due</a>{{if $p.include_deleted}}<a href="/tasks">Hide deleted tasks</a>{{else}}<a href="/tasks?include_deleted=1">Show deleted tasks</a>{{end}}</p>
-{{with $p.tasks}}{{range group . "project_title"}}
-<h2>{{with .Key}}{{.}}{{else}}No project{{end}}</h2>
-<ul class="plain">{{range .Items}}<li><a href="/tasks/{{num .id}}">{{.label}}</a>{{if .deleted_at}} <span class="badge">deleted</span>{{end}}
-<div><small>{{cadence .}}{{with reminder .}} · reminder {{.}}{{end}}</small></div></li>{{end}}</ul>
-{{end}}{{else}}<p><small>No task yet. A task is explicit intent: something to do once, or again and again.</small></p>{{end}}
-<h2>New</h2>
-{{template "boxed" (form (.Action "create-task"))}}
+<header class="page-head"><div class="what"><h1>Tasks</h1>
+<p class="sub"><a href="/deadlines">What is due</a>{{if $p.include_deleted}}<a href="/tasks">Hide deleted tasks</a>{{else}}<a href="/tasks?include_deleted=1">Show deleted tasks</a>{{end}}</p></div>
+<div class="tools">{{template "boxed" (form (.Action "create-task"))}}</div></header>
+{{with $p.tasks}}<div class="columns">{{range group . "project_title"}}
+<section class="panel" aria-label="{{with .Key}}{{.}}{{else}}No project{{end}}"><h2>{{with .Key}}{{.}}{{else}}No project{{end}}</h2>
+<ul class="plain">{{range .Items}}<li><a href="/tasks/{{num .id}}">{{.label}}</a>{{if .deleted_at}} <span class="tag deleted">deleted</span>{{end}}
+<div class="meta">{{cadence .}}{{with reminder .}} · reminder {{.}}{{end}}</div></li>{{end}}</ul></section>
+{{end}}</div>{{else}}<p><small>No task yet. A task is explicit intent: something to do once, or again and again.</small></p>{{end}}
 {{template "foot" .}}{{end}}
 
 {{define "task"}}{{template "head" .}}
 {{$p := .Props}}{{$t := $p.task}}
-<h1>{{$t.label}}</h1>
-<p class="sub"><span>{{cadence $t}}</span>{{with reminder $t}}<span>reminder {{.}}</span>{{end}}{{with .Link "project"}}<a href="{{.}}">{{$t.project_title}}</a>{{end}}<a href="/tasks">Every task</a><a href="/deadlines">What is due</a></p>
-{{if $t.deleted_at}}<aside class="warn" role="alert"><p>Deleted {{$t.deleted_at}}: its work and its reminders stopped. Revive it to bring it back.</p>
-{{template "form" (form (.Action "revive-task") "class" "tiny")}}</aside>{{end}}
+<header class="page-head"><div class="what"><span class="date">task{{if $t.deleted_at}} · deleted{{end}}</span><h1>{{$t.label}}</h1>
+<p class="sub"><span>{{cadence $t}}</span>{{with reminder $t}}<span>reminder {{.}}</span>{{end}}{{with .Link "project"}}<a href="{{.}}">{{$t.project_title}}</a>{{end}}<a href="/tasks">Every task</a><a href="/deadlines">What is due</a></p></div></header>
+{{if $t.deleted_at}}<div class="alert" role="alert"><p><strong>Deleted {{$t.deleted_at}}.</strong> Its work and its reminders stopped. Revive it to bring it back.</p>
+{{template "form" (form (.Action "revive-task") "class" "tiny")}}</div>{{end}}
 {{if $t.repeat_unit}}<h2>{{$p.from}} to {{$p.through}}</h2>
-{{range due $p.occurrences $p.today false}}<h3>{{.Name}}</h3><ul class="plain due">{{range .Items}}{{template "occ" ($.Occ .Occurrence .More)}}{{end}}</ul>
+{{range due $p.occurrences $p.today false}}<section class="panel flush" aria-label="{{.Name}}"><div class="panel-head"><h3>{{.Name}}</h3></div>
+<ul class="plain due">{{range .Items}}{{template "occ" ($.Occ .Occurrence .More)}}{{end}}</ul></section>
 {{else}}<p><small>No occurrence in this window.</small></p>{{end}}
-{{else}}{{with $p.once}}<ul class="plain due">{{template "occ" ($.Occ . 0)}}</ul>{{end}}{{end}}
-{{if or (.Action "edit-task") (.Action "stop-task") (.Action "tombstone-task")}}<h2>More</h2>
+{{else}}{{with $p.once}}<section class="panel flush" aria-label="The occurrence"><ul class="plain due">{{template "occ" ($.Occ . 0)}}</ul></section>{{end}}{{end}}
+{{if or (.Action "edit-task") (.Action "stop-task") (.Action "tombstone-task")}}<section class="section" aria-label="More"><h2>More</h2><div class="actions">
 {{template "boxed" (form (.Action "edit-task"))}}
 {{template "boxed" (form (.Action "stop-task"))}}
 {{if $t.repeat_unit}}{{template "boxed" (form (.Action "capture-occurrence") "button" "Write an occurrence")}}{{end}}
-{{template "boxed" (form (.Action "tombstone-task"))}}{{end}}
-<p class="sub"><small>created {{$t.created_at}}</small><small>by {{$t.source}}</small><small>version {{$t.version}}</small></p>
+{{template "boxed" (form (.Action "tombstone-task"))}}</div></section>{{end}}
+<p class="sub"><span class="meta">created {{$t.created_at}}</span><span class="meta">by {{$t.source}}</span><span class="meta">version {{$t.version}}</span></p>
 {{template "foot" .}}{{end}}
 
 {{define "occurrence"}}{{template "head" .}}
 {{$o := .Props}}
-<h1>{{$o.label}}</h1>
-<p class="sub">{{if ne $o.state "open"}}<span class="badge">{{$o.state}}</span>{{end}}<a href="{{.Link "task"}}">The task</a>{{with .Link "project"}}<a href="{{.}}">{{$o.project_title}}</a>{{end}}<a href="/deadlines">What is due</a></p>
-{{if $o.task_deleted_at}}<aside class="warn" role="alert"><p>The task was deleted {{$o.task_deleted_at}}: revive it on <a href="{{.Link "task"}}">its page</a>.</p></aside>
-{{else if $o.deleted_at}}<aside class="warn" role="alert"><p>Deleted {{$o.deleted_at}}. Its slot stays empty until it is revived.</p>
-{{template "form" (form (.Action "revive-occurrence") "class" "tiny")}}</aside>{{end}}
+<header class="page-head"><div class="what"><span class="date">occurrence</span><h1>{{$o.label}} {{if ne $o.state "open"}}<span class="tag{{if eq $o.state "done"}} done{{end}}">{{$o.state}}</span>{{end}}</h1>
+<p class="sub"><a href="{{.Link "task"}}">The task</a>{{with .Link "project"}}<a href="{{.}}">{{$o.project_title}}</a>{{end}}<a href="/deadlines">What is due</a></p></div>
+{{with $.OccurrenceAction $o}}<div class="tools outcomes">{{range outcomes . $o.state $.Here}}{{template "form" .}}{{end}}</div>{{end}}</header>
+{{if $o.task_deleted_at}}<div class="alert" role="alert"><p>The task was deleted {{$o.task_deleted_at}}: revive it on <a href="{{.Link "task"}}">its page</a>.</p></div>
+{{else if $o.deleted_at}}<div class="alert" role="alert"><p><strong>Deleted {{$o.deleted_at}}.</strong> Its slot stays empty until it is revived.</p>
+{{template "form" (form (.Action "revive-occurrence") "class" "tiny")}}</div>{{end}}
 <dl class="facts">
 <dt>Slot</dt><dd>{{if eq $o.key "once"}}once: a one-off task{{else}}{{weekday $o.key}} {{$o.key}}{{end}}</dd>
 <dt>Due</dt><dd>{{with $o.due_day}}{{weekday .}} {{.}}{{else}}no due day{{end}}</dd>
-<dt>State</dt><dd>{{$o.state}}{{with $o.completed_at}}, at {{.}}{{end}}{{if $o.virtual}} <small>(not yet written: the series implies it)</small>{{end}}</dd>
+<dt>State</dt><dd>{{$o.state}}{{with $o.completed_at}}, at {{.}}{{end}}{{if $o.virtual}} <span class="tag unwritten">not yet written</span>{{end}}</dd>
 <dt>Reminder</dt><dd>{{with reminder $o}}{{.}}{{else}}none{{end}}{{if eq $o.reminder_mode "off"}} (turned off){{end}}</dd>
 </dl>
-{{with $.OccurrenceAction $o}}<div class="outcomes">{{range outcomes . $o.state $.Here}}{{template "form" .}}{{end}}</div>{{end}}
+<div class="actions">
 {{if $o.virtual}}{{template "boxed" (form (.Action "capture-occurrence") "button" "Write it with another due day or reminder" "hide" "key")}}
 {{else}}{{template "boxed" (form (.Action "edit-occurrence"))}}{{template "boxed" (form (.Action "tombstone-occurrence"))}}{{end}}
-{{if not $o.virtual}}<p class="sub">{{with $o.created_at}}<small>written {{.}}</small>{{end}}{{with $o.source}}<small>by {{.}}</small>{{end}}{{with $o.version}}<small>version {{.}}</small>{{end}}</p>{{end}}
+</div>
+{{if not $o.virtual}}<p class="sub">{{with $o.created_at}}<span class="meta">written {{.}}</span>{{end}}{{with $o.source}}<span class="meta">by {{.}}</span>{{end}}{{with $o.version}}<span class="meta">version {{.}}</span>{{end}}</p>{{end}}
 {{template "foot" .}}{{end}}
 
 {{define "deadlines"}}{{template "head" .}}
 {{$p := .Props}}
-<h1>What is due</h1>
-<p class="sub"><span>{{$p.from}} to {{$p.through}}</span>{{if ne $p.state "open"}}<span>{{$p.state}} only</span>{{end}}<a href="/tasks">Every task</a></p>
-{{range due $p.occurrences $p.today true}}<h2>{{.Name}}</h2>
-<ul class="plain due">{{range .Items}}{{template "occ" ($.Occ .Occurrence .More)}}{{end}}</ul>
+<header class="page-head"><div class="what"><span class="date">{{$p.from}} to {{$p.through}}{{if ne $p.state "open"}} · {{$p.state}} only{{end}}</span><h1>What is due</h1>
+<p class="sub"><a href="/tasks">Every task</a></p></div>
+<div class="tools">{{template "boxed" (form (.Action "deadlines") "button" "Another window")}}{{template "boxed" (form (.Action "create-task"))}}</div></header>
+{{range due $p.occurrences $p.today true}}<section class="panel flush" aria-label="{{.Name}}"><div class="panel-head"><h2>{{.Name}}</h2></div>
+<ul class="plain due">{{range .Items}}{{template "occ" ($.Occ .Occurrence .More)}}{{end}}</ul></section>
 {{else}}<p><small>Nothing is due in this window.</small></p>{{end}}
 <p><small class="desc">A task with no due day is on <a href="/tasks">its own page</a>, not here.</small></p>
-{{template "boxed" (form (.Action "deadlines") "button" "Another window")}}
-{{template "boxed" (form (.Action "create-task"))}}
 {{template "foot" .}}{{end}}

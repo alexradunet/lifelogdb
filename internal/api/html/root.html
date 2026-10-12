@@ -53,31 +53,35 @@
 {{template "foot" .}}{{end}}
 
 {{define "list"}}{{template "head" .}}
-<h1>{{.Title}}</h1>
 {{$items := .Embedded "item"}}
-{{if $items}}<p class="sub"><small>{{len $items}} on this page</small></p>
-<ul class="plain">{{range $items}}<li><a href="{{.Href}}">{{.Title}}</a>{{if eq $.Title "Days"}} <small>{{weekday .Title}}</small>{{end}}</li>{{end}}</ul>
+<header class="page-head"><div class="what"><h1>{{.Title}}</h1>{{if $items}}<p class="sub">{{len $items}} on this page</p>{{end}}</div>
+<div class="tools">
+{{with .Action "create-person"}}{{template "boxed" (form .)}}{{end}}
+{{with .Action "create-place"}}{{template "boxed" (form .)}}{{end}}
+{{with .Action "add-file"}}{{template "boxed" (form . "hide" "sha256,mime")}}{{end}}
+</div></header>
+{{if $items}}<ul class="plain rows">{{range $items}}<li>{{if eq $.Title "Days"}}<a class="entry" href="{{.Href}}"><span class="date">{{shortDay .Title}}</span><span class="first">{{weekday .Title}}</span><span class="meta">{{.Title}}</span></a>{{else}}<a href="{{.Href}}">{{.Title}}</a>{{end}}</li>{{end}}</ul>
 {{else}}<p><small>Nothing yet.</small></p>{{end}}
 {{template "pager" .}}
-{{with .Action "create-person"}}<h2>New</h2>{{template "form" (form .)}}{{end}}
-{{with .Action "create-place"}}<h2>New</h2>{{template "form" (form . "class" "inline")}}{{end}}
-{{with .Action "add-file"}}<h2>New</h2><small class="desc">{{.Description}}</small>{{template "form" (form . "hide" "sha256,mime")}}{{end}}
 {{template "foot" .}}{{end}}
 
 {{define "search"}}{{template "head" .}}
-<h1>Search</h1>
+<header class="page-head"><div class="what"><h1>Search</h1></div></header>
 {{template "form" (form (.Action "search") "class" "inline" "autofocus" "q")}}
-{{with .Props}}{{with .hits}}<ul class="plain">{{range .}}<li><a href="/pages/{{num .id}}">{{.title}}</a>
+<p><small class="desc">FTS5 syntax: words, "a phrase", prefix*, a OR b.</small></p>
+{{with .Props}}{{with .hits}}<ul class="plain rows">{{range .}}<li><a href="/pages/{{num .id}}">{{.title}}</a>
 <div><small>{{mark .snippet}}</small></div></li>{{end}}</ul>
 {{else}}<p><small>No page matches.</small></p>{{end}}{{end}}
 {{template "pager" .}}
-<p><small class="desc">FTS5 syntax: words, "a phrase", prefix*, a OR b.</small></p>
 {{template "foot" .}}{{end}}
 
-{{define "error"}}{{template "head" .}}
-<h1>{{if .Submitted}}Not saved{{else if eq (num .Props.status) "404"}}Not found{{else}}Refused{{end}} <span class="badge">{{num .Props.status}}</span></h1>
-<aside class="warn" role="alert"><p>{{.Props.message}}</p></aside>
+{{/* error is an error entity (API.md, Errors): an alert whose first words and tone the code picks, then what the
+     form sent, so a refused save loses nothing */}}
+{{define "error"}}{{template "head" .}}{{$e := .Props}}{{$a := alert $e.code}}
+<header class="page-head"><div class="what"><span class="date">{{num $e.status}}{{with $e.code}} · {{.}}{{end}}</span>
+<h1>{{if .Submitted}}Not saved{{else if eq (num $e.status) "404"}}Not found{{else}}Refused{{end}}</h1></div></header>
+<div class="alert{{if $a.Danger}} danger{{end}}" role="alert"><p>{{with $a.Words}}<strong>{{.}}</strong> {{end}}{{$e.message}}</p></div>
 {{with .Link "existing"}}<aside><p>A page with that title exists: <a href="{{.}}">open it</a>.</p></aside>{{end}}
-{{with .Submitted}}<h2>What you sent</h2><small class="desc">Nothing was saved. Copy it from here.</small><textarea rows="14" readonly>{{.}}</textarea>{{end}}
+{{with .Submitted}}<section class="section" aria-label="What you sent"><h2>What you sent</h2><small class="desc">Nothing was saved. Copy it from here.</small><textarea rows="14" readonly>{{.}}</textarea></section>{{end}}
 <p class="sub">{{with .Back}}<a href="{{.}}">Back</a>{{end}}<a href="/">Home</a></p>
 {{template "foot" .}}{{end}}

@@ -73,8 +73,10 @@ func TestTheMonthIsACalendar(t *testing.T) {
 	}
 
 	body := browse(t, h, "/months/2031-05")
-	for _, w := range []string{`<table class="calendar">`, `<td class="written" aria-current="date"><a href="/days/2031-05-14">14</a><small>3</small></td>`,
-		`<a href="/days/2031-05-01" title="May day: a walk by the lake.">1</a>`, `<td><a href="/days/2031-05-20">20</a></td>`,
+	for _, w := range []string{`<table class="calendar">`,
+		`<td class="written" aria-current="date"><a href="/days/2031-05-14"><span class="n">14</span><span class="meta">mood 3</span></a></td>`,
+		`<td class="written"><a href="/days/2031-05-01"><span class="n">1</span><span class="first">May day: a walk by the lake.</span><span class="meta">mood 4</span></a></td>`,
+		`<td><a href="/days/2031-05-20"><span class="n">20</span></a></td>`,
 		`← April 2031`, `June 2031 →`, `action="/days/go"`} {
 		if !strings.Contains(body, w) {
 			t.Errorf("the calendar lacks %s", w)

@@ -78,10 +78,12 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   to return to in `back` (a path on this server, not a field of any action): a Done button on a list returns to the
   list. A value that is not a plain path is ignored, and a JSON client never follows it
   ([plan 091](docs/plans/091-the-browser-for-daily-use.md)).
-- **The page is semantic HTML, and the catalog says how to draw it.** A field is a `label` around its input, a card
-  is an `article`, a callout an `aside`, a series a `table` with a header row; no id or class is generated for a
-  template to find. What a template cannot know comes from the entity: `danger` marks a destructive action's button
-  and `rows` a textarea's height, so no view decides either by an action's or a field's name.
+- **The page is semantic HTML, and the catalog says how to draw it.** A field is a `label` around its input (a field
+  of 2 to 5 short options a `fieldset` of radio buttons), a card is an `article`, a callout an `aside`, an error a
+  `role="alert"`, a series a `table` with a header row; no id or class is generated for a template to find. What a
+  template cannot know comes from the entity: `danger` marks a destructive action's button, `owner` an owner-only
+  one, `rows` a textarea's height, `options` a field's choices and an error's `code` its first words, so no view
+  decides any of them by an action's or a field's name.
 - **The browser for daily use** ([plan 091](docs/plans/091-the-browser-for-daily-use.md)). The root is today at a
   glance: what is due today and overdue, today's habits and the five newest day pages. A day carries what is due on
   it, its mood, its habits and the `save-body` of its day page, so the day view edits in place. The tasks, a task, an
@@ -100,13 +102,20 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   (the login, a refusal of the token) has no sidebar, so it shows nothing of the database. The look is the owner's
   design system, Lifelog Almanac: cool paper, ink blue, words in Atkinson Hyperlegible and every day, time and number
   in IBM Plex Mono; light first, dark by `prefers-color-scheme`. Its tokens are custom properties of `base.css`, and
-  a test holds every text pair at 4.5:1 and every field border and the focus ring at 3:1 in both themes.
+  a test holds every text pair at 4.5:1 and every field border and the focus ring at 3:1 in both themes. Each part
+  of an entity has one component: the title and the `prev`/`next` links a page header, properties facts and
+  panels, sub-entities rows (an occurrence's with Done and Skip), an action with no visible field a button, one with
+  fields a button that opens its form, an error an alert, and a write's `result` a toast at the top of the page,
+  which stays until the next page because it may name what the write did not do. The day is the Today of the
+  design system: Capture, the journal and the pages of the day beside Due, the habits and the readings.
 - **One script, which no page needs** ([plan 091](docs/plans/091-the-browser-for-daily-use.md)). `app.js` is this
   application's own, embedded and written into each page like the two sheets: no framework, no CDN, no build step.
   It suggests the names of pages after `[[` (from `GET /titles`), shows a preview of a body as it will show when
   saved (from `POST /render`), sends the form of a textarea with Ctrl+Enter, leaves a field with Escape, takes keys
-  outside a field (`/` search, `c` capture, `t` today, `[` and `]` the previous and next page), and asks before the
-  browser leaves text that was not sent. It reads nothing else, writes nothing and keeps nothing in the browser. Every form posts and every link
+  outside a field (`/` search, `c` capture, `t` today, `[` and `]` the previous and next page), goes to the search
+  with Ctrl+K from anywhere, and asks before the browser leaves text that was not sent. It gives the toast a Close
+  (and Escape), makes a danger button ask once in the page before it sends, and brings the current section into the
+  sidebar's row on a phone ([plan 092](docs/plans/092-the-app-shell.md)). It reads nothing else, writes nothing and keeps nothing in the browser. Every form posts and every link
   works without it; the tests check the pages without running it, and a test keeps its reads to those two routes.
   `POST /render` is presentation, not a capability: no catalog action names it and it answers HTML only, so it and
   the fonts (below) are the routes the CLI and the MCP server do not carry. **Rejected:** a separate web client. It would be a second

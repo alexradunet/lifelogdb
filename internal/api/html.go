@@ -85,6 +85,7 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 	"addDays":   addDays,
 	"week":      isoWeek,
 	"segmented": segmented,
+	"alert":     alertOf,
 }).ParseFS(views, "html/*.html"))
 
 // num shows a property's value. A number is written in full, never with an exponent: the JSON client reads every
@@ -420,6 +421,28 @@ func segmented(f Field) bool {
 		}
 	}
 	return true
+}
+
+// alertView is how an error entity is drawn (docs/plans/092-the-app-shell.md): the first words, picked by the
+// error's code, and the tone: danger when the request was refused or failed, warn when the owner can fix it here.
+type alertView struct {
+	Words  string
+	Danger bool
+}
+
+// alertOf picks an error's first words and tone by its code (API.md, Errors); the message follows them.
+func alertOf(code any) alertView {
+	switch code {
+	case "forbidden", "cross_origin", "token_required", "unauthorized":
+		return alertView{"Refused.", true}
+	case "too_large", "timeout", "internal":
+		return alertView{"Not done.", true}
+	case "stale_version":
+		return alertView{"Not saved. The page changed since you opened it.", false}
+	case "exists":
+		return alertView{"Not created.", false}
+	}
+	return alertView{}
 }
 
 // addDays is the day n days after day ("" for a day that is not one).

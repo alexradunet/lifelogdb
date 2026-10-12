@@ -1,12 +1,14 @@
 // app.js — this application's one script, written into every page like the two sheets. It makes a page better,
 // and no page needs it: every form posts and every link works without it
 // (docs/plans/091-the-browser-for-daily-use.md). It reads /titles (the names after [[) and /render (the preview of
-// a body), and nothing else; it writes nothing. Four things:
+// a body), and nothing else; it writes nothing. Five things:
 //   1. after [[ in a textarea, the names of the pages that start with what follows;
 //   2. a preview of a body as it will show when saved;
-//   3. keys: Ctrl+Enter sends the form of a textarea, Escape leaves a field; outside a field, / search, c capture,
-//      t today, [ and ] the previous and next page;
-//   4. a question before the browser leaves text that was not sent.
+//   3. keys: Ctrl+K search from anywhere, Ctrl+Enter sends the form of a textarea, Escape leaves a field; outside a
+//      field, / search, c capture, t today, [ and ] the previous and next page, Escape closes the toast;
+//   4. a question before the browser leaves text that was not sent;
+//   5. the design system's small things (docs/plans/092-the-app-shell.md): the toast's Close, a second press for a
+//      danger button, and the current section in view in the sidebar.
 (function () {
   "use strict";
 
@@ -172,6 +174,12 @@
       t.form.requestSubmit();
       return;
     }
+    // Ctrl+K (Cmd+K) goes to the search from anywhere, a field too.
+    if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && !ev.shiftKey && (ev.key === "k" || ev.key === "K")) {
+      var box = document.querySelector("form[role=search] input");
+      if (box) { ev.preventDefault(); box.focus(); box.select(); }
+      return;
+    }
     // Escape leaves a field (a page may start in one), so the keys below work; it first closes a list of names.
     if (ev.key === "Escape" && !ev.defaultPrevented && inField(t) && !lists.get(t)) {
       t.blur();
@@ -195,6 +203,11 @@
         break;
       }
       case "t": ev.preventDefault(); location.href = "/days/today"; break;
+      case "Escape": {
+        var toast = document.querySelector(".toast");
+        if (toast) { ev.preventDefault(); toast.remove(); }
+        break;
+      }
       case "[": follow("main a[rel=prev]"); break;
       case "]": follow("main a[rel=next]"); break;
     }
@@ -216,6 +229,31 @@
     }
   });
 
+  // ---- 5. The toast, the danger button and the sidebar
+
+  // closable gives a toast its Close. A toast stays until it is closed or the page changes: it may name what a write
+  // did not do (names that made no link).
+  function closable(toast) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "close";
+    b.textContent = "Close";
+    b.addEventListener("click", function () { toast.remove(); });
+    toast.appendChild(b);
+  }
+
+  // A danger button (the catalog's danger: the action hides or retracts what is there) asks once, in the page: the
+  // first press changes its word, the second sends the form. After 4 seconds it asks again.
+  document.addEventListener("click", function (ev) {
+    var b = ev.target.closest && ev.target.closest("button.danger");
+    if (!b || !b.form || b.dataset.armed === "1") return;
+    ev.preventDefault();
+    var word = b.textContent;
+    b.dataset.armed = "1";
+    b.textContent = "Press again to " + word.toLowerCase();
+    setTimeout(function () { b.dataset.armed = ""; b.textContent = word; }, 4000);
+  });
+
   // ---- Start
 
   var areas = document.querySelectorAll("textarea:not([readonly])");
@@ -227,11 +265,22 @@
     area.addEventListener("blur", function (ev) { var a = ev.target; setTimeout(function () { close(a); }, 150); });
     if (area.name === "body") preview(area);
   }
+  var toasts = document.querySelectorAll(".toast");
+  for (var k = 0; k < toasts.length; k++) closable(toasts[k]);
+  var search = document.querySelector(".rail-search");
+  if (search) {
+    var hint = document.createElement("kbd");
+    hint.textContent = "Ctrl K";
+    search.appendChild(hint);
+  }
+  // On a phone the sections are one row that scrolls to the side: the current one is brought into it.
+  var here = document.querySelector(".rail nav a[aria-current=page]");
+  if (here && here.scrollIntoView) here.scrollIntoView({ block: "nearest", inline: "nearest" });
   var foot = document.querySelector("footer p");
   if (foot) {
     var keys = document.createElement("small");
     keys.className = "keys";
-    keys.textContent = "Keys: / search · c capture · t today · [ ] previous, next · Esc leaves a field · Ctrl+Enter sends a text";
+    keys.textContent = "Keys: Ctrl+K or / search · c capture · t today · [ ] previous, next · Esc leaves a field · Ctrl+Enter sends a text";
     foot.appendChild(document.createElement("br"));
     foot.appendChild(keys);
   }

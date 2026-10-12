@@ -9,7 +9,8 @@
 - **Priority:** P1. **Effort:** L. **Risk:** MEDIUM: every template and both sheets change; one read is added to
   every HTML page; one browser route serves embedded fonts; one field of the catalog gets `options`. None for the
   schema.
-- **Status:** TODO.
+- **Status:** DONE (three commits: `d66b077` for Parts 1 and 2, `0c1426b` for Part 3, and the commit that closes this
+  record).
 - **Resolves:** issue [0061](../issues/0061-the-browser-does-not-feel-like-an-application.md). No RFC: the contract
   in `docs/` does not change, and [D14](../decisions/D14-ui-and-tools.md) leaves the screens to the application.
 
@@ -135,3 +136,42 @@ flowchart LR
    recorded; it is not a test.
 4. Four commits, one for each part, each with the baseline green. The issue is resolved and this plan is DONE in
    the commit of Part 4.
+
+## Result (2026-10-12)
+
+All four parts are done, in three commits. These points differ from the text above, or add to it:
+
+| point | what was done, and why |
+|---|---|
+| Parts 1 and 2 | one commit: the new `base.css` has no rules for the old top bar, so the tokens and the shell had to come together. |
+| the fonts | latin **and** latin-ext of each face (the letters of Romanian are in latin-ext): 10 files, 137,952 bytes. `base.css` names both with their `unicode-range`, so a browser fetches latin-ext only for a page that needs it. The README of the folder names each file's source and sha256. |
+| the shell's read fails | the page is still drawn: the sidebar keeps its sections and today's date, without the count and the month. |
+| buttons | a button is plain; the submit of a form with fields to fill is primary, and so is a row's Done. A required field says "required" in words, not with a star. |
+| Segmented | the rule is general, not for the mood alone: any field with 2 to 5 options, none empty and each of 3 characters or fewer, is a row of radio buttons (the check-in's 1 and 0, `dry_run`, `link_days` too). Any other field with options is a select. |
+| the toast | at the top of the main column, not at the bottom right, and it does not go away by itself: a result may name what the write did not do (names that made no link). The script gives it a Close, and Escape closes it. The design system's Toast now says so. |
+| errors | the alert's first words and its tone come from the error's `code`: `stale_version`, `exists` (warn); `forbidden`, `cross_origin`, `token_required`, `unauthorized` ("Refused.", danger); `too_large`, `timeout`, `internal` ("Not done.", danger); any other code shows its message alone. |
+| Home | its list of other sections went: the sidebar holds them. Its Capture returns to Home. |
+| the day's readings | tiles of the metric and the value, without a unit or a line of recent values: the day's readings carry neither, and no entity changed for them. |
+| the month | the cells before the first day and after the last stay empty; the design system's days of the months around are not drawn. |
+| the script | it also writes the hint "Ctrl K" into the search (the key works only with the script) and brings the current section into the sidebar's row on a phone. |
+| not done | a theme switch (by decision), the command list of the Console draft, and the month of the page's day in the sidebar (the sidebar shows this month). |
+
+**Checks** (Windows 11, Go 1.27.1): `go generate ./... && go vet ./... && go test ./...` passes, mutants included;
+`go test -count=1 -shuffle=on ./...` passes; `gofmt` is clean. staticcheck and govulncheck were not run: they are not
+installed. Nothing was run on Linux, and no browser but Edge was tried.
+
+**The script in a browser.** The program of plan 091, in a scratch folder (not in the repo), drove Edge 154 (headless,
+Chromium) on Windows 11 through its DevTools protocol, on a synthetic database. 21 checks passed: the 16 of plan 091
+(the suggestions after `[[`, the preview, the question before unsent text is lost, the editor's two columns and one,
+the keys `/ [ c`, Escape and Ctrl+Enter, the footer's keys) and 5 new ones: the capture's result is a toast with a
+Close, Close removes it, Ctrl+K goes to the search from a field, a danger button asks once in the page, and its second
+press sends the form.
+
+**Screenshots** of Today, Home, a past day, Due, Tasks, a task, the month, a page, People, a series, a missing page and
+the catalog, at 1280 px and 390 px, in light and in dark (`prefers-color-scheme` set through the DevTools protocol),
+on the synthetic database. They are not kept in git.
+
+**The cost of the shell's read**, measured once with a benchmark that is not kept: 0.77 to 1.16 ms and about 105 KB
+in 1,820 allocations a page (5 runs, `-benchmem`), on the synthetic database of plan 091 (six tasks, three written
+days), warm, on Windows 11 with Go 1.27.1. This is a small database, not the lifetime workload: it says the read is
+not a problem today, and nothing about fifty years of tasks.

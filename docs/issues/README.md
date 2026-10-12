@@ -9,7 +9,7 @@ data could not answer, a rule that is ambiguous or untestable. It is the evidenc
 
 | id | title | status |
 |---|---|---|
-| [0061](0061-the-browser-does-not-feel-like-an-application.md) | The browser does not look or move like an application | open |
+| [0061](0061-the-browser-does-not-feel-like-an-application.md) | The browser does not look or move like an application | resolved |
 | [0060](0060-the-browser-cannot-carry-daily-use.md) | The browser cannot carry daily planning, journaling, editing and navigation | resolved |
 | [0059](0059-an-agent-in-the-lifelog-folder-knows-nothing.md) | An agent opened in the lifelog folder knows nothing about it | resolved |
 | [0058](0058-the-import-machine-outweighs-the-backfill.md) | The import machinery is larger than the life log, for a backfill done once | resolved |

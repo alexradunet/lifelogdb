@@ -31,7 +31,7 @@ func TestBrowserSessionEvidenceAndScopeLabels(t *testing.T) {
 	must(c.Do(find(root, "record"), map[string]string{"metric": "Steps", "day": "2020-01-02", "value": "10000"}))
 	scoped := must(c.Do(find(root, "record"), map[string]string{"metric": "Steps", "day": "2020-01-02", "value": "4000", "session_id": strings.TrimPrefix(location, "/sessions/")}))
 	readingBody := browse(t, h, href(scoped, "self"))
-	if !strings.Contains(readingBody, "Scope: session") || !strings.Contains(readingBody, location) {
+	if !strings.Contains(readingBody, "<dt>scope</dt><dd>session ") || !strings.Contains(readingBody, location) {
 		t.Fatal("reading omitted scope association")
 	}
 	all := browse(t, h, "/metrics/Steps?from=2020-01-01&to=2020-01-02&scope=all")

@@ -1,13 +1,16 @@
-{{/* The calendar: the weeks of a month, Monday first. A day with a page is marked, with its mood; today is marked;
-     each day opens its day view, and its first line is the link's title. */}}
+{{/* The calendar (docs/plans/092-the-app-shell.md): the weeks of a month, Monday first. A day with a page is tinted,
+     with its first line and its mood; today is framed; each day opens its day view. */}}
 {{define "month"}}{{template "head" .}}
 {{$m := .Props}}
-<h1>{{.Title}}</h1>
-<p class="sub"><a href="/days/{{$m.today}}">Today</a><a href="/months/current">This month</a><a href="/days">Every day, as a list</a></p>
-<nav class="pager" aria-label="Months"><a href="{{.Link "prev"}}" rel="prev">← {{.LinkTitle "prev"}}</a><a href="{{.Link "next"}}" rel="next">{{.LinkTitle "next"}} →</a></nav>
-<table class="calendar"><caption>A day with a page is marked, with its mood. Today has a frame.</caption>
+<header class="page-head"><div class="what"><h1>{{.Title}}</h1>
+<p class="sub"><a href="/days/{{$m.today}}">Today</a><a href="/months/current">This month</a><a href="/days">Every day, as a list</a></p></div>
+<div class="tools">
+<a class="button step" href="{{.Link "prev"}}" rel="prev">← {{.LinkTitle "prev"}}</a>
+<a class="button step" href="{{.Link "next"}}" rel="next">{{.LinkTitle "next"}} →</a>
+{{template "boxed" (form (.Action "open-day") "button" "Go to a day")}}
+</div></header>
+<div class="scroll"><table class="calendar"><caption>A day with a page is tinted, with its first line and its mood. Today has a frame.</caption>
 <thead><tr><th scope="col" abbr="Monday">Mon</th><th scope="col" abbr="Tuesday">Tue</th><th scope="col" abbr="Wednesday">Wed</th><th scope="col" abbr="Thursday">Thu</th><th scope="col" abbr="Friday">Fri</th><th scope="col" abbr="Saturday">Sat</th><th scope="col" abbr="Sunday">Sun</th></tr></thead>
-<tbody>{{range weeks $m.days}}<tr>{{range .}}{{if .}}<td{{if .page}} class="written"{{end}}{{if eq .day $m.today}} aria-current="date"{{end}}><a href="/days/{{.day}}"{{with .first_line}} title="{{.}}"{{end}}>{{dayOfMonth .day}}</a>{{with .mood}}<small>{{range $i, $v := .}}{{if $i}} {{end}}{{num $v}}{{end}}</small>{{end}}</td>{{else}}<td></td>{{end}}{{end}}</tr>
-{{end}}</tbody></table>
-{{template "form" (form (.Action "open-day") "class" "inline" "button" "Open")}}
+<tbody>{{range weeks $m.days}}<tr>{{range .}}{{if .}}<td{{if .page}} class="written"{{end}}{{if eq .day $m.today}} aria-current="date"{{end}}><a href="/days/{{.day}}"><span class="n">{{dayOfMonth .day}}</span>{{with .first_line}}<span class="first">{{.}}</span>{{end}}{{with .mood}}<span class="meta">mood {{range $i, $v := .}}{{if $i}}, {{end}}{{num $v}}{{end}}</span>{{end}}</a></td>{{else}}<td></td>{{end}}{{end}}</tr>
+{{end}}</tbody></table></div>
 {{template "foot" .}}{{end}}

@@ -1,20 +1,18 @@
 {{define "metrics"}}{{template "head" .}}
-<h1>Metrics</h1>
+<header class="page-head"><div class="what"><h1>Metrics</h1></div><div class="tools">{{template "boxed" (form (.Action "record") "button" "Record a reading")}}</div></header>
 {{range .Props.groups}}<section class="group depth-{{num .depth}}">
 {{if eq (num .depth) "0"}}<h2>{{if .page}}<a href="/pages/{{num .page}}">{{.title}}</a>{{else}}{{.title}}{{end}}{{with .metrics}} <small>{{len .}}</small>{{end}}</h2>{{else}}<h3><a href="/pages/{{num .page}}">{{.title}}</a> <small>{{.path}}{{with .metrics}} · {{len .}}{{end}}</small></h3>{{end}}
 {{with .metrics}}<div class="scroll"><table>
 <thead><tr><th scope="col">metric</th><th scope="col">unit</th><th scope="col">note</th></tr></thead>
 <tbody>{{range .}}<tr><td><a href="/metrics/{{pathesc .name}}">{{.name}}</a>{{if .habit}}{{range .categories}} <span class="badge">{{.}}</span>{{end}}{{end}}</td><td>{{.unit}}</td><td><small>{{.note}}</small></td></tr>{{end}}</tbody>
 </table></div>{{end}}</section>{{end}}
-<h2>Record</h2>
-{{template "form" (form (.Action "record"))}}
 {{template "foot" .}}{{end}}
 
 {{define "series"}}{{template "head" .}}
 {{$s := .Props}}
-<h1>{{.Title}}</h1>
+<header class="page-head"><div class="what"><span class="date">series</span><h1>{{.Title}}</h1>
 <p class="sub"><span>{{if $s.all_history}}All history through {{$s.to}}{{else}}{{$s.from}} – {{$s.to}}{{end}}</span>{{range $s.categories}}<span class="badge">{{.}}</span>{{end}}{{with .Link "page"}}<a href="{{.}}">Page</a>{{end}}<a href="/metrics">All metrics</a>
-<a href="{{.Link "all-readings"}}">All readings</a></p>
+<a href="{{.Link "all-readings"}}">All readings</a></p></div></header>
 <p><small>Scope: {{$s.scope}} (unassociated is not a daily total).</small></p>
 {{with $s.readings}}{{if ne $s.scope "all"}}{{chart $s.from $s.to .}}{{end}}
 <div class="scroll"><table><caption>Every reading in this range</caption>
@@ -34,9 +32,9 @@
 
 {{define "habits"}}{{template "head" .}}
 {{$h := .Props}}
-<h1>Habits</h1>
-<p class="sub"><a href="/days/{{$h.day}}">{{weekday $h.day}} {{$h.day}}</a></p>
-<nav class="pager" aria-label="Days"><a href="{{.Link "prev"}}" rel="prev">← Previous day</a><a href="{{.Link "next"}}" rel="next">Next day →</a></nav>
+<header class="page-head"><div class="what"><span class="date">{{$h.day}}</span><h1>Habits</h1>
+<p class="sub"><a href="/days/{{$h.day}}">{{weekday $h.day}}: the day view</a></p></div>
+<div class="tools"><a class="button step" href="{{.Link "prev"}}" rel="prev">← {{shortDay (addDays $h.day -1)}}</a><a class="button step" href="{{.Link "next"}}" rel="next">{{shortDay (addDays $h.day 1)}} →</a></div></header>
 {{with $h.habits}}<div class="scroll"><table><caption>Every habit active on this day, and what it was</caption>
 <thead><tr><th scope="col">habit</th><th scope="col">state</th><th scope="col">record</th></tr></thead>
 <tbody>{{range .}}{{$href := printf "/metrics/%s" (pathesc .metric)}}
