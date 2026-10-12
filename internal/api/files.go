@@ -276,31 +276,3 @@ func picture(get func(*http.Request) ([]byte, error)) http.HandlerFunc {
 		w.Write(b)
 	}
 }
-
-// locate gives a place its point (docs/cookbook/place-of-a-photo.md): the owner's answer, or a correction.
-func (h *server) locate(r *http.Request, src string) (*Entity, error) {
-	id, v, err := idForm(r, "lat", "lon", "radius_m")
-	if err != nil {
-		return nil, err
-	}
-	var p core.Point
-	for name, to := range map[string]*float64{"lat": &p.Lat, "lon": &p.Lon} {
-		f, err := number(v, name)
-		if err != nil {
-			return nil, err
-		}
-		*to = *f
-	}
-	if p.RadiusM, err = radius("radius_m", v.Get("radius_m")); err != nil {
-		return nil, err
-	}
-	linkDays, err := flag(v, "link_days")
-	if err != nil {
-		return nil, err
-	}
-	p.LinkDays = linkDays || v.Get("link_days") == "" // the default is to link the days
-	if err := h.s.Locate(r.Context(), src, id, p); err != nil {
-		return nil, err
-	}
-	return h.pageEntity(r.Context(), id)
-}

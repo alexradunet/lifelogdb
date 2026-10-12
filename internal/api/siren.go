@@ -6,6 +6,7 @@ package api
 import (
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 
 	"lifelog/internal/core"
@@ -277,4 +278,39 @@ func (a *Action) field(name string) *Field {
 		}
 	}
 	return nil
+}
+
+func pageHref(id int64) string { return "/pages/" + strconv.FormatInt(id, 10) }
+
+func dayHref(day string) string { return "/days/" + day }
+
+func measurementHref(id int64) string { return "/measurements/" + strconv.FormatInt(id, 10) }
+
+func metricHref(name string) string { return "/metrics/" + url.PathEscape(name) }
+
+func link(rel, href, title string) Link {
+	return Link{Rel: []string{rel}, Href: href, Title: title}
+}
+
+func selfOf(e *Entity) string {
+	if l := e.linkByRel("self"); l != nil {
+		return l.Href
+	}
+	return ""
+}
+
+func withOptions(a Action, field string, opts []string) Action {
+	if f := a.field(field); f != nil {
+		f.Options = opts
+	}
+	return a
+}
+
+func withResult(e *Entity, err error) func(any) (*Entity, error) {
+	return func(res any) (*Entity, error) {
+		if e != nil {
+			e.Result = res
+		}
+		return e, err
+	}
 }

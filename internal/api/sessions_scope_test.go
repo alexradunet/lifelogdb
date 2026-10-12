@@ -2,14 +2,15 @@ package api_test
 
 import (
 	"fmt"
-	"lifelog/internal/api"
-	"lifelog/internal/client"
-	"lifelog/internal/core"
-	"lifelog/internal/db"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"lifelog/internal/api"
+	"lifelog/internal/client"
+	"lifelog/internal/core"
+	"lifelog/internal/db"
 )
 
 func TestSessionAndScopeTransportParity(t *testing.T) {

@@ -2,13 +2,14 @@ package api_test
 
 import (
 	"fmt"
+	"net/http/httptest"
+	"path/filepath"
+	"testing"
+
 	"lifelog/internal/api"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db"
-	"net/http/httptest"
-	"path/filepath"
-	"testing"
 )
 
 func TestRecordedPeriodTransportParity(t *testing.T) {

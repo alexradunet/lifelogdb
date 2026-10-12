@@ -164,16 +164,3 @@ func (v *view) HabitStrip(recent any) habitStrip {
 	}
 	return s
 }
-
-// capLater keeps the first n occurrences of the group Later; the last one kept stands for the rest. A series on its
-// own page then shows its next slots, not every slot of its window.
-func capLater(groups []dueGroup, n int) []dueGroup {
-	for i := range groups {
-		if g := &groups[i]; g.Name == "Later" && len(g.Items) > n {
-			rest := len(g.Items) - n
-			g.Items = g.Items[:n]
-			g.Items[n-1].More += rest
-		}
-	}
-	return groups
-}

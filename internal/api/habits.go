@@ -9,41 +9,6 @@ import (
 	"lifelog/internal/core"
 )
 
-// correctTo corrects or retracts a reading.
-func (h *server) correctTo(ctx context.Context, src string, id int64, value *float64) (*Entity, error) {
-	fix, err := h.s.Correct(ctx, src, id, value)
-	if err != nil {
-		return nil, err
-	}
-	return h.measurementEntity(ctx, fix)
-}
-
-func (h *server) rename(r *http.Request, src string) (*Entity, error) {
-	id, v, err := idForm(r, "title")
-	if err != nil {
-		return nil, err
-	}
-	to, err := h.s.Rename(r.Context(), src, id, v.Get("title"))
-	if err != nil {
-		return nil, err
-	}
-	return h.pageEntity(r.Context(), to)
-}
-
-func (h *server) registerMetric(r *http.Request, src string) (*Entity, error) {
-	v, err := form(r)
-	if err != nil {
-		return nil, err
-	}
-	if err := required(v, "name"); err != nil {
-		return nil, err
-	}
-	if _, err := h.s.RegisterMetric(r.Context(), src, v.Get("name"), v.Get("unit"), v.Get("note")); err != nil {
-		return nil, err
-	}
-	return h.seriesEntity(r.Context(), v.Get("name"), nil)
-}
-
 func (h *server) startHabit(r *http.Request, src string) (*Entity, error) {
 	v, err := form(r)
 	if err != nil {
@@ -143,15 +108,6 @@ func checkIns(hs []core.HabitState, day string) []Action {
 		out = append(out, action("check-in", map[string]string{"name": x.Metric}, map[string]any{"day": day}))
 	}
 	return out
-}
-
-func (h *server) integrity(r *http.Request) (*Entity, error) {
-	res, err := h.s.Integrity(r.Context())
-	if err != nil {
-		return nil, err
-	}
-	return &Entity{Class: []string{"integrity"}, Title: "Integrity checks", Properties: res,
-		Links: []Link{link("self", "/integrity", "Integrity"), link("index", "/", "Home")}}, nil
 }
 
 // glanceDays is how many days, the day itself the last, a habit's recent states and a reading's trend cover

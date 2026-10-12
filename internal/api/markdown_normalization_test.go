@@ -1,9 +1,10 @@
 package api
 
 import (
-	"lifelog/internal/text"
 	"strings"
 	"testing"
+
+	"lifelog/internal/text"
 )
 
 func TestMarkdownPostParseNFC(t *testing.T) {
