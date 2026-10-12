@@ -180,8 +180,9 @@ form.inline{display:flex; flex-wrap:wrap; align-items:flex-end; gap:var(--space-
 form.inline>label{flex:1 1 130px}
 form.inline>button{flex:0 0 auto}
 @media (max-width:640px){form.inline>label{flex:1 1 100%}}
-form:not(.inline):not(.tiny):not([role=search]){display:flex; flex-direction:column; align-items:flex-start; gap:var(--space-3)}
-form:not(.inline):not(.tiny):not([role=search])>label{align-self:stretch}
+/* Any other form: its fields one under the other, the button under them. */
+form:where(:not(.inline):not(.tiny):not([role=search])){display:flex; flex-direction:column; align-items:flex-start; gap:var(--space-3)}
+form:where(:not(.inline):not(.tiny):not([role=search]))>label{align-self:stretch}
 
 /* A form that is one button: a habit's Done, a tombstone's Revive. */
 form.tiny{display:inline-block}
@@ -256,3 +257,56 @@ form>.editor{align-self:stretch}
   .editor .preview{max-height:80vh; overflow:auto; margin:0}
 }
 footer .keys{color:var(--muted)}
+
+/* An action with fields: a button that opens its form under it (with no script, a <details>). In the page header
+   the open form floats over the page; anywhere else it opens in place. A row of them is .actions. */
+details.action{border:0; padding:0; background:none; position:relative}
+details.action>summary{list-style:none; cursor:pointer; font-weight:400}
+details.action>summary::-webkit-details-marker{display:none}
+details.action>summary::marker{content:""}
+details.action[open]>summary{margin:0; border-color:var(--accent); color:var(--accent)}
+.action-form{display:flex; flex-direction:column; gap:var(--space-3); margin-top:var(--space-2); padding:var(--space-4);
+  background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-lg)}
+.tools details.action>.action-form{position:absolute; z-index:10; top:100%; right:0; width:min(34rem, calc(100vw - 2rem)); box-shadow:var(--shadow-float)}
+.actions{display:flex; flex-wrap:wrap; align-items:flex-start; gap:var(--space-2)}
+.actions>details.action[open]{flex:1 1 100%}
+details>.actions{margin-top:var(--space-1)}
+
+/* A choice of a few short values, as a row of radio buttons: it works with no script. */
+fieldset.segmented{display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-1)}
+fieldset.segmented legend{float:left; margin-right:var(--space-2); font-size:13px; line-height:19px; color:var(--muted)}
+fieldset.segmented label{position:relative; display:block; color:var(--ink)}
+fieldset.segmented input{position:absolute; inset:0; width:100%; height:100%; margin:0; opacity:0; cursor:pointer}
+fieldset.segmented span{display:grid; place-items:center; min-width:34px; height:34px; padding:0 var(--space-2); font:400 15px/1 var(--mono);
+  background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-md)}
+fieldset.segmented label:hover span{border-color:var(--line-strong)}
+fieldset.segmented input:checked+span{background:var(--accent-soft); border-color:var(--accent); color:var(--accent); font-weight:500}
+fieldset.segmented input:focus-visible+span{outline:2px solid var(--focus); outline-offset:2px}
+
+/* Capture: the main box of Today and of a day. The text, then the mood and Add on one row. */
+.capture form{flex-direction:row; flex-wrap:wrap; align-items:center; justify-content:space-between}
+.capture form>label,.capture form>.editor{flex:1 1 100%}
+.capture form>button{margin-left:auto}
+.capture textarea{min-height:92px}
+
+/* A habit in a panel: its name and state, then the Done and Not done of its check-in, joined. */
+.habit{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--space-2)}
+.habit+.habit{padding-top:var(--space-3); border-top:1px solid var(--line-soft)}
+.habit-what a{color:var(--ink); font-weight:700}
+.joined{display:inline-flex; border:1px solid var(--line); border-radius:var(--radius-md); overflow:hidden}
+.joined form{display:contents}
+.joined button{height:var(--control-small); padding:0 var(--space-3); border:0; border-radius:0; font-size:13px}
+.joined form+form button{border-left:1px solid var(--line)}
+.joined form:first-child button{color:var(--done); font-weight:700}
+.tag.notdone{background:var(--danger-soft); color:var(--danger-ink)}
+
+/* Rows inside a panel run to its edges when it is flush. */
+.panel ul.plain>li{padding:10px 0}
+.panel.flush ul.plain>li{padding:10px var(--space-4); border-top:1px solid var(--line-soft); border-bottom:0}
+
+/* Readings: a tile a reading, its metric and its value. */
+.readings{display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px}
+.reading-tile{display:flex; flex-direction:column; gap:2px; padding:10px var(--space-3); background:var(--ground); border-radius:var(--radius-md)}
+.reading-tile .name{font-size:13px; line-height:19px; color:var(--muted)}
+.reading-tile a.reading{font:400 22px/28px var(--mono); font-variant-numeric:tabular-nums; color:var(--ink)}
+.page-head .sub{margin-top:var(--space-1)}

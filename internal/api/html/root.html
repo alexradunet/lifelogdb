@@ -1,26 +1,40 @@
+{{/* Home is today at a glance (docs/plans/092-the-app-shell.md): Capture and the last entries; what is due and the
+     habits; then the closed sections New and Owner. */}}
 {{define "root"}}{{template "head" .}}
 {{$p := .Props}}
+<header class="page-head">
+<div class="what"><span class="date">{{$p.today}} · week {{week $p.today}}</span>
 <h1>{{weekday $p.today}}</h1>
-<p class="sub"><a href="/days/{{$p.today}}">{{$p.today}}</a><a href="/deadlines">What is due</a><a href="/tasks">Tasks</a></p>
+<p class="sub"><a href="/days/{{$p.today}}">Today's page</a><a href="/deadlines">What is due</a><a href="/tasks">Tasks</a></p></div>
+<div class="tools">
+{{template "boxed" (form (.Action "find") "button" "Open a page")}}
+{{template "boxed" (form (.Action "open-day") "button" "Go to a day")}}
+</div>
+</header>
 
-<h2>Capture</h2>
-{{template "form" (form (.Action "capture") "choices:mood" "1 2 3 4 5" "button" "Add to today" "autofocus" "text")}}
+<div class="columns">
+<div class="stack">
+{{with .Action "capture"}}<section class="panel capture" aria-label="Capture"><h2>Add to today</h2>
+{{template "form" (form . "button" "Add" "autofocus" "text" "back" $.Here)}}</section>{{end}}
 
-<h2>Due</h2>
+{{with $p.recent}}<section class="section" aria-label="Last entries">
+<div class="panel-head"><h2>Last entries</h2><a href="/days">Every day</a></div>
+<div>{{range .}}<a class="entry" href="/days/{{.day}}"><span class="date">{{shortDay .day}}</span><span class="first">{{.first_line}}</span><span class="meta">{{with .mood}}mood {{range $i, $m := .}}{{if $i}}, {{end}}{{num $m}}{{end}}{{end}}</span></a>
+{{end}}</div></section>{{end}}
+</div>
+
+<div class="stack">
+<section class="panel flush" aria-label="Due">
+<div class="panel-head"><h2>Due</h2><a href="/deadlines">The weeks ahead</a></div>
 {{with $p.due}}<ul class="plain due">{{range .}}{{template "occ" ($.Occ . 0)}}{{end}}</ul>
-{{else}}<p><small>Nothing is due today or overdue. <a href="/deadlines">The weeks ahead</a>.</small></p>{{end}}
-
+{{else}}<p><small>Nothing is due today or overdue.</small></p>{{end}}
+</section>
 {{template "checkins" .}}
-
-{{with $p.recent}}<h2>Last entries</h2>
-<ul class="plain">{{range .}}<li><a href="/days/{{.day}}">{{weekday .day}} {{.day}}</a><small>{{template "mood" .mood}}</small>
-{{with .first_line}}<div><small>{{.}}</small></div>{{end}}</li>{{end}}</ul>
-<p class="sub"><a href="/days">Every day</a></p>{{end}}
-
-<h2>Find</h2>
-{{template "form" (form (.Action "find") "class" "inline" "button" "Open")}}
+</div>
+</div>
 
 <details id="new"><summary>New: a page, a person, a place, a task, a file, a reading</summary>
+<div class="actions">
 {{template "boxed" (form (.Action "create-page"))}}
 {{template "boxed" (form (.Action "create-task"))}}
 {{template "boxed" (form (.Action "create-person"))}}
@@ -29,22 +43,13 @@
 {{template "boxed" (form (.Action "record"))}}
 {{template "boxed" (form (.Action "capture-session"))}}
 {{template "boxed" (form (.Action "create-period"))}}
-</details>
+</div></details>
 {{if or (.Action "register-metric") (.Action "snapshot") (.Action "query")}}<details id="owner"><summary>Owner: a metric, a snapshot, a query</summary>
+<div class="actions">
 {{template "boxed" (form (.Action "register-metric"))}}
 {{template "boxed" (form (.Action "snapshot"))}}
 {{template "boxed" (form (.Action "query"))}}
-</details>{{end}}
-
-<h2>More</h2>
-<ul class="plain">
-{{with .Link "deadlines"}}<li><a href="{{.}}">Deadlines</a> <small>— what is due, and what is overdue</small></li>{{end}}
-{{with .Link "tasks"}}<li><a href="{{.}}">Tasks</a> <small>— every task and its series</small></li>{{end}}
-{{with .Link "sessions"}}<li><a href="{{.}}">Sessions</a> <small>— the recorded spans of a day</small></li>{{end}}
-{{with .Link "periods"}}<li><a href="{{.}}">Periods</a> <small>— the named spans of a life</small></li>{{end}}
-{{with .Link "ghosts"}}<li><a href="{{.}}">Ghost pages</a> <small>— linked, never written</small></li>{{end}}
-{{with .Link "actions"}}<li><a href="{{.}}">Every action</a></li>{{end}}
-</ul>
+</div></details>{{end}}
 {{template "foot" .}}{{end}}
 
 {{define "list"}}{{template "head" .}}

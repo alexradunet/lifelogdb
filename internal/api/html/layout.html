@@ -49,14 +49,16 @@
      field, so a form needs no layout of its own; the catalog says how tall an area is and which action is a danger. */}}
 {{define "form"}}{{with .}}<form method="{{.Method}}" action="{{.Href}}"{{with .Class}} class="{{.}}"{{end}}{{if .Multipart}} enctype="multipart/form-data"{{end}}>
 {{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{num .Value}}">{{end}}{{with .Back}}<input type="hidden" name="back" value="{{.}}">{{end}}
-{{range .Shown}}<label><span>{{or .Title .Name}}{{if .Required}} <small>required</small>{{end}}</span>
+{{range .Shown}}{{if segmented .}}<fieldset class="segmented"><legend>{{or .Title .Name}}{{if .Required}} <small>required</small>{{end}}</legend>{{$v := num .Value}}{{$n := .Name}}{{$req := .Required}}{{range .Options}}<label><input type="radio" name="{{$n}}" value="{{.}}"{{if eq . $v}} checked{{end}}{{if $req}} required{{end}}><span>{{.}}</span></label>{{end}}</fieldset>
+{{else}}<label><span>{{or .Title .Name}}{{if .Required}} <small>required</small>{{end}}</span>
 {{if .Options}}<select name="{{.Name}}"{{if eq $.Focus .Name}} autofocus{{end}}>{{$v := num .Value}}{{range .Options}}<option{{if eq . $v}} selected{{end}}>{{.}}</option>{{end}}</select>
 {{else if eq .Type "textarea"}}<textarea name="{{.Name}}"{{with .Rows}} rows="{{.}}"{{end}}{{if eq $.Focus .Name}} autofocus{{end}}>{{num .Value}}</textarea>
 {{else}}<input type="{{.Type}}" name="{{.Name}}" value="{{num .Value}}"{{if .Required}} required{{end}}{{if eq .Type "number"}} step="any" inputmode="decimal"{{end}}{{if eq $.Focus .Name}} autofocus{{end}}>{{end}}</label>
-{{end}}<button{{if .Danger}} class="danger"{{else if .Primary}} class="primary"{{end}}>{{.Button}}</button></form>{{end}}{{end}}
+{{end}}{{end}}<button{{if .Danger}} class="danger"{{else if .Primary}} class="primary"{{end}}>{{.Button}}</button></form>{{end}}{{end}}
 
-{{/* an action in a closed box with its description */}}
-{{define "boxed"}}{{with .}}<details><summary>{{.Button}}</summary>{{with .Description}}<small class="desc">{{.}}</small>{{end}}{{template "form" .}}</details>{{end}}{{end}}
+{{/* boxed is an action as a button that opens its form (the ActionForm of the design system): with no script, a
+     closed <details>. An owner-only action carries the owner mark. */}}
+{{define "boxed"}}{{with .}}<details class="action"><summary class="button">{{.Button}}{{if .Owner}} <span class="owner">owner</span>{{end}}</summary><div class="action-form">{{with .Description}}<p class="desc">{{.}}</p>{{end}}{{template "form" .}}</div></details>{{end}}{{end}}
 
 {{/* generic is the view of any class without a template of its own: the whole entity, and every action it offers */}}
 {{define "generic"}}{{template "head" .}}

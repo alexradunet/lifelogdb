@@ -223,12 +223,16 @@ func TestMCPNumericSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	moodEnum := ""
 	for _, tool := range tools.Tools {
 		b, _ := json.Marshal(tool.InputSchema)
 		var schema map[string]any
 		json.Unmarshal(b, &schema)
 		for name, property := range schema["properties"].(map[string]any) {
 			p := property.(map[string]any)
+			if tool.Name == "capture" && name == "mood" {
+				moodEnum = fmt.Sprint(p["type"], " ", p["enum"])
+			}
 			if options, ok := p["enum"].([]any); ok {
 				for _, v := range options {
 					switch p["type"] {
@@ -244,6 +248,9 @@ func TestMCPNumericSchema(t *testing.T) {
 				}
 			}
 		}
+	}
+	if moodEnum != "number [1 2 3 4 5]" { // the browser draws it as five buttons (docs/plans/092-the-app-shell.md)
+		t.Errorf("capture's mood is %q, want the numbers 1 to 5", moodEnum)
 	}
 	callTool(t, ctx, session, "start_habit", map[string]any{"name": "walk", "start_day": "2026-06-01"})
 	for _, done := range []int{0, 1} {

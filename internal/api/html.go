@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"lifelog/internal/text"
 )
@@ -77,10 +78,13 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 		}
 		return day
 	},
-	"num":      num,
-	"pathesc":  url.PathEscape,
-	"icon":     icon,
-	"shortDay": shortDay,
+	"num":       num,
+	"pathesc":   url.PathEscape,
+	"icon":      icon,
+	"shortDay":  shortDay,
+	"addDays":   addDays,
+	"week":      isoWeek,
+	"segmented": segmented,
 }).ParseFS(views, "html/*.html"))
 
 // num shows a property's value. A number is written in full, never with an exponent: the JSON client reads every
@@ -401,6 +405,40 @@ var markRE = regexp.MustCompile(`\[([^[\]]+)\]`)
 func rejected(body string) []string {
 	_, _, out := text.Targets(body, "")
 	return out
+}
+
+// segmented reports a field the browser draws as a Segmented choice of the design system, a row of radio buttons:
+// 2 to 5 options, none empty and each of 3 characters or fewer (a mood 1 to 5, a 1 or a 0). Any other field with
+// options is a select.
+func segmented(f Field) bool {
+	if len(f.Options) < 2 || len(f.Options) > 5 {
+		return false
+	}
+	for _, o := range f.Options {
+		if o == "" || utf8.RuneCountInString(o) > 3 {
+			return false
+		}
+	}
+	return true
+}
+
+// addDays is the day n days after day ("" for a day that is not one).
+func addDays(day string, n int) string {
+	t, err := time.Parse(time.DateOnly, day)
+	if err != nil {
+		return ""
+	}
+	return t.AddDate(0, 0, n).Format(time.DateOnly)
+}
+
+// isoWeek is the ISO 8601 week of a day, 0 for a day that is not one.
+func isoWeek(day string) int {
+	t, err := time.Parse(time.DateOnly, day)
+	if err != nil {
+		return 0
+	}
+	_, w := t.ISOWeek()
+	return w
 }
 
 func weekday(day string) string {
