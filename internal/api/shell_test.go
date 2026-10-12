@@ -188,10 +188,10 @@ func TestThePhoneHasABottomBarAndASheet(t *testing.T) {
 // page is still drawn. A public listener refuses it without the token.
 func TestTheStylePageShowsEveryComponent(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(p); err != nil {
+	if err := db.Init(t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
-	d, err := db.Open(p)
+	d, err := db.Open(t.Context(), p)
 	if err != nil {
 		t.Fatal(err)
 	}

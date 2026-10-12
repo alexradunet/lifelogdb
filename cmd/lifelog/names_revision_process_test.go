@@ -24,10 +24,10 @@ func TestExecutableStableNamesAndExactRevision(t *testing.T) {
 		t.Fatalf("build: %v\n%s", err, out)
 	}
 	live := filepath.Join(root, "synthetic.db")
-	if err := db.Init(live); err != nil {
+	if err := db.Init(t.Context(), live); err != nil {
 		t.Fatal(err)
 	}
-	d, err := db.Open(live)
+	d, err := db.Open(t.Context(), live)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestExecutableStableNamesAndExactRevision(t *testing.T) {
 	if fmt.Sprint(old.Properties["id"]) != fmt.Sprint(final.Properties["id"]) || old.Title != "Process final" || old.Properties["body"] != "committed [[Kept]]" {
 		t.Fatalf("process alias identity: %+v %+v", old, final)
 	}
-	d, err = db.Open(live)
+	d, err = db.Open(t.Context(), live)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestExecutableStableNamesAndExactRevision(t *testing.T) {
 	}
 	call(true, "do", "save-body", "id="+strconv.FormatInt(id, 10), "version=9223372036854775807", "body=committed [[Kept]]")
 	call(false, "do", "save-body", "id="+strconv.FormatInt(id, 10), "version=9223372036854775807", "body=exhausted [[Forbidden]]")
-	d, err = db.Open(live)
+	d, err = db.Open(t.Context(), live)
 	if err != nil {
 		t.Fatal(err)
 	}

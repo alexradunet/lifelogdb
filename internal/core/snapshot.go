@@ -14,11 +14,11 @@ import (
 // as written. The path is returned with the check; an error names what refused (a folder inside a git work tree,
 // a name in use) or what failed.
 func Snapshot(ctx context.Context, from, dir string, now time.Time) (string, *IntegrityResult, error) {
-	path, err := db.Snapshot(from, dir, now)
+	path, err := db.Snapshot(ctx, from, dir, now)
 	if err != nil {
 		return "", nil, err
 	}
-	d, err := db.OpenSnapshot(path)
+	d, err := db.OpenSnapshot(ctx, path)
 	if err != nil {
 		return path, nil, fmt.Errorf("the snapshot %s cannot be checked: %w", path, err)
 	}

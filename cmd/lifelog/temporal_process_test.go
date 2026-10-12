@@ -20,7 +20,7 @@ func TestExecutableTemporalRecordsAndScopes(t *testing.T) {
 		t.Fatalf("build %v %s", err, out)
 	}
 	path := filepath.Join(root, "synthetic.db")
-	if err := db.Init(path); err != nil {
+	if err := db.Init(t.Context(), path); err != nil {
 		t.Fatal(err)
 	}
 	call := func(args ...string) map[string]any {

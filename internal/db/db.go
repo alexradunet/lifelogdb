@@ -50,49 +50,81 @@ func init() {
 }
 
 // checkConnection runs on every new connection: the version floor always, trusted_schema on readers, the pragmas
-// on writers.
+// on writers. A reader is known by the mode of its DSN's query, never by the text of the path. A value the check
+// cannot read refuses the connection: an unread pragma is not a pragma at its wanted value.
 func checkConnection(c sqlite.ExecQuerierContext, dsn string) error {
-	if v := version(c); v < minVersion {
+	v, err := version(c)
+	if err != nil {
+		return fmt.Errorf("the connection check: %w", err)
+	}
+	if v < minVersion {
 		return fmt.Errorf("SQLite %d is older than %d (connections.md)", v, minVersion)
 	}
-	if strings.Contains(dsn, "mode=ro") {
-		if got := intOf(c, "PRAGMA trusted_schema"); got != 0 {
+	u, err := url.Parse(dsn)
+	if err != nil {
+		return fmt.Errorf("the connection check: %w", err)
+	}
+	if u.Query().Get("mode") == "ro" {
+		got, err := intOf(c, "PRAGMA trusted_schema")
+		if err != nil {
+			return fmt.Errorf("the connection check on a reader: %w", err)
+		}
+		if got != 0 {
 			return fmt.Errorf("PRAGMA trusted_schema reads back %d on a reader, want 0; refusing to read", got)
 		}
 		return nil
 	}
 	for _, p := range pragmas {
-		if got := intOf(c, "PRAGMA "+p.name); got != p.want {
+		got, err := intOf(c, "PRAGMA "+p.name)
+		if err != nil {
+			return fmt.Errorf("the connection check on a writer: %w", err)
+		}
+		if got != p.want {
 			return fmt.Errorf("PRAGMA %s reads back %d, want %d; refusing to write", p.name, got, p.want)
 		}
 	}
 	return nil
 }
 
-func intOf(c sqlite.ExecQuerierContext, q string) int64 {
-	n, _ := valueOf(c, q).(int64)
-	return n
+func intOf(c sqlite.ExecQuerierContext, q string) (int64, error) {
+	v, err := valueOf(c, q)
+	if err != nil {
+		return 0, err
+	}
+	n, ok := v.(int64)
+	if !ok {
+		return 0, fmt.Errorf("%s reads back %v, not an integer", q, v)
+	}
+	return n, nil
 }
 
-func valueOf(c sqlite.ExecQuerierContext, q string) driver.Value {
+// valueOf is the one value a statement of the connection check answers. The driver's hook gives no context: the
+// check runs as the connection opens, before any request.
+func valueOf(c sqlite.ExecQuerierContext, q string) (driver.Value, error) {
 	rows, err := c.QueryContext(context.Background(), q, nil)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("%s: %w", q, err)
 	}
 	defer rows.Close()
 	v := make([]driver.Value, 1)
-	if rows.Next(v) != nil {
-		return nil
+	if err := rows.Next(v); err != nil {
+		return nil, fmt.Errorf("%s: %w", q, err)
 	}
-	return v[0]
+	return v[0], nil
 }
 
 // version is sqlite_version() as SQLITE_VERSION_NUMBER (X*1000000 + Y*1000 + Z).
-func version(c sqlite.ExecQuerierContext) int64 {
-	s, _ := valueOf(c, "SELECT sqlite_version()").(string)
+func version(c sqlite.ExecQuerierContext) (int64, error) {
+	v, err := valueOf(c, "SELECT sqlite_version()")
+	if err != nil {
+		return 0, err
+	}
+	s, _ := v.(string)
 	var x, y, z int64
-	fmt.Sscanf(s, "%d.%d.%d", &x, &y, &z)
-	return x*1000000 + y*1000 + z
+	if _, err := fmt.Sscanf(s, "%d.%d.%d", &x, &y, &z); err != nil {
+		return 0, fmt.Errorf("sqlite_version() %q: %w", s, err)
+	}
+	return x*1000000 + y*1000 + z, nil
 }
 
 func dsn(path string, readOnly bool) string {
@@ -134,9 +166,9 @@ type DB struct {
 func (d *DB) Path() string { return d.path }
 
 // Open opens an existing life.db.
-func Open(path string) (*DB, error) { return open(path, false) }
+func Open(ctx context.Context, path string) (*DB, error) { return open(ctx, path, false) }
 
-func open(path string, keep bool) (*DB, error) {
+func open(ctx context.Context, path string, keep bool) (*DB, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return nil, err
@@ -158,29 +190,29 @@ func open(path string, keep bool) (*DB, error) {
 	var id int64
 	// Validate compatibility before activating the writer. Refusal must not run
 	// Close's maintenance against a file this application does not understand.
-	if err := r.QueryRow("PRAGMA application_id").Scan(&id); err != nil {
+	if err := r.QueryRowContext(ctx, "PRAGMA application_id").Scan(&id); err != nil {
 		return nil, errors.Join(err, r.Close(), w.Close())
 	}
 	if id != applicationID {
 		return nil, errors.Join(fmt.Errorf("%s is not a Lifelog database (application_id %#x)", path, id), r.Close(), w.Close())
 	}
 	var version int64
-	if err := r.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
+	if err := r.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		return nil, errors.Join(err, r.Close(), w.Close())
 	}
 	if version != schemaVersion {
 		return nil, errors.Join(fmt.Errorf("unsupported user_version %d (supported: %d)", version, schemaVersion), r.Close(), w.Close())
 	}
-	if err := w.Ping(); err != nil {
+	if err := w.PingContext(ctx); err != nil {
 		return nil, errors.Join(err, r.Close(), w.Close())
 	}
 	return &DB{W: w, R: r, path: path, keep: keep}, nil
 }
 
 // Init creates a new life.db from the canonical DDL. It refuses an existing file.
-func Init(path string) error {
+func Init(ctx context.Context, path string) error {
 	return initWith(path, func(w *sql.DB) error {
-		_, err := w.Exec(schema)
+		_, err := w.ExecContext(ctx, schema)
 		return err
 	})
 }
@@ -276,7 +308,7 @@ func (d *DB) Write(ctx context.Context, fn func(*sql.Tx) error) error {
 
 // Copy writes a copy of a life.db to a new file through a read-only connection (docs/contract/imports.md step 1:
 // VACUUM INTO). It refuses an existing target.
-func Copy(from, to string) error {
+func Copy(ctx context.Context, from, to string) error {
 	// An absolute path also keeps a relative filename beginning "file:" from
 	// becoming a SQLite URI with a different destination from our reservation.
 	to, err := filepath.Abs(to)
@@ -284,7 +316,7 @@ func Copy(from, to string) error {
 		return err
 	}
 	return copyWith(from, to, func(r *sql.DB) error {
-		_, err := r.Exec(`VACUUM INTO ?`, to)
+		_, err := r.ExecContext(ctx, `VACUUM INTO ?`, to)
 		return err
 	})
 }
@@ -318,7 +350,7 @@ func copyWith(from, to string, copy func(*sql.DB) error) error {
 // Snapshot takes a snapshot of a life.db into dir (docs/cookbook/take-a-snapshot.md, D25): a Copy named by the local
 // day of now, life-YYYY-MM-DD.db, or life-YYYY-MM-DDTHHMMSS.db when the day has one already. It never overwrites a
 // file and refuses a folder inside a git work tree. It returns the snapshot's path.
-func Snapshot(from, dir string, now time.Time) (string, error) {
+func Snapshot(ctx context.Context, from, dir string, now time.Time) (string, error) {
 	// Use the resolved directory path so the supplied directory symlink is no longer traversed.
 	dir, err := CheckSnapshotDir(dir)
 	if err != nil {
@@ -330,7 +362,7 @@ func Snapshot(from, dir string, now time.Time) (string, error) {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return "", fmt.Errorf("check snapshot path %s: %w", to, err)
 	}
-	return to, Copy(from, to)
+	return to, Copy(ctx, from, to)
 }
 
 // CheckSnapshotDir is the folder a snapshot may land in, resolved to its physical path: it must exist, and
@@ -418,4 +450,4 @@ func gitWorkTree(dir string) (string, error) {
 // OpenSnapshot opens a snapshot for its restore check (docs/cookbook/take-a-snapshot.md): as Open opens life.db —
 // the FTS5 check is an INSERT, refused on a read-only connection — but Close runs no PRAGMA optimize, which can
 // write to the file, so the checks leave the snapshot as it was.
-func OpenSnapshot(path string) (*DB, error) { return open(path, true) }
+func OpenSnapshot(ctx context.Context, path string) (*DB, error) { return open(ctx, path, true) }

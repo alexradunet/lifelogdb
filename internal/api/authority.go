@@ -71,7 +71,7 @@ func NetworkAuthority(addr net.Addr, next http.Handler) (http.Handler, error) {
 		// Go replaces Host with the absolute request-target's authority. No proxy
 		// deployment is supported, so reject absolute-form instead of trusting it.
 		if !allowed || requestPort != port || r.URL == nil || r.URL.IsAbs() || r.URL.Host != "" {
-			http.Error(w, "HTTP authority refused", http.StatusForbidden)
+			refuse(w, r, http.StatusForbidden, "HTTP authority refused", "")
 			return
 		}
 		next.ServeHTTP(w, r)

@@ -16,20 +16,20 @@ func TestCopyTreatsLeadingFilePrefixAsLiteralPath(t *testing.T) {
 	}
 	t.Chdir(t.TempDir())
 	source := filepath.Join(t.TempDir(), "source.db")
-	if err := Init(source); err != nil {
+	if err := Init(t.Context(), source); err != nil {
 		t.Fatal(err)
 	}
 	// SQLite accepts an existing empty VACUUM target. A URI interpretation must
 	// not let the literal destination's prefix redirect the copy into this file.
 	writeFile(t, "copy.db", nil)
 	const destination = "file:copy.db"
-	if err := Copy(source, destination); err != nil {
+	if err := Copy(t.Context(), source, destination); err != nil {
 		t.Fatal(err)
 	}
 	if got, err := os.ReadFile("copy.db"); err != nil || len(got) != 0 {
 		t.Errorf("copy changed the alternate path: bytes=%d error=%v; want the existing empty file", len(got), err)
 	}
-	copied, err := Open(destination)
+	copied, err := Open(t.Context(), destination)
 	if err != nil {
 		t.Fatalf("literal destination does not hold the copied database: %v", err)
 	}
@@ -40,7 +40,7 @@ func TestCopyTreatsLeadingFilePrefixAsLiteralPath(t *testing.T) {
 
 func TestCopyRefusesExistingDestinationEntries(t *testing.T) {
 	source := filepath.Join(t.TempDir(), "source.db")
-	if err := Init(source); err != nil {
+	if err := Init(t.Context(), source); err != nil {
 		t.Fatal(err)
 	}
 	for _, kind := range []string{"empty", "nonempty", "dangling symlink", "existing symlink"} {
@@ -66,7 +66,7 @@ func TestCopyRefusesExistingDestinationEntries(t *testing.T) {
 			if kind != "dangling symlink" {
 				before = snapshotPath(t, dest)
 			}
-			if err := Copy(source, dest); err == nil {
+			if err := Copy(t.Context(), source, dest); err == nil {
 				t.Error("Copy accepted an existing destination directory entry")
 			}
 			switch kind {
@@ -88,7 +88,7 @@ func TestCopyRefusesExistingDestinationEntries(t *testing.T) {
 
 func TestCopyReservationFailureAndCleanup(t *testing.T) {
 	source := filepath.Join(t.TempDir(), "source.db")
-	if err := Init(source); err != nil {
+	if err := Init(t.Context(), source); err != nil {
 		t.Fatal(err)
 	}
 	for _, replacement := range []bool{false, true} {
@@ -98,7 +98,7 @@ func TestCopyReservationFailureAndCleanup(t *testing.T) {
 			copyErr := errors.New("controlled copy failure")
 			err := copyWith(source, dest, func(*sql.DB) error {
 				// A competing copy must be refused before its SQLite connection opens.
-				if err := Copy(source, dest); err == nil {
+				if err := Copy(t.Context(), source, dest); err == nil {
 					t.Error("competing copy accepted the reserved destination")
 				}
 				if replacement {
@@ -118,10 +118,10 @@ func TestCopyReservationFailureAndCleanup(t *testing.T) {
 					t.Fatalf("failed copy left its reservation: %v", err)
 				}
 				// A failure must leave the same name available for a real retry.
-				if err := Copy(source, dest); err != nil {
+				if err := Copy(t.Context(), source, dest); err != nil {
 					t.Fatalf("retry after failed copy: %v", err)
 				}
-				copied, err := Open(dest)
+				copied, err := Open(t.Context(), dest)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -139,7 +139,7 @@ func TestCopySQLiteFailureRemovesReservation(t *testing.T) {
 	dir := t.TempDir()
 	source, dest := filepath.Join(dir, "invalid.db"), filepath.Join(dir, "copy.db")
 	writeFile(t, source, []byte("not SQLite"))
-	if err := Copy(source, dest); err == nil {
+	if err := Copy(t.Context(), source, dest); err == nil {
 		t.Fatal("copy accepted an invalid source")
 	}
 	if _, err := os.Lstat(dest); !errors.Is(err, os.ErrNotExist) {

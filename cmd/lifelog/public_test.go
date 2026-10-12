@@ -120,7 +120,7 @@ func TestPublicServeProcess(t *testing.T) {
 		t.Fatalf("build: %v\n%s", err, out)
 	}
 	live := filepath.Join(root, "life.db")
-	if err := db.Init(live); err != nil {
+	if err := db.Init(t.Context(), live); err != nil {
 		t.Fatal(err)
 	}
 	tokenFile := filepath.Join(root, "token.txt")

@@ -148,10 +148,16 @@ func newHandler(s *core.Store, localDay func() string, zone *time.Location, trus
 		}
 	}
 	guard.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		e, status := errorEntity(&core.Error{Status: http.StatusForbidden, Msg: "cross-origin browser write refused", Code: "cross_origin"})
-		writeEntity(w, r, status, e)
+		refuse(w, r, http.StatusForbidden, "cross-origin browser write refused", "cross_origin")
 	}))
 	return guard.Handler(m)
+}
+
+// refuse answers a request the guards turn away with the error entity, as every refusal is answered: status, a code
+// (the status's general name when code is "") and the message.
+func refuse(w http.ResponseWriter, r *http.Request, status int, msg, code string) {
+	e, status := errorEntity(&core.Error{Status: status, Msg: msg, Code: code})
+	writeEntity(w, r, status, e)
 }
 
 // redirect is returned by a handler that answers with another resource's address.

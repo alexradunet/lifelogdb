@@ -17,7 +17,7 @@ func TestSnapshotNeverFollowsDestinationFileSymlinks(t *testing.T) {
 		t.Run(occupied, func(t *testing.T) {
 			root := t.TempDir()
 			live := filepath.Join(root, "life.db")
-			if err := db.Init(live); err != nil {
+			if err := db.Init(t.Context(), live); err != nil {
 				t.Fatal(err)
 			}
 			dir, repo := filepath.Join(root, "snapshots"), filepath.Join(root, "repo")

@@ -223,7 +223,7 @@ func runContext(ctx context.Context, o opts) error {
 		if err != nil {
 			return err
 		}
-		if err := db.Init(path); err != nil {
+		if err := db.Init(ctx, path); err != nil {
 			return err
 		}
 		fmt.Println("created", path)
@@ -268,7 +268,7 @@ func runContext(ctx context.Context, o opts) error {
 		if o.db, err = dbPath(o, ""); err != nil {
 			return err
 		}
-		d, err := db.Open(o.db)
+		d, err := db.Open(ctx, o.db)
 		if err != nil {
 			return err
 		}

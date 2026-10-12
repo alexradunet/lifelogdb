@@ -29,10 +29,10 @@ func generated(n int64) io.Reader { return io.LimitReader(repeatedByte{}, n) }
 func limitsHandler(t *testing.T) (http.Handler, func()) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(path); err != nil {
+	if err := db.Init(t.Context(), path); err != nil {
 		t.Fatal(err)
 	}
-	d, err := db.Open(path)
+	d, err := db.Open(t.Context(), path)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -16,7 +16,7 @@ import (
 func TestFileCommandNumberCoordinates(t *testing.T) {
 	root := t.TempDir()
 	live := filepath.Join(root, "synthetic.db")
-	if err := db.Init(live); err != nil {
+	if err := db.Init(t.Context(), live); err != nil {
 		t.Fatal(err)
 	}
 	picks := filepath.Join(root, "picks")

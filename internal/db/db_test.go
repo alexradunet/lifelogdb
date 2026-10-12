@@ -28,10 +28,10 @@ func TestSchemaCopyIsCurrent(t *testing.T) {
 func Fresh(t *testing.T) *DB {
 	t.Helper()
 	p := filepath.Join(t.TempDir(), "life.db")
-	if err := Init(p); err != nil {
+	if err := Init(t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
-	d, err := Open(p)
+	d, err := Open(t.Context(), p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestInitRefusesExistingFile(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.prepare(t, tc.path)
 			before := snapshotPath(t, tc.path)
-			if err := Init(tc.path); err == nil {
+			if err := Init(t.Context(), tc.path); err == nil {
 				t.Fatal("Init accepted an existing path")
 			}
 			assertSnapshot(t, tc.path, before)
@@ -162,7 +162,7 @@ func TestInitRefusesPathWhenParentIsNotDirectory(t *testing.T) {
 	want := []byte("parent sentinel")
 	writeFile(t, parent, want)
 	p := filepath.Join(parent, "life.db")
-	if err := Init(p); err == nil {
+	if err := Init(t.Context(), p); err == nil {
 		t.Fatal("Init treated a non-directory parent as a free database path")
 	}
 	got, err := os.ReadFile(parent)
@@ -184,7 +184,7 @@ func TestInitConcurrentReservation(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			<-start
-			errs[i] = Init(p)
+			errs[i] = Init(t.Context(), p)
 		}(i)
 	}
 	close(start)
@@ -199,7 +199,7 @@ func TestInitConcurrentReservation(t *testing.T) {
 	if successes != 1 {
 		t.Fatalf("concurrent Init successes = %d, errors = %v; want exactly one", successes, errs)
 	}
-	d, err := Open(p)
+	d, err := Open(t.Context(), p)
 	if err != nil {
 		t.Fatalf("winner database was not preserved as a valid life.db: %v", err)
 	}
@@ -211,7 +211,7 @@ func TestInitReservationBlocksCompetingLazyOpen(t *testing.T) {
 	applyErr := errors.New("controlled apply failure")
 	var competitorErr error
 	err := initWith(p, func(*sql.DB) error {
-		competitorErr = Init(p)
+		competitorErr = Init(t.Context(), p)
 		return applyErr
 	})
 	if err == nil || !strings.Contains(err.Error(), applyErr.Error()) {
@@ -282,7 +282,7 @@ func TestOpenRefusesForeignFile(t *testing.T) {
 	o, _ := sql.Open("lifelog", dsn(p, false))
 	o.Exec("CREATE TABLE x(a)")
 	o.Close()
-	if _, err := Open(p); err == nil || !strings.Contains(err.Error(), "not a Lifelog") {
+	if _, err := Open(t.Context(), p); err == nil || !strings.Contains(err.Error(), "not a Lifelog") {
 		t.Fatalf("Open of a non-Lifelog file: %v", err)
 	}
 }
@@ -336,15 +336,15 @@ func TestLiteralDatabasePaths(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err := Init(tc.requested); err != nil {
-				t.Fatalf("Init(%q) failed; requested literal file %q, alternate sentinel %q: %v", tc.requested, absForError(tc.requested), absForError(tc.sentinel), err)
+			if err := Init(t.Context(), tc.requested); err != nil {
+				t.Fatalf("Init(t.Context(), %q) failed; requested literal file %q, alternate sentinel %q: %v", tc.requested, absForError(tc.requested), absForError(tc.sentinel), err)
 			}
 			assertSamePhysicalFile(t, tc.requested)
 			assertLiteralSentinel(t, tc.sentinel)
 
-			d, err := Open(tc.requested)
+			d, err := Open(t.Context(), tc.requested)
 			if err != nil {
-				t.Fatalf("Open(%q) failed for requested literal file %q: %v", tc.requested, absForError(tc.requested), err)
+				t.Fatalf("Open(t.Context(), %q) failed for requested literal file %q: %v", tc.requested, absForError(tc.requested), err)
 			}
 			if err := d.Write(context.Background(), func(tx *sql.Tx) error {
 				_, err := tx.Exec(`INSERT INTO lifelog_meta(key, value) VALUES ('literal-path-test', ?)`, tc.name)
@@ -364,14 +364,14 @@ func TestLiteralDatabasePaths(t *testing.T) {
 			copyPath := filepath.Join(filepath.Dir(tc.requested), copyStem+" # %23.db")
 			copySentinel := filepath.Join(filepath.Dir(tc.requested), copyStem+" ")
 			prepareLiteralSentinel(t, copySentinel)
-			if err := Copy(tc.requested, copyPath); err != nil {
-				t.Fatalf("Copy(%q, %q) failed; source literal %q, destination literal %q: %v", tc.requested, copyPath, absForError(tc.requested), absForError(copyPath), err)
+			if err := Copy(t.Context(), tc.requested, copyPath); err != nil {
+				t.Fatalf("Copy(t.Context(), %q, %q) failed; source literal %q, destination literal %q: %v", tc.requested, copyPath, absForError(tc.requested), absForError(copyPath), err)
 			}
 			assertSamePhysicalFile(t, copyPath)
 			assertLiteralSentinel(t, copySentinel)
-			c, err := Open(copyPath)
+			c, err := Open(t.Context(), copyPath)
 			if err != nil {
-				t.Fatalf("Open(copy %q) failed: %v", absForError(copyPath), err)
+				t.Fatalf("Open(t.Context(), copy %q) failed: %v", absForError(copyPath), err)
 			}
 			if err := c.R.QueryRow(`SELECT value FROM lifelog_meta WHERE key = 'literal-path-test'`).Scan(&got); err != nil || got != tc.name {
 				c.Close()
@@ -407,9 +407,9 @@ func assertLiteralSentinel(t *testing.T, p string) {
 
 func assertSamePhysicalFile(t *testing.T, requested string) {
 	t.Helper()
-	d, err := Open(requested)
+	d, err := Open(t.Context(), requested)
 	if err != nil {
-		t.Fatalf("Open(%q) after Init/Copy failed: %v", requested, err)
+		t.Fatalf("Open(t.Context(), %q) after Init/Copy failed: %v", requested, err)
 	}
 	defer d.Close()
 	var reported string
@@ -460,7 +460,7 @@ func TestPragmasAndReaders(t *testing.T) {
 		t.Errorf("a reader with trusted_schema=ON was not refused: %v", err)
 	}
 	cp := filepath.Join(t.TempDir(), "copy.db")
-	if err := Copy(path, cp); err != nil {
+	if err := Copy(t.Context(), path, cp); err != nil {
 		t.Errorf("Copy through a reader with trusted_schema=OFF: %v", err)
 	}
 	checkShadowWrite := func(conn *sql.DB, defensive bool) {
@@ -493,7 +493,7 @@ func TestPragmasAndReaders(t *testing.T) {
 	}
 	checkShadowWrite(d.W, true)
 	controlPath := filepath.Join(t.TempDir(), "non-defensive.db")
-	if err := Init(controlPath); err != nil {
+	if err := Init(t.Context(), controlPath); err != nil {
 		t.Fatal(err)
 	}
 	control, err := sql.Open("sqlite", sqliteFileURI(controlPath, nil))
@@ -535,7 +535,7 @@ func TestWriteTakesTheLockUpFront(t *testing.T) {
 func TestSnapshotDestinationErrors(t *testing.T) {
 	root := t.TempDir()
 	live := filepath.Join(root, "life.db")
-	if err := Init(live); err != nil {
+	if err := Init(t.Context(), live); err != nil {
 		t.Fatal(err)
 	}
 	before, err := os.ReadFile(live)
@@ -543,7 +543,7 @@ func TestSnapshotDestinationErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, dest := range []string{filepath.Join(root, "missing"), live} {
-		if _, err := Snapshot(live, dest, time.Now()); err == nil {
+		if _, err := Snapshot(t.Context(), live, dest, time.Now()); err == nil {
 			t.Errorf("accepted non-directory %s", dest)
 		}
 	}
@@ -554,7 +554,7 @@ func TestSnapshotDestinationErrors(t *testing.T) {
 	// A dangling .git entry is still a privacy marker, not evidence of safety.
 	if err := os.Symlink(filepath.Join(root, "absent"), filepath.Join(target, ".git")); err != nil {
 		t.Logf("dangling-marker check unavailable: %v", err)
-	} else if _, err := Snapshot(live, target, time.Now()); err == nil || !strings.Contains(err.Error(), "git work tree") {
+	} else if _, err := Snapshot(t.Context(), live, target, time.Now()); err == nil || !strings.Contains(err.Error(), "git work tree") {
 		t.Errorf("dangling marker refusal: %v", err)
 	}
 	entries, err := os.ReadDir(target)

@@ -20,10 +20,10 @@ import (
 func fresh(t *testing.T) (*client.Client, http.Handler) {
 	t.Helper()
 	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(p); err != nil {
+	if err := db.Init(t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
-	d, err := db.Open(p)
+	d, err := db.Open(t.Context(), p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,10 +36,10 @@ func fresh(t *testing.T) (*client.Client, http.Handler) {
 func freshOn(t *testing.T, day string) (*client.Client, http.Handler) {
 	t.Helper()
 	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(p); err != nil {
+	if err := db.Init(t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
-	d, err := db.Open(p)
+	d, err := db.Open(t.Context(), p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -583,10 +583,10 @@ func feedbackLocation(location, path string) bool {
 // that day invalid and counts it (cookbook/habits.md). The CLI and MCP serve this same JSON.
 func TestHabitsShowInvalidCheckIns(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(p); err != nil {
+	if err := db.Init(t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
-	d, err := db.Open(p)
+	d, err := db.Open(t.Context(), p)
 	if err != nil {
 		t.Fatal(err)
 	}

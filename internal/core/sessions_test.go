@@ -11,10 +11,10 @@ import (
 
 func TestSessionCaptureRetryEditLifecycleAndReopen(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(path); err != nil {
+	if err := db.Init(t.Context(), path); err != nil {
 		t.Fatal(err)
 	}
-	d, err := db.Open(path)
+	d, err := db.Open(t.Context(), path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestSessionCaptureRetryEditLifecycleAndReopen(t *testing.T) {
 	if err := d.Close(); err != nil {
 		t.Fatal(err)
 	}
-	d, err = db.Open(path)
+	d, err = db.Open(t.Context(), path)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -31,7 +31,7 @@ func TestExecutableServeDrainsActiveRequest(t *testing.T) {
 		t.Fatalf("build: %v\n%s", err, out)
 	}
 	live := filepath.Join(root, "life.db")
-	if err := db.Init(live); err != nil {
+	if err := db.Init(t.Context(), live); err != nil {
 		t.Fatal(err)
 	}
 	cmd := exec.CommandContext(ctx, binary, "--db", live, "serve", "--addr", "127.0.0.1:0")
@@ -116,7 +116,7 @@ func TestExecutableServeDrainsActiveRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("server exit after successful drain: %v", err)
 	}
-	database, err := db.Open(live)
+	database, err := db.Open(t.Context(), live)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -137,10 +137,10 @@ func TestFindAndReadingsTools(t *testing.T) {
 func mcpTestClient(t *testing.T) *client.Client {
 	t.Helper()
 	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(p); err != nil {
+	if err := db.Init(t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
-	d, err := db.Open(p)
+	d, err := db.Open(t.Context(), p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -297,24 +297,27 @@ func TestMCPNumericArguments(t *testing.T) {
 		json.NewEncoder(w).Encode(api.Entity{})
 	}), "agent:test")
 	session, ctx := numericSession(t, c)
-	for _, token := range []string{"999999", "1000000", "9007199254740993", "1e6", "9.007199254740993e15"} {
+	// A number is sent as its JSON text: the API's own parser is the one rule for an id, on this surface as on the
+	// CLI and in a browser, so "1e6" reaches the API as written and the API refuses it there (404 no such id).
+	for _, token := range []string{"999999", "1000000", "9007199254740993", "1e6"} {
 		res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{Name: "tombstone", Arguments: json.RawMessage(`{"id":` + token + `}`)})
 		if err != nil || res.IsError {
 			t.Fatalf("%s: %v %v", token, res, err)
 		}
 	}
-	want := []string{"/pages/999999/tombstone", "/pages/1000000/tombstone", "/pages/9007199254740993/tombstone", "/pages/1000000/tombstone", "/pages/9007199254740993/tombstone"}
+	want := []string{"/pages/999999/tombstone", "/pages/1000000/tombstone", "/pages/9007199254740993/tombstone", "/pages/1e6/tombstone"}
 	if fmt.Sprint(paths) != fmt.Sprint(want) {
 		t.Fatalf("paths %v want %v", paths, want)
 	}
-	for _, token := range []string{"1.5", "9223372036854775808", "1e100", "{}", "[]"} {
+	// An argument that is not a number or a string is refused before any call.
+	for _, token := range []string{"{}", "[]"} {
 		res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{Name: "tombstone", Arguments: json.RawMessage(`{"id":` + token + `}`)})
 		if err == nil && !res.IsError {
 			t.Fatalf("accepted %s", token)
 		}
 	}
 	if len(paths) != len(want) {
-		t.Fatal("invalid IDs dispatched")
+		t.Fatal("invalid arguments dispatched")
 	}
 }
 

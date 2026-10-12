@@ -106,7 +106,7 @@ func Public(next http.Handler, o PublicOptions) (http.Handler, error) {
 func (p *public) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Absolute-form targets replace Host during parsing; no proxy deployment relies on them.
 	if r.URL == nil || r.URL.IsAbs() || r.URL.Host != "" {
-		http.Error(w, "HTTP authority refused", http.StatusForbidden)
+		refuse(w, r, http.StatusForbidden, "HTTP authority refused", "")
 		return
 	}
 	origin := r.Header.Get("Origin")
@@ -119,7 +119,7 @@ func (p *public) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method == http.MethodOptions {
 		if !allowed {
-			http.Error(w, "origin refused", http.StatusForbidden)
+			refuse(w, r, http.StatusForbidden, "origin refused", "")
 			return
 		}
 		h := w.Header()
@@ -175,7 +175,7 @@ func (p *public) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := p.guard.Check(r); err != nil {
-		http.Error(w, "cross-origin browser write refused", http.StatusForbidden)
+		refuse(w, r, http.StatusForbidden, "cross-origin browser write refused", "cross_origin")
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 4096)
@@ -189,7 +189,7 @@ func (p *public) login(w http.ResponseWriter, r *http.Request) {
 
 func (p *public) logout(w http.ResponseWriter, r *http.Request) {
 	if err := p.guard.Check(r); err != nil {
-		http.Error(w, "cross-origin browser write refused", http.StatusForbidden)
+		refuse(w, r, http.StatusForbidden, "cross-origin browser write refused", "cross_origin")
 		return
 	}
 	http.SetCookie(w, &http.Cookie{Name: CookieName, Value: "", Path: "/", HttpOnly: true, Secure: p.tls, SameSite: http.SameSiteStrictMode, MaxAge: -1})

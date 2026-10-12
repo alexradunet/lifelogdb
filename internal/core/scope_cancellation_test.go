@@ -92,7 +92,7 @@ func TestScopeRelocationCancellationAfterRetraction(t *testing.T) {
 	if err := s.DB.Close(); err != nil {
 		t.Fatal(err)
 	}
-	d, err := db.Open(path)
+	d, err := db.Open(t.Context(), path)
 	if err != nil {
 		t.Fatal(err)
 	}

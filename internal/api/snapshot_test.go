@@ -18,10 +18,10 @@ import (
 // The owner's snapshot action, from the client and from a browser form; refused to an agent.
 func TestSnapshotIsTheOwnersFromAnySurface(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(p); err != nil {
+	if err := db.Init(t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
-	d, err := db.Open(p)
+	d, err := db.Open(t.Context(), p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,10 +101,10 @@ func TestSnapshotIsTheOwnersFromAnySurface(t *testing.T) {
 // (docs/plans/098-the-codebase-made-cohesive.md).
 func TestASnapshotThatFailsItsRestoreCheckIsAnError(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(p); err != nil {
+	if err := db.Init(t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
-	d, err := db.Open(p)
+	d, err := db.Open(t.Context(), p)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -263,16 +263,12 @@ func (c *capped) Write(p []byte) (int, error) {
 func picture(get func(*http.Request) ([]byte, error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		b, err := get(r)
-		var ce *core.Error
-		switch {
-		case errors.As(err, &ce):
-			http.Error(w, ce.Msg, ce.Status)
-			return
-		case err != nil:
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		case b == nil:
-			http.NotFound(w, r)
+		if err == nil && b == nil {
+			err = core.NotFound("this page keeps no picture")
+		}
+		if err != nil { // the error entity, as every other route answers
+			e, status := errorEntity(err)
+			writeEntity(w, r, status, e)
 			return
 		}
 		w.Header().Set("Content-Type", "image/jpeg")

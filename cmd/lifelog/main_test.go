@@ -32,10 +32,10 @@ import (
 func TestSnapshot(t *testing.T) {
 	ctx := context.Background()
 	live := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(live); err != nil {
+	if err := db.Init(t.Context(), live); err != nil {
 		t.Fatal(err)
 	}
-	d, err := db.Open(live)
+	d, err := db.Open(t.Context(), live)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,12 +63,12 @@ func TestSnapshot(t *testing.T) {
 		t.Errorf("the restore check failed on a clean file: %+v", res)
 	}
 	// the restore check, as takeSnapshot runs it, on a snapshot no check has touched yet
-	untouched, err := db.Snapshot(live, t.TempDir(), now)
+	untouched, err := db.Snapshot(t.Context(), live, t.TempDir(), now)
 	if err != nil {
 		t.Fatal(err)
 	}
 	b0 := mustRead(t, untouched)
-	r, err := db.OpenSnapshot(untouched)
+	r, err := db.OpenSnapshot(t.Context(), untouched)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,10 +125,10 @@ func TestSnapshotLiteralSpecialCharacterPaths(t *testing.T) {
 	if err := os.MkdirAll(liveDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Init(live); err != nil {
+	if err := db.Init(t.Context(), live); err != nil {
 		t.Fatalf("Init(%q) failed with alternate sentinel %q: %v", live, filepath.Join(liveDir, "life #.db"), err)
 	}
-	d, err := db.Open(live)
+	d, err := db.Open(t.Context(), live)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +156,7 @@ func TestSnapshotLiteralSpecialCharacterPaths(t *testing.T) {
 	}
 	assertSnapshotSentinel(t, filepath.Join(liveDir, "life #.db"))
 	assertSnapshotSentinel(t, destinationSentinel)
-	snap, err := db.OpenSnapshot(want)
+	snap, err := db.OpenSnapshot(t.Context(), want)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +241,7 @@ func captureStdout(t *testing.T, fn func()) string {
 
 func TestSnapshotRefusesAGitWorkTree(t *testing.T) {
 	live := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(live); err != nil {
+	if err := db.Init(t.Context(), live); err != nil {
 		t.Fatal(err)
 	}
 	repo := t.TempDir()
@@ -270,7 +270,7 @@ func mustRead(t *testing.T, p string) []byte {
 func TestFileCommand(t *testing.T) {
 	dir := t.TempDir()
 	live := filepath.Join(dir, "life.db")
-	if err := db.Init(live); err != nil {
+	if err := db.Init(t.Context(), live); err != nil {
 		t.Fatal(err)
 	}
 	m := image.NewGray(image.Rect(0, 0, 64, 48))
@@ -290,7 +290,7 @@ func TestFileCommand(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	d, err := db.Open(live)
+	d, err := db.Open(t.Context(), live)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -314,10 +314,10 @@ func TestFileCommand(t *testing.T) {
 func TestKeepTheFewPhotosOfADay(t *testing.T) {
 	dir := t.TempDir()
 	live := filepath.Join(dir, "life.db")
-	if err := db.Init(live); err != nil {
+	if err := db.Init(t.Context(), live); err != nil {
 		t.Fatal(err)
 	}
-	d, err := db.Open(live)
+	d, err := db.Open(t.Context(), live)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -355,7 +355,7 @@ func TestKeepTheFewPhotosOfADay(t *testing.T) {
 	}
 	count := func(q string, args ...any) int {
 		t.Helper()
-		d, err := db.Open(live)
+		d, err := db.Open(t.Context(), live)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -462,10 +462,10 @@ func TestDoOpensADayAndGetsAMonth(t *testing.T) {
 func commandClient(t *testing.T) *client.Client {
 	t.Helper()
 	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(p); err != nil {
+	if err := db.Init(t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
-	d, err := db.Open(p)
+	d, err := db.Open(t.Context(), p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -514,7 +514,7 @@ func TestSnapshotPhysicalDestination(t *testing.T) {
 					}
 					root := t.TempDir()
 					live := filepath.Join(root, "life.db")
-					if err := db.Init(live); err != nil {
+					if err := db.Init(t.Context(), live); err != nil {
 						t.Fatal(err)
 					}
 					before := mustRead(t, live)
@@ -706,7 +706,7 @@ func TestServeAuthorityMount(t *testing.T) {
 	// Run the real serve branch against a disposable synthetic database. Capture
 	// the printed ephemeral listener address rather than guessing a free port.
 	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(p); err != nil {
+	if err := db.Init(t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
 	read, write, err := os.Pipe()

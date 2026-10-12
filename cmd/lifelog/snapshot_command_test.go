@@ -14,7 +14,7 @@ import (
 // lifelog snapshot is the catalog's action in-process, --to choosing the folder.
 func TestSnapshotCommandRunsTheAction(t *testing.T) {
 	live := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(live); err != nil {
+	if err := db.Init(t.Context(), live); err != nil {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()

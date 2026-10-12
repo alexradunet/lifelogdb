@@ -147,10 +147,10 @@ func Run(ctx context.Context, options Options) (report *Report, err error) {
 		}
 	}()
 	path := filepath.Join(dir, "life.db")
-	if err = db.Init(path); err != nil {
+	if err = db.Init(ctx, path); err != nil {
 		return nil, err
 	}
-	d, err := db.Open(path)
+	d, err := db.Open(ctx, path)
 	if err != nil {
 		return nil, err
 	}
@@ -216,16 +216,16 @@ func Run(ctx context.Context, options Options) (report *Report, err error) {
 	}
 	snapshot, restored := filepath.Join(dir, "snapshot.db"), filepath.Join(dir, "restored.db")
 	progress(options, "Copying snapshot and restoring into a separate file")
-	if err := record(report, "snapshot_copy", func() error { return db.Copy(path, snapshot) }); err != nil {
+	if err := record(report, "snapshot_copy", func() error { return db.Copy(ctx, path, snapshot) }); err != nil {
 		return nil, err
 	}
 	var reopened *db.DB
 	if err := record(report, "restore_copy_open", func() error {
-		if err := db.Copy(snapshot, restored); err != nil {
+		if err := db.Copy(ctx, snapshot, restored); err != nil {
 			return err
 		}
 		var e error
-		reopened, e = db.Open(restored)
+		reopened, e = db.Open(ctx, restored)
 		return e
 	}); err != nil {
 		return nil, err

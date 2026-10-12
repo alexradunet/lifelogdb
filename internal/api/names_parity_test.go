@@ -23,10 +23,10 @@ func TestStableNameTransportParity(t *testing.T) {
 		for _, kind := range []string{"page", "person", "place", "metric", "file"} {
 			t.Run(fmt.Sprintf("remote=%v/type=%s", remote, kind), func(t *testing.T) {
 				path := filepath.Join(t.TempDir(), "life.db")
-				if err := db.Init(path); err != nil {
+				if err := db.Init(t.Context(), path); err != nil {
 					t.Fatal(err)
 				}
-				d, err := db.Open(path)
+				d, err := db.Open(t.Context(), path)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -159,10 +159,10 @@ func TestStableNameTransportParity(t *testing.T) {
 
 func TestBrowserStableNameResolution(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(path); err != nil {
+	if err := db.Init(t.Context(), path); err != nil {
 		t.Fatal(err)
 	}
-	d, err := db.Open(path)
+	d, err := db.Open(t.Context(), path)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -21,10 +21,10 @@ const testToken = "synthetic-token-0123456789abcdefghij" // 36 characters
 func publicHandler(t *testing.T, o api.PublicOptions) (http.Handler, *core.Store) {
 	t.Helper()
 	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(p); err != nil {
+	if err := db.Init(t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
-	d, err := db.Open(p)
+	d, err := db.Open(t.Context(), p)
 	if err != nil {
 		t.Fatal(err)
 	}

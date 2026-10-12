@@ -18,10 +18,10 @@ var ctx = context.Background()
 func fresh(t *testing.T) *Store {
 	t.Helper()
 	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(p); err != nil {
+	if err := db.Init(t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
-	d, err := db.Open(p)
+	d, err := db.Open(t.Context(), p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -476,7 +476,7 @@ func TestQueryKeepsOpenedRelativeDatabaseAfterChdir(t *testing.T) {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := db.Init(filepath.Join(dir, "life.db")); err != nil {
+		if err := db.Init(t.Context(), filepath.Join(dir, "life.db")); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -491,7 +491,7 @@ func TestQueryKeepsOpenedRelativeDatabaseAfterChdir(t *testing.T) {
 	if err := os.Chdir(original); err != nil {
 		t.Fatal(err)
 	}
-	d, err := db.Open("life.db")
+	d, err := db.Open(t.Context(), "life.db")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -509,7 +509,7 @@ func TestQueryKeepsOpenedRelativeDatabaseAfterChdir(t *testing.T) {
 
 func writeMetaValue(t *testing.T, p, key, value string) {
 	t.Helper()
-	d, err := db.Open(p)
+	d, err := db.Open(t.Context(), p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -526,10 +526,10 @@ func TestQueryUsesLiteralReadOnlyPath(t *testing.T) {
 	if err := os.WriteFile(sentinel, []byte("sentinel"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Init(requested); err != nil {
+	if err := db.Init(t.Context(), requested); err != nil {
 		t.Fatal(err)
 	}
-	d, err := db.Open(requested)
+	d, err := db.Open(t.Context(), requested)
 	if err != nil {
 		t.Fatal(err)
 	}

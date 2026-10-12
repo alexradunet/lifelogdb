@@ -44,10 +44,10 @@ func TestFilesystemWriteFailureChild(t *testing.T) {
 		t.Skip("subprocess helper")
 	}
 	path := filepath.Join(dir, "life.db")
-	if err := Init(path); err != nil {
+	if err := Init(t.Context(), path); err != nil {
 		t.Fatal(err)
 	}
-	d, err := Open(path)
+	d, err := Open(t.Context(), path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestFilesystemWriteFailureChild(t *testing.T) {
 			t.Fatal(err)
 		}
 		d = nil
-		d, err = Open(path)
+		d, err = Open(t.Context(), path)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -131,17 +131,17 @@ func TestFilesystemWriteFailureChild(t *testing.T) {
 		checkIOFailureState(t, d, id, retried, true)
 	case "copy":
 		dest := filepath.Join(dir, "snapshot.db")
-		err = withIOFileSizeLimit(t, dir, func() error { return Copy(path, dest) })
+		err = withIOFileSizeLimit(t, dir, func() error { return Copy(t.Context(), path, dest) })
 		requireIOWriteError(t, err)
 		if _, err := os.Lstat(dest); !errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("failed copy left its partial destination: %v", err)
 		}
 		reopen()
 		checkIOFailureState(t, d, id, baseline, false)
-		if err := Copy(path, dest); err != nil {
+		if err := Copy(t.Context(), path, dest); err != nil {
 			t.Fatalf("same destination after restoring file-size limit: %v", err)
 		}
-		copied, err := OpenSnapshot(dest)
+		copied, err := OpenSnapshot(t.Context(), dest)
 		if err != nil {
 			t.Fatal(err)
 		}

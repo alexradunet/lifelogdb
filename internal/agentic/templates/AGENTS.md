@@ -21,7 +21,7 @@ the files the owner keeps. A row is never deleted: it is tombstoned, and a readi
 |---|---|---|
 | browser | `lifelog serve`, then http://127.0.0.1:7777 | the owner reads and edits |
 | MCP | `lifelog mcp --agent NAME` | you: every action as a tool |
-| CLI | `lifelog day`, `lifelog capture TEXT`, `lifelog page TITLE`, `lifelog search WORDS`, `lifelog do ACTION field=value`, `lifelog actions` | you or the owner, in a shell |
+| CLI | `"{{.Exe}}" --db "{{.DB}}" --source agent:NAME day`, then `capture TEXT`, `page TITLE`, `search WORDS`, `do ACTION field=value`, `actions` in the same form | you (as `agent:NAME`) or the owner, in a shell |
 | setup | `lifelog init` (makes `life.db` here), `lifelog agentic-init` (writes this file) | the owner |
 
 Without `--db`, lifelog uses the `life.db` in its own folder. When `life.db` does not exist yet, ask the owner to run
@@ -33,8 +33,9 @@ The MCP server `lifelog` is configured for your framework in this folder (`.mcp.
 `opencode.json`, `.pi/mcp.json`). Its tools are the actions of `lifelog actions`, for example `capture`,
 `create_page`, `save_body`, `get`, `get_day`, `find`, `search`, `create_person`, `create_place`, `promote`, `link`,
 `record`, `correct`, `readings_from_table`, `integrity_check`, and `query` (one read-only SQL statement). The rows you
-write show you as their writer (`agent:NAME`). Without MCP, use the CLI through your shell:
-`"{{.Exe}}" do ACTION field=value`.
+write show you as their writer (`agent:NAME`). Without MCP, use the CLI through your shell with the same writer and the
+same database, or the rows show the owner as their writer and the owner's rules do not hold:
+`"{{.Exe}}" --db "{{.DB}}" --source agent:NAME do ACTION field=value` (NAME as the MCP config names you).
 
 Three actions are the owner's only: `register_metric`, `relocate_reading` and `snapshot`. They are refused to you.
 When you need one, ask the owner to run it, for example `lifelog snapshot`.

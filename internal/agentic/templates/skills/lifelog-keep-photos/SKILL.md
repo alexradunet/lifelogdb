@@ -9,9 +9,9 @@ lifelog never stores the original file: it keeps its hash, its text and a small 
 is.
 
 1. The owner chooses the file. Never pick photos yourself from a library or a folder.
-2. In a shell: `lifelog file PATH --dry-run --human`. Tell the owner what it would do: the day, the place.
+2. In a shell: `lifelog --source agent:NAME file PATH --dry-run --human` (the program and its `--db` as AGENTS.md names them, so the rows show you as their writer). Tell the owner what it would do: the day, the place.
 3. A photo taken near no known place: ask the owner for the place, then add `--at PLACE`.
 4. A PDF or a recording: its text comes first (the owner's transcript, or a text the owner made from it), then
    `--text TEXTFILE`.
 5. Without `--dry-run`, it writes. Tell the owner the result. Several photos of one day go in one command:
-   `lifelog file PHOTO1 PHOTO2 --human`.
+   `lifelog --source agent:NAME file PHOTO1 PHOTO2 --human`.

@@ -329,10 +329,10 @@ func TestTaskStopRollbackAndCancellationRestoreWholeState(t *testing.T) {
 
 func TestTaskLifecycleContextSurvivesReopenAndSnapshot(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(path); err != nil {
+	if err := db.Init(t.Context(), path); err != nil {
 		t.Fatal(err)
 	}
-	d, err := db.Open(path)
+	d, err := db.Open(t.Context(), path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -388,19 +388,19 @@ func TestTaskLifecycleContextSurvivesReopenAndSnapshot(t *testing.T) {
 	// Copy is the production VACUUM INTO engine used by Snapshot; naming and
 	// destination-policy tests live with db.Snapshot itself.
 	snapshot := filepath.Join(t.TempDir(), "snapshot.db")
-	if err := db.Copy(path, snapshot); err != nil {
+	if err := db.Copy(t.Context(), path, snapshot); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.Close(); err != nil {
 		t.Fatal(err)
 	}
-	d, err = db.Open(path)
+	d, err = db.Open(t.Context(), path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.DB = d
 	check(s)
-	restored, err := db.OpenSnapshot(snapshot)
+	restored, err := db.OpenSnapshot(t.Context(), snapshot)
 	if err != nil {
 		t.Fatal(err)
 	}

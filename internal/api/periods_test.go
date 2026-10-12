@@ -15,10 +15,10 @@ func TestRecordedPeriodTransportParity(t *testing.T) {
 	for _, remote := range []bool{false, true} {
 		t.Run(fmt.Sprint(remote), func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "life.db")
-			if err := db.Init(path); err != nil {
+			if err := db.Init(t.Context(), path); err != nil {
 				t.Fatal(err)
 			}
-			d, err := db.Open(path)
+			d, err := db.Open(t.Context(), path)
 			if err != nil {
 				t.Fatal(err)
 			}

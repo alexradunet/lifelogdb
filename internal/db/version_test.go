@@ -2,6 +2,7 @@ package db
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -13,12 +14,12 @@ import (
 func TestOpenRefusesUnsupportedSchemaVersion(t *testing.T) {
 	for _, opener := range []struct {
 		name string
-		open func(string) (*DB, error)
+		open func(context.Context, string) (*DB, error)
 	}{{"writer", Open}, {"snapshot", OpenSnapshot}} {
 		for _, version := range []int{0, -1, 2, 2147483647} {
 			t.Run(fmt.Sprintf("%s/%d", opener.name, version), func(t *testing.T) {
 				path := filepath.Join(t.TempDir(), "unsupported.db")
-				if err := Init(path); err != nil {
+				if err := Init(t.Context(), path); err != nil {
 					t.Fatal(err)
 				}
 				fixture, err := sql.Open("sqlite", sqliteFileURI(path, nil))
@@ -43,7 +44,7 @@ func TestOpenRefusesUnsupportedSchemaVersion(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				opened, openErr := opener.open(path)
+				opened, openErr := opener.open(t.Context(), path)
 				if opened != nil {
 					if err := opened.Close(); err != nil {
 						t.Fatal(err)
@@ -66,11 +67,11 @@ func TestOpenRefusesUnsupportedSchemaVersion(t *testing.T) {
 
 func TestOpenAcceptsCurrentSchemaVersion(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "current.db")
-	if err := Init(path); err != nil {
+	if err := Init(t.Context(), path); err != nil {
 		t.Fatal(err)
 	}
-	for _, open := range []func(string) (*DB, error){Open, OpenSnapshot} {
-		d, err := open(path)
+	for _, open := range []func(context.Context, string) (*DB, error){Open, OpenSnapshot} {
+		d, err := open(t.Context(), path)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -85,7 +86,7 @@ func TestOpenAcceptsCurrentSchemaVersion(t *testing.T) {
 
 func TestOpenReadsSchemaVersionFromWAL(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "wal-version.db")
-	if err := Init(path); err != nil {
+	if err := Init(t.Context(), path); err != nil {
 		t.Fatal(err)
 	}
 	fixture, err := sql.Open("lifelog", dsn(path, false))
@@ -115,8 +116,8 @@ func TestOpenReadsSchemaVersionFromWAL(t *testing.T) {
 	if len(walBefore) == 0 {
 		t.Fatal("fixture has no outstanding WAL data")
 	}
-	for _, open := range []func(string) (*DB, error){Open, OpenSnapshot} {
-		d, err := open(path)
+	for _, open := range []func(context.Context, string) (*DB, error){Open, OpenSnapshot} {
+		d, err := open(t.Context(), path)
 		if d != nil {
 			if closeErr := d.Close(); closeErr != nil {
 				t.Fatal(closeErr)

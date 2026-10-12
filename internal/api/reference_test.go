@@ -227,10 +227,10 @@ func walkType(prefix string, t reflect.Type, out map[string]bool) {
 func fixture(t *testing.T) (http.Handler, *core.Store, map[string]string) {
 	t.Helper()
 	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(p); err != nil {
+	if err := db.Init(t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
-	d, err := db.Open(p)
+	d, err := db.Open(t.Context(), p)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -130,10 +130,10 @@ func TestClientCancellationQueuedWrite(t *testing.T) {
 
 func testQueuedWrite(t *testing.T, remote bool) {
 	path := filepath.Join(t.TempDir(), "synthetic.db")
-	if err := db.Init(path); err != nil {
+	if err := db.Init(t.Context(), path); err != nil {
 		t.Fatal(err)
 	}
-	d, err := db.Open(path)
+	d, err := db.Open(t.Context(), path)
 	if err != nil {
 		t.Fatal(err)
 	}
