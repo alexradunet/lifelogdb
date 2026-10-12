@@ -90,6 +90,7 @@ func newHandler(s *core.Store, localDay func() string, trustedOrigins ...string)
 	get("/search", h.search)
 	get("/titles", h.titles)
 	m.HandleFunc("POST /render", h.render)
+	m.HandleFunc("GET /assets/fonts/{file}", fonts)
 	post("/days/{day}/capture", h.capture)
 	post("/pages", h.createPage)
 	post("/pages/{id}/body", h.saveBody)
@@ -187,7 +188,7 @@ func (h *server) serve(f func(*http.Request) (*Entity, error)) http.HandlerFunc 
 				w.Header().Set("Referrer-Policy", "no-referrer")
 			}
 		}
-		write(w, r, status, e)
+		h.write(w, r, status, e)
 	}
 }
 
@@ -322,7 +323,7 @@ func paged[T any](e *Entity, rows []T, path string, q url.Values, limit, offset 
 
 func write(w http.ResponseWriter, r *http.Request, status int, e *Entity) {
 	if wantsHTML(r) {
-		renderHTML(w, r, status, e)
+		renderHTML(w, r, status, e, nil)
 		return
 	}
 	w.Header().Set("Content-Type", "application/vnd.siren+json")

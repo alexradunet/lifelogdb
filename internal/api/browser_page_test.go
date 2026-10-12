@@ -22,8 +22,8 @@ func page(t *testing.T, h http.Handler, path string) string {
 }
 
 // TestEveryPageIsSemanticHTML says what every page carries: both of this app's sheets under their markers, one
-// main with a way to skip to it, the navigation with this page marked, a footer, this app's one script and no
-// other, and no id generated for a template to find.
+// main with a way to skip to it, the sidebar's sections with this page marked, a footer, this app's one script and
+// no other, and no id generated for a template to find.
 func TestEveryPageIsSemanticHTML(t *testing.T) {
 	c, h := fresh(t)
 	root := must(c.Get("/"))
@@ -53,14 +53,14 @@ func TestEveryPageIsSemanticHTML(t *testing.T) {
 			t.Errorf("%s marks %d navigation links current, want one at most", path, n)
 		}
 	}
-	if body := page(t, h, "/"); !strings.Contains(body, `<a href="/" aria-current="page">Home</a>`) {
-		t.Error("the home page does not mark Home current")
+	if body := page(t, h, "/"); !strings.Contains(body, `<a class="brand" href="/" aria-current="page">Lifelog</a>`) {
+		t.Error("the home page does not mark the brand, its link, current")
 	}
-	if body := page(t, h, href(day, "self")); !strings.Contains(body, `<a href="/months/current" aria-current="page">Calendar</a>`) {
-		t.Error("a day does not mark Calendar current")
+	if body := page(t, h, "/days/2026-01-01"); !strings.Contains(body, `<a href="/months/current" aria-current="page">`) {
+		t.Error("a day that is not today does not mark Calendar current")
 	}
-	if body := page(t, h, "/people"); !strings.Contains(body, `<summary class="here">People</summary>`) {
-		t.Error("the More menu does not name the page of it the browser is on")
+	if body := page(t, h, "/people"); !strings.Contains(body, `<a href="/people" aria-current="page">`) {
+		t.Error("the sidebar does not mark People current on its page")
 	}
 }
 

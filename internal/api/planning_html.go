@@ -78,14 +78,14 @@ func outcomes(a *Action, state, back string) ([]*formView, error) {
 	if a == nil {
 		return nil, nil
 	}
-	type choice struct{ button, state, completed string }
-	choices := []choice{{"Reopen", "open", ""}}
+	type choice struct{ button, state, completed, primary string }
+	choices := []choice{{"Reopen", "open", "", "0"}}
 	if state == "open" {
-		choices = []choice{{"Done", "done", "now"}, {"Skip", "skipped", ""}}
+		choices = []choice{{"Done", "done", "now", "1"}, {"Skip", "skipped", "", "0"}}
 	}
 	var out []*formView
 	for _, c := range choices {
-		f, err := formOf(a, "state", c.state, "completed_at", c.completed, "button", c.button, "class", "tiny", "back", back)
+		f, err := formOf(a, "state", c.state, "completed_at", c.completed, "button", c.button, "class", "tiny", "back", back, "primary", c.primary)
 		if err != nil {
 			return nil, err
 		}

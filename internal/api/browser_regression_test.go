@@ -22,7 +22,8 @@ func TestBrowserAllReadingsCoordinates(t *testing.T) {
 		t.Fatal("missing all readings link")
 	}
 	all := browse(t, h, strings.ReplaceAll(link[1], "&amp;", "&"))
-	xs := regexp.MustCompile(`<circle cx="([^"]+)"`).FindAllStringSubmatch(all, -1)
+	chartSVG := regexp.MustCompile(`(?s)<svg class="chart".*?</svg>`).FindString(all) // the icons of the sidebar have circles too
+	xs := regexp.MustCompile(`<circle cx="([^"]+)"`).FindAllStringSubmatch(chartSVG, -1)
 	if len(xs) != 2 || xs[0][1] == xs[1][1] {
 		t.Fatalf("collapsed coordinates: %v", xs)
 	}

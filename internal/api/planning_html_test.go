@@ -157,7 +157,7 @@ func TestOutcomesAreOneButtonForms(t *testing.T) {
 		return b.String()
 	}
 	open := draw("open")
-	for _, want := range []string{`action="/tasks/4/occurrences/once/edit"`, `<button>Done</button>`, `<button>Skip</button>`,
+	for _, want := range []string{`action="/tasks/4/occurrences/once/edit"`, `<button class="primary">Done</button>`, `<button>Skip</button>`,
 		`name="state" value="done"`, `name="completed_at" value="now"`, `name="state" value="skipped"`, `name="version" value="7"`,
 		`name="task_version" value="3"`, `name="due_day" value="2026-10-15"`, `name="back" value="/deadlines?from=2026-10-01"`} {
 		if !strings.Contains(open, want) {

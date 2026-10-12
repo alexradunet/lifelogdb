@@ -6,6 +6,6 @@
 {{if $p.logged_in}}<aside role="note"><p>This browser is logged in.</p></aside>
 <form method="POST" action="/logout" class="inline"><button class="quiet">Log out</button></form>
 {{else}}<form method="POST" action="/login">
-<label>Token <abbr title="required">*</abbr><input type="password" name="token" required autocomplete="current-password" autofocus></label>
+<label><span>Token <small>required</small></span><input type="password" name="token" required autocomplete="current-password" autofocus></label>
 <button>Log in</button></form>{{end}}
 {{template "foot" .}}{{end}}

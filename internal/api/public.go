@@ -171,7 +171,7 @@ func (p *public) login(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		e := &Entity{Class: []string{"login"}, Title: "Log in",
 			Properties: map[string]any{"failed": r.URL.Query().Get("failed") == "1", "logged_in": p.authorized(r)}}
-		renderHTML(w, r, http.StatusOK, e)
+		renderHTML(w, r, http.StatusOK, e, nil)
 		return
 	}
 	if err := p.guard.Check(r); err != nil {

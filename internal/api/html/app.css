@@ -1,181 +1,258 @@
-/* app.css — only what this app's own vocabulary needs, on top of what base.css says about ordinary HTML. Every
-   colour here names its fallback, so a rule still holds when the base sheet changes. There is no image: the chart
-   is an inline <svg>. The last rules are for what app.js adds to a page, which no page needs. */
+/* app.css — only what this app's own vocabulary needs, on top of what base.css says about ordinary HTML: the shell
+   and the components of the Almanac design system (docs/plans/092-the-app-shell.md). Every colour, size and font is
+   a token of base.css; no rule here names a colour of its own. There is no image: the icons and the chart are inline
+   <svg>. The last rules are for what app.js adds to a page, which no page needs. */
 
-/* The way past the navigation, for a keyboard and its reader. */
-.skip{position:absolute; top:6px; left:6px; z-index:20; padding:8px 14px; border-radius:6px;
-  background:var(--accent,#0b5cad); color:var(--on-accent,#fff); transform:translateY(-250%)}
-.skip:focus-visible{transform:none}
+/* The way past the sidebar, for a keyboard and its reader. */
+.skip{position:absolute; top:6px; left:6px; z-index:40; padding:8px 14px; border-radius:var(--radius-md);
+  background:var(--accent); color:var(--on-accent); transform:translateY(-250%)}
+.skip:focus-visible{transform:none; color:var(--on-accent)}
 
-/* The one header every page carries: the brand, the sections of every day, the More menu of the rest, the search.
-   On a phone the sections are one row that scrolls to the side, and the search is the second row. */
-header.top{display:flex; flex-wrap:wrap; align-items:center; gap:2px 10px; font-size:15px}
-header.top .brand{font-weight:700; color:inherit; margin-right:6px; padding:5px 0}
-header.top nav{display:flex; align-items:center; gap:2px; min-width:0; overflow-x:auto; white-space:nowrap; scrollbar-width:none}
-header.top nav a,header.top details.more>summary,header.top details.more li a{padding:5px 9px; border-radius:6px; color:inherit}
-header.top nav a:hover,header.top details.more>summary:hover,header.top details.more li a:hover{background:var(--panel,#f2efe8); text-decoration:none}
-header.top a[aria-current=page],header.top details.more>summary.here{background:var(--accent-weak,#e7eff9); color:var(--accent,#0b5cad); font-weight:620}
-header.top details.more{position:relative; flex:0 0 auto; margin:0; padding:0; border:0; background:none}
-header.top details.more>summary{display:block; font-size:inherit; font-weight:inherit; list-style:none; white-space:nowrap}
-header.top details.more>summary::-webkit-details-marker{display:none}
-header.top details.more>summary::after{content:" ▾"; color:var(--muted,#6f6b63)}
-header.top details.more[open]>summary{margin:0; padding-bottom:5px; border-bottom:0}
-header.top details.more>ul{position:absolute; z-index:10; top:100%; left:0; min-width:13rem; margin:6px 0 0; padding:6px;
-  list-style:none; background:var(--bg,#fbfaf7); border:1px solid var(--line,#e3dfd6); border-radius:var(--radius,8px);
-  box-shadow:0 8px 24px rgb(0 0 0 / .18)}
-header.top details.more li{margin:0}
-header.top details.more li a{display:block}
-header.top form[role=search]{margin:0 0 0 auto; flex:1 1 170px; max-width:260px}
-header.top form[role=search] input{height:34px; font-size:14.5px}
-@media (max-width:640px){
-  header.top{position:static; flex-wrap:wrap; gap:2px 4px; font-size:14px}
-  header.top .brand{flex:0 0 auto; margin-right:2px}
-  header.top nav{flex:1 1 0}
-  header.top details.more>ul{left:auto; right:0}
-  header.top form[role=search]{flex:1 1 100%; max-width:none}
+/* The shell: the sidebar, then the column of the page. Under 900 px the sidebar is a bar over the page. */
+.shell{display:grid; grid-template-columns:var(--rail-width) minmax(0,1fr); min-height:100vh}
+.shell.bare{display:block}
+.column{min-width:0; display:flex; flex-direction:column; padding:var(--space-6) var(--space-8)}
+.column>main{flex:1; width:100%; max-width:1200px; display:flex; flex-direction:column; gap:var(--space-4)}
+.column>main>h2{margin-top:var(--space-4)}
+.column>footer{width:100%; max-width:1200px; margin-top:var(--space-10); padding-top:var(--space-3); border-top:1px solid var(--line)}
+.shell.bare>.column{max-width:34rem; margin:0 auto}
+
+svg.icon{flex:none; width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round}
+
+.rail{position:sticky; top:0; height:100vh; overflow-y:auto; display:flex; flex-direction:column; gap:var(--space-4);
+  padding:var(--space-4) var(--space-3); background:var(--rail); border-right:1px solid var(--line)}
+.rail-head{display:flex; align-items:baseline; justify-content:space-between; gap:var(--space-2); padding:0 var(--space-2)}
+.rail-head .brand{font-size:17px; line-height:24px; font-weight:700; color:var(--ink)}
+.rail-head .brand[aria-current=page]{color:var(--accent)}
+.rail .date{font:400 12px/16px var(--mono); color:var(--muted)}
+.rail-search{display:flex; align-items:center; gap:var(--space-2); height:var(--control); padding:0 10px; color:var(--muted);
+  background:var(--surface); border:1px solid var(--line-strong); border-radius:var(--radius-md)}
+.rail-search:focus-within{outline:2px solid var(--focus); outline-offset:2px}
+.rail-search input{flex:1; min-width:0; height:auto; padding:0; border:0; outline:0; background:transparent}
+.rail-search input:focus-visible{outline:0}
+.rail-new{width:100%}
+.rail>nav{display:flex; flex-direction:column; gap:var(--space-3)}
+.rail>nav ul{display:flex; flex-direction:column; gap:2px; margin:0; padding:0; list-style:none}
+.rail>nav li{margin:0}
+.rail>nav ul+ul{padding-top:var(--space-3); border-top:1px solid var(--line)}
+.rail>nav a{display:flex; align-items:center; gap:10px; padding:7px 10px; border-radius:var(--radius-md); color:var(--ink); white-space:nowrap}
+.rail>nav a:hover{background:var(--ground); color:var(--ink); text-decoration:none}
+.rail>nav a[aria-current=page]{background:var(--surface); color:var(--accent); font-weight:700; box-shadow:var(--shadow-current)}
+.count{margin-left:auto; font:400 12px/18px var(--mono); padding:0 7px; border-radius:var(--radius-pill); background:var(--warn-soft); color:var(--warn-ink)}
+.rail-foot{margin-top:auto; padding:0 var(--space-2); font-size:13px; line-height:19px; color:var(--muted)}
+.rail-foot a[aria-current=page]{font-weight:700}
+
+/* The month in the sidebar: a written day is tinted, today is framed. */
+.month-box{display:flex; flex-direction:column; gap:var(--space-2); padding:var(--space-3) 10px; background:var(--surface);
+  border:1px solid var(--line); border-radius:var(--radius-md)}
+.month-head{display:flex; align-items:baseline; justify-content:space-between; gap:var(--space-2)}
+.month-head a{font-size:14px; font-weight:700; color:var(--ink)}
+.month-head .meta{font:400 12px/16px var(--mono); color:var(--muted)}
+table.month{border-collapse:separate; border-spacing:2px; table-layout:fixed; font:400 12px/16px var(--mono); text-align:center}
+table.month th,table.month td{padding:0; border:0; text-align:center}
+table.month thead th{font-weight:400; font-size:12px; letter-spacing:0; text-transform:none; color:var(--muted); padding:2px 0}
+table.month tbody tr:hover{background:none}
+table.month a{display:block; padding:3px 0; border-radius:var(--radius-sm); color:var(--ink)}
+table.month a:hover{background:var(--ground); text-decoration:none}
+table.month a.written{background:var(--accent-soft); color:var(--accent); font-weight:500}
+table.month a[aria-current=date]{box-shadow:inset 0 0 0 1.5px var(--accent)}
+
+@media (max-width:899px){
+  .shell{grid-template-columns:minmax(0,1fr)}
+  .rail{position:static; height:auto; overflow:visible; flex-flow:row wrap; align-items:center; gap:var(--space-2) var(--space-3);
+    padding:var(--space-3) var(--space-4); border-right:0; border-bottom:1px solid var(--line)}
+  .rail-head{flex:1 1 auto; justify-content:flex-start; gap:var(--space-3); padding:0}
+  .rail-new{width:auto}
+  .rail-search{flex:1 1 100%}
+  .rail>nav{flex:1 1 100%; flex-direction:row; gap:2px; overflow-x:auto; scrollbar-width:none}
+  .rail>nav ul,.rail>nav ul+ul{display:contents}
+  .month-box{display:none}
+  .rail-foot{flex:1 1 100%; margin:0; padding:0}
+  .column{padding:var(--space-5) var(--space-4)}
 }
+@media print{.rail,.skip{display:none} .shell{display:block} .column{padding:0}}
+
+/* Type helpers: the mono styles of the design system. */
+.date,.meta,.value,.reading{font-family:var(--mono); font-variant-numeric:tabular-nums}
+.date{font-size:13px; line-height:18px; color:var(--muted)}
+.meta{font-size:12px; line-height:16px; color:var(--muted)}
+.value{font-size:14px; line-height:20px}
+.reading{font-size:22px; line-height:28px}
+.label{font-size:12px; line-height:16px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
+.muted{color:var(--muted)}
+
+/* The page header: the date line, the title, and the tools on the right. */
+.page-head{display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:14px}
+.page-head .what{display:flex; flex-direction:column; gap:2px; min-width:0}
+.page-head h1{overflow-wrap:anywhere}
+.page-head .tools{display:flex; flex-wrap:wrap; align-items:flex-start; gap:var(--space-2)}
+.mood{display:inline-block; font:500 15px/1 var(--mono); padding:5px 10px; border:1px solid var(--line); border-radius:var(--radius-pill);
+  background:var(--surface); color:var(--muted); vertical-align:middle; white-space:nowrap}
+small .mood{font-size:12px; padding:2px 8px}
 
 /* A line of the facts about the page under its title. */
-.sub{display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 14px; margin:.15rem 0 0; font-size:14px;
-  color:var(--muted,#6f6b63)}
-.sub a{color:var(--accent,#0b5cad)}
+.sub{display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 14px; font-size:14px; line-height:20px; color:var(--muted)}
 
-/* A short name of a kind: an entity type, a metric's category. */
-.badge{display:inline-block; font-size:12px; line-height:1.8; padding:0 8px; border-radius:999px;
-  white-space:nowrap; color:var(--muted,#6f6b63); background:var(--panel,#f2efe8);
-  border:1px solid var(--line,#e3dfd6)}
-@supports (background:color-mix(in srgb,red,blue)){
-  .badge{background:color-mix(in srgb,currentColor 9%,transparent); border-color:color-mix(in srgb,currentColor 24%,transparent)}
-}
+/* Columns of panels: two side by side when there is room for 340 px each, one on a phone. */
+.columns{display:grid; grid-template-columns:repeat(auto-fit,minmax(min(340px,100%),1fr)); gap:var(--space-5); align-items:start}
+.stack{display:flex; flex-direction:column; gap:var(--space-5); min-width:0}
+
+/* A panel: one group of the entity, under its label. A flush panel holds rows that run to its edges. */
+.panel{display:flex; flex-direction:column; gap:var(--space-3); min-width:0; padding:var(--space-4); background:var(--surface);
+  border:1px solid var(--line); border-radius:var(--radius-lg)}
+.panel-head{display:flex; align-items:baseline; justify-content:space-between; gap:var(--space-3)}
+.panel-head a{font-size:13px; line-height:19px}
+.panel.flush{gap:0; padding:0; overflow:hidden}
+.panel.flush>.panel-head{padding:14px var(--space-4) var(--space-2)}
+.panel.flush>p{padding:0 var(--space-4) var(--space-4)}
+.section{display:flex; flex-direction:column; gap:10px; min-width:0}
+
+/* A short name of a kind (an entity type, a category) and a state, in mono on a pill. The state's colour only
+   repeats its word. */
+.badge,.tag{display:inline-block; font:400 12px/16px var(--mono); padding:2px var(--space-2); border-radius:var(--radius-pill);
+  white-space:nowrap; background:var(--rail); color:var(--muted); vertical-align:middle}
+.tag.open{background:var(--accent-soft); color:var(--accent)}
+.tag.overdue{background:var(--warn-soft); color:var(--warn-ink)}
+.tag.done{background:var(--done-soft); color:var(--done-ink)}
+.tag.unwritten{background:none; border:1px dashed var(--line-strong); padding:1px 7px}
+.tag.deleted{background:var(--danger-soft); color:var(--danger-ink)}
+.owner{font:400 12px/16px var(--mono); padding:1px 6px; border-radius:var(--radius-sm); background:var(--rail); color:var(--muted)}
+
+/* Buttons beyond the plain one of base.css: the primary one (once a page, for what the page is for), the danger one
+   (the catalog's danger), a quiet one, a small one in a row, and a link drawn as a button. */
+.button{display:inline-flex; align-items:center; justify-content:center; gap:var(--space-2); height:var(--control); padding:0 var(--space-4);
+  border:1px solid var(--line); border-radius:var(--radius-md); background:var(--surface); color:var(--ink); white-space:nowrap}
+.button:hover{border-color:var(--line-strong); color:var(--ink); text-decoration:none}
+button.primary,.button.primary{background:var(--accent); border-color:var(--accent); color:var(--on-accent); font-weight:700}
+button.primary:hover,.button.primary:hover{background:var(--accent-hover); border-color:var(--accent-hover); color:var(--on-accent)}
+button.danger{border-color:var(--danger-line); color:var(--danger)}
+button.danger:hover{background:var(--danger-soft); border-color:var(--danger)}
+button.quiet{color:var(--accent)}
+button.small,.button.small,form.tiny button{height:var(--control-small); padding:0 var(--space-3); font-size:13px}
+.button.step{font:400 13px/1 var(--mono); padding:0 var(--space-3)}
 
 /* The prev and next of a list, a day, a habit window. */
-nav.pager{display:flex; justify-content:space-between; align-items:baseline; gap:12px; margin:.4rem 0 1.2rem;
-  padding:.5rem 0; border-top:1px solid var(--line,#e3dfd6); border-bottom:1px solid var(--line,#e3dfd6);
-  font-size:14px}
-nav.pager>:last-child{margin-left:auto; text-align:right}
+nav.pager{display:flex; justify-content:space-between; align-items:center; gap:var(--space-3)}
+nav.pager a{display:inline-flex; align-items:center; height:var(--control-small); padding:0 var(--space-3); font:400 13px/1 var(--mono);
+  color:var(--ink); background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-md)}
+nav.pager a:hover{border-color:var(--line-strong); text-decoration:none}
+nav.pager>:last-child{margin-left:auto}
 
 /* A list of the things themselves, with nothing in front of them. */
-ul.plain{list-style:none; margin:.4rem 0; padding:0}
-ul.plain>li{padding:6px 0; border-bottom:1px solid var(--line,#e3dfd6)}
+ul.plain{list-style:none; margin:0; padding:0}
+ul.plain>li{margin:0; padding:10px var(--space-1); border-bottom:1px solid var(--line-soft)}
 ul.plain>li:last-child{border-bottom:0}
 
+/* A row of a list: the day in mono, the first line, a value at the end. The whole row is the link. */
+.entry{display:grid; grid-template-columns:96px minmax(0,1fr) auto; gap:var(--space-3); align-items:baseline;
+  padding:10px var(--space-1); border-bottom:1px solid var(--line); color:var(--ink)}
+.entry:hover{background:var(--surface); color:var(--ink); text-decoration:none}
+.entry .first{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+@media (max-width:519px){.entry{grid-template-columns:minmax(0,1fr) auto}.entry>.date{grid-column:1 / -1}}
+
 /* A table wider than the screen scrolls; the page does not. */
-.scroll{overflow-x:auto; margin:.5rem 0}
+.scroll{overflow-x:auto}
 
 /* A body: the CommonMark of a page, with its [[wikilinks]], #tags and ![[pictures]] resolved. */
-.prose{max-width:var(--measure,74ch); overflow-wrap:anywhere}
-.prose>:first-child{margin-top:0}
-.prose>:last-child{margin-bottom:0}
-.prose h2,.prose h3,.prose h4{text-transform:none; letter-spacing:0; color:inherit; margin:1.5em 0 .4em}
-.prose h2{font-size:1.2rem}
-.prose h3{font-size:1.05rem}
-.prose h4{font-size:.98rem}
+.prose{max-width:var(--measure); font-size:16px; line-height:26px; overflow-wrap:anywhere}
+.prose>*+*{margin-top:10px}
+.prose h1,.prose h2,.prose h3,.prose h4{font-size:17px; line-height:24px; letter-spacing:0; text-transform:none; color:inherit; margin-top:var(--space-5)}
 .prose ul,.prose ol{padding-left:1.5em}
-.prose img{border-radius:6px}
+.prose img{border-radius:var(--radius-md)}
+.sheet{padding:var(--space-4) var(--space-5); background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-lg)}
 a.wikilink{border-bottom:1px dotted currentColor}
 a.wikilink:hover{border-bottom-style:solid; text-decoration:none}
 a.wikilink.embed{border-bottom:0}
-img.preview{border-radius:6px; border:1px solid var(--line,#e3dfd6)}
+img.preview{border-radius:var(--radius-md); border:1px solid var(--line)}
 
 /* A series, drawn by the server as an inline <svg>: one point per reading. */
-svg.chart{width:100%; height:auto; margin:12px 0; padding:8px; color:var(--accent,#0b5cad);
-  background:var(--panel,#f2efe8); border:1px solid var(--line,#e3dfd6); border-radius:var(--radius,8px)}
+svg.chart{width:100%; height:auto; padding:var(--space-2); color:var(--accent); background:var(--surface); border:1px solid var(--line);
+  border-radius:var(--radius-lg)}
 svg.chart polyline{fill:none; stroke:currentColor; stroke-width:2; stroke-linejoin:round; stroke-linecap:round}
 svg.chart circle{fill:currentColor}
-svg.chart circle:hover{fill:var(--warn,#b3261e)}
-svg.chart .axis{stroke:var(--line,#e3dfd6)}
-svg.chart text{fill:var(--muted,#6f6b63); font-size:12px; text-anchor:end}
+svg.chart circle:hover{fill:var(--warn)}
+svg.chart .axis{stroke:var(--line)}
+svg.chart text{fill:var(--muted); font:400 12px var(--mono); text-anchor:end}
 svg.chart text.x{text-anchor:middle}
 
 /* A form of a few short fields, on one line: find, correct, check in, record on a series. */
-form.inline{display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px}
-form.inline>label{flex:1 1 130px; margin:0}
-form.inline>button{flex:0 0 auto; margin:0}
+form.inline{display:flex; flex-wrap:wrap; align-items:flex-end; gap:var(--space-2)}
+form.inline>label{flex:1 1 130px}
+form.inline>button{flex:0 0 auto}
 @media (max-width:640px){form.inline>label{flex:1 1 100%}}
+form:not(.inline):not(.tiny):not([role=search]){display:flex; flex-direction:column; align-items:flex-start; gap:var(--space-3)}
+form:not(.inline):not(.tiny):not([role=search])>label{align-self:stretch}
 
 /* A form that is one button: a habit's Done, a tombstone's Revive. */
-form.tiny{display:inline-block; margin:0}
-form.tiny button{height:30px; margin:0; padding:2px 10px; font-size:13px}
-td form,th form{margin:0}
-td form.tiny+form.tiny{margin-left:4px}
-
-/* The button of an action the catalog marks destructive, and a quiet one. */
-button.danger{color:var(--warn,#b3261e); background:none; border-color:currentColor}
-button.danger:hover{background:var(--warn-weak,#fbeceb); filter:none}
-button.quiet{color:var(--accent,#0b5cad); background:none; border-color:var(--line,#e3dfd6)}
-button.quiet:hover{background:var(--panel,#f2efe8); filter:none}
+form.tiny{display:inline-block}
+td form.tiny+form.tiny{margin-left:var(--space-1)}
 
 /* A callout the owner must read: a refusal, a deleted page, names that made no link. */
-aside.warn{border-left-color:var(--warn,#b3261e); background:var(--warn-weak,#fbeceb)}
+aside.warn{background:var(--warn-soft); color:var(--warn-ink)}
+aside.warn a{color:inherit; text-decoration:underline}
 
 /* An occurrence of a task in a list: what and when on the left, its Done, Skip or Reopen on the right. A done or
    skipped one is quiet. */
-.occ{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:4px 12px}
-.occ>div:first-child{flex:1 1 16rem}
-.occ-facts{display:block}
+.occ{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--space-1) var(--space-3)}
+.occ>div:first-child{flex:1 1 16rem; min-width:0}
+.occ>div:first-child>a{color:var(--ink); font-weight:700}
+.occ-facts{display:block; font:400 12px/16px var(--mono); color:var(--muted)}
 .occ-facts>span+span::before{content:" · "}
-.outcomes{display:flex; flex-wrap:wrap; gap:4px; margin:.5rem 0}
-.occ .outcomes{margin:0}
-li.settled>.occ>div:first-child>a{color:var(--muted,#6f6b63); text-decoration:line-through}
-dl.facts dd{color:inherit}
+.outcomes{display:flex; flex-wrap:wrap; gap:6px}
+li.settled>.occ>div:first-child>a{color:var(--muted); font-weight:400; text-decoration:line-through}
+
+/* The properties of an entity, typed: the name muted, the value in mono. */
+dl.facts{display:grid; grid-template-columns:minmax(90px,max-content) minmax(0,1fr); gap:var(--space-2) var(--space-4); align-items:baseline}
+dl.facts dt{margin:0; font-size:14px; line-height:20px; font-weight:400; letter-spacing:0; text-transform:none; color:var(--muted)}
+dl.facts dd{margin:0; display:block; font:400 14px/20px var(--mono); font-variant-numeric:tabular-nums; color:var(--ink)}
 
 /* The state of a habit on a day, in words and in colour. */
-.done{color:var(--ok,#2e7d32); font-weight:620}
-.notdone{color:var(--warn,#b3261e); font-weight:620}
-.muted{color:var(--muted,#6f6b63)}
+.done{color:var(--done); font-weight:700}
+.notdone{color:var(--danger); font-weight:700}
 
 /* The metric tree: a category, then the categories under it, each one step in. */
-.group{margin:1.1rem 0}
+.group{display:flex; flex-direction:column; gap:var(--space-2)}
 .group h3 small{font-weight:400}
 .group.depth-1{margin-left:14px}
 .group.depth-2{margin-left:28px}
 .group.depth-3,.group.depth-4,.group.depth-5{margin-left:42px}
 
 /* What an action does, before its form; the note under a table or a search. */
-.desc{display:block; margin:.2rem 0 .5rem; font-size:13.5px; color:var(--muted,#6f6b63)}
+.desc{display:block; font-size:13px; line-height:19px; color:var(--muted)}
 
 /* A page's typed links: a kind, then the pages it points at. */
-dl{margin:.5rem 0}
-dt{font-size:12px; letter-spacing:.05em; text-transform:uppercase; color:var(--muted,#6f6b63); margin-top:.9rem}
-dd{margin:.15rem 0 0; display:flex; flex-wrap:wrap; gap:2px 14px}
+dl:not(.facts) dt{font-size:12px; letter-spacing:.06em; text-transform:uppercase; font-weight:700; color:var(--muted); margin-top:var(--space-3)}
+dl:not(.facts) dd{margin:var(--space-1) 0 0; display:flex; flex-wrap:wrap; gap:2px 14px}
+
+/* The calendar of a month: a cell for each day; a day with a page is tinted, today framed. */
+table.calendar{table-layout:fixed; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-lg); border-collapse:separate; border-spacing:0; overflow:hidden}
+table.calendar th{text-align:left; padding:var(--space-2)}
+table.calendar td{height:72px; padding:0; vertical-align:top; border-bottom:1px solid var(--line-soft); border-left:1px solid var(--line-soft)}
+table.calendar td:first-child{border-left:0}
+table.calendar td a{display:block; padding:6px var(--space-2) 2px; font:500 13px/18px var(--mono); color:var(--ink)}
+table.calendar td.written{background:var(--accent-soft)}
+table.calendar td.written a{color:var(--accent)}
+table.calendar td[aria-current=date]{box-shadow:inset 0 0 0 2px var(--accent)}
+table.calendar small{display:block; padding:0 var(--space-2); font:400 12px/16px var(--mono)}
+table.calendar tbody tr:hover{background:none}
+@media (max-width:599px){table.calendar td{height:48px} table.calendar th{padding:var(--space-1); text-align:center}}
 
 /* A kept picture, on its own line. */
-figure{margin:1rem 0}
 figure a{display:block}
 
-/* On paper the switcher of a page and its pager are of no use. */
-@media print{.skip,nav.pager{display:none}}
-
-/* The calendar of a month: a cell for each day; a day with a page is marked, today framed. */
-table.calendar{table-layout:fixed}
-table.calendar th,table.calendar td{text-align:center; padding:4px 2px}
-table.calendar td{height:3.2em; vertical-align:top}
-table.calendar td a{display:block; padding:2px 0; border-radius:6px}
-table.calendar td.written{background:var(--accent-weak,#e7eff9)}
-table.calendar td.written a{font-weight:650}
-table.calendar td[aria-current=date]{outline:2px solid var(--accent,#0b5cad); outline-offset:-2px; border-radius:6px}
-table.calendar small{display:block; line-height:1.2}
-table.calendar tbody tr:hover{background:none}
-
-/* A day's mood, beside its heading or its line in a list. */
-.mood{font-size:.55em; font-weight:500; color:var(--muted,#6f6b63); white-space:nowrap; vertical-align:middle}
-small .mood{font-size:1em}
-
 /* What app.js adds. The names after [[, under the textarea that asks for them. */
-label{position:relative}
-ul.suggest{position:absolute; z-index:8; left:0; right:0; top:100%; max-height:16rem; overflow:auto; margin:2px 0 0;
-  padding:4px; list-style:none; background:var(--bg,#fbfaf7); border:1px solid var(--line,#e3dfd6);
-  border-radius:var(--radius,8px); box-shadow:0 8px 24px rgb(0 0 0 / .18); font-size:15px; color:var(--fg,#1f1e1b)}
-ul.suggest li{margin:0; padding:5px 9px; border-radius:6px; cursor:pointer}
-ul.suggest li[aria-selected=true]{background:var(--accent-weak,#e7eff9); color:var(--accent,#0b5cad)}
+ul.suggest{position:absolute; z-index:8; left:0; right:0; top:100%; max-height:16rem; overflow:auto; margin:2px 0 0; padding:var(--space-1);
+  list-style:none; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-md); box-shadow:var(--shadow-float);
+  font-size:15px; color:var(--ink)}
+ul.suggest li{margin:0; padding:5px 9px; border-radius:var(--radius-sm); cursor:pointer}
+ul.suggest li[aria-selected=true]{background:var(--accent-soft); color:var(--accent)}
 
 /* The preview of a body: under its textarea, or beside it on a wide screen, where the open box of the editor leaves
    the column. */
-.editor .preview{min-height:5rem; margin:9px 0; padding:10px 14px; border:1px dashed var(--line,#e3dfd6);
-  border-radius:var(--radius,8px)}
+form>.editor{align-self:stretch}
+.editor .preview{min-height:5rem; margin:9px 0; padding:10px 14px; border:1px dashed var(--line-strong); border-radius:var(--radius-md)}
 @media (min-width:1200px){
-  .editor{display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start}
-  .editor .preview{max-height:80vh; overflow:auto}
-  details[open]:has(.editor){width:min(1180px, calc(100vw - 64px)); margin-left:calc((100% - min(1180px, calc(100vw - 64px))) / 2)}
+  .editor{display:grid; grid-template-columns:1fr 1fr; gap:var(--space-4); align-items:start}
+  .editor .preview{max-height:80vh; overflow:auto; margin:0}
 }
-footer .keys{color:var(--muted,#6f6b63)}
+footer .keys{color:var(--muted)}

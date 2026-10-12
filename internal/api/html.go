@@ -23,13 +23,15 @@ import (
 // reads the properties by their JSON names and places the entity's own actions, so a form is shown only where
 // the API offers the action. A form posts, and the server answers with a redirect.
 //
-// The look is two stylesheets of this application's own; no framework is vendored and nothing is fetched.
-// base.css styles ordinary HTML by element (its forms, tables, buttons, print sheet and dark palette); app.css
-// holds only what this app's own vocabulary needs (.wikilink, .badge, .chart, the dense rows), and a test keeps
-// the two apart. app.js is the one script, written into each page the same way: it makes a page better and no
-// page needs it (docs/plans/091-the-browser-for-daily-use.md).
+// The look is the Almanac design system (docs/plans/092-the-app-shell.md), in two stylesheets of this
+// application's own; no framework is vendored and nothing is fetched from another host. base.css holds the tokens
+// and styles ordinary HTML by element (its forms, tables, buttons and print sheet, light and dark); app.css holds
+// only what this app's own vocabulary needs (the shell, its components, .wikilink, .chart), and a test keeps the
+// two apart. The two faces are embedded files that /assets/fonts/ serves. app.js is the one script, written into
+// each page like the sheets: it makes a page better and no page needs it
+// (docs/plans/091-the-browser-for-daily-use.md).
 //
-//go:embed html/*.html html/*.css html/*.js
+//go:embed html/*.html html/*.css html/*.js html/fonts/*.woff2 html/fonts/*.txt
 var views embed.FS
 
 // baseCSS and appCSS are the two stylesheets, in that order: the look of ordinary HTML, then this app's own.
@@ -75,8 +77,10 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 		}
 		return day
 	},
-	"num":     num,
-	"pathesc": url.PathEscape,
+	"num":      num,
+	"pathesc":  url.PathEscape,
+	"icon":     icon,
+	"shortDay": shortDay,
 }).ParseFS(views, "html/*.html"))
 
 // num shows a property's value. A number is written in full, never with an exponent: the JSON client reads every
@@ -110,6 +114,7 @@ type view struct {
 	Here      string
 	Submitted string
 	Back      string
+	Shell     *shellView // the sidebar's read; nil when the page is drawn without it
 }
 
 // hereOf is the address of the page the browser is on, without the one-use feedback receipt: a form that returns
@@ -123,8 +128,8 @@ func hereOf(u *url.URL) string {
 	return u.EscapedPath() + "?" + q.Encode()
 }
 
-func renderHTML(w http.ResponseWriter, r *http.Request, status int, e *Entity) {
-	v := &view{Entity: e, Props: jsonShape(e.Properties), Path: r.URL.Path, Here: hereOf(r.URL)}
+func renderHTML(w http.ResponseWriter, r *http.Request, status int, e *Entity, sv *shellView) {
+	v := &view{Entity: e, Props: jsonShape(e.Properties), Path: r.URL.Path, Here: hereOf(r.URL), Shell: sv}
 	if status >= 400 && r.Method == "POST" {
 		v.Submitted = r.PostForm.Get("body")
 		if v.Submitted == "" {
@@ -152,47 +157,56 @@ func renderHTML(w http.ResponseWriter, r *http.Request, status int, e *Entity) {
 	io.Copy(w, &b)
 }
 
-// navItems are the top navigation's links, in order: a few in the bar, the rest in its More menu. Each stands for
-// the pages under its paths, so the one the browser is on is marked (Nav). A page's own neighbours need no entry
-// here, since every template places them from the entity's links.
+// navItems are the sidebar's links, in order, by group: "home" is the brand, "day" the sections of every day,
+// "record" the sections of the record, "owner" the links at its foot. Each stands for the pages under its paths, so
+// the one the browser is on is marked (Nav). A page's own neighbours need no entry here, since every template
+// places them from the entity's links.
 var navItems = []struct {
-	Title, Href string
-	Paths       []string // the pages it stands for: these paths and the paths under them
-	More        bool     // in the More menu, not the bar
+	Title, Href, Icon string
+	Paths             []string // the pages it stands for: these paths and the paths under them
+	Group             string
 }{
-	{"Today", "/days/today", []string{"/days/today"}, false},
-	{"Calendar", "/months/current", []string{"/months", "/days"}, false},
-	{"Due", "/deadlines", []string{"/deadlines"}, false},
-	{"Tasks", "/tasks", []string{"/tasks"}, false},
-	{"Home", "/", []string{"/"}, true},
-	{"New", "/#new", nil, true},
-	{"People", "/people", []string{"/people"}, true},
-	{"Places", "/places", []string{"/places"}, true},
-	{"Files", "/files", []string{"/files"}, true},
-	{"Metrics", "/metrics", []string{"/metrics"}, true},
-	{"Habits", "/habits", []string{"/habits"}, true},
-	{"Sessions", "/sessions", []string{"/sessions"}, true},
-	{"Periods", "/periods", []string{"/periods"}, true},
-	{"Ghost pages", "/ghosts", []string{"/ghosts"}, true},
-	{"Every action", "/actions", []string{"/actions"}, true},
-	{"Integrity checks", "/integrity", []string{"/integrity"}, true},
+	{"Lifelog", "/", "", []string{"/"}, "home"},
+	{"Today", "/days/today", "today", []string{"/days/today"}, "day"},
+	{"Calendar", "/months/current", "calendar", []string{"/months", "/days"}, "day"},
+	{"Due", "/deadlines", "due", []string{"/deadlines"}, "day"},
+	{"Tasks", "/tasks", "tasks", []string{"/tasks"}, "day"},
+	{"People", "/people", "people", []string{"/people"}, "record"},
+	{"Places", "/places", "places", []string{"/places"}, "record"},
+	{"Files", "/files", "files", []string{"/files"}, "record"},
+	{"Metrics", "/metrics", "metrics", []string{"/metrics"}, "record"},
+	{"Habits", "/habits", "habits", []string{"/habits"}, "record"},
+	{"Sessions", "/sessions", "sessions", []string{"/sessions"}, "record"},
+	{"Periods", "/periods", "periods", []string{"/periods"}, "record"},
+	{"Ghost pages", "/ghosts", "ghosts", []string{"/ghosts"}, "record"},
+	{"Every action", "/actions", "", []string{"/actions"}, "owner"},
+	{"Integrity checks", "/integrity", "", []string{"/integrity"}, "owner"},
 }
 
-// navItem is one navigation link, marked when the browser is on a page it stands for.
+// navItem is one sidebar link, marked when the browser is on a page it stands for. Count is the number beside it:
+// the open occurrences overdue or due today, beside Due.
 type navItem struct {
-	Title, Href   string
-	More, Current bool
+	Title, Href, Icon, Group string
+	Current                  bool
+	Count                    int
 }
 
-// Nav is the top navigation with the link of this page marked, so a reader knows where they are: the item whose
-// path is the page's path, else the one with the longest path the page is under.
+// Nav is the sidebar with the link of this page marked, so a reader knows where they are: the item whose path is
+// the page's path, else the one with the longest path the page is under. Today's day is Today, not Calendar.
 func (v *view) Nav() []navItem {
+	path := v.Path
+	if v.Shell != nil && v.Shell.Today != "" && path == dayHref(v.Shell.Today) {
+		path = "/days/today"
+	}
 	out := make([]navItem, len(navItems))
 	best, at, length := -1, 0, 0
 	for i, it := range navItems {
-		out[i] = navItem{Title: it.Title, Href: it.Href, More: it.More}
+		out[i] = navItem{Title: it.Title, Href: it.Href, Icon: it.Icon, Group: it.Group}
+		if it.Href == "/deadlines" && v.Shell != nil {
+			out[i].Count = v.Shell.Due
+		}
 		for _, p := range it.Paths {
-			if n := navMatch(v.Path, p); n > at || n == at && n > 0 && len(p) > length {
+			if n := navMatch(path, p); n > at || n == at && n > 0 && len(p) > length {
 				best, at, length = i, n, len(p)
 			}
 		}
@@ -201,16 +215,6 @@ func (v *view) Nav() []navItem {
 		out[best].Current = true
 	}
 	return out
-}
-
-// MoreTitle is the label of the More menu: the title of the page the browser is on when that page is in it.
-func (v *view) MoreTitle() string {
-	for _, it := range v.Nav() {
-		if it.More && it.Current {
-			return it.Title
-		}
-	}
-	return "More"
 }
 
 // navMatch is how well a path an item stands for fits the request path: 2 when it is the path, 1 when the path is
@@ -285,7 +289,7 @@ func (v *view) Embedded(rel string) []Link {
 }
 
 // formView is an action as the "form" template draws it. formOf takes name/value pairs: "button" labels the
-// button, "class" styles the form, "hide" lists fields kept with their value but not shown, "autofocus" names
+// button, "class" styles the form, "primary" ("1") draws its button as the primary one, "hide" lists fields kept with their value but not shown, "autofocus" names
 // the field the browser starts in, "choices:<field>" offers a field's values as a list, "back" is the page the
 // browser returns to after the write (no field of the action: the server reads it, see backOf), and any other
 // name fixes a field to a value (hidden).
@@ -294,6 +298,7 @@ type formView struct {
 	Button, Class string
 	Focus         string
 	Back          string
+	Primary       bool // the button is the primary one: a form with fields to fill, or a row's Done
 	Shown         []Field
 	Hidden        []Field
 }
@@ -327,6 +332,7 @@ func formOf(x any, opts ...string) (*formView, error) {
 		f.Button = a.Name
 	}
 	fixed, hide, choices := map[string]string{}, map[string]bool{}, map[string][]string{}
+	primary := false // the view named the button primary or not; else a form with fields to fill is primary
 	for i := 0; i < len(opts); i += 2 {
 		k, v := opts[i], opts[i+1]
 		switch {
@@ -342,6 +348,8 @@ func formOf(x any, opts ...string) (*formView, error) {
 			f.Focus = v
 		case k == "back":
 			f.Back = v
+		case k == "primary":
+			f.Primary, primary = v == "1", true
 		case strings.HasPrefix(k, "choices:"):
 			choices[strings.TrimPrefix(k, "choices:")] = strings.Fields(v)
 		default:
@@ -363,6 +371,9 @@ func formOf(x any, opts ...string) (*formView, error) {
 		} else {
 			f.Shown = append(f.Shown, fd)
 		}
+	}
+	if !primary {
+		f.Primary = len(f.Shown) > 0
 	}
 	return f, nil
 }

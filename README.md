@@ -89,9 +89,18 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   Each occurrence due 7 days after today or earlier offers its outcome action, which the browser draws as Done and
   Skip, or Reopen; a habit's check-in is Done and Not done. These are properties and actions of the entities, so every
   client gets them ([API.md](API.md)). `/months/{YYYY-MM}` is the calendar of a month (each day, whether it has a
-  page, its first line and its mood), and the catalog action `open-day` goes to a day by its date. The top bar holds
-  what is used every day (Today, Calendar, Due, Tasks, the search) and a More menu the rest; on a phone it is two
-  rows. The handler reads today from one clock, which a test fixes.
+  page, its first line and its mood), and the catalog action `open-day` goes to a day by its date. The handler reads
+  today from one clock, which a test fixes.
+- **The app shell: the Almanac design system** ([plan 092](docs/plans/092-the-app-shell.md)). Every page a browser
+  gets is in one shell: a sidebar with the brand and today's date, the search, New, the sections of every day (Today,
+  Calendar, Due, Tasks) and of the record (People to Ghost pages), this month with its written days, and the
+  owner's links; under 900 px it is a bar over the page. The sidebar is the one part of a page that is not the
+  page's entity: once a page, and for a browser only, the shell reads the Due count (the root's `due`) and this
+  month (`GET /months/{month}`), which every client gets from those two resources. A page drawn before the handler
+  (the login, a refusal of the token) has no sidebar, so it shows nothing of the database. The look is the owner's
+  design system, Lifelog Almanac: cool paper, ink blue, words in Atkinson Hyperlegible and every day, time and number
+  in IBM Plex Mono; light first, dark by `prefers-color-scheme`. Its tokens are custom properties of `base.css`, and
+  a test holds every text pair at 4.5:1 and every field border and the focus ring at 3:1 in both themes.
 - **One script, which no page needs** ([plan 091](docs/plans/091-the-browser-for-daily-use.md)). `app.js` is this
   application's own, embedded and written into each page like the two sheets: no framework, no CDN, no build step.
   It suggests the names of pages after `[[` (from `GET /titles`), shows a preview of a body as it will show when
@@ -99,15 +108,17 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   outside a field (`/` search, `c` capture, `t` today, `[` and `]` the previous and next page), and asks before the
   browser leaves text that was not sent. It reads nothing else, writes nothing and keeps nothing in the browser. Every form posts and every link
   works without it; the tests check the pages without running it, and a test keeps its reads to those two routes.
-  `POST /render` is presentation, not a capability: no catalog action names it and it answers HTML only, so it is
-  the one route the CLI and the MCP server do not carry. **Rejected:** a separate web client. It would be a second
+  `POST /render` is presentation, not a capability: no catalog action names it and it answers HTML only, so it and
+  the fonts (below) are the routes the CLI and the MCP server do not carry. **Rejected:** a separate web client. It would be a second
   implementation of every view to keep equal to the catalog, it would hold the token where JavaScript can read it,
   and it would bring a toolchain that changes every year.
-- **The stylesheet is this application's own: two embedded sheets, no vendored framework and no CDN.** `base.css`
-  styles ordinary HTML by element — type, colour, forms, tables, buttons, a print sheet, light and dark by
-  `prefers-color-scheme` — and `app.css` only what this app's own vocabulary needs (`.wikilink`, `.badge`, `.chart`,
-  the dense rows); a test keeps the app's names out of the base sheet, and nothing is fetched at render time, so a
-  page looks the same offline in fifty years. **Rejected:** a vendored classless sheet (Simple.css, Pico). Its
+- **The stylesheet is this application's own: two embedded sheets, two embedded faces, no vendored framework and
+  no CDN.** `base.css` holds the tokens and styles ordinary HTML by element — type, colour, forms, tables, buttons, a
+  print sheet, light and dark — and `app.css` only what this app's own vocabulary needs (the shell and its
+  components, `.wikilink`, `.chart`); a test keeps the app's names out of the base sheet. The two faces are open
+  fonts (SIL OFL 1.1), latin and latin-ext, embedded with their licences and served by exact name at
+  `GET /assets/fonts/{file}` with a cache of a year; like `/render`, the route is presentation and not in the catalog.
+  Nothing is fetched from another host, so a page looks the same offline in fifty years. **Rejected:** a vendored classless sheet (Simple.css, Pico). Its
   `aside` is a floated sidebar and ours is a callout in flow, its `section` a bordered band, its `h2` 2.6rem where
   ours labels a section, its tables bordered and zebra-striped where ours are dense, its form controls carry blanket
   margins where ours sit two to a row, and its `body` is a 45rem grid: keeping one meant overriding most of it, and
