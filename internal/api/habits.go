@@ -82,6 +82,9 @@ func (h *server) checkIn(r *http.Request, src string) (*Entity, error) {
 		return nil, err
 	}
 	name, day := r.PathValue("name"), v.Get("day")
+	if day == "today" { // the server's day, as /days/today: a client need not know it
+		day = h.localDay()
+	}
 	isDone, err := flag(v, "done")
 	if err != nil {
 		return nil, err

@@ -216,20 +216,21 @@ func runContext(ctx context.Context, o opts) error {
 		return agenticInit(o)
 	}
 	if cmd == "init" {
-		if o.db == "" && len(args) == 1 {
-			o.db = args[0]
+		if len(args) > 1 {
+			return errors.New("init [PATH]")
 		}
-		if o.db == "" {
-			var err error
-			if o.db, err = besideExecutable("life.db"); err != nil {
-				return err
-			}
-		}
-		if err := db.Init(o.db); err != nil {
+		path, err := dbPath(o, strings.Join(args, ""))
+		if err != nil {
 			return err
 		}
-		fmt.Println("created", o.db)
+		if err := db.Init(path); err != nil {
+			return err
+		}
+		fmt.Println("created", path)
 		return nil
+	}
+	if cmd == "serve" && o.url != "" {
+		return errors.New("serve opens the file itself: drop --url")
 	}
 	if cmd == "snapshot" && o.url != "" && o.to != "" {
 		return errors.New("snapshot over --url lands in the server's folder (serve --snapshots): drop --to")
@@ -263,11 +264,9 @@ func runContext(ctx context.Context, o opts) error {
 			c.SetToken(token)
 		}
 	} else {
-		if o.db == "" {
-			var err error
-			if o.db, err = besideExecutable("life.db"); err != nil {
-				return err
-			}
+		var err error
+		if o.db, err = dbPath(o, ""); err != nil {
+			return err
 		}
 		d, err := db.Open(o.db)
 		if err != nil {
@@ -279,14 +278,13 @@ func runContext(ctx context.Context, o opts) error {
 			origins = pub.Origins
 		}
 		handler = api.New(&core.Store{DB: d, SnapshotDir: o.snapshots}, origins...)
-		c = client.InProcess(handler, o.source)
+		if cmd != "serve" { // serve mounts the handler on a socket and calls it through no client
+			c = client.InProcess(handler, o.source)
+		}
 	}
 
 	switch cmd {
 	case "serve":
-		if o.url != "" {
-			return errors.New("serve opens the file itself: drop --url")
-		}
 		listener, err := net.Listen("tcp", o.addr)
 		if err != nil {
 			return err
@@ -335,11 +333,8 @@ func runContext(ctx context.Context, o opts) error {
 		}
 		return doAction(ctx, o, c, args[0], vals)
 	case "capture":
-		day := o.day
-		if day == "" {
-			day = core.Today()
-		}
-		vals := map[string]string{"day": day, "text": strings.Join(args, " ")}
+		// The day is the server's today unless --day names one: with --url, the server's clock is the one that counts.
+		vals := map[string]string{"day": dayOrToday(o), "text": strings.Join(args, " ")}
 		if o.mood != "" {
 			vals["mood"] = o.mood
 		}
@@ -349,40 +344,27 @@ func runContext(ctx context.Context, o opts) error {
 		if len(args) == 1 {
 			day = args[0]
 		}
-		return show(o)(c.Get(ctx, "/days/"+day))
+		return show(o)(c.Get(ctx, "/days/"+url.PathEscape(day)))
 	case "page":
-		return show(o)(c.Get(ctx, "/pages?title="+url.QueryEscape(strings.Join(args, " "))))
+		return doAction(ctx, o, c, "find", map[string]string{"title": strings.Join(args, " ")})
 	case "search":
 		return doAction(ctx, o, c, "search", map[string]string{"q": strings.Join(args, " ")})
 	case "query":
 		return doAction(ctx, o, c, "query", map[string]string{"sql": strings.Join(args, " ")})
 	case "habits":
-		day := core.Today()
+		href := "/habits" // the server's today
 		if len(args) == 1 {
-			day = args[0]
+			href += "?day=" + url.QueryEscape(args[0])
 		}
-		return show(o)(c.Get(ctx, "/habits?day="+day))
+		return show(o)(c.Get(ctx, href))
 	case "done", "skip":
 		if len(args) != 1 {
 			return fmt.Errorf("%s METRIC [--day YYYY-MM-DD]", cmd)
 		}
-		day := o.day
-		if day == "" {
-			day = core.Today()
-		}
 		done := map[string]string{"done": "1", "skip": "0"}[cmd]
-		return doAction(ctx, o, c, "check-in", map[string]string{"name": args[0], "day": day, "done": done})
+		return doAction(ctx, o, c, "check-in", map[string]string{"name": args[0], "day": dayOrToday(o), "done": done})
 	case "snapshot":
-		e, err := do(ctx, c, "snapshot", nil)
-		if err := show(o)(e, err); err != nil {
-			return err
-		}
-		p, _ := e.Properties.(map[string]any)
-		check, _ := p["restore_check"].(map[string]any)
-		if check["ok"] != true {
-			return fmt.Errorf("%v failed its restore check: it is kept, but it is not one to restore", p["snapshot"])
-		}
-		return nil
+		return doAction(ctx, o, c, "snapshot", nil)
 	case "tasks":
 		return show(o)(c.Get(ctx, "/tasks"))
 	case "due":
@@ -759,9 +741,9 @@ func summarise(files []keptFile, dry bool) (*batch, error) {
 		if err != nil {
 			return nil, err
 		}
-		var g *group
+		var g *group // the photos a place of the default radius at the first one's position would hold
 		for _, x := range b.Unmatched {
-			if haversine(lat, lon, x.Lat, x.Lon) <= 500 {
+			if core.Near(x.Lat, x.Lon, lat, lon, float64(core.DefaultRadius)) {
 				g = x
 				break
 			}
@@ -821,14 +803,6 @@ func (b *batch) print(w io.Writer) {
 			fmt.Fprintf(w, "failed: %s: %s\n", f.Path, f.Error)
 		}
 	}
-}
-
-// haversine is the great-circle distance in metres, for grouping the photos of a report.
-func haversine(lat1, lon1, lat2, lon2 float64) float64 {
-	rad := math.Pi / 180
-	dlat, dlon := (lat2-lat1)*rad, (lon2-lon1)*rad
-	h := math.Pow(math.Sin(dlat/2), 2) + math.Cos(lat1*rad)*math.Cos(lat2*rad)*math.Pow(math.Sin(dlon/2), 2)
-	return 2 * 6371008.8 * math.Asin(math.Sqrt(h))
 }
 
 func listActions(ctx context.Context, o opts, c *client.Client) error {
@@ -917,6 +891,30 @@ func human(w io.Writer, e *api.Entity) {
 
 func indent(s string) string { return "    " + strings.ReplaceAll(s, "\n", "\n    ") }
 
+// dayOrToday is the day a shortcut sends: --day, else "today", which the API reads as the server's local day.
+func dayOrToday(o opts) string {
+	if o.day != "" {
+		return o.day
+	}
+	return "today"
+}
+
+// dbPath is the life.db a command uses, in this order: --db, the PATH init alone takes, $LIFELOG_DB, the file beside
+// this program (docs/plans/090-agentic-init.md). PATH with --db is a mistake, refused.
+func dbPath(o opts, positional string) (string, error) {
+	switch {
+	case o.dbExplicit && positional != "":
+		return "", errors.New("init takes PATH or --db, not both")
+	case o.dbExplicit:
+		return o.db, nil
+	case positional != "":
+		return positional, nil
+	case o.db != "": // $LIFELOG_DB, read by parse
+		return o.db, nil
+	}
+	return besideExecutable("life.db")
+}
+
 // besideExecutable is a file in the folder of the running program, where life.db lives when no --db or LIFELOG_DB
 // names another (docs/plans/090-agentic-init.md).
 func besideExecutable(name string) (string, error) {
@@ -939,9 +937,9 @@ func agenticInit(o opts) error {
 	if real, err := filepath.EvalSymlinks(exe); err == nil {
 		exe = real
 	}
-	dbPath := o.db
-	if dbPath == "" {
-		dbPath = filepath.Join(filepath.Dir(exe), "life.db")
+	dbPath, err := dbPath(o, "")
+	if err != nil {
+		return err
 	}
 	if dbPath, err = filepath.Abs(dbPath); err != nil {
 		return err

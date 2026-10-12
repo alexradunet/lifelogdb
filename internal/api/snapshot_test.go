@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"errors"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -92,5 +93,45 @@ func TestSnapshotIsTheOwnersFromAnySurface(t *testing.T) {
 	}
 	if body := browse(t, h, "/"); !strings.Contains(body, `action="/snapshots"`) {
 		t.Fatalf("the home page lacks the snapshot form")
+	}
+}
+
+// A snapshot that fails its restore check is an error on every surface, not a 200 with ok false inside: the file is
+// kept (the check does not delete), and the answer names it with the code restore_check_failed
+// (docs/plans/098-the-codebase-made-cohesive.md).
+func TestASnapshotThatFailsItsRestoreCheckIsAnError(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "life.db")
+	if err := db.Init(p); err != nil {
+		t.Fatal(err)
+	}
+	d, err := db.Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { d.Close() })
+	dir := t.TempDir()
+	h := api.New(&core.Store{DB: d, SnapshotDir: dir})
+	owner := client.InProcess(h, "cli")
+	root := must(owner.Get(t.Context(), "/"))
+	must(owner.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "Walk"}))
+	must(owner.Do(t.Context(), find(must(owner.Get(t.Context(), "/metrics/Walk")), "start-habit"), map[string]string{"start_day": "2026-01-01"}))
+	// Deliberate damage, past the writer: a habit's reading that is not 0 or 1. The DDL cannot refuse it; the
+	// semantic integrity check reports it, in the live file and in every copy of it.
+	if _, err := d.W.ExecContext(t.Context(), `INSERT INTO measurements(metric_id, day, value, source, created_at)
+		SELECT h.metric_id, '2026-10-01', 5, 'cli', strftime('%Y-%m-%dT%H:%M:%fZ','now') FROM habit_periods h LIMIT 1`); err != nil {
+		t.Fatal(err)
+	}
+	e, err := owner.Do(t.Context(), find(root, "snapshot"), nil)
+	var ce *client.Error
+	if !errors.As(err, &ce) || ce.Status != 500 {
+		t.Fatalf("a failed restore check answers 500, got %v", err)
+	}
+	props, _ := e.Properties.(map[string]any)
+	if props["code"] != "restore_check_failed" {
+		t.Errorf("code = %v, want restore_check_failed", props["code"])
+	}
+	today := time.Now().Format("2006-01-02")
+	if _, err := os.Stat(filepath.Join(dir, "life-"+today+".db")); err != nil {
+		t.Errorf("the snapshot is kept although its check failed: %v", err)
 	}
 }

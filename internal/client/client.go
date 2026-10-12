@@ -260,7 +260,7 @@ func (c *Client) send(req *http.Request) (*api.Entity, error) {
 		}
 	}
 	if err != nil {
-		return nil, fmt.Errorf("HTTP %d, not a Siren entity: %.200s", res.StatusCode, body)
+		return nil, fmt.Errorf("HTTP %d, not a Siren entity (%s)", res.StatusCode, res.Header.Get("Content-Type")) // never the body: it may be a picture or a page
 	}
 	if res.StatusCode >= 300 {
 		return &e, &Error{res.StatusCode, &e}

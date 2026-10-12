@@ -1225,6 +1225,10 @@ func (h *server) snapshot(r *http.Request, _ string) (*Entity, error) {
 	if err != nil {
 		return nil, &core.Error{Status: 422, Msg: err.Error(), Code: "snapshot_refused"}
 	}
+	if !res.OK { // the file is kept, as the check does not delete: the owner reads it before trusting it
+		return nil, &core.Error{Status: http.StatusInternalServerError, Code: "restore_check_failed",
+			Msg: fmt.Sprintf("%s failed its restore check: it is kept, but it is not one to restore", path)}
+	}
 	props := map[string]any{"snapshot": path, "restore_check": res}
 	return &Entity{Class: []string{"snapshot"}, Title: "Snapshot", Properties: props, Result: props,
 		Links: []Link{link("self", "/", "Home"), link("index", "/", "Home")}}, nil

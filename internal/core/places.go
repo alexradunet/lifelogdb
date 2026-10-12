@@ -110,6 +110,14 @@ func (t *Tx) MatchPlace(lat, lon float64) (*Match, error) {
 // metresPerDegreeLon is what the match binds: the metres a degree of longitude spans at a latitude (D21).
 func metresPerDegreeLon(lat float64) float64 { return 111320 * math.Cos(lat*math.Pi/180) }
 
+// Near reports whether two positions are within metres of each other, by the flat approximation the place match
+// uses (matchSQL): what the match would say of a place at the first position with that radius.
+func Near(lat1, lon1, lat2, lon2, metres float64) bool {
+	dy := (lat1 - lat2) * 111320
+	dx := (lon1 - lon2) * metresPerDegreeLon(lat1)
+	return dx*dx+dy*dy <= metres*metres
+}
+
 // placeFor is the place a photo's owner names (cookbook/place-of-a-photo.md): an existing place, a plain page
 // promoted to one, or a new place.
 func (t *Tx) placeFor(title string) (int64, error) {
