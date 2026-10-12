@@ -20,22 +20,13 @@
 
 {{with $p.recent}}<section class="also" aria-label="Last entries">
 <div class="panel-head"><h2>Last entries</h2><a href="/days">Every day</a></div>
-<div>{{range .}}<a class="entry" href="/days/{{.day}}"><span class="date">{{shortDay .day}}</span><span class="first">{{.first_line}}</span><span class="meta">{{with .mood}}mood {{range $i, $m := .}}{{if $i}}, {{end}}{{num $m}}{{end}}{{end}}</span></a>
+<div>{{range .}}{{template "dayentry" (dict "v" $ "e" .)}}
 {{end}}</div></section>{{end}}
 </div>
 
 <div class="margin">
-<section class="group" aria-label="Due">
-<div class="panel-head"><h2>Due</h2><a href="/deadlines">The weeks ahead</a></div>
-{{with $p.due}}<ul class="plain due">{{range .}}{{template "occ" ($.Occ . 0)}}{{end}}</ul>
-{{else}}<p class="empty">Nothing is due today or overdue. <a href="/deadlines">What is due</a> has the weeks ahead.</p>{{end}}
-</section>
-{{with $p.on_this_day}}<section class="group" aria-label="On this day">
-<div class="panel-head"><h2>On this day</h2></div>
-<ul class="plain">{{range .}}<li><a class="entry" href="/days/{{.day}}"><span class="date">{{shortDayYear .day}}</span><span class="first">{{.first_line}}</span><span class="meta">{{with .mood}}mood {{range $i, $m := .}}{{if $i}}, {{end}}{{num $m}}{{end}}{{end}}</span></a></li>{{end}}</ul>
-</section>{{end}}
-
-
+{{template "due" (dict "v" $ "due" $p.due)}}
+{{template "onthisday" (dict "v" $ "days" $p.on_this_day)}}
 {{template "checkins" .}}
 </div>
 </div>
@@ -68,7 +59,7 @@
 {{with .Action "add-file"}}{{template "boxed" (form . "hide" "sha256,mime")}}{{end}}
 </div></header>
 {{$named := ""}}{{with .Props}}{{$named = .rows}}{{end}}
-{{if $named}}<div class="sheet list"><ul class="plain rows">{{range $named}}<li><a class="entry named" href="/pages/{{num .id}}"><span class="first">{{.title}}</span><span class="meta">{{mentionWords .mentions .last_day}}</span></a></li>{{end}}</ul></div>
+{{if $named}}<div class="sheet list"><ul class="plain rows">{{range $named}}<li><a class="entry named" href="/pages/{{num .id}}"><span class="first">{{.title}}</span><span class="meta">{{$.Mentions .mentions .last_day}}</span></a></li>{{end}}</ul></div>
 {{else if $items}}<div class="sheet list"><ul class="plain rows">{{range $items}}<li>{{if eq $.Title "Days"}}<a class="entry" href="{{.Href}}"><span class="date">{{$.Date .Title}}</span><span class="first">{{weekday .Title}}</span><span class="meta"></span></a>{{else}}<a href="{{.Href}}">{{$.Date .Title}}</a>{{end}}</li>{{end}}</ul></div>
 {{else}}<p class="empty">Nothing yet. <a href="/#new">New</a> makes a page, a person, a place or a file.</p>{{end}}
 {{template "pager" .}}

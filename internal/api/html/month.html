@@ -5,12 +5,12 @@
 <header class="page-head"><div class="what"><h1>{{.Title}}</h1>
 <p class="sub"><a href="/days/{{$m.today}}">Today</a><a href="/months/current">This month</a><a href="/weeks/current">This week</a><a href="/years/{{yearOf $m.month}}">The year</a><a href="/days">Every day, as a list</a></p></div>
 <div class="tools">
-<a class="button step" href="{{.Link "prev"}}" rel="prev">← {{.LinkTitle "prev"}}</a>
-<a class="button step" href="{{.Link "next"}}" rel="next">{{.LinkTitle "next"}} →</a>
+{{template "step" (dict "href" (.Link "prev") "rel" "prev" "label" (printf "Previous month, %s" (.LinkTitle "prev")) "text" (.LinkTitle "prev"))}}
+{{template "step" (dict "href" (.Link "next") "rel" "next" "label" (printf "Next month, %s" (.LinkTitle "next")) "text" (.LinkTitle "next"))}}
 {{template "boxed" (form (.Action "open-day") "button" "Go to a day")}}
 </div></header>
 <div class="scroll"><table class="calendar"><caption>A day with a page is tinted, with its first line and its mood. Today has a frame.</caption>
-<thead><tr><th scope="col" abbr="Monday">Mon</th><th scope="col" abbr="Tuesday">Tue</th><th scope="col" abbr="Wednesday">Wed</th><th scope="col" abbr="Thursday">Thu</th><th scope="col" abbr="Friday">Fri</th><th scope="col" abbr="Saturday">Sat</th><th scope="col" abbr="Sunday">Sun</th></tr></thead>
-<tbody>{{range weeks $m.days}}<tr>{{range .}}{{if .}}<td{{if .page}} class="written"{{end}}{{if eq .day $m.today}} aria-current="date"{{end}}><a href="/days/{{.day}}"><span class="n">{{dayOfMonth .day}}</span>{{with .first_line}}<span class="first">{{.}}</span>{{end}}{{with .mood}}<span class="meta">mood {{range $i, $v := .}}{{if $i}}, {{end}}{{num $v}}{{end}}</span>{{end}}</a></td>{{else}}<td></td>{{end}}{{end}}</tr>
+{{template "weekdays" false}}
+<tbody>{{range weeks $m.days}}<tr>{{range .}}{{if .}}<td{{if .page}} class="written"{{end}}{{if eq .day $m.today}} aria-current="date"{{end}}><a href="/days/{{.day}}"><span class="n">{{dayOfMonth .day}}</span>{{with .first_line}}<span class="first">{{.}}</span>{{end}}{{with .mood}}<span class="meta">{{template "moodwords" .}}</span>{{end}}</a></td>{{else}}<td></td>{{end}}{{end}}</tr>
 {{end}}</tbody></table></div>
 {{template "foot" .}}{{end}}

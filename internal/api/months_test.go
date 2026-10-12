@@ -77,7 +77,7 @@ func TestTheMonthIsACalendar(t *testing.T) {
 		`<td class="written" aria-current="date"><a href="/days/2031-05-14"><span class="n">14</span><span class="meta">mood 3</span></a></td>`,
 		`<td class="written"><a href="/days/2031-05-01"><span class="n">1</span><span class="first">May day: a walk by the lake.</span><span class="meta">mood 4</span></a></td>`,
 		`<td><a href="/days/2031-05-20"><span class="n">20</span></a></td>`,
-		`← April 2031`, `June 2031 →`, `action="/days/go"`} {
+		`aria-label="Previous month, April 2031"`, `aria-label="Next month, June 2031"`, `action="/days/go"`} {
 		if !strings.Contains(body, w) {
 			t.Errorf("the calendar lacks %s", w)
 		}

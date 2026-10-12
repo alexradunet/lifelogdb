@@ -15,6 +15,13 @@ import (
 // the name of its property. A day is "Mon 5 Oct", and near today "yesterday · Sun 11 Oct"; an instant is said in the
 // clock of the server's day, "today, 09:48", with the exact instant kept in its <time> element.
 
+// The layouts of a day and a month in words.
+const (
+	layoutDate     = "Mon 2 Jan"
+	layoutDateYear = "Mon 2 Jan 2006"
+	layoutMonth    = "January 2006"
+)
+
 // clock is what words need: the server's local day and its zone. A page drawn before the handler has neither: its
 // days carry their year and its times are in UTC.
 type clock struct {
@@ -40,9 +47,9 @@ func (c clock) sameYear(t time.Time) bool {
 // date is a day as a date: "Mon 5 Oct", with the year when it is not this year: "Sun 1 Nov 2026".
 func (c clock) date(t time.Time) string {
 	if c.sameYear(t) {
-		return t.Format("Mon 2 Jan")
+		return t.Format(layoutDate)
 	}
-	return t.Format("Mon 2 Jan 2006")
+	return t.Format(layoutDateYear)
 }
 
 // day says a day as a date; a value that is not a day is returned as it is.

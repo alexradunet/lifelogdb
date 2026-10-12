@@ -459,7 +459,7 @@ func (h *server) root(r *http.Request) (*Entity, error) {
 // overdueAndDue are the open occurrences due before today in the deadlines' default window, then the open ones due
 // today.
 func (h *server) overdueAndDue(ctx context.Context, today string) ([]occurrenceView, error) {
-	t, _ := time.Parse(time.DateOnly, today)
+	t, _ := dayOf(today)
 	from, yesterday := t.AddDate(0, 0, -windowBack).Format(time.DateOnly), t.AddDate(0, 0, -1).Format(time.DateOnly)
 	late, err := h.dueIn(ctx, from, yesterday, core.StateOpen, false)
 	if err != nil {
@@ -511,8 +511,11 @@ type dayView struct {
 }
 
 func (h *server) day(r *http.Request) (*Entity, error) {
-	ctx := r.Context()
-	day := r.PathValue("day")
+	return h.dayEntity(r.Context(), r.PathValue("day"))
+}
+
+// dayEntity is the resource /days/{day} serves.
+func (h *server) dayEntity(ctx context.Context, day string) (*Entity, error) {
 	d, err := h.s.Day(ctx, day)
 	if err != nil {
 		return nil, err
@@ -556,12 +559,12 @@ func (h *server) day(r *http.Request) (*Entity, error) {
 	if mood == nil {
 		mood = []float64{}
 	}
-	t, _ := time.Parse(time.DateOnly, day)
+	t, _ := dayOf(day)
 	e := &Entity{
 		Class: []string{"day"}, Title: day, Properties: dayView{Day: *d, Due: due, Mood: mood, Habits: hs, Trends: trends, OnThisDay: onThisDay, Today: today},
 		Links: []Link{link("self", dayHref(day), day), link("prev", dayHref(t.AddDate(0, 0, -1).Format(time.DateOnly)), "Previous day"),
 			link("next", dayHref(t.AddDate(0, 0, 1).Format(time.DateOnly)), "Next day"), link("metrics", "/metrics", "Metrics"), link("index", "/", "Home"),
-			link("month", monthHref(t), t.Format("January 2006"))},
+			link("month", monthHref(t), t.Format(layoutMonth))},
 		Actions: []Action{action("capture", map[string]string{"day": day}, nil), h.recordAction(ctx, "", day), action("open-day", nil, nil)},
 	}
 	if d.PageID != 0 {
@@ -782,11 +785,16 @@ func (h *server) metrics(r *http.Request) (*Entity, error) {
 
 // series is cookbook/metric-series.md; ?from= and ?to= default to the 90 days up to today.
 func (h *server) series(r *http.Request) (*Entity, error) {
-	name := r.PathValue("name")
-	q := r.URL.Query()
+	return h.seriesEntity(r.Context(), r.PathValue("name"), r.URL.Query())
+}
+
+// seriesEntity is the resource /metrics/{name} serves; q is its query (from, to, scope, session_id, include_deleted,
+// all_history), nil for the defaults.
+func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*Entity, error) {
+	today := h.localDay()
 	to := q.Get("to")
 	if to == "" {
-		to = h.localDay()
+		to = today
 	}
 	if !core.IsDay(to) {
 		return nil, core.Invalid("to must be an exact day")
@@ -800,7 +808,7 @@ func (h *server) series(r *http.Request) (*Entity, error) {
 		return nil, core.Invalid("all_history cannot select a lower bound")
 	}
 	if !allHistory && from == "" {
-		t, _ := time.Parse(time.DateOnly, to) // canonical day was checked above
+		t, _ := dayOf(to) // canonical day was checked above
 		lower := t.AddDate(0, 0, -90)
 		if lower.Year() < 0 {
 			allHistory = true // the default window reaches the minimum admitted calendar day
@@ -822,14 +830,14 @@ func (h *server) series(r *http.Request) (*Entity, error) {
 	}
 	var rows []core.Reading
 	if allHistory {
-		rows, err = h.s.SeriesHistory(r.Context(), name, to, scope, sessionID, includeDeleted)
+		rows, err = h.s.SeriesHistory(ctx, name, to, scope, sessionID, includeDeleted)
 	} else {
-		rows, err = h.s.SeriesScope(r.Context(), name, from, to, scope, sessionID, includeDeleted)
+		rows, err = h.s.SeriesScope(ctx, name, from, to, scope, sessionID, includeDeleted)
 	}
 	if err != nil {
 		return nil, err
 	}
-	periods, err := h.s.Periods(r.Context(), name)
+	periods, err := h.s.Periods(ctx, name)
 	if err != nil {
 		return nil, err
 	}
@@ -848,7 +856,7 @@ func (h *server) series(r *http.Request) (*Entity, error) {
 	allQuery.Del("from")
 	allQuery.Set("all_history", "1")
 	allURL.RawQuery = allQuery.Encode()
-	m := h.metricOf(r.Context(), name)
+	m := h.metricOf(ctx, name)
 	var categories []string
 	if m != nil {
 		categories = m.Categories
@@ -856,16 +864,16 @@ func (h *server) series(r *http.Request) (*Entity, error) {
 	e := &Entity{Class: []string{"series"}, Title: name,
 		Properties: map[string]any{"metric": name, "from": from, "to": to, "readings": rows, "habit_periods": periods, "categories": categories, "scope": scope, "session_id": sessionID, "include_deleted": includeDeleted, "all_history": allHistory},
 		Links:      []Link{link("all-readings", allURL.String(), "All readings"), link("self", self, name), link("up", "/metrics", "Metrics"), link("habits", "/habits", "Habits"), link("index", "/", "Home")},
-		Actions:    []Action{h.recordAction(r.Context(), name, h.localDay())}}
+		Actions:    []Action{h.recordAction(ctx, name, today)}}
 	if f := e.Actions[0].field("session_id"); scope == "session" && f != nil {
 		f.Value = sessionID
 	}
 	ids := map[string]string{"name": name}
 	if len(periods) > 0 && periods[len(periods)-1].End == "" {
-		e.Actions = append(e.Actions, action("stop-habit", ids, map[string]any{"day": h.localDay()}),
-			action("check-in", ids, map[string]any{"day": h.localDay()}))
-	} else if h.unitless(r.Context(), name) {
-		e.Actions = append(e.Actions, action("start-habit", ids, map[string]any{"start_day": h.localDay()}))
+		e.Actions = append(e.Actions, action("stop-habit", ids, map[string]any{"day": today}),
+			action("check-in", ids, map[string]any{"day": today}))
+	} else if h.unitless(ctx, name) {
+		e.Actions = append(e.Actions, action("start-habit", ids, map[string]any{"start_day": today}))
 	}
 	if m != nil { // the metric is a page (D27): its text, its backlinks, and filing it in a category
 		e.Links = append(e.Links, link("page", pageHref(m.ID), "Page"))
@@ -980,17 +988,12 @@ func (h *server) capture(r *http.Request, src string) (*Entity, error) {
 	day := r.PathValue("day")
 	if day == "today" { // the share target of the manifest cannot know the day
 		day = h.localDay()
-		r.SetPathValue("day", day)
 	}
-	if _, sync, err := h.s.Capture(r.Context(), src, day, v.Get("text"), mood); err != nil {
+	_, sync, err := h.s.Capture(r.Context(), src, day, v.Get("text"), mood)
+	if err != nil {
 		return nil, err
-	} else {
-		e, err := h.day(r)
-		if e != nil {
-			e.Result = sync
-		}
-		return e, err
 	}
+	return withResult(h.dayEntity(r.Context(), day))(sync)
 }
 
 func (h *server) createPage(r *http.Request, src string) (*Entity, error) {
@@ -1182,7 +1185,7 @@ func (h *server) correct(r *http.Request, src string) (*Entity, error) {
 	if value == nil {
 		return nil, core.Invalid("missing field value (to remove a reading, retract it)")
 	}
-	return h.correctTo(r, src, id, value)
+	return h.correctTo(r.Context(), src, id, value)
 }
 
 func (h *server) retract(r *http.Request, src string) (*Entity, error) {
@@ -1190,7 +1193,7 @@ func (h *server) retract(r *http.Request, src string) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	return h.correctTo(r, src, id, nil)
+	return h.correctTo(r.Context(), src, id, nil)
 }
 
 func (h *server) query(r *http.Request, _ string) (*Entity, error) {

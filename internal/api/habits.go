@@ -10,12 +10,12 @@ import (
 )
 
 // correctTo corrects or retracts a reading.
-func (h *server) correctTo(r *http.Request, src string, id int64, value *float64) (*Entity, error) {
-	fix, err := h.s.Correct(r.Context(), src, id, value)
+func (h *server) correctTo(ctx context.Context, src string, id int64, value *float64) (*Entity, error) {
+	fix, err := h.s.Correct(ctx, src, id, value)
 	if err != nil {
 		return nil, err
 	}
-	return h.measurementEntity(r.Context(), fix)
+	return h.measurementEntity(ctx, fix)
 }
 
 func (h *server) rename(r *http.Request, src string) (*Entity, error) {
@@ -41,7 +41,7 @@ func (h *server) registerMetric(r *http.Request, src string) (*Entity, error) {
 	if _, err := h.s.RegisterMetric(r.Context(), src, v.Get("name"), v.Get("unit"), v.Get("note")); err != nil {
 		return nil, err
 	}
-	return h.metricEntity(r, v.Get("name"))
+	return h.seriesEntity(r.Context(), v.Get("name"), nil)
 }
 
 func (h *server) startHabit(r *http.Request, src string) (*Entity, error) {
@@ -55,7 +55,7 @@ func (h *server) startHabit(r *http.Request, src string) (*Entity, error) {
 	if err := h.s.StartHabit(r.Context(), src, r.PathValue("name"), v.Get("start_day"), v.Get("end_day")); err != nil {
 		return nil, err
 	}
-	return h.metricEntity(r, r.PathValue("name"))
+	return h.seriesEntity(r.Context(), r.PathValue("name"), nil)
 }
 
 func (h *server) stopHabit(r *http.Request, src string) (*Entity, error) {
@@ -69,7 +69,7 @@ func (h *server) stopHabit(r *http.Request, src string) (*Entity, error) {
 	if err := h.s.StopHabit(r.Context(), src, r.PathValue("name"), v.Get("day")); err != nil {
 		return nil, err
 	}
-	return h.metricEntity(r, r.PathValue("name"))
+	return h.seriesEntity(r.Context(), r.PathValue("name"), nil)
 }
 
 // checkIn records a habit for a day inside one of its periods: 1 done, 0 not done.
@@ -104,20 +104,22 @@ func (h *server) checkIn(r *http.Request, src string) (*Entity, error) {
 	if _, err := h.s.Record(r.Context(), src, core.Reading{Metric: name, Day: day, Value: value}); err != nil {
 		return nil, err
 	}
-	r2 := r.Clone(r.Context())
-	r2.URL.RawQuery = "day=" + url.QueryEscape(day)
-	return h.habits(r2)
+	return h.habitsEntity(r.Context(), url.Values{"day": {day}})
 }
 
 // habits is the habits of ?day= (default today), each with its check-in, and completion over ?from=..?to=
 // (default the 30 days up to that day), cookbook/habits.md.
 func (h *server) habits(r *http.Request) (*Entity, error) {
-	q := r.URL.Query()
+	return h.habitsEntity(r.Context(), r.URL.Query())
+}
+
+// habitsEntity is the resource /habits serves; q is its query (day, from, to).
+func (h *server) habitsEntity(ctx context.Context, q url.Values) (*Entity, error) {
 	day := q.Get("day")
 	if day == "" {
 		day = h.localDay()
 	}
-	hs, err := h.s.Habits(r.Context(), day)
+	hs, err := h.s.Habits(ctx, day)
 	if err != nil {
 		return nil, err
 	}
@@ -127,19 +129,17 @@ func (h *server) habits(r *http.Request) (*Entity, error) {
 	}
 	from := q.Get("from")
 	if from == "" {
-		t, _ := time.Parse(time.DateOnly, to)
-		from = t.AddDate(0, 0, -29).Format(time.DateOnly)
+		from = addDays(to, -29)
 	}
-	comp, err := h.s.Completion(r.Context(), from, to)
+	comp, err := h.s.Completion(ctx, from, to)
 	if err != nil {
 		return nil, err
 	}
-	t, _ := time.Parse(time.DateOnly, day)
 	e := &Entity{Class: []string{"habits"}, Title: "Habits on " + day,
 		Properties: map[string]any{"day": day, "habits": hs, "from": from, "to": to, "completion": comp},
 		Links: []Link{link("self", "/habits?day="+day, "Habits"), link("day", dayHref(day), day),
-			link("prev", "/habits?day="+t.AddDate(0, 0, -1).Format(time.DateOnly), "Previous day"),
-			link("next", "/habits?day="+t.AddDate(0, 0, 1).Format(time.DateOnly), "Next day"), link("index", "/", "Home")}}
+			link("prev", "/habits?day="+addDays(day, -1), "Previous day"),
+			link("next", "/habits?day="+addDays(day, 1), "Next day"), link("index", "/", "Home")}}
 	for _, x := range hs {
 		e.Entities = append(e.Entities, link("habit", metricHref(x.Metric), x.Metric+": "+x.State))
 	}
@@ -155,14 +155,6 @@ func checkIns(hs []core.HabitState, day string) []Action {
 		out = append(out, action("check-in", map[string]string{"name": x.Metric}, map[string]any{"day": day}))
 	}
 	return out
-}
-
-// metricEntity is the resource /metrics/{name} serves.
-func (h *server) metricEntity(r *http.Request, name string) (*Entity, error) {
-	r2 := r.Clone(r.Context())
-	r2.SetPathValue("name", name)
-	r2.URL.RawQuery = ""
-	return h.series(r2)
 }
 
 func (h *server) unitless(ctx context.Context, name string) bool {

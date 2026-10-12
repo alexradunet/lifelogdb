@@ -10,8 +10,9 @@
 <div class="what"><h1>{{weekday .Title}}{{template "mood" $d.mood}}</h1>
 <p class="sub"><a class="date" href="/weeks/{{isoWeekKey .Title}}">week {{week .Title}}</a>{{if $today}}<span class="tag open">today</span>{{else}}<a href="/days/today">Go to today</a>{{end}}<a href="/habits?day={{.Title}}">The habits of this day</a></p></div></div>
 <div class="tools">
-{{template "step" (dict "href" (.Link "prev") "rel" "prev" "day" (addDays .Title -1))}}
-{{template "step" (dict "href" (.Link "next") "rel" "next" "day" (addDays .Title 1))}}
+{{$prev := shortDay (addDays .Title -1)}}{{$next := shortDay (addDays .Title 1)}}
+{{template "step" (dict "href" (.Link "prev") "rel" "prev" "label" (printf "Previous day, %s" $prev) "text" $prev)}}
+{{template "step" (dict "href" (.Link "next") "rel" "next" "label" (printf "Next day, %s" $next) "text" $next)}}
 {{template "boxed" (form (.Action "open-day") "button" "Go to a day")}}
 </div>
 </header>
@@ -35,19 +36,13 @@
 
 {{$pages := false}}{{range $d.view}}{{if eq .what "page" "page (edited)"}}{{$pages = true}}{{end}}{{end}}
 {{if $pages}}<section class="also" aria-label="Pages written this day"><h2>Pages written this day</h2>
-<ul class="plain">{{range $d.view}}{{if eq .what "page" "page (edited)"}}<li><a href="{{title .detail}}">{{.detail}}</a>{{if ne .what "page"}} <span class="badge">edited</span>{{end}}</li>{{end}}{{end}}</ul></section>{{end}}
+<ul class="plain">{{range $d.view}}{{if eq .what "page" "page (edited)"}}<li><a href="{{titleHref .detail}}">{{.detail}}</a>{{if ne .what "page"}} <span class="badge">edited</span>{{end}}</li>{{end}}{{end}}</ul></section>{{end}}
 </div>
 
 <div class="margin">
-{{if or $d.due $today}}<section class="group" aria-label="Due">
-<div class="panel-head"><h2>Due</h2><a href="/deadlines">The weeks ahead</a></div>
-{{with $d.due}}<ul class="plain due">{{range .}}{{template "occ" ($.Occ . 0)}}{{end}}</ul>{{else}}<p class="empty">Nothing is due today or overdue. <a href="/deadlines">What is due</a> has the weeks ahead.</p>{{end}}
-</section>{{end}}
+{{if or $d.due $today}}{{template "due" (dict "v" $ "due" $d.due)}}{{end}}
 
-{{with $d.on_this_day}}<section class="group" aria-label="On this day">
-<div class="panel-head"><h2>On this day</h2></div>
-<ul class="plain">{{range .}}<li><a class="entry" href="/days/{{.day}}"><span class="date">{{shortDayYear .day}}</span><span class="first">{{.first_line}}</span><span class="meta">{{with .mood}}mood {{range $i, $m := .}}{{if $i}}, {{end}}{{num $m}}{{end}}{{end}}</span></a></li>{{end}}</ul>
-</section>{{end}}
+{{template "onthisday" (dict "v" $ "days" $d.on_this_day)}}
 
 {{template "checkins" .}}
 
@@ -63,20 +58,16 @@
 
 {{$at := false}}{{range $d.view}}{{if eq .what "at"}}{{$at = true}}{{end}}{{end}}
 {{if $at}}<section class="group" aria-label="Where"><h2>Where</h2>
-<ul class="plain">{{range $d.view}}{{if eq .what "at"}}<li><a href="{{title .detail}}">{{.detail}}</a></li>{{end}}{{end}}</ul></section>{{end}}
+<ul class="plain">{{range $d.view}}{{if eq .what "at"}}<li><a href="{{titleHref .detail}}">{{.detail}}</a></li>{{end}}{{end}}</ul></section>{{end}}
 </div>
 </div>
 {{template "foot" .}}{{end}}
 
 {{/* leaf is the calendar leaf of a day: the month on its band, the day's number under it; it opens that month */}}
-{{define "leaf"}}<a class="leaf" href="/months/{{slice . 0 7}}" aria-label="{{monthOf .}}, the calendar of the month"><span class="leaf-month">{{monthOf .}}</span><span class="leaf-day">{{dayOfMonth .}}</span></a>{{end}}
+{{define "leaf"}}<a class="leaf" href="/months/{{slice . 0 7}}" aria-label="{{monthBand .}}, the calendar of the month"><span class="leaf-month">{{monthBand .}}</span><span class="leaf-day">{{dayOfMonth .}}</span></a>{{end}}
 
-{{/* step is the previous or next day: its day in words, which a phone shortens to the arrow (the link keeps the
-     whole name) */}}
-{{define "step"}}<a class="button step" href="{{.href}}" rel="{{.rel}}" aria-label="{{if eq .rel "prev"}}Previous day, {{else}}Next day, {{end}}{{shortDay .day}}">{{if eq .rel "prev"}}<span aria-hidden="true">‹</span><span class="step-day">{{shortDay .day}}</span>{{else}}<span class="step-day">{{shortDay .day}}</span><span aria-hidden="true">›</span>{{end}}</a>{{end}}
-
-{{/* mood is a day's mood beside its heading: each current reading, in the order it was recorded */}}
-{{define "mood"}}{{with .}} <span class="mood" title="Mood">mood {{range $i, $m := .}}{{if $i}}, {{end}}{{num $m}}{{end}}</span>{{end}}{{end}}
+{{/* mood is a day's mood beside its heading */}}
+{{define "mood"}}{{with .}} <span class="mood" title="Mood">{{template "moodwords" .}}</span>{{end}}{{end}}
 
 {{/* checkins are the habits of the entity's day in the margin, each with its state, its last 14 days and the Done
      and Not done of its check-in: a day and the root carry both the habits and their check-in actions */}}

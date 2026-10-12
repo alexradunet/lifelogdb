@@ -44,8 +44,8 @@ const actionableDays = 7
 // actionable reports an occurrence a list offers its outcome action for: one due on or before the last
 // actionable day after today.
 func actionable(o core.TaskOccurrence, today string) bool {
-	t, err := time.Parse(time.DateOnly, today)
-	return err == nil && o.DueDay != "" && o.DueDay <= t.AddDate(0, 0, actionableDays).Format(time.DateOnly)
+	last := addDays(today, actionableDays)
+	return last != "" && o.DueDay != "" && o.DueDay <= last
 }
 
 // outcomeAction is the write that sets an occurrence's state: capture-occurrence for a virtual slot (its key and
@@ -78,7 +78,7 @@ func outcomesOf(views []occurrenceView, today string) []Action {
 }
 
 func taskWindow(q url.Values, localDay string) (from, through string, err error) {
-	today, _ := time.Parse(time.DateOnly, localDay)
+	today, _ := dayOf(localDay)
 	from, through = q.Get("from"), q.Get("through")
 	if from == "" {
 		from = today.AddDate(0, 0, -windowBack).Format(time.DateOnly)
@@ -136,7 +136,8 @@ func (h *server) task(r *http.Request) (*Entity, error) {
 }
 
 func (h *server) taskEntity(ctx context.Context, id int64, q url.Values) (*Entity, error) {
-	from, through, err := taskWindow(q, h.localDay())
+	today := h.localDay()
+	from, through, err := taskWindow(q, today)
 	if err != nil {
 		return nil, err
 	}
@@ -157,7 +158,7 @@ func (h *server) taskEntity(ctx context.Context, id int64, q url.Values) (*Entit
 		views = append(views, viewOccurrence(*t, o, ""))
 	}
 	self := taskHref(id) + "?" + url.Values{"from": {from}, "through": {through}, "include_deleted": {boolField(deleted)}}.Encode()
-	props := map[string]any{"task": t, "from": from, "through": through, "include_deleted": deleted, "occurrences": views, "today": h.localDay()}
+	props := map[string]any{"task": t, "from": from, "through": through, "include_deleted": deleted, "occurrences": views, "today": today}
 	// A one-off's one occurrence, whatever its due day: an undated one is in no window, and its page must still
 	// show it and offer its outcome.
 	var once *core.TaskOccurrence
@@ -203,7 +204,7 @@ func (h *server) taskEntity(ctx context.Context, id int64, q url.Values) (*Entit
 			e.Actions = append(e.Actions, a)
 		}
 	} else {
-		e.Actions = append(e.Actions, outcomesOf(views, props["today"].(string))...)
+		e.Actions = append(e.Actions, outcomesOf(views, today)...)
 	}
 	return e, nil
 }
@@ -270,7 +271,8 @@ func (h *server) occurrenceEntity(ctx context.Context, taskID int64, key string)
 
 func (h *server) deadlines(r *http.Request) (*Entity, error) {
 	q := r.URL.Query()
-	from, through, err := taskWindow(q, h.localDay())
+	today := h.localDay()
+	from, through, err := taskWindow(q, today)
 	if err != nil {
 		return nil, err
 	}
@@ -285,7 +287,6 @@ func (h *server) deadlines(r *http.Request) (*Entity, error) {
 	if state != core.StateOpen && state != core.StateDone && state != core.StateSkipped && state != "all" {
 		return nil, core.Invalid("state is open, done, skipped or all")
 	}
-	today := h.localDay()
 	views, err := h.dueIn(r.Context(), from, through, state, deleted)
 	if err != nil {
 		return nil, err

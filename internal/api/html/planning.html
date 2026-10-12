@@ -4,7 +4,7 @@
 
 {{define "occ"}}{{$o := .O}}<li{{if ne $o.state "open"}} class="settled"{{end}}><div class="occ"><div>
 <a href="/tasks/{{num $o.task_id}}/occurrences/{{pathesc $o.key}}">{{.Name}}</a>{{if .Overdue}} <span class="tag overdue">overdue</span>{{end}}{{if ne $o.state "open"}} <span class="tag{{if eq $o.state "done"}} done{{end}}">{{$o.state}}</span>{{end}}
-<small class="occ-facts">{{with .When}}<span class="when">{{.}}</span>{{end}}{{with .Reminder}}<span>reminder {{.}}</span>{{end}}{{with $o.project_title}}<span><a href="{{title .}}">{{.}}</a></span>{{end}}{{with .More}}<span>{{if $.OwnPage}}and {{.}} more in this window{{else}}<a href="/tasks/{{num $o.task_id}}">and {{.}} more</a>{{end}}</span>{{end}}</small>
+<small class="occ-facts">{{with .When}}<span class="when">{{.}}</span>{{end}}{{with .Reminder}}<span>reminder {{.}}</span>{{end}}{{with $o.project_title}}<span><a href="{{titleHref .}}">{{.}}</a></span>{{end}}{{with .More}}<span>{{if $.OwnPage}}and {{.}} more in this window{{else}}<a href="/tasks/{{num $o.task_id}}">and {{.}} more</a>{{end}}</span>{{end}}</small>
 </div>{{with .Forms}}<div class="outcomes">{{range .}}{{template "form" .}}{{end}}</div>{{end}}</div></li>{{end}}
 
 {{define "tasks"}}{{template "head" .}}

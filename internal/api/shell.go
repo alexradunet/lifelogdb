@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"html/template"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -23,14 +25,7 @@ type shellView struct {
 	MonthHref string
 	Due       int
 	Written   int
-	Weeks     [][]*shellDay // Monday first; nil fills a cell before the first day and after the last
-}
-
-// shellDay is one day of the sidebar's month.
-type shellDay struct {
-	Day  string
-	N    int
-	Page bool
+	Days      []any // the days of this month as the month resource gives them (day, page): the monthbox template draws them
 }
 
 func (h *server) shell(ctx context.Context) (*shellView, error) {
@@ -38,9 +33,9 @@ func (h *server) shell(ctx context.Context) (*shellView, error) {
 		return nil, errors.New("no store or clock to read the shell from")
 	}
 	today := h.localDay()
-	t, err := time.Parse(time.DateOnly, today)
-	if err != nil {
-		return nil, err
+	t, ok := dayOf(today)
+	if !ok {
+		return nil, fmt.Errorf("today %q is not a day", today)
 	}
 	due, err := h.overdueAndDue(ctx, today)
 	if err != nil {
@@ -56,16 +51,10 @@ func (h *server) shell(ctx context.Context) (*shellView, error) {
 	for _, d := range entries {
 		written[d.Day] = true
 	}
-	sv := &shellView{Today: today, Zone: h.zone, Month: first.Format("January 2006"), MonthHref: monthHref(first), Due: len(due), Written: len(entries)}
-	row := make([]*shellDay, (int(first.Weekday())+6)%7)
+	sv := &shellView{Today: today, Zone: h.zone, Month: first.Format(layoutMonth), MonthHref: monthHref(first), Due: len(due), Written: len(entries)}
 	for d := first; !d.After(last); d = d.AddDate(0, 0, 1) {
 		day := d.Format(time.DateOnly)
-		if row = append(row, &shellDay{Day: day, N: d.Day(), Page: written[day]}); len(row) == 7 {
-			sv.Weeks, row = append(sv.Weeks, row), nil
-		}
-	}
-	if len(row) > 0 {
-		sv.Weeks = append(sv.Weeks, append(row, make([]*shellDay, 7-len(row))...))
+		sv.Days = append(sv.Days, map[string]any{"day": day, "page": written[day]})
 	}
 	return sv, nil
 }
@@ -166,20 +155,29 @@ func icon(name string) template.HTML {
 	return template.HTML(`<svg class="icon" viewBox="0 0 16 16" aria-hidden="true">` + p + `</svg>`)
 }
 
-// shortDay is a day as the sidebar and a list write it: "Mon 12 Oct".
+// shortDay is a day without its year, "Mon 12 Oct": the sidebar's today, a day's own heading and the step to the
+// day beside it, where the year is the page's. Everywhere else a day is written by Date, with its year when it is
+// not this year's.
 func shortDay(day string) string {
-	t, err := time.Parse(time.DateOnly, day)
-	if err != nil {
+	t, ok := dayOf(day)
+	if !ok {
 		return day
 	}
-	return t.Format("Mon 2 Jan")
+	return t.Format(layoutDate)
 }
 
-// shortDayYear is a day with its year: "Sun 12 Oct 2025". The margin uses it for the days of earlier years.
-func shortDayYear(day string) string {
-	t, err := time.Parse(time.DateOnly, day)
-	if err != nil {
-		return day
+// dayOfMonth is the number of a day in its month, for the calendar's cells.
+func dayOfMonth(day string) string {
+	if t, ok := dayOf(day); ok {
+		return strconv.Itoa(t.Day())
 	}
-	return t.Format("Mon 2 Jan 2006")
+	return day
+}
+
+// monthBand is the band of the calendar leaf: "Oct 2026".
+func monthBand(day string) string {
+	if t, ok := dayOf(day); ok {
+		return t.Format("Jan 2006")
+	}
+	return ""
 }

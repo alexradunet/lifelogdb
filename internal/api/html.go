@@ -54,41 +54,29 @@ func mustView(name string) []byte {
 }
 
 var pages = template.Must(template.New("").Funcs(template.FuncMap{
-	"basecss":   func() template.CSS { return baseCSS },
-	"appcss":    func() template.CSS { return appCSS },
-	"appjs":     func() template.JS { return appJS },
-	"rel":       func(r []string) string { return strings.Join(r, " ") },
-	"markdown":  markdown,
-	"mark":      mark,
-	"rejected":  rejected,
-	"chart":     chart,
-	"title":     titleHref,
-	"weekday":   weekday,
-	"unitWords": unitWords,
-	"form":      formOf,
-	"outcomes":  outcomes,
-	"group":     group,
-	"due":       dueGroups,
-	"weeks":     weeks,
-	"dayOfMonth": func(day string) string {
-		if t, err := time.Parse(time.DateOnly, day); err == nil {
-			return strconv.Itoa(t.Day())
-		}
-		return day
-	},
-	"dict": dict,
-	"monthOf": func(day string) string { // the band of the calendar leaf: "Oct 2026"
-		if t, err := time.Parse(time.DateOnly, day); err == nil {
-			return t.Format("Jan 2006")
-		}
-		return ""
-	},
+	"basecss":      func() template.CSS { return baseCSS },
+	"appcss":       func() template.CSS { return appCSS },
+	"appjs":        func() template.JS { return appJS },
+	"rel":          func(r []string) string { return strings.Join(r, " ") },
+	"markdown":     markdown,
+	"mark":         mark,
+	"rejected":     rejected,
+	"chart":        chart,
+	"titleHref":    titleHref,
+	"weekday":      weekday,
+	"unitWords":    unitWords,
+	"form":         formOf,
+	"outcomes":     outcomes,
+	"group":        group,
+	"due":          dueGroups,
+	"weeks":        weeks,
+	"dayOfMonth":   dayOfMonth,
+	"dict":         dict,
+	"monthBand":    monthBand,
 	"num":          num,
 	"pathesc":      url.PathEscape,
 	"icon":         icon,
-	"mentionWords": mentionWords,
 	"shortDay":     shortDay,
-	"shortDayYear": shortDayYear,
 	"addDays":      addDays,
 	"week":         isoWeek,
 	"isoWeekKey":   isoWeekKey,
@@ -569,8 +557,8 @@ func alertOf(code any) alertView {
 
 // addDays is the day n days after day ("" for a day that is not one).
 func addDays(day string, n int) string {
-	t, err := time.Parse(time.DateOnly, day)
-	if err != nil {
+	t, ok := dayOf(day)
+	if !ok {
 		return ""
 	}
 	return t.AddDate(0, 0, n).Format(time.DateOnly)
@@ -578,8 +566,8 @@ func addDays(day string, n int) string {
 
 // isoWeek is the ISO 8601 week of a day, 0 for a day that is not one.
 func isoWeek(day string) int {
-	t, err := time.Parse(time.DateOnly, day)
-	if err != nil {
+	t, ok := dayOf(day)
+	if !ok {
 		return 0
 	}
 	_, w := t.ISOWeek()
@@ -589,8 +577,8 @@ func isoWeek(day string) int {
 // isoWeekKey is the ISO 8601 week of a day as the address of the week writes it, "2026-W41"; "" for a day that is
 // not one.
 func isoWeekKey(day string) string {
-	t, err := time.Parse(time.DateOnly, day)
-	if err != nil {
+	t, ok := dayOf(day)
+	if !ok {
 		return ""
 	}
 	return weekKey(t)
@@ -640,9 +628,10 @@ func daysOf(done, active any) string {
 	return num(done) + " of " + num(active) + " days"
 }
 
+// weekday is the name of a day's weekday, "" for a day that is not one.
 func weekday(day string) string {
-	t, err := time.Parse(time.DateOnly, day)
-	if err != nil {
+	t, ok := dayOf(day)
+	if !ok {
 		return ""
 	}
 	return t.Weekday().String()
@@ -682,14 +671,14 @@ func chart(from, to string, readings any) template.HTML {
 		for _, it := range list {
 			m, _ := it.(map[string]any)
 			day, _ := m["day"].(string)
-			if _, err := time.Parse(time.DateOnly, day); err == nil && (from == "" || day < from) {
+			if _, ok := dayOf(day); ok && (from == "" || day < from) {
 				from = day
 			}
 		}
 	}
-	f, err1 := time.Parse(time.DateOnly, from)
-	t, err2 := time.Parse(time.DateOnly, to)
-	if len(list) == 0 || err1 != nil || err2 != nil || t.Before(f) {
+	f, ok1 := dayOf(from)
+	t, ok2 := dayOf(to)
+	if len(list) == 0 || !ok1 || !ok2 || t.Before(f) {
 		return ""
 	}
 	type pt struct {
@@ -728,7 +717,7 @@ func chart(from, to string, readings any) template.HTML {
 	x := func(p pt) float64 { return left + p.x*(w-left-pad) }
 	y := func(v float64) float64 { return pad + (1-(v-lo)/span)*(h-2*pad-bottom) }
 	var sb strings.Builder
-	first, last := f.Format("Mon 2 Jan 2006"), t.Format("Mon 2 Jan 2006") // the ends in words, with the year: a range can span years
+	first, last := f.Format(layoutDateYear), t.Format(layoutDateYear) // the ends in words, with the year: a range can span years
 	fmt.Fprintf(&sb, `<svg class="chart" viewBox="0 0 %g %g" role="img" aria-label="%d readings from %s to %s">`,
 		w, h, len(pts), first, last)
 	fmt.Fprintf(&sb, `<line class="axis" x1="%g" y1="%g" x2="%g" y2="%g"/><line class="axis" x1="%g" y1="%g" x2="%g" y2="%g"/>`,
@@ -744,7 +733,7 @@ func chart(from, to string, readings any) template.HTML {
 	for _, p := range pts {
 		d, _ := time.Parse(time.DateOnly, p.day) // parsed above: a point is only made from a day
 		fmt.Fprintf(&sb, `<circle cx="%.1f" cy="%.1f" r="3"><title>%s: %g</title></circle>`, x(p), y(p.value),
-			d.Format("Mon 2 Jan 2006"), p.value)
+			d.Format(layoutDateYear), p.value)
 	}
 	sb.WriteString(`</svg>`)
 	return template.HTML(sb.String())

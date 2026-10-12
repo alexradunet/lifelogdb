@@ -5,18 +5,11 @@
 <header class="page-head"><div class="what"><h1>{{.Title}}</h1>
 <p class="sub">{{if ne .Title (yearOf $y.today)}}<a href="/years/current">This year</a>{{end}}<a href="/days/today">Today</a></p></div>
 <div class="tools">
-<a class="button step" href="{{.Link "prev"}}" rel="prev" aria-label="Previous year, {{.LinkTitle "prev"}}"><span aria-hidden="true">‹</span><span class="step-day">{{.LinkTitle "prev"}}</span></a>
-<a class="button step" href="{{.Link "next"}}" rel="next" aria-label="Next year, {{.LinkTitle "next"}}"><span class="step-day">{{.LinkTitle "next"}}</span><span aria-hidden="true">›</span></a>
+{{template "step" (dict "href" (.Link "prev") "rel" "prev" "label" (printf "Previous year, %s" (.LinkTitle "prev")) "text" (.LinkTitle "prev"))}}
+{{template "step" (dict "href" (.Link "next") "rel" "next" "label" (printf "Next year, %s" (.LinkTitle "next")) "text" (.LinkTitle "next"))}}
 {{template "boxed" (form (.Action "open-day") "button" "Go to a day")}}
 </div></header>
 
-<div class="year">{{range $y.months}}{{template "yearmonth" (dict "m" . "today" $y.today)}}{{end}}</div>
+<div class="year">{{range $y.months}}{{template "monthbox" (dict "href" (printf "/months/%s" .month) "name" (monthName .month) "written" .written "days" .days "today" $y.today)}}{{end}}</div>
 <p class="sub"><span class="meta">{{num $y.written}} {{if eq (num $y.written) "1"}}day{{else}}days{{end}} written</span><span class="meta">{{num $y.readings}} {{if eq (num $y.readings) "1"}}reading{{else}}readings{{end}}</span></p>
 {{template "foot" .}}{{end}}
-
-{{/* yearmonth is a month of the year in the markup of the sidebar's month box, which draws from other types */}}
-{{define "yearmonth"}}{{$m := .m}}{{$today := .today}}<div class="month-box">
-<div class="month-head"><a href="/months/{{$m.month}}">{{monthName $m.month}}</a><span class="meta">{{num $m.written}} written</span></div>
-<table class="month"><thead><tr><th scope="col" abbr="Monday">M</th><th scope="col" abbr="Tuesday">T</th><th scope="col" abbr="Wednesday">W</th><th scope="col" abbr="Thursday">T</th><th scope="col" abbr="Friday">F</th><th scope="col" abbr="Saturday">S</th><th scope="col" abbr="Sunday">S</th></tr></thead>
-<tbody>{{range weeks $m.days}}<tr>{{range .}}<td>{{if .}}<a href="/days/{{.day}}"{{if .page}} class="written"{{end}}{{if eq .day $today}} aria-current="date"{{end}} aria-label="{{shortDay .day}}{{if .page}}, written{{end}}">{{dayOfMonth .day}}</a>{{end}}</td>{{end}}</tr>
-{{end}}</tbody></table></div>{{end}}

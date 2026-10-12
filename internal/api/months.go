@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -28,7 +29,7 @@ func monthHref(t time.Time) string { return "/months/" + t.Format("2006-01") }
 
 // currentMonth answers with this month's address, as /days/today does with today's.
 func (h *server) currentMonth(*http.Request) (*Entity, error) {
-	t, _ := time.Parse(time.DateOnly, h.localDay())
+	t, _ := dayOf(h.localDay())
 	return nil, redirect{monthHref(t)}
 }
 
@@ -40,30 +41,18 @@ func (h *server) month(r *http.Request) (*Entity, error) {
 	}
 	last := first.AddDate(0, 1, -1)
 	from, through := first.Format(time.DateOnly), last.Format(time.DateOnly)
-	entries, err := h.s.DayEntries(ctx, from, through, false, 31)
+	days, err := h.calendarDays(ctx, from, through)
 	if err != nil {
 		return nil, err
 	}
-	moods, err := h.s.Moods(ctx, from, through)
-	if err != nil {
-		return nil, err
-	}
-	pages := map[string]core.DayEntry{}
-	for _, d := range entries {
-		pages[d.Day] = d
-	}
-	name := first.Format("January 2006")
+	name := first.Format(layoutMonth)
 	prev, next := first.AddDate(0, -1, 0), first.AddDate(0, 1, 0)
 	e := &Entity{Class: []string{"month"}, Title: name,
-		Links: []Link{link("self", monthHref(first), name), link("prev", monthHref(prev), prev.Format("January 2006")),
-			link("next", monthHref(next), next.Format("January 2006")), link("days", "/days", "Days"), link("index", "/", "Home")},
+		Links: []Link{link("self", monthHref(first), name), link("prev", monthHref(prev), prev.Format(layoutMonth)),
+			link("next", monthHref(next), next.Format(layoutMonth)), link("days", "/days", "Days"), link("index", "/", "Home")},
 		Actions: []Action{action("open-day", nil, nil)}}
-	days := []monthDay{}
-	for t := first; !t.After(last); t = t.AddDate(0, 0, 1) {
-		day := t.Format(time.DateOnly)
-		p, written := pages[day]
-		days = append(days, monthDay{Day: day, Page: written, FirstLine: p.FirstLine, Mood: moods[day]})
-		e.Entities = append(e.Entities, link("day", dayHref(day), day))
+	for _, d := range days {
+		e.Entities = append(e.Entities, link("day", dayHref(d.Day), d.Day))
 	}
 	e.Properties = map[string]any{"month": first.Format("2006-01"), "today": h.localDay(), "days": days}
 	return e, nil
@@ -78,6 +67,32 @@ func (h *server) openDay(r *http.Request) (*Entity, error) {
 	return nil, redirect{dayHref(day)}
 }
 
+// calendarDays are the days from from through through as a calendar shows them: whether each has a day page, its
+// first line and its mood. A month and a week read them.
+func (h *server) calendarDays(ctx context.Context, from, through string) ([]monthDay, error) {
+	entries, err := h.s.DayEntries(ctx, from, through, false, 31)
+	if err != nil {
+		return nil, err
+	}
+	moods, err := h.s.Moods(ctx, from, through)
+	if err != nil {
+		return nil, err
+	}
+	pages := map[string]core.DayEntry{}
+	for _, d := range entries {
+		pages[d.Day] = d
+	}
+	days := []monthDay{}
+	first, _ := dayOf(from)
+	last, _ := dayOf(through)
+	for t := first; !t.After(last); t = t.AddDate(0, 0, 1) {
+		day := t.Format(time.DateOnly)
+		p, written := pages[day]
+		days = append(days, monthDay{Day: day, Page: written, FirstLine: p.FirstLine, Mood: moods[day]})
+	}
+	return days, nil
+}
+
 // weeks puts the days of a month into the rows of a calendar, Monday first: nil fills a cell before the first day and
 // after the last.
 func weeks(list any) [][]any {
@@ -87,8 +102,8 @@ func weeks(list any) [][]any {
 	}
 	m, _ := days[0].(map[string]any)
 	first, _ := m["day"].(string)
-	t, err := time.Parse(time.DateOnly, first)
-	if err != nil {
+	t, ok := dayOf(first)
+	if !ok {
 		return nil
 	}
 	var out [][]any

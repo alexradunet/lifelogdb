@@ -31,11 +31,7 @@
 <div class="rail-more" id="sections">
 <div class="rail-more-head"><span class="label">More</span><a class="button small" href="#closed">Close</a></div>
 <nav aria-label="The record"><ul>{{range $nav}}{{if eq .Group "record"}}<li>{{template "navlink" .}}</li>{{end}}{{end}}</ul></nav>
-{{with .Shell}}{{if .Weeks}}<div class="month-box">
-<div class="month-head"><a href="{{.MonthHref}}">{{.Month}}</a><span class="meta">{{.Written}} written</span></div>
-<table class="month"><thead><tr><th scope="col" abbr="Monday">M</th><th scope="col" abbr="Tuesday">T</th><th scope="col" abbr="Wednesday">W</th><th scope="col" abbr="Thursday">T</th><th scope="col" abbr="Friday">F</th><th scope="col" abbr="Saturday">S</th><th scope="col" abbr="Sunday">S</th></tr></thead>
-<tbody>{{range .Weeks}}<tr>{{range .}}<td>{{if .}}<a href="/days/{{.Day}}"{{if .Page}} class="written"{{end}}{{if eq .Day $.Shell.Today}} aria-current="date"{{end}} aria-label="{{shortDay .Day}}{{if .Page}}, written{{end}}">{{.N}}</a>{{end}}</td>{{end}}</tr>
-{{end}}</tbody></table></div>{{end}}{{end}}
+{{with .Shell}}{{if .Days}}{{template "monthbox" (dict "href" .MonthHref "name" .Month "written" .Written "days" .Days "today" .Today)}}{{end}}{{end}}
 <p class="rail-foot">Owner{{range $nav}}{{if eq .Group "owner"}} · <a href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}>{{.Title}}</a>{{end}}{{end}} · <a href="/#owner">Snapshot</a></p>
 </div>
 </aside>{{end}}
@@ -53,6 +49,44 @@
 </div>
 <script data-script="app">{{appjs}}</script>
 </body></html>{{end}}
+
+{{/* monthbox is a month as the sidebar and the year draw it: its name, how many of its days are written, and its
+     days in the rows of a calendar, Monday first; a day with a page is tinted, today is framed. It takes href, name,
+     written, days (the month resource's days: day, page) and today. */}}
+{{define "monthbox"}}<div class="month-box">
+<div class="month-head"><a href="{{.href}}">{{.name}}</a><span class="meta">{{num .written}} written</span></div>
+<table class="month">{{template "weekdays" true}}
+<tbody>{{$today := .today}}{{range weeks .days}}<tr>{{range .}}<td>{{if .}}<a href="/days/{{.day}}"{{if .page}} class="written"{{end}}{{if eq .day $today}} aria-current="date"{{end}} aria-label="{{shortDay .day}}{{if .page}}, written{{end}}">{{dayOfMonth .day}}</a>{{end}}</td>{{end}}</tr>
+{{end}}</tbody></table></div>{{end}}
+
+{{/* weekdays is the header row of a calendar, Monday first: one letter a day when short, else three */}}
+{{define "weekdays"}}<thead><tr>{{if .}}<th scope="col" abbr="Monday">M</th><th scope="col" abbr="Tuesday">T</th><th scope="col" abbr="Wednesday">W</th><th scope="col" abbr="Thursday">T</th><th scope="col" abbr="Friday">F</th><th scope="col" abbr="Saturday">S</th><th scope="col" abbr="Sunday">S</th>{{else}}<th scope="col" abbr="Monday">Mon</th><th scope="col" abbr="Tuesday">Tue</th><th scope="col" abbr="Wednesday">Wed</th><th scope="col" abbr="Thursday">Thu</th><th scope="col" abbr="Friday">Fri</th><th scope="col" abbr="Saturday">Sat</th><th scope="col" abbr="Sunday">Sun</th>{{end}}</tr></thead>{{end}}
+
+{{/* moodwords are a day's moods in words, "mood 3, 4": each current reading, in the order it was recorded */}}
+{{define "moodwords"}}{{with .}}mood {{range $i, $m := .}}{{if $i}}, {{end}}{{num $m}}{{end}}{{end}}{{end}}
+
+{{/* dayentry is a day page in a list: its date (with the year when it is not this year's), its first line and its
+     mood. It takes v (the view) and e (the entry: day, first_line, mood). */}}
+{{define "dayentry"}}{{$v := .v}}{{with .e}}<a class="entry" href="/days/{{.day}}"><span class="date">{{$v.Date .day}}</span><span class="first">{{.first_line}}</span><span class="meta">{{template "moodwords" .mood}}</span></a>{{end}}{{end}}
+
+{{/* onthisday is the margin's group of the day pages of earlier years on this date, when there are any. It takes v
+     (the view) and days. */}}
+{{define "onthisday"}}{{$v := .v}}{{with .days}}<section class="group" aria-label="On this day">
+<div class="panel-head"><h2>On this day</h2></div>
+<ul class="plain">{{range .}}<li>{{template "dayentry" (dict "v" $v "e" .)}}</li>{{end}}</ul>
+</section>{{end}}{{end}}
+
+{{/* due is the margin's group of what is due: the occurrences with their outcomes, or the way forward. It takes v
+     (the view) and due. */}}
+{{define "due"}}{{$v := .v}}<section class="group" aria-label="Due">
+<div class="panel-head"><h2>Due</h2><a href="/deadlines">The weeks ahead</a></div>
+{{with .due}}<ul class="plain due">{{range .}}{{template "occ" ($v.Occ . 0)}}{{end}}</ul>
+{{else}}<p class="empty">Nothing is due today or overdue. <a href="/deadlines">What is due</a> has the weeks ahead.</p>{{end}}
+</section>{{end}}
+
+{{/* step is the previous or next day, week, month or year: a button whose text a phone shortens to the arrow (the
+     label keeps the whole name). It takes href, rel (prev or next), label and text. */}}
+{{define "step"}}<a class="button step" href="{{.href}}" rel="{{.rel}}" aria-label="{{.label}}">{{if eq .rel "prev"}}<span aria-hidden="true">‹</span><span class="step-day">{{.text}}</span>{{else}}<span class="step-day">{{.text}}</span><span aria-hidden="true">›</span>{{end}}</a>{{end}}
 
 {{/* pager draws a list's prev and next links, when it has them */}}
 {{define "pager"}}{{$prev := .Link "prev"}}{{$next := .Link "next"}}{{if or $prev $next}}<nav class="pager" aria-label="Pages">{{with $prev}}<a href="{{.}}" rel="prev">← Previous</a>{{else}}<span></span>{{end}}{{with $next}}<a href="{{.}}" rel="next">Next →</a>{{end}}</nav>{{end}}{{end}}

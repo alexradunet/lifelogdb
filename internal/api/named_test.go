@@ -9,7 +9,7 @@ import (
 // TestPeopleListCarriesItsMentions: the rows of /people say how many pages link to each person and the newest day
 // page among them, in the order of the item links. The sheet says it in words.
 func TestPeopleListCarriesItsMentions(t *testing.T) {
-	c, h := fresh(t)
+	c, h := freshOn(t, "2026-10-12") // the day the words are read against: a day of this year has no year
 	root := must(c.Get(t.Context(), "/"))
 	catalog := must(c.Get(t.Context(), "/actions"))
 	for _, name := range []string{"Ana", "Sam", "Zed"} {
@@ -47,8 +47,8 @@ func TestPeopleListCarriesItsMentions(t *testing.T) {
 
 	body := page(t, h, "/people")
 	for _, s := range []string{
-		"mentioned on 3 pages, last Fri 9 Oct 2026",
-		"mentioned on 1 page, last Fri 9 Oct 2026",
+		"mentioned on 3 pages, last Fri 9 Oct",
+		"mentioned on 1 page, last Fri 9 Oct",
 		"not mentioned yet",
 		`<a class="entry named" href="` + list.Entities[0].Href + `">`,
 	} {
@@ -60,7 +60,7 @@ func TestPeopleListCarriesItsMentions(t *testing.T) {
 
 // TestMentionsHaveNoDayWhenNoDayPageLinks: a page that is not a day page gives a count and no last day.
 func TestMentionsHaveNoDayWhenNoDayPageLinks(t *testing.T) {
-	c, h := fresh(t)
+	c, h := freshOn(t, "2026-10-12") // the day the words are read against: a day of this year has no year
 	root := must(c.Get(t.Context(), "/"))
 	must(c.Do(t.Context(), find(root, "create-place"), map[string]string{"title": "Lake"}))
 	must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Trip", "body": "At [[Lake]]"}))

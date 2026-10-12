@@ -47,7 +47,7 @@ func weekName(monday time.Time) string {
 func yearHref(year int) string { return fmt.Sprintf("/years/%04d", year) }
 
 func (h *server) currentWeek(*http.Request) (*Entity, error) {
-	t, _ := time.Parse(time.DateOnly, h.localDay())
+	t, _ := dayOf(h.localDay())
 	return nil, redirect{weekHref(t)}
 }
 
@@ -71,37 +71,26 @@ func round2(x float64) float64 { return math.Round(x*100) / 100 }
 
 func (h *server) week(r *http.Request) (*Entity, error) {
 	ctx := r.Context()
+	today := h.localDay()
 	monday, ok := weekOf(r.PathValue("week"))
 	if !ok {
 		return nil, core.Invalid("a week is YYYY-Www")
 	}
 	sunday, before := monday.AddDate(0, 0, 6), monday.AddDate(0, 0, -7)
 	from, through, previous := monday.Format(time.DateOnly), sunday.Format(time.DateOnly), before.Format(time.DateOnly)
-	entries, err := h.s.DayEntries(ctx, from, through, false, 7)
+	days, err := h.calendarDays(ctx, from, through)
 	if err != nil {
 		return nil, err
-	}
-	moods, err := h.s.Moods(ctx, from, through)
-	if err != nil {
-		return nil, err
-	}
-	pages := map[string]core.DayEntry{}
-	for _, d := range entries {
-		pages[d.Day] = d
 	}
 	e := &Entity{Class: []string{"week"}, Title: weekName(monday), Actions: []Action{action("open-day", nil, nil)}}
-	days := []monthDay{}
-	for t := monday; !t.After(sunday); t = t.AddDate(0, 0, 1) {
-		day := t.Format(time.DateOnly)
-		p, written := pages[day]
-		days = append(days, monthDay{Day: day, Page: written, FirstLine: p.FirstLine, Mood: moods[day]})
-		e.Entities = append(e.Entities, link("day", dayHref(day), day))
+	for _, d := range days {
+		e.Entities = append(e.Entities, link("day", dayHref(d.Day), d.Day))
 	}
 
 	// The habits use the count of the habits view, so a habit counts the same on both pages. A week in progress
 	// counts through today, so a Monday does not read as six days missed; a week to come counts nothing.
 	habits := []weekHabit{}
-	end := min(through, h.localDay())
+	end := min(through, today)
 	var completion []core.Completion
 	if from <= end {
 		if completion, err = h.s.Completion(ctx, from, end); err != nil {
@@ -162,9 +151,9 @@ func (h *server) week(r *http.Request) (*Entity, error) {
 	}
 	next, thursday := monday.AddDate(0, 0, 7), monday.AddDate(0, 0, 3)
 	e.Links = []Link{link("self", weekHref(monday), e.Title), link("prev", weekHref(before), weekName(before)),
-		link("next", weekHref(next), weekName(next)), link("month", monthHref(thursday), thursday.Format("January 2006")),
+		link("next", weekHref(next), weekName(next)), link("month", monthHref(thursday), thursday.Format(layoutMonth)),
 		link("year", yearHref(thursday.Year()), strconv.Itoa(thursday.Year())), link("index", "/", "Home")}
-	e.Properties = map[string]any{"week": weekKey(monday), "from": from, "through": through, "today": h.localDay(),
+	e.Properties = map[string]any{"week": weekKey(monday), "from": from, "through": through, "today": today,
 		"days": days, "habits": habits, "metrics": metrics, "occurrences": occurrences}
 	return e, nil
 }
@@ -182,7 +171,7 @@ type yearDay struct {
 }
 
 func (h *server) currentYear(*http.Request) (*Entity, error) {
-	t, _ := time.Parse(time.DateOnly, h.localDay())
+	t, _ := dayOf(h.localDay())
 	return nil, redirect{yearHref(t.Year())}
 }
 
@@ -221,7 +210,7 @@ func (h *server) year(r *http.Request) (*Entity, error) {
 			}
 		}
 		months = append(months, ym)
-		e.Entities = append(e.Entities, link("month", monthHref(m), m.Format("January 2006")))
+		e.Entities = append(e.Entities, link("month", monthHref(m), m.Format(layoutMonth)))
 	}
 	e.Links = []Link{link("self", yearHref(year), s), link("prev", yearHref(year-1), fmt.Sprintf("%04d", year-1)),
 		link("next", yearHref(year+1), fmt.Sprintf("%04d", year+1)), link("index", "/", "Home")}

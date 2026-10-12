@@ -6,8 +6,8 @@
 <header class="page-head"><div class="what"><span class="date">{{shortDay $w.from}} to {{shortDay $w.through}}</span><h1>{{.Title}}</h1>
 <p class="sub"><a href="{{.Link "month"}}">{{.LinkTitle "month"}}</a><a href="{{.Link "year"}}">{{.LinkTitle "year"}}</a><a href="/days/today">Today</a></p></div>
 <div class="tools">
-<a class="button step" href="{{.Link "prev"}}" rel="prev" aria-label="Previous week, {{.LinkTitle "prev"}}"><span aria-hidden="true">‹</span><span class="step-day">Week {{week (addDays $w.from -7)}}</span></a>
-<a class="button step" href="{{.Link "next"}}" rel="next" aria-label="Next week, {{.LinkTitle "next"}}"><span class="step-day">Week {{week (addDays $w.from 7)}}</span><span aria-hidden="true">›</span></a>
+{{template "step" (dict "href" (.Link "prev") "rel" "prev" "label" (printf "Previous week, %s" (.LinkTitle "prev")) "text" (printf "Week %d" (week (addDays $w.from -7))))}}
+{{template "step" (dict "href" (.Link "next") "rel" "next" "label" (printf "Next week, %s" (.LinkTitle "next")) "text" (printf "Week %d" (week (addDays $w.from 7))))}}
 {{template "boxed" (form (.Action "open-day") "button" "Go to a day")}}
 </div></header>
 
@@ -15,7 +15,7 @@
 <div class="sheet">
 <section aria-label="The days">
 <div class="panel-head"><h2>The days</h2></div>
-<ul class="plain">{{range $w.days}}<li><a class="entry{{if not .page}} unwritten{{end}}" href="/days/{{.day}}"><span class="date">{{shortDay .day}}</span>{{if .page}}<span class="first">{{with .first_line}}{{.}}{{else}}no text{{end}}</span>{{else}}<span class="first"></span><span class="meta">{{if gt .day $w.today}}not yet{{else}}nothing written{{end}}</span>{{end}}{{with .mood}}<span class="meta">mood {{range $i, $v := .}}{{if $i}}, {{end}}{{num $v}}{{end}}</span>{{end}}</a></li>{{end}}</ul>
+<ul class="plain">{{range $w.days}}<li><a class="entry{{if not .page}} unwritten{{end}}" href="/days/{{.day}}"><span class="date">{{shortDay .day}}</span>{{if .page}}<span class="first">{{with .first_line}}{{.}}{{else}}no text{{end}}</span>{{else}}<span class="first"></span><span class="meta">{{if gt .day $w.today}}not yet{{else}}nothing written{{end}}</span>{{end}}{{with .mood}}<span class="meta">{{template "moodwords" .}}</span>{{end}}</a></li>{{end}}</ul>
 </section>
 </div>
 
