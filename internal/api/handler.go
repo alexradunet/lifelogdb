@@ -158,7 +158,11 @@ func (h *server) serve(f func(*http.Request) (*Entity, error)) http.HandlerFunc 
 		case r.Method == "POST":
 			if self := selfOf(e); self != "" {
 				if wantsHTML(r) { // a browser form: post, then redirect, so a reload never posts again
-					http.Redirect(w, r, h.feedback.put(self, e.Result), http.StatusSeeOther)
+					to := self
+					if back := backOf(r); back != "" {
+						to = back
+					}
+					http.Redirect(w, r, h.feedback.put(to, e.Result), http.StatusSeeOther)
 					return
 				}
 				w.Header().Set("Location", self)
@@ -173,6 +177,27 @@ func (h *server) serve(f func(*http.Request) (*Entity, error)) http.HandlerFunc 
 		}
 		write(w, r, status, e)
 	}
+}
+
+// maxBack is the longest return path a browser form may send.
+const maxBack = 2048
+
+// backOf is the page a browser form asks to return to after its write (docs/plans/091-the-browser-for-daily-use.md):
+// the form field back, when it is a path on this server, "" otherwise. Only a path that starts with one slash is
+// kept: "//host" and "/\host" name another host to a browser, and a scheme, a host, a fragment or a control
+// character makes the value something other than a path here. A value that is not kept is ignored, not refused:
+// the write is done, and the browser goes to the resource it changed.
+func backOf(r *http.Request) string {
+	b := r.PostForm.Get("back")
+	if b == "" || len(b) > maxBack || !strings.HasPrefix(b, "/") || strings.HasPrefix(b, "//") ||
+		strings.ContainsAny(b, "\\#") || strings.IndexFunc(b, func(c rune) bool { return c < 0x20 || c == 0x7f }) >= 0 {
+		return ""
+	}
+	u, err := url.Parse(b)
+	if err != nil || u.Scheme != "" || u.Host != "" || u.User != nil || u.Opaque != "" || !strings.HasPrefix(u.Path, "/") {
+		return ""
+	}
+	return b
 }
 
 func selfOf(e *Entity) string {

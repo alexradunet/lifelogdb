@@ -20,7 +20,8 @@ and this page disagree, so a property here is a property on the wire.
   `application/x-www-form-urlencoded`, `application/json` (one object; a non-string value is sent as its JSON text) or,
   for `add-file`, `multipart/form-data`.
 - **Writes answer with the resource they changed** (200, with `Location`), and `result` says what the write did. A
-  browser form is answered 303 to that resource instead.
+  browser form is answered 303 to that resource instead, or to the page its field `back` names when that is a path
+  on this server.
 
 ## The entity
 
@@ -411,7 +412,10 @@ record of what happened.
 (default 30 days back to 90 days on): the rows written, and for a live series the virtual slots not yet written.
 Links: `up` (tasks), `deadlines`, `project` (the project page). Embedded: an `occurrence` link per occurrence,
 class `occurrence` or `virtual`. Actions: `edit-task`, `stop-task` (a series), `capture-occurrence`,
-`tombstone-task`; `revive-task` alone on a tombstoned one (class `task deleted`).
+`tombstone-task`; then the **outcome** of each occurrence shown that is due 7 days after `today` or earlier, and of a
+one-off's `once`; `revive-task` alone on a tombstoned one (class `task deleted`). An occurrence's outcome is the write
+that sets its state: `capture-occurrence` with its key filled for a virtual slot, `edit-occurrence` with every current
+value filled for a written one; there is none for a tombstoned occurrence.
 
 | property | type | meaning |
 |---|---|---|
@@ -436,6 +440,31 @@ class `occurrence` or `virtual`. Actions: `edit-task`, `stop-task` (a series), `
 | `from` | day | the window's first day |
 | `through` | day | its last day |
 | `include_deleted` | boolean | tombstoned occurrences (and a tombstoned task's) were included |
+| `today` | day | this machine's local day: the occurrences due 7 days after it or earlier offer their outcome |
+| `once` | object | a one-off's one occurrence, whatever its due day (the occurrence shape below); absent for a series and before it is written |
+| `once.due_day` | day |  |
+| `once.state` | string |  |
+| `once.completed_at` | instant |  |
+| `once.reminder_mode` | string |  |
+| `once.reminder_at` | instant |  |
+| `once.id` | integer |  |
+| `once.task_id` | integer |  |
+| `once.key` | string | `once` |
+| `once.import_key` | string |  |
+| `once.source` | string |  |
+| `once.version` | string |  |
+| `once.created_at` | instant |  |
+| `once.updated_at` | instant |  |
+| `once.deleted_at` | instant |  |
+| `once.task_version` | string |  |
+| `once.task_deleted_at` | instant |  |
+| `once.project_title` | string |  |
+| `once.project_deleted_at` | instant |  |
+| `once.virtual` | boolean | always false |
+| `once.label` | string | absent here: this is the task's own view |
+| `once.reminder` | object |  |
+| `once.reminder.state` | string |  |
+| `once.reminder.at` | instant |  |
 | `occurrences[]` | list | the occurrences in the window, by due day then key (the occurrence shape below) |
 | `occurrences[].due_day` | day |  |
 | `occurrences[].state` | string |  |
@@ -498,7 +527,8 @@ with its key filled; on a written one `edit-occurrence` (every current value fil
 
 `GET /deadlines?from=&through=&state=&include_deleted=`: every task's occurrences due in the window (default 30 days
 back to 90 days on), `open` ones unless `state` is `done`, `skipped` or `all`. Overdue is this read with an earlier
-`from`. Embedded: an `occurrence` link each. Links: `tasks`. Actions: `deadlines`, `create-task`.
+`from`. Embedded: an `occurrence` link each. Links: `tasks`. Actions: `deadlines`, `create-task`, then the outcome
+(see task) of each occurrence due 7 days after `today` or earlier.
 
 | property | type | meaning |
 |---|---|---|
@@ -506,6 +536,7 @@ back to 90 days on), `open` ones unless `state` is `done`, `skipped` or `all`. O
 | `through` | day | its last day |
 | `state` | string | the filter applied |
 | `include_deleted` | boolean | tombstoned rows and tasks were included |
+| `today` | day | this machine's local day: the occurrences due 7 days after it or earlier offer their outcome |
 | `occurrences[]` | list | the occurrences (the occurrence shape, with `label`), by due day, key, task |
 | `occurrences[].due_day` | day |  |
 | `occurrences[].state` | string |  |

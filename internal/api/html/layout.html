@@ -24,7 +24,7 @@
 {{/* form draws one action of the entity (see formOf); nothing when the action is not offered. A label wraps its
      field, so a form needs no layout of its own; the catalog says how tall an area is and which action is a danger. */}}
 {{define "form"}}{{with .}}<form method="{{.Method}}" action="{{.Href}}"{{with .Class}} class="{{.}}"{{end}}{{if .Multipart}} enctype="multipart/form-data"{{end}}>
-{{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{num .Value}}">{{end}}
+{{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{num .Value}}">{{end}}{{with .Back}}<input type="hidden" name="back" value="{{.}}">{{end}}
 {{range .Shown}}<label>{{or .Title .Name}}{{if .Required}} <abbr title="required">*</abbr>{{end}}
 {{if .Options}}<select name="{{.Name}}"{{if eq $.Focus .Name}} autofocus{{end}}>{{$v := num .Value}}{{range .Options}}<option{{if eq . $v}} selected{{end}}>{{.}}</option>{{end}}</select>
 {{else if eq .Type "textarea"}}<textarea name="{{.Name}}"{{with .Rows}} rows="{{.}}"{{end}}{{if eq $.Focus .Name}} autofocus{{end}}>{{num .Value}}</textarea>

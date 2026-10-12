@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -57,36 +58,62 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 	"title":    titleHref,
 	"weekday":  weekday,
 	"form":     formOf,
+	"outcomes": outcomes,
 	"group":    group,
-	"num": func(v any) string {
-		if v == nil {
-			return ""
-		}
-		return fmt.Sprint(v)
-	},
-	"pathesc": url.PathEscape,
+	"due":      dueGroups,
+	"dueWords": dueWords,
+	"cadence":  cadence,
+	"reminder": reminderWords,
+	"num":      num,
+	"pathesc":  url.PathEscape,
 }).ParseFS(views, "html/*.html"))
+
+// num shows a property's value. A number is written in full, never with an exponent: the JSON client reads every
+// number as a float64, and an id of a million must still make the link /pages/1000000, not /pages/1e+06.
+func num(v any) string {
+	switch x := v.(type) {
+	case nil:
+		return ""
+	case float64:
+		return strconv.FormatFloat(x, 'f', -1, 64)
+	}
+	return fmt.Sprint(v)
+}
 
 // viewOf names the template that shows an entity of a class; a class without one is shown by "generic".
 var viewOf = map[string]string{
 	"root": "root", "day": "day", "page": "page", "person": "page", "place": "page", "file": "page", "period": "page",
 	"days": "list", "people": "list", "places": "list", "files": "list", "ghosts": "list", "search": "search",
 	"metrics": "metrics", "series": "series", "habits": "habits", "measurement": "measurement", "error": "error", "login": "login",
+	"tasks": "tasks", "task": "task", "occurrence": "occurrence", "deadlines": "deadlines",
 }
 
 // view is what a template gets: the entity, its properties as the JSON client reads them, the path the browser
-// asked for (which navigation link is current) and, for an error answering a form, the text that form sent (so
-// a refused save loses nothing) and the page it came from.
+// asked for (which navigation link is current), the address of this page (where a form on it asks to return,
+// docs/plans/091-the-browser-for-daily-use.md) and, for an error answering a form, the text that form sent (so a
+// refused save loses nothing) and the page it came from.
 type view struct {
 	*Entity
 	Props     any
 	Path      string
+	Here      string
 	Submitted string
 	Back      string
 }
 
+// hereOf is the address of the page the browser is on, without the one-use feedback receipt: a form that returns
+// here must not carry a receipt that was already taken.
+func hereOf(u *url.URL) string {
+	q := u.Query()
+	q.Del("feedback")
+	if len(q) == 0 {
+		return u.EscapedPath()
+	}
+	return u.EscapedPath() + "?" + q.Encode()
+}
+
 func renderHTML(w http.ResponseWriter, r *http.Request, status int, e *Entity) {
-	v := &view{Entity: e, Props: jsonShape(e.Properties), Path: r.URL.Path}
+	v := &view{Entity: e, Props: jsonShape(e.Properties), Path: r.URL.Path, Here: hereOf(r.URL)}
 	if status >= 400 && r.Method == "POST" {
 		v.Submitted = r.PostForm.Get("body")
 		if v.Submitted == "" {
@@ -210,12 +237,14 @@ func (v *view) Embedded(rel string) []Link {
 
 // formView is an action as the "form" template draws it. formOf takes name/value pairs: "button" labels the
 // button, "class" styles the form, "hide" lists fields kept with their value but not shown, "autofocus" names
-// the field the browser starts in, "choices:<field>" offers a field's values as a list, and any other name
-// fixes a field to a value (hidden).
+// the field the browser starts in, "choices:<field>" offers a field's values as a list, "back" is the page the
+// browser returns to after the write (no field of the action: the server reads it, see backOf), and any other
+// name fixes a field to a value (hidden).
 type formView struct {
 	*Action
 	Button, Class string
 	Focus         string
+	Back          string
 	Shown         []Field
 	Hidden        []Field
 }
@@ -262,6 +291,8 @@ func formOf(x any, opts ...string) (*formView, error) {
 			}
 		case k == "autofocus":
 			f.Focus = v
+		case k == "back":
+			f.Back = v
 		case strings.HasPrefix(k, "choices:"):
 			choices[strings.TrimPrefix(k, "choices:")] = strings.Fields(v)
 		default:
@@ -320,7 +351,8 @@ func weekday(day string) string {
 	return t.Weekday().String()
 }
 
-// group splits a list of objects by the value of key, keeping the order of first appearance.
+// group splits a list of objects by the value of key, keeping the order of first appearance. The objects without
+// the key are in the bucket whose key is "".
 type bucket struct {
 	Key   string
 	Items []any
@@ -332,7 +364,7 @@ func group(list any, key string) []bucket {
 	items, _ := list.([]any)
 	for _, it := range items {
 		m, _ := it.(map[string]any)
-		k := fmt.Sprint(m[key])
+		k := num(m[key])
 		i, ok := at[k]
 		if !ok {
 			i = len(out)

@@ -74,7 +74,10 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   template reads only the properties the JSON carries and places only the actions the entity offers, so a form
   shows where the action is legal and nowhere else. A body is CommonMark with goldmark's safe defaults (raw HTML
   omitted), its `[[wikilinks]]` and `#tags` linked. No JavaScript: a browser form posts and is answered 303 to the
-  resource it changed, so a reload never posts twice; a refused one shows the text it sent.
+  resource it changed, so a reload never posts twice; a refused one shows the text it sent. A form may name the page
+  to return to in `back` (a path on this server, not a field of any action): a Done button on a list returns to the
+  list. A value that is not a plain path is ignored, and a JSON client never follows it
+  ([plan 091](docs/plans/091-the-browser-for-daily-use.md)).
 - **The page is semantic HTML, and the catalog says how to draw it.** A field is a `label` around its input, a card
   is an `article`, a callout an `aside`, a series a `table` with a header row; no id or class is generated for a
   template to find. What a template cannot know comes from the entity: `danger` marks a destructive action's button

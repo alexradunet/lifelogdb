@@ -140,8 +140,9 @@ func TestPlanningLifeThroughTheCatalog(t *testing.T) {
 				t.Fatalf("after the tombstone: %d", n)
 			}
 			back := must(c.Do(find(gone, "revive-task"), nil))
-			if names(back) != "edit-task,capture-occurrence,tombstone-task" {
-				t.Fatalf("revived one-off actions: %s", names(back))
+			if names(back) != "edit-task,capture-occurrence,tombstone-task,edit-occurrence" ||
+				back.Actions[3].Href != onceHref+"/occurrences/once/edit" || props(back)["once"].(map[string]any)["key"] != "once" {
+				t.Fatalf("revived one-off actions: %s, once %v", names(back), props(back)["once"])
 			}
 			if _, err := c.Get(onceHref + "/occurrences/2031-01-01"); !clientStatus(err, 404) {
 				t.Fatalf("a one-off has no dated slot: %v", err)
@@ -172,7 +173,7 @@ func TestPlanningViewsRender(t *testing.T) {
 		"/tasks": {"Water plants", `action="/tasks"`},
 		href + "?from=2031-01-01&through=2031-01-31":    {`action="` + href + `/stop"`, `name="version" value="`, `action="` + href + `/occurrences"`, "2031-01-13"},
 		href + "/occurrences/2031-01-13":                {`action="` + href + `/occurrences"`, `name="key" value="2031-01-13"`},
-		"/deadlines?from=2031-01-01&through=2031-01-31": {"Water plants", "2031-01-27", `action="/deadlines"`},
+		"/deadlines?from=2031-01-01&through=2031-01-31": {"Water plants", "and 3 more", `action="/deadlines"`},
 	} {
 		body := browse(t, h, path)
 		for _, w := range want {

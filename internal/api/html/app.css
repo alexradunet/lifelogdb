@@ -95,6 +95,17 @@ button.quiet:hover{background:var(--panel,#f2efe8); filter:none}
 /* A callout the owner must read: a refusal, a deleted page, names that made no link. */
 aside.warn{border-left-color:var(--warn,#b3261e); background:var(--warn-weak,#fbeceb)}
 
+/* An occurrence of a task in a list: what and when on the left, its Done, Skip or Reopen on the right. A done or
+   skipped one is quiet. */
+.occ{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:4px 12px}
+.occ>div:first-child{flex:1 1 16rem}
+.occ-facts{display:block}
+.occ-facts>span+span::before{content:" · "}
+.outcomes{display:flex; flex-wrap:wrap; gap:4px; margin:.5rem 0}
+.occ .outcomes{margin:0}
+li.settled>.occ>div:first-child>a{color:var(--muted,#6f6b63); text-decoration:line-through}
+dl.facts dd{color:inherit}
+
 /* The state of a habit on a day, in words and in colour. */
 .done{color:var(--ok,#2e7d32); font-weight:620}
 .notdone{color:var(--warn,#b3261e); font-weight:620}
