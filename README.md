@@ -214,7 +214,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   `lifelog mcp --agent NAME` on that `life.db` with absolute paths. A file with another text is kept unless
   `--force`; run it again after the folder moves. Like `init`, it is a setup command of the machine, not a catalog
   action: it writes files beside the program.
-- **Owner-only actions.** `register-metric`, `relocate-reading` and `snapshot` are refused to an `agent:*` writer and
+- **Owner-only actions.** `register-metric`, `relocate-reading` and `snapshot` are refused to an `agent:*` or `import:*` writer and
   are never MCP tools. An agent that imports with the owner asks for them in the conversation.
 - **Renames select a preferred name on the same identity**, retaining direct aliases as
   [titles and wikilinks](docs/contract/titles-and-wikilinks.md) ("Renames") requires and
@@ -238,7 +238,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   `application_id`.
 - **Snapshots are the owner's, from any surface** ([take a snapshot](docs/cookbook/take-a-snapshot.md),
   [plan 082](docs/plans/082-snapshot-in-the-catalog.md)). `snapshot` is an owner-only action of the catalog
-  (`POST /snapshots`): refused to an `agent:*` writer, never an MCP tool, offered at the root to the owner. It takes
+  (`POST /snapshots`): refused to an `agent:*` or `import:*` writer, never an MCP tool, offered at the root to the owner. It takes
   no path: the file lands in the folder `serve --snapshots DIR` names, or beside `life.db`, named by the local day
   and never overwritten; it refuses a folder inside a git work tree, and its restore check opens the snapshot with
   `Close` skipping `PRAGMA optimize`. The answer carries the path and the check. `lifelog snapshot [--to DIR]` is the
@@ -270,7 +270,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   the cookie `/login` sets; one without is answered 401 with nothing of the database, and a browser is sent to
   `/login`. The `Host` check is dropped: it kept an unauthenticated local server from a DNS-rebinding page, and the
   token defeats that page on its own; absolute-form targets stay refused. A token holder is the owner: owner-only
-  actions are still refused by `Lifelog-Source: agent:*`, not by the token. **Origins:** `--allow-origin ORIGIN`
+  actions are still refused by `Lifelog-Source: agent:*` or `import:*`, not by the token. **Origins:** `--allow-origin ORIGIN`
   (repeatable, exact `scheme://host[:port]`) answers CORS preflights, adds the CORS headers for that origin and makes
   it a trusted origin for browser writes; any other origin is refused as before. **TLS:** `--tls-cert` and `--tls-key`
   serve HTTPS with the standard library; without them the token travels in clear, which is acceptable only on a

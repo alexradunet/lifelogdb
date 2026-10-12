@@ -168,8 +168,8 @@ func (r redirect) Error() string { return "see " + r.to }
 // ownerOnly refuses an action that is the owner's alone to an agent (a model never registers a metric or approves).
 func ownerOnly(f func(*http.Request, string) (*Entity, error)) func(*http.Request, string) (*Entity, error) {
 	return func(r *http.Request, src string) (*Entity, error) {
-		if strings.HasPrefix(src, "agent:") {
-			return nil, &core.Error{Status: http.StatusForbidden, Msg: "this action is the owner's: an agent may not run it"}
+		if !core.IsOwner(src) {
+			return nil, core.Forbidden("this action is the owner's: an agent or an import may not run it")
 		}
 		return f(r, src)
 	}

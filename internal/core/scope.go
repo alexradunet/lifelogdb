@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"strings"
 
 	"lifelog/internal/text"
 )
@@ -27,8 +26,8 @@ const relocationAncestors = `WITH RECURSIVE ancestors(id,source,import_key,super
 const importedChain = `EXISTS(SELECT 1 FROM ancestors WHERE import_key IS NOT NULL OR source LIKE 'import:%')`
 
 func (t *Tx) relocateReading(wrong int64, replacement Reading, afterRetraction func(int64) error) (ScopeRelocation, error) {
-	if strings.HasPrefix(t.Source, "agent:") || strings.HasPrefix(t.Source, "import:") {
-		return ScopeRelocation{}, Invalid("scope relocation is an owner operation, unavailable to agents/imports")
+	if !IsOwner(t.Source) {
+		return ScopeRelocation{}, Forbidden("relocating a reading is the owner's: an agent or an import may not run it")
 	}
 	if replacement.ImportKey != "" {
 		return ScopeRelocation{}, Invalid("scope relocation cannot create a keyed/import-backed root")

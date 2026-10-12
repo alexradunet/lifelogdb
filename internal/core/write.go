@@ -351,8 +351,12 @@ func (t *Tx) CreatePage(title, body, day, importKey string) (id int64, existing 
 }
 
 // PageForTitle is the id of the page that holds a title, made as an empty page when no page has it: the context a
-// task names by its title, like the target of a wikilink. A tombstoned page keeps its id and its tombstone.
+// task names by its title, like the target of a wikilink, and like it with no day, so it is not an entry of the day it
+// was made on. A tombstoned page keeps its id and its tombstone.
 func (t *Tx) PageForTitle(title string) (id int64, created bool, err error) {
+	if err := checkTitle("project", title); err != nil {
+		return 0, false, err
+	}
 	p, err := t.lookup(title)
 	if err != nil {
 		return 0, false, err
@@ -360,7 +364,7 @@ func (t *Tx) PageForTitle(title string) (id int64, created bool, err error) {
 	if p != nil {
 		return p.ID, false, nil
 	}
-	id, _, _, err = t.CreatePage(title, "", "", "")
+	id, _, err = t.insertPage("page", title, text.TitleKey(title), nil, "", "")
 	return id, err == nil, err
 }
 
@@ -430,17 +434,24 @@ func nullIfEmpty(s string) any {
 }
 
 // Promote makes a plain page a person or a place (cookbook/person-or-place.md): the id and its links stay, a
-// tombstoned page is revived.
+// tombstoned page is revived. A missing id is 404; a page of another type is a 409.
 func (t *Tx) Promote(id int64, typ, name string) error {
 	if typ != "person" && typ != "place" {
 		return Invalid("promote to person or place, not %q", typ)
 	}
-	res, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET entity_type = ?, deleted_at = NULL WHERE id = ? AND entity_type = 'page'`, typ, id)
+	var have string
+	err := t.tx.QueryRowContext(t.ctx, `SELECT entity_type FROM entities WHERE id = ?`, id).Scan(&have)
+	if errors.Is(err, sql.ErrNoRows) {
+		return NotFound("no page %d", id)
+	}
 	if err != nil {
 		return err
 	}
-	if n, _ := res.RowsAffected(); n != 1 {
-		return Conflict("page %d is not a plain page that can be promoted (missing or already typed)", id)
+	if have != "page" {
+		return Conflict("page %d is a %s, not a plain page to promote", id, have)
+	}
+	if _, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET entity_type = ?, deleted_at = NULL WHERE id = ?`, typ, id); err != nil {
+		return err
 	}
 	if typ == "person" {
 		if name == "" {
@@ -453,24 +464,30 @@ func (t *Tx) Promote(id int64, typ, name string) error {
 	return err
 }
 
-// Tombstone and Revive set or clear entities.deleted_at (D11): nothing is ever deleted.
-func (t *Tx) Tombstone(id int64) error {
-	return t.setDeleted(id, `UPDATE entities SET deleted_at = `+nowSQL+` WHERE id = ? AND deleted_at IS NULL`)
-}
+// Tombstone and Revive set or clear entities.deleted_at (D11): nothing is ever deleted. A missing id is 404; the same
+// state again changes nothing, as a task's or a session's lifecycle answers.
+func (t *Tx) Tombstone(id int64) error { return t.setDeleted(id, true) }
 
-func (t *Tx) Revive(id int64) error {
-	return t.setDeleted(id, `UPDATE entities SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL`)
-}
+func (t *Tx) Revive(id int64) error { return t.setDeleted(id, false) }
 
-func (t *Tx) setDeleted(id int64, q string) error {
-	res, err := t.tx.ExecContext(t.ctx, q, id)
+func (t *Tx) setDeleted(id int64, deleted bool) error {
+	var tombstoned bool
+	err := t.tx.QueryRowContext(t.ctx, `SELECT deleted_at IS NOT NULL FROM entities WHERE id = ?`, id).Scan(&tombstoned)
+	if errors.Is(err, sql.ErrNoRows) {
+		return NotFound("no entity %d", id)
+	}
 	if err != nil {
 		return err
 	}
-	if n, _ := res.RowsAffected(); n != 1 {
-		return Conflict("entity %d is missing or already in that state", id)
+	if tombstoned == deleted {
+		return nil
 	}
-	return nil
+	q := `UPDATE entities SET deleted_at = NULL WHERE id = ?`
+	if deleted {
+		q = `UPDATE entities SET deleted_at = ` + nowSQL + ` WHERE id = ?`
+	}
+	_, err = t.tx.ExecContext(t.ctx, q, id)
+	return err
 }
 
 // Link adds an edge of a registered kind (D8); added reports whether it was new. wikilink rows belong to the

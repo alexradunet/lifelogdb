@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"lifelog/internal/db"
@@ -112,4 +113,15 @@ func checkVersion(what, have, want string) error {
 		return conflictCode("stale_version", "%s changed since version %q (now %q): read it again", what, want, have)
 	}
 	return nil
+}
+
+// IsOwner reports a writer that is the owner: not an agent (agent:*) and not an import (import:*). The owner-only
+// actions (register-metric, relocate-reading, snapshot) are refused to any other writer, on every surface.
+func IsOwner(source string) bool {
+	return !strings.HasPrefix(source, "agent:") && !strings.HasPrefix(source, "import:")
+}
+
+// Forbidden is a 403: the writer may not run this action.
+func Forbidden(format string, a ...any) error {
+	return &Error{Status: 403, Msg: fmt.Sprintf(format, a...)}
 }
