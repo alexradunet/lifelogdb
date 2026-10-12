@@ -380,3 +380,21 @@ svg.trend circle{fill:currentColor}
 .strip i.not-done,.strip i.invalid{border:1.5px solid var(--danger)}
 .strip i.not-recorded{height:4px; background:var(--line-strong)}
 .strip i.inactive{border:1px dashed var(--line)}
+
+/* The command list of Ctrl K (docs/plans/094-the-command-list.md): a dialog over the page, the field on top, the rows
+   under it, the row chosen tinted. */
+dialog.palette{width:min(36rem, calc(100vw - 2rem)); max-height:min(32rem, calc(100vh - 6rem)); margin:12vh auto auto; padding:0;
+  border:1px solid var(--line); border-radius:var(--radius-lg); background:var(--surface); color:var(--ink); box-shadow:var(--shadow-float); overflow:hidden}
+dialog.palette[open]{display:flex; flex-direction:column}
+dialog.palette::backdrop{background:var(--backdrop)}
+dialog.palette input{flex:none; height:48px; padding:0 var(--space-4); border:0; border-bottom:1px solid var(--line); border-radius:0; font-size:16px}
+dialog.palette input:focus-visible{outline:0; border-bottom-color:var(--focus)}
+dialog.palette ul{flex:1; min-height:0; overflow-y:auto; margin:0; padding:var(--space-1); list-style:none}
+dialog.palette li{display:flex; align-items:baseline; justify-content:space-between; gap:var(--space-3); margin:0; padding:8px var(--space-3);
+  border-radius:var(--radius-md); cursor:pointer}
+dialog.palette li[aria-selected=true]{background:var(--accent-soft); color:var(--accent)}
+dialog.palette li .kind{font:400 12px/16px var(--mono); color:var(--muted); white-space:nowrap}
+dialog.palette li[aria-selected=true] .kind{color:var(--accent)}
+dialog.palette li.none{color:var(--muted); cursor:default}
+dialog.palette>.meta{flex:none; margin:0; padding:var(--space-2) var(--space-4); border-top:1px solid var(--line-soft)}
+@media (max-width:899px){dialog.palette{width:calc(100vw - 1rem); margin:var(--space-2) auto auto}}

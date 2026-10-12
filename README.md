@@ -121,11 +121,17 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   application's own, embedded and written into each page like the two sheets: no framework, no CDN, no build step.
   It suggests the names of pages after `[[` (from `GET /titles`), shows a preview of a body as it will show when
   saved (from `POST /render`), sends the form of a textarea with Ctrl+Enter, leaves a field with Escape, takes keys
-  outside a field (`/` search, `c` capture, `t` today, `[` and `]` the previous and next page), goes to the search
-  with Ctrl+K from anywhere, and asks before the browser leaves text that was not sent. It gives the toast a Close
-  (and Escape), makes a danger button ask once in the page before it sends ([plan 092](docs/plans/092-the-app-shell.md)),
-  and closes the phone's sheet of sections with Escape ([plan 093](docs/plans/093-words-phone-and-today.md)). It reads nothing else, writes nothing and keeps nothing in the browser. Every form posts and every link
-  works without it; the tests check the pages without running it, and a test keeps its reads to those two routes.
+  outside a field (`/` search, `c` capture, `t` today, `[` and `]` the previous and next page), and asks before
+  the browser leaves text that was not sent. It gives the toast a Close (and Escape), makes a danger button ask once
+  in the page before it sends ([plan 092](docs/plans/092-the-app-shell.md)), and closes the phone's sheet of sections
+  with Escape ([plan 093](docs/plans/093-words-phone-and-today.md)). Ctrl+K, from anywhere, and the phone's Search
+  button open the **command list** ([plan 094](docs/plans/094-the-command-list.md)): a typed day, this page's actions,
+  the sidebar's sections, the pages by the start of their title (`GET /titles`), the root's actions (`GET /`, once a
+  page) and a search of the bodies. It never builds a form: an action of this page opens the form the server drew for
+  it (every form carries its action's catalog name in `data-action`), and an action of the root goes to `/#do-{name}`,
+  where Home opens that form. It reads nothing else, writes nothing and keeps nothing in the browser. Every form posts
+  and every link works without it; the tests check the pages without running it, and a test keeps its reads to those
+  three routes.
   `POST /render` is presentation, not a capability: no catalog action names it and it answers HTML only, so it and
   the fonts (below) are the routes the CLI and the MCP server do not carry. **Rejected:** a separate web client. It would be a second
   implementation of every view to keep equal to the catalog, it would hold the token where JavaScript can read it,

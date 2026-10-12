@@ -148,22 +148,35 @@ func TestTheBaseSheetCarriesNoAppVocabulary(t *testing.T) {
 // cssComments cuts a stylesheet's comments, so a test reads its rules and not its prose.
 var cssComments = regexp.MustCompile(`(?s)/\*.*?\*/`)
 
-// TestTheScriptReadsTitlesAndRenderOnly keeps the script's promise in its first comment: it reads /titles and
-// /render and nothing else, and it keeps nothing in the browser.
-func TestTheScriptReadsTitlesAndRenderOnly(t *testing.T) {
+// TestTheScriptReadsTitlesRenderAndTheRootOnly keeps the script's promise in its first comment: it reads /titles,
+// /render and / (the root's actions, for the command list of docs/plans/094-the-command-list.md) and nothing else,
+// and it keeps nothing in the browser.
+func TestTheScriptReadsTitlesRenderAndTheRootOnly(t *testing.T) {
 	js := string(appJS)
 	calls := regexp.MustCompile(`fetch\(\s*"([^"?]*)`).FindAllStringSubmatch(js, -1)
-	var targets []string
+	read := map[string]bool{}
 	for _, c := range calls {
-		targets = append(targets, c[1])
+		read[c[1]] = true
 	}
-	if strings.Join(targets, ",") != "/titles,/render" || strings.Count(js, "fetch(") != 2 {
-		t.Errorf("the script fetches %v (%d calls), want /titles and /render", targets, strings.Count(js, "fetch("))
+	if len(calls) != strings.Count(js, "fetch(") || len(read) != 3 || !read["/titles"] || !read["/render"] || !read["/"] {
+		t.Errorf("the script fetches %v (%d calls), want /titles, /render and / only", read, strings.Count(js, "fetch("))
 	}
 	for _, never := range []string{"XMLHttpRequest", "WebSocket", "sendBeacon", "localStorage", "sessionStorage", "indexedDB",
 		"document.cookie", "import(", "eval(", "new Function", "http:", "https:"} {
 		if strings.Contains(js, never) {
 			t.Errorf("the script uses %s", never)
 		}
+	}
+}
+
+// TestTheScriptDeclaresEachFunctionOnce: the script is one function scope, so a second function of the same name
+// silently replaces the first (the command list's rows once replaced the suggestions after [[).
+func TestTheScriptDeclaresEachFunctionOnce(t *testing.T) {
+	seen := map[string]bool{}
+	for _, m := range regexp.MustCompile(`function ([A-Za-z_$][\w$]*)\s*\(`).FindAllStringSubmatch(string(appJS), -1) {
+		if seen[m[1]] {
+			t.Errorf("the script declares %s twice", m[1])
+		}
+		seen[m[1]] = true
 	}
 }

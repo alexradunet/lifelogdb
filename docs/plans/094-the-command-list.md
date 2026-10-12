@@ -8,7 +8,7 @@
 - **Date / baseline:** 2026-10-12, `9713306` (master).
 - **Priority:** P2. **Effort:** M. **Risk:** LOW: the script grows and reads one more resource; every form gets one
   attribute. No entity changes, none for the schema.
-- **Status:** TODO.
+- **Status:** DONE (one commit after the records, the one that closes this record).
 - **Resolves:** issue [0063](../issues/0063-ctrl-k-only-moves-to-the-search.md). No RFC: the contract in `docs/` does not
   change.
 
@@ -63,3 +63,27 @@ flowchart LR
 3. Baseline green on Windows: `go generate ./... && go vet ./... && go test ./...`; `gofmt`; staticcheck and
    govulncheck if available (reported as not run if not).
 4. One commit after the records; the issue is resolved and this plan is DONE in it.
+
+## Result (2026-10-12)
+
+Done in one commit. These points differ from the text above, or add to it:
+
+| point | what was done, and why |
+|---|---|
+| this page's actions | the forms of the page's boxes and the capture; a row's one-button forms (Done, Skip, a check-in) belong to their row and are not listed. An owner-only action says "owner, on this page". |
+| the root's actions | those the root offers once (they start something); one it offers per item (a check-in, an outcome) belongs to its item. The search is the list's own last row. An action already on this page is listed once, as this page's. |
+| a section's name | its words without the Due count. |
+| a clash in the script | the list's `show` replaced the `show` of the suggestions after `[[`: the script is one function scope. The browser check found it; the functions are renamed, and a new Go test keeps each function of the script declared once. |
+| the browser check of plan 092 | "Ctrl+K goes to the search" is gone: Ctrl+K now opens the list, and "/" still goes to the search. |
+
+**Checks** (Windows 11, Go 1.27.1): `go generate ./... && go vet ./... && go test ./...` passes, mutants included;
+`gofmt` is clean. staticcheck and govulncheck were not run: they are not installed. Nothing was run on Linux, and no
+browser but Edge was tried.
+
+**In a browser.** The program of plans 091 to 093, in a scratch folder, drove Edge 154 (headless) on Windows 11 on a
+synthetic database: 37 checks passed, the 24 that stay of plan 093 and 13 new ones: Ctrl+K opens the list from a
+field; the start of a title finds the page and Enter opens it; a section is found and opened; on a day, "record" finds
+the day's Record a reading and Enter opens its box with the cursor in its first field; "new task" finds the root's
+New task and Enter goes Home with its box open; a typed day opens that day; the last row searches the bodies; Escape
+closes the list and the focus goes back to the capture; on a phone, the Search button opens it. Screenshots of the
+list at 1400 px and 390 px, in light and in dark, are not kept in git.

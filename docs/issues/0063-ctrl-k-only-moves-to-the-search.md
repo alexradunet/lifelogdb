@@ -1,7 +1,7 @@
 # 0063 — Ctrl K only moves to the search; an action of another page is many steps away
 
 - **Date:** 2026-10-12
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the owner's review of the browser after [plan 093](../plans/093-words-phone-and-today.md), on the synthetic
   database of plan 091, in Edge on Windows
 
@@ -28,3 +28,9 @@ of the design drafts showed. Each item below is a fact of the code at `9713306`.
 
 - [README](../../README.md): "One script, which no page needs", "The app shell: the Almanac design system"
 - [AGENTS.md](../../AGENTS.md): "Every capability on every surface": the catalog decides what is offered where
+
+## Resolution
+
+Resolved by [plan 094](../plans/094-the-command-list.md). Ctrl+K, and the phone's Search button, open a command list:
+a typed day, this page's actions, the sections, the pages by the start of their title, the root's actions and a
+search of the bodies. An action opens the form the server drew for it, on this page or on Home.

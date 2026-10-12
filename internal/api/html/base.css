@@ -30,7 +30,7 @@
   --done:#2c7a4b; --done-ink:#1f5c37; --done-soft:#e1f2e7;
   --danger:#b42318; --danger-ink:#8f1d12; --danger-soft:#fbe4e1; --danger-line:#e3a49c;
   --mark:#fff1b8; --toast-link:#afc2f5;
-  --shadow-current:0 1px 0 #d9dee6; --shadow-float:0 8px 24px #151b2438;
+  --shadow-current:0 1px 0 #d9dee6; --shadow-float:0 8px 24px #151b2438; --backdrop:#151b2440;
   --focus:var(--accent); --toast-bg:var(--ink); --toast-ink:var(--surface);
   --sans:"Atkinson Hyperlegible","Segoe UI",system-ui,sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
@@ -48,7 +48,7 @@
   --done:#62bd8a; --done-ink:#8ed6ad; --done-soft:#16301f;
   --danger:#f0857a; --danger-ink:#f6a79f; --danger-soft:#3c1d1b; --danger-line:#7d3832;
   --mark:#4a4320; --toast-link:#2347b5;
-  --shadow-current:0 1px 0 #000000; --shadow-float:0 8px 24px #000000b3;
+  --shadow-current:0 1px 0 #000000; --shadow-float:0 8px 24px #000000b3; --backdrop:#000000a0;
 }}
 
 *,*::before,*::after{box-sizing:border-box}

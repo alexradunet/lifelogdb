@@ -1,15 +1,17 @@
 // app.js — this application's one script, written into every page like the two sheets. It makes a page better,
 // and no page needs it: every form posts and every link works without it
-// (docs/plans/091-the-browser-for-daily-use.md). It reads /titles (the names after [[) and /render (the preview of
-// a body), and nothing else; it writes nothing. Five things:
+// (docs/plans/091-the-browser-for-daily-use.md). It reads /titles (the names after [[, and the pages of the command
+// list), /render (the preview of a body) and / (the root's actions, for the command list), and nothing else; it
+// writes nothing. Six things:
 //   1. after [[ in a textarea, the names of the pages that start with what follows;
 //   2. a preview of a body as it will show when saved;
-//   3. keys: Ctrl+K search from anywhere, Ctrl+Enter sends the form of a textarea, Escape leaves a field; outside a
-//      field, / search, c capture, t today, [ and ] the previous and next page, Escape closes the phone's sheet of
+//   3. keys: Ctrl+K the command list from anywhere, Ctrl+Enter sends the form of a textarea, Escape leaves a
+//      field; outside a field, / search, c capture, t today, [ and ] the previous and next page, Escape closes the phone's sheet of
 //      sections or the toast;
 //   4. a question before the browser leaves text that was not sent;
 //   5. the design system's small things (docs/plans/092-the-app-shell.md): the toast's Close, a second press for a
-//      danger button, and the hint of Ctrl+K in the search.
+//      danger button, and the hint of Ctrl+K in the search;
+//   6. the command list of Ctrl+K (docs/plans/094-the-command-list.md).
 (function () {
   "use strict";
 
@@ -175,10 +177,10 @@
       t.form.requestSubmit();
       return;
     }
-    // Ctrl+K (Cmd+K) goes to the search from anywhere, a field too.
+    // Ctrl+K (Cmd+K) opens the command list from anywhere, a field too.
     if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && !ev.shiftKey && (ev.key === "k" || ev.key === "K")) {
-      var box = document.querySelector("form[role=search] input");
-      if (box) { ev.preventDefault(); box.focus(); box.select(); }
+      ev.preventDefault();
+      openPalette();
       return;
     }
     // Escape leaves a field (a page may start in one), so the keys below work; it first closes a list of names.
@@ -256,6 +258,212 @@
     setTimeout(function () { b.dataset.armed = ""; b.textContent = word; }, 4000);
   });
 
+  // ---- 6. The command list (docs/plans/094-the-command-list.md)
+
+  // The list finds what is typed among a day, this page's actions, the sidebar's sections, the pages (by the start of
+  // their title, from /titles), the root's actions (from /, once) and a search of the bodies. It never builds a form:
+  // an action opens the form the server drew for it, here or on Home (/#do-NAME).
+
+  function fold(s) { return s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase(); }
+
+  // rank is 0 when a word of the name starts with the query, 1 when the name holds it, -1 when it does not.
+  function rank(name, query) {
+    var n = fold(name), q = fold(query.trim());
+    if (!q) return 0;
+    if (n.indexOf(q) === 0 || n.indexOf(" " + q) >= 0) return 0;
+    return n.indexOf(q) >= 0 ? 1 : -1;
+  }
+
+  // pageActions are the actions of this page that the owner fills or presses: a box's, or the capture's; not a row's
+  // one-button forms (Done, Skip), which belong to their row.
+  function pageActions() {
+    var out = [], seen = {};
+    var forms = document.querySelectorAll("main form[data-action]");
+    for (var i = 0; i < forms.length; i++) {
+      var f = forms[i], name = f.getAttribute("data-action"), box = f.closest("details.action");
+      if (seen[name] || (!box && !f.querySelector("label, fieldset"))) continue;
+      seen[name] = true;
+      var summary = box && box.querySelector("summary");
+      var label = summary ? summary.firstChild.textContent : (f.querySelector("button") || {}).textContent || name;
+      var capture = !box && f.closest(".capture");
+      if (capture && capture.querySelector("h2")) label = capture.querySelector("h2").textContent;
+      out.push({ kind: summary && summary.querySelector(".owner") ? "owner, on this page" : "on this page", name: label.trim(), action: name });
+    }
+    return out;
+  }
+
+  function sections() {
+    var out = [], links = document.querySelectorAll(".rail nav a[href]:not([href^=\"#\"])");
+    for (var i = 0; i < links.length; i++) {
+      var name = links[i].firstChild && links[i].textContent.replace(/\d+$/, "").trim();
+      out.push({ kind: "section", name: name, href: links[i].getAttribute("href") });
+    }
+    return out;
+  }
+
+  var rootActions = null; // the root's actions, read once a page
+  function readRoot() {
+    if (rootActions) return Promise.resolve(rootActions);
+    return fetch("/", { headers: siren, credentials: "same-origin" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (e) {
+        var count = {}, out = [];
+        var actions = (e && e.actions) || [];
+        actions.forEach(function (a) { count[a.name] = (count[a.name] || 0) + 1; });
+        actions.forEach(function (a) {
+          // An action offered once starts something. One offered per item (a check-in, an outcome) belongs to its
+          // item, and the search is the list's own last row.
+          if (count[a.name] === 1 && a.name !== "search") out.push({ kind: a.owner ? "owner" : "action", name: a.title || a.name, action: a.name, root: true });
+        });
+        rootActions = out;
+        return out;
+      })
+      .catch(function () { return []; });
+  }
+
+  // openAction opens the form of an action on this page: the boxes around it, then the cursor in its first field.
+  function openAction(name) {
+    var f = document.querySelector("main form[data-action=\"" + CSS.escape(name) + "\"]");
+    if (!f) return false;
+    for (var d = f.closest("details"); d; d = d.parentElement && d.parentElement.closest("details")) d.open = true;
+    var field = f.querySelector("input:not([type=hidden]), textarea, select, button");
+    f.scrollIntoView({ block: "center" });
+    if (field) field.focus();
+    return true;
+  }
+
+  var palette = null, listed = [], chosen = 0, typed = 0, before = null;
+
+  function build() {
+    palette = document.createElement("dialog");
+    palette.className = "palette";
+    palette.setAttribute("aria-label", "Go to, or do");
+    var input = document.createElement("input");
+    input.type = "text";
+    input.autocomplete = "off";
+    input.setAttribute("role", "combobox");
+    input.setAttribute("aria-expanded", "true");
+    input.setAttribute("aria-controls", "palette-list");
+    input.setAttribute("aria-autocomplete", "list");
+    input.setAttribute("aria-label", "Go to a page, a section or a day, or do an action");
+    input.placeholder = "Go to a page, a section or a day, or do an action";
+    var list = document.createElement("ul");
+    list.id = "palette-list";
+    list.setAttribute("role", "listbox");
+    list.setAttribute("aria-label", "Results");
+    var keys = document.createElement("p");
+    keys.className = "meta";
+    keys.textContent = "↑ ↓ move · Enter opens · Esc closes";
+    palette.appendChild(input);
+    palette.appendChild(list);
+    palette.appendChild(keys);
+    document.body.appendChild(palette);
+    input.addEventListener("input", function () { fill(input.value); });
+    input.addEventListener("keydown", function (ev) {
+      switch (ev.key) {
+        case "ArrowDown": ev.preventDefault(); markRow(chosen + 1); break;
+        case "ArrowUp": ev.preventDefault(); markRow(chosen - 1); break;
+        case "Enter": ev.preventDefault(); ev.stopPropagation(); go(listed[chosen]); break;
+        case "Escape": ev.preventDefault(); ev.stopPropagation(); closePalette(); break;
+      }
+    });
+    palette.addEventListener("click", function (ev) { if (ev.target === palette) closePalette(); }); // the backdrop
+    palette.addEventListener("cancel", function (ev) { ev.preventDefault(); closePalette(); });
+  }
+
+  function openPalette() {
+    if (!palette) build();
+    if (!palette.open) {
+      before = document.activeElement;
+      palette.showModal();
+    }
+    var input = palette.querySelector("input");
+    input.value = "";
+    input.focus();
+    fill("");
+  }
+
+  function closePalette() {
+    if (!palette || !palette.open) return;
+    palette.close();
+    if (before && before.focus) before.focus();
+  }
+
+  function fill(query) {
+    var mine = ++typed, q = query.trim();
+    var near = function (items) {
+      return items.map(function (it) { return { it: it, r: rank(it.name, q) }; })
+        .filter(function (x) { return x.r >= 0; })
+        .sort(function (a, b) { return a.r - b.r; })
+        .map(function (x) { return x.it; });
+    };
+    var rows = /^\d{4}-\d{2}-\d{2}$/.test(q) ? [{ kind: "day", name: "Open " + q, href: "/days/" + q }] : [];
+    rows = rows.concat(near(pageActions()), near(sections()));
+    var search = q ? [{ kind: "search", name: "Search the bodies for “" + q + "”", href: "/search?q=" + encodeURIComponent(q) }] : [];
+    showRows(rows.concat(search));
+    var pages = !q ? Promise.resolve([]) : fetch("/titles?" + new URLSearchParams({ prefix: q, limit: "6" }), { headers: siren, credentials: "same-origin" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (e) {
+        return ((e && e.properties && e.properties.titles) || []).map(function (t) {
+          return { kind: "page", name: t.title, href: "/pages?title=" + encodeURIComponent(t.title) };
+        });
+      })
+      .catch(function () { return []; });
+    Promise.all([pages, readRoot()]).then(function (got) {
+      if (mine !== typed) return; // a later key has its own rows
+      var here = {};
+      pageActions().forEach(function (a) { here[a.action] = true; });
+      showRows(rows.concat(got[0], near(got[1].filter(function (a) { return !here[a.action]; })), search));
+    });
+  }
+
+  function showRows(rows) {
+    listed = rows.slice(0, 12);
+    var list = palette.querySelector("ul");
+    list.textContent = "";
+    listed.forEach(function (row, i) {
+      var li = document.createElement("li");
+      li.id = "palette-" + i;
+      li.setAttribute("role", "option");
+      var kind = document.createElement("span");
+      kind.className = "kind";
+      kind.textContent = row.kind;
+      var name = document.createElement("span");
+      name.textContent = row.name;
+      li.appendChild(name);
+      li.appendChild(kind);
+      li.addEventListener("mousedown", function (ev) { ev.preventDefault(); go(row); });
+      list.appendChild(li);
+    });
+    if (!listed.length) {
+      var none = document.createElement("li");
+      none.className = "none";
+      none.textContent = "Nothing matches. Type the start of a title, a section or an action.";
+      list.appendChild(none);
+    }
+    markRow(0);
+  }
+
+  function markRow(i) {
+    var items = palette.querySelectorAll("li[role=option]"), input = palette.querySelector("input");
+    if (!items.length) { input.removeAttribute("aria-activedescendant"); return; }
+    chosen = (i + items.length) % items.length;
+    for (var k = 0; k < items.length; k++) items[k].setAttribute("aria-selected", k === chosen ? "true" : "false");
+    input.setAttribute("aria-activedescendant", items[chosen].id);
+    items[chosen].scrollIntoView({ block: "nearest" });
+  }
+
+  function go(row) {
+    if (!row) return;
+    if (row.action && !row.root) { // an action of this page: its own form, here
+      before = null;
+      closePalette();
+      openAction(row.action);
+      return;
+    }
+    location.href = row.action ? "/#do-" + encodeURIComponent(row.action) : row.href;
+  }
+
   // ---- Start
 
   var areas = document.querySelectorAll("textarea:not([readonly])");
@@ -273,13 +481,19 @@
   if (search) {
     var hint = document.createElement("kbd");
     hint.textContent = "Ctrl K";
+    hint.title = "Ctrl K opens the command list";
     search.appendChild(hint);
   }
+  // On a phone the top bar's Search button opens the command list, which also searches the bodies.
+  var searchButton = document.querySelector(".rail-search-link");
+  if (searchButton) searchButton.addEventListener("click", function (ev) { ev.preventDefault(); openPalette(); });
+  // Home opens the action that the command list chose on another page (/#do-NAME).
+  if (location.hash.indexOf("#do-") === 0) openAction(decodeURIComponent(location.hash.slice(4)));
   var foot = document.querySelector("footer p");
   if (foot) {
     var keys = document.createElement("small");
     keys.className = "keys";
-    keys.textContent = "Keys: Ctrl+K or / search · c capture · t today · [ ] previous, next · Esc leaves a field · Ctrl+Enter sends a text";
+    keys.textContent = "Keys: Ctrl+K the command list · / search · c capture · t today · [ ] previous, next · Esc leaves a field · Ctrl+Enter sends a text";
     foot.appendChild(document.createElement("br"));
     foot.appendChild(keys);
   }

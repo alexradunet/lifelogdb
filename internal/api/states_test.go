@@ -107,3 +107,24 @@ func TestNoPageShowsARawInstant(t *testing.T) {
 		t.Error("a session's properties are not facts")
 	}
 }
+
+// TestEveryActionFormCarriesItsName: a form drawn from an action carries the action's catalog name, so the command
+// list (docs/plans/094-the-command-list.md) opens the form the server drew: a box, a row's one-button form, the capture.
+func TestEveryActionFormCarriesItsName(t *testing.T) {
+	c, h := freshOn(t, fixedToday)
+	root := must(c.Get("/"))
+	must(c.Do(find(root, "create-task"), map[string]string{"label": "Book the dentist", "due_day": dayOf(-1)}))
+	must(c.Do(find(root, "register-metric"), map[string]string{"name": "walk"}))
+	must(c.Do(find(must(c.Get("/metrics/walk")), "start-habit"), map[string]string{"start_day": dayOf(-3)}))
+	body := browse(t, h, "/")
+	for _, name := range []string{"capture", "create-task", "find", "snapshot", "edit-occurrence", "check-in"} {
+		if !strings.Contains(body, `data-action="`+name+`"`) {
+			t.Errorf("Home has no form named %s", name)
+		}
+	}
+	for _, tag := range regexp.MustCompile(`<form method="POST"[^>]*>`).FindAllString(body, -1) {
+		if !strings.Contains(tag, ` data-action="`) {
+			t.Errorf("a form has no action's name: %s", tag)
+		}
+	}
+}

@@ -8,7 +8,7 @@ Earlier closed plans live in git history (`git log -- docs/plans`). The next pla
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| [094](094-the-command-list.md) | The command list of Ctrl K | P2 | M | issue 0063; owner decision 2026-10-12 | TODO |
+| [094](094-the-command-list.md) | The command list of Ctrl K | P2 | M | issue 0063; owner decision 2026-10-12 | DONE |
 | [093](093-words-phone-and-today.md) | Words, not data; the phone first; a richer Today | P1 | L | issue 0062; owner decisions 2026-10-12 | DONE |
 | [092](092-the-app-shell.md) | The app shell: the Almanac design system in the browser | P1 | L | issue 0061; owner decisions 2026-10-12 | DONE |
 | [091](091-the-browser-for-daily-use.md) | The browser for daily use: planning, the journal, navigation and editing | P1 | L | issue 0060; owner decisions 2026-10-12 | DONE |
