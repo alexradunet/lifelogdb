@@ -38,6 +38,8 @@
   function close(area) {
     var open = lists.get(area);
     if (!open) return;
+    if (open.off) open.off();
+    if (typeof open.list.hidePopover === "function" && open.list.matches(":popover-open")) open.list.hidePopover();
     open.list.remove();
     lists.delete(area);
     area.removeAttribute("aria-controls");
@@ -72,6 +74,14 @@
     area.focus();
   }
 
+  // place puts a list that is a popover under its field: a popover is in the top layer, so it is fixed to the window.
+  function place(open) {
+    var r = open.area.getBoundingClientRect();
+    open.list.style.left = r.left + "px";
+    open.list.style.top = (r.bottom + 2) + "px";
+    open.list.style.width = r.width + "px";
+  }
+
   var serial = 0;
 
   function show(area, link, titles) {
@@ -96,7 +106,18 @@
       li.addEventListener("mousedown", function (ev) { ev.preventDefault(); choose(open, i); });
       list.appendChild(li);
     });
+    var popover = typeof list.showPopover === "function"; // a browser without the API keeps the list in the page
+    if (popover) list.setAttribute("popover", "manual");
     area.insertAdjacentElement("afterend", list);
+    if (popover) {
+      list.showPopover();
+      place(open);
+      // The list is fixed to the window, so a scroll or a resize of the page closes it. The list's own scroll does not.
+      var away = function (ev) { if (!(ev.target instanceof Node) || !list.contains(ev.target)) close(area); };
+      window.addEventListener("scroll", away, true);
+      window.addEventListener("resize", away);
+      open.off = function () { window.removeEventListener("scroll", away, true); window.removeEventListener("resize", away); };
+    }
     area.setAttribute("aria-controls", list.id);
     area.setAttribute("aria-expanded", "true");
     lists.set(area, open);
@@ -205,7 +226,7 @@
     };
     switch (ev.key) {
       case "/": {
-        var search = document.querySelector("form[role=search] input");
+        var search = document.querySelector("search input[type=search]");
         if (search) { ev.preventDefault(); search.focus(); }
         break;
       }

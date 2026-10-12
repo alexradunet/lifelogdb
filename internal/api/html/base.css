@@ -4,7 +4,7 @@
    so a page reads as HTML with this file alone and app.css adds only what this app's own vocabulary needs. No
    framework is vendored and nothing is fetched from another host: the three faces are embedded and served at
    /assets/fonts/. Dark is the identity; light is the daylight study of the same room, by prefers-color-scheme, with
-   every token redefined and no colour outside the token blocks. */
+   every token written once as light-dark(light, dark) and no colour outside the token block. */
 
 /* Atkinson Hyperlegible for words, IBM Plex Mono for days, times, counts and values, Jersey 15 for the few large
    things (a title, the leaf's number, a reading): the latin files, then the latin-ext ones, which a browser fetches
@@ -25,25 +25,25 @@
 /* The tokens: the materials (oak for the page, wood for the rail, parchment for what is written), the text of each
    material, the accents (gold for where the owner is and what is today, ember for the one loud button and the word
    "overdue", teal for a link and the focus ring), the shapes (bevels and hard drops, no radius) and the faces. Every
-   pair a use names holds 4.5:1 for text and 3:1 for an edge and the focus ring, in both themes; a test reads these
-   two blocks and checks it. A material sets its own text through the aliases --text, --text-strong, --text-muted,
+   pair a use names holds 4.5:1 for text and 3:1 for an edge and the focus ring, in both themes; a test reads this
+   one block and checks it. A material sets its own text through the aliases --text, --text-strong, --text-muted,
    --text-link, --text-accent and --rule: the page sets them for oak here, and a parchment or wood element resets
    them, so one rule draws a link or a heading on any material. The type scale is 13 / 15 / 18 / 24 / 40 px (the
    display face at 40 is as tall as the sans at 34), and a control is 40 px high, 44 px under 900 px, where the screen
    is a touch screen (docs/plans/095-the-leaf-and-its-margin.md). */
 :root{
   color-scheme:light;
-  --ground:#efe2bd; --rail:#3a2210; --rail-deep:#2c1a0c; --surface:#f4e9c4; --surface-deep:#e4d49e;
-  --edge:#8c7240; --outline:#241708; --line:#c8b488; --line-soft:#cdb983;
-  --ink:#2c2012; --muted:#5c4c2f; --page-ink:#3a2c18; --page-strong:#241a0c; --page-muted:#6a5838; --rail-ink:#d6bb92;
-  --accent:#6f4e0e; --rail-accent:#f2c14e; --accent-ink:#6b4a0c; --accent-soft:#e9d38c; --on-accent:#fff3dc;
-  --link:#0a5546; --link-page:#0a5546; --primary:#b5400a; --primary-hover:#9c3608;
-  --warn:#8f3a12; --warn-ink:#7e3210; --warn-soft:#f3d2b0;
-  --done:#3f6a22; --done-ink:#355c1c; --done-soft:#dbe4a6;
-  --danger:#a8201f; --danger-ink:#8f1d12; --danger-soft:#f3cbbf; --danger-line:#c25a48;
-  --mark:#f2c14e; --focus:#0e7f6b; --backdrop:#1a0d04b8;
-  --bevel-light:#ffdea64d; --bevel-dark:#0000008c; --paper-light:#ffffff73; --slab-shade:#40301240; --well-shade:#4030122e;
-  --grain-ground:repeating-conic-gradient(#2c20120a 0% 25%,transparent 0% 50%);
+  --ground:light-dark(#efe2bd, #140c06); --rail:light-dark(#3a2210, #2a1709); --rail-deep:light-dark(#2c1a0c, #1d0f06); --surface:light-dark(#f4e9c4, #e8d9ae); --surface-deep:light-dark(#e4d49e, #d6c188);
+  --edge:light-dark(#8c7240, #7f663a); --outline:light-dark(#241708, #120a04); --line:light-dark(#c8b488, #3b2a16); --line-soft:light-dark(#cdb983, #c2aa72);
+  --ink:#2c2012; --muted:light-dark(#5c4c2f, #463a24); --page-ink:light-dark(#3a2c18, #c9b894); --page-strong:light-dark(#241a0c, #ecdcb2); --page-muted:light-dark(#6a5838, #bfb19c); --rail-ink:light-dark(#d6bb92, #cbb18e);
+  --accent:light-dark(#6f4e0e, #f2c14e); --rail-accent:#f2c14e; --accent-ink:light-dark(#6b4a0c, #4f3709); --accent-soft:light-dark(#e9d38c, #e9c974); --on-accent:light-dark(#fff3dc, #1c0d04);
+  --link:light-dark(#0a5546, #084337); --link-page:light-dark(#0a5546, #39c6af); --primary:light-dark(#b5400a, #ff955c); --primary-hover:light-dark(#9c3608, #ffa676);
+  --warn:#8f3a12; --warn-ink:#7e3210; --warn-soft:light-dark(#f3d2b0, #edc8a3);
+  --done:light-dark(#3f6a22, #3d6621); --done-ink:#355c1c; --done-soft:light-dark(#dbe4a6, #d0dc9a);
+  --danger:#a8201f; --danger-ink:light-dark(#8f1d12, #8a1c11); --danger-soft:light-dark(#f3cbbf, #efc3b5); --danger-line:light-dark(#c25a48, #b8503f);
+  --mark:#f2c14e; --focus:#0e7f6b; --backdrop:light-dark(#1a0d04b8, #0a0501b8);
+  --bevel-light:light-dark(#ffdea64d, #ffc4762e); --bevel-dark:#0000008c; --paper-light:#ffffff73; --slab-shade:#40301240; --well-shade:#4030122e;
+  --grain-ground:repeating-conic-gradient(light-dark(#2c20120a, #ffd69606) 0% 25%,transparent 0% 50%);
   --grain-ink:repeating-conic-gradient(#402c120b 0% 25%,transparent 0% 50%);
   --planks:repeating-linear-gradient(0deg,#00000029 0 2px,transparent 2px 9px);
   --bevel-up:inset 0 3px 0 var(--bevel-light),inset 3px 0 0 var(--bevel-light),inset 0 -3px 0 var(--bevel-dark),inset -3px 0 0 var(--bevel-dark);
@@ -60,20 +60,7 @@
   --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-5:20px; --space-6:24px; --space-8:32px; --space-10:40px;
   --rail-width:248px; --control:40px; --control-small:32px; --measure:70ch; --measure-read:62ch;
 }
-@media (prefers-color-scheme:dark){:root{
-  color-scheme:dark;
-  --ground:#140c06; --rail:#2a1709; --rail-deep:#1d0f06; --surface:#e8d9ae; --surface-deep:#d6c188;
-  --edge:#7f663a; --outline:#120a04; --line:#3b2a16; --line-soft:#c2aa72;
-  --ink:#2c2012; --muted:#5c4c2f; --page-ink:#c9b894; --page-strong:#ecdcb2; --page-muted:#9a8363; --rail-ink:#c4a67e;
-  --accent:#f2c14e; --rail-accent:#f2c14e; --accent-ink:#6b4a0c; --accent-soft:#e9c974; --on-accent:#1c0d04;
-  --link:#0a5546; --link-page:#35b8a3; --primary:#ff7a33; --primary-hover:#ff925a;
-  --warn:#8f3a12; --warn-ink:#7e3210; --warn-soft:#edc8a3;
-  --done:#3f6a22; --done-ink:#355c1c; --done-soft:#d0dc9a;
-  --danger:#a8201f; --danger-ink:#8f1d12; --danger-soft:#efc3b5; --danger-line:#b8503f;
-  --mark:#f2c14e; --focus:#0e7f6b; --backdrop:#0a0501b8;
-  --bevel-light:#ffc4762e; --bevel-dark:#0000008c; --paper-light:#ffffff73; --slab-shade:#40301240; --well-shade:#4030122e;
-  --grain-ground:repeating-conic-gradient(#ffd69606 0% 25%,transparent 0% 50%);
-}}
+@media (prefers-color-scheme:dark){:root{color-scheme:dark}}
 @media (max-width:899px){:root{--control:44px; --control-small:40px}}
 
 *,*::before,*::after{box-sizing:border-box}
@@ -97,7 +84,11 @@ abbr[title]{cursor:help; text-decoration:underline dotted}
 a{color:var(--text-link); text-decoration:none}
 a:hover{text-decoration:underline}
 :where(a,button,summary,input,textarea,select,[tabindex]):focus-visible{outline:2px solid var(--focus); outline-offset:2px}
-/* The one motion: a press sinks. Reduced motion keeps the press and drops the transition. */
+/* The first motion: a press sinks. Reduced motion keeps the press and drops the transition. The second motion is the
+   step from one page to the next: the browser cross-fades the pages, and app.css names the leaf and the sheet so
+   they move on their own (docs/plans/097-the-almanac-reflects.md). */
+@view-transition{navigation:auto}
+@media (prefers-reduced-motion:reduce){@view-transition{navigation:none}}
 @media (prefers-reduced-motion:no-preference){button,summary{transition:transform .08s,box-shadow .08s,filter .08s}}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto} *,*::before,*::after{transition:none!important;animation:none!important}}
 

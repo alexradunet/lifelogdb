@@ -18,7 +18,7 @@
 {{define "rail"}}{{$nav := .Nav}}{{$elsewhere := false}}{{range $nav}}{{if and .Current (or (eq .Group "record") (eq .Group "owner"))}}{{$elsewhere = true}}{{end}}{{end}}<aside class="rail">
 <div class="rail-head">{{range $nav}}{{if eq .Group "home"}}<a class="brand" href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}>{{.Title}}</a>{{end}}{{end}}{{with .Shell.Today}}<span class="date">{{shortDay .}}</span>{{end}}
 <a class="rail-search-link button" href="/search" aria-label="Search">{{icon "search"}}</a></div>
-<form class="rail-search" method="GET" action="/search" role="search">{{icon "search"}}<input type="search" name="q" placeholder="Search" aria-label="Search"></form>
+<search><form class="rail-search" method="GET" action="/search">{{icon "search"}}<input type="search" name="q" placeholder="Search" aria-label="Search"></form></search>
 <a class="button primary rail-new" href="/#new">{{icon "new"}}New</a>
 <nav aria-label="Sections">
 <ul>{{range $nav}}{{if eq .Group "day"}}<li>{{template "navlink" .}}</li>{{end}}{{end}}
