@@ -61,7 +61,7 @@ func outcomeAction(o core.TaskOccurrence) (Action, bool) {
 		return action("capture-occurrence", map[string]string{"id": id}, map[string]any{"task_version": o.TaskVersion, "key": o.OccurrenceKey,
 			"due_day": o.OccurrenceKey, "state": "open", "reminder_mode": "inherit"}), true
 	}
-	return action("edit-occurrence", map[string]string{"id": id, "key": url.PathEscape(o.OccurrenceKey)}, map[string]any{"task_version": o.TaskVersion,
+	return action("edit-occurrence", map[string]string{"id": id, "key": o.OccurrenceKey}, map[string]any{"task_version": o.TaskVersion,
 		"version": o.Version, "due_day": o.DueDay, "state": o.State, "completed_at": o.CompletedAt, "reminder_mode": o.ReminderMode,
 		"reminder_at": o.ReminderOverrideAt}), true
 }
@@ -87,19 +87,9 @@ func taskWindow(q url.Values, localDay string) (from, through string, err error)
 		through = today.AddDate(0, 0, windowOn).Format(time.DateOnly)
 	}
 	if !core.IsDay(from) || !core.IsDay(through) || from > through {
-		return "", "", &core.Error{Status: 422, Msg: "from and through must be exact days, from first"}
+		return "", "", core.Invalid("from and through must be exact days, from first")
 	}
 	return from, through, nil
-}
-
-func flag(q url.Values, name string) (bool, error) {
-	switch q.Get(name) {
-	case "", "0":
-		return false, nil
-	case "1":
-		return true, nil
-	}
-	return false, &core.Error{Status: 422, Msg: name + " must be 0 or 1"}
 }
 
 func taskHref(id int64) string { return "/tasks/" + strconv.FormatInt(id, 10) }
@@ -166,7 +156,7 @@ func (h *server) taskEntity(ctx context.Context, id int64, q url.Values) (*Entit
 	for _, o := range os {
 		views = append(views, viewOccurrence(*t, o, ""))
 	}
-	self := taskHref(id) + "?" + url.Values{"from": {from}, "through": {through}, "include_deleted": {map[bool]string{true: "1", false: "0"}[deleted]}}.Encode()
+	self := taskHref(id) + "?" + url.Values{"from": {from}, "through": {through}, "include_deleted": {boolField(deleted)}}.Encode()
 	props := map[string]any{"task": t, "from": from, "through": through, "include_deleted": deleted, "occurrences": views, "today": h.localDay()}
 	// A one-off's one occurrence, whatever its due day: an undated one is in no window, and its page must still
 	// show it and offer its outcome.
@@ -194,7 +184,7 @@ func (h *server) taskEntity(ctx context.Context, id int64, q url.Values) (*Entit
 		}
 		e.Entities = append(e.Entities, Link{Rel: []string{"occurrence"}, Href: occurrenceHref(id, o.OccurrenceKey), Title: occurrenceTitle(o), Class: []string{class}})
 	}
-	ids := map[string]string{"id": strconv.FormatInt(id, 10)}
+	ids := idParam(id)
 	if t.DeletedAt != "" {
 		e.Class = append(e.Class, "deleted")
 		e.Actions = []Action{action("revive-task", ids, map[string]any{"version": t.Version})}
@@ -228,7 +218,7 @@ func (h *server) occurrence(r *http.Request) (*Entity, error) {
 
 func (h *server) occurrenceEntity(ctx context.Context, taskID int64, key string) (*Entity, error) {
 	if key != "once" && !core.IsDay(key) {
-		return nil, &core.Error{Status: 404, Msg: "an occurrence key is a day of the series, or once"}
+		return nil, core.NotFound("an occurrence key is a day of the series, or once")
 	}
 	t, err := h.s.Task(ctx, taskID)
 	if err != nil {
@@ -261,7 +251,7 @@ func (h *server) occurrenceEntity(ctx context.Context, taskID int64, key string)
 	if t.ProjectPageID != nil {
 		e.Links = append(e.Links, link("project", pageHref(*t.ProjectPageID), t.ProjectTitle))
 	}
-	ids := map[string]string{"id": strconv.FormatInt(taskID, 10), "key": url.PathEscape(key)}
+	ids := map[string]string{"id": strconv.FormatInt(taskID, 10), "key": key}
 	outcome, _ := outcomeAction(*o)
 	switch {
 	case t.DeletedAt != "":
@@ -293,14 +283,14 @@ func (h *server) deadlines(r *http.Request) (*Entity, error) {
 		state = "open"
 	}
 	if state != "open" && state != "done" && state != "skipped" && state != "all" {
-		return nil, &core.Error{Status: 422, Msg: "state is open, done, skipped or all"}
+		return nil, core.Invalid("state is open, done, skipped or all")
 	}
 	today := h.localDay()
 	views, err := h.dueIn(r.Context(), from, through, state, deleted)
 	if err != nil {
 		return nil, err
 	}
-	self := "/deadlines?" + url.Values{"from": {from}, "through": {through}, "state": {state}, "include_deleted": {map[bool]string{true: "1", false: "0"}[deleted]}}.Encode()
+	self := "/deadlines?" + url.Values{"from": {from}, "through": {through}, "state": {state}, "include_deleted": {boolField(deleted)}}.Encode()
 	e := &Entity{Class: []string{"deadlines"}, Title: "Deadlines " + from + " to " + through,
 		Properties: map[string]any{"from": from, "through": through, "state": state, "include_deleted": deleted, "occurrences": views, "today": today},
 		Links:      []Link{link("self", self, "Deadlines"), link("tasks", "/tasks", "Tasks"), link("index", "/", "Home")},
@@ -360,7 +350,7 @@ func (h *server) createTask(r *http.Request, src string) (*Entity, error) {
 	if every := v.Get("repeat_every"); every != "" {
 		n, err := strconv.ParseInt(every, 10, 64)
 		if err != nil {
-			return nil, &core.Error{Status: 422, Msg: "repeat_every must be a whole number"}
+			return nil, core.Invalid("repeat_every must be a whole number")
 		}
 		f.RepeatEvery = n
 	}
@@ -372,15 +362,8 @@ func (h *server) createTask(r *http.Request, src string) (*Entity, error) {
 }
 
 func (h *server) editTask(r *http.Request, src string) (*Entity, error) {
-	id, err := idOf(r)
+	id, v, err := idForm(r, "version", "label")
 	if err != nil {
-		return nil, err
-	}
-	v, err := form(r)
-	if err != nil {
-		return nil, err
-	}
-	if err := required(v, "version", "label"); err != nil {
 		return nil, err
 	}
 	if err := h.s.EditTask(r.Context(), src, id, v.Get("version"), taskForm(v)); err != nil {
@@ -390,15 +373,8 @@ func (h *server) editTask(r *http.Request, src string) (*Entity, error) {
 }
 
 func (h *server) stopTask(r *http.Request, src string) (*Entity, error) {
-	id, err := idOf(r)
+	id, v, err := idForm(r, "version", "through")
 	if err != nil {
-		return nil, err
-	}
-	v, err := form(r)
-	if err != nil {
-		return nil, err
-	}
-	if err := required(v, "version", "through"); err != nil {
 		return nil, err
 	}
 	if err := h.s.StopTask(r.Context(), src, id, v.Get("version"), v.Get("through")); err != nil {
@@ -409,15 +385,8 @@ func (h *server) stopTask(r *http.Request, src string) (*Entity, error) {
 
 func (h *server) taskLifecycle(deleted bool) func(*http.Request, string) (*Entity, error) {
 	return func(r *http.Request, src string) (*Entity, error) {
-		id, err := idOf(r)
+		id, v, err := idForm(r, "version")
 		if err != nil {
-			return nil, err
-		}
-		v, err := form(r)
-		if err != nil {
-			return nil, err
-		}
-		if err := required(v, "version"); err != nil {
 			return nil, err
 		}
 		if err := h.s.TaskLifecycle(r.Context(), src, id, v.Get("version"), deleted); err != nil {
@@ -448,15 +417,8 @@ func occurrencePatch(v url.Values) core.OccurrencePatch {
 }
 
 func (h *server) captureOccurrence(r *http.Request, src string) (*Entity, error) {
-	id, err := idOf(r)
+	id, v, err := idForm(r, "task_version", "key")
 	if err != nil {
-		return nil, err
-	}
-	v, err := form(r)
-	if err != nil {
-		return nil, err
-	}
-	if err := required(v, "task_version", "key"); err != nil {
 		return nil, err
 	}
 	key := v.Get("key")
@@ -467,15 +429,8 @@ func (h *server) captureOccurrence(r *http.Request, src string) (*Entity, error)
 }
 
 func (h *server) editOccurrence(r *http.Request, src string) (*Entity, error) {
-	id, err := idOf(r)
+	id, v, err := idForm(r, "task_version", "version")
 	if err != nil {
-		return nil, err
-	}
-	v, err := form(r)
-	if err != nil {
-		return nil, err
-	}
-	if err := required(v, "task_version", "version"); err != nil {
 		return nil, err
 	}
 	key := r.PathValue("key")
@@ -487,15 +442,8 @@ func (h *server) editOccurrence(r *http.Request, src string) (*Entity, error) {
 
 func (h *server) occurrenceLifecycle(deleted bool) func(*http.Request, string) (*Entity, error) {
 	return func(r *http.Request, src string) (*Entity, error) {
-		id, err := idOf(r)
+		id, v, err := idForm(r, "task_version", "version")
 		if err != nil {
-			return nil, err
-		}
-		v, err := form(r)
-		if err != nil {
-			return nil, err
-		}
-		if err := required(v, "task_version", "version"); err != nil {
 			return nil, err
 		}
 		key := r.PathValue("key")

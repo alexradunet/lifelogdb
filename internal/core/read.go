@@ -56,7 +56,7 @@ func (s *Store) PageByID(ctx context.Context, id int64) (*Page, error) {
 		  FROM entities e JOIN entity_names n ON n.entity_id = e.id AND n.name_key = e.preferred_name_key WHERE e.id = ?`, id).
 		Scan(&p.Type, &p.Title, &day, &p.Body, &p.CreatedAt, &p.Version, &deleted, &p.SessionKind, &p.TaskProject)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, notFound("no page %d", id)
+		return nil, NotFound("no page %d", id)
 	}
 	if err != nil {
 		return nil, err
@@ -157,7 +157,7 @@ type Day struct {
 
 func (s *Store) Day(ctx context.Context, day string) (*Day, error) {
 	if !IsDay(day) {
-		return nil, invalid("day %q is not YYYY-MM-DD", day)
+		return nil, Invalid("day %q is not YYYY-MM-DD", day)
 	}
 	d := &Day{Day: day, Rows: []DayRow{}}
 	err := s.DB.R.QueryRowContext(ctx, `SELECT id FROM entities WHERE id = (SELECT entity_id FROM entity_names WHERE name_key = ?) AND deleted_at IS NULL`, day).Scan(&d.PageID)
@@ -190,7 +190,7 @@ func (s *Store) Day(ctx context.Context, day string) (*Day, error) {
 // renamed Mood is still the mood. A day without a reading is absent.
 func (s *Store) Moods(ctx context.Context, from, through string) (map[string][]float64, error) {
 	if !IsDay(from) || !IsDay(through) || from > through {
-		return nil, invalid("a mood window must have ordered exact days")
+		return nil, Invalid("a mood window must have ordered exact days")
 	}
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT me.day, me.value
@@ -227,7 +227,7 @@ type DayEntry struct {
 // of them.
 func (s *Store) DayEntries(ctx context.Context, from, through string, newestFirst bool, limit int) ([]DayEntry, error) {
 	if !IsDay(from) || !IsDay(through) || from > through || limit < 1 {
-		return nil, invalid("day entries need ordered exact days and a limit")
+		return nil, Invalid("day entries need ordered exact days and a limit")
 	}
 	order := "ASC"
 	if newestFirst {
@@ -240,7 +240,7 @@ func (s *Store) DayEntries(ctx context.Context, from, through string, newestFirs
 // most limit of them. The text from the sixth character is "MM-DD", so 29 February matches 29 February only.
 func (s *Store) OnThisDay(ctx context.Context, day string, limit int) ([]DayEntry, error) {
 	if !IsDay(day) || limit < 1 {
-		return nil, invalid("on this day needs an exact day and a limit")
+		return nil, Invalid("on this day needs an exact day and a limit")
 	}
 	return s.dayEntries(ctx, `p.day < ? AND substr(p.day, 6) = substr(?, 6)`, "DESC", limit, day, day)
 }
@@ -304,7 +304,7 @@ type TitleMatch struct {
 func (s *Store) TitlesByPrefix(ctx context.Context, prefix string, limit int) ([]TitleMatch, error) {
 	key := text.TitleKey(strings.TrimSpace(prefix))
 	if key == "" || limit < 1 {
-		return nil, invalid("a title prefix needs text and a limit")
+		return nil, Invalid("a title prefix needs text and a limit")
 	}
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT n.title, p.title, e.id, e.entity_type
@@ -406,14 +406,14 @@ func (s *Store) Search(ctx context.Context, q string, limit, offset int) ([]Hit,
 		 WHERE entities_fts MATCH ?
 		 ORDER BY rank, p.id LIMIT ? OFFSET ?`, q, limit, offset)
 	if err != nil {
-		return nil, invalid("search %q: %v", q, err)
+		return nil, Invalid("search %q: %v", q, err)
 	}
 	defer rows.Close()
 	out := []Hit{}
 	for rows.Next() {
 		var h Hit
 		if err := rows.Scan(&h.ID, &h.Title, &h.Snippet); err != nil {
-			return nil, invalid("search %q: %v", q, err)
+			return nil, Invalid("search %q: %v", q, err)
 		}
 		out = append(out, h)
 	}
@@ -481,7 +481,7 @@ func (s *Store) Metrics(ctx context.Context) ([]Metric, error) {
 // owner keeps rather than the whole registry (a lab marker read twice a year stays at /metrics).
 func (s *Store) InUse(ctx context.Context, day string, n int) ([]string, error) {
 	if !IsDay(day) {
-		return nil, invalid("day is YYYY-MM-DD")
+		return nil, Invalid("day is YYYY-MM-DD")
 	}
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT m_name.title FROM entities m JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key AND m.deleted_at IS NULL
@@ -506,7 +506,7 @@ func (s *Store) InUse(ctx context.Context, day string, n int) ([]string, error) 
 // Series is cookbook/metric-series.md: the current readings of one metric in (from, to].
 func (s *Store) Series(ctx context.Context, metric, from, to string) ([]Reading, error) {
 	if !IsDay(from) || !IsDay(to) {
-		return nil, invalid("from and to are YYYY-MM-DD days")
+		return nil, Invalid("from and to are YYYY-MM-DD days")
 	}
 	return s.SeriesScope(ctx, metric, from, to, "unassociated", 0, false)
 }
@@ -515,7 +515,7 @@ func (s *Store) Series(ctx context.Context, metric, from, to string) ([]Reading,
 // the readings that Series gives, for all metrics. A corrected reading counts once, and a retracted one not at all.
 func (s *Store) ReadingsCount(ctx context.Context, from, through string) (int, error) {
 	if !IsDay(from) || !IsDay(through) || from > through {
-		return 0, invalid("a count needs ordered exact days")
+		return 0, Invalid("a count needs ordered exact days")
 	}
 	var n int
 	err := s.DB.R.QueryRowContext(ctx, `SELECT count(*) FROM measurement_values WHERE session_id IS NULL AND day BETWEEN ? AND ?`, from, through).Scan(&n)
@@ -542,7 +542,7 @@ func (s *Store) Measurement(ctx context.Context, id int64) (*Measurement, error)
 		  FROM measurements me LEFT JOIN sessions ss ON ss.id=me.session_id JOIN entities m ON m.id = me.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key  WHERE me.id = ?`, id).
 		Scan(&m.ID, &m.Metric, &m.Day, &m.TakenAt, &m.TZ, &value, &m.CapturedWith, &m.SessionID, &m.SessionDeletedAt, &m.Supersedes, &m.SupersededBy, &m.Current)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, notFound("no measurement %d", id)
+		return nil, NotFound("no measurement %d", id)
 	}
 	m.Scope = "unassociated"
 	if m.SessionID != 0 {
@@ -622,7 +622,7 @@ type Result struct {
 // setters cannot leak into pooled reads.
 func (s *Store) Query(ctx context.Context, q string, maxRows int) (*Result, error) {
 	if err := validateAdHocSQL(q); err != nil {
-		return nil, invalid("%v", err)
+		return nil, Invalid("%v", err)
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -638,7 +638,7 @@ func (s *Store) Query(ctx context.Context, q string, maxRows int) (*Result, erro
 	defer conn.Close()
 	rows, err := conn.QueryContext(ctx, q)
 	if err != nil {
-		return nil, invalid("%v", err)
+		return nil, Invalid("%v", err)
 	}
 	closed := false
 	closeRows := func() error {
@@ -652,7 +652,7 @@ func (s *Store) Query(ctx context.Context, q string, maxRows int) (*Result, erro
 	cols, err := rows.Columns()
 	if err != nil {
 		closeRows()
-		return nil, invalid("%v", err)
+		return nil, Invalid("%v", err)
 	}
 	res := &Result{Columns: cols, Rows: [][]any{}}
 	for rows.Next() {
@@ -667,7 +667,7 @@ func (s *Store) Query(ctx context.Context, q string, maxRows int) (*Result, erro
 		}
 		if err := rows.Scan(ptrs...); err != nil {
 			closeRows()
-			return nil, invalid("%v", err)
+			return nil, Invalid("%v", err)
 		}
 		for i, v := range vals {
 			if b, ok := v.([]byte); ok {
@@ -678,10 +678,10 @@ func (s *Store) Query(ctx context.Context, q string, maxRows int) (*Result, erro
 	}
 	if err := rows.Err(); err != nil {
 		closeRows()
-		return nil, invalid("%v", err)
+		return nil, Invalid("%v", err)
 	}
 	if err := closeRows(); err != nil {
-		return nil, invalid("%v", err)
+		return nil, Invalid("%v", err)
 	}
 	return res, nil
 }

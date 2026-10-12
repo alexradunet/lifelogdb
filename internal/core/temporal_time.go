@@ -21,7 +21,7 @@ func periodBoundary(value *string, end bool) (periodRange, error) {
 		if end {
 			return periodRange{ongoing: true}, nil
 		}
-		return periodRange{}, invalid("ongoing marker is only an end boundary")
+		return periodRange{}, Invalid("ongoing marker is only an end boundary")
 	}
 	qualified := false
 	if len(v) > 0 && strings.ContainsRune("?~%", rune(v[len(v)-1])) {
@@ -29,25 +29,25 @@ func periodBoundary(value *string, end bool) (periodRange, error) {
 		v = v[:len(v)-1]
 	}
 	if len(v) != 4 && len(v) != 7 && len(v) != 10 {
-		return periodRange{}, invalid("invalid period boundary")
+		return periodRange{}, Invalid("invalid period boundary")
 	}
 	for i := range len(v) {
 		if (i == 4 || i == 7) && v[i] == '-' {
 			continue
 		}
 		if v[i] < '0' || v[i] > '9' {
-			return periodRange{}, invalid("invalid period boundary")
+			return periodRange{}, Invalid("invalid period boundary")
 		}
 	}
 	year, err := strconv.Atoi(v[:4])
 	if err != nil {
-		return periodRange{}, invalid("invalid period year")
+		return periodRange{}, Invalid("invalid period year")
 	}
 	month := 1
 	if len(v) >= 7 {
 		month, err = strconv.Atoi(v[5:7])
 		if err != nil || month < 1 || month > 12 {
-			return periodRange{}, invalid("invalid period month")
+			return periodRange{}, Invalid("invalid period month")
 		}
 	}
 	lo, hi := v, v
@@ -60,7 +60,7 @@ func periodBoundary(value *string, end bool) (periodRange, error) {
 		hi = time.Date(year, time.Month(month)+1, 0, 0, 0, 0, 0, time.UTC).Format(time.DateOnly)
 	}
 	if !IsDay(lo) || !IsDay(hi) {
-		return periodRange{}, invalid("invalid period calendar boundary")
+		return periodRange{}, Invalid("invalid period calendar boundary")
 	}
 	if qualified {
 		return periodRange{}, nil
@@ -78,24 +78,24 @@ func periodSpan(start, end *string) (periodRange, periodRange, error) {
 		return periodRange{}, periodRange{}, err
 	}
 	if s.comparable && e.comparable && s.min > e.max {
-		return periodRange{}, periodRange{}, invalid("period boundaries are definitely reversed")
+		return periodRange{}, periodRange{}, Invalid("period boundaries are definitely reversed")
 	}
 	return s, e, nil
 }
 
 func periodMembership(start, end *string, day, asOf string) (string, error) {
 	if !IsDay(day) {
-		return "", invalid("membership day must be an exact day")
+		return "", Invalid("membership day must be an exact day")
 	}
 	if asOf != "" && !IsDay(asOf) {
-		return "", invalid("as_of must be an exact day")
+		return "", Invalid("as_of must be an exact day")
 	}
 	s, e, err := periodSpan(start, end)
 	if err != nil {
 		return "", err
 	}
 	if e.ongoing && !IsDay(asOf) {
-		return "", invalid("ongoing membership requires an explicit exact as_of day")
+		return "", Invalid("ongoing membership requires an explicit exact as_of day")
 	}
 	if s.comparable && day < s.min {
 		return "outside", nil
@@ -128,46 +128,46 @@ func periodMembership(start, end *string, day, asOf string) (string, error) {
 
 func validateSessionEndpoint(at, local, offset, zone string, required bool) error {
 	if at != "" && local != "" {
-		return invalid("session endpoint cannot be both UTC and local")
+		return Invalid("session endpoint cannot be both UTC and local")
 	}
 	if at == "" && local == "" {
 		if required {
-			return invalid("session start is required")
+			return Invalid("session start is required")
 		}
 		if offset != "" || zone != "" {
-			return invalid("session evidence requires an endpoint")
+			return Invalid("session evidence requires an endpoint")
 		}
 		return nil
 	}
 	if at != "" && !IsInstant(at) {
-		return invalid("session UTC endpoint must be a canonical instant")
+		return Invalid("session UTC endpoint must be a canonical instant")
 	}
 	if local != "" && (len(local) != 23 || !IsInstant(local+"Z")) {
-		return invalid("session local endpoint must be a canonical unresolved clock")
+		return Invalid("session local endpoint must be a canonical unresolved clock")
 	}
 	if offset != "" {
 		if at == "" {
-			return invalid("known offset requires a UTC endpoint")
+			return Invalid("known offset requires a UTC endpoint")
 		}
 		if len(offset) != 6 || (offset[0] != '+' && offset[0] != '-') || offset[3] != ':' || offset == "-00:00" {
-			return invalid("invalid known offset spelling")
+			return Invalid("invalid known offset spelling")
 		}
 		for _, i := range []int{1, 2, 4, 5} {
 			if offset[i] < '0' || offset[i] > '9' {
-				return invalid("invalid known offset spelling")
+				return Invalid("invalid known offset spelling")
 			}
 		}
 		if offset[1:3] > "23" || offset[4:6] > "59" {
-			return invalid("invalid known offset range")
+			return Invalid("invalid known offset range")
 		}
 	}
 	if zone != "" {
 		if len(zone) > 64 {
-			return invalid("unverified zone label is too long")
+			return Invalid("unverified zone label is too long")
 		}
 		for _, r := range zone {
 			if !(r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || strings.ContainsRune("_/+-", r)) {
-				return invalid("invalid unverified zone label")
+				return Invalid("invalid unverified zone label")
 			}
 		}
 	}
@@ -181,10 +181,10 @@ func sessionElapsedMillis(startAt, endAt string) (*int64, error) {
 		return nil, nil
 	}
 	if !IsInstant(startAt) || !IsInstant(endAt) {
-		return nil, invalid("elapsed endpoints must be canonical UTC instants")
+		return nil, Invalid("elapsed endpoints must be canonical UTC instants")
 	}
 	if endAt < startAt {
-		return nil, invalid("session UTC endpoints are reversed")
+		return nil, Invalid("session UTC endpoints are reversed")
 	}
 	start, err := time.Parse("2006-01-02T15:04:05.000Z", startAt)
 	if err != nil {

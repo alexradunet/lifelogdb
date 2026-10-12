@@ -291,12 +291,8 @@ func navMatch(path, p string) int {
 
 // LinkTitle is the title of the entity's link with that rel, "" when it has none.
 func (v *view) LinkTitle(rel string) string {
-	for _, l := range v.Links {
-		for _, r := range l.Rel {
-			if r == rel {
-				return l.Title
-			}
-		}
+	if l := v.linkByRel(rel); l != nil {
+		return l.Title
 	}
 	return ""
 }
@@ -346,12 +342,8 @@ func (v *view) ActionFor(name, href string) *Action {
 
 // Link is the href of the entity's link with that rel, "" when it has none.
 func (v *view) Link(rel string) string {
-	for _, l := range v.Links {
-		for _, r := range l.Rel {
-			if r == rel {
-				return l.Href
-			}
-		}
+	if l := v.linkByRel(rel); l != nil {
+		return l.Href
 	}
 	return ""
 }

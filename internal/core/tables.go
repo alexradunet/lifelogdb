@@ -58,7 +58,7 @@ func (t *Tx) ReadingsFromTable(page, metric, column string) (*TableReadings, err
 		return nil, err
 	}
 	if p == nil || p.Deleted {
-		return nil, notFound("no page %q", page)
+		return nil, NotFound("no page %q", page)
 	}
 	res.PageID, res.Page = p.ID, p.Title
 	unit, found, err := t.metricUnit(metric)
@@ -66,7 +66,7 @@ func (t *Tx) ReadingsFromTable(page, metric, column string) (*TableReadings, err
 		return nil, err
 	}
 	if !found {
-		return nil, invalid("no metric %q: the owner registers it first (register-metric)", metric)
+		return nil, Invalid("no metric %q: the owner registers it first (register-metric)", metric)
 	}
 	res.Unit = unit
 	tbl, dayCol, valueCol, unitCol, err := pickTable(markdownTables(p.Body), column)
@@ -199,18 +199,18 @@ func pickTable(tables [][][]string, column string) (tbl [][]string, dayCol, valu
 					return t, dayCol, c, unitCol, nil
 				}
 			}
-			return nil, 0, 0, 0, invalid("the table has no column %q", column)
+			return nil, 0, 0, 0, Invalid("the table has no column %q", column)
 		}
 		if len(values) != 1 {
 			names := make([]string, len(values))
 			for i, c := range values {
 				names[i] = t[0][c]
 			}
-			return nil, 0, 0, 0, invalid("the table has %d value columns (%s): name one with column", len(values), strings.Join(names, ", "))
+			return nil, 0, 0, 0, Invalid("the table has %d value columns (%s): name one with column", len(values), strings.Join(names, ", "))
 		}
 		return t, dayCol, values[0], unitCol, nil
 	}
-	return nil, 0, 0, 0, invalid("the page has no table with a column of days (YYYY-MM-DD)")
+	return nil, 0, 0, 0, Invalid("the page has no table with a column of days (YYYY-MM-DD)")
 }
 
 // headerName is a header without its unit in ( ) or [ ], case-folded: "Ferritin (ng/mL)" is "ferritin".

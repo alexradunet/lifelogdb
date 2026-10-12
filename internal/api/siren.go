@@ -4,6 +4,7 @@
 package api
 
 import (
+	"net/url"
 	"strings"
 )
 
@@ -212,7 +213,8 @@ func specOf(name string) spec {
 	panic("no action " + name)
 }
 
-// action instantiates a catalog action: path fields fill the href and drop out, values prefill the rest.
+// action instantiates a catalog action: path fields fill the href (escaped for a path) and drop out, values prefill
+// the rest.
 func action(name string, params map[string]string, values map[string]any) Action {
 	s := specOf(name)
 	a := Action{Name: s.Name, Title: s.Title, Description: s.Description, Method: s.Method, Href: s.Path, Owner: s.Owner,
@@ -222,7 +224,7 @@ func action(name string, params map[string]string, values map[string]any) Action
 	}
 	for _, f := range s.Fields {
 		if f.In == "path" {
-			a.Href = strings.ReplaceAll(a.Href, "{"+f.Name+"}", params[f.Name])
+			a.Href = strings.ReplaceAll(a.Href, "{"+f.Name+"}", url.PathEscape(params[f.Name]))
 			continue
 		}
 		if v, ok := values[f.Name]; ok {
@@ -241,4 +243,26 @@ func templated(s spec) Action {
 		a.Type = formType
 	}
 	return a
+}
+
+// linkByRel is the entity's link with that rel, nil when it has none.
+func (e *Entity) linkByRel(rel string) *Link {
+	for i := range e.Links {
+		for _, r := range e.Links[i].Rel {
+			if r == rel {
+				return &e.Links[i]
+			}
+		}
+	}
+	return nil
+}
+
+// field is the action's field with that name, nil when it has none.
+func (a *Action) field(name string) *Field {
+	for i := range a.Fields {
+		if a.Fields[i].Name == name {
+			return &a.Fields[i]
+		}
+	}
+	return nil
 }

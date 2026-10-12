@@ -71,17 +71,17 @@ type TaskOccurrence struct {
 
 func validateTaskSpec(in TaskSpec) error {
 	if !utf8.ValidString(in.Label) || strings.ContainsRune(in.Label, 0) || strings.Trim(in.Label, " ") == "" {
-		return invalid("task label must be nonempty text without NUL")
+		return Invalid("task label must be nonempty text without NUL")
 	}
 	if in.ProjectPageID != nil && *in.ProjectPageID <= 0 {
-		return invalid("task project ID must be positive")
+		return Invalid("task project ID must be positive")
 	}
 	if err := validateTaskSchedule(in); err != nil {
 		return err
 	}
 	if in.ReminderLocalTime != "" || in.ReminderZone != "" {
 		if !validReminderClock(in.ReminderLocalTime) || !validPlanningZone(in.ReminderZone) {
-			return invalid("task reminder needs a local minute clock and zone")
+			return Invalid("task reminder needs a local minute clock and zone")
 		}
 	}
 	return nil
@@ -89,25 +89,25 @@ func validateTaskSpec(in TaskSpec) error {
 
 func validateOccurrenceChanges(in OccurrenceChanges) error {
 	if in.DueDay != "" && !IsDay(in.DueDay) {
-		return invalid("task due day must be exact")
+		return Invalid("task due day must be exact")
 	}
 	if in.State != "open" && in.State != "done" && in.State != "skipped" {
-		return invalid("unknown task occurrence state")
+		return Invalid("unknown task occurrence state")
 	}
 	if in.CompletedAt != "" && (in.State != "done" || !IsInstant(in.CompletedAt)) {
-		return invalid("completion instant requires a done occurrence")
+		return Invalid("completion instant requires a done occurrence")
 	}
 	switch in.ReminderMode {
 	case "inherit", "off":
 		if in.ReminderOverrideAt != "" {
-			return invalid("reminder override requires at mode")
+			return Invalid("reminder override requires at mode")
 		}
 	case "at":
 		if !IsInstant(in.ReminderOverrideAt) {
-			return invalid("absolute reminder requires an exact instant")
+			return Invalid("absolute reminder requires an exact instant")
 		}
 	default:
-		return invalid("unknown task reminder mode")
+		return Invalid("unknown task reminder mode")
 	}
 	return nil
 }
@@ -130,7 +130,7 @@ func scanTaskOccurrence(row interface{ Scan(...any) error }) (*TaskOccurrence, e
 func (t *Tx) Task(id int64) (*Task, error) {
 	p, err := scanTask(t.tx.QueryRowContext(t.ctx, taskSelect+`WHERE t.id=?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, notFound("no task %d", id)
+		return nil, NotFound("no task %d", id)
 	}
 	return p, err
 }
@@ -138,7 +138,7 @@ func (t *Tx) Task(id int64) (*Task, error) {
 func (s *Store) Task(ctx context.Context, id int64) (*Task, error) {
 	p, err := scanTask(s.DB.R.QueryRowContext(ctx, taskSelect+`WHERE t.id=?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, notFound("no task %d", id)
+		return nil, NotFound("no task %d", id)
 	}
 	return p, err
 }
@@ -171,7 +171,7 @@ type Deadline struct {
 // includeDeleted), ordered by due day, key and task, bounded like a single task's read.
 func (s *Store) Deadlines(ctx context.Context, from, through string, includeDeleted bool) ([]Deadline, error) {
 	if !IsDay(from) || !IsDay(through) || from > through {
-		return nil, invalid("task deadline window must have ordered exact days")
+		return nil, Invalid("task deadline window must have ordered exact days")
 	}
 	tasks, err := s.Tasks(ctx, includeDeleted)
 	if err != nil {
@@ -185,7 +185,7 @@ func (s *Store) Deadlines(ctx context.Context, from, through string, includeDele
 		}
 		for _, o := range os {
 			if len(out) >= maxTaskOccurrences {
-				return nil, invalid("deadline window exceeds 10000 occurrence limit")
+				return nil, Invalid("deadline window exceeds 10000 occurrence limit")
 			}
 			out = append(out, Deadline{o, p.Label})
 		}
@@ -206,7 +206,7 @@ func (s *Store) Deadlines(ctx context.Context, from, through string, includeDele
 func (t *Tx) TaskOccurrence(taskID int64, key string) (*TaskOccurrence, error) {
 	o, err := scanTaskOccurrence(t.tx.QueryRowContext(t.ctx, occurrenceSelect+`WHERE o.task_id=? AND o.occurrence_key=?`, taskID, key))
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, notFound("no task occurrence")
+		return nil, NotFound("no task occurrence")
 	}
 	if err != nil {
 		return nil, err
@@ -230,7 +230,7 @@ func (s *Store) TaskOccurrence(ctx context.Context, taskID int64, key string) (*
 	o := &TaskOccurrence{}
 	err := row.Scan(&o.ID, &o.TaskID, &o.OccurrenceKey, &o.DueDay, &o.State, &o.CompletedAt, &o.ReminderMode, &o.ReminderOverrideAt, &o.ImportKey, &o.Source, &o.Version, &o.CreatedAt, &o.UpdatedAt, &o.DeletedAt, &o.TaskVersion, &o.TaskDeletedAt, &o.ProjectTitle, &o.ProjectDeletedAt)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, notFound("no task occurrence")
+		return nil, NotFound("no task occurrence")
 	}
 	return o, err
 }
@@ -253,7 +253,7 @@ func (t *Tx) CreateTask(in TaskSpec, importKey string) (id int64, existing bool,
 // CaptureOneOffTask commits an explicitly supplied initial outcome with its definition.
 func (t *Tx) CaptureOneOffTask(in TaskSpec, importKey string, initial OccurrenceInput) (int64, bool, error) {
 	if in.RepeatUnit != "" || initial.OccurrenceKey != "once" {
-		return 0, false, invalid("one-off capture requires its once occurrence")
+		return 0, false, Invalid("one-off capture requires its once occurrence")
 	}
 	if err := validateOccurrenceChanges(initial.OccurrenceChanges); err != nil {
 		return 0, false, err
@@ -269,7 +269,7 @@ func (t *Tx) createTask(in TaskSpec, importKey string, initial OccurrenceInput) 
 		have, e := scanTask(t.tx.QueryRowContext(t.ctx, taskSelect+`WHERE t.source=? AND t.import_key=?`, t.Source, importKey))
 		if e == nil {
 			if !sameTaskSpec(have.TaskSpec, in) {
-				return 0, false, conflict("task source identity has changed payload")
+				return 0, false, Conflict("task source identity has changed payload")
 			}
 			if initial.ImportKey != "" {
 				o, e := t.TaskOccurrence(have.ID, "once")
@@ -277,7 +277,7 @@ func (t *Tx) createTask(in TaskSpec, importKey string, initial OccurrenceInput) 
 					return 0, false, e
 				}
 				if o.Source != t.Source || o.ImportKey != initial.ImportKey {
-					return 0, false, conflict("one-off occurrence has a different source identity")
+					return 0, false, Conflict("one-off occurrence has a different source identity")
 				}
 			}
 			return have.ID, true, nil
@@ -326,7 +326,7 @@ func (t *Tx) spec(f TaskForm) (TaskSpec, error) {
 // CreateTask is one task in its own transaction: a series, or a one-off with its once occurrence due on DueDay.
 func (s *Store) CreateTask(ctx context.Context, source string, f TaskForm) (id int64, existing bool, err error) {
 	if f.RepeatUnit != "" && f.DueDay != "" {
-		return 0, false, invalid("due_day is a one-off's; a series is due on its slots")
+		return 0, false, Invalid("due_day is a one-off's; a series is due on its slots")
 	}
 	err = s.Do(ctx, source, func(t *Tx) error {
 		spec, e := t.spec(f)
@@ -437,7 +437,7 @@ func (t *Tx) liveTaskVersion(id int64, version string) (*Task, error) {
 		return nil, err
 	}
 	if p.Version != version || p.DeletedAt != "" {
-		return nil, conflict("live task and current version required")
+		return nil, Conflict("live task and current version required")
 	}
 	return p, nil
 }
@@ -451,7 +451,7 @@ func (t *Tx) EditTask(id int64, version string, in TaskSpec) error {
 		return err
 	}
 	if p.RepeatUnit != in.RepeatUnit || p.RepeatEvery != in.RepeatEvery || p.AnchorDay != in.AnchorDay || p.RepeatUntilDay != in.RepeatUntilDay {
-		return invalid("cadence is fixed; shorten an end with StopTask")
+		return Invalid("cadence is fixed; shorten an end with StopTask")
 	}
 	_, err = t.tx.ExecContext(t.ctx, `UPDATE tasks SET label=?,project_page_id=?,reminder_local_time=?,reminder_zone=? WHERE id=?`, in.Label, in.ProjectPageID, nullIfEmpty(in.ReminderLocalTime), nullIfEmpty(in.ReminderZone), id)
 	return err
@@ -459,17 +459,17 @@ func (t *Tx) EditTask(id int64, version string, in TaskSpec) error {
 
 func (t *Tx) StopTask(id int64, version, through string) error {
 	if !IsDay(through) {
-		return invalid("task recurrence end must be exact")
+		return Invalid("task recurrence end must be exact")
 	}
 	p, err := t.liveTaskVersion(id, version)
 	if err != nil {
 		return err
 	}
 	if p.RepeatUnit == "" {
-		return invalid("one-off task has no recurrence to end")
+		return Invalid("one-off task has no recurrence to end")
 	}
 	if p.RepeatUntilDay != "" && through > p.RepeatUntilDay {
-		return invalid("a recurrence end may only shorten")
+		return Invalid("a recurrence end may only shorten")
 	}
 	_, err = t.tx.ExecContext(t.ctx, `UPDATE tasks SET repeat_until_day=? WHERE id=?`, through, id)
 	return err
@@ -481,7 +481,7 @@ func (t *Tx) TaskLifecycle(id int64, version string, deleted bool) error {
 		return err
 	}
 	if p.Version != version {
-		return conflict("task changed since this version")
+		return Conflict("task changed since this version")
 	}
 	if deleted == (p.DeletedAt != "") {
 		return nil
@@ -510,20 +510,20 @@ func (t *Tx) CaptureTaskOccurrence(taskID int64, taskVersion string, in Occurren
 		return nil, false, err
 	}
 	if p.Version != taskVersion {
-		return nil, false, conflict("task changed since this version")
+		return nil, false, Conflict("task changed since this version")
 	}
 	belongs, err := taskSlot(t.ctx, p.TaskSpec, in.OccurrenceKey)
 	if err != nil {
 		return nil, false, err
 	}
 	if !belongs {
-		return nil, false, invalid("occurrence key does not belong to task")
+		return nil, false, Invalid("occurrence key does not belong to task")
 	}
 	if in.ImportKey != "" {
 		have, e := scanTaskOccurrence(t.tx.QueryRowContext(t.ctx, occurrenceSelect+`WHERE o.source=? AND o.import_key=?`, t.Source, in.ImportKey))
 		if e == nil {
 			if have.TaskID != taskID || have.OccurrenceKey != in.OccurrenceKey {
-				return nil, false, conflict("occurrence source key belongs to another slot")
+				return nil, false, Conflict("occurrence source key belongs to another slot")
 			}
 			have.withTask(p)
 			return have, true, nil
@@ -535,7 +535,7 @@ func (t *Tx) CaptureTaskOccurrence(taskID int64, taskVersion string, in Occurren
 	have, e := scanTaskOccurrence(t.tx.QueryRowContext(t.ctx, occurrenceSelect+`WHERE o.task_id=? AND o.occurrence_key=?`, taskID, in.OccurrenceKey))
 	if e == nil {
 		if in.ImportKey != "" && (have.Source != t.Source || have.ImportKey != in.ImportKey) {
-			return nil, false, conflict("occurrence slot has a different source identity")
+			return nil, false, Conflict("occurrence slot has a different source identity")
 		}
 		have.withTask(p)
 		return have, true, nil
@@ -544,10 +544,10 @@ func (t *Tx) CaptureTaskOccurrence(taskID int64, taskVersion string, in Occurren
 		return nil, false, e
 	}
 	if p.DeletedAt != "" {
-		return nil, false, conflict("new occurrence requires a live task")
+		return nil, false, Conflict("new occurrence requires a live task")
 	}
 	if in.State == "open" && p.RepeatUntilDay != "" && in.OccurrenceKey > p.RepeatUntilDay {
-		return nil, false, invalid("open occurrence is after recurrence end")
+		return nil, false, Invalid("open occurrence is after recurrence end")
 	}
 	if _, err = t.insertTaskOccurrence(taskID, in); err != nil {
 		return nil, false, err
@@ -568,7 +568,7 @@ func (t *Tx) EditTaskOccurrence(taskID int64, taskVersion, key, version string, 
 		return err
 	}
 	if o.Version != version || o.DeletedAt != "" {
-		return conflict("live occurrence and current version required")
+		return Conflict("live occurrence and current version required")
 	}
 	_, err = t.tx.ExecContext(t.ctx, `UPDATE task_occurrences SET due_day=?,state=?,completed_at=?,reminder_mode=?,reminder_override_at=? WHERE id=?`, nullIfEmpty(in.DueDay), in.State, nullIfEmpty(in.CompletedAt), in.ReminderMode, nullIfEmpty(in.ReminderOverrideAt), o.ID)
 	return err
@@ -584,13 +584,13 @@ func (t *Tx) TaskOccurrenceLifecycle(taskID int64, taskVersion, key, version str
 		return err
 	}
 	if o.Version != version {
-		return conflict("occurrence changed since this version")
+		return Conflict("occurrence changed since this version")
 	}
 	if deleted == (o.DeletedAt != "") {
 		return nil
 	}
 	if !deleted && o.State == "open" && p.RepeatUntilDay != "" && key > p.RepeatUntilDay {
-		return invalid("occurrence cannot reopen after recurrence end")
+		return Invalid("occurrence cannot reopen after recurrence end")
 	}
 	q := `UPDATE task_occurrences SET deleted_at=NULL WHERE id=?`
 	if deleted {
@@ -607,7 +607,7 @@ const maxTaskOccurrences = 10000
 // remain available by identity. The contract's sparse merge runs before deadline filtering.
 func (s *Store) TaskOccurrences(ctx context.Context, taskID int64, from, through string, includeDeleted bool) (_ []TaskOccurrence, err error) {
 	if !IsDay(from) || !IsDay(through) || from > through {
-		return nil, invalid("task deadline window must have ordered exact days")
+		return nil, Invalid("task deadline window must have ordered exact days")
 	}
 	tx, err := s.DB.R.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
@@ -616,7 +616,7 @@ func (s *Store) TaskOccurrences(ctx context.Context, taskID int64, from, through
 	defer tx.Rollback()
 	p, err := scanTask(tx.QueryRowContext(ctx, taskSelect+`WHERE t.id=?`, taskID))
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, notFound("no task %d", taskID)
+		return nil, NotFound("no task %d", taskID)
 	}
 	if err != nil {
 		return nil, err
@@ -635,7 +635,7 @@ func (s *Store) TaskOccurrences(ctx context.Context, taskID int64, from, through
 			return nil, errors.Join(e, rows.Close())
 		}
 		if len(persisted) >= maxTaskOccurrences {
-			return nil, errors.Join(invalid("task window exceeds 10000 occurrence limit"), rows.Close())
+			return nil, errors.Join(Invalid("task window exceeds 10000 occurrence limit"), rows.Close())
 		}
 		o.withTask(p)
 		persisted[o.OccurrenceKey] = *o
@@ -650,7 +650,7 @@ func (s *Store) TaskOccurrences(ctx context.Context, taskID int64, from, through
 			return nil
 		}
 		if len(out) >= maxTaskOccurrences {
-			return invalid("task window exceeds 10000 occurrence limit")
+			return Invalid("task window exceeds 10000 occurrence limit")
 		}
 		out = append(out, o)
 		return nil

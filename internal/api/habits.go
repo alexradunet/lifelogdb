@@ -19,15 +19,8 @@ func (h *server) correctTo(r *http.Request, src string, id int64, value *float64
 }
 
 func (h *server) rename(r *http.Request, src string) (*Entity, error) {
-	id, err := idOf(r)
+	id, v, err := idForm(r, "title")
 	if err != nil {
-		return nil, err
-	}
-	v, err := form(r)
-	if err != nil {
-		return nil, err
-	}
-	if err := required(v, "title"); err != nil {
 		return nil, err
 	}
 	to, err := h.s.Rename(r.Context(), src, id, v.Get("title"))
@@ -88,9 +81,10 @@ func (h *server) checkIn(r *http.Request, src string) (*Entity, error) {
 	if err := required(v, "day", "done"); err != nil {
 		return nil, err
 	}
-	name, day, done := r.PathValue("name"), v.Get("day"), v.Get("done")
-	if done != "0" && done != "1" {
-		return nil, &core.Error{Status: 422, Msg: "done is 1 (done) or 0 (not done)"}
+	name, day := r.PathValue("name"), v.Get("day")
+	isDone, err := flag(v, "done")
+	if err != nil {
+		return nil, err
 	}
 	periods, err := h.s.Periods(r.Context(), name)
 	if err != nil {
@@ -101,10 +95,10 @@ func (h *server) checkIn(r *http.Request, src string) (*Entity, error) {
 		on = on || (p.Start <= day && (p.End == "" || p.End >= day))
 	}
 	if !on {
-		return nil, &core.Error{Status: 422, Msg: name + " is not a habit on " + day + ": start it first"}
+		return nil, core.Invalid("%s is not a habit on %s: start it first", name, day)
 	}
 	value := 0.0
-	if done == "1" {
+	if isDone {
 		value = 1
 	}
 	if _, err := h.s.Record(r.Context(), src, core.Reading{Metric: name, Day: day, Value: value}); err != nil {
@@ -147,7 +141,7 @@ func (h *server) habits(r *http.Request) (*Entity, error) {
 			link("prev", "/habits?day="+t.AddDate(0, 0, -1).Format(time.DateOnly), "Previous day"),
 			link("next", "/habits?day="+t.AddDate(0, 0, 1).Format(time.DateOnly), "Next day"), link("index", "/", "Home")}}
 	for _, x := range hs {
-		e.Entities = append(e.Entities, link("habit", "/metrics/"+url.PathEscape(x.Metric), x.Metric+": "+x.State))
+		e.Entities = append(e.Entities, link("habit", metricHref(x.Metric), x.Metric+": "+x.State))
 	}
 	e.Actions = checkIns(hs, day)
 	return e, nil
@@ -158,7 +152,7 @@ func (h *server) habits(r *http.Request) (*Entity, error) {
 func checkIns(hs []core.HabitState, day string) []Action {
 	out := []Action{}
 	for _, x := range hs {
-		out = append(out, action("check-in", map[string]string{"name": url.PathEscape(x.Metric)}, map[string]any{"day": day}))
+		out = append(out, action("check-in", map[string]string{"name": x.Metric}, map[string]any{"day": day}))
 	}
 	return out
 }
@@ -201,7 +195,7 @@ type habitView struct {
 func (h *server) habitsOn(ctx context.Context, day string) ([]habitView, []core.HabitState, error) {
 	t, err := time.Parse(time.DateOnly, day)
 	if err != nil {
-		return nil, nil, &core.Error{Status: 422, Msg: "day must be a day, YYYY-MM-DD"}
+		return nil, nil, core.Invalid("day must be a day, YYYY-MM-DD")
 	}
 	byDay := make([]map[string]string, glanceDays)
 	var states []core.HabitState

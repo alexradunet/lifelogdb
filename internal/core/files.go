@@ -70,19 +70,19 @@ var (
 func (t *Tx) AddFile(f FileIn) (k Kept, err error) {
 	f.SHA256 = strings.ToLower(strings.TrimSpace(f.SHA256))
 	if !shaRE.MatchString(f.SHA256) {
-		return k, invalid("sha256 %q is not the 64 hex digits of a SHA-256", f.SHA256)
+		return k, Invalid("sha256 %q is not the 64 hex digits of a SHA-256", f.SHA256)
 	}
 	if f.MIME = NormalMIME(f.MIME); f.MIME == "" {
-		return k, invalid("mime: a type/subtype such as audio/mp4 or image/heic")
+		return k, Invalid("mime: a type/subtype such as audio/mp4 or image/heic")
 	}
 	if f.Preview != nil {
 		if err := preview.Check(f.Preview); err != nil {
-			return k, invalid("%v", err)
+			return k, Invalid("%v", err)
 		}
 	}
 	for _, d := range []string{f.Day, f.Taken} {
 		if d != "" && !IsDay(d) {
-			return k, invalid("day %q is not YYYY-MM-DD", d)
+			return k, Invalid("day %q is not YYYY-MM-DD", d)
 		}
 	}
 	if f.Radius == 0 {
@@ -94,7 +94,7 @@ func (t *Tx) AddFile(f FileIn) (k Kept, err error) {
 		}
 	}
 	if f.UnknownCaptureDay && (f.Day != "" || f.Taken != "" || f.At != "") {
-		return k, invalid("unknown capture day requires no day attribution or selected place")
+		return k, Invalid("unknown capture day requires no day attribution or selected place")
 	}
 	day, own := f.Day, true
 	switch {
@@ -139,7 +139,7 @@ func (t *Tx) AddFile(f FileIn) (k Kept, err error) {
 	}
 	// 1) the title: free, or a plain page to promote
 	if !text.ValidTitle(f.Title) {
-		return k, invalid("title %q is not a valid title (docs/contract/titles-and-wikilinks.md)", f.Title)
+		return k, Invalid("title %q is not a valid title (docs/contract/titles-and-wikilinks.md)", f.Title)
 	}
 	p, err := t.lookup(f.Title)
 	if err != nil {
@@ -163,14 +163,14 @@ func (t *Tx) AddFile(f FileIn) (k Kept, err error) {
 		title = f.Title
 	case p.Type == "page" && !p.DayPage:
 		if p.Body != "" && f.Body != "" && p.Body != f.Body {
-			return k, conflict("%s already has text of its own: give the file another title (two texts are never merged)", p.Title)
+			return k, Conflict("%s already has text of its own: give the file another title (two texts are never merged)", p.Title)
 		}
 		res, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET entity_type = 'file', deleted_at = NULL WHERE id = ? AND entity_type = 'page'`, p.ID)
 		if err != nil {
 			return k, err
 		}
 		if n, _ := res.RowsAffected(); n != 1 {
-			return k, conflict("page %d could not become the file", p.ID)
+			return k, Conflict("page %d could not become the file", p.ID)
 		}
 		if p.Body == "" && f.Body != "" {
 			if _, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET body = ? WHERE id = ?`, f.Body, p.ID); err != nil {

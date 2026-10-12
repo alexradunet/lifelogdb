@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"mime"
 	"net/http"
 	"net/url"
 	"slices"
@@ -285,12 +283,8 @@ func backOf(r *http.Request) string {
 }
 
 func selfOf(e *Entity) string {
-	for _, l := range e.Links {
-		for _, rel := range l.Rel {
-			if rel == "self" {
-				return l.Href
-			}
-		}
+	if l := e.linkByRel("self"); l != nil {
+		return l.Href
 	}
 	return ""
 }
@@ -340,58 +334,6 @@ func codeOf(status int) string {
 	return "internal"
 }
 
-// The lists page (docs/plans/079-client-contract-hygiene.md): limit and offset select a page, and the entity
-// links the next one when a further row exists, the previous one when offset > 0.
-const maxPageLimit = 500
-
-// pageOf reads limit (1–maxPageLimit, def when absent) and offset (≥ 0) from the query.
-func pageOf(r *http.Request, def int) (limit, offset int, err error) {
-	q := r.URL.Query()
-	limit = def
-	if s := q.Get("limit"); s != "" {
-		if limit, err = strconv.Atoi(s); err != nil || limit < 1 || limit > maxPageLimit {
-			return 0, 0, &core.Error{Status: 422, Msg: fmt.Sprintf("limit must be 1 to %d", maxPageLimit)}
-		}
-	}
-	if s := q.Get("offset"); s != "" {
-		if offset, err = strconv.Atoi(s); err != nil || offset < 0 {
-			return 0, 0, &core.Error{Status: 422, Msg: "offset must be 0 or more"}
-		}
-	}
-	return limit, offset, nil
-}
-
-// paged trims a read of limit+1 rows to the page, records limit and offset in the properties and adds the next
-// and prev links; path and q are the list's own address.
-func paged[T any](e *Entity, rows []T, path string, q url.Values, limit, offset int) []T {
-	more := len(rows) > limit
-	if more {
-		rows = rows[:limit]
-	}
-	props, _ := e.Properties.(map[string]any)
-	if props == nil {
-		props = map[string]any{}
-		e.Properties = props
-	}
-	props["limit"], props["offset"] = limit, offset
-	href := func(offset int) string {
-		v := url.Values{}
-		for k, vs := range q {
-			v[k] = vs
-		}
-		v.Set("limit", strconv.Itoa(limit))
-		v.Set("offset", strconv.Itoa(offset))
-		return path + "?" + v.Encode()
-	}
-	if offset > 0 {
-		e.Links = append(e.Links, link("prev", href(max(offset-limit, 0)), "Previous page"))
-	}
-	if more {
-		e.Links = append(e.Links, link("next", href(offset+limit), "Next page"))
-	}
-	return rows
-}
-
 func write(w http.ResponseWriter, r *http.Request, status int, e *Entity) {
 	if wantsHTML(r) {
 		renderHTML(w, r, status, e, nil)
@@ -422,92 +364,10 @@ func source(r *http.Request) (string, error) {
 	return s, core.CheckSource(s)
 }
 
-const maxRequestBody = 20 << 20
-
-func requestBodyError(err error) error {
-	var limit *http.MaxBytesError
-	if errors.As(err, &limit) {
-		return requestLimit("request body is larger than 20 MiB")
-	}
-	return &core.Error{Status: 400, Msg: "body: " + err.Error()}
-}
-
-func requestLimit(msg string) error {
-	return &core.Error{Status: http.StatusRequestEntityTooLarge, Msg: msg}
-}
-
-// form reads an action's fields: urlencoded (what a browser and the CLI send) or a JSON object.
-func form(r *http.Request) (url.Values, error) {
-	defer r.Body.Close()
-	r.Body = http.MaxBytesReader(nil, r.Body, maxRequestBody)
-	ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	if ct == "application/json" {
-		var m map[string]any
-		dec := json.NewDecoder(r.Body)
-		if err := dec.Decode(&m); err != nil {
-			return nil, requestBodyError(err)
-		}
-		if m == nil {
-			return nil, requestBodyError(errors.New("expected a JSON object"))
-		}
-		var extra any
-		if err := dec.Decode(&extra); err != io.EOF {
-			if err == nil {
-				err = errors.New("expected one JSON object")
-			}
-			return nil, requestBodyError(err)
-		}
-		v := url.Values{}
-		for k, x := range m {
-			switch x := x.(type) {
-			case string:
-				v.Set(k, x)
-			case nil:
-			default:
-				b, _ := json.Marshal(x)
-				v.Set(k, string(b))
-			}
-		}
-		return v, nil
-	}
-	if err := r.ParseForm(); err != nil {
-		return nil, requestBodyError(err)
-	}
-	return r.Form, nil
-}
-
-func required(v url.Values, names ...string) error {
-	for _, n := range names {
-		if v.Get(n) == "" {
-			return &core.Error{Status: 422, Msg: "missing field " + n}
-		}
-	}
-	return nil
-}
-
-func idOf(r *http.Request) (int64, error) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
-		return 0, &core.Error{Status: 404, Msg: "no such id " + r.PathValue("id")}
-	}
-	return id, nil
-}
-
-func number(v url.Values, name string) (*float64, error) {
-	s := v.Get(name)
-	if s == "" {
-		return nil, nil
-	}
-	f, err := strconv.ParseFloat(s, 64)
-	if err != nil {
-		return nil, &core.Error{Status: 422, Msg: fmt.Sprintf("%s %q is not a number", name, s)}
-	}
-	return &f, nil
-}
-
 func pageHref(id int64) string        { return "/pages/" + strconv.FormatInt(id, 10) }
 func dayHref(day string) string       { return "/days/" + day }
 func measurementHref(id int64) string { return "/measurements/" + strconv.FormatInt(id, 10) }
+func metricHref(name string) string   { return "/metrics/" + url.PathEscape(name) }
 func link(rel, href, title string) Link {
 	return Link{Rel: []string{rel}, Href: href, Title: title}
 }
@@ -721,15 +581,15 @@ func (h *server) day(r *http.Request) (*Entity, error) {
 
 func (h *server) find(r *http.Request) (*Entity, error) {
 	title := r.URL.Query().Get("title")
-	if title == "" {
-		return nil, &core.Error{Status: 422, Msg: "missing field title"}
+	if err := required(r.URL.Query(), "title"); err != nil {
+		return nil, err
 	}
 	id, err := h.s.PageID(r.Context(), title)
 	if err != nil {
 		return nil, err
 	}
 	if id == 0 {
-		return nil, &core.Error{Status: 404, Msg: "no page titled " + title}
+		return nil, core.NotFound("no page titled %s", title)
 	}
 	return nil, redirect{pageHref(id)}
 }
@@ -747,7 +607,7 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	ids := map[string]string{"id": strconv.FormatInt(id, 10)}
+	ids := idParam(id)
 	e := &Entity{Class: []string{p.Type}, Title: p.Title, Properties: p,
 		Links: []Link{link("self", pageHref(id), p.Title), link("index", "/", "Home")}}
 	if p.IsDayPage {
@@ -791,7 +651,7 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 	if p.Type == "place" {
 		values := map[string]any{"radius_m": core.DefaultRadius, "link_days": "1"}
 		if pt := p.Point; pt != nil {
-			values = map[string]any{"lat": pt.Lat, "lon": pt.Lon, "radius_m": pt.RadiusM, "link_days": map[bool]string{true: "1", false: "0"}[pt.LinkDays]}
+			values = map[string]any{"lat": pt.Lat, "lon": pt.Lon, "radius_m": pt.RadiusM, "link_days": boolField(pt.LinkDays)}
 		}
 		e.Actions = append(e.Actions, action("locate", ids, values))
 	}
@@ -828,10 +688,8 @@ func (h *server) linkKinds(ctx context.Context, typ string, dayPage bool) ([]str
 }
 
 func withOptions(a Action, field string, opts []string) Action {
-	for i := range a.Fields {
-		if a.Fields[i].Name == field {
-			a.Fields[i].Options = opts
-		}
+	if f := a.field(field); f != nil {
+		f.Options = opts
 	}
 	return a
 }
@@ -845,7 +703,7 @@ const inUseDays = 60
 func (h *server) recordAction(ctx context.Context, metric, day string) Action {
 	a := action("record", nil, map[string]any{"day": day})
 	if metric != "" {
-		a.Fields[0].Value = metric
+		a.field("metric").Value = metric
 	}
 	if names, err := h.s.InUse(ctx, day, inUseDays); err == nil {
 		if metric != "" && !slices.Contains(names, metric) {
@@ -917,7 +775,7 @@ func (h *server) metrics(r *http.Request) (*Entity, error) {
 		Links:   []Link{link("self", "/metrics", "Metrics"), link("index", "/", "Home")},
 		Actions: []Action{withOptions(action("record", nil, map[string]any{"day": h.localDay()}), "metric", names)}}
 	for _, m := range ms {
-		e.Entities = append(e.Entities, link("item", "/metrics/"+url.PathEscape(m.Name), m.Name))
+		e.Entities = append(e.Entities, link("item", metricHref(m.Name), m.Name))
 	}
 	return e, nil
 }
@@ -931,16 +789,15 @@ func (h *server) series(r *http.Request) (*Entity, error) {
 		to = h.localDay()
 	}
 	if !core.IsDay(to) {
-		return nil, &core.Error{Status: 422, Msg: "to must be an exact day"}
+		return nil, core.Invalid("to must be an exact day")
 	}
-	history := q.Get("all_history")
-	if history != "" && history != "0" && history != "1" {
-		return nil, &core.Error{Status: 422, Msg: "all_history must be 0 or 1"}
+	allHistory, err := flag(q, "all_history")
+	if err != nil {
+		return nil, err
 	}
-	allHistory := history == "1"
 	from := q.Get("from")
 	if allHistory && from != "" {
-		return nil, &core.Error{Status: 422, Msg: "all_history cannot select a lower bound"}
+		return nil, core.Invalid("all_history cannot select a lower bound")
 	}
 	if !allHistory && from == "" {
 		t, _ := time.Parse(time.DateOnly, to) // canonical day was checked above
@@ -955,8 +812,9 @@ func (h *server) series(r *http.Request) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	if q.Get("include_deleted") != "" && q.Get("include_deleted") != "0" && q.Get("include_deleted") != "1" {
-		return nil, &core.Error{Status: 422, Msg: "include_deleted must be 0 or 1"}
+	includeDeleted, err := flag(q, "include_deleted")
+	if err != nil {
+		return nil, err
 	}
 	scope := q.Get("scope")
 	if scope == "" {
@@ -964,9 +822,9 @@ func (h *server) series(r *http.Request) (*Entity, error) {
 	}
 	var rows []core.Reading
 	if allHistory {
-		rows, err = h.s.SeriesHistory(r.Context(), name, to, scope, sessionID, q.Get("include_deleted") == "1")
+		rows, err = h.s.SeriesHistory(r.Context(), name, to, scope, sessionID, includeDeleted)
 	} else {
-		rows, err = h.s.SeriesScope(r.Context(), name, from, to, scope, sessionID, q.Get("include_deleted") == "1")
+		rows, err = h.s.SeriesScope(r.Context(), name, from, to, scope, sessionID, includeDeleted)
 	}
 	if err != nil {
 		return nil, err
@@ -975,13 +833,13 @@ func (h *server) series(r *http.Request) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	selfQuery := url.Values{"to": {to}, "scope": {scope}, "session_id": {strconv.FormatInt(sessionID, 10)}, "include_deleted": {q.Get("include_deleted")}}
+	selfQuery := url.Values{"to": {to}, "scope": {scope}, "session_id": {strconv.FormatInt(sessionID, 10)}, "include_deleted": {boolField(includeDeleted)}}
 	if allHistory {
 		selfQuery.Set("all_history", "1")
 	} else {
 		selfQuery.Set("from", from)
 	}
-	self := "/metrics/" + url.PathEscape(name) + "?" + selfQuery.Encode()
+	self := metricHref(name) + "?" + selfQuery.Encode()
 	allURL, err := url.Parse(self)
 	if err != nil {
 		return nil, err
@@ -996,17 +854,13 @@ func (h *server) series(r *http.Request) (*Entity, error) {
 		categories = m.Categories
 	}
 	e := &Entity{Class: []string{"series"}, Title: name,
-		Properties: map[string]any{"metric": name, "from": from, "to": to, "readings": rows, "habit_periods": periods, "categories": categories, "scope": scope, "session_id": sessionID, "include_deleted": q.Get("include_deleted") == "1", "all_history": allHistory},
+		Properties: map[string]any{"metric": name, "from": from, "to": to, "readings": rows, "habit_periods": periods, "categories": categories, "scope": scope, "session_id": sessionID, "include_deleted": includeDeleted, "all_history": allHistory},
 		Links:      []Link{link("all-readings", allURL.String(), "All readings"), link("self", self, name), link("up", "/metrics", "Metrics"), link("habits", "/habits", "Habits"), link("index", "/", "Home")},
 		Actions:    []Action{h.recordAction(r.Context(), name, h.localDay())}}
-	if scope == "session" {
-		for i := range e.Actions[0].Fields {
-			if e.Actions[0].Fields[i].Name == "session_id" {
-				e.Actions[0].Fields[i].Value = sessionID
-			}
-		}
+	if f := e.Actions[0].field("session_id"); scope == "session" && f != nil {
+		f.Value = sessionID
 	}
-	ids := map[string]string{"name": url.PathEscape(name)}
+	ids := map[string]string{"name": name}
 	if len(periods) > 0 && periods[len(periods)-1].End == "" {
 		e.Actions = append(e.Actions, action("stop-habit", ids, map[string]any{"day": h.localDay()}),
 			action("check-in", ids, map[string]any{"day": h.localDay()}))
@@ -1038,14 +892,14 @@ func (h *server) measurementEntity(ctx context.Context, id int64) (*Entity, erro
 	}
 	e := &Entity{Class: []string{"measurement"}, Title: fmt.Sprintf("%s on %s", m.Metric, m.Day), Properties: m,
 		Links: []Link{link("self", measurementHref(id), "This reading"), link("day", dayHref(m.Day), m.Day),
-			link("series", "/metrics/"+url.PathEscape(m.Metric), m.Metric), link("index", "/", "Home")}}
+			link("series", metricHref(m.Metric), m.Metric), link("index", "/", "Home")}}
 	if m.Supersedes != 0 {
 		e.Links = append(e.Links, link("supersedes", measurementHref(m.Supersedes), "Corrects"))
 	}
 	if m.SupersededBy != 0 {
 		e.Links = append(e.Links, link("superseded-by", measurementHref(m.SupersededBy), "Corrected by"))
 	} else {
-		ids := map[string]string{"id": strconv.FormatInt(id, 10)}
+		ids := idParam(id)
 		e.Actions = []Action{}
 		if m.SessionDeletedAt == "" {
 			e.Actions = append(e.Actions, action("correct", ids, nil))
@@ -1062,7 +916,7 @@ func (h *server) measurementEntity(ctx context.Context, id int64) (*Entity, erro
 		return nil, err
 	}
 	if allowed {
-		e.Actions = append(e.Actions, action("relocate-reading", map[string]string{"id": strconv.FormatInt(id, 10)}, map[string]any{"metric": m.Metric, "day": m.Day, "value": m.Value, "taken_at": m.TakenAt, "tz": m.TZ, "captured_with_id": m.CapturedWith}))
+		e.Actions = append(e.Actions, action("relocate-reading", idParam(id), map[string]any{"metric": m.Metric, "day": m.Day, "value": m.Value, "taken_at": m.TakenAt, "tz": m.TZ, "captured_with_id": m.CapturedWith}))
 	}
 	if m.CapturedWith != 0 {
 		e.Links = append(e.Links, link("captured-with", pageHref(m.CapturedWith), "Captured with"))
@@ -1155,15 +1009,8 @@ func (h *server) createPage(r *http.Request, src string) (*Entity, error) {
 }
 
 func (h *server) saveBody(r *http.Request, src string) (*Entity, error) {
-	id, err := idOf(r)
+	id, v, err := idForm(r, "version")
 	if err != nil {
-		return nil, err
-	}
-	v, err := form(r)
-	if err != nil {
-		return nil, err
-	}
-	if err := required(v, "version"); err != nil {
 		return nil, err
 	}
 	sync, err := h.s.SaveBody(r.Context(), src, id, v.Get("body"), v.Get("version"))
@@ -1204,11 +1051,7 @@ func (h *server) createPlace(r *http.Request, src string) (*Entity, error) {
 }
 
 func (h *server) promote(r *http.Request, src string) (*Entity, error) {
-	id, err := idOf(r)
-	if err != nil {
-		return nil, err
-	}
-	v, err := form(r)
+	id, v, err := idForm(r)
 	if err != nil {
 		return nil, err
 	}
@@ -1252,7 +1095,7 @@ func (h *server) linkEnds(r *http.Request) (from, to int64, v url.Values, err er
 		return
 	}
 	if to, err = h.s.PageID(r.Context(), v.Get("to")); err == nil && to == 0 {
-		err = &core.Error{Status: 404, Msg: "no page titled " + v.Get("to") + ": create it first"}
+		err = core.NotFound("no page titled %s: create it first", v.Get("to"))
 	}
 	return
 }
@@ -1295,7 +1138,7 @@ func (h *server) readingsFromTable(r *http.Request, _ string) (*Entity, error) {
 	}
 	self := pageHref(res.PageID)
 	return &Entity{Class: []string{"readings-from-table"}, Title: "Readings from " + res.Page, Properties: res, Result: res,
-		Links: []Link{link("self", self, res.Page), link("metric", "/metrics/"+url.PathEscape(res.Metric), res.Metric), link("index", "/", "Home")}}, nil
+		Links: []Link{link("self", self, res.Page), link("metric", metricHref(res.Metric), res.Metric), link("index", "/", "Home")}}, nil
 }
 
 func (h *server) record(r *http.Request, src string) (*Entity, error) {
@@ -1328,11 +1171,7 @@ func (h *server) record(r *http.Request, src string) (*Entity, error) {
 }
 
 func (h *server) correct(r *http.Request, src string) (*Entity, error) {
-	id, err := idOf(r)
-	if err != nil {
-		return nil, err
-	}
-	v, err := form(r)
+	id, v, err := idForm(r)
 	if err != nil {
 		return nil, err
 	}
@@ -1341,7 +1180,7 @@ func (h *server) correct(r *http.Request, src string) (*Entity, error) {
 		return nil, err
 	}
 	if value == nil {
-		return nil, &core.Error{Status: 422, Msg: "missing field value (to remove a reading, retract it)"}
+		return nil, core.Invalid("missing field value (to remove a reading, retract it)")
 	}
 	return h.correctTo(r, src, id, value)
 }

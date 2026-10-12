@@ -32,10 +32,8 @@ func (v *view) OccurrenceAction(item any) *Action {
 
 // fieldValue is the value an action filled in for a field, "" when it filled none.
 func fieldValue(a *Action, name string) string {
-	for _, f := range a.Fields {
-		if f.Name == name {
-			return num(f.Value)
-		}
+	if f := a.field(name); f != nil {
+		return num(f.Value)
 	}
 	return ""
 }

@@ -13,7 +13,7 @@ func taskCalendar(ctx context.Context, in TaskSpec, from, through string, emit f
 		return err
 	}
 	if !IsDay(from) || !IsDay(through) || from > through {
-		return invalid("task deadline window must have ordered exact days")
+		return Invalid("task deadline window must have ordered exact days")
 	}
 	if err := validateTaskSchedule(in); err != nil {
 		return err
@@ -83,15 +83,15 @@ func taskMonth(anchor time.Time, offset int) time.Time {
 func validateTaskSchedule(in TaskSpec) error {
 	if in.RepeatUnit == "" {
 		if in.RepeatEvery != 0 || in.AnchorDay != "" || in.RepeatUntilDay != "" {
-			return invalid("a one-off task cannot have recurrence fields")
+			return Invalid("a one-off task cannot have recurrence fields")
 		}
 		return nil
 	}
 	if in.RepeatUnit != "day" && in.RepeatUnit != "week" && in.RepeatUnit != "month" && in.RepeatUnit != "year" {
-		return invalid("unknown task recurrence unit")
+		return Invalid("unknown task recurrence unit")
 	}
 	if in.RepeatEvery < 1 || !IsDay(in.AnchorDay) || in.RepeatUntilDay != "" && !IsDay(in.RepeatUntilDay) {
-		return invalid("task recurrence needs a positive interval and exact days")
+		return Invalid("task recurrence needs a positive interval and exact days")
 	}
 	return nil
 }
@@ -154,7 +154,7 @@ func ResolveTaskReminder(task Task, occurrence TaskOccurrence) (TaskReminder, er
 		return TaskReminder{State: "none"}, nil
 	}
 	if !validReminderClock(task.ReminderLocalTime) || !validPlanningZone(task.ReminderZone) {
-		return TaskReminder{}, invalid("invalid task reminder default")
+		return TaskReminder{}, Invalid("invalid task reminder default")
 	}
 	at, ok := resolveTaskClock(occurrence.DueDay, task.ReminderLocalTime, task.ReminderZone)
 	if !ok {

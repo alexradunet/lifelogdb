@@ -36,7 +36,7 @@ func (h *server) month(r *http.Request) (*Entity, error) {
 	ctx := r.Context()
 	first, ok := monthOf(r.PathValue("month"))
 	if !ok {
-		return nil, &core.Error{Status: 422, Msg: "a month is YYYY-MM"}
+		return nil, core.Invalid("a month is YYYY-MM")
 	}
 	last := first.AddDate(0, 1, -1)
 	from, through := first.Format(time.DateOnly), last.Format(time.DateOnly)
@@ -73,7 +73,7 @@ func (h *server) month(r *http.Request) (*Entity, error) {
 func (h *server) openDay(r *http.Request) (*Entity, error) {
 	day := r.URL.Query().Get("day")
 	if !core.IsDay(day) {
-		return nil, &core.Error{Status: 422, Msg: "day must be a day, YYYY-MM-DD"}
+		return nil, core.Invalid("day must be a day, YYYY-MM-DD")
 	}
 	return nil, redirect{dayHref(day)}
 }

@@ -53,7 +53,7 @@ func (h *server) addFile(r *http.Request, src string) (*Entity, error) {
 // (an agent that hashed the file itself): sha256 and mime, and no picture.
 func fileForm(r *http.Request) (core.FileIn, bool, error) {
 	bad := func(msg string) (core.FileIn, bool, error) {
-		return core.FileIn{}, false, &core.Error{Status: 422, Msg: msg}
+		return core.FileIn{}, false, core.Invalid("%s", msg)
 	}
 	if ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); ct != "multipart/form-data" {
 		v, err := form(r)
@@ -63,9 +63,13 @@ func fileForm(r *http.Request) (core.FileIn, bool, error) {
 		if err := required(v, "title", "sha256", "mime"); err != nil {
 			return core.FileIn{}, false, err
 		}
-		r, err := radius(v.Get("radius"))
+		r, err := radius("radius", v.Get("radius"))
+		if err != nil {
+			return core.FileIn{}, false, err
+		}
+		dry, err := flag(v, "dry_run")
 		return core.FileIn{UnknownCaptureDay: strings.HasPrefix(core.NormalMIME(v.Get("mime")), "image/") && v.Get("day") == "", Title: v.Get("title"), SHA256: v.Get("sha256"), MIME: v.Get("mime"), Body: v.Get("body"), Day: v.Get("day"),
-			At: v.Get("at"), Radius: r}, v.Get("dry_run") == "1", err
+			At: v.Get("at"), Radius: r}, dry, err
 	}
 	defer r.Body.Close()
 	mr, err := r.MultipartReader()
@@ -141,7 +145,7 @@ func fileForm(r *http.Request) (core.FileIn, bool, error) {
 	}
 	in := core.FileIn{Title: vals["title"], SHA256: vals["sha256"], MIME: vals["mime"], Body: vals["body"], Day: vals["day"], At: vals["at"],
 		Taken: meta.Day(), Lat: meta.Lat, Lon: meta.Lon, HasGPS: meta.HasGPS}
-	if in.Radius, err = radius(vals["radius"]); err != nil {
+	if in.Radius, err = radius("radius", vals["radius"]); err != nil {
 		return core.FileIn{}, false, err
 	}
 	switch {
@@ -166,7 +170,8 @@ func fileForm(r *http.Request) (core.FileIn, bool, error) {
 		in.Preview = p
 	}
 	in.UnknownCaptureDay = strings.HasPrefix(core.NormalMIME(in.MIME), "image/") && in.Day == "" && in.Taken == ""
-	return in, vals["dry_run"] == "1", nil
+	dry, err := flagValue("dry_run", vals["dry_run"])
+	return in, dry, err
 }
 
 // fileTextField projects multipart names onto the fields retained by fileForm.
@@ -276,43 +281,28 @@ func picture(get func(*http.Request) ([]byte, error)) http.HandlerFunc {
 	}
 }
 
-// radius is the radius field: whole metres, "" for the default.
-func radius(s string) (int, error) {
-	if s == "" {
-		return 0, nil
-	}
-	r, err := strconv.Atoi(s)
-	if err != nil {
-		return 0, &core.Error{Status: 422, Msg: "radius " + strconv.Quote(s) + " is not a whole number of metres"}
-	}
-	return r, nil
-}
-
 // locate gives a place its point (docs/cookbook/place-of-a-photo.md): the owner's answer, or a correction.
 func (h *server) locate(r *http.Request, src string) (*Entity, error) {
-	id, err := idOf(r)
+	id, v, err := idForm(r, "lat", "lon", "radius_m")
 	if err != nil {
-		return nil, err
-	}
-	v, err := form(r)
-	if err != nil {
-		return nil, err
-	}
-	if err := required(v, "lat", "lon", "radius_m"); err != nil {
 		return nil, err
 	}
 	var p core.Point
 	for name, to := range map[string]*float64{"lat": &p.Lat, "lon": &p.Lon} {
-		f, err := strconv.ParseFloat(v.Get(name), 64)
+		f, err := number(v, name)
 		if err != nil {
-			return nil, &core.Error{Status: 422, Msg: name + " " + strconv.Quote(v.Get(name)) + " is not a number"}
+			return nil, err
 		}
-		*to = f
+		*to = *f
 	}
-	if p.RadiusM, err = radius(v.Get("radius_m")); err != nil {
+	if p.RadiusM, err = radius("radius_m", v.Get("radius_m")); err != nil {
 		return nil, err
 	}
-	p.LinkDays = v.Get("link_days") != "0"
+	linkDays, err := flag(v, "link_days")
+	if err != nil {
+		return nil, err
+	}
+	p.LinkDays = linkDays || v.Get("link_days") == "" // the default is to link the days
 	if err := h.s.Locate(r.Context(), src, id, p); err != nil {
 		return nil, err
 	}

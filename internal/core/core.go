@@ -34,13 +34,18 @@ type Error struct {
 
 func (e *Error) Error() string { return e.Msg }
 
-func notFound(format string, a ...any) error {
+// NotFound is a 404: the row the request names does not exist.
+func NotFound(format string, a ...any) error {
 	return &Error{Status: 404, Msg: fmt.Sprintf(format, a...)}
 }
-func invalid(format string, a ...any) error {
+
+// Invalid is a 422: the request is well-formed, and a rule refuses it.
+func Invalid(format string, a ...any) error {
 	return &Error{Status: 422, Msg: fmt.Sprintf(format, a...)}
 }
-func conflict(format string, a ...any) error {
+
+// Conflict is a 409 with no code: the row is not in the state the request needs.
+func Conflict(format string, a ...any) error {
 	return &Error{Status: 409, Msg: fmt.Sprintf(format, a...)}
 }
 
@@ -70,7 +75,7 @@ var sourceRE = regexp.MustCompile(`^[a-z0-9_:.-]{1,64}$`)
 // CheckSource validates a writer name (lifelog_meta.source).
 func CheckSource(s string) error {
 	if !sourceRE.MatchString(s) {
-		return invalid("source %q: 1-64 characters of a-z 0-9 _ : . -", s)
+		return Invalid("source %q: 1-64 characters of a-z 0-9 _ : . -", s)
 	}
 	return nil
 }

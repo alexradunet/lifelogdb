@@ -25,11 +25,11 @@ const DefaultRadius = 250
 func (p Point) check() error {
 	switch {
 	case math.IsNaN(p.Lat) || math.IsNaN(p.Lon) || p.Lat < -90 || p.Lat > 90 || p.Lon < -180 || p.Lon > 180:
-		return invalid("a point is a latitude -90..90 and a longitude -180..180")
+		return Invalid("a point is a latitude -90..90 and a longitude -180..180")
 	case p.Lat == 0 && p.Lon == 0:
-		return invalid("0°, 0° is how photo metadata says \"no location\": it is never a place's point")
+		return Invalid("0°, 0° is how photo metadata says \"no location\": it is never a place's point")
 	case p.RadiusM < 10 || p.RadiusM > 100000:
-		return invalid("a radius is 10 to 100000 metres")
+		return Invalid("a radius is 10 to 100000 metres")
 	}
 	return nil
 }
@@ -49,12 +49,12 @@ func (t *Tx) Locate(id int64, p Point) error {
 	}
 	var typ string
 	if err := t.tx.QueryRowContext(t.ctx, `SELECT entity_type FROM entities WHERE id = ?`, id).Scan(&typ); errors.Is(err, sql.ErrNoRows) {
-		return notFound("no page %d", id)
+		return NotFound("no page %d", id)
 	} else if err != nil {
 		return err
 	}
 	if typ != "place" {
-		return invalid("only a place has a point, not a %s", typ)
+		return Invalid("only a place has a point, not a %s", typ)
 	}
 	_, err := t.tx.ExecContext(t.ctx, `INSERT INTO places(id, lat, lon, radius_m, link_days) VALUES (?, ?, ?, ?, ?)
 	                     ON CONFLICT(id) DO UPDATE SET lat = excluded.lat, lon = excluded.lon, radius_m = excluded.radius_m,
@@ -114,7 +114,7 @@ func metresPerDegreeLon(lat float64) float64 { return 111320 * math.Cos(lat*math
 // promoted to one, or a new place.
 func (t *Tx) placeFor(title string) (int64, error) {
 	if !text.ValidTitle(title) {
-		return 0, invalid("title %q is not a valid title (docs/contract/titles-and-wikilinks.md)", title)
+		return 0, Invalid("title %q is not a valid title (docs/contract/titles-and-wikilinks.md)", title)
 	}
 	p, err := t.lookup(title)
 	switch {
@@ -125,7 +125,7 @@ func (t *Tx) placeFor(title string) (int64, error) {
 		return id, err
 	case p.Type == "place":
 		if p.Deleted {
-			return 0, conflict("the place %s is deleted: revive it first", p.Title)
+			return 0, Conflict("the place %s is deleted: revive it first", p.Title)
 		}
 		return p.ID, nil
 	case p.Type == "page" && !p.DayPage:
@@ -162,7 +162,7 @@ func (t *Tx) embed(dayID int64, title string) (bool, *Sync, error) {
 		}
 	}
 	if !text.HasEmbed(body, title) || !named {
-		return false, nil, invalid("automatic photo embed cannot render and link here; edit the day's Markdown before keeping the photo")
+		return false, nil, Invalid("automatic photo embed cannot render and link here; edit the day's Markdown before keeping the photo")
 	}
 	_, err = t.tx.ExecContext(t.ctx, `UPDATE entities SET body = ? WHERE id = ?`, body, dayID)
 	if err != nil {
@@ -200,7 +200,7 @@ func automaticEmbedTitle(title string) error {
 	mark := "![[" + title + "]]"
 	keys, _, _ := text.Targets(mark, "")
 	if !text.HasEmbed(mark, title) || len(keys) != 1 || keys[0] != text.TitleKey(title) {
-		return invalid("cannot automatically embed %q: give a new file an explicit representable title; an existing file's handle is not renamed", title)
+		return Invalid("cannot automatically embed %q: give a new file an explicit representable title; an existing file's handle is not renamed", title)
 	}
 	return nil
 }

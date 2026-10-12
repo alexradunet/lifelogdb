@@ -40,7 +40,7 @@ func (h *server) sessionEntity(ctx context.Context, id int64) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	ids := map[string]string{"id": strconv.FormatInt(id, 10)}
+	ids := idParam(id)
 	e := &Entity{Class: []string{"session"}, Title: s.Kind + " · " + s.Day, Properties: s,
 		Links: []Link{link("self", sessionHref(id), "Session"), link("kind", pageHref(s.KindID), s.Kind), link("up", "/sessions", "Sessions"), link("index", "/", "Home")}}
 	if s.DeletedAt != "" {
@@ -108,15 +108,8 @@ func (h *server) captureSession(r *http.Request, src string) (*Entity, error) {
 }
 
 func (h *server) editSession(r *http.Request, src string) (*Entity, error) {
-	id, err := idOf(r)
+	id, v, err := idForm(r, "version", "kind", "day")
 	if err != nil {
-		return nil, err
-	}
-	v, err := form(r)
-	if err != nil {
-		return nil, err
-	}
-	if err := required(v, "version", "kind", "day"); err != nil {
 		return nil, err
 	}
 	if err := h.s.EditSession(r.Context(), src, id, v.Get("version"), sessionInput(v)); err != nil {
@@ -128,15 +121,8 @@ func (h *server) editSession(r *http.Request, src string) (*Entity, error) {
 // sessionLifecycle is tombstone-session (deleted) and revive-session.
 func (h *server) sessionLifecycle(deleted bool) func(*http.Request, string) (*Entity, error) {
 	return func(r *http.Request, src string) (*Entity, error) {
-		id, err := idOf(r)
+		id, v, err := idForm(r, "version")
 		if err != nil {
-			return nil, err
-		}
-		v, err := form(r)
-		if err != nil {
-			return nil, err
-		}
-		if err := required(v, "version"); err != nil {
 			return nil, err
 		}
 		if err := h.s.SessionLifecycle(r.Context(), src, id, v.Get("version"), deleted); err != nil {

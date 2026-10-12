@@ -20,14 +20,14 @@ const maxTitles = 20
 func (h *server) titles(r *http.Request) (*Entity, error) {
 	q := r.URL.Query()
 	prefix := q.Get("prefix")
-	if strings.TrimSpace(prefix) == "" {
-		return nil, &core.Error{Status: 422, Msg: "missing field prefix"}
+	if err := required(url.Values{"prefix": {strings.TrimSpace(prefix)}}, "prefix"); err != nil {
+		return nil, err
 	}
 	limit := 10
 	if s := q.Get("limit"); s != "" {
 		n, err := strconv.Atoi(s)
 		if err != nil || n < 1 || n > maxTitles {
-			return nil, &core.Error{Status: 422, Msg: "limit must be 1 to " + strconv.Itoa(maxTitles)}
+			return nil, core.Invalid("limit must be 1 to %d", maxTitles)
 		}
 		limit = n
 	}
@@ -63,11 +63,7 @@ func (h *server) render(w http.ResponseWriter, r *http.Request) {
 // saveBody is the save-body of a page, its body and version filled. Its textarea is as tall as the body, 12 to 40
 // lines, so a long page is edited without a scroll inside a small box.
 func saveBody(id int64, body, version string) Action {
-	a := action("save-body", map[string]string{"id": strconv.FormatInt(id, 10)}, map[string]any{"body": body, "version": version})
-	for i := range a.Fields {
-		if a.Fields[i].Name == "body" {
-			a.Fields[i].Rows = min(max(strings.Count(body, "\n")+2, 12), 40)
-		}
-	}
+	a := action("save-body", idParam(id), map[string]any{"body": body, "version": version})
+	a.field("body").Rows = min(max(strings.Count(body, "\n")+2, 12), 40)
 	return a
 }

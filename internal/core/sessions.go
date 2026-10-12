@@ -39,7 +39,7 @@ type Session struct {
 
 func validateSession(in SessionInput) error {
 	if !IsDay(in.Day) {
-		return invalid("session reporting day must be exact")
+		return Invalid("session reporting day must be exact")
 	}
 	if err := validateSessionEndpoint(in.StartAt, in.StartLocal, in.StartOffset, in.StartZoneUnverified, true); err != nil {
 		return err
@@ -82,7 +82,7 @@ func (t *Tx) CaptureSession(in SessionInput) (id int64, existing bool, err error
 		return 0, false, err
 	}
 	if kind == nil || kind.Type != "page" || kind.DayPage {
-		return 0, false, invalid("session kind must name a non-journal plain page")
+		return 0, false, Invalid("session kind must name a non-journal plain page")
 	}
 	if in.Key != "" {
 		have, e := scanSession(t.tx.QueryRowContext(t.ctx, sessionSelect+`WHERE s.source=? AND s.import_key=?`, t.Source, in.Key))
@@ -90,7 +90,7 @@ func (t *Tx) CaptureSession(in SessionInput) (id int64, existing bool, err error
 			expected := have.SessionInput
 			expected.Kind = in.Kind
 			if have.DeletedAt != "" || have.KindID != kind.ID || expected != in {
-				return 0, false, conflict("session source identity has changed payload or is tombstoned")
+				return 0, false, Conflict("session source identity has changed payload or is tombstoned")
 			}
 			return have.ID, true, nil
 		}
@@ -99,7 +99,7 @@ func (t *Tx) CaptureSession(in SessionInput) (id int64, existing bool, err error
 		}
 	}
 	if kind.Deleted {
-		return 0, false, conflict("session kind is tombstoned")
+		return 0, false, Conflict("session kind is tombstoned")
 	}
 	err = t.tx.QueryRowContext(t.ctx, `INSERT INTO sessions(kind_id,day,import_key,start_at,start_local,start_offset,start_zone_unverified,end_at,end_local,end_offset,end_zone_unverified,source,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,`+nowSQL+`,`+nowSQL+`) RETURNING id`, kind.ID, in.Day, nullIfEmpty(in.Key), nullIfEmpty(in.StartAt), nullIfEmpty(in.StartLocal), nullIfEmpty(in.StartOffset), nullIfEmpty(in.StartZoneUnverified), nullIfEmpty(in.EndAt), nullIfEmpty(in.EndLocal), nullIfEmpty(in.EndOffset), nullIfEmpty(in.EndZoneUnverified), t.Source).Scan(&id)
 	return id, false, err
@@ -111,23 +111,23 @@ func (t *Tx) EditSession(id int64, version string, in SessionInput) error {
 	}
 	have, err := scanSession(t.tx.QueryRowContext(t.ctx, sessionSelect+`WHERE s.id=?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
-		return notFound("no session %d", id)
+		return NotFound("no session %d", id)
 	}
 	if err != nil {
 		return err
 	}
 	if have.Version != version || have.DeletedAt != "" {
-		return conflict("live session and current version required")
+		return Conflict("live session and current version required")
 	}
 	if in.Key != "" && in.Key != have.Key {
-		return invalid("session import identity cannot be changed")
+		return Invalid("session import identity cannot be changed")
 	}
 	kind, err := t.lookup(in.Kind)
 	if err != nil {
 		return err
 	}
 	if kind == nil || kind.Type != "page" || kind.DayPage || kind.Deleted && kind.ID != have.KindID {
-		return invalid("session kind must name a live non-journal plain page when newly selected")
+		return Invalid("session kind must name a live non-journal plain page when newly selected")
 	}
 	_, err = t.tx.ExecContext(t.ctx, `UPDATE sessions SET kind_id=?,day=?,start_at=?,start_local=?,start_offset=?,start_zone_unverified=?,end_at=?,end_local=?,end_offset=?,end_zone_unverified=? WHERE id=?`, kind.ID, in.Day, nullIfEmpty(in.StartAt), nullIfEmpty(in.StartLocal), nullIfEmpty(in.StartOffset), nullIfEmpty(in.StartZoneUnverified), nullIfEmpty(in.EndAt), nullIfEmpty(in.EndLocal), nullIfEmpty(in.EndOffset), nullIfEmpty(in.EndZoneUnverified), id)
 	return err
@@ -138,13 +138,13 @@ func (t *Tx) SessionLifecycle(id int64, version string, deleted bool) error {
 	var tombstoned bool
 	err := t.tx.QueryRowContext(t.ctx, `SELECT CAST(revision AS TEXT),deleted_at IS NOT NULL FROM sessions WHERE id=?`, id).Scan(&have, &tombstoned)
 	if errors.Is(err, sql.ErrNoRows) {
-		return notFound("no session %d", id)
+		return NotFound("no session %d", id)
 	}
 	if err != nil {
 		return err
 	}
 	if have != version {
-		return conflict("session changed since this version")
+		return Conflict("session changed since this version")
 	}
 	if deleted == tombstoned {
 		return nil
@@ -160,14 +160,14 @@ func (t *Tx) SessionLifecycle(id int64, version string, deleted bool) error {
 func (s *Store) Session(ctx context.Context, id int64) (*Session, error) {
 	result, err := scanSession(s.DB.R.QueryRowContext(ctx, sessionSelect+`WHERE s.id=?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, notFound("no session %d", id)
+		return nil, NotFound("no session %d", id)
 	}
 	return result, err
 }
 
 func (s *Store) Sessions(ctx context.Context, day, kind string, includeDeleted bool) ([]Session, error) {
 	if day != "" && !IsDay(day) {
-		return nil, invalid("session reporting day must be exact")
+		return nil, Invalid("session reporting day must be exact")
 	}
 	query := sessionSelect + `WHERE (? OR s.deleted_at IS NULL)`
 	args := []any{includeDeleted}

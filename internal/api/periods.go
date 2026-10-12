@@ -65,15 +65,8 @@ func (h *server) createPeriod(r *http.Request, src string) (*Entity, error) {
 // writePeriod is edit-period, and promote-period when promote is set: both take the page's version and its boundaries.
 func (h *server) writePeriod(promote bool) func(*http.Request, string) (*Entity, error) {
 	return func(r *http.Request, src string) (*Entity, error) {
-		id, err := idOf(r)
+		id, v, err := idForm(r, "version")
 		if err != nil {
-			return nil, err
-		}
-		v, err := form(r)
-		if err != nil {
-			return nil, err
-		}
-		if err := required(v, "version"); err != nil {
 			return nil, err
 		}
 		start, end := boundary(v.Get("start_boundary")), boundary(v.Get("end_boundary"))

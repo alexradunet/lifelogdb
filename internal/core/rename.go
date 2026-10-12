@@ -13,16 +13,16 @@ func (t *Tx) Rename(id int64, newTitle string) (int64, error) {
 		return 0, err
 	}
 	if old.Deleted {
-		return 0, conflict("page %d is deleted: revive it first", id)
+		return 0, Conflict("page %d is deleted: revive it first", id)
 	}
 	if old.DayPage {
-		return 0, conflict("a day page's canonical date is not renamed")
+		return 0, Conflict("a day page's canonical date is not renamed")
 	}
 	if !text.ValidTitle(newTitle) {
-		return 0, invalid("title %q is not a valid reference name", newTitle)
+		return 0, Invalid("title %q is not a valid reference name", newTitle)
 	}
 	if IsDay(newTitle) {
-		return 0, conflict("a calendar date is reserved for its journal day")
+		return 0, Conflict("a calendar date is reserved for its journal day")
 	}
 	key := text.TitleKey(newTitle)
 	target, err := t.lookupKey(key)

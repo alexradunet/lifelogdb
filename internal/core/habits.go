@@ -16,7 +16,7 @@ import (
 // refused: a unit never changes (metrics_unit_fixed).
 func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
 	if !text.ValidTitle(name) {
-		return false, invalid("metric name %q is not a valid title (docs/contract/titles-and-wikilinks.md)", name)
+		return false, Invalid("metric name %q is not a valid title (docs/contract/titles-and-wikilinks.md)", name)
 	}
 	p, err := t.lookup(name)
 	if err != nil {
@@ -40,11 +40,11 @@ func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
 			return false, err
 		}
 		if _, _, scale := rangeUnit(have); have != unit && !(scale && unit == "") {
-			return false, conflict("metric %s exists with unit %q, not %q: a unit never changes; register a new metric", p.Title, have, unit)
+			return false, Conflict("metric %s exists with unit %q, not %q: a unit never changes; register a new metric", p.Title, have, unit)
 		}
 		return false, nil
 	case p.Type != "page" || p.DayPage:
-		return false, conflict("%s is taken by a %s or a day page: a metric's title must be free or a plain page (D27)", p.Title, p.Type)
+		return false, Conflict("%s is taken by a %s or a day page: a metric's title must be free or a plain page (D27)", p.Title, p.Type)
 	}
 	if _, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET entity_type = 'metric', deleted_at = NULL WHERE id = ?`, p.ID); err != nil {
 		return false, err
@@ -66,7 +66,7 @@ func (t *Tx) metricID(name string) (int64, error) {
 	err := t.tx.QueryRowContext(t.ctx, `SELECT p.id FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key AND p.deleted_at IS NULL
 	                       WHERE p.id = (SELECT entity_id FROM entity_names WHERE name_key = ?) AND p.entity_type = 'metric'`, text.TitleKey(name)).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
-		return 0, notFound("no metric %q: the owner registers metrics", name)
+		return 0, NotFound("no metric %q: the owner registers metrics", name)
 	}
 	return id, err
 }
@@ -76,7 +76,7 @@ func (t *Tx) metricID(name string) (int64, error) {
 // that starts on that day.
 func (t *Tx) StartHabit(metric, start, end string) error {
 	if !IsDay(start) || (end != "" && !IsDay(end)) {
-		return invalid("days are YYYY-MM-DD")
+		return Invalid("days are YYYY-MM-DD")
 	}
 	id, err := t.metricID(metric)
 	if err != nil {
@@ -88,7 +88,7 @@ func (t *Tx) StartHabit(metric, start, end string) error {
 		return err
 	}
 	if other {
-		return invalid("%s has readings other than 0 and 1: a habit is 1 = done, 0 = not done (D24)", metric)
+		return Invalid("%s has readings other than 0 and 1: a habit is 1 = done, 0 = not done (D24)", metric)
 	}
 	if _, err := t.tx.ExecContext(t.ctx, `INSERT INTO habit_periods(metric_id, start_day, end_day, source) VALUES (?, ?, ?, ?)
 	                        ON CONFLICT(metric_id, start_day) DO NOTHING`, id, start, nullIfEmpty(end), t.Source); err != nil {
@@ -102,7 +102,7 @@ func (t *Tx) StartHabit(metric, start, end string) error {
 // StopHabit ends the open period of a habit on day (inclusive).
 func (t *Tx) StopHabit(metric, day string) error {
 	if !IsDay(day) {
-		return invalid("day %q is not YYYY-MM-DD", day)
+		return Invalid("day %q is not YYYY-MM-DD", day)
 	}
 	id, err := t.metricID(metric)
 	if err != nil {
@@ -113,7 +113,7 @@ func (t *Tx) StopHabit(metric, day string) error {
 		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		return notFound("%s has no open period", metric)
+		return NotFound("%s has no open period", metric)
 	}
 	return nil
 }
@@ -143,7 +143,7 @@ type HabitState struct {
 // Habits is cookbook/habits.md: the habits of a day.
 func (s *Store) Habits(ctx context.Context, day string) ([]HabitState, error) {
 	if !IsDay(day) {
-		return nil, invalid("day %q is not YYYY-MM-DD", day)
+		return nil, Invalid("day %q is not YYYY-MM-DD", day)
 	}
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT m_name.title,
@@ -181,7 +181,7 @@ type Completion struct {
 
 func (s *Store) Completion(ctx context.Context, from, to string) ([]Completion, error) {
 	if !IsDay(from) || !IsDay(to) || from > to {
-		return nil, invalid("from and to are YYYY-MM-DD days, from <= to")
+		return nil, Invalid("from and to are YYYY-MM-DD days, from <= to")
 	}
 	rows, err := s.DB.R.QueryContext(ctx, `
 		WITH RECURSIVE days(day) AS (

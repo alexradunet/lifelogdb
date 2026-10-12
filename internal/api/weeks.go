@@ -73,7 +73,7 @@ func (h *server) week(r *http.Request) (*Entity, error) {
 	ctx := r.Context()
 	monday, ok := weekOf(r.PathValue("week"))
 	if !ok {
-		return nil, &core.Error{Status: 422, Msg: "a week is YYYY-Www"}
+		return nil, core.Invalid("a week is YYYY-Www")
 	}
 	sunday, before := monday.AddDate(0, 0, 6), monday.AddDate(0, 0, -7)
 	from, through, previous := monday.Format(time.DateOnly), sunday.Format(time.DateOnly), before.Format(time.DateOnly)
@@ -193,7 +193,7 @@ func (h *server) year(r *http.Request) (*Entity, error) {
 	s := r.PathValue("year")
 	year, _ := strconv.Atoi(s)
 	if !yearPattern.MatchString(s) || year < 1 {
-		return nil, &core.Error{Status: 422, Msg: "a year is YYYY"}
+		return nil, core.Invalid("a year is YYYY")
 	}
 	first := time.Date(year, time.January, 1, 0, 0, 0, 0, time.UTC)
 	from, through := first.Format(time.DateOnly), time.Date(year, time.December, 31, 0, 0, 0, 0, time.UTC).Format(time.DateOnly)
