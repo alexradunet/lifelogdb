@@ -59,7 +59,7 @@ func outcomeAction(o core.TaskOccurrence) (Action, bool) {
 		return Action{}, false
 	case o.Virtual:
 		return action("capture-occurrence", map[string]string{"id": id}, map[string]any{"task_version": o.TaskVersion, "key": o.OccurrenceKey,
-			"due_day": o.OccurrenceKey, "state": "open", "reminder_mode": "inherit"}), true
+			"due_day": o.OccurrenceKey, "state": core.StateOpen, "reminder_mode": core.ReminderInherit}), true
 	}
 	return action("edit-occurrence", map[string]string{"id": id, "key": o.OccurrenceKey}, map[string]any{"task_version": o.TaskVersion,
 		"version": o.Version, "due_day": o.DueDay, "state": o.State, "completed_at": o.CompletedAt, "reminder_mode": o.ReminderMode,
@@ -195,7 +195,7 @@ func (h *server) taskEntity(ctx context.Context, id int64, q url.Values) (*Entit
 	if t.RepeatUnit != "" {
 		e.Actions = append(e.Actions, action("stop-task", ids, map[string]any{"version": t.Version, "through": t.RepeatUntilDay}))
 	}
-	e.Actions = append(e.Actions, action("capture-occurrence", ids, map[string]any{"task_version": t.Version, "state": "open", "reminder_mode": "inherit"}),
+	e.Actions = append(e.Actions, action("capture-occurrence", ids, map[string]any{"task_version": t.Version, "state": core.StateOpen, "reminder_mode": core.ReminderInherit}),
 		action("tombstone-task", ids, map[string]any{"version": t.Version}))
 	// Then the outcome of a one-off's one occurrence, or of each occurrence shown that is due soon.
 	if once != nil {
@@ -280,9 +280,9 @@ func (h *server) deadlines(r *http.Request) (*Entity, error) {
 	}
 	state := q.Get("state")
 	if state == "" {
-		state = "open"
+		state = core.StateOpen
 	}
-	if state != "open" && state != "done" && state != "skipped" && state != "all" {
+	if state != core.StateOpen && state != core.StateDone && state != core.StateSkipped && state != "all" {
 		return nil, core.Invalid("state is open, done, skipped or all")
 	}
 	today := h.localDay()

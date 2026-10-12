@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"lifelog/internal/core"
 )
 
 // The richer Today (docs/plans/093-words-phone-and-today.md): a reading's tile with its unit and the line of its
@@ -156,7 +158,7 @@ func (v *view) HabitStrip(recent any) habitStrip {
 		if state != "inactive" {
 			s.Active++
 		}
-		if state == "done" {
+		if state == core.StateDone {
 			s.Done++
 		}
 	}

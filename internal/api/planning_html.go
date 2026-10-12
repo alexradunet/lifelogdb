@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"lifelog/internal/core"
 )
 
 // The browser's planning views (docs/plans/091-the-browser-for-daily-use.md): an occurrence in words, its outcome
@@ -60,7 +62,7 @@ func (v *view) Occ(item any, more int) (occRow, error) {
 	forms, err := outcomes(v.OccurrenceAction(item), state, v.Here)
 	due, _ := o["due_day"].(string)
 	row := occRow{O: o, Forms: forms, More: more, When: dueWords(o["due_day"], today), Reminder: reminderWords(o, v.clock()),
-		OwnPage: v.Path == "/tasks/"+num(o["task_id"]), Overdue: state == "open" && due != "" && today != "" && due < today}
+		OwnPage: v.Path == "/tasks/"+num(o["task_id"]), Overdue: state == core.StateOpen && due != "" && today != "" && due < today}
 	row.Name, _ = o["label"].(string)
 	if row.Name == "" {
 		row.Name, row.When = strings.ToUpper(row.When[:1])+row.When[1:], ""
@@ -81,9 +83,9 @@ func outcomes(a *Action, state, back string) ([]*formView, error) {
 		return nil, nil
 	}
 	type choice struct{ button, state, completed, class string }
-	choices := []choice{{"Reopen", "open", "", "reopen"}}
-	if state == "open" {
-		choices = []choice{{"Done", "done", "now", "done"}, {"Skip", "skipped", "", "skip"}}
+	choices := []choice{{"Reopen", core.StateOpen, "", "reopen"}}
+	if state == core.StateOpen {
+		choices = []choice{{"Done", core.StateDone, "now", core.StateDone}, {"Skip", core.StateSkipped, "", "skip"}}
 	}
 	var out []*formView
 	for _, c := range choices {
@@ -130,7 +132,7 @@ func dueGroups(list any, today string, fold bool) []dueGroup {
 		switch {
 		case due == "":
 			g = 5
-		case due < today && state == "open":
+		case due < today && state == core.StateOpen:
 			g = 0
 		case due < today:
 			g = 1

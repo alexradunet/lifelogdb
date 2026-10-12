@@ -16,6 +16,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"lifelog/internal/core"
 	"lifelog/internal/text"
 )
 
@@ -599,7 +600,7 @@ func isoWeekKey(day string) string {
 // order inside each state stays.
 func settledFirst(list any) []any {
 	items, _ := list.([]any)
-	rank := map[string]int{"done": 0, "skipped": 1}
+	rank := map[string]int{core.StateDone: 0, core.StateSkipped: 1}
 	out := slices.Clone(items)
 	slices.SortStableFunc(out, func(a, b any) int {
 		state := func(x any) int {

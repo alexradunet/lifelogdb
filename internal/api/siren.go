@@ -6,6 +6,8 @@ package api
 import (
 	"net/url"
 	"strings"
+
+	"lifelog/internal/core"
 )
 
 // Entity is a Siren entity. Result is an extension: what a POST did (e.g. the wikilinks a save skipped).
@@ -160,7 +162,7 @@ var catalog = []spec{
 	{"stop-habit", "Stop habit", "End a habit's open period on a day (inclusive).",
 		"POST", "/metrics/{name}/stop", []Field{path("name", "text", "Metric"), req("day", "date", "Last day")}, false},
 	{"check-in", "Check in", "Record a habit for a day: done 1, not done 0.",
-		"POST", "/metrics/{name}/check-in", []Field{path("name", "text", "Habit"), req("day", "date", "Day"), {Name: "done", Type: "number", Title: "Done", Required: true, Options: []string{"1", "0"}}}, false},
+		"POST", "/metrics/{name}/check-in", []Field{path("name", "text", "Habit"), req("day", "date", "Day"), {Name: core.StateDone, Type: "number", Title: "Done", Required: true, Options: []string{"1", "0"}}}, false},
 	{"integrity-check", "Integrity", "Run the four integrity checks of the database (docs/contract/integrity-checks.md).",
 		"GET", "/integrity", nil, false},
 	{"search", "Search", "Full-text search over page titles and bodies (FTS5 syntax).",
@@ -189,18 +191,18 @@ var catalog = []spec{
 		"POST", "/tasks/{id}/revive", []Field{path("id", "number", "Task id"), req("version", "hidden", "Version")}, false},
 	{"capture-occurrence", "Capture occurrence", "Write one occurrence of a task: key is a slot day of the series (due on that day unless due_day says otherwise) or once for a one-off. state open, done or skipped; completed_at an instant, or now, for a done one; reminder_mode inherit, off, or at with reminder_at. A slot written before is returned as it is.",
 		"POST", "/tasks/{id}/occurrences", []Field{path("id", "number", "Task id"), req("task_version", "hidden", "Task version"), req("key", "text", "Slot (a day, or once)"), opt("due_day", "date", "Due"),
-			{Name: "state", Type: "text", Title: "State", Options: []string{"open", "done", "skipped"}}, opt("completed_at", "text", "Completed at (UTC instant, or now)"),
-			{Name: "reminder_mode", Type: "text", Title: "Reminder", Options: []string{"inherit", "off", "at"}}, opt("reminder_at", "text", "Reminder at (UTC instant, with at)"), opt("import_key", "text", "Key")}, false},
+			{Name: "state", Type: "text", Title: "State", Options: []string{core.StateOpen, core.StateDone, core.StateSkipped}}, opt("completed_at", "text", "Completed at (UTC instant, or now)"),
+			{Name: "reminder_mode", Type: "text", Title: "Reminder", Options: []string{core.ReminderInherit, core.ReminderOff, core.ReminderAt}}, opt("reminder_at", "text", "Reminder at (UTC instant, with at)"), opt("import_key", "text", "Key")}, false},
 	{"edit-occurrence", "Edit occurrence", "Change an occurrence's due day (blank: undated), state, completion instant (now for this instant) or reminder choice, with both current versions. Reopening clears completion.",
 		"POST", "/tasks/{id}/occurrences/{key}/edit", []Field{path("id", "number", "Task id"), path("key", "text", "Occurrence key"), req("task_version", "hidden", "Task version"), req("version", "hidden", "Version"),
-			opt("due_day", "date", "Due"), {Name: "state", Type: "text", Title: "State", Options: []string{"open", "done", "skipped"}}, opt("completed_at", "text", "Completed at (UTC instant, or now)"),
-			{Name: "reminder_mode", Type: "text", Title: "Reminder", Options: []string{"inherit", "off", "at"}}, opt("reminder_at", "text", "Reminder at (UTC instant, with at)")}, false},
+			opt("due_day", "date", "Due"), {Name: "state", Type: "text", Title: "State", Options: []string{core.StateOpen, core.StateDone, core.StateSkipped}}, opt("completed_at", "text", "Completed at (UTC instant, or now)"),
+			{Name: "reminder_mode", Type: "text", Title: "Reminder", Options: []string{core.ReminderInherit, core.ReminderOff, core.ReminderAt}}, opt("reminder_at", "text", "Reminder at (UTC instant, with at)")}, false},
 	{"tombstone-occurrence", "Delete occurrence", "Tombstone one occurrence; its slot stays suppressed. revive-occurrence undoes it.",
 		"POST", "/tasks/{id}/occurrences/{key}/tombstone", []Field{path("id", "number", "Task id"), path("key", "text", "Occurrence key"), req("task_version", "hidden", "Task version"), req("version", "hidden", "Version")}, false},
 	{"revive-occurrence", "Revive occurrence", "Undo an occurrence's tombstone.",
 		"POST", "/tasks/{id}/occurrences/{key}/revive", []Field{path("id", "number", "Task id"), path("key", "text", "Occurrence key"), req("task_version", "hidden", "Task version"), req("version", "hidden", "Version")}, false},
 	{"deadlines", "Deadlines", "The occurrences of every task due in a window (default: 30 days back to 90 days on), open ones unless state says otherwise. Overdue is this read with an earlier from, never a stored flag.",
-		"GET", "/deadlines", []Field{opt("from", "date", "From"), opt("through", "date", "Through"), {Name: "state", Type: "text", Title: "State", Options: []string{"open", "done", "skipped", "all"}},
+		"GET", "/deadlines", []Field{opt("from", "date", "From"), opt("through", "date", "Through"), {Name: "state", Type: "text", Title: "State", Options: []string{core.StateOpen, core.StateDone, core.StateSkipped, "all"}},
 			{Name: "include_deleted", Type: "number", Title: "Include tombstoned", Options: []string{"0", "1"}}}, false},
 }
 

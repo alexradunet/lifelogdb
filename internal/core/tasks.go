@@ -91,18 +91,18 @@ func validateOccurrenceChanges(in OccurrenceChanges) error {
 	if err := checkDay("due_day", in.DueDay); in.DueDay != "" && err != nil {
 		return err
 	}
-	if in.State != "open" && in.State != "done" && in.State != "skipped" {
+	if in.State != StateOpen && in.State != StateDone && in.State != StateSkipped {
 		return Invalid("unknown task occurrence state")
 	}
-	if in.CompletedAt != "" && (in.State != "done" || !IsInstant(in.CompletedAt)) {
+	if in.CompletedAt != "" && (in.State != StateDone || !IsInstant(in.CompletedAt)) {
 		return Invalid("completion instant requires a done occurrence")
 	}
 	switch in.ReminderMode {
-	case "inherit", "off":
+	case ReminderInherit, ReminderOff:
 		if in.ReminderOverrideAt != "" {
 			return Invalid("reminder override requires at mode")
 		}
-	case "at":
+	case ReminderAt:
 		if !IsInstant(in.ReminderOverrideAt) {
 			return Invalid("absolute reminder requires an exact instant")
 		}
@@ -247,7 +247,7 @@ func sameTaskSpec(a, b TaskSpec) bool {
 }
 
 func (t *Tx) CreateTask(in TaskSpec, importKey string) (id int64, existing bool, err error) {
-	return t.createTask(in, importKey, OccurrenceInput{OccurrenceKey: "once", OccurrenceChanges: OccurrenceChanges{State: "open", ReminderMode: "inherit"}})
+	return t.createTask(in, importKey, OccurrenceInput{OccurrenceKey: "once", OccurrenceChanges: OccurrenceChanges{State: StateOpen, ReminderMode: ReminderInherit}})
 }
 
 // CaptureOneOffTask commits an explicitly supplied initial outcome with its definition.
@@ -334,7 +334,7 @@ func (s *Store) CreateTask(ctx context.Context, source string, f TaskForm) (id i
 			return e
 		}
 		if spec.RepeatUnit == "" {
-			initial := OccurrenceInput{OccurrenceKey: "once", OccurrenceChanges: OccurrenceChanges{DueDay: f.DueDay, State: "open", ReminderMode: "inherit"}}
+			initial := OccurrenceInput{OccurrenceKey: "once", OccurrenceChanges: OccurrenceChanges{DueDay: f.DueDay, State: StateOpen, ReminderMode: ReminderInherit}}
 			id, existing, e = t.CaptureOneOffTask(spec, f.ImportKey, initial)
 		} else {
 			id, existing, e = t.CreateTask(spec, f.ImportKey)
@@ -404,7 +404,7 @@ func (p OccurrencePatch) apply(c OccurrenceChanges) OccurrenceChanges {
 // CaptureTaskOccurrence writes one occurrence of a task in its own transaction: open and inheriting its reminder, due
 // on its slot day (a one-off's once is undated), unless the patch says otherwise.
 func (s *Store) CaptureTaskOccurrence(ctx context.Context, source string, taskID int64, taskVersion, key, importKey string, p OccurrencePatch) (o *TaskOccurrence, existing bool, err error) {
-	base := OccurrenceChanges{State: "open", ReminderMode: "inherit"}
+	base := OccurrenceChanges{State: StateOpen, ReminderMode: ReminderInherit}
 	if key != "once" {
 		base.DueDay = key
 	}
@@ -541,7 +541,7 @@ func (t *Tx) CaptureTaskOccurrence(taskID int64, taskVersion string, in Occurren
 	if p.DeletedAt != "" {
 		return nil, false, Conflict("new occurrence requires a live task")
 	}
-	if in.State == "open" && p.RepeatUntilDay != "" && in.OccurrenceKey > p.RepeatUntilDay {
+	if in.State == StateOpen && p.RepeatUntilDay != "" && in.OccurrenceKey > p.RepeatUntilDay {
 		return nil, false, Invalid("open occurrence is after recurrence end")
 	}
 	if _, err = t.insertTaskOccurrence(taskID, in); err != nil {
@@ -584,7 +584,7 @@ func (t *Tx) TaskOccurrenceLifecycle(taskID int64, taskVersion, key, version str
 	if deleted == (o.DeletedAt != "") {
 		return nil
 	}
-	if !deleted && o.State == "open" && p.RepeatUntilDay != "" && key > p.RepeatUntilDay {
+	if !deleted && o.State == StateOpen && p.RepeatUntilDay != "" && key > p.RepeatUntilDay {
 		return Invalid("occurrence cannot reopen after recurrence end")
 	}
 	return t.setDeletedAt("task_occurrences", o.ID, deleted)
@@ -655,7 +655,7 @@ func (s *Store) TaskOccurrences(ctx context.Context, taskID int64, from, through
 			if _, ok := persisted[key]; ok {
 				return nil
 			}
-			return appendOccurrence(TaskOccurrence{TaskID: taskID, TaskVersion: p.Version, OccurrenceKey: key, Virtual: true, OccurrenceChanges: OccurrenceChanges{DueDay: key, State: "open", ReminderMode: "inherit"}})
+			return appendOccurrence(TaskOccurrence{TaskID: taskID, TaskVersion: p.Version, OccurrenceKey: key, Virtual: true, OccurrenceChanges: OccurrenceChanges{DueDay: key, State: StateOpen, ReminderMode: ReminderInherit}})
 		})
 		if err != nil {
 			return nil, err
@@ -672,3 +672,14 @@ func (s *Store) TaskOccurrences(ctx context.Context, taskID int64, from, through
 	}
 	return out, nil
 }
+
+// The states of an occurrence and the modes of its reminder (docs/contract/planning.md), as the wire carries them.
+const (
+	StateOpen    = "open"
+	StateDone    = "done"
+	StateSkipped = "skipped"
+
+	ReminderInherit = "inherit"
+	ReminderOff     = "off"
+	ReminderAt      = "at"
+)

@@ -461,11 +461,11 @@ func (h *server) root(r *http.Request) (*Entity, error) {
 func (h *server) overdueAndDue(ctx context.Context, today string) ([]occurrenceView, error) {
 	t, _ := time.Parse(time.DateOnly, today)
 	from, yesterday := t.AddDate(0, 0, -windowBack).Format(time.DateOnly), t.AddDate(0, 0, -1).Format(time.DateOnly)
-	late, err := h.dueIn(ctx, from, yesterday, "open", false)
+	late, err := h.dueIn(ctx, from, yesterday, core.StateOpen, false)
 	if err != nil {
 		return nil, err
 	}
-	due, err := h.dueIn(ctx, today, today, "open", false)
+	due, err := h.dueIn(ctx, today, today, core.StateOpen, false)
 	return append(late, due...), err
 }
 
@@ -526,7 +526,7 @@ func (h *server) day(r *http.Request) (*Entity, error) {
 			settled, err = h.dueIn(ctx, today, today, "all", false)
 		}
 		for _, v := range settled {
-			if v.State != "open" {
+			if v.State != core.StateOpen {
 				due = append(due, v)
 			}
 		}

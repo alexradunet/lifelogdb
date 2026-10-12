@@ -133,10 +133,10 @@ func ResolveTaskReminder(task Task, occurrence TaskOccurrence) (TaskReminder, er
 	if err := validateOccurrenceChanges(occurrence.OccurrenceChanges); err != nil {
 		return TaskReminder{}, err
 	}
-	if task.DeletedAt != "" || occurrence.DeletedAt != "" || occurrence.State != "open" || occurrence.ReminderMode == "off" {
+	if task.DeletedAt != "" || occurrence.DeletedAt != "" || occurrence.State != StateOpen || occurrence.ReminderMode == ReminderOff {
 		return TaskReminder{State: "none"}, nil
 	}
-	if occurrence.ReminderMode == "at" {
+	if occurrence.ReminderMode == ReminderAt {
 		return TaskReminder{State: "resolved", At: occurrence.ReminderOverrideAt}, nil
 	}
 	if occurrence.DueDay == "" || task.ReminderLocalTime == "" && task.ReminderZone == "" {
