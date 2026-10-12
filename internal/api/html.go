@@ -86,6 +86,7 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 	"num":          num,
 	"pathesc":      url.PathEscape,
 	"icon":         icon,
+	"mentionWords": mentionWords,
 	"shortDay":     shortDay,
 	"shortDayYear": shortDayYear,
 	"addDays":      addDays,

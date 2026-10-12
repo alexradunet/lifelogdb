@@ -25,7 +25,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 	// The shape behind each section: a Go value whose JSON names, walked, are the paths the table must list.
 	shapes := map[string]any{
 		"root":                                map[string]any{"today": "", "due": []occurrenceView{}, "habits": []habitView{}, "recent": []recentDay{}, "on_this_day": []recentDay{}},
-		"days, people, places, files, ghosts": map[string]any{"limit": 0, "offset": 0},
+		"days, people, places, files, ghosts": map[string]any{"limit": 0, "offset": 0, "rows": []namedRow{}},
 		"search":                              map[string]any{"q": "", "hits": []core.Hit{}, "limit": 0, "offset": 0},
 		"day":                                 dayView{},
 		"month":                               map[string]any{"month": "", "today": "", "days": []monthDay{}},
