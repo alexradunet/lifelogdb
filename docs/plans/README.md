@@ -4,10 +4,11 @@ A plan is a dated record ([how a change happens](../process.md)): a change large
 written as a self-contained brief with done criteria. It cites the docs as they were at the commit it names. One file
 per plan, `NNN-short-slug.md`, numbered on from the last.
 
-Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **098**.
+Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **099**.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
+| [098](098-the-codebase-made-cohesive.md) | The codebase made cohesive: dead code out, one helper a rule, one convention a concept | P1 | L | issue 0067; owner decisions 2026-10-12 | IN PROGRESS |
 | [097](097-the-almanac-reflects.md) | The Almanac reflects: the past on the page, a refusal on its form, the week and the year | P1 | L | issue 0066; owner decision 2026-10-12 | DONE |
 | [096](096-bound-in-hearthwood.md) | Bound in Hearthwood: the Almanac takes Balaur's materials | P1 | L | issue 0065; owner decisions 2026-10-12 | DONE |
 | [095](095-the-leaf-and-its-margin.md) | The leaf and its margin: a calm Almanac | P1 | L | issue 0064; owner decisions 2026-10-12 | DONE |
