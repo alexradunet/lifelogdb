@@ -67,7 +67,7 @@ func TestClientCancellation(t *testing.T) {
 							close(cleanup)
 						}
 					}()
-					c = Remote(srv.URL, "cli")
+					c = Remote(srv.URL, "cli", "")
 				}
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
@@ -113,7 +113,7 @@ func TestClientCancellationBeforeSend(t *testing.T) {
 		if remote {
 			srv := httptest.NewServer(h)
 			defer srv.Close()
-			c = Remote(srv.URL, "cli")
+			c = Remote(srv.URL, "cli", "")
 		}
 		_, err := c.Get(ctx, "/")
 		if !errors.Is(err, context.Canceled) {
@@ -157,7 +157,7 @@ func testQueuedWrite(t *testing.T, remote bool) {
 	if remote {
 		srv := httptest.NewServer(handler)
 		defer srv.Close()
-		c = Remote(srv.URL, "cli")
+		c = Remote(srv.URL, "cli", "")
 	}
 	defer func() {
 		if released {

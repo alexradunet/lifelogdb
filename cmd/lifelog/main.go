@@ -4,23 +4,16 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"math"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
-	"time"
 
-	"lifelog/internal/agentic"
 	"lifelog/internal/api"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
@@ -30,50 +23,22 @@ import (
 
 const version = "0.1.0"
 
-const usage = `lifelog — the writer of a life.db
+// opts are the flags of a command line and its words. A flag may stand anywhere on the line; a command takes the
+// global flags and its own (command.flags), and refuses any other.
+type opts struct {
+	db, url, source, addr, agent, mood, day, from, to, title, text, preview, mime, at, radius, column string
+	tokenFile, tlsCert, tlsKey, snapshots                                                             string
+	allowOrigins                                                                                      []string
+	human, dryRun, dbExplicit, addrExplicit, public, force                                            bool
+	args                                                                                              []string
+	given                                                                                             []string           // the flags the line named
+	pub                                                                                               *api.PublicOptions // serve --public, read by its prepare
+}
 
-  lifelog init [PATH]                 create a new life.db from docs/schema/schema.sql (default: beside this program)
-  lifelog agentic-init [--force]      make this program's folder ready for a coding agent: AGENTS.md, CLAUDE.md,
-                                      skills, and the MCP config of Claude Code, Codex, OpenCode and Pi; a file
-                                      with another text is kept unless --force
-  lifelog serve [--addr 127.0.0.1:7777] [--snapshots DIR]   the API: Siren JSON, or HTML in a browser; this machine only
-  lifelog serve --public [--addr 0.0.0.0:7777] [--allow-origin O]... [--tls-cert F --tls-key F]
-                                      the API for other devices: every request needs the owner's token
-                                      (--token-file PATH or $LIFELOG_TOKEN); a browser logs in at /login
-  lifelog mcp [--agent NAME]          the MCP server on stdio (writes as agent:NAME)
+// globalFlags are the flags every command takes.
+var globalFlags = []string{"--db", "--url", "--source", "--human"}
 
-  lifelog get PATH                    fetch a resource, e.g. /, /days/today, /pages/12 (or pages/12: Git Bash rewrites a leading /)
-  lifelog do ACTION [field=value...]  run any action of the catalog (lifelog actions)
-  lifelog actions                     list the actions and their fields
-
-  lifelog capture TEXT... [--mood N] [--day YYYY-MM-DD]
-  lifelog day [YYYY-MM-DD]            the day view (default today)
-  lifelog page TITLE                  a page by its title
-  lifelog search QUERY...             full-text search
-  lifelog query SQL                   one read-only SQL statement
-  lifelog habits [YYYY-MM-DD]         the day's habits and completion
-  lifelog done METRIC [--day D]       check a habit in as done (skip METRIC: not done)
-  lifelog tasks                       every task; lifelog do create-task label=... makes one
-  lifelog due [--from D] [--to D]     what is due: every task's open occurrences in the window
-  lifelog rename PAGE-ID NEW-TITLE    rename a named object, retaining its id and old-name aliases
-  lifelog file PATH... [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day D] [--at PLACE [--radius M]] [--dry-run]
-                                      keep a file (docs/cookbook/keep-a-file.md): the original is hashed,
-                                      never stored; its text from FILE; a picture made from a JPEG, PNG or
-                                      GIF, else from PICTURE; the title defaults to the file's name. A photo
-                                      links its day to the place it was taken in; one near no place is
-                                      reported, and --at names the place (docs/cookbook/place-of-a-photo.md)
-                                      Several paths, or a folder's photos: the few chosen for a day, kept
-                                      together, with a report; --dry-run writes nothing
-  lifelog snapshot [--to DIR]         a dated copy of life.db (life-YYYY-MM-DD.db, beside it or in DIR),
-                                      then its restore check (docs/cookbook/take-a-snapshot.md); with --url the
-                                      server's folder (serve --snapshots), and --to is refused
-
-An import is done by a local agent with the owner, through the catalog (lifelog mcp --agent NAME;
-docs/plans/089-no-import-process.md). One action helps it:
-  lifelog readings PAGE METRIC [--column NAME]   readings of METRIC from the table of PAGE (readings-from-table):
-                                      a row with a day and a plain number in the metric's unit; the
-                                      others are reported; a second run writes nothing
-
+const globalUsage = `
 Global flags, anywhere on the line:
   --db PATH      the life.db (default $LIFELOG_DB, else the life.db beside this program)
   --url URL      talk to a running "lifelog serve" instead of opening the file ($LIFELOG_TOKEN if it is --public)
@@ -81,76 +46,304 @@ Global flags, anywhere on the line:
   --human        print a readable summary instead of JSON
 `
 
-type opts struct {
-	db, url, source, addr, agent, mood, day, from, to, title, text, preview, mime, at, radius, column string
-	tokenFile, tlsCert, tlsKey, snapshots                                                             string
-	allowOrigins                                                                                      []string
-	human, dryRun, dbExplicit, addrExplicit, public, force                                            bool
-	args                                                                                              []string
+// env is what a command runs with: the line, the client (nil for serve, which mounts the handler itself), and the
+// handler (nil over --url, when a running server is the one).
+type env struct {
+	o       opts
+	c       *client.Client
+	handler http.Handler
 }
 
-// parse takes flags anywhere on the line (an old CLI ignored --db after the subcommand).
+// command is one subcommand. The table commands is the one list of them: the usage, the dispatch, the flags a
+// command takes and whether an interrupt reaches it all read it.
+type command struct {
+	name    string
+	gap     bool                // a blank line before its usage: the start of a group
+	usage   string              // its lines of the usage text; "" for an alias with none of its own
+	flags   []string            // the flags it takes, besides the global ones
+	setup   bool                // a setup command of the machine (init, agentic-init): no client, and the OS's interrupt
+	prepare func(o *opts) error // what it checks and sets before anything opens
+	run     func(ctx context.Context, e env, args []string) error
+}
+
+var commands = []command{
+	{name: "init", setup: true, gap: true,
+		usage: "  lifelog init [PATH]                 create a new life.db from docs/schema/schema.sql (default: beside this program)",
+		run: func(ctx context.Context, e env, args []string) error {
+			if len(args) > 1 {
+				return errors.New("init [PATH]")
+			}
+			path, err := dbPath(e.o, strings.Join(args, ""))
+			if err != nil {
+				return err
+			}
+			if err := db.Init(ctx, path); err != nil {
+				return err
+			}
+			fmt.Println("created", path)
+			return nil
+		}},
+	{name: "agentic-init", setup: true, flags: []string{"--force"},
+		usage: "  lifelog agentic-init [--force]      make this program's folder ready for a coding agent: AGENTS.md, CLAUDE.md,\n" +
+			"                                      skills, and the MCP config of Claude Code, Codex, OpenCode and Pi; a file\n" +
+			"                                      with another text is kept unless --force",
+		run: func(_ context.Context, e env, _ []string) error { return agenticInit(e.o) }},
+	{name: "serve", flags: []string{"--addr", "--snapshots", "--public", "--token-file", "--allow-origin", "--tls-cert", "--tls-key"},
+		usage: "  lifelog serve [--addr 127.0.0.1:7777] [--snapshots DIR]   the API: Siren JSON, or HTML in a browser; this machine only\n" +
+			"  lifelog serve --public [--addr 0.0.0.0:7777] [--allow-origin O]... [--tls-cert F --tls-key F]\n" +
+			"                                      the API for other devices: every request needs the owner's token\n" +
+			"                                      (--token-file PATH or $LIFELOG_TOKEN); a browser logs in at /login",
+		prepare: prepareServe, run: serve},
+	{name: "mcp", flags: []string{"--agent"},
+		usage: "  lifelog mcp [--agent NAME]          the MCP server on stdio (writes as agent:NAME)",
+		prepare: func(o *opts) error {
+			name := o.agent
+			if name == "" {
+				name = "mcp"
+			}
+			o.source = "agent:" + name
+			return nil
+		},
+		run: func(ctx context.Context, e env, _ []string) error { return mcp.Serve(ctx, e.c, version) }},
+	{name: "get", gap: true,
+		usage: "  lifelog get PATH                    fetch a resource, e.g. /, /days/today, /pages/12 (or pages/12: Git Bash rewrites a leading /)",
+		run: func(ctx context.Context, e env, args []string) error {
+			if len(args) != 1 {
+				return errors.New("get PATH")
+			}
+			return show(e.o)(e.c.Get(ctx, "/"+strings.TrimPrefix(args[0], "/"))) // "pages/1" too: some shells rewrite a leading /
+		}},
+	{name: "do",
+		usage: "  lifelog do ACTION [field=value...]  run any action of the catalog (lifelog actions)",
+		run: func(ctx context.Context, e env, args []string) error {
+			if len(args) == 0 {
+				return errors.New("do ACTION [field=value...]")
+			}
+			vals := map[string]string{}
+			for _, kv := range args[1:] {
+				k, v, ok := strings.Cut(kv, "=")
+				if !ok {
+					return fmt.Errorf("%q is not field=value", kv)
+				}
+				vals[k] = v
+			}
+			return doAction(ctx, e, args[0], vals)
+		}},
+	{name: "actions",
+		usage: "  lifelog actions                     list the actions and their fields",
+		run:   func(ctx context.Context, e env, _ []string) error { return listActions(ctx, e.o, e.c) }},
+	{name: "capture", gap: true, flags: []string{"--mood", "--day"},
+		usage: "  lifelog capture TEXT... [--mood N] [--day YYYY-MM-DD]",
+		run: func(ctx context.Context, e env, args []string) error {
+			// The day is the server's today unless --day names one: with --url, the server's clock is the one that counts.
+			vals := map[string]string{"day": dayOrToday(e.o), "text": strings.Join(args, " ")}
+			if e.o.mood != "" {
+				vals["mood"] = e.o.mood
+			}
+			return doAction(ctx, e, "capture", vals)
+		}},
+	{name: "day",
+		usage: "  lifelog day [YYYY-MM-DD]            the day view (default today)",
+		run: func(ctx context.Context, e env, args []string) error {
+			day := "today"
+			if len(args) == 1 {
+				day = args[0]
+			}
+			return show(e.o)(e.c.Get(ctx, "/days/"+url.PathEscape(day)))
+		}},
+	{name: "page",
+		usage: "  lifelog page TITLE                  a page by its title",
+		run: func(ctx context.Context, e env, args []string) error {
+			return doAction(ctx, e, "find", map[string]string{"title": strings.Join(args, " ")})
+		}},
+	{name: "search",
+		usage: "  lifelog search QUERY...             full-text search",
+		run: func(ctx context.Context, e env, args []string) error {
+			return doAction(ctx, e, "search", map[string]string{"q": strings.Join(args, " ")})
+		}},
+	{name: "query",
+		usage: "  lifelog query SQL                   one read-only SQL statement",
+		run: func(ctx context.Context, e env, args []string) error {
+			return doAction(ctx, e, "query", map[string]string{"sql": strings.Join(args, " ")})
+		}},
+	{name: "habits",
+		usage: "  lifelog habits [YYYY-MM-DD]         the day's habits and completion",
+		run: func(ctx context.Context, e env, args []string) error {
+			href := "/habits" // the server's today
+			if len(args) == 1 {
+				href += "?day=" + url.QueryEscape(args[0])
+			}
+			return show(e.o)(e.c.Get(ctx, href))
+		}},
+	{name: "done", flags: []string{"--day"},
+		usage: "  lifelog done METRIC [--day D]       check a habit in as done (skip METRIC: not done)",
+		run:   checkIn("1")},
+	{name: "skip", flags: []string{"--day"}, run: checkIn("0")},
+	{name: "tasks",
+		usage: "  lifelog tasks                       every task; lifelog do create-task label=... makes one",
+		run:   func(ctx context.Context, e env, _ []string) error { return show(e.o)(e.c.Get(ctx, "/tasks")) }},
+	{name: "due", flags: []string{"--from", "--to"},
+		usage: "  lifelog due [--from D] [--to D]     what is due: every task's open occurrences in the window",
+		run: func(ctx context.Context, e env, _ []string) error {
+			vals := map[string]string{}
+			if e.o.from != "" {
+				vals["from"] = e.o.from
+			}
+			if e.o.to != "" {
+				vals["through"] = e.o.to
+			}
+			return doAction(ctx, e, "deadlines", vals)
+		}},
+	{name: "rename",
+		usage: "  lifelog rename PAGE-ID NEW-TITLE    rename a named object, retaining its id and old-name aliases",
+		run: func(ctx context.Context, e env, args []string) error {
+			if len(args) != 2 {
+				return errors.New("rename PAGE-ID NEW-TITLE")
+			}
+			return doAction(ctx, e, "rename", map[string]string{"id": args[0], "title": args[1]})
+		}},
+	{name: "file", flags: []string{"--title", "--text", "--preview", "--mime", "--day", "--at", "--radius", "--dry-run"},
+		usage: "  lifelog file PATH... [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day D] [--at PLACE [--radius M]] [--dry-run]\n" +
+			"                                      keep a file (docs/cookbook/keep-a-file.md): the original is hashed,\n" +
+			"                                      never stored; its text from FILE; a picture made from a JPEG, PNG or\n" +
+			"                                      GIF, else from PICTURE; the title defaults to the file's name. A photo\n" +
+			"                                      links its day to the place it was taken in; one near no place is\n" +
+			"                                      reported, and --at names the place (docs/cookbook/place-of-a-photo.md)\n" +
+			"                                      Several paths, or a folder's photos: the few chosen for a day, kept\n" +
+			"                                      together, with a report; --dry-run writes nothing",
+		run: func(ctx context.Context, e env, args []string) error { return keepFile(ctx, e.o, e.c, args) }},
+	{name: "snapshot", flags: []string{"--to"},
+		usage: "  lifelog snapshot [--to DIR]         a dated copy of life.db (life-YYYY-MM-DD.db, beside it or in DIR),\n" +
+			"                                      then its restore check (docs/cookbook/take-a-snapshot.md); with --url the\n" +
+			"                                      server's folder (serve --snapshots), and --to is refused",
+		prepare: func(o *opts) error {
+			if o.url != "" && o.to != "" {
+				return errors.New("snapshot over --url lands in the server's folder (serve --snapshots): drop --to")
+			}
+			if o.url == "" {
+				o.snapshots = o.to
+				if o.snapshots != "" {
+					// Refused before the database is opened: a mistaken folder leaves life.db untouched.
+					if _, err := db.CheckSnapshotDir(o.snapshots); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		},
+		run: func(ctx context.Context, e env, _ []string) error { return doAction(ctx, e, "snapshot", nil) }},
+	{name: "readings", gap: true, flags: []string{"--column"},
+		usage: "An import is done by a local agent with the owner, through the catalog (lifelog mcp --agent NAME;\n" +
+			"docs/plans/089-no-import-process.md). One action helps it:\n" +
+			"  lifelog readings PAGE METRIC [--column NAME]   readings of METRIC from the table of PAGE (readings-from-table):\n" +
+			"                                      a row with a day and a plain number in the metric's unit; the\n" +
+			"                                      others are reported; a second run writes nothing",
+		run: func(ctx context.Context, e env, args []string) error {
+			if len(args) != 2 {
+				return errors.New("readings PAGE METRIC [--column NAME]")
+			}
+			vals := map[string]string{"page": args[0], "metric": args[1]}
+			if e.o.column != "" {
+				vals["column"] = e.o.column
+			}
+			return doAction(ctx, e, "readings-from-table", vals)
+		}},
+}
+
+// commandNamed is the command of a name, nil for none.
+func commandNamed(name string) *command {
+	for i := range commands {
+		if commands[i].name == name {
+			return &commands[i]
+		}
+	}
+	return nil
+}
+
+// usageText is the usage, assembled from the table so that a command cannot be missing from it.
+func usageText() string {
+	var b strings.Builder
+	b.WriteString("lifelog — the writer of a life.db\n")
+	for _, c := range commands {
+		if c.usage == "" {
+			continue
+		}
+		if c.gap {
+			b.WriteString("\n")
+		}
+		b.WriteString(c.usage)
+		b.WriteString("\n")
+	}
+	b.WriteString(globalUsage)
+	return b.String()
+}
+
+// checkIn is done and skip: a habit's check-in on --day, else the server's today.
+func checkIn(done string) func(ctx context.Context, e env, args []string) error {
+	return func(ctx context.Context, e env, args []string) error {
+		if len(args) != 1 {
+			return fmt.Errorf("%s METRIC [--day YYYY-MM-DD]", e.o.args[0])
+		}
+		return doAction(ctx, e, "check-in", map[string]string{"name": args[0], "day": dayOrToday(e.o), "done": done})
+	}
+}
+
+// parse takes flags anywhere on the line (an old CLI ignored --db after the subcommand). A flag the command does not
+// take is refused, never ignored.
 func parse(argv []string) (opts, error) {
 	o := opts{db: os.Getenv("LIFELOG_DB"), source: "cli", addr: "127.0.0.1:7777"}
 	vals := map[string]*string{"--db": &o.db, "--url": &o.url, "--source": &o.source, "--addr": &o.addr,
 		"--agent": &o.agent, "--mood": &o.mood, "--day": &o.day, "--from": &o.from, "--to": &o.to,
 		"--title": &o.title, "--text": &o.text, "--preview": &o.preview, "--mime": &o.mime, "--at": &o.at, "--radius": &o.radius,
 		"--token-file": &o.tokenFile, "--tls-cert": &o.tlsCert, "--tls-key": &o.tlsKey, "--snapshots": &o.snapshots, "--column": &o.column}
+	bools := map[string]*bool{"--human": &o.human, "--dry-run": &o.dryRun, "--public": &o.public, "--force": &o.force}
 	for i := 0; i < len(argv); i++ {
 		a := argv[i]
-		if a == "--human" {
-			o.human = true
-			continue
-		}
-		if a == "--dry-run" {
-			o.dryRun = true
-			continue
-		}
-		if a == "--public" {
-			o.public = true
-			continue
-		}
-		if a == "--force" {
-			o.force = true
-			continue
-		}
 		if a == "--" {
 			o.args = append(o.args, argv[i+1:]...)
 			break
 		}
 		name, val, hasVal := strings.Cut(a, "=")
-		if p, ok := vals[name]; ok {
-			if !hasVal {
-				if i+1 >= len(argv) {
-					return o, fmt.Errorf("%s needs a value", name)
-				}
-				i++
-				val = argv[i]
-			}
-			*p = val
-			if name == "--db" {
-				o.dbExplicit = true
-			}
-			if name == "--addr" {
-				o.addrExplicit = true
-			}
+		if p, ok := bools[name]; ok {
+			*p = true
+			o.given = append(o.given, name)
 			continue
 		}
-		if name == "--allow-origin" {
-			if !hasVal {
-				if i+1 >= len(argv) {
-					return o, fmt.Errorf("%s needs a value", name)
-				}
-				i++
-				val = argv[i]
+		p, ok := vals[name]
+		if !ok && name != "--allow-origin" {
+			if strings.HasPrefix(a, "--") {
+				return o, fmt.Errorf("unknown flag %s", a)
 			}
+			o.args = append(o.args, a)
+			continue
+		}
+		if !hasVal {
+			if i+1 >= len(argv) {
+				return o, fmt.Errorf("%s needs a value", name)
+			}
+			i++
+			val = argv[i]
+		}
+		o.given = append(o.given, name)
+		switch name {
+		case "--allow-origin":
 			o.allowOrigins = append(o.allowOrigins, val)
-			continue
+		case "--db":
+			*p, o.dbExplicit = val, true
+		case "--addr":
+			*p, o.addrExplicit = val, true
+		default:
+			*p = val
 		}
-		if strings.HasPrefix(a, "--") {
-			return o, fmt.Errorf("unknown flag %s", a)
+	}
+	if len(o.args) > 0 {
+		if cmd := commandNamed(o.args[0]); cmd != nil {
+			for _, f := range o.given {
+				if !slices.Contains(globalFlags, f) && !slices.Contains(cmd.flags, f) {
+					return o, fmt.Errorf("%s does not take %s", cmd.name, f)
+				}
+			}
 		}
-		o.args = append(o.args, a)
 	}
 	return o, nil
 }
@@ -161,7 +354,7 @@ func main() {
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 		}
-		fmt.Fprint(os.Stderr, usage)
+		fmt.Fprint(os.Stderr, usageText())
 		os.Exit(2)
 	}
 	if err := run(o); err != nil {
@@ -170,17 +363,14 @@ func main() {
 	}
 }
 
-// Only intercept interrupts on paths that consume the resulting context. Owner-local
-// operations without cancellation support retain the OS's normal interrupt behavior.
+// commandConsumesContext says whether an interrupt reaches the command through its context: every command that runs
+// through the client or the server does; a setup command of the machine keeps the OS's interrupt.
 func commandConsumesContext(o opts) bool {
 	if len(o.args) == 0 {
 		return false
 	}
-	switch o.args[0] {
-	case "serve", "mcp", "get", "actions", "do", "capture", "day", "page", "search", "query", "habits", "done", "skip", "rename", "file", "tasks", "due", "snapshot", "readings":
-		return true
-	}
-	return false
+	cmd := commandNamed(o.args[0])
+	return cmd != nil && !cmd.setup
 }
 
 func run(o opts) error {
@@ -192,294 +382,54 @@ func run(o opts) error {
 	return runContext(ctx, o)
 }
 
+// runContext runs the command of the line: its prepare, then the client (a running server over --url, or the handler
+// in-process on the file dbPath names), then its run.
 func runContext(ctx context.Context, o opts) error {
-	cmd, args := o.args[0], o.args[1:]
-	var pub *api.PublicOptions
-	if cmd == "serve" {
-		var err error
-		if pub, err = publicOptions(o); err != nil {
-			return err
-		}
-		if pub == nil {
-			o.addr, err = api.LoopbackAddress(o.addr)
-		} else {
-			if !o.addrExplicit {
-				o.addr = "0.0.0.0:7777"
-			}
-			o.addr, err = api.PublicAddress(o.addr)
-		}
-		if err != nil {
+	cmd := commandNamed(o.args[0])
+	if cmd == nil {
+		return fmt.Errorf("unknown command %q (lifelog help)", o.args[0])
+	}
+	args := o.args[1:]
+	if cmd.prepare != nil {
+		if err := cmd.prepare(&o); err != nil {
 			return err
 		}
 	}
-	if cmd == "agentic-init" {
-		return agenticInit(o)
-	}
-	if cmd == "init" {
-		if len(args) > 1 {
-			return errors.New("init [PATH]")
-		}
-		path, err := dbPath(o, strings.Join(args, ""))
-		if err != nil {
-			return err
-		}
-		if err := db.Init(ctx, path); err != nil {
-			return err
-		}
-		fmt.Println("created", path)
-		return nil
-	}
-	if cmd == "serve" && o.url != "" {
-		return errors.New("serve opens the file itself: drop --url")
-	}
-	if cmd == "snapshot" && o.url != "" && o.to != "" {
-		return errors.New("snapshot over --url lands in the server's folder (serve --snapshots): drop --to")
-	}
-	if cmd == "snapshot" && o.url == "" {
-		o.snapshots = o.to
-	}
-	if (cmd == "serve" || cmd == "snapshot") && o.snapshots != "" {
-		// Refused before the database is opened: a mistaken folder leaves life.db untouched.
-		if _, err := db.CheckSnapshotDir(o.snapshots); err != nil {
-			return err
-		}
-	}
-
-	if cmd == "mcp" {
-		name := o.agent
-		if name == "" {
-			name = "mcp"
-		}
-		o.source = "agent:" + name
+	if cmd.setup {
+		return cmd.run(ctx, env{o: o}, args)
 	}
 	if err := core.CheckSource(o.source); err != nil {
 		return err
 	}
-
-	var c *client.Client
-	var handler http.Handler
-	if o.url != "" && cmd != "serve" {
-		c = client.Remote(o.url, o.source)
-		if token := os.Getenv("LIFELOG_TOKEN"); token != "" {
-			c.SetToken(token)
-		}
-	} else {
-		var err error
-		if o.db, err = dbPath(o, ""); err != nil {
-			return err
-		}
-		d, err := db.Open(ctx, o.db)
-		if err != nil {
-			return err
-		}
-		defer d.Close()
-		var origins []string
-		if pub != nil {
-			origins = pub.Origins
-		}
-		handler = api.New(&core.Store{DB: d, SnapshotDir: o.snapshots}, origins...)
-		if cmd != "serve" { // serve mounts the handler on a socket and calls it through no client
-			c = client.InProcess(handler, o.source)
-		}
+	e := env{o: o}
+	if o.url != "" {
+		e.c = client.Remote(o.url, o.source, os.Getenv("LIFELOG_TOKEN"))
+		return cmd.run(ctx, e, args)
 	}
-
-	switch cmd {
-	case "serve":
-		listener, err := net.Listen("tcp", o.addr)
-		if err != nil {
-			return err
-		}
-		defer listener.Close()
-		var networkHandler http.Handler
-		scheme, note := "http", ""
-		if pub == nil {
-			networkHandler, err = api.NetworkAuthority(listener.Addr(), handler)
-		} else {
-			networkHandler, err = api.Public(handler, *pub)
-			note = " (public: token required; the token travels in clear, use a private network)"
-			if pub.TLS {
-				scheme, note = "https", " (public: token required)"
-				if listener, err = tlsListener(listener, o.tlsCert, o.tlsKey); err != nil {
-					return err
-				}
-			}
-		}
-		if err != nil {
-			return err
-		}
-		srv := &http.Server{Addr: listener.Addr().String(), Handler: networkHandler, ReadHeaderTimeout: 10 * time.Second}
-		fmt.Fprintf(os.Stderr, "lifelog: serving %s on %s://%s%s\n", o.db, scheme, listener.Addr(), note)
-		return serveHTTP(ctx, srv, listener, 10*time.Second)
-	case "mcp":
-		return mcp.Serve(ctx, c, version)
-	case "get":
-		if len(args) != 1 {
-			return errors.New("get PATH")
-		}
-		return show(o)(c.Get(ctx, "/"+strings.TrimPrefix(args[0], "/"))) // "pages/1" too: some shells rewrite a leading /
-	case "actions":
-		return listActions(ctx, o, c)
-	case "do":
-		if len(args) == 0 {
-			return errors.New("do ACTION [field=value...]")
-		}
-		vals := map[string]string{}
-		for _, kv := range args[1:] {
-			k, v, ok := strings.Cut(kv, "=")
-			if !ok {
-				return fmt.Errorf("%q is not field=value", kv)
-			}
-			vals[k] = v
-		}
-		return doAction(ctx, o, c, args[0], vals)
-	case "capture":
-		// The day is the server's today unless --day names one: with --url, the server's clock is the one that counts.
-		vals := map[string]string{"day": dayOrToday(o), "text": strings.Join(args, " ")}
-		if o.mood != "" {
-			vals["mood"] = o.mood
-		}
-		return doAction(ctx, o, c, "capture", vals)
-	case "day":
-		day := "today"
-		if len(args) == 1 {
-			day = args[0]
-		}
-		return show(o)(c.Get(ctx, "/days/"+url.PathEscape(day)))
-	case "page":
-		return doAction(ctx, o, c, "find", map[string]string{"title": strings.Join(args, " ")})
-	case "search":
-		return doAction(ctx, o, c, "search", map[string]string{"q": strings.Join(args, " ")})
-	case "query":
-		return doAction(ctx, o, c, "query", map[string]string{"sql": strings.Join(args, " ")})
-	case "habits":
-		href := "/habits" // the server's today
-		if len(args) == 1 {
-			href += "?day=" + url.QueryEscape(args[0])
-		}
-		return show(o)(c.Get(ctx, href))
-	case "done", "skip":
-		if len(args) != 1 {
-			return fmt.Errorf("%s METRIC [--day YYYY-MM-DD]", cmd)
-		}
-		done := map[string]string{"done": "1", "skip": "0"}[cmd]
-		return doAction(ctx, o, c, "check-in", map[string]string{"name": args[0], "day": dayOrToday(o), "done": done})
-	case "snapshot":
-		return doAction(ctx, o, c, "snapshot", nil)
-	case "tasks":
-		return show(o)(c.Get(ctx, "/tasks"))
-	case "due":
-		vals := map[string]string{}
-		if o.from != "" {
-			vals["from"] = o.from
-		}
-		if o.to != "" {
-			vals["through"] = o.to
-		}
-		return doAction(ctx, o, c, "deadlines", vals)
-	case "rename":
-		if len(args) != 2 {
-			return errors.New("rename PAGE-ID NEW-TITLE")
-		}
-		return doAction(ctx, o, c, "rename", map[string]string{"id": args[0], "title": args[1]})
-	case "file":
-		return keepFile(ctx, o, c, args)
-	case "readings":
-		if len(args) != 2 {
-			return errors.New("readings PAGE METRIC [--column NAME]")
-		}
-		vals := map[string]string{"page": args[0], "metric": args[1]}
-		if o.column != "" {
-			vals["column"] = o.column
-		}
-		return doAction(ctx, o, c, "readings-from-table", vals)
-	}
-	return fmt.Errorf("unknown command %q (lifelog help)", cmd)
-}
-
-// publicOptions reads the --public flags (docs/plans/078-network-server.md): nil without --public, when the
-// flags that belong to it are refused rather than ignored; with it, the token from --token-file or $LIFELOG_TOKEN
-// is required before any listener opens.
-func publicOptions(o opts) (*api.PublicOptions, error) {
-	if !o.public {
-		switch {
-		case o.tokenFile != "":
-			return nil, errors.New("--token-file needs --public")
-		case len(o.allowOrigins) > 0:
-			return nil, errors.New("--allow-origin needs --public")
-		case o.tlsCert != "" || o.tlsKey != "":
-			return nil, errors.New("--tls-cert and --tls-key need --public")
-		}
-		return nil, nil
-	}
-	token := os.Getenv("LIFELOG_TOKEN")
-	if o.tokenFile != "" {
-		b, err := os.ReadFile(o.tokenFile)
-		if err != nil {
-			return nil, fmt.Errorf("token file: %w", err)
-		}
-		token = strings.TrimSuffix(strings.TrimSuffix(string(b), "\n"), "\r")
-	}
-	if token == "" {
-		return nil, errors.New("--public needs a token: --token-file PATH (one line, 32 characters or more) or $LIFELOG_TOKEN")
-	}
-	if err := api.CheckToken(token); err != nil {
-		return nil, fmt.Errorf("token: %w", err)
-	}
-	for _, origin := range o.allowOrigins {
-		if err := api.CheckOrigin(origin); err != nil {
-			return nil, err
-		}
-	}
-	if (o.tlsCert == "") != (o.tlsKey == "") {
-		return nil, errors.New("--tls-cert and --tls-key go together")
-	}
-	return &api.PublicOptions{Token: token, Origins: o.allowOrigins, TLS: o.tlsCert != ""}, nil
-}
-
-// tlsListener serves TLS on a public listener with the owner's certificate; the standard library does the rest.
-func tlsListener(l net.Listener, certFile, keyFile string) (net.Listener, error) {
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	path, err := dbPath(o, "")
 	if err != nil {
-		return nil, fmt.Errorf("tls: %w", err)
+		return err
 	}
-	return tls.NewListener(l, &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12, NextProtos: []string{"http/1.1"}}), nil
+	d, err := db.Open(ctx, path)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	var origins []string
+	if o.pub != nil {
+		origins = o.pub.Origins
+	}
+	e.o.db = path
+	e.handler = api.New(&core.Store{DB: d, SnapshotDir: o.snapshots}, origins...)
+	if cmd.name != "serve" { // serve mounts the handler on a socket and calls it through no client
+		e.c = client.InProcess(e.handler, o.source)
+	}
+	return cmd.run(ctx, e, args)
 }
 
-// serveHTTP owns shutdown until admitted requests finish or the drain deadline
-// expires. The caller must not close their database while Shutdown is still running.
-func serveHTTP(ctx context.Context, srv *http.Server, listener net.Listener, drainTimeout time.Duration) error {
-	stopped := make(chan struct{})
-	drained := make(chan struct{})
-	var drainErr error
-	go func() {
-		defer close(drained)
-		select {
-		case <-ctx.Done():
-		case <-stopped:
-		}
-		// An interrupt stops new work but lets admitted HTTP requests finish. This
-		// separate, bounded lifetime preserves command context values and is joined below.
-		drainCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), drainTimeout)
-		defer cancel()
-		err := srv.Shutdown(drainCtx)
-		if err != nil {
-			// Expiry closes connections and cancels their request contexts instead of
-			// leaving a blocked upload or reader alive after the server has returned.
-			err = errors.Join(err, srv.Close())
-		}
-		drainErr = err
-	}()
-	err := srv.Serve(listener)
-	close(stopped)
-	if errors.Is(err, http.ErrServerClosed) {
-		err = nil
-	}
-	<-drained
-	return errors.Join(err, drainErr)
-}
-
-func doAction(ctx context.Context, o opts, c *client.Client, name string, vals map[string]string) error {
-	return show(o)(do(ctx, c, name, vals))
+// doAction runs a catalog action by name and shows its answer.
+func doAction(ctx context.Context, e env, name string, vals map[string]string) error {
+	return show(e.o)(do(ctx, e.c, name, vals))
 }
 
 func do(ctx context.Context, c *client.Client, name string, vals map[string]string) (*api.Entity, error) {
@@ -494,402 +444,6 @@ func do(ctx context.Context, c *client.Client, name string, vals map[string]stri
 	}
 	return nil, fmt.Errorf("no action %q (lifelog actions)", name)
 }
-
-// keepFile is `lifelog file PATH`: the add-file action with the original streamed from disk (hashed by the API,
-// never stored), its text read from --text, and a picture from --preview when the original is not one lifelog reads.
-func keepFile(ctx context.Context, o opts, c *client.Client, args []string) error {
-	if len(args) == 0 {
-		return errors.New("file PATH... [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day YYYY-MM-DD] [--at PLACE [--radius M]] [--dry-run]")
-	}
-	paths, err := mediaPaths(args)
-	if err != nil {
-		return err
-	}
-	one := len(args) == 1 && len(paths) == 1 && paths[0] == args[0]
-	if !one && (o.title != "" || o.text != "" || o.preview != "" || o.mime != "") {
-		return errors.New("--title, --text, --preview and --mime describe one file: keep it alone")
-	}
-	actions, err := c.Catalog(ctx)
-	if err != nil {
-		return err
-	}
-	var add api.Action
-	for _, a := range actions {
-		if a.Name == "add-file" {
-			add = a
-		}
-	}
-	if add.Name == "" {
-		return errors.New("the API has no add-file action")
-	}
-	keep := func(p string) (*api.Entity, error) {
-		vals := map[string]string{"title": o.title}
-		if o.title == "" {
-			vals["title"] = filepath.Base(p)
-		}
-		if o.text != "" {
-			b, err := os.ReadFile(o.text)
-			if err != nil {
-				return nil, err
-			}
-			vals["body"] = string(b)
-		}
-		for k, v := range map[string]string{"mime": o.mime, "day": o.day, "at": o.at, "radius": o.radius} {
-			if v != "" {
-				vals[k] = v
-			}
-		}
-		if o.dryRun {
-			vals["dry_run"] = "1"
-		}
-		files := map[string]string{"original": p}
-		if o.preview != "" {
-			files["preview"] = o.preview
-		}
-		return c.DoFiles(ctx, add, vals, files)
-	}
-	if one {
-		e, err := keep(paths[0])
-		if err := show(o)(e, err); err != nil {
-			return err
-		}
-		if u := unmatchedOf(e); u != nil {
-			fmt.Fprintf(os.Stderr, "near no place: %v, %v (%v)\nname it: lifelog file %s --at PLACE [--radius METRES]\n", u["lat"], u["lon"], u["map"], paths[0])
-		}
-		return nil
-	}
-	var kept []keptFile
-	failed := 0
-	for _, p := range paths {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		k := keptFile{Path: p}
-		e, err := keep(p)
-		if err != nil {
-			k.Error = err.Error()
-			failed++
-		} else if r, ok := e.Result.(map[string]any); ok {
-			k.Result = r
-		}
-		kept = append(kept, k)
-	}
-	s, err := summarise(kept, o.dryRun)
-	if err != nil {
-		return err
-	}
-	if o.human {
-		s.print(os.Stdout)
-	} else if err := printJSON(os.Stdout, s); err != nil {
-		return err
-	}
-	if failed > 0 {
-		return fmt.Errorf("%d of %d files could not be kept", failed, len(paths))
-	}
-	return nil
-}
-
-// mediaPaths are the files to keep: a path as it is, a folder as its photos and videos (not its sub-folders), sorted.
-func mediaPaths(args []string) ([]string, error) {
-	var out []string
-	for _, a := range args {
-		st, err := os.Stat(a)
-		if err != nil {
-			return nil, err
-		}
-		if !st.IsDir() {
-			out = append(out, a)
-			continue
-		}
-		entries, err := os.ReadDir(a)
-		if err != nil {
-			return nil, err
-		}
-		var found []string
-		for _, e := range entries {
-			t := core.MimeOf(e.Name(), nil)
-			if !e.IsDir() && (strings.HasPrefix(t, "image/") || strings.HasPrefix(t, "video/")) {
-				found = append(found, filepath.Join(a, e.Name()))
-			}
-		}
-		if len(found) == 0 {
-			return nil, fmt.Errorf("%s holds no photo or video", a)
-		}
-		sort.Strings(found)
-		out = append(out, found...)
-	}
-	return out, nil
-}
-
-func unmatchedOf(e *api.Entity) map[string]any {
-	if e == nil {
-		return nil
-	}
-	r, _ := e.Result.(map[string]any)
-	u, _ := r["unmatched"].(map[string]any)
-	return u
-}
-
-// keptFile is what keeping one file of a batch did: the add-file result, or the refusal.
-type keptFile struct {
-	Path   string         `json:"path"`
-	Error  string         `json:"error,omitempty"`
-	Result map[string]any `json:"result,omitempty"`
-}
-
-// batch is the report of a batch: per day what was kept and linked, and the photos near no place in
-// groups, each to be named once.
-type batch struct {
-	DryRun    bool              `json:"dry_run,omitempty"`
-	Kept      int               `json:"kept"`
-	Already   int               `json:"kept_already"`
-	Failed    int               `json:"failed"`
-	Days      map[string]*daySo `json:"days"`
-	NoDay     []string          `json:"no_day_of_their_own,omitempty"`
-	Unmatched []*group          `json:"near_no_place,omitempty"`
-	Files     []keptFile        `json:"files"`
-}
-
-type daySo struct {
-	Photos int      `json:"photos"`
-	At     []string `json:"at,omitempty"`         // the places linked
-	Known  []string `json:"recognised,omitempty"` // places matched and never linked (home, work)
-	Near   int      `json:"near_no_place,omitempty"`
-}
-
-type group struct {
-	Lat, Lon float64  `json:"-"`
-	Count    int      `json:"photos"`
-	Days     []string `json:"days"`
-	Map      string   `json:"map"`
-	NameWith string   `json:"name_it_with"`
-}
-
-// Coordinates are a floating-point domain; leave all other response numbers (IDs
-// in particular) in their lossless client representation.
-func coordinate(v any) (float64, error) {
-	var n float64
-	var err error
-	switch v := v.(type) {
-	case json.Number:
-		n, err = v.Float64()
-	case float64:
-		n = v
-	default:
-		return 0, fmt.Errorf("invalid photo coordinate %v", v)
-	}
-	if err != nil {
-		return 0, fmt.Errorf("invalid photo coordinate: %w", err)
-	}
-	if math.IsNaN(n) || math.IsInf(n, 0) {
-		return 0, errors.New("photo coordinate must be finite")
-	}
-	return n, nil
-}
-
-func summarise(files []keptFile, dry bool) (*batch, error) {
-	b := &batch{DryRun: dry, Days: map[string]*daySo{}, Files: files}
-	add := func(list []string, s string) []string {
-		for _, x := range list {
-			if x == s {
-				return list
-			}
-		}
-		return append(list, s)
-	}
-	for _, f := range files {
-		r := f.Result
-		switch {
-		case f.Error != "":
-			b.Failed++
-			continue
-		case r["existing"] == true:
-			b.Already++
-		default:
-			b.Kept++
-		}
-		day, _ := r["day"].(string)
-		u, _ := r["unmatched"].(map[string]any)
-		if day == "" {
-			b.NoDay = append(b.NoDay, filepath.Base(f.Path))
-		} else {
-			d := b.Days[day]
-			if d == nil {
-				d = &daySo{}
-				b.Days[day] = d
-			}
-			d.Photos++
-			if place, _ := r["place"].(string); place != "" {
-				if r["linked"] == true {
-					d.At = add(d.At, place)
-				} else {
-					d.Known = add(d.Known, place)
-				}
-			}
-			if u != nil {
-				d.Near++
-			}
-		}
-		if u == nil {
-			continue
-		}
-		lat, err := coordinate(u["lat"])
-		if err != nil {
-			return nil, err
-		}
-		lon, err := coordinate(u["lon"])
-		if err != nil {
-			return nil, err
-		}
-		var g *group // the photos a place of the default radius at the first one's position would hold
-		for _, x := range b.Unmatched {
-			if core.Near(x.Lat, x.Lon, lat, lon, float64(core.DefaultRadius)) {
-				g = x
-				break
-			}
-		}
-		if g == nil {
-			m, _ := u["map"].(string)
-			g = &group{Lat: lat, Lon: lon, Map: m,
-				NameWith: fmt.Sprintf("lifelog file \"%s\" --at PLACE [--radius METRES], then keep them all again", f.Path)}
-			b.Unmatched = append(b.Unmatched, g)
-		}
-		g.Count++
-		if day != "" {
-			g.Days = add(g.Days, day)
-		}
-	}
-	for _, g := range b.Unmatched {
-		sort.Strings(g.Days)
-	}
-	return b, nil
-}
-
-func (b *batch) print(w io.Writer) {
-	if b.DryRun {
-		fmt.Fprintln(w, "dry run: nothing written")
-	}
-	fmt.Fprintf(w, "%d files: %d kept, %d kept already, %d failed\n", b.Kept+b.Already+b.Failed, b.Kept, b.Already, b.Failed)
-	days := make([]string, 0, len(b.Days))
-	for d := range b.Days {
-		days = append(days, d)
-	}
-	sort.Strings(days)
-	for _, d := range days {
-		x := b.Days[d]
-		line := fmt.Sprintf("%s: %d photo(s)", d, x.Photos)
-		if len(x.At) > 0 {
-			line += " · at " + strings.Join(x.At, ", ")
-		}
-		if len(x.Known) > 0 {
-			line += " · recognised, not linked: " + strings.Join(x.Known, ", ")
-		}
-		if x.Near > 0 {
-			line += fmt.Sprintf(" · %d near no place", x.Near)
-		}
-		fmt.Fprintln(w, line)
-	}
-	if len(b.NoDay) > 0 {
-		fmt.Fprintf(w, "no day of their own (no EXIF date): %s\n", strings.Join(b.NoDay, ", "))
-	}
-	if len(b.Unmatched) > 0 {
-		fmt.Fprintf(w, "near no place, %d group(s):\n", len(b.Unmatched))
-		for i, g := range b.Unmatched {
-			fmt.Fprintf(w, "  %d. %d photo(s), %s, %s\n     name it: %s\n", i+1, g.Count, strings.Join(g.Days, " "), g.Map, g.NameWith)
-		}
-	}
-	for _, f := range b.Files {
-		if f.Error != "" {
-			fmt.Fprintf(w, "failed: %s: %s\n", f.Path, f.Error)
-		}
-	}
-}
-
-func listActions(ctx context.Context, o opts, c *client.Client) error {
-	actions, err := c.Catalog(ctx)
-	if err != nil {
-		return err
-	}
-	if !o.human {
-		return printJSON(os.Stdout, actions)
-	}
-	for _, a := range actions {
-		var fs []string
-		for _, f := range a.Fields {
-			s := f.Name
-			if !f.Required {
-				s = "[" + s + "]"
-			}
-			fs = append(fs, s)
-		}
-		fmt.Printf("%-14s %s %s\n  %s\n  fields: %s\n", a.Name, a.Method, a.Href, a.Description, strings.Join(fs, " "))
-	}
-	return nil
-}
-
-// show prints an entity (an error entity too: an agent reads the message and the links) and returns the error.
-func show(o opts) func(*api.Entity, error) error {
-	return func(e *api.Entity, err error) error {
-		if e == nil {
-			return err
-		}
-		if o.human {
-			human(os.Stdout, e)
-		} else if perr := printJSON(os.Stdout, e); perr != nil {
-			return perr
-		}
-		return err
-	}
-}
-
-// printJSON writes a value as indented JSON, as the API answers it: no HTML escaping, so a body reads as it was written.
-func printJSON(w io.Writer, v any) error {
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-	enc.SetIndent("", "  ")
-	return enc.Encode(v)
-}
-
-// human writes an entity as a readable summary: its title and class, the result of a write, its properties, then
-// the embedded links, the links and the actions.
-func human(w io.Writer, e *api.Entity) {
-	fmt.Fprintf(w, "# %s  (%s)\n", e.Title, strings.Join(e.Class, " "))
-	if e.Result != nil {
-		b, _ := json.Marshal(e.Result)
-		fmt.Fprintf(w, "result: %s\n", b)
-	}
-	if p, ok := e.Properties.(map[string]any); ok {
-		keys := make([]string, 0, len(p))
-		for k := range p {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			switch v := p[k].(type) {
-			case string:
-				if strings.Contains(v, "\n") {
-					fmt.Fprintf(w, "%s:\n%s\n", k, indent(v))
-				} else if v != "" {
-					fmt.Fprintf(w, "%s: %s\n", k, v)
-				}
-			default:
-				b, _ := json.Marshal(v)
-				fmt.Fprintf(w, "%s: %s\n", k, b)
-			}
-		}
-	}
-	for _, l := range e.Entities {
-		fmt.Fprintf(w, "  → %-12s %-28s %s\n", strings.Join(l.Rel, " "), l.Title, l.Href)
-	}
-	for _, l := range e.Links {
-		fmt.Fprintf(w, "  ↗ %-12s %s\n", strings.Join(l.Rel, " "), l.Href)
-	}
-	for _, a := range e.Actions {
-		fmt.Fprintf(w, "  ! %-14s %s %s\n", a.Name, a.Method, a.Href)
-	}
-}
-
-func indent(s string) string { return "    " + strings.ReplaceAll(s, "\n", "\n    ") }
 
 // dayOrToday is the day a shortcut sends: --day, else "today", which the API reads as the server's local day.
 func dayOrToday(o opts) string {
@@ -926,40 +480,4 @@ func besideExecutable(name string) (string, error) {
 		exe = real
 	}
 	return filepath.Join(filepath.Dir(exe), name), nil
-}
-
-// agenticInit is `lifelog agentic-init`: the folder of this program made ready for a coding agent opened in it.
-func agenticInit(o opts) error {
-	exe, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("the path of this program: %w", err)
-	}
-	if real, err := filepath.EvalSymlinks(exe); err == nil {
-		exe = real
-	}
-	dbPath, err := dbPath(o, "")
-	if err != nil {
-		return err
-	}
-	if dbPath, err = filepath.Abs(dbPath); err != nil {
-		return err
-	}
-	dir := filepath.Dir(exe)
-	res, err := agentic.Init(agentic.Paths{Dir: dir, Exe: exe, DB: dbPath}, o.force)
-	for _, r := range res {
-		fmt.Printf("%-9s %s\n", r.State, filepath.Join(dir, filepath.FromSlash(r.Path)))
-	}
-	if err != nil {
-		return err
-	}
-	for _, r := range res {
-		if r.State == agentic.Kept {
-			fmt.Println("a kept file has another text; lifelog agentic-init --force replaces it")
-			break
-		}
-	}
-	if _, err := os.Stat(dbPath); err != nil {
-		fmt.Printf("no life.db yet: lifelog init %s makes it\n", dbPath)
-	}
-	return nil
 }

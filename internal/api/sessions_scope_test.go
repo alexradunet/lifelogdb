@@ -36,8 +36,8 @@ func TestSessionAndScopeTransportParity(t *testing.T) {
 			if remote {
 				server := httptest.NewServer(h)
 				t.Cleanup(server.Close)
-				c = client.Remote(server.URL, "cli")
-				agent = client.Remote(server.URL, "agent:test")
+				c = client.Remote(server.URL, "cli", "")
+				agent = client.Remote(server.URL, "agent:test", "")
 			}
 			actions, err := c.Get(t.Context(), "/actions")
 			if err != nil {

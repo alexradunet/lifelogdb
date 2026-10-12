@@ -18,7 +18,7 @@ func TestPlanningLifeThroughTheCatalog(t *testing.T) {
 			if remote {
 				srv := httptest.NewServer(h)
 				t.Cleanup(srv.Close)
-				c = client.Remote(srv.URL, "app:phone")
+				c = client.Remote(srv.URL, "app:phone", "")
 			}
 			root := must(c.Get(t.Context(), "/"))
 			if hrefOf(root, "tasks") != "/tasks" || hrefOf(root, "deadlines") != "/deadlines" || find(root, "create-task").Name == "" {

@@ -40,3 +40,24 @@ func TestInitHonoursThePathWhenTheEnvironmentNamesAnother(t *testing.T) {
 		t.Errorf("a refused init made %s", other)
 	}
 }
+
+// A flag a command does not take is refused, never ignored: --dry-run belongs to file, --public to serve. The usage
+// names every command of the table.
+func TestAFlagACommandDoesNotTakeIsRefused(t *testing.T) {
+	for _, argv := range [][]string{{"readings", "Weighings", "Weight", "--dry-run"}, {"day", "--public"}, {"habits", "--day", "2026-01-01"}, {"capture", "hello", "--to", "x"}} {
+		if _, err := parse(argv); err == nil || !strings.Contains(err.Error(), "does not take") {
+			t.Errorf("%v: %v, want a refusal of the flag", argv, err)
+		}
+	}
+	for _, argv := range [][]string{{"file", "x", "--dry-run"}, {"serve", "--public"}, {"capture", "hello", "--day", "2026-01-01"}, {"due", "--to", "2026-02-01"}, {"snapshot", "--to", "x"}} {
+		if _, err := parse(argv); err != nil {
+			t.Errorf("%v: %v, want the flag taken", argv, err)
+		}
+	}
+	usage := usageText()
+	for _, c := range commands {
+		if c.usage != "" && !strings.Contains(usage, "lifelog "+c.name) {
+			t.Errorf("the usage does not name %s", c.name)
+		}
+	}
+}

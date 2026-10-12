@@ -409,7 +409,7 @@ func TestMCPExactResponseNumbers(t *testing.T) {
 			if remote {
 				srv := httptest.NewServer(handler)
 				defer srv.Close()
-				c = client.Remote(srv.URL, "agent:test")
+				c = client.Remote(srv.URL, "agent:test", "")
 			}
 			session, ctx := numericSession(t, c)
 			res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{Name: "get", Arguments: map[string]any{"href": "/numbers"}})

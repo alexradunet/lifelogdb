@@ -32,7 +32,7 @@ func TestReadingsFromTableOnEverySurface(t *testing.T) {
 			if remote {
 				srv := httptest.NewServer(handler)
 				defer srv.Close()
-				agent = client.Remote(srv.URL, "agent:test")
+				agent = client.Remote(srv.URL, "agent:test", "")
 			}
 			byName := map[string]api.Action{}
 			actions, err := agent.Catalog(t.Context())

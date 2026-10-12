@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"lifelog/internal/db"
 	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"lifelog/internal/db"
 )
 
 func TestExecutableTemporalRecordsAndScopes(t *testing.T) {

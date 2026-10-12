@@ -33,11 +33,11 @@ func InProcess(h http.Handler, source string) *Client {
 	return &Client{hc: &http.Client{Transport: handlerTransport{h}}, base: "http://lifelog.local", source: source}
 }
 
-// Remote calls a running server, e.g. http://127.0.0.1:7777. Connecting and the TLS handshake are bounded by
-// dialTimeout; the response is not, since a replay or an upload may take minutes, and the command's context
-// carries the interrupt.
-func Remote(base, source string) *Client {
-	return &Client{hc: &http.Client{Transport: remoteTransport()}, base: strings.TrimRight(base, "/"), source: source}
+// Remote calls a running server, e.g. http://127.0.0.1:7777, with token as the owner's bearer credential when the
+// server is --public ("" for none). Connecting and the TLS handshake are bounded by dialTimeout; the response is not,
+// since an upload may take minutes, and the command's context carries the interrupt.
+func Remote(base, source, token string) *Client {
+	return &Client{hc: &http.Client{Transport: remoteTransport()}, base: strings.TrimRight(base, "/"), source: source, token: token}
 }
 
 const dialTimeout = 10 * time.Second
@@ -46,9 +46,6 @@ func remoteTransport() *http.Transport {
 	return &http.Transport{Proxy: http.ProxyFromEnvironment, DialContext: (&net.Dialer{Timeout: dialTimeout}).DialContext,
 		TLSHandshakeTimeout: dialTimeout, ExpectContinueTimeout: time.Second, ForceAttemptHTTP2: true}
 }
-
-// SetToken makes every request carry the owner's token: what `lifelog serve --public` requires.
-func (c *Client) SetToken(token string) { c.token = token }
 
 type handlerTransport struct{ h http.Handler }
 

@@ -41,7 +41,7 @@ func TestMCPStableNames(t *testing.T) {
 				if remote {
 					server := httptest.NewServer(h)
 					t.Cleanup(server.Close)
-					c = client.Remote(server.URL, "agent:names")
+					c = client.Remote(server.URL, "agent:names", "")
 				}
 				old := "Old " + kind
 				var id int64

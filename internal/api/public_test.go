@@ -216,11 +216,11 @@ func TestPublicRemoteClientParity(t *testing.T) {
 	h, s := publicHandler(t, api.PublicOptions{Token: testToken})
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
-	c := client.Remote(srv.URL, "app:phone")
+	c := client.Remote(srv.URL, "app:phone", "")
 	if _, err := c.Get(t.Context(), "/"); err == nil {
 		t.Fatal("a remote client without the token was served")
 	}
-	c.SetToken(testToken)
+	c = client.Remote(srv.URL, "app:phone", testToken)
 	root, err := c.Get(t.Context(), "/")
 	if err != nil {
 		t.Fatal(err)

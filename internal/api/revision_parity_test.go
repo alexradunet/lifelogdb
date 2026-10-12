@@ -41,7 +41,7 @@ func TestRevisionTokenParity(t *testing.T) {
 				if remote {
 					server := httptest.NewServer(h)
 					t.Cleanup(server.Close)
-					c = client.Remote(server.URL, source)
+					c = client.Remote(server.URL, source, "")
 				}
 				id, _, err := store.CreatePage(context.Background(), "cli", "Version parity", "first")
 				if err != nil {

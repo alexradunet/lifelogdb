@@ -26,7 +26,7 @@ func TestClientExactNumbers(t *testing.T) {
 				if remote {
 					srv := httptest.NewServer(h)
 					defer srv.Close()
-					c = Remote(srv.URL, "cli")
+					c = Remote(srv.URL, "cli", "")
 				}
 				e, err := c.Get(t.Context(), "/")
 				if err != nil {

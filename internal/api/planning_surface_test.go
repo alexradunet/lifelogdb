@@ -39,7 +39,7 @@ func TestTaskProjectPromotionActionsMatchRetainedReferences(t *testing.T) {
 			if remote {
 				server := httptest.NewServer(h)
 				t.Cleanup(server.Close)
-				c = client.Remote(server.URL, "cli")
+				c = client.Remote(server.URL, "cli", "")
 			}
 			projectID, _, err := s.CreatePage(ctx, "cli", "Garden project", "Preserve this context.")
 			if err != nil {

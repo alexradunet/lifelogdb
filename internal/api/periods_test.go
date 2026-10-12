@@ -34,7 +34,7 @@ func TestRecordedPeriodTransportParity(t *testing.T) {
 			if remote {
 				server := httptest.NewServer(h)
 				t.Cleanup(server.Close)
-				c = client.Remote(server.URL, "cli")
+				c = client.Remote(server.URL, "cli", "")
 			}
 			catalog, err := c.Get(t.Context(), "/actions")
 			if err != nil {
