@@ -4,10 +4,11 @@ A plan is a dated record ([how a change happens](../process.md)): a change large
 written as a self-contained brief with done criteria. It cites the docs as they were at the commit it names. One file
 per plan, `NNN-short-slug.md`, numbered on from the last.
 
-Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **092**.
+Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **093**.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
+| [092](092-the-app-shell.md) | The app shell: the Almanac design system in the browser | P1 | L | issue 0061; owner decisions 2026-10-12 | TODO |
 | [091](091-the-browser-for-daily-use.md) | The browser for daily use: planning, the journal, navigation and editing | P1 | L | issue 0060; owner decisions 2026-10-12 | DONE |
 | [090](090-agentic-init.md) | `lifelog agentic-init`: the lifelog folder ready for any agent | P1 | M | issue 0059 | DONE |
 | [089](089-no-import-process.md) | No import process: the owner imports with an agent, through the catalog | P1 | L | RFC 0011; issue 0058 | DONE |
