@@ -48,6 +48,7 @@ type occRow struct {
 	Forms                []*formView
 	More                 int
 	OwnPage              bool // the row is on its task's own page: its "more" are there already
+	Overdue              bool // open and due before today: the row says so in a word, not by its date alone
 }
 
 // Occ is the row of an occurrence of this entity; its forms return to this page. In a list of many tasks the row is
@@ -59,13 +60,14 @@ func (v *view) Occ(item any, more int) (occRow, error) {
 	today, _ := props["today"].(string)
 	state, _ := o["state"].(string)
 	forms, err := outcomes(v.OccurrenceAction(item), state, v.Here)
+	due, _ := o["due_day"].(string)
 	row := occRow{O: o, Forms: forms, More: more, When: dueWords(o["due_day"], today), Reminder: reminderWords(o, v.clock()),
-		OwnPage: v.Path == "/tasks/"+num(o["task_id"])}
+		OwnPage: v.Path == "/tasks/"+num(o["task_id"]), Overdue: state == "open" && due != "" && today != "" && due < today}
 	row.Name, _ = o["label"].(string)
 	if row.Name == "" {
 		row.Name, row.When = strings.ToUpper(row.When[:1])+row.When[1:], ""
 		key, _ := o["key"].(string)
-		if due, _ := o["due_day"].(string); key != "once" && due != key {
+		if key != "once" && due != key {
 			row.When = "moved from the slot of " + clock{today: today}.day(key)
 		}
 	}
@@ -74,19 +76,20 @@ func (v *view) Occ(item any, more int) (occRow, error) {
 
 // outcomes are the one-button forms of an occurrence's outcome action: Done and Skip while it is open, Reopen once
 // it is done or skipped. Every field keeps the value the entity filled in, except the state and the completion; a
-// done one is completed now. back is the page the browser returns to.
+// done one is completed now. back is the page the browser returns to. None is primary: a list has many rows, and a
+// page has one loud button (docs/plans/095-the-leaf-and-its-margin.md); each form's class names its outcome.
 func outcomes(a *Action, state, back string) ([]*formView, error) {
 	if a == nil {
 		return nil, nil
 	}
-	type choice struct{ button, state, completed, primary string }
-	choices := []choice{{"Reopen", "open", "", "0"}}
+	type choice struct{ button, state, completed, class string }
+	choices := []choice{{"Reopen", "open", "", "reopen"}}
 	if state == "open" {
-		choices = []choice{{"Done", "done", "now", "1"}, {"Skip", "skipped", "", "0"}}
+		choices = []choice{{"Done", "done", "now", "done"}, {"Skip", "skipped", "", "skip"}}
 	}
 	var out []*formView
 	for _, c := range choices {
-		f, err := formOf(a, "state", c.state, "completed_at", c.completed, "button", c.button, "class", "tiny", "back", back, "primary", c.primary)
+		f, err := formOf(a, "state", c.state, "completed_at", c.completed, "button", c.button, "class", "tiny outcome-"+c.class, "back", back, "primary", "0")
 		if err != nil {
 			return nil, err
 		}

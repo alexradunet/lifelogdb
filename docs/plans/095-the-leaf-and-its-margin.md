@@ -57,7 +57,7 @@ flowchart LR
 | **Controls** 40 px, 44 px under 900 px; the mood's choices too. | `base.css`, `app.css` |
 | **The toast** on the surface with a frame in the done colour, not a dark block: it says what a write did, calmly. Its tokens stay aliases, so the contrast test checks them. | `base.css`, `app.css` |
 | **Folded fields.** `formOf` takes `more`: names of optional fields drawn under `<details class="more-fields"><summary>More fields</summary>` inside the form. One sub-template `field` draws a field, shown or folded. | `internal/api/html.go`, `internal/api/html/layout.html` |
-| **A row's outcome.** Done, Skip and Reopen are not primary; each form gets its own class (`outcome done`, `outcome skip`, `outcome reopen`), and the sheet draws Done in outline with a check. | `internal/api/planning_html.go`, `app.css` |
+| **A row's outcome.** Done, Skip and Reopen are not primary; each form gets its own class (`outcome-done`, `outcome-skip`, `outcome-reopen`), and the sheet draws Done in outline with a check. | `internal/api/planning_html.go`, `app.css` |
 | **Overdue in a word.** `occRow` gets `Overdue` (open, due before today); the row has the tag "overdue". | `internal/api/planning_html.go`, `internal/api/html/planning.html` |
 
 ## Part 2 — The day and Home

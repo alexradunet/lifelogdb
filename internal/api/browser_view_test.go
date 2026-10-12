@@ -64,6 +64,59 @@ func TestDangerAndRowsReachTheForm(t *testing.T) {
 	}
 }
 
+// TestOptionalFieldsFoldUnderMoreFields: the optional fields a view names are drawn inside the form under "More
+// fields", with their values, so a browser sends them with no script; a required field is never folded; folded
+// fields with a value are drawn open; a folded file field still makes the form multipart
+// (docs/plans/095-the-leaf-and-its-margin.md).
+func TestOptionalFieldsFoldUnderMoreFields(t *testing.T) {
+	draw := func(t *testing.T, a Action, opts ...string) (string, *formView) {
+		t.Helper()
+		f, err := formOf(a, opts...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var b bytes.Buffer
+		if err := pages.ExecuteTemplate(&b, "form", f); err != nil {
+			t.Fatal(err)
+		}
+		return b.String(), f
+	}
+	more := regexp.MustCompile(`(?s)<details class="more-fields"( open)?><summary>([^<]*)</summary>(.*?)</details>`)
+	got, f := draw(t, action("record", nil, map[string]any{"day": "2026-10-12"}), "more", "metric,session_id,taken_at,tz,import_key")
+	m := more.FindStringSubmatch(got)
+	if m == nil {
+		t.Fatalf("no More fields in the form: %s", got)
+	}
+	if m[1] != "" || m[2] != "4 more fields" {
+		t.Errorf("More fields: open %q, summary %q; want closed, %q", m[1], m[2], "4 more fields")
+	}
+	for _, name := range []string{"session_id", "taken_at", "tz", "import_key"} {
+		if !strings.Contains(m[3], `name="`+name+`"`) {
+			t.Errorf("%s is not folded: %s", name, m[3])
+		}
+	}
+	if strings.Contains(m[3], `name="metric"`) || !strings.Contains(got, `name="metric"`) {
+		t.Errorf("the required metric is folded or gone: %s", got)
+	}
+	if !strings.Contains(got, `<input type="date" name="day" value="2026-10-12" required>`) || !f.Primary ||
+		!strings.Contains(got, `</details>
+<button class="primary">`) || strings.Index(got, "</details>") > strings.Index(got, "<button") {
+		t.Errorf("the shown fields, or the button after the folded ones, are not drawn: %s", got)
+	}
+	got, _ = draw(t, action("record", nil, map[string]any{"tz": "Europe/Bucharest"}), "more", "taken_at,tz")
+	if m := more.FindStringSubmatch(got); m == nil || m[1] != " open" || m[2] != "2 more fields" ||
+		!strings.Contains(m[3], `name="tz" value="Europe/Bucharest"`) {
+		t.Errorf("a folded field with a value is out of sight: %s", got)
+	}
+	if got, _ = draw(t, action("add-file", nil, nil), "more", "preview"); !strings.Contains(got, `enctype="multipart/form-data"`) ||
+		!more.MatchString(got) || !strings.Contains(more.FindStringSubmatch(got)[3], `type="file" name="preview"`) {
+		t.Errorf("a form with a folded file is not multipart: %s", got)
+	}
+	if got, _ = draw(t, action("record", nil, nil)); strings.Contains(got, "more-fields") {
+		t.Errorf("a form whose view folds nothing has More fields: %s", got)
+	}
+}
+
 // TestNavMarksThePageTheBrowserIsOn says one navigation link is current: the one whose path is the page's, else the
 // one with the longest path the page is under, and never a fragment (a place on a page is not a page).
 func TestNavMarksThePageTheBrowserIsOn(t *testing.T) {

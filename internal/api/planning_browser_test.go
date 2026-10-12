@@ -254,3 +254,42 @@ func fieldOf(a api.Action, name string) string {
 	}
 	return ""
 }
+
+// TestAnOverdueRowSaysSo: an open occurrence due before today says "overdue" in a word, not by its date alone; one
+// due today does not, and neither does an overdue one once it is done (docs/plans/095-the-leaf-and-its-margin.md).
+func TestAnOverdueRowSaysSo(t *testing.T) {
+	c, h := freshOn(t, fixedToday)
+	root := must(c.Get("/"))
+	create := func(v map[string]string) string {
+		e := must(c.Do(find(root, "create-task"), v))
+		return strings.SplitN(hrefOf(e, "self"), "?", 2)[0]
+	}
+	create(map[string]string{"label": "Book the dentist", "due_day": dayOf(-3)})
+	create(map[string]string{"label": "Call the plumber", "due_day": fixedToday})
+	paid := create(map[string]string{"label": "Pay the rent", "due_day": dayOf(-2)})
+	window := "/deadlines?from=" + dayOf(-7) + "&through=" + dayOf(7)
+	done := formFor(t, browse(t, h, window), "Done", paid+"/occurrences/once/edit")
+	if rec := submit(h, done.Action, done.Fields, ""); rec.Code != http.StatusSeeOther {
+		t.Fatalf("Done: %d", rec.Code)
+	}
+	rowRE := regexp.MustCompile(`(?s)<li[^>]*><div class="occ">.*?</div></li>`)
+	for _, path := range []string{window, "/"} {
+		rows := map[string]bool{}
+		for _, row := range rowRE.FindAllString(browse(t, h, path), -1) {
+			for _, label := range []string{"Book the dentist", "Call the plumber", "Pay the rent"} {
+				if strings.Contains(row, ">"+label+"</a>") {
+					rows[label] = strings.Contains(row, `<span class="tag overdue">overdue</span>`)
+				}
+			}
+		}
+		if overdue, ok := rows["Book the dentist"]; !ok || !overdue {
+			t.Errorf("%s: the occurrence due 3 days ago does not say overdue (found %v)", path, ok)
+		}
+		if rows["Call the plumber"] {
+			t.Errorf("%s: the occurrence due today says overdue", path)
+		}
+		if rows["Pay the rent"] {
+			t.Errorf("%s: the done occurrence says overdue", path)
+		}
+	}
+}

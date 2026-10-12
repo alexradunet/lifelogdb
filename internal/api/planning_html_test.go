@@ -136,7 +136,8 @@ func TestNumWritesNumbersInFull(t *testing.T) {
 }
 
 // TestOutcomesAreOneButtonForms draws the outcome forms of a written occurrence: every field the entity filled is
-// kept hidden, the state and completion are fixed, and the form asks to return to the page that drew it.
+// kept hidden, the state and completion are fixed, and the form asks to return to the page that drew it. No button
+// is primary, and each form's class names its outcome (docs/plans/095-the-leaf-and-its-margin.md).
 func TestOutcomesAreOneButtonForms(t *testing.T) {
 	a := action("edit-occurrence", map[string]string{"id": "4", "key": "once"}, map[string]any{"task_version": "3", "version": "7",
 		"due_day": "2026-10-15", "state": "open", "reminder_mode": "inherit"})
@@ -157,15 +158,19 @@ func TestOutcomesAreOneButtonForms(t *testing.T) {
 		return b.String()
 	}
 	open := draw("open")
-	for _, want := range []string{`action="/tasks/4/occurrences/once/edit"`, `<button class="primary">Done</button>`, `<button>Skip</button>`,
+	for _, want := range []string{`action="/tasks/4/occurrences/once/edit"`, `class="tiny outcome-done">`, `<button>Done</button>`,
+		`class="tiny outcome-skip">`, `<button>Skip</button>`,
 		`name="state" value="done"`, `name="completed_at" value="now"`, `name="state" value="skipped"`, `name="version" value="7"`,
 		`name="task_version" value="3"`, `name="due_day" value="2026-10-15"`, `name="back" value="/deadlines?from=2026-10-01"`} {
 		if !strings.Contains(open, want) {
 			t.Errorf("open occurrence forms lack %s:\n%s", want, open)
 		}
 	}
-	if done := draw("done"); !strings.Contains(done, `<button>Reopen</button>`) || !strings.Contains(done, `name="state" value="open"`) ||
-		strings.Contains(done, "Done</button>") {
+	if strings.Contains(open, "primary") {
+		t.Errorf("an outcome is a primary button: %s", open)
+	}
+	if done := draw("done"); !strings.Contains(done, `class="tiny outcome-reopen">`) || !strings.Contains(done, `<button>Reopen</button>`) ||
+		!strings.Contains(done, `name="state" value="open"`) || strings.Contains(done, "Done</button>") {
 		t.Errorf("a done occurrence offers: %s", done)
 	}
 	if forms, err := outcomes(nil, "open", "/"); forms != nil || err != nil {

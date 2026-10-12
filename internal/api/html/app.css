@@ -99,7 +99,7 @@ table.month a[aria-current=date]{box-shadow:inset 0 0 0 1.5px var(--accent)}
 .meta{font-size:12px; line-height:16px; color:var(--muted)}
 .value{font-size:14px; line-height:20px}
 .reading{font-size:22px; line-height:28px}
-.label{font-size:12px; line-height:16px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
+.label{font-size:15px; line-height:22px; font-weight:700; color:var(--ink)}
 .muted{color:var(--muted)}
 
 /* The page header: the date line, the title, and the tools on the right. */
@@ -214,10 +214,19 @@ td form.tiny+form.tiny{margin-left:var(--space-1)}
 .occ{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--space-1) var(--space-3)}
 .occ>div:first-child{flex:1 1 16rem; min-width:0}
 .occ>div:first-child>a{color:var(--ink); font-weight:700}
-.occ-facts{display:block; font:400 12px/16px var(--mono); color:var(--muted)}
-.occ-facts>span+span::before{content:" · "}
-.outcomes{display:flex; flex-wrap:wrap; gap:6px}
+.occ-facts{display:flex; flex-wrap:wrap; gap:0 var(--space-3); margin-top:2px; font-size:13px; line-height:19px; color:var(--muted)}
+.occ-facts .when{font-family:var(--mono); font-size:12px; font-variant-numeric:tabular-nums}
+.outcomes{display:flex; flex-wrap:wrap; gap:var(--space-1)}
 li.settled>.occ>div:first-child>a{color:var(--muted); font-weight:400; text-decoration:line-through}
+
+/* A row's outcome (docs/plans/095-the-leaf-and-its-margin.md): no row button is loud. Done is an outline in the done
+   colour with a check; Skip and Reopen are quiet words that show a frame on hover. */
+form:is(.outcome-done,.outcome-skip,.outcome-reopen) button{height:var(--control-small); padding:0 var(--space-3); font-size:14px}
+form.outcome-done button{color:var(--done); border-color:var(--done); font-weight:700}
+form.outcome-done button::before{content:"\2713" / ""; font-weight:700}
+form.outcome-done button:hover{background:var(--done-soft); color:var(--done-ink); border-color:var(--done)}
+form.outcome-skip button,form.outcome-reopen button{color:var(--muted); background:none; border-color:transparent}
+form.outcome-skip button:hover,form.outcome-reopen button:hover{color:var(--ink); border-color:var(--line)}
 
 /* The properties of an entity, typed: the name muted, the value in mono. */
 dl.facts{display:grid; grid-template-columns:minmax(90px,max-content) minmax(0,1fr); gap:var(--space-2) var(--space-4); align-items:baseline}
@@ -239,7 +248,7 @@ dl.facts dd{margin:0; display:block; font:400 14px/20px var(--mono); font-varian
 .desc{display:block; font-size:13px; line-height:19px; color:var(--muted)}
 
 /* A page's typed links: a kind, then the pages it points at. */
-dl:not(.facts) dt{font-size:12px; letter-spacing:.06em; text-transform:uppercase; font-weight:700; color:var(--muted); margin-top:var(--space-3)}
+dl:not(.facts) dt{font-size:13px; line-height:19px; font-weight:700; color:var(--muted); margin-top:var(--space-3)}
 dl:not(.facts) dd{margin:var(--space-1) 0 0; display:flex; flex-wrap:wrap; gap:2px 14px}
 
 /* The calendar of a month: a cell for each day; a day with a page is tinted, with its first line and its mood;
@@ -267,23 +276,32 @@ table.calendar tbody tr:hover{background:none}
 .alert a{color:inherit; text-decoration:underline}
 .alert code{background:none}
 
-/* The toast: what a write did, at the top of the page. */
-.toast{display:flex; flex-direction:column; gap:var(--space-2); padding:10px 14px; border-radius:var(--radius-md); background:var(--toast-bg);
-  color:var(--toast-ink); font-size:14px; line-height:20px; box-shadow:var(--shadow-float)}
-.toast h2{color:inherit}
+/* The toast: what a write did, at the top of the page. It is calm: on the surface, framed in the done colour, with a
+   check before its heading. */
+.toast{display:flex; flex-direction:column; gap:var(--space-2); padding:var(--space-3) var(--space-4); border-radius:var(--radius-md); background:var(--toast-bg);
+  color:var(--toast-ink); font-size:15px; line-height:22px; border:1px solid var(--line); border-left:4px solid var(--done); box-shadow:var(--shadow-float)}
+.toast h2{display:flex; align-items:center; gap:var(--space-2); color:var(--done); font-size:15px; line-height:22px}
+.toast h2::before{content:"\2713" / ""}
 .toast a{color:var(--toast-link); font-weight:700}
 .toast pre,.toast table{background:none; border:0; padding:0; color:inherit}
-.toast code{background:none; color:inherit; border:1px solid currentColor; border-radius:4px}
+.toast code{background:none; color:inherit; border:1px solid var(--line); border-radius:4px}
 .toast p+p{margin-top:var(--space-1)}
 .toast th,.toast td{border-color:transparent}
 .toast tbody tr:hover{background:none}
-.toast>button.close{align-self:flex-end; height:var(--control-small); padding:0 var(--space-3); font-size:13px}
+.toast>button.close{align-self:flex-end; height:var(--control-small); padding:0 var(--space-3); font-size:14px}
 
 /* A list of rows; a row's second line; the heading of a group inside a panel. */
 ul.rows>li{padding:0}
 ul.rows>li>a:not(.entry){display:block; padding:10px var(--space-1)}
 ul.plain .meta{display:block}
 .panel-head h3{font-size:15px; line-height:22px}
+
+/* The optional fields of a form, folded (docs/plans/095-the-leaf-and-its-margin.md): one quiet line that says how
+   many, which opens them in place. They stay in the form, so a browser sends them with no script. */
+details.more-fields{align-self:stretch; border:0; border-radius:0; padding:0; background:none}
+details.more-fields>summary{display:inline-flex; align-items:center; min-height:var(--control-small); font-weight:400; font-size:14px; color:var(--accent)}
+details.more-fields[open]>summary{margin-bottom:var(--space-1)}
+details.more-fields>:not(summary)+:not(summary){margin-top:var(--space-3)}
 
 /* A kept picture, on its own line. */
 figure a{display:block}
@@ -324,7 +342,7 @@ fieldset.segmented{display:flex; flex-wrap:wrap; align-items:center; gap:var(--s
 fieldset.segmented legend{float:left; margin-right:var(--space-2); font-size:13px; line-height:19px; color:var(--muted)}
 fieldset.segmented label{position:relative; display:block; color:var(--ink)}
 fieldset.segmented input{position:absolute; inset:0; width:100%; height:100%; margin:0; opacity:0; cursor:pointer}
-fieldset.segmented span{display:grid; place-items:center; min-width:34px; height:34px; padding:0 var(--space-2); font:400 15px/1 var(--mono);
+fieldset.segmented span{display:grid; place-items:center; min-width:var(--control); height:var(--control); padding:0 var(--space-2); font:400 15px/1 var(--mono);
   background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-md)}
 fieldset.segmented label:hover span{border-color:var(--line-strong)}
 fieldset.segmented input:checked+span{background:var(--accent-soft); border-color:var(--accent); color:var(--accent); font-weight:500}

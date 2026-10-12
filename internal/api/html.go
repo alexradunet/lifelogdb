@@ -293,23 +293,54 @@ func (v *view) Embedded(rel string) []Link {
 
 // formView is an action as the "form" template draws it. formOf takes name/value pairs: "button" labels the
 // button, "class" styles the form, "primary" ("1") draws its button as the primary one, "hide" lists fields kept with their value but not shown, "autofocus" names
-// the field the browser starts in, "choices:<field>" offers a field's values as a list, "back" is the page the
-// browser returns to after the write (no field of the action: the server reads it, see backOf), and any other
-// name fixes a field to a value (hidden).
+// the field the browser starts in, "choices:<field>" offers a field's values as a list, "more" lists optional
+// fields folded under "More fields" (docs/plans/095-the-leaf-and-its-margin.md), "back" is the page the browser
+// returns to after the write (no field of the action: the server reads it, see backOf), and any other name fixes a
+// field to a value (hidden).
 type formView struct {
 	*Action
 	Button, Class string
 	Focus         string
 	Back          string
-	Primary       bool // the button is the primary one: a form with fields to fill, or a row's Done
-	Shown         []Field
+	Primary       bool    // the button is the primary one: a form with fields to fill
+	Shown         []Field // the fields most writes need
+	More          []Field // optional fields, folded; still in the form, so a browser sends them with no script
 	Hidden        []Field
 }
 
-// Multipart reports a form with a file field: a browser sends it as multipart/form-data.
+// Multipart reports a form with a file field, shown or folded: a browser sends it as multipart/form-data.
 func (f *formView) Multipart() bool {
-	for _, fd := range f.Shown {
+	for _, fd := range append(f.Shown[:len(f.Shown):len(f.Shown)], f.More...) {
 		if fd.Type == "file" {
+			return true
+		}
+	}
+	return false
+}
+
+// fieldView is a field as the "field" template draws it: the field, and whether the browser starts in it.
+type fieldView struct {
+	Field
+	Focus bool
+}
+
+// Fields are the fields the form shows (folded false) or folds under "More fields" (folded true).
+func (f *formView) Fields(folded bool) []fieldView {
+	list := f.Shown
+	if folded {
+		list = f.More
+	}
+	out := make([]fieldView, len(list))
+	for i, fd := range list {
+		out[i] = fieldView{fd, fd.Name == f.Focus}
+	}
+	return out
+}
+
+// MoreOpen reports folded fields of which one has a value: they are drawn open, so no value is out of sight.
+func (f *formView) MoreOpen() bool {
+	for _, fd := range f.More {
+		if num(fd.Value) != "" {
 			return true
 		}
 	}
@@ -334,7 +365,7 @@ func formOf(x any, opts ...string) (*formView, error) {
 	if f.Button == "" {
 		f.Button = a.Name
 	}
-	fixed, hide, choices := map[string]string{}, map[string]bool{}, map[string][]string{}
+	fixed, hide, more, choices := map[string]string{}, map[string]bool{}, map[string]bool{}, map[string][]string{}
 	primary := false // the view named the button primary or not; else a form with fields to fill is primary
 	for i := 0; i < len(opts); i += 2 {
 		k, v := opts[i], opts[i+1]
@@ -346,6 +377,10 @@ func formOf(x any, opts ...string) (*formView, error) {
 		case k == "hide":
 			for _, n := range strings.Split(v, ",") {
 				hide[n] = true
+			}
+		case k == "more":
+			for _, n := range strings.Split(v, ",") {
+				more[n] = true
 			}
 		case k == "autofocus":
 			f.Focus = v
@@ -369,14 +404,17 @@ func formOf(x any, opts ...string) (*formView, error) {
 				fd.Options = append([]string{""}, c...)
 			}
 		}
-		if fd.Type == "hidden" || hide[fd.Name] {
+		switch {
+		case fd.Type == "hidden" || hide[fd.Name]:
 			f.Hidden = append(f.Hidden, fd)
-		} else {
+		case more[fd.Name] && !fd.Required:
+			f.More = append(f.More, fd)
+		default:
 			f.Shown = append(f.Shown, fd)
 		}
 	}
 	if !primary {
-		f.Primary = len(f.Shown) > 0
+		f.Primary = len(f.Shown)+len(f.More) > 0
 	}
 	return f, nil
 }
