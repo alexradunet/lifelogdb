@@ -130,6 +130,7 @@ var icons = map[string]string{
 	"ghosts":   `<path d="M4 1.5h5l3 3v10H4z" stroke-dasharray="2 2"/>`,
 	"search":   `<circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/>`,
 	"new":      `<path d="M8 3v10M3 8h10"/>`,
+	"more":     `<circle cx="3.5" cy="8" r=".9"/><circle cx="8" cy="8" r=".9"/><circle cx="12.5" cy="8" r=".9"/>`,
 }
 
 // icon is an icon of the sidebar as inline SVG, hidden from a reader: an icon is always beside its word.

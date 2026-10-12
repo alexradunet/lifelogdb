@@ -31,14 +31,16 @@ svg.icon{flex:none; width:16px; height:16px; fill:none; stroke:currentColor; str
 .rail-search input{flex:1; min-width:0; height:auto; padding:0; border:0; outline:0; background:transparent}
 .rail-search input:focus-visible{outline:0}
 .rail-new{width:100%}
-.rail>nav{display:flex; flex-direction:column; gap:var(--space-3)}
-.rail>nav ul{display:flex; flex-direction:column; gap:2px; margin:0; padding:0; list-style:none}
-.rail>nav li{margin:0}
-.rail>nav ul+ul{padding-top:var(--space-3); border-top:1px solid var(--line)}
-.rail>nav a{display:flex; align-items:center; gap:10px; padding:7px 10px; border-radius:var(--radius-md); color:var(--ink); white-space:nowrap}
-.rail>nav a:hover{background:var(--ground); color:var(--ink); text-decoration:none}
-.rail>nav a[aria-current=page]{background:var(--surface); color:var(--accent); font-weight:700; box-shadow:var(--shadow-current)}
+.rail nav ul{display:flex; flex-direction:column; gap:2px; margin:0; padding:0; list-style:none}
+.rail nav li{margin:0}
+.rail nav a{display:flex; align-items:center; gap:10px; padding:7px 10px; border-radius:var(--radius-md); color:var(--ink); white-space:nowrap}
+.rail nav a:hover{background:var(--ground); color:var(--ink); text-decoration:none}
+.rail nav a[aria-current=page]{background:var(--surface); color:var(--accent); font-weight:700; box-shadow:var(--shadow-current)}
 .count{margin-left:auto; font:400 12px/18px var(--mono); padding:0 7px; border-radius:var(--radius-pill); background:var(--warn-soft); color:var(--warn-ink)}
+/* On a wide screen the rest of the sidebar is in its flow: More, its head and the search link are the phone's. */
+.rail-more{display:contents}
+.rail-more>nav{padding-top:var(--space-3); border-top:1px solid var(--line)}
+.rail-more-link,.rail-more-head,.rail .rail-search-link{display:none}
 .rail-foot{margin-top:auto; padding:0 var(--space-2); font-size:13px; line-height:19px; color:var(--muted)}
 .rail-foot a[aria-current=page]{font-weight:700}
 
@@ -57,18 +59,37 @@ table.month a:hover{background:var(--ground); text-decoration:none}
 table.month a.written{background:var(--accent-soft); color:var(--accent); font-weight:500}
 table.month a[aria-current=date]{box-shadow:inset 0 0 0 1.5px var(--accent)}
 
+/* A phone (docs/plans/093-words-phone-and-today.md): the head of the sidebar is a top bar; the sections of every
+   day are a bottom bar with More; the rest is a sheet over the page while it is the target (#sections). */
 @media (max-width:899px){
-  .shell{grid-template-columns:minmax(0,1fr)}
-  .rail{position:static; height:auto; overflow:visible; flex-flow:row wrap; align-items:center; gap:var(--space-2) var(--space-3);
-    padding:var(--space-3) var(--space-4); border-right:0; border-bottom:1px solid var(--line)}
-  .rail-head{flex:1 1 auto; justify-content:flex-start; gap:var(--space-3); padding:0}
+  .shell{display:block}
+  .rail{position:sticky; top:0; z-index:20; height:auto; overflow:visible; flex-direction:row; align-items:center; gap:var(--space-2);
+    padding:calc(var(--space-2) + env(safe-area-inset-top, 0px)) calc(var(--space-4) + env(safe-area-inset-right, 0px)) var(--space-2) calc(var(--space-4) + env(safe-area-inset-left, 0px));
+    border-right:0; border-bottom:1px solid var(--line)}
+  .rail-head{flex:1 1 auto; align-items:center; justify-content:flex-start; gap:var(--space-3); padding:0}
+  .rail-search{display:none}
+  .rail .rail-search-link{display:inline-flex; width:var(--control); padding:0; margin-left:auto}
   .rail-new{width:auto}
-  .rail-search{flex:1 1 100%}
-  .rail>nav{flex:1 1 100%; flex-direction:row; gap:2px; overflow-x:auto; scrollbar-width:none}
-  .rail>nav ul,.rail>nav ul+ul{display:contents}
-  .month-box{display:none}
-  .rail-foot{flex:1 1 100%; margin:0; padding:0}
-  .column{padding:var(--space-5) var(--space-4)}
+  .rail>nav{position:fixed; z-index:20; left:0; right:0; bottom:0; background:var(--surface); border-top:1px solid var(--line);
+    padding:var(--space-1) calc(var(--space-2) + env(safe-area-inset-right, 0px)) calc(var(--space-1) + env(safe-area-inset-bottom, 0px)) calc(var(--space-2) + env(safe-area-inset-left, 0px))}
+  .rail>nav ul{flex-direction:row; justify-content:space-around; gap:0}
+  .rail>nav li{flex:1 1 0; min-width:0}
+  .rail>nav a{position:relative; flex-direction:column; gap:2px; padding:6px 0; font-size:12px; line-height:16px}
+  .rail>nav a svg.icon{width:20px; height:20px}
+  .rail>nav a[aria-current=page],.rail>nav a.here{background:none; box-shadow:none; color:var(--accent); font-weight:700}
+  .rail>nav .count{position:absolute; top:2px; left:calc(50% + 6px); margin:0; padding:0 5px; font-size:12px; line-height:16px}
+  .rail-more-link{display:block}
+  .rail-more{display:none}
+  .rail-more:target{display:flex; flex-direction:column; gap:var(--space-4); position:fixed; z-index:30; left:0; right:0; top:0;
+    bottom:calc(58px + env(safe-area-inset-bottom, 0px)); overflow-y:auto; background:var(--rail); box-shadow:var(--shadow-float);
+    padding:calc(var(--space-4) + env(safe-area-inset-top, 0px)) calc(var(--space-4) + env(safe-area-inset-right, 0px)) var(--space-4) calc(var(--space-4) + env(safe-area-inset-left, 0px))}
+  .rail-more-head{display:flex; align-items:center; justify-content:space-between}
+  .rail-more>nav{border-top:0; padding-top:0}
+  .rail-more .month-box{max-width:22rem}
+  .rail-foot{margin:0}
+  .column{padding:var(--space-5) calc(var(--space-4) + env(safe-area-inset-right, 0px)) calc(72px + env(safe-area-inset-bottom, 0px)) calc(var(--space-4) + env(safe-area-inset-left, 0px))}
+  .column>footer{margin-top:var(--space-6)}
+  footer .keys{display:none}
 }
 @media print{.rail,.skip{display:none} .shell{display:block} .column{padding:0}}
 
@@ -336,3 +357,9 @@ fieldset.segmented input:focus-visible+span{outline:2px solid var(--focus); outl
 .reading-tile .name{font-size:13px; line-height:19px; color:var(--muted)}
 .reading-tile a.reading{font:400 22px/28px var(--mono); font-variant-numeric:tabular-nums; color:var(--ink)}
 .page-head .sub{margin-top:var(--space-1)}
+
+/* On a phone an action's form opens in place, full width, not over the page. */
+@media (max-width:899px){
+  .tools details.action[open]{flex:1 1 100%}
+  .tools details.action>.action-form{position:static; width:auto; box-shadow:none}
+}

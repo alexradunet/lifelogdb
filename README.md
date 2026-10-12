@@ -96,7 +96,10 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **The app shell: the Almanac design system** ([plan 092](docs/plans/092-the-app-shell.md)). Every page a browser
   gets is in one shell: a sidebar with the brand and today's date, the search, New, the sections of every day (Today,
   Calendar, Due, Tasks) and of the record (People to Ghost pages), this month with its written days, and the
-  owner's links; under 900 px it is a bar over the page. The sidebar is the one part of a page that is not the
+  owner's links. Under 900 px it is a phone's layout
+  ([plan 093](docs/plans/093-words-phone-and-today.md)): a top bar (the brand, the date, Search, New), a bottom bar of
+  the sections of every day and More, and the rest as a sheet over the page while it is the target (`#sections`),
+  which needs no script. The sidebar is the one part of a page that is not the
   page's entity: once a page, and for a browser only, the shell reads the Due count (the root's `due`) and this
   month (`GET /months/{month}`), which every client gets from those two resources. A page drawn before the handler
   (the login, a refusal of the token) has no sidebar, so it shows nothing of the database. The look is the owner's
@@ -114,8 +117,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   saved (from `POST /render`), sends the form of a textarea with Ctrl+Enter, leaves a field with Escape, takes keys
   outside a field (`/` search, `c` capture, `t` today, `[` and `]` the previous and next page), goes to the search
   with Ctrl+K from anywhere, and asks before the browser leaves text that was not sent. It gives the toast a Close
-  (and Escape), makes a danger button ask once in the page before it sends, and brings the current section into the
-  sidebar's row on a phone ([plan 092](docs/plans/092-the-app-shell.md)). It reads nothing else, writes nothing and keeps nothing in the browser. Every form posts and every link
+  (and Escape), makes a danger button ask once in the page before it sends ([plan 092](docs/plans/092-the-app-shell.md)),
+  and closes the phone's sheet of sections with Escape ([plan 093](docs/plans/093-words-phone-and-today.md)). It reads nothing else, writes nothing and keeps nothing in the browser. Every form posts and every link
   works without it; the tests check the pages without running it, and a test keeps its reads to those two routes.
   `POST /render` is presentation, not a capability: no catalog action names it and it answers HTML only, so it and
   the fonts (below) are the routes the CLI and the MCP server do not carry. **Rejected:** a separate web client. It would be a second

@@ -5,10 +5,11 @@
 //   1. after [[ in a textarea, the names of the pages that start with what follows;
 //   2. a preview of a body as it will show when saved;
 //   3. keys: Ctrl+K search from anywhere, Ctrl+Enter sends the form of a textarea, Escape leaves a field; outside a
-//      field, / search, c capture, t today, [ and ] the previous and next page, Escape closes the toast;
+//      field, / search, c capture, t today, [ and ] the previous and next page, Escape closes the phone's sheet of
+//      sections or the toast;
 //   4. a question before the browser leaves text that was not sent;
 //   5. the design system's small things (docs/plans/092-the-app-shell.md): the toast's Close, a second press for a
-//      danger button, and the current section in view in the sidebar.
+//      danger button, and the hint of Ctrl+K in the search.
 (function () {
   "use strict";
 
@@ -204,6 +205,7 @@
       }
       case "t": ev.preventDefault(); location.href = "/days/today"; break;
       case "Escape": {
+        if (location.hash === "#sections") { ev.preventDefault(); location.replace("#closed"); break; } // the phone's sheet
         var toast = document.querySelector(".toast");
         if (toast) { ev.preventDefault(); toast.remove(); }
         break;
@@ -229,7 +231,7 @@
     }
   });
 
-  // ---- 5. The toast, the danger button and the sidebar
+  // ---- 5. The toast and the danger button
 
   // closable gives a toast its Close. A toast stays until it is closed or the page changes: it may name what a write
   // did not do (names that made no link).
@@ -273,9 +275,6 @@
     hint.textContent = "Ctrl K";
     search.appendChild(hint);
   }
-  // On a phone the sections are one row that scrolls to the side: the current one is brought into it.
-  var here = document.querySelector(".rail nav a[aria-current=page]");
-  if (here && here.scrollIntoView) here.scrollIntoView({ block: "nearest", inline: "nearest" });
   var foot = document.querySelector("footer p");
   if (foot) {
     var keys = document.createElement("small");

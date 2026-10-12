@@ -138,3 +138,42 @@ func TestTheFontsAreServedByExactName(t *testing.T) {
 		t.Errorf("a public listener refuses a font with the token: %d", rec.Code)
 	}
 }
+
+// TestThePhoneHasABottomBarAndASheet: the sections of every day and More are one list (a phone's bottom bar); the
+// sections of the record, the month and the owner's links are the sheet that More opens (#sections), with no script;
+// each link is drawn once, and More is marked when the page is in the sheet.
+func TestThePhoneHasABottomBarAndASheet(t *testing.T) {
+	_, h := freshOn(t, fixedToday)
+	body := browse(t, h, "/people")
+	bar := regexp.MustCompile(`(?s)<nav aria-label="Sections">(.*?)</nav>`).FindStringSubmatch(body)
+	sheet := regexp.MustCompile(`(?s)<div class="rail-more" id="sections">(.*?)</aside>`).FindStringSubmatch(body)
+	if bar == nil || sheet == nil {
+		t.Fatalf("no bottom bar or no sheet:\n%s", sidebar(body))
+	}
+	links := func(s string) string {
+		var out []string
+		for _, m := range regexp.MustCompile(`<a href="([^"#]+|#sections)"`).FindAllStringSubmatch(s, -1) {
+			out = append(out, m[1])
+		}
+		return strings.Join(out, " ")
+	}
+	if got := links(bar[1]); got != "/days/today /months/current /deadlines /tasks #sections" {
+		t.Errorf("the bottom bar: %s", got)
+	}
+	if got := links(sheet[1]); !strings.HasPrefix(got, "/people /places /files /metrics /habits /sessions /periods /ghosts /months/2031-05") ||
+		!strings.HasSuffix(got, "/actions /integrity") || !strings.Contains(sheet[1], `<a href="/#owner">Snapshot</a>`) {
+		t.Errorf("the sheet: %s", got)
+	}
+	if !strings.Contains(sheet[1], `<a class="button small" href="#closed">Close</a>`) {
+		t.Error("the sheet has no Close")
+	}
+	if !strings.Contains(bar[1], `<a href="#sections" class="here">`) {
+		t.Error("More is not marked on a page of the sheet")
+	}
+	if strings.Contains(browse(t, h, "/days/"+fixedToday), `<a href="#sections" class="here">`) {
+		t.Error("More is marked on Today")
+	}
+	if !strings.Contains(body, `content="width=device-width, initial-scale=1, viewport-fit=cover"`) {
+		t.Error("the page does not reach the phone's edges (viewport-fit)")
+	}
+}
