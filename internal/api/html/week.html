@@ -15,7 +15,7 @@
 <div class="sheet">
 <section aria-label="The days">
 <div class="panel-head"><h2>The days</h2></div>
-<ul class="plain">{{range $w.days}}<li><a class="entry{{if not .page}} unwritten{{end}}" href="/days/{{.day}}"><span class="date">{{shortDay .day}}</span>{{if .page}}<span class="first">{{with .first_line}}{{.}}{{else}}no text{{end}}</span>{{else}}<span class="first"></span><span class="meta">nothing written</span>{{end}}{{with .mood}}<span class="meta">mood {{range $i, $v := .}}{{if $i}}, {{end}}{{num $v}}{{end}}</span>{{end}}</a></li>{{end}}</ul>
+<ul class="plain">{{range $w.days}}<li><a class="entry{{if not .page}} unwritten{{end}}" href="/days/{{.day}}"><span class="date">{{shortDay .day}}</span>{{if .page}}<span class="first">{{with .first_line}}{{.}}{{else}}no text{{end}}</span>{{else}}<span class="first"></span><span class="meta">{{if gt .day $w.today}}not yet{{else}}nothing written{{end}}</span>{{end}}{{with .mood}}<span class="meta">mood {{range $i, $v := .}}{{if $i}}, {{end}}{{num $v}}{{end}}</span>{{end}}</a></li>{{end}}</ul>
 </section>
 </div>
 
@@ -28,7 +28,7 @@
 
 <section class="group" aria-label="Readings">
 <div class="panel-head"><h2>Readings</h2><a href="/metrics">Metrics</a></div>
-{{with $w.metrics}}<ul class="plain">{{range .}}<li><a class="entry" href="/metrics/{{pathesc .metric}}"><span class="first">{{.metric}}</span><span class="value">{{num .mean}}{{with .unit}} {{.}}{{end}}</span><span class="meta note">{{sinceLast .mean .previous_mean}}</span></a></li>{{end}}</ul>
+{{with $w.metrics}}<ul class="plain">{{range .}}<li><a class="entry" href="/metrics/{{pathesc .metric}}"><span class="first">{{.metric}}</span><span class="value">{{num .mean}}{{with .unit}} {{unitWords .}}{{end}}</span><span class="meta note">{{sinceLast .mean .previous_mean}}</span></a></li>{{end}}</ul>
 {{else}}<p class="empty">No reading this week. <a href="/metrics">Metrics</a>.</p>{{end}}
 </section>
 

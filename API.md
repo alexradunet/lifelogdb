@@ -279,7 +279,7 @@ day of the week. Actions: `open-day`.
 | `days[].page` | boolean | a live day page exists for it |
 | `days[].first_line` | string | the first line of that page's body that has text, as plain text; absent when none |
 | `days[].mood` | list | the values of the day's current Mood readings with no session, in the order they were recorded; absent when none |
-| `habits[]` | list | each habit active on a day of the week, by name, counted as `completion` of habits is |
+| `habits[]` | list | each habit active on a day of the week through today, by name, counted as `completion` of habits is: a week in progress counts through today, a week to come counts nothing |
 | `habits[].metric` | string | the habit's metric |
 | `habits[].done` | integer | the days of the week on which it was done |
 | `habits[].active_days` | integer | the days of the week on which it was active |

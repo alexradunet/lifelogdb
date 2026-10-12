@@ -1,7 +1,7 @@
 # 0066 — The Almanac never shows the owner their past, and a refused form loses its place
 
 - **Date:** 2026-10-12
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the owner's request for a review of the browser against the published guidance after
   [plan 096](../plans/096-bound-in-hearthwood.md): design-system practice, WCAG 2.2, the GOV.UK form patterns, the
   calm-technology principles, the ADHD guidance, and the journaling applications people keep (Day One, Obsidian,
@@ -46,4 +46,8 @@ streak. The review found the gaps elsewhere. Each row is a fact of the code at `
 
 ## Resolution
 
-Open. [Plan 097](../plans/097-the-almanac-reflects.md) carries the whole list.
+Resolved by [plan 097](../plans/097-the-almanac-reflects.md): a refused form comes back on its own page, filled, with the alert
+first; the day and Home show on this day; the week and the year have their resources and pages; a habit is told by its
+strip only; every empty state names the way forward; People and Places say their mentions; the tokens are one block
+with the APCA logged beside the ratio; the style page shows every component; the manifest makes the app installable
+with a share target; the small HTML is in. Every row of the table above is closed.

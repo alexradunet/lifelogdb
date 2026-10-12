@@ -8,7 +8,7 @@ Earlier closed plans live in git history (`git log -- docs/plans`). The next pla
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| [097](097-the-almanac-reflects.md) | The Almanac reflects: the past on the page, a refusal on its form, the week and the year | P1 | L | issue 0066; owner decision 2026-10-12 | IN PROGRESS |
+| [097](097-the-almanac-reflects.md) | The Almanac reflects: the past on the page, a refusal on its form, the week and the year | P1 | L | issue 0066; owner decision 2026-10-12 | DONE |
 | [096](096-bound-in-hearthwood.md) | Bound in Hearthwood: the Almanac takes Balaur's materials | P1 | L | issue 0065; owner decisions 2026-10-12 | DONE |
 | [095](095-the-leaf-and-its-margin.md) | The leaf and its margin: a calm Almanac | P1 | L | issue 0064; owner decisions 2026-10-12 | DONE |
 | [094](094-the-command-list.md) | The command list of Ctrl K | P2 | M | issue 0063; owner decision 2026-10-12 | DONE |

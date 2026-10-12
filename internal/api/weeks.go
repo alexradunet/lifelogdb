@@ -98,12 +98,16 @@ func (h *server) week(r *http.Request) (*Entity, error) {
 		e.Entities = append(e.Entities, link("day", dayHref(day), day))
 	}
 
-	// The habits use the count of the habits view, so a habit counts the same on both pages.
-	completion, err := h.s.Completion(ctx, from, through)
-	if err != nil {
-		return nil, err
-	}
+	// The habits use the count of the habits view, so a habit counts the same on both pages. A week in progress
+	// counts through today, so a Monday does not read as six days missed; a week to come counts nothing.
 	habits := []weekHabit{}
+	end := min(through, h.localDay())
+	var completion []core.Completion
+	if from <= end {
+		if completion, err = h.s.Completion(ctx, from, end); err != nil {
+			return nil, err
+		}
+	}
 	for _, c := range completion {
 		habits = append(habits, weekHabit{Metric: c.Metric, Done: c.Done, ActiveDays: c.ActiveDays})
 	}

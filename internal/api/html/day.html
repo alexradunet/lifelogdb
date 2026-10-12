@@ -29,7 +29,7 @@
 {{template "form" (form . "autofocus" "text" "button" "Add" "back" $.Here "placeholder" "text=What happened? Who was there?")}}
 </section>{{end}}
 
-{{with form (.Action "save-body") "button" "Save"}}<details{{if .Refused}} open{{end}}><summary>Edit the day page</summary>
+{{with form (.Action "save-body") "button" "Save" "back" (.Link "self")}}<details{{if .Refused}} open{{end}}><summary>Edit the day page</summary>
 <small class="desc">CommonMark. [[Title]] links a page and #tag a tag page. Nothing is saved until the version you read is still the current one.</small>
 {{template "form" .}}</details>{{end}}
 

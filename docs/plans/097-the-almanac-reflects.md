@@ -9,7 +9,8 @@
 - **Priority:** P1. **Effort:** L. **Risk:** MEDIUM: the token blocks of `base.css` change shape and the contrast
   test with them; two resources and three properties are added to the API (nothing on the wire changes meaning);
   a refused browser POST answers with another page's view. Nothing for the schema, nothing for the contract.
-- **Status:** IN PROGRESS. One commit for the records, then one commit a part, each with the baseline green.
+- **Status:** DONE. One commit for the records, then one commit a part (Part 5 merged from its branch), then one commit for the
+  findings of the screenshots and this record.
 - **Resolves:** issue [0066](../issues/0066-the-almanac-does-not-reflect-and-a-refusal-loses-the-form.md). No RFC:
   the contract in `docs/` does not change.
 
@@ -140,3 +141,32 @@ week's rows and the year's grid read; no text under 4.5:1.
    passes.
 3. The screenshots of the section above are reviewed and their findings fixed before the plan closes.
 4. The issue is resolved and this plan is DONE in the last commit.
+
+## Result (2026-10-12)
+
+Six parts, six commits (`cd5f2de`, `46cd08c`, `27589c9`, `ce730ee`, `86524cd` merged as `cf77544`, `c28e286`), then the
+closing commit. Each part was built by a sub-agent and reviewed before its commit. These points differ from the text
+above, or add to it:
+
+| point | what was done, and why |
+|---|---|
+| the dark shades | the APCA log showed ten dark text pairs under Lc 60; their dark shades moved until each held Lc 60 with the 4.5:1 gate kept (`--muted`, `--page-muted`, `--rail-ink`, `--accent-ink`, `--link`, `--link-page`, `--done`, `--danger-ink`); no text could reach Lc 60 on the old dark ember, so `--primary` and `--primary-hover` are lighter in dark instead. The light theme had no pair under 60. |
+| the refused title | "Not saved · {title}", since the alert's first words already say it; the alert takes a focus ring like any focused thing. |
+| the refused save | a page's Edit form carries `back` as the capture form does (the entity's `self`, since a page reached through `/pages?title=` is a redirect and a redirect draws no page), so a stale save comes back on its page: the screenshots showed it falling to the error view before. |
+| the week in progress | the habits count through today, so a Monday does not read as six days missed, and a day to come says "not yet"; a unit is in words ("of 5") as on a day. |
+| the suggest list | a `manual` popover placed by the script under its field; a scroll or a resize closes it; a browser without the API keeps the list in the page. |
+| the week's readings | the metrics come from the two weeks in use (`InUse`) and one `Series` read each, split by day; a habit is excluded. |
+| not done | the occurrence rows of a week carry no Done or Skip, since the week's only action is `open-day`; the generic view fills no refused form (it draws the raw actions and has no `autofocus`). |
+
+**In a browser.** `shots.js` drove Edge 154 (headless) on Windows 11 on the synthetic database of plan 096 with pages
+on 12 October in 2023, 2024 and 2025 added: Today, Home, a past day, the week, the year, the month, People, the
+style page, a refused save, a refused capture and the command list, at 1280 px and 390 px, light and dark. Reviewed
+on them: the refused capture is first on Home with its text kept; On this day sits after Due with the year in each
+date; the week's seven rows and the year's twelve boxes read; the people row says its mentions; the style page shows
+every component; the darker muted text still reads as muted. The three findings above (the save's `back`, the week's
+window and unit) were fixed and the two pages shot again.
+
+**Checks** (Windows 11, Go 1.27.2): `go generate ./... && go vet ./... && go test ./...` passes after every part and
+after the fixes; `gofmt` is clean; staticcheck 2026.2.1 (`honnef.co/go/tools` v0.8.1): no finding; govulncheck v1.9.0,
+default text mode: no vulnerability; `go test -count=1 -shuffle=on ./...` passes. Nothing was run on Linux, and no
+browser but Edge was tried.
