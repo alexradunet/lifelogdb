@@ -194,3 +194,21 @@ func (s *Store) Sessions(ctx context.Context, day, kind string, includeDeleted b
 	}
 	return out, rows.Err()
 }
+
+// ---- the same operations alone, each its own transaction
+
+func (s *Store) CaptureSession(ctx context.Context, source string, in SessionInput) (id int64, existing bool, err error) {
+	err = s.Do(ctx, source, func(t *Tx) (e error) { id, existing, e = t.CaptureSession(in); return })
+	if err != nil {
+		id, existing = 0, false
+	}
+	return
+}
+
+func (s *Store) EditSession(ctx context.Context, source string, id int64, version string, in SessionInput) error {
+	return s.Do(ctx, source, func(t *Tx) error { return t.EditSession(id, version, in) })
+}
+
+func (s *Store) SessionLifecycle(ctx context.Context, source string, id int64, version string, deleted bool) error {
+	return s.Do(ctx, source, func(t *Tx) error { return t.SessionLifecycle(id, version, deleted) })
+}

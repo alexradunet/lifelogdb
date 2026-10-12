@@ -684,6 +684,9 @@ func (s *Store) Capture(ctx context.Context, source, day, entry string, mood *fl
 
 func (s *Store) SaveBody(ctx context.Context, source string, id int64, body, version string) (r Sync, err error) {
 	err = s.Do(ctx, source, func(t *Tx) (e error) { r, e = t.SaveBody(id, body, version); return })
+	if err != nil {
+		r = Sync{}
+	}
 	return
 }
 

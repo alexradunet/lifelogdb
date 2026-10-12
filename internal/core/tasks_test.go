@@ -14,7 +14,7 @@ import (
 
 func planningTask(t *testing.T, s *Store, spec TaskSpec) *Task {
 	t.Helper()
-	id, _, err := s.CreateTask(ctx, "cli", spec, "")
+	id, _, err := s.CreateTask(ctx, "cli", TaskForm{TaskSpec: spec})
 	if err != nil {
 		t.Fatal(err)
 	}

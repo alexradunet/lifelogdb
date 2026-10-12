@@ -60,7 +60,7 @@ func TestTaskProjectPromotionActionsMatchRetainedReferences(t *testing.T) {
 			if promote.Name == "" || period.Name == "" {
 				t.Fatal("unreferenced page omitted promotion actions")
 			}
-			taskID, _, err := s.CreateTask(ctx, "cli", core.TaskSpec{Label: "Buy seeds", ProjectPageID: &projectID}, "")
+			taskID, _, err := s.CreateTask(ctx, "cli", core.TaskForm{TaskSpec: core.TaskSpec{Label: "Buy seeds", ProjectPageID: &projectID}})
 			if err != nil {
 				t.Fatal(err)
 			}

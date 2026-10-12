@@ -23,7 +23,7 @@ func TestPageRetainsTaskProjectContextAfterTombstones(t *testing.T) {
 	if page(projectID).TaskProject || page(ordinaryID).TaskProject {
 		t.Fatal("unreferenced page reported task project context")
 	}
-	taskID, _, err := s.CreateTask(ctx, "cli", TaskSpec{Label: "Buy seeds", ProjectPageID: &projectID}, "")
+	taskID, _, err := s.CreateTask(ctx, "cli", TaskForm{TaskSpec: TaskSpec{Label: "Buy seeds", ProjectPageID: &projectID}})
 	if err != nil {
 		t.Fatal(err)
 	}

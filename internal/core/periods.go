@@ -105,3 +105,21 @@ func (s *Store) LifePeriods(ctx context.Context, day, asOf string, includeDelete
 	}
 	return out, rows.Err()
 }
+
+// ---- the same operations alone, each its own transaction
+
+func (s *Store) CreatePeriod(ctx context.Context, source, title, body string, start, end *string) (id int64, err error) {
+	err = s.Do(ctx, source, func(t *Tx) (e error) { id, e = t.CreatePeriod(title, body, start, end); return })
+	if err != nil {
+		id = 0
+	}
+	return
+}
+
+func (s *Store) PromotePeriod(ctx context.Context, source string, id int64, version string, start, end *string) error {
+	return s.Do(ctx, source, func(t *Tx) error { return t.PromotePeriod(id, version, start, end) })
+}
+
+func (s *Store) EditPeriod(ctx context.Context, source string, id int64, version string, start, end *string) error {
+	return s.Do(ctx, source, func(t *Tx) error { return t.EditPeriod(id, version, start, end) })
+}

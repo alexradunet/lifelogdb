@@ -74,12 +74,12 @@ func newHandler(s *core.Store, localDay func() string, zone *time.Location, trus
 	get("/sessions/{id}", h.session)
 	post("/sessions", h.captureSession)
 	post("/sessions/{id}/edit", h.editSession)
-	post("/sessions/{id}/tombstone", h.tombstoneSession)
-	post("/sessions/{id}/revive", h.reviveSession)
+	post("/sessions/{id}/tombstone", h.sessionLifecycle(true))
+	post("/sessions/{id}/revive", h.sessionLifecycle(false))
 	get("/periods", h.periods)
 	post("/periods", h.createPeriod)
-	post("/pages/{id}/period", h.editPeriod)
-	post("/pages/{id}/promote-period", h.promotePeriod)
+	post("/pages/{id}/period", h.writePeriod(false))
+	post("/pages/{id}/promote-period", h.writePeriod(true))
 	get("/files", h.named("file", "files", "add-file"))
 	m.HandleFunc("GET /pages/{id}/preview", picture(func(r *http.Request) ([]byte, error) {
 		id, err := idOf(r)
@@ -1055,7 +1055,7 @@ func (h *server) measurementEntity(ctx context.Context, id int64) (*Entity, erro
 		}
 	}
 	if m.SessionID != 0 {
-		e.Links = append(e.Links, link("session", "/sessions/"+strconv.FormatInt(m.SessionID, 10), "Session scope"))
+		e.Links = append(e.Links, link("session", sessionHref(m.SessionID), "Session scope"))
 	}
 	allowed, err := h.s.RelocationAllowed(ctx, id)
 	if err != nil {

@@ -51,94 +51,99 @@ type TableRow struct {
 // or the header, in ( ) or [ ], and must be the metric's: it is checked, never converted. A row with a value that is
 // not a plain number (<5, a word, a comma decimal), with another unit, or with a second value for one day is
 // reported, not written. A reading's key is the page and the day, so a second run writes nothing.
-func (s *Store) ReadingsFromTable(ctx context.Context, page, metric, column string) (*TableReadings, error) {
+func (t *Tx) ReadingsFromTable(page, metric, column string) (*TableReadings, error) {
 	res := &TableReadings{Metric: metric, Reported: []TableRow{}}
-	err := s.Do(ctx, TableSource, func(t *Tx) error {
-		res.Written, res.Existing, res.Reported = 0, 0, []TableRow{}
-		p, err := t.lookup(page)
-		if err != nil {
-			return err
+	p, err := t.lookup(page)
+	if err != nil {
+		return nil, err
+	}
+	if p == nil || p.Deleted {
+		return nil, notFound("no page %q", page)
+	}
+	res.PageID, res.Page = p.ID, p.Title
+	unit, found, err := t.metricUnit(metric)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, invalid("no metric %q: the owner registers it first (register-metric)", metric)
+	}
+	res.Unit = unit
+	tbl, dayCol, valueCol, unitCol, err := pickTable(markdownTables(p.Body), column)
+	if err != nil {
+		return nil, err
+	}
+	res.Column = tbl[0][valueCol]
+	headerUnit := ""
+	if units := unitTokens(tbl[0][valueCol]); len(units) > 0 {
+		headerUnit = units[0]
+	}
+	seen := map[string]bool{}
+	for i, row := range tbl[1:] {
+		report := func(day, cell, format string, a ...any) {
+			res.Reported = append(res.Reported, TableRow{Row: i + 1, Day: day, Cell: cell, Reason: fmt.Sprintf(format, a...)})
 		}
-		if p == nil || p.Deleted {
-			return notFound("no page %q", page)
+		day, cell := cellAt(row, dayCol), cellAt(row, valueCol)
+		if cell == "" {
+			continue
 		}
-		res.PageID, res.Page = p.ID, p.Title
-		unit, found, err := t.metricUnit(metric)
-		if err != nil {
-			return err
+		if !IsDay(day) {
+			report(day, cell, "no day YYYY-MM-DD in the row")
+			continue
 		}
-		if !found {
-			return invalid("no metric %q: the owner registers it first (register-metric)", metric)
+		m := plainValueRE.FindStringSubmatch(cell)
+		if m == nil || (m[2] != "" && !unitToken(m[2])) {
+			report(day, cell, "not a plain number: kept as text")
+			continue
 		}
-		res.Unit = unit
-		tbl, dayCol, valueCol, unitCol, err := pickTable(markdownTables(p.Body), column)
-		if err != nil {
-			return err
+		got := m[2]
+		if got == "" && unitCol >= 0 {
+			got = cellAt(row, unitCol)
 		}
-		res.Column = tbl[0][valueCol]
-		headerUnit := ""
-		if units := unitTokens(tbl[0][valueCol]); len(units) > 0 {
-			headerUnit = units[0]
+		if got == "" {
+			got = headerUnit
 		}
-		seen := map[string]bool{}
-		for i, row := range tbl[1:] {
-			report := func(day, cell, format string, a ...any) {
-				res.Reported = append(res.Reported, TableRow{Row: i + 1, Day: day, Cell: cell, Reason: fmt.Sprintf(format, a...)})
-			}
-			day, cell := cellAt(row, dayCol), cellAt(row, valueCol)
-			if cell == "" {
-				continue
-			}
-			if !IsDay(day) {
-				report(day, cell, "no day YYYY-MM-DD in the row")
-				continue
-			}
-			m := plainValueRE.FindStringSubmatch(cell)
-			if m == nil || (m[2] != "" && !unitToken(m[2])) {
-				report(day, cell, "not a plain number: kept as text")
-				continue
-			}
-			got := m[2]
-			if got == "" && unitCol >= 0 {
-				got = cellAt(row, unitCol)
-			}
+		if got != unit {
 			if got == "" {
-				got = headerUnit
+				report(day, cell, "no unit: the metric's unit is %q", unit)
+			} else {
+				report(day, cell, "the unit %q is not the metric's unit %q: nothing is converted", got, unit)
 			}
-			if got != unit {
-				if got == "" {
-					report(day, cell, "no unit: the metric's unit is %q", unit)
-				} else {
-					report(day, cell, "the unit %q is not the metric's unit %q: nothing is converted", got, unit)
-				}
-				continue
-			}
-			if seen[day] {
-				report(day, cell, "a second value for this day")
-				continue
-			}
-			seen[day] = true
-			v, err := strconv.ParseFloat(m[1], 64)
-			if err != nil {
-				report(day, cell, "not a plain number: kept as text")
-				continue
-			}
-			id, err := t.Record(Reading{Metric: metric, Day: day, Key: tableKey(p.Title, day), Value: v})
-			var ce *Error
-			switch {
-			case errors.As(err, &ce):
-				report(day, cell, "%s", ce.Msg)
-			case err != nil:
-				return err
-			case id == 0:
-				res.Existing++
-			default:
-				res.Written++
-			}
+			continue
 		}
-		return nil
-	})
-	return res, err
+		if seen[day] {
+			report(day, cell, "a second value for this day")
+			continue
+		}
+		seen[day] = true
+		v, err := strconv.ParseFloat(m[1], 64)
+		if err != nil {
+			report(day, cell, "not a plain number: kept as text")
+			continue
+		}
+		id, err := t.Record(Reading{Metric: metric, Day: day, Key: tableKey(p.Title, day), Value: v})
+		var ce *Error
+		switch {
+		case errors.As(err, &ce):
+			report(day, cell, "%s", ce.Msg)
+		case err != nil:
+			return nil, err
+		case id == 0:
+			res.Existing++
+		default:
+			res.Written++
+		}
+	}
+	return res, nil
+}
+
+// ReadingsFromTable alone, in its own transaction under TableSource.
+func (s *Store) ReadingsFromTable(ctx context.Context, page, metric, column string) (res *TableReadings, err error) {
+	err = s.Do(ctx, TableSource, func(t *Tx) (e error) { res, e = t.ReadingsFromTable(page, metric, column); return })
+	if err != nil {
+		res = nil
+	}
+	return
 }
 
 // plainValueRE is a plain number, then an optional unit: "48", "4.5 ng/mL", "-2 %". A sign such as < or ~, a word or

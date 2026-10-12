@@ -6,6 +6,7 @@ import (
 	"errors"
 	"sort"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -299,12 +300,135 @@ func (t *Tx) createTask(in TaskSpec, importKey string, initial OccurrenceInput) 
 	return id, false, err
 }
 
-func (s *Store) CreateTask(ctx context.Context, source string, in TaskSpec, importKey string) (id int64, existing bool, err error) {
-	err = s.Do(ctx, source, func(t *Tx) error { var e error; id, existing, e = t.CreateTask(in, importKey); return e })
+// TaskForm is a task as a surface describes it (create-task, edit-task): the definition, its project as the title of
+// a page (made as an empty page when no page has the title; a ProjectPageID stands when there is no title), a
+// one-off's due day, and the sender's key.
+type TaskForm struct {
+	TaskSpec
+	Project   string
+	DueDay    string
+	ImportKey string
+}
+
+// spec is the form's definition with its project resolved to a page in this transaction.
+func (t *Tx) spec(f TaskForm) (TaskSpec, error) {
+	spec := f.TaskSpec
+	if f.Project != "" {
+		id, _, err := t.PageForTitle(f.Project)
+		if err != nil {
+			return spec, err
+		}
+		spec.ProjectPageID = &id
+	}
+	return spec, nil
+}
+
+// CreateTask is one task in its own transaction: a series, or a one-off with its once occurrence due on DueDay.
+func (s *Store) CreateTask(ctx context.Context, source string, f TaskForm) (id int64, existing bool, err error) {
+	if f.RepeatUnit != "" && f.DueDay != "" {
+		return 0, false, invalid("due_day is a one-off's; a series is due on its slots")
+	}
+	err = s.Do(ctx, source, func(t *Tx) error {
+		spec, e := t.spec(f)
+		if e != nil {
+			return e
+		}
+		if spec.RepeatUnit == "" {
+			initial := OccurrenceInput{OccurrenceKey: "once", OccurrenceChanges: OccurrenceChanges{DueDay: f.DueDay, State: "open", ReminderMode: "inherit"}}
+			id, existing, e = t.CaptureOneOffTask(spec, f.ImportKey, initial)
+		} else {
+			id, existing, e = t.CreateTask(spec, f.ImportKey)
+		}
+		return e
+	})
 	if err != nil {
 		id, existing = 0, false
 	}
 	return
+}
+
+// EditTask changes a task's label, project and default reminder in its own transaction; the cadence is the current
+// one, since it is fixed.
+func (s *Store) EditTask(ctx context.Context, source string, id int64, version string, f TaskForm) error {
+	return s.Do(ctx, source, func(t *Tx) error {
+		cur, err := t.Task(id)
+		if err != nil {
+			return err
+		}
+		f.RepeatUnit, f.RepeatEvery, f.AnchorDay, f.RepeatUntilDay = cur.RepeatUnit, cur.RepeatEvery, cur.AnchorDay, cur.RepeatUntilDay
+		f.ProjectPageID = nil
+		spec, err := t.spec(f)
+		if err != nil {
+			return err
+		}
+		return t.EditTask(id, version, spec)
+	})
+}
+
+func (s *Store) StopTask(ctx context.Context, source string, id int64, version, through string) error {
+	return s.Do(ctx, source, func(t *Tx) error { return t.StopTask(id, version, through) })
+}
+
+func (s *Store) TaskLifecycle(ctx context.Context, source string, id int64, version string, deleted bool) error {
+	return s.Do(ctx, source, func(t *Tx) error { return t.TaskLifecycle(id, version, deleted) })
+}
+
+// OccurrencePatch is an outcome as a surface sends it (capture-occurrence, edit-occurrence): a field set, even to
+// "", replaces the value; a nil field keeps it. "now" as CompletedAt is this instant.
+type OccurrencePatch struct {
+	DueDay, State, CompletedAt, ReminderMode, ReminderAt *string
+}
+
+func (p OccurrencePatch) apply(c OccurrenceChanges) OccurrenceChanges {
+	if p.DueDay != nil {
+		c.DueDay = *p.DueDay
+	}
+	if p.State != nil {
+		c.State = *p.State
+	}
+	if p.CompletedAt != nil {
+		c.CompletedAt = *p.CompletedAt
+		if c.CompletedAt == "now" {
+			c.CompletedAt = time.Now().UTC().Format(instantLayout)
+		}
+	}
+	if p.ReminderMode != nil {
+		c.ReminderMode = *p.ReminderMode
+	}
+	if p.ReminderAt != nil {
+		c.ReminderOverrideAt = *p.ReminderAt
+	}
+	return c
+}
+
+// CaptureTaskOccurrence writes one occurrence of a task in its own transaction: open and inheriting its reminder, due
+// on its slot day (a one-off's once is undated), unless the patch says otherwise.
+func (s *Store) CaptureTaskOccurrence(ctx context.Context, source string, taskID int64, taskVersion, key, importKey string, p OccurrencePatch) (o *TaskOccurrence, existing bool, err error) {
+	base := OccurrenceChanges{State: "open", ReminderMode: "inherit"}
+	if key != "once" {
+		base.DueDay = key
+	}
+	in := OccurrenceInput{OccurrenceKey: key, ImportKey: importKey, OccurrenceChanges: p.apply(base)}
+	err = s.Do(ctx, source, func(t *Tx) (e error) { o, existing, e = t.CaptureTaskOccurrence(taskID, taskVersion, in); return })
+	if err != nil {
+		o, existing = nil, false
+	}
+	return
+}
+
+// EditTaskOccurrence changes a written occurrence in its own transaction: the patch over its current values.
+func (s *Store) EditTaskOccurrence(ctx context.Context, source string, taskID int64, taskVersion, key, version string, p OccurrencePatch) error {
+	return s.Do(ctx, source, func(t *Tx) error {
+		cur, err := t.TaskOccurrence(taskID, key)
+		if err != nil {
+			return err
+		}
+		return t.EditTaskOccurrence(taskID, taskVersion, key, version, p.apply(cur.OccurrenceChanges))
+	})
+}
+
+func (s *Store) TaskOccurrenceLifecycle(ctx context.Context, source string, taskID int64, taskVersion, key, version string, deleted bool) error {
+	return s.Do(ctx, source, func(t *Tx) error { return t.TaskOccurrenceLifecycle(taskID, taskVersion, key, version, deleted) })
 }
 
 func (t *Tx) liveTaskVersion(id int64, version string) (*Task, error) {

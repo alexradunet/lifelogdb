@@ -84,8 +84,11 @@ func IsDay(s string) bool {
 	return err == nil && t.Format(time.DateOnly) == s
 }
 
-// IsInstant reports a lifelog_meta.instants instant: UTC, milliseconds, Z.
+// instantLayout is the layout of a lifelog_meta.instants instant: UTC, milliseconds, Z.
+const instantLayout = "2006-01-02T15:04:05.000Z"
+
+// IsInstant reports a lifelog_meta.instants instant.
 func IsInstant(s string) bool {
-	t, err := time.Parse("2006-01-02T15:04:05.000Z", s)
-	return err == nil && t.Format("2006-01-02T15:04:05.000Z") == s
+	t, err := time.Parse(instantLayout, s)
+	return err == nil && t.Format(instantLayout) == s
 }

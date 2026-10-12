@@ -120,6 +120,9 @@ func (t *Tx) StopHabit(metric, day string) error {
 
 func (s *Store) RegisterMetric(ctx context.Context, source, name, unit, note string) (added bool, err error) {
 	err = s.Do(ctx, source, func(t *Tx) (e error) { added, e = t.RegisterMetric(name, unit, note); return })
+	if err != nil {
+		added = false
+	}
 	return
 }
 

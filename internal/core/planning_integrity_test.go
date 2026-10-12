@@ -10,7 +10,7 @@ func TestPlanningIntegrityDetectsSemanticDamage(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			task, _, err := s.CreateTask(ctx, "cli", TaskSpec{Label: "Check alarm", ProjectPageID: &project, RepeatUnit: "month", RepeatEvery: 1, AnchorDay: "2026-01-31"}, "")
+			task, _, err := s.CreateTask(ctx, "cli", TaskForm{TaskSpec: TaskSpec{Label: "Check alarm", ProjectPageID: &project, RepeatUnit: "month", RepeatEvery: 1, AnchorDay: "2026-01-31"}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -69,7 +69,7 @@ func TestPlanningIntegrityRetainsLifecycleAndHistoricalOutcomes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	task, _, err := s.CreateTask(ctx, "cli", TaskSpec{Label: "Order seeds", ProjectPageID: &project, RepeatUnit: "month", RepeatEvery: 1, AnchorDay: "2026-01-31", RepeatUntilDay: "2026-01-31"}, "")
+	task, _, err := s.CreateTask(ctx, "cli", TaskForm{TaskSpec: TaskSpec{Label: "Order seeds", ProjectPageID: &project, RepeatUnit: "month", RepeatEvery: 1, AnchorDay: "2026-01-31", RepeatUntilDay: "2026-01-31"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestPlanningIntegrityRetainsLifecycleAndHistoricalOutcomes(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	once, _, err := s.CreateTask(ctx, "cli", TaskSpec{Label: "Replace rake"}, "")
+	once, _, err := s.CreateTask(ctx, "cli", TaskForm{TaskSpec: TaskSpec{Label: "Replace rake"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestPlanningIntegrityRetainsLifecycleAndHistoricalOutcomes(t *testing.T) {
 
 func TestPlanningIntegrityIdentifiesMissingOneOffOccurrence(t *testing.T) {
 	s := fresh(t)
-	task, _, err := s.CreateTask(ctx, "cli", TaskSpec{Label: "Book appointment"}, "")
+	task, _, err := s.CreateTask(ctx, "cli", TaskForm{TaskSpec: TaskSpec{Label: "Book appointment"}})
 	if err != nil {
 		t.Fatal(err)
 	}

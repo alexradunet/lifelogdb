@@ -337,23 +337,14 @@ func (h *server) dueIn(ctx context.Context, from, through, state string, include
 	return views, nil
 }
 
-// ---- writes: every one a core.Tx method inside one transaction, answered with the resource it changed
+// ---- writes: every one a core.Store method, one transaction, answered with the resource it changed
 
-// taskSpec reads a definition's fields inside the write; project is a page title, resolved to its id, and a title
-// no page has makes an empty page in the same transaction.
-func taskSpec(t *core.Tx, v url.Values, base core.TaskSpec) (core.TaskSpec, error) {
-	spec := base
-	spec.Label = v.Get("label")
-	spec.ProjectPageID = nil
-	if title := v.Get("project"); title != "" {
-		id, _, err := t.PageForTitle(title)
-		if err != nil {
-			return spec, err
-		}
-		spec.ProjectPageID = &id
-	}
-	spec.ReminderLocalTime, spec.ReminderZone = v.Get("reminder_time"), v.Get("reminder_zone")
-	return spec, nil
+// taskForm is a task as a form describes it: the label, the project's title and the default reminder; the cadence
+// fields are read by createTask alone.
+func taskForm(v url.Values) core.TaskForm {
+	f := core.TaskForm{Project: v.Get("project"), ImportKey: v.Get("import_key")}
+	f.Label, f.ReminderLocalTime, f.ReminderZone = v.Get("label"), v.Get("reminder_time"), v.Get("reminder_zone")
+	return f
 }
 
 func (h *server) createTask(r *http.Request, src string) (*Entity, error) {
@@ -364,32 +355,16 @@ func (h *server) createTask(r *http.Request, src string) (*Entity, error) {
 	if err := required(v, "label"); err != nil {
 		return nil, err
 	}
-	var base core.TaskSpec // the cadence; the rest is read inside the write
-	base.RepeatUnit, base.AnchorDay, base.RepeatUntilDay = v.Get("repeat_unit"), v.Get("anchor_day"), v.Get("repeat_until_day")
+	f := taskForm(v)
+	f.RepeatUnit, f.AnchorDay, f.RepeatUntilDay, f.DueDay = v.Get("repeat_unit"), v.Get("anchor_day"), v.Get("repeat_until_day"), v.Get("due_day")
 	if every := v.Get("repeat_every"); every != "" {
 		n, err := strconv.ParseInt(every, 10, 64)
 		if err != nil {
 			return nil, &core.Error{Status: 422, Msg: "repeat_every must be a whole number"}
 		}
-		base.RepeatEvery = n
+		f.RepeatEvery = n
 	}
-	if base.RepeatUnit != "" && v.Get("due_day") != "" {
-		return nil, &core.Error{Status: 422, Msg: "due_day is a one-off's; a series is due on its slots"}
-	}
-	var id int64
-	err = h.s.Do(r.Context(), src, func(t *core.Tx) error {
-		spec, e := taskSpec(t, v, base)
-		if e != nil {
-			return e
-		}
-		if spec.RepeatUnit == "" {
-			initial := core.OccurrenceInput{OccurrenceKey: "once", OccurrenceChanges: core.OccurrenceChanges{DueDay: v.Get("due_day"), State: "open", ReminderMode: "inherit"}}
-			id, _, e = t.CaptureOneOffTask(spec, v.Get("import_key"), initial)
-		} else {
-			id, _, e = t.CreateTask(spec, v.Get("import_key"))
-		}
-		return e
-	})
+	id, _, err := h.s.CreateTask(r.Context(), src, f)
 	if err != nil {
 		return nil, err
 	}
@@ -408,18 +383,7 @@ func (h *server) editTask(r *http.Request, src string) (*Entity, error) {
 	if err := required(v, "version", "label"); err != nil {
 		return nil, err
 	}
-	err = h.s.Do(r.Context(), src, func(t *core.Tx) error {
-		cur, e := t.Task(id)
-		if e != nil {
-			return e
-		}
-		spec, e := taskSpec(t, v, cur.TaskSpec) // the cadence is the current one: it is fixed
-		if e != nil {
-			return e
-		}
-		return t.EditTask(id, v.Get("version"), spec)
-	})
-	if err != nil {
+	if err := h.s.EditTask(r.Context(), src, id, v.Get("version"), taskForm(v)); err != nil {
 		return nil, staleTask(err)
 	}
 	return h.taskEntity(r.Context(), id, nil)
@@ -437,7 +401,7 @@ func (h *server) stopTask(r *http.Request, src string) (*Entity, error) {
 	if err := required(v, "version", "through"); err != nil {
 		return nil, err
 	}
-	if err := h.s.Do(r.Context(), src, func(t *core.Tx) error { return t.StopTask(id, v.Get("version"), v.Get("through")) }); err != nil {
+	if err := h.s.StopTask(r.Context(), src, id, v.Get("version"), v.Get("through")); err != nil {
 		return nil, staleTask(err)
 	}
 	return h.taskEntity(r.Context(), id, nil)
@@ -456,36 +420,31 @@ func (h *server) taskLifecycle(deleted bool) func(*http.Request, string) (*Entit
 		if err := required(v, "version"); err != nil {
 			return nil, err
 		}
-		if err := h.s.Do(r.Context(), src, func(t *core.Tx) error { return t.TaskLifecycle(id, v.Get("version"), deleted) }); err != nil {
+		if err := h.s.TaskLifecycle(r.Context(), src, id, v.Get("version"), deleted); err != nil {
 			return nil, staleTask(err)
 		}
 		return h.taskEntity(r.Context(), id, url.Values{"include_deleted": {"1"}})
 	}
 }
 
-// occurrenceChanges reads an outcome's fields over base: a field sent, even empty, replaces the value; one not
-// sent keeps it. "now" as completed_at is this instant.
-func occurrenceChanges(v url.Values, base core.OccurrenceChanges) core.OccurrenceChanges {
-	c := base
-	if v.Has("due_day") {
-		c.DueDay = v.Get("due_day")
-	}
-	if v.Has("state") && v.Get("state") != "" {
-		c.State = v.Get("state")
-	}
-	if v.Has("completed_at") {
-		c.CompletedAt = v.Get("completed_at")
-		if c.CompletedAt == "now" {
-			c.CompletedAt = time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+// occurrencePatch reads an outcome's fields: a field sent, even empty, replaces the value; one not sent keeps it. A
+// state or a reminder mode sent empty (a form's blank choice) keeps the value too.
+func occurrencePatch(v url.Values) core.OccurrencePatch {
+	sent := func(name string) *string {
+		if !v.Has(name) {
+			return nil
 		}
+		s := v.Get(name)
+		return &s
 	}
-	if v.Has("reminder_mode") && v.Get("reminder_mode") != "" {
-		c.ReminderMode = v.Get("reminder_mode")
+	choice := func(name string) *string {
+		if v.Get(name) == "" {
+			return nil
+		}
+		return sent(name)
 	}
-	if v.Has("reminder_at") {
-		c.ReminderOverrideAt = v.Get("reminder_at")
-	}
-	return c
+	return core.OccurrencePatch{DueDay: sent("due_day"), State: choice("state"), CompletedAt: sent("completed_at"),
+		ReminderMode: choice("reminder_mode"), ReminderAt: sent("reminder_at")}
 }
 
 func (h *server) captureOccurrence(r *http.Request, src string) (*Entity, error) {
@@ -501,16 +460,7 @@ func (h *server) captureOccurrence(r *http.Request, src string) (*Entity, error)
 		return nil, err
 	}
 	key := v.Get("key")
-	base := core.OccurrenceChanges{State: "open", ReminderMode: "inherit"}
-	if key != "once" {
-		base.DueDay = key // a slot is due on its day unless the outcome says otherwise
-	}
-	in := core.OccurrenceInput{OccurrenceKey: key, ImportKey: v.Get("import_key"), OccurrenceChanges: occurrenceChanges(v, base)}
-	err = h.s.Do(r.Context(), src, func(t *core.Tx) error {
-		_, _, e := t.CaptureTaskOccurrence(id, v.Get("task_version"), in)
-		return e
-	})
-	if err != nil {
+	if _, _, err := h.s.CaptureTaskOccurrence(r.Context(), src, id, v.Get("task_version"), key, v.Get("import_key"), occurrencePatch(v)); err != nil {
 		return nil, staleTask(err)
 	}
 	return h.occurrenceEntity(r.Context(), id, key)
@@ -529,14 +479,7 @@ func (h *server) editOccurrence(r *http.Request, src string) (*Entity, error) {
 		return nil, err
 	}
 	key := r.PathValue("key")
-	err = h.s.Do(r.Context(), src, func(t *core.Tx) error {
-		cur, e := t.TaskOccurrence(id, key)
-		if e != nil {
-			return e
-		}
-		return t.EditTaskOccurrence(id, v.Get("task_version"), key, v.Get("version"), occurrenceChanges(v, cur.OccurrenceChanges))
-	})
-	if err != nil {
+	if err := h.s.EditTaskOccurrence(r.Context(), src, id, v.Get("task_version"), key, v.Get("version"), occurrencePatch(v)); err != nil {
 		return nil, staleTask(err)
 	}
 	return h.occurrenceEntity(r.Context(), id, key)
@@ -556,9 +499,7 @@ func (h *server) occurrenceLifecycle(deleted bool) func(*http.Request, string) (
 			return nil, err
 		}
 		key := r.PathValue("key")
-		if err := h.s.Do(r.Context(), src, func(t *core.Tx) error {
-			return t.TaskOccurrenceLifecycle(id, v.Get("task_version"), key, v.Get("version"), deleted)
-		}); err != nil {
+		if err := h.s.TaskOccurrenceLifecycle(r.Context(), src, id, v.Get("task_version"), key, v.Get("version"), deleted); err != nil {
 			return nil, staleTask(err)
 		}
 		return h.occurrenceEntity(r.Context(), id, key)
