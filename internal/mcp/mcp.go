@@ -20,7 +20,7 @@ import (
 
 // Serve runs the MCP server on stdin/stdout until the client goes away.
 func Serve(ctx context.Context, c *client.Client, version string) error {
-	s, err := NewContext(ctx, c, version)
+	s, err := New(ctx, c, version)
 	if err != nil {
 		return err
 	}
@@ -28,12 +28,8 @@ func Serve(ctx context.Context, c *client.Client, version string) error {
 }
 
 // New builds the server from GET /actions.
-func New(c *client.Client, version string) (*mcp.Server, error) {
-	return NewContext(context.Background(), c, version)
-}
-
-func NewContext(ctx context.Context, c *client.Client, version string) (*mcp.Server, error) {
-	actions, err := c.CatalogContext(ctx)
+func New(ctx context.Context, c *client.Client, version string) (*mcp.Server, error) {
+	actions, err := c.Catalog(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +66,7 @@ func NewContext(ctx context.Context, c *client.Client, version string) (*mcp.Ser
 			if d := args["day"]; d != "" {
 				href = "/days/" + d
 			}
-			return result(c.GetContext(ctx, href))
+			return result(c.Get(ctx, href))
 		})
 	s.AddTool(&mcp.Tool{Name: "get", Description: "Follow a link: fetch the resource at an href from an earlier result (e.g. /pages/12).",
 		InputSchema: map[string]any{"type": "object", "required": []string{"href"},
@@ -84,7 +80,7 @@ func NewContext(ctx context.Context, c *client.Client, version string) (*mcp.Ser
 			if !strings.HasPrefix(args["href"], "/") {
 				return failure(fmt.Errorf("href must be a path such as /pages/12")), nil
 			}
-			return result(c.GetContext(ctx, args["href"]))
+			return result(c.Get(ctx, args["href"]))
 		})
 	return s, nil
 }
@@ -171,7 +167,7 @@ func call(c *client.Client, a api.Action) mcp.ToolHandler {
 		if err != nil {
 			return failure(err), nil
 		}
-		return result(c.DoContext(ctx, a, args))
+		return result(c.Do(ctx, a, args))
 	}
 }
 

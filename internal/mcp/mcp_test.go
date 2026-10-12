@@ -46,7 +46,7 @@ func TestValidateToolNamesRejectsNormalizedDuplicates(t *testing.T) {
 // are MCP tools; the owner-only actions are not.
 func TestFindAndReadingsTools(t *testing.T) {
 	c := mcpTestClient(t)
-	srv, err := New(c, "test")
+	srv, err := New(t.Context(), c, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,10 +137,10 @@ func mcpTestClient(t *testing.T) *client.Client {
 	handler := api.New(&core.Store{DB: d})
 	owner := client.InProcess(handler, "cli")
 	for _, fields := range []map[string]string{{"name": "walk"}, {"name": "weight", "unit": "kg"}} {
-		must(owner.Do(actionByName(t, must(owner.Get("/")), "register-metric"), fields))
+		must(owner.Do(t.Context(), actionByName(t, must(owner.Get(t.Context(), "/")), "register-metric"), fields))
 	}
 	c := client.InProcess(handler, "agent:test")
-	if _, err := c.Do(actionByName(t, must(c.Get("/")), "create-page"), map[string]string{"title": "Ana", "body": "Synthetic page"}); err != nil {
+	if _, err := c.Do(t.Context(), actionByName(t, must(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Ana", "body": "Synthetic page"}); err != nil {
 		t.Fatal(err)
 	}
 	return c
@@ -198,7 +198,7 @@ func href(e *api.Entity, rel string) string {
 
 func numericSession(t *testing.T, c *client.Client) (*mcpsdk.ClientSession, context.Context) {
 	t.Helper()
-	srv, err := New(c, "test")
+	srv, err := New(t.Context(), c, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,7 +271,7 @@ func TestMCPNumericSchema(t *testing.T) {
 
 func TestMCPNumericArguments(t *testing.T) {
 	base := mcpTestClient(t)
-	actions, err := base.Catalog()
+	actions, err := base.Catalog(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -326,7 +326,7 @@ func TestMCPCancellation(t *testing.T) {
 		}
 		fmt.Fprint(w, `{}`)
 	}), "cli")
-	srv, err := New(c, "test")
+	srv, err := New(t.Context(), c, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -414,7 +414,7 @@ func TestMCPExactResponseNumbers(t *testing.T) {
 			if err := decoder.Decode(&entity); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := c.Do(entity.Actions[0], nil); err != nil {
+			if _, err := c.Do(t.Context(), entity.Actions[0], nil); err != nil {
 				t.Fatal(err)
 			}
 		})

@@ -66,7 +66,7 @@ func TestIntegrityDetectsRestoredGuardSemanticDamage(t *testing.T) {
 					bypass("habit_periods_check_update", func() { exec("UPDATE habit_periods SET end_day='2026-10-04' WHERE start_day='2026-10-01'") })
 				} else {
 					// Deliberately bypass the writer's numeric-range validation, not a DDL guard.
-					exec("INSERT INTO measurements(metric_id,day,value,source,created_at) SELECT metric_id,'2026-10-02',2,'ui'," + Now + " FROM habit_periods")
+					exec("INSERT INTO measurements(metric_id,day,value,source,created_at) SELECT metric_id,'2026-10-02',2,'ui'," + nowSQL + " FROM habit_periods")
 				}
 			case "habit unit":
 				// a period on Mood, a scale with a unit, written while the guard is dropped

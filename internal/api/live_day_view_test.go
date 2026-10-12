@@ -4,18 +4,18 @@ import "testing"
 
 func TestLiveDayView(t *testing.T) {
 	c, _ := fresh(t)
-	root := must(c.Get("/"))
-	must(c.Do(find(root, "register-metric"), map[string]string{"name": "Walk"}))
-	must(c.Do(find(must(c.Get("/metrics/Walk")), "start-habit"), map[string]string{"start_day": "2026-09-01"}))
-	must(c.Do(find(root, "record"), map[string]string{"metric": "Walk", "day": "2026-09-01", "value": "1"}))
-	page := must(c.Get("/pages?title=Walk"))
+	root := must(c.Get(t.Context(), "/"))
+	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "Walk"}))
+	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/metrics/Walk")), "start-habit"), map[string]string{"start_day": "2026-09-01"}))
+	must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "Walk", "day": "2026-09-01", "value": "1"}))
+	page := must(c.Get(t.Context(), "/pages?title=Walk"))
 	for i, hidden := range []bool{false, true, false} {
 		if hidden {
-			page = must(c.Do(find(page, "tombstone"), nil))
+			page = must(c.Do(t.Context(), find(page, "tombstone"), nil))
 		} else if i > 0 {
-			page = must(c.Do(find(page, "revive"), nil))
+			page = must(c.Do(t.Context(), find(page, "revive"), nil))
 		}
-		day := must(c.Get("/days/2026-09-01"))
+		day := must(c.Get(t.Context(), "/days/2026-09-01"))
 		if hasOption(find(day, "record"), "metric", "Walk") == hidden {
 			t.Errorf("record options hidden=%v: %+v", hidden, day.Actions)
 		}

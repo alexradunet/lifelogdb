@@ -195,8 +195,8 @@ func TestFirstLineIsPlainText(t *testing.T) {
 		{"Café ünïcode", "Café ünïcode"},
 		{long, long[:160] + "…"},
 	} {
-		if got := FirstLine(c.body); got != c.want {
-			t.Errorf("FirstLine(%q) = %q, want %q", c.body, got, c.want)
+		if got := firstLine(c.body); got != c.want {
+			t.Errorf("firstLine(%q) = %q, want %q", c.body, got, c.want)
 		}
 	}
 }

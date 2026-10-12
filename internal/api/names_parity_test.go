@@ -75,21 +75,21 @@ func TestStableNameTransportParity(t *testing.T) {
 				}
 				resource := fmt.Sprintf("/pages/%d", id)
 				for _, title := range []string{"New " + kind, "NEW " + strings.ToUpper(kind), old, "Final " + kind} {
-					page, err := c.Get(resource)
+					page, err := c.Get(t.Context(), resource)
 					if err != nil {
 						t.Fatal(err)
 					}
 					if find(page, "rename").Name != "rename" {
 						t.Fatal("typed entity lacks rename action")
 					}
-					renamed, err := c.Do(find(page, "rename"), map[string]string{"title": title})
+					renamed, err := c.Do(t.Context(), find(page, "rename"), map[string]string{"title": title})
 					if err != nil {
 						t.Fatal(err)
 					}
 					if renamed.Title != title {
 						t.Fatalf("preferred response title=%q", renamed.Title)
 					}
-					resolved, err := c.Get("/pages?title=" + url.QueryEscape(old))
+					resolved, err := c.Get(t.Context(), "/pages?title="+url.QueryEscape(old))
 					if err != nil || resolved.Title != title {
 						t.Fatalf("old alias GET: %+v, %v", resolved, err)
 					}
@@ -128,11 +128,11 @@ func TestStableNameTransportParity(t *testing.T) {
 					t.Fatal(err)
 				}
 				for title, status := range map[string]int{"Reserved ghost": 409, "Reserved tombstone": 409, "2031-02-01": 409, "Lab [unsafe]": 422} {
-					page, err := c.Get(resource)
+					page, err := c.Get(t.Context(), resource)
 					if err != nil {
 						t.Fatal(err)
 					}
-					_, err = c.Do(find(page, "rename"), map[string]string{"title": title})
+					_, err = c.Do(t.Context(), find(page, "rename"), map[string]string{"title": title})
 					var ce *client.Error
 					if !errors.As(err, &ce) || ce.Status != status {
 						t.Fatalf("rename %q: %v; want %d", title, err, status)

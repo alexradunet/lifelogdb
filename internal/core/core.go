@@ -14,8 +14,8 @@ import (
 	sqlite3 "modernc.org/sqlite/lib"
 )
 
-// Now is the instant format of lifelog_meta.instants, written by SQLite so every row of a statement agrees.
-const Now = "strftime('%Y-%m-%dT%H:%M:%fZ','now')"
+// nowSQL is the instant format of lifelog_meta.instants, written by SQLite so every row of a statement agrees.
+const nowSQL = "strftime('%Y-%m-%dT%H:%M:%fZ','now')"
 
 // Store is one open life.db. SnapshotDir is the folder the snapshot action writes to; empty means beside the file.
 type Store struct {

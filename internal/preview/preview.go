@@ -17,40 +17,40 @@ import (
 )
 
 const (
-	MaxEdge  = 1600    // the long edge of a preview, in pixels
-	MaxBytes = 1 << 20 // the size of a preview (files_preview)
+	maxEdge  = 1600    // the long edge of a preview, in pixels
+	maxBytes = 1 << 20 // the size of a preview (files_preview)
 	maxArea  = 120e6   // the largest picture decoded (a 108 MP phone photo), so a crafted file cannot exhaust memory
 )
 
-// ErrFormat is a picture this package cannot read.
-var ErrFormat = errors.New("a preview is made from a JPEG, PNG or GIF picture; turn other formats (HEIC, a video's frame) into a JPEG first")
+// errFormat is a picture this package cannot read.
+var errFormat = errors.New("a preview is made from a JPEG, PNG or GIF picture; turn other formats (HEIC, a video's frame) into a JPEG first")
 
 // Readable reports a type a preview can be made from.
 func Readable(mime string) bool {
 	return mime == "image/jpeg" || mime == "image/png" || mime == "image/gif"
 }
 
-// Make decodes a picture, scales its long edge to at most MaxEdge, turns it upright by a JPEG's EXIF orientation, and
-// encodes it as a JPEG of at most MaxBytes. The result carries no metadata: a photo's GPS stays out (D21).
+// Make decodes a picture, scales its long edge to at most maxEdge, turns it upright by a JPEG's EXIF orientation, and
+// encodes it as a JPEG of at most maxBytes. The result carries no metadata: a photo's GPS stays out (D21).
 func Make(src []byte) ([]byte, error) {
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(src))
 	if err != nil {
-		return nil, ErrFormat
+		return nil, errFormat
 	}
 	if float64(cfg.Width)*float64(cfg.Height) > maxArea {
 		return nil, fmt.Errorf("the picture is %d×%d: too large to read", cfg.Width, cfg.Height)
 	}
 	m, _, err := image.Decode(bytes.NewReader(src))
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrFormat, err)
+		return nil, fmt.Errorf("%w: %v", errFormat, err)
 	}
 	w, h := m.Bounds().Dx(), m.Bounds().Dy()
 	if w == 0 || h == 0 {
-		return nil, ErrFormat
+		return nil, errFormat
 	}
 	dw, dh := w, h
-	if long := max(w, h); long > MaxEdge {
-		dw, dh = max(1, (w*MaxEdge+long/2)/long), max(1, (h*MaxEdge+long/2)/long)
+	if long := max(w, h); long > maxEdge {
+		dw, dh = max(1, (w*maxEdge+long/2)/long), max(1, (h*maxEdge+long/2)/long)
 	}
 	out := orient(scale(m, dw, dh), photo.Read(src).Orientation)
 	for _, q := range []int{85, 75, 65, 55, 45, 35} {
@@ -58,28 +58,28 @@ func Make(src []byte) ([]byte, error) {
 		if err := jpeg.Encode(&b, out, &jpeg.Options{Quality: q}); err != nil {
 			return nil, err
 		}
-		if b.Len() <= MaxBytes {
+		if b.Len() <= maxBytes {
 			return b.Bytes(), nil
 		}
 	}
 	return nil, errors.New("the picture does not fit in 1 MB")
 }
 
-// Check reports whether b is a preview as the schema keeps it: a JPEG of at most MaxBytes whose long edge is at most
-// MaxEdge.
+// Check reports whether b is a preview as the schema keeps it: a JPEG of at most maxBytes whose long edge is at most
+// maxEdge.
 func Check(b []byte) error {
 	if len(b) < 3 || b[0] != 0xFF || b[1] != 0xD8 || b[2] != 0xFF {
 		return errors.New("a preview is a JPEG")
 	}
-	if len(b) > MaxBytes {
-		return fmt.Errorf("a preview is at most %d bytes, not %d", MaxBytes, len(b))
+	if len(b) > maxBytes {
+		return fmt.Errorf("a preview is at most %d bytes, not %d", maxBytes, len(b))
 	}
 	cfg, err := jpeg.DecodeConfig(bytes.NewReader(b))
 	if err != nil {
 		return fmt.Errorf("a preview is a JPEG: %v", err)
 	}
-	if max(cfg.Width, cfg.Height) > MaxEdge {
-		return fmt.Errorf("a preview's long edge is at most %d px, not %d", MaxEdge, max(cfg.Width, cfg.Height))
+	if max(cfg.Width, cfg.Height) > maxEdge {
+		return fmt.Errorf("a preview's long edge is at most %d px, not %d", maxEdge, max(cfg.Width, cfg.Height))
 	}
 	return nil
 }

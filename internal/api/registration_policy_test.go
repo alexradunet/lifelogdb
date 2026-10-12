@@ -31,7 +31,7 @@ func TestOwnerOnlyActionsPolicy(t *testing.T) {
 	}
 	t.Cleanup(func() { d.Close() })
 	agent := client.InProcess(api.New(&core.Store{DB: d, SnapshotDir: root}), "agent:policy-test")
-	catalog := must(agent.Get("/actions"))
+	catalog := must(agent.Get(t.Context(), "/actions"))
 	register, snapshot, table := find(catalog, "register-metric"), find(catalog, "snapshot"), find(catalog, "readings-from-table")
 	if !register.Owner || !snapshot.Owner || table.Name == "" || table.Owner {
 		t.Fatalf("wrong catalog policy: %+v %+v %+v", register, snapshot, table)
@@ -45,7 +45,7 @@ func TestOwnerOnlyActionsPolicy(t *testing.T) {
 		a      api.Action
 		fields map[string]string
 	}{{register, map[string]string{"name": "Forbidden direct"}}, {snapshot, nil}} {
-		_, err := agent.Do(op.a, op.fields)
+		_, err := agent.Do(t.Context(), op.a, op.fields)
 		var ce *client.Error
 		if !errors.As(err, &ce) || ce.Status != 403 {
 			t.Fatalf("owner-only %s not refused: %v", op.a.Name, err)
@@ -57,7 +57,7 @@ func TestOwnerOnlyActionsPolicy(t *testing.T) {
 	}
 
 	// Inspect the actual SDK listing, without invoking any MCP tool.
-	srv, err := lifelogmcp.New(agent, "test")
+	srv, err := lifelogmcp.New(t.Context(), agent, "test")
 	if err != nil {
 		t.Fatal(err)
 	}

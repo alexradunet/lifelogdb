@@ -23,11 +23,11 @@ func TestReadingsCommand(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := client.InProcess(api.New(&core.Store{DB: d}), "cli")
-	root := mustEntity(c.Get("/"))
-	if _, err := c.Do(cmdAction(t, root, "register-metric"), map[string]string{"name": "Weight", "unit": "kg"}); err != nil {
+	root := mustEntity(c.Get(t.Context(), "/"))
+	if _, err := c.Do(t.Context(), cmdAction(t, root, "register-metric"), map[string]string{"name": "Weight", "unit": "kg"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Do(cmdAction(t, root, "create-page"), map[string]string{"title": "Weighings", "body": "| day | value |\n|---|---|\n| 2031-01-01 | 70.5 kg |\n| 2031-01-08 | 70 kg |\n"}); err != nil {
+	if _, err := c.Do(t.Context(), cmdAction(t, root, "create-page"), map[string]string{"title": "Weighings", "body": "| day | value |\n|---|---|\n| 2031-01-01 | 70.5 kg |\n| 2031-01-08 | 70 kg |\n"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.Close(); err != nil {

@@ -48,7 +48,7 @@ func TestRevisionTokenParity(t *testing.T) {
 					t.Fatal(err)
 				}
 				resource := fmt.Sprintf("/pages/%d", id)
-				p, err := c.Get(resource)
+				p, err := c.Get(t.Context(), resource)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -61,14 +61,14 @@ func TestRevisionTokenParity(t *testing.T) {
 				if err := d.R.QueryRow(`SELECT updated_at FROM entities WHERE id=?`, id).Scan(&clock); err != nil {
 					t.Fatal(err)
 				}
-				if _, err := c.Do(save, map[string]string{"body": "committed [[Kept]]"}); err != nil {
+				if _, err := c.Do(t.Context(), save, map[string]string{"body": "committed [[Kept]]"}); err != nil {
 					t.Fatal(err)
 				}
 				if _, err := d.W.Exec(`UPDATE entities SET updated_at=? WHERE id=?`, clock, id); err != nil {
 					t.Fatal(err)
 				}
 				for _, token := range []string{original, clock} {
-					_, err := c.Do(save, map[string]string{"body": "stale [[Forbidden]]", "version": token})
+					_, err := c.Do(t.Context(), save, map[string]string{"body": "stale [[Forbidden]]", "version": token})
 					var ce *client.Error
 					if !errors.As(err, &ce) || ce.Status != 409 {
 						t.Fatalf("token %q: %v; want conflict", token, err)
@@ -89,7 +89,7 @@ func TestRevisionTokenParity(t *testing.T) {
 				if _, err := d.W.Exec(`UPDATE entities SET revision=9223372036854775807 WHERE id=?`, id); err != nil {
 					t.Fatal(err)
 				}
-				p, err = c.Get(resource)
+				p, err = c.Get(t.Context(), resource)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -106,10 +106,10 @@ func TestRevisionTokenParity(t *testing.T) {
 				if prefilled != "9223372036854775807" {
 					t.Fatalf("prefilled token %#v", prefilled)
 				}
-				if _, err := c.Do(save, map[string]string{"body": state.Body}); err != nil {
+				if _, err := c.Do(t.Context(), save, map[string]string{"body": state.Body}); err != nil {
 					t.Fatalf("max token no-op: %v", err)
 				}
-				_, err = c.Do(save, map[string]string{"body": "overflow [[Forbidden]]"})
+				_, err = c.Do(t.Context(), save, map[string]string{"body": "overflow [[Forbidden]]"})
 				var ce *client.Error
 				if !errors.As(err, &ce) || ce.Status != 422 {
 					t.Fatalf("exhaustion error: %v; want refusal", err)

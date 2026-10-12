@@ -308,7 +308,7 @@ func TestFileCommand(t *testing.T) {
 	}
 }
 
-// TestKeepTheFewPhotosOfADay is `lifelog file FOLDER` (docs/plans/033): a dry run writes nothing; the batch keeps
+// TestKeepTheFewPhotosOfADay is `lifelog file FOLDER`: a dry run writes nothing; the batch keeps
 // the photos, links their days and shows them there; the photos near no place come in one group per place; naming one
 // photo's place lets the next run link the rest of its group; a run again writes nothing.
 func TestKeepTheFewPhotosOfADay(t *testing.T) {
@@ -431,7 +431,7 @@ func TestABatchReportGroupsThePhotosNearNoPlace(t *testing.T) {
 
 func TestDoDispatchesPageFind(t *testing.T) {
 	c := commandClient(t)
-	page, err := do(c, "find", map[string]string{"title": "Ana"})
+	page, err := do(t.Context(), c, "find", map[string]string{"title": "Ana"})
 	if err != nil {
 		t.Fatalf("page find: %v", err)
 	}
@@ -444,17 +444,17 @@ func TestDoDispatchesPageFind(t *testing.T) {
 // (docs/plans/091-the-browser-for-daily-use.md).
 func TestDoOpensADayAndGetsAMonth(t *testing.T) {
 	c := commandClient(t)
-	day, err := do(c, "open-day", map[string]string{"day": "2031-05-14"})
+	day, err := do(t.Context(), c, "open-day", map[string]string{"day": "2031-05-14"})
 	if err != nil || day.Title != "2031-05-14" {
 		t.Fatalf("open-day: %+v %v", day, err)
 	}
-	if month := mustEntity(c.Get("/months/2031-05")); month.Title != "May 2031" {
+	if month := mustEntity(c.Get(t.Context(), "/months/2031-05")); month.Title != "May 2031" {
 		t.Fatalf("get /months/2031-05: %+v", month)
 	}
-	if titles := mustEntity(c.Get("/titles?prefix=an")); len(titles.Entities) != 1 || titles.Entities[0].Title != "Ana" {
+	if titles := mustEntity(c.Get(t.Context(), "/titles?prefix=an")); len(titles.Entities) != 1 || titles.Entities[0].Title != "Ana" {
 		t.Fatalf("get /titles: %+v", titles)
 	}
-	if day, ok := mustEntity(c.Get("/days/2031-05-14")).Properties.(map[string]any); !ok || day["trends"] == nil || day["habits"] == nil {
+	if day, ok := mustEntity(c.Get(t.Context(), "/days/2031-05-14")).Properties.(map[string]any); !ok || day["trends"] == nil || day["habits"] == nil {
 		t.Fatalf("get /days/2031-05-14 lacks trends or habits: %v", day)
 	}
 }
@@ -471,7 +471,7 @@ func commandClient(t *testing.T) *client.Client {
 	}
 	t.Cleanup(func() { d.Close() })
 	c := client.InProcess(api.New(&core.Store{DB: d}), "cli")
-	if _, err := c.Do(cmdAction(t, mustEntity(c.Get("/")), "create-page"), map[string]string{"title": "Ana", "body": "Synthetic page"}); err != nil {
+	if _, err := c.Do(t.Context(), cmdAction(t, mustEntity(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Ana", "body": "Synthetic page"}); err != nil {
 		t.Fatal(err)
 	}
 	return c
@@ -670,7 +670,7 @@ func TestCommandCancellationFileBatch(t *testing.T) {
 		}
 		paths = append(paths, p)
 	}
-	if err := keepFileContext(ctx, opts{}, c, paths); !errors.Is(err, context.Canceled) {
+	if err := keepFile(ctx, opts{}, c, paths); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 	if calls != 1 {

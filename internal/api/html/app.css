@@ -138,17 +138,10 @@ small .mood{font-size:12px; padding:2px 8px}
 /* A line of the facts about the page under its title. */
 .sub{display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 14px; font-size:14px; line-height:20px; color:var(--text-muted)}
 
-/* Columns of panels: two side by side when there is room for 340 px each, one on a phone. */
-.columns{display:grid; grid-template-columns:repeat(auto-fit,minmax(min(340px,100%),1fr)); gap:var(--space-5); align-items:start}
-.stack{display:flex; flex-direction:column; gap:var(--space-5); min-width:0}
-
-/* A panel: one group of the entity, on parchment. A flush panel holds rows that run to its edges. */
+/* A panel: one group of the entity, on parchment. */
 .panel{display:flex; flex-direction:column; gap:var(--space-3); min-width:0; padding:var(--space-4); box-shadow:var(--parch-bevel)}
 .panel-head{display:flex; align-items:center; justify-content:space-between; gap:var(--space-3)}
 .panel-head a{font-size:13px; line-height:19px; flex:none}
-.panel.flush{gap:0; padding:0; overflow:hidden}
-.panel.flush>.panel-head{padding:14px var(--space-4) var(--space-2)}
-.panel.flush>p{padding:0 var(--space-4) var(--space-4)}
 .section{display:flex; flex-direction:column; gap:10px; min-width:0}
 
 /* The heading of a group carries a stitch after it: a dotted rule of the material, to the end of the line. */
@@ -418,9 +411,8 @@ fieldset.segmented input:focus-visible+span{outline:2px solid var(--focus); outl
 .joined form:first-child button{color:var(--done); font-weight:700}
 .tag.notdone{background:var(--danger-soft); color:var(--danger-ink); border-color:var(--danger)}
 
-/* Rows inside a panel run to its edges when it is flush. */
+/* Rows inside a panel. */
 .panel ul.plain>li{padding:10px 0}
-.panel.flush ul.plain>li{padding:10px var(--space-4); border-top:1px solid var(--line-soft); border-bottom:0}
 
 /* Readings: a tile a reading, its metric, its value in the display face with its unit, and its line. */
 .readings{display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px}

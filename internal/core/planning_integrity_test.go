@@ -17,7 +17,7 @@ func TestPlanningIntegrityDetectsSemanticDamage(t *testing.T) {
 			var occurrence *TaskOccurrence
 			if err := s.Do(ctx, "cli", func(tx *Tx) error {
 				var err error
-				occurrence, _, err = tx.MaterializeTaskOccurrence(task, "1", "2026-02-28")
+				occurrence, _, err = materialize(tx, task, "1", "2026-02-28")
 				return err
 			}); err != nil {
 				t.Fatal(err)

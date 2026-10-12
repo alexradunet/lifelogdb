@@ -318,9 +318,9 @@ func runContext(ctx context.Context, o opts) error {
 		if len(args) != 1 {
 			return errors.New("get PATH")
 		}
-		return show(o)(c.GetContext(ctx, "/"+strings.TrimPrefix(args[0], "/"))) // "pages/1" too: some shells rewrite a leading /
+		return show(o)(c.Get(ctx, "/"+strings.TrimPrefix(args[0], "/"))) // "pages/1" too: some shells rewrite a leading /
 	case "actions":
-		return listActionsContext(ctx, o, c)
+		return listActions(ctx, o, c)
 	case "do":
 		if len(args) == 0 {
 			return errors.New("do ACTION [field=value...]")
@@ -333,7 +333,7 @@ func runContext(ctx context.Context, o opts) error {
 			}
 			vals[k] = v
 		}
-		return doActionContext(ctx, o, c, args[0], vals)
+		return doAction(ctx, o, c, args[0], vals)
 	case "capture":
 		day := o.day
 		if day == "" {
@@ -343,25 +343,25 @@ func runContext(ctx context.Context, o opts) error {
 		if o.mood != "" {
 			vals["mood"] = o.mood
 		}
-		return doActionContext(ctx, o, c, "capture", vals)
+		return doAction(ctx, o, c, "capture", vals)
 	case "day":
 		day := "today"
 		if len(args) == 1 {
 			day = args[0]
 		}
-		return show(o)(c.GetContext(ctx, "/days/"+day))
+		return show(o)(c.Get(ctx, "/days/"+day))
 	case "page":
-		return show(o)(c.GetContext(ctx, "/pages?title="+url.QueryEscape(strings.Join(args, " "))))
+		return show(o)(c.Get(ctx, "/pages?title="+url.QueryEscape(strings.Join(args, " "))))
 	case "search":
-		return doActionContext(ctx, o, c, "search", map[string]string{"q": strings.Join(args, " ")})
+		return doAction(ctx, o, c, "search", map[string]string{"q": strings.Join(args, " ")})
 	case "query":
-		return doActionContext(ctx, o, c, "query", map[string]string{"sql": strings.Join(args, " ")})
+		return doAction(ctx, o, c, "query", map[string]string{"sql": strings.Join(args, " ")})
 	case "habits":
 		day := core.Today()
 		if len(args) == 1 {
 			day = args[0]
 		}
-		return show(o)(c.GetContext(ctx, "/habits?day="+day))
+		return show(o)(c.Get(ctx, "/habits?day="+day))
 	case "done", "skip":
 		if len(args) != 1 {
 			return fmt.Errorf("%s METRIC [--day YYYY-MM-DD]", cmd)
@@ -371,9 +371,9 @@ func runContext(ctx context.Context, o opts) error {
 			day = core.Today()
 		}
 		done := map[string]string{"done": "1", "skip": "0"}[cmd]
-		return doActionContext(ctx, o, c, "check-in", map[string]string{"name": args[0], "day": day, "done": done})
+		return doAction(ctx, o, c, "check-in", map[string]string{"name": args[0], "day": day, "done": done})
 	case "snapshot":
-		e, err := doContext(ctx, c, "snapshot", nil)
+		e, err := do(ctx, c, "snapshot", nil)
 		if err := show(o)(e, err); err != nil {
 			return err
 		}
@@ -384,7 +384,7 @@ func runContext(ctx context.Context, o opts) error {
 		}
 		return nil
 	case "tasks":
-		return show(o)(c.GetContext(ctx, "/tasks"))
+		return show(o)(c.Get(ctx, "/tasks"))
 	case "due":
 		vals := map[string]string{}
 		if o.from != "" {
@@ -393,14 +393,14 @@ func runContext(ctx context.Context, o opts) error {
 		if o.to != "" {
 			vals["through"] = o.to
 		}
-		return doActionContext(ctx, o, c, "deadlines", vals)
+		return doAction(ctx, o, c, "deadlines", vals)
 	case "rename":
 		if len(args) != 2 {
 			return errors.New("rename PAGE-ID NEW-TITLE")
 		}
-		return doActionContext(ctx, o, c, "rename", map[string]string{"id": args[0], "title": args[1]})
+		return doAction(ctx, o, c, "rename", map[string]string{"id": args[0], "title": args[1]})
 	case "file":
-		return keepFileContext(ctx, o, c, args)
+		return keepFile(ctx, o, c, args)
 	case "readings":
 		if len(args) != 2 {
 			return errors.New("readings PAGE METRIC [--column NAME]")
@@ -409,7 +409,7 @@ func runContext(ctx context.Context, o opts) error {
 		if o.column != "" {
 			vals["column"] = o.column
 		}
-		return doActionContext(ctx, o, c, "readings-from-table", vals)
+		return doAction(ctx, o, c, "readings-from-table", vals)
 	}
 	return fmt.Errorf("unknown command %q (lifelog help)", cmd)
 }
@@ -496,30 +496,26 @@ func serveHTTP(ctx context.Context, srv *http.Server, listener net.Listener, dra
 	return errors.Join(err, drainErr)
 }
 
-func doActionContext(ctx context.Context, o opts, c *client.Client, name string, vals map[string]string) error {
-	return show(o)(doContext(ctx, c, name, vals))
+func doAction(ctx context.Context, o opts, c *client.Client, name string, vals map[string]string) error {
+	return show(o)(do(ctx, c, name, vals))
 }
 
-func do(c *client.Client, name string, vals map[string]string) (*api.Entity, error) {
-	return doContext(context.Background(), c, name, vals)
-}
-
-func doContext(ctx context.Context, c *client.Client, name string, vals map[string]string) (*api.Entity, error) {
-	actions, err := c.CatalogContext(ctx)
+func do(ctx context.Context, c *client.Client, name string, vals map[string]string) (*api.Entity, error) {
+	actions, err := c.Catalog(ctx)
 	if err != nil {
 		return nil, err
 	}
 	for _, a := range actions {
 		if a.Name == name {
-			return c.DoContext(ctx, a, vals)
+			return c.Do(ctx, a, vals)
 		}
 	}
 	return nil, fmt.Errorf("no action %q (lifelog actions)", name)
 }
 
-// keepFileContext is `lifelog file PATH`: the add-file action with the original streamed from disk (hashed by the API,
+// keepFile is `lifelog file PATH`: the add-file action with the original streamed from disk (hashed by the API,
 // never stored), its text read from --text, and a picture from --preview when the original is not one lifelog reads.
-func keepFileContext(ctx context.Context, o opts, c *client.Client, args []string) error {
+func keepFile(ctx context.Context, o opts, c *client.Client, args []string) error {
 	if len(args) == 0 {
 		return errors.New("file PATH... [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day YYYY-MM-DD] [--at PLACE [--radius M]] [--dry-run]")
 	}
@@ -531,7 +527,7 @@ func keepFileContext(ctx context.Context, o opts, c *client.Client, args []strin
 	if !one && (o.title != "" || o.text != "" || o.preview != "" || o.mime != "") {
 		return errors.New("--title, --text, --preview and --mime describe one file: keep it alone")
 	}
-	actions, err := c.CatalogContext(ctx)
+	actions, err := c.Catalog(ctx)
 	if err != nil {
 		return err
 	}
@@ -568,7 +564,7 @@ func keepFileContext(ctx context.Context, o opts, c *client.Client, args []strin
 		if o.preview != "" {
 			files["preview"] = o.preview
 		}
-		return c.DoFilesContext(ctx, add, vals, files)
+		return c.DoFiles(ctx, add, vals, files)
 	}
 	if one {
 		e, err := keep(paths[0])
@@ -659,7 +655,7 @@ type keptFile struct {
 	Result map[string]any `json:"result,omitempty"`
 }
 
-// batch is the report of a batch (docs/plans/033): per day what was kept and linked, and the photos near no place in
+// batch is the report of a batch: per day what was kept and linked, and the photos near no place in
 // groups, each to be named once.
 type batch struct {
 	DryRun    bool              `json:"dry_run,omitempty"`
@@ -835,8 +831,8 @@ func haversine(lat1, lon1, lat2, lon2 float64) float64 {
 	return 2 * 6371008.8 * math.Asin(math.Sqrt(h))
 }
 
-func listActionsContext(ctx context.Context, o opts, c *client.Client) error {
-	actions, err := c.CatalogContext(ctx)
+func listActions(ctx context.Context, o opts, c *client.Client) error {
+	actions, err := c.Catalog(ctx)
 	if err != nil {
 		return err
 	}

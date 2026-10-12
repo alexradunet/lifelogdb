@@ -50,7 +50,7 @@ func TestTaskProjectPromotionActionsMatchRetainedReferences(t *testing.T) {
 				t.Fatal(err)
 			}
 			resource := fmt.Sprintf("/pages/%d", projectID)
-			initial, err := c.Get(resource)
+			initial, err := c.Get(t.Context(), resource)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -74,7 +74,7 @@ func TestTaskProjectPromotionActionsMatchRetainedReferences(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				page, err := c.Get(resource)
+				page, err := c.Get(t.Context(), resource)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -101,7 +101,7 @@ func TestTaskProjectPromotionActionsMatchRetainedReferences(t *testing.T) {
 					{promote, map[string]string{"to": "person", "name": "Unexpected person"}},
 					{period, map[string]string{"version": before.Version}},
 				} {
-					_, err := c.Do(attempt.action, attempt.values)
+					_, err := c.Do(t.Context(), attempt.action, attempt.values)
 					var ce *client.Error
 					if !errors.As(err, &ce) || ce.Status != 422 {
 						t.Errorf("task deleted=%v: direct %s got %v, want refusal", deleted, attempt.action.Name, err)
@@ -122,7 +122,7 @@ func TestTaskProjectPromotionActionsMatchRetainedReferences(t *testing.T) {
 					t.Fatal("refused promotion retained a typed extension")
 				}
 			}
-			ordinary, err := c.Get(fmt.Sprintf("/pages/%d", ordinaryID))
+			ordinary, err := c.Get(t.Context(), fmt.Sprintf("/pages/%d", ordinaryID))
 			if err != nil {
 				t.Fatal(err)
 			}

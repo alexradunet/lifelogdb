@@ -77,7 +77,7 @@ func (t *Tx) CaptureSession(in SessionInput) (id int64, existing bool, err error
 	if err = validateSession(in); err != nil {
 		return 0, false, err
 	}
-	kind, err := t.Lookup(in.Kind)
+	kind, err := t.lookup(in.Kind)
 	if err != nil {
 		return 0, false, err
 	}
@@ -101,7 +101,7 @@ func (t *Tx) CaptureSession(in SessionInput) (id int64, existing bool, err error
 	if kind.Deleted {
 		return 0, false, conflict("session kind is tombstoned")
 	}
-	err = t.tx.QueryRowContext(t.ctx, `INSERT INTO sessions(kind_id,day,import_key,start_at,start_local,start_offset,start_zone_unverified,end_at,end_local,end_offset,end_zone_unverified,source,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,`+Now+`,`+Now+`) RETURNING id`, kind.ID, in.Day, nullIfEmpty(in.Key), nullIfEmpty(in.StartAt), nullIfEmpty(in.StartLocal), nullIfEmpty(in.StartOffset), nullIfEmpty(in.StartZoneUnverified), nullIfEmpty(in.EndAt), nullIfEmpty(in.EndLocal), nullIfEmpty(in.EndOffset), nullIfEmpty(in.EndZoneUnverified), t.Source).Scan(&id)
+	err = t.tx.QueryRowContext(t.ctx, `INSERT INTO sessions(kind_id,day,import_key,start_at,start_local,start_offset,start_zone_unverified,end_at,end_local,end_offset,end_zone_unverified,source,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,`+nowSQL+`,`+nowSQL+`) RETURNING id`, kind.ID, in.Day, nullIfEmpty(in.Key), nullIfEmpty(in.StartAt), nullIfEmpty(in.StartLocal), nullIfEmpty(in.StartOffset), nullIfEmpty(in.StartZoneUnverified), nullIfEmpty(in.EndAt), nullIfEmpty(in.EndLocal), nullIfEmpty(in.EndOffset), nullIfEmpty(in.EndZoneUnverified), t.Source).Scan(&id)
 	return id, false, err
 }
 
@@ -122,7 +122,7 @@ func (t *Tx) EditSession(id int64, version string, in SessionInput) error {
 	if in.Key != "" && in.Key != have.Key {
 		return invalid("session import identity cannot be changed")
 	}
-	kind, err := t.Lookup(in.Kind)
+	kind, err := t.lookup(in.Kind)
 	if err != nil {
 		return err
 	}
@@ -151,7 +151,7 @@ func (t *Tx) SessionLifecycle(id int64, version string, deleted bool) error {
 	}
 	q := `UPDATE sessions SET deleted_at=NULL WHERE id=?`
 	if deleted {
-		q = `UPDATE sessions SET deleted_at=` + Now + ` WHERE id=?`
+		q = `UPDATE sessions SET deleted_at=` + nowSQL + ` WHERE id=?`
 	}
 	_, err = t.tx.ExecContext(t.ctx, q, id)
 	return err

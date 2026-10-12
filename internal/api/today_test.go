@@ -12,31 +12,31 @@ import (
 // so does a habit: its strip tells it.
 func TestTheDayCarriesItsTrends(t *testing.T) {
 	c, h := freshOn(t, fixedToday)
-	root := must(c.Get("/"))
-	must(c.Do(find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
-	must(c.Do(find(root, "register-metric"), map[string]string{"name": "steps", "unit": "steps"}))
+	root := must(c.Get(t.Context(), "/"))
+	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
+	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "steps", "unit": "steps"}))
 	record := func(day, value string, extra ...string) string {
 		v := map[string]string{"metric": "weight", "day": day, "value": value}
 		for i := 0; i+1 < len(extra); i += 2 {
 			v[extra[i]] = extra[i+1]
 		}
-		return href(must(c.Do(find(root, "record"), v)), "self")
+		return href(must(c.Do(t.Context(), find(root, "record"), v)), "self")
 	}
 	record(dayOf(-14), "72.0") // the day before the window
 	record(dayOf(-13), "71.4")
 	record(dayOf(-5), "71.2")
-	must(c.Do(find(must(c.Get(record(dayOf(-2), "80"))), "correct"), map[string]string{"value": "71.3"}))
-	must(c.Do(find(must(c.Get(record(dayOf(-3), "90"))), "retract"), nil))
+	must(c.Do(t.Context(), find(must(c.Get(t.Context(), record(dayOf(-2), "80"))), "correct"), map[string]string{"value": "71.3"}))
+	must(c.Do(t.Context(), find(must(c.Get(t.Context(), record(dayOf(-3), "90"))), "retract"), nil))
 	today := record(fixedToday, "71.1")
-	must(c.Do(find(root, "record"), map[string]string{"metric": "steps", "day": fixedToday, "value": "5000"}))
-	must(c.Do(find(root, "register-metric"), map[string]string{"name": "walk"}))
-	must(c.Do(find(must(c.Get("/metrics/walk")), "start-habit"), map[string]string{"start_day": dayOf(-4)}))
-	must(c.Do(find(must(c.Get("/metrics/walk")), "check-in"), map[string]string{"day": fixedToday, "done": "1"}))
-	must(c.Do(find(root, "create-page"), map[string]string{"title": "Run"}))
-	session := must(c.Do(find(root, "capture-session"), map[string]string{"kind": "Run", "day": fixedToday, "start_at": fixedToday + "T05:00:00.000Z"}))
+	must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "steps", "day": fixedToday, "value": "5000"}))
+	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "walk"}))
+	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/metrics/walk")), "start-habit"), map[string]string{"start_day": dayOf(-4)}))
+	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/metrics/walk")), "check-in"), map[string]string{"day": fixedToday, "done": "1"}))
+	must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Run"}))
+	session := must(c.Do(t.Context(), find(root, "capture-session"), map[string]string{"kind": "Run", "day": fixedToday, "start_at": fixedToday + "T05:00:00.000Z"}))
 	record(fixedToday, "70.9", "session_id", strings.TrimPrefix(href(session, "self"), "/sessions/"))
 
-	dayProps := props(must(c.Get("/days/" + fixedToday)))
+	dayProps := props(must(c.Get(t.Context(), "/days/"+fixedToday)))
 	var habitNames []string
 	for _, x := range dayProps["habits"].([]any) {
 		habitNames = append(habitNames, x.(map[string]any)["metric"].(string))
@@ -61,7 +61,7 @@ func TestTheDayCarriesItsTrends(t *testing.T) {
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("trends:\n got %s\nwant %s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
-	if trends := props(must(c.Get("/days/" + dayOf(-1))))["trends"].([]any); len(trends) != 0 {
+	if trends := props(must(c.Get(t.Context(), "/days/"+dayOf(-1))))["trends"].([]any); len(trends) != 0 {
 		t.Errorf("a day with no reading has trends: %v", trends)
 	}
 
@@ -82,17 +82,17 @@ func TestTheDayCarriesItsTrends(t *testing.T) {
 // the day, oldest first, inactive on a day no period of it holds.
 func TestAHabitCarriesItsLastDays(t *testing.T) {
 	c, h := freshOn(t, fixedToday)
-	root := must(c.Get("/"))
-	must(c.Do(find(root, "register-metric"), map[string]string{"name": "walk"}))
-	walk := must(c.Get("/metrics/walk"))
-	must(c.Do(find(walk, "start-habit"), map[string]string{"start_day": dayOf(-20), "end_day": dayOf(-10)}))
-	must(c.Do(find(must(c.Get("/metrics/walk")), "start-habit"), map[string]string{"start_day": dayOf(-4)}))
+	root := must(c.Get(t.Context(), "/"))
+	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "walk"}))
+	walk := must(c.Get(t.Context(), "/metrics/walk"))
+	must(c.Do(t.Context(), find(walk, "start-habit"), map[string]string{"start_day": dayOf(-20), "end_day": dayOf(-10)}))
+	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/metrics/walk")), "start-habit"), map[string]string{"start_day": dayOf(-4)}))
 	for day, done := range map[string]string{dayOf(-12): "1", dayOf(-11): "0", dayOf(-2): "1"} {
-		must(c.Do(find(must(c.Get("/metrics/walk")), "check-in"), map[string]string{"day": day, "done": done}))
+		must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/metrics/walk")), "check-in"), map[string]string{"day": day, "done": done}))
 	}
 	want := "not recorded,done,not done,not recorded,inactive,inactive,inactive,inactive,inactive,not recorded,not recorded,done,not recorded,not recorded"
 	for _, path := range []string{"/days/" + fixedToday, "/"} {
-		hs := props(must(c.Get(path)))["habits"].([]any)
+		hs := props(must(c.Get(t.Context(), path)))["habits"].([]any)
 		if len(hs) != 1 {
 			t.Fatalf("%s habits: %v", path, hs)
 		}
@@ -118,9 +118,9 @@ func TestAHabitCarriesItsLastDays(t *testing.T) {
 // a series with fewer shows them all.
 func TestASeriesDoesNotFillItsOwnPage(t *testing.T) {
 	c, h := freshOn(t, fixedToday)
-	root := must(c.Get("/"))
-	often := must(c.Do(find(root, "create-task"), map[string]string{"label": "Water the plants", "repeat_unit": "day", "repeat_every": "3", "anchor_day": fixedToday}))
-	rare := must(c.Do(find(root, "create-task"), map[string]string{"label": "Clean the gutter", "repeat_unit": "month", "repeat_every": "1", "anchor_day": dayOf(1)}))
+	root := must(c.Get(t.Context(), "/"))
+	often := must(c.Do(t.Context(), find(root, "create-task"), map[string]string{"label": "Water the plants", "repeat_unit": "day", "repeat_every": "3", "anchor_day": fixedToday}))
+	rare := must(c.Do(t.Context(), find(root, "create-task"), map[string]string{"label": "Clean the gutter", "repeat_unit": "month", "repeat_every": "1", "anchor_day": dayOf(1)}))
 	body := browse(t, h, strings.SplitN(hrefOf(often, "self"), "?", 2)[0])
 	later := body[strings.Index(body, `aria-label="Later"`):]
 	if n := strings.Count(later, `class="occ"`); n != 5 {
@@ -139,7 +139,7 @@ func TestASeriesDoesNotFillItsOwnPage(t *testing.T) {
 // property and in the margin after Due; none, an empty list and no group. The capture box carries its quiet prompt.
 func TestTheDayAndHomeCarryOnThisDay(t *testing.T) {
 	c, h := freshOn(t, fixedToday)
-	root := must(c.Get("/"))
+	root := must(c.Get(t.Context(), "/"))
 	older, old := strings.Replace(fixedToday, fixedToday[:4], "2029", 1), strings.Replace(fixedToday, fixedToday[:4], "2027", 1)
 	if got := props(root)["on_this_day"].([]any); len(got) != 0 {
 		t.Fatalf("on_this_day with no page = %v, want an empty list", got)
@@ -148,11 +148,11 @@ func TestTheDayAndHomeCarryOnThisDay(t *testing.T) {
 		t.Error("Home draws On this day with no entry")
 	}
 	for day, text := range map[string]string{older: "Two years ago.", old: "Four years ago.", dayOf(-1): "Yesterday."} {
-		must(c.Do(find(must(c.Get("/days/"+day)), "capture"), map[string]string{"text": text}))
+		must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/days/"+day)), "capture"), map[string]string{"text": text}))
 	}
 	for _, route := range []string{"/", "/days/" + fixedToday} {
 		var got []string
-		for _, x := range props(must(c.Get(route)))["on_this_day"].([]any) {
+		for _, x := range props(must(c.Get(t.Context(), route)))["on_this_day"].([]any) {
 			m := x.(map[string]any)
 			got = append(got, fmt.Sprintf("%v %v", m["day"], m["first_line"]))
 		}

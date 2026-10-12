@@ -15,18 +15,18 @@ func TestPlanningShortcutsAndActions(t *testing.T) {
 		t.Fatal("tasks does not consume the context")
 	}
 	c := commandClient(t)
-	task, err := do(c, "create-task", map[string]string{"label": "Write back", "project": "Ana", "repeat_unit": "week", "repeat_every": "2", "anchor_day": "2031-02-03"})
+	task, err := do(t.Context(), c, "create-task", map[string]string{"label": "Write back", "project": "Ana", "repeat_unit": "week", "repeat_every": "2", "anchor_day": "2031-02-03"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if task.Title != "Write back" || cmdHref(task, "project") == "" {
 		t.Fatalf("create-task returned %+v", task)
 	}
-	list := mustEntity(c.Get("/tasks"))
+	list := mustEntity(c.Get(t.Context(), "/tasks"))
 	if len(list.Entities) != 1 || list.Entities[0].Title != "Write back" {
 		t.Fatalf("tasks: %+v", list.Entities)
 	}
-	due, err := do(c, "deadlines", map[string]string{"from": "2031-02-01", "through": "2031-02-28"})
+	due, err := do(t.Context(), c, "deadlines", map[string]string{"from": "2031-02-01", "through": "2031-02-28"})
 	if err != nil {
 		t.Fatal(err)
 	}

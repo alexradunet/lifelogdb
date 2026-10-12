@@ -88,7 +88,7 @@ func TestAPhotoNearNoPlaceIsAskedAbout(t *testing.T) {
 		t.Fatalf("named: %+v %v", k, err)
 	}
 	porto, _ := s.PageID(ctx, "Porto")
-	if pt, _ := s.PlaceOf(ctx, porto); pt == nil || pt.RadiusM != 5000 || !pt.LinkDays {
+	if pt, _ := s.placeOf(ctx, porto); pt == nil || pt.RadiusM != 5000 || !pt.LinkDays {
 		t.Errorf("Porto's point: %+v", pt)
 	}
 	// later photos there match by themselves
@@ -107,7 +107,7 @@ func TestAPhotoNearNoPlaceIsAskedAbout(t *testing.T) {
 	if _, err := s.AddFile(ctx, "cli", FileIn{SHA256: sha('c'), MIME: "image/jpeg", Taken: "2019-06-05", Lat: 38.8, Lon: -9.2, HasGPS: true, At: "Home"}); err != nil {
 		t.Fatal(err)
 	}
-	if pt, _ := s.PlaceOf(ctx, home); pt.Lat != 38.73 || pt.RadiusM != 150 {
+	if pt, _ := s.placeOf(ctx, home); pt.Lat != 38.73 || pt.RadiusM != 150 {
 		t.Errorf("a photo moved home: %+v", pt)
 	}
 }
@@ -152,7 +152,7 @@ func TestPlaceRefusals(t *testing.T) {
 	if err := s.Locate(ctx, "cli", id, Point{11, 11, 300, true}); err != nil {
 		t.Fatal(err)
 	}
-	if pt, _ := s.PlaceOf(ctx, id); pt.Lat != 11 || pt.RadiusM != 300 || !pt.LinkDays {
+	if pt, _ := s.placeOf(ctx, id); pt.Lat != 11 || pt.RadiusM != 300 || !pt.LinkDays {
 		t.Errorf("moved: %+v", pt)
 	}
 	if p, _ := s.PageByID(ctx, id); p.Point == nil || p.Point.Lat != 11 {

@@ -15,11 +15,11 @@ import (
 // of radio buttons that works with no script.
 func TestTheMoodIsAChoiceOfFive(t *testing.T) {
 	c, h := freshOn(t, fixedToday)
-	day := must(c.Get("/days/" + fixedToday))
+	day := must(c.Get(t.Context(), "/days/"+fixedToday))
 	for _, a := range []string{"the day's", "the catalog's"} {
 		capture := find(day, "capture")
 		if a == "the catalog's" {
-			capture = find(must(c.Get("/actions")), "capture")
+			capture = find(must(c.Get(t.Context(), "/actions")), "capture")
 		}
 		var mood string
 		for _, f := range capture.Fields {
@@ -33,14 +33,14 @@ func TestTheMoodIsAChoiceOfFive(t *testing.T) {
 	}
 
 	capture := find(day, "capture")
-	must(c.Do(capture, map[string]string{"text": "No mood today."}))
-	must(c.Do(capture, map[string]string{"mood": "4"}))
+	must(c.Do(t.Context(), capture, map[string]string{"text": "No mood today."}))
+	must(c.Do(t.Context(), capture, map[string]string{"mood": "4"}))
 	for _, bad := range []string{"6", "0", "2.5"} {
-		if _, err := c.Do(capture, map[string]string{"mood": bad}); !clientStatus(err, 422) {
+		if _, err := c.Do(t.Context(), capture, map[string]string{"mood": bad}); !clientStatus(err, 422) {
 			t.Errorf("mood %s: %v, want 422", bad, err)
 		}
 	}
-	if got := fmt.Sprint(props(must(c.Get("/days/" + fixedToday)))["mood"]); got != "[4]" {
+	if got := fmt.Sprint(props(must(c.Get(t.Context(), "/days/"+fixedToday)))["mood"]); got != "[4]" {
 		t.Errorf("the day's mood after the captures: %s", got)
 	}
 
@@ -59,7 +59,7 @@ func TestTheMoodIsAChoiceOfFive(t *testing.T) {
 	if rec.Code != http.StatusSeeOther || !strings.HasPrefix(rec.Header().Get("Location"), "/days/"+fixedToday) {
 		t.Fatalf("Capture from the browser: %d %q", rec.Code, rec.Header().Get("Location"))
 	}
-	if got := fmt.Sprint(props(must(c.Get("/days/" + fixedToday)))["mood"]); got != "[4 3]" {
+	if got := fmt.Sprint(props(must(c.Get(t.Context(), "/days/"+fixedToday)))["mood"]); got != "[4 3]" {
 		t.Errorf("the day's mood after the browser's capture: %s", got)
 	}
 }

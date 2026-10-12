@@ -18,23 +18,23 @@ import (
 // alone: the owner's token is the credential of every request, allowed origins answer CORS, and the browser
 // logs in once for a cookie that carries the same token. Without --public none of this is mounted.
 
-// TokenMinLength is the shortest token a public listener accepts.
-const TokenMinLength = 32
+// tokenMinLength is the shortest token a public listener accepts.
+const tokenMinLength = 32
 
 // CookieName is the browser's credential on a public listener, set by POST /login.
 const CookieName = "lifelog_token"
 
 // PublicOptions configures Public.
 type PublicOptions struct {
-	Token   string   // the owner's token, at least TokenMinLength characters, one line
+	Token   string   // the owner's token, at least tokenMinLength characters, one line
 	Origins []string // browser origins (scheme://host[:port]) allowed to read and write
 	TLS     bool     // the listener serves TLS: the login cookie is marked Secure
 }
 
-// CheckToken reports whether t may be a public listener's token: one line of at least TokenMinLength characters.
+// CheckToken reports whether t may be a public listener's token: one line of at least tokenMinLength characters.
 func CheckToken(t string) error {
-	if len(t) < TokenMinLength {
-		return fmt.Errorf("the token must be at least %d characters", TokenMinLength)
+	if len(t) < tokenMinLength {
+		return fmt.Errorf("the token must be at least %d characters", tokenMinLength)
 	}
 	if strings.ContainsAny(t, "\r\n") {
 		return errors.New("the token must be one line")

@@ -32,7 +32,7 @@ func TestTemporalIntegrityDetectsActualKindAndScopeDamage(t *testing.T) {
 		t.Fatal(err)
 	}
 	var damaged int64
-	if err := s.DB.W.QueryRow(`INSERT INTO measurements(metric_id,session_id,day,value,supersedes_id,source,created_at) SELECT metric_id,?,'2020-01-02',3500,id,'ui',`+Now+` FROM measurements WHERE id=? RETURNING id`, sessions[1], root).Scan(&damaged); err != nil {
+	if err := s.DB.W.QueryRow(`INSERT INTO measurements(metric_id,session_id,day,value,supersedes_id,source,created_at) SELECT metric_id,?,'2020-01-02',3500,id,'ui',`+nowSQL+` FROM measurements WHERE id=? RETURNING id`, sessions[1], root).Scan(&damaged); err != nil {
 		t.Fatal(err)
 	}
 	result, err := s.Integrity(ctx)

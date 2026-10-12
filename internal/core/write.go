@@ -32,8 +32,8 @@ func (s *Store) Do(ctx context.Context, source string, fn func(*Tx) error) error
 // errDryRun rolls a DryRun back after fn succeeded.
 var errDryRun = errors.New("dry run")
 
-// DryRun runs fn in a write transaction and always rolls it back: what a write would do, without doing it.
-func (s *Store) DryRun(ctx context.Context, source string, fn func(*Tx) error) error {
+// dryRun runs fn in a write transaction and always rolls it back: what a write would do, without doing it.
+func (s *Store) dryRun(ctx context.Context, source string, fn func(*Tx) error) error {
 	err := s.Do(ctx, source, func(t *Tx) error {
 		if err := fn(t); err != nil {
 			return err
@@ -55,10 +55,10 @@ type Sync struct {
 	Skipped []string `json:"skipped,omitempty"`
 }
 
-// Savepoint runs fn inside a savepoint of the transaction: when fn fails, what it wrote is rolled back and the
+// savepoint runs fn inside a savepoint of the transaction: when fn fails, what it wrote is rolled back and the
 // transaction goes on; fn's error is returned, a constraint or trigger of the DDL as the 422 that Do would return.
 // A wikilink target that cannot be made, a facts write the writer refuses: the rest of the work is unaffected.
-func (t *Tx) Savepoint(fn func() error) error {
+func (t *Tx) savepoint(fn func() error) error {
 	if _, err := t.tx.ExecContext(t.ctx, `SAVEPOINT step`); err != nil {
 		return err
 	}
@@ -89,7 +89,7 @@ func (t *Tx) syncWikilinks(pageID int64, body string) (Sync, error) {
 		title := titles[i]
 		var id int64
 		var created, revived bool
-		if err := t.Savepoint(func() (err error) {
+		if err := t.savepoint(func() (err error) {
 			id, created, revived, err = t.linkTarget(pageID, key, title)
 			return err
 		}); err != nil {
@@ -135,7 +135,7 @@ func (t *Tx) linkTarget(pageID int64, key, title string) (id int64, created, rev
 		}
 		revived = true
 	}
-	_, err = t.tx.ExecContext(t.ctx, `INSERT INTO links(from_id, to_id, kind, created_at, source) VALUES (?, ?, 'wikilink', `+Now+`, ?)
+	_, err = t.tx.ExecContext(t.ctx, `INSERT INTO links(from_id, to_id, kind, created_at, source) VALUES (?, ?, 'wikilink', `+nowSQL+`, ?)
 	                    ON CONFLICT(from_id, to_id, kind) DO NOTHING`, pageID, id, t.Source)
 	return
 }
@@ -153,7 +153,7 @@ func dayOfTitle(title string) any {
 // (cookbook/import-a-row-once.md); existing says so.
 func (t *Tx) insertPage(typ, title, key string, day any, body, importKey string) (id int64, existing bool, err error) {
 	err = t.tx.QueryRowContext(t.ctx, `INSERT INTO entities(entity_type, preferred_name_key, day, body, created_at, updated_at, source, import_key)
-                         VALUES (?, ?, ?, ?, `+Now+`, `+Now+`, ?, ?)
+                         VALUES (?, ?, ?, ?, `+nowSQL+`, `+nowSQL+`, ?, ?)
 	                     ON CONFLICT(source, import_key) WHERE import_key IS NOT NULL DO NOTHING
 	                     RETURNING id`, typ, key, day, body, t.Source, nullIfEmpty(importKey)).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -167,8 +167,8 @@ func (t *Tx) insertPage(typ, title, key string, day any, body, importKey string)
 	return id, false, err
 }
 
-// PageRef is what a lookup by title finds.
-type PageRef struct {
+// pageRef is what a lookup by title finds.
+type pageRef struct {
 	ID      int64
 	Type    string
 	Title   string
@@ -177,13 +177,13 @@ type PageRef struct {
 	Deleted bool
 }
 
-// Lookup finds the page that holds a title's key; nil when none does.
-func (t *Tx) Lookup(title string) (*PageRef, error) {
+// lookup finds the page that holds a title's key; nil when none does.
+func (t *Tx) lookup(title string) (*pageRef, error) {
 	return t.lookupKey(text.TitleKey(title))
 }
 
-func (t *Tx) lookupKey(key string) (*PageRef, error) {
-	p := &PageRef{}
+func (t *Tx) lookupKey(key string) (*pageRef, error) {
+	p := &pageRef{}
 	var day sql.NullString
 	err := t.tx.QueryRowContext(t.ctx, `SELECT e.id, e.entity_type, n.title, e.body, e.day, e.deleted_at IS NOT NULL
                           FROM entities e JOIN entity_names n ON n.entity_id = e.id AND n.name_key = e.preferred_name_key
@@ -196,7 +196,7 @@ func (t *Tx) lookupKey(key string) (*PageRef, error) {
 	return p, err
 }
 
-func (t *Tx) pageByID(id int64) (*PageRef, error) {
+func (t *Tx) pageByID(id int64) (*pageRef, error) {
 	var key string
 	err := t.tx.QueryRowContext(t.ctx, `SELECT preferred_name_key FROM entities WHERE id = ?`, id).Scan(&key)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -243,11 +243,11 @@ func (t *Tx) Capture(day, entry string, mood *float64) (id int64, r Sync, err er
 
 func isMood(v float64) bool { return v >= 1 && v <= 5 && v == math.Trunc(v) }
 
-// RangeUnit says whether a metric's unit names a scale's range: two numbers of ASCII digits around one hyphen with
+// rangeUnit says whether a metric's unit names a scale's range: two numbers of ASCII digits around one hyphen with
 // the lower below the upper (`1-5`, `0-10`), and returns the two bounds. The range describes the metric, so a source
 // never writes it beside a number: the importer takes the number alone as the evidence of a reading, and the writer
 // holds every value of the metric to the whole numbers inside it. Only a 0/1 habit has no unit (D7, D24).
-func RangeUnit(unit string) (lo, hi float64, ok bool) {
+func rangeUnit(unit string) (lo, hi float64, ok bool) {
 	a, b, found := strings.Cut(unit, "-")
 	if !found || !asciiDigits(a) || !asciiDigits(b) {
 		return 0, 0, false
@@ -279,7 +279,7 @@ func validateMeasurementValue(unit, metric string, habit bool, value *float64) e
 	if math.IsNaN(*value) || math.IsInf(*value, 0) {
 		return invalid("value must be a finite number")
 	}
-	if lo, hi, ok := RangeUnit(unit); ok && (*value != math.Trunc(*value) || *value < lo || *value > hi) {
+	if lo, hi, ok := rangeUnit(unit); ok && (*value != math.Trunc(*value) || *value < lo || *value > hi) {
 		from, to, _ := strings.Cut(unit, "-")
 		return invalid("%s is a %s scale: a whole number from %s to %s (D7)", metric, unit, from, to)
 	}
@@ -347,12 +347,12 @@ func (t *Tx) CreatePage(title, body, day, importKey string) (id int64, existing 
 	case day == "":
 		day = Today()
 	}
-	have, err := t.ByImportKey(importKey)
+	have, err := t.byImportKey(importKey)
 	if err != nil {
 		return 0, false, r, err
 	}
 	if have == 0 {
-		if p, err := t.Lookup(title); err != nil || p != nil {
+		if p, err := t.lookup(title); err != nil || p != nil {
 			return 0, false, r, orExists(err, p, title)
 		}
 	}
@@ -366,7 +366,7 @@ func (t *Tx) CreatePage(title, body, day, importKey string) (id int64, existing 
 // PageForTitle is the id of the page that holds a title, made as an empty page when no page has it: the context a
 // task names by its title, like the target of a wikilink. A tombstoned page keeps its id and its tombstone.
 func (t *Tx) PageForTitle(title string) (id int64, created bool, err error) {
-	p, err := t.Lookup(title)
+	p, err := t.lookup(title)
 	if err != nil {
 		return 0, false, err
 	}
@@ -400,12 +400,12 @@ func (t *Tx) createNamed(typ, title, body, importKey string, extra func(int64) e
 	if !text.ValidTitle(title) {
 		return 0, false, invalid("title %q is not a valid title (docs/contract/titles-and-wikilinks.md)", title)
 	}
-	have, err := t.ByImportKey(importKey)
+	have, err := t.byImportKey(importKey)
 	if err != nil {
 		return 0, false, err
 	}
 	if have == 0 {
-		if p, err := t.Lookup(title); err != nil || p != nil {
+		if p, err := t.lookup(title); err != nil || p != nil {
 			return 0, false, orExists(err, p, title)
 		}
 	}
@@ -424,7 +424,7 @@ type ExistsError struct {
 
 func (e *ExistsError) Error() string { return "a page titled " + e.Title + " already exists" }
 
-func orExists(err error, p *PageRef, title string) error {
+func orExists(err error, p *pageRef, title string) error {
 	if err != nil {
 		return err
 	}
@@ -462,38 +462,9 @@ func (t *Tx) Promote(id int64, typ, name string) error {
 	return err
 }
 
-// FillPersonDays gives a person the birth_day and death_day it lacks: a NULL column takes the day given, a day
-// the row already holds is left alone, and a different one is refused (changing it is a correction, the owner's).
-// changed reports whether a column was written.
-func (t *Tx) FillPersonDays(id int64, birth, death string) (changed bool, err error) {
-	var have [2]sql.NullString
-	err = t.tx.QueryRowContext(t.ctx, `SELECT birth_day, death_day FROM people WHERE id = ?`, id).Scan(&have[0], &have[1])
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, notFound("no person %d", id)
-	}
-	if err != nil {
-		return false, err
-	}
-	for i, c := range [2]struct{ col, want string }{{"birth_day", birth}, {"death_day", death}} {
-		switch {
-		case c.want == "" || have[i].Valid && have[i].String == c.want:
-		case have[i].Valid:
-			return false, conflict("the person's %s is %s, not %s: a correction is the owner's", c.col, have[i].String, c.want)
-		case !IsDay(c.want):
-			return false, invalid("%s %q is not YYYY-MM-DD", c.col, c.want)
-		default:
-			if _, err := t.tx.ExecContext(t.ctx, `UPDATE people SET `+c.col+` = ? WHERE id = ?`, c.want, id); err != nil {
-				return false, err
-			}
-			changed = true
-		}
-	}
-	return changed, nil
-}
-
 // Tombstone and Revive set or clear entities.deleted_at (D11): nothing is ever deleted.
 func (t *Tx) Tombstone(id int64) error {
-	return t.setDeleted(id, `UPDATE entities SET deleted_at = `+Now+` WHERE id = ? AND deleted_at IS NULL`)
+	return t.setDeleted(id, `UPDATE entities SET deleted_at = `+nowSQL+` WHERE id = ? AND deleted_at IS NULL`)
 }
 
 func (t *Tx) Revive(id int64) error {
@@ -552,7 +523,7 @@ func (t *Tx) Link(from, to int64, kind, note string) (added bool, err error) {
 			return false, invalid("a category is a plain page, never a day page (D26)")
 		}
 	}
-	res, err := t.tx.ExecContext(t.ctx, `INSERT INTO links(from_id, to_id, kind, note, created_at, source) VALUES (?, ?, ?, ?, `+Now+`, ?)
+	res, err := t.tx.ExecContext(t.ctx, `INSERT INTO links(from_id, to_id, kind, note, created_at, source) VALUES (?, ?, ?, ?, `+nowSQL+`, ?)
 	                       ON CONFLICT(from_id, to_id, kind) DO NOTHING`, from, to, kind, nullIfEmpty(note), t.Source)
 	if err != nil {
 		return false, refused(err) // the registry's endpoint types refuse the link: a 422, as Do would return it
@@ -621,7 +592,7 @@ func (t *Tx) Record(m Reading) (id int64, err error) {
 		with = m.CapturedWith
 	}
 	err = t.tx.QueryRowContext(t.ctx, `INSERT INTO measurements(metric_id, day, taken_at, tz, value, source, import_key, captured_with_id,session_id, created_at)
-	                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, `+Now+`)
+	                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, `+nowSQL+`)
 	                     ON CONFLICT(source, import_key, metric_id) WHERE import_key IS NOT NULL DO NOTHING
 	                     RETURNING id`,
 		metric, m.Day, nullIfEmpty(m.TakenAt), nullIfEmpty(m.TZ), m.Value, t.Source, nullIfEmpty(m.Key), with, session).Scan(&id)
@@ -672,27 +643,6 @@ func validateMeasurementZone(zone string) error {
 	return nil
 }
 
-// ReadingByKey is the current value of the reading a sender's key names; found is false when there is none.
-// A retracted reading is found, with ok false.
-func (t *Tx) ReadingByKey(metric, key string) (value float64, ok, found bool, err error) {
-	var id int64
-	err = t.tx.QueryRowContext(t.ctx, `SELECT me.id FROM measurements me JOIN entities m ON m.id = me.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key
-	                      WHERE me.source = ? AND me.import_key = ? AND m.id = (SELECT entity_id FROM entity_names WHERE name_key = ?)`, t.Source, key, text.TitleKey(metric)).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return 0, false, false, nil
-	}
-	if err != nil {
-		return 0, false, false, err
-	}
-	// follow the correction chain to its end (a chain never cycles: measurements_supersede_metric)
-	var v sql.NullFloat64
-	err = t.tx.QueryRowContext(t.ctx, `WITH RECURSIVE chain(id, value, depth) AS (
-	                       SELECT id, value, 0 FROM measurements WHERE id = ?
-	                       UNION ALL SELECT x.id, x.value, depth + 1 FROM measurements x JOIN chain c ON x.supersedes_id = c.id)
-	                     SELECT value FROM chain ORDER BY depth DESC LIMIT 1`, id).Scan(&v)
-	return v.Float64, v.Valid, true, err
-}
-
 // Correct supersedes a reading with a new value, or retracts it when value is nil (cookbook/correct-a-measurement.md).
 func (t *Tx) Correct(wrong int64, value *float64) (id int64, err error) {
 	var metric int64
@@ -714,7 +664,7 @@ func (t *Tx) Correct(wrong int64, value *float64) (id int64, err error) {
 		v = *value
 	}
 	err = t.tx.QueryRowContext(t.ctx, `INSERT INTO measurements(metric_id, day, taken_at, tz, value, source, captured_with_id,session_id, supersedes_id, created_at)
-	                     SELECT metric_id, day, taken_at, tz, ?, ?, captured_with_id,session_id, id, `+Now+` FROM measurements WHERE id = ?
+	                     SELECT metric_id, day, taken_at, tz, ?, ?, captured_with_id,session_id, id, `+nowSQL+` FROM measurements WHERE id = ?
 	                     RETURNING id`, v, t.Source, wrong).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, notFound("no measurement %d", wrong)

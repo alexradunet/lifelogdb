@@ -80,11 +80,7 @@ func (e *Error) Error() string {
 }
 
 // Get fetches a resource by its href (a path such as /days/2026-09-29).
-func (c *Client) Get(href string) (*api.Entity, error) {
-	return c.GetContext(context.Background(), href)
-}
-
-func (c *Client) GetContext(ctx context.Context, href string) (*api.Entity, error) {
+func (c *Client) Get(ctx context.Context, href string) (*api.Entity, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -128,11 +124,7 @@ func fill(a api.Action, values map[string]string) (string, url.Values, error) {
 
 // DoFiles submits an action as multipart/form-data: values as fields, and files (field name → path on disk)
 // streamed from disk, never held whole in memory.
-func (c *Client) DoFiles(a api.Action, values, files map[string]string) (*api.Entity, error) {
-	return c.DoFilesContext(context.Background(), a, values, files)
-}
-
-func (c *Client) DoFilesContext(ctx context.Context, a api.Action, values, files map[string]string) (*api.Entity, error) {
+func (c *Client) DoFiles(ctx context.Context, a api.Action, values, files map[string]string) (*api.Entity, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -196,11 +188,7 @@ func (c *Client) DoFilesContext(ctx context.Context, a api.Action, values, files
 }
 
 // Do submits an action with field values. Fields of a templated href ({id}) are filled from values.
-func (c *Client) Do(a api.Action, values map[string]string) (*api.Entity, error) {
-	return c.DoContext(context.Background(), a, values)
-}
-
-func (c *Client) DoContext(ctx context.Context, a api.Action, values map[string]string) (*api.Entity, error) {
+func (c *Client) Do(ctx context.Context, a api.Action, values map[string]string) (*api.Entity, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -233,13 +221,11 @@ func hasField(a api.Action, name string) bool {
 }
 
 // Catalog is GET /actions: every action, with templated hrefs.
-func (c *Client) Catalog() ([]api.Action, error) { return c.CatalogContext(context.Background()) }
-
-func (c *Client) CatalogContext(ctx context.Context) ([]api.Action, error) {
+func (c *Client) Catalog(ctx context.Context) ([]api.Action, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	e, err := c.GetContext(ctx, "/actions")
+	e, err := c.Get(ctx, "/actions")
 	if err != nil {
 		return nil, err
 	}

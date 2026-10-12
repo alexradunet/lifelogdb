@@ -55,7 +55,7 @@ func (s *Store) ReadingsFromTable(ctx context.Context, page, metric, column stri
 	res := &TableReadings{Metric: metric, Reported: []TableRow{}}
 	err := s.Do(ctx, TableSource, func(t *Tx) error {
 		res.Written, res.Existing, res.Reported = 0, 0, []TableRow{}
-		p, err := t.Lookup(page)
+		p, err := t.lookup(page)
 		if err != nil {
 			return err
 		}
@@ -63,7 +63,7 @@ func (s *Store) ReadingsFromTable(ctx context.Context, page, metric, column stri
 			return notFound("no page %q", page)
 		}
 		res.PageID, res.Page = p.ID, p.Title
-		unit, found, err := t.MetricUnit(metric)
+		unit, found, err := t.metricUnit(metric)
 		if err != nil {
 			return err
 		}

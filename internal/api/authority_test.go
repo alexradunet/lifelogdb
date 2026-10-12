@@ -123,7 +123,7 @@ func TestHTTPAuthority(t *testing.T) {
 
 func TestHTTPAuthorityOriginsAndInProcess(t *testing.T) {
 	c, h := fresh(t)
-	if _, err := c.Get("/actions"); err != nil {
+	if _, err := c.Get(t.Context(), "/actions"); err != nil {
 		t.Fatal(err)
 	}
 	guarded, err := api.NetworkAuthority(&net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 7777}, h)

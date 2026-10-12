@@ -289,7 +289,7 @@ func (t *Tx) createTask(in TaskSpec, importKey string, initial OccurrenceInput) 
 	if in.RepeatUnit != "" {
 		every = in.RepeatEvery
 	}
-	err = t.tx.QueryRowContext(t.ctx, `INSERT INTO tasks(label,project_page_id,repeat_unit,repeat_every,anchor_day,repeat_until_day,reminder_local_time,reminder_zone,source,import_key,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,`+Now+`,`+Now+`) RETURNING id`, in.Label, in.ProjectPageID, nullIfEmpty(in.RepeatUnit), every, nullIfEmpty(in.AnchorDay), nullIfEmpty(in.RepeatUntilDay), nullIfEmpty(in.ReminderLocalTime), nullIfEmpty(in.ReminderZone), t.Source, nullIfEmpty(importKey)).Scan(&id)
+	err = t.tx.QueryRowContext(t.ctx, `INSERT INTO tasks(label,project_page_id,repeat_unit,repeat_every,anchor_day,repeat_until_day,reminder_local_time,reminder_zone,source,import_key,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,`+nowSQL+`,`+nowSQL+`) RETURNING id`, in.Label, in.ProjectPageID, nullIfEmpty(in.RepeatUnit), every, nullIfEmpty(in.AnchorDay), nullIfEmpty(in.RepeatUntilDay), nullIfEmpty(in.ReminderLocalTime), nullIfEmpty(in.ReminderZone), t.Source, nullIfEmpty(importKey)).Scan(&id)
 	if err != nil {
 		return 0, false, err
 	}
@@ -364,7 +364,7 @@ func (t *Tx) TaskLifecycle(id int64, version string, deleted bool) error {
 	}
 	q := `UPDATE tasks SET deleted_at=NULL WHERE id=?`
 	if deleted {
-		q = `UPDATE tasks SET deleted_at=` + Now + ` WHERE id=?`
+		q = `UPDATE tasks SET deleted_at=` + nowSQL + ` WHERE id=?`
 	}
 	_, err = t.tx.ExecContext(t.ctx, q, id)
 	return err
@@ -372,7 +372,7 @@ func (t *Tx) TaskLifecycle(id int64, version string, deleted bool) error {
 
 func (t *Tx) insertTaskOccurrence(taskID int64, in OccurrenceInput) (int64, error) {
 	var id int64
-	err := t.tx.QueryRowContext(t.ctx, `INSERT INTO task_occurrences(task_id,occurrence_key,due_day,state,completed_at,reminder_mode,reminder_override_at,source,import_key,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,`+Now+`,`+Now+`) RETURNING id`, taskID, in.OccurrenceKey, nullIfEmpty(in.DueDay), in.State, nullIfEmpty(in.CompletedAt), in.ReminderMode, nullIfEmpty(in.ReminderOverrideAt), t.Source, nullIfEmpty(in.ImportKey)).Scan(&id)
+	err := t.tx.QueryRowContext(t.ctx, `INSERT INTO task_occurrences(task_id,occurrence_key,due_day,state,completed_at,reminder_mode,reminder_override_at,source,import_key,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,`+nowSQL+`,`+nowSQL+`) RETURNING id`, taskID, in.OccurrenceKey, nullIfEmpty(in.DueDay), in.State, nullIfEmpty(in.CompletedAt), in.ReminderMode, nullIfEmpty(in.ReminderOverrideAt), t.Source, nullIfEmpty(in.ImportKey)).Scan(&id)
 	return id, err
 }
 
@@ -432,14 +432,6 @@ func (t *Tx) CaptureTaskOccurrence(taskID int64, taskVersion string, in Occurren
 	return o, false, err
 }
 
-func (t *Tx) MaterializeTaskOccurrence(taskID int64, taskVersion, key string) (*TaskOccurrence, bool, error) {
-	due := key
-	if key == "once" {
-		due = ""
-	}
-	return t.CaptureTaskOccurrence(taskID, taskVersion, OccurrenceInput{OccurrenceKey: key, OccurrenceChanges: OccurrenceChanges{DueDay: due, State: "open", ReminderMode: "inherit"}})
-}
-
 func (t *Tx) EditTaskOccurrence(taskID int64, taskVersion, key, version string, in OccurrenceChanges) error {
 	if err := validateOccurrenceChanges(in); err != nil {
 		return err
@@ -478,7 +470,7 @@ func (t *Tx) TaskOccurrenceLifecycle(taskID int64, taskVersion, key, version str
 	}
 	q := `UPDATE task_occurrences SET deleted_at=NULL WHERE id=?`
 	if deleted {
-		q = `UPDATE task_occurrences SET deleted_at=` + Now + ` WHERE id=?`
+		q = `UPDATE task_occurrences SET deleted_at=` + nowSQL + ` WHERE id=?`
 	}
 	_, err = t.tx.ExecContext(t.ctx, q, o.ID)
 	return err

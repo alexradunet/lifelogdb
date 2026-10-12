@@ -25,8 +25,8 @@ func codeOf(t *testing.T, err error) (string, int) {
 
 func TestErrorAnswersCarryACode(t *testing.T) {
 	c, h := fresh(t)
-	root := must(c.Get("/"))
-	page := must(c.Do(find(root, "create-page"), map[string]string{"title": "Taken", "body": "first"}))
+	root := must(c.Get(t.Context(), "/"))
+	page := must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Taken", "body": "first"}))
 	for _, tc := range []struct {
 		name   string
 		err    error
@@ -34,20 +34,20 @@ func TestErrorAnswersCarryACode(t *testing.T) {
 		status int
 	}{
 		{"stale save", func() error {
-			_, err := c.Do(find(page, "save-body"), map[string]string{"body": "second", "version": "0"})
+			_, err := c.Do(t.Context(), find(page, "save-body"), map[string]string{"body": "second", "version": "0"})
 			return err
 		}(), "stale_version", 409},
 		{"taken title", func() error {
-			_, err := c.Do(find(root, "create-page"), map[string]string{"title": "taken"})
+			_, err := c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "taken"})
 			return err
 		}(), "exists", 409},
-		{"unknown page", func() error { _, err := c.Get("/pages/999999"); return err }(), "not_found", 404},
-		{"bad day", func() error { _, err := c.Get("/days/2026-13-01"); return err }(), "invalid", 422},
+		{"unknown page", func() error { _, err := c.Get(t.Context(), "/pages/999999"); return err }(), "not_found", 404},
+		{"bad day", func() error { _, err := c.Get(t.Context(), "/days/2026-13-01"); return err }(), "invalid", 422},
 		{"missing field", func() error {
-			_, err := c.Do(find(root, "create-page"), map[string]string{"body": "no title"})
+			_, err := c.Do(t.Context(), find(root, "create-page"), map[string]string{"body": "no title"})
 			return err
 		}(), "invalid", 422},
-		{"bad limit", func() error { _, err := c.Get("/days?limit=0"); return err }(), "invalid", 422},
+		{"bad limit", func() error { _, err := c.Get(t.Context(), "/days?limit=0"); return err }(), "invalid", 422},
 	} {
 		code, status := codeOf(t, tc.err)
 		if code != tc.code || status != tc.status {
@@ -81,7 +81,7 @@ func walk(t *testing.T, c *client.Client, first string) (titles []string, sizes 
 		if n > 20 {
 			t.Fatal("more than 20 pages")
 		}
-		e := must(c.Get(href))
+		e := must(c.Get(t.Context(), href))
 		items := 0
 		for _, l := range e.Entities {
 			if l.Rel[0] == "item" {
@@ -112,11 +112,11 @@ func hrefOf(e *api.Entity, rel string) string {
 
 func TestListsPage(t *testing.T) {
 	c, h := fresh(t)
-	root := must(c.Get("/"))
-	catalog := must(c.Get("/actions"))
+	root := must(c.Get(t.Context(), "/"))
+	catalog := must(c.Get(t.Context(), "/actions"))
 	for i := 1; i <= 7; i++ {
-		must(c.Do(find(root, "create-person"), map[string]string{"title": fmt.Sprintf("Person %d", i)}))
-		must(c.Do(find(catalog, "capture"), map[string]string{"day": fmt.Sprintf("2031-03-%02d", i), "text": fmt.Sprintf("needleword [[Ghost %d]]", i)}))
+		must(c.Do(t.Context(), find(root, "create-person"), map[string]string{"title": fmt.Sprintf("Person %d", i)}))
+		must(c.Do(t.Context(), find(catalog, "capture"), map[string]string{"day": fmt.Sprintf("2031-03-%02d", i), "text": fmt.Sprintf("needleword [[Ghost %d]]", i)}))
 	}
 	for _, tc := range []struct {
 		list   string
@@ -143,7 +143,7 @@ func TestListsPage(t *testing.T) {
 		}
 		seen[x] = true
 	}
-	second := must(c.Get("/search?q=needleword&limit=3"))
+	second := must(c.Get(t.Context(), "/search?q=needleword&limit=3"))
 	if next := hrefOf(second, "next"); !strings.Contains(next, "q=needleword") || !strings.Contains(next, "offset=3") {
 		t.Errorf("search next=%q", next)
 	}
@@ -152,19 +152,19 @@ func TestListsPage(t *testing.T) {
 		list  string
 		limit int
 	}{{"/days", 60}, {"/people", 200}, {"/files", 200}, {"/places", 200}, {"/ghosts", 200}, {"/search?q=needleword", 50}} {
-		e := must(c.Get(tc.list))
+		e := must(c.Get(t.Context(), tc.list))
 		p, _ := e.Properties.(map[string]any)
 		if fmt.Sprint(p["limit"]) != fmt.Sprint(tc.limit) || fmt.Sprint(p["offset"]) != "0" || hrefOf(e, "next") != "" || hrefOf(e, "prev") != "" {
 			t.Errorf("%s: limit=%v offset=%v next=%q prev=%q", tc.list, p["limit"], p["offset"], hrefOf(e, "next"), hrefOf(e, "prev"))
 		}
 	}
 	// The page past the end is empty with a prev link; bad values are refused.
-	last := must(c.Get("/people?limit=3&offset=9"))
+	last := must(c.Get(t.Context(), "/people?limit=3&offset=9"))
 	if len(last.Entities) != 0 || hrefOf(last, "prev") != "/people?limit=3&offset=6" || hrefOf(last, "next") != "" {
 		t.Errorf("past the end: %d items prev=%q next=%q", len(last.Entities), hrefOf(last, "prev"), hrefOf(last, "next"))
 	}
 	for _, bad := range []string{"/people?limit=0", "/people?limit=501", "/people?limit=x", "/people?offset=-1", "/people?offset=x", "/search?q=a&limit=0"} {
-		if _, err := c.Get(bad); !clientStatus(err, 422) {
+		if _, err := c.Get(t.Context(), bad); !clientStatus(err, 422) {
 			t.Errorf("%s: %v", bad, err)
 		}
 	}

@@ -68,8 +68,8 @@ func TestNameOwnershipAndJournalReservations(t *testing.T) {
 		t.Fatalf("revival=%d %v", again, err)
 	}
 	for _, q := range []string{
-		`INSERT INTO entities(entity_type,preferred_name_key,created_at,updated_at,source) VALUES('page','missing',` + Now + `,` + Now + `,'cli')`,
-		`INSERT INTO entities(entity_type,preferred_name_key,created_at,updated_at,source) VALUES('page','mood',` + Now + `,` + Now + `,'cli')`,
+		`INSERT INTO entities(entity_type,preferred_name_key,created_at,updated_at,source) VALUES('page','missing',` + nowSQL + `,` + nowSQL + `,'cli')`,
+		`INSERT INTO entities(entity_type,preferred_name_key,created_at,updated_at,source) VALUES('page','mood',` + nowSQL + `,` + nowSQL + `,'cli')`,
 	} {
 		if err := s.DB.Write(ctx, func(tx *sql.Tx) error { _, err := tx.Exec(q); return err }); err == nil {
 			t.Fatalf("deferred owner commit accepted: %s", q)

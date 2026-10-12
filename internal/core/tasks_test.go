@@ -44,7 +44,7 @@ func planningMaterialize(t *testing.T, s *Store, p *Task, key string) *TaskOccur
 	var o *TaskOccurrence
 	if err := s.Do(ctx, "cli", func(tx *Tx) error {
 		var err error
-		o, _, err = tx.MaterializeTaskOccurrence(p.ID, p.Version, key)
+		o, _, err = materialize(tx, p.ID, p.Version, key)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -225,7 +225,7 @@ func TestTaskStopUsesOriginalKeysAndRetainsHistoricalOutcomes(t *testing.T) {
 		t.Fatalf("refused evidenced historical outcome: %v", err)
 	}
 	if err := s.Do(ctx, "cli", func(tx *Tx) error {
-		_, _, err := tx.MaterializeTaskOccurrence(p.ID, stopped.Version, "2027-03-01")
+		_, _, err := materialize(tx, p.ID, stopped.Version, "2027-03-01")
 		return err
 	}); status(err) != 422 {
 		t.Fatalf("new open slot beyond end: %v", err)
@@ -549,4 +549,14 @@ func TestPageForTitleFindsOrMakesTheProject(t *testing.T) {
 	if p, _ := s.PageByID(ctx, gone); p.DeletedAt == "" {
 		t.Error("finding a tombstoned page revived it")
 	}
+}
+
+// materialize writes a slot of a series as an open occurrence due on its day (once for a one-off): the write the
+// browser's Done or Skip starts from a virtual slot.
+func materialize(tx *Tx, taskID int64, taskVersion, key string) (*TaskOccurrence, bool, error) {
+	due := key
+	if key == "once" {
+		due = ""
+	}
+	return tx.CaptureTaskOccurrence(taskID, taskVersion, OccurrenceInput{OccurrenceKey: key, OccurrenceChanges: OccurrenceChanges{DueDay: due, State: "open", ReminderMode: "inherit"}})
 }

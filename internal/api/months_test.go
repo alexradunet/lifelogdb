@@ -13,13 +13,13 @@ import (
 func TestTheMonthIsACalendar(t *testing.T) {
 	c, h := freshOn(t, fixedToday)
 	capture := func(day string, v map[string]string) {
-		must(c.Do(find(must(c.Get("/days/"+day)), "capture"), v))
+		must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/days/"+day)), "capture"), v))
 	}
 	capture("2031-05-01", map[string]string{"text": "May day: a walk by the lake.", "mood": "4"})
 	capture("2031-05-14", map[string]string{"mood": "3"})
 	capture("2031-05-31", map[string]string{"text": "The last day."})
-	gone := must(c.Do(find(must(c.Get("/days/2031-05-20")), "capture"), map[string]string{"text": "Scratch"}))
-	must(c.Do(find(must(c.Get(hrefOf(gone, "page"))), "tombstone"), nil))
+	gone := must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/days/2031-05-20")), "capture"), map[string]string{"text": "Scratch"}))
+	must(c.Do(t.Context(), find(must(c.Get(t.Context(), hrefOf(gone, "page"))), "tombstone"), nil))
 
 	for _, tc := range []struct {
 		month, title, prev, next string
@@ -32,7 +32,7 @@ func TestTheMonthIsACalendar(t *testing.T) {
 		{"2031-12", "December 2031", "/months/2031-11", "/months/2032-01", 31},
 		{"2031-01", "January 2031", "/months/2030-12", "/months/2031-02", 31},
 	} {
-		m := must(c.Get("/months/" + tc.month))
+		m := must(c.Get(t.Context(), "/months/"+tc.month))
 		days := props(m)["days"].([]any)
 		if m.Title != tc.title || hrefOf(m, "prev") != tc.prev || hrefOf(m, "next") != tc.next || len(days) != tc.days {
 			t.Errorf("%s: %q, prev %q, next %q, %d days", tc.month, m.Title, hrefOf(m, "prev"), hrefOf(m, "next"), len(days))
@@ -45,7 +45,7 @@ func TestTheMonthIsACalendar(t *testing.T) {
 		}
 	}
 
-	may := props(must(c.Get("/months/2031-05")))
+	may := props(must(c.Get(t.Context(), "/months/2031-05")))
 	var marked []string
 	for _, d := range may["days"].([]any) {
 		m := d.(map[string]any)
@@ -62,7 +62,7 @@ func TestTheMonthIsACalendar(t *testing.T) {
 	}
 
 	for _, bad := range []string{"2031-13", "2031-5", "x", "2031-05-01"} {
-		if _, err := c.Get("/months/" + bad); !clientStatus(err, 422) {
+		if _, err := c.Get(t.Context(), "/months/"+bad); !clientStatus(err, 422) {
 			t.Errorf("/months/%s: %v", bad, err)
 		}
 	}
@@ -104,7 +104,7 @@ func TestOpenDayGoesToTheDay(t *testing.T) {
 		}
 	}
 	// The catalog action, as every client sends it, opens the day.
-	day := must(c.Do(find(must(c.Get("/")), "open-day"), map[string]string{"day": "2031-04-30"}))
+	day := must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "open-day"), map[string]string{"day": "2031-04-30"}))
 	if day.Title != "2031-04-30" || day.Class[0] != "day" {
 		t.Errorf("open-day through the client: %s %v", day.Title, day.Class)
 	}

@@ -24,14 +24,14 @@ func TestTheSidebarCountsWhatIsDueAndShowsTheMonth(t *testing.T) {
 		t.Errorf("an empty life log shows a count, or not its empty month:\n%s", sidebar(body))
 	}
 
-	root := must(c.Get("/"))
+	root := must(c.Get(t.Context(), "/"))
 	create := func(v map[string]string) string {
-		e := must(c.Do(find(root, "create-task"), v))
+		e := must(c.Do(t.Context(), find(root, "create-task"), v))
 		return strings.SplitN(hrefOf(e, "self"), "?", 2)[0]
 	}
 	outcome := func(task string, values map[string]string) {
-		occ := must(c.Get(task + "/occurrences/once"))
-		must(c.Do(find(occ, "edit-occurrence"), values))
+		occ := must(c.Get(t.Context(), task+"/occurrences/once"))
+		must(c.Do(t.Context(), find(occ, "edit-occurrence"), values))
 	}
 	create(map[string]string{"label": "Book the dentist", "due_day": dayOf(-3)})                                                // counted
 	create(map[string]string{"label": "Water the plants", "repeat_unit": "day", "repeat_every": "7", "anchor_day": dayOf(-14)}) // -14, -7 and 0: three
@@ -40,16 +40,16 @@ func TestTheSidebarCountsWhatIsDueAndShowsTheMonth(t *testing.T) {
 	outcome(create(map[string]string{"label": "Call Dana Example", "due_day": dayOf(-1)}), map[string]string{"state": "done", "completed_at": "now"})
 	outcome(create(map[string]string{"label": "Clean the gutter", "due_day": dayOf(-2)}), map[string]string{"state": "skipped"})
 	gone := create(map[string]string{"label": "Old plan", "due_day": dayOf(-4)})
-	must(c.Do(find(must(c.Get(gone)), "tombstone-task"), nil))
+	must(c.Do(t.Context(), find(must(c.Get(t.Context(), gone)), "tombstone-task"), nil))
 
 	for _, day := range []string{"2031-04-30", "2031-05-03", dayOf(-2), fixedToday} {
-		must(c.Do(find(must(c.Get("/days/"+day)), "capture"), map[string]string{"text": "Synthetic entry"}))
+		must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/days/"+day)), "capture"), map[string]string{"text": "Synthetic entry"}))
 	}
-	page := must(c.Get("/pages?title=2031-05-03"))
-	must(c.Do(find(page, "save-body"), map[string]string{"body": ""})) // a day page with an empty body is still written
+	page := must(c.Get(t.Context(), "/pages?title=2031-05-03"))
+	must(c.Do(t.Context(), find(page, "save-body"), map[string]string{"body": ""})) // a day page with an empty body is still written
 
 	body := browse(t, h, "/")
-	if n := len(props(must(c.Get("/")))["due"].([]any)); n != 4 {
+	if n := len(props(must(c.Get(t.Context(), "/")))["due"].([]any)); n != 4 {
 		t.Fatalf("the root lists %d due, want 4", n)
 	}
 	for _, want := range []string{
@@ -221,7 +221,7 @@ func TestTheStylePageShowsEveryComponent(t *testing.T) {
 	}
 
 	c, live := fresh(t)
-	catalog, err := c.Catalog()
+	catalog, err := c.Catalog(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,11 +316,11 @@ func TestTheManifestAndTheIconAreServed(t *testing.T) {
 	if r.Code != http.StatusSeeOther {
 		t.Fatalf("POST /days/today/capture: %d %.200s", r.Code, r.Body.String())
 	}
-	day := must(c.Get("/days/" + fixedToday))
+	day := must(c.Get(t.Context(), "/days/"+fixedToday))
 	if href(day, "page") == "" || !strings.Contains(browse(t, h, "/days/"+fixedToday), "Shared from a phone") {
 		t.Errorf("the shared text is not on %s", fixedToday)
 	}
-	if page := must(c.Get(href(day, "page"))); !strings.Contains(props(page)["body"].(string), "Shared from a phone") {
+	if page := must(c.Get(t.Context(), href(day, "page"))); !strings.Contains(props(page)["body"].(string), "Shared from a phone") {
 		t.Errorf("the day page does not hold the shared text: %v", props(page)["body"])
 	}
 }

@@ -18,7 +18,7 @@ func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
 	if !text.ValidTitle(name) {
 		return false, invalid("metric name %q is not a valid title (docs/contract/titles-and-wikilinks.md)", name)
 	}
-	p, err := t.Lookup(name)
+	p, err := t.lookup(name)
 	if err != nil {
 		return false, err
 	}
@@ -39,7 +39,7 @@ func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
 		if err := t.tx.QueryRowContext(t.ctx, `SELECT unit FROM metrics WHERE id = ?`, p.ID).Scan(&have); err != nil {
 			return false, err
 		}
-		if _, _, scale := RangeUnit(have); have != unit && !(scale && unit == "") {
+		if _, _, scale := rangeUnit(have); have != unit && !(scale && unit == "") {
 			return false, conflict("metric %s exists with unit %q, not %q: a unit never changes; register a new metric", p.Title, have, unit)
 		}
 		return false, nil
@@ -239,6 +239,3 @@ func (s *Store) Periods(ctx context.Context, metric string) ([]Period, error) {
 	}
 	return out, rows.Err()
 }
-
-// MetricID is the id of a live metric, found by its name in any case.
-func (t *Tx) MetricID(name string) (int64, error) { return t.metricID(name) }

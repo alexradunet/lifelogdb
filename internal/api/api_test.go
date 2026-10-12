@@ -67,7 +67,7 @@ func find(e *api.Entity, name string) api.Action {
 
 func TestCatalogNamesAreUnique(t *testing.T) {
 	c, _ := fresh(t)
-	actions, err := c.Catalog()
+	actions, err := c.Catalog(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,29 +94,29 @@ func TestCatalogNamesAreUnique(t *testing.T) {
 
 func TestActionsAreOfferedOnlyWhereLegal(t *testing.T) {
 	c, _ := fresh(t)
-	day, err := c.Do(find(must(c.Get("/")), "capture"), map[string]string{"text": "with [[Ana]]"})
+	day, err := c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "capture"), map[string]string{"text": "with [[Ana]]"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	dayPage := must(c.Get(href(day, "page")))
+	dayPage := must(c.Get(t.Context(), href(day, "page")))
 	if got := names(dayPage); got != "save-body,link,unlink,tombstone" {
 		t.Errorf("a day page offers %s (never promote)", got)
 	}
 	if !hasOption(find(dayPage, "link"), "kind", "at") {
 		t.Error("a day page does not offer an at link")
 	}
-	ana := must(c.Get(dayPage.Entities[0].Href))
+	ana := must(c.Get(t.Context(), dayPage.Entities[0].Href))
 	if got := names(ana); got != "save-body,promote,promote-period,rename,link,unlink,tombstone" {
 		t.Errorf("a plain page offers %s", got)
 	}
 	if hasOption(find(ana, "link"), "kind", "at") {
 		t.Error("a plain page offers an at link (D16: from a day page only)")
 	}
-	ana = must(c.Do(find(ana, "promote"), map[string]string{"to": "person"}))
+	ana = must(c.Do(t.Context(), find(ana, "promote"), map[string]string{"to": "person"}))
 	if got := names(ana); strings.Contains(got, "promote") || hasOption(find(ana, "link"), "kind", "located-in") {
 		t.Errorf("a person offers %s with kinds %v", got, find(ana, "link").Fields)
 	}
-	gone := must(c.Do(find(ana, "tombstone"), nil))
+	gone := must(c.Do(t.Context(), find(ana, "tombstone"), nil))
 	if got := names(gone); got != "revive" {
 		t.Errorf("a tombstoned page offers %s", got)
 	}
@@ -124,13 +124,13 @@ func TestActionsAreOfferedOnlyWhereLegal(t *testing.T) {
 
 func TestSaveCarriesItsVersion(t *testing.T) {
 	c, _ := fresh(t)
-	p := must(c.Do(find(must(c.Get("/")), "create-page"), map[string]string{"title": "Diet", "body": "v1"}))
+	p := must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Diet", "body": "v1"}))
 	save := find(p, "save-body")
-	p2 := must(c.Do(save, map[string]string{"body": "v2 [[Plan]]"}))
+	p2 := must(c.Do(t.Context(), save, map[string]string{"body": "v2 [[Plan]]"}))
 	if p2.Result == nil {
 		t.Error("a save reports no result")
 	}
-	_, err := c.Do(save, map[string]string{"body": "v3"}) // the old form: its version is stale now
+	_, err := c.Do(t.Context(), save, map[string]string{"body": "v3"}) // the old form: its version is stale now
 	var ce *client.Error
 	if !errors.As(err, &ce) || ce.Status != 409 {
 		t.Errorf("a stale save: %v", err)
@@ -139,9 +139,9 @@ func TestSaveCarriesItsVersion(t *testing.T) {
 
 func TestExistingTitleLinksToThePage(t *testing.T) {
 	c, _ := fresh(t)
-	create := find(must(c.Get("/")), "create-page")
-	c.Do(create, map[string]string{"title": "Café"})
-	e, err := c.Do(create, map[string]string{"title": "CAFÉ"})
+	create := find(must(c.Get(t.Context(), "/")), "create-page")
+	c.Do(t.Context(), create, map[string]string{"title": "Café"})
+	e, err := c.Do(t.Context(), create, map[string]string{"title": "CAFÉ"})
 	if err == nil || href(e, "existing") == "" {
 		t.Errorf("a duplicate title: %v, links %v", err, e.Links)
 	}
@@ -149,7 +149,7 @@ func TestExistingTitleLinksToThePage(t *testing.T) {
 
 func TestCorrectionDomainActions(t *testing.T) {
 	c, _ := fresh(t)
-	catalog, err := c.Catalog()
+	catalog, err := c.Catalog(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,25 +158,25 @@ func TestCorrectionDomainActions(t *testing.T) {
 	correct := find(actions, "correct")
 	retract := find(actions, "retract")
 
-	mood := must(c.Do(record, map[string]string{"metric": "Mood", "day": "2026-10-01", "value": "3"}))
-	if _, err := c.Do(correct, map[string]string{"id": measurementID(mood), "value": "2.5"}); !clientStatus(err, 422) {
+	mood := must(c.Do(t.Context(), record, map[string]string{"metric": "Mood", "day": "2026-10-01", "value": "3"}))
+	if _, err := c.Do(t.Context(), correct, map[string]string{"id": measurementID(mood), "value": "2.5"}); !clientStatus(err, 422) {
 		t.Fatalf("fractional mood correction: %v, want 422", err)
 	}
-	if _, err := c.Do(correct, map[string]string{"id": measurementID(mood), "value": "5"}); err != nil {
+	if _, err := c.Do(t.Context(), correct, map[string]string{"id": measurementID(mood), "value": "5"}); err != nil {
 		t.Fatalf("valid mood correction: %v", err)
 	}
 
-	if _, err := c.Do(find(actions, "register-metric"), map[string]string{"name": "api_walk"}); err != nil {
+	if _, err := c.Do(t.Context(), find(actions, "register-metric"), map[string]string{"name": "api_walk"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Do(find(actions, "start-habit"), map[string]string{"name": "api_walk", "start_day": "2026-10-01"}); err != nil {
+	if _, err := c.Do(t.Context(), find(actions, "start-habit"), map[string]string{"name": "api_walk", "start_day": "2026-10-01"}); err != nil {
 		t.Fatal(err)
 	}
-	habit := must(c.Do(record, map[string]string{"metric": "api_walk", "day": "2026-10-01", "value": "1"}))
-	if _, err := c.Do(correct, map[string]string{"id": measurementID(habit), "value": "2"}); !clientStatus(err, 422) {
+	habit := must(c.Do(t.Context(), record, map[string]string{"metric": "api_walk", "day": "2026-10-01", "value": "1"}))
+	if _, err := c.Do(t.Context(), correct, map[string]string{"id": measurementID(habit), "value": "2"}); !clientStatus(err, 422) {
 		t.Fatalf("non-binary habit correction: %v, want 422", err)
 	}
-	if _, err := c.Do(retract, map[string]string{"id": measurementID(habit)}); err != nil {
+	if _, err := c.Do(t.Context(), retract, map[string]string{"id": measurementID(habit)}); err != nil {
 		t.Fatalf("habit retraction: %v", err)
 	}
 }
@@ -203,7 +203,7 @@ func TestBrowserGetsHTMLAndSourceUI(t *testing.T) {
 	if body := browse(t, h, "/days/2026-09-29"); !strings.Contains(body, `<form method="POST" action="/days/2026-09-29/capture" data-action="capture">`) {
 		t.Errorf("HTML: %.300s", body)
 	}
-	q := must(c.Do(find(must(c.Get("/")), "query"), map[string]string{"sql": "SELECT source FROM entities"}))
+	q := must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "query"), map[string]string{"sql": "SELECT source FROM entities"}))
 	if !strings.Contains(fmtRows(q), "ui") {
 		t.Errorf("a browser form wrote as %s", fmtRows(q))
 	}
@@ -211,11 +211,11 @@ func TestBrowserGetsHTMLAndSourceUI(t *testing.T) {
 
 func TestQueryBoundaryIsReportedAs422(t *testing.T) {
 	c, _ := fresh(t)
-	query := find(must(c.Get("/")), "query")
-	if _, err := c.Do(query, map[string]string{"sql": "SELECT 1; SELECT 2"}); !clientStatus(err, 422) {
+	query := find(must(c.Get(t.Context(), "/")), "query")
+	if _, err := c.Do(t.Context(), query, map[string]string{"sql": "SELECT 1; SELECT 2"}); !clientStatus(err, 422) {
 		t.Fatalf("script query error = %v, want 422", err)
 	}
-	if got := fmtRows(must(c.Do(query, map[string]string{"sql": "SELECT ';' AS semi"}))); got != ";" {
+	if got := fmtRows(must(c.Do(t.Context(), query, map[string]string{"sql": "SELECT ';' AS semi"}))); got != ";" {
 		t.Fatalf("literal semicolon query rows = %q, want ;", got)
 	}
 }
@@ -304,14 +304,14 @@ func TestBrowserOriginProtection(t *testing.T) {
 		}
 	}
 
-	root := must(c.Get("/"))
-	if got := fmtRows(must(c.Do(find(root, "query"), map[string]string{"sql": "SELECT CAST(count(*) AS text) FROM entity_names WHERE title IN ('2026-10-10','2026-10-11')"}))); got != "2" {
+	root := must(c.Get(t.Context(), "/"))
+	if got := fmtRows(must(c.Do(t.Context(), find(root, "query"), map[string]string{"sql": "SELECT CAST(count(*) AS text) FROM entity_names WHERE title IN ('2026-10-10','2026-10-11')"}))); got != "2" {
 		t.Errorf("allowed day pages count = %s, want 2", got)
 	}
-	if got := fmtRows(must(c.Do(find(root, "query"), map[string]string{"sql": "SELECT CAST(count(*) AS text) FROM entity_names WHERE title IN ('2026-10-12','2026-10-14')"}))); got != "0" {
+	if got := fmtRows(must(c.Do(t.Context(), find(root, "query"), map[string]string{"sql": "SELECT CAST(count(*) AS text) FROM entity_names WHERE title IN ('2026-10-12','2026-10-14')"}))); got != "0" {
 		t.Errorf("denied day pages count = %s, want 0", got)
 	}
-	if got := fmtRows(must(c.Do(find(root, "query"), map[string]string{"sql": "SELECT CAST(count(*) AS text) FROM measurements WHERE day='2026-10-13'"}))); got != "0" {
+	if got := fmtRows(must(c.Do(t.Context(), find(root, "query"), map[string]string{"sql": "SELECT CAST(count(*) AS text) FROM measurements WHERE day='2026-10-13'"}))); got != "0" {
 		t.Errorf("denied readings count = %s, want 0", got)
 	}
 
@@ -358,18 +358,18 @@ func hasOption(a api.Action, field, opt string) bool {
 
 func TestViewsOfferTheMetricsInUse(t *testing.T) {
 	c, _ := fresh(t)
-	root := must(c.Get("/"))
+	root := must(c.Get(t.Context(), "/"))
 	for _, m := range []map[string]string{{"name": "weight", "unit": "kg"}, {"name": "ldl", "unit": "mg/dL"}} {
-		must(c.Do(find(root, "register-metric"), m))
+		must(c.Do(t.Context(), find(root, "register-metric"), m))
 	}
 	day := "2026-06-01"
 	for _, r := range []map[string]string{
 		{"metric": "weight", "day": "2026-05-20", "value": "71.5"},
 		{"metric": "ldl", "day": "2025-12-01", "value": "96"}, // a lab marker, read twice a year
 	} {
-		must(c.Do(find(root, "record"), r))
+		must(c.Do(t.Context(), find(root, "record"), r))
 	}
-	dayView := must(c.Get("/days/" + day))
+	dayView := must(c.Get(t.Context(), "/days/"+day))
 	rec := find(dayView, "record")
 	if !hasOption(rec, "metric", "weight") || hasOption(rec, "metric", "ldl") || hasOption(rec, "metric", "Mood") {
 		t.Errorf("the day view offers %v: only what was read in its last 60 days", rec.Fields[0].Options)
@@ -377,45 +377,45 @@ func TestViewsOfferTheMetricsInUse(t *testing.T) {
 	if href(dayView, "metrics") != "/metrics" {
 		t.Error("the day view does not link the whole registry")
 	}
-	if all := find(must(c.Get("/metrics")), "record"); !hasOption(all, "metric", "ldl") || !hasOption(all, "metric", "Mood") {
+	if all := find(must(c.Get(t.Context(), "/metrics")), "record"); !hasOption(all, "metric", "ldl") || !hasOption(all, "metric", "Mood") {
 		t.Errorf("/metrics offers %v: every registered metric", all.Fields[0].Options)
 	}
-	if ldl := find(must(c.Get("/metrics/ldl")), "record"); !hasOption(ldl, "metric", "ldl") || ldl.Fields[0].Value != "ldl" {
+	if ldl := find(must(c.Get(t.Context(), "/metrics/ldl")), "record"); !hasOption(ldl, "metric", "ldl") || ldl.Fields[0].Value != "ldl" {
 		t.Errorf("a series offers %v with %v: its own metric, selected", ldl.Fields[0].Options, ldl.Fields[0].Value)
 	}
-	must(c.Do(find(dayView, "record"), map[string]string{"metric": "ldl", "day": day, "value": "92"}))
-	if !hasOption(find(must(c.Get("/days/"+day)), "record"), "metric", "ldl") {
+	must(c.Do(t.Context(), find(dayView, "record"), map[string]string{"metric": "ldl", "day": day, "value": "92"}))
+	if !hasOption(find(must(c.Get(t.Context(), "/days/"+day)), "record"), "metric", "ldl") {
 		t.Error("a metric read on the day is not offered")
 	}
 }
 
 func TestMetricsAreGroupedByCategory(t *testing.T) {
 	c, h := fresh(t)
-	root := must(c.Get("/"))
+	root := must(c.Get(t.Context(), "/"))
 	for _, m := range []map[string]string{{"name": "TSH", "unit": "µUI/mL", "note": "thyroid-stimulating hormone"}, {"name": "Weight", "unit": "kg"},
 		{"name": "Walk"}, {"name": "Steps", "unit": "n"}} {
-		must(c.Do(find(root, "register-metric"), m))
+		must(c.Do(t.Context(), find(root, "register-metric"), m))
 	}
 	for _, p := range []string{"Biomarkers", "Thyroid", "Body"} {
-		must(c.Do(find(root, "create-page"), map[string]string{"title": p}))
+		must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": p}))
 	}
-	thyroid := must(c.Get("/pages?title=Thyroid"))
-	must(c.Do(find(thyroid, "link"), map[string]string{"to": "Biomarkers", "kind": "part-of"}))
-	tsh := must(c.Get("/metrics/tsh"))
+	thyroid := must(c.Get(t.Context(), "/pages?title=Thyroid"))
+	must(c.Do(t.Context(), find(thyroid, "link"), map[string]string{"to": "Biomarkers", "kind": "part-of"}))
+	tsh := must(c.Get(t.Context(), "/metrics/tsh"))
 	if href(tsh, "page") == "" || find(tsh, "link").Title != "File in category" {
 		t.Fatalf("a series links its metric's page and offers to file it: %v", names(tsh))
 	}
-	must(c.Do(find(tsh, "link"), map[string]string{"to": "Thyroid", "kind": "part-of"}))
-	must(c.Do(find(must(c.Get("/metrics/Weight")), "link"), map[string]string{"to": "Body", "kind": "part-of"}))
-	walk := must(c.Get("/metrics/Walk"))
-	must(c.Do(find(walk, "link"), map[string]string{"to": "Body", "kind": "part-of"}))
-	must(c.Do(find(walk, "start-habit"), map[string]string{"start_day": "2026-09-20"}))
-	if _, err := c.Do(find(walk, "link"), map[string]string{"to": "Nowhere", "kind": "part-of"}); err == nil {
+	must(c.Do(t.Context(), find(tsh, "link"), map[string]string{"to": "Thyroid", "kind": "part-of"}))
+	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/metrics/Weight")), "link"), map[string]string{"to": "Body", "kind": "part-of"}))
+	walk := must(c.Get(t.Context(), "/metrics/Walk"))
+	must(c.Do(t.Context(), find(walk, "link"), map[string]string{"to": "Body", "kind": "part-of"}))
+	must(c.Do(t.Context(), find(walk, "start-habit"), map[string]string{"start_day": "2026-09-20"}))
+	if _, err := c.Do(t.Context(), find(walk, "link"), map[string]string{"to": "Nowhere", "kind": "part-of"}); err == nil {
 		t.Error("a metric is filed in a category page that does not exist")
 	}
 
 	var got []string
-	for _, g := range must(c.Get("/metrics")).Properties.(map[string]any)["groups"].([]any) {
+	for _, g := range must(c.Get(t.Context(), "/metrics")).Properties.(map[string]any)["groups"].([]any) {
 		g := g.(map[string]any)
 		var ms []string
 		for _, m := range g["metrics"].([]any) {
@@ -442,18 +442,18 @@ func TestMetricsAreGroupedByCategory(t *testing.T) {
 
 func TestTombstonedHabits(t *testing.T) {
 	c, _ := fresh(t)
-	root := must(c.Get("/"))
-	must(c.Do(find(root, "register-metric"), map[string]string{"name": "Walk"}))
-	walk := must(c.Get("/metrics/Walk"))
-	must(c.Do(find(walk, "start-habit"), map[string]string{"start_day": "2026-09-01"}))
-	page := must(c.Get("/pages?title=Walk"))
+	root := must(c.Get(t.Context(), "/"))
+	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "Walk"}))
+	walk := must(c.Get(t.Context(), "/metrics/Walk"))
+	must(c.Do(t.Context(), find(walk, "start-habit"), map[string]string{"start_day": "2026-09-01"}))
+	page := must(c.Get(t.Context(), "/pages?title=Walk"))
 	for i, hidden := range []bool{false, true, false} {
 		if hidden {
-			page = must(c.Do(find(page, "tombstone"), nil))
+			page = must(c.Do(t.Context(), find(page, "tombstone"), nil))
 		} else if i > 0 {
-			page = must(c.Do(find(page, "revive"), nil))
+			page = must(c.Do(t.Context(), find(page, "revive"), nil))
 		}
-		h := must(c.Get("/habits?day=2026-09-01&from=2026-09-01&to=2026-09-02"))
+		h := must(c.Get(t.Context(), "/habits?day=2026-09-01&from=2026-09-01&to=2026-09-02"))
 		if hidden {
 			if find(h, "check-in").Name != "" || len(h.Entities) != 0 {
 				t.Errorf("hidden check-in offered: %+v", h)
@@ -481,16 +481,16 @@ func TestMetricCanonicalActions(t *testing.T) {
 		t.Run(tc.stored, func(t *testing.T) {
 			c, _ := fresh(t)
 			if tc.state != "unknown" {
-				must(c.Do(find(must(c.Get("/")), "register-metric"), map[string]string{"name": tc.stored, "unit": tc.unit}))
+				must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "register-metric"), map[string]string{"name": tc.stored, "unit": tc.unit}))
 				if tc.state == "habit" {
-					must(c.Do(find(must(c.Get("/metrics/"+url.PathEscape(tc.stored))), "start-habit"), map[string]string{"start_day": "2026-01-01"}))
+					must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/metrics/"+url.PathEscape(tc.stored))), "start-habit"), map[string]string{"start_day": "2026-01-01"}))
 				}
 				if tc.state == "deleted" {
-					must(c.Do(find(must(c.Get("/pages?title="+url.QueryEscape(tc.stored))), "tombstone"), nil))
+					must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/pages?title="+url.QueryEscape(tc.stored))), "tombstone"), nil))
 				}
 			}
-			stored := must(c.Get("/metrics/" + url.PathEscape(tc.stored)))
-			equivalent := must(c.Get("/metrics/" + url.PathEscape(tc.equivalent)))
+			stored := must(c.Get(t.Context(), "/metrics/"+url.PathEscape(tc.stored)))
+			equivalent := must(c.Get(t.Context(), "/metrics/"+url.PathEscape(tc.equivalent)))
 			if names(stored) != names(equivalent) {
 				t.Errorf("actions: stored %s, equivalent %s", names(stored), names(equivalent))
 			}
@@ -500,7 +500,7 @@ func TestMetricCanonicalActions(t *testing.T) {
 			for _, e := range []*api.Entity{stored, equivalent} {
 				if href(e, "self") == "" {
 					t.Error("missing self link")
-				} else if names(must(c.Get(href(e, "self")))) != names(e) {
+				} else if names(must(c.Get(t.Context(), href(e, "self")))) != names(e) {
 					t.Error("self link changes actions")
 				}
 				restricted := tc.state == "unknown" || tc.state == "deleted"
@@ -516,17 +516,17 @@ func TestMetricCanonicalActions(t *testing.T) {
 				if a.Name == "" {
 					t.Fatal("equivalent spelling lacks start action")
 				}
-				must(c.Do(a, map[string]string{"start_day": "2026-01-01"}))
+				must(c.Do(t.Context(), a, map[string]string{"start_day": "2026-01-01"}))
 			}
 			if tc.state == "habit" {
 				a := find(equivalent, "check-in")
 				if a.Name == "" {
 					t.Fatal("equivalent spelling lacks check-in")
 				}
-				must(c.Do(a, map[string]string{"day": "2026-01-01", "done": "1"}))
+				must(c.Do(t.Context(), a, map[string]string{"day": "2026-01-01", "done": "1"}))
 			}
 			if tc.state != "unknown" && tc.state != "deleted" {
-				page := must(c.Get(href(equivalent, "page")))
+				page := must(c.Get(t.Context(), href(equivalent, "page")))
 				if page.Title != tc.stored {
 					t.Errorf("stored spelling changed: %q", page.Title)
 				}
@@ -537,27 +537,27 @@ func TestMetricCanonicalActions(t *testing.T) {
 
 func TestRenamedIdentityRetainsActionsAndAliasWrites(t *testing.T) {
 	c, _ := fresh(t)
-	root := must(c.Get("/"))
-	p := must(c.Do(find(root, "create-page"), map[string]string{"title": "Typo", "body": "prose"}))
+	root := must(c.Get(t.Context(), "/"))
+	p := must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Typo", "body": "prose"}))
 	oldHref := href(p, "self")
-	renamed := must(c.Do(find(p, "rename"), map[string]string{"title": "Correct"}))
+	renamed := must(c.Do(t.Context(), find(p, "rename"), map[string]string{"title": "Correct"}))
 	if href(renamed, "self") != oldHref {
 		t.Fatal("rename changed id")
 	}
-	other := must(c.Do(find(root, "create-page"), map[string]string{"title": "Other", "body": "[[Typo]]"}))
-	current := must(c.Get(oldHref))
+	other := must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Other", "body": "[[Typo]]"}))
+	current := must(c.Get(t.Context(), oldHref))
 	if current.Title != "Correct" || names(current) != "save-body,promote,promote-period,rename,link,unlink,tombstone" {
 		t.Fatalf("renamed actions: %+v", current)
 	}
 	version := current.Properties.(map[string]any)["version"].(string)
-	must(c.Do(find(current, "save-body"), map[string]string{"body": "#REDIRECT [[Other]]", "version": version}))
-	must(c.Do(find(other, "link"), map[string]string{"to": "Typo", "kind": "related"}))
-	must(c.Do(find(must(c.Get(oldHref)), "unlink"), map[string]string{"to": "Other", "kind": "related"}))
-	alias := must(c.Get("/pages?title=Typo"))
+	must(c.Do(t.Context(), find(current, "save-body"), map[string]string{"body": "#REDIRECT [[Other]]", "version": version}))
+	must(c.Do(t.Context(), find(other, "link"), map[string]string{"to": "Typo", "kind": "related"}))
+	must(c.Do(t.Context(), find(must(c.Get(t.Context(), oldHref)), "unlink"), map[string]string{"to": "Other", "kind": "related"}))
+	alias := must(c.Get(t.Context(), "/pages?title=Typo"))
 	if href(alias, "self") != oldHref || alias.Title != "Correct" || alias.Properties.(map[string]any)["body"] != "#REDIRECT [[Other]]" {
 		t.Fatalf("retained alias: %+v", alias)
 	}
-	if _, err := c.Do(find(alias, "link"), map[string]string{"to": "Other", "kind": "redirect"}); !clientStatus(err, 422) {
+	if _, err := c.Do(t.Context(), find(alias, "link"), map[string]string{"to": "Other", "kind": "redirect"}); !clientStatus(err, 422) {
 		t.Fatalf("removed kind: %v", err)
 	}
 }
@@ -593,17 +593,17 @@ func TestHabitsShowInvalidCheckIns(t *testing.T) {
 	t.Cleanup(func() { d.Close() })
 	h := api.New(&core.Store{DB: d})
 	c := client.InProcess(h, "cli")
-	root := must(c.Get("/"))
-	must(c.Do(find(root, "register-metric"), map[string]string{"name": "Walk"}))
-	must(c.Do(find(must(c.Get("/metrics/Walk")), "start-habit"), map[string]string{"start_day": "2026-10-01"}))
-	must(c.Do(find(root, "record"), map[string]string{"metric": "Walk", "day": "2026-10-02", "value": "1"}))
+	root := must(c.Get(t.Context(), "/"))
+	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "Walk"}))
+	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/metrics/Walk")), "start-habit"), map[string]string{"start_day": "2026-10-01"}))
+	must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "Walk", "day": "2026-10-02", "value": "1"}))
 	if _, err := d.W.Exec(`INSERT INTO measurements(metric_id, day, value, created_at, source)
 	                       SELECT entity_id, '2026-10-01', 2, '2026-10-07T00:00:00.000Z', 'other-writer'
 	                         FROM entity_names WHERE title = 'Walk'`); err != nil {
 		t.Fatal(err)
 	}
 
-	habits := must(c.Get("/habits?day=2026-10-01&from=2026-10-01&to=2026-10-02"))
+	habits := must(c.Get(t.Context(), "/habits?day=2026-10-01&from=2026-10-01&to=2026-10-02"))
 	props := habits.Properties.(map[string]any)
 	if got := props["habits"].([]any); len(got) != 1 || got[0].(map[string]any)["state"] != "invalid" {
 		t.Errorf("habits of the day: %v", got)
@@ -618,7 +618,7 @@ func TestHabitsShowInvalidCheckIns(t *testing.T) {
 		}
 	}
 	listed := false
-	for _, v := range must(c.Get("/days/2026-10-01")).Properties.(map[string]any)["view"].([]any) {
+	for _, v := range must(c.Get(t.Context(), "/days/2026-10-01")).Properties.(map[string]any)["view"].([]any) {
 		row := v.(map[string]any)
 		listed = listed || row["what"] == "habit" && row["detail"] == "Walk: invalid"
 	}

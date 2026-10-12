@@ -12,7 +12,7 @@ func TestTransactionOperationsStopAfterCancellation(t *testing.T) {
 		name string
 		run  func(*Tx) error
 	}{
-		{"lookup", func(tx *Tx) error { _, err := tx.Lookup("Before cancellation"); return err }},
+		{"lookup", func(tx *Tx) error { _, err := tx.lookup("Before cancellation"); return err }},
 		{"create", func(tx *Tx) error {
 			_, _, _, err := tx.CreatePage("After cancellation", "", "2026-10-07", "")
 			return err

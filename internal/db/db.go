@@ -22,10 +22,10 @@ import (
 )
 
 //go:embed schema.sql
-var Schema string
+var schema string
 
-// MinVersion is the writer's floor (connections.md: the WAL race fixed in 3.51.3).
-const MinVersion = 3051003
+// minVersion is the writer's floor (connections.md: the WAL race fixed in 3.51.3).
+const minVersion = 3051003
 
 const applicationID = 0x4C494645
 const schemaVersion = 1 // docs/decisions/D13-migrations-and-freeze.md
@@ -52,8 +52,8 @@ func init() {
 // checkConnection runs on every new connection: the version floor always, trusted_schema on readers, the pragmas
 // on writers.
 func checkConnection(c sqlite.ExecQuerierContext, dsn string) error {
-	if v := version(c); v < MinVersion {
-		return fmt.Errorf("SQLite %d is older than %d (connections.md)", v, MinVersion)
+	if v := version(c); v < minVersion {
+		return fmt.Errorf("SQLite %d is older than %d (connections.md)", v, minVersion)
 	}
 	if strings.Contains(dsn, "mode=ro") {
 		if got := intOf(c, "PRAGMA trusted_schema"); got != 0 {
@@ -180,7 +180,7 @@ func open(path string, keep bool) (*DB, error) {
 // Init creates a new life.db from the canonical DDL. It refuses an existing file.
 func Init(path string) error {
 	return initWith(path, func(w *sql.DB) error {
-		_, err := w.Exec(Schema)
+		_, err := w.Exec(schema)
 		return err
 	})
 }

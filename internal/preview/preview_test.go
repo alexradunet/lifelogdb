@@ -168,7 +168,7 @@ func TestCheck(t *testing.T) {
 		"a PNG":           p.Bytes(),
 		"empty":           {},
 		"too wide":        encodeJPEG(t, halves(1601, 10)),
-		"over 1 MB":       append(append([]byte{}, small...), make([]byte, MaxBytes)...),
+		"over 1 MB":       append(append([]byte{}, small...), make([]byte, maxBytes)...),
 		"JPEG bytes only": {0xFF, 0xD8, 0xFF, 0xE0, 0, 0},
 	} {
 		if Check(b) == nil {

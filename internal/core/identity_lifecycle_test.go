@@ -27,7 +27,7 @@ func TestPromotionRefusesRetainedTypedEdges(t *testing.T) {
 					t.Fatal(err)
 				}
 				// Deliberate DDL setup isolates endpoint enforcement from at's day-only writer rule.
-				if _, err := s.DB.W.Exec(`INSERT INTO links(from_id,to_id,kind,created_at,source) VALUES(?,?,'at',`+Now+`,'cli')`, from, to); err != nil {
+				if _, err := s.DB.W.Exec(`INSERT INTO links(from_id,to_id,kind,created_at,source) VALUES(?,?,'at',`+nowSQL+`,'cli')`, from, to); err != nil {
 					t.Fatal(err)
 				}
 			} else if err := s.Link(ctx, "cli", from, to, kind, "retained note"); err != nil {

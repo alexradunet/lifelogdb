@@ -37,7 +37,7 @@ func TestScopeRelocationCancellationAfterRetraction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	counts, err := s.Counts(ctx)
+	counts, err := countRows(ctx, s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestScopeRelocationCancellationAfterRetraction(t *testing.T) {
 		if err != nil || !reflect.DeepEqual(beforeSession, afterSession) {
 			t.Fatalf("session changed %+v %v", afterSession, err)
 		}
-		afterCounts, err := s.Counts(ctx)
+		afterCounts, err := countRows(ctx, s)
 		if err != nil || !reflect.DeepEqual(counts, afterCounts) {
 			t.Fatalf("counts changed %+v %v", afterCounts, err)
 		}

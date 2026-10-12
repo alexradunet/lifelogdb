@@ -57,7 +57,6 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 	"appcss":    func() template.CSS { return appCSS },
 	"appjs":     func() template.JS { return appJS },
 	"rel":       func(r []string) string { return strings.Join(r, " ") },
-	"post":      func(a Action) bool { return a.Method == "POST" },
 	"markdown":  markdown,
 	"mark":      mark,
 	"rejected":  rejected,
@@ -69,7 +68,6 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 	"outcomes":  outcomes,
 	"group":     group,
 	"due":       dueGroups,
-	"dueWords":  dueWords,
 	"weeks":     weeks,
 	"dayOfMonth": func(day string) string {
 		if t, err := time.Parse(time.DateOnly, day); err == nil {
@@ -162,8 +160,6 @@ type view struct {
 
 // refusedView is the error of a refused form, as the page it came from draws it: the alert at the top of the page.
 type refusedView struct {
-	Status  int
-	Code    string
 	Message string
 	Words   string // the alert's first words (alertOf)
 	Danger  bool
@@ -189,7 +185,7 @@ func renderHTML(w http.ResponseWriter, r *http.Request, status int, e *Entity, s
 		code, _ := props["code"].(string)
 		message, _ := props["message"].(string)
 		words := alertOf(code)
-		v.Refused = &refusedView{Status: rf.status, Code: code, Message: message, Words: words.Words, Danger: words.Danger, Href: rf.href}
+		v.Refused = &refusedView{Message: message, Words: words.Words, Danger: words.Danger, Href: rf.href}
 		v.Sent = rf.sent
 		status, rf.shown = rf.status, true
 		w.Header().Set("Cache-Control", "no-store")

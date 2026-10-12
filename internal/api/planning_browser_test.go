@@ -108,7 +108,7 @@ func TestABrowserFormReturnsToThePageThatSentIt(t *testing.T) {
 	if out.Code != http.StatusOK || out.Header().Get("Location") != "/days/2026-09-29" {
 		t.Errorf("a JSON client followed back: %d %q", out.Code, out.Header().Get("Location"))
 	}
-	if n := len(must(c.Get("/days/2026-09-29")).Properties.(map[string]any)["view"].([]any)); n == 0 {
+	if n := len(must(c.Get(t.Context(), "/days/2026-09-29")).Properties.(map[string]any)["view"].([]any)); n == 0 {
 		t.Error("the writes were not done")
 	}
 }
@@ -118,9 +118,9 @@ func TestABrowserFormReturnsToThePageThatSentIt(t *testing.T) {
 // button writes the state it names and returns to the page.
 func TestDueOccurrencesOfferTheirOutcome(t *testing.T) {
 	c, h := freshOn(t, fixedToday)
-	root := must(c.Get("/"))
+	root := must(c.Get(t.Context(), "/"))
 	create := func(v map[string]string) string {
-		e := must(c.Do(find(root, "create-task"), v))
+		e := must(c.Do(t.Context(), find(root, "create-task"), v))
 		return strings.SplitN(hrefOf(e, "self"), "?", 2)[0]
 	}
 	late := create(map[string]string{"label": "Book the dentist", "due_day": dayOf(-10)})
@@ -128,11 +128,11 @@ func TestDueOccurrencesOfferTheirOutcome(t *testing.T) {
 	later := create(map[string]string{"label": "Renew the passport", "due_day": dayOf(30)})
 	undated := create(map[string]string{"label": "Read about compost"})
 	gone := create(map[string]string{"label": "Old plan", "due_day": dayOf(1)})
-	must(c.Do(find(must(c.Get(gone)), "tombstone-task"), nil))
+	must(c.Do(t.Context(), find(must(c.Get(t.Context(), gone)), "tombstone-task"), nil))
 
 	// The JSON: one outcome for each occurrence due within the week after today, and none for a later one.
 	window := "/deadlines?from=" + dayOf(-20) + "&through=" + dayOf(40)
-	due := must(c.Get(window))
+	due := must(c.Get(t.Context(), window))
 	if props(due)["today"] != fixedToday {
 		t.Fatalf("today = %v", props(due)["today"])
 	}
@@ -176,7 +176,7 @@ func TestDueOccurrencesOfferTheirOutcome(t *testing.T) {
 	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != window {
 		t.Fatalf("Done: %d %q", rec.Code, rec.Header().Get("Location"))
 	}
-	o := props(must(c.Get(late + "/occurrences/once")))
+	o := props(must(c.Get(t.Context(), late+"/occurrences/once")))
 	if o["state"] != "done" || !core.IsInstant(o["completed_at"].(string)) {
 		t.Fatalf("after Done: %v", o)
 	}
@@ -195,7 +195,7 @@ func TestDueOccurrencesOfferTheirOutcome(t *testing.T) {
 	if rec := submit(h, skip.Action, skip.Fields, ""); rec.Code != http.StatusSeeOther {
 		t.Fatalf("Skip: %d %s", rec.Code, rec.Body.String())
 	}
-	if o := props(must(c.Get(slot))); o["state"] != "skipped" || o["virtual"] != false || o["completed_at"] != nil {
+	if o := props(must(c.Get(t.Context(), slot))); o["state"] != "skipped" || o["virtual"] != false || o["completed_at"] != nil {
 		t.Fatalf("after Skip: %v", o)
 	}
 
@@ -204,27 +204,27 @@ func TestDueOccurrencesOfferTheirOutcome(t *testing.T) {
 	if rec := submit(h, reopen.Action, reopen.Fields, ""); rec.Code != http.StatusSeeOther {
 		t.Fatalf("Reopen: %d %s", rec.Code, rec.Body.String())
 	}
-	if o := props(must(c.Get(late + "/occurrences/once"))); o["state"] != "open" || o["completed_at"] != nil {
+	if o := props(must(c.Get(t.Context(), late+"/occurrences/once"))); o["state"] != "open" || o["completed_at"] != nil {
 		t.Fatalf("after Reopen: %v", o)
 	}
 
 	// A form drawn before the task changed is refused, and writes nothing.
 	stale := formFor(t, browse(t, h, window), "Done", water+"/occurrences")
-	must(c.Do(find(must(c.Get(water)), "edit-task"), map[string]string{"label": "Water the garden"}))
+	must(c.Do(t.Context(), find(must(c.Get(t.Context(), water)), "edit-task"), map[string]string{"label": "Water the garden"}))
 	if rec := submit(h, stale.Action, stale.Fields, ""); rec.Code != http.StatusConflict {
 		t.Fatalf("a stale Done: %d", rec.Code)
 	}
-	if o := props(must(c.Get(water + "/occurrences/" + stale.Fields.Get("key")))); o["virtual"] != true || o["state"] != "open" {
+	if o := props(must(c.Get(t.Context(), water+"/occurrences/"+stale.Fields.Get("key")))); o["virtual"] != true || o["state"] != "open" {
 		t.Fatalf("a stale Done wrote: %v", o)
 	}
 
 	// An undated one-off: its task page shows its one occurrence, with Done.
 	page := browse(t, h, undated)
-	if props(must(c.Get(undated)))["once"] == nil || formFor(t, page, "Done", undated+"/occurrences/once/edit").Fields.Get("back") != undated {
+	if props(must(c.Get(t.Context(), undated)))["once"] == nil || formFor(t, page, "Done", undated+"/occurrences/once/edit").Fields.Get("back") != undated {
 		t.Error("an undated one-off does not offer its outcome on its page")
 	}
 	// A tombstoned task offers no outcome anywhere.
-	if names(must(c.Get(gone))) != "revive-task" || len(postForms(browse(t, h, gone+"/occurrences/once"))) != 0 {
+	if names(must(c.Get(t.Context(), gone))) != "revive-task" || len(postForms(browse(t, h, gone+"/occurrences/once"))) != 0 {
 		t.Error("a tombstoned task offers an outcome")
 	}
 }
@@ -259,9 +259,9 @@ func fieldOf(a api.Action, name string) string {
 // due today does not, and neither does an overdue one once it is done (docs/plans/095-the-leaf-and-its-margin.md).
 func TestAnOverdueRowSaysSo(t *testing.T) {
 	c, h := freshOn(t, fixedToday)
-	root := must(c.Get("/"))
+	root := must(c.Get(t.Context(), "/"))
 	create := func(v map[string]string) string {
-		e := must(c.Do(find(root, "create-task"), v))
+		e := must(c.Do(t.Context(), find(root, "create-task"), v))
 		return strings.SplitN(hrefOf(e, "self"), "?", 2)[0]
 	}
 	create(map[string]string{"label": "Book the dentist", "due_day": dayOf(-3)})

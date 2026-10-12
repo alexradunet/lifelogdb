@@ -217,15 +217,15 @@ func TestPublicRemoteClientParity(t *testing.T) {
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
 	c := client.Remote(srv.URL, "app:phone")
-	if _, err := c.Get("/"); err == nil {
+	if _, err := c.Get(t.Context(), "/"); err == nil {
 		t.Fatal("a remote client without the token was served")
 	}
 	c.SetToken(testToken)
-	root, err := c.Get("/")
+	root, err := c.Get(t.Context(), "/")
 	if err != nil {
 		t.Fatal(err)
 	}
-	catalog, err := c.Catalog()
+	catalog, err := c.Catalog(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,14 +235,14 @@ func TestPublicRemoteClientParity(t *testing.T) {
 			capture = a
 		}
 	}
-	if _, err := c.Do(capture, map[string]string{"day": "2031-01-03", "text": "from the phone"}); err != nil {
+	if _, err := c.Do(t.Context(), capture, map[string]string{"day": "2031-01-03", "text": "from the phone"}); err != nil {
 		t.Fatal(err)
 	}
 	id, err := s.PageID(t.Context(), "2031-01-03")
 	if err != nil || id == 0 {
 		t.Fatalf("id=%d err=%v", id, err)
 	}
-	res := must(c.Do(find(root, "query"), map[string]string{"sql": fmt.Sprintf("SELECT source FROM entities WHERE id = %d", id)}))
+	res := must(c.Do(t.Context(), find(root, "query"), map[string]string{"sql": fmt.Sprintf("SELECT source FROM entities WHERE id = %d", id)}))
 	if got := fmtRows(res); got != "app:phone" {
 		t.Fatalf("source=%q", got)
 	}

@@ -21,22 +21,22 @@ func weekScenario(t *testing.T) (*client.Client, http.Handler) {
 	t.Helper()
 	c, h := freshOn(t, weekToday)
 	for day, text := range map[string]string{"2026-10-05": "Monday: the long meeting.", "2026-10-07": "Wednesday: a walk by the river.", "2026-10-11": "Sunday: rest."} {
-		must(c.Do(find(must(c.Get("/days/"+day)), "capture"), map[string]string{"text": text}))
+		must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/days/"+day)), "capture"), map[string]string{"text": text}))
 	}
-	root := must(c.Get("/"))
-	must(c.Do(find(root, "register-metric"), map[string]string{"name": "walk"}))
-	must(c.Do(find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
-	must(c.Do(find(must(c.Get("/metrics/walk")), "start-habit"), map[string]string{"start_day": "2026-09-20"}))
+	root := must(c.Get(t.Context(), "/"))
+	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "walk"}))
+	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
+	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/metrics/walk")), "start-habit"), map[string]string{"start_day": "2026-09-20"}))
 	for _, day := range []string{"2026-10-06", "2026-10-08"} {
-		must(c.Do(find(must(c.Get("/habits?day="+day)), "check-in"), map[string]string{"day": day, "done": "1"}))
+		must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/habits?day="+day)), "check-in"), map[string]string{"day": day, "done": "1"}))
 	}
 	for day, value := range map[string]string{"2026-10-01": "71.9", "2026-10-06": "71.6", "2026-10-09": "71.2"} {
-		must(c.Do(find(root, "record"), map[string]string{"metric": "weight", "day": day, "value": value}))
+		must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "weight", "day": day, "value": value}))
 	}
-	done := must(c.Do(find(root, "create-task"), map[string]string{"label": "Send the form", "due_day": "2026-10-07"}))
+	done := must(c.Do(t.Context(), find(root, "create-task"), map[string]string{"label": "Send the form", "due_day": "2026-10-07"}))
 	once := strings.SplitN(hrefOf(done, "self"), "?", 2)[0] + "/occurrences/once"
-	must(c.Do(find(must(c.Get(once)), "edit-occurrence"), map[string]string{"state": "done", "completed_at": "now"}))
-	must(c.Do(find(root, "create-task"), map[string]string{"label": "Call the bank", "due_day": "2026-10-10"}))
+	must(c.Do(t.Context(), find(must(c.Get(t.Context(), once)), "edit-occurrence"), map[string]string{"state": "done", "completed_at": "now"}))
+	must(c.Do(t.Context(), find(root, "create-task"), map[string]string{"label": "Call the bank", "due_day": "2026-10-10"}))
 	return c, h
 }
 
@@ -53,7 +53,7 @@ func objects(p map[string]any, key string) []map[string]any {
 // readings and occurrences are checked against the scenario by hand.
 func TestTheWeekLooksBackOverSevenDays(t *testing.T) {
 	c, h := weekScenario(t)
-	w := must(c.Get("/weeks/2026-W41"))
+	w := must(c.Get(t.Context(), "/weeks/2026-W41"))
 	p := props(w)
 	if w.Class[0] != "week" || w.Title != "Week 41 of 2026" || p["week"] != "2026-W41" || p["from"] != "2026-10-05" || p["through"] != "2026-10-11" || p["today"] != weekToday {
 		t.Errorf("the week: %v %q %v", w.Class, w.Title, p)
@@ -101,7 +101,7 @@ func TestTheWeekLooksBackOverSevenDays(t *testing.T) {
 	}
 
 	// The week before has one reading and no week before it: no previous mean. Its habit was active on all 7 days and done on none.
-	p40 := props(must(c.Get("/weeks/2026-W40")))
+	p40 := props(must(c.Get(t.Context(), "/weeks/2026-W40")))
 	m40 := objects(p40, "metrics")
 	if len(m40) != 1 || said(m40[0]["readings"]) != "1" || said(m40[0]["mean"]) != "71.9" {
 		t.Fatalf("week 40 metrics %v", m40)
@@ -113,23 +113,23 @@ func TestTheWeekLooksBackOverSevenDays(t *testing.T) {
 		t.Errorf("week 40 habits %v", h40)
 	}
 	// A week with nothing in it is still a week.
-	p42 := props(must(c.Get("/weeks/2026-W42")))
+	p42 := props(must(c.Get(t.Context(), "/weeks/2026-W42")))
 	if len(objects(p42, "metrics")) != 0 || len(objects(p42, "occurrences")) != 0 || len(objects(p42, "days")) != 7 {
 		t.Errorf("week 42: %v", p42)
 	}
 	// 2026 and 2020 have 53 weeks. Week 1 of 2026 starts in 2025, and its Thursday is in January.
 	for week, want := range map[string]string{"2026-W53": "2026-12-28", "2020-W53": "2020-12-28", "2027-W01": "2027-01-04", "2026-W01": "2025-12-29"} {
-		if got := props(must(c.Get("/weeks/" + week)))["from"]; got != want {
+		if got := props(must(c.Get(t.Context(), "/weeks/"+week)))["from"]; got != want {
 			t.Errorf("%s starts on %v, want %s", week, got, want)
 		}
 	}
-	w1 := must(c.Get("/weeks/2026-W01"))
+	w1 := must(c.Get(t.Context(), "/weeks/2026-W01"))
 	if hrefOf(w1, "month") != "/months/2026-01" || hrefOf(w1, "year") != "/years/2026" || hrefOf(w1, "prev") != "/weeks/2025-W52" {
 		t.Errorf("week 1 of 2026 links: %s %s %s", hrefOf(w1, "month"), hrefOf(w1, "year"), hrefOf(w1, "prev"))
 	}
 
 	for _, bad := range []string{"2026-W60", "2026-10", "2026-W00", "2026-W54", "2025-W53", "2026-W1", "x", "2026-w41", "2026-W41x"} {
-		if _, err := c.Get("/weeks/" + bad); !clientStatus(err, 422) {
+		if _, err := c.Get(t.Context(), "/weeks/"+bad); !clientStatus(err, 422) {
 			t.Errorf("/weeks/%s: %v", bad, err)
 		}
 	}
@@ -177,14 +177,14 @@ func TestTheWeekLooksBackOverSevenDays(t *testing.T) {
 func TestTheYearHoldsTwelveMonths(t *testing.T) {
 	c, h := freshOn(t, weekToday)
 	for _, day := range []string{"2026-10-05", "2026-10-07", "2026-10-11"} {
-		must(c.Do(find(must(c.Get("/days/"+day)), "capture"), map[string]string{"text": "A page."}))
+		must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/days/"+day)), "capture"), map[string]string{"text": "A page."}))
 	}
-	root := must(c.Get("/"))
-	must(c.Do(find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
+	root := must(c.Get(t.Context(), "/"))
+	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
 	for day, value := range map[string]string{"2025-12-31": "70", "2026-10-01": "71.9", "2026-10-06": "71.6", "2026-10-09": "71.2"} {
-		must(c.Do(find(root, "record"), map[string]string{"metric": "weight", "day": day, "value": value}))
+		must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "weight", "day": day, "value": value}))
 	}
-	y := must(c.Get("/years/2026"))
+	y := must(c.Get(t.Context(), "/years/2026"))
 	p := props(y)
 	if y.Class[0] != "year" || y.Title != "2026" || p["year"] != "2026" || p["today"] != weekToday || said(p["written"]) != "3" || said(p["readings"]) != "3" {
 		t.Errorf("the year: %v %q %v %v %v %v", y.Class, y.Title, p["year"], p["today"], p["written"], p["readings"])
@@ -207,11 +207,11 @@ func TestTheYearHoldsTwelveMonths(t *testing.T) {
 	if len(y.Actions) != 1 || find(y, "open-day").Name != "open-day" {
 		t.Errorf("actions: %s", names(y))
 	}
-	if len(objects(props(must(c.Get("/years/2028"))), "months")[1]["days"].([]any)) != 29 {
+	if len(objects(props(must(c.Get(t.Context(), "/years/2028"))), "months")[1]["days"].([]any)) != 29 {
 		t.Error("February 2028 has not 29 days")
 	}
 	for _, bad := range []string{"20", "abcd", "0000", "20260", "2026-10"} {
-		if _, err := c.Get("/years/" + bad); !clientStatus(err, 422) {
+		if _, err := c.Get(t.Context(), "/years/"+bad); !clientStatus(err, 422) {
 			t.Errorf("/years/%s: %v", bad, err)
 		}
 	}
@@ -243,7 +243,7 @@ func TestTheYearHoldsTwelveMonths(t *testing.T) {
 // TestHomeLinksTheWeekAndTheYear: Home links this week and this year.
 func TestHomeLinksTheWeekAndTheYear(t *testing.T) {
 	c, _ := freshOn(t, weekToday)
-	home := must(c.Get("/"))
+	home := must(c.Get(t.Context(), "/"))
 	if hrefOf(home, "week") != "/weeks/current" || hrefOf(home, "year") != "/years/current" {
 		t.Errorf("Home links: week %q, year %q", hrefOf(home, "week"), hrefOf(home, "year"))
 	}

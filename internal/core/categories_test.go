@@ -91,13 +91,36 @@ func edgeTitles(es []Edge) []string {
 
 func TestMetricsArePagesFiledInCategories(t *testing.T) {
 	s := fresh(t)
+	// file files a metric in the category at path, as the owner does through the catalog: the category pages made
+	// when missing, each part-of the one above it, then the metric's page part-of the last.
 	file := func(metric, path string) (added bool, err error) {
 		err = s.Do(ctx, "cli", func(tx *Tx) error {
 			id, err := tx.metricID(metric)
 			if err != nil {
 				return err
 			}
-			added, err = tx.File(id, path)
+			var above int64
+			for _, title := range strings.Split(path, "/") {
+				p, err := tx.lookup(title)
+				if err != nil {
+					return err
+				}
+				var c int64
+				if p == nil {
+					if c, _, _, err = tx.CreatePage(title, "", "", ""); err != nil {
+						return err
+					}
+				} else {
+					c = p.ID
+				}
+				if above != 0 {
+					if _, err := tx.Link(c, above, "part-of", ""); err != nil {
+						return err
+					}
+				}
+				above = c
+			}
+			added, err = tx.Link(id, above, "part-of", "")
 			return err
 		})
 		return
@@ -146,7 +169,7 @@ func TestMetricsArePagesFiledInCategories(t *testing.T) {
 	if _, err := file("Ferritin", "Supplements"); err != nil {
 		t.Errorf("a metric in a second category: %v", err)
 	}
-	if _, err := file("Ferritin", "2026-10-03"); status(err) != 409 {
+	if _, err := file("Ferritin", "2026-10-03"); status(err) != 422 {
 		t.Errorf("a day page is not a category: %v", err)
 	}
 	ms, err := s.Metrics(ctx)

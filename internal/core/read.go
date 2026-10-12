@@ -79,7 +79,7 @@ func (s *Store) PageByID(ctx context.Context, id int64) (*Page, error) {
 		p.Person.Birth, p.Person.Death = b.String, d.String
 	}
 	if p.Type == "place" {
-		if p.Point, err = s.PlaceOf(ctx, id); err != nil {
+		if p.Point, err = s.placeOf(ctx, id); err != nil {
 			return nil, err
 		}
 	}
@@ -262,7 +262,7 @@ func (s *Store) dayEntries(ctx context.Context, cond, order string, limit int, a
 		if err := rows.Scan(&e.Day, &e.PageID, &body); err != nil {
 			return nil, err
 		}
-		e.FirstLine = FirstLine(body)
+		e.FirstLine = firstLine(body)
 		out = append(out, e)
 	}
 	return out, rows.Err()
@@ -271,9 +271,9 @@ func (s *Store) dayEntries(ctx context.Context, cond, order string, limit int, a
 // firstLineRunes is how long a first line may be before it is cut.
 const firstLineRunes = 160
 
-// FirstLine is the first line of a body that has text, as plain text: a heading's or a list item's marker cut, the
+// firstLine is the first line of a body that has text, as plain text: a heading's or a list item's marker cut, the
 // brackets of a [[wikilink]] cut, and cut with "…" after 160 characters. It is for a list of days, not a rendering.
-func FirstLine(body string) string {
+func firstLine(body string) string {
 	for line := range strings.SplitSeq(body, "\n") {
 		line = strings.TrimSpace(line)
 		line = strings.TrimSpace(strings.TrimLeft(line, "#>-*+ "))

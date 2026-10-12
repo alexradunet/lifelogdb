@@ -35,17 +35,17 @@ func TestRecordedPeriodTransportParity(t *testing.T) {
 				t.Cleanup(server.Close)
 				c = client.Remote(server.URL, "cli")
 			}
-			catalog, err := c.Get("/actions")
+			catalog, err := c.Get(t.Context(), "/actions")
 			if err != nil {
 				t.Fatal(err)
 			}
-			created, err := c.Do(find(catalog, "create-period"), map[string]string{"title": "Synthetic study", "body": "With [[Sam]].", "start_boundary": "2018-09", "end_boundary": ".."})
+			created, err := c.Do(t.Context(), find(catalog, "create-period"), map[string]string{"title": "Synthetic study", "body": "With [[Sam]].", "start_boundary": "2018-09", "end_boundary": ".."})
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			version := fmt.Sprint(created.Properties.(map[string]any)["version"])
-			list, err := c.Get("/periods?day=2018-09-15&as_of=2018-09-15")
+			list, err := c.Get(t.Context(), "/periods?day=2018-09-15&as_of=2018-09-15")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -53,17 +53,17 @@ func TestRecordedPeriodTransportParity(t *testing.T) {
 			if len(ps) != 1 || ps[0].(map[string]any)["membership"] != "possible" || list.Properties.(map[string]any)["as_of"] != "2018-09-15" {
 				t.Fatalf("membership %+v", list.Properties)
 			}
-			edited, err := c.Do(find(created, "edit-period"), map[string]string{"version": version, "start_boundary": "2018-09", "end_boundary": "2018-09-15"})
+			edited, err := c.Do(t.Context(), find(created, "edit-period"), map[string]string{"version": version, "start_boundary": "2018-09", "end_boundary": "2018-09-15"})
 			if err != nil {
 				t.Fatal(err)
 			}
 			if fmt.Sprint(edited.Properties.(map[string]any)["version"]) == version {
 				t.Fatal("revision unchanged")
 			}
-			if _, err := c.Do(find(created, "edit-period"), map[string]string{"version": version, "start_boundary": "2018"}); err == nil {
+			if _, err := c.Do(t.Context(), find(created, "edit-period"), map[string]string{"version": version, "start_boundary": "2018"}); err == nil {
 				t.Fatal("stale edit accepted")
 			}
-			list, err = c.Get("/periods?day=2018-09-15")
+			list, err = c.Get(t.Context(), "/periods?day=2018-09-15")
 			if err != nil {
 				t.Fatal(err)
 			}

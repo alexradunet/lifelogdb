@@ -26,11 +26,11 @@ func page(t *testing.T, h http.Handler, path string) string {
 // no other, and no id generated for a template to find.
 func TestEveryPageIsSemanticHTML(t *testing.T) {
 	c, h := fresh(t)
-	root := must(c.Get("/"))
-	day := must(c.Do(find(root, "capture"), map[string]string{"text": "Ran with [[Sam]] #running", "mood": "4"}))
-	sam := must(c.Get("/pages?title=Sam"))
-	gone := must(c.Do(find(root, "create-page"), map[string]string{"title": "Scratch"}))
-	must(c.Do(find(gone, "tombstone"), nil))
+	root := must(c.Get(t.Context(), "/"))
+	day := must(c.Do(t.Context(), find(root, "capture"), map[string]string{"text": "Ran with [[Sam]] #running", "mood": "4"}))
+	sam := must(c.Get(t.Context(), "/pages?title=Sam"))
+	gone := must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Scratch"}))
+	must(c.Do(t.Context(), find(gone, "tombstone"), nil))
 
 	for _, path := range []string{"/", "/days", href(day, "self"), href(sam, "self"), href(gone, "self"),
 		"/metrics", "/habits", "/search?q=ran", "/actions", "/integrity", "/tasks", "/deadlines", "/pages/999999"} {
@@ -68,11 +68,11 @@ func TestEveryPageIsSemanticHTML(t *testing.T) {
 // knows an action's name: a tombstone is drawn as a danger, and the revive that undoes it is not.
 func TestADestructiveActionDrawsADangerButton(t *testing.T) {
 	c, h := fresh(t)
-	p := must(c.Do(find(must(c.Get("/")), "create-page"), map[string]string{"title": "Draft"}))
+	p := must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Draft"}))
 	if body := page(t, h, href(p, "self")); !strings.Contains(body, `<button class="danger">Delete</button>`) {
 		t.Errorf("a page that offers a tombstone draws no danger button: %.400s", body)
 	}
-	gone := must(c.Do(find(p, "tombstone"), nil))
+	gone := must(c.Do(t.Context(), find(p, "tombstone"), nil))
 	body := page(t, h, href(gone, "self"))
 	if !strings.Contains(body, "<button>Revive</button>") {
 		t.Errorf("a deleted page offers no plain revive: %.400s", body)

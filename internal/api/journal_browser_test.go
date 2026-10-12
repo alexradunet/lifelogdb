@@ -15,23 +15,23 @@ import (
 func journalFixture(t *testing.T) (*client.Client, http.Handler) {
 	t.Helper()
 	c, h := freshOn(t, fixedToday)
-	root := must(c.Get("/"))
+	root := must(c.Get(t.Context(), "/"))
 	task := func(label, due string) string {
-		e := must(c.Do(find(root, "create-task"), map[string]string{"label": label, "due_day": due}))
+		e := must(c.Do(t.Context(), find(root, "create-task"), map[string]string{"label": label, "due_day": due}))
 		return strings.SplitN(hrefOf(e, "self"), "?", 2)[0]
 	}
 	done := func(href string) {
-		must(c.Do(find(must(c.Get(href+"/occurrences/once")), "edit-occurrence"), map[string]string{"state": "done", "completed_at": "now"}))
+		must(c.Do(t.Context(), find(must(c.Get(t.Context(), href+"/occurrences/once")), "edit-occurrence"), map[string]string{"state": "done", "completed_at": "now"}))
 	}
 	task("Book the dentist", dayOf(-10))
 	task("Call the bank", fixedToday)
 	done(task("Pay the rent", fixedToday))
 	done(task("Return the books", dayOf(-20)))
 	task("Renew the passport", dayOf(30))
-	must(c.Do(find(root, "register-metric"), map[string]string{"name": "evening_walk"}))
-	must(c.Do(find(must(c.Get("/metrics/evening_walk")), "start-habit"), map[string]string{"start_day": dayOf(-30)}))
+	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "evening_walk"}))
+	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/metrics/evening_walk")), "start-habit"), map[string]string{"start_day": dayOf(-30)}))
 	capture := func(day string, v map[string]string) {
-		must(c.Do(find(must(c.Get("/days/"+day)), "capture"), v))
+		must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/days/"+day)), "capture"), v))
 	}
 	capture(dayOf(-2), map[string]string{"text": "## Morning\nRan with [[Sam]] by the river."})
 	capture(dayOf(-1), map[string]string{"mood": "2"})
@@ -64,7 +64,7 @@ func actionsNamed(e *api.Entity, name string) []string {
 func TestTheDayCarriesWhatIsDueItsMoodAndItsHabits(t *testing.T) {
 	c, h := journalFixture(t)
 
-	today := must(c.Get("/days/" + fixedToday))
+	today := must(c.Get(t.Context(), "/days/"+fixedToday))
 	p := props(today)
 	if got := labels(p["due"]); got != "Book the dentist/open Call the bank/open Pay the rent/done" {
 		t.Errorf("today's due: %s", got)
@@ -82,21 +82,21 @@ func TestTheDayCarriesWhatIsDueItsMoodAndItsHabits(t *testing.T) {
 		t.Errorf("today's outcomes: %v", got)
 	}
 	save := find(today, "save-body")
-	page := must(c.Get(hrefOf(today, "page")))
+	page := must(c.Get(t.Context(), hrefOf(today, "page")))
 	if save.Href != hrefOf(today, "page")+"/body" || fieldOf(save, "version") != fmt.Sprint(props(page)["version"]) ||
 		fieldOf(save, "body") != props(page)["body"] {
 		t.Errorf("the day's save-body: %+v, page %v", save, props(page))
 	}
 
 	// A past day: what was due on it, in every state, and nothing of the days before it.
-	past := props(must(c.Get("/days/" + dayOf(-20))))
+	past := props(must(c.Get(t.Context(), "/days/"+dayOf(-20))))
 	if got := labels(past["due"]); got != "Return the books/done" {
 		t.Errorf("a past day's due: %s", got)
 	}
 	if fmt.Sprint(past["mood"]) != "[]" {
 		t.Errorf("a day with no mood: %v", past["mood"])
 	}
-	quiet := must(c.Get("/days/" + dayOf(-5)))
+	quiet := must(c.Get(t.Context(), "/days/"+dayOf(-5)))
 	if got := labels(props(quiet)["due"]); got != "" || find(quiet, "save-body").Name != "" {
 		t.Errorf("a quiet day: due %q, save-body %v", got, find(quiet, "save-body").Href)
 	}
@@ -122,14 +122,14 @@ func TestTheDayCarriesWhatIsDueItsMoodAndItsHabits(t *testing.T) {
 	if rec := submit(h, walk.Action, walk.Fields, ""); rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/days/"+fixedToday {
 		t.Fatalf("check-in: %d %q", rec.Code, rec.Header().Get("Location"))
 	}
-	if hs := props(must(c.Get("/days/" + fixedToday)))["habits"].([]any); hs[0].(map[string]any)["state"] != "done" {
+	if hs := props(must(c.Get(t.Context(), "/days/"+fixedToday)))["habits"].([]any); hs[0].(map[string]any)["state"] != "done" {
 		t.Errorf("after the check-in: %v", hs)
 	}
 }
 
 func TestTheRootIsTodayAtAGlance(t *testing.T) {
 	c, h := journalFixture(t)
-	root := must(c.Get("/"))
+	root := must(c.Get(t.Context(), "/"))
 	p := props(root)
 	if got := labels(p["due"]); got != "Book the dentist/open Call the bank/open" {
 		t.Errorf("the root's due: %s", got)
@@ -162,7 +162,7 @@ func TestTheRootIsTodayAtAGlance(t *testing.T) {
 	if rec := submit(h, done.Action, done.Fields, ""); rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/" {
 		t.Fatalf("Done from the root: %d %q", rec.Code, rec.Header().Get("Location"))
 	}
-	if got := labels(props(must(c.Get("/")))["due"]); got != "Call the bank/open" {
+	if got := labels(props(must(c.Get(t.Context(), "/")))["due"]); got != "Call the bank/open" {
 		t.Errorf("after Done: %s", got)
 	}
 }

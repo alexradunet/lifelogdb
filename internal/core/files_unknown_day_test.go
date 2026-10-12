@@ -8,7 +8,7 @@ import (
 func TestUnknownPhotoDayHasNoCaptureOrPlaceSideEffects(t *testing.T) {
 	s := fresh(t)
 	in := FileIn{Title: "Synthetic photo.jpg", MIME: "image/jpeg", SHA256: strings.Repeat("a", 64), Body: "Selected picture", UnknownCaptureDay: true, HasGPS: true, Lat: 10, Lon: 20}
-	before, err := s.Counts(ctx)
+	before, err := countRows(ctx, s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -17,7 +17,7 @@ func TestUnknownPhotoDayHasNoCaptureOrPlaceSideEffects(t *testing.T) {
 	if _, err := s.AddFile(ctx, "cli", refused); err == nil {
 		t.Fatal("unknown day created selected place")
 	}
-	after, err := s.Counts(ctx)
+	after, err := countRows(ctx, s)
 	if err != nil || after.Pages != before.Pages || after.Links["at"] != before.Links["at"] {
 		t.Fatalf("refusal effects %+v %v", after, err)
 	}
@@ -80,7 +80,7 @@ func TestUnknownPhotoDryRunDedupKnownDayMissingPreviewAndTombstone(t *testing.T)
 		t.Fatal(err)
 	}
 	unknown := FileIn{Title: "Different.jpg", MIME: "image/jpeg", SHA256: in.SHA256, Body: "Do not replace", UnknownCaptureDay: true, Preview: preview, HasGPS: true, Lat: 30, Lon: 40}
-	before, err := s.Counts(ctx)
+	before, err := countRows(ctx, s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestUnknownPhotoDryRunDedupKnownDayMissingPreviewAndTombstone(t *testing.T)
 	if err != nil || after.Day != prior.Day || after.Title != prior.Title || after.Body != prior.Body {
 		t.Fatal("dedup replaced ownership")
 	}
-	counts, err := s.Counts(ctx)
+	counts, err := countRows(ctx, s)
 	if err != nil || counts.Pages != before.Pages || counts.Links["at"] != before.Links["at"] {
 		t.Fatal("unknown dedup incidental writes")
 	}

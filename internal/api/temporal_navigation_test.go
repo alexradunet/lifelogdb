@@ -10,14 +10,14 @@ import (
 
 func TestTemporalCollectionsRetainLinksAndEvidence(t *testing.T) {
 	c, h := fresh(t)
-	actions := must(c.Get("/actions"))
-	must(c.Do(find(actions, "create-page"), map[string]string{"title": "Workout"}))
-	first := must(c.Do(find(actions, "capture-session"), map[string]string{"kind": "Workout", "day": "2020-01-01", "start_at": "2020-01-01T12:00:00.000Z"}))
-	second := must(c.Do(find(actions, "capture-session"), map[string]string{"kind": "Workout", "day": "2020-01-02", "start_local": "2020-01-01T23:00:00.000", "end_local": "2020-01-02T07:00:00.000", "start_zone_unverified": "Claimed/Zone"}))
-	period := must(c.Do(find(actions, "create-period"), map[string]string{"title": "Synthetic study", "start_boundary": "2018-09", "end_boundary": ".."}))
+	actions := must(c.Get(t.Context(), "/actions"))
+	must(c.Do(t.Context(), find(actions, "create-page"), map[string]string{"title": "Workout"}))
+	first := must(c.Do(t.Context(), find(actions, "capture-session"), map[string]string{"kind": "Workout", "day": "2020-01-01", "start_at": "2020-01-01T12:00:00.000Z"}))
+	second := must(c.Do(t.Context(), find(actions, "capture-session"), map[string]string{"kind": "Workout", "day": "2020-01-02", "start_local": "2020-01-01T23:00:00.000", "end_local": "2020-01-02T07:00:00.000", "start_zone_unverified": "Claimed/Zone"}))
+	period := must(c.Do(t.Context(), find(actions, "create-period"), map[string]string{"title": "Synthetic study", "start_boundary": "2018-09", "end_boundary": ".."}))
 	for _, tc := range []struct{ collection, member string }{{"/sessions", href(first, "self")}, {"/sessions", href(second, "self")}, {"/periods", href(period, "self")}} {
 		t.Run(tc.collection+tc.member, func(t *testing.T) {
-			list := must(c.Get(tc.collection))
+			list := must(c.Get(t.Context(), tc.collection))
 			found := false
 			for _, link := range list.Entities {
 				found = found || link.Href == tc.member
@@ -44,15 +44,15 @@ func TestTemporalCollectionsRetainLinksAndEvidence(t *testing.T) {
 
 func TestAllReadingsLinkPreservesScope(t *testing.T) {
 	c, h := fresh(t)
-	actions := must(c.Get("/actions"))
-	must(c.Do(find(actions, "create-page"), map[string]string{"title": "Workout"}))
-	must(c.Do(find(actions, "register-metric"), map[string]string{"name": "Steps", "unit": "steps"}))
-	session := must(c.Do(find(actions, "capture-session"), map[string]string{"kind": "Workout", "day": "2020-01-02", "start_at": "2020-01-02T12:00:00.000Z"}))
+	actions := must(c.Get(t.Context(), "/actions"))
+	must(c.Do(t.Context(), find(actions, "create-page"), map[string]string{"title": "Workout"}))
+	must(c.Do(t.Context(), find(actions, "register-metric"), map[string]string{"name": "Steps", "unit": "steps"}))
+	session := must(c.Do(t.Context(), find(actions, "capture-session"), map[string]string{"kind": "Workout", "day": "2020-01-02", "start_at": "2020-01-02T12:00:00.000Z"}))
 	id := strings.TrimPrefix(href(session, "self"), "/sessions/")
 
-	must(c.Do(find(actions, "record"), map[string]string{"metric": "Steps", "day": "2020-01-02", "value": "10000"}))
-	fact := must(c.Do(find(actions, "record"), map[string]string{"metric": "Steps", "day": "2020-01-02", "value": "4000", "session_id": id}))
-	must(c.Do(find(session, "tombstone-session"), nil))
+	must(c.Do(t.Context(), find(actions, "record"), map[string]string{"metric": "Steps", "day": "2020-01-02", "value": "10000"}))
+	fact := must(c.Do(t.Context(), find(actions, "record"), map[string]string{"metric": "Steps", "day": "2020-01-02", "value": "4000", "session_id": id}))
+	must(c.Do(t.Context(), find(session, "tombstone-session"), nil))
 	body := browse(t, h, "/metrics/Steps?from=2020-01-01&to=2020-01-02&scope=session&session_id="+id+"&include_deleted=1")
 	match := regexp.MustCompile(`<a href="([^"]+)">All readings</a>`).FindStringSubmatch(body)
 	if len(match) != 2 {
@@ -62,7 +62,7 @@ func TestAllReadingsLinkPreservesScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expanded := must(c.Get(u.String()))
+	expanded := must(c.Get(t.Context(), u.String()))
 	readings := expanded.Properties.(map[string]any)["readings"].([]any)
 	if len(readings) != 1 || readings[0].(map[string]any)["id"] != fact.Properties.(map[string]any)["id"] {
 		t.Fatal("range navigation changed historical scope")

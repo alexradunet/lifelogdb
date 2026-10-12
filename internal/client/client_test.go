@@ -80,11 +80,11 @@ func TestClientCancellation(t *testing.T) {
 					var err error
 					switch method {
 					case "GET":
-						_, err = c.GetContext(ctx, "/")
+						_, err = c.Get(ctx, "/")
 					case "POST":
-						_, err = c.DoContext(ctx, api.Action{Method: "POST", Href: "/"}, nil)
+						_, err = c.Do(ctx, api.Action{Method: "POST", Href: "/"}, nil)
 					default:
-						_, err = c.DoFilesContext(ctx, api.Action{Method: "POST", Href: "/", Fields: []api.Field{{Name: "original", Type: "file"}}}, nil, map[string]string{"original": path})
+						_, err = c.DoFiles(ctx, api.Action{Method: "POST", Href: "/", Fields: []api.Field{{Name: "original", Type: "file"}}}, nil, map[string]string{"original": path})
 					}
 					result <- err
 				}()
@@ -115,7 +115,7 @@ func TestClientCancellationBeforeSend(t *testing.T) {
 			defer srv.Close()
 			c = Remote(srv.URL, "cli")
 		}
-		_, err := c.GetContext(ctx, "/")
+		_, err := c.Get(ctx, "/")
 		if !errors.Is(err, context.Canceled) {
 			t.Fatal(err)
 		}
@@ -172,7 +172,7 @@ func testQueuedWrite(t *testing.T, remote bool) {
 	defer cancel()
 	result := make(chan error, 1)
 	go func() {
-		_, err := c.DoContext(ctx, api.Action{Method: "POST", Href: "/days/{day}/capture", Fields: []api.Field{{Name: "day", In: "path"}, {Name: "text"}}}, map[string]string{"day": "2026-10-05", "text": "synthetic queued"})
+		_, err := c.Do(ctx, api.Action{Method: "POST", Href: "/days/{day}/capture", Fields: []api.Field{{Name: "day", In: "path"}, {Name: "text"}}}, map[string]string{"day": "2026-10-05", "text": "synthetic queued"})
 		result <- err
 	}()
 	wait(t, entered)
@@ -208,7 +208,7 @@ func TestClientCancellationEarlyRefusal(t *testing.T) {
 	c := InProcess(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(403); w.Write([]byte(`{}`)) }), "cli")
 	done := make(chan error, 1)
 	go func() {
-		_, err := c.DoFilesContext(context.Background(), api.Action{Method: "POST", Href: "/", Fields: []api.Field{{Name: "original", Type: "file"}}}, nil, map[string]string{"original": path})
+		_, err := c.DoFiles(context.Background(), api.Action{Method: "POST", Href: "/", Fields: []api.Field{{Name: "original", Type: "file"}}}, nil, map[string]string{"original": path})
 		done <- err
 	}()
 	select {

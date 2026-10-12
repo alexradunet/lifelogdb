@@ -13,7 +13,7 @@ import (
 // The planning actions are MCP tools like any other of the catalog, and get follows a task link.
 func TestPlanningToolsFromTheCatalog(t *testing.T) {
 	c := mcpTestClient(t)
-	srv, err := New(c, "test")
+	srv, err := New(t.Context(), c, "test")
 	if err != nil {
 		t.Fatal(err)
 	}

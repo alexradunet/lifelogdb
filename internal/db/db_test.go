@@ -19,7 +19,7 @@ func TestSchemaCopyIsCurrent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(b) != Schema {
+	if string(b) != schema {
 		t.Fatal("internal/db/schema.sql differs from docs/schema/schema.sql: run `go generate ./...`")
 	}
 }

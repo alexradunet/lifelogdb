@@ -37,25 +37,25 @@ func submit(h http.Handler, path string, form url.Values, referer string) *httpt
 
 func TestEveryViewRenders(t *testing.T) {
 	c, h := fresh(t)
-	root := must(c.Get("/"))
-	day := must(c.Do(find(root, "capture"), map[string]string{"text": "Ran with [[Sam]] #running, `[[not a link]]`", "mood": "4"}))
-	must(c.Do(find(must(c.Get(href(day, "page"))), "save-body"), map[string]string{"body": "Ran with [[Sam]] and [[Ana]] #running"}))
-	ana := must(c.Get("/pages?title=Ana"))
-	must(c.Do(find(ana, "promote"), map[string]string{"to": "person", "name": "Ana Popescu"}))
-	must(c.Do(find(root, "create-place"), map[string]string{"title": "Lisbon"}))
-	must(c.Do(find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
-	must(c.Do(find(root, "register-metric"), map[string]string{"name": "walk"}))
+	root := must(c.Get(t.Context(), "/"))
+	day := must(c.Do(t.Context(), find(root, "capture"), map[string]string{"text": "Ran with [[Sam]] #running, `[[not a link]]`", "mood": "4"}))
+	must(c.Do(t.Context(), find(must(c.Get(t.Context(), href(day, "page"))), "save-body"), map[string]string{"body": "Ran with [[Sam]] and [[Ana]] #running"}))
+	ana := must(c.Get(t.Context(), "/pages?title=Ana"))
+	must(c.Do(t.Context(), find(ana, "promote"), map[string]string{"to": "person", "name": "Ana Popescu"}))
+	must(c.Do(t.Context(), find(root, "create-place"), map[string]string{"title": "Lisbon"}))
+	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
+	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "walk"}))
 	var reading *string
 	for _, d := range []string{"2026-09-01", "2026-09-15", "2026-09-28"} {
-		m := must(c.Do(find(root, "record"), map[string]string{"metric": "weight", "day": d, "value": "71.2"}))
+		m := must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "weight", "day": d, "value": "71.2"}))
 		reading = &m.Links[0].Href
 	}
-	walk := must(c.Get("/metrics/walk"))
-	must(c.Do(find(walk, "start-habit"), map[string]string{"start_day": "2026-09-20"}))
-	draft := must(c.Do(find(root, "create-page"), map[string]string{"title": "Draft", "body": "old words"}))
-	must(c.Do(find(draft, "rename"), map[string]string{"title": "Essay"}))
-	gone := must(c.Do(find(root, "create-page"), map[string]string{"title": "Scratch"}))
-	must(c.Do(find(gone, "tombstone"), nil))
+	walk := must(c.Get(t.Context(), "/metrics/walk"))
+	must(c.Do(t.Context(), find(walk, "start-habit"), map[string]string{"start_day": "2026-09-20"}))
+	draft := must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Draft", "body": "old words"}))
+	must(c.Do(t.Context(), find(draft, "rename"), map[string]string{"title": "Essay"}))
+	gone := must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Scratch"}))
+	must(c.Do(t.Context(), find(gone, "tombstone"), nil))
 
 	for _, p := range []string{"/", "/actions", "/days", href(day, "self"), "/people", "/places", "/ghosts", "/metrics",
 		"/metrics/walk", "/measurements/1", "/search", "/search?q=ran", "/integrity", href(gone, "self"), "/weeks/2026-W40", "/years/2026",
@@ -105,9 +105,9 @@ func essay(t *testing.T, h http.Handler) string {
 func staleSave(t *testing.T) (h http.Handler, self, action, version string) {
 	t.Helper()
 	c, h := fresh(t)
-	p := must(c.Do(find(must(c.Get("/")), "create-page"), map[string]string{"title": "Diet", "body": "v1"}))
+	p := must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Diet", "body": "v1"}))
 	save := find(p, "save-body")
-	must(c.Do(save, map[string]string{"body": "v2"}))
+	must(c.Do(t.Context(), save, map[string]string{"body": "v2"}))
 	for _, f := range save.Fields {
 		if f.Name == "version" {
 			version = f.Value.(string)
@@ -220,9 +220,9 @@ func TestFeedbackURLPrivacyUsesStructureNotRandomSubstrings(t *testing.T) {
 
 func TestBrowserMutationFeedback(t *testing.T) {
 	c, h := fresh(t)
-	root := must(c.Get("/"))
-	target := must(c.Do(find(root, "create-page"), map[string]string{"title": "Revived target"}))
-	must(c.Do(find(target, "tombstone"), nil))
+	root := must(c.Get(t.Context(), "/"))
+	target := must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Revived target"}))
+	must(c.Do(t.Context(), find(target, "tombstone"), nil))
 	rec := submit(h, "/pages", url.Values{"title": {"Feedback page"}, "body": {"[[Revived target]] [[bad/name]]"}}, "")
 	if rec.Code != 303 {
 		t.Fatalf("POST: %d %s", rec.Code, rec.Body.String())
@@ -237,7 +237,7 @@ func TestBrowserMutationFeedback(t *testing.T) {
 	if strings.Contains(browse(t, h, location), "<h2>Result</h2>") {
 		t.Error("receipt replayed")
 	}
-	page := must(c.Get("/pages?title=Feedback%20page"))
+	page := must(c.Get(t.Context(), "/pages?title=Feedback%20page"))
 	if !feedbackLocation(location, href(page, "self")) {
 		t.Errorf("feedback URL must contain only the resource path and opaque receipt: %s", location)
 	}

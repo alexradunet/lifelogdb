@@ -99,7 +99,7 @@ SELECT id, title, link_days, d2
 func (t *Tx) MatchPlace(lat, lon float64) (*Match, error) {
 	m := &Match{}
 	var d2 float64
-	err := t.tx.QueryRowContext(t.ctx, matchSQL, sql.Named("lat", lat), sql.Named("lon", lon), sql.Named("m_per_deg_lon", MetresPerDegreeLon(lat))).
+	err := t.tx.QueryRowContext(t.ctx, matchSQL, sql.Named("lat", lat), sql.Named("lon", lon), sql.Named("m_per_deg_lon", metresPerDegreeLon(lat))).
 		Scan(&m.ID, &m.Title, &m.LinkDays, &d2)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -107,8 +107,8 @@ func (t *Tx) MatchPlace(lat, lon float64) (*Match, error) {
 	return m, err
 }
 
-// MetresPerDegreeLon is what the match binds: the metres a degree of longitude spans at a latitude (D21).
-func MetresPerDegreeLon(lat float64) float64 { return 111320 * math.Cos(lat*math.Pi/180) }
+// metresPerDegreeLon is what the match binds: the metres a degree of longitude spans at a latitude (D21).
+func metresPerDegreeLon(lat float64) float64 { return 111320 * math.Cos(lat*math.Pi/180) }
 
 // placeFor is the place a photo's owner names (cookbook/place-of-a-photo.md): an existing place, a plain page
 // promoted to one, or a new place.
@@ -116,7 +116,7 @@ func (t *Tx) placeFor(title string) (int64, error) {
 	if !text.ValidTitle(title) {
 		return 0, invalid("title %q is not a valid title (docs/contract/titles-and-wikilinks.md)", title)
 	}
-	p, err := t.Lookup(title)
+	p, err := t.lookup(title)
 	switch {
 	case err != nil:
 		return 0, err
@@ -173,8 +173,8 @@ func (t *Tx) embed(dayID int64, title string) (bool, *Sync, error) {
 	return true, &sync, err
 }
 
-// PlaceOf is the point of a place page, nil when it has none.
-func (s *Store) PlaceOf(ctx context.Context, id int64) (*Point, error) {
+// placeOf is the point of a place page, nil when it has none.
+func (s *Store) placeOf(ctx context.Context, id int64) (*Point, error) {
 	p := &Point{}
 	err := s.DB.R.QueryRowContext(ctx, `SELECT lat, lon, radius_m, link_days FROM places WHERE id = ?`, id).Scan(&p.Lat, &p.Lon, &p.RadiusM, &p.LinkDays)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -224,7 +224,7 @@ func (t *Tx) preflightEmbed(day, title string) error {
 }
 
 func (t *Tx) hasEmbed(body, title string) (bool, error) {
-	owner, err := t.Lookup(title)
+	owner, err := t.lookup(title)
 	if err != nil {
 		return false, err
 	}
@@ -235,7 +235,7 @@ func (t *Tx) hasEmbed(body, title string) (bool, error) {
 			}
 			continue
 		}
-		p, err := t.Lookup(target)
+		p, err := t.lookup(target)
 		if err != nil {
 			return false, err
 		}

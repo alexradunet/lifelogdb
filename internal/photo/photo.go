@@ -233,9 +233,6 @@ func itemData(file, iloc, idat []byte, item uint32) []byte {
 			if r.bad {
 				return nil
 			}
-			if !target {
-				continue
-			}
 			src := file
 			switch method {
 			case 0:
@@ -254,9 +251,7 @@ func itemData(file, iloc, idat []byte, item uint32) []byte {
 			start, end := int(off), int(off+n)
 			out = append(out, src[start:end]...)
 		}
-		if target {
-			return out
-		}
+		return out
 	}
 	return nil
 }

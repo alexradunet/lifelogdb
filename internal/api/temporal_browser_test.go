@@ -9,9 +9,9 @@ import (
 
 func TestBrowserSessionEvidenceAndScopeLabels(t *testing.T) {
 	c, h := fresh(t)
-	root := must(c.Get("/actions"))
-	must(c.Do(find(root, "create-page"), map[string]string{"title": "Workout"}))
-	must(c.Do(find(root, "register-metric"), map[string]string{"name": "Steps", "unit": "steps"}))
+	root := must(c.Get(t.Context(), "/actions"))
+	must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Workout"}))
+	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "Steps", "unit": "steps"}))
 	form := url.Values{"kind": {"Workout"}, "day": {"2020-01-02"}, "start_local": {"2020-01-01T23:00:00.000"}, "end_local": {"2020-01-02T07:00:00.000"}, "start_zone_unverified": {"Claimed/Zone"}}
 	request := httptest.NewRequest("POST", "/sessions", strings.NewReader(form.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -28,8 +28,8 @@ func TestBrowserSessionEvidenceAndScopeLabels(t *testing.T) {
 			t.Fatalf("missing %q", text)
 		}
 	}
-	must(c.Do(find(root, "record"), map[string]string{"metric": "Steps", "day": "2020-01-02", "value": "10000"}))
-	scoped := must(c.Do(find(root, "record"), map[string]string{"metric": "Steps", "day": "2020-01-02", "value": "4000", "session_id": strings.TrimPrefix(location, "/sessions/")}))
+	must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "Steps", "day": "2020-01-02", "value": "10000"}))
+	scoped := must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "Steps", "day": "2020-01-02", "value": "4000", "session_id": strings.TrimPrefix(location, "/sessions/")}))
 	readingBody := browse(t, h, href(scoped, "self"))
 	if !strings.Contains(readingBody, "<dt>scope</dt><dd>session ") || !strings.Contains(readingBody, location) {
 		t.Fatal("reading omitted scope association")

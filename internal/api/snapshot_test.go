@@ -29,7 +29,7 @@ func TestSnapshotIsTheOwnersFromAnySurface(t *testing.T) {
 	h := api.New(&core.Store{DB: d, SnapshotDir: dir})
 	owner := client.InProcess(h, "cli")
 	agent := client.InProcess(h, "agent:lmstudio")
-	root := must(owner.Get("/"))
+	root := must(owner.Get(t.Context(), "/"))
 	if _, _, err := (&core.Store{DB: d}).Capture(t.Context(), "cli", "2031-08-01", "a row to copy", nil); err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +38,7 @@ func TestSnapshotIsTheOwnersFromAnySurface(t *testing.T) {
 		t.Fatalf("the root offers the owner the snapshot action: %+v", action)
 	}
 
-	first := must(owner.Do(action, nil))
+	first := must(owner.Do(t.Context(), action, nil))
 	props := first.Properties.(map[string]any)
 	path, _ := props["snapshot"].(string)
 	today := time.Now().Format("2006-01-02")
@@ -54,7 +54,7 @@ func TestSnapshotIsTheOwnersFromAnySurface(t *testing.T) {
 	if first.Result == nil || hrefOf(first, "self") != "/" {
 		t.Fatalf("the answer carries the result and points home: result=%v self=%q", first.Result, hrefOf(first, "self"))
 	}
-	second := must(owner.Do(action, nil))
+	second := must(owner.Do(t.Context(), action, nil))
 	again, _ := second.Properties.(map[string]any)["snapshot"].(string)
 	if again == path || !strings.HasPrefix(filepath.Base(again), "life-"+today+"T") {
 		t.Fatalf("a second snapshot the same day: %q", again)
@@ -62,7 +62,7 @@ func TestSnapshotIsTheOwnersFromAnySurface(t *testing.T) {
 
 	// An agent is refused and writes nothing.
 	before, _ := os.ReadDir(dir)
-	if _, err := agent.Do(action, nil); !clientStatus(err, 403) {
+	if _, err := agent.Do(t.Context(), action, nil); !clientStatus(err, 403) {
 		t.Fatalf("agent: %v", err)
 	}
 	after, _ := os.ReadDir(dir)

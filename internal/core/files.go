@@ -21,19 +21,18 @@ import (
 // matched to a place and never stored; At names the place instead, which takes the position as its point if it has
 // none, with Radius (cookbook/place-of-a-photo.md).
 type FileIn struct {
-	RequireCaptureDayAgreement bool // Selected capture claims cannot change retained owner attribution.
-	UnknownCaptureDay          bool // Explicit selected-photo mode: no inferred attribution or incidental place writes.
-	Title                      string
-	SHA256                     string
-	MIME                       string
-	Body                       string
-	Day                        string
-	Taken                      string
-	Preview                    []byte
-	Lat, Lon                   float64
-	HasGPS                     bool
-	At                         string
-	Radius                     int
+	UnknownCaptureDay bool // Explicit selected-photo mode: no inferred attribution or incidental place writes.
+	Title             string
+	SHA256            string
+	MIME              string
+	Body              string
+	Day               string
+	Taken             string
+	Preview           []byte
+	Lat, Lon          float64
+	HasGPS            bool
+	At                string
+	Radius            int
 }
 
 // Kept is what keeping a file did.
@@ -116,9 +115,6 @@ func (t *Tx) AddFile(f FileIn) (k Kept, err error) {
 		Scan(&k.ID, &hasPreview, &deleted, &title, &storedDay)
 	switch {
 	case err == nil:
-		if f.RequireCaptureDayAgreement && day != "" && storedDay.Valid && storedDay.String != day {
-			return k, conflict("selected capture attribution conflicts with retained owner day")
-		}
 		k.Existing, k.Deleted = true, deleted.Valid
 		if f.UnknownCaptureDay {
 			k.StoredDay = storedDay.String
@@ -145,18 +141,9 @@ func (t *Tx) AddFile(f FileIn) (k Kept, err error) {
 	if !text.ValidTitle(f.Title) {
 		return k, invalid("title %q is not a valid title (docs/contract/titles-and-wikilinks.md)", f.Title)
 	}
-	p, err := t.Lookup(f.Title)
+	p, err := t.lookup(f.Title)
 	if err != nil {
 		return k, err
-	}
-	if f.RequireCaptureDayAgreement && day != "" && p != nil {
-		var retained sql.NullString
-		if err := t.tx.QueryRowContext(t.ctx, `SELECT day FROM entities WHERE id=?`, p.ID).Scan(&retained); err != nil {
-			return k, err
-		}
-		if retained.Valid && retained.String != day {
-			return k, conflict("selected capture attribution conflicts with retained owner day")
-		}
 	}
 	title = f.Title
 	if p != nil {
@@ -344,7 +331,7 @@ func MimeOf(name string, head []byte) string {
 // TryAddFile is AddFile in a transaction that is rolled back: what keeping the file would do, writing nothing. A page
 // it would create has no id.
 func (s *Store) TryAddFile(ctx context.Context, source string, f FileIn) (k Kept, err error) {
-	err = s.DryRun(ctx, source, func(t *Tx) (e error) { k, e = t.AddFile(f); return })
+	err = s.dryRun(ctx, source, func(t *Tx) (e error) { k, e = t.AddFile(f); return })
 	if !k.Existing {
 		k.ID = 0
 	}

@@ -35,17 +35,17 @@ func TestReadingsFromTableOnEverySurface(t *testing.T) {
 				agent = client.Remote(srv.URL, "agent:test")
 			}
 			byName := map[string]api.Action{}
-			actions, err := agent.Catalog()
+			actions, err := agent.Catalog(t.Context())
 			if err != nil {
 				t.Fatal(err)
 			}
 			for _, a := range actions {
 				byName[a.Name] = a
 			}
-			if _, err := owner.Do(byName["register-metric"], map[string]string{"name": "Weight", "unit": "kg"}); err != nil {
+			if _, err := owner.Do(t.Context(), byName["register-metric"], map[string]string{"name": "Weight", "unit": "kg"}); err != nil {
 				t.Fatal(err)
 			}
-			page, err := agent.Do(byName["create-page"], map[string]string{"title": "Weighings", "body": "| day | weight (kg) |\n|---|---|\n| 2031-01-01 | 70.5 |\n| 2031-01-08 | 70 |\n"})
+			page, err := agent.Do(t.Context(), byName["create-page"], map[string]string{"title": "Weighings", "body": "| day | weight (kg) |\n|---|---|\n| 2031-01-01 | 70.5 |\n| 2031-01-08 | 70 |\n"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -69,7 +69,7 @@ func TestReadingsFromTableOnEverySurface(t *testing.T) {
 			}
 			var got core.TableReadings
 			for run, want := range []core.TableReadings{{Written: 2}, {Existing: 2}} {
-				e, err := agent.Do(byName["readings-from-table"], map[string]string{"page": "Weighings", "metric": "weight"})
+				e, err := agent.Do(t.Context(), byName["readings-from-table"], map[string]string{"page": "Weighings", "metric": "weight"})
 				if err != nil {
 					t.Fatal(err)
 				}

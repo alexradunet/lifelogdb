@@ -89,7 +89,7 @@ func TestSaveBodyAddsAndDeletesLinks(t *testing.T) {
 	if titles(p.Out, "wikilink") != "Plan" {
 		t.Fatalf("links %v", p.Out)
 	}
-	r, err := s.SaveBody(ctx, "cli", id, "Now [[Other]] only", p.Version)
+	r, err := s.SaveBody(ctx, "cli", id, "nowSQL [[Other]] only", p.Version)
 	if err != nil {
 		t.Fatal(err)
 	}

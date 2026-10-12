@@ -16,9 +16,9 @@ import (
 // by an agent is a refusal, and a missing page shows the message alone.
 func TestAnErrorIsAnAlertInWords(t *testing.T) {
 	c, h := fresh(t)
-	p := must(c.Do(find(must(c.Get("/")), "create-page"), map[string]string{"title": "Diet", "body": "v1"}))
+	p := must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Diet", "body": "v1"}))
 	save := find(p, "save-body")
-	must(c.Do(save, map[string]string{"body": "v2"}))
+	must(c.Do(t.Context(), save, map[string]string{"body": "v2"}))
 	var version string
 	for _, f := range save.Fields {
 		if f.Name == "version" {
@@ -83,14 +83,14 @@ func TestAnOwnerActionCarriesTheOwnerMark(t *testing.T) {
 // exact instant stays only in an attribute (the <time> element's, or a form's value).
 func TestNoPageShowsARawInstant(t *testing.T) {
 	c, h := freshOn(t, fixedToday)
-	root := must(c.Get("/"))
-	p := must(c.Do(find(root, "create-page"), map[string]string{"title": "Garden project", "body": "Seeds."}))
-	task := must(c.Do(find(root, "create-task"), map[string]string{"label": "Buy seeds", "due_day": dayOf(-1)}))
+	root := must(c.Get(t.Context(), "/"))
+	p := must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Garden project", "body": "Seeds."}))
+	task := must(c.Do(t.Context(), find(root, "create-task"), map[string]string{"label": "Buy seeds", "due_day": dayOf(-1)}))
 	taskHref := strings.SplitN(hrefOf(task, "self"), "?", 2)[0]
-	occ := must(c.Do(find(must(c.Get(taskHref+"/occurrences/once")), "edit-occurrence"), map[string]string{"state": "done", "completed_at": "now"}))
-	must(c.Do(find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
-	reading := must(c.Do(find(root, "record"), map[string]string{"metric": "weight", "day": fixedToday, "value": "71.1", "taken_at": fixedToday + "T06:00:00.000Z"}))
-	session := must(c.Do(find(root, "capture-session"), map[string]string{"kind": "Garden project", "day": fixedToday, "start_at": fixedToday + "T05:00:00.000Z"}))
+	occ := must(c.Do(t.Context(), find(must(c.Get(t.Context(), taskHref+"/occurrences/once")), "edit-occurrence"), map[string]string{"state": "done", "completed_at": "now"}))
+	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
+	reading := must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "weight", "day": fixedToday, "value": "71.1", "taken_at": fixedToday + "T06:00:00.000Z"}))
+	session := must(c.Do(t.Context(), find(root, "capture-session"), map[string]string{"kind": "Garden project", "day": fixedToday, "start_at": fixedToday + "T05:00:00.000Z"}))
 
 	attributes := regexp.MustCompile(`(datetime|title|value)="[^"]*"`)
 	instant := regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z`)
@@ -112,10 +112,10 @@ func TestNoPageShowsARawInstant(t *testing.T) {
 // list (docs/plans/094-the-command-list.md) opens the form the server drew: a box, a row's one-button form, the capture.
 func TestEveryActionFormCarriesItsName(t *testing.T) {
 	c, h := freshOn(t, fixedToday)
-	root := must(c.Get("/"))
-	must(c.Do(find(root, "create-task"), map[string]string{"label": "Book the dentist", "due_day": dayOf(-1)}))
-	must(c.Do(find(root, "register-metric"), map[string]string{"name": "walk"}))
-	must(c.Do(find(must(c.Get("/metrics/walk")), "start-habit"), map[string]string{"start_day": dayOf(-3)}))
+	root := must(c.Get(t.Context(), "/"))
+	must(c.Do(t.Context(), find(root, "create-task"), map[string]string{"label": "Book the dentist", "due_day": dayOf(-1)}))
+	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "walk"}))
+	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/metrics/walk")), "start-habit"), map[string]string{"start_day": dayOf(-3)}))
 	body := browse(t, h, "/")
 	for _, name := range []string{"capture", "create-task", "find", "snapshot", "edit-occurrence", "check-in"} {
 		if !strings.Contains(body, `data-action="`+name+`"`) {

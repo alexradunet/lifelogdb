@@ -13,9 +13,9 @@ func TestPhotoDaySyncJSONAndBrowserReceipt(t *testing.T) {
 	for _, browser := range []bool{false, true} {
 		t.Run(map[bool]string{false: "JSON", true: "browser"}[browser], func(t *testing.T) {
 			c, h := fresh(t)
-			must(c.Do(find(must(c.Get("/")), "create-page"), map[string]string{"title": "2026-10-04", "body": "[[Old synthetic target]]"}))
-			target := must(c.Get("/pages?title=Old+synthetic+target"))
-			must(c.Do(find(target, "tombstone"), nil))
+			must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "2026-10-04", "body": "[[Old synthetic target]]"}))
+			target := must(c.Get(t.Context(), "/pages?title=Old+synthetic+target"))
+			must(c.Do(t.Context(), find(target, "tombstone"), nil))
 			var b bytes.Buffer
 			mw := multipart.NewWriter(&b)
 			for key, value := range map[string]string{"title": "Next synthetic.jpg", "day": "2026-10-04", "body": "[[File synthetic target]]"} {

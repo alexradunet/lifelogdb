@@ -14,11 +14,11 @@ import (
 // order, with the page each name is of; its limits are refused, not clamped.
 func TestTitlesAreTheNamesAfterABracket(t *testing.T) {
 	c, _ := fresh(t)
-	root := must(c.Get("/"))
+	root := must(c.Get(t.Context(), "/"))
 	for _, title := range []string{"Sam Example", "SAMUEL", "Garden project"} {
-		must(c.Do(find(root, "create-page"), map[string]string{"title": title}))
+		must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": title}))
 	}
-	got := must(c.Get("/titles?prefix=sa"))
+	got := must(c.Get(t.Context(), "/titles?prefix=sa"))
 	var names []string
 	for _, m := range props(got)["titles"].([]any) {
 		names = append(names, m.(map[string]any)["title"].(string))
@@ -29,11 +29,11 @@ func TestTitlesAreTheNamesAfterABracket(t *testing.T) {
 	if fmt.Sprint(props(got)["limit"]) != "10" || props(got)["prefix"] != "sa" {
 		t.Errorf("titles' prefix and limit: %v", props(got))
 	}
-	if n := len(props(must(c.Get("/titles?prefix=s&limit=1")))["titles"].([]any)); n != 1 {
+	if n := len(props(must(c.Get(t.Context(), "/titles?prefix=s&limit=1")))["titles"].([]any)); n != 1 {
 		t.Errorf("limit 1 answered %d", n)
 	}
 	for _, bad := range []string{"/titles", "/titles?prefix=", "/titles?prefix=%20", "/titles?prefix=s&limit=0", "/titles?prefix=s&limit=21", "/titles?prefix=s&limit=x"} {
-		if _, err := c.Get(bad); !clientStatus(err, 422) {
+		if _, err := c.Get(t.Context(), bad); !clientStatus(err, 422) {
 			t.Errorf("%s: %v", bad, err)
 		}
 	}
@@ -56,7 +56,7 @@ func TestRenderIsTheSavedPage(t *testing.T) {
 		return rec
 	}
 	rows := func() string {
-		return fmtRows(must(c.Do(find(must(c.Get("/")), "query"), map[string]string{"sql": "SELECT CAST(count(*) AS TEXT) || '/' || CAST(max(revision) AS TEXT) FROM entities"})))
+		return fmtRows(must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "query"), map[string]string{"sql": "SELECT CAST(count(*) AS TEXT) || '/' || CAST(max(revision) AS TEXT) FROM entities"})))
 	}
 	before := rows()
 	rec := post(url.Values{"body": {body}}, map[string]string{"Origin": "http://example.com", "Sec-Fetch-Site": "same-origin"})
@@ -67,7 +67,7 @@ func TestRenderIsTheSavedPage(t *testing.T) {
 	if after := rows(); after != before {
 		t.Fatalf("render wrote: %s, then %s", before, after)
 	}
-	page := must(c.Do(find(must(c.Get("/")), "create-page"), map[string]string{"title": "Notes", "body": body}))
+	page := must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Notes", "body": body}))
 	saved := browse(t, h, hrefOf(page, "self"))
 	if !strings.Contains(saved, `<div class="prose">`+preview+`</div>`) {
 		t.Errorf("the preview is not the saved page:\npreview %s\npage %.2000s", preview, saved)
@@ -81,7 +81,7 @@ func TestRenderIsTheSavedPage(t *testing.T) {
 	if get.Code != http.StatusMethodNotAllowed {
 		t.Errorf("GET /render: %d", get.Code)
 	}
-	for _, a := range must(c.Get("/actions")).Actions {
+	for _, a := range must(c.Get(t.Context(), "/actions")).Actions {
 		if strings.HasPrefix(a.Href, "/render") || strings.HasPrefix(a.Href, "/titles") {
 			t.Errorf("the catalog names %s: the preview is presentation, and the titles a resource", a.Href)
 		}
@@ -99,19 +99,19 @@ func TestRenderIsTheSavedPage(t *testing.T) {
 // page draws its editor before its body.
 func TestTheEditorIsTallAsItsBodyAndFirst(t *testing.T) {
 	c, h := fresh(t)
-	root := must(c.Get("/"))
+	root := must(c.Get(t.Context(), "/"))
 	for _, tc := range []struct {
 		lines, rows int
 	}{{1, 12}, {20, 21}, {38, 39}, {39, 40}, {200, 40}} {
 		body := strings.Repeat("line\n", tc.lines-1) + "line"
-		p := must(c.Do(find(root, "create-page"), map[string]string{"title": "Lines " + strings.Repeat("x", tc.lines), "body": body}))
+		p := must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Lines " + strings.Repeat("x", tc.lines), "body": body}))
 		for _, f := range find(p, "save-body").Fields {
 			if f.Name == "body" && f.Rows != tc.rows {
 				t.Errorf("%d lines: rows %d, want %d", tc.lines, f.Rows, tc.rows)
 			}
 		}
 	}
-	p := must(c.Do(find(root, "create-page"), map[string]string{"title": "Long", "body": "words"}))
+	p := must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Long", "body": "words"}))
 	body := browse(t, h, hrefOf(p, "self"))
 	if e, b := strings.Index(body, "<summary>Edit</summary>"), strings.Index(body, `<div class="prose">`); e < 0 || b < 0 || e > b {
 		t.Errorf("the editor is not before the body: %d, %d", e, b)

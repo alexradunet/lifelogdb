@@ -28,7 +28,7 @@ func TestClientExactNumbers(t *testing.T) {
 					defer srv.Close()
 					c = Remote(srv.URL, "cli")
 				}
-				e, err := c.Get("/")
+				e, err := c.Get(t.Context(), "/")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -39,7 +39,7 @@ func TestClientExactNumbers(t *testing.T) {
 						t.Fatalf("got %T %v want exact %s", v, v, token)
 					}
 				}
-				if _, err := c.Do(e.Actions[0], nil); err != nil {
+				if _, err := c.Do(t.Context(), e.Actions[0], nil); err != nil {
 					t.Fatal(err)
 				}
 			})
@@ -50,7 +50,7 @@ func TestClientExactNumbers(t *testing.T) {
 func TestClientRejectsTrailingJSON(t *testing.T) {
 	for _, body := range []string{`{} {}`, `{} null`, `{} trailing`} {
 		c := InProcess(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, body) }), "cli")
-		if _, err := c.Get("/"); err == nil {
+		if _, err := c.Get(t.Context(), "/"); err == nil {
 			t.Fatalf("accepted %q", body)
 		}
 	}

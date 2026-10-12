@@ -109,9 +109,9 @@ func TestRangeUnit(t *testing.T) {
 		{"1-5 ", 0, 0, false}, {"1–5", 0, 0, false}, {"+1-5", 0, 0, false}, {"1.5-5", 0, 0, false}, {"a-b", 0, 0, false},
 		{"١-٥", 0, 0, false}, {"kg", 0, 0, false}, {"mg/dL", 0, 0, false}, {"1/5", 0, 0, false}, {"2024-2025", 2024, 2025, true},
 	} {
-		lo, hi, ok := RangeUnit(c.unit)
+		lo, hi, ok := rangeUnit(c.unit)
 		if ok != c.ok || ok && (lo != c.lo || hi != c.hi) {
-			t.Errorf("RangeUnit(%q) = %g, %g, %v; want %g, %g, %v", c.unit, lo, hi, ok, c.lo, c.hi, c.ok)
+			t.Errorf("rangeUnit(%q) = %g, %g, %v; want %g, %g, %v", c.unit, lo, hi, ok, c.lo, c.hi, c.ok)
 		}
 	}
 }

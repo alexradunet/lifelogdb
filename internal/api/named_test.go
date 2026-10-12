@@ -10,16 +10,16 @@ import (
 // page among them, in the order of the item links. The sheet says it in words.
 func TestPeopleListCarriesItsMentions(t *testing.T) {
 	c, h := fresh(t)
-	root := must(c.Get("/"))
-	catalog := must(c.Get("/actions"))
+	root := must(c.Get(t.Context(), "/"))
+	catalog := must(c.Get(t.Context(), "/actions"))
 	for _, name := range []string{"Ana", "Sam", "Zed"} {
-		must(c.Do(find(root, "create-person"), map[string]string{"title": name}))
+		must(c.Do(t.Context(), find(root, "create-person"), map[string]string{"title": name}))
 	}
-	must(c.Do(find(catalog, "capture"), map[string]string{"day": "2026-10-05", "text": "Lunch with [[Ana]]"}))
-	must(c.Do(find(catalog, "capture"), map[string]string{"day": "2026-10-09", "text": "Walk with [[Ana]] and [[Sam]]"}))
-	must(c.Do(find(root, "create-page"), map[string]string{"title": "Trip", "body": "[[Ana]] came"}))
+	must(c.Do(t.Context(), find(catalog, "capture"), map[string]string{"day": "2026-10-05", "text": "Lunch with [[Ana]]"}))
+	must(c.Do(t.Context(), find(catalog, "capture"), map[string]string{"day": "2026-10-09", "text": "Walk with [[Ana]] and [[Sam]]"}))
+	must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Trip", "body": "[[Ana]] came"}))
 
-	list := must(c.Get("/people"))
+	list := must(c.Get(t.Context(), "/people"))
 	rows, _ := list.Properties.(map[string]any)["rows"].([]any)
 	type want struct {
 		title    string
@@ -61,10 +61,10 @@ func TestPeopleListCarriesItsMentions(t *testing.T) {
 // TestMentionsHaveNoDayWhenNoDayPageLinks: a page that is not a day page gives a count and no last day.
 func TestMentionsHaveNoDayWhenNoDayPageLinks(t *testing.T) {
 	c, h := fresh(t)
-	root := must(c.Get("/"))
-	must(c.Do(find(root, "create-place"), map[string]string{"title": "Lake"}))
-	must(c.Do(find(root, "create-page"), map[string]string{"title": "Trip", "body": "At [[Lake]]"}))
-	must(c.Do(find(root, "create-page"), map[string]string{"title": "Swim", "body": "In [[Lake]]"}))
+	root := must(c.Get(t.Context(), "/"))
+	must(c.Do(t.Context(), find(root, "create-place"), map[string]string{"title": "Lake"}))
+	must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Trip", "body": "At [[Lake]]"}))
+	must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Swim", "body": "In [[Lake]]"}))
 	if body := page(t, h, "/places"); !strings.Contains(body, "mentioned on 2 pages</span>") {
 		t.Errorf("the places sheet lacks the count without a day:\n%.2000s", body)
 	}
@@ -74,7 +74,7 @@ func TestMentionsHaveNoDayWhenNoDayPageLinks(t *testing.T) {
 func TestFilesListHasNoRows(t *testing.T) {
 	c, _ := fresh(t)
 	for _, path := range []string{"/files", "/days", "/ghosts"} {
-		if props, _ := must(c.Get(path)).Properties.(map[string]any); props["rows"] != nil {
+		if props, _ := must(c.Get(t.Context(), path)).Properties.(map[string]any); props["rows"] != nil {
 			t.Errorf("GET %s has rows: %v", path, props["rows"])
 		}
 	}
