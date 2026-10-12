@@ -64,14 +64,17 @@ func TestDangerAndRowsReachTheForm(t *testing.T) {
 	}
 }
 
-// TestNavMarksThePageTheBrowserIsOn says one navigation link is current: the longest one that fits the path, and
-// never a fragment (a place on a page is not a page).
+// TestNavMarksThePageTheBrowserIsOn says one navigation link is current: the one whose path is the page's, else the
+// one with the longest path the page is under, and never a fragment (a place on a page is not a page).
 func TestNavMarksThePageTheBrowserIsOn(t *testing.T) {
 	for path, want := range map[string]string{
 		"/":                "/",
-		"/days":            "/days",
-		"/days/2026-01-01": "/days",
+		"/days":            "/months/current",
+		"/days/2026-01-01": "/months/current",
 		"/days/today":      "/days/today",
+		"/months/2026-10":  "/months/current",
+		"/deadlines":       "/deadlines",
+		"/integrity":       "/integrity",
 		"/people":          "/people",
 		"/metrics/TSH":     "/metrics",
 		"/habits":          "/habits",
@@ -123,7 +126,8 @@ func TestMarkShowsTheMatchedWords(t *testing.T) {
 func TestTheBaseSheetCarriesNoAppVocabulary(t *testing.T) {
 	base := cssComments.ReplaceAllString(string(baseCSS), "")
 	for _, name := range []string{".wikilink", ".badge", ".chart", ".pager", ".plain", ".prose", ".sub", ".skip",
-		".tiny", ".inline", ".danger", ".quiet", ".desc", ".group", ".done", ".notdone", ".scroll", ".brand"} {
+		".tiny", ".inline", ".danger", ".quiet", ".desc", ".group", ".done", ".notdone", ".scroll", ".brand",
+		".occ", ".outcomes", ".settled", ".calendar", ".mood", ".more", ".here"} {
 		if strings.Contains(base, name) {
 			t.Errorf("base.css styles %s, which belongs to app.css: the base sheet is ordinary HTML", name)
 		}

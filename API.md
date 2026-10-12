@@ -67,7 +67,8 @@ first; search by rank.
 ### root
 
 `GET /`: today at a glance. Links: `today`, `days`, `sessions`, `periods`, `people`, `places`, `files`, `metrics`,
-`habits`, `tasks`, `deadlines`, `ghosts`, `actions`. Actions: `capture` (for today), `search`, `find`, `deadlines`,
+`habits`, `tasks`, `deadlines`, `ghosts`, `actions`, `calendar` (this month). Actions: `capture` (for today), `search`,
+`find`, `open-day`, `deadlines`,
 `create-task`, `capture-session`, `create-period`, `create-page`, `create-person`, `create-place`, `add-file`,
 `record`, `register-metric` (owner), `query`, `snapshot` (owner); then the `check-in` of each habit of today (today
 filled in), and the outcome (see task) of each occurrence in `due`.
@@ -140,8 +141,10 @@ page (with `class` the page's type where it has one). `people`, `places` and `fi
 
 ### day
 
-`GET /days/{day}` (`/days/today` redirects). Links: `prev`, `next` (the neighbouring days), `page` (the day page,
-once it exists), `metrics`. Embedded: `reading` links to each measurement. Actions: `capture`, `record`, `save-body`
+`GET /days/{day}` (`/days/today` redirects; `GET /days/go?day=`, the action `open-day`, redirects to the day it
+names, and a value that is not a day is 422). Links: `prev`, `next` (the neighbouring days), `month` (its calendar),
+`page` (the day page, once it exists), `metrics`. Embedded: `reading` links to each measurement. Actions: `capture`,
+`record`, `open-day`, `save-body`
 of the day page once it exists (its body and `version` filled in), the `check-in` of each habit in `habits`, and the
 outcome (see task) of each occurrence in `due` that is due 7 days after `today` or earlier. The write `capture`
 answers with this entity and a `result` of the sync shape.
@@ -200,6 +203,22 @@ The **reading** shape (`readings[]` here and in a series; a measurement's own pr
 | `readings[].session_id` | integer | the session it belongs to; absent when unassociated |
 | `readings[].session_deleted_at` | instant | when that session was tombstoned; absent while it lives |
 | `readings[].scope` | string | `unassociated` or `session` |
+
+### month
+
+`GET /months/{YYYY-MM}` (`/months/current` redirects to this month; a value that is not a month is 422): the calendar
+of a month. Links: `prev`, `next` (the months before and after), `days` (the list of day pages). Embedded: a `day`
+link to each day of the month. Actions: `open-day`.
+
+| property | type | meaning |
+|---|---|---|
+| `month` | string | the month, `YYYY-MM` |
+| `today` | day | this machine's local day |
+| `days[]` | list | each day of the month, in order |
+| `days[].day` | day | the day |
+| `days[].page` | boolean | a live day page exists for it |
+| `days[].first_line` | string | the first line of that page's body that has text, as plain text (as `recent[]` of the root); absent when none |
+| `days[].mood` | list | the values of the day's current Mood readings with no session, in the order they were recorded; absent when none |
 
 ### page, person, place, file, period
 

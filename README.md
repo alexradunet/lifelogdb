@@ -88,7 +88,10 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   occurrence and the deadlines have their own views, and the deadlines are grouped by their due day against today.
   Each occurrence due 7 days after today or earlier offers its outcome action, which the browser draws as Done and
   Skip, or Reopen; a habit's check-in is Done and Not done. These are properties and actions of the entities, so every
-  client gets them ([API.md](API.md)). The handler reads today from one clock, which a test fixes.
+  client gets them ([API.md](API.md)). `/months/{YYYY-MM}` is the calendar of a month (each day, whether it has a
+  page, its first line and its mood), and the catalog action `open-day` goes to a day by its date. The top bar holds
+  what is used every day (Today, Calendar, Due, Tasks, the search) and a More menu the rest; on a phone it is two
+  rows. The handler reads today from one clock, which a test fixes.
 - **The stylesheet is this application's own: two embedded sheets, no vendored framework and no CDN.** `base.css`
   styles ordinary HTML by element — type, colour, forms, tables, buttons, a print sheet, light and dark by
   `prefers-color-scheme` — and `app.css` only what this app's own vocabulary needs (`.wikilink`, `.badge`, `.chart`,

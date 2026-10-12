@@ -64,8 +64,15 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 	"dueWords": dueWords,
 	"cadence":  cadence,
 	"reminder": reminderWords,
-	"num":      num,
-	"pathesc":  url.PathEscape,
+	"weeks":    weeks,
+	"dayOfMonth": func(day string) string {
+		if t, err := time.Parse(time.DateOnly, day); err == nil {
+			return strconv.Itoa(t.Day())
+		}
+		return day
+	},
+	"num":     num,
+	"pathesc": url.PathEscape,
 }).ParseFS(views, "html/*.html"))
 
 // num shows a property's value. A number is written in full, never with an exponent: the JSON client reads every
@@ -85,7 +92,7 @@ var viewOf = map[string]string{
 	"root": "root", "day": "day", "page": "page", "person": "page", "place": "page", "file": "page", "period": "page",
 	"days": "list", "people": "list", "places": "list", "files": "list", "ghosts": "list", "search": "search",
 	"metrics": "metrics", "series": "series", "habits": "habits", "measurement": "measurement", "error": "error", "login": "login",
-	"tasks": "tasks", "task": "task", "occurrence": "occurrence", "deadlines": "deadlines",
+	"tasks": "tasks", "task": "task", "occurrence": "occurrence", "deadlines": "deadlines", "month": "month",
 }
 
 // view is what a template gets: the entity, its properties as the JSON client reads them, the path the browser
@@ -141,30 +148,49 @@ func renderHTML(w http.ResponseWriter, r *http.Request, status int, e *Entity) {
 	io.Copy(w, &b)
 }
 
-// navItems are the top navigation's links, in order. One of them is marked current per page (Nav); a page's own
-// neighbours need no entry here, since every template places them from the entity's links.
-var navItems = []struct{ Title, Href string }{
-	{"Home", "/"}, {"Today", "/days/today"}, {"Days", "/days"}, {"People", "/people"}, {"Places", "/places"},
-	{"Files", "/files"}, {"Metrics", "/metrics"}, {"Habits", "/habits"}, {"Tasks", "/tasks"}, {"New", "/#new"},
-}
-
-// navItem is one navigation link, marked when the browser is on it.
-type navItem struct {
+// navItems are the top navigation's links, in order: a few in the bar, the rest in its More menu. Each stands for
+// the pages under its paths, so the one the browser is on is marked (Nav). A page's own neighbours need no entry
+// here, since every template places them from the entity's links.
+var navItems = []struct {
 	Title, Href string
-	Current     bool
+	Paths       []string // the pages it stands for: these paths and the paths under them
+	More        bool     // in the More menu, not the bar
+}{
+	{"Today", "/days/today", []string{"/days/today"}, false},
+	{"Calendar", "/months/current", []string{"/months", "/days"}, false},
+	{"Due", "/deadlines", []string{"/deadlines"}, false},
+	{"Tasks", "/tasks", []string{"/tasks"}, false},
+	{"Home", "/", []string{"/"}, true},
+	{"New", "/#new", nil, true},
+	{"People", "/people", []string{"/people"}, true},
+	{"Places", "/places", []string{"/places"}, true},
+	{"Files", "/files", []string{"/files"}, true},
+	{"Metrics", "/metrics", []string{"/metrics"}, true},
+	{"Habits", "/habits", []string{"/habits"}, true},
+	{"Sessions", "/sessions", []string{"/sessions"}, true},
+	{"Periods", "/periods", []string{"/periods"}, true},
+	{"Ghost pages", "/ghosts", []string{"/ghosts"}, true},
+	{"Every action", "/actions", []string{"/actions"}, true},
+	{"Integrity checks", "/integrity", []string{"/integrity"}, true},
 }
 
-// Nav is the top navigation with the link of this page marked, so a reader knows where they are.
+// navItem is one navigation link, marked when the browser is on a page it stands for.
+type navItem struct {
+	Title, Href   string
+	More, Current bool
+}
+
+// Nav is the top navigation with the link of this page marked, so a reader knows where they are: the item whose
+// path is the page's path, else the one with the longest path the page is under.
 func (v *view) Nav() []navItem {
 	out := make([]navItem, len(navItems))
-	best, at := -1, 0
+	best, at, length := -1, 0, 0
 	for i, it := range navItems {
-		out[i] = navItem{Title: it.Title, Href: it.Href}
-		switch n := navMatch(v.Path, it.Href); {
-		case n > at: // a better match than the one held
-			best, at = i, n
-		case n == at && n > 0 && len(it.Href) > len(navItems[best].Href): // of two equal ones, the more specific
-			best = i
+		out[i] = navItem{Title: it.Title, Href: it.Href, More: it.More}
+		for _, p := range it.Paths {
+			if n := navMatch(v.Path, p); n > at || n == at && n > 0 && len(p) > length {
+				best, at, length = i, n, len(p)
+			}
 		}
 	}
 	if best >= 0 {
@@ -173,19 +199,38 @@ func (v *view) Nav() []navItem {
 	return out
 }
 
-// navMatch is how well a navigation href fits the request path: 2 when it is the path, 1 when the path is under
-// it, 0 when it is not. A fragment link never matches: it names a place on a page, not a page.
-func navMatch(path, href string) int {
-	if strings.Contains(href, "#") {
-		return 0
+// MoreTitle is the label of the More menu: the title of the page the browser is on when that page is in it.
+func (v *view) MoreTitle() string {
+	for _, it := range v.Nav() {
+		if it.More && it.Current {
+			return it.Title
+		}
 	}
+	return "More"
+}
+
+// navMatch is how well a path an item stands for fits the request path: 2 when it is the path, 1 when the path is
+// under it, 0 when it is not.
+func navMatch(path, p string) int {
 	switch {
-	case path == href:
+	case path == p:
 		return 2
-	case href != "/" && strings.HasPrefix(path, href+"/"):
+	case p != "/" && strings.HasPrefix(path, p+"/"):
 		return 1
 	}
 	return 0
+}
+
+// LinkTitle is the title of the entity's link with that rel, "" when it has none.
+func (v *view) LinkTitle(rel string) string {
+	for _, l := range v.Links {
+		for _, r := range l.Rel {
+			if r == rel {
+				return l.Title
+			}
+		}
+	}
+	return ""
 }
 
 // Action is the entity's action of that name, nil when it is not offered.

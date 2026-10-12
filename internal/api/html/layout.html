@@ -6,7 +6,8 @@
 </head><body>
 <a class="skip" href="#main">Skip to the content</a>
 <header class="top"><a class="brand" href="/">Lifelog</a>
-<nav aria-label="Sections">{{range .Nav}}<a href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}>{{.Title}}</a>{{end}}</nav>
+<nav aria-label="Sections">{{range .Nav}}{{if not .More}}<a href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}>{{.Title}}</a>{{end}}{{end}}</nav>
+<details class="more"><summary{{if ne .MoreTitle "More"}} class="here"{{end}}>{{.MoreTitle}}</summary><ul>{{range .Nav}}{{if .More}}<li><a href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}>{{.Title}}</a></li>{{end}}{{end}}</ul></details>
 <form method="GET" action="/search" role="search"><input type="search" name="q" placeholder="Search" aria-label="Search"></form></header>
 <main id="main">
 {{template "feedback" .}}{{end}}

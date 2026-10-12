@@ -440,6 +440,19 @@ func TestDoDispatchesPageFind(t *testing.T) {
 	}
 }
 
+// TestDoOpensADayAndGetsAMonth: the browser's "go to a day" and its calendar from the CLI
+// (docs/plans/091-the-browser-for-daily-use.md).
+func TestDoOpensADayAndGetsAMonth(t *testing.T) {
+	c := commandClient(t)
+	day, err := do(c, "open-day", map[string]string{"day": "2031-05-14"})
+	if err != nil || day.Title != "2031-05-14" {
+		t.Fatalf("open-day: %+v %v", day, err)
+	}
+	if month := mustEntity(c.Get("/months/2031-05")); month.Title != "May 2031" {
+		t.Fatalf("get /months/2031-05: %+v", month)
+	}
+}
+
 func commandClient(t *testing.T) *client.Client {
 	t.Helper()
 	p := filepath.Join(t.TempDir(), "life.db")

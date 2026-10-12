@@ -7,19 +7,32 @@
   background:var(--accent,#0b5cad); color:var(--on-accent,#fff); transform:translateY(-250%)}
 .skip:focus-visible{transform:none}
 
-/* The one header every page carries: the brand, the sections, the search. */
+/* The one header every page carries: the brand, the sections of every day, the More menu of the rest, the search.
+   On a phone the sections are one row that scrolls to the side, and the search is the second row. */
 header.top{display:flex; flex-wrap:wrap; align-items:center; gap:2px 10px; font-size:15px}
 header.top .brand{font-weight:700; color:inherit; margin-right:6px; padding:5px 0}
-header.top nav{display:flex; flex-wrap:wrap; align-items:center; gap:2px}
-header.top nav a{padding:5px 9px; border-radius:6px; color:inherit}
-header.top nav a:hover{background:var(--panel,#f2efe8); text-decoration:none}
-header.top nav a[aria-current=page]{background:var(--accent-weak,#e7eff9); color:var(--accent,#0b5cad); font-weight:620}
+header.top nav{display:flex; align-items:center; gap:2px; min-width:0; overflow-x:auto; white-space:nowrap; scrollbar-width:none}
+header.top nav a,header.top details.more>summary,header.top details.more li a{padding:5px 9px; border-radius:6px; color:inherit}
+header.top nav a:hover,header.top details.more>summary:hover,header.top details.more li a:hover{background:var(--panel,#f2efe8); text-decoration:none}
+header.top a[aria-current=page],header.top details.more>summary.here{background:var(--accent-weak,#e7eff9); color:var(--accent,#0b5cad); font-weight:620}
+header.top details.more{position:relative; flex:0 0 auto; margin:0; padding:0; border:0; background:none}
+header.top details.more>summary{display:block; font-size:inherit; font-weight:inherit; list-style:none; white-space:nowrap}
+header.top details.more>summary::-webkit-details-marker{display:none}
+header.top details.more>summary::after{content:" ▾"; color:var(--muted,#6f6b63)}
+header.top details.more[open]>summary{margin:0; padding-bottom:5px; border-bottom:0}
+header.top details.more>ul{position:absolute; z-index:10; top:100%; left:0; min-width:13rem; margin:6px 0 0; padding:6px;
+  list-style:none; background:var(--bg,#fbfaf7); border:1px solid var(--line,#e3dfd6); border-radius:var(--radius,8px);
+  box-shadow:0 8px 24px rgb(0 0 0 / .18)}
+header.top details.more li{margin:0}
+header.top details.more li a{display:block}
 header.top form[role=search]{margin:0 0 0 auto; flex:1 1 170px; max-width:260px}
 header.top form[role=search] input{height:34px; font-size:14.5px}
 @media (max-width:640px){
-  header.top{position:static; gap:2px 6px; font-size:14px}
-  header.top .brand{flex:1 1 100%; margin-bottom:2px}
-  header.top form[role=search]{flex:1 1 100%; max-width:none; order:1}
+  header.top{position:static; flex-wrap:wrap; gap:2px 4px; font-size:14px}
+  header.top .brand{flex:0 0 auto; margin-right:2px}
+  header.top nav{flex:1 1 0}
+  header.top details.more>ul{left:auto; right:0}
+  header.top form[role=search]{flex:1 1 100%; max-width:none}
 }
 
 /* A line of the facts about the page under its title. */
@@ -132,6 +145,17 @@ figure a{display:block}
 
 /* On paper the switcher of a page and its pager are of no use. */
 @media print{.skip,nav.pager{display:none}}
+
+/* The calendar of a month: a cell for each day; a day with a page is marked, today framed. */
+table.calendar{table-layout:fixed}
+table.calendar th,table.calendar td{text-align:center; padding:4px 2px}
+table.calendar td{height:3.2em; vertical-align:top}
+table.calendar td a{display:block; padding:2px 0; border-radius:6px}
+table.calendar td.written{background:var(--accent-weak,#e7eff9)}
+table.calendar td.written a{font-weight:650}
+table.calendar td[aria-current=date]{outline:2px solid var(--accent,#0b5cad); outline-offset:-2px; border-radius:6px}
+table.calendar small{display:block; line-height:1.2}
+table.calendar tbody tr:hover{background:none}
 
 /* A day's mood, beside its heading or its line in a list. */
 .mood{font-size:.55em; font-weight:500; color:var(--muted,#6f6b63); white-space:nowrap; vertical-align:middle}

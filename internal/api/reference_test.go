@@ -28,6 +28,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		"days, people, places, files, ghosts": map[string]any{"limit": 0, "offset": 0},
 		"search":                              map[string]any{"q": "", "hits": []core.Hit{}, "limit": 0, "offset": 0},
 		"day":                                 dayView{},
+		"month":                               map[string]any{"month": "", "today": "", "days": []monthDay{}},
 		"page, person, place, file, period":   core.Page{},
 		"measurement":                         core.Measurement{},
 		"series":                              map[string]any{"metric": "", "from": "", "to": "", "readings": []core.Reading{}, "habit_periods": []core.Period{}, "categories": []string{}, "scope": "", "session_id": int64(0), "include_deleted": false, "all_history": false},
@@ -86,7 +87,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		{"page, person, place, file, period", ids["place"]}, {"page, person, place, file, period", ids["file"]}, {"page, person, place, file, period", ids["period"]},
 		{"measurement", ids["measurement"]}, {"series", "/metrics/Weight"}, {"metrics", "/metrics"}, {"habits", "/habits?day=2031-05-01"},
 		{"sessions", "/sessions"}, {"session", ids["session"]}, {"periods", "/periods?day=2031-05-01"}, {"integrity", "/integrity"},
-		{"tasks", "/tasks"}, {"task", ids["task"]}, {"occurrence", ids["task"] + "/occurrences/once"}, {"deadlines", "/deadlines?from=2031-05-01&through=2031-05-31"},
+		{"month", "/months/2031-05"}, {"tasks", "/tasks"}, {"task", ids["task"]}, {"occurrence", ids["task"] + "/occurrences/once"}, {"deadlines", "/deadlines?from=2031-05-01&through=2031-05-31"},
 	}
 	named := func(section, key string) bool { // a list is documented as "name[]"
 		return documented[section][key] || documented[section][key+"[]"]

@@ -53,7 +53,10 @@ func newHandler(s *core.Store, localDay func() string, trustedOrigins ...string)
 	get("/actions", h.actions)
 	get("/days", h.days)
 	get("/days/today", h.today)
+	get("/days/go", h.openDay)
 	get("/days/{day}", h.day)
+	get("/months/current", h.currentMonth)
+	get("/months/{month}", h.month)
 	get("/pages", h.find)
 	get("/pages/{id}", h.page)
 	get("/people", h.named("person", "people", "create-person"))
@@ -474,7 +477,7 @@ func (h *server) root(r *http.Request) (*Entity, error) {
 		}
 	}
 	actions := []Action{
-		action("capture", map[string]string{"day": today}, nil), action("search", nil, nil), action("find", nil, nil), action("deadlines", nil, nil), action("create-task", nil, nil),
+		action("capture", map[string]string{"day": today}, nil), action("search", nil, nil), action("find", nil, nil), action("open-day", nil, nil), action("deadlines", nil, nil), action("create-task", nil, nil),
 		action("capture-session", nil, nil), action("create-period", nil, nil), action("create-page", nil, nil), action("create-person", nil, nil), action("create-place", nil, nil), action("add-file", nil, nil),
 		h.recordAction(ctx, "", today), action("register-metric", nil, nil), action("query", nil, nil), action("snapshot", nil, nil)}
 	return &Entity{
@@ -483,7 +486,7 @@ func (h *server) root(r *http.Request) (*Entity, error) {
 		Links: []Link{link("self", "/", "Lifelog"), link("today", dayHref(today), "Today"), link("days", "/days", "Days"),
 			link("sessions", "/sessions", "Sessions"), link("periods", "/periods", "Periods"), link("people", "/people", "People"), link("places", "/places", "Places"), link("files", "/files", "Files"), link("metrics", "/metrics", "Metrics"),
 			link("habits", "/habits", "Habits"), link("tasks", "/tasks", "Tasks"), link("deadlines", "/deadlines", "Deadlines"),
-			link("ghosts", "/ghosts", "Ghost pages"), link("actions", "/actions", "All actions")},
+			link("ghosts", "/ghosts", "Ghost pages"), link("actions", "/actions", "All actions"), link("calendar", "/months/current", "Calendar")},
 		Actions: append(append(actions, checkIns(hs, today)...), outcomesOf(due, today)...),
 	}, nil
 }
@@ -581,8 +584,9 @@ func (h *server) day(r *http.Request) (*Entity, error) {
 	e := &Entity{
 		Class: []string{"day"}, Title: day, Properties: dayView{Day: *d, Due: due, Mood: mood, Habits: hs, Today: today},
 		Links: []Link{link("self", dayHref(day), day), link("prev", dayHref(t.AddDate(0, 0, -1).Format(time.DateOnly)), "Previous day"),
-			link("next", dayHref(t.AddDate(0, 0, 1).Format(time.DateOnly)), "Next day"), link("metrics", "/metrics", "Metrics"), link("index", "/", "Home")},
-		Actions: []Action{action("capture", map[string]string{"day": day}, nil), h.recordAction(ctx, "", day)},
+			link("next", dayHref(t.AddDate(0, 0, 1).Format(time.DateOnly)), "Next day"), link("metrics", "/metrics", "Metrics"), link("index", "/", "Home"),
+			link("month", monthHref(t), t.Format("January 2006"))},
+		Actions: []Action{action("capture", map[string]string{"day": day}, nil), h.recordAction(ctx, "", day), action("open-day", nil, nil)},
 	}
 	if d.PageID != 0 {
 		e.Links = append(e.Links, link("page", pageHref(d.PageID), "The day page"))

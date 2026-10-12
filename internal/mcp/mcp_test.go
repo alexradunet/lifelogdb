@@ -83,7 +83,7 @@ func TestFindAndReadingsTools(t *testing.T) {
 		}
 		seen[tool.Name] = true
 	}
-	for _, name := range []string{"find", "get", "get_day", "readings_from_table"} {
+	for _, name := range []string{"find", "get", "get_day", "readings_from_table", "open_day"} {
 		if !seen[name] {
 			t.Fatalf("MCP tools lack %q; have %v", name, seen)
 		}
@@ -97,6 +97,13 @@ func TestFindAndReadingsTools(t *testing.T) {
 	page := callTool(t, ctx, session, "find", map[string]any{"title": "Ana"})
 	if page.Title != "Ana" || href(page, "self") == "" {
 		t.Fatalf("find returned %+v", page)
+	}
+	// The browser's calendar and its "go to a day" are on this surface too (docs/plans/091-the-browser-for-daily-use.md).
+	if day := callTool(t, ctx, session, "open_day", map[string]any{"day": "2031-05-14"}); day.Title != "2031-05-14" {
+		t.Fatalf("open_day returned %+v", day)
+	}
+	if month := callTool(t, ctx, session, "get", map[string]any{"href": "/months/2031-05"}); month.Title != "May 2031" {
+		t.Fatalf("get /months/2031-05 returned %+v", month)
 	}
 	callTool(t, ctx, session, "create_page", map[string]any{"title": "Weighings", "body": "| day | weight (kg) |\n|---|---|\n| 2031-01-01 | 70.5 |\n"})
 	readings := callTool(t, ctx, session, "readings_from_table", map[string]any{"page": "Weighings", "metric": "weight"})

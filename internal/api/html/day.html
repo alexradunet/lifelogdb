@@ -1,7 +1,7 @@
 {{define "day"}}{{template "head" .}}
 {{$d := .Props}}
 <h1>{{weekday .Title}}{{template "mood" $d.mood}}</h1>
-<p class="sub"><span>{{.Title}}</span>{{if ne .Title $d.today}}<a href="/days/today">Today</a>{{end}}<a href="/habits?day={{.Title}}">Habits</a>{{with .Link "page"}}<a href="{{.}}">The day page</a>{{end}}</p>
+<p class="sub"><span>{{.Title}}</span>{{if ne .Title $d.today}}<a href="/days/today">Today</a>{{end}}{{with .Link "month"}}<a href="{{.}}">{{$.LinkTitle "month"}}</a>{{end}}<a href="/habits?day={{.Title}}">Habits</a>{{with .Link "page"}}<a href="{{.}}">The day page</a>{{end}}</p>
 <nav class="pager" aria-label="Days"><a href="{{.Link "prev"}}" rel="prev">← Previous day</a><a href="{{.Link "next"}}" rel="next">Next day →</a></nav>
 
 <h2>Journal</h2>
@@ -36,6 +36,7 @@
 
 {{template "boxed" (form (.Action "record") "button" "Record a reading")}}
 {{template "boxed" (form (.Action "capture-session") "button" "Record a session")}}
+{{template "boxed" (form (.Action "open-day"))}}
 {{template "foot" .}}{{end}}
 
 {{/* mood is a day's mood beside its heading: each current reading, in the order it was recorded */}}
