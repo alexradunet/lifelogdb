@@ -79,3 +79,50 @@ func TestRelocationIsTheOwnersWith403(t *testing.T) {
 		}
 	}
 }
+
+// HabitStates over a window says, for each day and each habit active on it, what Habits says for that day alone: a
+// hand-checked week with a habit that starts mid-week, a check-in, a miss and an invalid value.
+func TestHabitStatesOverAWindowMatchTheDaysAlone(t *testing.T) {
+	s := fresh(t)
+	if _, err := s.RegisterMetric(ctx, "cli", "Walk", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.StartHabit(ctx, "cli", "Walk", "2026-03-03", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CheckIn(ctx, "cli", "Walk", "2026-03-03", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CheckIn(ctx, "cli", "Walk", "2026-03-04", false); err != nil {
+		t.Fatal(err)
+	}
+	// Deliberate damage past the writer: a value a habit never records, so the state is invalid.
+	if _, err := s.DB.W.ExecContext(ctx, `INSERT INTO measurements(metric_id, day, value, source, created_at)
+		SELECT h.metric_id, '2026-03-06', 7, 'cli', strftime('%Y-%m-%dT%H:%M:%fZ','now') FROM habit_periods h LIMIT 1`); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.HabitStates(ctx, "2026-03-01", "2026-03-07")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []HabitDay{
+		{"2026-03-03", HabitState{"Walk", "done"}}, {"2026-03-04", HabitState{"Walk", "not done"}},
+		{"2026-03-05", HabitState{"Walk", "not recorded"}}, {"2026-03-06", HabitState{"Walk", "invalid"}},
+		{"2026-03-07", HabitState{"Walk", "not recorded"}},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("%d states, want %d: %+v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("state %d: %+v, want %+v", i, got[i], want[i])
+		}
+		alone, err := s.Habits(ctx, want[i].Day)
+		if err != nil || len(alone) != 1 || alone[0] != want[i].HabitState {
+			t.Errorf("the day %s alone: %+v %v, want %+v", want[i].Day, alone, err, want[i].HabitState)
+		}
+	}
+	if before, err := s.Habits(ctx, "2026-03-02"); err != nil || len(before) != 0 {
+		t.Errorf("the day before the habit started has no habit: %+v %v", before, err)
+	}
+}

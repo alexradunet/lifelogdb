@@ -144,11 +144,19 @@ func (s *Store) Task(ctx context.Context, id int64) (*Task, error) {
 }
 
 // Tasks lists the definitions by id, the live ones unless includeDeleted.
+// tasksSelect is the list of tasks (the live ones, or all of them when includeDeleted), by id.
+const tasksSelect = taskSelect + `WHERE (? OR t.deleted_at IS NULL) ORDER BY t.id`
+
 func (s *Store) Tasks(ctx context.Context, includeDeleted bool) ([]Task, error) {
-	rows, err := s.DB.R.QueryContext(ctx, taskSelect+`WHERE (? OR t.deleted_at IS NULL) ORDER BY t.id`, includeDeleted)
+	rows, err := s.DB.R.QueryContext(ctx, tasksSelect, includeDeleted)
 	if err != nil {
 		return nil, err
 	}
+	return scanTasks(rows)
+}
+
+// scanTasks reads every task of rows and closes them.
+func scanTasks(rows *sql.Rows) ([]Task, error) {
 	defer rows.Close()
 	out := []Task{}
 	for rows.Next() {
@@ -161,10 +169,12 @@ func (s *Store) Tasks(ctx context.Context, includeDeleted bool) ([]Task, error) 
 	return out, rows.Err()
 }
 
-// Deadline is an occurrence of any task in a window, with its task's label.
+// Deadline is an occurrence of any task in a window, with its task's label, and the task itself for the reader that
+// resolves its reminder.
 type Deadline struct {
 	TaskOccurrence
 	Label string `json:"label"`
+	Task  Task   `json:"-"`
 }
 
 // Deadlines merges every task's TaskOccurrences over the window (the live tasks, or all of them when
@@ -173,13 +183,24 @@ func (s *Store) Deadlines(ctx context.Context, from, through string, includeDele
 	if err := checkWindow(from, through); err != nil {
 		return nil, err
 	}
-	tasks, err := s.Tasks(ctx, includeDeleted)
+	// One snapshot for every task: the tasks, then each one's occurrences inside the same read transaction.
+	tx, err := s.DB.R.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	rows, err := tx.QueryContext(ctx, tasksSelect, includeDeleted)
+	if err != nil {
+		return nil, err
+	}
+	tasks, err := scanTasks(rows)
 	if err != nil {
 		return nil, err
 	}
 	out := []Deadline{}
-	for _, p := range tasks {
-		os, err := s.TaskOccurrences(ctx, p.ID, from, through, includeDeleted)
+	for i := range tasks {
+		p := &tasks[i]
+		os, err := occurrencesIn(ctx, tx, p, from, through, includeDeleted)
 		if err != nil {
 			return nil, err
 		}
@@ -187,8 +208,11 @@ func (s *Store) Deadlines(ctx context.Context, from, through string, includeDele
 			if len(out) >= maxTaskOccurrences {
 				return nil, Invalid("deadline window exceeds %d occurrence limit", maxTaskOccurrences)
 			}
-			out = append(out, Deadline{o, p.Label})
+			out = append(out, Deadline{o, p.Label, *p})
 		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
 	}
 	sort.Slice(out, func(i, j int) bool {
 		a, b := out[i], out[j]
@@ -617,10 +641,20 @@ func (s *Store) TaskOccurrences(ctx context.Context, taskID int64, from, through
 	if err != nil {
 		return nil, err
 	}
-	if p.DeletedAt != "" && !includeDeleted {
-		return []TaskOccurrence{}, tx.Commit()
+	out, err := occurrencesIn(ctx, tx, p, from, through, includeDeleted)
+	if err != nil {
+		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, occurrenceSelect+`WHERE o.task_id=? AND (o.occurrence_key BETWEEN ? AND ? OR o.due_day BETWEEN ? AND ?) ORDER BY o.occurrence_key`, taskID, from, through, from, through)
+	return out, tx.Commit()
+}
+
+// occurrencesIn are one task's occurrences in a window, read inside the caller's snapshot: the written ones, and the
+// slots of a live series not yet written as virtual open work. The deadlines read every task's this way in one snapshot.
+func occurrencesIn(ctx context.Context, tx *sql.Tx, p *Task, from, through string, includeDeleted bool) (_ []TaskOccurrence, err error) {
+	if p.DeletedAt != "" && !includeDeleted {
+		return []TaskOccurrence{}, nil
+	}
+	rows, err := tx.QueryContext(ctx, occurrenceSelect+`WHERE o.task_id=? AND (o.occurrence_key BETWEEN ? AND ? OR o.due_day BETWEEN ? AND ?) ORDER BY o.occurrence_key`, p.ID, from, through, from, through)
 	if err != nil {
 		return nil, err
 	}
@@ -661,7 +695,7 @@ func (s *Store) TaskOccurrences(ctx context.Context, taskID int64, from, through
 			if _, ok := persisted[key]; ok {
 				return nil
 			}
-			return appendOccurrence(TaskOccurrence{TaskID: taskID, TaskVersion: p.Version, OccurrenceKey: key, Virtual: true, OccurrenceChanges: OccurrenceChanges{DueDay: key, State: StateOpen, ReminderMode: ReminderInherit}})
+			return appendOccurrence(TaskOccurrence{TaskID: p.ID, TaskVersion: p.Version, OccurrenceKey: key, Virtual: true, OccurrenceChanges: OccurrenceChanges{DueDay: key, State: StateOpen, ReminderMode: ReminderInherit}})
 		})
 		if err != nil {
 			return nil, err
@@ -673,9 +707,6 @@ func (s *Store) TaskOccurrences(ctx context.Context, taskID int64, from, through
 		}
 		return out[i].OccurrenceKey < out[j].OccurrenceKey
 	})
-	if err = tx.Commit(); err != nil {
-		return nil, err
-	}
 	return out, nil
 }
 

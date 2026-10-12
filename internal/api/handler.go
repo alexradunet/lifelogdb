@@ -473,14 +473,28 @@ func (h *server) root(r *http.Request) (*Entity, error) {
 // overdueAndDue are the open occurrences due before today in the deadlines' default window, then the open ones due
 // today.
 func (h *server) overdueAndDue(ctx context.Context, today string) ([]occurrenceView, error) {
+	open, _, err := h.dueToday(ctx, today)
+	return open, err
+}
+
+// dueToday reads the deadlines from the default window back through today once, and splits them: the open ones (the
+// overdue first, then today's, as the deadlines order them), and today's settled ones.
+func (h *server) dueToday(ctx context.Context, today string) (open, settled []occurrenceView, err error) {
 	t, _ := dayOf(today)
-	from, yesterday := t.AddDate(0, 0, -windowBack).Format(time.DateOnly), t.AddDate(0, 0, -1).Format(time.DateOnly)
-	late, err := h.dueIn(ctx, from, yesterday, core.StateOpen, false)
+	all, err := h.dueIn(ctx, t.AddDate(0, 0, -windowBack).Format(time.DateOnly), today, "all", false)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	due, err := h.dueIn(ctx, today, today, core.StateOpen, false)
-	return append(late, due...), err
+	open = []occurrenceView{}
+	for _, v := range all {
+		switch {
+		case v.State == core.StateOpen:
+			open = append(open, v)
+		case v.DueDay == today:
+			settled = append(settled, v)
+		}
+	}
+	return open, settled, nil
 }
 
 func (h *server) actions(*http.Request) (*Entity, error) {
@@ -536,17 +550,10 @@ func (h *server) dayEntity(ctx context.Context, day string) (*Entity, error) {
 	}
 	today := h.localDay()
 	var due []occurrenceView
-	if day == today { // the open work of the days before, then all of today's
-		due, err = h.overdueAndDue(ctx, today)
+	if day == today { // the open work of the days before, then all of today's: one read
 		var settled []occurrenceView
-		if err == nil {
-			settled, err = h.dueIn(ctx, today, today, "all", false)
-		}
-		for _, v := range settled {
-			if v.State != core.StateOpen {
-				due = append(due, v)
-			}
-		}
+		due, settled, err = h.dueToday(ctx, today)
+		due = append(due, settled...)
 	} else {
 		due, err = h.dueIn(ctx, day, day, "all", false)
 	}

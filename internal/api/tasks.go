@@ -309,21 +309,12 @@ func (h *server) dueIn(ctx context.Context, from, through, state string, include
 	if err != nil {
 		return nil, err
 	}
-	tasks := map[int64]core.Task{}
 	views := []occurrenceView{}
 	for _, d := range ds {
 		if state != "all" && d.State != state {
 			continue
 		}
-		t, ok := tasks[d.TaskID]
-		if !ok {
-			p, err := h.s.Task(ctx, d.TaskID)
-			if err != nil {
-				return nil, err
-			}
-			t, tasks[d.TaskID] = *p, *p
-		}
-		views = append(views, viewOccurrence(t, d.TaskOccurrence, d.Label))
+		views = append(views, viewOccurrence(d.Task, d.TaskOccurrence, d.Label))
 	}
 	return views, nil
 }

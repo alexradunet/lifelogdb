@@ -28,7 +28,9 @@ type shellView struct {
 	Days      []any // the days of this month as the month resource gives them (day, page): the monthbox template draws them
 }
 
-func (h *server) shell(ctx context.Context) (*shellView, error) {
+// shell reads the sidebar's view. due is the count of what is open, overdue or due today when the page already read
+// it (the root carries it), nil when the shell reads it itself.
+func (h *server) shell(ctx context.Context, due *int) (*shellView, error) {
 	if h.s == nil || h.localDay == nil {
 		return nil, errors.New("no store or clock to read the shell from")
 	}
@@ -37,9 +39,15 @@ func (h *server) shell(ctx context.Context) (*shellView, error) {
 	if !ok {
 		return nil, fmt.Errorf("today %q is not a day", today)
 	}
-	due, err := h.overdueAndDue(ctx, today)
-	if err != nil {
-		return nil, err
+	count := 0
+	if due != nil {
+		count = *due
+	} else {
+		open, err := h.overdueAndDue(ctx, today)
+		if err != nil {
+			return nil, err
+		}
+		count = len(open)
 	}
 	first := time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
 	last := first.AddDate(0, 1, -1)
@@ -51,7 +59,7 @@ func (h *server) shell(ctx context.Context) (*shellView, error) {
 	for _, d := range entries {
 		written[d.Day] = true
 	}
-	sv := &shellView{Today: today, Zone: h.zone, Month: first.Format(layoutMonth), MonthHref: monthHref(first), Due: len(due), Written: len(entries)}
+	sv := &shellView{Today: today, Zone: h.zone, Month: first.Format(layoutMonth), MonthHref: monthHref(first), Due: count, Written: len(entries)}
 	for d := first; !d.After(last); d = d.AddDate(0, 0, 1) {
 		day := d.Format(time.DateOnly)
 		sv.Days = append(sv.Days, map[string]any{"day": day, "page": written[day]})
@@ -73,7 +81,16 @@ func (h *server) write(w http.ResponseWriter, r *http.Request, status int, e *En
 
 // inShell draws the entity as a page in the shell, for any client: the read of the shell may fail, as write says.
 func (h *server) inShell(w http.ResponseWriter, r *http.Request, status int, e *Entity) {
-	sv, err := h.shell(r.Context())
+	var due *int // the root already read what is due: the shell does not read it again
+	if len(e.Class) > 0 && e.Class[0] == "root" {
+		if props, ok := e.Properties.(map[string]any); ok {
+			if open, ok := props["due"].([]occurrenceView); ok {
+				n := len(open)
+				due = &n
+			}
+		}
+	}
+	sv, err := h.shell(r.Context(), due)
 	if err != nil {
 		sv = &shellView{Zone: h.zone}
 		if h.localDay != nil {

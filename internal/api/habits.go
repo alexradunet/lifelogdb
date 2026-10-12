@@ -172,23 +172,28 @@ func (h *server) habitsOn(ctx context.Context, day string) ([]habitView, []core.
 	if err != nil {
 		return nil, nil, core.Invalid("day must be a day, YYYY-MM-DD")
 	}
+	first := t.AddDate(0, 0, -(glanceDays - 1)).Format(time.DateOnly)
+	if !core.IsDay(first) {
+		first = "0000-01-01" // before the first day a date can name: no habit was active
+	}
+	read, err := h.s.HabitStates(ctx, first, day) // one statement for the window, not one a day
+	if err != nil {
+		return nil, nil, err
+	}
 	byDay := make([]map[string]string, glanceDays)
-	var states []core.HabitState
 	for i := range byDay {
 		byDay[i] = map[string]string{}
-		d := t.AddDate(0, 0, i-(glanceDays-1)).Format(time.DateOnly)
-		if !core.IsDay(d) {
-			continue // before the first day a date can name: no habit was active
+	}
+	states := []core.HabitState{}
+	for _, x := range read {
+		at, _ := dayOf(x.Day)
+		i := glanceDays - 1 - int(t.Sub(at).Hours()/24)
+		if i < 0 || i >= glanceDays {
+			continue
 		}
-		hs, err := h.s.Habits(ctx, d)
-		if err != nil {
-			return nil, nil, err
-		}
-		for _, x := range hs {
-			byDay[i][x.Metric] = x.State
-		}
-		if i == glanceDays-1 {
-			states = hs
+		byDay[i][x.Metric] = x.State
+		if x.Day == day {
+			states = append(states, x.HabitState)
 		}
 	}
 	out := []habitView{}
