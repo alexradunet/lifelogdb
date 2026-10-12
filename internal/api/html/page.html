@@ -16,7 +16,7 @@
 <div class="sheet-margin">
 <div class="sheet">
 {{with .Link "preview"}}<figure><a href="{{.}}"><img class="preview" src="{{.}}" alt="{{$.Title}}"></a><figcaption>{{$.Title}}</figcaption></figure>{{end}}
-{{with form (.Action "save-body") "button" "Save" "autofocus" "body"}}<details{{if not $p.body}} open{{end}}><summary>Edit</summary>
+{{with form (.Action "save-body") "button" "Save" "autofocus" "body"}}<details{{if or (not $p.body) .Refused}} open{{end}}><summary>Edit</summary>
 <small class="desc">CommonMark. [[Title]] links a page and #tag a tag page; both are created if new. Nothing is saved until the version you read is still the current one.</small>
 {{template "form" .}}</details>{{end}}
 {{if or $p.body (not (.Action "save-body"))}}<section class="page-body" aria-label="The page">

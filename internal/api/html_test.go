@@ -101,22 +101,101 @@ func essay(t *testing.T, h http.Handler) string {
 	return rec.Header().Get("Location")
 }
 
-func TestBrowserKeepsWhatAFailedSaveSent(t *testing.T) {
+// staleSave is a page with a save that is already stale: the version it names is not the current one.
+func staleSave(t *testing.T) (h http.Handler, self, action, version string) {
+	t.Helper()
 	c, h := fresh(t)
 	p := must(c.Do(find(must(c.Get("/")), "create-page"), map[string]string{"title": "Diet", "body": "v1"}))
 	save := find(p, "save-body")
 	must(c.Do(save, map[string]string{"body": "v2"}))
-	var version string
 	for _, f := range save.Fields {
 		if f.Name == "version" {
 			version = f.Value.(string)
 		}
 	}
-	rec := submit(h, save.Href, url.Values{"body": {"my <long> draft"}, "version": {version}}, href(p, "self"))
+	return h, href(p, "self"), save.Href, version
+}
+
+// TestBrowserKeepsWhatAFailedSaveSent: with no page to return to, a refused save answers with the error view, which
+// holds what the form sent.
+func TestBrowserKeepsWhatAFailedSaveSent(t *testing.T) {
+	h, self, action, version := staleSave(t)
+	rec := submit(h, action, url.Values{"body": {"my <long> draft"}, "version": {version}}, self)
 	body := rec.Body.String()
 	if rec.Code != http.StatusConflict || !strings.Contains(body, "my &lt;long&gt; draft</textarea>") ||
-		!strings.Contains(body, `href="`+href(p, "self")+`">Back`) {
+		!strings.Contains(body, `href="`+self+`">Back`) || !strings.Contains(body, `aria-label="What you sent"`) {
 		t.Errorf("a stale browser save: %d %.600s", rec.Code, body)
+	}
+}
+
+// TestARefusedSaveComesBackOnItsPage: a form that names its page (back) is answered with that page, with the error's
+// status, the alert first and the form filled, open and described by the alert.
+func TestARefusedSaveComesBackOnItsPage(t *testing.T) {
+	h, self, action, version := staleSave(t)
+	rec := submit(h, action, url.Values{"body": {"my <long> draft"}, "version": {version}, "back": {self}}, self)
+	body := rec.Body.String()
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status %d, want 409: %.400s", rec.Code, body)
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Errorf("Cache-Control %q, want no-store", got)
+	}
+	for _, want := range []string{"<title>Not saved · Diet · Lifelog</title>",
+		`role="alert" id="refused" tabindex="-1" autofocus>`, "my &lt;long&gt; draft</textarea>",
+		`<details open><summary>Edit</summary>`, `data-action="save-body" aria-describedby="refused"`,
+		`value="` + version + `"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the refused page lacks %s", want)
+		}
+	}
+	if n := strings.Count(body, "autofocus"); n != 1 {
+		t.Errorf("%d autofocus on the refused page, want 1 (the alert)", n)
+	}
+	if strings.Contains(body, `aria-label="What you sent"`) {
+		t.Error("the refused page also shows the error view's copy of the text")
+	}
+}
+
+// TestARefusedCaptureComesBackOnHome: a capture refused from Home comes back on Home with the text still in the box.
+func TestARefusedCaptureComesBackOnHome(t *testing.T) {
+	_, h := fresh(t)
+	rec := submit(h, "/days/2026-10-12/capture", url.Values{"text": {"A note that must not be lost."}, "mood": {"9"}, "back": {"/"}}, "")
+	body := rec.Body.String()
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status %d, want 422: %.400s", rec.Code, body)
+	}
+	for _, want := range []string{"<title>Not saved · Lifelog · Lifelog</title>", `aria-label="Capture"`, "Add to today", `role="alert" id="refused"`,
+		">A note that must not be lost.</textarea>", `aria-describedby="refused"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("Home, refused, lacks %s", want)
+		}
+	}
+	if n := strings.Count(body, "autofocus"); n != 1 {
+		t.Errorf("%d autofocus on the refused page, want 1 (the alert)", n)
+	}
+}
+
+// TestARefusalWithoutAPageToReturnToIsTheErrorView: a back path whose page is missing, or that redirects, falls back
+// to the error view, and a JSON client gets the error entity whatever the form named.
+func TestARefusalWithoutAPageToReturnToIsTheErrorView(t *testing.T) {
+	h, self, action, version := staleSave(t)
+	for _, back := range []string{"/pages/999999", "/days/today"} {
+		rec := submit(h, action, url.Values{"body": {"my draft"}, "version": {version}, "back": {back}}, self)
+		body := rec.Body.String()
+		if rec.Code != http.StatusConflict || !strings.Contains(body, `aria-label="What you sent"`) ||
+			strings.Contains(body, `id="refused"`) {
+			t.Errorf("back %s: %d, want the error view: %.400s", back, rec.Code, body)
+		}
+	}
+
+	req := httptest.NewRequest("POST", action, strings.NewReader(url.Values{"body": {"my draft"}, "version": {version}, "back": {self}}.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/vnd.siren+json")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusConflict || !strings.HasPrefix(rec.Header().Get("Content-Type"), "application/vnd.siren+json") ||
+		!strings.Contains(rec.Body.String(), `"stale_version"`) || strings.Contains(rec.Body.String(), "refused") {
+		t.Errorf("a JSON client's refusal: %d %s %.300s", rec.Code, rec.Header().Get("Content-Type"), rec.Body.String())
 	}
 }
 

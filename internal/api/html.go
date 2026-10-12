@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -140,7 +141,19 @@ type view struct {
 	Here      string
 	Submitted string
 	Back      string
-	Shell     *shellView // the sidebar's read; nil when the page is drawn without it
+	Shell     *shellView   // the sidebar's read; nil when the page is drawn without it
+	Refused   *refusedView // a form of this page failed: the alert, and the form as it was sent
+	Sent      url.Values
+}
+
+// refusedView is the error of a refused form, as the page it came from draws it: the alert at the top of the page.
+type refusedView struct {
+	Status  int
+	Code    string
+	Message string
+	Words   string // the alert's first words (alertOf)
+	Danger  bool
+	Href    string // the refused action's address
 }
 
 // hereOf is the address of the page the browser is on, without the one-use feedback receipt: a form that returns
@@ -156,6 +169,17 @@ func hereOf(u *url.URL) string {
 
 func renderHTML(w http.ResponseWriter, r *http.Request, status int, e *Entity, sv *shellView) {
 	v := &view{Entity: e, Props: jsonShape(e.Properties), Path: r.URL.Path, Here: hereOf(r.URL), Shell: sv}
+	if rf, ok := r.Context().Value(refusalKey{}).(*refusal); ok && status < 400 {
+		// This page is the one a refused form came from (refusedOnItsPage): it answers with the form's error.
+		props, _ := rf.entity.Properties.(map[string]any)
+		code, _ := props["code"].(string)
+		message, _ := props["message"].(string)
+		words := alertOf(code)
+		v.Refused = &refusedView{Status: rf.status, Code: code, Message: message, Words: words.Words, Danger: words.Danger, Href: rf.href}
+		v.Sent = rf.sent
+		status, rf.shown = rf.status, true
+		w.Header().Set("Cache-Control", "no-store")
+	}
 	if status >= 400 && r.Method == "POST" {
 		v.Submitted = r.PostForm.Get("body")
 		if v.Submitted == "" {
@@ -271,10 +295,32 @@ func (v *view) LinkTitle(rel string) string {
 func (v *view) Action(name string) *Action {
 	for i := range v.Actions {
 		if v.Actions[i].Name == name {
-			return &v.Actions[i]
+			return v.shown(&v.Actions[i])
 		}
 	}
 	return nil
+}
+
+// shown is the action as this page draws it. On a page that shows a refusal, every action is a copy (the entity
+// stays as it is, and the JSON shape with it) that takes no focus, so the alert keeps it. The copy of the refused
+// action is also marked and filled: each of its fields holds what the form sent. A sent value that is not a field
+// of the action is dropped, and a file is never sent back.
+func (v *view) shown(a *Action) *Action {
+	if a == nil || v.Refused == nil {
+		return a
+	}
+	c := *a
+	c.noFocus = true
+	if a.Href == v.Refused.Href {
+		c.refused = true
+		c.Fields = slices.Clone(a.Fields)
+		for i, f := range c.Fields {
+			if _, sent := v.Sent[f.Name]; sent && f.Type != "file" {
+				c.Fields[i].Value = v.Sent.Get(f.Name)
+			}
+		}
+	}
+	return &c
 }
 
 // ActionFor is the action of that name on the resource href (a view offering one per item, e.g. a check-in
@@ -282,7 +328,7 @@ func (v *view) Action(name string) *Action {
 func (v *view) ActionFor(name, href string) *Action {
 	for i := range v.Actions {
 		if a := &v.Actions[i]; a.Name == name && strings.HasPrefix(a.Href, href+"/") {
-			return a
+			return v.shown(a)
 		}
 	}
 	return nil
@@ -325,6 +371,7 @@ type formView struct {
 	Button, Class string
 	Focus         string
 	Back          string
+	Refused       bool    // the form a refusal came from: open, filled, described by the alert, with no focus
 	Primary       bool    // the button is the primary one: a form with fields to fill
 	Shown         []Field // the fields most writes need
 	More          []Field // optional fields, folded; still in the form, so a browser sends them with no script
@@ -438,6 +485,10 @@ func formOf(x any, opts ...string) (*formView, error) {
 	}
 	if !primary {
 		f.Primary = len(f.Shown)+len(f.More) > 0
+	}
+	f.Refused = a.refused
+	if a.noFocus { // a page that shows a refusal puts the focus on the alert, and on no field
+		f.Focus = ""
 	}
 	return f, nil
 }

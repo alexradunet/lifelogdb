@@ -22,9 +22,9 @@ func (v *view) OccurrenceAction(item any) *Action {
 		a := &v.Actions[i]
 		switch {
 		case virtual && a.Name == "capture-occurrence" && a.Href == task+"/occurrences" && fieldValue(a, "key") == key:
-			return a
+			return v.shown(a)
 		case !virtual && a.Name == "edit-occurrence" && a.Href == task+"/occurrences/"+url.PathEscape(key)+"/edit":
-			return a
+			return v.shown(a)
 		}
 	}
 	return nil

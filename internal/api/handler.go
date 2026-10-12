@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -26,6 +27,7 @@ type server struct {
 	feedback feedbackStore
 	localDay func() string  // the server's local day: what is due, overdue and today is read against it
 	zone     *time.Location // the zone of that day: a browser's words for a time use it
+	mux      *http.ServeMux // the routes: a refused browser form runs a GET of its page through it
 }
 
 // New returns the whole API as one handler: lifelog serve mounts it on a socket, the CLI and the MCP server
@@ -40,6 +42,7 @@ func New(s *core.Store, trustedOrigins ...string) http.Handler {
 func newHandler(s *core.Store, localDay func() string, zone *time.Location, trustedOrigins ...string) http.Handler {
 	h := &server{s: s, localDay: localDay, zone: zone}
 	m := http.NewServeMux()
+	h.mux = m
 	get := func(p string, f func(*http.Request) (*Entity, error)) { m.HandleFunc("GET "+p, h.serve(f)) }
 	post := func(p string, f func(*http.Request, string) (*Entity, error)) {
 		m.HandleFunc("POST "+p, h.serve(func(r *http.Request) (*Entity, error) {
@@ -169,6 +172,9 @@ func (h *server) serve(f func(*http.Request) (*Entity, error)) http.HandlerFunc 
 			return
 		case err != nil:
 			e, status = errorEntity(err)
+			if h.refusedOnItsPage(w, r, e, status) {
+				return
+			}
 		case r.Method == "POST":
 			if self := selfOf(e); self != "" {
 				if wantsHTML(r) { // a browser form: post, then redirect, so a reload never posts again
@@ -192,6 +198,63 @@ func (h *server) serve(f func(*http.Request) (*Entity, error)) http.HandlerFunc 
 		h.write(w, r, status, e)
 	}
 }
+
+// refusal is a refused browser form, carried in the context of the GET that draws the page the form came from
+// (docs/plans/097-the-almanac-reflects.md). renderHTML reads it: the page then shows the error and the form
+// as the owner filled it. shown is set when it did.
+type refusal struct {
+	entity *Entity    // the error entity
+	status int        // the error's status: the page answers with it
+	href   string     // the refused action's address
+	sent   url.Values // what the form sent
+	shown  bool
+}
+
+type refusalKey struct{}
+
+// refusedOnItsPage answers a browser form that failed with the page it came from, filled in, and reports whether it
+// did. The server runs its own GET of the back path through its routes, on the context and the headers of the POST,
+// and a refusal in the context tells renderHTML to add the alert and the sent values. The GET writes into a buffer:
+// when it does not draw a page (a 404, a redirect, a picture), nothing is sent from it and the plain error view
+// answers, as for a POST with no back path. The GET gets no body: only the refusal carries what the form sent.
+func (h *server) refusedOnItsPage(w http.ResponseWriter, r *http.Request, e *Entity, status int) bool {
+	back := backOf(r)
+	if r.Method != "POST" || !wantsHTML(r) || back == "" {
+		return false
+	}
+	rf := &refusal{entity: e, status: status, href: r.URL.Path, sent: r.PostForm}
+	ctx := context.WithValue(r.Context(), refusalKey{}, rf)
+	get, err := http.NewRequestWithContext(ctx, "GET", back, nil)
+	if err != nil {
+		return false
+	}
+	get.Header = r.Header.Clone()
+	get.Header.Del("Content-Type")
+	get.Header.Del("Content-Length")
+	get.Host, get.RemoteAddr, get.TLS = r.Host, r.RemoteAddr, r.TLS
+	out := &pageBuffer{header: http.Header{}, status: http.StatusOK}
+	h.mux.ServeHTTP(out, get)
+	if !rf.shown {
+		return false
+	}
+	for k, v := range out.header {
+		w.Header()[k] = v
+	}
+	w.WriteHeader(out.status)
+	w.Write(out.body.Bytes())
+	return true
+}
+
+// pageBuffer holds what a handler writes, so the caller can send it or drop it.
+type pageBuffer struct {
+	header http.Header
+	status int
+	body   bytes.Buffer
+}
+
+func (b *pageBuffer) Header() http.Header         { return b.header }
+func (b *pageBuffer) Write(p []byte) (int, error) { return b.body.Write(p) }
+func (b *pageBuffer) WriteHeader(status int)      { b.status = status }
 
 // maxBack is the longest return path a browser form may send.
 const maxBack = 2048

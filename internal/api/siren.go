@@ -38,6 +38,10 @@ type Action struct {
 	Href        string  `json:"href"`
 	Type        string  `json:"type,omitempty"`
 	Fields      []Field `json:"fields,omitempty"`
+
+	// The browser's marks on a copy of an action (view.shown). They are not on the wire.
+	refused bool // the copy is the form a refusal came from: filled, open and described by the alert
+	noFocus bool // the page shows a refusal: no field takes the focus from the alert
 }
 
 // Field is a Siren field. In "path" (an extension) marks a field of the catalog's templated href; Rows (an

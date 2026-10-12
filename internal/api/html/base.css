@@ -84,6 +84,7 @@ abbr[title]{cursor:help; text-decoration:underline dotted}
 a{color:var(--text-link); text-decoration:none}
 a:hover{text-decoration:underline}
 :where(a,button,summary,input,textarea,select,[tabindex]):focus-visible{outline:2px solid var(--focus); outline-offset:2px}
+[role=alert]:focus{outline:2px solid var(--focus); outline-offset:2px} /* a refused form puts the focus on its alert */
 /* The first motion: a press sinks. Reduced motion keeps the press and drops the transition. The second motion is the
    step from one page to the next: the browser cross-fades the pages, and app.css names the leaf and the sheet so
    they move on their own (docs/plans/097-the-almanac-reflects.md). */
