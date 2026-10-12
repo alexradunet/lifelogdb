@@ -127,8 +127,9 @@ All three parts are done, one commit each. These points differ from the text abo
 no finding. govulncheck v1.9.0 (database of 2026-10-08), default text mode, exit 3: 12 vulnerabilities of the
 standard library of go1.27.1 are reachable (`net/http` and its HTTP/2, `html/template`, `crypto/tls`,
 `net/textproto`), all fixed in go1.27.2, none from this plan or from a module; GO-2026-6604 (`os.Root` on Windows) is
-in an imported package and not called. Disposition: open; the fix is the toolchain go1.27.2 (`go.mod`), a separate
-change for the owner to approve. Nothing was run on Linux, and no browser but Edge was tried.
+in an imported package and not called. Disposition: resolved the same day on the owner's word, in the commit after
+`322e4ef`: `go.mod` requires go 1.27.2, and govulncheck then finds no vulnerability. Nothing was run on Linux, and no
+browser but Edge was tried.
 
 **In a browser.** A program in a scratch folder drove Edge 154 (headless) on Windows 11 through its DevTools protocol,
 on a synthetic database: 22 checks passed. Ctrl K opens the list from a field and Escape closes it; a capture is in
