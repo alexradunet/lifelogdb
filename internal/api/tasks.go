@@ -169,7 +169,7 @@ func (h *server) taskEntity(ctx context.Context, id int64, q url.Values) (*Entit
 		case err == nil:
 			once = o
 			props["once"] = viewOccurrence(*t, *o, "")
-		case !asError(err, &ce) || ce.Status != 404:
+		case !errors.As(err, &ce) || ce.Status != 404:
 			return nil, err
 		}
 	}
@@ -228,7 +228,7 @@ func (h *server) occurrenceEntity(ctx context.Context, taskID int64, key string)
 	o, err := h.s.TaskOccurrence(ctx, taskID, key)
 	if err != nil {
 		var ce *core.Error
-		if !asError(err, &ce) || ce.Status != 404 {
+		if !errors.As(err, &ce) || ce.Status != 404 {
 			return nil, err
 		}
 		// Not written: a slot of a live recurring task is virtual open work (the contract, "Reading deadlines").
@@ -368,7 +368,7 @@ func (h *server) editTask(r *http.Request, src string) (*Entity, error) {
 		return nil, err
 	}
 	if err := h.s.EditTask(r.Context(), src, id, v.Get("version"), taskForm(v)); err != nil {
-		return nil, staleTask(err)
+		return nil, err
 	}
 	return h.taskEntity(r.Context(), id, nil)
 }
@@ -379,7 +379,7 @@ func (h *server) stopTask(r *http.Request, src string) (*Entity, error) {
 		return nil, err
 	}
 	if err := h.s.StopTask(r.Context(), src, id, v.Get("version"), v.Get("through")); err != nil {
-		return nil, staleTask(err)
+		return nil, err
 	}
 	return h.taskEntity(r.Context(), id, nil)
 }
@@ -391,7 +391,7 @@ func (h *server) taskLifecycle(deleted bool) func(*http.Request, string) (*Entit
 			return nil, err
 		}
 		if err := h.s.TaskLifecycle(r.Context(), src, id, v.Get("version"), deleted); err != nil {
-			return nil, staleTask(err)
+			return nil, err
 		}
 		return h.taskEntity(r.Context(), id, url.Values{"include_deleted": {"1"}})
 	}
@@ -424,7 +424,7 @@ func (h *server) captureOccurrence(r *http.Request, src string) (*Entity, error)
 	}
 	key := v.Get("key")
 	if _, _, err := h.s.CaptureTaskOccurrence(r.Context(), src, id, v.Get("task_version"), key, v.Get("import_key"), occurrencePatch(v)); err != nil {
-		return nil, staleTask(err)
+		return nil, err
 	}
 	return h.occurrenceEntity(r.Context(), id, key)
 }
@@ -436,7 +436,7 @@ func (h *server) editOccurrence(r *http.Request, src string) (*Entity, error) {
 	}
 	key := r.PathValue("key")
 	if err := h.s.EditTaskOccurrence(r.Context(), src, id, v.Get("task_version"), key, v.Get("version"), occurrencePatch(v)); err != nil {
-		return nil, staleTask(err)
+		return nil, err
 	}
 	return h.occurrenceEntity(r.Context(), id, key)
 }
@@ -449,19 +449,8 @@ func (h *server) occurrenceLifecycle(deleted bool) func(*http.Request, string) (
 		}
 		key := r.PathValue("key")
 		if err := h.s.TaskOccurrenceLifecycle(r.Context(), src, id, v.Get("task_version"), key, v.Get("version"), deleted); err != nil {
-			return nil, staleTask(err)
+			return nil, err
 		}
 		return h.occurrenceEntity(r.Context(), id, key)
 	}
 }
-
-// staleTask names a version conflict for a client: core says 409 and why, the code says what to do.
-func staleTask(err error) error {
-	var ce *core.Error
-	if asError(err, &ce) && ce.Status == 409 && ce.Code == "" {
-		return &core.Error{Status: 409, Msg: ce.Msg, Code: "stale_version"}
-	}
-	return err
-}
-
-func asError(err error, target **core.Error) bool { return errors.As(err, target) }

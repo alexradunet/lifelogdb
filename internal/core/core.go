@@ -30,9 +30,16 @@ type Error struct {
 	Status int
 	Msg    string
 	Code   string
+	Err    error // the cause, when one is kept for errors.Is: a context that ran out, a driver's refusal
 }
 
 func (e *Error) Error() string { return e.Msg }
+func (e *Error) Unwrap() error { return e.Err }
+
+// invalidCause is a 422 that keeps its cause: SQLite's refusal of a query, with the message as the client sees it.
+func invalidCause(err error, format string, a ...any) error {
+	return &Error{Status: 422, Msg: fmt.Sprintf(format, a...), Err: err}
+}
 
 // NotFound is a 404: the row the request names does not exist.
 func NotFound(format string, a ...any) error {
@@ -96,4 +103,13 @@ const instantLayout = "2006-01-02T15:04:05.000Z"
 func IsInstant(s string) bool {
 	t, err := time.Parse(instantLayout, s)
 	return err == nil && t.Format(instantLayout) == s
+}
+
+// checkVersion refuses a write that read an old version of a row: a client answers it by reading again. what names
+// the row's kind; have is the current version, want the one the write read.
+func checkVersion(what, have, want string) error {
+	if have != want {
+		return conflictCode("stale_version", "%s changed since version %q (now %q): read it again", what, want, have)
+	}
+	return nil
 }

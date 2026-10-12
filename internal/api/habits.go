@@ -89,22 +89,7 @@ func (h *server) checkIn(r *http.Request, src string) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	periods, err := h.s.HabitPeriods(r.Context(), name)
-	if err != nil {
-		return nil, err
-	}
-	on := false
-	for _, p := range periods {
-		on = on || (p.Start <= day && (p.End == "" || p.End >= day))
-	}
-	if !on {
-		return nil, core.Invalid("%s is not a habit on %s: start it first", name, day)
-	}
-	value := 0.0
-	if isDone {
-		value = 1
-	}
-	if _, err := h.s.Record(r.Context(), src, core.Reading{Metric: name, Day: day, Value: value}); err != nil {
+	if _, err := h.s.CheckIn(r.Context(), src, name, day, isDone); err != nil {
 		return nil, err
 	}
 	return h.habitsEntity(r.Context(), url.Values{"day": {day}})
@@ -158,11 +143,6 @@ func checkIns(hs []core.HabitState, day string) []Action {
 		out = append(out, action("check-in", map[string]string{"name": x.Metric}, map[string]any{"day": day}))
 	}
 	return out
-}
-
-func (h *server) unitless(ctx context.Context, name string) bool {
-	m := h.metricOf(ctx, name)
-	return m != nil && m.Unit == ""
 }
 
 func (h *server) integrity(r *http.Request) (*Entity, error) {

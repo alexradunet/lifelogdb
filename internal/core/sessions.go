@@ -116,8 +116,11 @@ func (t *Tx) EditSession(id int64, version string, in SessionInput) error {
 	if err != nil {
 		return err
 	}
-	if have.Version != version || have.DeletedAt != "" {
-		return Conflict("live session and current version required")
+	if have.DeletedAt != "" {
+		return Conflict("session %d is tombstoned: revive it first", id)
+	}
+	if err := checkVersion("session", have.Version, version); err != nil {
+		return err
 	}
 	if in.ImportKey != "" && in.ImportKey != have.ImportKey {
 		return Invalid("session import identity cannot be changed")
@@ -143,8 +146,8 @@ func (t *Tx) SessionLifecycle(id int64, version string, deleted bool) error {
 	if err != nil {
 		return err
 	}
-	if have != version {
-		return Conflict("session changed since this version")
+	if err := checkVersion("session", have, version); err != nil {
+		return err
 	}
 	if deleted == tombstoned {
 		return nil

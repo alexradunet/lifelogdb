@@ -299,13 +299,13 @@ func errorEntity(err error) (*Entity, int) {
 	var ce *core.Error
 	var ex *core.ExistsError
 	switch {
+	case errors.Is(err, context.DeadlineExceeded): // before the typed errors: a refusal that wraps a timeout is a timeout
+		status = http.StatusGatewayTimeout
 	case errors.As(err, &ex):
 		status, code = http.StatusConflict, "exists"
 		e.Links = append(e.Links, Link{Rel: []string{"existing"}, Href: pageHref(ex.ID), Title: ex.Title})
 	case errors.As(err, &ce):
 		status, code = ce.Status, ce.Code
-	case errors.Is(err, context.DeadlineExceeded):
-		status = http.StatusGatewayTimeout
 	}
 	if code == "" {
 		code = codeOf(status)
@@ -444,10 +444,14 @@ func (h *server) root(r *http.Request) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
+	record, err := h.recordAction(ctx, "", today)
+	if err != nil {
+		return nil, err
+	}
 	actions := []Action{
 		action("capture", map[string]string{"day": today}, nil), action("search", nil, nil), action("find", nil, nil), action("open-day", nil, nil), action("deadlines", nil, nil), action("create-task", nil, nil),
 		action("capture-session", nil, nil), action("create-period", nil, nil), action("create-page", nil, nil), action("create-person", nil, nil), action("create-place", nil, nil), action("add-file", nil, nil),
-		h.recordAction(ctx, "", today), action("register-metric", nil, nil), action("query", nil, nil), action("snapshot", nil, nil)}
+		record, action("register-metric", nil, nil), action("query", nil, nil), action("snapshot", nil, nil)}
 	return &Entity{
 		Class: []string{"root"}, Title: "Lifelog",
 		Properties: map[string]any{"today": today, "due": due, "habits": hs, "recent": recent, "on_this_day": onThisDay},
@@ -563,13 +567,17 @@ func (h *server) dayEntity(ctx context.Context, day string) (*Entity, error) {
 	if mood == nil {
 		mood = []float64{}
 	}
+	record, err := h.recordAction(ctx, "", day)
+	if err != nil {
+		return nil, err
+	}
 	t, _ := dayOf(day)
 	e := &Entity{
 		Class: []string{"day"}, Title: day, Properties: dayView{Day: *d, Due: due, Mood: mood, Habits: hs, Trends: trends, OnThisDay: onThisDay, Today: today},
 		Links: []Link{link("self", dayHref(day), day), link("prev", dayHref(t.AddDate(0, 0, -1).Format(time.DateOnly)), "Previous day"),
 			link("next", dayHref(t.AddDate(0, 0, 1).Format(time.DateOnly)), "Next day"), link("metrics", "/metrics", "Metrics"), link("index", "/", "Home"),
 			link("month", monthHref(t), t.Format(layoutMonth))},
-		Actions: []Action{action("capture", map[string]string{"day": day}, nil), h.recordAction(ctx, "", day), action("open-day", nil, nil)},
+		Actions: []Action{action("capture", map[string]string{"day": day}, nil), record, action("open-day", nil, nil)},
 	}
 	if d.PageID != 0 {
 		e.Links = append(e.Links, link("page", pageHref(d.PageID), "The day page"))
@@ -707,19 +715,20 @@ const inUseDays = 60
 
 // recordAction offers the metrics in use on day (and metric, when the view is that metric's), not the whole
 // registry; the record action itself takes any registered metric.
-func (h *server) recordAction(ctx context.Context, metric, day string) Action {
+func (h *server) recordAction(ctx context.Context, metric, day string) (Action, error) {
 	a := action("record", nil, map[string]any{"day": day})
 	if metric != "" {
 		a.field("metric").Value = metric
 	}
-	if names, err := h.s.InUse(ctx, day, inUseDays); err == nil {
-		if metric != "" && !slices.Contains(names, metric) {
-			names = append(names, metric)
-			slices.Sort(names)
-		}
-		a = withOptions(a, "metric", names)
+	names, err := h.s.InUse(ctx, day, inUseDays)
+	if err != nil {
+		return Action{}, err
 	}
-	return a
+	if metric != "" && !slices.Contains(names, metric) {
+		names = append(names, metric)
+		slices.Sort(names)
+	}
+	return withOptions(a, "metric", names), nil
 }
 
 // namedRow is a row of the people and places lists: the page and how often the log mentions it.
@@ -860,7 +869,14 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 	allQuery.Del("from")
 	allQuery.Set("all_history", "1")
 	allURL.RawQuery = allQuery.Encode()
-	m := h.metricOf(ctx, name)
+	m, err := h.metricOf(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	record, err := h.recordAction(ctx, name, today)
+	if err != nil {
+		return nil, err
+	}
 	var categories []string
 	if m != nil {
 		categories = m.Categories
@@ -868,7 +884,7 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 	e := &Entity{Class: []string{"series"}, Title: name,
 		Properties: map[string]any{"metric": name, "from": from, "to": to, "readings": rows, "habit_periods": periods, "categories": categories, "scope": scope, "session_id": sessionID, "include_deleted": includeDeleted, "all_history": allHistory},
 		Links:      []Link{link("all-readings", allURL.String(), "All readings"), link("self", self, name), link("up", "/metrics", "Metrics"), link("habits", "/habits", "Habits"), link("index", "/", "Home")},
-		Actions:    []Action{h.recordAction(ctx, name, today)}}
+		Actions:    []Action{record}}
 	if f := e.Actions[0].field("session_id"); scope == "session" && f != nil {
 		f.Value = sessionID
 	}
@@ -876,7 +892,7 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 	if len(periods) > 0 && periods[len(periods)-1].End == "" {
 		e.Actions = append(e.Actions, action("stop-habit", ids, map[string]any{"day": today}),
 			action("check-in", ids, map[string]any{"day": today}))
-	} else if h.unitless(ctx, name) {
+	} else if m != nil && m.Unit == "" { // a unitless metric may become a habit
 		e.Actions = append(e.Actions, action("start-habit", ids, map[string]any{"start_day": today}))
 	}
 	if m != nil { // the metric is a page (D27): its text, its backlinks, and filing it in a category

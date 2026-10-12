@@ -418,14 +418,14 @@ func (s *Store) Search(ctx context.Context, q string, limit, offset int) ([]Hit,
 		 WHERE entities_fts MATCH ?
 		 ORDER BY rank, p.id LIMIT ? OFFSET ?`, q, limit, offset)
 	if err != nil {
-		return nil, Invalid("search %q: %v", q, err)
+		return nil, invalidCause(err, "search %q: %v", q, err)
 	}
 	defer rows.Close()
 	out := []Hit{}
 	for rows.Next() {
 		var h Hit
 		if err := rows.Scan(&h.ID, &h.Title, &h.Snippet); err != nil {
-			return nil, Invalid("search %q: %v", q, err)
+			return nil, invalidCause(err, "search %q: %v", q, err)
 		}
 		out = append(out, h)
 	}
@@ -630,7 +630,7 @@ type Result struct {
 // setters cannot leak into pooled reads.
 func (s *Store) Query(ctx context.Context, q string, maxRows int) (*Result, error) {
 	if err := validateAdHocSQL(q); err != nil {
-		return nil, Invalid("%v", err)
+		return nil, invalidCause(err, "%v", err)
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -646,7 +646,10 @@ func (s *Store) Query(ctx context.Context, q string, maxRows int) (*Result, erro
 	defer conn.Close()
 	rows, err := conn.QueryContext(ctx, q)
 	if err != nil {
-		return nil, Invalid("%v", err)
+		if ctx.Err() != nil {
+			return nil, ctx.Err() // the time ran out, or the client went away: not the statement's fault
+		}
+		return nil, invalidCause(err, "%v", err)
 	}
 	closed := false
 	closeRows := func() error {
@@ -660,7 +663,7 @@ func (s *Store) Query(ctx context.Context, q string, maxRows int) (*Result, erro
 	cols, err := rows.Columns()
 	if err != nil {
 		closeRows()
-		return nil, Invalid("%v", err)
+		return nil, invalidCause(err, "%v", err)
 	}
 	res := &Result{Columns: cols, Rows: [][]any{}}
 	for rows.Next() {
@@ -675,7 +678,7 @@ func (s *Store) Query(ctx context.Context, q string, maxRows int) (*Result, erro
 		}
 		if err := rows.Scan(ptrs...); err != nil {
 			closeRows()
-			return nil, Invalid("%v", err)
+			return nil, invalidCause(err, "%v", err)
 		}
 		for i, v := range vals {
 			if b, ok := v.([]byte); ok {
@@ -686,10 +689,10 @@ func (s *Store) Query(ctx context.Context, q string, maxRows int) (*Result, erro
 	}
 	if err := rows.Err(); err != nil {
 		closeRows()
-		return nil, Invalid("%v", err)
+		return nil, invalidCause(err, "%v", err)
 	}
 	if err := closeRows(); err != nil {
-		return nil, Invalid("%v", err)
+		return nil, invalidCause(err, "%v", err)
 	}
 	return res, nil
 }

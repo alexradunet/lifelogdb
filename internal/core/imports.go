@@ -22,7 +22,7 @@ func (t *Tx) byImportKey(importKey string) (int64, error) {
 
 // metricUnit is a registered metric's unit; found is false when no metric has the name.
 func (t *Tx) metricUnit(name string) (unit string, found bool, err error) {
-	err = t.tx.QueryRowContext(t.ctx, `SELECT unit FROM metrics WHERE id = (SELECT entity_id FROM entity_names WHERE name_key = ?)`, text.TitleKey(name)).Scan(&unit)
+	err = t.tx.QueryRowContext(t.ctx, `SELECT m.unit FROM metrics m JOIN entities e ON e.id = m.id AND e.deleted_at IS NULL WHERE m.id = (SELECT entity_id FROM entity_names WHERE name_key = ?)`, text.TitleKey(name)).Scan(&unit)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", false, nil
 	}

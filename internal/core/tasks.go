@@ -436,8 +436,11 @@ func (t *Tx) liveTaskVersion(id int64, version string) (*Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	if p.Version != version || p.DeletedAt != "" {
-		return nil, Conflict("live task and current version required")
+	if p.DeletedAt != "" {
+		return nil, Conflict("task %d is tombstoned: revive it first", id)
+	}
+	if err := checkVersion("task", p.Version, version); err != nil {
+		return nil, err
 	}
 	return p, nil
 }
@@ -480,8 +483,8 @@ func (t *Tx) TaskLifecycle(id int64, version string, deleted bool) error {
 	if err != nil {
 		return err
 	}
-	if p.Version != version {
-		return Conflict("task changed since this version")
+	if err := checkVersion("task", p.Version, version); err != nil {
+		return err
 	}
 	if deleted == (p.DeletedAt != "") {
 		return nil
@@ -504,8 +507,8 @@ func (t *Tx) CaptureTaskOccurrence(taskID int64, taskVersion string, in Occurren
 	if err != nil {
 		return nil, false, err
 	}
-	if p.Version != taskVersion {
-		return nil, false, Conflict("task changed since this version")
+	if err := checkVersion("task", p.Version, taskVersion); err != nil {
+		return nil, false, err
 	}
 	belongs, err := taskSlot(t.ctx, p.TaskSpec, in.OccurrenceKey)
 	if err != nil {
@@ -562,8 +565,11 @@ func (t *Tx) EditTaskOccurrence(taskID int64, taskVersion, key, version string, 
 	if err != nil {
 		return err
 	}
-	if o.Version != version || o.DeletedAt != "" {
-		return Conflict("live occurrence and current version required")
+	if o.DeletedAt != "" {
+		return Conflict("occurrence %s is tombstoned: revive it first", key)
+	}
+	if err := checkVersion("occurrence", o.Version, version); err != nil {
+		return err
 	}
 	_, err = t.tx.ExecContext(t.ctx, `UPDATE task_occurrences SET due_day=?,state=?,completed_at=?,reminder_mode=?,reminder_override_at=? WHERE id=?`, nullIfEmpty(in.DueDay), in.State, nullIfEmpty(in.CompletedAt), in.ReminderMode, nullIfEmpty(in.ReminderOverrideAt), o.ID)
 	return err
@@ -578,8 +584,8 @@ func (t *Tx) TaskOccurrenceLifecycle(taskID int64, taskVersion, key, version str
 	if err != nil {
 		return err
 	}
-	if o.Version != version {
-		return Conflict("occurrence changed since this version")
+	if err := checkVersion("occurrence", o.Version, version); err != nil {
+		return err
 	}
 	if deleted == (o.DeletedAt != "") {
 		return nil

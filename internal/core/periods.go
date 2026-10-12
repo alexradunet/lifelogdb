@@ -47,8 +47,14 @@ func (t *Tx) PromotePeriod(id int64, version string, start, end *string) error {
 	if err != nil {
 		return err
 	}
-	if typ != "page" || deleted || have != version {
-		return Conflict("plain live page and current version required")
+	if typ != "page" {
+		return Conflict("page %d is a %s, not a plain page", id, typ)
+	}
+	if deleted {
+		return Conflict("page %d is tombstoned: revive it first", id)
+	}
+	if err := checkVersion("page", have, version); err != nil {
+		return err
 	}
 	if _, err = t.tx.ExecContext(t.ctx, `UPDATE entities SET entity_type='period' WHERE id=?`, id); err != nil {
 		return err
@@ -70,8 +76,11 @@ func (t *Tx) EditPeriod(id int64, version string, start, end *string) error {
 	if err != nil {
 		return err
 	}
-	if deleted || version != have {
-		return Conflict("live period and current version required")
+	if deleted {
+		return Conflict("period %d is tombstoned: revive it first", id)
+	}
+	if err := checkVersion("period", have, version); err != nil {
+		return err
 	}
 	_, err = t.tx.ExecContext(t.ctx, `UPDATE periods SET start_boundary=?,end_boundary=? WHERE id=?`, start, end, id)
 	return err

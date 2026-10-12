@@ -242,3 +242,35 @@ func (s *Store) HabitPeriods(ctx context.Context, metric string) ([]HabitPeriod,
 	}
 	return out, rows.Err()
 }
+
+// CheckIn records a habit for a day inside one of its periods (cookbook/habits.md, D24): 1 for done, 0 for not
+// done. The period check and the write are one transaction, so a habit stopped between them cannot take a reading.
+func (t *Tx) CheckIn(metric, day string, done bool) (int64, error) {
+	if err := checkDay("day", day); err != nil {
+		return 0, err
+	}
+	id, err := t.metricID(metric)
+	if err != nil {
+		return 0, err
+	}
+	var on bool
+	if err := t.tx.QueryRowContext(t.ctx, `SELECT EXISTS (SELECT 1 FROM habit_periods WHERE metric_id = ? AND start_day <= ? AND coalesce(end_day, '9999-12-31') >= ?)`, id, day, day).Scan(&on); err != nil {
+		return 0, err
+	}
+	if !on {
+		return 0, Invalid("%s is not a habit on %s: start it first", metric, day)
+	}
+	value := 0.0
+	if done {
+		value = 1
+	}
+	return t.Record(Reading{Metric: metric, Day: day, Value: value})
+}
+
+func (s *Store) CheckIn(ctx context.Context, source, metric, day string, done bool) (id int64, err error) {
+	err = s.Do(ctx, source, func(t *Tx) (e error) { id, e = t.CheckIn(metric, day, done); return })
+	if err != nil {
+		id = 0
+	}
+	return
+}

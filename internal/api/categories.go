@@ -62,15 +62,18 @@ func groupMetrics(ms []core.Metric, cs []core.Category) []metricGroup {
 }
 
 // metricOf is the live metric with that canonical title identity, nil when none.
-func (h *server) metricOf(ctx context.Context, name string) *core.Metric {
-	ms, _ := h.s.Metrics(ctx)
+func (h *server) metricOf(ctx context.Context, name string) (*core.Metric, error) {
+	ms, err := h.s.Metrics(ctx)
+	if err != nil {
+		return nil, err
+	}
 	key := text.TitleKey(name)
 	for i := range ms {
 		if text.TitleKey(ms[i].Name) == key {
-			return &ms[i]
+			return &ms[i], nil
 		}
 	}
-	return nil
+	return nil, nil
 }
 
 // fileAction files the metric in a category: a part-of link from its page to the category's (D26).

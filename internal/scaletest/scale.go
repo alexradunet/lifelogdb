@@ -585,11 +585,15 @@ func checkSeries(got []core.Reading, want []expected) error {
 	return nil
 }
 
+// timedSource is the writer of the timed checks: an import writer like the fixture's, not the owner's, and its own,
+// so the oracle that verifies the fixture (source import:scale) does not see the probe rows.
+const timedSource = "import:scale-timed"
+
 func exercise(ctx context.Context, s *core.Store, f *fixture, samples int, report *Report) error {
 	f.probes = map[string]probePage{}
 	probeDay := anchor.AddDate(0, 0, f.manifest.Profile.Days+1).Format(time.DateOnly)
 	var editID int64
-	if err := s.Do(ctx, "cli", func(tx *core.Tx) error {
+	if err := s.Do(ctx, timedSource, func(tx *core.Tx) error {
 		var e error
 		editID, _, _, e = tx.CreatePage("Scale Edit Probe", "initial", probeDay, "")
 		return e
@@ -601,7 +605,7 @@ func exercise(ctx context.Context, s *core.Store, f *fixture, samples int, repor
 		var captureID int64
 		if err := record(report, "capture_commit", func() error {
 			var e error
-			captureID, _, e = s.Capture(ctx, "cli", day, "Synthetic timed capture", nil)
+			captureID, _, e = s.Capture(ctx, timedSource, day, "Synthetic timed capture", nil)
 			return e
 		}); err != nil {
 			return err
@@ -619,7 +623,7 @@ func exercise(ctx context.Context, s *core.Store, f *fixture, samples int, repor
 			return err
 		}
 		body := fmt.Sprintf("Synthetic edit %d", i)
-		if err := record(report, "save_commit", func() error { _, e := s.SaveBody(ctx, "cli", editID, body, page.Version); return e }); err != nil {
+		if err := record(report, "save_commit", func() error { _, e := s.SaveBody(ctx, timedSource, editID, body, page.Version); return e }); err != nil {
 			return err
 		}
 		page, err = s.PageByID(ctx, editID)

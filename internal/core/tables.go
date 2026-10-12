@@ -66,7 +66,7 @@ func (t *Tx) ReadingsFromTable(page, metric, column string) (*TableReadings, err
 		return nil, err
 	}
 	if !found {
-		return nil, Invalid("no metric %q: the owner registers it first (register-metric)", metric)
+		return nil, NotFound("no metric %q: the owner registers it first (register-metric)", metric)
 	}
 	res.Unit = unit
 	tbl, dayCol, valueCol, unitCol, err := pickTable(markdownTables(p.Body), column)
