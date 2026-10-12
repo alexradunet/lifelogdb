@@ -79,6 +79,11 @@ func (h *server) write(w http.ResponseWriter, r *http.Request, status int, e *En
 		write(w, r, status, e)
 		return
 	}
+	h.inShell(w, r, status, e)
+}
+
+// inShell draws the entity as a page in the shell, for any client: the read of the shell may fail, as write says.
+func (h *server) inShell(w http.ResponseWriter, r *http.Request, status int, e *Entity) {
 	sv, err := h.shell(r.Context())
 	if err != nil {
 		sv = &shellView{Zone: h.zone}
@@ -111,6 +116,25 @@ func fonts(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	http.ServeContent(w, r, name, time.Time{}, bytes.NewReader(b))
+}
+
+// styleguide is GET /styleguide: every component of the Almanac in every state, on synthetic words
+// (html/styleguide.html). It is presentation, like /render, and not in the catalog. The template reads nothing from
+// the entity, so the page shows nothing of the database; only the shell around it reads, as for any page.
+func (h *server) styleguide(w http.ResponseWriter, r *http.Request) {
+	h.inShell(w, r, http.StatusOK, &Entity{Class: []string{"styleguide"}, Title: "The style page"})
+}
+
+// install serves an embedded file of html/ for a browser's install of the app: the manifest and its icon. The
+// cache says how long a browser keeps it. The file is the same for every request, so it needs no read of the store.
+func install(name, typ, cache string) http.HandlerFunc {
+	b := mustView(name)
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", typ)
+		w.Header().Set("Cache-Control", cache)
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		http.ServeContent(w, r, name, time.Time{}, bytes.NewReader(b))
+	}
 }
 
 // icons are the sidebar's line icons (the Icons of the design system): 16 px, a 1.5 px stroke in the colour of

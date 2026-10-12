@@ -43,8 +43,9 @@ svg.icon{flex:none; width:16px; height:16px; fill:none; stroke:currentColor; str
 .rail-search input::placeholder{color:var(--rail-ink)}
 .rail-search input:focus-visible{outline:0}
 /* New is a wood slab with gold words, not the loud button: that one is the page's main write. */
-.rail .rail-new.primary{width:100%; background:var(--rail); color:var(--rail-accent); border-color:var(--outline); box-shadow:var(--bevel-up),var(--drop-hard)}
-.rail .rail-new.primary:hover{background:var(--rail); color:var(--rail-accent); filter:brightness(1.12)}
+.rail .rail-new.primary{width:100%}
+.rail .rail-new.primary,.styleguide .rail-new.primary{background:var(--rail); color:var(--rail-accent); border-color:var(--outline); box-shadow:var(--bevel-up),var(--drop-hard)}
+.rail .rail-new.primary:hover,.styleguide .rail-new.primary:hover{background:var(--rail); color:var(--rail-accent); filter:brightness(1.12)}
 .rail nav ul{display:flex; flex-direction:column; gap:2px; margin:0; padding:0; list-style:none}
 .rail nav li{margin:0}
 .rail nav a{display:flex; align-items:center; gap:10px; padding:7px 10px; color:var(--rail-ink); white-space:nowrap}
@@ -560,3 +561,17 @@ a.task{color:var(--ink); font-weight:700}
 
 /* A person or a place in a list: no date column, the words of the mentions at the end. */
 .entry.named{grid-template-columns:minmax(0,1fr) auto}
+
+/* A field that the server refused. */
+input[aria-invalid=true],textarea[aria-invalid=true],select[aria-invalid=true]{border-color:var(--danger-line)}
+
+/* The keys of the command list, each in a kbd. */
+dialog.palette>.meta{line-height:26px}
+
+/* The style page (GET /styleguide): every component in every state. Its own rules only lay the specimens out. */
+.styleguide .guide{display:flex; flex-direction:column; gap:var(--space-3); padding-block:var(--space-4)}
+.styleguide .specimen{display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-3)}
+.styleguide .specimen-title{margin:0; font:400 40px/40px var(--display); letter-spacing:.01em; color:var(--text-strong)}
+@media (max-width:640px){.styleguide .specimen-title{font-size:32px; line-height:32px}}
+.styleguide dialog.palette{position:static; margin:0 0 var(--space-3)}
+.styleguide .specimen-title .mood{margin-left:var(--space-1)}

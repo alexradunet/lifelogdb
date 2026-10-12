@@ -92,7 +92,11 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   Skip, or Reopen; a habit's check-in is Done and Not done. These are properties and actions of the entities, so every
   client gets them ([API.md](API.md)). `/months/{YYYY-MM}` is the calendar of a month (each day, whether it has a
   page, its first line and its mood), and the catalog action `open-day` goes to a day by its date. The handler reads
-  today from one clock, which a test fixes.
+  today from one clock, which a test fixes. The day and the root carry `on_this_day`, the day pages of the same date
+  in earlier years, which the margin shows after Due. `/weeks/{YYYY-Www}` is the week (its days, its habits as
+  "N of M days", its readings against the week before, the work due) and `/years/{YYYY}` the year (twelve months);
+  People and Places list each name with the pages that mention it and the day of the last one
+  ([plan 097](docs/plans/097-the-almanac-reflects.md)).
 - **The app shell: the Almanac design system** ([plan 092](docs/plans/092-the-app-shell.md)). Every page a browser
   gets is in one shell: a sidebar with the brand and today's date, the search, New, the sections of every day (Today,
   Calendar, Due, Tasks) and of the record (People to Ghost pages), this month with its written days, and the
@@ -111,7 +115,24 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   and a page's title, the leaf's number and a reading's value in Jersey 15; dark is the identity and light the
   daylight study of the same room, by `prefers-color-scheme`. Its tokens are custom properties of `base.css`; a
   material sets its own text through aliases (`--text`, `--text-link`, …), and a test holds every text pair at
-  4.5:1 and every edge and the focus ring at 3:1 in both themes. The one motion is a press that sinks. Each part
+  4.5:1 and every edge and the focus ring at 3:1 in both themes. The two motions: a press sinks, and the step to the previous
+  or next day moves the leaf and cross-fades the sheet through a cross-document view transition, off under reduced
+  motion ([plan 097](docs/plans/097-the-almanac-reflects.md)).
+
+  Do and don't:
+  - Show one loud button a screen.
+  - Show no streak, no chain and no badge for consistency. A habit is "N of M days".
+  - Write in sentence case. Use no capitals for effect.
+  - Use mono for days, times and numbers only.
+  - Let a material set its own text through the aliases.
+  - Use no colour outside the one token block. Its `light-dark()` pairs are held by the contrast test at 4.5:1, with
+    the APCA Lc logged beside it.
+  - Draw a value by its type, never by its name.
+  - Make every form work with no script.
+  - Answer a refused form on its own page, filled, with the alert first.
+  - Make every empty state name the way forward.
+
+  Each part
   of an entity has one component: the title and the `prev`/`next` links a page header, properties facts and
   panels, sub-entities rows (an occurrence's with Done and Skip), an action with no visible field a button, one with
   fields a button that opens its form, an error an alert, and a write's `result` a toast at the top of the page,
@@ -128,11 +149,18 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   sentences by the result shapes of API.md. The day carries `trends` (each metric read that day, its unit and its
   readings of the 14 days through it) and each habit its `recent` states, so a reading's tile has its unit and its
   line and a habit its strip of 14 days; a series shows its next 5 later slots on its own page.
+  `GET /styleguide` is the style page: every component in every state, drawn on synthetic words, with the file each
+  lives in. It is presentation, like `/render`: it is not in the catalog and it reads nothing from the database.
+  `GET /manifest.webmanifest` and `GET /assets/icon.svg` make the app installable: three shortcuts (Today, Add to
+  today, What is due) and a share target that posts shared text into Capture (`POST /days/today/capture`, where
+  `today` is the local day). There is no service worker, since the server is the owner's own. A public listener
+  refuses all three without the token, as it refuses the fonts.
 - **One script, which no page needs** ([plan 091](docs/plans/091-the-browser-for-daily-use.md)). `app.js` is this
   application's own, embedded and written into each page like the two sheets: no framework, no CDN, no build step.
   It suggests the names of pages after `[[` and in a field for a page's title (from `GET /titles`), shows a preview of a body as it will show when
   saved (from `POST /render`), sends the form of a textarea with Ctrl+Enter, leaves a field with Escape, takes keys
-  outside a field (`/` search, `c` capture, `t` today, `[` and `]` the previous and next page), and asks before
+  outside a field (`/` search, `c` capture, `t` today, `[` and `]` the previous and next page, `?` the command list
+  with the legend of every key), shows the names after `[[` as a popover, and asks before
   the browser leaves text that was not sent. It gives the toast a Close (and Escape), makes a danger button ask once
   in the page before it sends ([plan 092](docs/plans/092-the-app-shell.md)), and closes the phone's sheet of sections
   with Escape ([plan 093](docs/plans/093-words-phone-and-today.md)). Ctrl+K, from anywhere, and the phone's Search
@@ -143,8 +171,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   where Home opens that form. It reads nothing else, writes nothing and keeps nothing in the browser. Every form posts
   and every link works without it; the tests check the pages without running it, and a test keeps its reads to those
   three routes.
-  `POST /render` is presentation, not a capability: no catalog action names it and it answers HTML only, so it and
-  the fonts (below) are the routes the CLI and the MCP server do not carry. **Rejected:** a separate web client. It would be a second
+  `POST /render` is presentation, not a capability: no catalog action names it and it answers HTML only, so it, the
+  fonts, the style page, the manifest and the icon are the routes the CLI and the MCP server do not carry. **Rejected:** a separate web client. It would be a second
   implementation of every view to keep equal to the catalog, it would hold the token where JavaScript can read it,
   and it would bring a toolchain that changes every year.
 - **The stylesheet is this application's own: two embedded sheets, three embedded faces, no vendored framework and

@@ -33,7 +33,7 @@ import (
 // each page like the sheets: it makes a page better and no page needs it
 // (docs/plans/091-the-browser-for-daily-use.md).
 //
-//go:embed html/*.html html/*.css html/*.js html/fonts/*.woff2 html/fonts/*.txt
+//go:embed html/*.html html/*.css html/*.js html/*.svg html/*.webmanifest html/fonts/*.woff2 html/fonts/*.txt
 var views embed.FS
 
 // baseCSS and appCSS are the two stylesheets, in that order: the look of ordinary HTML, then this app's own.
@@ -140,7 +140,7 @@ var viewOf = map[string]string{
 	"root": "root", "day": "day", "page": "page", "person": "page", "place": "page", "file": "page", "period": "page",
 	"days": "list", "people": "list", "places": "list", "files": "list", "ghosts": "list", "search": "search",
 	"metrics": "metrics", "series": "series", "habits": "habits", "measurement": "measurement", "error": "error", "login": "login",
-	"tasks": "tasks", "task": "task", "occurrence": "occurrence", "deadlines": "deadlines", "month": "month", "week": "week", "year": "year",
+	"tasks": "tasks", "task": "task", "occurrence": "occurrence", "deadlines": "deadlines", "month": "month", "week": "week", "year": "year", "styleguide": "styleguide",
 }
 
 // view is what a template gets: the entity, its properties as the JSON client reads them, the path the browser

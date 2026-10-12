@@ -99,6 +99,9 @@ func newHandler(s *core.Store, localDay func() string, zone *time.Location, trus
 	get("/titles", h.titles)
 	m.HandleFunc("POST /render", h.render)
 	m.HandleFunc("GET /assets/fonts/{file}", fonts)
+	m.HandleFunc("GET /styleguide", h.styleguide)
+	m.HandleFunc("GET /manifest.webmanifest", install("manifest.webmanifest", "application/manifest+json", "public, max-age=3600"))
+	m.HandleFunc("GET /assets/icon.svg", install("icon.svg", "image/svg+xml", "public, max-age=31536000, immutable"))
 	post("/days/{day}/capture", h.capture)
 	post("/pages", h.createPage)
 	post("/pages/{id}/body", h.saveBody)
@@ -1121,6 +1124,10 @@ func (h *server) capture(r *http.Request, src string) (*Entity, error) {
 		return nil, err
 	}
 	day := r.PathValue("day")
+	if day == "today" { // the share target of the manifest cannot know the day
+		day = h.localDay()
+		r.SetPathValue("day", day)
+	}
 	if _, sync, err := h.s.Capture(r.Context(), src, day, v.Get("text"), mood); err != nil {
 		return nil, err
 	} else {

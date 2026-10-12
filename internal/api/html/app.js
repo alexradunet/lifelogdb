@@ -7,8 +7,8 @@
 //      with what is typed;
 //   2. a preview of a body as it will show when saved;
 //   3. keys: Ctrl+K the command list from anywhere, Ctrl+Enter sends the form of a textarea, Escape leaves a
-//      field; outside a field, / search, c capture, t today, [ and ] the previous and next page, Escape closes the phone's sheet of
-//      sections or the toast;
+//      field; outside a field, / search, c capture, t today, [ and ] the previous and next page, ? the command list
+//      with its keys, Escape closes the phone's sheet of sections or the toast;
 //   4. a question before the browser leaves text that was not sent;
 //   5. the design system's small things (docs/plans/092-the-app-shell.md): the toast's Close, a second press for a
 //      danger button, and the hint of Ctrl+K in the search;
@@ -237,6 +237,7 @@
         break;
       }
       case "t": ev.preventDefault(); location.href = "/days/today"; break;
+      case "?": ev.preventDefault(); openPalette(); break; // the command list shows every key in its last line
       case "Escape": {
         if (location.hash === "#sections") { ev.preventDefault(); location.replace("#closed"); break; } // the phone's sheet
         var toast = document.querySelector(".toast");
@@ -384,7 +385,19 @@
     list.setAttribute("aria-label", "Results");
     var keys = document.createElement("p");
     keys.className = "meta";
-    keys.textContent = "↑ ↓ move · Enter opens · Esc closes";
+    // Every key the script takes, each in a kbd.
+    [[["↑", "↓"], "move"], [["Enter"], "opens"], [["Escape"], "closes, or leaves a field"], [["Ctrl K"], "the command list"],
+      [["?"], "the same list"], [["/"], "search"], [["c"], "capture"], [["t"], "today"], [["["], "previous page"],
+      [["]"], "next page"], [["Ctrl Enter"], "sends a text"]].forEach(function (item, n) {
+      if (n) keys.appendChild(document.createTextNode(" · "));
+      item[0].forEach(function (name, k) {
+        if (k) keys.appendChild(document.createTextNode(" "));
+        var kbd = document.createElement("kbd");
+        kbd.textContent = name;
+        keys.appendChild(kbd);
+      });
+      keys.appendChild(document.createTextNode(" " + item[1]));
+    });
     palette.appendChild(input);
     palette.appendChild(list);
     palette.appendChild(keys);
@@ -525,7 +538,7 @@
   if (foot) {
     var keys = document.createElement("small");
     keys.className = "keys";
-    keys.textContent = "Keys: Ctrl+K the command list · / search · c capture · t today · [ ] previous, next · Esc leaves a field · Ctrl+Enter sends a text";
+    keys.textContent = "Keys: Ctrl+K the command list · ? all the keys · / search · c capture · t today · [ ] previous, next · Esc leaves a field · Ctrl+Enter sends a text";
     foot.appendChild(document.createElement("br"));
     foot.appendChild(keys);
   }

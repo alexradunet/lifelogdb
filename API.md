@@ -176,7 +176,7 @@ names, and a value that is not a day is 422). Links: `prev`, `next` (the neighbo
 `record`, `open-day`, `save-body`
 of the day page once it exists (its body and `version` filled in), the `check-in` of each habit in `habits`, and the
 outcome (see task) of each occurrence in `due` that is due 7 days after `today` or earlier. The write `capture`
-answers with this entity and a `result` of the sync shape; its field `mood` has the `options` 1 to 5.
+answers with this entity and a `result` of the sync shape; its field `mood` has the `options` 1 to 5. `POST /days/today/capture` captures on the local day.
 
 | property | type | meaning |
 |---|---|---|

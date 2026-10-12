@@ -1,5 +1,7 @@
 {{define "head"}}<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#efe2bd"><meta name="theme-color" media="(prefers-color-scheme: dark)" content="#140c06">
 <title>{{if .Refused}}Not saved · {{end}}{{.Title}} · Lifelog</title>
 <style data-sheet="base">{{basecss}}</style>
 <style data-sheet="app">{{appcss}}</style>
