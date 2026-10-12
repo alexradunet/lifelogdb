@@ -4,11 +4,12 @@ An issue records an incident from real use — a failed import, a bug in the wri
 data could not answer, a rule that is ambiguous or untestable. It is the evidence a schema change needs
 ([how a change happens](../process.md)). One file per incident, named `NNNN-short-slug.md`, written from the
 [template](template.md), numbered on from the last: issues up to 0010 are closed and live in git history
-(`git log -- docs/issues`). Issues 0011–0062 are listed below; the next one is **0063**. Close an issue with its resolution and status, retaining the dated incident as
+(`git log -- docs/issues`). Issues 0011–0063 are listed below; the next one is **0064**. Close an issue with its resolution and status, retaining the dated incident as
 [the process](../process.md) requires. Earlier closed records remain available in git history.
 
 | id | title | status |
 |---|---|---|
+| [0063](0063-ctrl-k-only-moves-to-the-search.md) | Ctrl K only moves to the search; an action of another page is many steps away | open |
 | [0062](0062-the-browser-still-shows-data-not-words.md) | The browser still shows data where it should show words, is heavy on a phone, and Today is thin | resolved |
 | [0061](0061-the-browser-does-not-feel-like-an-application.md) | The browser does not look or move like an application | resolved |
 | [0060](0060-the-browser-cannot-carry-daily-use.md) | The browser cannot carry daily planning, journaling, editing and navigation | resolved |
