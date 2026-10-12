@@ -4,11 +4,12 @@ An issue records an incident from real use — a failed import, a bug in the wri
 data could not answer, a rule that is ambiguous or untestable. It is the evidence a schema change needs
 ([how a change happens](../process.md)). One file per incident, named `NNNN-short-slug.md`, written from the
 [template](template.md), numbered on from the last: issues up to 0010 are closed and live in git history
-(`git log -- docs/issues`). Issues 0011–0064 are listed below; the next one is **0065**. Close an issue with its resolution and status, retaining the dated incident as
+(`git log -- docs/issues`). Issues 0011–0065 are listed below; the next one is **0066**. Close an issue with its resolution and status, retaining the dated incident as
 [the process](../process.md) requires. Earlier closed records remain available in git history.
 
 | id | title | status |
 |---|---|---|
+| [0065](0065-the-almanac-reads-as-a-generic-app.md) | The browser's look is not the owner's own: the Almanac reads as a generic app | open |
 | [0064](0064-every-group-of-a-page-has-the-same-weight.md) | Every group of a page has the same weight, and the page asks for many decisions at once | resolved |
 | [0063](0063-ctrl-k-only-moves-to-the-search.md) | Ctrl K only moves to the search; an action of another page is many steps away | resolved |
 | [0062](0062-the-browser-still-shows-data-not-words.md) | The browser still shows data where it should show words, is heavy on a phone, and Today is thin | resolved |
