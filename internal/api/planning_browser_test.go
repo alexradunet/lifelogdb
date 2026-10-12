@@ -59,10 +59,12 @@ func formFor(t *testing.T, body, button, prefix string) htmlForm {
 	return htmlForm{}
 }
 
-// dayOf is a local day n days from the server's today. The tests keep their days far from the edges of a group,
-// so a run that crosses midnight puts each occurrence in the same group.
+// fixedToday is the server's local day in the tests of what is due: a Wednesday.
+const fixedToday = "2031-05-14"
+
+// dayOf is the local day n days from fixedToday.
 func dayOf(n int) string {
-	t, _ := time.Parse(time.DateOnly, core.Today())
+	t, _ := time.Parse(time.DateOnly, fixedToday)
 	return t.AddDate(0, 0, n).Format(time.DateOnly)
 }
 
@@ -115,7 +117,7 @@ func TestABrowserFormReturnsToThePageThatSentIt(t *testing.T) {
 // the overdue, today's and the next week's occurrences offer Done and Skip, a later one does not, and each
 // button writes the state it names and returns to the page.
 func TestDueOccurrencesOfferTheirOutcome(t *testing.T) {
-	c, h := fresh(t)
+	c, h := freshOn(t, fixedToday)
 	root := must(c.Get("/"))
 	create := func(v map[string]string) string {
 		e := must(c.Do(find(root, "create-task"), v))
@@ -131,7 +133,7 @@ func TestDueOccurrencesOfferTheirOutcome(t *testing.T) {
 	// The JSON: one outcome for each occurrence due within the week after today, and none for a later one.
 	window := "/deadlines?from=" + dayOf(-20) + "&through=" + dayOf(40)
 	due := must(c.Get(window))
-	if props(due)["today"] != core.Today() {
+	if props(due)["today"] != fixedToday {
 		t.Fatalf("today = %v", props(due)["today"])
 	}
 	var hrefs []string
@@ -139,7 +141,7 @@ func TestDueOccurrencesOfferTheirOutcome(t *testing.T) {
 		hrefs = append(hrefs, a.Name+" "+a.Href+" "+fieldOf(a, "key"))
 	}
 	// The series is due every 5 days from 11 days back: -11, -6, -1 and 4 are in the week after today or before it,
-	// and 9 is the first later one. No slot is on today or on the eighth day, the edges a midnight would move.
+	// and 9 is the first later one.
 	want := []string{
 		"capture-occurrence " + water + "/occurrences " + dayOf(-11),
 		"edit-occurrence " + late + "/occurrences/once/edit ",

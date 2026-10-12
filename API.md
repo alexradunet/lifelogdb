@@ -66,13 +66,47 @@ first; search by rank.
 
 ### root
 
-`GET /`. Links: `today`, `days`, `sessions`, `periods`, `people`, `places`, `files`, `metrics`, `habits`, `ghosts`,
-`actions`. Actions: `capture` (for today), `search`, `find`, `capture-session`, `create-period`, `create-page`,
-`create-person`, `create-place`, `add-file`, `record`, `register-metric` (owner), `query`.
+`GET /`: today at a glance. Links: `today`, `days`, `sessions`, `periods`, `people`, `places`, `files`, `metrics`,
+`habits`, `tasks`, `deadlines`, `ghosts`, `actions`. Actions: `capture` (for today), `search`, `find`, `deadlines`,
+`create-task`, `capture-session`, `create-period`, `create-page`, `create-person`, `create-place`, `add-file`,
+`record`, `register-metric` (owner), `query`, `snapshot` (owner); then the `check-in` of each habit of today (today
+filled in), and the outcome (see task) of each occurrence in `due`.
 
 | property | type | meaning |
 |---|---|---|
 | `today` | day | this machine's local day |
+| `due[]` | list | the open occurrences due in the 30 days before today, then the open ones due today, by due day (the occurrence shape, with `label`) |
+| `due[].due_day` | day |  |
+| `due[].state` | string |  |
+| `due[].completed_at` | instant |  |
+| `due[].reminder_mode` | string |  |
+| `due[].reminder_at` | instant |  |
+| `due[].id` | integer |  |
+| `due[].task_id` | integer |  |
+| `due[].key` | string |  |
+| `due[].import_key` | string |  |
+| `due[].source` | string |  |
+| `due[].version` | string |  |
+| `due[].created_at` | instant |  |
+| `due[].updated_at` | instant |  |
+| `due[].deleted_at` | instant |  |
+| `due[].task_version` | string |  |
+| `due[].task_deleted_at` | instant |  |
+| `due[].project_title` | string |  |
+| `due[].project_deleted_at` | instant |  |
+| `due[].virtual` | boolean |  |
+| `due[].label` | string | the task's label |
+| `due[].reminder` | object |  |
+| `due[].reminder.state` | string |  |
+| `due[].reminder.at` | instant |  |
+| `habits[]` | list | the habits active today, by name (the habit shape of habits) |
+| `habits[].metric` | string | the habit's metric |
+| `habits[].state` | string | `done`, `not done`, `not recorded` or `invalid` |
+| `recent[]` | list | the 5 newest live day pages up to today, the newest first |
+| `recent[].day` | day | the day |
+| `recent[].page_id` | integer | the day page's id |
+| `recent[].first_line` | string | the first line of its body that has text, as plain text: a heading's or a list item's marker and the brackets of a wikilink cut, 160 characters at most; absent when the body is empty |
+| `recent[].mood` | list | the values of the day's current Mood readings with no session, in the order they were recorded; absent when none |
 
 ### actions
 
@@ -107,8 +141,10 @@ page (with `class` the page's type where it has one). `people`, `places` and `fi
 ### day
 
 `GET /days/{day}` (`/days/today` redirects). Links: `prev`, `next` (the neighbouring days), `page` (the day page,
-once it exists), `metrics`. Embedded: `reading` links to each measurement. Actions: `capture`, `record`. The write
-`capture` answers with this entity and a `result` of the sync shape.
+once it exists), `metrics`. Embedded: `reading` links to each measurement. Actions: `capture`, `record`, `save-body`
+of the day page once it exists (its body and `version` filled in), the `check-in` of each habit in `habits`, and the
+outcome (see task) of each occurrence in `due` that is due 7 days after `today` or earlier. The write `capture`
+answers with this entity and a `result` of the sync shape.
 
 | property | type | meaning |
 |---|---|---|
@@ -119,6 +155,35 @@ once it exists), `metrics`. Embedded: `reading` links to each measurement. Actio
 | `view[].at` | instant | when, for a page or a reading; absent otherwise |
 | `view[].detail` | string | the body, the page title, the place, `Metric: done`/`not done`/`not recorded`/`invalid`, or `value unit` |
 | `readings[]` | list | the day's readings, each a reading (below) with its id, to correct one |
+| `due[]` | list | the occurrences due on the day, in every state; on today, first the open ones due in the 30 days before it (the occurrence shape, with `label`) |
+| `due[].due_day` | day |  |
+| `due[].state` | string |  |
+| `due[].completed_at` | instant |  |
+| `due[].reminder_mode` | string |  |
+| `due[].reminder_at` | instant |  |
+| `due[].id` | integer |  |
+| `due[].task_id` | integer |  |
+| `due[].key` | string |  |
+| `due[].import_key` | string |  |
+| `due[].source` | string |  |
+| `due[].version` | string |  |
+| `due[].created_at` | instant |  |
+| `due[].updated_at` | instant |  |
+| `due[].deleted_at` | instant |  |
+| `due[].task_version` | string |  |
+| `due[].task_deleted_at` | instant |  |
+| `due[].project_title` | string |  |
+| `due[].project_deleted_at` | instant |  |
+| `due[].virtual` | boolean |  |
+| `due[].label` | string | the task's label |
+| `due[].reminder` | object |  |
+| `due[].reminder.state` | string |  |
+| `due[].reminder.at` | instant |  |
+| `mood` | list | the values of the day's current Mood readings with no session, in the order they were recorded (the Mood metric found by its name key); empty when none |
+| `habits[]` | list | the habits active on the day, by name |
+| `habits[].metric` | string | the habit's metric |
+| `habits[].state` | string | `done`, `not done`, `not recorded` or `invalid` |
+| `today` | day | this machine's local day |
 
 The **reading** shape (`readings[]` here and in a series; a measurement's own properties):
 

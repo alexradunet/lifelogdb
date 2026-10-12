@@ -132,3 +132,7 @@ figure a{display:block}
 
 /* On paper the switcher of a page and its pager are of no use. */
 @media print{.skip,nav.pager{display:none}}
+
+/* A day's mood, beside its heading or its line in a list. */
+.mood{font-size:.55em; font-weight:500; color:var(--muted,#6f6b63); white-space:nowrap; vertical-align:middle}
+small .mood{font-size:1em}

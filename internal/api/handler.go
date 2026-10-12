@@ -24,13 +24,20 @@ const SourceHeader = "Lifelog-Source"
 type server struct {
 	s        *core.Store
 	feedback feedbackStore
+	localDay func() string // the server's local day: what is due, overdue and today is read against it
 }
 
 // New returns the whole API as one handler: lifelog serve mounts it on a socket, the CLI and the MCP server
 // call it in-process. trustedOrigins are the browser origins a public listener allows to write
 // (docs/plans/078-network-server.md); a local listener and the in-process client pass none.
 func New(s *core.Store, trustedOrigins ...string) http.Handler {
-	h := &server{s: s}
+	return newHandler(s, core.Today, trustedOrigins...)
+}
+
+// newHandler is New with the clock of the local day given: a test fixes it, so what is due and overdue is read
+// against a fixed day.
+func newHandler(s *core.Store, localDay func() string, trustedOrigins ...string) http.Handler {
+	h := &server{s: s, localDay: localDay}
 	m := http.NewServeMux()
 	get := func(p string, f func(*http.Request) (*Entity, error)) { m.HandleFunc("GET "+p, h.serve(f)) }
 	post := func(p string, f func(*http.Request, string) (*Entity, error)) {
@@ -430,20 +437,68 @@ func link(rel, href, title string) Link {
 
 // ---- reads
 
+// recentDays is how many of the newest day pages the root shows.
+const recentDays = 5
+
+// recentDay is a day page as the root lists it: the day, the first line of its body, and its mood.
+type recentDay struct {
+	core.DayEntry
+	Mood []float64 `json:"mood,omitempty"`
+}
+
+// The root is today at a glance (docs/plans/091-the-browser-for-daily-use.md): what is due today and is overdue,
+// today's habits, the newest day pages, and every action that starts something.
 func (h *server) root(r *http.Request) (*Entity, error) {
-	today := core.Today()
+	ctx := r.Context()
+	today := h.localDay()
+	due, err := h.overdueAndDue(ctx, today)
+	if err != nil {
+		return nil, err
+	}
+	hs, err := h.s.Habits(ctx, today)
+	if err != nil {
+		return nil, err
+	}
+	entries, err := h.s.DayEntries(ctx, "0000-01-01", today, true, recentDays)
+	if err != nil {
+		return nil, err
+	}
+	recent := []recentDay{}
+	if len(entries) > 0 {
+		moods, err := h.s.Moods(ctx, entries[len(entries)-1].Day, entries[0].Day)
+		if err != nil {
+			return nil, err
+		}
+		for _, d := range entries {
+			recent = append(recent, recentDay{DayEntry: d, Mood: moods[d.Day]})
+		}
+	}
+	actions := []Action{
+		action("capture", map[string]string{"day": today}, nil), action("search", nil, nil), action("find", nil, nil), action("deadlines", nil, nil), action("create-task", nil, nil),
+		action("capture-session", nil, nil), action("create-period", nil, nil), action("create-page", nil, nil), action("create-person", nil, nil), action("create-place", nil, nil), action("add-file", nil, nil),
+		h.recordAction(ctx, "", today), action("register-metric", nil, nil), action("query", nil, nil), action("snapshot", nil, nil)}
 	return &Entity{
 		Class: []string{"root"}, Title: "Lifelog",
-		Properties: map[string]any{"today": today},
+		Properties: map[string]any{"today": today, "due": due, "habits": hs, "recent": recent},
 		Links: []Link{link("self", "/", "Lifelog"), link("today", dayHref(today), "Today"), link("days", "/days", "Days"),
 			link("sessions", "/sessions", "Sessions"), link("periods", "/periods", "Periods"), link("people", "/people", "People"), link("places", "/places", "Places"), link("files", "/files", "Files"), link("metrics", "/metrics", "Metrics"),
 			link("habits", "/habits", "Habits"), link("tasks", "/tasks", "Tasks"), link("deadlines", "/deadlines", "Deadlines"),
 			link("ghosts", "/ghosts", "Ghost pages"), link("actions", "/actions", "All actions")},
-		Actions: []Action{
-			action("capture", map[string]string{"day": today}, nil), action("search", nil, nil), action("find", nil, nil), action("deadlines", nil, nil), action("create-task", nil, nil),
-			action("capture-session", nil, nil), action("create-period", nil, nil), action("create-page", nil, nil), action("create-person", nil, nil), action("create-place", nil, nil), action("add-file", nil, nil),
-			h.recordAction(r.Context(), "", today), action("register-metric", nil, nil), action("query", nil, nil), action("snapshot", nil, nil)},
+		Actions: append(append(actions, checkIns(hs, today)...), outcomesOf(due, today)...),
 	}, nil
+}
+
+// overdueAndDue are the open occurrences due before today in the deadlines' default window, then the open ones due
+// today.
+func (h *server) overdueAndDue(ctx context.Context, today string) ([]occurrenceView, error) {
+	t, _ := time.Parse(time.DateOnly, today)
+	from, yesterday := t.AddDate(0, 0, -windowBack).Format(time.DateOnly), t.AddDate(0, 0, -1).Format(time.DateOnly)
+	late, err := h.dueIn(ctx, from, yesterday, "open", false)
+	if err != nil {
+		return nil, err
+	}
+	due, err := h.dueIn(ctx, today, today, "open", false)
+	return append(late, due...), err
 }
 
 func (h *server) actions(*http.Request) (*Entity, error) {
@@ -454,7 +509,7 @@ func (h *server) actions(*http.Request) (*Entity, error) {
 	return e, nil
 }
 
-func (h *server) today(*http.Request) (*Entity, error) { return nil, redirect{dayHref(core.Today())} }
+func (h *server) today(*http.Request) (*Entity, error) { return nil, redirect{dayHref(h.localDay())} }
 
 func (h *server) days(r *http.Request) (*Entity, error) {
 	limit, offset, err := pageOf(r, 60)
@@ -473,22 +528,71 @@ func (h *server) days(r *http.Request) (*Entity, error) {
 	return e, nil
 }
 
+// dayView is a day as the API shows it: the cookbook's day view, and beside it what is due that day (on today, the
+// open work of the days before too), the day's mood, its habits and the day the server read as today
+// (docs/plans/091-the-browser-for-daily-use.md).
+type dayView struct {
+	core.Day
+	Due    []occurrenceView  `json:"due"`
+	Mood   []float64         `json:"mood"`
+	Habits []core.HabitState `json:"habits"`
+	Today  string            `json:"today"`
+}
+
 func (h *server) day(r *http.Request) (*Entity, error) {
+	ctx := r.Context()
 	day := r.PathValue("day")
-	d, err := h.s.Day(r.Context(), day)
+	d, err := h.s.Day(ctx, day)
 	if err != nil {
 		return nil, err
 	}
+	today := h.localDay()
+	var due []occurrenceView
+	if day == today { // the open work of the days before, then all of today's
+		due, err = h.overdueAndDue(ctx, today)
+		var settled []occurrenceView
+		if err == nil {
+			settled, err = h.dueIn(ctx, today, today, "all", false)
+		}
+		for _, v := range settled {
+			if v.State != "open" {
+				due = append(due, v)
+			}
+		}
+	} else {
+		due, err = h.dueIn(ctx, day, day, "all", false)
+	}
+	if err != nil {
+		return nil, err
+	}
+	moods, err := h.s.Moods(ctx, day, day)
+	if err != nil {
+		return nil, err
+	}
+	hs, err := h.s.Habits(ctx, day)
+	if err != nil {
+		return nil, err
+	}
+	mood := moods[day]
+	if mood == nil {
+		mood = []float64{}
+	}
 	t, _ := time.Parse(time.DateOnly, day)
 	e := &Entity{
-		Class: []string{"day"}, Title: day, Properties: d,
+		Class: []string{"day"}, Title: day, Properties: dayView{Day: *d, Due: due, Mood: mood, Habits: hs, Today: today},
 		Links: []Link{link("self", dayHref(day), day), link("prev", dayHref(t.AddDate(0, 0, -1).Format(time.DateOnly)), "Previous day"),
 			link("next", dayHref(t.AddDate(0, 0, 1).Format(time.DateOnly)), "Next day"), link("metrics", "/metrics", "Metrics"), link("index", "/", "Home")},
-		Actions: []Action{action("capture", map[string]string{"day": day}, nil), h.recordAction(r.Context(), "", day)},
+		Actions: []Action{action("capture", map[string]string{"day": day}, nil), h.recordAction(ctx, "", day)},
 	}
 	if d.PageID != 0 {
 		e.Links = append(e.Links, link("page", pageHref(d.PageID), "The day page"))
+		p, err := h.s.PageByID(ctx, d.PageID)
+		if err != nil {
+			return nil, err
+		}
+		e.Actions = append(e.Actions, action("save-body", map[string]string{"id": strconv.FormatInt(d.PageID, 10)}, map[string]any{"body": p.Body, "version": p.Version}))
 	}
+	e.Actions = append(append(e.Actions, checkIns(hs, day)...), outcomesOf(due, today)...)
 	for _, m := range d.Readings {
 		e.Entities = append(e.Entities, link("reading", measurementHref(m.ID), fmt.Sprintf("%s %g", m.Metric, m.Value)))
 	}
@@ -669,7 +773,7 @@ func (h *server) metrics(r *http.Request) (*Entity, error) {
 	}
 	e := &Entity{Class: []string{"metrics"}, Title: "Metrics", Properties: map[string]any{"metrics": ms, "groups": groupMetrics(ms, cs)},
 		Links:   []Link{link("self", "/metrics", "Metrics"), link("index", "/", "Home")},
-		Actions: []Action{withOptions(action("record", nil, map[string]any{"day": core.Today()}), "metric", names)}}
+		Actions: []Action{withOptions(action("record", nil, map[string]any{"day": h.localDay()}), "metric", names)}}
 	for _, m := range ms {
 		e.Entities = append(e.Entities, link("item", "/metrics/"+url.PathEscape(m.Name), m.Name))
 	}
@@ -682,7 +786,7 @@ func (h *server) series(r *http.Request) (*Entity, error) {
 	q := r.URL.Query()
 	to := q.Get("to")
 	if to == "" {
-		to = core.Today()
+		to = h.localDay()
 	}
 	if !core.IsDay(to) {
 		return nil, &core.Error{Status: 422, Msg: "to must be an exact day"}
@@ -752,7 +856,7 @@ func (h *server) series(r *http.Request) (*Entity, error) {
 	e := &Entity{Class: []string{"series"}, Title: name,
 		Properties: map[string]any{"metric": name, "from": from, "to": to, "readings": rows, "habit_periods": periods, "categories": categories, "scope": scope, "session_id": sessionID, "include_deleted": q.Get("include_deleted") == "1", "all_history": allHistory},
 		Links:      []Link{link("all-readings", allURL.String(), "All readings"), link("self", self, name), link("up", "/metrics", "Metrics"), link("habits", "/habits", "Habits"), link("index", "/", "Home")},
-		Actions:    []Action{h.recordAction(r.Context(), name, core.Today())}}
+		Actions:    []Action{h.recordAction(r.Context(), name, h.localDay())}}
 	if scope == "session" {
 		for i := range e.Actions[0].Fields {
 			if e.Actions[0].Fields[i].Name == "session_id" {
@@ -762,10 +866,10 @@ func (h *server) series(r *http.Request) (*Entity, error) {
 	}
 	ids := map[string]string{"name": url.PathEscape(name)}
 	if len(periods) > 0 && periods[len(periods)-1].End == "" {
-		e.Actions = append(e.Actions, action("stop-habit", ids, map[string]any{"day": core.Today()}),
-			action("check-in", ids, map[string]any{"day": core.Today()}))
+		e.Actions = append(e.Actions, action("stop-habit", ids, map[string]any{"day": h.localDay()}),
+			action("check-in", ids, map[string]any{"day": h.localDay()}))
 	} else if h.unitless(r.Context(), name) {
-		e.Actions = append(e.Actions, action("start-habit", ids, map[string]any{"start_day": core.Today()}))
+		e.Actions = append(e.Actions, action("start-habit", ids, map[string]any{"start_day": h.localDay()}))
 	}
 	if m != nil { // the metric is a page (D27): its text, its backlinks, and filing it in a category
 		e.Links = append(e.Links, link("page", pageHref(m.ID), "Page"))

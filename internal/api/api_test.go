@@ -32,6 +32,22 @@ func fresh(t *testing.T) (*client.Client, http.Handler) {
 	return client.InProcess(h, "cli"), h
 }
 
+// freshOn is fresh with the server's local day fixed: a test of what is due or overdue uses fixed dates.
+func freshOn(t *testing.T, day string) (*client.Client, http.Handler) {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "life.db")
+	if err := db.Init(p); err != nil {
+		t.Fatal(err)
+	}
+	d, err := db.Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { d.Close() })
+	h := api.NewOn(&core.Store{DB: d}, day)
+	return client.InProcess(h, "cli"), h
+}
+
 func names(e *api.Entity) string {
 	var out []string
 	for _, a := range e.Actions {

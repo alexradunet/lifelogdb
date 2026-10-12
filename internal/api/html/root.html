@@ -1,27 +1,40 @@
 {{define "root"}}{{template "head" .}}
-<h1>{{weekday .Props.today}}</h1>
-<p class="sub"><a href="/days/{{.Props.today}}">{{.Props.today}}</a><a href="/habits">Today's habits</a><a href="/deadlines">What is due</a></p>
+{{$p := .Props}}
+<h1>{{weekday $p.today}}</h1>
+<p class="sub"><a href="/days/{{$p.today}}">{{$p.today}}</a><a href="/deadlines">What is due</a><a href="/tasks">Tasks</a></p>
 
 <h2>Capture</h2>
 {{template "form" (form (.Action "capture") "choices:mood" "1 2 3 4 5" "button" "Add to today" "autofocus" "text")}}
 
+<h2>Due</h2>
+{{with $p.due}}<ul class="plain due">{{range .}}{{template "occ" ($.Occ . 0)}}{{end}}</ul>
+{{else}}<p><small>Nothing is due today or overdue. <a href="/deadlines">The weeks ahead</a>.</small></p>{{end}}
+
+{{template "checkins" .}}
+
+{{with $p.recent}}<h2>Last entries</h2>
+<ul class="plain">{{range .}}<li><a href="/days/{{.day}}">{{weekday .day}} {{.day}}</a><small>{{template "mood" .mood}}</small>
+{{with .first_line}}<div><small>{{.}}</small></div>{{end}}</li>{{end}}</ul>
+<p class="sub"><a href="/days">Every day</a></p>{{end}}
+
 <h2>Find</h2>
 {{template "form" (form (.Action "find") "class" "inline" "button" "Open")}}
 
-<h2 id="new">New</h2>
+<details id="new"><summary>New: a page, a person, a place, a task, a file, a reading</summary>
 {{template "boxed" (form (.Action "create-page"))}}
+{{template "boxed" (form (.Action "create-task"))}}
 {{template "boxed" (form (.Action "create-person"))}}
 {{template "boxed" (form (.Action "create-place"))}}
-{{template "boxed" (form (.Action "create-period"))}}
 {{template "boxed" (form (.Action "add-file") "hide" "sha256,mime")}}
 {{template "boxed" (form (.Action "record"))}}
-{{template "boxed" (form (.Action "create-task"))}}
 {{template "boxed" (form (.Action "capture-session"))}}
-
-<h2>Owner</h2>
+{{template "boxed" (form (.Action "create-period"))}}
+</details>
+{{if or (.Action "register-metric") (.Action "snapshot") (.Action "query")}}<details><summary>Owner: a metric, a snapshot, a query</summary>
 {{template "boxed" (form (.Action "register-metric"))}}
 {{template "boxed" (form (.Action "snapshot"))}}
 {{template "boxed" (form (.Action "query"))}}
+</details>{{end}}
 
 <h2>More</h2>
 <ul class="plain">

@@ -185,6 +185,96 @@ func (s *Store) Day(ctx context.Context, day string) (*Day, error) {
 	return d, err
 }
 
+// Moods are the values of the current Mood readings with no session, by day, from from through through, each day's
+// in id order: cookbook/mood-over-time.md read for a window of days. The metric is found by its name key, so a
+// renamed Mood is still the mood. A day without a reading is absent.
+func (s *Store) Moods(ctx context.Context, from, through string) (map[string][]float64, error) {
+	if !IsDay(from) || !IsDay(through) || from > through {
+		return nil, invalid("a mood window must have ordered exact days")
+	}
+	rows, err := s.DB.R.QueryContext(ctx, `
+		SELECT me.day, me.value
+		  FROM measurement_values me
+		  JOIN entities e ON e.id = me.metric_id AND e.deleted_at IS NULL
+		  JOIN entity_names n ON n.entity_id = me.metric_id AND n.name_key = 'mood'
+		 WHERE me.session_id IS NULL AND me.day BETWEEN ? AND ?
+		 ORDER BY me.day, me.id`, from, through)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string][]float64{}
+	for rows.Next() {
+		var day string
+		var v float64
+		if err := rows.Scan(&day, &v); err != nil {
+			return nil, err
+		}
+		out[day] = append(out[day], v)
+	}
+	return out, rows.Err()
+}
+
+// DayEntry is a live day page as a list of days shows it: its day, its id, and the first line of its body as plain
+// text.
+type DayEntry struct {
+	Day       string `json:"day"`
+	PageID    int64  `json:"page_id"`
+	FirstLine string `json:"first_line,omitempty"`
+}
+
+// DayEntries are the live day pages from from through through: in day order, or the newest first, and at most limit
+// of them.
+func (s *Store) DayEntries(ctx context.Context, from, through string, newestFirst bool, limit int) ([]DayEntry, error) {
+	if !IsDay(from) || !IsDay(through) || from > through || limit < 1 {
+		return nil, invalid("day entries need ordered exact days and a limit")
+	}
+	order := "ASC"
+	if newestFirst {
+		order = "DESC"
+	}
+	rows, err := s.DB.R.QueryContext(ctx, `
+		SELECT p.day, p.id, p.body FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
+		 WHERE p.day BETWEEN ? AND ? AND p_name.title = p.day AND p.deleted_at IS NULL
+		 ORDER BY p.day `+order+` LIMIT ?`, from, through, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []DayEntry{}
+	for rows.Next() {
+		var e DayEntry
+		var body string
+		if err := rows.Scan(&e.Day, &e.PageID, &body); err != nil {
+			return nil, err
+		}
+		e.FirstLine = FirstLine(body)
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// firstLineRunes is how long a first line may be before it is cut.
+const firstLineRunes = 160
+
+// FirstLine is the first line of a body that has text, as plain text: a heading's or a list item's marker cut, the
+// brackets of a [[wikilink]] cut, and cut with "…" after 160 characters. It is for a list of days, not a rendering.
+func FirstLine(body string) string {
+	for line := range strings.SplitSeq(body, "\n") {
+		line = strings.TrimSpace(line)
+		line = strings.TrimSpace(strings.TrimLeft(line, "#>-*+ "))
+		if line == "" {
+			continue
+		}
+		line = strings.NewReplacer("![[", "", "[[", "", "]]", "").Replace(line)
+		if r := []rune(line); len(r) > firstLineRunes {
+			line = strings.TrimSpace(string(r[:firstLineRunes])) + "…"
+		}
+		return line
+	}
+	return ""
+}
+
 // dayView implements cookbook/day-view.md with registry lookup and preferred display.
 const dayView = `
 SELECT what, at, detail FROM (

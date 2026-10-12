@@ -82,6 +82,13 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   is an `article`, a callout an `aside`, a series a `table` with a header row; no id or class is generated for a
   template to find. What a template cannot know comes from the entity: `danger` marks a destructive action's button
   and `rows` a textarea's height, so no view decides either by an action's or a field's name.
+- **The browser for daily use** ([plan 091](docs/plans/091-the-browser-for-daily-use.md)). The root is today at a
+  glance: what is due today and overdue, today's habits and the five newest day pages. A day carries what is due on
+  it, its mood, its habits and the `save-body` of its day page, so the day view edits in place. The tasks, a task, an
+  occurrence and the deadlines have their own views, and the deadlines are grouped by their due day against today.
+  Each occurrence due 7 days after today or earlier offers its outcome action, which the browser draws as Done and
+  Skip, or Reopen; a habit's check-in is Done and Not done. These are properties and actions of the entities, so every
+  client gets them ([API.md](API.md)). The handler reads today from one clock, which a test fixes.
 - **The stylesheet is this application's own: two embedded sheets, no vendored framework and no CDN.** `base.css`
   styles ordinary HTML by element — type, colour, forms, tables, buttons, a print sheet, light and dark by
   `prefers-color-scheme` — and `app.css` only what this app's own vocabulary needs (`.wikilink`, `.badge`, `.chart`,

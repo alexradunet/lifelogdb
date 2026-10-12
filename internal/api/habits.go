@@ -121,7 +121,7 @@ func (h *server) habits(r *http.Request) (*Entity, error) {
 	q := r.URL.Query()
 	day := q.Get("day")
 	if day == "" {
-		day = core.Today()
+		day = h.localDay()
 	}
 	hs, err := h.s.Habits(r.Context(), day)
 	if err != nil {
@@ -148,9 +148,19 @@ func (h *server) habits(r *http.Request) (*Entity, error) {
 			link("next", "/habits?day="+t.AddDate(0, 0, 1).Format(time.DateOnly), "Next day"), link("index", "/", "Home")}}
 	for _, x := range hs {
 		e.Entities = append(e.Entities, link("habit", "/metrics/"+url.PathEscape(x.Metric), x.Metric+": "+x.State))
-		e.Actions = append(e.Actions, action("check-in", map[string]string{"name": url.PathEscape(x.Metric)}, map[string]any{"day": day}))
 	}
+	e.Actions = checkIns(hs, day)
 	return e, nil
+}
+
+// checkIns are the check-in actions of the habits active on a day, that day filled in: /habits, a day and the root
+// offer them.
+func checkIns(hs []core.HabitState, day string) []Action {
+	out := []Action{}
+	for _, x := range hs {
+		out = append(out, action("check-in", map[string]string{"name": url.PathEscape(x.Metric)}, map[string]any{"day": day}))
+	}
+	return out
 }
 
 // metricEntity is the resource /metrics/{name} serves.

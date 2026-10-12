@@ -1,31 +1,34 @@
 {{define "day"}}{{template "head" .}}
 {{$d := .Props}}
-<h1>{{weekday .Title}}</h1>
-<p class="sub"><span>{{.Title}}</span><a href="/days/today">Today</a><a href="/habits?day={{.Title}}">Habits</a>{{with .Link "page"}}<a href="{{.}}">The day page</a>{{end}}</p>
+<h1>{{weekday .Title}}{{template "mood" $d.mood}}</h1>
+<p class="sub"><span>{{.Title}}</span>{{if ne .Title $d.today}}<a href="/days/today">Today</a>{{end}}<a href="/habits?day={{.Title}}">Habits</a>{{with .Link "page"}}<a href="{{.}}">The day page</a>{{end}}</p>
 <nav class="pager" aria-label="Days"><a href="{{.Link "prev"}}" rel="prev">← Previous day</a><a href="{{.Link "next"}}" rel="next">Next day →</a></nav>
 
 <h2>Journal</h2>
 {{range $d.view}}{{if eq .what "day page"}}<article class="prose">{{markdown .detail}}</article>{{end}}{{end}}
-{{with .Link "page"}}<p class="sub"><a href="{{.}}">Open or edit the day page</a></p>{{else}}<p><small>Nothing written on this day yet.</small></p>{{end}}
+{{with form (.Action "save-body") "button" "Save"}}<details><summary>Edit the day page</summary>
+<small class="desc">CommonMark. [[Title]] links a page and #tag a tag page. Nothing is saved until the version you read is still the current one.</small>
+{{template "form" .}}</details>{{else}}<p><small>Nothing written on this day yet.</small></p>{{end}}
 
 <h2>Add to this day</h2>
 {{template "form" (form (.Action "capture") "choices:mood" "1 2 3 4 5" "autofocus" "text")}}
 
+{{with $d.due}}<h2>Due</h2><ul class="plain due">{{range .}}{{template "occ" ($.Occ . 0)}}{{end}}</ul>{{end}}
+
+{{template "checkins" .}}
+
 {{$at := false}}{{range $d.view}}{{if eq .what "at"}}{{$at = true}}{{end}}{{end}}
 {{if $at}}<h2>Where</h2><ul class="plain">{{range $d.view}}{{if eq .what "at"}}<li><a href="{{title .detail}}">{{.detail}}</a></li>{{end}}{{end}}</ul>{{end}}
 
-{{$habit := false}}{{range $d.view}}{{if eq .what "habit"}}{{$habit = true}}{{end}}{{end}}
-{{if $habit}}<h2>Habits</h2><ul class="plain">{{range $d.view}}{{if eq .what "habit"}}<li>{{.detail}}</li>{{end}}{{end}}</ul>
-<p class="sub"><a href="/habits?day={{$.Title}}">Check in</a></p>{{end}}
-
 {{with $d.readings}}<h2>Readings</h2>
+{{$scoped := false}}{{range .}}{{if or .session_id .taken_at}}{{$scoped = true}}{{end}}{{end}}
 <div class="scroll"><table><caption>Every reading recorded on this day</caption>
-<thead><tr><th scope="col">metric</th><th scope="col" class="num">value</th><th scope="col">scope</th><th scope="col">taken at</th></tr></thead>
+<thead><tr><th scope="col">metric</th><th scope="col" class="num">value</th>{{if $scoped}}<th scope="col">scope</th><th scope="col">taken at</th>{{end}}</tr></thead>
 <tbody>{{range .}}<tr>
 <td><a href="/metrics/{{pathesc .metric}}">{{.metric}}</a></td>
 <td class="num"><a href="/measurements/{{num .id}}">{{num .value}}</a></td>
-<td>{{.scope}}{{with .session_id}} · <a href="/sessions/{{num .}}">session {{num .}}</a>{{end}}</td>
-<td><small>{{with .taken_at}}{{.}}{{else}}—{{end}}</small></td>
+{{if $scoped}}<td>{{.scope}}{{with .session_id}} · <a href="/sessions/{{num .}}">session {{num .}}</a>{{end}}</td>
+<td><small>{{with .taken_at}}{{.}}{{else}}—{{end}}</small></td>{{end}}
 </tr>{{end}}</tbody></table></div>{{end}}
 
 {{$pages := false}}{{range $d.view}}{{if eq .what "page" "page (edited)"}}{{$pages = true}}{{end}}{{end}}
@@ -34,3 +37,12 @@
 {{template "boxed" (form (.Action "record") "button" "Record a reading")}}
 {{template "boxed" (form (.Action "capture-session") "button" "Record a session")}}
 {{template "foot" .}}{{end}}
+
+{{/* mood is a day's mood beside its heading: each current reading, in the order it was recorded */}}
+{{define "mood"}}{{with .}} <span class="mood" title="Mood">mood {{range $i, $m := .}}{{if $i}}, {{end}}{{num $m}}{{end}}</span>{{end}}{{end}}
+
+{{/* checkins are the habits of the entity's day, each with the Done and Not done of its check-in: a day and the root
+     carry both the habits and their check-in actions */}}
+{{define "checkins"}}{{with .Props.habits}}<h2>Habits</h2><ul class="plain">{{range .}}{{$href := printf "/metrics/%s" (pathesc .metric)}}
+<li><div class="occ"><div><a href="{{$href}}">{{.metric}}</a> <span class="{{if eq .state "done"}}done{{else if or (eq .state "not done") (eq .state "invalid")}}notdone{{else}}muted{{end}}">{{.state}}</span></div>
+{{with $.ActionFor "check-in" $href}}<div class="outcomes">{{template "form" (form . "done" "1" "hide" "day" "button" "Done" "class" "tiny" "back" $.Here)}}{{template "form" (form . "done" "0" "hide" "day" "button" "Not done" "class" "tiny" "back" $.Here)}}</div>{{end}}</div></li>{{end}}</ul>{{end}}{{end}}

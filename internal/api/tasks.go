@@ -49,24 +49,36 @@ func actionable(o core.TaskOccurrence, today string) bool {
 }
 
 // outcomeAction is the write that sets an occurrence's state: capture-occurrence for a virtual slot (its key and
-// due day filled), edit-occurrence for a written one (every current value filled). There is none for a
-// tombstoned occurrence or under a tombstoned task: those offer only a revive, on their own pages.
-func outcomeAction(t core.Task, o core.TaskOccurrence) (Action, bool) {
-	id := strconv.FormatInt(t.ID, 10)
+// due day filled), edit-occurrence for a written one (every current value filled). Both edit tokens come from the
+// occurrence itself, which every read fills from one snapshot. There is none for a tombstoned occurrence or under a
+// tombstoned task: those offer only a revive, on their own pages.
+func outcomeAction(o core.TaskOccurrence) (Action, bool) {
+	id := strconv.FormatInt(o.TaskID, 10)
 	switch {
-	case t.DeletedAt != "" || o.DeletedAt != "":
+	case o.TaskDeletedAt != "" || o.DeletedAt != "":
 		return Action{}, false
 	case o.Virtual:
-		return action("capture-occurrence", map[string]string{"id": id}, map[string]any{"task_version": t.Version, "key": o.OccurrenceKey,
+		return action("capture-occurrence", map[string]string{"id": id}, map[string]any{"task_version": o.TaskVersion, "key": o.OccurrenceKey,
 			"due_day": o.OccurrenceKey, "state": "open", "reminder_mode": "inherit"}), true
 	}
-	return action("edit-occurrence", map[string]string{"id": id, "key": url.PathEscape(o.OccurrenceKey)}, map[string]any{"task_version": t.Version,
+	return action("edit-occurrence", map[string]string{"id": id, "key": url.PathEscape(o.OccurrenceKey)}, map[string]any{"task_version": o.TaskVersion,
 		"version": o.Version, "due_day": o.DueDay, "state": o.State, "completed_at": o.CompletedAt, "reminder_mode": o.ReminderMode,
 		"reminder_at": o.ReminderOverrideAt}), true
 }
 
-func taskWindow(q url.Values) (from, through string, err error) {
-	today, _ := time.Parse(time.DateOnly, core.Today())
+// outcomesOf are the outcome actions of the occurrences a list shows that are actionable against today.
+func outcomesOf(views []occurrenceView, today string) []Action {
+	out := []Action{}
+	for _, v := range views {
+		if a, ok := outcomeAction(v.TaskOccurrence); ok && actionable(v.TaskOccurrence, today) {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+func taskWindow(q url.Values, localDay string) (from, through string, err error) {
+	today, _ := time.Parse(time.DateOnly, localDay)
 	from, through = q.Get("from"), q.Get("through")
 	if from == "" {
 		from = today.AddDate(0, 0, -windowBack).Format(time.DateOnly)
@@ -134,7 +146,7 @@ func (h *server) task(r *http.Request) (*Entity, error) {
 }
 
 func (h *server) taskEntity(ctx context.Context, id int64, q url.Values) (*Entity, error) {
-	from, through, err := taskWindow(q)
+	from, through, err := taskWindow(q, h.localDay())
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +167,7 @@ func (h *server) taskEntity(ctx context.Context, id int64, q url.Values) (*Entit
 		views = append(views, viewOccurrence(*t, o, ""))
 	}
 	self := taskHref(id) + "?" + url.Values{"from": {from}, "through": {through}, "include_deleted": {map[bool]string{true: "1", false: "0"}[deleted]}}.Encode()
-	props := map[string]any{"task": t, "from": from, "through": through, "include_deleted": deleted, "occurrences": views, "today": core.Today()}
+	props := map[string]any{"task": t, "from": from, "through": through, "include_deleted": deleted, "occurrences": views, "today": h.localDay()}
 	// A one-off's one occurrence, whatever its due day: an undated one is in no window, and its page must still
 	// show it and offer its outcome.
 	var once *core.TaskOccurrence
@@ -195,20 +207,13 @@ func (h *server) taskEntity(ctx context.Context, id int64, q url.Values) (*Entit
 	}
 	e.Actions = append(e.Actions, action("capture-occurrence", ids, map[string]any{"task_version": t.Version, "state": "open", "reminder_mode": "inherit"}),
 		action("tombstone-task", ids, map[string]any{"version": t.Version}))
-	// Then the outcome of each occurrence shown that is due soon, and of a one-off's one occurrence.
-	today := core.Today()
+	// Then the outcome of a one-off's one occurrence, or of each occurrence shown that is due soon.
 	if once != nil {
-		if a, ok := outcomeAction(*t, *once); ok {
+		if a, ok := outcomeAction(*once); ok {
 			e.Actions = append(e.Actions, a)
 		}
-	}
-	for _, o := range os {
-		if once != nil && o.OccurrenceKey == "once" {
-			continue
-		}
-		if a, ok := outcomeAction(*t, o); ok && actionable(o, today) {
-			e.Actions = append(e.Actions, a)
-		}
+	} else {
+		e.Actions = append(e.Actions, outcomesOf(views, props["today"].(string))...)
 	}
 	return e, nil
 }
@@ -257,7 +262,7 @@ func (h *server) occurrenceEntity(ctx context.Context, taskID int64, key string)
 		e.Links = append(e.Links, link("project", pageHref(*t.ProjectPageID), t.ProjectTitle))
 	}
 	ids := map[string]string{"id": strconv.FormatInt(taskID, 10), "key": url.PathEscape(key)}
-	outcome, _ := outcomeAction(*t, *o)
+	outcome, _ := outcomeAction(*o)
 	switch {
 	case t.DeletedAt != "":
 		e.Class = append(e.Class, "deleted")
@@ -275,7 +280,7 @@ func (h *server) occurrenceEntity(ctx context.Context, taskID int64, key string)
 
 func (h *server) deadlines(r *http.Request) (*Entity, error) {
 	q := r.URL.Query()
-	from, through, err := taskWindow(q)
+	from, through, err := taskWindow(q, h.localDay())
 	if err != nil {
 		return nil, err
 	}
@@ -290,37 +295,46 @@ func (h *server) deadlines(r *http.Request) (*Entity, error) {
 	if state != "open" && state != "done" && state != "skipped" && state != "all" {
 		return nil, &core.Error{Status: 422, Msg: "state is open, done, skipped or all"}
 	}
-	ds, err := h.s.Deadlines(r.Context(), from, through, deleted)
+	today := h.localDay()
+	views, err := h.dueIn(r.Context(), from, through, state, deleted)
+	if err != nil {
+		return nil, err
+	}
+	self := "/deadlines?" + url.Values{"from": {from}, "through": {through}, "state": {state}, "include_deleted": {map[bool]string{true: "1", false: "0"}[deleted]}}.Encode()
+	e := &Entity{Class: []string{"deadlines"}, Title: "Deadlines " + from + " to " + through,
+		Properties: map[string]any{"from": from, "through": through, "state": state, "include_deleted": deleted, "occurrences": views, "today": today},
+		Links:      []Link{link("self", self, "Deadlines"), link("tasks", "/tasks", "Tasks"), link("index", "/", "Home")},
+		Actions:    append([]Action{action("deadlines", nil, map[string]any{"from": from, "through": through, "state": state}), action("create-task", nil, nil)}, outcomesOf(views, today)...)}
+	for _, v := range views {
+		e.Entities = append(e.Entities, Link{Rel: []string{"occurrence"}, Href: occurrenceHref(v.TaskID, v.OccurrenceKey), Title: v.Label + ": " + occurrenceTitle(v.TaskOccurrence)})
+	}
+	return e, nil
+}
+
+// dueIn are the occurrences of every task due from from through through, in state (or every state, "all"), as the
+// deadlines show them. The deadlines, a day and the root read what is due through it.
+func (h *server) dueIn(ctx context.Context, from, through, state string, includeDeleted bool) ([]occurrenceView, error) {
+	ds, err := h.s.Deadlines(ctx, from, through, includeDeleted)
 	if err != nil {
 		return nil, err
 	}
 	tasks := map[int64]core.Task{}
 	views := []occurrenceView{}
-	today := core.Today()
-	self := "/deadlines?" + url.Values{"from": {from}, "through": {through}, "state": {state}, "include_deleted": {map[bool]string{true: "1", false: "0"}[deleted]}}.Encode()
-	e := &Entity{Class: []string{"deadlines"}, Title: "Deadlines " + from + " to " + through,
-		Links:   []Link{link("self", self, "Deadlines"), link("tasks", "/tasks", "Tasks"), link("index", "/", "Home")},
-		Actions: []Action{action("deadlines", nil, map[string]any{"from": from, "through": through, "state": state}), action("create-task", nil, nil)}}
 	for _, d := range ds {
 		if state != "all" && d.State != state {
 			continue
 		}
 		t, ok := tasks[d.TaskID]
 		if !ok {
-			p, err := h.s.Task(r.Context(), d.TaskID)
+			p, err := h.s.Task(ctx, d.TaskID)
 			if err != nil {
 				return nil, err
 			}
 			t, tasks[d.TaskID] = *p, *p
 		}
 		views = append(views, viewOccurrence(t, d.TaskOccurrence, d.Label))
-		e.Entities = append(e.Entities, Link{Rel: []string{"occurrence"}, Href: occurrenceHref(d.TaskID, d.OccurrenceKey), Title: d.Label + ": " + occurrenceTitle(d.TaskOccurrence)})
-		if a, ok := outcomeAction(t, d.TaskOccurrence); ok && actionable(d.TaskOccurrence, today) {
-			e.Actions = append(e.Actions, a)
-		}
 	}
-	e.Properties = map[string]any{"from": from, "through": through, "state": state, "include_deleted": deleted, "occurrences": views, "today": today}
-	return e, nil
+	return views, nil
 }
 
 // ---- writes: every one a core.Tx method inside one transaction, answered with the resource it changed
