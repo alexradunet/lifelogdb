@@ -89,9 +89,14 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 		}
 		return month
 	},
-	"segmented": segmented,
-	"alert":     alertOf,
-	"capLater":  capLater,
+	"segmented":       segmented,
+	"alert":           alertOf,
+	"capLater":        capLater,
+	"upTo":            upTo,
+	"beyond":          beyond,
+	"placedPeriods":   placedPeriods,
+	"unplacedPeriods": unplacedPeriods,
+	"spanWords":       spanWords,
 }).ParseFS(views, "html/*.html"))
 
 // dict is the arguments of a sub-template that needs more than one value: name/value pairs, each name a string.

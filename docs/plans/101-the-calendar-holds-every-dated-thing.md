@@ -10,7 +10,7 @@
   meaning. The month reads more (the occurrences, the sessions, the pages, the people and the periods of the month).
   The sidebar does not read the month resource, so its cost stays the same. Nothing for the schema, nothing for the
   contract.
-- **Status:** TODO. One commit for the records, then one commit for the change and this record.
+- **Status:** DONE. One commit for the records, then one commit for the change and this record.
 - **Resolves:** issue [0070](../issues/0070-the-calendar-shows-only-the-journal.md). No RFC: the contract in `docs/`
   does not change.
 
@@ -59,8 +59,8 @@ Each day of `days[]` (the month's and the week's: one read serves both) keeps `d
   Open occurrences come before done ones, and done ones before skipped ones. Pages and files are in the order of
   their titles, at most 20 a day.
 - **`more_pages`**: the pages and files of the day after the first 20; absent when none. The day view lists all.
-- **`readings`**: the current readings with no session on the day, of every metric, the Mood included (as the
-  year counts them); absent when none.
+- **`readings`**: the current readings with no session on the day, of every metric but the Mood: `mood` holds
+  those, and a day with a mood alone must not read "mood 3, 1 reading". Absent when none.
 
 The month also gains **`periods[]`**: each live period that a day of the month can fall in, with its `membership`
 over the month. That is the strongest membership of its days ([period boundaries](../contract/period-boundaries.md)):
@@ -122,7 +122,7 @@ flowchart TB
 | The dated rows of a window: pages and files (20 a day, with the count), places, sessions; the anniversaries; the readings by day | a new `internal/core/calendar.go`; `internal/core/read.go` |
 | The membership of a period over a window of days | `internal/core/periods.go` |
 | `items[]`, `more_pages`, `readings` of a day; `periods[]` of the month; the week reads its occurrences once | `internal/api/months.go`, `internal/api/weeks.go` |
-| The words of an item, a boundary and a period | `internal/api/calendar.go` |
+| The words of an item, a boundary and a period, and the template functions that draw them | `internal/api/calendar.go`, `internal/api/html.go` |
 | The cells, Periods, Day by day | `internal/api/html/month.html`, `internal/api/html/app.css` |
 | A cell with items | `internal/api/html/styleguide.html` |
 | The month's and the week's properties | `API.md` |
@@ -150,3 +150,23 @@ flowchart TB
 - `go generate ./... && go vet ./... && go test ./...` green; `gofmt`; `staticcheck ./...`; `govulncheck ./...`.
 - Screenshots in headless Edge at 1280 and 390 px, light and dark, on a synthetic database: a busy month, a month
   with nothing, the style page.
+
+## Result
+
+Done as designed above, with two changes found in the work.
+
+- **The readings count leaves out the Mood.** The first commit of this plan counted every reading, as the year does.
+  Then a day with a mood alone read "mood 3 · 1 reading". `readings` now counts the other metrics; the year's count
+  stays as it was.
+- **A done task's line is not bold.** The page-wide `.done` rule (the state of a habit) also matched the item of a
+  cell. A rule of the calendar resets it; the square says done.
+- **Checks** (Windows 11): `go generate ./... && go vet ./... && go test ./...` green; `gofmt` clean; `staticcheck
+  ./...` (2026.2.1, 0.8.1) clean; `govulncheck ./...` (v1.9.0) "No vulnerabilities found"; `go test -count=1
+  -shuffle=on ./internal/api ./internal/core` green. Two rules broken on purpose were caught: with no 29 February
+  on 28 February, the anniversaries test failed; with an open task due today called overdue, the calendar test
+  failed.
+- **Screenshots** in headless Edge 154 at 1280 and 390 px, light and dark, on a synthetic database: October 2026
+  (17 days with items: tasks in every state, three people, four periods, four sessions, a place, files and pages),
+  August 2026 (no item, one period that cannot be placed), the style page.
+- **Not run:** the race check and a Linux run (no Linux here), the mermaid render (no diagram in `docs/` outside the
+  records changed), and a measurement at the lifetime envelope.

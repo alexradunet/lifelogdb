@@ -249,7 +249,8 @@ The **reading** shape (`readings[]` here and in a series; a measurement's own pr
 
 `GET /months/{YYYY-MM}` (`/months/current` redirects to this month; a value that is not a month is 422): the calendar
 of a month. Links: `prev`, `next` (the months before and after), `days` (the list of day pages). Embedded: a `day`
-link to each day of the month. Actions: `open-day`.
+link to each day of the month. Actions: `open-day`. Each day holds what names it
+([plan 101](docs/plans/101-the-calendar-holds-every-dated-thing.md)).
 
 | property | type | meaning |
 |---|---|---|
@@ -260,6 +261,25 @@ link to each day of the month. Actions: `open-day`.
 | `days[].page` | boolean | a live day page exists for it |
 | `days[].first_line` | string | the first line of that page's body that has text, as plain text (as `recent[]` of the root); absent when none |
 | `days[].mood` | list | the values of the day's current Mood readings with no session, in the order they were recorded; absent when none |
+| `days[].items[]` | list | every other thing that names the day, in this order: the occurrences due on it (open, then done, then skipped), the births and deaths, the period boundaries, the sessions, the places and the pages; absent when none |
+| `days[].items[].kind` | string | `task` (an occurrence of a live task, in every state, a recurring task's days included); `birthday` or `death` (a live person's birth or death day, and its day in each later year; 29 February is on 28 February in a common year); `period` (a boundary of a live period that names this day); `session` (a live session reported on the day); `place` (a live place that the live day page links with `at`); `page` or `file` (a live page that is not a day page and has the day, by title, at most 20 a day) |
+| `days[].items[].title` | string | a task's label; a session's kind; else the title of the page |
+| `days[].items[].href` | string | the item's own resource: the occurrence, the session or the page |
+| `days[].items[].state` | string | a task's: `open`, `done` or `skipped` |
+| `days[].items[].years` | integer | a birthday's or a death's: the whole years since the day the person's row holds; absent on that day |
+| `days[].items[].boundary` | string | a period's: `start` or `end` |
+| `days[].items[].qualifier` | string | a period's: `?`, `~` or `%` when the boundary has one; absent otherwise |
+| `days[].items[].at` | string | a session's start as it was recorded: an instant, or a local clock |
+| `days[].more_pages` | integer | the pages and files of the day after the first 20 in `items[]`; absent when none |
+| `days[].readings` | integer | the current readings with no session on the day, of every metric but the Mood (`mood` holds those); absent when none |
+| `periods[]` | list | each live period that a day of the month can fall in, by name: a period outside on every day is not listed |
+| `periods[].id` | integer | |
+| `periods[].title` | string | |
+| `periods[].start_boundary` | day | |
+| `periods[].end_boundary` | day | |
+| `periods[].version` | string | |
+| `periods[].deleted_at` | instant | |
+| `periods[].membership` | string | the strongest membership of a day of the month: `definite`, then `possible`, then `incomparable`; an ongoing end is read as of `today` |
 
 ### week
 
@@ -279,6 +299,17 @@ day of the week. Actions: `open-day`.
 | `days[].page` | boolean | a live day page exists for it |
 | `days[].first_line` | string | the first line of that page's body that has text, as plain text; absent when none |
 | `days[].mood` | list | the values of the day's current Mood readings with no session, in the order they were recorded; absent when none |
+| `days[].items[]` | list | every other thing that names the day, in this order: the occurrences due on it (open, then done, then skipped), the births and deaths, the period boundaries, the sessions, the places and the pages; absent when none |
+| `days[].items[].kind` | string | `task` (an occurrence of a live task, in every state, a recurring task's days included); `birthday` or `death` (a live person's birth or death day, and its day in each later year; 29 February is on 28 February in a common year); `period` (a boundary of a live period that names this day); `session` (a live session reported on the day); `place` (a live place that the live day page links with `at`); `page` or `file` (a live page that is not a day page and has the day, by title, at most 20 a day) |
+| `days[].items[].title` | string | a task's label; a session's kind; else the title of the page |
+| `days[].items[].href` | string | the item's own resource: the occurrence, the session or the page |
+| `days[].items[].state` | string | a task's: `open`, `done` or `skipped` |
+| `days[].items[].years` | integer | a birthday's or a death's: the whole years since the day the person's row holds; absent on that day |
+| `days[].items[].boundary` | string | a period's: `start` or `end` |
+| `days[].items[].qualifier` | string | a period's: `?`, `~` or `%` when the boundary has one; absent otherwise |
+| `days[].items[].at` | string | a session's start as it was recorded: an instant, or a local clock |
+| `days[].more_pages` | integer | the pages and files of the day after the first 20 in `items[]`; absent when none |
+| `days[].readings` | integer | the current readings with no session on the day, of every metric but the Mood (`mood` holds those); absent when none |
 | `habits[]` | list | each habit active on a day of the week through today, by name, counted as `completion` of habits is: a week in progress counts through today, a week to come counts nothing |
 | `habits[].metric` | string | the habit's metric |
 | `habits[].done` | integer | the days of the week on which it was done |

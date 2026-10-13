@@ -533,6 +533,29 @@ func (s *Store) ReadingsCount(ctx context.Context, from, through string) (int, e
 	return n, err
 }
 
+// ReadingsByDay counts the readings of ReadingsCount for each day from from through through; a day without one is
+// absent.
+func (s *Store) ReadingsByDay(ctx context.Context, from, through string) (map[string]int, error) {
+	if err := checkWindow(from, through); err != nil {
+		return nil, err
+	}
+	rows, err := s.DB.R.QueryContext(ctx, `SELECT day, count(*) FROM measurement_values WHERE session_id IS NULL AND day BETWEEN ? AND ? GROUP BY day`, from, through)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]int{}
+	for rows.Next() {
+		var day string
+		var n int
+		if err := rows.Scan(&day, &n); err != nil {
+			return nil, err
+		}
+		out[day] = n
+	}
+	return out, rows.Err()
+}
+
 // Measurement reads one row of the append-only table, current or not, and what corrected it.
 type Measurement struct {
 	Reading

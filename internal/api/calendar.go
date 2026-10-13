@@ -3,6 +3,7 @@ package api
 // The calendar in words and numbers: days stepped, ISO weeks, weekdays, and the words of a week.
 
 import (
+	"cmp"
 	"slices"
 	"strconv"
 	"time"
@@ -117,4 +118,132 @@ func monthBand(day string) string {
 		return t.Format("Jan 2006")
 	}
 	return ""
+}
+
+// calWords are the words of an item of the calendar (docs/plans/101-the-calendar-holds-every-dated-thing.md): Tag is
+// its tag in Day by day, Class the colour of its square and its tag (the tags' open, overdue and done; "" is muted),
+// Word the muted word a cell writes after the title, Note the muted note Day by day writes after the link.
+type calWords struct{ Tag, Class, Word, Note string }
+
+// qualifierWords say a period boundary's qualifier (docs/contract/period-boundaries.md).
+var qualifierWords = map[string]string{"?": "uncertain", "~": "approximate", "%": "uncertain, approximate"}
+
+// CalItem says an item of a day of the calendar in the words of this view. An open task due before today is overdue,
+// as the deadlines say it.
+func (v *view) CalItem(item any, day, today string) calWords {
+	m, _ := item.(map[string]any)
+	str := func(k string) string { s, _ := m[k].(string); return s }
+	years, _ := m["years"].(float64)
+	switch str("kind") {
+	case "task":
+		switch {
+		case str("state") == core.StateDone:
+			return calWords{Tag: "done", Class: "done"}
+		case str("state") == core.StateSkipped:
+			return calWords{Tag: "skipped"}
+		case day < today:
+			return calWords{Tag: "overdue", Class: "overdue"}
+		}
+		return calWords{Tag: "due", Class: "open"}
+	case "birthday":
+		if years == 0 {
+			return calWords{Tag: "born", Word: "born"}
+		}
+		return calWords{Tag: "birthday", Word: "birthday", Note: yearsWords(years)}
+	case "death":
+		w := calWords{Tag: "died", Word: "died"}
+		if years > 0 {
+			w.Note = yearsWords(years) + " ago"
+		}
+		return w
+	case "period":
+		w := calWords{Tag: "starts", Word: "starts", Note: qualifierWords[str("qualifier")]}
+		if str("boundary") == "end" {
+			w.Tag, w.Word = "ends", "ends"
+		}
+		return w
+	case "session":
+		at := v.clock().clockOf(str("at"))
+		return calWords{Tag: "session", Word: cmp.Or(at, "session"), Note: at}
+	case "place":
+		return calWords{Tag: "place", Word: "place"}
+	case "file":
+		return calWords{Tag: "file"}
+	}
+	return calWords{Tag: "page"}
+}
+
+// yearsWords is a count of whole years: "1 year", "36 years".
+func yearsWords(n float64) string {
+	if n == 1 {
+		return "1 year"
+	}
+	return num(n) + " years"
+}
+
+// clockOf is a session's start as a clock, "07:30": a local clock as it was recorded, an instant in the zone of the
+// view (in UTC, and said, when the view has none); "" for anything else.
+func (c clock) clockOf(at string) string {
+	switch {
+	case core.IsInstant(at):
+		t, err := time.Parse(time.RFC3339Nano, at)
+		if err != nil {
+			return ""
+		}
+		if c.zone == nil {
+			return t.UTC().Format("15:04") + " UTC"
+		}
+		return t.In(c.zone).Format("15:04")
+	case len(at) == 23 && at[10] == 'T': // a local clock, YYYY-MM-DDTHH:MM:SS.sss (sessions_start_local)
+		return at[11:16]
+	}
+	return ""
+}
+
+// upTo is the first n items of a list: a cell shows three items, and a phone's cell four squares.
+func upTo(list any, n int) []any {
+	items := anyList(list)
+	return items[:min(n, len(items))]
+}
+
+// beyond counts what a cell leaves out: the items after the first n, and the pages the day's items already left out.
+func beyond(list any, n int, morePages any) int {
+	items := anyList(list)
+	extra, _ := morePages.(float64)
+	return max(len(items)-n, 0) + int(extra)
+}
+
+// placedPeriods are the periods of a month that a day of it falls in, definitely or possibly; unplacedPeriods counts
+// the ones that cannot be compared with any day of it.
+func placedPeriods(list any) []any {
+	var out []any
+	for _, p := range anyList(list) {
+		if m, _ := p.(map[string]any); m["membership"] != "incomparable" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func unplacedPeriods(list any) int { return len(anyList(list)) - len(placedPeriods(list)) }
+
+// anyList is a list property as a template gets it; nil for anything else.
+func anyList(list any) []any {
+	items, _ := list.([]any)
+	return items
+}
+
+// spanWords are a period's boundaries as its page writes them, with "unknown" for none and "ongoing" for "..".
+func spanWords(start, end any) string {
+	word := func(b any) string {
+		switch s, _ := b.(string); s {
+		case "":
+			return "unknown"
+		case "..":
+			return "ongoing"
+		default:
+			return s
+		}
+	}
+	return word(start) + " to " + word(end)
 }

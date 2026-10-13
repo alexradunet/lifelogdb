@@ -13,7 +13,7 @@ import (
 
 // A week and a year look back over the calendar (docs/plans/097-the-almanac-reflects.md). The week is ISO 8601: it
 // starts on Monday, and week 1 is the week that holds 4 January. Both resources only read what the month, the habits
-// and the deadlines already give.
+// and the deadlines already give; the days are the month's, with their items (plan 101).
 
 var weekPattern = regexp.MustCompile(`^(\d{4})-W(\d{2})$`)
 
@@ -78,10 +78,11 @@ func (h *server) week(r *http.Request) (*Entity, error) {
 	}
 	sunday, before := monday.AddDate(0, 0, 6), monday.AddDate(0, 0, -7)
 	from, through, previous := monday.Format(time.DateOnly), sunday.Format(time.DateOnly), before.Format(time.DateOnly)
-	days, err := h.calendarDays(ctx, from, through)
+	cal, err := h.calendarOf(ctx, from, through)
 	if err != nil {
 		return nil, err
 	}
+	days := cal.days
 	e := &Entity{Class: []string{"week"}, Title: weekName(monday), Actions: []Action{action("open-day", nil, nil)}}
 	for _, d := range days {
 		e.Entities = append(e.Entities, link("day", dayHref(d.Day), d.Day))
@@ -145,10 +146,7 @@ func (h *server) week(r *http.Request) (*Entity, error) {
 		metrics = append(metrics, wm)
 	}
 
-	occurrences, err := h.dueIn(ctx, from, through, "all", false)
-	if err != nil {
-		return nil, err
-	}
+	occurrences := cal.occurrences
 	next, thursday := monday.AddDate(0, 0, 7), monday.AddDate(0, 0, 3)
 	e.Links = []Link{link("self", weekHref(monday), e.Title), link("prev", weekHref(before), weekName(before)),
 		link("next", weekHref(next), weekName(next)), link("month", monthHref(thursday), thursday.Format(layoutMonth)),

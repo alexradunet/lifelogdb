@@ -1,7 +1,7 @@
 # 0070 — The calendar shows only the journal
 
 - **Date:** 2026-10-13
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the owner's request on 2026-10-13: "I want to see in the calendar also the due tasks and all the data
   that might have a date assigned". Checked against the code at `c53cf4a`.
 
@@ -48,4 +48,8 @@ Each row is a fact of the code at `c53cf4a`.
 
 ## Resolution
 
-Open. [Plan 101](../plans/101-the-calendar-holds-every-dated-thing.md) proposes the change.
+Resolved by [plan 101](../plans/101-the-calendar-holds-every-dated-thing.md). Each day of the month and of the week has
+`items[]`: the occurrences due on it, the births and deaths of each year, the period boundaries, the sessions, the
+places and the pages and files. A day also has `more_pages` and `readings`, and the month has `periods[]`. The
+calendar draws three items a cell, squares on a phone, Day by day under the grid with a link to each item, and the
+Periods of the month. Every row of the table above has a place in the calendar now.

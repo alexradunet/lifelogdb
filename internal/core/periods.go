@@ -247,3 +247,28 @@ func periodMembership(start, end *string, day, asOf string) (string, error) {
 	}
 	return "possible", nil
 }
+
+// membershipRank orders the memberships of a day from the weakest to the strongest.
+var membershipRank = map[string]int{"outside": 0, "incomparable": 1, "possible": 2, "definite": 3}
+
+// PeriodMembershipIn is the strongest membership a period has on a day from from through through: definite, then
+// possible, then incomparable, else outside. Each day is read by contract/period-boundaries.md; an ongoing end needs
+// an exact asOf, as a day's membership does.
+func PeriodMembershipIn(start, end *string, from, through, asOf string) (string, error) {
+	if err := checkCalendarWindow(from, through); err != nil {
+		return "", err
+	}
+	best := "outside"
+	for _, t := range calendarDays(from, through) {
+		m, err := periodMembership(start, end, t.Format(time.DateOnly), asOf)
+		if err != nil {
+			return "", err
+		}
+		if membershipRank[m] > membershipRank[best] {
+			if best = m; best == "definite" {
+				break
+			}
+		}
+	}
+	return best, nil
+}

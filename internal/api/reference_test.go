@@ -28,7 +28,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		"days, people, places, files, ghosts": map[string]any{"limit": 0, "offset": 0, "rows": []namedRow{}},
 		"search":                              map[string]any{"q": "", "hits": []core.Hit{}, "limit": 0, "offset": 0},
 		"day":                                 dayView{},
-		"month":                               map[string]any{"month": "", "today": "", "days": []monthDay{}},
+		"month":                               map[string]any{"month": "", "today": "", "days": []monthDay{}, "periods": []core.LifePeriod{}},
 		"week":                                map[string]any{"week": "", "from": "", "through": "", "today": "", "days": []monthDay{}, "habits": []weekHabit{}, "metrics": []weekMetric{}, "occurrences": []occurrenceView{}},
 		"year":                                map[string]any{"year": "", "today": "", "written": 0, "readings": 0, "months": []yearMonth{}},
 		"titles":                              map[string]any{"prefix": "", "limit": 0, "titles": []core.TitleMatch{}},

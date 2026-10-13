@@ -295,13 +295,26 @@ table.calendar td:empty{background:none; border-color:transparent}
 table.calendar td>a{display:flex; flex-direction:column; gap:2px; height:100%; padding:6px var(--space-2); color:var(--ink)}
 table.calendar td>a:hover{background:var(--surface-deep); text-decoration:none}
 table.calendar .n{font:500 13px/18px var(--mono); color:var(--muted)}
-table.calendar .first{font-size:12px; line-height:16px; overflow:hidden; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical}
+table.calendar .first{font-size:12px; line-height:16px; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical}
+/* The items of a day (docs/plans/101-the-calendar-holds-every-dated-thing.md): a line each, a square before it the
+   colour of a task's state as the tags have it, every other square muted; a phone's cell keeps the squares only. */
+table.calendar .items{display:flex; flex-direction:column; min-width:0}
+table.calendar .item{position:relative; padding-left:10px; font-size:12px; line-height:16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+table.calendar .item::before{content:""; position:absolute; left:0; top:5px; width:6px; height:6px; background:var(--muted)}
+table.calendar .marks i{display:block; width:6px; height:6px; background:var(--muted)}
+table.calendar .item small,table.calendar .more{font-size:12px; line-height:16px; color:var(--muted)}
+table.calendar .item.open::before,table.calendar .marks i.open{background:var(--accent-ink)}
+table.calendar .item.overdue::before,table.calendar .marks i.overdue{background:var(--warn)}
+table.calendar .item.done::before,table.calendar .marks i.done{background:var(--done)}
+table.calendar .item.done{color:inherit; font-weight:inherit} /* the square says done: not the bold word of .done */
+table.calendar .marks{display:none}
 table.calendar td.written{background-color:var(--accent-soft)}
 table.calendar td.written .n{color:var(--accent-ink)}
 table.calendar td[aria-current=date]{border-color:var(--accent-ink); box-shadow:inset 0 0 0 1px var(--accent-ink)}
 table.calendar td[aria-current=date]::after{content:""; position:absolute; top:4px; right:4px; width:7px; height:7px; background:var(--accent-ink); pointer-events:none}
 table.calendar tbody tr:hover{background:none}
-@media (max-width:599px){table.calendar td{height:52px} table.calendar .first,table.calendar .meta{display:none} table.calendar th{padding:var(--space-1); text-align:center}}
+@media (max-width:599px){table.calendar td{height:52px} table.calendar .first,table.calendar .meta,table.calendar .items,table.calendar .more{display:none}
+  table.calendar .marks{display:flex; flex-wrap:wrap; gap:3px} table.calendar th{padding:var(--space-1); text-align:center}}
 
 /* An alert: an error entity in words, what went wrong and what to do, on parchment with the tone's edge. */
 .alert{display:flex; flex-direction:column; gap:var(--space-2); padding:var(--space-3) 14px; border-color:var(--warn); box-shadow:var(--parch-bevel); font-size:14px; line-height:20px}
@@ -579,3 +592,10 @@ dialog.palette>.meta{line-height:26px}
 @media (max-width:640px){.styleguide .specimen-title{font-size:32px; line-height:32px}}
 .styleguide dialog.palette{position:static; margin:0 0 var(--space-3)}
 .styleguide .specimen-title .mood{margin-left:var(--space-1)}
+
+/* Day by day, under the calendar (docs/plans/101-the-calendar-holds-every-dated-thing.md): a day a heading, each item
+   a tag and a link to its own page. */
+.agenda-day{padding-block:var(--space-2)}
+.agenda-day h3 a{color:var(--text-strong)}
+.agenda-day ul.plain>li{padding:var(--space-2) var(--space-1)}
+.agenda-note{color:var(--text-muted)}
