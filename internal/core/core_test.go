@@ -617,3 +617,24 @@ func TestRenamedIdentityWritesThroughRetainedHandle(t *testing.T) {
 		t.Fatalf("retained handle: %d %v", old, err)
 	}
 }
+
+// withoutTrigger runs one statement with a trigger dropped and restores it: deliberate damage, or a row a file
+// written before the rule may hold. It returns the statement's result.
+func withoutTrigger(t *testing.T, s *Store, trigger, statement string, args ...any) sql.Result {
+	t.Helper()
+	var definition string
+	if err := s.DB.W.QueryRow(`SELECT sql FROM sqlite_schema WHERE type='trigger' AND name=?`, trigger).Scan(&definition); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB.W.Exec("DROP TRIGGER " + trigger); err != nil {
+		t.Fatal(err)
+	}
+	res, err := s.DB.W.Exec(statement, args...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB.W.Exec(definition); err != nil {
+		t.Fatal(err)
+	}
+	return res
+}

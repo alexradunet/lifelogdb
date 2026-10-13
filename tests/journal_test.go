@@ -195,9 +195,8 @@ func journal(s *S) {
 	if len(st) < 3 {
 		stop("cookbook/where-was-i has %d statements, not 3", len(st))
 	}
-	if _, e := c.runBlock(st[0], P{"day_page_id": d31, "place_id": par}, nil); e != nil {
-		stop("where-was-i: %v", e)
-	}
+	_, e = c.runBlock(st[0], P{"day_page_id": d31, "place_id": par}, nil)
+	s.K("cookbook/where-was-i inserts the at link from a day page (links_endpoint_types reads is_journal)", e == nil, e)
 	s.K("cookbook/where-was-i records an at link from the day page to the place, with its note", c.str("select note from links where from_id=? and to_id=? and kind='at'", d31, par) == "evening")
 	s.K("...and again is a no-op (ON CONFLICT DO NOTHING)", c.tryx(st[0], P{"day_page_id": d31, "place_id": par}) == "OK" && c.n("select count(*) from links where kind='at'") == 1)
 	c.link(d7, cor, "at")

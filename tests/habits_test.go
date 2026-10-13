@@ -62,6 +62,16 @@ func habits(s *S) {
 	s.K("moving a period to a metric with a unit refused (update)", strings.Contains(c.tryx("UPDATE habit_periods SET metric_id=? WHERE start_day='2026-10-01'", kg), "unitless"))
 	s.K("a period is never deleted", err(c.tryx("DELETE FROM habit_periods")) && c.n("select count(*) from habit_periods") == 3)
 	s.K("a period's source never changes", strings.Contains(c.tryx("UPDATE habit_periods SET source='cli' WHERE start_day='2026-10-01'"), "never changed"))
+	// a check-in is 0 or 1 (measurements_habit_binary, D24), and a habit starts only when every current reading is
+	s.K("a check-in of 1 and 0 on a habit accepted", c.measure(vd, "2026-10-02", 1) == "OK" && c.measure(vd, "2026-10-03", 0) == "OK")
+	s.K("a check-in of 2 on a habit refused: 1 = done, 0 = not done", strings.Contains(c.measure(vd, "2026-10-04", 2), "1 = done"))
+	s.K("a retraction on a habit passes: NULL is never held", c.measure(vd, "2026-10-02", nil, M{"supersedes_id": c.n("SELECT max(id) FROM measurements WHERE metric_id=?", vd)}) == "OK")
+	two := c.metric("Pushups", "")
+	c.measure(two, "2026-12-01", 2)
+	s.K("a metric with a current reading of 2 cannot start a habit", strings.Contains(c.habit(two, "2026-12-01", nil), "outside 0 and 1"))
+	s.K("a habit cannot be reassigned to a metric with a reading of 2", strings.Contains(c.tryx("UPDATE habit_periods SET metric_id=? WHERE metric_id=? AND start_day='2026-11-01'", two, vd), "outside 0 and 1"))
+	c.measure(two, "2026-12-01", nil, M{"supersedes_id": c.n("SELECT max(id) FROM measurements WHERE metric_id=?", two)})
+	s.K("...once the reading is retracted, it can", c.habit(two, "2026-12-01", nil) == "OK")
 	s.K("...a full-row update that keeps it accepted", c.tryx("UPDATE habit_periods SET source='ui', end_day=end_day WHERE start_day='2026-10-01'") == "OK")
 	s.K("mood is not a habit: it has no period", c.n("select count(*) from habit_periods h join entity_names n on n.entity_id=h.metric_id where n.name_key='mood'") == 0)
 	s.K("the database is clean", c.integrityOK())
@@ -154,10 +164,13 @@ func habitInvalidReads(s *S) {
 	c := s.fresh()
 	metric := c.metric("Stretch", "")
 	c.must("INSERT INTO habit_periods(metric_id,start_day,end_day,source) VALUES (?,'2026-10-01','2026-10-02','ui')", metric)
-	// Deliberate writer-contract violations: direct SQL can store a non-binary value.
-	for _, v := range []int{1, -1, 2} {
-		c.must("INSERT INTO measurements(metric_id,day,value,source,created_at) VALUES (?,'2026-10-01',?,'ui',"+NOW+")", metric, v)
-	}
+	// A file written before measurements_habit_binary may hold a non-binary check-in: the guard is dropped to write
+	// them, restored before the reads.
+	bypass(c, "measurements_habit_binary", func() {
+		for _, v := range []int{1, -1, 2} {
+			c.must("INSERT INTO measurements(metric_id,day,value,source,created_at) VALUES (?,'2026-10-01',?,'ui',"+NOW+")", metric, v)
+		}
+	})
 	queries := statements(s.d.Block("habits"))
 	s.K("habit day labels non-binary current check-ins invalid", c.tab(queries[2], P{"day": "2026-10-01"}) == "Stretch|invalid")
 	s.K("habit completion counts invalid days separately and reconciles active days", c.tab(queries[3], P{"from_day": "2026-10-01", "to_day": "2026-10-02"}) == "Stretch|2|0|0|1|1")

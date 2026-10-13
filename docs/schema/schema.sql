@@ -652,6 +652,9 @@ CREATE TABLE measurements (
   -- down, taken_at + tz when and where it was measured (tz: IANA zone; NULL = unknown).
   -- Imports: INSERT ... ON CONFLICT(source, import_key, metric_id) WHERE import_key IS NOT NULL DO NOTHING;
   -- never OR IGNORE (it silently skips CHECK / NOT NULL violations).
+  -- A value is held to its metric: a whole number inside the range a scale's unit names (measurements_scale_range,
+  -- D6) and 0 or 1 for a metric that has a habit period (measurements_habit_binary, D24); a NULL value (a retraction)
+  -- is never held, so a wrong reading of any metric can be retracted.
   id               INTEGER PRIMARY KEY,
   metric_id        INTEGER NOT NULL REFERENCES metrics(id),
   session_id       INTEGER REFERENCES sessions(id), -- explicit nullable scope; NULL is unassociated, not a daily total
@@ -703,6 +706,27 @@ CREATE TRIGGER measurements_session_live AFTER INSERT ON measurements
  SELECT RAISE(ABORT,'new associated value requires a live session')
  WHERE NOT EXISTS (SELECT 1 FROM sessions s WHERE s.id=NEW.session_id AND s.deleted_at IS NULL);
 END;
+CREATE TRIGGER measurements_scale_range BEFORE INSERT ON measurements
+  WHEN NEW.value IS NOT NULL
+BEGIN
+  -- a scale names its range as its unit, lo-hi of ASCII digits with lo < hi (metrics_unit, D6): every value is a whole
+  -- number inside it. A unit is at most 32 bytes, so each bound has at most 15 digits and is exact as a REAL;
+  -- round() is a core function, not a math one
+  SELECT RAISE(ABORT, 'a scale value is a whole number inside the range its unit names (D6)')
+   WHERE EXISTS (SELECT 1 FROM metrics m WHERE m.id = NEW.metric_id
+                   AND m.unit GLOB '[0-9]*-[0-9]*' AND m.unit NOT GLOB '*[^0-9-]*' AND m.unit NOT GLOB '*-*-*'
+                   AND CAST(substr(m.unit, 1, instr(m.unit, '-') - 1) AS REAL) < CAST(substr(m.unit, instr(m.unit, '-') + 1) AS REAL)
+                   AND (NEW.value <> round(NEW.value)
+                        OR NEW.value NOT BETWEEN CAST(substr(m.unit, 1, instr(m.unit, '-') - 1) AS REAL)
+                                             AND CAST(substr(m.unit, instr(m.unit, '-') + 1) AS REAL)));
+END;
+CREATE TRIGGER measurements_habit_binary BEFORE INSERT ON measurements
+  WHEN NEW.value IS NOT NULL AND NEW.value NOT IN (0, 1)
+BEGIN
+  -- a habit's check-in is 1 = done or 0 = not done (D24), on every day once the metric has a period
+  SELECT RAISE(ABORT, 'a habit check-in is 1 = done or 0 = not done (D24)')
+   WHERE EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = NEW.metric_id);
+END;
 CREATE VIEW measurement_values AS
   -- the canonical read rule: rows nothing has corrected, minus retractions
   SELECT me.*
@@ -713,9 +737,10 @@ CREATE VIEW measurement_values AS
 CREATE TABLE habit_periods (
   -- The row id is immutable (habit_periods_identity_fixed), including through rowid aliases.
   -- a metric is a HABIT while it has a period: the local days the owner meant to do it (D24). Check-ins
-  -- stay in measurements (1 = done, 0 = not done that day); a day inside a period with no check-in is
-  -- NOT RECORDED, never assumed done or not done. A habit is unitless (0/1): a scale names its range as its
-  -- unit (metrics.unit), so Mood and every other scale are refused here by that one rule. A restarted habit
+  -- stay in measurements (1 = done, 0 = not done that day, held by measurements_habit_binary); a day inside a
+  -- period with no check-in is NOT RECORDED, never assumed done or not done. A habit is unitless (0/1): a scale
+  -- names its range as its unit (metrics.unit), so Mood and every other scale are refused here by that one rule,
+  -- and so is a metric whose current readings are not all 0 or 1. A restarted habit
   -- has several periods, which never overlap. A wrong period is corrected by UPDATE, never deleted.
   id         INTEGER PRIMARY KEY,
   metric_id  INTEGER NOT NULL REFERENCES metrics(id),
@@ -729,6 +754,9 @@ CREATE TRIGGER habit_periods_check_insert BEFORE INSERT ON habit_periods
 BEGIN
   SELECT RAISE(ABORT, 'a habit is a unitless metric (0 = not done, 1 = done): this metric has a unit')
    WHERE (SELECT unit FROM metrics WHERE id = NEW.metric_id) IS NOT '';
+  -- a metric with a current reading outside 0 and 1 is not a habit yet: retract the reading first (D24)
+  SELECT RAISE(ABORT, 'a habit is 0/1: this metric has a current reading outside 0 and 1')
+   WHERE EXISTS (SELECT 1 FROM measurement_values v WHERE v.metric_id = NEW.metric_id AND v.value NOT IN (0, 1));
   -- a period with the same start is left to UNIQUE, so ON CONFLICT DO NOTHING re-runs it (this trigger fires first)
   SELECT RAISE(ABORT, 'periods of one habit never overlap: end the open one first')
    WHERE EXISTS (SELECT 1 FROM habit_periods p WHERE p.metric_id = NEW.metric_id
@@ -740,6 +768,9 @@ CREATE TRIGGER habit_periods_check_update BEFORE UPDATE OF metric_id, start_day,
 BEGIN
   SELECT RAISE(ABORT, 'a habit is a unitless metric (0 = not done, 1 = done): this metric has a unit')
    WHERE (SELECT unit FROM metrics WHERE id = NEW.metric_id) IS NOT '';
+  SELECT RAISE(ABORT, 'a habit is 0/1: this metric has a current reading outside 0 and 1')
+   WHERE NEW.metric_id IS NOT OLD.metric_id
+     AND EXISTS (SELECT 1 FROM measurement_values v WHERE v.metric_id = NEW.metric_id AND v.value NOT IN (0, 1));
   SELECT RAISE(ABORT, 'periods of one habit never overlap')
    WHERE EXISTS (SELECT 1 FROM habit_periods p WHERE p.metric_id = NEW.metric_id AND p.id <> NEW.id
                     AND p.start_day <= coalesce(NEW.end_day, '9999-12-31')
@@ -782,7 +813,7 @@ CREATE TABLE link_kinds (
 INSERT INTO link_kinds(kind, symmetric, from_types, to_types, note) VALUES
   ('wikilink', 0, 'page,person,place,metric,file,period', 'page,person,place,metric,file,period', 'extracted from [[body]] on save (an embed ![[...]] is one); body is the truth'),
   ('about',    0, NULL,        'person,place', 'entity → person/place it is about'),
-  ('at',       0, 'page',      'place',        'day page → a place the owner was at that day; from a day page only, which the app checks (D16); a photo kept makes one to the place its position is in (D21)'),
+  ('at',       0, 'page',      'place',        'day page → a place the owner was at that day; from a day page only, which links_endpoint_types checks (D16); a photo kept makes one to the place its position is in (D21)'),
   ('located-in', 0, 'place',   'place',        'containment: Tokyo → Japan; transitive — walk it with a recursive CTE'),
   ('parent-of', 0, 'person',   'person',       'parent → child; ''family'' stays the symmetric catch-all'),
   ('part-of',  0, NULL,        'page',         'anything → the page of a category it is filed in (Ferritin → Iron → Biomarkers, D26); walk it with a recursive CTE'),
@@ -798,7 +829,8 @@ END;
 
 CREATE TABLE links (
   -- one graph for everything: wiki backlinks, relationships, where the owner was, containment,
-  -- general context. kind='at' records the places the owner was at; see D16 for the journal capture path.
+  -- general context. kind='at' records the places the owner was at, from a day page only, and kind='part-of' files
+  -- a thing in a plain page, never a day page: both held by links_endpoint_types (D16, D26).
   -- Rows are hard-deleted (the one such table, D11) and immutable otherwise (delete and
   -- re-insert). Symmetric kinds are mirrored by trigger on insert AND delete, so a half-edge cannot
   -- exist and backlinks need only to_id. A symmetric relationship has one shared note: editing either
@@ -841,6 +873,12 @@ BEGIN
                       OR (k.to_types IS NOT NULL
                           AND instr(',' || k.to_types || ',',
                                     ',' || coalesce((SELECT entity_type FROM entities WHERE id = NEW.to_id), '?') || ',') = 0)));
+  -- two rules link_kinds cannot say, since a day page and a plain page are both 'page': an at link starts at a
+  -- day page (D16), and a category is a plain page, never a day page (D26)
+  SELECT RAISE(ABORT, 'an at link starts at a day page (D16)')
+   WHERE NEW.kind = 'at' AND NOT coalesce((SELECT is_journal FROM entities WHERE id = NEW.from_id), 0);
+  SELECT RAISE(ABORT, 'a category is a plain page, never a day page (D26)')
+   WHERE NEW.kind = 'part-of' AND coalesce((SELECT is_journal FROM entities WHERE id = NEW.to_id), 0);
 END;
 CREATE TRIGGER links_mirror_insert AFTER INSERT ON links
   WHEN NEW.from_id <> NEW.to_id

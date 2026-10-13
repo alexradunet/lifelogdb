@@ -96,11 +96,10 @@ func TestHabitStatesOverAWindowMatchTheDaysAlone(t *testing.T) {
 	if _, err := s.CheckIn(ctx, "cli", "Walk", "2026-03-04", false); err != nil {
 		t.Fatal(err)
 	}
-	// Deliberate damage past the writer: a value a habit never records, so the state is invalid.
-	if _, err := s.DB.W.ExecContext(ctx, `INSERT INTO measurements(metric_id, day, value, source, created_at)
-		SELECT h.metric_id, '2026-03-06', 7, 'cli', strftime('%Y-%m-%dT%H:%M:%fZ','now') FROM habit_periods h LIMIT 1`); err != nil {
-		t.Fatal(err)
-	}
+	// Deliberate damage past the writer and the DDL: a value a habit never records, written with its trigger dropped,
+	// so the state is invalid.
+	withoutTrigger(t, s, "measurements_habit_binary", `INSERT INTO measurements(metric_id, day, value, source, created_at)
+		SELECT h.metric_id, '2026-03-06', 7, 'cli', strftime('%Y-%m-%dT%H:%M:%fZ','now') FROM habit_periods h LIMIT 1`)
 	got, err := s.HabitStates(ctx, "2026-03-01", "2026-03-07")
 	if err != nil {
 		t.Fatal(err)

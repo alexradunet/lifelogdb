@@ -68,7 +68,7 @@ func TestHabits(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.Record(ctx, "cli", Reading{Metric: "steps_0_1", Day: "2026-09-01", Value: 7})
-	if err := s.StartHabit(ctx, "cli", "steps_0_1", "2026-09-01", ""); err == nil || !strings.Contains(err.Error(), "other than 0 and 1") {
+	if err := s.StartHabit(ctx, "cli", "steps_0_1", "2026-09-01", ""); status(err) != 422 { // habit_periods_check_insert
 		t.Errorf("a habit on a metric with other readings: %v", err)
 	}
 }
@@ -357,11 +357,9 @@ func TestHabitReadersReportInvalidCheckIns(t *testing.T) {
 	// deliberately nonconforming rows, as another writer could leave them; the readers are under test
 	external := func(day string, value float64, sessionID any) int64 {
 		t.Helper()
-		res, err := s.DB.W.Exec(`INSERT INTO measurements(metric_id, session_id, day, value, created_at, source)
+		// a file written before measurements_habit_binary may hold a non-binary check-in: written with the trigger dropped
+		res := withoutTrigger(t, s, "measurements_habit_binary", `INSERT INTO measurements(metric_id, session_id, day, value, created_at, source)
 		                         VALUES (?, ?, ?, ?, '2026-10-07T00:00:00.000Z', 'other-writer')`, metric, sessionID, day, value)
-		if err != nil {
-			t.Fatal(err)
-		}
 		id, err := res.LastInsertId()
 		if err != nil {
 			t.Fatal(err)

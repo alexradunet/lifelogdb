@@ -3,13 +3,6 @@ package tests
 // These probes damage stored data with guards restored before the literal contract
 // checks run. Schema-object presence alone cannot discover these failures.
 func semanticIntegrity(s *S, checks []string) {
-	bypass := func(c *C, trigger string, change func()) {
-		definition := c.str("SELECT sql FROM sqlite_schema WHERE type='trigger' AND name=?", trigger)
-		c.must("DROP TRIGGER " + trigger)
-		change()
-		c.must(definition)
-	}
-
 	for _, mismatch := range []bool{false, true} {
 		c := s.fresh()
 		a, b := c.page("One"), c.page("Two")
@@ -51,7 +44,9 @@ func semanticIntegrity(s *S, checks []string) {
 	c = s.fresh()
 	metric = c.metric("Stretch", "")
 	c.must("INSERT INTO habit_periods(metric_id,start_day,end_day,source) VALUES(?,'2026-10-01','2026-10-03','ui')", metric)
-	c.must("INSERT INTO measurements(id,metric_id,day,value,source,created_at) VALUES(10,?,'2026-10-02',2,'ui',"+NOW+")", metric)
+	bypass(c, "measurements_habit_binary", func() {
+		c.must("INSERT INTO measurements(id,metric_id,day,value,source,created_at) VALUES(10,?,'2026-10-02',2,'ui',"+NOW+")", metric)
+	})
 	s.K("habit integrity detects current nonbinary check-ins", c.integrityOK() && c.tab(checks[12]) == "10")
 	c.must("INSERT INTO measurements(metric_id,day,value,supersedes_id,source,created_at) VALUES(?,'2026-10-02',1,10,'ui',"+NOW+")", metric)
 	s.K("habit integrity retains corrected invalid values as history", c.tab(checks[12]) == "")

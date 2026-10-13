@@ -980,3 +980,11 @@ func relPath(base, url string) (target, anchor string) {
 	}
 	return path.Clean(path.Join(path.Dir(base), p)), a
 }
+
+// bypass runs change with one trigger dropped and restores it: deliberate damage, or a file written before the rule.
+func bypass(c *C, trigger string, change func()) {
+	definition := c.str("SELECT sql FROM sqlite_schema WHERE type='trigger' AND name=?", trigger)
+	c.must("DROP TRIGGER " + trigger)
+	change()
+	c.must(definition)
+}

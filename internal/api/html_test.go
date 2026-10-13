@@ -158,7 +158,7 @@ func TestARefusedSaveComesBackOnItsPage(t *testing.T) {
 
 // TestARefusedCaptureComesBackOnHome: a capture refused from Home comes back on Home with the text still in the box.
 func TestARefusedCaptureComesBackOnHome(t *testing.T) {
-	_, h := fresh(t)
+	_, h := freshOn(t, "2026-10-12") // the form posts to that day, and Home's capture is today's
 	rec := submit(h, "/days/2026-10-12/capture", url.Values{"text": {"A note that must not be lost."}, "mood": {"9"}, "back": {"/"}}, "")
 	body := rec.Body.String()
 	if rec.Code != http.StatusUnprocessableEntity {

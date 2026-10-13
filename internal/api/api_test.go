@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -597,11 +598,10 @@ func TestHabitsShowInvalidCheckIns(t *testing.T) {
 	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "Walk"}))
 	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/metrics/Walk")), "start-habit"), map[string]string{"start_day": "2026-10-01"}))
 	must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "Walk", "day": "2026-10-02", "value": "1"}))
-	if _, err := d.W.Exec(`INSERT INTO measurements(metric_id, day, value, created_at, source)
+	// A file written before measurements_habit_binary may hold a non-binary check-in: written with the trigger dropped.
+	withoutTrigger(t, d.W, "measurements_habit_binary", `INSERT INTO measurements(metric_id, day, value, created_at, source)
 	                       SELECT entity_id, '2026-10-01', 2, '2026-10-07T00:00:00.000Z', 'other-writer'
-	                         FROM entity_names WHERE title = 'Walk'`); err != nil {
-		t.Fatal(err)
-	}
+	                         FROM entity_names WHERE title = 'Walk'`)
 
 	habits := must(c.Get(t.Context(), "/habits?day=2026-10-01&from=2026-10-01&to=2026-10-02"))
 	props := habits.Properties.(map[string]any)
@@ -629,6 +629,21 @@ func TestHabitsShowInvalidCheckIns(t *testing.T) {
 	for _, w := range []string{`<span class="notdone">invalid</span>`, `<th scope="col" class="num">invalid</th>`} {
 		if !strings.Contains(body, w) {
 			t.Errorf("the habits page does not show %s", w)
+		}
+	}
+}
+
+// withoutTrigger runs one statement with a trigger dropped and restores it: deliberate damage, or a row a file
+// written before the rule may hold.
+func withoutTrigger(t *testing.T, w *sql.DB, trigger, statement string) {
+	t.Helper()
+	var definition string
+	if err := w.QueryRow(`SELECT sql FROM sqlite_schema WHERE type='trigger' AND name=?`, trigger).Scan(&definition); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{"DROP TRIGGER " + trigger, statement, definition} {
+		if _, err := w.Exec(q); err != nil {
+			t.Fatal(err)
 		}
 	}
 }

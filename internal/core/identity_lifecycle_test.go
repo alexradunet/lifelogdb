@@ -26,10 +26,9 @@ func TestPromotionRefusesRetainedTypedEdges(t *testing.T) {
 				if err := s.Promote(ctx, "cli", other, "place", ""); err != nil {
 					t.Fatal(err)
 				}
-				// Deliberate DDL setup isolates endpoint enforcement from at's day-only writer rule.
-				if _, err := s.DB.W.Exec(`INSERT INTO links(from_id,to_id,kind,created_at,source) VALUES(?,?,'at',`+nowSQL+`,'cli')`, from, to); err != nil {
-					t.Fatal(err)
-				}
+				// an at link starts at a day page (links_endpoint_types): written with that trigger dropped, so the
+				// probe isolates the endpoint rule of a type change from the day-page rule of an insert
+				withoutTrigger(t, s, "links_endpoint_types", `INSERT INTO links(from_id,to_id,kind,created_at,source) VALUES(?,?,'at',`+nowSQL+`,'cli')`, from, to)
 			} else if err := s.Link(ctx, "cli", from, to, kind, "retained note"); err != nil {
 				t.Fatal(err)
 			}

@@ -29,7 +29,9 @@ func links(s *S) {
 		{"redirect page->place is refused", "ERR", m1, pl, "redirect"}, {"redirect person->page (a stub is a plain page)", "ERR", pa, pw, "redirect"},
 		{"about day page->person", "OK", m1, pb, "about"}, {"about person->place", "OK", pa, pl, "about"},
 		{"about day page->page", "ERR", m1, pw, "about"}, {"related page-person", "OK", pw, pa, "related"},
-		{"at day page->place", "OK", m1, pl, "at"}, {"at person->place (at comes from a page)", "ERR", pa, pl, "at"}, {"at page->person", "ERR", pw, pa, "at"},
+		{"at day page->place", "OK", m1, pl, "at"}, {"at day page->person (at ends at a place)", "ERR", m1, pa, "at"}, {"at plain page->place (an at starts at a day page, D16)", "ERR", pw, pl, "at"},
+		{"part-of metric->page (a category is a plain page, D26)", "OK", 1, pw, "part-of"}, {"part-of page->day page (a category is never a day page, D26)", "ERR", pw, m1, "part-of"},
+		{"at person->place (at comes from a page)", "ERR", pa, pl, "at"}, {"at page->person", "ERR", pw, pa, "at"},
 		{"visited is not a kind (D16)", "ERR", pa, pl, "visited"}, {"a dangling endpoint of a typed kind", "ERR", 9999, pl, "at"},
 		{"located-in place->person", "ERR", pl, pa, "located-in"}, {"parent-of person->place", "ERR", pa, pl, "parent-of"},
 	} {

@@ -12,7 +12,7 @@
   Anything — a metric ([D27](D27-a-metric-is-a-page.md)), a page, a person, a place — is filed in a category by a
   `part-of` link to the category's page, and a category belongs to another by the same link between their pages
   (`Ferritin` part-of `Iron` part-of `Biomarkers`). `part-of` is a registered kind ([D8](D08-entities-and-links.md)) from
-  any entity to a plain page, so the categories are in the one graph: what the owner writes about a category is its
+  any entity to a plain page, never a day page (`links_endpoint_types`), so the categories are in the one graph: what the owner writes about a category is its
   page's body, a `[[Lipids]]` in the journal is one of its backlinks, and a rename of the page moves the `part-of`
   links that end at it ([titles and wikilinks](../contract/titles-and-wikilinks.md)). The walk is
   [metrics by category](../cookbook/metrics-by-category.md).

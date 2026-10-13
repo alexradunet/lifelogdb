@@ -29,7 +29,9 @@
     done, so every unwritten day would count against the owner. An explicit 0 says "not done".
 - **Costs accepted.** A completion rate is over valid recorded days; the not-recorded days and invalid
   check-ins remain visible in the [diagnostic reads](../cookbook/habits.md). A habit's target ("three times a week") has no column yet ([non-goals](../architecture/non-goals.md)). The 0/1 range of a check-in
-  is checked by the writer, like mood's 1–5 ([D6](D06-mood-is-a-measurement.md)). The schema can correct a period's
+  is held by `measurements_habit_binary` once the metric has a period, and a metric whose current readings are not
+  all 0 or 1 is refused a period (`habit_periods_check_insert`, `habit_periods_check_update`), like mood's 1–5
+  ([D6](D06-mood-is-a-measurement.md)); a file written before these rules may still hold a non-binary check-in. The schema can correct a period's
   metric or boundaries, but cannot withdraw a wholly mistaken period independently: it has neither a tombstone
   nor an empty-interval representation. Changing dates to hide such a mistake would invent intention. Tombstoning
   the metric hides the whole habit from active reads; it does not retract one period. A period-level withdrawal

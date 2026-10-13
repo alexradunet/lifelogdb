@@ -66,8 +66,8 @@ func TestTemporalNULStorageRefusal(t *testing.T) {
 			case "end_zone_unverified":
 				writer.EndZoneUnverified = bad
 			}
-			if err := validateSession(writer); err == nil {
-				t.Fatal("writer accepted malformed probe")
+			if _, _, err := s.CaptureSession(ctx, "cli", writer); status(err) != 422 {
+				t.Fatalf("writer accepted malformed probe: %v", err)
 			}
 			before, err := s.Session(ctx, id)
 			if err != nil {

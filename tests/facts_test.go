@@ -107,6 +107,14 @@ func facts(s *S) {
 	s.K("the tap and its retraction are hidden", c.n("select count(*) from measurement_values where metric_id=1") == 0)
 	s.K("correcting the retraction brings a value back", c.measure(1, "2026-06-01", 4, M{"supersedes_id": tap + 1}) == "OK" && c.tab("select value from measurement_values where metric_id=1") == "4")
 	s.K("nothing was deleted: all six rows remain", c.n("select count(*) from measurements") == 6)
+	// ---- a scale holds its values (measurements_scale_range, D6): whole numbers inside the range its unit names
+	for _, bad := range []any{0, 6, 3.5, -1} {
+		s.K(fmt.Sprintf("Mood %v refused: a 1-5 scale", bad), err(c.measure(1, "2026-06-03", bad)))
+	}
+	s.K("Mood 1 and 5 accepted: the bounds are inside", c.measure(1, "2026-06-03", 1) == "OK" && c.measure(1, "2026-06-03", 5) == "OK")
+	pain := c.metric("Pain", "0-10")
+	s.K("a registered 0-10 scale holds 0 and 10 and refuses 11", c.measure(pain, "2026-06-03", 0) == "OK" && c.measure(pain, "2026-06-03", 10) == "OK" && err(c.measure(pain, "2026-06-03", 11)))
+	s.K("a retraction of a scale reading passes: NULL is never held", c.measure(pain, "2026-06-03", nil, M{"supersedes_id": c.n("select max(id) from measurements")}) == "OK")
 	c.measure(w, "2026-06-05", 70.1)
 	c.measure(w, "2026-06-05", 70.4)
 	s.K("two independent readings on one day are both returned", c.n("select count(*) from measurement_values where day='2026-06-05'") == 2)
@@ -142,16 +150,17 @@ func facts(s *S) {
 	ms := c.tab(s.d.Block("metric-series"), P{"day": "2026-10-02"})
 	s.K("cookbook/metric-series skips superseded and retracted readings", ms == "2026-09-01|4", ms)
 
-	// ---- finite values, NaN
+	// ---- finite values, NaN (on a kg metric: Mood is a scale, whose values are held to 1..5 below)
 	c = s.fresh()
-	s.K("+Infinity refused", err(c.measure(1, "2026-01-01", math.Inf(1))))
-	s.K("-Infinity refused", err(c.measure(1, "2026-01-01", math.Inf(-1))))
-	s.K("the largest finite double, -0.0 and ordinary values accepted", c.measure(1, "2026-01-01", math.MaxFloat64) == "OK" &&
-		c.measure(1, "2026-01-01", math.Copysign(0, -1)) == "OK" && c.measure(1, "2026-01-01", 70.5) == "OK")
-	s.K("NaN binds as NULL: refused as a first reading", err(c.measure(1, "2026-01-01", math.NaN())))
+	kg := c.metric("Weight", "kg")
+	s.K("+Infinity refused", err(c.measure(kg, "2026-01-01", math.Inf(1))))
+	s.K("-Infinity refused", err(c.measure(kg, "2026-01-01", math.Inf(-1))))
+	s.K("the largest finite double, -0.0 and ordinary values accepted", c.measure(kg, "2026-01-01", math.MaxFloat64) == "OK" &&
+		c.measure(kg, "2026-01-01", math.Copysign(0, -1)) == "OK" && c.measure(kg, "2026-01-01", 70.5) == "OK")
+	s.K("NaN binds as NULL: refused as a first reading", err(c.measure(kg, "2026-01-01", math.NaN())))
 	first := c.n("select max(id) from measurements")
 	s.K("...but on a correction it is a retraction the DB cannot tell apart (why the writer never binds NaN)",
-		c.measure(1, "2026-01-01", math.NaN(), M{"supersedes_id": first}) == "OK" && c.tab("select value from measurements where supersedes_id=?", first) == "None")
+		c.measure(kg, "2026-01-01", math.NaN(), M{"supersedes_id": first}) == "OK" && c.tab("select value from measurements where supersedes_id=?", first) == "None")
 
 	// ---- import idiom: ON CONFLICT DO NOTHING, never OR IGNORE, never OR REPLACE
 	c = s.fresh()

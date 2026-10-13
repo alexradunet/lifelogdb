@@ -50,9 +50,10 @@ SELECT m.title, count(*) AS active_days,
 ```
 
 A day outside every period is not a habit day at all: it is in no count. Two check-ins on one day
-count once (the higher wins when both are binary). A current value outside 0/1 violates the writer's
-[habit contract](../decisions/D24-habits.md). These diagnostic reads label that day `invalid`, even alongside a
-valid check-in, instead of misreporting it as unrecorded or silently dropping it from the completion counts.
+count once (the higher wins when both are binary). A current value outside 0/1 is refused by
+`measurements_habit_binary` ([D24](../decisions/D24-habits.md)); a file written before that rule may hold one. These
+diagnostic reads label that day `invalid`, even alongside a valid check-in, instead of misreporting it as unrecorded
+or silently dropping it from the completion counts.
 The four categories sum to the active-day count; investigate invalid days before reporting a completion rate.
 A re-sent period is idempotent: insert it with
 `ON CONFLICT(metric_id, start_day) DO NOTHING`, carrying the `end_day` it was sent with — the

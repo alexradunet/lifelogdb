@@ -159,7 +159,7 @@ func evolution(s *S) {
 	w := c.named("place", "Lakeside")
 	s.K("a day page at the place [[Lakeside]]", c.link(d, w, "at") == "OK")
 	s.K("type change refuses a retained incoming typed edge", strings.Contains(c.tryx("UPDATE entities SET entity_type='person' WHERE id=?", w), "retained link endpoint") && c.str("SELECT entity_type FROM entities WHERE id=?", w) == "place" && c.n("SELECT count(*) FROM links WHERE to_id=? AND kind='at'", w) == 1)
-	out := c.page("Outgoing context")
+	out := c.dayPage("2026-08-01", "x")
 	c.link(out, w, "at")
 	s.K("type change refuses a retained outgoing typed edge", strings.Contains(c.tryx("UPDATE entities SET entity_type='person' WHERE id=?", out), "retained link endpoint") && c.str("SELECT entity_type FROM entities WHERE id=?", out) == "page")
 

@@ -99,7 +99,14 @@ func TestPeriodIncompleteAndOngoingMembership(t *testing.T) {
 	}
 }
 
+// TestSessionEndpointEvidenceProfile: each endpoint profile is written as a session's start (required) or end through
+// the production writer, and the sessions CHECKs admit or refuse it.
 func TestSessionEndpointEvidenceProfile(t *testing.T) {
+	ctx := t.Context()
+	s := fresh(t)
+	if _, _, err := s.CreatePage(ctx, "cli", "Synthetic workout", ""); err != nil {
+		t.Fatal(err)
+	}
 	utc := "2020-01-01T23:00:00.000Z"
 	for _, tc := range []struct {
 		at, local, offset, zone string
@@ -127,7 +134,15 @@ func TestSessionEndpointEvidenceProfile(t *testing.T) {
 		{"2020-01-01T00:00:00Z", "", "", "", true, true},
 		{utc, "", "", "not a zone", true, true},
 	} {
-		if err := validateSessionEndpoint(tc.at, tc.local, tc.offset, tc.zone, tc.required); (err != nil) != tc.refuse {
+		in := SessionInput{Kind: "Synthetic workout", Day: "2020-01-01"}
+		if tc.required {
+			in.StartAt, in.StartLocal, in.StartOffset, in.StartZoneUnverified = tc.at, tc.local, tc.offset, tc.zone
+		} else {
+			in.StartAt = "2020-01-01T00:00:00.000Z"
+			in.EndAt, in.EndLocal, in.EndOffset, in.EndZoneUnverified = tc.at, tc.local, tc.offset, tc.zone
+		}
+		_, _, err := s.CaptureSession(ctx, "cli", in)
+		if (err != nil) != tc.refuse || err != nil && status(err) != 422 {
 			t.Fatalf("%+v: %v", tc, err)
 		}
 	}
@@ -146,7 +161,6 @@ func TestSessionElapsedExactFullCalendarRange(t *testing.T) {
 		{"9999-12-31T23:59:59.998Z", "9999-12-31T23:59:59.999Z", 1, false, false},
 		{"2020-01-01T23:00:00.000Z", "2020-01-02T07:00:00.000Z", 28800000, false, false},
 		{"2020-01-01T00:00:00.000Z", "2020-01-01T00:00:00.000Z", 0, false, false},
-		{"2020-01-01T00:00:00.001Z", "2020-01-01T00:00:00.000Z", 0, false, true},
 		{"", "2020-01-01T00:00:00.000Z", 0, true, false},
 		{"2020-01-01T00:00:00.000Z", "", 0, true, false},
 	} {

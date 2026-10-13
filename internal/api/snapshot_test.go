@@ -115,12 +115,11 @@ func TestASnapshotThatFailsItsRestoreCheckIsAnError(t *testing.T) {
 	root := must(owner.Get(t.Context(), "/"))
 	must(owner.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "Walk"}))
 	must(owner.Do(t.Context(), find(must(owner.Get(t.Context(), "/metrics/Walk")), "start-habit"), map[string]string{"start_day": "2026-01-01"}))
-	// Deliberate damage, past the writer: a habit's reading that is not 0 or 1. The DDL cannot refuse it; the
-	// semantic integrity check reports it, in the live file and in every copy of it.
-	if _, err := d.W.ExecContext(t.Context(), `INSERT INTO measurements(metric_id, day, value, source, created_at)
-		SELECT h.metric_id, '2026-10-01', 5, 'cli', strftime('%Y-%m-%dT%H:%M:%fZ','now') FROM habit_periods h LIMIT 1`); err != nil {
-		t.Fatal(err)
-	}
+	// Deliberate damage, past the writer and the DDL: a habit's reading that is not 0 or 1, written with its trigger
+	// dropped, as a file written before the rule may hold. The semantic integrity check reports it, in the live file
+	// and in every copy of it.
+	withoutTrigger(t, d.W, "measurements_habit_binary", `INSERT INTO measurements(metric_id, day, value, source, created_at)
+		SELECT h.metric_id, '2026-10-01', 5, 'cli', strftime('%Y-%m-%dT%H:%M:%fZ','now') FROM habit_periods h LIMIT 1`)
 	e, err := owner.Do(t.Context(), find(root, "snapshot"), nil)
 	var ce *client.Error
 	if !errors.As(err, &ce) || ce.Status != 500 {

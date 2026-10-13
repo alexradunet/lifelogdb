@@ -18,6 +18,6 @@
     only would sit empty on every other page.
   - *A place as plain text in prose, not a page*: the place queries fail, and backfilling 10 years of
     free text is the painful path.
-- **Costs accepted.** `link_kinds` can say "from a page", not "from a *day* page": the writing
-  application refuses an `at` from any other page ([titles and wikilinks](../contract/titles-and-wikilinks.md) says how a day page is recognised).
+- **Costs accepted.** `link_kinds` can say "from a page", not "from a *day* page": `links_endpoint_types` refuses an
+  `at` from any other page by `entities.is_journal` ([titles and wikilinks](../contract/titles-and-wikilinks.md) says how a day page is recognised).
 - **Sources.** [R46](../research/references.md#r46).
