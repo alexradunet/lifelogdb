@@ -126,6 +126,14 @@ schema is frozen ([D13](docs/decisions/D13-migrations-and-freeze.md)):
 - **Ordinary Go first.** Follow [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments): clear names,
   early error returns, cohesive packages, explicit dependencies and small public surfaces. Keep supporting packages
   under `internal/`. Prefer the standard library; justify a dependency by the complexity or risk it removes.
+- **A rule about the data is a CHECK or a trigger, never Go.** When a write must be refused because of what the row
+  says (a range, a shape, a state, a relation to another row), the refusal is written in `schema.sql`, with its
+  decision, its mutant and its suite witness; the Go cites the constraint name and lets the file refuse. Go holds
+  only what SQLite cannot see or say: a status other than 422 (a missing row is 404, a tombstone or a stale
+  version 409), a read's bounds, the title predicate and the algorithms the contract assigns to the writer
+  (wikilinks, calendars, zones), the owner-only rule, and a comparison of a resent payload. A Go check that
+  repeats a CHECK or a trigger is a defect (issue 0068): delete it, and let `core.refused` carry the sentence
+  SQLite gives. The same holds when a rule changes: edit the trigger, not the code around it.
 - **Concrete types by default.** Put a small interface at the consumer that actually needs substitution; do not mirror
   every struct with an interface or add a service/repository layer solely for mocks. Use generics only when they make
   actual repeated logic simpler. Share domain behavior, not incidental similarities between unrelated operations.
