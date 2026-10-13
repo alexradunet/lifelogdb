@@ -4,11 +4,12 @@ An issue records an incident from real use — a failed import, a bug in the wri
 data could not answer, a rule that is ambiguous or untestable. It is the evidence a schema change needs
 ([how a change happens](../process.md)). One file per incident, named `NNNN-short-slug.md`, written from the
 [template](template.md), numbered on from the last: issues up to 0010 are closed and live in git history
-(`git log -- docs/issues`). Issues 0011–0067 are listed below; the next one is **0068**. Close an issue with its resolution and status, retaining the dated incident as
+(`git log -- docs/issues`). Issues 0011–0068 are listed below; the next one is **0069**. Close an issue with its resolution and status, retaining the dated incident as
 [the process](../process.md) requires. Earlier closed records remain available in git history.
 
 | id | title | status |
 |---|---|---|
+| [0068](0068-rules-the-writer-holds-alone.md) | The writer holds rules the database could hold, and repeats rules the database holds | open |
 | [0067](0067-one-rule-in-several-places.md) | The code says one rule in several places, and keeps what plan 089 removed | resolved |
 | [0066](0066-the-almanac-does-not-reflect-and-a-refusal-loses-the-form.md) | The Almanac never shows the owner their past, and a refused form loses its place | resolved |
 | [0065](0065-the-almanac-reads-as-a-generic-app.md) | The browser's look is not the owner's own: the Almanac reads as a generic app | resolved |
