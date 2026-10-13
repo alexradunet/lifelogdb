@@ -1,7 +1,7 @@
 # 0068 — The writer holds rules the database could hold, and repeats rules the database holds
 
 - **Date:** 2026-10-13
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the owner's request to analyse the application for code to delete and for rules to enforce in
   `schema.sql` instead; checked against the code at `771c9e8` by reading every write of `internal/core` beside the DDL
 

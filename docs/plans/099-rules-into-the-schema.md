@@ -8,7 +8,7 @@
 - **Priority:** P1. **Effort:** M. **Risk:** LOW for the deletions (the status stays 422; the sentence is now
   SQLite's); MEDIUM for the triggers (a scale value, a check-in and an `at` link are refused by the file itself, so
   the suites that wrote them freely change in the same edit).
-- **Status:** IN PROGRESS. One commit for the records, then the schema change with its docs and suites, then the Go.
+- **Status:** DONE. One commit for the records, then the schema change with its docs and suites, then the Go.
 - **Resolves:** issue [0068](../issues/0068-rules-the-writer-holds-alone.md). No RFC: D6, D16, D24 and D26 are
   rewritten in place; their substance (the rule) does not change, only where it is held.
 
@@ -43,7 +43,8 @@ flowchart LR
 - `measurements_habit_binary` (BEFORE INSERT): a non-NULL value of a metric with a habit period is 0 or 1.
 - `habit_periods_check_insert` and `habit_periods_check_update` also refuse a metric with a current value outside
   0 and 1 (`measurement_values`).
-- `task_occurrences_open` also fires on a revive (`deleted_at` cleared) of an open occurrence past the end.
+- `task_occurrences_open` is unchanged: a tombstoned open slot past the end cannot exist (`tasks_end_skip` skips it,
+  `task_occurrences_admit` refuses it), so the Go check that refused its revive was dead.
 - `docs/schema/README.md`: 76 triggers. `tests/README.md`: the mutant count.
 
 ### The docs
@@ -63,7 +64,8 @@ Deleted: `validateSession`, `validateSessionEndpoint`, `validateTaskSpec`, `vali
 `shaRE`, `mimeRE`, the scale and habit branches of `validateMeasurementValue`, the `at` and `part-of` day-page
 branches of `Link`, the non-binary readings check of `StartHabit`, the `periodSpan` calls on writes, the cadence
 and end checks of `EditTask` and `StopTask`, the open-after-end checks of `CaptureTaskOccurrence` and
-`TaskOccurrenceLifecycle`, the `checkDay` calls on writes. A unit test that asserted a Go refusal asserts the same
+`TaskOccurrenceLifecycle`, the `checkDay` calls on writes (`CheckIn` keeps its own: a malformed day is not "no
+period on that day"). `AddFile` keeps the bounds of a position, since a position is matched and never stored. A unit test that asserted a Go refusal asserts the same
 422 through the production writer.
 
 ## Done criteria
@@ -73,6 +75,19 @@ and end checks of `EditTask` and `StopTask`, the open-after-end checks of `Captu
 - `sqlite3` on a fresh file refuses `Mood = 9`, a check-in of 2 and an `at` from a person.
 - `lifelog capture "x" --mood 9` answers 422 on every surface.
 
-## Result
+## Result (2026-10-13)
 
-Filled in at the closing commit.
+- `internal/core`: 9 files, 56 insertions and 365 deletions; `validateSession`, `validateSessionEndpoint`,
+  `validateTaskSpec`, `validateOccurrenceChanges`, `validReminderClock`, `validPlanningZone`,
+  `validateMeasurementZone`, `zoneLabel`, `taskSlot`, `Point.check`, `shaRE`, `mimeRE` and `metricRules` are gone.
+- `schema.sql`: two new triggers (`measurements_scale_range`, `measurements_habit_binary`), two RAISEs added to
+  `links_endpoint_types`, one to each of `habit_periods_check_insert` and `habit_periods_check_update`; 76 triggers.
+- Six mutants (487), with witnesses in `links`, `facts` and `habits`; the `journal` suite no longer stops on the
+  where-was-i insert, so the is_journal mutants are still noticed; three Go fixtures and two suite probes that wrote
+  a non-binary check-in by direct SQL now drop the trigger first, as a file written before the rule.
+- Checks: `go generate ./... && go vet ./... && go test ./...` green (mutants included); `gofmt`;
+  `staticcheck ./...` clean (v0.8.1); `deadcode -test ./...` names nothing; `go test -count=1 -shuffle=on` on
+  `internal/core` and `internal/api` green; on Windows 11. The CLI smoke: `capture --mood 9` answers 422 with
+  the trigger's sentence.
+- Found on the way: `TestARefusedCaptureComesBackOnHome` posted to a hard-coded day and so failed on every day but
+  2026-10-12; it now fixes the server's clock.

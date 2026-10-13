@@ -38,20 +38,6 @@ type Session struct {
 	TimeBasis           string `json:"time_basis"`
 }
 
-func validateSession(in SessionInput) error {
-	if err := checkDay("day", in.Day); err != nil {
-		return err
-	}
-	if err := validateSessionEndpoint(in.StartAt, in.StartLocal, in.StartOffset, in.StartZoneUnverified, true); err != nil {
-		return err
-	}
-	if err := validateSessionEndpoint(in.EndAt, in.EndLocal, in.EndOffset, in.EndZoneUnverified, false); err != nil {
-		return err
-	}
-	_, err := sessionElapsedMillis(in.StartAt, in.EndAt)
-	return err
-}
-
 const sessionSelect = `SELECT s.id,n.title,s.kind_id,coalesce(e.deleted_at,''),s.day,coalesce(s.import_key,''),coalesce(s.start_at,''),coalesce(s.start_local,''),coalesce(s.start_offset,''),coalesce(s.start_zone_unverified,''),coalesce(s.end_at,''),coalesce(s.end_local,''),coalesce(s.end_offset,''),coalesce(s.end_zone_unverified,''),s.source,CAST(s.revision AS TEXT),s.created_at,s.updated_at,coalesce(s.deleted_at,'') FROM sessions s JOIN entities e ON e.id=s.kind_id JOIN entity_names n ON n.entity_id=e.id AND n.name_key=e.preferred_name_key `
 
 func scanSession(row interface{ Scan(...any) error }) (*Session, error) {
@@ -74,16 +60,15 @@ func scanSession(row interface{ Scan(...any) error }) (*Session, error) {
 	return s, nil
 }
 
+// CaptureSession writes a session of a kind named by its title. The endpoints and the day are the sessions CHECKs; the
+// kind being a live plain non-journal page is sessions_kind_insert.
 func (t *Tx) CaptureSession(in SessionInput) (id int64, existing bool, err error) {
-	if err = validateSession(in); err != nil {
-		return 0, false, err
-	}
 	kind, err := t.lookup(in.Kind)
 	if err != nil {
 		return 0, false, err
 	}
-	if kind == nil || kind.Type != "page" || kind.DayPage {
-		return 0, false, Invalid("session kind must name a non-journal plain page")
+	if kind == nil {
+		return 0, false, NotFound("no page titled %q for the session's kind", in.Kind)
 	}
 	if in.ImportKey != "" {
 		have, e := scanSession(t.tx.QueryRowContext(t.ctx, sessionSelect+`WHERE s.source=? AND s.import_key=?`, t.Source, in.ImportKey))
@@ -107,9 +92,6 @@ func (t *Tx) CaptureSession(in SessionInput) (id int64, existing bool, err error
 }
 
 func (t *Tx) EditSession(id int64, version string, in SessionInput) error {
-	if err := validateSession(in); err != nil {
-		return err
-	}
 	have, err := scanSession(t.tx.QueryRowContext(t.ctx, sessionSelect+`WHERE s.id=?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return NotFound("no session %d", id)
@@ -130,8 +112,11 @@ func (t *Tx) EditSession(id int64, version string, in SessionInput) error {
 	if err != nil {
 		return err
 	}
-	if kind == nil || kind.Type != "page" || kind.DayPage || kind.Deleted && kind.ID != have.KindID {
-		return Invalid("session kind must name a live non-journal plain page when newly selected")
+	if kind == nil {
+		return NotFound("no page titled %q for the session's kind", in.Kind)
+	}
+	if kind.Deleted && kind.ID != have.KindID {
+		return Conflict("session kind %s is tombstoned: revive it first", kind.Title)
 	}
 	_, err = t.tx.ExecContext(t.ctx, `UPDATE sessions SET kind_id=?,day=?,start_at=?,start_local=?,start_offset=?,start_zone_unverified=?,end_at=?,end_local=?,end_offset=?,end_zone_unverified=? WHERE id=?`, kind.ID, in.Day, nullIfEmpty(in.StartAt), nullIfEmpty(in.StartLocal), nullIfEmpty(in.StartOffset), nullIfEmpty(in.StartZoneUnverified), nullIfEmpty(in.EndAt), nullIfEmpty(in.EndLocal), nullIfEmpty(in.EndOffset), nullIfEmpty(in.EndZoneUnverified), id)
 	return err
@@ -212,58 +197,12 @@ func (s *Store) SessionLifecycle(ctx context.Context, source string, id int64, v
 	return s.Do(ctx, source, func(t *Tx) error { return t.SessionLifecycle(id, version, deleted) })
 }
 
-func validateSessionEndpoint(at, local, offset, zone string, required bool) error {
-	if at != "" && local != "" {
-		return Invalid("session endpoint cannot be both UTC and local")
-	}
-	if at == "" && local == "" {
-		if required {
-			return Invalid("session start is required")
-		}
-		if offset != "" || zone != "" {
-			return Invalid("session evidence requires an endpoint")
-		}
-		return nil
-	}
-	if at != "" && !IsInstant(at) {
-		return Invalid("session UTC endpoint must be a canonical instant")
-	}
-	if local != "" && (len(local) != 23 || !IsInstant(local+"Z")) {
-		return Invalid("session local endpoint must be a canonical unresolved clock")
-	}
-	if offset != "" {
-		if at == "" {
-			return Invalid("known offset requires a UTC endpoint")
-		}
-		if len(offset) != 6 || (offset[0] != '+' && offset[0] != '-') || offset[3] != ':' || offset == "-00:00" {
-			return Invalid("invalid known offset spelling")
-		}
-		for _, i := range []int{1, 2, 4, 5} {
-			if offset[i] < '0' || offset[i] > '9' {
-				return Invalid("invalid known offset spelling")
-			}
-		}
-		if offset[1:3] > "23" || offset[4:6] > "59" {
-			return Invalid("invalid known offset range")
-		}
-	}
-	if zone != "" && !zoneLabel(zone) {
-		return Invalid("invalid unverified zone label")
-	}
-	return nil
-}
-
 // sessionElapsedMillis is exact across years0000–9999; time.Duration cannot
-// represent that span. Local clocks and mixed endpoints never establish elapsed.
+// represent that span. Local clocks and mixed endpoints never establish elapsed. The endpoints come from a row, so
+// they are instants in order (sessions_start_at, sessions_end_at, sessions_utc_order).
 func sessionElapsedMillis(startAt, endAt string) (*int64, error) {
 	if startAt == "" || endAt == "" {
 		return nil, nil
-	}
-	if !IsInstant(startAt) || !IsInstant(endAt) {
-		return nil, Invalid("elapsed endpoints must be canonical UTC instants")
-	}
-	if endAt < startAt {
-		return nil, Invalid("session UTC endpoints are reversed")
 	}
 	start, err := time.Parse(instantLayout, startAt)
 	if err != nil {

@@ -211,9 +211,6 @@ func (t *Tx) pageByID(id int64) (*pageRef, error) {
 
 // Capture appends an entry to a day page, creating or reviving it, with an optional mood (cookbook/capture.md).
 func (t *Tx) Capture(day, entry string, mood *float64) (id int64, r Sync, err error) {
-	if err := checkDay("day", day); err != nil {
-		return 0, r, err
-	}
 	if entry == "" && mood == nil {
 		return 0, r, Invalid("nothing to capture: give text, a mood or both")
 	}
@@ -266,21 +263,12 @@ func asciiDigits(s string) bool {
 	return s != ""
 }
 
-// validateMeasurementValue checks a value against its metric's unit and habit state; a call with no metric yet
-// (an empty unit and no name) checks only that the value is a finite number.
-func validateMeasurementValue(unit, metric string, habit bool, value *float64) error {
-	if value == nil {
-		return nil
-	}
-	if math.IsNaN(*value) || math.IsInf(*value, 0) {
-		return Invalid("value must be a finite number")
-	}
-	if lo, hi, ok := rangeUnit(unit); ok && (*value != math.Trunc(*value) || *value < lo || *value > hi) {
-		from, to, _ := strings.Cut(unit, "-")
-		return Invalid("%s is a %s scale: a whole number from %s to %s (D7)", metric, unit, from, to)
-	}
-	if habit && *value != 0 && *value != 1 {
-		return Invalid("%s is a habit: 1 = done, 0 = not done (D24)", metric)
+// checkValue refuses a NaN: SQLite binds it as NULL, which a correction cannot tell from a retraction (D7). Every
+// other rule of a value is the DDL's: finite (measurements_value_finite), inside a scale's range
+// (measurements_scale_range), 0 or 1 for a habit (measurements_habit_binary).
+func checkValue(value *float64) error {
+	if value != nil && math.IsNaN(*value) {
+		return Invalid("value must be a number")
 	}
 	return nil
 }
@@ -491,23 +479,14 @@ func (t *Tx) setDeleted(id int64, deleted bool) error {
 }
 
 // Link adds an edge of a registered kind (D8); added reports whether it was new. wikilink rows belong to the
-// save contract; redirect is unsupported, so neither is written here. An `at` link starts at a day page,
-// which the app checks (D16).
+// save contract; redirect is unsupported, so neither is written here. The endpoint rules, an `at` from a day page
+// among them, are links_endpoint_types. A period's category must be live: a rule with no home yet (issue 0068).
 func (t *Tx) Link(from, to int64, kind, note string) (added bool, err error) {
 	if kind == "redirect" {
 		return false, Invalid("redirect is not a supported link kind")
 	}
 	if kind == "wikilink" {
 		return false, Invalid("wikilink links are written by saving a body, not directly")
-	}
-	if kind == "at" {
-		var isDay bool
-		if err := t.tx.QueryRowContext(t.ctx, `SELECT coalesce((SELECT is_journal FROM entities WHERE id = ?), 0)`, from).Scan(&isDay); err != nil {
-			return false, err
-		}
-		if !isDay {
-			return false, Invalid("an at link starts at a day page (D16)")
-		}
 	}
 	if kind == "part-of" {
 		var invalidSelection bool
@@ -521,14 +500,6 @@ func (t *Tx) Link(from, to int64, kind, note string) (added bool, err error) {
 		}
 		if invalidSelection {
 			return false, Invalid("a new period category must be live")
-		}
-		// A category is never a journal page (D26).
-		var odd bool
-		if err := t.tx.QueryRowContext(t.ctx, `SELECT coalesce((SELECT is_journal FROM entities WHERE id = ?), 0)`, to).Scan(&odd); err != nil {
-			return false, err
-		}
-		if odd {
-			return false, Invalid("a category is a plain page, never a day page (D26)")
 		}
 	}
 	res, err := t.tx.ExecContext(t.ctx, `INSERT INTO links(from_id, to_id, kind, note, created_at, source) VALUES (?, ?, ?, ?, `+nowSQL+`, ?)
@@ -558,9 +529,6 @@ func (t *Tx) Unlink(from, to int64, kind string) error {
 	}
 	return nil
 }
-
-// metricRules select a metric's id, title, unit and whether it is a habit: the rules a value is held to.
-const metricRules = `SELECT m.id, m_name.title, coalesce((SELECT unit FROM metrics WHERE id = m.id), ''), EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id)`
 
 // Reading is one measurement to record (D7).
 type Reading struct {
@@ -613,56 +581,17 @@ func (t *Tx) Record(m Reading) (id int64, err error) {
 	return id, err
 }
 
+// prepareReading is the live metric the reading names; the day, instant, zone and value are the DDL's to refuse.
 func (t *Tx) prepareReading(m Reading) (metric int64, err error) {
-	if err := validateMeasurementZone(m.TZ); err != nil {
+	if err := checkValue(&m.Value); err != nil {
 		return 0, err
 	}
-	if err := checkDay("day", m.Day); err != nil {
-		return 0, err
-	}
-	if m.TakenAt != "" && !IsInstant(m.TakenAt) {
-		return 0, Invalid("taken_at %q is not a UTC instant like 2026-06-09T21:14:03.482Z", m.TakenAt)
-	}
-	if err := validateMeasurementValue("", "", false, &m.Value); err != nil {
-		return 0, err
-	}
-	var metricTitle, unit string
-	var habit bool
-	err = t.tx.QueryRowContext(t.ctx, metricRules+` FROM entities m JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key AND m.deleted_at IS NULL WHERE m.id = (SELECT entity_id FROM entity_names WHERE name_key = ?) AND m.entity_type = 'metric'`,
-		text.TitleKey(m.Metric)).Scan(&metric, &metricTitle, &unit, &habit)
-	if errors.Is(err, sql.ErrNoRows) {
-		return 0, NotFound("no metric %q: the owner registers metrics", m.Metric)
-	}
-	if err != nil {
-		return 0, err
-	}
-	if err := validateMeasurementValue(unit, metricTitle, habit, &m.Value); err != nil {
-		return 0, err
-	}
-	return metric, nil
-}
-
-func validateMeasurementZone(zone string) error {
-	if zone != "" && !zoneLabel(zone) {
-		return Invalid("invalid measurement zone")
-	}
-	return nil
+	return t.metricID(m.Metric)
 }
 
 // Correct supersedes a reading with a new value, or retracts it when value is nil (cookbook/correct-a-measurement.md).
 func (t *Tx) Correct(wrong int64, value *float64) (id int64, err error) {
-	var metric int64
-	var metricTitle, unit string
-	var habit bool
-	err = t.tx.QueryRowContext(t.ctx, metricRules+`
-	                       FROM measurements me JOIN entities m ON m.id = me.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key WHERE me.id = ?`, wrong).Scan(&metric, &metricTitle, &unit, &habit)
-	if errors.Is(err, sql.ErrNoRows) {
-		return 0, NotFound("no measurement %d", wrong)
-	}
-	if err != nil {
-		return 0, err
-	}
-	if err := validateMeasurementValue(unit, metricTitle, habit, value); err != nil {
+	if err := checkValue(value); err != nil {
 		return 0, err
 	}
 	var v any

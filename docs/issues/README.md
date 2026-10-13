@@ -9,7 +9,7 @@ data could not answer, a rule that is ambiguous or untestable. It is the evidenc
 
 | id | title | status |
 |---|---|---|
-| [0068](0068-rules-the-writer-holds-alone.md) | The writer holds rules the database could hold, and repeats rules the database holds | open |
+| [0068](0068-rules-the-writer-holds-alone.md) | The writer holds rules the database could hold, and repeats rules the database holds | resolved |
 | [0067](0067-one-rule-in-several-places.md) | The code says one rule in several places, and keeps what plan 089 removed | resolved |
 | [0066](0066-the-almanac-does-not-reflect-and-a-refusal-loses-the-form.md) | The Almanac never shows the owner their past, and a refused form loses its place | resolved |
 | [0065](0065-the-almanac-reads-as-a-generic-app.md) | The browser's look is not the owner's own: the Almanac reads as a generic app | resolved |

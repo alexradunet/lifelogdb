@@ -20,18 +20,6 @@ type Point struct {
 // DefaultRadius is the radius a place named for a photo takes when none is given: a spot, not a city.
 const DefaultRadius = 250
 
-func (p Point) check() error {
-	switch {
-	case math.IsNaN(p.Lat) || math.IsNaN(p.Lon) || p.Lat < -90 || p.Lat > 90 || p.Lon < -180 || p.Lon > 180:
-		return Invalid("a point is a latitude -90..90 and a longitude -180..180")
-	case p.Lat == 0 && p.Lon == 0:
-		return Invalid("0°, 0° is how photo metadata says \"no location\": it is never a place's point")
-	case p.RadiusM < 10 || p.RadiusM > 100000:
-		return Invalid("a radius is 10 to 100000 metres")
-	}
-	return nil
-}
-
 func linkDays(b bool) int {
 	if b {
 		return 1
@@ -40,19 +28,14 @@ func linkDays(b bool) int {
 }
 
 // Locate gives a place its point or moves it: the owner's act (cookbook/place-of-a-photo.md says a photo never moves
-// a point).
+// a point). The point's rules are the places CHECKs; a page that is not a place is refused by its typed FK.
 func (t *Tx) Locate(id int64, p Point) error {
-	if err := p.check(); err != nil {
+	var exists bool
+	if err := t.tx.QueryRowContext(t.ctx, `SELECT EXISTS (SELECT 1 FROM entities WHERE id = ?)`, id).Scan(&exists); err != nil {
 		return err
 	}
-	var typ string
-	if err := t.tx.QueryRowContext(t.ctx, `SELECT entity_type FROM entities WHERE id = ?`, id).Scan(&typ); errors.Is(err, sql.ErrNoRows) {
+	if !exists {
 		return NotFound("no page %d", id)
-	} else if err != nil {
-		return err
-	}
-	if typ != "place" {
-		return Invalid("only a place has a point, not a %s", typ)
 	}
 	_, err := t.tx.ExecContext(t.ctx, `INSERT INTO places(id, lat, lon, radius_m, link_days) VALUES (?, ?, ?, ?, ?)
 	                     ON CONFLICT(id) DO UPDATE SET lat = excluded.lat, lon = excluded.lon, radius_m = excluded.radius_m,
@@ -62,9 +45,6 @@ func (t *Tx) Locate(id int64, p Point) error {
 
 // pointIfNone gives a place a point only if it has none (cookbook/place-of-a-photo.md); set says it did.
 func (t *Tx) pointIfNone(id int64, p Point) (set bool, err error) {
-	if err := p.check(); err != nil {
-		return false, err
-	}
 	res, err := t.tx.ExecContext(t.ctx, `INSERT INTO places(id, lat, lon, radius_m, link_days) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING`,
 		id, p.Lat, p.Lon, p.RadiusM, linkDays(p.LinkDays))
 	if err != nil {

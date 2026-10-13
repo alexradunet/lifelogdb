@@ -21,9 +21,6 @@ type LifePeriod struct {
 }
 
 func (t *Tx) CreatePeriod(title, body string, start, end *string) (int64, error) {
-	if _, _, err := periodSpan(start, end); err != nil {
-		return 0, err
-	}
 	id, _, err := t.createNamed("period", title, body, nil, "", func(id int64) error {
 		_, err := t.tx.ExecContext(t.ctx, `INSERT INTO periods(id,start_boundary,end_boundary) VALUES(?,?,?)`, id, start, end)
 		return err
@@ -38,9 +35,6 @@ func (t *Tx) CreatePeriod(title, body string, start, end *string) (int64, error)
 }
 
 func (t *Tx) PromotePeriod(id int64, version string, start, end *string) error {
-	if _, _, err := periodSpan(start, end); err != nil {
-		return err
-	}
 	var typ, have string
 	var deleted bool
 	err := t.tx.QueryRowContext(t.ctx, `SELECT entity_type,CAST(revision AS TEXT),deleted_at IS NOT NULL FROM entities WHERE id=?`, id).Scan(&typ, &have, &deleted)
@@ -67,9 +61,6 @@ func (t *Tx) PromotePeriod(id int64, version string, start, end *string) error {
 }
 
 func (t *Tx) EditPeriod(id int64, version string, start, end *string) error {
-	if _, _, err := periodSpan(start, end); err != nil {
-		return err
-	}
 	var have string
 	var deleted bool
 	err := t.tx.QueryRowContext(t.ctx, `SELECT CAST(e.revision AS TEXT),e.deleted_at IS NOT NULL FROM periods p JOIN entities e ON e.id=p.id WHERE p.id=?`, id).Scan(&have, &deleted)
@@ -136,7 +127,8 @@ func (s *Store) EditPeriod(ctx context.Context, source string, id int64, version
 	return s.Do(ctx, source, func(t *Tx) error { return t.EditPeriod(id, version, start, end) })
 }
 
-// periodRange describes possible endpoint days, not observed dates.
+// periodRange describes possible endpoint days, not observed dates: the read side of contract/period-boundaries.md.
+// The grammar and the order of a stored boundary are the periods CHECKs.
 type periodRange struct {
 	min, max            string
 	comparable, ongoing bool

@@ -5,9 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"sort"
-	"strings"
 	"time"
-	"unicode/utf8"
 )
 
 // TaskSpec is the current definition described by docs/contract/planning.md. The JSON names are the wire
@@ -67,49 +65,6 @@ type TaskOccurrence struct {
 	ProjectTitle     string `json:"project_title,omitempty"`
 	ProjectDeletedAt string `json:"project_deleted_at,omitempty"`
 	Virtual          bool   `json:"virtual"`
-}
-
-func validateTaskSpec(in TaskSpec) error {
-	if !utf8.ValidString(in.Label) || strings.ContainsRune(in.Label, 0) || strings.Trim(in.Label, " ") == "" {
-		return Invalid("task label must be nonempty text without NUL")
-	}
-	if in.ProjectPageID != nil && *in.ProjectPageID <= 0 {
-		return Invalid("task project ID must be positive")
-	}
-	if err := validateTaskSchedule(in); err != nil {
-		return err
-	}
-	if in.ReminderLocalTime != "" || in.ReminderZone != "" {
-		if !validReminderClock(in.ReminderLocalTime) || !validPlanningZone(in.ReminderZone) {
-			return Invalid("task reminder needs a local minute clock and zone")
-		}
-	}
-	return nil
-}
-
-func validateOccurrenceChanges(in OccurrenceChanges) error {
-	if err := checkDay("due_day", in.DueDay); in.DueDay != "" && err != nil {
-		return err
-	}
-	if in.State != StateOpen && in.State != StateDone && in.State != StateSkipped {
-		return Invalid("unknown task occurrence state")
-	}
-	if in.CompletedAt != "" && (in.State != StateDone || !IsInstant(in.CompletedAt)) {
-		return Invalid("completion instant requires a done occurrence")
-	}
-	switch in.ReminderMode {
-	case ReminderInherit, ReminderOff:
-		if in.ReminderOverrideAt != "" {
-			return Invalid("reminder override requires at mode")
-		}
-	case ReminderAt:
-		if !IsInstant(in.ReminderOverrideAt) {
-			return Invalid("absolute reminder requires an exact instant")
-		}
-	default:
-		return Invalid("unknown task reminder mode")
-	}
-	return nil
 }
 
 const taskSelect = `SELECT t.id,t.label,t.project_page_id,coalesce(t.repeat_unit,''),coalesce(t.repeat_every,0),coalesce(t.anchor_day,''),coalesce(t.repeat_until_day,''),coalesce(t.reminder_local_time,''),coalesce(t.reminder_zone,''),coalesce(t.import_key,''),t.source,CAST(t.revision AS TEXT),t.created_at,t.updated_at,coalesce(t.deleted_at,''),coalesce(n.title,''),coalesce(e.deleted_at,'') FROM tasks t LEFT JOIN entities e ON e.id=t.project_page_id LEFT JOIN entity_names n ON n.entity_id=e.id AND n.name_key=e.preferred_name_key `
@@ -279,16 +234,10 @@ func (t *Tx) CaptureOneOffTask(in TaskSpec, importKey string, initial Occurrence
 	if in.RepeatUnit != "" || initial.OccurrenceKey != "once" {
 		return 0, false, Invalid("one-off capture requires its once occurrence")
 	}
-	if err := validateOccurrenceChanges(initial.OccurrenceChanges); err != nil {
-		return 0, false, err
-	}
 	return t.createTask(in, importKey, initial)
 }
 
 func (t *Tx) createTask(in TaskSpec, importKey string, initial OccurrenceInput) (id int64, existing bool, err error) {
-	if err = validateTaskSpec(in); err != nil {
-		return
-	}
 	if importKey != "" {
 		have, e := scanTask(t.tx.QueryRowContext(t.ctx, taskSelect+`WHERE t.source=? AND t.import_key=?`, t.Source, importKey))
 		if e == nil {
@@ -469,36 +418,23 @@ func (t *Tx) liveTaskVersion(id int64, version string) (*Task, error) {
 	return p, nil
 }
 
+// EditTask changes the label, the project and the default reminder; the cadence is not written (tasks_fixed holds
+// it, and tasks_end_shortens the end).
 func (t *Tx) EditTask(id int64, version string, in TaskSpec) error {
-	if err := validateTaskSpec(in); err != nil {
+	if _, err := t.liveTaskVersion(id, version); err != nil {
 		return err
 	}
-	p, err := t.liveTaskVersion(id, version)
-	if err != nil {
-		return err
-	}
-	if p.RepeatUnit != in.RepeatUnit || p.RepeatEvery != in.RepeatEvery || p.AnchorDay != in.AnchorDay || p.RepeatUntilDay != in.RepeatUntilDay {
-		return Invalid("cadence is fixed; shorten an end with StopTask")
-	}
-	_, err = t.tx.ExecContext(t.ctx, `UPDATE tasks SET label=?,project_page_id=?,reminder_local_time=?,reminder_zone=? WHERE id=?`, in.Label, in.ProjectPageID, nullIfEmpty(in.ReminderLocalTime), nullIfEmpty(in.ReminderZone), id)
+	_, err := t.tx.ExecContext(t.ctx, `UPDATE tasks SET label=?,project_page_id=?,reminder_local_time=?,reminder_zone=? WHERE id=?`, in.Label, in.ProjectPageID, nullIfEmpty(in.ReminderLocalTime), nullIfEmpty(in.ReminderZone), id)
 	return err
 }
 
+// StopTask shortens a series' end: a one-off has none (tasks_recurrence), and an end only shortens
+// (tasks_end_shortens); the open slots past it are skipped by tasks_end_skip.
 func (t *Tx) StopTask(id int64, version, through string) error {
-	if err := checkDay("through", through); err != nil {
+	if _, err := t.liveTaskVersion(id, version); err != nil {
 		return err
 	}
-	p, err := t.liveTaskVersion(id, version)
-	if err != nil {
-		return err
-	}
-	if p.RepeatUnit == "" {
-		return Invalid("one-off task has no recurrence to end")
-	}
-	if p.RepeatUntilDay != "" && through > p.RepeatUntilDay {
-		return Invalid("a recurrence end may only shorten")
-	}
-	_, err = t.tx.ExecContext(t.ctx, `UPDATE tasks SET repeat_until_day=? WHERE id=?`, through, id)
+	_, err := t.tx.ExecContext(t.ctx, `UPDATE tasks SET repeat_until_day=? WHERE id=?`, through, id)
 	return err
 }
 
@@ -522,24 +458,15 @@ func (t *Tx) insertTaskOccurrence(taskID int64, in OccurrenceInput) (int64, erro
 	return id, err
 }
 
-// CaptureTaskOccurrence preserves an explicit outcome; retry identity never overwrites current contents.
+// CaptureTaskOccurrence preserves an explicit outcome; retry identity never overwrites current contents. The key's
+// membership in the cadence, a live task and no open work past the end are task_occurrences_admit.
 func (t *Tx) CaptureTaskOccurrence(taskID int64, taskVersion string, in OccurrenceInput) (*TaskOccurrence, bool, error) {
-	if err := validateOccurrenceChanges(in.OccurrenceChanges); err != nil {
-		return nil, false, err
-	}
 	p, err := t.Task(taskID)
 	if err != nil {
 		return nil, false, err
 	}
 	if err := checkVersion("task", p.Version, taskVersion); err != nil {
 		return nil, false, err
-	}
-	belongs, err := taskSlot(t.ctx, p.TaskSpec, in.OccurrenceKey)
-	if err != nil {
-		return nil, false, err
-	}
-	if !belongs {
-		return nil, false, Invalid("occurrence key does not belong to task")
 	}
 	if in.ImportKey != "" {
 		have, e := scanTaskOccurrence(t.tx.QueryRowContext(t.ctx, occurrenceSelect+`WHERE o.source=? AND o.import_key=?`, t.Source, in.ImportKey))
@@ -568,9 +495,6 @@ func (t *Tx) CaptureTaskOccurrence(taskID int64, taskVersion string, in Occurren
 	if p.DeletedAt != "" {
 		return nil, false, Conflict("new occurrence requires a live task")
 	}
-	if in.State == StateOpen && p.RepeatUntilDay != "" && in.OccurrenceKey > p.RepeatUntilDay {
-		return nil, false, Invalid("open occurrence is after recurrence end")
-	}
 	if _, err = t.insertTaskOccurrence(taskID, in); err != nil {
 		return nil, false, err
 	}
@@ -579,9 +503,6 @@ func (t *Tx) CaptureTaskOccurrence(taskID int64, taskVersion string, in Occurren
 }
 
 func (t *Tx) EditTaskOccurrence(taskID int64, taskVersion, key, version string, in OccurrenceChanges) error {
-	if err := validateOccurrenceChanges(in); err != nil {
-		return err
-	}
 	if _, err := t.liveTaskVersion(taskID, taskVersion); err != nil {
 		return err
 	}
@@ -600,8 +521,7 @@ func (t *Tx) EditTaskOccurrence(taskID int64, taskVersion, key, version string, 
 }
 
 func (t *Tx) TaskOccurrenceLifecycle(taskID int64, taskVersion, key, version string, deleted bool) error {
-	p, err := t.liveTaskVersion(taskID, taskVersion)
-	if err != nil {
+	if _, err := t.liveTaskVersion(taskID, taskVersion); err != nil {
 		return err
 	}
 	o, err := t.TaskOccurrence(taskID, key)
@@ -614,9 +534,7 @@ func (t *Tx) TaskOccurrenceLifecycle(taskID int64, taskVersion, key, version str
 	if deleted == (o.DeletedAt != "") {
 		return nil
 	}
-	if !deleted && o.State == StateOpen && p.RepeatUntilDay != "" && key > p.RepeatUntilDay {
-		return Invalid("occurrence cannot reopen after recurrence end")
-	}
+	// a tombstoned open slot past the end cannot exist: tasks_end_skip skips it, task_occurrences_admit refuses it
 	return t.setDeletedAt("task_occurrences", o.ID, deleted)
 }
 

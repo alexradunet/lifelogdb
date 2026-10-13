@@ -27,16 +27,3 @@ func checkTitle(what, title string) error {
 	}
 	return nil
 }
-
-// zoneLabel reports a time-zone label as the contract admits it: 1 to 64 characters of A-Z, a-z, 0-9, _, /, + and -.
-func zoneLabel(s string) bool {
-	if len(s) < 1 || len(s) > 64 {
-		return false
-	}
-	for _, r := range s {
-		if !(r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '_' || r == '/' || r == '+' || r == '-') {
-			return false
-		}
-	}
-	return true
-}

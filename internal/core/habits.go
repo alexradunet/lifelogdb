@@ -71,24 +71,14 @@ func (t *Tx) metricID(name string) (int64, error) {
 	return id, err
 }
 
-// StartHabit gives a unitless metric a period from start (cookbook/habits.md, D24). end is "" for a habit that is
+// StartHabit gives a unitless metric a period from start (cookbook/habits.md, D24): the days, the unit, the overlap
+// and the metric's readings being 0 or 1 are the habit_periods CHECKs and triggers. end is "" for a habit that is
 // still going. A re-sent period inserts nothing and carries its end: a changed end is applied to the period
 // that starts on that day.
 func (t *Tx) StartHabit(metric, start, end string) error {
-	if !IsDay(start) || (end != "" && !IsDay(end)) {
-		return Invalid("days are YYYY-MM-DD")
-	}
 	id, err := t.metricID(metric)
 	if err != nil {
 		return err
-	}
-	var other bool
-	if err := t.tx.QueryRowContext(t.ctx, `SELECT EXISTS (SELECT 1 FROM measurement_values WHERE metric_id = ? AND value NOT IN (0, 1))`, id).
-		Scan(&other); err != nil {
-		return err
-	}
-	if other {
-		return Invalid("%s has readings other than 0 and 1: a habit is 1 = done, 0 = not done (D24)", metric)
 	}
 	if _, err := t.tx.ExecContext(t.ctx, `INSERT INTO habit_periods(metric_id, start_day, end_day, source) VALUES (?, ?, ?, ?)
 	                        ON CONFLICT(metric_id, start_day) DO NOTHING`, id, start, nullIfEmpty(end), t.Source); err != nil {
@@ -101,9 +91,6 @@ func (t *Tx) StartHabit(metric, start, end string) error {
 
 // StopHabit ends the open period of a habit on day (inclusive).
 func (t *Tx) StopHabit(metric, day string) error {
-	if err := checkDay("day", day); err != nil {
-		return err
-	}
 	id, err := t.metricID(metric)
 	if err != nil {
 		return err

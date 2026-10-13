@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"math"
 	"mime"
-	"regexp"
 	"strings"
 
 	"lifelog/internal/preview"
@@ -58,18 +58,11 @@ type Position struct {
 	Map string  `json:"map"`
 }
 
-var (
-	shaRE  = regexp.MustCompile(`^[0-9a-f]{64}$`)
-	mimeRE = regexp.MustCompile(`^[a-z][a-z0-9.+-]*/[a-z0-9][a-z0-9.+-]*$`) // files_mime
-)
-
 // AddFile keeps a file: the page the original's hash names already, or a new file page, or a plain page of the title
 // promoted to the file (docs/cookbook/keep-a-file.md); then its place and its day (docs/cookbook/place-of-a-photo.md).
 func (t *Tx) AddFile(f FileIn) (k Kept, err error) {
+	// the hash and the type are normalized here and held by files_sha256 and files_mime; the days by entities_day
 	f.SHA256 = strings.ToLower(strings.TrimSpace(f.SHA256))
-	if !shaRE.MatchString(f.SHA256) {
-		return k, Invalid("sha256 %q is not the 64 hex digits of a SHA-256", f.SHA256)
-	}
 	if f.MIME = NormalMIME(f.MIME); f.MIME == "" {
 		return k, Invalid("mime: a type/subtype such as audio/mp4 or image/heic")
 	}
@@ -78,18 +71,13 @@ func (t *Tx) AddFile(f FileIn) (k Kept, err error) {
 			return k, Invalid("%v", err)
 		}
 	}
-	for _, d := range []string{f.Day, f.Taken} {
-		if err := checkDay("day", d); d != "" && err != nil {
-			return k, err
-		}
-	}
 	if f.Radius == 0 {
 		f.Radius = DefaultRadius
 	}
-	if f.HasGPS {
-		if err := (Point{f.Lat, f.Lon, f.Radius, true}).check(); err != nil {
-			return k, err
-		}
+	// a position is matched, never stored, so the places CHECKs never see it: the same bounds, and 0°, 0° is how
+	// photo metadata says "no location" (places_lat, places_lon, places_not_null_island)
+	if f.HasGPS && (f.Lat == 0 && f.Lon == 0 || math.IsNaN(f.Lat) || math.IsNaN(f.Lon) || f.Lat < -90 || f.Lat > 90 || f.Lon < -180 || f.Lon > 180) {
+		return k, Invalid("a position is a latitude -90..90 and a longitude -180..180, and 0°, 0° is no position")
 	}
 	if f.UnknownCaptureDay && (f.Day != "" || f.Taken != "" || f.At != "") {
 		return k, Invalid("unknown capture day requires no day attribution or selected place")
@@ -295,10 +283,11 @@ func (s *Store) preview(ctx context.Context, q string, arg any) ([]byte, error) 
 	return b, err
 }
 
-// NormalMIME is a type as files.mime keeps it: lowercase type/subtype, parameters dropped; "" when it is not one.
+// NormalMIME is a type as files.mime keeps it: lowercase type/subtype, parameters dropped; "" when it does not parse.
+// Its grammar is files_mime.
 func NormalMIME(s string) string {
 	t, _, err := mime.ParseMediaType(s)
-	if err != nil || len(t) > 127 || !mimeRE.MatchString(t) {
+	if err != nil {
 		return ""
 	}
 	return t

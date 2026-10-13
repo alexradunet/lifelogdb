@@ -79,6 +79,8 @@ func taskMonth(anchor time.Time, offset int) time.Time {
 	return first.AddDate(0, 0, min(anchor.Day(), last)-1)
 }
 
+// validateTaskSchedule guards the expansion of taskCalendar, which a test may call with a spec no row holds; a
+// written spec is held to tasks_recurrence, tasks_repeat_unit and tasks_repeat_every.
 func validateTaskSchedule(in TaskSpec) error {
 	if in.RepeatUnit == "" {
 		if in.RepeatEvery != 0 || in.AnchorDay != "" || in.RepeatUntilDay != "" {
@@ -95,44 +97,15 @@ func validateTaskSchedule(in TaskSpec) error {
 	return nil
 }
 
-func taskSlot(ctx context.Context, in TaskSpec, key string) (bool, error) {
-	if in.RepeatUnit == "" {
-		return key == "once", nil
-	}
-	if !IsDay(key) {
-		return false, nil
-	}
-	in.RepeatUntilDay = "" // Membership survives a shortened end; admission is a separate check.
-	found := false
-	err := taskCalendar(ctx, in, key, key, func(string) error { found = true; return nil })
-	return found, err
-}
-
-func validReminderClock(clock string) bool {
-	if len(clock) != 5 || clock[2] != ':' {
-		return false
-	}
-	for _, i := range []int{0, 1, 3, 4} {
-		if clock[i] < '0' || clock[i] > '9' {
-			return false
-		}
-	}
-	return clock[:2] <= "23" && clock[3:] <= "59"
-}
-
-func validPlanningZone(zone string) bool { return zoneLabel(zone) }
-
 // TaskReminder distinguishes absent intent from a clock that cannot be resolved.
 type TaskReminder struct {
 	State string `json:"state"` // none, resolved or unresolved
 	At    string `json:"at,omitempty"`
 }
 
-// ResolveTaskReminder resolves intent only; it never schedules or sends a notification.
+// ResolveTaskReminder resolves intent only; it never schedules or sends a notification. The task and the occurrence
+// are rows, so their clock, zone and mode are as the DDL admits them.
 func ResolveTaskReminder(task Task, occurrence TaskOccurrence) (TaskReminder, error) {
-	if err := validateOccurrenceChanges(occurrence.OccurrenceChanges); err != nil {
-		return TaskReminder{}, err
-	}
 	if task.DeletedAt != "" || occurrence.DeletedAt != "" || occurrence.State != StateOpen || occurrence.ReminderMode == ReminderOff {
 		return TaskReminder{State: "none"}, nil
 	}
@@ -141,9 +114,6 @@ func ResolveTaskReminder(task Task, occurrence TaskOccurrence) (TaskReminder, er
 	}
 	if occurrence.DueDay == "" || task.ReminderLocalTime == "" && task.ReminderZone == "" {
 		return TaskReminder{State: "none"}, nil
-	}
-	if !validReminderClock(task.ReminderLocalTime) || !validPlanningZone(task.ReminderZone) {
-		return TaskReminder{}, Invalid("invalid task reminder default")
 	}
 	at, ok := resolveTaskClock(occurrence.DueDay, task.ReminderLocalTime, task.ReminderZone)
 	if !ok {
