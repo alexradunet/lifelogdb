@@ -340,8 +340,10 @@ tombstoned page adds `deleted`. Links: `day` (a day page's day view), `preview` 
 point). Embedded: every outgoing link under its kind, every incoming one under `backlink` and its kind. Actions by
 what is legal: `save-body` (with the current `body` and `version` filled), `promote`, `promote-period`, `rename`,
 `edit-period`, `locate`, `link` and `unlink` (with the kinds this type may start), `readings-from-table` (when the
-body holds a table, with `page` filled), `tombstone`, or `revive` alone on a deleted page. The writes answer with this entity; `create-page` and `save-body` carry a `result` of the sync shape,
-`add-file` the kept shape.
+body holds a table, with `page` filled), `tombstone`, or `revive` alone on a deleted page. In a browser, the page of a
+live metric answers 303 to its series, the metric's one page, which carries this page's text, links and actions. The
+writes answer with this entity; `create-page` and `save-body` carry a `result` of the sync shape, `add-file` the kept
+shape.
 
 | property | type | meaning |
 |---|---|---|
@@ -416,14 +418,17 @@ body holds a table, with `page` filled), `tombstone`, or `revive` alone on a del
 
 ### series
 
-`GET /metrics/{name}?from=&to=&scope=&session_id=&include_deleted=&all_history=`: a metric's readings over
-`(from, to]` (default the 90 days to today; `all_history=1` instead of `from`). Links: `all-readings`, `up`
-(metrics), `habits`, `page` (the metric's page). Embedded: `reading` links. Actions: `record` (this metric), and for a
-habit `check-in` and `stop-habit`, else `start-habit` when unitless; `link` titled "File in category".
+`GET /metrics/{name}?from=&to=&scope=&session_id=&include_deleted=&all_history=`: the one page of a metric. Its
+readings over `(from, to]`, or with no `from` every reading through `to` (`all_history=1` says the same; `to` is today
+by default). An alias names the metric too. Links: `self` (`/metrics/{name}` when asked with no query),
+`all-readings`, `up` (metrics), `habits`, `page` (the metric's page). Embedded: `reading` links. Actions: `record`
+(this metric), and for a habit `check-in` and `stop-habit`, else `start-habit` when unitless. A live metric is a page
+(D27), so its page's actions are here too: `save-body`, `rename`, `link` (titled "File in category", with `kind`
+`part-of` filled), `unlink`, `readings-from-table` (when its body holds a table, with `metric` filled) and `tombstone`.
 
 | property | type | meaning |
 |---|---|---|
-| `metric` | string | the name |
+| `metric` | string | the name (an alias asked for gives the metric's name) |
 | `from` | day | the exclusive lower bound; empty in all-history mode |
 | `to` | day | the inclusive upper bound |
 | `readings[]` | list | the readings (the reading shape), oldest first |
@@ -442,10 +447,25 @@ habit `check-in` and `stop-habit`, else `start-habit` when unitless; `link` titl
 | `habit_periods[].start_day` | day | from |
 | `habit_periods[].end_day` | day | until, inclusive; absent while open |
 | `categories` | list | the paths of the categories it is filed in (`biomarkers/iron`) |
-| `scope` | string | `unassociated` (the default) or `session` |
+| `id` | integer | the metric's page id; absent when the name is no live metric |
+| `unit` | string | its unit, `''` for a habit, a range (`1-5`) for a scale; absent likewise |
+| `body` | string | its page's text, CommonMark; absent likewise |
+| `links[]` | list | the typed links its page starts (the page's shape); absent likewise |
+| `links[].kind` | string | |
+| `links[].id` | integer | |
+| `links[].title` | string | |
+| `links[].entity_type` | string | |
+| `links[].note` | string | |
+| `backlinks[]` | list | the links that end at its page (the page's shape); absent likewise |
+| `backlinks[].kind` | string | |
+| `backlinks[].id` | integer | |
+| `backlinks[].title` | string | |
+| `backlinks[].entity_type` | string | |
+| `backlinks[].note` | string | |
+| `scope` | string | `unassociated` (the default), `session` or `all` |
 | `session_id` | integer | the session selected, 0 for none |
 | `include_deleted` | boolean | readings of tombstoned sessions were included |
-| `all_history` | boolean | every admitted day through `to` was selected |
+| `all_history` | boolean | no `from` was named: every admitted day through `to` was selected |
 
 ### metrics
 

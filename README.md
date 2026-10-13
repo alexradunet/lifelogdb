@@ -190,10 +190,13 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **Provenance per surface.** `source` is `cli`, `api`, `ui` (a browser form) or `agent:<name>` (MCP);
   the `Lifelog-Source` header sets it.
 - **Optimistic saves.** A body save sends the `version` (the decimal `entities.revision` token) it read; a newer one is a 409.
-- **Metric ranges.** `/metrics/{name}` selects `(from, to]`; omitted `from` defaults to 90 days before `to`.
-  `all_history=1` selects all admitted days through `to`, with no `from` allowed, preserving scope/session and
-  `include_deleted`. The All readings link uses this mode. A default window reaching before year0000 uses
-  the same all-history mode rather than inventing a negative-year bound.
+- **One page a metric** ([plan 100](docs/plans/100-one-page-a-metric.md)). `/metrics/{name}` is the metric's one
+  page: Record first (Check in while it is a habit), its readings newest first in a fold a year, and, as a metric is
+  a page (D27), its page's text, links, backlinks and actions, taken from the page's own entity. Its readings are
+  `(from, to]`; with no `from`, every admitted day through `to`, on every surface (`all_history=1` says the same and
+  allows no `from`), preserving scope/session and `include_deleted`. The All readings link leads a window back to the
+  whole. In a browser, the page of a live metric (`/pages/{id}`) answers 303 to it, with its feedback; JSON keeps
+  the page.
 - **Read-only queries.** `POST /query` runs one allowed read statement (`SELECT`, `WITH`, `VALUES`, `EXPLAIN` of
   those reads, or an allowlisted introspection `PRAGMA`) on a short-lived `mode=ro`, `query_only` connection, 5 s
   and 500 rows at most; scripts, transactions, setters and maintenance commands are refused.

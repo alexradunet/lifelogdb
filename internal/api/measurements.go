@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
-	"time"
 
 	"lifelog/internal/core"
 )
@@ -58,13 +57,14 @@ func (h *server) metrics(r *http.Request) (*Entity, error) {
 	return e, nil
 }
 
-// series is cookbook/metric-series.md; ?from= and ?to= default to the 90 days up to today.
+// series is cookbook/metric-series.md; ?to= defaults to today, and with no ?from= every reading through it is read.
 func (h *server) series(r *http.Request) (*Entity, error) {
 	return h.seriesEntity(r.Context(), r.PathValue("name"), r.URL.Query())
 }
 
-// seriesEntity is the resource /metrics/{name} serves; q is its query (from, to, scope, session_id, include_deleted,
-// all_history), nil for the defaults.
+// seriesEntity is the resource /metrics/{name} serves, the one page of a metric (docs/plans/100-one-page-a-metric.md):
+// its readings, the writes of a reading and of a habit, and, as the metric is a page (D27), the page's text, edges
+// and actions. q is its query (from, to, scope, session_id, include_deleted, all_history), nil for the defaults.
 func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*Entity, error) {
 	today := h.localDay()
 	to := q.Get("to")
@@ -82,14 +82,13 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 	if allHistory && from != "" {
 		return nil, core.Invalid("all_history cannot select a lower bound")
 	}
-	if !allHistory && from == "" {
-		t, _ := dayOf(to) // canonical day was checked above
-		lower := t.AddDate(0, 0, -90)
-		if lower.Year() < 0 {
-			allHistory = true // the default window reaches the minimum admitted calendar day
-		} else {
-			from = lower.Format(time.DateOnly)
-		}
+	allHistory = from == "" // no lower bound: every admitted day through to
+	m, err := h.metricOf(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	if m != nil { // an alias names the metric by its name
+		name = m.Name
 	}
 	sessionID, err := optionalID(q, "session_id")
 	if err != nil {
@@ -128,22 +127,17 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 		return metricHref(name) + "?" + v.Encode()
 	}
 	self, allHref := seriesHref(allHistory), seriesHref(true)
-	m, err := h.metricOf(ctx, name)
-	if err != nil {
-		return nil, err
+	if len(q) == 0 { // asked with no query, the series names itself so: a browser that registers a metric lands on it
+		self = metricHref(name)
 	}
 	record, err := h.recordAction(ctx, name, today)
 	if err != nil {
 		return nil, err
 	}
-	var categories []string
-	if m != nil {
-		categories = m.Categories
-	}
-	e := &Entity{Class: []string{"series"}, Title: name,
-		Properties: map[string]any{"metric": name, "from": from, "to": to, "readings": rows, "habit_periods": periods, "categories": categories, "scope": scope, "session_id": sessionID, "include_deleted": includeDeleted, "all_history": allHistory},
-		Links:      []Link{link("all-readings", allHref, "All readings"), link("self", self, name), link("up", "/metrics", "Metrics"), link("habits", "/habits", "Habits"), link("index", "/", "Home")},
-		Actions:    []Action{record}}
+	props := map[string]any{"metric": name, "from": from, "to": to, "readings": rows, "habit_periods": periods, "scope": scope, "session_id": sessionID, "include_deleted": includeDeleted, "all_history": allHistory, "categories": []string(nil)}
+	e := &Entity{Class: []string{"series"}, Title: name, Properties: props,
+		Links:   []Link{link("all-readings", allHref, "All readings"), link("self", self, name), link("up", "/metrics", "Metrics"), link("habits", "/habits", "Habits"), link("index", "/", "Home")},
+		Actions: []Action{record}}
 	if f := e.Actions[0].field("session_id"); scope == "session" && f != nil {
 		f.Value = sessionID
 	}
@@ -154,9 +148,28 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 	} else if m != nil && m.Unit == "" { // a unitless metric may become a habit
 		e.Actions = append(e.Actions, action("start-habit", ids, map[string]any{"start_day": today}))
 	}
-	if m != nil { // the metric is a page (D27): its text, its backlinks, and filing it in a category
+	if m != nil { // the metric is a page (D27): the page's text, edges and actions are the series' too, built once
+		page, err := h.pageEntity(ctx, m.ID)
+		if err != nil {
+			return nil, err
+		}
+		p := page.Properties.(*core.Page)
+		props["categories"], props["id"], props["unit"], props["body"], props["links"], props["backlinks"] = m.Categories, m.ID, m.Unit, p.Body, p.Out, p.In
 		e.Links = append(e.Links, link("page", pageHref(m.ID), "Page"))
-		e.Actions = append(e.Actions, fileAction(m))
+		for _, a := range page.Actions {
+			switch a.Name {
+			case "link": // the link a metric makes most: filing it in a category (D26)
+				a.Title = "File in category"
+				if f := a.field("kind"); f != nil {
+					f.Value = "part-of"
+				}
+			case "readings-from-table": // a table in a metric's own text is of that metric, unless the owner says
+				if f := a.field("metric"); f != nil {
+					f.Value = name
+				}
+			}
+			e.Actions = append(e.Actions, a)
+		}
 	}
 	for _, m := range rows {
 		e.Entities = append(e.Entities, link("reading", measurementHref(m.ID), fmt.Sprintf("%s %g", m.Day, m.Value)))

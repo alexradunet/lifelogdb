@@ -209,7 +209,7 @@ func TestTheStylePageShowsEveryComponent(t *testing.T) {
 	}
 	for _, want := range []string{"leaf", "leaf-day", "sheet", "margin", "journal-text", "capture", "segmented", "occ", "tag overdue", "settled",
 		"habit", "strip", "reading-tile", "entry", "button primary", "danger", "step", "tag done", "badge", "owner", "alert", "toast", "palette",
-		`table class="calendar"`, `table class="month"`, "chart", "pager", "empty", "facts"} {
+		`table class="calendar"`, `table class="month"`, "chart", "record", "readings-year", "pager", "empty", "facts"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the style page does not show %q", want)
 		}

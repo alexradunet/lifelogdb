@@ -8,26 +8,81 @@
 </table></div>{{end}}</section>{{end}}
 {{template "foot" .}}{{end}}
 
-{{define "series"}}{{template "head" .}}
-{{$s := .Props}}
-<header class="page-head"><div class="what"><span class="kind">series</span><h1>{{.Title}}</h1>
-<p class="sub"><span>{{if $s.all_history}}All history through {{$.Date $s.to}}{{else}}{{$.Date $s.from}} to {{$.Date $s.to}}{{end}}</span>{{range $s.categories}}<span class="badge">{{.}}</span>{{end}}{{with .Link "page"}}<a href="{{.}}">Page</a>{{end}}<a href="/metrics">All metrics</a>
-<a href="{{.Link "all-readings"}}">All readings</a></p></div></header>
-<p><small>Scope: {{$s.scope}} (unassociated is not a daily total).</small></p>
-{{with $s.readings}}{{if ne $s.scope "all"}}{{chart $s.from $s.to .}}{{end}}
-<div class="scroll"><table><caption>Every reading in this range</caption>
-<thead><tr><th scope="col">day</th><th scope="col" class="num">value</th><th scope="col">scope</th><th scope="col">taken at</th></tr></thead>
-<tbody>{{range .}}<tr><td><a href="/days/{{.day}}">{{$.Date .day}}</a></td><td class="num"><a href="/measurements/{{num .id}}">{{num .value}}</a></td><td>{{.scope}}{{with .session_id}} · <a href="/sessions/{{num .}}">session {{num .}}</a>{{end}}{{with .session_deleted_at}} · tombstoned {{$.When .}}{{end}}</td><td>{{with .taken_at}}{{$.When .}}{{end}}</td></tr>{{end}}</tbody>
-</table></div>{{else}}<p><small>No readings in this range.</small></p>{{end}}
+{{/* The one page of a metric (docs/plans/100-one-page-a-metric.md). The head: its kind, its categories and its latest
+     reading. The sheet: Record first (a habit's Check in, while it is one), then the chart and every reading in one
+     fold a year, newest first. The margin: the metric as a page (D27), with its text, the pages that mention it, its
+     habit, its links and its other actions. In a browser, the metric's page (/pages/{id}) opens this one. */}}
+{{define "metric"}}{{template "head" .}}
+{{$s := .Props}}{{$r := .MetricReadings}}{{$checkIn := .Action "check-in"}}
+{{$today := ""}}{{with .Shell}}{{$today = .Today}}{{end}}{{$unit := ""}}{{with $s.unit}}{{$unit = .}}{{end}}
+<header class="page-head"><div class="what"><span class="kind">{{if $checkIn}}habit{{else}}metric{{end}}</span><h1>{{.Title}}</h1>
+<p class="sub">{{range $s.categories}}<span class="badge">{{.}}</span>{{end}}{{if not $s.all_history}}<a href="{{.Link "all-readings"}}">All readings</a>{{end}}<a href="/metrics">Every metric</a></p></div>
+{{if not $r.Habit}}{{with $r.Latest}}<div class="tools"><div class="reading-tile"><span class="name">Latest, {{$.Date .day}}</span>
+<a class="reading" href="/measurements/{{num .id}}">{{num .value}}{{with $unit}} <span class="unit">{{.}}</span>{{end}}</a></div></div>{{end}}{{end}}
+</header>
 
-{{with $s.habit_periods}}<h2>Habit periods</h2><ul class="plain">{{range .}}<li>from {{$.Date .start_day}}{{with .end_day}} to {{$.Date .}}{{else}}, ongoing{{end}}</li>{{end}}</ul>{{end}}
-{{with .Action "check-in"}}<h2>Check in</h2>{{template "form" (form . "choices:done" "1 0" "class" "inline")}}{{end}}
+<div class="sheet-margin">
+<div class="sheet">
+{{if $checkIn}}<section class="record" id="record" aria-label="Check in"><h2>Check in today</h2>
+<div class="joined" role="group" aria-label="Check in {{.Title}} today">{{template "form" (form $checkIn "done" "1" "hide" "day" "button" "Done" "class" "tiny" "back" $.Here)}}{{template "form" (form $checkIn "done" "0" "hide" "day" "button" "Not done" "class" "tiny" "back" $.Here)}}</div></section>
+{{else}}{{with .Action "record"}}<section class="record" id="record" aria-label="Record"><h2>Record</h2>
+{{template "form" (form . "metric" $.Title "button" "Record" "more" "session_id,taken_at,tz,import_key" "placeholder" (printf "value=%s" $unit) "back" $.Here)}}</section>{{end}}{{end}}
 
-<h2>Record</h2>
-{{template "form" (form (.Action "record") "class" "inline" "hide" "taken_at,tz,import_key")}}
-{{template "boxed" (form (.Action "start-habit"))}}
-{{template "boxed" (form (.Action "stop-habit"))}}
-{{template "boxed" (form (.Action "link") "hide" "kind,note")}}
+<section class="readings-all" aria-label="Readings">
+<div class="panel-head"><h2>Readings</h2><span class="meta">{{len $s.readings}}</span></div>
+{{if or (not $s.all_history) (ne $s.to $today) (ne $s.scope "unassociated")}}<p class="desc">{{if not $s.all_history}}{{$.Date $s.from}} to {{$.Date $s.to}}.{{else if ne $s.to $today}}All history through {{$.Date $s.to}}.{{else}}All history.{{end}}
+{{if ne $s.scope "unassociated"}}Scope: {{$s.scope}}{{with $s.session_id}}, <a href="/sessions/{{num .}}">session {{num .}}</a>{{end}}{{if $s.include_deleted}}, tombstoned sessions included{{end}}.{{end}}</p>{{end}}
+{{if and $s.readings (not $r.Habit) (ne $s.scope "all")}}{{chart $s.from $s.to $s.readings}}{{end}}
+{{range $r.Years}}<details class="readings-year"{{if .Open}} open{{end}}><summary><span class="year-name">{{.Year}}</span> <span class="meta">{{.Summary}}</span></summary>
+<div class="scroll"><table>
+<thead><tr><th scope="col">day</th><th scope="col" class="num">{{if $r.Habit}}check-in{{else}}value{{end}}</th>{{if ne $s.scope "unassociated"}}<th scope="col">scope</th>{{end}}{{if $r.Times}}<th scope="col">taken at</th>{{end}}</tr></thead>
+<tbody>{{range .Rows}}<tr><td><a href="/days/{{.day}}">{{$.Date .day}}</a></td><td class="num"><a href="/measurements/{{num .id}}">{{if $r.Habit}}{{if eq (num .value) "1"}}done{{else if eq (num .value) "0"}}not done{{else}}{{num .value}}{{end}}{{else}}{{num .value}}{{end}}</a></td>{{if ne $s.scope "unassociated"}}<td>{{.scope}}{{with .session_id}} · <a href="/sessions/{{num .}}">session {{num .}}</a>{{end}}{{with .session_deleted_at}} · tombstoned {{$.When .}}{{end}}</td>{{end}}{{if $r.Times}}<td>{{with .taken_at}}{{$.When .}}{{end}}</td>{{end}}</tr>
+{{end}}</tbody></table></div></details>
+{{else}}<p class="empty">{{if $s.all_history}}No reading yet. {{if $checkIn}}Check in above.{{else}}Record the first one above.{{end}}{{else}}No reading in this window. <a href="{{.Link "all-readings"}}">All readings</a> has the rest.{{end}}</p>{{end}}
+</section>
+</div>
+
+{{if $s.id}}<div class="margin">
+<section class="group" aria-label="About"><h2>About</h2>
+{{if $s.body}}<div class="prose about">{{markdown $s.body}}</div>{{else}}<p class="empty">Nothing is written about {{.Title}} yet: what it measures, and how. Open Edit to write it.</p>{{end}}
+{{with rejected $s.body}}<div class="alert" role="note"><p>These names make no link — a title cannot hold <code>/ \ : * ? " &lt; &gt; |</code>, or start or end with a dot or space:</p>
+<p>{{range $i, $t := .}}{{if $i}}, {{end}}<code>[[{{$t}}]]</code>{{end}}</p></div>{{end}}
+{{with form (.Action "save-body") "button" "Save" "back" $.Here}}<details{{if .Refused}} open{{end}}><summary>Edit</summary>
+<small class="desc">CommonMark. [[Title]] links a page and #tag a tag page; both are created if new. Nothing is saved until the version you read is still the current one.</small>
+{{template "form" .}}</details>{{end}}
+</section>
+
+<section class="group" aria-label="Mentioned in"><h2>Mentioned in</h2>
+{{with $s.backlinks}}{{range group . "kind"}}{{if ne .Key "wikilink"}}<p class="sub">{{.Key}}</p>{{end}}
+<ul class="plain">{{range .Items}}<li><a href="/pages/{{num .id}}">{{$.Date .title}}</a>{{if ne .entity_type "page"}} <span class="badge">{{.entity_type}}</span>{{end}}</li>{{end}}</ul>{{end}}
+{{else}}<p class="empty">No page names {{.Title}} yet. Write [[{{.Title}}]] in a day, and the day is listed here.</p>{{end}}
+</section>
+
+{{if or $s.habit_periods (.Action "start-habit")}}<section class="group" aria-label="Habit"><div class="panel-head"><h2>Habit</h2><a href="/habits">Every habit</a></div>
+{{with $s.habit_periods}}<ul class="plain">{{range .}}<li>From {{$.Date .start_day}}{{with .end_day}} to {{$.Date .}}{{else}}, ongoing{{end}}</li>{{end}}</ul>
+{{else}}<p class="empty">Not a habit. Start it, and check it in each day as done or not done.</p>{{end}}
+<div class="actions">{{template "boxed" (form $checkIn "button" "Check in another day" "choices:done" "1 0" "back" $.Here)}}
+{{template "boxed" (form (.Action "start-habit") "back" $.Here)}}
+{{template "boxed" (form (.Action "stop-habit") "back" $.Here)}}</div>
+</section>{{end}}
+
+<section class="group" aria-label="Links"><h2>Links</h2>
+{{with $s.links}}<dl>{{range group . "kind"}}<dt>{{.Key}}</dt>
+<dd>{{range .Items}}<a href="/pages/{{num .id}}">{{$.Date .title}}</a>{{with .note}} <small>({{.}})</small>{{end}}{{end}}</dd>{{end}}</dl>
+{{else}}<p class="empty">Filed in no category, and linked to no page.</p>{{end}}
+<div class="actions">{{template "boxed" (form (.Action "link") "hide" "kind,note" "back" $.Here)}}
+{{template "boxed" (form (.Action "link") "button" "Add a typed link" "back" $.Here)}}
+{{template "boxed" (form (.Action "unlink") "button" "Remove a typed link" "back" $.Here)}}</div>
+</section>
+
+<section class="group" aria-label="More"><h2>More</h2><div class="actions">
+{{if $checkIn}}{{template "boxed" (form (.Action "record") "button" "Record a value" "metric" $.Title "more" "session_id,taken_at,tz,import_key" "back" $.Here)}}{{end}}
+{{template "boxed" (form (.Action "readings-from-table") "hide" "page" "back" $.Here)}}
+{{template "boxed" (form (.Action "rename"))}}
+{{template "boxed" (form (.Action "tombstone"))}}</div>
+</section>
+</div>{{end}}
+</div>
 {{template "foot" .}}{{end}}
 
 {{define "habits"}}{{template "head" .}}

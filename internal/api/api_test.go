@@ -433,11 +433,13 @@ func TestMetricsAreGroupedByCategory(t *testing.T) {
 			t.Errorf("/metrics lacks %q", s)
 		}
 	}
-	if s := browse(t, h, "/metrics/TSH"); !strings.Contains(s, `<span class="badge">Biomarkers/Thyroid</span>`) {
+	// The metric's page opens this one in a browser (TestTheBrowserOpensAMetricsPageAtItsMetric), so it holds the note.
+	s := browse(t, h, "/metrics/TSH")
+	if !strings.Contains(s, `<span class="badge">Biomarkers/Thyroid</span>`) {
 		t.Error("a series does not show its category")
 	}
-	if s := browse(t, h, href(tsh, "page")); !strings.Contains(s, "thyroid-stimulating hormone") {
-		t.Error("a metric's page does not hold its note")
+	if !strings.Contains(s, "thyroid-stimulating hormone") {
+		t.Error("a metric's one page does not hold its note")
 	}
 }
 

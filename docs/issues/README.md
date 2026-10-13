@@ -9,7 +9,7 @@ data could not answer, a rule that is ambiguous or untestable. It is the evidenc
 
 | id | title | status |
 |---|---|---|
-| [0069](0069-a-metric-is-three-pages.md) | A metric is three pages, and Record is under its readings | open |
+| [0069](0069-a-metric-is-three-pages.md) | A metric is three pages, and Record is under its readings | resolved |
 | [0068](0068-rules-the-writer-holds-alone.md) | The writer holds rules the database could hold, and repeats rules the database holds | resolved |
 | [0067](0067-one-rule-in-several-places.md) | The code says one rule in several places, and keeps what plan 089 removed | resolved |
 | [0066](0066-the-almanac-does-not-reflect-and-a-refusal-loses-the-form.md) | The Almanac never shows the owner their past, and a refused form loses its place | resolved |

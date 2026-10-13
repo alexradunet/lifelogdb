@@ -9,7 +9,7 @@
 - **Priority:** P1. **Effort:** M. **Risk:** LOW to MEDIUM: the series of the API reads all history when no `from`
   is named (it read 90 days), and it gains the page's properties and actions (nothing on the wire changes meaning);
   in a browser, the page of a live metric answers 303 to its metric. Nothing for the schema, nothing for the contract.
-- **Status:** IN PROGRESS. One commit for the records, then one commit for the change and this record.
+- **Status:** DONE. One commit for the records, then one commit for the change and this record.
 - **Resolves:** issue [0069](../issues/0069-a-metric-is-three-pages.md). No RFC: the contract in `docs/` does not
   change.
 
@@ -106,4 +106,17 @@ flowchart LR
 
 ## Result
 
-Filled in at the closing commit.
+Done as designed above; no judgment call changed in the work.
+
+- **Checks** (Windows 11): `go generate ./... && go vet ./... && go test ./...` green; `gofmt`; `staticcheck ./...`
+  (2026.2.1, 0.8.1) clean; `govulncheck ./...` (v1.9.0) "No vulnerabilities found"; `go test -count=1 -shuffle=on
+  ./internal/api` green. The four new tests failed before the change for the reasons they name.
+- **Screenshots** in headless Edge 154 at 1280 and 390 px, light and dark, on a synthetic database: `weight` (35
+  readings over three years, a note, a mention, a category), `evening_walk` (a habit), `/pages?title=weight` (the
+  303 lands on the same page) and a deleted metric (the page view with Revive).
+- **Measured once at the lifetime envelope**: one metric with 18,262 daily readings (50 years), warm, in-process: the
+  HTML page is 2.5 MB in about 210 ms, the JSON 5.0 MB in about 80 ms. The JSON is the cost the first judgment call
+  accepts for an agent that follows a series link; `from` bounds it.
+- **Not run:** the race check and a Linux run (no Linux here), and the mermaid render (no diagram in `docs/` changed).
+- The command list (Ctrl K) names `link` once, by its first form, File in category; Add a typed link is the second
+  form of the same action, on the page.

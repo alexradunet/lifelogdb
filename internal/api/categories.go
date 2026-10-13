@@ -2,11 +2,9 @@ package api
 
 import (
 	"context"
-	"strconv"
 	"strings"
 
 	"lifelog/internal/core"
-	"lifelog/internal/text"
 )
 
 // metricGroup is one section of /metrics: the habits (derived from their periods, D24), a category page with the
@@ -61,24 +59,21 @@ func groupMetrics(ms []core.Metric, cs []core.Category) []metricGroup {
 	return out
 }
 
-// metricOf is the live metric with that canonical title identity, nil when none.
+// metricOf is the live metric that name names, by its name or by an alias its renames kept (D27, as a series is
+// read); nil when it names none.
 func (h *server) metricOf(ctx context.Context, name string) (*core.Metric, error) {
+	id, err := h.s.PageID(ctx, name)
+	if err != nil || id == 0 {
+		return nil, err
+	}
 	ms, err := h.s.Metrics(ctx)
 	if err != nil {
 		return nil, err
 	}
-	key := text.TitleKey(name)
 	for i := range ms {
-		if text.TitleKey(ms[i].Name) == key {
+		if ms[i].ID == id {
 			return &ms[i], nil
 		}
 	}
 	return nil, nil
-}
-
-// fileAction files the metric in a category: a part-of link from its page to the category's (D26).
-func fileAction(m *core.Metric) Action {
-	a := action("link", map[string]string{"id": strconv.FormatInt(m.ID, 10)}, map[string]any{"kind": "part-of"})
-	a.Title = "File in category"
-	return a
 }

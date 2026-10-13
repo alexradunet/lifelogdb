@@ -9,7 +9,7 @@
 /* The two materials of this sheet, as reusable declarations: parchment (what is written) and wood (the chrome). */
 .rail,.rail>nav,.rail-more:target,.scroll:has(>table.calendar){--text:var(--rail-ink); --text-strong:var(--rail-accent); --text-muted:var(--rail-ink); --text-link:var(--rail-accent); --text-accent:var(--rail-accent); --rule:var(--outline);
   color:var(--text); background-color:var(--rail); background-image:var(--planks),var(--grain-ground); background-size:auto,4px 4px}
-.sheet,.panel,.leaf,.month-box,.reading-tile,.alert,.toast,.action-form,ul.suggest,dialog.palette,table.calendar td,.margin ul.plain,.margin .habit,
+.sheet,.panel,.leaf,.month-box,.reading-tile,.alert,.toast,.action-form,ul.suggest,dialog.palette,table.calendar td,.margin ul.plain,.margin .habit,.margin .about,
 .editor .preview,main>.scroll:not(:has(>table.calendar)),.group>.scroll{--text:var(--ink); --text-strong:var(--ink); --text-muted:var(--muted); --text-link:var(--link); --text-accent:var(--accent-ink); --rule:var(--edge);
   color:var(--text); background-color:var(--surface); background-image:var(--grain-ink); background-size:4px 4px; border:2px solid var(--edge)}
 
@@ -145,8 +145,8 @@ small .mood{font-size:12px; padding:2px 8px}
 .section{display:flex; flex-direction:column; gap:10px; min-width:0}
 
 /* The heading of a group carries a stitch after it: a dotted rule of the material, to the end of the line. */
-.panel-head :is(h2,h3),.margin .group>h2,.capture>h2,.also>h2,.section>h2{display:flex; align-items:center; gap:10px; flex:1 1 auto; min-width:0}
-.panel-head :is(h2,h3)::after,.margin .group>h2::after,.capture>h2::after,.also>h2::after,.section>h2::after{content:""; flex:1; height:2px; min-width:24px;
+.panel-head :is(h2,h3),.margin .group>h2,.capture>h2,.record>h2,.also>h2,.section>h2{display:flex; align-items:center; gap:10px; flex:1 1 auto; min-width:0}
+.panel-head :is(h2,h3)::after,.margin .group>h2::after,.capture>h2::after,.record>h2::after,.also>h2::after,.section>h2::after{content:""; flex:1; height:2px; min-width:24px;
   background:linear-gradient(to right,var(--rule) 50%,transparent 50%) 0 0/8px 2px repeat-x; opacity:.7}
 
 /* A short name of a kind (an entity type, a category) and a state, in mono on a small slab. The state's colour only
@@ -399,6 +399,17 @@ fieldset.segmented input:focus-visible+span{outline:2px solid var(--focus); outl
 .capture textarea{field-sizing:content; min-height:calc(4 * 26px + 2 * 10px + 2 * 2px); border-style:dashed; background:var(--surface)}
 .capture textarea:focus-visible{border-style:solid; border-color:var(--accent-ink); outline:0}
 
+/* Record on a metric's page (docs/plans/100-one-page-a-metric.md): the day and the value side by side, the folded
+   fields under them, then the button: the order on the screen is the order of the keys. */
+.record form{flex-direction:row; flex-wrap:wrap; align-items:flex-end; gap:var(--space-3)}
+.record form>label{flex:1 1 160px; max-width:20rem}
+.record form>details.more-fields{flex:1 1 100%}
+
+/* A metric's readings, one fold a year: the year in mono, and what the year holds beside it. */
+details.readings-year>summary{color:var(--text-strong)}
+details.readings-year>summary .year-name{font:700 15px/22px var(--mono); font-variant-numeric:tabular-nums}
+details.readings-year+details.readings-year{margin-top:var(--space-2)}
+
 /* A habit in the margin: its name and state, then the Done and Not done of its check-in, joined. */
 .habit{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--space-2)}
 .habit+.habit{padding-top:var(--space-3); border-top:1px solid var(--line-soft)}
@@ -498,7 +509,7 @@ dialog.palette>.meta{flex:none; margin:0; padding:var(--space-2) var(--space-5);
 .journal .panel-head h2{color:var(--muted); font-weight:400}
 .journal-text{max-width:var(--measure-read); font-size:18px; line-height:30px}
 .journal-text>*+*{margin-top:var(--space-4)}
-.capture>h2{margin-bottom:var(--space-3)}
+.capture>h2,.record>h2{margin-bottom:var(--space-3)}
 .empty{color:var(--text-muted); font-size:15px; line-height:22px}
 .margin{display:flex; flex-direction:column; gap:var(--space-8); min-width:0}
 .margin .group{gap:var(--space-2)}
@@ -511,6 +522,7 @@ dialog.palette>.meta{flex:none; margin:0; padding:var(--space-2) var(--space-5);
 .margin .habit+.habit{margin-top:var(--space-2); border-top:2px solid var(--edge)}
 .margin .readings{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
 .margin .group>details.action{margin-top:var(--space-2)}
+.margin .about{padding:var(--space-3)}
 .also ul.plain>li{padding:var(--space-2) 0}
 @media (max-width:1179px){.sheet-margin{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:899px){

@@ -126,7 +126,7 @@ func num(v any) string {
 var viewOf = map[string]string{
 	"root": "root", "day": "day", "page": "page", "person": "page", "place": "page", "file": "page", "period": "page",
 	"days": "list", "people": "list", "places": "list", "files": "list", "ghosts": "list", "search": "search",
-	"metrics": "metrics", "series": "series", "habits": "habits", "measurement": "measurement", "error": "error", "login": "login",
+	"metrics": "metrics", "series": "metric", "metric": "page", "habits": "habits", "measurement": "measurement", "error": "error", "login": "login",
 	"tasks": "tasks", "task": "task", "occurrence": "occurrence", "deadlines": "deadlines", "month": "month", "week": "week", "year": "year", "styleguide": "styleguide",
 }
 
@@ -579,7 +579,12 @@ func group(list any, key string) []bucket {
 	return out
 }
 
-// chart draws a series as an inline SVG: one point per reading, placed by its day between from and to.
+// chartPoints is how many readings the chart draws a point for: more points than this overlap on its 640 units and
+// only add weight, so the line alone draws a longer series (docs/plans/100-one-page-a-metric.md).
+const chartPoints = 200
+
+// chart draws a series as an inline SVG: a line through its readings, each placed by its day between from and to,
+// and a point a reading while there are at most chartPoints.
 func chart(from, to string, readings any) template.HTML {
 	list, _ := readings.([]any)
 	// An absent lower bound is explicit all-history mode. Plot from the earliest
@@ -647,10 +652,12 @@ func chart(from, to string, readings any) template.HTML {
 		fmt.Fprintf(&sb, "%.1f,%.1f ", x(p), y(p.value))
 	}
 	sb.WriteString(`"/>`)
-	for _, p := range pts {
-		d, _ := time.Parse(time.DateOnly, p.day) // parsed above: a point is only made from a day
-		fmt.Fprintf(&sb, `<circle cx="%.1f" cy="%.1f" r="3"><title>%s: %g</title></circle>`, x(p), y(p.value),
-			d.Format(layoutDateYear), p.value)
+	if len(pts) <= chartPoints {
+		for _, p := range pts {
+			d, _ := time.Parse(time.DateOnly, p.day) // parsed above: a point is only made from a day
+			fmt.Fprintf(&sb, `<circle cx="%.1f" cy="%.1f" r="3"><title>%s: %g</title></circle>`, x(p), y(p.value),
+				d.Format(layoutDateYear), p.value)
+		}
 	}
 	sb.WriteString(`</svg>`)
 	return template.HTML(sb.String())

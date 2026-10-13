@@ -99,3 +99,21 @@ func (s *feedbackStore) take(path, token string) string {
 	delete(s.entries, token)
 	return r.text
 }
+
+// move gives the receipt for path to destination, the page a browser is sent to instead (the page of a metric opens
+// its metric, docs/plans/100-one-page-a-metric.md), and reports whether there was one to give.
+func (s *feedbackStore) move(token, path, destination string) bool {
+	u, err := url.Parse(destination)
+	if err != nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, ok := s.entries[token]
+	if !ok || r.path != path || !s.clock().Before(r.expires) {
+		return false
+	}
+	r.path = u.Path
+	s.entries[token] = r
+	return true
+}
