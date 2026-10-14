@@ -322,3 +322,51 @@ func TestTheSheetsQueryTheColumnNotTheScreen(t *testing.T) {
 		}
 	}
 }
+
+// TestTheMotionsAreOffUnderReducedMotion: every entry, exit and scroll-driven motion of app.css is inside a block
+// that asks for motion (prefers-reduced-motion:no-preference), and the scroll-driven one inside @supports as well,
+// so a browser that does not want motion, or cannot drive it by the scroll, gets none.
+func TestTheMotionsAreOffUnderReducedMotion(t *testing.T) {
+	app := cssComments.ReplaceAllString(string(appCSS), "")
+	// enclosing is the preludes of the blocks around the index, outermost first.
+	enclosing := func(at int) []string {
+		var stack []string
+		start := 0
+		for i := 0; i < at; i++ {
+			switch app[i] {
+			case '{':
+				stack = append(stack, strings.TrimSpace(app[start:i]))
+				start = i + 1
+			case '}':
+				stack = stack[:len(stack)-1]
+				start = i + 1
+			case ';':
+				start = i + 1
+			}
+		}
+		return stack
+	}
+	within := func(stack []string, want string) bool {
+		for _, p := range stack {
+			if strings.Contains(p, want) {
+				return true
+			}
+		}
+		return false
+	}
+	for _, token := range []string{"@starting-style", "allow-discrete", "animation-timeline:scroll(root)"} {
+		if !strings.Contains(app, token) {
+			t.Errorf("app.css has no %s", token)
+		}
+		for at := strings.Index(app, token); at >= 0; at = strings.Index(app, token) {
+			stack := enclosing(at)
+			if !within(stack, "prefers-reduced-motion:no-preference") {
+				t.Errorf("%s at %q is outside a block that asks for motion", token, strings.Join(stack, " > "))
+			}
+			if strings.HasPrefix(token, "animation-timeline:") && !within(stack, "@supports (animation-timeline:scroll())") {
+				t.Errorf("%s at %q is outside @supports", token, strings.Join(stack, " > "))
+			}
+			app = app[:at] + strings.Repeat(" ", len(token)) + app[at+len(token):]
+		}
+	}
+}

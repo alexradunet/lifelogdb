@@ -123,9 +123,12 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   and a page's title, the leaf's number and a reading's value in Jersey 15; dark is the identity and light the
   daylight study of the same room, by `prefers-color-scheme`. Its tokens are custom properties of `base.css`; a
   material sets its own text through aliases (`--text`, `--text-link`, …), and a test holds every text pair at
-  4.5:1 and every edge and the focus ring at 3:1 in both themes. The two motions: a press sinks, and the step to the previous
-  or next day moves the leaf and cross-fades the sheet through a cross-document view transition, off under reduced
-  motion ([plan 097](docs/plans/097-the-almanac-reflects.md)).
+  4.5:1 and every edge and the focus ring at 3:1 in both themes. The motions, all off under reduced motion: a press
+  sinks; the step to the previous or next day moves the leaf and cross-fades the sheet through a cross-document view
+  transition ([plan 097](docs/plans/097-the-almanac-reflects.md)); the search dialog, the phone's sheet and the chat
+  sheet enter and leave by `@starting-style` and a discrete transition; the phone's top bar takes its drop once the
+  page has scrolled under it, by a scroll-driven animation
+  ([plan 108](docs/plans/108-the-browser-made-current.md)).
 
   Do and don't:
   - Show one loud button a screen.
