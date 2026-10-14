@@ -242,3 +242,20 @@ func TestBrowserMutationFeedback(t *testing.T) {
 		t.Errorf("feedback URL must contain only the resource path and opaque receipt: %s", location)
 	}
 }
+
+// TestAnEmptyPageSaysSoWithItsEditorClosed: a page with no text says so in words, as every empty view does, and its
+// editor is closed under the sentence, so the page does not open as a large empty box with the focus in it.
+func TestAnEmptyPageSaysSoWithItsEditorClosed(t *testing.T) {
+	c, h := fresh(t)
+	sam := must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "create-person"), map[string]string{"title": "Sam"}))
+	body := browse(t, h, hrefOf(sam, "self"))
+	if !strings.Contains(body, `<p class="empty">Nothing written here yet.</p>`) {
+		t.Error("an empty page does not say that nothing is written")
+	}
+	if !strings.Contains(body, `<details><summary>Edit</summary>`) || strings.Contains(body, `<details open><summary>Edit</summary>`) {
+		t.Error("an empty page opens its editor")
+	}
+	if strings.Count(body, "autofocus") != 0 {
+		t.Error("an empty page puts the focus in its editor")
+	}
+}

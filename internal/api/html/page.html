@@ -16,11 +16,12 @@
 <div class="sheet-margin">
 <div class="sheet">
 {{with .Link "preview"}}<figure><a href="{{.}}"><img class="preview" src="{{.}}" alt="{{$.Title}}"></a><figcaption>{{$.Title}}</figcaption></figure>{{end}}
-{{with form (.Action "save-body") "button" "Save" "autofocus" "body" "back" (.Link "self")}}<details{{if or (not $p.body) .Refused}} open{{end}}><summary>Edit</summary>
+{{if not $p.body}}<p class="empty">Nothing written here yet.</p>{{end}}
+{{with form (.Action "save-body") "button" "Save" "back" (.Link "self")}}<details{{if .Refused}} open{{end}}><summary>Edit</summary>
 <small class="desc">CommonMark. [[Title]] links a page and #tag a tag page; both are created if new. Nothing is saved until the version you read is still the current one.</small>
 {{template "form" .}}</details>{{end}}
-{{if or $p.body (not (.Action "save-body"))}}<section class="page-body" aria-label="The page">
-{{if $p.body}}<div class="prose">{{markdown $p.body}}</div>{{else}}<p class="empty">Nothing written here yet.</p>{{end}}
+{{if $p.body}}<section class="page-body" aria-label="The page">
+<div class="prose">{{markdown $p.body}}</div>
 {{with rejected $p.body}}<div class="alert" role="note"><p>These names make no link — a title cannot hold <code>/ \ : * ? " &lt; &gt; |</code>, or start or end with a dot or space:</p>
 <p>{{range $i, $t := .}}{{if $i}}, {{end}}<code>[[{{$t}}]]</code>{{end}}</p></div>{{end}}
 </section>{{end}}
