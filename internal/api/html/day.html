@@ -27,7 +27,7 @@
 
 {{with .Action "capture"}}<section class="capture" id="capture" aria-label="Capture">
 <h2>{{if $today}}Add to today{{else}}Add to {{shortDay $.Title}}{{end}}</h2>
-{{template "form" (form . "autofocus" "text" "button" "Add" "back" $.Here "placeholder" "text=What happened? Who was there?")}}
+{{template "form" (form . "autofocus" "text" "button" "Add" "back" $.Here "placeholder" "text=What happened? Who was there?" "key" "text=c")}}
 </section>{{end}}
 
 {{with form (.Action "save-body") "button" "Save" "back" (.Link "self")}}<details{{if .Refused}} open{{end}}><summary>Edit the day page</summary>

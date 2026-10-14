@@ -81,3 +81,11 @@
 {{template "boxed" (form (.Action "relocate-reading"))}}
 </div>
 {{template "foot" .}}{{end}}
+
+{{/* preview is POST /render: the body of a form as its page will show it once saved, in a new tab, so the form keeps
+     its words. Nothing is saved. */}}
+{{define "preview"}}{{template "head" .}}
+<header class="page-head"><div class="what"><span class="kind">preview</span><h1>Preview</h1>
+<p class="sub">The body as its page shows it once saved. Nothing is saved: close this tab and go on writing.</p></div></header>
+<div class="sheet"><div class="prose">{{markdown .Props.body}}</div></div>
+{{template "foot" .}}{{end}}

@@ -216,7 +216,13 @@ func (h *server) search(r *http.Request) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	e.Properties = map[string]any{"q": q}
+	// The pages whose title starts with the words come first, as the names after [[ once did: the search dialog of
+	// the browser is the one way to a page by its title (docs/plans/108-the-browser-made-current.md).
+	titles, err := h.s.TitlesByPrefix(r.Context(), q, 8)
+	if err != nil {
+		return nil, err
+	}
+	e.Properties = map[string]any{"q": q, "titles": titles}
 	hits = paged(e, hits, "/search", url.Values{"q": {q}}, limit, offset)
 	e.Properties.(map[string]any)["hits"] = hits
 	for _, x := range hits {

@@ -48,7 +48,8 @@ func TestAnErrorIsAnAlertInWords(t *testing.T) {
 	}
 }
 
-// TestAWriteEndsInAToast: a browser form's result comes back once, as the toast at the top of the page.
+// TestAWriteEndsInAToast: a browser form's result comes back once, as the toast at the top of the page: an open
+// dialog in the flow, which Escape (closedby) and its own Close close with no script.
 func TestAWriteEndsInAToast(t *testing.T) {
 	_, h := freshOn(t, fixedToday)
 	rec := submit(h, "/days/"+fixedToday+"/capture", url.Values{"text": {"Walked with [[Dana Example]]."}, "back": {"/"}}, "")
@@ -56,8 +57,9 @@ func TestAWriteEndsInAToast(t *testing.T) {
 		t.Fatalf("capture: %d %q", rec.Code, rec.Header().Get("Location"))
 	}
 	body := browse(t, h, rec.Header().Get("Location"))
-	if !strings.Contains(body, `<main id="main">`+"\n"+`<aside class="toast" role="status"><h2>Result</h2>`) || !strings.Contains(body, "Dana Example") {
-		t.Errorf("the capture's result is not the toast at the top of the page")
+	if !strings.Contains(body, `<main id="main">`+"\n"+`<dialog open closedby="closerequest" class="toast" aria-label="Result"><h2>Result</h2>`) || !strings.Contains(body, "Dana Example") ||
+		!strings.Contains(body, `<form method="dialog" class="tiny"><button class="close">Close</button></form></dialog>`) {
+		t.Errorf("the capture's result is not the toast at the top of the page, with its Close")
 	}
 	if strings.Contains(browse(t, h, rec.Header().Get("Location")), `class="toast"`) {
 		t.Error("the toast came back on a reload")

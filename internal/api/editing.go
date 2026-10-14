@@ -1,7 +1,6 @@
 package api
 
 import (
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -45,7 +44,8 @@ func (h *server) titles(r *http.Request) (*Entity, error) {
 	return e, nil
 }
 
-// render is POST /render: the field body as the browser shows it saved, the editor's preview. It writes nothing. It
+// render is POST /render: a page that shows the field body (or text, a capture's) as its page will show it saved,
+// the Preview of a form that writes a body, opened in a new tab so the form keeps its words. It writes nothing. It
 // is presentation, not a capability of the life log, so no catalog action names it and it answers HTML only; it
 // is behind the request limits, the origin guard and the token like every other POST.
 func (h *server) render(w http.ResponseWriter, r *http.Request) {
@@ -55,9 +55,12 @@ func (h *server) render(w http.ResponseWriter, r *http.Request) {
 		writeEntity(w, r, status, e)
 		return
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	body := v.Get("body")
+	if body == "" {
+		body = v.Get("text")
+	}
 	w.Header().Set("Cache-Control", "no-store")
-	io.WriteString(w, string(markdown(v.Get("body"))))
+	renderHTML(w, r, http.StatusOK, &Entity{Class: []string{"preview"}, Title: "Preview", Properties: map[string]any{"body": body}}, nil)
 }
 
 // saveBody is the save-body of a page, its body and version filled. Its textarea is as tall as the body, 12 to 40

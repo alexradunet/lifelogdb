@@ -134,19 +134,14 @@
 <div class="alert"><p><strong>Take care.</strong> A warning tells what the owner may want to check.</p></div>
 <div class="alert danger"><p><strong>Not done.</strong> A danger tells that nothing was saved.</p></div>
 <div class="alert" id="refused-sample" role="note"><p><strong>Not saved.</strong> The mood must be from 1 to 5.</p></div>
-<aside class="toast"><h2>Result</h2><p>Saved on Mon 12 Oct.</p></aside>
+<dialog open closedby="closerequest" class="toast" aria-label="Result"><h2>Result</h2><p>Saved on Mon 12 Oct.</p><form method="dialog" class="tiny"><button class="close">Close</button></form></dialog>
 </section>
 
-<section class="guide" aria-label="The command list">
-<h2>The command list, drawn open (app.css, app.js)</h2>
-<dialog class="palette" open aria-label="Go to, or do">
-<input type="text" role="combobox" aria-expanded="true" aria-controls="palette-list-sample" aria-autocomplete="list" aria-label="Go to a page, a section or a day, or do an action" placeholder="Go to a page, a section or a day, or do an action">
-<ul id="palette-list-sample" role="listbox" aria-label="Results">
-<li role="option" aria-selected="true"><span>Add to today</span><span class="kind">on this page</span></li>
-<li role="option" aria-selected="false"><span>Due</span><span class="kind">section</span></li>
-<li role="option" aria-selected="false"><span>Sam</span><span class="kind">page</span></li>
-</ul>
-<p class="meta"><kbd>↑</kbd> <kbd>↓</kbd> move · <kbd>Enter</kbd> opens · <kbd>Escape</kbd> closes, or leaves a field · <kbd>Ctrl K</kbd> the command list · <kbd>?</kbd> the same list · <kbd>/</kbd> search · <kbd>c</kbd> capture · <kbd>t</kbd> today · <kbd>[</kbd> previous page · <kbd>]</kbd> next page · <kbd>Ctrl Enter</kbd> sends a text</p>
+<section class="guide" aria-label="The search dialog">
+<h2>The search dialog, drawn open (app.css, layout.html)</h2>
+<dialog class="palette" open aria-label="Search">
+<form method="get" action="/styleguide"><input type="search" name="q" autocomplete="off" aria-label="Search" placeholder="A page's title, or words of a body"></form>
+<p class="meta">Enter searches · <kbd>Escape</kbd> closes · access keys, with the browser's modifier: <kbd>k</kbd> search · <kbd>n</kbd> new · <kbd>c</kbd> capture · <kbd>t</kbd> today · <kbd>[</kbd> <kbd>]</kbd> previous, next</p>
 </dialog>
 </section>
 

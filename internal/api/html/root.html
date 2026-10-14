@@ -64,7 +64,7 @@
 {{with .Action "add-file"}}{{template "boxed" (form . "hide" "sha256,mime")}}{{end}}
 </div></header>
 {{$named := ""}}{{with .Props}}{{$named = .rows}}{{end}}
-{{if $named}}{{$del := .Action "tombstone-pages"}}<div class="sheet list">{{if $del}}{{template "pick-form-open" (dict "action" $del "back" $.Here)}}{{end}}<ul class="plain rows">{{range $named}}<li{{if $del}} class="pick"{{end}}>{{if $del}}<label class="pick-box"><input type="checkbox" name="ids" value="{{num .id}}" aria-label="Select {{.title}}"></label>{{end}}<a class="entry named" href="/pages/{{num .id}}"><span class="first">{{.title}}</span><span class="meta">{{$.Mentions .mentions .last_day}}</span></a></li>{{end}}</ul>{{if $del}}</form>{{end}}</div>
+{{if $named}}{{$del := .Action "tombstone-pages"}}<div class="sheet list">{{if $del}}{{template "pick-form-open" (dict "action" $del "back" $.Here)}}{{end}}<ul class="plain rows">{{range $named}}<li{{if $del}} class="pick"{{end}}>{{if $del}}<label class="pick-box"><input type="checkbox" name="ids" value="{{num .id}}" aria-label="Select {{.title}}"></label>{{end}}<a class="entry named" href="/pages/{{num .id}}"><span class="first">{{.title}}</span><span class="meta">{{$.Mentions .mentions .last_day}}</span></a></li>{{end}}</ul>{{if $del}}{{template "pick-form-close"}}{{end}}</div>
 {{else if $items}}<div class="sheet list"><ul class="plain rows">{{range $items}}<li>{{if eq $.Title "Days"}}<a class="entry" href="{{.Href}}"><span class="date">{{$.Date .Title}}</span><span class="first">{{weekday .Title}}</span><span class="meta"></span></a>{{else}}<a href="{{.Href}}">{{$.Date .Title}}</a>{{end}}</li>{{end}}</ul></div>
 {{else if $ghosts}}<p class="empty">No ghost page: every page has text or a link.</p>
 {{else}}<p class="empty">Nothing yet. <a href="/#new">New</a> makes a page, a person, a place or a file.</p>{{end}}
@@ -120,9 +120,11 @@
 {{define "search"}}{{template "head" .}}
 <header class="page-head"><div class="what"><h1>Search</h1></div></header>
 {{template "form" (form (.Action "search") "class" "inline" "autofocus" "q")}}
-<p><small class="desc">FTS5 syntax: words, "a phrase", prefix*, a OR b.</small></p>
-{{with .Props}}{{with .hits}}<div class="sheet list"><ul class="plain rows">{{range .}}<li><a href="/pages/{{num .id}}">{{$.Date .title}}</a>
-<div class="snippet">{{mark .snippet}}</div></li>{{end}}</ul></div>
+<p><small class="desc">FTS5 syntax: words, "a phrase", prefix*, a OR b. A page whose title starts with the words comes first.</small></p>
+{{with .Props}}{{if or .titles .hits}}<div class="sheet list">{{with .titles}}<section class="due-group" aria-label="Pages by title"><div class="panel-head"><h2>Pages by title</h2><span class="meta">{{len .}}</span></div>
+<ul class="plain rows">{{range .}}<li><a href="{{titleHref .title}}">{{$.Date .title}}</a>{{if ne .name .title}} <span class="meta">{{.name}}</span>{{end}}</li>{{end}}</ul></section>{{end}}
+{{with .hits}}<section class="due-group" aria-label="Pages by their words"><div class="panel-head"><h2>Pages by their words</h2></div><ul class="plain rows">{{range .}}<li><a href="/pages/{{num .id}}">{{$.Date .title}}</a>
+<div class="snippet">{{mark .snippet}}</div></li>{{end}}</ul></section>{{end}}</div>
 {{else}}<p class="empty">No page matches. Try fewer words, or a prefix*.</p>{{end}}{{end}}
 {{template "pager" .}}
 {{template "foot" .}}{{end}}

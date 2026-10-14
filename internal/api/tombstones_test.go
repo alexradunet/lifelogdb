@@ -188,7 +188,7 @@ func TestTheListsDeleteWhatIsChecked(t *testing.T) {
 
 	list := browse(t, h, "/files")
 	for _, want := range []string{`<form method="POST" action="/pages/tombstone" data-action="tombstone-pages" class="pick-form">`,
-		`<input type="hidden" name="back" value="/files">`, `data-pick-all`, `<button class="danger">Delete selected</button>`,
+		`<input type="hidden" name="back" value="/files">`, `<div class="pick-bar"><span class="desc">Check the rows to delete, then delete them.</span><button class="danger">Delete selected</button></div></form>`,
 		`<input type="checkbox" name="ids" value="` + files[0] + `" aria-label="Select Scan 1.pdf">`, `name="ids" value="` + files[1] + `"`} {
 		if !strings.Contains(list, want) {
 			t.Errorf("the files list lacks %s", want)
@@ -196,6 +196,10 @@ func TestTheListsDeleteWhatIsChecked(t *testing.T) {
 	}
 	if strings.Contains(browse(t, h, "/people"), `data-action="tombstone-pages"`) {
 		t.Error("the people list draws the boxes")
+	}
+	// The bar comes after the rows, so a CSS counter can count the checked boxes on its button (plan 108).
+	if bar, last := strings.Index(list, `class="pick-bar"`), strings.LastIndex(list, `name="ids"`); bar < last || !strings.Contains(list[bar:], "</form>") {
+		t.Error("the bar is not after the rows and before the end of the form")
 	}
 	rec := submit(h, "/pages/tombstone", url.Values{"ids": files, "back": {"/files"}}, "")
 	if rec.Code != http.StatusSeeOther {

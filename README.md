@@ -81,7 +81,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   ([plan 091](docs/plans/091-the-browser-for-daily-use.md)).
 - **The page is semantic HTML, and the catalog says how to draw it.** A field is a `label` around its input (a field
   of 2 to 5 short options a `fieldset` of radio buttons), a card is an `article`, a callout an `aside`, an error a
-  `role="alert"`, a series a `table` with a header row; no id or class is generated for a template to find. What a
+  `role="alert"`, a series a `table` with a header row, a write's result and the search an open or a modal `dialog`,
+  the phone's sheet a popover; no id or class is generated for a template to find. What a
   template cannot know comes from the entity: `danger` marks a destructive action's button, `owner` an owner-only
   one, `rows` a textarea's height, `options` a field's choices, `pages` a field whose value is a page's title and an
   error's `code` its first words, so no view decides any of them by an action's or a field's name.
@@ -106,8 +107,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   Calendar, Due, Tasks) and of the record (People to Ghost pages), this month with its written days, and the
   owner's links. Under 900 px it is a phone's layout
   ([plan 093](docs/plans/093-words-phone-and-today.md)): a top bar (the brand, the date, Search, New), a bottom bar of
-  the sections of every day and More, and the rest as a sheet over the page while it is the target (`#sections`),
-  which needs no script. Inside the page a layout asks the width of its column (`@container column`), not of the
+  the sections of every day and More, and the rest as a sheet over the page (`#sections`): a popover that More
+  opens and Close, Escape or a tap outside closes, with no script. Inside the page a layout asks the width of its column (`@container column`), not of the
   screen, so a day beside an open sheet lays out as in a narrow window; the title, the leaf and the sheet's padding
   scale with the column by `clamp()`, with no step at a breakpoint
   ([plan 108](docs/plans/108-the-browser-made-current.md)). The sidebar is the one part of a page that is not the
@@ -162,22 +163,23 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   today, What is due) and a share target that posts shared text into Capture (`POST /days/today/capture`, where
   `today` is the local day). There is no service worker, since the server is the owner's own. A public listener
   refuses all three without the token, as it refuses the fonts.
-- **One script, which no page needs** ([plan 091](docs/plans/091-the-browser-for-daily-use.md)). `app.js` is this
-  application's own, embedded and written into each page like the two sheets: no framework, no CDN, no build step.
-  It suggests the names of pages after `[[` and in a field for a page's title (from `GET /titles`), shows a preview of a body as it will show when
-  saved (from `POST /render`), sends the form of a textarea with Ctrl+Enter, leaves a field with Escape, takes keys
-  outside a field (`/` search, `c` capture, `t` today, `[` and `]` the previous and next page, `?` the command list
-  with the legend of every key), shows the names after `[[` as a popover, and asks before
-  the browser leaves text that was not sent. It gives the toast a Close (and Escape), makes a danger button ask once
-  in the page before it sends ([plan 092](docs/plans/092-the-app-shell.md)), and closes the phone's sheet of sections
-  with Escape ([plan 093](docs/plans/093-words-phone-and-today.md)). Ctrl+K, from anywhere, and the phone's Search
-  button open the **command list** ([plan 094](docs/plans/094-the-command-list.md)): a typed day, this page's actions,
-  the sidebar's sections, the pages by the start of their title (`GET /titles`), the root's actions (`GET /`, once a
-  page) and a search of the bodies. It never builds a form: an action of this page opens the form the server drew for
-  it (every form carries its action's catalog name in `data-action`), and an action of the root goes to `/#do-{name}`,
-  where Home opens that form. It reads nothing else, writes nothing and keeps nothing in the browser. Every form posts
-  and every link works without it; the tests check the pages without running it, and a test keeps its reads to those
-  three routes.
+- **No script** ([plan 108](docs/plans/108-the-browser-made-current.md); the owner's rule of 2026-10-14: as native
+  as HTML can be, even at the cost of a small convenience). A page carries its two sheets and no `script` element,
+  and a test holds it. What the one script once did ([plan 091](docs/plans/091-the-browser-for-daily-use.md),
+  [plan 094](docs/plans/094-the-command-list.md)), the browser does by itself: the **search dialog** is a `dialog`
+  the server draws on every page of the shell, with the search form inside, which the top bar's Search opens by its
+  command (`commandfor`) and Escape or a tap outside closes (`closedby="any"`); `/search` lists the pages whose title
+  starts with the words before the pages whose words match, so a page is one search away by its title. The phone's
+  sheet of sections is a popover; the toast is an open `dialog` in the flow of the page, which Escape and its own
+  Close close. The keys are the browser's **access keys**, with its own modifier (Alt in Chromium, Alt+Shift in
+  Firefox, Ctrl+Alt on a Mac): `k` the search, `n` New, `t` Today, `c` the capture, `[` and `]` the previous and
+  next page; the footer and the dialog say so. A form that writes a body offers **Preview**, a second button that
+  sends it to `POST /render` in a new tab (`formaction`, `formtarget`), where the body shows as its page will show
+  it, and the form keeps its words. The list that deletes several rows counts the checked boxes on its button by a
+  CSS counter. **Dropped, by the owner's word:** the names after `[[`, the live preview as one types, Ctrl+Enter,
+  Escape to leave a field, the question before the browser leaves text not sent, the second press of a danger
+  button (a boxed danger already takes two presses, and a tombstone has Revive), and the command list's ranking of
+  this page's actions.
   `POST /render` is presentation, not a capability: no catalog action names it and it answers HTML only, so it, the
   fonts, the style page, the manifest, the icon and the pictures (`GET /pages/{id}/preview`, `GET /previews`) are the
   routes the CLI and the MCP server do not carry. **Rejected:** a separate web client. It would be a second
@@ -293,9 +295,9 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **Several rows deleted at once** ([plan 107](docs/plans/107-delete-several-at-once.md)). `tombstone-pages`
   (`POST /pages/tombstone`) and `tombstone-tasks` (`POST /tasks/tombstone`) take `ids`, separated by spaces or
   commas, and tombstone them all in one write or none: a missing id is a 404 that writes nothing. The files list
-  offers the first and the tasks list the second, so the browser draws a box on each row of Files and Tasks, Select
-  all, and one danger button that returns to the list with the count; the CLI's `do` and the MCP tools carry them as
-  any action. Both are dangers, not the owner's alone, and a revive undoes each.
+  offers the first and the tasks list the second, so the browser draws a box on each row of Files and Tasks and one
+  danger button, which counts the checked boxes (a CSS counter, no script) and returns to the list with the count;
+  the CLI's `do` and the MCP tools carry them as any action. Both are dangers, not the owner's alone, and a revive undoes each.
 - **Files** ([keep a file](docs/cookbook/keep-a-file.md), D9). `add-file` (`POST /files`, `lifelog file`) streams
   the original through SHA-256 and drops it; nothing of it is stored. `internal/preview` makes every picture itself —
   from a JPEG, PNG or GIF, or a JPEG sent for a HEIC or a video frame: scaled to 1600 px, turned upright by EXIF,

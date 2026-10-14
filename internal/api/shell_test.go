@@ -82,7 +82,7 @@ func sidebar(body string) string {
 // TestTheSidebarMarksTodayOnTodaysDay: today's day is Today; any other day is in the Calendar.
 func TestTheSidebarMarksTodayOnTodaysDay(t *testing.T) {
 	_, h := freshOn(t, fixedToday)
-	if body := browse(t, h, "/days/"+fixedToday); !strings.Contains(body, `<a href="/days/today" aria-current="page">`) {
+	if body := browse(t, h, "/days/"+fixedToday); !strings.Contains(body, `<a href="/days/today" aria-current="page" accesskey="t">`) {
 		t.Errorf("today's day does not mark Today:\n%s", sidebar(body))
 	}
 	if body := browse(t, h, "/days/"+dayOf(-1)); !strings.Contains(body, `<a href="/months/current" aria-current="page">`) {
@@ -148,37 +148,37 @@ func TestTheFontsAreServedByExactName(t *testing.T) {
 }
 
 // TestThePhoneHasABottomBarAndASheet: the sections of every day and More are one list (a phone's bottom bar); the
-// sections of the record, the month and the owner's links are the sheet that More opens (#sections), with no script;
-// each link is drawn once, and More is marked when the page is in the sheet.
+// sections of the record, the month and the owner's links are the popover sheet that More opens and Close hides
+// (#sections), with no script; each link is drawn once, and More is marked when the page is in the sheet.
 func TestThePhoneHasABottomBarAndASheet(t *testing.T) {
 	_, h := freshOn(t, fixedToday)
 	body := browse(t, h, "/people")
 	bar := regexp.MustCompile(`(?s)<nav aria-label="Sections">(.*?)</nav>`).FindStringSubmatch(body)
-	sheet := regexp.MustCompile(`(?s)<div class="rail-more" id="sections">(.*?)</aside>`).FindStringSubmatch(body)
+	sheet := regexp.MustCompile(`(?s)<div class="rail-more" id="sections" popover>(.*?)</aside>`).FindStringSubmatch(body)
 	if bar == nil || sheet == nil {
 		t.Fatalf("no bottom bar or no sheet:\n%s", sidebar(body))
 	}
 	links := func(s string) string {
 		var out []string
-		for _, m := range regexp.MustCompile(`<a href="([^"#]+|#sections)"`).FindAllStringSubmatch(s, -1) {
-			out = append(out, m[1])
+		for _, m := range regexp.MustCompile(`<a href="([^"#]+)"|<button type="button" (popovertarget="sections")`).FindAllStringSubmatch(s, -1) {
+			out = append(out, m[1]+m[2])
 		}
 		return strings.Join(out, " ")
 	}
-	if got := links(bar[1]); got != "/days/today /months/current /deadlines /tasks /conversations #sections" {
+	if got := links(bar[1]); got != "/days/today /months/current /deadlines /tasks /conversations popovertarget=\"sections\"" {
 		t.Errorf("the bottom bar: %s", got)
 	}
 	if got := links(sheet[1]); !strings.HasPrefix(got, "/people /places /files /metrics /habits /sessions /periods /ghosts /months/2031-05") ||
 		!strings.HasSuffix(got, "/actions /integrity") || !strings.Contains(sheet[1], `<a href="/#owner">Snapshot</a>`) {
 		t.Errorf("the sheet: %s", got)
 	}
-	if !strings.Contains(sheet[1], `<a class="button small" href="#closed">Close</a>`) {
+	if !strings.Contains(sheet[1], `<button type="button" class="button small" popovertarget="sections" popovertargetaction="hide">Close</button>`) {
 		t.Error("the sheet has no Close")
 	}
-	if !strings.Contains(bar[1], `<a href="#sections" class="here">`) {
+	if !strings.Contains(bar[1], `<button type="button" popovertarget="sections" class="here">`) {
 		t.Error("More is not marked on a page of the sheet")
 	}
-	if strings.Contains(browse(t, h, "/days/"+fixedToday), `<a href="#sections" class="here">`) {
+	if strings.Contains(browse(t, h, "/days/"+fixedToday), `popovertarget="sections" class="here">`) {
 		t.Error("More is marked on Today")
 	}
 	if !strings.Contains(body, `content="width=device-width, initial-scale=1, viewport-fit=cover"`) {

@@ -5,13 +5,13 @@
    parchment element and a wood element reset them once, here. There is no image: the icons and the chart are
    inline <svg>, and the grain, the planks and the stitch are CSS. This sheet is the components and the utilities
    layers of the one cascade base.css declares (docs/plans/108-the-browser-made-current.md): a utility is a class
-   no component restyles, so it may come last. The last rules are for what app.js adds to a page, which no page
-   needs. */
+   no component restyles, so it may come last. There is no script: a sheet, a dialog and a popover are the
+   browser's own, and a rule here only dresses them. */
 
 @layer components{
 /* The two materials of this sheet, as reusable declarations: parchment (what is written) and wood (the chrome).
    These two lists stay flat: a rule nested under a list takes the whole list's specificity. */
-.rail,.rail>nav,.rail-more:target,.scroll:has(>table.calendar){--text:var(--rail-ink); --text-strong:var(--rail-accent); --text-muted:var(--rail-ink); --text-link:var(--rail-accent); --text-accent:var(--rail-accent); --rule:var(--outline);
+.rail,.rail>nav,.rail-more:popover-open,.scroll:has(>table.calendar){--text:var(--rail-ink); --text-strong:var(--rail-accent); --text-muted:var(--rail-ink); --text-link:var(--rail-accent); --text-accent:var(--rail-accent); --rule:var(--outline);
   color:var(--text); background-color:var(--rail); background-image:var(--planks),var(--grain-ground); background-size:auto,4px 4px}
 .sheet,.panel,.leaf,.month-box,.reading-tile,.alert,.toast,.action-form,ul.suggest,dialog.palette,table.calendar td,.margin ul.plain,.margin .habit,.margin .about,
 .editor .preview,main>.scroll:not(:has(>table.calendar)),.group>.scroll{--text:var(--ink); --text-strong:var(--ink); --text-muted:var(--muted); --text-link:var(--link); --text-accent:var(--accent-ink); --rule:var(--edge);
@@ -48,10 +48,12 @@ svg.icon{flex:none; inline-size:16px; block-size:16px; fill:none; stroke:current
 .rail .rail-new.primary{inline-size:100%}
 .rail .rail-new.primary,.styleguide .rail-new.primary{background:var(--rail); color:var(--rail-accent); border-color:var(--outline); box-shadow:var(--bevel-up),var(--drop-hard);
   &:hover{background:var(--rail); color:var(--rail-accent); filter:brightness(1.12)}}
+/* A section is a link; More, which opens the phone's sheet, is a button drawn as one. */
 .rail nav{
   & ul{display:flex; flex-direction:column; gap:2px; margin:0; padding:0; list-style:none}
   & li{margin:0}
-  & a{display:flex; align-items:center; gap:10px; padding:7px 10px; color:var(--rail-ink); white-space:nowrap;
+  & button{all:unset; box-sizing:border-box; cursor:pointer}
+  & :is(a,button){display:flex; align-items:center; gap:10px; padding:7px 10px; color:var(--rail-ink); white-space:nowrap;
     &:hover{color:var(--rail-accent); text-decoration:none}
     &[aria-current=page]{background:var(--rail-deep); color:var(--rail-accent); font-weight:700; box-shadow:inset 0 2px 0 var(--bevel-dark),inset 0 -2px 0 var(--bevel-light)}}}
 .count{margin-inline-start:auto; font:700 12px/18px var(--mono); padding:0 7px; border:1px solid var(--outline); background:var(--primary); color:var(--on-accent)}
@@ -101,14 +103,16 @@ table.month{border-collapse:separate; border-spacing:2px; table-layout:fixed; fo
     padding:var(--space-1) calc(var(--space-2) + env(safe-area-inset-right, 0px)) calc(var(--space-1) + env(safe-area-inset-bottom, 0px)) calc(var(--space-2) + env(safe-area-inset-left, 0px));
     & ul{flex-direction:row; justify-content:space-around; gap:0}
     & li{flex:1 1 0; min-inline-size:0}
-    & a{position:relative; flex-direction:column; gap:2px; padding:6px 0; font-size:12px; line-height:16px;
+    & :is(a,button){position:relative; inline-size:100%; flex-direction:column; gap:2px; padding:6px 0; font-size:12px; line-height:16px;
       & svg.icon{inline-size:20px; block-size:20px}
       &[aria-current=page],&.here{background:none; box-shadow:none; color:var(--rail-accent); font-weight:700}}
     & .count{position:absolute; inset-block-start:2px; inset-inline-start:calc(50% + 6px); margin:0; padding:0 5px; font-size:12px; line-height:16px}}
   .rail-more-link{display:block}
   .rail-more{display:none}
-  .rail-more:target{display:flex; flex-direction:column; gap:var(--space-4); position:fixed; z-index:30; inset-inline:0; inset-block-start:0;
-    inset-block-end:calc(58px + env(safe-area-inset-bottom, 0px)); overflow-y:auto; box-shadow:var(--shadow-float);
+  /* The sheet is a popover: the browser puts it in the top layer, with its own size, margin, border and colours,
+     which this rule sets to the sheet's. */
+  .rail-more:popover-open{display:flex; flex-direction:column; gap:var(--space-4); position:fixed; z-index:30; inset-inline:0; inset-block-start:0;
+    inset-block-end:calc(58px + env(safe-area-inset-bottom, 0px)); inline-size:auto; block-size:auto; margin:0; border:0; overflow-y:auto; box-shadow:var(--shadow-float);
     padding:calc(var(--space-4) + env(safe-area-inset-top, 0px)) calc(var(--space-4) + env(safe-area-inset-right, 0px)) var(--space-4) calc(var(--space-4) + env(safe-area-inset-left, 0px))}
   .rail-more-head{display:flex; align-items:center; justify-content:space-between;
     & .label{color:var(--rail-accent)}}
@@ -341,8 +345,10 @@ table.calendar{inline-size:100%; min-inline-size:320px; table-layout:fixed; bord
   & code{background:none; color:inherit}}
 
 /* The toast: what a write did, at the top of the page. It is calm: parchment with a gold edge, a check in the done
-   colour before its heading. */
+   colour before its heading. It is an open dialog in the flow of the page, not the browser's centred box: its
+   position, size and margin are reset here; Escape and Close close it. */
 .toast{display:flex; flex-direction:column; gap:var(--space-2); padding:var(--space-3) var(--space-4); background-color:var(--toast-bg); color:var(--toast-ink);
+  position:static; inset:auto; inline-size:auto; block-size:auto; max-inline-size:none; max-block-size:none; margin:0;
   font-size:15px; line-height:22px; border-color:var(--accent-ink); box-shadow:var(--parch-bevel),var(--shadow-float);
   & h2{display:flex; align-items:center; gap:var(--space-2); color:var(--done); font-size:15px; line-height:22px;
     &::before{content:"\2713" / ""}}
@@ -352,7 +358,8 @@ table.calendar{inline-size:100%; min-inline-size:320px; table-layout:fixed; bord
   & p+p{margin-block-start:var(--space-1)}
   & th,& td{border-color:transparent}
   & tbody tr:hover{background:none}
-  &>button.close{align-self:flex-end; block-size:var(--control-small); padding:0 var(--space-3); font-size:14px}}
+  &>form{align-self:flex-end}
+  & button.close{font-size:14px}}
 
 /* A list of rows; a row's second line. */
 ul.rows>li{padding:0;
@@ -368,27 +375,9 @@ details.more-fields{align-self:stretch; border:0; padding:0; background:none;
 /* A kept picture, on its own line. */
 figure a{display:block}
 
-/* What app.js adds. The names after [[, under the textarea that asks for them, or under a field for a page's title. */
-ul.suggest{position:absolute; z-index:8; inset-inline:0; inset-block-start:100%; max-block-size:16rem; overflow:auto; margin:2px 0 0; padding:var(--space-1);
-  list-style:none; box-shadow:var(--shadow-float); font-size:15px;
-  /* In the top layer (a popover) the list is fixed, and the script sets its left, top and width from the field. The
-     browser's own styles for a popover put it at inset 0 and centre it; inset and margin are reset here, and the
-     alias block above and the rule before this one give it the parchment, edge and padding. */
-  &:popover-open{position:fixed; inset:auto; margin:0}
-  & li{margin:0; padding:5px 9px; cursor:pointer;
-    &[aria-selected=true]{background:var(--accent-soft); color:var(--accent-ink)}}}
-
-/* The preview of a body: under its textarea, or beside it in a wide column, where the open box of the editor leaves
-   the column. */
-form>.editor{align-self:stretch}
-.editor .preview{min-block-size:5rem; margin:9px 0; padding:10px 14px; border-style:dashed; box-shadow:none}
-@container column (min-width:888px){
-  .editor{display:grid; grid-template-columns:1fr 1fr; gap:var(--space-4); align-items:start}
-  .editor .preview{max-block-size:80vh; overflow:auto; margin:0}
-  .sheet-margin .editor{display:block} /* a sheet beside its margin is too narrow for two columns */
-  .sheet-margin .editor .preview{margin:9px 0 0}
-}
+/* The access keys, in the footer; a phone has no keyboard. The search's hint is a kbd after its field. */
 footer .keys{color:var(--text-muted)}
+.rail-search kbd{flex:none}
 
 /* An action with fields: a button that opens its form under it (with no script, a <details>). In the page header
    the open form floats over the page; anywhere else it opens in place. A row of them is .actions. */
@@ -477,8 +466,9 @@ svg.trend{display:block; inline-size:100%; block-size:28px; margin-block-start:v
     &.not-recorded{block-size:4px; background:var(--edge)}
     &.inactive{border:1px dashed var(--edge)}}}
 
-/* The command list of Ctrl K (docs/plans/094-the-command-list.md): the one ornate panel, parchment with a gold edge
-   and gold corner brackets, the field on top, the rows under it, the row chosen tinted. */
+/* The search dialog (docs/plans/108-the-browser-made-current.md; once the command list of plan 094): the one ornate
+   panel, parchment with a gold edge and gold corner brackets, the field on top and the keys under it. The top bar's
+   Search opens it by its command; Enter searches, Escape or a tap outside closes it. */
 dialog.palette{inline-size:min(36rem, calc(100vw - 2rem)); max-block-size:min(32rem, calc(100vh - 6rem)); margin:12vh auto auto; padding:0;
   border-color:var(--accent-ink); box-shadow:var(--parch-bevel),var(--shadow-float); overflow:hidden;
   &[open]{display:flex; flex-direction:column}
@@ -488,15 +478,10 @@ dialog.palette{inline-size:min(36rem, calc(100vw - 2rem)); max-block-size:min(32
       linear-gradient(var(--accent-ink),var(--accent-ink)),linear-gradient(var(--accent-ink),var(--accent-ink)),linear-gradient(var(--accent-ink),var(--accent-ink)),linear-gradient(var(--accent-ink),var(--accent-ink));
     background-repeat:no-repeat; background-size:12px 3px,3px 12px,12px 3px,3px 12px,12px 3px,3px 12px,12px 3px,3px 12px;
     background-position:left 5px top 5px,left 5px top 5px,right 5px top 5px,right 5px top 5px,left 5px bottom 5px,left 5px bottom 5px,right 5px bottom 5px,right 5px bottom 5px}
+  & form{display:contents}
   & input{flex:none; block-size:48px; padding:0 var(--space-5); border:0; border-block-end:2px solid var(--edge); background:transparent; box-shadow:none; font-size:16px;
     &:focus-visible{outline:0; border-block-end-color:var(--focus)}}
-  & ul{flex:1; min-block-size:0; overflow-y:auto; margin:0; padding:var(--space-2); list-style:none}
-  & li{display:flex; align-items:baseline; justify-content:space-between; gap:var(--space-3); margin:0; padding:8px var(--space-3); cursor:pointer;
-    &[aria-selected=true]{background:var(--accent-soft); color:var(--accent-ink);
-      & .kind{color:var(--accent-ink)}}
-    & .kind{font:400 12px/16px var(--mono); color:var(--muted); white-space:nowrap}
-    &.none{color:var(--muted); cursor:default}}
-  /* The keys of the command list, each in a kbd. */
+  /* The keys, each in a kbd. */
   &>.meta{flex:none; margin:0; padding:var(--space-2) var(--space-5); border-block-start:2px dotted var(--edge); line-height:26px}}
 @media (max-width:899px){dialog.palette{inline-size:calc(100vw - 1rem); margin:var(--space-2) auto auto}}
 
@@ -582,12 +567,15 @@ a.task{color:var(--ink); font-weight:700}
 /* A person or a place in a list: no date column, the words of the mentions at the end. */
 .entry.named{grid-template-columns:minmax(0,1fr) auto}
 
-/* A list that deletes several rows at once (Files, Tasks): a bar with Select all and the danger button, then a box
-   at the start of each row. The bar stays in view while the list scrolls under it. */
-.pick-form{display:flex; flex-direction:column; align-items:stretch; gap:0}
-.pick-bar{position:sticky; inset-block-start:0; z-index:1; display:flex; align-items:center; justify-content:space-between; gap:var(--space-3);
+/* A list that deletes several rows at once (Files, Tasks): a box at the start of each row, and a bar with the danger
+   button, drawn first (order) though it comes after the rows, so a counter can count the checked boxes on the
+   button; the button is quiet until a box is checked. The bar stays in view while the list scrolls under it. */
+.pick-form{display:flex; flex-direction:column; align-items:stretch; gap:0; counter-reset:picked;
+  &:not(:has(input[name=ids]:checked)) .pick-bar button.danger{opacity:.55}
+  &:has(input[name=ids]:checked) .pick-bar button.danger::after{content:" (" counter(picked) ")"}}
+li.pick:has(input[name=ids]:checked){counter-increment:picked}
+.pick-bar{order:-1; position:sticky; inset-block-start:0; z-index:1; display:flex; align-items:center; justify-content:space-between; gap:var(--space-3);
   padding:var(--space-2) var(--space-1); background:var(--surface); border-block-end:1px solid var(--line-soft);
-  & .pick-all{flex-direction:row; align-items:center; gap:var(--space-2); font-size:14px; color:var(--text-muted); cursor:pointer}
   & button{flex:none}}
 li.pick{display:flex; align-items:stretch; gap:var(--space-1);
   &>a.entry,&>.pick-main{flex:1 1 auto; min-inline-size:0}}

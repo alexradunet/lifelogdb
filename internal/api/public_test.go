@@ -120,7 +120,7 @@ func TestPublicRequiresTheToken(t *testing.T) {
 		t.Fatalf("browser without cookie: %d %q", rec.Code, rec.Header().Get("Location"))
 	}
 	rec = request(h, "GET", "/login", "", map[string]string{"Accept": "text/html"})
-	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `action="/login"`) || strings.Contains(rec.Body.String(), "2031-01-01") {
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `action="/login"`) || strings.Contains(rec.Body.String(), "2031-01-01") || strings.Contains(rec.Body.String(), "<dialog") {
 		t.Fatalf("login page: %d %.300s", rec.Code, rec.Body.String())
 	}
 }

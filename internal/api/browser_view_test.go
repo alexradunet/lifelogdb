@@ -234,47 +234,6 @@ func TestTheBaseSheetCarriesNoAppVocabulary(t *testing.T) {
 // cssComments cuts a stylesheet's comments, so a test reads its rules and not its prose.
 var cssComments = regexp.MustCompile(`(?s)/\*.*?\*/`)
 
-// TestTheScriptReadsTitlesRenderTheRootAndTheChatOnly keeps the script's promise in its first comment: it reads
-// /titles, /render, / (the root's actions, for the command list of docs/plans/094-the-command-list.md) and a chat page
-// (/conversations/{id}, for the sidebar of docs/plans/103-the-conversation-on-the-screen.md), and nothing else; the
-// one request it sends itself is the sidebar's form (form.action). The one thing it keeps in the browser is the
-// sidebar's state, under one key: open or closed, and the current conversation's id, never its text.
-func TestTheScriptReadsTitlesRenderTheRootAndTheChatOnly(t *testing.T) {
-	js := string(appJS)
-	calls := regexp.MustCompile(`fetch\(\s*"([^"?]*)`).FindAllStringSubmatch(js, -1)
-	read := map[string]bool{}
-	for _, c := range calls {
-		read[c[1]] = true
-	}
-	if len(calls)+strings.Count(js, "fetch(form.action,") != strings.Count(js, "fetch(") || strings.Count(js, "fetch(form.action,") != 1 ||
-		len(read) != 4 || !read["/titles"] || !read["/render"] || !read["/"] || !read["/conversations"] {
-		t.Errorf("the script fetches %v (%d calls), want /titles, /render, /, /conversations and the sidebar's form only", read, strings.Count(js, "fetch("))
-	}
-	if strings.Count(js, "localStorage") != 2 || strings.Count(js, "localStorage.getItem(chatKey)") != 1 ||
-		strings.Count(js, "localStorage.setItem(chatKey,") != 1 || !strings.Contains(js, `var chatKey = "lifelog.chat";`) ||
-		strings.Count(js, "saveChat({ open: ") != 2 || strings.Contains(js, "s.id") {
-		t.Error("the script keeps something in the browser besides whether the sidebar is open")
-	}
-	for _, never := range []string{"XMLHttpRequest", "WebSocket", "sendBeacon", "sessionStorage", "indexedDB",
-		"document.cookie", "import(", "eval(", "new Function", "http:", "https:"} {
-		if strings.Contains(js, never) {
-			t.Errorf("the script uses %s", never)
-		}
-	}
-}
-
-// TestTheScriptDeclaresEachFunctionOnce: the script is one function scope, so a second function of the same name
-// silently replaces the first (the command list's rows once replaced the suggestions after [[).
-func TestTheScriptDeclaresEachFunctionOnce(t *testing.T) {
-	seen := map[string]bool{}
-	for _, m := range regexp.MustCompile(`function ([A-Za-z_$][\w$]*)\s*\(`).FindAllStringSubmatch(string(appJS), -1) {
-		if seen[m[1]] {
-			t.Errorf("the script declares %s twice", m[1])
-		}
-		seen[m[1]] = true
-	}
-}
-
 // TestTheSheetsAreLayered: the two sheets are one cascade in four layers (docs/plans/108-the-browser-made-current.md),
 // declared once at the top of base.css before anything but the fonts, which stay outside the layers; app.css holds
 // the two last layers and never repeats the declaration, which would be a second home for the order.

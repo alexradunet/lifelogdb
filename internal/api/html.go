@@ -32,19 +32,16 @@ import (
 // this app's own vocabulary needs (the shell, its components, .wikilink, .chart), and a test keeps the two apart.
 // The two are one cascade in four layers (tokens, base, components, utilities), declared once in base.css, and
 // every rule is in logical properties (docs/plans/108-the-browser-made-current.md).
-// The three faces are embedded files that /assets/fonts/ serves. app.js is the one script, written into
-// each page like the sheets: it makes a page better and no page needs it
-// (docs/plans/091-the-browser-for-daily-use.md).
+// The three faces are embedded files that /assets/fonts/ serves. There is no script: what a page does beyond
+// its links and forms, the browser does by itself (docs/plans/108-the-browser-made-current.md).
 //
-//go:embed html/*.html html/*.css html/*.js html/*.svg html/*.png html/*.webmanifest html/fonts/*.woff2 html/fonts/*.txt
+//go:embed html/*.html html/*.css html/*.svg html/*.png html/*.webmanifest html/fonts/*.woff2 html/fonts/*.txt
 var views embed.FS
 
 // baseCSS and appCSS are the two stylesheets, in that order: the look of ordinary HTML, then this app's own.
-// appJS is the script.
 var (
 	baseCSS = template.CSS(mustView("base.css"))
 	appCSS  = template.CSS(mustView("app.css"))
-	appJS   = template.JS(mustView("app.js"))
 )
 
 func mustView(name string) []byte {
@@ -58,7 +55,6 @@ func mustView(name string) []byte {
 var pages = template.Must(template.New("").Funcs(template.FuncMap{
 	"basecss":      func() template.CSS { return baseCSS },
 	"appcss":       func() template.CSS { return appCSS },
-	"appjs":        func() template.JS { return appJS },
 	"rel":          func(r []string) string { return strings.Join(r, " ") },
 	"markdown":     markdown,
 	"mark":         mark,
@@ -139,7 +135,7 @@ var viewOf = map[string]string{
 	"periods": "periods", "sessions": "sessions", "session": "session",
 	"metrics": "metrics", "series": "metric", "metric": "page", "habits": "habits", "measurement": "measurement", "error": "error", "login": "login",
 	"tasks": "tasks", "task": "task", "occurrence": "occurrence", "deadlines": "deadlines", "month": "month", "week": "week", "year": "year", "styleguide": "styleguide",
-	"conversation": "conversation",
+	"conversation": "conversation", "preview": "preview",
 }
 
 // view is what a template gets: the entity, its properties as the JSON client reads them, the path the browser
@@ -386,6 +382,18 @@ type formView struct {
 	More          []Field // optional fields, folded; still in the form, so a browser sends them with no script
 	Hidden        []Field
 	prompts       map[string]string // field name to placeholder words
+	keys          map[string]string // field name to its access key
+}
+
+// Preview reports a form with a body to write: it offers Preview, a second button that sends the form to
+// POST /render in a new tab, where the body shows as its page will show it, and nothing is saved.
+func (f *formView) Preview() bool {
+	for _, fd := range append(f.Shown[:len(f.Shown):len(f.Shown)], f.More...) {
+		if fd.Type == "textarea" && (fd.Name == "body" || fd.Name == "text") {
+			return true
+		}
+	}
+	return false
 }
 
 // Multipart reports a form with a file field, shown or folded: a browser sends it as multipart/form-data.
@@ -403,6 +411,7 @@ type fieldView struct {
 	Field
 	Focus       bool
 	Placeholder string // a quiet prompt in an empty box; it is an attribute, never sent
+	Key         string // the field's access key, which the browser's own modifier reaches
 }
 
 // Fields are the fields the form shows (folded false) or folds under "More fields" (folded true).
@@ -413,7 +422,7 @@ func (f *formView) Fields(folded bool) []fieldView {
 	}
 	out := make([]fieldView, len(list))
 	for i, fd := range list {
-		out[i] = fieldView{fd, fd.Name == f.Focus, f.prompts[fd.Name]}
+		out[i] = fieldView{fd, fd.Name == f.Focus, f.prompts[fd.Name], f.keys[fd.Name]}
 	}
 	return out
 }
@@ -473,6 +482,13 @@ func formOf(x any, opts ...string) (*formView, error) {
 					f.prompts = map[string]string{}
 				}
 				f.prompts[name] = words
+			}
+		case k == "key": // "field=letter"
+			if name, letter, ok := strings.Cut(v, "="); ok {
+				if f.keys == nil {
+					f.keys = map[string]string{}
+				}
+				f.keys[name] = letter
 			}
 		case k == "primary":
 			f.Primary, primary = v == "1", true

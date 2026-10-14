@@ -144,6 +144,11 @@ class `tombstoned`), which a browser draws as a box on each row.
 | property | type | meaning |
 |---|---|---|
 | `q` | string | the query |
+| `titles[]` | list | the live pages whose name key starts with the title key of `q`, at most 8, in key order: the rows of `GET /titles` |
+| `titles[].name` | string | the name that starts with `q`: the page's title or one of its aliases |
+| `titles[].title` | string | the page's preferred title |
+| `titles[].page_id` | integer | the page |
+| `titles[].entity_type` | string | its type: `page`, `person`, `place`, `file`, … |
 | `hits[]` | list | the hits of this page, best first |
 | `hits[].id` | integer | the page's id |
 | `hits[].title` | string | its title |
@@ -156,8 +161,9 @@ class `tombstoned`), which a browser draws as a box on each row.
 `GET /titles?prefix=&limit=`: the names of live pages whose name key starts with the title key of `prefix` (as
 [titles and wikilinks](docs/contract/titles-and-wikilinks.md) folds a title), in key order: what an editor suggests
 after `[[`. `limit` is 1–20, default 10; an empty prefix is 422. Embedded: an `item` link to the page of each name,
-class its type. `POST /render` with the field `body` answers the HTML a page shows for that body once saved; it
-writes nothing, answers `text/html` only and is not a catalog action: it is the browser's preview.
+class its type. `POST /render` with the field `body` (or `text`) answers a page that shows the body as its page
+shows it once saved; it writes nothing, answers `text/html` only and is not a catalog action: it is the browser's
+Preview, a second button of a form that writes a body, which opens it in a new tab.
 
 | property | type | meaning |
 |---|---|---|

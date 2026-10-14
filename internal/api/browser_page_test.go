@@ -22,8 +22,8 @@ func page(t *testing.T, h http.Handler, path string) string {
 }
 
 // TestEveryPageIsSemanticHTML says what every page carries: both of this app's sheets under their markers, one
-// main with a way to skip to it, the sidebar's sections with this page marked, a footer, this app's one script and
-// no other, and no id generated for a template to find.
+// main with a way to skip to it, the sidebar's sections with this page marked, a footer, the search dialog, no
+// script at all (docs/plans/108-the-browser-made-current.md), and no id generated for a template to find.
 func TestEveryPageIsSemanticHTML(t *testing.T) {
 	c, h := fresh(t)
 	root := must(c.Get(t.Context(), "/"))
@@ -38,13 +38,14 @@ func TestEveryPageIsSemanticHTML(t *testing.T) {
 		for _, want := range []string{
 			`<style data-sheet="base">`, `<style data-sheet="app">`, // the two sheets, the base one first
 			`<a class="skip" href="#main">`, `<main id="main">`, `<nav aria-label="Sections">`, "<footer>",
+			`<dialog class="palette" id="palette" closedby="any" aria-label="Search">`,
 		} {
 			if !strings.Contains(body, want) {
 				t.Errorf("%s does not carry %s", path, want)
 			}
 		}
-		if strings.Count(body, "<script") != 1 || strings.Count(body, `<script data-script="app">`) != 1 {
-			t.Errorf("%s carries %d scripts: a page carries this app's one script, and no other", path, strings.Count(body, "<script"))
+		if strings.Contains(body, "<script") {
+			t.Errorf("%s carries a script: a page is HTML the browser runs by itself", path)
 		}
 		if strings.Contains(body, `id="f-`) {
 			t.Errorf("%s carries a generated id: a page is semantic HTML", path)

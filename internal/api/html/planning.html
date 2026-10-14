@@ -16,7 +16,7 @@
 <section class="due-group" aria-label="{{with .Key}}{{.}}{{else}}No project{{end}}"><div class="panel-head"><h2>{{with .Key}}{{.}}{{else}}No project{{end}}</h2><span class="meta">{{len .Items}}</span></div>
 <ul class="plain">{{range .Items}}<li{{if $del}} class="pick"{{end}}>{{if $del}}<label class="pick-box">{{if .deleted_at}}<input type="checkbox" disabled aria-label="{{.label}} is deleted">{{else}}<input type="checkbox" name="ids" value="{{num .id}}" aria-label="Select {{.label}}">{{end}}</label>{{end}}<div class="pick-main"><a class="task" href="/tasks/{{num .id}}">{{.label}}</a>{{if .deleted_at}} <span class="tag deleted">deleted</span>{{end}}
 <div class="task-facts">{{$.Cadence .}}{{with .due_day}}<span class="date">due {{$.Date .}}</span>{{end}}{{with $.Reminder .}}<span>reminder {{.}}</span>{{end}}</div></div></li>{{end}}</ul></section>
-{{end}}{{if $del}}</form>{{end}}</div>{{else}}<p class="empty">No task yet. A task is explicit intent: something to do once, or again and again. <a href="#create">Create one</a> above.</p>{{end}}
+{{end}}{{if $del}}{{template "pick-form-close"}}{{end}}</div>{{else}}<p class="empty">No task yet. A task is explicit intent: something to do once, or again and again. <a href="#create">Create one</a> above.</p>{{end}}
 {{template "foot" .}}{{end}}
 
 {{define "task"}}{{template "head" .}}

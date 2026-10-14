@@ -54,7 +54,4 @@ func TestAFieldForAPageTitleCarriesDataPages(t *testing.T) {
 			t.Errorf("%s marks %d fields as a page's title, want 1", name, marked)
 		}
 	}
-	if js := string(appJS); !strings.Contains(js, `input[data-pages]`) {
-		t.Error("the script does not hang the list of names on input[data-pages]")
-	}
 }
