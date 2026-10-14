@@ -132,6 +132,7 @@ func num(v any) string {
 var viewOf = map[string]string{
 	"root": "root", "day": "day", "page": "page", "person": "page", "place": "page", "file": "page", "period": "page",
 	"days": "list", "people": "list", "places": "list", "files": "list", "ghosts": "list", "search": "search",
+	"periods": "periods",
 	"metrics": "metrics", "series": "metric", "metric": "page", "habits": "habits", "measurement": "measurement", "error": "error", "login": "login",
 	"tasks": "tasks", "task": "task", "occurrence": "occurrence", "deadlines": "deadlines", "month": "month", "week": "week", "year": "year", "styleguide": "styleguide",
 	"conversations": "conversation", "conversation": "conversation",

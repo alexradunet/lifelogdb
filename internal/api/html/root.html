@@ -69,6 +69,16 @@
 {{template "pager" .}}
 {{template "foot" .}}{{end}}
 
+{{/* periods is the list of recorded periods, drawn as the people and the places are: a row each, its boundaries in
+     words, and the action that records one in the head */}}
+{{define "periods"}}{{template "head" .}}{{$p := .Props}}
+<header class="page-head"><div class="what"><h1>{{.Title}}</h1>{{with $p.periods}}<p class="sub">{{len .}} on this page</p>{{end}}</div>
+<div class="tools">{{with .Action "create-period"}}{{template "boxed" (form .)}}{{end}}</div></header>
+{{with $p.periods}}<div class="sheet list"><ul class="plain rows">{{range .}}<li><a class="entry named" href="/pages/{{num .id}}"><span class="first">{{.title}}{{if .deleted_at}} <span class="tag deleted">deleted</span>{{end}}</span><span class="meta">{{if or .start_boundary .end_boundary}}{{or .start_boundary "unknown"}} to {{or .end_boundary "unknown"}}{{else}}no boundaries{{end}}</span></a></li>{{end}}</ul></div>
+{{else}}<p class="empty">No period yet. Record period makes one.</p>{{end}}
+{{template "pager" .}}
+{{template "foot" .}}{{end}}
+
 {{define "search"}}{{template "head" .}}
 <header class="page-head"><div class="what"><h1>Search</h1></div></header>
 {{template "form" (form (.Action "search") "class" "inline" "autofocus" "q")}}
