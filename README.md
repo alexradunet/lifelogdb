@@ -32,6 +32,7 @@ lifelog day --human
 lifelog serve                              # http://127.0.0.1:7777 — open it in a browser; this machine only
 lifelog serve --public --token-file ~/life/token   # for your other devices: every request needs the token
 lifelog mcp --agent lmstudio               # MCP on stdio; rows are written as agent:lmstudio
+lifelog ask "What did I do last Sunday?"  # a model answers with the actions ($LIFELOG_MODEL_URL, $LIFELOG_MODEL)
 lifelog habits --human                     # today's habits; lifelog done evening_walk
 lifelog snapshot --to ~/snapshots --human  # life-YYYY-MM-DD.db and its restore check
 lifelog file memo.m4a --text memo.txt     # keep a file: its text, the original hashed and never stored
@@ -191,7 +192,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   margins where ours sit two to a row, and its `body` is a 45rem grid: keeping one meant overriding most of it, and
   re-pinning a file by hand at every upstream change.
 - **Provenance per surface.** `source` is `cli`, `api`, `ui` (a browser form) or `agent:<name>` (MCP);
-  the `Lifelog-Source` header sets it.
+  the `Lifelog-Source` header sets it. The agent of `ask` writes as `agent:chat`, whoever asked.
 - **Optimistic saves.** A body save sends the `version` (the decimal `entities.revision` token) it read; a newer one is a 409.
 - **One page a metric** ([plan 100](docs/plans/100-one-page-a-metric.md)). `/metrics/{name}` is the metric's one
   page: Record first (Check in while it is a habit), its readings newest first in a fold a year, and, as a metric is
@@ -222,6 +223,18 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   action: it writes files beside the program.
 - **Owner-only actions.** `register-metric`, `relocate-reading` and `snapshot` are refused to an `agent:*` or `import:*` writer and
   are never MCP tools. An agent that imports with the owner asks for them in the conversation.
+- **A conversation with lifelog** ([plan 102](docs/plans/102-a-conversation-with-lifelog.md)). `ask` is an action of
+  the catalog, so it is on every surface: `lifelog ask`, the MCP tool `ask`, the form on Home and on each
+  conversation page. A model the owner configures answers it with the same tools as the MCP server, minus `ask`
+  itself, as `agent:chat` (`internal/chat`). The model is an OpenAI chat-completions endpoint, read from the
+  environment of the process that opens the file: `LIFELOG_MODEL_URL` (the base URL, ending in `/v1`),
+  `LIFELOG_MODEL` and optional `LIFELOG_MODEL_KEY`; without them `ask` answers 503 and the rest is unchanged. With
+  `--url`, the server's model answers. A model writes with no approval step; it asks the owner in the chat when it
+  is not sure. Each turn is appended to a page `Conversation YYYY-MM-DD HH.MM.SS`, filed by `part-of` in the page
+  `Conversations`; the body is the conversation's only memory, sent whole to the model when it continues. At most
+  16 model steps a question and 64 KiB a tool result; the loop runs in the request and stops with it. **Rejected:**
+  rewriting `lifelog` in another language to embed an agent SDK, a second application beside it, and a table of
+  conversations before a question needs one ([RFC 0012](docs/rfcs/0012-a-conversation-with-lifelog.md)).
 - **Renames select a preferred name on the same identity**, retaining direct aliases as
   [titles and wikilinks](docs/contract/titles-and-wikilinks.md) ("Renames") requires and
   [rename a page](docs/cookbook/rename-a-page.md) writes; `lifelog rename` and the API's `rename` action run it.
@@ -298,7 +311,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 | `internal/photo` | what a photo's metadata says: the day and time taken, the position, the orientation (JPEG and HEIC); `phototest` builds synthetic ones |
 | `internal/api` | the action catalog, the routes, Siren and HTML; the local and the `--public` network guards |
 | `internal/client` | the hypermedia client (in-process or remote) |
-| `internal/mcp` | the catalog as MCP tools |
+| `internal/mcp` | the catalog as MCP tools (the tool list is `internal/client`'s, shared with `internal/chat`) |
+| `internal/chat` | the agent of `ask`: the model client, the loop over the catalog's tools, the conversation page |
 | `internal/agentic` | `lifelog agentic-init`: the texts and MCP configs for a coding agent opened in the folder of the program |
 | `internal/scaletest` | the synthetic personas and the lifetime workload of `tools/lifescale`: generators, an oracle and the timed checks |
 | `tools/copyschema` | `go generate`'s copy of `docs/schema/schema.sql` into `internal/db` |

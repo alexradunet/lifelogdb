@@ -4,10 +4,11 @@ A plan is a dated record ([how a change happens](../process.md)): a change large
 written as a self-contained brief with done criteria. It cites the docs as they were at the commit it names. One file
 per plan, `NNN-short-slug.md`, numbered on from the last.
 
-Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **102**.
+Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **103**.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
+| [102](102-a-conversation-with-lifelog.md) | A conversation with lifelog: the action `ask`, an agent inside the writer | P1 | M | RFC 0012; issue 0071; owner decisions 2026-10-14 | IN PROGRESS |
 | [101](101-the-calendar-holds-every-dated-thing.md) | The calendar holds every dated thing | P1 | M | issue 0070; owner decision 2026-10-13 | DONE |
 | [100](100-one-page-a-metric.md) | One page a metric: Record, every reading, and its own page | P1 | M | issue 0069; owner decision 2026-10-13 | DONE |
 | [099](099-rules-into-the-schema.md) | Rules into the schema: a Go copy deleted, a writer-held rule made a trigger | P1 | M | issue 0068 | DONE |

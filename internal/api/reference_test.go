@@ -52,6 +52,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		"result of capture, create-page, save-body": core.Sync{},
 		"result of add-file":                        core.Kept{},
 		"result of relocate-reading":                core.ScopeRelocation{},
+		"result of ask":                             Answer{},
 		"readings-from-table":                       core.TableReadings{},
 	}
 	for section, shape := range shapes {

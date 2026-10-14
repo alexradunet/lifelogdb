@@ -199,6 +199,10 @@ var catalog = []spec{
 		"POST", "/tasks/{id}/occurrences/{key}/tombstone", []Field{path("id", "number", "Task id"), path("key", "text", "Occurrence key"), req("task_version", "hidden", "Task version"), req("version", "hidden", "Version")}, false, true},
 	{"revive-occurrence", "Revive occurrence", "Undo an occurrence's tombstone.",
 		"POST", "/tasks/{id}/occurrences/{key}/revive", []Field{path("id", "number", "Task id"), path("key", "text", "Occurrence key"), req("task_version", "hidden", "Task version"), req("version", "hidden", "Version")}, false, false},
+	// A conversation with lifelog (docs/plans/102-a-conversation-with-lifelog.md): a model answers with the tools of this
+	// catalog, and the turn is kept on a conversation page.
+	{"ask", "Ask", "Ask lifelog in words. A model answers with the tools of this catalog (never the owner's own actions) and writes as agent:chat; it asks back when it is not sure. The turn is appended to a conversation page, filed in the page Conversations: a new one, or the one named by conversation.",
+		"POST", "/conversations", []Field{areaReq("question", "Question", 3), opt("conversation", "number", "Conversation page id (blank: a new one)")}, false, false},
 	{"deadlines", "Deadlines", "The occurrences of every task due in a window (default: 30 days back to 90 days on), open ones unless state says otherwise. Overdue is this read with an earlier from, never a stored flag.",
 		"GET", "/deadlines", []Field{opt("from", "date", "From"), opt("through", "date", "Through"), {Name: "state", Type: "text", Title: "State", Options: []string{core.StateOpen, core.StateDone, core.StateSkipped, "all"}},
 			{Name: "include_deleted", Type: "number", Title: "Include tombstoned", Options: []string{"0", "1"}}}, false, false},

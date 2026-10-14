@@ -23,19 +23,25 @@ type server struct {
 	localDay func() string  // the server's local day: what is due, overdue and today is read against it
 	zone     *time.Location // the zone of that day: a browser's words for a time use it
 	mux      *http.ServeMux // the routes: a refused browser form runs a GET of its page through it
+	asker    Asker          // the agent of ask; nil when no model is configured
 }
 
 // New returns the whole API as one handler: lifelog serve mounts it on a socket, the CLI and the MCP server
 // call it in-process. trustedOrigins are the browser origins a public listener allows to write
 // (docs/plans/078-network-server.md); a local listener and the in-process client pass none.
 func New(s *core.Store, trustedOrigins ...string) http.Handler {
-	return newHandler(s, core.Today, time.Local, trustedOrigins...)
+	return newHandler(s, core.Today, time.Local, nil, trustedOrigins...)
+}
+
+// NewAsking is New with the agent of ask (docs/plans/102-a-conversation-with-lifelog.md); asker nil refuses ask.
+func NewAsking(s *core.Store, asker Asker, trustedOrigins ...string) http.Handler {
+	return newHandler(s, core.Today, time.Local, asker, trustedOrigins...)
 }
 
 // newHandler is New with the clock of the local day and its zone given: a test fixes them, so what is due and
 // overdue is read against a fixed day, and a time is written in fixed words.
-func newHandler(s *core.Store, localDay func() string, zone *time.Location, trustedOrigins ...string) http.Handler {
-	h := &server{s: s, localDay: localDay, zone: zone}
+func newHandler(s *core.Store, localDay func() string, zone *time.Location, asker Asker, trustedOrigins ...string) http.Handler {
+	h := &server{s: s, localDay: localDay, zone: zone, asker: asker}
 	m := http.NewServeMux()
 	h.mux = m
 	get := func(p string, f func(*http.Request) (*Entity, error)) { m.HandleFunc("GET "+p, h.serve(f)) }
@@ -138,6 +144,7 @@ func newHandler(s *core.Store, localDay func() string, zone *time.Location, trus
 	post("/tasks/{id}/occurrences/{key}/edit", h.editOccurrence)
 	post("/tasks/{id}/occurrences/{key}/tombstone", h.occurrenceLifecycle(true))
 	post("/tasks/{id}/occurrences/{key}/revive", h.occurrenceLifecycle(false))
+	post("/conversations", h.ask)
 	guard := http.NewCrossOriginProtection()
 	for _, origin := range trustedOrigins {
 		if err := guard.AddTrustedOrigin(origin); err != nil {

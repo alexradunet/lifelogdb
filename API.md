@@ -52,7 +52,7 @@ An error is an entity of class `error` with `properties`:
 | property | type | meaning |
 |---|---|---|
 | `status` | integer | the HTTP status |
-| `code` | string | what went wrong, to branch on: `stale_version` (a save with an old `version`), `exists` (a title in use; the link `existing` names the page), `cross_origin` (a browser write from another origin), `token_required` (a public listener without a credential), `snapshot_refused` (the snapshot folder refused it), `restore_check_failed` (the snapshot is written but fails its restore check), or the status's general name: `bad_request`, `unauthorized`, `forbidden`, `not_found`, `conflict`, `too_large`, `invalid` (422), `timeout`, `internal` |
+| `code` | string | what went wrong, to branch on: `stale_version` (a save with an old `version`), `exists` (a title in use; the link `existing` names the page), `cross_origin` (a browser write from another origin), `token_required` (a public listener without a credential), `snapshot_refused` (the snapshot folder refused it), `restore_check_failed` (the snapshot is written but fails its restore check), `no_model` (503: `ask` with no model configured), `model` (502: the model failed or did not answer), or the status's general name: `bad_request`, `unauthorized`, `forbidden`, `not_found`, `conflict`, `too_large`, `invalid` (422), `timeout`, `internal` |
 | `message` | string | the text, for a person |
 
 ## Pages of a list
@@ -70,7 +70,7 @@ first; search by rank.
 `habits`, `tasks`, `deadlines`, `ghosts`, `actions`, `calendar` (this month), `week` (this week), `year` (this year). Actions: `capture` (for today), `search`,
 `find`, `open-day`, `deadlines`,
 `create-task`, `capture-session`, `create-period`, `create-page`, `create-person`, `create-place`, `add-file`,
-`record`, `register-metric` (owner), `query`, `snapshot` (owner); then the `check-in` of each habit of today (today
+`record`, `register-metric` (owner), `query`, `snapshot` (owner), `ask`; then the `check-in` of each habit of today (today
 filled in), and the outcome (see task) of each occurrence in `due`.
 
 | property | type | meaning |
@@ -371,7 +371,8 @@ tombstoned page adds `deleted`. Links: `day` (a day page's day view), `preview` 
 point). Embedded: every outgoing link under its kind, every incoming one under `backlink` and its kind. Actions by
 what is legal: `save-body` (with the current `body` and `version` filled), `promote`, `promote-period`, `rename`,
 `edit-period`, `locate`, `link` and `unlink` (with the kinds this type may start), `readings-from-table` (when the
-body holds a table, with `page` filled), `tombstone`, or `revive` alone on a deleted page. In a browser, the page of a
+body holds a table, with `page` filled), `ask` (on a conversation page, with `conversation` filled), `tombstone`, or
+`revive` alone on a deleted page. In a browser, the page of a
 live metric answers 303 to its series, the metric's one page, which carries this page's text, links and actions. The
 writes answer with this entity; `create-page` and `save-body` carry a `result` of the sync shape, `add-file` the kept
 shape.
@@ -899,6 +900,23 @@ What the save contract did with the body's `[[wikilinks]]` and `#tags`:
 | `created` | list | the titles whose page was created; absent when none |
 | `revived` | list | the tombstoned pages revived by a link; absent when none |
 | `skipped` | list | the `[[names]]` that are not valid titles; absent when none |
+
+### result of ask
+
+`POST /conversations` (`question`, optional `conversation`): a model the server is configured with
+(`LIFELOG_MODEL_URL`, `LIFELOG_MODEL`, optional `LIFELOG_MODEL_KEY`) answers with the tools of the catalog, never an
+owner-only action, and writes as `agent:chat`. The turn is appended to a conversation page: a new page titled
+`Conversation YYYY-MM-DD HH.MM.SS` and filed by `part-of` in the page `Conversations`, or the page `conversation`
+names, which must be a live page filed there (else 422). The answer is that page, with this `result`:
+
+| property | type | meaning |
+|---|---|---|
+| `conversation` | integer | the conversation page's id |
+| `reply` | string | the model's answer in words |
+| `steps[]` | list | each tool the model called, in order |
+| `steps[].tool` | string | the tool's name: an action's name with `_` for `-`, or `get_day`, `get` |
+| `steps[].href` | string | the `self` of what the tool answered; absent when it failed |
+| `steps[].error` | string | the refusal the model was given back; absent when it succeeded |
 
 ### result of add-file
 

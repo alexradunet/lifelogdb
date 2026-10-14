@@ -20,28 +20,6 @@ import (
 	"lifelog/internal/db"
 )
 
-func TestValidateToolNamesRejectsNormalizedDuplicates(t *testing.T) {
-	for _, tc := range []struct {
-		name    string
-		actions []api.Action
-		want    string
-	}{
-		{"catalog collision", []api.Action{{Name: "same-name"}, {Name: "same_name"}}, `"same_name"`},
-		{"built-in get", []api.Action{{Name: "get"}}, `"get"`},
-		{"built-in get day", []api.Action{{Name: "get-day"}}, `"get_day"`},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			err := validateToolNames(tc.actions)
-			if err == nil || !strings.Contains(err.Error(), tc.want) {
-				t.Fatalf("validateToolNames() = %v, want a collision containing %s", err, tc.want)
-			}
-		})
-	}
-	if err := validateToolNames([]api.Action{{Name: "get", Owner: true}, {Name: "find"}, {Name: "import-find"}}); err != nil {
-		t.Fatalf("owner-only duplicate and distinct public tools were rejected: %v", err)
-	}
-}
-
 // The find tools and readings_from_table, the tool an agent uses during an import (docs/plans/089-no-import-process.md),
 // are MCP tools; the owner-only actions are not.
 func TestFindAndReadingsTools(t *testing.T) {
@@ -83,7 +61,7 @@ func TestFindAndReadingsTools(t *testing.T) {
 		}
 		seen[tool.Name] = true
 	}
-	for _, name := range []string{"find", "get", "get_day", "readings_from_table", "open_day"} {
+	for _, name := range []string{"find", "get", "get_day", "readings_from_table", "open_day", "ask"} {
 		if !seen[name] {
 			t.Fatalf("MCP tools lack %q; have %v", name, seen)
 		}
@@ -99,7 +77,7 @@ func TestFindAndReadingsTools(t *testing.T) {
 	for _, a := range actions {
 		if a.Owner {
 			owner++
-			if seen[toolName(a.Name)] {
+			if seen[client.ToolName(a.Name)] {
 				t.Fatalf("owner-only action %q was exposed as an MCP tool", a.Name)
 			}
 		}
@@ -318,14 +296,6 @@ func TestMCPNumericArguments(t *testing.T) {
 	}
 	if len(paths) != len(want) {
 		t.Fatal("invalid arguments dispatched")
-	}
-}
-
-func TestMCPNumericInvalidCatalog(t *testing.T) {
-	for _, option := range []string{"oops", "null", "\"1\""} {
-		if _, err := schema([]api.Field{{Name: "done", Type: "number", Options: []string{option}}}); err == nil {
-			t.Fatalf("accepted %q", option)
-		}
 	}
 }
 

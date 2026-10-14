@@ -111,6 +111,9 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 	if core.HasTable(p.Body) {
 		e.Actions = append(e.Actions, action("readings-from-table", nil, map[string]any{"page": p.Title}))
 	}
+	if isConversation(p) {
+		e.Actions = append(e.Actions, action("ask", nil, map[string]any{"conversation": id}))
+	}
 	e.Actions = append(e.Actions, action("tombstone", ids, nil))
 	return e, nil
 }
