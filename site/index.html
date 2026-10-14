@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lifelog</title>
+<meta name="description" content="Lifelog keeps your life log in one SQLite file that you own, built to stay readable for fifty years. A journal, people, places, health readings, habits and the files you keep.">
+<meta property="og:title" content="Lifelog — a life log for fifty years">
+<meta property="og:description" content="One SQLite file that you own, with an open schema that any program can read. A journal, people, places, health readings, habits and the files you keep.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#2a1709">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to the content</a>
+
+<header class="bar">
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="icon.svg" alt="" width="32" height="32">Lifelog</a>
+    <nav aria-label="Sections">
+      <a href="#keeps">What it keeps</a>
+      <a href="#surfaces">How you use it</a>
+      <a href="#lasts">Built to last</a>
+      <a href="#developers">For developers</a>
+      <a href="#start">Get started</a>
+      <a href="https://github.com/alexradunet/lifelogdb">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+<section class="hero" id="top">
+  <div class="wrap">
+    <div>
+      <p class="eyebrow">ONE FILE · ONE OWNER · FIFTY YEARS</p>
+      <h1>Your life log, in <em>one file</em> you keep.</h1>
+      <p class="lede">Lifelog keeps a journal of your days, the people and places in them, your health readings, your
+        habits and the files you keep. Everything goes into one SQLite file, <code>life.db</code>, on your own disk.
+        The file explains itself, so you can read it in fifty years, with or without this program.</p>
+      <div class="actions">
+        <a class="button loud" href="#start">Get started</a>
+        <a class="button quiet" href="https://github.com/alexradunet/lifelogdb/blob/master/docs/schema/schema.sql">Read the schema</a>
+      </div>
+    </div>
+
+    <div>
+      <figure class="leaf parchment" style="margin:0" aria-label="A day page, as the browser shows it. The content is an example.">
+        <div class="leaf-band"><span>SEPTEMBER 2026</span><b>today</b></div>
+        <div class="leaf-body">
+          <div class="leaf-day"><span>12</span><span>Saturday · week 37</span></div>
+          <p>Ran 5k with <span class="wl">Sam</span> along the <span class="wl">Lakeside</span>. Cold air, good pace.
+            <span class="tag">#running</span></p>
+          <p>Read two chapters of <span class="wl">The Overstory</span> in the evening.</p>
+          <hr>
+          <div class="margin">
+            <div>
+              <h3>Readings</h3>
+              <ul>
+                <li><span>Mood</span><span class="v">4</span></li>
+                <li><span>Resting HR</span><span class="v">54 bpm</span></li>
+                <li><span>Sleep</span><span class="v">7.4 h</span></li>
+              </ul>
+            </div>
+            <div>
+              <h3>Habits</h3>
+              <ul>
+                <li><span>Evening walk</span><span class="v done">done</span></li>
+                <li><span>Reading</span><span class="v done">done</span></li>
+                <li><span>Stretch</span><span class="v">—</span></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </figure>
+      <p class="caption">A day page in the browser. The content is an example.</p>
+    </div>
+  </div>
+</section>
+
+<section id="keeps">
+  <div class="wrap">
+    <p class="eyebrow">WHAT IT KEEPS</p>
+    <h2>What happened, and what you measured.</h2>
+    <p class="intro">Lifelog is a life log and its backup. It keeps the record of your days in plain, typed tables.
+      It does not guess, and it does not change your words.</p>
+    <div class="grid">
+      <article class="card parchment"><h3>A journal of day pages</h3>
+        <p>One page for each day. Write in Markdown. A <code>[[name]]</code> links a person, a place or a page, and a
+          <code>#tag</code> groups the pages.</p></article>
+      <article class="card parchment"><h3>People and places</h3>
+        <p>Each person and each place has a page. Their names, birthdays and the days they appear in are kept as
+          records, not only as text.</p></article>
+      <article class="card parchment"><h3>Health readings</h3>
+        <p>Mood, weight, sleep, a blood test. Readings are never edited: a correction is a new reading that replaces
+          the old one, so the history stays true.</p></article>
+      <article class="card parchment"><h3>Habits, without streaks</h3>
+        <p>Check in each day: done or not done. A habit shows as “5 of 7 days”. There are no chains and no badges.</p></article>
+      <article class="card parchment"><h3>The files you keep</h3>
+        <p>A voice memo’s transcript, a PDF’s text, a photo’s small picture. The original stays where it is, so the
+          database stays small enough to copy.</p></article>
+      <article class="card parchment"><h3>Tasks and reminders</h3>
+        <p>Write down what you plan to do and when it is due. Mark it done or skipped. The intent is kept beside
+          what happened, and never mixed with it.</p></article>
+    </div>
+  </div>
+</section>
+
+<section id="surfaces">
+  <div class="wrap">
+    <p class="eyebrow">HOW YOU USE IT</p>
+    <h2>One program, three ways in.</h2>
+    <p class="intro">Lifelog is one Go binary. The browser, the command line and an AI agent all go through the same
+      handler, so each one can do the same things, with the same rules.</p>
+
+    <div class="flow" role="img" aria-label="The browser, the command line and an AI agent all use one handler. The handler writes through one core into life.db.">
+      <div class="node parchment">Browser<small>lifelog serve</small></div>
+      <div class="node parchment">Command line<small>lifelog capture</small></div>
+      <div class="node parchment">AI agent<small>lifelog mcp</small></div>
+      <div class="stem"></div>
+      <div class="node parchment wide">One hypermedia API<small>every action in one catalog</small></div>
+      <div class="stem"></div>
+      <div class="wide file">life.db<small>one SQLite file</small></div>
+    </div>
+
+    <div class="grid">
+      <article class="card parchment"><h3>The browser</h3>
+        <p>Today at a glance: what is due, your habits, your newest pages. A calendar of each month, week and year.
+          It works with no script, and on a phone.</p></article>
+      <article class="card parchment"><h3>The command line</h3>
+        <p>Capture a line, read a day, check in a habit, keep a file or take a snapshot, from any terminal.</p>
+        <span class="mono">lifelog capture "Ran 5k with [[Sam]] #running" --mood 4</span></article>
+      <article class="card parchment"><h3>An AI agent, with your word</h3>
+        <p>An MCP server lets a coding agent help you import old notes. The agent proposes each person, place and
+          link. You say yes or no. Each row records which agent wrote it.</p></article>
+    </div>
+  </div>
+</section>
+
+<section id="lasts">
+  <div class="wrap">
+    <p class="eyebrow">BUILT TO LAST</p>
+    <h2>Made for the reader of 2075.</h2>
+    <p class="intro">The largest risk to a lifetime of notes is not a broken disk. It is meaning that lives only in an
+      application’s code, and an application that is gone. Lifelog is built against that risk.</p>
+    <div class="two">
+      <ul class="list">
+        <li><b>One SQLite file.</b> SQLite is a format that the Library of Congress recommends for keeping data.
+          There is no server and no cloud account.</li>
+        <li><b>The file explains its records.</b> Each table holds its own description. The rules that span
+          tables are rows in the file. A stranger can read them with <code>.schema</code>.</li>
+        <li><b>The rules are in the database.</b> A CHECK or a trigger refuses a bad write, whichever program
+          tries it. The rules do not depend on Go.</li>
+      </ul>
+      <ul class="list">
+        <li><b>Nothing is deleted.</b> A removed page becomes a tombstone. A reading is corrected by a new reading.
+          The record of your life only grows.</li>
+        <li><b>Snapshots you can trust.</b> <code>lifelog snapshot</code> makes a dated copy and checks it with
+          four integrity checks before it calls the copy good.</li>
+        <li><b>Your data stays yours.</b> It runs on your machine. Your other devices connect to it with a token,
+          over your own network.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="developers">
+  <div class="wrap">
+    <p class="eyebrow">FOR DEVELOPERS</p>
+    <h2>An open contract, not a black box.</h2>
+    <p class="intro">The database is specified on its own, in any language. Lifelog is one writer of it. You can read
+      <code>life.db</code> with any SQLite tool, or build a different application around the same schema.</p>
+    <div class="grid">
+      <article class="card parchment"><h3>The schema</h3>
+        <p>One canonical DDL: 15 strict, typed tables, a full-text index and 3 views. Every CHECK has a name.
+          No JSON columns.</p>
+        <a class="mono" href="https://github.com/alexradunet/lifelogdb/blob/master/docs/schema/schema.sql">docs/schema/schema.sql</a></article>
+      <article class="card parchment"><h3>The decisions</h3>
+        <p>Each rule has a recorded reason: why integer ids, why tombstones, why mood is a measurement. The
+          alternatives that were cut are listed too.</p>
+        <a class="mono" href="https://github.com/alexradunet/lifelogdb/blob/master/docs/decisions/README.md">docs/decisions/</a></article>
+      <article class="card parchment"><h3>The cookbook</h3>
+        <p>The canonical reads and writes as SQL. A test suite runs every block, so the examples cannot go out of date.</p>
+        <a class="mono" href="https://github.com/alexradunet/lifelogdb/blob/master/docs/cookbook/README.md">docs/cookbook/</a></article>
+      <article class="card parchment"><h3>Build a writer</h3>
+        <p>The guide for a second program that writes <code>life.db</code>: the connection settings, the wikilink
+          grammar and its test vectors.</p>
+        <a class="mono" href="https://github.com/alexradunet/lifelogdb/blob/master/docs/guides/building-a-writer.md">docs/guides/building-a-writer.md</a></article>
+      <article class="card parchment"><h3>The API</h3>
+        <p>Each response is a Siren entity with its links and the actions that are legal on it. A client needs no
+          change when a new action comes.</p>
+        <a class="mono" href="https://github.com/alexradunet/lifelogdb/blob/master/API.md">API.md</a></article>
+      <article class="card parchment"><h3>The tests</h3>
+        <p>Each claim that the docs make about SQLite is executed. Mutants break each rule on purpose, to prove
+          that a suite sees it.</p>
+        <a class="mono" href="https://github.com/alexradunet/lifelogdb/blob/master/tests/README.md">tests/</a></article>
+    </div>
+  </div>
+</section>
+
+<section id="not">
+  <div class="wrap">
+    <p class="eyebrow">WHAT IT IS NOT</p>
+    <h2>Small on purpose.</h2>
+    <p class="intro">Each table must earn its place. These things were considered and cut. Each one has a written
+      reason, and a condition that can open it again.</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th scope="col">Not included</th><th scope="col">Why</th></tr></thead>
+        <tbody>
+          <tr><td>Sync between copies</td><td>Your other devices are clients of one writer. A merge would remove the
+            checked keys that keep the data correct.</td></tr>
+          <tr><td>A location track</td><td>A place has a point, and a photo’s place links its day. No minute-by-minute
+            position is kept.</td></tr>
+          <tr><td>A photo archive</td><td>Lifelog keeps the few photos that stand for a day. Your library stays in your
+            photo tool.</td></tr>
+          <tr><td>A finance ledger</td><td>Notes about money stay text until a real need for numbers comes.</td></tr>
+          <tr><td>Encryption inside the file</td><td>The file is plain on purpose, so it stays readable. Protect the
+            disk with full-disk encryption.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="intro muted">The full list: <a href="https://github.com/alexradunet/lifelogdb/blob/master/docs/architecture/non-goals.md">non-goals and deferred work</a>.</p>
+  </div>
+</section>
+
+<section id="start">
+  <div class="wrap">
+    <p class="eyebrow">GET STARTED</p>
+    <h2>Build it, then write your first day.</h2>
+    <p class="intro">You need Go 1.27 or later. You do not need cgo or the <code>sqlite3</code> program: SQLite comes
+      with the build. Lifelog runs on Linux and Windows.</p>
+    <div class="two">
+<pre><span class="c"># build</span>
+git clone https://github.com/alexradunet/lifelogdb
+cd lifelogdb
+go generate ./... &amp;&amp; go build -o lifelog ./cmd/lifelog
+
+<span class="c"># make life.db beside the program</span>
+./lifelog init
+
+<span class="c"># write, then read</span>
+./lifelog capture <span class="p">"Ran 5k with [[Sam]] #running"</span> --mood 4
+./lifelog day --human</pre>
+<pre><span class="c"># open it in a browser: http://127.0.0.1:7777</span>
+./lifelog serve
+
+<span class="c"># check in a habit</span>
+./lifelog done evening_walk
+
+<span class="c"># keep a voice memo as its text</span>
+./lifelog file memo.m4a --text memo.txt
+
+<span class="c"># a dated copy, checked before it is trusted</span>
+./lifelog snapshot --to ~/snapshots --human
+
+<span class="c"># let a coding agent help you import</span>
+./lifelog agentic-init</pre>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Lifelog — one file, one owner, fifty years.</span>
+    <span><a href="https://github.com/alexradunet/lifelogdb">Source on GitHub</a> ·
+      <a href="https://github.com/alexradunet/lifelogdb/blob/master/docs/README.md">The database contract</a> ·
+      <a href="https://github.com/alexradunet/lifelogdb/blob/master/README.md">README</a></span>
+  </div>
+</footer>
+</body>
+</html>
