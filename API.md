@@ -653,6 +653,7 @@ record of what happened.
 | `tasks[].deleted_at` | instant |  |
 | `tasks[].project_title` | string |  |
 | `tasks[].project_deleted_at` | instant |  |
+| `tasks[].due_day` | day | a one-off's: the due day of its live `once`; absent for a series and an undated one-off |
 | `include_deleted` | boolean | tombstoned tasks were included |
 
 ### task
@@ -686,6 +687,7 @@ value filled for a written one; there is none for a tombstoned occurrence.
 | `task.deleted_at` | instant | when it was tombstoned; absent while it lives |
 | `task.project_title` | string | the project page's title; absent when none |
 | `task.project_deleted_at` | instant | when the project page was tombstoned; absent while it lives |
+| `task.due_day` | day | a one-off's: the due day of its live `once`; absent for a series and an undated one-off |
 | `from` | day | the window's first day |
 | `through` | day | its last day |
 | `include_deleted` | boolean | tombstoned occurrences (and a tombstoned task's) were included |

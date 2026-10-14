@@ -560,3 +560,32 @@ func materialize(tx *Tx, taskID int64, taskVersion, key string) (*TaskOccurrence
 	}
 	return tx.CaptureTaskOccurrence(taskID, taskVersion, OccurrenceInput{OccurrenceKey: key, OccurrenceChanges: OccurrenceChanges{DueDay: due, State: "open", ReminderMode: "inherit"}})
 }
+
+// TestATaskCarriesTheDueDayOfItsOnce: a one-off's due day is the due day of its once occurrence, read with the task,
+// so a list of tasks can say when each one-off is due; an undated one-off and a series have none.
+func TestATaskCarriesTheDueDayOfItsOnce(t *testing.T) {
+	s := fresh(t)
+	for _, f := range []TaskForm{
+		{TaskSpec: TaskSpec{Label: "Renew passport"}, DueDay: "2026-10-20"},
+		{TaskSpec: TaskSpec{Label: "Ideas"}},
+		{TaskSpec: TaskSpec{Label: "Water", RepeatUnit: "day", RepeatEvery: 3, AnchorDay: "2026-10-01"}},
+	} {
+		if _, _, err := s.CreateTask(ctx, "cli", f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ts, err := s.Tasks(ctx, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, x := range ts {
+		got[x.Label] = x.DueDay
+	}
+	if want := map[string]string{"Renew passport": "2026-10-20", "Ideas": "", "Water": ""}; !reflect.DeepEqual(got, want) {
+		t.Errorf("due days %v, want %v", got, want)
+	}
+	if p := planningReadTask(t, s, ts[0].ID); p.DueDay != "2026-10-20" {
+		t.Errorf("the task read alone: due day %q", p.DueDay)
+	}
+}

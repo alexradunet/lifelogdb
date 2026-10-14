@@ -334,3 +334,18 @@ func TestTheMarginFoldsTheOverdueSlotsOfASeries(t *testing.T) {
 		}
 	}
 }
+
+// TestTheTaskListSaysWhenAOneOffIsDue: a dated one-off says its due day beside "once"; an undated one does not.
+func TestTheTaskListSaysWhenAOneOffIsDue(t *testing.T) {
+	c, h := freshOn(t, fixedToday)
+	root := must(c.Get(t.Context(), "/"))
+	must(c.Do(t.Context(), find(root, "create-task"), map[string]string{"label": "Renew passport", "due_day": "2031-05-20"}))
+	must(c.Do(t.Context(), find(root, "create-task"), map[string]string{"label": "Ideas"}))
+	body := browse(t, h, "/tasks")
+	if !strings.Contains(body, `<div class="task-facts">once<span class="date">due Tue 20 May</span></div>`) {
+		t.Error("the task list does not say when Renew passport is due")
+	}
+	if !regexp.MustCompile(`>Ideas</a>\s*<div class="task-facts">once</div>`).MatchString(body) {
+		t.Error("the task list does not draw the undated Ideas as once alone")
+	}
+}

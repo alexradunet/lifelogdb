@@ -32,6 +32,7 @@ type Task struct {
 	DeletedAt        string `json:"deleted_at,omitempty"`
 	ProjectTitle     string `json:"project_title,omitempty"`
 	ProjectDeletedAt string `json:"project_deleted_at,omitempty"`
+	DueDay           string `json:"due_day,omitempty"` // a one-off's: the due day of its live once occurrence
 }
 
 type OccurrenceChanges struct {
@@ -67,12 +68,12 @@ type TaskOccurrence struct {
 	Virtual          bool   `json:"virtual"`
 }
 
-const taskSelect = `SELECT t.id,t.label,t.project_page_id,coalesce(t.repeat_unit,''),coalesce(t.repeat_every,0),coalesce(t.anchor_day,''),coalesce(t.repeat_until_day,''),coalesce(t.reminder_local_time,''),coalesce(t.reminder_zone,''),coalesce(t.import_key,''),t.source,CAST(t.revision AS TEXT),t.created_at,t.updated_at,coalesce(t.deleted_at,''),coalesce(n.title,''),coalesce(e.deleted_at,'') FROM tasks t LEFT JOIN entities e ON e.id=t.project_page_id LEFT JOIN entity_names n ON n.entity_id=e.id AND n.name_key=e.preferred_name_key `
+const taskSelect = `SELECT t.id,t.label,t.project_page_id,coalesce(t.repeat_unit,''),coalesce(t.repeat_every,0),coalesce(t.anchor_day,''),coalesce(t.repeat_until_day,''),coalesce(t.reminder_local_time,''),coalesce(t.reminder_zone,''),coalesce(t.import_key,''),t.source,CAST(t.revision AS TEXT),t.created_at,t.updated_at,coalesce(t.deleted_at,''),coalesce(n.title,''),coalesce(e.deleted_at,''),coalesce((SELECT o.due_day FROM task_occurrences o WHERE o.task_id=t.id AND o.occurrence_key='once' AND o.deleted_at IS NULL),'') FROM tasks t LEFT JOIN entities e ON e.id=t.project_page_id LEFT JOIN entity_names n ON n.entity_id=e.id AND n.name_key=e.preferred_name_key `
 const occurrenceSelect = `SELECT o.id,o.task_id,o.occurrence_key,coalesce(o.due_day,''),o.state,coalesce(o.completed_at,''),o.reminder_mode,coalesce(o.reminder_override_at,''),coalesce(o.import_key,''),o.source,CAST(o.revision AS TEXT),o.created_at,o.updated_at,coalesce(o.deleted_at,'') FROM task_occurrences o `
 
 func scanTask(row interface{ Scan(...any) error }) (*Task, error) {
 	p := &Task{}
-	err := row.Scan(&p.ID, &p.Label, &p.ProjectPageID, &p.RepeatUnit, &p.RepeatEvery, &p.AnchorDay, &p.RepeatUntilDay, &p.ReminderLocalTime, &p.ReminderZone, &p.ImportKey, &p.Source, &p.Version, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt, &p.ProjectTitle, &p.ProjectDeletedAt)
+	err := row.Scan(&p.ID, &p.Label, &p.ProjectPageID, &p.RepeatUnit, &p.RepeatEvery, &p.AnchorDay, &p.RepeatUntilDay, &p.ReminderLocalTime, &p.ReminderZone, &p.ImportKey, &p.Source, &p.Version, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt, &p.ProjectTitle, &p.ProjectDeletedAt, &p.DueDay)
 	return p, err
 }
 
