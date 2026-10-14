@@ -130,7 +130,7 @@
 {{/* error is an error entity (API.md, Errors): an alert whose first words and tone the code picks, then what the
      form sent, so a refused save loses nothing */}}
 {{define "error"}}{{template "head" .}}{{$e := .Props}}{{$a := alert $e.code}}
-<header class="page-head"><div class="what"><span class="date">{{num $e.status}}{{with $e.code}} · {{.}}{{end}}</span>
+<header class="page-head"><div class="what"><span class="date">{{num $e.status}}{{with $e.code}} · {{nameWords .}}{{end}}</span>
 <h1>{{if .Submitted}}Not saved{{else if eq (num $e.status) "404"}}Not found{{else}}Refused{{end}}</h1></div></header>
 <div class="alert{{if $a.Danger}} danger{{end}}" role="alert"><p>{{with $a.Words}}<strong>{{.}}</strong> {{end}}{{$e.message}}</p></div>
 {{with .Link "existing"}}<aside><p>A page with that title exists: <a href="{{.}}">open it</a>.</p></aside>{{end}}

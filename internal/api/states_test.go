@@ -26,7 +26,7 @@ func TestAnErrorIsAnAlertInWords(t *testing.T) {
 		}
 	}
 	stale := submit(h, save.Href, url.Values{"body": {"my draft"}, "version": {version}}, href(p, "self")).Body.String()
-	for _, want := range []string{`<span class="date">409 · stale_version</span>`,
+	for _, want := range []string{`<span class="date">409 · stale version</span>`,
 		`<div class="alert" role="alert"><p><strong>Not saved. The page changed since you opened it.</strong> `, ">my draft</textarea>"} {
 		if !strings.Contains(stale, want) {
 			t.Errorf("a stale save lacks %s", want)

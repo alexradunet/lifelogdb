@@ -84,6 +84,7 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 	"settledFirst": settledFirst,
 	"sinceLast":    sinceLastWeek,
 	"daysOf":       daysOf,
+	"nameWords":    nameWords,
 	"lasting":      lasting,
 	"monthName": func(month string) string { // "2026-10" to "October"
 		if t, ok := monthOf(month); ok {
