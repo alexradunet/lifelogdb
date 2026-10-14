@@ -346,8 +346,10 @@ table.calendar{inline-size:100%; min-inline-size:320px; table-layout:fixed; bord
 
 /* The toast: what a write did, at the top of the page. It is calm: parchment with a gold edge, a check in the done
    colour before its heading. It is an open dialog in the flow of the page, not the browser's centred box: its
-   position, size and margin are reset here; Escape and Close close it. */
-.toast{display:flex; flex-direction:column; gap:var(--space-2); padding:var(--space-3) var(--space-4); background-color:var(--toast-bg); color:var(--toast-ink);
+   position, size and margin are reset here; Escape and Close close it. Its display is set only while it is open:
+   a closed dialog is the browser's display:none, which a rule on the element alone would beat. */
+.toast[open]{display:flex}
+.toast{flex-direction:column; gap:var(--space-2); padding:var(--space-3) var(--space-4); background-color:var(--toast-bg); color:var(--toast-ink);
   position:static; inset:auto; inline-size:auto; block-size:auto; max-inline-size:none; max-block-size:none; margin:0;
   font-size:15px; line-height:22px; border-color:var(--accent-ink); box-shadow:var(--parch-bevel),var(--shadow-float);
   & h2{display:flex; align-items:center; gap:var(--space-2); color:var(--done); font-size:15px; line-height:22px;

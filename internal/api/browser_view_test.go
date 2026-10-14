@@ -396,3 +396,18 @@ func TestTheFieldsSayWhatTheBrowserRefuses(t *testing.T) {
 		t.Errorf("base.css names base-select %d times, want the @supports and the one declaration", strings.Count(base, "base-select"))
 	}
 }
+
+// TestAClosedToastIsNotShown: the toast is a dialog, and a closed dialog is the browser's display:none, which a
+// display on the element itself would beat; so the sheet sets the toast's display only while it is open (the
+// owner's Close once closed the dialog and left the box in view).
+func TestAClosedToastIsNotShown(t *testing.T) {
+	app := cssComments.ReplaceAllString(string(appCSS), "")
+	if !strings.Contains(app, ".toast[open]{display:flex}") {
+		t.Error("app.css does not tie the toast's display to its open state")
+	}
+	for _, m := range regexp.MustCompile(`\.toast\{[^{}]*`).FindAllString(app, -1) {
+		if strings.Contains(m, "display:") {
+			t.Errorf("app.css sets the toast's display outside [open]: %.80s", m)
+		}
+	}
+}
