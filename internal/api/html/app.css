@@ -77,14 +77,16 @@ table.month{border-collapse:separate; border-spacing:2px; table-layout:fixed; fo
     &.written{background:var(--accent-soft); color:var(--accent-ink); font-weight:500}
     &[aria-current=date]{box-shadow:inset 0 0 0 2px var(--accent-ink)}}}
 
-/* The year: twelve of those month boxes in a grid. */
+/* The year: twelve of those month boxes in a grid; four, two or one across, by the width of the column. */
 .year{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:var(--space-4)}
-@media (max-width:899px){.year{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media (max-width:519px){.year{grid-template-columns:minmax(0,1fr)}}
+@container column (max-width:867px){.year{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@container column (max-width:487px){.year{grid-template-columns:minmax(0,1fr)}}
 
 /* A phone (docs/plans/093-words-phone-and-today.md): the head of the sidebar is a top bar; the sections of every
    day are a bottom bar with More; the rest is a sheet over the page while it is the target (#sections). All of it
-   is the same wood. */
+   is the same wood. The bars are fixed to the screen, so this is a media query: the one width of the screen the
+   sheets ask. A layout inside the page asks its column instead (@container column), at the screen's width less
+   the column's padding (899 → 867). */
 @media (max-width:899px){
   .shell{display:block}
   .rail{position:sticky; inset-block-start:0; z-index:20; block-size:auto; overflow:visible; flex-direction:row; align-items:center; gap:var(--space-2);
@@ -206,7 +208,7 @@ ul.plain{list-style:none; margin:0; padding:0;
   &.unwritten{color:var(--text-muted)}
   /* A note of an entry (a session's evidence) is a line under its words. */
   &>.note{grid-column:2 / -1}}
-@media (max-width:519px){.entry{grid-template-columns:minmax(0,1fr) auto} .entry>.date,.entry>.note{grid-column:1 / -1}}
+@container column (max-width:487px){.entry{grid-template-columns:minmax(0,1fr) auto} .entry>.date,.entry>.note{grid-column:1 / -1}}
 .margin .entry{grid-template-columns:minmax(0,1fr) auto;
   &>.date,& .note{grid-column:1 / -1}}
 /* An entry in a list item: the item draws the line, the entry the padding, so a row has one of each. */
@@ -236,13 +238,13 @@ svg.chart{inline-size:100%; max-inline-size:800px; block-size:auto; padding:var(
   & .axis{stroke:var(--edge)}
   & text{fill:var(--muted); font:400 12px var(--mono); text-anchor:end;
     &.x{text-anchor:middle}}}
-@media (max-width:640px){svg.chart text{font-size:20px}} /* the chart is scaled down to the screen: its words are not */
+@container column (max-width:608px){svg.chart text{font-size:20px}} /* the chart is scaled down to the column: its words are not */
 
 /* A form of a few short fields, on one line: find, correct, check in, record on a series. */
 form.inline{display:flex; flex-wrap:wrap; align-items:flex-end; gap:var(--space-2);
   &>label{flex:1 1 130px}
   &>button{flex:0 0 auto}}
-@media (max-width:640px){form.inline>label{flex:1 1 100%}}
+@container column (max-width:608px){form.inline>label{flex:1 1 100%}}
 /* Any other form: its fields one under the other, the button under them. */
 form:where(:not(.inline):not(.tiny):not(.rail-search)){display:flex; flex-direction:column; align-items:flex-start; gap:var(--space-3);
   &>label{align-self:stretch}}
@@ -327,7 +329,7 @@ table.calendar{inline-size:100%; min-inline-size:320px; table-layout:fixed; bord
       &.overdue{background:var(--warn)}
       &.done{background:var(--done)}}}
   & tbody tr:hover{background:none}}
-@media (max-width:599px){table.calendar td{block-size:52px} table.calendar .first,table.calendar .meta,table.calendar .items,table.calendar .more{display:none}
+@container column (max-width:567px){table.calendar td{block-size:52px} table.calendar .first,table.calendar .meta,table.calendar .items,table.calendar .more{display:none}
   table.calendar .marks{display:flex; flex-wrap:wrap; gap:3px} table.calendar th{padding:var(--space-1); text-align:center}}
 
 /* An alert: an error entity in words, what went wrong and what to do, on parchment with the tone's edge. */
@@ -453,8 +455,8 @@ details.readings-year{
   & a.reading{font:400 32px/32px var(--display); font-variant-numeric:tabular-nums; color:var(--ink)}
   & .unit{font:400 13px/16px var(--mono); color:var(--muted)}}
 
-/* On a phone an action's form opens in place, full width, not over the page. */
-@media (max-width:899px){
+/* In a narrow column an action's form opens in place, full width, not over the page. */
+@container column (max-width:867px){
   .tools details.action[open]{flex:1 1 100%}
   .tools details.action>.action-form{position:static; inline-size:auto; box-shadow:var(--parch-bevel)}
 }
@@ -505,26 +507,28 @@ dialog.palette{inline-size:min(36rem, calc(100vw - 2rem)); max-block-size:min(32
   & .sub{margin-block-start:var(--space-1);
     & .tag{align-self:center}}}
 .day-title{display:flex; align-items:center; gap:var(--space-4); min-inline-size:0}
-.leaf{flex:none; display:flex; flex-direction:column; inline-size:84px; overflow:hidden; text-align:center; box-shadow:var(--parch-bevel); view-transition-name:leaf;
+.leaf{flex:none; display:flex; flex-direction:column; inline-size:clamp(64px, 44px + 5cqi, 84px); overflow:hidden; text-align:center; box-shadow:var(--parch-bevel); view-transition-name:leaf;
   &:hover{color:var(--ink); border-color:var(--accent-ink); text-decoration:none}}
 .leaf-month{padding:3px 0; font:500 12px/16px var(--mono); background:var(--accent); color:var(--on-accent)}
-.leaf-day{padding:4px 0 6px; font:400 48px/48px var(--display); font-variant-numeric:tabular-nums; color:var(--ink)}
+.leaf-day{padding:4px 0 6px; font:400 clamp(36px, 24px + 3cqi, 48px)/1 var(--display); font-variant-numeric:tabular-nums; color:var(--ink)}
 
 /* The sheet holds what the page is for, on parchment with the gold notch; the margin beside it holds what the page
    asks of the owner, on the oak, each group a heading with its stitch and its rows on a parchment slip. One column
    when the main column is narrow, the margin after the sheet. */
 .sheet-margin{display:grid; grid-template-columns:minmax(0,1fr) minmax(280px,360px); gap:var(--space-6) var(--space-8); align-items:start;
   &>.sheet{view-transition-name:sheet}}
-.sheet{position:relative; display:flex; flex-direction:column; gap:var(--space-6); min-inline-size:0; padding:var(--space-6) var(--space-8); box-shadow:var(--parch-bevel);
+/* The sheet's padding and the gap between its parts scale with the column, from a phone's to the wide sheet's. */
+.sheet{--sheet-gap:clamp(20px, 16px + 1cqi, 24px); position:relative; display:flex; flex-direction:column; gap:var(--sheet-gap); min-inline-size:0;
+  padding:var(--sheet-gap) clamp(16px, 2px + 3.75cqi, 32px); box-shadow:var(--parch-bevel);
   &::after{content:""; position:absolute; inset-block-start:6px; inset-inline-end:6px; inline-size:7px; block-size:7px; background:var(--accent-ink)}
-  &>*+*{padding-block-start:var(--space-6); border-block-start:2px dotted var(--edge)}
+  &>*+*{padding-block-start:var(--sheet-gap); border-block-start:2px dotted var(--edge)}
   &>details{padding-block-start:var(--space-3);
     &:first-child{padding-block-start:0}
     &:not([open])+*{margin-block-start:calc(-1 * var(--space-3))}}
   & h2{font-size:15px; line-height:22px}
   & .panel-head{margin-block-end:var(--space-3)}}
 .journal .panel-head h2{color:var(--muted); font-weight:400}
-.journal-text{max-inline-size:var(--measure-read); font-size:18px; line-height:30px;
+.journal-text{max-inline-size:var(--measure-read); font-size:clamp(17px, 16px + .25cqi, 18px); line-height:clamp(28px, 26px + .5cqi, 30px);
   &>*+*{margin-block-start:var(--space-4)}}
 .capture>h2,.record>h2{margin-block-end:var(--space-3)}
 .margin{display:flex; flex-direction:column; gap:var(--space-8); min-inline-size:0;
@@ -541,18 +545,13 @@ dialog.palette{inline-size:min(36rem, calc(100vw - 2rem)); max-block-size:min(32
   & .about{padding:var(--space-3)}}
 .also ul.plain>li{padding:var(--space-2) 0}
 @container column (max-width:867px){.sheet-margin{grid-template-columns:minmax(0,1fr)}}
-@media (max-width:899px){
+@container column (max-width:867px){
   .day-head{align-items:flex-start;
     & .tools{inline-size:100%}}
   .day-title{gap:var(--space-3)}
-  .leaf{inline-size:64px}
-  .leaf-day{font-size:36px; line-height:38px}
-  .sheet{padding:var(--space-5) var(--space-4); gap:var(--space-5);
-    &>*+*{padding-block-start:var(--space-5)}}
-  .journal-text{font-size:17px; line-height:28px}
 }
-/* A phone: a step is its arrow alone (its label keeps the whole name); a tablet has room for the day. */
-@media (max-width:639px){.button.step{inline-size:var(--control); padding:0} .button.step .step-day{display:none}}
+/* A narrow column: a step is its arrow alone (its label keeps the whole name); a wider one has room for the day. */
+@container column (max-width:607px){.button.step{inline-size:var(--control); padding:0} .button.step .step-day{display:none}}
 
 /* Every other view on the sheet (docs/plans/095-the-leaf-and-its-margin.md). The kind of a page over its title, in
    words; a word among the facts in the sans. */
@@ -578,7 +577,7 @@ dialog.palette{inline-size:min(36rem, calc(100vw - 2rem)); max-block-size:min(32
 a.task{color:var(--ink); font-weight:700}
 .task-facts{display:flex; flex-wrap:wrap; gap:0 var(--space-3); margin-block-start:2px; font-size:13px; line-height:19px; color:var(--muted)}
 .snippet{margin-block-start:2px; font-size:14px; line-height:20px; color:var(--muted)}
-@media (max-width:899px){.sheet.list{padding:var(--space-1) var(--space-4)}}
+@container column (max-width:867px){.sheet.list{padding:var(--space-1) var(--space-4)}}
 
 /* A person or a place in a list: no date column, the words of the mentions at the end. */
 .entry.named{grid-template-columns:minmax(0,1fr) auto}
@@ -602,10 +601,9 @@ input[aria-invalid=true],textarea[aria-invalid=true],select[aria-invalid=true]{b
 .styleguide{
   & .guide{display:flex; flex-direction:column; gap:var(--space-3); padding-block:var(--space-4)}
   & .specimen{display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-3)}
-  & .specimen-title{margin:0; font:400 40px/40px var(--display); letter-spacing:.01em; color:var(--text-strong);
+  & .specimen-title{margin:0; font:400 clamp(32px, 24px + 2cqi, 40px)/1 var(--display); letter-spacing:.01em; color:var(--text-strong);
     & .mood{margin-inline-start:var(--space-1)}}
   & dialog.palette{position:static; margin:0 0 var(--space-3)}}
-@media (max-width:640px){.styleguide .specimen-title{font-size:32px; line-height:32px}}
 
 /* Day by day, under the calendar (docs/plans/101-the-calendar-holds-every-dated-thing.md): a day a heading, each item
    a tag and a link to its own page. */
@@ -737,7 +735,7 @@ input[aria-invalid=true],textarea[aria-invalid=true],select[aria-invalid=true]{b
   .chat-panel{position:fixed; z-index:25; inset:0 0 calc(58px + env(safe-area-inset-bottom, 0px)) 0; block-size:auto; border-inline-start:0; box-shadow:var(--shadow-float)}
   .chat-toggle{display:none} /* the bottom bar's Chat opens the sheet (app.js) */
 }
-@media (max-width:640px){.chat,.chat-page{--portrait-size:64px; --chat-gutter:78px}}
+@container column (max-width:608px){.chat,.chat-page{--portrait-size:64px; --chat-gutter:78px}}
 @media print{.chat-panel,.chat-toggle{display:none}}
 }
 

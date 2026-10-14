@@ -107,7 +107,10 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   owner's links. Under 900 px it is a phone's layout
   ([plan 093](docs/plans/093-words-phone-and-today.md)): a top bar (the brand, the date, Search, New), a bottom bar of
   the sections of every day and More, and the rest as a sheet over the page while it is the target (`#sections`),
-  which needs no script. The sidebar is the one part of a page that is not the
+  which needs no script. Inside the page a layout asks the width of its column (`@container column`), not of the
+  screen, so a day beside an open sheet lays out as in a narrow window; the title, the leaf and the sheet's padding
+  scale with the column by `clamp()`, with no step at a breakpoint
+  ([plan 108](docs/plans/108-the-browser-made-current.md)). The sidebar is the one part of a page that is not the
   page's entity: once a page, and for a browser only, the shell reads the Due count (the root's `due`) and this
   month (`GET /months/{month}`), which every client gets from those two resources. A page drawn before the handler
   (the login, a refusal of the token) has no sidebar, so it shows nothing of the database. The look is the Almanac

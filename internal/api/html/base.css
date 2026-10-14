@@ -80,8 +80,10 @@ body{margin:0; background-color:var(--ground); background-image:var(--grain-grou
 /* Headings: h1 is the page, in the display face; h2 names a group of it, h3 a part of that; all in sentence case,
    none in capitals. */
 h1,h2,h3,h4{text-wrap:balance; overflow-wrap:break-word; margin:0; color:var(--text-strong)}
-h1{font:400 40px/40px var(--display); letter-spacing:.01em}
-h2{font-size:18px; line-height:24px; font-weight:700}
+/* The title and the group heading scale with the column (cqi: the nearest container, the page's column), from a
+   phone's size to the wide one. */
+h1{font:400 clamp(32px, 24px + 2cqi, 40px)/1 var(--display); letter-spacing:.01em}
+h2{font-size:clamp(17px, 16px + .25cqi, 18px); line-height:24px; font-weight:700}
 h3{font-size:15px; line-height:22px; font-weight:700}
 h4{font-size:15px; line-height:22px; font-weight:700; color:var(--text-muted)}
 p{margin:0}
@@ -181,12 +183,8 @@ kbd{font:400 12px/16px var(--mono); padding:1px 6px; border:1px solid var(--outl
 /* A touch screen: a tall text box is capped, so the page around it stays in view. */
 @media (max-width:899px){textarea{max-block-size:45vh}}
 
-/* A narrow screen: a smaller title. */
-@media (max-width:640px){
-  h1{font-size:32px; line-height:32px}
-  h2{font-size:17px}
-  th,td{padding:6px}
-}
+/* A narrow column: a denser table. */
+@container (max-width:608px){th,td{padding:6px}}
 
 /* On paper: the content alone, no way to navigate and nothing to fill in. */
 @media print{

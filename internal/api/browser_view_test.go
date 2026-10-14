@@ -321,3 +321,45 @@ func TestTheSheetsUseLogicalProperties(t *testing.T) {
 		}
 	}
 }
+
+// TestTheSheetsQueryTheColumnNotTheScreen: a layout inside the page asks the width of its column (@container
+// column), not of the screen, so it is right beside an open sheet and in a narrow window alike; a width media query
+// stays only where the screen is the subject: the phone's bars and the touch size of a control (899 px), the shell's
+// own columns and the top layer. The title and the sheet scale with the column by clamp(), not by a step.
+func TestTheSheetsQueryTheColumnNotTheScreen(t *testing.T) {
+	widths := func(sheet string) string {
+		seen := map[string]bool{}
+		var out []string
+		for _, m := range regexp.MustCompile(`@media \(max-width:(\d+px)\)`).FindAllStringSubmatch(cssComments.ReplaceAllString(sheet, ""), -1) {
+			if !seen[m[1]] {
+				seen[m[1]] = true
+				out = append(out, m[1])
+			}
+		}
+		return strings.Join(out, " ")
+	}
+	if got := widths(string(baseCSS)); got != "899px" {
+		t.Errorf("base.css asks the screen's width at %s, want 899px alone", got)
+	}
+	if got := widths(string(appCSS)); got != "899px 1179px" {
+		t.Errorf("app.css asks the screen's width at %s, want 899px and 1179px alone", got)
+	}
+	app := cssComments.ReplaceAllString(string(appCSS), "")
+	if n := strings.Count(app, "@container column ("); n < 8 {
+		t.Errorf("app.css asks its column %d times, want at least 8", n)
+	}
+	if !strings.Contains(app, "container:column / inline-size") {
+		t.Error("app.css does not make the column a container")
+	}
+	base := cssComments.ReplaceAllString(string(baseCSS), "")
+	for _, want := range []string{"h1{font:400 clamp(", "h2{font-size:clamp(", "@container (max-width:608px)"} {
+		if !strings.Contains(base, want) {
+			t.Errorf("base.css lacks %s", want)
+		}
+	}
+	for _, want := range []string{".leaf{flex:none; display:flex; flex-direction:column; inline-size:clamp(", "--sheet-gap:clamp("} {
+		if !strings.Contains(app, want) {
+			t.Errorf("app.css lacks %s", want)
+		}
+	}
+}
