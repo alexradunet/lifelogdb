@@ -8,7 +8,7 @@
 - **Date / baseline:** 2026-10-14, `28d10ce` (master).
 - **Priority:** P2. **Effort:** M. **Risk:** LOW: presentation only. Nothing for the schema or the catalog; every
   form posts with no script, as before.
-- **Status:** IN PROGRESS.
+- **Status:** DONE.
 - **Resolves:** no issue, no RFC. The owner's words are the incident.
 
 ## The owner's words (2026-10-14)
@@ -98,13 +98,26 @@ flowchart LR
 
 ## Done when
 
-- [ ] No page carries a `script` element; `app.js` is gone (tested).
-- [ ] The sheets are four layers in one declared order, nested, in logical properties (tested).
-- [ ] No width `@media` remains but the phone's and the top layer's; the rest are container queries (tested).
-- [ ] The search dialog, More, the toast, the chat sidebar and the pick list work with no script (tested on the HTML;
-      opened in a browser with scripts off).
-- [ ] Baseline green after every commit.
+- [x] No page carries a `script` element; `app.js` is gone (tested).
+- [x] The sheets are four layers in one declared order, nested, in logical properties (tested).
+- [x] No width `@media` remains but the phone's and the top layer's; the rest are container queries (tested).
+- [x] The search dialog, More, the toast, the chat sidebar and the pick list work with no script (tested on the HTML).
+- [ ] Opened in a browser with scripts off: not done here (see the result).
+- [x] Baseline green after every commit.
 
 ## Result
 
-To be written at the end.
+Six commits on `2d23831` (the plan): the layers, the container queries, the shell without its script, the chat,
+the motions, the forms. After every one: `gofmt -l` clean, `go generate ./... && go vet ./... && go test ./...`
+green, and `go test ./internal/api ./internal/chat -count=1 -shuffle=on` green. The declarations of the layered
+sheets were flattened and compared with the sheets before them, outside the repo: the same set, in logical
+names.
+
+Not run: no browser, Chromium or JavaScript runtime is on this machine, and the permission of the session refused
+a run of the built binary, so no page was opened and no screenshot compared. The HTML of every view is held by the
+tests through the handler. The first look in a browser should take `GET /styleguide` at 1440 and 390 px, light and
+dark, with scripts off, and the deliberate differences are these: the type, the leaf and the sheet's padding scale
+with the column between the old two sizes; with the sidebar at a viewport of 900 to 1179 px the year shows two
+columns; the toast carries a Close of its own; the chat sidebar is a sheet over the page, not a column, and the
+page no longer narrows; the thread opens at its end; the select is the app's own in Chromium and Safari. Any other
+difference is a defect of this plan.
