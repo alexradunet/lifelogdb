@@ -16,6 +16,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"lifelog/internal/core"
 	"lifelog/internal/text"
 )
 
@@ -516,13 +517,13 @@ func jsonShape(v any) any {
 	return x
 }
 
-// mark is a search snippet with its matched words marked: snippet() puts [ and ] around them. The text is
-// escaped first, so a snippet can never carry HTML of its own.
+// mark is a search snippet with its matched words marked: the search puts core.SnippetOpen and core.SnippetClose
+// around them. The text is escaped first, so a snippet can never carry HTML of its own.
 func mark(snippet string) template.HTML {
 	return template.HTML(markRE.ReplaceAllString(template.HTMLEscapeString(snippet), "<mark>$1</mark>"))
 }
 
-var markRE = regexp.MustCompile(`\[([^[\]]+)\]`)
+var markRE = regexp.MustCompile(core.SnippetOpen + `([^` + core.SnippetOpen + core.SnippetClose + `]+)` + core.SnippetClose)
 
 // rejected are the [[…]] names in a body that make no link, because they are not valid titles.
 func rejected(body string) []string {

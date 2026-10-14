@@ -401,6 +401,13 @@ func (s *Store) readingsWithLifecycle(ctx context.Context, includeDeleted bool, 
 	return out, rows.Err()
 }
 
+// SnippetOpen and SnippetClose mark a match in a Hit's snippet. They are not brackets, because a body's own text
+// holds [[wikilinks]] and task boxes, and a mark must never be confused with the text.
+const (
+	SnippetOpen  = "⟦"
+	SnippetClose = "⟧"
+)
+
 // Hit is one full-text match (cookbook/full-text-search.md).
 type Hit struct {
 	ID      int64  `json:"id"`
@@ -411,7 +418,7 @@ type Hit struct {
 // Search is the hits of an FTS5 query, best first; limit and offset select one page of them.
 func (s *Store) Search(ctx context.Context, q string, limit, offset int) ([]Hit, error) {
 	rows, err := s.DB.R.QueryContext(ctx, `
-		SELECT p.id, p_name.title, snippet(entities_fts, 2, '[', ']', '…', 24)
+		SELECT p.id, p_name.title, snippet(entities_fts, 2, '⟦', '⟧', '…', 24)
 		  FROM entities_fts
 		  JOIN entities p ON p.id = entities_fts.rowid JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key AND p.deleted_at IS NULL
 		 WHERE entities_fts MATCH ?

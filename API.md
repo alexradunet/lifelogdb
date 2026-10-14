@@ -146,7 +146,7 @@ page (with `class` the page's type where it has one). `people`, `places` and `fi
 | `hits[]` | list | the hits of this page, best first |
 | `hits[].id` | integer | the page's id |
 | `hits[].title` | string | its title |
-| `hits[].snippet` | string | the matching text, matches in `[`…`]` |
+| `hits[].snippet` | string | the matching text, matches in `⟦`…`⟧` (U+27E6, U+27E7: never brackets, which a body's text uses) |
 | `limit` | integer | the page size used |
 | `offset` | integer | the rows skipped |
 

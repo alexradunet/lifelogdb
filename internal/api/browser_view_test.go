@@ -176,11 +176,12 @@ func TestNavMarksThePageTheBrowserIsOn(t *testing.T) {
 // never become markup.
 func TestMarkShowsTheMatchedWords(t *testing.T) {
 	for src, want := range map[string]string{
-		"…ran [5k] with…":           "…ran <mark>5k</mark> with…",
-		"<b>[x]</b>":                "&lt;b&gt;<mark>x</mark>&lt;/b&gt;",
-		"<script>alert(1)</script>": "&lt;script&gt;alert(1)&lt;/script&gt;",
-		"no match here":             "no match here",
-		"[]":                        "[]",
+		"…ran ⟦5k⟧ with…":                  "…ran <mark>5k</mark> with…",
+		"<b>⟦x⟧</b>":                       "&lt;b&gt;<mark>x</mark>&lt;/b&gt;",
+		"<script>alert(1)</script>":        "&lt;script&gt;alert(1)&lt;/script&gt;",
+		"no match here":                    "no match here",
+		"⟦⟧":                               "⟦⟧",
+		"the [[⟦Garden⟧ project]] - [x] a": "the [[<mark>Garden</mark> project]] - [x] a",
 	} {
 		if got := string(mark(src)); got != want {
 			t.Errorf("mark(%q) = %q, want %q", src, got, want)

@@ -156,8 +156,31 @@ func TestCanonicalSearchRankLimitAndStableTie(t *testing.T) {
 		t.Fatalf("one document per entity: %+v %v", hits, err)
 	}
 	for _, h := range hits {
-		if h.Snippet != "[needle]" {
+		if h.Snippet != "⟦needle⟧" {
 			t.Fatalf("body field snippet %s: %q", fmt.Sprint(h.ID), h.Snippet)
 		}
+	}
+}
+
+// TestSearchSnippetKeepsTheBracketsOfTheText says the marks of a match cannot be confused with the text: a body's
+// [[wikilinks]] and task boxes keep their brackets, and only the matched word is marked.
+func TestSearchSnippetKeepsTheBracketsOfTheText(t *testing.T) {
+	s := fresh(t)
+	if _, _, err := s.CreatePage(ctx, "cli", "Plans", "Coffee with [[Ana]]; we planned the [[Garden project]]. - [x] seeds"); err != nil {
+		t.Fatal(err)
+	}
+	hits, err := s.Search(ctx, "garden", 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, h := range hits {
+		if h.Title == "Plans" {
+			got = append(got, h.Snippet)
+		}
+	}
+	want := "Coffee with [[Ana]]; we planned the [[⟦Garden⟧ project]]. - [x] seeds"
+	if len(got) != 1 || got[0] != want {
+		t.Fatalf("snippet of Plans = %q, want [%q]", got, want)
 	}
 }
