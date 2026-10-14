@@ -124,3 +124,14 @@ func TestTheFilesSayWhereTheyAreMentioned(t *testing.T) {
 		t.Error("the files do not say where a file is mentioned")
 	}
 }
+
+// TestAReadingsFactsAreOnACard: a reading's page puts its facts on a card, as an occurrence's and a session's do.
+func TestAReadingsFactsAreOnACard(t *testing.T) {
+	c, h := freshOn(t, fixedToday)
+	root := must(c.Get(t.Context(), "/"))
+	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
+	r := must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "weight", "day": fixedToday, "value": "71.4"}))
+	if body := browse(t, h, hrefOf(r, "self")); !strings.Contains(body, `<div class="sheet list"><dl class="facts">`) {
+		t.Error("a reading's facts are not on a card")
+	}
+}

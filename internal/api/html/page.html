@@ -66,12 +66,12 @@
 {{$m := .Props}}
 <header class="page-head"><div class="what"><span class="kind">{{$m.metric}}, {{$.Date $m.day}}</span>
 <h1>{{if $m.retraction}}Retracted{{else}}{{num $m.value}}{{end}}</h1></div></header>
-<dl class="facts">
+<div class="sheet list"><dl class="facts">
 <dt>metric</dt><dd><a href="{{.Link "series"}}">{{$m.metric}}</a></dd>
 <dt>day</dt><dd><a href="{{.Link "day"}}">{{$.Date $m.day}}</a></dd>
 {{with $m.taken_at}}<dt>taken at</dt><dd>{{$.When .}}{{with $m.tz}} ({{.}}){{end}}</dd>{{end}}
 <dt>scope</dt><dd>{{$m.scope}} <small>(unassociated is not a daily total)</small>{{with $.Link "session"}} · <a href="{{.}}">session</a>{{end}}{{with $m.session_deleted_at}} · session tombstoned {{$.When .}}{{end}}</dd>
-</dl>
+</dl></div>
 {{if $m.retraction}}<aside role="note"><p>This row retracts the reading before it: that reading never counts.</p></aside>
 {{else if not $m.current}}<div class="alert" role="note"><p>This reading was corrected or retracted. {{with .Link "superseded-by"}}<a href="{{.}}">See what replaced it</a>.{{end}}</p></div>{{end}}
 {{if or (.Link "supersedes") (.Link "captured-with")}}<ul class="plain">
