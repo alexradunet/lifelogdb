@@ -569,7 +569,26 @@ a.task{color:var(--ink); font-weight:700}
 /* A person or a place in a list: no date column, the words of the mentions at the end. */
 .entry.named{grid-template-columns:minmax(0,1fr) auto}
 
-/* A list that deletes several rows at once (Files, Tasks): a box at the start of each row, and a bar with the danger
+/* The media list (docs/plans/110-the-media-list.md): the kinds as links under the head, the current one in the
+   ink; then a tile a file, its picture square over its title, as many across as the column holds. A blank tile
+   stands for a recording or a video with no frame. Its box sits on the corner of the picture. */
+.kinds{display:flex; flex-wrap:wrap; gap:var(--space-1) var(--space-4); padding:var(--space-2) var(--space-1); font-size:14px; line-height:20px;
+  & a{color:var(--text-muted); text-decoration:none}
+  & a[aria-current]{color:var(--text-strong); font-weight:700; text-decoration:underline; text-underline-offset:4px}}
+.sheet.list ul.tiles{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:var(--space-4) var(--space-3); padding-block:var(--space-4);
+  &>li{margin:0; padding:0; border:0;
+    &.pick{position:relative; display:block}}}
+.tile-link{display:flex; flex-direction:column; gap:2px; color:var(--text); text-decoration:none;
+  & img,& .tile-blank{display:block; inline-size:100%; aspect-ratio:1; object-fit:cover; margin-block-end:var(--space-1); background:var(--surface-deep); border:2px solid var(--edge); box-shadow:var(--drop-hard)}
+  & .tile-blank{display:grid; place-items:center; color:var(--text-muted);
+    & svg{inline-size:40%; block-size:40%}}
+  & .first{font-weight:700; color:var(--text-strong); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  & .meta{font-size:13px; line-height:19px; color:var(--text-muted)}
+  &:hover .first{text-decoration:underline}}
+li.tile>.pick-box{position:absolute; inset-block-start:var(--space-1); inset-inline-start:var(--space-1); z-index:1; padding:var(--space-1); background:var(--surface); border:2px solid var(--edge)}
+@container column (max-width:487px){.sheet.list ul.tiles{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}}
+
+/* A list that deletes several rows at once (Media, Tasks): a box at the start of each row, and a bar with the danger
    button, drawn first (order) though it comes after the rows, so a counter can count the checked boxes on the
    button; the button is quiet until a box is checked. The bar stays in view while the list scrolls under it. */
 .pick-form{display:flex; flex-direction:column; align-items:stretch; gap:0; counter-reset:picked;

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -771,5 +772,70 @@ func TestServeAuthorityMount(t *testing.T) {
 		if res.StatusCode != tc.want {
 			t.Fatalf("Host=%q status=%d", tc.host, res.StatusCode)
 		}
+	}
+}
+
+// TestCaptureVoiceNote is `lifelog capture --audio FILE`: the recording goes to the transcriber the environment names,
+// its words land on the day page, and no file row is written. Without a transcriber the capture is refused.
+func TestCaptureVoiceNote(t *testing.T) {
+	dir := t.TempDir()
+	live := filepath.Join(dir, "life.db")
+	if err := db.Init(t.Context(), live); err != nil {
+		t.Fatal(err)
+	}
+	note := filepath.Join(dir, "memo 1.m4a")
+	os.WriteFile(note, []byte("synthetic m4a bytes"), 0o644)
+	var gotModel, gotName, gotBytes string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/audio/transcriptions" {
+			t.Errorf("the request went to %s", r.URL.Path)
+		}
+		r.ParseMultipartForm(1 << 20)
+		gotModel = r.FormValue("model")
+		f, head, err := r.FormFile("file")
+		if err != nil {
+			t.Errorf("no file part: %v", err)
+			return
+		}
+		defer f.Close()
+		b, _ := io.ReadAll(f)
+		gotName, gotBytes = head.Filename, string(b)
+		io.WriteString(w, `{"text": "Walked to the market with [[Sam]]."}`)
+	}))
+	defer srv.Close()
+	t.Setenv("LIFELOG_TRANSCRIBE_URL", "")
+	t.Setenv("LIFELOG_TRANSCRIBE_MODEL", "")
+	o, err := parse([]string{"capture", "--audio", note, "--db", live, "--day", "2026-10-04"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := run(o); err == nil || !strings.Contains(err.Error(), "no transcriber is configured") {
+		t.Fatalf("without a transcriber: %v", err)
+	}
+	t.Setenv("LIFELOG_TRANSCRIBE_URL", srv.URL+"/v1")
+	t.Setenv("LIFELOG_TRANSCRIBE_MODEL", "synthetic-whisper")
+	captureStdout(t, func() {
+		if err := run(o); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if gotModel != "synthetic-whisper" || gotName != "memo 1.m4a" || gotBytes != "synthetic m4a bytes" {
+		t.Errorf("the transcriber was sent model %q, file %q, %q", gotModel, gotName, gotBytes)
+	}
+	d, err := db.Open(t.Context(), live)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	s := &core.Store{DB: d}
+	id, _ := s.PageID(context.Background(), "2026-10-04")
+	p, err := s.PageByID(context.Background(), id)
+	if err != nil || p.Body != "Walked to the market with [[Sam]]." {
+		t.Fatalf("the day page: %v %+v", err, p)
+	}
+	var n int
+	d.R.QueryRow(`SELECT count(*) FROM files`).Scan(&n)
+	if n != 0 {
+		t.Errorf("%d files rows: a voice note is never kept as a file", n)
 	}
 }

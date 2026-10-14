@@ -28,6 +28,7 @@ lifelog init                               # life.db beside the program; --db PA
 lifelog agentic-init                       # AGENTS.md, skills and MCP configs here, for a coding agent opened here
 
 lifelog capture "Ran 5k with [[Sam]] #running" --mood 4
+lifelog capture --audio memo.m4a          # a voice note: its words go on today's page ($LIFELOG_TRANSCRIBE_URL, $LIFELOG_TRANSCRIBE_MODEL)
 lifelog day --human
 lifelog serve                              # http://127.0.0.1:7777 — open it in a browser; this machine only
 lifelog serve --public --token-file ~/life/token   # for your other devices: every request needs the token
@@ -165,8 +166,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   `GET /styleguide` is the style page: every component in every state, drawn on synthetic words, with the file each
   lives in. It is presentation, like `/render`: it is not in the catalog and it reads nothing from the database.
   `GET /manifest.webmanifest` and `GET /assets/icon.svg` make the app installable: three shortcuts (Today, Add to
-  today, What is due) and a share target that posts shared text into Capture (`POST /days/today/capture`, where
-  `today` is the local day). There is no service worker, since the server is the owner's own. A public listener
+  today, What is due) and a share target that posts shared text, or a shared voice memo, into Capture
+  (`POST /days/today/capture`, where `today` is the local day; the memo is transcribed, see the voice note below). There is no service worker, since the server is the owner's own. A public listener
   refuses all three without the token, as it refuses the fonts.
 - **No script** ([plan 108](docs/plans/108-the-browser-made-current.md); the owner's rule of 2026-10-14: as native
   as HTML can be, even at the cost of a small convenience). A page carries its two sheets and no `script` element,
@@ -246,6 +247,16 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   steps a question and 64 KiB a tool result; the loop runs in the request and stops with it. **Rejected:** rewriting
   `lifelog` in another language to embed an agent SDK, a second application beside it, and a table of conversations
   before a question needs one ([RFC 0012](docs/rfcs/0012-a-conversation-with-lifelog.md)).
+- **A voice note** ([plan 109](docs/plans/109-a-voice-note.md)). `capture` takes `audio`, a file field, beside its
+  text: the capture box on Home and on a day page, `lifelog capture --audio FILE` and a phone's share sheet send a
+  recording; the MCP tool `capture` carries no file field, as `add-file` does not. A transcriber the owner configures
+  turns it into words, appended to the entry after the text; the recording is never stored
+  ([D9](docs/decisions/D09-binary-files.md)). The transcriber is an endpoint of the OpenAI audio-transcriptions
+  protocol (`internal/speech`), read from the environment as the model is: `LIFELOG_TRANSCRIBE_URL` (the base URL,
+  ending in `/v1`), `LIFELOG_TRANSCRIBE_MODEL` and optional `LIFELOG_TRANSCRIBE_KEY`; without them a capture with a
+  note answers 503 and the rest is unchanged. A note is at most 25 MiB, transcribed before the write transaction
+  opens, and written in one request with no look at the words first, by the owner's word. **Rejected:** dictation
+  in the browser (the speech would go to the browser's vendor) and a whisper binary run as a subprocess.
 - **One continuous conversation** ([plan 106](docs/plans/106-one-continuous-conversation.md)). The owner's rule
   (2026-10-14): one conversation, not sessions. Each turn is appended to the page `Conversation YYYY-MM-DD` of the
   server's local day, filed by `part-of` in the page `Conversations` and created at the day's first question; `ask`
@@ -353,6 +364,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 | `internal/client` | the hypermedia client (in-process or remote) |
 | `internal/mcp` | the catalog as MCP tools (the tool list is `internal/client`'s, shared with `internal/chat`) |
 | `internal/chat` | the agent of `ask`: the model client, the loop over the catalog's tools, the conversation page |
+| `internal/speech` | the transcriber of a voice note: the audio-transcriptions client, read from the environment |
 | `internal/agentic` | `lifelog agentic-init`: the texts and MCP configs for a coding agent opened in the folder of the program |
 | `internal/scaletest` | the synthetic personas and the lifetime workload of `tools/lifescale`: generators, an oracle and the timed checks |
 | `tools/copyschema` | `go generate`'s copy of `docs/schema/schema.sql` into `internal/db` |

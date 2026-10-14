@@ -131,7 +131,7 @@
 {{else}}<label><span>{{or .Title .Name}}{{if .Required}} <small>required</small>{{end}}</span>
 {{if .Options}}<select name="{{.Name}}"{{if .Focus}} autofocus{{end}}>{{$v := num .Value}}{{range .Options}}<option{{if eq . $v}} selected{{end}}>{{.}}</option>{{end}}</select>
 {{else if eq .Type "textarea"}}<textarea name="{{.Name}}"{{with .Rows}} rows="{{.}}"{{end}}{{with .Placeholder}} placeholder="{{.}}"{{end}}{{with .Key}} accesskey="{{.}}"{{end}}{{if .Focus}} autofocus{{end}}>{{num .Value}}</textarea>
-{{else}}<input type="{{.Type}}" name="{{.Name}}" value="{{num .Value}}"{{if .Required}} required{{end}}{{if eq .Type "number"}} step="any" inputmode="decimal"{{end}}{{if .Pages}} data-pages{{end}}{{with .Placeholder}} placeholder="{{.}}"{{end}}{{if .Focus}} autofocus{{end}}>{{end}}</label>
+{{else}}<input type="{{.Type}}" name="{{.Name}}" value="{{num .Value}}"{{if .Required}} required{{end}}{{if eq .Type "number"}} step="any" inputmode="decimal"{{end}}{{if .Pages}} data-pages{{end}}{{with .Accept}} accept="{{.}}"{{end}}{{with .Placeholder}} placeholder="{{.}}"{{end}}{{if .Focus}} autofocus{{end}}>{{end}}</label>
 {{end}}{{end}}
 
 {{/* boxed is an action as a button that opens its form (the ActionForm of the design system): with no script, a

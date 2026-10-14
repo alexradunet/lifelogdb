@@ -137,7 +137,7 @@ func (h *server) linkKinds(ctx context.Context, typ string, dayPage bool) ([]str
 	return out, nil
 }
 
-// namedRow is a row of the people, places and files lists: the page and how often the log mentions it.
+// namedRow is a row of the people and the places lists: the page and how often the log mentions it.
 type namedRow struct {
 	ID       int64  `json:"id"`
 	Title    string `json:"title"`
@@ -154,10 +154,7 @@ func (h *server) named(typ, plural, create string) func(*http.Request) (*Entity,
 		e := &Entity{Class: []string{plural}, Title: strings.ToUpper(plural[:1]) + plural[1:],
 			Links:   []Link{link("self", "/"+plural, plural), link("index", "/", "Home")},
 			Actions: []Action{action(create, nil, nil)}}
-		if typ == "file" { // the files list deletes several at once: a browser draws a box on each row
-			e.Actions = append(e.Actions, action("tombstone-pages", nil, nil))
-		}
-		if typ == "person" || typ == "place" || typ == "file" { // these rows say how often the log mentions them
+		if typ == "person" || typ == "place" { // these rows say how often the log mentions them
 			found, err := h.s.NamedMentions(r.Context(), typ, limit+1, offset)
 			if err != nil {
 				return nil, err

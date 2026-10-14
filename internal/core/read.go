@@ -685,3 +685,78 @@ func (s *Store) NamedMentions(ctx context.Context, typ string, limit, offset int
 	}
 	return out, rows.Err()
 }
+
+// MediaKinds are the kinds of file the media list shows, named by the first part of files.mime, in the order the
+// list counts them. A file of any other kind (a PDF, a scan's text) keeps its page, its wikilinks and its place in
+// search; the list leaves it out.
+var MediaKinds = []string{"image", "video", "audio"}
+
+// MediaRow is a live picture, video or recording the owner keeps (docs/cookbook/keep-a-file.md), as the media list
+// shows it.
+type MediaRow struct {
+	ID    int64
+	Title string
+	MIME  string
+	// Picture says the file keeps a preview: a photo's own, or the frame a video was sent with.
+	Picture bool
+	// Day is the file's own day, else the day of the newest live day page that links to it; "" when it has neither.
+	Day string
+	// Mentions is the number of live pages that link to this one, of any kind. A page counts once.
+	Mentions int
+}
+
+// mediaKind is the first part of files.mime: 'image' of 'image/jpeg'. files_mime guarantees the slash.
+const mediaKind = `substr(f.mime, 1, instr(f.mime, '/') - 1)`
+
+// Media is one page of the live files of the media kinds: all of them, or the one kind named. Newest day first
+// (MediaRow.Day), then the newest kept.
+func (s *Store) Media(ctx context.Context, kind string, limit, offset int) ([]MediaRow, error) {
+	rows, err := s.DB.R.QueryContext(ctx, `
+		SELECT p.id, p_name.title, f.mime, f.preview IS NOT NULL,
+		       coalesce(p.day, max(CASE WHEN lp_name.title = lp.day THEN lp.day END), '') AS day,
+		       count(DISTINCT lp.id)
+		  FROM entities p
+		  JOIN files f ON f.id = p.id
+		  JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
+		  LEFT JOIN links l ON l.to_id = p.id
+		  LEFT JOIN entities lp ON lp.id = l.from_id AND lp.deleted_at IS NULL
+		  LEFT JOIN entity_names lp_name ON lp_name.entity_id = lp.id AND lp_name.name_key = lp.preferred_name_key
+		 WHERE p.deleted_at IS NULL
+		   AND `+mediaKind+` IN ('image', 'video', 'audio')
+		   AND (? = '' OR `+mediaKind+` = ?)
+		 GROUP BY p.id, p_name.title, f.mime, f.preview IS NOT NULL
+		 ORDER BY day DESC, p.created_at DESC, p.id DESC LIMIT ? OFFSET ?`, kind, kind, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []MediaRow{}
+	for rows.Next() {
+		var r MediaRow
+		if err := rows.Scan(&r.ID, &r.Title, &r.MIME, &r.Picture, &r.Day, &r.Mentions); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// MediaCounts counts the live files of each media kind, by kind; a kind with none is absent.
+func (s *Store) MediaCounts(ctx context.Context) (map[string]int, error) {
+	rows, err := s.DB.R.QueryContext(ctx, `SELECT `+mediaKind+`, count(*) FROM files f JOIN entities p ON p.id = f.id
+		WHERE p.deleted_at IS NULL AND `+mediaKind+` IN ('image', 'video', 'audio') GROUP BY 1`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]int{}
+	for rows.Next() {
+		var k string
+		var n int
+		if err := rows.Scan(&k, &n); err != nil {
+			return nil, err
+		}
+		out[k] = n
+	}
+	return out, rows.Err()
+}

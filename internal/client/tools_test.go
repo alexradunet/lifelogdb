@@ -71,3 +71,18 @@ func TestArgumentsFlattenToFormValues(t *testing.T) {
 		t.Fatalf("Arguments(nil) = %v, %v", got, err)
 	}
 }
+
+// TestToolsCarryNoFileField is the one allowed difference of the MCP surface: a file (a recording, a picture) is
+// sent by the CLI or a browser; the tool keeps the action's other fields.
+func TestToolsCarryNoFileField(t *testing.T) {
+	tools, err := Tools([]api.Action{{Name: "capture", Method: "POST", Href: "/days/{day}/capture", Fields: []api.Field{
+		{Name: "day", Type: "date", In: "path", Required: true}, {Name: "text", Type: "textarea"},
+		{Name: "audio", Type: "file", Accept: "audio/*"}}}}, notOwner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	props, _ := tools[0].Schema["properties"].(map[string]any)
+	if _, ok := props["audio"]; ok || props["text"] == nil || props["day"] == nil {
+		t.Errorf("the tool's properties: %v", props)
+	}
+}

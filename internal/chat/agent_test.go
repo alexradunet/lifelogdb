@@ -166,7 +166,7 @@ func setup(t *testing.T, script ...answer) (*fakeModel, *client.Client, *db.DB, 
 	t.Cleanup(srv.Close)
 	c := &clock{day: today}
 	agent := &chat.Agent{Model: &chat.Model{URL: srv.URL + "/v1", Name: "synthetic", Key: "synthetic-key"}, Now: c.now}
-	h := api.NewOn(&core.Store{DB: d}, c.today, time.UTC, agent)
+	h := api.NewOn(&core.Store{DB: d}, c.today, time.UTC, agent, nil)
 	agent.Client = client.InProcess(h, chat.Source)
 	return f, client.InProcess(h, "cli"), d, h, c
 }
@@ -403,7 +403,7 @@ func TestAskStopsWhenTheRequestIsCancelled(t *testing.T) {
 	t.Cleanup(blocked.Close)
 	// A second handler on the same file, whose agent waits on a model that never answers.
 	agent := &chat.Agent{Model: &chat.Model{URL: blocked.URL + "/v1", Name: "synthetic"}}
-	h := api.NewAsking(&core.Store{DB: d}, agent)
+	h := api.NewWith(&core.Store{DB: d}, agent, nil)
 	agent.Client = client.InProcess(h, chat.Source)
 	c := client.InProcess(h, "cli")
 	a := catalogAction(t, owner, "ask")

@@ -89,7 +89,7 @@ func (h *server) root(r *http.Request) (*Entity, error) {
 		Class: []string{"root"}, Title: "Lifelog",
 		Properties: map[string]any{"today": today, "due": due, "habits": hs, "recent": recent, "on_this_day": onThisDay},
 		Links: []Link{link("self", "/", "Lifelog"), link("today", dayHref(today), "Today"), link("days", "/days", "Days"),
-			link("sessions", "/sessions", "Sessions"), link("periods", "/periods", "Periods"), link("people", "/people", "People"), link("places", "/places", "Places"), link("files", "/files", "Files"), link("metrics", "/metrics", "Metrics"),
+			link("sessions", "/sessions", "Sessions"), link("periods", "/periods", "Periods"), link("people", "/people", "People"), link("places", "/places", "Places"), link("media", "/media", "Media"), link("metrics", "/metrics", "Metrics"),
 			link("habits", "/habits", "Habits"), link("tasks", "/tasks", "Tasks"), link("deadlines", "/deadlines", "Deadlines"),
 			link("ghosts", "/ghosts", "Ghost pages"), link("actions", "/actions", "All actions"), link("calendar", "/months/current", "Calendar"),
 			link("week", "/weeks/current", "This week"), link("year", "/years/current", "This year")},
@@ -227,7 +227,7 @@ func (h *server) dayEntity(ctx context.Context, day string) (*Entity, error) {
 }
 
 func (h *server) capture(r *http.Request, src string) (*Entity, error) {
-	v, err := form(r)
+	v, note, err := captureForm(r)
 	if err != nil {
 		return nil, err
 	}
@@ -239,7 +239,11 @@ func (h *server) capture(r *http.Request, src string) (*Entity, error) {
 	if day == "today" { // the share target of the manifest cannot know the day
 		day = h.localDay()
 	}
-	_, sync, err := h.s.Capture(r.Context(), src, day, v.Get("text"), mood)
+	entry, err := h.entryOf(r.Context(), v.Get("text"), note)
+	if err != nil {
+		return nil, err
+	}
+	_, sync, err := h.s.Capture(r.Context(), src, day, entry, mood)
 	if err != nil {
 		return nil, err
 	}

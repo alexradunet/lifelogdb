@@ -62,7 +62,7 @@ var icons = map[string]string{
 	"tasks":    `<path d="M6 4h8M6 8h8M6 12h8M2 4h1M2 8h1M2 12h1"/>`,
 	"people":   `<circle cx="8" cy="5.5" r="2.5"/><path d="M3 14c.6-2.8 2.6-4.2 5-4.2s4.4 1.4 5 4.2"/>`,
 	"places":   `<path d="M8 14.5s4.5-4.2 4.5-8a4.5 4.5 0 0 0-9 0c0 3.8 4.5 8 4.5 8z"/><circle cx="8" cy="6.5" r="1.6"/>`,
-	"files":    `<path d="M4 1.5h5l3 3v10H4z"/><path d="M9 1.5v3h3"/>`,
+	"media":    `<rect x="2" y="3" width="12" height="10" rx="1.5"/><circle cx="5.5" cy="6.5" r="1.3"/><path d="M2.5 11.5l3.5-3.5 2.5 2.5 2-2 3 3"/>`,
 	"metrics":  `<path d="M1.5 9h3l2-5 3 9 2-4h3"/>`,
 	"habits":   `<path d="M3 6a5 5 0 0 1 9-1.5M13 10a5 5 0 0 1-9 1.5M12 1.5v3h-3M4 14.5v-3h3"/>`,
 	"sessions": `<circle cx="8" cy="8.5" r="5.5"/><path d="M8 5.5v3l2 1.5M6.5 1.5h3"/>`,

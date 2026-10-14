@@ -271,14 +271,22 @@ func TestTheManifestAndTheIconAreServed(t *testing.T) {
 		Shortcuts   []struct{ Name, URL string }
 		ShareTarget struct {
 			Action, Method, Enctype string
-			Params                  map[string]string
+			Params                  struct {
+				Text  string
+				Files []struct {
+					Name   string
+					Accept []string
+				}
+			}
 		} `json:"share_target"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &m); err != nil {
 		t.Fatalf("the manifest is not JSON: %v", err)
 	}
 	if m.Name != "Lifelog" || m.StartURL != "/" || m.Display != "standalone" || m.ThemeColor != "#3a2210" || len(m.Shortcuts) != 3 || len(m.Icons) != 2 ||
-		m.ShareTarget.Action != "/days/today/capture" || m.ShareTarget.Method != "POST" || m.ShareTarget.Params["text"] != "text" {
+		m.ShareTarget.Action != "/days/today/capture" || m.ShareTarget.Method != "POST" || m.ShareTarget.Enctype != "multipart/form-data" ||
+		m.ShareTarget.Params.Text != "text" || len(m.ShareTarget.Params.Files) != 1 || m.ShareTarget.Params.Files[0].Name != "audio" ||
+		strings.Join(m.ShareTarget.Params.Files[0].Accept, ",") != "audio/*" { // a phone's share sheet sends a voice memo to capture
 		t.Errorf("the manifest says %+v", m)
 	}
 	for _, i := range m.Icons {

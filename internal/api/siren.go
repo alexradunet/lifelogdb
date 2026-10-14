@@ -51,7 +51,8 @@ type Action struct {
 
 // Field is a Siren field. In "path" (an extension) marks a field of the catalog's templated href; Rows (an
 // extension) is how many lines a browser draws of a textarea; Pages (an extension) says the value is a page's
-// title, so a browser can offer the names of the pages as it does after [[.
+// title, so a browser can offer the names of the pages as it does after [[; Accept (an extension) is what a file
+// field takes, as the accept attribute of a browser's file input ("audio/*").
 type Field struct {
 	Name     string   `json:"name"`
 	Type     string   `json:"type"`
@@ -62,6 +63,7 @@ type Field struct {
 	In       string   `json:"in,omitempty"`
 	Rows     int      `json:"rows,omitempty"`
 	Pages    bool     `json:"pages,omitempty"`
+	Accept   string   `json:"accept,omitempty"`
 }
 
 const formType = "application/x-www-form-urlencoded"
@@ -113,9 +115,10 @@ var catalog = []spec{
 	{"create-period", "Record period", "Record a named historical span, with optional uncertain boundaries; classifications use ordinary part-of links.", "POST", "/periods", []Field{req("title", "text", "Title"), area("body", "Body", 5), opt("start_boundary", "text", "Start boundary (blank unknown)"), opt("end_boundary", "text", "End boundary (blank unknown; .. ongoing)")}, false, false},
 	{"edit-period", "Edit boundaries", "Replace period boundaries using the current named-object version.", "POST", "/pages/{id}/period", []Field{path("id", "number", "Period id"), req("version", "hidden", "Version"), opt("start_boundary", "text", "Start boundary"), opt("end_boundary", "text", "End boundary")}, false, false},
 	{"promote-period", "Record span", "Make this plain non-journal page a period without replacing its identity, body or links.", "POST", "/pages/{id}/promote-period", []Field{path("id", "number", "Page id"), req("version", "hidden", "Version"), opt("start_boundary", "text", "Start boundary"), opt("end_boundary", "text", "End boundary")}, false, false},
-	{"capture", "Capture", "Append an entry to the journal page of a local day (created on the first capture), with an optional mood 1-5. [[Title]] and #tag in the text link pages, creating them if new.",
+	{"capture", "Capture", "Append an entry to the journal page of a local day (created on the first capture), with an optional mood 1-5. [[Title]] and #tag in the text link pages, creating them if new. audio is a voice note (a recording, sent as a file by the CLI's --audio, a browser's capture box or a phone's share sheet): its words are transcribed and appended after the text; the recording is never stored.",
 		"POST", "/days/{day}/capture", []Field{path("day", "date", "Local day, YYYY-MM-DD"), area("text", "Entry (CommonMark)", 4),
-			{Name: "mood", Type: "number", Title: "Mood 1-5", Options: []string{"1", "2", "3", "4", "5"}}}, false, false},
+			{Name: "mood", Type: "number", Title: "Mood 1-5", Options: []string{"1", "2", "3", "4", "5"}},
+			{Name: "audio", Type: "file", Title: "A voice note", Accept: "audio/*"}}, false, false},
 	{"create-page", "New page", "Create a page with a unique title (a valid file name) and a CommonMark body.",
 		"POST", "/pages", []Field{req("title", "text", "Title"), area("body", "Body", 12)}, false, false},
 	{"save-body", "Save", "Replace a page's whole body. version must be the page's current version (from the last read); wikilinks are re-synced.",
