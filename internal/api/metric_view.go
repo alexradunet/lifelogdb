@@ -3,15 +3,20 @@ package api
 // The one page of a metric (docs/plans/100-one-page-a-metric.md): its readings newest first, in one fold a year.
 // The series gives them oldest first; only the view orders and folds them.
 
+// newestRows is how many readings a year's fold shows; the rest of the year are in a closed fold under them, so the
+// page's other groups stay near on a long series.
+const newestRows = 10
+
 // openFolds is how many readings a series may hold for every year's fold to be open: a short series (a lab
 // marker read twice a year) is read whole, and a long one opens on its newest year.
 const openFolds = 60
 
-// readingYear is one fold of a metric's readings: a year, its readings newest first, the line its summary says,
-// and whether it is open.
+// readingYear is one fold of a metric's readings: a year, its newest readings, the rest of them (More), the line its
+// summary says of them all, and whether it is open.
 type readingYear struct {
 	Year    string
 	Rows    []map[string]any
+	More    []map[string]any
 	Summary string
 	Open    bool
 }
@@ -51,6 +56,9 @@ func (v *view) MetricReadings() metricReadings {
 		y := &r.Years[i]
 		y.Open = i == 0 || len(list) <= openFolds
 		y.Summary = yearSummary(y.Rows, unit, r.Habit)
+		if len(y.Rows) > newestRows {
+			y.Rows, y.More = y.Rows[:newestRows], y.Rows[newestRows:]
+		}
 	}
 	if len(r.Years) > 0 {
 		r.Latest = r.Years[0].Rows[0]

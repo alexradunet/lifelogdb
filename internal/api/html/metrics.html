@@ -33,11 +33,10 @@
 {{if or (not $s.all_history) (ne $s.to $today) (ne $s.scope "unassociated")}}<p class="desc">{{if not $s.all_history}}{{$.Date $s.from}} to {{$.Date $s.to}}.{{else if ne $s.to $today}}All history through {{$.Date $s.to}}.{{else}}All history.{{end}}
 {{if ne $s.scope "unassociated"}}Scope: {{$s.scope}}{{with $s.session_id}}, <a href="/sessions/{{num .}}">session {{num .}}</a>{{end}}{{if $s.include_deleted}}, tombstoned sessions included{{end}}.{{end}}</p>{{end}}
 {{if and $s.readings (not $r.Habit) (ne $s.scope "all")}}{{chart $s.from $s.to $s.readings}}{{end}}
-{{range $r.Years}}<details class="readings-year"{{if .Open}} open{{end}}><summary><span class="year-name">{{.Year}}</span> <span class="meta">{{.Summary}}</span></summary>
-<div class="scroll"><table>
-<thead><tr><th scope="col">day</th><th scope="col" class="num">{{if $r.Habit}}check-in{{else}}value{{end}}</th>{{if ne $s.scope "unassociated"}}<th scope="col">scope</th>{{end}}{{if $r.Times}}<th scope="col">taken at</th>{{end}}</tr></thead>
-<tbody>{{range .Rows}}<tr><td><a href="/days/{{.day}}">{{$.Date .day}}</a></td><td class="num"><a href="/measurements/{{num .id}}">{{if $r.Habit}}{{if eq (num .value) "1"}}done{{else if eq (num .value) "0"}}not done{{else}}{{num .value}}{{end}}{{else}}{{num .value}}{{end}}</a></td>{{if ne $s.scope "unassociated"}}<td>{{.scope}}{{with .session_id}} · <a href="/sessions/{{num .}}">session {{num .}}</a>{{end}}{{with .session_deleted_at}} · tombstoned {{$.When .}}{{end}}</td>{{end}}{{if $r.Times}}<td>{{with .taken_at}}{{$.When .}}{{end}}</td>{{end}}</tr>
-{{end}}</tbody></table></div></details>
+{{range $r.Years}}{{$year := .Year}}<details class="readings-year"{{if .Open}} open{{end}}><summary><span class="year-name">{{.Year}}</span> <span class="meta">{{.Summary}}</span></summary>
+{{template "readings" (dict "v" $ "r" $r "s" $s "rows" .Rows)}}
+{{with .More}}<details class="readings-more"><summary>{{len .}} more {{if $r.Habit}}check-ins{{else}}readings{{end}} of {{$year}}</summary>
+{{template "readings" (dict "v" $ "r" $r "s" $s "rows" .)}}</details>{{end}}</details>
 {{else}}<p class="empty">{{if $s.all_history}}No reading yet. {{if $checkIn}}Check in above.{{else}}Record the first one above.{{end}}{{else}}No reading in this window. <a href="{{.Link "all-readings"}}">All readings</a> has the rest.{{end}}</p>{{end}}
 </section>
 </div>
@@ -104,3 +103,10 @@
 <tbody>{{range .}}<tr><td>{{.metric}}</td><td class="num">{{num .done}}</td><td class="num">{{num .not_done}}</td><td class="num">{{num .not_recorded}}</td><td class="num">{{num .invalid}}</td><td class="num">{{num .active_days}}</td></tr>{{end}}</tbody>
 </table></div>{{end}}
 {{template "foot" .}}{{end}}
+
+{{/* readings is a table of a metric's readings, newest first: a year's newest ones, or the rest of that year. It takes
+     v (the view), r (MetricReadings), s (the series) and rows. */}}
+{{define "readings"}}{{$v := .v}}{{$r := .r}}{{$s := .s}}<div class="scroll"><table>
+<thead><tr><th scope="col">day</th><th scope="col" class="num">{{if $r.Habit}}check-in{{else}}value{{end}}</th>{{if ne $s.scope "unassociated"}}<th scope="col">scope</th>{{end}}{{if $r.Times}}<th scope="col">taken at</th>{{end}}</tr></thead>
+<tbody>{{range .rows}}<tr><td><a href="/days/{{.day}}">{{$v.Date .day}}</a></td><td class="num"><a href="/measurements/{{num .id}}">{{if $r.Habit}}{{if eq (num .value) "1"}}done{{else if eq (num .value) "0"}}not done{{else}}{{num .value}}{{end}}{{else}}{{num .value}}{{end}}</a></td>{{if ne $s.scope "unassociated"}}<td>{{.scope}}{{with .session_id}} · <a href="/sessions/{{num .}}">session {{num .}}</a>{{end}}{{with .session_deleted_at}} · tombstoned {{$v.When .}}{{end}}</td>{{end}}{{if $r.Times}}<td>{{with .taken_at}}{{$v.When .}}{{end}}</td>{{end}}</tr>
+{{end}}</tbody></table></div>{{end}}

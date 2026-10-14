@@ -218,3 +218,38 @@ func TestAHabitsPageLeadsWithItsCheckIn(t *testing.T) {
 		t.Errorf("a habit's Record is not under More (more at %d, record at %d)", more, rec)
 	}
 }
+
+// TestAYearShowsItsNewestReadingsFirst: a year's fold shows its newest ten readings, and the rest of the year are in
+// a closed fold under them that says how many it holds, so the page's other groups stay near; every reading is
+// still on the page, newest first.
+func TestAYearShowsItsNewestReadingsFirst(t *testing.T) {
+	c, h := freshOn(t, "2026-10-13")
+	root := must(c.Get(t.Context(), "/"))
+	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "Weight", "unit": "kg"}))
+	for d := 1; d <= 15; d++ {
+		must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "Weight", "day": fmt.Sprintf("2026-09-%02d", d), "value": fmt.Sprint(70 + d)}))
+	}
+	body := browse(t, h, "/metrics/Weight")
+	fold := body[strings.Index(body, `<details class="readings-year" open>`):]
+	end := strings.Index(fold, `</details></details>`)
+	if end < 0 {
+		t.Fatal("the year's fold holds no fold of its older readings")
+	}
+	fold = fold[:end]
+	open, more, _ := strings.Cut(fold, `<details class="readings-more"><summary>5 more readings of 2026</summary>`)
+	if more == "" {
+		t.Fatal("the year does not fold its older five readings under its newest ten")
+	}
+	if n := strings.Count(open, `<a href="/measurements/`); n != 10 {
+		t.Errorf("the open part of the year has %d readings, want 10", n)
+	}
+	if !strings.Contains(open, `<a href="/days/2026-09-15">`) || !strings.Contains(open, `<a href="/days/2026-09-06">`) || strings.Contains(open, `<a href="/days/2026-09-05">`) {
+		t.Error("the open part is not the newest ten, 15 to 6 September")
+	}
+	if n := strings.Count(more, `<a href="/measurements/`); n != 5 || !strings.Contains(more, `<a href="/days/2026-09-01">`) {
+		t.Errorf("the closed part has %d readings, want the five of 1 to 5 September", n)
+	}
+	if !strings.Contains(body, `<span class="meta">15 readings · 71 to 85 kg</span>`) {
+		t.Error("the year's summary does not count all its readings")
+	}
+}
