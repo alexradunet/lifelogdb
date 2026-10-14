@@ -20,7 +20,9 @@
 /* The shell: the sidebar, then the column of the page. Under 900 px the sidebar is a bar over the page. */
 .shell{display:grid; grid-template-columns:var(--rail-width) minmax(0,1fr); min-height:100vh}
 .shell.bare{display:block}
-.column{min-width:0; display:flex; flex-direction:column; padding:var(--space-6) var(--space-8)}
+/* The column is a container: the open chat makes it narrower than the screen, so a layout inside it asks the width of
+   the column, not of the screen. */
+.column{container:column / inline-size; min-width:0; display:flex; flex-direction:column; padding:var(--space-6) var(--space-8)}
 .column>main{flex:1; width:100%; max-width:1200px; display:flex; flex-direction:column; gap:var(--space-4)}
 .column>main>h2{margin-top:var(--space-4)}
 .column>footer{width:100%; max-width:1200px; margin-top:var(--space-10); padding-top:var(--space-3); border-top:2px dotted var(--line)}
@@ -364,11 +366,11 @@ ul.suggest:popover-open{position:fixed; inset:auto; margin:0}
 ul.suggest li{margin:0; padding:5px 9px; cursor:pointer}
 ul.suggest li[aria-selected=true]{background:var(--accent-soft); color:var(--accent-ink)}
 
-/* The preview of a body: under its textarea, or beside it on a wide screen, where the open box of the editor leaves
+/* The preview of a body: under its textarea, or beside it in a wide column, where the open box of the editor leaves
    the column. */
 form>.editor{align-self:stretch}
 .editor .preview{min-height:5rem; margin:9px 0; padding:10px 14px; border-style:dashed; box-shadow:none}
-@media (min-width:1200px){
+@container column (min-width:888px){
   .editor{display:grid; grid-template-columns:1fr 1fr; gap:var(--space-4); align-items:start}
   .editor .preview{max-height:80vh; overflow:auto; margin:0}
   .sheet-margin .editor{display:block} /* a sheet beside its margin is too narrow for two columns */
@@ -537,7 +539,7 @@ dialog.palette>.meta{flex:none; margin:0; padding:var(--space-2) var(--space-5);
 .margin .group>details.action{margin-top:var(--space-2)}
 .margin .about{padding:var(--space-3)}
 .also ul.plain>li{padding:var(--space-2) 0}
-@media (max-width:1179px){.sheet-margin{grid-template-columns:minmax(0,1fr)}}
+@container column (max-width:867px){.sheet-margin{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:899px){
   .day-head{align-items:flex-start}
   .day-title{gap:var(--space-3)}
