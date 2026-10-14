@@ -183,7 +183,10 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **The stylesheet is this application's own: two embedded sheets, three embedded faces, no vendored framework and
   no CDN.** `base.css` holds the tokens and styles ordinary HTML by element — type, colour, forms, tables, buttons, a
   print sheet, light and dark — and `app.css` only what this app's own vocabulary needs (the shell and its
-  components, `.wikilink`, `.chart`); a test keeps the app's names out of the base sheet. The three faces are open
+  components, `.wikilink`, `.chart`); a test keeps the app's names out of the base sheet. The two sheets are one
+  cascade in four layers, `tokens`, `base`, `components` and `utilities`, declared once at the top of `base.css`
+  and shared by the two `style` elements, and every rule is in logical properties; a test holds both
+  ([plan 108](docs/plans/108-the-browser-made-current.md)). The three faces are open
   fonts (SIL OFL 1.1), latin and latin-ext, embedded with their licences and served by exact name at
   `GET /assets/fonts/{file}` with a cache of a year; like `/render`, the route is presentation and not in the catalog.
   Nothing is fetched from another host, so a page looks the same offline in fifty years. **Rejected:** a vendored classless sheet (Simple.css, Pico). Its

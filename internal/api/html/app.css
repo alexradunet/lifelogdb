@@ -3,78 +3,79 @@
    colour, size and font is a token of base.css; no rule here names a colour of its own. A material sets its text
    through the aliases of base.css (--text, --text-strong, --text-muted, --text-link, --text-accent, --rule): a
    parchment element and a wood element reset them once, here. There is no image: the icons and the chart are
-   inline <svg>, and the grain, the planks and the stitch are CSS. The last rules are for what app.js adds to a page,
-   which no page needs. */
+   inline <svg>, and the grain, the planks and the stitch are CSS. This sheet is the components and the utilities
+   layers of the one cascade base.css declares (docs/plans/108-the-browser-made-current.md): a utility is a class
+   no component restyles, so it may come last. The last rules are for what app.js adds to a page, which no page
+   needs. */
 
-/* The two materials of this sheet, as reusable declarations: parchment (what is written) and wood (the chrome). */
+@layer components{
+/* The two materials of this sheet, as reusable declarations: parchment (what is written) and wood (the chrome).
+   These two lists stay flat: a rule nested under a list takes the whole list's specificity. */
 .rail,.rail>nav,.rail-more:target,.scroll:has(>table.calendar){--text:var(--rail-ink); --text-strong:var(--rail-accent); --text-muted:var(--rail-ink); --text-link:var(--rail-accent); --text-accent:var(--rail-accent); --rule:var(--outline);
   color:var(--text); background-color:var(--rail); background-image:var(--planks),var(--grain-ground); background-size:auto,4px 4px}
 .sheet,.panel,.leaf,.month-box,.reading-tile,.alert,.toast,.action-form,ul.suggest,dialog.palette,table.calendar td,.margin ul.plain,.margin .habit,.margin .about,
 .editor .preview,main>.scroll:not(:has(>table.calendar)),.group>.scroll{--text:var(--ink); --text-strong:var(--ink); --text-muted:var(--muted); --text-link:var(--link); --text-accent:var(--accent-ink); --rule:var(--edge);
   color:var(--text); background-color:var(--surface); background-image:var(--grain-ink); background-size:4px 4px; border:2px solid var(--edge)}
 
-/* The way past the sidebar, for a keyboard and its reader. */
-.skip{position:absolute; top:6px; left:6px; z-index:40; padding:8px 14px; background:var(--primary); color:var(--on-accent); border:2px solid var(--outline); transform:translateY(-250%)}
-.skip:focus-visible{transform:none; color:var(--on-accent)}
-
 /* The shell: the sidebar, then the column of the page. Under 900 px the sidebar is a bar over the page. */
-.shell{display:grid; grid-template-columns:var(--rail-width) minmax(0,1fr); min-height:100vh}
+.shell{display:grid; grid-template-columns:var(--rail-width) minmax(0,1fr); min-block-size:100vh}
 .shell.bare{display:block}
 /* The column is a container: the open chat makes it narrower than the screen, so a layout inside it asks the width of
    the column, not of the screen. */
-.column{container:column / inline-size; min-width:0; display:flex; flex-direction:column; padding:var(--space-6) var(--space-8)}
-.column>main{flex:1; width:100%; max-width:1200px; display:flex; flex-direction:column; gap:var(--space-4)}
-.column>main>h2{margin-top:var(--space-4)}
-.column>footer{width:100%; max-width:1200px; margin-top:var(--space-10); padding-top:var(--space-3); border-top:2px dotted var(--line)}
-.shell.bare>.column{max-width:34rem; margin:0 auto}
+.column{container:column / inline-size; min-inline-size:0; display:flex; flex-direction:column; padding:var(--space-6) var(--space-8);
+  &>main{flex:1; inline-size:100%; max-inline-size:1200px; display:flex; flex-direction:column; gap:var(--space-4);
+    &>h2{margin-block-start:var(--space-4)}}
+  &>footer{inline-size:100%; max-inline-size:1200px; margin-block-start:var(--space-10); padding-block-start:var(--space-3); border-block-start:2px dotted var(--line)}}
+.shell.bare>.column{max-inline-size:34rem; margin:0 auto}
 
-svg.icon{flex:none; width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round}
+svg.icon{flex:none; inline-size:16px; block-size:16px; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round}
 
 /* The rail is wood: planks, a raised bevel, the outline on its right. Its words are the rail's ink; where the
    owner is, gold on a carved well. */
-.rail{position:sticky; top:0; height:100vh; overflow-y:auto; display:flex; flex-direction:column; gap:var(--space-4);
-  padding:var(--space-4) var(--space-3); border-right:2px solid var(--outline); box-shadow:var(--bevel-up)}
-.rail-head{display:flex; align-items:baseline; justify-content:space-between; gap:var(--space-2); padding:0 var(--space-2)}
-.rail-head .brand{font:400 26px/28px var(--display); letter-spacing:.02em; color:var(--rail-accent)}
-.rail-head .brand[aria-current=page]{text-decoration:underline; text-decoration-thickness:2px; text-underline-offset:4px}
-.rail .date{font:400 12px/16px var(--mono); color:var(--rail-ink)}
-.rail-search{display:flex; align-items:center; gap:var(--space-2); height:var(--control); padding:0 10px; color:var(--rail-ink);
-  background:var(--rail-deep); border:2px solid var(--outline); box-shadow:var(--bevel-in)}
-.rail-search:focus-within{outline:2px solid var(--focus); outline-offset:2px}
-.rail-search input{flex:1; min-width:0; height:auto; padding:0; border:0; outline:0; background:transparent; box-shadow:none; color:var(--rail-ink)}
-.rail-search input::placeholder{color:var(--rail-ink)}
-.rail-search input:focus-visible{outline:0}
+.rail{position:sticky; inset-block-start:0; block-size:100vh; overflow-y:auto; display:flex; flex-direction:column; gap:var(--space-4);
+  padding:var(--space-4) var(--space-3); border-inline-end:2px solid var(--outline); box-shadow:var(--bevel-up);
+  & .date{font:400 12px/16px var(--mono); color:var(--rail-ink)}}
+.rail-head{display:flex; align-items:baseline; justify-content:space-between; gap:var(--space-2); padding:0 var(--space-2);
+  & .brand{font:400 26px/28px var(--display); letter-spacing:.02em; color:var(--rail-accent);
+    &[aria-current=page]{text-decoration:underline; text-decoration-thickness:2px; text-underline-offset:4px}}}
+.rail-search{display:flex; align-items:center; gap:var(--space-2); block-size:var(--control); padding:0 10px; color:var(--rail-ink);
+  background:var(--rail-deep); border:2px solid var(--outline); box-shadow:var(--bevel-in);
+  &:focus-within{outline:2px solid var(--focus); outline-offset:2px}
+  & input{flex:1; min-inline-size:0; block-size:auto; padding:0; border:0; outline:0; background:transparent; box-shadow:none; color:var(--rail-ink);
+    &::placeholder{color:var(--rail-ink)}
+    &:focus-visible{outline:0}}}
 /* New is a wood slab with gold words, not the loud button: that one is the page's main write. */
-.rail .rail-new.primary{width:100%}
-.rail .rail-new.primary,.styleguide .rail-new.primary{background:var(--rail); color:var(--rail-accent); border-color:var(--outline); box-shadow:var(--bevel-up),var(--drop-hard)}
-.rail .rail-new.primary:hover,.styleguide .rail-new.primary:hover{background:var(--rail); color:var(--rail-accent); filter:brightness(1.12)}
-.rail nav ul{display:flex; flex-direction:column; gap:2px; margin:0; padding:0; list-style:none}
-.rail nav li{margin:0}
-.rail nav a{display:flex; align-items:center; gap:10px; padding:7px 10px; color:var(--rail-ink); white-space:nowrap}
-.rail nav a:hover{color:var(--rail-accent); text-decoration:none}
-.rail nav a[aria-current=page]{background:var(--rail-deep); color:var(--rail-accent); font-weight:700; box-shadow:inset 0 2px 0 var(--bevel-dark),inset 0 -2px 0 var(--bevel-light)}
-.count{margin-left:auto; font:700 12px/18px var(--mono); padding:0 7px; border:1px solid var(--outline); background:var(--primary); color:var(--on-accent)}
+.rail .rail-new.primary{inline-size:100%}
+.rail .rail-new.primary,.styleguide .rail-new.primary{background:var(--rail); color:var(--rail-accent); border-color:var(--outline); box-shadow:var(--bevel-up),var(--drop-hard);
+  &:hover{background:var(--rail); color:var(--rail-accent); filter:brightness(1.12)}}
+.rail nav{
+  & ul{display:flex; flex-direction:column; gap:2px; margin:0; padding:0; list-style:none}
+  & li{margin:0}
+  & a{display:flex; align-items:center; gap:10px; padding:7px 10px; color:var(--rail-ink); white-space:nowrap;
+    &:hover{color:var(--rail-accent); text-decoration:none}
+    &[aria-current=page]{background:var(--rail-deep); color:var(--rail-accent); font-weight:700; box-shadow:inset 0 2px 0 var(--bevel-dark),inset 0 -2px 0 var(--bevel-light)}}}
+.count{margin-inline-start:auto; font:700 12px/18px var(--mono); padding:0 7px; border:1px solid var(--outline); background:var(--primary); color:var(--on-accent)}
 /* On a wide screen the rest of the sidebar is in its flow: More, its head and the search link are the phone's. */
-.rail-more{display:contents}
-.rail-more>nav{padding-top:var(--space-3); border-top:2px solid var(--outline)}
+.rail-more{display:contents;
+  &>nav{padding-block-start:var(--space-3); border-block-start:2px solid var(--outline)}}
 .rail-more-link,.rail-more-head,.rail .rail-search-link{display:none}
-.rail-foot{margin-top:auto; padding:0 var(--space-2); font-size:13px; line-height:19px; color:var(--rail-ink)}
-.rail-foot a{color:var(--rail-ink)}
-.rail-foot a[aria-current=page]{font-weight:700; color:var(--rail-accent)}
+.rail-foot{margin-block-start:auto; padding:0 var(--space-2); font-size:13px; line-height:19px; color:var(--rail-ink);
+  & a{color:var(--rail-ink);
+    &[aria-current=page]{font-weight:700; color:var(--rail-accent)}}}
 
 /* The month in the sidebar: a parchment slip in the wood; a written day is tinted, today is framed. */
 .month-box{display:flex; flex-direction:column; gap:var(--space-2); padding:var(--space-3) 10px; box-shadow:var(--parch-bevel)}
-.month-head{display:flex; align-items:baseline; justify-content:space-between; gap:var(--space-2)}
-.month-head a{font-size:14px; font-weight:700; color:var(--ink)}
-.month-head .meta{font:400 12px/16px var(--mono); color:var(--muted)}
-table.month{border-collapse:separate; border-spacing:2px; table-layout:fixed; font:400 12px/16px var(--mono); text-align:center}
-table.month th,table.month td{padding:0; border:0; text-align:center}
-table.month thead th{font-weight:400; font-size:12px; letter-spacing:0; text-transform:none; color:var(--muted); padding:2px 0}
-table.month tbody tr:hover{background:none}
-table.month a{display:block; padding:3px 0; color:var(--ink)}
-table.month a:hover{background:var(--surface-deep); text-decoration:none}
-table.month a.written{background:var(--accent-soft); color:var(--accent-ink); font-weight:500}
-table.month a[aria-current=date]{box-shadow:inset 0 0 0 2px var(--accent-ink)}
+.month-head{display:flex; align-items:baseline; justify-content:space-between; gap:var(--space-2);
+  & a{font-size:14px; font-weight:700; color:var(--ink)}
+  & .meta{font:400 12px/16px var(--mono); color:var(--muted)}}
+table.month{border-collapse:separate; border-spacing:2px; table-layout:fixed; font:400 12px/16px var(--mono); text-align:center;
+  & th,& td{padding:0; border:0; text-align:center}
+  & thead th{font-weight:400; font-size:12px; letter-spacing:0; text-transform:none; color:var(--muted); padding:2px 0}
+  & tbody tr:hover{background:none}
+  & a{display:block; padding:3px 0; color:var(--ink);
+    &:hover{background:var(--surface-deep); text-decoration:none}
+    &.written{background:var(--accent-soft); color:var(--accent-ink); font-weight:500}
+    &[aria-current=date]{box-shadow:inset 0 0 0 2px var(--accent-ink)}}}
 
 /* The year: twelve of those month boxes in a grid. */
 .year{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:var(--space-4)}
@@ -86,53 +87,53 @@ table.month a[aria-current=date]{box-shadow:inset 0 0 0 2px var(--accent-ink)}
    is the same wood. */
 @media (max-width:899px){
   .shell{display:block}
-  .rail{position:sticky; top:0; z-index:20; height:auto; overflow:visible; flex-direction:row; align-items:center; gap:var(--space-2);
+  .rail{position:sticky; inset-block-start:0; z-index:20; block-size:auto; overflow:visible; flex-direction:row; align-items:center; gap:var(--space-2);
     padding:calc(var(--space-2) + env(safe-area-inset-top, 0px)) calc(var(--space-4) + env(safe-area-inset-right, 0px)) var(--space-2) calc(var(--space-4) + env(safe-area-inset-left, 0px));
-    border-right:0; border-bottom:2px solid var(--outline); box-shadow:inset 0 3px 0 var(--bevel-light),inset 0 -3px 0 var(--bevel-dark)}
-  .rail-head{flex:1 1 auto; align-items:center; justify-content:flex-start; gap:var(--space-3); padding:0}
-  .rail-head .brand{font-size:22px; line-height:24px}
+    border-inline-end:0; border-block-end:2px solid var(--outline); box-shadow:inset 0 3px 0 var(--bevel-light),inset 0 -3px 0 var(--bevel-dark)}
+  .rail-head{flex:1 1 auto; align-items:center; justify-content:flex-start; gap:var(--space-3); padding:0;
+    & .brand{font-size:22px; line-height:24px}}
   .rail>search,.rail-search{display:none}
-  .rail .rail-search-link{display:inline-flex; width:var(--control); padding:0; margin-left:auto; background:var(--rail); color:var(--rail-accent); box-shadow:var(--bevel-up),var(--drop-hard)}
-  .rail .rail-new.primary{width:auto}
-  .rail>nav{position:fixed; z-index:20; left:0; right:0; bottom:0; border-top:2px solid var(--outline); box-shadow:inset 0 3px 0 var(--bevel-light);
-    padding:var(--space-1) calc(var(--space-2) + env(safe-area-inset-right, 0px)) calc(var(--space-1) + env(safe-area-inset-bottom, 0px)) calc(var(--space-2) + env(safe-area-inset-left, 0px))}
-  .rail>nav ul{flex-direction:row; justify-content:space-around; gap:0}
-  .rail>nav li{flex:1 1 0; min-width:0}
-  .rail>nav a{position:relative; flex-direction:column; gap:2px; padding:6px 0; font-size:12px; line-height:16px}
-  .rail>nav a svg.icon{width:20px; height:20px}
-  .rail>nav a[aria-current=page],.rail>nav a.here{background:none; box-shadow:none; color:var(--rail-accent); font-weight:700}
-  .rail>nav .count{position:absolute; top:2px; left:calc(50% + 6px); margin:0; padding:0 5px; font-size:12px; line-height:16px}
+  .rail .rail-search-link{display:inline-flex; inline-size:var(--control); padding:0; margin-inline-start:auto; background:var(--rail); color:var(--rail-accent); box-shadow:var(--bevel-up),var(--drop-hard)}
+  .rail .rail-new.primary{inline-size:auto}
+  .rail>nav{position:fixed; z-index:20; inset-inline:0; inset-block-end:0; border-block-start:2px solid var(--outline); box-shadow:inset 0 3px 0 var(--bevel-light);
+    padding:var(--space-1) calc(var(--space-2) + env(safe-area-inset-right, 0px)) calc(var(--space-1) + env(safe-area-inset-bottom, 0px)) calc(var(--space-2) + env(safe-area-inset-left, 0px));
+    & ul{flex-direction:row; justify-content:space-around; gap:0}
+    & li{flex:1 1 0; min-inline-size:0}
+    & a{position:relative; flex-direction:column; gap:2px; padding:6px 0; font-size:12px; line-height:16px;
+      & svg.icon{inline-size:20px; block-size:20px}
+      &[aria-current=page],&.here{background:none; box-shadow:none; color:var(--rail-accent); font-weight:700}}
+    & .count{position:absolute; inset-block-start:2px; inset-inline-start:calc(50% + 6px); margin:0; padding:0 5px; font-size:12px; line-height:16px}}
   .rail-more-link{display:block}
   .rail-more{display:none}
-  .rail-more:target{display:flex; flex-direction:column; gap:var(--space-4); position:fixed; z-index:30; left:0; right:0; top:0;
-    bottom:calc(58px + env(safe-area-inset-bottom, 0px)); overflow-y:auto; box-shadow:var(--shadow-float);
+  .rail-more:target{display:flex; flex-direction:column; gap:var(--space-4); position:fixed; z-index:30; inset-inline:0; inset-block-start:0;
+    inset-block-end:calc(58px + env(safe-area-inset-bottom, 0px)); overflow-y:auto; box-shadow:var(--shadow-float);
     padding:calc(var(--space-4) + env(safe-area-inset-top, 0px)) calc(var(--space-4) + env(safe-area-inset-right, 0px)) var(--space-4) calc(var(--space-4) + env(safe-area-inset-left, 0px))}
-  .rail-more-head{display:flex; align-items:center; justify-content:space-between}
-  .rail-more-head .label{color:var(--rail-accent)}
-  .rail-more>nav{border-top:0; padding-top:0}
-  .rail-more .month-box{max-width:22rem}
+  .rail-more-head{display:flex; align-items:center; justify-content:space-between;
+    & .label{color:var(--rail-accent)}}
+  .rail-more>nav{border-block-start:0; padding-block-start:0}
+  .rail-more .month-box{max-inline-size:22rem}
   .rail-foot{margin:0}
-  .column{padding:var(--space-5) calc(var(--space-4) + env(safe-area-inset-right, 0px)) calc(72px + env(safe-area-inset-bottom, 0px)) calc(var(--space-4) + env(safe-area-inset-left, 0px))}
-  .column>footer{margin-top:var(--space-6)}
+  .column{padding:var(--space-5) calc(var(--space-4) + env(safe-area-inset-right, 0px)) calc(72px + env(safe-area-inset-bottom, 0px)) calc(var(--space-4) + env(safe-area-inset-left, 0px));
+    &>footer{margin-block-start:var(--space-6)}}
   html{scroll-padding-block-end:calc(var(--control) + var(--space-4) + env(safe-area-inset-bottom, 0px))} /* a focused field stays above the bottom bar */
   footer .keys{display:none}
 }
 @media print{.rail,.skip{display:none} .shell{display:block} .column{padding:0}}
 
-/* Type helpers: the mono styles of the design system. */
+/* Type helpers: the mono styles of the design system. A component restyles them, so they are not utilities. */
 .date,.meta,.value,.reading{font-family:var(--mono); font-variant-numeric:tabular-nums}
 .date{font-size:13px; line-height:18px; color:var(--text-muted)}
 .meta{font-size:12px; line-height:16px; color:var(--text-muted)}
 .value{font-size:14px; line-height:20px}
 .reading{font-size:22px; line-height:28px}
 .label{font-size:15px; line-height:22px; font-weight:700; color:var(--text-strong)}
-.muted{color:var(--text-muted)}
 
 /* The page header: the date line, the title, and the tools on the right. */
-.page-head{display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:14px}
-.page-head .what{display:flex; flex-direction:column; gap:2px; min-width:0}
-.page-head h1{overflow-wrap:anywhere}
-.page-head .tools{display:flex; flex-wrap:wrap; align-items:flex-start; gap:var(--space-2)}
+.page-head{display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:14px;
+  & .what{display:flex; flex-direction:column; gap:2px; min-inline-size:0}
+  & h1{overflow-wrap:anywhere}
+  & .tools{display:flex; flex-wrap:wrap; align-items:flex-start; gap:var(--space-2)}
+  & .sub{margin-block-start:var(--space-1)}}
 .mood{display:inline-block; font:500 15px/1 var(--mono); padding:5px 10px; border:1px solid var(--edge); background:var(--surface-deep); color:var(--ink);
   vertical-align:middle; white-space:nowrap}
 small .mood{font-size:12px; padding:2px 8px}
@@ -141,238 +142,247 @@ small .mood{font-size:12px; padding:2px 8px}
 .sub{display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 14px; font-size:14px; line-height:20px; color:var(--text-muted)}
 
 /* A panel: one group of the entity, on parchment. */
-.panel{display:flex; flex-direction:column; gap:var(--space-3); min-width:0; padding:var(--space-4); box-shadow:var(--parch-bevel)}
-.panel-head{display:flex; align-items:center; justify-content:space-between; gap:var(--space-3)}
-.panel-head a{font-size:13px; line-height:19px; flex:none}
-.section{display:flex; flex-direction:column; gap:10px; min-width:0}
+.panel{display:flex; flex-direction:column; gap:var(--space-3); min-inline-size:0; padding:var(--space-4); box-shadow:var(--parch-bevel)}
+.panel-head{display:flex; align-items:center; justify-content:space-between; gap:var(--space-3);
+  & a{font-size:13px; line-height:19px; flex:none}
+  & h3{font-size:15px; line-height:22px}}
+.section{display:flex; flex-direction:column; gap:10px; min-inline-size:0}
 
 /* The heading of a group carries a stitch after it: a dotted rule of the material, to the end of the line. */
-.panel-head :is(h2,h3),.margin .group>h2,.capture>h2,.record>h2,.also>h2,.section>h2{display:flex; align-items:center; gap:10px; flex:1 1 auto; min-width:0}
-.panel-head :is(h2,h3)::after,.margin .group>h2::after,.capture>h2::after,.record>h2::after,.also>h2::after,.section>h2::after{content:""; flex:1; height:2px; min-width:24px;
+.panel-head :is(h2,h3),.margin .group>h2,.capture>h2,.record>h2,.also>h2,.section>h2{display:flex; align-items:center; gap:10px; flex:1 1 auto; min-inline-size:0}
+.panel-head :is(h2,h3)::after,.margin .group>h2::after,.capture>h2::after,.record>h2::after,.also>h2::after,.section>h2::after{content:""; flex:1; block-size:2px; min-inline-size:24px;
   background:linear-gradient(to right,var(--rule) 50%,transparent 50%) 0 0/8px 2px repeat-x; opacity:.7}
 
 /* A short name of a kind (an entity type, a category) and a state, in mono on a small slab. The state's colour only
    repeats its word. */
 .badge,.tag{display:inline-block; font:400 12px/16px var(--mono); padding:2px var(--space-2); white-space:nowrap;
   background:var(--surface-deep); color:var(--muted); border:1px solid var(--edge); vertical-align:middle}
-.tag.open{background:var(--accent-soft); color:var(--accent-ink); border-color:var(--accent-ink)}
-.tag.overdue{background:var(--warn-soft); color:var(--warn-ink); border-color:var(--warn)}
-.tag.done{background:var(--done-soft); color:var(--done-ink); border-color:var(--done)}
-.tag.unwritten{background:none; border-style:dashed; padding:1px 7px; color:var(--text-muted); border-color:var(--rule)}
-.tag.deleted{background:var(--danger-soft); color:var(--danger-ink); border-color:var(--danger)}
+.tag{
+  &.open{background:var(--accent-soft); color:var(--accent-ink); border-color:var(--accent-ink)}
+  &.overdue{background:var(--warn-soft); color:var(--warn-ink); border-color:var(--warn)}
+  &.done{background:var(--done-soft); color:var(--done-ink); border-color:var(--done)}
+  &.unwritten{background:none; border-style:dashed; padding:1px 7px; color:var(--text-muted); border-color:var(--rule)}
+  &.deleted,&.notdone{background:var(--danger-soft); color:var(--danger-ink); border-color:var(--danger)}}
 .owner{font:400 12px/16px var(--mono); padding:1px 6px; border:1px solid var(--outline); background:var(--rail); color:var(--rail-accent)}
 
 /* Buttons beyond the plain slab of base.css: the primary one (once a screen, in ember, for what the page is for),
    the danger one (the catalog's danger), a quiet one, a small one in a row, and a link drawn as a button. */
-.button{display:inline-flex; align-items:center; justify-content:center; gap:var(--space-2); height:var(--control); padding:0 var(--space-4);
-  font-weight:700; color:var(--ink); background:var(--surface-deep); border:2px solid var(--outline); box-shadow:var(--slab-bevel),var(--drop-hard); white-space:nowrap}
-.button:hover{color:var(--ink); text-decoration:none; filter:brightness(1.04)}
-.button:active{transform:translateY(3px); box-shadow:var(--slab-pressed)}
+.button{display:inline-flex; align-items:center; justify-content:center; gap:var(--space-2); block-size:var(--control); padding:0 var(--space-4);
+  font-weight:700; color:var(--ink); background:var(--surface-deep); border:2px solid var(--outline); box-shadow:var(--slab-bevel),var(--drop-hard); white-space:nowrap;
+  &:hover{color:var(--ink); text-decoration:none; filter:brightness(1.04)}
+  &:active{transform:translateY(3px); box-shadow:var(--slab-pressed)}}
 @media (prefers-reduced-motion:no-preference){.button{transition:transform .08s,box-shadow .08s,filter .08s}}
-button.primary,.button.primary{background:var(--primary); color:var(--on-accent)}
-button.primary:hover,.button.primary:hover{background:var(--primary-hover); color:var(--on-accent); filter:none}
-button.danger{color:var(--danger); border-color:var(--danger-line); background:var(--surface)}
-button.danger:hover{background:var(--danger-soft); border-color:var(--danger); filter:none}
-button.quiet{background:none; border-color:transparent; box-shadow:none; color:var(--text-link); font-weight:400}
-button.quiet:hover{border-color:var(--rule); filter:none}
-button.quiet:active{transform:none}
-button.small,.button.small,form.tiny button{height:var(--control-small); padding:0 var(--space-3); font-size:13px}
-.button.step{font:400 13px/1 var(--mono); padding:0 var(--space-3)}
+button.primary,.button.primary{background:var(--primary); color:var(--on-accent);
+  &:hover{background:var(--primary-hover); color:var(--on-accent); filter:none}}
+button.danger{color:var(--danger); border-color:var(--danger-line); background:var(--surface);
+  &:hover{background:var(--danger-soft); border-color:var(--danger); filter:none}}
+button.quiet{background:none; border-color:transparent; box-shadow:none; color:var(--text-link); font-weight:400;
+  &:hover{border-color:var(--rule); filter:none}
+  &:active{transform:none}}
+button.small,.button.small,form.tiny button{block-size:var(--control-small); padding:0 var(--space-3); font-size:13px}
+.button.step{font:400 13px/1 var(--mono); padding:0 var(--space-3); gap:var(--space-2);
+  &>[aria-hidden]{font:400 20px/1 var(--sans)}}
 
 /* The prev and next of a list, a day, a habit window. */
-nav.pager{display:flex; justify-content:space-between; align-items:center; gap:var(--space-3)}
-nav.pager a{display:inline-flex; align-items:center; height:var(--control-small); padding:0 var(--space-3); font:400 13px/1 var(--mono);
-  color:var(--ink); background:var(--surface-deep); border:2px solid var(--outline); box-shadow:var(--slab-bevel),var(--drop-hard)}
-nav.pager a:hover{text-decoration:none; filter:brightness(1.04)}
-nav.pager a:active{transform:translateY(3px); box-shadow:var(--slab-pressed)}
-nav.pager>:last-child{margin-left:auto}
+nav.pager{display:flex; justify-content:space-between; align-items:center; gap:var(--space-3);
+  & a{display:inline-flex; align-items:center; block-size:var(--control-small); padding:0 var(--space-3); font:400 13px/1 var(--mono);
+    color:var(--ink); background:var(--surface-deep); border:2px solid var(--outline); box-shadow:var(--slab-bevel),var(--drop-hard);
+    &:hover{text-decoration:none; filter:brightness(1.04)}
+    &:active{transform:translateY(3px); box-shadow:var(--slab-pressed)}}
+  &>:last-child{margin-inline-start:auto}}
 
 /* A list of the things themselves, with nothing in front of them. */
-ul.plain{list-style:none; margin:0; padding:0}
-ul.plain>li{margin:0; padding:10px var(--space-1); border-bottom:1px solid var(--line-soft)}
-ul.plain>li:last-child{border-bottom:0}
+ul.plain{list-style:none; margin:0; padding:0;
+  &>li{margin:0; padding:10px var(--space-1); border-block-end:1px solid var(--line-soft);
+    &:last-child{border-block-end:0}
+    &:has(>a.entry){padding:0}}
+  & .meta{display:block}}
 
 /* A row of a list: the day in mono, the first line, a value at the end. The whole row is the link. */
 .entry{display:grid; grid-template-columns:96px minmax(0,1fr) auto; gap:var(--space-3); align-items:baseline;
-  padding:10px var(--space-1); border-bottom:1px solid var(--line-soft); color:var(--text)}
-.entry:hover{background:var(--surface-deep); color:var(--text); text-decoration:none}
-.entry .first{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-@media (max-width:519px){.entry{grid-template-columns:minmax(0,1fr) auto}.entry>.date{grid-column:1 / -1}}
-.margin .entry{grid-template-columns:minmax(0,1fr) auto}
-.margin .entry>.date{grid-column:1 / -1}
-.margin .entry .note{grid-column:1 / -1}
-.entry.unwritten{color:var(--text-muted)}
+  padding:10px var(--space-1); border-block-end:1px solid var(--line-soft); color:var(--text);
+  &:hover{background:var(--surface-deep); color:var(--text); text-decoration:none}
+  & .first{min-inline-size:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  &.unwritten{color:var(--text-muted)}
+  /* A note of an entry (a session's evidence) is a line under its words. */
+  &>.note{grid-column:2 / -1}}
+@media (max-width:519px){.entry{grid-template-columns:minmax(0,1fr) auto} .entry>.date,.entry>.note{grid-column:1 / -1}}
+.margin .entry{grid-template-columns:minmax(0,1fr) auto;
+  &>.date,& .note{grid-column:1 / -1}}
+/* An entry in a list item: the item draws the line, the entry the padding, so a row has one of each. */
+li>a.entry{border-block-end:0}
 
 /* A table wider than the screen scrolls; the page does not. A table on the oak is written on parchment first. */
 .scroll{overflow-x:auto}
 main>.scroll:not(:has(>table.calendar)),.group>.scroll{padding:var(--space-2) var(--space-3); box-shadow:var(--parch-bevel)}
 
 /* A body: the CommonMark of a page, with its [[wikilinks]], #tags and ![[pictures]] resolved. */
-.prose{max-width:var(--measure); font-size:16px; line-height:26px; overflow-wrap:anywhere}
-.prose>*+*{margin-top:10px}
-.prose h1,.prose h2,.prose h3,.prose h4{font:700 17px/24px var(--sans); letter-spacing:0; text-transform:none; color:inherit; margin-top:var(--space-5)}
-.prose ul,.prose ol{padding-left:1.5em}
-.prose img{border:2px solid var(--edge)}
-a.wikilink{border-bottom:1px dotted currentColor}
-a.wikilink:hover{border-bottom-style:solid; text-decoration:none}
-a.wikilink.embed{border-bottom:0}
+.prose{max-inline-size:var(--measure); font-size:16px; line-height:26px; overflow-wrap:anywhere;
+  &>*+*{margin-block-start:10px}
+  & h1,& h2,& h3,& h4{font:700 17px/24px var(--sans); letter-spacing:0; text-transform:none; color:inherit; margin-block-start:var(--space-5)}
+  & ul,& ol{padding-inline-start:1.5em}
+  & img{border:2px solid var(--edge)}}
+a.wikilink{border-block-end:1px dotted currentColor;
+  &:hover{border-block-end-style:solid; text-decoration:none}
+  &.embed{border-block-end:0}}
 img.preview{border:2px solid var(--edge); box-shadow:var(--drop-hard)}
 
 /* A series, drawn by the server as an inline <svg>: one point per reading, a teal line on parchment, gold marks. */
-svg.chart{width:100%; max-width:800px; height:auto; padding:var(--space-2); color:var(--link); background-color:var(--surface); background-image:var(--grain-ink); background-size:4px 4px;
-  border:2px solid var(--edge); box-shadow:var(--parch-bevel)}
-svg.chart polyline{fill:none; stroke:currentColor; stroke-width:2; stroke-linejoin:round; stroke-linecap:round}
-svg.chart circle{fill:var(--accent-ink)}
-svg.chart circle:hover{fill:var(--warn)}
-svg.chart .axis{stroke:var(--edge)}
-svg.chart text{fill:var(--muted); font:400 12px var(--mono); text-anchor:end}
-svg.chart text.x{text-anchor:middle}
+svg.chart{inline-size:100%; max-inline-size:800px; block-size:auto; padding:var(--space-2); color:var(--link); background-color:var(--surface); background-image:var(--grain-ink); background-size:4px 4px;
+  border:2px solid var(--edge); box-shadow:var(--parch-bevel);
+  & polyline{fill:none; stroke:currentColor; stroke-width:2; stroke-linejoin:round; stroke-linecap:round}
+  & circle{fill:var(--accent-ink);
+    &:hover{fill:var(--warn)}}
+  & .axis{stroke:var(--edge)}
+  & text{fill:var(--muted); font:400 12px var(--mono); text-anchor:end;
+    &.x{text-anchor:middle}}}
 @media (max-width:640px){svg.chart text{font-size:20px}} /* the chart is scaled down to the screen: its words are not */
 
 /* A form of a few short fields, on one line: find, correct, check in, record on a series. */
-form.inline{display:flex; flex-wrap:wrap; align-items:flex-end; gap:var(--space-2)}
-form.inline>label{flex:1 1 130px}
-form.inline>button{flex:0 0 auto}
+form.inline{display:flex; flex-wrap:wrap; align-items:flex-end; gap:var(--space-2);
+  &>label{flex:1 1 130px}
+  &>button{flex:0 0 auto}}
 @media (max-width:640px){form.inline>label{flex:1 1 100%}}
 /* Any other form: its fields one under the other, the button under them. */
-form:where(:not(.inline):not(.tiny):not(.rail-search)){display:flex; flex-direction:column; align-items:flex-start; gap:var(--space-3)}
-form:where(:not(.inline):not(.tiny):not(.rail-search))>label{align-self:stretch}
+form:where(:not(.inline):not(.tiny):not(.rail-search)){display:flex; flex-direction:column; align-items:flex-start; gap:var(--space-3);
+  &>label{align-self:stretch}}
 
 /* A form that is one button: a habit's Done, a tombstone's Revive. */
 form.tiny{display:inline-block}
-td form.tiny+form.tiny{margin-left:var(--space-1)}
+td form.tiny+form.tiny{margin-inline-start:var(--space-1)}
 
 /* An occurrence of a task in a list: what and when on the left, its Done, Skip or Reopen on the right. A done or
    skipped one is quiet. */
-.occ{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--space-1) var(--space-3)}
-.occ>div:first-child{flex:1 1 11rem; min-width:0}
-.occ>div:first-child>a{color:var(--text-strong); font-weight:700}
-.occ-facts{display:flex; flex-wrap:wrap; gap:0 var(--space-3); margin-top:2px; font-size:13px; line-height:19px; color:var(--text-muted)}
-.occ-facts .when{font-family:var(--mono); font-size:12px; font-variant-numeric:tabular-nums}
+.occ{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--space-1) var(--space-3);
+  &>div:first-child{flex:1 1 11rem; min-inline-size:0;
+    &>a{color:var(--text-strong); font-weight:700}}}
+.occ-facts{display:flex; flex-wrap:wrap; gap:0 var(--space-3); margin-block-start:2px; font-size:13px; line-height:19px; color:var(--text-muted);
+  & .when{font-family:var(--mono); font-size:12px; font-variant-numeric:tabular-nums}}
 .outcomes{display:flex; flex-wrap:wrap; gap:var(--space-1)}
 li.settled>.occ>div:first-child>a{color:var(--text-muted); font-weight:400; text-decoration:line-through}
 
 /* A row's outcome (docs/plans/095-the-leaf-and-its-margin.md): no row button is loud. Done is an outline in the done
    colour with a check; Skip, Reopen and a habit's Not done are quiet words that show a frame on hover. */
-form:is(.outcome-done,.outcome-skip,.outcome-reopen,.outcome-notdone) button{height:var(--control-small); padding:0 var(--space-3); font-size:14px}
-form.outcome-done button{color:var(--done); border-color:var(--done); background:var(--surface); box-shadow:var(--drop-hard); font-weight:700}
-form.outcome-done button::before{content:"\2713" / ""; font-weight:700}
-form.outcome-done button:hover{background:var(--done-soft); color:var(--done-ink); border-color:var(--done); filter:none}
-form:is(.outcome-skip,.outcome-reopen,.outcome-notdone) button{color:var(--text-muted); background:none; border-color:transparent; box-shadow:none; font-weight:400}
-form:is(.outcome-skip,.outcome-reopen,.outcome-notdone) button:hover{color:var(--text); border-color:var(--rule); filter:none}
-form:is(.outcome-skip,.outcome-reopen,.outcome-notdone) button:active{transform:none}
+form:is(.outcome-done,.outcome-skip,.outcome-reopen,.outcome-notdone) button{block-size:var(--control-small); padding:0 var(--space-3); font-size:14px}
+form.outcome-done button{color:var(--done); border-color:var(--done); background:var(--surface); box-shadow:var(--drop-hard); font-weight:700;
+  &::before{content:"\2713" / ""; font-weight:700}
+  &:hover{background:var(--done-soft); color:var(--done-ink); border-color:var(--done); filter:none}}
+form:is(.outcome-skip,.outcome-reopen,.outcome-notdone) button{color:var(--text-muted); background:none; border-color:transparent; box-shadow:none; font-weight:400;
+  &:hover{color:var(--text); border-color:var(--rule); filter:none}
+  &:active{transform:none}}
 
 /* The properties of an entity, typed: the name muted, the value in mono. */
-dl.facts{display:grid; grid-template-columns:minmax(90px,max-content) minmax(0,1fr); gap:var(--space-2) var(--space-4); align-items:baseline}
-dl.facts dt{margin:0; font-size:14px; line-height:20px; font-weight:400; letter-spacing:0; text-transform:none; color:var(--text-muted)}
-dl.facts dt::first-letter{text-transform:uppercase}
-dl.facts dd{margin:0; display:block; font:400 14px/20px var(--mono); font-variant-numeric:tabular-nums; color:var(--text)}
+dl.facts{display:grid; grid-template-columns:minmax(90px,max-content) minmax(0,1fr); gap:var(--space-2) var(--space-4); align-items:baseline;
+  & dt{margin:0; font-size:14px; line-height:20px; font-weight:400; letter-spacing:0; text-transform:none; color:var(--text-muted);
+    &::first-letter{text-transform:uppercase}}
+  & dd{margin:0; display:block; font:400 14px/20px var(--mono); font-variant-numeric:tabular-nums; color:var(--text);
+    &.words{font-family:var(--sans)}}}
 
 /* The state of a habit on a day, in words and in colour. */
 .done{color:var(--done); font-weight:700}
 .notdone{color:var(--danger); font-weight:700}
 
 /* The metric tree: a category, then the categories under it, each one step in. */
-.group{display:flex; flex-direction:column; gap:var(--space-2)}
-.group h3 small{font-weight:400}
-.group.depth-1{margin-left:14px}
-.group.depth-2{margin-left:28px}
-.group.depth-3,.group.depth-4,.group.depth-5{margin-left:42px}
-
-/* What an action does, before its form; the note under a table or a search. */
-.desc{display:block; font-size:13px; line-height:19px; color:var(--text-muted)}
+.group{display:flex; flex-direction:column; gap:var(--space-2);
+  & h3 small{font-weight:400}
+  &.depth-1{margin-inline-start:14px}
+  &.depth-2{margin-inline-start:28px}
+  &.depth-3,&.depth-4,&.depth-5{margin-inline-start:42px}}
 
 /* A page's typed links: a kind, then the pages it points at. */
-dl:not(.facts) dt{font-size:13px; line-height:19px; font-weight:700; color:var(--text-muted); margin-top:var(--space-3)}
-dl:not(.facts) dd{margin:var(--space-1) 0 0; display:flex; flex-wrap:wrap; gap:2px 14px}
+dl:not(.facts){
+  & dt{font-size:13px; line-height:19px; font-weight:700; color:var(--text-muted); margin-block-start:var(--space-3)}
+  & dd{margin:var(--space-1) 0 0; display:flex; flex-wrap:wrap; gap:2px 14px}}
 
 /* The calendar of a month: parchment cells on wood; a day with a page is tinted, with its first line and its mood;
    today has the gold edge and the notch. On a phone the cells keep the day and its tint. */
 .scroll:has(>table.calendar){padding:var(--space-2); border:2px solid var(--outline); box-shadow:var(--bevel-up)}
-table.calendar{width:100%; min-width:320px; table-layout:fixed; border-collapse:separate; border-spacing:3px}
-table.calendar caption{color:var(--rail-ink)}
-table.calendar th{padding:var(--space-1) var(--space-2); text-align:left; border-bottom:0; font:400 12px/16px var(--mono); color:var(--rail-ink)}
-table.calendar td{position:relative; height:96px; padding:0; vertical-align:top}
-table.calendar td:empty{background:none; border-color:transparent}
-table.calendar td>a{display:flex; flex-direction:column; gap:2px; height:100%; padding:6px var(--space-2); color:var(--ink)}
-table.calendar td>a:hover{background:var(--surface-deep); text-decoration:none}
-table.calendar .n{font:500 13px/18px var(--mono); color:var(--muted)}
-table.calendar .first{font-size:12px; line-height:16px; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical}
-/* The items of a day (docs/plans/101-the-calendar-holds-every-dated-thing.md): a line each, a square before it the
-   colour of a task's state as the tags have it, every other square muted; a phone's cell keeps the squares only. */
-table.calendar .items{display:flex; flex-direction:column; min-width:0}
-table.calendar .item{position:relative; padding-left:10px; font-size:12px; line-height:16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-table.calendar .item::before{content:""; position:absolute; left:0; top:5px; width:6px; height:6px; background:var(--muted)}
-table.calendar .marks i{display:block; width:6px; height:6px; background:var(--muted)}
-table.calendar .item small,table.calendar .more{font-size:12px; line-height:16px; color:var(--muted)}
-table.calendar .item.open::before,table.calendar .marks i.open{background:var(--accent-ink)}
-table.calendar .item.overdue::before,table.calendar .marks i.overdue{background:var(--warn)}
-table.calendar .item.done::before,table.calendar .marks i.done{background:var(--done)}
-table.calendar .item.done{color:inherit; font-weight:inherit} /* the square says done: not the bold word of .done */
-table.calendar .marks{display:none}
-table.calendar td.written{background-color:var(--accent-soft)}
-table.calendar td.written .n{color:var(--accent-ink)}
-table.calendar td[aria-current=date]{border-color:var(--accent-ink); box-shadow:inset 0 0 0 1px var(--accent-ink)}
-table.calendar td[aria-current=date]::after{content:""; position:absolute; top:4px; right:4px; width:7px; height:7px; background:var(--accent-ink); pointer-events:none}
-table.calendar tbody tr:hover{background:none}
-@media (max-width:599px){table.calendar td{height:52px} table.calendar .first,table.calendar .meta,table.calendar .items,table.calendar .more{display:none}
+table.calendar{inline-size:100%; min-inline-size:320px; table-layout:fixed; border-collapse:separate; border-spacing:3px;
+  & caption{color:var(--rail-ink)}
+  & th{padding:var(--space-1) var(--space-2); text-align:start; border-block-end:0; font:400 12px/16px var(--mono); color:var(--rail-ink)}
+  & td{position:relative; block-size:96px; padding:0; vertical-align:top;
+    &:empty{background:none; border-color:transparent}
+    &>a{display:flex; flex-direction:column; gap:2px; block-size:100%; padding:6px var(--space-2); color:var(--ink);
+      &:hover{background:var(--surface-deep); text-decoration:none}}
+    &.written{background-color:var(--accent-soft);
+      & .n{color:var(--accent-ink)}}
+    &[aria-current=date]{border-color:var(--accent-ink); box-shadow:inset 0 0 0 1px var(--accent-ink);
+      &::after{content:""; position:absolute; inset-block-start:4px; inset-inline-end:4px; inline-size:7px; block-size:7px; background:var(--accent-ink); pointer-events:none}}}
+  & .n{font:500 13px/18px var(--mono); color:var(--muted)}
+  & .first{font-size:12px; line-height:16px; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical}
+  /* The items of a day (docs/plans/101-the-calendar-holds-every-dated-thing.md): a line each, a square before it the
+     colour of a task's state as the tags have it, every other square muted; a phone's cell keeps the squares only. */
+  & .items{display:flex; flex-direction:column; min-inline-size:0}
+  & .item{position:relative; padding-inline-start:10px; font-size:12px; line-height:16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    &::before{content:""; position:absolute; inset-inline-start:0; inset-block-start:5px; inline-size:6px; block-size:6px; background:var(--muted)}
+    &.open::before{background:var(--accent-ink)}
+    &.overdue::before{background:var(--warn)}
+    &.done::before{background:var(--done)}
+    &.done{color:inherit; font-weight:inherit} /* the square says done: not the bold word of .done */
+    & small{font-size:12px; line-height:16px; color:var(--muted)}}
+  & .more{font-size:12px; line-height:16px; color:var(--muted)}
+  & .marks{display:none;
+    & i{display:block; inline-size:6px; block-size:6px; background:var(--muted);
+      &.open{background:var(--accent-ink)}
+      &.overdue{background:var(--warn)}
+      &.done{background:var(--done)}}}
+  & tbody tr:hover{background:none}}
+@media (max-width:599px){table.calendar td{block-size:52px} table.calendar .first,table.calendar .meta,table.calendar .items,table.calendar .more{display:none}
   table.calendar .marks{display:flex; flex-wrap:wrap; gap:3px} table.calendar th{padding:var(--space-1); text-align:center}}
 
 /* An alert: an error entity in words, what went wrong and what to do, on parchment with the tone's edge. */
-.alert{display:flex; flex-direction:column; gap:var(--space-2); padding:var(--space-3) 14px; border-color:var(--warn); box-shadow:var(--parch-bevel); font-size:14px; line-height:20px}
-.alert strong{color:var(--warn-ink)}
-.alert.danger{border-color:var(--danger)}
-.alert.danger strong{color:var(--danger-ink)}
-.alert a{color:var(--link); text-decoration:underline}
-.alert code{background:none; color:inherit}
+.alert{display:flex; flex-direction:column; gap:var(--space-2); padding:var(--space-3) 14px; border-color:var(--warn); box-shadow:var(--parch-bevel); font-size:14px; line-height:20px;
+  & strong{color:var(--warn-ink)}
+  &.danger{border-color:var(--danger);
+    & strong{color:var(--danger-ink)}}
+  & a{color:var(--link); text-decoration:underline}
+  & code{background:none; color:inherit}}
 
 /* The toast: what a write did, at the top of the page. It is calm: parchment with a gold edge, a check in the done
    colour before its heading. */
 .toast{display:flex; flex-direction:column; gap:var(--space-2); padding:var(--space-3) var(--space-4); background-color:var(--toast-bg); color:var(--toast-ink);
-  font-size:15px; line-height:22px; border-color:var(--accent-ink); box-shadow:var(--parch-bevel),var(--shadow-float)}
-.toast h2{display:flex; align-items:center; gap:var(--space-2); color:var(--done); font-size:15px; line-height:22px}
-.toast h2::before{content:"\2713" / ""}
-.toast a{color:var(--toast-link); font-weight:700}
-.toast pre,.toast table{background:none; border:0; box-shadow:none; padding:0; color:inherit}
-.toast code{background:none; color:inherit; border:1px solid var(--edge)}
-.toast p+p{margin-top:var(--space-1)}
-.toast th,.toast td{border-color:transparent}
-.toast tbody tr:hover{background:none}
-.toast>button.close{align-self:flex-end; height:var(--control-small); padding:0 var(--space-3); font-size:14px}
+  font-size:15px; line-height:22px; border-color:var(--accent-ink); box-shadow:var(--parch-bevel),var(--shadow-float);
+  & h2{display:flex; align-items:center; gap:var(--space-2); color:var(--done); font-size:15px; line-height:22px;
+    &::before{content:"\2713" / ""}}
+  & a{color:var(--toast-link); font-weight:700}
+  & pre,& table{background:none; border:0; box-shadow:none; padding:0; color:inherit}
+  & code{background:none; color:inherit; border:1px solid var(--edge)}
+  & p+p{margin-block-start:var(--space-1)}
+  & th,& td{border-color:transparent}
+  & tbody tr:hover{background:none}
+  &>button.close{align-self:flex-end; block-size:var(--control-small); padding:0 var(--space-3); font-size:14px}}
 
-/* A list of rows; a row's second line; the heading of a group inside a panel. */
-ul.rows>li{padding:0}
-ul.rows>li>a:not(.entry){display:block; padding:10px var(--space-1)}
-ul.plain .meta{display:block}
-.panel-head h3{font-size:15px; line-height:22px}
+/* A list of rows; a row's second line. */
+ul.rows>li{padding:0;
+  &>a:not(.entry){display:block; padding:10px var(--space-1)}}
 
 /* The optional fields of a form, folded (docs/plans/095-the-leaf-and-its-margin.md): one quiet line that says how
    many, which opens them in place. They stay in the form, so a browser sends them with no script. */
-details.more-fields{align-self:stretch; border:0; padding:0; background:none}
-details.more-fields>summary{display:inline-flex; align-items:center; min-height:var(--control-small); font-weight:400; font-size:14px; color:var(--text-link)}
-details.more-fields[open]>summary{margin-bottom:var(--space-1)}
-details.more-fields>:not(summary)+:not(summary){margin-top:var(--space-3)}
+details.more-fields{align-self:stretch; border:0; padding:0; background:none;
+  &>summary{display:inline-flex; align-items:center; min-block-size:var(--control-small); font-weight:400; font-size:14px; color:var(--text-link)}
+  &[open]>summary{margin-block-end:var(--space-1)}
+  &>:not(summary)+:not(summary){margin-block-start:var(--space-3)}}
 
 /* A kept picture, on its own line. */
 figure a{display:block}
 
 /* What app.js adds. The names after [[, under the textarea that asks for them, or under a field for a page's title. */
-ul.suggest{position:absolute; z-index:8; left:0; right:0; top:100%; max-height:16rem; overflow:auto; margin:2px 0 0; padding:var(--space-1);
-  list-style:none; box-shadow:var(--shadow-float); font-size:15px}
-/* In the top layer (a popover) the list is fixed, and the script sets its left, top and width from the field. The
-   browser's own styles for a popover put it at inset 0 and centre it; inset and margin are reset here, and the
-   alias block above and the rule before this one give it the parchment, edge and padding. */
-ul.suggest:popover-open{position:fixed; inset:auto; margin:0}
-ul.suggest li{margin:0; padding:5px 9px; cursor:pointer}
-ul.suggest li[aria-selected=true]{background:var(--accent-soft); color:var(--accent-ink)}
+ul.suggest{position:absolute; z-index:8; inset-inline:0; inset-block-start:100%; max-block-size:16rem; overflow:auto; margin:2px 0 0; padding:var(--space-1);
+  list-style:none; box-shadow:var(--shadow-float); font-size:15px;
+  /* In the top layer (a popover) the list is fixed, and the script sets its left, top and width from the field. The
+     browser's own styles for a popover put it at inset 0 and centre it; inset and margin are reset here, and the
+     alias block above and the rule before this one give it the parchment, edge and padding. */
+  &:popover-open{position:fixed; inset:auto; margin:0}
+  & li{margin:0; padding:5px 9px; cursor:pointer;
+    &[aria-selected=true]{background:var(--accent-soft); color:var(--accent-ink)}}}
 
 /* The preview of a body: under its textarea, or beside it in a wide column, where the open box of the editor leaves
    the column. */
 form>.editor{align-self:stretch}
-.editor .preview{min-height:5rem; margin:9px 0; padding:10px 14px; border-style:dashed; box-shadow:none}
+.editor .preview{min-block-size:5rem; margin:9px 0; padding:10px 14px; border-style:dashed; box-shadow:none}
 @container column (min-width:888px){
   .editor{display:grid; grid-template-columns:1fr 1fr; gap:var(--space-4); align-items:start}
-  .editor .preview{max-height:80vh; overflow:auto; margin:0}
+  .editor .preview{max-block-size:80vh; overflow:auto; margin:0}
   .sheet-margin .editor{display:block} /* a sheet beside its margin is too narrow for two columns */
   .sheet-margin .editor .preview{margin:9px 0 0}
 }
@@ -380,202 +390,194 @@ footer .keys{color:var(--text-muted)}
 
 /* An action with fields: a button that opens its form under it (with no script, a <details>). In the page header
    the open form floats over the page; anywhere else it opens in place. A row of them is .actions. */
-details.action{border:0; padding:0; background:none; position:relative}
-details.action>summary{list-style:none; cursor:pointer}
-details.action>summary::-webkit-details-marker{display:none}
-details.action>summary::marker{content:""}
-details.action>summary::before{content:none}
-details.action[open]>summary{margin:0; border-color:var(--accent-ink); color:var(--accent-ink)}
-.action-form{display:flex; flex-direction:column; gap:var(--space-3); margin-top:var(--space-2); padding:var(--space-4); box-shadow:var(--parch-bevel)}
-.tools details.action>.action-form{position:absolute; z-index:10; top:100%; right:0; width:min(34rem, calc(100vw - 2rem)); box-shadow:var(--parch-bevel),var(--shadow-float)}
-.actions{display:flex; flex-wrap:wrap; align-items:flex-start; gap:var(--space-2)}
-.actions>details.action[open]{flex:1 1 100%}
-details>.actions{margin-top:var(--space-1)}
+details.action{border:0; padding:0; background:none; position:relative;
+  &>summary{list-style:none; cursor:pointer;
+    &::-webkit-details-marker{display:none}
+    &::marker{content:""}
+    &::before{content:none}}
+  &[open]>summary{margin:0; border-color:var(--accent-ink); color:var(--accent-ink)}}
+.action-form{display:flex; flex-direction:column; gap:var(--space-3); margin-block-start:var(--space-2); padding:var(--space-4); box-shadow:var(--parch-bevel)}
+.tools details.action>.action-form{position:absolute; z-index:10; inset-block-start:100%; inset-inline-end:0; inline-size:min(34rem, calc(100vw - 2rem)); box-shadow:var(--parch-bevel),var(--shadow-float)}
+.actions{display:flex; flex-wrap:wrap; align-items:flex-start; gap:var(--space-2);
+  &>details.action[open]{flex:1 1 100%}}
+details>.actions{margin-block-start:var(--space-1)}
 
 /* A choice of a few short values, as a row of radio buttons: slabs, and the chosen one is pressed. It works with no
    script. */
-fieldset.segmented{display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-1)}
-fieldset.segmented legend{float:left; margin-right:var(--space-2); font-size:13px; line-height:19px; color:var(--text-muted)}
-fieldset.segmented label{position:relative; display:block; color:var(--ink); padding-bottom:3px}
-fieldset.segmented input{position:absolute; inset:0; width:100%; height:100%; margin:0; opacity:0; cursor:pointer}
-fieldset.segmented span{display:grid; place-items:center; min-width:var(--control); height:var(--control); padding:0 var(--space-2); font:400 15px/1 var(--mono);
-  background:var(--surface-deep); color:var(--ink); border:2px solid var(--outline); box-shadow:var(--slab-bevel),var(--drop-hard)}
-fieldset.segmented label:hover span{filter:brightness(1.04)}
-fieldset.segmented input:checked+span{background:var(--accent-soft); color:var(--accent-ink); font-weight:500; box-shadow:var(--slab-pressed); transform:translateY(3px)}
-fieldset.segmented input:focus-visible+span{outline:2px solid var(--focus); outline-offset:2px}
+fieldset.segmented{display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-1);
+  & legend{float:inline-start; margin-inline-end:var(--space-2); font-size:13px; line-height:19px; color:var(--text-muted)}
+  & label{position:relative; display:block; color:var(--ink); padding-block-end:3px;
+    &:hover span{filter:brightness(1.04)}}
+  & input{position:absolute; inset:0; inline-size:100%; block-size:100%; margin:0; opacity:0; cursor:pointer;
+    &:checked+span{background:var(--accent-soft); color:var(--accent-ink); font-weight:500; box-shadow:var(--slab-pressed); transform:translateY(3px)}
+    &:focus-visible+span{outline:2px solid var(--focus); outline-offset:2px}}
+  & span{display:grid; place-items:center; min-inline-size:var(--control); block-size:var(--control); padding:0 var(--space-2); font:400 15px/1 var(--mono);
+    background:var(--surface-deep); color:var(--ink); border:2px solid var(--outline); box-shadow:var(--slab-bevel),var(--drop-hard)}}
 
 /* Capture: the main box of Today and of a day. The text box is a draft: dashed, and solid gold while it has the
    focus. Then the mood and Add on one row. */
-.capture form{flex-direction:row; flex-wrap:wrap; align-items:center; justify-content:space-between}
-.capture form>label,.capture form>.editor{flex:1 1 100%}
-.capture form>button{margin-left:auto}
-/* The box grows with its text (a browser without field-sizing keeps its rows). The least height is four lines of the
-   textarea (26 px each), its padding and its border; base.css caps it at 45vh on a phone. */
-.capture textarea{field-sizing:content; min-height:calc(4 * 26px + 2 * 10px + 2 * 2px); border-style:dashed; background:var(--surface)}
-.capture textarea:focus-visible{border-style:solid; border-color:var(--accent-ink); outline:0}
+.capture{
+  & form{flex-direction:row; flex-wrap:wrap; align-items:center; justify-content:space-between;
+    &>label,&>.editor{flex:1 1 100%}
+    &>button{margin-inline-start:auto}}
+  /* The box grows with its text (a browser without field-sizing keeps its rows). The least height is four lines of
+     the textarea (26 px each), its padding and its border; base.css caps it at 45vh on a phone. */
+  & textarea{field-sizing:content; min-block-size:calc(4 * 26px + 2 * 10px + 2 * 2px); border-style:dashed; background:var(--surface);
+    &:focus-visible{border-style:solid; border-color:var(--accent-ink); outline:0}}}
 
 /* Record on a metric's page (docs/plans/100-one-page-a-metric.md): the day and the value side by side, the folded
    fields under them, then the button: the order on the screen is the order of the keys. */
-.record form{flex-direction:row; flex-wrap:wrap; align-items:flex-end; gap:var(--space-3)}
-.record form>label{flex:1 1 160px; max-width:20rem}
-.record form>details.more-fields{flex:1 1 100%}
+.record form{flex-direction:row; flex-wrap:wrap; align-items:flex-end; gap:var(--space-3);
+  &>label{flex:1 1 160px; max-inline-size:20rem}
+  &>details.more-fields{flex:1 1 100%}}
 
 /* A metric's readings, one fold a year: the year in mono, and what the year holds beside it. */
-details.readings-year>summary{color:var(--text-strong)}
-details.readings-year>summary .year-name{font:700 15px/22px var(--mono); font-variant-numeric:tabular-nums}
-details.readings-year+details.readings-year{margin-top:var(--space-2)}
+details.readings-year{
+  &>summary{color:var(--text-strong);
+    & .year-name{font:700 15px/22px var(--mono); font-variant-numeric:tabular-nums}}
+  &+details.readings-year{margin-block-start:var(--space-2)}}
 
 /* A habit in the margin: its name and state, then the Done and Not done of its check-in, drawn as outcomes. */
-.habit{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--space-2)}
-.habit+.habit{padding-top:var(--space-3); border-top:1px solid var(--line-soft)}
-.habit-what a{color:var(--text-strong); font-weight:700}
-.tag.notdone{background:var(--danger-soft); color:var(--danger-ink); border-color:var(--danger)}
+.habit{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--space-2);
+  &+.habit{padding-block-start:var(--space-3); border-block-start:1px solid var(--line-soft)}}
+.habit-what{display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-1) var(--space-2); min-inline-size:0;
+  & a{color:var(--text-strong); font-weight:700}}
 
 /* Rows inside a panel. */
 .panel ul.plain>li{padding:10px 0}
 
 /* Readings: a tile a reading, its metric, its value in the display face with its unit, and its line. */
 .readings{display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px}
-.reading-tile{display:flex; flex-direction:column; gap:2px; padding:10px var(--space-3); box-shadow:var(--parch-bevel)}
-.reading-tile .name{font-size:13px; line-height:19px; color:var(--muted)}
-.reading-tile a.reading{font:400 32px/32px var(--display); font-variant-numeric:tabular-nums; color:var(--ink)}
-.page-head .sub{margin-top:var(--space-1)}
+.reading-tile{display:flex; flex-direction:column; gap:2px; padding:10px var(--space-3); box-shadow:var(--parch-bevel);
+  & .name{font-size:13px; line-height:19px; color:var(--muted)}
+  & a.reading{font:400 32px/32px var(--display); font-variant-numeric:tabular-nums; color:var(--ink)}
+  & .unit{font:400 13px/16px var(--mono); color:var(--muted)}}
 
 /* On a phone an action's form opens in place, full width, not over the page. */
 @media (max-width:899px){
   .tools details.action[open]{flex:1 1 100%}
-  .tools details.action>.action-form{position:static; width:auto; box-shadow:var(--parch-bevel)}
+  .tools details.action>.action-form{position:static; inline-size:auto; box-shadow:var(--parch-bevel)}
 }
 
 /* A trend: the line of a reading's last 14 days in teal, its last value marked in gold
    (docs/plans/093-words-phone-and-today.md). */
-svg.trend{display:block; width:100%; height:28px; margin-top:var(--space-1); color:var(--link); overflow:visible}
-svg.trend polyline{fill:none; stroke:currentColor; stroke-width:2; stroke-linejoin:round; stroke-linecap:round}
-svg.trend circle{fill:var(--accent-ink)}
-.reading-tile .unit{font:400 13px/16px var(--mono); color:var(--muted)}
+svg.trend{display:block; inline-size:100%; block-size:28px; margin-block-start:var(--space-1); color:var(--link); overflow:visible;
+  & polyline{fill:none; stroke:currentColor; stroke-width:2; stroke-linejoin:round; stroke-linecap:round}
+  & circle{fill:var(--accent-ink)}}
 
 /* A habit's strip: a cell a day, oldest first. Each state has its own shape, so no state is told by colour alone:
    done is a full cell, not done an empty frame, not recorded a low bar, inactive a dashed frame. */
-.habit-what{display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-1) var(--space-2); min-width:0}
 .habit-days{flex-basis:100%; display:flex; align-items:center; gap:var(--space-2)}
-.strip{display:inline-flex; align-items:flex-end; gap:2px; height:14px}
-.strip i{display:block; width:8px; height:14px}
-.strip i.done{background:var(--done)}
-.strip i.not-done,.strip i.invalid{border:2px solid var(--danger)}
-.strip i.not-recorded{height:4px; background:var(--edge)}
-.strip i.inactive{border:1px dashed var(--edge)}
+.strip{display:inline-flex; align-items:flex-end; gap:2px; block-size:14px;
+  & i{display:block; inline-size:8px; block-size:14px;
+    &.done{background:var(--done)}
+    &.not-done,&.invalid{border:2px solid var(--danger)}
+    &.not-recorded{block-size:4px; background:var(--edge)}
+    &.inactive{border:1px dashed var(--edge)}}}
 
 /* The command list of Ctrl K (docs/plans/094-the-command-list.md): the one ornate panel, parchment with a gold edge
    and gold corner brackets, the field on top, the rows under it, the row chosen tinted. */
-dialog.palette{width:min(36rem, calc(100vw - 2rem)); max-height:min(32rem, calc(100vh - 6rem)); margin:12vh auto auto; padding:0;
-  border-color:var(--accent-ink); box-shadow:var(--parch-bevel),var(--shadow-float); overflow:hidden}
-dialog.palette[open]{display:flex; flex-direction:column}
-dialog.palette::backdrop{background:var(--backdrop)}
-dialog.palette::before{content:""; position:absolute; inset:0; pointer-events:none; z-index:1;
-  background-image:linear-gradient(var(--accent-ink),var(--accent-ink)),linear-gradient(var(--accent-ink),var(--accent-ink)),linear-gradient(var(--accent-ink),var(--accent-ink)),linear-gradient(var(--accent-ink),var(--accent-ink)),
-    linear-gradient(var(--accent-ink),var(--accent-ink)),linear-gradient(var(--accent-ink),var(--accent-ink)),linear-gradient(var(--accent-ink),var(--accent-ink)),linear-gradient(var(--accent-ink),var(--accent-ink));
-  background-repeat:no-repeat; background-size:12px 3px,3px 12px,12px 3px,3px 12px,12px 3px,3px 12px,12px 3px,3px 12px;
-  background-position:left 5px top 5px,left 5px top 5px,right 5px top 5px,right 5px top 5px,left 5px bottom 5px,left 5px bottom 5px,right 5px bottom 5px,right 5px bottom 5px}
-dialog.palette input{flex:none; height:48px; padding:0 var(--space-5); border:0; border-bottom:2px solid var(--edge); background:transparent; box-shadow:none; font-size:16px}
-dialog.palette input:focus-visible{outline:0; border-bottom-color:var(--focus)}
-dialog.palette ul{flex:1; min-height:0; overflow-y:auto; margin:0; padding:var(--space-2); list-style:none}
-dialog.palette li{display:flex; align-items:baseline; justify-content:space-between; gap:var(--space-3); margin:0; padding:8px var(--space-3); cursor:pointer}
-dialog.palette li[aria-selected=true]{background:var(--accent-soft); color:var(--accent-ink)}
-dialog.palette li .kind{font:400 12px/16px var(--mono); color:var(--muted); white-space:nowrap}
-dialog.palette li[aria-selected=true] .kind{color:var(--accent-ink)}
-dialog.palette li.none{color:var(--muted); cursor:default}
-dialog.palette>.meta{flex:none; margin:0; padding:var(--space-2) var(--space-5); border-top:2px dotted var(--edge)}
-@media (max-width:899px){dialog.palette{width:calc(100vw - 1rem); margin:var(--space-2) auto auto}}
+dialog.palette{inline-size:min(36rem, calc(100vw - 2rem)); max-block-size:min(32rem, calc(100vh - 6rem)); margin:12vh auto auto; padding:0;
+  border-color:var(--accent-ink); box-shadow:var(--parch-bevel),var(--shadow-float); overflow:hidden;
+  &[open]{display:flex; flex-direction:column}
+  &::backdrop{background:var(--backdrop)}
+  &::before{content:""; position:absolute; inset:0; pointer-events:none; z-index:1;
+    background-image:linear-gradient(var(--accent-ink),var(--accent-ink)),linear-gradient(var(--accent-ink),var(--accent-ink)),linear-gradient(var(--accent-ink),var(--accent-ink)),linear-gradient(var(--accent-ink),var(--accent-ink)),
+      linear-gradient(var(--accent-ink),var(--accent-ink)),linear-gradient(var(--accent-ink),var(--accent-ink)),linear-gradient(var(--accent-ink),var(--accent-ink)),linear-gradient(var(--accent-ink),var(--accent-ink));
+    background-repeat:no-repeat; background-size:12px 3px,3px 12px,12px 3px,3px 12px,12px 3px,3px 12px,12px 3px,3px 12px;
+    background-position:left 5px top 5px,left 5px top 5px,right 5px top 5px,right 5px top 5px,left 5px bottom 5px,left 5px bottom 5px,right 5px bottom 5px,right 5px bottom 5px}
+  & input{flex:none; block-size:48px; padding:0 var(--space-5); border:0; border-block-end:2px solid var(--edge); background:transparent; box-shadow:none; font-size:16px;
+    &:focus-visible{outline:0; border-block-end-color:var(--focus)}}
+  & ul{flex:1; min-block-size:0; overflow-y:auto; margin:0; padding:var(--space-2); list-style:none}
+  & li{display:flex; align-items:baseline; justify-content:space-between; gap:var(--space-3); margin:0; padding:8px var(--space-3); cursor:pointer;
+    &[aria-selected=true]{background:var(--accent-soft); color:var(--accent-ink);
+      & .kind{color:var(--accent-ink)}}
+    & .kind{font:400 12px/16px var(--mono); color:var(--muted); white-space:nowrap}
+    &.none{color:var(--muted); cursor:default}}
+  /* The keys of the command list, each in a kbd. */
+  &>.meta{flex:none; margin:0; padding:var(--space-2) var(--space-5); border-block-start:2px dotted var(--edge); line-height:26px}}
+@media (max-width:899px){dialog.palette{inline-size:calc(100vw - 1rem); margin:var(--space-2) auto auto}}
 
 /* The leaf and its margin (docs/plans/095-the-leaf-and-its-margin.md). The head of a day, and of Home, is a calendar
    leaf: parchment, the month on a gold band, the day's number large in the display face; it opens the month. */
-.day-head{align-items:center}
-.day-title{display:flex; align-items:center; gap:var(--space-4); min-width:0}
-.leaf{flex:none; display:flex; flex-direction:column; width:84px; overflow:hidden; text-align:center; box-shadow:var(--parch-bevel)}
-.leaf{view-transition-name:leaf}
-.leaf:hover{color:var(--ink); border-color:var(--accent-ink); text-decoration:none}
+.day-head{align-items:center;
+  & h1 .mood{margin-inline-start:var(--space-1)}
+  & .sub{margin-block-start:var(--space-1);
+    & .tag{align-self:center}}}
+.day-title{display:flex; align-items:center; gap:var(--space-4); min-inline-size:0}
+.leaf{flex:none; display:flex; flex-direction:column; inline-size:84px; overflow:hidden; text-align:center; box-shadow:var(--parch-bevel); view-transition-name:leaf;
+  &:hover{color:var(--ink); border-color:var(--accent-ink); text-decoration:none}}
 .leaf-month{padding:3px 0; font:500 12px/16px var(--mono); background:var(--accent); color:var(--on-accent)}
 .leaf-day{padding:4px 0 6px; font:400 48px/48px var(--display); font-variant-numeric:tabular-nums; color:var(--ink)}
-.day-head h1 .mood{margin-left:var(--space-1)}
-.day-head .sub{margin-top:var(--space-1)}
-.day-head .sub .tag{align-self:center}
-.button.step{gap:var(--space-2)}
-.button.step>[aria-hidden]{font:400 20px/1 var(--sans)}
 
 /* The sheet holds what the page is for, on parchment with the gold notch; the margin beside it holds what the page
    asks of the owner, on the oak, each group a heading with its stitch and its rows on a parchment slip. One column
    when the main column is narrow, the margin after the sheet. */
-.sheet-margin{display:grid; grid-template-columns:minmax(0,1fr) minmax(280px,360px); gap:var(--space-6) var(--space-8); align-items:start}
-.sheet{position:relative; display:flex; flex-direction:column; gap:var(--space-6); min-width:0; padding:var(--space-6) var(--space-8); box-shadow:var(--parch-bevel)}
-.sheet-margin>.sheet{view-transition-name:sheet}
-.sheet::after{content:""; position:absolute; top:6px; right:6px; width:7px; height:7px; background:var(--accent-ink)}
-.sheet>*+*{padding-top:var(--space-6); border-top:2px dotted var(--edge)}
-.sheet>details{padding-top:var(--space-3)}
-.sheet>details:first-child{padding-top:0}
-.sheet>details:not([open])+*{margin-top:calc(-1 * var(--space-3))}
-.sheet h2{font-size:15px; line-height:22px}
-.sheet .panel-head{margin-bottom:var(--space-3)}
+.sheet-margin{display:grid; grid-template-columns:minmax(0,1fr) minmax(280px,360px); gap:var(--space-6) var(--space-8); align-items:start;
+  &>.sheet{view-transition-name:sheet}}
+.sheet{position:relative; display:flex; flex-direction:column; gap:var(--space-6); min-inline-size:0; padding:var(--space-6) var(--space-8); box-shadow:var(--parch-bevel);
+  &::after{content:""; position:absolute; inset-block-start:6px; inset-inline-end:6px; inline-size:7px; block-size:7px; background:var(--accent-ink)}
+  &>*+*{padding-block-start:var(--space-6); border-block-start:2px dotted var(--edge)}
+  &>details{padding-block-start:var(--space-3);
+    &:first-child{padding-block-start:0}
+    &:not([open])+*{margin-block-start:calc(-1 * var(--space-3))}}
+  & h2{font-size:15px; line-height:22px}
+  & .panel-head{margin-block-end:var(--space-3)}}
 .journal .panel-head h2{color:var(--muted); font-weight:400}
-.journal-text{max-width:var(--measure-read); font-size:18px; line-height:30px}
-.journal-text>*+*{margin-top:var(--space-4)}
-.capture>h2,.record>h2{margin-bottom:var(--space-3)}
-.empty{color:var(--text-muted); font-size:15px; line-height:22px}
-.margin{display:flex; flex-direction:column; gap:var(--space-8); min-width:0}
-.margin .group{gap:var(--space-2)}
-.margin .panel-head{padding-bottom:var(--space-1)}
-.margin ul.plain{padding:0 var(--space-3); box-shadow:var(--parch-bevel)}
-.margin ul.plain>li{padding:var(--space-3) 0; border-top:1px solid var(--edge); border-bottom:0}
-.margin ul.plain>li:first-child{border-top:0}
-/* An entry in a list item: the item draws the line, the entry the padding, so a row has one of each. A note of an
-   entry (a session's evidence) is a line under its words. */
-.entry>.note{grid-column:2 / -1}
-@media (max-width:519px){.entry>.note{grid-column:1 / -1}}
-ul.plain>li:has(>a.entry){padding:0}
-li>a.entry{border-bottom:0}
-.margin .occ{align-items:flex-start}
-.margin .habit{padding:var(--space-3); box-shadow:var(--parch-bevel)}
-.margin .habit+.habit{margin-top:var(--space-2); border-top:2px solid var(--edge)}
-.margin .readings{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
-.margin .group>details.action{margin-top:var(--space-2)}
-.margin .about{padding:var(--space-3)}
+.journal-text{max-inline-size:var(--measure-read); font-size:18px; line-height:30px;
+  &>*+*{margin-block-start:var(--space-4)}}
+.capture>h2,.record>h2{margin-block-end:var(--space-3)}
+.margin{display:flex; flex-direction:column; gap:var(--space-8); min-inline-size:0;
+  & .group{gap:var(--space-2);
+    &>details.action{margin-block-start:var(--space-2)}}
+  & .panel-head{padding-block-end:var(--space-1)}
+  & ul.plain{padding:0 var(--space-3); box-shadow:var(--parch-bevel);
+    &>li{padding:var(--space-3) 0; border-block-start:1px solid var(--edge); border-block-end:0;
+      &:first-child{border-block-start:0}}}
+  & .occ{align-items:flex-start}
+  & .habit{padding:var(--space-3); box-shadow:var(--parch-bevel);
+    &+.habit{margin-block-start:var(--space-2); border-block-start:2px solid var(--edge)}}
+  & .readings{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+  & .about{padding:var(--space-3)}}
 .also ul.plain>li{padding:var(--space-2) 0}
 @container column (max-width:867px){.sheet-margin{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:899px){
-  .day-head{align-items:flex-start}
+  .day-head{align-items:flex-start;
+    & .tools{inline-size:100%}}
   .day-title{gap:var(--space-3)}
-  .leaf{width:64px}
+  .leaf{inline-size:64px}
   .leaf-day{font-size:36px; line-height:38px}
-  .day-head .tools{width:100%}
-  .sheet{padding:var(--space-5) var(--space-4); gap:var(--space-5)}
-  .sheet>*+*{padding-top:var(--space-5)}
+  .sheet{padding:var(--space-5) var(--space-4); gap:var(--space-5);
+    &>*+*{padding-block-start:var(--space-5)}}
   .journal-text{font-size:17px; line-height:28px}
 }
 /* A phone: a step is its arrow alone (its label keeps the whole name); a tablet has room for the day. */
-@media (max-width:639px){.button.step{width:var(--control); padding:0} .button.step .step-day{display:none}}
+@media (max-width:639px){.button.step{inline-size:var(--control); padding:0} .button.step .step-day{display:none}}
 
 /* Every other view on the sheet (docs/plans/095-the-leaf-and-its-margin.md). The kind of a page over its title, in
    words; a word among the facts in the sans. */
 .kind{font-size:13px; line-height:19px; color:var(--text-muted)}
-dl.facts dd.words{font-family:var(--sans)}
 .page-body .prose{font-size:17px; line-height:28px}
 
 /* A list on a sheet: a list page, the search, Tasks, What is due, a task's slots, an occurrence. Its groups have a
    heading and a count; Overdue is in its tone. */
-.sheet.list{padding:var(--space-2) var(--space-6); gap:0}
-.sheet.list>*+*{padding-top:0; border-top:0}
-.sheet.list>dl.facts{padding-block:var(--space-4)}
-.due-group{display:flex; flex-direction:column; padding-block:var(--space-4)}
-.due-group>.panel-head{margin-bottom:var(--space-2)}
-.due-group>.panel-head :is(h2,h3){font-size:18px; line-height:24px}
-.due-group>.panel-head .meta{font-size:13px; flex:none}
-.due-group.overdue h2,.due-group.overdue h3{color:var(--warn)}
-.due-group ul.plain>li{padding:var(--space-3) 0; border-top:1px solid var(--line-soft); border-bottom:0}
+.sheet.list{padding:var(--space-2) var(--space-6); gap:0;
+  &>*+*{padding-block-start:0; border-block-start:0}
+  &>dl.facts{padding-block:var(--space-4)}
+  & ul.rows>li{border-block-end:1px solid var(--line-soft);
+    &:last-child{border-block-end:0}}
+  & .entry{border-block-end:0}}
+.due-group{display:flex; flex-direction:column; padding-block:var(--space-4);
+  &>.panel-head{margin-block-end:var(--space-2);
+    & :is(h2,h3){font-size:18px; line-height:24px}
+    & .meta{font-size:13px; flex:none}}
+  &.overdue h2,&.overdue h3{color:var(--warn)}
+  & ul.plain>li{padding:var(--space-3) 0; border-block-start:1px solid var(--line-soft); border-block-end:0;
+    &.pick{padding:0;
+      &>.pick-main{padding:var(--space-3) 0}}}}
 a.task{color:var(--ink); font-weight:700}
-.task-facts{display:flex; flex-wrap:wrap; gap:0 var(--space-3); margin-top:2px; font-size:13px; line-height:19px; color:var(--muted)}
-.sheet.list ul.rows>li{border-bottom:1px solid var(--line-soft)}
-.sheet.list ul.rows>li:last-child{border-bottom:0}
-.sheet.list .entry{border-bottom:0}
-.snippet{margin-top:2px; font-size:14px; line-height:20px; color:var(--muted)}
+.task-facts{display:flex; flex-wrap:wrap; gap:0 var(--space-3); margin-block-start:2px; font-size:13px; line-height:19px; color:var(--muted)}
+.snippet{margin-block-start:2px; font-size:14px; line-height:20px; color:var(--muted)}
 @media (max-width:899px){.sheet.list{padding:var(--space-1) var(--space-4)}}
 
 /* A person or a place in a list: no date column, the words of the mentions at the end. */
@@ -584,36 +586,32 @@ a.task{color:var(--ink); font-weight:700}
 /* A list that deletes several rows at once (Files, Tasks): a bar with Select all and the danger button, then a box
    at the start of each row. The bar stays in view while the list scrolls under it. */
 .pick-form{display:flex; flex-direction:column; align-items:stretch; gap:0}
-.pick-bar{position:sticky; top:0; z-index:1; display:flex; align-items:center; justify-content:space-between; gap:var(--space-3);
-  padding:var(--space-2) var(--space-1); background:var(--surface); border-bottom:1px solid var(--line-soft)}
-.pick-bar .pick-all{flex-direction:row; align-items:center; gap:var(--space-2); font-size:14px; color:var(--text-muted); cursor:pointer}
-.pick-bar button{flex:none}
-li.pick{display:flex; align-items:stretch; gap:var(--space-1)}
-.pick-box{flex:none; flex-direction:row; align-items:center; padding:0 var(--space-1); cursor:pointer}
-.pick-box input:disabled{opacity:.35; cursor:default}
-li.pick>a.entry,li.pick>.pick-main{flex:1 1 auto; min-width:0}
-.due-group ul.plain>li.pick{padding:0}
-.due-group li.pick>.pick-main{padding:var(--space-3) 0}
+.pick-bar{position:sticky; inset-block-start:0; z-index:1; display:flex; align-items:center; justify-content:space-between; gap:var(--space-3);
+  padding:var(--space-2) var(--space-1); background:var(--surface); border-block-end:1px solid var(--line-soft);
+  & .pick-all{flex-direction:row; align-items:center; gap:var(--space-2); font-size:14px; color:var(--text-muted); cursor:pointer}
+  & button{flex:none}}
+li.pick{display:flex; align-items:stretch; gap:var(--space-1);
+  &>a.entry,&>.pick-main{flex:1 1 auto; min-inline-size:0}}
+.pick-box{flex:none; flex-direction:row; align-items:center; padding:0 var(--space-1); cursor:pointer;
+  & input:disabled{opacity:.35; cursor:default}}
 
 /* A field that the server refused. */
 input[aria-invalid=true],textarea[aria-invalid=true],select[aria-invalid=true]{border-color:var(--danger-line)}
 
-/* The keys of the command list, each in a kbd. */
-dialog.palette>.meta{line-height:26px}
-
 /* The style page (GET /styleguide): every component in every state. Its own rules only lay the specimens out. */
-.styleguide .guide{display:flex; flex-direction:column; gap:var(--space-3); padding-block:var(--space-4)}
-.styleguide .specimen{display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-3)}
-.styleguide .specimen-title{margin:0; font:400 40px/40px var(--display); letter-spacing:.01em; color:var(--text-strong)}
+.styleguide{
+  & .guide{display:flex; flex-direction:column; gap:var(--space-3); padding-block:var(--space-4)}
+  & .specimen{display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-3)}
+  & .specimen-title{margin:0; font:400 40px/40px var(--display); letter-spacing:.01em; color:var(--text-strong);
+    & .mood{margin-inline-start:var(--space-1)}}
+  & dialog.palette{position:static; margin:0 0 var(--space-3)}}
 @media (max-width:640px){.styleguide .specimen-title{font-size:32px; line-height:32px}}
-.styleguide dialog.palette{position:static; margin:0 0 var(--space-3)}
-.styleguide .specimen-title .mood{margin-left:var(--space-1)}
 
 /* Day by day, under the calendar (docs/plans/101-the-calendar-holds-every-dated-thing.md): a day a heading, each item
    a tag and a link to its own page. */
-.agenda-day{padding-block:var(--space-2)}
-.agenda-day h3 a{color:var(--text-strong)}
-.agenda-day ul.plain>li{padding:var(--space-2) var(--space-1)}
+.agenda-day{padding-block:var(--space-2);
+  & h3 a{color:var(--text-strong)}
+  & ul.plain>li{padding:var(--space-2) var(--space-1)}}
 .agenda-note{color:var(--text-muted)}
 
 /* The conversation (docs/plans/103-the-conversation-on-the-screen.md) in the Chat of Balaur — Basm
@@ -622,68 +620,70 @@ dialog.palette>.meta{line-height:26px}
    tool is a row of dark wood between them; the draft is a dashed panel in the owner's place. Basm's tokens are the
    app's: chrome is --rail, parchment --surface, the parchment edge --edge, the outline --outline, gold --rail-accent,
    teal --teal, the owner's indigo --indigo. Words are in sentence case, as everywhere in the app (plan 096). */
-.sr{position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap}
 /* The chat page fills the screen and scrolls its thread alone (plan 106): the head and the draft never move, and the
    page never scrolls under the owner's hands. The shell takes the screen's height on this page only, and the height
    runs down the column, the main and the page to the thread, which is the one scroll area. */
-.shell:has(.chat-page){height:100dvh}
-.shell:has(.chat-page)>.column,.shell:has(.chat-page) main{min-height:0}
-.shell:has(.chat-page)>.column>footer{margin-top:var(--space-4)}
-.chat-page{display:grid; grid-template-rows:minmax(0,1fr); height:100%; min-height:0}
-.chat-main{display:flex; flex-direction:column; gap:var(--space-4); min-width:0; min-height:0}
-.chat-page .chat-thread{overflow-y:auto; overscroll-behavior:contain; padding:var(--space-1) var(--space-3) var(--space-2) 0}
-.chat-main>.msg-draft{flex:none}
-.chat-head{display:flex; align-items:baseline; justify-content:space-between; gap:var(--space-3); flex-wrap:wrap}
-.chat-head .tools{display:flex; gap:var(--space-3); flex-wrap:wrap}
-.chat-head h1{font-size:28px; line-height:32px}
-.chat-note{padding:var(--space-2) var(--space-3); border-left:3px solid var(--line)}
+.shell:has(.chat-page){block-size:100dvh;
+  &>.column,& main{min-block-size:0}
+  &>.column>footer{margin-block-start:var(--space-4)}}
+.chat-page{display:grid; grid-template-rows:minmax(0,1fr); block-size:100%; min-block-size:0;
+  & .chat-thread{overflow-y:auto; overscroll-behavior:contain; padding:var(--space-1) var(--space-3) var(--space-2) 0}}
+.chat-main{display:flex; flex-direction:column; gap:var(--space-4); min-inline-size:0; min-block-size:0;
+  &>.msg-draft{flex:none}}
+.chat-head{display:flex; align-items:baseline; justify-content:space-between; gap:var(--space-3); flex-wrap:wrap;
+  & .tools{display:flex; gap:var(--space-3); flex-wrap:wrap}
+  & h1{font-size:28px; line-height:32px}}
+.chat-note{padding:var(--space-2) var(--space-3); border-inline-start:3px solid var(--line)}
 
 /* The portrait's size is the chat page's, so the composer under the thread (outside .chat) has the thread's size. */
 .chat-page{--portrait-size:96px; --chat-gutter:calc(var(--portrait-size) + 14px)}
-.chat{--portrait-size:96px; --chat-gutter:calc(var(--portrait-size) + 14px); display:flex; flex-direction:column; gap:var(--space-6); min-height:0}
-.chat-thread{flex:1 1 auto; min-height:0}
-.msg{display:grid; grid-template-columns:auto minmax(0,1fr); gap:14px; align-items:start; max-width:calc(var(--measure) + var(--chat-gutter))}
-.msg-owner{grid-template-columns:minmax(0,1fr) auto; align-self:flex-end}
-.msg-owner .portrait{order:2}
-.msg-owner .msg-main{order:1}
-.msg-owner .avatar img{transform:scaleX(-1)} /* the portraits face right: the owner's turns to face the words */
+.chat{--portrait-size:96px; --chat-gutter:calc(var(--portrait-size) + 14px); display:flex; flex-direction:column; gap:var(--space-6); min-block-size:0}
+.chat-thread{flex:1 1 auto; min-block-size:0}
+.msg{display:grid; grid-template-columns:auto minmax(0,1fr); gap:14px; align-items:start; max-inline-size:calc(var(--measure) + var(--chat-gutter));
+  & .body{inline-size:100%; overflow-wrap:anywhere; font-size:16px; line-height:24px;
+    &>:first-child{margin-block-start:0}
+    &>:last-child{margin-block-end:0}}}
+.msg-owner{grid-template-columns:minmax(0,1fr) auto; align-self:flex-end;
+  & .portrait{order:2}
+  & .msg-main{order:1}
+  & .avatar img{transform:scaleX(-1)} /* the portraits face right: the owner's turns to face the words */
+  & .portrait .avatar{box-shadow:inset 0 0 0 2px var(--indigo),var(--drop-hard)}
+  & .who{color:var(--indigo)}}
 .msg-lifelog{align-self:flex-start}
 
 /* The portrait: the art has no border; this wood frame belongs to the chat. */
-.portrait{margin:0; display:flex; flex-direction:column; align-items:center; width:max-content}
-.portrait .avatar{display:block; width:var(--portrait-size); height:var(--portrait-size); padding:3px; background:#101314;
-  border:2px solid var(--outline); box-shadow:inset 0 0 0 2px var(--rail-accent),var(--drop-hard)}
-.portrait .avatar img{display:block; width:100%; height:100%; image-rendering:pixelated}
-.msg-owner .portrait .avatar{box-shadow:inset 0 0 0 2px var(--indigo),var(--drop-hard)}
-/* The nameplate: a small wood plate hung under the frame. */
-.portrait .who{margin-top:-2px; max-width:calc(var(--portrait-size) + 18px); padding:2px 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-  font:700 12px/18px var(--mono); text-align:center; color:var(--rail-accent);
-  background-color:var(--rail); background-image:var(--grain-ground); background-size:4px 4px;
-  border:2px solid var(--outline); box-shadow:inset 0 2px 0 var(--bevel-light),inset 0 -2px 0 var(--bevel-dark)}
-.msg-owner .who{color:var(--indigo)}
+.portrait{margin:0; display:flex; flex-direction:column; align-items:center; inline-size:max-content;
+  & .avatar{display:block; inline-size:var(--portrait-size); block-size:var(--portrait-size); padding:3px; background:#101314;
+    border:2px solid var(--outline); box-shadow:inset 0 0 0 2px var(--rail-accent),var(--drop-hard);
+    & img{display:block; inline-size:100%; block-size:100%; image-rendering:pixelated}}
+  /* The nameplate: a small wood plate hung under the frame. */
+  & .who{margin-block-start:-2px; max-inline-size:calc(var(--portrait-size) + 18px); padding:2px 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    font:700 12px/18px var(--mono); text-align:center; color:var(--rail-accent);
+    background-color:var(--rail); background-image:var(--grain-ground); background-size:4px 4px;
+    border:2px solid var(--outline); box-shadow:inset 0 2px 0 var(--bevel-light),inset 0 -2px 0 var(--bevel-dark)}}
 
 /* The speech panel: parchment, with a stepped pixel tail toward the speaker. */
-.msg-main{position:relative; min-width:0; min-height:calc(var(--portrait-size) + 10px); display:flex; align-items:center; padding:14px 18px;
+.msg-main{position:relative; min-inline-size:0; min-block-size:calc(var(--portrait-size) + 10px); display:flex; align-items:center; padding:14px 18px;
   --text:var(--ink); --text-strong:var(--ink); --text-muted:var(--muted); --text-link:var(--link); --text-accent:var(--accent-ink); --rule:var(--edge);
   color:var(--ink); background-color:var(--surface); background-image:var(--grain-ink); background-size:4px 4px;
-  border:2px solid var(--edge); box-shadow:var(--parch-bevel)}
-.msg-main::before,.msg-main::after{content:""; position:absolute; top:36px; width:10px; height:10px; background:var(--surface); border:2px solid var(--edge)}
-.msg-lifelog .msg-main::before{left:-10px; border-right:0}
-.msg-lifelog .msg-main::after{left:-17px; top:39px; width:7px; height:7px; border-right:0}
-.msg-owner .msg-main::before{right:-10px; border-left:0}
-.msg-owner .msg-main::after{right:-17px; top:39px; width:7px; height:7px; border-left:0}
-.msg .body{width:100%; overflow-wrap:anywhere; font-size:16px; line-height:24px}
-.msg .body>:first-child{margin-top:0} .msg .body>:last-child{margin-bottom:0}
+  border:2px solid var(--edge); box-shadow:var(--parch-bevel);
+  &::before,&::after{content:""; position:absolute; inset-block-start:36px; inline-size:10px; block-size:10px; background:var(--surface); border:2px solid var(--edge)}}
+.msg-lifelog .msg-main{
+  &::before{inset-inline-start:-10px; border-inline-end:0}
+  &::after{inset-inline-start:-17px; inset-block-start:39px; inline-size:7px; block-size:7px; border-inline-end:0}}
+.msg-owner .msg-main{
+  &::before{inset-inline-end:-10px; border-inline-start:0}
+  &::after{inset-inline-end:-17px; inset-block-start:39px; inline-size:7px; block-size:7px; border-inline-start:0}}
 .msg-failed .msg-main{border-color:var(--danger-line); border-style:dashed}
 
 /* A tool: a row of dark wood, set in under the portraits, in mono: the visible trail of what the model did. */
-.msg-tool{margin:calc(-1 * var(--space-3)) 0 0 var(--chat-gutter); padding:9px 14px; font:13px/20px var(--mono); color:var(--rail-ink);
+.msg-tool{margin-block-start:calc(-1 * var(--space-3)); margin-inline-start:var(--chat-gutter); padding:9px 14px; font:13px/20px var(--mono); color:var(--rail-ink);
   background-color:var(--rail-deep); background-image:var(--grain-ground); background-size:4px 4px;
-  border:2px solid var(--outline); box-shadow:var(--bevel-in); overflow-wrap:anywhere}
-.msg-tool .who{color:var(--teal)}
-.msg-tool .tool-icon{margin-right:7px; color:var(--teal)}
-.msg-tool a{color:var(--rail-accent)}
-.msg-tool .refused{color:var(--rail-ink)}
+  border:2px solid var(--outline); box-shadow:var(--bevel-in); overflow-wrap:anywhere;
+  & .who{color:var(--teal)}
+  & .tool-icon{margin-inline-end:7px; color:var(--teal)}
+  & a{color:var(--rail-accent)}
+  & .refused{color:var(--rail-ink)}}
 
 /* Thinking: the dots, and the portrait breathing teal light; the frame never moves. */
 .thinking{font:13px/20px var(--mono); color:var(--muted)}
@@ -695,45 +695,62 @@ dialog.palette>.meta{line-height:26px}
   0%,100%{box-shadow:inset 0 0 0 2px var(--rail-accent),0 0 10px color-mix(in srgb, var(--teal) 30%, transparent)}
   50%{box-shadow:inset 0 0 0 2px var(--teal),0 0 26px color-mix(in srgb, var(--teal) 60%, transparent)}}
 
-/* The draft: the unsent message in the owner's place, dashed until it is written in. */
-/* The draft has the width of a message, whatever is typed in it: the text box sizes its height to its content alone. */
-.msg-draft{width:100%}
-.msg-draft .msg-main{flex-direction:column; align-items:stretch; gap:6px; padding:12px 14px 10px; border-style:dashed; box-shadow:none}
-.msg-draft .msg-main::before,.msg-draft .msg-main::after{content:none}
-.msg-draft:focus-within .msg-main{border-style:solid; border-color:var(--accent-ink); box-shadow:var(--parch-bevel)}
-.msg-draft label{margin:0}
-.msg-draft textarea{width:100%; min-height:52px; max-height:28vh; field-sizing:content; resize:none; padding:2px 4px;
-  font:16px/24px var(--sans); color:var(--ink); caret-color:var(--primary); background:transparent; border:0; box-shadow:none}
-.msg-draft textarea:focus-visible{outline:none}
-.msg-draft-foot{display:flex; align-items:center; justify-content:space-between; gap:10px; padding-top:9px; border-top:2px dotted var(--edge)}
+/* The draft: the unsent message in the owner's place, dashed until it is written in. It has the width of a message,
+   whatever is typed in it: the text box sizes its height to its content alone. */
+.msg-draft{inline-size:100%;
+  & .msg-main{flex-direction:column; align-items:stretch; gap:6px; padding:12px 14px 10px; border-style:dashed; box-shadow:none;
+    &::before,&::after{content:none}}
+  &:focus-within .msg-main{border-style:solid; border-color:var(--accent-ink); box-shadow:var(--parch-bevel)}
+  & label{margin:0}
+  & textarea{inline-size:100%; min-block-size:52px; max-block-size:28vh; field-sizing:content; resize:none; padding:2px 4px;
+    font:16px/24px var(--sans); color:var(--ink); caret-color:var(--primary); background:transparent; border:0; box-shadow:none;
+    &:focus-visible{outline:none}}}
+.msg-draft-foot{display:flex; align-items:center; justify-content:space-between; gap:10px; padding-block-start:9px; border-block-start:2px dotted var(--edge)}
 .msg-draft-hint{font:12px/18px var(--mono); color:var(--muted)}
 
 @media (prefers-reduced-motion:reduce){.avatar[data-state=thinking],.thinking-dots::after{animation:none}}
 
 /* The sidebar: a third column of the shell while it is open, of wood like the rail; a sheet over the page on a phone. */
-.shell.chat-open{grid-template-columns:var(--rail-width) minmax(0,1fr) minmax(340px,420px)}
-.chat-panel{position:sticky; top:0; height:100vh; display:flex; flex-direction:column; gap:var(--space-3); min-width:0; padding:var(--space-4);
+.shell.chat-open{grid-template-columns:var(--rail-width) minmax(0,1fr) minmax(340px,420px);
+  & .chat-toggle{display:none}}
+.chat-panel{position:sticky; inset-block-start:0; block-size:100vh; display:flex; flex-direction:column; gap:var(--space-3); min-inline-size:0; padding:var(--space-4);
   --text:var(--rail-ink); --text-strong:var(--rail-accent); --text-muted:var(--rail-ink); --text-link:var(--rail-accent); --text-accent:var(--rail-accent); --rule:var(--outline);
   color:var(--rail-ink); background-color:var(--rail); background-image:var(--planks),var(--grain-ground); background-size:auto,4px 4px;
-  border-left:2px solid var(--outline); box-shadow:inset 3px 0 0 var(--bevel-light)}
-.chat-panel[hidden]{display:none}
-.chat-panel-head{display:flex; align-items:center; justify-content:space-between; gap:var(--space-2)}
-.chat-panel-head .label{text-decoration:none}
-.chat-panel-head .tools{display:flex; gap:var(--space-1)}
-.chat-panel .chat{--portrait-size:56px; --chat-gutter:70px; gap:var(--space-4)}
-.chat-panel .chat-thread{overflow-y:auto; padding:var(--space-1) var(--space-2) var(--space-2) 0}
-.chat-panel .msg-main{min-height:calc(var(--portrait-size) + 10px); padding:10px 12px}
-.chat-panel .msg-main::before{top:20px} .chat-panel .msg-main::after{top:23px}
-.chat-panel .msg .body{font-size:15px; line-height:22px}
-.chat-panel .msg-draft{--portrait-size:56px}
-.chat-toggle{position:fixed; z-index:15; bottom:var(--space-5); right:var(--space-5); gap:var(--space-2); box-shadow:var(--shadow-float)}
-.chat-toggle[hidden],.shell.chat-open .chat-toggle{display:none}
+  border-inline-start:2px solid var(--outline); box-shadow:inset 3px 0 0 var(--bevel-light);
+  &[hidden]{display:none}
+  & .chat{--portrait-size:56px; --chat-gutter:70px; gap:var(--space-4)}
+  & .chat-thread{overflow-y:auto; padding:var(--space-1) var(--space-2) var(--space-2) 0}
+  & .msg-main{min-block-size:calc(var(--portrait-size) + 10px); padding:10px 12px;
+    &::before{inset-block-start:20px}
+    &::after{inset-block-start:23px}}
+  & .msg .body{font-size:15px; line-height:22px}
+  & .msg-draft{--portrait-size:56px}}
+.chat-panel-head{display:flex; align-items:center; justify-content:space-between; gap:var(--space-2);
+  & .label{text-decoration:none}
+  & .tools{display:flex; gap:var(--space-1)}}
+.chat-toggle{position:fixed; z-index:15; inset-block-end:var(--space-5); inset-inline-end:var(--space-5); gap:var(--space-2); box-shadow:var(--shadow-float);
+  &[hidden]{display:none}}
 @media (max-width:1179px){.shell.chat-open{grid-template-columns:var(--rail-width) minmax(0,1fr) minmax(300px,360px)}}
 @media (max-width:899px){
-  .shell:has(.chat-page){display:flex; flex-direction:column} /* the top bar, then the column with the thread */
-  .shell:has(.chat-page)>.column>footer{display:none} /* the thread has the height instead */
-  .chat-panel{position:fixed; z-index:25; inset:0 0 calc(58px + env(safe-area-inset-bottom, 0px)) 0; height:auto; border-left:0; box-shadow:var(--shadow-float)}
+  .shell:has(.chat-page){display:flex; flex-direction:column; /* the top bar, then the column with the thread */
+    &>.column>footer{display:none}} /* the thread has the height instead */
+  .chat-panel{position:fixed; z-index:25; inset:0 0 calc(58px + env(safe-area-inset-bottom, 0px)) 0; block-size:auto; border-inline-start:0; box-shadow:var(--shadow-float)}
   .chat-toggle{display:none} /* the bottom bar's Chat opens the sheet (app.js) */
 }
 @media (max-width:640px){.chat,.chat-page{--portrait-size:64px; --chat-gutter:78px}}
 @media print{.chat-panel,.chat-toggle{display:none}}
+}
+
+/* The utilities: a class with one purpose that no component restyles, so it may come last in the cascade. */
+@layer utilities{
+/* The way past the sidebar, for a keyboard and its reader. */
+.skip{position:absolute; inset-block-start:6px; inset-inline-start:6px; z-index:40; padding:8px 14px; background:var(--primary); color:var(--on-accent); border:2px solid var(--outline); transform:translateY(-250%);
+  &:focus-visible{transform:none; color:var(--on-accent)}}
+/* Words for a reader alone. */
+.sr{position:absolute; inline-size:1px; block-size:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap}
+.muted{color:var(--text-muted)}
+/* An empty state, which names the way forward. */
+.empty{color:var(--text-muted); font-size:15px; line-height:22px}
+/* What an action does, before its form; the note under a table or a search. */
+.desc{display:block; font-size:13px; line-height:19px; color:var(--text-muted)}
+}

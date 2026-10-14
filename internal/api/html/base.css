@@ -4,7 +4,12 @@
    so a page reads as HTML with this file alone and app.css adds only what this app's own vocabulary needs. No
    framework is vendored and nothing is fetched from another host: the three faces are embedded and served at
    /assets/fonts/. Dark is the identity; light is the daylight study of the same room, by prefers-color-scheme, with
-   every token written once as light-dark(light, dark) and no colour outside the token block. */
+   every token written once as light-dark(light, dark) and no colour outside the token block. The two sheets are one
+   cascade in four layers, declared once here and shared by app.css: tokens, base (this file), components and
+   utilities (app.css); @font-face stays outside them. Every rule is in logical properties
+   (docs/plans/108-the-browser-made-current.md). */
+
+@layer tokens, base, components, utilities;
 
 /* Atkinson Hyperlegible for words, IBM Plex Mono for days, times, counts and values, Jersey 15 for the few large
    things (a title, the leaf's number, a reading): the latin files, then the latin-ext ones, which a browser fetches
@@ -31,6 +36,7 @@
    them, so one rule draws a link or a heading on any material. The type scale is 13 / 15 / 18 / 24 / 40 px (the
    display face at 40 is as tall as the sans at 34), and a control is 40 px high, 44 px under 900 px, where the screen
    is a touch screen (docs/plans/095-the-leaf-and-its-margin.md). */
+@layer tokens{
 :root{
   color-scheme:light;
   --ground:light-dark(#efe2bd, #140c06); --rail:light-dark(#3a2210, #2a1709); --rail-deep:light-dark(#2c1a0c, #1d0f06); --surface:light-dark(#f4e9c4, #e8d9ae); --surface-deep:light-dark(#e4d49e, #d6c188);
@@ -63,7 +69,9 @@
 }
 @media (prefers-color-scheme:dark){:root{color-scheme:dark}}
 @media (max-width:899px){:root{--control:44px; --control-small:40px}}
+}
 
+@layer base{
 *,*::before,*::after{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%; scroll-behavior:smooth}
 body{margin:0; background-color:var(--ground); background-image:var(--grain-ground); background-size:4px 4px; color:var(--text);
@@ -78,12 +86,12 @@ h3{font-size:15px; line-height:22px; font-weight:700}
 h4{font-size:15px; line-height:22px; font-weight:700; color:var(--text-muted)}
 p{margin:0}
 /* A rule is a stitch: a dotted line of the material's rule colour. */
-hr{height:2px; border:0; margin:var(--space-6) 0; background:linear-gradient(to right,var(--rule) 50%,transparent 50%) 0 0/8px 2px repeat-x}
+hr{block-size:2px; border:0; margin:var(--space-6) 0; background:linear-gradient(to right,var(--rule) 50%,transparent 50%) 0 0/8px 2px repeat-x}
 small{font-size:13px; line-height:19px; color:var(--text-muted)}
 abbr[title]{cursor:help; text-decoration:underline dotted}
 
-a{color:var(--text-link); text-decoration:none}
-a:hover{text-decoration:underline}
+a{color:var(--text-link); text-decoration:none;
+  &:hover{text-decoration:underline}}
 :where(a,button,summary,input,textarea,select,[tabindex]):focus-visible{outline:2px solid var(--focus); outline-offset:2px}
 [role=alert]:focus{outline:2px solid var(--focus); outline-offset:2px} /* a refused form puts the focus on its alert */
 /* The first motion: a press sinks. Reduced motion keeps the press and drops the transition. The second motion is the
@@ -102,24 +110,24 @@ footer{color:var(--text-muted); font-size:13px; line-height:19px}
 article,aside{--text:var(--ink); --text-strong:var(--ink); --text-muted:var(--muted); --text-link:var(--link); --text-accent:var(--accent-ink); --rule:var(--edge);
   color:var(--text); background-color:var(--surface); background-image:var(--grain-ink); background-size:4px 4px;
   border:2px solid var(--edge); box-shadow:var(--parch-bevel)}
-article{position:relative; padding:var(--space-4) var(--space-5)}
-article::after{content:""; position:absolute; top:6px; right:6px; width:7px; height:7px; background:var(--accent-ink)}
-aside{background-color:var(--accent-soft); padding:var(--space-3) 14px; font-size:14px; line-height:20px}
-aside>*+*{margin-top:var(--space-2)}
+article{position:relative; padding:var(--space-4) var(--space-5);
+  &::after{content:""; position:absolute; inset-block-start:6px; inset-inline-end:6px; inline-size:7px; block-size:7px; background:var(--accent-ink)}}
+aside{background-color:var(--accent-soft); padding:var(--space-3) 14px; font-size:14px; line-height:20px;
+  &>*+*{margin-block-start:var(--space-2)}}
 
 /* Lists. */
-ul,ol{margin:0; padding-left:1.4em}
-li+li{margin-top:var(--space-1)}
+ul,ol{margin:0; padding-inline-start:1.4em}
+li+li{margin-block-start:var(--space-1)}
 dl{margin:0}
 dt{font-weight:700}
 dd{margin:0 0 var(--space-2); color:var(--text-muted)}
 
 /* Tables: the readings of a series, a habit's completion, the properties of any entity. Days and numbers line up. */
-table{border-collapse:collapse; width:100%; font-size:14px; line-height:20px; font-variant-numeric:tabular-nums}
-caption{caption-side:bottom; text-align:left; color:var(--text-muted); font-size:13px; padding:var(--space-2) var(--space-2) 0}
-th,td{text-align:left; vertical-align:top; padding:var(--space-2); border-bottom:1px solid var(--line-soft)}
-thead th{color:var(--text-muted); font-weight:700; font-size:13px; border-bottom:2px solid var(--rule); white-space:nowrap}
-thead th::first-letter{text-transform:uppercase} /* sentence case, also for the names the generic view takes from JSON */
+table{border-collapse:collapse; inline-size:100%; font-size:14px; line-height:20px; font-variant-numeric:tabular-nums}
+caption{caption-side:bottom; text-align:start; color:var(--text-muted); font-size:13px; padding:var(--space-2) var(--space-2) 0}
+th,td{text-align:start; vertical-align:top; padding:var(--space-2); border-block-end:1px solid var(--line-soft)}
+thead th{color:var(--text-muted); font-weight:700; font-size:13px; border-block-end:2px solid var(--rule); white-space:nowrap;
+  &::first-letter{text-transform:uppercase}} /* sentence case, also for the names the generic view takes from JSON */
 th[scope=row]{color:var(--text-muted); font-weight:400}
 tbody tr:hover{background:var(--surface-deep)}
 table table{font-size:inherit}
@@ -127,51 +135,51 @@ table table{font-size:inherit}
 /* Forms: a label wraps its field, the words over the control, so a form needs no layout classes. A field is a well
    carved into the paper. Days, times and numbers are typed in mono. */
 form{margin:0}
-fieldset{border:0; margin:0; padding:0; min-width:0}
+fieldset{border:0; margin:0; padding:0; min-inline-size:0}
 legend{padding:0; font-size:13px; color:var(--text-muted)}
 label{position:relative; display:flex; flex-direction:column; gap:var(--space-1); font-size:13px; line-height:19px; color:var(--text-muted)}
-input,textarea,select{width:100%; height:var(--control); padding:0 var(--space-3); font:400 15px/22px var(--sans); color:var(--ink);
-  background:var(--surface-deep); border:2px solid var(--edge); box-shadow:var(--well)}
+input,textarea,select{inline-size:100%; block-size:var(--control); padding:0 var(--space-3); font:400 15px/22px var(--sans); color:var(--ink);
+  background:var(--surface-deep); border:2px solid var(--edge); box-shadow:var(--well);
+  &:hover{border-color:var(--outline)}
+  &:focus-visible{outline:2px solid var(--focus); outline-offset:0; border-color:var(--focus)}}
 input[type=date],input[type=time],input[type=number],input[type=datetime-local]{font-family:var(--mono); font-size:14px; font-variant-numeric:tabular-nums}
-input[type=checkbox],input[type=radio]{width:auto; height:auto; box-shadow:none; accent-color:var(--accent-ink)}
-input[type=file]{height:auto; padding:var(--space-2) var(--space-3)}
-textarea{height:auto; min-height:6em; padding:10px var(--space-3); resize:vertical; font:400 16px/26px var(--sans)}
-input:hover,textarea:hover,select:hover{border-color:var(--outline)}
-input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--focus); outline-offset:0; border-color:var(--focus)}
+input[type=checkbox],input[type=radio]{inline-size:auto; block-size:auto; box-shadow:none; accent-color:var(--accent-ink)}
+input[type=file]{block-size:auto; padding:var(--space-2) var(--space-3)}
+textarea{block-size:auto; min-block-size:6em; padding:10px var(--space-3); resize:vertical; font:400 16px/26px var(--sans)}
 input[readonly],textarea[readonly]{background:var(--surface)}
 ::placeholder{color:var(--muted); opacity:.8}
 
 /* A button is a parchment slab with its outline, a light top bevel and a hard drop; pressed, it sinks 3 px and the
    bevel turns. The primary one, the danger one and the small one are app.css's. */
-button{display:inline-flex; align-items:center; justify-content:center; gap:var(--space-2); height:var(--control); margin:0; padding:0 var(--space-4);
+button{display:inline-flex; align-items:center; justify-content:center; gap:var(--space-2); block-size:var(--control); margin:0; padding:0 var(--space-4);
   font:700 15px/1 var(--sans); color:var(--ink); background:var(--surface-deep); border:2px solid var(--outline);
-  box-shadow:var(--slab-bevel),var(--drop-hard); white-space:nowrap; cursor:pointer}
-button:hover{filter:brightness(1.04)}
-button:active{transform:translateY(3px); box-shadow:var(--slab-pressed)}
-button:disabled{opacity:.55; cursor:not-allowed; transform:none; box-shadow:var(--slab-bevel),var(--drop-hard)}
+  box-shadow:var(--slab-bevel),var(--drop-hard); white-space:nowrap; cursor:pointer;
+  &:hover{filter:brightness(1.04)}
+  &:active{transform:translateY(3px); box-shadow:var(--slab-pressed)}
+  &:disabled{opacity:.55; cursor:not-allowed; transform:none; box-shadow:var(--slab-bevel),var(--drop-hard)}}
 
 /* A secondary thing, closed: one line with a chevron that turns when it opens, not a box. */
-details{border:0; padding:0; background:none}
-details>summary{display:flex; align-items:center; gap:var(--space-2); min-height:var(--control); cursor:pointer; list-style:none; font-weight:700; color:var(--text-link)}
-details>summary::-webkit-details-marker{display:none}
-details>summary::before{content:""; flex:none; width:7px; height:7px; margin:0 3px; border:solid currentColor; border-width:0 2px 2px 0; transform:rotate(-45deg)}
-details[open]>summary::before{transform:rotate(45deg)}
-details[open]>summary{margin-bottom:var(--space-3)}
+details{border:0; padding:0; background:none;
+  &>summary{display:flex; align-items:center; gap:var(--space-2); min-block-size:var(--control); cursor:pointer; list-style:none; font-weight:700; color:var(--text-link);
+    &::-webkit-details-marker{display:none}
+    &::before{content:""; flex:none; inline-size:7px; block-size:7px; margin:0 3px; border:solid currentColor; border-width:0 2px 2px 0; transform:rotate(-45deg)}}
+  &[open]>summary{margin-block-end:var(--space-3);
+    &::before{transform:rotate(45deg)}}}
 
 /* Code and quotations: code is carved into wood. */
 pre{white-space:pre-wrap; overflow-x:auto; background-color:var(--rail-deep); color:var(--rail-ink); border:2px solid var(--outline); box-shadow:var(--bevel-in);
   padding:10px var(--space-3); margin:0; font:13px/20px var(--mono)}
 code{font:.92em/1.4 var(--mono); background:var(--rail-deep); color:var(--rail-ink); padding:1px 5px}
 pre code{background:none; padding:0; font-size:inherit}
-blockquote{margin:0; padding-left:14px; border-left:3px solid var(--rule); color:var(--text-muted)}
-img,svg,video{max-width:100%; height:auto}
+blockquote{margin:0; padding-inline-start:14px; border-inline-start:3px solid var(--rule); color:var(--text-muted)}
+img,svg,video{max-inline-size:100%; block-size:auto}
 figure{margin:0}
 figcaption{color:var(--text-muted); font-size:13px}
 mark{background:var(--mark); color:var(--ink); padding:0 2px}
 kbd{font:400 12px/16px var(--mono); padding:1px 6px; border:1px solid var(--outline); background:var(--rail); color:var(--rail-ink); white-space:nowrap}
 
 /* A touch screen: a tall text box is capped, so the page around it stays in view. */
-@media (max-width:899px){textarea{max-height:45vh}}
+@media (max-width:899px){textarea{max-block-size:45vh}}
 
 /* A narrow screen: a smaller title. */
 @media (max-width:640px){
@@ -188,6 +196,7 @@ kbd{font:400 12px/16px var(--mono); padding:1px 6px; border:1px solid var(--outl
   details{border:0; padding:0}
   a{color:#000; text-decoration:underline}
   article,aside{break-inside:avoid; background:none; border:1px solid #999; box-shadow:none}
-  thead th{border-bottom-color:#000}
+  thead th{border-block-end-color:#000}
   h1,h2,h3{break-after:avoid}
+}
 }

@@ -274,3 +274,50 @@ func TestTheScriptDeclaresEachFunctionOnce(t *testing.T) {
 		seen[m[1]] = true
 	}
 }
+
+// TestTheSheetsAreLayered: the two sheets are one cascade in four layers (docs/plans/108-the-browser-made-current.md),
+// declared once at the top of base.css before anything but the fonts, which stay outside the layers; app.css holds
+// the two last layers and never repeats the declaration, which would be a second home for the order.
+func TestTheSheetsAreLayered(t *testing.T) {
+	base := strings.TrimSpace(cssComments.ReplaceAllString(string(baseCSS), ""))
+	app := cssComments.ReplaceAllString(string(appCSS), "")
+	if !strings.HasPrefix(base, "@layer tokens, base, components, utilities;") {
+		t.Errorf("base.css does not start with the layer order: %.80q", base)
+	}
+	before := base[:strings.Index(base, "@layer tokens{")]
+	if rest := regexp.MustCompile(`(?s)@layer [^;]+;|@font-face\{[^}]*\}|\s`).ReplaceAllString(before, ""); rest != "" {
+		t.Errorf("base.css has a rule outside the layers before the tokens: %.80q", rest)
+	}
+	for _, want := range []string{"@layer tokens{", "@layer base{"} {
+		if strings.Count(base, want) != 1 {
+			t.Errorf("base.css opens %s %d times, want once", want, strings.Count(base, want))
+		}
+	}
+	for _, want := range []string{"@layer components{", "@layer utilities{"} {
+		if strings.Count(app, want) != 1 {
+			t.Errorf("app.css opens %s %d times, want once", want, strings.Count(app, want))
+		}
+	}
+	if strings.Contains(app, "@layer tokens") || strings.Contains(app, "@layer base") || regexp.MustCompile(`@layer [^{]*;`).MatchString(app) {
+		t.Error("app.css declares a layer order or a layer of base.css")
+	}
+}
+
+// TestTheSheetsUseLogicalProperties: a rule says inline and block, start and end, never left, right, top and
+// bottom, so the sheets read the same in any writing direction. A value stays physical where the property is a
+// position of a background or a shadow; only a property name is checked here.
+func TestTheSheetsUseLogicalProperties(t *testing.T) {
+	physical := []*regexp.Regexp{
+		regexp.MustCompile(`(^|[{;\s])(margin|padding|border)-(left|right|top|bottom)(-[a-z]+)?\s*:`),
+		regexp.MustCompile(`(^|[{;\s])(left|right|top|bottom|width|height|min-width|max-width|min-height|max-height)\s*:`),
+		regexp.MustCompile(`(^|[{;\s])(text-align|float)\s*:\s*(left|right)\b`),
+	}
+	for name, sheet := range map[string]string{"base.css": string(baseCSS), "app.css": string(appCSS)} {
+		rules := cssComments.ReplaceAllString(sheet, "")
+		for _, re := range physical {
+			for _, m := range re.FindAllString(rules, -1) {
+				t.Errorf("%s uses a physical property: %q", name, strings.TrimSpace(m))
+			}
+		}
+	}
+}
