@@ -162,7 +162,7 @@ func TestThePhoneHasABottomBarAndASheet(t *testing.T) {
 		}
 		return strings.Join(out, " ")
 	}
-	if got := links(bar[1]); got != "/days/today /months/current /deadlines /tasks #sections" {
+	if got := links(bar[1]); got != "/days/today /months/current /deadlines /tasks /conversations #sections" {
 		t.Errorf("the bottom bar: %s", got)
 	}
 	if got := links(sheet[1]); !strings.HasPrefix(got, "/people /places /files /metrics /habits /sessions /periods /ghosts /months/2031-05") ||

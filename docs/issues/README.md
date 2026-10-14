@@ -4,11 +4,12 @@ An issue records an incident from real use — a failed import, a bug in the wri
 data could not answer, a rule that is ambiguous or untestable. It is the evidence a schema change needs
 ([how a change happens](../process.md)). One file per incident, named `NNNN-short-slug.md`, written from the
 [template](template.md), numbered on from the last: issues up to 0010 are closed and live in git history
-(`git log -- docs/issues`). Issues 0011–0071 are listed below; the next one is **0072**. Close an issue with its resolution and status, retaining the dated incident as
+(`git log -- docs/issues`). Issues 0011–0072 are listed below; the next one is **0073**. Close an issue with its resolution and status, retaining the dated incident as
 [the process](../process.md) requires. Earlier closed records remain available in git history.
 
 | id | title | status |
 |---|---|---|
+| [0072](0072-a-conversation-reads-as-a-page.md) | A conversation reads as a page, and it leaves the screen when the owner moves on | open |
 | [0071](0071-the-owner-cannot-talk-to-lifelog.md) | The owner cannot talk to lifelog: an agent works only from outside, and its conversation is lost | open |
 | [0070](0070-the-calendar-shows-only-the-journal.md) | The calendar shows only the journal | resolved |
 | [0069](0069-a-metric-is-three-pages.md) | A metric is three pages, and Record is under its readings | resolved |

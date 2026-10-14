@@ -44,6 +44,11 @@ func (h *server) page(r *http.Request) (*Entity, error) {
 		}
 		return nil, redirect{to}
 	}
+	// In a browser, a conversation's page is its chat page (docs/plans/103-the-conversation-on-the-screen.md);
+	// ?view=page shows the page itself, to edit its text.
+	if p := e.Properties.(*core.Page); wantsHTML(r) && p.DeletedAt == "" && isConversation(p) && r.URL.Query().Get("view") != "page" {
+		return nil, h.conversationRedirect(r, id)
+	}
 	return e, nil
 }
 
@@ -110,9 +115,6 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 	}
 	if core.HasTable(p.Body) {
 		e.Actions = append(e.Actions, action("readings-from-table", nil, map[string]any{"page": p.Title}))
-	}
-	if isConversation(p) {
-		e.Actions = append(e.Actions, action("ask", nil, map[string]any{"conversation": id}))
 	}
 	e.Actions = append(e.Actions, action("tombstone", ids, nil))
 	return e, nil

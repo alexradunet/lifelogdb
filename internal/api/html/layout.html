@@ -46,6 +46,7 @@
 {{define "foot"}}</main>
 <footer><p>Lifelog, the one writer of <code>life.db</code>.</p></footer>
 </div>
+{{if .ChatPanel}}{{template "chatpanel" .}}{{end}}
 </div>
 <script data-script="app">{{appjs}}</script>
 </body></html>{{end}}

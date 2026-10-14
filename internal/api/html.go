@@ -133,6 +133,7 @@ var viewOf = map[string]string{
 	"days": "list", "people": "list", "places": "list", "files": "list", "ghosts": "list", "search": "search",
 	"metrics": "metrics", "series": "metric", "metric": "page", "habits": "habits", "measurement": "measurement", "error": "error", "login": "login",
 	"tasks": "tasks", "task": "task", "occurrence": "occurrence", "deadlines": "deadlines", "month": "month", "week": "week", "year": "year", "styleguide": "styleguide",
+	"conversations": "conversation", "conversation": "conversation",
 }
 
 // view is what a template gets: the entity, its properties as the JSON client reads them, the path the browser
@@ -224,6 +225,7 @@ var navItems = []struct {
 	{"Calendar", "/months/current", "calendar", []string{"/months", "/weeks", "/years", "/days"}, "day"},
 	{"Due", "/deadlines", "due", []string{"/deadlines"}, "day"},
 	{"Tasks", "/tasks", "tasks", []string{"/tasks"}, "day"},
+	{"Chat", "/conversations", "chat", []string{"/conversations"}, "day"},
 	{"People", "/people", "people", []string{"/people"}, "record"},
 	{"Places", "/places", "places", []string{"/places"}, "record"},
 	{"Files", "/files", "files", []string{"/files"}, "record"},
@@ -283,6 +285,12 @@ func navMatch(path, p string) int {
 }
 
 // LinkTitle is the title of the entity's link with that rel, "" when it has none.
+// ChatPanel says whether the page draws the chat sidebar: every page of the shell but the chat page, which is the
+// same conversation full size (docs/plans/103-the-conversation-on-the-screen.md).
+func (v *view) ChatPanel() bool {
+	return v.Shell != nil && !slices.ContainsFunc(v.Class, func(c string) bool { return c == "conversation" || c == "conversations" })
+}
+
 func (v *view) LinkTitle(rel string) string {
 	if l := v.linkByRel(rel); l != nil {
 		return l.Title

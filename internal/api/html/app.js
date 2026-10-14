@@ -1,8 +1,9 @@
 // app.js — this application's one script, written into every page like the two sheets. It makes a page better,
 // and no page needs it: every form posts and every link works without it
 // (docs/plans/091-the-browser-for-daily-use.md). It reads /titles (the names after [[, and the pages of the command
-// list), /render (the preview of a body) and / (the root's actions, for the command list), and nothing else; it
-// writes nothing. Six things:
+// list), /render (the preview of a body), / (the root's actions, for the command list) and the chat pages
+// (/conversations/{id}, for the sidebar's thread); the one write it sends itself is the sidebar's question to
+// POST /conversations, the form the server drew. Seven things:
 //   1. after [[ in a textarea, and in a field for a page's title (data-pages), the names of the pages that start
 //      with what is typed;
 //   2. a preview of a body as it will show when saved;
@@ -12,7 +13,9 @@
 //   4. a question before the browser leaves text that was not sent;
 //   5. the design system's small things (docs/plans/092-the-app-shell.md): the toast's Close, a second press for a
 //      danger button, and the hint of Ctrl+K in the search;
-//   6. the command list of Ctrl+K (docs/plans/094-the-command-list.md).
+//   6. the command list of Ctrl+K (docs/plans/094-the-command-list.md);
+//   7. the conversation (docs/plans/103-the-conversation-on-the-screen.md): the sidebar that follows the owner from
+//      the chat page, its thread and its question, and the question shown at once on the chat page.
 (function () {
   "use strict";
 
@@ -254,6 +257,11 @@
   var sent = null; // the form being sent: its own text is not lost
   document.addEventListener("submit", function (ev) { sent = ev.target; }, true);
   window.addEventListener("beforeunload", function (ev) {
+    if (chatPending) { // the answer runs in its request: leaving the page stops it
+      ev.preventDefault();
+      ev.returnValue = "";
+      return;
+    }
     var areas = document.querySelectorAll("textarea");
     for (var i = 0; i < areas.length; i++) {
       var a = areas[i];
@@ -508,6 +516,124 @@
     location.href = row.action ? "/#do-" + encodeURIComponent(row.action) : row.href;
   }
 
+  // ---- 7. The conversation (docs/plans/103-the-conversation-on-the-screen.md)
+
+  // The state of the sidebar lives in this browser: open or closed, and the current conversation. The chat page sets
+  // it open, so the page the owner goes to next shows the same conversation in the sidebar.
+  var chatKey = "lifelog.chat";
+  var chatPending = false; // a question waits for its answer
+  function chatState() { try { return JSON.parse(localStorage.getItem(chatKey)) || {}; } catch (e) { return {}; } }
+  function saveChat(s) { try { localStorage.setItem(chatKey, JSON.stringify(s)); } catch (e) { /* private mode */ } }
+
+  // chatHTML reads a chat page's HTML: its thread (the server draws every turn), its conversation and its alert.
+  function chatHTML(html) {
+    var doc = new DOMParser().parseFromString(html, "text/html");
+    var page = doc.querySelector("[data-chat-page]");
+    return { thread: doc.querySelector(".chat-page .chat-thread"), id: page ? page.getAttribute("data-chat-page") : null,
+      alert: doc.querySelector("[role=alert]") };
+  }
+
+  // turnWaiting draws the question as sent and "Thinking" under it, until the answer replaces the thread.
+  function turnWaiting(thread, question) {
+    var empty = thread.querySelector(".chat-empty");
+    if (empty) empty.remove();
+    var mine = document.createElement("div");
+    mine.className = "msg owner";
+    mine.innerHTML = '<div class="bubble"></div>';
+    mine.firstChild.textContent = question;
+    var wait = document.createElement("div");
+    wait.className = "msg lifelog pending";
+    wait.innerHTML = '<div class="bubble">Thinking… the answer can take a minute.</div>';
+    thread.appendChild(mine);
+    thread.appendChild(wait);
+    return wait;
+  }
+
+  function chat() {
+    var page = document.querySelector("[data-chat-page]");
+    if (page) {
+      saveChat({ open: true, id: page.getAttribute("data-chat-page") });
+      var full = page.querySelector(".chat-composer form");
+      if (full) full.addEventListener("submit", function () {
+        var q = full.querySelector("textarea[name=question]");
+        if (!q || !q.value.trim()) return;
+        turnWaiting(page.querySelector(".chat-thread"), q.value.trim());
+        full.querySelector("button").disabled = true;
+        window.scrollTo(0, document.body.scrollHeight);
+      });
+      window.scrollTo(0, document.body.scrollHeight);
+      return;
+    }
+    var panel = document.getElementById("chat-panel");
+    var toggle = document.querySelector('[data-chat="toggle"]');
+    if (!panel || !toggle) return;
+    var shell = panel.parentElement, thread = panel.querySelector(".chat-thread"), form = panel.querySelector("form");
+    var question = form.querySelector("textarea[name=question]"), send = form.querySelector("button");
+    var blank = thread.innerHTML, loaded = null;
+
+    function showThread(t) { thread.innerHTML = t ? t.innerHTML : blank; thread.scrollTop = thread.scrollHeight; }
+    function current(id) {
+      form.querySelector("input[name=conversation]").value = id || "";
+      var links = panel.querySelectorAll('[data-chat="full"]');
+      for (var i = 0; i < links.length; i++) links[i].href = id ? "/conversations/" + id : "/conversations";
+      var s = chatState();
+      s.id = id || "";
+      saveChat(s);
+    }
+    function load(id) {
+      loaded = id || "";
+      current(id);
+      if (!id) { showThread(null); return; }
+      fetch("/conversations/" + encodeURIComponent(id), { headers: { Accept: "text/html" }, credentials: "same-origin" })
+        .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status); })
+        .then(function (html) { showThread(chatHTML(html).thread); })
+        .catch(function () { load(""); }); // tombstoned, or gone: a new conversation
+    }
+    function setOpen(open) {
+      panel.hidden = !open;
+      shell.classList.toggle("chat-open", open);
+      toggle.setAttribute("aria-expanded", open ? "true" : "false");
+      var s = chatState();
+      s.open = open;
+      saveChat(s);
+      if (open && loaded === null) load(s.id);
+    }
+
+    toggle.hidden = false;
+    toggle.addEventListener("click", function () { setOpen(true); question.focus(); });
+    panel.querySelector('[data-chat="close"]').addEventListener("click", function () { setOpen(false); toggle.focus(); });
+    panel.querySelector('[data-chat="new"]').addEventListener("click", function () { load(""); question.focus(); });
+    form.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var q = question.value.trim();
+      if (!q || chatPending) return;
+      chatPending = true;
+      send.disabled = true;
+      var wait = turnWaiting(thread, q);
+      thread.scrollTop = thread.scrollHeight;
+      function failed(words) {
+        wait.className = "msg lifelog failed";
+        wait.firstChild.textContent = words;
+      }
+      fetch(form.action, { method: "POST", body: new URLSearchParams(new FormData(form)), credentials: "same-origin",
+        headers: { Accept: "text/html" } })
+        .then(function (r) { return r.text().then(function (html) { return { ok: r.ok, status: r.status, page: chatHTML(html) }; }); })
+        .then(function (a) {
+          if (a.ok && a.page.id) {
+            loaded = a.page.id;
+            current(a.page.id);
+            showThread(a.page.thread);
+            question.value = "";
+          } else {
+            failed("No answer. " + (a.page.alert ? a.page.alert.textContent.trim() : "HTTP " + a.status));
+          }
+        })
+        .catch(function (e) { failed("No answer: " + e.message); })
+        .then(function () { chatPending = false; send.disabled = false; });
+    });
+    if (chatState().open) setOpen(true);
+  }
+
   // ---- Start
 
   var areas = document.querySelectorAll("textarea:not([readonly]), input[data-pages]");
@@ -520,6 +646,7 @@
     area.addEventListener("blur", function (ev) { var a = ev.target; setTimeout(function () { close(a); }, 150); });
     if (area.name === "body") preview(area);
   }
+  chat();
   var toasts = document.querySelectorAll(".toast");
   for (var k = 0; k < toasts.length; k++) closable(toasts[k]);
   var search = document.querySelector(".rail-search");

@@ -61,7 +61,11 @@ func (a *Agent) Ask(ctx context.Context, question string, conversation int64) (a
 	if runErr != nil && len(steps) == 0 {
 		return api.Answer{}, modelError(runErr)
 	}
-	turn := transcript(now, question, steps, reply, runErr)
+	failure := ""
+	if runErr != nil {
+		failure = runErr.Error()
+	}
+	turn := api.FormatTurn(now, question, steps, reply, failure)
 	if conversation == 0 {
 		conversation, err = a.newConversation(ctx, actions, now, turn)
 	} else {
@@ -195,31 +199,6 @@ func (a *Agent) do(ctx context.Context, actions []api.Action, name string, value
 		}
 	}
 	return nil, fmt.Errorf("the catalog has no action %s", name)
-}
-
-// transcript is one turn as the page keeps it: the owner's question, a line for each tool call, the reply.
-func transcript(now time.Time, question string, steps []api.Step, reply string, runErr error) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "**Owner** (%s): %s\n\n", now.Format("15.04"), strings.TrimSpace(question))
-	for _, s := range steps {
-		switch {
-		case s.Error != "":
-			fmt.Fprintf(&b, "- `%s`: %s\n", s.Tool, firstLine(s.Error))
-		case s.Href != "":
-			fmt.Fprintf(&b, "- `%s` → [%s](%s)\n", s.Tool, s.Href, s.Href)
-		default:
-			fmt.Fprintf(&b, "- `%s`\n", s.Tool)
-		}
-	}
-	if len(steps) > 0 {
-		b.WriteString("\n")
-	}
-	if runErr != nil {
-		fmt.Fprintf(&b, "**lifelog** did not answer: %s\n", firstLine(runErr.Error()))
-	} else {
-		fmt.Fprintf(&b, "**lifelog:** %s\n", reply)
-	}
-	return b.String()
 }
 
 func systemPrompt(now time.Time) string {

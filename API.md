@@ -371,9 +371,9 @@ tombstoned page adds `deleted`. Links: `day` (a day page's day view), `preview` 
 point). Embedded: every outgoing link under its kind, every incoming one under `backlink` and its kind. Actions by
 what is legal: `save-body` (with the current `body` and `version` filled), `promote`, `promote-period`, `rename`,
 `edit-period`, `locate`, `link` and `unlink` (with the kinds this type may start), `readings-from-table` (when the
-body holds a table, with `page` filled), `ask` (on a conversation page, with `conversation` filled), `tombstone`, or
-`revive` alone on a deleted page. In a browser, the page of a
-live metric answers 303 to its series, the metric's one page, which carries this page's text, links and actions. The
+body holds a table, with `page` filled), `tombstone`, or `revive` alone on a deleted page. In a browser, the page of a
+live metric answers 303 to its series, the metric's one page, which carries this page's text, links and actions; the
+page of a live conversation answers 303 to `/conversations/{id}`, unless the query has `view=page`. The
 writes answer with this entity; `create-page` and `save-body` carry a `result` of the sync shape, `add-file` the kept
 shape.
 
@@ -811,6 +811,44 @@ back to 90 days on), `open` ones unless `state` is `done`, `skipped` or `all`. O
 | `occurrences[].reminder.state` | string |  |
 | `occurrences[].reminder.at` | instant |  |
 
+### conversations
+
+`GET /conversations`: every live conversation, the newest first (the live pages filed by `part-of` in the page
+`Conversations`). Links: `index`. Actions: `ask`, for a new conversation. In a browser it is the chat page, with no
+conversation open.
+
+| property | type | meaning |
+|---|---|---|
+| `conversations[]` | list | the conversations, the newest first |
+| `conversations[].id` | integer | the conversation page's id |
+| `conversations[].title` | string | its title |
+
+### conversation
+
+`GET /conversations/{id}`: one live conversation, read from its page's body; 404 for a page that is not a live
+conversation. Links: `page` (its page, to edit the text), `conversations`, `index`. Actions: `ask`, with
+`conversation` filled. `ask` answers with this entity. In a browser it is the chat page.
+
+| property | type | meaning |
+|---|---|---|
+| `id` | integer | the conversation page's id |
+| `title` | string | its title |
+| `version` | string | its page's version |
+| `created_at` | instant | when it started |
+| `preamble` | string | text of the page before its first turn; absent when none |
+| `turns[]` | list | the turns, in order |
+| `turns[].at` | string | the time of the question, `HH.MM`, the server's local time |
+| `turns[].question` | string | the owner's question |
+| `turns[].steps[]` | list | each tool the model called (the steps of the result of ask) |
+| `turns[].steps[].tool` | string | |
+| `turns[].steps[].href` | string | |
+| `turns[].steps[].error` | string | |
+| `turns[].reply` | string | the model's answer (CommonMark); absent when there is none |
+| `turns[].error` | string | why the model gave no answer; absent when it answered |
+| `conversations[]` | list | every conversation, as `conversations` lists them |
+| `conversations[].id` | integer | |
+| `conversations[].title` | string | |
+
 ### integrity
 
 `GET /integrity`: the four integrity checks of the contract, and this writer's own.
@@ -907,7 +945,8 @@ What the save contract did with the body's `[[wikilinks]]` and `#tags`:
 (`LIFELOG_MODEL_URL`, `LIFELOG_MODEL`, optional `LIFELOG_MODEL_KEY`) answers with the tools of the catalog, never an
 owner-only action, and writes as `agent:chat`. The turn is appended to a conversation page: a new page titled
 `Conversation YYYY-MM-DD HH.MM.SS` and filed by `part-of` in the page `Conversations`, or the page `conversation`
-names, which must be a live page filed there (else 422). The answer is that page, with this `result`:
+names, which must be a live page filed there (else 422). The answer is the `conversation`, with this `result` (a
+browser form gets no receipt: the chat page shows the turn):
 
 | property | type | meaning |
 |---|---|---|

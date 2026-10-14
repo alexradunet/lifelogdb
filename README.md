@@ -235,6 +235,14 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   16 model steps a question and 64 KiB a tool result; the loop runs in the request and stops with it. **Rejected:**
   rewriting `lifelog` in another language to embed an agent SDK, a second application beside it, and a table of
   conversations before a question needs one ([RFC 0012](docs/rfcs/0012-a-conversation-with-lifelog.md)).
+- **The conversation on the screen** ([plan 103](docs/plans/103-the-conversation-on-the-screen.md)). `/conversations`
+  and `/conversations/{id}` read the conversations and their turns; in a browser they are the chat page (the
+  conversations, the thread, the composer), and a conversation's `/pages/{id}` answers 303 there (`?view=page` keeps
+  the page). Every other page of the shell has the chat sidebar: a right column that the Chat button opens and closes,
+  a sheet on a phone. The script fills it from the chat page's own HTML and sends its question with `fetch`; its state
+  (open, the current conversation) is kept in `localStorage`, and the chat page sets it open, so the conversation
+  follows the owner off the chat page. The transcript format is written and read in `internal/api/conversations.go`
+  alone. A question still runs in its request: the script asks before a page with a waiting question is left.
 - **Renames select a preferred name on the same identity**, retaining direct aliases as
   [titles and wikilinks](docs/contract/titles-and-wikilinks.md) ("Renames") requires and
   [rename a page](docs/cookbook/rename-a-page.md) writes; `lifelog rename` and the API's `rename` action run it.

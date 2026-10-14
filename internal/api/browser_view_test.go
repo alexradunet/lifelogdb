@@ -216,20 +216,27 @@ func TestTheBaseSheetCarriesNoAppVocabulary(t *testing.T) {
 // cssComments cuts a stylesheet's comments, so a test reads its rules and not its prose.
 var cssComments = regexp.MustCompile(`(?s)/\*.*?\*/`)
 
-// TestTheScriptReadsTitlesRenderAndTheRootOnly keeps the script's promise in its first comment: it reads /titles,
-// /render and / (the root's actions, for the command list of docs/plans/094-the-command-list.md) and nothing else,
-// and it keeps nothing in the browser.
-func TestTheScriptReadsTitlesRenderAndTheRootOnly(t *testing.T) {
+// TestTheScriptReadsTitlesRenderTheRootAndTheChatOnly keeps the script's promise in its first comment: it reads
+// /titles, /render, / (the root's actions, for the command list of docs/plans/094-the-command-list.md) and a chat page
+// (/conversations/{id}, for the sidebar of docs/plans/103-the-conversation-on-the-screen.md), and nothing else; the
+// one request it sends itself is the sidebar's form (form.action). The one thing it keeps in the browser is the
+// sidebar's state, under one key: open or closed, and the current conversation's id, never its text.
+func TestTheScriptReadsTitlesRenderTheRootAndTheChatOnly(t *testing.T) {
 	js := string(appJS)
 	calls := regexp.MustCompile(`fetch\(\s*"([^"?]*)`).FindAllStringSubmatch(js, -1)
 	read := map[string]bool{}
 	for _, c := range calls {
 		read[c[1]] = true
 	}
-	if len(calls) != strings.Count(js, "fetch(") || len(read) != 3 || !read["/titles"] || !read["/render"] || !read["/"] {
-		t.Errorf("the script fetches %v (%d calls), want /titles, /render and / only", read, strings.Count(js, "fetch("))
+	if len(calls)+strings.Count(js, "fetch(form.action,") != strings.Count(js, "fetch(") || strings.Count(js, "fetch(form.action,") != 1 ||
+		len(read) != 4 || !read["/titles"] || !read["/render"] || !read["/"] || !read["/conversations/"] {
+		t.Errorf("the script fetches %v (%d calls), want /titles, /render, /, /conversations/ and the sidebar's form only", read, strings.Count(js, "fetch("))
 	}
-	for _, never := range []string{"XMLHttpRequest", "WebSocket", "sendBeacon", "localStorage", "sessionStorage", "indexedDB",
+	if strings.Count(js, "localStorage") != 2 || strings.Count(js, "localStorage.getItem(chatKey)") != 1 ||
+		strings.Count(js, "localStorage.setItem(chatKey,") != 1 || !strings.Contains(js, `var chatKey = "lifelog.chat";`) {
+		t.Error("the script keeps something in the browser besides the sidebar's state")
+	}
+	for _, never := range []string{"XMLHttpRequest", "WebSocket", "sendBeacon", "sessionStorage", "indexedDB",
 		"document.cookie", "import(", "eval(", "new Function", "http:", "https:"} {
 		if strings.Contains(js, never) {
 			t.Errorf("the script uses %s", never)

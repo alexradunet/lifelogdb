@@ -122,7 +122,9 @@ func setup(t *testing.T, script ...answer) (*fakeModel, *client.Client, *db.DB, 
 	f := &fakeModel{t: t, script: script}
 	srv := httptest.NewServer(f)
 	t.Cleanup(srv.Close)
-	agent := &chat.Agent{Model: &chat.Model{URL: srv.URL + "/v1", Name: "synthetic", Key: "synthetic-key"}, Now: func() time.Time { return noon }}
+	calls := 0 // each ask reads the clock once: a second conversation is one second later, so its title is new
+	agent := &chat.Agent{Model: &chat.Model{URL: srv.URL + "/v1", Name: "synthetic", Key: "synthetic-key"},
+		Now: func() time.Time { calls++; return noon.Add(time.Duration(calls-1) * time.Second) }}
 	h := api.NewAsking(&core.Store{DB: d}, agent)
 	agent.Client = client.InProcess(h, chat.Source)
 	return f, client.InProcess(h, "cli"), d, h
@@ -227,10 +229,12 @@ func TestAskContinuesAConversation(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := fmt.Sprint(first.Properties.(map[string]any)["id"])
-	page := must(owner.Get(t.Context(), "/pages/"+id))
-	cont := actionNamed(page, "ask")
+	if first.Class[0] != "conversation" || selfHref(first) != "/conversations/"+id {
+		t.Fatalf("ask answered with %v %s, want the conversation", first.Class, selfHref(first))
+	}
+	cont := actionNamed(first, "ask")
 	if cont == nil || fmt.Sprint(cont.Fields[1].Value) != id {
-		t.Fatalf("a conversation page offers no ask that continues it: %+v", page.Actions)
+		t.Fatalf("a conversation offers no ask that continues it: %+v", first.Actions)
 	}
 	if _, err := ask(t, owner, map[string]string{"question": "What did I say?", "conversation": id}); err != nil {
 		t.Fatal(err)
@@ -384,8 +388,8 @@ func TestAskFromABrowserForm(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	id := scalar(t, d, `SELECT e.id FROM `+named+` WHERE n.title LIKE 'Conversation %'`)
-	if rec.Code != http.StatusSeeOther || !strings.HasPrefix(rec.Header().Get("Location"), "/pages/"+id) {
-		t.Fatalf("answer %d to %q, want 303 to /pages/%s", rec.Code, rec.Header().Get("Location"), id)
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/conversations/"+id {
+		t.Fatalf("answer %d to %q, want 303 to /conversations/%s and no receipt", rec.Code, rec.Header().Get("Location"), id)
 	}
 	if got := scalar(t, d, `SELECT source FROM entities WHERE id = ?`, id); got != chat.Source {
 		t.Fatalf("conversation source = %q", got)
@@ -393,7 +397,7 @@ func TestAskFromABrowserForm(t *testing.T) {
 	// Home draws the form of ask, and the conversation page draws the one that continues it.
 	for _, tc := range []struct{ path, want string }{
 		{"/", `<form method="POST" action="/conversations" data-action="ask">`},
-		{"/pages/" + id, `<input type="hidden" name="conversation" value="` + id + `">`},
+		{"/conversations/" + id, `<input type="hidden" name="conversation" value="` + id + `">`},
 	} {
 		get := httptest.NewRequestWithContext(t.Context(), http.MethodGet, tc.path, nil)
 		get.Header.Set("Accept", "text/html")
@@ -403,6 +407,93 @@ func TestAskFromABrowserForm(t *testing.T) {
 			t.Fatalf("%s (%d) does not draw the form of ask: want %s", tc.path, rec.Code, tc.want)
 		}
 	}
+}
+
+func TestConversationsListAndRead(t *testing.T) {
+	_, owner, d, h := setup(t, answer{reply: "First."}, answer{reply: "Second."})
+	first := must(ask(t, owner, map[string]string{"question": "One"}))
+	second := must(ask(t, owner, map[string]string{"question": "Two"}))
+	id1, id2 := fmt.Sprint(first.Properties.(map[string]any)["id"]), fmt.Sprint(second.Properties.(map[string]any)["id"])
+	list := func() string {
+		var out []string
+		for _, c := range must(owner.Get(t.Context(), "/conversations")).Properties.(map[string]any)["conversations"].([]any) {
+			m := c.(map[string]any)
+			out = append(out, fmt.Sprint(m["id"])+" "+fmt.Sprint(m["title"]))
+		}
+		return strings.Join(out, "; ")
+	}
+	if got, want := list(), id2+" Conversation 2031-05-14 12.30.06; "+id1+" Conversation 2031-05-14 12.30.05"; got != want {
+		t.Fatalf("conversations = %s, want %s", got, want)
+	}
+	turns := must(owner.Get(t.Context(), "/conversations/"+id2)).Properties.(map[string]any)["turns"]
+	if got := fmt.Sprint(turns); got != "[map[at:12.30 question:Two reply:Second. steps:[]]]" {
+		t.Fatalf("turns = %s", got)
+	}
+	// A tombstoned conversation leaves the list and is not found; neither is a page that is not a conversation.
+	must(owner.Do(t.Context(), catalogAction(t, owner, "tombstone"), map[string]string{"id": id1}))
+	if got := list(); got != id2+" Conversation 2031-05-14 12.30.06" {
+		t.Fatalf("conversations after a tombstone = %s", got)
+	}
+	cid := scalar(t, d, `SELECT entity_id FROM entity_names WHERE title = 'Conversations'`)
+	for _, id := range []string{id1, cid} {
+		var ce *client.Error
+		if _, err := owner.Get(t.Context(), "/conversations/"+id); !errors.As(err, &ce) || ce.Status != http.StatusNotFound {
+			t.Fatalf("/conversations/%s: err = %v, want 404", id, err)
+		}
+	}
+	// In a browser, a conversation's page is its chat page; ?view=page shows the page itself.
+	for _, tc := range []struct {
+		path string
+		code int
+		loc  string
+	}{{"/pages/" + id2, http.StatusSeeOther, "/conversations/" + id2}, {"/pages/" + id2 + "?view=page", http.StatusOK, ""}} {
+		rec := browse(t, h, tc.path)
+		if rec.Code != tc.code || rec.Header().Get("Location") != tc.loc {
+			t.Fatalf("%s: %d to %q, want %d to %q", tc.path, rec.Code, rec.Header().Get("Location"), tc.code, tc.loc)
+		}
+	}
+}
+
+func TestTheChatSidebarAndTheChatPage(t *testing.T) {
+	_, owner, _, h := setup(t, answer{reply: "Hello **there**."})
+	id := fmt.Sprint(must(ask(t, owner, map[string]string{"question": "Hi"})).Properties.(map[string]any)["id"])
+	home := browse(t, h, "/").Body.String()
+	for _, want := range []string{`<aside class="chat-panel" id="chat-panel"`, `data-chat="toggle"`, `<a href="/conversations"`} {
+		if !strings.Contains(home, want) {
+			t.Fatalf("Home has no %s", want)
+		}
+	}
+	page := browse(t, h, "/conversations/"+id).Body.String()
+	if strings.Contains(page, `id="chat-panel"`) {
+		t.Fatal("the chat page draws the sidebar too")
+	}
+	for _, want := range []string{`data-chat-page="` + id + `"`, `<div class="msg owner"><div class="bubble prose"><p>Hi</p>`,
+		`<div class="msg lifelog"><div class="bubble prose"><p>Hello <strong>there</strong>.</p>`, `aria-current="page">Conversation 2031-05-14 12.30.05</a>`} {
+		if !strings.Contains(page, want) {
+			t.Fatalf("the chat page has no %s", want)
+		}
+	}
+	if blank := browse(t, h, "/conversations").Body.String(); !strings.Contains(blank, "New conversation</h1>") || !strings.Contains(blank, `data-chat-page=""`) {
+		t.Fatal("/conversations is not a new conversation")
+	}
+}
+
+func browse(t *testing.T, h http.Handler, path string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil)
+	req.Header.Set("Accept", "text/html")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	return rec
+}
+
+func selfHref(e *api.Entity) string {
+	for _, l := range e.Links {
+		if slices.Contains(l.Rel, "self") {
+			return l.Href
+		}
+	}
+	return ""
 }
 
 func actionNamed(e *api.Entity, name string) *api.Action {

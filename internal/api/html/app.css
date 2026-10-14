@@ -599,3 +599,60 @@ dialog.palette>.meta{line-height:26px}
 .agenda-day h3 a{color:var(--text-strong)}
 .agenda-day ul.plain>li{padding:var(--space-2) var(--space-1)}
 .agenda-note{color:var(--text-muted)}
+
+/* The conversation (docs/plans/103-the-conversation-on-the-screen.md): the chat page, its thread, and the sidebar of
+   every other page. The owner's words on the right, lifelog's on the left, the tools between them, small. */
+.sr{position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap}
+.chat-page{display:grid; grid-template-columns:minmax(200px,260px) minmax(0,1fr); gap:var(--space-6); align-items:start}
+.chat-list{position:sticky; top:var(--space-4); display:flex; flex-direction:column; gap:var(--space-3); max-height:calc(100vh - 2 * var(--space-6)); overflow-y:auto}
+.chat-list ul{display:flex; flex-direction:column; gap:2px}
+.chat-list li a{display:block; padding:6px 10px; font-size:14px; line-height:20px; text-decoration:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.chat-list li a[aria-current=page]{background:var(--accent-soft); color:var(--ink); font-weight:700}
+.chat-main{display:flex; flex-direction:column; gap:var(--space-4); min-width:0; min-height:calc(100vh - 2 * var(--space-6)); padding:var(--space-5) var(--space-6); background:var(--surface); box-shadow:var(--parch-bevel)}
+.chat-head{display:flex; align-items:baseline; justify-content:space-between; gap:var(--space-3); flex-wrap:wrap}
+.chat-head h1{font-size:28px; line-height:32px}
+.chat-thread{flex:1 1 auto; display:flex; flex-direction:column; gap:var(--space-2); min-height:0}
+.chat-note{padding:var(--space-2) var(--space-3); border-left:3px solid var(--line)}
+.msg{display:flex; flex-direction:column; gap:2px; max-width:min(100%, var(--measure))}
+.msg.owner{align-self:flex-end; align-items:flex-end}
+.msg.lifelog{align-self:flex-start}
+.msg .bubble{padding:var(--space-2) var(--space-3); border:2px solid var(--edge); border-radius:14px; background:var(--surface-deep); overflow-wrap:anywhere}
+.msg.owner .bubble{background:var(--accent-soft); border-color:var(--accent-ink); border-bottom-right-radius:4px}
+.msg.lifelog .bubble{border-bottom-left-radius:4px}
+.msg.failed .bubble{border-color:var(--danger); border-style:dashed}
+.msg.pending .bubble{color:var(--text-muted); font-style:italic}
+.msg .bubble>:first-child{margin-top:0} .msg .bubble>:last-child{margin-bottom:0}
+.msg .meta{font-size:12px; line-height:16px; color:var(--text-muted)}
+ul.steps{display:flex; flex-direction:column; gap:0; margin:0 0 0 var(--space-2); padding-left:var(--space-3); border-left:2px dotted var(--line); font-size:13px; line-height:20px; color:var(--text-muted)}
+ul.steps code{font-size:12px}
+ul.steps .refused{color:var(--danger)}
+.chat-composer{position:sticky; bottom:0; padding-top:var(--space-2); background:var(--surface)}
+.chat-composer form,form.chat-composer{display:flex; align-items:flex-end; gap:var(--space-2); flex-direction:row}
+.chat-composer form>label,form.chat-composer>label{flex:1 1 auto; margin:0}
+.chat-composer textarea{field-sizing:content; min-height:calc(2 * 26px + 2 * 10px); max-height:40vh; resize:none}
+.chat-empty{margin:auto 0}
+
+/* The sidebar: a third column of the shell while it is open; a sheet over the page on a phone. */
+.shell.chat-open{grid-template-columns:var(--rail-width) minmax(0,1fr) minmax(320px,400px)}
+.chat-panel{position:sticky; top:0; height:100vh; display:flex; flex-direction:column; gap:var(--space-3); min-width:0;
+  padding:var(--space-4); background:var(--surface); border-left:2px solid var(--outline); box-shadow:var(--parch-bevel)}
+.chat-panel[hidden]{display:none}
+.chat-panel-head{display:flex; align-items:center; justify-content:space-between; gap:var(--space-2)}
+.chat-panel-head .label{text-decoration:none}
+.chat-panel-head .tools{display:flex; gap:var(--space-1)}
+.chat-panel .chat-thread{overflow-y:auto; padding-right:var(--space-1)}
+.chat-panel .msg{max-width:100%}
+.chat-toggle{position:fixed; z-index:15; bottom:var(--space-5); right:var(--space-5); gap:var(--space-2); box-shadow:var(--shadow-float)}
+.chat-toggle[hidden],.shell.chat-open .chat-toggle{display:none}
+@media (max-width:1179px){.shell.chat-open{grid-template-columns:var(--rail-width) minmax(0,1fr) minmax(300px,340px)}}
+@media (max-width:899px){
+  .chat-page{grid-template-columns:minmax(0,1fr)}
+  .chat-list{position:static; max-height:none}
+  .chat-list{order:2}
+  .chat-main{padding:var(--space-4); min-height:calc(100vh - 160px)}
+  .chat-panel{position:fixed; z-index:25; inset:0 0 calc(58px + env(safe-area-inset-bottom, 0px)) 0; height:auto; border-left:0; box-shadow:var(--shadow-float)}
+  .chat-toggle{bottom:calc(70px + env(safe-area-inset-bottom, 0px)); right:var(--space-3)}
+  .chat-composer{bottom:calc(58px + env(safe-area-inset-bottom, 0px))}
+  .chat-panel .chat-composer{bottom:0}
+}
+@media print{.chat-panel,.chat-toggle{display:none}}

@@ -1,0 +1,42 @@
+{{/* The chat page (docs/plans/103-the-conversation-on-the-screen.md): the conversations on the left, the thread in the
+     middle, the composer under it. /conversations is a new conversation; /conversations/{id} one of them. The
+     sidebar of every other page (chatpanel) draws the same thread, which the script takes from this page. */}}
+{{define "conversation"}}{{template "head" .}}
+{{$p := .Props}}
+<div class="chat-page" data-chat-page="{{with $p.id}}{{num .}}{{end}}">
+<nav class="chat-list" aria-label="Conversations">
+<a class="button primary" href="/conversations">{{icon "new"}}New conversation</a>
+{{with $p.conversations}}<ul class="plain">{{range .}}<li><a href="/conversations/{{num .id}}"{{if and $p.id (eq (num .id) (num $p.id))}} aria-current="page"{{end}}>{{.title}}</a></li>{{end}}</ul>{{end}}
+</nav>
+<section class="chat-main" aria-label="Conversation">
+<header class="chat-head"><h1>{{if $p.title}}{{$p.title}}{{else}}New conversation{{end}}</h1>
+{{with .Link "page"}}<a href="{{.}}?view=page">Its page</a>{{end}}</header>
+{{template "thread" $p}}
+{{with .Action "ask"}}<div class="chat-composer">{{template "form" (form . "button" "Send" "hide" "conversation" "autofocus" "question" "placeholder" "question=Ask lifelog…")}}</div>{{end}}
+</section>
+</div>
+{{template "foot" .}}{{end}}
+
+{{/* thread is the turns of a conversation: the owner's question on the right, the tools the model called, small,
+     then its answer. It takes the conversation's properties (none for a new one). */}}
+{{define "thread"}}<div class="chat-thread" aria-live="polite">
+{{with .preamble}}<div class="prose chat-note">{{markdown .}}</div>{{end}}
+{{range .turns}}<div class="msg owner"><div class="bubble prose">{{markdown .question}}</div><span class="meta">{{.at}}</span></div>
+{{with .steps}}<ul class="plain steps">{{range .}}<li><code>{{.tool}}</code>{{with .href}} <a href="{{.}}">{{.}}</a>{{end}}{{with .error}} <span class="refused">{{.}}</span>{{end}}</li>{{end}}</ul>{{end}}
+{{if .error}}<div class="msg lifelog failed"><div class="bubble"><p><strong>No answer.</strong> {{.error}}</p></div></div>
+{{else}}<div class="msg lifelog"><div class="bubble prose">{{markdown .reply}}</div></div>{{end}}
+{{else}}<p class="empty chat-empty">Ask about your life log, or ask lifelog to write in it. The model reads with the tools of lifelog and writes as agent:chat; it asks when it is not sure.</p>{{end}}
+</div>{{end}}
+
+{{/* chatpanel is the sidebar of every page of the shell but the chat page: the thread of the current conversation and
+     a composer. The script opens and closes it, fills the thread and sends the question; without the script it stays
+     hidden, and Chat in the sections leads to the chat page. */}}
+{{define "chatpanel"}}<aside class="chat-panel" id="chat-panel" aria-label="Chat" hidden>
+<div class="chat-panel-head"><a class="label" href="/conversations" data-chat="full">Chat</a>
+<span class="tools"><button type="button" class="button small" data-chat="new">New</button><a class="button small" href="/conversations" data-chat="full">Full screen</a><button type="button" class="button small" data-chat="close" aria-label="Close the chat">×</button></span></div>
+<div class="chat-thread" aria-live="polite"><p class="empty chat-empty">Ask about your life log, or ask lifelog to write in it.</p></div>
+<form class="chat-composer" method="POST" action="/conversations"><input type="hidden" name="conversation" value="">
+<label><span class="sr">Question</span><textarea name="question" rows="2" required placeholder="Ask lifelog…"></textarea></label>
+<button class="primary">Send</button></form>
+</aside>
+<button type="button" class="button chat-toggle" data-chat="toggle" aria-controls="chat-panel" aria-expanded="false" hidden>{{icon "chat"}}Chat</button>{{end}}

@@ -144,6 +144,8 @@ func newHandler(s *core.Store, localDay func() string, zone *time.Location, aske
 	post("/tasks/{id}/occurrences/{key}/edit", h.editOccurrence)
 	post("/tasks/{id}/occurrences/{key}/tombstone", h.occurrenceLifecycle(true))
 	post("/tasks/{id}/occurrences/{key}/revive", h.occurrenceLifecycle(false))
+	get("/conversations", h.conversations)
+	get("/conversations/{id}", h.conversation)
 	post("/conversations", h.ask)
 	guard := http.NewCrossOriginProtection()
 	for _, origin := range trustedOrigins {
