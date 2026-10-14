@@ -249,7 +249,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   is today's conversation and `/conversations/{id}` the conversation of one day, its turns read from its page; in a
   browser they are the chat page (the thread, a note that the previous day's conversation is summed up in that day's
   page, the composer on today's alone), and a conversation's `/pages/{id}` answers 303 there (`?view=page` keeps
-  the page). Every other page of the shell has the chat sidebar: a right column that the Chat button opens and
+  the page). The chat page takes the screen's height and scrolls its thread alone, so the head and the composer
+  never move and the page never scrolls under the owner's hands. Every other page of the shell has the chat sidebar: a right column that the Chat button opens and
   closes, a sheet on a phone. The script fills it from the chat page's own HTML and sends its question with `fetch`;
   whether it is open is kept in `localStorage`, and the chat page sets it open, so the conversation follows the
   owner off the chat page. A question still runs in its request: the script asks before a page with a waiting

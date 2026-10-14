@@ -609,8 +609,16 @@ dialog.palette>.meta{line-height:26px}
    app's: chrome is --rail, parchment --surface, the parchment edge --edge, the outline --outline, gold --rail-accent,
    teal --teal, the owner's indigo --indigo. Words are in sentence case, as everywhere in the app (plan 096). */
 .sr{position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap}
-.chat-page{display:grid; grid-template-columns:minmax(0,1fr); align-items:start}
-.chat-main{display:flex; flex-direction:column; gap:var(--space-4); min-width:0; min-height:calc(100vh - 2 * var(--space-6))}
+/* The chat page fills the screen and scrolls its thread alone (plan 106): the head and the draft never move, and the
+   page never scrolls under the owner's hands. The shell takes the screen's height on this page only, and the height
+   runs down the column, the main and the page to the thread, which is the one scroll area. */
+.shell:has(.chat-page){height:100dvh}
+.shell:has(.chat-page)>.column,.shell:has(.chat-page) main{min-height:0}
+.shell:has(.chat-page)>.column>footer{margin-top:var(--space-4)}
+.chat-page{display:grid; grid-template-rows:minmax(0,1fr); height:100%; min-height:0}
+.chat-main{display:flex; flex-direction:column; gap:var(--space-4); min-width:0; min-height:0}
+.chat-page .chat-thread{overflow-y:auto; overscroll-behavior:contain; padding:var(--space-1) var(--space-3) var(--space-2) 0}
+.chat-main>.msg-draft{flex:none}
 .chat-head{display:flex; align-items:baseline; justify-content:space-between; gap:var(--space-3); flex-wrap:wrap}
 .chat-head .tools{display:flex; gap:var(--space-3); flex-wrap:wrap}
 .chat-head h1{font-size:28px; line-height:32px}
@@ -619,7 +627,7 @@ dialog.palette>.meta{line-height:26px}
 /* The portrait's size is the chat page's, so the composer under the thread (outside .chat) has the thread's size. */
 .chat-page{--portrait-size:96px; --chat-gutter:calc(var(--portrait-size) + 14px)}
 .chat{--portrait-size:96px; --chat-gutter:calc(var(--portrait-size) + 14px); display:flex; flex-direction:column; gap:var(--space-6); min-height:0}
-.chat-thread{flex:1 1 auto}
+.chat-thread{flex:1 1 auto; min-height:0}
 .msg{display:grid; grid-template-columns:auto minmax(0,1fr); gap:14px; align-items:start; max-width:calc(var(--measure) + var(--chat-gutter))}
 .msg-owner{grid-template-columns:minmax(0,1fr) auto; align-self:flex-end}
 .msg-owner .portrait{order:2}
@@ -683,7 +691,6 @@ dialog.palette>.meta{line-height:26px}
 .msg-draft textarea:focus-visible{outline:none}
 .msg-draft-foot{display:flex; align-items:center; justify-content:space-between; gap:10px; padding-top:9px; border-top:2px dotted var(--edge)}
 .msg-draft-hint{font:12px/18px var(--mono); color:var(--muted)}
-.chat-main>.msg-draft{position:sticky; bottom:var(--space-3)}
 
 @media (prefers-reduced-motion:reduce){.avatar[data-state=thinking],.thinking-dots::after{animation:none}}
 
@@ -707,8 +714,8 @@ dialog.palette>.meta{line-height:26px}
 .chat-toggle[hidden],.shell.chat-open .chat-toggle{display:none}
 @media (max-width:1179px){.shell.chat-open{grid-template-columns:var(--rail-width) minmax(0,1fr) minmax(300px,360px)}}
 @media (max-width:899px){
-  .chat-main{min-height:calc(100vh - 160px)}
-  .chat-main>.msg-draft{bottom:calc(66px + env(safe-area-inset-bottom, 0px))}
+  .shell:has(.chat-page){display:flex; flex-direction:column} /* the top bar, then the column with the thread */
+  .shell:has(.chat-page)>.column>footer{display:none} /* the thread has the height instead */
   .chat-panel{position:fixed; z-index:25; inset:0 0 calc(58px + env(safe-area-inset-bottom, 0px)) 0; height:auto; border-left:0; box-shadow:var(--shadow-float)}
   .chat-toggle{display:none} /* the bottom bar's Chat opens the sheet (app.js) */
 }

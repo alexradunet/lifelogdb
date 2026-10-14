@@ -568,17 +568,19 @@
 
   function chat() {
     var page = document.querySelector("[data-chat-page]");
-    if (page) {
+    if (page) { // the thread is the page's one scroll area (app.css): it opens at its end, where the draft is
       saveChat({ open: true });
-      var full = page.querySelector("form.msg-draft");
+      var pageThread = page.querySelector(".chat-thread"), full = page.querySelector("form.msg-draft");
+      function toEnd() { pageThread.scrollTop = pageThread.scrollHeight; }
       if (full) full.addEventListener("submit", function () {
         var q = full.querySelector("textarea[name=question]");
         if (!q || !q.value.trim()) return;
-        turnWaiting(page.querySelector(".chat-thread"), q.value.trim());
+        turnWaiting(pageThread, q.value.trim());
         full.querySelector("button").disabled = true;
-        window.scrollTo(0, document.body.scrollHeight);
+        toEnd();
       });
-      window.scrollTo(0, document.body.scrollHeight);
+      toEnd();
+      window.addEventListener("load", toEnd); // the fonts and the portraits change the thread's height once they are in
       return;
     }
     var panel = document.getElementById("chat-panel");
