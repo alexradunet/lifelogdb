@@ -581,6 +581,20 @@ a.task{color:var(--ink); font-weight:700}
 /* A person or a place in a list: no date column, the words of the mentions at the end. */
 .entry.named{grid-template-columns:minmax(0,1fr) auto}
 
+/* A list that deletes several rows at once (Files, Tasks): a bar with Select all and the danger button, then a box
+   at the start of each row. The bar stays in view while the list scrolls under it. */
+.pick-form{display:flex; flex-direction:column; align-items:stretch; gap:0}
+.pick-bar{position:sticky; top:0; z-index:1; display:flex; align-items:center; justify-content:space-between; gap:var(--space-3);
+  padding:var(--space-2) var(--space-1); background:var(--surface); border-bottom:1px solid var(--line-soft)}
+.pick-bar .pick-all{flex-direction:row; align-items:center; gap:var(--space-2); font-size:14px; color:var(--text-muted); cursor:pointer}
+.pick-bar button{flex:none}
+li.pick{display:flex; align-items:stretch; gap:var(--space-1)}
+.pick-box{flex:none; flex-direction:row; align-items:center; padding:0 var(--space-1); cursor:pointer}
+.pick-box input:disabled{opacity:.35; cursor:default}
+li.pick>a.entry,li.pick>.pick-main{flex:1 1 auto; min-width:0}
+.due-group ul.plain>li.pick{padding:0}
+.due-group li.pick>.pick-main{padding:var(--space-3) 0}
+
 /* A field that the server refused. */
 input[aria-invalid=true],textarea[aria-invalid=true],select[aria-invalid=true]{border-color:var(--danger-line)}
 

@@ -93,6 +93,12 @@
      word, in one group named by label. back is the page to return to; every caller gives it. */}}
 {{define "checkin"}}<div class="outcomes" role="group" aria-label="{{.label}}">{{template "form" (form .action "done" "1" "hide" "day" "button" "Done" "class" "tiny outcome-done" "back" .back)}}{{template "form" (form .action "done" "0" "hide" "day" "button" "Not done" "class" "tiny outcome-notdone" "back" .back)}}</div>{{end}}
 
+{{/* pick-form-open opens the form of a list that deletes several rows at once (tombstone-pages on Files,
+     tombstone-tasks on Tasks): its bar has Select all and the danger button, and the rows under it carry a box each,
+     name ids, which the action reads. The list closes the form after its rows. back is the list to return to. */}}
+{{define "pick-form-open"}}<form method="POST" action="{{.action.Href}}" data-action="{{.action.Name}}" class="pick-form"><input type="hidden" name="back" value="{{.back}}">
+<div class="pick-bar"><label class="pick-all"><input type="checkbox" data-pick-all><span>Select all shown</span></label><button class="danger">Delete selected</button></div>{{end}}
+
 {{/* pager draws a list's prev and next links, when it has them */}}
 {{define "pager"}}{{$prev := .Link "prev"}}{{$next := .Link "next"}}{{if or $prev $next}}<nav class="pager" aria-label="Pages">{{with $prev}}<a href="{{.}}" rel="prev">← Previous</a>{{else}}<span></span>{{end}}{{with $next}}<a href="{{.}}" rel="next">Next →</a>{{end}}</nav>{{end}}{{end}}
 

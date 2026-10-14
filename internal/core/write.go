@@ -684,6 +684,21 @@ func (s *Store) Revive(ctx context.Context, source string, id int64) error {
 	return s.Do(ctx, source, func(t *Tx) error { return t.Revive(id) })
 }
 
+// TombstonePages tombstones every page named, in one write (D11): a page that is tombstoned already is left as it
+// is, and an id no entity has is a 404 that writes nothing.
+func (t *Tx) TombstonePages(ids []int64) error {
+	for _, id := range ids {
+		if err := t.Tombstone(id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) TombstonePages(ctx context.Context, source string, ids []int64) error {
+	return s.Do(ctx, source, func(t *Tx) error { return t.TombstonePages(ids) })
+}
+
 func (s *Store) Link(ctx context.Context, source string, from, to int64, kind, note string) error {
 	return s.Do(ctx, source, func(t *Tx) error { _, err := t.Link(from, to, kind, note); return err })
 }

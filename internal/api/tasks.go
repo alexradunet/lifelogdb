@@ -120,7 +120,7 @@ func (h *server) tasks(r *http.Request) (*Entity, error) {
 	}
 	e := &Entity{Class: []string{"tasks"}, Title: "Tasks", Properties: map[string]any{"tasks": ts, "include_deleted": deleted},
 		Links:   []Link{link("self", "/tasks", "Tasks"), link("deadlines", "/deadlines", "Deadlines"), link("index", "/", "Home")},
-		Actions: []Action{action("create-task", nil, nil), action("deadlines", nil, nil)}}
+		Actions: []Action{action("create-task", nil, nil), action("deadlines", nil, nil), action("tombstone-tasks", nil, nil)}}
 	for _, t := range ts {
 		e.Entities = append(e.Entities, link("item", taskHref(t.ID), t.Label))
 	}

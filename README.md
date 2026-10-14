@@ -268,8 +268,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **Planning on every surface** ([plan 081](docs/plans/081-planning-on-every-surface.md)). Core task operations
   implement the [planning contract](docs/contract/planning.md), and the catalog carries them: `/tasks`, a task with
   its occurrences over a window, an occurrence (written, or a virtual slot of a series), `/deadlines` across tasks;
-  `create-task`, `edit-task`, `stop-task`, `capture-occurrence`, `edit-occurrence`, the tombstones and revives
-  ([API.md](API.md)). `lifelog tasks` and `lifelog due` are shortcuts; the MCP tools and the browser's generic view
+  `create-task`, `edit-task`, `stop-task`, `capture-occurrence`, `edit-occurrence`, the tombstones and revives, and
+  `tombstone-tasks`, several tasks in one write ([API.md](API.md)). `lifelog tasks` and `lifelog due` are shortcuts; the MCP tools and the browser's generic view
   carry the rest. Deadline reads use an explicit inclusive window (default 30 days back, 90 on), limited to 10,000
   persisted candidates and 10,000 returned occurrences; larger reads refuse instead of silently truncating. A
   reminder is resolved intent in the answer (`reminder.state`, `reminder.at`); no notification is sent by anything.
@@ -284,6 +284,12 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   `Close` skipping `PRAGMA optimize`. The answer carries the path and the check. `lifelog snapshot [--to DIR]` is the
   action in-process, `--to` choosing the folder; with `--url` the server's folder is the one, and `--to` is refused.
   Restoring stays the manual procedure of the cookbook.
+- **Several rows deleted at once** ([plan 107](docs/plans/107-delete-several-at-once.md)). `tombstone-pages`
+  (`POST /pages/tombstone`) and `tombstone-tasks` (`POST /tasks/tombstone`) take `ids`, separated by spaces or
+  commas, and tombstone them all in one write or none: a missing id is a 404 that writes nothing. The files list
+  offers the first and the tasks list the second, so the browser draws a box on each row of Files and Tasks, Select
+  all, and one danger button that returns to the list with the count; the CLI's `do` and the MCP tools carry them as
+  any action. Both are dangers, not the owner's alone, and a revive undoes each.
 - **Files** ([keep a file](docs/cookbook/keep-a-file.md), D9). `add-file` (`POST /files`, `lifelog file`) streams
   the original through SHA-256 and drops it; nothing of it is stored. `internal/preview` makes every picture itself —
   from a JPEG, PNG or GIF, or a JPEG sent for a HEIC or a video frame: scaled to 1600 px, turned upright by EXIF,

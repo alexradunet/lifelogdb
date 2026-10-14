@@ -3,7 +3,7 @@
 // (docs/plans/091-the-browser-for-daily-use.md). It reads /titles (the names after [[, and the pages of the command
 // list), /render (the preview of a body), / (the root's actions, for the command list) and the chat pages
 // (/conversations, for the sidebar's thread); the one write it sends itself is the sidebar's question to
-// POST /conversations, the form the server drew. Seven things:
+// POST /conversations, the form the server drew. Eight things:
 //   1. after [[ in a textarea, and in a field for a page's title (data-pages), the names of the pages that start
 //      with what is typed;
 //   2. a preview of a body as it will show when saved;
@@ -16,7 +16,9 @@
 //   6. the command list of Ctrl+K (docs/plans/094-the-command-list.md);
 //   7. the conversation (docs/plans/103-the-conversation-on-the-screen.md): the sidebar that follows the owner from
 //      the chat page, the draft of the chat page and of the sidebar that sends its question, shows it at once and
-//      clears itself, and Enter that sends a draft.
+//      clears itself, and Enter that sends a draft;
+//   8. a list that deletes several rows at once (Files, Tasks): Select all checks every box, and the button says
+//      how many are selected and waits until one is.
 (function () {
   "use strict";
 
@@ -658,6 +660,36 @@
     if (chatState().open) setOpen(true);
   }
 
+  // ---- 8. A list that deletes several rows at once
+
+  // picks wires each pick form (the server drew it: a bar, then a box on each row named ids). Select all checks or
+  // clears every box; the button is disabled until a box is checked and then counts them; the bar's box shows a part
+  // of the rows as indeterminate. Without the script the form posts the checked boxes as it is.
+  function picks() {
+    var forms = document.querySelectorAll("form.pick-form");
+    for (var i = 0; i < forms.length; i++) (function (form) {
+      var all = form.querySelector("[data-pick-all]"), button = form.querySelector("button.danger");
+      if (!button) return;
+      var word = button.textContent;
+      function boxes() { return form.querySelectorAll("input[name=ids]"); }
+      function update() {
+        var bs = boxes(), n = 0;
+        for (var j = 0; j < bs.length; j++) if (bs[j].checked) n++;
+        button.disabled = n === 0;
+        button.dataset.armed = "";
+        button.textContent = n ? word + " (" + n + ")" : word;
+        if (all) { all.checked = n > 0 && n === bs.length; all.indeterminate = n > 0 && n < bs.length; }
+      }
+      if (all) all.addEventListener("change", function () {
+        var bs = boxes();
+        for (var j = 0; j < bs.length; j++) bs[j].checked = all.checked;
+        update();
+      });
+      form.addEventListener("change", function (ev) { if (ev.target.name === "ids") update(); });
+      update();
+    })(forms[i]);
+  }
+
   // ---- Start
 
   var areas = document.querySelectorAll("textarea:not([readonly]), input[data-pages]");
@@ -671,6 +703,7 @@
     if (area.name === "body") preview(area);
   }
   chat();
+  picks();
   var toasts = document.querySelectorAll(".toast");
   for (var k = 0; k < toasts.length; k++) closable(toasts[k]);
   var search = document.querySelector(".rail-search");

@@ -124,7 +124,8 @@ import actions are included and the link `import` leads to its status.
 
 `GET /days`, `/people`, `/places`, `/files`, `/ghosts`: one page of a list, each row an embedded `item` link to the
 page (with `class` the page's type where it has one). `people`, `places` and `files` offer `create-person`,
-`create-place` and `add-file`.
+`create-place` and `add-file`; `files` also offers `tombstone-pages`, the delete of several at once (its answer is the
+class `tombstoned`), which a browser draws as a box on each row.
 
 | property | type | meaning |
 |---|---|---|
@@ -630,7 +631,8 @@ Embedded: `item` links to the period pages. Action: `create-period`.
 ### tasks
 
 `GET /tasks?include_deleted=`: every task definition, by id. Embedded: `item` links. Links: `deadlines`. Actions:
-`create-task`, `deadlines`. Planning is the [planning contract](docs/contract/planning.md): explicit intent, never a
+`create-task`, `deadlines` and `tombstone-tasks` (the delete of several at once, no version needed; its answer is the
+class `tombstoned`, and a browser draws it as a box on each row). Planning is the [planning contract](docs/contract/planning.md): explicit intent, never a
 record of what happened.
 
 | property | type | meaning |
@@ -915,6 +917,20 @@ browser form is answered home with them as feedback. A refusal (a folder inside 
 | `restore_check.invalid_journal_names` | list | |
 | `restore_check.full_text_index_ok` | boolean | |
 | `restore_check.full_text_error` | string | |
+
+### tombstoned
+
+`POST /pages/tombstone` (`tombstone-pages`) and `POST /tasks/tombstone` (`tombstone-tasks`): the one field `ids` names
+the pages or the tasks, separated by spaces or commas, or sent once per id as a browser form does; 500 at most. Every
+id is tombstoned in one write, or none is: an id no row has is 404, and a row tombstoned already is left as it is. The
+answer embeds an `item` link to each; `result` says the count in words, which a browser form shows on the list it
+returns to. `self` is `/tasks` for tasks and `/` for pages.
+
+| property | type | meaning |
+|---|---|---|
+| `kind` | string | `pages` or `tasks` |
+| `ids` | list | the ids named, each once, in the order sent |
+| `count` | integer | how many |
 
 ### login
 

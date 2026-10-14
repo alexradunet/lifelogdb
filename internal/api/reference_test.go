@@ -46,6 +46,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		"occurrence": occurrenceView{},
 		"deadlines":  map[string]any{"from": "", "through": "", "state": "", "include_deleted": false, "occurrences": []occurrenceView{}, "today": ""},
 		"snapshot":   map[string]any{"snapshot": "", "restore_check": core.IntegrityResult{}},
+		"tombstoned": map[string]any{"kind": "", "ids": []int64{}, "count": 0},
 		"integrity":  core.IntegrityResult{},
 		"result":     core.Result{},
 		"login":      map[string]any{"failed": false, "logged_in": false},
@@ -110,6 +111,11 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 	for k := range properties(t, h, "POST", "/snapshots", "") {
 		if !named("snapshot", k) {
 			t.Errorf("POST /snapshots sends %q, which API.md \"snapshot\" does not name", k)
+		}
+	}
+	for k := range properties(t, h, "POST", "/pages/tombstone", "ids="+strings.TrimPrefix(ids["page"], "/pages/")) {
+		if !named("tombstoned", k) {
+			t.Errorf("POST /pages/tombstone sends %q, which API.md \"tombstoned\" does not name", k)
 		}
 	}
 	for k := range properties(t, h, "POST", "/query", "sql=SELECT+1") {

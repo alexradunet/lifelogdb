@@ -453,6 +453,29 @@ func (t *Tx) TaskLifecycle(id int64, version string, deleted bool) error {
 	return t.setDeletedAt("tasks", id, deleted)
 }
 
+// TombstoneTasks tombstones every task named, in one write: one that is tombstoned already is left as it is, and an
+// id no task has is a 404 that writes nothing. No version is checked: the rows were picked from a list, a tombstone
+// changes no fact of a task, and revive-task undoes it.
+func (t *Tx) TombstoneTasks(ids []int64) error {
+	for _, id := range ids {
+		p, err := t.Task(id)
+		if err != nil {
+			return err
+		}
+		if p.DeletedAt != "" {
+			continue
+		}
+		if err := t.setDeletedAt("tasks", id, true); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) TombstoneTasks(ctx context.Context, source string, ids []int64) error {
+	return s.Do(ctx, source, func(t *Tx) error { return t.TombstoneTasks(ids) })
+}
+
 func (t *Tx) insertTaskOccurrence(taskID int64, in OccurrenceInput) (int64, error) {
 	var id int64
 	err := t.tx.QueryRowContext(t.ctx, `INSERT INTO task_occurrences(task_id,occurrence_key,due_day,state,completed_at,reminder_mode,reminder_override_at,source,import_key,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,`+nowSQL+`,`+nowSQL+`) RETURNING id`, taskID, in.OccurrenceKey, nullIfEmpty(in.DueDay), in.State, nullIfEmpty(in.CompletedAt), in.ReminderMode, nullIfEmpty(in.ReminderOverrideAt), t.Source, nullIfEmpty(in.ImportKey)).Scan(&id)

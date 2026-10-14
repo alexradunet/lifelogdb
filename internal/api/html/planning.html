@@ -12,11 +12,11 @@
 <header class="page-head"><div class="what"><h1>Tasks</h1>
 <p class="sub"><a href="/deadlines">What is due</a>{{if $p.include_deleted}}<a href="/tasks">Hide deleted tasks</a>{{else}}<a href="/tasks?include_deleted=1">Show deleted tasks</a>{{end}}</p></div>
 <div class="tools" id="create">{{template "boxed" (form (.Action "create-task") "more" "repeat_unit,repeat_every,anchor_day,repeat_until_day,reminder_time,reminder_zone,import_key")}}</div></header>
-{{with $p.tasks}}<div class="sheet list">{{range group . "project_title"}}
+{{with $p.tasks}}{{$del := $.Action "tombstone-tasks"}}<div class="sheet list">{{if $del}}{{template "pick-form-open" (dict "action" $del "back" $.Here)}}{{end}}{{range group . "project_title"}}
 <section class="due-group" aria-label="{{with .Key}}{{.}}{{else}}No project{{end}}"><div class="panel-head"><h2>{{with .Key}}{{.}}{{else}}No project{{end}}</h2><span class="meta">{{len .Items}}</span></div>
-<ul class="plain">{{range .Items}}<li><a class="task" href="/tasks/{{num .id}}">{{.label}}</a>{{if .deleted_at}} <span class="tag deleted">deleted</span>{{end}}
-<div class="task-facts">{{$.Cadence .}}{{with .due_day}}<span class="date">due {{$.Date .}}</span>{{end}}{{with $.Reminder .}}<span>reminder {{.}}</span>{{end}}</div></li>{{end}}</ul></section>
-{{end}}</div>{{else}}<p class="empty">No task yet. A task is explicit intent: something to do once, or again and again. <a href="#create">Create one</a> above.</p>{{end}}
+<ul class="plain">{{range .Items}}<li{{if $del}} class="pick"{{end}}>{{if $del}}<label class="pick-box">{{if .deleted_at}}<input type="checkbox" disabled aria-label="{{.label}} is deleted">{{else}}<input type="checkbox" name="ids" value="{{num .id}}" aria-label="Select {{.label}}">{{end}}</label>{{end}}<div class="pick-main"><a class="task" href="/tasks/{{num .id}}">{{.label}}</a>{{if .deleted_at}} <span class="tag deleted">deleted</span>{{end}}
+<div class="task-facts">{{$.Cadence .}}{{with .due_day}}<span class="date">due {{$.Date .}}</span>{{end}}{{with $.Reminder .}}<span>reminder {{.}}</span>{{end}}</div></div></li>{{end}}</ul></section>
+{{end}}{{if $del}}</form>{{end}}</div>{{else}}<p class="empty">No task yet. A task is explicit intent: something to do once, or again and again. <a href="#create">Create one</a> above.</p>{{end}}
 {{template "foot" .}}{{end}}
 
 {{define "task"}}{{template "head" .}}

@@ -64,7 +64,7 @@
 {{with .Action "add-file"}}{{template "boxed" (form . "hide" "sha256,mime")}}{{end}}
 </div></header>
 {{$named := ""}}{{with .Props}}{{$named = .rows}}{{end}}
-{{if $named}}<div class="sheet list"><ul class="plain rows">{{range $named}}<li><a class="entry named" href="/pages/{{num .id}}"><span class="first">{{.title}}</span><span class="meta">{{$.Mentions .mentions .last_day}}</span></a></li>{{end}}</ul></div>
+{{if $named}}{{$del := .Action "tombstone-pages"}}<div class="sheet list">{{if $del}}{{template "pick-form-open" (dict "action" $del "back" $.Here)}}{{end}}<ul class="plain rows">{{range $named}}<li{{if $del}} class="pick"{{end}}>{{if $del}}<label class="pick-box"><input type="checkbox" name="ids" value="{{num .id}}" aria-label="Select {{.title}}"></label>{{end}}<a class="entry named" href="/pages/{{num .id}}"><span class="first">{{.title}}</span><span class="meta">{{$.Mentions .mentions .last_day}}</span></a></li>{{end}}</ul>{{if $del}}</form>{{end}}</div>
 {{else if $items}}<div class="sheet list"><ul class="plain rows">{{range $items}}<li>{{if eq $.Title "Days"}}<a class="entry" href="{{.Href}}"><span class="date">{{$.Date .Title}}</span><span class="first">{{weekday .Title}}</span><span class="meta"></span></a>{{else}}<a href="{{.Href}}">{{$.Date .Title}}</a>{{end}}</li>{{end}}</ul></div>
 {{else if $ghosts}}<p class="empty">No ghost page: every page has text or a link.</p>
 {{else}}<p class="empty">Nothing yet. <a href="/#new">New</a> makes a page, a person, a place or a file.</p>{{end}}
