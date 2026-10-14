@@ -15,8 +15,8 @@
 //      danger button, and the hint of Ctrl+K in the search;
 //   6. the command list of Ctrl+K (docs/plans/094-the-command-list.md);
 //   7. the conversation (docs/plans/103-the-conversation-on-the-screen.md): the sidebar that follows the owner from
-//      the chat page, its thread and its question, the question shown at once on the chat page, and Enter that
-//      sends a draft.
+//      the chat page, the draft of the chat page and of the sidebar that sends its question, shows it at once and
+//      clears itself, and Enter that sends a draft.
 (function () {
   "use strict";
 
@@ -566,19 +566,49 @@
     if (t.value.trim()) t.form.requestSubmit();
   });
 
+  // send wires a draft to its thread. The question is shown at once, as sent, and the draft is cleared; the answer
+  // comes by fetch, and the thread is drawn again from the chat page the server answers. When there is no answer,
+  // the reason is shown and the words go back into the draft, to send again.
+  function send(form, thread) {
+    var question = form.querySelector("textarea[name=question]"), button = form.querySelector("button");
+    form.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var q = question.value.trim();
+      if (!q || chatPending) return;
+      chatPending = true;
+      button.disabled = true;
+      var wait = turnWaiting(thread, q);
+      thread.scrollTop = thread.scrollHeight;
+      var body = new URLSearchParams(new FormData(form));
+      question.value = "";
+      function failed(words) {
+        wait.className = "msg msg-lifelog msg-failed";
+        wait.querySelector(".avatar").removeAttribute("data-state");
+        wait.querySelector(".body p").textContent = words;
+        question.value = q;
+      }
+      fetch(form.action, { method: "POST", body: body, credentials: "same-origin", headers: { Accept: "text/html" } })
+        .then(function (r) { return r.text().then(function (html) { return { ok: r.ok, status: r.status, page: chatHTML(html) }; }); })
+        .then(function (a) {
+          if (a.ok && a.page.thread) {
+            thread.innerHTML = a.page.thread.innerHTML;
+            thread.scrollTop = thread.scrollHeight;
+          } else {
+            failed("No answer. " + (a.page.alert ? a.page.alert.textContent.trim() : "HTTP " + a.status));
+          }
+        })
+        .catch(function (e) { failed("No answer: " + e.message); })
+        .then(function () { chatPending = false; button.disabled = false; question.focus(); });
+    });
+  }
+
   function chat() {
     var page = document.querySelector("[data-chat-page]");
     if (page) { // the thread is the page's one scroll area (app.css): it opens at its end, where the draft is
       saveChat({ open: true });
       var pageThread = page.querySelector(".chat-thread"), full = page.querySelector("form.msg-draft");
       function toEnd() { pageThread.scrollTop = pageThread.scrollHeight; }
-      if (full) full.addEventListener("submit", function () {
-        var q = full.querySelector("textarea[name=question]");
-        if (!q || !q.value.trim()) return;
-        turnWaiting(pageThread, q.value.trim());
-        full.querySelector("button").disabled = true;
-        toEnd();
-      });
+      if (full) send(full, pageThread);
       toEnd();
       window.addEventListener("load", toEnd); // the fonts and the portraits change the thread's height once they are in
       return;
@@ -587,7 +617,7 @@
     var toggle = document.querySelector('[data-chat="toggle"]');
     if (!panel || !toggle) return;
     var shell = panel.parentElement, thread = panel.querySelector(".chat-thread"), form = panel.querySelector("form");
-    var question = form.querySelector("textarea[name=question]"), send = form.querySelector("button");
+    var question = form.querySelector("textarea[name=question]");
     var blank = thread.innerHTML, loaded = false;
 
     function showThread(t) { thread.innerHTML = t ? t.innerHTML : blank; thread.scrollTop = thread.scrollHeight; }
@@ -624,33 +654,7 @@
       setOpen(false);
       (phone.matches && tab ? tab : toggle).focus();
     });
-    form.addEventListener("submit", function (ev) {
-      ev.preventDefault();
-      var q = question.value.trim();
-      if (!q || chatPending) return;
-      chatPending = true;
-      send.disabled = true;
-      var wait = turnWaiting(thread, q);
-      thread.scrollTop = thread.scrollHeight;
-      function failed(words) {
-        wait.className = "msg msg-lifelog msg-failed";
-        wait.querySelector(".avatar").removeAttribute("data-state");
-        wait.querySelector(".body p").textContent = words;
-      }
-      fetch(form.action, { method: "POST", body: new URLSearchParams(new FormData(form)), credentials: "same-origin",
-        headers: { Accept: "text/html" } })
-        .then(function (r) { return r.text().then(function (html) { return { ok: r.ok, status: r.status, page: chatHTML(html) }; }); })
-        .then(function (a) {
-          if (a.ok && a.page.thread) {
-            showThread(a.page.thread);
-            question.value = "";
-          } else {
-            failed("No answer. " + (a.page.alert ? a.page.alert.textContent.trim() : "HTTP " + a.status));
-          }
-        })
-        .catch(function (e) { failed("No answer: " + e.message); })
-        .then(function () { chatPending = false; send.disabled = false; });
-    });
+    send(form, thread);
     if (chatState().open) setOpen(true);
   }
 
