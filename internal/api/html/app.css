@@ -546,12 +546,12 @@ li>a.entry{border-bottom:0}
   .leaf{width:64px}
   .leaf-day{font-size:36px; line-height:38px}
   .day-head .tools{width:100%}
-  .button.step{width:var(--control); padding:0}
-  .button.step .step-day{display:none}
   .sheet{padding:var(--space-5) var(--space-4); gap:var(--space-5)}
   .sheet>*+*{padding-top:var(--space-5)}
   .journal-text{font-size:17px; line-height:28px}
 }
+/* A phone: a step is its arrow alone (its label keeps the whole name); a tablet has room for the day. */
+@media (max-width:639px){.button.step{width:var(--control); padding:0} .button.step .step-day{display:none}}
 
 /* Every other view on the sheet (docs/plans/095-the-leaf-and-its-margin.md). The kind of a page over its title, in
    words; a word among the facts in the sans. */
