@@ -713,7 +713,7 @@ dialog.palette>.meta{line-height:26px}
   .chat-main{min-height:calc(100vh - 160px)}
   .chat-main>.msg-draft{bottom:calc(66px + env(safe-area-inset-bottom, 0px))}
   .chat-panel{position:fixed; z-index:25; inset:0 0 calc(58px + env(safe-area-inset-bottom, 0px)) 0; height:auto; border-left:0; box-shadow:var(--shadow-float)}
-  .chat-toggle{bottom:calc(70px + env(safe-area-inset-bottom, 0px)); right:var(--space-3)}
+  .chat-toggle{display:none} /* the bottom bar's Chat opens the sheet (app.js) */
 }
 @media (max-width:640px){.chat{--portrait-size:64px; --chat-gutter:78px}}
 @media print{.chat-panel,.chat-toggle{display:none}}

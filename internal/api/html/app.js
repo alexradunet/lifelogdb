@@ -617,9 +617,24 @@
       if (open && loaded === null) load(s.id);
     }
 
+    // On a phone the bottom bar's Chat opens and closes the sheet, and the floating button is hidden (app.css): the tab
+    // is at the bottom of every page already, and the button covered the page. With a modifier key the tab opens the
+    // chat page, as it does without the script.
+    var phone = window.matchMedia("(max-width:899px)");
+    var tab = document.querySelector('.rail>nav a[href="/conversations"]');
+    if (tab) tab.addEventListener("click", function (ev) {
+      if (!phone.matches || ev.button !== 0 || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return;
+      ev.preventDefault();
+      setOpen(panel.hidden);
+      if (!panel.hidden) question.focus();
+    });
+
     toggle.hidden = false;
     toggle.addEventListener("click", function () { setOpen(true); question.focus(); });
-    panel.querySelector('[data-chat="close"]').addEventListener("click", function () { setOpen(false); toggle.focus(); });
+    panel.querySelector('[data-chat="close"]').addEventListener("click", function () {
+      setOpen(false);
+      (phone.matches && tab ? tab : toggle).focus();
+    });
     panel.querySelector('[data-chat="new"]').addEventListener("click", function () { load(""); question.focus(); });
     form.addEventListener("submit", function (ev) {
       ev.preventDefault();
