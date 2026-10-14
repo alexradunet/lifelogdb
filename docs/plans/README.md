@@ -4,10 +4,11 @@ A plan is a dated record ([how a change happens](../process.md)): a change large
 written as a self-contained brief with done criteria. It cites the docs as they were at the commit it names. One file
 per plan, `NNN-short-slug.md`, numbered on from the last.
 
-Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **106**.
+Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **107**.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
+| [106](106-one-continuous-conversation.md) | One continuous conversation: a page per day, compacted into the daily note | P1 | M | plans 102, 103; owner decision 2026-10-14 | DONE |
 | [105](105-the-owners-shape-in-the-synthetic-fixture.md) | The owner's shape in the synthetic fixture: a calibrated workload for tests | P1 | L | owner request 2026-10-14; `bd16083` | TODO |
 | [104](104-the-chat-in-basm.md) | The chat in Basm: the conversation drawn as the Chat of the owner's design system | P2 | S | plan 103; owner decision 2026-10-14 | DONE |
 | [103](103-the-conversation-on-the-screen.md) | The conversation on the screen: a chat page, and a sidebar that follows the owner | P1 | M | issue 0072; owner decision 2026-10-14 | IN PROGRESS |

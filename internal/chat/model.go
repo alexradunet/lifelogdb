@@ -65,9 +65,14 @@ const maxAnswer = 8 << 20
 
 func text(s string) *string { return &s }
 
-// complete sends the messages and the tools, and returns the model's next message.
+// complete sends the messages and the tools, and returns the model's next message. With no tools the request
+// names none: a summary is asked for in words alone.
 func (m *Model) complete(ctx context.Context, msgs []message, tools []toolSpec) (message, error) {
-	body, err := json.Marshal(map[string]any{"model": m.Name, "messages": msgs, "tools": tools})
+	payload := map[string]any{"model": m.Name, "messages": msgs}
+	if len(tools) > 0 {
+		payload["tools"] = tools
+	}
+	body, err := json.Marshal(payload)
 	if err != nil {
 		return message{}, err
 	}

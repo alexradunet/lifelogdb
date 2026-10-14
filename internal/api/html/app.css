@@ -609,13 +609,10 @@ dialog.palette>.meta{line-height:26px}
    app's: chrome is --rail, parchment --surface, the parchment edge --edge, the outline --outline, gold --rail-accent,
    teal --teal, the owner's indigo --indigo. Words are in sentence case, as everywhere in the app (plan 096). */
 .sr{position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap}
-.chat-page{display:grid; grid-template-columns:minmax(200px,260px) minmax(0,1fr); gap:var(--space-6); align-items:start}
-.chat-list{position:sticky; top:var(--space-4); display:flex; flex-direction:column; gap:var(--space-3); max-height:calc(100vh - 2 * var(--space-6)); overflow-y:auto}
-.chat-list ul{display:flex; flex-direction:column; gap:2px}
-.chat-list li a{display:block; padding:6px 10px; font-size:14px; line-height:20px; text-decoration:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.chat-list li a[aria-current=page]{background:var(--accent-soft); color:var(--ink); font-weight:700}
+.chat-page{display:grid; grid-template-columns:minmax(0,1fr); align-items:start}
 .chat-main{display:flex; flex-direction:column; gap:var(--space-4); min-width:0; min-height:calc(100vh - 2 * var(--space-6))}
 .chat-head{display:flex; align-items:baseline; justify-content:space-between; gap:var(--space-3); flex-wrap:wrap}
+.chat-head .tools{display:flex; gap:var(--space-3); flex-wrap:wrap}
 .chat-head h1{font-size:28px; line-height:32px}
 .chat-note{padding:var(--space-2) var(--space-3); border-left:3px solid var(--line)}
 
@@ -710,8 +707,6 @@ dialog.palette>.meta{line-height:26px}
 .chat-toggle[hidden],.shell.chat-open .chat-toggle{display:none}
 @media (max-width:1179px){.shell.chat-open{grid-template-columns:var(--rail-width) minmax(0,1fr) minmax(300px,360px)}}
 @media (max-width:899px){
-  .chat-page{grid-template-columns:minmax(0,1fr)}
-  .chat-list{position:static; max-height:none; order:2}
   .chat-main{min-height:calc(100vh - 160px)}
   .chat-main>.msg-draft{bottom:calc(66px + env(safe-area-inset-bottom, 0px))}
   .chat-panel{position:fixed; z-index:25; inset:0 0 calc(58px + env(safe-area-inset-bottom, 0px)) 0; height:auto; border-left:0; box-shadow:var(--shadow-float)}

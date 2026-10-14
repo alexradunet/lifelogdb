@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"lifelog/internal/api"
 	"lifelog/internal/client"
@@ -45,7 +46,7 @@ func freshOn(t *testing.T, day string) (*client.Client, http.Handler) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { d.Close() })
-	h := api.NewOn(&core.Store{DB: d}, day)
+	h := api.NewOn(&core.Store{DB: d}, func() string { return day }, time.UTC, nil)
 	return client.InProcess(h, "cli"), h
 }
 

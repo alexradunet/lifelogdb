@@ -53,9 +53,8 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		"result of add-file":                        core.Kept{},
 		"result of relocate-reading":                core.ScopeRelocation{},
 		"result of ask":                             Answer{},
-		"conversations":                             map[string]any{"conversations": []conversationRow{}},
-		"conversation": map[string]any{"id": int64(0), "title": "", "version": "", "created_at": "", "preamble": "", "turns": []Turn{},
-			"conversations": []conversationRow{}},
+		"conversation": map[string]any{"day": "", "id": int64(0), "title": "", "version": "", "created_at": "", "preamble": "", "turns": []Turn{},
+			"compacted": false, "previous": PreviousConversation{}},
 		"readings-from-table": core.TableReadings{},
 	}
 	for section, shape := range shapes {

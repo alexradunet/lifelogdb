@@ -224,25 +224,36 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **Owner-only actions.** `register-metric`, `relocate-reading` and `snapshot` are refused to an `agent:*` or `import:*` writer and
   are never MCP tools. An agent that imports with the owner asks for them in the conversation.
 - **A conversation with lifelog** ([plan 102](docs/plans/102-a-conversation-with-lifelog.md)). `ask` is an action of
-  the catalog, so it is on every surface: `lifelog ask`, the MCP tool `ask`, the form on Home and on each
-  conversation page. A model the owner configures answers it with the same tools as the MCP server, minus `ask`
-  itself, as `agent:chat` (`internal/chat`). The model is an OpenAI chat-completions endpoint, read from the
-  environment of the process that opens the file: `LIFELOG_MODEL_URL` (the base URL, ending in `/v1`),
-  `LIFELOG_MODEL` and optional `LIFELOG_MODEL_KEY`; without them `ask` answers 503 and the rest is unchanged. With
-  `--url`, the server's model answers. A model writes with no approval step; it asks the owner in the chat when it
-  is not sure. Each turn is appended to a page `Conversation YYYY-MM-DD HH.MM.SS`, filed by `part-of` in the page
-  `Conversations`; the body is the conversation's only memory, sent whole to the model when it continues. At most
-  16 model steps a question and 64 KiB a tool result; the loop runs in the request and stops with it. **Rejected:**
-  rewriting `lifelog` in another language to embed an agent SDK, a second application beside it, and a table of
-  conversations before a question needs one ([RFC 0012](docs/rfcs/0012-a-conversation-with-lifelog.md)).
+  the catalog, so it is on every surface: `lifelog ask`, the MCP tool `ask`, the form on Home and on the chat page.
+  A model the owner configures answers it with the same tools as the MCP server, minus `ask` itself, as `agent:chat`
+  (`internal/chat`). The model is an OpenAI chat-completions endpoint, read from the environment of the process that
+  opens the file: `LIFELOG_MODEL_URL` (the base URL, ending in `/v1`), `LIFELOG_MODEL` and optional
+  `LIFELOG_MODEL_KEY`; without them `ask` answers 503 and the rest is unchanged. With `--url`, the server's model
+  answers. A model writes with no approval step; it asks the owner in the chat when it is not sure. At most 16 model
+  steps a question and 64 KiB a tool result; the loop runs in the request and stops with it. **Rejected:** rewriting
+  `lifelog` in another language to embed an agent SDK, a second application beside it, and a table of conversations
+  before a question needs one ([RFC 0012](docs/rfcs/0012-a-conversation-with-lifelog.md)).
+- **One continuous conversation** ([plan 106](docs/plans/106-one-continuous-conversation.md)). The owner's rule
+  (2026-10-14): one conversation, not sessions. Each turn is appended to the page `Conversation YYYY-MM-DD` of the
+  server's local day, filed by `part-of` in the page `Conversations` and created at the day's first question; `ask`
+  takes the question alone. At the first question of a day the agent first compacts the earlier days' conversations
+  not yet summed up, the oldest first and at most three a question: one model call in words, `capture` of the
+  summary on that day's journal page as `agent:chat` with a `[[link]]` to the transcript, then the trailer
+  `**Compacted** into [[day]]` on the transcript (the summary first, so a stale trailer never loses one). A
+  compaction that fails is a `compact` step with its error, and stops the compaction until the next question; the
+  question is still answered. The model's memory of the days before is the journal page of the nearest earlier day
+  within seven days, given whole, then today's turns. The transcript format, the trailer included, is written and
+  read in `internal/api/conversations.go` alone. **Rejected:** a timer or a goroutine for the compaction, a link
+  kind or a filing page as the compacted mark (the schema, or a second home), a table of conversations.
 - **The conversation on the screen** ([plan 103](docs/plans/103-the-conversation-on-the-screen.md)). `/conversations`
-  and `/conversations/{id}` read the conversations and their turns; in a browser they are the chat page (the
-  conversations, the thread, the composer), and a conversation's `/pages/{id}` answers 303 there (`?view=page` keeps
-  the page). Every other page of the shell has the chat sidebar: a right column that the Chat button opens and closes,
-  a sheet on a phone. The script fills it from the chat page's own HTML and sends its question with `fetch`; its state
-  (open, the current conversation) is kept in `localStorage`, and the chat page sets it open, so the conversation
-  follows the owner off the chat page. The transcript format is written and read in `internal/api/conversations.go`
-  alone. A question still runs in its request: the script asks before a page with a waiting question is left.
+  is today's conversation and `/conversations/{id}` the conversation of one day, its turns read from its page; in a
+  browser they are the chat page (the thread, a note that the previous day's conversation is summed up in that day's
+  page, the composer on today's alone), and a conversation's `/pages/{id}` answers 303 there (`?view=page` keeps
+  the page). Every other page of the shell has the chat sidebar: a right column that the Chat button opens and
+  closes, a sheet on a phone. The script fills it from the chat page's own HTML and sends its question with `fetch`;
+  whether it is open is kept in `localStorage`, and the chat page sets it open, so the conversation follows the
+  owner off the chat page. A question still runs in its request: the script asks before a page with a waiting
+  question is left.
 - **Renames select a preferred name on the same identity**, retaining direct aliases as
   [titles and wikilinks](docs/contract/titles-and-wikilinks.md) ("Renames") requires and
   [rename a page](docs/cookbook/rename-a-page.md) writes; `lifelog rename` and the API's `rename` action run it.

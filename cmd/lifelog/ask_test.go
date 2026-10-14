@@ -50,16 +50,27 @@ func TestAskCommand(t *testing.T) {
 		t.Fatalf("answer = %+v", e)
 	}
 
-	// The same conversation, continued by its id.
-	o, err = parse([]string{"ask", "Again", "--conversation", "999", "--db", live})
+	// The conversation is the day's: a second question continues it, with no id to give (plan 106).
+	o, err = parse([]string{"ask", "Again", "--db", live})
 	if err != nil {
 		t.Fatal(err)
 	}
-	captureStdout(t, func() {
-		if err := runContext(context.Background(), o); err == nil || !strings.Contains(err.Error(), "404") {
-			t.Fatalf("a missing conversation: err = %v, want 404", err)
+	out = captureStdout(t, func() {
+		if err := runContext(context.Background(), o); err != nil {
+			t.Fatal(err)
 		}
 	})
+	var again struct {
+		Result struct {
+			Conversation int64 `json:"conversation"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(out), &again); err != nil || again.Result.Conversation != e.Result.Conversation {
+		t.Fatalf("the second question went to conversation %d, want %d (%v)", again.Result.Conversation, e.Result.Conversation, err)
+	}
+	if _, err := parse([]string{"ask", "x", "--conversation", "1"}); err == nil {
+		t.Fatal("ask took --conversation: the conversation is the day's")
+	}
 
 	t.Setenv("LIFELOG_MODEL_URL", "")
 	o, err = parse([]string{"ask", "Hello", "--db", live})

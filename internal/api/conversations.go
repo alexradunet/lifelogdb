@@ -17,11 +17,26 @@ import (
 // ConversationsTitle is the title of the page every conversation is filed in, by part-of.
 const ConversationsTitle = "Conversations"
 
-// Asker answers a question in words with an agent that uses the catalog (internal/chat), and keeps the turn on a
-// conversation page (docs/plans/102-a-conversation-with-lifelog.md). conversation is the page to continue, 0 for a
-// new one.
+// ConversationTitle is the title of the conversation page of a local day: the conversation is one, continued all
+// day, and compacted into the day's journal page at the first question of a later day
+// (docs/plans/106-one-continuous-conversation.md).
+func ConversationTitle(day string) string { return "Conversation " + day }
+
+// conversationDay is the day of a conversation page, from its title: the ten characters after "Conversation ",
+// when they are a day. A title of plan 102, "Conversation YYYY-MM-DD HH.MM.SS", has its day too. "" for a page in
+// Conversations whose title names no day: it is read, never compacted, and never the previous conversation.
+func conversationDay(title string) string {
+	rest, ok := strings.CutPrefix(title, "Conversation ")
+	if !ok || len(rest) < 10 || (len(rest) > 10 && rest[10] != ' ') || !core.IsDay(rest[:10]) {
+		return ""
+	}
+	return rest[:10]
+}
+
+// Asker answers a question in words with an agent that uses the catalog (internal/chat), and keeps the turn on the
+// conversation page of the server's day (docs/plans/102-a-conversation-with-lifelog.md, plan 106).
 type Asker interface {
-	Ask(ctx context.Context, question string, conversation int64) (Answer, error)
+	Ask(ctx context.Context, question string) (Answer, error)
 }
 
 // Answer is the result of ask: the conversation page, the model's reply and each tool it called.
@@ -31,7 +46,8 @@ type Answer struct {
 	Steps        []Step `json:"steps"`
 }
 
-// Step is one tool call of a turn: the href of what it answered, or the error it gave back to the model.
+// Step is one tool call of a turn: the href of what it answered, or the error it gave back to the model. The
+// compaction of an earlier day is a step too, named compact, with the day page it wrote or why it did not.
 type Step struct {
 	Tool  string `json:"tool"`
 	Href  string `json:"href,omitempty"`
@@ -48,17 +64,28 @@ type Turn struct {
 	Error    string `json:"error,omitempty"`
 }
 
-// The transcript format of a conversation page (docs/plans/103-the-conversation-on-the-screen.md). FormatTurn
-// writes it and ParseTurns reads it: this file is its one home.
+// PreviousConversation is the conversation of the nearest earlier day, and whether it is compacted into its day's
+// journal page yet.
+type PreviousConversation struct {
+	ID        int64  `json:"id"`
+	Title     string `json:"title"`
+	Day       string `json:"day"`
+	Compacted bool   `json:"compacted"`
+}
+
+// The transcript format of a conversation page (docs/plans/103-the-conversation-on-the-screen.md). FormatTurn and
+// FormatCompacted write it and ParseTurns reads it: this file is its one home.
 const (
-	ownerMark  = "**Owner** ("
-	replyMark  = "**lifelog:** "
-	failedMark = "**lifelog** did not answer: "
+	ownerMark     = "**Owner** ("
+	replyMark     = "**lifelog:** "
+	failedMark    = "**lifelog** did not answer: "
+	compactedMark = "**Compacted** into [["
 )
 
 var (
-	ownerLine = regexp.MustCompile(`^\*\*Owner\*\* \((\d\d\.\d\d)\): ?(.*)$`)
-	stepLine  = regexp.MustCompile("^- `([^`]+)`(?: → \\[[^\\]]*\\]\\(([^)]*)\\)|: (.*))?$")
+	ownerLine     = regexp.MustCompile(`^\*\*Owner\*\* \((\d\d\.\d\d)\): ?(.*)$`)
+	stepLine      = regexp.MustCompile("^- `([^`]+)`(?: → \\[[^\\]]*\\]\\(([^)]*)\\)|: (.*))?$")
+	compactedLine = regexp.MustCompile(`^\*\*Compacted\*\* into \[\[(\d{4}-\d\d-\d\d)\]\]$`)
 )
 
 // FormatTurn is one turn as the page keeps it. failure is why the model gave no answer; "" when it answered.
@@ -86,9 +113,14 @@ func FormatTurn(at time.Time, question string, steps []Step, reply, failure stri
 	return b.String()
 }
 
+// FormatCompacted is the trailer of a conversation page whose summary is on the journal page of day: the page is
+// compacted, and its [[day]] links the page that holds the summary.
+func FormatCompacted(day string) string { return compactedMark + day + "]]\n" }
+
 // ParseTurns reads the turns of a conversation page's body. Text before the first turn is the preamble. A line the
-// format does not know stays in the text it falls in, so an edit by the owner is shown, never dropped.
-func ParseTurns(body string) (preamble string, turns []Turn) {
+// format does not know stays in the text it falls in, so an edit by the owner is shown, never dropped. The trailer
+// of FormatCompacted belongs to no turn, wherever the owner moved it; compacted is its day, "" when there is none.
+func ParseTurns(body string) (preamble string, turns []Turn, compacted string) {
 	var pre, question, reply []string
 	var cur *Turn
 	inReply := false
@@ -105,6 +137,10 @@ func ParseTurns(body string) (preamble string, turns []Turn) {
 		question, reply, inReply = nil, nil, false
 	}
 	for _, line := range strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n") {
+		if m := compactedLine.FindStringSubmatch(line); m != nil {
+			compacted = m[1]
+			continue
+		}
 		if m := ownerLine.FindStringSubmatch(line); m != nil {
 			end()
 			cur = &Turn{At: m[1], Steps: []Step{}}
@@ -129,7 +165,7 @@ func ParseTurns(body string) (preamble string, turns []Turn) {
 		}
 	}
 	end()
-	return strings.TrimSpace(strings.Join(pre, "\n")), turns
+	return strings.TrimSpace(strings.Join(pre, "\n")), turns, compacted
 }
 
 // firstLine is the start of an error: one line, never a whole page.
@@ -146,7 +182,7 @@ var NoModel = &core.Error{Status: http.StatusServiceUnavailable, Code: "no_model
 	Msg: "no model is configured: set LIFELOG_MODEL_URL and LIFELOG_MODEL where lifelog runs"}
 
 // ask is POST /conversations. The agent writes as agent:chat whatever the source of the request: the rows say which
-// model wrote them. The answer is the conversation.
+// model wrote them. The answer is today's conversation.
 func (h *server) ask(r *http.Request, _ string) (*Entity, error) {
 	v, err := form(r)
 	if err != nil {
@@ -155,32 +191,17 @@ func (h *server) ask(r *http.Request, _ string) (*Entity, error) {
 	if err := required(v, "question"); err != nil {
 		return nil, err
 	}
-	var conversation int64
-	if c := v.Get("conversation"); c != "" {
-		if conversation, err = strconv.ParseInt(c, 10, 64); err != nil || conversation <= 0 {
-			return nil, core.Invalid("conversation must be the id of a conversation page")
-		}
-	}
-	if conversation != 0 {
-		p, err := h.s.PageByID(r.Context(), conversation)
-		if err != nil {
-			return nil, err
-		}
-		if p.DeletedAt != "" || !isConversation(p) {
-			return nil, core.Invalid("page %d is not a live conversation: a turn is appended only to a page filed in %s", conversation, ConversationsTitle)
-		}
-	}
 	if h.asker == nil {
 		return nil, NoModel
 	}
-	a, err := h.asker.Ask(r.Context(), v.Get("question"), conversation)
+	a, err := h.asker.Ask(r.Context(), v.Get("question"))
 	if err != nil {
 		return nil, err
 	}
 	if wantsHTML(r) { // the chat page shows the turn: no toast repeats it
-		return h.conversationEntity(r.Context(), a.Conversation)
+		return h.todayConversation(r.Context())
 	}
-	return withResult(h.conversationEntity(r.Context(), a.Conversation))(a)
+	return withResult(h.todayConversation(r.Context()))(a)
 }
 
 // isConversation says whether a page is filed in Conversations: a turn is appended to such a page and to no other.
@@ -195,10 +216,10 @@ func isConversation(p *core.Page) bool {
 
 func conversationHref(id int64) string { return "/conversations/" + strconv.FormatInt(id, 10) }
 
-// conversationRow is a conversation in the list.
+// conversationRow is a conversation in the list of the Conversations page.
 type conversationRow struct {
-	ID    int64  `json:"id"`
-	Title string `json:"title"`
+	ID    int64
+	Title string
 }
 
 // conversationList is every live conversation, the newest first: the live pages filed in Conversations.
@@ -221,16 +242,63 @@ func (h *server) conversationList(ctx context.Context) ([]conversationRow, error
 	return rows, nil
 }
 
-// conversations is GET /conversations: the list, and ask for a new conversation.
-func (h *server) conversations(r *http.Request) (*Entity, error) {
-	list, err := h.conversationList(r.Context())
+// previousConversation is the newest conversation with a day before the page before (every one when before is 0),
+// and whether it is compacted. nil when there is none.
+func (h *server) previousConversation(ctx context.Context, before int64) (*PreviousConversation, error) {
+	rows, err := h.conversationList(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return &Entity{Class: []string{"conversations"}, Title: "Chat",
-		Properties: map[string]any{"conversations": list},
-		Links:      []Link{link("self", "/conversations", "Chat"), link("index", "/", "Home")},
-		Actions:    []Action{action("ask", nil, nil)}}, nil
+	for _, row := range rows {
+		if before != 0 && row.ID >= before {
+			continue
+		}
+		day := conversationDay(row.Title)
+		if day == "" {
+			continue
+		}
+		p, err := h.s.PageByID(ctx, row.ID)
+		if err != nil {
+			return nil, err
+		}
+		_, _, compacted := ParseTurns(p.Body)
+		return &PreviousConversation{ID: row.ID, Title: row.Title, Day: day, Compacted: compacted != ""}, nil
+	}
+	return nil, nil
+}
+
+// memoryDay is the day of the nearest live journal page in the seven days before day: the memory the model is given
+// for the conversation of day. "" when there is none.
+func (h *server) memoryDay(ctx context.Context, day string) (string, error) {
+	t, ok := dayOf(day)
+	if !ok {
+		return "", nil
+	}
+	entries, err := h.s.DayEntries(ctx, t.AddDate(0, 0, -7).Format(time.DateOnly), t.AddDate(0, 0, -1).Format(time.DateOnly), true, 1)
+	if err != nil || len(entries) == 0 {
+		return "", err
+	}
+	return entries[0].Day, nil
+}
+
+// todayConversation is GET /conversations: the conversation of the server's day, with no page yet when nothing was
+// asked today.
+func (h *server) todayConversation(ctx context.Context) (*Entity, error) {
+	day := h.localDay()
+	id, err := h.s.PageID(ctx, ConversationTitle(day))
+	if err != nil {
+		return nil, err
+	}
+	var p *core.Page
+	if id != 0 {
+		if p, err = h.s.PageByID(ctx, id); err != nil {
+			return nil, err
+		}
+		if p.DeletedAt != "" || !isConversation(p) {
+			p = nil
+		}
+	}
+	return h.conversationView(ctx, p, day, "/conversations")
 }
 
 // conversation is GET /conversations/{id}: one conversation and its turns.
@@ -239,34 +307,65 @@ func (h *server) conversation(r *http.Request) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	return h.conversationEntity(r.Context(), id)
-}
-
-func (h *server) conversationEntity(ctx context.Context, id int64) (*Entity, error) {
-	p, err := h.s.PageByID(ctx, id)
+	p, err := h.s.PageByID(r.Context(), id)
 	if err != nil {
 		return nil, err
 	}
 	if p.DeletedAt != "" || !isConversation(p) {
 		return nil, core.NotFound("no conversation %d", id)
 	}
-	list, err := h.conversationList(ctx)
+	return h.conversationView(r.Context(), p, conversationDay(p.Title), conversationHref(id))
+}
+
+// conversationView is a conversation as a resource: its page (nil when the day has none yet), its day ("" for a page
+// whose title names none), the previous conversation and the memory the model is given. ask is offered on the
+// conversation of the server's day only: the conversation is one, continued all day.
+func (h *server) conversationView(ctx context.Context, p *core.Page, day, self string) (*Entity, error) {
+	title := ConversationTitle(day)
+	props := map[string]any{"day": day, "turns": []Turn{}, "compacted": false}
+	var id int64
+	if p != nil {
+		id, title = p.ID, p.Title
+		preamble, turns, compacted := ParseTurns(p.Body)
+		if turns == nil {
+			turns = []Turn{}
+		}
+		props["id"], props["version"], props["created_at"] = id, p.Version, p.CreatedAt
+		props["turns"], props["compacted"] = turns, compacted != ""
+		if preamble != "" {
+			props["preamble"] = preamble
+		}
+	}
+	props["title"] = title
+	links := []Link{link("self", self, title)}
+	if p != nil {
+		links = append(links, link("page", pageHref(id), "Its page"))
+	}
+	if self != "/conversations" {
+		links = append(links, link("today", "/conversations", "Chat"))
+	}
+	prev, err := h.previousConversation(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	preamble, turns := ParseTurns(p.Body)
-	if turns == nil {
-		turns = []Turn{}
+	if prev != nil {
+		props["previous"] = prev
+		links = append(links, link("previous", conversationHref(prev.ID), prev.Title))
 	}
-	props := map[string]any{"id": id, "title": p.Title, "version": p.Version, "created_at": p.CreatedAt,
-		"turns": turns, "conversations": list}
-	if preamble != "" {
-		props["preamble"] = preamble
+	if day != "" {
+		m, err := h.memoryDay(ctx, day)
+		if err != nil {
+			return nil, err
+		}
+		if m != "" {
+			links = append(links, link("memory", dayHref(m), m))
+		}
 	}
-	return &Entity{Class: []string{"conversation"}, Title: p.Title, Properties: props,
-		Links: []Link{link("self", conversationHref(id), p.Title), link("page", pageHref(id), "Its page"),
-			link("conversations", "/conversations", "Chat"), link("index", "/", "Home")},
-		Actions: []Action{action("ask", nil, map[string]any{"conversation": id})}}, nil
+	e := &Entity{Class: []string{"conversation"}, Title: title, Properties: props, Links: append(links, link("index", "/", "Home"))}
+	if day == h.localDay() {
+		e.Actions = []Action{action("ask", nil, nil)}
+	}
+	return e, nil
 }
 
 // conversationRedirect is where a browser goes for a conversation's page: its chat page, with a receipt of feedback.

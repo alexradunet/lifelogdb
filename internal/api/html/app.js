@@ -2,7 +2,7 @@
 // and no page needs it: every form posts and every link works without it
 // (docs/plans/091-the-browser-for-daily-use.md). It reads /titles (the names after [[, and the pages of the command
 // list), /render (the preview of a body), / (the root's actions, for the command list) and the chat pages
-// (/conversations/{id}, for the sidebar's thread); the one write it sends itself is the sidebar's question to
+// (/conversations, for the sidebar's thread); the one write it sends itself is the sidebar's question to
 // POST /conversations, the form the server drew. Seven things:
 //   1. after [[ in a textarea, and in a field for a page's title (data-pages), the names of the pages that start
 //      with what is typed;
@@ -517,21 +517,20 @@
     location.href = row.action ? "/#do-" + encodeURIComponent(row.action) : row.href;
   }
 
-  // ---- 7. The conversation (docs/plans/103-the-conversation-on-the-screen.md)
+  // ---- 7. The conversation (docs/plans/103-the-conversation-on-the-screen.md, plan 106)
 
-  // The state of the sidebar lives in this browser: open or closed, and the current conversation. The chat page sets
-  // it open, so the page the owner goes to next shows the same conversation in the sidebar.
+  // The state of the sidebar lives in this browser: open or closed. The conversation is one, the day's, so the sidebar
+  // always draws /conversations; the chat page sets the sidebar open, so the page the owner goes to next shows the
+  // conversation beside it.
   var chatKey = "lifelog.chat";
   var chatPending = false; // a question waits for its answer
   function chatState() { try { return JSON.parse(localStorage.getItem(chatKey)) || {}; } catch (e) { return {}; } }
   function saveChat(s) { try { localStorage.setItem(chatKey, JSON.stringify(s)); } catch (e) { /* private mode */ } }
 
-  // chatHTML reads a chat page's HTML: its thread (the server draws every turn), its conversation and its alert.
+  // chatHTML reads a chat page's HTML: its thread (the server draws every turn) and its alert.
   function chatHTML(html) {
     var doc = new DOMParser().parseFromString(html, "text/html");
-    var page = doc.querySelector("[data-chat-page]");
-    return { thread: doc.querySelector(".chat-page .chat-thread"), id: page ? page.getAttribute("data-chat-page") : null,
-      alert: doc.querySelector("[role=alert]") };
+    return { thread: doc.querySelector(".chat-page .chat-thread"), alert: doc.querySelector("[role=alert]") };
   }
 
   // speaker is a spoken line of the thread as the server draws it (docs/plans/104-the-chat-in-basm.md): the framed
@@ -570,7 +569,7 @@
   function chat() {
     var page = document.querySelector("[data-chat-page]");
     if (page) {
-      saveChat({ open: true, id: page.getAttribute("data-chat-page") });
+      saveChat({ open: true });
       var full = page.querySelector("form.msg-draft");
       if (full) full.addEventListener("submit", function () {
         var q = full.querySelector("textarea[name=question]");
@@ -587,34 +586,22 @@
     if (!panel || !toggle) return;
     var shell = panel.parentElement, thread = panel.querySelector(".chat-thread"), form = panel.querySelector("form");
     var question = form.querySelector("textarea[name=question]"), send = form.querySelector("button");
-    var blank = thread.innerHTML, loaded = null;
+    var blank = thread.innerHTML, loaded = false;
 
     function showThread(t) { thread.innerHTML = t ? t.innerHTML : blank; thread.scrollTop = thread.scrollHeight; }
-    function current(id) {
-      form.querySelector("input[name=conversation]").value = id || "";
-      var links = panel.querySelectorAll('[data-chat="full"]');
-      for (var i = 0; i < links.length; i++) links[i].href = id ? "/conversations/" + id : "/conversations";
-      var s = chatState();
-      s.id = id || "";
-      saveChat(s);
-    }
-    function load(id) {
-      loaded = id || "";
-      current(id);
-      if (!id) { showThread(null); return; }
-      fetch("/conversations/" + encodeURIComponent(id), { headers: { Accept: "text/html" }, credentials: "same-origin" })
+    function load() {
+      loaded = true;
+      fetch("/conversations", { headers: { Accept: "text/html" }, credentials: "same-origin" })
         .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status); })
         .then(function (html) { showThread(chatHTML(html).thread); })
-        .catch(function () { load(""); }); // tombstoned, or gone: a new conversation
+        .catch(function () { showThread(null); });
     }
     function setOpen(open) {
       panel.hidden = !open;
       shell.classList.toggle("chat-open", open);
       toggle.setAttribute("aria-expanded", open ? "true" : "false");
-      var s = chatState();
-      s.open = open;
-      saveChat(s);
-      if (open && loaded === null) load(s.id);
+      saveChat({ open: open });
+      if (open && !loaded) load();
     }
 
     // On a phone the bottom bar's Chat opens and closes the sheet, and the floating button is hidden (app.css): the tab
@@ -635,7 +622,6 @@
       setOpen(false);
       (phone.matches && tab ? tab : toggle).focus();
     });
-    panel.querySelector('[data-chat="new"]').addEventListener("click", function () { load(""); question.focus(); });
     form.addEventListener("submit", function (ev) {
       ev.preventDefault();
       var q = question.value.trim();
@@ -653,9 +639,7 @@
         headers: { Accept: "text/html" } })
         .then(function (r) { return r.text().then(function (html) { return { ok: r.ok, status: r.status, page: chatHTML(html) }; }); })
         .then(function (a) {
-          if (a.ok && a.page.id) {
-            loaded = a.page.id;
-            current(a.page.id);
+          if (a.ok && a.page.thread) {
             showThread(a.page.thread);
             question.value = "";
           } else {

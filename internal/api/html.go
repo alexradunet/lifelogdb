@@ -137,7 +137,7 @@ var viewOf = map[string]string{
 	"periods": "periods", "sessions": "sessions", "session": "session",
 	"metrics": "metrics", "series": "metric", "metric": "page", "habits": "habits", "measurement": "measurement", "error": "error", "login": "login",
 	"tasks": "tasks", "task": "task", "occurrence": "occurrence", "deadlines": "deadlines", "month": "month", "week": "week", "year": "year", "styleguide": "styleguide",
-	"conversations": "conversation", "conversation": "conversation",
+	"conversation": "conversation",
 }
 
 // view is what a template gets: the entity, its properties as the JSON client reads them, the path the browser
@@ -292,7 +292,7 @@ func navMatch(path, p string) int {
 // ChatPanel says whether the page draws the chat sidebar: every page of the shell but the chat page, which is the
 // same conversation full size (docs/plans/103-the-conversation-on-the-screen.md).
 func (v *view) ChatPanel() bool {
-	return v.Shell != nil && !slices.ContainsFunc(v.Class, func(c string) bool { return c == "conversation" || c == "conversations" })
+	return v.Shell != nil && !slices.Contains(v.Class, "conversation")
 }
 
 func (v *view) LinkTitle(rel string) string {

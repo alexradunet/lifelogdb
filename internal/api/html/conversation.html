@@ -1,21 +1,19 @@
-{{/* The chat page (docs/plans/103-the-conversation-on-the-screen.md): the conversations on the left, the thread in the
-     middle, the draft at its end. /conversations is a new conversation; /conversations/{id} one of them. The sidebar
-     of every other page (chatpanel) draws the same thread, which the script takes from this page. The thread is the
-     Chat of the owner's design system Balaur — Basm (docs/plans/104-the-chat-in-basm.md): a framed portrait and its
-     nameplate beside a parchment speech panel, lifelog on the left and the owner on the right, the tools as rows of
-     dark wood between them, and the draft as an unsent message in the owner's place. */}}
+{{/* The chat page (docs/plans/103-the-conversation-on-the-screen.md, docs/plans/106-one-continuous-conversation.md):
+     one conversation, the day's, with the thread in the middle and the draft at its end. /conversations is today's;
+     /conversations/{id} is the conversation of an earlier day, read without a draft. Above the turns, a note says
+     that the previous day's conversation is summed up in that day's journal page. The sidebar of every other page
+     (chatpanel) draws the same thread, which the script takes from this page. The thread is the Chat of the owner's
+     design system Balaur — Basm (docs/plans/104-the-chat-in-basm.md): a framed portrait and its nameplate beside a
+     parchment speech panel, lifelog on the left and the owner on the right, the tools as rows of dark wood between
+     them, and the draft as an unsent message in the owner's place. */}}
 {{define "conversation"}}{{template "head" .}}
 {{$p := .Props}}
-<div class="chat-page" data-chat-page="{{with $p.id}}{{num .}}{{end}}">
-<nav class="chat-list" aria-label="Conversations">
-<a class="button primary" href="/conversations">{{icon "new"}}New conversation</a>
-{{with $p.conversations}}<ul class="plain">{{range .}}<li><a href="/conversations/{{num .id}}"{{if and $p.id (eq (num .id) (num $p.id))}} aria-current="page"{{end}}>{{.title}}</a></li>{{end}}</ul>{{end}}
-</nav>
+<div class="chat-page" data-chat-page>
 <section class="chat-main" aria-label="Conversation">
-<header class="chat-head"><h1>{{if $p.title}}{{$p.title}}{{else}}New conversation{{end}}</h1>
-{{with .Link "page"}}<a href="{{.}}?view=page">Its page</a>{{end}}</header>
+<header class="chat-head"><h1>{{$p.title}}</h1>
+<span class="tools">{{with .Link "today"}}<a href="{{.}}">Today</a>{{end}}{{with .Link "memory"}}<a href="{{.}}">Memory: {{$.LinkTitle "memory"}}</a>{{end}}{{with .Link "page"}}<a href="{{.}}?view=page">Its page</a>{{end}}</span></header>
 {{template "thread" $p}}
-{{with .Action "ask"}}{{template "draft" (dict "href" .Href "conversation" $p.id "focus" true)}}{{end}}
+{{with .Action "ask"}}{{template "draft" (dict "href" .Href "focus" true)}}{{end}}
 </section>
 </div>
 {{template "foot" .}}{{end}}
@@ -24,32 +22,33 @@
      and state (thinking, while an answer is awaited). */}}
 {{define "portrait"}}<figure class="portrait"><span class="avatar"{{with .state}} data-state="{{.}}"{{end}}><img src="/assets/portrait-{{.who}}.png" alt="" width="256" height="256" decoding="async"></span><figcaption class="who">{{.name}}</figcaption></figure>{{end}}
 
-{{/* thread is the turns of a conversation: the owner's question, the tools the model called, then its answer. It
-     takes the conversation's properties (none for a new one). */}}
+{{/* thread is the turns of a conversation: first the note on the previous day's conversation, then the owner's
+     question, the tools the model called, and the model's answer. It takes the conversation's properties (none for
+     the sidebar before it is filled). */}}
 {{define "thread"}}<div class="chat chat-thread" aria-live="polite">
-{{with .preamble}}<div class="prose chat-note">{{markdown .}}</div>{{end}}
+{{with .previous}}<div class="msg msg-lifelog msg-note">{{template "portrait" (dict "who" "lifelog" "name" "Lifelog")}}<div class="msg-main"><div class="body"><p>The conversation of <a href="/days/{{.day}}">{{.day}}</a> is summed up in that day's page{{if not .compacted}} at your first question of today{{end}}. <a href="/conversations/{{num .id}}">Read it in full.</a></p></div></div></div>
+{{end}}{{with .preamble}}<div class="prose chat-note">{{markdown .}}</div>{{end}}
 {{range .turns}}<div class="msg msg-owner">{{template "portrait" (dict "who" "owner" "name" (print "You · " .at))}}<div class="msg-main"><div class="body prose">{{markdown .question}}</div></div></div>
 {{range .steps}}<div class="msg-tool"><span class="who"><span class="tool-icon" aria-hidden="true">⌥</span>tool · {{.tool}} — </span><span class="body">{{with .href}}<a href="{{.}}">{{.}}</a>{{end}}{{with .error}}<span class="refused">{{.}}</span>{{end}}</span></div>
 {{end}}{{if .error}}<div class="msg msg-lifelog msg-failed">{{template "portrait" (dict "who" "lifelog" "name" "Lifelog")}}<div class="msg-main"><div class="body"><p><strong>No answer.</strong> {{.error}}</p></div></div></div>
 {{else}}<div class="msg msg-lifelog">{{template "portrait" (dict "who" "lifelog" "name" "Lifelog")}}<div class="msg-main"><div class="body prose">{{markdown .reply}}</div></div></div>{{end}}
-{{else}}<div class="msg msg-lifelog">{{template "portrait" (dict "who" "lifelog" "name" "Lifelog")}}<div class="msg-main"><div class="body"><p>Ask me about your life log, or ask me to write in it. I read with the tools of lifelog and write as agent:chat. When I am not sure, I ask you first.</p></div></div></div>{{end}}
+{{else}}{{if not .previous}}<div class="msg msg-lifelog">{{template "portrait" (dict "who" "lifelog" "name" "Lifelog")}}<div class="msg-main"><div class="body"><p>Ask me about your life log, or ask me to write in it. I read with the tools of lifelog and write as agent:chat. When I am not sure, I ask you first.</p></div></div></div>{{end}}{{end}}
 </div>{{end}}
 
 {{/* draft is the composer as an unsent message at the end of the conversation, in the owner's place: a dashed panel
      that becomes the next spoken message when it is sent. Enter sends and Shift+Enter makes a new line (the script);
-     without the script the button sends. It takes href (the action ask), conversation (blank for a new one) and
-     focus. */}}
-{{define "draft"}}<form class="msg msg-owner msg-draft" method="POST" action="{{.href}}" data-action="ask"><input type="hidden" name="conversation" value="{{with .conversation}}{{num .}}{{end}}">
+     without the script the button sends. It takes href (the action ask) and focus. */}}
+{{define "draft"}}<form class="msg msg-owner msg-draft" method="POST" action="{{.href}}" data-action="ask">
 <div class="msg-main"><label><span class="sr">Question</span><textarea name="question" rows="2" required placeholder="Ask lifelog…"{{if .focus}} autofocus{{end}}></textarea></label>
 <div class="msg-draft-foot"><span class="msg-draft-hint">Not sent · Enter sends, Shift+Enter makes a new line</span><button class="button primary small">Send</button></div></div>
 {{template "portrait" (dict "who" "owner" "name" "You")}}</form>{{end}}
 
-{{/* chatpanel is the sidebar of every page of the shell but the chat page: the thread of the current conversation and
+{{/* chatpanel is the sidebar of every page of the shell but the chat page: the thread of the day's conversation and
      the draft. The script opens and closes it, fills the thread and sends the question; without the script it stays
      hidden, and Chat in the sections leads to the chat page. */}}
 {{define "chatpanel"}}<aside class="chat-panel" id="chat-panel" aria-label="Chat" hidden>
-<div class="chat-panel-head"><a class="label" href="/conversations" data-chat="full">Chat</a>
-<span class="tools"><button type="button" class="button small" data-chat="new">New</button><a class="button small" href="/conversations" data-chat="full">Full screen</a><button type="button" class="button small" data-chat="close" aria-label="Close the chat">×</button></span></div>
+<div class="chat-panel-head"><a class="label" href="/conversations">Chat</a>
+<span class="tools"><a class="button small" href="/conversations">Full screen</a><button type="button" class="button small" data-chat="close" aria-label="Close the chat">×</button></span></div>
 {{template "thread" (dict)}}
 {{template "draft" (dict "href" "/conversations")}}
 </aside>

@@ -247,12 +247,13 @@ func TestTheScriptReadsTitlesRenderTheRootAndTheChatOnly(t *testing.T) {
 		read[c[1]] = true
 	}
 	if len(calls)+strings.Count(js, "fetch(form.action,") != strings.Count(js, "fetch(") || strings.Count(js, "fetch(form.action,") != 1 ||
-		len(read) != 4 || !read["/titles"] || !read["/render"] || !read["/"] || !read["/conversations/"] {
-		t.Errorf("the script fetches %v (%d calls), want /titles, /render, /, /conversations/ and the sidebar's form only", read, strings.Count(js, "fetch("))
+		len(read) != 4 || !read["/titles"] || !read["/render"] || !read["/"] || !read["/conversations"] {
+		t.Errorf("the script fetches %v (%d calls), want /titles, /render, /, /conversations and the sidebar's form only", read, strings.Count(js, "fetch("))
 	}
 	if strings.Count(js, "localStorage") != 2 || strings.Count(js, "localStorage.getItem(chatKey)") != 1 ||
-		strings.Count(js, "localStorage.setItem(chatKey,") != 1 || !strings.Contains(js, `var chatKey = "lifelog.chat";`) {
-		t.Error("the script keeps something in the browser besides the sidebar's state")
+		strings.Count(js, "localStorage.setItem(chatKey,") != 1 || !strings.Contains(js, `var chatKey = "lifelog.chat";`) ||
+		strings.Count(js, "saveChat({ open: ") != 2 || strings.Contains(js, "s.id") {
+		t.Error("the script keeps something in the browser besides whether the sidebar is open")
 	}
 	for _, never := range []string{"XMLHttpRequest", "WebSocket", "sendBeacon", "sessionStorage", "indexedDB",
 		"document.cookie", "import(", "eval(", "new Function", "http:", "https:"} {

@@ -30,17 +30,17 @@ type server struct {
 // call it in-process. trustedOrigins are the browser origins a public listener allows to write
 // (docs/plans/078-network-server.md); a local listener and the in-process client pass none.
 func New(s *core.Store, trustedOrigins ...string) http.Handler {
-	return newHandler(s, core.Today, time.Local, nil, trustedOrigins...)
+	return NewOn(s, core.Today, time.Local, nil, trustedOrigins...)
 }
 
 // NewAsking is New with the agent of ask (docs/plans/102-a-conversation-with-lifelog.md); asker nil refuses ask.
 func NewAsking(s *core.Store, asker Asker, trustedOrigins ...string) http.Handler {
-	return newHandler(s, core.Today, time.Local, asker, trustedOrigins...)
+	return NewOn(s, core.Today, time.Local, asker, trustedOrigins...)
 }
 
-// newHandler is New with the clock of the local day and its zone given: a test fixes them, so what is due and
-// overdue is read against a fixed day, and a time is written in fixed words.
-func newHandler(s *core.Store, localDay func() string, zone *time.Location, asker Asker, trustedOrigins ...string) http.Handler {
+// NewOn is New with the clock of the local day and its zone given: a test fixes them, so what is due, overdue and
+// today's conversation are read against a fixed day, and a time is written in fixed words.
+func NewOn(s *core.Store, localDay func() string, zone *time.Location, asker Asker, trustedOrigins ...string) http.Handler {
 	h := &server{s: s, localDay: localDay, zone: zone, asker: asker}
 	m := http.NewServeMux()
 	h.mux = m
@@ -147,7 +147,7 @@ func newHandler(s *core.Store, localDay func() string, zone *time.Location, aske
 	post("/tasks/{id}/occurrences/{key}/edit", h.editOccurrence)
 	post("/tasks/{id}/occurrences/{key}/tombstone", h.occurrenceLifecycle(true))
 	post("/tasks/{id}/occurrences/{key}/revive", h.occurrenceLifecycle(false))
-	get("/conversations", h.conversations)
+	get("/conversations", func(r *http.Request) (*Entity, error) { return h.todayConversation(r.Context()) })
 	get("/conversations/{id}", h.conversation)
 	post("/conversations", h.ask)
 	guard := http.NewCrossOriginProtection()

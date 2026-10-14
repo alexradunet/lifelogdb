@@ -19,8 +19,8 @@
 {{template "form" (form . "button" "Add" "autofocus" "text" "back" $.Here "placeholder" "text=What happened? Who was there?")}}</section>{{end}}
 
 {{with .Action "ask"}}<section class="capture ask" id="ask" aria-label="Ask lifelog"><h2>Ask lifelog</h2>
-<small class="desc">A model answers with the actions of lifelog, and may write as agent:chat; it asks back when it is not sure. The answer can take a minute. The conversation is kept as a page.</small>
-{{template "form" (form . "button" "Ask" "hide" "conversation" "placeholder" "question=What did I do last weekend?")}}</section>{{end}}
+<small class="desc">A model answers with the actions of lifelog, and may write as agent:chat; it asks back when it is not sure. The answer can take a minute. The conversation is one, continued all day and kept as a page.</small>
+{{template "form" (form . "button" "Ask" "placeholder" "question=What did I do last weekend?")}}</section>{{end}}
 
 {{with $p.recent}}<section class="also" aria-label="Last entries">
 <div class="panel-head"><h2>Last entries</h2><a href="/days">Every day</a></div>

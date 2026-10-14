@@ -27,13 +27,13 @@ const version = "0.1.0"
 // opts are the flags of a command line and its words. A flag may stand anywhere on the line; a command takes the
 // global flags and its own (command.flags), and refuses any other.
 type opts struct {
-	db, url, source, addr, agent, mood, day, from, to, title, text, preview, mime, at, radius, column, conversation string
-	tokenFile, tlsCert, tlsKey, snapshots                                                                           string
-	allowOrigins                                                                                                    []string
-	human, dryRun, dbExplicit, addrExplicit, public, force                                                          bool
-	args                                                                                                            []string
-	given                                                                                                           []string           // the flags the line named
-	pub                                                                                                             *api.PublicOptions // serve --public, read by its prepare
+	db, url, source, addr, agent, mood, day, from, to, title, text, preview, mime, at, radius, column string
+	tokenFile, tlsCert, tlsKey, snapshots                                                             string
+	allowOrigins                                                                                      []string
+	human, dryRun, dbExplicit, addrExplicit, public, force                                            bool
+	args                                                                                              []string
+	given                                                                                             []string           // the flags the line named
+	pub                                                                                               *api.PublicOptions // serve --public, read by its prepare
 }
 
 // globalFlags are the flags every command takes.
@@ -152,16 +152,12 @@ var commands = []command{
 			}
 			return show(e.o)(e.c.Get(ctx, "/days/"+url.PathEscape(day)))
 		}},
-	{name: "ask", flags: []string{"--conversation"},
-		usage: "  lifelog ask QUESTION... [--conversation ID]   ask lifelog in words: a model answers with the actions (the\n" +
-			"                                      model of $LIFELOG_MODEL_URL and $LIFELOG_MODEL where lifelog runs); the turn\n" +
-			"                                      is kept on a conversation page, a new one or the page ID",
+	{name: "ask",
+		usage: "  lifelog ask QUESTION...             ask lifelog in words: a model answers with the actions (the model of\n" +
+			"                                      $LIFELOG_MODEL_URL and $LIFELOG_MODEL where lifelog runs); the turn is\n" +
+			"                                      kept on the conversation page of the day",
 		run: func(ctx context.Context, e env, args []string) error {
-			vals := map[string]string{"question": strings.Join(args, " ")}
-			if e.o.conversation != "" {
-				vals["conversation"] = e.o.conversation
-			}
-			return doAction(ctx, e, "ask", vals)
+			return doAction(ctx, e, "ask", map[string]string{"question": strings.Join(args, " ")})
 		}},
 	{name: "page",
 		usage: "  lifelog page TITLE                  a page by its title",
@@ -307,8 +303,7 @@ func parse(argv []string) (opts, error) {
 	vals := map[string]*string{"--db": &o.db, "--url": &o.url, "--source": &o.source, "--addr": &o.addr,
 		"--agent": &o.agent, "--mood": &o.mood, "--day": &o.day, "--from": &o.from, "--to": &o.to,
 		"--title": &o.title, "--text": &o.text, "--preview": &o.preview, "--mime": &o.mime, "--at": &o.at, "--radius": &o.radius,
-		"--token-file": &o.tokenFile, "--tls-cert": &o.tlsCert, "--tls-key": &o.tlsKey, "--snapshots": &o.snapshots, "--column": &o.column,
-		"--conversation": &o.conversation}
+		"--token-file": &o.tokenFile, "--tls-cert": &o.tlsCert, "--tls-key": &o.tlsKey, "--snapshots": &o.snapshots, "--column": &o.column}
 	bools := map[string]*bool{"--human": &o.human, "--dry-run": &o.dryRun, "--public": &o.public, "--force": &o.force}
 	for i := 0; i < len(argv); i++ {
 		a := argv[i]
