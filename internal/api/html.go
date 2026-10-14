@@ -33,7 +33,7 @@ import (
 // each page like the sheets: it makes a page better and no page needs it
 // (docs/plans/091-the-browser-for-daily-use.md).
 //
-//go:embed html/*.html html/*.css html/*.js html/*.svg html/*.webmanifest html/fonts/*.woff2 html/fonts/*.txt
+//go:embed html/*.html html/*.css html/*.js html/*.svg html/*.png html/*.webmanifest html/fonts/*.woff2 html/fonts/*.txt
 var views embed.FS
 
 // baseCSS and appCSS are the two stylesheets, in that order: the look of ordinary HTML, then this app's own.

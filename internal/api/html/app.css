@@ -600,59 +600,118 @@ dialog.palette>.meta{line-height:26px}
 .agenda-day ul.plain>li{padding:var(--space-2) var(--space-1)}
 .agenda-note{color:var(--text-muted)}
 
-/* The conversation (docs/plans/103-the-conversation-on-the-screen.md): the chat page, its thread, and the sidebar of
-   every other page. The owner's words on the right, lifelog's on the left, the tools between them, small. */
+/* The conversation (docs/plans/103-the-conversation-on-the-screen.md) in the Chat of Balaur — Basm
+   (docs/plans/104-the-chat-in-basm.md): on the oak of the page, lifelog speaks from the left and the owner answers
+   from the right, each a framed portrait with a wood nameplate beside a parchment speech panel with a pixel tail; a
+   tool is a row of dark wood between them; the draft is a dashed panel in the owner's place. Basm's tokens are the
+   app's: chrome is --rail, parchment --surface, the parchment edge --edge, the outline --outline, gold --rail-accent,
+   teal --teal, the owner's indigo --indigo. Words are in sentence case, as everywhere in the app (plan 096). */
 .sr{position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap}
 .chat-page{display:grid; grid-template-columns:minmax(200px,260px) minmax(0,1fr); gap:var(--space-6); align-items:start}
 .chat-list{position:sticky; top:var(--space-4); display:flex; flex-direction:column; gap:var(--space-3); max-height:calc(100vh - 2 * var(--space-6)); overflow-y:auto}
 .chat-list ul{display:flex; flex-direction:column; gap:2px}
 .chat-list li a{display:block; padding:6px 10px; font-size:14px; line-height:20px; text-decoration:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .chat-list li a[aria-current=page]{background:var(--accent-soft); color:var(--ink); font-weight:700}
-.chat-main{display:flex; flex-direction:column; gap:var(--space-4); min-width:0; min-height:calc(100vh - 2 * var(--space-6)); padding:var(--space-5) var(--space-6); background:var(--surface); box-shadow:var(--parch-bevel)}
+.chat-main{display:flex; flex-direction:column; gap:var(--space-4); min-width:0; min-height:calc(100vh - 2 * var(--space-6))}
 .chat-head{display:flex; align-items:baseline; justify-content:space-between; gap:var(--space-3); flex-wrap:wrap}
 .chat-head h1{font-size:28px; line-height:32px}
-.chat-thread{flex:1 1 auto; display:flex; flex-direction:column; gap:var(--space-2); min-height:0}
 .chat-note{padding:var(--space-2) var(--space-3); border-left:3px solid var(--line)}
-.msg{display:flex; flex-direction:column; gap:2px; max-width:min(100%, var(--measure))}
-.msg.owner{align-self:flex-end; align-items:flex-end}
-.msg.lifelog{align-self:flex-start}
-.msg .bubble{padding:var(--space-2) var(--space-3); border:2px solid var(--edge); border-radius:14px; background:var(--surface-deep); overflow-wrap:anywhere}
-.msg.owner .bubble{background:var(--accent-soft); border-color:var(--accent-ink); border-bottom-right-radius:4px}
-.msg.lifelog .bubble{border-bottom-left-radius:4px}
-.msg.failed .bubble{border-color:var(--danger); border-style:dashed}
-.msg.pending .bubble{color:var(--text-muted); font-style:italic}
-.msg .bubble>:first-child{margin-top:0} .msg .bubble>:last-child{margin-bottom:0}
-.msg .meta{font-size:12px; line-height:16px; color:var(--text-muted)}
-ul.steps{display:flex; flex-direction:column; gap:0; margin:0 0 0 var(--space-2); padding-left:var(--space-3); border-left:2px dotted var(--line); font-size:13px; line-height:20px; color:var(--text-muted)}
-ul.steps code{font-size:12px}
-ul.steps .refused{color:var(--danger)}
-.chat-composer{position:sticky; bottom:0; padding-top:var(--space-2); background:var(--surface)}
-.chat-composer form,form.chat-composer{display:flex; align-items:flex-end; gap:var(--space-2); flex-direction:row}
-.chat-composer form>label,form.chat-composer>label{flex:1 1 auto; margin:0}
-.chat-composer textarea{field-sizing:content; min-height:calc(2 * 26px + 2 * 10px); max-height:40vh; resize:none}
-.chat-empty{margin:auto 0}
 
-/* The sidebar: a third column of the shell while it is open; a sheet over the page on a phone. */
-.shell.chat-open{grid-template-columns:var(--rail-width) minmax(0,1fr) minmax(320px,400px)}
-.chat-panel{position:sticky; top:0; height:100vh; display:flex; flex-direction:column; gap:var(--space-3); min-width:0;
-  padding:var(--space-4); background:var(--surface); border-left:2px solid var(--outline); box-shadow:var(--parch-bevel)}
+.chat{--portrait-size:96px; --chat-gutter:calc(var(--portrait-size) + 14px); display:flex; flex-direction:column; gap:var(--space-6); min-height:0}
+.chat-thread{flex:1 1 auto}
+.msg{display:grid; grid-template-columns:auto minmax(0,1fr); gap:14px; align-items:start; max-width:calc(var(--measure) + var(--chat-gutter))}
+.msg-owner{grid-template-columns:minmax(0,1fr) auto; align-self:flex-end}
+.msg-owner .portrait{order:2}
+.msg-owner .msg-main{order:1}
+.msg-owner .avatar img{transform:scaleX(-1)} /* the portraits face right: the owner's turns to face the words */
+.msg-lifelog{align-self:flex-start}
+
+/* The portrait: the art has no border; this wood frame belongs to the chat. */
+.portrait{margin:0; display:flex; flex-direction:column; align-items:center; width:max-content}
+.portrait .avatar{display:block; width:var(--portrait-size); height:var(--portrait-size); padding:3px; background:#101314;
+  border:2px solid var(--outline); box-shadow:inset 0 0 0 2px var(--rail-accent),var(--drop-hard)}
+.portrait .avatar img{display:block; width:100%; height:100%; image-rendering:pixelated}
+.msg-owner .portrait .avatar{box-shadow:inset 0 0 0 2px var(--indigo),var(--drop-hard)}
+/* The nameplate: a small wood plate hung under the frame. */
+.portrait .who{margin-top:-2px; max-width:calc(var(--portrait-size) + 18px); padding:2px 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  font:700 12px/18px var(--mono); text-align:center; color:var(--rail-accent);
+  background-color:var(--rail); background-image:var(--grain-ground); background-size:4px 4px;
+  border:2px solid var(--outline); box-shadow:inset 0 2px 0 var(--bevel-light),inset 0 -2px 0 var(--bevel-dark)}
+.msg-owner .who{color:var(--indigo)}
+
+/* The speech panel: parchment, with a stepped pixel tail toward the speaker. */
+.msg-main{position:relative; min-width:0; min-height:calc(var(--portrait-size) + 10px); display:flex; align-items:center; padding:14px 18px;
+  --text:var(--ink); --text-strong:var(--ink); --text-muted:var(--muted); --text-link:var(--link); --text-accent:var(--accent-ink); --rule:var(--edge);
+  color:var(--ink); background-color:var(--surface); background-image:var(--grain-ink); background-size:4px 4px;
+  border:2px solid var(--edge); box-shadow:var(--parch-bevel)}
+.msg-main::before,.msg-main::after{content:""; position:absolute; top:36px; width:10px; height:10px; background:var(--surface); border:2px solid var(--edge)}
+.msg-lifelog .msg-main::before{left:-10px; border-right:0}
+.msg-lifelog .msg-main::after{left:-17px; top:39px; width:7px; height:7px; border-right:0}
+.msg-owner .msg-main::before{right:-10px; border-left:0}
+.msg-owner .msg-main::after{right:-17px; top:39px; width:7px; height:7px; border-left:0}
+.msg .body{width:100%; overflow-wrap:anywhere; font-size:16px; line-height:24px}
+.msg .body>:first-child{margin-top:0} .msg .body>:last-child{margin-bottom:0}
+.msg-failed .msg-main{border-color:var(--danger-line); border-style:dashed}
+
+/* A tool: a row of dark wood, set in under the portraits, in mono: the visible trail of what the model did. */
+.msg-tool{margin:calc(-1 * var(--space-3)) 0 0 var(--chat-gutter); padding:9px 14px; font:13px/20px var(--mono); color:var(--rail-ink);
+  background-color:var(--rail-deep); background-image:var(--grain-ground); background-size:4px 4px;
+  border:2px solid var(--outline); box-shadow:var(--bevel-in); overflow-wrap:anywhere}
+.msg-tool .who{color:var(--teal)}
+.msg-tool .tool-icon{margin-right:7px; color:var(--teal)}
+.msg-tool a{color:var(--rail-accent)}
+.msg-tool .refused{color:var(--rail-ink)}
+
+/* Thinking: the dots, and the portrait breathing teal light; the frame never moves. */
+.thinking{font:13px/20px var(--mono); color:var(--muted)}
+.thinking-dots::after{content:""; animation:thinking-dots 1s steps(1, end) infinite}
+@keyframes thinking-dots{0%,24.99%{content:""} 25%,49.99%{content:"."} 50%,74.99%{content:".."} 75%,100%{content:"..."}}
+.msg-pending .msg-main{border-color:var(--accent-ink)}
+.avatar[data-state=thinking]{animation:chat-glow 1.6s ease-in-out infinite}
+@keyframes chat-glow{
+  0%,100%{box-shadow:inset 0 0 0 2px var(--rail-accent),0 0 10px color-mix(in srgb, var(--teal) 30%, transparent)}
+  50%{box-shadow:inset 0 0 0 2px var(--teal),0 0 26px color-mix(in srgb, var(--teal) 60%, transparent)}}
+
+/* The draft: the unsent message in the owner's place, dashed until it is written in. */
+.msg-draft .msg-main{flex-direction:column; align-items:stretch; gap:6px; padding:12px 14px 10px; border-style:dashed; box-shadow:none}
+.msg-draft .msg-main::before,.msg-draft .msg-main::after{content:none}
+.msg-draft:focus-within .msg-main{border-style:solid; border-color:var(--accent-ink); box-shadow:var(--parch-bevel)}
+.msg-draft label{margin:0}
+.msg-draft textarea{width:100%; min-height:52px; max-height:28vh; field-sizing:content; resize:none; padding:2px 4px;
+  font:16px/24px var(--sans); color:var(--ink); caret-color:var(--primary); background:transparent; border:0; box-shadow:none}
+.msg-draft textarea:focus-visible{outline:none}
+.msg-draft-foot{display:flex; align-items:center; justify-content:space-between; gap:10px; padding-top:9px; border-top:2px dotted var(--edge)}
+.msg-draft-hint{font:12px/18px var(--mono); color:var(--muted)}
+.chat-main>.msg-draft{position:sticky; bottom:var(--space-3)}
+
+@media (prefers-reduced-motion:reduce){.avatar[data-state=thinking],.thinking-dots::after{animation:none}}
+
+/* The sidebar: a third column of the shell while it is open, of wood like the rail; a sheet over the page on a phone. */
+.shell.chat-open{grid-template-columns:var(--rail-width) minmax(0,1fr) minmax(340px,420px)}
+.chat-panel{position:sticky; top:0; height:100vh; display:flex; flex-direction:column; gap:var(--space-3); min-width:0; padding:var(--space-4);
+  --text:var(--rail-ink); --text-strong:var(--rail-accent); --text-muted:var(--rail-ink); --text-link:var(--rail-accent); --text-accent:var(--rail-accent); --rule:var(--outline);
+  color:var(--rail-ink); background-color:var(--rail); background-image:var(--planks),var(--grain-ground); background-size:auto,4px 4px;
+  border-left:2px solid var(--outline); box-shadow:inset 3px 0 0 var(--bevel-light)}
 .chat-panel[hidden]{display:none}
 .chat-panel-head{display:flex; align-items:center; justify-content:space-between; gap:var(--space-2)}
 .chat-panel-head .label{text-decoration:none}
 .chat-panel-head .tools{display:flex; gap:var(--space-1)}
-.chat-panel .chat-thread{overflow-y:auto; padding-right:var(--space-1)}
-.chat-panel .msg{max-width:100%}
+.chat-panel .chat{--portrait-size:56px; --chat-gutter:70px; gap:var(--space-4)}
+.chat-panel .chat-thread{overflow-y:auto; padding:var(--space-1) var(--space-2) var(--space-2) 0}
+.chat-panel .msg-main{min-height:calc(var(--portrait-size) + 10px); padding:10px 12px}
+.chat-panel .msg-main::before{top:20px} .chat-panel .msg-main::after{top:23px}
+.chat-panel .msg .body{font-size:15px; line-height:22px}
+.chat-panel .msg-draft{--portrait-size:56px}
 .chat-toggle{position:fixed; z-index:15; bottom:var(--space-5); right:var(--space-5); gap:var(--space-2); box-shadow:var(--shadow-float)}
 .chat-toggle[hidden],.shell.chat-open .chat-toggle{display:none}
-@media (max-width:1179px){.shell.chat-open{grid-template-columns:var(--rail-width) minmax(0,1fr) minmax(300px,340px)}}
+@media (max-width:1179px){.shell.chat-open{grid-template-columns:var(--rail-width) minmax(0,1fr) minmax(300px,360px)}}
 @media (max-width:899px){
   .chat-page{grid-template-columns:minmax(0,1fr)}
-  .chat-list{position:static; max-height:none}
-  .chat-list{order:2}
-  .chat-main{padding:var(--space-4); min-height:calc(100vh - 160px)}
+  .chat-list{position:static; max-height:none; order:2}
+  .chat-main{min-height:calc(100vh - 160px)}
+  .chat-main>.msg-draft{bottom:calc(66px + env(safe-area-inset-bottom, 0px))}
   .chat-panel{position:fixed; z-index:25; inset:0 0 calc(58px + env(safe-area-inset-bottom, 0px)) 0; height:auto; border-left:0; box-shadow:var(--shadow-float)}
   .chat-toggle{bottom:calc(70px + env(safe-area-inset-bottom, 0px)); right:var(--space-3)}
-  .chat-composer{bottom:calc(58px + env(safe-area-inset-bottom, 0px))}
-  .chat-panel .chat-composer{bottom:0}
 }
+@media (max-width:640px){.chat{--portrait-size:64px; --chat-gutter:78px}}
 @media print{.chat-panel,.chat-toggle{display:none}}

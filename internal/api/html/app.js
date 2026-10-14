@@ -15,7 +15,8 @@
 //      danger button, and the hint of Ctrl+K in the search;
 //   6. the command list of Ctrl+K (docs/plans/094-the-command-list.md);
 //   7. the conversation (docs/plans/103-the-conversation-on-the-screen.md): the sidebar that follows the owner from
-//      the chat page, its thread and its question, and the question shown at once on the chat page.
+//      the chat page, its thread and its question, the question shown at once on the chat page, and Enter that
+//      sends a draft.
 (function () {
   "use strict";
 
@@ -533,27 +534,44 @@
       alert: doc.querySelector("[role=alert]") };
   }
 
-  // turnWaiting draws the question as sent and "Thinking" under it, until the answer replaces the thread.
+  // speaker is a spoken line of the thread as the server draws it (docs/plans/104-the-chat-in-basm.md): the framed
+  // portrait and its nameplate beside the parchment panel. The words are text, never markup.
+  function speaker(who, name, words, state) {
+    var msg = document.createElement("div");
+    msg.className = "msg msg-" + who;
+    msg.innerHTML = '<figure class="portrait"><span class="avatar"><img src="/assets/portrait-' + who + '.png" alt="" width="256" height="256"></span>' +
+      '<figcaption class="who"></figcaption></figure><div class="msg-main"><div class="body"><p></p></div></div>';
+    msg.querySelector(".who").textContent = name;
+    msg.querySelector(".body p").textContent = words;
+    if (state) msg.querySelector(".avatar").setAttribute("data-state", state);
+    return msg;
+  }
+
+  // turnWaiting draws the question as sent and lifelog thinking under it, until the answer replaces the thread. It
+  // returns the waiting line, which a failure turns into the reason.
   function turnWaiting(thread, question) {
-    var empty = thread.querySelector(".chat-empty");
-    if (empty) empty.remove();
-    var mine = document.createElement("div");
-    mine.className = "msg owner";
-    mine.innerHTML = '<div class="bubble"></div>';
-    mine.firstChild.textContent = question;
-    var wait = document.createElement("div");
-    wait.className = "msg lifelog pending";
-    wait.innerHTML = '<div class="bubble">Thinking… the answer can take a minute.</div>';
-    thread.appendChild(mine);
+    var wait = speaker("lifelog", "Lifelog", "", "thinking");
+    wait.classList.add("msg-pending");
+    wait.querySelector(".body p").innerHTML = '<span class="thinking thinking-dots">Thinking</span>';
+    thread.appendChild(speaker("owner", "You", question));
     thread.appendChild(wait);
     return wait;
   }
+
+  // A draft sends with Enter, as Basm's does; Shift+Enter makes a new line, and a composing input method keeps Enter.
+  document.addEventListener("keydown", function (ev) {
+    var t = ev.target;
+    if (ev.defaultPrevented || ev.key !== "Enter" || ev.shiftKey || ev.altKey || ev.ctrlKey || ev.metaKey || ev.isComposing) return;
+    if (t.tagName !== "TEXTAREA" || !t.form || !t.form.classList.contains("msg-draft")) return;
+    ev.preventDefault();
+    if (t.value.trim()) t.form.requestSubmit();
+  });
 
   function chat() {
     var page = document.querySelector("[data-chat-page]");
     if (page) {
       saveChat({ open: true, id: page.getAttribute("data-chat-page") });
-      var full = page.querySelector(".chat-composer form");
+      var full = page.querySelector("form.msg-draft");
       if (full) full.addEventListener("submit", function () {
         var q = full.querySelector("textarea[name=question]");
         if (!q || !q.value.trim()) return;
@@ -612,8 +630,9 @@
       var wait = turnWaiting(thread, q);
       thread.scrollTop = thread.scrollHeight;
       function failed(words) {
-        wait.className = "msg lifelog failed";
-        wait.firstChild.textContent = words;
+        wait.className = "msg msg-lifelog msg-failed";
+        wait.querySelector(".avatar").removeAttribute("data-state");
+        wait.querySelector(".body p").textContent = words;
       }
       fetch(form.action, { method: "POST", body: new URLSearchParams(new FormData(form)), credentials: "same-origin",
         headers: { Accept: "text/html" } })

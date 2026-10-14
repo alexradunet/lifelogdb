@@ -467,10 +467,20 @@ func TestTheChatSidebarAndTheChatPage(t *testing.T) {
 	if strings.Contains(page, `id="chat-panel"`) {
 		t.Fatal("the chat page draws the sidebar too")
 	}
-	for _, want := range []string{`data-chat-page="` + id + `"`, `<div class="msg owner"><div class="bubble prose"><p>Hi</p>`,
-		`<div class="msg lifelog"><div class="bubble prose"><p>Hello <strong>there</strong>.</p>`, `aria-current="page">Conversation 2031-05-14 12.30.05</a>`} {
+	for _, want := range []string{`data-chat-page="` + id + `"`,
+		`<div class="msg msg-owner"><figure class="portrait"><span class="avatar"><img src="/assets/portrait-owner.png"`,
+		`<figcaption class="who">You · 12.30</figcaption></figure><div class="msg-main"><div class="body prose"><p>Hi</p>`,
+		`<figcaption class="who">Lifelog</figcaption></figure><div class="msg-main"><div class="body prose"><p>Hello <strong>there</strong>.</p>`,
+		`<form class="msg msg-owner msg-draft" method="POST" action="/conversations" data-action="ask"><input type="hidden" name="conversation" value="` + id + `">`,
+		`aria-current="page">Conversation 2031-05-14 12.30.05</a>`} {
 		if !strings.Contains(page, want) {
 			t.Fatalf("the chat page has no %s", want)
+		}
+	}
+	for _, who := range []string{"lifelog", "owner"} { // the portraits the thread names are served, as PNG
+		rec := browse(t, h, "/assets/portrait-"+who+".png")
+		if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "image/png" || !strings.HasPrefix(rec.Body.String(), "\x89PNG") {
+			t.Fatalf("portrait %s: %d %s", who, rec.Code, rec.Header().Get("Content-Type"))
 		}
 	}
 	if blank := browse(t, h, "/conversations").Body.String(); !strings.Contains(blank, "New conversation</h1>") || !strings.Contains(blank, `data-chat-page=""`) {

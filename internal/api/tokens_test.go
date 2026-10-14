@@ -41,6 +41,8 @@ func TestTheTokensHoldTheirContrast(t *testing.T) {
 	text("page-muted", "ground")
 	text("rail-ink", "rail", "rail-deep")
 	text("rail-accent", "rail", "rail-deep")
+	text("teal", "rail", "rail-deep")   // a tool's name on its row of wood (docs/plans/104-the-chat-in-basm.md)
+	text("indigo", "rail", "rail-deep") // the owner's nameplate
 	text("accent", "ground")
 	text("accent-ink", "surface", "surface-deep")
 	text("link", "surface", "surface-deep")
