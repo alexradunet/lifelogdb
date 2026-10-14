@@ -84,6 +84,25 @@ func daysOf(done, active any) string {
 	return num(done) + " of " + num(active) + " days"
 }
 
+// lasting says how long a session lasted from its elapsed milliseconds: "35 min", "1 h 15 min", "2 h", "under 1 min";
+// "" when it has no length (no end, or a local clock that names no instant).
+func lasting(ms any) string {
+	f, ok := ms.(float64)
+	if !ok {
+		return ""
+	}
+	m := int64(f) / 60000
+	switch {
+	case m < 1:
+		return "under 1 min"
+	case m < 60:
+		return strconv.FormatInt(m, 10) + " min"
+	case m%60 == 0:
+		return strconv.FormatInt(m/60, 10) + " h"
+	}
+	return strconv.FormatInt(m/60, 10) + " h " + strconv.FormatInt(m%60, 10) + " min"
+}
+
 // weekday is the name of a day's weekday, "" for a day that is not one.
 func weekday(day string) string {
 	t, ok := dayOf(day)
