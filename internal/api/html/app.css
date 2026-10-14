@@ -526,6 +526,9 @@ dialog.palette>.meta{flex:none; margin:0; padding:var(--space-2) var(--space-5);
 .margin ul.plain{padding:0 var(--space-3); box-shadow:var(--parch-bevel)}
 .margin ul.plain>li{padding:var(--space-3) 0; border-top:1px solid var(--edge); border-bottom:0}
 .margin ul.plain>li:first-child{border-top:0}
+/* An entry in a list item: the item draws the line, the entry the padding, so a row has one of each. */
+ul.plain>li:has(>a.entry){padding:0}
+li>a.entry{border-bottom:0}
 .margin .occ{align-items:flex-start}
 .margin .habit{padding:var(--space-3); box-shadow:var(--parch-bevel)}
 .margin .habit+.habit{margin-top:var(--space-2); border-top:2px solid var(--edge)}

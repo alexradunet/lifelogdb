@@ -158,6 +158,10 @@ func TestTheWeekLooksBackOverSevenDays(t *testing.T) {
 	if strings.Index(body, "Send the form") > strings.Index(body, "Call the bank") {
 		t.Error("the done occurrence is not before the open one")
 	}
+	// The list holds the open occurrences of the week too, so its heading names them all.
+	if !strings.Contains(body, `<section class="group" aria-label="Due this week">`) || strings.Contains(body, "Done and skipped") {
+		t.Error("the week's work is not headed Due this week")
+	}
 	empty := browse(t, h, "/weeks/2026-W20")
 	for _, want := range []string{"No habit was active this week.", "No reading this week.", "Nothing was due this week."} {
 		if !strings.Contains(empty, want) {

@@ -1,6 +1,6 @@
 {{/* The week (docs/plans/097-the-almanac-reflects.md): a look back over seven days, Monday first. The sheet lists the
      days, each a link to its day. The margin counts what the week held: habits, readings and the work that was due.
-     A habit is told by its count, with no strip. */}}
+     A habit is told by its count, with no strip; what was due lists the settled occurrences first. */}}
 {{define "week"}}{{template "head" .}}
 {{$w := .Props}}
 <header class="page-head"><div class="what"><span class="date">{{shortDay $w.from}} to {{shortDay $w.through}}</span><h1>{{.Title}}</h1>
@@ -32,8 +32,8 @@
 {{else}}<p class="empty">No reading this week. <a href="/metrics">Metrics</a>.</p>{{end}}
 </section>
 
-<section class="group" aria-label="Done and skipped">
-<div class="panel-head"><h2>Done and skipped</h2><a href="/deadlines">What is due</a></div>
+<section class="group" aria-label="Due this week">
+<div class="panel-head"><h2>Due this week</h2><a href="/deadlines">What is due</a></div>
 {{with $w.occurrences}}<ul class="plain due">{{range settledFirst .}}{{template "occ" ($.Occ . 0)}}{{end}}</ul>
 {{else}}<p class="empty">Nothing was due this week. <a href="/deadlines">What is due</a>.</p>{{end}}
 </section>
