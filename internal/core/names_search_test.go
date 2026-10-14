@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"reflect"
 	"testing"
 )
 
@@ -182,5 +183,32 @@ func TestSearchSnippetKeepsTheBracketsOfTheText(t *testing.T) {
 	want := "Coffee with [[Ana]]; we planned the [[⟦Garden⟧ project]]. - [x] seeds"
 	if len(got) != 1 || got[0] != want {
 		t.Fatalf("snippet of Plans = %q, want [%q]", got, want)
+	}
+}
+
+// TestASaveSaysWhichLinksItAdded: a save's Linked is every page the body links after it; Added is the ones this save
+// linked that the page did not link before, so a capture can report what it added and not the whole day again.
+func TestASaveSaysWhichLinksItAdded(t *testing.T) {
+	s := fresh(t)
+	_, r, err := s.Capture(ctx, "cli", "2026-10-14", "Ran with [[Sam]] at [[Lakeside Park]].", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(r.Added, []string{"Sam", "Lakeside Park"}) {
+		t.Errorf("first capture added %v", r.Added)
+	}
+	_, r, err = s.Capture(ctx, "cli", "2026-10-14", "Lunch with [[Mihai]] and [[Sam]]. #food", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(r.Linked, []string{"Sam", "Lakeside Park", "Mihai", "food"}) || !reflect.DeepEqual(r.Added, []string{"Mihai", "food"}) {
+		t.Errorf("second capture linked %v, added %v; want every link, and Mihai and food added", r.Linked, r.Added)
+	}
+	_, r, err = s.Capture(ctx, "cli", "2026-10-14", "Home again.", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Added) != 0 {
+		t.Errorf("a capture with no link added %v", r.Added)
 	}
 }

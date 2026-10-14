@@ -106,12 +106,13 @@ func TestAResultIsSaidInSentences(t *testing.T) {
 		in   map[string]any
 		want string
 	}{
-		{"sync", map[string]any{"linked": []any{"B", "A"}, "created": []any{"<b>"}, "revived": []any{"D"}, "skipped": []any{"x/y"}},
+		{"sync", map[string]any{"linked": []any{"B", "C", "A"}, "added": []any{"B", "A"}, "created": []any{"<b>"}, "revived": []any{"D"}, "skipped": []any{"x/y"}},
 			`Linked <a href="/pages?title=A">A</a> and <a href="/pages?title=B">B</a>. | Created <a href="/pages?title=%3Cb%3E">&lt;b&gt;</a>. | ` +
 				`Revived <a href="/pages?title=D">D</a>. | Not linked, not a valid title: <code>[[x/y]]</code>.`},
 		{"nothing to say", map[string]any{"linked": []any{}}, "Done."},
+		{"no link added", map[string]any{"linked": []any{"A", "B"}}, "Done."},
 		{"add-file", map[string]any{"id": 7.0, "existing": true, "day": "2026-10-11", "place": "Lakeside", "linked": true, "point_set": true,
-			"embedded": true, "sync": map[string]any{"linked": []any{"A"}}, "day_sync": map[string]any{"revived": []any{"B"}}},
+			"embedded": true, "sync": map[string]any{"linked": []any{"A"}, "added": []any{"A"}}, "day_sync": map[string]any{"revived": []any{"B"}}},
 			`In its page: Linked <a href="/pages?title=A">A</a>. | In its day page: Revived <a href="/pages?title=B">B</a>. | ` +
 				`Kept the file: <a href="/pages/7">its page</a>. | The same original was kept before. | ` +
 				`Filed under <time datetime="2026-10-11">yesterday · Sun 11 Oct</time>. | At <a href="/pages?title=Lakeside">Lakeside</a>. | ` +

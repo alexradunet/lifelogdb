@@ -52,9 +52,13 @@ func resultSentences(m map[string]any, c clock) []resultLine {
 	var out []resultLine
 	say := func(format string, a ...any) { out = append(out, template.HTML(fmt.Sprintf(format, a...))) }
 
-	// The sync shape: what the save contract did with the [[links]] and #tags of a body.
+	// The sync shape: what the save contract did with the [[links]] and #tags of a body. Linked says the links this
+	// save added, not every link of the page again; the whole list is the JSON's.
 	sync := func(m map[string]any, where string) {
-		for _, s := range []struct{ key, words string }{{"linked", "Linked"}, {"created", "Created"}, {"revived", "Revived"}, {"skipped", ""}} {
+		if _, isList := m["linked"].([]any); isList {
+			delete(m, "linked")
+		}
+		for _, s := range []struct{ key, words string }{{"added", "Linked"}, {"created", "Created"}, {"revived", "Revived"}, {"skipped", ""}} {
 			list, isList := m[s.key].([]any)
 			if !isList {
 				continue // add-file's linked is a yes or no: its own sentence says it

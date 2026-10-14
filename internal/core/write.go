@@ -51,6 +51,7 @@ func (s *Store) dryRun(ctx context.Context, source string, fn func(*Tx) error) e
 // skipped targets and tells the owner about a revived page).
 type Sync struct {
 	Linked  []string `json:"linked"`
+	Added   []string `json:"added,omitempty"` // the linked titles the page did not link before this save
 	Created []string `json:"created,omitempty"`
 	Revived []string `json:"revived,omitempty"`
 	Skipped []string `json:"skipped,omitempty"`
@@ -84,6 +85,25 @@ func (t *Tx) syncWikilinks(pageID int64, body string) (Sync, error) {
 	}
 	keys, titles, rejected := text.Targets(body, own)
 	r := Sync{Linked: []string{}, Skipped: rejected}
+	before := map[int64]bool{}
+	rows, err := t.tx.QueryContext(t.ctx, `SELECT to_id FROM links WHERE from_id = ? AND kind = 'wikilink'`, pageID)
+	if err != nil {
+		return Sync{}, err
+	}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return Sync{}, err
+		}
+		before[id] = true
+	}
+	if err := rows.Close(); err != nil {
+		return Sync{}, err
+	}
+	if err := rows.Err(); err != nil {
+		return Sync{}, err
+	}
 	ids := []int64{}
 	seen := map[int64]bool{pageID: true}
 	for i, key := range keys {
@@ -103,6 +123,9 @@ func (t *Tx) syncWikilinks(pageID int64, body string) (Sync, error) {
 		seen[id] = true
 		ids = append(ids, id)
 		r.Linked = append(r.Linked, title)
+		if !before[id] {
+			r.Added = append(r.Added, title)
+		}
 		if created {
 			r.Created = append(r.Created, title)
 		}
@@ -111,7 +134,7 @@ func (t *Tx) syncWikilinks(pageID int64, body string) (Sync, error) {
 		}
 	}
 	idsJSON, _ := json.Marshal(ids)
-	_, err := t.tx.ExecContext(t.ctx, `DELETE FROM links WHERE from_id = ? AND kind = 'wikilink'
+	_, err = t.tx.ExecContext(t.ctx, `DELETE FROM links WHERE from_id = ? AND kind = 'wikilink'
 	                       AND to_id NOT IN (SELECT value FROM json_each(?))`, pageID, string(idsJSON))
 	return r, err
 }

@@ -937,6 +937,7 @@ What the save contract did with the body's `[[wikilinks]]` and `#tags`:
 | property | type | meaning |
 |---|---|---|
 | `linked` | list | the titles linked |
+| `added` | list | the titles in `linked` that the page did not link before this save; absent when none |
 | `created` | list | the titles whose page was created; absent when none |
 | `revived` | list | the tombstoned pages revived by a link; absent when none |
 | `skipped` | list | the `[[names]]` that are not valid titles; absent when none |
@@ -971,11 +972,13 @@ browser form gets no receipt: the chat page shows the turn):
 | `promoted` | boolean | a plain page of that title became the file |
 | `sync` | object | the sync shape of its body |
 | `sync.linked` | list | |
+| `sync.added` | list | |
 | `sync.created` | list | |
 | `sync.revived` | list | |
 | `sync.skipped` | list | |
 | `day_sync` | object | the sync shape of its day page, when it was appended there |
 | `day_sync.linked` | list | |
+| `day_sync.added` | list | |
 | `day_sync.created` | list | |
 | `day_sync.revived` | list | |
 | `day_sync.skipped` | list | |
