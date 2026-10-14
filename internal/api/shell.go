@@ -43,7 +43,7 @@ func (h *server) shell(ctx context.Context, due *int) (*shellView, error) {
 		if err != nil {
 			return nil, err
 		}
-		count = len(open)
+		count = dueRows(open, today)
 	}
 	first := time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
 	last := first.AddDate(0, 1, -1)
@@ -75,13 +75,30 @@ func (h *server) write(w http.ResponseWriter, r *http.Request, status int, e *En
 	h.inShell(w, r, status, e)
 }
 
+// dueRows is how many rows the root's Due draws for the open occurrences overdue or due today: a series overdue many
+// times is one row, as the list folds it (dueGroups), and each occurrence due today is one.
+func dueRows(open []occurrenceView, today string) int {
+	n, overdue := 0, map[int64]bool{}
+	for _, o := range open {
+		if o.DueDay < today {
+			if overdue[o.TaskID] {
+				continue
+			}
+			overdue[o.TaskID] = true
+		}
+		n++
+	}
+	return n
+}
+
 // inShell draws the entity as a page in the shell, for any client: the read of the shell may fail, as write says.
 func (h *server) inShell(w http.ResponseWriter, r *http.Request, status int, e *Entity) {
 	var due *int // the root already read what is due: the shell does not read it again
 	if len(e.Class) > 0 && e.Class[0] == "root" {
 		if props, ok := e.Properties.(map[string]any); ok {
 			if open, ok := props["due"].([]occurrenceView); ok {
-				n := len(open)
+				today, _ := props["today"].(string)
+				n := dueRows(open, today)
 				due = &n
 			}
 		}

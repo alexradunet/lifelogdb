@@ -15,9 +15,9 @@ import (
 	"lifelog/internal/db"
 )
 
-// TestTheSidebarCountsWhatIsDueAndShowsTheMonth: the Due count is the open occurrences overdue (in the 30 days
-// before today) or due today, as the root's due lists them; a done, a skipped, a later, an older and a tombstoned
-// one are not counted. The month is this month, with the days that have a day page marked and today framed.
+// TestTheSidebarCountsWhatIsDueAndShowsTheMonth: the Due count is the rows of the root's Due: the open occurrences
+// overdue (in the 30 days before today) with a series counted once, as the list folds it, and each one due today; a
+// done, a skipped, a later, an older and a tombstoned one are not counted. The month is this month, with the days that have a day page marked and today framed.
 func TestTheSidebarCountsWhatIsDueAndShowsTheMonth(t *testing.T) {
 	c, h := freshOn(t, fixedToday) // Wednesday 14 May 2031
 	if body := browse(t, h, "/"); strings.Contains(body, `class="count"`) || !strings.Contains(body, "May 2031</a><span class=\"meta\">0 written</span>") {
@@ -34,7 +34,7 @@ func TestTheSidebarCountsWhatIsDueAndShowsTheMonth(t *testing.T) {
 		must(c.Do(t.Context(), find(occ, "edit-occurrence"), values))
 	}
 	create(map[string]string{"label": "Book the dentist", "due_day": dayOf(-3)})                                                // counted
-	create(map[string]string{"label": "Water the plants", "repeat_unit": "day", "repeat_every": "7", "anchor_day": dayOf(-14)}) // -14, -7 and 0: three
+	create(map[string]string{"label": "Water the plants", "repeat_unit": "day", "repeat_every": "7", "anchor_day": dayOf(-14)}) // -14 and -7 one row, 0 another
 	create(map[string]string{"label": "Renew the passport", "due_day": dayOf(2)})                                               // later
 	create(map[string]string{"label": "Pay the old bill", "due_day": dayOf(-40)})                                               // before the window
 	outcome(create(map[string]string{"label": "Call Dana Example", "due_day": dayOf(-1)}), map[string]string{"state": "done", "completed_at": "now"})
@@ -53,7 +53,7 @@ func TestTheSidebarCountsWhatIsDueAndShowsTheMonth(t *testing.T) {
 		t.Fatalf("the root lists %d due, want 4", n)
 	}
 	for _, want := range []string{
-		`<span class="count" title="Open, overdue or due today">4</span>`,
+		`<span class="count" title="Open, overdue or due today">3</span>`,
 		`<a href="/months/2031-05">May 2031</a><span class="meta">3 written</span>`,
 		`<tr><td></td><td></td><td></td><td><a href="/days/2031-05-01" aria-label="Thu 1 May">1</a></td>`,
 		`<a href="/days/2031-05-03" class="written" aria-label="Sat 3 May, written">3</a>`,
@@ -65,6 +65,9 @@ func TestTheSidebarCountsWhatIsDueAndShowsTheMonth(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("the sidebar lacks %s:\n%s", want, sidebar(body))
 		}
+	}
+	if tasks := browse(t, h, "/tasks"); !strings.Contains(tasks, `<span class="count" title="Open, overdue or due today">3</span>`) {
+		t.Errorf("another page counts what is due otherwise:\n%s", sidebar(tasks))
 	}
 	if strings.Contains(sidebar(body), "2031-04-30") {
 		t.Error("the sidebar's month shows a day of another month")
