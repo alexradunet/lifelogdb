@@ -19,10 +19,13 @@ func occ(task float64, key, due, state string) map[string]any {
 }
 
 // TestDueGroupsPutEachOccurrenceInItsGroup checks the groups of a list against a hand-made table: the edges of
-// today and of the week after it, the states, an undated one, and a series folded in Later only.
+// today and of the week after it, the states, an undated one, and a series folded in Overdue and in Later.
 func TestDueGroupsPutEachOccurrenceInItsGroup(t *testing.T) {
 	list := []any{
 		occ(1, "2026-10-01", "2026-10-01", "open"),    // overdue
+		occ(1, "2026-10-04", "2026-10-04", "open"),    // overdue, the same series again
+		occ(7, "once", "2026-10-05", "open"),          // overdue, another task
+		occ(1, "2026-10-07", "2026-10-07", "open"),    // and the series again
 		occ(2, "once", "2026-10-11", "done"),          // earlier: settled before today
 		occ(3, "once", "2026-10-12", "open"),          // today
 		occ(1, "2026-10-13", "2026-10-13", "skipped"), // next 7 days, whatever its state
@@ -53,9 +56,9 @@ func TestDueGroupsPutEachOccurrenceInItsGroup(t *testing.T) {
 		fold bool
 		want string
 	}{
-		{true, "Overdue: 1/2026-10-01 | Earlier: 2/once | Today: 3/once | Next 7 days: 1/2026-10-13 4/once | " +
+		{true, "Overdue: 1/2026-10-01+2 7/once | Earlier: 2/once | Today: 3/once | Next 7 days: 1/2026-10-13 4/once | " +
 			"Later: 1/2026-10-20+2 5/once | No due day: 6/once"},
-		{false, "Overdue: 1/2026-10-01 | Earlier: 2/once | Today: 3/once | Next 7 days: 1/2026-10-13 4/once | " +
+		{false, "Overdue: 1/2026-10-01 1/2026-10-04 7/once 1/2026-10-07 | Earlier: 2/once | Today: 3/once | Next 7 days: 1/2026-10-13 4/once | " +
 			"Later: 1/2026-10-20 5/once 1/2026-10-27 1/2026-11-03 | No due day: 6/once"},
 	} {
 		if got := show(dueGroups(list, "2026-10-12", c.fold)); got != c.want {

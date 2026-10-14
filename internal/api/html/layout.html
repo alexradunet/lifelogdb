@@ -77,11 +77,11 @@
 <ul class="plain">{{range .}}<li>{{template "dayentry" (dict "v" $v "e" .)}}</li>{{end}}</ul>
 </section>{{end}}{{end}}
 
-{{/* due is the margin's group of what is due: the occurrences with their outcomes, or the way forward. It takes v
-     (the view) and due. */}}
+{{/* due is the margin's group of what is due: the occurrences with their outcomes, a series overdue once (folded as
+     the deadlines fold it), or the way forward. It takes v (the view) and due. */}}
 {{define "due"}}{{$v := .v}}<section class="group" aria-label="Due">
 <div class="panel-head"><h2>Due</h2><a href="/deadlines">The weeks ahead</a></div>
-{{with .due}}<ul class="plain due">{{range .}}{{template "occ" ($v.Occ . 0)}}{{end}}</ul>
+{{with .due}}<ul class="plain due">{{range due . $v.Props.today true}}{{range .Items}}{{template "occ" ($v.Occ .Occurrence .More)}}{{end}}{{end}}</ul>
 {{else}}<p class="empty">Nothing is due today or overdue. <a href="/deadlines">What is due</a> has the weeks ahead.</p>{{end}}
 </section>{{end}}
 

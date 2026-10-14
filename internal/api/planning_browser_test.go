@@ -187,10 +187,19 @@ func TestDueOccurrencesOfferTheirOutcome(t *testing.T) {
 	if skip.Fields.Get("key") != dayOf(-11) {
 		t.Fatalf("the first Skip of the series is for %s", skip.Fields.Get("key"))
 	}
+	// The deadlines fold the overdue slots of a series under its first one; the task's own page has every slot.
 	for _, f := range postForms(browse(t, h, window)) {
+		if f.Button == "Skip" && f.Fields.Get("key") == dayOf(-1) {
+			t.Error("the deadlines page shows a folded overdue slot")
+		}
+	}
+	for _, f := range postForms(browse(t, h, water)) {
 		if f.Button == "Skip" && f.Fields.Get("key") == dayOf(-1) {
 			skip = f
 		}
+	}
+	if skip.Fields.Get("key") != dayOf(-1) {
+		t.Fatalf("the task page offers no Skip for %s", dayOf(-1))
 	}
 	if rec := submit(h, skip.Action, skip.Fields, ""); rec.Code != http.StatusSeeOther {
 		t.Fatalf("Skip: %d %s", rec.Code, rec.Body.String())
@@ -290,6 +299,38 @@ func TestAnOverdueRowSaysSo(t *testing.T) {
 		}
 		if rows["Pay the rent"] {
 			t.Errorf("%s: the done occurrence says overdue", path)
+		}
+	}
+}
+
+// TestTheMarginFoldsTheOverdueSlotsOfASeries: a daily series three days behind is one overdue row in the margin of
+// Home and of today, with "and 2 more" that opens the task, beside today's slot; the task's own page keeps every slot.
+func TestTheMarginFoldsTheOverdueSlotsOfASeries(t *testing.T) {
+	c, h := freshOn(t, fixedToday)
+	e := must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "create-task"),
+		map[string]string{"label": "Water the plants", "repeat_unit": "day", "repeat_every": "1", "anchor_day": dayOf(-3)}))
+	water := strings.SplitN(hrefOf(e, "self"), "?", 2)[0]
+	rows := regexp.MustCompile(`<a href="` + regexp.QuoteMeta(water) + `/occurrences/([0-9-]+)">Water the plants</a>`)
+	for _, path := range []string{"/", "/days/" + fixedToday} {
+		body := browse(t, h, path)
+		var keys []string
+		for _, m := range rows.FindAllStringSubmatch(body, -1) {
+			keys = append(keys, m[1])
+		}
+		if want := dayOf(-3) + " " + fixedToday; strings.Join(keys, " ") != want {
+			t.Errorf("%s: the rows of the series are %v, want %s", path, keys, want)
+		}
+		if !strings.Contains(body, `<a href="`+water+`">and 2 more</a>`) {
+			t.Errorf("%s: the overdue row does not say that it stands for 2 more", path)
+		}
+	}
+	if n := len(rows.FindAllString(browse(t, h, water), -1)); n != 0 {
+		t.Errorf("the task page names its rows by the task: %d rows named so", n)
+	}
+	page := browse(t, h, water)
+	for _, k := range []string{dayOf(-3), dayOf(-2), dayOf(-1), fixedToday} {
+		if !strings.Contains(page, water+"/occurrences/"+k+`"`) {
+			t.Errorf("the task page lacks the slot %s", k)
 		}
 	}
 }

@@ -113,8 +113,8 @@ type dueItem struct {
 
 // dueGroups puts occurrences, already in due-day order, into groups: Overdue (open, due before today), Earlier
 // (done or skipped, due before today), Today, Next 7 days, Later, and No due day. A group without an occurrence is
-// left out. With fold, Later shows a series once, at its first slot, and counts the slots it stands for: a series
-// every few days must not hide the one-off tasks of the months ahead.
+// left out. With fold, Overdue and Later show a series once, at its first slot, and count the slots it stands for: a
+// series every few days must not hide the one-off tasks of the months ahead, or bury the other overdue ones.
 func dueGroups(list any, today string, fold bool) []dueGroup {
 	names := []string{"Overdue", "Earlier", "Today", "Next 7 days", "Later", "No due day"}
 	groups := make([][]dueItem, len(names))
@@ -122,7 +122,7 @@ func dueGroups(list any, today string, fold bool) []dueGroup {
 	if t, err := time.Parse(time.DateOnly, today); err == nil {
 		week = t.AddDate(0, 0, actionableDays).Format(time.DateOnly)
 	}
-	first := map[string]int{} // a series in Later: where its first slot is
+	first := [2]map[string]int{{}, {}} // a series in Overdue, in Later: where its first slot is
 	items, _ := list.([]any)
 	for _, it := range items {
 		o, _ := it.(map[string]any)
@@ -141,13 +141,13 @@ func dueGroups(list any, today string, fold bool) []dueGroup {
 		case due <= week:
 			g = 3
 		}
-		if g == 4 && fold {
-			task := num(o["task_id"])
-			if i, ok := first[task]; ok {
+		if fold && (g == 0 || g == 4) {
+			f, task := first[g/4], num(o["task_id"])
+			if i, ok := f[task]; ok {
 				groups[g][i].More++
 				continue
 			}
-			first[task] = len(groups[g])
+			f[task] = len(groups[g])
 		}
 		groups[g] = append(groups[g], dueItem{Occurrence: it})
 	}
