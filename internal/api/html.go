@@ -174,6 +174,9 @@ func hereOf(u *url.URL) string {
 }
 
 func renderHTML(w http.ResponseWriter, r *http.Request, status int, e *Entity, sv *shellView) {
+	if r.Header.Get("Sec-Fetch-Dest") == "iframe" {
+		sv = nil // a page inside a frame (the chat sidebar) has the shell of the page around it, not one of its own
+	}
 	v := &view{Entity: e, Props: jsonShape(e.Properties), Path: r.URL.Path, Here: hereOf(r.URL), Shell: sv}
 	if rf, ok := r.Context().Value(refusalKey{}).(*refusal); ok && status < 400 {
 		// This page is the one a refused form came from (refusedOnItsPage): it answers with the form's error.
@@ -288,7 +291,8 @@ func navMatch(path, p string) int {
 
 // LinkTitle is the title of the entity's link with that rel, "" when it has none.
 // ChatPanel says whether the page draws the chat sidebar: every page of the shell but the chat page, which is the
-// same conversation full size (docs/plans/103-the-conversation-on-the-screen.md).
+// same conversation full size (docs/plans/103-the-conversation-on-the-screen.md), and the sidebar holds it in a
+// frame (docs/plans/108-the-browser-made-current.md).
 func (v *view) ChatPanel() bool {
 	return v.Shell != nil && !slices.Contains(v.Class, "conversation")
 }

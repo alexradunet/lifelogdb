@@ -722,7 +722,8 @@ func TestTheChatSidebarAndTheChatPage(t *testing.T) {
 	id := idOf(must(ask(t, owner, "Hi")))
 	clock.set("2031-05-14")
 	home := browse(t, h, "/").Body.String()
-	for _, want := range []string{`<aside class="chat-panel" id="chat-panel"`, `data-chat="toggle"`, `<a href="/conversations"`} {
+	for _, want := range []string{`<aside class="chat-panel" id="chat-panel" popover aria-label="Chat">`, `<iframe src="/conversations" title="The conversation" loading="lazy"></iframe>`,
+		`<button type="button" class="button chat-toggle" popovertarget="chat-panel">`, `<a href="/conversations"`} {
 		if !strings.Contains(home, want) {
 			t.Fatalf("Home has no %s", want)
 		}
@@ -740,7 +741,16 @@ func TestTheChatSidebarAndTheChatPage(t *testing.T) {
 	if strings.Contains(page, `id="chat-panel"`) || strings.Contains(page, "chat-list") {
 		t.Fatal("the chat page draws the sidebar or a list of conversations")
 	}
-	for _, want := range []string{`<div class="chat-page" data-chat-page>`, `<h1>Conversation 2031-05-14</h1>`, `<a href="/days/2031-05-13">Memory: 2031-05-13</a>`,
+	// Inside the sidebar's frame the page has no shell: the browser says it asks for a frame.
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/conversations", nil)
+	req.Header.Set("Accept", "text/html")
+	req.Header.Set("Sec-Fetch-Dest", "iframe")
+	framed := httptest.NewRecorder()
+	h.ServeHTTP(framed, req)
+	if !strings.Contains(page, `class="rail"`) || strings.Contains(framed.Body.String(), `class="rail"`) || !strings.Contains(framed.Body.String(), `<div class="chat-thread"><div class="chat">`) {
+		t.Fatalf("the chat page in a frame draws the shell, or the page outside one does not")
+	}
+	for _, want := range []string{`<div class="chat-page">`, `<h1>Conversation 2031-05-14</h1>`, `<a href="/days/2031-05-13">Memory: 2031-05-13</a>`,
 		`The conversation of <a href="/days/2031-05-13">2031-05-13</a> is summed up in that day's page. <a href="/conversations/` + fmt.Sprint(id) + `">Read it in full.</a>`,
 		`<figcaption class="who">You · 12.30</figcaption></figure><div class="msg-main"><div class="body prose"><p>Morning</p>`,
 		`<figcaption class="who">Lifelog</figcaption></figure><div class="msg-main"><div class="body prose"><p>Morning.</p>`,

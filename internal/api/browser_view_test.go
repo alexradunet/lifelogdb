@@ -300,8 +300,8 @@ func TestTheSheetsQueryTheColumnNotTheScreen(t *testing.T) {
 	if got := widths(string(baseCSS)); got != "899px" {
 		t.Errorf("base.css asks the screen's width at %s, want 899px alone", got)
 	}
-	if got := widths(string(appCSS)); got != "899px 1179px" {
-		t.Errorf("app.css asks the screen's width at %s, want 899px and 1179px alone", got)
+	if got := widths(string(appCSS)); got != "899px" {
+		t.Errorf("app.css asks the screen's width at %s, want 899px alone", got)
 	}
 	app := cssComments.ReplaceAllString(string(appCSS), "")
 	if n := strings.Count(app, "@container column ("); n < 8 {

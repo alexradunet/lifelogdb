@@ -258,12 +258,12 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   browser they are the chat page (the thread, a note that the previous day's conversation is summed up in that day's
   page, the composer on today's alone), and a conversation's `/pages/{id}` answers 303 there (`?view=page` keeps
   the page). The chat page takes the screen's height and scrolls its thread alone, so the head and the composer
-  never move and the page never scrolls under the owner's hands. Every other page of the shell has the chat sidebar: a right column that the Chat button opens and
-  closes, a sheet on a phone. The script fills it from the chat page's own HTML. The draft of the chat page and of
-  the sidebar sends its question with `fetch`, shows it at once as sent and clears itself, and draws the thread
-  again from the answer; when there is no answer the words go back into the draft. Whether the sidebar is open is
-  kept in `localStorage`, and the chat page sets it open, so the conversation follows the owner off the chat page. A question still runs in its request: the script asks before a page with a waiting
-  question is left.
+  never move and the page never scrolls under the owner's hands; the thread is laid out from its end, so it opens
+  at the newest turn ([plan 108](docs/plans/108-the-browser-made-current.md)). The draft posts, the answer runs in
+  the request, and the page comes back with it. Every other page of the shell has the chat sidebar: a popover
+  sheet over the right of the page that the Chat button opens and Close, Escape or a tap outside closes, holding
+  the chat page in an `iframe`; a page asked for as a frame (`Sec-Fetch-Dest: iframe`) is drawn without the shell.
+  The draft posts inside the frame. Whether the sidebar is open is not remembered from one page to the next.
 - **Renames select a preferred name on the same identity**, retaining direct aliases as
   [titles and wikilinks](docs/contract/titles-and-wikilinks.md) ("Renames") requires and
   [rename a page](docs/cookbook/rename-a-page.md) writes; `lifelog rename` and the API's `rename` action run it.

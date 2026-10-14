@@ -608,12 +608,14 @@ input[aria-invalid=true],textarea[aria-invalid=true],select[aria-invalid=true]{b
    teal --teal, the owner's indigo --indigo. Words are in sentence case, as everywhere in the app (plan 096). */
 /* The chat page fills the screen and scrolls its thread alone (plan 106): the head and the draft never move, and the
    page never scrolls under the owner's hands. The shell takes the screen's height on this page only, and the height
-   runs down the column, the main and the page to the thread, which is the one scroll area. */
+   runs down the column, the main and the page to the thread, which is the one scroll area. The thread is laid out
+   from its end (column-reverse), so it opens at the newest turn with no script (plan 108); the turns inside keep
+   their order. */
 .shell:has(.chat-page){block-size:100dvh;
   &>.column,& main{min-block-size:0}
   &>.column>footer{margin-block-start:var(--space-4)}}
 .chat-page{display:grid; grid-template-rows:minmax(0,1fr); block-size:100%; min-block-size:0;
-  & .chat-thread{overflow-y:auto; overscroll-behavior:contain; padding:var(--space-1) var(--space-3) var(--space-2) 0}}
+  & .chat-thread{display:flex; flex-direction:column-reverse; overflow-y:auto; overscroll-behavior:contain; padding:var(--space-1) var(--space-3) var(--space-2) 0}}
 .chat-main{display:flex; flex-direction:column; gap:var(--space-4); min-inline-size:0; min-block-size:0;
   &>.msg-draft{flex:none}}
 .chat-head{display:flex; align-items:baseline; justify-content:space-between; gap:var(--space-3); flex-wrap:wrap;
@@ -671,16 +673,6 @@ input[aria-invalid=true],textarea[aria-invalid=true],select[aria-invalid=true]{b
   & a{color:var(--rail-accent)}
   & .refused{color:var(--rail-ink)}}
 
-/* Thinking: the dots, and the portrait breathing teal light; the frame never moves. */
-.thinking{font:13px/20px var(--mono); color:var(--muted)}
-.thinking-dots::after{content:""; animation:thinking-dots 1s steps(1, end) infinite}
-@keyframes thinking-dots{0%,24.99%{content:""} 25%,49.99%{content:"."} 50%,74.99%{content:".."} 75%,100%{content:"..."}}
-.msg-pending .msg-main{border-color:var(--accent-ink)}
-.avatar[data-state=thinking]{animation:chat-glow 1.6s ease-in-out infinite}
-@keyframes chat-glow{
-  0%,100%{box-shadow:inset 0 0 0 2px var(--rail-accent),0 0 10px color-mix(in srgb, var(--teal) 30%, transparent)}
-  50%{box-shadow:inset 0 0 0 2px var(--teal),0 0 26px color-mix(in srgb, var(--teal) 60%, transparent)}}
-
 /* The draft: the unsent message in the owner's place, dashed until it is written in. It has the width of a message,
    whatever is typed in it: the text box sizes its height to its content alone. */
 .msg-draft{inline-size:100%;
@@ -694,34 +686,25 @@ input[aria-invalid=true],textarea[aria-invalid=true],select[aria-invalid=true]{b
 .msg-draft-foot{display:flex; align-items:center; justify-content:space-between; gap:10px; padding-block-start:9px; border-block-start:2px dotted var(--edge)}
 .msg-draft-hint{font:12px/18px var(--mono); color:var(--muted)}
 
-@media (prefers-reduced-motion:reduce){.avatar[data-state=thinking],.thinking-dots::after{animation:none}}
-
-/* The sidebar: a third column of the shell while it is open, of wood like the rail; a sheet over the page on a phone. */
-.shell.chat-open{grid-template-columns:var(--rail-width) minmax(0,1fr) minmax(340px,420px);
-  & .chat-toggle{display:none}}
-.chat-panel{position:sticky; inset-block-start:0; block-size:100vh; display:flex; flex-direction:column; gap:var(--space-3); min-inline-size:0; padding:var(--space-4);
-  --text:var(--rail-ink); --text-strong:var(--rail-accent); --text-muted:var(--rail-ink); --text-link:var(--rail-accent); --text-accent:var(--rail-accent); --rule:var(--outline);
-  color:var(--rail-ink); background-color:var(--rail); background-image:var(--planks),var(--grain-ground); background-size:auto,4px 4px;
-  border-inline-start:2px solid var(--outline); box-shadow:inset 3px 0 0 var(--bevel-light);
-  &[hidden]{display:none}
-  & .chat{--portrait-size:56px; --chat-gutter:70px; gap:var(--space-4)}
-  & .chat-thread{overflow-y:auto; padding:var(--space-1) var(--space-2) var(--space-2) 0}
-  & .msg-main{min-block-size:calc(var(--portrait-size) + 10px); padding:10px 12px;
-    &::before{inset-block-start:20px}
-    &::after{inset-block-start:23px}}
-  & .msg .body{font-size:15px; line-height:22px}
-  & .msg-draft{--portrait-size:56px}}
+/* The sidebar (plan 108): a popover sheet over the right of the page, of wood like the rail, that holds the chat page
+   in a frame; the Chat button opens it, and Close, Escape or a tap outside closes it. The browser puts a popover in
+   the top layer with its own size and margin, which this rule sets to the sheet's. */
+.chat-panel{display:none;
+  &:popover-open{display:flex; flex-direction:column; gap:var(--space-3); position:fixed; z-index:25; inset:0 0 0 auto; inline-size:min(420px, 100%); block-size:auto; margin:0; padding:var(--space-4);
+    --text:var(--rail-ink); --text-strong:var(--rail-accent); --text-muted:var(--rail-ink); --text-link:var(--rail-accent); --text-accent:var(--rail-accent); --rule:var(--outline);
+    color:var(--rail-ink); background-color:var(--rail); background-image:var(--planks),var(--grain-ground); background-size:auto,4px 4px;
+    border:0; border-inline-start:2px solid var(--outline); box-shadow:inset 3px 0 0 var(--bevel-light),var(--shadow-float)}
+  & iframe{flex:1; inline-size:100%; min-block-size:0; border:2px solid var(--outline); background:var(--ground)}}
 .chat-panel-head{display:flex; align-items:center; justify-content:space-between; gap:var(--space-2);
   & .label{text-decoration:none}
   & .tools{display:flex; gap:var(--space-1)}}
-.chat-toggle{position:fixed; z-index:15; inset-block-end:var(--space-5); inset-inline-end:var(--space-5); gap:var(--space-2); box-shadow:var(--shadow-float);
-  &[hidden]{display:none}}
-@media (max-width:1179px){.shell.chat-open{grid-template-columns:var(--rail-width) minmax(0,1fr) minmax(300px,360px)}}
+.chat-toggle{position:fixed; z-index:15; inset-block-end:var(--space-5); inset-inline-end:var(--space-5); gap:var(--space-2); box-shadow:var(--shadow-float)}
+.shell:has(.chat-panel:popover-open) .chat-toggle{display:none}
 @media (max-width:899px){
   .shell:has(.chat-page){display:flex; flex-direction:column; /* the top bar, then the column with the thread */
     &>.column>footer{display:none}} /* the thread has the height instead */
-  .chat-panel{position:fixed; z-index:25; inset:0 0 calc(58px + env(safe-area-inset-bottom, 0px)) 0; block-size:auto; border-inline-start:0; box-shadow:var(--shadow-float)}
-  .chat-toggle{display:none} /* the bottom bar's Chat opens the sheet (app.js) */
+  .chat-panel:popover-open{inset:0 0 calc(58px + env(safe-area-inset-bottom, 0px)) 0; inline-size:auto; border-inline-start:0}
+  .chat-toggle{display:none} /* the bottom bar's Chat leads to the chat page */
 }
 @container column (max-width:608px){.chat,.chat-page{--portrait-size:64px; --chat-gutter:78px}}
 @media print{.chat-panel,.chat-toggle{display:none}}
