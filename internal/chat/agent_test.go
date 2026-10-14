@@ -390,12 +390,18 @@ func TestAskFromABrowserForm(t *testing.T) {
 	if got := scalar(t, d, `SELECT source FROM entities WHERE id = ?`, id); got != chat.Source {
 		t.Fatalf("conversation source = %q", got)
 	}
-	// Home offers ask.
-	home := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil)
-	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, home)
-	if !strings.Contains(rec.Body.String(), `"name": "ask"`) {
-		t.Fatal("Home does not offer ask")
+	// Home draws the form of ask, and the conversation page draws the one that continues it.
+	for _, tc := range []struct{ path, want string }{
+		{"/", `<form method="POST" action="/conversations" data-action="ask">`},
+		{"/pages/" + id, `<input type="hidden" name="conversation" value="` + id + `">`},
+	} {
+		get := httptest.NewRequestWithContext(t.Context(), http.MethodGet, tc.path, nil)
+		get.Header.Set("Accept", "text/html")
+		rec = httptest.NewRecorder()
+		h.ServeHTTP(rec, get)
+		if body := rec.Body.String(); rec.Code != http.StatusOK || !strings.Contains(body, tc.want) || !strings.Contains(body, `name="question"`) {
+			t.Fatalf("%s (%d) does not draw the form of ask: want %s", tc.path, rec.Code, tc.want)
+		}
 	}
 }
 
