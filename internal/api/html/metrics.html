@@ -89,7 +89,8 @@
 {{$h := .Props}}
 <header class="page-head"><div class="what"><span class="date">{{$.Date $h.day}}</span><h1>Habits</h1>
 <p class="sub"><a href="/days/{{$h.day}}">{{weekday $h.day}}: the day view</a></p></div>
-<div class="tools">{{template "step" (dict "href" (.Link "prev") "rel" "prev" "day" (addDays $h.day -1))}}{{template "step" (dict "href" (.Link "next") "rel" "next" "day" (addDays $h.day 1))}}</div></header>
+{{$prev := shortDay (addDays $h.day -1)}}{{$next := shortDay (addDays $h.day 1)}}
+<div class="tools">{{template "step" (dict "href" (.Link "prev") "rel" "prev" "label" (printf "Previous day, %s" $prev) "text" $prev)}}{{template "step" (dict "href" (.Link "next") "rel" "next" "label" (printf "Next day, %s" $next) "text" $next)}}</div></header>
 {{with $h.habits}}<div class="scroll"><table><caption>Every habit active on this day, and what it was</caption>
 <thead><tr><th scope="col">habit</th><th scope="col">state</th><th scope="col">record</th></tr></thead>
 <tbody>{{range .}}{{$href := printf "/metrics/%s" (pathesc .metric)}}

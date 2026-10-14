@@ -142,3 +142,18 @@ func TestTheDayIsALeafAndItsMargin(t *testing.T) {
 		t.Error("a past day says today")
 	}
 }
+
+// TestTheHabitsStepToANamedDay says the previous and next day of the habits page carry their names, as the day's
+// own steps do: an arrow alone gives a reader nothing to read.
+func TestTheHabitsStepToANamedDay(t *testing.T) {
+	_, h := freshOn(t, fixedToday)
+	body := browse(t, h, "/habits?day="+fixedToday)
+	for _, want := range []string{
+		`rel="prev" aria-label="Previous day, Tue 13 May"><span aria-hidden="true">‹</span><span class="step-day">Tue 13 May</span></a>`,
+		`rel="next" aria-label="Next day, Thu 15 May"><span class="step-day">Thu 15 May</span><span aria-hidden="true">›</span></a>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the habits page lacks %s", want)
+		}
+	}
+}
