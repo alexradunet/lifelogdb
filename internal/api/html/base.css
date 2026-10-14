@@ -149,7 +149,31 @@ input[type=checkbox],input[type=radio]{inline-size:auto; block-size:auto; box-sh
 input[type=file]{block-size:auto; padding:var(--space-2) var(--space-3)}
 textarea{block-size:auto; min-block-size:6em; padding:10px var(--space-3); resize:vertical; font:400 16px/26px var(--sans)}
 input[readonly],textarea[readonly]{background:var(--surface)}
+/* A field the server refused (aria-invalid, with the alert that says why) and a field the browser refuses once the
+   owner has typed in it (:user-invalid: a required field left empty, a number that is not one) show the same edge. */
+:is(input,textarea,select):is([aria-invalid=true],:user-invalid){border-color:var(--danger-line)}
 ::placeholder{color:var(--muted); opacity:.8}
+
+/* The select is the app's own where the browser lets a sheet draw it (appearance:base-select: Chromium and Safari;
+   Firefox keeps its native one): the list is a parchment slip under the field, the chosen option tinted, the arrow
+   the chevron of a details. */
+@supports (appearance:base-select){
+  select,::picker(select){appearance:base-select}
+  select{display:flex; align-items:center; justify-content:space-between; gap:var(--space-2)}
+  select::picker-icon{content:""; flex:none; inline-size:7px; block-size:7px; margin-inline-end:3px; border:solid currentColor; border-width:0 2px 2px 0; transform:rotate(45deg)}
+  select:open::picker-icon{transform:rotate(-135deg)}
+  ::picker(select){margin-block-start:2px; padding:var(--space-1); border:2px solid var(--edge); color:var(--ink);
+    background-color:var(--surface); background-image:var(--grain-ink); background-size:4px 4px; box-shadow:var(--shadow-float)}
+  option{padding:5px 9px; font:400 15px/22px var(--sans);
+    &::checkmark{display:none}
+    &:checked{background:var(--accent-soft); color:var(--accent-ink); font-weight:700}
+    &:is(:hover,:focus-visible){background:var(--surface-deep); outline:0}}
+  @media (prefers-reduced-motion:no-preference){
+    ::picker(select){opacity:0; transition:opacity .12s, overlay .12s allow-discrete, display .12s allow-discrete}
+    select:open::picker(select){opacity:1;
+      @starting-style{opacity:0}}
+  }
+}
 
 /* A button is a parchment slab with its outline, a light top bevel and a hard drop; pressed, it sinks 3 px and the
    bevel turns. The primary one, the danger one and the small one are app.css's. */

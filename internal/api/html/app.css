@@ -582,9 +582,6 @@ li.pick{display:flex; align-items:stretch; gap:var(--space-1);
 .pick-box{flex:none; flex-direction:row; align-items:center; padding:0 var(--space-1); cursor:pointer;
   & input:disabled{opacity:.35; cursor:default}}
 
-/* A field that the server refused. */
-input[aria-invalid=true],textarea[aria-invalid=true],select[aria-invalid=true]{border-color:var(--danger-line)}
-
 /* The style page (GET /styleguide): every component in every state. Its own rules only lay the specimens out. */
 .styleguide{
   & .guide{display:flex; flex-direction:column; gap:var(--space-3); padding-block:var(--space-4)}

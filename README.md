@@ -82,7 +82,9 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **The page is semantic HTML, and the catalog says how to draw it.** A field is a `label` around its input (a field
   of 2 to 5 short options a `fieldset` of radio buttons), a card is an `article`, a callout an `aside`, an error a
   `role="alert"`, a series a `table` with a header row, a write's result and the search an open or a modal `dialog`,
-  the phone's sheet a popover; no id or class is generated for a template to find. What a
+  the phone's sheet a popover; a field the browser refuses once the owner has typed in it (`:user-invalid`) shows
+  the same danger edge as one the server refused (`aria-invalid`), and the select is the app's own where the browser
+  lets a sheet draw it (`appearance: base-select`); no id or class is generated for a template to find. What a
   template cannot know comes from the entity: `danger` marks a destructive action's button, `owner` an owner-only
   one, `rows` a textarea's height, `options` a field's choices, `pages` a field whose value is a page's title and an
   error's `code` its first words, so no view decides any of them by an action's or a field's name.

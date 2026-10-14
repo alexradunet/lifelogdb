@@ -323,11 +323,17 @@ func TestTheSheetsQueryTheColumnNotTheScreen(t *testing.T) {
 	}
 }
 
-// TestTheMotionsAreOffUnderReducedMotion: every entry, exit and scroll-driven motion of app.css is inside a block
+// TestTheMotionsAreOffUnderReducedMotion: every entry, exit and scroll-driven motion of the sheets is inside a block
 // that asks for motion (prefers-reduced-motion:no-preference), and the scroll-driven one inside @supports as well,
 // so a browser that does not want motion, or cannot drive it by the scroll, gets none.
 func TestTheMotionsAreOffUnderReducedMotion(t *testing.T) {
-	app := cssComments.ReplaceAllString(string(appCSS), "")
+	for name, sheet := range map[string]string{"base.css": string(baseCSS), "app.css": string(appCSS)} {
+		t.Run(name, func(t *testing.T) { motionsAskFirst(t, cssComments.ReplaceAllString(sheet, ""), name == "app.css") })
+	}
+}
+
+// motionsAskFirst checks one sheet; scroll says the sheet must hold the scroll-driven animation.
+func motionsAskFirst(t *testing.T, app string, scroll bool) {
 	// enclosing is the preludes of the blocks around the index, outermost first.
 	enclosing := func(at int) []string {
 		var stack []string
@@ -355,8 +361,8 @@ func TestTheMotionsAreOffUnderReducedMotion(t *testing.T) {
 		return false
 	}
 	for _, token := range []string{"@starting-style", "allow-discrete", "animation-timeline:scroll(root)"} {
-		if !strings.Contains(app, token) {
-			t.Errorf("app.css has no %s", token)
+		if !strings.Contains(app, token) && (scroll || token != "animation-timeline:scroll(root)") {
+			t.Errorf("the sheet has no %s", token)
 		}
 		for at := strings.Index(app, token); at >= 0; at = strings.Index(app, token) {
 			stack := enclosing(at)
@@ -368,5 +374,25 @@ func TestTheMotionsAreOffUnderReducedMotion(t *testing.T) {
 			}
 			app = app[:at] + strings.Repeat(" ", len(token)) + app[at+len(token):]
 		}
+	}
+}
+
+// TestTheFieldsSayWhatTheBrowserRefuses: ordinary HTML, so base.css: a field the browser refuses (:user-invalid)
+// and one the server refused (aria-invalid) share one rule, and the select is the app's own where a sheet may draw
+// it (appearance:base-select), behind @supports so the native one stays elsewhere.
+func TestTheFieldsSayWhatTheBrowserRefuses(t *testing.T) {
+	base := cssComments.ReplaceAllString(string(baseCSS), "")
+	app := cssComments.ReplaceAllString(string(appCSS), "")
+	for _, want := range []string{":is(input,textarea,select):is([aria-invalid=true],:user-invalid){border-color:var(--danger-line)}",
+		"@supports (appearance:base-select){", "::picker(select){", "select::picker-icon{"} {
+		if !strings.Contains(base, want) {
+			t.Errorf("base.css lacks %s", want)
+		}
+	}
+	if strings.Contains(app, "aria-invalid") || strings.Contains(app, "base-select") {
+		t.Error("app.css styles a field's refusal or the select: ordinary HTML belongs to base.css")
+	}
+	if strings.Count(base, "base-select") != 2 {
+		t.Errorf("base.css names base-select %d times, want the @supports and the one declaration", strings.Count(base, "base-select"))
 	}
 }
