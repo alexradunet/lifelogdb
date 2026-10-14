@@ -93,6 +93,23 @@ not external services or private files.
   pre-release validation when available. Keep representative correctness cases in the baseline. Document a runner's
   invocation when implementing it; specifying a workload here does not mean that runner exists or has passed.
 
+## The owner's live database in this folder
+
+- `life.db` and its `-wal`/`-shm` live in this folder, beside the built binary, and are gitignored. `./lifelog` with
+  no `--db` and no `LIFELOG_DB` uses that file: the folder of the program, [README](README.md). It is the owner's
+  real data. Never open it from a test, a query, a fixture, `sqlite3` or Datasette. Tests use `t.TempDir()` and
+  synthetic data.
+- **Never run `git clean -x` here.** It deletes gitignored files, and `life.db` is one of them. A nightly
+  `lifelog snapshot` keeps checked copies outside the folder ([D25](docs/decisions/D25-snapshots.md)), so the worst
+  loss is one night.
+- A system service runs the installed `lifelog` against this file, and a local proxy exposes it on the owner's
+  private network. The CLI in this folder and that service are the same writer on one file, which
+  [connections](docs/contract/connections.md) allows. Do not start a second writer stack on it, and do not point a
+  reader at it while the service writes.
+- The service runs the installed binary, not `./lifelog`. A change is live only after `go build -o <install path>
+  ./cmd/lifelog` and a service restart. Report the install path, the restart and the service's own log line when
+  you ship a change.
+
 ## The one hard rule: no migrations until the schema freeze
 
 **Do not create `db/migrations/`, `0001_init.sql`, or any migration runner** — not in `docs/`, `tests/` or the Go code. Until the
