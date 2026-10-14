@@ -56,7 +56,8 @@
 
 {{define "list"}}{{template "head" .}}
 {{$items := .Embedded "item"}}
-<header class="page-head"><div class="what"><h1>{{.Title}}</h1>{{if $items}}<p class="sub">{{len $items}} on this page</p>{{end}}</div>
+{{$ghosts := eq (index .Class 0) "ghosts"}}
+<header class="page-head"><div class="what"><h1>{{.Title}}</h1>{{if $ghosts}}<p class="sub">Empty pages, older than 30 days, that nothing links to or from.</p>{{end}}{{if $items}}<p class="sub">{{len $items}} on this page</p>{{end}}</div>
 <div class="tools">
 {{with .Action "create-person"}}{{template "boxed" (form .)}}{{end}}
 {{with .Action "create-place"}}{{template "boxed" (form .)}}{{end}}
@@ -65,6 +66,7 @@
 {{$named := ""}}{{with .Props}}{{$named = .rows}}{{end}}
 {{if $named}}<div class="sheet list"><ul class="plain rows">{{range $named}}<li><a class="entry named" href="/pages/{{num .id}}"><span class="first">{{.title}}</span><span class="meta">{{$.Mentions .mentions .last_day}}</span></a></li>{{end}}</ul></div>
 {{else if $items}}<div class="sheet list"><ul class="plain rows">{{range $items}}<li>{{if eq $.Title "Days"}}<a class="entry" href="{{.Href}}"><span class="date">{{$.Date .Title}}</span><span class="first">{{weekday .Title}}</span><span class="meta"></span></a>{{else}}<a href="{{.Href}}">{{$.Date .Title}}</a>{{end}}</li>{{end}}</ul></div>
+{{else if $ghosts}}<p class="empty">No ghost page: every page has text or a link.</p>
 {{else}}<p class="empty">Nothing yet. <a href="/#new">New</a> makes a page, a person, a place or a file.</p>{{end}}
 {{template "pager" .}}
 {{template "foot" .}}{{end}}

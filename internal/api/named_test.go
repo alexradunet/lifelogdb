@@ -70,10 +70,11 @@ func TestMentionsHaveNoDayWhenNoDayPageLinks(t *testing.T) {
 	}
 }
 
-// TestFilesListHasNoRows: only people and places carry rows.
-func TestFilesListHasNoRows(t *testing.T) {
+// TestDaysAndGhostsHaveNoRows: people, places and files carry rows (how often the log mentions each); the days and
+// the ghost pages do not.
+func TestDaysAndGhostsHaveNoRows(t *testing.T) {
 	c, _ := fresh(t)
-	for _, path := range []string{"/files", "/days", "/ghosts"} {
+	for _, path := range []string{"/days", "/ghosts"} {
 		if props, _ := must(c.Get(t.Context(), path)).Properties.(map[string]any); props["rows"] != nil {
 			t.Errorf("GET %s has rows: %v", path, props["rows"])
 		}

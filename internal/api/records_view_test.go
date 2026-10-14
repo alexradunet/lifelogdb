@@ -98,3 +98,29 @@ func TestASessionPageIsItsFacts(t *testing.T) {
 		t.Error("the session's page is drawn by the generic view")
 	}
 }
+
+// TestTheGhostPagesSayWhatTheyAre: the ghost pages say what a ghost page is under their title, and an empty list says
+// why it is empty, not how to make a page.
+func TestTheGhostPagesSayWhatTheyAre(t *testing.T) {
+	_, h := freshOn(t, fixedToday)
+	body := browse(t, h, "/ghosts")
+	for _, want := range []string{`<p class="sub">Empty pages, older than 30 days, that nothing links to or from.</p>`,
+		`<p class="empty">No ghost page: every page has text or a link.</p>`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the ghost pages lack %s", want)
+		}
+	}
+}
+
+// TestTheFilesSayWhereTheyAreMentioned: a file's row says how often the log mentions it, as a person's and a
+// place's do.
+func TestTheFilesSayWhereTheyAreMentioned(t *testing.T) {
+	c, h := freshOn(t, fixedToday)
+	root := must(c.Get(t.Context(), "/"))
+	must(c.Do(t.Context(), find(root, "add-file"), map[string]string{"title": "memo.m4a", "sha256": strings.Repeat("ab", 32), "mime": "audio/mp4", "body": "A memo."}))
+	must(c.Do(t.Context(), find(root, "capture"), map[string]string{"text": "Listened to [[memo.m4a]]."}))
+	body := browse(t, h, "/files")
+	if !regexp.MustCompile(`<span class="first">memo.m4a</span><span class="meta">mentioned on 1 page, last [^<]*Wed 14 May</span>`).MatchString(body) {
+		t.Error("the files do not say where a file is mentioned")
+	}
+}
