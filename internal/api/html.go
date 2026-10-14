@@ -517,11 +517,28 @@ func jsonShape(v any) any {
 	return x
 }
 
-// mark is a search snippet with its matched words marked: the search puts core.SnippetOpen and core.SnippetClose
-// around them. The text is escaped first, so a snippet can never carry HTML of its own.
+// mark is a search snippet as plain text with its matched words marked: the search puts core.SnippetOpen and
+// core.SnippetClose around them. The text is escaped first, so a snippet can never carry HTML of its own.
 func mark(snippet string) template.HTML {
-	return template.HTML(markRE.ReplaceAllString(template.HTMLEscapeString(snippet), "<mark>$1</mark>"))
+	return template.HTML(markRE.ReplaceAllString(template.HTMLEscapeString(plainSnippet(snippet)), "<mark>$1</mark>"))
 }
+
+// plainSnippet is the words of a snippet without its CommonMark, on one line: the marker of a heading, a quote, a
+// list item or a task box at the start of a line is cut, and the brackets of a wikilink or an embed. It is for a
+// list of hits, not a rendering; the JSON keeps the text as it is.
+func plainSnippet(s string) string {
+	var words []string
+	for line := range strings.SplitSeq(s, "\n") {
+		line = blockMarkRE.ReplaceAllString(strings.TrimSpace(line), "")
+		if line != "" {
+			words = append(words, line)
+		}
+	}
+	return strings.NewReplacer("![[", "", "[[", "", "]]", "").Replace(strings.Join(words, " "))
+}
+
+// blockMarkRE is the markers at the start of a line that plainSnippet cuts: headings, quotes, list items, task boxes.
+var blockMarkRE = regexp.MustCompile(`^(?:#{1,6}\s+|>\s*|[-*+]\s+)*(?:\[[ xX]\]\s+)?`)
 
 var markRE = regexp.MustCompile(core.SnippetOpen + `([^` + core.SnippetOpen + core.SnippetClose + `]+)` + core.SnippetClose)
 
