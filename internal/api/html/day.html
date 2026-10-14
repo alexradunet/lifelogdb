@@ -77,6 +77,6 @@
 <div class="habit-what"><a href="{{$href}}">{{.metric}}</a> <span class="tag{{if eq .state "done"}} done{{else if or (eq .state "not done") (eq .state "invalid")}} notdone{{end}}">{{.state}}</span>
 {{with $.HabitStrip .recent}}<span class="habit-days"><span class="strip" role="img" aria-label="done on {{.Done}} of its {{.Active}} active days of the last 14">{{range .Cells}}<i class="{{.State}}" title="{{.Title}}"></i>{{end}}</span>
 <span class="meta">{{.Done}} of {{.Active}} days</span></span>{{end}}</div>
-{{with $.ActionFor "check-in" $href}}<div class="joined" role="group" aria-label="Check in {{$name}}">{{template "form" (form . "done" "1" "hide" "day" "button" "Done" "class" "tiny" "back" $.Here)}}{{template "form" (form . "done" "0" "hide" "day" "button" "Not done" "class" "tiny" "back" $.Here)}}</div>{{end}}
+{{with $.ActionFor "check-in" $href}}{{template "checkin" (dict "action" . "label" (printf "Check in %s" $name) "back" $.Here)}}{{end}}
 </div>{{end}}
 </section>{{end}}{{end}}

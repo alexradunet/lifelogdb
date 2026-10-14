@@ -157,3 +157,31 @@ func TestTheHabitsStepToANamedDay(t *testing.T) {
 		}
 	}
 }
+
+// TestACheckInIsDrawnOneWay: the margin of a day, the habit's own page and the habits page draw a check-in alike, as
+// the outcomes of a task are drawn: Done in the done colour, Not done a quiet word, in one labelled group; the state
+// of the day is the same tag in the margin and on the habits page.
+func TestACheckInIsDrawnOneWay(t *testing.T) {
+	c, h := freshOn(t, fixedToday)
+	root := must(c.Get(t.Context(), "/"))
+	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "Walk"}))
+	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/metrics/Walk")), "start-habit"), map[string]string{"start_day": "2031-05-01"}))
+	must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "Walk", "day": fixedToday, "value": "1"}))
+	group := regexp.MustCompile(`(?s)<div class="outcomes" role="group" aria-label="Check in Walk[^"]*">` +
+		`<form[^>]* class="tiny outcome-done"[^>]*>.*?<button[^>]*>Done</button></form>` +
+		`<form[^>]* class="tiny outcome-notdone"[^>]*>.*?<button[^>]*>Not done</button></form></div>`)
+	for _, path := range []string{"/days/" + fixedToday, "/metrics/Walk", "/habits?day=" + fixedToday} {
+		body := browse(t, h, path)
+		if !group.MatchString(body) {
+			t.Errorf("%s does not draw the check-in of Walk as one group of outcomes", path)
+		}
+		if strings.Contains(body, `class="joined"`) {
+			t.Errorf("%s still draws a joined pair", path)
+		}
+	}
+	for _, path := range []string{"/days/" + fixedToday, "/habits?day=" + fixedToday} {
+		if body := browse(t, h, path); !strings.Contains(body, `<span class="tag done">done</span>`) {
+			t.Errorf("%s does not tag the state of Walk", path)
+		}
+	}
+}

@@ -24,7 +24,7 @@
 <div class="sheet-margin">
 <div class="sheet">
 {{if $checkIn}}<section class="record" id="record" aria-label="Check in"><h2>Check in today</h2>
-<div class="joined" role="group" aria-label="Check in {{.Title}} today">{{template "form" (form $checkIn "done" "1" "hide" "day" "button" "Done" "class" "tiny" "back" $.Here)}}{{template "form" (form $checkIn "done" "0" "hide" "day" "button" "Not done" "class" "tiny" "back" $.Here)}}</div></section>
+{{template "checkin" (dict "action" $checkIn "label" (printf "Check in %s today" .Title) "back" $.Here)}}</section>
 {{else}}{{with .Action "record"}}<section class="record" id="record" aria-label="Record"><h2>Record</h2>
 {{template "form" (form . "metric" $.Title "button" "Record" "more" "session_id,taken_at,tz,import_key" "placeholder" (printf "value=%s" $unit) "back" $.Here)}}</section>{{end}}{{end}}
 
@@ -93,10 +93,10 @@
 <div class="tools">{{template "step" (dict "href" (.Link "prev") "rel" "prev" "label" (printf "Previous day, %s" $prev) "text" $prev)}}{{template "step" (dict "href" (.Link "next") "rel" "next" "label" (printf "Next day, %s" $next) "text" $next)}}</div></header>
 {{with $h.habits}}<div class="scroll"><table><caption>Every habit active on this day, and what it was</caption>
 <thead><tr><th scope="col">habit</th><th scope="col">state</th><th scope="col">record</th></tr></thead>
-<tbody>{{range .}}{{$href := printf "/metrics/%s" (pathesc .metric)}}
+<tbody>{{range .}}{{$href := printf "/metrics/%s" (pathesc .metric)}}{{$name := .metric}}
 <tr><td><a href="{{$href}}">{{.metric}}</a></td>
-<td><span class="{{if eq .state "done"}}done{{else if or (eq .state "not done") (eq .state "invalid")}}notdone{{else}}muted{{end}}">{{.state}}</span></td>
-<td>{{with $.ActionFor "check-in" $href}}{{template "form" (form . "done" "1" "hide" "day" "button" "Done" "class" "tiny")}}{{template "form" (form . "done" "0" "hide" "day" "button" "Not done" "class" "tiny")}}{{end}}</td></tr>{{end}}
+<td><span class="tag{{if eq .state "done"}} done{{else if or (eq .state "not done") (eq .state "invalid")}} notdone{{end}}">{{.state}}</span></td>
+<td>{{with $.ActionFor "check-in" $href}}{{template "checkin" (dict "action" . "label" (printf "Check in %s" $name) "back" $.Here)}}{{end}}</td></tr>{{end}}
 </tbody></table></div>
 {{else}}<p><small>No habit is active on this day. A habit is a unitless metric with a period: start one from its metric's page.</small></p>{{end}}
 {{with $h.completion}}<h2>{{$.Date $h.from}} to {{$.Date $h.to}}</h2><div class="scroll"><table><caption>How often each habit was recorded in this window</caption>

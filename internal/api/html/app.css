@@ -253,14 +253,14 @@ td form.tiny+form.tiny{margin-left:var(--space-1)}
 li.settled>.occ>div:first-child>a{color:var(--text-muted); font-weight:400; text-decoration:line-through}
 
 /* A row's outcome (docs/plans/095-the-leaf-and-its-margin.md): no row button is loud. Done is an outline in the done
-   colour with a check; Skip and Reopen are quiet words that show a frame on hover. */
-form:is(.outcome-done,.outcome-skip,.outcome-reopen) button{height:var(--control-small); padding:0 var(--space-3); font-size:14px}
+   colour with a check; Skip, Reopen and a habit's Not done are quiet words that show a frame on hover. */
+form:is(.outcome-done,.outcome-skip,.outcome-reopen,.outcome-notdone) button{height:var(--control-small); padding:0 var(--space-3); font-size:14px}
 form.outcome-done button{color:var(--done); border-color:var(--done); background:var(--surface); box-shadow:var(--drop-hard); font-weight:700}
 form.outcome-done button::before{content:"\2713" / ""; font-weight:700}
 form.outcome-done button:hover{background:var(--done-soft); color:var(--done-ink); border-color:var(--done); filter:none}
-form.outcome-skip button,form.outcome-reopen button{color:var(--text-muted); background:none; border-color:transparent; box-shadow:none; font-weight:400}
-form.outcome-skip button:hover,form.outcome-reopen button:hover{color:var(--text); border-color:var(--rule); filter:none}
-form.outcome-skip button:active,form.outcome-reopen button:active{transform:none}
+form:is(.outcome-skip,.outcome-reopen,.outcome-notdone) button{color:var(--text-muted); background:none; border-color:transparent; box-shadow:none; font-weight:400}
+form:is(.outcome-skip,.outcome-reopen,.outcome-notdone) button:hover{color:var(--text); border-color:var(--rule); filter:none}
+form:is(.outcome-skip,.outcome-reopen,.outcome-notdone) button:active{transform:none}
 
 /* The properties of an entity, typed: the name muted, the value in mono. */
 dl.facts{display:grid; grid-template-columns:minmax(90px,max-content) minmax(0,1fr); gap:var(--space-2) var(--space-4); align-items:baseline}
@@ -425,16 +425,10 @@ details.readings-year>summary{color:var(--text-strong)}
 details.readings-year>summary .year-name{font:700 15px/22px var(--mono); font-variant-numeric:tabular-nums}
 details.readings-year+details.readings-year{margin-top:var(--space-2)}
 
-/* A habit in the margin: its name and state, then the Done and Not done of its check-in, joined. */
+/* A habit in the margin: its name and state, then the Done and Not done of its check-in, drawn as outcomes. */
 .habit{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--space-2)}
 .habit+.habit{padding-top:var(--space-3); border-top:1px solid var(--line-soft)}
 .habit-what a{color:var(--text-strong); font-weight:700}
-.joined{display:inline-flex; border:2px solid var(--outline); box-shadow:var(--drop-hard); background:var(--surface-deep)}
-.joined form{display:contents}
-.joined button{height:var(--control-small); padding:0 var(--space-3); border:0; box-shadow:none; font-size:13px; font-weight:400}
-.joined button:active{transform:none; box-shadow:var(--slab-pressed)}
-.joined form+form button{border-left:2px solid var(--outline)}
-.joined form:first-child button{color:var(--done); font-weight:700}
 .tag.notdone{background:var(--danger-soft); color:var(--danger-ink); border-color:var(--danger)}
 
 /* Rows inside a panel. */
