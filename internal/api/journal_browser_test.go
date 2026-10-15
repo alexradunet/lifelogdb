@@ -150,7 +150,7 @@ func TestTheRootIsTodayAtAGlance(t *testing.T) {
 	}
 
 	body := browse(t, h, "/")
-	for _, want := range []string{"<h2>Due</h2>", "<h2>Habits</h2>", "<h2>Last entries</h2>", `<details id="new">`, "Quiet day."} {
+	for _, want := range []string{"<h2>Due</h2>", "<h2>Habits</h2>", "<h2>Last entries</h2>", "Quiet day."} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the root lacks %q", want)
 		}

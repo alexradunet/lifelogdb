@@ -23,7 +23,7 @@
 {{$p := .Props}}{{$t := $p.task}}
 <header class="page-head"><div class="what"><span class="kind">task{{if $t.deleted_at}}, deleted{{end}}</span><h1>{{$t.label}}</h1>
 <p class="sub"><span>{{$.Cadence $t}}</span>{{with $.Reminder $t}}<span>reminder {{.}}</span>{{end}}{{with .Link "project"}}<a href="{{.}}">{{$t.project_title}}</a>{{end}}<a href="/tasks">Every task</a><a href="/deadlines">What is due</a></p></div></header>
-{{if $t.deleted_at}}<div class="alert" role="alert"><p><strong>Deleted {{$.When $t.deleted_at}}.</strong> Its work and its reminders stopped. Revive it to bring it back.</p>
+{{if $t.deleted_at}}<div class="alert" role="alert"><p><strong>Deleted {{$.When $t.deleted_at}}.</strong> Its work and its reminders stopped. Restore it to bring it back.</p>
 {{template "form" (form (.Action "revive-task") "class" "tiny")}}</div>{{end}}
 {{if $t.repeat_unit}}<h2>{{$.Date $p.from}} to {{$.Date $p.through}}</h2>
 {{with capLater (due $p.occurrences $p.today false) 5}}<div class="sheet list">{{range .}}<section class="due-group{{if eq .Name "Overdue"}} overdue{{end}}" aria-label="{{.Name}}"><div class="panel-head"><h3>{{.Name}}</h3></div>
@@ -33,7 +33,7 @@
 {{if or (.Action "edit-task") (.Action "stop-task") (.Action "tombstone-task")}}<section class="section" aria-label="More"><h2>More</h2><div class="actions">
 {{template "boxed" (form (.Action "edit-task"))}}
 {{template "boxed" (form (.Action "stop-task"))}}
-{{if $t.repeat_unit}}{{template "boxed" (form (.Action "capture-occurrence") "button" "Write an occurrence")}}{{end}}
+{{if $t.repeat_unit}}{{template "boxed" (form (.Action "capture-occurrence"))}}{{end}}
 {{template "boxed" (form (.Action "tombstone-task"))}}</div></section>{{end}}
 <p class="sub"><span class="meta">created {{$.When $t.created_at}}</span><span class="meta">by {{$t.source}}</span><span class="meta">version {{$t.version}}</span></p>
 {{template "foot" .}}{{end}}

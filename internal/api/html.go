@@ -153,6 +153,7 @@ type view struct {
 	Shell     *shellView   // the sidebar's read; nil when the page is drawn without it
 	Refused   *refusedView // a form of this page failed: the alert, and the form as it was sent
 	Sent      url.Values
+	query     url.Values // the page's own query: ?new=<action> and the fields it fills
 }
 
 // refusedView is the error of a refused form, as the page it came from draws it: the alert at the top of the page.
@@ -163,15 +164,9 @@ type refusedView struct {
 	Href    string // the refused action's address
 }
 
-// Asked is a parameter of the page's own query, as the page reads a request to open one of its folds
-// (/metrics?new=metric).
-func (v *view) Asked(name string) string {
-	u, err := url.Parse(v.Here)
-	if err != nil {
-		return ""
-	}
-	return u.Query().Get(name)
-}
+// Asked is a parameter of the page's own query (docs/plans/114-one-way-to-do-a-thing.md): ?new=<action> opens that
+// action's form, and ?category= fills a field.
+func (v *view) Asked(name string) string { return v.query.Get(name) }
 
 // hereOf is the address of the page the browser is on, without the one-use feedback receipt: a form that returns
 // here must not carry a receipt that was already taken.
@@ -188,7 +183,7 @@ func renderHTML(w http.ResponseWriter, r *http.Request, status int, e *Entity, s
 	if r.Header.Get("Sec-Fetch-Dest") == "iframe" {
 		sv = nil // a page inside a frame (the chat sidebar) has the shell of the page around it, not one of its own
 	}
-	v := &view{Entity: e, Props: jsonShape(e.Properties), Path: r.URL.Path, Here: hereOf(r.URL), Shell: sv}
+	v := &view{Entity: e, Props: jsonShape(e.Properties), Path: r.URL.Path, Here: hereOf(r.URL), Shell: sv, query: r.URL.Query()}
 	if rf, ok := r.Context().Value(refusalKey{}).(*refusal); ok && status < 400 {
 		// This page is the one a refused form came from (refusedOnItsPage): it answers with the form's error.
 		props, _ := rf.entity.Properties.(map[string]any)
@@ -262,6 +257,24 @@ type navItem struct {
 	Count                    int
 }
 
+// newKinds are the items of the rail's New menu (docs/plans/114-one-way-to-do-a-thing.md): each kind is made on its
+// list, and the link opens the list with its New form open. A page has no list: Home has New page. A reading is
+// added on its metric's card.
+var newKinds = []struct{ Title, Href, Icon string }{
+	{"Page", "/?new=create-page", "new"},
+	{"Task", "/tasks?new=create-task", "tasks"},
+	{"Person", "/people?new=create-person", "people"},
+	{"Place", "/places?new=create-place", "places"},
+	{"Metric", "/metrics?new=register-metric", "metrics"},
+	{"Reading", "/metrics", "metrics"},
+	{"File", "/files?new=add-file", "files"},
+	{"Period", "/periods?new=create-period", "periods"},
+	{"Session", "/sessions?new=capture-session", "sessions"},
+}
+
+// NewKinds are the items of the rail's New menu.
+func (v *view) NewKinds() []struct{ Title, Href, Icon string } { return newKinds }
+
 // Nav is the sidebar with the link of this page marked, so a reader knows where they are: the item whose path is
 // the page's path, else the one with the longest path the page is under. Today's day is Today, not Calendar.
 func (v *view) Nav() []navItem {
@@ -329,9 +342,26 @@ func (v *view) Action(name string) *Action {
 // stays as it is, and the JSON shape with it) that takes no focus, so the alert keeps it. The copy of the refused
 // action is also marked and filled: each of its fields holds what the form sent. A sent value that is not a field
 // of the action is dropped, and a file is never sent back.
+//
+// With no refusal, the page's link can ask for one form (?new=<name>, docs/plans/114-one-way-to-do-a-thing.md): its
+// copy is open, and each field that the query names, but a path field or a file, holds the query's value.
 func (v *view) shown(a *Action) *Action {
-	if a == nil || v.Refused == nil {
-		return a
+	if a == nil {
+		return nil
+	}
+	if v.Refused == nil {
+		if a.Name == "" || v.Asked("new") != a.Name {
+			return a
+		}
+		c := *a
+		c.asked = true
+		c.Fields = slices.Clone(a.Fields)
+		for i, f := range c.Fields {
+			if _, named := v.query[f.Name]; named && f.In != "path" && f.Type != "file" && f.Name != "new" {
+				c.Fields[i].Value = v.query.Get(f.Name)
+			}
+		}
+		return &c
 	}
 	c := *a
 	c.noFocus = true
@@ -392,6 +422,7 @@ type formView struct {
 	Focus         string
 	Back          string
 	Refused       bool    // the form a refusal came from: open, filled, described by the alert, with no focus
+	Asked         bool    // the form the page's link asked for (?new=<name>): open
 	Primary       bool    // the button is the primary one: a form with fields to fill
 	Shown         []Field // the fields most writes need
 	More          []Field // optional fields, folded; still in the form, so a browser sends them with no script
@@ -535,7 +566,10 @@ func formOf(x any, opts ...string) (*formView, error) {
 	if !primary {
 		f.Primary = len(f.Shown)+len(f.More) > 0
 	}
-	f.Refused = a.refused
+	f.Refused, f.Asked = a.refused, a.asked
+	if a.asked && f.Focus == "" && len(f.Shown) > 0 { // a form the reader asked for starts in its first field
+		f.Focus = f.Shown[0].Name
+	}
 	if a.noFocus { // a page that shows a refusal puts the focus on the alert, and on no field
 		f.Focus = ""
 	}

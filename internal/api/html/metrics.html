@@ -4,7 +4,7 @@
 {{$lens := ""}}{{with .Props.show}}{{$lens = .}}{{end}}{{$h := .Props}}
 <header class="page-head"><div class="what">{{if eq $lens "habits"}}<span class="date">{{$.Date $h.day}}</span>{{end}}<h1>Metrics</h1>
 <p class="sub"><a href="/metrics"{{if ne $lens "habits"}} aria-current="true"{{end}}>By category</a><a href="/metrics?show=habits"{{if eq $lens "habits"}} aria-current="true"{{end}}>Habits</a>{{if eq $lens "habits"}}<a href="/days/{{$h.day}}">{{weekday $h.day}}: the day view</a>{{end}}</p></div>
-<div class="tools">{{if eq $lens "habits"}}{{$prev := shortDay (addDays $h.day -1)}}{{$next := shortDay (addDays $h.day 1)}}{{template "step" (dict "href" (.Link "prev") "rel" "prev" "label" (printf "Previous day, %s" $prev) "text" $prev)}}{{template "step" (dict "href" (.Link "next") "rel" "next" "label" (printf "Next day, %s" $next) "text" $next)}}{{else}}{{with .Action "register-metric"}}{{template "new-metric" (dict "action" . "view" $)}}{{end}}{{with .Action "file-pages"}}<a class="button" href="/metrics?new=category#file-bar">New category</a>{{end}}{{end}}</div></header>
+<div class="tools">{{if eq $lens "habits"}}{{$prev := shortDay (addDays $h.day -1)}}{{$next := shortDay (addDays $h.day 1)}}{{template "step" (dict "href" (.Link "prev") "rel" "prev" "label" (printf "Previous day, %s" $prev) "text" $prev)}}{{template "step" (dict "href" (.Link "next") "rel" "next" "label" (printf "Next day, %s" $next) "text" $next)}}{{else}}{{with .Action "register-metric"}}{{template "new-metric" (dict "action" . "view" $)}}{{end}}{{with .Action "file-pages"}}<a class="button" href="/metrics?new=file-pages#file-bar">New category</a>{{end}}{{end}}</div></header>
 {{if eq $lens "habits"}}{{with $h.habits}}<div class="scroll"><table><caption>Every habit active on this day, and what it was</caption>
 <thead><tr><th scope="col">habit</th><th scope="col">state</th><th scope="col">record</th></tr></thead>
 <tbody>{{range .}}{{$href := printf "/metrics/%s" (pathesc .metric)}}{{$name := .metric}}
@@ -20,7 +20,7 @@
 {{else}}{{$file := .Action "file-pages"}}{{$new := .Action "register-metric"}}{{$sections := .MetricSections}}
 <datalist id="metric-categories">{{range $.Props.categories}}<option value="{{.title}}">{{.path}}</option>{{end}}</datalist>
 {{if gt (len $sections) 1}}<nav class="kinds jump" aria-label="Groups">{{range $sections}}<a href="#{{.Anchor}}">{{.Title}} <small>{{.Count}}</small></a>{{end}}</nav>{{end}}
-{{with $file}}{{$refused := and $.Refused (eq $.Refused.Href .Href)}}<details class="file-bar" id="file-bar"{{if or $refused (eq ($.Asked "new") "category")}} open{{end}}><summary>Move to a category</summary>
+{{with $file}}{{$refused := and $.Refused (eq $.Refused.Href .Href)}}<details class="file-bar" id="file-bar"{{if or $refused (eq ($.Asked "new") "file-pages")}} open{{end}}><summary>Put in a category</summary>
 <form id="file-metrics" method="POST" action="{{.Href}}" data-action="{{.Name}}"><input type="hidden" name="back" value="/metrics">
 <label><span>Category <small>required</small></span><input type="text" name="category" list="metric-categories" required value="{{if $refused}}{{$.Sent.Get "category"}}{{end}}" placeholder="Bloodwork, Sport, Financial"></label>
 <fieldset class="segmented"><legend>Keep the other categories?</legend><label><input type="radio" name="move" value="0"{{if not (and $refused (eq ($.Sent.Get "move") "1"))}} checked{{end}}><span>Add</span></label><label><input type="radio" name="move" value="1"{{if and $refused (eq ($.Sent.Get "move") "1")}} checked{{end}}><span>Move</span></label></fieldset>
@@ -35,7 +35,7 @@
 {{template "foot" .}}{{end}}
 
 {{/* The one page of a metric (docs/plans/100-one-page-a-metric.md). The head: its kind, its categories and its latest
-     reading. The sheet: Record first (a habit's Check in, while it is one), then the chart and every reading in one
+     reading. The sheet: Add a reading first (a habit's Check in, while it is one), then the chart and every reading in one
      fold a year, newest first. The margin: the metric as a page (D27), with its text, the pages that mention it, its
      habit, its links and its other actions. In a browser, the metric's page (/pages/{id}) opens this one. */}}
 {{define "metric"}}{{template "head" .}}
@@ -51,8 +51,8 @@
 <div class="sheet">
 {{if $checkIn}}<section class="record" id="record" aria-label="Check in"><h2>Check in today</h2>
 {{template "checkin" (dict "action" $checkIn "label" (printf "Check in %s today" .Title) "back" $.Here)}}</section>
-{{else}}{{with .Action "record"}}<section class="record" id="record" aria-label="Record"><h2>Record</h2>
-{{template "form" (form . "metric" $.Title "button" "Record" "more" "session_id,taken_at,tz,import_key" "placeholder" (printf "value=%s" $unit) "back" $.Here)}}</section>{{end}}{{end}}
+{{else}}{{with .Action "record"}}<section class="record" id="record" aria-label="Add a reading"><h2>Add a reading</h2>
+{{template "form" (form . "metric" $.Title "button" "Add" "more" "session_id,taken_at,tz,import_key" "placeholder" (printf "value=%s" $unit) "back" $.Here)}}</section>{{end}}{{end}}
 
 <section class="readings-all" aria-label="Readings">
 <div class="panel-head"><h2>Readings</h2><span class="meta">{{len $s.readings}}</span></div>
@@ -63,7 +63,7 @@
 {{template "readings" (dict "v" $ "r" $r "s" $s "rows" .Rows)}}
 {{with .More}}<details class="readings-more"><summary>{{len .}} more {{if $r.Habit}}check-ins{{else}}readings{{end}} of {{$year}}</summary>
 {{template "readings" (dict "v" $ "r" $r "s" $s "rows" .)}}</details>{{end}}</details>
-{{else}}<p class="empty">{{if $s.all_history}}No reading yet. {{if $checkIn}}Check in above.{{else}}Record the first one above.{{end}}{{else}}No reading in this window. <a href="{{.Link "all-readings"}}">All readings</a> has the rest.{{end}}</p>{{end}}
+{{else}}<p class="empty">{{if $s.all_history}}No reading yet. {{if $checkIn}}Check in above.{{else}}Add the first one above.{{end}}{{else}}No reading in this window. <a href="{{.Link "all-readings"}}">All readings</a> has the rest.{{end}}</p>{{end}}
 </section>
 </div>
 
@@ -101,7 +101,7 @@
 </section>
 
 <section class="group" aria-label="More"><h2>More</h2><div class="actions">
-{{if $checkIn}}{{template "boxed" (form (.Action "record") "button" "Record a value" "metric" $.Title "more" "session_id,taken_at,tz,import_key" "back" $.Here)}}{{end}}
+{{if $checkIn}}{{template "boxed" (form (.Action "record") "button" "Add a value" "metric" $.Title "more" "session_id,taken_at,tz,import_key" "back" $.Here)}}{{end}}
 {{template "boxed" (form (.Action "readings-from-table") "hide" "page" "back" $.Here)}}
 {{template "boxed" (form (.Action "rename"))}}
 {{template "boxed" (form (.Action "tombstone"))}}</div>
@@ -137,15 +137,15 @@
 </div>{{end}}</div>{{end}}
 
 {{/* new-here is the link under a category's heading to New metric, with the category filled in */}}
-{{define "new-here"}}<a class="button small" href="/metrics?new=metric&amp;category={{.}}#new-metric">+ New metric here</a>{{end}}
+{{define "new-here"}}<a class="button small" href="/metrics?new=register-metric&amp;category={{.}}#new-metric">+ New metric here</a>{{end}}
 
 {{/* new-metric is the New metric fold of /metrics (docs/plans/113-new-metric-on-metrics.md): "What do you record?"
      switches three forms of register-metric with CSS, with no script. A number sends its unit, a score its range,
      and done or not done no unit and today as habit_from. The kind input is for the page only: a refused form opens
-     again on its own kind. ?new=metric opens the fold, and ?category= fills in the category. */}}
+     again on its own kind. ?new=register-metric opens the fold, and ?category= fills in the category. */}}
 {{define "new-metric"}}{{$v := .view}}{{$a := .action}}{{$refused := and $v.Refused (eq $v.Refused.Href $a.Href)}}
 {{$kind := "number"}}{{$cat := $v.Asked "category"}}{{if $refused}}{{with $v.Sent.Get "kind"}}{{$kind = .}}{{end}}{{$cat = $v.Sent.Get "category"}}{{end}}
-<details class="action new-metric" id="new-metric"{{if or $refused (eq ($v.Asked "new") "metric")}} open{{end}}><summary class="button">New metric{{if $a.Owner}} <span class="owner">owner</span>{{end}}</summary>
+<details class="action new-metric" id="new-metric"{{if or $refused (eq ($v.Asked "new") "register-metric")}} open{{end}}><summary class="button">New metric{{if $a.Owner}} <span class="owner">owner</span>{{end}}</summary>
 <div class="action-form"><fieldset class="segmented"><legend>What do you record?</legend>
 <label><input type="radio" name="new-kind" value="number"{{if eq $kind "number"}} checked{{end}}><span>A number</span></label><label><input type="radio" name="new-kind" value="score"{{if eq $kind "score"}} checked{{end}}><span>A score</span></label><label><input type="radio" name="new-kind" value="habit"{{if eq $kind "habit"}} checked{{end}}><span>Done or not done</span></label></fieldset>
 {{template "new-metric-form" (dict "v" $v "a" $a "k" "number" "mine" (and $refused (eq $kind "number")) "cat" $cat)}}

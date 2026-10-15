@@ -31,7 +31,7 @@ func TestTheKeysAreInThePage(t *testing.T) {
 	day := page(t, h, "/days/"+fixedToday)
 	for _, want := range []string{
 		`<input type="search" name="q" placeholder="Search" aria-label="Search" accesskey="k">`,
-		`<a class="button primary rail-new" href="/#new" accesskey="n">`,
+		`<button type="button" class="button primary rail-new" popovertarget="new-menu" accesskey="n">`,
 		`<a href="/days/today" aria-current="page" accesskey="t">`,
 		`placeholder="What happened? Who was there?" accesskey="c" autofocus>`,
 		`<a class="button step" accesskey="[" href="/days/2031-05-13" rel="prev"`, `<a class="button step" accesskey="]" href="/days/2031-05-15" rel="next"`,

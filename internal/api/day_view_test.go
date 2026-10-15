@@ -123,11 +123,11 @@ func TestTheDayIsALeafAndItsMargin(t *testing.T) {
 	readings := body[strings.Index(body, `aria-label="Readings"`):]
 	readings = readings[:strings.Index(readings, "</section>")]
 	more := regexp.MustCompile(`(?s)<details class="more-fields"><summary>4 more fields</summary>(.*?)</details>`).FindStringSubmatch(readings)
-	if !strings.Contains(readings, `<summary class="button">Record a reading</summary>`) || more == nil ||
+	if !strings.Contains(readings, `<summary class="button">Add a reading</summary>`) || more == nil ||
 		strings.Count(more[1], "<label>") != 4 || !strings.Contains(more[1], `name="taken_at"`) {
-		t.Errorf("Record a reading is not in the Readings, with 4 folded fields:\n%s", readings)
+		t.Errorf("Add a reading is not in the Readings, with 4 folded fields:\n%s", readings)
 	}
-	if !strings.Contains(readings, `<p class="empty">No readings on this day. <a href="#record">Record one</a> below.</p>`) {
+	if !strings.Contains(readings, `<p class="empty">No readings on this day. <a href="#record">Add one</a> below.</p>`) {
 		t.Errorf("a day with no reading does not say so:\n%s", readings)
 	}
 

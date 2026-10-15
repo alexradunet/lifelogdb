@@ -47,6 +47,7 @@ type Action struct {
 	// The browser's marks on a copy of an action (view.shown). They are not on the wire.
 	refused bool // the copy is the form a refusal came from: filled, open and described by the alert
 	noFocus bool // the page shows a refusal: no field takes the focus from the alert
+	asked   bool // the page's link asked for this form (?new=<name>): open, filled from the query
 }
 
 // Field is a Siren field. In "path" (an extension) marks a field of the catalog's templated href; Rows (an
@@ -108,14 +109,14 @@ func areaReq(name, title string, rows int) Field {
 // catalog is every action the API has. GET /actions serves it, and the CLI and the MCP server are built from it.
 var catalog = []spec{
 	{"relocate-reading", "Move reading scope", "Owner-only atomic same-metric scope correction of a current unkeyed non-imported chain: retract old scope and append independent replacement, never a cross-scope supersedes edge.", "POST", "/measurements/{id}/relocate", []Field{path("id", "number", "Expected current leaf id"), req("metric", "text", "Same metric"), req("day", "date", "Replacement reading day"), req("value", "number", "Replacement value"), opt("session_id", "number", "New session id (blank unassociated)"), opt("taken_at", "text", "Replacement UTC instant"), opt("tz", "text", "Replacement supplied zone"), opt("captured_with_id", "number", "Replacement capture provenance")}, true, true},
-	{"capture-session", "Record session", "Record a lightweight session with independent reporting day and explicit UTC or unresolved local endpoints. Zone labels are UNVERIFIED claims; no host timezone inference.", "POST", "/sessions", append(append([]Field{}, sessionFields...), opt("import_key", "text", "Exact source identity")), false, false},
+	{"capture-session", "New session", "Record a lightweight session with independent reporting day and explicit UTC or unresolved local endpoints. Zone labels are UNVERIFIED claims; no host timezone inference.", "POST", "/sessions", append(append([]Field{}, sessionFields...), opt("import_key", "text", "Exact source identity")), false, false},
 	{"edit-session", "Edit session", "Replace session metadata using its current revision; identity/provenance never change.", "POST", "/sessions/{id}/edit", append([]Field{path("id", "number", "Session id"), req("version", "hidden", "Version")}, sessionFields...), false, false},
 	{"tombstone-session", "Delete session", "Hide active session results, retaining facts and historical access.", "POST", "/sessions/{id}/tombstone", []Field{path("id", "number", "Session id"), req("version", "hidden", "Version")}, false, true},
-	{"revive-session", "Revive session", "Restore the same session identity and current facts.", "POST", "/sessions/{id}/revive", []Field{path("id", "number", "Session id"), req("version", "hidden", "Version")}, false, false},
-	{"create-period", "Record period", "Record a named historical span, with optional uncertain boundaries; classifications use ordinary part-of links.", "POST", "/periods", []Field{req("title", "text", "Title"), area("body", "Body", 5), opt("start_boundary", "text", "Start boundary (blank unknown)"), opt("end_boundary", "text", "End boundary (blank unknown; .. ongoing)")}, false, false},
+	{"revive-session", "Restore session", "Restore the same session identity and current facts.", "POST", "/sessions/{id}/revive", []Field{path("id", "number", "Session id"), req("version", "hidden", "Version")}, false, false},
+	{"create-period", "New period", "Record a named historical span, with optional uncertain boundaries; classifications use ordinary part-of links.", "POST", "/periods", []Field{req("title", "text", "Title"), area("body", "Body", 5), opt("start_boundary", "text", "Start boundary (blank unknown)"), opt("end_boundary", "text", "End boundary (blank unknown; .. ongoing)")}, false, false},
 	{"edit-period", "Edit boundaries", "Replace period boundaries using the current named-object version.", "POST", "/pages/{id}/period", []Field{path("id", "number", "Period id"), req("version", "hidden", "Version"), opt("start_boundary", "text", "Start boundary"), opt("end_boundary", "text", "End boundary")}, false, false},
 	{"promote-period", "Record span", "Make this plain non-journal page a period without replacing its identity, body or links.", "POST", "/pages/{id}/promote-period", []Field{path("id", "number", "Page id"), req("version", "hidden", "Version"), opt("start_boundary", "text", "Start boundary"), opt("end_boundary", "text", "End boundary")}, false, false},
-	{"capture", "Capture", "Append an entry to the journal page of a local day (created on the first capture), with an optional mood 1-5. [[Title]] and #tag in the text link pages, creating them if new. audio is a voice note (a recording, sent as a file by the CLI's --audio, a browser's capture box or a phone's share sheet): its words are transcribed and appended after the text; the recording is never stored.",
+	{"capture", "Add to the day", "Append an entry to the journal page of a local day (created on the first capture), with an optional mood 1-5. [[Title]] and #tag in the text link pages, creating them if new. audio is a voice note (a recording, sent as a file by the CLI's --audio, a browser's capture box or a phone's share sheet): its words are transcribed and appended after the text; the recording is never stored.",
 		"POST", "/days/{day}/capture", []Field{path("day", "date", "Local day, YYYY-MM-DD"), area("text", "Entry (CommonMark)", 4),
 			{Name: "mood", Type: "number", Title: "Mood 1-5", Options: []string{"1", "2", "3", "4", "5"}},
 			{Name: "audio", Type: "file", Title: "A voice note", Accept: "audio/*"}}, false, false},
@@ -127,7 +128,7 @@ var catalog = []spec{
 		"POST", "/people", []Field{req("title", "text", "Handle"), opt("name", "text", "Full name"), opt("birth_day", "date", "Born"), opt("death_day", "date", "Died")}, false, false},
 	{"create-place", "New place", "Create a place; its title is its name and its handle.",
 		"POST", "/places", []Field{req("title", "text", "Name")}, false, false},
-	{"add-file", "Keep a file", "Keep a file the owner picked (a recording, a PDF, a scan, a photo) as a page: title is its permanent handle, and ![[title]] in a day page shows it; body is its text (a transcript, the text of a PDF, a caption). Send the original, which is read and never stored, or its sha256 and mime. A picture is made from the original when it is a JPEG, PNG or GIF; for any other (HEIC, a video's frame) send preview, a JPEG, PNG or GIF. A photo's own day (its EXIF date) and position are read from the original: its day page gets an at link to the place it was taken in, and shows it; a position near no place is reported, and at names the place, which takes the position as its point. The same original again finds its page and writes nothing but a missing picture, its place and its day.",
+	{"add-file", "New file", "Keep a file the owner picked (a recording, a PDF, a scan, a photo) as a page: title is its permanent handle, and ![[title]] in a day page shows it; body is its text (a transcript, the text of a PDF, a caption). Send the original, which is read and never stored, or its sha256 and mime. A picture is made from the original when it is a JPEG, PNG or GIF; for any other (HEIC, a video's frame) send preview, a JPEG, PNG or GIF. A photo's own day (its EXIF date) and position are read from the original: its day page gets an at link to the place it was taken in, and shows it; a position near no place is reported, and at names the place, which takes the position as its point. The same original again finds its page and writes nothing but a missing picture, its place and its day.",
 		"POST", "/files", []Field{req("title", "text", "Title"), opt("original", "file", "The file (read, never stored)"), opt("sha256", "text", "SHA-256 of the original, when it is not sent"),
 			opt("mime", "text", "Type, e.g. audio/mp4"), opt("preview", "file", "Picture, when the original is not a JPEG, PNG or GIF"), area("body", "Text: a transcript, a caption", 6), opt("day", "date", "Its day (default: the photo's own, else today)"),
 			opt("at", "text", "The place it was taken at (names it)"), opt("radius", "number", "That place's radius in metres, when it takes this position (default 250)"),
@@ -142,18 +143,18 @@ var catalog = []spec{
 		"POST", "/pages/{id}/promote", []Field{path("id", "number", "Page id"), {Name: "to", Type: "text", Title: "Into", Required: true, Options: []string{"person", "place"}}, opt("name", "text", "Full name (a person)")}, false, false},
 	{"tombstone", "Delete", "Tombstone a page (nothing is ever removed; revive undoes it).",
 		"POST", "/pages/{id}/tombstone", []Field{path("id", "number", "Page id")}, false, true},
-	{"revive", "Revive", "Undo a tombstone.",
+	{"revive", "Restore", "Undo a tombstone.",
 		"POST", "/pages/{id}/revive", []Field{path("id", "number", "Page id")}, false, false},
 	{"tombstone-pages", "Delete pages", "Tombstone several pages (files among them) in one write: ids are page ids, separated by spaces or commas. An id no page has refuses the whole action; revive undoes each.",
 		"POST", "/pages/tombstone", []Field{req("ids", "text", "Page ids, separated by spaces or commas")}, false, true},
-	{"link", "Link", "Add a typed link from this page to the page titled `to` (kinds: at = a day page was at a place; about; located-in; parent-of; part-of = filed in the category whose page is `to`; friend; family; related).",
+	{"link", "Add a link", "Add a typed link from this page to the page titled `to` (kinds: at = a day page was at a place; about; located-in; parent-of; part-of = filed in the category whose page is `to`; friend; family; related).",
 		"POST", "/pages/{id}/links", []Field{path("id", "number", "Page id"), pageField("to", "To (title)", true), req("kind", "text", "Kind"), opt("note", "text", "Note")}, false, false},
-	{"unlink", "Unlink", "Remove a typed link from this page to the page titled `to`.",
+	{"unlink", "Remove a link", "Remove a typed link from this page to the page titled `to`.",
 		"POST", "/pages/{id}/unlink", []Field{path("id", "number", "Page id"), pageField("to", "To (title)", true), req("kind", "text", "Kind")}, false, false},
-	{"file-pages", "File in a category", "File several pages (metrics among them) in the category page titled `category`, in one write (a part-of link from each): ids are page ids, separated by spaces or commas. A missing category is made as an empty page. With move 1, every other part-of link of those pages is removed first. An id no page has refuses the whole action.",
+	{"file-pages", "Put in a category", "File several pages (metrics among them) in the category page titled `category`, in one write (a part-of link from each): ids are page ids, separated by spaces or commas. A missing category is made as an empty page. With move 1, every other part-of link of those pages is removed first. An id no page has refuses the whole action.",
 		"POST", "/pages/file", []Field{req("ids", "text", "Page ids, separated by spaces or commas"), pageField("category", "Category (title)", true),
 			{Name: "move", Type: "number", Title: "Move (remove the other categories)", Options: []string{"0", "1"}}}, false, false},
-	{"record", "Record", "Record a reading of a registered metric for a local day. import_key makes a re-send a no-op. A view offers the metrics read in its last 60 days; /metrics lists them all.",
+	{"record", "Add a reading", "Record a reading of a registered metric for a local day. import_key makes a re-send a no-op. A view offers the metrics read in its last 60 days; /metrics lists them all.",
 		"POST", "/measurements", []Field{req("metric", "text", "Metric"), req("day", "date", "Day"), req("value", "number", "Value"),
 			opt("session_id", "number", "Session scope (blank unassociated, not a daily total)"), opt("taken_at", "text", "Taken at (UTC, 2026-06-09T21:14:03.482Z)"), opt("tz", "text", "Zone (IANA)"), opt("import_key", "text", "Key")}, false, false},
 	{"readings-from-table", "Readings from a table", "Turn the table of a page into readings of a registered metric: each row with a day (YYYY-MM-DD) and a plain number is one reading of that day. The unit (in the cell, a unit column, or the header in ( ) or [ ]) must be the metric's; nothing is converted. A sign (<5), a word, a comma decimal, another unit or a second value for one day is reported, not written. A second run writes nothing.",
@@ -197,11 +198,11 @@ var catalog = []spec{
 		"POST", "/tasks/{id}/stop", []Field{path("id", "number", "Task id"), req("version", "hidden", "Version"), req("through", "date", "Last day")}, false, false},
 	{"tombstone-task", "Delete task", "Tombstone a task: all its work and reminders stop; revive-task undoes it.",
 		"POST", "/tasks/{id}/tombstone", []Field{path("id", "number", "Task id"), req("version", "hidden", "Version")}, false, true},
-	{"revive-task", "Revive task", "Undo a task's tombstone.",
+	{"revive-task", "Restore task", "Undo a task's tombstone.",
 		"POST", "/tasks/{id}/revive", []Field{path("id", "number", "Task id"), req("version", "hidden", "Version")}, false, false},
 	{"tombstone-tasks", "Delete tasks", "Tombstone several tasks in one write, no version needed: ids are task ids, separated by spaces or commas. An id no task has refuses the whole action; revive-task undoes each.",
 		"POST", "/tasks/tombstone", []Field{req("ids", "text", "Task ids, separated by spaces or commas")}, false, true},
-	{"capture-occurrence", "Capture occurrence", "Write one occurrence of a task: key is a slot day of the series (due on that day unless due_day says otherwise) or once for a one-off. state open, done or skipped; completed_at an instant, or now, for a done one; reminder_mode inherit, off, or at with reminder_at. A slot written before is returned as it is.",
+	{"capture-occurrence", "Add an occurrence", "Write one occurrence of a task: key is a slot day of the series (due on that day unless due_day says otherwise) or once for a one-off. state open, done or skipped; completed_at an instant, or now, for a done one; reminder_mode inherit, off, or at with reminder_at. A slot written before is returned as it is.",
 		"POST", "/tasks/{id}/occurrences", []Field{path("id", "number", "Task id"), req("task_version", "hidden", "Task version"), req("key", "text", "Slot (a day, or once)"), opt("due_day", "date", "Due"),
 			{Name: "state", Type: "text", Title: "State", Options: []string{core.StateOpen, core.StateDone, core.StateSkipped}}, opt("completed_at", "text", "Completed at (UTC instant, or now)"),
 			{Name: "reminder_mode", Type: "text", Title: "Reminder", Options: []string{core.ReminderInherit, core.ReminderOff, core.ReminderAt}}, opt("reminder_at", "text", "Reminder at (UTC instant, with at)"), opt("import_key", "text", "Key")}, false, false},
@@ -211,7 +212,7 @@ var catalog = []spec{
 			{Name: "reminder_mode", Type: "text", Title: "Reminder", Options: []string{core.ReminderInherit, core.ReminderOff, core.ReminderAt}}, opt("reminder_at", "text", "Reminder at (UTC instant, with at)")}, false, false},
 	{"tombstone-occurrence", "Delete occurrence", "Tombstone one occurrence; its slot stays suppressed. revive-occurrence undoes it.",
 		"POST", "/tasks/{id}/occurrences/{key}/tombstone", []Field{path("id", "number", "Task id"), path("key", "text", "Occurrence key"), req("task_version", "hidden", "Task version"), req("version", "hidden", "Version")}, false, true},
-	{"revive-occurrence", "Revive occurrence", "Undo an occurrence's tombstone.",
+	{"revive-occurrence", "Restore occurrence", "Undo an occurrence's tombstone.",
 		"POST", "/tasks/{id}/occurrences/{key}/revive", []Field{path("id", "number", "Task id"), path("key", "text", "Occurrence key"), req("task_version", "hidden", "Task version"), req("version", "hidden", "Version")}, false, false},
 	// A conversation with lifelog (docs/plans/102-a-conversation-with-lifelog.md): a model answers with the tools of this
 	// catalog, and the turn is kept on a conversation page.

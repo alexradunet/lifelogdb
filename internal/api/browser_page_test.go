@@ -75,8 +75,8 @@ func TestADestructiveActionDrawsADangerButton(t *testing.T) {
 	}
 	gone := must(c.Do(t.Context(), find(p, "tombstone"), nil))
 	body := page(t, h, href(gone, "self"))
-	if !strings.Contains(body, "<button>Revive</button>") {
-		t.Errorf("a deleted page offers no plain revive: %.400s", body)
+	if !strings.Contains(body, "<button>Restore</button>") {
+		t.Errorf("a deleted page offers no plain Restore: %.400s", body)
 	}
 	if strings.Contains(body, `<button class="danger">`) {
 		t.Error("a deleted page draws a danger button for the revive that restores it")

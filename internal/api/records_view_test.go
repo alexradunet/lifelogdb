@@ -10,7 +10,7 @@ import (
 // boundaries in words, and not as the generic view's properties; an empty list names the way forward.
 func TestThePeriodsAreAList(t *testing.T) {
 	c, h := freshOn(t, fixedToday)
-	if body := browse(t, h, "/periods"); !strings.Contains(body, `<p class="empty">No period yet. Record period makes one.</p>`) {
+	if body := browse(t, h, "/periods"); !strings.Contains(body, `<p class="empty">No period yet. New period makes one.</p>`) {
 		t.Error("an empty list of periods does not say how to make one")
 	}
 	root := must(c.Get(t.Context(), "/"))
@@ -22,7 +22,7 @@ func TestThePeriodsAreAList(t *testing.T) {
 		`<a class="entry named" href="` + hrefOf(cluj, "self") + `"><span class="first">Living in Cluj</span><span class="meta">2019-09 to 2023-06</span></a>`,
 		`<span class="first">Childhood</span><span class="meta">no boundaries</span>`,
 		`<span class="first">Since the move</span><span class="meta">2024-03 to unknown</span>`,
-		`<p class="sub">3 on this page</p>`, `>Record period</summary>`,
+		`<p class="sub">3 on this page</p>`, `>New period</summary>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the periods lack %s", want)
@@ -39,7 +39,7 @@ func TestThePeriodsAreAList(t *testing.T) {
 // or its kind was deleted. Nothing is converted and nothing is left out (D22).
 func TestTheSessionsAreAList(t *testing.T) {
 	c, h := freshOn(t, fixedToday)
-	if body := browse(t, h, "/sessions"); !strings.Contains(body, `<p class="empty">No session yet. Record session makes one.</p>`) {
+	if body := browse(t, h, "/sessions"); !strings.Contains(body, `<p class="empty">No session yet. New session makes one.</p>`) {
 		t.Error("an empty list of sessions does not say how to make one")
 	}
 	root := must(c.Get(t.Context(), "/"))
@@ -58,7 +58,7 @@ func TestTheSessionsAreAList(t *testing.T) {
 		regexp.MustCompile(`<span class="date">Mon 12 May</span><span class="first">Run</span><span class="meta">unresolved</span>` +
 			`<small class="note">local 2031-05-11T23:10:00.000 Claimed/Zone \(unverified\) to local 2031-05-12T07:05:00.000</small>`),
 		regexp.MustCompile(`<p class="sub">2 on this page<a href="/sessions\?include_deleted=1">Show deleted sessions</a></p>`),
-		regexp.MustCompile(`>Record session</summary>`),
+		regexp.MustCompile(`>New session</summary>`),
 	} {
 		if !want.MatchString(body) {
 			t.Errorf("the sessions lack %s", want)

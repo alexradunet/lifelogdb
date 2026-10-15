@@ -11,7 +11,7 @@
 @layer components{
 /* The two materials of this sheet, as reusable declarations: parchment (what is written) and wood (the chrome).
    These two lists stay flat: a rule nested under a list takes the whole list's specificity. */
-.rail,.rail>nav,.rail-more:popover-open,.scroll:has(>table.calendar){--text:var(--rail-ink); --text-strong:var(--rail-accent); --text-muted:var(--rail-ink); --text-link:var(--rail-accent); --text-accent:var(--rail-accent); --rule:var(--outline);
+.rail,.rail>nav,.rail-more:popover-open,.new-menu:popover-open,.scroll:has(>table.calendar){--text:var(--rail-ink); --text-strong:var(--rail-accent); --text-muted:var(--rail-ink); --text-link:var(--rail-accent); --text-accent:var(--rail-accent); --rule:var(--outline);
   color:var(--text); background-color:var(--rail); background-image:var(--planks),var(--grain-ground); background-size:auto,4px 4px}
 .sheet,.panel,.leaf,.month-box,.reading-tile,.alert,.toast,.action-form,ul.suggest,dialog.palette,table.calendar td,.margin ul.plain,.margin .habit,.margin .about,
 .editor .preview,main>.scroll:not(:has(>table.calendar)),.group>.scroll{--text:var(--ink); --text-strong:var(--ink); --text-muted:var(--muted); --text-link:var(--link); --text-accent:var(--accent-ink); --rule:var(--edge);
@@ -48,6 +48,14 @@ svg.icon{flex:none; inline-size:16px; block-size:16px; fill:none; stroke:current
 .rail .rail-new.primary{inline-size:100%}
 .rail .rail-new.primary,.styleguide .rail-new.primary{background:var(--rail); color:var(--rail-accent); border-color:var(--outline); box-shadow:var(--bevel-up),var(--drop-hard);
   &:hover{background:var(--rail); color:var(--rail-accent); filter:brightness(1.12)}}
+/* New opens a menu of the kinds (docs/plans/114-one-way-to-do-a-thing.md): a popover in the middle of the screen,
+   a wood slab like the rail, two columns of links. */
+.new-menu:popover-open{display:flex; flex-direction:column; gap:var(--space-3); inline-size:min(22rem, calc(100vw - 2rem)); block-size:fit-content;
+  margin:auto; padding:var(--space-4); background:var(--rail); border:2px solid var(--outline); box-shadow:var(--bevel-up),var(--shadow-float);
+  & nav ul{display:grid; grid-template-columns:1fr 1fr; gap:2px}
+  &::backdrop{background:rgb(0 0 0 / .35)}}
+.new-menu-head{display:flex; align-items:center; justify-content:space-between;
+  & .label{color:var(--rail-accent); font-weight:700}}
 /* A section is a link; More, which opens the phone's sheet, is a button drawn as one. */
 .rail nav{
   & ul{display:flex; flex-direction:column; gap:2px; margin:0; padding:0; list-style:none}

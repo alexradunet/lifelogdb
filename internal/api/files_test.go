@@ -135,7 +135,7 @@ func TestFileViews(t *testing.T) {
 	f := must(c.DoFiles(t.Context(), find(root, "add-file"), map[string]string{"title": "Lake.jpg", "body": "dawn"}, map[string]string{"original": path}))
 	day := must(c.Do(t.Context(), find(root, "capture"), map[string]string{"text": "Swam. ![[Lake.jpg|the lake]]"}))
 	for path, want := range map[string][]string{
-		"/":               {`enctype="multipart/form-data"`, `type="file" name="original"`, `type="hidden" name="sha256"`},
+		"/files":          {`enctype="multipart/form-data"`, `type="file" name="original"`, `type="hidden" name="sha256"`},
 		"/media":          {"Lake.jpg", `action="/files"`, `<img src="` + href(f, "preview") + `" alt="" loading="lazy">`},
 		href(f, "self"):   {`<img class="preview" src="` + href(f, "preview") + `"`, "image/jpeg", "Backlinks"},
 		href(day, "page"): {`<img src="/previews?title=Lake.jpg" alt="the lake"`},

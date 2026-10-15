@@ -128,7 +128,7 @@ func TestMediaListsPicturesVideosAndRecordings(t *testing.T) {
 	if body := browse(t, h, "/media?kind=video"); !strings.Contains(body, `<a href="/media?kind=video" aria-current="page">Videos</a>`) || strings.Contains(body, "Memo 1.m4a") || !strings.Contains(body, `value="/media?kind=video">`) {
 		t.Errorf("the videos page: %.800s", body)
 	}
-	if body := browse(t, h, "/media?kind=video&offset=1"); !strings.Contains(body, `<p class="empty">None of this kind yet. Keep a file adds one.</p>`) {
+	if body := browse(t, h, "/media?kind=video&offset=1"); !strings.Contains(body, `<p class="empty">None of this kind yet. New file adds one.</p>`) {
 		t.Errorf("an empty kind: %.800s", body)
 	}
 	if !strings.Contains(browse(t, h, "/"), `href="/media"`) {
@@ -146,7 +146,7 @@ func TestMediaIsEmptyUntilAFileOfItsKindsIsKept(t *testing.T) {
 	if rows, _ := props(e)["rows"].([]any); len(rows) != 0 || len(e.Entities) != 0 {
 		t.Errorf("the rows: %v", props(e)["rows"])
 	}
-	if body := browse(t, h, "/media"); !strings.Contains(body, `<p class="sub">no pictures, no videos, no recordings</p>`) || !strings.Contains(body, `<p class="empty">No media yet. Keep a file adds a picture, a video or a recording.</p>`) {
+	if body := browse(t, h, "/media"); !strings.Contains(body, `<p class="sub">no pictures, no videos, no recordings</p>`) || !strings.Contains(body, `<p class="empty">No media yet. New file adds a picture, a video or a recording.</p>`) {
 		t.Errorf("the empty page: %.800s", body)
 	}
 	// And the other way round: a photo alone leaves the files list empty.
@@ -156,7 +156,7 @@ func TestMediaIsEmptyUntilAFileOfItsKindsIsKept(t *testing.T) {
 	if e := must(c.Get(ctx, "/files")); len(e.Entities) != 0 {
 		t.Errorf("the files: %+v", e.Entities)
 	}
-	if body := browse(t, h, "/files"); !strings.Contains(body, `<p class="empty">No other file yet. Keep a file adds one; a picture, a video or a recording goes to Media.</p>`) {
+	if body := browse(t, h, "/files"); !strings.Contains(body, `<p class="empty">No other file yet. New file adds one; a picture, a video or a recording goes to Media.</p>`) {
 		t.Errorf("the empty files page: %.800s", body)
 	}
 }

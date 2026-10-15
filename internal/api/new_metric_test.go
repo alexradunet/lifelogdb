@@ -67,7 +67,7 @@ func TestTheMetricsPageMakesAMetricACategoryAndAReading(t *testing.T) {
 
 	page := browse(t, h, "/metrics")
 	for _, want := range []string{`<details class="action new-metric" id="new-metric">`, `<form class="kind-number"`, `<form class="kind-score"`,
-		`<form class="kind-habit"`, `name="habit_from" value="` + fixedToday + `"`, `<a class="button" href="/metrics?new=category#file-bar">New category</a>`,
+		`<form class="kind-habit"`, `name="habit_from" value="` + fixedToday + `"`, `<a class="button" href="/metrics?new=file-pages#file-bar">New category</a>`,
 		`<input type="radio" name="new-kind" value="number" checked>`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("/metrics lacks %s", want)
@@ -76,12 +76,12 @@ func TestTheMetricsPageMakesAMetricACategoryAndAReading(t *testing.T) {
 	if home := browse(t, h, "/"); strings.Contains(home, `data-action="register-metric"`) {
 		t.Error("Home still draws the New metric form")
 	}
-	if p := browse(t, h, "/metrics?new=metric&category=Sport"); !strings.Contains(p, `id="new-metric" open>`) ||
+	if p := browse(t, h, "/metrics?new=register-metric&category=Sport"); !strings.Contains(p, `id="new-metric" open>`) ||
 		!strings.Contains(p, `name="category" list="metric-categories" value="Sport"`) {
-		t.Error("?new=metric&category=Sport does not open New metric with Sport filled in")
+		t.Error("?new=register-metric&category=Sport does not open New metric with Sport filled in")
 	}
-	if p := browse(t, h, "/metrics?new=category"); !strings.Contains(p, `id="file-bar" open>`) {
-		t.Error("?new=category does not open the bar")
+	if p := browse(t, h, "/metrics?new=file-pages"); !strings.Contains(p, `id="file-bar" open>`) {
+		t.Error("?new=file-pages does not open the bar")
 	}
 
 	// The habit form and the number form, as a browser sends them.
@@ -98,7 +98,7 @@ func TestTheMetricsPageMakesAMetricACategoryAndAReading(t *testing.T) {
 		}
 	}
 	page = browse(t, h, "/metrics")
-	for _, want := range []string{`href="/metrics?new=metric&amp;category=Body#new-metric">+ New metric here</a>`,
+	for _, want := range []string{`href="/metrics?new=register-metric&amp;category=Body#new-metric">+ New metric here</a>`,
 		`aria-label="Add a reading of Weight"`, `aria-label="Check in Walk"`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("/metrics lacks %s", want)
