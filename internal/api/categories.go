@@ -122,3 +122,33 @@ func (h *server) filePages(r *http.Request, src string) (*Entity, error) {
 	e.Result = result + "."
 	return e, nil
 }
+
+// categoriesView is GET /categories (docs/plans/115-categories-to-browse.md): the category tree by path, each with
+// its count, as the property categories and a category link each; then the unfiled plain pages, paged, as the
+// property unfiled and an item link each.
+func (h *server) categoriesView(r *http.Request) (*Entity, error) {
+	limit, offset, err := pageOf(r, 200)
+	if err != nil {
+		return nil, err
+	}
+	cs, err := h.s.Categories(r.Context())
+	if err != nil {
+		return nil, err
+	}
+	un, err := h.s.Unfiled(r.Context(), limit+1, offset)
+	if err != nil {
+		return nil, err
+	}
+	e := &Entity{Class: []string{"categories"}, Title: "Categories",
+		Links: []Link{link("self", "/categories", "Categories"), link("index", "/", "Home")}}
+	un = paged(e, un, "/categories", nil, limit, offset)
+	props := e.Properties.(map[string]any)
+	props["categories"], props["unfiled"] = cs, un
+	for _, c := range cs {
+		e.Entities = append(e.Entities, Link{Rel: []string{"category"}, Href: pageHref(c.ID), Title: c.Title, Class: []string{"page"}})
+	}
+	for _, p := range un {
+		e.Entities = append(e.Entities, Link{Rel: []string{"item"}, Href: pageHref(p.ID), Title: p.Title, Class: []string{p.Type}})
+	}
+	return e, nil
+}

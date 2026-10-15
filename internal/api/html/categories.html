@@ -1,0 +1,13 @@
+{{/* The Categories view (docs/plans/115-categories-to-browse.md): the category tree by path, a category under its
+     first parent by title, with the count of what is filed directly in it; then Not filed, the plain pages in no
+     category. A category is a page, so its row opens the page, where Filed here lists its contents. */}}
+{{define "category-tree"}}{{template "head" .}}{{$p := .Props}}
+<header class="page-head"><div class="what"><h1>Categories</h1>
+<p class="sub">A category is a page. Anything is put in one from its badges, and a category in another the same way.</p></div></header>
+{{with $p.categories}}<div class="sheet list"><ul class="plain rows tree">{{range .}}<li class="depth-{{depth .path}}"><a class="entry" href="/pages/{{num .id}}"><span class="first">{{.title}}</span><span class="meta">{{num .count}}</span></a></li>{{end}}</ul></div>
+{{else}}<p class="empty">No category yet. Open a page and use + Add beside Categories: the category is made with the first page put in it.</p>{{end}}
+<section class="group" aria-label="Not filed"><h2>Not filed</h2>
+{{with $p.unfiled}}<div class="sheet list"><ul class="plain rows">{{range .}}<li><a href="/pages/{{num .id}}">{{.title}}</a></li>{{end}}</ul></div>
+{{else}}<p class="empty">Every page is in a category.</p>{{end}}
+{{template "pager" .}}</section>
+{{template "foot" .}}{{end}}

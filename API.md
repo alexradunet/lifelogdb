@@ -141,6 +141,28 @@ import actions are included and the link `import` leads to its status.
 | `rows[].point.radius_m` | integer | the radius of its circle, in metres |
 | `rows[].point.link_days` | boolean | true when a photo in the circle links its day to the place |
 
+### categories
+
+`GET /categories`: the category tree, then one page of the plain pages filed nowhere. A category is a page that
+something is `part-of` (D26). Each category is an embedded `category` link to its page, and each unfiled page an
+embedded `item` link.
+
+| property | type | meaning |
+|---|---|---|
+| `categories[]` | list | every category page, by path, as [metrics](#metrics) `categories[]` |
+| `categories[].id` | integer | the category's page id |
+| `categories[].title` | string | its title |
+| `categories[].path` | string | the titles from the top, joined by `/` |
+| `categories[].count` | integer | how many live things are filed directly in it, the categories under it included; absent when none |
+| `unfiled[]` | list | the live plain pages in no category that are not categories, by title: not a day page, and not a metric, a person, a place or a file |
+| `unfiled[].kind` | string | `page` |
+| `unfiled[].id` | integer | the page's id |
+| `unfiled[].title` | string | its title |
+| `unfiled[].entity_type` | string | `page` |
+| `unfiled[].note` | string | absent |
+| `limit` | integer | the page size of `unfiled`, 200 by default |
+| `offset` | integer | the rows skipped |
+
 ### media, files
 
 `GET /media`: one page of the live files whose type is `image/*`, `video/*` or `audio/*`, newest day first, each row
@@ -550,6 +572,7 @@ With `?show=habits` (and `day`, `from`, `to`) it also carries the properties, li
 | `categories[].id` | integer | the category's page id |
 | `categories[].title` | string | its title |
 | `categories[].path` | string | the titles from the top, joined by `/` |
+| `categories[].count` | integer | how many live things are filed directly in it; absent when none |
 | `today` | day | the server's local day |
 | `habit_days[]` | list | the habits active today, as [root](#root) `habits[]`; absent with `?show=habits` |
 | `habit_days[].metric` | string | the habit's name |
@@ -895,6 +918,7 @@ category is 422 (`links_endpoint_types`). The answer embeds an `item` link to ea
 | `category.id` | integer | its id |
 | `category.title` | string | its title |
 | `category.path` | string | empty here |
+| `category.count` | integer | absent here |
 | `created` | boolean | the category page was made by this action |
 | `ids` | list | the ids named, each once, in the order sent |
 | `count` | integer | how many |

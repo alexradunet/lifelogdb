@@ -90,6 +90,7 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 		}
 		return month
 	},
+	"depth":     func(path string) int { return strings.Count(path, "/") }, // a category's depth in the drawn tree
 	"segmented": segmented,
 	"alert":     alertOf,
 	"capLater":  capLater,
@@ -128,7 +129,7 @@ func num(v any) string {
 // viewOf names the template that shows an entity of a class; a class without one is shown by "generic".
 var viewOf = map[string]string{
 	"root": "root", "day": "day", "page": "page", "person": "page", "place": "page", "file": "page",
-	"days": "list", "people": "list", "places": "list", "media": "media", "files": "files", "ghosts": "list", "search": "search",
+	"days": "list", "people": "list", "places": "list", "media": "media", "files": "files", "ghosts": "list", "search": "search", "categories": "category-tree",
 
 	"metrics": "metrics", "series": "metric", "metric": "page", "measurement": "measurement", "error": "error", "login": "login",
 	"tasks": "tasks", "task": "task", "occurrence": "occurrence", "deadlines": "deadlines", "month": "month", "week": "week", "year": "year", "styleguide": "styleguide",
@@ -233,6 +234,7 @@ var navItems = []struct {
 	{"Due", "/deadlines", "due", []string{"/deadlines"}, "day"},
 	{"Tasks", "/tasks", "tasks", []string{"/tasks"}, "day"},
 	{"Chat", "/conversations", "chat", []string{"/conversations"}, "day"},
+	{"Categories", "/categories", "categories", []string{"/categories"}, "record"},
 	{"People", "/people", "people", []string{"/people"}, "record"},
 	{"Places", "/places", "places", []string{"/places"}, "record"},
 	{"Media", "/media", "media", []string{"/media"}, "record"},

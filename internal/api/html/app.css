@@ -851,3 +851,10 @@ li.pick{display:flex; align-items:stretch; gap:var(--space-1);
 /* What an action does, before its form; the note under a table or a search. */
 .desc{display:block; font-size:13px; line-height:19px; color:var(--text-muted)}
 }
+
+/* The category tree (docs/plans/115-categories-to-browse.md): a row is indented by its depth in the drawn tree. */
+.tree>li.depth-1 .entry{padding-inline-start:var(--space-5)}
+.tree>li.depth-2 .entry{padding-inline-start:calc(2 * var(--space-5))}
+.tree>li.depth-3 .entry{padding-inline-start:calc(3 * var(--space-5))}
+.tree>li.depth-4 .entry{padding-inline-start:calc(4 * var(--space-5))}
+.tree .entry{grid-template-columns:minmax(0,1fr) auto}

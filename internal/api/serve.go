@@ -92,6 +92,7 @@ func NewOn(s *core.Store, localDay func() string, zone *time.Location, asker Ask
 	get("/metrics/{name}", h.series)
 	get("/measurements/{id}", h.measurement)
 	get("/ghosts", h.ghosts)
+	get("/categories", h.categoriesView)
 	get("/search", h.search)
 	get("/titles", h.titles)
 	m.HandleFunc("POST /render", h.render)
