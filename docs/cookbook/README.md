@@ -21,7 +21,6 @@ The order below is the order the suites run the recipes in; the key is how a sui
 | [Full-text search](full-text-search.md) | `full-text-search` |
 | [Where was I: the places of a day, the days at a place (D16)](where-was-i.md) | `where-was-i` |
 | [Correct a wrong measurement (append-only)](correct-a-measurement.md) | `correct-a-measurement` |
-| [Everything inside a place (containment)](inside-a-place.md) | `inside-a-place` |
 | [Ghost pages (the wikilink sweep, D5)](ghost-pages.md) | `ghost-pages` |
 | [Save a body with wikilinks (resolve or create each target, sync the links)](save-a-body.md) | `save-a-body` |
 | [A person or a place: create one, promote a ghost page (D20)](person-or-place.md) | `person-or-place` |

@@ -248,10 +248,6 @@ func triggersAvoidConflictShortcuts(s *S) {
 	s.K("the DDL has triggers to read", triggers > 50, triggers)
 	s.K("no trigger uses OR IGNORE or OR REPLACE", len(offenders) == 0, offenders)
 
-	c := s.fresh()
-	a, b := c.named("person", "Mirror A"), c.named("person", "Mirror B")
-	s.K("a symmetric link is mirrored once with the same source and time", c.link(a, b, "friend") == "OK" && c.n("SELECT count(*) FROM links WHERE kind='friend'") == 2 &&
-		c.n("SELECT count(*) FROM links x JOIN links y ON y.from_id=x.to_id AND y.to_id=x.from_id AND y.kind=x.kind AND y.source=x.source AND y.created_at=x.created_at WHERE x.kind='friend'") == 2)
 }
 
 // The two lookups that were widened: a day is found by entities_day (only pages with a day are in it) and a backlink

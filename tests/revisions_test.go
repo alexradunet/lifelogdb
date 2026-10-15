@@ -120,17 +120,6 @@ func editRevisions(s *S) {
 	s.K("a wikilink insertion advances no page: it is derived from the body", untouched())
 	c.must("DELETE FROM links WHERE from_id=? AND to_id=? AND kind='wikilink'", page, other)
 	s.K("a wikilink deletion advances no page: it is derived from the body", untouched())
-	// the two rows of a symmetric link are two inserts, two note updates, two deletes: both pages advance
-	ana, bob := c.named("person", "Revision Ana"), c.named("person", "Revision Bob")
-	ra, rb := revision(ana), revision(bob)
-	c.must("INSERT INTO links(from_id,to_id,kind,created_at,source) VALUES(?,?,'friend',"+NOW+",'ui')", ana, bob)
-	s.K("a symmetric link insertion advances both pages: the mirror row is its own insert", revision(ana) > ra && revision(bob) > rb)
-	ra, rb = revision(ana), revision(bob)
-	c.must("UPDATE links SET note='shared' WHERE from_id=? AND to_id=? AND kind='friend'", ana, bob)
-	s.K("a symmetric link note edit advances both pages: the mirror note is its own update", revision(ana) > ra && revision(bob) > rb)
-	ra, rb = revision(ana), revision(bob)
-	c.must("DELETE FROM links WHERE from_id=? AND to_id=? AND kind='friend'", ana, bob)
-	s.K("a symmetric link deletion advances both pages: the mirror row is its own delete", revision(ana) > ra && revision(bob) > rb)
 	c.must("UPDATE entities SET revision=9223372036854775807 WHERE id=?", page)
 	s.K("revision exhaustion refuses edit", strings.HasPrefix(c.tryx("UPDATE entities SET body='overflow' WHERE id=?", page), "ERR") && c.str("SELECT body FROM entities WHERE id=?", page) == "committed" && revision(page) == 9223372036854775807)
 }

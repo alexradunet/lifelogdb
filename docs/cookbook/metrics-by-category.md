@@ -52,5 +52,5 @@ the journal is one of its backlinks ([backlinks](backlinks.md)). The same link f
 page, a person, a place. A habit is not a category: it is a metric with a period ([habits](habits.md)), and it may be
 filed in a category as well. Renaming a category's page retains the id and all `part-of` links that end at it
 ([rename a page](rename-a-page.md)). Nothing keeps the `part-of` links a tree: a page may belong to two categories,
-and links may close a cycle, as `located-in` may (D8); a writer that draws the tree follows one parent and stops at a
+and links may close a cycle (D8); a writer that draws the tree follows one parent and stops at a
 page it has seen.

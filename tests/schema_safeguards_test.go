@@ -32,7 +32,7 @@ func schemaTextNUL(s *S) {
 		{"measurements_tz", "UTC", "INSERT INTO measurements(metric_id,day,value,source,created_at,tz) VALUES(1,'2020-01-01',3,'ui'," + NOW + ",?)", nil},
 		{"measurements_source", "cli", "INSERT INTO measurements(metric_id,day,value,created_at,source) VALUES(1,'2020-01-01',3," + NOW + ",?)", nil},
 		{"habit_periods_source", "cli", "INSERT INTO habit_periods(metric_id,start_day,source) VALUES(?,'2020-01-01',?)", []any{habit}},
-		{"links_source", "cli", "INSERT INTO links(from_id,to_id,kind,created_at,source) VALUES(?,1,'related'," + NOW + ",?)", []any{owner}},
+		{"links_source", "cli", "INSERT INTO links(from_id,to_id,kind,created_at,source) VALUES(?,?,'part-of'," + NOW + ",?)", []any{owner, owner}},
 		{"link_kinds_kind", "custom", "INSERT INTO link_kinds(kind) VALUES(?)", nil},
 		{"link_kinds_from_types", "page", "INSERT INTO link_kinds(kind,from_types) VALUES('custom',?)", nil},
 		{"link_kinds_to_types", "page", "INSERT INTO link_kinds(kind,to_types) VALUES('custom',?)", nil},

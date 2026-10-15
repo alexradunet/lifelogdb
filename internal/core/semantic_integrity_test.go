@@ -3,7 +3,7 @@ package core
 import "testing"
 
 func TestIntegrityDetectsRestoredGuardSemanticDamage(t *testing.T) {
-	for _, damage := range []string{"missing mirror", "mirror note", "correction cycle", "habit overlap", "habit value", "habit unit", "journal alias", "journal owner"} {
+	for _, damage := range []string{"correction cycle", "habit overlap", "habit value", "habit unit", "journal alias", "journal owner"} {
 		t.Run(damage, func(t *testing.T) {
 			s := fresh(t)
 			exec := func(q string, args ...any) {
@@ -31,16 +31,6 @@ func TestIntegrityDetectsRestoredGuardSemanticDamage(t *testing.T) {
 				return id
 			}
 			switch damage {
-			case "missing mirror", "mirror note":
-				a, b := page("One"), page("Two")
-				if err := s.Link(ctx, "cli", a, b, "related", "shared"); err != nil {
-					t.Fatal(err)
-				}
-				if damage == "missing mirror" {
-					bypass("links_mirror_delete", func() { exec("DELETE FROM links WHERE from_id=? AND to_id=?", b, a) })
-				} else {
-					bypass("links_mirror_note", func() { exec("UPDATE links SET note=NULL WHERE from_id=? AND to_id=?", b, a) })
-				}
 			case "correction cycle":
 				root, err := s.Record(ctx, "cli", Reading{Metric: "Mood", Day: "2026-10-01", Value: 3})
 				if err != nil {
@@ -91,10 +81,6 @@ func TestIntegrityDetectsRestoredGuardSemanticDamage(t *testing.T) {
 			var diagnostic []int64
 			want := 1
 			switch damage {
-			case "missing mirror":
-				diagnostic = got.InvalidSymmetricLinks
-			case "mirror note":
-				diagnostic, want = got.InvalidSymmetricLinks, 2
 			case "correction cycle":
 				diagnostic, want = got.InvalidMeasurementChains, 2
 			case "habit overlap":

@@ -51,10 +51,10 @@ func renames(s *S) {
 		place := c.named("place", "Japan")
 		day := c.dayPage("2026-09-29", "See [[Sourdogh]].")
 		c.link(id, target, "wikilink")
-		c.link(id, target, "related")
-		c.link(id, place, "about")
+		c.link(id, target, "part-of")
+		c.link(id, place, "wikilink")
 		c.link(day, id, "wikilink")
-		c.must("UPDATE links SET note='same flour' WHERE from_id=? AND kind='related'", id)
+		c.must("UPDATE links SET note='same flour' WHERE from_id=? AND kind='part-of'", id)
 		return id, day
 	}
 	for _, writer := range []bool{false, true} {

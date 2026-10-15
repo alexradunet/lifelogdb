@@ -17,7 +17,6 @@ func temporalModelDB(s *S, name string) *C {
 }
 
 func temporalCookbookModels(s *S) {
-	temporalContainmentLifecycle(s)
 	temporalCategoryLifecycle(s)
 	temporalCorrectionModel(s)
 	temporalDeadlineModel(s)
@@ -55,30 +54,6 @@ func temporalCategoryLifecycle(s *S) {
 	s.K("category all intermediate paths tombstoned hide descendant metrics", read(root) == "", read(root))
 	c.must("UPDATE entities SET deleted_at=NULL WHERE id=?", middle)
 	s.K("category intermediate revival restores retained membership", read(root) == "Lipids|LDL|mg/dL" && c.n("SELECT count(*) FROM links") == 6 && c.integrityOK(), read(root))
-	c.must("COMMIT")
-}
-
-func temporalContainmentLifecycle(s *S) {
-	c := temporalModelDB(s, "temporal-containment.db")
-	root, middle, leaf := c.named("place", "Japan"), c.named("place", "Kanto"), c.named("place", "Tokyo")
-	day := c.dayPage("2026-10-01", "A synthetic visit")
-	for _, edge := range [][2]int64{{leaf, middle}, {middle, root}} {
-		c.must("INSERT INTO links(from_id,to_id,kind,created_at,source) VALUES(?,?,'located-in',"+NOW+",'ui')", edge[0], edge[1])
-	}
-	c.must("INSERT INTO links(from_id,to_id,kind,created_at,source) VALUES(?,?,'at',"+NOW+",'ui')", day, leaf)
-	query := s.d.Block("inside-a-place")
-	read := func(id int64) string {
-		return c.tab(query, P{"place_id": id, "from_day": "2026-10-01", "to_day": "2026-10-01"})
-	}
-	s.K("containment reads a live descendant through live ancestors", read(root) == "2026-10-01|Tokyo", read(root))
-	c.must("UPDATE entities SET deleted_at="+NOW+" WHERE id=?", root)
-	s.K("containment tombstoned root hides live descendant days", read(root) == "", read(root))
-	s.K("containment root tombstone retains direct descendant history", read(leaf) == "2026-10-01|Tokyo" && c.n("SELECT count(*) FROM links") == 3)
-	c.must("UPDATE entities SET deleted_at=NULL WHERE id=?", root)
-	c.must("UPDATE entities SET deleted_at="+NOW+" WHERE id=?", middle)
-	s.K("containment tombstoned intermediate stops descendant traversal", read(root) == "", read(root))
-	c.must("UPDATE entities SET deleted_at=NULL WHERE id=?", middle)
-	s.K("containment revival restores retained descendant days", read(root) == "2026-10-01|Tokyo", read(root))
 	c.must("COMMIT")
 }
 

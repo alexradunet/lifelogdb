@@ -59,7 +59,7 @@ func dates(s *S) {
 	s.K("a tombstone that is not an instant refused", strings.Contains(c.tryx("UPDATE entities SET deleted_at='2026-01-01' WHERE id=?", c.anyIdentity("page")), "entities_deleted_at"))
 	pa, pb := c.named("person", ""), c.named("person", "")
 	s.K("measurements.created_at must be an instant", strings.HasPrefix(c.tryx("INSERT INTO measurements(metric_id,day,value,source,created_at) VALUES (1,'2026-01-01',1,'ui','2026-01-01 10:00:00')"), "ERR"))
-	s.K("links.created_at must be an instant", strings.HasPrefix(c.tryx("INSERT INTO links(from_id,to_id,kind,created_at,source) VALUES (?,?,'related','2026-01-01 10:00:00','ui')", pa, pb), "ERR"))
+	s.K("links.created_at must be an instant", strings.HasPrefix(c.tryx("INSERT INTO links(from_id,to_id,kind,created_at,source) VALUES (?,?,'wikilink','2026-01-01 10:00:00','ui')", pa, pb), "ERR"))
 	s.K("people.death_day must round-trip", strings.HasPrefix(c.tryx("UPDATE people SET death_day='2026-9-3' WHERE id=?", pa), "ERR"))
 	hab := c.metric("hab", "")
 	s.K("habit_periods.end_day must round-trip", strings.HasPrefix(c.habit(hab, "2026-01-01", "2026-2-1"), "ERR"))
@@ -115,7 +115,7 @@ func exactTimeBoundaries(s *S) {
 			}
 			queries["measurements.created_at"] = "INSERT INTO measurements(metric_id,day,value,source,created_at) VALUES(1,'2026-01-01',3,'ui',?)"
 			queries["measurements.taken_at"] = "INSERT INTO measurements(metric_id,day,taken_at,value,source,created_at) VALUES(1,'2026-01-01',?,3,'ui','2026-01-01T00:00:00.000Z')"
-			queries["links.created_at"] = fmt.Sprintf("INSERT INTO links(from_id,to_id,kind,source,created_at) VALUES(%d,%d,'about','ui',?)", entity, person)
+			queries["links.created_at"] = fmt.Sprintf("INSERT INTO links(from_id,to_id,kind,source,created_at) VALUES(%d,%d,'wikilink','ui',?)", entity, person)
 		}
 
 		keys := make([]string, 0, len(queries))

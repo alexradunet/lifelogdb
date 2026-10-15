@@ -81,13 +81,12 @@ func identity(s *S) {
 	}
 
 	hab := c.metric("hab", "")
-	s.K("links.source takes the same GLOB as entities.source", err(c.link(c.named("person", ""), c.named("person", ""), "friend", "UI")))
+	s.K("links.source takes the same GLOB as entities.source", err(c.link(c.page("Source A"), c.page("Source B"), "part-of", "UI")))
 	s.K("habit_periods.source takes the same GLOB as entities.source", err(c.habit(hab, "2026-01-01", nil, "Import:x")))
-	a, b := c.named("person", ""), c.named("person", "")
+	a, b := c.page("Source C"), c.page("Source D")
 	s.K("entities.source cannot change", err(c.tryx("UPDATE entities SET source='cli' WHERE id=?", a)))
 	s.K("a no-op full-row update and a tombstone still pass", c.tryx("UPDATE entities SET source=source, deleted_at="+NOW+" WHERE id=?", a) == "OK")
-	c.link(a, b, "friend", "agent:claude")
-	s.K("the mirror of a symmetric link copies its source", c.str("select source from links where from_id=? and to_id=?", b, a) == "agent:claude")
+	c.link(a, b, "part-of", "agent:claude")
 	s.K("links.source cannot change", err(c.tryx("UPDATE links SET source='ui' WHERE from_id=?", a)))
 	s.K("a link note edit still passes", c.tryx("UPDATE links SET note='n', source=source WHERE from_id=?", a) == "OK")
 
@@ -118,12 +117,12 @@ func identity(s *S) {
 	s.K("with foreign_keys=OFF: DELETE FROM entities still refused (the trigger, not the FK)", err(c.tryx("DELETE FROM entities WHERE id=?", byType["person"])))
 	s.K("with foreign_keys=OFF: DELETE FROM people still refused", err(c.tryx("DELETE FROM people WHERE id=?", byType["person"])))
 	c.must("PRAGMA foreign_keys=ON")
-	c.link(byType["person"], byType["place"], "about")
+	c.link(byType["person"], byType["page"], "part-of")
 	s.K("links rows may be hard-deleted (the one such table)", c.tryx("DELETE FROM links WHERE from_id=?", byType["person"]) == "OK" && c.n("select count(*) from links") == 0)
 	c.must("INSERT INTO link_kinds(kind) VALUES ('spare')")
 	s.K("an unreferenced registry row may be deleted (registries are administrative)", c.tryx("DELETE FROM link_kinds WHERE kind='spare'") == "OK")
-	c.link(byType["person"], byType["place"], "about")
-	s.K("a referenced link kind is refused by its foreign key, not by a trigger", strings.Contains(strings.ToUpper(c.tryx("DELETE FROM link_kinds WHERE kind='about'")), "FOREIGN KEY"))
+	c.link(byType["person"], byType["page"], "part-of")
+	s.K("a referenced link kind is refused by its foreign key, not by a trigger", strings.Contains(strings.ToUpper(c.tryx("DELETE FROM link_kinds WHERE kind='part-of'")), "FOREIGN KEY"))
 
 	// ---- updated_at, kept by triggers
 	c = s.fresh()

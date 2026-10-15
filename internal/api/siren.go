@@ -134,7 +134,7 @@ var catalog = []spec{
 		"POST", "/pages/{id}/revive", []Field{path("id", "number", "Page id")}, false, false},
 	{"tombstone-pages", "Delete pages", "Tombstone several pages (files among them) in one write: ids are page ids, separated by spaces or commas. An id no page has refuses the whole action; revive undoes each.",
 		"POST", "/pages/tombstone", []Field{req("ids", "text", "Page ids, separated by spaces or commas")}, false, true},
-	{"link", "Add a link", "Add a typed link from this page to the page titled `to` (kinds: at = a day page was at a place; about; located-in; parent-of; part-of = filed in the category whose page is `to`; friend; family; related).",
+	{"link", "Add a link", "Add a typed link from this page to the page titled `to` (kinds: at = a day page was at a place; part-of = filed in the category whose page is `to`).",
 		"POST", "/pages/{id}/links", []Field{path("id", "number", "Page id"), pageField("to", "To (title)", true), req("kind", "text", "Kind"), opt("note", "text", "Note")}, false, false},
 	{"unlink", "Remove a link", "Remove a typed link from this page to the page titled `to`.",
 		"POST", "/pages/{id}/unlink", []Field{path("id", "number", "Page id"), pageField("to", "To (title)", true), req("kind", "text", "Kind")}, false, false},

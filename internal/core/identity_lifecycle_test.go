@@ -93,89 +93,63 @@ func TestMoodHabitRegistrationRefusedAtomically(t *testing.T) {
 	}
 }
 
-func TestLinkFieldsImmutableAndSymmetricNoteShared(t *testing.T) {
+func TestLinkFieldsImmutable(t *testing.T) {
 	s := fresh(t)
-	a, err := s.CreatePerson(ctx, "cli", "Person A", "A", "", "")
+	a, _, err := s.CreatePage(ctx, "cli", "Page A", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := s.CreatePerson(ctx, "cli", "Person B", "B", "", "")
+	b, _, err := s.CreatePage(ctx, "cli", "Page B", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Link(ctx, "cli", a, b, "friend", "old note"); err != nil {
+	if err := s.Link(ctx, "cli", a, b, "part-of", "old note"); err != nil {
 		t.Fatal(err)
 	}
 	var id int64
 	var created string
-	if err := s.DB.R.QueryRow(`SELECT id,created_at FROM links WHERE from_id=? AND to_id=? AND kind='friend'`, a, b).Scan(&id, &created); err != nil {
+	if err := s.DB.R.QueryRow(`SELECT id,created_at FROM links WHERE from_id=? AND to_id=? AND kind='part-of'`, a, b).Scan(&id, &created); err != nil {
 		t.Fatal(err)
 	}
-	for _, set := range []string{`id=id+1000`, `created_at='2020-01-01T00:00:00.000Z'`, `from_id=to_id`, `to_id=from_id`, `kind='related'`, `source='api'`} {
+	for _, set := range []string{`id=id+1000`, `created_at='2020-01-01T00:00:00.000Z'`, `from_id=to_id`, `to_id=from_id`, `kind='wikilink'`, `source='api'`} {
 		if _, err := s.DB.W.Exec(`UPDATE links SET `+set+` WHERE id=?`, id); err == nil {
 			t.Fatalf("immutable update accepted: %s", set)
 		}
 	}
 	var gotID int64
 	var gotCreated string
-	if err := s.DB.R.QueryRow(`SELECT id,created_at FROM links WHERE from_id=? AND to_id=? AND kind='friend'`, a, b).Scan(&gotID, &gotCreated); err != nil {
+	if err := s.DB.R.QueryRow(`SELECT id,created_at FROM links WHERE from_id=? AND to_id=? AND kind='part-of'`, a, b).Scan(&gotID, &gotCreated); err != nil {
 		t.Fatal(err)
 	}
 	if gotID != id || gotCreated != created {
 		t.Fatal("immutable refusal changed persisted link")
 	}
-	assertNotes := func(want any) {
+	note := func() any {
 		t.Helper()
-		var mismatches int
-		if err := s.DB.R.QueryRow(`SELECT count(*) FROM links WHERE kind='friend' AND note IS NOT ?`, want).Scan(&mismatches); err != nil {
+		var n any
+		if err := s.DB.R.QueryRow(`SELECT note FROM links WHERE id=?`, id).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
-		if mismatches != 0 {
-			t.Fatalf("%d mirrored notes differ from %v", mismatches, want)
-		}
+		return n
 	}
-	for _, tc := range []struct {
-		from, to int64
-		note     any
-	}{{a, b, "forward"}, {b, a, "reverse"}, {b, a, "reverse"}, {a, b, nil}} {
-		if _, err := s.DB.W.Exec(`UPDATE links SET note=? WHERE from_id=? AND to_id=? AND kind='friend'`, tc.note, tc.from, tc.to); err != nil {
-			t.Fatal(err)
-		}
-		assertNotes(tc.note)
+	if _, err := s.DB.W.Exec(`UPDATE links SET note='new note' WHERE id=?`, id); err != nil {
+		t.Fatal(err)
+	}
+	if got := note(); got != "new note" {
+		t.Fatalf("the note is the one field that changes: %v", got)
 	}
 	rollback := errors.New("rollback note")
 	if err := s.DB.Write(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.Exec(`UPDATE links SET note='rollback' WHERE from_id=? AND to_id=? AND kind='friend'`, a, b); err != nil {
+		if _, err := tx.Exec(`UPDATE links SET note='rollback' WHERE id=?`, id); err != nil {
 			return err
 		}
 		return rollback
 	}); !errors.Is(err, rollback) {
 		t.Fatalf("rollback: %v", err)
 	}
-	assertNotes(nil)
-	if err := s.Link(ctx, "cli", a, b, "parent-of", "directional"); err != nil {
-		t.Fatal(err)
+	if got := note(); got != "new note" {
+		t.Fatalf("a rolled back note edit changed the note: %v", got)
 	}
-	if err := s.Link(ctx, "cli", b, a, "parent-of", "other direction"); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Link(ctx, "cli", a, a, "related", "self"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.DB.W.Exec(`UPDATE links SET note='updated self' WHERE from_id=? AND to_id=? AND kind='related'`, a, a); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.DB.W.Exec(`UPDATE links SET note='updated direction' WHERE from_id=? AND to_id=? AND kind='parent-of'`, a, b); err != nil {
-		t.Fatal(err)
-	}
-	var reverse string
-	if err := s.DB.R.QueryRow(`SELECT note FROM links WHERE from_id=? AND to_id=? AND kind='parent-of'`, b, a).Scan(&reverse); err != nil {
-		t.Fatal(err)
-	}
-	if reverse != "other direction" {
-		t.Fatalf("directional reverse changed: %q", reverse)
-	}
-	assertNotes(nil)
 }
 
 func TestIntegrityDetectsDeliberateTypedEdgeDamage(t *testing.T) {

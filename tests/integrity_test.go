@@ -29,9 +29,9 @@ func newIntegrityFile(s *S, pageRows int) *integrityFile {
 		}
 	}
 	s.K("contract/integrity-checks has four groups: structure, foreign keys, domain/typed-edge semantics, FTS5",
-		len(sts) == 14 && strings.HasPrefix(strings.ToLower(sts[0]), "pragma integrity_check") && strings.HasPrefix(strings.ToLower(sts[1]), "pragma foreign_key_check") &&
+		len(sts) == 13 && strings.HasPrefix(strings.ToLower(sts[0]), "pragma integrity_check") && strings.HasPrefix(strings.ToLower(sts[1]), "pragma foreign_key_check") &&
 			strings.HasPrefix(strings.ToUpper(sts[2]), "SELECT ID FROM ENTITIES") && strings.HasPrefix(sts[3], "SELECT l.id FROM links") && strings.HasPrefix(sts[4], "SELECT m.id FROM measurements") && strings.HasPrefix(sts[5], "SELECT t.id FROM tasks") && strings.HasPrefix(sts[6], "SELECT t.id FROM tasks") && strings.HasPrefix(sts[7], "SELECT o.id FROM task_occurrences") && strings.Contains(sts[len(sts)-1], "'integrity-check', 1"), sts)
-	if len(sts) != 14 {
+	if len(sts) != 13 {
 		return nil
 	}
 	base := filepath.Join(s.dir, "base.db")

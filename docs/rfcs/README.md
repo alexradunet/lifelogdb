@@ -23,5 +23,6 @@ becomes a [decision](../decisions/README.md). One file per proposal, named `NNNN
 | [0014](0014-no-periods.md) | No recorded periods: a span is a plain page | accepted | [0074](../issues/0074-periods-cost-more-than-they-give.md) | [D22](../decisions/D22-events.md) |
 | [0015](0015-no-conversation.md) | No conversation inside the writer: the owner talks to lifelog through a coding agent | accepted | [0075](../issues/0075-the-conversation-costs-more-than-it-gives.md), 0071, 0072 | none |
 | [0016](0016-no-location.md) | No location: a place has no point, and a photo's position is never read | accepted | [0076](../issues/0076-a-places-point-costs-more-than-it-gives.md) | [D21](../decisions/D21-location-history.md) |
+| [0017](0017-no-typed-links.md) | Three link kinds: wikilink, at and part-of; no symmetric mirror | accepted | [0077](../issues/0077-relationship-links-cost-more-than-they-give.md) | [D8](../decisions/D08-entities-and-links.md) |
 
 Status values: draft | accepted | rejected (with a one-line reason) | withdrawn.

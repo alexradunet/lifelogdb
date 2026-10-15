@@ -99,3 +99,10 @@ flowchart LR
   rewritten, D16, D09, D20, D03 and the non-goals edited; the 2075 table lost its question on a place's point.
   Checks: `go generate ./... && go vet ./... && go test ./...` green. The live file still holds `places` until the
   owner runs the one-off program (after step 8, one program for the four schema steps).
+- **Step 6 (typed links).** Removed: the registry rows `about`, `located-in`, `parent-of`, `friend`, `family` and
+  `related`; `link_kinds.symmetric`, `link_kinds_mirror_valid` and the three mirror triggers; the symmetric query of
+  the integrity checks and its `invalid_symmetric_links`; the cookbook recipe inside-a-place; 20 mutants. `link` and
+  `unlink` keep `at` and `part-of`. The link map draws three arrows. Record: issue 0077, RFC 0017; D8 rewritten,
+  D11, D16, D20, D26, the cookbook recipes everything-about and days-that-name, the integrity contract and the
+  schema README edited; README and API.md say the current truth. Checks: `go generate ./... && go vet ./... &&
+  go test ./...` green.

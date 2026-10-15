@@ -34,8 +34,8 @@ DETACH s;
    and `'12.5kg'` into `12.5`, silently — a plain insert into the STRICT column converts `'12.5'` and
    rejects `'abc'` and `''`. A CSV empty field is `''`, not NULL, so optional columns go through
    `NULLIF(…, '')`; a `''` in `taken_at` fails its CHECK. A fourth, for links: **never `INSERT OR
-   REPLACE` into `links`** — it deletes the pair (and, on a symmetric kind, its mirror) and writes it again
-   under new ids (executed). Use
+   REPLACE` into `links`** — it deletes the row and writes it again
+   under a new id (executed). Use
    `ON CONFLICT(from_id, to_id, kind) DO NOTHING`.
 3. **Identity and time.** `source` names the importer (`import:<name>`), `import_key` is the source's
    own id, `day` / `taken_at` / `tz` say when it happened, `created_at` is when you imported it — on

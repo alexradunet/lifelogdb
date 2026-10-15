@@ -584,7 +584,7 @@ BEGIN SELECT RAISE(ABORT, 'habit-period identity is immutable'); END;
 
 CREATE TABLE link_kinds (
   -- the CLOSED registry of link kinds: a link's kind must be registered first (FK), and a kind's
-  -- structure (symmetric flag, allowed endpoint entity types) is fixed at registration and enforced
+  -- structure (allowed endpoint entity types) is fixed at registration and enforced
   -- by a trigger on every link. Registering a kind is a deliberate INSERT, so a typo cannot create
   -- one. from_types / to_types: NULL = any entity type, else a comma list of entities.entity_type values
   -- ('person,place'), matched token by token: a misspelt token admits nothing, so it never widens a kind,
@@ -592,43 +592,32 @@ CREATE TABLE link_kinds (
   -- an unreferenced kind may be deleted or replaced by the owner; a used one is refused by the links FK, which is
   -- RESTRICT because REPLACE deletes the row first and would otherwise change its structure past the trigger
   kind       TEXT PRIMARY KEY CONSTRAINT link_kinds_kind CHECK (instr(kind, char(0)) = 0 AND kind = lower(kind) AND length(kind) > 0 AND kind NOT GLOB '*[^a-z0-9_-]*'),
-  symmetric  INTEGER NOT NULL DEFAULT 0 CONSTRAINT link_kinds_symmetric CHECK (symmetric IN (0,1)),
   from_types TEXT CONSTRAINT link_kinds_from_types CHECK (from_types IS NULL OR (instr(from_types, char(0)) = 0 AND from_types NOT GLOB '*[^a-z,]*' AND from_types NOT GLOB ',*'
                          AND from_types NOT GLOB '*,' AND from_types NOT GLOB '*,,*')),
   to_types   TEXT CONSTRAINT link_kinds_to_types CHECK (to_types   IS NULL OR (instr(to_types, char(0)) = 0 AND to_types   NOT GLOB '*[^a-z,]*' AND to_types   NOT GLOB ',*'
                          AND to_types   NOT GLOB '*,' AND to_types   NOT GLOB '*,,*')),
-  note       TEXT CONSTRAINT link_kinds_note CHECK (note IS NULL OR instr(note, char(0)) = 0),
-  CONSTRAINT link_kinds_mirror_valid CHECK (symmetric = 0 OR from_types IS to_types)   -- a mirrored edge must be valid in both directions
+  note       TEXT CONSTRAINT link_kinds_note CHECK (note IS NULL OR instr(note, char(0)) = 0)
 ) STRICT;
-INSERT INTO link_kinds(kind, symmetric, from_types, to_types, note) VALUES
-  ('wikilink', 0, 'page,person,place,metric,file', 'page,person,place,metric,file', 'extracted from [[body]] on save (an embed ![[...]] is one); body is the truth'),
-  ('about',    0, NULL,        'person,place', 'entity → person/place it is about'),
-  ('at',       0, 'page',      'place',        'day page → a place the owner was at that day; from a day page only, which links_endpoint_types checks (D16)'),
-  ('located-in', 0, 'place',   'place',        'containment: Tokyo → Japan; transitive — walk it with a recursive CTE'),
-  ('parent-of', 0, 'person',   'person',       'parent → child; ''family'' stays the symmetric catch-all'),
-  ('part-of',  0, NULL,        'page',         'anything → the page of a category it is filed in (Ferritin → Iron → Biomarkers, D26); walk it with a recursive CTE'),
-  ('friend',   1, 'person',    'person',       NULL),
-  ('family',   1, 'person',    'person',       NULL),
-  ('related',  1, NULL,        NULL,           'anything ↔ anything');
-CREATE TRIGGER link_kinds_structure_fixed BEFORE UPDATE OF symmetric, from_types, to_types ON link_kinds
-  WHEN NEW.symmetric IS NOT OLD.symmetric OR NEW.from_types IS NOT OLD.from_types OR NEW.to_types IS NOT OLD.to_types
+INSERT INTO link_kinds(kind, from_types, to_types, note) VALUES
+  ('wikilink', 'page,person,place,metric,file', 'page,person,place,metric,file', 'extracted from [[body]] on save (an embed ![[...]] is one); body is the truth'),
+  ('at',       'page',      'place',        'day page → a place the owner was at that day; from a day page only, which links_endpoint_types checks (D16)'),
+  ('part-of',  NULL,        'page',         'anything → the page of a category it is filed in (Ferritin → Iron → Biomarkers, D26); walk it with a recursive CTE');
+CREATE TRIGGER link_kinds_structure_fixed BEFORE UPDATE OF from_types, to_types ON link_kinds
+  WHEN NEW.from_types IS NOT OLD.from_types OR NEW.to_types IS NOT OLD.to_types
 BEGIN
   -- changing a kind's structure would leave edges that violate it, or half-edges; register a new kind
-  SELECT RAISE(ABORT, 'a link kind''s structure (symmetric, endpoint types) is fixed at registration; register a new kind instead');
+  SELECT RAISE(ABORT, 'a link kind''s structure (endpoint types) is fixed at registration; register a new kind instead');
 END;
 
 CREATE TABLE links (
-  -- one graph for everything: wiki backlinks, relationships, where the owner was, containment,
-  -- general context. kind='at' records the places the owner was at, from a day page only, and kind='part-of' files
+  -- one graph for everything: wiki backlinks, where the owner was, what is filed where. kind='at' records the places the owner was at, from a day page only, and kind='part-of' files
   -- a thing in a plain page, never a day page: both held by links_endpoint_types (D16, D26).
   -- Rows are hard-deleted (the one such table, D11) and immutable otherwise (delete and
-  -- re-insert). Symmetric kinds are mirrored by trigger on insert AND delete, so a half-edge cannot
-  -- exist and backlinks need only to_id. A symmetric relationship has one shared note: editing either
-  -- direction updates the other atomically; directional kinds keep independent notes. Cycles are not prevented (D8).
+  -- re-insert). Backlinks need only to_id. Cycles are not prevented (D8).
   -- Edit revisions (lifelog_meta.edit_revisions): a link is an edit of the page it leaves (from_id) and never of the
   -- page it points at, so another writer's open edit of that page stays current. A wikilink is derived from the
   -- body (D19), whose change already advanced its page, so adding or removing one advances nothing; its note is
-  -- still an edit. A symmetric kind's mirror row is its own insert, delete or note update: both pages advance.
+  -- still an edit.
   -- source names the writer, as on entities; written at insert, never changed.
   id         INTEGER PRIMARY KEY,
   from_id    INTEGER NOT NULL REFERENCES entities(id),
@@ -670,31 +659,6 @@ BEGIN
   SELECT RAISE(ABORT, 'a category is a plain page, never a day page (D26)')
    WHERE NEW.kind = 'part-of' AND coalesce((SELECT is_journal FROM entities WHERE id = NEW.to_id), 0);
 END;
-CREATE TRIGGER links_mirror_insert AFTER INSERT ON links
-  WHEN NEW.from_id <> NEW.to_id
-   AND (SELECT symmetric FROM link_kinds WHERE kind = NEW.kind) = 1
-BEGIN
-  -- mirror a symmetric edge; DO NOTHING on the pair makes the re-fire find the row present and stop, and
-  -- unlike OR IGNORE it skips only that duplicate, never a CHECK or NOT NULL violation
-  INSERT INTO links(from_id, to_id, kind, note, created_at, source)
-  VALUES (NEW.to_id, NEW.from_id, NEW.kind, NEW.note, NEW.created_at, NEW.source)
-  ON CONFLICT(from_id, to_id, kind) DO NOTHING;
-END;
-CREATE TRIGGER links_mirror_note AFTER UPDATE OF note ON links
-  WHEN NEW.note IS NOT OLD.note AND NEW.from_id <> NEW.to_id
-   AND (SELECT symmetric FROM link_kinds WHERE kind = NEW.kind) = 1
-BEGIN
-  UPDATE links SET note = NEW.note
-   WHERE from_id = NEW.to_id AND to_id = NEW.from_id AND kind = NEW.kind
-     AND note IS NOT NEW.note;
-END;
-CREATE TRIGGER links_mirror_delete AFTER DELETE ON links
-  WHEN OLD.from_id <> OLD.to_id
-   AND (SELECT symmetric FROM link_kinds WHERE kind = OLD.kind) = 1
-BEGIN
-  DELETE FROM links WHERE from_id = OLD.to_id AND to_id = OLD.from_id AND kind = OLD.kind;
-END;
-
 CREATE VIEW ghost_pages AS
   -- Empty live plain objects older than 30 days without graph, task-project or measurement-capture references,
   -- including historical facts; never a typed identity. Owner tombstones them.

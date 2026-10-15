@@ -31,9 +31,6 @@ SELECT o.id FROM task_occurrences o WHERE NOT EXISTS
          (CAST(substr(o.occurrence_key,1,4) AS INTEGER)%4=0 AND
           (CAST(substr(o.occurrence_key,1,4) AS INTEGER)%100<>0 OR CAST(substr(o.occurrence_key,1,4) AS INTEGER)%400=0))
        WHEN substr(o.occurrence_key,6,2) IN ('04','06','09','11') THEN 30 ELSE 31 END))))) OR (o.state='open' AND EXISTS (SELECT 1 FROM tasks t WHERE t.id=o.task_id AND t.repeat_until_day IS NOT NULL AND o.occurrence_key>t.repeat_until_day)) ORDER BY o.id; -- no rows
-SELECT l.id FROM links l JOIN link_kinds k ON k.kind=l.kind
- LEFT JOIN links r ON r.from_id=l.to_id AND r.to_id=l.from_id AND r.kind=l.kind
- WHERE k.symmetric=1 AND (r.id IS NULL OR r.note IS NOT l.note) ORDER BY l.id; -- no rows
 WITH RECURSIVE rooted(id) AS (
  SELECT id FROM measurements WHERE supersedes_id IS NULL
  UNION
@@ -69,7 +66,7 @@ INSERT INTO entities_fts(entities_fts, rank) VALUES ('integrity-check', 1);   --
   `task_occurrences_admit` trigger, so it detects rows admitted while the trigger was bypassed, not an error in the
   expression itself; the independent check of that expression is the anchor-generated calendar oracle of the
   planning suites ([the suite guide](../../tests/README.md)). The remaining semantic queries detect a correction of a missing reading or of another metric,
-  missing symmetric reverse links or unequal shared notes, correction rows unreachable from an original reading (cycles or dangling chains),
+  correction rows unreachable from an original reading (cycles or dangling chains),
   overlapping habit periods and periods on a metric with a unit (a scale, Mood included), current nonbinary habit values, and invalid journal-name ownership
   (executed with deliberately bypassed guards restored before checking). The rooted-chain query visits each
   reachable reading once; it does not follow every row's full ancestry. Habit range checks include every current

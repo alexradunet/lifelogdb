@@ -10,17 +10,13 @@ import (
 	"testing"
 )
 
-// The reference stores one undirected edge per friendship, not the two SQL rows.
-// NULL and empty notes remain different, and directed edges retain their orientation.
+// The reference stores one directed edge per link. NULL and empty notes remain different.
 type graphEdge struct {
 	kind string
 	a, b int64
 }
 
 func graphKey(kind string, a, b int64) graphEdge {
-	if kind == "friend" && a > b {
-		a, b = b, a
-	}
 	return graphEdge{kind, a, b}
 }
 
@@ -39,8 +35,8 @@ func graphSequence(s *S, operations []byte, label string) {
 	path := filepath.Join(s.dir, fmt.Sprintf("graph-%d.db", s.next()))
 	c := s.freshWith(F{Path: path, Hardened: true})
 	c.must("PRAGMA synchronous=FULL")
-	people := []int64{c.named("person", "Graph Ada"), c.named("person", "Graph Bea"), c.named("person", "Graph Cy"), c.named("person", "Graph Dee")}
-	plain := c.page("Invalid friend endpoint")
+	pages := []int64{c.page("Graph Ada"), c.page("Graph Bea"), c.page("Graph Cy"), c.page("Graph Dee")}
+	journal := c.dayPage("2026-10-07", "an invalid part-of target")
 	want := map[graphEdge]any{}
 	const selectEdges = "SELECT kind,from_id,to_id,note FROM links ORDER BY kind,from_id,to_id"
 	const selectVersions = "SELECT id,revision,updated_at FROM entities ORDER BY id"
@@ -48,9 +44,6 @@ func graphSequence(s *S, operations []byte, label string) {
 		var expected [][]any
 		for edge, note := range want {
 			expected = append(expected, []any{edge.kind, edge.a, edge.b, note})
-			if edge.kind == "friend" && edge.a != edge.b {
-				expected = append(expected, []any{edge.kind, edge.b, edge.a, note})
-			}
 		}
 		sort.Slice(expected, func(i, j int) bool {
 			a, b := expected[i], expected[j]
@@ -66,9 +59,9 @@ func graphSequence(s *S, operations []byte, label string) {
 		s.K(step+" agrees with independent graph", got == tab(expected), got, tab(expected))
 	}
 	for pos := 0; pos+3 < len(operations); pos += 4 {
-		op, a, b := operations[pos]%8, people[int(operations[pos+1])%len(people)], people[int(operations[pos+2])%len(people)]
-		// a symmetric kind, a kind derived from bodies, and a plain directed one
-		kind := [...]string{"friend", "wikilink", "parent-of"}[operations[pos+3]%3]
+		op, a, b := operations[pos]%8, pages[int(operations[pos+1])%len(pages)], pages[int(operations[pos+2])%len(pages)]
+		// a kind derived from bodies, and a journal directed one
+		kind := [...]string{"wikilink", "part-of"}[operations[pos+3]%2]
 		var note any
 		switch (operations[pos+3] >> 1) % 3 {
 		case 1:
@@ -99,8 +92,8 @@ func graphSequence(s *S, operations []byte, label string) {
 			delete(want, key)
 		case 4:
 			// The first row is valid (or an explicit duplicate); the second is typed wrong.
-			// ABORT must restore mirrors and revisions generated for the first row.
-			result := c.tryx("INSERT INTO links(from_id,to_id,kind,note,created_at,source) VALUES(?,?,'friend',?,'2026-10-07T00:00:00.000Z','ui'),(?,?,'friend',?,'2026-10-07T00:00:00.000Z','ui') ON CONFLICT(from_id,to_id,kind) DO NOTHING", a, b, note, a, plain, note)
+			// ABORT must restore the revisions generated for the first row.
+			result := c.tryx("INSERT INTO links(from_id,to_id,kind,note,created_at,source) VALUES(?,?,'part-of',?,'2026-10-07T00:00:00.000Z','ui'),(?,?,'part-of',?,'2026-10-07T00:00:00.000Z','ui') ON CONFLICT(from_id,to_id,kind) DO NOTHING", a, b, note, a, journal, note)
 			s.K(step+" rejects typed invalid batch atomically", strings.HasPrefix(result, "ERR") && c.tab(selectEdges) == before && c.tab(selectVersions) == versions, result)
 		case 5:
 			result := c.tryx("UPDATE links SET note='forbidden',created_at='2026-10-08T00:00:00.000Z' WHERE kind=? AND from_id=? AND to_id=?", kind, a, b)
@@ -112,13 +105,11 @@ func graphSequence(s *S, operations []byte, label string) {
 		}
 		check(step + " inside transaction")
 		// Which pages a graph change advances (lifelog_meta.edit_revisions), from the rule and not from the triggers:
-		// a link is an edit of the page it leaves; a friendship is two rows, so of both pages; a wikilink
+		// a link is an edit of the page it leaves; a wikilink
 		// is derived from the body, so only editing its note is an edit; no page is advanced by a link it receives.
 		advanced := map[int64]bool{}
 		if !maps.Equal(want, saved) {
 			switch {
-			case kind == "friend":
-				advanced[a], advanced[b] = true, true
 			case kind == "wikilink" && op != 2:
 			default:
 				advanced[a] = true

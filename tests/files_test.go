@@ -12,7 +12,7 @@ import (
 // files: a file the owner keeps is a page (schema.sql, D9) — one identity with owned names and a
 // files row: the hash and type of the original, never stored, and a small JPEG.
 // A  the keys and CHECKs: sha256, mime, preview (and why IS, not =), what never changes, never deleted;
-// B  the graph: an embed lands on a file, a caption links out, about, part-of, refused redirect; a ghost becomes a file;
+// B  the graph: an embed lands on a file, a caption links out, part-of, refused redirect; a ghost becomes a file;
 // C  cookbook/keep-a-file as a writer runs it: create, the same original again, a missing preview, a tombstone,
 //
 //	another source, a promoted ghost, the refusals; the pictures a day shows.
@@ -102,7 +102,7 @@ func files(s *S) {
 	bob := c.named("person", "Bob Sample")
 	s.K("an embed in a day page lands on the file page (a wikilink)", c.link(day, f, "wikilink") == "OK")
 	s.K("a caption that names a person links it from the file page", c.link(f, bob, "wikilink") == "OK")
-	s.K("a file may be about a person", c.link(f, bob, "about") == "OK")
+	s.K("a file may be filed in a category", c.link(f, c.page("Scans"), "part-of") == "OK")
 	s.K("a file may be filed in a category page (an album)", c.link(f, c.page("Holidays"), "part-of") == "OK")
 	s.K("a file page is not a day page: it starts no at link", err(c.link(f, c.named("place", "Lakeside"), "at")))
 	s.K("redirect is not a registered kind", err(c.link(c.page("Lake photo"), f, "redirect")))

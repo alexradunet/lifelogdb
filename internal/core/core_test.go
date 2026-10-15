@@ -391,16 +391,16 @@ func TestRenamedIdentityWritesThroughRetainedHandle(t *testing.T) {
 	if err := s.Do(ctx, "import:synthetic", func(tx *Tx) error { _, err := tx.SetBody(id, "imported [[Other]]"); return err }); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Link(ctx, "cli", id, other, "related", "note"); err != nil {
+	if err := s.Link(ctx, "cli", id, other, "part-of", "note"); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Unlink(ctx, "cli", other, id, "related"); err != nil {
+	if err := s.Unlink(ctx, "cli", id, other, "part-of"); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Link(ctx, "cli", other, id, "related", "reverse"); err != nil {
+	if err := s.Link(ctx, "cli", other, id, "part-of", "reverse"); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Unlink(ctx, "cli", id, other, "related"); err != nil {
+	if err := s.Unlink(ctx, "cli", other, id, "part-of"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Link(ctx, "cli", other, id, "redirect", ""); status(err) != 422 {

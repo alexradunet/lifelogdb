@@ -443,7 +443,7 @@ that is not a kept picture, is refused (422).
 | `file.mime` | string | its media type |
 | `file.preview` | boolean | a picture is kept (`GET /pages/{id}/preview`) |
 | `links[]` | list | the typed links this page starts |
-| `links[].kind` | string | the link kind (`wikilink`, `at`, `about`, `located-in`, `parent-of`, `part-of`, `friend`, `family`, `related`) |
+| `links[].kind` | string | the link kind (`wikilink`, `at`, `part-of`) |
 | `links[].id` | integer | the other page's id |
 | `links[].title` | string | its title |
 | `links[].entity_type` | string | its type |
@@ -792,7 +792,6 @@ back to 90 days on), `open` ones unless `state` is `done`, `skipped` or `all`. O
 | `invalid_task_projects` | list | ids |
 | `invalid_one_off_tasks` | list | ids |
 | `invalid_task_occurrences` | list | ids |
-| `invalid_symmetric_links` | list | ids |
 | `invalid_measurement_chains` | list | ids |
 | `invalid_habit_periods` | list | ids |
 | `invalid_habit_readings` | list | ids |
@@ -832,7 +831,6 @@ browser form is answered home with them as feedback. A refusal (a folder inside 
 | `restore_check.invalid_task_projects` | list | |
 | `restore_check.invalid_one_off_tasks` | list | |
 | `restore_check.invalid_task_occurrences` | list | |
-| `restore_check.invalid_symmetric_links` | list | |
 | `restore_check.invalid_measurement_chains` | list | |
 | `restore_check.invalid_habit_periods` | list | |
 | `restore_check.invalid_habit_readings` | list | |

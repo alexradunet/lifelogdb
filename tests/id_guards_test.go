@@ -9,9 +9,9 @@ import (
 // idGuards exercises SQLite's INTEGER PRIMARY KEY aliases on a real hardened file.
 func idGuards(s *S) {
 	c := s.freshWith(F{Path: filepath.Join(s.dir, "id-guards.db"), Hardened: true})
-	a, b := c.named("person", "Alice"), c.named("person", "Bob")
-	if r := c.link(a, b, "friend"); r != "OK" {
-		stop("friend fixture: %s", r)
+	a, b := c.page("Alice"), c.page("Bob")
+	if r := c.link(a, b, "part-of"); r != "OK" {
+		stop("part-of fixture: %s", r)
 	}
 	name := c.page("Straße")
 	nameID := c.n("SELECT id FROM entity_names WHERE entity_id=?", name)
@@ -46,9 +46,9 @@ func idGuards(s *S) {
 			s.K(table+" "+alias+" identity no-op preserves state", r == "OK" && state() == before && indexed(), r)
 		}
 	}
-	before, beforeMirror := c.n("SELECT revision FROM entities WHERE id=?", a), c.n("SELECT revision FROM entities WHERE id=?", b)
+	before, beforeTarget := c.n("SELECT revision FROM entities WHERE id=?", a), c.n("SELECT revision FROM entities WHERE id=?", b)
 	c.must("UPDATE links SET note='allowed' WHERE id=?", linkID)
-	s.K("permitted note edit preserves mirror identities and advances revisions", c.n("SELECT count(*) FROM links WHERE kind='friend' AND note='allowed'") == 2 && c.n("SELECT id FROM links WHERE from_id=? AND to_id=?", a, b) == linkID && c.n("SELECT revision FROM entities WHERE id=?", a) > before && c.n("SELECT revision FROM entities WHERE id=?", b) > beforeMirror)
+	s.K("permitted note edit preserves the link identity and advances the page it leaves only", c.n("SELECT count(*) FROM links WHERE kind='part-of' AND note='allowed'") == 1 && c.n("SELECT id FROM links WHERE from_id=? AND to_id=?", a, b) == linkID && c.n("SELECT revision FROM entities WHERE id=?", a) > before && c.n("SELECT revision FROM entities WHERE id=?", b) == beforeTarget)
 	before = c.n("SELECT revision FROM entities WHERE id=?", name)
 	c.must("UPDATE entity_names SET title='STRASSE' WHERE id=?", nameID)
 	s.K("permitted equivalent spelling preserves registry identity and FTS", c.n("SELECT entity_id FROM entity_names WHERE id=?", nameID) == name && c.n("SELECT revision FROM entities WHERE id=?", name) > before && c.tryx("INSERT INTO entities_fts(entities_fts,rank) VALUES('integrity-check',1)") == "OK" && c.n("SELECT count(*) FROM entities_fts WHERE entities_fts MATCH 'strasse' AND rowid=?", name) == 1)
@@ -60,5 +60,5 @@ func idGuards(s *S) {
 		stop("close identity fixture: %v", err)
 	}
 	reopened := s.readOnly(filepath.Join(s.dir, "id-guards.db"))
-	s.K("identity guards persist after reopen", reopened.n("SELECT count(*) FROM links WHERE kind='friend' AND note='allowed'") == 2 && reopened.n("SELECT entity_id FROM entity_names WHERE id=?", nameID) == name)
+	s.K("identity guards persist after reopen", reopened.n("SELECT count(*) FROM links WHERE kind='part-of' AND note='allowed'") == 1 && reopened.n("SELECT entity_id FROM entity_names WHERE id=?", nameID) == name)
 }

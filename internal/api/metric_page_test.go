@@ -171,7 +171,7 @@ func TestTheSeriesCarriesItsPage(t *testing.T) {
 		t.Errorf("the series lacks its links or backlinks: %v %v", p["links"], p["backlinks"])
 	}
 	link := find(series, "link")
-	if link.Title != "Add a link" || !hasOption(link, "kind", "related") || !hasOption(link, "kind", "part-of") {
+	if link.Title != "Add a link" || !hasOption(link, "kind", "part-of") {
 		t.Errorf("link is not Add a link with every kind: %+v", link)
 	}
 	for _, name := range []string{"save-body", "rename", "unlink", "tombstone"} {

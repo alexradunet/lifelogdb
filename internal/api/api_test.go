@@ -134,7 +134,7 @@ func TestActionsAreOfferedOnlyWhereLegal(t *testing.T) {
 		t.Error("a plain page offers an at link (D16: from a day page only)")
 	}
 	ana = must(c.Do(t.Context(), find(ana, "promote"), map[string]string{"to": "person"}))
-	if got := names(ana); strings.Contains(got, "promote") || hasOption(find(ana, "link"), "kind", "located-in") {
+	if got := names(ana); strings.Contains(got, "promote") || hasOption(find(ana, "link"), "kind", "at") {
 		t.Errorf("a person offers %s with kinds %v", got, find(ana, "link").Fields)
 	}
 	gone := must(c.Do(t.Context(), find(ana, "tombstone"), nil))
@@ -544,15 +544,15 @@ func TestRenamedIdentityRetainsActionsAndAliasWrites(t *testing.T) {
 	if href(renamed, "self") != oldHref {
 		t.Fatal("rename changed id")
 	}
-	other := must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Other", "body": "[[Typo]]"}))
+	must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Other", "body": "[[Typo]]"}))
 	current := must(c.Get(t.Context(), oldHref))
 	if current.Title != "Correct" || names(current) != "save-body,promote,rename,link,unlink,file-pages,tombstone" {
 		t.Fatalf("renamed actions: %+v", current)
 	}
 	version := current.Properties.(map[string]any)["version"].(string)
 	must(c.Do(t.Context(), find(current, "save-body"), map[string]string{"body": "#REDIRECT [[Other]]", "version": version}))
-	must(c.Do(t.Context(), find(other, "link"), map[string]string{"to": "Typo", "kind": "related"}))
-	must(c.Do(t.Context(), find(must(c.Get(t.Context(), oldHref)), "unlink"), map[string]string{"to": "Other", "kind": "related"}))
+	must(c.Do(t.Context(), find(current, "link"), map[string]string{"to": "Other", "kind": "part-of"}))
+	must(c.Do(t.Context(), find(must(c.Get(t.Context(), oldHref)), "unlink"), map[string]string{"to": "Other", "kind": "part-of"}))
 	alias := must(c.Get(t.Context(), "/pages?title=Typo"))
 	if href(alias, "self") != oldHref || alias.Title != "Correct" || alias.Properties.(map[string]any)["body"] != "#REDIRECT [[Other]]" {
 		t.Fatalf("retained alias: %+v", alias)

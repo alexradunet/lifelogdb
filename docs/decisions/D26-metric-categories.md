@@ -27,7 +27,7 @@
     hold.
   - *`#tags` for pages and a column for metrics*: rejected — two ways to say the same thing.
 - **Trade accepted.** Nothing keeps the `part-of` links a tree: anything may be in two categories and links may close
-  a cycle, as `located-in` may ([D8](D08-entities-and-links.md)); a walk uses `UNION` and stops at a page it has seen,
+  a cycle ([D8](D08-entities-and-links.md)); a walk uses `UNION` and stops at a page it has seen,
   and the writer that draws the tree follows one parent. A `#tag` in a page's text remains a wikilink, not a filing.
   There are no seeded categories: they are the owner's pages.
 - **Sources.** The `facts` and `renames` suites (executed).

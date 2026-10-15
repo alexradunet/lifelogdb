@@ -13,7 +13,7 @@ reused, and a decision that changes is rewritten in place (git is its history).
 | [D5](D05-pages-and-day-pages.md) | One prose body per identity; the journal is a page per day; names are owned aliases. | accepted |
 | [D6](D06-mood-is-a-measurement.md) | Mood: the `mood` metric in `measurements`, not a prose column. | accepted |
 | [D7](D07-measurements.md) | Measurements: one FxLifeSheet-shaped table + tiny metric registry; append-only. | accepted |
-| [D8](D08-entities-and-links.md) | One `entities` supertype + one polymorphic `links` graph; a closed kind registry; symmetry in-DB. | accepted |
+| [D8](D08-entities-and-links.md) | One `entities` supertype + one polymorphic `links` graph; a closed kind registry. | accepted |
 | [D9](D09-binary-files.md) | Files: a file the owner keeps is a page; its text is the body, a small JPEG its picture, and the original stays outside. | accepted |
 | [D10](D10-time-model.md) | Time model: UTC instants + denormalized local days, both TEXT. | accepted |
 | [D11](D11-tombstones.md) | Deletion: tombstones, never hard deletes. | accepted |

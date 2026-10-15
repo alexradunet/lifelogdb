@@ -1,4 +1,4 @@
-# D8 — One `entities` supertype + one polymorphic `links` graph; a closed kind registry; symmetry in-DB.
+# D8 — One `entities` supertype + one polymorphic `links` graph; a closed kind registry.
 
 **Status:** accepted
 
@@ -10,14 +10,14 @@
   registry `link_kinds`, whose structure is fixed at registration (`link_kinds_structure_fixed`); the foreign key is
   `ON DELETE RESTRICT`, so a used kind can be neither deleted nor replaced — `REPLACE` deletes the row before
   re-inserting it, which the update trigger never sees and a final-state foreign key would not stop (executed);
-  `links_endpoint_types` checks the kind and both endpoint types on every insert, including mirror rows
+  `links_endpoint_types` checks the kind and both endpoint types on every insert
   — also on a connection with `foreign_keys=OFF`, executed in autocommit. `entities_endpoint_types`
   refuses type changes that would invalidate retained incoming or outgoing edges;
-  [semantic integrity](../contract/integrity-checks.md) checks endpoints independently (executed). Symmetric kinds are mirrored
-  by trigger on insert *and* delete, so a half-edge cannot exist whatever the writer, and both mirror
-  triggers terminate under `recursive_triggers=ON` (executed). `links_mirror_note` gives symmetric
-  relationships one shared note, with a change guard that terminates recursively; directional notes stay independent (executed). Links are immutable except `note`
-  (`links_fixed`); a note, like a link kind's, holds no NUL (`links_note`, `link_kinds_note`). Cycles (e.g. `located-in`) are not prevented; [inside a place](../cookbook/inside-a-place.md) walks it with `UNION`. Widening a
+  [semantic integrity](../contract/integrity-checks.md) checks endpoints independently (executed). Three kinds are
+  registered: `wikilink`, `at` and `part-of` ([who may link what](../architecture/link-rules.md)); the owner removed
+  the relationship kinds and the symmetric mirror with them ([RFC 0017](../rfcs/0017-no-typed-links.md)): a
+  relationship is words in the page. Links are immutable except `note`
+  (`links_fixed`); a note, like a link kind's, holds no NUL (`links_note`, `link_kinds_note`). Cycles (`part-of`) are not prevented; [metrics by category](../cookbook/metrics-by-category.md) walks them with `UNION`. Widening a
   kind's endpoint types is a deliberate migration: drop `link_kinds_structure_fixed`, update the row,
   recreate the trigger, in one transaction (executed).
 - **Alternatives.**
@@ -30,8 +30,8 @@
     constrained: **constrain structure, leave taxonomy open — but never implicit.**
   - *Free-text kinds auto-registered on first use*: rejected — a typo (`Friend`) would register a
     permanent kind.
-  - *Symmetry as discipline or as app double-writes*: rejected — every graph query must remember the
-    OR, or any future writer (API, CLI, agent) can silently create a half-edge.
+  - *Symmetric kinds (`friend`, `family`, `related`), mirrored by trigger* (the earlier D8): removed by
+    [RFC 0017](../rfcs/0017-no-typed-links.md) with `about`, `located-in` and `parent-of`; the owner did not use them.
   - *A `pending_links` table for unresolved wikilinks*: rejected — a second source of truth; the body
     is the record of an unresolved mention ([D19](D19-wikilink-save-contract.md)).
 - **Rationale.** The graph is where a life database earns its keep: ark's "killer feature" is its

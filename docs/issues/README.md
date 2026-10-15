@@ -4,11 +4,12 @@ An issue records an incident from real use — a failed import, a bug in the wri
 data could not answer, a rule that is ambiguous or untestable. It is the evidence a schema change needs
 ([how a change happens](../process.md)). One file per incident, named `NNNN-short-slug.md`, written from the
 [template](template.md), numbered on from the last: issues up to 0010 are closed and live in git history
-(`git log -- docs/issues`). Issues 0011–0076 are listed below; the next one is **0077**. Close an issue with its resolution and status, retaining the dated incident as
+(`git log -- docs/issues`). Issues 0011–0077 are listed below; the next one is **0078**. Close an issue with its resolution and status, retaining the dated incident as
 [the process](../process.md) requires. Earlier closed records remain available in git history.
 
 | id | title | status |
 |---|---|---|
+| [0077](0077-relationship-links-cost-more-than-they-give.md) | The relationship link kinds cost more than they give | resolved |
 | [0076](0076-a-places-point-costs-more-than-it-gives.md) | A place's point and a photo's position cost more than they give | resolved |
 | [0075](0075-the-conversation-costs-more-than-it-gives.md) | The conversation inside the writer costs more than it gives | resolved |
 | [0074](0074-periods-cost-more-than-they-give.md) | Recorded periods cost more than they give | resolved |

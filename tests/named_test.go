@@ -41,7 +41,7 @@ func named(s *S) {
 		stop("missing literal integrity block")
 	}
 	integrityStatements := statements(integrityBlocks[0])
-	if len(integrityStatements) != 14 {
+	if len(integrityStatements) != 13 {
 		stop("unexpected integrity statement count")
 	}
 	s.K("a named person missing its extension is found by the semantic query", c.n("SELECT count(*) FROM people WHERE id=?", half) == 0 && contains(c.col(integrityStatements[2]), ids(half)))
@@ -160,8 +160,6 @@ func named(s *S) {
 	wiki := c.page("Coffee spots")
 	c.editBody(wiki, "Best one: [[Bob Sample]] goes there")
 	c.editBody(bod, "Colleague since 2019. Lives in [[Cluj]].")
-	rome := c.named("place", "Rome")
-	c.link(bod, rome, "about")
 	s.K("the day page links to the person's own id, and no new page was made", c.tab("select to_id from links where from_id=? and kind='wikilink'", m1) == ids(bod) &&
 		c.n("select count(*) from entity_names where name_key='bob sample'") == 1)
 	s.K("an alias does not change the target", c.tab("select to_id from links where from_id=?", m3) == ids(bod))
@@ -175,8 +173,8 @@ func named(s *S) {
 		return sorted(out)
 	}
 	cluj := c.n("select entity_id from entity_names where name_key='cluj'")
-	s.K("cookbook/everything-about finds the day pages and the page that name him, what his page links to, and what it is about", eq(arkSet(ark),
-		sorted([]string{"wikilink|" + ids(m1) + "|in", "wikilink|" + ids(m3) + "|in", "wikilink|" + ids(wiki) + "|in", "wikilink|" + ids(cluj) + "|out", "about|" + ids(rome) + "|out"})), tab(ark))
+	s.K("cookbook/everything-about finds the day pages and the page that name him, and what his page links to", eq(arkSet(ark),
+		sorted([]string{"wikilink|" + ids(m1) + "|in", "wikilink|" + ids(m3) + "|in", "wikilink|" + ids(wiki) + "|in", "wikilink|" + ids(cluj) + "|out"})), tab(ark))
 	typo := false
 	for _, r := range ark {
 		typo = typo || r[2] == m4
@@ -200,16 +198,6 @@ func named(s *S) {
 	}
 	s.K("cookbook/backlinks labels the backlinks of a person by title, a day page by its day, and counts the day that used both owned aliases",
 		eq(sorted(blTitles), sorted([]string{"Coffee spots", "2026-09-28", "2026-10-02"})), tab(bl))
-	ana := c.named("person", "Ana Example", M{"name": "Ana Example"})
-	c.link(bod, ana, "friend")
-	ark = c.rows(s.d.Block("everything-about"), P{"entity_id": bod})
-	var friends []string
-	for _, r := range ark {
-		if r[0] == "friend" {
-			friends = append(friends, val(r[0])+"|"+val(r[2])+"|"+val(r[3]))
-		}
-	}
-	s.K("...and a friend once, not twice", eq(friends, []string{"friend|" + ids(ana) + "|in"}), tab(ark))
 	wl := "select from_id, to_id from links where kind='wikilink' order by 1, 2"
 	before := c.tab(wl)
 	c.must("UPDATE people SET name='Bob S.' WHERE id=?", bod)

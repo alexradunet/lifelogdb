@@ -6,9 +6,8 @@
   page title, and what the owner knows about it is the page's text; it has no point ([D21](D21-location-history.md)).
   Where the owner was on a day is a link `at` from that day's page to the place (several
   places a day are several links; the link's `note` may say when) — so "where was I on 7 August" and
-  "when was I at Lakeside" are one link query each ([where was I](../cookbook/where-was-i.md)). `about` links connect anything to a place;
-  `located-in` nests places, so "everything in Japan" is answerable ([inside a place](../cookbook/inside-a-place.md)). There is no `lives-in`
-  kind: it would be undated; where the owner lived is prose until dated spans return with events ([D22](D22-events.md)).
+  "when was I at Lakeside" are one link query each ([where was I](../cookbook/where-was-i.md)). There is no `lives-in` kind and no `located-in`
+  ([RFC 0017](../rfcs/0017-no-typed-links.md)): where the owner lived, and what is inside what, is prose.
 - **Why `at` and not the day page's `[[Lakeside]]`.** A wikilink says the day *names* Lakeside — "we
   talked about going to Lakeside" and "I was at Lakeside" would be the same row. The owner asked to
   register the place they were at on the day itself, so it is a link kind of its own.

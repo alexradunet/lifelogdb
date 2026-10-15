@@ -116,13 +116,13 @@ func TestRename(t *testing.T) {
 	old, _, _ := s.CreatePage(ctx, "cli", "Sourdogh", "Feed the starter. [[Baking]]", "")
 	day, _, _ := s.Capture(ctx, "cli", "2026-09-29", "baked, see [[Sourdogh]]", nil)
 	baking, _ := s.PageID(ctx, "Baking")
-	s.Link(ctx, "cli", old, baking, "related", "")
+	s.Link(ctx, "cli", old, baking, "part-of", "")
 	to, err := s.Rename(ctx, "cli", old, "Sourdough")
 	if err != nil {
 		t.Fatal(err)
 	}
 	p, _ := s.PageByID(ctx, to)
-	if p.Body != "Feed the starter. [[Baking]]" || titles(p.Out, "wikilink") != "Baking" || titles(p.Out, "related") != "Baking" {
+	if p.Body != "Feed the starter. [[Baking]]" || titles(p.Out, "wikilink") != "Baking" || titles(p.Out, "part-of") != "Baking" {
 		t.Errorf("the new page: %+v", p)
 	}
 	if to != old {

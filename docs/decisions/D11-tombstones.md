@@ -22,7 +22,7 @@
   records are. The triggers guard against mistakes, not against a writer that drops
   them, so "tamper-evident" would overstate it.
 - **Known asymmetry.** `links` rows are hard-deleted — no tombstone, no audit. Wikilink removal is
-  *required* (the body is the truth, [D19](D19-wikilink-save-contract.md)). Authored links (`friend`, `family`, …) go the same way,
+  *required* (the body is the truth, [D19](D19-wikilink-save-contract.md)). Authored links (`at`, `part-of`) go the same way,
   weighed against a split policy and **rejected**: the *evidence* (the day pages that name
   people together) survives, and relationship links are a summary over it. Relationship removal is therefore invisible. The split
   policy stays additive later (a `deleted_at` column + partial unique index + a flag in `link_kinds`),

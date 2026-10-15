@@ -9,5 +9,4 @@ SELECT l.kind, e.entity_type, l.from_id, n.title AS label
 ```
 
 Old names resolve to this same endpoint; backlinks need no redirect traversal. The current preferred
-spelling labels each source. Symmetric kinds are mirrored ([D8](../decisions/D08-entities-and-links.md)),
-so this one direction suffices for them.
+spelling labels each source.

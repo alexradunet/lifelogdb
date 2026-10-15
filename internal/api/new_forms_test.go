@@ -139,10 +139,9 @@ func TestAPagesCategoriesAreBadges(t *testing.T) {
 	c, h := freshOn(t, fixedToday)
 	ctx := t.Context()
 	root := must(c.Get(ctx, "/"))
-	garden := must(c.Do(ctx, find(root, "create-page"), map[string]string{"title": "Garden"}))
 	must(c.Do(ctx, find(root, "create-page"), map[string]string{"title": "Seeds"}))
 	must(c.Do(ctx, find(must(c.Get(ctx, "/pages?title=Seeds")), "file-pages"), map[string]string{"category": "Projects"}))
-	must(c.Do(ctx, find(garden, "link"), map[string]string{"to": "Seeds", "kind": "related"}))
+	garden := must(c.Do(ctx, find(root, "create-page"), map[string]string{"title": "Garden", "body": "See [[Seeds]]."}))
 	self := href(garden, "self")
 	id := self[strings.LastIndex(self, "/")+1:]
 
@@ -179,8 +178,8 @@ func TestAPagesCategoriesAreBadges(t *testing.T) {
 		l := l.(map[string]any)
 		links[l["title"].(string)] = l["kind"].(string)
 	}
-	if len(links) != 2 || links["Projects"] != "part-of" || links["Seeds"] != "related" {
-		t.Errorf("after x the links are %v, want Projects part-of and Seeds related", links)
+	if len(links) != 2 || links["Projects"] != "part-of" || links["Seeds"] != "wikilink" {
+		t.Errorf("after x the links are %v, want Projects part-of and Seeds wikilink", links)
 	}
 
 	day := must(c.Do(ctx, find(root, "capture"), map[string]string{"text": "Dug the beds."}))

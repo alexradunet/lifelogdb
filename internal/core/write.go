@@ -520,8 +520,7 @@ func (t *Tx) Link(from, to int64, kind, note string) (added bool, err error) {
 	return n > 0, nil
 }
 
-// Unlink deletes one edge (links rows are the one table whose rows are deleted, D11); a symmetric kind's
-// mirror goes with it (links_mirror_delete).
+// Unlink deletes one edge (links rows are the one table whose rows are deleted, D11).
 func (t *Tx) Unlink(from, to int64, kind string) error {
 	if kind == "redirect" {
 		return Invalid("redirect is not a supported link kind")

@@ -75,22 +75,20 @@ func (s *Store) PageByID(ctx context.Context, id int64) (*Page, error) {
 			return nil, err
 		}
 	}
-	// outgoing edges to live entities; a symmetric kind's mirror is the same edge, so it shows once here
+	// outgoing edges to live entities
 	if p.Out, err = s.edges(ctx, `
 		SELECT l.kind, l.to_id, pg_name.title, e.entity_type, coalesce(l.note, '')
 		  FROM links l JOIN entities e ON e.id = l.to_id AND e.deleted_at IS NULL JOIN entity_names pg_name ON pg_name.entity_id = e.id AND pg_name.name_key = e.preferred_name_key
 		 WHERE l.from_id = ? ORDER BY l.kind, pg_name.title`, id); err != nil {
 		return nil, err
 	}
-	// cookbook/backlinks.md: owned names resolve to this id; a symmetric edge
-	// already in Out is not listed twice
+	// cookbook/backlinks.md: owned names resolve to this id
 	if p.In, err = s.edges(ctx, `
 		SELECT l.kind, l.from_id, pg_name.title, e.entity_type, coalesce(l.note, '')
 		  FROM links l
 		  JOIN entities e  ON e.id = l.from_id AND e.deleted_at IS NULL
 		  JOIN entity_names pg_name ON pg_name.entity_id = e.id AND pg_name.name_key = e.preferred_name_key
 		 WHERE l.to_id = ?
-		   AND l.kind NOT IN (SELECT kind FROM link_kinds WHERE symmetric = 1)
 		 ORDER BY pg_name.title`, id); err != nil {
 		return nil, err
 	}

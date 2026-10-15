@@ -16,7 +16,7 @@ import (
 //	every relationship a foreign key, labelled by its first column, with the cardinality the constraint implies
 //	(NOT NULL `||`, nullable `|o`; unique in the child `o|`, else `o{`);
 //
-// C  the link map against `link_kinds`: same edges (a node naming several types stands for each), same symmetric arrows;
+// C  the link map against `link_kinds`: same edges (a node naming several types stands for each);
 // D  the correction story of cookbook/correct-a-measurement, executed;
 // E  the save flow and cookbook/save-a-body name the same steps; the other diagrams name what they rely on.
 func diagrams(s *S) {
@@ -278,7 +278,6 @@ func diagrams(s *S) {
 	}
 	type edge struct {
 		from, to string
-		sym      bool
 	}
 	edges := map[edge]map[string]bool{}
 	typesOf := func(n string) []string {
@@ -287,10 +286,10 @@ func diagrams(s *S) {
 		}
 		return []string{"?" + n}
 	}
-	for _, m := range regexp.MustCompile(`(?m)^    (\w+) (-->|<-->)\|"([^"]+)"\| (\w+)`).FindAllStringSubmatch(body("link-map"), -1) {
+	for _, m := range regexp.MustCompile(`(?m)^    (\w+) (-->)\|"([^"]+)"\| (\w+)`).FindAllStringSubmatch(body("link-map"), -1) {
 		for _, f := range typesOf(m[1]) {
 			for _, t := range typesOf(m[4]) {
-				e := edge{f, t, m[2] == "<-->"}
+				e := edge{f, t}
 				if edges[e] == nil {
 					edges[e] = map[string]bool{}
 				}
@@ -301,16 +300,16 @@ func diagrams(s *S) {
 		}
 	}
 	exp := map[edge]map[string]bool{}
-	for _, r := range c.rows("select kind, symmetric, from_types, to_types from link_kinds") {
+	for _, r := range c.rows("select kind, from_types, to_types from link_kinds") {
 		split := func(v any) []string {
 			if v == nil || v == "" {
 				return []string{"any"}
 			}
 			return strings.Split(val(v), ",")
 		}
-		for _, f := range split(r[2]) {
-			for _, t := range split(r[3]) {
-				e := edge{f, t, r[1].(int64) != 0}
+		for _, f := range split(r[1]) {
+			for _, t := range split(r[2]) {
+				e := edge{f, t}
 				if exp[e] == nil {
 					exp[e] = map[string]bool{}
 				}
@@ -325,7 +324,7 @@ func diagrams(s *S) {
 			for k := range ks {
 				kk = append(kk, k)
 			}
-			out = append(out, fmt.Sprintf("%s->%s sym=%v %v", e.from, e.to, e.sym, sorted(kk)))
+			out = append(out, fmt.Sprintf("%s->%s %v", e.from, e.to, sorted(kk)))
 		}
 		return strings.Join(sorted(out), "; ")
 	}

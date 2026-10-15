@@ -15,7 +15,7 @@
   no `page_id` pointer and its rules, no separate prose identity.
 - **Alternatives.**
   - *A separate page entity pointed at by `entities.page_id`*: rejected — two ids for one person (the
-    page `[[…]]` reaches and the person `about` points at), a pointer column with a CHECK, a
+    page `[[…]]` reaches and a typed link points at), a pointer column with a CHECK, a
     UNIQUE and two triggers, a third leg in every "everything about X" query, and a place name that
     had to be unique twice (its own `name` and its title).
   - *A `mention` link kind, page → person, resolved by matching names on save*: rejected — a page and
@@ -24,4 +24,4 @@
   - *A `[[@Name]]` prefix for people*: rejected — the same resolution problem with a namespace in front.
 - **Costs accepted.** Every person and place needs a unique handle, even one never mentioned;
   an importer makes one ([a person or a place](../cookbook/person-or-place.md)). A preferred handle can change while its old owned names keep working; changing `people.name` changes only the full name. A typo in a name makes a ghost page like any wikilink typo. A page
-  names a person by wikilink *or* by `about`; the two are separate rows, and [everything about](../cookbook/everything-about.md) reads both.
+  names a person by wikilink, and [everything about](../cookbook/everything-about.md) reads both directions.
