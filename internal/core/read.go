@@ -636,13 +636,6 @@ func (s *Store) RecentDays(ctx context.Context, limit, offset int) ([]Edge, erro
 	                      WHERE p.is_journal AND p.deleted_at IS NULL ORDER BY p.day DESC LIMIT ? OFFSET ?`, limit, offset)
 }
 
-// Named is one page of the live people, places or files, by title (the folded title, preferred_name_key).
-func (s *Store) Named(ctx context.Context, typ string, limit, offset int) ([]Edge, error) {
-	return s.edges(ctx, `SELECT p.entity_type, p.id, p_name.title, p.entity_type, coalesce(pe.name, '')
-	                       FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key LEFT JOIN people pe ON pe.id = p.id
-	                      WHERE p.entity_type = ? AND p.deleted_at IS NULL ORDER BY p.preferred_name_key LIMIT ? OFFSET ?`, typ, limit, offset)
-}
-
 // LinkKindsFrom are the registered kinds a page of this type may start (link_kinds.from_types, NULL for any),
 // the save contract's wikilink excluded, in kind order.
 func (s *Store) LinkKindsFrom(ctx context.Context, typ string) ([]string, error) {
@@ -676,8 +669,8 @@ type NamedRow struct {
 	Picture int64
 }
 
-// NamedMentions is one page of the live people or places in the scope, in the order and with the paging of Named.
-// It reads the mentions in the same query, so the cost does not grow with the number of rows.
+// NamedMentions is one page of the live people or places in the scope, by title (the folded title,
+// preferred_name_key). It reads the mentions in the same query, so the cost does not grow with the number of rows.
 func (s *Store) NamedMentions(ctx context.Context, typ string, sc Scope, limit, offset int) ([]NamedRow, error) {
 	where, args := sc.where()
 	rows, err := s.DB.R.QueryContext(ctx, `
@@ -738,12 +731,12 @@ func firstPicture(ctx context.Context, q interface {
 	return 0, nil
 }
 
-// MediaKinds are the kinds of file the media list shows, named by the first part of files.mime, in the order the
-// list counts them. A file of any other kind (a PDF, a scan's text) is in the files list (OtherFiles).
+// MediaKinds are the kinds of file the media list of Browse shows, named by the first part of files.mime, in the
+// order the list counts them. A file of any other kind (a PDF, a scan's text) is a document (OtherFiles).
 var MediaKinds = []string{"image", "video", "audio"}
 
-// FileRow is a live file the owner keeps (docs/cookbook/keep-a-file.md), as the media list and the files list show
-// it.
+// FileRow is a live file the owner keeps (docs/cookbook/keep-a-file.md), as the media and the documents of Browse
+// show it.
 type FileRow struct {
 	ID    int64
 	Title string
@@ -767,7 +760,7 @@ func (s *Store) Media(ctx context.Context, kind string, sc Scope, limit, offset 
 	return s.filesOf(ctx, true, kind, sc, limit, offset)
 }
 
-// OtherFiles is one page of the live files of every other kind (a PDF, a text) in the scope: the files list, in the
+// OtherFiles is one page of the live files of every other kind (a PDF, a text) in the scope: the documents, in the
 // order of Media.
 func (s *Store) OtherFiles(ctx context.Context, sc Scope, limit, offset int) ([]FileRow, error) {
 	return s.filesOf(ctx, false, "", sc, limit, offset)
@@ -807,10 +800,11 @@ func (s *Store) filesOf(ctx context.Context, media bool, kind string, sc Scope, 
 	return out, rows.Err()
 }
 
-// MediaCounts counts the live files of each media kind, by kind; a kind with none is absent.
-func (s *Store) MediaCounts(ctx context.Context) (map[string]int, error) {
+// MediaCounts counts the live files of each media kind in the scope, by kind; a kind with none is absent.
+func (s *Store) MediaCounts(ctx context.Context, sc Scope) (map[string]int, error) {
+	where, args := sc.where()
 	rows, err := s.DB.R.QueryContext(ctx, `SELECT `+mediaKind+`, count(*) FROM files f JOIN entities p ON p.id = f.id
-		WHERE p.deleted_at IS NULL AND `+mediaKind+` IN ('image', 'video', 'audio') GROUP BY 1`)
+		WHERE p.deleted_at IS NULL AND `+mediaKind+` IN ('image', 'video', 'audio') AND `+where+` GROUP BY 1`, args...)
 	if err != nil {
 		return nil, err
 	}

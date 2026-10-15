@@ -81,8 +81,10 @@ func (h *server) root(r *http.Request) (*Entity, error) {
 		Class: []string{"root"}, Title: "Lifelog",
 		Properties: map[string]any{"today": today, "recent": recent, "on_this_day": onThisDay},
 		Links: []Link{link("self", "/", "Lifelog"), link("today", dayHref(today), "Today"), link("days", "/days", "Days"),
-			link("categories", "/categories", "Categories"), link("people", "/people", "People"), link("places", "/places", "Places"), link("media", "/media", "Media"), link("files", "/files", "Files"), link("metrics", "/metrics", "Metrics"),
-			link("ghosts", "/ghosts", "Ghost pages"), link("actions", "/actions", "All actions"), link("calendar", "/months/current", "Calendar"),
+			link("browse", "/browse", "Browse"), link("categories", "/browse", "Categories"), link("people", "/browse?kind=person", "People"),
+			link("places", "/browse?kind=place", "Places"), link("media", "/browse?kind=media", "Media"), link("files", "/browse?kind=document", "Documents"),
+			link("metrics", "/metrics", "Metrics"), link("ghosts", "/browse?ghosts=1&kind=page", "Ghost pages"), link("actions", "/actions", "All actions"),
+			link("calendar", "/months/current", "Calendar"),
 			link("week", "/weeks/current", "This week"), link("year", "/years/current", "This year")},
 		Actions: actions,
 	}, nil

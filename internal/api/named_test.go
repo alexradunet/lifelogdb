@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-// TestPeopleListCarriesItsMentions: the rows of /people say how many pages link to each person and the newest day
-// page among them, in the order of the item links. The sheet says it in words.
+// TestPeopleListCarriesItsMentions: the rows of the people list of Browse say how many pages link to each person and
+// the newest day page among them, in the order of the item links. The sheet says it in words.
 func TestPeopleListCarriesItsMentions(t *testing.T) {
 	c, h := freshOn(t, "2026-10-12") // the day the words are read against: a day of this year has no year
 	root := must(c.Get(t.Context(), "/"))
@@ -19,7 +19,7 @@ func TestPeopleListCarriesItsMentions(t *testing.T) {
 	must(c.Do(t.Context(), find(catalog, "capture"), map[string]string{"day": "2026-10-09", "text": "Walk with [[Ana]] and [[Sam]]"}))
 	must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Trip", "body": "[[Ana]] came"}))
 
-	list := must(c.Get(t.Context(), "/people"))
+	list := must(c.Get(t.Context(), "/browse?kind=person"))
 	rows, _ := list.Properties.(map[string]any)["rows"].([]any)
 	type want struct {
 		title    string
@@ -45,7 +45,7 @@ func TestPeopleListCarriesItsMentions(t *testing.T) {
 		t.Errorf("a person with no day page has last_day: %v", rows[2])
 	}
 
-	body := page(t, h, "/people")
+	body := page(t, h, "/browse?kind=person")
 	for _, s := range []string{
 		"mentioned on 3 pages, last Fri 9 Oct",
 		"mentioned on 1 page, last Fri 9 Oct",
@@ -58,8 +58,8 @@ func TestPeopleListCarriesItsMentions(t *testing.T) {
 	}
 }
 
-// TestPeopleListShowsThePictureAPersonEmbeds: a person whose page embeds a picture has that picture's preview in its
-// row, and the sheet draws it round before the name; a person with none has the icon of a person. A place has
+// TestPeopleListShowsThePictureAPersonEmbeds: in the people list of Browse, a person whose page embeds a picture has
+// that picture's preview in its row, and the sheet draws it round before the name; a person with none has the icon of a person. A place has
 // neither, even when its page embeds a picture.
 func TestPeopleListShowsThePictureAPersonEmbeds(t *testing.T) {
 	c, h := freshOn(t, fixedToday)
@@ -73,7 +73,7 @@ func TestPeopleListShowsThePictureAPersonEmbeds(t *testing.T) {
 	lake := must(c.Do(ctx, find(root, "create-place"), map[string]string{"title": "Lake"}))
 	must(c.Do(ctx, find(lake, "save-body"), map[string]string{"body": "![[Ana face.jpg]]"}))
 
-	rows, _ := props(must(c.Get(ctx, "/people")))["rows"].([]any)
+	rows, _ := props(must(c.Get(ctx, "/browse?kind=person")))["rows"].([]any)
 	if len(rows) != 2 {
 		t.Fatalf("rows = %v, want Ana and Sam", rows)
 	}
@@ -84,17 +84,17 @@ func TestPeopleListShowsThePictureAPersonEmbeds(t *testing.T) {
 	if _, has := rows[1].(map[string]any)["picture"]; has {
 		t.Errorf("Sam has a picture: %v", rows[1])
 	}
-	body := page(t, h, "/people")
+	body := page(t, h, "/browse?kind=person")
 	for _, s := range []string{`<img class="face-picture" src="` + want + `" alt="" loading="lazy">`, `<span class="face-picture" aria-hidden="true">`} {
 		if !strings.Contains(body, s) {
 			t.Errorf("the people sheet lacks %q", s)
 		}
 	}
-	places, _ := props(must(c.Get(ctx, "/places")))["rows"].([]any)
+	places, _ := props(must(c.Get(ctx, "/browse?kind=place")))["rows"].([]any)
 	if len(places) != 1 || places[0].(map[string]any)["picture"] != nil {
 		t.Errorf("the places rows = %v, want Lake with no picture", places)
 	}
-	if body := page(t, h, "/places"); strings.Contains(body, `class="face-picture"`) {
+	if body := page(t, h, "/browse?kind=place"); strings.Contains(body, `class="face-picture"`) {
 		t.Errorf("the places sheet draws a picture of a face")
 	}
 }
@@ -106,18 +106,15 @@ func TestMentionsHaveNoDayWhenNoDayPageLinks(t *testing.T) {
 	must(c.Do(t.Context(), find(root, "create-place"), map[string]string{"title": "Lake"}))
 	must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Trip", "body": "At [[Lake]]"}))
 	must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Swim", "body": "In [[Lake]]"}))
-	if body := page(t, h, "/places"); !strings.Contains(body, "mentioned on 2 pages</span>") {
+	if body := page(t, h, "/browse?kind=place"); !strings.Contains(body, "mentioned on 2 pages</span>") {
 		t.Errorf("the places sheet lacks the count without a day:\n%.2000s", body)
 	}
 }
 
-// TestDaysAndGhostsHaveNoRows: people, places and files carry rows (how often the log mentions each); the days and
-// the ghost pages do not.
-func TestDaysAndGhostsHaveNoRows(t *testing.T) {
+// TestDaysHaveNoRows: the list of the days is its item links alone; the lists of Browse carry rows.
+func TestDaysHaveNoRows(t *testing.T) {
 	c, _ := fresh(t)
-	for _, path := range []string{"/days", "/ghosts"} {
-		if props, _ := must(c.Get(t.Context(), path)).Properties.(map[string]any); props["rows"] != nil {
-			t.Errorf("GET %s has rows: %v", path, props["rows"])
-		}
+	if props, _ := must(c.Get(t.Context(), "/days")).Properties.(map[string]any); props["rows"] != nil {
+		t.Errorf("GET /days has rows: %v", props["rows"])
 	}
 }

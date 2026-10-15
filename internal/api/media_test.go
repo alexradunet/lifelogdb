@@ -9,9 +9,9 @@ import (
 	"lifelog/internal/api"
 )
 
-// TestMediaListsPicturesVideosAndRecordings: the media list is the files of the three kinds, newest day first, with
-// a kind, a picture where one is kept and a day; a file of another kind keeps its page and is not in it. One kind
-// alone is read by its name, and any other name is refused.
+// TestMediaListsPicturesVideosAndRecordings: the media list of Browse is the files of the three kinds, newest day
+// first, with a kind, a picture where one is kept and a day; a file of another kind keeps its page and is a document.
+// One kind alone is read by media=, and any other word is refused.
 func TestMediaListsPicturesVideosAndRecordings(t *testing.T) {
 	c, h := freshOn(t, fixedToday)
 	ctx := t.Context()
@@ -30,31 +30,32 @@ func TestMediaListsPicturesVideosAndRecordings(t *testing.T) {
 	must(c.DoFiles(ctx, add, map[string]string{"title": "Blank.jpg"}, map[string]string{"original": jpg("blank.jpg", 24, 16)}))
 	must(c.Do(ctx, add, map[string]string{"title": "Scan.pdf", "sha256": strings.Repeat("ef", 32), "mime": "application/pdf"}))
 
-	e := must(c.Get(ctx, "/media"))
+	e := must(c.Get(ctx, "/browse?kind=media"))
 	rows, _ := props(e)["rows"].([]any)
 	var got []string
 	for _, r := range rows {
 		m := r.(map[string]any)
-		got = append(got, m["title"].(string)+" "+m["kind"].(string)+" "+m["mime"].(string)+" day="+str(m["day"])+" picture="+str(m["picture"])+" mentions="+str(m["mentions"]))
+		got = append(got, m["title"].(string)+" "+m["kind"].(string)+" "+m["file_kind"].(string)+" "+m["mime"].(string)+" day="+str(m["day"])+" picture="+str(m["picture"])+" mentions="+str(m["mentions"]))
 	}
 	want := []string{
-		"Dawn.jpg image image/jpeg day=" + fixedToday + " picture=/pages/8/preview mentions=1",
-		"Walk.mp4 video video/mp4 day=2031-05-12 picture= mentions=1",
-		"Lake.jpg image image/jpeg day=2031-05-10 picture=" + hrefOf(photo, "preview") + " mentions=1", // its day page shows it
-		"Memo 2.m4a audio audio/mp4 day=2031-05-02 picture= mentions=0",
-		"Memo 1.m4a audio audio/mp4 day=2031-05-01 picture= mentions=0",
-		"Blank.jpg image image/jpeg day= picture=/pages/9/preview mentions=0",
+		"Dawn.jpg media image image/jpeg day=" + fixedToday + " picture=/pages/8/preview mentions=1",
+		"Walk.mp4 media video video/mp4 day=2031-05-12 picture= mentions=1",
+		"Lake.jpg media image image/jpeg day=2031-05-10 picture=" + hrefOf(photo, "preview") + " mentions=1", // its day page shows it
+		"Memo 2.m4a media audio audio/mp4 day=2031-05-02 picture= mentions=0",
+		"Memo 1.m4a media audio audio/mp4 day=2031-05-01 picture= mentions=0",
+		"Blank.jpg media image image/jpeg day= picture=/pages/9/preview mentions=0",
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("the rows:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
-	if counts, _ := props(e)["counts"].(map[string]any); str(counts["image"]) != "3" || str(counts["video"]) != "1" || str(counts["audio"]) != "2" {
-		t.Errorf("the counts: %v", props(e)["counts"])
+	if counts, _ := props(e)["media_counts"].(map[string]any); str(counts["image"]) != "3" || str(counts["video"]) != "1" || str(counts["audio"]) != "2" {
+		t.Errorf("the media counts: %v", props(e)["media_counts"])
 	}
-	if len(e.Entities) != 6 || e.Entities[0].Title != "Dawn.jpg" || e.Entities[0].Class[0] != "file" || e.Title != "Media" || e.Class[0] != "media" {
+	if len(e.Entities) != 6 || e.Entities[0].Title != "Dawn.jpg" || e.Entities[0].Class[0] != "file" {
 		t.Errorf("the items: %+v", e.Entities)
 	}
-	if hrefOf(e, "pictures") != "/media?kind=image" || hrefOf(e, "videos") != "/media?kind=video" || hrefOf(e, "recordings") != "/media?kind=audio" || hrefOf(root, "media") != "/media" {
+	if hrefOf(e, "pictures") != "/browse?kind=media&media=image" || hrefOf(e, "videos") != "/browse?kind=media&media=video" ||
+		hrefOf(e, "recordings") != "/browse?kind=media&media=audio" || hrefOf(root, "media") != "/browse?kind=media" {
 		t.Errorf("the links: %+v", e.Links)
 	}
 	// The list's add-file takes the kinds it shows; the catalog's keeps a file of any kind.
@@ -70,23 +71,27 @@ func TestMediaListsPicturesVideosAndRecordings(t *testing.T) {
 		t.Errorf("the actions: %+v", e.Actions)
 	}
 
-	// One kind alone, and its paging keeps the kind.
-	audio := must(c.Get(ctx, "/media?kind=audio&limit=1"))
+	// One kind alone, and its paging keeps the kind; the media counts stay those of every kind.
+	audio := must(c.Get(ctx, "/browse?kind=media&media=audio&limit=1"))
 	rows, _ = props(audio)["rows"].([]any)
-	if len(rows) != 1 || rows[0].(map[string]any)["title"] != "Memo 2.m4a" || props(audio)["kind"] != "audio" || hrefOf(audio, "next") != "/media?kind=audio&limit=1&offset=1" || hrefOf(audio, "self") != "/media?kind=audio" {
-		t.Errorf("the recordings: %v %v %q", rows, props(audio)["kind"], hrefOf(audio, "next"))
+	if len(rows) != 1 || rows[0].(map[string]any)["title"] != "Memo 2.m4a" || props(audio)["media"] != "audio" ||
+		hrefOf(audio, "next") != "/browse?kind=media&limit=1&media=audio&offset=1" || hrefOf(audio, "self") != "/browse?kind=media&media=audio" {
+		t.Errorf("the recordings: %v %v %q", rows, props(audio)["media"], hrefOf(audio, "next"))
 	}
-	if rows, _ := props(must(c.Get(ctx, "/media?kind=image")))["rows"].([]any); len(rows) != 3 || rows[1].(map[string]any)["title"] != "Lake.jpg" {
+	if counts, _ := props(audio)["media_counts"].(map[string]any); str(counts["image"]) != "3" {
+		t.Errorf("the media counts of the recordings: %v", props(audio)["media_counts"])
+	}
+	if rows, _ := props(must(c.Get(ctx, "/browse?kind=media&media=image")))["rows"].([]any); len(rows) != 3 || rows[1].(map[string]any)["title"] != "Lake.jpg" {
 		t.Errorf("the pictures: %v", rows)
 	}
-	if _, err := c.Get(ctx, "/media?kind=document"); !clientStatus(err, 422) {
+	if _, err := c.Get(ctx, "/browse?kind=media&media=document"); !clientStatus(err, 422) {
 		t.Errorf("an unknown kind: %v", err)
 	}
 
 	// The browser: the counts in words, the kinds as links, a tile a file with its picture or the icon of its kind.
-	body := browse(t, h, "/media")
-	for _, want := range []string{"<h1>Media</h1>", `<p class="sub">3 pictures, 1 video, 2 recordings</p>`,
-		`<nav class="kinds" aria-label="Kind"><a href="/media" aria-current="page">All</a><a href="/media?kind=image">Pictures</a><a href="/media?kind=video">Videos</a><a href="/media?kind=audio">Recordings</a></nav>`,
+	body := browse(t, h, "/browse?kind=media")
+	for _, want := range []string{"<span>3 pictures, 1 video, 2 recordings</span>",
+		`<nav class="kinds" aria-label="Media kind"><a href="/browse?kind=media" aria-current="page">All media</a><a href="/browse?kind=media&amp;media=image">Pictures</a><a href="/browse?kind=media&amp;media=video">Videos</a><a href="/browse?kind=media&amp;media=audio">Recordings</a></nav>`,
 		`<ul class="plain tiles">`, `<img src="` + hrefOf(photo, "preview") + `" alt="" loading="lazy"><span class="first">Lake.jpg</span><span class="meta">picture · Sat 10 May</span>`,
 		`<span class="tile-blank" aria-hidden="true"><svg class="icon"`, `<span class="first">Walk.mp4</span><span class="meta">video · Mon 12 May</span>`, `<span class="first">Dawn.jpg</span><span class="meta">picture · Wed 14 May</span>`,
 		`<span class="first">Memo 1.m4a</span><span class="meta">recording · Thu 1 May</span>`, `<span class="first">Blank.jpg</span><span class="meta">picture · no day yet</span>`, `accept="image/*,video/*,audio/*"`,
@@ -98,66 +103,84 @@ func TestMediaListsPicturesVideosAndRecordings(t *testing.T) {
 	if strings.Contains(body, "Scan.pdf") {
 		t.Error("the media page shows the PDF")
 	}
-	// Files is every other file, as rows, with the same words.
+	// The documents are every other file, as rows, with the same words.
 	must(c.Do(ctx, add, map[string]string{"title": "Notes.txt", "sha256": strings.Repeat("0f", 32), "mime": "text/plain", "day": "2031-05-03"}))
-	files := must(c.Get(ctx, "/files"))
+	files := must(c.Get(ctx, "/browse?kind=document"))
 	got = nil
 	for _, r := range props(files)["rows"].([]any) {
 		m := r.(map[string]any)
-		got = append(got, m["title"].(string)+" "+m["kind"].(string)+" "+m["mime"].(string)+" day="+str(m["day"]))
+		got = append(got, m["title"].(string)+" "+m["kind"].(string)+" "+m["file_kind"].(string)+" "+m["mime"].(string)+" day="+str(m["day"]))
 	}
-	if want := "Notes.txt text text/plain day=2031-05-03\nScan.pdf application application/pdf day=" + str(props(files)["rows"].([]any)[1].(map[string]any)["day"]); strings.Join(got, "\n") != want ||
-		len(files.Entities) != 2 || files.Class[0] != "files" || hrefOf(files, "media") != "/media" || hrefOf(root, "files") != "/files" ||
-		accept(find(files, "add-file")) != "" || find(files, "tombstone-pages").Name == "" || props(files)["kind"] != nil || props(files)["counts"] != nil {
-		t.Errorf("the files: %v\n%+v %+v", got, files.Links, props(files))
+	if want := "Notes.txt document text text/plain day=2031-05-03\nScan.pdf document application application/pdf day=" + str(props(files)["rows"].([]any)[1].(map[string]any)["day"]); strings.Join(got, "\n") != want ||
+		len(files.Entities) != 2 || hrefOf(root, "files") != "/browse?kind=document" ||
+		accept(find(files, "add-file")) != "" || find(files, "tombstone-pages").Name == "" || props(files)["media_counts"] != nil {
+		t.Errorf("the documents: %v\n%+v %+v", got, files.Links, props(files))
 	}
-	body = browse(t, h, "/files")
-	for _, want := range []string{"<h1>Files</h1>", `2 on this page`, `<a href="/media">Pictures, videos and recordings are in Media</a>`,
-		`<input type="hidden" name="back" value="/files">`, `aria-label="Select Notes.txt">`,
+	body = browse(t, h, "/browse?kind=document")
+	for _, want := range []string{`<a href="/browse?kind=document" aria-current="page">Documents <small>2</small></a>`,
+		`<input type="hidden" name="back" value="/browse?kind=document">`, `aria-label="Select Notes.txt">`,
 		`<span class="first">Notes.txt</span><span class="meta">text/plain · Sat 3 May</span>`, `<ul class="plain rows">`} {
 		if !strings.Contains(body, want) {
-			t.Errorf("the files page lacks %s", want)
+			t.Errorf("the documents page lacks %s", want)
 		}
 	}
-	if strings.Contains(body, "Lake.jpg") || strings.Contains(body, "Memo 1.m4a") {
-		t.Error("the files page shows media")
+	if strings.Contains(body, "Lake.jpg") || strings.Contains(body, "Memo 1.m4a") || strings.Contains(body, " pictures, ") {
+		t.Error("the documents page shows media")
 	}
-	if !strings.Contains(browse(t, h, "/"), `href="/files"`) {
-		t.Error("the sidebar does not lead to Files")
-	}
-	if body := browse(t, h, "/media?kind=video"); !strings.Contains(body, `<a href="/media?kind=video" aria-current="page">Videos</a>`) || strings.Contains(body, "Memo 1.m4a") || !strings.Contains(body, `value="/media?kind=video">`) {
+	if body := browse(t, h, "/browse?kind=media&media=video"); !strings.Contains(body, `<a href="/browse?kind=media&amp;media=video" aria-current="page">Videos</a>`) ||
+		strings.Contains(body, "Memo 1.m4a") || !strings.Contains(body, `value="/browse?kind=media&amp;media=video">`) {
 		t.Errorf("the videos page: %.800s", body)
 	}
-	if body := browse(t, h, "/media?kind=video&offset=1"); !strings.Contains(body, `<p class="empty">None of this kind yet. New file adds one.</p>`) {
+	if body := browse(t, h, "/browse?kind=media&media=video&offset=1"); !strings.Contains(body, `<p class="empty">Nothing of this kind yet. New, above, makes the first one.</p>`) {
 		t.Errorf("an empty kind: %.800s", body)
-	}
-	if !strings.Contains(browse(t, h, "/"), `href="/media"`) {
-		t.Error("the sidebar does not lead to Media")
 	}
 }
 
-// TestMediaIsEmptyUntilAFileOfItsKindsIsKept: a PDF alone leaves the media list empty, with its own words, and a
-// photo alone the files list.
+// TestTheMediaCountsFollowTheScope: inside a category the media list counts what is filed there, and Not filed what
+// is in no category.
+func TestTheMediaCountsFollowTheScope(t *testing.T) {
+	c, h, s := freshStore(t)
+	browseFixture(t, s) // Family: photo.jpg and scan.pdf; nowhere: memo.m4a
+	ctx := t.Context()
+	for path, want := range map[string]string{
+		"/browse?kind=media":            "image=1 video=0 audio=1",
+		"/browse?kind=media&in=Family":  "image=1 video=0 audio=0",
+		"/browse?kind=media&unfiled=1":  "image=0 video=0 audio=1",
+		"/browse?kind=media&in=Cousins": "image=0 video=0 audio=0",
+	} {
+		m := props(must(c.Get(ctx, path)))["media_counts"].(map[string]any)
+		if got := "image=" + str(m["image"]) + " video=" + str(m["video"]) + " audio=" + str(m["audio"]); got != want {
+			t.Errorf("%s: %s, want %s", path, got, want)
+		}
+	}
+	if body := browse(t, h, "/browse?kind=media&in=Family"); !strings.Contains(body, "<span>1 picture, no videos, no recordings</span>") {
+		t.Error("the media list in Family does not say its counts")
+	}
+}
+
+// TestMediaIsEmptyUntilAFileOfItsKindsIsKept: a PDF alone leaves the media list empty, with its counts and its
+// empty words, and a photo alone the documents.
 func TestMediaIsEmptyUntilAFileOfItsKindsIsKept(t *testing.T) {
 	c, h := fresh(t)
 	ctx := t.Context()
 	must(c.Do(ctx, find(must(c.Get(ctx, "/")), "add-file"), map[string]string{"title": "Scan.pdf", "sha256": strings.Repeat("ef", 32), "mime": "application/pdf"}))
-	e := must(c.Get(ctx, "/media"))
+	e := must(c.Get(ctx, "/browse?kind=media"))
 	if rows, _ := props(e)["rows"].([]any); len(rows) != 0 || len(e.Entities) != 0 {
 		t.Errorf("the rows: %v", props(e)["rows"])
 	}
-	if body := browse(t, h, "/media"); !strings.Contains(body, `<p class="sub">no pictures, no videos, no recordings</p>`) || !strings.Contains(body, `<p class="empty">No media yet. New file adds a picture, a video or a recording.</p>`) {
+	if body := browse(t, h, "/browse?kind=media"); !strings.Contains(body, `<span>no pictures, no videos, no recordings</span>`) ||
+		!strings.Contains(body, `<p class="empty">Nothing of this kind yet. New, above, makes the first one.</p>`) {
 		t.Errorf("the empty page: %.800s", body)
 	}
-	// And the other way round: a photo alone leaves the files list empty.
+	// And the other way round: a photo alone leaves the documents empty.
 	c, h = fresh(t)
 	path, _ := jpegFile(t, "lake.jpg", 40, 30)
 	must(c.DoFiles(ctx, find(must(c.Get(ctx, "/")), "add-file"), map[string]string{"title": "Lake.jpg"}, map[string]string{"original": path}))
-	if e := must(c.Get(ctx, "/files")); len(e.Entities) != 0 {
-		t.Errorf("the files: %+v", e.Entities)
+	if e := must(c.Get(ctx, "/browse?kind=document")); len(e.Entities) != 0 {
+		t.Errorf("the documents: %+v", e.Entities)
 	}
-	if body := browse(t, h, "/files"); !strings.Contains(body, `<p class="empty">No other file yet. New file adds one; a picture, a video or a recording goes to Media.</p>`) {
-		t.Errorf("the empty files page: %.800s", body)
+	if body := browse(t, h, "/browse?kind=document"); !strings.Contains(body, `<p class="empty">Nothing of this kind yet. New, above, makes the first one.</p>`) {
+		t.Errorf("the empty documents page: %.800s", body)
 	}
 }
 

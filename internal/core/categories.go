@@ -84,17 +84,6 @@ func (s *Store) Categories(ctx context.Context) ([]Category, error) {
 	return out, nil
 }
 
-// Unfiled are the live plain pages in no category that are not categories themselves, by title: what the
-// Categories view lists after the tree (docs/plans/115-categories-to-browse.md). A day page is never filed, and a
-// metric, a person, a place and a file have lists of their own.
-func (s *Store) Unfiled(ctx context.Context, limit, offset int) ([]Edge, error) {
-	where, args := Scope{Unfiled: true}.where()
-	return s.edges(ctx, `SELECT p.entity_type, p.id, p_name.title, p.entity_type, ''
-	                       FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
-	                      WHERE `+plainPage+` AND `+where+`
-	                      ORDER BY p.preferred_name_key LIMIT ? OFFSET ?`, append(args, limit, offset)...)
-}
-
 // Filed is what FilePages did: the category page, whether it was made, the links added and the other part-of links
 // removed.
 type Filed struct {

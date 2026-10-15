@@ -7,10 +7,10 @@ import (
 	"testing"
 )
 
-// The Categories view (docs/plans/115-categories-to-browse.md): the category tree with a count each, then the
-// plain pages filed nowhere.
+// The category tree of Browse (docs/plans/117-one-browse-view.md, rule 3): the categories by path with a count each,
+// beside the list, and Not filed at its end.
 
-func TestTheCategoriesViewDrawsTheTreeAndTheUnfiledPages(t *testing.T) {
+func TestBrowseDrawsTheTreeAndTheUnfiledPages(t *testing.T) {
 	c, h := freshOn(t, fixedToday)
 	ctx := t.Context()
 	root := must(c.Get(ctx, "/"))
@@ -30,10 +30,7 @@ func TestTheCategoriesViewDrawsTheTreeAndTheUnfiledPages(t *testing.T) {
 	file(travel, "Life")
 	must(c.Do(ctx, find(must(c.Get(ctx, "/pages/"+ids["Gone"])), "tombstone"), nil))
 
-	e := must(c.Get(ctx, "/categories"))
-	if e.Title != "Categories" || e.Class[0] != "categories" {
-		t.Fatalf("GET /categories: %s %v", e.Title, e.Class)
-	}
+	e := must(c.Get(ctx, "/browse?unfiled=1"))
 	var tree []string
 	for _, x := range props(e)["categories"].([]any) {
 		c := x.(map[string]any)
@@ -43,52 +40,46 @@ func TestTheCategoriesViewDrawsTheTreeAndTheUnfiledPages(t *testing.T) {
 	if want := "Life=1 Life/Travel=2"; strings.Join(tree, " ") != want {
 		t.Errorf("tree: %v, want %s", tree, want)
 	}
-	var unfiled []string
-	for _, x := range props(e)["unfiled"].([]any) {
-		unfiled = append(unfiled, x.(map[string]any)["title"].(string))
-	}
-	// Not a category (Life), not a filed page, not a day page, not a tombstone.
-	if want := []string{"Loose note"}; strings.Join(unfiled, ",") != strings.Join(want, ",") {
-		t.Errorf("unfiled: %v, want %v", unfiled, want)
-	}
+	// Not filed: not a category (Life), not a filed page, not a day page, not a tombstone.
 	var links []string
 	for _, l := range e.Entities {
 		links = append(links, strings.Join(l.Rel, "+")+":"+l.Title)
 	}
-	if want := "category:Life category:Travel item:Loose note"; strings.Join(links, " ") != want {
+	if want := "item:Loose note category:Life category:Travel"; strings.Join(links, " ") != want {
 		t.Errorf("links: %v, want %s", links, want)
 	}
 
-	body := browse(t, h, "/categories")
-	if !strings.Contains(body, `<a href="/categories" aria-current="page">`) {
-		t.Error("the sidebar does not mark Categories as current")
-	}
-	rows := regexp.MustCompile(`<li class="depth-(\d)"><a class="entry" href="/pages/(\d+)"><span class="first">([^<]*)</span><span class="meta">(\d+)</span></a></li>`).FindAllStringSubmatch(body, -1)
+	body := browse(t, h, "/browse?unfiled=1")
+	rows := regexp.MustCompile(`<li class="depth-(\d)"><a class="entry" href="/browse\?in=(\w+)"><span class="first">([^<]*)</span><span class="meta">(\d+)</span></a></li>`).FindAllStringSubmatch(body, -1)
 	var got []string
 	for _, r := range rows {
 		got = append(got, r[1]+":"+r[3]+"="+r[4])
 	}
-	if want := "0:Life=1 1:Travel=2"; strings.Join(got, " ") != want {
+	// The tree is drawn twice: beside the list, and in the fold a phone shows.
+	if want := "0:Life=1 1:Travel=2 0:Life=1 1:Travel=2"; strings.Join(got, " ") != want {
 		t.Errorf("tree rows: %v, want %s", got, want)
 	}
-	if !strings.Contains(body, `<h2>Not filed</h2>`) || !strings.Contains(body, `<a href="/pages/`+ids["Loose note"]+`">Loose note</a>`) {
-		t.Error("Not filed does not list the loose page")
+	if !strings.Contains(body, `<a class="entry" href="/browse?unfiled=1" aria-current="page"><span class="first">Not filed</span>`) ||
+		!strings.Contains(body, `href="/pages/`+ids["Loose note"]+`"><span class="first">Loose note</span>`) {
+		t.Error("Not filed is not marked, or does not list the loose page")
 	}
-	if strings.Contains(body, `">Gone</a>`) || strings.Contains(body, `">Japan 2031</a>`) {
+	if strings.Contains(body, `<span class="first">Gone</span>`) || strings.Contains(body, `<span class="first">Japan 2031</span>`) {
 		t.Error("Not filed lists a filed page or a tombstone")
-	}
-	if !strings.Contains(browse(t, h, "/"), `href="/categories"`) {
-		t.Error("Home has no link to the categories")
 	}
 }
 
-func TestTheCategoriesViewWithNoCategory(t *testing.T) {
+func TestBrowseWithNoCategory(t *testing.T) {
 	c, h := freshOn(t, fixedToday)
-	e := must(c.Get(t.Context(), "/categories"))
+	e := must(c.Get(t.Context(), "/browse"))
 	if cs := props(e)["categories"].([]any); len(cs) != 0 {
 		t.Errorf("categories: %v", cs)
 	}
-	if body := browse(t, h, "/categories"); !strings.Contains(body, "No category yet") {
-		t.Error("an empty tree says nothing")
+	body := browse(t, h, "/browse?unfiled=1")
+	tree := regexp.MustCompile(`(?s)<nav class="browse-side panel" aria-label="Categories">(.*?)</nav>`).FindStringSubmatch(body)
+	if tree == nil || strings.Count(tree[1], "<li") != 2 || !strings.Contains(tree[1], "Everything") || !strings.Contains(tree[1], "Not filed") {
+		t.Errorf("an empty tree is not Everything and Not filed: %v", tree)
+	}
+	if !strings.Contains(body, `<p class="empty">Everything of this kind is in a category.</p>`) {
+		t.Error("an empty Not filed says nothing")
 	}
 }

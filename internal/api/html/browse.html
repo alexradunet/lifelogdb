@@ -1,12 +1,13 @@
 {{/* Browse (docs/plans/117-one-browse-view.md): one list with two filters. The kind is a chip, with its count in
-     the scope of the list; where the list looks (Everything, a category, Not filed) is a branch of the category tree.
+     the scope of the list (inside a category All comes first: it is the default there); the media list also says
+     its count of each media kind; where the list looks (Everything, a category, Not filed) is a branch of the category tree.
      In a wide column the tree is beside the list; in a narrow one it is a closed disclosure above the chips, and the
      chips wrap onto more lines, so the current chip and every count are in view. Both copies of the tree are in the page, and the column's width shows one: there
      is no script. Each kind keeps its row: a face for a person, a tile for media, a row for the rest. The pick bar
      offers what the list offers. */}}
 {{define "browse"}}{{template "head" .}}{{$p := .Props}}{{$c := $p.counts}}
 {{$where := "Everything"}}{{if $p.ghosts}}{{$where = "Ghost pages"}}{{else if $p.unfiled}}{{$where = "Not filed"}}{{else if $p.in}}{{$where = printf "In %s" (crumbs $p.in.path)}}{{end}}
-<header class="page-head"><div class="what"><h1>Browse</h1><p class="sub"><span>{{$where}}</span>{{if $p.ghosts}}<span>Empty pages, older than 30 days, that nothing links to or from.</span>{{end}}{{if eq $p.kind "metric"}}<a href="{{.Link "metrics"}}">The values are on the Metrics board</a>{{end}}</p></div>
+<header class="page-head"><div class="what"><h1>Browse</h1><p class="sub"><span>{{$where}}</span>{{if $p.ghosts}}<span>Empty pages, older than 30 days, that nothing links to or from.</span>{{end}}{{with $p.media_counts}}<span>{{$.MediaCount .image "picture" "pictures"}}, {{$.MediaCount .video "video" "videos"}}, {{$.MediaCount .audio "recording" "recordings"}}</span>{{end}}{{if eq $p.kind "metric"}}<a href="{{.Link "metrics"}}">The values are on the Metrics board</a>{{end}}</p></div>
 <div class="tools">
 {{with .Action "create-page"}}{{template "boxed" (form .)}}{{end}}
 {{with .Action "create-person"}}{{template "boxed" (form .)}}{{end}}

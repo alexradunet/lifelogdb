@@ -76,8 +76,8 @@ func TestAddFileKeepsAPhotoAndItsPicture(t *testing.T) {
 	if got := names(e); got != "save-body,rename,link,unlink,file-pages,tombstone" {
 		t.Errorf("a file page offers %s (never promote)", got)
 	}
-	if list := must(c.Get(t.Context(), "/media")); len(list.Entities) != 1 || list.Entities[0].Title != "2026-10-04 Lake.jpg" {
-		t.Errorf("/media: %+v", list.Entities)
+	if list := must(c.Get(t.Context(), "/browse?kind=media")); len(list.Entities) != 1 || list.Entities[0].Title != "2026-10-04 Lake.jpg" {
+		t.Errorf("/browse?kind=media: %+v", list.Entities)
 	}
 }
 
@@ -133,10 +133,10 @@ func TestFileViews(t *testing.T) {
 	f := must(c.DoFiles(t.Context(), find(root, "add-file"), map[string]string{"title": "Lake.jpg", "body": "dawn"}, map[string]string{"original": path}))
 	day := must(c.Do(t.Context(), find(root, "capture"), map[string]string{"text": "Swam. ![[Lake.jpg|the lake]]"}))
 	for path, want := range map[string][]string{
-		"/files":          {`enctype="multipart/form-data"`, `type="file" name="original"`, `type="hidden" name="sha256"`},
-		"/media":          {"Lake.jpg", `action="/files"`, `<img src="` + href(f, "preview") + `" alt="" loading="lazy">`},
-		href(f, "self"):   {`<img class="preview" src="` + href(f, "preview") + `"`, "image/jpeg", "Backlinks"},
-		href(day, "page"): {`<img src="/previews?title=Lake.jpg" alt="the lake"`},
+		"/browse?kind=document": {`enctype="multipart/form-data"`, `type="file" name="original"`, `type="hidden" name="sha256"`},
+		"/browse?kind=media":    {"Lake.jpg", `action="/files"`, `<img src="` + href(f, "preview") + `" alt="" loading="lazy">`},
+		href(f, "self"):         {`<img class="preview" src="` + href(f, "preview") + `"`, "image/jpeg", "Backlinks"},
+		href(day, "page"):       {`<img src="/previews?title=Lake.jpg" alt="the lake"`},
 	} {
 		body := browse(t, h, path)
 		for _, w := range want {
@@ -214,7 +214,7 @@ func TestAddFileDryRunWritesNothing(t *testing.T) {
 	if res, _ := e.Result.(map[string]any); !strings.Contains(strings.Join(e.Class, ","), "dry-run") || res == nil || res["id"] != nil {
 		t.Errorf("a dry run: %+v %+v", e.Class, e.Result)
 	}
-	if list := must(c.Get(t.Context(), "/media")); len(list.Entities) != 0 {
+	if list := must(c.Get(t.Context(), "/browse?kind=media")); len(list.Entities) != 0 {
 		t.Error("a dry run kept a file")
 	}
 	capture := find(must(c.Get(t.Context(), "/actions")), "capture")
@@ -230,7 +230,7 @@ func TestAddFileDryRunWritesNothing(t *testing.T) {
 	if props(ghost)["entity_type"] != "page" || props(ghost)["day"] != nil || props(ghost)["file"] != nil {
 		t.Errorf("a dry-run promotion wrote to the ghost: %+v", props(ghost))
 	}
-	if list := must(c.Get(t.Context(), "/media")); len(list.Entities) != 0 {
+	if list := must(c.Get(t.Context(), "/browse?kind=media")); len(list.Entities) != 0 {
 		t.Error("a dry-run promotion kept a file")
 	}
 }

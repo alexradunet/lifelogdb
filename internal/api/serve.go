@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -65,10 +66,6 @@ func NewOn(s *core.Store, localDay func() string, zone *time.Location, trustedOr
 	get("/years/{year}", h.year)
 	get("/pages", h.find)
 	get("/pages/{id}", h.page)
-	get("/people", h.named("person", "people", "create-person"))
-	get("/places", h.named("place", "places", "create-place"))
-	get("/media", h.media)
-	get("/files", h.files)
 	m.HandleFunc("GET /pages/{id}/preview", picture(func(r *http.Request) ([]byte, error) {
 		id, err := idOf(r)
 		if err != nil {
@@ -82,9 +79,12 @@ func NewOn(s *core.Store, localDay func() string, zone *time.Location, trustedOr
 	get("/metrics", h.metrics)
 	get("/metrics/{name}", h.series)
 	get("/measurements/{id}", h.measurement)
-	get("/ghosts", h.ghosts)
-	get("/categories", h.categoriesView)
 	get("/browse", h.browse)
+	for path := range oldLists {
+		m.HandleFunc("GET "+path, func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, toBrowse(path, r.URL.Query()), http.StatusPermanentRedirect)
+		})
+	}
 	get("/search", h.search)
 	get("/titles", h.titles)
 	m.HandleFunc("POST /render", h.render)
@@ -123,6 +123,36 @@ func NewOn(s *core.Store, localDay func() string, zone *time.Location, trustedOr
 		refuse(w, r, http.StatusForbidden, "cross-origin browser write refused", "cross_origin")
 	}))
 	return guard.Handler(m)
+}
+
+// oldLists are the lists that Browse replaced (docs/plans/117-one-browse-view.md, rule 8), each with the filters of
+// Browse that give its rows. A GET of one answers 308 to Browse, so a bookmark or a client keeps working; the POST
+// routes of the same paths do not change.
+var oldLists = map[string]url.Values{
+	"/people":     {"kind": {"person"}},
+	"/places":     {"kind": {"place"}},
+	"/media":      {"kind": {"media"}},
+	"/files":      {"kind": {"document"}},
+	"/ghosts":     {"kind": {"page"}, "ghosts": {"1"}},
+	"/categories": {},
+}
+
+// toBrowse is the Browse address of a GET of an old list: its filters, and the limit, the offset and the asked form
+// (new) of the query. The kind of the media list (image, video, audio) is the field media of Browse.
+func toBrowse(path string, q url.Values) string {
+	v := url.Values{}
+	for k, vs := range oldLists[path] {
+		v[k] = slices.Clone(vs)
+	}
+	for _, k := range []string{"limit", "offset", "new"} {
+		if x, ok := q[k]; ok {
+			v[k] = x
+		}
+	}
+	if path == "/media" && q.Get("kind") != "" {
+		v.Set("media", q.Get("kind"))
+	}
+	return browseHref(v)
 }
 
 // refuse answers a request the guards turn away with the error entity, as every refusal is answered: status, a code

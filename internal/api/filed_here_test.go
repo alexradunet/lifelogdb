@@ -143,7 +143,7 @@ func TestANewPageIsFiledWhereItIsMade(t *testing.T) {
 		t.Errorf("Kyoto's links: %v, want %s", kinds, want)
 	}
 	must(c.Do(ctx, create, map[string]string{"title": "Lisbon", "category": "Cities"}))
-	if cs := props(must(c.Get(ctx, "/categories")))["categories"].([]any); len(cs) != 3 || cs[0].(map[string]any)["path"] != "Cities" {
+	if cs := props(must(c.Get(ctx, "/browse")))["categories"].([]any); len(cs) != 3 || cs[0].(map[string]any)["path"] != "Cities" {
 		t.Errorf("categories after Lisbon: %v", cs)
 	}
 

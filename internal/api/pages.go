@@ -1,6 +1,6 @@
 package api
 
-// The pages: a page by id or title, the people, places, files and ghosts, the search, and the writes on a page.
+// The pages: a page by id or title, the search, and the writes on a page.
 
 import (
 	"context"
@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
-	"strings"
 
 	"lifelog/internal/core"
 )
@@ -143,71 +142,6 @@ func (h *server) linkKinds(ctx context.Context, typ string, dayPage bool) ([]str
 		out = append(out, k)
 	}
 	return out, nil
-}
-
-// namedRow is a row of the people and the places lists: the page and how often the log mentions it.
-type namedRow struct {
-	ID       int64  `json:"id"`
-	Title    string `json:"title"`
-	Mentions int    `json:"mentions"`
-	LastDay  string `json:"last_day,omitempty"`
-	Picture  string `json:"picture,omitempty"` // a person's: the preview of the first picture its page embeds
-}
-
-func (h *server) named(typ, plural, create string) func(*http.Request) (*Entity, error) {
-	return func(r *http.Request) (*Entity, error) {
-		limit, offset, err := pageOf(r, 200)
-		if err != nil {
-			return nil, err
-		}
-		e := &Entity{Class: []string{plural}, Title: strings.ToUpper(plural[:1]) + plural[1:],
-			Links:   []Link{link("self", "/"+plural, plural), link("index", "/", "Home")},
-			Actions: []Action{action(create, nil, nil)}}
-		if typ == "person" || typ == "place" { // these rows say how often the log mentions them
-			found, err := h.s.NamedMentions(r.Context(), typ, core.Scope{}, limit+1, offset)
-			if err != nil {
-				return nil, err
-			}
-			found = paged(e, found, "/"+plural, nil, limit, offset)
-			rows := []namedRow{}
-			for _, p := range found {
-				row := namedRow{ID: p.ID, Title: p.Title, Mentions: p.Mentions, LastDay: p.LastDay}
-				if p.Picture != 0 {
-					row.Picture = pageHref(p.Picture) + "/preview"
-				}
-				rows = append(rows, row)
-				e.Entities = append(e.Entities, Link{Rel: []string{"item"}, Href: pageHref(p.ID), Title: p.Title, Class: []string{typ}})
-			}
-			e.Properties.(map[string]any)["rows"] = rows
-			return e, nil
-		}
-		list, err := h.s.Named(r.Context(), typ, limit+1, offset)
-		if err != nil {
-			return nil, err
-		}
-		list = paged(e, list, "/"+plural, nil, limit, offset)
-		for _, p := range list {
-			e.Entities = append(e.Entities, Link{Rel: []string{"item"}, Href: pageHref(p.ID), Title: p.Title, Class: []string{typ}})
-		}
-		return e, nil
-	}
-}
-
-func (h *server) ghosts(r *http.Request) (*Entity, error) {
-	limit, offset, err := pageOf(r, 200)
-	if err != nil {
-		return nil, err
-	}
-	gs, err := h.s.Ghosts(r.Context(), limit+1, offset)
-	if err != nil {
-		return nil, err
-	}
-	e := &Entity{Class: []string{"ghosts"}, Title: "Ghost pages", Links: []Link{link("self", "/ghosts", "Ghost pages"), link("index", "/", "Home")}}
-	gs = paged(e, gs, "/ghosts", nil, limit, offset)
-	for _, g := range gs {
-		e.Entities = append(e.Entities, link("item", pageHref(g.ID), g.Title))
-	}
-	return e, nil
 }
 
 func (h *server) search(r *http.Request) (*Entity, error) {

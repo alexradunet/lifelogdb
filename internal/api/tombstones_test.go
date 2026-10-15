@@ -25,8 +25,9 @@ func idOfSelf(t *testing.T, href string) string {
 	return id
 }
 
-// TestDeletePagesAtOnce: tombstone-pages is offered on the media list and on no other list; it tombstones every id
-// named in one write, or none of them.
+// TestDeletePagesAtOnce: tombstone-pages is offered on the lists of Browse whose things a page can be deleted with
+// (pages, the ghost pages too, media and documents), and not on people or places, which are deleted from their own
+// page; it tombstones every id named in one write, or none of them.
 func TestDeletePagesAtOnce(t *testing.T) {
 	c, h := fresh(t)
 	ctx := t.Context()
@@ -36,13 +37,15 @@ func TestDeletePagesAtOnce(t *testing.T) {
 		e := must(c.Do(ctx, add, map[string]string{"title": title, "sha256": strings.Repeat(fmt.Sprintf("%02x", i+1), 32), "mime": "audio/mp4"}))
 		ids = append(ids, idOfSelf(t, hrefOf(e, "self")))
 	}
-	del := find(must(c.Get(ctx, "/media")), "tombstone-pages")
+	del := find(must(c.Get(ctx, "/browse?kind=media")), "tombstone-pages")
 	if del.Name == "" || !del.Danger || len(del.Fields) != 1 || del.Fields[0].Name != "ids" || !del.Fields[0].Required {
 		t.Fatalf("the media list's delete: %+v", del)
 	}
-	for _, list := range []string{"/people", "/places", "/ghosts"} {
-		if find(must(c.Get(ctx, list)), "tombstone-pages").Name != "" {
-			t.Errorf("%s offers tombstone-pages", list)
+	// The ghost list offers Delete: the owner's word (docs/plans/117-one-browse-view.md, rule 5).
+	for list, offers := range map[string]bool{"/browse?kind=person": false, "/browse?kind=place": false, "/browse?ghosts=1": true,
+		"/browse": true, "/browse?kind=document": true} {
+		if got := find(must(c.Get(ctx, list)), "tombstone-pages").Name != ""; got != offers {
+			t.Errorf("%s offers tombstone-pages: %v, want %v", list, got, offers)
 		}
 	}
 	deleted := func(id string) bool {
@@ -59,7 +62,7 @@ func TestDeletePagesAtOnce(t *testing.T) {
 	if !deleted(ids[0]) || !deleted(ids[1]) || deleted(ids[2]) {
 		t.Fatalf("after the delete: %v %v %v", deleted(ids[0]), deleted(ids[1]), deleted(ids[2]))
 	}
-	if rows := props(must(c.Get(ctx, "/media")))["rows"].([]any); len(rows) != 1 || rows[0].(map[string]any)["title"] != "Memo 3.m4a" {
+	if rows := props(must(c.Get(ctx, "/browse?kind=media")))["rows"].([]any); len(rows) != 1 || rows[0].(map[string]any)["title"] != "Memo 3.m4a" {
 		t.Errorf("the media list after the delete: %v", rows)
 	}
 
@@ -106,9 +109,9 @@ func TestDeletePagesAtOnce(t *testing.T) {
 	}
 }
 
-// TestTheListsDeleteWhatIsChecked follows the browser: Media draws a box on each tile inside one form, the
-// form posts the checked ids and returns to the list with the count, and a post with no box checked comes back to
-// the list with the refusal.
+// TestTheListsDeleteWhatIsChecked follows the browser: the media list of Browse draws a box on each tile for one
+// form, the form posts the checked ids and returns to the list with the count, and a post with no box checked comes
+// back to the list with the refusal.
 func TestTheListsDeleteWhatIsChecked(t *testing.T) {
 	c, h := fresh(t)
 	ctx := t.Context()
@@ -119,35 +122,36 @@ func TestTheListsDeleteWhatIsChecked(t *testing.T) {
 		files = append(files, idOfSelf(t, hrefOf(e, "self")))
 	}
 
-	list := browse(t, h, "/media")
-	for _, want := range []string{`<form id="pick" class="pick-bar" method="POST" action="/pages/tombstone" data-action="tombstone-pages">`,
-		`<input type="hidden" name="back" value="/media">`, `<span class="desc">Check the rows, then delete them.</span>`, `<button class="danger" formaction="/pages/tombstone" formnovalidate>Delete selected</button></div></form>`,
+	list := browse(t, h, "/browse?kind=media")
+	for _, want := range []string{`<form id="pick" class="pick-bar" method="POST" action="/pages/file" data-action="file-pages">`,
+		`<input type="hidden" name="back" value="/browse?kind=media">`, `<span class="desc">Check the rows, then type a category or delete them. A new name makes a new category.</span>`,
+		`<button class="danger" formaction="/pages/tombstone" formnovalidate>Delete selected</button></div></form>`,
 		`<input type="checkbox" name="ids" value="` + files[0] + `" form="pick" aria-label="Select Scan 1.jpg">`, `name="ids" value="` + files[1] + `"`} {
 		if !strings.Contains(list, want) {
 			t.Errorf("the media list lacks %s", want)
 		}
 	}
-	if strings.Contains(browse(t, h, "/people"), `data-action="tombstone-pages"`) {
-		t.Error("the people list draws the boxes")
+	if strings.Contains(browse(t, h, "/browse?kind=person"), `formaction="/pages/tombstone"`) {
+		t.Error("the people list draws Delete")
 	}
 	// The bar comes after the rows, so a CSS counter can count the checked boxes on its button (plan 108).
 	if bar, last := strings.Index(list, `class="pick-bar"`), strings.LastIndex(list, `name="ids"`); bar < last || !strings.Contains(list[bar:], "</form>") {
 		t.Error("the bar is not after the rows")
 	}
-	rec := submit(h, "/pages/tombstone", url.Values{"ids": files, "back": {"/media"}}, "")
+	rec := submit(h, "/pages/tombstone", url.Values{"ids": files, "back": {"/browse?kind=media"}}, "")
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("the form: %d %.300s", rec.Code, rec.Body.String())
 	}
 	loc := rec.Header().Get("Location")
-	if !feedbackLocation(loc, "/media") {
+	if !feedbackLocation(loc, "/browse?kind=media") {
 		t.Fatalf("the form returned to %q", loc)
 	}
 	after := browse(t, h, loc)
 	if !strings.Contains(after, "Deleted 2 pages.") || strings.Contains(after, `href="/pages/`+files[0]+`"`) || strings.Contains(after, `href="/pages/`+files[1]+`"`) {
 		t.Errorf("the list after the delete: %.600s", after)
 	}
-	rec = submit(h, "/pages/tombstone", url.Values{"back": {"/media"}}, "")
-	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), `role="alert"`) || !strings.Contains(rec.Body.String(), "missing field ids") || !strings.Contains(rec.Body.String(), "<h1>Media</h1>") {
+	rec = submit(h, "/pages/tombstone", url.Values{"back": {"/browse?kind=media"}}, "")
+	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), `role="alert"`) || !strings.Contains(rec.Body.String(), "missing field ids") || !strings.Contains(rec.Body.String(), "<h1>Browse</h1>") {
 		t.Errorf("no box checked: %d %.300s", rec.Code, rec.Body.String())
 	}
 

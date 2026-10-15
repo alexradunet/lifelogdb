@@ -3,7 +3,7 @@ package core
 import "testing"
 
 // TestNamedMentionsCountLivePagesAndTheNewestDay: a person is mentioned once by each live page that links to it.
-// A tombstoned page does not count, and only a day page gives the last day. The order is the order of Named.
+// A tombstoned page does not count, and only a day page gives the last day. The order is by title.
 func TestNamedMentionsCountLivePagesAndTheNewestDay(t *testing.T) {
 	s := fresh(t)
 	for _, name := range []string{"Sam", "Ana", "Zed"} {
@@ -47,18 +47,6 @@ func TestNamedMentionsCountLivePagesAndTheNewestDay(t *testing.T) {
 		}
 	}
 
-	named, err := s.Named(ctx, "person", 10, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(named) != len(got) {
-		t.Fatalf("Named has %d rows, NamedMentions %d", len(named), len(got))
-	}
-	for i, e := range named {
-		if got[i].ID != e.ID {
-			t.Errorf("row %d is page %d, Named has page %d", i, got[i].ID, e.ID)
-		}
-	}
 	second, err := s.NamedMentions(ctx, "person", Scope{}, 1, 1)
 	if err != nil || len(second) != 1 || second[0].Title != "Sam" {
 		t.Errorf("NamedMentions(1, 1) = %+v, %v, want Sam", second, err)

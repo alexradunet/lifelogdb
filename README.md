@@ -61,8 +61,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   the catalog; the CLI's `do` and the MCP tools are generated from it, so a new action needs no client change.
   An error is an entity too: `status`, a `code` a client branches on (`stale_version`, `exists`, `not_found`, `snapshot_refused`, `restore_check_failed`,
   `invalid`, `cross_origin`, `token_required`, or the status's general name) and the message. The lists `/days`,
-  `/people`, `/places`, `/files`, `/ghosts` and `/search` take `limit` (1–500) and `offset` and link `next` and
-  `prev` ([plan 079](docs/plans/079-client-contract-hygiene.md)).
+  `/browse` and `/search` take `limit` (1–500) and `offset` and link `next` and `prev`
+  ([plan 079](docs/plans/079-client-contract-hygiene.md)).
 - **The browser gets the same entity.** `Accept: text/html` renders it with a template per class (day, page,
   person, place, metric, search, lists; `internal/api/html/`, embedded) or a generic one for any other. A
   template reads only the properties the JSON carries and places only the actions the entity offers, so a form
@@ -100,8 +100,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   The photo goes in no day page.
 - **The app shell: the Almanac design system** ([plan 092](docs/plans/092-the-app-shell.md)). Every page a browser
   gets is in one shell: a sidebar with the brand and today's date, the search, New, the sections of every day (Today,
-  Calendar) and of the record (People to Ghost pages), this month with its written days, and the
-  owner's links. Under 900 px it is a phone's layout
+  Calendar, Metrics and Browse), this month with its written days, and the owner's links. Under 900 px it is a phone's layout
   ([plan 093](docs/plans/093-words-phone-and-today.md)): a top bar (the brand, the date, Search, New), a bottom bar of
   the sections of every day and More, and the rest as a sheet over the page (`#sections`): a popover that More
   opens and Close, Escape or a tap outside closes, with no script. Inside the page a layout asks the width of its column (`@container column`), not of the
@@ -248,8 +247,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   Restoring stays the manual procedure of the cookbook.
 - **Several rows deleted at once** ([plan 107](docs/plans/107-delete-several-at-once.md)). `tombstone-pages`
   (`POST /pages/tombstone`) takes `ids`, separated by spaces or
-  commas, and tombstones them all in one write or none: a missing id is a 404 that writes nothing. The files list
-  offers it, so the browser draws a box on each tile of Media and one
+  commas, and tombstones them all in one write or none: a missing id is a 404 that writes nothing. Browse offers it
+  on pages (the ghost pages too), media and documents, so the browser draws a box on each row or tile and one
   danger button, which counts the checked boxes (a CSS counter, no script) and returns to the list with the count;
   the CLI's `do` and the MCP tools carry it as any action. It is a danger, not the owner's alone, and a revive undoes it.
 - **Metrics as cards, filed in groups** ([plan 112](docs/plans/112-metrics-as-cards.md)). `/metrics` draws each
@@ -257,35 +256,41 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   of its newest 30 readings, muted when the latest is older than 60 days. `file-pages` (`POST /pages/file`) files several pages in a category page in one write, made when it is
   missing; `move` 1 takes them out of their other categories. The page's pick bar checks the cards to file. The CLI's
   `do` and the MCP tools carry it as any action; it is not the owner's alone, as `link` is not.
-- **Categories to browse** ([plan 115](docs/plans/115-categories-to-browse.md)). A category is a page, and
-  anything is filed in it by `part-of` (D26); the owner's word (2026-10-15) is "category" everywhere, a thing may
-  be in several, and a category shows everything filed in it, whatever its type. `GET /categories` is a sidebar
-  entry: the tree by path with a count each, then Not filed, the live plain pages in no category. A category page
-  has one section, Filed here: the sub-categories first, then the rest by title, a type badge on what is not a
-  page; its margin's Backlinks no longer lists `part-of`. `create-page` takes an optional `category`: the page is
-  made and filed there in one write, a missing category made as `file-pages` makes it, and a day as the category
-  refuses the whole write (`entities_day_page` when the day has no page, `links_endpoint_types` when it has one).
-  A category page offers it as New page here. `create-person`, `create-place` and `add-file` take `category` too,
-  in the same one write ([plan 117](docs/plans/117-one-browse-view.md), rule 6); `add-file` files the page of the
-  same original when it exists, unless that page is deleted. Rejected by the owner: exclusive membership, a manual
-  order and a syntax in the body that files a page.
+- **Browse** ([plan 117](docs/plans/117-one-browse-view.md)). A category is a page, and anything is filed in it by
+  `part-of` (D26); the owner's word (2026-10-15) is "category" everywhere, a thing may be in several, and a category
+  shows everything filed in it, whatever its type. `GET /browse` (the catalog action `browse`) is one list with two
+  filters: the kind of its rows (Pages, People, Places, Media, Documents, Metrics, each chip with its count; All
+  inside a category, where it is the first chip and the default) and where it looks (Everything, what is filed
+  directly in a category, or Not filed, which follows the kind). The category tree, by path with a count each, is
+  beside the list; on a phone it is a closed fold above the chips. Each kind keeps its row and its order: a person
+  has a face, the mentions and the last day; media are tiles, newest day first, with the picture a file keeps or the
+  icon of its kind, one media kind by `media=`, and the count of each media kind in words; documents are the other
+  files, as rows. The ghost pages are a filter of Pages. The pick bar puts the checked rows in a category, and
+  deletes pages, media and documents. Metrics keeps its own board at `/metrics`. The sidebar has Today, Calendar,
+  Metrics and Browse; a phone's bottom bar is the same four with More. The old lists (`/people`, `/places`,
+  `/media`, `/files`, `/ghosts`, `/categories`) answer 308 to their Browse address, with `limit`, `offset` and
+  `new` kept; the POST routes of those paths do not change. A category page has one section, Filed here: the
+  sub-categories first, then the rest by title, a type badge on what is not a page, and Open in Browse; its
+  margin's Backlinks does not list `part-of`. `create-page`, `create-person`, `create-place` and `add-file` take an
+  optional `category`: the thing is made and filed there in one write, a missing category made as `file-pages`
+  makes it, and a day as the category refuses the whole write (`entities_day_page` when the day has no page,
+  `links_endpoint_types` when it has one). Browse in a category fills it in each New form, and a category page
+  offers New page here. `add-file` files the page of the same original when it exists, unless that page is deleted.
+  Rejected by the owner: exclusive membership, a manual order and a syntax in the body that files a page.
 - **One way to make a thing** ([plan 114](docs/plans/114-one-way-to-do-a-thing.md)). The rail's New is a menu of the
-  kinds; each kind is made on its list, whose header has its New button (a page on Home, beside Open a page).
+  kinds; each kind is made on its list of Browse, whose header has its New button (a file on the media list, a
+  metric on `/metrics`; a page also on Home, beside Open a page).
   `?new=<action>` opens that action's form on any page, and a query parameter that names a field fills it in. The
   catalog's titles say one verb for one meaning: New makes a thing, Add adds to one, Remove takes away, Restore
   brings back. The action names do not change. A number card and a day's reading tile have + Add, one value for
   that day. A page and a metric show their categories as badges, each with x, and + Add (`file-pages` with this
-  page). Media, Files and Metrics act on several things the same way: Select shows the boxes, and one bar holds
+  page). The lists of Browse and the Metrics board act on several things the same way: Select shows the boxes, and one bar holds
   the count and a button for each action the list offers.
 - **New metric, new category and a reading from `/metrics`** ([plan 113](docs/plans/113-new-metric-on-metrics.md)).
   New metric is in the header of `/metrics` and under each category's heading, not on Home. It asks what you
   record: a number with its unit, a score with its range, or done or not done (a 0/1 habit). Its category is
   made when it is new. `register-metric` takes `category`, and does both in one write. New
   category opens the file bar. Each number card has a +, which records one value for today.
-- **Media** ([plan 110](docs/plans/110-the-media-list.md)). `GET /media` is the list of the files whose type is an
-  image, a video or an audio: tiles, newest day first, with the picture a file keeps, or the icon of its kind; one
-  kind alone by `?kind=`. `GET /files` is the list of every other file (a PDF, a text), as rows. Both offer
-  `add-file` and the delete of several at once.
 - **Files** ([keep a file](docs/cookbook/keep-a-file.md), D9). `add-file` (`POST /files`, `lifelog file`) streams
   the original through SHA-256 and drops it; nothing of it is stored. `internal/preview` makes every picture itself —
   from a JPEG, PNG or GIF, or a JPEG sent for a HEIC or a video frame: scaled to 1600 px, turned upright by EXIF,

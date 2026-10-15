@@ -121,12 +121,12 @@ func TestABrowserFormReturnsToThePageThatSentIt(t *testing.T) {
 		}
 	}
 	// The feedback of a write that has some goes to the page returned to, with its receipt.
-	rec := submit(h, "/pages", url.Values{"title": {"Notes"}, "body": {"[[bad/name]]"}, "back": {"/people"}}, "")
-	if loc := rec.Header().Get("Location"); !feedbackLocation(loc, "/people") || !strings.Contains(browse(t, h, loc), "bad/name") {
+	rec := submit(h, "/pages", url.Values{"title": {"Notes"}, "body": {"[[bad/name]]"}, "back": {"/browse?kind=person"}}, "")
+	if loc := rec.Header().Get("Location"); !feedbackLocation(loc, "/browse?kind=person") || !strings.Contains(browse(t, h, loc), "bad/name") {
 		t.Errorf("feedback did not follow the return path: %q", loc)
 	}
 	// A JSON client: the answer is the resource, whatever back says.
-	req := httptest.NewRequest("POST", "/days/2026-09-29/capture", strings.NewReader(url.Values{"text": {"json"}, "back": {"/people"}}.Encode()))
+	req := httptest.NewRequest("POST", "/days/2026-09-29/capture", strings.NewReader(url.Values{"text": {"json"}, "back": {"/browse?kind=person"}}.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	out := httptest.NewRecorder()
 	h.ServeHTTP(out, req)

@@ -1,7 +1,8 @@
 {{/* A page, a person, a place or a file (docs/plans/095-the-leaf-and-its-margin.md): the head with its
      title (a day page's in words); the sheet with the editor under the head, so a long page is edited without a
      scroll to its end, then the body, then Filed here on a category page (what is part-of it, the categories
-     first, with New page here; docs/plans/115-categories-to-browse.md); the margin with its facts, its typed
+     first, with New page here and a link to the category in Browse; docs/plans/115-categories-to-browse.md,
+     docs/plans/117-one-browse-view.md); the margin with its facts, its typed
      links, its other backlinks and its other actions. A day page's title is a day in words wherever a page is
      listed. */}}
 {{define "page"}}{{template "head" .}}
@@ -29,7 +30,7 @@
 <p>{{range $i, $t := .}}{{if $i}}, {{end}}<code>[[{{$t}}]]</code>{{end}}</p></div>{{end}}
 </section>{{end}}
 {{with $.Filed}}<section class="group filed" aria-label="Filed here">
-<div class="panel-head"><h2>Filed here <small>{{len .Subs | add (len .Items)}}</small></h2>{{with $.Action "create-page"}}{{template "boxed" (form . "hide" "category" "button" "New page here" "back" $.Here)}}{{end}}</div>
+<div class="panel-head"><h2>Filed here <small>{{len .Subs | add (len .Items)}}</small></h2><a href="/browse?in={{$.Title}}">Open in Browse</a>{{with $.Action "create-page"}}{{template "boxed" (form . "hide" "category" "button" "New page here" "back" $.Here)}}{{end}}</div>
 <ul class="plain rows">{{range .Subs}}<li><a class="entry" href="{{.Href}}"><span class="first">{{.Title}}</span><span class="meta"><span class="badge">category</span></span></a></li>{{end}}{{range .Items}}<li><a class="entry" href="{{.Href}}"><span class="first">{{$.Date .Title}}</span><span class="meta">{{range .Class}}{{if ne . "page"}}<span class="badge">{{.}}</span>{{end}}{{end}}</span></a></li>{{end}}</ul>
 </section>{{end}}
 </div>

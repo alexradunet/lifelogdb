@@ -17,12 +17,12 @@ func TestEveryKindOfTheNewMenuOpensItsForm(t *testing.T) {
 	menu := day[strings.Index(day, `<div class="new-menu" id="new-menu" popover>`):]
 	menu = menu[:strings.Index(menu, "</nav></div>")]
 	for _, kind := range []struct{ title, href, action string }{
-		{"Page", "/?new=create-page", "create-page"},
-		{"Person", "/people?new=create-person", "create-person"},
-		{"Place", "/places?new=create-place", "create-place"},
+		{"Page", "/browse?kind=page&new=create-page", "create-page"},
+		{"Person", "/browse?kind=person&new=create-person", "create-person"},
+		{"Place", "/browse?kind=place&new=create-place", "create-place"},
 		{"Metric", "/metrics?new=register-metric", ""},
 		{"Reading", "/metrics", ""},
-		{"File", "/files?new=add-file", "add-file"},
+		{"File", "/browse?kind=media&new=add-file", "add-file"},
 	} {
 		link := regexp.MustCompile(`<a href="` + regexp.QuoteMeta(strings.ReplaceAll(kind.href, "&", "&amp;")) + `">(<svg[^>]*>.*?</svg>)?` + kind.title + `</a>`)
 		if !link.MatchString(menu) {
@@ -49,7 +49,7 @@ func TestEveryKindOfTheNewMenuOpensItsForm(t *testing.T) {
 
 func TestALinkOpensAFormAndFillsItsFields(t *testing.T) {
 	_, h := freshOn(t, fixedToday)
-	people := browse(t, h, "/people?new=create-person&title=Ana+Popescu&name=Ana")
+	people := browse(t, h, "/browse?kind=person&new=create-person&title=Ana+Popescu&name=Ana")
 	form := people[strings.Index(people, `<details class="action" open>`):]
 	form = form[:strings.Index(form, "</details>")]
 	for _, want := range []string{`data-action="create-person"`, `name="title" value="Ana Popescu"`, `name="name" value="Ana"`, `autofocus`} {
@@ -62,7 +62,7 @@ func TestALinkOpensAFormAndFillsItsFields(t *testing.T) {
 	}
 
 	// A name no action has opens nothing, and with no ?new= every form stays closed.
-	for _, path := range []string{"/people?new=nothing&title=Ana", "/people"} {
+	for _, path := range []string{"/browse?kind=person&new=nothing&title=Ana", "/browse?kind=person"} {
 		if body := browse(t, h, path); strings.Contains(body, `<details class="action" open>`) || strings.Contains(body, `value="Ana"`) {
 			t.Errorf("%s opens or fills a form", path)
 		}
@@ -186,8 +186,8 @@ func TestAPagesCategoriesAreBadges(t *testing.T) {
 	}
 }
 
-// TestEveryListSelectsTheSameWay: Media, Files and Metrics draw one pick bar, after their boxes, with Select
-// and a button for each action the list offers; Metrics offers no Delete of several.
+// TestEveryListSelectsTheSameWay: the lists of Browse and the Metrics board draw one pick bar, after their boxes,
+// with Select and a button for each action the list offers; a list of metrics offers no Delete of several.
 func TestEveryListSelectsTheSameWay(t *testing.T) {
 	c, h := freshOn(t, fixedToday)
 	ctx := t.Context()
@@ -198,7 +198,8 @@ func TestEveryListSelectsTheSameWay(t *testing.T) {
 		must(c.Do(ctx, find(root, "add-file"), map[string]string{"title": title, "sha256": strings.Repeat(map[string]string{"Scan.jpg": "ab", "Notes.pdf": "cd"}[title], 32), "mime": mime}))
 	}
 	for _, list := range []struct{ path, put, del string }{
-		{"/media", "", "/pages/tombstone"}, {"/files", "", "/pages/tombstone"}, {"/metrics", "/pages/file", ""},
+		{"/browse?kind=media", "/pages/file", "/pages/tombstone"}, {"/browse?kind=document", "/pages/file", "/pages/tombstone"},
+		{"/browse?kind=metric", "/pages/file", ""}, {"/metrics", "/pages/file", ""},
 	} {
 		body := browse(t, h, list.path)
 		if strings.Count(body, `id="pick"`) != 1 || !strings.Contains(body, `<label class="pick-toggle button small"><input type="checkbox" class="pick-on">Select</label>`) {

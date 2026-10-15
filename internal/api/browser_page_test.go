@@ -60,8 +60,8 @@ func TestEveryPageIsSemanticHTML(t *testing.T) {
 	if body := page(t, h, "/days/2026-01-01"); !strings.Contains(body, `<a href="/months/current" aria-current="page">`) {
 		t.Error("a day that is not today does not mark Calendar current")
 	}
-	if body := page(t, h, "/people"); !strings.Contains(body, `<a href="/people" aria-current="page">`) {
-		t.Error("the sidebar does not mark People current on its page")
+	if body := page(t, h, "/browse?kind=person"); !strings.Contains(body, `<a href="/browse" aria-current="page">`) {
+		t.Error("the sidebar does not mark Browse current on its page")
 	}
 }
 

@@ -57,17 +57,34 @@ An error is an entity of class `error` with `properties`:
 
 ## Pages of a list
 
-`/days`, `/people`, `/places`, `/media`, `/files`, `/ghosts` and `/search` take `limit` (1–500; defaults 60 for days, 50 for
-search, 200 otherwise) and `offset` (0 or more), carry both in their properties, and link `next` when a further row
-exists and `prev` past the first page. Orders: days newest first; people and places by title; media and files newest day first;
-ghosts oldest first; search by rank.
+`/days`, `/browse` and `/search` take `limit` (1–500; defaults 60 for days, 50 for search, 200 for browse) and
+`offset` (0 or more), carry both in their properties, and link `next` when a further row exists and `prev` past the
+first page. Orders: days newest first; search by rank; browse by the kind of its rows ([browse](#browse)).
+
+## The old addresses of the lists
+
+A `GET` of a list that [browse](#browse) replaced answers `308 Permanent Redirect` to its Browse address, with its
+`limit`, `offset` and `new` kept (docs/plans/117-one-browse-view.md):
+
+| old address | answers 308 to |
+|---|---|
+| `/people` | `/browse?kind=person` |
+| `/places` | `/browse?kind=place` |
+| `/media`, `/media?kind=image` | `/browse?kind=media`, `/browse?kind=media&media=image` |
+| `/files` | `/browse?kind=document` |
+| `/ghosts` | `/browse?ghosts=1&kind=page` |
+| `/categories` | `/browse` |
+
+The `POST` routes of `/people`, `/places` and `/files` (`create-person`, `create-place`, `add-file`) do not change.
 
 ## Classes
 
 ### root
 
-`GET /`: today at a glance. Links: `today`, `days`, `people`, `places`, `media`, `files`, `metrics`,
-`ghosts`, `actions`, `calendar` (this month), `week` (this week), `year` (this year). Actions: `capture` (for today), `search`,
+`GET /`: today at a glance. Links: `today`, `days`, `browse`, `categories` (`/browse`), `people`
+(`/browse?kind=person`), `places` (`/browse?kind=place`), `media` (`/browse?kind=media`), `files`
+(`/browse?kind=document`), `metrics`, `ghosts` (`/browse?ghosts=1&kind=page`), `actions`, `calendar` (this month),
+`week` (this week), `year` (this year). Actions: `capture` (for today), `search`,
 `find`, `open-day`,
 `create-page`, `create-person`, `create-place`, `add-file`,
 `record`, `register-metric` (owner), `snapshot` (owner).
@@ -91,42 +108,13 @@ ghosts oldest first; search by rank.
 `GET /actions`: no properties; `actions` is the whole catalog with templated hrefs. With an import workspace the
 import actions are included and the link `import` leads to its status.
 
-### days, people, places, ghosts
+### days
 
-`GET /days`, `/people`, `/places`, `/ghosts`: one page of a list, each row an embedded `item` link to the page (with
-`class` the page's type where it has one). `people` and `places` offer `create-person` and `create-place`.
+`GET /days`: one page of the live day pages, newest first, each an embedded `item` link to its day.
 
 | property | type | meaning |
 |---|---|---|
 | `limit` | integer | the page size used |
-| `offset` | integer | the rows skipped |
-| `rows[]` | list | `people` and `places`: one row for each `item` link, in the same order |
-| `rows[].id` | integer | the page's id |
-| `rows[].title` | string | its title |
-| `rows[].mentions` | integer | the live pages that link to it, of any kind, each counted once |
-| `rows[].last_day` | string | the day of the newest live day page among them; absent when there is none |
-| `rows[].picture` | string | `people` only: the href of the preview of the first live file with a preview that the person's body embeds; absent when there is none |
-
-### categories
-
-`GET /categories`: the category tree, then one page of the plain pages filed nowhere. A category is a page that
-something is `part-of` (D26). Each category is an embedded `category` link to its page, and each unfiled page an
-embedded `item` link.
-
-| property | type | meaning |
-|---|---|---|
-| `categories[]` | list | every category page, by path, as [metrics](#metrics) `categories[]` |
-| `categories[].id` | integer | the category's page id |
-| `categories[].title` | string | its title |
-| `categories[].path` | string | the titles from the top, joined by `/` |
-| `categories[].count` | integer | how many live things are filed directly in it, the categories under it included and a day page not; absent when none |
-| `unfiled[]` | list | the live plain pages in no category that are not categories, by title: not a day page, and not a metric, a person, a place or a file |
-| `unfiled[].kind` | string | `page` |
-| `unfiled[].id` | integer | the page's id |
-| `unfiled[].title` | string | its title |
-| `unfiled[].entity_type` | string | `page` |
-| `unfiled[].note` | string | absent |
-| `limit` | integer | the page size of `unfiled`, 200 by default |
 | `offset` | integer | the rows skipped |
 
 ### browse
@@ -150,10 +138,10 @@ A page is a plain page: a day page is in no list. Media and documents are the fi
 type. Orders: pages, people, places and metrics by title, in any case (as the tree orders the categories); media and documents newest day first; `all` the categories
 first, then by title; ghosts oldest first.
 
-Each row is an embedded `item` link (class: the row's `type`), and each category of the tree an embedded `category`
-link to Browse in that category (it keeps a `kind` the query names, but `all`). Links: `self` (with the filters),
-`index`, `metrics`, a `kind` link for each chip (class: its kind; it keeps `in` and `unfiled`; `all` inside a
-category only), `everything` and `unfiled` (the ends of the tree), `ghosts`, with `kind=media` also `pictures`,
+A category is a page that something is `part-of` (D26). Each row is an embedded `item` link (class: the row's
+`type`), and each category of the tree an embedded `category` link to Browse in that category (it keeps a `kind` the
+query names, but `all`). Links: `self` (with the filters), `index`, `metrics`, a `kind` link for each chip (class:
+its kind; it keeps `in` and `unfiled`; `all` inside a category only, and there the first), `everything` and `unfiled` (the ends of the tree), `ghosts`, with `kind=media` also `pictures`,
 `videos` and `recordings`, and `prev`/`next`. Actions: the New of the kind (`create-page`, `create-person`,
 `create-place`, `add-file`, whose `original` carries `accept` for media; none for `metric`, `all` and the ghosts),
 with `category` filled inside a category: each of them makes the thing and files it there in one write, and a
@@ -179,7 +167,11 @@ too), `media` and `document`.
 | `counts.metric` | integer | the metrics |
 | `counts.all` | integer | inside a category only: the sum of the kinds |
 | `counts.ghosts` | integer | the rows of `ghost_pages`, in any scope |
-| `categories[]` | list | the category tree, as [categories](#categories) `categories[]` |
+| `media_counts` | object | `kind=media` only: the live files of each media kind in the scope of the list, whatever `media` this page reads |
+| `media_counts.image` | integer | the pictures |
+| `media_counts.video` | integer | the videos |
+| `media_counts.audio` | integer | the recordings |
+| `categories[]` | list | every category page, by path, as [metrics](#metrics) `categories[]` |
 | `categories[].id` | integer | the category's page id |
 | `categories[].title` | string | its title |
 | `categories[].path` | string | the titles from the top, joined by `/` |
@@ -195,39 +187,10 @@ too), `media` and `document`.
 | `rows[].picture` | string | a person, a file: the address of its picture; absent when none |
 | `rows[].mime` | string | a file (not in `all`): the type of the original |
 | `rows[].file_kind` | string | a file: the first part of its type, `image`, `video`, `audio`, `application`, `text`, … |
-| `rows[].day` | string | a file (not in `all`): its day, as [media](#media-files) `rows[].day`; absent when none |
+| `rows[].day` | string | a file (not in `all`): its day (the day given, a photo's EXIF day, else the day it was kept), else the day of the newest live day page that shows it; absent when it has neither |
 | `rows[].unit` | string | a metric: its unit; absent for a count or a habit |
 | `limit` | integer | the page size used |
 | `offset` | integer | the rows skipped |
-
-### media, files
-
-`GET /media`: one page of the live files whose type is `image/*`, `video/*` or `audio/*`, newest day first, each row
-an embedded `item` link to the file's page (class `file`). `?kind=image`, `video` or `audio` reads one kind; any
-other word is refused (422). Links: `pictures`, `videos`, `recordings` (the three kinds). Actions: `add-file`
-(its `original` field carries `accept`, the three kinds) and `tombstone-pages`, the delete of several at once (its
-answer is the class `tombstoned`), which a browser draws as a box on each row.
-
-`GET /files`: the same page of every other live file (a PDF, a text), newest day first, with the link `media` and the
-actions `add-file` and `tombstone-pages`. It carries no `kind` and no `counts`.
-
-| property | type | meaning |
-|---|---|---|
-| `limit` | integer | the page size used |
-| `offset` | integer | the rows skipped |
-| `kind` | string | `media`: the kind read: `image`, `video`, `audio`, or `""` for all three |
-| `counts` | object | `media`: the live files of each kind, whatever kind this page reads |
-| `counts.image` | integer | the live pictures |
-| `counts.video` | integer | the live videos |
-| `counts.audio` | integer | the live recordings |
-| `rows[]` | list | one row for each `item` link, in the same order |
-| `rows[].id` | integer | the page's id |
-| `rows[].title` | string | its title |
-| `rows[].kind` | string | the first part of its type: `image`, `video` or `audio` in `media`; `application`, `text`, … in `files` |
-| `rows[].mime` | string | the type of the original |
-| `rows[].picture` | string | the address of its picture (`GET /pages/{id}/preview`); absent when it keeps none |
-| `rows[].day` | string | its day (the day given, a photo's EXIF day, else the day it was kept), else the day of the newest live day page that shows it; absent when it has neither |
-| `rows[].mentions` | integer | the live pages that link to it, of any kind, each counted once |
 
 ### search
 

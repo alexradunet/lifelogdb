@@ -125,7 +125,7 @@ func num(v any) string {
 // viewOf names the template that shows an entity of a class; a class without one is shown by "generic".
 var viewOf = map[string]string{
 	"root": "root", "day": "day", "page": "page", "person": "page", "place": "page", "file": "page",
-	"days": "list", "people": "list", "places": "list", "media": "media", "files": "files", "ghosts": "list", "search": "search", "categories": "category-tree", "browse": "browse",
+	"days": "list", "search": "search", "browse": "browse",
 
 	"metrics": "metrics", "series": "metric", "metric": "page", "measurement": "measurement", "error": "error", "login": "login",
 	"month": "month", "week": "week", "year": "year", "styleguide": "styleguide",
@@ -215,10 +215,10 @@ func renderHTML(w http.ResponseWriter, r *http.Request, status int, e *Entity, s
 	io.Copy(w, &b)
 }
 
-// navItems are the sidebar's links, in order, by group: "home" is the brand, "day" the sections of every day,
-// "record" the sections of the record, "owner" the links at its foot. Each stands for the pages under its paths, so
-// the one the browser is on is marked (Nav). A page's own neighbours need no entry here, since every template
-// places them from the entity's links.
+// navItems are the sidebar's links, in order, by group: "home" is the brand, "day" the sections of every day (on a
+// phone, the bottom bar with More), "owner" the links at its foot. Each stands for the pages under its paths, so the
+// one the browser is on is marked (Nav). A page's own neighbours need no entry here, since every template places them
+// from the entity's links. Browse is the one list of the record (docs/plans/117-one-browse-view.md, rule 7).
 var navItems = []struct {
 	Title, Href, Icon string
 	Paths             []string // the pages it stands for: these paths and the paths under them
@@ -227,13 +227,8 @@ var navItems = []struct {
 	{"Lifelog", "/", "", []string{"/"}, "home"},
 	{"Today", "/days/today", "today", []string{"/days/today"}, "day"},
 	{"Calendar", "/months/current", "calendar", []string{"/months", "/weeks", "/years", "/days"}, "day"},
-	{"Categories", "/categories", "categories", []string{"/categories"}, "record"},
-	{"People", "/people", "people", []string{"/people"}, "record"},
-	{"Places", "/places", "places", []string{"/places"}, "record"},
-	{"Media", "/media", "media", []string{"/media"}, "record"},
-	{"Files", "/files", "files", []string{"/files"}, "record"},
-	{"Metrics", "/metrics", "metrics", []string{"/metrics"}, "record"},
-	{"Ghost pages", "/ghosts", "ghosts", []string{"/ghosts"}, "record"},
+	{"Metrics", "/metrics", "metrics", []string{"/metrics"}, "day"},
+	{"Browse", "/browse", "browse", []string{"/browse"}, "day"},
 	{"Every action", "/actions", "", []string{"/actions"}, "owner"},
 	{"Integrity checks", "/integrity", "", []string{"/integrity"}, "owner"},
 }
@@ -245,15 +240,16 @@ type navItem struct {
 }
 
 // newKinds are the items of the rail's New menu (docs/plans/114-one-way-to-do-a-thing.md): each kind is made on its
-// list, and the link opens the list with its New form open. A page has no list: Home has New page. A reading is
-// added on its metric's card.
+// list, and the link opens the list with its New form open. A page, a person, a place and a file are made on their
+// Browse list (docs/plans/117-one-browse-view.md, rule 7); a file on the media list. A metric is made on /metrics,
+// and a reading is added on its metric's card.
 var newKinds = []struct{ Title, Href, Icon string }{
-	{"Page", "/?new=create-page", "new"},
-	{"Person", "/people?new=create-person", "people"},
-	{"Place", "/places?new=create-place", "places"},
+	{"Page", "/browse?kind=page&new=create-page", "new"},
+	{"Person", "/browse?kind=person&new=create-person", "people"},
+	{"Place", "/browse?kind=place&new=create-place", "places"},
 	{"Metric", "/metrics?new=register-metric", "metrics"},
 	{"Reading", "/metrics", "metrics"},
-	{"File", "/files?new=add-file", "files"},
+	{"File", "/browse?kind=media&new=add-file", "files"},
 }
 
 // NewKinds are the items of the rail's New menu.

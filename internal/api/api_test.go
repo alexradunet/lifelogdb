@@ -515,9 +515,15 @@ func TestRenamedIdentityRetainsActionsAndAliasWrites(t *testing.T) {
 	}
 }
 
-func feedbackLocation(location, path string) bool {
+// feedbackLocation reports a Location that is the page back (a path, with its query when it has one) and one
+// receipt of feedback.
+func feedbackLocation(location, back string) bool {
+	want, err := url.Parse(back)
+	if err != nil {
+		return false
+	}
 	u, err := url.Parse(location)
-	if err != nil || u.Scheme != "" || u.Host != "" || u.Path != path || u.Fragment != "" {
+	if err != nil || u.Scheme != "" || u.Host != "" || u.Path != want.Path || u.Fragment != "" {
 		return false
 	}
 	q, err := url.ParseQuery(u.RawQuery)
@@ -525,7 +531,8 @@ func feedbackLocation(location, path string) bool {
 		return false
 	}
 	values := q["feedback"]
-	if len(q) != 1 || len(values) != 1 || len(values[0]) != 64 {
+	q.Del("feedback")
+	if q.Encode() != want.Query().Encode() || len(values) != 1 || len(values[0]) != 64 {
 		return false
 	}
 	_, err = hex.DecodeString(values[0])

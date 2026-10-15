@@ -24,12 +24,12 @@ func TestSetPictureFromThePersonPage(t *testing.T) {
 	ana := must(c.Do(ctx, find(root, "create-person"), map[string]string{"title": "Ana"}))
 	must(c.Do(ctx, find(ana, "save-body"), map[string]string{"body": "Met at school."}))
 	lake := must(c.Do(ctx, find(root, "create-place"), map[string]string{"title": "Lake"}))
-	for _, e := range []*api.Entity{lake, must(c.Get(ctx, "/people")), must(c.Get(ctx, "/places"))} {
+	for _, e := range []*api.Entity{lake, must(c.Get(ctx, "/browse?kind=person")), must(c.Get(ctx, "/browse?kind=place"))} {
 		if hasAction(e, "set-picture") {
 			t.Errorf("%s offers set-picture", e.Title)
 		}
 	}
-	if body := page(t, h, "/people"); strings.Contains(body, "/picture\"") {
+	if body := page(t, h, "/browse?kind=person"); strings.Contains(body, "/picture\"") {
 		t.Errorf("the people sheet draws a form to set a picture")
 	}
 	set := pictureAction(t, must(c.Get(ctx, href(ana, "self"))), href(ana, "self")+"/picture")
@@ -49,7 +49,7 @@ func TestSetPictureFromThePersonPage(t *testing.T) {
 	if got := str(props(must(c.Get(ctx, href(ana, "self"))))["body"]); got != "![["+title+"]]\n\nMet at school." {
 		t.Errorf("Ana's body = %q", got)
 	}
-	rows, _ := props(must(c.Get(ctx, "/people")))["rows"].([]any)
+	rows, _ := props(must(c.Get(ctx, "/browse?kind=person")))["rows"].([]any)
 	if len(rows) != 1 || !strings.HasSuffix(str(rows[0].(map[string]any)["picture"]), "/preview") {
 		t.Fatalf("rows = %v, want Ana with a picture", rows)
 	}
@@ -58,7 +58,7 @@ func TestSetPictureFromThePersonPage(t *testing.T) {
 	other, _ := jpegFile(t, "other.jpg", 30, 40)
 	kept := must(c.DoFiles(ctx, find(root, "add-file"), map[string]string{"title": "Other.jpg"}, map[string]string{"original": other}))
 	must(c.Do(ctx, set, map[string]string{"title": "Other.jpg"}))
-	rows, _ = props(must(c.Get(ctx, "/people")))["rows"].([]any)
+	rows, _ = props(must(c.Get(ctx, "/browse?kind=person")))["rows"].([]any)
 	if got := str(rows[0].(map[string]any)["picture"]); got != hrefOf(kept, "preview") || got == first {
 		t.Errorf("Ana's picture = %q, want %q", got, hrefOf(kept, "preview"))
 	}

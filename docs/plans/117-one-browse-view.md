@@ -161,3 +161,26 @@ Each step is one commit, with its tests, and can ship alone.
 - **Checks run for step 2 (Linux):** `gofmt -l` clean; `go generate ./... && go vet ./... && go test ./...` green;
   `go test -count=1 -shuffle=on ./internal/api ./internal/core ./internal/mcp ./cmd/lifelog` green. Not run:
   `staticcheck`, `govulncheck`, the race check, Windows, a look in a browser.
+- **Step 3, the navigation, the redirects, and the old lists deleted.** The sidebar's sections of every day are
+  Today, Calendar, Metrics and Browse (`navItems`), and a phone's bottom bar is the same four with More; the record
+  group is gone, and More is marked on an owner's page only. Browse has the folder icon (`browse`). The New menu
+  opens Page, Person and Place on their Browse lists and File on the media list, each with its form open (`?new=`).
+  `GET /people`, `/places`, `/media`, `/files`, `/ghosts` and `/categories` answer 308 to their Browse address
+  (`oldLists`, `toBrowse` in `serve.go`), with `limit`, `offset` and `new` kept and the media list's `kind=` as
+  `media=`; their POST routes do not change. Home keeps its link rels with the Browse hrefs and adds `browse`. Filed
+  here on a category page links Open in Browse (`/browse?in=<title>`). Inside a category the All chip is the first.
+  The media list of Browse says the count of each media kind in words, in the scope of the list (`media_counts`,
+  `Store.MediaCounts` with a scope). Deleted: the handlers `named`, `ghosts`, `media`, `files` and `categoriesView`,
+  the templates `media`, `files` and `category-tree` (`categories.html`), the people, places and ghost parts of
+  `list` (it draws the days alone), their `viewOf` entries, the icons `ghosts` and `media`, the rule of the record
+  group in `app.css`, and the reads `Store.Named` and `Store.Unfiled`, which nothing else used. The tests of the old lists assert the same behaviour on Browse;
+  `tombstones_test.go` asserts that the ghost list offers Delete. New tests: `TestTheOldListsAnswer308ToBrowse`,
+  `TestHomeLinksTheListsOfBrowse`, `TestTheSidebarHasMetricsAndBrowse`, `TestACategoryPageOpensInBrowse`,
+  `TestTheMediaCountsFollowTheScope`; `TestThePhoneHasABottomBarAndASheet` and the New menu test have the new
+  entries. Not carried to Browse: the sentence "No category yet" of the empty tree; an empty tree is Everything and
+  Not filed. Open for the owner: New file opens the media list (rule 7), where `original` accepts media only
+  (rule 2), so a document cannot be picked from the New menu on a phone; before step 3 New file opened `/files`,
+  with no `accept`.
+- **Checks run for step 3 (Linux):** `gofmt -l` clean; `go generate ./... && go vet ./... && go test ./...` green;
+  `go test -count=1 -shuffle=on ./internal/api ./internal/core ./internal/mcp ./cmd/lifelog` green. Not run:
+  `staticcheck`, `govulncheck`, the race check, Windows, a look in a browser.

@@ -5,12 +5,12 @@ import (
 	"testing"
 )
 
-// TestTheGhostPagesSayWhatTheyAre: the ghost pages say what a ghost page is under their title, and an empty list says
-// why it is empty, not how to make a page.
+// TestTheGhostPagesSayWhatTheyAre: the ghost list of Browse says what a ghost page is under its title, and an empty
+// list says why it is empty, not how to make a page.
 func TestTheGhostPagesSayWhatTheyAre(t *testing.T) {
 	_, h := freshOn(t, fixedToday)
-	body := browse(t, h, "/ghosts")
-	for _, want := range []string{`<p class="sub">Empty pages, older than 30 days, that nothing links to or from.</p>`,
+	body := browse(t, h, "/browse?ghosts=1")
+	for _, want := range []string{`<p class="sub"><span>Ghost pages</span><span>Empty pages, older than 30 days, that nothing links to or from.</span></p>`,
 		`<p class="empty">No ghost page: every page has text or a link.</p>`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the ghost pages lack %s", want)

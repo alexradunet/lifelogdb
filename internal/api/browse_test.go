@@ -239,19 +239,14 @@ func TestBrowseNotFiledFollowsTheKind(t *testing.T) {
 			t.Errorf("%s: unfiled is %v", tc.path, props(e)["unfiled"])
 		}
 	}
-	// For pages, Not filed is the list Categories showed: the same rows as Store.Unfiled.
-	want, err := s.Unfiled(ctx, 200, 0)
-	if err != nil {
+	// For pages, Not filed is the list Categories showed: the plain pages in no category that are not categories
+	// themselves (Family and Cousins are), and never a day page (the day page of 2031-05-01 is filed; one of another
+	// day is filed nowhere).
+	if _, _, err := s.Capture(ctx, "cli", "2031-05-03", "a day", nil); err != nil {
 		t.Fatal(err)
 	}
-	rows := props(must(c.Get(ctx, "/browse?unfiled=1")))["rows"].([]any)
-	if len(rows) != len(want) {
-		t.Fatalf("%d rows, Unfiled has %d", len(rows), len(want))
-	}
-	for i, w := range want {
-		if r := rows[i].(map[string]any); fmt.Sprint(r["id"]) != fmt.Sprint(w.ID) || r["title"] != w.Title {
-			t.Errorf("row %d %v, Unfiled %+v", i, r, w)
-		}
+	if got := browseRows(t, must(c.Get(ctx, "/browse?unfiled=1")), "category"); got != "Alpha:category=-" {
+		t.Errorf("pages not filed: %s", got)
 	}
 }
 
@@ -298,8 +293,9 @@ func TestBrowseCountsEachChipInTheScopeOfTheList(t *testing.T) {
 		"place=/browse?kind=place&unfiled=1 media=/browse?kind=media&unfiled=1 document=/browse?kind=document&unfiled=1 metric=/browse?kind=metric&unfiled=1"; got != want {
 		t.Errorf("chips not filed:\n got %s\nwant %s", got, want)
 	}
-	if got := chips(must(c.Get(ctx, "/browse?in=Family&kind=media&media=image"))); !strings.HasSuffix(got, "metric=/browse?in=Family&kind=metric all=/browse?in=Family&kind=all") ||
-		!strings.Contains(got, "media=/browse?in=Family&kind=media ") {
+	// Inside a category All is the default, and its chip comes first.
+	if got := chips(must(c.Get(ctx, "/browse?in=Family&kind=media&media=image"))); !strings.HasPrefix(got, "all=/browse?in=Family&kind=all page=/browse?in=Family&kind=page ") ||
+		!strings.HasSuffix(got, " metric=/browse?in=Family&kind=metric") || !strings.Contains(got, "media=/browse?in=Family&kind=media ") {
 		t.Errorf("chips in Family: %s", got)
 	}
 	// The ends of the tree keep a kind the URL names; without one, a branch opens All in that category.
@@ -559,8 +555,7 @@ func TestTheBrowsePageDrawsTheTreeTheChipsAndTheRows(t *testing.T) {
 		fmt.Sprintf(`<li class="depth-0"><a class="entry" href="/browse?in=Family" aria-current="page"><span class="first">Family</span><span class="meta">5</span></a></li>`),
 		`<li class="depth-1"><a class="entry" href="/browse?in=Cousins"><span class="first">Cousins</span><span class="meta">2</span></a></li>`,
 		`<a class="entry" href="/browse?unfiled=1"><span class="first">Not filed</span>`,
-		`<nav class="kinds chips" aria-label="Kind"><a href="/browse?in=Family&amp;kind=page">Pages <small>2</small></a>`,
-		`<a href="/browse?in=Family&amp;kind=all" aria-current="page">All <small>5</small></a>`,
+		`<nav class="kinds chips" aria-label="Kind"><a href="/browse?in=Family&amp;kind=all" aria-current="page">All <small>5</small></a><a href="/browse?in=Family&amp;kind=page">Pages <small>2</small></a>`,
 		`<span class="first">Cousins</span><span class="meta"><span class="badge category">category</span></span>`,
 		`<span class="first">Ana</span><span class="meta"><span class="badge">person</span></span>`,
 	} {

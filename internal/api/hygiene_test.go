@@ -122,7 +122,7 @@ func TestListsPage(t *testing.T) {
 		list   string
 		titles []string
 	}{
-		{"/people?limit=3", []string{"Person 1", "Person 2", "Person 3", "Person 4", "Person 5", "Person 6", "Person 7"}},
+		{"/browse?kind=person&limit=3", []string{"Person 1", "Person 2", "Person 3", "Person 4", "Person 5", "Person 6", "Person 7"}},
 		{"/days?limit=3", []string{"2031-03-07", "2031-03-06", "2031-03-05", "2031-03-04", "2031-03-03", "2031-03-02", "2031-03-01"}},
 	} {
 		titles, sizes := walk(t, c, tc.list)
@@ -151,7 +151,7 @@ func TestListsPage(t *testing.T) {
 	for _, tc := range []struct {
 		list  string
 		limit int
-	}{{"/days", 60}, {"/people", 200}, {"/media", 200}, {"/files", 200}, {"/places", 200}, {"/ghosts", 200}, {"/search?q=needleword", 50}} {
+	}{{"/days", 60}, {"/browse", 200}, {"/browse?kind=person", 200}, {"/browse?kind=media", 200}, {"/browse?ghosts=1", 200}, {"/search?q=needleword", 50}} {
 		e := must(c.Get(t.Context(), tc.list))
 		p, _ := e.Properties.(map[string]any)
 		if fmt.Sprint(p["limit"]) != fmt.Sprint(tc.limit) || fmt.Sprint(p["offset"]) != "0" || hrefOf(e, "next") != "" || hrefOf(e, "prev") != "" {
@@ -159,18 +159,18 @@ func TestListsPage(t *testing.T) {
 		}
 	}
 	// The page past the end is empty with a prev link; bad values are refused.
-	last := must(c.Get(t.Context(), "/people?limit=3&offset=9"))
-	if len(last.Entities) != 0 || hrefOf(last, "prev") != "/people?limit=3&offset=6" || hrefOf(last, "next") != "" {
+	last := must(c.Get(t.Context(), "/browse?kind=person&limit=3&offset=9"))
+	if len(last.Entities) != 0 || hrefOf(last, "prev") != "/browse?kind=person&limit=3&offset=6" || hrefOf(last, "next") != "" {
 		t.Errorf("past the end: %d items prev=%q next=%q", len(last.Entities), hrefOf(last, "prev"), hrefOf(last, "next"))
 	}
-	for _, bad := range []string{"/people?limit=0", "/people?limit=501", "/people?limit=x", "/people?offset=-1", "/people?offset=x", "/search?q=a&limit=0"} {
+	for _, bad := range []string{"/browse?limit=0", "/browse?limit=501", "/browse?limit=x", "/browse?offset=-1", "/browse?offset=x", "/search?q=a&limit=0"} {
 		if _, err := c.Get(t.Context(), bad); !clientStatus(err, 422) {
 			t.Errorf("%s: %v", bad, err)
 		}
 	}
 	// The browser sees the links.
-	body := browse(t, h, "/people?limit=3&offset=3")
-	if !strings.Contains(body, `href="/people?limit=3&amp;offset=0" rel="prev"`) || !strings.Contains(body, `href="/people?limit=3&amp;offset=6" rel="next"`) {
+	body := browse(t, h, "/browse?kind=person&limit=3&offset=3")
+	if !strings.Contains(body, `href="/browse?kind=person&amp;limit=3&amp;offset=0" rel="prev"`) || !strings.Contains(body, `href="/browse?kind=person&amp;limit=3&amp;offset=6" rel="next"`) {
 		t.Errorf("people page 2: %.600s", body)
 	}
 	if body := browse(t, h, "/search?q=needleword&limit=3"); !strings.Contains(body, `rel="next"`) || strings.Contains(body, `rel="prev"`) {

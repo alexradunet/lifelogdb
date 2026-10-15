@@ -87,8 +87,7 @@ func pageTitles(rows []PageRow) string {
 }
 
 // TestPlainPagesInEachScope: the plain pages by title, a category marked; in a category only what is filed directly
-// in it; not filed, the pages in no category that are not categories, the rows of Unfiled. A day page and a
-// tombstone are in no list.
+// in it; not filed, the pages in no category that are not categories. A day page and a tombstone are in no list.
 func TestPlainPagesInEachScope(t *testing.T) {
 	s, ids := browseFixture(t)
 	for _, tc := range []struct {
@@ -99,7 +98,6 @@ func TestPlainPagesInEachScope(t *testing.T) {
 		{"everything", Scope{}, "Alpha,Beta,Cousins*,Delta,Family*,Gamma,Work*"},
 		{"in Family", Scope{In: ids["Family"]}, "Beta,Cousins*"},
 		{"in Cousins", Scope{In: ids["Cousins"]}, "Gamma"},
-		{"not filed", Scope{Unfiled: true}, "Alpha"},
 	} {
 		got, err := s.PlainPages(ctx, tc.sc, 50, 0)
 		if err != nil || pageTitles(got) != tc.want {
@@ -109,9 +107,9 @@ func TestPlainPagesInEachScope(t *testing.T) {
 	if got, err := s.PlainPages(ctx, Scope{}, 2, 2); err != nil || pageTitles(got) != "Cousins*,Delta" {
 		t.Errorf("a page of two after two: %q %v", pageTitles(got), err)
 	}
-	unfiled, err := s.Unfiled(ctx, 50, 0)
-	if err != nil || len(unfiled) != 1 || unfiled[0].Title != "Alpha" || unfiled[0].ID != ids["Alpha"] {
-		t.Errorf("Unfiled: %+v %v", unfiled, err)
+	unfiled, err := s.PlainPages(ctx, Scope{Unfiled: true}, 50, 0)
+	if err != nil || pageTitles(unfiled) != "Alpha" || unfiled[0].ID != ids["Alpha"] {
+		t.Errorf("not filed: %+v %v, want Alpha %d", unfiled, err, ids["Alpha"])
 	}
 }
 
@@ -323,11 +321,8 @@ func TestNotFiledCountsOnlyALiveCategory(t *testing.T) {
 	if err != nil || len(people) != 1 || people[0].ID != cy {
 		t.Errorf("people not filed: %+v %v, want Cy", people, err)
 	}
-	if pages, err := s.PlainPages(ctx, unfiled, 50, 0); err != nil || pageTitles(pages) != "Alpha,Eps" {
-		t.Errorf("pages not filed: %q %v, want Alpha,Eps", pageTitles(pages), err)
-	}
-	if list, err := s.Unfiled(ctx, 50, 0); err != nil || len(list) != 2 || list[1].ID != eps {
-		t.Errorf("Unfiled: %+v %v, want Alpha, Eps", list, err)
+	if pages, err := s.PlainPages(ctx, unfiled, 50, 0); err != nil || pageTitles(pages) != "Alpha,Eps" || pages[1].ID != eps {
+		t.Errorf("pages not filed: %+v %v, want Alpha,Eps (%d)", pages, err, eps)
 	}
 	if got, err := s.BrowseCounts(ctx, unfiled); err != nil || got["person"] != 1 || got["page"] != 2 {
 		t.Errorf("counts not filed: %v %v, want 1 person and 2 pages", got, err)
@@ -386,17 +381,12 @@ func TestBrowseOrdersTitlesWithoutCase(t *testing.T) {
 			for _, r := range rs {
 				out = append(out, r.Title)
 			}
-		case []Edge:
-			for _, r := range rs {
-				out = append(out, r.Title)
-			}
 		}
 		return strings.Join(out, ",")
 	}
 	for _, tc := range []struct{ name, got, want string }{
 		{"pages", titles(s.PlainPages(ctx, Scope{}, 50, 0)), "Alpha,reading,Shelf,Zeta"},
 		{"people", titles(s.NamedMentions(ctx, "person", Scope{}, 50, 0)), "Ana,bo,Cy"},
-		{"people, Named", titles(s.Named(ctx, "person", 50, 0)), "Ana,bo,Cy"},
 		{"metrics", titles(s.MetricRows(ctx, Scope{}, 50, 0)), "commits,Mood,Weight"},
 		{"in Shelf", titles(s.FiledIn(ctx, shelf, 50, 0)), "Alpha,reading,Zeta"},
 	} {
@@ -409,7 +399,7 @@ func TestBrowseOrdersTitlesWithoutCase(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if got := titles(s.Unfiled(ctx, 50, 0)); got != "beta,Delta" {
-		t.Errorf("Unfiled: %q", got)
+	if got := titles(s.PlainPages(ctx, Scope{Unfiled: true}, 50, 0)); got != "beta,Delta" {
+		t.Errorf("not filed: %q", got)
 	}
 }

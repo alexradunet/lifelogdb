@@ -33,9 +33,13 @@ func TestReadersPage(t *testing.T) {
 	}{
 		{"places first two", 2, 0, "Place 1,Place 2"}, {"places middle", 2, 2, "Place 3,Place 4"}, {"places last", 2, 4, "Place 5"}, {"places past", 2, 5, ""}, {"places all", 10, 0, "Place 1,Place 2,Place 3,Place 4,Place 5"},
 	} {
-		got, err := s.Named(ctx, "place", tc.limit, tc.offset)
-		if err != nil || titles(got) != tc.want {
-			t.Errorf("%s: %q %v", tc.name, titles(got), err)
+		got, err := s.NamedMentions(ctx, "place", Scope{}, tc.limit, tc.offset)
+		var list []string
+		for _, r := range got {
+			list = append(list, r.Title)
+		}
+		if err != nil || strings.Join(list, ",") != tc.want {
+			t.Errorf("%s: %q %v", tc.name, list, err)
 		}
 	}
 	if got, err := s.RecentDays(ctx, 2, 1); err != nil || titles(got) != "2031-04-04,2031-04-03" {

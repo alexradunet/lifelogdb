@@ -14,7 +14,7 @@ import (
 // (everything, a category, or no category), and the category tree beside it. Each kind keeps its row and its order;
 // the order is fixed here, and there is no sort field.
 
-// browseKinds are the values of the field kind, in the order of the chips; "all" is a chip only inside a category.
+// browseKinds are the values of the field kind; "all" is a chip only inside a category, where it is the first.
 var browseKinds = append(slices.Clone(core.BrowseKinds), "all")
 
 // chipWords are the words of each chip.
@@ -169,10 +169,11 @@ func (h *server) browse(r *http.Request) (*Entity, error) {
 	self := browseHref(b.values(""))
 	e := &Entity{Class: []string{"browse"}, Title: "Browse",
 		Links: []Link{link("self", self, "Browse"), link("index", "/", "Home"), link("metrics", "/metrics", "Metrics")}}
-	for _, k := range browseKinds {
-		if k == "all" && in == nil {
-			continue
-		}
+	chips := core.BrowseKinds
+	if in != nil { // inside a category All is the default, and its chip comes first
+		chips = append([]string{"all"}, chips...)
+	}
+	for _, k := range chips {
 		e.Links = append(e.Links, Link{Rel: []string{"kind"}, Href: browseHref(b.values(k, "ghosts", "media")), Title: chipWords[k], Class: []string{k}})
 	}
 	treeKind := url.Values{} // a branch keeps the kind the URL names; All needs a category
@@ -225,6 +226,13 @@ func (h *server) browse(r *http.Request) (*Entity, error) {
 		props["in"] = in
 	}
 	props["counts"] = c
+	if b.kind == "media" {
+		m, err := h.s.MediaCounts(ctx, sc)
+		if err != nil {
+			return nil, err
+		}
+		props["media_counts"] = mediaCounts{Image: m["image"], Video: m["video"], Audio: m["audio"]}
+	}
 	return e, nil
 }
 

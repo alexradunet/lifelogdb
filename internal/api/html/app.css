@@ -65,8 +65,7 @@ svg.icon{flex:none; inline-size:16px; block-size:16px; fill:none; stroke:current
     &[aria-current=page]{background:var(--rail-deep); color:var(--rail-accent); font-weight:700; box-shadow:inset 0 2px 0 var(--bevel-dark),inset 0 -2px 0 var(--bevel-light)}}}
 .count{margin-inline-start:auto; font:700 12px/18px var(--mono); padding:0 7px; border:1px solid var(--outline); background:var(--primary); color:var(--on-accent)}
 /* On a wide screen the rest of the sidebar is in its flow: More, its head and the search link are the phone's. */
-.rail-more{display:contents;
-  &>nav{padding-block-start:var(--space-3); border-block-start:2px solid var(--outline)}}
+.rail-more{display:contents}
 .rail-more-link,.rail-more-head,.rail .rail-search-link{display:none}
 .rail-foot{margin-block-start:auto; padding:0 var(--space-2); font-size:13px; line-height:19px; color:var(--rail-ink);
   & a{color:var(--rail-ink);
@@ -123,7 +122,6 @@ table.month{border-collapse:separate; border-spacing:2px; table-layout:fixed; fo
     padding:calc(var(--space-4) + env(safe-area-inset-top, 0px)) calc(var(--space-4) + env(safe-area-inset-right, 0px)) var(--space-4) calc(var(--space-4) + env(safe-area-inset-left, 0px))}
   .rail-more-head{display:flex; align-items:center; justify-content:space-between;
     & .label{color:var(--rail-accent)}}
-  .rail-more>nav{border-block-start:0; padding-block-start:0}
   .rail-more .month-box{max-inline-size:22rem}
   .rail-foot{margin:0}
   .column{padding:var(--space-5) calc(var(--space-4) + env(safe-area-inset-right, 0px)) calc(72px + env(safe-area-inset-bottom, 0px)) calc(var(--space-4) + env(safe-area-inset-left, 0px));
@@ -557,7 +555,7 @@ dialog.palette{inline-size:min(36rem, calc(100vw - 2rem)); max-block-size:min(32
 li.tile>.pick-box{position:absolute; inset-block-start:var(--space-1); inset-inline-start:var(--space-1); z-index:1; padding:var(--space-1); background:var(--surface); border:2px solid var(--edge)}
 @container column (max-width:487px){.sheet.list ul.tiles{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}}
 
-/* The one selection (docs/plans/114-one-way-to-do-a-thing.md): Media, People, Places, Files and Metrics. A
+/* The one selection (docs/plans/114-one-way-to-do-a-thing.md): the lists of Browse and the Metrics board. A
    list with a pick bar draws the bar first (order), though it comes after the boxes, so a counter counts the
    checked boxes on its buttons. Select shows the boxes and the tools; a button is quiet until a box is checked. The
    bar stays in view while the list scrolls under it, under the phone's top bar. */

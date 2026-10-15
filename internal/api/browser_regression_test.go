@@ -71,7 +71,7 @@ func TestBrowserMultipartRecoversAcceptedBody(t *testing.T) {
 			if rec.Code < 400 || !strings.Contains(rec.Body.String(), "transcript &lt;script&gt; &amp; draft</textarea>") {
 				t.Fatalf("%s: status %d recovered=%v", kind, rec.Code, strings.Contains(rec.Body.String(), "draft</textarea>"))
 			}
-			if len(must(c.Get(t.Context(), "/media")).Entities) != 0 {
+			if len(must(c.Get(t.Context(), "/browse?kind=media")).Entities) != 0 {
 				t.Fatal("wrote file")
 			}
 		})
