@@ -4,10 +4,11 @@ A plan is a dated record ([how a change happens](../process.md)): a change large
 written as a self-contained brief with done criteria. It cites the docs as they were at the commit it names. One file
 per plan, `NNN-short-slug.md`, numbered on from the last.
 
-Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **118**.
+Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **119**.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
+| [118](118-fold-and-find.md) | Fold and find: the category tree, the Browse list (folders, letter groups) and the Metrics board (folds, Cards or List) fold | P2 | M | owner request 2026-10-15; `0f85dda` | DONE |
 | [117](117-one-browse-view.md) | One Browse view: the kinds and the categories in one place; Metrics keeps its board | P2 | L | owner request 2026-10-15; `d7194c8` | DONE |
 | [116](116-strip-to-the-core.md) | Strip to the core: remove the conversation, read-only SQL, readings from a table, the public listener, photo positions, typed links, habits and tasks | P1 | XL | owner decision 2026-10-15; `518c3bb` | DONE |
 | [115](115-categories-to-browse.md) | Categories to browse: the tree with counts and Not filed, a category page's Filed here, and a new page filed where it is made | P2 | M | owner request 2026-10-15; `7083b88` | DONE |

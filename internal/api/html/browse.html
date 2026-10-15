@@ -23,23 +23,41 @@
 {{if and (eq $p.kind "page") (not $p.ghosts) (not $p.in) (not $p.unfiled)}}<p class="sub"><a href="{{.Link "ghosts"}}">Ghost pages {{num $c.ghosts}}</a></p>{{end}}
 {{$file := .Action "file-pages"}}{{$del := .Action "tombstone-pages"}}{{$pick := or $file $del}}
 <datalist id="browse-categories">{{range $p.categories}}<option value="{{.title}}">{{.path}}</option>{{end}}</datalist>
-{{with $p.rows}}<div class="sheet list{{if $pick}} pick-list{{end}}">
-{{if eq $p.kind "media"}}<ul class="plain tiles">{{range .}}<li class="tile{{if $pick}} pick{{end}}">{{if $pick}}{{template "pick-box" .}}{{end}}<a class="tile-link" href="/pages/{{num .id}}">{{with .picture}}<img src="{{.}}" alt="" loading="lazy">{{else}}<span class="tile-blank" aria-hidden="true">{{icon .file_kind}}</span>{{end}}<span class="first">{{.title}}</span><span class="meta">{{$.FileWords .file_kind .mime .day}}</span></a></li>{{end}}</ul>
-{{else}}<ul class="plain rows">{{range .}}<li{{if $pick}} class="pick"{{end}}>{{if $pick}}{{template "pick-box" .}}{{end}}{{if eq .kind "person" "place"}}{{if eq $p.kind "all"}}<a class="entry named" href="/pages/{{num .id}}"><span class="first">{{.title}}</span><span class="meta"><span class="badge">{{.kind}}</span></span></a>{{else}}<a class="entry named{{if eq .kind "person"}} face{{end}}" href="/pages/{{num .id}}">{{if eq .kind "person"}}{{with .picture}}<img class="face-picture" src="{{.}}" alt="" loading="lazy">{{else}}<span class="face-picture" aria-hidden="true">{{icon "people"}}</span>{{end}}{{end}}<span class="first">{{.title}}</span><span class="meta">{{$.Mentions .mentions .last_day}}</span></a>{{end}}
-{{else}}<a class="entry named" href="/pages/{{num .id}}"><span class="first">{{.title}}</span><span class="meta">{{if .category}}<span class="badge category">category</span>{{else if eq $p.kind "all"}}<span class="badge">{{.kind}}</span>{{else if eq .kind "document"}}{{$.FileWords .file_kind .mime .day}}{{else if eq .kind "metric"}}{{with .unit}}{{unitWords .}}{{else}}a count{{end}}{{end}}</span></a>{{end}}</li>{{end}}</ul>{{end}}
+{{$list := .BrowseList}}
+{{if or $list.Folders $list.Rows $list.Letters}}<div class="sheet list{{if $pick}} pick-list{{end}}">
+{{with $list.Folders}}<details class="folders" open><summary>Categories <small>{{len .}}</small></summary>
+<ul class="plain folder-tiles">{{range .}}<li class="folder{{if $pick}} pick{{end}}">{{if $pick}}{{template "pick-box" .}}{{end}}<a class="folder-link" href="{{.href}}">{{icon "browse"}}<span class="first">{{.title}}</span><span class="meta">{{.count}}</span></a></li>
+{{end}}</ul></details>{{end}}
+{{if eq $p.kind "media"}}<ul class="plain tiles">{{range $list.Rows}}<li class="tile{{if $pick}} pick{{end}}">{{if $pick}}{{template "pick-box" .}}{{end}}<a class="tile-link" href="/pages/{{num .id}}">{{with .picture}}<img src="{{.}}" alt="" loading="lazy">{{else}}<span class="tile-blank" aria-hidden="true">{{icon .file_kind}}</span>{{end}}<span class="first">{{.title}}</span><span class="meta">{{$.FileWords .file_kind .mime .day}}</span></a></li>{{end}}</ul>
+{{else if $list.Letters}}<nav class="kinds letters" aria-label="Letters">{{range $list.Letters}}<a href="#{{.Anchor}}">{{.Letter}}</a>{{end}}</nav>
+{{range $list.Letters}}<details class="letter"{{if not $list.Closed}} open{{end}}><summary><span class="letter-name">{{.Letter}}</span> <small>{{len .Rows}}</small></summary>
+<ul class="plain rows" id="{{.Anchor}}">{{range .Rows}}{{template "browse-row" (dict "v" $ "r" . "pick" $pick)}}{{end}}</ul></details>
+{{end}}
+{{else}}<ul class="plain rows">{{range $list.Rows}}{{template "browse-row" (dict "v" $ "r" . "pick" $pick)}}{{end}}</ul>{{end}}
 {{if $pick}}{{template "pick-bar" (dict "v" $ "file" $file "del" $del "list" "browse-categories" "back" $.Here "words" (or (and $del "Check the rows, then type a category or delete them. A new name makes a new category.") "Check the rows, then type a category. A new name makes a new category."))}}{{end}}</div>
 {{else}}<p class="empty">{{if $p.ghosts}}No ghost page: every page has text or a link.{{else if $p.unfiled}}Everything of this kind is in a category.{{else if $p.in}}Nothing of this kind is filed in {{$p.in.title}}.{{else if eq $p.kind "metric"}}No metric yet. The Metrics board makes the first one.{{else}}Nothing of this kind yet. New, above, makes the first one.{{end}}</p>{{end}}
 {{template "pager" .}}
 </div></div>
 {{template "foot" .}}{{end}}
 
-{{/* browse-tree is the category tree of Browse: Everything, the categories by path (each with the count of what is
-     filed directly in it, indented by its depth), and Not filed. The branch the list is on is marked: the ghost list
-     looks at everything, so it marks Everything. */}}
-{{define "browse-tree"}}{{$p := .Props}}{{$links := .Embedded "category"}}{{$here := ""}}{{with $p.in}}{{$here = num .id}}{{end}}
+{{/* browse-tree is the category tree of Browse: Everything, the categories (each with the count of what is filed
+     directly in it), and Not filed. A category with categories under it has a fold beside its row, and they are in
+     the fold (docs/plans/118-fold-and-find.md, rule 1): open on the path to the current branch, closed elsewhere. The
+     row is the link and the fold is its own control. The branch the list is on is marked: the ghost list looks at
+     everything, so it marks Everything. */}}
+{{define "browse-tree"}}{{$p := .Props}}
 <ul class="plain rows tree"><li><a class="entry" href="{{.Link "everything"}}"{{if not (or $p.in $p.unfiled)}} aria-current="page"{{end}}><span class="first">Everything</span><span class="meta"></span></a></li>
-{{range $i, $cat := $p.categories}}{{$l := index $links $i}}<li class="depth-{{depth .path}}"><a class="entry" href="{{$l.Href}}"{{if eq $here (num .id)}} aria-current="page"{{end}}><span class="first">{{.title}}</span><span class="meta">{{num .count}}</span></a></li>
-{{end}}<li><a class="entry" href="{{.Link "unfiled"}}"{{if $p.unfiled}} aria-current="page"{{end}}><span class="first">Not filed</span><span class="meta"></span></a></li></ul>{{end}}
+{{template "tree-branches" .BrowseTree}}<li><a class="entry" href="{{.Link "unfiled"}}"{{if $p.unfiled}} aria-current="page"{{end}}><span class="first">Not filed</span><span class="meta"></span></a></li></ul>{{end}}
+
+{{/* tree-branches are the rows of one level of the tree, and the folds of the levels under them */}}
+{{define "tree-branches"}}{{range .}}<li{{if .Kids}} class="branch"{{end}}><a class="entry" href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}><span class="first">{{.Title}}</span><span class="meta">{{.Count}}</span></a>{{if .Kids}}<details{{if .Open}} open{{end}}><summary><span class="sr">Categories in {{.Title}}</span></summary><ul class="plain rows tree">{{template "tree-branches" .Kids}}</ul></details>{{end}}</li>
+{{end}}{{end}}
+
+{{/* browse-row is a row of a Browse list that is not tiles: a face and the mentions for a person, the mentions for a
+     place, a badge for a category or for the kind in All, the words of a document, the unit of a metric. It takes v
+     (the view), r (the row) and pick (the pick bar's action, nil without one). */}}
+{{define "browse-row"}}{{$v := .v}}{{$p := $v.Props}}{{$pick := .pick}}{{with .r}}<li{{if $pick}} class="pick"{{end}}>{{if $pick}}{{template "pick-box" .}}{{end}}{{if eq .kind "person" "place"}}{{if eq $p.kind "all"}}<a class="entry named" href="/pages/{{num .id}}"><span class="first">{{.title}}</span><span class="meta"><span class="badge">{{.kind}}</span></span></a>{{else}}<a class="entry named{{if eq .kind "person"}} face{{end}}" href="/pages/{{num .id}}">{{if eq .kind "person"}}{{with .picture}}<img class="face-picture" src="{{.}}" alt="" loading="lazy">{{else}}<span class="face-picture" aria-hidden="true">{{icon "people"}}</span>{{end}}{{end}}<span class="first">{{.title}}</span><span class="meta">{{$v.Mentions .mentions .last_day}}</span></a>{{end}}
+{{else}}<a class="entry named" href="/pages/{{num .id}}"><span class="first">{{.title}}</span><span class="meta">{{if .category}}<span class="badge category">category</span>{{else if eq $p.kind "all"}}<span class="badge">{{.kind}}</span>{{else if eq .kind "document"}}{{$v.FileWords .file_kind .mime .day}}{{else if eq .kind "metric"}}{{with .unit}}{{unitWords .}}{{else}}a count{{end}}{{end}}</span></a>{{end}}</li>{{end}}{{end}}
 
 {{/* pick-box is the box of a row of Browse, which joins the pick bar's form */}}
 {{define "pick-box"}}<label class="pick-box"><input type="checkbox" name="ids" value="{{num .id}}" form="pick" aria-label="Select {{.title}}"></label>{{end}}

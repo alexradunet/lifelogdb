@@ -420,7 +420,7 @@ func TestMetricsAreGroupedByCategory(t *testing.T) {
 		t.Errorf("groups %q, want %q: each category in tree order with those under it, the rest last", strings.Join(got, " "), want)
 	}
 	page := browse(t, h, "/metrics")
-	for _, s := range []string{">Thyroid</a>", "Biomarkers/Thyroid", "<h2>Not filed", `title="thyroid-stimulating hormone"`} {
+	for _, s := range []string{"<h3>Thyroid <small>1</small></h3>", "Biomarkers/Thyroid", "<h2>Not filed", `title="thyroid-stimulating hormone"`} {
 		if !strings.Contains(page, s) {
 			t.Errorf("/metrics lacks %q", s)
 		}

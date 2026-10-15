@@ -553,11 +553,14 @@ func TestTheBrowsePageDrawsTheTreeTheChipsAndTheRows(t *testing.T) {
 		`<h1>Browse</h1><p class="sub"><span>In Family</span>`,
 		`<nav class="browse-side panel" aria-label="Categories">`, `<details class="browse-fold panel"><summary>Categories <span class="meta">In Family</span></summary>`,
 		`<a class="entry" href="/browse"><span class="first">Everything</span>`,
-		fmt.Sprintf(`<li class="depth-0"><a class="entry" href="/browse?in=Family" aria-current="page"><span class="first">Family</span><span class="meta">5</span></a></li>`),
-		`<li class="depth-1"><a class="entry" href="/browse?in=Cousins"><span class="first">Cousins</span><span class="meta">2</span></a></li>`,
+		// The tree folds (docs/plans/118-fold-and-find.md, rule 1): Cousins is in the fold of Family, open, since the
+		// list is on Family.
+		`<li class="branch"><a class="entry" href="/browse?in=Family" aria-current="page"><span class="first">Family</span><span class="meta">5</span></a><details open><summary><span class="sr">Categories in Family</span></summary><ul class="plain rows tree"><li><a class="entry" href="/browse?in=Cousins"><span class="first">Cousins</span><span class="meta">2</span></a></li>`,
 		`<a class="entry" href="/browse?unfiled=1"><span class="first">Not filed</span>`,
 		`<nav class="kinds chips" aria-label="Kind"><a href="/browse?in=Family&amp;kind=all" aria-current="page">All <small>5</small></a><a href="/browse?in=Family&amp;kind=page">Pages <small>2</small></a>`,
-		`<span class="first">Cousins</span><span class="meta"><span class="badge category">category</span></span>`,
+		// The category under Family is a folder (rule 2), with its count.
+		`<details class="folders" open><summary>Categories <small>1</small></summary>`,
+		`<li class="folder"><a class="folder-link" href="/browse?in=Cousins">`, `<span class="first">Cousins</span><span class="meta">2</span></a></li>`,
 		`<span class="first">Ana</span><span class="meta"><span class="badge">person</span></span>`,
 	} {
 		if !strings.Contains(family, want) {
@@ -570,6 +573,8 @@ func TestTheBrowsePageDrawsTheTreeTheChipsAndTheRows(t *testing.T) {
 	if cousins := browse(t, h, "/browse?in=Cousins&kind=page"); !strings.Contains(cousins, "<span>In Family › Cousins</span>") ||
 		!strings.Contains(cousins, `<a href="/browse?in=Cousins&amp;kind=page" aria-current="page">Pages <small>1</small></a>`) {
 		t.Errorf("/browse?in=Cousins&kind=page lacks its path or its chip")
+	} else if !strings.Contains(cousins, `<details open><summary><span class="sr">Categories in Family</span>`) {
+		t.Error("the fold of Family is not open on the path to Cousins")
 	}
 
 	people := browse(t, h, "/browse?kind=person")
@@ -608,11 +613,17 @@ func TestTheBrowsePageDrawsTheTreeTheChipsAndTheRows(t *testing.T) {
 		t.Errorf("the metrics lack their rows or the way to the board: %s", metrics[strings.Index(metrics, "<main"):])
 	}
 	pages := browse(t, h, "/browse")
-	for _, want := range []string{`<a href="/browse?ghosts=1&amp;kind=page">Ghost pages 0</a>`, `<span class="first">Family</span><span class="meta"><span class="badge category">category</span>`,
+	// On Pages in Everything the top categories are folders with a box, and not rows; the fold of Family is closed.
+	for _, want := range []string{`<a href="/browse?ghosts=1&amp;kind=page">Ghost pages 0</a>`,
+		fmt.Sprintf(`<li class="folder pick"><label class="pick-box"><input type="checkbox" name="ids" value="%d" form="pick" aria-label="Select Family"></label><a class="folder-link" href="/browse?in=Family">`, ids["Family"]),
+		`<details><summary><span class="sr">Categories in Family</span>`,
 		`formaction="/pages/tombstone"`, "type a category or delete them"} {
 		if !strings.Contains(pages, want) {
 			t.Errorf("/browse lacks %s", want)
 		}
+	}
+	if strings.Contains(pages, `<span class="badge category">category</span>`) || strings.Contains(pages, `<a class="folder-link" href="/browse?in=Cousins">`) {
+		t.Error("/browse lists a category as a row, or a category under another as a top folder")
 	}
 	// The form of the catalog's browse, on /actions: an optional select starts empty, so the form sends only what the
 	// reader picks, and the empty values it sends are the defaults.
@@ -638,6 +649,33 @@ func TestTheBrowsePageDrawsTheTreeTheChipsAndTheRows(t *testing.T) {
 	} {
 		if body := browse(t, h, path); !strings.Contains(body, `<p class="empty">`+want+`</p>`) {
 			t.Errorf("%s lacks its empty state %q", path, want)
+		}
+	}
+}
+
+// A long list of Browse is in letter groups with a letter bar (docs/plans/118-fold-and-find.md, rule 3); the
+// thresholds are held by TestALongListIsInLetterGroups.
+func TestALongBrowseListHasALetterBar(t *testing.T) {
+	_, h, s := freshStore(t)
+	ctx := t.Context()
+	for i := range 31 {
+		title := fmt.Sprintf("Note %02d", i)
+		if i == 0 {
+			title = "Apple"
+		}
+		if _, _, err := s.CreatePage(ctx, "cli", title, "", ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	body := browse(t, h, "/browse")
+	for _, want := range []string{
+		`<nav class="kinds letters" aria-label="Letters"><a href="#letter-1">A</a><a href="#letter-2">N</a></nav>`,
+		`<details class="letter" open><summary><span class="letter-name">A</span> <small>1</small></summary>`,
+		`<ul class="plain rows" id="letter-2"><li class="pick"><label class="pick-box">`,
+		`<span class="letter-name">N</span> <small>30</small>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("/browse lacks %s", want)
 		}
 	}
 }

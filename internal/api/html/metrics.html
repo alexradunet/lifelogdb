@@ -1,18 +1,24 @@
-{{/* The metrics filed by category (D26), as cards (docs/plans/112-metrics-as-cards.md). */}}
+{{/* The metrics filed by category (D26), as cards (docs/plans/112-metrics-as-cards.md) or as rows: ?view=list is a
+     word of the page, as ?new= is, and the JSON does not change. Each group is a fold, open, and a category under it a
+     fold inside it; the line of a fold says its count and the day of its newest reading. The link to the category's
+     page and + New metric here are in the open fold (docs/plans/118-fold-and-find.md, rules 4 and 5). */}}
 {{define "metrics"}}{{template "head" .}}
 <header class="page-head"><div class="what"><h1>Metrics</h1></div>
 <div class="tools">{{with .Action "register-metric"}}{{template "new-metric" (dict "action" . "view" $)}}{{end}}{{with .Action "file-pages"}}<a class="button" href="/metrics?new=file-pages#pick">New category</a>{{end}}</div></header>
-{{$file := .Action "file-pages"}}{{$new := .Action "register-metric"}}{{$sections := .MetricSections}}
+{{$file := .Action "file-pages"}}{{$new := .Action "register-metric"}}{{$sections := .MetricSections}}{{$list := eq (.Asked "view") "list"}}
 <datalist id="metric-categories">{{range $.Props.categories}}<option value="{{.title}}">{{.path}}</option>{{end}}</datalist>
-{{if gt (len $sections) 1}}<nav class="kinds jump" aria-label="Groups">{{range $sections}}<a href="#{{.Anchor}}">{{.Title}} <small>{{.Count}}</small></a>{{end}}</nav>{{end}}
+{{if $sections}}<div class="board-nav"><nav class="kinds view-switch" aria-label="View"><a href="/metrics"{{if not $list}} aria-current="true"{{end}}>Cards</a><a href="/metrics?view=list"{{if $list}} aria-current="true"{{end}}>List</a></nav>
+{{if gt (len $sections) 1}}<nav class="kinds jump" aria-label="Groups">{{range $sections}}<a href="#{{.Anchor}}">{{.Title}} <small>{{.Count}}</small></a>{{end}}</nav>{{end}}</div>{{end}}
 <div class="pick-list">
-{{range $sections}}<section class="group metric-group" id="{{.Anchor}}" aria-label="{{.Title}}">
-<div class="panel-head"><h2>{{if .Page}}<a href="/pages/{{.Page}}">{{.Title}}</a>{{else}}{{.Title}}{{end}} <small>{{.Count}}</small></h2>{{if and $new .Page}}{{template "new-here" .Title}}{{end}}</div>
-{{with .Cards}}{{template "metric-cards" (dict "cards" . "file" $file "view" $)}}{{end}}
-{{range .Subs}}<div class="panel-head"><h3><a href="/pages/{{.Page}}">{{.Title}}</a> <small>{{len .Cards}}</small></h3>{{if $new}}{{template "new-here" .Title}}{{end}}</div>
-{{with .Cards}}{{template "metric-cards" (dict "cards" . "file" $file "view" $)}}{{end}}{{end}}
-</section>{{else}}<p class="empty">No metric yet. Make the first one with New metric.</p>{{end}}
-{{with $file}}{{if $sections}}{{template "pick-bar" (dict "v" $ "file" . "list" "metric-categories" "back" "/metrics" "words" "Check the cards, then type a category. A new name makes a new category.")}}{{end}}{{end}}</div>
+{{range $sections}}<details class="group metric-group" id="{{.Anchor}}" open><summary><h2>{{.Title}} <small>{{.Count}}</small></h2>{{with .Latest}}<span class="meta">newest {{.}}</span>{{end}}</summary>
+{{if .Page}}<div class="group-tools"><a href="/pages/{{.Page}}">Open {{.Title}}</a>{{if $new}}{{template "new-here" .Title}}{{end}}</div>{{end}}
+{{with .Cards}}{{template "metric-board" (dict "cards" . "file" $file "view" $ "list" $list)}}{{end}}
+{{range .Subs}}<details class="metric-sub" open><summary><h3>{{.Title}} <small>{{len .Cards}}</small></h3>{{with .Latest}}<span class="meta">newest {{.}}</span>{{end}}</summary>
+<div class="group-tools"><a href="/pages/{{.Page}}">Open {{.Title}}</a>{{if $new}}{{template "new-here" .Title}}{{end}}</div>
+{{with .Cards}}{{template "metric-board" (dict "cards" . "file" $file "view" $ "list" $list)}}{{end}}</details>
+{{end}}</details>
+{{else}}<p class="empty">No metric yet. Make the first one with New metric.</p>{{end}}
+{{with $file}}{{if $sections}}{{template "pick-bar" (dict "v" $ "file" . "list" "metric-categories" "back" $.Here "words" "Check the metrics, then type a category. A new name makes a new category.")}}{{end}}{{end}}</div>
 {{template "foot" .}}{{end}}
 
 {{/* The one page of a metric (docs/plans/100-one-page-a-metric.md). The head: its kind, its categories and its latest
@@ -85,6 +91,10 @@
 <tbody>{{range .rows}}<tr><td><a href="/days/{{.day}}">{{$v.Date .day}}</a></td><td class="num"><a href="/measurements/{{num .id}}">{{num .value}}</a></td>{{if $r.Times}}<td>{{with .taken_at}}{{$v.When .}}{{end}}</td>{{end}}</tr>
 {{end}}</tbody></table></div>{{end}}
 
+{{/* metric-board is the metrics of a group as cards, or as rows with list: it takes cards, file (the file-pages
+     action, nil without it), view and list. */}}
+{{define "metric-board"}}{{if .list}}{{template "metric-rows" .}}{{else}}{{template "metric-cards" .}}{{end}}{{end}}
+
 {{/* metric-cards is a grid of metric cards: a card is the metric's name, its latest reading with its unit and its day,
      and the line of its recent readings. With the file-pages action, each card has a box that the file bar's form
      reads (form="pick"), and a form never holds a form. The boxes show while the file bar is open. */}}
@@ -94,8 +104,17 @@
 {{if .Measurement}}<a class="reading" href="/measurements/{{.Measurement}}">{{.Value}}{{with .Unit}} <span class="unit">{{.}}</span>{{end}}</a>
 <span class="meta">{{.When}}{{if gt .Count 1}} · {{.Count}} readings{{end}}</span>
 {{.Line}}{{else}}<span class="meta">No reading yet{{with .Unit}} · {{.}}{{end}}</span>{{end}}
-{{template "add-reading" (dict "action" ($v.Action "record") "metric" .Name "unit" .Unit "day" $v.Props.today "today" $v.Props.today "back" "/metrics")}}
+{{template "add-reading" (dict "action" ($v.Action "record") "metric" .Name "unit" .Unit "day" $v.Props.today "today" $v.Props.today "back" $v.Here)}}
 </div>{{end}}</div>{{end}}
+
+{{/* metric-rows is the metrics of a group as one row each (?view=list): the box, the name, the latest value with its
+     unit, its day, its line and + Add. It takes what metric-cards takes. */}}
+{{define "metric-rows"}}{{$v := .view}}{{$file := .file}}<ul class="plain metric-rows">{{range .cards}}<li class="metric-row{{if $file}} pick{{end}}{{if .Stale}} stale{{end}}">
+{{if $file}}<label class="pick-box"><input type="checkbox" name="ids" value="{{.ID}}" form="pick" aria-label="Select {{.Name}}"></label>{{end}}
+<a class="name" href="{{.Href}}"{{with .Note}} title="{{.}}"{{end}}>{{.Name}}</a>
+{{if .Measurement}}<a class="reading" href="/measurements/{{.Measurement}}">{{.Value}}{{with .Unit}} <span class="unit">{{.}}</span>{{end}}</a><span class="meta">{{.When}}</span><span class="line">{{.Line}}</span>{{else}}<span class="meta none">No reading yet{{with .Unit}} · {{.}}{{end}}</span>{{end}}
+{{template "add-reading" (dict "action" ($v.Action "record") "metric" .Name "unit" .Unit "day" $v.Props.today "today" $v.Props.today "back" $v.Here)}}
+</li>{{end}}</ul>{{end}}
 
 {{/* new-here is the link under a category's heading to New metric, with the category filled in */}}
 {{define "new-here"}}<a class="button small" href="/metrics?new=register-metric&amp;category={{.}}#new-metric">+ New metric here</a>{{end}}

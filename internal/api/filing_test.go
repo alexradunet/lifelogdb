@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -183,7 +184,7 @@ func TestTheMetricsPageDrawsCards(t *testing.T) {
 	page := browse(t, h, "/metrics")
 	for _, want := range []string{
 		`<nav class="kinds jump" aria-label="Groups"><a href="#c-`, `>Body <small>3</small></a>`, `<a href="#not-filed">Not filed <small>2</small></a>`,
-		`id="not-filed"`, `<h3><a href="/pages/` + idOfSelf(t, hrefOf(iron, "self")) + `">Iron</a> <small>1</small></h3>`,
+		`id="not-filed"`, `<details class="metric-sub" open><summary><h3>Iron <small>1</small></h3><span class="meta">newest `, `<a href="/pages/` + idOfSelf(t, hrefOf(iron, "self")) + `">Open Iron</a>`,
 		`<a class="name" href="/metrics/Weight">Weight</a>`, `79.5 <span class="unit">kg</span>`, `yesterday · Tue 13 May · 2 readings`, `<svg class="trend"`,
 		`<div class="reading-tile metric-card stale">`, `title="iron stores">Ferritin</a>`, `No reading yet · n`,
 		`<form id="pick" class="pick-bar" method="POST" action="/pages/file" data-action="file-pages">`, `<input type="hidden" name="back" value="/metrics">`,
@@ -264,5 +265,63 @@ func TestADayPageIsNeverFiled(t *testing.T) {
 				t.Errorf("the day page is part-of %v", got)
 			}
 		})
+	}
+}
+
+// The Metrics board folds, and ?view=list draws the same metrics as rows (docs/plans/118-fold-and-find.md, rules 4
+// and 5).
+func TestTheMetricsBoardFoldsAndHasAList(t *testing.T) {
+	c, h := freshOn(t, fixedToday)
+	ctx := t.Context()
+	ids := cardsFixture(t, c)
+	file := find(must(c.Get(ctx, "/metrics")), "file-pages")
+	must(c.Do(ctx, file, map[string]string{"ids": ids["Ferritin"], "category": "Iron"}))
+	must(c.Do(ctx, file, map[string]string{"ids": ids["Weight"] + "," + ids["Walk"], "category": "Body"}))
+	must(c.Do(ctx, find(must(c.Get(ctx, "/pages?title=Iron")), "link"), map[string]string{"to": "Body", "kind": "part-of"}))
+
+	cards := browse(t, h, "/metrics")
+	for _, want := range []string{
+		`<nav class="kinds view-switch" aria-label="View"><a href="/metrics" aria-current="true">Cards</a><a href="/metrics?view=list">List</a></nav>`,
+		// Body holds Weight and Walk, and Ferritin under Iron: its newest reading is Weight's, yesterday.
+		`<details class="group metric-group" id="c-`, ` open><summary><h2>Body <small>3</small></h2><span class="meta">newest yesterday · Tue 13 May</span></summary>`,
+		`<details class="metric-sub" open><summary><h3>Iron <small>1</small></h3><span class="meta">newest `,
+		// Mood and Steps have no reading: the line of Not filed says no day.
+		`<details class="group metric-group" id="not-filed" open><summary><h2>Not filed <small>2</small></h2></summary>`,
+	} {
+		if !strings.Contains(cards, want) {
+			t.Errorf("/metrics lacks %s", want)
+		}
+	}
+
+	list := browse(t, h, "/metrics?view=list")
+	for _, want := range []string{
+		`<a href="/metrics">Cards</a><a href="/metrics?view=list" aria-current="true">List</a>`,
+		`<ul class="plain metric-rows"><li class="metric-row pick">`,
+		`<input type="checkbox" name="ids" value="` + ids["Weight"] + `" form="pick" aria-label="Select Weight">`,
+		`<a class="name" href="/metrics/Weight">Weight</a>`,
+		`79.5 <span class="unit">kg</span></a><span class="meta">yesterday · Tue 13 May</span><span class="line"><svg class="trend"`,
+		`<li class="metric-row pick stale">`, `<span class="meta none">No reading yet · n</span>`,
+		`<input type="hidden" name="back" value="/metrics?view=list">`,
+	} {
+		if !strings.Contains(list, want) {
+			t.Errorf("/metrics?view=list lacks %s", want)
+		}
+	}
+	// Each + Add of a row and the pick bar return to the list.
+	if strings.Contains(list, `class="reading-tile metric-card`) || strings.Count(list, `<input type="hidden" name="back" value="/metrics?view=list">`) != 6 {
+		t.Error("the list draws a card, or a form of it does not return to the list")
+	}
+	names := regexp.MustCompile(`<a class="name" href="/metrics/(\w+)"`)
+	if a, b := names.FindAllString(cards, -1), names.FindAllString(list, -1); len(a) != 5 || strings.Join(a, " ") != strings.Join(b, " ") {
+		t.Errorf("the cards %v and the rows %v are not the same metrics", a, b)
+	}
+
+	// + Add on a row returns to the list.
+	rec := submit(h, "/measurements", url.Values{"metric": {"Steps"}, "day": {fixedToday}, "value": {"9000"}, "back": {"/metrics?view=list"}}, "")
+	if loc, err := url.Parse(rec.Header().Get("Location")); rec.Code != http.StatusSeeOther || err != nil || loc.Path != "/metrics" || loc.Query().Get("view") != "list" {
+		t.Fatalf("+ Add on the list: %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+	if after := browse(t, h, rec.Header().Get("Location")); !strings.Contains(after, `9000 <span class="unit">n</span></a><span class="meta">today</span>`) {
+		t.Error("the list after + Add lacks the reading")
 	}
 }

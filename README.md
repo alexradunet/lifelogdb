@@ -279,6 +279,14 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   `links_endpoint_types` when it has one). Browse in a category fills it in each New form, and a category page
   offers New page here. `add-file` files the page of the same original when it exists, unless that page is deleted.
   Rejected by the owner: exclusive membership, a manual order and a syntax in the body that files a page.
+- **Fold and find** ([plan 118](docs/plans/118-fold-and-find.md); the owner's choice, 2026-10-15). In the browser
+  only, and with no script, Browse and the Metrics board fold; the JSON and the catalog do not change. The tree folds
+  each category that has categories under it, open on the path to the current branch. On Pages in Everything the top
+  categories are folder tiles before the list, and they are not rows of it; inside a category, the categories under
+  it are the folders. A list in title order with more than 30 rows is in letter groups with a letter bar, closed
+  when it has more than 100 rows. The Metrics board folds each group and each category under it, and the line of a
+  fold says its count and the day of its newest reading. `/metrics?view=list` draws one row a metric in place of the
+  cards; `view` is a word of the page, as `new` is, and a form of the page returns to the same view.
 - **One way to make a thing** ([plan 114](docs/plans/114-one-way-to-do-a-thing.md)). The rail's New is a menu of the
   kinds; each kind is made on its list of Browse, whose header has its New button (a file on the media list, a
   metric on `/metrics`; a page also on Home, beside Open a page).

@@ -115,6 +115,7 @@ type metricCard struct {
 	Name, Href  string
 	Value, Unit string
 	Measurement string // the latest reading's id, "" with none
+	Day         string // the latest reading's day, "" with none
 	When        string // the latest reading's day in words
 	Count       int    // how many recent readings the line holds
 	Line        template.HTML
@@ -122,19 +123,30 @@ type metricCard struct {
 	Note        string
 }
 
-// metricSub is a category under a section's top: its path below the top, its page and its cards.
+// metricSub is a category under a section's top: its path below the top, its page, its cards and the day of its
+// newest reading in words.
 type metricSub struct {
-	Title, Page string
-	Cards       []metricCard
+	Title, Page, Latest string
+	Cards               []metricCard
 }
 
 // metricSection is one top-level group: a category, or Not filed. Count is how many metrics it holds, each
-// once, in its subcategories too.
+// once, in its subcategories too. Latest is the day of the newest reading among them, in words: the line of the
+// group's fold says it (docs/plans/118-fold-and-find.md, rule 4).
 type metricSection struct {
-	Title, Page, Anchor string
-	Count               int
-	Cards               []metricCard
-	Subs                []metricSub
+	Title, Page, Anchor, Latest string
+	Count                       int
+	Cards                       []metricCard
+	Subs                        []metricSub
+}
+
+// newest is the day of the newest reading of the cards, "" with none.
+func newest(cards []metricCard) string {
+	day := ""
+	for _, k := range cards {
+		day = max(day, k.Day)
+	}
+	return day
 }
 
 // MetricSections are the groups of /metrics as sections of cards, in the order of the groups.
@@ -168,7 +180,7 @@ func (v *view) MetricSections() []metricSection {
 		if n := len(recent); n > 0 {
 			last, _ := recent[n-1].(map[string]any)
 			day, _ := last["day"].(string)
-			k.Value, k.Measurement, k.When, k.Count = num(last["value"]), num(last["id"]), c.relative(day), n
+			k.Value, k.Measurement, k.Day, k.When, k.Count = num(last["value"]), num(last["id"]), day, c.relative(day), n
 			if t, ok := dayOf(day); ok && !limit.IsZero() && t.Before(limit) {
 				k.Stale = true
 			}
@@ -213,7 +225,20 @@ func (v *view) MetricSections() []metricSection {
 		if i := strings.Index(path, "/"); i >= 0 {
 			sub = path[i+1:]
 		}
-		s.Subs = append(s.Subs, metricSub{Title: sub, Page: num(g["page"]), Cards: cards})
+		k := metricSub{Title: sub, Page: num(g["page"]), Cards: cards}
+		if d := newest(cards); d != "" {
+			k.Latest = c.relative(d)
+		}
+		s.Subs = append(s.Subs, k)
+	}
+	for i := range out {
+		day := newest(out[i].Cards)
+		for _, k := range out[i].Subs {
+			day = max(day, newest(k.Cards))
+		}
+		if day != "" {
+			out[i].Latest = c.relative(day)
+		}
 	}
 	return out
 }

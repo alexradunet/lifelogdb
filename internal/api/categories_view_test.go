@@ -50,14 +50,18 @@ func TestBrowseDrawsTheTreeAndTheUnfiledPages(t *testing.T) {
 	}
 
 	body := browse(t, h, "/browse?unfiled=1")
-	rows := regexp.MustCompile(`<li class="depth-(\d)"><a class="entry" href="/browse\?in=(\w+)"><span class="first">([^<]*)</span><span class="meta">(\d+)</span></a></li>`).FindAllStringSubmatch(body, -1)
+	rows := regexp.MustCompile(`<li(?: class="branch")?><a class="entry" href="/browse\?in=(\w+)"><span class="first">([^<]*)</span><span class="meta">(\d+)</span></a>`).FindAllStringSubmatch(body, -1)
 	var got []string
 	for _, r := range rows {
-		got = append(got, r[1]+":"+r[3]+"="+r[4])
+		got = append(got, r[2]+"="+r[3])
 	}
 	// The tree is drawn twice: beside the list, and in the fold a phone shows.
-	if want := "0:Life=1 1:Travel=2 0:Life=1 1:Travel=2"; strings.Join(got, " ") != want {
+	if want := "Life=1 Travel=2 Life=1 Travel=2"; strings.Join(got, " ") != want {
 		t.Errorf("tree rows: %v, want %s", got, want)
+	}
+	// Travel is in the fold of Life (docs/plans/118-fold-and-find.md, rule 1), closed: the list is not on either.
+	if want := `<li class="branch"><a class="entry" href="/browse?in=Life"><span class="first">Life</span><span class="meta">1</span></a><details><summary><span class="sr">Categories in Life</span></summary><ul class="plain rows tree"><li><a class="entry" href="/browse?in=Travel">`; strings.Count(body, want) != 2 {
+		t.Errorf("the tree does not hold Travel in the closed fold of Life")
 	}
 	if !strings.Contains(body, `<a class="entry" href="/browse?unfiled=1" aria-current="page"><span class="first">Not filed</span>`) ||
 		!strings.Contains(body, `href="/pages/`+ids["Loose note"]+`"><span class="first">Loose note</span>`) {
