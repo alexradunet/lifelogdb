@@ -266,7 +266,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   has a face, the mentions and the last day; media are tiles, newest day first, with the picture a file keeps or the
   icon of its kind, one media kind by `media=`, and the count of each media kind in words; documents are the other
   files, as rows. The ghost pages are a filter of Pages. The pick bar puts the checked rows in a category, and
-  deletes pages, media and documents. Metrics keeps its own board at `/metrics`. The sidebar has Today, Calendar,
+  deletes pages, media and documents. Metrics keeps its own board at `/metrics`. Days are not in Browse: a day is the time axis, found in the Calendar and by
+  Search, and it meets the things through its mentions (the owner's word, 2026-10-15). The sidebar has Today, Calendar,
   Metrics and Browse; a phone's bottom bar is the same four with More. The old lists (`/people`, `/places`,
   `/media`, `/files`, `/ghosts`, `/categories`) answer 308 to their Browse address, with `limit`, `offset` and
   `new` kept; the POST routes of those paths do not change. A category page has one section, Filed here: the
