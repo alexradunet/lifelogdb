@@ -93,7 +93,7 @@ func resultSentences(m map[string]any, c clock) []resultLine {
 	if id, ok := take("id"); ok {
 		say(`Kept the file: <a href="/pages/%s">its page</a>.`, num(id))
 	}
-	if e, ok := left["existing"].(bool); ok { // add-file's; readings-from-table's is a count
+	if e, ok := left["existing"].(bool); ok { // add-file's
 		delete(left, "existing")
 		if e {
 			say("The same original was kept before.")
@@ -129,27 +129,6 @@ func resultSentences(m map[string]any, c clock) []resultLine {
 	}
 	if b, _ := take("embedded"); b == true {
 		say("Shown on its day page.")
-	}
-
-	// readings-from-table.
-	if n, ok := take("written"); ok {
-		say("Wrote %s.", count(n, "reading", "readings"))
-	}
-	if n, ok := left["existing"].(float64); ok {
-		delete(left, "existing")
-		say("%s there before.", count(n, "reading was", "readings were"))
-	}
-	if rows, ok := take("reported"); ok {
-		if list, _ := rows.([]any); len(list) > 0 {
-			var sb strings.Builder
-			sb.WriteString(count(float64(len(list)), "row gave", "rows gave") + " no reading:<ul>")
-			for _, r := range list {
-				row, _ := r.(map[string]any)
-				sb.WriteString("<li>row " + esc(num(row["row"])) + ": " + esc(fmt.Sprint(row["reason"])) + "</li>")
-			}
-			sb.WriteString("</ul>")
-			out = append(out, template.HTML(sb.String()))
-		}
 	}
 
 	// snapshot.

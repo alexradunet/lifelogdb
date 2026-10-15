@@ -98,7 +98,6 @@
 
 <section class="group" aria-label="More"><h2>More</h2><div class="actions">
 {{if $checkIn}}{{template "boxed" (form (.Action "record") "button" "Add a value" "metric" $.Title "more" "taken_at,tz,import_key" "back" $.Here)}}{{end}}
-{{template "boxed" (form (.Action "readings-from-table") "hide" "page" "back" $.Here)}}
 {{template "boxed" (form (.Action "rename"))}}
 {{template "boxed" (form (.Action "tombstone"))}}</div>
 </section>

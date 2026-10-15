@@ -608,7 +608,7 @@ func TestSnapshotPhysicalDestination(t *testing.T) {
 }
 
 func TestCommandCancellation(t *testing.T) {
-	for _, args := range [][]string{{"get", "blocked"}, {"capture", "synthetic"}, {"readings", "Weighings", "Weight"}, {"actions"}} {
+	for _, args := range [][]string{{"get", "blocked"}, {"capture", "synthetic"}, {"search", "synthetic"}, {"actions"}} {
 		t.Run(strings.Join(args, "-"), func(t *testing.T) {
 			started, stopped, release := make(chan struct{}), make(chan struct{}), make(chan struct{})
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

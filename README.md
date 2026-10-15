@@ -230,7 +230,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **Unicode.** Registry name keys use `x/text`'s full case fold; the `Cn` rule uses a pinned Unicode 15.0 assigned table,
   not the tables Go ships, so the titles this writer accepts do not change with a Go upgrade.
 - **One transaction type.** Every write is a method on `core.Tx`; an operation alone is one transaction, and an
-  operation that writes several rows (`readings-from-table`) runs several of the same methods in one. Nothing writes
+  operation that writes several rows (`file-pages`) runs several of the same methods in one. Nothing writes
   around them.
 - **The folder of the program** ([plan 090](docs/plans/090-agentic-init.md)). Without `--db`, `LIFELOG_DB` or
   `--url`, a command uses the `life.db` beside the executable, and `lifelog init` with no path makes it there; a
@@ -251,12 +251,6 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **Renames select a preferred name on the same identity**, retaining direct aliases as
   [titles and wikilinks](docs/contract/titles-and-wikilinks.md) ("Renames") requires and
   [rename a page](docs/cookbook/rename-a-page.md) writes; `lifelog rename` and the API's `rename` action run it.
-- **Readings from a table** ([plan 089](docs/plans/089-no-import-process.md)). `readings-from-table` reads the first
-  table of a page that has a column of days and writes each row with a day and a plain number as a reading of a
-  registered metric; the unit (in the cell, a `unit` column, or the header in `( )` or `[ ]`) must be the metric's,
-  and nothing is converted. A sign (`<5`), a word, a comma decimal, another unit or a second value for one day is
-  reported, not written. Its rows are written under the source `import:table` with the key
-  `table|<page title_key>|<day>`, so a run from any surface finds what an earlier one wrote and writes nothing.
 - **Planning on every surface** ([plan 081](docs/plans/081-planning-on-every-surface.md)). Core task operations
   implement the [planning contract](docs/contract/planning.md), and the catalog carries them: `/tasks`, a task with
   its occurrences over a window, an occurrence (written, or a virtual slot of a series), `/deadlines` across tasks;

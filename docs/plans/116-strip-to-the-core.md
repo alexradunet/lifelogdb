@@ -84,3 +84,7 @@ flowchart LR
   allow-list and `Result`, and the ad hoc reader of `internal/db`. The tests that used `query` as a probe of what a
   surface wrote read the row from the file instead (`freshStore`, `scalar`). Record: README; API.md's `result`
   class is the dry run's shape alone. Checks: `go generate ./... && go vet ./... && go test ./...` green.
+- **Step 3 (readings from a table).** Removed: `readings-from-table` (`POST /measurements/from-table`), the CLI
+  `readings` and `--column`, `core/tables.go` with the source `import:table`, the agentic skill
+  `lifelog-readings-from-table`. A reading is recorded one at a time with `record`. Record: README, API.md.
+  Checks: `go generate ./... && go vet ./... && go test ./...` green.

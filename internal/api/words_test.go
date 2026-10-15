@@ -119,8 +119,6 @@ func TestAResultIsSaidInSentences(t *testing.T) {
 				`Its day is linked to the place. | The place took this position as its point. | Shown on its day page.`},
 		{"unmatched", map[string]any{"unmatched": map[string]any{"lat": 41.1496, "lon": -8.611, "map": "https://example.org/m?a=1&b=2"}},
 			`Near no known place: 41.1496, -8.611 (<a href="https://example.org/m?a=1&amp;b=2" rel="noreferrer">map</a>).`},
-		{"readings-from-table", map[string]any{"written": 12.0, "existing": 1.0, "reported": []any{map[string]any{"row": 2.0, "reason": "no value"}}, "unit": "kg"},
-			`Wrote 12 readings. | 1 reading was there before. | 1 row gave no reading:<ul><li>row 2: no value</li></ul> | <dl class="facts"><dt>unit</dt><dd>kg</dd></dl>`},
 		{"snapshot", map[string]any{"snapshot": "snaps/life-2026-10-12.db", "restore_check": "ok"},
 			`Took a snapshot: <code>snaps/life-2026-10-12.db</code>. | <dl class="facts"><dt>restore check</dt><dd>ok</dd></dl>`},
 		{"unknown", map[string]any{"foo_bar": 1.0}, `<dl class="facts"><dt>foo bar</dt><dd>1</dd></dl>`},

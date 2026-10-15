@@ -45,4 +45,4 @@ like a date but is none of these: ask the owner.
   lists it. Ask the owner: keep it as written, or write `[[Note|Folder/Note]]`.
 - An embedded attachment (`![[scan.pdf]]`) makes an empty page of that name. When the owner later keeps the file
   (skill `lifelog-keep-photos`), the file becomes that page.
-- A table of dated values (bloodwork): import the note first, then use the skill `lifelog-readings-from-table`.
+- A table of dated values (bloodwork): import the note first, then `record` each reading the owner wants kept.

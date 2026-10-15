@@ -173,15 +173,7 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 		p := page.Properties.(*core.Page)
 		props["categories"], props["id"], props["unit"], props["body"], props["links"], props["backlinks"] = m.Categories, m.ID, m.Unit, p.Body, p.Out, p.In
 		e.Links = append(e.Links, link("page", pageHref(m.ID), "Page"))
-		for _, a := range page.Actions {
-			switch a.Name {
-			case "readings-from-table": // a table in a metric's own text is of that metric, unless the owner says
-				if f := a.field("metric"); f != nil {
-					f.Value = name
-				}
-			}
-			e.Actions = append(e.Actions, a)
-		}
+		e.Actions = append(e.Actions, page.Actions...)
 	}
 	for _, m := range rows {
 		e.Entities = append(e.Entities, link("reading", measurementHref(m.ID), fmt.Sprintf("%s %g", m.Day, m.Value)))
@@ -221,25 +213,6 @@ func (h *server) measurementEntity(ctx context.Context, id int64) (*Entity, erro
 		e.Links = append(e.Links, link("captured-with", pageHref(m.CapturedWith), "Captured with"))
 	}
 	return e, nil
-}
-
-// readingsFromTable is readings-from-table: the readings a page's table gives, under the fixed source of
-// core.TableSource, so a run from any surface finds what an earlier one wrote. The answer returns to the page.
-func (h *server) readingsFromTable(r *http.Request, _ string) (*Entity, error) {
-	v, err := form(r)
-	if err != nil {
-		return nil, err
-	}
-	if err := required(v, "page", "metric"); err != nil {
-		return nil, err
-	}
-	res, err := h.s.ReadingsFromTable(r.Context(), v.Get("page"), v.Get("metric"), v.Get("column"))
-	if err != nil {
-		return nil, err
-	}
-	self := pageHref(res.PageID)
-	return &Entity{Class: []string{"readings-from-table"}, Title: "Readings from " + res.Page, Properties: res, Result: res,
-		Links: []Link{link("self", self, res.Page), link("metric", metricHref(res.Metric), res.Metric), link("index", "/", "Home")}}, nil
 }
 
 func (h *server) record(r *http.Request, src string) (*Entity, error) {

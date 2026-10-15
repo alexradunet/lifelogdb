@@ -43,7 +43,7 @@ func TestAFieldForAPageTitleCarriesDataPages(t *testing.T) {
 	if got := b.String(); !strings.Contains(got, `name="project" value="" data-pages>`) || strings.Count(got, "data-pages") != 1 {
 		t.Errorf("the project field of create-task is not the one field marked data-pages:\n%s", got)
 	}
-	for _, name := range []string{"link", "unlink", "readings-from-table", "find", "edit-task"} {
+	for _, name := range []string{"link", "unlink", "find", "edit-task"} {
 		marked := 0
 		for _, fd := range action(name, nil, nil).Fields {
 			if fd.Pages {

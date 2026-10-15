@@ -20,9 +20,8 @@ import (
 	"lifelog/internal/db"
 )
 
-// The find tools and readings_from_table, the tool an agent uses during an import (docs/plans/089-no-import-process.md),
-// are MCP tools; the owner-only actions are not.
-func TestFindAndReadingsTools(t *testing.T) {
+// The find tools are MCP tools; the owner-only actions are not.
+func TestFindTools(t *testing.T) {
 	c := mcpTestClient(t)
 	srv, err := New(t.Context(), c, "test")
 	if err != nil {
@@ -61,7 +60,7 @@ func TestFindAndReadingsTools(t *testing.T) {
 		}
 		seen[tool.Name] = true
 	}
-	for _, name := range []string{"find", "get", "get_day", "readings_from_table", "open_day"} {
+	for _, name := range []string{"find", "get", "get_day", "open_day"} {
 		if !seen[name] {
 			t.Fatalf("MCP tools lack %q; have %v", name, seen)
 		}
@@ -103,12 +102,6 @@ func TestFindAndReadingsTools(t *testing.T) {
 	// A day's trends and each habit's last days are on this surface too (docs/plans/093-words-phone-and-today.md).
 	if day, ok := callTool(t, ctx, session, "get", map[string]any{"href": "/days/2031-05-14"}).Properties.(map[string]any); !ok || day["trends"] == nil || day["habits"] == nil {
 		t.Fatalf("get /days/2031-05-14 lacks trends or habits: %v", day)
-	}
-	callTool(t, ctx, session, "create_page", map[string]any{"title": "Weighings", "body": "| day | weight (kg) |\n|---|---|\n| 2031-01-01 | 70.5 |\n"})
-	readings := callTool(t, ctx, session, "readings_from_table", map[string]any{"page": "Weighings", "metric": "weight"})
-	result, _ := readings.Result.(map[string]any)
-	if readings.Title != "Readings from Weighings" || fmt.Sprint(result["written"]) != "1" {
-		t.Fatalf("readings_from_table returned %+v", readings)
 	}
 }
 

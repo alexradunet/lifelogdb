@@ -17,8 +17,7 @@ import (
 	lifelogmcp "lifelog/internal/mcp"
 )
 
-// The owner-only actions are refused to an agent and are never MCP tools; readings-from-table, which an agent uses
-// during an import (docs/plans/089-no-import-process.md), is a tool like any other action.
+// The owner-only actions are refused to an agent and are never MCP tools; every other action is a tool.
 func TestOwnerOnlyActionsPolicy(t *testing.T) {
 	root := t.TempDir()
 	p := filepath.Join(root, "synthetic.db")
@@ -32,9 +31,9 @@ func TestOwnerOnlyActionsPolicy(t *testing.T) {
 	t.Cleanup(func() { d.Close() })
 	agent := client.InProcess(api.New(&core.Store{DB: d, SnapshotDir: root}), "agent:policy-test")
 	catalog := must(agent.Get(t.Context(), "/actions"))
-	register, snapshot, table := find(catalog, "register-metric"), find(catalog, "snapshot"), find(catalog, "readings-from-table")
-	if !register.Owner || !snapshot.Owner || table.Name == "" || table.Owner {
-		t.Fatalf("wrong catalog policy: %+v %+v %+v", register, snapshot, table)
+	register, snapshot, record := find(catalog, "register-metric"), find(catalog, "snapshot"), find(catalog, "record")
+	if !register.Owner || !snapshot.Owner || record.Name == "" || record.Owner {
+		t.Fatalf("wrong catalog policy: %+v %+v %+v", register, snapshot, record)
 	}
 	for _, a := range catalog.Actions {
 		if strings.Contains(a.Name, "approve") || strings.HasPrefix(a.Href, "/import") {
@@ -87,12 +86,12 @@ func TestOwnerOnlyActionsPolicy(t *testing.T) {
 	}
 	found := false
 	for _, tool := range tools.Tools {
-		found = found || tool.Name == "readings_from_table"
+		found = found || tool.Name == "record"
 		if tool.Name == "register_metric" || tool.Name == "snapshot" || strings.Contains(tool.Name, "approve") {
 			t.Fatalf("owner operation exposed as tool: %s", tool.Name)
 		}
 	}
 	if !found {
-		t.Fatal("readings_from_table missing from the MCP tools")
+		t.Fatal("record missing from the MCP tools")
 	}
 }

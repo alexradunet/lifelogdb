@@ -148,8 +148,6 @@ var catalog = []spec{
 	{"record", "Add a reading", "Record a reading of a registered metric for a local day. import_key makes a re-send a no-op. A view offers the metrics read in its last 60 days; /metrics lists them all.",
 		"POST", "/measurements", []Field{req("metric", "text", "Metric"), req("day", "date", "Day"), req("value", "number", "Value"),
 			opt("taken_at", "text", "Taken at (UTC, 2026-06-09T21:14:03.482Z)"), opt("tz", "text", "Zone (IANA)"), opt("import_key", "text", "Key")}, false, false},
-	{"readings-from-table", "Readings from a table", "Turn the table of a page into readings of a registered metric: each row with a day (YYYY-MM-DD) and a plain number is one reading of that day. The unit (in the cell, a unit column, or the header in ( ) or [ ]) must be the metric's; nothing is converted. A sign (<5), a word, a comma decimal, another unit or a second value for one day is reported, not written. A second run writes nothing.",
-		"POST", "/measurements/from-table", []Field{pageField("page", "Page (title)", true), req("metric", "text", "Metric"), opt("column", "text", "Value column, when the table has several")}, false, false},
 	{"correct", "Correct", "Correct a reading with a new value (a reading is corrected once; correct the correction after that).",
 		"POST", "/measurements/{id}/correct", []Field{path("id", "number", "Measurement id"), req("value", "number", "Value")}, false, false},
 	{"retract", "Retract", "Retract a reading that should never have existed.",

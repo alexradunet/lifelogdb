@@ -134,9 +134,6 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 		}
 		e.Actions = append(e.Actions, withOptions(action("file-pages", nil, map[string]any{"ids": strconv.FormatInt(p.ID, 10), "move": "0"}), "category", titles))
 	}
-	if core.HasTable(p.Body) {
-		e.Actions = append(e.Actions, action("readings-from-table", nil, map[string]any{"page": p.Title}))
-	}
 	e.Actions = append(e.Actions, action("tombstone", ids, nil))
 	return e, nil
 }

@@ -418,8 +418,7 @@ point). Embedded: every outgoing link under its kind, every incoming one under `
 what is legal: `save-body` (with the current `body` and `version` filled), `promote`, `rename`, `locate`, `link` and `unlink` (with the kinds this type may start), [`file-pages`](#filed) (a page that may
 be `part-of`, not a day page: `ids` is this page, and `category` offers the category titles; a new title is made),
 `create-page` with `category` filled (a live category page: something is `part-of` it; the new page is made and
-filed in it in one write), `set-picture` (a person), `readings-from-table` (when the
-body holds a table, with `page` filled), `tombstone`, or `revive` alone on a deleted page. In a browser, the page of a
+filed in it in one write), `set-picture` (a person), `tombstone`, or `revive` alone on a deleted page. In a browser, the page of a
 live metric answers 303 to its series, the metric's one page, which carries this page's text, links and actions. The
 writes answer with this entity; `create-page` and `save-body` carry a `result` of the sync shape, `add-file` the kept
 shape. `set-picture` (`POST /pages/{id}/picture`) puts `![[title]]` first in the body, unless that file is the page's
@@ -496,7 +495,7 @@ by default). An alias names the metric too. Links: `self` (`/metrics/{name}` whe
 `all-readings`, `up` (metrics), `habits`, `page` (the metric's page). Embedded: `reading` links. Actions: `record`
 (this metric), and for a habit `check-in` and `stop-habit`, else `start-habit` when unitless. A live metric is a page
 (D27), so its page's actions are here too: `save-body`, `rename`, `link`, `unlink`,
-[`file-pages`](#filed) (this metric), `readings-from-table` (when its body holds a table, with `metric` filled) and `tombstone`.
+[`file-pages`](#filed) (this metric) and `tombstone`.
 
 | property | type | meaning |
 |---|---|---|
@@ -943,24 +942,3 @@ What the save contract did with the body's `[[wikilinks]]` and `#tags`:
 | `unmatched.lon` | number | |
 | `unmatched.map` | string | a map link to it |
 | `embedded` | boolean | `![[title]]` was appended to its day page |
-
-### readings-from-table
-
-`POST /measurements/from-table` (`page`, `metric`, optional `column`): the readings a page's table gives, written
-under the source `import:table`. The answer has class `readings-from-table`, links `self` (the page) and `metric`, and
-this shape as its properties and its `result`:
-
-| property | type | meaning |
-|---|---|---|
-| `page_id` | integer | the page read |
-| `page` | string | its title |
-| `metric` | string | the metric named |
-| `unit` | string | the metric's unit, which every row had to state |
-| `column` | string | the header of the value column read |
-| `written` | integer | readings written now |
-| `existing` | integer | readings an earlier run wrote |
-| `reported[]` | list | the rows that gave no reading |
-| `reported[].row` | integer | the row, 1 under the header |
-| `reported[].day` | string | its day cell, when it has one |
-| `reported[].cell` | string | its value cell |
-| `reported[].reason` | string | why it gave no reading |

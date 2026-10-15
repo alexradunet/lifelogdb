@@ -27,8 +27,7 @@ func read(t *testing.T, p Paths, name string) string {
 
 var allFiles = []string{
 	".agents/skills/lifelog-import-notes/SKILL.md", ".agents/skills/lifelog-keep-photos/SKILL.md",
-	".agents/skills/lifelog-readings-from-table/SKILL.md", ".claude/skills/lifelog-import-notes/SKILL.md",
-	".claude/skills/lifelog-keep-photos/SKILL.md", ".claude/skills/lifelog-readings-from-table/SKILL.md",
+	".claude/skills/lifelog-import-notes/SKILL.md", ".claude/skills/lifelog-keep-photos/SKILL.md",
 	".codex/config.toml", ".mcp.json", ".pi/mcp.json", "AGENTS.md", "CLAUDE.md", "opencode.json",
 }
 
@@ -150,8 +149,8 @@ func TestEachSkillFollowsTheSharedFormat(t *testing.T) {
 			t.Errorf("%s: description of %d characters", name, l)
 		}
 	}
-	if n != 6 {
-		t.Errorf("%d skill files, want 3 skills in 2 folders", n)
+	if n != 4 {
+		t.Errorf("%d skill files, want 2 skills in 2 folders", n)
 	}
 }
 

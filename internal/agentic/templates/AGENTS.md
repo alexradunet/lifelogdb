@@ -32,7 +32,7 @@ Without `--db`, lifelog uses the `life.db` in its own folder. When `life.db` doe
 The MCP server `lifelog` is configured for your framework in this folder (`.mcp.json`, `.codex/config.toml`,
 `opencode.json`, `.pi/mcp.json`). Its tools are the actions of `lifelog actions`, for example `capture`,
 `create_page`, `save_body`, `get`, `get_day`, `find`, `search`, `create_person`, `create_place`, `promote`, `link`,
-`record`, `correct`, `readings_from_table`, `integrity_check`, and `query` (one read-only SQL statement). The rows you
+`record`, `correct` and `integrity_check`. The rows you
 write show you as their writer (`agent:NAME`). Without MCP, use the CLI through your shell with the same writer and the
 same database, or the rows show the owner as their writer and the owner's rules do not hold:
 `"{{.Exe}}" --db "{{.DB}}" --source agent:NAME do ACTION field=value` (NAME as the MCP config names you).
@@ -64,5 +64,4 @@ through LM Studio or llama.cpp) keeps the text here.
 | skill | for |
 |---|---|
 | `lifelog-import-notes` | put a folder of notes (a journal of daily notes, topic notes) into `life.db`, with the owner |
-| `lifelog-readings-from-table` | turn a table of measurements in a page (bloodwork, weight) into readings |
 | `lifelog-keep-photos` | keep a chosen photo or file for a day, with the place it was taken |

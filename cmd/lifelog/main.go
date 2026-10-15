@@ -26,13 +26,13 @@ const version = "0.1.0"
 // opts are the flags of a command line and its words. A flag may stand anywhere on the line; a command takes the
 // global flags and its own (command.flags), and refuses any other.
 type opts struct {
-	db, url, source, addr, agent, mood, day, from, to, title, text, preview, mime, at, radius, column string
-	tokenFile, tlsCert, tlsKey, snapshots                                                             string
-	allowOrigins                                                                                      []string
-	human, dryRun, dbExplicit, addrExplicit, public, force                                            bool
-	args                                                                                              []string
-	given                                                                                             []string           // the flags the line named
-	pub                                                                                               *api.PublicOptions // serve --public, read by its prepare
+	db, url, source, addr, agent, mood, day, from, to, title, text, preview, mime, at, radius string
+	tokenFile, tlsCert, tlsKey, snapshots                                                     string
+	allowOrigins                                                                              []string
+	human, dryRun, dbExplicit, addrExplicit, public, force                                    bool
+	args                                                                                      []string
+	given                                                                                     []string           // the flags the line named
+	pub                                                                                       *api.PublicOptions // serve --public, read by its prepare
 }
 
 // globalFlags are the flags every command takes.
@@ -228,22 +228,6 @@ var commands = []command{
 			return nil
 		},
 		run: func(ctx context.Context, e env, _ []string) error { return doAction(ctx, e, "snapshot", nil) }},
-	{name: "readings", gap: true, flags: []string{"--column"},
-		usage: "An import is done by a local agent with the owner, through the catalog (lifelog mcp --agent NAME;\n" +
-			"docs/plans/089-no-import-process.md). One action helps it:\n" +
-			"  lifelog readings PAGE METRIC [--column NAME]   readings of METRIC from the table of PAGE (readings-from-table):\n" +
-			"                                      a row with a day and a plain number in the metric's unit; the\n" +
-			"                                      others are reported; a second run writes nothing",
-		run: func(ctx context.Context, e env, args []string) error {
-			if len(args) != 2 {
-				return errors.New("readings PAGE METRIC [--column NAME]")
-			}
-			vals := map[string]string{"page": args[0], "metric": args[1]}
-			if e.o.column != "" {
-				vals["column"] = e.o.column
-			}
-			return doAction(ctx, e, "readings-from-table", vals)
-		}},
 }
 
 // commandNamed is the command of a name, nil for none.
@@ -291,7 +275,7 @@ func parse(argv []string) (opts, error) {
 	vals := map[string]*string{"--db": &o.db, "--url": &o.url, "--source": &o.source, "--addr": &o.addr,
 		"--agent": &o.agent, "--mood": &o.mood, "--day": &o.day, "--from": &o.from, "--to": &o.to,
 		"--title": &o.title, "--text": &o.text, "--preview": &o.preview, "--mime": &o.mime, "--at": &o.at, "--radius": &o.radius,
-		"--token-file": &o.tokenFile, "--tls-cert": &o.tlsCert, "--tls-key": &o.tlsKey, "--snapshots": &o.snapshots, "--column": &o.column}
+		"--token-file": &o.tokenFile, "--tls-cert": &o.tlsCert, "--tls-key": &o.tlsKey, "--snapshots": &o.snapshots}
 	bools := map[string]*bool{"--human": &o.human, "--dry-run": &o.dryRun, "--public": &o.public, "--force": &o.force}
 	for i := 0; i < len(argv); i++ {
 		a := argv[i]
