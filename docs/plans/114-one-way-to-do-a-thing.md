@@ -8,7 +8,7 @@
 - **Date / baseline:** 2026-10-15, `ebf3a87` (master).
 - **Priority:** P2. **Effort:** L, in four steps. **Risk:** LOW to MEDIUM: the browser, and the titles of the
   catalog's actions. No schema change, no new data rule, no action name changes.
-- **Status:** IN PROGRESS: steps 1 and 2 done.
+- **Status:** IN PROGRESS: steps 1 to 3 done.
 - **Resolves:** no issue, no RFC. The owner's request (2026-10-15), after plan 113: "consolidate this behaviour
   across the entire app so that users always follow the same patterns." An interview followed.
 
@@ -98,3 +98,8 @@ Each step is one commit, with its tests, and can ship alone.
 - **Step 2, + Add.** The card's + Add is one template, `add-reading` (`layout.html`). A day's reading tile, and so
   Today's, uses it for that day; its label is Today on today, else the short day. Test:
   `TestADaysReadingTileAddsAReadingForThatDay`.
+- **Step 3, category badges.** A page that may be `part-of` (not a day page) offers `file-pages` with its own id
+  and the category titles as the options of `category`. One template, `categories` (`layout.html`), draws the
+  badges in the head of a page and of a metric: x posts `unlink` with `part-of`, and + Add posts `file-pages`. A
+  badge shows the category the page is in, not its path. The metric's `link` is no longer titled "File in
+  category" with `part-of` filled: it is "Add a link", as on every page. Test: `TestAPagesCategoriesAreBadges`.

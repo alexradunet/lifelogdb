@@ -111,7 +111,7 @@ func (h *server) filePages(r *http.Request, src string) (*Entity, error) {
 	for _, id := range ids {
 		e.Entities = append(e.Entities, link("item", pageHref(id), strconv.FormatInt(id, 10)))
 	}
-	verb := "Filed"
+	verb := "Put"
 	if move {
 		verb = "Moved"
 	}

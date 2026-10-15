@@ -75,7 +75,7 @@ func TestAddFileKeepsAPhotoAndItsPicture(t *testing.T) {
 	if res, _ := again.Result.(map[string]any); err != nil || res["existing"] != true || href(again, "self") != href(e, "self") {
 		t.Errorf("the same original again: %v %+v", err, again.Result)
 	}
-	if got := names(e); got != "save-body,rename,link,unlink,tombstone" {
+	if got := names(e); got != "save-body,rename,link,unlink,file-pages,tombstone" {
 		t.Errorf("a file page offers %s (never promote)", got)
 	}
 	if list := must(c.Get(t.Context(), "/media")); len(list.Entities) != 1 || list.Entities[0].Title != "2026-10-04 Lake.jpg" {

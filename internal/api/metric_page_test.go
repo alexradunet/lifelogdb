@@ -151,7 +151,7 @@ func TestTheSeriesCarriesItsPage(t *testing.T) {
 	root := must(c.Get(t.Context(), "/"))
 	must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Body"}))
 	series := must(c.Get(t.Context(), "/metrics/weight"))
-	must(c.Do(t.Context(), find(series, "link"), map[string]string{"to": "Body"}))
+	must(c.Do(t.Context(), find(series, "link"), map[string]string{"to": "Body", "kind": "part-of"}))
 
 	series = must(c.Get(t.Context(), "/metrics/weight"))
 	p := series.Properties.(map[string]any)
@@ -171,8 +171,8 @@ func TestTheSeriesCarriesItsPage(t *testing.T) {
 		t.Errorf("the series lacks its links or backlinks: %v %v", p["links"], p["backlinks"])
 	}
 	link := find(series, "link")
-	if link.Title != "File in category" || !hasOption(link, "kind", "related") {
-		t.Errorf("link is not File in category with the other kinds: %+v", link)
+	if link.Title != "Add a link" || !hasOption(link, "kind", "related") || !hasOption(link, "kind", "part-of") {
+		t.Errorf("link is not Add a link with every kind: %+v", link)
 	}
 	for _, name := range []string{"save-body", "rename", "unlink", "tombstone"} {
 		if find(series, name).Name == "" {

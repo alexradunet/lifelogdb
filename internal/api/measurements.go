@@ -192,11 +192,6 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 		e.Links = append(e.Links, link("page", pageHref(m.ID), "Page"))
 		for _, a := range page.Actions {
 			switch a.Name {
-			case "link": // the link a metric makes most: filing it in a category (D26)
-				a.Title = "File in category"
-				if f := a.field("kind"); f != nil {
-					f.Value = "part-of"
-				}
 			case "readings-from-table": // a table in a metric's own text is of that metric, unless the owner says
 				if f := a.field("metric"); f != nil {
 					f.Value = name

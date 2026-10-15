@@ -410,7 +410,9 @@ month. Actions: `open-day`.
 tombstoned page adds `deleted`. Links: `day` (a day page's day view), `preview` (a file's picture), `map` (a place's
 point). Embedded: every outgoing link under its kind, every incoming one under `backlink` and its kind. Actions by
 what is legal: `save-body` (with the current `body` and `version` filled), `promote`, `promote-period`, `rename`,
-`edit-period`, `locate`, `link` and `unlink` (with the kinds this type may start), `set-picture` (a person), `readings-from-table` (when the
+`edit-period`, `locate`, `link` and `unlink` (with the kinds this type may start), [`file-pages`](#filed) (a page that may
+be `part-of`, not a day page: `ids` is this page, and `category` offers the category titles; a new title is made),
+`set-picture` (a person), `readings-from-table` (when the
 body holds a table, with `page` filled), `tombstone`, or `revive` alone on a deleted page. In a browser, the page of a
 live metric answers 303 to its series, the metric's one page, which carries this page's text, links and actions; the
 page of a live conversation answers 303 to `/conversations/{id}`, unless the query has `view=page`. The
@@ -500,8 +502,8 @@ readings over `(from, to]`, or with no `from` every reading through `to` (`all_h
 by default). An alias names the metric too. Links: `self` (`/metrics/{name}` when asked with no query),
 `all-readings`, `up` (metrics), `habits`, `page` (the metric's page). Embedded: `reading` links. Actions: `record`
 (this metric), and for a habit `check-in` and `stop-habit`, else `start-habit` when unitless. A live metric is a page
-(D27), so its page's actions are here too: `save-body`, `rename`, `link` (titled "File in category", with `kind`
-`part-of` filled), `unlink`, `readings-from-table` (when its body holds a table, with `metric` filled) and `tombstone`.
+(D27), so its page's actions are here too: `save-body`, `rename`, `link`, `unlink`,
+[`file-pages`](#filed) (this metric), `readings-from-table` (when its body holds a table, with `metric` filled) and `tombstone`.
 
 | property | type | meaning |
 |---|---|---|

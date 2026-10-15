@@ -42,7 +42,8 @@
 {{$s := .Props}}{{$r := .MetricReadings}}{{$checkIn := .Action "check-in"}}
 {{$today := ""}}{{with .Shell}}{{$today = .Today}}{{end}}{{$unit := ""}}{{with $s.unit}}{{$unit = .}}{{end}}
 <header class="page-head"><div class="what"><span class="kind">{{if $checkIn}}habit{{else}}metric{{end}}</span><h1>{{.Title}}</h1>
-<p class="sub">{{range $s.categories}}<span class="badge">{{.}}</span>{{end}}{{if not $s.all_history}}<a href="{{.Link "all-readings"}}">All readings</a>{{end}}<a href="/metrics">Every metric</a></p></div>
+{{template "categories" (dict "v" $ "links" $s.links "back" $.Here)}}
+<p class="sub">{{if not $s.all_history}}<a href="{{.Link "all-readings"}}">All readings</a>{{end}}<a href="/metrics">Every metric</a></p></div>
 {{if not $r.Habit}}{{with $r.Latest}}<div class="tools"><div class="reading-tile"><span class="name">Latest, {{$.Date .day}}</span>
 <a class="reading" href="/measurements/{{num .id}}">{{num .value}}{{with $unit}} <span class="unit">{{.}}</span>{{end}}</a></div></div>{{end}}{{end}}
 </header>
@@ -95,8 +96,7 @@
 {{with $s.links}}<dl>{{range group . "kind"}}<dt>{{.Key}}</dt>
 <dd>{{range .Items}}<a href="/pages/{{num .id}}">{{$.Date .title}}</a>{{with .note}} <small>({{.}})</small>{{end}}{{end}}</dd>{{end}}</dl>
 {{else}}<p class="empty">Filed in no category, and linked to no page.</p>{{end}}
-<div class="actions">{{template "boxed" (form (.Action "link") "hide" "kind,note" "back" $.Here)}}
-{{template "boxed" (form (.Action "link") "button" "Add a typed link" "back" $.Here)}}
+<div class="actions">{{template "boxed" (form (.Action "link") "button" "Add a typed link" "back" $.Here)}}
 {{template "boxed" (form (.Action "unlink") "button" "Remove a typed link" "back" $.Here)}}</div>
 </section>
 

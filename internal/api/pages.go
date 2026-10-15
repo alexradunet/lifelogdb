@@ -6,6 +6,8 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"slices"
+	"strconv"
 	"strings"
 
 	"lifelog/internal/core"
@@ -115,6 +117,19 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 	if len(kinds) > 0 {
 		e.Actions = append(e.Actions, withOptions(action("link", ids, nil), "kind", kinds))
 		e.Actions = append(e.Actions, withOptions(action("unlink", ids, nil), "kind", kinds))
+	}
+	if slices.Contains(kinds, "part-of") && !p.IsDayPage { // its categories, as badges (docs/plans/114-one-way-to-do-a-thing.md)
+		cs, err := h.s.Categories(ctx)
+		if err != nil {
+			return nil, err
+		}
+		var titles []string
+		for _, c := range cs {
+			if c.ID != p.ID {
+				titles = append(titles, c.Title)
+			}
+		}
+		e.Actions = append(e.Actions, withOptions(action("file-pages", nil, map[string]any{"ids": strconv.FormatInt(p.ID, 10), "move": "0"}), "category", titles))
 	}
 	if core.HasTable(p.Body) {
 		e.Actions = append(e.Actions, action("readings-from-table", nil, map[string]any{"page": p.Title}))

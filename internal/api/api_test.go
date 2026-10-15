@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -108,7 +109,7 @@ func TestActionsAreOfferedOnlyWhereLegal(t *testing.T) {
 		t.Error("a day page does not offer an at link")
 	}
 	ana := must(c.Get(t.Context(), dayPage.Entities[0].Href))
-	if got := names(ana); got != "save-body,promote,promote-period,rename,link,unlink,tombstone" {
+	if got := names(ana); got != "save-body,promote,promote-period,rename,link,unlink,file-pages,tombstone" {
 		t.Errorf("a plain page offers %s", got)
 	}
 	if hasOption(find(ana, "link"), "kind", "at") {
@@ -404,7 +405,7 @@ func TestMetricsAreGroupedByCategory(t *testing.T) {
 	thyroid := must(c.Get(t.Context(), "/pages?title=Thyroid"))
 	must(c.Do(t.Context(), find(thyroid, "link"), map[string]string{"to": "Biomarkers", "kind": "part-of"}))
 	tsh := must(c.Get(t.Context(), "/metrics/tsh"))
-	if href(tsh, "page") == "" || find(tsh, "link").Title != "File in category" {
+	if href(tsh, "page") == "" || find(tsh, "file-pages").Name == "" || find(tsh, "link").Title != "Add a link" {
 		t.Fatalf("a series links its metric's page and offers to file it: %v", names(tsh))
 	}
 	must(c.Do(t.Context(), find(tsh, "link"), map[string]string{"to": "Thyroid", "kind": "part-of"}))
@@ -436,8 +437,8 @@ func TestMetricsAreGroupedByCategory(t *testing.T) {
 	}
 	// The metric's page opens this one in a browser (TestTheBrowserOpensAMetricsPageAtItsMetric), so it holds the note.
 	s := browse(t, h, "/metrics/TSH")
-	if !strings.Contains(s, `<span class="badge">Biomarkers/Thyroid</span>`) {
-		t.Error("a series does not show its category")
+	if !regexp.MustCompile(`<span class="badge category"><a href="/pages/\d+">Thyroid</a><form class="tiny" method="POST" action="/pages/\d+/unlink"`).MatchString(s) {
+		t.Error("a series does not show its category as a badge with its x")
 	}
 	if !strings.Contains(s, "thyroid-stimulating hormone") {
 		t.Error("a metric's one page does not hold its note")
@@ -550,7 +551,7 @@ func TestRenamedIdentityRetainsActionsAndAliasWrites(t *testing.T) {
 	}
 	other := must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Other", "body": "[[Typo]]"}))
 	current := must(c.Get(t.Context(), oldHref))
-	if current.Title != "Correct" || names(current) != "save-body,promote,promote-period,rename,link,unlink,tombstone" {
+	if current.Title != "Correct" || names(current) != "save-body,promote,promote-period,rename,link,unlink,file-pages,tombstone" {
 		t.Fatalf("renamed actions: %+v", current)
 	}
 	version := current.Properties.(map[string]any)["version"].(string)

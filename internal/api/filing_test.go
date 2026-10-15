@@ -80,7 +80,7 @@ func TestFileMetricsAtOnce(t *testing.T) {
 	p := props(done)
 	cat := p["category"].(map[string]any)
 	if done.Class[0] != "filed" || cat["title"] != "Bloodwork" || p["created"] != true || p["added"] != json.Number("2") || p["count"] != json.Number("2") ||
-		len(done.Entities) != 2 || done.Entities[0].Href != "/pages/"+ids["Ferritin"] || done.Result != "Filed 2 in Bloodwork (a new category)." {
+		len(done.Entities) != 2 || done.Entities[0].Href != "/pages/"+ids["Ferritin"] || done.Result != "Put 2 in Bloodwork (a new category)." {
 		t.Fatalf("the answer: %v %v %v", done.Class, p, done.Result)
 	}
 	if got, want := groupsOf(t, c), "Habits:Walk Bloodwork:Ferritin,Steps Not filed:Mood,Weight"; got != want {
@@ -89,7 +89,7 @@ func TestFileMetricsAtOnce(t *testing.T) {
 
 	// An agent may file: a part-of link is open to it, as link is.
 	agent := client.InProcess(h, "agent:test")
-	if again := must(agent.Do(ctx, file, map[string]string{"ids": ids["Weight"], "category": "Body"})); again.Result != "Filed 1 in Body (a new category)." {
+	if again := must(agent.Do(ctx, file, map[string]string{"ids": ids["Weight"], "category": "Body"})); again.Result != "Put 1 in Body (a new category)." {
 		t.Errorf("an agent's filing: %v", again.Result)
 	}
 	// Move takes Steps out of Bloodwork, and Ferritin stays in it.
@@ -204,7 +204,7 @@ func TestTheMetricsPageDrawsCards(t *testing.T) {
 	if rec.Code != http.StatusSeeOther || !feedbackLocation(rec.Header().Get("Location"), "/metrics") {
 		t.Fatalf("the form: %d %q %.300s", rec.Code, rec.Header().Get("Location"), rec.Body.String())
 	}
-	if after := browse(t, h, rec.Header().Get("Location")); !strings.Contains(after, "Filed 2 in Daily (a new category).") || !strings.Contains(after, `<a href="#c-`) || strings.Contains(after, `id="not-filed"`) {
+	if after := browse(t, h, rec.Header().Get("Location")); !strings.Contains(after, "Put 2 in Daily (a new category).") || !strings.Contains(after, `<a href="#c-`) || strings.Contains(after, `id="not-filed"`) {
 		t.Errorf("/metrics after the filing: %.600s", after)
 	}
 	// A refused form comes back to the page with the bar open and the category it sent.

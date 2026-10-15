@@ -134,3 +134,59 @@ func TestADaysReadingTileAddsAReadingForThatDay(t *testing.T) {
 		t.Error("the day does not show the added reading on its tile")
 	}
 }
+
+// TestAPagesCategoriesAreBadges: a page shows its categories as badges; + Add puts it in one (a new name makes it),
+// and x takes it out of that one only. A day page has none.
+func TestAPagesCategoriesAreBadges(t *testing.T) {
+	c, h := freshOn(t, fixedToday)
+	ctx := t.Context()
+	root := must(c.Get(ctx, "/"))
+	garden := must(c.Do(ctx, find(root, "create-page"), map[string]string{"title": "Garden"}))
+	must(c.Do(ctx, find(root, "create-page"), map[string]string{"title": "Seeds"}))
+	must(c.Do(ctx, find(must(c.Get(ctx, "/pages?title=Seeds")), "file-pages"), map[string]string{"category": "Projects"}))
+	must(c.Do(ctx, find(garden, "link"), map[string]string{"to": "Seeds", "kind": "related"}))
+	self := href(garden, "self")
+	id := self[strings.LastIndex(self, "/")+1:]
+
+	before := browse(t, h, self)
+	for _, want := range []string{`<div class="categories" role="group" aria-label="Categories"><span class="label">Categories</span>`, `<span class="meta">none</span>`,
+		`<input type="hidden" name="ids" value="` + id + `"><input type="hidden" name="move" value="0">`, `<option value="Projects">`} {
+		if !strings.Contains(before, want) {
+			t.Errorf("the page lacks %s", want)
+		}
+	}
+	if strings.Contains(before, `<option value="Garden">`) {
+		t.Error("a page is offered as its own category")
+	}
+
+	for _, cat := range []string{"Projects", "Outdoors"} {
+		rec := submit(h, "/pages/file", url.Values{"ids": {id}, "move": {"0"}, "category": {cat}, "back": {self}}, "")
+		if rec.Code != http.StatusSeeOther || !feedbackLocation(rec.Header().Get("Location"), self) {
+			t.Fatalf("+ Add %s: %d %q", cat, rec.Code, rec.Header().Get("Location"))
+		}
+	}
+	after := browse(t, h, self)
+	for _, cat := range []string{"Projects", "Outdoors"} {
+		if !regexp.MustCompile(`<span class="badge category"><a href="/pages/\d+">` + cat + `</a><form class="tiny" method="POST" action="` + self + `/unlink"`).MatchString(after) {
+			t.Errorf("the page has no badge for %s", cat)
+		}
+	}
+
+	rec := submit(h, self+"/unlink", url.Values{"to": {"Outdoors"}, "kind": {"part-of"}, "back": {self}}, "")
+	if loc := rec.Header().Get("Location"); rec.Code != http.StatusSeeOther || (loc != self && !feedbackLocation(loc, self)) {
+		t.Fatalf("x: %d %q", rec.Code, loc)
+	}
+	links := map[string]string{}
+	for _, l := range props(must(c.Get(ctx, self)))["links"].([]any) {
+		l := l.(map[string]any)
+		links[l["title"].(string)] = l["kind"].(string)
+	}
+	if len(links) != 2 || links["Projects"] != "part-of" || links["Seeds"] != "related" {
+		t.Errorf("after x the links are %v, want Projects part-of and Seeds related", links)
+	}
+
+	day := must(c.Do(ctx, find(root, "capture"), map[string]string{"text": "Dug the beds."}))
+	if body := browse(t, h, href(day, "page")); strings.Contains(body, `aria-label="Categories"`) {
+		t.Error("a day page shows categories")
+	}
+}

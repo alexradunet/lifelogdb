@@ -7,10 +7,11 @@
 <header class="page-head"><div class="what">
 <span class="kind">{{if $p.is_day_page}}day page{{else}}{{$p.entity_type}}{{end}}{{if $p.deleted_at}}, deleted{{end}}</span>
 <h1>{{if $p.is_day_page}}{{$.Date .Title}}{{else}}{{.Title}}{{end}}</h1>
+{{if not $p.deleted_at}}{{template "categories" (dict "v" $ "links" $p.links "back" $.Here)}}{{end}}
 {{if or $p.is_day_page (.Link "map")}}<p class="sub">{{if $p.is_day_page}}<a href="{{.Link "day"}}">{{weekday $p.day}}: the day view</a>{{end}}{{with .Link "map"}}<a href="{{.}}" rel="noreferrer">Open the map</a>{{end}}</p>{{end}}
 </div></header>
 
-{{if $p.deleted_at}}<div class="alert" role="alert"><p><strong>Deleted {{$.When $p.deleted_at}}.</strong> Nothing is ever removed: revive it to bring it back.</p>
+{{if $p.deleted_at}}<div class="alert" role="alert"><p><strong>Deleted {{$.When $p.deleted_at}}.</strong> Nothing is ever removed: restore it to bring it back.</p>
 {{template "form" (form (.Action "revive") "class" "tiny")}}</div>{{end}}
 
 <div class="sheet-margin">
