@@ -70,11 +70,11 @@ func TestAWriteEndsInAToast(t *testing.T) {
 func TestAnOwnerActionCarriesTheOwnerMark(t *testing.T) {
 	_, h := fresh(t)
 	body := page(t, h, "/")
-	for _, want := range []string{`<summary class="button">Take a snapshot <span class="owner">owner</span></summary>`,
-		`<summary class="button">New metric <span class="owner">owner</span></summary>`} {
-		if !strings.Contains(body, want) {
-			t.Errorf("Home lacks %s", want)
-		}
+	if want := `<summary class="button">Take a snapshot <span class="owner">owner</span></summary>`; !strings.Contains(body, want) {
+		t.Errorf("Home lacks %s", want)
+	}
+	if want := `<summary class="button">New metric <span class="owner">owner</span></summary>`; !strings.Contains(page(t, h, "/metrics"), want) {
+		t.Errorf("/metrics lacks %s", want)
 	}
 	if strings.Contains(body, `New page <span class="owner">`) {
 		t.Error("an action that is not the owner's alone carries the owner mark")

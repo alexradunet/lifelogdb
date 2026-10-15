@@ -547,9 +547,12 @@ by default). An alias names the metric too. Links: `self` (`/metrics/{name}` whe
 ### metrics
 
 `GET /metrics`: the registry. Embedded: `item` links to each series. Actions: `record` with the metrics as options,
-[`file-pages`](#filed), and a `check-in` for each habit of today. A browser draws each metric as a card: its latest
-reading, the line of its recent readings, and for a habit its strip of 14 days
-([plan 112](docs/plans/112-metrics-as-cards.md)).
+[`file-pages`](#filed), `register-metric` (owner), and a `check-in` for each habit of today. A browser draws each metric
+as a card: its latest reading, the line of its recent readings, and for a habit its strip of 14 days
+([plan 112](docs/plans/112-metrics-as-cards.md)). `register-metric` takes `category` (a page title, made when missing)
+and `habit_from` (a day, or `today`): one write makes the metric, files it and starts its habit. A refusal of any
+step writes nothing. Its answer is the metric's [series](#series), with a `result` sentence
+([plan 113](docs/plans/113-new-metric-on-metrics.md)).
 With `?show=habits` (and `day`, `from`, `to`) it also carries the properties, links, embedded links and `check-in` actions of [habits](#habits). The browser draws that as the Habits lens of Metrics ([plan 111](docs/plans/111-one-metrics-view.md)).
 
 | property | type | meaning |

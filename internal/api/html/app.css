@@ -649,6 +649,19 @@ details.file-bar{position:sticky; inset-block-start:0; z-index:3; padding:var(--
     &>label{flex:1 1 14rem}
     & .desc{flex:1 1 100%; color:var(--text-muted); font-size:13px}}}
 main:not(:has(.metric-card input:checked)) details.file-bar button.primary{opacity:.55}
+/* New metric (docs/plans/113-new-metric-on-metrics.md): the checked kind shows its form, with no script. A category's
+   heading carries "+ New metric here", and a number card its + fold, one value for today. */
+.new-metric{& form{display:none}
+  &:has(input[name=new-kind][value=number]:checked) form.kind-number,
+  &:has(input[name=new-kind][value=score]:checked) form.kind-score,
+  &:has(input[name=new-kind][value=habit]:checked) form.kind-habit{display:flex}
+  & form>label{align-self:stretch}
+  & .desc{margin:0; font-size:13px; color:var(--text-muted)}}
+.metric-group>.panel-head{flex-wrap:wrap; & h2,& h3{margin:0}}
+.metric-card .add-reading{align-self:flex-start;
+  &>summary{min-inline-size:var(--control-small); &::before{content:none}}
+  &[open]{align-self:stretch; &>summary{margin-block-end:0}}
+  & form{margin-block-start:var(--space-2); & label{flex:1 1 6rem; min-inline-size:0} & input{inline-size:100%}}}
 /* On a narrow screen the rail is a bar at the top, 72px high as drawn (its controls and their bevels): the file bar
    stays under it. */
 @media (max-width:899px){details.file-bar{inset-block-start:calc(72px + env(safe-area-inset-top, 0px))}}

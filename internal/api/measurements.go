@@ -71,7 +71,7 @@ func (h *server) metrics(r *http.Request) (*Entity, error) {
 		Properties: map[string]any{"metrics": rows, "groups": groupMetrics(ms, cs), "categories": cs, "today": today},
 		Links:      []Link{link("self", "/metrics", "Metrics"), link("index", "/", "Home")},
 		Actions: []Action{withOptions(action("record", nil, map[string]any{"day": today}), "metric", names),
-			action("file-pages", nil, nil)}}
+			action("file-pages", nil, nil), action("register-metric", nil, nil)}}
 	for _, m := range ms {
 		e.Entities = append(e.Entities, link("item", metricHref(m.Name), m.Name))
 	}
@@ -346,8 +346,28 @@ func (h *server) registerMetric(r *http.Request, src string) (*Entity, error) {
 	if err := required(v, "name"); err != nil {
 		return nil, err
 	}
-	if _, err := h.s.RegisterMetric(r.Context(), src, v.Get("name"), v.Get("unit"), v.Get("note")); err != nil {
+	m := core.NewMetric{Name: v.Get("name"), Unit: v.Get("unit"), Note: v.Get("note"), Category: v.Get("category"), HabitFrom: v.Get("habit_from")}
+	if m.HabitFrom == "today" { // the server's day, as check-in reads it
+		m.HabitFrom = h.localDay()
+	}
+	added, err := h.s.CreateMetric(r.Context(), src, m)
+	if err != nil {
 		return nil, err
 	}
-	return h.seriesEntity(r.Context(), v.Get("name"), nil)
+	e, err := h.seriesEntity(r.Context(), m.Name, nil)
+	if err != nil {
+		return nil, err
+	}
+	result := "New metric " + e.Title
+	if !added {
+		result = e.Title + " exists"
+	}
+	if m.Category != "" {
+		result += ", in " + m.Category
+	}
+	if m.HabitFrom != "" {
+		result += ", a habit from " + m.HabitFrom
+	}
+	e.Result = result + "."
+	return e, nil
 }

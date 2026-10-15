@@ -4,7 +4,7 @@
 {{$lens := ""}}{{with .Props.show}}{{$lens = .}}{{end}}{{$h := .Props}}
 <header class="page-head"><div class="what">{{if eq $lens "habits"}}<span class="date">{{$.Date $h.day}}</span>{{end}}<h1>Metrics</h1>
 <p class="sub"><a href="/metrics"{{if ne $lens "habits"}} aria-current="true"{{end}}>By category</a><a href="/metrics?show=habits"{{if eq $lens "habits"}} aria-current="true"{{end}}>Habits</a>{{if eq $lens "habits"}}<a href="/days/{{$h.day}}">{{weekday $h.day}}: the day view</a>{{end}}</p></div>
-<div class="tools">{{if eq $lens "habits"}}{{$prev := shortDay (addDays $h.day -1)}}{{$next := shortDay (addDays $h.day 1)}}{{template "step" (dict "href" (.Link "prev") "rel" "prev" "label" (printf "Previous day, %s" $prev) "text" $prev)}}{{template "step" (dict "href" (.Link "next") "rel" "next" "label" (printf "Next day, %s" $next) "text" $next)}}{{else}}{{template "boxed" (form (.Action "record") "button" "Record a reading" "more" "session_id,taken_at,tz,import_key")}}{{end}}</div></header>
+<div class="tools">{{if eq $lens "habits"}}{{$prev := shortDay (addDays $h.day -1)}}{{$next := shortDay (addDays $h.day 1)}}{{template "step" (dict "href" (.Link "prev") "rel" "prev" "label" (printf "Previous day, %s" $prev) "text" $prev)}}{{template "step" (dict "href" (.Link "next") "rel" "next" "label" (printf "Next day, %s" $next) "text" $next)}}{{else}}{{with .Action "register-metric"}}{{template "new-metric" (dict "action" . "view" $)}}{{end}}{{with .Action "file-pages"}}<a class="button" href="/metrics?new=category#file-bar">New category</a>{{end}}{{end}}</div></header>
 {{if eq $lens "habits"}}{{with $h.habits}}<div class="scroll"><table><caption>Every habit active on this day, and what it was</caption>
 <thead><tr><th scope="col">habit</th><th scope="col">state</th><th scope="col">record</th></tr></thead>
 <tbody>{{range .}}{{$href := printf "/metrics/%s" (pathesc .metric)}}{{$name := .metric}}
@@ -17,20 +17,20 @@
 <thead><tr><th scope="col">habit</th><th scope="col" class="num">done</th><th scope="col" class="num">not done</th><th scope="col" class="num">not recorded</th><th scope="col" class="num">invalid</th><th scope="col" class="num">active days</th></tr></thead>
 <tbody>{{range .}}<tr><td>{{.metric}}</td><td class="num">{{num .done}}</td><td class="num">{{num .not_done}}</td><td class="num">{{num .not_recorded}}</td><td class="num">{{num .invalid}}</td><td class="num">{{num .active_days}}</td></tr>{{end}}</tbody>
 </table></div>{{end}}
-{{else}}{{$file := .Action "file-pages"}}{{$sections := .MetricSections}}
-{{if gt (len $sections) 1}}<nav class="kinds jump" aria-label="Groups">{{range $sections}}<a href="#{{.Anchor}}">{{.Title}} <small>{{.Count}}</small></a>{{end}}</nav>{{end}}
-{{with $file}}{{$refused := and $.Refused (eq $.Refused.Href .Href)}}<details class="file-bar"{{if $refused}} open{{end}}><summary>File in a category</summary>
-<form id="file-metrics" method="POST" action="{{.Href}}" data-action="{{.Name}}"><input type="hidden" name="back" value="{{$.Here}}">
-<label><span>Category <small>required</small></span><input type="text" name="category" list="metric-categories" required value="{{if $refused}}{{$.Sent.Get "category"}}{{end}}" placeholder="Bloodwork, Sport, Financial"></label>
+{{else}}{{$file := .Action "file-pages"}}{{$new := .Action "register-metric"}}{{$sections := .MetricSections}}
 <datalist id="metric-categories">{{range $.Props.categories}}<option value="{{.title}}">{{.path}}</option>{{end}}</datalist>
+{{if gt (len $sections) 1}}<nav class="kinds jump" aria-label="Groups">{{range $sections}}<a href="#{{.Anchor}}">{{.Title}} <small>{{.Count}}</small></a>{{end}}</nav>{{end}}
+{{with $file}}{{$refused := and $.Refused (eq $.Refused.Href .Href)}}<details class="file-bar" id="file-bar"{{if or $refused (eq ($.Asked "new") "category")}} open{{end}}><summary>Move to a category</summary>
+<form id="file-metrics" method="POST" action="{{.Href}}" data-action="{{.Name}}"><input type="hidden" name="back" value="/metrics">
+<label><span>Category <small>required</small></span><input type="text" name="category" list="metric-categories" required value="{{if $refused}}{{$.Sent.Get "category"}}{{end}}" placeholder="Bloodwork, Sport, Financial"></label>
 <fieldset class="segmented"><legend>Keep the other categories?</legend><label><input type="radio" name="move" value="0"{{if not (and $refused (eq ($.Sent.Get "move") "1"))}} checked{{end}}><span>Add</span></label><label><input type="radio" name="move" value="1"{{if and $refused (eq ($.Sent.Get "move") "1")}} checked{{end}}><span>Move</span></label></fieldset>
-<span class="desc">Check the cards to file, then file them.</span><button class="primary">File selected</button></form></details>{{end}}
+<span class="desc">Check the cards, then type a category. A new name makes a new category.</span><button class="primary">File selected</button></form></details>{{end}}
 {{range $sections}}<section class="group metric-group" id="{{.Anchor}}" aria-label="{{.Title}}">
-<h2>{{if .Page}}<a href="/pages/{{.Page}}">{{.Title}}</a>{{else}}{{.Title}}{{end}} <small>{{.Count}}</small></h2>
+<div class="panel-head"><h2>{{if .Page}}<a href="/pages/{{.Page}}">{{.Title}}</a>{{else}}{{.Title}}{{end}} <small>{{.Count}}</small></h2>{{if and $new .Page}}{{template "new-here" .Title}}{{end}}</div>
 {{with .Cards}}{{template "metric-cards" (dict "cards" . "file" $file "view" $)}}{{end}}
-{{range .Subs}}<h3><a href="/pages/{{.Page}}">{{.Title}}</a> <small>{{len .Cards}}</small></h3>
+{{range .Subs}}<div class="panel-head"><h3><a href="/pages/{{.Page}}">{{.Title}}</a> <small>{{len .Cards}}</small></h3>{{if $new}}{{template "new-here" .Title}}{{end}}</div>
 {{with .Cards}}{{template "metric-cards" (dict "cards" . "file" $file "view" $)}}{{end}}{{end}}
-</section>{{else}}<p class="empty">No metric yet. Register one from Home.</p>{{end}}
+</section>{{else}}<p class="empty">No metric yet. Make the first one with New metric.</p>{{end}}
 {{end}}
 {{template "foot" .}}{{end}}
 
@@ -131,4 +131,38 @@
 {{else if .Measurement}}<a class="reading" href="/measurements/{{.Measurement}}">{{.Value}}{{with .Unit}} <span class="unit">{{.}}</span>{{end}}</a>
 <span class="meta">{{.When}}{{if gt .Count 1}} · {{.Count}} readings{{end}}</span>
 {{.Line}}{{else}}<span class="meta">No reading yet{{with .Unit}} · {{.}}{{end}}</span>{{end}}
+{{if not .Habit}}{{$name := .Name}}{{$unit := .Unit}}{{with $v.Action "record"}}<details class="add-reading"><summary class="button small" aria-label="Add a reading of {{$name}}">+ Add</summary>
+<form class="inline" method="POST" action="{{.Href}}" data-action="{{.Name}}"><input type="hidden" name="back" value="/metrics"><input type="hidden" name="metric" value="{{$name}}"><input type="hidden" name="day" value="{{$v.Props.today}}">
+<label><span>Today{{with $unit}}, {{.}}{{end}}</span><input type="number" name="value" step="any" inputmode="decimal" required></label><button class="primary small">Save</button></form></details>{{end}}{{end}}
 </div>{{end}}</div>{{end}}
+
+{{/* new-here is the link under a category's heading to New metric, with the category filled in */}}
+{{define "new-here"}}<a class="button small" href="/metrics?new=metric&amp;category={{.}}#new-metric">+ New metric here</a>{{end}}
+
+{{/* new-metric is the New metric fold of /metrics (docs/plans/113-new-metric-on-metrics.md): "What do you record?"
+     switches three forms of register-metric with CSS, with no script. A number sends its unit, a score its range,
+     and done or not done no unit and today as habit_from. The kind input is for the page only: a refused form opens
+     again on its own kind. ?new=metric opens the fold, and ?category= fills in the category. */}}
+{{define "new-metric"}}{{$v := .view}}{{$a := .action}}{{$refused := and $v.Refused (eq $v.Refused.Href $a.Href)}}
+{{$kind := "number"}}{{$cat := $v.Asked "category"}}{{if $refused}}{{with $v.Sent.Get "kind"}}{{$kind = .}}{{end}}{{$cat = $v.Sent.Get "category"}}{{end}}
+<details class="action new-metric" id="new-metric"{{if or $refused (eq ($v.Asked "new") "metric")}} open{{end}}><summary class="button">New metric{{if $a.Owner}} <span class="owner">owner</span>{{end}}</summary>
+<div class="action-form"><fieldset class="segmented"><legend>What do you record?</legend>
+<label><input type="radio" name="new-kind" value="number"{{if eq $kind "number"}} checked{{end}}><span>A number</span></label><label><input type="radio" name="new-kind" value="score"{{if eq $kind "score"}} checked{{end}}><span>A score</span></label><label><input type="radio" name="new-kind" value="habit"{{if eq $kind "habit"}} checked{{end}}><span>Done or not done</span></label></fieldset>
+{{template "new-metric-form" (dict "v" $v "a" $a "k" "number" "mine" (and $refused (eq $kind "number")) "cat" $cat)}}
+{{template "new-metric-form" (dict "v" $v "a" $a "k" "score" "mine" (and $refused (eq $kind "score")) "cat" $cat)}}
+{{template "new-metric-form" (dict "v" $v "a" $a "k" "habit" "mine" (and $refused (eq $kind "habit")) "cat" $cat)}}
+</div></details>{{end}}
+
+{{/* new-metric-form is one form of the New metric fold: v the view, a the action, k the kind, mine whether the
+     refused form was this one, cat the category to fill in. */}}
+{{define "new-metric-form"}}{{$v := .v}}{{$a := .a}}{{$k := .k}}{{$mine := .mine}}{{$cat := .cat}}<form class="kind-{{$k}}" method="POST" action="{{$a.Href}}" data-action="{{$a.Name}}"><input type="hidden" name="back" value="/metrics"><input type="hidden" name="kind" value="{{$k}}">
+<label><span>Name <small>required</small></span><input type="text" name="name" required value="{{if $mine}}{{$v.Sent.Get "name"}}{{end}}" placeholder="{{if eq $k "number"}}Weight, Savings{{else if eq $k "score"}}Mood, Sleep quality{{else}}Walk, No sugar{{end}}"></label>
+{{if eq $k "number"}}<label><span>Unit <small>required</small></span><input type="text" name="unit" required value="{{if $mine}}{{$v.Sent.Get "unit"}}{{end}}" placeholder="kg, EUR, bpm"></label>
+<p class="desc">A unit never changes. For another unit, make a new metric.</p>
+{{else if eq $k "score"}}<label><span>Range <small>required</small></span><input type="text" name="unit" required pattern="[0-9]+-[0-9]+" value="{{if $mine}}{{$v.Sent.Get "unit"}}{{end}}" placeholder="1-5"></label>
+<p class="desc">The lowest and the highest score, as 1-5. The range never changes.</p>
+{{else}}<input type="hidden" name="unit" value=""><input type="hidden" name="habit_from" value="{{$v.Props.today}}">
+<p class="desc">A habit. You check it in each day as done or not done, from today.</p>{{end}}
+<label><span>Category</span><input type="text" name="category" list="metric-categories" value="{{$cat}}" placeholder="Bloodwork, Sport, Financial"></label>
+<label><span>Note</span><input type="text" name="note" value="{{if $mine}}{{$v.Sent.Get "note"}}{{end}}" placeholder="What it measures, and how"></label>
+<button class="primary">Create</button></form>{{end}}

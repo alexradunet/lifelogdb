@@ -4,10 +4,11 @@ A plan is a dated record ([how a change happens](../process.md)): a change large
 written as a self-contained brief with done criteria. It cites the docs as they were at the commit it names. One file
 per plan, `NNN-short-slug.md`, numbered on from the last.
 
-Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **112**.
+Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **114**.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
+| [113](113-new-metric-on-metrics.md) | New metric, new category and a reading from the metrics page: a kind chooser, register-metric with category and habit_from, a + on each card | P2 | M | owner request 2026-10-15; `725e260` | DONE |
 | [112](112-metrics-as-cards.md) | The metrics as cards, filed in groups: a jump bar, a card a metric with its latest value and line, and file-pages | P2 | M | owner request 2026-10-15; `16e40bb` | DONE |
 | [111](111-one-metrics-view.md) | One metrics view: Habits becomes a lens of Metrics in the browser | P2 | S | owner decision 2026-10-15; `1697b50` | DONE |
 | [109](109-a-voice-note.md) | A voice note: capture takes a recording, a transcriber turns it into words | P1 | S | owner decisions 2026-10-14; `895d2aa` | DONE |

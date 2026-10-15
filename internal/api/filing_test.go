@@ -195,7 +195,7 @@ func TestTheMetricsPageDrawsCards(t *testing.T) {
 	if main := page[strings.Index(page, "<main"):]; strings.Contains(main, "<table") { // the rail's month is a table
 		t.Error("the category lens draws a table")
 	}
-	if strings.Contains(page, `<details class="file-bar" open>`) {
+	if strings.Contains(page, `<details class="file-bar" id="file-bar" open>`) {
 		t.Error("the file bar is open with nothing refused")
 	}
 
@@ -209,7 +209,7 @@ func TestTheMetricsPageDrawsCards(t *testing.T) {
 	}
 	// A refused form comes back to the page with the bar open and the category it sent.
 	rec = submit(h, "/pages/file", url.Values{"category": {"Daily"}, "back": {"/metrics"}}, "")
-	if body := rec.Body.String(); rec.Code != http.StatusUnprocessableEntity || !strings.Contains(body, `<details class="file-bar" open>`) ||
+	if body := rec.Body.String(); rec.Code != http.StatusUnprocessableEntity || !strings.Contains(body, `<details class="file-bar" id="file-bar" open>`) ||
 		!strings.Contains(body, `value="Daily"`) || !strings.Contains(body, "missing field ids") {
 		t.Errorf("no box checked: %d %.600s", rec.Code, body)
 	}

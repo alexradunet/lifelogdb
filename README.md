@@ -331,6 +331,11 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   check-in. `file-pages` (`POST /pages/file`) files several pages in a category page in one write, made when it is
   missing; `move` 1 takes them out of their other categories. The page's file bar checks the cards to file. The CLI's
   `do` and the MCP tools carry it as any action; it is not the owner's alone, as `link` is not.
+- **New metric, new category and a reading from `/metrics`** ([plan 113](docs/plans/113-new-metric-on-metrics.md)).
+  New metric is in the header of `/metrics` and under each category's heading, not on Home. It asks what you
+  record: a number with its unit, a score with its range, or done or not done (a habit from today). Its category is
+  made when it is new. `register-metric` takes `category` and `habit_from`, and does all of it in one write. New
+  category opens the file bar. Each number card has a +, which records one value for today.
 - **Media** ([plan 110](docs/plans/110-the-media-list.md)). `GET /media` is the list of the files whose type is an
   image, a video or an audio: tiles, newest day first, with the picture a file keeps, or the icon of its kind; one
   kind alone by `?kind=`. `GET /files` is the list of every other file (a PDF, a text), as rows. Both offer

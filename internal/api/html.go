@@ -163,6 +163,16 @@ type refusedView struct {
 	Href    string // the refused action's address
 }
 
+// Asked is a parameter of the page's own query, as the page reads a request to open one of its folds
+// (/metrics?new=metric).
+func (v *view) Asked(name string) string {
+	u, err := url.Parse(v.Here)
+	if err != nil {
+		return ""
+	}
+	return u.Query().Get(name)
+}
+
 // hereOf is the address of the page the browser is on, without the one-use feedback receipt: a form that returns
 // here must not carry a receipt that was already taken.
 func hereOf(u *url.URL) string {

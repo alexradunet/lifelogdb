@@ -46,7 +46,7 @@ func TestTheCategoryLensShowsTheGroupsAndTheSwitch(t *testing.T) {
 	h := lensFixture(t)
 	body := browse(t, h, "/metrics")
 	for _, want := range []string{`class="group metric-group"`, `<a href="/metrics" aria-current="true">By category</a>`,
-		`<a href="/metrics?show=habits">Habits</a>`, "Record a reading"} {
+		`<a href="/metrics?show=habits">Habits</a>`, `id="new-metric"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the category lens lacks %s", want)
 		}

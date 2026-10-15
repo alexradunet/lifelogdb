@@ -113,6 +113,42 @@ func (s *Store) RegisterMetric(ctx context.Context, source, name, unit, note str
 	return
 }
 
+// NewMetric is what CreateMetric makes in one write: the metric, and, when they are named, its category and the
+// first day of its habit. Category is a page title and HabitFrom a day; either may be empty.
+type NewMetric struct {
+	Name, Unit, Note    string
+	Category, HabitFrom string
+}
+
+// CreateMetric registers a metric, files it in its category (made when no page has that title, as FilePages makes
+// it) and starts its habit, in one write: a refusal of any step writes nothing. A habit of a metric with a unit is
+// refused by habit_periods, not here.
+func (s *Store) CreateMetric(ctx context.Context, source string, m NewMetric) (added bool, err error) {
+	err = s.Do(ctx, source, func(t *Tx) error {
+		var e error
+		if added, e = t.RegisterMetric(m.Name, m.Unit, m.Note); e != nil {
+			return e
+		}
+		if m.Category != "" {
+			id, e := t.metricID(m.Name)
+			if e != nil {
+				return e
+			}
+			if _, e = t.FilePages([]int64{id}, m.Category, false); e != nil {
+				return e
+			}
+		}
+		if m.HabitFrom != "" {
+			return t.StartHabit(m.Name, m.HabitFrom, "")
+		}
+		return nil
+	})
+	if err != nil {
+		added = false
+	}
+	return
+}
+
 func (s *Store) StartHabit(ctx context.Context, source, metric, start, end string) error {
 	return s.Do(ctx, source, func(t *Tx) error { return t.StartHabit(metric, start, end) })
 }
