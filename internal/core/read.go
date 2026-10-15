@@ -694,7 +694,7 @@ func (s *Store) NamedMentions(ctx context.Context, typ string, limit, offset int
 		return out, nil
 	}
 	for i := range out {
-		if out[i].Picture, err = s.firstPicture(ctx, bodies[i]); err != nil {
+		if out[i].Picture, err = firstPicture(ctx, s.DB.R, bodies[i]); err != nil {
 			return nil, err
 		}
 	}
@@ -703,10 +703,12 @@ func (s *Store) NamedMentions(ctx context.Context, typ string, limit, offset int
 
 // firstPicture is the id of the first live file with a preview that body embeds, else 0. A title resolves through
 // every name of a page, as GET /previews resolves it.
-func (s *Store) firstPicture(ctx context.Context, body string) (int64, error) {
+func firstPicture(ctx context.Context, q interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, body string) (int64, error) {
 	for _, title := range text.EmbeddedTitles(body) {
 		var id int64
-		err := s.DB.R.QueryRowContext(ctx, `
+		err := q.QueryRowContext(ctx, `
 			SELECT f.id FROM entity_names n
 			  JOIN entities e ON e.id = n.entity_id AND e.deleted_at IS NULL
 			  JOIN files f ON f.id = e.id AND f.preview IS NOT NULL

@@ -46,7 +46,8 @@
 {{if $p.task_project}}<aside><p>A task uses this page as its project context, so it cannot become a person or a place.</p></aside>
 {{else if $p.session_kind}}<aside><p>This page names a kind of session, so it cannot become a person or a place.</p></aside>{{end}}
 
-{{if or (.Action "rename") (.Action "promote") (.Action "link") (.Action "locate") (.Action "tombstone")}}<section class="group" aria-label="More"><h2>More</h2><div class="actions">
+{{if or (.Action "rename") (.Action "promote") (.Action "link") (.Action "locate") (.Action "set-picture") (.Action "tombstone")}}<section class="group" aria-label="More"><h2>More</h2><div class="actions">
+{{template "boxed" (form (.Action "set-picture") "more" "preview")}}
 {{template "boxed" (form (.Action "locate") "button" "Set its point")}}
 {{template "boxed" (form (.Action "link") "button" "Add a typed link")}}
 {{template "boxed" (form (.Action "unlink") "button" "Remove a typed link")}}

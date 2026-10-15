@@ -18,7 +18,7 @@ and this page disagree, so a property here is a property on the wire.
 - **Representation:** `Accept: application/vnd.siren+json` (or anything but `text/html`) gets the JSON below;
   `Accept: text/html` gets the same entity drawn as a page. A JSON client sends an action as
   `application/x-www-form-urlencoded`, `application/json` (one object; a non-string value is sent as its JSON text) or,
-  for `add-file`, `multipart/form-data`.
+  for `add-file` and `set-picture`, `multipart/form-data`.
 - **Writes answer with the resource they changed** (200, with `Location`), and `result` says what the write did. A
   browser form is answered 303 to that resource instead, or to the page its field `back` names when that is a path
   on this server.
@@ -123,7 +123,8 @@ import actions are included and the link `import` leads to its status.
 ### days, people, places, ghosts
 
 `GET /days`, `/people`, `/places`, `/ghosts`: one page of a list, each row an embedded `item` link to the page (with
-`class` the page's type where it has one). `people` and `places` offer `create-person` and `create-place`.
+`class` the page's type where it has one). `people` and `places` offer `create-person` and `create-place`; `people`
+also offers `set-picture` for each person in it, with its `id` filled.
 
 | property | type | meaning |
 |---|---|---|
@@ -405,12 +406,17 @@ month. Actions: `open-day`.
 tombstoned page adds `deleted`. Links: `day` (a day page's day view), `preview` (a file's picture), `map` (a place's
 point). Embedded: every outgoing link under its kind, every incoming one under `backlink` and its kind. Actions by
 what is legal: `save-body` (with the current `body` and `version` filled), `promote`, `promote-period`, `rename`,
-`edit-period`, `locate`, `link` and `unlink` (with the kinds this type may start), `readings-from-table` (when the
+`edit-period`, `locate`, `link` and `unlink` (with the kinds this type may start), `set-picture` (a person), `readings-from-table` (when the
 body holds a table, with `page` filled), `tombstone`, or `revive` alone on a deleted page. In a browser, the page of a
 live metric answers 303 to its series, the metric's one page, which carries this page's text, links and actions; the
 page of a live conversation answers 303 to `/conversations/{id}`, unless the query has `view=page`. The
 writes answer with this entity; `create-page` and `save-body` carry a `result` of the sync shape, `add-file` the kept
-shape.
+shape. `set-picture` (`POST /pages/{id}/picture`) puts `![[title]]` first in the body, unless that file is the page's
+picture already (the first live file with a preview that the body embeds). It takes a new photo as `original` (and
+`preview` when the photo is not a JPEG, PNG or GIF), kept as a file with no day and no place and titled
+`<page> <today>.jpg` (` 2`, ` 3`… when taken) unless `title` names it; its `result` is the kept shape. Or it takes
+the `title` of a kept file with a preview, and its `result` is the sync shape. A photo with no picture, or a title
+that is not a kept picture, is refused (422).
 
 | property | type | meaning |
 |---|---|---|

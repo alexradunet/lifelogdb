@@ -119,6 +119,7 @@ func NewOn(s *core.Store, localDay func() string, zone *time.Location, asker Ask
 	post("/people", h.createPerson)
 	post("/places", h.createPlace)
 	post("/files", h.addFile)
+	post("/pages/{id}/picture", h.setPicture)
 	post("/pages/{id}/promote", h.promote)
 	post("/pages/{id}/tombstone", h.tombstone)
 	post("/pages/{id}/revive", h.revive)
