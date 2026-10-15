@@ -21,9 +21,9 @@
 
 <div class="margin">
 <section class="group" aria-label="Habits">
-<div class="panel-head"><h2>Habits</h2><a href="/habits">Every habit</a></div>
+<div class="panel-head"><h2>Habits</h2><a href="/metrics?show=habits">Every habit</a></div>
 {{with $w.habits}}<ul class="plain">{{range .}}<li><a class="entry" href="/metrics/{{pathesc .metric}}"><span class="first">{{.metric}}</span><span class="meta">{{daysOf .done .active_days}}</span></a></li>{{end}}</ul>
-{{else}}<p class="empty">No habit was active this week. <a href="/habits">Every habit</a>.</p>{{end}}
+{{else}}<p class="empty">No habit was active this week. <a href="/metrics?show=habits">Every habit</a>.</p>{{end}}
 </section>
 
 <section class="group" aria-label="Readings">

@@ -65,11 +65,11 @@ func TestEveryViewRenders(t *testing.T) {
 	for path, want := range map[string][]string{
 		href(day, "page"): {`name="version" value="`, `<a href="/pages?title=Sam" class="wikilink">Sam</a>`,
 			`<a href="/pages?title=running" class="wikilink">#running</a>`},
-		"/pages?title=Ana":       {"Ana Popescu", "Backlinks", "mentioned in"},
-		"/metrics/weight":        {`<svg class="chart"`, "71.2"},
-		"/habits?day=2026-09-28": {`<button>Done</button>`, `<button>Not done</button>`, `name="done" value="1"`, `name="done" value="0"`},
-		*reading:                 {`action="/measurements/`, "Correct"},
-		href(gone, "self"):       {"Deleted", `action="` + href(gone, "self") + `/revive"`},
+		"/pages?title=Ana":                    {"Ana Popescu", "Backlinks", "mentioned in"},
+		"/metrics/weight":                     {`<svg class="chart"`, "71.2"},
+		"/metrics?show=habits&day=2026-09-28": {`<button>Done</button>`, `<button>Not done</button>`, `name="done" value="1"`, `name="done" value="0"`},
+		*reading:                              {`action="/measurements/`, "Correct"},
+		href(gone, "self"):                    {"Deleted", `action="` + href(gone, "self") + `/revive"`},
 	} {
 		req := httptest.NewRequest("GET", path, nil)
 		req.Header.Set("Accept", "text/html")

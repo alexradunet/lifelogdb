@@ -62,8 +62,16 @@ func (h *server) checkIn(r *http.Request, src string) (*Entity, error) {
 
 // habits is the habits of ?day= (default today), each with its check-in, and completion over ?from=..?to=
 // (default the 30 days up to that day), cookbook/habits.md.
+//
+// In a browser the habits are a lens of Metrics (docs/plans/111-one-metrics-view.md): the page is redirected, with
+// its day and window kept. JSON, the CLI and MCP keep this resource.
 func (h *server) habits(r *http.Request) (*Entity, error) {
-	return h.habitsEntity(r.Context(), r.URL.Query())
+	q := r.URL.Query()
+	if wantsHTML(r) {
+		q.Set("show", "habits")
+		return nil, redirect{"/metrics?" + q.Encode()}
+	}
+	return h.habitsEntity(r.Context(), q)
 }
 
 // habitsEntity is the resource /habits serves; q is its query (day, from, to).
@@ -228,4 +236,29 @@ func (h *server) trends(ctx context.Context, day string, readings []core.Reading
 		out = append(out, tr)
 	}
 	return out, nil
+}
+
+// habitsLens adds the habits read to the metrics entity, for ?show=habits (docs/plans/111-one-metrics-view.md): the
+// day's habits, the completion, the step to the next and previous day, and the check-ins. The rule has one home,
+// habitsEntity.
+func (h *server) habitsLens(r *http.Request, e *Entity) error {
+	he, err := h.habitsEntity(r.Context(), r.URL.Query())
+	if err != nil {
+		return err
+	}
+	props := he.Properties.(map[string]any)
+	mine := e.Properties.(map[string]any)
+	for _, k := range []string{"day", "habits", "from", "to", "completion"} {
+		mine[k] = props[k]
+	}
+	mine["show"] = "habits"
+	day := props["day"].(string)
+	lens := func(d string) string {
+		return "/metrics?" + url.Values{"show": {"habits"}, "day": {d}}.Encode()
+	}
+	e.Links = append(e.Links, link("day", dayHref(day), day), link("prev", lens(addDays(day, -1)), "Previous day"),
+		link("next", lens(addDays(day, 1)), "Next day"))
+	e.Entities = append(e.Entities, he.Entities...)
+	e.Actions = append(e.Actions, he.Actions...)
+	return nil
 }

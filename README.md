@@ -72,7 +72,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   `/people`, `/places`, `/files`, `/ghosts` and `/search` take `limit` (1–500) and `offset` and link `next` and
   `prev` ([plan 079](docs/plans/079-client-contract-hygiene.md)).
 - **The browser gets the same entity.** `Accept: text/html` renders it with a template per class (day, page,
-  person, place, metric, habits, search, lists; `internal/api/html/`, embedded) or a generic one for any other. A
+  person, place, metric, search, lists; `internal/api/html/`, embedded) or a generic one for any other. A
   template reads only the properties the JSON carries and places only the actions the entity offers, so a form
   shows where the action is legal and nowhere else. A body is CommonMark with goldmark's safe defaults (raw HTML
   omitted), its `[[wikilinks]]` and `#tags` linked. A browser form posts and is answered 303 to the resource it

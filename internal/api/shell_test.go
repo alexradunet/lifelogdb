@@ -168,7 +168,7 @@ func TestThePhoneHasABottomBarAndASheet(t *testing.T) {
 	if got := links(bar[1]); got != "/days/today /months/current /deadlines /tasks /conversations popovertarget=\"sections\"" {
 		t.Errorf("the bottom bar: %s", got)
 	}
-	if got := links(sheet[1]); !strings.HasPrefix(got, "/people /places /files /metrics /habits /sessions /periods /ghosts /months/2031-05") ||
+	if got := links(sheet[1]); !strings.HasPrefix(got, "/people /places /files /metrics /sessions /periods /ghosts /months/2031-05") ||
 		!strings.HasSuffix(got, "/actions /integrity") || !strings.Contains(sheet[1], `<a href="/#owner">Snapshot</a>`) {
 		t.Errorf("the sheet: %s", got)
 	}

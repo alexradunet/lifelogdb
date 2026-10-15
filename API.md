@@ -509,6 +509,7 @@ by default). An alias names the metric too. Links: `self` (`/metrics/{name}` whe
 ### metrics
 
 `GET /metrics`: the registry. Embedded: `item` links to each series. Action: `record` with the metrics as options.
+With `?show=habits` (and `day`, `from`, `to`) it also carries the properties, links, embedded links and `check-in` actions of [habits](#habits). The browser draws that as the Habits lens of Metrics ([plan 111](docs/plans/111-one-metrics-view.md)).
 
 | property | type | meaning |
 |---|---|---|
@@ -536,7 +537,7 @@ by default). An alias names the metric too. Links: `self` (`/metrics/{name}` whe
 
 `GET /habits?day=&from=&to=`: the habits of a day (default today) and their completion over `[from, to]` (default
 the 30 days to that day). Links: `day`, `prev`, `next`. Embedded: a `habit` link per habit to its series. Actions: a
-`check-in` per habit, its `day` filled.
+`check-in` per habit, its `day` filled. A browser (`Accept: text/html`) is redirected to `/metrics?show=habits` with the same query; JSON, the CLI and MCP keep this resource.
 
 | property | type | meaning |
 |---|---|---|

@@ -147,7 +147,7 @@ func TestTheDayIsALeafAndItsMargin(t *testing.T) {
 // own steps do: an arrow alone gives a reader nothing to read.
 func TestTheHabitsStepToANamedDay(t *testing.T) {
 	_, h := freshOn(t, fixedToday)
-	body := browse(t, h, "/habits?day="+fixedToday)
+	body := browse(t, h, "/metrics?show=habits&day="+fixedToday)
 	for _, want := range []string{
 		`rel="prev" aria-label="Previous day, Tue 13 May"><span aria-hidden="true">‹</span><span class="step-day">Tue 13 May</span></a>`,
 		`rel="next" aria-label="Next day, Thu 15 May"><span class="step-day">Thu 15 May</span><span aria-hidden="true">›</span></a>`,
@@ -170,7 +170,7 @@ func TestACheckInIsDrawnOneWay(t *testing.T) {
 	group := regexp.MustCompile(`(?s)<div class="outcomes" role="group" aria-label="Check in Walk[^"]*">` +
 		`<form[^>]* class="tiny outcome-done"[^>]*>.*?<button[^>]*>Done</button></form>` +
 		`<form[^>]* class="tiny outcome-notdone"[^>]*>.*?<button[^>]*>Not done</button></form></div>`)
-	for _, path := range []string{"/days/" + fixedToday, "/metrics/Walk", "/habits?day=" + fixedToday} {
+	for _, path := range []string{"/days/" + fixedToday, "/metrics/Walk", "/metrics?show=habits&day=" + fixedToday} {
 		body := browse(t, h, path)
 		if !group.MatchString(body) {
 			t.Errorf("%s does not draw the check-in of Walk as one group of outcomes", path)
@@ -179,7 +179,7 @@ func TestACheckInIsDrawnOneWay(t *testing.T) {
 			t.Errorf("%s still draws a joined pair", path)
 		}
 	}
-	for _, path := range []string{"/days/" + fixedToday, "/habits?day=" + fixedToday} {
+	for _, path := range []string{"/days/" + fixedToday, "/metrics?show=habits&day=" + fixedToday} {
 		if body := browse(t, h, path); !strings.Contains(body, `<span class="tag done">done</span>`) {
 			t.Errorf("%s does not tag the state of Walk", path)
 		}

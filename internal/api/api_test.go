@@ -628,7 +628,7 @@ func TestHabitsShowInvalidCheckIns(t *testing.T) {
 	if !listed {
 		t.Error("the day view does not label the habit invalid")
 	}
-	body := browse(t, h, "/habits?day=2026-10-01&from=2026-10-01&to=2026-10-02")
+	body := browse(t, h, "/metrics?show=habits&day=2026-10-01&from=2026-10-01&to=2026-10-02")
 	for _, w := range []string{`<span class="tag notdone">invalid</span>`, `<th scope="col" class="num">invalid</th>`} {
 		if !strings.Contains(body, w) {
 			t.Errorf("the habits page does not show %s", w)

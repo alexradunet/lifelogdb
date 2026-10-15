@@ -145,7 +145,6 @@ func TestNavMarksThePageTheBrowserIsOn(t *testing.T) {
 		"/integrity":       "/integrity",
 		"/people":          "/people",
 		"/metrics/TSH":     "/metrics",
-		"/habits":          "/habits",
 		"/tasks/7":         "/tasks",
 		"/pages/7":         "",
 		"/search":          "",

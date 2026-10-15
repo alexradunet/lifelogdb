@@ -1,11 +1,28 @@
+{{/* The metrics, in one of two lenses (docs/plans/111-one-metrics-view.md): the metrics filed by category (D26), or the
+     habits of a day (D24) with their check-ins and completion. ?show=habits chooses the second. */}}
 {{define "metrics"}}{{template "head" .}}
-<header class="page-head"><div class="what"><h1>Metrics</h1></div><div class="tools">{{template "boxed" (form (.Action "record") "button" "Record a reading" "more" "session_id,taken_at,tz,import_key")}}</div></header>
-{{range .Props.groups}}<section class="group depth-{{num .depth}}">
+{{$lens := ""}}{{with .Props.show}}{{$lens = .}}{{end}}{{$h := .Props}}
+<header class="page-head"><div class="what">{{if eq $lens "habits"}}<span class="date">{{$.Date $h.day}}</span>{{end}}<h1>Metrics</h1>
+<p class="sub"><a href="/metrics"{{if ne $lens "habits"}} aria-current="true"{{end}}>By category</a><a href="/metrics?show=habits"{{if eq $lens "habits"}} aria-current="true"{{end}}>Habits</a>{{if eq $lens "habits"}}<a href="/days/{{$h.day}}">{{weekday $h.day}}: the day view</a>{{end}}</p></div>
+<div class="tools">{{if eq $lens "habits"}}{{$prev := shortDay (addDays $h.day -1)}}{{$next := shortDay (addDays $h.day 1)}}{{template "step" (dict "href" (.Link "prev") "rel" "prev" "label" (printf "Previous day, %s" $prev) "text" $prev)}}{{template "step" (dict "href" (.Link "next") "rel" "next" "label" (printf "Next day, %s" $next) "text" $next)}}{{else}}{{template "boxed" (form (.Action "record") "button" "Record a reading" "more" "session_id,taken_at,tz,import_key")}}{{end}}</div></header>
+{{if eq $lens "habits"}}{{with $h.habits}}<div class="scroll"><table><caption>Every habit active on this day, and what it was</caption>
+<thead><tr><th scope="col">habit</th><th scope="col">state</th><th scope="col">record</th></tr></thead>
+<tbody>{{range .}}{{$href := printf "/metrics/%s" (pathesc .metric)}}{{$name := .metric}}
+<tr><td><a href="{{$href}}">{{.metric}}</a></td>
+<td><span class="tag{{if eq .state "done"}} done{{else if or (eq .state "not done") (eq .state "invalid")}} notdone{{end}}">{{.state}}</span></td>
+<td>{{with $.ActionFor "check-in" $href}}{{template "checkin" (dict "action" . "label" (printf "Check in %s" $name) "back" $.Here)}}{{end}}</td></tr>{{end}}
+</tbody></table></div>
+{{else}}<p><small>No habit is active on this day. A habit is a unitless metric with a period: start one from its metric's page.</small></p>{{end}}
+{{with $h.completion}}<h2>{{$.Date $h.from}} to {{$.Date $h.to}}</h2><div class="scroll"><table><caption>How often each habit was recorded in this window</caption>
+<thead><tr><th scope="col">habit</th><th scope="col" class="num">done</th><th scope="col" class="num">not done</th><th scope="col" class="num">not recorded</th><th scope="col" class="num">invalid</th><th scope="col" class="num">active days</th></tr></thead>
+<tbody>{{range .}}<tr><td>{{.metric}}</td><td class="num">{{num .done}}</td><td class="num">{{num .not_done}}</td><td class="num">{{num .not_recorded}}</td><td class="num">{{num .invalid}}</td><td class="num">{{num .active_days}}</td></tr>{{end}}</tbody>
+</table></div>{{end}}
+{{else}}{{range .Props.groups}}<section class="group depth-{{num .depth}}">
 {{if eq (num .depth) "0"}}<h2>{{if .page}}<a href="/pages/{{num .page}}">{{.title}}</a>{{else}}{{.title}}{{end}}{{with .metrics}} <small>{{len .}}</small>{{end}}</h2>{{else}}<h3><a href="/pages/{{num .page}}">{{.title}}</a> <small>{{.path}}{{with .metrics}} · {{len .}}{{end}}</small></h3>{{end}}
 {{with .metrics}}<div class="scroll"><table>
 <thead><tr><th scope="col">metric</th><th scope="col">unit</th><th scope="col">note</th></tr></thead>
 <tbody>{{range .}}<tr><td><a href="/metrics/{{pathesc .name}}">{{.name}}</a>{{if .habit}}{{range .categories}} <span class="badge">{{.}}</span>{{end}}{{end}}</td><td>{{.unit}}</td><td><small>{{.note}}</small></td></tr>{{end}}</tbody>
-</table></div>{{end}}</section>{{end}}
+</table></div>{{end}}</section>{{end}}{{end}}
 {{template "foot" .}}{{end}}
 
 {{/* The one page of a metric (docs/plans/100-one-page-a-metric.md). The head: its kind, its categories and its latest
@@ -57,7 +74,7 @@
 {{else}}<p class="empty">No page names {{.Title}} yet. Write [[{{.Title}}]] in a day, and the day is listed here.</p>{{end}}
 </section>
 
-{{if or $s.habit_periods (.Action "start-habit")}}<section class="group" aria-label="Habit"><div class="panel-head"><h2>Habit</h2><a href="/habits">Every habit</a></div>
+{{if or $s.habit_periods (.Action "start-habit")}}<section class="group" aria-label="Habit"><div class="panel-head"><h2>Habit</h2><a href="/metrics?show=habits">Every habit</a></div>
 {{with $s.habit_periods}}<ul class="plain">{{range .}}<li>From {{$.Date .start_day}}{{with .end_day}} to {{$.Date .}}{{else}}, ongoing{{end}}</li>{{end}}</ul>
 {{else}}<p class="empty">Not a habit. Start it, and check it in each day as done or not done.</p>{{end}}
 <div class="actions">{{template "boxed" (form $checkIn "button" "Check in another day" "choices:done" "1 0" "back" $.Here)}}
@@ -82,26 +99,6 @@
 </section>
 </div>{{end}}
 </div>
-{{template "foot" .}}{{end}}
-
-{{define "habits"}}{{template "head" .}}
-{{$h := .Props}}
-<header class="page-head"><div class="what"><span class="date">{{$.Date $h.day}}</span><h1>Habits</h1>
-<p class="sub"><a href="/days/{{$h.day}}">{{weekday $h.day}}: the day view</a></p></div>
-{{$prev := shortDay (addDays $h.day -1)}}{{$next := shortDay (addDays $h.day 1)}}
-<div class="tools">{{template "step" (dict "href" (.Link "prev") "rel" "prev" "label" (printf "Previous day, %s" $prev) "text" $prev)}}{{template "step" (dict "href" (.Link "next") "rel" "next" "label" (printf "Next day, %s" $next) "text" $next)}}</div></header>
-{{with $h.habits}}<div class="scroll"><table><caption>Every habit active on this day, and what it was</caption>
-<thead><tr><th scope="col">habit</th><th scope="col">state</th><th scope="col">record</th></tr></thead>
-<tbody>{{range .}}{{$href := printf "/metrics/%s" (pathesc .metric)}}{{$name := .metric}}
-<tr><td><a href="{{$href}}">{{.metric}}</a></td>
-<td><span class="tag{{if eq .state "done"}} done{{else if or (eq .state "not done") (eq .state "invalid")}} notdone{{end}}">{{.state}}</span></td>
-<td>{{with $.ActionFor "check-in" $href}}{{template "checkin" (dict "action" . "label" (printf "Check in %s" $name) "back" $.Here)}}{{end}}</td></tr>{{end}}
-</tbody></table></div>
-{{else}}<p><small>No habit is active on this day. A habit is a unitless metric with a period: start one from its metric's page.</small></p>{{end}}
-{{with $h.completion}}<h2>{{$.Date $h.from}} to {{$.Date $h.to}}</h2><div class="scroll"><table><caption>How often each habit was recorded in this window</caption>
-<thead><tr><th scope="col">habit</th><th scope="col" class="num">done</th><th scope="col" class="num">not done</th><th scope="col" class="num">not recorded</th><th scope="col" class="num">invalid</th><th scope="col" class="num">active days</th></tr></thead>
-<tbody>{{range .}}<tr><td>{{.metric}}</td><td class="num">{{num .done}}</td><td class="num">{{num .not_done}}</td><td class="num">{{num .not_recorded}}</td><td class="num">{{num .invalid}}</td><td class="num">{{num .active_days}}</td></tr>{{end}}</tbody>
-</table></div>{{end}}
 {{template "foot" .}}{{end}}
 
 {{/* readings is a table of a metric's readings, newest first: a year's newest ones, or the rest of that year. It takes

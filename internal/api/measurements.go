@@ -54,6 +54,11 @@ func (h *server) metrics(r *http.Request) (*Entity, error) {
 	for _, m := range ms {
 		e.Entities = append(e.Entities, link("item", metricHref(m.Name), m.Name))
 	}
+	if r.URL.Query().Get("show") == "habits" {
+		if err := h.habitsLens(r, e); err != nil {
+			return nil, err
+		}
+	}
 	return e, nil
 }
 
