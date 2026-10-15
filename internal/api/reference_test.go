@@ -24,16 +24,17 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 	documented := readReference(t, filepath.Join("..", "..", "API.md"))
 	// The shape behind each section: a Go value whose JSON names, walked, are the paths the table must list.
 	shapes := map[string]any{
-		"root":                                map[string]any{"today": "", "due": []occurrenceView{}, "habits": []habitView{}, "recent": []recentDay{}, "on_this_day": []recentDay{}},
-		"days, people, places, files, ghosts": map[string]any{"limit": 0, "offset": 0, "rows": []namedRow{}},
-		"search":                              map[string]any{"q": "", "titles": []core.TitleMatch{}, "hits": []core.Hit{}, "limit": 0, "offset": 0},
-		"day":                                 dayView{},
-		"month":                               map[string]any{"month": "", "today": "", "days": []monthDay{}, "periods": []core.LifePeriod{}},
-		"week":                                map[string]any{"week": "", "from": "", "through": "", "today": "", "days": []monthDay{}, "habits": []weekHabit{}, "metrics": []weekMetric{}, "occurrences": []occurrenceView{}},
-		"year":                                map[string]any{"year": "", "today": "", "written": 0, "readings": 0, "months": []yearMonth{}},
-		"titles":                              map[string]any{"prefix": "", "limit": 0, "titles": []core.TitleMatch{}},
-		"page, person, place, file, period":   core.Page{},
-		"measurement":                         core.Measurement{},
+		"root":                              map[string]any{"today": "", "due": []occurrenceView{}, "habits": []habitView{}, "recent": []recentDay{}, "on_this_day": []recentDay{}},
+		"days, people, places, ghosts":      map[string]any{"limit": 0, "offset": 0, "rows": []namedRow{}},
+		"media":                             map[string]any{"limit": 0, "offset": 0, "kind": "", "rows": []mediaRow{}, "counts": mediaCounts{}},
+		"search":                            map[string]any{"q": "", "titles": []core.TitleMatch{}, "hits": []core.Hit{}, "limit": 0, "offset": 0},
+		"day":                               dayView{},
+		"month":                             map[string]any{"month": "", "today": "", "days": []monthDay{}, "periods": []core.LifePeriod{}},
+		"week":                              map[string]any{"week": "", "from": "", "through": "", "today": "", "days": []monthDay{}, "habits": []weekHabit{}, "metrics": []weekMetric{}, "occurrences": []occurrenceView{}},
+		"year":                              map[string]any{"year": "", "today": "", "written": 0, "readings": 0, "months": []yearMonth{}},
+		"titles":                            map[string]any{"prefix": "", "limit": 0, "titles": []core.TitleMatch{}},
+		"page, person, place, file, period": core.Page{},
+		"measurement":                       core.Measurement{},
 		"series": map[string]any{"metric": "", "from": "", "to": "", "readings": []core.Reading{}, "habit_periods": []core.HabitPeriod{}, "categories": []string{}, "scope": "", "session_id": int64(0), "include_deleted": false, "all_history": false,
 			"id": int64(0), "unit": "", "body": "", "links": []core.Edge{}, "backlinks": []core.Edge{}},
 		"metrics":    map[string]any{"metrics": []core.Metric{}, "groups": []metricGroup{}},
@@ -89,8 +90,8 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 	// Live: every route's top-level keys are documented for its section.
 	h, c, ids := fixture(t)
 	live := []struct{ section, route string }{
-		{"root", "/"}, {"days, people, places, files, ghosts", "/days"}, {"days, people, places, files, ghosts", "/people"},
-		{"days, people, places, files, ghosts", "/files"}, {"days, people, places, files, ghosts", "/ghosts"}, {"search", "/search?q=word"},
+		{"root", "/"}, {"days, people, places, ghosts", "/days"}, {"days, people, places, ghosts", "/people"},
+		{"media", "/media"}, {"days, people, places, ghosts", "/ghosts"}, {"search", "/search?q=word"},
 		{"day", "/days/2031-05-01"}, {"page, person, place, file, period", ids["page"]}, {"page, person, place, file, period", ids["person"]},
 		{"page, person, place, file, period", ids["place"]}, {"page, person, place, file, period", ids["file"]}, {"page, person, place, file, period", ids["period"]},
 		{"measurement", ids["measurement"]}, {"series", "/metrics/Weight"}, {"metrics", "/metrics"}, {"habits", "/habits?day=2031-05-01"},

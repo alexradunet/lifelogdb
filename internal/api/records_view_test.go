@@ -112,19 +112,6 @@ func TestTheGhostPagesSayWhatTheyAre(t *testing.T) {
 	}
 }
 
-// TestTheFilesSayWhereTheyAreMentioned: a file's row says how often the log mentions it, as a person's and a
-// place's do.
-func TestTheFilesSayWhereTheyAreMentioned(t *testing.T) {
-	c, h := freshOn(t, fixedToday)
-	root := must(c.Get(t.Context(), "/"))
-	must(c.Do(t.Context(), find(root, "add-file"), map[string]string{"title": "memo.m4a", "sha256": strings.Repeat("ab", 32), "mime": "audio/mp4", "body": "A memo."}))
-	must(c.Do(t.Context(), find(root, "capture"), map[string]string{"text": "Listened to [[memo.m4a]]."}))
-	body := browse(t, h, "/files")
-	if !regexp.MustCompile(`<span class="first">memo.m4a</span><span class="meta">mentioned on 1 page, last [^<]*Wed 14 May</span>`).MatchString(body) {
-		t.Error("the files do not say where a file is mentioned")
-	}
-}
-
 // TestAReadingsFactsAreOnACard: a reading's page puts its facts on a card, as an occurrence's and a session's do.
 func TestAReadingsFactsAreOnACard(t *testing.T) {
 	c, h := freshOn(t, fixedToday)

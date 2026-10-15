@@ -72,6 +72,10 @@ var icons = map[string]string{
 	"new":      `<path d="M8 3v10M3 8h10"/>`,
 	"chat":     `<path d="M2 3.5h12v7.5H7l-3 2.5V11H2z"/>`,
 	"more":     `<circle cx="3.5" cy="8" r=".9"/><circle cx="8" cy="8" r=".9"/><circle cx="12.5" cy="8" r=".9"/>`,
+	// the kinds of the media list, on a blank tile: a picture, a video, a recording
+	"image": `<rect x="2" y="3" width="12" height="10" rx="1.5"/><circle cx="5.5" cy="6.5" r="1.3"/><path d="M2.5 11.5l3.5-3.5 2.5 2.5 2-2 3 3"/>`,
+	"video": `<rect x="1.5" y="4" width="9" height="8" rx="1.5"/><path d="M10.5 7l4-2v6l-4-2z"/>`,
+	"audio": `<rect x="6" y="1.5" width="4" height="8" rx="2"/><path d="M3.5 7.5a4.5 4.5 0 0 0 9 0M8 12v2.5M5.5 14.5h5"/>`,
 }
 
 // icon is an icon of the sidebar as inline SVG, hidden from a reader: an icon is always beside its word.

@@ -103,7 +103,7 @@
      word, in one group named by label. back is the page to return to; every caller gives it. */}}
 {{define "checkin"}}<div class="outcomes" role="group" aria-label="{{.label}}">{{template "form" (form .action "done" "1" "hide" "day" "button" "Done" "class" "tiny outcome-done" "back" .back)}}{{template "form" (form .action "done" "0" "hide" "day" "button" "Not done" "class" "tiny outcome-notdone" "back" .back)}}</div>{{end}}
 
-{{/* pick-form-open opens the form of a list that deletes several rows at once (tombstone-pages on Files,
+{{/* pick-form-open opens the form of a list that deletes several rows at once (tombstone-pages on Media,
      tombstone-tasks on Tasks): the rows under it carry a box each, name ids, which the action reads, and
      pick-form-close draws the bar with the danger button and closes the form. The bar comes after the rows, so a
      CSS counter can count the checked boxes on the button, and it is drawn first by order: choose, then delete.

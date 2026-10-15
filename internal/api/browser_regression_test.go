@@ -54,7 +54,7 @@ func TestBrowserMultipartRecoversAcceptedBody(t *testing.T) {
 			}
 			mw.WriteField("title", title)
 			mw.WriteField("sha256", strings.Repeat("a", 64))
-			mw.WriteField("mime", "text/plain")
+			mw.WriteField("mime", "audio/mp4")
 			switch kind {
 			case "preview":
 				p, _ := mw.CreateFormFile("preview", "bad.png")
@@ -73,7 +73,7 @@ func TestBrowserMultipartRecoversAcceptedBody(t *testing.T) {
 			if rec.Code < 400 || !strings.Contains(rec.Body.String(), "transcript &lt;script&gt; &amp; draft</textarea>") {
 				t.Fatalf("%s: status %d recovered=%v", kind, rec.Code, strings.Contains(rec.Body.String(), "draft</textarea>"))
 			}
-			if len(must(c.Get(t.Context(), "/files")).Entities) != 0 {
+			if len(must(c.Get(t.Context(), "/media")).Entities) != 0 {
 				t.Fatal("wrote file")
 			}
 		})

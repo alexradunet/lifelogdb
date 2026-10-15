@@ -25,7 +25,7 @@ func idOfSelf(t *testing.T, href string) string {
 	return id
 }
 
-// TestDeletePagesAtOnce: tombstone-pages is offered on the files list and on no other list; it tombstones every id
+// TestDeletePagesAtOnce: tombstone-pages is offered on the media list and on no other list; it tombstones every id
 // named in one write, or none of them.
 func TestDeletePagesAtOnce(t *testing.T) {
 	c, h := fresh(t)
@@ -36,9 +36,9 @@ func TestDeletePagesAtOnce(t *testing.T) {
 		e := must(c.Do(ctx, add, map[string]string{"title": title, "sha256": strings.Repeat(fmt.Sprintf("%02x", i+1), 32), "mime": "audio/mp4"}))
 		ids = append(ids, idOfSelf(t, hrefOf(e, "self")))
 	}
-	del := find(must(c.Get(ctx, "/files")), "tombstone-pages")
+	del := find(must(c.Get(ctx, "/media")), "tombstone-pages")
 	if del.Name == "" || !del.Danger || len(del.Fields) != 1 || del.Fields[0].Name != "ids" || !del.Fields[0].Required {
-		t.Fatalf("the files list's delete: %+v", del)
+		t.Fatalf("the media list's delete: %+v", del)
 	}
 	for _, list := range []string{"/people", "/places", "/ghosts"} {
 		if find(must(c.Get(ctx, list)), "tombstone-pages").Name != "" {
@@ -59,8 +59,8 @@ func TestDeletePagesAtOnce(t *testing.T) {
 	if !deleted(ids[0]) || !deleted(ids[1]) || deleted(ids[2]) {
 		t.Fatalf("after the delete: %v %v %v", deleted(ids[0]), deleted(ids[1]), deleted(ids[2]))
 	}
-	if rows := props(must(c.Get(ctx, "/files")))["rows"].([]any); len(rows) != 1 || rows[0].(map[string]any)["title"] != "Memo 3.m4a" {
-		t.Errorf("the files list after the delete: %v", rows)
+	if rows := props(must(c.Get(ctx, "/media")))["rows"].([]any); len(rows) != 1 || rows[0].(map[string]any)["title"] != "Memo 3.m4a" {
+		t.Errorf("the media list after the delete: %v", rows)
 	}
 
 	// An id no page has refuses the whole write: the live page named beside it stays live.
@@ -170,7 +170,7 @@ func TestDeleteTasksAtOnce(t *testing.T) {
 	}
 }
 
-// TestTheListsDeleteWhatIsChecked follows the browser: Files and Tasks draw a box on each row inside one form, the
+// TestTheListsDeleteWhatIsChecked follows the browser: Media and Tasks draw a box on each tile or row inside one form, the
 // form posts the checked ids and returns to the list with the count, and a post with no box checked comes back to
 // the list with the refusal.
 func TestTheListsDeleteWhatIsChecked(t *testing.T) {
@@ -178,20 +178,20 @@ func TestTheListsDeleteWhatIsChecked(t *testing.T) {
 	ctx := t.Context()
 	root := must(c.Get(ctx, "/"))
 	var files, tasks []string
-	for i, title := range []string{"Scan 1.pdf", "Scan 2.pdf"} {
-		e := must(c.Do(ctx, find(root, "add-file"), map[string]string{"title": title, "sha256": strings.Repeat(fmt.Sprintf("%02x", i+7), 32), "mime": "application/pdf"}))
+	for i, title := range []string{"Scan 1.jpg", "Scan 2.jpg"} {
+		e := must(c.Do(ctx, find(root, "add-file"), map[string]string{"title": title, "sha256": strings.Repeat(fmt.Sprintf("%02x", i+7), 32), "mime": "image/jpeg"}))
 		files = append(files, idOfSelf(t, hrefOf(e, "self")))
 	}
 	for _, label := range []string{"Buy seeds", "Water"} {
 		tasks = append(tasks, idOfSelf(t, hrefOf(must(c.Do(ctx, find(root, "create-task"), map[string]string{"label": label})), "self")))
 	}
 
-	list := browse(t, h, "/files")
+	list := browse(t, h, "/media")
 	for _, want := range []string{`<form method="POST" action="/pages/tombstone" data-action="tombstone-pages" class="pick-form">`,
-		`<input type="hidden" name="back" value="/files">`, `<div class="pick-bar"><span class="desc">Check the rows to delete, then delete them.</span><button class="danger">Delete selected</button></div></form>`,
-		`<input type="checkbox" name="ids" value="` + files[0] + `" aria-label="Select Scan 1.pdf">`, `name="ids" value="` + files[1] + `"`} {
+		`<input type="hidden" name="back" value="/media">`, `<div class="pick-bar"><span class="desc">Check the rows to delete, then delete them.</span><button class="danger">Delete selected</button></div></form>`,
+		`<input type="checkbox" name="ids" value="` + files[0] + `" aria-label="Select Scan 1.jpg">`, `name="ids" value="` + files[1] + `"`} {
 		if !strings.Contains(list, want) {
-			t.Errorf("the files list lacks %s", want)
+			t.Errorf("the media list lacks %s", want)
 		}
 	}
 	if strings.Contains(browse(t, h, "/people"), `data-action="tombstone-pages"`) {
@@ -201,20 +201,20 @@ func TestTheListsDeleteWhatIsChecked(t *testing.T) {
 	if bar, last := strings.Index(list, `class="pick-bar"`), strings.LastIndex(list, `name="ids"`); bar < last || !strings.Contains(list[bar:], "</form>") {
 		t.Error("the bar is not after the rows and before the end of the form")
 	}
-	rec := submit(h, "/pages/tombstone", url.Values{"ids": files, "back": {"/files"}}, "")
+	rec := submit(h, "/pages/tombstone", url.Values{"ids": files, "back": {"/media"}}, "")
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("the form: %d %.300s", rec.Code, rec.Body.String())
 	}
 	loc := rec.Header().Get("Location")
-	if !feedbackLocation(loc, "/files") {
+	if !feedbackLocation(loc, "/media") {
 		t.Fatalf("the form returned to %q", loc)
 	}
 	after := browse(t, h, loc)
 	if !strings.Contains(after, "Deleted 2 pages.") || strings.Contains(after, `href="/pages/`+files[0]+`"`) || strings.Contains(after, `href="/pages/`+files[1]+`"`) {
 		t.Errorf("the list after the delete: %.600s", after)
 	}
-	rec = submit(h, "/pages/tombstone", url.Values{"back": {"/files"}}, "")
-	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), `role="alert"`) || !strings.Contains(rec.Body.String(), "missing field ids") || !strings.Contains(rec.Body.String(), "<h1>Files</h1>") {
+	rec = submit(h, "/pages/tombstone", url.Values{"back": {"/media"}}, "")
+	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), `role="alert"`) || !strings.Contains(rec.Body.String(), "missing field ids") || !strings.Contains(rec.Body.String(), "<h1>Media</h1>") {
 		t.Errorf("no box checked: %d %.300s", rec.Code, rec.Body.String())
 	}
 

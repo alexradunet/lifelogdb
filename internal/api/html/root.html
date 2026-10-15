@@ -79,8 +79,7 @@
 <div class="tools">{{with .Action "add-file"}}{{template "boxed" (form . "hide" "sha256,mime")}}{{end}}</div></header>
 <nav class="kinds" aria-label="Kind"><a href="/media"{{if not $p.kind}} aria-current="page"{{end}}>All</a><a href="{{.Link "pictures"}}"{{if eq $p.kind "image"}} aria-current="page"{{end}}>Pictures</a><a href="{{.Link "videos"}}"{{if eq $p.kind "video"}} aria-current="page"{{end}}>Videos</a><a href="{{.Link "recordings"}}"{{if eq $p.kind "audio"}} aria-current="page"{{end}}>Recordings</a></nav>
 {{with $p.rows}}{{$del := $.Action "tombstone-pages"}}<div class="sheet list">{{if $del}}{{template "pick-form-open" (dict "action" $del "back" $.Here)}}{{end}}<ul class="plain tiles">{{range .}}<li class="tile{{if $del}} pick{{end}}">{{if $del}}<label class="pick-box"><input type="checkbox" name="ids" value="{{num .id}}" aria-label="Select {{.title}}"></label>{{end}}<a class="tile-link" href="/pages/{{num .id}}">{{with .picture}}<img src="{{.}}" alt="" loading="lazy">{{else}}<span class="tile-blank" aria-hidden="true">{{icon .kind}}</span>{{end}}<span class="first">{{.title}}</span><span class="meta">{{$.MediaWords .kind .day}}</span></a></li>{{end}}</ul>{{if $del}}{{template "pick-form-close"}}{{end}}</div>
-{{else if $p.kind}}<p class="empty">None of this kind yet. Keep a file adds one.</p>
-{{else}}<p class="empty">No media yet. Keep a file adds a picture, a video or a recording.</p>{{end}}
+{{else}}{{if $p.kind}}<p class="empty">None of this kind yet. Keep a file adds one.</p>{{else}}<p class="empty">No media yet. Keep a file adds a picture, a video or a recording.</p>{{end}}{{end}}
 {{template "pager" .}}
 {{template "foot" .}}{{end}}
 

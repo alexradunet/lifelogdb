@@ -57,16 +57,16 @@ An error is an entity of class `error` with `properties`:
 
 ## Pages of a list
 
-`/days`, `/people`, `/places`, `/files`, `/ghosts` and `/search` take `limit` (1–500; defaults 60 for days, 50 for
+`/days`, `/people`, `/places`, `/media`, `/ghosts` and `/search` take `limit` (1–500; defaults 60 for days, 50 for
 search, 200 otherwise) and `offset` (0 or more), carry both in their properties, and link `next` when a further row
-exists and `prev` past the first page. Orders: days newest first; people, places and files by title; ghosts oldest
-first; search by rank.
+exists and `prev` past the first page. Orders: days newest first; people and places by title; media newest day first;
+ghosts oldest first; search by rank.
 
 ## Classes
 
 ### root
 
-`GET /`: today at a glance. Links: `today`, `days`, `sessions`, `periods`, `people`, `places`, `files`, `metrics`,
+`GET /`: today at a glance. Links: `today`, `days`, `sessions`, `periods`, `people`, `places`, `media`, `metrics`,
 `habits`, `tasks`, `deadlines`, `ghosts`, `actions`, `calendar` (this month), `week` (this week), `year` (this year). Actions: `capture` (for today), `search`,
 `find`, `open-day`, `deadlines`,
 `create-task`, `capture-session`, `create-period`, `create-page`, `create-person`, `create-place`, `add-file`,
@@ -120,22 +120,47 @@ filled in), and the outcome (see task) of each occurrence in `due`.
 `GET /actions`: no properties; `actions` is the whole catalog with templated hrefs. With an import workspace the
 import actions are included and the link `import` leads to its status.
 
-### days, people, places, files, ghosts
+### days, people, places, ghosts
 
-`GET /days`, `/people`, `/places`, `/files`, `/ghosts`: one page of a list, each row an embedded `item` link to the
-page (with `class` the page's type where it has one). `people`, `places` and `files` offer `create-person`,
-`create-place` and `add-file`; `files` also offers `tombstone-pages`, the delete of several at once (its answer is the
-class `tombstoned`), which a browser draws as a box on each row.
+`GET /days`, `/people`, `/places`, `/ghosts`: one page of a list, each row an embedded `item` link to the page (with
+`class` the page's type where it has one). `people` and `places` offer `create-person` and `create-place`.
 
 | property | type | meaning |
 |---|---|---|
 | `limit` | integer | the page size used |
 | `offset` | integer | the rows skipped |
-| `rows[]` | list | `people`, `places` and `files`: one row for each `item` link, in the same order |
+| `rows[]` | list | `people` and `places`: one row for each `item` link, in the same order |
 | `rows[].id` | integer | the page's id |
 | `rows[].title` | string | its title |
 | `rows[].mentions` | integer | the live pages that link to it, of any kind, each counted once |
 | `rows[].last_day` | string | the day of the newest live day page among them; absent when there is none |
+
+### media
+
+`GET /media`: one page of the live files whose type is `image/*`, `video/*` or `audio/*`, newest day first, each row
+an embedded `item` link to the file's page (class `file`). `?kind=image`, `video` or `audio` reads one kind; any
+other word is refused (422). Links: `pictures`, `videos`, `recordings` (the three kinds). Actions: `add-file`
+(its `original` field carries `accept`, the three kinds) and `tombstone-pages`, the delete of several at once (its
+answer is the class `tombstoned`), which a browser draws as a box on each row. A file of another type (a PDF, a text)
+keeps its page, its wikilinks and its place in search; this list leaves it out.
+
+| property | type | meaning |
+|---|---|---|
+| `limit` | integer | the page size used |
+| `offset` | integer | the rows skipped |
+| `kind` | string | the kind read: `image`, `video`, `audio`, or `""` for all three |
+| `counts` | object | the live files of each kind, whatever kind this page reads |
+| `counts.image` | integer | the live pictures |
+| `counts.video` | integer | the live videos |
+| `counts.audio` | integer | the live recordings |
+| `rows[]` | list | one row for each `item` link, in the same order |
+| `rows[].id` | integer | the page's id |
+| `rows[].title` | string | its title |
+| `rows[].kind` | string | `image`, `video` or `audio`: the first part of its type |
+| `rows[].mime` | string | the type of the original |
+| `rows[].picture` | string | the address of its picture (`GET /pages/{id}/preview`); absent when it keeps none |
+| `rows[].day` | string | its day (the day given, a photo's EXIF day, else the day it was kept), else the day of the newest live day page that shows it; absent when it has neither |
+| `rows[].mentions` | integer | the live pages that link to it, of any kind, each counted once |
 
 ### search
 

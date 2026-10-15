@@ -10,6 +10,7 @@ Earlier closed plans live in git history (`git log -- docs/plans`). The next pla
 |------|-------|----------|--------|------------|--------|
 | [111](111-one-metrics-view.md) | One metrics view: Habits becomes a lens of Metrics in the browser | P2 | S | owner decision 2026-10-15; `1697b50` | DONE |
 | [109](109-a-voice-note.md) | A voice note: capture takes a recording, a transcriber turns it into words | P1 | S | owner decisions 2026-10-14; `895d2aa` | DONE |
+| [110](110-the-media-list.md) | The media list: Files becomes Media, the pictures, the videos and the recordings as tiles | P1 | S | owner request 2026-10-14; `1697b50` | DONE |
 | [108](108-the-browser-made-current.md) | The browser made current: layers, containers, and HTML in place of the script | P2 | M | owner decisions 2026-10-14; `28d10ce` | DONE |
 | [107](107-delete-several-at-once.md) | Delete several at once: a box on each row of Files and Tasks | P1 | S | owner request 2026-10-14 | DONE |
 | [106](106-one-continuous-conversation.md) | One continuous conversation: a page per day, compacted into the daily note | P1 | M | plans 102, 103; owner decision 2026-10-14 | DONE |
