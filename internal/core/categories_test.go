@@ -8,7 +8,7 @@ import (
 
 func TestMetricNoteLinks(t *testing.T) {
 	s := fresh(t)
-	if _, err := s.CreatePerson(ctx, "cli", "Bob Sample", "", "", ""); err != nil {
+	if _, err := s.CreatePerson(ctx, "cli", "Bob Sample", "", "", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := s.CreatePage(ctx, "cli", "Diet Plan", "owner note", ""); err != nil {

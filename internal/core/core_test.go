@@ -159,7 +159,7 @@ func TestPeoplePlacesAndPromotion(t *testing.T) {
 	if !found {
 		t.Errorf("day view %+v", d.Rows)
 	}
-	bob, err := s.CreatePerson(ctx, "cli", "Bob", "Bob Sample", "1990-02-30", "")
+	bob, err := s.CreatePerson(ctx, "cli", "Bob", "Bob Sample", "1990-02-30", "", "")
 	if status(err) != 422 || bob != 0 {
 		t.Errorf("an impossible birth day: %v", err)
 	}

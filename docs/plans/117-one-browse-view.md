@@ -87,9 +87,11 @@ flowchart LR
    own page, as before. The ghost list now offers Delete: the owner's word (2026-10-15).
 6. **A new thing is filed where it is made.** `create-person`, `create-place` and `add-file` take the optional
    field `category`, as `create-page` and `register-metric` do: the thing and its `part-of` link in one write, a
-   missing category made as `file-pages` makes it, and a day as the category refused by `links_endpoint_types`
-   with nothing written. Browse inside a category fills `category` in the New form. When `add-file` finds a file
-   that exists, it files that file.
+   missing category made as `file-pages` makes it, and a day as the category refused with nothing written (by
+   `entities_day_page` when the day has no page, by `links_endpoint_types` when it has one). Browse inside a
+   category fills `category` in the New form. When `add-file` finds a file that exists, it files that file; a
+   deleted one is not filed, and nothing is written for it. A dry run writes nothing and says in `filed` what
+   filing would do. The CLI's `lifelog file` has `--category`, which fills the field.
 7. **The sidebar has two record entries.** Today, Calendar, Metrics and Browse are the sections of every day; on a
    phone they are the bottom bar with More. The record group goes. The New menu opens each kind on its Browse list
    (`/browse?kind=person&new=create-person`); New page opens `/browse?kind=page&new=create-page`; New file opens the
@@ -141,4 +143,21 @@ Each step is one commit, with its tests, and can ship alone.
 
 ## Result
 
-(Filled when the plan is done.)
+- **Step 2, a new thing filed where it is made.** `create-person`, `create-place` and `add-file` have the optional
+  title field `category`. `Store.CreatePerson` and `Store.CreatePlace` file the new thing with `Tx.fileNew`
+  (`Tx.FilePages`) in the same write, as `Store.CreatePage` does. `Tx.AddFile` keeps the file (`Tx.keep`), then
+  files its page; the page of the same original is filed too, a deleted one is not, and for it nothing is written.
+  The answer of `add-file` has `filed`, and a dry run gives the category it would make no id. The form of the
+  original (multipart) and the url-encoded form both carry `category`. Browse in a category fills `category` in
+  each New form. `lifelog file` has `--category`. A day as the category is a 422 with nothing written:
+  `entities_day_page` refuses it when the day has no page, `links_endpoint_types` when it has one. API.md and
+  README have the field. Tests: core `TestANewThingIsFiledWhereItIsMade`, `TestANewThingMakesAMissingCategory`,
+  `TestADayAsTheCategoryWritesNothing` (both day cases), `TestAddFileFilesTheFileThatExists`,
+  `TestTryAddFileWithACategoryWritesNothing`; api `TestTheMakersTakeACategory`,
+  `TestANewThingIsFiledWhereItIsMadeOverHTTP`, `TestADayAsTheCategoryWritesNothingOverHTTP`,
+  `TestAddFileFilesTheFileThatExistsAndADryRunWritesNothing`, `TestBrowseNewFormsInACategoryCarryIt`,
+  `TestFilingWhereMadeTransportParity`, the sentences in `TestAResultIsSaidInSentences`; mcp
+  `TestAnAgentFilesANewPlaceWhereItIsMade`; cmd/lifelog `TestFileCommandFilesInACategory`.
+- **Checks run for step 2 (Linux):** `gofmt -l` clean; `go generate ./... && go vet ./... && go test ./...` green;
+  `go test -count=1 -shuffle=on ./internal/api ./internal/core ./internal/mcp ./cmd/lifelog` green. Not run:
+  `staticcheck`, `govulncheck`, the race check, Windows, a look in a browser.

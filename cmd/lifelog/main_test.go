@@ -306,6 +306,52 @@ func TestFileCommand(t *testing.T) {
 	}
 }
 
+// TestFileCommandFilesInACategory is `lifelog file PATH --category TITLE`: the original kept and its page filed in the
+// category in one write, the category made when it is new (docs/plans/117-one-browse-view.md, rule 6).
+func TestFileCommandFilesInACategory(t *testing.T) {
+	dir := t.TempDir()
+	live := filepath.Join(dir, "life.db")
+	if err := db.Init(t.Context(), live); err != nil {
+		t.Fatal(err)
+	}
+	memo := filepath.Join(dir, "memo.txt")
+	if err := os.WriteFile(memo, []byte("a synthetic memo"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	o, err := parse([]string{"file", memo, "--db", live, "--day", "2026-10-04", "--category", "Papers"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := run(o); err != nil {
+		t.Fatal(err)
+	}
+	d, err := db.Open(t.Context(), live)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	s := &core.Store{DB: d}
+	file, err := s.PageID(t.Context(), "memo.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cat, err := s.PageID(t.Context(), "Papers")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p, err := s.PageByID(t.Context(), cat); err != nil || p.Type != "page" {
+		t.Fatalf("the category Papers: %v %+v, want a plain page", err, p)
+	}
+	var all, filed int
+	if err := d.R.QueryRowContext(t.Context(), `SELECT count(*), count(*) FILTER (WHERE from_id = ? AND to_id = ?)
+		FROM links WHERE kind = 'part-of'`, file, cat).Scan(&all, &filed); err != nil {
+		t.Fatal(err)
+	}
+	if all != 1 || filed != 1 || file == 0 {
+		t.Errorf("%d part-of links, %d from memo.txt (%d) to Papers (%d): want the one link", all, filed, file, cat)
+	}
+}
+
 func TestDoDispatchesPageFind(t *testing.T) {
 	c := commandClient(t)
 	page, err := do(t.Context(), c, "find", map[string]string{"title": "Ana"})

@@ -21,7 +21,7 @@ func TestAnniversariesComeBackEachYear(t *testing.T) {
 	s := fresh(t)
 	person := func(title, birth, death string) int64 {
 		t.Helper()
-		id, err := s.CreatePerson(ctx, "cli", title, title, birth, death)
+		id, err := s.CreatePerson(ctx, "cli", title, title, birth, death, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -97,7 +97,7 @@ func TestDatedRowsOfAWindow(t *testing.T) {
 	if _, err := s.AddFile(ctx, "cli", FileIn{Title: "Lake.jpg", SHA256: strings.Repeat("a", 64), MIME: "image/jpeg", Day: "2031-05-14"}); err != nil {
 		t.Fatal(err)
 	}
-	park, err := s.CreatePlace(ctx, "cli", "Lake Park")
+	park, err := s.CreatePlace(ctx, "cli", "Lake Park", "")
 	if err != nil {
 		t.Fatal(err)
 	}

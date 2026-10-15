@@ -276,7 +276,7 @@ func (h *server) createPerson(r *http.Request, src string) (*Entity, error) {
 	if err := required(v, "title"); err != nil {
 		return nil, err
 	}
-	id, err := h.s.CreatePerson(r.Context(), src, v.Get("title"), v.Get("name"), v.Get("birth_day"), v.Get("death_day"))
+	id, err := h.s.CreatePerson(r.Context(), src, v.Get("title"), v.Get("name"), v.Get("birth_day"), v.Get("death_day"), v.Get("category"))
 	if err != nil {
 		return nil, err
 	}
@@ -291,7 +291,7 @@ func (h *server) createPlace(r *http.Request, src string) (*Entity, error) {
 	if err := required(v, "title"); err != nil {
 		return nil, err
 	}
-	id, err := h.s.CreatePlace(r.Context(), src, v.Get("title"))
+	id, err := h.s.CreatePlace(r.Context(), src, v.Get("title"), v.Get("category"))
 	if err != nil {
 		return nil, err
 	}

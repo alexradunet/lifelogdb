@@ -336,31 +336,31 @@ func (h *server) browseRows(ctx context.Context, e *Entity, b browseQuery, sc co
 	return rows, nil
 }
 
-// browseActions are the actions of a list: the New of its kind (a new page is filed in the category of the list),
-// and the pick bar's. Every list but All offers file-pages; pages (the ghosts too), media and documents also offer
-// tombstone-pages. People, places and metrics are deleted from their own page.
+// browseActions are the actions of a list: the New of its kind (a new thing is filed in the category of the list,
+// rule 6), and the pick bar's. Every list but All offers file-pages; pages (the ghosts too), media and documents
+// also offer tombstone-pages. People, places and metrics are deleted from their own page.
 func browseActions(b browseQuery, in *browseIn, categories []string) []Action {
+	var values map[string]any
+	if in != nil {
+		values = map[string]any{"category": in.Title}
+	}
 	var out []Action
 	switch {
 	case b.ghosts:
 	case b.kind == "page":
-		var values map[string]any
-		if in != nil {
-			values = map[string]any{"category": in.Title}
-		}
 		out = append(out, action("create-page", nil, values))
 	case b.kind == "person":
-		out = append(out, action("create-person", nil, nil))
+		out = append(out, action("create-person", nil, values))
 	case b.kind == "place":
-		out = append(out, action("create-place", nil, nil))
+		out = append(out, action("create-place", nil, values))
 	case b.kind == "media":
-		add := action("add-file", nil, nil)
+		add := action("add-file", nil, values)
 		if f := add.field("original"); f != nil {
 			f.Accept = mediaAccept
 		}
 		out = append(out, add)
 	case b.kind == "document":
-		out = append(out, action("add-file", nil, nil))
+		out = append(out, action("add-file", nil, values))
 	}
 	if b.kind != "all" {
 		out = append(out, withOptions(action("file-pages", nil, nil), "category", categories))

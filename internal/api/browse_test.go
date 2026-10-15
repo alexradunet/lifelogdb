@@ -43,11 +43,11 @@ func browseFixture(t *testing.T, s *core.Store) map[string]int64 {
 		ids[title] = id
 	}
 	for _, title := range []string{"Ana", "Bo"} {
-		id, err := s.CreatePerson(ctx, "cli", title, "", "", "")
+		id, err := s.CreatePerson(ctx, "cli", title, "", "", "", "")
 		check(err)
 		ids[title] = id
 	}
-	id, err := s.CreatePlace(ctx, "cli", "Lakeside")
+	id, err := s.CreatePlace(ctx, "cli", "Lakeside", "")
 	check(err)
 	ids["Lakeside"] = id
 	for i, f := range []core.FileIn{{Title: "photo.jpg", MIME: "image/jpeg", Day: "2031-05-02"}, {Title: "memo.m4a", MIME: "audio/mp4", Day: "2031-05-01"},

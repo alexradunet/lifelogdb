@@ -11,7 +11,7 @@ func TestReadersPage(t *testing.T) {
 	s := fresh(t)
 	ctx := context.Background()
 	for i := 1; i <= 5; i++ {
-		if _, err := s.CreatePlace(ctx, "cli", fmt.Sprintf("Place %d", i)); err != nil {
+		if _, err := s.CreatePlace(ctx, "cli", fmt.Sprintf("Place %d", i), ""); err != nil {
 			t.Fatal(err)
 		}
 		if _, _, err := s.Capture(ctx, "cli", fmt.Sprintf("2031-04-%02d", i), fmt.Sprintf("pageword [[Missing %d]]", i), nil); err != nil {

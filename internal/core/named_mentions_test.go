@@ -7,7 +7,7 @@ import "testing"
 func TestNamedMentionsCountLivePagesAndTheNewestDay(t *testing.T) {
 	s := fresh(t)
 	for _, name := range []string{"Sam", "Ana", "Zed"} {
-		if _, err := s.CreatePerson(ctx, "cli", name, "", "", ""); err != nil {
+		if _, err := s.CreatePerson(ctx, "cli", name, "", "", "", ""); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -88,7 +88,7 @@ func TestNamedMentionsGiveAPersonTheFirstPictureItsPageEmbeds(t *testing.T) {
 		"Zed": "",
 	}
 	for _, name := range []string{"Ana", "Sam", "Zed"} {
-		id, err := s.CreatePerson(ctx, "cli", name, "", "", "")
+		id, err := s.CreatePerson(ctx, "cli", name, "", "", "", "")
 		if err != nil {
 			t.Fatal(err)
 		}

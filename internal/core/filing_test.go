@@ -95,7 +95,7 @@ func TestFilePages(t *testing.T) {
 func TestFilePagesRefusals(t *testing.T) {
 	s := fresh(t)
 	ferritin := metricID(t, s, "Ferritin", "ug/L")
-	_, err := s.CreatePerson(ctx, "cli", "Bob Sample", "", "", "")
+	_, err := s.CreatePerson(ctx, "cli", "Bob Sample", "", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

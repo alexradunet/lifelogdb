@@ -264,8 +264,11 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   has one section, Filed here: the sub-categories first, then the rest by title, a type badge on what is not a
   page; its margin's Backlinks no longer lists `part-of`. `create-page` takes an optional `category`: the page is
   made and filed there in one write, a missing category made as `file-pages` makes it, and a day as the category
-  refuses the whole write (`links_endpoint_types`). A category page offers it as New page here. Rejected by the
-  owner: exclusive membership, a manual order and a syntax in the body that files a page.
+  refuses the whole write (`entities_day_page` when the day has no page, `links_endpoint_types` when it has one).
+  A category page offers it as New page here. `create-person`, `create-place` and `add-file` take `category` too,
+  in the same one write ([plan 117](docs/plans/117-one-browse-view.md), rule 6); `add-file` files the page of the
+  same original when it exists, unless that page is deleted. Rejected by the owner: exclusive membership, a manual
+  order and a syntax in the body that files a page.
 - **One way to make a thing** ([plan 114](docs/plans/114-one-way-to-do-a-thing.md)). The rail's New is a menu of the
   kinds; each kind is made on its list, whose header has its New button (a page on Home, beside Open a page).
   `?new=<action>` opens that action's form on any page, and a query parameter that names a field fills it in. The
@@ -290,7 +293,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   picture; `GET /pages/{id}/preview` and `GET /previews?title=` serve it. A photo's day comes from its EXIF
   (`internal/photo`: a JPEG's APP1, a HEIC's Exif item, read from the original's first megabyte); its position is
   never read ([D21](docs/decisions/D21-location-history.md), [plan 116](docs/plans/116-strip-to-the-core.md)).
-  `lifelog file` keeps one file, with `--dry-run`. Unknown capture-local day follows [keep a file](docs/cookbook/keep-a-file.md).
+  `lifelog file` keeps one file, with `--dry-run`, and `--category` files it in the same write. Unknown capture-local day follows [keep a file](docs/cookbook/keep-a-file.md).
 - **`serve` is local-only unless the owner says `--public`.** Without the flag `serve` is what it was: `life.db`
   holds health data, and the API is for this machine. The default bind is `127.0.0.1:7777`; `--addr` accepts numeric
   loopback IPs or `localhost` with a numeric port (0 selects an ephemeral port, printed at startup), and nothing else.

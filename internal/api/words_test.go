@@ -116,6 +116,12 @@ func TestAResultIsSaidInSentences(t *testing.T) {
 			`In its page: Linked <a href="/pages?title=A">A</a>. | In its day page: Revived <a href="/pages?title=B">B</a>. | ` +
 				`Kept the file: <a href="/pages/7">its page</a>. | The same original was kept before. | ` +
 				`Filed under <time datetime="2026-10-11">yesterday · Sun 11 Oct</time>. | Shown on its day page.`},
+		{"add-file filed in a new category", map[string]any{"id": 7.0, "filed": map[string]any{"category": map[string]any{"id": 9.0, "title": "Papers", "path": ""}, "created": true, "added": 1.0, "moved": 0.0}},
+			`Kept the file: <a href="/pages/7">its page</a>. | Put in the new category <a href="/pages?title=Papers">Papers</a>.`},
+		{"add-file filed", map[string]any{"filed": map[string]any{"category": map[string]any{"title": "Papers"}, "created": false, "added": 1.0, "moved": 0.0}},
+			`Put in the category <a href="/pages?title=Papers">Papers</a>.`},
+		{"add-file filed before", map[string]any{"filed": map[string]any{"category": map[string]any{"title": "Papers"}, "created": false, "added": 0.0, "moved": 0.0}},
+			`It was in the category <a href="/pages?title=Papers">Papers</a> already.`},
 		{"snapshot", map[string]any{"snapshot": "snaps/life-2026-10-12.db", "restore_check": "ok"},
 			`Took a snapshot: <code>snaps/life-2026-10-12.db</code>. | <dl class="facts"><dt>restore check</dt><dd>ok</dd></dl>`},
 		{"unknown", map[string]any{"foo_bar": 1.0}, `<dl class="facts"><dt>foo bar</dt><dd>1</dd></dl>`},

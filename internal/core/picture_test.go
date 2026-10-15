@@ -11,7 +11,7 @@ import (
 func TestSetPictureKeepsThePhotoAndShowsItFirst(t *testing.T) {
 	s := fresh(t)
 	pic := smallJPEG(t)
-	ana, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "")
+	ana, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,11 +78,11 @@ func TestSetPictureKeepsThePhotoAndShowsItFirst(t *testing.T) {
 func TestSetPictureRefuses(t *testing.T) {
 	s := fresh(t)
 	pic := smallJPEG(t)
-	ana, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "")
+	ana, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	gone, err := s.CreatePerson(ctx, "cli", "Gone", "", "", "")
+	gone, err := s.CreatePerson(ctx, "cli", "Gone", "", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

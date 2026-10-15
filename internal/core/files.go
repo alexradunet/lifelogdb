@@ -15,10 +15,11 @@ import (
 // stored; the title and text of its page; its preview, a JPEG preview.Make made (nil for none). Its day is Day when
 // the caller gives one, else Taken, else today for ordinary files. Unknown-capture mode follows
 // docs/cookbook/keep-a-file.md: a photo with no day of its own goes in no day page. A photo's position is never
-// read (D21).
+// read (D21). Category is the title of the category to file the page in ("" for none).
 type FileIn struct {
 	UnknownCaptureDay bool // Explicit selected-photo mode: no inferred attribution.
 	Title             string
+	Category          string
 	SHA256            string
 	MIME              string
 	Body              string
@@ -39,11 +40,29 @@ type Kept struct {
 	DaySync      *Sync  `json:"day_sync,omitempty"`      // the links synchronized when appending to its day
 	Day          string `json:"day,omitempty"`           // its own day: the caller's, or the one its metadata gives
 	Embedded     bool   `json:"embedded,omitempty"`      // it was appended to its day's page
+	Filed        *Filed `json:"filed,omitempty"`         // what filing it in the category named did; none when no category was named
 }
 
-// AddFile keeps a file: the page the original's hash names already, or a new file page, or a plain page of the title
+// AddFile keeps a file (keep), then, when f names a category, files its page there in the same write, as FilePages
+// does (docs/plans/117-one-browse-view.md, rule 6). The page the original's hash names already is filed too. A
+// tombstoned page is not filed: for it nothing is written. A day as the category refuses the whole write, as fileNew
+// says.
+func (t *Tx) AddFile(f FileIn) (Kept, error) {
+	k, err := t.keep(f)
+	if err != nil || f.Category == "" || k.Deleted {
+		return k, err
+	}
+	filed, err := t.FilePages([]int64{k.ID}, f.Category, false)
+	if err != nil {
+		return k, err
+	}
+	k.Filed = &filed
+	return k, nil
+}
+
+// keep keeps a file: the page the original's hash names already, or a new file page, or a plain page of the title
 // promoted to the file (docs/cookbook/keep-a-file.md); then its place and its day (docs/cookbook/place-of-a-photo.md).
-func (t *Tx) AddFile(f FileIn) (k Kept, err error) {
+func (t *Tx) keep(f FileIn) (k Kept, err error) {
 	// the hash and the type are normalized here and held by files_sha256 and files_mime; the days by entities_day
 	f.SHA256 = strings.ToLower(strings.TrimSpace(f.SHA256))
 	if f.MIME = NormalMIME(f.MIME); f.MIME == "" {
@@ -228,11 +247,14 @@ func NormalMIME(s string) string {
 }
 
 // TryAddFile is AddFile in a transaction that is rolled back: what keeping the file would do, writing nothing. A page
-// it would create has no id.
+// it would create has no id, and neither has a category it would create.
 func (s *Store) TryAddFile(ctx context.Context, source string, f FileIn) (k Kept, err error) {
 	err = s.dryRun(ctx, source, func(t *Tx) (e error) { k, e = t.AddFile(f); return })
 	if !k.Existing {
 		k.ID = 0
+	}
+	if k.Filed != nil && k.Filed.Created {
+		k.Filed.Category.ID = 0
 	}
 	return
 }

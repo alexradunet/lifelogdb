@@ -64,7 +64,7 @@ func TestRename(t *testing.T) {
 	// a typo ghost, empty, into an existing person
 	s.Capture(ctx, "cli", "2026-09-30", "met [[Sm]]", nil)
 	ghost, _ := s.PageID(ctx, "Sm")
-	sam, _ := s.CreatePerson(ctx, "cli", "Sam", "Sam Example", "", "")
+	sam, _ := s.CreatePerson(ctx, "cli", "Sam", "Sam Example", "", "", "")
 	if to, err := s.Rename(ctx, "cli", ghost, "Sam"); !isExists(err) || to != 0 {
 		t.Errorf("ghost conflict must refuse without merging: %d, %v", to, err)
 	}

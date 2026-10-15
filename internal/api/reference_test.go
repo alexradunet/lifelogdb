@@ -240,12 +240,12 @@ func fixture(t *testing.T) (http.Handler, *core.Store, map[string]string) {
 	s := &core.Store{DB: d}
 	ctx := t.Context()
 	ids := map[string]string{}
-	personID, err := s.CreatePerson(ctx, "cli", "Sam", "Sam Synthetic", "2001-01-01", "")
+	personID, err := s.CreatePerson(ctx, "cli", "Sam", "Sam Synthetic", "2001-01-01", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	ids["person"] = fmt.Sprintf("/pages/%d", personID)
-	placeID, err := s.CreatePlace(ctx, "cli", "Lakeside")
+	placeID, err := s.CreatePlace(ctx, "cli", "Lakeside", "")
 	if err != nil {
 		t.Fatal(err)
 	}

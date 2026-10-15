@@ -30,12 +30,12 @@ func browseFixture(t *testing.T) (*Store, map[string]int64) {
 		ids[title] = id
 	}
 	for _, title := range []string{"Ana", "Bo"} {
-		id, err := s.CreatePerson(ctx, "cli", title, "", "", "")
+		id, err := s.CreatePerson(ctx, "cli", title, "", "", "", "")
 		check(err)
 		ids[title] = id
 	}
 	for _, title := range []string{"Lakeside", "Harbor"} {
-		id, err := s.CreatePlace(ctx, "cli", title)
+		id, err := s.CreatePlace(ctx, "cli", title, "")
 		check(err)
 		ids[title] = id
 	}
@@ -291,7 +291,7 @@ func TestBrowseCountsTheGhostPages(t *testing.T) {
 // category. It is in Not filed, and the chip counts it.
 func TestNotFiledCountsOnlyALiveCategory(t *testing.T) {
 	s, ids := browseFixture(t)
-	cy, err := s.CreatePerson(ctx, "cli", "Cy", "", "", "")
+	cy, err := s.CreatePerson(ctx, "cli", "Cy", "", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -347,7 +347,7 @@ func TestBrowseOrdersTitlesWithoutCase(t *testing.T) {
 		pages = append(pages, id)
 	}
 	for _, title := range []string{"bo", "Ana", "Cy"} {
-		if _, err := s.CreatePerson(ctx, "cli", title, "", "", ""); err != nil {
+		if _, err := s.CreatePerson(ctx, "cli", title, "", "", "", ""); err != nil {
 			t.Fatal(err)
 		}
 	}

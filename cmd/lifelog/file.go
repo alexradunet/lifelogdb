@@ -10,10 +10,11 @@ import (
 )
 
 // keepFile is `lifelog file PATH`: the add-file action with the original streamed from disk (hashed by the API,
-// never stored), its text read from --text, and a picture from --preview when the original is not one lifelog reads.
+// never stored), its text read from --text, a picture from --preview when the original is not one lifelog reads, and
+// --category to file its page in a category in the same write.
 func keepFile(ctx context.Context, o opts, c *client.Client, args []string) error {
 	if len(args) != 1 {
-		return errors.New("file PATH [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day YYYY-MM-DD] [--dry-run]")
+		return errors.New("file PATH [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day YYYY-MM-DD] [--category TITLE] [--dry-run]")
 	}
 	add, err := actionNamed(ctx, c, "add-file")
 	if err != nil {
@@ -30,7 +31,7 @@ func keepFile(ctx context.Context, o opts, c *client.Client, args []string) erro
 		}
 		vals["body"] = string(b)
 	}
-	for k, v := range map[string]string{"mime": o.mime, "day": o.day} {
+	for k, v := range map[string]string{"mime": o.mime, "day": o.day, "category": o.category} {
 		if v != "" {
 			vals[k] = v
 		}

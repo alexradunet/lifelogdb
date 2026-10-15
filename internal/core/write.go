@@ -616,14 +616,13 @@ func (s *Store) SaveBody(ctx context.Context, source string, id int64, body, ver
 }
 
 // CreatePage makes the page and, with a category, files it there in the same write, as FilePages does
-// (docs/plans/115-categories-to-browse.md): a category the links registry refuses (a day) refuses the whole write.
+// (docs/plans/115-categories-to-browse.md): a day as the category refuses the whole write.
 func (s *Store) CreatePage(ctx context.Context, source, title, body, category string) (id int64, r Sync, err error) {
 	err = s.Do(ctx, source, func(t *Tx) (e error) {
-		if id, _, r, e = t.CreatePage(title, body, "", ""); e != nil || category == "" {
+		if id, _, r, e = t.CreatePage(title, body, "", ""); e != nil {
 			return e
 		}
-		_, e = t.FilePages([]int64{id}, category, false)
-		return e
+		return t.fileNew(id, category)
 	})
 	if err != nil {
 		id = 0
@@ -631,20 +630,44 @@ func (s *Store) CreatePage(ctx context.Context, source, title, body, category st
 	return
 }
 
-func (s *Store) CreatePerson(ctx context.Context, source, title, name, birth, death string) (id int64, err error) {
-	err = s.Do(ctx, source, func(t *Tx) (e error) { id, _, e = t.CreatePerson(title, name, birth, death, ""); return })
+// CreatePerson makes the person and, with a category, files it there in the same write, as CreatePage does
+// (docs/plans/117-one-browse-view.md, rule 6).
+func (s *Store) CreatePerson(ctx context.Context, source, title, name, birth, death, category string) (id int64, err error) {
+	err = s.Do(ctx, source, func(t *Tx) (e error) {
+		if id, _, e = t.CreatePerson(title, name, birth, death, ""); e != nil {
+			return e
+		}
+		return t.fileNew(id, category)
+	})
 	if err != nil {
 		id = 0
 	}
 	return
 }
 
-func (s *Store) CreatePlace(ctx context.Context, source, title string) (id int64, err error) {
-	err = s.Do(ctx, source, func(t *Tx) (e error) { id, _, e = t.CreatePlace(title, ""); return })
+// CreatePlace makes the place and, with a category, files it there in the same write, as CreatePage does.
+func (s *Store) CreatePlace(ctx context.Context, source, title, category string) (id int64, err error) {
+	err = s.Do(ctx, source, func(t *Tx) (e error) {
+		if id, _, e = t.CreatePlace(title, ""); e != nil {
+			return e
+		}
+		return t.fileNew(id, category)
+	})
 	if err != nil {
 		id = 0
 	}
 	return
+}
+
+// fileNew files a thing made in this write in the category titled category ("" for none), as FilePages files it:
+// a missing category is made, and a day as the category refuses the whole write: entities_day_page refuses a plain
+// page with a day's title, and links_endpoint_types a part-of link to a day page that exists.
+func (t *Tx) fileNew(id int64, category string) error {
+	if category == "" {
+		return nil
+	}
+	_, err := t.FilePages([]int64{id}, category, false)
+	return err
 }
 
 func (s *Store) Promote(ctx context.Context, source string, id int64, typ, name string) error {

@@ -49,9 +49,9 @@ func TestMCPStableNames(t *testing.T) {
 				case "page":
 					id, _, err = s.CreatePage(context.Background(), "cli", old, "original prose", "")
 				case "person":
-					id, err = s.CreatePerson(context.Background(), "cli", old, "Synthetic Person", "", "")
+					id, err = s.CreatePerson(context.Background(), "cli", old, "Synthetic Person", "", "", "")
 				case "place":
-					id, err = s.CreatePlace(context.Background(), "cli", old)
+					id, err = s.CreatePlace(context.Background(), "cli", old, "")
 				case "metric":
 					_, err = s.RegisterMetric(context.Background(), "cli", old, "kg", "original metric")
 					if err == nil {

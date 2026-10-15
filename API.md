@@ -154,9 +154,10 @@ Each row is an embedded `item` link (class: the row's `type`), and each category
 link to Browse in that category (it keeps a `kind` the query names, but `all`). Links: `self` (with the filters),
 `index`, `metrics`, a `kind` link for each chip (class: its kind; it keeps `in` and `unfiled`; `all` inside a
 category only), `everything` and `unfiled` (the ends of the tree), `ghosts`, with `kind=media` also `pictures`,
-`videos` and `recordings`, and `prev`/`next`. Actions: the New of the kind (`create-page`, with `category` filled
-inside a category; `create-person`; `create-place`; `add-file`, whose `original` carries `accept` for media; none
-for `metric`, `all` and the ghosts); `file-pages` on every list but `all`; `tombstone-pages` on `page` (the ghosts
+`videos` and `recordings`, and `prev`/`next`. Actions: the New of the kind (`create-page`, `create-person`,
+`create-place`, `add-file`, whose `original` carries `accept` for media; none for `metric`, `all` and the ghosts),
+with `category` filled inside a category: each of them makes the thing and files it there in one write, and a
+refusal of either step writes nothing; `file-pages` on every list but `all`; `tombstone-pages` on `page` (the ghosts
 too), `media` and `document`.
 
 | property | type | meaning |
@@ -672,3 +673,12 @@ What the save contract did with the body's `[[wikilinks]]` and `#tags`:
 | `day_sync.skipped` | list | |
 | `day` | day | the day it was filed under |
 | `embedded` | boolean | `![[title]]` was appended to its day page |
+| `filed` | object | what filing it in `category` did, as [filed](#filed) says it; absent when no `category` was sent or its page is deleted |
+| `filed.category` | object | the category page; in a dry run that would make it, its `id` is 0 |
+| `filed.category.id` | integer | its id |
+| `filed.category.title` | string | its title |
+| `filed.category.path` | string | empty here |
+| `filed.category.count` | integer | absent here |
+| `filed.created` | boolean | the category page was made by this action |
+| `filed.added` | integer | 1 when the part-of link is new, 0 when the file was in the category already |
+| `filed.moved` | integer | always 0: `add-file` removes no link |

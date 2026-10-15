@@ -27,7 +27,7 @@ const version = "0.1.0"
 // global flags and its own (command.flags), and refuses any other.
 type opts struct {
 	db, url, source, addr, agent, mood, day, from, to, title, text, preview, mime string
-	tokenFile, tlsCert, tlsKey, snapshots                                         string
+	tokenFile, tlsCert, tlsKey, snapshots, category                               string
 	allowOrigins                                                                  []string
 	human, dryRun, dbExplicit, addrExplicit, public, force                        bool
 	args                                                                          []string
@@ -170,12 +170,13 @@ var commands = []command{
 			}
 			return doAction(ctx, e, "rename", map[string]string{"id": args[0], "title": args[1]})
 		}},
-	{name: "file", flags: []string{"--title", "--text", "--preview", "--mime", "--day", "--dry-run"},
-		usage: "  lifelog file PATH [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day D] [--dry-run]\n" +
-			"                                      keep a file (docs/cookbook/keep-a-file.md): the original is hashed,\n" +
+	{name: "file", flags: []string{"--title", "--text", "--preview", "--mime", "--day", "--category", "--dry-run"},
+		usage: "  lifelog file PATH [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day D] [--category C]\n" +
+			"                  [--dry-run]         keep a file (docs/cookbook/keep-a-file.md): the original is hashed,\n" +
 			"                                      never stored; its text from FILE; a picture made from a JPEG, PNG or\n" +
 			"                                      GIF, else from PICTURE; the title defaults to the file's name. A photo\n" +
-			"                                      is filed under its own day; --dry-run writes nothing",
+			"                                      is filed under its own day; --category files its page in the category\n" +
+			"                                      page C in the same write; --dry-run writes nothing",
 		run: func(ctx context.Context, e env, args []string) error { return keepFile(ctx, e.o, e.c, args) }},
 	{name: "snapshot", flags: []string{"--to"},
 		usage: "  lifelog snapshot [--to DIR]         a dated copy of life.db (life-YYYY-MM-DD.db, beside it or in DIR),\n" +
@@ -233,7 +234,7 @@ func parse(argv []string) (opts, error) {
 	o := opts{db: os.Getenv("LIFELOG_DB"), source: "cli", addr: "127.0.0.1:7777"}
 	vals := map[string]*string{"--db": &o.db, "--url": &o.url, "--source": &o.source, "--addr": &o.addr,
 		"--agent": &o.agent, "--mood": &o.mood, "--day": &o.day, "--from": &o.from, "--to": &o.to,
-		"--title": &o.title, "--text": &o.text, "--preview": &o.preview, "--mime": &o.mime,
+		"--title": &o.title, "--text": &o.text, "--preview": &o.preview, "--mime": &o.mime, "--category": &o.category,
 		"--token-file": &o.tokenFile, "--tls-cert": &o.tlsCert, "--tls-key": &o.tlsKey, "--snapshots": &o.snapshots}
 	bools := map[string]*bool{"--human": &o.human, "--dry-run": &o.dryRun, "--public": &o.public, "--force": &o.force}
 	for i := 0; i < len(argv); i++ {

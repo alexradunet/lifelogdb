@@ -33,7 +33,7 @@ func TestAnAgentBrowsesThroughMCP(t *testing.T) {
 	ctx := context.Background()
 	var ids []int64
 	for _, title := range []string{"Ana", "Bo", "Cy"} {
-		id, err := s.CreatePerson(ctx, "cli", title, "", "", "")
+		id, err := s.CreatePerson(ctx, "cli", title, "", "", "", "")
 		if err != nil {
 			t.Fatal(err)
 		}

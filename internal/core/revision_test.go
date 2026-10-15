@@ -49,7 +49,7 @@ func TestConditionalSaveRejectsEqualClockStaleToken(t *testing.T) {
 
 func TestEditRevisionNoopRollbackAndTypedMutation(t *testing.T) {
 	s := fresh(t)
-	id, err := s.CreatePerson(ctx, "cli", "Person witness", "Name", "", "")
+	id, err := s.CreatePerson(ctx, "cli", "Person witness", "Name", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

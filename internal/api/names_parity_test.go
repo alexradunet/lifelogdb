@@ -49,9 +49,9 @@ func TestStableNameTransportParity(t *testing.T) {
 				case "page":
 					id, _, err = s.CreatePage(context.Background(), "cli", old, "original prose", "")
 				case "person":
-					id, err = s.CreatePerson(context.Background(), "cli", old, "Synthetic Person", "", "2031-01-01")
+					id, err = s.CreatePerson(context.Background(), "cli", old, "Synthetic Person", "", "2031-01-01", "")
 				case "place":
-					id, err = s.CreatePlace(context.Background(), "cli", old)
+					id, err = s.CreatePlace(context.Background(), "cli", old, "")
 				case "metric":
 					_, err = s.RegisterMetric(context.Background(), "cli", old, "kg", "original metric")
 					if err == nil {
@@ -173,7 +173,7 @@ func TestBrowserStableNameResolution(t *testing.T) {
 	})
 	s := &core.Store{DB: d}
 	h := api.New(s)
-	id, err := s.CreatePerson(context.Background(), "cli", "Old person", "Synthetic Person", "", "")
+	id, err := s.CreatePerson(context.Background(), "cli", "Old person", "Synthetic Person", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
