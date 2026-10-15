@@ -59,7 +59,7 @@ func TestSetPictureKeepsThePhotoAndShowsItFirst(t *testing.T) {
 	if got, want := body(), "![[Ana 2026-10-15 2.jpg]]\n\n![[Ana 2026-10-15.jpg]]\n\nMet at school."; got != want {
 		t.Errorf("body = %q, want %q", got, want)
 	}
-	rows, err := s.NamedMentions(ctx, "person", 10, 0)
+	rows, err := s.NamedMentions(ctx, "person", Scope{}, 10, 0)
 	if err != nil || len(rows) != 1 || rows[0].Picture != second.ID {
 		t.Errorf("NamedMentions = %+v, %v, want the picture %d", rows, err, second.ID)
 	}

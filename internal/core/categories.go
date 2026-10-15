@@ -15,7 +15,8 @@ import (
 // draws one: each category under one parent (the first by title), and a page it has seen ends the walk.
 
 // Category is a category page and the path the writer draws it at: the titles from the top, joined by '/'. Count
-// is how many live things are filed directly in it, the categories under it included.
+// is how many live things are filed directly in it, the categories under it included and a day page not: the
+// rows of All in that category in Browse (docs/plans/117-one-browse-view.md).
 type Category struct {
 	ID    int64  `json:"id"`
 	Title string `json:"title"`
@@ -26,7 +27,7 @@ type Category struct {
 // categories are the live pages something is part-of, by id, each with its path and its count.
 func (s *Store) categories(ctx context.Context) (map[int64]*Category, error) {
 	rows, err := s.DB.R.QueryContext(ctx, `
-		SELECT l.from_id, p.id, p_name.title, f.deleted_at IS NULL
+		SELECT l.from_id, p.id, p_name.title, f.deleted_at IS NULL AND NOT f.is_journal
 		  FROM links l JOIN entities p ON p.id = l.to_id JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key AND p.deleted_at IS NULL
 		  JOIN entities f ON f.id = l.from_id
 		 WHERE l.kind = 'part-of'
@@ -87,11 +88,11 @@ func (s *Store) Categories(ctx context.Context) ([]Category, error) {
 // Categories view lists after the tree (docs/plans/115-categories-to-browse.md). A day page is never filed, and a
 // metric, a person, a place and a file have lists of their own.
 func (s *Store) Unfiled(ctx context.Context, limit, offset int) ([]Edge, error) {
+	where, args := Scope{Unfiled: true}.where()
 	return s.edges(ctx, `SELECT p.entity_type, p.id, p_name.title, p.entity_type, ''
 	                       FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
-	                      WHERE p.entity_type = 'page' AND NOT p.is_journal AND p.deleted_at IS NULL
-	                        AND NOT EXISTS (SELECT 1 FROM links l WHERE l.kind = 'part-of' AND (l.from_id = p.id OR l.to_id = p.id))
-	                      ORDER BY p_name.title LIMIT ? OFFSET ?`, limit, offset)
+	                      WHERE `+plainPage+` AND `+where+`
+	                      ORDER BY p.preferred_name_key LIMIT ? OFFSET ?`, append(args, limit, offset)...)
 }
 
 // Filed is what FilePages did: the category page, whether it was made, the links added and the other part-of links

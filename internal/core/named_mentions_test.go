@@ -28,7 +28,7 @@ func TestNamedMentionsCountLivePagesAndTheNewestDay(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := s.NamedMentions(ctx, "person", 10, 0)
+	got, err := s.NamedMentions(ctx, "person", Scope{}, 10, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestNamedMentionsCountLivePagesAndTheNewestDay(t *testing.T) {
 			t.Errorf("row %d is page %d, Named has page %d", i, got[i].ID, e.ID)
 		}
 	}
-	second, err := s.NamedMentions(ctx, "person", 1, 1)
+	second, err := s.NamedMentions(ctx, "person", Scope{}, 1, 1)
 	if err != nil || len(second) != 1 || second[0].Title != "Sam" {
 		t.Errorf("NamedMentions(1, 1) = %+v, %v, want Sam", second, err)
 	}
@@ -103,7 +103,7 @@ func TestNamedMentionsGiveAPersonTheFirstPictureItsPageEmbeds(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := s.NamedMentions(ctx, "person", 10, 0)
+	got, err := s.NamedMentions(ctx, "person", Scope{}, 10, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

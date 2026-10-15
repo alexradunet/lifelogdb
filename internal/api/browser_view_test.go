@@ -259,6 +259,27 @@ func TestTheSheetsAreLayered(t *testing.T) {
 	}
 }
 
+// TestTheSheetsCloseEveryBlock: every block of a sheet is closed, so no rule is nested by accident in the rule
+// before it. A brace lost with a deleted line once put every rule after .metric-card inside it, where it matched
+// nothing.
+func TestTheSheetsCloseEveryBlock(t *testing.T) {
+	for name, sheet := range map[string]string{"base.css": string(baseCSS), "app.css": string(appCSS)} {
+		depth, reported := 0, false
+		for i, line := range strings.Split(cssComments.ReplaceAllStringFunc(sheet, func(c string) string { return strings.Repeat("\n", strings.Count(c, "\n")) }), "\n") {
+			// A line that starts at the margin with a selector or an at-rule starts a rule of a layer, or of the
+			// sheet itself: the blocks before it are closed.
+			if line != "" && !strings.ContainsAny(line[:1], " \t}") && depth > 1 && !reported {
+				t.Errorf("%s:%d: %.60q starts inside %d open blocks", name, i+1, line, depth)
+				reported = true
+			}
+			depth += strings.Count(line, "{") - strings.Count(line, "}")
+		}
+		if depth != 0 {
+			t.Errorf("%s ends with %d blocks open", name, depth)
+		}
+	}
+}
+
 // TestTheSheetsUseLogicalProperties: a rule says inline and block, start and end, never left, right, top and
 // bottom, so the sheets read the same in any writing direction. A value stays physical where the property is a
 // position of a background or a shadow; only a property name is checked here.

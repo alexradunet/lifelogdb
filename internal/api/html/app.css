@@ -597,7 +597,7 @@ li.pick{display:flex; align-items:stretch; gap:var(--space-1);
   & .meta{font-size:13px; line-height:19px; color:var(--muted)}
   & .badge{align-self:flex-start}
   &>.pick-box{position:absolute; inset-block-start:var(--space-1); inset-inline-end:var(--space-1); z-index:1; padding:var(--space-1); background:var(--surface); border:2px solid var(--edge)}
-  &.stale{& a.reading,& .name{color:var(--muted)} & svg.trend{color:var(--muted)} & svg.trend circle{fill:var(--muted)}}
+  &.stale{& a.reading,& .name{color:var(--muted)} & svg.trend{color:var(--muted)} & svg.trend circle{fill:var(--muted)}}}
 .metric-card:has(.pick-box input:checked){outline:2px solid var(--link); outline-offset:-2px}
 /* New metric (docs/plans/113-new-metric-on-metrics.md): the checked kind shows its form, with no script. A category's
    heading carries "+ New metric here". A number card and a day's reading tile carry + Add, one value for one day. */
@@ -663,6 +663,23 @@ li.pick{display:flex; align-items:stretch; gap:var(--space-1);
   }
 }
 @keyframes rail-drop{to{box-shadow:inset 0 3px 0 var(--bevel-light),inset 0 -3px 0 var(--bevel-dark),var(--shadow-float)}}
+
+/* Browse (docs/plans/117-one-browse-view.md): the category tree beside the list in a wide column, on a panel, the
+   branch of the list marked. In a narrow column the tree is a closed disclosure above the chips. The chips wrap onto
+   more lines (.kinds does): a row that scrolls hid the current chip past the edge, and with no script nothing
+   scrolls it into view. The page holds both copies of the tree; the column's width shows one. */
+.browse{display:grid; grid-template-columns:minmax(180px,240px) minmax(0,1fr); gap:var(--space-6); align-items:start}
+.browse-main{display:flex; flex-direction:column; gap:var(--space-2); min-inline-size:0}
+.browse-side,.browse-fold{gap:0; padding:var(--space-2) var(--space-3);
+  & .tree a.entry[aria-current=page]{background:var(--accent-soft); color:var(--accent-ink); font-weight:700}}
+.browse-fold{display:none;
+  &>summary{display:flex; align-items:baseline; gap:var(--space-3); padding:var(--space-2) var(--space-1); cursor:pointer; font-weight:700;
+    & .meta{margin-inline-start:auto; font-weight:400; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}}}
+.kinds.chips{& a{white-space:nowrap} & small{color:var(--text-muted)}}
+@container column (max-width:867px){
+  .browse{grid-template-columns:minmax(0,1fr)}
+  .browse-side{display:none}
+  .browse-fold{display:block}}
 }
 
 /* The utilities: a class with one purpose that no component restyles, so it may come last in the cascade. */

@@ -85,7 +85,8 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 		}
 		return month
 	},
-	"depth":     func(path string) int { return strings.Count(path, "/") }, // a category's depth in the drawn tree
+	"depth":     func(path string) int { return strings.Count(path, "/") },                // a category's depth in the drawn tree
+	"crumbs":    func(path string) string { return strings.ReplaceAll(path, "/", " › ") }, // "Family/Cousins" to "Family › Cousins"
 	"add":       func(a, b int) int { return a + b },
 	"segmented": segmented,
 	"alert":     alertOf,
@@ -124,7 +125,7 @@ func num(v any) string {
 // viewOf names the template that shows an entity of a class; a class without one is shown by "generic".
 var viewOf = map[string]string{
 	"root": "root", "day": "day", "page": "page", "person": "page", "place": "page", "file": "page",
-	"days": "list", "people": "list", "places": "list", "media": "media", "files": "files", "ghosts": "list", "search": "search", "categories": "category-tree",
+	"days": "list", "people": "list", "places": "list", "media": "media", "files": "files", "ghosts": "list", "search": "search", "categories": "category-tree", "browse": "browse",
 
 	"metrics": "metrics", "series": "metric", "metric": "page", "measurement": "measurement", "error": "error", "login": "login",
 	"month": "month", "week": "week", "year": "year", "styleguide": "styleguide",
@@ -366,6 +367,17 @@ func (v *view) Link(rel string) string {
 		return l.Href
 	}
 	return ""
+}
+
+// LinksOf are the entity's links with that rel, in order.
+func (v *view) LinksOf(rel string) []Link {
+	var out []Link
+	for _, l := range v.Links {
+		if slices.Contains(l.Rel, rel) {
+			out = append(out, l)
+		}
+	}
+	return out
 }
 
 // Embedded are the entity's embedded links with that rel.

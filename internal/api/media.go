@@ -63,7 +63,7 @@ func (h *server) media(r *http.Request) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	found, err := h.s.Media(r.Context(), kind, limit+1, offset)
+	found, err := h.s.Media(r.Context(), kind, core.Scope{}, limit+1, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +83,7 @@ func (h *server) files(r *http.Request) (*Entity, error) {
 	e := &Entity{Class: []string{"files"}, Title: "Files",
 		Links:   []Link{link("self", "/files", "Files"), link("index", "/", "Home"), link("media", "/media", "Media")},
 		Actions: []Action{action("add-file", nil, nil), action("tombstone-pages", nil, nil)}}
-	found, err := h.s.OtherFiles(r.Context(), limit+1, offset)
+	found, err := h.s.OtherFiles(r.Context(), core.Scope{}, limit+1, offset)
 	if err != nil {
 		return nil, err
 	}

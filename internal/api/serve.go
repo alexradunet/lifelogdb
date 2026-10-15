@@ -84,6 +84,7 @@ func NewOn(s *core.Store, localDay func() string, zone *time.Location, trustedOr
 	get("/measurements/{id}", h.measurement)
 	get("/ghosts", h.ghosts)
 	get("/categories", h.categoriesView)
+	get("/browse", h.browse)
 	get("/search", h.search)
 	get("/titles", h.titles)
 	m.HandleFunc("POST /render", h.render)

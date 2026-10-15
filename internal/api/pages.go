@@ -164,7 +164,7 @@ func (h *server) named(typ, plural, create string) func(*http.Request) (*Entity,
 			Links:   []Link{link("self", "/"+plural, plural), link("index", "/", "Home")},
 			Actions: []Action{action(create, nil, nil)}}
 		if typ == "person" || typ == "place" { // these rows say how often the log mentions them
-			found, err := h.s.NamedMentions(r.Context(), typ, limit+1, offset)
+			found, err := h.s.NamedMentions(r.Context(), typ, core.Scope{}, limit+1, offset)
 			if err != nil {
 				return nil, err
 			}

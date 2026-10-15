@@ -75,7 +75,8 @@ flowchart LR
    everything filed directly in it), with Everything at the top and Not filed at the end. The current branch is
    marked, and the title says where the list is: "In Family › Cousins". A branch link keeps the kind when the URL
    names one; without one, it opens All in that category. On a phone the tree is a closed disclosure above the
-   chips, and the chips are one row that scrolls.
+   chips, and the chips wrap onto more lines, so the current chip and every count are in view. (A row that
+   scrolls hid the current chip past the edge on a phone, and with no script nothing scrolled it into view.)
 4. **Not filed follows the chosen kind.** With Pages, it is the list `/categories` showed: the plain pages in no
    category that are not categories themselves. With People, the people in no category, and so on. Each chip shows
    its count in the current scope (Everything, the category, or Not filed), so a large backlog of one kind does not

@@ -119,7 +119,7 @@ embedded `item` link.
 | `categories[].id` | integer | the category's page id |
 | `categories[].title` | string | its title |
 | `categories[].path` | string | the titles from the top, joined by `/` |
-| `categories[].count` | integer | how many live things are filed directly in it, the categories under it included; absent when none |
+| `categories[].count` | integer | how many live things are filed directly in it, the categories under it included and a day page not; absent when none |
 | `unfiled[]` | list | the live plain pages in no category that are not categories, by title: not a day page, and not a metric, a person, a place or a file |
 | `unfiled[].kind` | string | `page` |
 | `unfiled[].id` | integer | the page's id |
@@ -127,6 +127,76 @@ embedded `item` link.
 | `unfiled[].entity_type` | string | `page` |
 | `unfiled[].note` | string | absent |
 | `limit` | integer | the page size of `unfiled`, 200 by default |
+| `offset` | integer | the rows skipped |
+
+### browse
+
+`GET /browse`, the catalog action `browse` (docs/plans/117-one-browse-view.md): one page of the things of one kind,
+with the category tree beside them. The query, all optional:
+
+- `kind`: `page`, `person`, `place`, `media`, `document`, `metric` or `all`; the default is `all` with `in`, else
+  `page`.
+- `in`: a title (any name of the page, in any case): only what is filed directly in that category.
+- `unfiled`: `0` or `1`: only what is in no category. A deleted category is not one: what is filed only there is in
+  no category.
+- `ghosts`: `0` or `1`: only the rows of the `ghost_pages` view, a day page left out.
+- `media`: `image`, `video` or `audio`: one media kind.
+- `limit` and `offset`: as every list; 200 and 0 by default.
+
+A combination with no meaning is refused (422): `all` without `in`; `in` with `unfiled`; `ghosts` with a kind other
+than `page`, or with `in` or `unfiled`; `media` with a kind other than `media`. A title that names nothing is a 404. A title of a thing
+that cannot be a category (a person, a place, a file, a metric or a day) is a 422, and of a deleted page a 409.
+A page is a plain page: a day page is in no list. Media and documents are the files, split by the first part of their
+type. Orders: pages, people, places and metrics by title, in any case (as the tree orders the categories); media and documents newest day first; `all` the categories
+first, then by title; ghosts oldest first.
+
+Each row is an embedded `item` link (class: the row's `type`), and each category of the tree an embedded `category`
+link to Browse in that category (it keeps a `kind` the query names, but `all`). Links: `self` (with the filters),
+`index`, `metrics`, a `kind` link for each chip (class: its kind; it keeps `in` and `unfiled`; `all` inside a
+category only), `everything` and `unfiled` (the ends of the tree), `ghosts`, with `kind=media` also `pictures`,
+`videos` and `recordings`, and `prev`/`next`. Actions: the New of the kind (`create-page`, with `category` filled
+inside a category; `create-person`; `create-place`; `add-file`, whose `original` carries `accept` for media; none
+for `metric`, `all` and the ghosts); `file-pages` on every list but `all`; `tombstone-pages` on `page` (the ghosts
+too), `media` and `document`.
+
+| property | type | meaning |
+|---|---|---|
+| `kind` | string | the kind of the rows |
+| `in` | object | the category; absent when the list is not in one |
+| `in.id` | integer | its page id |
+| `in.title` | string | its title |
+| `in.path` | string | its path in the tree, or its title when nothing is filed in it |
+| `unfiled` | boolean | the list is of what is in no category |
+| `ghosts` | boolean | the list is of the ghost pages |
+| `media` | string | the media kind read, or `""` |
+| `counts` | object | the live things of each kind in the scope of the list (everything, the category, or no category) |
+| `counts.page` | integer | the plain pages |
+| `counts.person` | integer | the people |
+| `counts.place` | integer | the places |
+| `counts.media` | integer | the pictures, videos and recordings |
+| `counts.document` | integer | the other files |
+| `counts.metric` | integer | the metrics |
+| `counts.all` | integer | inside a category only: the sum of the kinds |
+| `counts.ghosts` | integer | the rows of `ghost_pages`, in any scope |
+| `categories[]` | list | the category tree, as [categories](#categories) `categories[]` |
+| `categories[].id` | integer | the category's page id |
+| `categories[].title` | string | its title |
+| `categories[].path` | string | the titles from the top, joined by `/` |
+| `categories[].count` | integer | how many live things are filed directly in it, a day page not counted; absent when none |
+| `rows[]` | list | one row for each `item` link, in the same order |
+| `rows[].id` | integer | the page's id |
+| `rows[].title` | string | its title |
+| `rows[].type` | string | its `entity_type` |
+| `rows[].kind` | string | its kind: `page`, `person`, `place`, `media`, `document` or `metric` |
+| `rows[].category` | boolean | a page that is a category; absent otherwise |
+| `rows[].mentions` | integer | a person, a place, a file (not in `all`): the live pages that link to it, each counted once |
+| `rows[].last_day` | string | a person, a place: the day of the newest live day page among them; absent when none |
+| `rows[].picture` | string | a person, a file: the address of its picture; absent when none |
+| `rows[].mime` | string | a file (not in `all`): the type of the original |
+| `rows[].file_kind` | string | a file: the first part of its type, `image`, `video`, `audio`, `application`, `text`, … |
+| `rows[].day` | string | a file (not in `all`): its day, as [media](#media-files) `rows[].day`; absent when none |
+| `rows[].unit` | string | a metric: its unit; absent for a count or a habit |
+| `limit` | integer | the page size used |
 | `offset` | integer | the rows skipped |
 
 ### media, files
@@ -464,7 +534,7 @@ page title, made when missing): one write makes the metric and files it. A refus
 | `categories[].id` | integer | the category's page id |
 | `categories[].title` | string | its title |
 | `categories[].path` | string | the titles from the top, joined by `/` |
-| `categories[].count` | integer | how many live things are filed directly in it; absent when none |
+| `categories[].count` | integer | how many live things are filed directly in it, a day page not counted; absent when none |
 | `today` | day | the server's local day |
 
 ### integrity
