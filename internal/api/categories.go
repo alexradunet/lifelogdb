@@ -100,7 +100,7 @@ func (h *server) filePages(r *http.Request, src string) (*Entity, error) {
 	e := &Entity{Class: []string{"filed"}, Title: "Filed",
 		Properties: map[string]any{"category": f.Category, "created": f.Created, "ids": ids, "count": len(ids),
 			"added": f.Added, "moved": f.Moved},
-		Links: []Link{link("self", "/metrics", "Metrics"), link("category", pageHref(f.Category.ID), f.Category.Title),
+		Links: []Link{link("self", pageHref(f.Category.ID), f.Category.Title), link("category", pageHref(f.Category.ID), f.Category.Title),
 			link("index", "/", "Home")}}
 	for _, id := range ids {
 		e.Entities = append(e.Entities, link("item", pageHref(id), strconv.FormatInt(id, 10)))

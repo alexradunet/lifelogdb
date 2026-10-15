@@ -82,6 +82,9 @@ func TestFileMetricsAtOnce(t *testing.T) {
 		len(done.Entities) != 2 || done.Entities[0].Href != "/pages/"+ids["Ferritin"] || done.Result != "Put 2 in Bloodwork (a new category)." {
 		t.Fatalf("the answer: %v %v %v", done.Class, p, done.Result)
 	}
+	if got, want := href(done, "self"), "/pages/"+fmt.Sprint(cat["id"]); got != want {
+		t.Errorf("the answer's self is %s, want the category %s", got, want)
+	}
 	if got, want := groupsOf(t, c), "Bloodwork:Ferritin,Steps Not filed:Mood,Walk,Weight"; got != want {
 		t.Errorf("groups %q, want %q", got, want)
 	}

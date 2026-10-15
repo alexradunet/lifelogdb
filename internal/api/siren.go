@@ -148,7 +148,7 @@ var catalog = []spec{
 		"POST", "/measurements/{id}/retract", []Field{path("id", "number", "Measurement id")}, false, true},
 	{"rename", "Rename", "Select a new preferred reference name without changing this identity, body or links. Previous names remain aliases. Another identity's name and journal dates are refused.",
 		"POST", "/pages/{id}/rename", []Field{path("id", "number", "Page id"), req("title", "text", "New title")}, false, false},
-	{"register-metric", "New metric", "Register a metric with a preferred reference name; its unit never changes ('' for a count or a 0/1 habit; a scale names its range, '1-5'); the note is the page's text. category files it in that category page (made when missing), and habit_from starts it as a habit from that day (a unitless metric only), in the same write. A metric that exists is returned as it is when the unit is the same, or when it is a scale and the unit is empty.",
+	{"register-metric", "New metric", "Register a metric with a preferred reference name; its unit never changes ('' for a count or a 0/1 habit; a scale names its range, '1-5'); the note is the page's text. category files it in that category page (made when missing) in the same write. A metric that exists is returned as it is when the unit is the same, or when it is a scale and the unit is empty.",
 		"POST", "/metrics", []Field{req("name", "text", "Name"), opt("unit", "text", "Unit"), opt("note", "text", "Note"),
 			pageField("category", "Category (title)", false)}, true, false},
 	{"integrity-check", "Integrity", "Run the four integrity checks of the database (docs/contract/integrity-checks.md).",

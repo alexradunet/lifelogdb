@@ -1,12 +1,12 @@
 {{/* Home is today at a glance (docs/plans/095-the-leaf-and-its-margin.md): the calendar leaf of today; the sheet
-     with Capture, Ask and the last entries; the margin with On this day; then the closed section Owner,
+     with Capture and the last entries; the margin with On this day; then the closed section Owner,
      their long forms with their optional fields folded. */}}
 {{define "root"}}{{template "head" .}}
 {{$p := .Props}}
 <header class="page-head day-head">
 <div class="day-title">{{template "leaf" $p.today}}
 <div class="what"><h1>{{weekday $p.today}}</h1>
-<p class="sub"><a class="date" href="/weeks/{{isoWeekKey $p.today}}">week {{week $p.today}}</a><a href="/days/{{$p.today}}">Today's page</a><a href="/deadlines">What is due</a><a href="/tasks">Tasks</a></p></div></div>
+<p class="sub"><a class="date" href="/weeks/{{isoWeekKey $p.today}}">week {{week $p.today}}</a><a href="/days/{{$p.today}}">Today's page</a></p></div></div>
 <div class="tools">
 {{with .Action "create-page"}}{{template "boxed" (form .)}}{{end}}
 {{template "boxed" (form (.Action "find") "button" "Open a page")}}
@@ -30,10 +30,9 @@
 </div>
 </div>
 
-{{if or (.Action "snapshot") (.Action "query")}}<details id="owner"><summary>Owner: a snapshot, a query</summary>
+{{if .Action "snapshot"}}<details id="owner"><summary>Owner: a snapshot</summary>
 <div class="actions">
 {{template "boxed" (form (.Action "snapshot"))}}
-{{template "boxed" (form (.Action "query"))}}
 </div></details>{{end}}
 {{template "foot" .}}{{end}}
 
