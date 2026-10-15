@@ -209,7 +209,7 @@ func (s *Store) Completion(ctx context.Context, from, through string) ([]Complet
 		  FROM active a
 		  JOIN entities m ON m.id = a.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key AND m.deleted_at IS NULL
 		  LEFT JOIN (SELECT metric_id, day, max(value) AS value, max(value NOT IN (0, 1)) AS invalid
-		             FROM measurement_values WHERE session_id IS NULL GROUP BY metric_id, day) s
+		             FROM measurement_values GROUP BY metric_id, day) s
 		         ON s.metric_id = a.metric_id AND s.day = a.day
 		 GROUP BY m.id
 		 ORDER BY m.preferred_name_key`, sql.Named("from_day", from), sql.Named("to_day", through))
@@ -301,9 +301,9 @@ func (s *Store) HabitStates(ctx context.Context, from, through string) ([]HabitD
 	rows, err := s.DB.R.QueryContext(ctx, `
 		WITH RECURSIVE days(day) AS (SELECT :from_day UNION ALL SELECT date(day, '+1 day') FROM days WHERE day < :through_day)
 		SELECT d.day, m_name.title,
-		       CASE WHEN EXISTS (SELECT 1 FROM measurement_values v WHERE v.metric_id = m.id AND v.day = d.day AND v.session_id IS NULL AND v.value NOT IN (0, 1))
+		       CASE WHEN EXISTS (SELECT 1 FROM measurement_values v WHERE v.metric_id = m.id AND v.day = d.day AND v.value NOT IN (0, 1))
 		         THEN 'invalid'
-		         ELSE CASE (SELECT max(v.value) FROM measurement_values v WHERE v.metric_id = m.id AND v.day = d.day AND v.session_id IS NULL)
+		         ELSE CASE (SELECT max(v.value) FROM measurement_values v WHERE v.metric_id = m.id AND v.day = d.day)
 		           WHEN 1 THEN 'done' WHEN 0 THEN 'not done' ELSE 'not recorded' END END AS state
 		  FROM days d
 		  JOIN habit_periods h ON h.start_day <= d.day AND coalesce(h.end_day, '9999-12-31') >= d.day

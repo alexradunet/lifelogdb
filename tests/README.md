@@ -31,8 +31,8 @@ the document (a broken block makes a later step impossible) reports that as one 
 | file | suite | subject |
 |---|---|---|
 | `dates_test.go` | `dates` | instants, local days, the round-trip CHECKs and why `IS`, the zone (lifelog_meta.instants and .days, D10) |
-| `schema_safeguards_test.go`, `schema_bounds_test.go` | `schema-safeguards` | NUL-free constrained text; the bounds of import keys, person names, units, notes and task labels, with the empty-key incident; a tombstone never precedes creation; `entities.body` last; the atomic Mood seed; no `OR IGNORE`/`OR REPLACE` in a trigger; immutable typed-detail/habit identities and entity creation evidence; rowid-alias atomicity; Unicode search distinctions; cleanup excludes retained session and measurement references |
-| `schema_adversarial_test.go` | `schema-adversarial` | Scoped import replay after tombstones; new-row refusal and multi-row atomicity; skipped duplicate validation limits; statement ABORT versus caller transaction rollback |
+| `schema_safeguards_test.go`, `schema_bounds_test.go` | `schema-safeguards` | NUL-free constrained text; the bounds of import keys, person names, units, notes and task labels, with the empty-key incident; a tombstone never precedes creation; `entities.body` last; the atomic Mood seed; no `OR IGNORE`/`OR REPLACE` in a trigger; immutable typed-detail/habit identities and entity creation evidence; rowid-alias atomicity; Unicode search distinctions; cleanup excludes retained capture references |
+| `schema_adversarial_test.go` | `schema-adversarial` | Skipped duplicate validation limits; statement ABORT versus caller transaction rollback |
 | `graph_model_test.go` | `graph-model`, `FuzzGraphTransitions` | Independent directed/undirected graph model, NULL/empty notes, self-links, retry/edit/delete sequences, which endpoints a change advances (the page a link leaves, both of a friendship, none for a wikilink's insert or delete), savepoint and transaction rollback, typed batch refusal and read-only reopen |
 | `temporal_model_test.go` | `temporal-model` | Recursive lifecycle reads, independent correction-chain cutoff model, bounded calendar/deadline model with persisted overrides, tombstones, recurrence ends and extreme years |
 | `storage_resilience_test.go` | `storage-resilience` | FTS term-position equality across trigger reordering, rejected edits, rollback, reopen and rebuild; WAL reader body/index snapshot isolation and checkpoint release |
@@ -40,7 +40,6 @@ the document (a broken block makes a later step impossible) reports that as one 
 | `identity_fixture_test.go` | `TestCanonicalIdentityFixtureOwnershipAndRollback` | The canonical identity fixture: a named entity owns its name, and a refused insert rolls the whole identity back |
 | `id_guards_test.go` | `id-guards` | file-backed declared/rowid/_rowid_/oid identity guards; forbidden combined edits, no-ops, revisions, mirrors, FTS and reopen controls |
 | `name_grammar_test.go` | `name-grammar` | documented raw/NFC addressability vectors under mutation; canonical key and bracket-storage probes, separate from production pipeline tests |
-| `sessions_test.go` | `recorded-sessions`, `measurement-scopes` | shared endpoint vectors, immutable session identity/provenance, revisions/kinds, correction scope/liveness and actual semantic damage probes |
 | `periods_test.go` | `recorded-periods` | boundary storage/revision/ID guards and shared membership vectors; the boundary grammar as one hand-checked vector table (precision, calendar validity, one qualifier, `..` only as an end, NUL) through both columns on insert and update |
 | `planning_test.go` | `planning` | file-backed one-off cardinality, retained project context, immutable IDs/provenance/cadence, revisions, retry preservation, atomic stop/outcome rules and deliberate semantic damage |
 | `planning_boundaries_test.go` | `planning-boundaries` | named CHECK/NUL/exact-time boundaries; shared calendar membership and reminder-clock vectors, including leap clamps, range edges and non-hour transitions |
@@ -67,7 +66,7 @@ the document (a broken block makes a later step impossible) reports that as one 
 | `wikilinks_test.go` | `doc-save-contract` | the save contract as the docs print it: the vector table of contract/titles-and-wikilinks, cookbook/save-a-body run literally (and equal to a writer's own save after 400 random edits), cookbook/backlinks |
 | | `save-contract` | the save contract through a writer's own save against the DDL: invalid targets, the `SAVEPOINT` backstop, set equality, ordinary REDIRECT prose, revival, 400 random edits against a rebuild, 4 concurrent writers, every vector |
 | | `title-fuzz` | writer acceptance is a subset of the DDL's filename checks over 60 000 generated strings; DB-only names independently fail reference addressability |
-| `mutants_test.go` | `TestMutants` | 487 broken copies of the docs tree, one rule each; a completed owning suite must fail the mutant's explicit rule witness |
+| `mutants_test.go` | `TestMutants` | 442 broken copies of the docs tree, one rule each; a completed owning suite must fail the mutant's explicit rule witness |
 | `render_test.go` | `TestMermaidRender` | optional: every diagram renders |
 | `kit_test.go`, `suites_test.go` | | reading the tree (a page, the cookbook blocks by recipe key, an overlay of broken files for a mutant); fresh databases and the insert conventions (entity first, `RETURNING`, named entities); the runner |
 

@@ -83,13 +83,13 @@ func (h *server) root(r *http.Request) (*Entity, error) {
 	}
 	actions := []Action{
 		action("capture", map[string]string{"day": today}, nil), action("search", nil, nil), action("find", nil, nil), action("open-day", nil, nil), action("deadlines", nil, nil), action("create-task", nil, nil),
-		action("capture-session", nil, nil), action("create-period", nil, nil), action("create-page", nil, nil), action("create-person", nil, nil), action("create-place", nil, nil), action("add-file", nil, nil),
+		action("create-period", nil, nil), action("create-page", nil, nil), action("create-person", nil, nil), action("create-place", nil, nil), action("add-file", nil, nil),
 		record, action("register-metric", nil, nil), action("query", nil, nil), action("snapshot", nil, nil), action("ask", nil, nil)}
 	return &Entity{
 		Class: []string{"root"}, Title: "Lifelog",
 		Properties: map[string]any{"today": today, "due": due, "habits": hs, "recent": recent, "on_this_day": onThisDay},
 		Links: []Link{link("self", "/", "Lifelog"), link("today", dayHref(today), "Today"), link("days", "/days", "Days"),
-			link("sessions", "/sessions", "Sessions"), link("periods", "/periods", "Periods"), link("people", "/people", "People"), link("places", "/places", "Places"), link("media", "/media", "Media"), link("files", "/files", "Files"), link("metrics", "/metrics", "Metrics"),
+			link("periods", "/periods", "Periods"), link("people", "/people", "People"), link("places", "/places", "Places"), link("media", "/media", "Media"), link("files", "/files", "Files"), link("metrics", "/metrics", "Metrics"),
 			link("habits", "/habits", "Habits"), link("tasks", "/tasks", "Tasks"), link("deadlines", "/deadlines", "Deadlines"),
 			link("ghosts", "/ghosts", "Ghost pages"), link("actions", "/actions", "All actions"), link("calendar", "/months/current", "Calendar"),
 			link("week", "/weeks/current", "This week"), link("year", "/years/current", "This year")},

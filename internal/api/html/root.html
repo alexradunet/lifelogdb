@@ -93,42 +93,6 @@
 {{template "pager" .}}
 {{template "foot" .}}{{end}}
 
-{{/* endpoint is one end of a session as it was recorded (D22): an instant in words with its supplied offset, or a
-     local clock as it was given, and a zone claim marked unverified; nothing is converted. It takes v (the view), at,
-     local, offset and zone; an end with neither is "no end". */}}
-{{define "endpoint"}}{{if .at}}{{.v.When .at}}{{with .offset}} (offset {{.}}){{end}}{{else if .local}}local {{.local}}{{else}}no end{{end}}{{with .zone}} {{.}} (unverified){{end}}{{end}}
-
-{{/* sessions is the list of recorded sessions, drawn as the periods are: the reporting day, the kind, the length in
-     words (or the time basis when there is none), and the evidence of both ends under them */}}
-{{define "sessions"}}{{template "head" .}}{{$p := .Props}}
-<header class="page-head"><div class="what"><h1>{{.Title}}</h1><p class="sub">{{with $p.sessions}}{{len .}} on this page{{end}}{{if $p.include_deleted}}<a href="/sessions">Hide deleted sessions</a>{{else}}<a href="/sessions?include_deleted=1">Show deleted sessions</a>{{end}}</p></div>
-<div class="tools">{{with .Action "capture-session"}}{{template "boxed" (form . "more" "start_local,start_offset,start_zone_unverified,end_local,end_offset,end_zone_unverified,import_key")}}{{end}}</div></header>
-{{with $p.sessions}}<div class="sheet list"><ul class="plain rows">{{range .}}<li><a class="entry" href="/sessions/{{num .id}}"><span class="date">{{$.Date .day}}</span><span class="first">{{.kind}}{{if .deleted_at}} <span class="tag deleted">deleted</span>{{end}}</span><span class="meta">{{with lasting .elapsed_milliseconds}}{{.}}{{else}}{{.time_basis}}{{end}}</span><small class="note">{{template "endpoint" (dict "v" $ "at" .start_at "local" .start_local "offset" .start_offset "zone" .start_zone_unverified)}} to {{template "endpoint" (dict "v" $ "at" .end_at "local" .end_local "offset" .end_offset "zone" .end_zone_unverified)}}{{with .deleted_at}} · deleted at {{$.When .}}{{end}}{{with .kind_deleted_at}} · kind deleted at {{$.When .}}{{end}}</small></a></li>{{end}}</ul></div>
-{{else}}<p class="empty">No session yet. New session makes one.</p>{{end}}
-{{template "pager" .}}
-{{template "foot" .}}{{end}}
-
-{{/* session is one recorded session, drawn as an occurrence is: its kind as the title, its day and its kind linked,
-     Edit and Delete (or Restore) in the head, and its facts in words on a card */}}
-{{define "session"}}{{template "head" .}}{{$s := .Props}}
-<header class="page-head"><div class="what"><span class="kind">session{{if $s.deleted_at}}, deleted{{end}}</span><h1>{{$s.kind}}</h1>
-<p class="sub"><a href="/days/{{$s.day}}">{{$.Date $s.day}}</a>{{with .Link "kind"}}<a href="{{.}}">{{$s.kind}}</a>{{end}}<a href="/sessions">Every session</a></p></div>
-<div class="tools">{{with .Action "edit-session"}}{{template "boxed" (form . "more" "start_local,start_offset,start_zone_unverified,end_local,end_offset,end_zone_unverified")}}{{end}}{{with .Action "tombstone-session"}}{{template "boxed" (form .)}}{{end}}{{with .Action "revive-session"}}{{template "boxed" (form .)}}{{end}}</div></header>
-{{if $s.deleted_at}}<div class="alert" role="alert"><p><strong>Deleted {{$.When $s.deleted_at}}.</strong> Its facts stay. Restore it to bring it back.</p></div>{{end}}
-<div class="sheet list"><dl class="facts">
-<dt>day</dt><dd>{{$.Date $s.day}}</dd>
-<dt>start</dt><dd>{{template "endpoint" (dict "v" $ "at" $s.start_at "local" $s.start_local "offset" $s.start_offset "zone" $s.start_zone_unverified)}}</dd>
-<dt>end</dt><dd>{{template "endpoint" (dict "v" $ "at" $s.end_at "local" $s.end_local "offset" $s.end_offset "zone" $s.end_zone_unverified)}}</dd>
-{{with lasting $s.elapsed_milliseconds}}<dt>length</dt><dd>{{.}}</dd>{{end}}
-<dt>time basis</dt><dd>{{$s.time_basis}}</dd>
-{{with $s.kind_deleted_at}}<dt>kind deleted at</dt><dd>{{$.When .}}</dd>{{end}}
-{{with $s.import_key}}<dt>import key</dt><dd>{{.}}</dd>{{end}}
-<dt>source</dt><dd>{{$s.source}}</dd>
-<dt>created</dt><dd>{{$.When $s.created_at}}</dd>
-<dt>version</dt><dd>{{$s.version}}</dd>
-</dl></div>
-{{template "foot" .}}{{end}}
-
 {{define "search"}}{{template "head" .}}
 <header class="page-head"><div class="what"><h1>Search</h1></div></header>
 {{template "form" (form (.Action "search") "class" "inline" "autofocus" "q")}}

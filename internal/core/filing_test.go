@@ -138,37 +138,26 @@ func TestRecentReadings(t *testing.T) {
 	s := fresh(t)
 	weight := metricID(t, s, "Weight", "kg")
 	gone := metricID(t, s, "Gone", "kg")
-	record := func(metric, day string, v float64, session int64) int64 {
+	record := func(metric, day string, v float64) int64 {
 		t.Helper()
-		id, err := s.Record(ctx, "cli", Reading{Metric: metric, Day: day, Value: v, SessionID: session})
+		id, err := s.Record(ctx, "cli", Reading{Metric: metric, Day: day, Value: v})
 		if err != nil {
 			t.Fatal(err)
 		}
 		return id
 	}
-	record("Weight", "2026-10-01", 80, 0)
-	wrong := record("Weight", "2026-10-02", 90, 0)
-	mistake := record("Weight", "2026-10-03", 70, 0)
-	record("Weight", "2026-10-04", 79, 0)
-	last := record("Weight", "2026-10-04", 78.5, 0) // a later reading of the same day comes last
+	record("Weight", "2026-10-01", 80)
+	wrong := record("Weight", "2026-10-02", 90)
+	mistake := record("Weight", "2026-10-03", 70)
+	record("Weight", "2026-10-04", 79)
+	last := record("Weight", "2026-10-04", 78.5) // a later reading of the same day comes last
 	if _, err := s.Correct(ctx, "cli", wrong, ptr(81.0)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Correct(ctx, "cli", mistake, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.CreatePage(ctx, "cli", "Run", ""); err != nil {
-		t.Fatal(err)
-	}
-	var session int64
-	if err := s.Do(ctx, "cli", func(tx *Tx) (e error) {
-		session, _, e = tx.CaptureSession(SessionInput{Kind: "Run", Day: "2026-10-05", StartAt: "2026-10-05T06:00:00.000Z"})
-		return
-	}); err != nil {
-		t.Fatal(err)
-	}
-	record("Weight", "2026-10-05", 60, session)
-	record("Gone", "2026-10-05", 1, 0)
+	record("Gone", "2026-10-05", 1)
 	if err := s.Tombstone(ctx, "cli", gone); err != nil {
 		t.Fatal(err)
 	}

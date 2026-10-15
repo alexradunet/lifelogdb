@@ -7,7 +7,7 @@
   (executed, [connection setup](../contract/connections.md)). Junk captured by accident is tombstoned like
   everything else. An import writes through the writer's operations, so it brings a tombstoned page back only as they
   do: a `[[link]]` in a saved body revives it, and the save names it ([save a body](../cookbook/save-a-body.md)). A
-  tombstone is never earlier than its row's creation (`entities_deleted_after_created`, `sessions_deleted_after_created`,
+  tombstone is never earlier than its row's creation (`entities_deleted_after_created`,
   `tasks_deleted_after_created`, `task_occurrences_deleted_after_created`): a tombstone stamped by a clock that has
   stepped back behind `created_at` is refused. Tombstoning and un-tombstoning bump `entities.updated_at`
   (`entities_touch`, watching `deleted_at` and `entity_type`, so it cannot re-fire itself under

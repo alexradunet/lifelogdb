@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os/exec"
 	"path/filepath"
 	"testing"
@@ -12,7 +11,7 @@ import (
 	"lifelog/internal/db"
 )
 
-func TestExecutableTemporalRecordsAndScopes(t *testing.T) {
+func TestExecutablePeriodRecords(t *testing.T) {
 	root := t.TempDir()
 	binary := filepath.Join(root, "lifelog.exe")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -44,24 +43,5 @@ func TestExecutableTemporalRecordsAndScopes(t *testing.T) {
 	periods := call("get", "/periods?day=2018-09-15&as_of=2018-09-15")
 	if periods["properties"].(map[string]any)["periods"].([]any)[0].(map[string]any)["membership"] != "possible" {
 		t.Fatal("CLI horizon pruned starts")
-	}
-	call("do", "create-page", "title=Workout")
-	call("do", "register-metric", "name=Steps", "unit=steps")
-	captured := call("do", "capture-session", "kind=Workout", "day=2020-01-02", "start_local=2020-01-01T23:00:00.000", "end_local=2020-01-02T07:00:00.000", "start_zone_unverified=Claimed/Zone", "import_key=18446744073709551615")
-	props := captured["properties"].(map[string]any)
-	id := fmt.Sprint(props["id"])
-	if props["import_key"] != "18446744073709551615" {
-		t.Fatal("lossy CLI key")
-	}
-	call("do", "record", "metric=Steps", "day=2020-01-02", "value=10000")
-	reading := call("do", "record", "metric=Steps", "day=2020-01-02", "value=4000", "session_id="+id)
-	rid := fmt.Sprint(reading["properties"].(map[string]any)["id"])
-	defaultSeries := call("get", "/metrics/Steps?from=2020-01-01&to=2020-01-02")
-	if len(defaultSeries["properties"].(map[string]any)["readings"].([]any)) != 1 {
-		t.Fatal("scope mixing")
-	}
-	moved := call("do", "relocate-reading", "id="+rid, "metric=Steps", "day=2020-01-02", "value=4000")
-	if moved["result"] == nil || moved["properties"].(map[string]any)["scope"] != "unassociated" {
-		t.Fatal("missing atomic relocation result")
 	}
 }

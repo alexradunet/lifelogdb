@@ -28,7 +28,7 @@
 {{if $any}}{{range $m.days}}{{if .items}}{{$d := .}}<section class="agenda-day" aria-label="{{$.Date .day}}"><h3><a href="/days/{{.day}}">{{$.Date .day}}</a></h3>
 <ul class="plain">{{range .items}}{{$w := $.CalItem . $d.day $m.today}}<li><span class="tag{{with $w.Class}} {{.}}{{end}}">{{$w.Tag}}</span> <a href="{{.href}}">{{.title}}</a>{{with $w.Note}} <small class="agenda-note">{{.}}</small>{{end}}</li>{{end}}
 {{- with $d.more_pages}}<li><a href="/days/{{$d.day}}">and {{num .}} more {{if eq (num .) "1"}}page{{else}}pages{{end}}</a></li>{{end}}</ul></section>
-{{end}}{{end}}{{else}}<p class="empty">No task, session, page, place, birthday or period has a day in {{.Title}}.</p>{{end}}
+{{end}}{{end}}{{else}}<p class="empty">No task, page, place, birthday or period has a day in {{.Title}}.</p>{{end}}
 </section>
 </div>
 

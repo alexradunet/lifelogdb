@@ -21,11 +21,9 @@
   ([a metric series](../cookbook/metric-series.md)). Lifecycle filters belong to the read's stated purpose.
   The unique index on `supersedes_id` doubles as the index the view's `NOT EXISTS` needs (executed:
   the plan uses it).
-- **Session scope** is distinct from capture provenance ([scope](../contract/measurement-scope.md)); the
-  append-only chain keeps its metric and association. Wrong-scope owner correction retracts and creates an
-  independent root atomically. Existing imported correction intent does not authorize imported/keyed relocation.
-  `measurements_session_live` runs after insertion so its admission check does not reject a skipped import-key retry
-  after the associated session is tombstoned; a genuinely new value still fails atomically.
+- **One metric, one meaning.** A reading has no scope beside its metric and day. A total that must not add to a
+  daily total, such as the steps of one workout, is a reading of another metric (`workout-steps` beside `steps`).
+  `captured_with_id` is capture provenance only.
 - **Habits** are 0/1 metrics with active periods ([D24](D24-habits.md)): their check-ins are ordinary rows here.
 - **Categories** file metrics in pages nested by `part-of` links (Biomarkers, Lipids, Substances) ([D26](D26-metric-categories.md)).
 - **`captured_with_id`** is provenance (the day page the reading was captured with), not "about

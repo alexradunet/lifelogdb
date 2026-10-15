@@ -2,7 +2,7 @@ package core
 
 import "testing"
 
-// The lifecycle of an entity answers like a task's or a session's (docs/plans/098-the-codebase-made-cohesive.md): a
+// The lifecycle of an entity answers like a task's (docs/plans/098-the-codebase-made-cohesive.md): a
 // missing id is 404, the same state again is a no-op, and a promotion of what is not a plain page is a 409.
 func TestEntityLifecycleStatusesAreTheCommonOnes(t *testing.T) {
 	s := fresh(t)
@@ -58,25 +58,6 @@ func TestAnImplicitProjectPageHasNoDay(t *testing.T) {
 	}
 	if p.Day != "" {
 		t.Errorf("the implicit project page %q has the day %q; a wikilink's target has none", p.Title, p.Day)
-	}
-}
-
-// Relocating a reading's scope is the owner's: an agent and an import are refused with 403, as the api refuses every
-// owner-only action.
-func TestRelocationIsTheOwnersWith403(t *testing.T) {
-	s := fresh(t)
-	if _, err := s.RegisterMetric(ctx, "cli", "Steps", "steps", ""); err != nil {
-		t.Fatal(err)
-	}
-	id, err := s.Record(ctx, "cli", Reading{Metric: "Steps", Day: "2026-01-02", Value: 100})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, source := range []string{"agent:lmstudio", "import:notebook"} {
-		_, err := s.RelocateReading(ctx, source, id, Reading{Metric: "Steps", Day: "2026-01-02", Value: 100})
-		if status(err) != 403 {
-			t.Errorf("%s relocating a reading: %v, want 403", source, err)
-		}
 	}
 }
 

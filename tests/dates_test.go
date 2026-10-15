@@ -92,7 +92,6 @@ func exactTimeBoundaries(s *S) {
 	habit := c.metric("Habit boundary", "")
 	otherHabit := c.metric("Other habit", "")
 	c.must("INSERT INTO habit_periods(metric_id,start_day,source) VALUES(?,'0000-01-01','ui')", habit)
-	sessionKind := c.page("Session calendar kind")
 	c.must("BEGIN IMMEDIATE")
 	for _, v := range vectors {
 		typ, value, want := v[1], v[2], v[3] == "yes"
@@ -119,28 +118,6 @@ func exactTimeBoundaries(s *S) {
 			queries["links.created_at"] = fmt.Sprintf("INSERT INTO links(from_id,to_id,kind,source,created_at) VALUES(%d,%d,'about','ui',?)", entity, person)
 		}
 
-		if typ == "day" {
-			queries["sessions.day"] = fmt.Sprintf("INSERT INTO sessions(kind_id,day,start_at,source,created_at,updated_at) VALUES(%d,?,'2026-01-01T00:00:00.000Z','ui','2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z')", sessionKind)
-		} else {
-			queries["sessions.start_at"] = fmt.Sprintf("INSERT INTO sessions(kind_id,day,start_at,source,created_at,updated_at) VALUES(%d,'2026-01-01',?,'ui','2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z')", sessionKind)
-			queries["sessions.end_at"] = fmt.Sprintf("INSERT INTO sessions(kind_id,day,start_local,end_at,source,created_at,updated_at) VALUES(%d,'2026-01-01','2026-01-01T00:00:00.000',?,'ui','2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z')", sessionKind)
-			for _, col := range []string{"created_at", "updated_at", "deleted_at"} {
-				columns := []string{"kind_id", "day", "start_at", "source", "created_at", "updated_at"}
-				values := []string{fmt.Sprint(sessionKind), "'2026-01-01'", "'2026-01-01T00:00:00.000Z'", "'ui'", "'2026-01-01T00:00:00.000Z'", "'2026-01-01T00:00:00.000Z'"}
-				if col == "deleted_at" { // created at the earliest instant: the probe tests shape, not order
-					columns = append(columns, col)
-					values = append(values, "?")
-					values[4] = "'0000-01-01T00:00:00.000Z'"
-				} else {
-					for i, name := range columns {
-						if name == col {
-							values[i] = "?"
-						}
-					}
-				}
-				queries["sessions."+col] = "INSERT INTO sessions(" + strings.Join(columns, ",") + ") VALUES(" + strings.Join(values, ",") + ")"
-			}
-		}
 		keys := make([]string, 0, len(queries))
 		for col := range queries {
 			keys = append(keys, col)

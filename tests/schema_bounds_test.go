@@ -34,14 +34,12 @@ func (c *C) rolledBack(q string, args ...any) string {
 
 func importKeyBounds(s *S) {
 	c := s.freshWith(F{Path: filepath.Join(s.dir, "import-key-bounds.db"), Hardened: true})
-	kind := c.page("Import key kind")
 	task := planningTask(c, nil)
 	tables := []struct {
 		name, insert string
 		args         []any // before the key, which is always the last parameter
 	}{
 		{"entities", "INSERT INTO entities(entity_type,preferred_name_key,source,created_at,updated_at,import_key) VALUES('page','import key witness','ui'," + bounds0 + "," + bounds0 + ",?)", nil},
-		{"sessions", "INSERT INTO sessions(kind_id,day,start_at,source,created_at,updated_at,import_key) VALUES(?,'2020-01-02','2020-01-01T23:00:00.000Z','ui'," + bounds0 + "," + bounds0 + ",?)", []any{kind}},
 		{"tasks", "INSERT INTO tasks(label,repeat_unit,repeat_every,anchor_day,source,created_at,updated_at,import_key) VALUES('Witness','day',1,'2026-01-01','ui'," + bounds0 + "," + bounds0 + ",?)", nil},
 		{"task_occurrences", "INSERT INTO task_occurrences(task_id,occurrence_key,due_day,source,created_at,updated_at,import_key) VALUES(?,'2026-01-05','2026-01-05','ui'," + bounds0 + "," + bounds0 + ",?)", []any{task}},
 		{"measurements", "INSERT INTO measurements(metric_id,day,value,source,created_at,import_key) VALUES(1,'2026-01-01',3,'ui'," + bounds0 + ",?)", nil},
@@ -178,7 +176,6 @@ func taskLabelBounds(s *S) {
 // A tombstone follows creation: deleted_at is never earlier than created_at (the same instant is allowed).
 func tombstoneOrder(s *S) {
 	c := s.freshWith(F{Path: filepath.Join(s.dir, "tombstone-order.db"), Hardened: true})
-	kind := c.page("Tombstone kind")
 	const created, before, after = "2026-01-01T00:00:00.000Z", "2025-12-31T23:59:59.999Z", "2026-01-01T00:00:00.001Z"
 	task := planningTask(c, nil)
 	tables := []struct {
@@ -187,7 +184,6 @@ func tombstoneOrder(s *S) {
 		base         int64
 	}{
 		{"entities", "INSERT INTO entities(entity_type,preferred_name_key,source,created_at,updated_at,deleted_at) VALUES('page','tombstone witness','ui'," + bounds0 + "," + bounds0 + ",?)", nil, c.page("Tombstone base")},
-		{"sessions", "INSERT INTO sessions(kind_id,day,start_at,source,created_at,updated_at,deleted_at) VALUES(?,'2020-01-02','2020-01-01T23:00:00.000Z','ui'," + bounds0 + "," + bounds0 + ",?)", []any{kind}, sessionFixture(c, kind, nil)},
 		{"tasks", "INSERT INTO tasks(label,repeat_unit,repeat_every,anchor_day,source,created_at,updated_at,deleted_at) VALUES('Witness','day',1,'2026-01-01','ui'," + bounds0 + "," + bounds0 + ",?)", nil, task},
 		{"task_occurrences", "INSERT INTO task_occurrences(task_id,occurrence_key,due_day,source,created_at,updated_at,deleted_at) VALUES(?,'2026-01-05','2026-01-05','ui'," + bounds0 + "," + bounds0 + ",?)", []any{task}, planningOccurrence(c, task, "2026-01-02", nil)},
 	}

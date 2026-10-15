@@ -22,11 +22,10 @@ INSERT INTO lifelog_meta(key, value) VALUES
   ('schema',    'lifelog v1: the journal (one page per day), wiki, people, places, recorded life periods, health metrics and the files kept as their text and a small picture, of one person: a life log with explicit personal task intentions, recurring outcomes and reminder intent, not a general project manager; the rules of each table are comments inside its CREATE statement (.schema), the rules that span tables are these rows; this is an in-file reading summary: a conforming writer also needs the matching docs contract and vectors'),
   ('instants',  'every *_at column is an exact 24-character ASCII UTC ISO-8601 TEXT instant, years 0000..9999 and hours 00..23, with milliseconds, e.g. 2026-06-09T21:14:03.482Z, written by the app, never by a SQLite default (CURRENT_TIMESTAMP has no milliseconds and is not ISO-8601; a trigger writes strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')); fixed width, so it sorts as text; supplied clock timestamps may coincide or regress and do not encode commit order; CHECK strftime(''%Y-%m-%dT%H:%M:%fZ'', x) IS x; created_at, on every table that has it, is when the row was written to life.db, never back-dated; task completed_at is supplied completion evidence and reminder_override_at is a chosen future or past reminder instant, not an assertion that an event happened'),
   ('days',      'every *_day column (and day) is the LOCAL exact 10-character ASCII calendar date YYYY-MM-DD, years 0000..9999, where the thing happened for recorded facts, written by the app from the local calendar of the device that captured it (never a server''s), never recomputed from an instant; tasks.anchor_day, tasks.repeat_until_day, task_occurrences.due_day and date occurrence_key are chosen planning calendar days, not claims that an event happened; CHECK explicit ASCII shape and date(x) IS x (IS, not =: a CHECK passes on NULL, and date(''2026-9-3'') is NULL)'),
-  ('measurement_scope', 'a new non-NULL measurement associated by session_id requires a live session; tombstones retain facts, NULL retraction remains allowed; active queries exclude tombstoned-session facts, explicit historical reads retain scope and lifecycle'),
   ('planning', 'task project admission requires a live non-journal plain page. Retained references forbid incompatible type changes and exclude ghost cleanup. Tombstones retain context. A one-off task commits with exactly one occurrence, keyed once. Occurrence admission requires a live task and a key in its immutable anchored sequence. Open keys cannot exceed the task''s current end; explicit historical done or skipped outcomes may. Shortening the end atomically skips existing open keys beyond it, preserves other outcomes and forbids reopening those later keys. Active planning reads and reminders exclude tombstoned tasks and occurrences. A reminder requires an open occurrence'),
   ('deletes',   'life data is never deleted except links rows: an entity is a tombstone (entities.deleted_at); revival clears the tombstone, so lifecycle transitions are not retained history; a measurement is corrected by inserting a row; BEFORE DELETE triggers enforce it on entities and every domain row; ordinary active reads filter lifecycle tombstones; explicit historical and append-only audits retain them; the registries (link_kinds, lifelog_meta) are the owner''s administrative rows, deletable while nothing references them (each CREATE comment says so)'),
-  ('source',    'entities, sessions, tasks, task_occurrences, links, measurements and habit_periods: source names the original inserter of the row, not the last editor or an audit trail (ui, cli, api, agent:<name>, import:<name>; schema for the rows this file seeds); written at insert, never changed; import_key is unique per source on entities, sessions, tasks and task_occurrences, and per source and metric on measurements; a present import_key is 1 to 512 bytes without NUL'),
-  ('edit_revisions', 'entities.revision, sessions.revision, tasks.revision and task_occurrences.revision are monotonic integer edit tokens independent of updated_at; creation is not an edit (nothing advances a row whose creation transaction is its only write: it keeps revision 1 and the updated_at its insert wrote, its owned preferred name and typed detail row included); a later change of the row''s own content advances it: names, body, day, type, lifecycle, typed detail, habit period and the links it leaves (a link advances only the page it leaves, never the page it points at; a wikilink is derived from the body and advances nothing; both rows of a symmetric link advance both pages); no-ops do not, rollback restores it, exhaustion refuses; clients compare the token inside BEGIN IMMEDIATE, never a timestamp; exact increment counts are not meaningful; planning edits advance the edited row; resolving inherited task context, lifecycle or reminder defaults requires comparing both task and occurrence tokens'),
+  ('source',    'entities, tasks, task_occurrences, links, measurements and habit_periods: source names the original inserter of the row, not the last editor or an audit trail (ui, cli, api, agent:<name>, import:<name>; schema for the rows this file seeds); written at insert, never changed; import_key is unique per source on entities, tasks and task_occurrences, and per source and metric on measurements; a present import_key is 1 to 512 bytes without NUL'),
+  ('edit_revisions', 'entities.revision, tasks.revision and task_occurrences.revision are monotonic integer edit tokens independent of updated_at; creation is not an edit (nothing advances a row whose creation transaction is its only write: it keeps revision 1 and the updated_at its insert wrote, its owned preferred name and typed detail row included); a later change of the row''s own content advances it: names, body, day, type, lifecycle, typed detail, habit period and the links it leaves (a link advances only the page it leaves, never the page it points at; a wikilink is derived from the body and advances nothing; both rows of a symmetric link advance both pages); no-ops do not, rollback restores it, exhaustion refuses; clients compare the token inside BEGIN IMMEDIATE, never a timestamp; exact increment counts are not meaningful; planning edits advance the edited row; resolving inherited task context, lifecycle or reminder defaults requires comparing both task and occurrence tokens'),
   ('typed_links', 'both endpoints of every retained link must satisfy link_kinds; a type change refuses invalid incoming or outgoing edges atomically; semantic integrity checks the registry independently of structural integrity'),
   ('writers',   'one writing application; every connection sets foreign_keys=ON, recursive_triggers=ON, synchronous=FULL, trusted_schema=OFF and starts write transactions with BEGIN IMMEDIATE; every other tool opens the file read-only; imports use INSERT ... ON CONFLICT DO NOTHING, never OR IGNORE (skips CHECK/NOT NULL violations silently) or OR REPLACE (a delete)'),
   ('sqlite',    'writers need SQLite >= 3.51.3 (fixes a WAL race between concurrent writers and checkpoints); migrations need >= 3.53 (ALTER TABLE ADD/DROP CONSTRAINT); CHECKs use only functions every such version has'),
@@ -330,137 +329,6 @@ CREATE TRIGGER files_identity_fixed BEFORE UPDATE ON files
  WHEN NEW.id IS NOT OLD.id
 BEGIN SELECT RAISE(ABORT, 'files identity and ownership are immutable'); END;
 
-CREATE TABLE sessions (
- -- Lightweight recorded sessions, not named/graph objects. kind is a plain non-journal page.
- -- UTC and unresolved local endpoints are exclusive; start required, end may be unavailable.
- -- Reporting day is independent attribution. Zone labels are supplied UNVERIFIED claims, never inferred.
- -- Source keys are lossless TEXT, unique per source, not parsed numbers or portable local IDs; 1 to 512 bytes, no NUL.
- -- Current editable contents plus snapshots; versioned lifecycle, immutable provenance and no hard deletes.
- -- A tombstone is never earlier than created_at (sessions_deleted_after_created).
- id INTEGER PRIMARY KEY,
- kind_id INTEGER NOT NULL,
- kind_entity_type TEXT NOT NULL DEFAULT 'page' CONSTRAINT sessions_kind_entity_type CHECK (kind_entity_type='page'),
- day TEXT NOT NULL CONSTRAINT sessions_day CHECK (length(day)=10 AND day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(day) IS day),
- start_at TEXT CONSTRAINT sessions_start_at CHECK (start_at IS NULL
-      OR (length(start_at)=24
-      AND start_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z'
-      AND substr(start_at,12,2) BETWEEN '00'
-      AND '23'
-      AND strftime('%Y-%m-%dT%H:%M:%fZ',start_at) IS start_at)),
- start_local TEXT CONSTRAINT sessions_start_local CHECK (start_local IS NULL
-      OR (length(start_local)=23
-      AND (length((start_local||'Z'))=24
-      AND (start_local||'Z') GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z'
-      AND substr((start_local||'Z'),12,2) BETWEEN '00'
-      AND '23'
-      AND strftime('%Y-%m-%dT%H:%M:%fZ',(start_local||'Z')) IS (start_local||'Z')))),
- start_offset TEXT CONSTRAINT sessions_start_offset CHECK (start_offset IS NULL
-      OR (instr(start_offset, char(0)) = 0
-      AND length(start_offset)=6
-      AND start_offset GLOB '[+-][0-9][0-9]:[0-9][0-9]'
-      AND substr(start_offset,2,2) BETWEEN '00'
-      AND '23'
-      AND substr(start_offset,5,2) BETWEEN '00'
-      AND '59'
-      AND start_offset<>'-00:00'
-      AND start_at IS NOT NULL)),
- start_zone_unverified TEXT CONSTRAINT sessions_start_zone_unverified CHECK (start_zone_unverified IS NULL
-      OR (instr(start_zone_unverified, char(0)) = 0
-      AND length(start_zone_unverified) BETWEEN 1
-      AND 64
-      AND start_zone_unverified NOT GLOB '*[^A-Za-z0-9_/+-]*'
-      AND (start_at IS NOT NULL
-      OR start_local IS NOT NULL))),
- end_at TEXT CONSTRAINT sessions_end_at CHECK (end_at IS NULL
-      OR (length(end_at)=24
-      AND end_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z'
-      AND substr(end_at,12,2) BETWEEN '00'
-      AND '23'
-      AND strftime('%Y-%m-%dT%H:%M:%fZ',end_at) IS end_at)),
- end_local TEXT CONSTRAINT sessions_end_local CHECK (end_local IS NULL
-      OR (length(end_local)=23
-      AND (length((end_local||'Z'))=24
-      AND (end_local||'Z') GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z'
-      AND substr((end_local||'Z'),12,2) BETWEEN '00'
-      AND '23'
-      AND strftime('%Y-%m-%dT%H:%M:%fZ',(end_local||'Z')) IS (end_local||'Z')))),
- end_offset TEXT CONSTRAINT sessions_end_offset CHECK (end_offset IS NULL
-      OR (instr(end_offset, char(0)) = 0
-      AND length(end_offset)=6
-      AND end_offset GLOB '[+-][0-9][0-9]:[0-9][0-9]'
-      AND substr(end_offset,2,2) BETWEEN '00'
-      AND '23'
-      AND substr(end_offset,5,2) BETWEEN '00'
-      AND '59'
-      AND end_offset<>'-00:00'
-      AND end_at IS NOT NULL)),
- end_zone_unverified TEXT CONSTRAINT sessions_end_zone_unverified CHECK (end_zone_unverified IS NULL
-      OR (instr(end_zone_unverified, char(0)) = 0
-      AND length(end_zone_unverified) BETWEEN 1
-      AND 64
-      AND end_zone_unverified NOT GLOB '*[^A-Za-z0-9_/+-]*'
-      AND (end_at IS NOT NULL
-      OR end_local IS NOT NULL))),
- created_at TEXT NOT NULL CONSTRAINT sessions_created_at CHECK (length(created_at)=24
-      AND created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z'
-      AND substr(created_at,12,2) BETWEEN '00'
-      AND '23'
-      AND strftime('%Y-%m-%dT%H:%M:%fZ',created_at) IS created_at),
- updated_at TEXT NOT NULL CONSTRAINT sessions_updated_at CHECK (length(updated_at)=24
-      AND updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z'
-      AND substr(updated_at,12,2) BETWEEN '00'
-      AND '23'
-      AND strftime('%Y-%m-%dT%H:%M:%fZ',updated_at) IS updated_at),
- deleted_at TEXT CONSTRAINT sessions_deleted_at CHECK (deleted_at IS NULL
-      OR length(deleted_at)=24
-      AND deleted_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z'
-      AND substr(deleted_at,12,2) BETWEEN '00'
-      AND '23'
-      AND strftime('%Y-%m-%dT%H:%M:%fZ',deleted_at) IS deleted_at),
- revision INTEGER NOT NULL DEFAULT 1 CONSTRAINT sessions_revision CHECK (revision>=1),
- source TEXT NOT NULL CONSTRAINT sessions_source CHECK (instr(source, char(0)) = 0 AND length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*'),
- import_key TEXT CONSTRAINT sessions_import_key CHECK (import_key IS NULL OR (instr(import_key, char(0)) = 0 AND length(CAST(import_key AS BLOB)) BETWEEN 1 AND 512)),
- FOREIGN KEY(kind_id,kind_entity_type) REFERENCES entities(id,entity_type),
- CONSTRAINT sessions_start_basis CHECK ((start_at IS NULL)<>(start_local IS NULL)),
- CONSTRAINT sessions_end_basis CHECK (end_at IS NULL OR end_local IS NULL),
- CONSTRAINT sessions_utc_order CHECK (start_at IS NULL OR end_at IS NULL OR end_at>=start_at),
- CONSTRAINT sessions_deleted_after_created CHECK (deleted_at IS NULL OR deleted_at>=created_at)
-) STRICT;
-CREATE UNIQUE INDEX sessions_import ON sessions(source,import_key) WHERE import_key IS NOT NULL;
-CREATE INDEX sessions_day_kind ON sessions(day,kind_id);
-CREATE INDEX sessions_kind ON sessions(kind_id); -- retained kind references and ghost exclusion
-CREATE TRIGGER sessions_fixed BEFORE UPDATE ON sessions
- WHEN NEW.id IS NOT OLD.id OR NEW.source IS NOT OLD.source OR NEW.import_key IS NOT OLD.import_key
- OR NEW.created_at IS NOT OLD.created_at OR NEW.kind_entity_type IS NOT OLD.kind_entity_type
-BEGIN SELECT RAISE(ABORT,'session identity and provenance are immutable'); END;
-CREATE TRIGGER sessions_no_delete BEFORE DELETE ON sessions
-BEGIN SELECT RAISE(ABORT,'sessions are tombstoned, never deleted'); END;
-CREATE TRIGGER sessions_kind_insert BEFORE INSERT ON sessions BEGIN
- SELECT RAISE(ABORT,'session kind must be a live non-journal plain page') WHERE NOT EXISTS
- (SELECT 1 FROM entities e WHERE e.id=NEW.kind_id AND e.entity_type='page' AND e.deleted_at IS NULL
- AND NOT e.is_journal);
-END;
-CREATE TRIGGER sessions_kind_update BEFORE UPDATE OF kind_id ON sessions WHEN NEW.kind_id IS NOT OLD.kind_id BEGIN
- SELECT RAISE(ABORT,'session kind must be a live non-journal plain page') WHERE NOT EXISTS
- (SELECT 1 FROM entities e WHERE e.id=NEW.kind_id AND e.entity_type='page' AND e.deleted_at IS NULL
- AND NOT e.is_journal);
-END;
-CREATE TRIGGER sessions_touch AFTER UPDATE OF kind_id,day,start_at,start_local,start_offset,start_zone_unverified,end_at,end_local,end_offset,end_zone_unverified,deleted_at ON sessions WHEN NEW.kind_id IS NOT OLD.kind_id
-      OR NEW.day IS NOT OLD.day
-      OR NEW.start_at IS NOT OLD.start_at
-      OR NEW.start_local IS NOT OLD.start_local
-      OR NEW.start_offset IS NOT OLD.start_offset
-      OR NEW.start_zone_unverified IS NOT OLD.start_zone_unverified
-      OR NEW.end_at IS NOT OLD.end_at
-      OR NEW.end_local IS NOT OLD.end_local
-      OR NEW.end_offset IS NOT OLD.end_offset
-      OR NEW.end_zone_unverified IS NOT OLD.end_zone_unverified
-      OR NEW.deleted_at IS NOT OLD.deleted_at BEGIN
- UPDATE sessions SET revision=revision+1,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=NEW.id;
-END;
-CREATE TRIGGER sessions_revision_monotonic BEFORE UPDATE OF revision ON sessions WHEN NEW.revision<OLD.revision
-BEGIN SELECT RAISE(ABORT,'session revisions never decrease'); END;
-
 CREATE TABLE tasks (
  -- Explicit personal intentions; repeated labels are allowed and are not named entities or graph endpoints.
  -- Project context is optional; cross-table admission, cardinality and lifecycle are lifelog_meta.planning.
@@ -558,7 +426,7 @@ CREATE TABLE task_occurrences (
  -- Missing recurring rows are virtual open slots in finite windows (contract/planning.md). A retained row,
  -- including a tombstone, replaces its virtual slot before filtering by current deadline and state.
  -- completed_at is optional supplied evidence only for done; reopening/skipping clears it. No transition
- -- creates journal prose, a reading, a recorded session or a place claim. Snapshots preserve earlier states.
+ -- creates journal prose, a reading, a recorded period or a place claim. Snapshots preserve earlier states.
  -- Reminder modes: inherit resolves the definition against due_day; off suppresses; at uses the absolute
  -- reminder_override_at, including undated tasks. Eligibility is lifelog_meta.planning.
  id INTEGER PRIMARY KEY,
@@ -644,8 +512,7 @@ CREATE TABLE measurements (
   -- one row per data point (the FxLifeSheet shape). The table is append-only, enforced by triggers: never
   -- UPDATE or DELETE. A correction is a new row whose supersedes_id names the row it corrects, at most one
   -- per row (chain: correct the correction); a correction with a NULL value RETRACTS the row it corrects.
-  -- session_id is explicit scope, never captured_with provenance; corrections retain metric and NULL-safe scope.
-  -- Cross-table liveness is lifelog_meta.measurement_scope. Relocation is retract/new-root, not a cross-scope chain.
+  -- A correction retains its metric (measurements_supersede_metric).
   -- measurement_values selects current unretracted leaves, with no lifecycle filtering. A recorded-time cutoff
   -- selects eligible chain leaves from measurements, never by filtering the current view; clock order is not commit order.
   -- day is when the value was true, created_at when it was written
@@ -657,7 +524,6 @@ CREATE TABLE measurements (
   -- is never held, so a wrong reading of any metric can be retracted.
   id               INTEGER PRIMARY KEY,
   metric_id        INTEGER NOT NULL REFERENCES metrics(id),
-  session_id       INTEGER REFERENCES sessions(id), -- explicit nullable scope; NULL is unassociated, not a daily total
   day              TEXT NOT NULL CONSTRAINT measurements_day CHECK (length(day) = 10 AND day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(day) IS day),  -- local date the value refers to
   taken_at         TEXT CONSTRAINT measurements_taken_at CHECK (taken_at IS NULL OR length(taken_at) = 24 AND taken_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z' AND substr(taken_at,12,2) BETWEEN '00' AND '23' AND strftime('%Y-%m-%dT%H:%M:%fZ', taken_at) IS taken_at),
   tz               TEXT CONSTRAINT measurements_tz CHECK (tz IS NULL OR (instr(tz, char(0)) = 0 AND length(tz) BETWEEN 1 AND 64 AND tz NOT GLOB '*[^A-Za-z0-9_/+-]*')),
@@ -678,7 +544,6 @@ CREATE UNIQUE INDEX measurements_one_correction
   ON measurements(supersedes_id) WHERE supersedes_id IS NOT NULL;  -- one correction per row; also serves measurement_values
 CREATE INDEX measurements_day ON measurements(day);                -- day view
 CREATE INDEX measurements_capture ON measurements(captured_with_id) WHERE captured_with_id IS NOT NULL;
-CREATE INDEX measurements_session ON measurements(session_id,metric_id,day) WHERE session_id IS NOT NULL;
 CREATE TRIGGER measurements_no_update BEFORE UPDATE ON measurements
 BEGIN
   SELECT RAISE(ABORT, 'measurements are append-only: correct by inserting a row with supersedes_id');
@@ -695,16 +560,6 @@ BEGIN
   -- and must name an existing row, so correction chains can never form a cycle.
   SELECT RAISE(ABORT, 'supersedes_id must reference a measurement of the same metric')
    WHERE (SELECT metric_id FROM measurements WHERE id = NEW.supersedes_id) IS NOT NEW.metric_id;
-END;
-CREATE TRIGGER measurements_supersede_scope AFTER INSERT ON measurements WHEN NEW.supersedes_id IS NOT NULL BEGIN
- SELECT RAISE(ABORT,'correction must retain the same session scope')
- WHERE (SELECT session_id FROM measurements WHERE id=NEW.supersedes_id) IS NOT NEW.session_id;
-END;
-CREATE TRIGGER measurements_session_live AFTER INSERT ON measurements
- WHEN NEW.value IS NOT NULL AND NEW.session_id IS NOT NULL BEGIN
- -- Check admitted rows: a duplicate import key remains a no-op after a session is tombstoned.
- SELECT RAISE(ABORT,'new associated value requires a live session')
- WHERE NOT EXISTS (SELECT 1 FROM sessions s WHERE s.id=NEW.session_id AND s.deleted_at IS NULL);
 END;
 CREATE TRIGGER measurements_scale_range BEFORE INSERT ON measurements
   WHEN NEW.value IS NOT NULL
@@ -906,14 +761,13 @@ BEGIN
 END;
 
 CREATE VIEW ghost_pages AS
-  -- Empty live plain objects older than 30 days without graph, session-kind, task-project or measurement-capture references,
+  -- Empty live plain objects older than 30 days without graph, task-project or measurement-capture references,
   -- including historical facts; never a typed identity. Owner tombstones them.
   SELECT e.id, n.title, e.created_at
     FROM entities e JOIN entity_names n ON n.entity_id = e.id AND n.name_key = e.preferred_name_key
    WHERE e.entity_type = 'page' AND e.body = '' AND e.deleted_at IS NULL
      AND e.created_at < strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 day')
      AND NOT EXISTS (SELECT 1 FROM links l WHERE l.to_id = e.id OR l.from_id = e.id)
-     AND NOT EXISTS (SELECT 1 FROM sessions s WHERE s.kind_id = e.id)
      AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.project_page_id = e.id)
      AND NOT EXISTS (SELECT 1 FROM measurements m WHERE m.captured_with_id = e.id);
 

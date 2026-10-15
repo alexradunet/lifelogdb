@@ -113,7 +113,7 @@ func TestTheDayCarriesWhatIsDueItsMoodAndItsHabits(t *testing.T) {
 		t.Error("the day view shows work of another day")
 	}
 	if strings.Contains(body, `<th scope="col">scope</th>`) {
-		t.Error("the readings show a scope column with no session or time to show")
+		t.Error("the readings show a scope column")
 	}
 	walk := formFor(t, body, "Done", "/metrics/evening_walk/check-in")
 	if walk.Fields.Get("day") != fixedToday || walk.Fields.Get("done") != "1" || walk.Fields.Get("back") != "/days/"+fixedToday {

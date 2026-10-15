@@ -4,11 +4,12 @@ An issue records an incident from real use — a failed import, a bug in the wri
 data could not answer, a rule that is ambiguous or untestable. It is the evidence a schema change needs
 ([how a change happens](../process.md)). One file per incident, named `NNNN-short-slug.md`, written from the
 [template](template.md), numbered on from the last: issues up to 0010 are closed and live in git history
-(`git log -- docs/issues`). Issues 0011–0072 are listed below; the next one is **0073**. Close an issue with its resolution and status, retaining the dated incident as
+(`git log -- docs/issues`). Issues 0011–0073 are listed below; the next one is **0074**. Close an issue with its resolution and status, retaining the dated incident as
 [the process](../process.md) requires. Earlier closed records remain available in git history.
 
 | id | title | status |
 |---|---|---|
+| [0073](0073-sessions-cost-more-than-they-give.md) | Sessions cost more than they give, and no data uses them | resolved |
 | [0072](0072-a-conversation-reads-as-a-page.md) | A conversation reads as a page, and it leaves the screen when the owner moves on | open |
 | [0071](0071-the-owner-cannot-talk-to-lifelog.md) | The owner cannot talk to lifelog: an agent works only from outside, and its conversation is lost | open |
 | [0070](0070-the-calendar-shows-only-the-journal.md) | The calendar shows only the journal | resolved |
@@ -58,7 +59,7 @@ data could not answer, a rule that is ambiguous or untestable. It is the evidenc
 | [0017](0017-link-identity-and-time-are-mutable.md) | Link identity and creation time escape the stated immutability rule | proposed |
 | [0018](0018-symmetric-link-note-semantics-are-unclear.md) | Symmetric-link note semantics are unclear | proposed |
 | [0019](0019-life-period-questions-have-no-structured-boundaries.md) | Jobs, study and trips cannot define honest query windows | proposed |
-| [0020](0020-imported-sessions-need-time-and-measurement-scope.md) | Session exports need time and measurement scope | proposed |
+| [0020](0020-imported-sessions-need-time-and-measurement-scope.md) | Session exports need time and measurement scope | won't-fix |
 | [0021](0021-selected-photo-sidecars-have-unhandled-time-evidence.md) | Selected photo sidecars have unhandled time evidence | proposed |
 | [0022](0022-nul-suffixes-bypass-text-checks.md) | NUL suffixes bypass constrained text checks | resolved |
 | [0023](0023-place-point-ownership-bypasses-revisions.md) | Moving a place point bypasses both owners' edit revisions | resolved |

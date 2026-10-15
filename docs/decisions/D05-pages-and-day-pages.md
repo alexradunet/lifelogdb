@@ -15,7 +15,7 @@
   - Rename into another owner's name, even an empty ghost: rejected — rename is not merge.
   - ASCII-only uniqueness or an application collation: rejected — Unicode names need the shared normalization, and a stored index must remain usable without a private collation (executed).
   - Id-named handles without filename checks: rejected — relaxing a restriction later is possible; tightening it after freeze can meet existing incompatible names ([D13](D13-migrations-and-freeze.md)).
-- **Costs accepted.** A day-page entry has no separate timestamp; a time worth keeping stays in prose. There is no inbox. Retained names consume the global namespace, including after tombstoning. Empty unreferenced pages appear in `ghost_pages` for the owner's review; retained session kinds and capture provenance keep meaningful empty pages out of cleanup.
+- **Costs accepted.** A day-page entry has no separate timestamp; a time worth keeping stays in prose. There is no inbox. Retained names consume the global namespace, including after tombstoning. Empty unreferenced pages appear in `ghost_pages` for the owner's review; task projects and capture provenance keep meaningful empty pages out of cleanup.
 - **Search and names.** `entities_fts` is a derived token index, separate from exact owned-name resolution.
   Its tokenizer avoids SQLite's compatibility default that leaves compound Latin diacritics folded inconsistently;
   the tokenizer choice lives in its `CREATE` statement. It still does not implement the full casefold used by name

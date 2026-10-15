@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
-	"strconv"
 
 	"lifelog/internal/core"
 )
@@ -98,7 +97,7 @@ func (h *server) series(r *http.Request) (*Entity, error) {
 
 // seriesEntity is the resource /metrics/{name} serves, the one page of a metric (docs/plans/100-one-page-a-metric.md):
 // its readings, the writes of a reading and of a habit, and, as the metric is a page (D27), the page's text, edges
-// and actions. q is its query (from, to, scope, session_id, include_deleted, all_history), nil for the defaults.
+// and actions. q is its query (from, to, all_history), nil for the defaults.
 func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*Entity, error) {
 	today := h.localDay()
 	to := q.Get("to")
@@ -124,24 +123,11 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 	if m != nil { // an alias names the metric by its name
 		name = m.Name
 	}
-	sessionID, err := optionalID(q, "session_id")
-	if err != nil {
-		return nil, err
-	}
-	includeDeleted, err := flag(q, "include_deleted")
-	if err != nil {
-		return nil, err
-	}
-	scope := q.Get("scope")
-	if scope == "" {
-		scope = "unassociated"
-	}
-	sc := core.Scope{Kind: scope, SessionID: sessionID, IncludeDeleted: includeDeleted}
 	var rows []core.Reading
 	if allHistory {
-		rows, err = h.s.SeriesHistory(ctx, name, to, sc)
+		rows, err = h.s.SeriesHistory(ctx, name, to)
 	} else {
-		rows, err = h.s.SeriesScope(ctx, name, from, to, sc)
+		rows, err = h.s.Series(ctx, name, from, to)
 	}
 	if err != nil {
 		return nil, err
@@ -152,7 +138,7 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 	}
 	// The series' own address, and the address of all its history: the same query with no lower bound.
 	seriesHref := func(allHistory bool) string {
-		v := url.Values{"to": {to}, "scope": {scope}, "session_id": {strconv.FormatInt(sessionID, 10)}, "include_deleted": {boolField(includeDeleted)}}
+		v := url.Values{"to": {to}}
 		if allHistory {
 			v.Set("all_history", "1")
 		} else {
@@ -168,13 +154,10 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 	if err != nil {
 		return nil, err
 	}
-	props := map[string]any{"metric": name, "from": from, "to": to, "readings": rows, "habit_periods": periods, "scope": scope, "session_id": sessionID, "include_deleted": includeDeleted, "all_history": allHistory, "categories": []string(nil)}
+	props := map[string]any{"metric": name, "from": from, "to": to, "readings": rows, "habit_periods": periods, "all_history": allHistory, "categories": []string(nil)}
 	e := &Entity{Class: []string{"series"}, Title: name, Properties: props,
 		Links:   []Link{link("all-readings", allHref, "All readings"), link("self", self, name), link("up", "/metrics", "Metrics"), link("habits", "/habits", "Habits"), link("index", "/", "Home")},
 		Actions: []Action{record}}
-	if f := e.Actions[0].field("session_id"); scope == "session" && f != nil {
-		f.Value = sessionID
-	}
 	ids := map[string]string{"name": name}
 	if len(periods) > 0 && periods[len(periods)-1].End == "" {
 		e.Actions = append(e.Actions, action("stop-habit", ids, map[string]any{"day": today}),
@@ -229,23 +212,10 @@ func (h *server) measurementEntity(ctx context.Context, id int64) (*Entity, erro
 		e.Links = append(e.Links, link("superseded-by", measurementHref(m.SupersededBy), "Corrected by"))
 	} else {
 		ids := idParam(id)
-		e.Actions = []Action{}
-		if m.SessionDeletedAt == "" {
-			e.Actions = append(e.Actions, action("correct", ids, nil))
-		}
+		e.Actions = []Action{action("correct", ids, nil)}
 		if !m.Retraction {
 			e.Actions = append(e.Actions, action("retract", ids, nil))
 		}
-	}
-	if m.SessionID != 0 {
-		e.Links = append(e.Links, link("session", sessionHref(m.SessionID), "Session scope"))
-	}
-	allowed, err := h.s.RelocationAllowed(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	if allowed {
-		e.Actions = append(e.Actions, action("relocate-reading", idParam(id), map[string]any{"metric": m.Metric, "day": m.Day, "value": m.Value, "taken_at": m.TakenAt, "tz": m.TZ, "captured_with_id": m.CapturedWith}))
 	}
 	if m.CapturedWith != 0 {
 		e.Links = append(e.Links, link("captured-with", pageHref(m.CapturedWith), "Captured with"))
@@ -284,11 +254,7 @@ func (h *server) record(r *http.Request, src string) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	sessionID, err := optionalID(v, "session_id")
-	if err != nil {
-		return nil, err
-	}
-	id, err := h.s.Record(r.Context(), src, core.Reading{SessionID: sessionID, Metric: v.Get("metric"), Day: v.Get("day"), Value: *value,
+	id, err := h.s.Record(r.Context(), src, core.Reading{Metric: v.Get("metric"), Day: v.Get("day"), Value: *value,
 		TakenAt: v.Get("taken_at"), TZ: v.Get("tz"), ImportKey: v.Get("import_key")})
 	if err != nil {
 		return nil, err

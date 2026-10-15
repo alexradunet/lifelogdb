@@ -7,8 +7,6 @@ spans tables — time, identity, provenance, deletion — in a row of `lifelog_m
 | page | what it holds |
 |---|---|
 | [Prose, wikilinks and titles](titles-and-wikilinks.md) | the save contract, the wikilink and `#tag` grammar and its vectors, renames, titles, `title_key`, day pages |
-| [Session time evidence](session-time.md) | UTC/local exclusivity, reporting day and unverified evidence vectors |
-| [Measurement scope](measurement-scope.md) | scoped corrections, active/historical reads and owner relocation |
 | [Recorded period boundaries](period-boundaries.md) | partial/qualified boundary profile and day-membership vectors |
 | [Personal tasks and reminder intent](planning.md) | bounded recurrence, merged deadline reads, writer lifecycle and clock-resolution vectors |
 | [Integrity checks](integrity-checks.md) | the four checks that tell whether a file still obeys the schema |

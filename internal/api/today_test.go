@@ -6,10 +6,9 @@ import (
 	"testing"
 )
 
-// TestTheDayCarriesItsTrends: for each metric with a current reading of no session on the day, its unit and its
-// current readings of no session in the 14 days through the day, oldest first (docs/plans/093-words-phone-and-today.md).
-// A reading outside the window, a session's reading, a corrected value and a retracted reading stay out of it, and
-// so does a habit: its strip tells it.
+// TestTheDayCarriesItsTrends: for each metric with a current reading on the day, its unit and its current readings
+// in the 14 days through the day, oldest first (docs/plans/093-words-phone-and-today.md). A reading outside the
+// window, a corrected value and a retracted reading stay out of it, and so does a habit: its strip tells it.
 func TestTheDayCarriesItsTrends(t *testing.T) {
 	c, h := freshOn(t, fixedToday)
 	root := must(c.Get(t.Context(), "/"))
@@ -32,9 +31,6 @@ func TestTheDayCarriesItsTrends(t *testing.T) {
 	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "walk"}))
 	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/metrics/walk")), "start-habit"), map[string]string{"start_day": dayOf(-4)}))
 	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/metrics/walk")), "check-in"), map[string]string{"day": fixedToday, "done": "1"}))
-	must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Run"}))
-	session := must(c.Do(t.Context(), find(root, "capture-session"), map[string]string{"kind": "Run", "day": fixedToday, "start_at": fixedToday + "T05:00:00.000Z"}))
-	record(fixedToday, "70.9", "session_id", strings.TrimPrefix(href(session, "self"), "/sessions/"))
 
 	dayProps := props(must(c.Get(t.Context(), "/days/"+fixedToday)))
 	var habitNames []string
@@ -70,7 +66,6 @@ func TestTheDayCarriesItsTrends(t *testing.T) {
 		`<a class="reading" href="` + today + `">71.1 <span class="unit">kg</span></a>`,
 		`<svg class="trend" viewBox="0 0 120 28" role="img" aria-label="weight from 71.4 kg Thu 1 May to 71.1 kg today">`,
 		`aria-label="steps: one reading in 14 days, 5000 steps today"`,
-		`<span class="meta">session ` + strings.TrimPrefix(href(session, "self"), "/sessions/"),
 	} {
 		if !strings.Contains(body, w) {
 			t.Errorf("the day's readings lack %s", w)

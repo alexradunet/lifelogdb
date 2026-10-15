@@ -9,23 +9,22 @@ import (
 
 // IntegrityResult is the four check groups of docs/contract/integrity-checks.md; OK when all pass.
 type IntegrityResult struct {
-	OK                       bool     `json:"ok"`
-	IntegrityCheck           []string `json:"integrity_check"`
-	ForeignKeys              int      `json:"foreign_key_violations"`
-	OrphanEntities           []int64  `json:"entities_without_domain_row"`
-	InvalidTypedLinks        []int64  `json:"invalid_typed_links"`
-	InvalidSessionKinds      []int64  `json:"invalid_session_kinds"`
-	InvalidMeasurementScopes []int64  `json:"invalid_measurement_scopes"`
-	InvalidTaskProjects      []int64  `json:"invalid_task_projects"`
-	InvalidOneOffTasks       []int64  `json:"invalid_one_off_tasks"`
-	InvalidTaskOccurrences   []int64  `json:"invalid_task_occurrences"`
-	InvalidSymmetricLinks    []int64  `json:"invalid_symmetric_links"`
-	InvalidMeasurementChains []int64  `json:"invalid_measurement_chains"`
-	InvalidHabitPeriods      []int64  `json:"invalid_habit_periods"`
-	InvalidHabitReadings     []int64  `json:"invalid_habit_readings"`
-	InvalidJournalNames      []int64  `json:"invalid_journal_names"`
-	FullTextIndexOK          bool     `json:"full_text_index_ok"`
-	FullTextError            string   `json:"full_text_error,omitempty"`
+	OK                            bool     `json:"ok"`
+	IntegrityCheck                []string `json:"integrity_check"`
+	ForeignKeys                   int      `json:"foreign_key_violations"`
+	OrphanEntities                []int64  `json:"entities_without_domain_row"`
+	InvalidTypedLinks             []int64  `json:"invalid_typed_links"`
+	InvalidMeasurementCorrections []int64  `json:"invalid_measurement_corrections"`
+	InvalidTaskProjects           []int64  `json:"invalid_task_projects"`
+	InvalidOneOffTasks            []int64  `json:"invalid_one_off_tasks"`
+	InvalidTaskOccurrences        []int64  `json:"invalid_task_occurrences"`
+	InvalidSymmetricLinks         []int64  `json:"invalid_symmetric_links"`
+	InvalidMeasurementChains      []int64  `json:"invalid_measurement_chains"`
+	InvalidHabitPeriods           []int64  `json:"invalid_habit_periods"`
+	InvalidHabitReadings          []int64  `json:"invalid_habit_readings"`
+	InvalidJournalNames           []int64  `json:"invalid_journal_names"`
+	FullTextIndexOK               bool     `json:"full_text_index_ok"`
+	FullTextError                 string   `json:"full_text_error,omitempty"`
 }
 
 // idCheck is one semantic check: a query that selects the id of every row that breaks a rule, and the list of the
@@ -52,8 +51,7 @@ func (r *IntegrityResult) idChecks() []idCheck {
  OR (k.from_types IS NOT NULL AND instr(',' || k.from_types || ',', ',' || f.entity_type || ',')=0)
  OR (k.to_types IS NOT NULL AND instr(',' || k.to_types || ',', ',' || t.entity_type || ',')=0)
  ORDER BY l.id`, &r.InvalidTypedLinks},
-		{"session kind endpoints", `SELECT s.id FROM sessions s LEFT JOIN entities e ON e.id=s.kind_id WHERE e.id IS NULL OR e.entity_type<>'page' OR e.is_journal ORDER BY s.id`, &r.InvalidSessionKinds},
-		{"measurement scopes", `SELECT m.id FROM measurements m LEFT JOIN sessions s ON s.id=m.session_id LEFT JOIN measurements p ON p.id=m.supersedes_id WHERE (m.session_id IS NOT NULL AND s.id IS NULL) OR (m.supersedes_id IS NOT NULL AND (p.id IS NULL OR p.metric_id IS NOT m.metric_id OR p.session_id IS NOT m.session_id)) ORDER BY m.id`, &r.InvalidMeasurementScopes},
+		{"measurement corrections", `SELECT m.id FROM measurements m LEFT JOIN measurements p ON p.id=m.supersedes_id WHERE m.supersedes_id IS NOT NULL AND (p.id IS NULL OR p.metric_id IS NOT m.metric_id) ORDER BY m.id`, &r.InvalidMeasurementCorrections},
 		{"task project endpoints", `SELECT t.id FROM tasks t LEFT JOIN entities e ON e.id=t.project_page_id WHERE t.project_page_id IS NOT NULL AND (e.id IS NULL OR e.entity_type<>'page' OR e.is_journal) ORDER BY t.id`, &r.InvalidTaskProjects},
 		{"one-off task ownership", `SELECT t.id FROM tasks t WHERE t.repeat_unit IS NULL AND (SELECT count(*) FROM task_occurrences o WHERE o.task_id=t.id AND o.occurrence_key='once')<>1 ORDER BY t.id`, &r.InvalidOneOffTasks},
 		// The recurrence rule in SQL, independent of the Go calendar: an occurrence is on a slot of its series.

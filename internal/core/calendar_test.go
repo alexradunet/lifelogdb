@@ -119,7 +119,6 @@ func TestDatedRowsOfAWindow(t *testing.T) {
 		return id
 	}
 	page("Notes on rivers", "2031-05-14")
-	page("Run", "2031-04-01") // the kind of the sessions, written before the window
 	page("June plan", "2031-06-01")
 	if err := s.Tombstone(ctx, "cli", page("Scratch", "2031-05-14")); err != nil {
 		t.Fatal(err)
@@ -137,17 +136,6 @@ func TestDatedRowsOfAWindow(t *testing.T) {
 	if err := s.Link(ctx, "cli", dayPage, park, "at", ""); err != nil {
 		t.Fatal(err)
 	}
-	run, _, err := s.CaptureSession(ctx, "cli", SessionInput{Kind: "Run", Day: "2031-05-14", StartLocal: "2031-05-14T07:30:00.000"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	gone, _, err := s.CaptureSession(ctx, "cli", SessionInput{Kind: "Run", Day: "2031-05-14", StartAt: "2031-05-14T18:00:00.000Z"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := s.SessionLifecycle(ctx, "cli", gone, "1", true); err != nil {
-		t.Fatal(err)
-	}
 
 	rows, err := s.DatedIn(ctx, "2031-05-01", "2031-05-31", 20)
 	if err != nil {
@@ -155,19 +143,15 @@ func TestDatedRowsOfAWindow(t *testing.T) {
 	}
 	var got []string
 	for _, r := range rows {
-		got = append(got, fmt.Sprintf("%s %s %s %s %d", r.Day, r.Kind, r.Title, r.At, r.Pages))
-		if r.Kind == "session" && r.ID != run {
-			t.Errorf("the session is %d, want %d", r.ID, run)
-		}
+		got = append(got, fmt.Sprintf("%s %s %s %d", r.Day, r.Kind, r.Title, r.Pages))
 	}
 	want := []string{
-		"2031-05-14 session Run 2031-05-14T07:30:00.000 0",
-		"2031-05-14 place Lake Park  0",
-		"2031-05-14 file Lake.jpg  2",
-		"2031-05-14 page Notes on rivers  2",
+		"2031-05-14 place Lake Park 0",
+		"2031-05-14 file Lake.jpg 2",
+		"2031-05-14 page Notes on rivers 2",
 	}
 	for i := 1; i <= 20; i++ {
-		want = append(want, fmt.Sprintf("2031-05-20 page Import %02d  21", i))
+		want = append(want, fmt.Sprintf("2031-05-20 page Import %02d 21", i))
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("dated rows:\n got %s\nwant %s", strings.Join(got, "\n"), strings.Join(want, "\n"))
@@ -186,38 +170,30 @@ func TestReadingsByDay(t *testing.T) {
 	if _, err := s.RegisterMetric(ctx, "cli", "weight", "kg", ""); err != nil {
 		t.Fatal(err)
 	}
-	record := func(day string, v float64, session int64) int64 {
+	record := func(day string, v float64) int64 {
 		t.Helper()
-		id, err := s.Record(ctx, "cli", Reading{Metric: "weight", Day: day, Value: v, SessionID: session})
+		id, err := s.Record(ctx, "cli", Reading{Metric: "weight", Day: day, Value: v})
 		if err != nil {
 			t.Fatal(err)
 		}
 		return id
 	}
-	wrong := record("2031-05-14", 80, 0)
+	wrong := record("2031-05-14", 80)
 	if _, err := s.Correct(ctx, "cli", wrong, func() *float64 { v := 79.5; return &v }()); err != nil {
 		t.Fatal(err)
 	}
-	record("2031-05-14", 79, 0)
-	record("2031-05-15", 78, 0)
-	if _, err := s.Correct(ctx, "cli", record("2031-05-15", 70, 0), nil); err != nil { // a retraction
+	record("2031-05-14", 79)
+	record("2031-05-15", 78)
+	if _, err := s.Correct(ctx, "cli", record("2031-05-15", 70), nil); err != nil { // a retraction
 		t.Fatal(err)
 	}
-	record("2031-06-01", 77, 0)
-	if _, _, err := s.CreatePage(ctx, "cli", "Run", ""); err != nil {
-		t.Fatal(err)
-	}
-	run, _, err := s.CaptureSession(ctx, "cli", SessionInput{Kind: "Run", Day: "2031-05-14", StartLocal: "2031-05-14T07:30:00.000"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	record("2031-05-14", 76, run)
+	record("2031-06-01", 77)
 
 	got, err := s.ReadingsByDay(ctx, "2031-05-01", "2031-05-31")
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 14 May: the mood, the correction (not the reading it corrects) and 79; not the session's reading. 15 May:
+	// 14 May: the mood, the correction (not the reading it corrects) and 79. 15 May:
 	// 78, not the retracted reading
 	if fmt.Sprint(got) != "map[2031-05-14:3 2031-05-15:1]" {
 		t.Errorf("readings by day: %v", got)

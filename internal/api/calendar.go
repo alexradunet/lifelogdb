@@ -3,7 +3,6 @@ package api
 // The calendar in words and numbers: days stepped, ISO weeks, weekdays, and the words of a week.
 
 import (
-	"cmp"
 	"slices"
 	"strconv"
 	"time"
@@ -84,25 +83,6 @@ func daysOf(done, active any) string {
 	return num(done) + " of " + num(active) + " days"
 }
 
-// lasting says how long a session lasted from its elapsed milliseconds: "35 min", "1 h 15 min", "2 h", "under 1 min";
-// "" when it has no length (no end, or a local clock that names no instant).
-func lasting(ms any) string {
-	f, ok := ms.(float64)
-	if !ok {
-		return ""
-	}
-	m := int64(f) / 60000
-	switch {
-	case m < 1:
-		return "under 1 min"
-	case m < 60:
-		return strconv.FormatInt(m, 10) + " min"
-	case m%60 == 0:
-		return strconv.FormatInt(m/60, 10) + " h"
-	}
-	return strconv.FormatInt(m/60, 10) + " h " + strconv.FormatInt(m%60, 10) + " min"
-}
-
 // weekday is the name of a day's weekday, "" for a day that is not one.
 func weekday(day string) string {
 	t, ok := dayOf(day)
@@ -181,9 +161,6 @@ func (v *view) CalItem(item any, day, today string) calWords {
 			w.Tag, w.Word = "ends", "ends"
 		}
 		return w
-	case "session":
-		at := v.clock().clockOf(str("at"))
-		return calWords{Tag: "session", Word: cmp.Or(at, "session"), Note: at}
 	case "place":
 		return calWords{Tag: "place", Word: "place"}
 	case "file":
@@ -198,25 +175,6 @@ func yearsWords(n float64) string {
 		return "1 year"
 	}
 	return num(n) + " years"
-}
-
-// clockOf is a session's start as a clock, "07:30": a local clock as it was recorded, an instant in the zone of the
-// view (in UTC, and said, when the view has none); "" for anything else.
-func (c clock) clockOf(at string) string {
-	switch {
-	case core.IsInstant(at):
-		t, err := time.Parse(time.RFC3339Nano, at)
-		if err != nil {
-			return ""
-		}
-		if c.zone == nil {
-			return t.UTC().Format("15:04") + " UTC"
-		}
-		return t.In(c.zone).Format("15:04")
-	case len(at) == 23 && at[10] == 'T': // a local clock, YYYY-MM-DDTHH:MM:SS.sss (sessions_start_local)
-		return at[11:16]
-	}
-	return ""
 }
 
 // upTo is the first n items of a list: a cell shows three items, and a phone's cell four squares.

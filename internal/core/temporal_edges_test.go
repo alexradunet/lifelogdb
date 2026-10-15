@@ -40,52 +40,6 @@ func TestTemporalNULStorageRefusal(t *testing.T) {
 			})
 		}
 	}
-	for _, col := range []string{"start_offset", "end_offset", "start_zone_unverified", "end_zone_unverified"} {
-		t.Run(col, func(t *testing.T) {
-			s := fresh(t)
-			if _, _, err := s.CreatePage(ctx, "cli", "Synthetic workout", ""); err != nil {
-				t.Fatal(err)
-			}
-			in := SessionInput{Kind: "Synthetic workout", Day: "2020-01-01", StartAt: "2020-01-01T00:00:00.000Z", EndAt: "2020-01-01T01:00:00.000Z"}
-			var id int64
-			if err := s.Do(ctx, "cli", func(tx *Tx) error { var err error; id, _, err = tx.CaptureSession(in); return err }); err != nil {
-				t.Fatal(err)
-			}
-			bad := "+00:00" + string(rune(0)) + "hidden"
-			if col == "start_zone_unverified" || col == "end_zone_unverified" {
-				bad = "UTC" + string(rune(0)) + "hidden invalid label"
-			}
-			writer := in
-			switch col {
-			case "start_offset":
-				writer.StartOffset = bad
-			case "end_offset":
-				writer.EndOffset = bad
-			case "start_zone_unverified":
-				writer.StartZoneUnverified = bad
-			case "end_zone_unverified":
-				writer.EndZoneUnverified = bad
-			}
-			if _, _, err := s.CaptureSession(ctx, "cli", writer); status(err) != 422 {
-				t.Fatalf("writer accepted malformed probe: %v", err)
-			}
-			before, err := s.Session(ctx, id)
-			if err != nil {
-				t.Fatal(err)
-			}
-			err = s.Do(ctx, "cli", func(tx *Tx) error {
-				_, err := tx.tx.Exec("UPDATE sessions SET "+col+"=? WHERE id=?", bad, id)
-				return err
-			})
-			after, readErr := s.Session(ctx, id)
-			if readErr != nil {
-				t.Fatal(readErr)
-			}
-			if err == nil || !reflect.DeepEqual(before, after) {
-				t.Errorf("DDL accepted NUL-tailed %s=%q: err=%v; state unchanged=%v", col, bad, err, reflect.DeepEqual(before, after))
-			}
-		})
-	}
 }
 
 func TestPeriodCategoryMustBeLiveWhenSelected(t *testing.T) {

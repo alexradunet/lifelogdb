@@ -476,7 +476,7 @@ func (t *Tx) Promote(id int64, typ, name string) error {
 }
 
 // Tombstone and Revive set or clear entities.deleted_at (D11): nothing is ever deleted. A missing id is 404; the same
-// state again changes nothing, as a task's or a session's lifecycle answers.
+// state again changes nothing, as a task's lifecycle answers.
 func (t *Tx) Tombstone(id int64) error { return t.setDeleted(id, true) }
 
 func (t *Tx) Revive(id int64) error { return t.setDeleted(id, false) }
@@ -555,17 +555,14 @@ func (t *Tx) Unlink(from, to int64, kind string) error {
 
 // Reading is one measurement to record (D7).
 type Reading struct {
-	ID               int64   `json:"id,omitempty"`
-	Metric           string  `json:"metric"`
-	Day              string  `json:"day"`
-	TakenAt          string  `json:"taken_at,omitempty"`
-	TZ               string  `json:"tz,omitempty"`
-	ImportKey        string  `json:"import_key,omitempty"`
-	Value            float64 `json:"value"`
-	CapturedWith     int64   `json:"captured_with_id,omitempty"`
-	SessionID        int64   `json:"session_id,omitempty"`
-	SessionDeletedAt string  `json:"session_deleted_at,omitempty"`
-	Scope            string  `json:"scope,omitempty"`
+	ID           int64   `json:"id,omitempty"`
+	Metric       string  `json:"metric"`
+	Day          string  `json:"day"`
+	TakenAt      string  `json:"taken_at,omitempty"`
+	TZ           string  `json:"tz,omitempty"`
+	ImportKey    string  `json:"import_key,omitempty"`
+	Value        float64 `json:"value"`
+	CapturedWith int64   `json:"captured_with_id,omitempty"`
 }
 
 // Record appends a measurement. An ImportKey makes a re-send a no-op (ON CONFLICT ... DO NOTHING, docs/contract/imports.md);
@@ -575,29 +572,15 @@ func (t *Tx) Record(m Reading) (id int64, err error) {
 	if err != nil {
 		return 0, err
 	}
-	if m.ImportKey != "" {
-		var previous sql.NullInt64
-		err := t.tx.QueryRowContext(t.ctx, `SELECT session_id FROM measurements WHERE source=? AND import_key=? AND metric_id=?`, t.Source, m.ImportKey, metric).Scan(&previous)
-		if err == nil && previous.Int64 != m.SessionID {
-			return 0, Conflict("measurement source identity cannot change session scope")
-		}
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return 0, err
-		}
-	}
-	var session any
-	if m.SessionID != 0 {
-		session = m.SessionID
-	}
 	var with any
 	if m.CapturedWith != 0 {
 		with = m.CapturedWith
 	}
-	err = t.tx.QueryRowContext(t.ctx, `INSERT INTO measurements(metric_id, day, taken_at, tz, value, source, import_key, captured_with_id,session_id, created_at)
-	                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, `+nowSQL+`)
+	err = t.tx.QueryRowContext(t.ctx, `INSERT INTO measurements(metric_id, day, taken_at, tz, value, source, import_key, captured_with_id, created_at)
+	                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, `+nowSQL+`)
 	                     ON CONFLICT(source, import_key, metric_id) WHERE import_key IS NOT NULL DO NOTHING
 	                     RETURNING id`,
-		metric, m.Day, nullIfEmpty(m.TakenAt), nullIfEmpty(m.TZ), m.Value, t.Source, nullIfEmpty(m.ImportKey), with, session).Scan(&id)
+		metric, m.Day, nullIfEmpty(m.TakenAt), nullIfEmpty(m.TZ), m.Value, t.Source, nullIfEmpty(m.ImportKey), with).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, nil // sent before
 	}
@@ -621,8 +604,8 @@ func (t *Tx) Correct(wrong int64, value *float64) (id int64, err error) {
 	if value != nil {
 		v = *value
 	}
-	err = t.tx.QueryRowContext(t.ctx, `INSERT INTO measurements(metric_id, day, taken_at, tz, value, source, captured_with_id,session_id, supersedes_id, created_at)
-	                     SELECT metric_id, day, taken_at, tz, ?, ?, captured_with_id,session_id, id, `+nowSQL+` FROM measurements WHERE id = ?
+	err = t.tx.QueryRowContext(t.ctx, `INSERT INTO measurements(metric_id, day, taken_at, tz, value, source, captured_with_id, supersedes_id, created_at)
+	                     SELECT metric_id, day, taken_at, tz, ?, ?, captured_with_id, id, `+nowSQL+` FROM measurements WHERE id = ?
 	                     RETURNING id`, v, t.Source, wrong).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, NotFound("no measurement %d", wrong)
@@ -724,10 +707,10 @@ func (s *Store) Correct(ctx context.Context, source string, wrong int64, value *
 }
 
 // setDeletedAt sets or clears a row's deleted_at in one of the tables whose rows carry a version: the tombstone of
-// a task, an occurrence or a session (D11: nothing is deleted).
+// a task or an occurrence (D11: nothing is deleted).
 func (t *Tx) setDeletedAt(table string, id int64, deleted bool) error {
 	switch table {
-	case "tasks", "task_occurrences", "sessions":
+	case "tasks", "task_occurrences":
 	default:
 		return fmt.Errorf("setDeletedAt: %s is not a table with a tombstone", table)
 	}

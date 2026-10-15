@@ -287,7 +287,7 @@ func TestAskWritesThroughTheCatalogAndKeepsTheTurn(t *testing.T) {
 			t.Fatalf("tool %s missing from %v", name, tools)
 		}
 	}
-	for _, name := range []string{"ask", "register_metric", "relocate_reading", "snapshot"} {
+	for _, name := range []string{"ask", "register_metric", "snapshot"} {
 		if slices.Contains(tools, name) {
 			t.Fatalf("tool %s was given to the model", name)
 		}

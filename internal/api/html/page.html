@@ -44,8 +44,7 @@
 {{with $p.backlinks}}<section class="group" aria-label="Backlinks"><h2>Backlinks</h2>{{range group . "kind"}}<p class="sub">{{if eq .Key "wikilink"}}mentioned in{{else}}{{.Key}}{{end}}</p>
 <ul class="plain">{{range .Items}}<li><a href="/pages/{{num .id}}">{{$.Date .title}}</a>{{if ne .entity_type "page"}} <span class="badge">{{.entity_type}}</span>{{end}}</li>{{end}}</ul>{{end}}</section>{{end}}
 
-{{if $p.task_project}}<aside><p>A task uses this page as its project context, so it cannot become a person or a place.</p></aside>
-{{else if $p.session_kind}}<aside><p>This page names a kind of session, so it cannot become a person or a place.</p></aside>{{end}}
+{{if $p.task_project}}<aside><p>A task uses this page as its project context, so it cannot become a person or a place.</p></aside>{{end}}
 
 {{if or (.Action "rename") (.Action "promote") (.Action "link") (.Action "locate") (.Action "set-picture") (.Action "tombstone")}}<section class="group" aria-label="More"><h2>More</h2><div class="actions">
 {{template "boxed" (form (.Action "set-picture") "more" "preview")}}
@@ -69,7 +68,6 @@
 <dt>metric</dt><dd><a href="{{.Link "series"}}">{{$m.metric}}</a></dd>
 <dt>day</dt><dd><a href="{{.Link "day"}}">{{$.Date $m.day}}</a></dd>
 {{with $m.taken_at}}<dt>taken at</dt><dd>{{$.When .}}{{with $m.tz}} ({{.}}){{end}}</dd>{{end}}
-<dt>scope</dt><dd>{{$m.scope}} <small>(unassociated is not a daily total)</small>{{with $.Link "session"}} · <a href="{{.}}">session</a>{{end}}{{with $m.session_deleted_at}} · session tombstoned {{$.When .}}{{end}}</dd>
 </dl></div>
 {{if $m.retraction}}<aside role="note"><p>This row retracts the reading before it: that reading never counts.</p></aside>
 {{else if not $m.current}}<div class="alert" role="note"><p>This reading was corrected or retracted. {{with .Link "superseded-by"}}<a href="{{.}}">See what replaced it</a>.{{end}}</p></div>{{end}}
@@ -80,7 +78,6 @@
 {{with .Action "correct"}}<section class="panel" aria-label="Correct"><h2>Correct</h2>{{template "form" (form . "class" "inline")}}</section>{{end}}
 <div class="actions">
 {{template "boxed" (form (.Action "retract"))}}
-{{template "boxed" (form (.Action "relocate-reading"))}}
 </div>
 {{template "foot" .}}{{end}}
 

@@ -37,7 +37,7 @@ func (v *view) ReadingTiles() []readingTile {
 		tile := readingTile{Metric: metric, Unit: unitWords(unit)}
 		for _, r := range readings {
 			m, _ := r.(map[string]any)
-			if m["metric"] == metric && m["session_id"] == nil {
+			if m["metric"] == metric {
 				if tile.ID != "" {
 					tile.More++
 				}
@@ -47,19 +47,6 @@ func (v *view) ReadingTiles() []readingTile {
 		points, _ := t["readings"].([]any)
 		tile.Line = trendLine(metric, unit, day, points)
 		out = append(out, tile)
-	}
-	return out
-}
-
-// SessionReadings are the day's readings of a session: no trend holds them, as they are not daily values.
-func (v *view) SessionReadings() []map[string]any {
-	props, _ := v.Props.(map[string]any)
-	readings, _ := props["readings"].([]any)
-	var out []map[string]any
-	for _, r := range readings {
-		if m, _ := r.(map[string]any); m["session_id"] != nil {
-			out = append(out, m)
-		}
 	}
 	return out
 }

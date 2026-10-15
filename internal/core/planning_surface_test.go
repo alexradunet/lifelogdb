@@ -27,7 +27,7 @@ func TestPageRetainsTaskProjectContextAfterTombstones(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p := page(projectID); !p.TaskProject || p.SessionKind || p.Type != "page" {
+	if p := page(projectID); !p.TaskProject || p.Type != "page" {
 		t.Fatalf("project context %+v", p)
 	}
 	task, err := s.Task(ctx, taskID)

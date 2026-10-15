@@ -27,7 +27,7 @@ type monthDay struct {
 }
 
 // calendarItem is a thing that names a day besides its day page: its kind, its title and the address of its own
-// resource. State is a task's, Years an anniversary's, Boundary and Qualifier a period's, At a session's start.
+// resource. State is a task's, Years an anniversary's, Boundary and Qualifier a period's.
 type calendarItem struct {
 	Kind      string `json:"kind"`
 	Title     string `json:"title"`
@@ -36,7 +36,6 @@ type calendarItem struct {
 	Years     int    `json:"years,omitempty"`
 	Boundary  string `json:"boundary,omitempty"`
 	Qualifier string `json:"qualifier,omitempty"`
-	At        string `json:"at,omitempty"`
 }
 
 // dayPages is how many pages and files of a day the calendar lists; more_pages counts the rest, and the day lists
@@ -146,7 +145,7 @@ func (h *server) calendarOf(ctx context.Context, from, through string) (*calenda
 	}
 
 	// The items of each day, in the order of plan 101: the tasks (open, then done, then skipped), the anniversaries,
-	// the period boundaries, then the sessions, the places and the pages as DatedIn orders them.
+	// the period boundaries, then the places and the pages as DatedIn orders them.
 	items, more := map[string][]calendarItem{}, map[string]int{}
 	add := func(day string, it calendarItem) { items[day] = append(items[day], it) }
 	rank := map[string]int{core.StateOpen: 0, core.StateDone: 1, core.StateSkipped: 2}
@@ -171,11 +170,7 @@ func (h *server) calendarOf(ctx context.Context, from, through string) (*calenda
 		}
 	}
 	for _, d := range dated {
-		it := calendarItem{Kind: d.Kind, Title: d.Title, Href: pageHref(d.ID)}
-		if d.Kind == "session" {
-			it.Href, it.At = sessionHref(d.ID), d.At
-		}
-		add(d.Day, it)
+		add(d.Day, calendarItem{Kind: d.Kind, Title: d.Title, Href: pageHref(d.ID)})
 		if d.Pages > dayPages {
 			more[d.Day] = d.Pages - dayPages
 		}

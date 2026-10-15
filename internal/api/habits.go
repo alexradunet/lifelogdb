@@ -189,9 +189,8 @@ type trendPoint struct {
 	Value float64 `json:"value"`
 }
 
-// trends are the trends of the metrics with a current unassociated reading among a day's readings, in the order of
-// those readings. A reading of a session is not a daily value, so it starts no trend. A habit is told by its strip,
-// so it has no trend.
+// trends are the trends of the metrics with a current reading among a day's readings, in the order of those
+// readings. A habit is told by its strip, so it has no trend.
 func (h *server) trends(ctx context.Context, day string, readings []core.Reading, habits []habitView) ([]trend, error) {
 	out := []trend{}
 	seen := map[string]bool{}
@@ -200,7 +199,7 @@ func (h *server) trends(ctx context.Context, day string, readings []core.Reading
 	}
 	var names []string
 	for _, r := range readings {
-		if r.SessionID == 0 && !seen[r.Metric] {
+		if !seen[r.Metric] {
 			seen[r.Metric] = true
 			names = append(names, r.Metric)
 		}

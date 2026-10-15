@@ -91,15 +91,12 @@ func temporalCorrectionModel(s *S) {
 	rng := rand.New(rand.NewSource(seed))
 	c := temporalModelDB(s, "temporal-corrections.db")
 	weight, other := c.metric("weight", "kg"), c.metric("Other metric", "kg")
-	kind := c.page("Workout")
-	sessions := []int64{sessionFixture(c, kind, nil), sessionFixture(c, kind, nil)}
 	ids := rng.Perm(1000)
 	used := 0
 	type fact struct {
 		id, metric int64
 		day, at    string
 		value      any
-		session    any
 	}
 	var chains [][]fact
 	for chain := range 40 {
@@ -110,10 +107,6 @@ func temporalCorrectionModel(s *S) {
 		if chain%5 == 0 {
 			metric = other
 		}
-		var session any
-		if chain%3 != 0 {
-			session = sessions[chain%2]
-		}
 		for depth := range length {
 			id := int64(ids[used] + 10)
 			used++
@@ -123,13 +116,12 @@ func temporalCorrectionModel(s *S) {
 			}
 			day := fmt.Sprintf("2026-10-%02d", chain%28+1)
 			at := fmt.Sprintf("2026-11-01T%02d:00:00.000Z", rng.Intn(16))
-			c.must("INSERT INTO measurements(id,metric_id,session_id,day,value,source,created_at,supersedes_id) VALUES(?,?,?,?,?,'ui',?,?)", id, metric, session, day, value, at, prior)
-			members = append(members, fact{id, metric, day, at, value, session})
+			c.must("INSERT INTO measurements(id,metric_id,day,value,source,created_at,supersedes_id) VALUES(?,?,?,?,'ui',?,?)", id, metric, day, value, at, prior)
+			members = append(members, fact{id, metric, day, at, value})
 			prior = id
 		}
 		chains = append(chains, members)
 	}
-	c.must("UPDATE sessions SET deleted_at='2026-11-02T00:00:00.000Z' WHERE id=?", sessions[1])
 	c.must("UPDATE entities SET deleted_at='2026-11-03T00:00:00.000Z' WHERE id=?", weight)
 	query := sqlBlocks(s.d.Page("cookbook/metric-series.md"))[1]
 	for hour := range 17 {
@@ -155,11 +147,7 @@ func temporalCorrectionModel(s *S) {
 		})
 		var wantRows [][]any
 		for _, f := range want {
-			var sessionDeleted any
-			if f.session == sessions[1] {
-				sessionDeleted = "2026-11-02T00:00:00.000Z"
-			}
-			wantRows = append(wantRows, []any{f.id, f.day, f.value, f.session, "2026-11-03T00:00:00.000Z", sessionDeleted})
+			wantRows = append(wantRows, []any{f.id, f.day, f.value, "2026-11-03T00:00:00.000Z"})
 		}
 		got := c.rows(query, P{"metric": "weight", "as_of": cutoff})
 		s.K(fmt.Sprintf("recorded-time model seed %d cutoff %s", seed, cutoff), tab(got) == tab(wantRows), "got", tab(got), "want", tab(wantRows))

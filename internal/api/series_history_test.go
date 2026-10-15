@@ -14,27 +14,17 @@ func TestAllReadingsIncludesEntireAdmittedCalendar(t *testing.T) {
 	c, h := fresh(t)
 	actions := must(c.Get(t.Context(), "/actions"))
 	metric := must(c.Do(t.Context(), find(actions, "register-metric"), map[string]string{"name": "Steps", "unit": "steps"}))
-	must(c.Do(t.Context(), find(actions, "create-page"), map[string]string{"title": "Workout"}))
-	session := must(c.Do(t.Context(), find(actions, "capture-session"), map[string]string{"kind": "Workout", "day": "0000-01-01", "start_local": "0000-01-01T12:00:00.000"}))
-	sid := strings.TrimPrefix(href(session, "self"), "/sessions/")
 	days := []string{"0000-01-01", "0000-02-29", "0001-01-01", "0001-01-02"}
-	var plain, scoped []string
+	var plain []string
 	values := map[string]string{}
 	for i, day := range days {
-		for _, scope := range []string{"", sid} {
-			fact := must(c.Do(t.Context(), find(actions, "record"), map[string]string{"metric": "Steps", "day": day, "value": fmt.Sprint(10 + i), "session_id": scope}))
-			id := href(fact, "self")
-			values[id] = fmt.Sprint(10 + i)
-			if scope == "" {
-				plain = append(plain, id)
-			} else {
-				scoped = append(scoped, id)
-			}
-		}
+		fact := must(c.Do(t.Context(), find(actions, "record"), map[string]string{"metric": "Steps", "day": day, "value": fmt.Sprint(10 + i)}))
+		id := href(fact, "self")
+		values[id] = fmt.Sprint(10 + i)
+		plain = append(plain, id)
 	}
 	metricPage := must(c.Get(t.Context(), href(metric, "page")))
 	must(c.Do(t.Context(), find(metricPage, "rename"), map[string]string{"title": "Stride count"}))
-	must(c.Do(t.Context(), find(session, "tombstone-session"), nil))
 	assertRows := func(t *testing.T, e *api.Entity, want []string) {
 		t.Helper()
 		rows := e.Properties.(map[string]any)["readings"].([]any)
@@ -51,39 +41,26 @@ func TestAllReadingsIncludesEntireAdmittedCalendar(t *testing.T) {
 			t.Fatalf("ordered identities=%v want=%v", got, want)
 		}
 	}
-	for _, tc := range []struct {
-		scope, history string
-		want           []string
-	}{
-		{"unassociated", "0", plain[:3]}, {"session", "0", []string{}}, {"session", "1", scoped[:3]},
-		{"all", "0", plain[:3]}, {"all", "1", []string{plain[0], scoped[0], plain[1], scoped[1], plain[2], scoped[2]}},
-	} {
-		t.Run(tc.scope+tc.history, func(t *testing.T) {
-			q := url.Values{"from": {"0000-12-31"}, "to": {"0001-01-01"}, "scope": {tc.scope}, "include_deleted": {tc.history}}
-			q.Set("session_id", "0")
-			if tc.scope == "session" {
-				q.Set("session_id", sid)
-			}
-			bounded := must(c.Get(t.Context(), "/metrics/Steps?"+q.Encode())) // retained alias
-			link := href(bounded, "all-readings")
-			expanded := must(c.Get(t.Context(), link))
-			assertRows(t, expanded, tc.want)
-			u, err := url.Parse(href(expanded, "self"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if u.Query().Get("all_history") != "1" || u.Query().Has("from") || u.Query().Get("scope") != tc.scope || u.Query().Get("include_deleted") != tc.history || u.Query().Get("session_id") != q.Get("session_id") {
-				t.Fatalf("history navigation=%s", u)
-			}
-			assertRows(t, must(c.Get(t.Context(), href(expanded, "self"))), tc.want)
-			assertRows(t, must(c.Get(t.Context(), href(expanded, "all-readings"))), tc.want)
-			if body := browse(t, h, link); !strings.Contains(body, "All history") {
-				t.Fatal("missing explicit history label")
-			}
-		})
+	// The all-readings link drops the lower bound and keeps the upper one; following it again changes nothing.
+	q := url.Values{"from": {"0000-12-31"}, "to": {"0001-01-01"}}
+	bounded := must(c.Get(t.Context(), "/metrics/Steps?"+q.Encode())) // retained alias
+	link := href(bounded, "all-readings")
+	expanded := must(c.Get(t.Context(), link))
+	assertRows(t, expanded, plain[:3])
+	u, err := url.Parse(href(expanded, "self"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.Query().Get("all_history") != "1" || u.Query().Has("from") || u.Query().Get("to") != "0001-01-01" {
+		t.Fatalf("history navigation=%s", u)
+	}
+	assertRows(t, must(c.Get(t.Context(), href(expanded, "self"))), plain[:3])
+	assertRows(t, must(c.Get(t.Context(), href(expanded, "all-readings"))), plain[:3])
+	if body := browse(t, h, link); !strings.Contains(body, "All history") {
+		t.Fatal("missing explicit history label")
 	}
 	// Explicit ranges retain their exclusive lower and inclusive upper limits.
-	bounded := must(c.Get(t.Context(), "/metrics/Stride%20count?from=0000-01-01&to=0000-02-29"))
+	bounded = must(c.Get(t.Context(), "/metrics/Stride%20count?from=0000-01-01&to=0000-02-29"))
 	rows := bounded.Properties.(map[string]any)["readings"].([]any)
 	if len(rows) != 1 || fmt.Sprint("/measurements/", rows[0].(map[string]any)["id"]) != plain[1] || fmt.Sprint(rows[0].(map[string]any)["value"]) != "11" {
 		t.Fatal("bounded range semantics changed")

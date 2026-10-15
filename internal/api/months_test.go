@@ -154,8 +154,6 @@ func TestTheCalendarHoldsEveryDatedThing(t *testing.T) {
 		do(root, "create-period", map[string]string{"title": p[0], "start_boundary": p[1], "end_boundary": p[2]})
 	}
 
-	do(root, "create-page", map[string]string{"title": "Run"})
-	do(root, "capture-session", map[string]string{"kind": "Run", "day": "2031-05-14", "start_local": "2031-05-14T07:30:00.000"})
 	do(root, "create-place", map[string]string{"title": "Lake Park"})
 	do(must(c.Get(ctx, hrefOf(day, "page"))), "link", map[string]string{"to": "Lake Park", "kind": "at"})
 	do(root, "add-file", map[string]string{"title": "Scan.pdf", "sha256": strings.Repeat("a", 64), "mime": "application/pdf", "day": "2031-05-14"})
@@ -170,7 +168,7 @@ func TestTheCalendarHoldsEveryDatedThing(t *testing.T) {
 		on := m["day"].(string)
 		for _, it := range anyItems(m["items"]) {
 			line := fmt.Sprintf("%v %v", it["kind"], it["title"])
-			for _, k := range []string{"state", "years", "boundary", "qualifier", "at"} {
+			for _, k := range []string{"state", "years", "boundary", "qualifier"} {
 				if v, ok := it[k]; ok {
 					line += fmt.Sprintf(" %s=%v", k, v)
 				}
@@ -181,9 +179,9 @@ func TestTheCalendarHoldsEveryDatedThing(t *testing.T) {
 			switch {
 			case err != nil:
 				t.Errorf("%s: %s: %v", on, it["href"], err)
-			case it["kind"] == "task" && e.Class[0] != "occurrence", it["kind"] == "session" && e.Class[0] != "session":
+			case it["kind"] == "task" && e.Class[0] != "occurrence":
 				t.Errorf("%s: %s is a %v", on, it["href"], e.Class)
-			case it["kind"] != "task" && it["kind"] != "session" && e.Title != it["title"]:
+			case it["kind"] != "task" && e.Title != it["title"]:
 				t.Errorf("%s: %s is %q, want %q", on, it["href"], e.Title, it["title"])
 			}
 		}
@@ -200,7 +198,7 @@ func TestTheCalendarHoldsEveryDatedThing(t *testing.T) {
 		"2031-05-06": {"task Water the plants state=done"},
 		"2031-05-10": {"task Call the bank state=open"},
 		"2031-05-13": {"task Water the plants state=skipped"},
-		"2031-05-14": {"task Pay rent state=open", "birthday Ana years=41", "session Run at=2031-05-14T07:30:00.000", "place Lake Park", "file Scan.pdf"},
+		"2031-05-14": {"task Pay rent state=open", "birthday Ana years=41", "place Lake Park", "file Scan.pdf"},
 		"2031-05-20": imports,
 		"2031-05-21": {"death Ion years=11"},
 		"2031-05-24": {"period Trip to Rome boundary=end"},
@@ -242,8 +240,8 @@ func TestTheCalendarHoldsEveryDatedThing(t *testing.T) {
 	for _, s := range []string{
 		// a cell: three items, each with a square the colour of a task's state, then the rest counted, the mood and
 		// the readings; a phone's squares
-		`<span class="item open">Pay rent</span><span class="item">Ana <small>birthday</small></span><span class="item">Run <small>07:30</small></span></span>`,
-		`<span class="marks" aria-hidden="true"><i class="open"></i><i></i><i></i><i></i></span><span class="more">and 2 more</span><span class="meta">mood 4 · 1 reading</span>`,
+		`<span class="item open">Pay rent</span><span class="item">Ana <small>birthday</small></span><span class="item">Lake Park <small>place</small></span></span>`,
+		`<span class="marks" aria-hidden="true"><i class="open"></i><i></i><i></i><i></i></span><span class="more">and 1 more</span><span class="meta">mood 4 · 1 reading</span>`,
 		`<span class="item overdue">Call the bank</span>`,
 		`<span class="item done">Water the plants</span>`,
 		`<span class="item">Study <small>starts</small></span>`,
@@ -255,7 +253,6 @@ func TestTheCalendarHoldsEveryDatedThing(t *testing.T) {
 		`>Ana</a> <small class="agenda-note">41 years</small>`,
 		`>Ion</a> <small class="agenda-note">11 years ago</small>`,
 		`>Study</a> <small class="agenda-note">approximate</small>`,
-		`<span class="tag">session</span> <a href="/sessions/`,
 		`<a href="/days/2031-05-20">and 1 more page</a>`,
 		// Periods: the placed ones with their boundaries, the possible one tagged, the incomparable one counted
 		`>Living in Berlin</a> <small class="agenda-note">2018-09 to ongoing</small>`,
@@ -273,7 +270,7 @@ func TestTheCalendarHoldsEveryDatedThing(t *testing.T) {
 	// A month with nothing says so: a fresh file's.
 	_, none := freshOn(t, fixedToday)
 	empty := browse(t, none, "/months/2031-08")
-	for _, s := range []string{"No task, session, page, place, birthday or period has a day in August 2031.", "No period falls in August 2031."} {
+	for _, s := range []string{"No task, page, place, birthday or period has a day in August 2031.", "No period falls in August 2031."} {
 		if !strings.Contains(empty, s) {
 			t.Errorf("an empty month lacks %q", s)
 		}

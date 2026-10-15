@@ -6,9 +6,8 @@ import (
 	"testing"
 )
 
-// TestMoodsReadTheCurrentMoodOfEachDay: the current readings of the Mood metric with no session, each day's in the
-// order they were recorded. A correction replaces its reading, a retraction removes it, and a reading of a session
-// is not the day's mood.
+// TestMoodsReadTheCurrentMoodOfEachDay: the current readings of the Mood metric, each day's in the order they were
+// recorded. A correction replaces its reading, and a retraction removes it.
 func TestMoodsReadTheCurrentMoodOfEachDay(t *testing.T) {
 	s := fresh(t)
 	mood := func(day string, v float64) {
@@ -34,19 +33,6 @@ func TestMoodsReadTheCurrentMoodOfEachDay(t *testing.T) {
 	}
 	mood("2026-10-12", 2)
 	if _, err := s.Correct(ctx, "cli", readingOf("2026-10-12"), nil); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, err := s.CreatePage(ctx, "cli", "Run", ""); err != nil {
-		t.Fatal(err)
-	}
-	var session int64
-	if err := s.Do(ctx, "cli", func(tx *Tx) (e error) {
-		session, _, e = tx.CaptureSession(SessionInput{Kind: "Run", Day: "2026-10-13", StartAt: "2026-10-13T06:00:00.000Z"})
-		return
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.Record(ctx, "cli", Reading{Metric: "Mood", Day: "2026-10-13", Value: 1, SessionID: session}); err != nil {
 		t.Fatal(err)
 	}
 	mood("2026-10-14", 3) // outside the window read below

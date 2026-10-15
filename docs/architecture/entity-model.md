@@ -76,11 +76,9 @@ one-off ownership relationship without storing the fixed key twice ([planning](.
 %% diagram: er-facts
 erDiagram
     entities    ||--o| metrics : "id"
-    entities ||--o{ sessions : "kind_id"
     entities |o--o{ tasks : "project_page_id"
     tasks ||--o{ task_occurrences : "task_id"
     task_occurrences |o--o| tasks : "id"
-    sessions |o--o{ measurements : "session_id"
     metrics     ||--o{ measurements : "metric_id"
     entities    |o--o{ measurements : "captured_with_id"
     measurements |o--o| measurements : "supersedes_id"
@@ -100,14 +98,8 @@ erDiagram
         INTEGER id PK
         INTEGER task_id FK
     }
-    sessions {
-        INTEGER id PK
-        INTEGER kind_id FK
-        TEXT kind_entity_type FK
-    }
     measurements {
         INTEGER id PK
-        INTEGER session_id FK
         INTEGER metric_id FK
         INTEGER captured_with_id FK
         INTEGER supersedes_id FK

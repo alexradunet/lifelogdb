@@ -42,20 +42,18 @@ func calendarDays(from, through string) []time.Time {
 }
 
 // Dated is a row the calendar shows on its day: a page that is not a day page and has the day (kind page, or file
-// for a file), a live place the live day page links with at (place), or a live session reported on the day
-// (session). ID is the page's, the place's or the session's; Title is a session's kind. At is a session's start as
-// it was recorded: an instant or a local clock. Pages is the count of the day's pages and files, on a page or a file.
+// for a file), or a live place the live day page links with at (place). ID is the page's or the place's. Pages is
+// the count of the day's pages and files, on a page or a file.
 type Dated struct {
 	Day   string
 	Kind  string
 	ID    int64
 	Title string
-	At    string
 	Pages int
 }
 
-// DatedIn are the dated rows from from through through, by day: the sessions in the order they were captured, the
-// places and the pages in the order of their titles, at most pagesPerDay pages and files a day.
+// DatedIn are the dated rows from from through through, by day: the places and the pages in the order of their
+// titles, at most pagesPerDay pages and files a day.
 func (s *Store) DatedIn(ctx context.Context, from, through string, pagesPerDay int) ([]Dated, error) {
 	if err := checkCalendarWindow(from, through); err != nil {
 		return nil, err
@@ -64,26 +62,20 @@ func (s *Store) DatedIn(ctx context.Context, from, through string, pagesPerDay i
 		return nil, Invalid("the dated rows need a limit of pages of 1 or more")
 	}
 	rows, err := s.DB.R.QueryContext(ctx, `
-		SELECT day, kind, id, title, at, n FROM (
+		SELECT day, kind, id, title, n FROM (
 		  SELECT p.day AS day, CASE p.entity_type WHEN 'file' THEN 'file' ELSE 'page' END AS kind, p.id AS id,
-		         p_name.title AS title, '' AS at, 2 AS rank, p.preferred_name_key AS sortkey,
+		         p_name.title AS title, 2 AS rank, p.preferred_name_key AS sortkey,
 		         row_number() OVER (PARTITION BY p.day ORDER BY p.preferred_name_key, p.id) AS r,
 		         count(*) OVER (PARTITION BY p.day) AS n
 		    FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
 		   WHERE p.day BETWEEN :from AND :through AND NOT p.is_journal AND p.deleted_at IS NULL
 		  UNION ALL
-		  SELECT d.day, 'place', pl.id, pl_name.title, '', 1, pl.preferred_name_key, 0, 0
+		  SELECT d.day, 'place', pl.id, pl_name.title, 1, pl.preferred_name_key, 0, 0
 		    FROM entities d
 		    JOIN links l ON l.from_id = d.id AND l.kind = 'at'
 		    JOIN entities pl ON pl.id = l.to_id AND pl.deleted_at IS NULL
 		    JOIN entity_names pl_name ON pl_name.entity_id = pl.id AND pl_name.name_key = pl.preferred_name_key
 		   WHERE d.is_journal AND d.day BETWEEN :from AND :through AND d.deleted_at IS NULL
-		  UNION ALL
-		  SELECT s.day, 'session', s.id, k_name.title, coalesce(s.start_at, s.start_local), 0, printf('%020d', s.id), 0, 0
-		    FROM sessions s
-		    JOIN entities k ON k.id = s.kind_id
-		    JOIN entity_names k_name ON k_name.entity_id = k.id AND k_name.name_key = k.preferred_name_key
-		   WHERE s.day BETWEEN :from AND :through AND s.deleted_at IS NULL
 		) WHERE r <= :cap
 		ORDER BY day, rank, sortkey, id`,
 		sql.Named("from", from), sql.Named("through", through), sql.Named("cap", pagesPerDay))
@@ -94,7 +86,7 @@ func (s *Store) DatedIn(ctx context.Context, from, through string, pagesPerDay i
 	out := []Dated{}
 	for rows.Next() {
 		var d Dated
-		if err := rows.Scan(&d.Day, &d.Kind, &d.ID, &d.Title, &d.At, &d.Pages); err != nil {
+		if err := rows.Scan(&d.Day, &d.Kind, &d.ID, &d.Title, &d.Pages); err != nil {
 			return nil, err
 		}
 		out = append(out, d)

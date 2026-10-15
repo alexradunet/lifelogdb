@@ -24,15 +24,6 @@ func code(err error) string {
 func TestStaleVersionIsTheSameCodeOnEveryResource(t *testing.T) {
 	c, _ := fresh(t)
 	root := must(c.Get(t.Context(), "/"))
-	kind := must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Sleep"}))
-	_ = kind
-	session := must(c.Do(t.Context(), find(root, "capture-session"), map[string]string{"kind": "Sleep", "day": "2026-10-01", "start_at": "2026-10-01T22:00:00.000Z"}))
-	edit := find(session, "edit-session")
-	must(c.Do(t.Context(), edit, map[string]string{"day": "2026-10-02"}))
-	if _, err := c.Do(t.Context(), edit, map[string]string{"day": "2026-10-03"}); code(err) != "stale_version" {
-		t.Errorf("a session edited with an old version: code %q, want stale_version (%v)", code(err), err)
-	}
-
 	task := must(c.Do(t.Context(), find(root, "create-task"), map[string]string{"label": "Water the plants"}))
 	stop := find(task, "edit-task")
 	must(c.Do(t.Context(), stop, map[string]string{"label": "Water the plants well"}))

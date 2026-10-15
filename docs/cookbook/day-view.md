@@ -24,9 +24,9 @@ SELECT what, at, detail FROM (
    WHERE d.preferred_name_key = :day AND d.day = :day AND d.deleted_at IS NULL
   UNION ALL
   SELECT 'habit', NULL, m.title || ': ' ||
-         CASE WHEN EXISTS (SELECT 1 FROM measurement_values v WHERE v.metric_id = e.id AND v.day = :day AND v.session_id IS NULL AND v.value NOT IN (0, 1))
+         CASE WHEN EXISTS (SELECT 1 FROM measurement_values v WHERE v.metric_id = e.id AND v.day = :day AND v.value NOT IN (0, 1))
            THEN 'invalid'
-           ELSE CASE (SELECT max(v.value) FROM measurement_values v WHERE v.metric_id = e.id AND v.day = :day AND v.session_id IS NULL)
+           ELSE CASE (SELECT max(v.value) FROM measurement_values v WHERE v.metric_id = e.id AND v.day = :day)
              WHEN 1 THEN 'done' WHEN 0 THEN 'not done' ELSE 'not recorded' END END
     FROM habit_periods h JOIN entities e ON e.id = h.metric_id AND e.deleted_at IS NULL
     JOIN entity_names m ON m.entity_id = e.id AND m.name_key = e.preferred_name_key
@@ -36,7 +36,7 @@ SELECT what, at, detail FROM (
     FROM measurement_values me JOIN metrics m ON m.id = me.metric_id
     JOIN entities e ON e.id = m.id AND e.deleted_at IS NULL
     JOIN entity_names p ON p.entity_id = e.id AND p.name_key = e.preferred_name_key
-   WHERE me.day = :day AND me.session_id IS NULL
+   WHERE me.day = :day
      AND NOT EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = me.metric_id
                         AND h.start_day <= :day AND coalesce(h.end_day, '9999-12-31') >= :day)
 )

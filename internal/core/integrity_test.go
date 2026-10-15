@@ -57,10 +57,8 @@ func (c *integrityConn) QueryContext(_ context.Context, query string, _ []driver
 		check = "journal name ownership"
 	} else if strings.Contains(query, "SELECT l.id FROM links") {
 		check = "typed link endpoints"
-	} else if strings.Contains(query, "SELECT s.id FROM sessions") {
-		check = "session kind endpoints"
 	} else if strings.Contains(query, "SELECT m.id FROM measurements") {
-		check = "measurement scopes"
+		check = "measurement corrections"
 	} else if strings.Contains(query, "SELECT t.id FROM tasks t LEFT") {
 		check = "task project endpoints"
 	} else if strings.Contains(query, "SELECT t.id FROM tasks t WHERE") {
@@ -151,7 +149,7 @@ func faultIntegrityStore(t *testing.T, c *integrityConnector) *Store {
 	return &Store{DB: &db.DB{R: d, W: d}}
 }
 func TestIntegrityReadFailures(t *testing.T) {
-	for i, check := range []string{"integrity_check", "foreign_key_check", "orphan entities", "typed link endpoints", "session kind endpoints", "measurement scopes", "task project endpoints", "one-off task ownership", "task occurrence membership", "symmetric link pairs", "measurement correction chains", "habit period semantics", "habit reading values", "journal name ownership"} {
+	for i, check := range []string{"integrity_check", "foreign_key_check", "orphan entities", "typed link endpoints", "measurement corrections", "task project endpoints", "one-off task ownership", "task occurrence membership", "symmetric link pairs", "measurement correction chains", "habit period semantics", "habit reading values", "journal name ownership"} {
 		for _, fault := range []string{"query", "late", "scan", "close", "scan-close"} {
 			t.Run(check+"/"+fault, func(t *testing.T) {
 				c := &integrityConnector{check: check, fault: fault}
@@ -184,7 +182,7 @@ func TestIntegrityResultSemantics(t *testing.T) {
 			if r.OK != (fault == "") || r.FullTextIndexOK != (fault == "") || (r.FullTextError != "") != (fault == "fts") || len(r.IntegrityCheck) != 1 || r.IntegrityCheck[0] != "ok" || r.ForeignKeys != 0 || len(r.OrphanEntities) != 0 || len(r.InvalidTaskProjects) != 0 || len(r.InvalidOneOffTasks) != 0 || len(r.InvalidTaskOccurrences) != 0 {
 				t.Errorf("unexpected result: %+v", r)
 			}
-			if c.closed != 14 || c.execs != 1 {
+			if c.closed != 13 || c.execs != 1 {
 				t.Errorf("closed=%d execs=%d", c.closed, c.execs)
 			}
 		})
@@ -192,7 +190,7 @@ func TestIntegrityResultSemantics(t *testing.T) {
 }
 
 func TestIntegrityDiagnostics(t *testing.T) {
-	for _, check := range []string{"integrity_check", "foreign_key_check", "orphan entities", "typed link endpoints", "session kind endpoints", "measurement scopes", "task project endpoints", "one-off task ownership", "task occurrence membership", "symmetric link pairs", "measurement correction chains", "habit period semantics", "habit reading values", "journal name ownership"} {
+	for _, check := range []string{"integrity_check", "foreign_key_check", "orphan entities", "typed link endpoints", "measurement corrections", "task project endpoints", "one-off task ownership", "task occurrence membership", "symmetric link pairs", "measurement correction chains", "habit period semantics", "habit reading values", "journal name ownership"} {
 		t.Run(check, func(t *testing.T) {
 			c := &integrityConnector{check: check, fault: "diagnostic"}
 			r, err := faultIntegrityStore(t, c).Integrity(context.Background())
@@ -215,13 +213,9 @@ func TestIntegrityDiagnostics(t *testing.T) {
 				if len(r.InvalidTypedLinks) != 1 || r.InvalidTypedLinks[0] != 42 {
 					t.Errorf("typed-link diagnostic lost: %+v", r)
 				}
-			case "session kind endpoints":
-				if len(r.InvalidSessionKinds) != 1 || r.InvalidSessionKinds[0] != 42 {
-					t.Errorf("session-kind diagnostic lost: %+v", r)
-				}
-			case "measurement scopes":
-				if len(r.InvalidMeasurementScopes) != 1 || r.InvalidMeasurementScopes[0] != 42 {
-					t.Errorf("scope diagnostic lost: %+v", r)
+			case "measurement corrections":
+				if len(r.InvalidMeasurementCorrections) != 1 || r.InvalidMeasurementCorrections[0] != 42 {
+					t.Errorf("correction diagnostic lost: %+v", r)
 				}
 			case "task project endpoints":
 				if len(r.InvalidTaskProjects) != 1 || r.InvalidTaskProjects[0] != 42 {
@@ -260,7 +254,7 @@ func TestIntegrityDiagnostics(t *testing.T) {
 					t.Errorf("orphan diagnostic lost: %+v", r)
 				}
 			}
-			if c.closed != 14 || c.execs != 1 {
+			if c.closed != 13 || c.execs != 1 {
 				t.Errorf("closed=%d execs=%d", c.closed, c.execs)
 			}
 		})

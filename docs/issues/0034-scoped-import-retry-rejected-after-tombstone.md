@@ -16,7 +16,7 @@ Record a non-NULL reading with a source/import key and session, tombstone the se
 
 ## Rules involved
 
-[Imports](../contract/imports.md), [measurement scope](../contract/measurement-scope.md), `measurements_session_live` and [D7](../decisions/D07-measurements.md).
+[Imports](../contract/imports.md), measurement scope (removed by RFC 0013), `measurements_session_live` and [D7](../decisions/D07-measurements.md).
 
 ## Resolution
 

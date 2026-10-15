@@ -217,12 +217,10 @@ ul.plain{list-style:none; margin:0; padding:0;
   padding:10px var(--space-1); border-block-end:1px solid var(--line-soft); color:var(--text);
   &:hover{background:var(--surface-deep); color:var(--text); text-decoration:none}
   & .first{min-inline-size:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-  &.unwritten{color:var(--text-muted)}
-  /* A note of an entry (a session's evidence) is a line under its words. */
-  &>.note{grid-column:2 / -1}}
-@container column (max-width:487px){.entry{grid-template-columns:minmax(0,1fr) auto} .entry>.date,.entry>.note{grid-column:1 / -1}}
+  &.unwritten{color:var(--text-muted)}}
+@container column (max-width:487px){.entry{grid-template-columns:minmax(0,1fr) auto} .entry>.date{grid-column:1 / -1}}
 .margin .entry{grid-template-columns:minmax(0,1fr) auto;
-  &>.date,& .note{grid-column:1 / -1}}
+  &>.date{grid-column:1 / -1}}
 /* An entry in a list item: the item draws the line, the entry the padding, so a row has one of each. */
 li>a.entry{border-block-end:0}
 

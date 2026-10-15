@@ -131,14 +131,6 @@ func resultSentences(m map[string]any, c clock) []resultLine {
 		say("Shown on its day page.")
 	}
 
-	// relocate-reading.
-	if r, ok := take("retraction_id"); ok {
-		say(`Retracted the old scope: <a href="/measurements/%s">reading %s</a>.`, num(r), num(r))
-	}
-	if r, ok := take("replacement_id"); ok {
-		say(`The replacement is <a href="/measurements/%s">reading %s</a>.`, num(r), num(r))
-	}
-
 	// readings-from-table.
 	if n, ok := take("written"); ok {
 		say("Wrote %s.", count(n, "reading", "readings"))

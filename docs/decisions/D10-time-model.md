@@ -27,9 +27,7 @@
   Provenance (`source`, `lifelog_meta.source`) is a column for the same reason as the zone: only the moment of writing
   knows it, and with agents among the writers ([D3](D03-integer-ids.md)) it identifies the original inserting writer.
   It does not identify later editors of mutable content ([D12](D12-no-revision-tables.md)).
-- **Recorded-session evidence** is separate from exact write instants: [session time](../contract/session-time.md)
-  preserves unresolved local clocks and unverified zone labels, without host-zone inference. Reporting days are
-  independent attribution, not inferred from endpoints. Period boundaries use a separate [profile](../contract/period-boundaries.md).
+- **Period boundaries** are separate from exact write instants: they use their own [profile](../contract/period-boundaries.md).
 - **Planning time** retains a calendar deadline independently of reminder delivery. A reminder zone is a chosen
   scheduling basis, not evidence of location. The [planning profile](../contract/planning.md) specifies clock
   resolution and preserves unknown completion time without inventing an instant.

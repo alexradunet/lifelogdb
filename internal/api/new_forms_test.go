@@ -25,7 +25,6 @@ func TestEveryKindOfTheNewMenuOpensItsForm(t *testing.T) {
 		{"Reading", "/metrics", ""},
 		{"File", "/files?new=add-file", "add-file"},
 		{"Period", "/periods?new=create-period", "create-period"},
-		{"Session", "/sessions?new=capture-session", "capture-session"},
 	} {
 		link := regexp.MustCompile(`<a href="` + regexp.QuoteMeta(strings.ReplaceAll(kind.href, "&", "&amp;")) + `">(<svg[^>]*>.*?</svg>)?` + kind.title + `</a>`)
 		if !link.MatchString(menu) {
@@ -45,8 +44,8 @@ func TestEveryKindOfTheNewMenuOpensItsForm(t *testing.T) {
 			}
 		}
 	}
-	if strings.Count(menu, "<li>") != 9 {
-		t.Errorf("the New menu has %d items, want 9", strings.Count(menu, "<li>"))
+	if strings.Count(menu, "<li>") != 8 {
+		t.Errorf("the New menu has %d items, want 8", strings.Count(menu, "<li>"))
 	}
 }
 
@@ -93,9 +92,9 @@ func TestTheCatalogSaysOneVerbForOneMeaning(t *testing.T) {
 	}
 	for name, want := range map[string]string{
 		"create-page": "New page", "create-person": "New person", "create-place": "New place", "create-task": "New task",
-		"register-metric": "New metric", "add-file": "New file", "create-period": "New period", "capture-session": "New session",
+		"register-metric": "New metric", "add-file": "New file", "create-period": "New period",
 		"record": "Add a reading", "capture-occurrence": "Add an occurrence", "link": "Add a link", "capture": "Add to the day",
-		"unlink": "Remove a link", "revive": "Restore", "revive-task": "Restore task", "revive-session": "Restore session",
+		"unlink": "Remove a link", "revive": "Restore", "revive-task": "Restore task",
 		"revive-occurrence": "Restore occurrence", "file-pages": "Put in a category",
 	} {
 		if titles[name] != want {

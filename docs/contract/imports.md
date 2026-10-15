@@ -44,7 +44,7 @@ DETACH s;
    (a Health Connect record's id; a note's path in its vault). A source without ids gets a key built from
    fields it never changes (a note's file name, the day of a reading) — and a change to one of them then
    looks like a new row. **A key is 1 to 512 bytes without NUL** (`entities_import_key` and the same CHECK on
-   `sessions`, `tasks`, `task_occurrences` and `measurements`): the empty string is refused, not stored —
+   `tasks`, `task_occurrences` and `measurements`): the empty string is refused, not stored —
    it would enter the unique index, and every later row of the source would be skipped as imported before.
    A source key that can be longer is hashed by the importer, the same way on every run: the key becomes `sha256:`
    followed by the 64 lowercase hexadecimal digits of the SHA-256 of the key's exact bytes (71 bytes in all). A key
@@ -66,9 +66,7 @@ DETACH s;
    **On any statement or commit error, the writer stops and explicitly rolls back the whole batch.**
    SQLite's ordinary constraint `ABORT` undoes the failing statement, including its trigger effects,
    but leaves earlier statements and the transaction active (executed). Do not continue to `COMMIT`
-   after an error. Fix the data and run the batch again. An admitted scoped reading requires a live
-   session; a skipped retry retains its existing row even after that session is tombstoned
-   ([measurement scope](measurement-scope.md), executed).
+   after an error. Fix the data and run the batch again.
 5. **Check afterwards:** the four checks of [integrity checks](integrity-checks.md), per-source counts (`SELECT source, count(*),
    min(day), max(day) FROM measurements GROUP BY source`), and **run the importer a second time — it
    must insert nothing.**

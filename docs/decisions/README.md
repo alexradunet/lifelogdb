@@ -27,7 +27,7 @@ reused, and a decision that changes is rewritten in place (git is its history).
 | [D19](D19-wikilink-save-contract.md) | The wikilink save contract: one transaction, links follow the body, a bad target never blocks a save. | accepted |
 | [D20](D20-named-pages.md) | A person or a place is a page: one id, and `[[Name]]` reaches it directly. | accepted |
 | [D21](D21-location-history.md) | Location: a place has a point and a radius; a photo's place becomes an `at` link when it is kept; no track. | accepted |
-| [D22](D22-events.md) | Recorded life periods and independent sessions, not a generic event framework | accepted |
+| [D22](D22-events.md) | Recorded life periods, not a generic event framework | accepted |
 | [D23](D23-no-tasks.md) | Explicit personal tasks, with projects as context pages. | accepted |
 | [D24](D24-habits.md) | Habits: a metric with active periods. | accepted |
 | [D25](D25-snapshots.md) | Snapshots: a dated `VACUUM INTO` copy, trusted once its restore check passes. | accepted |

@@ -475,7 +475,7 @@ func verify(ctx context.Context, s *core.Store, f *fixture) error {
 		return err
 	}
 	for i, name := range metricNames {
-		got, err := s.SeriesHistory(ctx, name, "9999-12-31", core.Scope{Kind: "unassociated"})
+		got, err := s.SeriesHistory(ctx, name, "9999-12-31")
 		if err != nil {
 			return err
 		}
@@ -578,7 +578,7 @@ func checkSeries(got []core.Reading, want []expected) error {
 	}
 	for i, r := range got {
 		w := want[i]
-		if r.ID != w.id || r.Day != w.day || r.Value != w.value || r.SessionID != 0 {
+		if r.ID != w.id || r.Day != w.day || r.Value != w.value {
 			return fmt.Errorf("series row %d got %+v want %+v", i, r, w)
 		}
 	}
@@ -698,7 +698,7 @@ func exercise(ctx context.Context, s *core.Store, f *fixture, samples int, repor
 		var series []core.Reading
 		if err := record(report, "historical_metric_series", func() error {
 			var e error
-			series, e = s.SeriesHistory(ctx, metricNames[0], "9999-12-31", core.Scope{Kind: "unassociated"})
+			series, e = s.SeriesHistory(ctx, metricNames[0], "9999-12-31")
 			return e
 		}); err != nil {
 			return err

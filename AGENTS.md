@@ -15,7 +15,7 @@ where the owner was, health readings, and the files the owner keeps — as their
 original left outside ([D9](docs/decisions/D09-binary-files.md)). Explicit tasks and occurrences preserve personal
 planning and reminder intent; ordinary pages provide project context ([D23](docs/decisions/D23-no-tasks.md),
 [planning](docs/contract/planning.md)). A plan written in a note stays text unless explicitly captured as a task.
-Recorded periods and sessions follow [D22](docs/decisions/D22-events.md); money and a location track remain deferred
+Recorded periods follow [D22](docs/decisions/D22-events.md); money and a location track remain deferred
 ([D18](docs/decisions/D18-money.md), [D21](docs/decisions/D21-location-history.md)). A proposal that adds project
 workflows, notification delivery or a finance ledger needs a real incident and the owner's word first.
 Any developer, in any language, may
@@ -163,7 +163,7 @@ schema is frozen ([D13](docs/decisions/D13-migrations-and-freeze.md)):
   without further work; a shortcut on one surface (`lifelog capture`, a dedicated HTML view) wraps an action, never
   replaces or extends it. A feature that exists on one surface only is a defect, not a convenience. The only
   differences allowed are the ones the README names and tests assert: owner-only actions (`register-metric`,
-  `relocate-reading`, `snapshot`) are refused to an `agent:*` or `import:*` writer and are never MCP tools.
+  `snapshot`) are refused to an `agent:*` or `import:*` writer and are never MCP tools.
 - **Contexts and ownership.** Pass the operation's `context.Context` explicitly, first, through blocking calls and SQL.
   Do not replace a request context with `Background` to evade cancellation, or use context values as dependency bags.
   Prefer synchronous APIs. Every goroutine needs an owner, bounded work, a shutdown path and a way to await completion;
@@ -332,7 +332,7 @@ Their homes are in `docs/`; this list is the checklist, not the rule.
 - **Links**: a closed, endpoint-typed `link_kinds` registry (D8).
 - **Names and journal identity**: use [titles and wikilinks](docs/contract/titles-and-wikilinks.md), its vectors,
   and [D5](docs/decisions/D05-pages-and-day-pages.md). Check preferred-name changes, retained aliases and journal
-  reservations against those rules. Recorded sessions and periods follow [D22](docs/decisions/D22-events.md);
+  reservations against those rules. Recorded periods follow [D22](docs/decisions/D22-events.md);
   habits follow [D24](docs/decisions/D24-habits.md).
 - **Connections** ([connection setup](docs/contract/connections.md)): one writing application per file; per connection
   `PRAGMA foreign_keys=ON`, `recursive_triggers=ON`, `synchronous=FULL`, `trusted_schema=OFF` (the first three read back and refused

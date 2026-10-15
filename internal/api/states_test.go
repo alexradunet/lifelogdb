@@ -81,7 +81,7 @@ func TestAnOwnerActionCarriesTheOwnerMark(t *testing.T) {
 	}
 }
 
-// TestNoPageShowsARawInstant: a page, a task, an occurrence, a reading and a session say their times in words; the
+// TestNoPageShowsARawInstant: a page, a task, an occurrence and a reading say their times in words; the
 // exact instant stays only in an attribute (the <time> element's, or a form's value).
 func TestNoPageShowsARawInstant(t *testing.T) {
 	c, h := freshOn(t, fixedToday)
@@ -92,11 +92,10 @@ func TestNoPageShowsARawInstant(t *testing.T) {
 	occ := must(c.Do(t.Context(), find(must(c.Get(t.Context(), taskHref+"/occurrences/once")), "edit-occurrence"), map[string]string{"state": "done", "completed_at": "now"}))
 	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
 	reading := must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "weight", "day": fixedToday, "value": "71.1", "taken_at": fixedToday + "T06:00:00.000Z"}))
-	session := must(c.Do(t.Context(), find(root, "capture-session"), map[string]string{"kind": "Garden project", "day": fixedToday, "start_at": fixedToday + "T05:00:00.000Z"}))
 
 	attributes := regexp.MustCompile(`(datetime|title|value)="[^"]*"`)
 	instant := regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z`)
-	for _, path := range []string{href(p, "self"), taskHref, hrefOf(occ, "self"), href(reading, "self"), href(session, "self"), "/sessions"} {
+	for _, path := range []string{href(p, "self"), taskHref, hrefOf(occ, "self"), href(reading, "self")} {
 		body := browse(t, h, path)
 		if raw := instant.FindString(attributes.ReplaceAllString(body, "")); raw != "" {
 			t.Errorf("%s shows the raw instant %s", path, raw)
@@ -104,9 +103,6 @@ func TestNoPageShowsARawInstant(t *testing.T) {
 		if !strings.Contains(body, "<time datetime=") {
 			t.Errorf("%s says no time in words", path)
 		}
-	}
-	if body := browse(t, h, href(session, "self")); !strings.Contains(body, `<dl class="facts">`) {
-		t.Error("a session's properties are not facts")
 	}
 }
 

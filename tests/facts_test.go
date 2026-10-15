@@ -227,17 +227,13 @@ func measurementQueryPlan(s *S) {
 
 func retainedReferencePlans(s *S) {
 	c := s.fresh()
-	kind := c.page("Recorded kind")
 	capture := c.page("Capture context")
-	c.must("INSERT INTO sessions(id,kind_id,day,start_at,source,created_at,updated_at) VALUES(1,?,'2026-01-01','2026-01-01T00:00:00.000Z','ui',"+NOW+","+NOW+")", kind)
-	c.must("INSERT INTO measurements(metric_id,session_id,captured_with_id,day,value,source,created_at) VALUES(1,1,?,'2026-01-01',3,'ui',"+NOW+")", capture)
+	c.must("INSERT INTO measurements(metric_id,captured_with_id,day,value,source,created_at) VALUES(1,?,'2026-01-01',3,'ui',"+NOW+")", capture)
 	for _, probe := range []struct {
 		index, q string
 		id       int64
 	}{
-		{"sessions_kind", "SELECT count(*) FROM sessions WHERE kind_id=?", kind},
 		{"measurements_capture", "SELECT count(*) FROM measurements WHERE captured_with_id=?", capture},
-		{"measurements_session", "SELECT count(*) FROM measurement_values WHERE session_id=?", 1},
 	} {
 		plan := c.plan(probe.q, probe.id)
 		s.K(probe.index+" supports retained reference lookup", strings.Contains(plan, "SEARCH") && strings.Contains(plan, probe.index), plan)
@@ -245,5 +241,5 @@ func retainedReferencePlans(s *S) {
 		s.K(probe.index+" lookup handles an absent reference", c.n(probe.q, int64(999999)) == 0)
 	}
 	plan := c.plan("SELECT count(*) FROM ghost_pages")
-	s.K("ghost reference probes use both retained reference indexes", strings.Contains(plan, "sessions_kind") && strings.Contains(plan, "measurements_capture"), plan)
+	s.K("ghost reference probes use the retained capture index", strings.Contains(plan, "measurements_capture"), plan)
 }

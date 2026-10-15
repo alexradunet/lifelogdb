@@ -116,7 +116,7 @@ func checkVersion(what, have, want string) error {
 }
 
 // IsOwner reports a writer that is the owner: not an agent (agent:*) and not an import (import:*). The owner-only
-// actions (register-metric, relocate-reading, snapshot) are refused to any other writer, on every surface.
+// actions (register-metric, snapshot) are refused to any other writer, on every surface.
 func IsOwner(source string) bool {
 	return !strings.HasPrefix(source, "agent:") && !strings.HasPrefix(source, "import:")
 }

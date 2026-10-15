@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"lifelog/internal/core"
 )
 
 func schemaSafeguards(s *S) {
@@ -93,30 +92,19 @@ func referencedGhosts(s *S) {
 	store := c.store()
 	ctx := context.Background()
 	// Insert already-old synthetic identities, then capture through the writer.
-	kind := c.page("Sleep")
 	c.dayPage("2020-01-02", "")
-	err := store.Do(ctx, "cli", func(tx *core.Tx) error {
-		_, _, e := tx.CaptureSession(core.SessionInput{Kind: "Sleep", Day: "2020-01-01", StartAt: "2020-01-01T00:00:00.000Z"})
-		return e
-	})
-	if err != nil {
-		stop("ghost session: %v", err)
-	}
 	mood := float64(3)
 	day, _, err := store.Capture(ctx, "cli", "2020-01-02", "", &mood)
 	if err != nil {
 		stop("ghost mood capture: %v", err)
 	}
 	unused := c.page("Unused typo")
-	s.K("ghost pages exclude retained session kinds", c.n("SELECT count(*) FROM ghost_pages WHERE id=?", kind) == 0)
 	s.K("ghost pages exclude measurement capture provenance", c.n("SELECT count(*) FROM ghost_pages WHERE id=?", day) == 0)
 	s.K("ghost pages retain unused empty page control", c.n("SELECT count(*) FROM ghost_pages WHERE id=?", unused) == 1)
-	c.must("UPDATE sessions SET deleted_at="+NOW+" WHERE kind_id=?", kind)
 	reading := c.n("SELECT id FROM measurements WHERE captured_with_id=?", day)
 	if _, err := store.Correct(ctx, "cli", reading, nil); err != nil {
 		stop("ghost retraction: %v", err)
 	}
-	s.K("ghost pages retain historical session references", c.n("SELECT count(*) FROM ghost_pages WHERE id=?", kind) == 0)
 	s.K("ghost pages retain retracted capture provenance", c.n("SELECT count(*) FROM ghost_pages WHERE id=?", day) == 0)
 }
 

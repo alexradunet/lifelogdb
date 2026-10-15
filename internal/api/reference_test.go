@@ -35,13 +35,11 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		"titles":                            map[string]any{"prefix": "", "limit": 0, "titles": []core.TitleMatch{}},
 		"page, person, place, file, period": core.Page{},
 		"measurement":                       core.Measurement{},
-		"series": map[string]any{"metric": "", "from": "", "to": "", "readings": []core.Reading{}, "habit_periods": []core.HabitPeriod{}, "categories": []string{}, "scope": "", "session_id": int64(0), "include_deleted": false, "all_history": false,
+		"series": map[string]any{"metric": "", "from": "", "to": "", "readings": []core.Reading{}, "habit_periods": []core.HabitPeriod{}, "categories": []string{}, "all_history": false,
 			"id": int64(0), "unit": "", "body": "", "links": []core.Edge{}, "backlinks": []core.Edge{}},
 		"metrics": map[string]any{"metrics": []metricRow{}, "groups": []metricGroup{}, "categories": []core.Category{}, "today": "",
 			"habit_days": []habitView{}},
 		"habits":     map[string]any{"day": "", "habits": []core.HabitState{}, "from": "", "to": "", "completion": []core.Completion{}},
-		"sessions":   map[string]any{"sessions": []core.Session{}, "include_deleted": false, "order": ""},
-		"session":    core.Session{},
 		"periods":    map[string]any{"periods": []core.LifePeriod{}, "day": "", "as_of": "", "membership_basis": "", "include_deleted": false},
 		"tasks":      map[string]any{"tasks": []core.Task{}, "include_deleted": false},
 		"task":       map[string]any{"task": core.Task{}, "from": "", "through": "", "include_deleted": false, "occurrences": []occurrenceView{}, "today": "", "once": occurrenceView{}},
@@ -55,7 +53,6 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		"login":      map[string]any{"failed": false, "logged_in": false},
 		"result of capture, create-page, save-body": core.Sync{},
 		"result of add-file":                        core.Kept{},
-		"result of relocate-reading":                core.ScopeRelocation{},
 		"result of ask":                             Answer{},
 		"conversation": map[string]any{"day": "", "id": int64(0), "title": "", "version": "", "created_at": "", "preamble": "", "turns": []Turn{},
 			"compacted": false, "previous": PreviousConversation{}},
@@ -97,7 +94,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		{"day", "/days/2031-05-01"}, {"page, person, place, file, period", ids["page"]}, {"page, person, place, file, period", ids["person"]},
 		{"page, person, place, file, period", ids["place"]}, {"page, person, place, file, period", ids["file"]}, {"page, person, place, file, period", ids["period"]},
 		{"measurement", ids["measurement"]}, {"series", "/metrics/Weight"}, {"metrics", "/metrics"}, {"habits", "/habits?day=2031-05-01"},
-		{"sessions", "/sessions"}, {"session", ids["session"]}, {"periods", "/periods?day=2031-05-01"}, {"integrity", "/integrity"},
+		{"periods", "/periods?day=2031-05-01"}, {"integrity", "/integrity"},
 		{"month", "/months/2031-05"}, {"week", "/weeks/2031-W18"}, {"year", "/years/2031"}, {"titles", "/titles?prefix=s"}, {"tasks", "/tasks"}, {"task", ids["task"]}, {"occurrence", ids["task"] + "/occurrences/once"}, {"deadlines", "/deadlines?from=2031-05-01&through=2031-05-31"},
 	}
 	named := func(section, key string) bool { // a list is documented as "name[]"
@@ -302,14 +299,6 @@ func fixture(t *testing.T) (http.Handler, *core.Store, map[string]string) {
 		t.Fatalf("create-period: %d %.300s", rec.Code, rec.Body.String())
 	}
 	ids["period"] = rec.Header().Get("Location")
-	req = httptest.NewRequest("POST", "/sessions", strings.NewReader("kind=A+note&day=2031-05-01&start_at=2031-05-01T08:00:00.000Z&end_at=2031-05-01T09:00:00.000Z"))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	if rec.Code != 200 {
-		t.Fatalf("capture-session: %d %.300s", rec.Code, rec.Body.String())
-	}
-	ids["session"] = rec.Header().Get("Location")
 	req = httptest.NewRequest("POST", "/tasks", strings.NewReader("label=Plant+beans&project=A+note&due_day=2031-05-02"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec = httptest.NewRecorder()

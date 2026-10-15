@@ -97,7 +97,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   Skip, or Reopen; a habit's check-in is Done and Not done. These are properties and actions of the entities, so every
   client gets them ([API.md](API.md)). `/months/{YYYY-MM}` is the calendar of a month (each day, whether it has a
   page, its first line, its mood and its readings, and every other thing that names the day: the work due on it, a
-  birthday or a death each year, a period boundary, a session, a place, a page or a file; under the calendar, Day by
+  birthday or a death each year, a period boundary, a place, a page or a file; under the calendar, Day by
   day links each one and Periods says what the month falls in: [plan 101](docs/plans/101-the-calendar-holds-every-dated-thing.md)),
   and the catalog action `open-day` goes to a day by its date. The handler reads
   today from one clock, which a test fixes. The day and the root carry `on_this_day`, the day pages of the same date
@@ -223,7 +223,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   page: Record first (Check in while it is a habit), its readings newest first in a fold a year, and, as a metric is
   a page (D27), its page's text, links, backlinks and actions, taken from the page's own entity. Its readings are
   `(from, to]`; with no `from`, every admitted day through `to`, on every surface (`all_history=1` says the same and
-  allows no `from`), preserving scope/session and `include_deleted`. The All readings link leads a window back to the
+  allows no `from`). The All readings link leads a window back to the
   whole. In a browser, the page of a live metric (`/pages/{id}`) answers 303 to it, with its feedback; JSON keeps
   the page.
 - **Read-only queries.** `POST /query` runs one allowed read statement (`SELECT`, `WITH`, `VALUES`, `EXPLAIN` of
@@ -246,7 +246,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   `lifelog mcp --agent NAME` on that `life.db` with absolute paths. A file with another text is kept unless
   `--force`; run it again after the folder moves. Like `init`, it is a setup command of the machine, not a catalog
   action: it writes files beside the program.
-- **Owner-only actions.** `register-metric`, `relocate-reading` and `snapshot` are refused to an `agent:*` or `import:*` writer and
+- **Owner-only actions.** `register-metric` and `snapshot` are refused to an `agent:*` or `import:*` writer and
   are never MCP tools. An agent that imports with the owner asks for them in the conversation.
 - **A conversation with lifelog** ([plan 102](docs/plans/102-a-conversation-with-lifelog.md)). `ask` is an action of
   the catalog, so it is on every surface: `lifelog ask`, the MCP tool `ask`, the form on Home and on the chat page.

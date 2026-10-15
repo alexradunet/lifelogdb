@@ -15,9 +15,9 @@ UPDATE habit_periods SET end_day = :day
 
 -- the habits of :day: done, not done, not recorded, or invalid data
 SELECT m.title,
-       CASE WHEN EXISTS (SELECT 1 FROM measurement_values v WHERE v.metric_id = e.id AND v.day = :day AND v.session_id IS NULL AND v.value NOT IN (0, 1))
+       CASE WHEN EXISTS (SELECT 1 FROM measurement_values v WHERE v.metric_id = e.id AND v.day = :day AND v.value NOT IN (0, 1))
          THEN 'invalid'
-         ELSE CASE (SELECT max(v.value) FROM measurement_values v WHERE v.metric_id = e.id AND v.day = :day AND v.session_id IS NULL)
+         ELSE CASE (SELECT max(v.value) FROM measurement_values v WHERE v.metric_id = e.id AND v.day = :day)
            WHEN 1 THEN 'done' WHEN 0 THEN 'not done' ELSE 'not recorded' END END AS state
   FROM habit_periods h JOIN entities e ON e.id = h.metric_id AND e.deleted_at IS NULL
   JOIN entity_names m ON m.entity_id = e.id AND m.name_key = e.preferred_name_key
@@ -43,7 +43,7 @@ SELECT m.title, count(*) AS active_days,
   JOIN entities e ON e.id = a.metric_id AND e.deleted_at IS NULL
   JOIN entity_names m ON m.entity_id = e.id AND m.name_key = e.preferred_name_key
   LEFT JOIN (SELECT metric_id, day, max(value) AS value, max(value NOT IN (0, 1)) AS invalid
-             FROM measurement_values WHERE session_id IS NULL GROUP BY metric_id, day) s
+             FROM measurement_values GROUP BY metric_id, day) s
          ON s.metric_id = a.metric_id AND s.day = a.day
  GROUP BY e.id
  ORDER BY m.name_key;

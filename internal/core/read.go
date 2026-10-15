@@ -12,7 +12,6 @@ import (
 
 // Page is one page with what surrounds it. Version is the decimal entities.revision token: pass it back to SaveBody.
 type Page struct {
-	SessionKind bool        `json:"session_kind"`
 	TaskProject bool        `json:"task_project"`
 	ID          int64       `json:"id"`
 	Type        string      `json:"entity_type"`
@@ -51,9 +50,9 @@ func (s *Store) PageByID(ctx context.Context, id int64) (*Page, error) {
 	p := &Page{ID: id}
 	var day, deleted sql.NullString
 	err := s.DB.R.QueryRowContext(ctx, `
-		SELECT e.entity_type, n.title, e.day, e.body, e.created_at, CAST(e.revision AS TEXT), e.deleted_at,EXISTS(SELECT 1 FROM sessions WHERE kind_id=e.id),EXISTS(SELECT 1 FROM tasks WHERE project_page_id=e.id)
+		SELECT e.entity_type, n.title, e.day, e.body, e.created_at, CAST(e.revision AS TEXT), e.deleted_at,EXISTS(SELECT 1 FROM tasks WHERE project_page_id=e.id)
 		  FROM entities e JOIN entity_names n ON n.entity_id = e.id AND n.name_key = e.preferred_name_key WHERE e.id = ?`, id).
-		Scan(&p.Type, &p.Title, &day, &p.Body, &p.CreatedAt, &p.Version, &deleted, &p.SessionKind, &p.TaskProject)
+		Scan(&p.Type, &p.Title, &day, &p.Body, &p.CreatedAt, &p.Version, &deleted, &p.TaskProject)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, NotFound("no page %d", id)
 	}
@@ -184,7 +183,7 @@ func (s *Store) Day(ctx context.Context, day string) (*Day, error) {
 	return d, err
 }
 
-// Moods are the values of the current Mood readings with no session, by day, from from through through, each day's
+// Moods are the values of the current Mood readings, by day, from from through through, each day's
 // in id order: cookbook/mood-over-time.md read for a window of days. The metric is found by its name key, so a
 // renamed Mood is still the mood. A day without a reading is absent.
 func (s *Store) Moods(ctx context.Context, from, through string) (map[string][]float64, error) {
@@ -196,7 +195,7 @@ func (s *Store) Moods(ctx context.Context, from, through string) (map[string][]f
 		  FROM measurement_values me
 		  JOIN entities e ON e.id = me.metric_id AND e.deleted_at IS NULL
 		  JOIN entity_names n ON n.entity_id = me.metric_id AND n.name_key = 'mood'
-		 WHERE me.session_id IS NULL AND me.day BETWEEN ? AND ?
+		 WHERE me.day BETWEEN ? AND ?
 		 ORDER BY me.day, me.id`, from, through)
 	if err != nil {
 		return nil, err
@@ -349,42 +348,29 @@ SELECT what, at, detail FROM (
    WHERE d.id = (SELECT entity_id FROM entity_names WHERE name_key = :day) AND d.deleted_at IS NULL
   UNION ALL
   SELECT 'habit', NULL, m_name.title || ': ' ||
-         CASE WHEN EXISTS (SELECT 1 FROM measurement_values v WHERE v.metric_id = m.id AND v.day = :day AND v.session_id IS NULL AND v.value NOT IN (0, 1))
+         CASE WHEN EXISTS (SELECT 1 FROM measurement_values v WHERE v.metric_id = m.id AND v.day = :day AND v.value NOT IN (0, 1))
            THEN 'invalid'
-           ELSE CASE (SELECT max(v.value) FROM measurement_values v WHERE v.metric_id = m.id AND v.day = :day AND v.session_id IS NULL)
+           ELSE CASE (SELECT max(v.value) FROM measurement_values v WHERE v.metric_id = m.id AND v.day = :day)
              WHEN 1 THEN 'done' WHEN 0 THEN 'not done' ELSE 'not recorded' END END
     FROM habit_periods h JOIN entities m ON m.id = h.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key AND m.deleted_at IS NULL
    WHERE h.start_day <= :day AND coalesce(h.end_day, '9999-12-31') >= :day
   UNION ALL
   SELECT p_name.title, me.taken_at, CAST(me.value AS TEXT) || ' ' || m.unit
     FROM measurement_values me JOIN metrics m ON m.id = me.metric_id JOIN entities p ON p.id = m.id JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
-   WHERE me.day = :day AND me.session_id IS NULL
+   WHERE me.day = :day
      AND NOT EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = me.metric_id
                         AND h.start_day <= :day AND coalesce(h.end_day, '9999-12-31') >= :day)
 )
 ORDER BY (at IS NOT NULL), at;`
 
-// readingColumns are a reading's columns as Reading scans them, from measurements me joined to its session ss and
-// its metric m with its name m_name.
-const readingColumns = `me.id, m_name.title, me.day, coalesce(me.taken_at, ''), coalesce(me.tz, ''), me.value, coalesce(me.captured_with_id, 0),coalesce(me.session_id,0),coalesce(ss.deleted_at,'')`
-
-// scopeOf is a reading's scope: a session's, or the day's (unassociated).
-func scopeOf(sessionID int64) string {
-	if sessionID != 0 {
-		return "session"
-	}
-	return "unassociated"
-}
+// readingColumns are a reading's columns as Reading scans them, from measurements me joined to its metric m with
+// its name m_name.
+const readingColumns = `me.id, m_name.title, me.day, coalesce(me.taken_at, ''), coalesce(me.tz, ''), me.value, coalesce(me.captured_with_id, 0)`
 
 func (s *Store) readings(ctx context.Context, where string, args ...any) ([]Reading, error) {
-	return s.readingsWithLifecycle(ctx, false, where, args...)
-}
-func (s *Store) readingsWithLifecycle(ctx context.Context, includeDeleted bool, where string, args ...any) ([]Reading, error) {
-	where = `WHERE (? OR me.session_id IS NULL OR ss.deleted_at IS NULL) AND ` + strings.TrimPrefix(where, "WHERE ")
-	args = append([]any{includeDeleted}, args...)
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT `+readingColumns+`
-		  FROM measurement_values me LEFT JOIN sessions ss ON ss.id=me.session_id JOIN entities m ON m.id = me.metric_id  JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key `+where, args...)
+		  FROM measurement_values me JOIN entities m ON m.id = me.metric_id  JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key `+where, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -392,10 +378,9 @@ func (s *Store) readingsWithLifecycle(ctx context.Context, includeDeleted bool, 
 	out := []Reading{}
 	for rows.Next() {
 		var r Reading
-		if err := rows.Scan(&r.ID, &r.Metric, &r.Day, &r.TakenAt, &r.TZ, &r.Value, &r.CapturedWith, &r.SessionID, &r.SessionDeletedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.Metric, &r.Day, &r.TakenAt, &r.TZ, &r.Value, &r.CapturedWith); err != nil {
 			return nil, err
 		}
-		r.Scope = scopeOf(r.SessionID)
 		out = append(out, r)
 	}
 	return out, rows.Err()
@@ -503,7 +488,7 @@ type Recent struct {
 }
 
 // RecentReadings are the newest n current unassociated readings of each live metric, oldest first, in the series'
-// order, so the last is the reading a metric's page calls its latest. A reading of a session is not a daily value.
+// order, so the last is the reading a metric's page calls its latest.
 // Each metric's readings are read backwards on measurements_series and stop at n, so the work is n a metric, not
 // the whole history.
 func (s *Store) RecentReadings(ctx context.Context, n int) (map[int64][]Recent, error) {
@@ -512,7 +497,7 @@ func (s *Store) RecentReadings(ctx context.Context, n int) (map[int64][]Recent, 
 		  FROM metrics m CROSS JOIN entities e ON e.id = m.id AND e.deleted_at IS NULL -- the metrics drive, not every page
 		  JOIN measurement_values v ON v.id IN (
 		        SELECT x.id FROM measurement_values x
-		         WHERE x.metric_id = m.id AND x.session_id IS NULL
+		         WHERE x.metric_id = m.id
 		         ORDER BY x.day DESC, x.taken_at DESC, x.id DESC LIMIT ?)
 		 ORDER BY v.metric_id, v.day, v.taken_at, v.id`, n)
 	if err != nil {
@@ -562,17 +547,36 @@ func (s *Store) Series(ctx context.Context, metric, from, to string) ([]Reading,
 	if !IsDay(from) || !IsDay(to) {
 		return nil, Invalid("from and to are YYYY-MM-DD days")
 	}
-	return s.SeriesScope(ctx, metric, from, to, Scope{Kind: "unassociated"})
+	return s.series(ctx, metric, from, to)
 }
 
-// ReadingsCount is how many current readings with no session fall on the days from through through, both included:
+// SeriesHistory is Series with no lower day bound; to remains inclusive.
+func (s *Store) SeriesHistory(ctx context.Context, metric, to string) ([]Reading, error) {
+	if !IsDay(to) {
+		return nil, Invalid("to is a YYYY-MM-DD day")
+	}
+	return s.series(ctx, metric, "", to)
+}
+
+// series reads the readings of the metric named metric up to to, and after from unless from is empty.
+func (s *Store) series(ctx context.Context, metric, from, to string) ([]Reading, error) {
+	predicate := `WHERE m.id=(SELECT entity_id FROM entity_names WHERE name_key=?) AND me.day<=?`
+	args := []any{text.TitleKey(metric), to}
+	if from != "" {
+		predicate += ` AND me.day>?`
+		args = append(args, from)
+	}
+	return s.readings(ctx, predicate+` ORDER BY me.day,me.taken_at,me.id`, args...)
+}
+
+// ReadingsCount is how many current readings fall on the days from through through, both included:
 // the readings that Series gives, for all metrics. A corrected reading counts once, and a retracted one not at all.
 func (s *Store) ReadingsCount(ctx context.Context, from, through string) (int, error) {
 	if err := checkWindow(from, through); err != nil {
 		return 0, err
 	}
 	var n int
-	err := s.DB.R.QueryRowContext(ctx, `SELECT count(*) FROM measurement_values WHERE session_id IS NULL AND day BETWEEN ? AND ?`, from, through).Scan(&n)
+	err := s.DB.R.QueryRowContext(ctx, `SELECT count(*) FROM measurement_values WHERE day BETWEEN ? AND ?`, from, through).Scan(&n)
 	return n, err
 }
 
@@ -582,7 +586,7 @@ func (s *Store) ReadingsByDay(ctx context.Context, from, through string) (map[st
 	if err := checkWindow(from, through); err != nil {
 		return nil, err
 	}
-	rows, err := s.DB.R.QueryContext(ctx, `SELECT day, count(*) FROM measurement_values WHERE session_id IS NULL AND day BETWEEN ? AND ? GROUP BY day`, from, through)
+	rows, err := s.DB.R.QueryContext(ctx, `SELECT day, count(*) FROM measurement_values WHERE day BETWEEN ? AND ? GROUP BY day`, from, through)
 	if err != nil {
 		return nil, err
 	}
@@ -615,12 +619,11 @@ func (s *Store) Measurement(ctx context.Context, id int64) (*Measurement, error)
 		SELECT `+readingColumns+`, coalesce(me.supersedes_id, 0),
 		       coalesce((SELECT x.id FROM measurements x WHERE x.supersedes_id = me.id), 0),
 		       EXISTS (SELECT 1 FROM measurement_values v WHERE v.id = me.id)
-		  FROM measurements me LEFT JOIN sessions ss ON ss.id=me.session_id JOIN entities m ON m.id = me.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key  WHERE me.id = ?`, id).
-		Scan(&m.ID, &m.Metric, &m.Day, &m.TakenAt, &m.TZ, &value, &m.CapturedWith, &m.SessionID, &m.SessionDeletedAt, &m.Supersedes, &m.SupersededBy, &m.Current)
+		  FROM measurements me JOIN entities m ON m.id = me.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key  WHERE me.id = ?`, id).
+		Scan(&m.ID, &m.Metric, &m.Day, &m.TakenAt, &m.TZ, &value, &m.CapturedWith, &m.Supersedes, &m.SupersededBy, &m.Current)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, NotFound("no measurement %d", id)
 	}
-	m.Scope = scopeOf(m.SessionID)
 	m.Value, m.Retraction = value.Float64, !value.Valid
 	return m, err
 }

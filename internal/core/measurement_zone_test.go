@@ -21,20 +21,6 @@ func TestMeasurementZoneValidationBeforeWrites(t *testing.T) {
 			if count != 0 {
 				t.Errorf("invalid Record persisted %d measurements", count)
 			}
-			root, err := s.Record(ctx, "cli", Reading{Metric: "Mood", Day: "2020-01-01", Value: 3})
-			if err != nil {
-				t.Fatal(err)
-			}
-			result, err := s.RelocateReading(ctx, "cli", root, input)
-			if status(err) != 422 || result.RetractionID != 0 || result.ReplacementID != 0 {
-				t.Errorf("RelocateReading invalid zone: result=%+v err=%v", result, err)
-			}
-			if err := s.DB.R.QueryRow("SELECT count(*) FROM measurements WHERE supersedes_id=?", root).Scan(&count); err != nil {
-				t.Fatal(err)
-			}
-			if count != 0 {
-				t.Errorf("invalid relocation retracted root with %d corrections", count)
-			}
 		})
 	}
 }

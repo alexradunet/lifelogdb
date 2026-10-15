@@ -84,7 +84,6 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 	"sinceLast":    sinceLastWeek,
 	"daysOf":       daysOf,
 	"nameWords":    nameWords,
-	"lasting":      lasting,
 	"monthName": func(month string) string { // "2026-10" to "October"
 		if t, ok := monthOf(month); ok {
 			return t.Format("January")
@@ -133,7 +132,7 @@ func num(v any) string {
 var viewOf = map[string]string{
 	"root": "root", "day": "day", "page": "page", "person": "page", "place": "page", "file": "page", "period": "page",
 	"days": "list", "people": "list", "places": "list", "media": "media", "files": "files", "ghosts": "list", "search": "search",
-	"periods": "periods", "sessions": "sessions", "session": "session",
+	"periods": "periods",
 	"metrics": "metrics", "series": "metric", "metric": "page", "measurement": "measurement", "error": "error", "login": "login",
 	"tasks": "tasks", "task": "task", "occurrence": "occurrence", "deadlines": "deadlines", "month": "month", "week": "week", "year": "year", "styleguide": "styleguide",
 	"conversation": "conversation", "preview": "preview",
@@ -242,7 +241,6 @@ var navItems = []struct {
 	{"Media", "/media", "media", []string{"/media"}, "record"},
 	{"Files", "/files", "files", []string{"/files"}, "record"},
 	{"Metrics", "/metrics", "metrics", []string{"/metrics"}, "record"},
-	{"Sessions", "/sessions", "sessions", []string{"/sessions"}, "record"},
 	{"Periods", "/periods", "periods", []string{"/periods"}, "record"},
 	{"Ghost pages", "/ghosts", "ghosts", []string{"/ghosts"}, "record"},
 	{"Every action", "/actions", "", []string{"/actions"}, "owner"},
@@ -269,7 +267,6 @@ var newKinds = []struct{ Title, Href, Icon string }{
 	{"Reading", "/metrics", "metrics"},
 	{"File", "/files?new=add-file", "files"},
 	{"Period", "/periods?new=create-period", "periods"},
-	{"Session", "/sessions?new=capture-session", "sessions"},
 }
 
 // NewKinds are the items of the rail's New menu.

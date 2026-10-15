@@ -157,8 +157,8 @@ func planning(s *S) {
 
 func planningIntegrity(s *S) {
 	checks := statements(sqlBlocks(s.d.Page("contract/integrity-checks.md"))[0])
-	if len(checks) != 15 {
-		stop("planning integrity needs fifteen literal statements, got %d", len(checks))
+	if len(checks) != 14 {
+		stop("planning integrity needs fourteen literal statements, got %d", len(checks))
 	}
 	c := planningDB(s, "planning-integrity")
 	project := c.page("Integrity project")
@@ -167,19 +167,19 @@ func planningIntegrity(s *S) {
 	history := planningOccurrence(c, task, "2026-03-31", M{"state": "done"})
 	c.must("UPDATE tasks SET repeat_until_day='2026-02-28',deleted_at="+NOW+" WHERE id=?", task)
 	c.must("UPDATE entities SET deleted_at="+NOW+" WHERE id=?", project)
-	s.K("planning semantic checks retain tombstoned context and historical done beyond end", c.tab(checks[6]) == "" && c.tab(checks[7]) == "" && c.tab(checks[8]) == "")
+	s.K("planning semantic checks retain tombstoned context and historical done beyond end", c.tab(checks[5]) == "" && c.tab(checks[6]) == "" && c.tab(checks[7]) == "")
 	c.must("DROP TRIGGER tasks_project_update")
 	c.must("UPDATE tasks SET project_page_id=? WHERE id=?", journal, task)
-	s.K("planning project semantic query detects journal reference damage", c.integrityOK() && contains(c.col(checks[6]), ids(task)))
+	s.K("planning project semantic query detects journal reference damage", c.integrityOK() && contains(c.col(checks[5]), ids(task)))
 	c.must("DROP TRIGGER task_occurrences_open")
 	c.must("UPDATE task_occurrences SET state='open' WHERE id=?", history)
-	s.K("planning occurrence semantic query detects open slot beyond end", c.integrityOK() && contains(c.col(checks[8]), ids(history)))
+	s.K("planning occurrence semantic query detects open slot beyond end", c.integrityOK() && contains(c.col(checks[7]), ids(history)))
 	c.must("PRAGMA foreign_keys=OFF")
 	orphan := planningTask(c, M{"repeat_unit": nil, "repeat_every": nil, "anchor_day": nil})
-	s.K("planning one-off semantic query detects missing once occurrence", contains(c.col(checks[7]), ids(orphan)))
+	s.K("planning one-off semantic query detects missing once occurrence", contains(c.col(checks[6]), ids(orphan)))
 	c.must("DROP TRIGGER task_occurrences_admit")
 	invalid := planningOccurrence(c, task, "2026-03-28", M{"state": "skipped"})
-	s.K("planning occurrence semantic query detects calendar nonmember", contains(c.col(checks[8]), ids(invalid)))
+	s.K("planning occurrence semantic query detects calendar nonmember", contains(c.col(checks[7]), ids(invalid)))
 }
 
 func planningOneOff(s *S) {

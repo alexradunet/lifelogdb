@@ -339,27 +339,16 @@ func TestHabitReadersReportInvalidCheckIns(t *testing.T) {
 	if err := s.StartHabit(ctx, "cli", "Walk", "2026-10-01", "2026-10-06"); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.CreatePage(ctx, "cli", "Workout", ""); err != nil {
-		t.Fatal(err)
-	}
-	var session int64
-	if err := s.Do(ctx, "cli", func(tx *Tx) error {
-		var err error
-		session, _, err = tx.CaptureSession(SessionInput{Kind: "Workout", Day: "2026-10-05", StartLocal: "2026-10-05T08:00:00.000"})
-		return err
-	}); err != nil {
-		t.Fatal(err)
-	}
 	metric, err := s.PageID(ctx, "Walk")
 	if err != nil {
 		t.Fatal(err)
 	}
 	// deliberately nonconforming rows, as another writer could leave them; the readers are under test
-	external := func(day string, value float64, sessionID any) int64 {
+	external := func(day string, value float64) int64 {
 		t.Helper()
 		// a file written before measurements_habit_binary may hold a non-binary check-in: written with the trigger dropped
-		res := withoutTrigger(t, s, "measurements_habit_binary", `INSERT INTO measurements(metric_id, session_id, day, value, created_at, source)
-		                         VALUES (?, ?, ?, ?, '2026-10-07T00:00:00.000Z', 'other-writer')`, metric, sessionID, day, value)
+		res := withoutTrigger(t, s, "measurements_habit_binary", `INSERT INTO measurements(metric_id, day, value, created_at, source)
+		                         VALUES (?, ?, ?, '2026-10-07T00:00:00.000Z', 'other-writer')`, metric, day, value)
 		id, err := res.LastInsertId()
 		if err != nil {
 			t.Fatal(err)
@@ -372,17 +361,16 @@ func TestHabitReadersReportInvalidCheckIns(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	external("2026-10-01", 2, nil) // invalid only
-	record("2026-10-02", 1)        // a valid check-in does not hide an invalid one
-	external("2026-10-02", -1, nil)
+	external("2026-10-01", 2) // invalid only
+	record("2026-10-02", 1)   // a valid check-in does not hide an invalid one
+	external("2026-10-02", -1)
 	one := 1.0 // a corrected invalid reading is no longer current
-	if _, err := s.Correct(ctx, "cli", external("2026-10-03", 2, nil), &one); err != nil {
+	if _, err := s.Correct(ctx, "cli", external("2026-10-03", 2), &one); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Correct(ctx, "cli", external("2026-10-04", 2, nil), nil); err != nil { // nor is a retracted one
+	if _, err := s.Correct(ctx, "cli", external("2026-10-04", 2), nil); err != nil { // nor is a retracted one
 		t.Fatal(err)
 	}
-	external("2026-10-05", 2, session) // session-scoped facts are not daily check-ins
 	record("2026-10-06", 0)
 
 	want := map[string]string{"2026-10-01": "invalid", "2026-10-02": "invalid", "2026-10-03": "done",

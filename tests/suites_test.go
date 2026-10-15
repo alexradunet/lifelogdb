@@ -12,8 +12,6 @@ var suites = []struct {
 }{
 	{"dates", dates},
 	{"recorded-periods", recordedPeriods},
-	{"recorded-sessions", recordedSessions},
-	{"measurement-scopes", measurementScopes},
 	{"planning", planning},
 	{"planning-boundaries", planningBoundaries},
 	{"planning-cookbook", planningCookbook},

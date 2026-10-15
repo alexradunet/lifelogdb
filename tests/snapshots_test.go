@@ -34,8 +34,8 @@ func snapshots(s *S) {
 			checks = append(checks, code(st))
 		}
 	}
-	if len(checks) != 15 {
-		stop("contract/integrity-checks does not contain the fifteen statements in four check groups: %v", checks)
+	if len(checks) != 14 {
+		stop("contract/integrity-checks does not contain the fourteen statements in four check groups: %v", checks)
 	}
 	// checkStatements includes both domain and typed-edge semantic queries in the four check groups.
 	checkStatements := func(c *C) []string {
@@ -51,7 +51,7 @@ func snapshots(s *S) {
 		return out
 	}
 	clean := func(r []string) bool {
-		if len(r) != 15 || r[0] != "ok" {
+		if len(r) != 14 || r[0] != "ok" {
 			return false
 		}
 		for _, result := range r[1:] {

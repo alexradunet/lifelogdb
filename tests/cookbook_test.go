@@ -15,7 +15,7 @@ func cookbook(s *S) {
 	cookbookMeasurementReads(s)
 	bl := s.d.CookbookBlocks()
 	first, order := s.d.Blocks()
-	s.K("the cookbook has at least 24 SQL blocks, one or more per recipe, 24 recipes", len(bl) >= 24 && len(first) == 24 && eq(order, s.d.CookbookOrder()), order)
+	s.K("the cookbook has at least 23 SQL blocks, one or more per recipe, 23 recipes", len(bl) >= 23 && len(first) == 23 && eq(order, s.d.CookbookOrder()), order)
 
 	seeded := func(hardened bool, path string) (*C, P) {
 		c := s.freshWith(F{Hardened: hardened, Path: path})

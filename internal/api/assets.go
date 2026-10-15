@@ -66,7 +66,6 @@ var icons = map[string]string{
 	"media":    `<rect x="2" y="3" width="12" height="10" rx="1.5"/><circle cx="5.5" cy="6.5" r="1.3"/><path d="M2.5 11.5l3.5-3.5 2.5 2.5 2-2 3 3"/>`,
 	"metrics":  `<path d="M1.5 9h3l2-5 3 9 2-4h3"/>`,
 	"habits":   `<path d="M3 6a5 5 0 0 1 9-1.5M13 10a5 5 0 0 1-9 1.5M12 1.5v3h-3M4 14.5v-3h3"/>`,
-	"sessions": `<circle cx="8" cy="8.5" r="5.5"/><path d="M8 5.5v3l2 1.5M6.5 1.5h3"/>`,
 	"periods":  `<path d="M4 3H2.5v10H4M12 3h1.5v10H12M5.5 8h5"/>`,
 	"ghosts":   `<path d="M4 1.5h5l3 3v10H4z" stroke-dasharray="2 2"/>`,
 	"search":   `<circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/>`,

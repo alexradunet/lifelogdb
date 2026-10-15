@@ -66,10 +66,10 @@ ghosts oldest first; search by rank.
 
 ### root
 
-`GET /`: today at a glance. Links: `today`, `days`, `sessions`, `periods`, `people`, `places`, `media`, `files`, `metrics`,
+`GET /`: today at a glance. Links: `today`, `days`, `periods`, `people`, `places`, `media`, `files`, `metrics`,
 `habits`, `tasks`, `deadlines`, `ghosts`, `actions`, `calendar` (this month), `week` (this week), `year` (this year). Actions: `capture` (for today), `search`,
 `find`, `open-day`, `deadlines`,
-`create-task`, `capture-session`, `create-period`, `create-page`, `create-person`, `create-place`, `add-file`,
+`create-task`, `create-period`, `create-page`, `create-person`, `create-place`, `add-file`,
 `record`, `register-metric` (owner), `query`, `snapshot` (owner), `ask`; then the `check-in` of each habit of today (today
 filled in), and the outcome (see task) of each occurrence in `due`.
 
@@ -108,12 +108,12 @@ filled in), and the outcome (see task) of each occurrence in `due`.
 | `recent[].day` | day | the day |
 | `recent[].page_id` | integer | the day page's id |
 | `recent[].first_line` | string | the first line of its body that has text, as plain text: a heading's or a list item's marker and the brackets of a wikilink cut, 160 characters at most; absent when the body is empty |
-| `recent[].mood` | list | the values of the day's current Mood readings with no session, in the order they were recorded; absent when none |
+| `recent[].mood` | list | the values of the day's current Mood readings, in the order they were recorded; absent when none |
 | `on_this_day[]` | list | the live day pages of earlier years with the same month and day of the month, at most 10, the newest first; empty when none; 29 February matches 29 February only |
 | `on_this_day[].day` | day | the day |
 | `on_this_day[].page_id` | integer | the day page's id |
 | `on_this_day[].first_line` | string | the first line of its body (as `recent[]` of the root); absent when the body is empty |
-| `on_this_day[].mood` | list | the values of the day's current Mood readings with no session; absent when none |
+| `on_this_day[].mood` | list | the values of the day's current Mood readings; absent when none |
 
 ### actions
 
@@ -251,22 +251,22 @@ answers with this entity and a `result` of the sync shape; its field `mood` has 
 | `due[].reminder` | object |  |
 | `due[].reminder.state` | string |  |
 | `due[].reminder.at` | instant |  |
-| `mood` | list | the values of the day's current Mood readings with no session, in the order they were recorded (the Mood metric found by its name key); empty when none |
+| `mood` | list | the values of the day's current Mood readings, in the order they were recorded (the Mood metric found by its name key); empty when none |
 | `habits[]` | list | the habits active on the day, by name |
 | `habits[].metric` | string | the habit's metric |
 | `habits[].state` | string | `done`, `not done`, `not recorded` or `invalid` |
 | `habits[].recent` | list | its state on each of the 14 days through the day, oldest first: a state above, or `inactive` on a day no period of the habit holds |
-| `trends[]` | list | one for each metric with a current reading of no session on the day that is not a habit active on the day, in the order of `readings` |
+| `trends[]` | list | one for each metric with a current reading on the day that is not a habit active on the day, in the order of `readings` |
 | `trends[].metric` | string | the metric's name |
 | `trends[].unit` | string | its unit (`''` for a habit, a range such as `1-5` for a scale) |
-| `trends[].readings[]` | list | its current readings of no session in the 14 days through the day, oldest first (the series of the cookbook) |
+| `trends[].readings[]` | list | its current readings in the 14 days through the day, oldest first (the series of the cookbook) |
 | `trends[].readings[].day` | day |  |
 | `trends[].readings[].value` | number |  |
 | `on_this_day[]` | list | the live day pages of earlier years with the same month and day of the month, at most 10, the newest first; empty when none; 29 February matches 29 February only |
 | `on_this_day[].day` | day | the day |
 | `on_this_day[].page_id` | integer | the day page's id |
 | `on_this_day[].first_line` | string | the first line of its body (as `recent[]` of the root); absent when the body is empty |
-| `on_this_day[].mood` | list | the values of the day's current Mood readings with no session; absent when none |
+| `on_this_day[].mood` | list | the values of the day's current Mood readings; absent when none |
 | `today` | day | this machine's local day |
 
 The **reading** shape (`readings[]` here and in a series; a measurement's own properties):
@@ -281,9 +281,6 @@ The **reading** shape (`readings[]` here and in a series; a measurement's own pr
 | `readings[].import_key` | string | the key an import gave it; absent otherwise |
 | `readings[].value` | number | the value |
 | `readings[].captured_with_id` | integer | the page of what captured it (a device, an app); absent otherwise |
-| `readings[].session_id` | integer | the session it belongs to; absent when unassociated |
-| `readings[].session_deleted_at` | instant | when that session was tombstoned; absent while it lives |
-| `readings[].scope` | string | `unassociated` or `session` |
 
 ### month
 
@@ -300,18 +297,17 @@ link to each day of the month. Actions: `open-day`. Each day holds what names it
 | `days[].day` | day | the day |
 | `days[].page` | boolean | a live day page exists for it |
 | `days[].first_line` | string | the first line of that page's body that has text, as plain text (as `recent[]` of the root); absent when none |
-| `days[].mood` | list | the values of the day's current Mood readings with no session, in the order they were recorded; absent when none |
-| `days[].items[]` | list | every other thing that names the day, in this order: the occurrences due on it (open, then done, then skipped), the births and deaths, the period boundaries, the sessions, the places and the pages; absent when none |
-| `days[].items[].kind` | string | `task` (an occurrence of a live task, in every state, a recurring task's days included); `birthday` or `death` (a live person's birth or death day, and its day in each later year; 29 February is on 28 February in a common year); `period` (a boundary of a live period that names this day); `session` (a live session reported on the day); `place` (a live place that the live day page links with `at`); `page` or `file` (a live page that is not a day page and has the day, by title, at most 20 a day) |
-| `days[].items[].title` | string | a task's label; a session's kind; else the title of the page |
-| `days[].items[].href` | string | the item's own resource: the occurrence, the session or the page |
+| `days[].mood` | list | the values of the day's current Mood readings, in the order they were recorded; absent when none |
+| `days[].items[]` | list | every other thing that names the day, in this order: the occurrences due on it (open, then done, then skipped), the births and deaths, the period boundaries, the places and the pages; absent when none |
+| `days[].items[].kind` | string | `task` (an occurrence of a live task, in every state, a recurring task's days included); `birthday` or `death` (a live person's birth or death day, and its day in each later year; 29 February is on 28 February in a common year); `period` (a boundary of a live period that names this day); `place` (a live place that the live day page links with `at`); `page` or `file` (a live page that is not a day page and has the day, by title, at most 20 a day) |
+| `days[].items[].title` | string | a task's label; else the title of the page |
+| `days[].items[].href` | string | the item's own resource: the occurrence or the page |
 | `days[].items[].state` | string | a task's: `open`, `done` or `skipped` |
 | `days[].items[].years` | integer | a birthday's or a death's: the whole years since the day the person's row holds; absent on that day |
 | `days[].items[].boundary` | string | a period's: `start` or `end` |
 | `days[].items[].qualifier` | string | a period's: `?`, `~` or `%` when the boundary has one; absent otherwise |
-| `days[].items[].at` | string | a session's start as it was recorded: an instant, or a local clock |
 | `days[].more_pages` | integer | the pages and files of the day after the first 20 in `items[]`; absent when none |
-| `days[].readings` | integer | the current readings with no session on the day, of every metric but the Mood (`mood` holds those); absent when none |
+| `days[].readings` | integer | the current readings on the day, of every metric but the Mood (`mood` holds those); absent when none |
 | `periods[]` | list | each live period that a day of the month can fall in, by name: a period outside on every day is not listed |
 | `periods[].id` | integer | |
 | `periods[].title` | string | |
@@ -338,23 +334,22 @@ day of the week. Actions: `open-day`.
 | `days[].day` | day | the day |
 | `days[].page` | boolean | a live day page exists for it |
 | `days[].first_line` | string | the first line of that page's body that has text, as plain text; absent when none |
-| `days[].mood` | list | the values of the day's current Mood readings with no session, in the order they were recorded; absent when none |
-| `days[].items[]` | list | every other thing that names the day, in this order: the occurrences due on it (open, then done, then skipped), the births and deaths, the period boundaries, the sessions, the places and the pages; absent when none |
-| `days[].items[].kind` | string | `task` (an occurrence of a live task, in every state, a recurring task's days included); `birthday` or `death` (a live person's birth or death day, and its day in each later year; 29 February is on 28 February in a common year); `period` (a boundary of a live period that names this day); `session` (a live session reported on the day); `place` (a live place that the live day page links with `at`); `page` or `file` (a live page that is not a day page and has the day, by title, at most 20 a day) |
-| `days[].items[].title` | string | a task's label; a session's kind; else the title of the page |
-| `days[].items[].href` | string | the item's own resource: the occurrence, the session or the page |
+| `days[].mood` | list | the values of the day's current Mood readings, in the order they were recorded; absent when none |
+| `days[].items[]` | list | every other thing that names the day, in this order: the occurrences due on it (open, then done, then skipped), the births and deaths, the period boundaries, the places and the pages; absent when none |
+| `days[].items[].kind` | string | `task` (an occurrence of a live task, in every state, a recurring task's days included); `birthday` or `death` (a live person's birth or death day, and its day in each later year; 29 February is on 28 February in a common year); `period` (a boundary of a live period that names this day); `place` (a live place that the live day page links with `at`); `page` or `file` (a live page that is not a day page and has the day, by title, at most 20 a day) |
+| `days[].items[].title` | string | a task's label; else the title of the page |
+| `days[].items[].href` | string | the item's own resource: the occurrence or the page |
 | `days[].items[].state` | string | a task's: `open`, `done` or `skipped` |
 | `days[].items[].years` | integer | a birthday's or a death's: the whole years since the day the person's row holds; absent on that day |
 | `days[].items[].boundary` | string | a period's: `start` or `end` |
 | `days[].items[].qualifier` | string | a period's: `?`, `~` or `%` when the boundary has one; absent otherwise |
-| `days[].items[].at` | string | a session's start as it was recorded: an instant, or a local clock |
 | `days[].more_pages` | integer | the pages and files of the day after the first 20 in `items[]`; absent when none |
-| `days[].readings` | integer | the current readings with no session on the day, of every metric but the Mood (`mood` holds those); absent when none |
+| `days[].readings` | integer | the current readings on the day, of every metric but the Mood (`mood` holds those); absent when none |
 | `habits[]` | list | each habit active on a day of the week through today, by name, counted as `completion` of habits is: a week in progress counts through today, a week to come counts nothing |
 | `habits[].metric` | string | the habit's metric |
 | `habits[].done` | integer | the days of the week on which it was done |
 | `habits[].active_days` | integer | the days of the week on which it was active |
-| `metrics[]` | list | each metric, a habit excepted, with a current reading with no session in the week, by name |
+| `metrics[]` | list | each metric, a habit excepted, with a current reading in the week, by name |
 | `metrics[].metric` | string | the metric's name |
 | `metrics[].unit` | string | its unit; empty for a metric with none |
 | `metrics[].readings` | integer | how many such readings the week holds |
@@ -396,7 +391,7 @@ month. Actions: `open-day`.
 | `year` | string | the year, `YYYY` |
 | `today` | day | this machine's local day |
 | `written` | integer | the live day pages of the year |
-| `readings` | integer | the current readings with no session, of every metric, on the days of the year |
+| `readings` | integer | the current readings of every metric, on the days of the year |
 | `months[]` | list | the twelve months, in order |
 | `months[].month` | string | the month, `YYYY-MM` |
 | `months[].written` | integer | the live day pages of the month |
@@ -426,7 +421,6 @@ that is not a kept picture, is refused (422).
 
 | property | type | meaning |
 |---|---|---|
-| `session_kind` | boolean | this page names a kind of session |
 | `task_project` | boolean | this page is a task's project |
 | `id` | integer | the page's id, permanent |
 | `entity_type` | string | `page`, `person`, `place`, `metric`, `file` or `period` |
@@ -474,8 +468,8 @@ that is not a kept picture, is refused (422).
 ### measurement
 
 `GET /measurements/{id}`: one reading, current or not. Links: `day`, `series`, `supersedes` (what it corrects),
-`superseded-by` (what corrected it), `session`, `captured-with`. Actions on the current reading: `correct`,
-`retract`, `relocate-reading` (owner; when its scope may move). The properties are the reading's (above) and:
+`superseded-by` (what corrected it), `captured-with`. Actions on the current reading: `correct`,
+`retract`. The properties are the reading's (above) and:
 
 | property | type | meaning |
 |---|---|---|
@@ -487,9 +481,6 @@ that is not a kept picture, is refused (422).
 | `import_key` | string | |
 | `value` | number | |
 | `captured_with_id` | integer | |
-| `session_id` | integer | |
-| `session_deleted_at` | instant | |
-| `scope` | string | |
 | `current` | boolean | this is the reading that stands (not corrected, not retracted) |
 | `supersedes_id` | integer | the reading it corrects; absent for a first reading |
 | `superseded_by` | integer | the reading that corrects it; absent while it stands |
@@ -497,7 +488,7 @@ that is not a kept picture, is refused (422).
 
 ### series
 
-`GET /metrics/{name}?from=&to=&scope=&session_id=&include_deleted=&all_history=`: the one page of a metric. Its
+`GET /metrics/{name}?from=&to=&all_history=`: the one page of a metric. Its
 readings over `(from, to]`, or with no `from` every reading through `to` (`all_history=1` says the same; `to` is today
 by default). An alias names the metric too. Links: `self` (`/metrics/{name}` when asked with no query),
 `all-readings`, `up` (metrics), `habits`, `page` (the metric's page). Embedded: `reading` links. Actions: `record`
@@ -519,9 +510,6 @@ by default). An alias names the metric too. Links: `self` (`/metrics/{name}` whe
 | `readings[].import_key` | string | |
 | `readings[].value` | number | |
 | `readings[].captured_with_id` | integer | |
-| `readings[].session_id` | integer | |
-| `readings[].session_deleted_at` | instant | |
-| `readings[].scope` | string | |
 | `habit_periods[]` | list | the periods it was a habit, oldest first |
 | `habit_periods[].start_day` | day | from |
 | `habit_periods[].end_day` | day | until, inclusive; absent while open |
@@ -541,9 +529,6 @@ by default). An alias names the metric too. Links: `self` (`/metrics/{name}` whe
 | `backlinks[].title` | string | |
 | `backlinks[].entity_type` | string | |
 | `backlinks[].note` | string | |
-| `scope` | string | `unassociated` (the default), `session` or `all` |
-| `session_id` | integer | the session selected, 0 for none |
-| `include_deleted` | boolean | readings of tombstoned sessions were included |
 | `all_history` | boolean | no `from` was named: every admitted day through `to` was selected |
 
 ### metrics
@@ -566,7 +551,7 @@ With `?show=habits` (and `day`, `from`, `to`) it also carries the properties, li
 | `metrics[].note` | string | the page's text; absent when empty |
 | `metrics[].habit` | boolean | it has a habit period |
 | `metrics[].categories` | list | the category paths it is filed in; absent when none |
-| `metrics[].recent[]` | list | its newest 30 current readings with no session, oldest first: the last is its latest |
+| `metrics[].recent[]` | list | its newest 30 current readings, oldest first: the last is its latest |
 | `metrics[].recent[].id` | integer | the measurement's id |
 | `metrics[].recent[].day` | day | its day |
 | `metrics[].recent[].value` | number | its value |
@@ -613,66 +598,6 @@ the 30 days to that day). Links: `day`, `prev`, `next`. Embedded: a `habit` link
 | `completion[].not_done` | integer | days checked in not done |
 | `completion[].not_recorded` | integer | active days with no check-in |
 | `completion[].invalid` | integer | days with an invalid reading |
-
-### sessions
-
-`GET /sessions?day=&kind=&include_deleted=`: recorded sessions. Embedded: `item` links. Action: `capture-session`.
-
-| property | type | meaning |
-|---|---|---|
-| `sessions[]` | list | the sessions (the session shape), by reporting day then id |
-| `sessions[].kind` | string | |
-| `sessions[].day` | day | |
-| `sessions[].import_key` | string | |
-| `sessions[].start_at` | instant | |
-| `sessions[].start_local` | string | |
-| `sessions[].start_offset` | string | |
-| `sessions[].start_zone_unverified` | string | |
-| `sessions[].end_at` | instant | |
-| `sessions[].end_local` | string | |
-| `sessions[].end_offset` | string | |
-| `sessions[].end_zone_unverified` | string | |
-| `sessions[].id` | integer | |
-| `sessions[].kind_id` | integer | |
-| `sessions[].kind_deleted_at` | instant | |
-| `sessions[].source` | string | |
-| `sessions[].version` | string | |
-| `sessions[].created_at` | instant | |
-| `sessions[].updated_at` | instant | |
-| `sessions[].deleted_at` | instant | |
-| `sessions[].elapsed_milliseconds` | integer | |
-| `sessions[].time_basis` | string | |
-| `include_deleted` | boolean | tombstoned sessions were included |
-| `order` | string | a note on the order |
-
-### session
-
-`GET /sessions/{id}`. Links: `kind` (the page naming its kind), `index` (the sessions list). Actions: `edit-session`,
-`tombstone-session`, or `revive-session` on a tombstoned one, their fields filled.
-
-| property | type | meaning |
-|---|---|---|
-| `kind` | string | the kind: the title of a plain page |
-| `day` | day | the reporting day |
-| `import_key` | string | an import's key; absent otherwise |
-| `start_at` | instant | the start, when known in UTC; absent otherwise |
-| `start_local` | string | the start as an unresolved local clock; absent otherwise |
-| `start_offset` | string | a known offset of the start; absent otherwise |
-| `start_zone_unverified` | string | a zone claimed for the start, unverified; absent otherwise |
-| `end_at` | instant | the end in UTC; absent otherwise |
-| `end_local` | string | the end as a local clock; absent otherwise |
-| `end_offset` | string | a known offset of the end; absent otherwise |
-| `end_zone_unverified` | string | a zone claimed for the end; absent otherwise |
-| `id` | integer | the session's id |
-| `kind_id` | integer | the kind page's id |
-| `kind_deleted_at` | instant | when the kind page was tombstoned; absent while it lives |
-| `source` | string | the writer that recorded it |
-| `version` | string | the version token an edit sends back |
-| `created_at` | instant | |
-| `updated_at` | instant | |
-| `deleted_at` | instant | when it was tombstoned; absent while it lives |
-| `elapsed_milliseconds` | integer | the length, when both ends are known in UTC; absent otherwise |
-| `time_basis` | string | `known UTC interval`, `missing end` or `unresolved` |
 
 ### periods
 
@@ -928,8 +853,7 @@ conversation's day), `index`. Actions: `ask`, on the conversation of the server'
 | `foreign_key_violations` | integer | |
 | `entities_without_domain_row` | list | ids |
 | `invalid_typed_links` | list | ids |
-| `invalid_session_kinds` | list | ids |
-| `invalid_measurement_scopes` | list | ids |
+| `invalid_measurement_corrections` | list | ids |
 | `invalid_task_projects` | list | ids |
 | `invalid_one_off_tasks` | list | ids |
 | `invalid_task_occurrences` | list | ids |
@@ -971,8 +895,7 @@ browser form is answered home with them as feedback. A refusal (a folder inside 
 | `restore_check.foreign_key_violations` | integer | |
 | `restore_check.entities_without_domain_row` | list | |
 | `restore_check.invalid_typed_links` | list | |
-| `restore_check.invalid_session_kinds` | list | |
-| `restore_check.invalid_measurement_scopes` | list | |
+| `restore_check.invalid_measurement_corrections` | list | |
 | `restore_check.invalid_task_projects` | list | |
 | `restore_check.invalid_one_off_tasks` | list | |
 | `restore_check.invalid_task_occurrences` | list | |
@@ -1097,13 +1020,6 @@ shows the turn):
 | `unmatched.lon` | number | |
 | `unmatched.map` | string | a map link to it |
 | `embedded` | boolean | `![[title]]` was appended to its day page |
-
-### result of relocate-reading
-
-| property | type | meaning |
-|---|---|---|
-| `retraction_id` | integer | the retraction written for the old scope |
-| `replacement_id` | integer | the independent replacement reading |
 
 ### readings-from-table
 

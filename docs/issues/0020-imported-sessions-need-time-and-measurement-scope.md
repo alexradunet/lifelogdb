@@ -1,7 +1,7 @@
 # 0020 — Session exports do not fit daily measurements without losing scope or inventing time
 
 - **Date:** 2026-10-06
-- **Status:** proposed
+- **Status:** won't-fix
 - **Seen in:** owner-authorized structural sampling of Fit and Google Health exports, after selecting daily summaries plus individual sleep/exercise sessions.
 
 ## What happened
@@ -45,6 +45,10 @@ exist yet.
 
 ## Resolution
 
-Open. [RFC 0006](../rfcs/0006-stable-names-and-life-periods.md) proposes lightweight sessions, an explicit measurement
+Won't fix, 2026-10-15. RFC 0006 added sessions for this import; [RFC 0011](../rfcs/0011-no-import-process.md) removed
+the import, and [RFC 0013](../rfcs/0013-no-sessions.md) removed sessions. A daily reading or day-page prose holds a
+session's facts.
+
+Earlier: [RFC 0006](../rfcs/0006-stable-names-and-life-periods.md) proposes lightweight sessions, an explicit measurement
 association and conservative import rules. Raw sensor streams, GPS tracks and a raw-export mirror inside the
 database are not requested. No real import or new storage capability has been authorized by this inspection.

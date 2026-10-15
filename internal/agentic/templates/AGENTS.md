@@ -37,7 +37,7 @@ write show you as their writer (`agent:NAME`). Without MCP, use the CLI through 
 same database, or the rows show the owner as their writer and the owner's rules do not hold:
 `"{{.Exe}}" --db "{{.DB}}" --source agent:NAME do ACTION field=value` (NAME as the MCP config names you).
 
-Three actions are the owner's only: `register_metric`, `relocate_reading` and `snapshot`. They are refused to you.
+Two actions are the owner's only: `register_metric` and `snapshot`. They are refused to you.
 When you need one, ask the owner to run it, for example `lifelog snapshot`.
 
 ## Rules

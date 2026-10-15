@@ -5,7 +5,7 @@
 - **Decision.** Personal planning uses independent `tasks` and `task_occurrences`, with project context in ordinary
   pages. Their storage constraints are in [schema.sql](../schema/schema.sql); bounded calendar, lifecycle and
   reminder operations are in [planning](../contract/planning.md). Task labels do not consume owned page names or
-  become graph endpoints. Planned work remains distinguishable from recorded sessions, readings and presence.
+  become graph endpoints. Planned work remains distinguishable from recorded periods, readings and presence.
 - **Why.** The owner wants projects, recurring tasks and reminder intent preserved in the same lifetime file,
   independently of the eventual interface or notification provider. A repeating instruction and one occurrence's
   outcome are different facts. Ordinary project pages provide useful grouping without a project workflow model.

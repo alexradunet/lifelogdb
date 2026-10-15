@@ -19,8 +19,8 @@ compatibility follows [D13](../decisions/D13-migrations-and-freeze.md).
 3. **The [cookbook](../cookbook/README.md)** as the canonical reads and writes; `lifelog_meta` and the comments inside
    `.schema` as the in-file summary.
 4. **The test vectors** printed in [titles and wikilinks](../contract/titles-and-wikilinks.md) as a conformance suite: the
-   page is their only copy, and the suites in `tests/` read them from it. The [exact-time](../contract/exact-time.md),
-   [period-boundary](../contract/period-boundaries.md) and [session-time](../contract/session-time.md) vectors preserve
+   page is their only copy, and the suites in `tests/` read them from it. The [exact-time](../contract/exact-time.md)
+   and [period-boundary](../contract/period-boundaries.md) vectors preserve
    the different meanings of recorded time evidence. The [planning vectors](../contract/planning.md)
    similarly define calendar expansion and reminder clock resolution; task writes use that page's transaction and
    revision rules. Persisted outcomes supplement bounded virtual recurrence, without implying notification delivery.

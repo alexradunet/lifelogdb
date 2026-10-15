@@ -79,15 +79,15 @@ func TestOptionalFieldsFoldUnderMoreFields(t *testing.T) {
 		return b.String(), f
 	}
 	more := regexp.MustCompile(`(?s)<details class="more-fields"( open)?><summary>([^<]*)</summary>(.*?)</details>`)
-	got, f := draw(t, action("record", nil, map[string]any{"day": "2026-10-12"}), "more", "metric,session_id,taken_at,tz,import_key")
+	got, f := draw(t, action("record", nil, map[string]any{"day": "2026-10-12"}), "more", "metric,taken_at,tz,import_key")
 	m := more.FindStringSubmatch(got)
 	if m == nil {
 		t.Fatalf("no More fields in the form: %s", got)
 	}
-	if m[1] != "" || m[2] != "4 more fields" {
-		t.Errorf("More fields: open %q, summary %q; want closed, %q", m[1], m[2], "4 more fields")
+	if m[1] != "" || m[2] != "3 more fields" {
+		t.Errorf("More fields: open %q, summary %q; want closed, %q", m[1], m[2], "3 more fields")
 	}
-	for _, name := range []string{"session_id", "taken_at", "tz", "import_key"} {
+	for _, name := range []string{"taken_at", "tz", "import_key"} {
 		if !strings.Contains(m[3], `name="`+name+`"`) {
 			t.Errorf("%s is not folded: %s", name, m[3])
 		}
