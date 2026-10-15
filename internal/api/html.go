@@ -131,7 +131,7 @@ func num(v any) string {
 // viewOf names the template that shows an entity of a class; a class without one is shown by "generic".
 var viewOf = map[string]string{
 	"root": "root", "day": "day", "page": "page", "person": "page", "place": "page", "file": "page", "period": "page",
-	"days": "list", "people": "list", "places": "list", "media": "media", "ghosts": "list", "search": "search",
+	"days": "list", "people": "list", "places": "list", "media": "media", "files": "files", "ghosts": "list", "search": "search",
 	"periods": "periods", "sessions": "sessions", "session": "session",
 	"metrics": "metrics", "series": "metric", "metric": "page", "measurement": "measurement", "error": "error", "login": "login",
 	"tasks": "tasks", "task": "task", "occurrence": "occurrence", "deadlines": "deadlines", "month": "month", "week": "week", "year": "year", "styleguide": "styleguide",
@@ -234,6 +234,7 @@ var navItems = []struct {
 	{"People", "/people", "people", []string{"/people"}, "record"},
 	{"Places", "/places", "places", []string{"/places"}, "record"},
 	{"Media", "/media", "media", []string{"/media"}, "record"},
+	{"Files", "/files", "files", []string{"/files"}, "record"},
 	{"Metrics", "/metrics", "metrics", []string{"/metrics"}, "record"},
 	{"Sessions", "/sessions", "sessions", []string{"/sessions"}, "record"},
 	{"Periods", "/periods", "periods", []string{"/periods"}, "record"},

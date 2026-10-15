@@ -316,8 +316,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   the CLI's `do` and the MCP tools carry them as any action. Both are dangers, not the owner's alone, and a revive undoes each.
 - **Media** ([plan 110](docs/plans/110-the-media-list.md)). `GET /media` is the list of the files whose type is an
   image, a video or an audio: tiles, newest day first, with the picture a file keeps, or the icon of its kind; one
-  kind alone by `?kind=`. A file of another type (a PDF, a text) is kept the same way and keeps its page, its
-  wikilinks and its place in search, but the list leaves it out until the owner asks for more kinds.
+  kind alone by `?kind=`. `GET /files` is the list of every other file (a PDF, a text), as rows. Both offer
+  `add-file` and the delete of several at once.
 - **Files** ([keep a file](docs/cookbook/keep-a-file.md), D9). `add-file` (`POST /files`, `lifelog file`) streams
   the original through SHA-256 and drops it; nothing of it is stored. `internal/preview` makes every picture itself —
   from a JPEG, PNG or GIF, or a JPEG sent for a HEIC or a video frame: scaled to 1600 px, turned upright by EXIF,

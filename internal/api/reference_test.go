@@ -26,7 +26,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 	shapes := map[string]any{
 		"root":                              map[string]any{"today": "", "due": []occurrenceView{}, "habits": []habitView{}, "recent": []recentDay{}, "on_this_day": []recentDay{}},
 		"days, people, places, ghosts":      map[string]any{"limit": 0, "offset": 0, "rows": []namedRow{}},
-		"media":                             map[string]any{"limit": 0, "offset": 0, "kind": "", "rows": []mediaRow{}, "counts": mediaCounts{}},
+		"media, files":                      map[string]any{"limit": 0, "offset": 0, "kind": "", "rows": []fileRow{}, "counts": mediaCounts{}},
 		"search":                            map[string]any{"q": "", "titles": []core.TitleMatch{}, "hits": []core.Hit{}, "limit": 0, "offset": 0},
 		"day":                               dayView{},
 		"month":                             map[string]any{"month": "", "today": "", "days": []monthDay{}, "periods": []core.LifePeriod{}},
@@ -91,7 +91,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 	h, c, ids := fixture(t)
 	live := []struct{ section, route string }{
 		{"root", "/"}, {"days, people, places, ghosts", "/days"}, {"days, people, places, ghosts", "/people"},
-		{"media", "/media"}, {"days, people, places, ghosts", "/ghosts"}, {"search", "/search?q=word"},
+		{"media, files", "/media"}, {"media, files", "/files"}, {"days, people, places, ghosts", "/ghosts"}, {"search", "/search?q=word"},
 		{"day", "/days/2031-05-01"}, {"page, person, place, file, period", ids["page"]}, {"page, person, place, file, period", ids["person"]},
 		{"page, person, place, file, period", ids["place"]}, {"page, person, place, file, period", ids["file"]}, {"page, person, place, file, period", ids["period"]},
 		{"measurement", ids["measurement"]}, {"series", "/metrics/Weight"}, {"metrics", "/metrics"}, {"habits", "/habits?day=2031-05-01"},

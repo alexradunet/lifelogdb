@@ -88,6 +88,7 @@ func NewOn(s *core.Store, localDay func() string, zone *time.Location, asker Ask
 	post("/pages/{id}/period", h.writePeriod(false))
 	post("/pages/{id}/promote-period", h.writePeriod(true))
 	get("/media", h.media)
+	get("/files", h.files)
 	m.HandleFunc("GET /pages/{id}/preview", picture(func(r *http.Request) ([]byte, error) {
 		id, err := idOf(r)
 		if err != nil {

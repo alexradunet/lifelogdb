@@ -98,6 +98,33 @@ func TestMediaListsPicturesVideosAndRecordings(t *testing.T) {
 	if strings.Contains(body, "Scan.pdf") {
 		t.Error("the media page shows the PDF")
 	}
+	// Files is every other file, as rows, with the same words.
+	must(c.Do(ctx, add, map[string]string{"title": "Notes.txt", "sha256": strings.Repeat("0f", 32), "mime": "text/plain", "day": "2031-05-03"}))
+	files := must(c.Get(ctx, "/files"))
+	got = nil
+	for _, r := range props(files)["rows"].([]any) {
+		m := r.(map[string]any)
+		got = append(got, m["title"].(string)+" "+m["kind"].(string)+" "+m["mime"].(string)+" day="+str(m["day"]))
+	}
+	if want := "Notes.txt text text/plain day=2031-05-03\nScan.pdf application application/pdf day=" + str(props(files)["rows"].([]any)[1].(map[string]any)["day"]); strings.Join(got, "\n") != want ||
+		len(files.Entities) != 2 || files.Class[0] != "files" || hrefOf(files, "media") != "/media" || hrefOf(root, "files") != "/files" ||
+		accept(find(files, "add-file")) != "" || find(files, "tombstone-pages").Name == "" || props(files)["kind"] != nil || props(files)["counts"] != nil {
+		t.Errorf("the files: %v\n%+v %+v", got, files.Links, props(files))
+	}
+	body = browse(t, h, "/files")
+	for _, want := range []string{"<h1>Files</h1>", `2 on this page`, `<a href="/media">Pictures, videos and recordings are in Media</a>`,
+		`<input type="hidden" name="back" value="/files">`, `aria-label="Select Notes.txt">`,
+		`<span class="first">Notes.txt</span><span class="meta">text/plain · Sat 3 May</span>`, `<ul class="plain rows">`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the files page lacks %s", want)
+		}
+	}
+	if strings.Contains(body, "Lake.jpg") || strings.Contains(body, "Memo 1.m4a") {
+		t.Error("the files page shows media")
+	}
+	if !strings.Contains(browse(t, h, "/"), `href="/files"`) {
+		t.Error("the sidebar does not lead to Files")
+	}
 	if body := browse(t, h, "/media?kind=video"); !strings.Contains(body, `<a href="/media?kind=video" aria-current="page">Videos</a>`) || strings.Contains(body, "Memo 1.m4a") || !strings.Contains(body, `value="/media?kind=video">`) {
 		t.Errorf("the videos page: %.800s", body)
 	}
@@ -109,7 +136,8 @@ func TestMediaListsPicturesVideosAndRecordings(t *testing.T) {
 	}
 }
 
-// TestMediaIsEmptyUntilAFileOfItsKindsIsKept: a PDF alone leaves the media list empty, with its own words.
+// TestMediaIsEmptyUntilAFileOfItsKindsIsKept: a PDF alone leaves the media list empty, with its own words, and a
+// photo alone the files list.
 func TestMediaIsEmptyUntilAFileOfItsKindsIsKept(t *testing.T) {
 	c, h := fresh(t)
 	ctx := t.Context()
@@ -120,6 +148,16 @@ func TestMediaIsEmptyUntilAFileOfItsKindsIsKept(t *testing.T) {
 	}
 	if body := browse(t, h, "/media"); !strings.Contains(body, `<p class="sub">no pictures, no videos, no recordings</p>`) || !strings.Contains(body, `<p class="empty">No media yet. Keep a file adds a picture, a video or a recording.</p>`) {
 		t.Errorf("the empty page: %.800s", body)
+	}
+	// And the other way round: a photo alone leaves the files list empty.
+	c, h = fresh(t)
+	path, _ := jpegFile(t, "lake.jpg", 40, 30)
+	must(c.DoFiles(ctx, find(must(c.Get(ctx, "/")), "add-file"), map[string]string{"title": "Lake.jpg"}, map[string]string{"original": path}))
+	if e := must(c.Get(ctx, "/files")); len(e.Entities) != 0 {
+		t.Errorf("the files: %+v", e.Entities)
+	}
+	if body := browse(t, h, "/files"); !strings.Contains(body, `<p class="empty">No other file yet. Keep a file adds one; a picture, a video or a recording goes to Media.</p>`) {
+		t.Errorf("the empty files page: %.800s", body)
 	}
 }
 

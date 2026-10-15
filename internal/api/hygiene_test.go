@@ -151,7 +151,7 @@ func TestListsPage(t *testing.T) {
 	for _, tc := range []struct {
 		list  string
 		limit int
-	}{{"/days", 60}, {"/people", 200}, {"/media", 200}, {"/places", 200}, {"/ghosts", 200}, {"/search?q=needleword", 50}} {
+	}{{"/days", 60}, {"/people", 200}, {"/media", 200}, {"/files", 200}, {"/places", 200}, {"/ghosts", 200}, {"/search?q=needleword", 50}} {
 		e := must(c.Get(t.Context(), tc.list))
 		p, _ := e.Properties.(map[string]any)
 		if fmt.Sprint(p["limit"]) != fmt.Sprint(tc.limit) || fmt.Sprint(p["offset"]) != "0" || hrefOf(e, "next") != "" || hrefOf(e, "prev") != "" {

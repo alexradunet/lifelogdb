@@ -57,16 +57,16 @@ An error is an entity of class `error` with `properties`:
 
 ## Pages of a list
 
-`/days`, `/people`, `/places`, `/media`, `/ghosts` and `/search` take `limit` (1–500; defaults 60 for days, 50 for
+`/days`, `/people`, `/places`, `/media`, `/files`, `/ghosts` and `/search` take `limit` (1–500; defaults 60 for days, 50 for
 search, 200 otherwise) and `offset` (0 or more), carry both in their properties, and link `next` when a further row
-exists and `prev` past the first page. Orders: days newest first; people and places by title; media newest day first;
+exists and `prev` past the first page. Orders: days newest first; people and places by title; media and files newest day first;
 ghosts oldest first; search by rank.
 
 ## Classes
 
 ### root
 
-`GET /`: today at a glance. Links: `today`, `days`, `sessions`, `periods`, `people`, `places`, `media`, `metrics`,
+`GET /`: today at a glance. Links: `today`, `days`, `sessions`, `periods`, `people`, `places`, `media`, `files`, `metrics`,
 `habits`, `tasks`, `deadlines`, `ghosts`, `actions`, `calendar` (this month), `week` (this week), `year` (this year). Actions: `capture` (for today), `search`,
 `find`, `open-day`, `deadlines`,
 `create-task`, `capture-session`, `create-period`, `create-page`, `create-person`, `create-place`, `add-file`,
@@ -135,28 +135,30 @@ import actions are included and the link `import` leads to its status.
 | `rows[].mentions` | integer | the live pages that link to it, of any kind, each counted once |
 | `rows[].last_day` | string | the day of the newest live day page among them; absent when there is none |
 
-### media
+### media, files
 
 `GET /media`: one page of the live files whose type is `image/*`, `video/*` or `audio/*`, newest day first, each row
 an embedded `item` link to the file's page (class `file`). `?kind=image`, `video` or `audio` reads one kind; any
 other word is refused (422). Links: `pictures`, `videos`, `recordings` (the three kinds). Actions: `add-file`
 (its `original` field carries `accept`, the three kinds) and `tombstone-pages`, the delete of several at once (its
-answer is the class `tombstoned`), which a browser draws as a box on each row. A file of another type (a PDF, a text)
-keeps its page, its wikilinks and its place in search; this list leaves it out.
+answer is the class `tombstoned`), which a browser draws as a box on each row.
+
+`GET /files`: the same page of every other live file (a PDF, a text), newest day first, with the link `media` and the
+actions `add-file` and `tombstone-pages`. It carries no `kind` and no `counts`.
 
 | property | type | meaning |
 |---|---|---|
 | `limit` | integer | the page size used |
 | `offset` | integer | the rows skipped |
-| `kind` | string | the kind read: `image`, `video`, `audio`, or `""` for all three |
-| `counts` | object | the live files of each kind, whatever kind this page reads |
+| `kind` | string | `media`: the kind read: `image`, `video`, `audio`, or `""` for all three |
+| `counts` | object | `media`: the live files of each kind, whatever kind this page reads |
 | `counts.image` | integer | the live pictures |
 | `counts.video` | integer | the live videos |
 | `counts.audio` | integer | the live recordings |
 | `rows[]` | list | one row for each `item` link, in the same order |
 | `rows[].id` | integer | the page's id |
 | `rows[].title` | string | its title |
-| `rows[].kind` | string | `image`, `video` or `audio`: the first part of its type |
+| `rows[].kind` | string | the first part of its type: `image`, `video` or `audio` in `media`; `application`, `text`, … in `files` |
 | `rows[].mime` | string | the type of the original |
 | `rows[].picture` | string | the address of its picture (`GET /pages/{id}/preview`); absent when it keeps none |
 | `rows[].day` | string | its day (the day given, a photo's EXIF day, else the day it was kept), else the day of the newest live day page that shows it; absent when it has neither |

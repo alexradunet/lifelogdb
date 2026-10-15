@@ -687,13 +687,12 @@ func (s *Store) NamedMentions(ctx context.Context, typ string, limit, offset int
 }
 
 // MediaKinds are the kinds of file the media list shows, named by the first part of files.mime, in the order the
-// list counts them. A file of any other kind (a PDF, a scan's text) keeps its page, its wikilinks and its place in
-// search; the list leaves it out.
+// list counts them. A file of any other kind (a PDF, a scan's text) is in the files list (OtherFiles).
 var MediaKinds = []string{"image", "video", "audio"}
 
-// MediaRow is a live picture, video or recording the owner keeps (docs/cookbook/keep-a-file.md), as the media list
-// shows it.
-type MediaRow struct {
+// FileRow is a live file the owner keeps (docs/cookbook/keep-a-file.md), as the media list and the files list show
+// it.
+type FileRow struct {
 	ID    int64
 	Title string
 	MIME  string
@@ -711,8 +710,19 @@ type MediaRow struct {
 const mediaKind = `substr(f.mime, 1, instr(f.mime, '/') - 1)`
 
 // Media is one page of the live files of the media kinds: all of them, or the one kind named. Newest day first
-// (MediaRow.Day), then the newest kept.
-func (s *Store) Media(ctx context.Context, kind string, limit, offset int) ([]MediaRow, error) {
+// (FileRow.Day), then the newest kept.
+func (s *Store) Media(ctx context.Context, kind string, limit, offset int) ([]FileRow, error) {
+	return s.filesOf(ctx, true, kind, limit, offset)
+}
+
+// OtherFiles is one page of the live files of every other kind (a PDF, a text): the files list, in the order of Media.
+func (s *Store) OtherFiles(ctx context.Context, limit, offset int) ([]FileRow, error) {
+	return s.filesOf(ctx, false, "", limit, offset)
+}
+
+// filesOf is one page of the live files of the media kinds (media true) or of every other kind, one media kind alone
+// when kind names it.
+func (s *Store) filesOf(ctx context.Context, media bool, kind string, limit, offset int) ([]FileRow, error) {
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT p.id, p_name.title, f.mime, f.preview IS NOT NULL,
 		       coalesce(p.day, max(CASE WHEN lp_name.title = lp.day THEN lp.day END), '') AS day,
@@ -724,17 +734,17 @@ func (s *Store) Media(ctx context.Context, kind string, limit, offset int) ([]Me
 		  LEFT JOIN entities lp ON lp.id = l.from_id AND lp.deleted_at IS NULL
 		  LEFT JOIN entity_names lp_name ON lp_name.entity_id = lp.id AND lp_name.name_key = lp.preferred_name_key
 		 WHERE p.deleted_at IS NULL
-		   AND `+mediaKind+` IN ('image', 'video', 'audio')
+		   AND (`+mediaKind+` IN ('image', 'video', 'audio')) = ?
 		   AND (? = '' OR `+mediaKind+` = ?)
 		 GROUP BY p.id, p_name.title, f.mime, f.preview IS NOT NULL
-		 ORDER BY day DESC, p.created_at DESC, p.id DESC LIMIT ? OFFSET ?`, kind, kind, limit, offset)
+		 ORDER BY day DESC, p.created_at DESC, p.id DESC LIMIT ? OFFSET ?`, media, kind, kind, limit, offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	out := []MediaRow{}
+	out := []FileRow{}
 	for rows.Next() {
-		var r MediaRow
+		var r FileRow
 		if err := rows.Scan(&r.ID, &r.Title, &r.MIME, &r.Picture, &r.Day, &r.Mentions); err != nil {
 			return nil, err
 		}
