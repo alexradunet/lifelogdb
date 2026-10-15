@@ -8,7 +8,7 @@ Earlier closed plans live in git history (`git log -- docs/plans`). The next pla
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| [114](114-one-way-to-do-a-thing.md) | One way to do a thing, on every page: New on its list, ?new= links, + Add, category badges, one selection, one verb a meaning | P2 | L | owner request 2026-10-15; `ebf3a87` | IN PROGRESS (steps 1 to 3 of 4 done) |
+| [114](114-one-way-to-do-a-thing.md) | One way to do a thing, on every page: New on its list, ?new= links, + Add, category badges, one selection, one verb a meaning | P2 | L | owner request 2026-10-15; `ebf3a87` | DONE |
 | [113](113-new-metric-on-metrics.md) | New metric, new category and a reading from the metrics page: a kind chooser, register-metric with category and habit_from, a + on each card | P2 | M | owner request 2026-10-15; `725e260` | DONE |
 | [112](112-metrics-as-cards.md) | The metrics as cards, filed in groups: a jump bar, a card a metric with its latest value and line, and file-pages | P2 | M | owner request 2026-10-15; `16e40bb` | DONE |
 | [111](111-one-metrics-view.md) | One metrics view: Habits becomes a lens of Metrics in the browser | P2 | S | owner decision 2026-10-15; `1697b50` | DONE |

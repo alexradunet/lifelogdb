@@ -329,13 +329,16 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   group as a grid of cards, with a jump bar to the groups: a card is a metric's latest value, its day and the line
   of its newest 30 readings, muted when the latest is older than 60 days; a habit's card is its strip and its
   check-in. `file-pages` (`POST /pages/file`) files several pages in a category page in one write, made when it is
-  missing; `move` 1 takes them out of their other categories. The page's file bar checks the cards to file. The CLI's
+  missing; `move` 1 takes them out of their other categories. The page's pick bar checks the cards to file. The CLI's
   `do` and the MCP tools carry it as any action; it is not the owner's alone, as `link` is not.
 - **One way to make a thing** ([plan 114](docs/plans/114-one-way-to-do-a-thing.md)). The rail's New is a menu of the
   kinds; each kind is made on its list, whose header has its New button (a page on Home, beside Open a page).
   `?new=<action>` opens that action's form on any page, and a query parameter that names a field fills it in. The
   catalog's titles say one verb for one meaning: New makes a thing, Add adds to one, Remove takes away, Restore
-  brings back. The action names do not change.
+  brings back. The action names do not change. A number card and a day's reading tile have + Add, one value for
+  that day. A page and a metric show their categories as badges, each with x, and + Add (`file-pages` with this
+  page). Media, Files, Tasks and Metrics act on several things the same way: Select shows the boxes, and one bar holds
+  the count and a button for each action the list offers.
 - **New metric, new category and a reading from `/metrics`** ([plan 113](docs/plans/113-new-metric-on-metrics.md)).
   New metric is in the header of `/metrics` and under each category's heading, not on Home. It asks what you
   record: a number with its unit, a score with its range, or done or not done (a habit from today). Its category is

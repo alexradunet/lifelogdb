@@ -128,13 +128,23 @@
 
 {{define "checkin"}}<div class="outcomes" role="group" aria-label="{{.label}}">{{template "form" (form .action "done" "1" "hide" "day" "button" "Done" "class" "tiny outcome-done" "back" .back)}}{{template "form" (form .action "done" "0" "hide" "day" "button" "Not done" "class" "tiny outcome-notdone" "back" .back)}}</div>{{end}}
 
-{{/* pick-form-open opens the form of a list that deletes several rows at once (tombstone-pages on Media,
-     tombstone-tasks on Tasks): the rows under it carry a box each, name ids, which the action reads, and
-     pick-form-close draws the bar with the danger button and closes the form. The bar comes after the rows, so a
-     CSS counter can count the checked boxes on the button, and it is drawn first by order: choose, then delete.
-     No script (docs/plans/108-the-browser-made-current.md). back is the list to return to. */}}
-{{define "pick-form-open"}}<form method="POST" action="{{.action.Href}}" data-action="{{.action.Name}}" class="pick-form"><input type="hidden" name="back" value="{{.back}}">{{end}}
-{{define "pick-form-close"}}<div class="pick-bar"><span class="desc">Check the rows to delete, then delete them.</span><button class="danger">Delete selected</button></div></form>{{end}}
+{{/* pick-bar is the one way to act on several things of a list (docs/plans/114-one-way-to-do-a-thing.md): Select
+     shows a box on each row, tile or card, and the bar's tools, with no script. The bar is a form of its own (id
+     "pick"), and each box joins it by its form attribute, so a card may hold a form of its own (a check-in). Each
+     action the list offers is one button, which sends the checked ids to its own address (formaction); Delete needs
+     no category. The bar comes after the boxes, so a CSS counter counts them on the buttons, and it is drawn first by
+     order, at the top of the list. It takes v (the view), back, words (what to check), and the actions: file
+     (file-pages, with list, the id of a datalist of categories) and del (a delete of several). */}}
+{{define "pick-bar"}}{{$v := .v}}{{$file := .file}}{{$del := .del}}{{$first := $del}}{{if $file}}{{$first = $file}}{{end}}
+{{$refused := false}}{{if $v.Refused}}{{if and $file (eq $v.Refused.Href $file.Href)}}{{$refused = true}}{{end}}{{if and $del (eq $v.Refused.Href $del.Href)}}{{$refused = true}}{{end}}{{end}}
+{{$on := $refused}}{{if and $file (eq ($v.Asked "new") $file.Name)}}{{$on = true}}{{end}}
+<form id="pick" class="pick-bar" method="POST" action="{{$first.Href}}" data-action="{{$first.Name}}"><input type="hidden" name="back" value="{{.back}}">
+<label class="pick-toggle button small"><input type="checkbox" class="pick-on"{{if $on}} checked{{end}}>Select</label>
+<div class="pick-tools"><span class="desc">{{.words}}</span>
+{{with $file}}<label><span>Category <small>required</small></span><input type="text" name="category" list="{{$.list}}" required value="{{if $refused}}{{$v.Sent.Get "category"}}{{end}}" placeholder="Bloodwork, Sport, Financial"></label>
+<fieldset class="segmented"><legend>Keep the other categories?</legend><label><input type="radio" name="move" value="0"{{if not (and $refused (eq ($v.Sent.Get "move") "1"))}} checked{{end}}><span>Add</span></label><label><input type="radio" name="move" value="1"{{if and $refused (eq ($v.Sent.Get "move") "1")}} checked{{end}}><span>Move</span></label></fieldset>
+<button class="primary" formaction="{{.Href}}">Put in a category</button>{{end}}
+{{with $del}}<button class="danger" formaction="{{.Href}}" formnovalidate>Delete selected</button>{{end}}</div></form>{{end}}
 
 {{/* pager draws a list's prev and next links, when it has them */}}
 {{define "pager"}}{{$prev := .Link "prev"}}{{$next := .Link "next"}}{{if or $prev $next}}<nav class="pager" aria-label="Pages">{{with $prev}}<a href="{{.}}" rel="prev">← Previous</a>{{else}}<span></span>{{end}}{{with $next}}<a href="{{.}}" rel="next">Next →</a>{{end}}</nav>{{end}}{{end}}

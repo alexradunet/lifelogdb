@@ -618,16 +618,29 @@ a.task{color:var(--ink); font-weight:700}
 li.tile>.pick-box{position:absolute; inset-block-start:var(--space-1); inset-inline-start:var(--space-1); z-index:1; padding:var(--space-1); background:var(--surface); border:2px solid var(--edge)}
 @container column (max-width:487px){.sheet.list ul.tiles{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}}
 
-/* A list that deletes several rows at once (Media, Tasks): a box at the start of each row, and a bar with the danger
-   button, drawn first (order) though it comes after the rows, so a counter can count the checked boxes on the
-   button; the button is quiet until a box is checked. The bar stays in view while the list scrolls under it. */
-.pick-form{display:flex; flex-direction:column; align-items:stretch; gap:0; counter-reset:picked;
-  &:not(:has(input[name=ids]:checked)) .pick-bar button.danger{opacity:.55}
-  &:has(input[name=ids]:checked) .pick-bar button.danger::after{content:" (" counter(picked) ")"}}
-li.pick:has(input[name=ids]:checked){counter-increment:picked}
-.pick-bar{order:-1; position:sticky; inset-block-start:0; z-index:1; display:flex; align-items:center; justify-content:space-between; gap:var(--space-3);
-  padding:var(--space-2) var(--space-1); background:var(--surface); border-block-end:1px solid var(--line-soft);
-  & button{flex:none}}
+/* The one selection (docs/plans/114-one-way-to-do-a-thing.md): Media, People, Places, Files, Tasks and Metrics. A
+   list with a pick bar draws the bar first (order), though it comes after the boxes, so a counter counts the
+   checked boxes on its buttons. Select shows the boxes and the tools; a button is quiet until a box is checked. The
+   bar stays in view while the list scrolls under it, under the phone's top bar. */
+.pick-list{display:flex; flex-direction:column; align-items:stretch; counter-reset:picked;
+  & .pick-box{display:none}
+  &:has(.pick-on:checked) .pick-box{display:flex}
+  &:not(:has(input[name=ids]:checked)) .pick-bar :is(button.primary,button.danger){opacity:.55}
+  &:has(input[name=ids]:checked) .pick-bar :is(button.primary,button.danger)::after{content:" (" counter(picked) ")"}}
+li.pick:has(input[name=ids]:checked),.metric-card:has(>.pick-box input:checked){counter-increment:picked}
+.pick-bar{order:-1; position:sticky; inset-block-start:0; z-index:3; display:flex; flex-direction:row; flex-wrap:wrap; align-items:center; gap:var(--space-2) var(--space-3);
+  margin-block-end:var(--space-2); padding:var(--space-2) var(--space-3); background:var(--surface); box-shadow:var(--parch-bevel);
+  --text:var(--ink); --text-strong:var(--ink); --text-muted:var(--muted); --text-link:var(--link); --text-accent:var(--accent-ink); --rule:var(--edge);
+  & .pick-toggle{cursor:pointer;
+    & input{position:absolute; opacity:0; inline-size:1px; block-size:1px}
+    &:has(input:checked){background:var(--accent-soft); color:var(--accent-ink); box-shadow:var(--slab-pressed); transform:translateY(3px)}
+    &:has(input:focus-visible){outline:2px solid var(--focus); outline-offset:2px}}
+  & .pick-tools{display:none; flex:1 1 100%; flex-direction:row; flex-wrap:wrap; align-items:flex-end; gap:var(--space-2) var(--space-3);
+    &>label{flex:1 1 14rem}
+    & .desc{flex:1 1 100%; color:var(--text-muted); font-size:13px}
+    & button{flex:none}}
+  &:has(.pick-on:checked) .pick-tools{display:flex}}
+@media (max-width:899px){.pick-bar{inset-block-start:calc(72px + env(safe-area-inset-top, 0px))}}
 li.pick{display:flex; align-items:stretch; gap:var(--space-1);
   &>a.entry,&>.pick-main{flex:1 1 auto; min-inline-size:0}}
 .pick-box{flex:none; flex-direction:row; align-items:center; padding:0 var(--space-1); cursor:pointer;
@@ -635,8 +648,7 @@ li.pick{display:flex; align-items:stretch; gap:var(--space-1);
 
 /* The metrics as cards (docs/plans/112-metrics-as-cards.md): a jump bar to the groups, a grid of cards in each group
    and in each category under it. A card a lab marker has not had for 60 days is muted, so the series in daily use
-   stand out. The file bar stays at the top while the cards scroll under it; while it is open, each card shows its
-   box, and the button is quiet until a box is checked. */
+   stand out. Select, in the pick bar, shows a box on each card. */
 .kinds.jump{& small{color:var(--text-muted)}}
 .metric-group{scroll-margin-block-start:var(--space-8);
   &>h3{margin-block:var(--space-4) var(--space-2); & small{color:var(--text-muted); font-weight:400}}}
@@ -645,18 +657,10 @@ li.pick{display:flex; align-items:stretch; gap:var(--space-1);
   & .name{flex:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   & .meta{font-size:13px; line-height:19px; color:var(--muted)}
   & .badge{align-self:flex-start}
-  &>.pick-box{display:none; position:absolute; inset-block-start:var(--space-1); inset-inline-end:var(--space-1); z-index:1; padding:var(--space-1); background:var(--surface); border:2px solid var(--edge)}
+  &>.pick-box{position:absolute; inset-block-start:var(--space-1); inset-inline-end:var(--space-1); z-index:1; padding:var(--space-1); background:var(--surface); border:2px solid var(--edge)}
   &.stale{& a.reading,& .name{color:var(--muted)} & svg.trend{color:var(--muted)} & svg.trend circle{fill:var(--muted)}}
   &.habit-card{gap:var(--space-1); & .tag{align-self:flex-start} & .habit-days{flex-wrap:wrap; gap:var(--space-1) var(--space-2)}}}
-main:has(details.file-bar[open]) .metric-card>.pick-box{display:flex}
 .metric-card:has(.pick-box input:checked){outline:2px solid var(--link); outline-offset:-2px}
-details.file-bar{position:sticky; inset-block-start:0; z-index:3; padding:var(--space-2) var(--space-3); background:var(--surface); box-shadow:var(--parch-bevel);
-  --text:var(--ink); --text-strong:var(--ink); --text-muted:var(--muted); --text-link:var(--link); --text-accent:var(--accent-ink); --rule:var(--edge);
-  &>summary{cursor:pointer; font-weight:700; color:var(--text-strong)}
-  & form{display:flex; flex-direction:row; flex-wrap:wrap; align-items:flex-end; gap:var(--space-2) var(--space-3); padding-block-start:var(--space-2);
-    &>label{flex:1 1 14rem}
-    & .desc{flex:1 1 100%; color:var(--text-muted); font-size:13px}}}
-main:not(:has(.metric-card input:checked)) details.file-bar button.primary{opacity:.55}
 /* New metric (docs/plans/113-new-metric-on-metrics.md): the checked kind shows its form, with no script. A category's
    heading carries "+ New metric here". A number card and a day's reading tile carry + Add, one value for one day. */
 .new-metric{& form{display:none}
@@ -665,7 +669,8 @@ main:not(:has(.metric-card input:checked)) details.file-bar button.primary{opaci
   &:has(input[name=new-kind][value=habit]:checked) form.kind-habit{display:flex}
   & form>label{align-self:stretch}
   & .desc{margin:0; font-size:13px; color:var(--text-muted)}}
-.metric-group>.panel-head{flex-wrap:wrap; & h2,& h3{margin:0}}
+.metric-group>.panel-head{flex-wrap:wrap; & h2,& h3{margin:0} & :is(h2,h3) a{font-size:inherit; line-height:inherit}}
+.pick-list>.metric-group{margin-block-end:var(--space-6)}
 .reading-tile .add-reading{align-self:flex-start;
   &>summary{min-inline-size:var(--control-small); &::before{content:none}}
   &[open]{align-self:stretch; &>summary{margin-block-end:0}}
@@ -681,9 +686,6 @@ main:not(:has(.metric-card input:checked)) details.file-bar button.primary{opaci
   & details.add-category{&>summary::before{content:none}
     &[open]{flex:1 1 100%; &>summary{margin-block-end:var(--space-1)}}
     & form label{flex:1 1 12rem}}}
-/* On a narrow screen the rail is a bar at the top, 72px high as drawn (its controls and their bevels): the file bar
-   stays under it. */
-@media (max-width:899px){details.file-bar{inset-block-start:calc(72px + env(safe-area-inset-top, 0px))}}
 
 /* The style page (GET /styleguide): every component in every state. Its own rules only lay the specimens out. */
 .styleguide{

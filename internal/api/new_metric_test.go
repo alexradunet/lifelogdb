@@ -67,7 +67,7 @@ func TestTheMetricsPageMakesAMetricACategoryAndAReading(t *testing.T) {
 
 	page := browse(t, h, "/metrics")
 	for _, want := range []string{`<details class="action new-metric" id="new-metric">`, `<form class="kind-number"`, `<form class="kind-score"`,
-		`<form class="kind-habit"`, `name="habit_from" value="` + fixedToday + `"`, `<a class="button" href="/metrics?new=file-pages#file-bar">New category</a>`,
+		`<form class="kind-habit"`, `name="habit_from" value="` + fixedToday + `"`, `<a class="button" href="/metrics?new=file-pages#pick">New category</a>`,
 		`<input type="radio" name="new-kind" value="number" checked>`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("/metrics lacks %s", want)
@@ -80,8 +80,8 @@ func TestTheMetricsPageMakesAMetricACategoryAndAReading(t *testing.T) {
 		!strings.Contains(p, `name="category" list="metric-categories" value="Sport"`) {
 		t.Error("?new=register-metric&category=Sport does not open New metric with Sport filled in")
 	}
-	if p := browse(t, h, "/metrics?new=file-pages"); !strings.Contains(p, `id="file-bar" open>`) {
-		t.Error("?new=file-pages does not open the bar")
+	if p := browse(t, h, "/metrics?new=file-pages"); !strings.Contains(p, `<input type="checkbox" class="pick-on" checked>`) {
+		t.Error("?new=file-pages does not turn Select on")
 	}
 
 	// The habit form and the number form, as a browser sends them.

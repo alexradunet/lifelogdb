@@ -185,8 +185,8 @@ func TestTheMetricsPageDrawsCards(t *testing.T) {
 		`<a class="name" href="/metrics/Weight">Weight</a>`, `79.5 <span class="unit">kg</span>`, `yesterday · Tue 13 May · 2 readings`, `<svg class="trend"`,
 		`<div class="reading-tile metric-card stale">`, `title="iron stores">Ferritin</a>`, `No reading yet · n`,
 		`<div class="reading-tile metric-card habit-card">`, `<span class="badge">Body</span>`, `class="strip"`, `>Done</button>`,
-		`<form id="file-metrics" method="POST" action="/pages/file"`, `<input type="hidden" name="back" value="/metrics">`,
-		`<input type="checkbox" name="ids" value="` + ids["Weight"] + `" form="file-metrics" aria-label="Select Weight">`, `<option value="Iron">Body/Iron</option>`,
+		`<form id="pick" class="pick-bar" method="POST" action="/pages/file" data-action="file-pages">`, `<input type="hidden" name="back" value="/metrics">`,
+		`<input type="checkbox" name="ids" value="` + ids["Weight"] + `" form="pick" aria-label="Select Weight">`, `<option value="Iron">Body/Iron</option>`,
 	} {
 		if !strings.Contains(page, want) {
 			t.Errorf("/metrics lacks %s", want)
@@ -195,8 +195,8 @@ func TestTheMetricsPageDrawsCards(t *testing.T) {
 	if main := page[strings.Index(page, "<main"):]; strings.Contains(main, "<table") { // the rail's month is a table
 		t.Error("the category lens draws a table")
 	}
-	if strings.Contains(page, `<details class="file-bar" id="file-bar" open>`) {
-		t.Error("the file bar is open with nothing refused")
+	if strings.Contains(page, `class="pick-on" checked`) {
+		t.Error("Select is on with nothing refused")
 	}
 
 	// The browser's form: a box per card, back to /metrics with the sentence.
@@ -207,9 +207,9 @@ func TestTheMetricsPageDrawsCards(t *testing.T) {
 	if after := browse(t, h, rec.Header().Get("Location")); !strings.Contains(after, "Put 2 in Daily (a new category).") || !strings.Contains(after, `<a href="#c-`) || strings.Contains(after, `id="not-filed"`) {
 		t.Errorf("/metrics after the filing: %.600s", after)
 	}
-	// A refused form comes back to the page with the bar open and the category it sent.
+	// A refused form comes back to the page with Select on and the category it sent.
 	rec = submit(h, "/pages/file", url.Values{"category": {"Daily"}, "back": {"/metrics"}}, "")
-	if body := rec.Body.String(); rec.Code != http.StatusUnprocessableEntity || !strings.Contains(body, `<details class="file-bar" id="file-bar" open>`) ||
+	if body := rec.Body.String(); rec.Code != http.StatusUnprocessableEntity || !strings.Contains(body, `<input type="checkbox" class="pick-on" checked>`) ||
 		!strings.Contains(body, `value="Daily"`) || !strings.Contains(body, "missing field ids") {
 		t.Errorf("no box checked: %d %.600s", rec.Code, body)
 	}

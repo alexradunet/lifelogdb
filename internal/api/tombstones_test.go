@@ -187,9 +187,9 @@ func TestTheListsDeleteWhatIsChecked(t *testing.T) {
 	}
 
 	list := browse(t, h, "/media")
-	for _, want := range []string{`<form method="POST" action="/pages/tombstone" data-action="tombstone-pages" class="pick-form">`,
-		`<input type="hidden" name="back" value="/media">`, `<div class="pick-bar"><span class="desc">Check the rows to delete, then delete them.</span><button class="danger">Delete selected</button></div></form>`,
-		`<input type="checkbox" name="ids" value="` + files[0] + `" aria-label="Select Scan 1.jpg">`, `name="ids" value="` + files[1] + `"`} {
+	for _, want := range []string{`<form id="pick" class="pick-bar" method="POST" action="/pages/tombstone" data-action="tombstone-pages">`,
+		`<input type="hidden" name="back" value="/media">`, `<span class="desc">Check the rows, then delete them.</span>`, `<button class="danger" formaction="/pages/tombstone" formnovalidate>Delete selected</button></div></form>`,
+		`<input type="checkbox" name="ids" value="` + files[0] + `" form="pick" aria-label="Select Scan 1.jpg">`, `name="ids" value="` + files[1] + `"`} {
 		if !strings.Contains(list, want) {
 			t.Errorf("the media list lacks %s", want)
 		}
@@ -199,7 +199,7 @@ func TestTheListsDeleteWhatIsChecked(t *testing.T) {
 	}
 	// The bar comes after the rows, so a CSS counter can count the checked boxes on its button (plan 108).
 	if bar, last := strings.Index(list, `class="pick-bar"`), strings.LastIndex(list, `name="ids"`); bar < last || !strings.Contains(list[bar:], "</form>") {
-		t.Error("the bar is not after the rows and before the end of the form")
+		t.Error("the bar is not after the rows")
 	}
 	rec := submit(h, "/pages/tombstone", url.Values{"ids": files, "back": {"/media"}}, "")
 	if rec.Code != http.StatusSeeOther {
@@ -219,8 +219,8 @@ func TestTheListsDeleteWhatIsChecked(t *testing.T) {
 	}
 
 	list = browse(t, h, "/tasks")
-	for _, want := range []string{`action="/tasks/tombstone" data-action="tombstone-tasks" class="pick-form">`, `<input type="hidden" name="back" value="/tasks">`,
-		`<input type="checkbox" name="ids" value="` + tasks[0] + `" aria-label="Select Buy seeds">`, `name="ids" value="` + tasks[1] + `"`} {
+	for _, want := range []string{`<form id="pick" class="pick-bar" method="POST" action="/tasks/tombstone" data-action="tombstone-tasks">`, `<input type="hidden" name="back" value="/tasks">`,
+		`<input type="checkbox" name="ids" value="` + tasks[0] + `" form="pick" aria-label="Select Buy seeds">`, `name="ids" value="` + tasks[1] + `"`} {
 		if !strings.Contains(list, want) {
 			t.Errorf("the tasks list lacks %s", want)
 		}

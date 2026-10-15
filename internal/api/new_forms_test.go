@@ -190,3 +190,34 @@ func TestAPagesCategoriesAreBadges(t *testing.T) {
 		t.Error("a day page shows categories")
 	}
 }
+
+// TestEveryListSelectsTheSameWay: Media, Files, Tasks and Metrics draw one pick bar, after their boxes, with Select
+// and a button for each action the list offers; Metrics offers no Delete of several.
+func TestEveryListSelectsTheSameWay(t *testing.T) {
+	c, h := freshOn(t, fixedToday)
+	ctx := t.Context()
+	root := must(c.Get(ctx, "/"))
+	must(c.Do(ctx, find(root, "register-metric"), map[string]string{"name": "Weight", "unit": "kg"}))
+	must(c.Do(ctx, find(root, "create-task"), map[string]string{"label": "Buy seeds"}))
+	for _, title := range []string{"Scan.jpg", "Notes.pdf"} {
+		mime := map[string]string{"Scan.jpg": "image/jpeg", "Notes.pdf": "application/pdf"}[title]
+		must(c.Do(ctx, find(root, "add-file"), map[string]string{"title": title, "sha256": strings.Repeat(map[string]string{"Scan.jpg": "ab", "Notes.pdf": "cd"}[title], 32), "mime": mime}))
+	}
+	for _, list := range []struct{ path, put, del string }{
+		{"/media", "", "/pages/tombstone"}, {"/files", "", "/pages/tombstone"}, {"/tasks", "", "/tasks/tombstone"}, {"/metrics", "/pages/file", ""},
+	} {
+		body := browse(t, h, list.path)
+		if strings.Count(body, `id="pick"`) != 1 || !strings.Contains(body, `<label class="pick-toggle button small"><input type="checkbox" class="pick-on">Select</label>`) {
+			t.Errorf("%s has no one pick bar with Select", list.path)
+			continue
+		}
+		if bar, last := strings.Index(body, `id="pick"`), strings.LastIndex(body, `form="pick"`); last < 0 || bar < last {
+			t.Errorf("%s: the bar is not after its boxes", list.path)
+		}
+		put := strings.Contains(body, `<button class="primary" formaction="/pages/file">Put in a category</button>`)
+		del := strings.Contains(body, `<button class="danger" formaction="`+list.del+`" formnovalidate>Delete selected</button>`)
+		if put != (list.put != "") || del != (list.del != "") {
+			t.Errorf("%s: Put in a category %v, Delete %v; want %v, %v", list.path, put, del, list.put != "", list.del != "")
+		}
+	}
+}

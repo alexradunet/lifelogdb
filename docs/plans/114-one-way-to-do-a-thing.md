@@ -8,7 +8,7 @@
 - **Date / baseline:** 2026-10-15, `ebf3a87` (master).
 - **Priority:** P2. **Effort:** L, in four steps. **Risk:** LOW to MEDIUM: the browser, and the titles of the
   catalog's actions. No schema change, no new data rule, no action name changes.
-- **Status:** IN PROGRESS: steps 1 to 3 done.
+- **Status:** DONE.
 - **Resolves:** no issue, no RFC. The owner's request (2026-10-15), after plan 113: "consolidate this behaviour
   across the entire app so that users always follow the same patterns." An interview followed.
 
@@ -103,3 +103,15 @@ Each step is one commit, with its tests, and can ship alone.
   badges in the head of a page and of a metric: x posts `unlink` with `part-of`, and + Add posts `file-pages`. A
   badge shows the category the page is in, not its path. The metric's `link` is no longer titled "File in
   category" with `part-of` filled: it is "Add a link", as on every page. Test: `TestAPagesCategoriesAreBadges`.
+- **Step 4, one selection.** One template, `pick-bar` (`layout.html`), replaces the Delete bar of Media, Files and
+  Tasks and the file bar of Metrics. The bar is a form of its own (`id="pick"`) after the list, drawn first by
+  `order`; each box joins it with `form="pick"`, so a metric card keeps its check-in form. Select (a checkbox with no
+  name) shows the boxes and the tools. Each action is a button with `formaction`; Delete has `formnovalidate`, so it
+  needs no category. The count is a CSS counter on the buttons. `?new=file-pages` and a refused post turn Select on.
+  Test: `TestEveryListSelectsTheSameWay`; the tests of plans 108 and 112 follow the new markup.
+- **Checks run (Linux):** `gofmt -l` clean; `go generate ./... && go vet ./... && go test ./...` green;
+  `go test -count=1 -shuffle=on ./internal/api ./internal/core ./internal/mcp` green. Each step was seen on a
+  synthetic copy, desktop and phone, light and dark. Not run: `staticcheck`, `govulncheck` (not installed), the race
+  check, Windows.
+- **Changed from the plan:** People and Places have no Delete of several, as before, so they have no pick bar. A
+  badge shows the category a page is in, not its path; the path stays on `/metrics`.
