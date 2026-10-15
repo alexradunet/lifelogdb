@@ -25,5 +25,6 @@ becomes a [decision](../decisions/README.md). One file per proposal, named `NNNN
 | [0016](0016-no-location.md) | No location: a place has no point, and a photo's position is never read | accepted | [0076](../issues/0076-a-places-point-costs-more-than-it-gives.md) | [D21](../decisions/D21-location-history.md) |
 | [0017](0017-no-typed-links.md) | Three link kinds: wikilink, at and part-of; no symmetric mirror | accepted | [0077](../issues/0077-relationship-links-cost-more-than-they-give.md) | [D8](../decisions/D08-entities-and-links.md) |
 | [0018](0018-no-habit-periods.md) | No habit periods: a habit is a metric with a reading of 1 or 0 a day | accepted | [0078](../issues/0078-habit-periods-cost-more-than-they-give.md) | [D24](../decisions/D24-habits.md) |
+| [0019](0019-no-tasks.md) | No tasks: a plan is words in a page | accepted | [0079](../issues/0079-tasks-cost-more-than-they-give.md) | [D23](../decisions/D23-no-tasks.md), [D15](../decisions/D15-recurrence.md) |
 
 Status values: draft | accepted | rejected (with a one-line reason) | withdrawn.

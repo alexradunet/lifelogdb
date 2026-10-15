@@ -215,7 +215,7 @@ func journal(s *S) {
 
 	// ---- observed habits and birthdays remain distinct from explicit tasks (D23)
 	c = s.fresh()
-	s.K("tasks have independent identities and no task graph kinds (D23)", c.n("select count(*) from sqlite_schema where type='table' and name in ('tasks','task_occurrences')") == 2 &&
+	s.K("no task table and no task graph kinds (D23)", c.n("select count(*) from sqlite_schema where type='table' and name in ('tasks','task_occurrences')") == 0 &&
 		c.n("select count(*) from link_kinds where kind in ('spawned','subtask')") == 0)
 	mid := c.metric("rent_paid", "")
 	for _, x := range [][2]any{{"2026-01-31", 1}, {"2026-02-28", 0}, {"2026-03-31", 1}} {

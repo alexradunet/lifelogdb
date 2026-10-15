@@ -33,17 +33,17 @@ func TestBrowserFieldPresence(t *testing.T) {
 // marks them with data-pages, and the script hangs the list of names after [[ on exactly those inputs.
 func TestAFieldForAPageTitleCarriesDataPages(t *testing.T) {
 	var b bytes.Buffer
-	f, err := formOf(action("create-task", nil, nil))
+	f, err := formOf(action("create-page", nil, nil))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := pages.ExecuteTemplate(&b, "form", f); err != nil {
 		t.Fatal(err)
 	}
-	if got := b.String(); !strings.Contains(got, `name="project" value="" data-pages>`) || strings.Count(got, "data-pages") != 1 {
-		t.Errorf("the project field of create-task is not the one field marked data-pages:\n%s", got)
+	if got := b.String(); !strings.Contains(got, `name="category" value="" data-pages>`) || strings.Count(got, "data-pages") != 1 {
+		t.Errorf("the category field of create-page is not the one field marked data-pages:\n%s", got)
 	}
-	for _, name := range []string{"link", "unlink", "find", "edit-task"} {
+	for _, name := range []string{"link", "unlink", "find", "file-pages"} {
 		marked := 0
 		for _, fd := range action(name, nil, nil).Fields {
 			if fd.Pages {

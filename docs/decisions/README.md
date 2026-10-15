@@ -20,7 +20,7 @@ reused, and a decision that changes is rewritten in place (git is its history).
 | [D12](D12-no-revision-tables.md) | Audit trail: no revision tables. | accepted |
 | [D13](D13-migrations-and-freeze.md) | Migrations: numbered plain SQL + `PRAGMA user_version`; freeze-and-migrate. | accepted |
 | [D14](D14-ui-and-tools.md) | UI: thin custom app for capture/browse; off-the-shelf tools for exploration. | accepted |
-| [D15](D15-recurrence.md) | Anchored calendar recurrence with durable task outcomes. | accepted |
+| [D15](D15-recurrence.md) | No recurrence: a repeating duty is words in a page. | accepted |
 | [D16](D16-places.md) | Places: a page of type `place`; where the owner was is an `at` link from the day page. | accepted |
 | [D17](D17-contract-as-data.md) | The contract as data: `lifelog_meta`, comments inside the statements, in-DB guards. | accepted |
 | [D18](D18-money.md) | Money: DEFERRED out of v1. The design is kept here for the day it returns. | deferred |
@@ -28,7 +28,7 @@ reused, and a decision that changes is rewritten in place (git is its history).
 | [D20](D20-named-pages.md) | A person or a place is a page: one id, and `[[Name]]` reaches it directly. | accepted |
 | [D21](D21-location-history.md) | No location: a place has no point, a photo's position is never read, and there is no track. | accepted |
 | [D22](D22-events.md) | No recorded spans, sessions or events: the day page and plain pages hold them | accepted |
-| [D23](D23-no-tasks.md) | Explicit personal tasks, with projects as context pages. | accepted |
+| [D23](D23-no-tasks.md) | No tasks: a plan is words in a page. | accepted |
 | [D24](D24-habits.md) | Habits: a unitless metric with a reading of 1 or 0 a day; no periods. | accepted |
 | [D25](D25-snapshots.md) | Snapshots: a dated `VACUUM INTO` copy, trusted once its restore check passes. | accepted |
 | [D26](D26-metric-categories.md) | Categories: a category is a page, and anything is filed in it by a `part-of` link. | accepted |

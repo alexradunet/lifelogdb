@@ -129,19 +129,6 @@ func TestTheCalendarHoldsEveryDatedThing(t *testing.T) {
 	do(root, "register-metric", map[string]string{"name": "weight", "unit": "kg"})
 	do(must(c.Get(ctx, "/")), "record", map[string]string{"metric": "weight", "day": "2031-05-14", "value": "80"})
 
-	do(root, "create-task", map[string]string{"label": "Pay rent", "due_day": "2031-05-14"})
-	do(root, "create-task", map[string]string{"label": "Call the bank", "due_day": "2031-05-10"})
-	old := do(root, "create-task", map[string]string{"label": "Old errand", "due_day": "2031-05-14"})
-	do(old, "tombstone-task", nil)
-	plants := do(root, "create-task", map[string]string{"label": "Water the plants", "repeat_unit": "week", "repeat_every": "1", "anchor_day": "2031-05-06"})
-	settle := func(key, state string) {
-		t.Helper()
-		slot := must(c.Get(ctx, strings.SplitN(hrefOf(plants, "self"), "?", 2)[0]+"/occurrences/"+key))
-		do(do(slot, "capture-occurrence", nil), "edit-occurrence", map[string]string{"state": state})
-	}
-	settle("2031-05-06", "done")
-	settle("2031-05-13", "skipped")
-
 	do(root, "create-person", map[string]string{"title": "Ana", "birth_day": "1990-05-14"})
 	do(root, "create-person", map[string]string{"title": "Ion", "birth_day": "1930-03-01", "death_day": "2020-05-21"})
 
@@ -170,9 +157,7 @@ func TestTheCalendarHoldsEveryDatedThing(t *testing.T) {
 			switch {
 			case err != nil:
 				t.Errorf("%s: %s: %v", on, it["href"], err)
-			case it["kind"] == "task" && e.Class[0] != "occurrence":
-				t.Errorf("%s: %s is a %v", on, it["href"], e.Class)
-			case it["kind"] != "task" && e.Title != it["title"]:
+			case e.Title != it["title"]:
 				t.Errorf("%s: %s is %q, want %q", on, it["href"], e.Title, it["title"])
 			}
 		}
@@ -180,18 +165,14 @@ func TestTheCalendarHoldsEveryDatedThing(t *testing.T) {
 			extra[on] = fmt.Sprintf("more %v readings %v", m["more_pages"], m["readings"])
 		}
 	}
-	imports := []string{"task Water the plants state=open"}
+	imports := []string{}
 	for i := 1; i <= 20; i++ {
 		imports = append(imports, fmt.Sprintf("file Import %02d.pdf", i))
 	}
 	want := map[string][]string{
-		"2031-05-06": {"task Water the plants state=done"},
-		"2031-05-10": {"task Call the bank state=open"},
-		"2031-05-13": {"task Water the plants state=skipped"},
-		"2031-05-14": {"task Pay rent state=open", "birthday Ana years=41", "place Lake Park", "file Scan.pdf"},
+		"2031-05-14": {"birthday Ana years=41", "place Lake Park", "file Scan.pdf"},
 		"2031-05-20": imports,
 		"2031-05-21": {"death Ion years=11"},
-		"2031-05-27": {"task Water the plants state=open"},
 	}
 	if fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Errorf("the items of May:\n got %v\nwant %v", got, want)
@@ -200,34 +181,23 @@ func TestTheCalendarHoldsEveryDatedThing(t *testing.T) {
 	if fmt.Sprint(extra) != "map[2031-05-14:more <nil> readings 1 2031-05-20:more 1 readings <nil>]" {
 		t.Errorf("more pages and readings: %v", extra)
 	}
-	// The week of 20 May has the same days, and its occurrences are as before.
+	// The week of 20 May has the same days.
 	y, w := time.Date(2031, 5, 20, 0, 0, 0, 0, time.UTC).ISOWeek()
 	week := props(must(c.Get(ctx, fmt.Sprintf("/weeks/%04d-W%02d", y, w))))
 	for _, d := range week["days"].([]any) {
-		if m := d.(map[string]any); m["day"] == "2031-05-20" && (len(anyItems(m["items"])) != 21 || fmt.Sprint(m["more_pages"]) != "1") {
+		if m := d.(map[string]any); m["day"] == "2031-05-20" && (len(anyItems(m["items"])) != 20 || fmt.Sprint(m["more_pages"]) != "1") {
 			t.Errorf("the week's 20 May: %d items, more %v", len(anyItems(m["items"])), m["more_pages"])
 		}
-	}
-	var labels []string
-	for _, o := range week["occurrences"].([]any) {
-		labels = append(labels, fmt.Sprint(o.(map[string]any)["label"], " ", o.(map[string]any)["due_day"]))
-	}
-	if got := strings.Join(labels, ", "); got != "Water the plants 2031-05-20" {
-		t.Errorf("the week's occurrences: %s", got)
 	}
 
 	body := browse(t, h, "/months/2031-05")
 	for _, s := range []string{
-		// a cell: three items, each with a square the colour of a task's state, then the rest counted, the mood and
-		// the readings; a phone's squares
-		`<span class="item open">Pay rent</span><span class="item">Ana <small>birthday</small></span><span class="item">Lake Park <small>place</small></span></span>`,
-		`<span class="marks" aria-hidden="true"><i class="open"></i><i></i><i></i><i></i></span><span class="more">and 1 more</span><span class="meta">mood 4 · 1 reading</span>`,
-		`<span class="item overdue">Call the bank</span>`,
-		`<span class="item done">Water the plants</span>`,
-		`<span class="more">and 19 more</span>`,
+		// a cell: three items, each with a square, the mood and the readings; a phone's squares
+		`<span class="item">Ana <small>birthday</small></span><span class="item">Lake Park <small>place</small></span><span class="item">Scan.pdf</span></span>`,
+		`<span class="marks" aria-hidden="true"><i></i><i></i><i></i></span><span class="meta">mood 4 · 1 reading</span>`,
+		`<span class="more">and 18 more</span>`,
 		// Day by day: a day a heading, each item a tag, a link to the thing and a note
 		`<h3><a href="/days/2031-05-14">`,
-		`<span class="tag overdue">overdue</span> <a href="/tasks/`,
 		`<span class="tag">birthday</span> <a href="/pages/`,
 		`>Ana</a> <small class="agenda-note">41 years</small>`,
 		`>Ion</a> <small class="agenda-note">11 years ago</small>`,
@@ -237,14 +207,11 @@ func TestTheCalendarHoldsEveryDatedThing(t *testing.T) {
 			t.Errorf("the calendar lacks %s", s)
 		}
 	}
-	if strings.Contains(body, "Old errand") {
-		t.Error("the calendar shows a deleted task")
-	}
 
 	// A month with nothing says so: a fresh file's.
 	_, none := freshOn(t, fixedToday)
 	empty := browse(t, none, "/months/2031-08")
-	for _, s := range []string{"No task, page, place or birthday has a day in August 2031."} {
+	for _, s := range []string{"No page, place or birthday has a day in August 2031."} {
 		if !strings.Contains(empty, s) {
 			t.Errorf("an empty month lacks %q", s)
 		}

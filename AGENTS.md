@@ -9,12 +9,11 @@
 cookbook, non-goals, research — so that `life.db` can be read, or written by another application, in any language.
 The docs state the current truth only.
 
-**What `life.db` is for: a life log and its backup, with explicit personal planning.** It keeps
+**What `life.db` is for: a life log and its backup.** It keeps
 what happened and what was measured: a journal of day pages, notes, the people and places in them,
 where the owner was, health readings, and the files the owner keeps — as their text and a small picture, the
-original left outside ([D9](docs/decisions/D09-binary-files.md)). Explicit tasks and occurrences preserve personal
-planning and reminder intent; ordinary pages provide project context ([D23](docs/decisions/D23-no-tasks.md),
-[planning](docs/contract/planning.md)). A plan written in a note stays text unless explicitly captured as a task.
+original left outside ([D9](docs/decisions/D09-binary-files.md)). A plan is words in a page: there are no tasks
+([D23](docs/decisions/D23-no-tasks.md)).
 A span of life or a session is a plain page or a reading, not a table of its own ([D22](docs/decisions/D22-events.md)); money and a location track remain deferred
 ([D18](docs/decisions/D18-money.md), [D21](docs/decisions/D21-location-history.md)). A proposal that adds project
 workflows, notification delivery or a finance ledger needs a real incident and the owner's word first.

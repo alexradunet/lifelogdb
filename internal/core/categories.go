@@ -104,7 +104,7 @@ type Filed struct {
 }
 
 // FilePages files every page named in the category page titled category, in one write (D26): a part-of link from
-// each. A missing category is made as an empty page, as PageForTitle makes a task's project. With move, every other
+// each. A missing category is made as an empty page, as PageForTitle makes it. With move, every other
 // part-of link of those pages is removed first. An id no page has is a 404 and a tombstone a 409; either writes
 // nothing. What the links registry refuses (a day page as a category) is links_endpoint_types.
 func (t *Tx) FilePages(ids []int64, category string, move bool) (Filed, error) {

@@ -141,11 +141,9 @@ func TestNavMarksThePageTheBrowserIsOn(t *testing.T) {
 		"/months/2026-10":  "/months/current",
 		"/weeks/2026-W41":  "/months/current",
 		"/years/2026":      "/months/current",
-		"/deadlines":       "/deadlines",
 		"/integrity":       "/integrity",
 		"/people":          "/people",
 		"/metrics/TSH":     "/metrics",
-		"/tasks/7":         "/tasks",
 		"/pages/7":         "",
 		"/search":          "",
 		"/import/prepared": "",
@@ -212,7 +210,7 @@ func TestTheBaseSheetCarriesNoAppVocabulary(t *testing.T) {
 	base := cssComments.ReplaceAllString(string(baseCSS), "")
 	for _, name := range []string{".wikilink", ".badge", ".chart", ".pager", ".plain", ".prose", ".sub", ".skip",
 		".tiny", ".inline", ".danger", ".quiet", ".desc", ".group", ".done", ".notdone", ".scroll", ".brand",
-		".occ", ".outcomes", ".settled", ".calendar", ".mood", ".more", ".here"} {
+		".calendar", ".mood", ".more", ".here"} {
 		if strings.Contains(base, name) {
 			t.Errorf("base.css styles %s, which belongs to app.css: the base sheet is ordinary HTML", name)
 		}

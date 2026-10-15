@@ -52,15 +52,11 @@ func (h *server) onThisDay(ctx context.Context, day string) ([]recentDay, error)
 	return h.withMoods(ctx, entries)
 }
 
-// The root is today at a glance (docs/plans/091-the-browser-for-daily-use.md): what is due today and is overdue,
-// the newest day pages, and every action that starts something.
+// The root is today at a glance (docs/plans/091-the-browser-for-daily-use.md): the newest day pages, and every
+// action that starts something.
 func (h *server) root(r *http.Request) (*Entity, error) {
 	ctx := r.Context()
 	today := h.localDay()
-	due, err := h.overdueAndDue(ctx, today)
-	if err != nil {
-		return nil, err
-	}
 	entries, err := h.s.DayEntries(ctx, "0000-01-01", today, true, recentDays)
 	if err != nil {
 		return nil, err
@@ -78,46 +74,18 @@ func (h *server) root(r *http.Request) (*Entity, error) {
 		return nil, err
 	}
 	actions := []Action{
-		action("capture", map[string]string{"day": today}, nil), action("search", nil, nil), action("find", nil, nil), action("open-day", nil, nil), action("deadlines", nil, nil), action("create-task", nil, nil),
+		action("capture", map[string]string{"day": today}, nil), action("search", nil, nil), action("find", nil, nil), action("open-day", nil, nil),
 		action("create-page", nil, nil), action("create-person", nil, nil), action("create-place", nil, nil), action("add-file", nil, nil),
 		record, action("register-metric", nil, nil), action("snapshot", nil, nil)}
 	return &Entity{
 		Class: []string{"root"}, Title: "Lifelog",
-		Properties: map[string]any{"today": today, "due": due, "recent": recent, "on_this_day": onThisDay},
+		Properties: map[string]any{"today": today, "recent": recent, "on_this_day": onThisDay},
 		Links: []Link{link("self", "/", "Lifelog"), link("today", dayHref(today), "Today"), link("days", "/days", "Days"),
 			link("categories", "/categories", "Categories"), link("people", "/people", "People"), link("places", "/places", "Places"), link("media", "/media", "Media"), link("files", "/files", "Files"), link("metrics", "/metrics", "Metrics"),
-			link("tasks", "/tasks", "Tasks"), link("deadlines", "/deadlines", "Deadlines"),
 			link("ghosts", "/ghosts", "Ghost pages"), link("actions", "/actions", "All actions"), link("calendar", "/months/current", "Calendar"),
 			link("week", "/weeks/current", "This week"), link("year", "/years/current", "This year")},
-		Actions: append(actions, outcomesOf(due, today)...),
+		Actions: actions,
 	}, nil
-}
-
-// overdueAndDue are the open occurrences due before today in the deadlines' default window, then the open ones due
-// today.
-func (h *server) overdueAndDue(ctx context.Context, today string) ([]occurrenceView, error) {
-	open, _, err := h.dueToday(ctx, today)
-	return open, err
-}
-
-// dueToday reads the deadlines from the default window back through today once, and splits them: the open ones (the
-// overdue first, then today's, as the deadlines order them), and today's settled ones.
-func (h *server) dueToday(ctx context.Context, today string) (open, settled []occurrenceView, err error) {
-	t, _ := dayOf(today)
-	all, err := h.dueIn(ctx, t.AddDate(0, 0, -windowBack).Format(time.DateOnly), today, "all", false)
-	if err != nil {
-		return nil, nil, err
-	}
-	open = []occurrenceView{}
-	for _, v := range all {
-		switch {
-		case v.State == core.StateOpen:
-			open = append(open, v)
-		case v.DueDay == today:
-			settled = append(settled, v)
-		}
-	}
-	return open, settled, nil
 }
 
 func (h *server) today(*http.Request) (*Entity, error) { return nil, redirect{dayHref(h.localDay())} }
@@ -139,14 +107,13 @@ func (h *server) days(r *http.Request) (*Entity, error) {
 	return e, nil
 }
 
-// dayView is a day as the API shows it: the cookbook's day view, and beside it what is due that day (on today, the
-// open work of the days before too), the day's mood and the day the server read as today
+// dayView is a day as the API shows it: the cookbook's day view, and beside it the day's mood and the day the
+// server read as today
 // (docs/plans/091-the-browser-for-daily-use.md).
 type dayView struct {
 	core.Day
-	Due    []occurrenceView `json:"due"`
-	Mood   []float64        `json:"mood"`
-	Trends []trend          `json:"trends"`
+	Mood   []float64 `json:"mood"`
+	Trends []trend   `json:"trends"`
 	// OnThisDay are the day pages of earlier years on this month and day.
 	OnThisDay []recentDay `json:"on_this_day"`
 	Today     string      `json:"today"`
@@ -163,17 +130,6 @@ func (h *server) dayEntity(ctx context.Context, day string) (*Entity, error) {
 		return nil, err
 	}
 	today := h.localDay()
-	var due []occurrenceView
-	if day == today { // the open work of the days before, then all of today's: one read
-		var settled []occurrenceView
-		due, settled, err = h.dueToday(ctx, today)
-		due = append(due, settled...)
-	} else {
-		due, err = h.dueIn(ctx, day, day, "all", false)
-	}
-	if err != nil {
-		return nil, err
-	}
 	moods, err := h.s.Moods(ctx, day, day)
 	if err != nil {
 		return nil, err
@@ -196,7 +152,7 @@ func (h *server) dayEntity(ctx context.Context, day string) (*Entity, error) {
 	}
 	t, _ := dayOf(day)
 	e := &Entity{
-		Class: []string{"day"}, Title: day, Properties: dayView{Day: *d, Due: due, Mood: mood, Trends: trends, OnThisDay: onThisDay, Today: today},
+		Class: []string{"day"}, Title: day, Properties: dayView{Day: *d, Mood: mood, Trends: trends, OnThisDay: onThisDay, Today: today},
 		Links: []Link{link("self", dayHref(day), day), link("prev", dayHref(t.AddDate(0, 0, -1).Format(time.DateOnly)), "Previous day"),
 			link("next", dayHref(t.AddDate(0, 0, 1).Format(time.DateOnly)), "Next day"), link("metrics", "/metrics", "Metrics"), link("index", "/", "Home"),
 			link("month", monthHref(t), t.Format(layoutMonth))},
@@ -210,7 +166,6 @@ func (h *server) dayEntity(ctx context.Context, day string) (*Entity, error) {
 		}
 		e.Actions = append(e.Actions, saveBodyAction(d.PageID, p.Body, p.Version))
 	}
-	e.Actions = append(e.Actions, outcomesOf(due, today)...)
 	for _, m := range d.Readings {
 		e.Entities = append(e.Entities, link("reading", measurementHref(m.ID), fmt.Sprintf("%s %g", m.Metric, m.Value)))
 	}

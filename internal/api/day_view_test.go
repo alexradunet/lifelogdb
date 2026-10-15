@@ -111,7 +111,7 @@ func TestTheDayIsALeafAndItsMargin(t *testing.T) {
 		}
 	}
 	order := []string{`<div class="sheet">`, `<section class="journal"`, `<section class="capture"`, `<div class="margin">`,
-		`<section class="group" aria-label="Due">`, `<section class="group" aria-label="Readings">`}
+		`<section class="group" aria-label="Readings">`}
 	at, prev := -1, "the start"
 	for _, mark := range order {
 		i := strings.Index(body, mark)

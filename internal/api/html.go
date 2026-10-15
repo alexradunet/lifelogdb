@@ -53,35 +53,32 @@ func mustView(name string) []byte {
 }
 
 var pages = template.Must(template.New("").Funcs(template.FuncMap{
-	"basecss":      func() template.CSS { return baseCSS },
-	"appcss":       func() template.CSS { return appCSS },
-	"rel":          func(r []string) string { return strings.Join(r, " ") },
-	"markdown":     markdown,
-	"mark":         mark,
-	"rejected":     rejected,
-	"chart":        chart,
-	"titleHref":    titleHref,
-	"weekday":      weekday,
-	"unitWords":    unitWords,
-	"form":         formOf,
-	"outcomes":     outcomes,
-	"group":        group,
-	"due":          dueGroups,
-	"weeks":        weeks,
-	"dayOfMonth":   dayOfMonth,
-	"dict":         dict,
-	"monthBand":    monthBand,
-	"num":          num,
-	"pathesc":      url.PathEscape,
-	"icon":         icon,
-	"shortDay":     shortDay,
-	"addDays":      addDays,
-	"week":         isoWeek,
-	"isoWeekKey":   isoWeekKey,
-	"yearOf":       func(month string) string { return month[:min(4, len(month))] },
-	"settledFirst": settledFirst,
-	"sinceLast":    sinceLastWeek,
-	"nameWords":    nameWords,
+	"basecss":    func() template.CSS { return baseCSS },
+	"appcss":     func() template.CSS { return appCSS },
+	"rel":        func(r []string) string { return strings.Join(r, " ") },
+	"markdown":   markdown,
+	"mark":       mark,
+	"rejected":   rejected,
+	"chart":      chart,
+	"titleHref":  titleHref,
+	"weekday":    weekday,
+	"unitWords":  unitWords,
+	"form":       formOf,
+	"group":      group,
+	"weeks":      weeks,
+	"dayOfMonth": dayOfMonth,
+	"dict":       dict,
+	"monthBand":  monthBand,
+	"num":        num,
+	"pathesc":    url.PathEscape,
+	"icon":       icon,
+	"shortDay":   shortDay,
+	"addDays":    addDays,
+	"week":       isoWeek,
+	"isoWeekKey": isoWeekKey,
+	"yearOf":     func(month string) string { return month[:min(4, len(month))] },
+	"sinceLast":  sinceLastWeek,
+	"nameWords":  nameWords,
 	"monthName": func(month string) string { // "2026-10" to "October"
 		if t, ok := monthOf(month); ok {
 			return t.Format("January")
@@ -92,7 +89,6 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 	"add":       func(a, b int) int { return a + b },
 	"segmented": segmented,
 	"alert":     alertOf,
-	"capLater":  capLater,
 	"upTo":      upTo,
 	"beyond":    beyond,
 }).ParseFS(views, "html/*.html"))
@@ -131,7 +127,7 @@ var viewOf = map[string]string{
 	"days": "list", "people": "list", "places": "list", "media": "media", "files": "files", "ghosts": "list", "search": "search", "categories": "category-tree",
 
 	"metrics": "metrics", "series": "metric", "metric": "page", "measurement": "measurement", "error": "error", "login": "login",
-	"tasks": "tasks", "task": "task", "occurrence": "occurrence", "deadlines": "deadlines", "month": "month", "week": "week", "year": "year", "styleguide": "styleguide",
+	"month": "month", "week": "week", "year": "year", "styleguide": "styleguide",
 	"preview": "preview",
 }
 
@@ -230,8 +226,6 @@ var navItems = []struct {
 	{"Lifelog", "/", "", []string{"/"}, "home"},
 	{"Today", "/days/today", "today", []string{"/days/today"}, "day"},
 	{"Calendar", "/months/current", "calendar", []string{"/months", "/weeks", "/years", "/days"}, "day"},
-	{"Due", "/deadlines", "due", []string{"/deadlines"}, "day"},
-	{"Tasks", "/tasks", "tasks", []string{"/tasks"}, "day"},
 	{"Categories", "/categories", "categories", []string{"/categories"}, "record"},
 	{"People", "/people", "people", []string{"/people"}, "record"},
 	{"Places", "/places", "places", []string{"/places"}, "record"},
@@ -243,12 +237,10 @@ var navItems = []struct {
 	{"Integrity checks", "/integrity", "", []string{"/integrity"}, "owner"},
 }
 
-// navItem is one sidebar link, marked when the browser is on a page it stands for. Count is the number beside it:
-// the open occurrences overdue or due today, beside Due.
+// navItem is one sidebar link, marked when the browser is on a page it stands for.
 type navItem struct {
 	Title, Href, Icon, Group string
 	Current                  bool
-	Count                    int
 }
 
 // newKinds are the items of the rail's New menu (docs/plans/114-one-way-to-do-a-thing.md): each kind is made on its
@@ -256,7 +248,6 @@ type navItem struct {
 // added on its metric's card.
 var newKinds = []struct{ Title, Href, Icon string }{
 	{"Page", "/?new=create-page", "new"},
-	{"Task", "/tasks?new=create-task", "tasks"},
 	{"Person", "/people?new=create-person", "people"},
 	{"Place", "/places?new=create-place", "places"},
 	{"Metric", "/metrics?new=register-metric", "metrics"},
@@ -278,9 +269,6 @@ func (v *view) Nav() []navItem {
 	best, at, length := -1, 0, 0
 	for i, it := range navItems {
 		out[i] = navItem{Title: it.Title, Href: it.Href, Icon: it.Icon, Group: it.Group}
-		if it.Href == "/deadlines" && v.Shell != nil {
-			out[i].Count = v.Shell.Due
-		}
 		for _, p := range it.Paths {
 			if n := navMatch(path, p); n > at || n == at && n > 0 && len(p) > length {
 				best, at, length = i, n, len(p)
@@ -362,8 +350,7 @@ func (v *view) shown(a *Action) *Action {
 	return &c
 }
 
-// ActionFor is the action of that name on the resource href (a view offering one per item, e.g. an outcome
-// per occurrence).
+// ActionFor is the action of that name on the resource href (a view offering one per item).
 func (v *view) ActionFor(name, href string) *Action {
 	for i := range v.Actions {
 		if a := &v.Actions[i]; a.Name == name && strings.HasPrefix(a.Href, href+"/") {

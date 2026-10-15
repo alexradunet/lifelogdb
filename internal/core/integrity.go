@@ -15,9 +15,6 @@ type IntegrityResult struct {
 	OrphanEntities                []int64  `json:"entities_without_domain_row"`
 	InvalidTypedLinks             []int64  `json:"invalid_typed_links"`
 	InvalidMeasurementCorrections []int64  `json:"invalid_measurement_corrections"`
-	InvalidTaskProjects           []int64  `json:"invalid_task_projects"`
-	InvalidOneOffTasks            []int64  `json:"invalid_one_off_tasks"`
-	InvalidTaskOccurrences        []int64  `json:"invalid_task_occurrences"`
 	InvalidMeasurementChains      []int64  `json:"invalid_measurement_chains"`
 	InvalidJournalNames           []int64  `json:"invalid_journal_names"`
 	FullTextIndexOK               bool     `json:"full_text_index_ok"`
@@ -48,27 +45,6 @@ func (r *IntegrityResult) idChecks() []idCheck {
  OR (k.to_types IS NOT NULL AND instr(',' || k.to_types || ',', ',' || t.entity_type || ',')=0)
  ORDER BY l.id`, &r.InvalidTypedLinks},
 		{"measurement corrections", `SELECT m.id FROM measurements m LEFT JOIN measurements p ON p.id=m.supersedes_id WHERE m.supersedes_id IS NOT NULL AND (p.id IS NULL OR p.metric_id IS NOT m.metric_id) ORDER BY m.id`, &r.InvalidMeasurementCorrections},
-		{"task project endpoints", `SELECT t.id FROM tasks t LEFT JOIN entities e ON e.id=t.project_page_id WHERE t.project_page_id IS NOT NULL AND (e.id IS NULL OR e.entity_type<>'page' OR e.is_journal) ORDER BY t.id`, &r.InvalidTaskProjects},
-		{"one-off task ownership", `SELECT t.id FROM tasks t WHERE t.repeat_unit IS NULL AND (SELECT count(*) FROM task_occurrences o WHERE o.task_id=t.id AND o.occurrence_key='once')<>1 ORDER BY t.id`, &r.InvalidOneOffTasks},
-		// The recurrence rule in SQL, independent of the Go calendar: an occurrence is on a slot of its series.
-		{"task occurrence membership", `SELECT o.id FROM task_occurrences o WHERE NOT EXISTS
-(SELECT 1 FROM tasks t WHERE t.id=o.task_id AND
-   ((t.repeat_unit IS NULL AND o.occurrence_key='once') OR
-    (t.repeat_unit IS NOT NULL AND o.occurrence_key>=t.anchor_day
-     AND CASE t.repeat_unit
-       WHEN 'day' THEN CAST(julianday(o.occurrence_key)-julianday(t.anchor_day) AS INTEGER)%t.repeat_every=0
-       WHEN 'week' THEN CAST(julianday(o.occurrence_key)-julianday(t.anchor_day) AS INTEGER)%7=0
-         AND (CAST(julianday(o.occurrence_key)-julianday(t.anchor_day) AS INTEGER)/7)%t.repeat_every=0
-       WHEN 'month' THEN ((CAST(substr(o.occurrence_key,1,4) AS INTEGER)-CAST(substr(t.anchor_day,1,4) AS INTEGER))*12
-         + CAST(substr(o.occurrence_key,6,2) AS INTEGER)-CAST(substr(t.anchor_day,6,2) AS INTEGER))%t.repeat_every=0
-       WHEN 'year' THEN (CAST(substr(o.occurrence_key,1,4) AS INTEGER)-CAST(substr(t.anchor_day,1,4) AS INTEGER))%t.repeat_every=0
-         AND substr(o.occurrence_key,6,2)=substr(t.anchor_day,6,2)
-     END
-     AND (t.repeat_unit IN ('day','week') OR CAST(substr(o.occurrence_key,9,2) AS INTEGER)=min(CAST(substr(t.anchor_day,9,2) AS INTEGER),
-       CASE WHEN substr(o.occurrence_key,6,2)='02' THEN 28+
-         (CAST(substr(o.occurrence_key,1,4) AS INTEGER)%4=0 AND
-          (CAST(substr(o.occurrence_key,1,4) AS INTEGER)%100<>0 OR CAST(substr(o.occurrence_key,1,4) AS INTEGER)%400=0))
-       WHEN substr(o.occurrence_key,6,2) IN ('04','06','09','11') THEN 30 ELSE 31 END))))) OR (o.state='open' AND EXISTS (SELECT 1 FROM tasks t WHERE t.id=o.task_id AND t.repeat_until_day IS NOT NULL AND o.occurrence_key>t.repeat_until_day)) ORDER BY o.id`, &r.InvalidTaskOccurrences},
 		{"measurement correction chains", `WITH RECURSIVE rooted(id) AS (
  SELECT id FROM measurements WHERE supersedes_id IS NULL
  UNION

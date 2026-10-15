@@ -7,7 +7,6 @@ spans tables — time, identity, provenance, deletion — in a row of `lifelog_m
 | page | what it holds |
 |---|---|
 | [Prose, wikilinks and titles](titles-and-wikilinks.md) | the save contract, the wikilink and `#tag` grammar and its vectors, renames, titles, `title_key`, day pages |
-| [Personal tasks and reminder intent](planning.md) | bounded recurrence, merged deadline reads, writer lifecycle and clock-resolution vectors |
 | [Integrity checks](integrity-checks.md) | the four checks that tell whether a file still obeys the schema |
 | [Connection setup](connections.md) | the pragmas every writer sets and reads back, the version floor, `BEGIN IMMEDIATE`, read-only readers |
 | [Threat model and the 2075 test](threat-model.md) | what is protected and from what; the questions the file alone must answer |

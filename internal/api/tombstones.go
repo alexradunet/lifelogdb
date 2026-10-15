@@ -9,7 +9,7 @@ import (
 	"lifelog/internal/core"
 )
 
-// maxTombstoneIDs bounds one tombstone-pages or tombstone-tasks: a list page shows 200 rows at most.
+// maxTombstoneIDs bounds one tombstone-pages: a list page shows 200 rows at most.
 const maxTombstoneIDs = 500
 
 // idsOf reads the field ids of a bulk action: every value of the field (a browser sends one per checked row),
@@ -40,7 +40,7 @@ func idsOf(values []string) ([]int64, error) {
 	return ids, nil
 }
 
-// tombstoneMany is tombstone-pages (kind "pages") and tombstone-tasks (kind "tasks"): every id named is tombstoned
+// tombstoneMany is tombstone-pages (kind "pages"): every id named is tombstoned
 // in one write, or none is. The answer is the class tombstoned: the ids, their count, and an item link to each.
 // A browser form returns to its list (back), with the count as its feedback.
 func (h *server) tombstoneMany(kind string) func(*http.Request, string) (*Entity, error) {
@@ -59,9 +59,6 @@ func (h *server) tombstoneMany(kind string) func(*http.Request, string) (*Entity
 		case "pages":
 			self, href = "/", pageHref
 			err = h.s.TombstonePages(r.Context(), src, ids)
-		case "tasks":
-			self, href = "/tasks", taskHref
-			err = h.s.TombstoneTasks(r.Context(), src, ids)
 		}
 		if err != nil {
 			return nil, err

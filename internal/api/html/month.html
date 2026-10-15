@@ -1,7 +1,7 @@
 {{/* The calendar (docs/plans/092-the-app-shell.md): the weeks of a month, Monday first. A day with a page is tinted,
      with its first line; today is framed; each day opens its day view. Every other thing that names a day is an item
-     of it (docs/plans/101-the-calendar-holds-every-dated-thing.md): a cell shows three, with a square the colour of a
-     task's state, then "and N more", the mood and the readings; a phone's cell shows only the squares. Under the
+     of it (docs/plans/101-the-calendar-holds-every-dated-thing.md): a cell shows three, with a square each, then
+     "and N more", the mood and the readings; a phone's cell shows only the squares. Under the
      calendar, Day by day links each item to its own page. */}}
 {{define "month"}}{{template "head" .}}
 {{$m := .Props}}
@@ -12,7 +12,7 @@
 {{template "step" (dict "href" (.Link "next") "rel" "next" "label" (printf "Next month, %s" (.LinkTitle "next")) "text" (.LinkTitle "next"))}}
 {{template "boxed" (form (.Action "open-day") "button" "Go to a day")}}
 </div></header>
-<div class="scroll"><table class="calendar"><caption>A day with a page is tinted, with its first line. A day shows what is due on it and what else has its date; Day by day, under the calendar, lists every one. Today has a frame.</caption>
+<div class="scroll"><table class="calendar"><caption>A day with a page is tinted, with its first line. A day shows what has its date; Day by day, under the calendar, lists every one. Today has a frame.</caption>
 {{template "weekdays" false}}
 <tbody>{{range weeks $m.days}}<tr>{{range .}}{{if .}}{{$d := .}}<td{{if .page}} class="written"{{end}}{{if eq .day $m.today}} aria-current="date"{{end}}><a href="/days/{{.day}}"><span class="n">{{dayOfMonth .day}}</span>{{with .first_line}}<span class="first">{{.}}</span>{{end}}
 {{- with .items}}<span class="items">{{range upTo . 3}}{{$w := $.CalItem . $d.day $m.today}}<span class="item{{with $w.Class}} {{.}}{{end}}">{{.title}}{{with $w.Word}} <small>{{.}}</small>{{end}}</span>{{end}}</span><span class="marks" aria-hidden="true">{{range upTo . 4}}<i{{with ($.CalItem . $d.day $m.today).Class}} class="{{.}}"{{end}}></i>{{end}}</span>{{end}}
@@ -27,7 +27,7 @@
 {{if $any}}{{range $m.days}}{{if .items}}{{$d := .}}<section class="agenda-day" aria-label="{{$.Date .day}}"><h3><a href="/days/{{.day}}">{{$.Date .day}}</a></h3>
 <ul class="plain">{{range .items}}{{$w := $.CalItem . $d.day $m.today}}<li><span class="tag{{with $w.Class}} {{.}}{{end}}">{{$w.Tag}}</span> <a href="{{.href}}">{{.title}}</a>{{with $w.Note}} <small class="agenda-note">{{.}}</small>{{end}}</li>{{end}}
 {{- with $d.more_pages}}<li><a href="/days/{{$d.day}}">and {{num .}} more {{if eq (num .) "1"}}page{{else}}pages{{end}}</a></li>{{end}}</ul></section>
-{{end}}{{end}}{{else}}<p class="empty">No task, page, place or birthday has a day in {{.Title}}.</p>{{end}}
+{{end}}{{end}}{{else}}<p class="empty">No page, place or birthday has a day in {{.Title}}.</p>{{end}}
 </section>
 </div>
 

@@ -16,9 +16,9 @@ func semanticIntegrity(s *S, checks []string) {
 	c = s.fresh()
 	c.must("INSERT INTO measurements(id,metric_id,day,value,source,created_at) VALUES(200,1,'2026-10-01',3,'ui'," + NOW + ")")
 	c.must("INSERT INTO measurements(id,metric_id,day,value,supersedes_id,source,created_at) VALUES(3,1,'2026-10-01',NULL,200,'ui'," + NOW + ")")
-	s.K("correction integrity accepts retractions and nonmonotonic ids", c.tab(checks[8]) == "" && c.n("SELECT count(*) FROM measurement_values") == 0)
+	s.K("correction integrity accepts retractions and nonmonotonic ids", c.tab(checks[5]) == "" && c.n("SELECT count(*) FROM measurement_values") == 0)
 	bypass(c, "measurements_no_update", func() { c.must("UPDATE measurements SET supersedes_id=3 WHERE id=200") })
-	s.K("correction integrity detects a rootless cycle", c.integrityOK() && c.tab(checks[8]) == "3; 200")
+	s.K("correction integrity detects a rootless cycle", c.integrityOK() && c.tab(checks[5]) == "3; 200")
 
 	for _, journal := range []bool{false, true} {
 		c = s.fresh()
@@ -32,12 +32,12 @@ func semanticIntegrity(s *S, checks []string) {
 		} else {
 			owner = c.page(title)
 		}
-		s.K("journal integrity accepts canonical ownership and ordinary names", c.tab(checks[9]) == "")
+		s.K("journal integrity accepts canonical ownership and ordinary names", c.tab(checks[6]) == "")
 		bypass(c, "entity_names_day_insert", func() { c.must("INSERT INTO entity_names(entity_id,title,name_key) VALUES(?,?,?)", owner, alias, key) })
 		witness := "journal integrity detects a date name on another owner"
 		if journal {
 			witness = "journal integrity detects extra journal aliases"
 		}
-		s.K(witness, c.integrityOK() && c.tab(checks[9]) == c.tab("SELECT id FROM entity_names WHERE name_key=?", key))
+		s.K(witness, c.integrityOK() && c.tab(checks[6]) == c.tab("SELECT id FROM entity_names WHERE name_key=?", key))
 	}
 }

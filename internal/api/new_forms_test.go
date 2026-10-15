@@ -18,7 +18,6 @@ func TestEveryKindOfTheNewMenuOpensItsForm(t *testing.T) {
 	menu = menu[:strings.Index(menu, "</nav></div>")]
 	for _, kind := range []struct{ title, href, action string }{
 		{"Page", "/?new=create-page", "create-page"},
-		{"Task", "/tasks?new=create-task", "create-task"},
 		{"Person", "/people?new=create-person", "create-person"},
 		{"Place", "/places?new=create-place", "create-place"},
 		{"Metric", "/metrics?new=register-metric", ""},
@@ -43,8 +42,8 @@ func TestEveryKindOfTheNewMenuOpensItsForm(t *testing.T) {
 			}
 		}
 	}
-	if strings.Count(menu, "<li>") != 7 {
-		t.Errorf("the New menu has %d items, want 7", strings.Count(menu, "<li>"))
+	if strings.Count(menu, "<li>") != 6 {
+		t.Errorf("the New menu has %d items, want 6", strings.Count(menu, "<li>"))
 	}
 }
 
@@ -76,7 +75,7 @@ func TestALinkOpensAFormAndFillsItsFields(t *testing.T) {
 	if !strings.Contains(tools, `data-action="create-page"`) || !strings.Contains(tools, `data-action="find"`) {
 		t.Errorf("Home's header lacks New page or Open a page:\n%s", tools)
 	}
-	for _, gone := range []string{`<details id="new">`, `data-action="create-person"`, `data-action="add-file"`, `data-action="create-task"`} {
+	for _, gone := range []string{`<details id="new">`, `data-action="create-person"`, `data-action="add-file"`} {
 		if strings.Contains(home, gone) {
 			t.Errorf("Home still draws %s", gone)
 		}
@@ -90,11 +89,10 @@ func TestTheCatalogSaysOneVerbForOneMeaning(t *testing.T) {
 		titles[a.Name] = a.Title
 	}
 	for name, want := range map[string]string{
-		"create-page": "New page", "create-person": "New person", "create-place": "New place", "create-task": "New task",
+		"create-page": "New page", "create-person": "New person", "create-place": "New place",
 		"register-metric": "New metric", "add-file": "New file",
-		"record": "Add a reading", "capture-occurrence": "Add an occurrence", "link": "Add a link", "capture": "Add to the day",
-		"unlink": "Remove a link", "revive": "Restore", "revive-task": "Restore task",
-		"revive-occurrence": "Restore occurrence", "file-pages": "Put in a category",
+		"record": "Add a reading", "link": "Add a link", "capture": "Add to the day",
+		"unlink": "Remove a link", "revive": "Restore", "file-pages": "Put in a category",
 	} {
 		if titles[name] != want {
 			t.Errorf("%s is titled %q, want %q", name, titles[name], want)
@@ -188,20 +186,19 @@ func TestAPagesCategoriesAreBadges(t *testing.T) {
 	}
 }
 
-// TestEveryListSelectsTheSameWay: Media, Files, Tasks and Metrics draw one pick bar, after their boxes, with Select
+// TestEveryListSelectsTheSameWay: Media, Files and Metrics draw one pick bar, after their boxes, with Select
 // and a button for each action the list offers; Metrics offers no Delete of several.
 func TestEveryListSelectsTheSameWay(t *testing.T) {
 	c, h := freshOn(t, fixedToday)
 	ctx := t.Context()
 	root := must(c.Get(ctx, "/"))
 	must(c.Do(ctx, find(root, "register-metric"), map[string]string{"name": "Weight", "unit": "kg"}))
-	must(c.Do(ctx, find(root, "create-task"), map[string]string{"label": "Buy seeds"}))
 	for _, title := range []string{"Scan.jpg", "Notes.pdf"} {
 		mime := map[string]string{"Scan.jpg": "image/jpeg", "Notes.pdf": "application/pdf"}[title]
 		must(c.Do(ctx, find(root, "add-file"), map[string]string{"title": title, "sha256": strings.Repeat(map[string]string{"Scan.jpg": "ab", "Notes.pdf": "cd"}[title], 32), "mime": mime}))
 	}
 	for _, list := range []struct{ path, put, del string }{
-		{"/media", "", "/pages/tombstone"}, {"/files", "", "/pages/tombstone"}, {"/tasks", "", "/tasks/tombstone"}, {"/metrics", "/pages/file", ""},
+		{"/media", "", "/pages/tombstone"}, {"/files", "", "/pages/tombstone"}, {"/metrics", "/pages/file", ""},
 	} {
 		body := browse(t, h, list.path)
 		if strings.Count(body, `id="pick"`) != 1 || !strings.Contains(body, `<label class="pick-toggle button small"><input type="checkbox" class="pick-on">Select</label>`) {

@@ -3,11 +3,8 @@ package api
 // The calendar in words and numbers: days stepped, ISO weeks, weekdays, and the words of a week.
 
 import (
-	"slices"
 	"strconv"
 	"time"
-
-	"lifelog/internal/core"
 )
 
 // addDays is the day n days after day ("" for a day that is not one).
@@ -37,26 +34,6 @@ func isoWeekKey(day string) string {
 		return ""
 	}
 	return weekKey(t)
-}
-
-// settledFirst orders the occurrences of a week for reading back: done ones, then skipped ones, then open ones. The
-// order inside each state stays.
-func settledFirst(list any) []any {
-	items, _ := list.([]any)
-	rank := map[string]int{core.StateDone: 0, core.StateSkipped: 1}
-	out := slices.Clone(items)
-	slices.SortStableFunc(out, func(a, b any) int {
-		state := func(x any) int {
-			m, _ := x.(map[string]any)
-			s, _ := m["state"].(string)
-			if r, ok := rank[s]; ok {
-				return r
-			}
-			return 2
-		}
-		return state(a) - state(b)
-	})
-	return out
 }
 
 // sinceLastWeek says in words how a week's mean differs from the week before's: previous is nil when that week had
@@ -116,23 +93,12 @@ func monthBand(day string) string {
 // Word the muted word a cell writes after the title, Note the muted note Day by day writes after the link.
 type calWords struct{ Tag, Class, Word, Note string }
 
-// CalItem says an item of a day of the calendar in the words of this view. An open task due before today is overdue,
-// as the deadlines say it.
+// CalItem says an item of a day of the calendar in the words of this view.
 func (v *view) CalItem(item any, day, today string) calWords {
 	m, _ := item.(map[string]any)
 	str := func(k string) string { s, _ := m[k].(string); return s }
 	years, _ := m["years"].(float64)
 	switch str("kind") {
-	case "task":
-		switch {
-		case str("state") == core.StateDone:
-			return calWords{Tag: "done", Class: "done"}
-		case str("state") == core.StateSkipped:
-			return calWords{Tag: "skipped"}
-		case day < today:
-			return calWords{Tag: "overdue", Class: "overdue"}
-		}
-		return calWords{Tag: "due", Class: "open"}
 	case "birthday":
 		if years == 0 {
 			return calWords{Tag: "born", Word: "born"}

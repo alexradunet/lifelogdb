@@ -15,32 +15,12 @@ import (
 	"lifelog/internal/db"
 )
 
-// TestTheSidebarCountsWhatIsDueAndShowsTheMonth: the Due count is the rows of the root's Due: the open occurrences
-// overdue (in the 30 days before today) with a series counted once, as the list folds it, and each one due today; a
-// done, a skipped, a later, an older and a tombstoned one are not counted. The month is this month, with the days that have a day page marked and today framed.
-func TestTheSidebarCountsWhatIsDueAndShowsTheMonth(t *testing.T) {
+// TestTheSidebarShowsTheMonth: the month is this month, with the days that have a day page marked and today framed.
+func TestTheSidebarShowsTheMonth(t *testing.T) {
 	c, h := freshOn(t, fixedToday) // Wednesday 14 May 2031
-	if body := browse(t, h, "/"); strings.Contains(body, `class="count"`) || !strings.Contains(body, "May 2031</a><span class=\"meta\">0 written</span>") {
-		t.Errorf("an empty life log shows a count, or not its empty month:\n%s", sidebar(body))
+	if body := browse(t, h, "/"); !strings.Contains(body, "May 2031</a><span class=\"meta\">0 written</span>") {
+		t.Errorf("an empty life log does not show its empty month:\n%s", sidebar(body))
 	}
-
-	root := must(c.Get(t.Context(), "/"))
-	create := func(v map[string]string) string {
-		e := must(c.Do(t.Context(), find(root, "create-task"), v))
-		return strings.SplitN(hrefOf(e, "self"), "?", 2)[0]
-	}
-	outcome := func(task string, values map[string]string) {
-		occ := must(c.Get(t.Context(), task+"/occurrences/once"))
-		must(c.Do(t.Context(), find(occ, "edit-occurrence"), values))
-	}
-	create(map[string]string{"label": "Book the dentist", "due_day": dayOf(-3)})                                                // counted
-	create(map[string]string{"label": "Water the plants", "repeat_unit": "day", "repeat_every": "7", "anchor_day": dayOf(-14)}) // -14 and -7 one row, 0 another
-	create(map[string]string{"label": "Renew the passport", "due_day": dayOf(2)})                                               // later
-	create(map[string]string{"label": "Pay the old bill", "due_day": dayOf(-40)})                                               // before the window
-	outcome(create(map[string]string{"label": "Call Dana Example", "due_day": dayOf(-1)}), map[string]string{"state": "done", "completed_at": "now"})
-	outcome(create(map[string]string{"label": "Clean the gutter", "due_day": dayOf(-2)}), map[string]string{"state": "skipped"})
-	gone := create(map[string]string{"label": "Old plan", "due_day": dayOf(-4)})
-	must(c.Do(t.Context(), find(must(c.Get(t.Context(), gone)), "tombstone-task"), nil))
 
 	for _, day := range []string{"2031-04-30", "2031-05-03", dayOf(-2), fixedToday} {
 		must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/days/"+day)), "capture"), map[string]string{"text": "Synthetic entry"}))
@@ -49,11 +29,7 @@ func TestTheSidebarCountsWhatIsDueAndShowsTheMonth(t *testing.T) {
 	must(c.Do(t.Context(), find(page, "save-body"), map[string]string{"body": ""})) // a day page with an empty body is still written
 
 	body := browse(t, h, "/")
-	if n := len(props(must(c.Get(t.Context(), "/")))["due"].([]any)); n != 4 {
-		t.Fatalf("the root lists %d due, want 4", n)
-	}
 	for _, want := range []string{
-		`<span class="count" title="Open, overdue or due today">3</span>`,
 		`<a href="/months/2031-05">May 2031</a><span class="meta">3 written</span>`,
 		`<tr><td></td><td></td><td></td><td><a href="/days/2031-05-01" aria-label="Thu 1 May">1</a></td>`,
 		`<a href="/days/2031-05-03" class="written" aria-label="Sat 3 May, written">3</a>`,
@@ -65,9 +41,6 @@ func TestTheSidebarCountsWhatIsDueAndShowsTheMonth(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("the sidebar lacks %s:\n%s", want, sidebar(body))
 		}
-	}
-	if tasks := browse(t, h, "/tasks"); !strings.Contains(tasks, `<span class="count" title="Open, overdue or due today">3</span>`) {
-		t.Errorf("another page counts what is due otherwise:\n%s", sidebar(tasks))
 	}
 	if strings.Contains(sidebar(body), "2031-04-30") {
 		t.Error("the sidebar's month shows a day of another month")
@@ -165,7 +138,7 @@ func TestThePhoneHasABottomBarAndASheet(t *testing.T) {
 		}
 		return strings.Join(out, " ")
 	}
-	if got := links(bar[1]); got != "/days/today /months/current /deadlines /tasks popovertarget=\"sections\"" {
+	if got := links(bar[1]); got != "/days/today /months/current popovertarget=\"sections\"" {
 		t.Errorf("the bottom bar: %s", got)
 	}
 	if got := links(sheet[1]); !strings.HasPrefix(got, "/categories /people /places /media /files /metrics /ghosts /months/2031-05") ||
@@ -210,8 +183,8 @@ func TestTheStylePageShowsEveryComponent(t *testing.T) {
 	if rec.Code != http.StatusOK || !strings.HasPrefix(rec.Header().Get("Content-Type"), "text/html") || !strings.HasSuffix(strings.TrimSpace(body), "</html>") {
 		t.Fatalf("GET /styleguide with the store closed: %d %q %.300s", rec.Code, rec.Header().Get("Content-Type"), body)
 	}
-	for _, want := range []string{"leaf", "leaf-day", "sheet", "margin", "journal-text", "capture", "segmented", "occ", "tag overdue", "settled",
-		"reading-tile", "entry", "button primary", "danger", "step", "tag done", "badge", "owner", "alert", "toast", "palette",
+	for _, want := range []string{"leaf", "leaf-day", "sheet", "margin", "journal-text", "capture", "segmented",
+		"reading-tile", "entry", "button primary", "danger", "step", "badge", "owner", "alert", "toast", "palette",
 		`table class="calendar"`, `table class="month"`, "chart", "record", "readings-year", "pager", "empty", "facts"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the style page does not show %q", want)
@@ -283,7 +256,7 @@ func TestTheManifestAndTheIconAreServed(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &m); err != nil {
 		t.Fatalf("the manifest is not JSON: %v", err)
 	}
-	if m.Name != "Lifelog" || m.StartURL != "/" || m.Display != "standalone" || m.ThemeColor != "#3a2210" || len(m.Shortcuts) != 3 || len(m.Icons) != 2 ||
+	if m.Name != "Lifelog" || m.StartURL != "/" || m.Display != "standalone" || m.ThemeColor != "#3a2210" || len(m.Shortcuts) != 2 || len(m.Icons) != 2 ||
 		m.ShareTarget.Action != "/days/today/capture" || m.ShareTarget.Method != "POST" || m.ShareTarget.Enctype != "multipart/form-data" ||
 		m.ShareTarget.Params.Text != "text" || len(m.ShareTarget.Params.Files) != 0 { // a phone's share sheet sends text to capture
 		t.Errorf("the manifest says %+v", m)

@@ -2,9 +2,7 @@
 
 `lifelog` is one Go binary that keeps a lifetime-scale, single-user SQLite database, `life.db` — a life log and
 its backup: a journal of day pages, notes, the people and places in them, where you were, health readings, and the
-files you keep — a recording's transcript, a PDF's text, a photo's small picture. The database also preserves
-[explicit personal tasks and reminder intent](docs/contract/planning.md); planning interfaces and notification
-delivery are separate application work. It serves the file three ways: a hypermedia API (with an HTML face for
+files you keep — a recording's transcript, a PDF's text, a photo's small picture. A plan is words in a page. It serves the file three ways: a hypermedia API (with an HTML face for
 the browser), a CLI and an MCP server.
 
 The database it writes is specified independently of it, so another program — in any language — can read
@@ -84,19 +82,15 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   one, `rows` a textarea's height, `options` a field's choices, `pages` a field whose value is a page's title and an
   error's `code` its first words, so no view decides any of them by an action's or a field's name.
 - **The browser for daily use** ([plan 091](docs/plans/091-the-browser-for-daily-use.md)). The root is today at a
-  glance: what is due today and overdue and the five newest day pages. A day carries what is due on
-  it, its mood and the `save-body` of its day page, so the day view edits in place. The tasks, a task, an
-  occurrence and the deadlines have their own views, and the deadlines are grouped by their due day against today.
-  Each occurrence due 7 days after today or earlier offers its outcome action, which the browser draws as Done and
-  Skip, or Reopen. These are properties and actions of the entities, so every
-  client gets them ([API.md](API.md)). `/months/{YYYY-MM}` is the calendar of a month (each day, whether it has a
-  page, its first line, its mood and its readings, and every other thing that names the day: the work due on it, a
+  glance: the five newest day pages. A day carries its mood and the `save-body` of its day page, so the day view
+  edits in place. These are properties and actions of the entities, so every client gets them ([API.md](API.md)). `/months/{YYYY-MM}` is the calendar of a month (each day, whether it has a
+  page, its first line, its mood and its readings, and every other thing that names the day: a
   birthday or a death each year, a place, a page or a file; under the calendar, Day by
   day links each one: [plan 101](docs/plans/101-the-calendar-holds-every-dated-thing.md)),
   and the catalog action `open-day` goes to a day by its date. The handler reads
   today from one clock, which a test fixes. The day and the root carry `on_this_day`, the day pages of the same date
-  in earlier years, which the margin shows after Due. `/weeks/{YYYY-Www}` is the week (its days, its readings
-  against the week before, the work due) and `/years/{YYYY}` the year (twelve months);
+  in earlier years, which the margin shows. `/weeks/{YYYY-Www}` is the week (its days, its readings
+  against the week before) and `/years/{YYYY}` the year (twelve months);
   People and Places list each name with the pages that mention it and the day of the last one
   ([plan 097](docs/plans/097-the-almanac-reflects.md)). A person's row starts with a round picture: the preview of
   the first live file with a preview that the person's page embeds (`![[Ana.jpg]]`), else the icon of a person. The
@@ -106,7 +100,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   The photo goes in no day page.
 - **The app shell: the Almanac design system** ([plan 092](docs/plans/092-the-app-shell.md)). Every page a browser
   gets is in one shell: a sidebar with the brand and today's date, the search, New, the sections of every day (Today,
-  Calendar, Due, Tasks) and of the record (People to Ghost pages), this month with its written days, and the
+  Calendar) and of the record (People to Ghost pages), this month with its written days, and the
   owner's links. Under 900 px it is a phone's layout
   ([plan 093](docs/plans/093-words-phone-and-today.md)): a top bar (the brand, the date, Search, New), a bottom bar of
   the sections of every day and More, and the rest as a sheet over the page (`#sections`): a popover that More
@@ -114,8 +108,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   screen, so a day beside an open sheet lays out as in a narrow window; the title, the leaf and the sheet's padding
   scale with the column by `clamp()`, with no step at a breakpoint
   ([plan 108](docs/plans/108-the-browser-made-current.md)). The sidebar is the one part of a page that is not the
-  page's entity: once a page, and for a browser only, the shell reads the Due count (the root's `due`) and this
-  month (`GET /months/{month}`), which every client gets from those two resources. A page drawn before the handler
+  page's entity: once a page, and for a browser only, the shell reads this
+  month (`GET /months/{month}`), which every client gets from that resource. A page drawn before the handler
   (the login, a refusal of the token) has no sidebar, so it shows nothing of the database. The look is the Almanac
   bound in Hearthwood, the materials of the owner's Balaur design system
   ([plan 096](docs/plans/096-bound-in-hearthwood.md)): the page is dark oak, the sidebar and the phone's bars are
@@ -147,14 +141,14 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 
   Each part
   of an entity has one component: the title and the `prev`/`next` links a page header, properties facts and
-  panels, sub-entities rows (an occurrence's with Done and Skip), an action with no visible field a button, one with
+  panels, sub-entities rows, an action with no visible field a button, one with
   fields a button that opens its form, an error an alert, and a write's `result` a toast at the top of the page,
   which stays until the next page because it may name what the write did not do. A day and Home are a calendar
   leaf, a sheet and its margin ([plan 095](docs/plans/095-the-leaf-and-its-margin.md)): the leaf (the month on a
   band, the day's number in mono) heads the page; the sheet holds what the page is for (the journal, then Capture);
-  the margin holds what the page asks of the owner (Due, the readings, the places), and comes after the
-  sheet on a narrow screen. A page, a list and the planning views use the same sheet. One button a screen is filled:
-  the main write; a row's Done is an outline, Skip is quiet, and an overdue row says so in a word. A view can fold an
+  the margin holds what the page asks of the owner (the readings, the places), and comes after the
+  sheet on a narrow screen. A page and a list use the same sheet. One button a screen is filled:
+  the main write. A view can fold an
   action's optional fields under "N more fields", inside the form, so a browser sends them with no script.
   A value is drawn by its type, never by its property's name ([plan 093](docs/plans/093-words-phone-and-today.md)):
   a day in words near today ("yesterday · Sun 11 Oct"), an instant in the clock of the server's day ("today, 09:48",
@@ -164,8 +158,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   later slots on its own page.
   `GET /styleguide` is the style page: every component in every state, drawn on synthetic words, with the file each
   lives in. It is presentation, like `/render`: it is not in the catalog and it reads nothing from the database.
-  `GET /manifest.webmanifest` and `GET /assets/icon.svg` make the app installable: three shortcuts (Today, Add to
-  today, What is due) and a share target that posts shared text into Capture
+  `GET /manifest.webmanifest` and `GET /assets/icon.svg` make the app installable: two shortcuts (Today, Add to
+  today) and a share target that posts shared text into Capture
   (`POST /days/today/capture`, where `today` is the local day). There is no service worker, since the server is the owner's own. A public listener
   refuses all three without the token, as it refuses the fonts.
 - **No script** ([plan 108](docs/plans/108-the-browser-made-current.md); the owner's rule of 2026-10-14: as native
@@ -241,14 +235,6 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **Renames select a preferred name on the same identity**, retaining direct aliases as
   [titles and wikilinks](docs/contract/titles-and-wikilinks.md) ("Renames") requires and
   [rename a page](docs/cookbook/rename-a-page.md) writes; `lifelog rename` and the API's `rename` action run it.
-- **Planning on every surface** ([plan 081](docs/plans/081-planning-on-every-surface.md)). Core task operations
-  implement the [planning contract](docs/contract/planning.md), and the catalog carries them: `/tasks`, a task with
-  its occurrences over a window, an occurrence (written, or a virtual slot of a series), `/deadlines` across tasks;
-  `create-task`, `edit-task`, `stop-task`, `capture-occurrence`, `edit-occurrence`, the tombstones and revives, and
-  `tombstone-tasks`, several tasks in one write ([API.md](API.md)). `lifelog tasks` and `lifelog due` are shortcuts; the MCP tools and the browser's generic view
-  carry the rest. Deadline reads use an explicit inclusive window (default 30 days back, 90 on), limited to 10,000
-  persisted candidates and 10,000 returned occurrences; larger reads refuse instead of silently truncating. A
-  reminder is resolved intent in the answer (`reminder.state`, `reminder.at`); no notification is sent by anything.
 - **The schema is embedded.** `go generate ./...` copies `docs/schema/schema.sql` into `internal/db`; a test fails
   when the copy is stale. `lifelog init` refuses an existing file; `Open` refuses a file without Lifelog's
   `application_id`.
@@ -261,11 +247,11 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   action in-process, `--to` choosing the folder; with `--url` the server's folder is the one, and `--to` is refused.
   Restoring stays the manual procedure of the cookbook.
 - **Several rows deleted at once** ([plan 107](docs/plans/107-delete-several-at-once.md)). `tombstone-pages`
-  (`POST /pages/tombstone`) and `tombstone-tasks` (`POST /tasks/tombstone`) take `ids`, separated by spaces or
-  commas, and tombstone them all in one write or none: a missing id is a 404 that writes nothing. The files list
-  offers the first and the tasks list the second, so the browser draws a box on each tile of Media and each row of Tasks and one
+  (`POST /pages/tombstone`) takes `ids`, separated by spaces or
+  commas, and tombstones them all in one write or none: a missing id is a 404 that writes nothing. The files list
+  offers it, so the browser draws a box on each tile of Media and one
   danger button, which counts the checked boxes (a CSS counter, no script) and returns to the list with the count;
-  the CLI's `do` and the MCP tools carry them as any action. Both are dangers, not the owner's alone, and a revive undoes each.
+  the CLI's `do` and the MCP tools carry it as any action. It is a danger, not the owner's alone, and a revive undoes it.
 - **Metrics as cards, filed in groups** ([plan 112](docs/plans/112-metrics-as-cards.md)). `/metrics` draws each
   group as a grid of cards, with a jump bar to the groups: a card is a metric's latest value, its day and the line
   of its newest 30 readings, muted when the latest is older than 60 days. `file-pages` (`POST /pages/file`) files several pages in a category page in one write, made when it is
@@ -286,7 +272,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   catalog's titles say one verb for one meaning: New makes a thing, Add adds to one, Remove takes away, Restore
   brings back. The action names do not change. A number card and a day's reading tile have + Add, one value for
   that day. A page and a metric show their categories as badges, each with x, and + Add (`file-pages` with this
-  page). Media, Files, Tasks and Metrics act on several things the same way: Select shows the boxes, and one bar holds
+  page). Media, Files and Metrics act on several things the same way: Select shows the boxes, and one bar holds
   the count and a button for each action the list offers.
 - **New metric, new category and a reading from `/metrics`** ([plan 113](docs/plans/113-new-metric-on-metrics.md)).
   New metric is in the header of `/metrics` and under each category's heading, not on Home. It asks what you

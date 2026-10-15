@@ -49,8 +49,6 @@
 {{if $any}}<section class="group" aria-label="Backlinks"><h2>Backlinks</h2>{{range $groups}}{{if ne .Key "part-of"}}<p class="sub">{{if eq .Key "wikilink"}}mentioned in{{else}}{{.Key}}{{end}}</p>
 <ul class="plain">{{range .Items}}<li><a href="/pages/{{num .id}}">{{$.Date .title}}</a>{{if ne .entity_type "page"}} <span class="badge">{{.entity_type}}</span>{{end}}</li>{{end}}</ul>{{end}}{{end}}</section>{{end}}
 
-{{if $p.task_project}}<aside><p>A task uses this page as its project context, so it cannot become a person or a place.</p></aside>{{end}}
-
 {{if or (.Action "rename") (.Action "promote") (.Action "link") (.Action "set-picture") (.Action "tombstone")}}<section class="group" aria-label="More"><h2>More</h2><div class="actions">
 {{template "boxed" (form (.Action "set-picture") "more" "preview")}}
 {{template "boxed" (form (.Action "link") "button" "Add a typed link")}}

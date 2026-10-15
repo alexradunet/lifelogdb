@@ -1,20 +1,18 @@
-# D23 — Explicit personal tasks, with projects as context pages
+# D23 — No tasks: a plan is words in a page.
 
 **Status:** accepted
 
-- **Decision.** Personal planning uses independent `tasks` and `task_occurrences`, with project context in ordinary
-  pages. Their storage constraints are in [schema.sql](../schema/schema.sql); bounded calendar, lifecycle and
-  reminder operations are in [planning](../contract/planning.md). Task labels do not consume owned page names or
-  become graph endpoints. Planned work remains distinguishable from readings and presence.
-- **Why.** The owner wants projects, recurring tasks and reminder intent preserved in the same lifetime file,
-  independently of the eventual interface or notification provider. A repeating instruction and one occurrence's
-  outcome are different facts. Ordinary project pages provide useful grouping without a project workflow model.
-  Explicit task capture avoids turning historical prose and ambiguous checkboxes into unwanted obligations.
-- **Alternatives.** *Tasks as named entities*: repeated labels need no unique wiki handle. *Only one mutable due
-  date*: advancing it loses earlier outcomes. *A separate planning database*: it splits reference and restore
-  responsibilities. *Generic properties or a plugin schema*: they add compatibility machinery without a concrete
-  second use ([D2](D02-typed-strict-tables.md)).
-- **Costs accepted.** Task context and occurrence outcomes are current state plus snapshots, not a history of
-  every edit ([D12](D12-no-revision-tables.md)). Recurrence has a bounded profile ([D15](D15-recurrence.md)).
-  Project status/hierarchy, task dependencies and delivery machinery remain [non-goals](../architecture/non-goals.md).
-  Historical notes retain their prose unless the owner explicitly selects structured task capture.
+- **Decision.** `life.db` keeps no tasks, occurrences, deadlines or reminders: there is no `tasks` table. A plan,
+  a thing to do, a deadline or a recurring duty is words in a page, a day page or a plain page, and the owner
+  reads it there. A checkbox in an imported note stays text ([imports](../contract/imports.md)).
+- **Why.** The owner reviewed the writer on 2026-10-15 and kept the core only
+  ([RFC 0019](../rfcs/0019-no-tasks.md)): the tasks answered "what is due" with two tables, fourteen triggers,
+  a planning contract with calendar and clock vectors, three integrity queries, eleven actions, four views and a
+  cookbook recipe. The owner plans in words; the life log keeps what happened.
+- **Alternatives.**
+  - *Explicit tasks and occurrences, with projects as context pages* (the earlier D23 and [D15](D15-recurrence.md)):
+    removed by RFC 0019. The owner's tasks were written into a page as text, so no word was lost.
+  - *Tasks as named entities*: rejected, a thing to do needs no wiki handle.
+  - *A separate planning database*: rejected, it splits the one file ([D1](D01-single-sqlite-file.md)).
+- **Trade accepted.** Nothing in the file says what is due; a reminder comes from no writer of this file.
+- **Sources.** Executed: the `identity` and `named` suites (no task entity type; no task link kind).

@@ -12,20 +12,19 @@ import (
 
 // Page is one page with what surrounds it. Version is the decimal entities.revision token: pass it back to SaveBody.
 type Page struct {
-	TaskProject bool    `json:"task_project"`
-	ID          int64   `json:"id"`
-	Type        string  `json:"entity_type"`
-	Title       string  `json:"title"`
-	Day         string  `json:"day,omitempty"`
-	Body        string  `json:"body"`
-	CreatedAt   string  `json:"created_at"`
-	Version     string  `json:"version"`
-	DeletedAt   string  `json:"deleted_at,omitempty"`
-	IsDayPage   bool    `json:"is_day_page"`
-	Person      *Person `json:"person,omitempty"`
-	File        *File   `json:"file,omitempty"`
-	Out         []Edge  `json:"links"`
-	In          []Edge  `json:"backlinks"`
+	ID        int64   `json:"id"`
+	Type      string  `json:"entity_type"`
+	Title     string  `json:"title"`
+	Day       string  `json:"day,omitempty"`
+	Body      string  `json:"body"`
+	CreatedAt string  `json:"created_at"`
+	Version   string  `json:"version"`
+	DeletedAt string  `json:"deleted_at,omitempty"`
+	IsDayPage bool    `json:"is_day_page"`
+	Person    *Person `json:"person,omitempty"`
+	File      *File   `json:"file,omitempty"`
+	Out       []Edge  `json:"links"`
+	In        []Edge  `json:"backlinks"`
 }
 
 type Person struct {
@@ -48,9 +47,9 @@ func (s *Store) PageByID(ctx context.Context, id int64) (*Page, error) {
 	p := &Page{ID: id}
 	var day, deleted sql.NullString
 	err := s.DB.R.QueryRowContext(ctx, `
-		SELECT e.entity_type, n.title, e.day, e.body, e.created_at, CAST(e.revision AS TEXT), e.deleted_at,EXISTS(SELECT 1 FROM tasks WHERE project_page_id=e.id)
+		SELECT e.entity_type, n.title, e.day, e.body, e.created_at, CAST(e.revision AS TEXT), e.deleted_at
 		  FROM entities e JOIN entity_names n ON n.entity_id = e.id AND n.name_key = e.preferred_name_key WHERE e.id = ?`, id).
-		Scan(&p.Type, &p.Title, &day, &p.Body, &p.CreatedAt, &p.Version, &deleted, &p.TaskProject)
+		Scan(&p.Type, &p.Title, &day, &p.Body, &p.CreatedAt, &p.Version, &deleted)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, NotFound("no page %d", id)
 	}

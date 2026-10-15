@@ -128,7 +128,7 @@ func (c clock) timeHTML(s string) template.HTML {
 	return template.HTML(esc(s))
 }
 
-// nameWords is a property's name in words: "task_version" is "task version".
+// nameWords is a property's name in words: "created_at" is "created at".
 func nameWords(name string) string { return strings.ReplaceAll(name, "_", " ") }
 
 // writeValue draws any value by its type (the diagram of plan 093): an object as facts, a list of objects as a table,
@@ -243,6 +243,3 @@ func (v *view) Value(x any) template.HTML {
 	v.clock().writeValue(&sb, jsonShape(x))
 	return template.HTML(sb.String())
 }
-
-// Reminder says a reminder in the words of this view.
-func (v *view) Reminder(x any) string { return reminderWords(x, v.clock()) }

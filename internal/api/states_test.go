@@ -81,21 +81,18 @@ func TestAnOwnerActionCarriesTheOwnerMark(t *testing.T) {
 	}
 }
 
-// TestNoPageShowsARawInstant: a page, a task, an occurrence and a reading say their times in words; the
+// TestNoPageShowsARawInstant: a page and a reading say their times in words; the
 // exact instant stays only in an attribute (the <time> element's, or a form's value).
 func TestNoPageShowsARawInstant(t *testing.T) {
 	c, h := freshOn(t, fixedToday)
 	root := must(c.Get(t.Context(), "/"))
 	p := must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Garden project", "body": "Seeds."}))
-	task := must(c.Do(t.Context(), find(root, "create-task"), map[string]string{"label": "Buy seeds", "due_day": dayOf(-1)}))
-	taskHref := strings.SplitN(hrefOf(task, "self"), "?", 2)[0]
-	occ := must(c.Do(t.Context(), find(must(c.Get(t.Context(), taskHref+"/occurrences/once")), "edit-occurrence"), map[string]string{"state": "done", "completed_at": "now"}))
 	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
 	reading := must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "weight", "day": fixedToday, "value": "71.1", "taken_at": fixedToday + "T06:00:00.000Z"}))
 
 	attributes := regexp.MustCompile(`(datetime|title|value)="[^"]*"`)
 	instant := regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z`)
-	for _, path := range []string{href(p, "self"), taskHref, hrefOf(occ, "self"), href(reading, "self")} {
+	for _, path := range []string{href(p, "self"), href(reading, "self")} {
 		body := browse(t, h, path)
 		if raw := instant.FindString(attributes.ReplaceAllString(body, "")); raw != "" {
 			t.Errorf("%s shows the raw instant %s", path, raw)
@@ -111,10 +108,9 @@ func TestNoPageShowsARawInstant(t *testing.T) {
 func TestEveryActionFormCarriesItsName(t *testing.T) {
 	c, h := freshOn(t, fixedToday)
 	root := must(c.Get(t.Context(), "/"))
-	must(c.Do(t.Context(), find(root, "create-task"), map[string]string{"label": "Book the dentist", "due_day": dayOf(-1)}))
 	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "walk"}))
 	body := browse(t, h, "/")
-	for _, name := range []string{"capture", "create-page", "find", "snapshot", "edit-occurrence"} {
+	for _, name := range []string{"capture", "create-page", "find", "snapshot"} {
 		if !strings.Contains(body, `data-action="`+name+`"`) {
 			t.Errorf("Home has no form named %s", name)
 		}

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -476,7 +475,7 @@ func (t *Tx) Promote(id int64, typ, name string) error {
 }
 
 // Tombstone and Revive set or clear entities.deleted_at (D11): nothing is ever deleted. A missing id is 404; the same
-// state again changes nothing, as a task's lifecycle answers.
+// state again changes nothing.
 func (t *Tx) Tombstone(id int64) error { return t.setDeleted(id, true) }
 
 func (t *Tx) Revive(id int64) error { return t.setDeleted(id, false) }
@@ -697,22 +696,6 @@ func (s *Store) Correct(ctx context.Context, source string, wrong int64, value *
 		id = 0
 	}
 	return
-}
-
-// setDeletedAt sets or clears a row's deleted_at in one of the tables whose rows carry a version: the tombstone of
-// a task or an occurrence (D11: nothing is deleted).
-func (t *Tx) setDeletedAt(table string, id int64, deleted bool) error {
-	switch table {
-	case "tasks", "task_occurrences":
-	default:
-		return fmt.Errorf("setDeletedAt: %s is not a table with a tombstone", table)
-	}
-	q := `UPDATE ` + table + ` SET deleted_at=NULL WHERE id=?`
-	if deleted {
-		q = `UPDATE ` + table + ` SET deleted_at=` + nowSQL + ` WHERE id=?`
-	}
-	_, err := t.tx.ExecContext(t.ctx, q, id)
-	return err
 }
 
 // byImportKey is the entity a sender's key names under this transaction's source; 0 when none.

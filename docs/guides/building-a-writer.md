@@ -20,9 +20,7 @@ compatibility follows [D13](../decisions/D13-migrations-and-freeze.md).
    `.schema` as the in-file summary.
 4. **The test vectors** printed in [titles and wikilinks](../contract/titles-and-wikilinks.md) as a conformance suite: the
    page is their only copy, and the suites in `tests/` read them from it. The [exact-time](../contract/exact-time.md)
-   vectors preserve the meaning of recorded time evidence. The [planning vectors](../contract/planning.md)
-   similarly define calendar expansion and reminder clock resolution; task writes use that page's transaction and
-   revision rules. Persisted outcomes supplement bounded virtual recurrence, without implying notification delivery.
+   vectors preserve the meaning of recorded time evidence.
 5. For imports, [imports](../contract/imports.md): a program loads rows itself; an agent works with the owner through the
    writer's operations.
 

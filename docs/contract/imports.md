@@ -44,7 +44,7 @@ DETACH s;
    (a Health Connect record's id; a note's path in its vault). A source without ids gets a key built from
    fields it never changes (a note's file name, the day of a reading) — and a change to one of them then
    looks like a new row. **A key is 1 to 512 bytes without NUL** (`entities_import_key` and the same CHECK on
-   `tasks`, `task_occurrences` and `measurements`): the empty string is refused, not stored —
+   `measurements`): the empty string is refused, not stored —
    it would enter the unique index, and every later row of the source would be skipped as imported before.
    A source key that can be longer is hashed by the importer, the same way on every run: the key becomes `sha256:`
    followed by the 64 lowercase hexadecimal digits of the SHA-256 of the key's exact bytes (71 bytes in all). A key
@@ -74,11 +74,3 @@ DETACH s;
    The [docs index](../README.md) records the current freeze status; the
    [freeze checklist](../process.md#before-the-freeze) governs the first write that a rebuild would lose.
 
-## Explicit planning imports
-
-A source's prose, goals and checkboxes remain prose unless the owner explicitly selects structured task capture
-([D23](../decisions/D23-no-tasks.md)). The [planning writer operations](planning.md) govern creation and replay:
-source/import keys and task/occurrence keys must bind to the same identity, and an existing occurrence retains its
-edits and tombstone. Imported completion evidence is distinct from write time; unknown completion time stays NULL.
-A planning importer, a program or an agent, uses the task contract deliberately, on the owner's word, and never reads
-a checkbox in a note as permission to create work.

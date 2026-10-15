@@ -27,7 +27,7 @@ The table is executed as a presence check: each place named in the third column 
 a table, view or trigger whose `CREATE` statement `.schema` prints — must exist in a fresh database and its
 text must contain each phrase in the last column. **Every key of `lifelog_meta` must be used by some question**.
 This catches missing summaries; it does not prove that prose is unambiguous or that an independent reader
-can reconstruct the full Unicode, Markdown or reminder-resolution algorithms. Their
+can reconstruct the full Unicode or Markdown algorithms. Their
 behavioral vectors remain in the [storage contract](README.md).
 
 | # | Question | Where the answer is | The answer says |
@@ -51,15 +51,9 @@ behavioral vectors remain in the [storage contract](README.md).
 | 17 | Where is the journal? What did I write on a given day? | `entities`, `days` | `plain journal-day identity`, `YYYY-MM-DD`, `neither may transfer` |
 | 18 | Which SQLite may write this file? | `sqlite` | `3.51.3`, `3.53` |
 | 19 | Who inserted this row, and is that necessarily its last editor? | `source` | `written at insert`, `agent`, `last editor` |
-| 20 | Does it keep personal planning distinct from recorded facts? | `schema`, `tasks`, `task_occurrences` | `personal task intentions`, `occurrence`, `reminder` |
-| 21 | Where was I on a given day? | `links`, `link_kinds` | `places the owner was at`, `kind='at'` |
-| 22 | Which metrics are biomarkers, or what the owner took in? | `metrics` | `a category is a page`, `part-of`, `NOT a category` |
-| 23 | Where are the photos, the recordings and the scans? | `files` | `never stored in life.db`, `sha256`, `JPEG` |
-| 24 | Can a type change reinterpret retained edges? | `typed_links`, `entities_endpoint_types` | `incoming`, `outgoing`, `retained` |
-| 25 | How are stale edits rejected when write clocks coincide, and what counts as an edit? | `edit_revisions` | `monotonic`, `independent`, `no-ops`, `rollback`, `exhaustion`, `creation is not an edit`, `never the page it points at` |
-| 26 | How do planning identities, stopping and lifecycle agree? | `planning` | `task`, `occurrence`, `tombstone` |
-| 27 | What happens when a reminder clock repeats or does not exist? | `tasks` | `earlier instant`, `gap`, `entire local date`, `unresolved` |
+| 20 | Where was I on a given day? | `links`, `link_kinds` | `places the owner was at`, `kind='at'` |
+| 21 | Which metrics are biomarkers, or what the owner took in? | `metrics` | `a category is a page`, `part-of`, `NOT a category` |
+| 22 | Where are the photos, the recordings and the scans? | `files` | `never stored in life.db`, `sha256`, `JPEG` |
+| 23 | Can a type change reinterpret retained edges? | `typed_links`, `entities_endpoint_types` | `incoming`, `outgoing`, `retained` |
+| 24 | How are stale edits rejected when write clocks coincide, and what counts as an edit? | `edit_revisions` | `monotonic`, `independent`, `no-ops`, `rollback`, `exhaustion`, `creation is not an edit`, `never the page it points at` |
 
-Planning reads and reminders follow the [planning profile](planning.md), including retained outcomes after
-ending a recurrence. A clock that cannot be resolved remains visible as unresolved intent; restoring a snapshot
-does not send notifications or establish that old reminders should be delivered.

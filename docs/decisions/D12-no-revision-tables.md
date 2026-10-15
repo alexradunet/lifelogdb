@@ -14,8 +14,8 @@
 - **Alternatives.** *Full revision snapshots per edit*: rejected — significant code for a history
   nobody has asked to query. *Trigger-based history tables* (`sqlite-history` [R48](../research/references.md#r48)): rejected **for
   now**; it retrofits onto the current schema with no redesign if a real need appears.
-- **Cost accepted.** Mutable bodies, display spellings, typed details, file previews,
-  task and occurrence state retain their current contents, not their edit histories. `source`
+- **Cost accepted.** Mutable bodies, display spellings, typed details and file previews
+  retain their current contents, not their edit histories. `source`
   identifies the original inserter, not the latest editor; timestamps and revisions do not reconstruct an edit.
   Retained aliases are name ownership, not a dated rename history. Revival removes the prior tombstone.
   The database retains an earlier mutable value only in a [snapshot](D25-snapshots.md) that actually contains it;

@@ -27,9 +27,6 @@
   Provenance (`source`, `lifelog_meta.source`) is a column for the same reason as the zone: only the moment of writing
   knows it, and with agents among the writers ([D3](D03-integer-ids.md)) it identifies the original inserting writer.
   It does not identify later editors of mutable content ([D12](D12-no-revision-tables.md)).
-- **Planning time** retains a calendar deadline independently of reminder delivery. A reminder zone is a chosen
-  scheduling basis, not evidence of location. The [planning profile](../contract/planning.md) specifies clock
-  resolution and preserves unknown completion time without inventing an instant.
 - **Alternatives.**
   - *Instants only, local day computed at query time*: rejected — a timezone move or DST rule
     silently rewrites history. This is why FxLifeSheet needed a dedicated `tag_days` importer to

@@ -16,7 +16,7 @@ const weekToday = "2026-10-12"
 
 // weekScenario writes, through the catalog, week 41 of 2026 and the week before it. The tests check the answers by
 // hand: pages on Mon 5, Wed 7 and Sun 11 October; the habit walk since 20 September, done on 6 and 8 October; weight
-// read on 1 October (week 40), 6 and 9 October; a task due on 7 October and done, a task due on 10 October and open.
+// read on 1 October (week 40), 6 and 9 October.
 func weekScenario(t *testing.T) (*client.Client, http.Handler) {
 	t.Helper()
 	c, h := freshOn(t, weekToday)
@@ -28,10 +28,6 @@ func weekScenario(t *testing.T) (*client.Client, http.Handler) {
 	for day, value := range map[string]string{"2026-10-01": "71.9", "2026-10-06": "71.6", "2026-10-09": "71.2"} {
 		must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "weight", "day": day, "value": value}))
 	}
-	done := must(c.Do(t.Context(), find(root, "create-task"), map[string]string{"label": "Send the form", "due_day": "2026-10-07"}))
-	once := strings.SplitN(hrefOf(done, "self"), "?", 2)[0] + "/occurrences/once"
-	must(c.Do(t.Context(), find(must(c.Get(t.Context(), once)), "edit-occurrence"), map[string]string{"state": "done", "completed_at": "now"}))
-	must(c.Do(t.Context(), find(root, "create-task"), map[string]string{"label": "Call the bank", "due_day": "2026-10-10"}))
 	return c, h
 }
 
@@ -45,7 +41,7 @@ func objects(p map[string]any, key string) []map[string]any {
 }
 
 // TestTheWeekLooksBackOverSevenDays: week 41 of 2026 runs from Monday 5 to Sunday 11 October. Its days, habits,
-// readings and occurrences are checked against the scenario by hand.
+// readings are checked against the scenario by hand.
 func TestTheWeekLooksBackOverSevenDays(t *testing.T) {
 	c, h := weekScenario(t)
 	w := must(c.Get(t.Context(), "/weeks/2026-W41"))
@@ -78,10 +74,6 @@ func TestTheWeekLooksBackOverSevenDays(t *testing.T) {
 		said(metrics[0]["mean"]) != "71.4" || said(metrics[0]["previous_mean"]) != "71.9" {
 		t.Errorf("metrics %v: weight, 2 readings, mean (71.6+71.2)/2 = 71.4, the week before 71.9", metrics)
 	}
-	occ := objects(p, "occurrences")
-	if len(occ) != 2 || occ[0]["label"] != "Send the form" || occ[0]["state"] != "done" || occ[1]["label"] != "Call the bank" || occ[1]["state"] != "open" {
-		t.Errorf("occurrences %v: one done (due 7 October), one open (due 10 October)", occ)
-	}
 	for rel, want := range map[string]string{"self": "/weeks/2026-W41", "prev": "/weeks/2026-W40", "next": "/weeks/2026-W42", "month": "/months/2026-10", "year": "/years/2026"} {
 		if got := hrefOf(w, rel); got != want {
 			t.Errorf("link %s = %q, want %q", rel, got, want)
@@ -102,7 +94,7 @@ func TestTheWeekLooksBackOverSevenDays(t *testing.T) {
 	}
 	// A week with nothing in it is still a week.
 	p42 := props(must(c.Get(t.Context(), "/weeks/2026-W42")))
-	if len(objects(p42, "metrics")) != 0 || len(objects(p42, "occurrences")) != 0 || len(objects(p42, "days")) != 7 {
+	if len(objects(p42, "metrics")) != 0 || len(objects(p42, "days")) != 7 {
 		t.Errorf("week 42: %v", p42)
 	}
 	// 2026 and 2020 have 53 weeks. Week 1 of 2026 starts in 2025, and its Thursday is in January.
@@ -129,7 +121,7 @@ func TestTheWeekLooksBackOverSevenDays(t *testing.T) {
 
 	body := browse(t, h, "/weeks/2026-W41")
 	for _, want := range []string{"Week 41 of 2026", "Mon 5 Oct to Sun 11 Oct", `href="/months/2026-10"`, `href="/years/2026"`,
-		"Monday: the long meeting.", "Sunday: rest.", "71.4 kg", "down from 71.9", "Send the form", "Call the bank",
+		"Monday: the long meeting.", "Sunday: rest.", "71.4 kg", "down from 71.9",
 		`rel="prev"`, `rel="next"`, `action="/days/go"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the week's page lacks %q", want)
@@ -143,15 +135,8 @@ func TestTheWeekLooksBackOverSevenDays(t *testing.T) {
 	if n := strings.Count(body, `<a class="entry unwritten"`); n != 4 || strings.Count(body, "nothing written") != 4 {
 		t.Errorf("%d unwritten rows, want 4", n)
 	}
-	if strings.Index(body, "Send the form") > strings.Index(body, "Call the bank") {
-		t.Error("the done occurrence is not before the open one")
-	}
-	// The list holds the open occurrences of the week too, so its heading names them all.
-	if !strings.Contains(body, `<section class="group" aria-label="Due this week">`) || strings.Contains(body, "Done and skipped") {
-		t.Error("the week's work is not headed Due this week")
-	}
 	empty := browse(t, h, "/weeks/2026-W20")
-	for _, want := range []string{"No reading this week.", "Nothing was due this week."} {
+	for _, want := range []string{"No reading this week."} {
 		if !strings.Contains(empty, want) {
 			t.Errorf("an empty week lacks %q", want)
 		}

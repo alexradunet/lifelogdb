@@ -59,7 +59,6 @@ var icons = map[string]string{
 	"today":      `<circle cx="8" cy="8" r="3"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3 3l1.4 1.4M11.6 11.6 13 13M3 13l1.4-1.4M11.6 4.4 13 3"/>`,
 	"calendar":   `<rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 6.5h12M5 1.5v3M11 1.5v3"/>`,
 	"due":        `<circle cx="8" cy="8" r="6"/><path d="M5.5 8.2l1.8 1.8 3.3-3.6"/>`,
-	"tasks":      `<path d="M6 4h8M6 8h8M6 12h8M2 4h1M2 8h1M2 12h1"/>`,
 	"categories": `<path d="M2 3.5h4l1.5 1.5H14v8.5H2z"/><path d="M2 7.5h12"/>`,
 	"people":     `<circle cx="8" cy="5.5" r="2.5"/><path d="M3 14c.6-2.8 2.6-4.2 5-4.2s4.4 1.4 5 4.2"/>`,
 	"places":     `<path d="M8 14.5s4.5-4.2 4.5-8a4.5 4.5 0 0 0-9 0c0 3.8 4.5 8 4.5 8z"/><circle cx="8" cy="6.5" r="1.6"/>`,

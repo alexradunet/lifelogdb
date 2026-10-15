@@ -1,10 +1,8 @@
 package api
 
 import (
-	"cmp"
 	"context"
 	"net/http"
-	"slices"
 	"time"
 
 	"lifelog/internal/core"
@@ -26,12 +24,11 @@ type monthDay struct {
 }
 
 // calendarItem is a thing that names a day besides its day page: its kind, its title and the address of its own
-// resource. State is a task's, Years an anniversary's.
+// resource. Years is an anniversary's.
 type calendarItem struct {
 	Kind  string `json:"kind"`
 	Title string `json:"title"`
 	Href  string `json:"href"`
-	State string `json:"state,omitempty"`
 	Years int    `json:"years,omitempty"`
 }
 
@@ -87,10 +84,9 @@ func (h *server) openDay(r *http.Request) (*Entity, error) {
 	return nil, redirect{dayHref(day)}
 }
 
-// calendar is what a window of days holds: its days as a calendar shows them, and the occurrences due in it.
+// calendar is what a window of days holds: its days as a calendar shows them.
 type calendar struct {
-	days        []monthDay
-	occurrences []occurrenceView
+	days []monthDay
 }
 
 // calendarOf reads the days from from through through: whether each has a day page, its first line, its mood, its
@@ -109,10 +105,6 @@ func (h *server) calendarOf(ctx context.Context, from, through string) (*calenda
 	if err != nil {
 		return nil, err
 	}
-	occurrences, err := h.dueIn(ctx, from, through, "all", false)
-	if err != nil {
-		return nil, err
-	}
 	anniversaries, err := h.s.Anniversaries(ctx, from, through)
 	if err != nil {
 		return nil, err
@@ -122,18 +114,10 @@ func (h *server) calendarOf(ctx context.Context, from, through string) (*calenda
 		return nil, err
 	}
 
-	// The items of each day, in the order of plan 101: the tasks (open, then done, then skipped), the anniversaries,
-	// then the places and the pages as DatedIn orders them.
+	// The items of each day, in the order of plan 101: the anniversaries, then the places and the pages as DatedIn
+	// orders them.
 	items, more := map[string][]calendarItem{}, map[string]int{}
 	add := func(day string, it calendarItem) { items[day] = append(items[day], it) }
-	rank := map[string]int{core.StateOpen: 0, core.StateDone: 1, core.StateSkipped: 2}
-	tasks := slices.Clone(occurrences)
-	slices.SortStableFunc(tasks, func(a, b occurrenceView) int {
-		return cmp.Or(cmp.Compare(a.DueDay, b.DueDay), cmp.Compare(rank[a.State], rank[b.State]))
-	})
-	for _, o := range tasks {
-		add(o.DueDay, calendarItem{Kind: "task", Title: o.Label, Href: occurrenceHref(o.TaskID, o.OccurrenceKey), State: o.State})
-	}
 	for _, a := range anniversaries {
 		add(a.Day, calendarItem{Kind: a.Kind, Title: a.Title, Href: pageHref(a.ID), Years: a.Years})
 	}
@@ -157,7 +141,7 @@ func (h *server) calendarOf(ctx context.Context, from, through string) (*calenda
 		days = append(days, monthDay{Day: day, Page: written, FirstLine: p.FirstLine, Mood: moods[day],
 			Items: items[day], MorePages: more[day], Readings: readings[day] - len(moods[day])})
 	}
-	return &calendar{days: days, occurrences: occurrences}, nil
+	return &calendar{days: days}, nil
 }
 
 // weeks puts the days of a month into the rows of a calendar, Monday first: nil fills a cell before the first day and

@@ -106,84 +106,17 @@ func TestDeletePagesAtOnce(t *testing.T) {
 	}
 }
 
-// TestDeleteTasksAtOnce: tombstone-tasks is offered on the tasks list; it needs no version, tombstones every task
-// named in one write or none, and revive-task undoes each.
-func TestDeleteTasksAtOnce(t *testing.T) {
-	c, _ := fresh(t)
-	ctx := t.Context()
-	create := find(must(c.Get(ctx, "/")), "create-task")
-	var ids []string
-	for _, label := range []string{"Buy seeds", "Water", "Prune"} {
-		ids = append(ids, idOfSelf(t, hrefOf(must(c.Do(ctx, create, map[string]string{"label": label})), "self")))
-	}
-	del := find(must(c.Get(ctx, "/tasks")), "tombstone-tasks")
-	if del.Name == "" || !del.Danger || len(del.Fields) != 1 || del.Fields[0].Name != "ids" {
-		t.Fatalf("the tasks list's delete: %+v", del)
-	}
-	labels := func(path string) (live, gone []string) {
-		t.Helper()
-		for _, x := range props(must(c.Get(ctx, path)))["tasks"].([]any) {
-			task := x.(map[string]any)
-			if task["deleted_at"] != nil {
-				gone = append(gone, task["label"].(string))
-			} else {
-				live = append(live, task["label"].(string))
-			}
-		}
-		return
-	}
-
-	done := must(c.Do(ctx, del, map[string]string{"ids": ids[0] + "," + ids[1]}))
-	if done.Class[0] != "tombstoned" || props(done)["count"] != json.Number("2") || props(done)["kind"] != "tasks" ||
-		done.Entities[0].Href != "/tasks/"+ids[0] || done.Result != "Deleted 2 tasks." {
-		t.Fatalf("the answer: %+v %v %v", done.Class, props(done), done.Result)
-	}
-	if live, gone := labels("/tasks"); !slices.Equal(live, []string{"Prune"}) || gone != nil {
-		t.Errorf("the list after the delete: %v %v", live, gone)
-	}
-	if live, gone := labels("/tasks?include_deleted=1"); !slices.Equal(live, []string{"Prune"}) || !slices.Equal(gone, []string{"Buy seeds", "Water"}) {
-		t.Errorf("the list with the deleted: %v %v", live, gone)
-	}
-
-	// An id no task has refuses the whole write: the live task named beside it stays live.
-	if _, err := c.Do(ctx, del, map[string]string{"ids": ids[2] + " 424242"}); !clientStatus(err, 404) {
-		t.Fatalf("an id no task has: %v", err)
-	}
-	if live, _ := labels("/tasks"); !slices.Equal(live, []string{"Prune"}) {
-		t.Errorf("a refused delete tombstoned the live task: %v", live)
-	}
-	if _, err := c.Do(ctx, del, map[string]string{"ids": ""}); !clientStatus(err, 422) {
-		t.Errorf("no ids: %v", err)
-	}
-	// A task tombstoned already is left as it is, and revive-task brings one back.
-	if again := must(c.Do(ctx, del, map[string]string{"ids": ids[0]})); again.Result != "Deleted 1 task." {
-		t.Errorf("a second delete: %v", again.Result)
-	}
-	gone := must(c.Get(ctx, "/tasks/"+ids[0]))
-	if revive := find(gone, "revive-task"); revive.Name == "" {
-		t.Fatalf("a deleted task offers %s", names(gone))
-	} else {
-		must(c.Do(ctx, revive, nil))
-	}
-	if live, _ := labels("/tasks"); !slices.Equal(live, []string{"Buy seeds", "Prune"}) {
-		t.Errorf("after the revive: %v", live)
-	}
-}
-
-// TestTheListsDeleteWhatIsChecked follows the browser: Media and Tasks draw a box on each tile or row inside one form, the
+// TestTheListsDeleteWhatIsChecked follows the browser: Media draws a box on each tile inside one form, the
 // form posts the checked ids and returns to the list with the count, and a post with no box checked comes back to
 // the list with the refusal.
 func TestTheListsDeleteWhatIsChecked(t *testing.T) {
 	c, h := fresh(t)
 	ctx := t.Context()
 	root := must(c.Get(ctx, "/"))
-	var files, tasks []string
+	var files []string
 	for i, title := range []string{"Scan 1.jpg", "Scan 2.jpg"} {
 		e := must(c.Do(ctx, find(root, "add-file"), map[string]string{"title": title, "sha256": strings.Repeat(fmt.Sprintf("%02x", i+7), 32), "mime": "image/jpeg"}))
 		files = append(files, idOfSelf(t, hrefOf(e, "self")))
-	}
-	for _, label := range []string{"Buy seeds", "Water"} {
-		tasks = append(tasks, idOfSelf(t, hrefOf(must(c.Do(ctx, find(root, "create-task"), map[string]string{"label": label})), "self")))
 	}
 
 	list := browse(t, h, "/media")
@@ -218,24 +151,4 @@ func TestTheListsDeleteWhatIsChecked(t *testing.T) {
 		t.Errorf("no box checked: %d %.300s", rec.Code, rec.Body.String())
 	}
 
-	list = browse(t, h, "/tasks")
-	for _, want := range []string{`<form id="pick" class="pick-bar" method="POST" action="/tasks/tombstone" data-action="tombstone-tasks">`, `<input type="hidden" name="back" value="/tasks">`,
-		`<input type="checkbox" name="ids" value="` + tasks[0] + `" form="pick" aria-label="Select Buy seeds">`, `name="ids" value="` + tasks[1] + `"`} {
-		if !strings.Contains(list, want) {
-			t.Errorf("the tasks list lacks %s", want)
-		}
-	}
-	rec = submit(h, "/tasks/tombstone", url.Values{"ids": tasks[:1], "back": {"/tasks"}}, "")
-	if rec.Code != http.StatusSeeOther || !feedbackLocation(rec.Header().Get("Location"), "/tasks") {
-		t.Fatalf("the tasks form: %d %q", rec.Code, rec.Header().Get("Location"))
-	}
-	after = browse(t, h, rec.Header().Get("Location"))
-	if !strings.Contains(after, "Deleted 1 task.") || strings.Contains(after, `href="/tasks/`+tasks[0]+`"`) || !strings.Contains(after, `href="/tasks/`+tasks[1]+`"`) {
-		t.Errorf("the tasks list after the delete: %.600s", after)
-	}
-	// A deleted task shown has no box to check: its row's box is disabled.
-	shown := browse(t, h, "/tasks?include_deleted=1")
-	if strings.Contains(shown, `name="ids" value="`+tasks[0]+`"`) || !strings.Contains(shown, `aria-label="Buy seeds is deleted"`) {
-		t.Errorf("a deleted task's row: %.600s", shown)
-	}
 }

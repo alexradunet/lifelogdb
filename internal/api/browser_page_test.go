@@ -33,7 +33,7 @@ func TestEveryPageIsSemanticHTML(t *testing.T) {
 	must(c.Do(t.Context(), find(gone, "tombstone"), nil))
 
 	for _, path := range []string{"/", "/days", href(day, "self"), href(sam, "self"), href(gone, "self"),
-		"/metrics", "/search?q=ran", "/actions", "/integrity", "/tasks", "/deadlines", "/pages/999999"} {
+		"/metrics", "/search?q=ran", "/actions", "/integrity", "/pages/999999"} {
 		body := page(t, h, path)
 		for _, want := range []string{
 			`<style data-sheet="base">`, `<style data-sheet="app">`, // the two sheets, the base one first

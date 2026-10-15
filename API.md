@@ -67,38 +67,14 @@ ghosts oldest first; search by rank.
 ### root
 
 `GET /`: today at a glance. Links: `today`, `days`, `people`, `places`, `media`, `files`, `metrics`,
-`tasks`, `deadlines`, `ghosts`, `actions`, `calendar` (this month), `week` (this week), `year` (this year). Actions: `capture` (for today), `search`,
-`find`, `open-day`, `deadlines`,
-`create-task`, `create-page`, `create-person`, `create-place`, `add-file`,
-`record`, `register-metric` (owner), `snapshot` (owner); then the outcome (see task) of each occurrence in `due`.
+`ghosts`, `actions`, `calendar` (this month), `week` (this week), `year` (this year). Actions: `capture` (for today), `search`,
+`find`, `open-day`,
+`create-page`, `create-person`, `create-place`, `add-file`,
+`record`, `register-metric` (owner), `snapshot` (owner).
 
 | property | type | meaning |
 |---|---|---|
 | `today` | day | this machine's local day |
-| `due[]` | list | the open occurrences due in the 30 days before today, then the open ones due today, by due day (the occurrence shape, with `label`) |
-| `due[].due_day` | day |  |
-| `due[].state` | string |  |
-| `due[].completed_at` | instant |  |
-| `due[].reminder_mode` | string |  |
-| `due[].reminder_at` | instant |  |
-| `due[].id` | integer |  |
-| `due[].task_id` | integer |  |
-| `due[].key` | string |  |
-| `due[].import_key` | string |  |
-| `due[].source` | string |  |
-| `due[].version` | string |  |
-| `due[].created_at` | instant |  |
-| `due[].updated_at` | instant |  |
-| `due[].deleted_at` | instant |  |
-| `due[].task_version` | string |  |
-| `due[].task_deleted_at` | instant |  |
-| `due[].project_title` | string |  |
-| `due[].project_deleted_at` | instant |  |
-| `due[].virtual` | boolean |  |
-| `due[].label` | string | the task's label |
-| `due[].reminder` | object |  |
-| `due[].reminder.state` | string |  |
-| `due[].reminder.at` | instant |  |
 | `recent[]` | list | the 5 newest live day pages up to today, the newest first |
 | `recent[].day` | day | the day |
 | `recent[].page_id` | integer | the day page's id |
@@ -226,8 +202,7 @@ Preview, a second button of a form that writes a body, which opens it in a new t
 names, and a value that is not a day is 422). Links: `prev`, `next` (the neighbouring days), `month` (its calendar),
 `page` (the day page, once it exists), `metrics`. Embedded: `reading` links to each measurement. Actions: `capture`,
 `record`, `open-day`, `save-body`
-of the day page once it exists (its body and `version` filled in), and the
-outcome (see task) of each occurrence in `due` that is due 7 days after `today` or earlier. The write `capture`
+of the day page once it exists (its body and `version` filled in). The write `capture`
 answers with this entity and a `result` of the sync shape; its field `mood` has the `options` 1 to 5. `POST /days/today/capture` captures on the local day.
 
 | property | type | meaning |
@@ -239,30 +214,6 @@ answers with this entity and a `result` of the sync shape; its field `mood` has 
 | `view[].at` | instant | when, for a page or a reading; absent otherwise |
 | `view[].detail` | string | the body, the page title, the place, `Metric: done`/`not done`/`not recorded`/`invalid`, or `value unit` |
 | `readings[]` | list | the day's readings, each a reading (below) with its id, to correct one |
-| `due[]` | list | the occurrences due on the day, in every state; on today, first the open ones due in the 30 days before it (the occurrence shape, with `label`) |
-| `due[].due_day` | day |  |
-| `due[].state` | string |  |
-| `due[].completed_at` | instant |  |
-| `due[].reminder_mode` | string |  |
-| `due[].reminder_at` | instant |  |
-| `due[].id` | integer |  |
-| `due[].task_id` | integer |  |
-| `due[].key` | string |  |
-| `due[].import_key` | string |  |
-| `due[].source` | string |  |
-| `due[].version` | string |  |
-| `due[].created_at` | instant |  |
-| `due[].updated_at` | instant |  |
-| `due[].deleted_at` | instant |  |
-| `due[].task_version` | string |  |
-| `due[].task_deleted_at` | instant |  |
-| `due[].project_title` | string |  |
-| `due[].project_deleted_at` | instant |  |
-| `due[].virtual` | boolean |  |
-| `due[].label` | string | the task's label |
-| `due[].reminder` | object |  |
-| `due[].reminder.state` | string |  |
-| `due[].reminder.at` | instant |  |
 | `mood` | list | the values of the day's current Mood readings, in the order they were recorded (the Mood metric found by its name key); empty when none |
 | `trends[]` | list | one for each metric with a current reading on the day, in the order of `readings` |
 | `trends[].metric` | string | the metric's name |
@@ -306,11 +257,10 @@ link to each day of the month. Actions: `open-day`. Each day holds what names it
 | `days[].page` | boolean | a live day page exists for it |
 | `days[].first_line` | string | the first line of that page's body that has text, as plain text (as `recent[]` of the root); absent when none |
 | `days[].mood` | list | the values of the day's current Mood readings, in the order they were recorded; absent when none |
-| `days[].items[]` | list | every other thing that names the day, in this order: the occurrences due on it (open, then done, then skipped), the births and deaths, the places and the pages; absent when none |
-| `days[].items[].kind` | string | `task` (an occurrence of a live task, in every state, a recurring task's days included); `birthday` or `death` (a live person's birth or death day, and its day in each later year; 29 February is on 28 February in a common year); `place` (a live place that the live day page links with `at`); `page` or `file` (a live page that is not a day page and has the day, by title, at most 20 a day) |
-| `days[].items[].title` | string | a task's label; else the title of the page |
-| `days[].items[].href` | string | the item's own resource: the occurrence or the page |
-| `days[].items[].state` | string | a task's: `open`, `done` or `skipped` |
+| `days[].items[]` | list | every other thing that names the day, in this order: the births and deaths, the places and the pages; absent when none |
+| `days[].items[].kind` | string | `birthday` or `death` (a live person's birth or death day, and its day in each later year; 29 February is on 28 February in a common year); `place` (a live place that the live day page links with `at`); `page` or `file` (a live page that is not a day page and has the day, by title, at most 20 a day) |
+| `days[].items[].title` | string | the title of the page |
+| `days[].items[].href` | string | the item's own resource: the page |
 | `days[].items[].years` | integer | a birthday's or a death's: the whole years since the day the person's row holds; absent on that day |
 | `days[].more_pages` | integer | the pages and files of the day after the first 20 in `items[]`; absent when none |
 | `days[].readings` | integer | the current readings on the day, of every metric but the Mood (`mood` holds those); absent when none |
@@ -333,11 +283,10 @@ day of the week. Actions: `open-day`.
 | `days[].page` | boolean | a live day page exists for it |
 | `days[].first_line` | string | the first line of that page's body that has text, as plain text; absent when none |
 | `days[].mood` | list | the values of the day's current Mood readings, in the order they were recorded; absent when none |
-| `days[].items[]` | list | every other thing that names the day, in this order: the occurrences due on it (open, then done, then skipped), the births and deaths, the places and the pages; absent when none |
-| `days[].items[].kind` | string | `task` (an occurrence of a live task, in every state, a recurring task's days included); `birthday` or `death` (a live person's birth or death day, and its day in each later year; 29 February is on 28 February in a common year); `place` (a live place that the live day page links with `at`); `page` or `file` (a live page that is not a day page and has the day, by title, at most 20 a day) |
-| `days[].items[].title` | string | a task's label; else the title of the page |
-| `days[].items[].href` | string | the item's own resource: the occurrence or the page |
-| `days[].items[].state` | string | a task's: `open`, `done` or `skipped` |
+| `days[].items[]` | list | every other thing that names the day, in this order: the births and deaths, the places and the pages; absent when none |
+| `days[].items[].kind` | string | `birthday` or `death` (a live person's birth or death day, and its day in each later year; 29 February is on 28 February in a common year); `place` (a live place that the live day page links with `at`); `page` or `file` (a live page that is not a day page and has the day, by title, at most 20 a day) |
+| `days[].items[].title` | string | the title of the page |
+| `days[].items[].href` | string | the item's own resource: the page |
 | `days[].items[].years` | integer | a birthday's or a death's: the whole years since the day the person's row holds; absent on that day |
 | `days[].more_pages` | integer | the pages and files of the day after the first 20 in `items[]`; absent when none |
 | `days[].readings` | integer | the current readings on the day, of every metric but the Mood (`mood` holds those); absent when none |
@@ -347,30 +296,6 @@ day of the week. Actions: `open-day`.
 | `metrics[].readings` | integer | how many such readings the week holds |
 | `metrics[].mean` | number | their mean, rounded to 2 decimals |
 | `metrics[].previous_mean` | number | the mean of the week before, in the same way; absent when that week had no reading |
-| `occurrences[]` | list | the occurrences due in the week, in every state (the occurrence shape, with `label`) |
-| `occurrences[].due_day` | day |  |
-| `occurrences[].state` | string |  |
-| `occurrences[].completed_at` | instant |  |
-| `occurrences[].reminder_mode` | string |  |
-| `occurrences[].reminder_at` | instant |  |
-| `occurrences[].id` | integer |  |
-| `occurrences[].task_id` | integer |  |
-| `occurrences[].key` | string |  |
-| `occurrences[].import_key` | string |  |
-| `occurrences[].source` | string |  |
-| `occurrences[].version` | string |  |
-| `occurrences[].created_at` | instant |  |
-| `occurrences[].updated_at` | instant |  |
-| `occurrences[].deleted_at` | instant |  |
-| `occurrences[].task_version` | string |  |
-| `occurrences[].task_deleted_at` | instant |  |
-| `occurrences[].project_title` | string |  |
-| `occurrences[].project_deleted_at` | instant |  |
-| `occurrences[].virtual` | boolean |  |
-| `occurrences[].label` | string | the task's label |
-| `occurrences[].reminder` | object |  |
-| `occurrences[].reminder.state` | string |  |
-| `occurrences[].reminder.at` | instant |  |
 
 ### year
 
@@ -411,7 +336,6 @@ that is not a kept picture, is refused (422).
 
 | property | type | meaning |
 |---|---|---|
-| `task_project` | boolean | this page is a task's project |
 | `id` | integer | the page's id, permanent |
 | `entity_type` | string | `page`, `person`, `place`, `metric` or `file` |
 | `title` | string | its preferred title; a day page's is its day |
@@ -543,193 +467,6 @@ page title, made when missing): one write makes the metric and files it. A refus
 | `categories[].count` | integer | how many live things are filed directly in it; absent when none |
 | `today` | day | the server's local day |
 
-### tasks
-
-`GET /tasks?include_deleted=`: every task definition, by id. Embedded: `item` links. Links: `deadlines`. Actions:
-`create-task`, `deadlines` and `tombstone-tasks` (the delete of several at once, no version needed; its answer is the
-class `tombstoned`, and a browser draws it as a box on each row). Planning is the [planning contract](docs/contract/planning.md): explicit intent, never a
-record of what happened.
-
-| property | type | meaning |
-|---|---|---|
-| `tasks[]` | list | the definitions (the task shape below) |
-| `tasks[].label` | string |  |
-| `tasks[].project_page_id` | integer |  |
-| `tasks[].repeat_unit` | string |  |
-| `tasks[].repeat_every` | integer |  |
-| `tasks[].anchor_day` | day |  |
-| `tasks[].repeat_until_day` | day |  |
-| `tasks[].reminder_time` | string |  |
-| `tasks[].reminder_zone` | string |  |
-| `tasks[].id` | integer |  |
-| `tasks[].import_key` | string |  |
-| `tasks[].source` | string |  |
-| `tasks[].version` | string |  |
-| `tasks[].created_at` | instant |  |
-| `tasks[].updated_at` | instant |  |
-| `tasks[].deleted_at` | instant |  |
-| `tasks[].project_title` | string |  |
-| `tasks[].project_deleted_at` | instant |  |
-| `tasks[].due_day` | day | a one-off's: the due day of its live `once`; absent for a series and an undated one-off |
-| `include_deleted` | boolean | tombstoned tasks were included |
-
-### task
-
-`GET /tasks/{id}?from=&through=&include_deleted=`: one definition and its occurrences over an inclusive window
-(default 30 days back to 90 days on): the rows written, and for a live series the virtual slots not yet written.
-Links: `up` (tasks), `deadlines`, `project` (the project page). Embedded: an `occurrence` link per occurrence,
-class `occurrence` or `virtual`. Actions: `edit-task`, `stop-task` (a series), `capture-occurrence`,
-`tombstone-task`; then the **outcome** of each occurrence shown that is due 7 days after `today` or earlier, and of a
-one-off's `once`; `revive-task` alone on a tombstoned one (class `task deleted`). An occurrence's outcome is the write
-that sets its state: `capture-occurrence` with its key filled for a virtual slot, `edit-occurrence` with every current
-value filled for a written one; there is none for a tombstoned occurrence.
-
-| property | type | meaning |
-|---|---|---|
-| `task` | object | the definition |
-| `task.label` | string | the label; repeated labels are allowed, a label is not a page |
-| `task.project_page_id` | integer | the project page; absent when none |
-| `task.repeat_unit` | string | `day`, `week`, `month` or `year`; absent for a one-off |
-| `task.repeat_every` | integer | the interval in units; absent for a one-off |
-| `task.anchor_day` | day | the first slot; absent for a one-off |
-| `task.repeat_until_day` | day | the last slot, inclusive; absent while open-ended |
-| `task.reminder_time` | string | the default reminder clock, `HH:MM`; absent when none |
-| `task.reminder_zone` | string | its IANA zone; absent when none |
-| `task.id` | integer | the task's id (its own namespace, not a page id) |
-| `task.import_key` | string | an import's key; absent otherwise |
-| `task.source` | string | the writer |
-| `task.version` | string | the version token every task write sends back |
-| `task.created_at` | instant |  |
-| `task.updated_at` | instant |  |
-| `task.deleted_at` | instant | when it was tombstoned; absent while it lives |
-| `task.project_title` | string | the project page's title; absent when none |
-| `task.project_deleted_at` | instant | when the project page was tombstoned; absent while it lives |
-| `task.due_day` | day | a one-off's: the due day of its live `once`; absent for a series and an undated one-off |
-| `from` | day | the window's first day |
-| `through` | day | its last day |
-| `include_deleted` | boolean | tombstoned occurrences (and a tombstoned task's) were included |
-| `today` | day | this machine's local day: the occurrences due 7 days after it or earlier offer their outcome |
-| `once` | object | a one-off's one occurrence, whatever its due day (the occurrence shape below); absent for a series and before it is written |
-| `once.due_day` | day |  |
-| `once.state` | string |  |
-| `once.completed_at` | instant |  |
-| `once.reminder_mode` | string |  |
-| `once.reminder_at` | instant |  |
-| `once.id` | integer |  |
-| `once.task_id` | integer |  |
-| `once.key` | string | `once` |
-| `once.import_key` | string |  |
-| `once.source` | string |  |
-| `once.version` | string |  |
-| `once.created_at` | instant |  |
-| `once.updated_at` | instant |  |
-| `once.deleted_at` | instant |  |
-| `once.task_version` | string |  |
-| `once.task_deleted_at` | instant |  |
-| `once.project_title` | string |  |
-| `once.project_deleted_at` | instant |  |
-| `once.virtual` | boolean | always false |
-| `once.label` | string | absent here: this is the task's own view |
-| `once.reminder` | object |  |
-| `once.reminder.state` | string |  |
-| `once.reminder.at` | instant |  |
-| `occurrences[]` | list | the occurrences in the window, by due day then key (the occurrence shape below) |
-| `occurrences[].due_day` | day |  |
-| `occurrences[].state` | string |  |
-| `occurrences[].completed_at` | instant |  |
-| `occurrences[].reminder_mode` | string |  |
-| `occurrences[].reminder_at` | instant |  |
-| `occurrences[].id` | integer |  |
-| `occurrences[].task_id` | integer |  |
-| `occurrences[].key` | string |  |
-| `occurrences[].import_key` | string |  |
-| `occurrences[].source` | string |  |
-| `occurrences[].version` | string |  |
-| `occurrences[].created_at` | instant |  |
-| `occurrences[].updated_at` | instant |  |
-| `occurrences[].deleted_at` | instant |  |
-| `occurrences[].task_version` | string |  |
-| `occurrences[].task_deleted_at` | instant |  |
-| `occurrences[].project_title` | string |  |
-| `occurrences[].project_deleted_at` | instant |  |
-| `occurrences[].virtual` | boolean |  |
-| `occurrences[].label` | string | absent here: this is the task's own view |
-| `occurrences[].reminder` | object |  |
-| `occurrences[].reminder.state` | string |  |
-| `occurrences[].reminder.at` | instant |  |
-
-### occurrence
-
-`GET /tasks/{id}/occurrences/{key}`: one occurrence, written or (class `occurrence virtual`) a slot of a live
-series not yet written. Links: `task`, `deadlines`, `project`. Actions: on a virtual slot `capture-occurrence`
-with its key filled; on a written one `edit-occurrence` (every current value filled) and `tombstone-occurrence`;
-`revive-occurrence` alone on a tombstoned one; none under a tombstoned task.
-
-| property | type | meaning |
-|---|---|---|
-| `due_day` | day | the current deadline; absent when undated |
-| `state` | string | `open`, `done` or `skipped` |
-| `completed_at` | instant | when it was done, if known; absent otherwise |
-| `reminder_mode` | string | `inherit` (the task's default), `off`, or `at` |
-| `reminder_at` | instant | the absolute reminder, with mode `at`; absent otherwise |
-| `id` | integer | the row's id; absent for a virtual slot |
-| `task_id` | integer | the task |
-| `key` | string | the slot: a day of the series, or `once` |
-| `import_key` | string | an import's key; absent otherwise |
-| `source` | string | the writer; absent for a virtual slot |
-| `version` | string | the token every occurrence write sends back; absent for a virtual slot |
-| `created_at` | instant | absent for a virtual slot |
-| `updated_at` | instant | absent for a virtual slot |
-| `deleted_at` | instant | when it was tombstoned; absent while it lives |
-| `task_version` | string | the task's token, sent back with every occurrence write |
-| `task_deleted_at` | instant | the task's tombstone; absent while it lives |
-| `project_title` | string | the project page's title; absent when none |
-| `project_deleted_at` | instant | the project page's tombstone; absent while it lives |
-| `virtual` | boolean | not written yet: open work the series implies |
-| `label` | string | the task's label |
-| `reminder` | object | the reminder resolved from this intent |
-| `reminder.state` | string | `none` (no reminder), `resolved`, or `unresolved` (a clock the zone cannot name) |
-| `reminder.at` | instant | the UTC instant, when resolved |
-
-### deadlines
-
-`GET /deadlines?from=&through=&state=&include_deleted=`: every task's occurrences due in the window (default 30 days
-back to 90 days on), `open` ones unless `state` is `done`, `skipped` or `all`. Overdue is this read with an earlier
-`from`. Embedded: an `occurrence` link each. Links: `tasks`. Actions: `deadlines`, `create-task`, then the outcome
-(see task) of each occurrence due 7 days after `today` or earlier.
-
-| property | type | meaning |
-|---|---|---|
-| `from` | day | the window's first day |
-| `through` | day | its last day |
-| `state` | string | the filter applied |
-| `include_deleted` | boolean | tombstoned rows and tasks were included |
-| `today` | day | this machine's local day: the occurrences due 7 days after it or earlier offer their outcome |
-| `occurrences[]` | list | the occurrences (the occurrence shape, with `label`), by due day, key, task |
-| `occurrences[].due_day` | day |  |
-| `occurrences[].state` | string |  |
-| `occurrences[].completed_at` | instant |  |
-| `occurrences[].reminder_mode` | string |  |
-| `occurrences[].reminder_at` | instant |  |
-| `occurrences[].id` | integer |  |
-| `occurrences[].task_id` | integer |  |
-| `occurrences[].key` | string |  |
-| `occurrences[].import_key` | string |  |
-| `occurrences[].source` | string |  |
-| `occurrences[].version` | string |  |
-| `occurrences[].created_at` | instant |  |
-| `occurrences[].updated_at` | instant |  |
-| `occurrences[].deleted_at` | instant |  |
-| `occurrences[].task_version` | string |  |
-| `occurrences[].task_deleted_at` | instant |  |
-| `occurrences[].project_title` | string |  |
-| `occurrences[].project_deleted_at` | instant |  |
-| `occurrences[].virtual` | boolean |  |
-| `occurrences[].label` | string | the task's label |
-| `occurrences[].reminder` | object |  |
-| `occurrences[].reminder.state` | string |  |
-| `occurrences[].reminder.at` | instant |  |
-
 ### integrity
 
 `GET /integrity`: the four integrity checks of the contract, and this writer's own.
@@ -742,9 +479,6 @@ back to 90 days on), `open` ones unless `state` is `done`, `skipped` or `all`. O
 | `entities_without_domain_row` | list | ids |
 | `invalid_typed_links` | list | ids |
 | `invalid_measurement_corrections` | list | ids |
-| `invalid_task_projects` | list | ids |
-| `invalid_one_off_tasks` | list | ids |
-| `invalid_task_occurrences` | list | ids |
 | `invalid_measurement_chains` | list | ids |
 | `invalid_journal_names` | list | ids |
 | `full_text_index_ok` | boolean | |
@@ -779,9 +513,6 @@ browser form is answered home with them as feedback. A refusal (a folder inside 
 | `restore_check.entities_without_domain_row` | list | |
 | `restore_check.invalid_typed_links` | list | |
 | `restore_check.invalid_measurement_corrections` | list | |
-| `restore_check.invalid_task_projects` | list | |
-| `restore_check.invalid_one_off_tasks` | list | |
-| `restore_check.invalid_task_occurrences` | list | |
 | `restore_check.invalid_measurement_chains` | list | |
 | `restore_check.invalid_journal_names` | list | |
 | `restore_check.full_text_index_ok` | boolean | |
@@ -789,15 +520,15 @@ browser form is answered home with them as feedback. A refusal (a folder inside 
 
 ### tombstoned
 
-`POST /pages/tombstone` (`tombstone-pages`) and `POST /tasks/tombstone` (`tombstone-tasks`): the one field `ids` names
-the pages or the tasks, separated by spaces or commas, or sent once per id as a browser form does; 500 at most. Every
+`POST /pages/tombstone` (`tombstone-pages`): the one field `ids` names
+the pages, separated by spaces or commas, or sent once per id as a browser form does; 500 at most. Every
 id is tombstoned in one write, or none is: an id no row has is 404, and a row tombstoned already is left as it is. The
 answer embeds an `item` link to each; `result` says the count in words, which a browser form shows on the list it
-returns to. `self` is `/tasks` for tasks and `/` for pages.
+returns to. `self` is `/`.
 
 | property | type | meaning |
 |---|---|---|
-| `kind` | string | `pages` or `tasks` |
+| `kind` | string | `pages` |
 | `ids` | list | the ids named, each once, in the order sent |
 | `count` | integer | how many |
 

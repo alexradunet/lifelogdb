@@ -63,29 +63,8 @@ func TestTheDayCarriesItsTrends(t *testing.T) {
 	}
 }
 
-// TestASeriesDoesNotFillItsOwnPage: on a task's page the group Later shows its next 5 slots and says how many more;
-// a series with fewer shows them all.
-func TestASeriesDoesNotFillItsOwnPage(t *testing.T) {
-	c, h := freshOn(t, fixedToday)
-	root := must(c.Get(t.Context(), "/"))
-	often := must(c.Do(t.Context(), find(root, "create-task"), map[string]string{"label": "Water the plants", "repeat_unit": "day", "repeat_every": "3", "anchor_day": fixedToday}))
-	rare := must(c.Do(t.Context(), find(root, "create-task"), map[string]string{"label": "Clean the gutter", "repeat_unit": "month", "repeat_every": "1", "anchor_day": dayOf(1)}))
-	body := browse(t, h, strings.SplitN(hrefOf(often, "self"), "?", 2)[0])
-	later := body[strings.Index(body, `aria-label="Later"`):]
-	if n := strings.Count(later, `class="occ"`); n != 5 {
-		t.Errorf("Later shows %d slots, want 5", n)
-	}
-	if !strings.Contains(later, " more in this window</span>") || strings.Contains(later, `">and `) {
-		t.Errorf("Later does not say how many more, in words and with no link to its own page")
-	}
-	rareBody := browse(t, h, strings.SplitN(hrefOf(rare, "self"), "?", 2)[0])
-	if strings.Contains(rareBody, "more in this window") {
-		t.Error("a series with few slots is folded")
-	}
-}
-
 // TestTheDayAndHomeCarryOnThisDay: the day pages of earlier years on the month and day, the newest first, in the
-// property and in the margin after Due; none, an empty list and no group. The capture box carries its quiet prompt.
+// property and in the margin; none, an empty list and no group. The capture box carries its quiet prompt.
 func TestTheDayAndHomeCarryOnThisDay(t *testing.T) {
 	c, h := freshOn(t, fixedToday)
 	root := must(c.Get(t.Context(), "/"))
@@ -113,9 +92,6 @@ func TestTheDayAndHomeCarryOnThisDay(t *testing.T) {
 			if !strings.Contains(body, w) {
 				t.Errorf("%s lacks %s", route, w)
 			}
-		}
-		if i, j := strings.Index(body, `aria-label="Due"`), strings.Index(body, `aria-label="On this day"`); i < 0 || j < i {
-			t.Errorf("%s: On this day is not after Due", route)
 		}
 	}
 }

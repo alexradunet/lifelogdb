@@ -40,9 +40,6 @@ the document (a broken block makes a later step impossible) reports that as one 
 | `identity_fixture_test.go` | `TestCanonicalIdentityFixtureOwnershipAndRollback` | The canonical identity fixture: a named entity owns its name, and a refused insert rolls the whole identity back |
 | `id_guards_test.go` | `id-guards` | file-backed declared/rowid/_rowid_/oid identity guards; forbidden combined edits, no-ops, revisions, FTS and reopen controls |
 | `name_grammar_test.go` | `name-grammar` | documented raw/NFC addressability vectors under mutation; canonical key and bracket-storage probes, separate from production pipeline tests |
-| `planning_test.go` | `planning` | file-backed one-off cardinality, retained project context, immutable IDs/provenance/cadence, revisions, retry preservation, atomic stop/outcome rules and deliberate semantic damage |
-| `planning_boundaries_test.go` | `planning-boundaries` | named CHECK/NUL/exact-time boundaries; shared calendar membership and reminder-clock vectors, including leap clamps, range edges and non-hour transitions |
-| `planning_cookbook_test.go` | `planning-cookbook` | literal creation/materialization/edit/stop recipes, dual stale versions and merged deadline reads with moved, undated, skipped and tombstoned slots |
 | `identity_test.go`, `revisions_test.go` | `identity` | the supertype and its composite FKs, ids by `RETURNING`, `source` on every row, no hard deletes, `updated_at` and the edit revisions: creation is not an edit, a link advances only the page it leaves (schema.sql, D8, D10, D11, D12) |
 | `names_test.go` | `names`, `name-ownership` | mandatory deferred preferred ownership; direct reserved names and immutable owner/key/id; actual alias/preferred/spelling/body FTS maintenance and journal-name reservations |
 | `named_test.go` | `named` | a person or a place is a page: one id, promotion, cookbook/person-or-place, cookbook/days-that-name and cookbook/everything-about run literally, two Sams (D16, D20) |
@@ -63,19 +60,16 @@ the document (a broken block makes a later step impossible) reports that as one 
 | `wikilinks_test.go` | `doc-save-contract` | the save contract as the docs print it: the vector table of contract/titles-and-wikilinks, cookbook/save-a-body run literally (and equal to a writer's own save after 400 random edits), cookbook/backlinks |
 | | `save-contract` | the save contract through a writer's own save against the DDL: invalid targets, the `SAVEPOINT` backstop, set equality, ordinary REDIRECT prose, revival, 400 random edits against a rebuild, 4 concurrent writers, every vector |
 | | `title-fuzz` | writer acceptance is a subset of the DDL's filename checks over 60 000 generated strings; DB-only names independently fail reference addressability |
-| `mutants_test.go` | `TestMutants` | 337 broken copies of the docs tree, one rule each; a completed owning suite must fail the mutant's explicit rule witness |
+| `mutants_test.go` | `TestMutants` | 253 broken copies of the docs tree, one rule each; a completed owning suite must fail the mutant's explicit rule witness |
 | `render_test.go` | `TestMermaidRender` | optional: every diagram renders |
 | `kit_test.go`, `suites_test.go` | | reading the tree (a page, the cookbook blocks by recipe key, an overlay of broken files for a mutant); fresh databases and the insert conventions (entity first, `RETURNING`, named entities); the runner |
 
 **The vectors have one home per subject**: the table of [titles and wikilinks](../docs/contract/titles-and-wikilinks.md),
-[exact time](../docs/contract/exact-time.md), and [planning calendar/reminder clocks](../docs/contract/planning.md).
+and [exact time](../docs/contract/exact-time.md).
 The wikilink suites read them from the page (with the boundary cases the line under the table states) and run them through the
 writer's extraction (`internal/text`) and its save (`internal/core`); `internal/text` has its own tests against the
 same table. Every save path here runs against the DDL under test, so a mutant of `schema.sql` reaches it.
-Planning suites compare file-backed SQLite admission and the writer's reminder resolver with the contract's
-independent expected answers. Boundary probes roll back every case, including unexpected success under a mutant.
-The core planning tests exercise the production writer, deadline merging, retries, rollback and snapshot reopen.
-Its calendar fuzz target compares bounded expansion with an independent day-by-day oracle; baseline runs its seeds.
+Boundary probes roll back every case, including unexpected success under a mutant.
 Run a bounded campaign explicitly with
 `go test ./internal/core -run '^$' -fuzz '^FuzzTaskCalendarWindow$' -fuzztime=20s -parallel=2`.
 

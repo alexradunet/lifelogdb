@@ -3,8 +3,8 @@
 **The goal:** one database that a single human writes to for ~50 years and that remains
 readable and meaningful long after the current application is gone. The dominant risk is
 not SQLite durability (settled — see [D1](../decisions/D01-single-sqlite-file.md)); it is *meaning living only in application code*,
-and *canonical data being corrupted by uncontrolled writers*. Personal records and explicitly captured planning
-intent share the file; [tasks](../decisions/D23-no-tasks.md) do not turn intentions into observed facts.
+and *canonical data being corrupted by uncontrolled writers*. A plan is words in a page
+([D23](../decisions/D23-no-tasks.md)); nothing turns an intention into an observed fact.
 
 **Principles, in priority order:**
 

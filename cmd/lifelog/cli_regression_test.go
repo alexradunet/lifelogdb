@@ -17,8 +17,8 @@ func TestCommandInterruptPolicy(t *testing.T) {
 			t.Errorf("%v: intercept=%v want=%v", tc.args, got, tc.want)
 		}
 	}
-	// snapshot, tasks and due run through the client like the rest since plans 081 and 082: an interrupt reaches them.
-	for _, cmd := range []string{"serve", "mcp", "get", "actions", "do", "capture", "day", "page", "search", "rename", "file", "snapshot", "tasks", "due"} {
+	// snapshot runs through the client like the rest since plan 082: an interrupt reaches it.
+	for _, cmd := range []string{"serve", "mcp", "get", "actions", "do", "capture", "day", "page", "search", "rename", "file", "snapshot"} {
 		if !commandConsumesContext(opts{args: []string{cmd}}) {
 			t.Errorf("%s must consume signal context", cmd)
 		}

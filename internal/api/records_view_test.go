@@ -18,7 +18,7 @@ func TestTheGhostPagesSayWhatTheyAre(t *testing.T) {
 	}
 }
 
-// TestAReadingsFactsAreOnACard: a reading's page puts its facts on a card, as an occurrence's does.
+// TestAReadingsFactsAreOnACard: a reading's page puts its facts on a card.
 func TestAReadingsFactsAreOnACard(t *testing.T) {
 	c, h := freshOn(t, fixedToday)
 	root := must(c.Get(t.Context(), "/"))

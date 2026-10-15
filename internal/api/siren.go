@@ -8,8 +8,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-
-	"lifelog/internal/core"
 )
 
 // Entity is a Siren entity. Result is an extension: what a POST did (e.g. the wikilinks a save skipped).
@@ -163,37 +161,6 @@ var catalog = []spec{
 		"GET", "/days/go", []Field{req("day", "date", "Day")}, false, false},
 	{"snapshot", "Take a snapshot", "The owner's dated copy of life.db (docs/cookbook/take-a-snapshot.md) into the server's snapshot folder, never overwriting, then its restore check. The answer names the file and the check.",
 		"POST", "/snapshots", nil, true, false},
-	// Planning (docs/contract/planning.md): explicit tasks, their occurrences, the deadlines of a window.
-	{"create-task", "New task", "Create a task: a one-off (due on due_day, or undated), or a series when repeat_unit is day, week, month or year, every repeat_every units from anchor_day, until repeat_until_day. project names the page that is its context, made as an empty page when no page has the title. reminder_time (HH:MM) and reminder_zone (IANA) are the default reminder of each occurrence. Planning never records what happened.",
-		"POST", "/tasks", []Field{req("label", "text", "Label"), pageField("project", "Project page (title)", false), opt("repeat_unit", "text", "Repeat: day, week, month or year (blank: one-off)"),
-			opt("repeat_every", "number", "Every N units"), opt("anchor_day", "date", "First occurrence"), opt("repeat_until_day", "date", "Last occurrence (inclusive)"),
-			opt("reminder_time", "text", "Reminder clock (HH:MM)"), opt("reminder_zone", "text", "Reminder zone (IANA)"), opt("due_day", "date", "Due (a one-off)"), opt("import_key", "text", "Key")}, false, false},
-	{"edit-task", "Edit task", "Change a task's label, project (a page, made when no page has the title) or default reminder; its cadence is fixed (stop-task shortens a series).",
-		"POST", "/tasks/{id}/edit", []Field{path("id", "number", "Task id"), req("version", "hidden", "Version"), req("label", "text", "Label"), pageField("project", "Project page (title)", false),
-			opt("reminder_time", "text", "Reminder clock (HH:MM)"), opt("reminder_zone", "text", "Reminder zone (IANA)")}, false, false},
-	{"stop-task", "Stop series", "End a series on a day (inclusive): its open slots after it are skipped, done ones kept. An end only shortens.",
-		"POST", "/tasks/{id}/stop", []Field{path("id", "number", "Task id"), req("version", "hidden", "Version"), req("through", "date", "Last day")}, false, false},
-	{"tombstone-task", "Delete task", "Tombstone a task: all its work and reminders stop; revive-task undoes it.",
-		"POST", "/tasks/{id}/tombstone", []Field{path("id", "number", "Task id"), req("version", "hidden", "Version")}, false, true},
-	{"revive-task", "Restore task", "Undo a task's tombstone.",
-		"POST", "/tasks/{id}/revive", []Field{path("id", "number", "Task id"), req("version", "hidden", "Version")}, false, false},
-	{"tombstone-tasks", "Delete tasks", "Tombstone several tasks in one write, no version needed: ids are task ids, separated by spaces or commas. An id no task has refuses the whole action; revive-task undoes each.",
-		"POST", "/tasks/tombstone", []Field{req("ids", "text", "Task ids, separated by spaces or commas")}, false, true},
-	{"capture-occurrence", "Add an occurrence", "Write one occurrence of a task: key is a slot day of the series (due on that day unless due_day says otherwise) or once for a one-off. state open, done or skipped; completed_at an instant, or now, for a done one; reminder_mode inherit, off, or at with reminder_at. A slot written before is returned as it is.",
-		"POST", "/tasks/{id}/occurrences", []Field{path("id", "number", "Task id"), req("task_version", "hidden", "Task version"), req("key", "text", "Slot (a day, or once)"), opt("due_day", "date", "Due"),
-			{Name: "state", Type: "text", Title: "State", Options: []string{core.StateOpen, core.StateDone, core.StateSkipped}}, opt("completed_at", "text", "Completed at (UTC instant, or now)"),
-			{Name: "reminder_mode", Type: "text", Title: "Reminder", Options: []string{core.ReminderInherit, core.ReminderOff, core.ReminderAt}}, opt("reminder_at", "text", "Reminder at (UTC instant, with at)"), opt("import_key", "text", "Key")}, false, false},
-	{"edit-occurrence", "Edit occurrence", "Change an occurrence's due day (blank: undated), state, completion instant (now for this instant) or reminder choice, with both current versions. Reopening clears completion.",
-		"POST", "/tasks/{id}/occurrences/{key}/edit", []Field{path("id", "number", "Task id"), path("key", "text", "Occurrence key"), req("task_version", "hidden", "Task version"), req("version", "hidden", "Version"),
-			opt("due_day", "date", "Due"), {Name: "state", Type: "text", Title: "State", Options: []string{core.StateOpen, core.StateDone, core.StateSkipped}}, opt("completed_at", "text", "Completed at (UTC instant, or now)"),
-			{Name: "reminder_mode", Type: "text", Title: "Reminder", Options: []string{core.ReminderInherit, core.ReminderOff, core.ReminderAt}}, opt("reminder_at", "text", "Reminder at (UTC instant, with at)")}, false, false},
-	{"tombstone-occurrence", "Delete occurrence", "Tombstone one occurrence; its slot stays suppressed. revive-occurrence undoes it.",
-		"POST", "/tasks/{id}/occurrences/{key}/tombstone", []Field{path("id", "number", "Task id"), path("key", "text", "Occurrence key"), req("task_version", "hidden", "Task version"), req("version", "hidden", "Version")}, false, true},
-	{"revive-occurrence", "Restore occurrence", "Undo an occurrence's tombstone.",
-		"POST", "/tasks/{id}/occurrences/{key}/revive", []Field{path("id", "number", "Task id"), path("key", "text", "Occurrence key"), req("task_version", "hidden", "Task version"), req("version", "hidden", "Version")}, false, false},
-	{"deadlines", "Deadlines", "The occurrences of every task due in a window (default: 30 days back to 90 days on), open ones unless state says otherwise. Overdue is this read with an earlier from, never a stored flag.",
-		"GET", "/deadlines", []Field{opt("from", "date", "From"), opt("through", "date", "Through"), {Name: "state", Type: "text", Title: "State", Options: []string{core.StateOpen, core.StateDone, core.StateSkipped, "all"}},
-			{Name: "include_deleted", Type: "number", Title: "Include tombstoned", Options: []string{"0", "1"}}}, false, false},
 }
 
 // ownerPath reports whether the catalog action at a method and path is the owner's alone: the routes wrap it.

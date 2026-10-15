@@ -12,21 +12,18 @@ import (
 // date, the count of what is due and this month. It reads what every client gets from the root's due and from
 // GET /months/{month}, once a page, and only for a browser: a JSON answer never runs it.
 
-// shellView is what the sidebar shows: today, the open occurrences overdue or due today, and the weeks of this
-// month with the days that have a day page.
+// shellView is what the sidebar shows: today, and the weeks of this month with the days that have a day page.
 type shellView struct {
 	Today     string
 	Zone      *time.Location // the zone of today: the words for a time use it
 	Month     string         // "October 2026"
 	MonthHref string
-	Due       int
 	Written   int
 	Days      []any // the days of this month as the month resource gives them (day, page): the monthbox template draws them
 }
 
-// shell reads the sidebar's view. due is the count of what is open, overdue or due today when the page already read
-// it (the root carries it), nil when the shell reads it itself.
-func (h *server) shell(ctx context.Context, due *int) (*shellView, error) {
+// shell reads the sidebar's view.
+func (h *server) shell(ctx context.Context) (*shellView, error) {
 	if h.s == nil || h.localDay == nil {
 		return nil, errors.New("no store or clock to read the shell from")
 	}
@@ -34,16 +31,6 @@ func (h *server) shell(ctx context.Context, due *int) (*shellView, error) {
 	t, ok := dayOf(today)
 	if !ok {
 		return nil, fmt.Errorf("today %q is not a day", today)
-	}
-	count := 0
-	if due != nil {
-		count = *due
-	} else {
-		open, err := h.overdueAndDue(ctx, today)
-		if err != nil {
-			return nil, err
-		}
-		count = dueRows(open, today)
 	}
 	first := time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
 	last := first.AddDate(0, 1, -1)
@@ -55,7 +42,7 @@ func (h *server) shell(ctx context.Context, due *int) (*shellView, error) {
 	for _, d := range entries {
 		written[d.Day] = true
 	}
-	sv := &shellView{Today: today, Zone: h.zone, Month: first.Format(layoutMonth), MonthHref: monthHref(first), Due: count, Written: len(entries)}
+	sv := &shellView{Today: today, Zone: h.zone, Month: first.Format(layoutMonth), MonthHref: monthHref(first), Written: len(entries)}
 	for d := first; !d.After(last); d = d.AddDate(0, 0, 1) {
 		day := d.Format(time.DateOnly)
 		sv.Days = append(sv.Days, map[string]any{"day": day, "page": written[day]})
@@ -75,35 +62,9 @@ func (h *server) write(w http.ResponseWriter, r *http.Request, status int, e *En
 	h.inShell(w, r, status, e)
 }
 
-// dueRows is how many rows the root's Due draws for the open occurrences overdue or due today: a series overdue many
-// times is one row, as the list folds it (dueGroups), and each occurrence due today is one.
-func dueRows(open []occurrenceView, today string) int {
-	n, overdue := 0, map[int64]bool{}
-	for _, o := range open {
-		if o.DueDay < today {
-			if overdue[o.TaskID] {
-				continue
-			}
-			overdue[o.TaskID] = true
-		}
-		n++
-	}
-	return n
-}
-
 // inShell draws the entity as a page in the shell, for any client: the read of the shell may fail, as write says.
 func (h *server) inShell(w http.ResponseWriter, r *http.Request, status int, e *Entity) {
-	var due *int // the root already read what is due: the shell does not read it again
-	if len(e.Class) > 0 && e.Class[0] == "root" {
-		if props, ok := e.Properties.(map[string]any); ok {
-			if open, ok := props["due"].([]occurrenceView); ok {
-				today, _ := props["today"].(string)
-				n := dueRows(open, today)
-				due = &n
-			}
-		}
-	}
-	sv, err := h.shell(r.Context(), due)
+	sv, err := h.shell(r.Context())
 	if err != nil {
 		sv = &shellView{Zone: h.zone}
 		if h.localDay != nil {

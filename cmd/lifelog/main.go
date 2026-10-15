@@ -162,21 +162,6 @@ var commands = []command{
 		run: func(ctx context.Context, e env, args []string) error {
 			return doAction(ctx, e, "search", map[string]string{"q": strings.Join(args, " ")})
 		}},
-	{name: "tasks",
-		usage: "  lifelog tasks                       every task; lifelog do create-task label=... makes one",
-		run:   func(ctx context.Context, e env, _ []string) error { return show(e.o)(e.c.Get(ctx, "/tasks")) }},
-	{name: "due", flags: []string{"--from", "--to"},
-		usage: "  lifelog due [--from D] [--to D]     what is due: every task's open occurrences in the window",
-		run: func(ctx context.Context, e env, _ []string) error {
-			vals := map[string]string{}
-			if e.o.from != "" {
-				vals["from"] = e.o.from
-			}
-			if e.o.to != "" {
-				vals["through"] = e.o.to
-			}
-			return doAction(ctx, e, "deadlines", vals)
-		}},
 	{name: "rename",
 		usage: "  lifelog rename PAGE-ID NEW-TITLE    rename a named object, retaining its id and old-name aliases",
 		run: func(ctx context.Context, e env, args []string) error {

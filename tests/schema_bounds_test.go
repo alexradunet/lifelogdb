@@ -14,7 +14,6 @@ func schemaBounds(s *S) {
 	importKeyBounds(s)
 	emptyImportKeyIncident(s)
 	nameUnitAndNoteBounds(s)
-	taskLabelBounds(s)
 	tombstoneOrder(s)
 	entityColumnOrder(s)
 	seedIsAtomic(s)
@@ -34,14 +33,11 @@ func (c *C) rolledBack(q string, args ...any) string {
 
 func importKeyBounds(s *S) {
 	c := s.freshWith(F{Path: filepath.Join(s.dir, "import-key-bounds.db"), Hardened: true})
-	task := planningTask(c, nil)
 	tables := []struct {
 		name, insert string
 		args         []any // before the key, which is always the last parameter
 	}{
 		{"entities", "INSERT INTO entities(entity_type,preferred_name_key,source,created_at,updated_at,import_key) VALUES('page','import key witness','ui'," + bounds0 + "," + bounds0 + ",?)", nil},
-		{"tasks", "INSERT INTO tasks(label,repeat_unit,repeat_every,anchor_day,source,created_at,updated_at,import_key) VALUES('Witness','day',1,'2026-01-01','ui'," + bounds0 + "," + bounds0 + ",?)", nil},
-		{"task_occurrences", "INSERT INTO task_occurrences(task_id,occurrence_key,due_day,source,created_at,updated_at,import_key) VALUES(?,'2026-01-05','2026-01-05','ui'," + bounds0 + "," + bounds0 + ",?)", []any{task}},
 		{"measurements", "INSERT INTO measurements(metric_id,day,value,source,created_at,import_key) VALUES(1,'2026-01-01',3,'ui'," + bounds0 + ",?)", nil},
 	}
 	accepted := []struct {
@@ -154,38 +150,16 @@ func nameUnitAndNoteBounds(s *S) {
 	s.K("link_kinds_note allows no note", c.rolledBack("INSERT INTO link_kinds(kind) VALUES('note-probe')") == "OK")
 }
 
-func taskLabelBounds(s *S) {
-	c := s.freshWith(F{Path: filepath.Join(s.dir, "task-label-bounds.db"), Hardened: true})
-	insert := "INSERT INTO tasks(label,repeat_unit,repeat_every,anchor_day,source,created_at,updated_at) VALUES(?,'day',1,'2026-01-01','ui'," + bounds0 + "," + bounds0 + ")"
-	for _, v := range []string{"Buy supplies", "a", "two  inner  spaces"} {
-		s.K(fmt.Sprintf("tasks_label accepts %q", v), c.rolledBack(insert, v) == "OK")
-	}
-	for _, x := range []struct{ desc, v string }{
-		{"a leading space", " Buy supplies"},
-		{"a trailing space", "Buy supplies "},
-		{"only spaces", "   "},
-		{"the empty label", ""},
-		{"an embedded NUL", "Buy\x00supplies"},
-	} {
-		s.K("tasks_label refuses "+x.desc, strings.Contains(c.rolledBack(insert, x.v), "tasks_label"))
-	}
-	task := planningTask(c, nil)
-	s.K("tasks_label refuses an edit to a padded label", strings.Contains(c.rolledBack("UPDATE tasks SET label=' padded' WHERE id=?", task), "tasks_label"))
-}
-
 // A tombstone follows creation: deleted_at is never earlier than created_at (the same instant is allowed).
 func tombstoneOrder(s *S) {
 	c := s.freshWith(F{Path: filepath.Join(s.dir, "tombstone-order.db"), Hardened: true})
 	const created, before, after = "2026-01-01T00:00:00.000Z", "2025-12-31T23:59:59.999Z", "2026-01-01T00:00:00.001Z"
-	task := planningTask(c, nil)
 	tables := []struct {
 		name, insert string
 		args         []any // before the tombstone, which is always the last parameter
 		base         int64
 	}{
 		{"entities", "INSERT INTO entities(entity_type,preferred_name_key,source,created_at,updated_at,deleted_at) VALUES('page','tombstone witness','ui'," + bounds0 + "," + bounds0 + ",?)", nil, c.page("Tombstone base")},
-		{"tasks", "INSERT INTO tasks(label,repeat_unit,repeat_every,anchor_day,source,created_at,updated_at,deleted_at) VALUES('Witness','day',1,'2026-01-01','ui'," + bounds0 + "," + bounds0 + ",?)", nil, task},
-		{"task_occurrences", "INSERT INTO task_occurrences(task_id,occurrence_key,due_day,source,created_at,updated_at,deleted_at) VALUES(?,'2026-01-05','2026-01-05','ui'," + bounds0 + "," + bounds0 + ",?)", []any{task}, planningOccurrence(c, task, "2026-01-02", nil)},
 	}
 	for _, t := range tables {
 		name := t.name + "_deleted_after_created"
@@ -245,7 +219,7 @@ func triggersAvoidConflictShortcuts(s *S) {
 			offenders = append(offenders, clip(strings.Join(strings.Fields(code(st)), " "), 60))
 		}
 	}
-	s.K("the DDL has triggers to read", triggers > 50, triggers)
+	s.K("the DDL has triggers to read", triggers > 30, triggers)
 	s.K("no trigger uses OR IGNORE or OR REPLACE", len(offenders) == 0, offenders)
 
 }

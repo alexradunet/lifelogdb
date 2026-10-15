@@ -71,7 +71,7 @@ func TestAValueIsDrawnByItsType(t *testing.T) {
 	var sb strings.Builder
 	c.writeValue(&sb, map[string]any{
 		"start_utc": "2026-10-12T06:00:00.000Z", "day": "2026-10-05", "open": true, "closed": false, "end_utc": nil,
-		"task_version": 1000000.0, "members": []any{map[string]any{"page_id": 3.0, "kind_deleted_at": "2026-10-11T21:14:03.000Z"}},
+		"edit_version": 1000000.0, "members": []any{map[string]any{"page_id": 3.0, "kind_deleted_at": "2026-10-11T21:14:03.000Z"}},
 		"tags": []any{"a", "b"}, "note": "<script>",
 	})
 	got := sb.String()
@@ -82,7 +82,7 @@ func TestAValueIsDrawnByItsType(t *testing.T) {
 		`<td><time datetime="2026-10-11T21:14:03.000Z" title="2026-10-11T21:14:03.000Z">yesterday, 21:14 UTC</time></td><td>3</td>`,
 		`<dt>note</dt><dd>&lt;script&gt;</dd>`, `<dt>open</dt><dd>yes</dd>`,
 		`<dt>start utc</dt><dd><time datetime="2026-10-12T06:00:00.000Z" title="2026-10-12T06:00:00.000Z">today, 06:00 UTC</time></dd>`,
-		`<dt>tags</dt><dd><ul><li>a</li><li>b</li></ul></dd>`, `<dt>task version</dt><dd>1000000</dd>`,
+		`<dt>tags</dt><dd><ul><li>a</li><li>b</li></ul></dd>`, `<dt>edit version</dt><dd>1000000</dd>`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the value lacks %s:\n%s", want, got)

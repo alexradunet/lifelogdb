@@ -11,9 +11,6 @@ var suites = []struct {
 	run  func(*S)
 }{
 	{"dates", dates},
-	{"planning", planning},
-	{"planning-boundaries", planningBoundaries},
-	{"planning-cookbook", planningCookbook},
 	{"identity", identity},
 	{"id-guards", idGuards},
 	{"schema-safeguards", schemaSafeguards},

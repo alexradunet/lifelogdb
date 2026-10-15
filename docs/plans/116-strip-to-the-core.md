@@ -114,3 +114,12 @@ flowchart LR
   rewritten, D06, D07, D12, D15, D26, D27, the day view and metrics-by-category recipes, the integrity contract, the
   entity model, the 2075 table (one question fewer) and the schema README edited; README and API.md say the current
   truth. Checks: `go generate ./... && go vet ./... && go test ./...` green.
+- **Step 8 (tasks).** Removed: the `tasks` and `task_occurrences` tables with their indexes and fourteen
+  triggers, `lifelog_meta.planning` and the task clauses of three other rows, the task clause of `ghost_pages`, the
+  planning contract, the cookbook recipe tasks, the three task queries of the integrity checks, the eleven task
+  actions, `/tasks` and `/deadlines`, the due lists of Home, of a day, of a month and of a week, the Due count of
+  the sidebar, the CLI's `tasks` and `due`, `page.task_project`, the `planning` suites and 83 mutants. A plan is
+  words in a page. Record: issue 0079, RFC 0019; D23 and D15 rewritten; D10, D11, D12, D22, the goals, the
+  non-goals, the product concepts, the imports and integrity contracts, the 2075 table (three questions fewer),
+  the entity model, the ghost-pages recipe, the schema README, the writer guide and AGENTS.md edited; README and
+  API.md say the current truth. Checks: `go generate ./... && go vet ./... && go test ./...` green.

@@ -13,11 +13,9 @@
 | Sleep, workouts and other recorded activities | a reading on the reporting day, under a metric of its own when it must not add to a daily total (`workout-steps` beside `steps`); anything else is day-page prose ([D22](../decisions/D22-events.md)) |
 | A span of life (a trip, a job, a home) | a plain page: its body says when; the day pages inside it link it, so its backlinks list those days ([D22](../decisions/D22-events.md)) |
 | Habits | a unitless metric with a reading of 1 or 0 a day ([D24](../decisions/D24-habits.md)); its series is the record |
-| Personal tasks, recurring work and project context | independent definitions and occurrences, with ordinary pages for project grouping ([tasks](../cookbook/tasks.md), [D23](../decisions/D23-no-tasks.md)) |
-| Reminder intent | chosen local clock/zone defaults and per-occurrence overrides, resolved by the [planning profile](../contract/planning.md); delivery is separate |
 | Birthdays | a query over `people.birth_day` |
 | Biomarkers / quantified self | `metrics` + `measurements` ([a metric series](../cookbook/metric-series.md)), filed in category pages ([metrics by category](../cookbook/metrics-by-category.md), [D26](../decisions/D26-metric-categories.md)) |
 | Imported notes (a vault) | `entities.import_key`, unique per `source`: a re-run inserts nothing, a changed note updates its page ([import a row once](../cookbook/import-a-row-once.md)) |
 | Photos, recordings, scans | a file page: its text (a transcript, a caption) in the body, a small JPEG in `files.preview`, the original left outside; `![[Lake.jpg]]` in a day page links it ([keep a file](../cookbook/keep-a-file.md), [D9](../decisions/D09-binary-files.md)) |
 | Search | `entities_fts` ([full-text search](../cookbook/full-text-search.md)) |
-| "Which of my agents wrote this?" | `source` on every entity, task, task occurrence, link and measurement (`lifelog_meta.source`, [D10](../decisions/D10-time-model.md)) |
+| "Which of my agents wrote this?" | `source` on every entity, link and measurement (`lifelog_meta.source`, [D10](../decisions/D10-time-model.md)) |

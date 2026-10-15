@@ -57,17 +57,12 @@ A reading is a fact, not an entity: `measurements` is append-only ([D7](../decis
 `measurements.supersedes_id` points back at the row it corrects; `measurements.captured_with_id` records
 provenance (a mood reading points at its day page). A metric is a page with a `metrics` row, as a person is a page with a `people` row ([D27](../decisions/D27-a-metric-is-a-page.md));
 it is filed in a category, which is a page, by a `part-of` link ([D26](../decisions/D26-metric-categories.md)). `lifelog_meta` stands alone: the rules that span
-tables ([D17](../decisions/D17-contract-as-data.md)). Explicit personal intentions use independent `tasks` and
-`task_occurrences`; an ordinary page supplies project context. The generated `once_key` closes a deferred
-one-off ownership relationship without storing the fixed key twice ([planning](../contract/planning.md)).
+tables ([D17](../decisions/D17-contract-as-data.md)).
 
 ```mermaid
 %% diagram: er-facts
 erDiagram
     entities    ||--o| metrics : "id"
-    entities |o--o{ tasks : "project_page_id"
-    tasks ||--o{ task_occurrences : "task_id"
-    task_occurrences |o--o| tasks : "id"
     metrics     ||--o{ measurements : "metric_id"
     entities    |o--o{ measurements : "captured_with_id"
     measurements |o--o| measurements : "supersedes_id"
@@ -75,16 +70,6 @@ erDiagram
     metrics {
         INTEGER id PK, FK
         TEXT entity_type FK
-    }
-    tasks {
-        INTEGER id PK, FK
-        INTEGER project_page_id FK
-        TEXT project_entity_type FK
-        TEXT once_key FK
-    }
-    task_occurrences {
-        INTEGER id PK
-        INTEGER task_id FK
     }
     measurements {
         INTEGER id PK

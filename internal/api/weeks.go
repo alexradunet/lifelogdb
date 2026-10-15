@@ -13,7 +13,7 @@ import (
 
 // A week and a year look back over the calendar (docs/plans/097-the-almanac-reflects.md). The week is ISO 8601: it
 // starts on Monday, and week 1 is the week that holds 4 January. Both resources only read what the month, the habits
-// and the deadlines already give; the days are the month's, with their items (plan 101).
+// already gives; the days are the month's, with their items (plan 101).
 
 var weekPattern = regexp.MustCompile(`^(\d{4})-W(\d{2})$`)
 
@@ -125,13 +125,12 @@ func (h *server) week(r *http.Request) (*Entity, error) {
 		metrics = append(metrics, wm)
 	}
 
-	occurrences := cal.occurrences
 	next, thursday := monday.AddDate(0, 0, 7), monday.AddDate(0, 0, 3)
 	e.Links = []Link{link("self", weekHref(monday), e.Title), link("prev", weekHref(before), weekName(before)),
 		link("next", weekHref(next), weekName(next)), link("month", monthHref(thursday), thursday.Format(layoutMonth)),
 		link("year", yearHref(thursday.Year()), strconv.Itoa(thursday.Year())), link("index", "/", "Home")}
 	e.Properties = map[string]any{"week": weekKey(monday), "from": from, "through": through, "today": today,
-		"days": days, "metrics": metrics, "occurrences": occurrences}
+		"days": days, "metrics": metrics}
 	return e, nil
 }
 

@@ -13,8 +13,7 @@
   ],
   "shortcuts": [
     {"name": "Today", "url": "/days/today"},
-    {"name": "Add to today", "url": "/#new"},
-    {"name": "What is due", "url": "/deadlines"}
+    {"name": "Add to today", "url": "/#new"}
   ],
   "share_target": {
     "action": "/days/today/capture",
