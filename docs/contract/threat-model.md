@@ -27,7 +27,7 @@ The table is executed as a presence check: each place named in the third column 
 a table, view or trigger whose `CREATE` statement `.schema` prints — must exist in a fresh database and its
 text must contain each phrase in the last column. **Every key of `lifelog_meta` must be used by some question**.
 This catches missing summaries; it does not prove that prose is unambiguous or that an independent reader
-can reconstruct the full Unicode, Markdown, period-membership or reminder-resolution algorithms. Their
+can reconstruct the full Unicode, Markdown or reminder-resolution algorithms. Their
 behavioral vectors remain in the [storage contract](README.md).
 
 | # | Question | Where the answer is | The answer says |
@@ -60,8 +60,7 @@ behavioral vectors remain in the [storage contract](README.md).
 | 26 | Can a type change reinterpret retained edges? | `typed_links`, `entities_endpoint_types` | `incoming`, `outgoing`, `retained` |
 | 27 | How are stale edits rejected when write clocks coincide, and what counts as an edit? | `edit_revisions` | `monotonic`, `independent`, `no-ops`, `rollback`, `exhaustion`, `creation is not an edit`, `never the page it points at` |
 | 28 | How do planning identities, stopping and lifecycle agree? | `planning` | `task`, `occurrence`, `tombstone` |
-| 29 | What do partial, qualified and ongoing period boundaries mean? | `periods` | `? uncertain`, `~ approximate`, `% both`, `incomparable`, `as_of` |
-| 30 | What happens when a reminder clock repeats or does not exist? | `tasks` | `earlier instant`, `gap`, `entire local date`, `unresolved` |
+| 29 | What happens when a reminder clock repeats or does not exist? | `tasks` | `earlier instant`, `gap`, `entire local date`, `unresolved` |
 
 Planning reads and reminders follow the [planning profile](planning.md), including retained outcomes after
 ending a recurrence. A clock that cannot be resolved remains visible as unresolved intent; restoring a snapshot

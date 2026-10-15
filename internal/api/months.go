@@ -5,7 +5,6 @@ import (
 	"context"
 	"net/http"
 	"slices"
-	"strings"
 	"time"
 
 	"lifelog/internal/core"
@@ -27,15 +26,13 @@ type monthDay struct {
 }
 
 // calendarItem is a thing that names a day besides its day page: its kind, its title and the address of its own
-// resource. State is a task's, Years an anniversary's, Boundary and Qualifier a period's.
+// resource. State is a task's, Years an anniversary's.
 type calendarItem struct {
-	Kind      string `json:"kind"`
-	Title     string `json:"title"`
-	Href      string `json:"href"`
-	State     string `json:"state,omitempty"`
-	Years     int    `json:"years,omitempty"`
-	Boundary  string `json:"boundary,omitempty"`
-	Qualifier string `json:"qualifier,omitempty"`
+	Kind  string `json:"kind"`
+	Title string `json:"title"`
+	Href  string `json:"href"`
+	State string `json:"state,omitempty"`
+	Years int    `json:"years,omitempty"`
 }
 
 // dayPages is how many pages and files of a day the calendar lists; more_pages counts the rest, and the day lists
@@ -68,19 +65,6 @@ func (h *server) month(r *http.Request) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	// The periods a day of the month can fall in. An ongoing end is read as of today, which the month gives: the
-	// contract asks for an explicit day (docs/contract/period-boundaries.md).
-	periods := []core.LifePeriod{}
-	for _, p := range cal.periods {
-		m, err := core.PeriodMembershipIn(p.Start, p.End, from, through, today)
-		if err != nil {
-			return nil, err
-		}
-		if m != "outside" {
-			p.Membership = m
-			periods = append(periods, p)
-		}
-	}
 	name := first.Format(layoutMonth)
 	prev, next := first.AddDate(0, -1, 0), first.AddDate(0, 1, 0)
 	e := &Entity{Class: []string{"month"}, Title: name,
@@ -90,7 +74,7 @@ func (h *server) month(r *http.Request) (*Entity, error) {
 	for _, d := range cal.days {
 		e.Entities = append(e.Entities, link("day", dayHref(d.Day), d.Day))
 	}
-	e.Properties = map[string]any{"month": first.Format("2006-01"), "today": today, "days": cal.days, "periods": periods}
+	e.Properties = map[string]any{"month": first.Format("2006-01"), "today": today, "days": cal.days}
 	return e, nil
 }
 
@@ -103,12 +87,10 @@ func (h *server) openDay(r *http.Request) (*Entity, error) {
 	return nil, redirect{dayHref(day)}
 }
 
-// calendar is what a window of days holds: its days as a calendar shows them, the occurrences due in it, and every
-// live period (a boundary of one marks its day).
+// calendar is what a window of days holds: its days as a calendar shows them, and the occurrences due in it.
 type calendar struct {
 	days        []monthDay
 	occurrences []occurrenceView
-	periods     []core.LifePeriod
 }
 
 // calendarOf reads the days from from through through: whether each has a day page, its first line, its mood, its
@@ -135,17 +117,13 @@ func (h *server) calendarOf(ctx context.Context, from, through string) (*calenda
 	if err != nil {
 		return nil, err
 	}
-	periods, err := h.s.LifePeriods(ctx, "", "", false)
-	if err != nil {
-		return nil, err
-	}
 	dated, err := h.s.DatedIn(ctx, from, through, dayPages)
 	if err != nil {
 		return nil, err
 	}
 
 	// The items of each day, in the order of plan 101: the tasks (open, then done, then skipped), the anniversaries,
-	// the period boundaries, then the places and the pages as DatedIn orders them.
+	// then the places and the pages as DatedIn orders them.
 	items, more := map[string][]calendarItem{}, map[string]int{}
 	add := func(day string, it calendarItem) { items[day] = append(items[day], it) }
 	rank := map[string]int{core.StateOpen: 0, core.StateDone: 1, core.StateSkipped: 2}
@@ -158,16 +136,6 @@ func (h *server) calendarOf(ctx context.Context, from, through string) (*calenda
 	}
 	for _, a := range anniversaries {
 		add(a.Day, calendarItem{Kind: a.Kind, Title: a.Title, Href: pageHref(a.ID), Years: a.Years})
-	}
-	for _, p := range periods {
-		for _, b := range []struct {
-			name  string
-			value *string
-		}{{"start", p.Start}, {"end", p.End}} {
-			if day, q, ok := boundaryDay(b.value); ok && from <= day && day <= through {
-				add(day, calendarItem{Kind: "period", Title: p.Title, Href: pageHref(p.ID), Boundary: b.name, Qualifier: q})
-			}
-		}
 	}
 	for _, d := range dated {
 		add(d.Day, calendarItem{Kind: d.Kind, Title: d.Title, Href: pageHref(d.ID)})
@@ -189,20 +157,7 @@ func (h *server) calendarOf(ctx context.Context, from, through string) (*calenda
 		days = append(days, monthDay{Day: day, Page: written, FirstLine: p.FirstLine, Mood: moods[day],
 			Items: items[day], MorePages: more[day], Readings: readings[day] - len(moods[day])})
 	}
-	return &calendar{days: days, occurrences: occurrences, periods: periods}, nil
-}
-
-// boundaryDay is the day a period boundary names, and its qualifier (?, ~ or %, "" for none); ok is false for a
-// boundary that names a year or a month, an unknown one and an ongoing end.
-func boundaryDay(b *string) (day, qualifier string, ok bool) {
-	if b == nil {
-		return "", "", false
-	}
-	day = strings.TrimRight(*b, "?~%")
-	if day != *b {
-		qualifier = (*b)[len(day):]
-	}
-	return day, qualifier, core.IsDay(day)
+	return &calendar{days: days, occurrences: occurrences}, nil
 }
 
 // weeks puts the days of a month into the rows of a calendar, Monday first: nil fills a cell before the first day and

@@ -21,7 +21,6 @@ func temporalCookbookModels(s *S) {
 	temporalCategoryLifecycle(s)
 	temporalCorrectionModel(s)
 	temporalDeadlineModel(s)
-	temporalPeriodStorageModel(s)
 }
 
 func temporalCategoryLifecycle(s *S) {
@@ -335,45 +334,5 @@ func temporalDeadlineModel(s *S) {
 		check("revived", until, false)
 	}
 	s.K("deadline model retains file integrity", c.integrityOK())
-	c.must("COMMIT")
-}
-
-func temporalPeriodStorageModel(s *S) {
-	c := temporalModelDB(s, "temporal-period-boundaries.db")
-	id := c.identity("period", "ui", "Boundary combinations", nil, "")
-	c.must("INSERT INTO periods(id) VALUES(?)", id)
-	type boundary struct {
-		value                  any
-		first, last            string // hand-checked extrema, independent of SQLite date modifiers
-		unconstrained, invalid bool
-	}
-	finite := []boundary{
-		{"0000", "0000-01-01", "0000-12-31", false, false},
-		{"0000-02", "0000-02-01", "0000-02-29", false, false},
-		{"0000-02-29", "0000-02-29", "0000-02-29", false, false},
-		{"1900-02", "1900-02-01", "1900-02-28", false, false},
-		{"2000-02", "2000-02-01", "2000-02-29", false, false},
-		{"2026-10-15", "2026-10-15", "2026-10-15", false, false},
-		{"9999", "9999-01-01", "9999-12-31", false, false},
-		{"9999-12", "9999-12-01", "9999-12-31", false, false},
-		{"9999-12-31", "9999-12-31", "9999-12-31", false, false},
-	}
-	starts := append(append([]boundary{}, finite...), boundary{nil, "", "", true, false}, boundary{"9999?", "", "", true, false}, boundary{"1900-02-29~", "", "", true, true})
-	ends := append(append([]boundary{}, finite...), boundary{nil, "", "", true, false}, boundary{"..", "", "", true, false}, boundary{"0000%", "", "", true, false}, boundary{"9999-13?", "", "", true, true})
-	for _, start := range starts {
-		for _, end := range ends {
-			accepted := !start.invalid && !end.invalid && (start.unconstrained || end.unconstrained || start.first <= end.last)
-			c.must("SAVEPOINT period_combination")
-			before := c.tab("SELECT p.start_boundary,p.end_boundary,e.revision,e.updated_at FROM periods p JOIN entities e USING(id) WHERE p.id=?", id)
-			result := c.tryx("UPDATE periods SET start_boundary=?,end_boundary=? WHERE id=?", start.value, end.value, id)
-			unchanged := before == c.tab("SELECT p.start_boundary,p.end_boundary,e.revision,e.updated_at FROM periods p JOIN entities e USING(id) WHERE p.id=?", id)
-			stored := c.tab("SELECT start_boundary,end_boundary FROM periods WHERE id=?", id)
-			want := tab([][]any{{start.value, end.value}})
-			s.K(fmt.Sprintf("period storage model %v through %v", start.value, end.value), (result == "OK") == accepted && (accepted && stored == want || !accepted && unchanged), result, "expected accepted", accepted, "stored", stored, "want", want, "refusal unchanged", unchanged)
-			c.must("ROLLBACK TO period_combination")
-			c.must("RELEASE period_combination")
-		}
-	}
-	s.K("period storage model retains file integrity", c.integrityOK())
 	c.must("COMMIT")
 }

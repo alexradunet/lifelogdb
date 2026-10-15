@@ -109,7 +109,7 @@ func TestActionsAreOfferedOnlyWhereLegal(t *testing.T) {
 		t.Error("a day page does not offer an at link")
 	}
 	ana := must(c.Get(t.Context(), dayPage.Entities[0].Href))
-	if got := names(ana); got != "save-body,promote,promote-period,rename,link,unlink,file-pages,tombstone" {
+	if got := names(ana); got != "save-body,promote,rename,link,unlink,file-pages,tombstone" {
 		t.Errorf("a plain page offers %s", got)
 	}
 	if hasOption(find(ana, "link"), "kind", "at") {
@@ -551,7 +551,7 @@ func TestRenamedIdentityRetainsActionsAndAliasWrites(t *testing.T) {
 	}
 	other := must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Other", "body": "[[Typo]]"}))
 	current := must(c.Get(t.Context(), oldHref))
-	if current.Title != "Correct" || names(current) != "save-body,promote,promote-period,rename,link,unlink,file-pages,tombstone" {
+	if current.Title != "Correct" || names(current) != "save-body,promote,rename,link,unlink,file-pages,tombstone" {
 		t.Fatalf("renamed actions: %+v", current)
 	}
 	version := current.Properties.(map[string]any)["version"].(string)

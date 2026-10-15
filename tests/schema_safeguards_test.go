@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-
 )
 
 func schemaSafeguards(s *S) {

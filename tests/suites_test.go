@@ -11,7 +11,6 @@ var suites = []struct {
 	run  func(*S)
 }{
 	{"dates", dates},
-	{"recorded-periods", recordedPeriods},
 	{"planning", planning},
 	{"planning-boundaries", planningBoundaries},
 	{"planning-cookbook", planningCookbook},

@@ -20,21 +20,19 @@ func editRevisions(s *S) {
 	}
 	s.K("creation is not an edit: a page made by cookbook/capture's entity and owned-name statements is at revision 1 with updated_at = created_at", created)
 	var edited []string
-	for _, typ := range []string{"page", "person", "place", "metric", "file", "period"} {
+	for _, typ := range []string{"page", "person", "place", "metric", "file"} {
 		id := c.identity(typ, "ui", "Created "+typ, nil, "")
 		switch typ {
 		case "person", "metric", "file":
 			c.domain(typ, id, nil)
 		case "place":
 			c.must("INSERT INTO places(id,lat,lon,radius_m) VALUES(?,1,2,30)", id)
-		case "period":
-			c.must("INSERT INTO periods(id) VALUES(?)", id)
 		}
 		if revision(id) != 1 || c.str("SELECT updated_at = created_at FROM entities WHERE id=?", id) != "1" {
 			edited = append(edited, typ)
 		}
 	}
-	s.K("creation is not an edit: a page, person, place with a point, metric, file and period stay at revision 1 with updated_at = created_at after their typed row", len(edited) == 0, edited)
+	s.K("creation is not an edit: a page, person, place with a point, metric and file stay at revision 1 with updated_at = created_at after their typed row", len(edited) == 0, edited)
 	renamed := c.page("Rename witness")
 	renameBefore := revision(renamed)
 	c.must("INSERT INTO entity_names(entity_id,title,name_key) VALUES (?,'Renamed witness','renamed witness')", renamed)

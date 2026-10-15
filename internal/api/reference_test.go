@@ -24,23 +24,22 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 	documented := readReference(t, filepath.Join("..", "..", "API.md"))
 	// The shape behind each section: a Go value whose JSON names, walked, are the paths the table must list.
 	shapes := map[string]any{
-		"root":                              map[string]any{"today": "", "due": []occurrenceView{}, "habits": []habitView{}, "recent": []recentDay{}, "on_this_day": []recentDay{}},
-		"days, people, places, ghosts":      map[string]any{"limit": 0, "offset": 0, "rows": []namedRow{}},
-		"media, files":                      map[string]any{"limit": 0, "offset": 0, "kind": "", "rows": []fileRow{}, "counts": mediaCounts{}},
-		"search":                            map[string]any{"q": "", "titles": []core.TitleMatch{}, "hits": []core.Hit{}, "limit": 0, "offset": 0},
-		"day":                               dayView{},
-		"month":                             map[string]any{"month": "", "today": "", "days": []monthDay{}, "periods": []core.LifePeriod{}},
-		"week":                              map[string]any{"week": "", "from": "", "through": "", "today": "", "days": []monthDay{}, "habits": []weekHabit{}, "metrics": []weekMetric{}, "occurrences": []occurrenceView{}},
-		"year":                              map[string]any{"year": "", "today": "", "written": 0, "readings": 0, "months": []yearMonth{}},
-		"titles":                            map[string]any{"prefix": "", "limit": 0, "titles": []core.TitleMatch{}},
-		"page, person, place, file, period": core.Page{},
-		"measurement":                       core.Measurement{},
+		"root":                         map[string]any{"today": "", "due": []occurrenceView{}, "habits": []habitView{}, "recent": []recentDay{}, "on_this_day": []recentDay{}},
+		"days, people, places, ghosts": map[string]any{"limit": 0, "offset": 0, "rows": []namedRow{}},
+		"media, files":                 map[string]any{"limit": 0, "offset": 0, "kind": "", "rows": []fileRow{}, "counts": mediaCounts{}},
+		"search":                       map[string]any{"q": "", "titles": []core.TitleMatch{}, "hits": []core.Hit{}, "limit": 0, "offset": 0},
+		"day":                          dayView{},
+		"month":                        map[string]any{"month": "", "today": "", "days": []monthDay{}},
+		"week":                         map[string]any{"week": "", "from": "", "through": "", "today": "", "days": []monthDay{}, "habits": []weekHabit{}, "metrics": []weekMetric{}, "occurrences": []occurrenceView{}},
+		"year":                         map[string]any{"year": "", "today": "", "written": 0, "readings": 0, "months": []yearMonth{}},
+		"titles":                       map[string]any{"prefix": "", "limit": 0, "titles": []core.TitleMatch{}},
+		"page, person, place, file":    core.Page{},
+		"measurement":                  core.Measurement{},
 		"series": map[string]any{"metric": "", "from": "", "to": "", "readings": []core.Reading{}, "habit_periods": []core.HabitPeriod{}, "categories": []string{}, "all_history": false,
 			"id": int64(0), "unit": "", "body": "", "links": []core.Edge{}, "backlinks": []core.Edge{}},
 		"metrics": map[string]any{"metrics": []metricRow{}, "groups": []metricGroup{}, "categories": []core.Category{}, "today": "",
 			"habit_days": []habitView{}},
 		"habits":     map[string]any{"day": "", "habits": []core.HabitState{}, "from": "", "to": "", "completion": []core.Completion{}},
-		"periods":    map[string]any{"periods": []core.LifePeriod{}, "day": "", "as_of": "", "membership_basis": "", "include_deleted": false},
 		"tasks":      map[string]any{"tasks": []core.Task{}, "include_deleted": false},
 		"task":       map[string]any{"task": core.Task{}, "from": "", "through": "", "include_deleted": false, "occurrences": []occurrenceView{}, "today": "", "once": occurrenceView{}},
 		"occurrence": occurrenceView{},
@@ -91,10 +90,10 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 	live := []struct{ section, route string }{
 		{"root", "/"}, {"days, people, places, ghosts", "/days"}, {"days, people, places, ghosts", "/people"},
 		{"media, files", "/media"}, {"media, files", "/files"}, {"days, people, places, ghosts", "/ghosts"}, {"search", "/search?q=word"},
-		{"day", "/days/2031-05-01"}, {"page, person, place, file, period", ids["page"]}, {"page, person, place, file, period", ids["person"]},
-		{"page, person, place, file, period", ids["place"]}, {"page, person, place, file, period", ids["file"]}, {"page, person, place, file, period", ids["period"]},
+		{"day", "/days/2031-05-01"}, {"page, person, place, file", ids["page"]}, {"page, person, place, file", ids["person"]},
+		{"page, person, place, file", ids["place"]}, {"page, person, place, file", ids["file"]},
 		{"measurement", ids["measurement"]}, {"series", "/metrics/Weight"}, {"metrics", "/metrics"}, {"habits", "/habits?day=2031-05-01"},
-		{"periods", "/periods?day=2031-05-01"}, {"integrity", "/integrity"},
+		{"integrity", "/integrity"},
 		{"month", "/months/2031-05"}, {"week", "/weeks/2031-W18"}, {"year", "/years/2031"}, {"titles", "/titles?prefix=s"}, {"tasks", "/tasks"}, {"task", ids["task"]}, {"occurrence", ids["task"] + "/occurrences/once"}, {"deadlines", "/deadlines?from=2031-05-01&through=2031-05-31"},
 	}
 	named := func(section, key string) bool { // a list is documented as "name[]"
@@ -291,17 +290,9 @@ func fixture(t *testing.T) (http.Handler, *core.Store, map[string]string) {
 		t.Fatal(err)
 	}
 	h := New(s)
-	req := httptest.NewRequest("POST", "/periods", strings.NewReader("title=School&start_boundary=2030-01-01&end_boundary=2032-01-01"))
+	req := httptest.NewRequest("POST", "/tasks", strings.NewReader("label=Plant+beans&project=A+note&due_day=2031-05-02"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	if rec.Code != 200 {
-		t.Fatalf("create-period: %d %.300s", rec.Code, rec.Body.String())
-	}
-	ids["period"] = rec.Header().Get("Location")
-	req = httptest.NewRequest("POST", "/tasks", strings.NewReader("label=Plant+beans&project=A+note&due_day=2031-05-02"))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != 200 {
 		t.Fatalf("create-task: %d %.300s", rec.Code, rec.Body.String())

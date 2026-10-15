@@ -48,8 +48,6 @@ func newIntegrityFile(s *S, pageRows int) *integrityFile {
 	c.thing("place")
 	c.thing("metric")
 	c.thing("file")
-	period := c.identity("period", "ui", "Complete period", nil, "")
-	c.must("INSERT INTO periods(id) VALUES(?)", period)
 	c.must("COMMIT")
 	c.must("PRAGMA wal_checkpoint(TRUNCATE)")
 	if err := c.Close(); err != nil {
@@ -289,7 +287,7 @@ func integrity(s *S) {
 	}
 	r = f.checks(p)
 	s.K("missing preferred ownership is detected by FK and semantic checks, not structure", r.ic == "ok" && r.fk != "" && r.orph == ids(oid), r)
-	for _, typ := range []string{"person", "metric", "file", "period"} {
+	for _, typ := range []string{"person", "metric", "file"} {
 		p = f.copy("half-" + typ)
 		w = s.connect(p)
 		w.must("PRAGMA foreign_keys=ON")

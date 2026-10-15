@@ -86,22 +86,12 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 	e.Actions = append(e.Actions, saveBodyAction(id, p.Body, p.Version))
 	if !p.IsDayPage {
 		if p.Type == "page" && !p.TaskProject {
-			e.Actions = append(e.Actions, action("promote", ids, nil), action("promote-period", ids, map[string]any{"version": p.Version}))
+			e.Actions = append(e.Actions, action("promote", ids, nil))
 		}
 		e.Actions = append(e.Actions, action("rename", ids, nil))
 	}
 	if p.Type == "person" {
 		e.Actions = append(e.Actions, action("set-picture", ids, nil))
-	}
-	if p.Period != nil {
-		values := map[string]any{"version": p.Version}
-		if p.Period.Start != nil {
-			values["start_boundary"] = *p.Period.Start
-		}
-		if p.Period.End != nil {
-			values["end_boundary"] = *p.Period.End
-		}
-		e.Actions = append(e.Actions, action("edit-period", ids, values))
 	}
 	if p.Type == "place" {
 		values := map[string]any{"radius_m": core.DefaultRadius, "link_days": "1"}

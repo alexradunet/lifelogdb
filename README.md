@@ -97,8 +97,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   Skip, or Reopen; a habit's check-in is Done and Not done. These are properties and actions of the entities, so every
   client gets them ([API.md](API.md)). `/months/{YYYY-MM}` is the calendar of a month (each day, whether it has a
   page, its first line, its mood and its readings, and every other thing that names the day: the work due on it, a
-  birthday or a death each year, a period boundary, a place, a page or a file; under the calendar, Day by
-  day links each one and Periods says what the month falls in: [plan 101](docs/plans/101-the-calendar-holds-every-dated-thing.md)),
+  birthday or a death each year, a place, a page or a file; under the calendar, Day by
+  day links each one: [plan 101](docs/plans/101-the-calendar-holds-every-dated-thing.md)),
   and the catalog action `open-day` goes to a day by its date. The handler reads
   today from one clock, which a test fixes. The day and the root carry `on_this_day`, the day pages of the same date
   in earlier years, which the margin shows after Due. `/weeks/{YYYY-Www}` is the week (its days, its habits as

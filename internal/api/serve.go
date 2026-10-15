@@ -76,10 +76,6 @@ func NewOn(s *core.Store, localDay func() string, zone *time.Location, asker Ask
 	get("/pages/{id}", h.page)
 	get("/people", h.named("person", "people", "create-person"))
 	get("/places", h.named("place", "places", "create-place"))
-	get("/periods", h.periods)
-	post("/periods", h.createPeriod)
-	post("/pages/{id}/period", h.writePeriod(false))
-	post("/pages/{id}/promote-period", h.writePeriod(true))
 	get("/media", h.media)
 	get("/files", h.files)
 	m.HandleFunc("GET /pages/{id}/preview", picture(func(r *http.Request) ([]byte, error) {

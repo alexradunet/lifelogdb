@@ -36,7 +36,6 @@ func editedRows(t *testing.T, s *Store, day string) []string {
 // edit: the owned preferred name and the typed detail row are part of it (lifelog_meta.edit_revisions).
 func TestCreationIsNotAnEdit(t *testing.T) {
 	const day = "2026-10-04"
-	start, end := "2018-09", "2018-09-15"
 	s := fresh(t)
 	created := map[string]int64{}
 	add := func(name string, id int64, err error) {
@@ -72,11 +71,6 @@ func TestCreationIsNotAnEdit(t *testing.T) {
 	k, err := s.AddFile(ctx, "cli", FileIn{Title: "2026-10-04 Lake.jpg", SHA256: sha('a'), MIME: "image/jpeg",
 		Body: "the lake with [[Sam Sample]]", Day: day, Preview: smallJPEG(t)})
 	add("file", k.ID, err)
-	err = s.Do(ctx, "cli", func(tx *Tx) (e error) {
-		id, e = tx.CreatePeriod("Trip", "a trip, see [[Lakeside]]", &start, &end)
-		return
-	})
-	add("period", id, err)
 	// link targets a body save made: ghosts
 	for _, title := range []string{"Lakeside", "health"} {
 		id, err = s.PageID(ctx, title)

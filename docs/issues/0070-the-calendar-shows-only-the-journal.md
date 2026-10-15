@@ -40,7 +40,7 @@ Each row is a fact of the code at `c53cf4a`.
 
 ## Rules involved
 
-- [D22](../decisions/D22-events.md): sessions and periods; [period boundaries](../contract/period-boundaries.md):
+- [D22](../decisions/D22-events.md): sessions and periods; period boundaries (removed by RFC 0014):
   day membership.
 - [Planning](../contract/planning.md): occurrences and their due days.
 - [README](../../README.md): "The browser for daily use", "The app shell".

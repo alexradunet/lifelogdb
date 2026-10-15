@@ -108,9 +108,6 @@ func areaReq(name, title string, rows int) Field {
 
 // catalog is every action the API has. GET /actions serves it, and the CLI and the MCP server are built from it.
 var catalog = []spec{
-	{"create-period", "New period", "Record a named historical span, with optional uncertain boundaries; classifications use ordinary part-of links.", "POST", "/periods", []Field{req("title", "text", "Title"), area("body", "Body", 5), opt("start_boundary", "text", "Start boundary (blank unknown)"), opt("end_boundary", "text", "End boundary (blank unknown; .. ongoing)")}, false, false},
-	{"edit-period", "Edit boundaries", "Replace period boundaries using the current named-object version.", "POST", "/pages/{id}/period", []Field{path("id", "number", "Period id"), req("version", "hidden", "Version"), opt("start_boundary", "text", "Start boundary"), opt("end_boundary", "text", "End boundary")}, false, false},
-	{"promote-period", "Record span", "Make this plain non-journal page a period without replacing its identity, body or links.", "POST", "/pages/{id}/promote-period", []Field{path("id", "number", "Page id"), req("version", "hidden", "Version"), opt("start_boundary", "text", "Start boundary"), opt("end_boundary", "text", "End boundary")}, false, false},
 	{"capture", "Add to the day", "Append an entry to the journal page of a local day (created on the first capture), with an optional mood 1-5. [[Title]] and #tag in the text link pages, creating them if new. audio is a voice note (a recording, sent as a file by the CLI's --audio, a browser's capture box or a phone's share sheet): its words are transcribed and appended after the text; the recording is never stored.",
 		"POST", "/days/{day}/capture", []Field{path("day", "date", "Local day, YYYY-MM-DD"), area("text", "Entry (CommonMark)", 4),
 			{Name: "mood", Type: "number", Title: "Mood 1-5", Options: []string{"1", "2", "3", "4", "5"}},

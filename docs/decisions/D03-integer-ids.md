@@ -12,7 +12,7 @@
 - **An id is a permanent reference.** Nothing but `links` rows is deleted, so an entity id is never
   reused, and a named entity also has its retained owned names ([D20](D20-named-pages.md)). Typed extension
   ownership is guarded separately from foreign-key validity (`people_identity_fixed`, `places_fixed`,
-  `metrics_identity_fixed`, `files_identity_fixed`, `periods_fixed`): a foreign key alone would allow details
+  `metrics_identity_fixed`, `files_identity_fixed`): a foreign key alone would allow details
   to move to another identity of the same type. Stable ownership keeps the name, prose, details and edit token
   about the same thing.
 - **Trade accepted.** If merging two databases ever becomes real, integer IDs can collide.

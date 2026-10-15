@@ -1,4 +1,4 @@
-{{/* A page, a person, a place, a file or a period (docs/plans/095-the-leaf-and-its-margin.md): the head with its
+{{/* A page, a person, a place or a file (docs/plans/095-the-leaf-and-its-margin.md): the head with its
      title (a day page's in words); the sheet with the editor under the head, so a long page is edited without a
      scroll to its end, then the body; the margin with its facts, its typed links, its backlinks and its other
      actions. A day page's title is a day in words wherever a page is listed. */}}
@@ -32,7 +32,6 @@
 <section class="group" aria-label="Facts"><h2>Facts</h2>
 <dl class="facts">
 {{with $p.person}}{{with .name}}<dt>name</dt><dd class="words">{{.}}</dd>{{end}}{{with .birth_day}}<dt>born</dt><dd>{{$.Date .}}</dd>{{end}}{{with .death_day}}<dt>died</dt><dd>{{$.Date .}}</dd>{{end}}{{end}}
-{{with $p.period}}<dt>start</dt><dd>{{or .start_boundary "unknown"}}</dd><dt>end</dt><dd>{{or .end_boundary "unknown"}}</dd>{{end}}
 {{with $p.point}}<dt>point</dt><dd>{{num .lat}}, {{num .lon}}</dd><dt>radius</dt><dd>{{num .radius_m}} m</dd>{{if not .link_days}}<dt>its days</dt><dd class="words">not linked</dd>{{end}}{{end}}
 {{with $p.file}}<dt>type</dt><dd>{{.mime}}</dd><dt>SHA-256</dt><dd title="SHA-256 of the original">{{slice .sha256 0 12}}…</dd>{{end}}
 <dt>created</dt><dd>{{$.When $p.created_at}}</dd>
@@ -52,8 +51,6 @@
 {{template "boxed" (form (.Action "link") "button" "Add a typed link")}}
 {{template "boxed" (form (.Action "unlink") "button" "Remove a typed link")}}
 {{template "boxed" (form (.Action "rename"))}}
-{{template "boxed" (form (.Action "edit-period"))}}
-{{template "boxed" (form (.Action "promote-period"))}}
 {{template "boxed" (form (.Action "promote") "button" "Make it a person or a place")}}
 {{template "boxed" (form (.Action "tombstone"))}}</div></section>{{end}}
 </div>

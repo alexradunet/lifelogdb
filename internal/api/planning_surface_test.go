@@ -56,8 +56,8 @@ func TestTaskProjectPromotionActionsMatchRetainedReferences(t *testing.T) {
 			}
 			// Retain actions advertised before the reference existed. Their direct
 			// invocation must still refuse after the resource's legal actions change.
-			promote, period := find(initial, "promote"), find(initial, "promote-period")
-			if promote.Name == "" || period.Name == "" {
+			promote := find(initial, "promote")
+			if promote.Name == "" {
 				t.Fatal("unreferenced page omitted promotion actions")
 			}
 			taskID, _, err := s.CreateTask(ctx, "cli", core.TaskForm{TaskSpec: core.TaskSpec{Label: "Buy seeds", ProjectPageID: &projectID}})
@@ -78,16 +78,14 @@ func TestTaskProjectPromotionActionsMatchRetainedReferences(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				for _, action := range []string{"promote", "promote-period"} {
-					if find(page, action).Name != "" {
-						t.Errorf("task deleted=%v: project page advertises forbidden %s", deleted, action)
-					}
+				if find(page, "promote").Name != "" {
+					t.Errorf("task deleted=%v: project page advertises forbidden promote", deleted)
 				}
 				if props(page)["task_project"] != true {
 					t.Errorf("task deleted=%v: project context flag=%v", deleted, props(page)["task_project"])
 				}
 				body := browse(t, h, resource)
-				if strings.Contains(body, resource+`/promote"`) || strings.Contains(body, resource+`/promote-period"`) {
+				if strings.Contains(body, resource+`/promote"`) {
 					t.Errorf("task deleted=%v: browser renders forbidden project promotion", deleted)
 				}
 				before, err := s.PageByID(ctx, projectID)
@@ -99,7 +97,6 @@ func TestTaskProjectPromotionActionsMatchRetainedReferences(t *testing.T) {
 					values map[string]string
 				}{
 					{promote, map[string]string{"to": "person", "name": "Unexpected person"}},
-					{period, map[string]string{"version": before.Version}},
 				} {
 					_, err := c.Do(t.Context(), attempt.action, attempt.values)
 					var ce *client.Error
@@ -115,7 +112,7 @@ func TestTaskProjectPromotionActionsMatchRetainedReferences(t *testing.T) {
 					}
 				}
 				var typedRows int
-				if err := d.R.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM people WHERE id=?)+(SELECT count(*) FROM periods WHERE id=?)`, projectID, projectID).Scan(&typedRows); err != nil {
+				if err := d.R.QueryRowContext(ctx, `SELECT count(*) FROM people WHERE id=?`, projectID).Scan(&typedRows); err != nil {
 					t.Fatal(err)
 				}
 				if typedRows != 0 {
@@ -126,7 +123,7 @@ func TestTaskProjectPromotionActionsMatchRetainedReferences(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if find(ordinary, "promote").Name == "" || find(ordinary, "promote-period").Name == "" {
+			if find(ordinary, "promote").Name == "" {
 				t.Fatal("ordinary page lost promotion actions")
 			}
 			if props(ordinary)["task_project"] != false {

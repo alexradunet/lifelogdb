@@ -15,7 +15,7 @@ where the owner was, health readings, and the files the owner keeps — as their
 original left outside ([D9](docs/decisions/D09-binary-files.md)). Explicit tasks and occurrences preserve personal
 planning and reminder intent; ordinary pages provide project context ([D23](docs/decisions/D23-no-tasks.md),
 [planning](docs/contract/planning.md)). A plan written in a note stays text unless explicitly captured as a task.
-Recorded periods follow [D22](docs/decisions/D22-events.md); money and a location track remain deferred
+A span of life or a session is a plain page or a reading, not a table of its own ([D22](docs/decisions/D22-events.md)); money and a location track remain deferred
 ([D18](docs/decisions/D18-money.md), [D21](docs/decisions/D21-location-history.md)). A proposal that adds project
 workflows, notification delivery or a finance ledger needs a real incident and the owner's word first.
 Any developer, in any language, may
@@ -332,7 +332,7 @@ Their homes are in `docs/`; this list is the checklist, not the rule.
 - **Links**: a closed, endpoint-typed `link_kinds` registry (D8).
 - **Names and journal identity**: use [titles and wikilinks](docs/contract/titles-and-wikilinks.md), its vectors,
   and [D5](docs/decisions/D05-pages-and-day-pages.md). Check preferred-name changes, retained aliases and journal
-  reservations against those rules. Recorded periods follow [D22](docs/decisions/D22-events.md);
+  reservations against those rules. Spans and sessions follow [D22](docs/decisions/D22-events.md);
   habits follow [D24](docs/decisions/D24-habits.md).
 - **Connections** ([connection setup](docs/contract/connections.md)): one writing application per file; per connection
   `PRAGMA foreign_keys=ON`, `recursive_triggers=ON`, `synchronous=FULL`, `trusted_schema=OFF` (the first three read back and refused

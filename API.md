@@ -66,10 +66,10 @@ ghosts oldest first; search by rank.
 
 ### root
 
-`GET /`: today at a glance. Links: `today`, `days`, `periods`, `people`, `places`, `media`, `files`, `metrics`,
+`GET /`: today at a glance. Links: `today`, `days`, `people`, `places`, `media`, `files`, `metrics`,
 `habits`, `tasks`, `deadlines`, `ghosts`, `actions`, `calendar` (this month), `week` (this week), `year` (this year). Actions: `capture` (for today), `search`,
 `find`, `open-day`, `deadlines`,
-`create-task`, `create-period`, `create-page`, `create-person`, `create-place`, `add-file`,
+`create-task`, `create-page`, `create-person`, `create-place`, `add-file`,
 `record`, `register-metric` (owner), `query`, `snapshot` (owner), `ask`; then the `check-in` of each habit of today (today
 filled in), and the outcome (see task) of each occurrence in `due`.
 
@@ -298,24 +298,14 @@ link to each day of the month. Actions: `open-day`. Each day holds what names it
 | `days[].page` | boolean | a live day page exists for it |
 | `days[].first_line` | string | the first line of that page's body that has text, as plain text (as `recent[]` of the root); absent when none |
 | `days[].mood` | list | the values of the day's current Mood readings, in the order they were recorded; absent when none |
-| `days[].items[]` | list | every other thing that names the day, in this order: the occurrences due on it (open, then done, then skipped), the births and deaths, the period boundaries, the places and the pages; absent when none |
-| `days[].items[].kind` | string | `task` (an occurrence of a live task, in every state, a recurring task's days included); `birthday` or `death` (a live person's birth or death day, and its day in each later year; 29 February is on 28 February in a common year); `period` (a boundary of a live period that names this day); `place` (a live place that the live day page links with `at`); `page` or `file` (a live page that is not a day page and has the day, by title, at most 20 a day) |
+| `days[].items[]` | list | every other thing that names the day, in this order: the occurrences due on it (open, then done, then skipped), the births and deaths, the places and the pages; absent when none |
+| `days[].items[].kind` | string | `task` (an occurrence of a live task, in every state, a recurring task's days included); `birthday` or `death` (a live person's birth or death day, and its day in each later year; 29 February is on 28 February in a common year); `place` (a live place that the live day page links with `at`); `page` or `file` (a live page that is not a day page and has the day, by title, at most 20 a day) |
 | `days[].items[].title` | string | a task's label; else the title of the page |
 | `days[].items[].href` | string | the item's own resource: the occurrence or the page |
 | `days[].items[].state` | string | a task's: `open`, `done` or `skipped` |
 | `days[].items[].years` | integer | a birthday's or a death's: the whole years since the day the person's row holds; absent on that day |
-| `days[].items[].boundary` | string | a period's: `start` or `end` |
-| `days[].items[].qualifier` | string | a period's: `?`, `~` or `%` when the boundary has one; absent otherwise |
 | `days[].more_pages` | integer | the pages and files of the day after the first 20 in `items[]`; absent when none |
 | `days[].readings` | integer | the current readings on the day, of every metric but the Mood (`mood` holds those); absent when none |
-| `periods[]` | list | each live period that a day of the month can fall in, by name: a period outside on every day is not listed |
-| `periods[].id` | integer | |
-| `periods[].title` | string | |
-| `periods[].start_boundary` | day | |
-| `periods[].end_boundary` | day | |
-| `periods[].version` | string | |
-| `periods[].deleted_at` | instant | |
-| `periods[].membership` | string | the strongest membership of a day of the month: `definite`, then `possible`, then `incomparable`; an ongoing end is read as of `today` |
 
 ### week
 
@@ -335,14 +325,12 @@ day of the week. Actions: `open-day`.
 | `days[].page` | boolean | a live day page exists for it |
 | `days[].first_line` | string | the first line of that page's body that has text, as plain text; absent when none |
 | `days[].mood` | list | the values of the day's current Mood readings, in the order they were recorded; absent when none |
-| `days[].items[]` | list | every other thing that names the day, in this order: the occurrences due on it (open, then done, then skipped), the births and deaths, the period boundaries, the places and the pages; absent when none |
-| `days[].items[].kind` | string | `task` (an occurrence of a live task, in every state, a recurring task's days included); `birthday` or `death` (a live person's birth or death day, and its day in each later year; 29 February is on 28 February in a common year); `period` (a boundary of a live period that names this day); `place` (a live place that the live day page links with `at`); `page` or `file` (a live page that is not a day page and has the day, by title, at most 20 a day) |
+| `days[].items[]` | list | every other thing that names the day, in this order: the occurrences due on it (open, then done, then skipped), the births and deaths, the places and the pages; absent when none |
+| `days[].items[].kind` | string | `task` (an occurrence of a live task, in every state, a recurring task's days included); `birthday` or `death` (a live person's birth or death day, and its day in each later year; 29 February is on 28 February in a common year); `place` (a live place that the live day page links with `at`); `page` or `file` (a live page that is not a day page and has the day, by title, at most 20 a day) |
 | `days[].items[].title` | string | a task's label; else the title of the page |
 | `days[].items[].href` | string | the item's own resource: the occurrence or the page |
 | `days[].items[].state` | string | a task's: `open`, `done` or `skipped` |
 | `days[].items[].years` | integer | a birthday's or a death's: the whole years since the day the person's row holds; absent on that day |
-| `days[].items[].boundary` | string | a period's: `start` or `end` |
-| `days[].items[].qualifier` | string | a period's: `?`, `~` or `%` when the boundary has one; absent otherwise |
 | `days[].more_pages` | integer | the pages and files of the day after the first 20 in `items[]`; absent when none |
 | `days[].readings` | integer | the current readings on the day, of every metric but the Mood (`mood` holds those); absent when none |
 | `habits[]` | list | each habit active on a day of the week through today, by name, counted as `completion` of habits is: a week in progress counts through today, a week to come counts nothing |
@@ -399,13 +387,12 @@ month. Actions: `open-day`.
 | `months[].days[].day` | day | the day |
 | `months[].days[].page` | boolean | a live day page exists for it |
 
-### page, person, place, file, period
+### page, person, place, file
 
 `GET /pages/{id}`; `GET /pages?title=` redirects to it. The class is the page's type; a day page adds `day-page`, a
 tombstoned page adds `deleted`. Links: `day` (a day page's day view), `preview` (a file's picture), `map` (a place's
 point). Embedded: every outgoing link under its kind, every incoming one under `backlink` and its kind. Actions by
-what is legal: `save-body` (with the current `body` and `version` filled), `promote`, `promote-period`, `rename`,
-`edit-period`, `locate`, `link` and `unlink` (with the kinds this type may start), [`file-pages`](#filed) (a page that may
+what is legal: `save-body` (with the current `body` and `version` filled), `promote`, `rename`, `locate`, `link` and `unlink` (with the kinds this type may start), [`file-pages`](#filed) (a page that may
 be `part-of`, not a day page: `ids` is this page, and `category` offers the category titles; a new title is made),
 `set-picture` (a person), `readings-from-table` (when the
 body holds a table, with `page` filled), `tombstone`, or `revive` alone on a deleted page. In a browser, the page of a
@@ -423,7 +410,7 @@ that is not a kept picture, is refused (422).
 |---|---|---|
 | `task_project` | boolean | this page is a task's project |
 | `id` | integer | the page's id, permanent |
-| `entity_type` | string | `page`, `person`, `place`, `metric`, `file` or `period` |
+| `entity_type` | string | `page`, `person`, `place`, `metric` or `file` |
 | `title` | string | its preferred title; a day page's is its day |
 | `day` | day | the page's day: a day page's own, or the day a note or file belongs to; absent otherwise |
 | `body` | string | the body, CommonMark with `[[wikilinks]]` and `#tags` |
@@ -431,14 +418,6 @@ that is not a kept picture, is refused (422).
 | `version` | string | the version token a `save-body` must send back |
 | `deleted_at` | instant | when it was tombstoned; absent while it lives |
 | `is_day_page` | boolean | it is a journal day page |
-| `period` | object | a period's boundaries; absent otherwise |
-| `period.id` | integer | the page's id again |
-| `period.title` | string | its title again |
-| `period.start_boundary` | day | the start, `null` when unknown |
-| `period.end_boundary` | day | the end, `null` when unknown, `..` when ongoing |
-| `period.version` | string | the version token `edit-period` sends back |
-| `period.deleted_at` | instant | absent while it lives |
-| `period.membership` | string | in a periods list only: how the asked day falls in it; absent here |
 | `person` | object | a person's details; absent otherwise |
 | `person.name` | string | the full name |
 | `person.birth_day` | day | born; absent when unknown |
@@ -598,26 +577,6 @@ the 30 days to that day). Links: `day`, `prev`, `next`. Embedded: a `habit` link
 | `completion[].not_done` | integer | days checked in not done |
 | `completion[].not_recorded` | integer | active days with no check-in |
 | `completion[].invalid` | integer | days with an invalid reading |
-
-### periods
-
-`GET /periods?day=&as_of=&include_deleted=`: recorded life periods, with their membership of `day` when one is asked.
-Embedded: `item` links to the period pages. Action: `create-period`.
-
-| property | type | meaning |
-|---|---|---|
-| `periods[]` | list | the periods (a page's `period` object, with `membership`) |
-| `periods[].id` | integer | |
-| `periods[].title` | string | |
-| `periods[].start_boundary` | day | |
-| `periods[].end_boundary` | day | |
-| `periods[].version` | string | |
-| `periods[].deleted_at` | instant | |
-| `periods[].membership` | string | how `day` falls in the period, when asked |
-| `day` | string | the day asked, or empty |
-| `as_of` | string | the as-of day asked, or empty |
-| `membership_basis` | string | a note: membership is by the supplied day, not by interval overlap |
-| `include_deleted` | boolean | tombstoned periods were included |
 
 ### tasks
 

@@ -8,8 +8,8 @@ is derived and rebuildable and is not drawn.)
 ## Entities and the graph
 
 One named identity and prose body per linkable thing (`entities`), with authoritative spellings in
-`entity_names` and a preferred selection checked by a deferred owner FK. A person, place, metric, file or
-period is a page concept, not a separate prose row. Typed extensions reference `(id, entity_type)`
+`entity_names` and a preferred selection checked by a deferred owner FK. A person, place, metric or file
+is a page concept, not a separate prose row. Typed extensions reference `(id, entity_type)`
 directly on `entities`; a place's point remains optional. The polymorphic `links` graph references
 the same stable id and the closed `link_kinds` registry.
 
@@ -18,7 +18,6 @@ the same stable id and the closed `link_kinds` registry.
 erDiagram
     entities ||--o{ entity_names : "entity_id"
     entity_names ||--o| entities : "id"
-    entities ||--o| periods : "id"
     entities ||--o| people : "id"
     entities ||--o| files : "id"
     entities ||--o| places : "id"
@@ -33,10 +32,6 @@ erDiagram
     entity_names {
         INTEGER id PK
         INTEGER entity_id FK
-    }
-    periods {
-        INTEGER id PK, FK
-        TEXT entity_type FK
     }
     people {
         INTEGER id PK, FK

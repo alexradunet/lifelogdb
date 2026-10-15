@@ -11,7 +11,7 @@
 | People and places in prose | `[[Bob Sample]]` links to the person itself, because the person is a page ([D20](../decisions/D20-named-pages.md), [a person or a place](../cookbook/person-or-place.md)) |
 | Life graph ("everything about my son") | `links` in both directions from his id ([everything about](../cookbook/everything-about.md)) |
 | Sleep, workouts and other recorded activities | a reading on the reporting day, under a metric of its own when it must not add to a daily total (`workout-steps` beside `steps`); anything else is day-page prose ([D22](../decisions/D22-events.md)) |
-| Recorded periods | named overlapping spans with partial/qualified boundaries and explicit day-membership results ([profile](../contract/period-boundaries.md), [D22](../decisions/D22-events.md)) |
+| A span of life (a trip, a job, a home) | a plain page: its body says when; the day pages inside it link it, so its backlinks list those days ([D22](../decisions/D22-events.md)) |
 | Habits | a 0/1 metric with active periods: the day's habits done, not done or not recorded, and completion over a period ([habits](../cookbook/habits.md), [D24](../decisions/D24-habits.md)) |
 | Personal tasks, recurring work and project context | independent definitions and occurrences, with ordinary pages for project grouping ([tasks](../cookbook/tasks.md), [D23](../decisions/D23-no-tasks.md)) |
 | Reminder intent | chosen local clock/zone defaults and per-occurrence overrides, resolved by the [planning profile](../contract/planning.md); delivery is separate |

@@ -503,27 +503,13 @@ func (t *Tx) setDeleted(id int64, deleted bool) error {
 
 // Link adds an edge of a registered kind (D8); added reports whether it was new. wikilink rows belong to the
 // save contract; redirect is unsupported, so neither is written here. The endpoint rules, an `at` from a day page
-// among them, are links_endpoint_types. A period's category must be live: a rule with no home yet (issue 0068).
+// among them, are links_endpoint_types.
 func (t *Tx) Link(from, to int64, kind, note string) (added bool, err error) {
 	if kind == "redirect" {
 		return false, Invalid("redirect is not a supported link kind")
 	}
 	if kind == "wikilink" {
 		return false, Invalid("wikilink links are written by saving a body, not directly")
-	}
-	if kind == "part-of" {
-		var invalidSelection bool
-		err := t.tx.QueryRowContext(t.ctx, `SELECT EXISTS (
-            SELECT 1 FROM entities p JOIN entities category ON category.id=?
-            WHERE p.id=? AND p.entity_type='period' AND category.deleted_at IS NOT NULL
-              AND NOT EXISTS (SELECT 1 FROM links WHERE from_id=p.id AND to_id=category.id AND kind='part-of')
-        )`, to, from).Scan(&invalidSelection)
-		if err != nil {
-			return false, err
-		}
-		if invalidSelection {
-			return false, Invalid("a new period category must be live")
-		}
 	}
 	res, err := t.tx.ExecContext(t.ctx, `INSERT INTO links(from_id, to_id, kind, note, created_at, source) VALUES (?, ?, ?, ?, `+nowSQL+`, ?)
 	                       ON CONFLICT(from_id, to_id, kind) DO NOTHING`, from, to, kind, nullIfEmpty(note), t.Source)

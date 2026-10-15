@@ -19,7 +19,7 @@ CREATE TABLE lifelog_meta (
   value TEXT NOT NULL
 ) STRICT;
 INSERT INTO lifelog_meta(key, value) VALUES
-  ('schema',    'lifelog v1: the journal (one page per day), wiki, people, places, recorded life periods, health metrics and the files kept as their text and a small picture, of one person: a life log with explicit personal task intentions, recurring outcomes and reminder intent, not a general project manager; the rules of each table are comments inside its CREATE statement (.schema), the rules that span tables are these rows; this is an in-file reading summary: a conforming writer also needs the matching docs contract and vectors'),
+  ('schema',    'lifelog v1: the journal (one page per day), wiki, people, places, health metrics and the files kept as their text and a small picture, of one person: a life log with explicit personal task intentions, recurring outcomes and reminder intent, not a general project manager; the rules of each table are comments inside its CREATE statement (.schema), the rules that span tables are these rows; this is an in-file reading summary: a conforming writer also needs the matching docs contract and vectors'),
   ('instants',  'every *_at column is an exact 24-character ASCII UTC ISO-8601 TEXT instant, years 0000..9999 and hours 00..23, with milliseconds, e.g. 2026-06-09T21:14:03.482Z, written by the app, never by a SQLite default (CURRENT_TIMESTAMP has no milliseconds and is not ISO-8601; a trigger writes strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')); fixed width, so it sorts as text; supplied clock timestamps may coincide or regress and do not encode commit order; CHECK strftime(''%Y-%m-%dT%H:%M:%fZ'', x) IS x; created_at, on every table that has it, is when the row was written to life.db, never back-dated; task completed_at is supplied completion evidence and reminder_override_at is a chosen future or past reminder instant, not an assertion that an event happened'),
   ('days',      'every *_day column (and day) is the LOCAL exact 10-character ASCII calendar date YYYY-MM-DD, years 0000..9999, where the thing happened for recorded facts, written by the app from the local calendar of the device that captured it (never a server''s), never recomputed from an instant; tasks.anchor_day, tasks.repeat_until_day, task_occurrences.due_day and date occurrence_key are chosen planning calendar days, not claims that an event happened; CHECK explicit ASCII shape and date(x) IS x (IS, not =: a CHECK passes on NULL, and date(''2026-9-3'') is NULL)'),
   ('planning', 'task project admission requires a live non-journal plain page. Retained references forbid incompatible type changes and exclude ghost cleanup. Tombstones retain context. A one-off task commits with exactly one occurrence, keyed once. Occurrence admission requires a live task and a key in its immutable anchored sequence. Open keys cannot exceed the task''s current end; explicit historical done or skipped outcomes may. Shortening the end atomically skips existing open keys beyond it, preserves other outcomes and forbids reopening those later keys. Active planning reads and reminders exclude tombstoned tasks and occurrences. A reminder requires an open occurrence'),
@@ -32,7 +32,7 @@ INSERT INTO lifelog_meta(key, value) VALUES
   ('evolution', 'after the freeze (the first kept write that a rebuild would lose, which no program can write again from its source; before it a file is rebuilt, not migrated): numbered forward-only SQL migrations, additive only (new tables, columns and indexes; a named CHECK may be replaced with ALTER TABLE DROP/ADD CONSTRAINT, so every CHECK is named), counted in PRAGMA user_version; additive means data-preserving, not reader-compatible: renames can break readers and replaced CHECKs can break writers; check user_version and select explicit columns');
 
 CREATE TABLE entities (
-  -- One named identity and prose body per linkable thing (page, person, place, metric, file, period).
+  -- One named identity and prose body per linkable thing (page, person, place, metric, file).
   -- Creation time is immutable evidence of initial recording (entities_provenance_fixed).
   -- Insert this row first with RETURNING id, then its owned preferred entity_names row in the same
   -- BEGIN IMMEDIATE transaction; preferred ownership is NOT NULL and checked by the deferred composite FK.
@@ -54,7 +54,7 @@ CREATE TABLE entities (
   -- (deleted_at, entity_type, ...) are read without walking the overflow pages of a long body.
   id          INTEGER PRIMARY KEY,
   entity_type TEXT NOT NULL CONSTRAINT entities_entity_type
-                  CHECK (entity_type IN ('page','person','place','metric','file','period')),
+                  CHECK (entity_type IN ('page','person','place','metric','file')),
   preferred_name_key TEXT NOT NULL,       -- selects exactly one owned registry row; spelling lives only there
   day         TEXT CONSTRAINT entities_day CHECK (day IS NULL OR length(day) = 10 AND day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(day) IS day),
   -- The one definition of "a journal day page" (D5): the preferred key is a canonical local date. The CHECKs and
@@ -222,48 +222,6 @@ CREATE TRIGGER places_fixed BEFORE UPDATE ON places
  WHEN NEW.id IS NOT OLD.id
 BEGIN SELECT RAISE(ABORT, 'place point ownership is immutable'); END;
 
-CREATE TABLE periods (
-  -- Named recorded spans. Boundaries follow contract/period-boundaries.md, not exact entities.day.
-  -- Unknown is NULL; only an end may be ongoing '..', evaluated at an explicit as_of day.
-  -- Qualifiers: ? uncertain, ~ approximate, % both. Qualified/unknown boundaries are incomparable,
-  -- unless the opposite finite unqualified bound proves the queried day outside. Partial precision retains a range.
-  -- Overlap is allowed; comparisons derive ranges, never store dates guessed from partial observations.
-  -- Classify with ordinary optional part-of links. No primary kind, duration or membership is stored.
-  id INTEGER PRIMARY KEY,
-  entity_type TEXT NOT NULL DEFAULT 'period' CONSTRAINT periods_entity_type CHECK (entity_type='period'),
-  start_boundary TEXT CONSTRAINT periods_start_boundary CHECK (start_boundary IS NULL
-      OR (instr(start_boundary, char(0)) = 0
-      AND length(start_boundary) - length(rtrim(start_boundary, '?~%')) <= 1   -- rtrim strips every trailing qualifier: at most one
-      AND CASE length(rtrim(start_boundary, '?~%'))
-        WHEN 4  THEN rtrim(start_boundary, '?~%') GLOB '[0-9][0-9][0-9][0-9]'
-        WHEN 7  THEN rtrim(start_boundary, '?~%') GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]' AND substr(start_boundary, 6, 2) BETWEEN '01' AND '12'
-        WHEN 10 THEN rtrim(start_boundary, '?~%') GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(rtrim(start_boundary, '?~%')) IS rtrim(start_boundary, '?~%')
-        ELSE 0 END)),
-  end_boundary TEXT CONSTRAINT periods_end_boundary CHECK (end_boundary IS NULL
-      OR (instr(end_boundary, char(0)) = 0
-      AND (end_boundary = '..'
-        OR (length(end_boundary) - length(rtrim(end_boundary, '?~%')) <= 1   -- rtrim strips every trailing qualifier: at most one
-        AND CASE length(rtrim(end_boundary, '?~%'))
-          WHEN 4  THEN rtrim(end_boundary, '?~%') GLOB '[0-9][0-9][0-9][0-9]'
-          WHEN 7  THEN rtrim(end_boundary, '?~%') GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]' AND substr(end_boundary, 6, 2) BETWEEN '01' AND '12'
-          WHEN 10 THEN rtrim(end_boundary, '?~%') GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(rtrim(end_boundary, '?~%')) IS rtrim(end_boundary, '?~%')
-          ELSE 0 END)))),
-  CONSTRAINT periods_order CHECK (start_boundary IS NULL OR end_boundary IS NULL OR end_boundary='..'
-    OR substr(start_boundary,-1) IN ('?','~','%') OR substr(end_boundary,-1) IN ('?','~','%')
-    OR (CASE length(start_boundary) WHEN 4 THEN start_boundary||'-01-01' WHEN 7 THEN start_boundary||'-01' ELSE start_boundary END) <= (CASE length(end_boundary) WHEN 4 THEN end_boundary||'-12-31' WHEN 7 THEN CASE WHEN substr(end_boundary,6,2)='12' THEN end_boundary||'-31' ELSE date(end_boundary||'-01','+1 month','-1 day') END ELSE end_boundary END)),
-  FOREIGN KEY(id,entity_type) REFERENCES entities(id,entity_type)
-) STRICT;
-CREATE TRIGGER periods_fixed BEFORE UPDATE ON periods
- WHEN NEW.id IS NOT OLD.id OR NEW.entity_type IS NOT OLD.entity_type
-BEGIN SELECT RAISE(ABORT,'period identity is immutable'); END;
-CREATE TRIGGER periods_no_delete BEFORE DELETE ON periods
-BEGIN SELECT RAISE(ABORT,'periods are tombstoned through their named identity'); END;
-CREATE TRIGGER periods_touch_update AFTER UPDATE OF start_boundary,end_boundary ON periods
- WHEN NEW.start_boundary IS NOT OLD.start_boundary OR NEW.end_boundary IS NOT OLD.end_boundary
-BEGIN
- UPDATE entities SET revision=revision+1,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=NEW.id;
-END;
-
 CREATE TABLE metrics (
   -- The owning id is immutable (metrics_identity_fixed), including through rowid aliases.
   -- what is measured (D7). A metric is also a page with the same id (D27), as a person is: its title is
@@ -426,7 +384,7 @@ CREATE TABLE task_occurrences (
  -- Missing recurring rows are virtual open slots in finite windows (contract/planning.md). A retained row,
  -- including a tombstone, replaces its virtual slot before filtering by current deadline and state.
  -- completed_at is optional supplied evidence only for done; reopening/skipping clears it. No transition
- -- creates journal prose, a reading, a recorded period or a place claim. Snapshots preserve earlier states.
+ -- creates journal prose, a reading or a place claim. Snapshots preserve earlier states.
  -- Reminder modes: inherit resolves the definition against due_day; off suppresses; at uses the absolute
  -- reminder_override_at, including undated tasks. Eligibility is lifelog_meta.planning.
  id INTEGER PRIMARY KEY,
@@ -666,7 +624,7 @@ CREATE TABLE link_kinds (
   CONSTRAINT link_kinds_mirror_valid CHECK (symmetric = 0 OR from_types IS to_types)   -- a mirrored edge must be valid in both directions
 ) STRICT;
 INSERT INTO link_kinds(kind, symmetric, from_types, to_types, note) VALUES
-  ('wikilink', 0, 'page,person,place,metric,file,period', 'page,person,place,metric,file,period', 'extracted from [[body]] on save (an embed ![[...]] is one); body is the truth'),
+  ('wikilink', 0, 'page,person,place,metric,file', 'page,person,place,metric,file', 'extracted from [[body]] on save (an embed ![[...]] is one); body is the truth'),
   ('about',    0, NULL,        'person,place', 'entity → person/place it is about'),
   ('at',       0, 'page',      'place',        'day page → a place the owner was at that day; from a day page only, which links_endpoint_types checks (D16); a photo kept makes one to the place its position is in (D21)'),
   ('located-in', 0, 'place',   'place',        'containment: Tokyo → Japan; transitive — walk it with a recursive CTE'),

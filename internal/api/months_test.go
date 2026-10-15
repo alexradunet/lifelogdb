@@ -114,8 +114,8 @@ func TestOpenDayGoesToTheDay(t *testing.T) {
 }
 
 // TestTheCalendarHoldsEveryDatedThing (docs/plans/101-the-calendar-holds-every-dated-thing.md): a month gives each
-// day what names it, written through the catalog as every client writes it, and the browser draws the cells, Day by
-// day and the periods. The expected items are worked out by hand.
+// day what names it, written through the catalog as every client writes it, and the browser draws the cells and Day by
+// day. The expected items are worked out by hand.
 func TestTheCalendarHoldsEveryDatedThing(t *testing.T) {
 	c, h := freshOn(t, fixedToday) // 2031-05-14
 	ctx := t.Context()
@@ -144,15 +144,6 @@ func TestTheCalendarHoldsEveryDatedThing(t *testing.T) {
 
 	do(root, "create-person", map[string]string{"title": "Ana", "birth_day": "1990-05-14"})
 	do(root, "create-person", map[string]string{"title": "Ion", "birth_day": "1930-03-01", "death_day": "2020-05-21"})
-	for _, p := range [][3]string{
-		{"Trip to Rome", "2031-05-20", "2031-05-24"}, // definite; it marks both its days
-		{"Living in Berlin", "2018-09", ".."},        // definite, read as of today
-		{"Spring", "2031-05", "2031-05"},             // possible on every day
-		{"Study", "2031-05-02~", "2031-06"},          // incomparable; it marks its approximate start
-		{"Old job", "2010", "2015"},                  // outside
-	} {
-		do(root, "create-period", map[string]string{"title": p[0], "start_boundary": p[1], "end_boundary": p[2]})
-	}
 
 	do(root, "create-place", map[string]string{"title": "Lake Park"})
 	do(must(c.Get(ctx, hrefOf(day, "page"))), "link", map[string]string{"to": "Lake Park", "kind": "at"})
@@ -168,7 +159,7 @@ func TestTheCalendarHoldsEveryDatedThing(t *testing.T) {
 		on := m["day"].(string)
 		for _, it := range anyItems(m["items"]) {
 			line := fmt.Sprintf("%v %v", it["kind"], it["title"])
-			for _, k := range []string{"state", "years", "boundary", "qualifier"} {
+			for _, k := range []string{"state", "years"} {
 				if v, ok := it[k]; ok {
 					line += fmt.Sprintf(" %s=%v", k, v)
 				}
@@ -189,19 +180,17 @@ func TestTheCalendarHoldsEveryDatedThing(t *testing.T) {
 			extra[on] = fmt.Sprintf("more %v readings %v", m["more_pages"], m["readings"])
 		}
 	}
-	imports := []string{"task Water the plants state=open", "period Trip to Rome boundary=start"}
+	imports := []string{"task Water the plants state=open"}
 	for i := 1; i <= 20; i++ {
 		imports = append(imports, fmt.Sprintf("file Import %02d.pdf", i))
 	}
 	want := map[string][]string{
-		"2031-05-02": {"period Study boundary=start qualifier=~"},
 		"2031-05-06": {"task Water the plants state=done"},
 		"2031-05-10": {"task Call the bank state=open"},
 		"2031-05-13": {"task Water the plants state=skipped"},
 		"2031-05-14": {"task Pay rent state=open", "birthday Ana years=41", "place Lake Park", "file Scan.pdf"},
 		"2031-05-20": imports,
 		"2031-05-21": {"death Ion years=11"},
-		"2031-05-24": {"period Trip to Rome boundary=end"},
 		"2031-05-27": {"task Water the plants state=open"},
 	}
 	if fmt.Sprint(got) != fmt.Sprint(want) {
@@ -211,20 +200,11 @@ func TestTheCalendarHoldsEveryDatedThing(t *testing.T) {
 	if fmt.Sprint(extra) != "map[2031-05-14:more <nil> readings 1 2031-05-20:more 1 readings <nil>]" {
 		t.Errorf("more pages and readings: %v", extra)
 	}
-	var periods []string
-	for _, p := range props(month)["periods"].([]any) {
-		m := p.(map[string]any)
-		periods = append(periods, fmt.Sprintf("%v %v", m["title"], m["membership"]))
-	}
-	if got := strings.Join(periods, ", "); got != "Living in Berlin definite, Spring possible, Study incomparable, Trip to Rome definite" {
-		t.Errorf("the periods of May: %s", got)
-	}
-
 	// The week of 20 May has the same days, and its occurrences are as before.
 	y, w := time.Date(2031, 5, 20, 0, 0, 0, 0, time.UTC).ISOWeek()
 	week := props(must(c.Get(ctx, fmt.Sprintf("/weeks/%04d-W%02d", y, w))))
 	for _, d := range week["days"].([]any) {
-		if m := d.(map[string]any); m["day"] == "2031-05-20" && (len(anyItems(m["items"])) != 22 || fmt.Sprint(m["more_pages"]) != "1") {
+		if m := d.(map[string]any); m["day"] == "2031-05-20" && (len(anyItems(m["items"])) != 21 || fmt.Sprint(m["more_pages"]) != "1") {
 			t.Errorf("the week's 20 May: %d items, more %v", len(anyItems(m["items"])), m["more_pages"])
 		}
 	}
@@ -244,33 +224,27 @@ func TestTheCalendarHoldsEveryDatedThing(t *testing.T) {
 		`<span class="marks" aria-hidden="true"><i class="open"></i><i></i><i></i><i></i></span><span class="more">and 1 more</span><span class="meta">mood 4 · 1 reading</span>`,
 		`<span class="item overdue">Call the bank</span>`,
 		`<span class="item done">Water the plants</span>`,
-		`<span class="item">Study <small>starts</small></span>`,
-		`<span class="more">and 20 more</span>`,
+		`<span class="more">and 19 more</span>`,
 		// Day by day: a day a heading, each item a tag, a link to the thing and a note
 		`<h3><a href="/days/2031-05-14">`,
 		`<span class="tag overdue">overdue</span> <a href="/tasks/`,
 		`<span class="tag">birthday</span> <a href="/pages/`,
 		`>Ana</a> <small class="agenda-note">41 years</small>`,
 		`>Ion</a> <small class="agenda-note">11 years ago</small>`,
-		`>Study</a> <small class="agenda-note">approximate</small>`,
 		`<a href="/days/2031-05-20">and 1 more page</a>`,
-		// Periods: the placed ones with their boundaries, the possible one tagged, the incomparable one counted
-		`>Living in Berlin</a> <small class="agenda-note">2018-09 to ongoing</small>`,
-		`>Spring</a> <span class="tag">possibly</span>`,
-		`1 period cannot be placed in this month`,
 	} {
 		if !strings.Contains(body, s) {
 			t.Errorf("the calendar lacks %s", s)
 		}
 	}
-	if strings.Contains(body, "Old job") || strings.Contains(body, "Old errand") {
-		t.Error("the calendar shows a period outside the month or a deleted task")
+	if strings.Contains(body, "Old errand") {
+		t.Error("the calendar shows a deleted task")
 	}
 
 	// A month with nothing says so: a fresh file's.
 	_, none := freshOn(t, fixedToday)
 	empty := browse(t, none, "/months/2031-08")
-	for _, s := range []string{"No task, page, place, birthday or period has a day in August 2031.", "No period falls in August 2031."} {
+	for _, s := range []string{"No task, page, place or birthday has a day in August 2031."} {
 		if !strings.Contains(empty, s) {
 			t.Errorf("an empty month lacks %q", s)
 		}

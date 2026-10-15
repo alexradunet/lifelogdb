@@ -68,38 +68,6 @@ func TestAnniversariesComeBackEachYear(t *testing.T) {
 	}
 }
 
-func TestPeriodMembershipOverAWindow(t *testing.T) {
-	b := func(s string) *string { return &s }
-	for _, tc := range []struct {
-		name                string
-		start, end          *string
-		from, through, asOf string
-		want                string
-	}{
-		{"an exact span inside the month", b("2031-05-14"), b("2031-06-02"), "2031-05-01", "2031-05-31", "", "definite"},
-		{"an exact start and an unknown end", b("2031-05-14"), nil, "2031-05-01", "2031-05-31", "", "incomparable"},
-		{"months as boundaries, one day definite", b("2031-05"), b("2031-06"), "2031-05-01", "2031-05-31", "", "definite"},
-		{"one month as both boundaries", b("2031-05"), b("2031-05"), "2031-05-01", "2031-05-31", "", "possible"},
-		{"ongoing, read through the horizon", b("2018-09"), b(".."), "2031-05-01", "2031-05-31", "2031-05-20", "definite"},
-		{"ongoing, the month after the horizon", b("2018-09"), b(".."), "2031-06-01", "2031-06-30", "2031-05-20", "incomparable"},
-		{"both unknown", nil, nil, "2031-05-01", "2031-05-31", "", "incomparable"},
-		{"a qualified start, a known end before the month", b("2019~"), b("2020-01-01"), "2031-05-01", "2031-05-31", "", "outside"},
-		{"a year before the month", b("2030"), b("2030-12-31"), "2031-05-01", "2031-05-31", "", "outside"},
-		{"a start after the month", b("2031-06-01"), b(".."), "2031-05-01", "2031-05-31", "2031-07-01", "outside"},
-	} {
-		got, err := PeriodMembershipIn(tc.start, tc.end, tc.from, tc.through, tc.asOf)
-		if err != nil || got != tc.want {
-			t.Errorf("%s: %q %v, want %q", tc.name, got, err, tc.want)
-		}
-	}
-	if _, err := PeriodMembershipIn(b("2018-09"), b(".."), "2031-05-01", "2031-05-31", ""); status(err) != 422 {
-		t.Errorf("ongoing with no as_of: %v, want 422", err)
-	}
-	if _, err := PeriodMembershipIn(nil, nil, "2031-01-01", "2032-01-02", ""); status(err) != 422 {
-		t.Errorf("a window of 367 days: %v, want 422", err)
-	}
-}
-
 func TestDatedRowsOfAWindow(t *testing.T) {
 	s := fresh(t)
 	dayPage, _, err := s.Capture(ctx, "cli", "2031-05-14", "A walk by the lake.", nil)

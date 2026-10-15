@@ -124,9 +124,6 @@ func monthBand(day string) string {
 // Word the muted word a cell writes after the title, Note the muted note Day by day writes after the link.
 type calWords struct{ Tag, Class, Word, Note string }
 
-// qualifierWords say a period boundary's qualifier (docs/contract/period-boundaries.md).
-var qualifierWords = map[string]string{"?": "uncertain", "~": "approximate", "%": "uncertain, approximate"}
-
 // CalItem says an item of a day of the calendar in the words of this view. An open task due before today is overdue,
 // as the deadlines say it.
 func (v *view) CalItem(item any, day, today string) calWords {
@@ -153,12 +150,6 @@ func (v *view) CalItem(item any, day, today string) calWords {
 		w := calWords{Tag: "died", Word: "died"}
 		if years > 0 {
 			w.Note = yearsWords(years) + " ago"
-		}
-		return w
-	case "period":
-		w := calWords{Tag: "starts", Word: "starts", Note: qualifierWords[str("qualifier")]}
-		if str("boundary") == "end" {
-			w.Tag, w.Word = "ends", "ends"
 		}
 		return w
 	case "place":
@@ -190,37 +181,8 @@ func beyond(list any, n int, morePages any) int {
 	return max(len(items)-n, 0) + int(extra)
 }
 
-// placedPeriods are the periods of a month that a day of it falls in, definitely or possibly; unplacedPeriods counts
-// the ones that cannot be compared with any day of it.
-func placedPeriods(list any) []any {
-	var out []any
-	for _, p := range anyList(list) {
-		if m, _ := p.(map[string]any); m["membership"] != "incomparable" {
-			out = append(out, p)
-		}
-	}
-	return out
-}
-
-func unplacedPeriods(list any) int { return len(anyList(list)) - len(placedPeriods(list)) }
-
 // anyList is a list property as a template gets it; nil for anything else.
 func anyList(list any) []any {
 	items, _ := list.([]any)
 	return items
-}
-
-// spanWords are a period's boundaries as its page writes them, with "unknown" for none and "ongoing" for "..".
-func spanWords(start, end any) string {
-	word := func(b any) string {
-		switch s, _ := b.(string); s {
-		case "":
-			return "unknown"
-		case "..":
-			return "ongoing"
-		default:
-			return s
-		}
-	}
-	return word(start) + " to " + word(end)
 }

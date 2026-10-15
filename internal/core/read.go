@@ -12,22 +12,21 @@ import (
 
 // Page is one page with what surrounds it. Version is the decimal entities.revision token: pass it back to SaveBody.
 type Page struct {
-	TaskProject bool        `json:"task_project"`
-	ID          int64       `json:"id"`
-	Type        string      `json:"entity_type"`
-	Title       string      `json:"title"`
-	Day         string      `json:"day,omitempty"`
-	Body        string      `json:"body"`
-	CreatedAt   string      `json:"created_at"`
-	Version     string      `json:"version"`
-	DeletedAt   string      `json:"deleted_at,omitempty"`
-	IsDayPage   bool        `json:"is_day_page"`
-	Period      *LifePeriod `json:"period,omitempty"`
-	Person      *Person     `json:"person,omitempty"`
-	File        *File       `json:"file,omitempty"`
-	Point       *Point      `json:"point,omitempty"` // a place's, when it has one (D21)
-	Out         []Edge      `json:"links"`
-	In          []Edge      `json:"backlinks"`
+	TaskProject bool    `json:"task_project"`
+	ID          int64   `json:"id"`
+	Type        string  `json:"entity_type"`
+	Title       string  `json:"title"`
+	Day         string  `json:"day,omitempty"`
+	Body        string  `json:"body"`
+	CreatedAt   string  `json:"created_at"`
+	Version     string  `json:"version"`
+	DeletedAt   string  `json:"deleted_at,omitempty"`
+	IsDayPage   bool    `json:"is_day_page"`
+	Person      *Person `json:"person,omitempty"`
+	File        *File   `json:"file,omitempty"`
+	Point       *Point  `json:"point,omitempty"` // a place's, when it has one (D21)
+	Out         []Edge  `json:"links"`
+	In          []Edge  `json:"backlinks"`
 }
 
 type Person struct {
@@ -61,12 +60,6 @@ func (s *Store) PageByID(ctx context.Context, id int64) (*Page, error) {
 	}
 	p.Day, p.DeletedAt = day.String, deleted.String
 	p.IsDayPage = p.Day != "" && p.Day == p.Title
-	if p.Type == "period" {
-		p.Period = &LifePeriod{ID: id, Title: p.Title, Version: p.Version, DeletedAt: p.DeletedAt}
-		if err := s.DB.R.QueryRowContext(ctx, `SELECT start_boundary,end_boundary FROM periods WHERE id=?`, id).Scan(&p.Period.Start, &p.Period.End); err != nil {
-			return nil, err
-		}
-	}
 	if p.Type == "person" {
 		var b, d sql.NullString
 		p.Person = &Person{}

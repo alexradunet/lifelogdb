@@ -31,13 +31,6 @@ func TestStaleVersionIsTheSameCodeOnEveryResource(t *testing.T) {
 		t.Errorf("a task edited with an old version: code %q, want stale_version (%v)", code(err), err)
 	}
 
-	period := must(c.Do(t.Context(), find(root, "create-period"), map[string]string{"title": "School years"}))
-	editPeriod := find(period, "edit-period")
-	must(c.Do(t.Context(), editPeriod, map[string]string{"start_boundary": "2001"}))
-	if _, err := c.Do(t.Context(), editPeriod, map[string]string{"start_boundary": "2002"}); code(err) != "stale_version" {
-		t.Errorf("a period edited with an old version: code %q, want stale_version (%v)", code(err), err)
-	}
-
 	// Not a version's 409: a sender's key reused with another payload.
 	must(c.Do(t.Context(), find(root, "create-task"), map[string]string{"label": "Pay the rent", "import_key": "rent"}))
 	if _, err := c.Do(t.Context(), find(root, "create-task"), map[string]string{"label": "Pay the rent twice", "import_key": "rent"}); code(err) != "conflict" {

@@ -63,7 +63,7 @@ Each day of `days[]` (the month's and the week's: one read serves both) keeps `d
   those, and a day with a mood alone must not read "mood 3, 1 reading". Absent when none.
 
 The month also gains **`periods[]`**: each live period that a day of the month can fall in, with its `membership`
-over the month. That is the strongest membership of its days ([period boundaries](../contract/period-boundaries.md)):
+over the month. That is the strongest membership of its days (period boundaries (removed by RFC 0014)):
 `definite`, then `possible`, then `incomparable`. A period outside on every day is not listed. An ongoing end is read
 as of `today`, which the month gives; the contract asks for an explicit day, and `today` is that day.
 

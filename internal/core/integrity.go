@@ -42,7 +42,6 @@ func (r *IntegrityResult) idChecks() []idCheck {
              NOT EXISTS (SELECT 1 FROM entity_names n WHERE n.entity_id = e.id AND n.name_key = e.preferred_name_key)
              OR (e.entity_type = 'person' AND NOT EXISTS (SELECT 1 FROM people p WHERE p.id = e.id))
              OR (e.entity_type = 'metric' AND NOT EXISTS (SELECT 1 FROM metrics m WHERE m.id = e.id))
-             OR (e.entity_type = 'period' AND NOT EXISTS (SELECT 1 FROM periods p WHERE p.id=e.id))
              OR (e.entity_type = 'file' AND NOT EXISTS (SELECT 1 FROM files f WHERE f.id = e.id))`, &r.OrphanEntities},
 		{"typed link endpoints", `SELECT l.id FROM links l
  LEFT JOIN link_kinds k ON k.kind=l.kind

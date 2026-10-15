@@ -4,7 +4,7 @@ The storage rules live in `tasks`, `task_occurrences` and `lifelog_meta` in
 [the schema](../schema/schema.sql). [D23](../decisions/D23-no-tasks.md) explains the independent identities and
 project pages; [D15](../decisions/D15-recurrence.md) explains bounded recurrence. This page specifies the calendar
 and clock algorithms that a constraint cannot supply, and the writer operations that combine them. The
-[task cookbook](../cookbook/tasks.md) demonstrates the SQL. Planning never establishes a recorded period,
+[task cookbook](../cookbook/tasks.md) demonstrates the SQL. Planning never establishes a
 measurement, physical presence or completion of a habit.
 
 ## Calendar expansion

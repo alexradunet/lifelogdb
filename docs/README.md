@@ -4,8 +4,8 @@
 
 **Scope of the project:** A lifetime personal database — a life log and its backup, with explicit personal
 planning ([D23](decisions/D23-no-tasks.md)): a journal of day pages, notes and wiki pages, people, places,
-health metrics and the files the owner keeps, as their text and a small picture ([D9](decisions/D09-binary-files.md)),
-with recorded periods ([D22](decisions/D22-events.md)). Tasks and their occurrences retain
+health metrics and the files the owner keeps, as their text and a small picture ([D9](decisions/D09-binary-files.md)).
+A span of life is a plain page ([D22](decisions/D22-events.md)). Tasks and their occurrences retain
 planned work and [reminder intent](contract/planning.md); ordinary pages provide project context. Money and a location track
 remain deferred ([D18](decisions/D18-money.md), [D21](decisions/D21-location-history.md)). It is one SQLite file,
 plus a custom UI for data entry and daily use.
