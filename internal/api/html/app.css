@@ -244,6 +244,21 @@ svg.chart{inline-size:100%; max-inline-size:800px; block-size:auto; padding:var(
     &.x{text-anchor:middle}}}
 @container column (max-width:608px){svg.chart text{font-size:20px}} /* the chart is scaled down to the column: its words are not */
 
+/* The places on a map, drawn by the server as an inline <svg> (placemap.go): the land of the world outline on
+   parchment, a gold dot a place with its name, its circle in teal when it is larger than the dot. A word has a halo
+   of parchment, so it reads over a border or another dot. */
+svg.place-map{display:block; inline-size:100%; block-size:auto; margin-block-end:var(--space-3);
+  background-color:var(--surface); border:2px solid var(--edge); box-shadow:var(--parch-bevel);
+  & .land{fill:var(--surface-deep); stroke:var(--edge); stroke-width:1}
+  & .borders{fill:none; stroke:var(--edge); stroke-width:1; stroke-dasharray:3 2}
+  & .area{fill:var(--link); fill-opacity:.15; stroke:var(--link); stroke-width:1; vector-effect:non-scaling-stroke}
+  & .dot{fill:var(--accent-ink); stroke:var(--surface); stroke-width:1.5; vector-effect:non-scaling-stroke}
+  & text{fill:var(--ink); font-family:var(--sans); paint-order:stroke; stroke:var(--surface); stroke-width:3; stroke-linejoin:round; vector-effect:non-scaling-stroke}
+  & a:hover .dot, & a:focus-visible .dot{fill:var(--primary)}
+  & a:hover text{text-decoration:underline}}
+/* The map is scaled down to a narrow column and its words with it: there it shows the dots, and the list the names. */
+@container column (max-width:487px){svg.place-map text{display:none}}
+
 /* A form of a few short fields, on one line: find, correct, check in, record on a series. */
 form.inline{display:flex; flex-wrap:wrap; align-items:flex-end; gap:var(--space-2);
   &>label{flex:1 1 130px}

@@ -117,3 +117,34 @@ func TestNamedMentionsGiveAPersonTheFirstPictureItsPageEmbeds(t *testing.T) {
 		}
 	}
 }
+
+// TestNamedMentionsGiveAPlaceItsPoint: a place with a row in places has its point in its row, and a place without
+// one has none. A person never has a point.
+func TestNamedMentionsGiveAPlaceItsPoint(t *testing.T) {
+	s := fresh(t)
+	placeID(t, s, "Lake", Point{Lat: 45.5, Lon: -0.25, RadiusM: 800, LinkDays: false})
+	if _, err := s.CreatePlace(ctx, "cli", "Somewhere"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreatePerson(ctx, "cli", "Ana", "", "", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.NamedMentions(ctx, "place", 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Title != "Lake" || got[1].Title != "Somewhere" {
+		t.Fatalf("NamedMentions = %+v, want Lake and Somewhere", got)
+	}
+	if p := got[0].Point; p == nil || *p != (Point{Lat: 45.5, Lon: -0.25, RadiusM: 800, LinkDays: false}) {
+		t.Errorf("Lake's point = %+v, want 45.5, -0.25, 800 m, not linked", p)
+	}
+	if got[1].Point != nil {
+		t.Errorf("Somewhere has a point: %+v", got[1].Point)
+	}
+	people, err := s.NamedMentions(ctx, "person", 10, 0)
+	if err != nil || len(people) != 1 || people[0].Point != nil {
+		t.Errorf("people = %+v, %v, want Ana with no point", people, err)
+	}
+}

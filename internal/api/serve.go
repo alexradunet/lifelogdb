@@ -110,6 +110,7 @@ func NewOn(s *core.Store, localDay func() string, zone *time.Location, asker Ask
 	m.HandleFunc("GET /styleguide", h.styleguide)
 	m.HandleFunc("GET /manifest.webmanifest", install("manifest.webmanifest", "application/manifest+json", "public, max-age=3600"))
 	m.HandleFunc("GET /assets/icon.svg", install("icon.svg", "image/svg+xml", "public, max-age=31536000, immutable"))
+	m.HandleFunc("GET "+worldOutline, install(worldOutline[len("/assets/"):], "image/svg+xml", "public, max-age=31536000, immutable"))
 	// The two portraits of a conversation, from the owner's design system Balaur — Basm (docs/plans/104-the-chat-in-basm.md).
 	m.HandleFunc("GET /assets/portrait-lifelog.png", install("portrait-lifelog.png", "image/png", "public, max-age=31536000, immutable"))
 	m.HandleFunc("GET /assets/portrait-owner.png", install("portrait-owner.png", "image/png", "public, max-age=31536000, immutable"))

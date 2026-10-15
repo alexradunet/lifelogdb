@@ -109,7 +109,13 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   row's `picture` gives its href. The schema has no link for it, by the owner's choice (2026-10-15): an embed is
   how any page shows a picture, so every surface can set it. `set-picture` on the person's page sets it: a new
   photo (the browser) or a kept file by its title (the CLI and an agent, which send no file through the catalog).
-  The photo goes in no day page.
+  The photo goes in no day page. Places opens on a map of the places of the page that have a point (the row's
+  `point`): a dot a place, its circle when it is larger than the dot, its name, each a link to its page. The view
+  holds every point, and never less than about 5.5 km. Under the dots is the land and the borders of Natural Earth
+  (public domain, 1:50m), one embedded file of 450 KB at `GET /assets/world-50m-v5.1.2.svg`, made by
+  `tools/worldmap` ([its source](internal/api/html/world.md)). The server draws the map as an inline SVG, like a
+  chart: there are no tiles, no map script and no other host (the owner's choice, 2026-10-15). In a city the map
+  shows where the places are against each other, but not the streets.
 - **The app shell: the Almanac design system** ([plan 092](docs/plans/092-the-app-shell.md)). Every page a browser
   gets is in one shell: a sidebar with the brand and today's date, the search, New, the sections of every day (Today,
   Calendar, Due, Tasks) and of the record (People to Ghost pages), this month with its written days, and the
@@ -192,7 +198,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   button (a boxed danger already takes two presses, and a tombstone has Revive), and the command list's ranking of
   this page's actions.
   `POST /render` is presentation, not a capability: no catalog action names it and it answers HTML only, so it, the
-  fonts, the style page, the manifest, the icon and the pictures (`GET /pages/{id}/preview`, `GET /previews`) are the
+  fonts, the style page, the manifest, the icon, the world outline and the pictures (`GET /pages/{id}/preview`, `GET /previews`) are the
   routes the CLI and the MCP server do not carry. **Rejected:** a separate web client. It would be a second
   implementation of every view to keep equal to the catalog, it would hold the token where JavaScript can read it,
   and it would bring a toolchain that changes every year.

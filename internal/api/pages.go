@@ -142,11 +142,12 @@ func (h *server) linkKinds(ctx context.Context, typ string, dayPage bool) ([]str
 
 // namedRow is a row of the people and the places lists: the page and how often the log mentions it.
 type namedRow struct {
-	ID       int64  `json:"id"`
-	Title    string `json:"title"`
-	Mentions int    `json:"mentions"`
-	LastDay  string `json:"last_day,omitempty"`
-	Picture  string `json:"picture,omitempty"` // a person's: the preview of the first picture its page embeds
+	ID       int64       `json:"id"`
+	Title    string      `json:"title"`
+	Mentions int         `json:"mentions"`
+	LastDay  string      `json:"last_day,omitempty"`
+	Picture  string      `json:"picture,omitempty"` // a person's: the preview of the first picture its page embeds
+	Point    *core.Point `json:"point,omitempty"`   // a place's: its point, when it has one
 }
 
 func (h *server) named(typ, plural, create string) func(*http.Request) (*Entity, error) {
@@ -166,7 +167,7 @@ func (h *server) named(typ, plural, create string) func(*http.Request) (*Entity,
 			found = paged(e, found, "/"+plural, nil, limit, offset)
 			rows := []namedRow{}
 			for _, p := range found {
-				row := namedRow{ID: p.ID, Title: p.Title, Mentions: p.Mentions, LastDay: p.LastDay}
+				row := namedRow{ID: p.ID, Title: p.Title, Mentions: p.Mentions, LastDay: p.LastDay, Point: p.Point}
 				if p.Picture != 0 {
 					row.Picture = pageHref(p.Picture) + "/preview"
 				}
