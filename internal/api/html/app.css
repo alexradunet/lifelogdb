@@ -568,6 +568,13 @@ a.task{color:var(--ink); font-weight:700}
 
 /* A person or a place in a list: no date column, the words of the mentions at the end. */
 .entry.named{grid-template-columns:minmax(0,1fr) auto}
+/* A person in the list has a round picture first: the first picture its page embeds, or the icon of a person. */
+.entry.named.face{grid-template-columns:32px minmax(0,1fr) auto; align-items:center;
+  & .face-picture{display:grid; place-items:center; inline-size:32px; block-size:32px; border-radius:50%; object-fit:cover;
+    background:var(--surface-deep); border:1px solid var(--edge); color:var(--text-muted)}}
+/* In a narrow column the name keeps the line, and the mentions go under it. */
+@container column (max-width:487px){.entry.named.face{grid-template-columns:32px minmax(0,1fr); row-gap:0;
+  & .face-picture{grid-row:span 2} & .meta{grid-column:2}}}
 
 /* The media list (docs/plans/110-the-media-list.md): the kinds as links under the head, the current one in the
    ink; then a tile a file, its picture square over its title, as many across as the column holds. A blank tile

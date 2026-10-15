@@ -143,6 +143,7 @@ type namedRow struct {
 	Title    string `json:"title"`
 	Mentions int    `json:"mentions"`
 	LastDay  string `json:"last_day,omitempty"`
+	Picture  string `json:"picture,omitempty"` // a person's: the preview of the first picture its page embeds
 }
 
 func (h *server) named(typ, plural, create string) func(*http.Request) (*Entity, error) {
@@ -162,7 +163,11 @@ func (h *server) named(typ, plural, create string) func(*http.Request) (*Entity,
 			found = paged(e, found, "/"+plural, nil, limit, offset)
 			rows := []namedRow{}
 			for _, p := range found {
-				rows = append(rows, namedRow{ID: p.ID, Title: p.Title, Mentions: p.Mentions, LastDay: p.LastDay})
+				row := namedRow{ID: p.ID, Title: p.Title, Mentions: p.Mentions, LastDay: p.LastDay}
+				if p.Picture != 0 {
+					row.Picture = pageHref(p.Picture) + "/preview"
+				}
+				rows = append(rows, row)
 				e.Entities = append(e.Entities, Link{Rel: []string{"item"}, Href: pageHref(p.ID), Title: p.Title, Class: []string{typ}})
 			}
 			e.Properties.(map[string]any)["rows"] = rows

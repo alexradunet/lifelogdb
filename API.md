@@ -134,6 +134,7 @@ import actions are included and the link `import` leads to its status.
 | `rows[].title` | string | its title |
 | `rows[].mentions` | integer | the live pages that link to it, of any kind, each counted once |
 | `rows[].last_day` | string | the day of the newest live day page among them; absent when there is none |
+| `rows[].picture` | string | `people` only: the href of the preview of the first live file with a preview that the person's body embeds; absent when there is none |
 
 ### media, files
 

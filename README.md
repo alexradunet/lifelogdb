@@ -104,7 +104,10 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   in earlier years, which the margin shows after Due. `/weeks/{YYYY-Www}` is the week (its days, its habits as
   "N of M days", its readings against the week before, the work due) and `/years/{YYYY}` the year (twelve months);
   People and Places list each name with the pages that mention it and the day of the last one
-  ([plan 097](docs/plans/097-the-almanac-reflects.md)).
+  ([plan 097](docs/plans/097-the-almanac-reflects.md)). A person's row starts with a round picture: the preview of
+  the first live file with a preview that the person's page embeds (`![[Ana.jpg]]`), else the icon of a person. The
+  row's `picture` gives its href. The schema has no link for it, by the owner's choice (2026-10-15): an embed is
+  how any page shows a picture, so every surface can set it.
 - **The app shell: the Almanac design system** ([plan 092](docs/plans/092-the-app-shell.md)). Every page a browser
   gets is in one shell: a sidebar with the brand and today's date, the search, New, the sections of every day (Today,
   Calendar, Due, Tasks) and of the record (People to Ghost pages), this month with its written days, and the

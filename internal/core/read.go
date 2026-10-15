@@ -655,6 +655,9 @@ type NamedRow struct {
 	Mentions int
 	// LastDay is the day of the newest live day page among those pages. It is "" when there is none.
 	LastDay string
+	// Picture is the file whose preview stands for a person: the first embed of its body (![[title]]) that names a
+	// live file with a preview. It is 0 when there is none, and for a place.
+	Picture int64
 }
 
 // NamedMentions is one page of the live people or places, in the order and with the paging of Named.
@@ -662,7 +665,7 @@ type NamedRow struct {
 func (s *Store) NamedMentions(ctx context.Context, typ string, limit, offset int) ([]NamedRow, error) {
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT p.id, p_name.title, count(DISTINCT lp.id),
-		       coalesce(max(CASE WHEN lp_name.title = lp.day THEN lp.day END), '')
+		       coalesce(max(CASE WHEN lp_name.title = lp.day THEN lp.day END), ''), p.body
 		  FROM entities p
 		  JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
 		  LEFT JOIN links l ON l.to_id = p.id
@@ -675,15 +678,45 @@ func (s *Store) NamedMentions(ctx context.Context, typ string, limit, offset int
 		return nil, err
 	}
 	defer rows.Close()
-	out := []NamedRow{}
+	out, bodies := []NamedRow{}, []string{}
 	for rows.Next() {
 		var r NamedRow
-		if err := rows.Scan(&r.ID, &r.Title, &r.Mentions, &r.LastDay); err != nil {
+		var body string
+		if err := rows.Scan(&r.ID, &r.Title, &r.Mentions, &r.LastDay, &body); err != nil {
 			return nil, err
 		}
-		out = append(out, r)
+		out, bodies = append(out, r), append(bodies, body)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if typ != "person" {
+		return out, nil
+	}
+	for i := range out {
+		if out[i].Picture, err = s.firstPicture(ctx, bodies[i]); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// firstPicture is the id of the first live file with a preview that body embeds, else 0. A title resolves through
+// every name of a page, as GET /previews resolves it.
+func (s *Store) firstPicture(ctx context.Context, body string) (int64, error) {
+	for _, title := range text.EmbeddedTitles(body) {
+		var id int64
+		err := s.DB.R.QueryRowContext(ctx, `
+			SELECT f.id FROM entity_names n
+			  JOIN entities e ON e.id = n.entity_id AND e.deleted_at IS NULL
+			  JOIN files f ON f.id = e.id AND f.preview IS NOT NULL
+			 WHERE n.name_key = ?`, text.TitleKey(title)).Scan(&id)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		}
+		return id, err
+	}
+	return 0, nil
 }
 
 // MediaKinds are the kinds of file the media list shows, named by the first part of files.mime, in the order the

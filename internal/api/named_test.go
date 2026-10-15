@@ -50,11 +50,52 @@ func TestPeopleListCarriesItsMentions(t *testing.T) {
 		"mentioned on 3 pages, last Fri 9 Oct",
 		"mentioned on 1 page, last Fri 9 Oct",
 		"not mentioned yet",
-		`<a class="entry named" href="` + list.Entities[0].Href + `">`,
+		`<a class="entry named face" href="` + list.Entities[0].Href + `">`,
 	} {
 		if !strings.Contains(body, s) {
 			t.Errorf("the people sheet lacks %q", s)
 		}
+	}
+}
+
+// TestPeopleListShowsThePictureAPersonEmbeds: a person whose page embeds a picture has that picture's preview in its
+// row, and the sheet draws it round before the name; a person with none has the icon of a person. A place has
+// neither, even when its page embeds a picture.
+func TestPeopleListShowsThePictureAPersonEmbeds(t *testing.T) {
+	c, h := freshOn(t, fixedToday)
+	ctx := t.Context()
+	root := must(c.Get(ctx, "/"))
+	jpg, _ := jpegFile(t, "ana.jpg", 40, 30)
+	photo := must(c.DoFiles(ctx, find(root, "add-file"), map[string]string{"title": "Ana face.jpg"}, map[string]string{"original": jpg}))
+	ana := must(c.Do(ctx, find(root, "create-person"), map[string]string{"title": "Ana"}))
+	must(c.Do(ctx, find(ana, "save-body"), map[string]string{"body": "![[Ana face.jpg]]\n\nMet at school."}))
+	must(c.Do(ctx, find(root, "create-person"), map[string]string{"title": "Sam"}))
+	lake := must(c.Do(ctx, find(root, "create-place"), map[string]string{"title": "Lake"}))
+	must(c.Do(ctx, find(lake, "save-body"), map[string]string{"body": "![[Ana face.jpg]]"}))
+
+	rows, _ := props(must(c.Get(ctx, "/people")))["rows"].([]any)
+	if len(rows) != 2 {
+		t.Fatalf("rows = %v, want Ana and Sam", rows)
+	}
+	want := hrefOf(photo, "preview")
+	if got := str(rows[0].(map[string]any)["picture"]); want == "" || got != want {
+		t.Errorf("Ana's picture = %q, want %q", got, want)
+	}
+	if _, has := rows[1].(map[string]any)["picture"]; has {
+		t.Errorf("Sam has a picture: %v", rows[1])
+	}
+	body := page(t, h, "/people")
+	for _, s := range []string{`<img class="face-picture" src="` + want + `" alt="" loading="lazy">`, `<span class="face-picture" aria-hidden="true">`} {
+		if !strings.Contains(body, s) {
+			t.Errorf("the people sheet lacks %q", s)
+		}
+	}
+	places, _ := props(must(c.Get(ctx, "/places")))["rows"].([]any)
+	if len(places) != 1 || places[0].(map[string]any)["picture"] != nil {
+		t.Errorf("the places rows = %v, want Lake with no picture", places)
+	}
+	if body := page(t, h, "/places"); strings.Contains(body, `class="face-picture"`) {
+		t.Errorf("the places sheet draws a picture of a face")
 	}
 }
 
