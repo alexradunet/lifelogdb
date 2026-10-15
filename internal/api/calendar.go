@@ -75,14 +75,6 @@ func sinceLastWeek(mean, previous any) string {
 	return "same as last week"
 }
 
-// daysOf writes a habit's count over a week: "5 of 7 days".
-func daysOf(done, active any) string {
-	if a, _ := active.(float64); a == 1 {
-		return num(done) + " of 1 day"
-	}
-	return num(done) + " of " + num(active) + " days"
-}
-
 // weekday is the name of a day's weekday, "" for a day that is not one.
 func weekday(day string) string {
 	t, ok := dayOf(day)

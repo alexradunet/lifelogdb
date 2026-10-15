@@ -114,12 +114,11 @@ func TestASnapshotThatFailsItsRestoreCheckIsAnError(t *testing.T) {
 	owner := client.InProcess(h, "cli")
 	root := must(owner.Get(t.Context(), "/"))
 	must(owner.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "Walk"}))
-	must(owner.Do(t.Context(), find(must(owner.Get(t.Context(), "/metrics/Walk")), "start-habit"), map[string]string{"start_day": "2026-01-01"}))
-	// Deliberate damage, past the writer and the DDL: a habit's reading that is not 0 or 1, written with its trigger
-	// dropped, as a file written before the rule may hold. The semantic integrity check reports it, in the live file
-	// and in every copy of it.
-	withoutTrigger(t, d.W, "measurements_habit_binary", `INSERT INTO measurements(metric_id, day, value, source, created_at)
-		SELECT h.metric_id, '2026-10-01', 5, 'cli', strftime('%Y-%m-%dT%H:%M:%fZ','now') FROM habit_periods h LIMIT 1`)
+	// Deliberate damage, past the writer and the DDL: a correction of a reading of another metric, written with its
+	// trigger dropped. The semantic integrity check reports it, in the live file and in every copy of it.
+	must(owner.Do(t.Context(), find(root, "record"), map[string]string{"metric": "Walk", "day": "2026-10-01", "value": "1"}))
+	withoutTrigger(t, d.W, "measurements_supersede_metric", `INSERT INTO measurements(metric_id, day, value, supersedes_id, source, created_at)
+		SELECT 1, '2026-10-01', 3, (SELECT id FROM measurements LIMIT 1), 'cli', strftime('%Y-%m-%dT%H:%M:%fZ','now')`)
 	e, err := owner.Do(t.Context(), find(root, "snapshot"), nil)
 	var ce *client.Error
 	if !errors.As(err, &ce) || ce.Status != 500 {

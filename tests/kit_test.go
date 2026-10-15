@@ -639,13 +639,6 @@ func (c *C) measure(metric any, day string, value any, cols ...M) string {
 }
 
 // habit inserts a habit period (D24): 'OK' or 'ERR <message>'.
-func (c *C) habit(metric any, start string, end any, source ...string) string {
-	src := "ui"
-	if len(source) > 0 {
-		src = source[0]
-	}
-	return c.tryx("INSERT INTO habit_periods(metric_id,start_day,end_day,source) VALUES (?,?,?,?)", metric, start, end, src)
-}
 
 // jpegBytes is a real JPEG (8×8, grey): a preview the DDL and the writer both accept.
 var jpegBytes = func() []byte {

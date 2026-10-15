@@ -29,7 +29,7 @@ reused, and a decision that changes is rewritten in place (git is its history).
 | [D21](D21-location-history.md) | No location: a place has no point, a photo's position is never read, and there is no track. | accepted |
 | [D22](D22-events.md) | No recorded spans, sessions or events: the day page and plain pages hold them | accepted |
 | [D23](D23-no-tasks.md) | Explicit personal tasks, with projects as context pages. | accepted |
-| [D24](D24-habits.md) | Habits: a metric with active periods. | accepted |
+| [D24](D24-habits.md) | Habits: a unitless metric with a reading of 1 or 0 a day; no periods. | accepted |
 | [D25](D25-snapshots.md) | Snapshots: a dated `VACUUM INTO` copy, trusted once its restore check passes. | accepted |
 | [D26](D26-metric-categories.md) | Categories: a category is a page, and anything is filed in it by a `part-of` link. | accepted |
 | [D27](D27-a-metric-is-a-page.md) | A metric is a page: its title is its name, its body its note. | accepted |

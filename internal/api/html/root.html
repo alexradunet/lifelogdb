@@ -1,5 +1,5 @@
 {{/* Home is today at a glance (docs/plans/095-the-leaf-and-its-margin.md): the calendar leaf of today; the sheet
-     with Capture, Ask and the last entries; the margin with Due and the habits; then the closed section Owner,
+     with Capture, Ask and the last entries; the margin with Due; then the closed section Owner,
      their long forms with their optional fields folded. */}}
 {{define "root"}}{{template "head" .}}
 {{$p := .Props}}
@@ -28,7 +28,6 @@
 <div class="margin">
 {{template "due" (dict "v" $ "due" $p.due)}}
 {{template "onthisday" (dict "v" $ "days" $p.on_this_day)}}
-{{template "checkins" .}}
 </div>
 </div>
 

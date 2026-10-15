@@ -74,19 +74,6 @@ func (h *server) metrics(r *http.Request) (*Entity, error) {
 	for _, m := range ms {
 		e.Entities = append(e.Entities, link("item", metricHref(m.Name), m.Name))
 	}
-	if r.URL.Query().Get("show") == "habits" {
-		if err := h.habitsLens(r, e); err != nil {
-			return nil, err
-		}
-		return e, nil
-	}
-	// The habits of today, each with its strip, for the cards of the Habits group, and their check-ins.
-	hv, states, err := h.habitsOn(ctx, today)
-	if err != nil {
-		return nil, err
-	}
-	e.Properties.(map[string]any)["habit_days"] = hv
-	e.Actions = append(e.Actions, checkIns(states, today)...)
 	return e, nil
 }
 
@@ -132,10 +119,6 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 	if err != nil {
 		return nil, err
 	}
-	periods, err := h.s.HabitPeriods(ctx, name)
-	if err != nil {
-		return nil, err
-	}
 	// The series' own address, and the address of all its history: the same query with no lower bound.
 	seriesHref := func(allHistory bool) string {
 		v := url.Values{"to": {to}}
@@ -154,17 +137,10 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 	if err != nil {
 		return nil, err
 	}
-	props := map[string]any{"metric": name, "from": from, "to": to, "readings": rows, "habit_periods": periods, "all_history": allHistory, "categories": []string(nil)}
+	props := map[string]any{"metric": name, "from": from, "to": to, "readings": rows, "all_history": allHistory, "categories": []string(nil)}
 	e := &Entity{Class: []string{"series"}, Title: name, Properties: props,
-		Links:   []Link{link("all-readings", allHref, "All readings"), link("self", self, name), link("up", "/metrics", "Metrics"), link("habits", "/habits", "Habits"), link("index", "/", "Home")},
+		Links:   []Link{link("all-readings", allHref, "All readings"), link("self", self, name), link("up", "/metrics", "Metrics"), link("index", "/", "Home")},
 		Actions: []Action{record}}
-	ids := map[string]string{"name": name}
-	if len(periods) > 0 && periods[len(periods)-1].End == "" {
-		e.Actions = append(e.Actions, action("stop-habit", ids, map[string]any{"day": today}),
-			action("check-in", ids, map[string]any{"day": today}))
-	} else if m != nil && m.Unit == "" { // a unitless metric may become a habit
-		e.Actions = append(e.Actions, action("start-habit", ids, map[string]any{"start_day": today}))
-	}
 	if m != nil { // the metric is a page (D27): the page's text, edges and actions are the series' too, built once
 		page, err := h.pageEntity(ctx, m.ID)
 		if err != nil {
@@ -280,10 +256,7 @@ func (h *server) registerMetric(r *http.Request, src string) (*Entity, error) {
 	if err := required(v, "name"); err != nil {
 		return nil, err
 	}
-	m := core.NewMetric{Name: v.Get("name"), Unit: v.Get("unit"), Note: v.Get("note"), Category: v.Get("category"), HabitFrom: v.Get("habit_from")}
-	if m.HabitFrom == "today" { // the server's day, as check-in reads it
-		m.HabitFrom = h.localDay()
-	}
+	m := core.NewMetric{Name: v.Get("name"), Unit: v.Get("unit"), Note: v.Get("note"), Category: v.Get("category")}
 	added, err := h.s.CreateMetric(r.Context(), src, m)
 	if err != nil {
 		return nil, err
@@ -298,9 +271,6 @@ func (h *server) registerMetric(r *http.Request, src string) (*Entity, error) {
 	}
 	if m.Category != "" {
 		result += ", in " + m.Category
-	}
-	if m.HabitFrom != "" {
-		result += ", a habit from " + m.HabitFrom
 	}
 	e.Result = result + "."
 	return e, nil

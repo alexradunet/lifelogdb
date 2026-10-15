@@ -80,9 +80,7 @@ func identity(s *S) {
 		s.K(fmt.Sprintf("source %.20v rejected on entities and measurements", v), sourceProbe(v) != nil && err(c.measure(1, "2026-01-01", 3, M{"source": v})))
 	}
 
-	hab := c.metric("hab", "")
 	s.K("links.source takes the same GLOB as entities.source", err(c.link(c.page("Source A"), c.page("Source B"), "part-of", "UI")))
-	s.K("habit_periods.source takes the same GLOB as entities.source", err(c.habit(hab, "2026-01-01", nil, "Import:x")))
 	a, b := c.page("Source C"), c.page("Source D")
 	s.K("entities.source cannot change", err(c.tryx("UPDATE entities SET source='cli' WHERE id=?", a)))
 	s.K("a no-op full-row update and a tombstone still pass", c.tryx("UPDATE entities SET source=source, deleted_at="+NOW+" WHERE id=?", a) == "OK")

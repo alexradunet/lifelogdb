@@ -262,7 +262,7 @@ func (t *Tx) Capture(day, entry string, mood *float64) (id int64, r Sync, err er
 // rangeUnit says whether a metric's unit names a scale's range: two numbers of ASCII digits around one hyphen with
 // the lower below the upper (`1-5`, `0-10`), and returns the two bounds. The range describes the metric, so a source
 // never writes it beside a number: the importer takes the number alone as the evidence of a reading, and the writer
-// holds every value of the metric to the whole numbers inside it. Only a 0/1 habit has no unit (D7, D24).
+// holds every value of the metric to the whole numbers inside it. A count or a 0/1 habit has no unit (D7, D24).
 func rangeUnit(unit string) (lo, hi float64, ok bool) {
 	a, b, found := strings.Cut(unit, "-")
 	if !found || !asciiDigits(a) || !asciiDigits(b) {
@@ -288,7 +288,7 @@ func asciiDigits(s string) bool {
 
 // checkValue refuses a NaN: SQLite binds it as NULL, which a correction cannot tell from a retraction (D7). Every
 // other rule of a value is the DDL's: finite (measurements_value_finite), inside a scale's range
-// (measurements_scale_range), 0 or 1 for a habit (measurements_habit_binary).
+// (measurements_scale_range).
 func checkValue(value *float64) error {
 	if value != nil && math.IsNaN(*value) {
 		return Invalid("value must be a number")

@@ -19,7 +19,6 @@ func schemaTextNUL(s *S) {
 	c := s.fresh()
 	owner := c.page("Name owner")
 	file := c.identity("file", "ui", "Hash witness", nil, "")
-	habit := c.metric("Habit source witness", "")
 	type probe struct {
 		constraint, valid, query string
 		args                     []any
@@ -31,7 +30,6 @@ func schemaTextNUL(s *S) {
 		{"files_mime", "image/jpeg", "INSERT INTO files(id,sha256,mime) VALUES(?,'" + strings.Repeat("a", 64) + "',?)", []any{file}},
 		{"measurements_tz", "UTC", "INSERT INTO measurements(metric_id,day,value,source,created_at,tz) VALUES(1,'2020-01-01',3,'ui'," + NOW + ",?)", nil},
 		{"measurements_source", "cli", "INSERT INTO measurements(metric_id,day,value,created_at,source) VALUES(1,'2020-01-01',3," + NOW + ",?)", nil},
-		{"habit_periods_source", "cli", "INSERT INTO habit_periods(metric_id,start_day,source) VALUES(?,'2020-01-01',?)", []any{habit}},
 		{"links_source", "cli", "INSERT INTO links(from_id,to_id,kind,created_at,source) VALUES(?,?,'part-of'," + NOW + ",?)", []any{owner, owner}},
 		{"link_kinds_kind", "custom", "INSERT INTO link_kinds(kind) VALUES(?)", nil},
 		{"link_kinds_from_types", "page", "INSERT INTO link_kinds(kind,from_types) VALUES('custom',?)", nil},
@@ -85,14 +83,10 @@ func fixedDetailOwnership(s *S) {
 		{"people", "person", ",name='Changed'"},
 		{"files", "file", ",preview=x'FFD8FF01'"},
 		{"metrics", "metric", ",unit=unit"},
-		{"habit_periods", "metric", ",end_day='2026-12-31'"},
 	} {
 		c := s.fresh()
 		a := c.named(tc.typ, "Original owner")
 		b := c.identity(tc.typ, "ui", "Other owner", nil, "")
-		if tc.table == "habit_periods" {
-			c.must("INSERT INTO habit_periods(id,metric_id,start_day,source) VALUES(?,?,'2026-01-01','ui')", a, a)
-		}
 		state := func() string {
 			return c.tab("SELECT * FROM "+tc.table+" ORDER BY id") + " / " + c.tab("SELECT id,revision,updated_at FROM entities ORDER BY id")
 		}

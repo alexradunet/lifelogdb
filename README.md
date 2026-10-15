@@ -32,7 +32,6 @@ lifelog day --human
 lifelog serve                              # http://127.0.0.1:7777 — open it in a browser; this machine only
 lifelog serve --public --token-file ~/life/token   # for your other devices: every request needs the token
 lifelog mcp --agent lmstudio               # MCP on stdio; rows are written as agent:lmstudio
-lifelog habits --human                     # today's habits; lifelog done evening_walk
 lifelog snapshot --to ~/snapshots --human  # life-YYYY-MM-DD.db and its restore check
 lifelog file memo.m4a --text memo.txt     # keep a file: its text, the original hashed and never stored
 lifelog file IMG_0001.HEIC --preview IMG_0001.jpg   # a photo lifelog cannot read: send a JPEG of it
@@ -85,19 +84,19 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   one, `rows` a textarea's height, `options` a field's choices, `pages` a field whose value is a page's title and an
   error's `code` its first words, so no view decides any of them by an action's or a field's name.
 - **The browser for daily use** ([plan 091](docs/plans/091-the-browser-for-daily-use.md)). The root is today at a
-  glance: what is due today and overdue, today's habits and the five newest day pages. A day carries what is due on
-  it, its mood, its habits and the `save-body` of its day page, so the day view edits in place. The tasks, a task, an
+  glance: what is due today and overdue and the five newest day pages. A day carries what is due on
+  it, its mood and the `save-body` of its day page, so the day view edits in place. The tasks, a task, an
   occurrence and the deadlines have their own views, and the deadlines are grouped by their due day against today.
   Each occurrence due 7 days after today or earlier offers its outcome action, which the browser draws as Done and
-  Skip, or Reopen; a habit's check-in is Done and Not done. These are properties and actions of the entities, so every
+  Skip, or Reopen. These are properties and actions of the entities, so every
   client gets them ([API.md](API.md)). `/months/{YYYY-MM}` is the calendar of a month (each day, whether it has a
   page, its first line, its mood and its readings, and every other thing that names the day: the work due on it, a
   birthday or a death each year, a place, a page or a file; under the calendar, Day by
   day links each one: [plan 101](docs/plans/101-the-calendar-holds-every-dated-thing.md)),
   and the catalog action `open-day` goes to a day by its date. The handler reads
   today from one clock, which a test fixes. The day and the root carry `on_this_day`, the day pages of the same date
-  in earlier years, which the margin shows after Due. `/weeks/{YYYY-Www}` is the week (its days, its habits as
-  "N of M days", its readings against the week before, the work due) and `/years/{YYYY}` the year (twelve months);
+  in earlier years, which the margin shows after Due. `/weeks/{YYYY-Www}` is the week (its days, its readings
+  against the week before, the work due) and `/years/{YYYY}` the year (twelve months);
   People and Places list each name with the pages that mention it and the day of the last one
   ([plan 097](docs/plans/097-the-almanac-reflects.md)). A person's row starts with a round picture: the preview of
   the first live file with a preview that the person's page embeds (`![[Ana.jpg]]`), else the icon of a person. The
@@ -135,7 +134,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 
   Do and don't:
   - Show one loud button a screen.
-  - Show no streak, no chain and no badge for consistency. A habit is "N of M days".
+  - Show no streak, no chain and no badge for consistency.
   - Write in sentence case. Use no capitals for effect.
   - Use mono for days, times and numbers only.
   - Let a material set its own text through the aliases.
@@ -153,7 +152,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   which stays until the next page because it may name what the write did not do. A day and Home are a calendar
   leaf, a sheet and its margin ([plan 095](docs/plans/095-the-leaf-and-its-margin.md)): the leaf (the month on a
   band, the day's number in mono) heads the page; the sheet holds what the page is for (the journal, then Capture);
-  the margin holds what the page asks of the owner (Due, the habits, the readings, the places), and comes after the
+  the margin holds what the page asks of the owner (Due, the readings, the places), and comes after the
   sheet on a narrow screen. A page, a list and the planning views use the same sheet. One button a screen is filled:
   the main write; a row's Done is an outline, Skip is quiet, and an overdue row says so in a word. A view can fold an
   action's optional fields under "N more fields", inside the form, so a browser sends them with no script.
@@ -161,8 +160,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   a day in words near today ("yesterday · Sun 11 Oct"), an instant in the clock of the server's day ("today, 09:48",
   the exact instant kept in its `<time>` element), an object of the generic view as facts, and a write's result in
   sentences by the result shapes of API.md. The day carries `trends` (each metric read that day, its unit and its
-  readings of the 14 days through it) and each habit its `recent` states, so a reading's tile has its unit and its
-  line and a habit its strip of 14 days; a series shows its next 5 later slots on its own page.
+  readings of the 14 days through it), so a reading's tile has its unit and its line; a series shows its next 5
+  later slots on its own page.
   `GET /styleguide` is the style page: every component in every state, drawn on synthetic words, with the file each
   lives in. It is presentation, like `/render`: it is not in the catalog and it reads nothing from the database.
   `GET /manifest.webmanifest` and `GET /assets/icon.svg` make the app installable: three shortcuts (Today, Add to
@@ -209,7 +208,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   the `Lifelog-Source` header sets it.
 - **Optimistic saves.** A body save sends the `version` (the decimal `entities.revision` token) it read; a newer one is a 409.
 - **One page a metric** ([plan 100](docs/plans/100-one-page-a-metric.md)). `/metrics/{name}` is the metric's one
-  page: Record first (Check in while it is a habit), its readings newest first in a fold a year, and, as a metric is
+  page: Record first, its readings newest first in a fold a year, and, as a metric is
   a page (D27), its page's text, links, backlinks and actions, taken from the page's own entity. Its readings are
   `(from, to]`; with no `from`, every admitted day through `to`, on every surface (`all_history=1` says the same and
   allows no `from`). The All readings link leads a window back to the
@@ -269,8 +268,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   the CLI's `do` and the MCP tools carry them as any action. Both are dangers, not the owner's alone, and a revive undoes each.
 - **Metrics as cards, filed in groups** ([plan 112](docs/plans/112-metrics-as-cards.md)). `/metrics` draws each
   group as a grid of cards, with a jump bar to the groups: a card is a metric's latest value, its day and the line
-  of its newest 30 readings, muted when the latest is older than 60 days; a habit's card is its strip and its
-  check-in. `file-pages` (`POST /pages/file`) files several pages in a category page in one write, made when it is
+  of its newest 30 readings, muted when the latest is older than 60 days. `file-pages` (`POST /pages/file`) files several pages in a category page in one write, made when it is
   missing; `move` 1 takes them out of their other categories. The page's pick bar checks the cards to file. The CLI's
   `do` and the MCP tools carry it as any action; it is not the owner's alone, as `link` is not.
 - **Categories to browse** ([plan 115](docs/plans/115-categories-to-browse.md)). A category is a page, and
@@ -292,8 +290,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   the count and a button for each action the list offers.
 - **New metric, new category and a reading from `/metrics`** ([plan 113](docs/plans/113-new-metric-on-metrics.md)).
   New metric is in the header of `/metrics` and under each category's heading, not on Home. It asks what you
-  record: a number with its unit, a score with its range, or done or not done (a habit from today). Its category is
-  made when it is new. `register-metric` takes `category` and `habit_from`, and does all of it in one write. New
+  record: a number with its unit, a score with its range, or done or not done (a 0/1 habit). Its category is
+  made when it is new. `register-metric` takes `category`, and does both in one write. New
   category opens the file bar. Each number card has a +, which records one value for today.
 - **Media** ([plan 110](docs/plans/110-the-media-list.md)). `GET /media` is the list of the files whose type is an
   image, a video or an audio: tiles, newest day first, with the picture a file keeps, or the icon of its kind; one
@@ -341,7 +339,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 | `cmd/lifelog` | the binary: `init`, `serve`, `mcp`, `get`, `do`, `actions` and the shortcuts (`file`, `snapshot` among them) |
 | `internal/db` | open, pragmas, `BEGIN IMMEDIATE`, the embedded schema |
 | `internal/text` | the title predicate, `title_key`, wikilink and `#tag` extraction; tested against the vectors of [titles and wikilinks](docs/contract/titles-and-wikilinks.md) |
-| `internal/core` | the cookbook's writes and reads; the save contract; habits; renames; files |
+| `internal/core` | the cookbook's writes and reads; the save contract; metrics; renames; files |
 | `internal/preview` | the picture a file page keeps: decode, scale to 1600 px, EXIF orientation, a JPEG of at most 1 MB with no metadata |
 | `internal/photo` | what a photo's metadata says: the day and time taken and the orientation (JPEG and HEIC); `phototest` builds synthetic ones |
 | `internal/api` | the action catalog, the routes, Siren and HTML; the local and the `--public` network guards |

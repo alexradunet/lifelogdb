@@ -146,9 +146,6 @@ func TestMoodIdentitySurvivesRename(t *testing.T) {
 	if _, err := s.Rename(ctx, "cli", 1, "Wellbeing"); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.StartHabit(ctx, "cli", "Wellbeing", "2026-02-28", ""); err == nil {
-		t.Fatal("renamed Mood became habit")
-	}
 	for _, name := range []string{"Mood", "Wellbeing"} {
 		if _, err := s.Record(context.Background(), "cli", Reading{Metric: name, Day: "2026-02-28", Value: 0}); status(err) != 422 {
 			t.Fatalf("invalid Mood via %q: %v", name, err)

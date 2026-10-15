@@ -331,8 +331,8 @@ func TestDoOpensADayAndGetsAMonth(t *testing.T) {
 	if titles := mustEntity(c.Get(t.Context(), "/titles?prefix=an")); len(titles.Entities) != 1 || titles.Entities[0].Title != "Ana" {
 		t.Fatalf("get /titles: %+v", titles)
 	}
-	if day, ok := mustEntity(c.Get(t.Context(), "/days/2031-05-14")).Properties.(map[string]any); !ok || day["trends"] == nil || day["habits"] == nil {
-		t.Fatalf("get /days/2031-05-14 lacks trends or habits: %v", day)
+	if day, ok := mustEntity(c.Get(t.Context(), "/days/2031-05-14")).Properties.(map[string]any); !ok || day["trends"] == nil {
+		t.Fatalf("get /days/2031-05-14 lacks trends: %v", day)
 	}
 }
 

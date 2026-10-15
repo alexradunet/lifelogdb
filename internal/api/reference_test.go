@@ -24,23 +24,21 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 	documented := readReference(t, filepath.Join("..", "..", "API.md"))
 	// The shape behind each section: a Go value whose JSON names, walked, are the paths the table must list.
 	shapes := map[string]any{
-		"root":                         map[string]any{"today": "", "due": []occurrenceView{}, "habits": []habitView{}, "recent": []recentDay{}, "on_this_day": []recentDay{}},
+		"root":                         map[string]any{"today": "", "due": []occurrenceView{}, "recent": []recentDay{}, "on_this_day": []recentDay{}},
 		"days, people, places, ghosts": map[string]any{"limit": 0, "offset": 0, "rows": []namedRow{}},
 		"media, files":                 map[string]any{"limit": 0, "offset": 0, "kind": "", "rows": []fileRow{}, "counts": mediaCounts{}},
 		"categories":                   map[string]any{"limit": 0, "offset": 0, "categories": []core.Category{}, "unfiled": []core.Edge{}},
 		"search":                       map[string]any{"q": "", "titles": []core.TitleMatch{}, "hits": []core.Hit{}, "limit": 0, "offset": 0},
 		"day":                          dayView{},
 		"month":                        map[string]any{"month": "", "today": "", "days": []monthDay{}},
-		"week":                         map[string]any{"week": "", "from": "", "through": "", "today": "", "days": []monthDay{}, "habits": []weekHabit{}, "metrics": []weekMetric{}, "occurrences": []occurrenceView{}},
+		"week":                         map[string]any{"week": "", "from": "", "through": "", "today": "", "days": []monthDay{}, "metrics": []weekMetric{}, "occurrences": []occurrenceView{}},
 		"year":                         map[string]any{"year": "", "today": "", "written": 0, "readings": 0, "months": []yearMonth{}},
 		"titles":                       map[string]any{"prefix": "", "limit": 0, "titles": []core.TitleMatch{}},
 		"page, person, place, file":    core.Page{},
 		"measurement":                  core.Measurement{},
-		"series": map[string]any{"metric": "", "from": "", "to": "", "readings": []core.Reading{}, "habit_periods": []core.HabitPeriod{}, "categories": []string{}, "all_history": false,
+		"series": map[string]any{"metric": "", "from": "", "to": "", "readings": []core.Reading{}, "categories": []string{}, "all_history": false,
 			"id": int64(0), "unit": "", "body": "", "links": []core.Edge{}, "backlinks": []core.Edge{}},
-		"metrics": map[string]any{"metrics": []metricRow{}, "groups": []metricGroup{}, "categories": []core.Category{}, "today": "",
-			"habit_days": []habitView{}},
-		"habits":     map[string]any{"day": "", "habits": []core.HabitState{}, "from": "", "to": "", "completion": []core.Completion{}},
+		"metrics":    map[string]any{"metrics": []metricRow{}, "groups": []metricGroup{}, "categories": []core.Category{}, "today": ""},
 		"tasks":      map[string]any{"tasks": []core.Task{}, "include_deleted": false},
 		"task":       map[string]any{"task": core.Task{}, "from": "", "through": "", "include_deleted": false, "occurrences": []occurrenceView{}, "today": "", "once": occurrenceView{}},
 		"occurrence": occurrenceView{},
@@ -89,7 +87,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		{"media, files", "/media"}, {"media, files", "/files"}, {"days, people, places, ghosts", "/ghosts"}, {"search", "/search?q=word"},
 		{"day", "/days/2031-05-01"}, {"page, person, place, file", ids["page"]}, {"page, person, place, file", ids["person"]},
 		{"page, person, place, file", ids["place"]}, {"page, person, place, file", ids["file"]},
-		{"measurement", ids["measurement"]}, {"series", "/metrics/Weight"}, {"metrics", "/metrics"}, {"categories", "/categories"}, {"habits", "/habits?day=2031-05-01"},
+		{"measurement", ids["measurement"]}, {"series", "/metrics/Weight"}, {"metrics", "/metrics"}, {"categories", "/categories"},
 		{"integrity", "/integrity"},
 		{"month", "/months/2031-05"}, {"week", "/weeks/2031-W18"}, {"year", "/years/2031"}, {"titles", "/titles?prefix=s"}, {"tasks", "/tasks"}, {"task", ids["task"]}, {"occurrence", ids["task"] + "/occurrences/once"}, {"deadlines", "/deadlines?from=2031-05-01&through=2031-05-31"},
 	}
@@ -276,9 +274,6 @@ func fixture(t *testing.T) (http.Handler, *core.Store, map[string]string) {
 	}
 	ids["measurement"] = fmt.Sprintf("/measurements/%d", mid)
 	if _, err := s.RegisterMetric(ctx, "cli", "Walk", "", "1 = done"); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.StartHabit(ctx, "cli", "Walk", "2031-04-01", ""); err != nil {
 		t.Fatal(err)
 	}
 	h := New(s)

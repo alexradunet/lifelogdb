@@ -33,10 +33,9 @@ SELECT c.title AS category, mp.title AS metric, m.unit
   JOIN entity_names mp ON mp.entity_id = me.id AND mp.name_key = me.preferred_name_key
  ORDER BY c.name_key, mp.name_key;
 
--- every metric with each category it is filed in ('' = none) and whether it is a habit: the habits first,
--- then by category, the metrics filed nowhere last; a metric in two categories is listed under each
-SELECT EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id) AS habit,
-       coalesce(c.title, '') AS category, mp.title AS metric, m.unit
+-- every metric with each category it is filed in ('' = none): by category, the metrics filed nowhere last; a
+-- metric in two categories is listed under each
+SELECT coalesce(c.title, '') AS category, mp.title AS metric, m.unit
   FROM metrics m
   JOIN entities me ON me.id = m.id AND me.deleted_at IS NULL
   JOIN entity_names mp ON mp.entity_id = me.id AND mp.name_key = me.preferred_name_key
@@ -44,13 +43,12 @@ SELECT EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id) AS habit,
                FROM links l JOIN entities e ON e.id = l.to_id AND e.deleted_at IS NULL
                JOIN entity_names p ON p.entity_id = e.id AND p.name_key = e.preferred_name_key
               WHERE l.kind = 'part-of') c ON c.from_id = m.id
- ORDER BY habit DESC, c.name_key IS NULL, c.name_key, mp.name_key;
+ ORDER BY c.name_key IS NULL, c.name_key, mp.name_key;
 ```
 
 A category's page is an ordinary page: its body is what the owner writes about the category, and a `[[Lipids]]` in
 the journal is one of its backlinks ([backlinks](backlinks.md)). The same link files anything else in a category — a
-page, a person, a place. A habit is not a category: it is a metric with a period ([habits](habits.md)), and it may be
-filed in a category as well. Renaming a category's page retains the id and all `part-of` links that end at it
+page, a person, a place. Renaming a category's page retains the id and all `part-of` links that end at it
 ([rename a page](rename-a-page.md)). Nothing keeps the `part-of` links a tree: a page may belong to two categories,
 and links may close a cycle (D8); a writer that draws the tree follows one parent and stops at a
 page it has seen.

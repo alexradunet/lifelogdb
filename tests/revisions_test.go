@@ -89,13 +89,6 @@ func editRevisions(s *S) {
 			s.K("file details advance revision", revision(id) > before)
 		}
 	}
-	metric := c.metric("Revision habit", "")
-	before = revision(metric)
-	c.must("INSERT INTO habit_periods(metric_id,start_day,source) VALUES(?,'2026-01-01','ui')", metric)
-	s.K("habit insertion advances revision", revision(metric) > before)
-	before = revision(metric)
-	c.must("UPDATE habit_periods SET end_day='2026-01-02' WHERE metric_id=?", metric)
-	s.K("habit edits advance revision", revision(metric) > before)
 	other := c.page("Other endpoint")
 	// a link is an edit of the page it leaves and of no page it points at
 	before, otherBefore, otherStamp := revision(page), revision(other), stamp(other)

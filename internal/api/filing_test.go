@@ -35,7 +35,6 @@ func cardsFixture(t *testing.T, c *client.Client) map[string]string {
 		{"metric": "Weight", "day": "2031-05-12", "value": "80"}, {"metric": "Weight", "day": "2031-05-13", "value": "79.5"}} {
 		must(c.Do(ctx, record, r))
 	}
-	must(c.Do(ctx, find(must(c.Get(ctx, "/metrics/Walk")), "start-habit"), map[string]string{"start_day": "2031-05-01"}))
 	ids := map[string]string{}
 	for _, x := range props(must(c.Get(ctx, "/metrics")))["metrics"].([]any) {
 		m := x.(map[string]any)
@@ -83,7 +82,7 @@ func TestFileMetricsAtOnce(t *testing.T) {
 		len(done.Entities) != 2 || done.Entities[0].Href != "/pages/"+ids["Ferritin"] || done.Result != "Put 2 in Bloodwork (a new category)." {
 		t.Fatalf("the answer: %v %v %v", done.Class, p, done.Result)
 	}
-	if got, want := groupsOf(t, c), "Habits:Walk Bloodwork:Ferritin,Steps Not filed:Mood,Weight"; got != want {
+	if got, want := groupsOf(t, c), "Bloodwork:Ferritin,Steps Not filed:Mood,Walk,Weight"; got != want {
 		t.Errorf("groups %q, want %q", got, want)
 	}
 
@@ -97,7 +96,7 @@ func TestFileMetricsAtOnce(t *testing.T) {
 	if props(moved)["moved"] != json.Number("1") || moved.Result != "Moved 1 in Body." {
 		t.Errorf("the move: %v %v", props(moved), moved.Result)
 	}
-	if got, want := groupsOf(t, c), "Habits:Walk Bloodwork:Ferritin Body:Steps,Weight Not filed:Mood"; got != want {
+	if got, want := groupsOf(t, c), "Bloodwork:Ferritin Body:Steps,Weight Not filed:Mood,Walk"; got != want {
 		t.Errorf("after the move, groups %q, want %q", got, want)
 	}
 
@@ -118,7 +117,7 @@ func TestFileMetricsAtOnce(t *testing.T) {
 	if _, err := c.Get(ctx, "/pages?title=Mood+board"); !clientStatus(err, 404) {
 		t.Errorf("a refused filing made its category page: %v", err)
 	}
-	if got := groupsOf(t, c); !strings.HasSuffix(got, "Not filed:Mood") {
+	if got := groupsOf(t, c); !strings.HasSuffix(got, "Not filed:Mood,Walk") {
 		t.Errorf("a refused filing filed Mood: %q", got)
 	}
 }
@@ -149,7 +148,7 @@ func TestFilingTransportParity(t *testing.T) {
 			ids := cardsFixture(t, c)
 			file := find(must(c.Get(t.Context(), "/metrics")), "file-pages")
 			must(c.Do(t.Context(), file, map[string]string{"ids": ids["Weight"] + " " + ids["Steps"], "category": "Sport"}))
-			if got, want := groupsOf(t, c), "Habits:Walk Sport:Steps,Weight Not filed:Ferritin,Mood"; got != want {
+			if got, want := groupsOf(t, c), "Sport:Steps,Weight Not filed:Ferritin,Mood,Walk"; got != want {
 				t.Errorf("groups %q, want %q", got, want)
 			}
 		})
@@ -180,11 +179,10 @@ func TestTheMetricsPageDrawsCards(t *testing.T) {
 
 	page := browse(t, h, "/metrics")
 	for _, want := range []string{
-		`<nav class="kinds jump" aria-label="Groups"><a href="#habits">Habits <small>1</small></a><a href="#c-`, `>Body <small>2</small></a>`, `<a href="#not-filed">Not filed <small>2</small></a>`,
-		`id="habits"`, `id="not-filed"`, `<h3><a href="/pages/` + idOfSelf(t, hrefOf(iron, "self")) + `">Iron</a> <small>1</small></h3>`,
+		`<nav class="kinds jump" aria-label="Groups"><a href="#c-`, `>Body <small>3</small></a>`, `<a href="#not-filed">Not filed <small>2</small></a>`,
+		`id="not-filed"`, `<h3><a href="/pages/` + idOfSelf(t, hrefOf(iron, "self")) + `">Iron</a> <small>1</small></h3>`,
 		`<a class="name" href="/metrics/Weight">Weight</a>`, `79.5 <span class="unit">kg</span>`, `yesterday · Tue 13 May · 2 readings`, `<svg class="trend"`,
 		`<div class="reading-tile metric-card stale">`, `title="iron stores">Ferritin</a>`, `No reading yet · n`,
-		`<div class="reading-tile metric-card habit-card">`, `<span class="badge">Body</span>`, `class="strip"`, `>Done</button>`,
 		`<form id="pick" class="pick-bar" method="POST" action="/pages/file" data-action="file-pages">`, `<input type="hidden" name="back" value="/metrics">`,
 		`<input type="checkbox" name="ids" value="` + ids["Weight"] + `" form="pick" aria-label="Select Weight">`, `<option value="Iron">Body/Iron</option>`,
 	} {

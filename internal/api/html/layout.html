@@ -101,8 +101,6 @@
      label keeps the whole name). It takes href, rel (prev or next), label and text. */}}
 {{define "step"}}<a class="button step" accesskey="{{if eq .rel "prev"}}[{{else}}]{{end}}" href="{{.href}}" rel="{{.rel}}" aria-label="{{.label}}">{{if eq .rel "prev"}}<span aria-hidden="true">‹</span><span class="step-day">{{.text}}</span>{{else}}<span class="step-day">{{.text}}</span><span aria-hidden="true">›</span>{{end}}</a>{{end}}
 
-{{/* checkin draws the check-in of a habit as the outcomes of a task are drawn: Done in the done colour, Not done a quiet
-     word, in one group named by label. back is the page to return to; every caller gives it. */}}
 {{/* add-reading is the + Add of a metric's card or tile (docs/plans/114-one-way-to-do-a-thing.md): a closed fold
      with one value, for one day, that returns to back. It takes action (record; nothing is drawn without it), metric,
      unit (in words), day, today (the label says Today on that day) and back. The full form, with another day and the
@@ -124,8 +122,6 @@
 <label><span>Category</span><input type="text" name="category" required list="category-choices" placeholder="Bloodwork, Sport, Financial"></label>
 <datalist id="category-choices">{{range .Fields}}{{if eq .Name "category"}}{{range .Options}}<option value="{{.}}">{{end}}{{end}}{{end}}</datalist>
 <button class="primary small">Add</button></form></details>{{end}}</div>{{end}}{{end}}
-
-{{define "checkin"}}<div class="outcomes" role="group" aria-label="{{.label}}">{{template "form" (form .action "done" "1" "hide" "day" "button" "Done" "class" "tiny outcome-done" "back" .back)}}{{template "form" (form .action "done" "0" "hide" "day" "button" "Not done" "class" "tiny outcome-notdone" "back" .back)}}</div>{{end}}
 
 {{/* pick-bar is the one way to act on several things of a list (docs/plans/114-one-way-to-do-a-thing.md): Select
      shows a box on each row, tile or card, and the bar's tools, with no script. The bar is a form of its own (id

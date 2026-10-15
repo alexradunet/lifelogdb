@@ -53,15 +53,11 @@ func (h *server) onThisDay(ctx context.Context, day string) ([]recentDay, error)
 }
 
 // The root is today at a glance (docs/plans/091-the-browser-for-daily-use.md): what is due today and is overdue,
-// today's habits, the newest day pages, and every action that starts something.
+// the newest day pages, and every action that starts something.
 func (h *server) root(r *http.Request) (*Entity, error) {
 	ctx := r.Context()
 	today := h.localDay()
 	due, err := h.overdueAndDue(ctx, today)
-	if err != nil {
-		return nil, err
-	}
-	hs, states, err := h.habitsOn(ctx, today)
 	if err != nil {
 		return nil, err
 	}
@@ -87,13 +83,13 @@ func (h *server) root(r *http.Request) (*Entity, error) {
 		record, action("register-metric", nil, nil), action("snapshot", nil, nil)}
 	return &Entity{
 		Class: []string{"root"}, Title: "Lifelog",
-		Properties: map[string]any{"today": today, "due": due, "habits": hs, "recent": recent, "on_this_day": onThisDay},
+		Properties: map[string]any{"today": today, "due": due, "recent": recent, "on_this_day": onThisDay},
 		Links: []Link{link("self", "/", "Lifelog"), link("today", dayHref(today), "Today"), link("days", "/days", "Days"),
 			link("categories", "/categories", "Categories"), link("people", "/people", "People"), link("places", "/places", "Places"), link("media", "/media", "Media"), link("files", "/files", "Files"), link("metrics", "/metrics", "Metrics"),
-			link("habits", "/habits", "Habits"), link("tasks", "/tasks", "Tasks"), link("deadlines", "/deadlines", "Deadlines"),
+			link("tasks", "/tasks", "Tasks"), link("deadlines", "/deadlines", "Deadlines"),
 			link("ghosts", "/ghosts", "Ghost pages"), link("actions", "/actions", "All actions"), link("calendar", "/months/current", "Calendar"),
 			link("week", "/weeks/current", "This week"), link("year", "/years/current", "This year")},
-		Actions: append(append(actions, checkIns(states, today)...), outcomesOf(due, today)...),
+		Actions: append(actions, outcomesOf(due, today)...),
 	}, nil
 }
 
@@ -144,13 +140,12 @@ func (h *server) days(r *http.Request) (*Entity, error) {
 }
 
 // dayView is a day as the API shows it: the cookbook's day view, and beside it what is due that day (on today, the
-// open work of the days before too), the day's mood, its habits and the day the server read as today
+// open work of the days before too), the day's mood and the day the server read as today
 // (docs/plans/091-the-browser-for-daily-use.md).
 type dayView struct {
 	core.Day
 	Due    []occurrenceView `json:"due"`
 	Mood   []float64        `json:"mood"`
-	Habits []habitView      `json:"habits"`
 	Trends []trend          `json:"trends"`
 	// OnThisDay are the day pages of earlier years on this month and day.
 	OnThisDay []recentDay `json:"on_this_day"`
@@ -183,11 +178,7 @@ func (h *server) dayEntity(ctx context.Context, day string) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	hs, states, err := h.habitsOn(ctx, day)
-	if err != nil {
-		return nil, err
-	}
-	trends, err := h.trends(ctx, day, d.Readings, hs)
+	trends, err := h.trends(ctx, day, d.Readings)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +196,7 @@ func (h *server) dayEntity(ctx context.Context, day string) (*Entity, error) {
 	}
 	t, _ := dayOf(day)
 	e := &Entity{
-		Class: []string{"day"}, Title: day, Properties: dayView{Day: *d, Due: due, Mood: mood, Habits: hs, Trends: trends, OnThisDay: onThisDay, Today: today},
+		Class: []string{"day"}, Title: day, Properties: dayView{Day: *d, Due: due, Mood: mood, Trends: trends, OnThisDay: onThisDay, Today: today},
 		Links: []Link{link("self", dayHref(day), day), link("prev", dayHref(t.AddDate(0, 0, -1).Format(time.DateOnly)), "Previous day"),
 			link("next", dayHref(t.AddDate(0, 0, 1).Format(time.DateOnly)), "Next day"), link("metrics", "/metrics", "Metrics"), link("index", "/", "Home"),
 			link("month", monthHref(t), t.Format(layoutMonth))},
@@ -219,7 +210,7 @@ func (h *server) dayEntity(ctx context.Context, day string) (*Entity, error) {
 		}
 		e.Actions = append(e.Actions, saveBodyAction(d.PageID, p.Body, p.Version))
 	}
-	e.Actions = append(append(e.Actions, checkIns(states, day)...), outcomesOf(due, today)...)
+	e.Actions = append(e.Actions, outcomesOf(due, today)...)
 	for _, m := range d.Readings {
 		e.Entities = append(e.Entities, link("reading", measurementHref(m.ID), fmt.Sprintf("%s %g", m.Metric, m.Value)))
 	}

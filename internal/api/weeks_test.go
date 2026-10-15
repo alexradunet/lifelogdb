@@ -24,12 +24,7 @@ func weekScenario(t *testing.T) (*client.Client, http.Handler) {
 		must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/days/"+day)), "capture"), map[string]string{"text": text}))
 	}
 	root := must(c.Get(t.Context(), "/"))
-	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "walk"}))
 	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
-	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/metrics/walk")), "start-habit"), map[string]string{"start_day": "2026-09-20"}))
-	for _, day := range []string{"2026-10-06", "2026-10-08"} {
-		must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/habits?day="+day)), "check-in"), map[string]string{"day": day, "done": "1"}))
-	}
 	for day, value := range map[string]string{"2026-10-01": "71.9", "2026-10-06": "71.6", "2026-10-09": "71.2"} {
 		must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "weight", "day": day, "value": value}))
 	}
@@ -78,10 +73,6 @@ func TestTheWeekLooksBackOverSevenDays(t *testing.T) {
 		}
 	}
 
-	habits := objects(p, "habits")
-	if len(habits) != 1 || habits[0]["metric"] != "walk" || said(habits[0]["done"]) != "2" || said(habits[0]["active_days"]) != "7" {
-		t.Errorf("habits %v: walk done on 2 of its 7 active days", habits)
-	}
 	metrics := objects(p, "metrics")
 	if len(metrics) != 1 || metrics[0]["metric"] != "weight" || metrics[0]["unit"] != "kg" || said(metrics[0]["readings"]) != "2" ||
 		said(metrics[0]["mean"]) != "71.4" || said(metrics[0]["previous_mean"]) != "71.9" {
@@ -100,7 +91,7 @@ func TestTheWeekLooksBackOverSevenDays(t *testing.T) {
 		t.Errorf("actions: %s", names(w))
 	}
 
-	// The week before has one reading and no week before it: no previous mean. Its habit was active on all 7 days and done on none.
+	// The week before has one reading and no week before it: no previous mean.
 	p40 := props(must(c.Get(t.Context(), "/weeks/2026-W40")))
 	m40 := objects(p40, "metrics")
 	if len(m40) != 1 || said(m40[0]["readings"]) != "1" || said(m40[0]["mean"]) != "71.9" {
@@ -108,9 +99,6 @@ func TestTheWeekLooksBackOverSevenDays(t *testing.T) {
 	}
 	if _, has := m40[0]["previous_mean"]; has {
 		t.Error("week 40 has a previous mean, and week 39 has no reading")
-	}
-	if h40 := objects(p40, "habits"); len(h40) != 1 || said(h40[0]["done"]) != "0" || said(h40[0]["active_days"]) != "7" {
-		t.Errorf("week 40 habits %v", h40)
 	}
 	// A week with nothing in it is still a week.
 	p42 := props(must(c.Get(t.Context(), "/weeks/2026-W42")))
@@ -141,7 +129,7 @@ func TestTheWeekLooksBackOverSevenDays(t *testing.T) {
 
 	body := browse(t, h, "/weeks/2026-W41")
 	for _, want := range []string{"Week 41 of 2026", "Mon 5 Oct to Sun 11 Oct", `href="/months/2026-10"`, `href="/years/2026"`,
-		"Monday: the long meeting.", "Sunday: rest.", "walk", "2 of 7 days", "71.4 kg", "down from 71.9", "Send the form", "Call the bank",
+		"Monday: the long meeting.", "Sunday: rest.", "71.4 kg", "down from 71.9", "Send the form", "Call the bank",
 		`rel="prev"`, `rel="next"`, `action="/days/go"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the week's page lacks %q", want)
@@ -163,7 +151,7 @@ func TestTheWeekLooksBackOverSevenDays(t *testing.T) {
 		t.Error("the week's work is not headed Due this week")
 	}
 	empty := browse(t, h, "/weeks/2026-W20")
-	for _, want := range []string{"No habit was active this week.", "No reading this week.", "Nothing was due this week."} {
+	for _, want := range []string{"No reading this week.", "Nothing was due this week."} {
 		if !strings.Contains(empty, want) {
 			t.Errorf("an empty week lacks %q", want)
 		}

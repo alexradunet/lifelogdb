@@ -246,13 +246,7 @@ func TestCorrectionDomains(t *testing.T) {
 	if _, err := s.RegisterMetric(ctx, "cli", "evening_walk", "", ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.StartHabit(ctx, "cli", "evening_walk", "2026-10-01", ""); err != nil {
-		t.Fatal(err)
-	}
 	if _, err := s.RegisterMetric(ctx, "cli", "winter_vitamin", "", ""); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.StartHabit(ctx, "cli", "winter_vitamin", "2026-01-01", "2026-01-31"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -280,8 +274,6 @@ func TestCorrectionDomains(t *testing.T) {
 
 	assertRejectedCorrection("mood above range", Reading{Metric: "mood", Day: "2026-10-01", Value: 3}, 6)
 	assertRejectedCorrection("fractional mood", Reading{Metric: "mood", Day: "2026-10-02", Value: 3}, 2.5)
-	assertRejectedCorrection("current habit", Reading{Metric: "evening_walk", Day: "2026-10-01", Value: 1}, 2)
-	assertRejectedCorrection("ended habit", Reading{Metric: "winter_vitamin", Day: "2026-02-05", Value: 0}, 2)
 
 	unknownRows := measurementRows(t, s)
 	if _, err := s.Correct(ctx, "cli", 987654321, ptr(1)); status(err) != 404 {

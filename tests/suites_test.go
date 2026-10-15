@@ -29,7 +29,6 @@ var suites = []struct {
 	{"graph-model", graphModel},
 	{"facts", facts},
 	{"measurement-query-plan", measurementQueryPlan},
-	{"habits", habits},
 	{"journal", journal},
 	{"writers", writers},
 	{"storage-resilience", storageResilience},

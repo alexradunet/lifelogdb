@@ -71,40 +71,6 @@ func (t *Tx) metricID(name string) (int64, error) {
 	return id, err
 }
 
-// StartHabit gives a unitless metric a period from start (cookbook/habits.md, D24): the days, the unit, the overlap
-// and the metric's readings being 0 or 1 are the habit_periods CHECKs and triggers. end is "" for a habit that is
-// still going. A re-sent period inserts nothing and carries its end: a changed end is applied to the period
-// that starts on that day.
-func (t *Tx) StartHabit(metric, start, end string) error {
-	id, err := t.metricID(metric)
-	if err != nil {
-		return err
-	}
-	if _, err := t.tx.ExecContext(t.ctx, `INSERT INTO habit_periods(metric_id, start_day, end_day, source) VALUES (?, ?, ?, ?)
-	                        ON CONFLICT(metric_id, start_day) DO NOTHING`, id, start, nullIfEmpty(end), t.Source); err != nil {
-		return err
-	}
-	_, err = t.tx.ExecContext(t.ctx, `UPDATE habit_periods SET end_day = ? WHERE metric_id = ? AND start_day = ? AND end_day IS NOT ?`,
-		nullIfEmpty(end), id, start, nullIfEmpty(end))
-	return err
-}
-
-// StopHabit ends the open period of a habit on day (inclusive).
-func (t *Tx) StopHabit(metric, day string) error {
-	id, err := t.metricID(metric)
-	if err != nil {
-		return err
-	}
-	res, err := t.tx.ExecContext(t.ctx, `UPDATE habit_periods SET end_day = ? WHERE metric_id = ? AND end_day IS NULL`, day, id)
-	if err != nil {
-		return err
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return NotFound("%s has no open period", metric)
-	}
-	return nil
-}
-
 func (s *Store) RegisterMetric(ctx context.Context, source, name, unit, note string) (added bool, err error) {
 	err = s.Do(ctx, source, func(t *Tx) (e error) { added, e = t.RegisterMetric(name, unit, note); return })
 	if err != nil {
@@ -113,16 +79,15 @@ func (s *Store) RegisterMetric(ctx context.Context, source, name, unit, note str
 	return
 }
 
-// NewMetric is what CreateMetric makes in one write: the metric, and, when they are named, its category and the
-// first day of its habit. Category is a page title and HabitFrom a day; either may be empty.
+// NewMetric is what CreateMetric makes in one write: the metric, and, when it is named, its category, a page
+// title; it may be empty.
 type NewMetric struct {
-	Name, Unit, Note    string
-	Category, HabitFrom string
+	Name, Unit, Note string
+	Category         string
 }
 
-// CreateMetric registers a metric, files it in its category (made when no page has that title, as FilePages makes
-// it) and starts its habit, in one write: a refusal of any step writes nothing. A habit of a metric with a unit is
-// refused by habit_periods, not here.
+// CreateMetric registers a metric and files it in its category (made when no page has that title, as FilePages
+// makes it), in one write: a refusal of either step writes nothing.
 func (s *Store) CreateMetric(ctx context.Context, source string, m NewMetric) (added bool, err error) {
 	err = s.Do(ctx, source, func(t *Tx) error {
 		var e error
@@ -138,190 +103,12 @@ func (s *Store) CreateMetric(ctx context.Context, source string, m NewMetric) (a
 				return e
 			}
 		}
-		if m.HabitFrom != "" {
-			return t.StartHabit(m.Name, m.HabitFrom, "")
-		}
 		return nil
 	})
 	if err != nil {
 		added = false
 	}
 	return
-}
-
-func (s *Store) StartHabit(ctx context.Context, source, metric, start, end string) error {
-	return s.Do(ctx, source, func(t *Tx) error { return t.StartHabit(metric, start, end) })
-}
-
-func (s *Store) StopHabit(ctx context.Context, source, metric, day string) error {
-	return s.Do(ctx, source, func(t *Tx) error { return t.StopHabit(metric, day) })
-}
-
-// HabitState is one habit of a day: done, not done, not recorded or invalid.
-type HabitState struct {
-	Metric string `json:"metric"`
-	State  string `json:"state"`
-}
-
-// Habits is cookbook/habits.md: the habits of a day, each with its state.
-func (s *Store) Habits(ctx context.Context, day string) ([]HabitState, error) {
-	if err := checkDay("day", day); err != nil {
-		return nil, err
-	}
-	days, err := s.HabitStates(ctx, day, day)
-	if err != nil {
-		return nil, err
-	}
-	out := []HabitState{}
-	for _, h := range days {
-		out = append(out, h.HabitState)
-	}
-	return out, nil
-}
-
-// Completion is one habit's count over a period (cookbook/habits.md).
-type Completion struct {
-	Metric      string `json:"metric"`
-	ActiveDays  int    `json:"active_days"`
-	Done        int    `json:"done"`
-	NotDone     int    `json:"not_done"`
-	NotRecorded int    `json:"not_recorded"`
-	Invalid     int    `json:"invalid"`
-}
-
-func (s *Store) Completion(ctx context.Context, from, through string) ([]Completion, error) {
-	if err := checkWindow(from, through); err != nil {
-		return nil, err
-	}
-	rows, err := s.DB.R.QueryContext(ctx, `
-		WITH RECURSIVE days(day) AS (
-		  SELECT :from_day
-		  UNION ALL
-		  SELECT date(day, '+1 day') FROM days WHERE day < :to_day
-		),
-		active AS (
-		  SELECT h.metric_id, d.day
-		    FROM days d JOIN habit_periods h ON h.start_day <= d.day AND coalesce(h.end_day, '9999-12-31') >= d.day
-		)
-		SELECT m_name.title, count(*) AS active_days,
-		       sum(s.value IS 1 AND s.invalid IS 0) AS done, sum(s.value IS 0 AND s.invalid IS 0) AS not_done,
-		       sum(s.value IS NULL) AS not_recorded, sum(s.invalid IS 1) AS invalid
-		  FROM active a
-		  JOIN entities m ON m.id = a.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key AND m.deleted_at IS NULL
-		  LEFT JOIN (SELECT metric_id, day, max(value) AS value, max(value NOT IN (0, 1)) AS invalid
-		             FROM measurement_values GROUP BY metric_id, day) s
-		         ON s.metric_id = a.metric_id AND s.day = a.day
-		 GROUP BY m.id
-		 ORDER BY m.preferred_name_key`, sql.Named("from_day", from), sql.Named("to_day", through))
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []Completion{}
-	for rows.Next() {
-		var c Completion
-		if err := rows.Scan(&c.Metric, &c.ActiveDays, &c.Done, &c.NotDone, &c.NotRecorded, &c.Invalid); err != nil {
-			return nil, err
-		}
-		out = append(out, c)
-	}
-	return out, rows.Err()
-}
-
-// HabitPeriod is one habit period.
-type HabitPeriod struct {
-	Start string `json:"start_day"`
-	End   string `json:"end_day,omitempty"`
-}
-
-// Periods lists a metric's habit periods, oldest first.
-func (s *Store) HabitPeriods(ctx context.Context, metric string) ([]HabitPeriod, error) {
-	rows, err := s.DB.R.QueryContext(ctx, `SELECT h.start_day, coalesce(h.end_day, '') FROM habit_periods h
-	                                         JOIN entities m ON m.id = h.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key  WHERE m.id = (SELECT entity_id FROM entity_names WHERE name_key = ?) ORDER BY h.start_day`, text.TitleKey(metric))
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []HabitPeriod{}
-	for rows.Next() {
-		var p HabitPeriod
-		if err := rows.Scan(&p.Start, &p.End); err != nil {
-			return nil, err
-		}
-		out = append(out, p)
-	}
-	return out, rows.Err()
-}
-
-// CheckIn records a habit for a day inside one of its periods (cookbook/habits.md, D24): 1 for done, 0 for not
-// done. The period check and the write are one transaction, so a habit stopped between them cannot take a reading.
-func (t *Tx) CheckIn(metric, day string, done bool) (int64, error) {
-	if err := checkDay("day", day); err != nil {
-		return 0, err
-	}
-	id, err := t.metricID(metric)
-	if err != nil {
-		return 0, err
-	}
-	var on bool
-	if err := t.tx.QueryRowContext(t.ctx, `SELECT EXISTS (SELECT 1 FROM habit_periods WHERE metric_id = ? AND start_day <= ? AND coalesce(end_day, '9999-12-31') >= ?)`, id, day, day).Scan(&on); err != nil {
-		return 0, err
-	}
-	if !on {
-		return 0, Invalid("%s is not a habit on %s: start it first", metric, day)
-	}
-	value := 0.0
-	if done {
-		value = 1
-	}
-	return t.Record(Reading{Metric: metric, Day: day, Value: value})
-}
-
-func (s *Store) CheckIn(ctx context.Context, source, metric, day string, done bool) (id int64, err error) {
-	err = s.Do(ctx, source, func(t *Tx) (e error) { id, e = t.CheckIn(metric, day, done); return })
-	if err != nil {
-		id = 0
-	}
-	return
-}
-
-// HabitDay is one habit's state on one day of a window.
-type HabitDay struct {
-	Day string `json:"day"`
-	HabitState
-}
-
-// HabitStates are the states of every habit active on each day from from through through, by day then habit: the
-// read of Habits over a window in one statement, so a view of 14 days does not read 14 times. The rule of a state
-// (cookbook/habits.md) has this one home.
-func (s *Store) HabitStates(ctx context.Context, from, through string) ([]HabitDay, error) {
-	if err := checkWindow(from, through); err != nil {
-		return nil, err
-	}
-	rows, err := s.DB.R.QueryContext(ctx, `
-		WITH RECURSIVE days(day) AS (SELECT :from_day UNION ALL SELECT date(day, '+1 day') FROM days WHERE day < :through_day)
-		SELECT d.day, m_name.title,
-		       CASE WHEN EXISTS (SELECT 1 FROM measurement_values v WHERE v.metric_id = m.id AND v.day = d.day AND v.value NOT IN (0, 1))
-		         THEN 'invalid'
-		         ELSE CASE (SELECT max(v.value) FROM measurement_values v WHERE v.metric_id = m.id AND v.day = d.day)
-		           WHEN 1 THEN 'done' WHEN 0 THEN 'not done' ELSE 'not recorded' END END AS state
-		  FROM days d
-		  JOIN habit_periods h ON h.start_day <= d.day AND coalesce(h.end_day, '9999-12-31') >= d.day
-		  JOIN entities m ON m.id = h.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key AND m.deleted_at IS NULL
-		 ORDER BY d.day, m.preferred_name_key`, sql.Named("from_day", from), sql.Named("through_day", through))
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []HabitDay{}
-	for rows.Next() {
-		var h HabitDay
-		if err := rows.Scan(&h.Day, &h.Metric, &h.State); err != nil {
-			return nil, err
-		}
-		out = append(out, h)
-	}
-	return out, rows.Err()
 }
 
 // metricUnit is a registered metric's unit; found is false when no metric has the name.

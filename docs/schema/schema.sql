@@ -24,7 +24,7 @@ INSERT INTO lifelog_meta(key, value) VALUES
   ('days',      'every *_day column (and day) is the LOCAL exact 10-character ASCII calendar date YYYY-MM-DD, years 0000..9999, where the thing happened for recorded facts, written by the app from the local calendar of the device that captured it (never a server''s), never recomputed from an instant; tasks.anchor_day, tasks.repeat_until_day, task_occurrences.due_day and date occurrence_key are chosen planning calendar days, not claims that an event happened; CHECK explicit ASCII shape and date(x) IS x (IS, not =: a CHECK passes on NULL, and date(''2026-9-3'') is NULL)'),
   ('planning', 'task project admission requires a live non-journal plain page. Retained references forbid incompatible type changes and exclude ghost cleanup. Tombstones retain context. A one-off task commits with exactly one occurrence, keyed once. Occurrence admission requires a live task and a key in its immutable anchored sequence. Open keys cannot exceed the task''s current end; explicit historical done or skipped outcomes may. Shortening the end atomically skips existing open keys beyond it, preserves other outcomes and forbids reopening those later keys. Active planning reads and reminders exclude tombstoned tasks and occurrences. A reminder requires an open occurrence'),
   ('deletes',   'life data is never deleted except links rows: an entity is a tombstone (entities.deleted_at); revival clears the tombstone, so lifecycle transitions are not retained history; a measurement is corrected by inserting a row; BEFORE DELETE triggers enforce it on entities and every domain row; ordinary active reads filter lifecycle tombstones; explicit historical and append-only audits retain them; the registries (link_kinds, lifelog_meta) are the owner''s administrative rows, deletable while nothing references them (each CREATE comment says so)'),
-  ('source',    'entities, tasks, task_occurrences, links, measurements and habit_periods: source names the original inserter of the row, not the last editor or an audit trail (ui, cli, api, agent:<name>, import:<name>; schema for the rows this file seeds); written at insert, never changed; import_key is unique per source on entities, tasks and task_occurrences, and per source and metric on measurements; a present import_key is 1 to 512 bytes without NUL'),
+  ('source',    'entities, tasks, task_occurrences, links and measurements: source names the original inserter of the row, not the last editor or an audit trail (ui, cli, api, agent:<name>, import:<name>; schema for the rows this file seeds); written at insert, never changed; import_key is unique per source on entities, tasks and task_occurrences, and per source and metric on measurements; a present import_key is 1 to 512 bytes without NUL'),
   ('edit_revisions', 'entities.revision, tasks.revision and task_occurrences.revision are monotonic integer edit tokens independent of updated_at; creation is not an edit (nothing advances a row whose creation transaction is its only write: it keeps revision 1 and the updated_at its insert wrote, its owned preferred name and typed detail row included); a later change of the row''s own content advances it: names, body, day, type, lifecycle, typed detail, habit period and the links it leaves (a link advances only the page it leaves, never the page it points at; a wikilink is derived from the body and advances nothing; both rows of a symmetric link advance both pages); no-ops do not, rollback restores it, exhaustion refuses; clients compare the token inside BEGIN IMMEDIATE, never a timestamp; exact increment counts are not meaningful; planning edits advance the edited row; resolving inherited task context, lifecycle or reminder defaults requires comparing both task and occurrence tokens'),
   ('typed_links', 'both endpoints of every retained link must satisfy link_kinds; a type change refuses invalid incoming or outgoing edges atomically; semantic integrity checks the registry independently of structural integrity'),
   ('writers',   'one writing application; every connection sets foreign_keys=ON, recursive_triggers=ON, synchronous=FULL, trusted_schema=OFF and starts write transactions with BEGIN IMMEDIATE; every other tool opens the file read-only; imports use INSERT ... ON CONFLICT DO NOTHING, never OR IGNORE (skips CHECK/NOT NULL violations silently) or OR REPLACE (a delete)'),
@@ -206,12 +206,12 @@ CREATE TABLE metrics (
   -- writes about it, and [[Weight]] in the journal reaches it after renaming. The unit
   -- gives every stored value its meaning, so it never changes (metrics_unit_fixed). Seeded with Mood (D6).
   -- A category is a page: a metric is filed in one by a part-of link from its page (D26).
-  -- A habit is NOT a category: a metric is a habit while it has habit_periods (D24).
+  -- A habit is a unitless metric with a reading of 1 or 0 a day (D24), NOT a category.
   -- A metric registered by mistake is tombstoned, never deleted (D11); its readings stay life data.
   id          INTEGER PRIMARY KEY,
   entity_type TEXT NOT NULL DEFAULT 'metric' CONSTRAINT metrics_entity_type CHECK (entity_type = 'metric'),
   unit        TEXT NOT NULL DEFAULT '' CONSTRAINT metrics_unit CHECK (instr(unit, char(0)) = 0 AND unit = trim(unit)
-                           AND length(CAST(unit AS BLOB)) <= 32),   -- 'kg', 'bpm', 'h'; '' only for 0/1 habits; a scale names its range ('1-5', '0-10')
+                           AND length(CAST(unit AS BLOB)) <= 32),   -- 'kg', 'bpm', 'h'; '' for a count or a 0/1 habit; a scale names its range ('1-5', '0-10')
   FOREIGN KEY (id, entity_type) REFERENCES entities(id, entity_type)
 ) STRICT;
 CREATE TRIGGER metrics_unit_fixed BEFORE UPDATE OF unit ON metrics
@@ -455,7 +455,7 @@ CREATE TABLE measurements (
   -- Imports: INSERT ... ON CONFLICT(source, import_key, metric_id) WHERE import_key IS NOT NULL DO NOTHING;
   -- never OR IGNORE (it silently skips CHECK / NOT NULL violations).
   -- A value is held to its metric: a whole number inside the range a scale's unit names (measurements_scale_range,
-  -- D6) and 0 or 1 for a metric that has a habit period (measurements_habit_binary, D24); a NULL value (a retraction)
+  -- D6); a NULL value (a retraction)
   -- is never held, so a wrong reading of any metric can be retracted.
   id               INTEGER PRIMARY KEY,
   metric_id        INTEGER NOT NULL REFERENCES metrics(id),
@@ -510,77 +510,12 @@ BEGIN
                         OR NEW.value NOT BETWEEN CAST(substr(m.unit, 1, instr(m.unit, '-') - 1) AS REAL)
                                              AND CAST(substr(m.unit, instr(m.unit, '-') + 1) AS REAL)));
 END;
-CREATE TRIGGER measurements_habit_binary BEFORE INSERT ON measurements
-  WHEN NEW.value IS NOT NULL AND NEW.value NOT IN (0, 1)
-BEGIN
-  -- a habit's check-in is 1 = done or 0 = not done (D24), on every day once the metric has a period
-  SELECT RAISE(ABORT, 'a habit check-in is 1 = done or 0 = not done (D24)')
-   WHERE EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = NEW.metric_id);
-END;
 CREATE VIEW measurement_values AS
   -- the canonical read rule: rows nothing has corrected, minus retractions
   SELECT me.*
     FROM measurements me
    WHERE me.value IS NOT NULL
      AND NOT EXISTS (SELECT 1 FROM measurements x WHERE x.supersedes_id = me.id);
-
-CREATE TABLE habit_periods (
-  -- The row id is immutable (habit_periods_identity_fixed), including through rowid aliases.
-  -- a metric is a HABIT while it has a period: the local days the owner meant to do it (D24). Check-ins
-  -- stay in measurements (1 = done, 0 = not done that day, held by measurements_habit_binary); a day inside a
-  -- period with no check-in is NOT RECORDED, never assumed done or not done. A habit is unitless (0/1): a scale
-  -- names its range as its unit (metrics.unit), so Mood and every other scale are refused here by that one rule,
-  -- and so is a metric whose current readings are not all 0 or 1. A restarted habit
-  -- has several periods, which never overlap. A wrong period is corrected by UPDATE, never deleted.
-  id         INTEGER PRIMARY KEY,
-  metric_id  INTEGER NOT NULL REFERENCES metrics(id),
-  start_day  TEXT NOT NULL CONSTRAINT habit_periods_start_day CHECK (length(start_day) = 10 AND start_day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(start_day) IS start_day),
-  end_day    TEXT CONSTRAINT habit_periods_end_day CHECK (end_day IS NULL OR length(end_day) = 10 AND end_day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(end_day) IS end_day),   -- the last day, inclusive; NULL = still going
-  source     TEXT NOT NULL CONSTRAINT habit_periods_source CHECK (instr(source, char(0)) = 0 AND length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*'),   -- the writer (lifelog_meta.source)
-  CONSTRAINT habit_periods_order CHECK (end_day IS NULL OR end_day >= start_day),
-  UNIQUE (metric_id, start_day)
-) STRICT;
-CREATE TRIGGER habit_periods_check_insert BEFORE INSERT ON habit_periods
-BEGIN
-  SELECT RAISE(ABORT, 'a habit is a unitless metric (0 = not done, 1 = done): this metric has a unit')
-   WHERE (SELECT unit FROM metrics WHERE id = NEW.metric_id) IS NOT '';
-  -- a metric with a current reading outside 0 and 1 is not a habit yet: retract the reading first (D24)
-  SELECT RAISE(ABORT, 'a habit is 0/1: this metric has a current reading outside 0 and 1')
-   WHERE EXISTS (SELECT 1 FROM measurement_values v WHERE v.metric_id = NEW.metric_id AND v.value NOT IN (0, 1));
-  -- a period with the same start is left to UNIQUE, so ON CONFLICT DO NOTHING re-runs it (this trigger fires first)
-  SELECT RAISE(ABORT, 'periods of one habit never overlap: end the open one first')
-   WHERE EXISTS (SELECT 1 FROM habit_periods p WHERE p.metric_id = NEW.metric_id
-                    AND p.start_day IS NOT NEW.start_day
-                    AND p.start_day <= coalesce(NEW.end_day, '9999-12-31')
-                    AND coalesce(p.end_day, '9999-12-31') >= NEW.start_day);
-END;
-CREATE TRIGGER habit_periods_check_update BEFORE UPDATE OF metric_id, start_day, end_day ON habit_periods
-BEGIN
-  SELECT RAISE(ABORT, 'a habit is a unitless metric (0 = not done, 1 = done): this metric has a unit')
-   WHERE (SELECT unit FROM metrics WHERE id = NEW.metric_id) IS NOT '';
-  SELECT RAISE(ABORT, 'a habit is 0/1: this metric has a current reading outside 0 and 1')
-   WHERE NEW.metric_id IS NOT OLD.metric_id
-     AND EXISTS (SELECT 1 FROM measurement_values v WHERE v.metric_id = NEW.metric_id AND v.value NOT IN (0, 1));
-  SELECT RAISE(ABORT, 'periods of one habit never overlap')
-   WHERE EXISTS (SELECT 1 FROM habit_periods p WHERE p.metric_id = NEW.metric_id AND p.id <> NEW.id
-                    AND p.start_day <= coalesce(NEW.end_day, '9999-12-31')
-                    AND coalesce(p.end_day, '9999-12-31') >= NEW.start_day);
-END;
-CREATE TRIGGER habit_periods_no_delete BEFORE DELETE ON habit_periods
-BEGIN
-  SELECT RAISE(ABORT, 'habit periods are never deleted: correct a wrong one with UPDATE');
-END;
-CREATE TRIGGER habit_periods_source_fixed BEFORE UPDATE OF source ON habit_periods
-  WHEN NEW.source IS NOT OLD.source
-BEGIN
-  -- provenance is written at insert and never changed, as on entities and links (lifelog_meta.source);
-  -- the WHEN clause lets full-row updates through
-  SELECT RAISE(ABORT, 'habit_periods.source is written at insert and never changed');
-END;
-
-CREATE TRIGGER habit_periods_identity_fixed BEFORE UPDATE ON habit_periods
- WHEN NEW.id IS NOT OLD.id
-BEGIN SELECT RAISE(ABORT, 'habit-period identity is immutable'); END;
 
 CREATE TABLE link_kinds (
   -- the CLOSED registry of link kinds: a link's kind must be registered first (FK), and a kind's
@@ -698,14 +633,6 @@ END;
 CREATE TRIGGER entities_revision_monotonic BEFORE UPDATE OF revision ON entities
  WHEN NEW.revision < OLD.revision
 BEGIN SELECT RAISE(ABORT, 'edit revisions never decrease'); END;
-CREATE TRIGGER habit_periods_touch_insert AFTER INSERT ON habit_periods BEGIN
- UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), revision = revision + 1 WHERE id = NEW.metric_id;
-END;
-CREATE TRIGGER habit_periods_touch_update AFTER UPDATE OF start_day,end_day,metric_id ON habit_periods
- WHEN NEW.start_day IS NOT OLD.start_day OR NEW.end_day IS NOT OLD.end_day OR NEW.metric_id IS NOT OLD.metric_id
-BEGIN
- UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), revision = revision + 1 WHERE id IN (OLD.metric_id,NEW.metric_id);
-END;
 CREATE TRIGGER links_touch_insert AFTER INSERT ON links WHEN NEW.kind <> 'wikilink' BEGIN
  UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), revision = revision + 1 WHERE id = NEW.from_id;
 END;

@@ -54,7 +54,7 @@ func Tools(actions []api.Action, keep func(api.Action) bool) ([]Tool, error) {
 		tools = append(tools, Tool{Name: name, Description: a.Description, Schema: schema, Action: a})
 	}
 	return append(tools,
-		Tool{Name: "get_day", Description: "The day view of one local day (YYYY-MM-DD; default today): its journal page, places, habits and readings.",
+		Tool{Name: "get_day", Description: "The day view of one local day (YYYY-MM-DD; default today): its journal page, places and readings.",
 			Schema: map[string]any{"type": "object", "properties": map[string]any{"day": map[string]any{"type": "string", "format": "date"}}}},
 		Tool{Name: "get", Description: "Follow a link: fetch the resource at an href from an earlier result (e.g. /pages/12).",
 			Schema: map[string]any{"type": "object", "required": []string{"href"},

@@ -51,13 +51,6 @@ func (h *server) currentWeek(*http.Request) (*Entity, error) {
 	return nil, redirect{weekHref(t)}
 }
 
-// weekHabit is a habit over a week: the days it was done, of the days it was active.
-type weekHabit struct {
-	Metric     string `json:"metric"`
-	Done       int    `json:"done"`
-	ActiveDays int    `json:"active_days"`
-}
-
 // weekMetric is a metric read in a week: its current readings, their mean, and the mean of the week before.
 type weekMetric struct {
 	Metric       string   `json:"metric"`
@@ -88,21 +81,7 @@ func (h *server) week(r *http.Request) (*Entity, error) {
 		e.Entities = append(e.Entities, link("day", dayHref(d.Day), d.Day))
 	}
 
-	// The habits use the count of the habits view, so a habit counts the same on both pages. A week in progress
-	// counts through today, so a Monday does not read as six days missed; a week to come counts nothing.
-	habits := []weekHabit{}
-	end := min(through, today)
-	var completion []core.Completion
-	if from <= end {
-		if completion, err = h.s.Completion(ctx, from, end); err != nil {
-			return nil, err
-		}
-	}
-	for _, c := range completion {
-		habits = append(habits, weekHabit{Metric: c.Metric, Done: c.Done, ActiveDays: c.ActiveDays})
-	}
-
-	// A metric is shown when it has a reading in the week. A habit is told by its count above.
+	// A metric is shown when it has a reading in the week.
 	inUse, err := h.s.InUse(ctx, through, 14) // the week and the week before
 	if err != nil {
 		return nil, err
@@ -117,7 +96,7 @@ func (h *server) week(r *http.Request) (*Entity, error) {
 	}
 	metrics := []weekMetric{}
 	for _, m := range all {
-		if m.Habit || !used[m.Name] {
+		if !used[m.Name] {
 			continue
 		}
 		// A series is (from, to], so the day before the previous week starts it.
@@ -152,7 +131,7 @@ func (h *server) week(r *http.Request) (*Entity, error) {
 		link("next", weekHref(next), weekName(next)), link("month", monthHref(thursday), thursday.Format(layoutMonth)),
 		link("year", yearHref(thursday.Year()), strconv.Itoa(thursday.Year())), link("index", "/", "Home")}
 	e.Properties = map[string]any{"week": weekKey(monday), "from": from, "through": through, "today": today,
-		"days": days, "habits": habits, "metrics": metrics, "occurrences": occurrences}
+		"days": days, "metrics": metrics, "occurrences": occurrences}
 	return e, nil
 }
 

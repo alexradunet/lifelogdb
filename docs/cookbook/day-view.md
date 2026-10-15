@@ -1,7 +1,7 @@
 # The day view
 
-The day's page, other pages written that day, the places the owner was at, the habits active that
-day with their state ([habits](habits.md)), and the other measurements (through `measurement_values`, so corrected readings never show).
+The day's page, other pages written that day, the places the owner was at, and the measurements (through
+`measurement_values`, so corrected readings never show).
 `ORDER BY (at IS NOT NULL), at` puts undated items — the day page first — before the rest on purpose;
 a bare `ORDER BY at` does it by accident.
 
@@ -23,22 +23,11 @@ SELECT what, at, detail FROM (
     JOIN entity_names pl ON pl.entity_id = e.id AND pl.name_key = e.preferred_name_key
    WHERE d.preferred_name_key = :day AND d.day = :day AND d.deleted_at IS NULL
   UNION ALL
-  SELECT 'habit', NULL, m.title || ': ' ||
-         CASE WHEN EXISTS (SELECT 1 FROM measurement_values v WHERE v.metric_id = e.id AND v.day = :day AND v.value NOT IN (0, 1))
-           THEN 'invalid'
-           ELSE CASE (SELECT max(v.value) FROM measurement_values v WHERE v.metric_id = e.id AND v.day = :day)
-             WHEN 1 THEN 'done' WHEN 0 THEN 'not done' ELSE 'not recorded' END END
-    FROM habit_periods h JOIN entities e ON e.id = h.metric_id AND e.deleted_at IS NULL
-    JOIN entity_names m ON m.entity_id = e.id AND m.name_key = e.preferred_name_key
-   WHERE h.start_day <= :day AND coalesce(h.end_day, '9999-12-31') >= :day
-  UNION ALL
   SELECT p.title, me.taken_at, CAST(me.value AS TEXT) || ' ' || m.unit
     FROM measurement_values me JOIN metrics m ON m.id = me.metric_id
     JOIN entities e ON e.id = m.id AND e.deleted_at IS NULL
     JOIN entity_names p ON p.entity_id = e.id AND p.name_key = e.preferred_name_key
    WHERE me.day = :day
-     AND NOT EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = me.metric_id
-                        AND h.start_day <= :day AND coalesce(h.end_day, '9999-12-31') >= :day)
 )
 ORDER BY (at IS NOT NULL), at;
 ```

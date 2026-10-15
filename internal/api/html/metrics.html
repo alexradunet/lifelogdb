@@ -1,23 +1,8 @@
-{{/* The metrics, in one of two lenses (docs/plans/111-one-metrics-view.md): the metrics filed by category (D26), or the
-     habits of a day (D24) with their check-ins and completion. ?show=habits chooses the second. */}}
+{{/* The metrics filed by category (D26), as cards (docs/plans/112-metrics-as-cards.md). */}}
 {{define "metrics"}}{{template "head" .}}
-{{$lens := ""}}{{with .Props.show}}{{$lens = .}}{{end}}{{$h := .Props}}
-<header class="page-head"><div class="what">{{if eq $lens "habits"}}<span class="date">{{$.Date $h.day}}</span>{{end}}<h1>Metrics</h1>
-<p class="sub"><a href="/metrics"{{if ne $lens "habits"}} aria-current="true"{{end}}>By category</a><a href="/metrics?show=habits"{{if eq $lens "habits"}} aria-current="true"{{end}}>Habits</a>{{if eq $lens "habits"}}<a href="/days/{{$h.day}}">{{weekday $h.day}}: the day view</a>{{end}}</p></div>
-<div class="tools">{{if eq $lens "habits"}}{{$prev := shortDay (addDays $h.day -1)}}{{$next := shortDay (addDays $h.day 1)}}{{template "step" (dict "href" (.Link "prev") "rel" "prev" "label" (printf "Previous day, %s" $prev) "text" $prev)}}{{template "step" (dict "href" (.Link "next") "rel" "next" "label" (printf "Next day, %s" $next) "text" $next)}}{{else}}{{with .Action "register-metric"}}{{template "new-metric" (dict "action" . "view" $)}}{{end}}{{with .Action "file-pages"}}<a class="button" href="/metrics?new=file-pages#pick">New category</a>{{end}}{{end}}</div></header>
-{{if eq $lens "habits"}}{{with $h.habits}}<div class="scroll"><table><caption>Every habit active on this day, and what it was</caption>
-<thead><tr><th scope="col">habit</th><th scope="col">state</th><th scope="col">record</th></tr></thead>
-<tbody>{{range .}}{{$href := printf "/metrics/%s" (pathesc .metric)}}{{$name := .metric}}
-<tr><td><a href="{{$href}}">{{.metric}}</a></td>
-<td><span class="tag{{if eq .state "done"}} done{{else if or (eq .state "not done") (eq .state "invalid")}} notdone{{end}}">{{.state}}</span></td>
-<td>{{with $.ActionFor "check-in" $href}}{{template "checkin" (dict "action" . "label" (printf "Check in %s" $name) "back" $.Here)}}{{end}}</td></tr>{{end}}
-</tbody></table></div>
-{{else}}<p><small>No habit is active on this day. A habit is a unitless metric with a period: start one from its metric's page.</small></p>{{end}}
-{{with $h.completion}}<h2>{{$.Date $h.from}} to {{$.Date $h.to}}</h2><div class="scroll"><table><caption>How often each habit was recorded in this window</caption>
-<thead><tr><th scope="col">habit</th><th scope="col" class="num">done</th><th scope="col" class="num">not done</th><th scope="col" class="num">not recorded</th><th scope="col" class="num">invalid</th><th scope="col" class="num">active days</th></tr></thead>
-<tbody>{{range .}}<tr><td>{{.metric}}</td><td class="num">{{num .done}}</td><td class="num">{{num .not_done}}</td><td class="num">{{num .not_recorded}}</td><td class="num">{{num .invalid}}</td><td class="num">{{num .active_days}}</td></tr>{{end}}</tbody>
-</table></div>{{end}}
-{{else}}{{$file := .Action "file-pages"}}{{$new := .Action "register-metric"}}{{$sections := .MetricSections}}
+<header class="page-head"><div class="what"><h1>Metrics</h1></div>
+<div class="tools">{{with .Action "register-metric"}}{{template "new-metric" (dict "action" . "view" $)}}{{end}}{{with .Action "file-pages"}}<a class="button" href="/metrics?new=file-pages#pick">New category</a>{{end}}</div></header>
+{{$file := .Action "file-pages"}}{{$new := .Action "register-metric"}}{{$sections := .MetricSections}}
 <datalist id="metric-categories">{{range $.Props.categories}}<option value="{{.title}}">{{.path}}</option>{{end}}</datalist>
 {{if gt (len $sections) 1}}<nav class="kinds jump" aria-label="Groups">{{range $sections}}<a href="#{{.Anchor}}">{{.Title}} <small>{{.Count}}</small></a>{{end}}</nav>{{end}}
 <div class="pick-list">
@@ -28,39 +13,36 @@
 {{with .Cards}}{{template "metric-cards" (dict "cards" . "file" $file "view" $)}}{{end}}{{end}}
 </section>{{else}}<p class="empty">No metric yet. Make the first one with New metric.</p>{{end}}
 {{with $file}}{{if $sections}}{{template "pick-bar" (dict "v" $ "file" . "list" "metric-categories" "back" "/metrics" "words" "Check the cards, then type a category. A new name makes a new category.")}}{{end}}{{end}}</div>
-{{end}}
 {{template "foot" .}}{{end}}
 
 {{/* The one page of a metric (docs/plans/100-one-page-a-metric.md). The head: its kind, its categories and its latest
-     reading. The sheet: Add a reading first (a habit's Check in, while it is one), then the chart and every reading in one
+     reading. The sheet: Add a reading first, then the chart and every reading in one
      fold a year, newest first. The margin: the metric as a page (D27), with its text, the pages that mention it, its
-     habit, its links and its other actions. In a browser, the metric's page (/pages/{id}) opens this one. */}}
+     links and its other actions. In a browser, the metric's page (/pages/{id}) opens this one. */}}
 {{define "metric"}}{{template "head" .}}
-{{$s := .Props}}{{$r := .MetricReadings}}{{$checkIn := .Action "check-in"}}
+{{$s := .Props}}{{$r := .MetricReadings}}
 {{$today := ""}}{{with .Shell}}{{$today = .Today}}{{end}}{{$unit := ""}}{{with $s.unit}}{{$unit = .}}{{end}}
-<header class="page-head"><div class="what"><span class="kind">{{if $checkIn}}habit{{else}}metric{{end}}</span><h1>{{.Title}}</h1>
+<header class="page-head"><div class="what"><span class="kind">metric</span><h1>{{.Title}}</h1>
 {{template "categories" (dict "v" $ "links" $s.links "back" $.Here)}}
 <p class="sub">{{if not $s.all_history}}<a href="{{.Link "all-readings"}}">All readings</a>{{end}}<a href="/metrics">Every metric</a></p></div>
-{{if not $r.Habit}}{{with $r.Latest}}<div class="tools"><div class="reading-tile"><span class="name">Latest, {{$.Date .day}}</span>
-<a class="reading" href="/measurements/{{num .id}}">{{num .value}}{{with $unit}} <span class="unit">{{.}}</span>{{end}}</a></div></div>{{end}}{{end}}
+{{with $r.Latest}}<div class="tools"><div class="reading-tile"><span class="name">Latest, {{$.Date .day}}</span>
+<a class="reading" href="/measurements/{{num .id}}">{{num .value}}{{with $unit}} <span class="unit">{{.}}</span>{{end}}</a></div></div>{{end}}
 </header>
 
 <div class="sheet-margin">
 <div class="sheet">
-{{if $checkIn}}<section class="record" id="record" aria-label="Check in"><h2>Check in today</h2>
-{{template "checkin" (dict "action" $checkIn "label" (printf "Check in %s today" .Title) "back" $.Here)}}</section>
-{{else}}{{with .Action "record"}}<section class="record" id="record" aria-label="Add a reading"><h2>Add a reading</h2>
-{{template "form" (form . "metric" $.Title "button" "Add" "more" "taken_at,tz,import_key" "placeholder" (printf "value=%s" $unit) "back" $.Here)}}</section>{{end}}{{end}}
+{{with .Action "record"}}<section class="record" id="record" aria-label="Add a reading"><h2>Add a reading</h2>
+{{template "form" (form . "metric" $.Title "button" "Add" "more" "taken_at,tz,import_key" "placeholder" (printf "value=%s" $unit) "back" $.Here)}}</section>{{end}}
 
 <section class="readings-all" aria-label="Readings">
 <div class="panel-head"><h2>Readings</h2><span class="meta">{{len $s.readings}}</span></div>
 {{if or (not $s.all_history) (ne $s.to $today)}}<p class="desc">{{if not $s.all_history}}{{$.Date $s.from}} to {{$.Date $s.to}}.{{else}}All history through {{$.Date $s.to}}.{{end}}</p>{{end}}
-{{if and $s.readings (not $r.Habit)}}{{chart $s.from $s.to $s.readings}}{{end}}
+{{if $s.readings}}{{chart $s.from $s.to $s.readings}}{{end}}
 {{range $r.Years}}{{$year := .Year}}<details class="readings-year"{{if .Open}} open{{end}}><summary><span class="year-name">{{.Year}}</span> <span class="meta">{{.Summary}}</span></summary>
 {{template "readings" (dict "v" $ "r" $r "s" $s "rows" .Rows)}}
-{{with .More}}<details class="readings-more"><summary>{{len .}} more {{if $r.Habit}}check-ins{{else}}readings{{end}} of {{$year}}</summary>
+{{with .More}}<details class="readings-more"><summary>{{len .}} more readings of {{$year}}</summary>
 {{template "readings" (dict "v" $ "r" $r "s" $s "rows" .)}}</details>{{end}}</details>
-{{else}}<p class="empty">{{if $s.all_history}}No reading yet. {{if $checkIn}}Check in above.{{else}}Add the first one above.{{end}}{{else}}No reading in this window. <a href="{{.Link "all-readings"}}">All readings</a> has the rest.{{end}}</p>{{end}}
+{{else}}<p class="empty">{{if $s.all_history}}No reading yet. Add the first one above.{{else}}No reading in this window. <a href="{{.Link "all-readings"}}">All readings</a> has the rest.{{end}}</p>{{end}}
 </section>
 </div>
 
@@ -80,14 +62,6 @@
 {{else}}<p class="empty">No page names {{.Title}} yet. Write [[{{.Title}}]] in a day, and the day is listed here.</p>{{end}}
 </section>
 
-{{if or $s.habit_periods (.Action "start-habit")}}<section class="group" aria-label="Habit"><div class="panel-head"><h2>Habit</h2><a href="/metrics?show=habits">Every habit</a></div>
-{{with $s.habit_periods}}<ul class="plain">{{range .}}<li>From {{$.Date .start_day}}{{with .end_day}} to {{$.Date .}}{{else}}, ongoing{{end}}</li>{{end}}</ul>
-{{else}}<p class="empty">Not a habit. Start it, and check it in each day as done or not done.</p>{{end}}
-<div class="actions">{{template "boxed" (form $checkIn "button" "Check in another day" "choices:done" "1 0" "back" $.Here)}}
-{{template "boxed" (form (.Action "start-habit") "back" $.Here)}}
-{{template "boxed" (form (.Action "stop-habit") "back" $.Here)}}</div>
-</section>{{end}}
-
 <section class="group" aria-label="Links"><h2>Links</h2>
 {{with $s.links}}<dl>{{range group . "kind"}}<dt>{{.Key}}</dt>
 <dd>{{range .Items}}<a href="/pages/{{num .id}}">{{$.Date .title}}</a>{{with .note}} <small>({{.}})</small>{{end}}{{end}}</dd>{{end}}</dl>
@@ -97,7 +71,6 @@
 </section>
 
 <section class="group" aria-label="More"><h2>More</h2><div class="actions">
-{{if $checkIn}}{{template "boxed" (form (.Action "record") "button" "Add a value" "metric" $.Title "more" "taken_at,tz,import_key" "back" $.Here)}}{{end}}
 {{template "boxed" (form (.Action "rename"))}}
 {{template "boxed" (form (.Action "tombstone"))}}</div>
 </section>
@@ -108,25 +81,20 @@
 {{/* readings is a table of a metric's readings, newest first: a year's newest ones, or the rest of that year. It takes
      v (the view), r (MetricReadings), s (the series) and rows. */}}
 {{define "readings"}}{{$v := .v}}{{$r := .r}}{{$s := .s}}<div class="scroll"><table>
-<thead><tr><th scope="col">day</th><th scope="col" class="num">{{if $r.Habit}}check-in{{else}}value{{end}}</th>{{if $r.Times}}<th scope="col">taken at</th>{{end}}</tr></thead>
-<tbody>{{range .rows}}<tr><td><a href="/days/{{.day}}">{{$v.Date .day}}</a></td><td class="num"><a href="/measurements/{{num .id}}">{{if $r.Habit}}{{if eq (num .value) "1"}}done{{else if eq (num .value) "0"}}not done{{else}}{{num .value}}{{end}}{{else}}{{num .value}}{{end}}</a></td>{{if $r.Times}}<td>{{with .taken_at}}{{$v.When .}}{{end}}</td>{{end}}</tr>
+<thead><tr><th scope="col">day</th><th scope="col" class="num">value</th>{{if $r.Times}}<th scope="col">taken at</th>{{end}}</tr></thead>
+<tbody>{{range .rows}}<tr><td><a href="/days/{{.day}}">{{$v.Date .day}}</a></td><td class="num"><a href="/measurements/{{num .id}}">{{num .value}}</a></td>{{if $r.Times}}<td>{{with .taken_at}}{{$v.When .}}{{end}}</td>{{end}}</tr>
 {{end}}</tbody></table></div>{{end}}
 
 {{/* metric-cards is a grid of metric cards: a card is the metric's name, its latest reading with its unit and its day,
-     and the line of its recent readings; a habit's card is its state today, its strip and its check-in. With the
-     file-pages action, each card has a box that the file bar's form reads (form="pick"): a habit's check-in
-     is a form of its own, and a form never holds a form. The boxes show while the file bar is open. */}}
-{{define "metric-cards"}}{{$v := .view}}{{$file := .file}}<div class="readings metric-cards">{{range .cards}}<div class="reading-tile metric-card{{if .Stale}} stale{{end}}{{if .Habit}} habit-card{{end}}">
+     and the line of its recent readings. With the file-pages action, each card has a box that the file bar's form
+     reads (form="pick"), and a form never holds a form. The boxes show while the file bar is open. */}}
+{{define "metric-cards"}}{{$v := .view}}{{$file := .file}}<div class="readings metric-cards">{{range .cards}}<div class="reading-tile metric-card{{if .Stale}} stale{{end}}">
 {{if $file}}<label class="pick-box"><input type="checkbox" name="ids" value="{{.ID}}" form="pick" aria-label="Select {{.Name}}"></label>{{end}}
 <a class="name" href="{{.Href}}"{{with .Note}} title="{{.}}"{{end}}>{{.Name}}</a>
-{{if .Habit}}{{range .Categories}}<span class="badge">{{.}}</span>{{end}}<span class="tag{{if eq .State "done"}} done{{else if or (eq .State "not done") (eq .State "invalid")}} notdone{{end}}">{{.State}}</span>
-{{if .Strip.Cells}}<span class="habit-days"><span class="strip" role="img" aria-label="done on {{.Strip.Done}} of its {{.Strip.Active}} active days of the last 14">{{range .Strip.Cells}}<i class="{{.State}}" title="{{.Title}}"></i>{{end}}</span>
-<span class="meta">{{.Strip.Done}} of {{.Strip.Active}} days</span></span>{{end}}
-{{$name := .Name}}{{with $v.ActionFor "check-in" .Href}}{{template "checkin" (dict "action" . "label" (printf "Check in %s" $name) "back" $v.Here)}}{{end}}
-{{else if .Measurement}}<a class="reading" href="/measurements/{{.Measurement}}">{{.Value}}{{with .Unit}} <span class="unit">{{.}}</span>{{end}}</a>
+{{if .Measurement}}<a class="reading" href="/measurements/{{.Measurement}}">{{.Value}}{{with .Unit}} <span class="unit">{{.}}</span>{{end}}</a>
 <span class="meta">{{.When}}{{if gt .Count 1}} · {{.Count}} readings{{end}}</span>
 {{.Line}}{{else}}<span class="meta">No reading yet{{with .Unit}} · {{.}}{{end}}</span>{{end}}
-{{if not .Habit}}{{template "add-reading" (dict "action" ($v.Action "record") "metric" .Name "unit" .Unit "day" $v.Props.today "today" $v.Props.today "back" "/metrics")}}{{end}}
+{{template "add-reading" (dict "action" ($v.Action "record") "metric" .Name "unit" .Unit "day" $v.Props.today "today" $v.Props.today "back" "/metrics")}}
 </div>{{end}}</div>{{end}}
 
 {{/* new-here is the link under a category's heading to New metric, with the category filled in */}}
@@ -134,7 +102,7 @@
 
 {{/* new-metric is the New metric fold of /metrics (docs/plans/113-new-metric-on-metrics.md): "What do you record?"
      switches three forms of register-metric with CSS, with no script. A number sends its unit, a score its range,
-     and done or not done no unit and today as habit_from. The kind input is for the page only: a refused form opens
+     and done or not done no unit. The kind input is for the page only: a refused form opens
      again on its own kind. ?new=register-metric opens the fold, and ?category= fills in the category. */}}
 {{define "new-metric"}}{{$v := .view}}{{$a := .action}}{{$refused := and $v.Refused (eq $v.Refused.Href $a.Href)}}
 {{$kind := "number"}}{{$cat := $v.Asked "category"}}{{if $refused}}{{with $v.Sent.Get "kind"}}{{$kind = .}}{{end}}{{$cat = $v.Sent.Get "category"}}{{end}}
@@ -154,8 +122,8 @@
 <p class="desc">A unit never changes. For another unit, make a new metric.</p>
 {{else if eq $k "score"}}<label><span>Range <small>required</small></span><input type="text" name="unit" required pattern="[0-9]+-[0-9]+" value="{{if $mine}}{{$v.Sent.Get "unit"}}{{end}}" placeholder="1-5"></label>
 <p class="desc">The lowest and the highest score, as 1-5. The range never changes.</p>
-{{else}}<input type="hidden" name="unit" value=""><input type="hidden" name="habit_from" value="{{$v.Props.today}}">
-<p class="desc">A habit. You check it in each day as done or not done, from today.</p>{{end}}
+{{else}}<input type="hidden" name="unit" value="">
+<p class="desc">A habit: you record 1 (done) or 0 (not done) a day.</p>{{end}}
 <label><span>Category</span><input type="text" name="category" list="metric-categories" value="{{$cat}}" placeholder="Bloodwork, Sport, Financial"></label>
 <label><span>Note</span><input type="text" name="note" value="{{if $mine}}{{$v.Sent.Get "note"}}{{end}}" placeholder="What it measures, and how"></label>
 <button class="primary">Create</button></form>{{end}}

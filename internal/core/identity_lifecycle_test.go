@@ -60,39 +60,6 @@ func TestPromotionRefusesRetainedTypedEdges(t *testing.T) {
 	}
 }
 
-func TestMoodHabitRegistrationRefusedAtomically(t *testing.T) {
-	s := fresh(t)
-	err := s.Do(ctx, "cli", func(tx *Tx) error {
-		if _, _, _, err := tx.CreatePage("Rollback witness", "prose", "2026-10-06", ""); err != nil {
-			return err
-		}
-		return tx.StartHabit("Mood", "2026-10-06", "")
-	})
-	if err == nil {
-		t.Fatal("Mood habit accepted")
-	}
-	id, err := s.PageID(ctx, "Rollback witness")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if id != 0 {
-		t.Fatal("partial prose survived refusal")
-	}
-	var periods int
-	if err := s.DB.R.QueryRow(`SELECT count(*) FROM habit_periods WHERE metric_id=1`).Scan(&periods); err != nil {
-		t.Fatal(err)
-	}
-	if periods != 0 {
-		t.Fatalf("Mood retained %d periods", periods)
-	}
-	if _, _, err := s.Capture(ctx, "cli", "2026-10-06", "ordinary mood", ptr(4)); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.DB.W.Exec(`INSERT INTO habit_periods(metric_id,start_day,source) VALUES(1,'2026-10-07','cli')`); err == nil {
-		t.Fatal("DDL accepted Mood habit")
-	}
-}
-
 func TestLinkFieldsImmutable(t *testing.T) {
 	s := fresh(t)
 	a, _, err := s.CreatePage(ctx, "cli", "Page A", "", "")

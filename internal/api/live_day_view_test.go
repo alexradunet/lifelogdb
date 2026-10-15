@@ -1,12 +1,15 @@
 package api_test
 
-import "testing"
+import (
+	"fmt"
+	"strings"
+	"testing"
+)
 
 func TestLiveDayView(t *testing.T) {
 	c, _ := fresh(t)
 	root := must(c.Get(t.Context(), "/"))
 	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "Walk"}))
-	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/metrics/Walk")), "start-habit"), map[string]string{"start_day": "2026-09-01"}))
 	must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "Walk", "day": "2026-09-01", "value": "1"}))
 	page := must(c.Get(t.Context(), "/pages?title=Walk"))
 	for i, hidden := range []bool{false, true, false} {
@@ -23,10 +26,10 @@ func TestLiveDayView(t *testing.T) {
 		listed := false
 		for _, v := range props["view"].([]any) {
 			row := v.(map[string]any)
-			listed = listed || row["what"] == "habit" && row["detail"] == "Walk: done"
+			listed = listed || row["what"] == "Walk" && strings.HasPrefix(fmt.Sprint(row["detail"]), "1")
 		}
 		if listed == hidden {
-			t.Errorf("habit visibility hidden=%v: %v", hidden, props["view"])
+			t.Errorf("reading visibility hidden=%v: %v", hidden, props["view"])
 		}
 		if len(props["readings"].([]any)) != 1 {
 			t.Error("historical reading lost")

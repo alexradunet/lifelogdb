@@ -157,8 +157,8 @@ func planning(s *S) {
 
 func planningIntegrity(s *S) {
 	checks := statements(sqlBlocks(s.d.Page("contract/integrity-checks.md"))[0])
-	if len(checks) != 13 {
-		stop("planning integrity needs thirteen literal statements, got %d", len(checks))
+	if len(checks) != 11 {
+		stop("planning integrity needs eleven literal statements, got %d", len(checks))
 	}
 	c := planningDB(s, "planning-integrity")
 	project := c.page("Integrity project")

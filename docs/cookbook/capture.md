@@ -19,9 +19,9 @@ UPDATE entities SET body = body || CASE WHEN body = '' THEN '' ELSE char(10, 10)
                         || 'Shipped the schema doc. Review pending. [[Lifelog]]'
  WHERE id = :page_id;
 -- the body names [[Lifelog]]: the link sync of cookbook/save-a-body.md runs here, inside this same transaction
--- optional mood: the app requires a live metric and validates the value under D6 and D24
+-- optional mood: the app requires a live metric and validates the value under D6
 -- before inserting; a missing metric or refused value rolls back the entire capture
--- (docs/decisions/D06-mood-is-a-measurement.md, docs/decisions/D24-habits.md)
+-- (docs/decisions/D06-mood-is-a-measurement.md)
 -- attached to the page it belongs to (D6):
 INSERT INTO measurements(metric_id, day, value, source, captured_with_id, created_at)
 SELECT e.id, '2026-09-29', 4, 'ui', :page_id, strftime('%Y-%m-%dT%H:%M:%fZ','now')

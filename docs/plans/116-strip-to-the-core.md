@@ -106,3 +106,11 @@ flowchart LR
   D11, D16, D20, D26, the cookbook recipes everything-about and days-that-name, the integrity contract and the
   schema README edited; README and API.md say the current truth. Checks: `go generate ./... && go vet ./... &&
   go test ./...` green.
+- **Step 7 (habits).** Removed: the `habit_periods` table and its seven triggers, `measurements_habit_binary`,
+  the two habit queries of the integrity checks, `start-habit`, `stop-habit`, `check-in` and `register-metric`'s
+  `habit_from`, `/habits` and the Habits lens of Metrics, the habits of Home, of a day and of a week with their
+  strips, the Habits group, the CLI's `habits`, `done` and `skip`, the cookbook recipe habits, the `habits` suite
+  and 40 mutants. A habit is a unitless metric with a reading of 1 or 0 a day. Record: issue 0078, RFC 0018; D24
+  rewritten, D06, D07, D12, D15, D26, D27, the day view and metrics-by-category recipes, the integrity contract, the
+  entity model, the 2075 table (one question fewer) and the schema README edited; README and API.md say the current
+  truth. Checks: `go generate ./... && go vet ./... && go test ./...` green.

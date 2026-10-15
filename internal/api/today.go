@@ -7,8 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"lifelog/internal/core"
 )
 
 // The richer Today (docs/plans/093-words-phone-and-today.md): a reading's tile with its unit and the line of its
@@ -160,40 +158,4 @@ func line(label string, pts []linePoint) template.HTML {
 	}
 	fmt.Fprintf(&sb, `"/><circle cx="%.1f" cy="%.1f" r="2.5"/></svg>`, last.x, y(last.value))
 	return template.HTML(sb.String())
-}
-
-// habitCell is one day of a habit's strip.
-type habitCell struct {
-	State, Title string
-}
-
-// habitStrip is a habit's last 14 days: a cell each, and how many of its active days were done.
-type habitStrip struct {
-	Cells        []habitCell
-	Done, Active int
-}
-
-// HabitStrip draws a habit's recent states, oldest first, ending on the entity's day (a day's, or the root's today).
-func (v *view) HabitStrip(recent any) habitStrip {
-	props, _ := v.Props.(map[string]any)
-	end, _ := props["day"].(string)
-	if end == "" {
-		end, _ = props["today"].(string)
-	}
-	states, _ := recent.([]any)
-	var s habitStrip
-	last, _ := dayOf(end)
-	c := v.clock()
-	for i, x := range states {
-		state, _ := x.(string)
-		d := last.AddDate(0, 0, i-(len(states)-1)).Format(time.DateOnly)
-		s.Cells = append(s.Cells, habitCell{State: strings.ReplaceAll(state, " ", "-"), Title: c.day(d) + ": " + state})
-		if state != "inactive" {
-			s.Active++
-		}
-		if state == core.StateDone {
-			s.Done++
-		}
-	}
-	return s
 }

@@ -19,8 +19,6 @@ type IntegrityResult struct {
 	InvalidOneOffTasks            []int64  `json:"invalid_one_off_tasks"`
 	InvalidTaskOccurrences        []int64  `json:"invalid_task_occurrences"`
 	InvalidMeasurementChains      []int64  `json:"invalid_measurement_chains"`
-	InvalidHabitPeriods           []int64  `json:"invalid_habit_periods"`
-	InvalidHabitReadings          []int64  `json:"invalid_habit_readings"`
 	InvalidJournalNames           []int64  `json:"invalid_journal_names"`
 	FullTextIndexOK               bool     `json:"full_text_index_ok"`
 	FullTextError                 string   `json:"full_text_error,omitempty"`
@@ -77,13 +75,6 @@ func (r *IntegrityResult) idChecks() []idCheck {
  SELECT m.id FROM measurements m JOIN rooted r ON m.supersedes_id=r.id
 )
 SELECT id FROM measurements EXCEPT SELECT id FROM rooted ORDER BY id`, &r.InvalidMeasurementChains},
-		{"habit period semantics", `SELECT h.id FROM habit_periods h LEFT JOIN metrics m ON m.id=h.metric_id
- WHERE m.id IS NULL OR m.unit<>'' OR EXISTS
- (SELECT 1 FROM habit_periods p WHERE p.metric_id=h.metric_id AND p.id<>h.id
-  AND p.start_day<=coalesce(h.end_day,'9999-12-31') AND coalesce(p.end_day,'9999-12-31')>=h.start_day)
- ORDER BY h.id`, &r.InvalidHabitPeriods},
-		{"habit reading values", `SELECT v.id FROM measurement_values v WHERE v.value NOT IN (0,1)
- AND EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id=v.metric_id) ORDER BY v.id`, &r.InvalidHabitReadings},
 		{"journal name ownership", `SELECT n.id FROM entity_names n JOIN entities e ON e.id=n.entity_id
  WHERE (length(n.name_key)=10 AND date(n.name_key) IS n.name_key
    AND (e.entity_type<>'page' OR e.preferred_name_key IS NOT n.name_key OR e.day IS NOT n.name_key OR n.title IS NOT n.name_key))

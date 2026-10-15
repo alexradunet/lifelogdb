@@ -21,35 +21,34 @@ func TestRegisterMetricTakesACategoryAndAHabit(t *testing.T) {
 	var fields []string
 	for _, f := range register.Fields {
 		fields = append(fields, f.Name)
-		if (f.Name == "category" || f.Name == "habit_from") && f.Required {
+		if f.Name == "category" && f.Required {
 			t.Errorf("%s is required, want optional", f.Name)
 		}
 	}
-	if !slices.Equal(fields, []string{"name", "unit", "note", "category", "habit_from"}) {
+	if !slices.Equal(fields, []string{"name", "unit", "note", "category"}) {
 		t.Errorf("register-metric fields: %v", fields)
 	}
 
-	// "today" is the server's day, as a check-in reads it.
-	walk := must(c.Do(ctx, register, map[string]string{"name": "Walk", "category": "Sport", "habit_from": "today"}))
-	if walk.Result != "New metric Walk, in Sport, a habit from "+fixedToday+"." {
+	walk := must(c.Do(ctx, register, map[string]string{"name": "Walk", "category": "Sport"}))
+	if walk.Result != "New metric Walk, in Sport." {
 		t.Errorf("the answer's sentence: %v", walk.Result)
 	}
-	if got, want := groupsOf(t, c), "Habits:Walk Not filed:Mood"; got != want {
+	if got, want := groupsOf(t, c), "Sport:Walk Not filed:Mood"; got != want {
 		t.Errorf("groups %q, want %q", got, want)
 	}
 	if got := props(must(c.Get(ctx, "/metrics/Walk")))["categories"]; !slices.Equal(anyStrings(got), []string{"Sport"}) {
 		t.Errorf("Walk's categories %v, want [Sport]", got)
 	}
 
-	// A refused habit writes nothing: neither the metric nor its category.
-	if _, err := c.Do(ctx, register, map[string]string{"name": "Run", "unit": "km", "category": "Running", "habit_from": "today"}); err == nil {
-		t.Fatal("a habit of a metric with a unit was written")
+	// A refused metric writes nothing: neither the metric nor its category.
+	if _, err := c.Do(ctx, register, map[string]string{"name": "Run", "unit": "km", "category": "2031-05-01"}); err == nil {
+		t.Fatal("a metric filed in a day was written")
 	}
-	if got, want := groupsOf(t, c), "Habits:Walk Not filed:Mood"; got != want {
+	if got, want := groupsOf(t, c), "Sport:Walk Not filed:Mood"; got != want {
 		t.Errorf("after a refusal, groups %q, want %q", got, want)
 	}
-	if _, err := c.Get(ctx, "/pages?title=Running"); err == nil {
-		t.Error("a refused register-metric made the category Running")
+	if _, err := c.Get(ctx, "/pages?title=Run"); err == nil {
+		t.Error("a refused register-metric made the metric Run")
 	}
 }
 
@@ -67,7 +66,7 @@ func TestTheMetricsPageMakesAMetricACategoryAndAReading(t *testing.T) {
 
 	page := browse(t, h, "/metrics")
 	for _, want := range []string{`<details class="action new-metric" id="new-metric">`, `<form class="kind-number"`, `<form class="kind-score"`,
-		`<form class="kind-habit"`, `name="habit_from" value="` + fixedToday + `"`, `<a class="button" href="/metrics?new=file-pages#pick">New category</a>`,
+		`<form class="kind-habit"`, `<a class="button" href="/metrics?new=file-pages#pick">New category</a>`,
 		`<input type="radio" name="new-kind" value="number" checked>`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("/metrics lacks %s", want)
@@ -86,26 +85,23 @@ func TestTheMetricsPageMakesAMetricACategoryAndAReading(t *testing.T) {
 
 	// The habit form and the number form, as a browser sends them.
 	for _, form := range []url.Values{
-		{"kind": {"habit"}, "name": {"Walk"}, "unit": {""}, "habit_from": {fixedToday}, "category": {"Sport"}, "note": {""}, "back": {"/metrics"}},
+		{"kind": {"habit"}, "name": {"Walk"}, "unit": {""}, "category": {"Sport"}, "note": {""}, "back": {"/metrics"}},
 		{"kind": {"number"}, "name": {"Weight"}, "unit": {"kg"}, "category": {"Body"}, "note": {"Before breakfast"}, "back": {"/metrics"}},
 	} {
 		rec := submit(h, "/metrics", form, "")
 		if rec.Code != http.StatusSeeOther || !feedbackLocation(rec.Header().Get("Location"), "/metrics") {
 			t.Fatalf("New metric %s: %d %q %.300s", form.Get("name"), rec.Code, rec.Header().Get("Location"), rec.Body.String())
 		}
-		if form.Get("name") == "Walk" && !strings.Contains(browse(t, h, rec.Header().Get("Location")), "New metric Walk, in Sport, a habit from "+fixedToday+".") {
+		if form.Get("name") == "Walk" && !strings.Contains(browse(t, h, rec.Header().Get("Location")), "New metric Walk, in Sport.") {
 			t.Error("the toast does not say what New metric made")
 		}
 	}
 	page = browse(t, h, "/metrics")
 	for _, want := range []string{`href="/metrics?new=register-metric&amp;category=Body#new-metric">+ New metric here</a>`,
-		`aria-label="Add a reading of Weight"`, `aria-label="Check in Walk"`} {
+		`aria-label="Add a reading of Weight"`, `aria-label="Add a reading of Walk"`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("/metrics lacks %s", want)
 		}
-	}
-	if strings.Contains(page, `aria-label="Add a reading of Walk"`) {
-		t.Error("a habit card has the + of a number card")
 	}
 
 	// The card's +: one value, for today.

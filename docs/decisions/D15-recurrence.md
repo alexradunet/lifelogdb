@@ -16,5 +16,5 @@
   retained slot keys. The fixed-cadence and shortening rules avoid a series-version framework.
 - **Costs accepted.** A cadence change starts a new definition. Completion-relative recurrence, multiple weekdays,
   timed appointments and calendar synchronization are [deferred](../architecture/non-goals.md). Birthdays remain a
-  query over `people.birth_day`; habit observations remain measurements ([D24](D24-habits.md)).
+  query over `people.birth_day`; a habit's days remain measurements ([D24](D24-habits.md)).
 - **Sources.** [R51](../research/references.md#r51), [R52](../research/references.md#r52).

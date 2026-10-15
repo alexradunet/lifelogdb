@@ -16,8 +16,8 @@
   page's body, a `[[Lipids]]` in the journal is one of its backlinks, and a rename of the page moves the `part-of`
   links that end at it ([titles and wikilinks](../contract/titles-and-wikilinks.md)). The walk is
   [metrics by category](../cookbook/metrics-by-category.md).
-- **Habits are not a category.** A metric is a habit while it has a period ([D24](D24-habits.md)); a
-  category saying so would be a second home for that fact, and could disagree with it.
+- **A habit is a metric** with 0/1 readings ([D24](D24-habits.md)), filed in a category like any other; a habit is
+  not a category.
 - **Alternatives.**
   - *A free-text `metrics.category`*: rejected — `biomarker` and `biomarkers` become two groups, and there
     are no subgroups.

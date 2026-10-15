@@ -27,21 +27,19 @@ type readingYear struct {
 }
 
 // metricReadings are a series' readings as its page draws them: the folds, newest year first; the newest reading;
-// whether a column of times is needed; and whether the values are a habit's check-ins (D24), said in words.
+// and whether a column of times is needed.
 type metricReadings struct {
 	Years  []readingYear
 	Latest map[string]any
 	Times  bool
-	Habit  bool
 }
 
 // MetricReadings are the series' readings by year, newest first.
 func (v *view) MetricReadings() metricReadings {
 	props, _ := v.Props.(map[string]any)
 	list, _ := props["readings"].([]any)
-	periods, _ := props["habit_periods"].([]any)
 	unit, _ := props["unit"].(string)
-	r := metricReadings{Habit: len(periods) > 0}
+	r := metricReadings{}
 	for i := len(list) - 1; i >= 0; i-- {
 		m, _ := list[i].(map[string]any)
 		day, _ := m["day"].(string)
@@ -60,7 +58,7 @@ func (v *view) MetricReadings() metricReadings {
 	for i := range r.Years {
 		y := &r.Years[i]
 		y.Open = i == 0 || len(list) <= openFolds
-		y.Summary = yearSummary(y.Rows, unit, r.Habit)
+		y.Summary = yearSummary(y.Rows, unit)
 		if len(y.Rows) > newestRows {
 			y.Rows, y.More = y.Rows[:newestRows], y.Rows[newestRows:]
 		}
@@ -77,22 +75,14 @@ func isDayText(day string) bool {
 	return ok && len(day) == 10
 }
 
-// yearSummary is what a closed fold says of its year: "214 readings · 76.2 to 81 kg", or for a habit
-// "9 done, 2 not done".
-func yearSummary(rows []map[string]any, unit string, habit bool) string {
-	var done, notDone float64
+// yearSummary is what a closed fold says of its year: "214 readings · 76.2 to 81 kg".
+func yearSummary(rows []map[string]any, unit string) string {
 	var lo, hi float64
 	n := 0
 	for _, m := range rows {
 		v, ok := m["value"].(float64)
 		if !ok {
 			continue
-		}
-		switch {
-		case habit && v == 1:
-			done++
-		case habit && v == 0:
-			notDone++
 		}
 		if n == 0 || v < lo {
 			lo = v
@@ -101,9 +91,6 @@ func yearSummary(rows []map[string]any, unit string, habit bool) string {
 			hi = v
 		}
 		n++
-	}
-	if habit {
-		return num(done) + " done, " + num(notDone) + " not done"
 	}
 	s := count(float64(len(rows)), "reading", "readings")
 	if n == 0 {
@@ -122,7 +109,7 @@ func yearSummary(rows []map[string]any, unit string, habit bool) string {
 // The metrics as cards (docs/plans/112-metrics-as-cards.md): a section for each top-level group of /metrics, its
 // subcategories inside it, and a card for each metric with its latest reading and the line of its recent ones.
 
-// metricCard is a metric as its card draws it. A habit's card holds its state today and its strip instead.
+// metricCard is a metric as its card draws it.
 type metricCard struct {
 	ID          string
 	Name, Href  string
@@ -133,10 +120,6 @@ type metricCard struct {
 	Line        template.HTML
 	Stale       bool // the latest reading is older than inUseDays
 	Note        string
-	Habit       bool
-	Categories  []string // a habit's categories: it is drawn only under Habits
-	State       string   // today's state; "stopped" for a habit no period holds today
-	Strip       habitStrip
 }
 
 // metricSub is a category under a section's top: its path below the top, its page and its cards.
@@ -145,12 +128,11 @@ type metricSub struct {
 	Cards       []metricCard
 }
 
-// metricSection is one top-level group: Habits, a category, or Not filed. Count is how many metrics it holds, each
+// metricSection is one top-level group: a category, or Not filed. Count is how many metrics it holds, each
 // once, in its subcategories too.
 type metricSection struct {
 	Title, Page, Anchor string
 	Count               int
-	Habits              bool
 	Cards               []metricCard
 	Subs                []metricSub
 }
@@ -168,15 +150,6 @@ func (v *view) MetricSections() []metricSection {
 			}
 		}
 	}
-	habits := map[string]map[string]any{}
-	if hs, _ := props["habit_days"].([]any); hs != nil {
-		for _, x := range hs {
-			if h, _ := x.(map[string]any); h != nil {
-				name, _ := h["metric"].(string)
-				habits[name] = h
-			}
-		}
-	}
 	c := clock{today: today}
 	limit, _ := dayOf(today)
 	limit = limit.AddDate(0, 0, -inUseDays)
@@ -189,9 +162,8 @@ func (v *view) MetricSections() []metricSection {
 		}
 		name, _ := m["name"].(string)
 		unit, _ := m["unit"].(string)
-		habit, _ := m["habit"].(bool)
 		note, _ := m["note"].(string)
-		k := metricCard{ID: id, Name: name, Href: metricHref(name), Unit: unitWords(unit), Note: note, Habit: habit}
+		k := metricCard{ID: id, Name: name, Href: metricHref(name), Unit: unitWords(unit), Note: note}
 		recent, _ := m["recent"].([]any)
 		if n := len(recent); n > 0 {
 			last, _ := recent[n-1].(map[string]any)
@@ -200,21 +172,7 @@ func (v *view) MetricSections() []metricSection {
 			if t, ok := dayOf(day); ok && !limit.IsZero() && t.Before(limit) {
 				k.Stale = true
 			}
-			if !habit {
-				k.Line = sparkLine(name, unit, today, recent)
-			}
-		}
-		if habit {
-			for _, c := range anyList(m["categories"]) {
-				if p, ok := c.(string); ok {
-					k.Categories = append(k.Categories, p)
-				}
-			}
-			k.State = "stopped"
-			if h := habits[name]; h != nil {
-				k.State, _ = h["state"].(string)
-				k.Strip = v.HabitStrip(h["recent"])
-			}
+			k.Line = sparkLine(name, unit, today, recent)
 		}
 		return k
 	}
@@ -226,12 +184,10 @@ func (v *view) MetricSections() []metricSection {
 		depth := num(g["depth"])
 		ms, _ := g["metrics"].([]any)
 		if depth == "0" || len(out) == 0 {
-			s := metricSection{Title: title, Page: num(g["page"]), Habits: g["page"] == nil && title == "Habits"}
+			s := metricSection{Title: title, Page: num(g["page"])}
 			switch {
 			case s.Page != "":
 				s.Anchor = "c-" + s.Page
-			case s.Habits:
-				s.Anchor = "habits"
 			default:
 				s.Anchor = "not-filed"
 			}

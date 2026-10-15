@@ -332,19 +332,9 @@ SELECT what, at, detail FROM (
     JOIN entities pl ON pl.id = l.to_id JOIN entity_names pl_name ON pl_name.entity_id = pl.id AND pl_name.name_key = pl.preferred_name_key AND pl.deleted_at IS NULL
    WHERE d.id = (SELECT entity_id FROM entity_names WHERE name_key = :day) AND d.deleted_at IS NULL
   UNION ALL
-  SELECT 'habit', NULL, m_name.title || ': ' ||
-         CASE WHEN EXISTS (SELECT 1 FROM measurement_values v WHERE v.metric_id = m.id AND v.day = :day AND v.value NOT IN (0, 1))
-           THEN 'invalid'
-           ELSE CASE (SELECT max(v.value) FROM measurement_values v WHERE v.metric_id = m.id AND v.day = :day)
-             WHEN 1 THEN 'done' WHEN 0 THEN 'not done' ELSE 'not recorded' END END
-    FROM habit_periods h JOIN entities m ON m.id = h.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key AND m.deleted_at IS NULL
-   WHERE h.start_day <= :day AND coalesce(h.end_day, '9999-12-31') >= :day
-  UNION ALL
   SELECT p_name.title, me.taken_at, CAST(me.value AS TEXT) || ' ' || m.unit
-    FROM measurement_values me JOIN metrics m ON m.id = me.metric_id JOIN entities p ON p.id = m.id JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
+    FROM measurement_values me JOIN metrics m ON m.id = me.metric_id JOIN entities p ON p.id = m.id AND p.deleted_at IS NULL JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
    WHERE me.day = :day
-     AND NOT EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = me.metric_id
-                        AND h.start_day <= :day AND coalesce(h.end_day, '9999-12-31') >= :day)
 )
 ORDER BY (at IS NOT NULL), at;`
 
@@ -408,20 +398,19 @@ func (s *Store) Search(ctx context.Context, q string, limit, offset int) ([]Hit,
 	return out, rows.Err()
 }
 
-// Metric is a live metric (D27): its page's id, title (its name) and body (its note), its unit; Habit says it has
-// a period (D24), Categories are the paths of the categories it is filed in (D26).
+// Metric is a live metric (D27): its page's id, title (its name) and body (its note), its unit; Categories are the
+// paths of the categories it is filed in (D26).
 type Metric struct {
 	ID         int64    `json:"id"`
 	Name       string   `json:"name"`
 	Unit       string   `json:"unit"`
 	Note       string   `json:"note,omitempty"`
-	Habit      bool     `json:"habit"`
 	Categories []string `json:"categories,omitempty"`
 }
 
 func (s *Store) Metrics(ctx context.Context) ([]Metric, error) {
 	rows, err := s.DB.R.QueryContext(ctx, `
-		SELECT m.id, p_name.title, m.unit, p.body, EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id)
+		SELECT m.id, p_name.title, m.unit, p.body
 		  FROM metrics m JOIN entities p ON p.id = m.id JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key AND p.deleted_at IS NULL
 		 ORDER BY p.preferred_name_key`)
 	if err != nil {
@@ -432,7 +421,7 @@ func (s *Store) Metrics(ctx context.Context) ([]Metric, error) {
 	at := map[int64]int{}
 	for rows.Next() {
 		var m Metric
-		if err := rows.Scan(&m.ID, &m.Name, &m.Unit, &m.Note, &m.Habit); err != nil {
+		if err := rows.Scan(&m.ID, &m.Name, &m.Unit, &m.Note); err != nil {
 			return nil, err
 		}
 		at[m.ID] = len(out)

@@ -195,32 +195,10 @@ func TestRecentReadings(t *testing.T) {
 	}
 }
 
-// habitStarts is the first days of the habit periods of metric id, in order.
-func habitStarts(t *testing.T, s *Store, id int64) []string {
-	t.Helper()
-	rows, err := s.DB.R.QueryContext(ctx, `SELECT start_day FROM habit_periods WHERE metric_id = ? ORDER BY start_day`, id)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rows.Close()
-	out := []string{}
-	for rows.Next() {
-		var day string
-		if err := rows.Scan(&day); err != nil {
-			t.Fatal(err)
-		}
-		out = append(out, day)
-	}
-	if err := rows.Err(); err != nil {
-		t.Fatal(err)
-	}
-	return out
-}
-
-// TestCreateMetric: the metric, its category and its habit are one write (docs/plans/113-new-metric-on-metrics.md).
+// TestCreateMetric: the metric and its category are one write (docs/plans/113-new-metric-on-metrics.md).
 func TestCreateMetric(t *testing.T) {
 	s := fresh(t)
-	added, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "Walk", Category: "Sport", HabitFrom: "2031-05-01"})
+	added, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "Walk", Category: "Sport"})
 	if err != nil || !added {
 		t.Fatalf("CreateMetric = %v, %v; want a new metric", added, err)
 	}
@@ -230,9 +208,6 @@ func TestCreateMetric(t *testing.T) {
 	}
 	if got := partOf(t, s, walk.ID); !slices.Equal(got, []string{"Sport"}) {
 		t.Errorf("Walk is part-of %v, want [Sport]", got)
-	}
-	if got := habitStarts(t, s, walk.ID); !slices.Equal(got, []string{"2031-05-01"}) {
-		t.Errorf("Walk's habit starts %v, want [2031-05-01]", got)
 	}
 
 	// A metric that exists is filed in one more category, and nothing else changes.
@@ -244,7 +219,7 @@ func TestCreateMetric(t *testing.T) {
 		t.Errorf("Walk is part-of %v, want [Daily Sport]", got)
 	}
 
-	// A plain metric with neither: no link and no habit.
+	// A plain metric with no category: no link.
 	weight := func() int64 {
 		if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "Weight", Unit: "kg"}); err != nil {
 			t.Fatal(err)
@@ -253,9 +228,6 @@ func TestCreateMetric(t *testing.T) {
 	}()
 	if got := partOf(t, s, weight); len(got) != 0 {
 		t.Errorf("Weight is part-of %v, want none", got)
-	}
-	if got := habitStarts(t, s, weight); len(got) != 0 {
-		t.Errorf("Weight is a habit from %v, want none", got)
 	}
 }
 
@@ -273,10 +245,8 @@ func TestCreateMetricRefusalsWriteNothing(t *testing.T) {
 		m    NewMetric
 		want int
 	}{
-		{"a habit of a metric with a unit", NewMetric{Name: "Run", Unit: "km", Category: "Sport", HabitFrom: "2031-05-01"}, 422},
 		{"a deleted category", NewMetric{Name: "Run", Unit: "km", Category: "Old Group"}, 409},
 		{"a day as the category", NewMetric{Name: "Run", Unit: "km", Category: "2031-05-01"}, 422},
-		{"a habit from no day", NewMetric{Name: "Run", Category: "Sport", HabitFrom: "May"}, 422},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			_, err := s.CreateMetric(ctx, "cli", c.m)

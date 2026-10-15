@@ -280,7 +280,7 @@ func build(ctx context.Context, s *core.Store, p Profile, o Options) (*fixture, 
 				return e
 			}
 		}
-		return tx.StartHabit(metricNames[3], "1970-01-01", "")
+		return nil
 	})
 	if err != nil {
 		return nil, err

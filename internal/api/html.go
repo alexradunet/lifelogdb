@@ -81,7 +81,6 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 	"yearOf":       func(month string) string { return month[:min(4, len(month))] },
 	"settledFirst": settledFirst,
 	"sinceLast":    sinceLastWeek,
-	"daysOf":       daysOf,
 	"nameWords":    nameWords,
 	"monthName": func(month string) string { // "2026-10" to "October"
 		if t, ok := monthOf(month); ok {
@@ -363,8 +362,8 @@ func (v *view) shown(a *Action) *Action {
 	return &c
 }
 
-// ActionFor is the action of that name on the resource href (a view offering one per item, e.g. a check-in
-// per habit).
+// ActionFor is the action of that name on the resource href (a view offering one per item, e.g. an outcome
+// per occurrence).
 func (v *view) ActionFor(name, href string) *Action {
 	for i := range v.Actions {
 		if a := &v.Actions[i]; a.Name == name && strings.HasPrefix(a.Href, href+"/") {

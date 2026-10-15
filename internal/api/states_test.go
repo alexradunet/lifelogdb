@@ -113,9 +113,8 @@ func TestEveryActionFormCarriesItsName(t *testing.T) {
 	root := must(c.Get(t.Context(), "/"))
 	must(c.Do(t.Context(), find(root, "create-task"), map[string]string{"label": "Book the dentist", "due_day": dayOf(-1)}))
 	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "walk"}))
-	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/metrics/walk")), "start-habit"), map[string]string{"start_day": dayOf(-3)}))
 	body := browse(t, h, "/")
-	for _, name := range []string{"capture", "create-page", "find", "snapshot", "edit-occurrence", "check-in"} {
+	for _, name := range []string{"capture", "create-page", "find", "snapshot", "edit-occurrence"} {
 		if !strings.Contains(body, `data-action="`+name+`"`) {
 			t.Errorf("Home has no form named %s", name)
 		}

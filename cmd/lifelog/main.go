@@ -162,19 +162,6 @@ var commands = []command{
 		run: func(ctx context.Context, e env, args []string) error {
 			return doAction(ctx, e, "search", map[string]string{"q": strings.Join(args, " ")})
 		}},
-	{name: "habits",
-		usage: "  lifelog habits [YYYY-MM-DD]         the day's habits and completion",
-		run: func(ctx context.Context, e env, args []string) error {
-			href := "/habits" // the server's today
-			if len(args) == 1 {
-				href += "?day=" + url.QueryEscape(args[0])
-			}
-			return show(e.o)(e.c.Get(ctx, href))
-		}},
-	{name: "done", flags: []string{"--day"},
-		usage: "  lifelog done METRIC [--day D]       check a habit in as done (skip METRIC: not done)",
-		run:   checkIn("1")},
-	{name: "skip", flags: []string{"--day"}, run: checkIn("0")},
 	{name: "tasks",
 		usage: "  lifelog tasks                       every task; lifelog do create-task label=... makes one",
 		run:   func(ctx context.Context, e env, _ []string) error { return show(e.o)(e.c.Get(ctx, "/tasks")) }},
@@ -253,16 +240,6 @@ func usageText() string {
 	}
 	b.WriteString(globalUsage)
 	return b.String()
-}
-
-// checkIn is done and skip: a habit's check-in on --day, else the server's today.
-func checkIn(done string) func(ctx context.Context, e env, args []string) error {
-	return func(ctx context.Context, e env, args []string) error {
-		if len(args) != 1 {
-			return fmt.Errorf("%s METRIC [--day YYYY-MM-DD]", e.o.args[0])
-		}
-		return doAction(ctx, e, "check-in", map[string]string{"name": args[0], "day": dayOrToday(e.o), "done": done})
-	}
 }
 
 // parse takes flags anywhere on the line (an old CLI ignored --db after the subcommand). A flag the command does not

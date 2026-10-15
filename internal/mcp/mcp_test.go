@@ -99,9 +99,9 @@ func TestFindTools(t *testing.T) {
 	if titles := callTool(t, ctx, session, "get", map[string]any{"href": "/titles?prefix=an"}); len(titles.Entities) != 1 || titles.Entities[0].Title != "Ana" {
 		t.Fatalf("get /titles returned %+v", titles)
 	}
-	// A day's trends and each habit's last days are on this surface too (docs/plans/093-words-phone-and-today.md).
-	if day, ok := callTool(t, ctx, session, "get", map[string]any{"href": "/days/2031-05-14"}).Properties.(map[string]any); !ok || day["trends"] == nil || day["habits"] == nil {
-		t.Fatalf("get /days/2031-05-14 lacks trends or habits: %v", day)
+	// A day's trends are on this surface too (docs/plans/093-words-phone-and-today.md).
+	if day, ok := callTool(t, ctx, session, "get", map[string]any{"href": "/days/2031-05-14"}).Properties.(map[string]any); !ok || day["trends"] == nil {
+		t.Fatalf("get /days/2031-05-14 lacks trends: %v", day)
 	}
 }
 
@@ -237,16 +237,6 @@ func TestMCPNumericSchema(t *testing.T) {
 	}
 	if moodEnum != "number [1 2 3 4 5]" { // the browser draws it as five buttons (docs/plans/092-the-app-shell.md)
 		t.Errorf("capture's mood is %q, want the numbers 1 to 5", moodEnum)
-	}
-	callTool(t, ctx, session, "start_habit", map[string]any{"name": "walk", "start_day": "2026-06-01"})
-	for _, done := range []int{0, 1} {
-		callTool(t, ctx, session, "check_in", map[string]any{"name": "walk", "day": fmt.Sprintf("2026-06-0%d", done+1), "done": done})
-	}
-	for _, args := range []map[string]any{{"name": "walk", "day": "2026-06-03", "done": 2}, {"name": "walk", "day": "2026-06-03"}} {
-		res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{Name: "check_in", Arguments: args})
-		if err == nil && !res.IsError {
-			t.Fatal("invalid check-in accepted")
-		}
 	}
 	callTool(t, ctx, session, "record", map[string]any{"metric": "weight", "day": "2026-06-01", "value": 71.5})
 }

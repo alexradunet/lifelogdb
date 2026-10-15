@@ -16,7 +16,7 @@
   seeded as the metric page `Mood` ([D6](D06-mood-is-a-measurement.md)). A plain page of the metric's title becomes
   the metric by the same promotion a person takes — a ghost, or a note the owner already wrote about it (an imported
   `aPTT.md`), whose text is kept: a registration's note fills only an empty body, never the owner's words.
-  Measurements, habit periods and corrections keep referencing `metrics(id)`.
+  Measurements and corrections keep referencing `metrics(id)`.
 - **Alternatives.**
   - *A snake_case `metrics.name` beside the title*: rejected — every metric with two names (`ferritin`,
     "Ferritin"), the duplication one home per concept forbids.

@@ -439,12 +439,6 @@ details.readings-year{
     & .year-name{font:700 15px/22px var(--mono); font-variant-numeric:tabular-nums}}
   &+details.readings-year{margin-block-start:var(--space-2)}}
 
-/* A habit in the margin: its name and state, then the Done and Not done of its check-in, drawn as outcomes. */
-.habit{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--space-2);
-  &+.habit{padding-block-start:var(--space-3); border-block-start:1px solid var(--line-soft)}}
-.habit-what{display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-1) var(--space-2); min-inline-size:0;
-  & a{color:var(--text-strong); font-weight:700}}
-
 /* Rows inside a panel. */
 .panel ul.plain>li{padding:10px 0}
 
@@ -466,16 +460,6 @@ details.readings-year{
 svg.trend{display:block; inline-size:100%; block-size:28px; margin-block-start:var(--space-1); color:var(--link); overflow:visible;
   & polyline{fill:none; stroke:currentColor; stroke-width:2; stroke-linejoin:round; stroke-linecap:round}
   & circle{fill:var(--accent-ink)}}
-
-/* A habit's strip: a cell a day, oldest first. Each state has its own shape, so no state is told by colour alone:
-   done is a full cell, not done an empty frame, not recorded a low bar, inactive a dashed frame. */
-.habit-days{flex-basis:100%; display:flex; align-items:center; gap:var(--space-2)}
-.strip{display:inline-flex; align-items:flex-end; gap:2px; block-size:14px;
-  & i{display:block; inline-size:8px; block-size:14px;
-    &.done{background:var(--done)}
-    &.not-done,&.invalid{border:2px solid var(--danger)}
-    &.not-recorded{block-size:4px; background:var(--edge)}
-    &.inactive{border:1px dashed var(--edge)}}}
 
 /* The search dialog (docs/plans/108-the-browser-made-current.md; once the command list of plan 094): the one ornate
    panel, parchment with a gold edge and gold corner brackets, the field on top and the keys under it. The top bar's
@@ -535,8 +519,6 @@ dialog.palette{inline-size:min(36rem, calc(100vw - 2rem)); max-block-size:min(32
     &>li{padding:var(--space-3) 0; border-block-start:1px solid var(--edge); border-block-end:0;
       &:first-child{border-block-start:0}}}
   & .occ{align-items:flex-start}
-  & .habit{padding:var(--space-3); box-shadow:var(--parch-bevel);
-    &+.habit{margin-block-start:var(--space-2); border-block-start:2px solid var(--edge)}}
   & .readings{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
   & .about{padding:var(--space-3)}}
 .also ul.plain>li{padding:var(--space-2) 0}
@@ -645,7 +627,6 @@ li.pick{display:flex; align-items:stretch; gap:var(--space-1);
   & .badge{align-self:flex-start}
   &>.pick-box{position:absolute; inset-block-start:var(--space-1); inset-inline-end:var(--space-1); z-index:1; padding:var(--space-1); background:var(--surface); border:2px solid var(--edge)}
   &.stale{& a.reading,& .name{color:var(--muted)} & svg.trend{color:var(--muted)} & svg.trend circle{fill:var(--muted)}}
-  &.habit-card{gap:var(--space-1); & .tag{align-self:flex-start} & .habit-days{flex-wrap:wrap; gap:var(--space-1) var(--space-2)}}}
 .metric-card:has(.pick-box input:checked){outline:2px solid var(--link); outline-offset:-2px}
 /* New metric (docs/plans/113-new-metric-on-metrics.md): the checked kind shows its form, with no script. A category's
    heading carries "+ New metric here". A number card and a day's reading tile carry + Add, one value for one day. */

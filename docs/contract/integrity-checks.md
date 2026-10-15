@@ -37,13 +37,6 @@ WITH RECURSIVE rooted(id) AS (
  SELECT m.id FROM measurements m JOIN rooted r ON m.supersedes_id=r.id
 )
 SELECT id FROM measurements EXCEPT SELECT id FROM rooted ORDER BY id; -- no rows
-SELECT h.id FROM habit_periods h LEFT JOIN metrics m ON m.id=h.metric_id
- WHERE m.id IS NULL OR m.unit<>'' OR EXISTS
- (SELECT 1 FROM habit_periods p WHERE p.metric_id=h.metric_id AND p.id<>h.id
-  AND p.start_day<=coalesce(h.end_day,'9999-12-31') AND coalesce(p.end_day,'9999-12-31')>=h.start_day)
- ORDER BY h.id; -- no rows
-SELECT v.id FROM measurement_values v WHERE v.value NOT IN (0,1)
- AND EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id=v.metric_id) ORDER BY v.id; -- no rows
 SELECT n.id FROM entity_names n JOIN entities e ON e.id=n.entity_id
  WHERE (length(n.name_key)=10 AND date(n.name_key) IS n.name_key
    AND (e.entity_type<>'page' OR e.preferred_name_key IS NOT n.name_key OR e.day IS NOT n.name_key OR n.title IS NOT n.name_key))
@@ -66,11 +59,9 @@ INSERT INTO entities_fts(entities_fts, rank) VALUES ('integrity-check', 1);   --
   `task_occurrences_admit` trigger, so it detects rows admitted while the trigger was bypassed, not an error in the
   expression itself; the independent check of that expression is the anchor-generated calendar oracle of the
   planning suites ([the suite guide](../../tests/README.md)). The remaining semantic queries detect a correction of a missing reading or of another metric,
-  correction rows unreachable from an original reading (cycles or dangling chains),
-  overlapping habit periods and periods on a metric with a unit (a scale, Mood included), current nonbinary habit values, and invalid journal-name ownership
+  correction rows unreachable from an original reading (cycles or dangling chains), and invalid journal-name ownership
   (executed with deliberately bypassed guards restored before checking). The rooted-chain query visits each
-  reachable reading once; it does not follow every row's full ancestry. Habit range checks include every current
-  reading of a metric with a habit period; corrected or retracted invalid values remain legitimate history.
+  reachable reading once; it does not follow every row's full ancestry.
   Journal diagnostics report `entity_names.id`; other diagnostics report the inspected table's `id`.
 - **The FTS5 integrity-check — the index against its content.** `entities_fts` is an external-content
   index over `entity_search_content`; if the two drift apart, searches return wrong rows and `integrity_check` still

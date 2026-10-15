@@ -28,8 +28,6 @@ func journalFixture(t *testing.T) (*client.Client, http.Handler) {
 	done(task("Pay the rent", fixedToday))
 	done(task("Return the books", dayOf(-20)))
 	task("Renew the passport", dayOf(30))
-	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "evening_walk"}))
-	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/metrics/evening_walk")), "start-habit"), map[string]string{"start_day": dayOf(-30)}))
 	capture := func(day string, v map[string]string) {
 		must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/days/"+day)), "capture"), v))
 	}
@@ -72,12 +70,6 @@ func TestTheDayCarriesWhatIsDueItsMoodAndItsHabits(t *testing.T) {
 	if fmt.Sprint(p["mood"]) != "[4 3]" || p["today"] != fixedToday {
 		t.Errorf("today's mood %v, today %v", p["mood"], p["today"])
 	}
-	if hs := p["habits"].([]any); len(hs) != 1 || hs[0].(map[string]any)["metric"] != "evening_walk" || hs[0].(map[string]any)["state"] != "not recorded" {
-		t.Errorf("today's habits: %v", hs)
-	}
-	if got := actionsNamed(today, "check-in"); len(got) != 1 || got[0] != "/metrics/evening_walk/check-in" {
-		t.Errorf("check-ins: %v", got)
-	}
 	if got := actionsNamed(today, "edit-occurrence"); len(got) != 3 {
 		t.Errorf("today's outcomes: %v", got)
 	}
@@ -115,16 +107,6 @@ func TestTheDayCarriesWhatIsDueItsMoodAndItsHabits(t *testing.T) {
 	if strings.Contains(body, `<th scope="col">scope</th>`) {
 		t.Error("the readings show a scope column")
 	}
-	walk := formFor(t, body, "Done", "/metrics/evening_walk/check-in")
-	if walk.Fields.Get("day") != fixedToday || walk.Fields.Get("done") != "1" || walk.Fields.Get("back") != "/days/"+fixedToday {
-		t.Fatalf("the habit's Done: %v", walk.Fields)
-	}
-	if rec := submit(h, walk.Action, walk.Fields, ""); rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/days/"+fixedToday {
-		t.Fatalf("check-in: %d %q", rec.Code, rec.Header().Get("Location"))
-	}
-	if hs := props(must(c.Get(t.Context(), "/days/"+fixedToday)))["habits"].([]any); hs[0].(map[string]any)["state"] != "done" {
-		t.Errorf("after the check-in: %v", hs)
-	}
 }
 
 func TestTheRootIsTodayAtAGlance(t *testing.T) {
@@ -134,9 +116,6 @@ func TestTheRootIsTodayAtAGlance(t *testing.T) {
 	if got := labels(p["due"]); got != "Book the dentist/open Call the bank/open" {
 		t.Errorf("the root's due: %s", got)
 	}
-	if hs := p["habits"].([]any); len(hs) != 1 || hs[0].(map[string]any)["metric"] != "evening_walk" {
-		t.Errorf("the root's habits: %v", hs)
-	}
 	var recent []string
 	for _, r := range p["recent"].([]any) {
 		m := r.(map[string]any)
@@ -145,12 +124,12 @@ func TestTheRootIsTodayAtAGlance(t *testing.T) {
 	if got, want := strings.Join(recent, " | "), fixedToday+" [4 3] Quiet day. | "+dayOf(-1)+" [2] <nil> | "+dayOf(-2)+" <nil> Morning"; got != want {
 		t.Errorf("recent:\n got %s\nwant %s", got, want)
 	}
-	if got := actionsNamed(root, "edit-occurrence"); len(got) != 2 || len(actionsNamed(root, "check-in")) != 1 {
-		t.Errorf("the root's outcomes %v, check-ins %v", got, actionsNamed(root, "check-in"))
+	if got := actionsNamed(root, "edit-occurrence"); len(got) != 2 {
+		t.Errorf("the root's outcomes %v", got)
 	}
 
 	body := browse(t, h, "/")
-	for _, want := range []string{"<h2>Due</h2>", "<h2>Habits</h2>", "<h2>Last entries</h2>", "Quiet day."} {
+	for _, want := range []string{"<h2>Due</h2>", "<h2>Last entries</h2>", "Quiet day."} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the root lacks %q", want)
 		}

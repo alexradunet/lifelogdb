@@ -67,11 +67,10 @@ ghosts oldest first; search by rank.
 ### root
 
 `GET /`: today at a glance. Links: `today`, `days`, `people`, `places`, `media`, `files`, `metrics`,
-`habits`, `tasks`, `deadlines`, `ghosts`, `actions`, `calendar` (this month), `week` (this week), `year` (this year). Actions: `capture` (for today), `search`,
+`tasks`, `deadlines`, `ghosts`, `actions`, `calendar` (this month), `week` (this week), `year` (this year). Actions: `capture` (for today), `search`,
 `find`, `open-day`, `deadlines`,
 `create-task`, `create-page`, `create-person`, `create-place`, `add-file`,
-`record`, `register-metric` (owner), `snapshot` (owner); then the `check-in` of each habit of today (today
-filled in), and the outcome (see task) of each occurrence in `due`.
+`record`, `register-metric` (owner), `snapshot` (owner); then the outcome (see task) of each occurrence in `due`.
 
 | property | type | meaning |
 |---|---|---|
@@ -100,10 +99,6 @@ filled in), and the outcome (see task) of each occurrence in `due`.
 | `due[].reminder` | object |  |
 | `due[].reminder.state` | string |  |
 | `due[].reminder.at` | instant |  |
-| `habits[]` | list | the habits active today, by name (the habit shape of habits) |
-| `habits[].metric` | string | the habit's metric |
-| `habits[].state` | string | `done`, `not done`, `not recorded` or `invalid` |
-| `habits[].recent` | list | its state on each of the 14 days through today, oldest first: a state above, or `inactive` on a day no period of the habit holds |
 | `recent[]` | list | the 5 newest live day pages up to today, the newest first |
 | `recent[].day` | day | the day |
 | `recent[].page_id` | integer | the day page's id |
@@ -231,7 +226,7 @@ Preview, a second button of a form that writes a body, which opens it in a new t
 names, and a value that is not a day is 422). Links: `prev`, `next` (the neighbouring days), `month` (its calendar),
 `page` (the day page, once it exists), `metrics`. Embedded: `reading` links to each measurement. Actions: `capture`,
 `record`, `open-day`, `save-body`
-of the day page once it exists (its body and `version` filled in), the `check-in` of each habit in `habits`, and the
+of the day page once it exists (its body and `version` filled in), and the
 outcome (see task) of each occurrence in `due` that is due 7 days after `today` or earlier. The write `capture`
 answers with this entity and a `result` of the sync shape; its field `mood` has the `options` 1 to 5. `POST /days/today/capture` captures on the local day.
 
@@ -240,7 +235,7 @@ answers with this entity and a `result` of the sync shape; its field `mood` has 
 | `day` | day | the day |
 | `page_id` | integer | the id of the day page; absent when none exists yet |
 | `view[]` | list | the day view of the cookbook, one row each, in reading order |
-| `view[].what` | string | `day page` (its body), `page` or `page (edited)` (a page written that day), `at` (a place the day was at), `habit` (a habit and its state), or a metric's title (a reading not part of a habit) |
+| `view[].what` | string | `day page` (its body), `page` or `page (edited)` (a page written that day), `at` (a place the day was at), or a metric's title (a reading) |
 | `view[].at` | instant | when, for a page or a reading; absent otherwise |
 | `view[].detail` | string | the body, the page title, the place, `Metric: done`/`not done`/`not recorded`/`invalid`, or `value unit` |
 | `readings[]` | list | the day's readings, each a reading (below) with its id, to correct one |
@@ -269,13 +264,9 @@ answers with this entity and a `result` of the sync shape; its field `mood` has 
 | `due[].reminder.state` | string |  |
 | `due[].reminder.at` | instant |  |
 | `mood` | list | the values of the day's current Mood readings, in the order they were recorded (the Mood metric found by its name key); empty when none |
-| `habits[]` | list | the habits active on the day, by name |
-| `habits[].metric` | string | the habit's metric |
-| `habits[].state` | string | `done`, `not done`, `not recorded` or `invalid` |
-| `habits[].recent` | list | its state on each of the 14 days through the day, oldest first: a state above, or `inactive` on a day no period of the habit holds |
-| `trends[]` | list | one for each metric with a current reading on the day that is not a habit active on the day, in the order of `readings` |
+| `trends[]` | list | one for each metric with a current reading on the day, in the order of `readings` |
 | `trends[].metric` | string | the metric's name |
-| `trends[].unit` | string | its unit (`''` for a habit, a range such as `1-5` for a scale) |
+| `trends[].unit` | string | its unit (`''` for a count or a habit, a range such as `1-5` for a scale) |
 | `trends[].readings[]` | list | its current readings in the 14 days through the day, oldest first (the series of the cookbook) |
 | `trends[].readings[].day` | day |  |
 | `trends[].readings[].value` | number |  |
@@ -350,11 +341,7 @@ day of the week. Actions: `open-day`.
 | `days[].items[].years` | integer | a birthday's or a death's: the whole years since the day the person's row holds; absent on that day |
 | `days[].more_pages` | integer | the pages and files of the day after the first 20 in `items[]`; absent when none |
 | `days[].readings` | integer | the current readings on the day, of every metric but the Mood (`mood` holds those); absent when none |
-| `habits[]` | list | each habit active on a day of the week through today, by name, counted as `completion` of habits is: a week in progress counts through today, a week to come counts nothing |
-| `habits[].metric` | string | the habit's metric |
-| `habits[].done` | integer | the days of the week on which it was done |
-| `habits[].active_days` | integer | the days of the week on which it was active |
-| `metrics[]` | list | each metric, a habit excepted, with a current reading in the week, by name |
+| `metrics[]` | list | each metric with a current reading in the week, by name |
 | `metrics[].metric` | string | the metric's name |
 | `metrics[].unit` | string | its unit; empty for a metric with none |
 | `metrics[].readings` | integer | how many such readings the week holds |
@@ -481,8 +468,8 @@ that is not a kept picture, is refused (422).
 `GET /metrics/{name}?from=&to=&all_history=`: the one page of a metric. Its
 readings over `(from, to]`, or with no `from` every reading through `to` (`all_history=1` says the same; `to` is today
 by default). An alias names the metric too. Links: `self` (`/metrics/{name}` when asked with no query),
-`all-readings`, `up` (metrics), `habits`, `page` (the metric's page). Embedded: `reading` links. Actions: `record`
-(this metric), and for a habit `check-in` and `stop-habit`, else `start-habit` when unitless. A live metric is a page
+`all-readings`, `up` (metrics), `page` (the metric's page). Embedded: `reading` links. Actions: `record`
+(this metric). A live metric is a page
 (D27), so its page's actions are here too: `save-body`, `rename`, `link`, `unlink`,
 [`file-pages`](#filed) (this metric) and `tombstone`.
 
@@ -500,12 +487,9 @@ by default). An alias names the metric too. Links: `self` (`/metrics/{name}` whe
 | `readings[].import_key` | string | |
 | `readings[].value` | number | |
 | `readings[].captured_with_id` | integer | |
-| `habit_periods[]` | list | the periods it was a habit, oldest first |
-| `habit_periods[].start_day` | day | from |
-| `habit_periods[].end_day` | day | until, inclusive; absent while open |
 | `categories` | list | the paths of the categories it is filed in (`biomarkers/iron`) |
 | `id` | integer | the metric's page id; absent when the name is no live metric |
-| `unit` | string | its unit, `''` for a habit, a range (`1-5`) for a scale; absent likewise |
+| `unit` | string | its unit, `''` for a count or a habit, a range (`1-5`) for a scale; absent likewise |
 | `body` | string | its page's text, CommonMark; absent likewise |
 | `links[]` | list | the typed links its page starts (the page's shape); absent likewise |
 | `links[].kind` | string | |
@@ -524,30 +508,26 @@ by default). An alias names the metric too. Links: `self` (`/metrics/{name}` whe
 ### metrics
 
 `GET /metrics`: the registry. Embedded: `item` links to each series. Actions: `record` with the metrics as options,
-[`file-pages`](#filed), `register-metric` (owner), and a `check-in` for each habit of today. A browser draws each metric
-as a card: its latest reading, the line of its recent readings, and for a habit its strip of 14 days
-([plan 112](docs/plans/112-metrics-as-cards.md)). `register-metric` takes `category` (a page title, made when missing)
-and `habit_from` (a day, or `today`): one write makes the metric, files it and starts its habit. A refusal of any
-step writes nothing. Its answer is the metric's [series](#series), with a `result` sentence
+[`file-pages`](#filed), `register-metric` (owner). A browser draws each metric as a card: its latest reading and the
+line of its recent readings ([plan 112](docs/plans/112-metrics-as-cards.md)). `register-metric` takes `category` (a
+page title, made when missing): one write makes the metric and files it. A refusal of either step writes nothing. Its answer is the metric's [series](#series), with a `result` sentence
 ([plan 113](docs/plans/113-new-metric-on-metrics.md)).
-With `?show=habits` (and `day`, `from`, `to`) it also carries the properties, links, embedded links and `check-in` actions of [habits](#habits). The browser draws that as the Habits lens of Metrics ([plan 111](docs/plans/111-one-metrics-view.md)).
 
 | property | type | meaning |
 |---|---|---|
 | `metrics[]` | list | every live metric, by name |
 | `metrics[].id` | integer | its page's id |
 | `metrics[].name` | string | its name (the page's title) |
-| `metrics[].unit` | string | the unit, `''` for a habit, a range (`1-5`) for a scale |
+| `metrics[].unit` | string | the unit, `''` for a count or a habit, a range (`1-5`) for a scale |
 | `metrics[].note` | string | the page's text; absent when empty |
-| `metrics[].habit` | boolean | it has a habit period |
 | `metrics[].categories` | list | the category paths it is filed in; absent when none |
 | `metrics[].recent[]` | list | its newest 30 current readings, oldest first: the last is its latest |
 | `metrics[].recent[].id` | integer | the measurement's id |
 | `metrics[].recent[].day` | day | its day |
 | `metrics[].recent[].value` | number | its value |
-| `groups[]` | list | the same metrics in sections: Habits, each category in tree order, Not filed |
+| `groups[]` | list | the same metrics in sections: each category in tree order, Not filed |
 | `groups[].title` | string | the section |
-| `groups[].path` | string | the category's path; absent for Habits and Not filed |
+| `groups[].path` | string | the category's path; absent for Not filed |
 | `groups[].page` | integer | the category's page id; absent likewise |
 | `groups[].depth` | integer | the category's depth in the tree |
 | `groups[].metrics[]` | list | the metrics in it (the metric shape) |
@@ -555,7 +535,6 @@ With `?show=habits` (and `day`, `from`, `to`) it also carries the properties, li
 | `groups[].metrics[].name` | string | |
 | `groups[].metrics[].unit` | string | |
 | `groups[].metrics[].note` | string | |
-| `groups[].metrics[].habit` | boolean | |
 | `groups[].metrics[].categories` | list | |
 | `categories[]` | list | every category page, by path: what `file-pages` files in |
 | `categories[].id` | integer | the category's page id |
@@ -563,32 +542,6 @@ With `?show=habits` (and `day`, `from`, `to`) it also carries the properties, li
 | `categories[].path` | string | the titles from the top, joined by `/` |
 | `categories[].count` | integer | how many live things are filed directly in it; absent when none |
 | `today` | day | the server's local day |
-| `habit_days[]` | list | the habits active today, as [root](#root) `habits[]`; absent with `?show=habits` |
-| `habit_days[].metric` | string | the habit's name |
-| `habit_days[].state` | string | today's state |
-| `habit_days[].recent` | list | its state on each of the 14 days through today, oldest first |
-
-### habits
-
-`GET /habits?day=&from=&to=`: the habits of a day (default today) and their completion over `[from, to]` (default
-the 30 days to that day). Links: `day`, `prev`, `next`. Embedded: a `habit` link per habit to its series. Actions: a
-`check-in` per habit, its `day` filled. A browser (`Accept: text/html`) is redirected to `/metrics?show=habits` with the same query; JSON, the CLI and MCP keep this resource.
-
-| property | type | meaning |
-|---|---|---|
-| `day` | day | the day |
-| `habits[]` | list | the habits active that day, by name |
-| `habits[].metric` | string | the habit's name |
-| `habits[].state` | string | `done`, `not done`, `not recorded` or `invalid` (a reading that is neither 0 nor 1) |
-| `from` | day | the completion window's first day |
-| `to` | day | its last day |
-| `completion[]` | list | per habit, over the window |
-| `completion[].metric` | string | |
-| `completion[].active_days` | integer | days of the window the habit was on |
-| `completion[].done` | integer | days checked in done |
-| `completion[].not_done` | integer | days checked in not done |
-| `completion[].not_recorded` | integer | active days with no check-in |
-| `completion[].invalid` | integer | days with an invalid reading |
 
 ### tasks
 
@@ -793,8 +746,6 @@ back to 90 days on), `open` ones unless `state` is `done`, `skipped` or `all`. O
 | `invalid_one_off_tasks` | list | ids |
 | `invalid_task_occurrences` | list | ids |
 | `invalid_measurement_chains` | list | ids |
-| `invalid_habit_periods` | list | ids |
-| `invalid_habit_readings` | list | ids |
 | `invalid_journal_names` | list | ids |
 | `full_text_index_ok` | boolean | |
 | `full_text_error` | string | absent when the index is fine |
@@ -832,8 +783,6 @@ browser form is answered home with them as feedback. A refusal (a folder inside 
 | `restore_check.invalid_one_off_tasks` | list | |
 | `restore_check.invalid_task_occurrences` | list | |
 | `restore_check.invalid_measurement_chains` | list | |
-| `restore_check.invalid_habit_periods` | list | |
-| `restore_check.invalid_habit_readings` | list | |
 | `restore_check.invalid_journal_names` | list | |
 | `restore_check.full_text_index_ok` | boolean | |
 | `restore_check.full_text_error` | string | |

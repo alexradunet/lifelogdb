@@ -28,18 +28,8 @@ func TestTheDayCarriesItsTrends(t *testing.T) {
 	must(c.Do(t.Context(), find(must(c.Get(t.Context(), record(dayOf(-3), "90"))), "retract"), nil))
 	today := record(fixedToday, "71.1")
 	must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "steps", "day": fixedToday, "value": "5000"}))
-	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "walk"}))
-	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/metrics/walk")), "start-habit"), map[string]string{"start_day": dayOf(-4)}))
-	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/metrics/walk")), "check-in"), map[string]string{"day": fixedToday, "done": "1"}))
 
 	dayProps := props(must(c.Get(t.Context(), "/days/"+fixedToday)))
-	var habitNames []string
-	for _, x := range dayProps["habits"].([]any) {
-		habitNames = append(habitNames, x.(map[string]any)["metric"].(string))
-	}
-	if strings.Join(habitNames, ",") != "walk" {
-		t.Errorf("habits = %v, want [walk]", habitNames)
-	}
 	var got []string
 	for _, x := range dayProps["trends"].([]any) {
 		tr := x.(map[string]any)
@@ -69,42 +59,6 @@ func TestTheDayCarriesItsTrends(t *testing.T) {
 	} {
 		if !strings.Contains(body, w) {
 			t.Errorf("the day's readings lack %s", w)
-		}
-	}
-}
-
-// TestAHabitCarriesItsLastDays: each habit of the day and of the root has its state on each of the 14 days through
-// the day, oldest first, inactive on a day no period of it holds.
-func TestAHabitCarriesItsLastDays(t *testing.T) {
-	c, h := freshOn(t, fixedToday)
-	root := must(c.Get(t.Context(), "/"))
-	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "walk"}))
-	walk := must(c.Get(t.Context(), "/metrics/walk"))
-	must(c.Do(t.Context(), find(walk, "start-habit"), map[string]string{"start_day": dayOf(-20), "end_day": dayOf(-10)}))
-	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/metrics/walk")), "start-habit"), map[string]string{"start_day": dayOf(-4)}))
-	for day, done := range map[string]string{dayOf(-12): "1", dayOf(-11): "0", dayOf(-2): "1"} {
-		must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/metrics/walk")), "check-in"), map[string]string{"day": day, "done": done}))
-	}
-	want := "not recorded,done,not done,not recorded,inactive,inactive,inactive,inactive,inactive,not recorded,not recorded,done,not recorded,not recorded"
-	for _, path := range []string{"/days/" + fixedToday, "/"} {
-		hs := props(must(c.Get(t.Context(), path)))["habits"].([]any)
-		if len(hs) != 1 {
-			t.Fatalf("%s habits: %v", path, hs)
-		}
-		var recent []string
-		for _, s := range hs[0].(map[string]any)["recent"].([]any) {
-			recent = append(recent, s.(string))
-		}
-		if got := strings.Join(recent, ","); got != want {
-			t.Errorf("%s recent:\n got %s\nwant %s", path, got, want)
-		}
-	}
-	body := browse(t, h, "/days/"+fixedToday)
-	for _, w := range []string{`<span class="strip" role="img" aria-label="done on 2 of its 9 active days of the last 14">`,
-		`<i class="not-recorded" title="Thu 1 May: not recorded"></i><i class="done" title="Fri 2 May: done"></i><i class="not-done" title="Sat 3 May: not done"></i>`,
-		`<i class="inactive" title="Mon 5 May: inactive"></i>`, `<span class="meta">2 of 9 days</span>`} {
-		if !strings.Contains(body, w) {
-			t.Errorf("the habit's strip lacks %s", w)
 		}
 	}
 }

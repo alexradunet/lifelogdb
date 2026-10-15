@@ -55,8 +55,7 @@ erDiagram
 
 A reading is a fact, not an entity: `measurements` is append-only ([D7](../decisions/D07-measurements.md)). A correction is a new row, and
 `measurements.supersedes_id` points back at the row it corrects; `measurements.captured_with_id` records
-provenance (a mood reading points at its day page). `habit_periods` says when a metric is a habit
-([D24](../decisions/D24-habits.md)). A metric is a page with a `metrics` row, as a person is a page with a `people` row ([D27](../decisions/D27-a-metric-is-a-page.md));
+provenance (a mood reading points at its day page). A metric is a page with a `metrics` row, as a person is a page with a `people` row ([D27](../decisions/D27-a-metric-is-a-page.md));
 it is filed in a category, which is a page, by a `part-of` link ([D26](../decisions/D26-metric-categories.md)). `lifelog_meta` stands alone: the rules that span
 tables ([D17](../decisions/D17-contract-as-data.md)). Explicit personal intentions use independent `tasks` and
 `task_occurrences`; an ordinary page supplies project context. The generated `once_key` closes a deferred
@@ -72,7 +71,6 @@ erDiagram
     metrics     ||--o{ measurements : "metric_id"
     entities    |o--o{ measurements : "captured_with_id"
     measurements |o--o| measurements : "supersedes_id"
-    metrics     ||--o{ habit_periods : "metric_id"
 
     metrics {
         INTEGER id PK, FK
@@ -97,10 +95,6 @@ erDiagram
     entities {
         INTEGER id PK, FK
         TEXT preferred_name_key FK
-    }
-    habit_periods {
-        INTEGER id PK
-        INTEGER metric_id FK
     }
     lifelog_meta {
         TEXT key PK

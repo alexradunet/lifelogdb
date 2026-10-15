@@ -1,7 +1,7 @@
 {{/* The day (docs/plans/095-the-leaf-and-its-margin.md): a calendar leaf heads it, with the weekday, the mood, the
      previous and next day and Go to a day. Then the sheet and its margin. The sheet is what the owner writes and
      reads: the journal, Capture as its next part, the editor and the pages written this day. The margin is what the
-     day asks of the owner: Due, the habits, the readings (with Add a reading) and the places. On a narrow screen
+     day asks of the owner: Due, the readings (with Add a reading) and the places. On a narrow screen
      the margin comes after the sheet. */}}
 {{define "day"}}{{template "head" .}}
 {{$d := .Props}}{{$today := eq .Title $d.today}}
@@ -44,7 +44,6 @@
 
 {{template "onthisday" (dict "v" $ "days" $d.on_this_day)}}
 
-{{template "checkins" .}}
 
 {{if or $d.readings (.Action "record")}}<section class="group" aria-label="Readings">
 <div class="panel-head"><h2>Readings</h2><a href="/metrics">Metrics</a></div>
@@ -69,14 +68,3 @@
 {{/* mood is a day's mood beside its heading */}}
 {{define "mood"}}{{with .}} <span class="mood" title="Mood">{{template "moodwords" .}}</span>{{end}}{{end}}
 
-{{/* checkins are the habits of the entity's day in the margin, each with its state, its last 14 days and the Done
-     and Not done of its check-in: a day and the root carry both the habits and their check-in actions */}}
-{{define "checkins"}}{{with .Props.habits}}<section class="group" aria-label="Habits">
-<div class="panel-head"><h2>Habits</h2><a href="/metrics?show=habits">Every habit</a></div>
-{{range .}}{{$href := printf "/metrics/%s" (pathesc .metric)}}{{$name := .metric}}<div class="habit">
-<div class="habit-what"><a href="{{$href}}">{{.metric}}</a> <span class="tag{{if eq .state "done"}} done{{else if or (eq .state "not done") (eq .state "invalid")}} notdone{{end}}">{{.state}}</span>
-{{with $.HabitStrip .recent}}<span class="habit-days"><span class="strip" role="img" aria-label="done on {{.Done}} of its {{.Active}} active days of the last 14">{{range .Cells}}<i class="{{.State}}" title="{{.Title}}"></i>{{end}}</span>
-<span class="meta">{{.Done}} of {{.Active}} days</span></span>{{end}}</div>
-{{with $.ActionFor "check-in" $href}}{{template "checkin" (dict "action" . "label" (printf "Check in %s" $name) "back" $.Here)}}{{end}}
-</div>{{end}}
-</section>{{end}}{{end}}

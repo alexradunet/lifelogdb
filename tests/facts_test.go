@@ -54,7 +54,6 @@ func facts(s *S) {
 	c.link(c.metric("Weight", "kg"), c.page("Body"), "part-of")
 	c.metric("Steps", "n")
 	vd := c.metric("Vitamin D", "")
-	c.habit(vd, "2026-01-01", nil)
 	p := P{"metric_id": vd, "page_id": vit, "parent_id": bio, "source": "ui"}
 	out, e := c.runBlock(s.d.Block("metrics-by-category"), p, nil)
 	if e != nil {
@@ -65,15 +64,15 @@ func facts(s *S) {
 		e == nil && c.n("select count(*) from links where kind='part-of' and from_id in (?, ?)", vit, vd) == 2, e)
 	sub, all := tab(out[2]), tab(out[3])
 	s.K("cookbook/metrics-by-category: a category holds the metrics of every category under it", sub == "Lipids|LDL cholesterol|mg/dL; Vitamins|Vitamin D|", sub)
-	s.K("cookbook/metrics-by-category: habits first, then by category, the metrics filed nowhere last",
-		all == "1|Vitamins|Vitamin D|; 0|Body|Weight|kg; 0|Lipids|LDL cholesterol|mg/dL; 0||Mood|1-5; 0||Steps|n", all)
+	s.K("cookbook/metrics-by-category: by category, the metrics filed nowhere last",
+		all == "Body|Weight|kg; Lipids|LDL cholesterol|mg/dL; Vitamins|Vitamin D|; |Mood|1-5; |Steps|n", all)
 	walk := statements(s.d.Block("metrics-by-category"))[2]
 	c.link(bio, lip, "part-of") // a cycle: Biomarkers part-of Lipids part-of Biomarkers
 	cyc, e := c.query(walk, P{"parent_id": bio})
 	s.K("cookbook/metrics-by-category: a cycle of part-of links ends the walk", e == nil && tab(cyc) == sub, e, tab(cyc))
 	c.must("UPDATE entities SET deleted_at="+NOW+" WHERE id=?", vit)
 	s.K("cookbook/metrics-by-category: a deleted category's metrics read as filed nowhere",
-		strings.Contains(tab(c.rows(statements(s.d.Block("metrics-by-category"))[3])), "1||Vitamin D|"))
+		strings.Contains("; "+tab(c.rows(statements(s.d.Block("metrics-by-category"))[3])), "; |Vitamin D|"))
 
 	// ---- append-only, supersede, retract
 	c = s.fresh()

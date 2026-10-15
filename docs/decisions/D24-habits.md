@@ -1,38 +1,21 @@
-# D24 — Habits: a metric with active periods.
+# D24 — Habits: a unitless metric with a reading of 1 or 0 a day; no periods.
 
 **Status:** accepted
 
-- **Decision.** A habit is a unitless metric ([D7](D07-measurements.md)) that has periods in `habit_periods`: the local days
-  the owner meant to do it, from `start_day` to `end_day` (inclusive; NULL = still going). Its
-  check-ins stay in `measurements`, one home for a day's value: 1 = done, 0 = not done. On a day inside
-  a period, no check-in is **not recorded** — never assumed either way. A restarted habit has several
-  periods, which never overlap (`habit_periods_check_insert`, `habit_periods_check_update`); a period on a metric
-  with a unit is refused, and a scale names its range as its unit (`1-5`, `0-10`), so Mood and every scale the owner
-  registers are refused by that one rule; a wrong period is corrected by `UPDATE`, never deleted
-  (`habit_periods_no_delete`). The day's habits and their completion are [habits](../cookbook/habits.md); the day view lists
-  them ([the day view](../cookbook/day-view.md)).
-  `habit_periods_identity_fixed` retains the period's own identity across corrections; changing its metric remains
-  an explicit correction that advances both affected metric revisions.
-- **Why** (the first real import, 2026-10). The vault's habits and supplements became 0/1 metrics,
-  and two questions had no answer: which metrics are habits (only a note's wording set them apart
-  from mood or a 0/1 lab marker), and whether a habit was meant to be done on a given day — so a day
-  with no check-in could not be told from a day outside the habit, and no streak or completion rate
-  could be honest.
+- **Decision.** A habit is a metric ([D7](D07-measurements.md)) with no unit, whose readings are 1 (done) or 0 (not
+  done), one a day, recorded with `record` like any reading. There is no `habit_periods` table: when a habit applies
+  is words in its page, and a day with no reading is a day with no reading. A habit is filed in a category like any
+  other metric ([D26](D26-metric-categories.md)); a category named Habits is the owner's choice.
+- **Why.** The owner reviewed the writer on 2026-10-15 and kept the core only
+  ([RFC 0018](../rfcs/0018-no-habit-periods.md)): the periods answered "was this habit meant to be done that day",
+  and the answer cost a table, eight triggers, two integrity queries, three actions, a lens of the metrics view, a
+  strip on every day page and a cookbook recipe. The owner records what was done; a streak or a rate is a count
+  over the readings.
 - **Alternatives.**
-  - *A separate check-in table*: rejected — a second home for "how was that day", with its own
-    corrections, imports and charts, and no join with mood or weight.
-  - *A `kind` column on `metrics`*: rejected — it says which metrics are habits, not when. For the
-    same reason a habit is never a metric category ([D26](D26-metric-categories.md)).
-  - *Start and stop columns on `metrics`*: rejected — a habit restarted (vitamin D each winter) needs
-    several periods.
-  - *A missing day counts as not done*: rejected — imported notes rarely say which days a habit was
-    done, so every unwritten day would count against the owner. An explicit 0 says "not done".
-- **Costs accepted.** A completion rate is over valid recorded days; the not-recorded days and invalid
-  check-ins remain visible in the [diagnostic reads](../cookbook/habits.md). A habit's target ("three times a week") has no column yet ([non-goals](../architecture/non-goals.md)). The 0/1 range of a check-in
-  is held by `measurements_habit_binary` once the metric has a period, and a metric whose current readings are not
-  all 0 or 1 is refused a period (`habit_periods_check_insert`, `habit_periods_check_update`), like mood's 1–5
-  ([D6](D06-mood-is-a-measurement.md)); a file written before these rules may still hold a non-binary check-in. The schema can correct a period's
-  metric or boundaries, but cannot withdraw a wholly mistaken period independently: it has neither a tombstone
-  nor an empty-interval representation. Changing dates to hide such a mistake would invent intention. Tombstoning
-  the metric hides the whole habit from active reads; it does not retract one period. A period-level withdrawal
-  mechanism needs its own incident and decision.
+  - *A metric with active periods* (the earlier D24): removed by RFC 0018. The owner's periods were written into
+    the metric pages as text, so no word was lost.
+  - *A separate check-in table*: rejected, a second home for "how was that day".
+  - *A missing day counts as not done*: rejected, an unwritten day says nothing.
+- **Trade accepted.** Nothing tells a habit from any other unitless metric, and nothing holds its readings to 0
+  and 1: the owner writes 1 or 0. A day not recorded cannot be told from a day outside the habit.
+- **Sources.** Executed: the `facts` suite (a unitless metric takes a reading of 1 and of 0).

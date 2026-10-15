@@ -9,7 +9,6 @@ type counts struct {
 	Readings int
 	Links    map[string]int
 	Metrics  int
-	Habits   int
 	BySource map[string]int
 }
 
@@ -41,7 +40,7 @@ func countRows(ctx context.Context, s *Store) (*counts, error) {
 		return nil, err
 	}
 	err := s.DB.R.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM entities WHERE entity_type <> 'metric'), (SELECT count(*) FROM measurement_values),
-	                                           (SELECT count(*) FROM metrics), (SELECT count(*) FROM habit_periods)`).
-		Scan(&c.Pages, &c.Readings, &c.Metrics, &c.Habits)
+	                                           (SELECT count(*) FROM metrics)`).
+		Scan(&c.Pages, &c.Readings, &c.Metrics)
 	return c, err
 }

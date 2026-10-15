@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -190,13 +189,7 @@ func TestCorrectionDomainActions(t *testing.T) {
 	if _, err := c.Do(t.Context(), find(actions, "register-metric"), map[string]string{"name": "api_walk"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Do(t.Context(), find(actions, "start-habit"), map[string]string{"name": "api_walk", "start_day": "2026-10-01"}); err != nil {
-		t.Fatal(err)
-	}
 	habit := must(c.Do(t.Context(), record, map[string]string{"metric": "api_walk", "day": "2026-10-01", "value": "1"}))
-	if _, err := c.Do(t.Context(), correct, map[string]string{"id": measurementID(habit), "value": "2"}); !clientStatus(err, 422) {
-		t.Fatalf("non-binary habit correction: %v, want 422", err)
-	}
 	if _, err := c.Do(t.Context(), retract, map[string]string{"id": measurementID(habit)}); err != nil {
 		t.Fatalf("habit retraction: %v", err)
 	}
@@ -407,7 +400,6 @@ func TestMetricsAreGroupedByCategory(t *testing.T) {
 	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/metrics/Weight")), "link"), map[string]string{"to": "Body", "kind": "part-of"}))
 	walk := must(c.Get(t.Context(), "/metrics/Walk"))
 	must(c.Do(t.Context(), find(walk, "link"), map[string]string{"to": "Body", "kind": "part-of"}))
-	must(c.Do(t.Context(), find(walk, "start-habit"), map[string]string{"start_day": "2026-09-20"}))
 	if _, err := c.Do(t.Context(), find(walk, "link"), map[string]string{"to": "Nowhere", "kind": "part-of"}); err == nil {
 		t.Error("a metric is filed in a category page that does not exist")
 	}
@@ -421,11 +413,11 @@ func TestMetricsAreGroupedByCategory(t *testing.T) {
 		}
 		got = append(got, g["title"].(string)+":"+strings.Join(ms, ","))
 	}
-	if want := "Habits:Walk Biomarkers: Thyroid:TSH Body:Weight Not filed:Mood,Steps"; strings.Join(got, " ") != want {
-		t.Errorf("groups %q, want %q: habits first, each category in tree order with those under it, the rest last", strings.Join(got, " "), want)
+	if want := "Biomarkers: Thyroid:TSH Body:Walk,Weight Not filed:Mood,Steps"; strings.Join(got, " ") != want {
+		t.Errorf("groups %q, want %q: each category in tree order with those under it, the rest last", strings.Join(got, " "), want)
 	}
 	page := browse(t, h, "/metrics")
-	for _, s := range []string{"<h2>Habits", `<span class="badge">Body</span>`, ">Thyroid</a>", "Biomarkers/Thyroid", "<h2>Not filed", `title="thyroid-stimulating hormone"`} {
+	for _, s := range []string{">Thyroid</a>", "Biomarkers/Thyroid", "<h2>Not filed", `title="thyroid-stimulating hormone"`} {
 		if !strings.Contains(page, s) {
 			t.Errorf("/metrics lacks %q", s)
 		}
@@ -440,38 +432,12 @@ func TestMetricsAreGroupedByCategory(t *testing.T) {
 	}
 }
 
-func TestTombstonedHabits(t *testing.T) {
-	c, _ := fresh(t)
-	root := must(c.Get(t.Context(), "/"))
-	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "Walk"}))
-	walk := must(c.Get(t.Context(), "/metrics/Walk"))
-	must(c.Do(t.Context(), find(walk, "start-habit"), map[string]string{"start_day": "2026-09-01"}))
-	page := must(c.Get(t.Context(), "/pages?title=Walk"))
-	for i, hidden := range []bool{false, true, false} {
-		if hidden {
-			page = must(c.Do(t.Context(), find(page, "tombstone"), nil))
-		} else if i > 0 {
-			page = must(c.Do(t.Context(), find(page, "revive"), nil))
-		}
-		h := must(c.Get(t.Context(), "/habits?day=2026-09-01&from=2026-09-01&to=2026-09-02"))
-		if hidden {
-			if find(h, "check-in").Name != "" || len(h.Entities) != 0 {
-				t.Errorf("hidden check-in offered: %+v", h)
-			}
-		} else if find(h, "check-in").Name == "" || len(h.Entities) != 1 {
-			t.Errorf("live check-in missing: %+v", h)
-		}
-	}
-}
-
 func TestMetricCanonicalActions(t *testing.T) {
 	for _, tc := range []struct{ stored, equivalent, unit, state string }{
 		{"Café", "Cafe\u0301", "", "unitless"},
 		{"Straße", "STRASSE", "", "unitless"},
 		{"Café mass", "Cafe\u0301 mass", "kg", "unitful"},
 		{"Straße mass", "STRASSE mass", "kg", "unitful"},
-		{"Café habit", "Cafe\u0301 habit", "", "habit"},
-		{"Straße habit", "STRASSE habit", "", "habit"},
 		{"Café hidden", "Cafe\u0301 hidden", "", "deleted"},
 		{"Straße hidden", "STRASSE hidden", "", "deleted"},
 		{"Café absent", "Cafe\u0301 absent", "", "unknown"},
@@ -482,9 +448,6 @@ func TestMetricCanonicalActions(t *testing.T) {
 			c, _ := fresh(t)
 			if tc.state != "unknown" {
 				must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "register-metric"), map[string]string{"name": tc.stored, "unit": tc.unit}))
-				if tc.state == "habit" {
-					must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/metrics/"+url.PathEscape(tc.stored))), "start-habit"), map[string]string{"start_day": "2026-01-01"}))
-				}
 				if tc.state == "deleted" {
 					must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/pages?title="+url.QueryEscape(tc.stored))), "tombstone"), nil))
 				}
@@ -504,26 +467,16 @@ func TestMetricCanonicalActions(t *testing.T) {
 					t.Error("self link changes actions")
 				}
 				restricted := tc.state == "unknown" || tc.state == "deleted"
-				if restricted && (href(e, "page") != "" || find(e, "link").Name != "" || find(e, "start-habit").Name != "" || find(e, "check-in").Name != "") {
+				if restricted && (href(e, "page") != "" || find(e, "link").Name != "") {
 					t.Errorf("restricted metric offers actions: %s", names(e))
-				}
-				if tc.unit != "" && find(e, "start-habit").Name != "" {
-					t.Error("unitful metric offers habit")
 				}
 			}
 			if tc.state == "unitless" {
-				a := find(equivalent, "start-habit")
+				a := find(equivalent, "record")
 				if a.Name == "" {
-					t.Fatal("equivalent spelling lacks start action")
+					t.Fatal("equivalent spelling lacks record")
 				}
-				must(c.Do(t.Context(), a, map[string]string{"start_day": "2026-01-01"}))
-			}
-			if tc.state == "habit" {
-				a := find(equivalent, "check-in")
-				if a.Name == "" {
-					t.Fatal("equivalent spelling lacks check-in")
-				}
-				must(c.Do(t.Context(), a, map[string]string{"day": "2026-01-01", "done": "1"}))
+				must(c.Do(t.Context(), a, map[string]string{"day": "2026-01-01", "value": "1"}))
 			}
 			if tc.state != "unknown" && tc.state != "deleted" {
 				page := must(c.Get(t.Context(), href(equivalent, "page")))
@@ -577,59 +530,6 @@ func feedbackLocation(location, path string) bool {
 	}
 	_, err = hex.DecodeString(values[0])
 	return err == nil
-}
-
-// Another writer's file can hold a daily habit check-in outside 0/1; every presentation of the habits labels
-// that day invalid and counts it (cookbook/habits.md). The CLI and MCP serve this same JSON.
-func TestHabitsShowInvalidCheckIns(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(t.Context(), p); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(t.Context(), p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { d.Close() })
-	h := api.New(&core.Store{DB: d})
-	c := client.InProcess(h, "cli")
-	root := must(c.Get(t.Context(), "/"))
-	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "Walk"}))
-	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/metrics/Walk")), "start-habit"), map[string]string{"start_day": "2026-10-01"}))
-	must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "Walk", "day": "2026-10-02", "value": "1"}))
-	// A file written before measurements_habit_binary may hold a non-binary check-in: written with the trigger dropped.
-	withoutTrigger(t, d.W, "measurements_habit_binary", `INSERT INTO measurements(metric_id, day, value, created_at, source)
-	                       SELECT entity_id, '2026-10-01', 2, '2026-10-07T00:00:00.000Z', 'other-writer'
-	                         FROM entity_names WHERE title = 'Walk'`)
-
-	habits := must(c.Get(t.Context(), "/habits?day=2026-10-01&from=2026-10-01&to=2026-10-02"))
-	props := habits.Properties.(map[string]any)
-	if got := props["habits"].([]any); len(got) != 1 || got[0].(map[string]any)["state"] != "invalid" {
-		t.Errorf("habits of the day: %v", got)
-	}
-	comp := props["completion"].([]any)
-	if len(comp) != 1 {
-		t.Fatalf("completion: %v", comp)
-	}
-	for field, want := range map[string]string{"active_days": "2", "done": "1", "not_done": "0", "not_recorded": "0", "invalid": "1"} {
-		if got := fmt.Sprint(comp[0].(map[string]any)[field]); got != want {
-			t.Errorf("completion %s = %v, want %v", field, got, want)
-		}
-	}
-	listed := false
-	for _, v := range must(c.Get(t.Context(), "/days/2026-10-01")).Properties.(map[string]any)["view"].([]any) {
-		row := v.(map[string]any)
-		listed = listed || row["what"] == "habit" && row["detail"] == "Walk: invalid"
-	}
-	if !listed {
-		t.Error("the day view does not label the habit invalid")
-	}
-	body := browse(t, h, "/metrics?show=habits&day=2026-10-01&from=2026-10-01&to=2026-10-02")
-	for _, w := range []string{`<span class="tag notdone">invalid</span>`, `<th scope="col" class="num">invalid</th>`} {
-		if !strings.Contains(body, w) {
-			t.Errorf("the habits page does not show %s", w)
-		}
-	}
 }
 
 // withoutTrigger runs one statement with a trigger dropped and restores it: deliberate damage, or a row a file

@@ -53,13 +53,12 @@ behavioral vectors remain in the [storage contract](README.md).
 | 19 | Who inserted this row, and is that necessarily its last editor? | `source` | `written at insert`, `agent`, `last editor` |
 | 20 | Does it keep personal planning distinct from recorded facts? | `schema`, `tasks`, `task_occurrences` | `personal task intentions`, `occurrence`, `reminder` |
 | 21 | Where was I on a given day? | `links`, `link_kinds` | `places the owner was at`, `kind='at'` |
-| 22 | Which metrics are habits, and was one meant to be done on a day? | `habit_periods` | `HABIT`, `NOT RECORDED` |
-| 23 | Which metrics are biomarkers, or what the owner took in? | `metrics` | `a category is a page`, `part-of`, `NOT a category` |
-| 24 | Where are the photos, the recordings and the scans? | `files` | `never stored in life.db`, `sha256`, `JPEG` |
-| 25 | Can a type change reinterpret retained edges? | `typed_links`, `entities_endpoint_types` | `incoming`, `outgoing`, `retained` |
-| 26 | How are stale edits rejected when write clocks coincide, and what counts as an edit? | `edit_revisions` | `monotonic`, `independent`, `no-ops`, `rollback`, `exhaustion`, `creation is not an edit`, `never the page it points at` |
-| 27 | How do planning identities, stopping and lifecycle agree? | `planning` | `task`, `occurrence`, `tombstone` |
-| 28 | What happens when a reminder clock repeats or does not exist? | `tasks` | `earlier instant`, `gap`, `entire local date`, `unresolved` |
+| 22 | Which metrics are biomarkers, or what the owner took in? | `metrics` | `a category is a page`, `part-of`, `NOT a category` |
+| 23 | Where are the photos, the recordings and the scans? | `files` | `never stored in life.db`, `sha256`, `JPEG` |
+| 24 | Can a type change reinterpret retained edges? | `typed_links`, `entities_endpoint_types` | `incoming`, `outgoing`, `retained` |
+| 25 | How are stale edits rejected when write clocks coincide, and what counts as an edit? | `edit_revisions` | `monotonic`, `independent`, `no-ops`, `rollback`, `exhaustion`, `creation is not an edit`, `never the page it points at` |
+| 26 | How do planning identities, stopping and lifecycle agree? | `planning` | `task`, `occurrence`, `tombstone` |
+| 27 | What happens when a reminder clock repeats or does not exist? | `tasks` | `earlier instant`, `gap`, `entire local date`, `unresolved` |
 
 Planning reads and reminders follow the [planning profile](planning.md), including retained outcomes after
 ending a recurrence. A clock that cannot be resolved remains visible as unresolved intent; restoring a snapshot

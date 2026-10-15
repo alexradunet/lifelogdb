@@ -61,8 +61,6 @@ func dates(s *S) {
 	s.K("measurements.created_at must be an instant", strings.HasPrefix(c.tryx("INSERT INTO measurements(metric_id,day,value,source,created_at) VALUES (1,'2026-01-01',1,'ui','2026-01-01 10:00:00')"), "ERR"))
 	s.K("links.created_at must be an instant", strings.HasPrefix(c.tryx("INSERT INTO links(from_id,to_id,kind,created_at,source) VALUES (?,?,'wikilink','2026-01-01 10:00:00','ui')", pa, pb), "ERR"))
 	s.K("people.death_day must round-trip", strings.HasPrefix(c.tryx("UPDATE people SET death_day='2026-9-3' WHERE id=?", pa), "ERR"))
-	hab := c.metric("hab", "")
-	s.K("habit_periods.end_day must round-trip", strings.HasPrefix(c.habit(hab, "2026-01-01", "2026-2-1"), "ERR"))
 
 	// ---- zone
 	for _, tz := range []any{"Europe/Berlin", "UTC", "America/Argentina/Buenos_Aires", "Etc/GMT+5", "America/Port-au-Prince", nil, strings.Repeat("x", 64)} {
@@ -89,9 +87,6 @@ func exactTimeBoundaries(s *S) {
 		stop("time witness: %v", err)
 	}
 	person := c.named("person", "")
-	habit := c.metric("Habit boundary", "")
-	otherHabit := c.metric("Other habit", "")
-	c.must("INSERT INTO habit_periods(metric_id,start_day,source) VALUES(?,'0000-01-01','ui')", habit)
 	c.must("BEGIN IMMEDIATE")
 	for _, v := range vectors {
 		typ, value, want := v[1], v[2], v[3] == "yes"
@@ -106,8 +101,6 @@ func exactTimeBoundaries(s *S) {
 			queries["people.birth_day"] = fmt.Sprintf("UPDATE people SET birth_day=? WHERE id=%d", person)
 			queries["people.death_day"] = fmt.Sprintf("UPDATE people SET death_day=? WHERE id=%d", person)
 			queries["measurements.day"] = "INSERT INTO measurements(metric_id,day,value,source,created_at) VALUES(1,?,3,'ui','2026-01-01T00:00:00.000Z')"
-			queries["habit_periods.start_day"] = fmt.Sprintf("INSERT INTO habit_periods(metric_id,start_day,source) VALUES(%d,?,'ui')", otherHabit)
-			queries["habit_periods.end_day"] = fmt.Sprintf("UPDATE habit_periods SET end_day=? WHERE metric_id=%d", habit)
 		} else {
 			queries["entities.created_at"] = "" // creation evidence is tested at insert, never by rewriting it
 			for _, col := range []string{"updated_at", "deleted_at"} {

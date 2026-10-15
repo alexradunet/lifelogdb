@@ -189,36 +189,6 @@ func TestTheSeriesCarriesItsPage(t *testing.T) {
 	}
 }
 
-func TestAHabitsPageLeadsWithItsCheckIn(t *testing.T) {
-	c, h := freshOn(t, "2026-10-13")
-	root := must(c.Get(t.Context(), "/"))
-	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "Walk"}))
-	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/metrics/Walk")), "start-habit"), map[string]string{"start_day": "2026-10-01"}))
-	walk := must(c.Get(t.Context(), "/metrics/Walk"))
-	for day, done := range map[string]string{"2026-10-11": "0", "2026-10-12": "1"} {
-		must(c.Do(t.Context(), find(walk, "check-in"), map[string]string{"day": day, "done": done}))
-	}
-	body := browse(t, h, "/metrics/Walk")
-
-	forms := postForms(body)
-	if len(forms) < 2 || forms[0].Button != "Done" || forms[1].Button != "Not done" ||
-		forms[0].Action != "/metrics/Walk/check-in" || forms[0].Fields.Get("day") != "2026-10-13" || forms[0].Fields.Get("done") != "1" {
-		t.Fatalf("a habit's page does not lead with today's check-in: %+v", forms)
-	}
-	for _, want := range []string{`<span class="kind">habit</span>`, `<td class="num"><a href="/measurements/`, ">done</a>", ">not done</a>"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("a habit's page does not show %s", want)
-		}
-	}
-	if strings.Contains(body, `<svg class="chart"`) {
-		t.Error("a habit is charted as a line of 0 and 1")
-	}
-	more := strings.Index(body, `aria-label="More"`)
-	if rec := strings.Index(body, `data-action="record"`); more < 0 || rec < more {
-		t.Errorf("a habit's Record is not under More (more at %d, record at %d)", more, rec)
-	}
-}
-
 // TestAYearShowsItsNewestReadingsFirst: a year's fold shows its newest ten readings, and the rest of the year are in
 // a closed fold under them that says how many it holds, so the page's other groups stay near; every reading is
 // still on the page, newest first.

@@ -3,7 +3,7 @@
 Proof that the schema serves the product with plain SQL. `:named` are bind parameters.
 Active views filter tombstones (`e.deleted_at IS NULL`); explicitly labeled historical queries retain them.
 Every write transaction starts with
-`BEGIN IMMEDIATE` ([connection setup](../contract/connections.md)); a block that writes one statement and reads nothing before it (start a habit, a correction, an `at` link) is shown alone
+`BEGIN IMMEDIATE` ([connection setup](../contract/connections.md)); a block that writes one statement and reads nothing before it (a correction, an `at` link) is shown alone
 — it is its own transaction; inside a larger write it goes between that write's `BEGIN IMMEDIATE` and `COMMIT`; and every block runs in `tests/`.
 
 The order below is the order the suites run the recipes in; the key is how a suite names a recipe
@@ -27,7 +27,6 @@ The order below is the order the suites run the recipes in; the key is how a sui
 | [Keep a file: a recording, a PDF, a photo (D9)](keep-a-file.md) | `keep-a-file` |
 | [Rename a page: a new page and a stub (D5)](rename-a-page.md) | `rename-a-page` |
 | [Import a row once: insert it, re-run it, update a changed one](import-a-row-once.md) | `import-a-row-once` |
-| [Habits: start and stop one, the habits of a day, completion over a period (D24)](habits.md) | `habits` |
 | [Metrics by category: file a metric, nest a category, a category's metrics, every metric grouped (D26)](metrics-by-category.md) | `metrics-by-category` |
 | [Personal tasks, occurrences and deadlines](tasks.md) | `tasks` |
 | [Take a snapshot, check it, restore it (D25)](take-a-snapshot.md) | `take-a-snapshot` |

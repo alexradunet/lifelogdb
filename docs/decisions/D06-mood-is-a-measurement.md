@@ -7,7 +7,7 @@
   1–5 range is keyed by the metric's unit, `1-5`: a scale names its range as its unit (`metrics.unit`,
   [D7](D07-measurements.md)), and `measurements_scale_range` holds every value of a metric with a range unit, Mood or
   any scale the owner registers (`0-10`), to the whole numbers inside that range; a retraction (a NULL value) is
-  never held. This is also why no scale is ever a habit ([D24](D24-habits.md)).
+  never held.
 - **Rule.** One home per concept, forever (principle 6): a standalone mood tap needs no second
   mechanism, and mood charts uniformly with every other series.
 - **Alternatives.** *`pages.mood` column*: rejected — it splits the concept across two tables the

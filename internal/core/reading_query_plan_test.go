@@ -22,7 +22,7 @@ func TestNewDatabaseReadingLookupUsesIndexes(t *testing.T) {
 	// conceal initialization statistics that still describe only the seeded Mood.
 	// This is prepareReading's lookup, planned on that same writer connection.
 	rows, err := s.DB.W.QueryContext(t.Context(), `EXPLAIN QUERY PLAN
-		SELECT m.id, m_name.title, EXISTS (SELECT 1 FROM habit_periods h WHERE h.metric_id = m.id)
+		SELECT m.id, m_name.title
 		FROM entities m JOIN entity_names m_name
 		  ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key AND m.deleted_at IS NULL
 		WHERE m.id = (SELECT entity_id FROM entity_names WHERE name_key = ?) AND m.entity_type = 'metric'`, "mood")
