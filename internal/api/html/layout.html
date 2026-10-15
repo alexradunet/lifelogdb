@@ -104,6 +104,14 @@
 
 {{/* checkin draws the check-in of a habit as the outcomes of a task are drawn: Done in the done colour, Not done a quiet
      word, in one group named by label. back is the page to return to; every caller gives it. */}}
+{{/* add-reading is the + Add of a metric's card or tile (docs/plans/114-one-way-to-do-a-thing.md): a closed fold
+     with one value, for one day, that returns to back. It takes action (record; nothing is drawn without it), metric,
+     unit (in words), day, today (the label says Today on that day) and back. The full form, with another day and the
+     folded fields, is the metric's page. */}}
+{{define "add-reading"}}{{with .action}}<details class="add-reading"><summary class="button small" aria-label="Add a reading of {{$.metric}}">+ Add</summary>
+<form class="inline" method="POST" action="{{.Href}}" data-action="{{.Name}}"><input type="hidden" name="back" value="{{$.back}}"><input type="hidden" name="metric" value="{{$.metric}}"><input type="hidden" name="day" value="{{$.day}}">
+<label><span>{{if eq $.day $.today}}Today{{else}}{{shortDay $.day}}{{end}}{{with $.unit}}, {{.}}{{end}}</span><input type="number" name="value" step="any" inputmode="decimal" required></label><button class="primary small">Save</button></form></details>{{end}}{{end}}
+
 {{define "checkin"}}<div class="outcomes" role="group" aria-label="{{.label}}">{{template "form" (form .action "done" "1" "hide" "day" "button" "Done" "class" "tiny outcome-done" "back" .back)}}{{template "form" (form .action "done" "0" "hide" "day" "button" "Not done" "class" "tiny outcome-notdone" "back" .back)}}</div>{{end}}
 
 {{/* pick-form-open opens the form of a list that deletes several rows at once (tombstone-pages on Media,

@@ -1,6 +1,8 @@
 package api_test
 
 import (
+	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"testing"
@@ -99,5 +101,36 @@ func TestTheCatalogSaysOneVerbForOneMeaning(t *testing.T) {
 		if titles[name] != want {
 			t.Errorf("%s is titled %q, want %q", name, titles[name], want)
 		}
+	}
+}
+
+// TestADaysReadingTileAddsAReadingForThatDay: + Add on a day's tile records one value for that day, not today, and
+// returns to the day; on today it says Today.
+func TestADaysReadingTileAddsAReadingForThatDay(t *testing.T) {
+	c, h := freshOn(t, fixedToday)
+	ctx := t.Context()
+	must(c.Do(ctx, find(must(c.Get(ctx, "/")), "register-metric"), map[string]string{"name": "Weight", "unit": "kg"}))
+	record := find(must(c.Get(ctx, "/metrics/Weight")), "record")
+	for _, day := range []string{"2031-05-12", fixedToday} {
+		must(c.Do(ctx, record, map[string]string{"metric": "Weight", "day": day, "value": "80"}))
+	}
+
+	past := browse(t, h, "/days/2031-05-12")
+	for _, want := range []string{`<summary class="button small" aria-label="Add a reading of Weight">+ Add</summary>`,
+		`<input type="hidden" name="metric" value="Weight"><input type="hidden" name="day" value="2031-05-12">`, `<span>Mon 12 May, kg</span>`} {
+		if !strings.Contains(past, want) {
+			t.Errorf("the day's tile lacks %s", want)
+		}
+	}
+	if today := browse(t, h, "/days/"+fixedToday); !strings.Contains(today, `<span>Today, kg</span>`) {
+		t.Error("today's tile does not say Today")
+	}
+
+	rec := submit(h, "/measurements", url.Values{"metric": {"Weight"}, "day": {"2031-05-12"}, "value": {"79.5"}, "back": {"/days/2031-05-12"}}, "")
+	if loc := rec.Header().Get("Location"); rec.Code != http.StatusSeeOther || (loc != "/days/2031-05-12" && !feedbackLocation(loc, "/days/2031-05-12")) {
+		t.Fatalf("+ Add on a day: %d %q", rec.Code, loc)
+	}
+	if after := browse(t, h, "/days/2031-05-12"); !strings.Contains(after, "and 1 more this day") || !strings.Contains(after, ">79.5 <span class=\"unit\">kg</span>") {
+		t.Error("the day does not show the added reading on its tile")
 	}
 }

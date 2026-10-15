@@ -8,7 +8,7 @@
 - **Date / baseline:** 2026-10-15, `ebf3a87` (master).
 - **Priority:** P2. **Effort:** L, in four steps. **Risk:** LOW to MEDIUM: the browser, and the titles of the
   catalog's actions. No schema change, no new data rule, no action name changes.
-- **Status:** IN PROGRESS: step 1 done.
+- **Status:** IN PROGRESS: steps 1 and 2 done.
 - **Resolves:** no issue, no RFC. The owner's request (2026-10-15), after plan 113: "consolidate this behaviour
   across the entire app so that users always follow the same patterns." An interview followed.
 
@@ -95,3 +95,6 @@ Each step is one commit, with its tests, and can ship alone.
   page in its header. `/metrics?new=metric` and `?new=category` are now `?new=register-metric` and
   `?new=file-pages`. Eighteen catalog titles follow the table above. Tests: `internal/api/new_forms_test.go`, and
   the tests that named the old words or the Home fold.
+- **Step 2, + Add.** The card's + Add is one template, `add-reading` (`layout.html`). A day's reading tile, and so
+  Today's, uses it for that day; its label is Today on today, else the short day. Test:
+  `TestADaysReadingTileAddsAReadingForThatDay`.

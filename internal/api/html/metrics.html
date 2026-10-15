@@ -131,9 +131,7 @@
 {{else if .Measurement}}<a class="reading" href="/measurements/{{.Measurement}}">{{.Value}}{{with .Unit}} <span class="unit">{{.}}</span>{{end}}</a>
 <span class="meta">{{.When}}{{if gt .Count 1}} · {{.Count}} readings{{end}}</span>
 {{.Line}}{{else}}<span class="meta">No reading yet{{with .Unit}} · {{.}}{{end}}</span>{{end}}
-{{if not .Habit}}{{$name := .Name}}{{$unit := .Unit}}{{with $v.Action "record"}}<details class="add-reading"><summary class="button small" aria-label="Add a reading of {{$name}}">+ Add</summary>
-<form class="inline" method="POST" action="{{.Href}}" data-action="{{.Name}}"><input type="hidden" name="back" value="/metrics"><input type="hidden" name="metric" value="{{$name}}"><input type="hidden" name="day" value="{{$v.Props.today}}">
-<label><span>Today{{with $unit}}, {{.}}{{end}}</span><input type="number" name="value" step="any" inputmode="decimal" required></label><button class="primary small">Save</button></form></details>{{end}}{{end}}
+{{if not .Habit}}{{template "add-reading" (dict "action" ($v.Action "record") "metric" .Name "unit" .Unit "day" $v.Props.today "today" $v.Props.today "back" "/metrics")}}{{end}}
 </div>{{end}}</div>{{end}}
 
 {{/* new-here is the link under a category's heading to New metric, with the category filled in */}}
