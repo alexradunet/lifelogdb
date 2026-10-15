@@ -9,7 +9,7 @@
 - **Priority:** P1. **Effort:** XL, in eight steps. **Risk:** MEDIUM: four steps change the schema, which is
   possible only before the freeze ([D13](../decisions/D13-migrations-and-freeze.md)); each of those rewrites the
   owner's rows as text before its table goes, so no word is lost.
-- **Status:** IN PROGRESS: step 4 waits for the owner's word, and the live file waits for the program run.
+- **Status:** IN PROGRESS: the live file waits for the program run; every step is done or decided.
 - **Resolves:** the owner's decision (2026-10-15): "I am looking to strip all the unwanted or complex features in
   order to have a simpler more reliable software." The owner chose every candidate of the inventory below. Each
   schema step has its own issue and RFC, as [RFC 0013](../rfcs/0013-no-sessions.md) and
@@ -57,7 +57,7 @@ flowchart LR
 | 1 | `ask`, `/conversations`, the Conversations pages, the voice note (`capture` audio, the transcriber), the chat, agentic and speech packages, the model configuration | issue 0075, RFC 0015; the non-goals row on AI generation rewritten; README |
 | 2 | `query` (`POST /query`), `core/query.go`, the CLI `query` | README (an application decision) |
 | 3 | `readings-from-table` (`POST /measurements/from-table`), `core/tables.go` | README |
-| 4 | `serve --public` and the token: `serve` is local-only | README |
+| 4 | `serve --public` and the token: kept, by the owner's word (2026-10-15) | README |
 | 5 | the `places` table (point, radius, link_days), `locate`, the map link, the photo's position and its place matching, the folder import of photos; a photo keeps its own day | issue 0076, RFC 0016; D21 and D16 rewritten; cookbook place-of-a-photo removed |
 | 6 | `link_kinds` rows `about`, `located-in`, `parent-of`, `friend`, `family`, `related`; `link` and `unlink` keep `at` only | issue 0077, RFC 0017; D8 and D16 rewritten; cookbook inside-a-place removed |
 | 7 | the `habit_periods` table, `start-habit`, `stop-habit`, `check-in`, `/habits` | issue 0078, RFC 0018; D24 rewritten: a habit is a metric with a daily reading |
@@ -88,10 +88,9 @@ flowchart LR
   `readings` and `--column`, `core/tables.go` with the source `import:table`, the agentic skill
   `lifelog-readings-from-table`. A reading is recorded one at a time with `record`. Record: README, API.md.
   Checks: `go generate ./... && go vet ./... && go test ./...` green.
-- **Step 4 (the public listener).** Not done: the service unit runs `serve --public --token-file … --allow-origin
+- **Step 4 (the public listener).** Kept, by the owner's word (2026-10-15): the service unit runs `serve --public --token-file … --allow-origin
   https://balaur.ojos-sargas.ts.net`, and `tailscale serve` proxies the tailnet to it. Without `--public` the
-  tailnet access would carry no credential and the local Host guard would refuse the proxied host. The owner
-  decides whether to keep it as it is.
+  tailnet access would carry no credential and the local Host guard would refuse the proxied host. The token stays.
 - **Step 5 (photo positions).** Removed: the `places` table and its three triggers, the `places` suite and 19
   mutants, the cookbook recipe place-of-a-photo, `locate`, the map of the places with the world outline and
   `tools/worldmap`, `add-file`'s `at` and `radius` and the position in its answer, the folder import of the CLI's
