@@ -114,19 +114,6 @@ func resultSentences(m map[string]any, c clock) []resultLine {
 	if d, ok := take("day"); ok {
 		say("Filed under %s.", c.timeHTML(fmt.Sprint(d)))
 	}
-	if p, ok := take("place"); ok {
-		say("At %s.", pageLinks([]string{fmt.Sprint(p)}))
-	}
-	if b, _ := take("linked"); b == true { // add-file's own linked: its day got an at link
-		say("Its day is linked to the place.")
-	}
-	if b, _ := take("point_set"); b == true {
-		say("The place took this position as its point.")
-	}
-	if u, ok := take("unmatched"); ok {
-		p, _ := u.(map[string]any)
-		say(`Near no known place: %s, %s (<a href="%s" rel="noreferrer">map</a>).`, esc(num(p["lat"])), esc(num(p["lon"])), esc(fmt.Sprint(p["map"])))
-	}
 	if b, _ := take("embedded"); b == true {
 		say("Shown on its day page.")
 	}

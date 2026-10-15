@@ -38,7 +38,7 @@ func TestMultipartUnknownNameProjection(t *testing.T) {
 	if len(retained) != 0 {
 		t.Fatalf("retained %d unknown names despite zero text bytes", len(retained))
 	}
-	for _, name := range []string{"title", "sha256", "mime", "body", "day", "at", "radius", "dry_run"} {
+	for _, name := range []string{"title", "sha256", "mime", "body", "day", "dry_run"} {
 		if got := fileTextField(name); got != name {
 			t.Errorf("recognized %q projected to %q", name, got)
 		}

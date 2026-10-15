@@ -25,14 +25,12 @@ func editRevisions(s *S) {
 		switch typ {
 		case "person", "metric", "file":
 			c.domain(typ, id, nil)
-		case "place":
-			c.must("INSERT INTO places(id,lat,lon,radius_m) VALUES(?,1,2,30)", id)
 		}
 		if revision(id) != 1 || c.str("SELECT updated_at = created_at FROM entities WHERE id=?", id) != "1" {
 			edited = append(edited, typ)
 		}
 	}
-	s.K("creation is not an edit: a page, person, place with a point, metric and file stay at revision 1 with updated_at = created_at after their typed row", len(edited) == 0, edited)
+	s.K("creation is not an edit: a page, person, place, metric and file stay at revision 1 with updated_at = created_at after their typed row", len(edited) == 0, edited)
 	renamed := c.page("Rename witness")
 	renameBefore := revision(renamed)
 	c.must("INSERT INTO entity_names(entity_id,title,name_key) VALUES (?,'Renamed witness','renamed witness')", renamed)
@@ -91,11 +89,6 @@ func editRevisions(s *S) {
 			s.K("file details advance revision", revision(id) > before)
 		}
 	}
-	place := c.named("place", "")
-	c.must("INSERT INTO places(id,lat,lon,radius_m) VALUES(?,1,2,30)", place)
-	before = revision(place)
-	c.must("UPDATE places SET lat=3 WHERE id=?", place)
-	s.K("place details advance revision", revision(place) > before)
 	metric := c.metric("Revision habit", "")
 	before = revision(metric)
 	c.must("INSERT INTO habit_periods(metric_id,start_day,source) VALUES(?,'2026-01-01','ui')", metric)

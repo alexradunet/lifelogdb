@@ -39,7 +39,7 @@ func TestBrowserAllReadingsCoordinates(t *testing.T) {
 }
 
 func TestBrowserMultipartRecoversAcceptedBody(t *testing.T) {
-	for _, kind := range []string{"title", "preview", "radius", "overflow", "conflict"} {
+	for _, kind := range []string{"title", "preview", "overflow", "conflict"} {
 		t.Run(kind, func(t *testing.T) {
 			c, h := fresh(t)
 			if kind == "conflict" {
@@ -59,8 +59,6 @@ func TestBrowserMultipartRecoversAcceptedBody(t *testing.T) {
 			case "preview":
 				p, _ := mw.CreateFormFile("preview", "bad.png")
 				p.Write([]byte("invalid"))
-			case "radius":
-				mw.WriteField("radius", "bad")
 			case "overflow":
 				mw.WriteField("unknown", strings.Repeat("x", 16<<20))
 			}
@@ -77,19 +75,5 @@ func TestBrowserMultipartRecoversAcceptedBody(t *testing.T) {
 				t.Fatal("wrote file")
 			}
 		})
-	}
-}
-
-func TestBrowserLocateZeroAxes(t *testing.T) {
-	c, h := fresh(t)
-	p := must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "create-place"), map[string]string{"title": "Synthetic point"}))
-	for _, coords := range [][2]string{{"0", "12"}, {"12", "0"}, {"12", "34"}} {
-		p = must(c.Do(t.Context(), find(p, "locate"), map[string]string{"lat": coords[0], "lon": coords[1], "radius_m": "100"}))
-		body := browse(t, h, href(p, "self"))
-		for i, name := range []string{"lat", "lon"} {
-			if !strings.Contains(body, `name="`+name+`" value="`+coords[i]+`"`) {
-				t.Errorf("missing %s=%s", name, coords[i])
-			}
-		}
 	}
 }

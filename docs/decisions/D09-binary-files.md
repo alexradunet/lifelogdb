@@ -17,8 +17,7 @@
     kept once whatever writer sends it — which `entities.import_key`, unique per `source`, cannot promise;
   - `mime`, the original's type (`files_mime`): `audio/mp4` tells a reader the body is a transcript;
   - `preview`, the retained current picture (`files_preview`): a JPEG of at most 1 MB whose long edge the writer scales
-    to at most 1600 px, made by the writer with no metadata — a photo's GPS would be the location history
-    [D21](D21-location-history.md) leaves out — or NULL where the text is the point. A video keeps one frame.
+    to at most 1600 px, made by the writer with no metadata (a photo's GPS among it: [D21](D21-location-history.md) keeps no position), or NULL where the text is the point. A video keeps one frame.
 
   The original remains attached to the same page (`files_identity_fixed`); otherwise two valid file rows could
   exchange originals while every foreign key still passed. The hash and the type never change (`files_original_fixed`);
@@ -30,8 +29,7 @@
   stored in `life.db` and never managed by its writer. A plain page of the file's title — a ghost an earlier embed
   made — becomes the file by the promotion a person takes, its text kept ([keep a file](../cookbook/keep-a-file.md)).
 - **A file's day.** Capture evidence must not become import-time evidence: see [keep a file](../cookbook/keep-a-file.md).
-  A picture with a day of its own appears there once; its position is transient evidence for
-  [the place of a photo](../cookbook/place-of-a-photo.md), not a location history ([D21](D21-location-history.md)).
+  A picture with a day of its own appears there once; its position is never read ([D21](D21-location-history.md)).
 - **Alternatives.**
   - *Keep files deferred, a transcript a plain page keyed by the hash*: rejected — the key deduplicates per `source`
     only, a transcript appended to a day page has no key, and no picture can be kept.

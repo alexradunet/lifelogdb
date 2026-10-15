@@ -11,7 +11,7 @@
   multi-device merge — buys nothing while sync is a non-goal ([non-goals](../architecture/non-goals.md)) [R26](../research/references.md#r26)[R27](../research/references.md#r27).
 - **An id is a permanent reference.** Nothing but `links` rows is deleted, so an entity id is never
   reused, and a named entity also has its retained owned names ([D20](D20-named-pages.md)). Typed extension
-  ownership is guarded separately from foreign-key validity (`people_identity_fixed`, `places_fixed`,
+  ownership is guarded separately from foreign-key validity (`people_identity_fixed`,
   `metrics_identity_fixed`, `files_identity_fixed`): a foreign key alone would allow details
   to move to another identity of the same type. Stable ownership keeps the name, prose, details and edit token
   about the same thing.

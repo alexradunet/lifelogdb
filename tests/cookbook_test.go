@@ -2,7 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"math"
 	"path/filepath"
 	"strings"
 )
@@ -15,7 +14,7 @@ func cookbook(s *S) {
 	cookbookMeasurementReads(s)
 	bl := s.d.CookbookBlocks()
 	first, order := s.d.Blocks()
-	s.K("the cookbook has at least 22 SQL blocks, one or more per recipe, 22 recipes", len(bl) >= 22 && len(first) == 22 && eq(order, s.d.CookbookOrder()), order)
+	s.K("the cookbook has at least 21 SQL blocks, one or more per recipe, 21 recipes", len(bl) >= 21 && len(first) == 21 && eq(order, s.d.CookbookOrder()), order)
 
 	seeded := func(hardened bool, path string) (*C, P) {
 		c := s.freshWith(F{Hardened: hardened, Path: path})
@@ -48,7 +47,6 @@ func cookbook(s *S) {
 			"planning_from": "2026-10-01", "planning_through": "2026-11-30",
 			"sha256": strings.Repeat("ab", 32), "mime": "image/heic", "preview": jpegBytes, "file_title": "2026-09-29 Lake.jpg", "append_embed": 1,
 			"file_key": "2026-09-29 lake.jpg", "body": "The lake at dawn with [[Sam]].",
-			"lat": 38.7139, "lon": -9.1394, "radius_m": 8000, "link_days": 1, "m_per_deg_lon": 111320 * math.Cos(38.7139*math.Pi/180), "taken_day": "2026-08-15",
 			"snapshot": filepath.ToSlash(filepath.Join(s.dir, fmt.Sprintf("cookbook-snapshot-%v.db", hardened)))}
 	}
 

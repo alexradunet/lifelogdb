@@ -151,18 +151,6 @@ func flagValue(name, s string) (bool, error) {
 	return false, core.Invalid("%s must be 0 or 1", name)
 }
 
-// radius is a radius field: whole metres, 0 for the default when it is empty.
-func radius(name, s string) (int, error) {
-	if s == "" {
-		return 0, nil
-	}
-	r, err := strconv.Atoi(s)
-	if err != nil {
-		return 0, core.Invalid("%s %q is not a whole number of metres", name, s)
-	}
-	return r, nil
-}
-
 // The lists page (docs/plans/079-client-contract-hygiene.md): limit and offset select a page, and the entity
 // links the next one when a further row exists, the previous one when offset > 0.
 const maxPageLimit = 500

@@ -3,8 +3,8 @@
 **Status:** accepted
 
 - **Decision.** A place is an entity and a page ([D20](D20-named-pages.md)) with `entity_type = 'place'`: its name is the
-  page title, what the owner knows about it is the page's text, and where it is — a point and a radius, optional —
-  is its `places` row ([D21](D21-location-history.md)): a photo kept there links its day. Where the owner was on a day is a link `at` from that day's page to the place (several
+  page title, and what the owner knows about it is the page's text; it has no point ([D21](D21-location-history.md)).
+  Where the owner was on a day is a link `at` from that day's page to the place (several
   places a day are several links; the link's `note` may say when) — so "where was I on 7 August" and
   "when was I at Lakeside" are one link query each ([where was I](../cookbook/where-was-i.md)). `about` links connect anything to a place;
   `located-in` nests places, so "everything in Japan" is answerable ([inside a place](../cookbook/inside-a-place.md)). There is no `lives-in`

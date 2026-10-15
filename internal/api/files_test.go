@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
-	"fmt"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -149,15 +147,11 @@ func TestFileViews(t *testing.T) {
 	}
 }
 
-// TestAPhotosPlaceAndDay is plan 031 through the API: a photo's own day and position, read from the original.
-func TestAPhotosPlaceAndDay(t *testing.T) {
+// TestAPhotosDay is a photo's own day, read from the original: the photo is filed under it and shown on it. Its
+// position is never read (D21).
+func TestAPhotosDay(t *testing.T) {
 	c, h := fresh(t)
 	root := must(c.Get(t.Context(), "/"))
-	lisbon := must(c.Do(t.Context(), find(root, "create-place"), map[string]string{"title": "Lisbon"}))
-	lisbon = must(c.Do(t.Context(), find(lisbon, "locate"), map[string]string{"lat": "38.7223", "lon": "-9.1393", "radius_m": "10000"}))
-	if pt, _ := props(lisbon)["point"].(map[string]any); pt["radius_m"] != json.Number("10000") || pt["link_days"] != true || href(lisbon, "map") == "" {
-		t.Fatalf("Lisbon located: %+v", props(lisbon))
-	}
 	write := func(name string, b []byte) string {
 		p := filepath.Join(t.TempDir(), name)
 		if err := os.WriteFile(p, b, 0o644); err != nil {
@@ -166,43 +160,22 @@ func TestAPhotosPlaceAndDay(t *testing.T) {
 		return p
 	}
 	add := find(root, "add-file")
-	jpg := write("IMG_1.jpg", phototest.JPEG(64, 48, photo.Meta{Taken: "2019-06-03 07:41:12", Lat: 38.7139, Lon: -9.1394, HasGPS: true}, true))
+	jpg := write("IMG_1.jpg", phototest.JPEG(64, 48, photo.Meta{Taken: "2019-06-03 07:41:12"}, true))
 	e := must(c.DoFiles(t.Context(), add, map[string]string{"title": "2019-06-03 IMG_1.jpg"}, map[string]string{"original": jpg}))
 	res, _ := e.Result.(map[string]any)
-	if res["place"] != "Lisbon" || res["linked"] != true || res["embedded"] != true || res["day"] != "2019-06-03" || props(e)["day"] != "2019-06-03" {
-		t.Fatalf("a photo in Lisbon: %+v", res)
+	if res["embedded"] != true || res["day"] != "2019-06-03" || props(e)["day"] != "2019-06-03" || res["place"] != nil || res["unmatched"] != nil {
+		t.Fatalf("a photo with a day: %+v", res)
 	}
 	day := must(c.Get(t.Context(), "/days/2019-06-03"))
-	if !strings.Contains(fmt.Sprint(day.Properties), "Lisbon") {
-		t.Errorf("the day view does not say where the day was: %+v", day.Properties)
-	}
 	if body := browse(t, h, href(day, "page")); !strings.Contains(body, `<img src="/previews?title=2019-06-03+IMG_1.jpg"`) {
 		t.Errorf("the day page does not show the photo")
 	}
-	// a HEIC in Porto: no picture, no embed; near no place, then named
-	heic := write("IMG_2.HEIC", phototest.HEIC(photo.Meta{Taken: "2019-06-04 10:00:00", Lat: 41.1496, Lon: -8.6110, HasGPS: true}, false, false))
+	// a HEIC: no picture, no embed, its day still read
+	heic := write("IMG_2.HEIC", phototest.HEIC(photo.Meta{Taken: "2019-06-04 10:00:00"}, false, false))
 	e = must(c.DoFiles(t.Context(), add, map[string]string{"title": "2019-06-04 IMG_2.HEIC"}, map[string]string{"original": heic}))
 	res, _ = e.Result.(map[string]any)
-	u, _ := res["unmatched"].(map[string]any)
-	if u == nil || !strings.Contains(fmt.Sprint(u["map"]), "openstreetmap.org") || res["linked"] == true || res["embedded"] == true {
-		t.Fatalf("a HEIC near no place: %+v", res)
-	}
-	e = must(c.DoFiles(t.Context(), add, map[string]string{"title": "x", "at": "Porto", "radius": "6000"}, map[string]string{"original": heic}))
-	if res, _ = e.Result.(map[string]any); res["existing"] != true || res["point_set"] != true || res["linked"] != true || res["place"] != "Porto" {
-		t.Errorf("named: %+v", res)
-	}
-	porto := must(c.Get(t.Context(), "/pages?title=Porto"))
-	if pt, _ := props(porto)["point"].(map[string]any); pt["radius_m"] != json.Number("6000") || find(porto, "locate").Name == "" {
-		t.Errorf("Porto: %+v", props(porto))
-	}
-	if body := browse(t, h, href(porto, "self")); !strings.Contains(body, "6000 m") || !strings.Contains(body, `action="`+href(porto, "self")+`/locate"`) {
-		t.Errorf("a place page shows no point or no locate form")
-	}
-	if _, err := c.Do(t.Context(), find(porto, "locate"), map[string]string{"lat": "0", "lon": "0", "radius_m": "100"}); err == nil {
-		t.Error("0°, 0° was accepted as a place's point")
-	}
-	if _, err := c.DoFiles(t.Context(), add, map[string]string{"title": "y", "radius": "big"}, map[string]string{"original": heic}); err == nil {
-		t.Error("a radius that is not a number was accepted")
+	if res["day"] != "2019-06-04" || res["embedded"] == true {
+		t.Fatalf("a HEIC: %+v", res)
 	}
 }
 
@@ -262,55 +235,12 @@ func TestAddFileDryRunWritesNothing(t *testing.T) {
 	}
 }
 
-func TestPhotoGPSReferences(t *testing.T) {
-	for _, malformed := range []bool{true, false} {
-		t.Run(fmt.Sprint(malformed), func(t *testing.T) {
-			c, _ := fresh(t)
-			root := must(c.Get(t.Context(), "/"))
-			place := must(c.Do(t.Context(), find(root, "create-place"), map[string]string{"title": "Southwest"}))
-			if !malformed {
-				must(c.Do(t.Context(), find(place, "locate"), map[string]string{"lat": "-12", "lon": "-34", "radius_m": "1000"}))
-			}
-			b := phototest.JPEG(32, 24, photo.Meta{Taken: "2026-10-05 12:34:56", Lat: -12, Lon: -34, HasGPS: true, Orientation: 6}, true)
-			if malformed {
-				b = phototest.GPSReference(b, 1, 2, 2, "Sx", false)
-			}
-			p := filepath.Join(t.TempDir(), "synthetic.jpg")
-			if err := os.WriteFile(p, b, 0o644); err != nil {
-				t.Fatal(err)
-			}
-			fields := map[string]string{"title": "synthetic.jpg", "body": "kept text"}
-			e := must(c.DoFiles(t.Context(), find(root, "add-file"), fields, map[string]string{"original": p}))
-			res, _ := e.Result.(map[string]any)
-			file, _ := props(e)["file"].(map[string]any)
-			if props(e)["body"] != "kept text" || file["preview"] != true || res["day"] != "2026-10-05" || res["embedded"] != true {
-				t.Fatalf("file/day lost: %+v %+v", props(e), res)
-			}
-			if malformed {
-				if res["linked"] == true || res["point_set"] == true || res["unmatched"] != nil {
-					t.Errorf("guessed GPS persisted: %+v", res)
-				}
-				place = must(c.Get(t.Context(), "/pages?title=Southwest"))
-				if props(place)["point"] != nil {
-					t.Errorf("guessed point: %+v", props(place))
-				}
-				day := must(c.Get(t.Context(), "/days/2026-10-05"))
-				if strings.Contains(fmt.Sprint(day.Properties), "Southwest") {
-					t.Errorf("guessed at link: %+v", day.Properties)
-				}
-			} else if res["place"] != "Southwest" || res["linked"] != true {
-				t.Errorf("valid southwest lost: %+v", res)
-			}
-		})
-	}
-}
-
 func TestBrowserMutationFeedbackPhoto(t *testing.T) {
 	_, h := fresh(t)
 	for _, dry := range []bool{true, false} {
 		var b bytes.Buffer
 		mw := multipart.NewWriter(&b)
-		mw.WriteField("title", "Unmatched synthetic.jpg")
+		mw.WriteField("title", "Dated synthetic.jpg")
 		if dry {
 			mw.WriteField("dry_run", "1")
 		}
@@ -318,7 +248,7 @@ func TestBrowserMutationFeedbackPhoto(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		part.Write(phototest.JPEG(64, 48, photo.Meta{Taken: "2019-06-04 10:00:00", Lat: 41.1496, Lon: -8.6110, HasGPS: true}, true))
+		part.Write(phototest.JPEG(64, 48, photo.Meta{Taken: "2019-06-04 10:00:00"}, true))
 		mw.Close()
 		req := httptest.NewRequest("POST", "/files", &b)
 		req.Header.Set("Content-Type", mw.FormDataContentType())
@@ -340,7 +270,7 @@ func TestBrowserMutationFeedbackPhoto(t *testing.T) {
 			}
 			body = browse(t, h, location)
 		}
-		for _, want := range []string{"Result", "Near no known place: 41.1496"} { // the toast says the result in words
+		for _, want := range []string{"Result", "Filed under"} { // the toast says the result in words
 			if !strings.Contains(body, want) {
 				t.Errorf("photo feedback missing %q", want)
 			}

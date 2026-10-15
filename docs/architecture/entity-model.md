@@ -10,7 +10,7 @@ is derived and rebuildable and is not drawn.)
 One named identity and prose body per linkable thing (`entities`), with authoritative spellings in
 `entity_names` and a preferred selection checked by a deferred owner FK. A person, place, metric or file
 is a page concept, not a separate prose row. Typed extensions reference `(id, entity_type)`
-directly on `entities`; a place's point remains optional. The polymorphic `links` graph references
+directly on `entities`; a place has no typed row. The polymorphic `links` graph references
 the same stable id and the closed `link_kinds` registry.
 
 ```mermaid
@@ -20,7 +20,6 @@ erDiagram
     entity_names ||--o| entities : "id"
     entities ||--o| people : "id"
     entities ||--o| files : "id"
-    entities ||--o| places : "id"
     entities ||--o{ links    : "from_id"
     entities ||--o{ links    : "to_id"
     link_kinds ||--o{ links  : "kind"
@@ -38,10 +37,6 @@ erDiagram
         TEXT entity_type FK
     }
     files {
-        INTEGER id PK, FK
-        TEXT entity_type FK
-    }
-    places {
         INTEGER id PK, FK
         TEXT entity_type FK
     }

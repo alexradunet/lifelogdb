@@ -12,10 +12,8 @@ import (
 
 // Meta is what the metadata says; the zero of each field is "it does not say".
 type Meta struct {
-	Taken       string  // the local date and time it was taken (EXIF DateTimeOriginal, the camera's clock), "2006-01-02 15:04:05"
-	Lat, Lon    float64 // WGS84 degrees, when HasGPS
-	HasGPS      bool    // a position, and not 0°, 0° (how photo metadata says "no location")
-	Orientation int     // the EXIF orientation, 1-8; 1 when it has none
+	Taken       string // the local date and time it was taken (EXIF DateTimeOriginal, the camera's clock), "2006-01-02 15:04:05"
+	Orientation int    // the EXIF orientation, 1-8; 1 when it has none
 }
 
 // Day is the local day it was taken (lifelog_meta.days: the calendar of the device that captured it), "" when none.
@@ -324,24 +322,6 @@ func parseTIFF(t []byte) Meta {
 			}
 		}
 	}
-	if p, ok := ifd0[0x8825]; ok {
-		gps := entries(t, bo, int(p.long(t, bo)))
-		lat, okLat := gps[0x0002].degrees(t, bo)
-		lon, okLon := gps[0x0004].degrees(t, bo)
-		latRef := gps[0x0001].reference(t, bo, 'N', 'S')
-		lonRef := gps[0x0003].reference(t, bo, 'E', 'W')
-		if okLat && okLon && latRef != 0 && lonRef != 0 {
-			if latRef == 'S' {
-				lat = -lat
-			}
-			if lonRef == 'W' {
-				lon = -lon
-			}
-			if lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180 && (lat != 0 || lon != 0) {
-				m.Lat, m.Lon, m.HasGPS = lat, lon, true
-			}
-		}
-	}
 	return m
 }
 
@@ -404,34 +384,4 @@ func (e entry) ascii(t []byte, bo binary.ByteOrder) string {
 		return ""
 	}
 	return string(e.value(t, bo))
-}
-
-// reference requires the EXIF ASCII count of two: a hemisphere and its NUL terminator.
-func (e entry) reference(t []byte, bo binary.ByteOrder, positive, negative byte) byte {
-	if e.typ != 2 || e.count != 2 {
-		return 0
-	}
-	v := e.value(t, bo)
-	if len(v) != 2 || v[1] != 0 || (v[0] != positive && v[0] != negative) {
-		return 0
-	}
-	return v[0]
-}
-
-// degrees is a GPS coordinate: three rationals, degrees, minutes and seconds.
-func (e entry) degrees(t []byte, bo binary.ByteOrder) (float64, bool) {
-	v := e.value(t, bo)
-	if e.typ != 5 || e.count != 3 || len(v) != 24 {
-		return 0, false
-	}
-	var d [3]float64
-	for i := range 3 {
-		num, den := bo.Uint32(v[8*i:]), bo.Uint32(v[8*i+4:])
-		if den == 0 {
-			return 0, false
-		}
-		d[i] = float64(num) / float64(den)
-	}
-	deg := d[0] + d[1]/60 + d[2]/3600
-	return deg, !math.IsNaN(deg) && !math.IsInf(deg, 0)
 }

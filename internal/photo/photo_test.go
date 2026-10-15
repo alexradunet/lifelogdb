@@ -9,11 +9,9 @@ import (
 	"lifelog/internal/photo/phototest"
 )
 
-func near(a, b float64) bool { return math.Abs(a-b) < 1e-6 }
-
 func TestReadsAJPEGAndAHEIC(t *testing.T) {
-	want := photo.Meta{Taken: "2019-06-03 07:41:12", Lat: 38.7139, Lon: -9.1394, HasGPS: true, Orientation: 6}
-	south := photo.Meta{Taken: "2024-01-31 23:59:59", Lat: -33.8568, Lon: 151.2153, HasGPS: true, Orientation: 1}
+	want := photo.Meta{Taken: "2019-06-03 07:41:12", Orientation: 6}
+	south := photo.Meta{Taken: "2024-01-31 23:59:59", Orientation: 1}
 	for _, little := range []bool{false, true} {
 		for name, b := range map[string][]byte{
 			"JPEG":         phototest.JPEG(40, 30, want, little),
@@ -21,11 +19,11 @@ func TestReadsAJPEGAndAHEIC(t *testing.T) {
 			"HEIC in idat": phototest.HEIC(want, little, true),
 		} {
 			got := photo.Read(b)
-			if got.Taken != want.Taken || !got.HasGPS || !near(got.Lat, want.Lat) || !near(got.Lon, want.Lon) || got.Orientation != 6 || got.Day() != "2019-06-03" {
+			if got.Taken != want.Taken || got.Orientation != 6 || got.Day() != "2019-06-03" {
 				t.Errorf("%s (little-endian %v): %+v", name, little, got)
 			}
 		}
-		if got := photo.Read(phototest.JPEG(8, 8, south, little)); !near(got.Lat, south.Lat) || !near(got.Lon, south.Lon) || got.Taken != south.Taken {
+		if got := photo.Read(phototest.JPEG(8, 8, south, little)); got.Taken != south.Taken {
 			t.Errorf("south and east (little-endian %v): %+v", little, got)
 		}
 	}
@@ -35,21 +33,20 @@ func TestSaysNothingItDoesNotKnow(t *testing.T) {
 	for name, b := range map[string][]byte{
 		"no EXIF":         phototest.JPEG(8, 8, photo.Meta{}, false)[:0],
 		"not a photo":     []byte("%PDF-1.7 hello"),
-		"0°, 0°":          phototest.JPEG(8, 8, photo.Meta{Taken: "2019-06-03 07:41:12", HasGPS: true}, false),
 		"a date alone":    phototest.JPEG(8, 8, photo.Meta{Taken: "2019-06-03 07:41:12"}, true),
-		"a HEIC's head":   phototest.HEIC(photo.Meta{Taken: "2019-06-03 07:41:12", Lat: 1, Lon: 1, HasGPS: true}, false, false)[:200],
-		"a JPEG's head":   phototest.JPEG(8, 8, photo.Meta{Taken: "2019-06-03 07:41:12", Lat: 1, Lon: 1, HasGPS: true}, false)[:40],
+		"a HEIC's head":   phototest.HEIC(photo.Meta{Taken: "2019-06-03 07:41:12"}, false, false)[:200],
+		"a JPEG's head":   phototest.JPEG(8, 8, photo.Meta{Taken: "2019-06-03 07:41:12"}, false)[:40],
 		"garbage in ftyp": append([]byte("\x00\x00\x00\x10ftypheic\x00\x00\x00\x00"), 0xFF, 0xFF, 0xFF, 0xFF, 'm', 'e', 't', 'a'),
 	} {
 		got := photo.Read(b)
-		if got.HasGPS || got.Orientation != 1 && got.Orientation != 0 {
+		if got.Orientation != 1 && got.Orientation != 0 {
 			t.Errorf("%s: %+v", name, got)
 		}
-		if name != "a date alone" && name != "0°, 0°" && got.Taken != "" {
+		if name != "a date alone" && got.Taken != "" {
 			t.Errorf("%s: a date from nowhere: %+v", name, got)
 		}
 	}
-	if got := photo.Read(phototest.JPEG(8, 8, photo.Meta{Taken: "2019-06-03 07:41:12"}, true)); got.Day() != "2019-06-03" || got.HasGPS {
+	if got := photo.Read(phototest.JPEG(8, 8, photo.Meta{Taken: "2019-06-03 07:41:12"}, true)); got.Day() != "2019-06-03" {
 		t.Errorf("a date alone: %+v", got)
 	}
 	if (photo.Meta{}).Day() != "" {
@@ -58,7 +55,7 @@ func TestSaysNothingItDoesNotKnow(t *testing.T) {
 }
 
 func TestHEIFLocationVersions(t *testing.T) {
-	want := photo.Meta{Taken: "2026-10-05 12:34:56", Lat: 38.7139, Lon: -9.1394, HasGPS: true, Orientation: 8}
+	want := photo.Meta{Taken: "2026-10-05 12:34:56", Orientation: 8}
 	item := heifExifItem(want, true, 0)
 	split := len(item) / 2
 	for name, b := range map[string][]byte{
@@ -70,14 +67,14 @@ func TestHEIFLocationVersions(t *testing.T) {
 		"version 1 repeated extents": heifWithLocations(1, 4, 4, 0, 0, item, heifLocation{id: 102, typ: "Exif", method: 1, extents: []heifExtent{{n: uint64(split)}, {off: uint64(split), n: uint64(len(item) - split)}}}),
 	} {
 		got := readPhoto(t, b)
-		if got.Taken != want.Taken || !got.HasGPS || !near(got.Lat, want.Lat) || !near(got.Lon, want.Lon) || got.Orientation != want.Orientation {
+		if got.Taken != want.Taken || got.Orientation != want.Orientation {
 			t.Errorf("%s: %+v", name, got)
 		}
 	}
 }
 
 func TestHEIFLocationBounds(t *testing.T) {
-	want := photo.Meta{Taken: "2026-10-05 12:34:56", Lat: 1, Lon: 2, HasGPS: true, Orientation: 6}
+	want := photo.Meta{Taken: "2026-10-05 12:34:56", Orientation: 6}
 	item := heifExifItem(want, false, 0)
 	valid := heifWithLocations(1, 4, 4, 0, 0, item, heifLocation{id: 102, typ: "Exif", method: 1, extents: []heifExtent{{n: uint64(len(item))}}})
 	overlapIDAT := append([]byte{0}, item...)
@@ -102,7 +99,7 @@ func TestHEIFLocationBounds(t *testing.T) {
 	}
 	for name, b := range unknown {
 		got := readPhoto(t, b)
-		if got.Taken != "" || got.HasGPS || got.Orientation != 1 {
+		if got.Taken != "" || got.Orientation != 1 {
 			t.Errorf("%s: %+v", name, got)
 		}
 	}
@@ -111,7 +108,7 @@ func TestHEIFLocationBounds(t *testing.T) {
 		heifLocation{id: 101, typ: "hvc1", method: 0, extents: []heifExtent{{off: 1 << 40, n: 64}}},
 		heifLocation{id: 102, typ: "Exif", method: 1, extents: []heifExtent{{n: uint64(len(item))}}},
 	)
-	if got := readPhoto(t, withSkippedImage); got.Taken != want.Taken || !got.HasGPS {
+	if got := readPhoto(t, withSkippedImage); got.Taken != want.Taken {
 		t.Errorf("Exif after unavailable image item: %+v", got)
 	}
 
@@ -120,19 +117,19 @@ func TestHEIFLocationBounds(t *testing.T) {
 		heifLocation{id: 101, typ: "hvc1", method: 0, extents: manyExtents},
 		heifLocation{id: 102, typ: "Exif", method: 1, extents: []heifExtent{{n: uint64(len(item))}}},
 	)
-	if got := readPhoto(t, withManySkippedExtents); got.Taken != want.Taken || !got.HasGPS {
+	if got := readPhoto(t, withManySkippedExtents); got.Taken != want.Taken {
 		t.Errorf("Exif after many skipped extents: %+v", got)
 	}
 
 	budgetItem := heifExifItem(want, false, 1<<20-4-6-len(phototest.TIFF(want, false)))
 	atBudget := heifWithLocations(1, 4, 4, 0, 0, budgetItem, heifLocation{id: 102, typ: "Exif", method: 1, extents: []heifExtent{{n: uint64(len(budgetItem))}}})
-	if got := readPhoto(t, atBudget); got.Taken != want.Taken || !got.HasGPS || got.Orientation != want.Orientation {
+	if got := readPhoto(t, atBudget); got.Taken != want.Taken || got.Orientation != want.Orientation {
 		t.Errorf("budget boundary: %+v", got)
 	}
 }
 
 func FuzzRead(f *testing.F) {
-	meta := photo.Meta{Taken: "2026-10-05 12:34:56", Lat: 38.7139, Lon: -9.1394, HasGPS: true, Orientation: 6}
+	meta := photo.Meta{Taken: "2026-10-05 12:34:56", Orientation: 6}
 	for _, seed := range [][]byte{
 		{},
 		[]byte("%PDF-1.7 hello"),
@@ -246,38 +243,4 @@ func heifTestBox(typ string, body ...[]byte) []byte {
 	}
 	binary.BigEndian.PutUint32(b, uint32(len(b)))
 	return b
-}
-
-func TestGPSReferences(t *testing.T) {
-	for _, little := range []bool{false, true} {
-		for _, lat := range []float64{-12, 0, 12} {
-			for _, lon := range []float64{-34, 0, 34} {
-				want := photo.Meta{Taken: "2026-10-05 12:34:56", Orientation: 6, Lat: lat, Lon: lon, HasGPS: true}
-				for name, b := range map[string][]byte{"JPEG": phototest.JPEG(8, 8, want, little), "HEIC mdat": phototest.HEIC(want, little, false), "HEIC idat": phototest.HEIC(want, little, true)} {
-					got := photo.Read(b)
-					if got.HasGPS != (lat != 0 || lon != 0) || !near(got.Lat, lat) || !near(got.Lon, lon) {
-						t.Fatalf("%s little=%v valid: %+v", name, little, got)
-					}
-					for _, axis := range []uint16{1, 3} {
-						for _, bad := range []struct {
-							name, value string
-							typ         uint16
-							count       uint32
-							absent      bool
-						}{
-							{"absent", "", 2, 2, true}, {"empty", "", 2, 2, false}, {"wrong axis", "E\x00", 2, 2, false}, {"text", "South", 2, 4, false}, {"prefix", "Sx", 2, 2, false}, {"type", "S\x00", 1, 2, false}, {"short count", "S", 2, 1, false}, {"long count", "S\x00\x00", 2, 3, false}, {"truncated", "", 2, 8, false}, {"lowercase", "s\x00", 2, 2, false},
-						} {
-							if axis == 3 && bad.name == "wrong axis" {
-								bad.value = "N\x00"
-							}
-							got = photo.Read(phototest.GPSReference(b, axis, bad.typ, bad.count, bad.value, bad.absent))
-							if got.HasGPS || got.Lat != 0 || got.Lon != 0 || got.Taken != want.Taken || got.Orientation != want.Orientation {
-								t.Errorf("%s little=%v axis=%d %s: %+v", name, little, axis, bad.name, got)
-							}
-						}
-					}
-				}
-			}
-		}
-	}
 }

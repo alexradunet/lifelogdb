@@ -8,7 +8,6 @@ import (
 
 func schemaSafeguards(s *S) {
 	schemaTextNUL(s)
-	placePointOwnership(s)
 	referencedGhosts(s)
 	fixedDetailOwnership(s)
 	fixedEntityCreation(s)
@@ -56,34 +55,6 @@ func schemaTextNUL(s *S) {
 		}
 	}
 	s.K("SQLite TEXT length and GLOB ignore a NUL suffix", c.n("SELECT length('UTC'||char(0)||'!')=3 AND ('UTC'||char(0)||'!') NOT GLOB '*[^A-Za-z0-9_/+-]*'") == 1)
-}
-
-func placePointOwnership(s *S) {
-	c := s.fresh()
-	a, b := c.named("place", "Point owner"), c.named("place", "Unlocated place")
-	c.must("INSERT INTO places(id,lat,lon,radius_m) VALUES(?,1,2,30)", a)
-	state := func() string {
-		return c.tab("SELECT id,lat,lon,radius_m,link_days FROM places ORDER BY id") + " / " + c.tab("SELECT id,revision,updated_at FROM entities ORDER BY id")
-	}
-	for _, alias := range []string{"id", "rowid", "_rowid_", "oid"} {
-		for _, combined := range []bool{false, true} {
-			before := state()
-			c.must("BEGIN IMMEDIATE")
-			q := "UPDATE places SET " + alias + "=?"
-			if combined {
-				q += ",lat=3"
-			}
-			r := c.tryx(q+" WHERE id=?", b, a)
-			s.K(fmt.Sprintf("place %s combined=%v ownership refusal is atomic", alias, combined), strings.Contains(r, "immutable") && state() == before, r)
-			c.must("ROLLBACK")
-		}
-		before := state()
-		r := c.tryx("UPDATE places SET "+alias+"=id WHERE id=?", a)
-		s.K("place "+alias+" ownership no-op preserves revisions", r == "OK" && state() == before, r)
-	}
-	before := c.n("SELECT revision FROM entities WHERE id=?", a)
-	c.must("UPDATE places SET lat=3 WHERE id=?", a)
-	s.K("place point edits still advance owner revision", c.n("SELECT revision FROM entities WHERE id=?", a) > before && c.n("SELECT lat=3 FROM places WHERE id=?", a) == 1)
 }
 
 func referencedGhosts(s *S) {

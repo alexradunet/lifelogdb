@@ -199,29 +199,6 @@ CREATE TRIGGER people_identity_fixed BEFORE UPDATE ON people
  WHEN NEW.id IS NOT OLD.id
 BEGIN SELECT RAISE(ABORT, 'people identity and ownership are immutable'); END;
 
-CREATE TABLE places (
-  -- where a place is (D21): one point and a radius, never where the owner was — that is the at links of the day
-  -- pages (D16). Optional: a place without a row has no point and is never matched. A photo's position is matched
-  -- when the photo is kept, to the live places whose circle holds it: the smallest radius first, then the nearest.
-  -- The distance needs no math function: the app binds the metres per degree of longitude at the position's latitude
-  -- (111320 * cos(lat)) and compares the squared equirectangular distance with radius_m squared; a circle is not
-  -- matched across the 180th meridian. link_days = 1: the photo's day gets an at link to the place; 0: the place is
-  -- recognised (its photos are never asked about) and not linked — home, work. The photo's position is never stored.
-  -- A wrong point is fixed by UPDATE; its owning id never changes. Never deleted: tombstone the entity (D11).
-  id          INTEGER PRIMARY KEY,
-  entity_type TEXT NOT NULL DEFAULT 'place' CONSTRAINT places_entity_type CHECK (entity_type = 'place'),
-  lat         REAL NOT NULL CONSTRAINT places_lat CHECK (lat BETWEEN -90 AND 90),      -- WGS84 degrees
-  lon         REAL NOT NULL CONSTRAINT places_lon CHECK (lon BETWEEN -180 AND 180),
-  radius_m    INTEGER NOT NULL CONSTRAINT places_radius CHECK (radius_m BETWEEN 10 AND 100000),   -- a café ~100, a city ~10000
-  link_days   INTEGER NOT NULL DEFAULT 1 CONSTRAINT places_link_days CHECK (link_days IN (0, 1)),
-  FOREIGN KEY (id, entity_type) REFERENCES entities(id, entity_type),
-  CONSTRAINT places_not_null_island CHECK (lat <> 0 OR lon <> 0)   -- 0°, 0° is how photo metadata says "no location"
-) STRICT;
-
-CREATE TRIGGER places_fixed BEFORE UPDATE ON places
- WHEN NEW.id IS NOT OLD.id
-BEGIN SELECT RAISE(ABORT, 'place point ownership is immutable'); END;
-
 CREATE TABLE metrics (
   -- The owning id is immutable (metrics_identity_fixed), including through rowid aliases.
   -- what is measured (D7). A metric is also a page with the same id (D27), as a person is: its title is
@@ -626,7 +603,7 @@ CREATE TABLE link_kinds (
 INSERT INTO link_kinds(kind, symmetric, from_types, to_types, note) VALUES
   ('wikilink', 0, 'page,person,place,metric,file', 'page,person,place,metric,file', 'extracted from [[body]] on save (an embed ![[...]] is one); body is the truth'),
   ('about',    0, NULL,        'person,place', 'entity → person/place it is about'),
-  ('at',       0, 'page',      'place',        'day page → a place the owner was at that day; from a day page only, which links_endpoint_types checks (D16); a photo kept makes one to the place its position is in (D21)'),
+  ('at',       0, 'page',      'place',        'day page → a place the owner was at that day; from a day page only, which links_endpoint_types checks (D16)'),
   ('located-in', 0, 'place',   'place',        'containment: Tokyo → Japan; transitive — walk it with a recursive CTE'),
   ('parent-of', 0, 'person',   'person',       'parent → child; ''family'' stays the symmetric catch-all'),
   ('part-of',  0, NULL,        'page',         'anything → the page of a category it is filed in (Ferritin → Iron → Biomarkers, D26); walk it with a recursive CTE'),
@@ -744,11 +721,6 @@ CREATE TRIGGER people_touch AFTER UPDATE ON people
 BEGIN
   UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), revision = revision + 1 WHERE id = NEW.id;
 END;
-CREATE TRIGGER places_touch AFTER UPDATE ON places
- WHEN NEW.lat IS NOT OLD.lat OR NEW.lon IS NOT OLD.lon OR NEW.radius_m IS NOT OLD.radius_m OR NEW.link_days IS NOT OLD.link_days
-BEGIN
-  UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), revision = revision + 1 WHERE id = NEW.id;
-END;
 CREATE TRIGGER files_touch AFTER UPDATE ON files WHEN NEW.preview IS NOT OLD.preview
 BEGIN
   UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), revision = revision + 1 WHERE id = NEW.id;
@@ -806,8 +778,6 @@ BEGIN
 END;
 CREATE TRIGGER people_no_delete BEFORE DELETE ON people
 BEGIN SELECT RAISE(ABORT, 'people are never deleted: tombstone the entity (entities.deleted_at)'); END;
-CREATE TRIGGER places_no_delete BEFORE DELETE ON places
-BEGIN SELECT RAISE(ABORT, 'places are never deleted: fix a wrong point by UPDATE, tombstone the entity (entities.deleted_at)'); END;
 CREATE TRIGGER metrics_no_delete BEFORE DELETE ON metrics
 BEGIN SELECT RAISE(ABORT, 'metrics are never deleted: tombstone the entity (entities.deleted_at)'); END;
 CREATE TRIGGER files_no_delete BEFORE DELETE ON files

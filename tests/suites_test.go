@@ -23,7 +23,6 @@ var suites = []struct {
 	{"name-grammar", nameGrammar},
 	{"name-ownership", nameOwnership},
 	{"files", files},
-	{"places", places},
 	{"pages", pages},
 	{"renames", renames},
 	{"links", links},

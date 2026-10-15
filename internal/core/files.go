@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"math"
 	"mime"
 	"strings"
 
@@ -15,11 +14,10 @@ import (
 // FileIn is a file to keep (docs/cookbook/keep-a-file.md, D9): the hash and type of the original, which is never
 // stored; the title and text of its page; its preview, a JPEG preview.Make made (nil for none). Its day is Day when
 // the caller gives one, else Taken, else today for ordinary files. Unknown-capture mode follows
-// docs/cookbook/keep-a-file.md and withholds incidental place writes. Its position (HasGPS) is
-// matched to a place and never stored; At names the place instead, which takes the position as its point if it has
-// none, with Radius (cookbook/place-of-a-photo.md).
+// docs/cookbook/keep-a-file.md: a photo with no day of its own goes in no day page. A photo's position is never
+// read (D21).
 type FileIn struct {
-	UnknownCaptureDay bool // Explicit selected-photo mode: no inferred attribution or incidental place writes.
+	UnknownCaptureDay bool // Explicit selected-photo mode: no inferred attribution.
 	Title             string
 	SHA256            string
 	MIME              string
@@ -27,35 +25,20 @@ type FileIn struct {
 	Day               string
 	Taken             string
 	Preview           []byte
-	Lat, Lon          float64
-	HasGPS            bool
-	At                string
-	Radius            int
 }
 
 // Kept is what keeping a file did.
 type Kept struct {
-	StoredDay    string    `json:"stored_day,omitempty"`    // Existing attribution, not new capture evidence.
-	ID           int64     `json:"id,omitempty"`            // none in a dry run that would create the page
-	Existing     bool      `json:"existing,omitempty"`      // the original was kept already: that page, nothing else written
-	Deleted      bool      `json:"deleted,omitempty"`       // ...and it is tombstoned, so not even a preview was added
-	PreviewAdded bool      `json:"preview_added,omitempty"` // a file kept without a preview got this one
-	Promoted     bool      `json:"promoted,omitempty"`      // a plain page of the title (a ghost an embed made) became the file
-	Sync         *Sync     `json:"sync,omitempty"`          // the links its text names; none when nothing was written
-	DaySync      *Sync     `json:"day_sync,omitempty"`      // the links synchronized when appending to its day
-	Day          string    `json:"day,omitempty"`           // its own day: the caller's, or the one its metadata gives
-	Place        string    `json:"place,omitempty"`         // the place its position is in, or the one named for it
-	Linked       bool      `json:"linked,omitempty"`        // its day has an at link to that place
-	PointSet     bool      `json:"point_set,omitempty"`     // the place named took its position as its point
-	Unmatched    *Position `json:"unmatched,omitempty"`     // its position, in no place's circle: name the place with at
-	Embedded     bool      `json:"embedded,omitempty"`      // it was appended to its day's page
-}
-
-// Position is a photo's position, reported (never stored) when no place holds it.
-type Position struct {
-	Lat float64 `json:"lat"`
-	Lon float64 `json:"lon"`
-	Map string  `json:"map"`
+	StoredDay    string `json:"stored_day,omitempty"`    // Existing attribution, not new capture evidence.
+	ID           int64  `json:"id,omitempty"`            // none in a dry run that would create the page
+	Existing     bool   `json:"existing,omitempty"`      // the original was kept already: that page, nothing else written
+	Deleted      bool   `json:"deleted,omitempty"`       // ...and it is tombstoned, so not even a preview was added
+	PreviewAdded bool   `json:"preview_added,omitempty"` // a file kept without a preview got this one
+	Promoted     bool   `json:"promoted,omitempty"`      // a plain page of the title (a ghost an embed made) became the file
+	Sync         *Sync  `json:"sync,omitempty"`          // the links its text names; none when nothing was written
+	DaySync      *Sync  `json:"day_sync,omitempty"`      // the links synchronized when appending to its day
+	Day          string `json:"day,omitempty"`           // its own day: the caller's, or the one its metadata gives
+	Embedded     bool   `json:"embedded,omitempty"`      // it was appended to its day's page
 }
 
 // AddFile keeps a file: the page the original's hash names already, or a new file page, or a plain page of the title
@@ -71,16 +54,8 @@ func (t *Tx) AddFile(f FileIn) (k Kept, err error) {
 			return k, Invalid("%v", err)
 		}
 	}
-	if f.Radius == 0 {
-		f.Radius = DefaultRadius
-	}
-	// a position is matched, never stored, so the places CHECKs never see it: the same bounds, and 0°, 0° is how
-	// photo metadata says "no location" (places_lat, places_lon, places_not_null_island)
-	if f.HasGPS && (f.Lat == 0 && f.Lon == 0 || math.IsNaN(f.Lat) || math.IsNaN(f.Lon) || f.Lat < -90 || f.Lat > 90 || f.Lon < -180 || f.Lon > 180) {
-		return k, Invalid("a position is a latitude -90..90 and a longitude -180..180, and 0°, 0° is no position")
-	}
-	if f.UnknownCaptureDay && (f.Day != "" || f.Taken != "" || f.At != "") {
-		return k, Invalid("unknown capture day requires no day attribution or selected place")
+	if f.UnknownCaptureDay && (f.Day != "" || f.Taken != "") {
+		return k, Invalid("unknown capture day requires no day attribution")
 	}
 	day, own := f.Day, true
 	switch {
@@ -197,55 +172,14 @@ func (t *Tx) placeAndDay(k *Kept, f FileIn, title, day string, own, picture bool
 	if own {
 		k.Day = day
 	}
-	if f.UnknownCaptureDay {
-		return nil
-	}
-	var place int64
-	link := false
-	switch {
-	case f.At != "":
-		id, err := t.placeFor(f.At)
-		if err != nil {
-			return err
-		}
-		if f.HasGPS {
-			if k.PointSet, err = t.pointIfNone(id, Point{f.Lat, f.Lon, f.Radius, true}); err != nil {
-				return err
-			}
-		}
-		var days sql.NullBool // a place with no point yet is linked: the owner named it
-		if err := t.tx.QueryRowContext(t.ctx, `SELECT p_name.title, pl.link_days FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key  LEFT JOIN places pl ON pl.id = p.id WHERE p.id = ?`, id).
-			Scan(&k.Place, &days); err != nil {
-			return err
-		}
-		place, link = id, !days.Valid || days.Bool
-	case f.HasGPS:
-		m, err := t.MatchPlace(f.Lat, f.Lon)
-		if err != nil {
-			return err
-		}
-		if m == nil {
-			k.Unmatched = &Position{round6(f.Lat), round6(f.Lon), MapLink(f.Lat, f.Lon)}
-			break
-		}
-		place, link, k.Place = m.ID, m.LinkDays, m.Title
-	}
-	if !own || !(place != 0 && link || picture) {
+	if f.UnknownCaptureDay || !own || !picture {
 		return nil
 	}
 	dayID, err := t.dayPage(day)
 	if err != nil {
 		return err
 	}
-	if place != 0 && link {
-		if _, err := t.Link(dayID, place, "at", ""); err != nil {
-			return err
-		}
-		k.Linked = true
-	}
-	if picture {
-		k.Embedded, k.DaySync, err = t.embed(dayID, title)
-	}
+	k.Embedded, k.DaySync, err = t.embed(dayID, title)
 	return err
 }
 

@@ -135,11 +135,6 @@ import actions are included and the link `import` leads to its status.
 | `rows[].mentions` | integer | the live pages that link to it, of any kind, each counted once |
 | `rows[].last_day` | string | the day of the newest live day page among them; absent when there is none |
 | `rows[].picture` | string | `people` only: the href of the preview of the first live file with a preview that the person's body embeds; absent when there is none |
-| `rows[].point` | object | `places` only: the place's point, as `locate` sets it; absent when the place has none |
-| `rows[].point.lat` | number | its latitude, in degrees |
-| `rows[].point.lon` | number | its longitude, in degrees |
-| `rows[].point.radius_m` | integer | the radius of its circle, in metres |
-| `rows[].point.link_days` | boolean | true when a photo in the circle links its day to the place |
 
 ### categories
 
@@ -412,10 +407,9 @@ month. Actions: `open-day`.
 ### page, person, place, file
 
 `GET /pages/{id}`; `GET /pages?title=` redirects to it. The class is the page's type; a day page adds `day-page`, a
-tombstoned page adds `deleted`. Links: `day` (a day page's day view), `preview` (a file's picture), `map` (a place's
-point). Embedded: every outgoing link under its kind, every incoming one under `backlink` and its kind, with the class
+tombstoned page adds `deleted`. Links: `day` (a day page's day view), `preview` (a file's picture). Embedded: every outgoing link under its kind, every incoming one under `backlink` and its kind, with the class
 `category` added to a `part-of` backlink from a category page. Actions by
-what is legal: `save-body` (with the current `body` and `version` filled), `promote`, `rename`, `locate`, `link` and `unlink` (with the kinds this type may start), [`file-pages`](#filed) (a page that may
+what is legal: `save-body` (with the current `body` and `version` filled), `promote`, `rename`, `link` and `unlink` (with the kinds this type may start), [`file-pages`](#filed) (a page that may
 be `part-of`, not a day page: `ids` is this page, and `category` offers the category titles; a new title is made),
 `create-page` with `category` filled (a live category page: something is `part-of` it; the new page is made and
 filed in it in one write), `set-picture` (a person), `tombstone`, or `revive` alone on a deleted page. In a browser, the page of a
@@ -448,11 +442,6 @@ that is not a kept picture, is refused (422).
 | `file.sha256` | string | the SHA-256 of the original, hex |
 | `file.mime` | string | its media type |
 | `file.preview` | boolean | a picture is kept (`GET /pages/{id}/preview`) |
-| `point` | object | a place's point; absent until located |
-| `point.lat` | number | latitude |
-| `point.lon` | number | longitude |
-| `point.radius_m` | integer | the radius in metres a photo inside is matched by |
-| `point.link_days` | boolean | its days are linked (`false`: recognised, never linked, like home) |
 | `links[]` | list | the typed links this page starts |
 | `links[].kind` | string | the link kind (`wikilink`, `at`, `about`, `located-in`, `parent-of`, `part-of`, `friend`, `family`, `related`) |
 | `links[].id` | integer | the other page's id |
@@ -934,11 +923,4 @@ What the save contract did with the body's `[[wikilinks]]` and `#tags`:
 | `day_sync.revived` | list | |
 | `day_sync.skipped` | list | |
 | `day` | day | the day it was filed under |
-| `place` | string | the place matched or named |
-| `linked` | boolean | its day got an `at` link to that place |
-| `point_set` | boolean | the place named took this position as its point |
-| `unmatched` | object | a position near no known place |
-| `unmatched.lat` | number | |
-| `unmatched.lon` | number | |
-| `unmatched.map` | string | a map link to it |
 | `embedded` | boolean | `![[title]]` was appended to its day page |

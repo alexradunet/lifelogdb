@@ -64,9 +64,6 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 	if p.File != nil && p.File.Preview {
 		e.Links = append(e.Links, link("preview", pageHref(id)+"/preview", "Picture"))
 	}
-	if p.Point != nil {
-		e.Links = append(e.Links, link("map", core.MapLink(p.Point.Lat, p.Point.Lon), "Map"))
-	}
 	for _, l := range p.Out {
 		e.Entities = append(e.Entities, Link{Rel: []string{l.Kind}, Href: pageHref(l.ID), Title: l.Title, Class: []string{l.Type}})
 	}
@@ -110,13 +107,6 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 	if p.Type == "person" {
 		e.Actions = append(e.Actions, action("set-picture", ids, nil))
 	}
-	if p.Type == "place" {
-		values := map[string]any{"radius_m": core.DefaultRadius, "link_days": "1"}
-		if pt := p.Point; pt != nil {
-			values = map[string]any{"lat": pt.Lat, "lon": pt.Lon, "radius_m": pt.RadiusM, "link_days": boolField(pt.LinkDays)}
-		}
-		e.Actions = append(e.Actions, action("locate", ids, values))
-	}
 	kinds, err := h.linkKinds(ctx, p.Type, p.IsDayPage)
 	if err != nil {
 		return nil, err
@@ -157,12 +147,11 @@ func (h *server) linkKinds(ctx context.Context, typ string, dayPage bool) ([]str
 
 // namedRow is a row of the people and the places lists: the page and how often the log mentions it.
 type namedRow struct {
-	ID       int64       `json:"id"`
-	Title    string      `json:"title"`
-	Mentions int         `json:"mentions"`
-	LastDay  string      `json:"last_day,omitempty"`
-	Picture  string      `json:"picture,omitempty"` // a person's: the preview of the first picture its page embeds
-	Point    *core.Point `json:"point,omitempty"`   // a place's: its point, when it has one
+	ID       int64  `json:"id"`
+	Title    string `json:"title"`
+	Mentions int    `json:"mentions"`
+	LastDay  string `json:"last_day,omitempty"`
+	Picture  string `json:"picture,omitempty"` // a person's: the preview of the first picture its page embeds
 }
 
 func (h *server) named(typ, plural, create string) func(*http.Request) (*Entity, error) {
@@ -182,7 +171,7 @@ func (h *server) named(typ, plural, create string) func(*http.Request) (*Entity,
 			found = paged(e, found, "/"+plural, nil, limit, offset)
 			rows := []namedRow{}
 			for _, p := range found {
-				row := namedRow{ID: p.ID, Title: p.Title, Mentions: p.Mentions, LastDay: p.LastDay, Point: p.Point}
+				row := namedRow{ID: p.ID, Title: p.Title, Mentions: p.Mentions, LastDay: p.LastDay}
 				if p.Picture != 0 {
 					row.Picture = pageHref(p.Picture) + "/preview"
 				}
@@ -391,32 +380,4 @@ func (h *server) rename(r *http.Request, src string) (*Entity, error) {
 		return nil, err
 	}
 	return h.pageEntity(r.Context(), to)
-}
-
-// locate gives a place its point (docs/cookbook/place-of-a-photo.md): the owner's answer, or a correction.
-func (h *server) locate(r *http.Request, src string) (*Entity, error) {
-	id, v, err := idForm(r, "lat", "lon", "radius_m")
-	if err != nil {
-		return nil, err
-	}
-	var p core.Point
-	for name, to := range map[string]*float64{"lat": &p.Lat, "lon": &p.Lon} {
-		f, err := number(v, name)
-		if err != nil {
-			return nil, err
-		}
-		*to = *f
-	}
-	if p.RadiusM, err = radius("radius_m", v.Get("radius_m")); err != nil {
-		return nil, err
-	}
-	linkDays, err := flag(v, "link_days")
-	if err != nil {
-		return nil, err
-	}
-	p.LinkDays = linkDays || v.Get("link_days") == "" // the default is to link the days
-	if err := h.s.Locate(r.Context(), src, id, p); err != nil {
-		return nil, err
-	}
-	return h.pageEntity(r.Context(), id)
 }

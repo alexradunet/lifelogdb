@@ -60,7 +60,6 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 	"mark":         mark,
 	"rejected":     rejected,
 	"chart":        chart,
-	"placeMap":     placeMap,
 	"titleHref":    titleHref,
 	"weekday":      weekday,
 	"unitWords":    unitWords,

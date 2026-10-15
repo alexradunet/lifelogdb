@@ -210,13 +210,12 @@ func TestFilePromotionDay(t *testing.T) {
 	}
 
 	s = fresh(t)
-	placeID(t, s, "Lakeside", Point{46.1, 7.2, 300, true})
 	if _, _, err := s.Capture(ctx, "cli", "2099-01-01", "Undated: ![[scan.jpg]]", nil); err != nil {
 		t.Fatal(err)
 	}
 	scanGhost, _ := s.PageID(ctx, "scan.jpg")
 	before := Today()
-	k, err = s.AddFile(ctx, "cli", FileIn{Title: "scan.jpg", SHA256: sha('5'), MIME: "image/jpeg", Lat: 46.1, Lon: 7.2, HasGPS: true, Preview: smallJPEG(t)})
+	k, err = s.AddFile(ctx, "cli", FileIn{Title: "scan.jpg", SHA256: sha('5'), MIME: "image/jpeg", Preview: smallJPEG(t)})
 	after := Today()
 	if err != nil {
 		t.Fatal(err)
@@ -228,7 +227,7 @@ func TestFilePromotionDay(t *testing.T) {
 	if p.Day != before && p.Day != after {
 		t.Errorf("undated keep used day %q, outside [%q,%q]", p.Day, before, after)
 	}
-	if k.Day != "" || k.Place != "Lakeside" || k.Linked || k.Embedded {
+	if k.Day != "" || k.Embedded {
 		t.Errorf("undated photo got its own-day effects: %+v", k)
 	}
 	if dayID, _ := s.PageID(ctx, p.Day); dayID != 0 {

@@ -5,28 +5,20 @@ import (
 	"testing"
 )
 
+// photo is a kept photo as the writer sees it: a JPEG with a preview, taken on day. Its position is never read (D21).
+func photo(t *testing.T, c byte, title, day string) FileIn {
+	return FileIn{Title: title, SHA256: sha(c), MIME: "image/jpeg", Taken: day, Preview: smallJPEG(t)}
+}
+
 func TestUnknownPhotoDayHasNoCaptureOrPlaceSideEffects(t *testing.T) {
 	s := fresh(t)
-	in := FileIn{Title: "Synthetic photo.jpg", MIME: "image/jpeg", SHA256: strings.Repeat("a", 64), Body: "Selected picture", UnknownCaptureDay: true, HasGPS: true, Lat: 10, Lon: 20}
-	before, err := countRows(ctx, s)
-	if err != nil {
-		t.Fatal(err)
-	}
-	refused := in
-	refused.At = "Uncreated place"
-	if _, err := s.AddFile(ctx, "cli", refused); err == nil {
-		t.Fatal("unknown day created selected place")
-	}
-	after, err := countRows(ctx, s)
-	if err != nil || after.Pages != before.Pages || after.Links["at"] != before.Links["at"] {
-		t.Fatalf("refusal effects %+v %v", after, err)
-	}
+	in := FileIn{Title: "Synthetic photo.jpg", MIME: "image/jpeg", SHA256: strings.Repeat("a", 64), Body: "Selected picture", UnknownCaptureDay: true}
 	kept, err := s.AddFile(ctx, "cli", in)
 	if err != nil {
 		t.Fatal(err)
 	}
 	page, err := s.PageByID(ctx, kept.ID)
-	if err != nil || page.Day != "" || kept.Day != "" || kept.Linked || kept.Embedded || kept.PointSet {
+	if err != nil || page.Day != "" || kept.Day != "" || kept.Embedded {
 		t.Fatalf("unknown capture %+v %+v %v", kept, page, err)
 	}
 	var null bool
@@ -67,8 +59,7 @@ func TestUnknownPhotoDayHasNoCaptureOrPlaceSideEffects(t *testing.T) {
 
 func TestUnknownPhotoDryRunDedupKnownDayMissingPreviewAndTombstone(t *testing.T) {
 	s := fresh(t)
-	in := photo(t, 'c', "Owner.jpg", "2012-03-04", 0, 0)
-	in.HasGPS = false
+	in := photo(t, 'c', "Owner.jpg", "2012-03-04")
 	preview := in.Preview
 	in.Preview = nil
 	kept, err := s.AddFile(ctx, "cli", in)
@@ -79,7 +70,7 @@ func TestUnknownPhotoDryRunDedupKnownDayMissingPreviewAndTombstone(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	unknown := FileIn{Title: "Different.jpg", MIME: "image/jpeg", SHA256: in.SHA256, Body: "Do not replace", UnknownCaptureDay: true, Preview: preview, HasGPS: true, Lat: 30, Lon: 40}
+	unknown := FileIn{Title: "Different.jpg", MIME: "image/jpeg", SHA256: in.SHA256, Body: "Do not replace", UnknownCaptureDay: true, Preview: preview}
 	before, err := countRows(ctx, s)
 	if err != nil {
 		t.Fatal(err)
@@ -93,7 +84,7 @@ func TestUnknownPhotoDryRunDedupKnownDayMissingPreviewAndTombstone(t *testing.T)
 		t.Fatal("dry run filled preview")
 	}
 	again, err := s.AddFile(ctx, "cli", unknown)
-	if err != nil || again.ID != kept.ID || again.StoredDay != "2012-03-04" || again.Embedded || again.Linked || again.PointSet {
+	if err != nil || again.ID != kept.ID || again.StoredDay != "2012-03-04" || again.Embedded {
 		t.Fatalf("known attribution %+v %v", again, err)
 	}
 	after, err := s.PageByID(ctx, kept.ID)

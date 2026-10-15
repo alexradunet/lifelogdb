@@ -36,9 +36,6 @@ lifelog habits --human                     # today's habits; lifelog done evenin
 lifelog snapshot --to ~/snapshots --human  # life-YYYY-MM-DD.db and its restore check
 lifelog file memo.m4a --text memo.txt     # keep a file: its text, the original hashed and never stored
 lifelog file IMG_0001.HEIC --preview IMG_0001.jpg   # a photo lifelog cannot read: send a JPEG of it
-lifelog file IMG_0003.jpg --at Lakeside --radius 300   # a photo near no known place: name the place
-lifelog file ~/picks/2019-06 --dry-run --human   # the few photos chosen for some days: what keeping them would do
-lifelog file ~/picks/2019-06 --human             # keep them: their days linked, the ones near no place grouped
 ```
 
 An import is done by a program that loads rows itself ([imports](docs/contract/imports.md)), or by a coding agent
@@ -107,13 +104,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   row's `picture` gives its href. The schema has no link for it, by the owner's choice (2026-10-15): an embed is
   how any page shows a picture, so every surface can set it. `set-picture` on the person's page sets it: a new
   photo (the browser) or a kept file by its title (the CLI and an agent, which send no file through the catalog).
-  The photo goes in no day page. Places opens on a map of the places of the page that have a point (the row's
-  `point`): a dot a place, its circle when it is larger than the dot, its name, each a link to its page. The view
-  holds every point, and never less than about 5.5 km. Under the dots is the land and the borders of Natural Earth
-  (public domain, 1:50m), one embedded file of 450 KB at `GET /assets/world-50m-v5.1.2.svg`, made by
-  `tools/worldmap` ([its source](internal/api/html/world.md)). The server draws the map as an inline SVG, like a
-  chart: there are no tiles, no map script and no other host (the owner's choice, 2026-10-15). In a city the map
-  shows where the places are against each other, but not the streets.
+  The photo goes in no day page.
 - **The app shell: the Almanac design system** ([plan 092](docs/plans/092-the-app-shell.md)). Every page a browser
   gets is in one shell: a sidebar with the brand and today's date, the search, New, the sections of every day (Today,
   Calendar, Due, Tasks) and of the record (People to Ghost pages), this month with its written days, and the
@@ -312,11 +303,10 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   the original through SHA-256 and drops it; nothing of it is stored. `internal/preview` makes every picture itself —
   from a JPEG, PNG or GIF, or a JPEG sent for a HEIC or a video frame: scaled to 1600 px, turned upright by EXIF,
   re-encoded with no metadata (no GPS). An agent sends `sha256`, `mime` and the text. `![[Title]]` renders the
-  picture; `GET /pages/{id}/preview` and `GET /previews?title=` serve it. A photo's day and position come from its EXIF
-  (`internal/photo`: a JPEG's APP1, a HEIC's Exif item, read from the original's first megabyte): its day links the
-  place its position is in, `at` names one, `locate` sets or moves a place's point; the position is never stored.
-  `lifelog file` keeps several (paths, or a folder's photos and videos), with `--dry-run` and a report per day and
-  per group of photos near no place. Unknown capture-local day follows [keep a file](docs/cookbook/keep-a-file.md).
+  picture; `GET /pages/{id}/preview` and `GET /previews?title=` serve it. A photo's day comes from its EXIF
+  (`internal/photo`: a JPEG's APP1, a HEIC's Exif item, read from the original's first megabyte); its position is
+  never read ([D21](docs/decisions/D21-location-history.md), [plan 116](docs/plans/116-strip-to-the-core.md)).
+  `lifelog file` keeps one file, with `--dry-run`. Unknown capture-local day follows [keep a file](docs/cookbook/keep-a-file.md).
 - **`serve` is local-only unless the owner says `--public`.** Without the flag `serve` is what it was: `life.db`
   holds health data, and the API is for this machine. The default bind is `127.0.0.1:7777`; `--addr` accepts numeric
   loopback IPs or `localhost` with a numeric port (0 selects an ephemeral port, printed at startup), and nothing else.
@@ -353,7 +343,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 | `internal/text` | the title predicate, `title_key`, wikilink and `#tag` extraction; tested against the vectors of [titles and wikilinks](docs/contract/titles-and-wikilinks.md) |
 | `internal/core` | the cookbook's writes and reads; the save contract; habits; renames; files |
 | `internal/preview` | the picture a file page keeps: decode, scale to 1600 px, EXIF orientation, a JPEG of at most 1 MB with no metadata |
-| `internal/photo` | what a photo's metadata says: the day and time taken, the position, the orientation (JPEG and HEIC); `phototest` builds synthetic ones |
+| `internal/photo` | what a photo's metadata says: the day and time taken and the orientation (JPEG and HEIC); `phototest` builds synthetic ones |
 | `internal/api` | the action catalog, the routes, Siren and HTML; the local and the `--public` network guards |
 | `internal/client` | the hypermedia client (in-process or remote) |
 | `internal/mcp` | the catalog as MCP tools (the tool list is `internal/client`'s) |

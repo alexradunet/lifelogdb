@@ -83,13 +83,8 @@ func parseFileForm(r *http.Request) (core.FileIn, bool, error) {
 		if err := required(v, "title", "sha256", "mime"); err != nil {
 			return core.FileIn{}, false, err
 		}
-		r, err := radius("radius", v.Get("radius"))
-		if err != nil {
-			return core.FileIn{}, false, err
-		}
 		dry, err := flag(v, "dry_run")
-		return core.FileIn{UnknownCaptureDay: strings.HasPrefix(core.NormalMIME(v.Get("mime")), "image/") && v.Get("day") == "", Title: v.Get("title"), SHA256: v.Get("sha256"), MIME: v.Get("mime"), Body: v.Get("body"), Day: v.Get("day"),
-			At: v.Get("at"), Radius: r}, dry, err
+		return core.FileIn{UnknownCaptureDay: strings.HasPrefix(core.NormalMIME(v.Get("mime")), "image/") && v.Get("day") == "", Title: v.Get("title"), SHA256: v.Get("sha256"), MIME: v.Get("mime"), Body: v.Get("body"), Day: v.Get("day")}, dry, err
 	}
 	defer r.Body.Close()
 	mr, err := r.MultipartReader()
@@ -163,11 +158,7 @@ func parseFileForm(r *http.Request) (core.FileIn, bool, error) {
 			return bad("the form: " + err.Error())
 		}
 	}
-	in := core.FileIn{Title: vals["title"], SHA256: vals["sha256"], MIME: vals["mime"], Body: vals["body"], Day: vals["day"], At: vals["at"],
-		Taken: meta.Day(), Lat: meta.Lat, Lon: meta.Lon, HasGPS: meta.HasGPS}
-	if in.Radius, err = radius("radius", vals["radius"]); err != nil {
-		return core.FileIn{}, false, err
-	}
+	in := core.FileIn{Title: vals["title"], SHA256: vals["sha256"], MIME: vals["mime"], Body: vals["body"], Day: vals["day"], Taken: meta.Day()}
 	switch {
 	case sent && in.SHA256 != "" && !strings.EqualFold(strings.TrimSpace(in.SHA256), sum):
 		return bad("the sha256 sent is not the original's (" + sum + ")")
@@ -209,10 +200,6 @@ func fileTextField(name string) string {
 		return "body"
 	case "day":
 		return "day"
-	case "at":
-		return "at"
-	case "radius":
-		return "radius"
 	case "dry_run":
 		return "dry_run"
 	case "back":

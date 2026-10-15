@@ -56,11 +56,10 @@ behavioral vectors remain in the [storage contract](README.md).
 | 22 | Which metrics are habits, and was one meant to be done on a day? | `habit_periods` | `HABIT`, `NOT RECORDED` |
 | 23 | Which metrics are biomarkers, or what the owner took in? | `metrics` | `a category is a page`, `part-of`, `NOT a category` |
 | 24 | Where are the photos, the recordings and the scans? | `files` | `never stored in life.db`, `sha256`, `JPEG` |
-| 25 | Where is a place, and why does a day have one? | `places` | `never where the owner was`, `radius`, `at link` |
-| 26 | Can a type change reinterpret retained edges? | `typed_links`, `entities_endpoint_types` | `incoming`, `outgoing`, `retained` |
-| 27 | How are stale edits rejected when write clocks coincide, and what counts as an edit? | `edit_revisions` | `monotonic`, `independent`, `no-ops`, `rollback`, `exhaustion`, `creation is not an edit`, `never the page it points at` |
-| 28 | How do planning identities, stopping and lifecycle agree? | `planning` | `task`, `occurrence`, `tombstone` |
-| 29 | What happens when a reminder clock repeats or does not exist? | `tasks` | `earlier instant`, `gap`, `entire local date`, `unresolved` |
+| 25 | Can a type change reinterpret retained edges? | `typed_links`, `entities_endpoint_types` | `incoming`, `outgoing`, `retained` |
+| 26 | How are stale edits rejected when write clocks coincide, and what counts as an edit? | `edit_revisions` | `monotonic`, `independent`, `no-ops`, `rollback`, `exhaustion`, `creation is not an edit`, `never the page it points at` |
+| 27 | How do planning identities, stopping and lifecycle agree? | `planning` | `task`, `occurrence`, `tombstone` |
+| 28 | What happens when a reminder clock repeats or does not exist? | `tasks` | `earlier instant`, `gap`, `entire local date`, `unresolved` |
 
 Planning reads and reminders follow the [planning profile](planning.md), including retained outcomes after
 ending a recurrence. A clock that cannot be resolved remains visible as unresolved intent; restoring a snapshot

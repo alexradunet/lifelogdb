@@ -88,3 +88,14 @@ flowchart LR
   `readings` and `--column`, `core/tables.go` with the source `import:table`, the agentic skill
   `lifelog-readings-from-table`. A reading is recorded one at a time with `record`. Record: README, API.md.
   Checks: `go generate ./... && go vet ./... && go test ./...` green.
+- **Step 4 (the public listener).** Not done: the service unit runs `serve --public --token-file … --allow-origin
+  https://balaur.ojos-sargas.ts.net`, and `tailscale serve` proxies the tailnet to it. Without `--public` the
+  tailnet access would carry no credential and the local Host guard would refuse the proxied host. The owner
+  decides whether to keep it as it is.
+- **Step 5 (photo positions).** Removed: the `places` table and its three triggers, the `places` suite and 19
+  mutants, the cookbook recipe place-of-a-photo, `locate`, the map of the places with the world outline and
+  `tools/worldmap`, `add-file`'s `at` and `radius` and the position in its answer, the folder import of the CLI's
+  `file`, the position in `internal/photo`. A photo keeps its own day. Record: issue 0076, RFC 0016; D21
+  rewritten, D16, D09, D20, D03 and the non-goals edited; the 2075 table lost its question on a place's point.
+  Checks: `go generate ./... && go vet ./... && go test ./...` green. The live file still holds `places` until the
+  owner runs the one-off program (after step 8, one program for the four schema steps).

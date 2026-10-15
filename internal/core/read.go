@@ -24,7 +24,6 @@ type Page struct {
 	IsDayPage   bool    `json:"is_day_page"`
 	Person      *Person `json:"person,omitempty"`
 	File        *File   `json:"file,omitempty"`
-	Point       *Point  `json:"point,omitempty"` // a place's, when it has one (D21)
 	Out         []Edge  `json:"links"`
 	In          []Edge  `json:"backlinks"`
 }
@@ -68,11 +67,6 @@ func (s *Store) PageByID(ctx context.Context, id int64) (*Page, error) {
 			return nil, err
 		}
 		p.Person.Birth, p.Person.Death = b.String, d.String
-	}
-	if p.Type == "place" {
-		if p.Point, err = s.placeOf(ctx, id); err != nil {
-			return nil, err
-		}
 	}
 	if p.Type == "file" {
 		p.File = &File{}
@@ -690,8 +684,6 @@ type NamedRow struct {
 	// Picture is the file whose preview stands for a person: the first embed of its body (![[title]]) that names a
 	// live file with a preview. It is 0 when there is none, and for a place.
 	Picture int64
-	// Point is a place's row of the places table (D21). It is nil when the place has no point, and for a person.
-	Point *Point
 }
 
 // NamedMentions is one page of the live people or places, in the order and with the paging of Named.
@@ -699,11 +691,9 @@ type NamedRow struct {
 func (s *Store) NamedMentions(ctx context.Context, typ string, limit, offset int) ([]NamedRow, error) {
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT p.id, p_name.title, count(DISTINCT lp.id),
-		       coalesce(max(CASE WHEN lp_name.title = lp.day THEN lp.day END), ''), p.body,
-		       pl.lat, pl.lon, pl.radius_m, pl.link_days
+		       coalesce(max(CASE WHEN lp_name.title = lp.day THEN lp.day END), ''), p.body
 		  FROM entities p
 		  JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
-		  LEFT JOIN places pl ON pl.id = p.id
 		  LEFT JOIN links l ON l.to_id = p.id
 		  LEFT JOIN entities lp ON lp.id = l.from_id AND lp.deleted_at IS NULL
 		  LEFT JOIN entity_names lp_name ON lp_name.entity_id = lp.id AND lp_name.name_key = lp.preferred_name_key
@@ -718,13 +708,8 @@ func (s *Store) NamedMentions(ctx context.Context, typ string, limit, offset int
 	for rows.Next() {
 		var r NamedRow
 		var body string
-		var lat, lon sql.NullFloat64
-		var radius, linkDays sql.NullInt64
-		if err := rows.Scan(&r.ID, &r.Title, &r.Mentions, &r.LastDay, &body, &lat, &lon, &radius, &linkDays); err != nil {
+		if err := rows.Scan(&r.ID, &r.Title, &r.Mentions, &r.LastDay, &body); err != nil {
 			return nil, err
-		}
-		if lat.Valid {
-			r.Point = &Point{Lat: lat.Float64, Lon: lon.Float64, RadiusM: int(radius.Int64), LinkDays: linkDays.Int64 == 1}
 		}
 		out, bodies = append(out, r), append(bodies, body)
 	}

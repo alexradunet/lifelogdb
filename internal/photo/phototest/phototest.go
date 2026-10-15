@@ -20,7 +20,7 @@ type entry struct {
 	data     []byte
 }
 
-// TIFF is EXIF saying what m says: IFD0 (orientation, the pointers), the Exif IFD (DateTimeOriginal) and the GPS IFD.
+// TIFF is EXIF saying what m says: IFD0 (orientation, the pointers) and the Exif IFD (DateTimeOriginal).
 func TIFF(m photo.Meta, little bool) []byte {
 	var bo interface {
 		binary.ByteOrder
@@ -32,18 +32,6 @@ func TIFF(m photo.Meta, little bool) []byte {
 	}
 	u16 := func(v uint16) []byte { return bo.AppendUint16(nil, v) }
 	u32 := func(v uint32) []byte { return bo.AppendUint32(nil, v) }
-	rat := func(v float64) []byte {
-		d := math.Floor(v)
-		mf := (v - d) * 60
-		mi := math.Floor(mf)
-		sec := (mf - mi) * 60
-		var b []byte
-		for _, p := range [][2]uint32{{uint32(d), 1}, {uint32(mi), 1}, {uint32(math.Round(sec * 10000)), 10000}} {
-			b = append(b, u32(p[0])...)
-			b = append(b, u32(p[1])...)
-		}
-		return b
-	}
 	var ifd0, exif, gps []entry
 	if m.Orientation > 0 {
 		ifd0 = append(ifd0, entry{0x0112, 3, 1, u16(uint16(m.Orientation))})
@@ -51,16 +39,6 @@ func TIFF(m photo.Meta, little bool) []byte {
 	if m.Taken != "" {
 		s := strings.Replace(m.Taken[:10], "-", ":", 2) + m.Taken[10:] + "\x00"
 		exif = append(exif, entry{0x9003, 2, uint32(len(s)), []byte(s)})
-	}
-	if m.HasGPS {
-		ns, ew := "N\x00", "E\x00"
-		if m.Lat < 0 {
-			ns = "S\x00"
-		}
-		if m.Lon < 0 {
-			ew = "W\x00"
-		}
-		gps = []entry{{1, 2, 2, []byte(ns)}, {2, 5, 3, rat(math.Abs(m.Lat))}, {3, 2, 2, []byte(ew)}, {4, 5, 3, rat(math.Abs(m.Lon))}}
 	}
 	size := func(es []entry) int { return 2 + 12*len(es) + 4 }
 	n0 := len(ifd0)
@@ -248,48 +226,6 @@ func HEICOverflowingLocation() []byte {
 func appendUint(b []byte, size int, v uint64) []byte {
 	for i := size - 1; i >= 0; i-- {
 		b = append(b, byte(v>>uint(i*8)))
-	}
-	return b
-}
-
-// GPSReference replaces one reference entry in a synthetic JPEG or HEIC. A zero
-// tag removes the reference; an out-of-line count points past the TIFF data.
-func GPSReference(b []byte, axis uint16, typ uint16, count uint32, value string, absent bool) []byte {
-	b = append([]byte(nil), b...)
-	start := bytes.Index(b, []byte("MM\x00\x2a"))
-	if start < 0 {
-		start = bytes.Index(b, []byte("II\x2a\x00"))
-	}
-	t := b[start:]
-	var bo binary.ByteOrder = binary.BigEndian
-	if string(t[:2]) == "II" {
-		bo = binary.LittleEndian
-	}
-	off := int(bo.Uint32(t[4:]))
-	gps := 0
-	for i := 0; i < int(bo.Uint16(t[off:])); i++ {
-		e := off + 2 + 12*i
-		if bo.Uint16(t[e:]) == 0x8825 {
-			gps = int(bo.Uint32(t[e+8:]))
-		}
-	}
-	for i := 0; i < int(bo.Uint16(t[gps:])); i++ {
-		e := gps + 2 + 12*i
-		if bo.Uint16(t[e:]) != axis {
-			continue
-		}
-		if absent {
-			bo.PutUint16(t[e:], 0)
-			break
-		}
-		bo.PutUint16(t[e+2:], typ)
-		bo.PutUint32(t[e+4:], count)
-		clear(t[e+8 : e+12])
-		copy(t[e+8:e+12], value)
-		if count > 4 {
-			bo.PutUint32(t[e+8:], uint32(len(t)+1))
-		}
-		break
 	}
 	return b
 }

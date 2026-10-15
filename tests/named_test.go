@@ -29,7 +29,7 @@ func named(s *S) {
 	plainOwner := c.page("Wrong extension owner")
 	s.K("a person extension requires a person owner", err(c.tryx("INSERT INTO people(id,name) VALUES (?,'Wrong type')", plainOwner)))
 	c.must("UPDATE entities SET body='not a cleanup ghost' WHERE id=?", plainOwner)
-	s.K("a place needs no detail row without a point", c.n("SELECT count(*) FROM places") == 0 && c.n("SELECT count(*) FROM entities WHERE entity_type='place'") == 1)
+	s.K("a place needs no detail row", c.n("SELECT count(*) FROM entities WHERE entity_type='place'") == 1)
 	_, untitled := c.tryIdentity("person", "", nil)
 	s.K("a named entity must be titled", untitled != nil)
 	s.K("a person detail cannot claim another type", err(c.tryx("INSERT INTO people(id,entity_type,name) VALUES (?,'place','Mismatch')", c.anyIdentity("person"))))

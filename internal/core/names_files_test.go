@@ -7,7 +7,7 @@ import (
 
 func TestDatedFileRenameKeepsOriginalAndOldEmbed(t *testing.T) {
 	s := fresh(t)
-	f := photo(t, 'a', "Old.jpg", "2019-06-03", 46.1, 7.2)
+	f := photo(t, 'a', "Old.jpg", "2019-06-03")
 	f.Body = "caption [[Subject]]"
 	kept, err := s.AddFile(ctx, "cli", f)
 	if err != nil {
@@ -68,4 +68,18 @@ func TestDatedFileRenameKeepsOriginalAndOldEmbed(t *testing.T) {
 	if err != nil || len(p.Out) != 1 || p.Out[0].ID != kept.ID {
 		t.Fatalf("old embed no longer resolves: %+v %v", p, err)
 	}
+}
+
+// dayOf is the day page of day, nil when there is none.
+func dayOf(t *testing.T, s *Store, day string) *Page {
+	t.Helper()
+	id, _ := s.PageID(ctx, day)
+	if id == 0 {
+		return nil
+	}
+	p, err := s.PageByID(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
 }
