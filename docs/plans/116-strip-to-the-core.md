@@ -9,7 +9,7 @@
 - **Priority:** P1. **Effort:** XL, in eight steps. **Risk:** MEDIUM: four steps change the schema, which is
   possible only before the freeze ([D13](../decisions/D13-migrations-and-freeze.md)); each of those rewrites the
   owner's rows as text before its table goes, so no word is lost.
-- **Status:** IN PROGRESS.
+- **Status:** IN PROGRESS: step 4 waits for the owner's word, and the live file waits for the program run.
 - **Resolves:** the owner's decision (2026-10-15): "I am looking to strip all the unwanted or complex features in
   order to have a simpler more reliable software." The owner chose every candidate of the inventory below. Each
   schema step has its own issue and RFC, as [RFC 0013](../rfcs/0013-no-sessions.md) and
@@ -123,3 +123,12 @@ flowchart LR
   non-goals, the product concepts, the imports and integrity contracts, the 2075 table (three questions fewer),
   the entity model, the ghost-pages recipe, the schema README, the writer guide and AGENTS.md edited; README and
   API.md say the current truth. Checks: `go generate ./... && go vet ./... && go test ./...` green.
+- **The live file.** A one-off program, `dropcore` (kept at `~/.local/share/lifelog-ui/dropcore-bin` with its
+  source beside it), brings `life.db` from the schema before RFC 0016 to the current `schema.sql` in one
+  transaction: a place's point, a link of a removed kind (with a wikilink in its place), a habit's periods and every
+  task with its occurrences become text in their pages (the tasks in a page `Tasks`); the four tables go;
+  `link_kinds` is made again without `symmetric`; every other rule, table text and `lifelog_meta` row is made equal
+  to a fresh file, and the program refuses to commit on any difference. Tested on 2026-10-15 on a synthetic file
+  made by the binary of `498cbb8`: 2 points, 7 links, 2 periods and 2 tasks became text, 9 entities kept, the four
+  checks pass, and the binary of this plan reads the result. The owner runs it with the service stopped, after a
+  snapshot, then the integrity check, then starts the service.
