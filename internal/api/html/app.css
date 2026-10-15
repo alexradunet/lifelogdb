@@ -20,8 +20,7 @@
 /* The shell: the sidebar, then the column of the page. Under 900 px the sidebar is a bar over the page. */
 .shell{display:grid; grid-template-columns:var(--rail-width) minmax(0,1fr); min-block-size:100vh}
 .shell.bare{display:block}
-/* The column is a container: the open chat makes it narrower than the screen, so a layout inside it asks the width of
-   the column, not of the screen. */
+/* The column is a container: a layout inside it asks the width of the column, not of the screen. */
 .column{container:column / inline-size; min-inline-size:0; display:flex; flex-direction:column; padding:var(--space-6) var(--space-8);
   &>main{flex:1; inline-size:100%; max-inline-size:1200px; display:flex; flex-direction:column; gap:var(--space-4);
     &>h2{margin-block-start:var(--space-4)}}
@@ -700,118 +699,8 @@ li.pick{display:flex; align-items:stretch; gap:var(--space-1);
   & ul.plain>li{padding:var(--space-2) var(--space-1)}}
 .agenda-note{color:var(--text-muted)}
 
-/* The conversation (docs/plans/103-the-conversation-on-the-screen.md) in the Chat of Balaur — Basm
-   (docs/plans/104-the-chat-in-basm.md): on the oak of the page, lifelog speaks from the left and the owner answers
-   from the right, each a framed portrait with a wood nameplate beside a parchment speech panel with a pixel tail; a
-   tool is a row of dark wood between them; the draft is a dashed panel in the owner's place. Basm's tokens are the
-   app's: chrome is --rail, parchment --surface, the parchment edge --edge, the outline --outline, gold --rail-accent,
-   teal --teal, the owner's indigo --indigo. Words are in sentence case, as everywhere in the app (plan 096). */
-/* The chat page fills the screen and scrolls its thread alone (plan 106): the head and the draft never move, and the
-   page never scrolls under the owner's hands. The shell takes the screen's height on this page only, and the height
-   runs down the column, the main and the page to the thread, which is the one scroll area. The thread is laid out
-   from its end (column-reverse), so it opens at the newest turn with no script (plan 108); the turns inside keep
-   their order. */
-.shell:has(.chat-page){block-size:100dvh;
-  &>.column,& main{min-block-size:0}
-  &>.column>footer{margin-block-start:var(--space-4)}}
-.chat-page{display:grid; grid-template-rows:minmax(0,1fr); block-size:100%; min-block-size:0;
-  & .chat-thread{display:flex; flex-direction:column-reverse; overflow-y:auto; overscroll-behavior:contain; padding:var(--space-1) var(--space-3) var(--space-2) 0}}
-.chat-main{display:flex; flex-direction:column; gap:var(--space-4); min-inline-size:0; min-block-size:0;
-  &>.msg-draft{flex:none}}
-.chat-head{display:flex; align-items:baseline; justify-content:space-between; gap:var(--space-3); flex-wrap:wrap;
-  & .tools{display:flex; gap:var(--space-3); flex-wrap:wrap}
-  & h1{font-size:28px; line-height:32px}}
-.chat-note{padding:var(--space-2) var(--space-3); border-inline-start:3px solid var(--line)}
-
-/* The portrait's size is the chat page's, so the composer under the thread (outside .chat) has the thread's size. */
-.chat-page{--portrait-size:96px; --chat-gutter:calc(var(--portrait-size) + 14px)}
-.chat{--portrait-size:96px; --chat-gutter:calc(var(--portrait-size) + 14px); display:flex; flex-direction:column; gap:var(--space-6); min-block-size:0}
-.chat-thread{flex:1 1 auto; min-block-size:0}
-.msg{display:grid; grid-template-columns:auto minmax(0,1fr); gap:14px; align-items:start; max-inline-size:calc(var(--measure) + var(--chat-gutter));
-  & .body{inline-size:100%; overflow-wrap:anywhere; font-size:16px; line-height:24px;
-    &>:first-child{margin-block-start:0}
-    &>:last-child{margin-block-end:0}}}
-.msg-owner{grid-template-columns:minmax(0,1fr) auto; align-self:flex-end;
-  & .portrait{order:2}
-  & .msg-main{order:1}
-  & .avatar img{transform:scaleX(-1)} /* the portraits face right: the owner's turns to face the words */
-  & .portrait .avatar{box-shadow:inset 0 0 0 2px var(--indigo),var(--drop-hard)}
-  & .who{color:var(--indigo)}}
-.msg-lifelog{align-self:flex-start}
-
-/* The portrait: the art has no border; this wood frame belongs to the chat. */
-.portrait{margin:0; display:flex; flex-direction:column; align-items:center; inline-size:max-content;
-  & .avatar{display:block; inline-size:var(--portrait-size); block-size:var(--portrait-size); padding:3px; background:#101314;
-    border:2px solid var(--outline); box-shadow:inset 0 0 0 2px var(--rail-accent),var(--drop-hard);
-    & img{display:block; inline-size:100%; block-size:100%; image-rendering:pixelated}}
-  /* The nameplate: a small wood plate hung under the frame. */
-  & .who{margin-block-start:-2px; max-inline-size:calc(var(--portrait-size) + 18px); padding:2px 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-    font:700 12px/18px var(--mono); text-align:center; color:var(--rail-accent);
-    background-color:var(--rail); background-image:var(--grain-ground); background-size:4px 4px;
-    border:2px solid var(--outline); box-shadow:inset 0 2px 0 var(--bevel-light),inset 0 -2px 0 var(--bevel-dark)}}
-
-/* The speech panel: parchment, with a stepped pixel tail toward the speaker. */
-.msg-main{position:relative; min-inline-size:0; min-block-size:calc(var(--portrait-size) + 10px); display:flex; align-items:center; padding:14px 18px;
-  --text:var(--ink); --text-strong:var(--ink); --text-muted:var(--muted); --text-link:var(--link); --text-accent:var(--accent-ink); --rule:var(--edge);
-  color:var(--ink); background-color:var(--surface); background-image:var(--grain-ink); background-size:4px 4px;
-  border:2px solid var(--edge); box-shadow:var(--parch-bevel);
-  &::before,&::after{content:""; position:absolute; inset-block-start:36px; inline-size:10px; block-size:10px; background:var(--surface); border:2px solid var(--edge)}}
-.msg-lifelog .msg-main{
-  &::before{inset-inline-start:-10px; border-inline-end:0}
-  &::after{inset-inline-start:-17px; inset-block-start:39px; inline-size:7px; block-size:7px; border-inline-end:0}}
-.msg-owner .msg-main{
-  &::before{inset-inline-end:-10px; border-inline-start:0}
-  &::after{inset-inline-end:-17px; inset-block-start:39px; inline-size:7px; block-size:7px; border-inline-start:0}}
-.msg-failed .msg-main{border-color:var(--danger-line); border-style:dashed}
-
-/* A tool: a row of dark wood, set in under the portraits, in mono: the visible trail of what the model did. */
-.msg-tool{margin-block-start:calc(-1 * var(--space-3)); margin-inline-start:var(--chat-gutter); padding:9px 14px; font:13px/20px var(--mono); color:var(--rail-ink);
-  background-color:var(--rail-deep); background-image:var(--grain-ground); background-size:4px 4px;
-  border:2px solid var(--outline); box-shadow:var(--bevel-in); overflow-wrap:anywhere;
-  & .who{color:var(--teal)}
-  & .tool-icon{margin-inline-end:7px; color:var(--teal)}
-  & a{color:var(--rail-accent)}
-  & .refused{color:var(--rail-ink)}}
-
-/* The draft: the unsent message in the owner's place, dashed until it is written in. It has the width of a message,
-   whatever is typed in it: the text box sizes its height to its content alone. */
-.msg-draft{inline-size:100%;
-  & .msg-main{flex-direction:column; align-items:stretch; gap:6px; padding:12px 14px 10px; border-style:dashed; box-shadow:none;
-    &::before,&::after{content:none}}
-  &:focus-within .msg-main{border-style:solid; border-color:var(--accent-ink); box-shadow:var(--parch-bevel)}
-  & label{margin:0}
-  & textarea{inline-size:100%; min-block-size:52px; max-block-size:28vh; field-sizing:content; resize:none; padding:2px 4px;
-    font:16px/24px var(--sans); color:var(--ink); caret-color:var(--primary); background:transparent; border:0; box-shadow:none;
-    &:focus-visible{outline:none}}}
-.msg-draft-foot{display:flex; align-items:center; justify-content:space-between; gap:10px; padding-block-start:9px; border-block-start:2px dotted var(--edge)}
-.msg-draft-hint{font:12px/18px var(--mono); color:var(--muted)}
-
-/* The sidebar (plan 108): a popover sheet over the right of the page, of wood like the rail, that holds the chat page
-   in a frame; the Chat button opens it, and Close, Escape or a tap outside closes it. The browser puts a popover in
-   the top layer with its own size and margin, which this rule sets to the sheet's. */
-.chat-panel{display:none;
-  &:popover-open{display:flex; flex-direction:column; gap:var(--space-3); position:fixed; z-index:25; inset:0 0 0 auto; inline-size:min(420px, 100%); block-size:auto; margin:0; padding:var(--space-4);
-    --text:var(--rail-ink); --text-strong:var(--rail-accent); --text-muted:var(--rail-ink); --text-link:var(--rail-accent); --text-accent:var(--rail-accent); --rule:var(--outline);
-    color:var(--rail-ink); background-color:var(--rail); background-image:var(--planks),var(--grain-ground); background-size:auto,4px 4px;
-    border:0; border-inline-start:2px solid var(--outline); box-shadow:inset 3px 0 0 var(--bevel-light),var(--shadow-float)}
-  & iframe{flex:1; inline-size:100%; min-block-size:0; border:2px solid var(--outline); background:var(--ground)}}
-.chat-panel-head{display:flex; align-items:center; justify-content:space-between; gap:var(--space-2);
-  & .label{text-decoration:none}
-  & .tools{display:flex; gap:var(--space-1)}}
-.chat-toggle{position:fixed; z-index:15; inset-block-end:var(--space-5); inset-inline-end:var(--space-5); gap:var(--space-2); box-shadow:var(--shadow-float)}
-.shell:has(.chat-panel:popover-open) .chat-toggle{display:none}
-@media (max-width:899px){
-  .shell:has(.chat-page){display:flex; flex-direction:column; /* the top bar, then the column with the thread */
-    &>.column>footer{display:none}} /* the thread has the height instead */
-  .chat-panel:popover-open{inset:0 0 calc(58px + env(safe-area-inset-bottom, 0px)) 0; inline-size:auto; border-inline-start:0}
-  .chat-toggle{display:none} /* the bottom bar's Chat leads to the chat page */
-}
-@container column (max-width:608px){.chat,.chat-page{--portrait-size:64px; --chat-gutter:78px}}
-@media print{.chat-panel,.chat-toggle{display:none}}
-
 /* The motions of a dialog and a popover (docs/plans/108-the-browser-made-current.md), only where motion is wanted:
-   the search dialog and its backdrop fade in from a little above, the phone's sheet rises, the chat sheet slides in
-   from its edge; each leaves the same way. @starting-style is the state the entry starts from, and the discrete
+   the search dialog and its backdrop fade in from a little above, the phone's sheet rises; each leaves the same way. @starting-style is the state the entry starts from, and the discrete
    transition of display and overlay keeps the element in the top layer while it leaves (overlay is Chromium's and
    Safari's; Firefox ends the exit at once, which is no loss). */
 @media (prefers-reduced-motion:no-preference){
@@ -824,9 +713,6 @@ li.pick{display:flex; align-items:stretch; gap:var(--space-1);
   .rail-more{transition:opacity .16s, translate .16s, overlay .16s allow-discrete, display .16s allow-discrete;
     &:popover-open{translate:0 0;
       @starting-style{opacity:0; translate:0 100%}}}
-  .chat-panel{transition:opacity .16s, translate .16s, overlay .16s allow-discrete, display .16s allow-discrete;
-    &:popover-open{translate:0 0;
-      @starting-style{opacity:0; translate:100% 0}}}
 }
 /* The phone's top bar takes its hard drop once the page has scrolled under it: an animation driven by the scroll of
    the page, not by time. A browser without it keeps the bar as it is. */

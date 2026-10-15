@@ -12,9 +12,7 @@ import (
 	"lifelog/internal/api"
 )
 
-// Tool is one function a model may call: an action of the catalog, or one of the two reads get_day and get. The MCP
-// server and the agent of the action ask (docs/plans/102-a-conversation-with-lifelog.md) both use this one list, so a
-// model sees the same tools on both.
+// Tool is one function a model may call: an action of the catalog, or one of the two reads get_day and get.
 type Tool struct {
 	Name        string
 	Description string
@@ -22,7 +20,7 @@ type Tool struct {
 	Action      *api.Action // nil for get_day and get
 }
 
-// Instructions are what a model reads first about life.db and its tools, on the MCP server and in the agent of ask.
+// Instructions are what a model reads first about life.db and its tools, on the MCP server.
 const Instructions = "life.db is a personal life log: a journal of day pages (one per local day, titled YYYY-MM-DD), " +
 	"pages linked by [[Title]] and #tag, people, places and health readings. Read before you write: get_day " +
 	"and search first; every result lists the links you can follow (get) and the actions you can take next, " +

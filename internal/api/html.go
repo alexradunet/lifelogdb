@@ -35,7 +35,7 @@ import (
 // The three faces are embedded files that /assets/fonts/ serves. There is no script: what a page does beyond
 // its links and forms, the browser does by itself (docs/plans/108-the-browser-made-current.md).
 //
-//go:embed html/*.html html/*.css html/*.svg html/*.png html/*.webmanifest html/fonts/*.woff2 html/fonts/*.txt
+//go:embed html/*.html html/*.css html/*.svg html/*.webmanifest html/fonts/*.woff2 html/fonts/*.txt
 var views embed.FS
 
 // baseCSS and appCSS are the two stylesheets, in that order: the look of ordinary HTML, then this app's own.
@@ -134,7 +134,7 @@ var viewOf = map[string]string{
 
 	"metrics": "metrics", "series": "metric", "metric": "page", "measurement": "measurement", "error": "error", "login": "login",
 	"tasks": "tasks", "task": "task", "occurrence": "occurrence", "deadlines": "deadlines", "month": "month", "week": "week", "year": "year", "styleguide": "styleguide",
-	"conversation": "conversation", "preview": "preview",
+	"preview": "preview",
 }
 
 // view is what a template gets: the entity, its properties as the JSON client reads them, the path the browser
@@ -234,7 +234,6 @@ var navItems = []struct {
 	{"Calendar", "/months/current", "calendar", []string{"/months", "/weeks", "/years", "/days"}, "day"},
 	{"Due", "/deadlines", "due", []string{"/deadlines"}, "day"},
 	{"Tasks", "/tasks", "tasks", []string{"/tasks"}, "day"},
-	{"Chat", "/conversations", "chat", []string{"/conversations"}, "day"},
 	{"Categories", "/categories", "categories", []string{"/categories"}, "record"},
 	{"People", "/people", "people", []string{"/people"}, "record"},
 	{"Places", "/places", "places", []string{"/places"}, "record"},
@@ -309,13 +308,6 @@ func navMatch(path, p string) int {
 }
 
 // LinkTitle is the title of the entity's link with that rel, "" when it has none.
-// ChatPanel says whether the page draws the chat sidebar: every page of the shell but the chat page, which is the
-// same conversation full size (docs/plans/103-the-conversation-on-the-screen.md), and the sidebar holds it in a
-// frame (docs/plans/108-the-browser-made-current.md).
-func (v *view) ChatPanel() bool {
-	return v.Shell != nil && !slices.Contains(v.Class, "conversation")
-}
-
 func (v *view) LinkTitle(rel string) string {
 	if l := v.linkByRel(rel); l != nil {
 		return l.Title

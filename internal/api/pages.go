@@ -46,11 +46,6 @@ func (h *server) page(r *http.Request) (*Entity, error) {
 		}
 		return nil, redirect{to}
 	}
-	// In a browser, a conversation's page is its chat page (docs/plans/103-the-conversation-on-the-screen.md);
-	// ?view=page shows the page itself, to edit its text.
-	if p := e.Properties.(*core.Page); wantsHTML(r) && p.DeletedAt == "" && isConversation(p) && r.URL.Query().Get("view") != "page" {
-		return nil, h.conversationRedirect(r, id)
-	}
 	return e, nil
 }
 

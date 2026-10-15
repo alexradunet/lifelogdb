@@ -53,10 +53,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		"login":      map[string]any{"failed": false, "logged_in": false},
 		"result of capture, create-page, save-body": core.Sync{},
 		"result of add-file":                        core.Kept{},
-		"result of ask":                             Answer{},
-		"conversation": map[string]any{"day": "", "id": int64(0), "title": "", "version": "", "created_at": "", "preamble": "", "turns": []Turn{},
-			"compacted": false, "previous": PreviousConversation{}},
-		"readings-from-table": core.TableReadings{},
+		"readings-from-table":                       core.TableReadings{},
 	}
 	for section, shape := range shapes {
 		want := map[string]bool{}

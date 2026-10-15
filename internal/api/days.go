@@ -84,7 +84,7 @@ func (h *server) root(r *http.Request) (*Entity, error) {
 	actions := []Action{
 		action("capture", map[string]string{"day": today}, nil), action("search", nil, nil), action("find", nil, nil), action("open-day", nil, nil), action("deadlines", nil, nil), action("create-task", nil, nil),
 		action("create-page", nil, nil), action("create-person", nil, nil), action("create-place", nil, nil), action("add-file", nil, nil),
-		record, action("register-metric", nil, nil), action("query", nil, nil), action("snapshot", nil, nil), action("ask", nil, nil)}
+		record, action("register-metric", nil, nil), action("query", nil, nil), action("snapshot", nil, nil)}
 	return &Entity{
 		Class: []string{"root"}, Title: "Lifelog",
 		Properties: map[string]any{"today": today, "due": due, "habits": hs, "recent": recent, "on_this_day": onThisDay},
@@ -227,7 +227,7 @@ func (h *server) dayEntity(ctx context.Context, day string) (*Entity, error) {
 }
 
 func (h *server) capture(r *http.Request, src string) (*Entity, error) {
-	v, note, err := captureForm(r)
+	v, err := form(r)
 	if err != nil {
 		return nil, err
 	}
@@ -239,11 +239,7 @@ func (h *server) capture(r *http.Request, src string) (*Entity, error) {
 	if day == "today" { // the share target of the manifest cannot know the day
 		day = h.localDay()
 	}
-	entry, err := h.entryOf(r.Context(), v.Get("text"), note)
-	if err != nil {
-		return nil, err
-	}
-	_, sync, err := h.s.Capture(r.Context(), src, day, entry, mood)
+	_, sync, err := h.s.Capture(r.Context(), src, day, v.Get("text"), mood)
 	if err != nil {
 		return nil, err
 	}

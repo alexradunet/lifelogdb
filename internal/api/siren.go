@@ -108,10 +108,9 @@ func areaReq(name, title string, rows int) Field {
 
 // catalog is every action the API has. GET /actions serves it, and the CLI and the MCP server are built from it.
 var catalog = []spec{
-	{"capture", "Add to the day", "Append an entry to the journal page of a local day (created on the first capture), with an optional mood 1-5. [[Title]] and #tag in the text link pages, creating them if new. audio is a voice note (a recording, sent as a file by the CLI's --audio, a browser's capture box or a phone's share sheet): its words are transcribed and appended after the text; the recording is never stored.",
+	{"capture", "Add to the day", "Append an entry to the journal page of a local day (created on the first capture), with an optional mood 1-5. [[Title]] and #tag in the text link pages, creating them if new.",
 		"POST", "/days/{day}/capture", []Field{path("day", "date", "Local day, YYYY-MM-DD"), area("text", "Entry (CommonMark)", 4),
-			{Name: "mood", Type: "number", Title: "Mood 1-5", Options: []string{"1", "2", "3", "4", "5"}},
-			{Name: "audio", Type: "file", Title: "A voice note", Accept: "audio/*"}}, false, false},
+			{Name: "mood", Type: "number", Title: "Mood 1-5", Options: []string{"1", "2", "3", "4", "5"}}}, false, false},
 	{"create-page", "New page", "Create a page with a unique title (a valid file name) and a CommonMark body. category files it in that category page (D26) in the same write, making the category when it is new.",
 		"POST", "/pages", []Field{req("title", "text", "Title"), area("body", "Body", 12), pageField("category", "Category (title)", false)}, false, false},
 	{"save-body", "Save", "Replace a page's whole body. version must be the page's current version (from the last read); wikilinks are re-synced.",
@@ -206,10 +205,6 @@ var catalog = []spec{
 		"POST", "/tasks/{id}/occurrences/{key}/tombstone", []Field{path("id", "number", "Task id"), path("key", "text", "Occurrence key"), req("task_version", "hidden", "Task version"), req("version", "hidden", "Version")}, false, true},
 	{"revive-occurrence", "Restore occurrence", "Undo an occurrence's tombstone.",
 		"POST", "/tasks/{id}/occurrences/{key}/revive", []Field{path("id", "number", "Task id"), path("key", "text", "Occurrence key"), req("task_version", "hidden", "Task version"), req("version", "hidden", "Version")}, false, false},
-	// A conversation with lifelog (docs/plans/102-a-conversation-with-lifelog.md): a model answers with the tools of this
-	// catalog, and the turn is kept on a conversation page.
-	{"ask", "Ask", "Ask lifelog in words. A model answers with the tools of this catalog (never the owner's own actions) and writes as agent:chat; it asks back when it is not sure. The turn is appended to the conversation page of the day (Conversation YYYY-MM-DD, filed in the page Conversations). At the first question of a day the earlier days' conversations are summed up into their journal pages first.",
-		"POST", "/conversations", []Field{areaReq("question", "Question", 3)}, false, false},
 	{"deadlines", "Deadlines", "The occurrences of every task due in a window (default: 30 days back to 90 days on), open ones unless state says otherwise. Overdue is this read with an earlier from, never a stored flag.",
 		"GET", "/deadlines", []Field{opt("from", "date", "From"), opt("through", "date", "Through"), {Name: "state", Type: "text", Title: "State", Options: []string{core.StateOpen, core.StateDone, core.StateSkipped, "all"}},
 			{Name: "include_deleted", Type: "number", Title: "Include tombstoned", Options: []string{"0", "1"}}}, false, false},

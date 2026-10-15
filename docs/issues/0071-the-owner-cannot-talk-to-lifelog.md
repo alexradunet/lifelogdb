@@ -1,7 +1,7 @@
 # 0071 — The owner cannot talk to lifelog: an agent works only from outside, and its conversation is lost
 
 - **Date:** 2026-10-14
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the owner's request on 2026-10-14, in a conversation with a coding agent: a chat inside the
   application, with an agent that can do all that the CLI and MCP can do, on the self-hosted model that the owner
   uses today in Pi. Checked against the code at `fa2cf64`.
@@ -56,4 +56,6 @@ The owner reopens it with this request.
 
 ## Resolution
 
-Open. Proposal: [RFC 0012](../rfcs/0012-a-conversation-with-lifelog.md).
+Resolved by [RFC 0012](../rfcs/0012-a-conversation-with-lifelog.md), then closed the other way on 2026-10-15 by
+[RFC 0015](../rfcs/0015-no-conversation.md): the conversation is removed; an agent works from outside, through the
+MCP tools, and keeps its own conversation.

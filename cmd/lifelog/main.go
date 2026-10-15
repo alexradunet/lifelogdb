@@ -15,12 +15,10 @@ import (
 	"strings"
 
 	"lifelog/internal/api"
-	"lifelog/internal/chat"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db"
 	"lifelog/internal/mcp"
-	"lifelog/internal/speech"
 )
 
 const version = "0.1.0"
@@ -28,13 +26,13 @@ const version = "0.1.0"
 // opts are the flags of a command line and its words. A flag may stand anywhere on the line; a command takes the
 // global flags and its own (command.flags), and refuses any other.
 type opts struct {
-	db, url, source, addr, agent, mood, day, from, to, title, text, preview, mime, at, radius, column, audio string
-	tokenFile, tlsCert, tlsKey, snapshots                                                                    string
-	allowOrigins                                                                                             []string
-	human, dryRun, dbExplicit, addrExplicit, public, force                                                   bool
-	args                                                                                                     []string
-	given                                                                                                    []string           // the flags the line named
-	pub                                                                                                      *api.PublicOptions // serve --public, read by its prepare
+	db, url, source, addr, agent, mood, day, from, to, title, text, preview, mime, at, radius, column string
+	tokenFile, tlsCert, tlsKey, snapshots                                                             string
+	allowOrigins                                                                                      []string
+	human, dryRun, dbExplicit, addrExplicit, public, force                                            bool
+	args                                                                                              []string
+	given                                                                                             []string           // the flags the line named
+	pub                                                                                               *api.PublicOptions // serve --public, read by its prepare
 }
 
 // globalFlags are the flags every command takes.
@@ -134,24 +132,16 @@ var commands = []command{
 	{name: "actions",
 		usage: "  lifelog actions                     list the actions and their fields",
 		run:   func(ctx context.Context, e env, _ []string) error { return listActions(ctx, e.o, e.c) }},
-	{name: "capture", gap: true, flags: []string{"--mood", "--day", "--audio"},
-		usage: "  lifelog capture [TEXT...] [--mood N] [--day YYYY-MM-DD] [--audio FILE]\n" +
-			"                                      add to a day's journal page; --audio is a voice note, transcribed where\n" +
-			"                                      lifelog runs ($LIFELOG_TRANSCRIBE_URL, $LIFELOG_TRANSCRIBE_MODEL) and never stored",
+	{name: "capture", gap: true, flags: []string{"--mood", "--day"},
+		usage: "  lifelog capture [TEXT...] [--mood N] [--day YYYY-MM-DD]\n" +
+			"                                      add to a day's journal page",
 		run: func(ctx context.Context, e env, args []string) error {
 			// The day is the server's today unless --day names one: with --url, the server's clock is the one that counts.
 			vals := map[string]string{"day": dayOrToday(e.o), "text": strings.Join(args, " ")}
 			if e.o.mood != "" {
 				vals["mood"] = e.o.mood
 			}
-			if e.o.audio == "" {
-				return doAction(ctx, e, "capture", vals)
-			}
-			a, err := actionNamed(ctx, e.c, "capture")
-			if err != nil {
-				return err
-			}
-			return show(e.o)(e.c.DoFiles(ctx, a, vals, map[string]string{"audio": e.o.audio}))
+			return doAction(ctx, e, "capture", vals)
 		}},
 	{name: "day",
 		usage: "  lifelog day [YYYY-MM-DD]            the day view (default today)",
@@ -161,13 +151,6 @@ var commands = []command{
 				day = args[0]
 			}
 			return show(e.o)(e.c.Get(ctx, "/days/"+url.PathEscape(day)))
-		}},
-	{name: "ask",
-		usage: "  lifelog ask QUESTION...             ask lifelog in words: a model answers with the actions (the model of\n" +
-			"                                      $LIFELOG_MODEL_URL and $LIFELOG_MODEL where lifelog runs); the turn is\n" +
-			"                                      kept on the conversation page of the day",
-		run: func(ctx context.Context, e env, args []string) error {
-			return doAction(ctx, e, "ask", map[string]string{"question": strings.Join(args, " ")})
 		}},
 	{name: "page",
 		usage: "  lifelog page TITLE                  a page by its title",
@@ -312,7 +295,7 @@ func parse(argv []string) (opts, error) {
 	o := opts{db: os.Getenv("LIFELOG_DB"), source: "cli", addr: "127.0.0.1:7777"}
 	vals := map[string]*string{"--db": &o.db, "--url": &o.url, "--source": &o.source, "--addr": &o.addr,
 		"--agent": &o.agent, "--mood": &o.mood, "--day": &o.day, "--from": &o.from, "--to": &o.to,
-		"--title": &o.title, "--text": &o.text, "--preview": &o.preview, "--mime": &o.mime, "--at": &o.at, "--radius": &o.radius, "--audio": &o.audio,
+		"--title": &o.title, "--text": &o.text, "--preview": &o.preview, "--mime": &o.mime, "--at": &o.at, "--radius": &o.radius,
 		"--token-file": &o.tokenFile, "--tls-cert": &o.tlsCert, "--tls-key": &o.tlsKey, "--snapshots": &o.snapshots, "--column": &o.column}
 	bools := map[string]*bool{"--human": &o.human, "--dry-run": &o.dryRun, "--public": &o.public, "--force": &o.force}
 	for i := 0; i < len(argv); i++ {
@@ -438,18 +421,7 @@ func runContext(ctx context.Context, o opts) error {
 		origins = o.pub.Origins
 	}
 	e.o.db = path
-	// The agent of ask calls this same handler in-process, as agent:chat (docs/plans/102-a-conversation-with-lifelog.md).
-	var asker api.Asker
-	agent := &chat.Agent{Model: chat.ModelFromEnv()}
-	if agent.Model != nil {
-		asker = agent
-	}
-	var transcriber api.Transcriber
-	if t := speech.FromEnv(); t != nil { // a nil interface, not a nil *speech.Transcriber in one
-		transcriber = t
-	}
-	e.handler = api.NewWith(&core.Store{DB: d, SnapshotDir: o.snapshots}, asker, transcriber, origins...)
-	agent.Client = client.InProcess(e.handler, chat.Source)
+	e.handler = api.New(&core.Store{DB: d, SnapshotDir: o.snapshots}, origins...)
 	if cmd.name != "serve" { // serve mounts the handler on a socket and calls it through no client
 		e.c = client.InProcess(e.handler, o.source)
 	}

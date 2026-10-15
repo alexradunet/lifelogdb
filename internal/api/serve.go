@@ -18,33 +18,24 @@ import (
 const SourceHeader = "Lifelog-Source"
 
 type server struct {
-	s           *core.Store
-	feedback    feedbackStore
-	localDay    func() string  // the server's local day: what is due, overdue and today is read against it
-	zone        *time.Location // the zone of that day: a browser's words for a time use it
-	mux         *http.ServeMux // the routes: a refused browser form runs a GET of its page through it
-	asker       Asker          // the agent of ask; nil when no model is configured
-	transcriber Transcriber    // the words of a voice note sent to capture; nil when none is configured
+	s        *core.Store
+	feedback feedbackStore
+	localDay func() string  // the server's local day: what is due, overdue and today is read against it
+	zone     *time.Location // the zone of that day: a browser's words for a time use it
+	mux      *http.ServeMux // the routes: a refused browser form runs a GET of its page through it
 }
 
 // New returns the whole API as one handler: lifelog serve mounts it on a socket, the CLI and the MCP server
 // call it in-process. trustedOrigins are the browser origins a public listener allows to write
 // (docs/plans/078-network-server.md); a local listener and the in-process client pass none.
 func New(s *core.Store, trustedOrigins ...string) http.Handler {
-	return NewOn(s, core.Today, time.Local, nil, nil, trustedOrigins...)
-}
-
-// NewWith is New with what the environment configures: the agent of ask
-// (docs/plans/102-a-conversation-with-lifelog.md) and the transcriber of a voice note (docs/plans/109-a-voice-note.md).
-// A nil asker refuses ask; a nil transcriber refuses a capture with a voice note.
-func NewWith(s *core.Store, asker Asker, transcriber Transcriber, trustedOrigins ...string) http.Handler {
-	return NewOn(s, core.Today, time.Local, asker, transcriber, trustedOrigins...)
+	return NewOn(s, core.Today, time.Local, trustedOrigins...)
 }
 
 // NewOn is New with the clock of the local day and its zone given: a test fixes them, so what is due, overdue and
-// today's conversation are read against a fixed day, and a time is written in fixed words.
-func NewOn(s *core.Store, localDay func() string, zone *time.Location, asker Asker, transcriber Transcriber, trustedOrigins ...string) http.Handler {
-	h := &server{s: s, localDay: localDay, zone: zone, asker: asker, transcriber: transcriber}
+// today are read against a fixed day, and a time is written in fixed words.
+func NewOn(s *core.Store, localDay func() string, zone *time.Location, trustedOrigins ...string) http.Handler {
+	h := &server{s: s, localDay: localDay, zone: zone}
 	m := http.NewServeMux()
 	h.mux = m
 	get := func(p string, f func(*http.Request) (*Entity, error)) { m.HandleFunc("GET "+p, h.serve(f)) }
@@ -101,9 +92,6 @@ func NewOn(s *core.Store, localDay func() string, zone *time.Location, asker Ask
 	m.HandleFunc("GET /manifest.webmanifest", install("manifest.webmanifest", "application/manifest+json", "public, max-age=3600"))
 	m.HandleFunc("GET /assets/icon.svg", install("icon.svg", "image/svg+xml", "public, max-age=31536000, immutable"))
 	m.HandleFunc("GET "+worldOutline, install(worldOutline[len("/assets/"):], "image/svg+xml", "public, max-age=31536000, immutable"))
-	// The two portraits of a conversation, from the owner's design system Balaur — Basm (docs/plans/104-the-chat-in-basm.md).
-	m.HandleFunc("GET /assets/portrait-lifelog.png", install("portrait-lifelog.png", "image/png", "public, max-age=31536000, immutable"))
-	m.HandleFunc("GET /assets/portrait-owner.png", install("portrait-owner.png", "image/png", "public, max-age=31536000, immutable"))
 	post("/days/{day}/capture", h.capture)
 	post("/pages", h.createPage)
 	post("/pages/{id}/body", h.saveBody)
@@ -146,9 +134,6 @@ func NewOn(s *core.Store, localDay func() string, zone *time.Location, asker Ask
 	post("/tasks/{id}/occurrences/{key}/edit", h.editOccurrence)
 	post("/tasks/{id}/occurrences/{key}/tombstone", h.occurrenceLifecycle(true))
 	post("/tasks/{id}/occurrences/{key}/revive", h.occurrenceLifecycle(false))
-	get("/conversations", func(r *http.Request) (*Entity, error) { return h.todayConversation(r.Context()) })
-	get("/conversations/{id}", h.conversation)
-	post("/conversations", h.ask)
 	guard := http.NewCrossOriginProtection()
 	for _, origin := range trustedOrigins {
 		if err := guard.AddTrustedOrigin(origin); err != nil {

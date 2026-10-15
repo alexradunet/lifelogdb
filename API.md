@@ -70,7 +70,7 @@ ghosts oldest first; search by rank.
 `habits`, `tasks`, `deadlines`, `ghosts`, `actions`, `calendar` (this month), `week` (this week), `year` (this year). Actions: `capture` (for today), `search`,
 `find`, `open-day`, `deadlines`,
 `create-task`, `create-page`, `create-person`, `create-place`, `add-file`,
-`record`, `register-metric` (owner), `query`, `snapshot` (owner), `ask`; then the `check-in` of each habit of today (today
+`record`, `register-metric` (owner), `query`, `snapshot` (owner); then the `check-in` of each habit of today (today
 filled in), and the outcome (see task) of each occurrence in `due`.
 
 | property | type | meaning |
@@ -420,8 +420,7 @@ be `part-of`, not a day page: `ids` is this page, and `category` offers the cate
 `create-page` with `category` filled (a live category page: something is `part-of` it; the new page is made and
 filed in it in one write), `set-picture` (a person), `readings-from-table` (when the
 body holds a table, with `page` filled), `tombstone`, or `revive` alone on a deleted page. In a browser, the page of a
-live metric answers 303 to its series, the metric's one page, which carries this page's text, links and actions; the
-page of a live conversation answers 303 to `/conversations/{id}`, unless the query has `view=page`. The
+live metric answers 303 to its series, the metric's one page, which carries this page's text, links and actions. The
 writes answer with this entity; `create-page` and `save-body` carry a `result` of the sync shape, `add-file` the kept
 shape. `set-picture` (`POST /pages/{id}/picture`) puts `![[title]]` first in the body, unless that file is the page's
 picture already (the first live file with a preview that the body embeds). It takes a new photo as `original` (and
@@ -790,42 +789,6 @@ back to 90 days on), `open` ones unless `state` is `done`, `skipped` or `all`. O
 | `occurrences[].reminder.state` | string |  |
 | `occurrences[].reminder.at` | instant |  |
 
-### conversation
-
-`GET /conversations`: the conversation of the server's local day, continued all day
-([plan 106](docs/plans/106-one-continuous-conversation.md)): the live page `Conversation YYYY-MM-DD` filed by `part-of`
-in the page `Conversations`. Before the day's first question there is no page: `id`, `version` and `created_at` are
-absent and `turns` is empty. `GET /conversations/{id}`: the conversation of one day, read from its page's body; 404
-for a page that is not a live conversation. Links: `page` (its page, to edit the text; when it exists), `today`
-(`/conversations`, on an earlier day's), `previous` (the conversation of the nearest earlier day), `memory`
-(`/days/{day}`: the journal page the model is given, the nearest live day page in the seven days before this
-conversation's day), `index`. Actions: `ask`, on the conversation of the server's day alone. `ask` answers with
-`GET /conversations`. In a browser it is the chat page.
-
-| property | type | meaning |
-|---|---|---|
-| `day` | string | the conversation's local day, from its title; empty for a page filed in `Conversations` whose title names no day |
-| `id` | integer | the conversation page's id |
-| `title` | string | its title |
-| `version` | string | its page's version |
-| `created_at` | instant | when it started |
-| `preamble` | string | text of the page before its first turn; absent when none |
-| `turns[]` | list | the turns, in order |
-| `turns[].at` | string | the time of the question, `HH.MM`, the server's local time |
-| `turns[].question` | string | the owner's question |
-| `turns[].steps[]` | list | each tool the model called (the steps of the result of ask), the compaction of earlier days first |
-| `turns[].steps[].tool` | string | |
-| `turns[].steps[].href` | string | |
-| `turns[].steps[].error` | string | |
-| `turns[].reply` | string | the model's answer (CommonMark); absent when there is none |
-| `turns[].error` | string | why the model gave no answer; absent when it answered |
-| `compacted` | boolean | whether the conversation is summed up in the journal page of its day: its page ends with the line `**Compacted** into [[day]]` |
-| `previous` | object | the conversation of the nearest earlier day; absent when there is none |
-| `previous.id` | integer | its page's id |
-| `previous.title` | string | its title |
-| `previous.day` | string | its day |
-| `previous.compacted` | boolean | whether it is summed up yet: it is, at the first question of a later day |
-
 ### integrity
 
 `GET /integrity`: the four integrity checks of the contract, and this writer's own.
@@ -950,29 +913,6 @@ What the save contract did with the body's `[[wikilinks]]` and `#tags`:
 | `created` | list | the titles whose page was created; absent when none |
 | `revived` | list | the tombstoned pages revived by a link; absent when none |
 | `skipped` | list | the `[[names]]` that are not valid titles; absent when none |
-
-### result of ask
-
-`POST /conversations` (`question`): a model the server is configured with (`LIFELOG_MODEL_URL`, `LIFELOG_MODEL`,
-optional `LIFELOG_MODEL_KEY`) answers with the tools of the catalog, never an owner-only action, and writes as
-`agent:chat`. The turn is appended to the conversation page of the server's local day, `Conversation YYYY-MM-DD`,
-filed by `part-of` in the page `Conversations` and created at the day's first question. Before the model answers, the
-conversations of earlier days not yet summed up are compacted, the oldest first and at most three a question: the
-model sums each up in words, `capture` appends the summary to the journal page of that day as `agent:chat`, with a
-`[[link]]` to the transcript, and the transcript ends with `**Compacted** into [[day]]`. A compaction that fails is a
-step with its error, and stops the compaction until the next question; the question is still answered. The model's
-memory is the journal page of the nearest earlier day within seven days (the link `memory` of the conversation), then
-today's turns. The answer is `GET /conversations`, with this `result` (a browser form gets no receipt: the chat page
-shows the turn):
-
-| property | type | meaning |
-|---|---|---|
-| `conversation` | integer | the conversation page's id |
-| `reply` | string | the model's answer in words |
-| `steps[]` | list | the compaction of each earlier day, then each tool the model called, in order |
-| `steps[].tool` | string | the tool's name: an action's name with `_` for `-`, `get_day`, `get`, or `compact` for an earlier day summed up |
-| `steps[].href` | string | the `self` of what the tool answered, or the day page a compaction wrote; absent when it failed |
-| `steps[].error` | string | the refusal the model was given back, or why a compaction failed; absent when it succeeded |
 
 ### result of add-file
 

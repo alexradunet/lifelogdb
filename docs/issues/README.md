@@ -4,15 +4,16 @@ An issue records an incident from real use — a failed import, a bug in the wri
 data could not answer, a rule that is ambiguous or untestable. It is the evidence a schema change needs
 ([how a change happens](../process.md)). One file per incident, named `NNNN-short-slug.md`, written from the
 [template](template.md), numbered on from the last: issues up to 0010 are closed and live in git history
-(`git log -- docs/issues`). Issues 0011–0074 are listed below; the next one is **0075**. Close an issue with its resolution and status, retaining the dated incident as
+(`git log -- docs/issues`). Issues 0011–0075 are listed below; the next one is **0076**. Close an issue with its resolution and status, retaining the dated incident as
 [the process](../process.md) requires. Earlier closed records remain available in git history.
 
 | id | title | status |
 |---|---|---|
+| [0075](0075-the-conversation-costs-more-than-it-gives.md) | The conversation inside the writer costs more than it gives | resolved |
 | [0074](0074-periods-cost-more-than-they-give.md) | Recorded periods cost more than they give | resolved |
 | [0073](0073-sessions-cost-more-than-they-give.md) | Sessions cost more than they give, and no data uses them | resolved |
-| [0072](0072-a-conversation-reads-as-a-page.md) | A conversation reads as a page, and it leaves the screen when the owner moves on | open |
-| [0071](0071-the-owner-cannot-talk-to-lifelog.md) | The owner cannot talk to lifelog: an agent works only from outside, and its conversation is lost | open |
+| [0072](0072-a-conversation-reads-as-a-page.md) | A conversation reads as a page, and it leaves the screen when the owner moves on | resolved |
+| [0071](0071-the-owner-cannot-talk-to-lifelog.md) | The owner cannot talk to lifelog: an agent works only from outside, and its conversation is lost | resolved |
 | [0070](0070-the-calendar-shows-only-the-journal.md) | The calendar shows only the journal | resolved |
 | [0069](0069-a-metric-is-three-pages.md) | A metric is three pages, and Record is under its readings | resolved |
 | [0068](0068-rules-the-writer-holds-alone.md) | The writer holds rules the database could hold, and repeats rules the database holds | resolved |

@@ -50,13 +50,12 @@
      form of the dialog's own; no script. */}}
 {{define "feedback"}}{{if .Result}}<dialog open closedby="closerequest" class="toast" aria-label="Result"><h2>Result</h2>{{range .ResultLines}}<p>{{.}}</p>{{end}}<form method="dialog" class="tiny"><button class="close">Close</button></form></dialog>{{end}}{{end}}
 
-{{/* foot closes the page: the footer with the access keys, the chat sidebar, and the search dialog
+{{/* foot closes the page: the footer with the access keys and the search dialog
      (docs/plans/108-the-browser-made-current.md): a modal the top bar's Search opens by its command, with the search
      form inside, so a page by its title or the words of a body is one key away; Escape or a tap outside closes it. */}}
 {{define "foot"}}</main>
 <footer><p>Lifelog, the one writer of <code>life.db</code>.</p>{{if .Shell}}<p class="keys"><small>Access keys, with the browser's modifier: <kbd>k</kbd> search · <kbd>n</kbd> new · <kbd>c</kbd> capture · <kbd>t</kbd> today · <kbd>[</kbd> <kbd>]</kbd> previous, next</small></p>{{end}}</footer>
 </div>
-{{if .ChatPanel}}{{template "chatpanel" .}}{{end}}
 {{if .Shell}}<dialog class="palette" id="palette" closedby="any" aria-label="Search">
 <form method="GET" action="/search"><input type="search" name="q" autocomplete="off" aria-label="Search" placeholder="A page's title, or words of a body"></form>
 <p class="meta">Enter searches · <kbd>Escape</kbd> closes · access keys, with the browser's modifier: <kbd>k</kbd> search · <kbd>n</kbd> new · <kbd>c</kbd> capture · <kbd>t</kbd> today · <kbd>[</kbd> <kbd>]</kbd> previous, next</p>

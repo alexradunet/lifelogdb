@@ -61,22 +61,13 @@ func TestFindAndReadingsTools(t *testing.T) {
 		}
 		seen[tool.Name] = true
 	}
-	for _, name := range []string{"find", "get", "get_day", "readings_from_table", "open_day", "ask"} {
+	for _, name := range []string{"find", "get", "get_day", "readings_from_table", "open_day"} {
 		if !seen[name] {
 			t.Fatalf("MCP tools lack %q; have %v", name, seen)
 		}
 	}
 	if seen["render"] {
 		t.Fatal("the browser's preview was exposed as an MCP tool")
-	}
-	for _, tool := range tools.Tools { // ask takes the question alone: the conversation is the day's (plan 106)
-		if tool.Name != "ask" {
-			continue
-		}
-		props, _ := tool.InputSchema.(map[string]any)["properties"].(map[string]any)
-		if _, ok := props["question"]; !ok || len(props) != 1 {
-			t.Fatalf("ask's input is %v, want question alone", props)
-		}
 	}
 	actions, err := c.Catalog(ctx)
 	if err != nil {

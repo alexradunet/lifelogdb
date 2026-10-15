@@ -1,7 +1,7 @@
 # 0072 — A conversation reads as a page, and it leaves the screen when the owner moves on
 
 - **Date:** 2026-10-14
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the owner's first use of `ask` in the browser on 2026-10-14: "I want it to act more like a
   conversation, for example having an always on sidebar chat with the agent and have a full screen chat page. If the
   user moves out of the full screen chat page, it becomes a toggleable right sidebar". Checked against the code at
@@ -33,4 +33,5 @@ flowchart LR
 
 ## Resolution
 
-Open. [Plan 103](../plans/103-the-conversation-on-the-screen.md).
+Resolved by [plan 103](../plans/103-the-conversation-on-the-screen.md), then closed the other way on 2026-10-15 by
+[RFC 0015](../rfcs/0015-no-conversation.md): the conversation is removed.

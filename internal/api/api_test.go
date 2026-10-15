@@ -47,7 +47,7 @@ func freshOn(t *testing.T, day string) (*client.Client, http.Handler) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { d.Close() })
-	h := api.NewOn(&core.Store{DB: d}, func() string { return day }, time.UTC, nil, nil)
+	h := api.NewOn(&core.Store{DB: d}, func() string { return day }, time.UTC)
 	return client.InProcess(h, "cli"), h
 }
 
@@ -203,7 +203,7 @@ func TestBrowserGetsHTMLAndSourceUI(t *testing.T) {
 	if rec.Code != http.StatusSeeOther || !feedbackLocation(rec.Header().Get("Location"), "/days/2026-09-29") {
 		t.Errorf("a browser form is answered %d, Location %q: post, then redirect", rec.Code, rec.Header().Get("Location"))
 	}
-	if body := browse(t, h, "/days/2026-09-29"); !strings.Contains(body, `<form method="POST" action="/days/2026-09-29/capture" data-action="capture" enctype="multipart/form-data">`) {
+	if body := browse(t, h, "/days/2026-09-29"); !strings.Contains(body, `<form method="POST" action="/days/2026-09-29/capture" data-action="capture">`) {
 		t.Errorf("HTML: %.300s", body)
 	}
 	q := must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "query"), map[string]string{"sql": "SELECT source FROM entities"}))

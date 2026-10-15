@@ -165,7 +165,7 @@ func TestThePhoneHasABottomBarAndASheet(t *testing.T) {
 		}
 		return strings.Join(out, " ")
 	}
-	if got := links(bar[1]); got != "/days/today /months/current /deadlines /tasks /conversations popovertarget=\"sections\"" {
+	if got := links(bar[1]); got != "/days/today /months/current /deadlines /tasks popovertarget=\"sections\"" {
 		t.Errorf("the bottom bar: %s", got)
 	}
 	if got := links(sheet[1]); !strings.HasPrefix(got, "/categories /people /places /media /files /metrics /ghosts /months/2031-05") ||
@@ -285,8 +285,7 @@ func TestTheManifestAndTheIconAreServed(t *testing.T) {
 	}
 	if m.Name != "Lifelog" || m.StartURL != "/" || m.Display != "standalone" || m.ThemeColor != "#3a2210" || len(m.Shortcuts) != 3 || len(m.Icons) != 2 ||
 		m.ShareTarget.Action != "/days/today/capture" || m.ShareTarget.Method != "POST" || m.ShareTarget.Enctype != "multipart/form-data" ||
-		m.ShareTarget.Params.Text != "text" || len(m.ShareTarget.Params.Files) != 1 || m.ShareTarget.Params.Files[0].Name != "audio" ||
-		strings.Join(m.ShareTarget.Params.Files[0].Accept, ",") != "audio/*" { // a phone's share sheet sends a voice memo to capture
+		m.ShareTarget.Params.Text != "text" || len(m.ShareTarget.Params.Files) != 0 { // a phone's share sheet sends text to capture
 		t.Errorf("the manifest says %+v", m)
 	}
 	for _, i := range m.Icons {

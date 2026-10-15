@@ -28,12 +28,10 @@ lifelog init                               # life.db beside the program; --db PA
 lifelog agentic-init                       # AGENTS.md, skills and MCP configs here, for a coding agent opened here
 
 lifelog capture "Ran 5k with [[Sam]] #running" --mood 4
-lifelog capture --audio memo.m4a          # a voice note: its words go on today's page ($LIFELOG_TRANSCRIBE_URL, $LIFELOG_TRANSCRIBE_MODEL)
 lifelog day --human
 lifelog serve                              # http://127.0.0.1:7777 — open it in a browser; this machine only
 lifelog serve --public --token-file ~/life/token   # for your other devices: every request needs the token
 lifelog mcp --agent lmstudio               # MCP on stdio; rows are written as agent:lmstudio
-lifelog ask "What did I do last Sunday?"  # a model answers with the actions ($LIFELOG_MODEL_URL, $LIFELOG_MODEL)
 lifelog habits --human                     # today's habits; lifelog done evening_walk
 lifelog snapshot --to ~/snapshots --human  # life-YYYY-MM-DD.db and its restore check
 lifelog file memo.m4a --text memo.txt     # keep a file: its text, the original hashed and never stored
@@ -139,8 +137,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   material sets its own text through aliases (`--text`, `--text-link`, …), and a test holds every text pair at
   4.5:1 and every edge and the focus ring at 3:1 in both themes. The motions, all off under reduced motion: a press
   sinks; the step to the previous or next day moves the leaf and cross-fades the sheet through a cross-document view
-  transition ([plan 097](docs/plans/097-the-almanac-reflects.md)); the search dialog, the phone's sheet and the chat
-  sheet enter and leave by `@starting-style` and a discrete transition; the phone's top bar takes its drop once the
+  transition ([plan 097](docs/plans/097-the-almanac-reflects.md)); the search dialog and the phone's sheet
+  enter and leave by `@starting-style` and a discrete transition; the phone's top bar takes its drop once the
   page has scrolled under it, by a scroll-driven animation
   ([plan 108](docs/plans/108-the-browser-made-current.md)).
 
@@ -177,8 +175,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   `GET /styleguide` is the style page: every component in every state, drawn on synthetic words, with the file each
   lives in. It is presentation, like `/render`: it is not in the catalog and it reads nothing from the database.
   `GET /manifest.webmanifest` and `GET /assets/icon.svg` make the app installable: three shortcuts (Today, Add to
-  today, What is due) and a share target that posts shared text, or a shared voice memo, into Capture
-  (`POST /days/today/capture`, where `today` is the local day; the memo is transcribed, see the voice note below). There is no service worker, since the server is the owner's own. A public listener
+  today, What is due) and a share target that posts shared text into Capture
+  (`POST /days/today/capture`, where `today` is the local day). There is no service worker, since the server is the owner's own. A public listener
   refuses all three without the token, as it refuses the fonts.
 - **No script** ([plan 108](docs/plans/108-the-browser-made-current.md); the owner's rule of 2026-10-14: as native
   as HTML can be, even at the cost of a small convenience). A page carries its two sheets and no `script` element,
@@ -217,7 +215,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   margins where ours sit two to a row, and its `body` is a 45rem grid: keeping one meant overriding most of it, and
   re-pinning a file by hand at every upstream change.
 - **Provenance per surface.** `source` is `cli`, `api`, `ui` (a browser form) or `agent:<name>` (MCP);
-  the `Lifelog-Source` header sets it. The agent of `ask` writes as `agent:chat`, whoever asked.
+  the `Lifelog-Source` header sets it.
 - **Optimistic saves.** A body save sends the `version` (the decimal `entities.revision` token) it read; a newer one is a 409.
 - **One page a metric** ([plan 100](docs/plans/100-one-page-a-metric.md)). `/metrics/{name}` is the metric's one
   page: Record first (Check in while it is a habit), its readings newest first in a fold a year, and, as a metric is
@@ -248,49 +246,11 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   action: it writes files beside the program.
 - **Owner-only actions.** `register-metric` and `snapshot` are refused to an `agent:*` or `import:*` writer and
   are never MCP tools. An agent that imports with the owner asks for them in the conversation.
-- **A conversation with lifelog** ([plan 102](docs/plans/102-a-conversation-with-lifelog.md)). `ask` is an action of
-  the catalog, so it is on every surface: `lifelog ask`, the MCP tool `ask`, the form on Home and on the chat page.
-  A model the owner configures answers it with the same tools as the MCP server, minus `ask` itself, as `agent:chat`
-  (`internal/chat`). The model is an OpenAI chat-completions endpoint, read from the environment of the process that
-  opens the file: `LIFELOG_MODEL_URL` (the base URL, ending in `/v1`), `LIFELOG_MODEL` and optional
-  `LIFELOG_MODEL_KEY`; without them `ask` answers 503 and the rest is unchanged. With `--url`, the server's model
-  answers. A model writes with no approval step; it asks the owner in the chat when it is not sure. At most 16 model
-  steps a question and 64 KiB a tool result; the loop runs in the request and stops with it. **Rejected:** rewriting
-  `lifelog` in another language to embed an agent SDK, a second application beside it, and a table of conversations
-  before a question needs one ([RFC 0012](docs/rfcs/0012-a-conversation-with-lifelog.md)).
-- **A voice note** ([plan 109](docs/plans/109-a-voice-note.md)). `capture` takes `audio`, a file field, beside its
-  text: the capture box on Home and on a day page, `lifelog capture --audio FILE` and a phone's share sheet send a
-  recording; the MCP tool `capture` carries no file field, as `add-file` does not. A transcriber the owner configures
-  turns it into words, appended to the entry after the text; the recording is never stored
-  ([D9](docs/decisions/D09-binary-files.md)). The transcriber is an endpoint of the OpenAI audio-transcriptions
-  protocol (`internal/speech`), read from the environment as the model is: `LIFELOG_TRANSCRIBE_URL` (the base URL,
-  ending in `/v1`), `LIFELOG_TRANSCRIBE_MODEL` and optional `LIFELOG_TRANSCRIBE_KEY`; without them a capture with a
-  note answers 503 and the rest is unchanged. A note is at most 25 MiB, transcribed before the write transaction
-  opens, and written in one request with no look at the words first, by the owner's word. **Rejected:** dictation
-  in the browser (the speech would go to the browser's vendor) and a whisper binary run as a subprocess.
-- **One continuous conversation** ([plan 106](docs/plans/106-one-continuous-conversation.md)). The owner's rule
-  (2026-10-14): one conversation, not sessions. Each turn is appended to the page `Conversation YYYY-MM-DD` of the
-  server's local day, filed by `part-of` in the page `Conversations` and created at the day's first question; `ask`
-  takes the question alone. At the first question of a day the agent first compacts the earlier days' conversations
-  not yet summed up, the oldest first and at most three a question: one model call in words, `capture` of the
-  summary on that day's journal page as `agent:chat` with a `[[link]]` to the transcript, then the trailer
-  `**Compacted** into [[day]]` on the transcript (the summary first, so a stale trailer never loses one). A
-  compaction that fails is a `compact` step with its error, and stops the compaction until the next question; the
-  question is still answered. The model's memory of the days before is the journal page of the nearest earlier day
-  within seven days, given whole, then today's turns. The transcript format, the trailer included, is written and
-  read in `internal/api/conversations.go` alone. **Rejected:** a timer or a goroutine for the compaction, a link
-  kind or a filing page as the compacted mark (the schema, or a second home), a table of conversations.
-- **The conversation on the screen** ([plan 103](docs/plans/103-the-conversation-on-the-screen.md)). `/conversations`
-  is today's conversation and `/conversations/{id}` the conversation of one day, its turns read from its page; in a
-  browser they are the chat page (the thread, a note that the previous day's conversation is summed up in that day's
-  page, the composer on today's alone), and a conversation's `/pages/{id}` answers 303 there (`?view=page` keeps
-  the page). The chat page takes the screen's height and scrolls its thread alone, so the head and the composer
-  never move and the page never scrolls under the owner's hands; the thread is laid out from its end, so it opens
-  at the newest turn ([plan 108](docs/plans/108-the-browser-made-current.md)). The draft posts, the answer runs in
-  the request, and the page comes back with it. Every other page of the shell has the chat sidebar: a popover
-  sheet over the right of the page that the Chat button opens and Close, Escape or a tap outside closes, holding
-  the chat page in an `iframe`; a page asked for as a frame (`Sec-Fetch-Dest: iframe`) is drawn without the shell.
-  The draft posts inside the frame. Whether the sidebar is open is not remembered from one page to the next.
+- **No conversation inside the writer** ([plan 116](docs/plans/116-strip-to-the-core.md), [RFC 0015](docs/rfcs/0015-no-conversation.md)).
+  The owner's decision (2026-10-15): `ask`, the Conversations pages, the chat sidebar and the voice note are
+  removed, with the model and transcriber endpoints they needed. The owner talks to `life.db` through a coding
+  agent's MCP tools, and a recording is kept as a file with its text ([D9](docs/decisions/D09-binary-files.md)).
+  The conversation pages already written stay plain pages, filed in `Conversations`.
 - **Renames select a preferred name on the same identity**, retaining direct aliases as
   [titles and wikilinks](docs/contract/titles-and-wikilinks.md) ("Renames") requires and
   [rename a page](docs/cookbook/rename-a-page.md) writes; `lifelog rename` and the API's `rename` action run it.
@@ -405,9 +365,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 | `internal/photo` | what a photo's metadata says: the day and time taken, the position, the orientation (JPEG and HEIC); `phototest` builds synthetic ones |
 | `internal/api` | the action catalog, the routes, Siren and HTML; the local and the `--public` network guards |
 | `internal/client` | the hypermedia client (in-process or remote) |
-| `internal/mcp` | the catalog as MCP tools (the tool list is `internal/client`'s, shared with `internal/chat`) |
-| `internal/chat` | the agent of `ask`: the model client, the loop over the catalog's tools, the conversation page |
-| `internal/speech` | the transcriber of a voice note: the audio-transcriptions client, read from the environment |
+| `internal/mcp` | the catalog as MCP tools (the tool list is `internal/client`'s) |
 | `internal/agentic` | `lifelog agentic-init`: the texts and MCP configs for a coding agent opened in the folder of the program |
 | `internal/scaletest` | the synthetic personas and the lifetime workload of `tools/lifescale`: generators, an oracle and the timed checks |
 | `tools/copyschema` | `go generate`'s copy of `docs/schema/schema.sql` into `internal/db` |
