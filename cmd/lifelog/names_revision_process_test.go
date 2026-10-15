@@ -32,7 +32,7 @@ func TestExecutableStableNamesAndExactRevision(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := &core.Store{DB: d}
-	id, _, err := s.CreatePage(context.Background(), "cli", "Process old", "first")
+	id, _, err := s.CreatePage(context.Background(), "cli", "Process old", "first", "")
 	if err != nil {
 		d.Close()
 		t.Fatal(err)

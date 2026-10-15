@@ -10,11 +10,11 @@ func TestPromotionRefusesRetainedTypedEdges(t *testing.T) {
 	for _, incoming := range []bool{true, false} {
 		t.Run(map[bool]string{true: "incoming", false: "outgoing"}[incoming], func(t *testing.T) {
 			s := fresh(t)
-			category, _, err := s.CreatePage(ctx, "cli", "Category", "retained prose")
+			category, _, err := s.CreatePage(ctx, "cli", "Category", "retained prose", "")
 			if err != nil {
 				t.Fatal(err)
 			}
-			other, _, err := s.CreatePage(ctx, "cli", "Other", "")
+			other, _, err := s.CreatePage(ctx, "cli", "Other", "", "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -180,7 +180,7 @@ func TestLinkFieldsImmutableAndSymmetricNoteShared(t *testing.T) {
 
 func TestIntegrityDetectsDeliberateTypedEdgeDamage(t *testing.T) {
 	s := fresh(t)
-	category, _, err := s.CreatePage(ctx, "cli", "Damaged category", "")
+	category, _, err := s.CreatePage(ctx, "cli", "Damaged category", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

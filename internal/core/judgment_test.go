@@ -6,7 +6,7 @@ import "testing"
 // missing id is 404, the same state again is a no-op, and a promotion of what is not a plain page is a 409.
 func TestEntityLifecycleStatusesAreTheCommonOnes(t *testing.T) {
 	s := fresh(t)
-	id, _, err := s.CreatePage(ctx, "cli", "Lifecycle witness", "")
+	id, _, err := s.CreatePage(ctx, "cli", "Lifecycle witness", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -75,8 +75,30 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 	for _, l := range p.Out {
 		e.Entities = append(e.Entities, Link{Rel: []string{l.Kind}, Href: pageHref(l.ID), Title: l.Title, Class: []string{l.Type}})
 	}
+	// The categories, read once: the options of file-pages, and which of the pages filed here are categories
+	// themselves (docs/plans/115-categories-to-browse.md).
+	var cats []core.Category
+	if !p.IsDayPage {
+		if cats, err = h.s.Categories(ctx); err != nil {
+			return nil, err
+		}
+	}
+	isCategory := func(id int64) bool {
+		return slices.ContainsFunc(cats, func(c core.Category) bool { return c.ID == id })
+	}
+	filed := 0
 	for _, l := range p.In {
-		e.Entities = append(e.Entities, Link{Rel: []string{"backlink", l.Kind}, Href: pageHref(l.ID), Title: l.Title, Class: []string{l.Type}})
+		class := []string{l.Type}
+		if l.Kind == "part-of" {
+			filed++
+			if isCategory(l.ID) {
+				class = append(class, "category")
+			}
+		}
+		e.Entities = append(e.Entities, Link{Rel: []string{"backlink", l.Kind}, Href: pageHref(l.ID), Title: l.Title, Class: class})
+	}
+	if filed > 0 && p.DeletedAt == "" { // a category page: a new page is made and filed here in one write
+		e.Actions = append(e.Actions, action("create-page", nil, map[string]any{"category": p.Title}))
 	}
 	if p.DeletedAt != "" {
 		e.Class = append(e.Class, "deleted")
@@ -109,12 +131,8 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 		e.Actions = append(e.Actions, withOptions(action("unlink", ids, nil), "kind", kinds))
 	}
 	if slices.Contains(kinds, "part-of") && !p.IsDayPage { // its categories, as badges (docs/plans/114-one-way-to-do-a-thing.md)
-		cs, err := h.s.Categories(ctx)
-		if err != nil {
-			return nil, err
-		}
 		var titles []string
-		for _, c := range cs {
+		for _, c := range cats {
 			if c.ID != p.ID {
 				titles = append(titles, c.Title)
 			}
@@ -250,7 +268,7 @@ func (h *server) createPage(r *http.Request, src string) (*Entity, error) {
 	if err := required(v, "title"); err != nil {
 		return nil, err
 	}
-	id, sync, err := h.s.CreatePage(r.Context(), src, v.Get("title"), v.Get("body"))
+	id, sync, err := h.s.CreatePage(r.Context(), src, v.Get("title"), v.Get("body"), v.Get("category"))
 	if err != nil {
 		return nil, err
 	}

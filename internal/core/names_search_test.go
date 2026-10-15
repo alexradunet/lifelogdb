@@ -10,7 +10,7 @@ import (
 
 func TestCanonicalNamesSearchConflictPathsAndRebuild(t *testing.T) {
 	s := fresh(t)
-	id, _, err := s.CreatePage(ctx, "cli", "Blue", "needle original")
+	id, _, err := s.CreatePage(ctx, "cli", "Blue", "needle original", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestCanonicalNamesSearchConflictPathsAndRebuild(t *testing.T) {
 	if err != nil || len(empty) != 0 {
 		t.Fatalf("alias must not duplicate body: %+v %v", empty, err)
 	}
-	other, _, err := s.CreatePage(ctx, "cli", "Other owner", "")
+	other, _, err := s.CreatePage(ctx, "cli", "Other owner", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func TestCanonicalSearchRankLimitAndStableTie(t *testing.T) {
 	s := fresh(t)
 	var first int64
 	for i, name := range []string{"Alpha", "Beta"} {
-		id, _, err := s.CreatePage(ctx, "cli", name, "needle")
+		id, _, err := s.CreatePage(ctx, "cli", name, "needle", "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -167,7 +167,7 @@ func TestCanonicalSearchRankLimitAndStableTie(t *testing.T) {
 // [[wikilinks]] and task boxes keep their brackets, and only the matched word is marked.
 func TestSearchSnippetKeepsTheBracketsOfTheText(t *testing.T) {
 	s := fresh(t)
-	if _, _, err := s.CreatePage(ctx, "cli", "Plans", "Coffee with [[Ana]]; we planned the [[Garden project]]. - [x] seeds"); err != nil {
+	if _, _, err := s.CreatePage(ctx, "cli", "Plans", "Coffee with [[Ana]]; we planned the [[Garden project]]. - [x] seeds", ""); err != nil {
 		t.Fatal(err)
 	}
 	hits, err := s.Search(ctx, "garden", 10, 0)

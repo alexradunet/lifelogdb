@@ -47,7 +47,7 @@ func TestMCPStableNames(t *testing.T) {
 				var id int64
 				switch kind {
 				case "page":
-					id, _, err = s.CreatePage(context.Background(), "cli", old, "original prose")
+					id, _, err = s.CreatePage(context.Background(), "cli", old, "original prose", "")
 				case "person":
 					id, err = s.CreatePerson(context.Background(), "cli", old, "Synthetic Person", "", "")
 				case "place":

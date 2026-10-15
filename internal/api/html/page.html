@@ -1,7 +1,9 @@
 {{/* A page, a person, a place or a file (docs/plans/095-the-leaf-and-its-margin.md): the head with its
      title (a day page's in words); the sheet with the editor under the head, so a long page is edited without a
-     scroll to its end, then the body; the margin with its facts, its typed links, its backlinks and its other
-     actions. A day page's title is a day in words wherever a page is listed. */}}
+     scroll to its end, then the body, then Filed here on a category page (what is part-of it, the categories
+     first, with New page here; docs/plans/115-categories-to-browse.md); the margin with its facts, its typed
+     links, its other backlinks and its other actions. A day page's title is a day in words wherever a page is
+     listed. */}}
 {{define "page"}}{{template "head" .}}
 {{$p := .Props}}
 <header class="page-head"><div class="what">
@@ -26,6 +28,10 @@
 {{with rejected $p.body}}<div class="alert" role="note"><p>These names make no link — a title cannot hold <code>/ \ : * ? " &lt; &gt; |</code>, or start or end with a dot or space:</p>
 <p>{{range $i, $t := .}}{{if $i}}, {{end}}<code>[[{{$t}}]]</code>{{end}}</p></div>{{end}}
 </section>{{end}}
+{{with $.Filed}}<section class="group filed" aria-label="Filed here">
+<div class="panel-head"><h2>Filed here <small>{{len .Subs | add (len .Items)}}</small></h2>{{with $.Action "create-page"}}{{template "boxed" (form . "hide" "category" "button" "New page here" "back" $.Here)}}{{end}}</div>
+<ul class="plain rows">{{range .Subs}}<li><a class="entry" href="{{.Href}}"><span class="first">{{.Title}}</span><span class="meta"><span class="badge">category</span></span></a></li>{{end}}{{range .Items}}<li><a class="entry" href="{{.Href}}"><span class="first">{{$.Date .Title}}</span><span class="meta">{{range .Class}}{{if ne . "page"}}<span class="badge">{{.}}</span>{{end}}{{end}}</span></a></li>{{end}}</ul>
+</section>{{end}}
 </div>
 
 <div class="margin">
@@ -40,8 +46,9 @@
 
 {{with $p.links}}<section class="group" aria-label="Links"><h2>Links</h2><dl>{{range group . "kind"}}<dt>{{.Key}}</dt>
 <dd>{{range .Items}}<a href="/pages/{{num .id}}">{{$.Date .title}}</a>{{with .note}} <small>({{.}})</small>{{end}}{{end}}</dd>{{end}}</dl></section>{{end}}
-{{with $p.backlinks}}<section class="group" aria-label="Backlinks"><h2>Backlinks</h2>{{range group . "kind"}}<p class="sub">{{if eq .Key "wikilink"}}mentioned in{{else}}{{.Key}}{{end}}</p>
-<ul class="plain">{{range .Items}}<li><a href="/pages/{{num .id}}">{{$.Date .title}}</a>{{if ne .entity_type "page"}} <span class="badge">{{.entity_type}}</span>{{end}}</li>{{end}}</ul>{{end}}</section>{{end}}
+{{$groups := group $p.backlinks "kind"}}{{$any := false}}{{range $groups}}{{if ne .Key "part-of"}}{{$any = true}}{{end}}{{end}}
+{{if $any}}<section class="group" aria-label="Backlinks"><h2>Backlinks</h2>{{range $groups}}{{if ne .Key "part-of"}}<p class="sub">{{if eq .Key "wikilink"}}mentioned in{{else}}{{.Key}}{{end}}</p>
+<ul class="plain">{{range .Items}}<li><a href="/pages/{{num .id}}">{{$.Date .title}}</a>{{if ne .entity_type "page"}} <span class="badge">{{.entity_type}}</span>{{end}}</li>{{end}}</ul>{{end}}{{end}}</section>{{end}}
 
 {{if $p.task_project}}<aside><p>A task uses this page as its project context, so it cannot become a person or a place.</p></aside>{{end}}
 

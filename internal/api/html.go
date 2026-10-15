@@ -91,6 +91,7 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 		return month
 	},
 	"depth":     func(path string) int { return strings.Count(path, "/") }, // a category's depth in the drawn tree
+	"add":       func(a, b int) int { return a + b },
 	"segmented": segmented,
 	"alert":     alertOf,
 	"capLater":  capLater,

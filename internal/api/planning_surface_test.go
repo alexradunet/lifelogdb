@@ -41,11 +41,11 @@ func TestTaskProjectPromotionActionsMatchRetainedReferences(t *testing.T) {
 				t.Cleanup(server.Close)
 				c = client.Remote(server.URL, "cli", "")
 			}
-			projectID, _, err := s.CreatePage(ctx, "cli", "Garden project", "Preserve this context.")
+			projectID, _, err := s.CreatePage(ctx, "cli", "Garden project", "Preserve this context.", "")
 			if err != nil {
 				t.Fatal(err)
 			}
-			ordinaryID, _, err := s.CreatePage(ctx, "cli", "Ordinary page", "")
+			ordinaryID, _, err := s.CreatePage(ctx, "cli", "Ordinary page", "", "")
 			if err != nil {
 				t.Fatal(err)
 			}

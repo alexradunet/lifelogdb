@@ -331,6 +331,15 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   check-in. `file-pages` (`POST /pages/file`) files several pages in a category page in one write, made when it is
   missing; `move` 1 takes them out of their other categories. The page's pick bar checks the cards to file. The CLI's
   `do` and the MCP tools carry it as any action; it is not the owner's alone, as `link` is not.
+- **Categories to browse** ([plan 115](docs/plans/115-categories-to-browse.md)). A category is a page, and
+  anything is filed in it by `part-of` (D26); the owner's word (2026-10-15) is "category" everywhere, a thing may
+  be in several, and a category shows everything filed in it, whatever its type. `GET /categories` is a sidebar
+  entry: the tree by path with a count each, then Not filed, the live plain pages in no category. A category page
+  has one section, Filed here: the sub-categories first, then the rest by title, a type badge on what is not a
+  page; its margin's Backlinks no longer lists `part-of`. `create-page` takes an optional `category`: the page is
+  made and filed there in one write, a missing category made as `file-pages` makes it, and a day as the category
+  refuses the whole write (`links_endpoint_types`). A category page offers it as New page here. Rejected by the
+  owner: exclusive membership, a manual order and a syntax in the body that files a page.
 - **One way to make a thing** ([plan 114](docs/plans/114-one-way-to-do-a-thing.md)). The rail's New is a menu of the
   kinds; each kind is made on its list, whose header has its New button (a page on Home, beside Open a page).
   `?new=<action>` opens that action's form on any page, and a query parameter that names a field fills it in. The

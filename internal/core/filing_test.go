@@ -99,7 +99,7 @@ func TestFilePagesRefusals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	gone, _, err := s.CreatePage(ctx, "cli", "Old Group", "")
+	gone, _, err := s.CreatePage(ctx, "cli", "Old Group", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,7 +261,7 @@ func TestCreateMetric(t *testing.T) {
 
 func TestCreateMetricRefusalsWriteNothing(t *testing.T) {
 	s := fresh(t)
-	gone, _, err := s.CreatePage(ctx, "cli", "Old Group", "")
+	gone, _, err := s.CreatePage(ctx, "cli", "Old Group", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

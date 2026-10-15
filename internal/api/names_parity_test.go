@@ -47,7 +47,7 @@ func TestStableNameTransportParity(t *testing.T) {
 				var id int64
 				switch kind {
 				case "page":
-					id, _, err = s.CreatePage(context.Background(), "cli", old, "original prose")
+					id, _, err = s.CreatePage(context.Background(), "cli", old, "original prose", "")
 				case "person":
 					id, err = s.CreatePerson(context.Background(), "cli", old, "Synthetic Person", "", "2031-01-01")
 				case "place":
@@ -65,7 +65,7 @@ func TestStableNameTransportParity(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				ref, _, err := s.CreatePage(context.Background(), "cli", "Reference", "See [["+old+"]].")
+				ref, _, err := s.CreatePage(context.Background(), "cli", "Reference", "See [["+old+"]].", "")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -108,11 +108,11 @@ func TestStableNameTransportParity(t *testing.T) {
 						t.Fatalf("old reference: %+v", reference)
 					}
 				}
-				_, _, err = s.CreatePage(context.Background(), "cli", "Ghost ref", "[[Reserved ghost]]")
+				_, _, err = s.CreatePage(context.Background(), "cli", "Ghost ref", "[[Reserved ghost]]", "")
 				if err != nil {
 					t.Fatal(err)
 				}
-				tomb, _, err := s.CreatePage(context.Background(), "cli", "Reserved tombstone", "")
+				tomb, _, err := s.CreatePage(context.Background(), "cli", "Reserved tombstone", "", "")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -177,7 +177,7 @@ func TestBrowserStableNameResolution(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ref, _, err := s.CreatePage(context.Background(), "cli", "Old reference", "See [[Old person]].")
+	ref, _, err := s.CreatePage(context.Background(), "cli", "Old reference", "See [[Old person]].", "")
 	if err != nil {
 		t.Fatal(err)
 	}

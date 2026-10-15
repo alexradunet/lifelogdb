@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -151,4 +152,29 @@ func (h *server) categoriesView(r *http.Request) (*Entity, error) {
 		e.Entities = append(e.Entities, Link{Rel: []string{"item"}, Href: pageHref(p.ID), Title: p.Title, Class: []string{p.Type}})
 	}
 	return e, nil
+}
+
+// filedHere is what a category page lists under Filed here: the sub-categories first, then the rest, each in the
+// order of the backlinks (by title).
+type filedHere struct {
+	Subs, Items []Link
+}
+
+// Filed is the Filed here of a page: its part-of backlinks, the categories first; nil when nothing is filed in it.
+func (v *view) Filed() *filedHere {
+	var f filedHere
+	for _, l := range v.Embedded("backlink") {
+		if !slices.Contains(l.Rel, "part-of") {
+			continue
+		}
+		if slices.Contains(l.Class, "category") {
+			f.Subs = append(f.Subs, l)
+		} else {
+			f.Items = append(f.Items, l)
+		}
+	}
+	if len(f.Subs)+len(f.Items) == 0 {
+		return nil
+	}
+	return &f
 }

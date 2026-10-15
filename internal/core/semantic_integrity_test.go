@@ -24,7 +24,7 @@ func TestIntegrityDetectsRestoredGuardSemanticDamage(t *testing.T) {
 			}
 			page := func(name string) int64 {
 				t.Helper()
-				id, _, err := s.CreatePage(ctx, "cli", name, "")
+				id, _, err := s.CreatePage(ctx, "cli", name, "", "")
 				if err != nil {
 					t.Fatal(err)
 				}

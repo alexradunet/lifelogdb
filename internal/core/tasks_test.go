@@ -124,11 +124,11 @@ func TestTaskDeadlineMergeUsesCurrentDueDaysAndRetainedSlots(t *testing.T) {
 
 func TestTaskProjectsKeepIndependentLabelsAndCurrentPageContext(t *testing.T) {
 	s := fresh(t)
-	firstProject, _, err := s.CreatePage(ctx, "cli", "Home maintenance", "")
+	firstProject, _, err := s.CreatePage(ctx, "cli", "Home maintenance", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondProject, _, err := s.CreatePage(ctx, "cli", "Family visits", "")
+	secondProject, _, err := s.CreatePage(ctx, "cli", "Family visits", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -342,7 +342,7 @@ func TestTaskLifecycleContextSurvivesReopenAndSnapshot(t *testing.T) {
 		}
 	})
 	s := &Store{DB: d}
-	project, _, err := s.CreatePage(ctx, "cli", "Annual maintenance", "Synthetic project context")
+	project, _, err := s.CreatePage(ctx, "cli", "Annual maintenance", "Synthetic project context", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -509,7 +509,7 @@ func TestPageForTitleFindsOrMakesTheProject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	gone, _, err := s.CreatePage(ctx, "cli", "Old plan", "")
+	gone, _, err := s.CreatePage(ctx, "cli", "Old plan", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

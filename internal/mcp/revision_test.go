@@ -39,7 +39,7 @@ func TestMCPRevisionTokenRoundTripAndStaleRefusal(t *testing.T) {
 				t.Cleanup(server.Close)
 				c = client.Remote(server.URL, "agent:test", "")
 			}
-			id, _, err := store.CreatePage(context.Background(), "cli", "MCP revision", "first")
+			id, _, err := store.CreatePage(context.Background(), "cli", "MCP revision", "first", "")
 			if err != nil {
 				t.Fatal(err)
 			}

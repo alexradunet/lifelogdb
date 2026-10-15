@@ -43,7 +43,7 @@ func TestRevisionTokenParity(t *testing.T) {
 					t.Cleanup(server.Close)
 					c = client.Remote(server.URL, source, "")
 				}
-				id, _, err := store.CreatePage(context.Background(), "cli", "Version parity", "first")
+				id, _, err := store.CreatePage(context.Background(), "cli", "Version parity", "first", "")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -142,7 +142,7 @@ func TestBrowserFormCarriesRevisionAndRefusesOldClockToken(t *testing.T) {
 	})
 	store := &core.Store{DB: d}
 	h := api.New(store)
-	id, _, err := store.CreatePage(context.Background(), "cli", "Browser version", "first")
+	id, _, err := store.CreatePage(context.Background(), "cli", "Browser version", "first", "")
 	if err != nil {
 		t.Fatal(err)
 	}

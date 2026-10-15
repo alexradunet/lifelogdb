@@ -17,10 +17,10 @@ func TestNamedMentionsCountLivePagesAndTheNewestDay(t *testing.T) {
 	if _, _, err := s.Capture(ctx, "cli", "2026-10-09", "Walk with [[Ana]] and [[Sam]]", nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.CreatePage(ctx, "cli", "Trip", "[[Ana]] came"); err != nil {
+	if _, _, err := s.CreatePage(ctx, "cli", "Trip", "[[Ana]] came", ""); err != nil {
 		t.Fatal(err)
 	}
-	gone, _, err := s.CreatePage(ctx, "cli", "Old note", "[[Sam]] was there")
+	gone, _, err := s.CreatePage(ctx, "cli", "Old note", "[[Sam]] was there", "")
 	if err != nil {
 		t.Fatal(err)
 	}

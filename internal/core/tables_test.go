@@ -46,7 +46,7 @@ func TestReadingsFromTableWritesEachPlainRowOnce(t *testing.T) {
 		"| 2031-04-01 | 53 ng/mL |\n" + // a second value of one day
 		"| early 2031 | 41 ng/mL |\n" + // no day
 		"| 2031-09-01 |  |\n" // no value: nothing
-	if _, _, err := s.CreatePage(ctx, "cli", "Ferritin results", body); err != nil {
+	if _, _, err := s.CreatePage(ctx, "cli", "Ferritin results", body, ""); err != nil {
 		t.Fatal(err)
 	}
 	res, err := s.ReadingsFromTable(ctx, "Ferritin results", "Ferritin", "")
@@ -90,7 +90,7 @@ func TestReadingsFromTableTakesTheUnitFromTheHeaderOrAUnitColumn(t *testing.T) {
 	header := "| Day | Hemoglobin (g/dL) | Other [mmol/L] |\n|---|---|---|\n| 2031-03-01 | 14.2 | 5 |\n| 2031-03-02 | 13 | 6 |\n"
 	unitCol := "| when | ESR | unit |\n|---|---|---|\n| 2031-03-01 | 12 | mm/h |\n| 2031-03-02 | 9 | mm/hr |\n"
 	for title, body := range map[string]string{"Blood count": header, "ESR results": unitCol} {
-		if _, _, err := s.CreatePage(ctx, "cli", title, body); err != nil {
+		if _, _, err := s.CreatePage(ctx, "cli", title, body, ""); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -116,10 +116,10 @@ func TestReadingsFromTableRefusesWhatItCannotRead(t *testing.T) {
 	if _, err := s.RegisterMetric(ctx, "cli", "Weight", "kg", ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.CreatePage(ctx, "cli", "No table", "Only words.\n"); err != nil {
+	if _, _, err := s.CreatePage(ctx, "cli", "No table", "Only words.\n", ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.CreatePage(ctx, "cli", "Bare numbers", "| date | weight |\n|---|---|\n| 2031-01-01 | 70 |\n"); err != nil {
+	if _, _, err := s.CreatePage(ctx, "cli", "Bare numbers", "| date | weight |\n|---|---|\n| 2031-01-01 | 70 |\n", ""); err != nil {
 		t.Fatal(err)
 	}
 	for _, c := range []struct{ page, metric, column, want string }{

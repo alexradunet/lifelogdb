@@ -413,10 +413,12 @@ month. Actions: `open-day`.
 
 `GET /pages/{id}`; `GET /pages?title=` redirects to it. The class is the page's type; a day page adds `day-page`, a
 tombstoned page adds `deleted`. Links: `day` (a day page's day view), `preview` (a file's picture), `map` (a place's
-point). Embedded: every outgoing link under its kind, every incoming one under `backlink` and its kind. Actions by
+point). Embedded: every outgoing link under its kind, every incoming one under `backlink` and its kind, with the class
+`category` added to a `part-of` backlink from a category page. Actions by
 what is legal: `save-body` (with the current `body` and `version` filled), `promote`, `rename`, `locate`, `link` and `unlink` (with the kinds this type may start), [`file-pages`](#filed) (a page that may
 be `part-of`, not a day page: `ids` is this page, and `category` offers the category titles; a new title is made),
-`set-picture` (a person), `readings-from-table` (when the
+`create-page` with `category` filled (a live category page: something is `part-of` it; the new page is made and
+filed in it in one write), `set-picture` (a person), `readings-from-table` (when the
 body holds a table, with `page` filled), `tombstone`, or `revive` alone on a deleted page. In a browser, the page of a
 live metric answers 303 to its series, the metric's one page, which carries this page's text, links and actions; the
 page of a live conversation answers 303 to `/conversations/{id}`, unless the query has `view=page`. The

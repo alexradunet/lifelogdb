@@ -4,11 +4,11 @@ import "testing"
 
 func TestPageRetainsTaskProjectContextAfterTombstones(t *testing.T) {
 	s := fresh(t)
-	projectID, _, err := s.CreatePage(ctx, "cli", "Garden project", "Context remains a page.")
+	projectID, _, err := s.CreatePage(ctx, "cli", "Garden project", "Context remains a page.", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	ordinaryID, _, err := s.CreatePage(ctx, "cli", "Ordinary page", "")
+	ordinaryID, _, err := s.CreatePage(ctx, "cli", "Ordinary page", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

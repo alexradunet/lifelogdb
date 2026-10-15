@@ -931,7 +931,7 @@ func (c *C) savePage(body, title string) (int64, core.Sync) {
 	if title == "" {
 		title = fmt.Sprintf("Note %d", c.s.next())
 	}
-	id, r, err := c.store().CreatePage(context.Background(), "ui", title, body)
+	id, r, err := c.store().CreatePage(context.Background(), "ui", title, body, "")
 	if err != nil {
 		stop("save %q: %v", title, err)
 	}

@@ -66,7 +66,7 @@ func TestDayEntriesListTheLiveDayPages(t *testing.T) {
 	if _, _, err := s.Capture(ctx, "cli", "2026-10-04", "", &four); err != nil { // a mood alone: a day page with no text
 		t.Fatal(err)
 	}
-	if _, _, err := s.CreatePage(ctx, "cli", "Notes on 2026-10-02", "not a day page"); err != nil {
+	if _, _, err := s.CreatePage(ctx, "cli", "Notes on 2026-10-02", "not a day page", ""); err != nil {
 		t.Fatal(err)
 	}
 	gone, err := s.Day(ctx, "2026-10-05")
@@ -193,7 +193,7 @@ func TestTitlesByPrefixFoldsLikeATitleKey(t *testing.T) {
 	s := fresh(t)
 	page := func(title string) int64 {
 		t.Helper()
-		id, _, err := s.CreatePage(ctx, "cli", title, "")
+		id, _, err := s.CreatePage(ctx, "cli", title, "", "")
 		if err != nil {
 			t.Fatal(err)
 		}

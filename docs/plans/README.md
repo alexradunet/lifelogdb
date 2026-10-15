@@ -8,7 +8,7 @@ Earlier closed plans live in git history (`git log -- docs/plans`). The next pla
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| [115](115-categories-to-browse.md) | Categories to browse: the tree with counts and Not filed, a category page's Filed here, and a new page filed where it is made | P2 | M | owner request 2026-10-15; `7083b88` | IN PROGRESS |
+| [115](115-categories-to-browse.md) | Categories to browse: the tree with counts and Not filed, a category page's Filed here, and a new page filed where it is made | P2 | M | owner request 2026-10-15; `7083b88` | DONE |
 | [114](114-one-way-to-do-a-thing.md) | One way to do a thing, on every page: New on its list, ?new= links, + Add, category badges, one selection, one verb a meaning | P2 | L | owner request 2026-10-15; `ebf3a87` | DONE |
 | [113](113-new-metric-on-metrics.md) | New metric, new category and a reading from the metrics page: a kind chooser, register-metric with category and habit_from, a + on each card | P2 | M | owner request 2026-10-15; `725e260` | DONE |
 | [112](112-metrics-as-cards.md) | The metrics as cards, filed in groups: a jump bar, a card a metric with its latest value and line, and file-pages | P2 | M | owner request 2026-10-15; `16e40bb` | DONE |

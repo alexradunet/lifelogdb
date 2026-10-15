@@ -6,7 +6,7 @@ func TestPlanningIntegrityDetectsSemanticDamage(t *testing.T) {
 	for _, damage := range []string{"project", "cadence", "ended-open"} {
 		t.Run(damage, func(t *testing.T) {
 			s := fresh(t)
-			project, _, err := s.CreatePage(ctx, "cli", "House maintenance", "")
+			project, _, err := s.CreatePage(ctx, "cli", "House maintenance", "", "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -35,7 +35,7 @@ func TestPlanningIntegrityDetectsSemanticDamage(t *testing.T) {
 			}
 			switch damage {
 			case "project":
-				journal, _, err := s.CreatePage(ctx, "cli", "2026-02-28", "")
+				journal, _, err := s.CreatePage(ctx, "cli", "2026-02-28", "", "")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -65,7 +65,7 @@ func TestPlanningIntegrityDetectsSemanticDamage(t *testing.T) {
 
 func TestPlanningIntegrityRetainsLifecycleAndHistoricalOutcomes(t *testing.T) {
 	s := fresh(t)
-	project, _, err := s.CreatePage(ctx, "cli", "Garden", "")
+	project, _, err := s.CreatePage(ctx, "cli", "Garden", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

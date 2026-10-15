@@ -6,11 +6,11 @@ import (
 
 func TestStableRenameKeepsIdentityAndOldReferences(t *testing.T) {
 	s := fresh(t)
-	id, _, err := s.CreatePage(ctx, "cli", "First name", "original [[Target]]")
+	id, _, err := s.CreatePage(ctx, "cli", "First name", "original [[Target]]", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	mention, _, err := s.CreatePage(ctx, "cli", "Mention", "[[First name]]")
+	mention, _, err := s.CreatePage(ctx, "cli", "Mention", "[[First name]]", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestStableRenameKeepsIdentityAndOldReferences(t *testing.T) {
 func TestReferenceGrammarRejectsUnaddressableNamesAtomically(t *testing.T) {
 	s := fresh(t)
 	for _, name := range []string{"Lab [old]", "_old_", "a`b`c", "R&amp;D", "a`b`c"} {
-		if _, _, err := s.CreatePage(ctx, "cli", name, "[[Forbidden]]"); status(err) != 422 {
+		if _, _, err := s.CreatePage(ctx, "cli", name, "[[Forbidden]]", ""); status(err) != 422 {
 			t.Fatalf("unaddressable name %q = %v; want 422", name, err)
 		}
 		if id, err := s.PageID(ctx, name); err != nil || id != 0 {

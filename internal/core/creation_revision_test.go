@@ -134,15 +134,15 @@ func TestCapturedDayPageWithoutTextIsAtRevisionOne(t *testing.T) {
 // writer's open edit of the health page stale. The page that links is the one whose content changed.
 func TestIncomingLinkDoesNotInvalidateAnOpenEdit(t *testing.T) {
 	s := fresh(t)
-	health, _, err := s.CreatePage(ctx, "cli", "health", "notes on health")
+	health, _, err := s.CreatePage(ctx, "cli", "health", "notes on health", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	topic, _, err := s.CreatePage(ctx, "cli", "Topic", "a topic")
+	topic, _, err := s.CreatePage(ctx, "cli", "Topic", "a topic", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	other, _, err := s.CreatePage(ctx, "cli", "Other", "another")
+	other, _, err := s.CreatePage(ctx, "cli", "Other", "another", "")
 	if err != nil {
 		t.Fatal(err)
 	}

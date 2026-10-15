@@ -11,7 +11,7 @@ func TestMetricNoteLinks(t *testing.T) {
 	if _, err := s.CreatePerson(ctx, "cli", "Bob Sample", "", "", ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.CreatePage(ctx, "cli", "Diet Plan", "owner note"); err != nil {
+	if _, _, err := s.CreatePage(ctx, "cli", "Diet Plan", "owner note", ""); err != nil {
 		t.Fatal(err)
 	}
 	note := "Discuss with [[Bob Sample]], [[Diet Plan]], [[diet plan|again]], #health #Health and [[Health/Diet]]."
@@ -30,7 +30,7 @@ func TestMetricNoteLinks(t *testing.T) {
 		t.Fatalf("invalid target became page %d: %v", id, err)
 	}
 
-	ghost, _, err := s.CreatePage(ctx, "cli", "Promoted Link Metric", "")
+	ghost, _, err := s.CreatePage(ctx, "cli", "Promoted Link Metric", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestMetricsArePagesFiledInCategories(t *testing.T) {
 	if _, err := s.RegisterMetric(ctx, "cli", "a/b", "", ""); status(err) != 422 {
 		t.Errorf("a name that is not a valid title: %v", err)
 	}
-	ghost, _, err := s.CreatePage(ctx, "cli", "Ferritin", "")
+	ghost, _, err := s.CreatePage(ctx, "cli", "Ferritin", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +144,7 @@ func TestMetricsArePagesFiledInCategories(t *testing.T) {
 	if p, _ := s.PageByID(ctx, ghost); p.Type != "metric" || p.Body != "iron stores" {
 		t.Errorf("the promoted page: %+v", p)
 	}
-	written, _, err := s.CreatePage(ctx, "cli", "aPTT", "Clotting time; mine runs long.")
+	written, _, err := s.CreatePage(ctx, "cli", "aPTT", "Clotting time; mine runs long.", "")
 	if err != nil {
 		t.Fatal(err)
 	}

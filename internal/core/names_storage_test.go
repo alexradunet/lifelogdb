@@ -10,7 +10,7 @@ import (
 
 func TestNameOwnershipAndJournalReservations(t *testing.T) {
 	s := fresh(t)
-	ordinary, _, err := s.CreatePage(ctx, "cli", "Dated note", "prose")
+	ordinary, _, err := s.CreatePage(ctx, "cli", "Dated note", "prose", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestNameOwnershipAndJournalReservations(t *testing.T) {
 
 func TestStableNamesRevivalSelfAndRollback(t *testing.T) {
 	s := fresh(t)
-	id, _, err := s.CreatePage(ctx, "cli", "Old", "kept")
+	id, _, err := s.CreatePage(ctx, "cli", "Old", "kept", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestStableNamesRevivalSelfAndRollback(t *testing.T) {
 	if err := s.Tombstone(ctx, "cli", id); err != nil {
 		t.Fatal(err)
 	}
-	source, _, err := s.CreatePage(ctx, "cli", "Source", "[[Old]] [[New]]")
+	source, _, err := s.CreatePage(ctx, "cli", "Source", "[[Old]] [[New]]", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +171,7 @@ func TestMoodIdentitySurvivesRename(t *testing.T) {
 
 func TestNameRevisionExhaustionRefusesAtomically(t *testing.T) {
 	s := fresh(t)
-	id, _, err := s.CreatePage(ctx, "cli", "Old", "kept [[Target]]")
+	id, _, err := s.CreatePage(ctx, "cli", "Old", "kept [[Target]]", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,7 +211,7 @@ func TestNameRevisionExhaustionRefusesAtomically(t *testing.T) {
 
 func TestIntegrityDetectsDeliberatePreferredOwnerDamage(t *testing.T) {
 	s := fresh(t)
-	id, _, err := s.CreatePage(ctx, "cli", "Owner", "prose")
+	id, _, err := s.CreatePage(ctx, "cli", "Owner", "prose", "")
 	if err != nil {
 		t.Fatal(err)
 	}

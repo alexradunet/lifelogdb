@@ -617,8 +617,16 @@ func (s *Store) SaveBody(ctx context.Context, source string, id int64, body, ver
 	return
 }
 
-func (s *Store) CreatePage(ctx context.Context, source, title, body string) (id int64, r Sync, err error) {
-	err = s.Do(ctx, source, func(t *Tx) (e error) { id, _, r, e = t.CreatePage(title, body, "", ""); return })
+// CreatePage makes the page and, with a category, files it there in the same write, as FilePages does
+// (docs/plans/115-categories-to-browse.md): a category the links registry refuses (a day) refuses the whole write.
+func (s *Store) CreatePage(ctx context.Context, source, title, body, category string) (id int64, r Sync, err error) {
+	err = s.Do(ctx, source, func(t *Tx) (e error) {
+		if id, _, r, e = t.CreatePage(title, body, "", ""); e != nil || category == "" {
+			return e
+		}
+		_, e = t.FilePages([]int64{id}, category, false)
+		return e
+	})
 	if err != nil {
 		id = 0
 	}

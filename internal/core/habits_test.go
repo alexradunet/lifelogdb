@@ -113,7 +113,7 @@ func TestScalesAreNotHabitsAndAreRangeChecked(t *testing.T) {
 
 func TestRename(t *testing.T) {
 	s := fresh(t)
-	old, _, _ := s.CreatePage(ctx, "cli", "Sourdogh", "Feed the starter. [[Baking]]")
+	old, _, _ := s.CreatePage(ctx, "cli", "Sourdogh", "Feed the starter. [[Baking]]", "")
 	day, _, _ := s.Capture(ctx, "cli", "2026-09-29", "baked, see [[Sourdogh]]", nil)
 	baking, _ := s.PageID(ctx, "Baking")
 	s.Link(ctx, "cli", old, baking, "related", "")

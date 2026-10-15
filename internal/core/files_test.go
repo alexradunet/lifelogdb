@@ -105,7 +105,7 @@ func TestAddFilePromotesAGhost(t *testing.T) {
 		t.Errorf("the day's embed does not land on the file: %v (day %d)", p.In, day)
 	}
 	// a page with text keeps it; text on both sides is refused
-	if _, _, err := s.CreatePage(ctx, "cli", "Notes.pdf", "my own words"); err != nil {
+	if _, _, err := s.CreatePage(ctx, "cli", "Notes.pdf", "my own words", ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.AddFile(ctx, "cli", FileIn{Title: "Notes.pdf", SHA256: sha('e'), MIME: "application/pdf", Body: "OCR text"}); status(err) != 409 {

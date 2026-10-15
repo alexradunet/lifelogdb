@@ -8,7 +8,7 @@ import (
 
 func TestConditionalSaveRejectsEqualClockStaleToken(t *testing.T) {
 	s := fresh(t)
-	id, _, err := s.CreatePage(ctx, "cli", "Clock witness", "first")
+	id, _, err := s.CreatePage(ctx, "cli", "Clock witness", "first", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestEditRevisionNoopRollbackAndTypedMutation(t *testing.T) {
 
 func TestEditRevisionExhaustionAndCancellation(t *testing.T) {
 	s := fresh(t)
-	id, _, err := s.CreatePage(ctx, "cli", "Exhaustion witness", "kept")
+	id, _, err := s.CreatePage(ctx, "cli", "Exhaustion witness", "kept", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +147,7 @@ func TestEditRevisionExhaustionAndCancellation(t *testing.T) {
 	if target, err := s.PageID(ctx, "Forbidden"); err != nil || target != 0 {
 		t.Fatalf("target after exhaustion: %d %v", target, err)
 	}
-	normal, _, err := s.CreatePage(ctx, "cli", "Canceled witness", "before")
+	normal, _, err := s.CreatePage(ctx, "cli", "Canceled witness", "before", "")
 	if err != nil {
 		t.Fatal(err)
 	}

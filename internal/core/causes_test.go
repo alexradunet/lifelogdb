@@ -33,7 +33,7 @@ func TestReadingsFromTableRefuseATombstonedMetric(t *testing.T) {
 	if err := s.Tombstone(ctx, "cli", id); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.CreatePage(ctx, "cli", "Iron results", "| day | ng/mL |\n|---|---|\n| 2026-01-01 | 70 |\n"); err != nil {
+	if _, _, err := s.CreatePage(ctx, "cli", "Iron results", "| day | ng/mL |\n|---|---|\n| 2026-01-01 | 70 |\n", ""); err != nil {
 		t.Fatal(err)
 	}
 	_, err = s.ReadingsFromTable(ctx, "Iron results", "Ferritin", "")

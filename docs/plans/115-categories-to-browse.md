@@ -8,7 +8,7 @@
 - **Date / baseline:** 2026-10-15, `7083b88` (master).
 - **Priority:** P2. **Effort:** M, in two steps. **Risk:** LOW: the browser, one new read, and one optional field
   on `create-page`. No schema change, no new data rule, no action name changes.
-- **Status:** IN PROGRESS.
+- **Status:** DONE.
 - **Resolves:** no issue, no RFC. The owner's request (2026-10-15): "organize some of my pages into notebooks or
   categories or something and to be able to navigate them." An interview followed; its answers are the rules below.
 
@@ -75,4 +75,22 @@ Each step is one commit, with its tests, and can ship alone.
 
 ## Result
 
-- To be written when the steps are done.
+- **Step 1, the Categories view.** `Store.Categories` counts the live things filed directly in each category
+  (`Category.Count`), and `Store.Unfiled` reads the live plain pages in no category that are not categories. `GET
+  /categories` (`categoriesView`) carries both, the tree as `category` links and the rest as `item` links, paged
+  by 200. The template `category-tree` indents a row by its depth (`depth-N`). Categories is the first entry of the
+  sidebar's record group and a link of Home. API.md has the class. Test: `TestTheCategoriesViewDrawsTheTreeAndTheUnfiledPages`.
+- **Step 2, Filed here and New page here.** The page entity reads the categories once, for the badges' options and
+  to add the class `category` to a `part-of` backlink from a category page; a live page with something filed in it
+  offers `create-page` with `category` filled. `view.Filed` splits those backlinks into the sub-categories and the
+  rest, in the backlinks' order (by title); `page.html` draws them as one section in the sheet, after the body, each
+  row an entry with a type badge in its meta column, with New page here in its head (the form opens in place, full
+  width). The margin's Backlinks skips `part-of`. `create-page` has the optional title field `category`;
+  `Store.CreatePage` files the page with `Tx.FilePages` in the same write, so a refused category (a day) writes
+  nothing. Tests: `TestACategoryPageListsWhatIsFiledInIt`, `TestANewPageIsFiledWhereItIsMade`.
+- **Checks run (Linux):** `gofmt -l` clean; `go generate ./... && go vet ./... && go test ./...` green after each
+  step; `go test -count=1 -shuffle=on ./internal/api ./internal/core` green. Each step was seen on a synthetic copy,
+  desktop and phone, light and dark. Not run: `staticcheck`, `govulncheck` (not installed), the race check, Windows.
+- **Changed from the plan:** a tag page (`#travel` makes the page `travel`) is a plain page, so an unused tag is
+  listed under Not filed, and a category made with a tag's title is that tag's page. Both follow the contract
+  (a tag is a page, D5) and were left as they are.

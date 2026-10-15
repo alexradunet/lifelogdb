@@ -263,7 +263,7 @@ func fixture(t *testing.T) (http.Handler, *core.Store, map[string]string) {
 		t.Fatal(err)
 	}
 	ids["place"] = fmt.Sprintf("/pages/%d", placeID)
-	pageID, _, err := s.CreatePage(ctx, "cli", "A note", "word [[Sam]] #tag")
+	pageID, _, err := s.CreatePage(ctx, "cli", "A note", "word [[Sam]] #tag", "")
 	if err != nil {
 		t.Fatal(err)
 	}

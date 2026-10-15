@@ -89,7 +89,7 @@ func TestSetPictureRefuses(t *testing.T) {
 	if err := s.Tombstone(ctx, "cli", gone); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.CreatePage(ctx, "cli", "Plain", "words"); err != nil {
+	if _, _, err := s.CreatePage(ctx, "cli", "Plain", "words", ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.AddFile(ctx, "cli", FileIn{Title: "Scan.pdf", SHA256: sha('c'), MIME: "application/pdf"}); err != nil {

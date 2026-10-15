@@ -857,4 +857,8 @@ li.pick{display:flex; align-items:stretch; gap:var(--space-1);
 .tree>li.depth-2 .entry{padding-inline-start:calc(2 * var(--space-5))}
 .tree>li.depth-3 .entry{padding-inline-start:calc(3 * var(--space-5))}
 .tree>li.depth-4 .entry{padding-inline-start:calc(4 * var(--space-5))}
-.tree .entry{grid-template-columns:minmax(0,1fr) auto}
+.tree .entry,.filed .entry{grid-template-columns:minmax(0,1fr) auto}
+
+/* Filed here (docs/plans/115-categories-to-browse.md): New page here opens in place, under the heading, full width. */
+.filed>.panel-head{flex-wrap:wrap;
+  &>details.action[open]{flex:1 1 100%}}

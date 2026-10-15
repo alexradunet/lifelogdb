@@ -81,7 +81,7 @@ func ptr(f float64) *float64 { return &f }
 
 func TestSaveBodyAddsAndDeletesLinks(t *testing.T) {
 	s := fresh(t)
-	id, _, err := s.CreatePage(ctx, "cli", "Diet", "See [[Plan]] and [[Health/Diet]] and [[Diet]]")
+	id, _, err := s.CreatePage(ctx, "cli", "Diet", "See [[Plan]] and [[Health/Diet]] and [[Diet]]", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,11 +107,11 @@ func TestSaveBodyAddsAndDeletesLinks(t *testing.T) {
 
 func TestSaveRevivesATombstonedTarget(t *testing.T) {
 	s := fresh(t)
-	old, _, _ := s.CreatePage(ctx, "cli", "Old", "")
+	old, _, _ := s.CreatePage(ctx, "cli", "Old", "", "")
 	if err := s.Tombstone(ctx, "cli", old); err != nil {
 		t.Fatal(err)
 	}
-	_, r, err := s.CreatePage(ctx, "cli", "New", "[[old]]")
+	_, r, err := s.CreatePage(ctx, "cli", "New", "[[old]]", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,13 +122,13 @@ func TestSaveRevivesATombstonedTarget(t *testing.T) {
 
 func TestTitlesAreUniqueByKey(t *testing.T) {
 	s := fresh(t)
-	s.CreatePage(ctx, "cli", "Café notes", "")
-	_, _, err := s.CreatePage(ctx, "cli", "CAFÉ NOTES", "")
+	s.CreatePage(ctx, "cli", "Café notes", "", "")
+	_, _, err := s.CreatePage(ctx, "cli", "CAFÉ NOTES", "", "")
 	var ex *ExistsError
 	if !errors.As(err, &ex) {
 		t.Errorf("a second page with the same key: %v", err)
 	}
-	if _, _, err := s.CreatePage(ctx, "cli", "CON", ""); status(err) != 422 {
+	if _, _, err := s.CreatePage(ctx, "cli", "CON", "", ""); status(err) != 422 {
 		t.Errorf("a device name: %v", err)
 	}
 }
@@ -449,7 +449,7 @@ func TestQueryDoesNotLeakReaderState(t *testing.T) {
 	}
 	assertReaderPragmas(t, s)
 
-	if _, _, err := s.CreatePage(ctx, "cli", "Fresh after query", ""); err != nil {
+	if _, _, err := s.CreatePage(ctx, "cli", "Fresh after query", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	var n int
@@ -561,7 +561,7 @@ func TestQueryUsesLiteralReadOnlyPath(t *testing.T) {
 
 func TestRenamedIdentityWritesThroughRetainedHandle(t *testing.T) {
 	s := fresh(t)
-	id, _, err := s.CreatePage(ctx, "cli", "Typo", "prose")
+	id, _, err := s.CreatePage(ctx, "cli", "Typo", "prose", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -569,7 +569,7 @@ func TestRenamedIdentityWritesThroughRetainedHandle(t *testing.T) {
 	if err != nil || renamed != id {
 		t.Fatalf("rename: %d %v", renamed, err)
 	}
-	other, _, err := s.CreatePage(ctx, "cli", "Other", "[[Typo]]")
+	other, _, err := s.CreatePage(ctx, "cli", "Other", "[[Typo]]", "")
 	if err != nil {
 		t.Fatal(err)
 	}

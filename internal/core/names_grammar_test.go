@@ -44,7 +44,7 @@ func TestReferenceNameContractProductionPipeline(t *testing.T) {
 				t.Fatalf("predicate %v want %v", got, v.Accepted)
 			}
 			s := fresh(t)
-			id, _, err := s.CreatePage(ctx, "cli", v.Name, "")
+			id, _, err := s.CreatePage(ctx, "cli", v.Name, "", "")
 			if !v.Accepted {
 				if status(err) != 422 || id != 0 {
 					t.Fatalf("rejected create=%d %v", id, err)
@@ -60,7 +60,7 @@ func TestReferenceNameContractProductionPipeline(t *testing.T) {
 			if text.TitleKey(v.Name) != v.Key {
 				t.Fatalf("key=%q want %q", text.TitleKey(v.Name), v.Key)
 			}
-			source, _, err := s.CreatePage(ctx, "cli", "Vector source", "")
+			source, _, err := s.CreatePage(ctx, "cli", "Vector source", "", "")
 			if err != nil {
 				t.Fatal(err)
 			}

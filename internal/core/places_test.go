@@ -139,7 +139,7 @@ func TestPlaceRefusals(t *testing.T) {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
-	page, _, _ := s.CreatePage(ctx, "cli", "Plain", "")
+	page, _, _ := s.CreatePage(ctx, "cli", "Plain", "", "")
 	if err := s.Locate(ctx, "cli", page, Point{1, 1, 100, true}); status(err) != 422 {
 		t.Errorf("a plain page located: %v", err)
 	}
@@ -279,7 +279,7 @@ func TestPhotoEmbedDeduplication(t *testing.T) {
 	} {
 		t.Run(tc.body, func(t *testing.T) {
 			s := fresh(t)
-			if _, _, err := s.CreatePage(ctx, "cli", "2019-06-03", tc.body); err != nil {
+			if _, _, err := s.CreatePage(ctx, "cli", "2019-06-03", tc.body, ""); err != nil {
 				t.Fatal(err)
 			}
 			f := photo(t, 'a', "Café.jpg", "2019-06-03", 46.1, 7.2)
@@ -306,7 +306,7 @@ func TestPhotoEmbedDeduplication(t *testing.T) {
 func TestAutomaticEmbedBodyContextRefusal(t *testing.T) {
 	s := fresh(t)
 	body := "An unfinished example:\n```"
-	if _, _, err := s.CreatePage(ctx, "cli", "2019-06-03", body); err != nil {
+	if _, _, err := s.CreatePage(ctx, "cli", "2019-06-03", body, ""); err != nil {
 		t.Fatal(err)
 	}
 	f := photo(t, 'a', "Lake.jpg", "2019-06-03", 46.1, 7.2)
@@ -352,7 +352,7 @@ func TestAutomaticEmbedEscapedExistingHandle(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := `![[Copy &amp; lake.jpg]]`
-	if _, _, err := s.CreatePage(ctx, "cli", "2019-06-03", body); err != nil {
+	if _, _, err := s.CreatePage(ctx, "cli", "2019-06-03", body, ""); err != nil {
 		t.Fatal(err)
 	}
 	f.Title = "different.jpg"
