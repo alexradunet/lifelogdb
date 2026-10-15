@@ -117,14 +117,14 @@ type FiledRow struct {
 }
 
 // FiledIn is one page of every live thing filed directly in the category page with that id: the categories under
-// it first, then the rest, each by title. A day page is not in it, as it is in no list of Browse.
+// it first, then the rest, each by title. A day page is never in it: links_endpoint_types refuses to file one (D26).
 func (s *Store) FiledIn(ctx context.Context, category int64, limit, offset int) ([]FiledRow, error) {
 	where, args := Scope{In: category}.where()
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT p.id, p_name.title, p.entity_type, `+browseKind+`, `+isCategory+` AS category, coalesce(f.mime, '')
 		  FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
 		  LEFT JOIN files f ON f.id = p.id
-		 WHERE p.deleted_at IS NULL AND NOT p.is_journal AND `+where+`
+		 WHERE p.deleted_at IS NULL AND `+where+`
 		 ORDER BY category DESC, p.preferred_name_key LIMIT ? OFFSET ?`, append(args, limit, offset)...)
 	if err != nil {
 		return nil, err

@@ -22,11 +22,11 @@ import (
 
 // browseFixture writes through the writer, and returns the ids by title. Hand-checked layout:
 //
-//	Family:  Beta, Cousins, Ana, photo.jpg, scan.pdf, the day page 2031-05-01
+//	Family:  Beta, Cousins, Ana, photo.jpg, scan.pdf
 //	Cousins: Gamma, Weight
 //	nowhere: Alpha, Bo, Lakeside, memo.m4a, Mood (the metric every file has)
 //
-// The day page mentions Ana and Lakeside.
+// The day page 2031-05-01 mentions Ana and Lakeside; a day page is never filed (links_endpoint_types, D26).
 func browseFixture(t *testing.T, s *core.Store) map[string]int64 {
 	t.Helper()
 	ctx := t.Context()
@@ -75,7 +75,7 @@ func browseFixture(t *testing.T, s *core.Store) map[string]int64 {
 		check(err)
 		ids[category] = f.Category.ID
 	}
-	file("Family", "Beta", "Ana", "photo.jpg", "scan.pdf", "2031-05-01")
+	file("Family", "Beta", "Ana", "photo.jpg", "scan.pdf")
 	file("Cousins", "Gamma", "Weight")
 	file("Family", "Cousins")
 	return ids
@@ -240,8 +240,8 @@ func TestBrowseNotFiledFollowsTheKind(t *testing.T) {
 		}
 	}
 	// For pages, Not filed is the list Categories showed: the plain pages in no category that are not categories
-	// themselves (Family and Cousins are), and never a day page (the day page of 2031-05-01 is filed; one of another
-	// day is filed nowhere).
+	// themselves (Family and Cousins are), and never a day page (a day page is filed nowhere: the Calendar has the
+	// days).
 	if _, _, err := s.Capture(ctx, "cli", "2031-05-03", "a day", nil); err != nil {
 		t.Fatal(err)
 	}

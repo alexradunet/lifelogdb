@@ -114,7 +114,7 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 		e.Actions = append(e.Actions, withOptions(action("link", ids, nil), "kind", kinds))
 		e.Actions = append(e.Actions, withOptions(action("unlink", ids, nil), "kind", kinds))
 	}
-	if slices.Contains(kinds, "part-of") && !p.IsDayPage { // its categories, as badges (docs/plans/114-one-way-to-do-a-thing.md)
+	if slices.Contains(kinds, "part-of") { // its categories, as badges (docs/plans/114-one-way-to-do-a-thing.md)
 		var titles []string
 		for _, c := range cats {
 			if c.ID != p.ID {
@@ -128,7 +128,8 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 }
 
 // linkKinds are the kinds a page of this type may start (link_kinds.from_types), minus the two the save
-// contract and renames own; `at` only from a day page (D16).
+// contract and renames own; `at` only from a day page (D16), `part-of` never from one (D26). links_endpoint_types
+// holds both rules: these are only the options a form offers.
 func (h *server) linkKinds(ctx context.Context, typ string, dayPage bool) ([]string, error) {
 	kinds, err := h.s.LinkKindsFrom(ctx, typ)
 	if err != nil {
@@ -136,7 +137,7 @@ func (h *server) linkKinds(ctx context.Context, typ string, dayPage bool) ([]str
 	}
 	var out []string
 	for _, k := range kinds {
-		if k == "at" && !dayPage {
+		if k == "at" && !dayPage || k == "part-of" && dayPage {
 			continue
 		}
 		out = append(out, k)

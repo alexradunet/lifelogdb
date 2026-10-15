@@ -15,8 +15,8 @@ import (
 // draws one: each category under one parent (the first by title), and a page it has seen ends the walk.
 
 // Category is a category page and the path the writer draws it at: the titles from the top, joined by '/'. Count
-// is how many live things are filed directly in it, the categories under it included and a day page not: the
-// rows of All in that category in Browse (docs/plans/117-one-browse-view.md).
+// is how many live things are filed directly in it, the categories under it included: the rows of All in that
+// category in Browse (docs/plans/117-one-browse-view.md). A day page is never filed (links_endpoint_types, D26).
 type Category struct {
 	ID    int64  `json:"id"`
 	Title string `json:"title"`
@@ -27,7 +27,7 @@ type Category struct {
 // categories are the live pages something is part-of, by id, each with its path and its count.
 func (s *Store) categories(ctx context.Context) (map[int64]*Category, error) {
 	rows, err := s.DB.R.QueryContext(ctx, `
-		SELECT l.from_id, p.id, p_name.title, f.deleted_at IS NULL AND NOT f.is_journal
+		SELECT l.from_id, p.id, p_name.title, f.deleted_at IS NULL
 		  FROM links l JOIN entities p ON p.id = l.to_id JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key AND p.deleted_at IS NULL
 		  JOIN entities f ON f.id = l.from_id
 		 WHERE l.kind = 'part-of'
@@ -96,7 +96,7 @@ type Filed struct {
 // FilePages files every page named in the category page titled category, in one write (D26): a part-of link from
 // each. A missing category is made as an empty page, as PageForTitle makes it. With move, every other
 // part-of link of those pages is removed first. An id no page has is a 404 and a tombstone a 409; either writes
-// nothing. What the links registry refuses (a day page as a category) is links_endpoint_types.
+// nothing. What the links registry refuses (a day page as a category, or filed in one) is links_endpoint_types.
 func (t *Tx) FilePages(ids []int64, category string, move bool) (Filed, error) {
 	if err := checkTitle("category", category); err != nil {
 		return Filed{}, err

@@ -125,6 +125,9 @@ func TestActionsAreOfferedOnlyWhereLegal(t *testing.T) {
 	if !hasOption(find(dayPage, "link"), "kind", "at") {
 		t.Error("a day page does not offer an at link")
 	}
+	if hasOption(find(dayPage, "link"), "kind", "part-of") {
+		t.Error("a day page offers a part-of link (D26: a day page is never filed)")
+	}
 	ana := must(c.Get(t.Context(), dayPage.Entities[0].Href))
 	if got := names(ana); got != "save-body,promote,rename,link,unlink,file-pages,tombstone" {
 		t.Errorf("a plain page offers %s", got)

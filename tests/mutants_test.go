@@ -157,7 +157,9 @@ var mutants = []struct {
 	{"integrity", "semantic integrity ignores invalid typed destinations", "typed-edge semantic query detects deliberate endpoint damage", edit("OR (k.to_types IS NOT NULL AND instr(',' || k.to_types || ',', ',' || t.entity_type || ',')=0)", "OR (0)")},
 
 	{"links", "an at link may start at a plain page", "link at plain page->place (an at starts at a day page, D16): ERR", edit("   WHERE NEW.kind = 'at' AND NOT coalesce(", "   WHERE 0 AND NOT coalesce(")},
-	{"links", "a category may be a day page", "link part-of page->day page (a category is never a day page, D26): ERR", edit("   WHERE NEW.kind = 'part-of' AND coalesce(", "   WHERE 0 AND coalesce(")},
+	{"links", "a category may be a day page", "link part-of page->day page (a category is never a day page, D26): ERR", edit("WHERE NEW.kind = 'part-of' AND coalesce((SELECT is_journal FROM entities WHERE id = NEW.to_id)", "WHERE 0 AND coalesce((SELECT is_journal FROM entities WHERE id = NEW.to_id)")},
+	{"links", "a day page may be filed", "link part-of day page->page (a day page is never filed, D26): ERR", edit("WHERE NEW.kind = 'part-of' AND coalesce((SELECT is_journal FROM entities WHERE id = NEW.from_id)", "WHERE 0 AND coalesce((SELECT is_journal FROM entities WHERE id = NEW.from_id)")},
+	{"links", "a page with a part-of link may become a day page", "a page with no name yet, filed in a category, cannot become a day page (D26)", edit(" WHERE NEW.is_journal\n   AND (EXISTS (SELECT 1 FROM links l", " WHERE 0\n   AND (EXISTS (SELECT 1 FROM links l")},
 	{"links", "link ID can change", "links are immutable: id", edit("WHEN NEW.id IS NOT OLD.id OR NEW.from_id", "WHEN NEW.from_id")},
 	{"links", "link creation time can change", "links are immutable: created_at", edit("OR NEW.created_at IS NOT OLD.created_at OR NEW.source", "OR NEW.source")},
 	{"links", "a used kind can be replaced past its fixed structure", "REPLACE of a used kind changing the endpoint types is refused by the links FK", edit("REFERENCES link_kinds(kind) ON DELETE RESTRICT,", "REFERENCES link_kinds(kind),")},

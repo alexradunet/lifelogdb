@@ -10,10 +10,11 @@ import (
 // browseFixture writes, through the writer, one of each kind in and out of the categories Family, Cousins (under
 // Family) and Work, and returns the ids by title. Hand-checked layout:
 //
-//	Family:  Beta, Cousins, Ana, photo.jpg, scan.pdf, the day page 2031-05-01, Old (tombstoned)
+//	Family:  Beta, Cousins, Ana, photo.jpg, scan.pdf, Old (tombstoned)
 //	Cousins: Gamma
 //	Work:    Delta, Harbor, Weight
-//	nowhere: Alpha, Bo, Lakeside, memo.m4a, notes.txt, Walk, Mood (the metric every file has)
+//	nowhere: Alpha, Bo, Lakeside, memo.m4a, notes.txt, Walk, Mood (the metric every file has), the day page
+//	         2031-05-01 (a day page is never filed: links_endpoint_types, D26)
 func browseFixture(t *testing.T) (*Store, map[string]int64) {
 	t.Helper()
 	s := fresh(t)
@@ -66,7 +67,7 @@ func browseFixture(t *testing.T) (*Store, map[string]int64) {
 		check(err)
 		ids[category] = f.Category.ID
 	}
-	file("Family", "Beta", "Ana", "photo.jpg", "scan.pdf", "2031-05-01", "Old")
+	file("Family", "Beta", "Ana", "photo.jpg", "scan.pdf", "Old")
 	file("Cousins", "Gamma")
 	file("Family", "Cousins")
 	file("Work", "Delta", "Harbor", "Weight")
@@ -187,7 +188,7 @@ func TestTheKindsInEachScope(t *testing.T) {
 }
 
 // TestFiledInListsTheCategoriesFirst: All in a category is every live thing filed directly in it, the categories
-// first, then by title, each with its kind; a day page and a tombstone are not in it, nor what a sub-category holds.
+// first, then by title, each with its kind; a tombstone is not in it, nor what a sub-category holds.
 func TestFiledInListsTheCategoriesFirst(t *testing.T) {
 	s, ids := browseFixture(t)
 	rows, err := s.FiledIn(ctx, ids["Family"], 50, 0)
@@ -205,7 +206,7 @@ func TestFiledInListsTheCategoriesFirst(t *testing.T) {
 	if rows[0].ID != ids["Cousins"] || rows[1].ID != ids["Ana"] {
 		t.Errorf("ids: %+v", rows[:2])
 	}
-	// The tree counts the same things: the day page and the tombstone filed in Family are not counted.
+	// The tree counts the same things: the tombstone filed in Family is not counted.
 	cats, err := s.Categories(ctx)
 	if err != nil {
 		t.Fatal(err)

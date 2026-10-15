@@ -31,5 +31,5 @@ reused, and a decision that changes is rewritten in place (git is its history).
 | [D23](D23-no-tasks.md) | No tasks: a plan is words in a page. | accepted |
 | [D24](D24-habits.md) | Habits: a unitless metric with a reading of 1 or 0 a day; no periods. | accepted |
 | [D25](D25-snapshots.md) | Snapshots: a dated `VACUUM INTO` copy, trusted once its restore check passes. | accepted |
-| [D26](D26-metric-categories.md) | Categories: a category is a page, and anything is filed in it by a `part-of` link. | accepted |
+| [D26](D26-metric-categories.md) | Categories: a category is a plain page, and a thing is filed in it by a `part-of` link. | accepted |
 | [D27](D27-a-metric-is-a-page.md) | A metric is a page: its title is its name, its body its note. | accepted |

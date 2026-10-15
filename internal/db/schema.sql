@@ -133,6 +133,12 @@ BEGIN
  WHERE OLD.is_journal
     OR (NEW.is_journal
         AND EXISTS (SELECT 1 FROM entity_names n WHERE n.entity_id = OLD.id AND n.name_key IS NOT NEW.preferred_name_key));
+ -- a page with no name yet (its key's FK is deferred) has no name that refuses a date: its part-of links do, since a
+ -- day page is never filed and never a category (D26, links_endpoint_types)
+ SELECT RAISE(ABORT, 'a page with a part-of link never becomes a day page (D26)')
+ WHERE NEW.is_journal
+   AND (EXISTS (SELECT 1 FROM links l WHERE l.from_id = OLD.id AND l.kind = 'part-of')
+     OR EXISTS (SELECT 1 FROM links l WHERE l.to_id = OLD.id AND l.kind = 'part-of'));
 END;
 
 CREATE VIEW entity_search_content AS
@@ -356,7 +362,7 @@ CREATE TABLE link_kinds (
 INSERT INTO link_kinds(kind, from_types, to_types, note) VALUES
   ('wikilink', 'page,person,place,metric,file', 'page,person,place,metric,file', 'extracted from [[body]] on save (an embed ![[...]] is one); body is the truth'),
   ('at',       'page',      'place',        'day page → a place the owner was at that day; from a day page only, which links_endpoint_types checks (D16)'),
-  ('part-of',  NULL,        'page',         'anything → the page of a category it is filed in (Ferritin → Iron → Biomarkers, D26); walk it with a recursive CTE');
+  ('part-of',  NULL,        'page',         'anything but a day page → the page of a category it is filed in (Ferritin → Iron → Biomarkers, D26); a day page is never filed, which links_endpoint_types checks; walk it with a recursive CTE');
 CREATE TRIGGER link_kinds_structure_fixed BEFORE UPDATE OF from_types, to_types ON link_kinds
   WHEN NEW.from_types IS NOT OLD.from_types OR NEW.to_types IS NOT OLD.to_types
 BEGIN
@@ -407,12 +413,16 @@ BEGIN
                       OR (k.to_types IS NOT NULL
                           AND instr(',' || k.to_types || ',',
                                     ',' || coalesce((SELECT entity_type FROM entities WHERE id = NEW.to_id), '?') || ',') = 0)));
-  -- two rules link_kinds cannot say, since a day page and a plain page are both 'page': an at link starts at a
-  -- day page (D16), and a category is a plain page, never a day page (D26)
+  -- three rules link_kinds cannot say, since a day page and a plain page are both 'page': an at link starts at a
+  -- day page (D16); a category is a plain page, never a day page; and a day page is never filed in a category: a day
+  -- is found by its date (D26). A link never changes its endpoints (links_fixed), a day page never stops being one,
+  -- and a page with a part-of link never becomes one (entities_day_identity, entity_names_day_insert)
   SELECT RAISE(ABORT, 'an at link starts at a day page (D16)')
    WHERE NEW.kind = 'at' AND NOT coalesce((SELECT is_journal FROM entities WHERE id = NEW.from_id), 0);
   SELECT RAISE(ABORT, 'a category is a plain page, never a day page (D26)')
    WHERE NEW.kind = 'part-of' AND coalesce((SELECT is_journal FROM entities WHERE id = NEW.to_id), 0);
+  SELECT RAISE(ABORT, 'a day page is never filed in a category (D26)')
+   WHERE NEW.kind = 'part-of' AND coalesce((SELECT is_journal FROM entities WHERE id = NEW.from_id), 0);
 END;
 CREATE VIEW ghost_pages AS
   -- Empty live plain objects older than 30 days without graph or measurement-capture references,

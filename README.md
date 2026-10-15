@@ -267,7 +267,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   icon of its kind, one media kind by `media=`, and the count of each media kind in words; documents are the other
   files, as rows. The ghost pages are a filter of Pages. The pick bar puts the checked rows in a category, and
   deletes pages, media and documents. Metrics keeps its own board at `/metrics`. Days are not in Browse: a day is the time axis, found in the Calendar and by
-  Search, and it meets the things through its mentions (the owner's word, 2026-10-15). The sidebar has Today, Calendar,
+  Search, and it meets the things through its mentions (the owner's word, 2026-10-15); a day page is never filed
+  ([D26](docs/decisions/D26-metric-categories.md)), so a day page's `link` does not offer `part-of`. The sidebar has Today, Calendar,
   Metrics and Browse; a phone's bottom bar is the same four with More. The old lists (`/people`, `/places`,
   `/media`, `/files`, `/ghosts`, `/categories`) answer 308 to their Browse address, with `limit`, `offset` and
   `new` kept; the POST routes of those paths do not change. A category page has one section, Filed here: the

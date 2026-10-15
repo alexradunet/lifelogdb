@@ -215,3 +215,54 @@ func TestTheMetricsPageDrawsCards(t *testing.T) {
 		t.Errorf("no box checked: %d %.600s", rec.Code, body)
 	}
 }
+
+// A day page is never filed (D26), on the in-process and the remote client alike: file-pages that names a day page
+// is a 422 with SQLite's sentence and writes nothing, not even for the other ids or the category it would make; a
+// part-of link from a day page is a 422; and a day page's link form does not offer part-of.
+func TestADayPageIsNeverFiled(t *testing.T) {
+	for _, remote := range []bool{false, true} {
+		t.Run(fmt.Sprint(remote), func(t *testing.T) {
+			c, h := fresh(t)
+			if remote {
+				server := httptest.NewServer(h)
+				t.Cleanup(server.Close)
+				c = client.Remote(server.URL, "cli", "")
+			}
+			ctx := t.Context()
+			root := must(c.Get(ctx, "/"))
+			plain := fmt.Sprint(props(must(c.Do(ctx, find(root, "create-page"), map[string]string{"title": "Plans"})))["id"])
+			day := must(c.Get(ctx, href(must(c.Do(ctx, find(root, "capture"), map[string]string{"text": "a synthetic entry"})), "page")))
+			dayID := fmt.Sprint(props(day)["id"])
+			const sentence = "a day page is never filed in a category (D26)"
+
+			file := find(must(c.Get(ctx, "/pages/"+plain)), "file-pages")
+			for _, ids := range []string{dayID, plain + " " + dayID, dayID + "," + plain} {
+				_, err := c.Do(ctx, file, map[string]string{"ids": ids, "category": "Garden"})
+				if !clientStatus(err, http.StatusUnprocessableEntity) || !strings.Contains(fmt.Sprint(err), sentence) {
+					t.Errorf("file-pages %s: %v, want a 422 that says %q", ids, err, sentence)
+				}
+			}
+			if _, err := c.Get(ctx, "/pages?title=Garden"); !clientStatus(err, http.StatusNotFound) {
+				t.Errorf("a refused filing made its category page: %v", err)
+			}
+			if got := partOfLinks(must(c.Get(ctx, "/pages/"+plain))); len(got) != 0 {
+				t.Errorf("a refused filing filed Plans in %v", got)
+			}
+
+			if hasOption(find(day, "link"), "kind", "part-of") || !hasOption(find(day, "link"), "kind", "at") {
+				t.Errorf("a day page's link offers %+v: at, and never part-of", find(day, "link").Fields)
+			}
+			if !hasOption(find(must(c.Get(ctx, "/pages/"+plain)), "link"), "kind", "part-of") {
+				t.Error("a plain page's link does not offer part-of")
+			}
+			must(c.Do(ctx, file, map[string]string{"ids": plain, "category": "Garden"}))
+			_, err := c.Do(ctx, find(day, "link"), map[string]string{"to": "Garden", "kind": "part-of"})
+			if !clientStatus(err, http.StatusUnprocessableEntity) || !strings.Contains(fmt.Sprint(err), sentence) {
+				t.Errorf("link part-of from a day page: %v, want a 422 that says %q", err, sentence)
+			}
+			if got := partOfLinks(must(c.Get(ctx, "/pages/"+dayID))); len(got) != 0 {
+				t.Errorf("the day page is part-of %v", got)
+			}
+		})
+	}
+}

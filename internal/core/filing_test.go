@@ -1,7 +1,9 @@
 package core
 
 import (
+	"reflect"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -259,5 +261,73 @@ func TestCreateMetricRefusalsWriteNothing(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A day page is never filed (D26): links_endpoint_types refuses a part-of link from it, so file-pages that names a
+// day page among other pages is a 422 that writes nothing (not the other pages' links, not the category it would
+// make, no revision), and so is a part-of link from a day page to a category that exists. The refusal is SQLite's
+// sentence: the writer holds no rule of its own here.
+func TestADayPageIsNeverFiled(t *testing.T) {
+	s := fresh(t)
+	plain, _, err := s.CreatePage(ctx, "cli", "Plans", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	day, _, err := s.Capture(ctx, "cli", "2031-05-02", "a synthetic entry", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := countRows(ctx, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	version := func(id int64) string {
+		t.Helper()
+		p, err := s.PageByID(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p.Version
+	}
+	plainVersion, dayVersion := version(plain), version(day)
+	const sentence = "a day page is never filed in a category (D26)"
+
+	for _, ids := range [][]int64{{day}, {plain, day}, {day, plain}} {
+		_, err := s.FilePages(ctx, "cli", ids, "Garden", false)
+		if status(err) != 422 || !strings.Contains(err.Error(), sentence) {
+			t.Errorf("file-pages %v: %d %v, want a 422 that says %q", ids, status(err), err, sentence)
+		}
+	}
+	if _, err := s.FilePages(ctx, "cli", []int64{plain, day}, "Garden", true); status(err) != 422 {
+		t.Errorf("file-pages with move: %d %v, want a 422", status(err), err)
+	}
+	after, err := countRows(ctx, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(before, after) {
+		t.Errorf("rows before %+v, after %+v: a refused filing wrote", before, after)
+	}
+	if id, err := s.PageID(ctx, "Garden"); err != nil || id != 0 {
+		t.Errorf("a refused filing made the category, page %d (%v)", id, err)
+	}
+	if got := partOf(t, s, plain); len(got) != 0 {
+		t.Errorf("a refused filing filed the plain page in %v", got)
+	}
+	if version(plain) != plainVersion || version(day) != dayVersion {
+		t.Errorf("a refused filing advanced a revision: plain %s->%s, day %s->%s", plainVersion, version(plain), dayVersion, version(day))
+	}
+
+	// The category exists: the part-of link from the day page is refused, the one from the plain page is not.
+	if _, err := s.FilePages(ctx, "cli", []int64{plain}, "Garden", false); err != nil {
+		t.Fatal(err)
+	}
+	garden := pageByTitle(t, s, "Garden").ID
+	if err := s.Link(ctx, "cli", day, garden, "part-of", ""); status(err) != 422 || !strings.Contains(err.Error(), sentence) {
+		t.Errorf("link part-of from a day page: %d %v, want a 422 that says %q", status(err), err, sentence)
+	}
+	if got := partOf(t, s, day); len(got) != 0 {
+		t.Errorf("the day page is part-of %v", got)
 	}
 }

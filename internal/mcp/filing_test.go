@@ -2,9 +2,13 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"lifelog/internal/api"
 	"lifelog/internal/client"
@@ -55,6 +59,67 @@ func TestAnAgentFilesMetricsThroughMCP(t *testing.T) {
 	for _, m := range ms {
 		if (m.Name == "Ferritin" || m.Name == "LDL") && (len(m.Categories) != 1 || m.Categories[0] != "Bloodwork") {
 			t.Errorf("%s is filed in %v, want [Bloodwork]", m.Name, m.Categories)
+		}
+	}
+}
+
+// A day page is never filed (D26): file_pages with a day page's id is an MCP error carrying the 422 and SQLite's
+// sentence, and nothing is written, not the other page's link, not the category.
+func TestAnAgentCannotFileADayPageThroughMCP(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "life.db")
+	if err := db.Init(t.Context(), path); err != nil {
+		t.Fatal(err)
+	}
+	d, err := db.Open(t.Context(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := d.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	s := &core.Store{DB: d}
+	plain, _, err := s.CreatePage(context.Background(), "cli", "Plans", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	day, _, err := s.Capture(context.Background(), "cli", "2031-05-02", "a synthetic entry", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, ctx := numericSession(t, client.InProcess(api.New(s), "agent:file"))
+	res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{Name: "file_pages", Arguments: map[string]any{"ids": fmt.Sprintf("%d,%d", plain, day), "category": "Garden"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.IsError || len(res.Content) != 1 {
+		t.Fatalf("file_pages with a day page: %+v, want one error content", res)
+	}
+	text, ok := res.Content[0].(*mcpsdk.TextContent)
+	if !ok {
+		t.Fatalf("error content %T", res.Content[0])
+	}
+	var e api.Entity
+	if err := json.Unmarshal([]byte(text.Text), &e); err != nil {
+		t.Fatal(err)
+	}
+	p, _ := e.Properties.(map[string]any)
+	if p["status"] != float64(422) || !strings.Contains(fmt.Sprint(p["message"]), "a day page is never filed in a category (D26)") {
+		t.Errorf("file_pages with a day page: %v, want a 422 with the trigger's sentence", p)
+	}
+	if id, err := s.PageID(context.Background(), "Garden"); err != nil || id != 0 {
+		t.Errorf("a refused filing made the category, page %d (%v)", id, err)
+	}
+	for _, id := range []int64{plain, day} {
+		pg, err := s.PageByID(context.Background(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, l := range pg.Out {
+			if l.Kind == "part-of" {
+				t.Errorf("page %d is part-of %s after a refused filing", id, l.Title)
+			}
 		}
 	}
 }
