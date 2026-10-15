@@ -123,8 +123,7 @@ import actions are included and the link `import` leads to its status.
 ### days, people, places, ghosts
 
 `GET /days`, `/people`, `/places`, `/ghosts`: one page of a list, each row an embedded `item` link to the page (with
-`class` the page's type where it has one). `people` and `places` offer `create-person` and `create-place`; `people`
-also offers `set-picture` for each person in it, with its `id` filled.
+`class` the page's type where it has one). `people` and `places` offer `create-person` and `create-place`.
 
 | property | type | meaning |
 |---|---|---|

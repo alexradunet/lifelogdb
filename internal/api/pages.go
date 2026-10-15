@@ -149,17 +149,6 @@ type namedRow struct {
 	Picture  string `json:"picture,omitempty"` // a person's: the preview of the first picture its page embeds
 }
 
-// PictureAction is the set-picture action the entity offers for the page with this id, nil when it offers none.
-func (v *view) PictureAction(id any) *Action {
-	href := "/pages/" + num(id) + "/picture"
-	for i := range v.Actions {
-		if a := &v.Actions[i]; a.Name == "set-picture" && a.Href == href {
-			return v.shown(a)
-		}
-	}
-	return nil
-}
-
 func (h *server) named(typ, plural, create string) func(*http.Request) (*Entity, error) {
 	return func(r *http.Request) (*Entity, error) {
 		limit, offset, err := pageOf(r, 200)
@@ -183,9 +172,6 @@ func (h *server) named(typ, plural, create string) func(*http.Request) (*Entity,
 				}
 				rows = append(rows, row)
 				e.Entities = append(e.Entities, Link{Rel: []string{"item"}, Href: pageHref(p.ID), Title: p.Title, Class: []string{typ}})
-				if typ == "person" { // each row's photo is set from the list
-					e.Actions = append(e.Actions, action("set-picture", idParam(p.ID), nil))
-				}
 			}
 			e.Properties.(map[string]any)["rows"] = rows
 			return e, nil

@@ -572,12 +572,6 @@ a.task{color:var(--ink); font-weight:700}
 .entry.named.face{grid-template-columns:32px minmax(0,1fr) auto; align-items:center;
   & .face-picture{display:grid; place-items:center; inline-size:32px; block-size:32px; border-radius:50%; object-fit:cover;
     background:var(--surface-deep); border:1px solid var(--edge); color:var(--text-muted)}}
-/* The button that sets a person's picture ends the row; its form is a popover in the middle of the screen. */
-li:has(>.face-set){display:flex; align-items:center; gap:var(--space-1); &>a.entry{flex:1 1 auto; min-inline-size:0}}
-.face-set{flex:none; padding:6px; line-height:0}
-.face-form:popover-open{inline-size:min(28rem,calc(100vw - 32px)); padding:var(--space-4); background:var(--surface); color:var(--text);
-  border:2px solid var(--edge); box-shadow:var(--drop-hard)}
-.face-form::backdrop{background:rgb(0 0 0 / .4)}
 /* In a narrow column the name keeps the line, and the mentions go under it. */
 @container column (max-width:487px){.entry.named.face{grid-template-columns:32px minmax(0,1fr); row-gap:0;
   & .face-picture{grid-row:span 2} & .meta{grid-column:2}}}

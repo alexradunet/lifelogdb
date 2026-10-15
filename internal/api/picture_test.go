@@ -13,40 +13,36 @@ import (
 	"lifelog/internal/api"
 )
 
-// TestSetPictureFromThePeopleList: the people list offers set-picture on each person's row, and a place has none. A
-// browser sends a new photo from the list and comes back to it; the photo is the person's picture, kept with a title
-// of the person and today. A client names a kept picture by its title instead, as the CLI and an agent do.
-func TestSetPictureFromThePeopleList(t *testing.T) {
+// TestSetPictureFromThePersonPage: a person's page offers set-picture, and a place's page and the lists do not. A
+// browser sends a new photo from the page and comes back to it; the photo is the person's picture in People, kept
+// with a title of the person and today. A client names a kept picture by its title instead, as the CLI and an agent
+// do.
+func TestSetPictureFromThePersonPage(t *testing.T) {
 	c, h := freshOn(t, fixedToday)
 	ctx := t.Context()
 	root := must(c.Get(ctx, "/"))
 	ana := must(c.Do(ctx, find(root, "create-person"), map[string]string{"title": "Ana"}))
 	must(c.Do(ctx, find(ana, "save-body"), map[string]string{"body": "Met at school."}))
 	lake := must(c.Do(ctx, find(root, "create-place"), map[string]string{"title": "Lake"}))
-	if hasAction(lake, "set-picture") || hasAction(must(c.Get(ctx, "/places")), "set-picture") {
-		t.Errorf("a place offers set-picture")
+	for _, e := range []*api.Entity{lake, must(c.Get(ctx, "/people")), must(c.Get(ctx, "/places"))} {
+		if hasAction(e, "set-picture") {
+			t.Errorf("%s offers set-picture", e.Title)
+		}
 	}
-	set := pictureAction(t, must(c.Get(ctx, "/people")), href(ana, "self")+"/picture")
-	if !hasAction(must(c.Get(ctx, href(ana, "self"))), "set-picture") {
-		t.Errorf("the person's page does not offer set-picture")
+	if body := page(t, h, "/people"); strings.Contains(body, "/picture\"") {
+		t.Errorf("the people sheet draws a form to set a picture")
 	}
-	if !strings.Contains(page(t, h, href(ana, "self")), `action="`+href(ana, "self")+`/picture"`) {
-		t.Errorf("the person's page does not draw set-picture")
-	}
-
-	// The list draws a button on the row and the form in a popover after the list.
-	id := href(ana, "self")[len("/pages/"):]
-	body := page(t, h, "/people")
-	for _, s := range []string{`popovertarget="picture-` + id + `"`, `<div popover id="picture-` + id + `" class="face-form">`,
-		`action="` + set.Href + `"`, `enctype="multipart/form-data"`, `name="back" value="/people"`} {
+	set := pictureAction(t, must(c.Get(ctx, href(ana, "self"))), href(ana, "self")+"/picture")
+	body := page(t, h, href(ana, "self"))
+	for _, s := range []string{`action="` + set.Href + `"`, `enctype="multipart/form-data"`} {
 		if !strings.Contains(body, s) {
-			t.Errorf("the people sheet lacks %q", s)
+			t.Errorf("the person's page lacks %q", s)
 		}
 	}
 
 	jpg, _ := jpegFile(t, "ana.jpg", 40, 30)
-	rec := postPhoto(t, h, set.Href, jpg, "/people")
-	if rec.Code != http.StatusSeeOther || !strings.HasPrefix(rec.Header().Get("Location"), "/people") {
+	rec := postPhoto(t, h, set.Href, jpg, href(ana, "self"))
+	if rec.Code != http.StatusSeeOther || !strings.HasPrefix(rec.Header().Get("Location"), href(ana, "self")) {
 		t.Fatalf("POST %s: %d to %q %.300s", set.Href, rec.Code, rec.Header().Get("Location"), rec.Body.String())
 	}
 	title := "Ana " + fixedToday + ".jpg"
