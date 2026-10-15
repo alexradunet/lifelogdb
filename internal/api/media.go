@@ -4,9 +4,6 @@ package api
 // and the recordings, drawn as tiles; the documents are every other file (a PDF, a text), drawn as rows. add-file
 // keeps a file of any kind.
 
-// mediaAccept is what the file input of the media list's add-file takes: the kinds the list shows.
-const mediaAccept = "image/*,video/*,audio/*"
-
 // mediaCounts counts the live files of each media kind in the scope of the media list.
 type mediaCounts struct {
 	Image int `json:"image"`

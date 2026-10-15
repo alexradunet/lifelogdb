@@ -361,13 +361,7 @@ func browseActions(b browseQuery, in *browseIn, categories []string) []Action {
 		out = append(out, action("create-person", nil, values))
 	case b.kind == "place":
 		out = append(out, action("create-place", nil, values))
-	case b.kind == "media":
-		add := action("add-file", nil, values)
-		if f := add.field("original"); f != nil {
-			f.Accept = mediaAccept
-		}
-		out = append(out, add)
-	case b.kind == "document":
+	case b.kind == "media", b.kind == "document": // a file of any kind: it goes to the list of its type
 		out = append(out, action("add-file", nil, values))
 	}
 	if b.kind != "all" {

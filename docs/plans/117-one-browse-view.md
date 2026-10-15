@@ -8,7 +8,7 @@
 - **Date / baseline:** 2026-10-15, `d7194c8` (master).
 - **Priority:** P2. **Effort:** L, in four steps. **Risk:** MEDIUM: the browser's navigation changes, six GET
   routes become redirects, and three actions take one more optional field. No schema change, no new data rule.
-- **Status:** IN PROGRESS.
+- **Status:** DONE.
 - **Resolves:** no issue, no RFC. The owner's request (2026-10-15): the sidebar listed Categories, People, Places,
   Media, Files, Metrics and Ghost pages side by side, and "I can think of People as categories, or places as
   categories or even media and files or metrics." The owner chose one Browse view, with three answers: Metrics
@@ -63,7 +63,7 @@ flowchart LR
    | `page` | the title; a badge when the page is a category | title | `create-page` |
    | `person` | the face, the title, the mentions and the last day | title | `create-person` |
    | `place` | the title, the mentions and the last day | title | `create-place` |
-   | `media` | a tile: the picture, the title, the kind and the day | newest day first | `add-file`, `original` accepts media |
+   | `media` | a tile: the picture, the title, the kind and the day | newest day first | `add-file`, a file of any kind |
    | `document` | the title, the type and the day | newest day first | `add-file` |
    | `metric` | the title and the unit; the board has the values | title | none: New metric is on `/metrics` |
    | `all` | the title and a kind badge; the sub-categories first | title | none |
@@ -178,9 +178,9 @@ Each step is one commit, with its tests, and can ship alone.
   `TestHomeLinksTheListsOfBrowse`, `TestTheSidebarHasMetricsAndBrowse`, `TestACategoryPageOpensInBrowse`,
   `TestTheMediaCountsFollowTheScope`; `TestThePhoneHasABottomBarAndASheet` and the New menu test have the new
   entries. Not carried to Browse: the sentence "No category yet" of the empty tree; an empty tree is Everything and
-  Not filed. Open for the owner: New file opens the media list (rule 7), where `original` accepts media only
-  (rule 2), so a document cannot be picked from the New menu on a phone; before step 3 New file opened `/files`,
-  with no `accept`.
+  Not filed. After the review: New file opens the media list (rule 7), and there `original` accepted media only,
+  so a document could not be picked from the New menu on a phone. The media list's `add-file` now takes a file of
+  any kind, as the documents' does; a file goes to the list of its type.
 - **Checks run for step 3 (Linux):** `gofmt -l` clean; `go generate ./... && go vet ./... && go test ./...` green;
   `go test -count=1 -shuffle=on ./internal/api ./internal/core ./internal/mcp ./cmd/lifelog` green. Not run:
   `staticcheck`, `govulncheck`, the race check, Windows, a look in a browser.

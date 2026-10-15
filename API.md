@@ -143,7 +143,7 @@ A category is a page that something is `part-of` (D26). Each row is an embedded 
 query names, but `all`). Links: `self` (with the filters), `index`, `metrics`, a `kind` link for each chip (class:
 its kind; it keeps `in` and `unfiled`; `all` inside a category only, and there the first), `everything` and `unfiled` (the ends of the tree), `ghosts`, with `kind=media` also `pictures`,
 `videos` and `recordings`, and `prev`/`next`. Actions: the New of the kind (`create-page`, `create-person`,
-`create-place`, `add-file`, whose `original` carries `accept` for media; none for `metric`, `all` and the ghosts),
+`create-place`, `add-file`, which keeps a file of any kind on the media list too; none for `metric`, `all` and the ghosts),
 with `category` filled inside a category: each of them makes the thing and files it there in one write, and a
 refusal of either step writes nothing; `file-pages` on every list but `all`; `tombstone-pages` on `page` (the ghosts
 too), `media` and `document`.

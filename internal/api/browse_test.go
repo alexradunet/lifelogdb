@@ -469,7 +469,8 @@ func TestBrowseOffersTheNewAndThePickBarOfItsKind(t *testing.T) {
 	if v := fieldOf(find(must(c.Get(ctx, "/browse")), "create-page"), "category"); v != "" {
 		t.Errorf("New page has category %q", v)
 	}
-	// The media list's file field takes media; the documents' takes any file.
+	// The file field takes a file of any kind on both lists: New file opens the media list, and a document kept
+	// there goes to the documents.
 	accept := func(path string) string {
 		a := find(must(c.Get(ctx, path)), "add-file")
 		for _, f := range a.Fields {
@@ -479,7 +480,7 @@ func TestBrowseOffersTheNewAndThePickBarOfItsKind(t *testing.T) {
 		}
 		return "?"
 	}
-	if got := accept("/browse?kind=media"); got != "image/*,video/*,audio/*" {
+	if got := accept("/browse?kind=media"); got != "" {
 		t.Errorf("media accepts %q", got)
 	}
 	if got := accept("/browse?kind=document"); got != "" {
@@ -591,10 +592,13 @@ func TestTheBrowsePageDrawsTheTreeTheChipsAndTheRows(t *testing.T) {
 	media := browse(t, h, "/browse?kind=media")
 	for _, want := range []string{`<ul class="plain tiles">`, `<li class="tile pick">`, `<span class="first">memo.m4a</span><span class="meta">recording · `,
 		`<nav class="kinds" aria-label="Media kind"><a href="/browse?kind=media" aria-current="page">All media</a><a href="/browse?kind=media&amp;media=image">Pictures</a>`,
-		`accept="image/*,video/*,audio/*"`, `formaction="/pages/tombstone"`} {
+		`formaction="/pages/tombstone"`} {
 		if !strings.Contains(media, want) {
 			t.Errorf("/browse?kind=media lacks %s", want)
 		}
+	}
+	if strings.Contains(media, `accept="`) {
+		t.Error("the media list limits the kinds of file it keeps")
 	}
 	if docs := browse(t, h, "/browse?kind=document"); !strings.Contains(docs, `<span class="first">scan.pdf</span><span class="meta">application/pdf · `) {
 		t.Error("the documents lack their row")

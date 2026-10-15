@@ -58,7 +58,7 @@ func TestMediaListsPicturesVideosAndRecordings(t *testing.T) {
 		hrefOf(e, "recordings") != "/browse?kind=media&media=audio" || hrefOf(root, "media") != "/browse?kind=media" {
 		t.Errorf("the links: %+v", e.Links)
 	}
-	// The list's add-file takes the kinds it shows; the catalog's keeps a file of any kind.
+	// The list's add-file takes a file of any kind, as the catalog's does.
 	accept := func(a api.Action) string {
 		for _, f := range a.Fields {
 			if f.Name == "original" {
@@ -67,7 +67,7 @@ func TestMediaListsPicturesVideosAndRecordings(t *testing.T) {
 		}
 		return "?"
 	}
-	if accept(find(e, "add-file")) != "image/*,video/*,audio/*" || accept(add) != "" || find(e, "tombstone-pages").Name == "" {
+	if accept(find(e, "add-file")) != "" || accept(add) != "" || find(e, "tombstone-pages").Name == "" {
 		t.Errorf("the actions: %+v", e.Actions)
 	}
 
@@ -94,7 +94,7 @@ func TestMediaListsPicturesVideosAndRecordings(t *testing.T) {
 		`<nav class="kinds" aria-label="Media kind"><a href="/browse?kind=media" aria-current="page">All media</a><a href="/browse?kind=media&amp;media=image">Pictures</a><a href="/browse?kind=media&amp;media=video">Videos</a><a href="/browse?kind=media&amp;media=audio">Recordings</a></nav>`,
 		`<ul class="plain tiles">`, `<img src="` + hrefOf(photo, "preview") + `" alt="" loading="lazy"><span class="first">Lake.jpg</span><span class="meta">picture · Sat 10 May</span>`,
 		`<span class="tile-blank" aria-hidden="true"><svg class="icon"`, `<span class="first">Walk.mp4</span><span class="meta">video · Mon 12 May</span>`, `<span class="first">Dawn.jpg</span><span class="meta">picture · Wed 14 May</span>`,
-		`<span class="first">Memo 1.m4a</span><span class="meta">recording · Thu 1 May</span>`, `<span class="first">Blank.jpg</span><span class="meta">picture · no day yet</span>`, `accept="image/*,video/*,audio/*"`,
+		`<span class="first">Memo 1.m4a</span><span class="meta">recording · Thu 1 May</span>`, `<span class="first">Blank.jpg</span><span class="meta">picture · no day yet</span>`,
 		`<label class="pick-box"><input type="checkbox" name="ids" value="`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the media page lacks %s", want)
