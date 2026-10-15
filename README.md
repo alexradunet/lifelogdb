@@ -325,6 +325,12 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   offers the first and the tasks list the second, so the browser draws a box on each tile of Media and each row of Tasks and one
   danger button, which counts the checked boxes (a CSS counter, no script) and returns to the list with the count;
   the CLI's `do` and the MCP tools carry them as any action. Both are dangers, not the owner's alone, and a revive undoes each.
+- **Metrics as cards, filed in groups** ([plan 112](docs/plans/112-metrics-as-cards.md)). `/metrics` draws each
+  group as a grid of cards, with a jump bar to the groups: a card is a metric's latest value, its day and the line
+  of its newest 30 readings, muted when the latest is older than 60 days; a habit's card is its strip and its
+  check-in. `file-pages` (`POST /pages/file`) files several pages in a category page in one write, made when it is
+  missing; `move` 1 takes them out of their other categories. The page's file bar checks the cards to file. The CLI's
+  `do` and the MCP tools carry it as any action; it is not the owner's alone, as `link` is not.
 - **Media** ([plan 110](docs/plans/110-the-media-list.md)). `GET /media` is the list of the files whose type is an
   image, a video or an audio: tiles, newest day first, with the picture a file keeps, or the icon of its kind; one
   kind alone by `?kind=`. `GET /files` is the list of every other file (a PDF, a text), as rows. Both offer

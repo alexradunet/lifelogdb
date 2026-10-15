@@ -1,5 +1,10 @@
 package api
 
+import (
+	"html/template"
+	"strings"
+)
+
 // The one page of a metric (docs/plans/100-one-page-a-metric.md): its readings newest first, in one fold a year.
 // The series gives them oldest first; only the view orders and folds them.
 
@@ -112,4 +117,147 @@ func yearSummary(rows []map[string]any, unit string, habit bool) string {
 		values += " " + unit
 	}
 	return s + " · " + values
+}
+
+// The metrics as cards (docs/plans/112-metrics-as-cards.md): a section for each top-level group of /metrics, its
+// subcategories inside it, and a card for each metric with its latest reading and the line of its recent ones.
+
+// metricCard is a metric as its card draws it. A habit's card holds its state today and its strip instead.
+type metricCard struct {
+	ID          string
+	Name, Href  string
+	Value, Unit string
+	Measurement string // the latest reading's id, "" with none
+	When        string // the latest reading's day in words
+	Count       int    // how many recent readings the line holds
+	Line        template.HTML
+	Stale       bool // the latest reading is older than inUseDays
+	Note        string
+	Habit       bool
+	Categories  []string // a habit's categories: it is drawn only under Habits
+	State       string   // today's state; "stopped" for a habit no period holds today
+	Strip       habitStrip
+}
+
+// metricSub is a category under a section's top: its path below the top, its page and its cards.
+type metricSub struct {
+	Title, Page string
+	Cards       []metricCard
+}
+
+// metricSection is one top-level group: Habits, a category, or Not filed. Count is how many metrics it holds, each
+// once, in its subcategories too.
+type metricSection struct {
+	Title, Page, Anchor string
+	Count               int
+	Habits              bool
+	Cards               []metricCard
+	Subs                []metricSub
+}
+
+// MetricSections are the groups of /metrics as sections of cards, in the order of the groups.
+func (v *view) MetricSections() []metricSection {
+	props, _ := v.Props.(map[string]any)
+	today, _ := props["today"].(string)
+	groups, _ := props["groups"].([]any)
+	rows := map[string]map[string]any{}
+	if ms, _ := props["metrics"].([]any); ms != nil {
+		for _, x := range ms {
+			if m, _ := x.(map[string]any); m != nil {
+				rows[num(m["id"])] = m
+			}
+		}
+	}
+	habits := map[string]map[string]any{}
+	if hs, _ := props["habit_days"].([]any); hs != nil {
+		for _, x := range hs {
+			if h, _ := x.(map[string]any); h != nil {
+				name, _ := h["metric"].(string)
+				habits[name] = h
+			}
+		}
+	}
+	c := clock{today: today}
+	limit, _ := dayOf(today)
+	limit = limit.AddDate(0, 0, -inUseDays)
+	card := func(x any) metricCard {
+		g, _ := x.(map[string]any)
+		id := num(g["id"])
+		m := rows[id]
+		if m == nil {
+			m = g
+		}
+		name, _ := m["name"].(string)
+		unit, _ := m["unit"].(string)
+		habit, _ := m["habit"].(bool)
+		note, _ := m["note"].(string)
+		k := metricCard{ID: id, Name: name, Href: metricHref(name), Unit: unitWords(unit), Note: note, Habit: habit}
+		recent, _ := m["recent"].([]any)
+		if n := len(recent); n > 0 {
+			last, _ := recent[n-1].(map[string]any)
+			day, _ := last["day"].(string)
+			k.Value, k.Measurement, k.When, k.Count = num(last["value"]), num(last["id"]), c.relative(day), n
+			if t, ok := dayOf(day); ok && !limit.IsZero() && t.Before(limit) {
+				k.Stale = true
+			}
+			if !habit {
+				k.Line = sparkLine(name, unit, today, recent)
+			}
+		}
+		if habit {
+			for _, c := range anyList(m["categories"]) {
+				if p, ok := c.(string); ok {
+					k.Categories = append(k.Categories, p)
+				}
+			}
+			k.State = "stopped"
+			if h := habits[name]; h != nil {
+				k.State, _ = h["state"].(string)
+				k.Strip = v.HabitStrip(h["recent"])
+			}
+		}
+		return k
+	}
+	var out []metricSection
+	var seen map[string]bool
+	for _, x := range groups {
+		g, _ := x.(map[string]any)
+		title, _ := g["title"].(string)
+		depth := num(g["depth"])
+		ms, _ := g["metrics"].([]any)
+		if depth == "0" || len(out) == 0 {
+			s := metricSection{Title: title, Page: num(g["page"]), Habits: g["page"] == nil && title == "Habits"}
+			switch {
+			case s.Page != "":
+				s.Anchor = "c-" + s.Page
+			case s.Habits:
+				s.Anchor = "habits"
+			default:
+				s.Anchor = "not-filed"
+			}
+			out = append(out, s)
+			seen = map[string]bool{}
+		}
+		s := &out[len(out)-1]
+		var cards []metricCard
+		for _, m := range ms {
+			k := card(m)
+			cards = append(cards, k)
+			if !seen[k.ID] {
+				seen[k.ID] = true
+				s.Count++
+			}
+		}
+		if depth == "0" {
+			s.Cards = cards
+			continue
+		}
+		path, _ := g["path"].(string)
+		sub := path
+		if i := strings.Index(path, "/"); i >= 0 {
+			sub = path[i+1:]
+		}
+		s.Subs = append(s.Subs, metricSub{Title: sub, Page: num(g["page"]), Cards: cards})
+	}
+	return out
 }

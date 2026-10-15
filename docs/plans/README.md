@@ -8,6 +8,7 @@ Earlier closed plans live in git history (`git log -- docs/plans`). The next pla
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
+| [112](112-metrics-as-cards.md) | The metrics as cards, filed in groups: a jump bar, a card a metric with its latest value and line, and file-pages | P2 | M | owner request 2026-10-15; `16e40bb` | DONE |
 | [111](111-one-metrics-view.md) | One metrics view: Habits becomes a lens of Metrics in the browser | P2 | S | owner decision 2026-10-15; `1697b50` | DONE |
 | [109](109-a-voice-note.md) | A voice note: capture takes a recording, a transcriber turns it into words | P1 | S | owner decisions 2026-10-14; `895d2aa` | DONE |
 | [110](110-the-media-list.md) | The media list: Files becomes Media, the pictures, the videos and the recordings as tiles; Files the rest | P1 | S | owner request 2026-10-14; `1697b50` | DONE |

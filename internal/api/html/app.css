@@ -625,6 +625,34 @@ li.pick{display:flex; align-items:stretch; gap:var(--space-1);
 .pick-box{flex:none; flex-direction:row; align-items:center; padding:0 var(--space-1); cursor:pointer;
   & input:disabled{opacity:.35; cursor:default}}
 
+/* The metrics as cards (docs/plans/112-metrics-as-cards.md): a jump bar to the groups, a grid of cards in each group
+   and in each category under it. A card a lab marker has not had for 60 days is muted, so the series in daily use
+   stand out. The file bar stays at the top while the cards scroll under it; while it is open, each card shows its
+   box, and the button is quiet until a box is checked. */
+.kinds.jump{& small{color:var(--text-muted)}}
+.metric-group{scroll-margin-block-start:var(--space-8);
+  &>h3{margin-block:var(--space-4) var(--space-2); & small{color:var(--text-muted); font-weight:400}}}
+.readings.metric-cards{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
+.metric-card{position:relative; min-inline-size:0;
+  & .name{flex:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  & .meta{font-size:13px; line-height:19px; color:var(--muted)}
+  & .badge{align-self:flex-start}
+  &>.pick-box{display:none; position:absolute; inset-block-start:var(--space-1); inset-inline-end:var(--space-1); z-index:1; padding:var(--space-1); background:var(--surface); border:2px solid var(--edge)}
+  &.stale{& a.reading,& .name{color:var(--muted)} & svg.trend{color:var(--muted)} & svg.trend circle{fill:var(--muted)}}
+  &.habit-card{gap:var(--space-1); & .tag{align-self:flex-start} & .habit-days{flex-wrap:wrap; gap:var(--space-1) var(--space-2)}}}
+main:has(details.file-bar[open]) .metric-card>.pick-box{display:flex}
+.metric-card:has(.pick-box input:checked){outline:2px solid var(--link); outline-offset:-2px}
+details.file-bar{position:sticky; inset-block-start:0; z-index:3; padding:var(--space-2) var(--space-3); background:var(--surface); box-shadow:var(--parch-bevel);
+  --text:var(--ink); --text-strong:var(--ink); --text-muted:var(--muted); --text-link:var(--link); --text-accent:var(--accent-ink); --rule:var(--edge);
+  &>summary{cursor:pointer; font-weight:700; color:var(--text-strong)}
+  & form{display:flex; flex-direction:row; flex-wrap:wrap; align-items:flex-end; gap:var(--space-2) var(--space-3); padding-block-start:var(--space-2);
+    &>label{flex:1 1 14rem}
+    & .desc{flex:1 1 100%; color:var(--text-muted); font-size:13px}}}
+main:not(:has(.metric-card input:checked)) details.file-bar button.primary{opacity:.55}
+/* On a narrow screen the rail is a bar at the top, 72px high as drawn (its controls and their bevels): the file bar
+   stays under it. */
+@media (max-width:899px){details.file-bar{inset-block-start:calc(72px + env(safe-area-inset-top, 0px))}}
+
 /* The style page (GET /styleguide): every component in every state. Its own rules only lay the specimens out. */
 .styleguide{
   & .guide{display:flex; flex-direction:column; gap:var(--space-3); padding-block:var(--space-4)}

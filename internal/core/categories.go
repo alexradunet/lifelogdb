@@ -2,6 +2,8 @@ package core
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"sort"
 	"strings"
 
@@ -70,4 +72,72 @@ func (s *Store) Categories(ctx context.Context) ([]Category, error) {
 	}
 	sort.Slice(out, func(i, j int) bool { return text.TitleKey(out[i].Path) < text.TitleKey(out[j].Path) })
 	return out, nil
+}
+
+// Filed is what FilePages did: the category page, whether it was made, the links added and the other part-of links
+// removed.
+type Filed struct {
+	Category Category `json:"category"`
+	Created  bool     `json:"created"`
+	Added    int      `json:"added"`
+	Moved    int      `json:"moved"`
+}
+
+// FilePages files every page named in the category page titled category, in one write (D26): a part-of link from
+// each. A missing category is made as an empty page, as PageForTitle makes a task's project. With move, every other
+// part-of link of those pages is removed first. An id no page has is a 404 and a tombstone a 409; either writes
+// nothing. What the links registry refuses (a day page as a category) is links_endpoint_types.
+func (t *Tx) FilePages(ids []int64, category string, move bool) (Filed, error) {
+	if err := checkTitle("category", category); err != nil {
+		return Filed{}, err
+	}
+	cat, created, err := t.PageForTitle(category)
+	if err != nil {
+		return Filed{}, err
+	}
+	p, err := t.pageByID(cat)
+	if err != nil {
+		return Filed{}, err
+	}
+	if p.Deleted {
+		return Filed{}, Conflict("the category %s is deleted: revive it first", p.Title)
+	}
+	f := Filed{Category: Category{ID: cat, Title: p.Title}, Created: created}
+	for _, id := range ids {
+		var deleted bool
+		err := t.tx.QueryRowContext(t.ctx, `SELECT deleted_at IS NOT NULL FROM entities WHERE id = ?`, id).Scan(&deleted)
+		if errors.Is(err, sql.ErrNoRows) {
+			return Filed{}, NotFound("no page %d", id)
+		}
+		if err != nil {
+			return Filed{}, err
+		}
+		if deleted {
+			return Filed{}, Conflict("page %d is deleted", id)
+		}
+		if move {
+			res, err := t.tx.ExecContext(t.ctx, `DELETE FROM links WHERE from_id = ? AND kind = 'part-of' AND to_id <> ?`, id, cat)
+			if err != nil {
+				return Filed{}, err
+			}
+			n, _ := res.RowsAffected()
+			f.Moved += int(n)
+		}
+		added, err := t.Link(id, cat, "part-of", "")
+		if err != nil {
+			return Filed{}, err
+		}
+		if added {
+			f.Added++
+		}
+	}
+	return f, nil
+}
+
+func (s *Store) FilePages(ctx context.Context, source string, ids []int64, category string, move bool) (f Filed, err error) {
+	err = s.Do(ctx, source, func(t *Tx) (e error) { f, e = t.FilePages(ids, category, move); return })
+	if err != nil {
+		f = Filed{}
+	}
+	return
 }

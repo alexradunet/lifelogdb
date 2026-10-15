@@ -495,6 +495,42 @@ func (s *Store) Metrics(ctx context.Context) ([]Metric, error) {
 	return out, filed.Err()
 }
 
+// Recent is one of a metric's recent readings: its measurement, its day and its value.
+type Recent struct {
+	ID    int64   `json:"id"`
+	Day   string  `json:"day"`
+	Value float64 `json:"value"`
+}
+
+// RecentReadings are the newest n current unassociated readings of each live metric, oldest first, in the series'
+// order, so the last is the reading a metric's page calls its latest. A reading of a session is not a daily value.
+// Each metric's readings are read backwards on measurements_series and stop at n, so the work is n a metric, not
+// the whole history.
+func (s *Store) RecentReadings(ctx context.Context, n int) (map[int64][]Recent, error) {
+	rows, err := s.DB.R.QueryContext(ctx, `
+		SELECT v.metric_id, v.id, v.day, v.value
+		  FROM metrics m CROSS JOIN entities e ON e.id = m.id AND e.deleted_at IS NULL -- the metrics drive, not every page
+		  JOIN measurement_values v ON v.id IN (
+		        SELECT x.id FROM measurement_values x
+		         WHERE x.metric_id = m.id AND x.session_id IS NULL
+		         ORDER BY x.day DESC, x.taken_at DESC, x.id DESC LIMIT ?)
+		 ORDER BY v.metric_id, v.day, v.taken_at, v.id`, n)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64][]Recent{}
+	for rows.Next() {
+		var metric int64
+		var r Recent
+		if err := rows.Scan(&metric, &r.ID, &r.Day, &r.Value); err != nil {
+			return nil, err
+		}
+		out[metric] = append(out[metric], r)
+	}
+	return out, rows.Err()
+}
+
 // InUse names the metrics with a current reading in the n days up to day, so a view offers the series the
 // owner keeps rather than the whole registry (a lab marker read twice a year stays at /metrics).
 func (s *Store) InUse(ctx context.Context, day string, n int) ([]string, error) {

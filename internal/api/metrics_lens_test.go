@@ -34,7 +34,7 @@ func TestTheHabitsLensShowsTheDaysHabitsAndNotTheCategories(t *testing.T) {
 	if !strings.Contains(body, `<a href="/metrics?show=habits" aria-current="true">Habits</a>`) {
 		t.Error("the habits lens does not mark its own link current")
 	}
-	if strings.Contains(body, `<section class="group depth-`) {
+	if strings.Contains(body, `class="group metric-group"`) {
 		t.Error("the habits lens shows the groups of categories")
 	}
 	if strings.Contains(body, "Record a reading") {
@@ -45,7 +45,7 @@ func TestTheHabitsLensShowsTheDaysHabitsAndNotTheCategories(t *testing.T) {
 func TestTheCategoryLensShowsTheGroupsAndTheSwitch(t *testing.T) {
 	h := lensFixture(t)
 	body := browse(t, h, "/metrics")
-	for _, want := range []string{`<section class="group depth-0">`, `<a href="/metrics" aria-current="true">By category</a>`,
+	for _, want := range []string{`class="group metric-group"`, `<a href="/metrics" aria-current="true">By category</a>`,
 		`<a href="/metrics?show=habits">Habits</a>`, "Record a reading"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the category lens lacks %s", want)

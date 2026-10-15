@@ -35,22 +35,43 @@ func (h *server) recordAction(ctx context.Context, metric, day string) (Action, 
 	return withOptions(a, "metric", names), nil
 }
 
+// recentReadings is how many of a metric's newest readings /metrics reads for its card: the latest, and the line of
+// the ones before it.
+const recentReadings = 30
+
+// metricRow is a metric as /metrics lists it: the metric, and its newest current unassociated readings, oldest first
+// (the last is its latest).
+type metricRow struct {
+	core.Metric
+	Recent []core.Recent `json:"recent"`
+}
+
 func (h *server) metrics(r *http.Request) (*Entity, error) {
-	ms, err := h.s.Metrics(r.Context())
+	ctx := r.Context()
+	ms, err := h.s.Metrics(ctx)
+	if err != nil {
+		return nil, err
+	}
+	recent, err := h.s.RecentReadings(ctx, recentReadings)
 	if err != nil {
 		return nil, err
 	}
 	var names []string
+	rows := []metricRow{}
 	for _, m := range ms {
 		names = append(names, m.Name)
+		rows = append(rows, metricRow{Metric: m, Recent: append([]core.Recent{}, recent[m.ID]...)})
 	}
-	cs, err := h.s.Categories(r.Context())
+	cs, err := h.s.Categories(ctx)
 	if err != nil {
 		return nil, err
 	}
-	e := &Entity{Class: []string{"metrics"}, Title: "Metrics", Properties: map[string]any{"metrics": ms, "groups": groupMetrics(ms, cs)},
-		Links:   []Link{link("self", "/metrics", "Metrics"), link("index", "/", "Home")},
-		Actions: []Action{withOptions(action("record", nil, map[string]any{"day": h.localDay()}), "metric", names)}}
+	today := h.localDay()
+	e := &Entity{Class: []string{"metrics"}, Title: "Metrics",
+		Properties: map[string]any{"metrics": rows, "groups": groupMetrics(ms, cs), "categories": cs, "today": today},
+		Links:      []Link{link("self", "/metrics", "Metrics"), link("index", "/", "Home")},
+		Actions: []Action{withOptions(action("record", nil, map[string]any{"day": today}), "metric", names),
+			action("file-pages", nil, nil)}}
 	for _, m := range ms {
 		e.Entities = append(e.Entities, link("item", metricHref(m.Name), m.Name))
 	}
@@ -58,7 +79,15 @@ func (h *server) metrics(r *http.Request) (*Entity, error) {
 		if err := h.habitsLens(r, e); err != nil {
 			return nil, err
 		}
+		return e, nil
 	}
+	// The habits of today, each with its strip, for the cards of the Habits group, and their check-ins.
+	hv, states, err := h.habitsOn(ctx, today)
+	if err != nil {
+		return nil, err
+	}
+	e.Properties.(map[string]any)["habit_days"] = hv
+	e.Actions = append(e.Actions, checkIns(states, today)...)
 	return e, nil
 }
 

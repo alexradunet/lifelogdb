@@ -125,6 +125,7 @@ func NewOn(s *core.Store, localDay func() string, zone *time.Location, asker Ask
 	post("/pages/{id}/tombstone", h.tombstone)
 	post("/pages/{id}/revive", h.revive)
 	post("/pages/tombstone", h.tombstoneMany("pages"))
+	post("/pages/file", h.filePages)
 	post("/pages/{id}/links", h.linkPages)
 	post("/pages/{id}/unlink", h.unlinkPages)
 	post("/measurements", h.record)

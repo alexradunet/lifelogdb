@@ -37,7 +37,8 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		"measurement":                       core.Measurement{},
 		"series": map[string]any{"metric": "", "from": "", "to": "", "readings": []core.Reading{}, "habit_periods": []core.HabitPeriod{}, "categories": []string{}, "scope": "", "session_id": int64(0), "include_deleted": false, "all_history": false,
 			"id": int64(0), "unit": "", "body": "", "links": []core.Edge{}, "backlinks": []core.Edge{}},
-		"metrics":    map[string]any{"metrics": []core.Metric{}, "groups": []metricGroup{}},
+		"metrics": map[string]any{"metrics": []metricRow{}, "groups": []metricGroup{}, "categories": []core.Category{}, "today": "",
+			"habit_days": []habitView{}},
 		"habits":     map[string]any{"day": "", "habits": []core.HabitState{}, "from": "", "to": "", "completion": []core.Completion{}},
 		"sessions":   map[string]any{"sessions": []core.Session{}, "include_deleted": false, "order": ""},
 		"session":    core.Session{},
@@ -48,6 +49,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		"deadlines":  map[string]any{"from": "", "through": "", "state": "", "include_deleted": false, "occurrences": []occurrenceView{}, "today": ""},
 		"snapshot":   map[string]any{"snapshot": "", "restore_check": core.IntegrityResult{}},
 		"tombstoned": map[string]any{"kind": "", "ids": []int64{}, "count": 0},
+		"filed":      map[string]any{"category": core.Category{}, "created": false, "ids": []int64{}, "count": 0, "added": 0, "moved": 0},
 		"integrity":  core.IntegrityResult{},
 		"result":     core.Result{},
 		"login":      map[string]any{"failed": false, "logged_in": false},
@@ -117,6 +119,11 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 	for k := range properties(t, h, "POST", "/pages/tombstone", "ids="+strings.TrimPrefix(ids["page"], "/pages/")) {
 		if !named("tombstoned", k) {
 			t.Errorf("POST /pages/tombstone sends %q, which API.md \"tombstoned\" does not name", k)
+		}
+	}
+	for k := range properties(t, h, "POST", "/pages/file", "category=Filed+Things&ids="+strings.TrimPrefix(ids["person"], "/pages/")) {
+		if !named("filed", k) {
+			t.Errorf("POST /pages/file sends %q, which API.md \"filed\" does not name", k)
 		}
 	}
 	for k := range properties(t, h, "POST", "/query", "sql=SELECT+1") {

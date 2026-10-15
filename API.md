@@ -546,7 +546,10 @@ by default). An alias names the metric too. Links: `self` (`/metrics/{name}` whe
 
 ### metrics
 
-`GET /metrics`: the registry. Embedded: `item` links to each series. Action: `record` with the metrics as options.
+`GET /metrics`: the registry. Embedded: `item` links to each series. Actions: `record` with the metrics as options,
+[`file-pages`](#filed), and a `check-in` for each habit of today. A browser draws each metric as a card: its latest
+reading, the line of its recent readings, and for a habit its strip of 14 days
+([plan 112](docs/plans/112-metrics-as-cards.md)).
 With `?show=habits` (and `day`, `from`, `to`) it also carries the properties, links, embedded links and `check-in` actions of [habits](#habits). The browser draws that as the Habits lens of Metrics ([plan 111](docs/plans/111-one-metrics-view.md)).
 
 | property | type | meaning |
@@ -558,6 +561,10 @@ With `?show=habits` (and `day`, `from`, `to`) it also carries the properties, li
 | `metrics[].note` | string | the page's text; absent when empty |
 | `metrics[].habit` | boolean | it has a habit period |
 | `metrics[].categories` | list | the category paths it is filed in; absent when none |
+| `metrics[].recent[]` | list | its newest 30 current readings with no session, oldest first: the last is its latest |
+| `metrics[].recent[].id` | integer | the measurement's id |
+| `metrics[].recent[].day` | day | its day |
+| `metrics[].recent[].value` | number | its value |
 | `groups[]` | list | the same metrics in sections: Habits, each category in tree order, Not filed |
 | `groups[].title` | string | the section |
 | `groups[].path` | string | the category's path; absent for Habits and Not filed |
@@ -570,6 +577,15 @@ With `?show=habits` (and `day`, `from`, `to`) it also carries the properties, li
 | `groups[].metrics[].note` | string | |
 | `groups[].metrics[].habit` | boolean | |
 | `groups[].metrics[].categories` | list | |
+| `categories[]` | list | every category page, by path: what `file-pages` files in |
+| `categories[].id` | integer | the category's page id |
+| `categories[].title` | string | its title |
+| `categories[].path` | string | the titles from the top, joined by `/` |
+| `today` | day | the server's local day |
+| `habit_days[]` | list | the habits active today, as [root](#root) `habits[]`; absent with `?show=habits` |
+| `habit_days[].metric` | string | the habit's name |
+| `habit_days[].state` | string | today's state |
+| `habit_days[].recent` | list | its state on each of the 14 days through today, oldest first |
 
 ### habits
 
@@ -976,6 +992,27 @@ returns to. `self` is `/tasks` for tasks and `/` for pages.
 | `kind` | string | `pages` or `tasks` |
 | `ids` | list | the ids named, each once, in the order sent |
 | `count` | integer | how many |
+
+### filed
+
+`POST /pages/file` (`file-pages`): the field `ids` names the pages as `tombstone-pages` does; `category` is the title
+of the category page, made as an empty page when no page has it; `move` 1 removes every other `part-of` link of those
+pages first. Each page gets a `part-of` link to the category, in one write ([D26](docs/decisions/D26-metric-categories.md)).
+An id no page has is 404 and a deleted page or category is 409: either writes nothing. A day page or a person as the
+category is 422 (`links_endpoint_types`). The answer embeds an `item` link to each page and a `category` link;
+`result` says what was done in words, which a browser form shows on the list it returns to.
+
+| property | type | meaning |
+|---|---|---|
+| `category` | object | the category page |
+| `category.id` | integer | its id |
+| `category.title` | string | its title |
+| `category.path` | string | empty here |
+| `created` | boolean | the category page was made by this action |
+| `ids` | list | the ids named, each once, in the order sent |
+| `count` | integer | how many |
+| `added` | integer | the part-of links added (a page filed there already adds none) |
+| `moved` | integer | the other part-of links removed by `move` |
 
 ### login
 

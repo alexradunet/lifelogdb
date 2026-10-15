@@ -78,16 +78,11 @@ func unitWords(unit string) string {
 // through the day, the last one marked; "" with no reading. Its label says the first and the last value in words.
 func trendLine(metric, unit, day string, points []any) template.HTML {
 	end, ok := dayOf(day)
-	if !ok || len(points) == 0 {
+	if !ok {
 		return ""
 	}
-	type pt struct {
-		x, value float64
-		day      string
-	}
-	var pts []pt
-	lo, hi := 0.0, 0.0
-	for i, p := range points {
+	var pts []linePoint
+	for _, p := range points {
 		m, _ := p.(map[string]any)
 		d, _ := m["day"].(string)
 		value, _ := m["value"].(float64)
@@ -96,22 +91,10 @@ func trendLine(metric, unit, day string, points []any) template.HTML {
 			continue
 		}
 		back := end.Sub(t).Hours() / 24 // 0 on the day, 13 on the first of the 14
-		pts = append(pts, pt{x: 4 + (float64(glanceDays-1)-back)*112/float64(glanceDays-1), value: value, day: d})
-		if i == 0 || value < lo {
-			lo = value
-		}
-		if i == 0 || value > hi {
-			hi = value
-		}
+		pts = append(pts, linePoint{x: 4 + (float64(glanceDays-1)-back)*112/float64(glanceDays-1), value: value, day: d})
 	}
 	if len(pts) == 0 {
 		return ""
-	}
-	y := func(v float64) float64 {
-		if hi == lo {
-			return 14
-		}
-		return 24 - (v-lo)/(hi-lo)*20
 	}
 	c := clock{today: day}
 	first, last := pts[0], pts[len(pts)-1]
@@ -120,6 +103,69 @@ func trendLine(metric, unit, day string, points []any) template.HTML {
 	if len(pts) == 1 {
 		label = fmt.Sprintf("%s: one reading in 14 days, %s %s %s", metric, strconv.FormatFloat(last.value, 'f', -1, 64), unitWords(unit), c.relative(last.day))
 	}
+	return line(label, pts)
+}
+
+// sparkLine draws a metric's recent readings as an inline SVG, 120 by 28: each point placed by its day between the
+// first reading and the last, so a marker read twice a year is drawn as it was read; "" with no reading. Its label
+// says how many readings, and the first and the last value in words, against today.
+func sparkLine(metric, unit, today string, points []any) template.HTML {
+	type read struct {
+		t     time.Time
+		value float64
+		day   string
+	}
+	var rs []read
+	for _, p := range points {
+		m, _ := p.(map[string]any)
+		d, _ := m["day"].(string)
+		value, _ := m["value"].(float64)
+		if t, ok := dayOf(d); ok {
+			rs = append(rs, read{t, value, d})
+		}
+	}
+	if len(rs) == 0 {
+		return ""
+	}
+	span := rs[len(rs)-1].t.Sub(rs[0].t).Hours()
+	pts := make([]linePoint, len(rs))
+	for i, r := range rs {
+		x := 116.0 // one day only: the points stand at the end, where the latest is
+		if span > 0 {
+			x = 4 + r.t.Sub(rs[0].t).Hours()/span*112
+		}
+		pts[i] = linePoint{x: x, value: r.value, day: r.day}
+	}
+	c := clock{today: today}
+	first, last := pts[0], pts[len(pts)-1]
+	label := fmt.Sprintf("%s: %d readings, from %s %s %s to %s %s %s", metric, len(pts), strconv.FormatFloat(first.value, 'f', -1, 64), unitWords(unit),
+		c.relative(first.day), strconv.FormatFloat(last.value, 'f', -1, 64), unitWords(unit), c.relative(last.day))
+	if len(pts) == 1 {
+		label = fmt.Sprintf("%s: one reading, %s %s %s", metric, strconv.FormatFloat(last.value, 'f', -1, 64), unitWords(unit), c.relative(last.day))
+	}
+	return line(label, pts)
+}
+
+// linePoint is one reading of a drawn line: where it stands across, its value and its day.
+type linePoint struct {
+	x, value float64
+	day      string
+}
+
+// line draws points as an inline SVG, 120 by 28, with the values between their least and their greatest, the last
+// point marked; label is what it says to a screen reader.
+func line(label string, pts []linePoint) template.HTML {
+	lo, hi := pts[0].value, pts[0].value
+	for _, p := range pts {
+		lo, hi = min(lo, p.value), max(hi, p.value)
+	}
+	y := func(v float64) float64 {
+		if hi == lo {
+			return 14
+		}
+		return 24 - (v-lo)/(hi-lo)*20
+	}
+	last := pts[len(pts)-1]
 	var sb strings.Builder
 	fmt.Fprintf(&sb, `<svg class="trend" viewBox="0 0 120 28" role="img" aria-label="%s"><polyline points="`, template.HTMLEscapeString(strings.Join(strings.Fields(label), " ")))
 	for _, p := range pts {
