@@ -1,6 +1,6 @@
 package api
 
-// The database as a whole: a read-only query, the integrity checks and the owner's snapshot.
+// The database as a whole: the integrity checks and the owner's snapshot.
 
 import (
 	"fmt"
@@ -9,23 +9,6 @@ import (
 
 	"lifelog/internal/core"
 )
-
-func (h *server) query(r *http.Request, _ string) (*Entity, error) {
-	v, err := form(r)
-	if err != nil {
-		return nil, err
-	}
-	if err := required(v, "sql"); err != nil {
-		return nil, err
-	}
-	res, err := h.s.Query(r.Context(), v.Get("sql"), 500)
-	if err != nil {
-		return nil, err
-	}
-	return &Entity{Class: []string{"result"}, Title: "Query", Properties: res,
-		Links:   []Link{link("index", "/", "Home")},
-		Actions: []Action{action("query", nil, map[string]any{"sql": v.Get("sql")})}}, nil
-}
 
 // snapshot is the owner's action (docs/plans/082-snapshot-in-the-catalog.md): the file lands on this machine, in
 // the store's folder; the answer is the path and the restore check, with self at the root so a browser form is

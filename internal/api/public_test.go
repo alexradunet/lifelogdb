@@ -221,7 +221,7 @@ func TestPublicRemoteClientParity(t *testing.T) {
 		t.Fatal("a remote client without the token was served")
 	}
 	c = client.Remote(srv.URL, "app:phone", testToken)
-	root, err := c.Get(t.Context(), "/")
+	_, err := c.Get(t.Context(), "/")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,8 +242,7 @@ func TestPublicRemoteClientParity(t *testing.T) {
 	if err != nil || id == 0 {
 		t.Fatalf("id=%d err=%v", id, err)
 	}
-	res := must(c.Do(t.Context(), find(root, "query"), map[string]string{"sql": fmt.Sprintf("SELECT source FROM entities WHERE id = %d", id)}))
-	if got := fmtRows(res); got != "app:phone" {
+	if got := scalar(t, s, fmt.Sprintf("SELECT source FROM entities WHERE id = %d", id)); got != "app:phone" {
 		t.Fatalf("source=%q", got)
 	}
 }

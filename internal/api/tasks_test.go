@@ -14,7 +14,7 @@ import (
 func TestPlanningLifeThroughTheCatalog(t *testing.T) {
 	for _, remote := range []bool{false, true} {
 		t.Run(fmt.Sprintf("remote=%v", remote), func(t *testing.T) {
-			c, h := fresh(t)
+			c, h, s := freshStore(t)
 			if remote {
 				srv := httptest.NewServer(h)
 				t.Cleanup(srv.Close)
@@ -175,12 +175,11 @@ func TestPlanningLifeThroughTheCatalog(t *testing.T) {
 			}
 
 			// Provenance: the remote client's own source is on the rows.
-			rows := must(c.Do(t.Context(), find(root, "query"), map[string]string{"sql": "SELECT DISTINCT source FROM tasks"}))
 			want := "cli"
 			if remote {
 				want = "app:phone"
 			}
-			if got := fmtRows(rows); got != want {
+			if got := scalar(t, s, "SELECT DISTINCT source FROM tasks"); got != want {
 				t.Fatalf("source=%q", got)
 			}
 		})

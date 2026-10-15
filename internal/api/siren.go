@@ -173,8 +173,6 @@ var catalog = []spec{
 		"GET", "/pages", []Field{pageField("title", "Title", true)}, false, false},
 	{"open-day", "Go to a day", "Open the day view of a local day (YYYY-MM-DD): its journal, what was due, its habits and readings.",
 		"GET", "/days/go", []Field{req("day", "date", "Day")}, false, false},
-	{"query", "Query", "Run one read-only SQL statement (SQLite; see docs/cookbook for the canonical queries). At most 500 rows.",
-		"POST", "/query", []Field{areaReq("sql", "SQL", 6)}, false, false},
 	{"snapshot", "Take a snapshot", "The owner's dated copy of life.db (docs/cookbook/take-a-snapshot.md) into the server's snapshot folder, never overwriting, then its restore check. The answer names the file and the check.",
 		"POST", "/snapshots", nil, true, false},
 	// Planning (docs/contract/planning.md): explicit tasks, their occurrences, the deadlines of a window.

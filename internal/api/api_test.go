@@ -22,6 +22,13 @@ import (
 
 func fresh(t *testing.T) (*client.Client, http.Handler) {
 	t.Helper()
+	c, h, _ := freshStore(t)
+	return c, h
+}
+
+// freshStore is fresh with the store too: a test reads a row straight from the file, as a probe of what a surface wrote.
+func freshStore(t *testing.T) (*client.Client, http.Handler, *core.Store) {
+	t.Helper()
 	p := filepath.Join(t.TempDir(), "life.db")
 	if err := db.Init(t.Context(), p); err != nil {
 		t.Fatal(err)
@@ -31,8 +38,19 @@ func fresh(t *testing.T) (*client.Client, http.Handler) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { d.Close() })
-	h := api.New(&core.Store{DB: d})
-	return client.InProcess(h, "cli"), h
+	s := &core.Store{DB: d}
+	h := api.New(s)
+	return client.InProcess(h, "cli"), h, s
+}
+
+// scalar reads one text value from the file: a probe, never the behaviour under test.
+func scalar(t *testing.T, s *core.Store, query string) string {
+	t.Helper()
+	var v string
+	if err := s.DB.R.QueryRowContext(t.Context(), query).Scan(&v); err != nil {
+		t.Fatalf("%s: %v", query, err)
+	}
+	return v
 }
 
 // freshOn is fresh with the server's local day fixed: a test of what is due or overdue uses fixed dates.
@@ -194,7 +212,7 @@ func measurementID(e *api.Entity) string {
 }
 
 func TestBrowserGetsHTMLAndSourceUI(t *testing.T) {
-	c, h := fresh(t)
+	_, h, s := freshStore(t)
 	req := httptest.NewRequest("POST", "/days/2026-09-29/capture", strings.NewReader("text=hello"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "text/html,application/xhtml+xml")
@@ -206,25 +224,13 @@ func TestBrowserGetsHTMLAndSourceUI(t *testing.T) {
 	if body := browse(t, h, "/days/2026-09-29"); !strings.Contains(body, `<form method="POST" action="/days/2026-09-29/capture" data-action="capture">`) {
 		t.Errorf("HTML: %.300s", body)
 	}
-	q := must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "query"), map[string]string{"sql": "SELECT source FROM entities"}))
-	if !strings.Contains(fmtRows(q), "ui") {
-		t.Errorf("a browser form wrote as %s", fmtRows(q))
-	}
-}
-
-func TestQueryBoundaryIsReportedAs422(t *testing.T) {
-	c, _ := fresh(t)
-	query := find(must(c.Get(t.Context(), "/")), "query")
-	if _, err := c.Do(t.Context(), query, map[string]string{"sql": "SELECT 1; SELECT 2"}); !clientStatus(err, 422) {
-		t.Fatalf("script query error = %v, want 422", err)
-	}
-	if got := fmtRows(must(c.Do(t.Context(), query, map[string]string{"sql": "SELECT ';' AS semi"}))); got != ";" {
-		t.Fatalf("literal semicolon query rows = %q, want ;", got)
+	if got := scalar(t, s, "SELECT CAST(count(*) AS text) FROM entities WHERE source = 'ui'"); got != "1" {
+		t.Errorf("rows a browser form wrote as ui: %s, want 1", got)
 	}
 }
 
 func TestBrowserOriginProtection(t *testing.T) {
-	c, h := fresh(t)
+	_, h, s := freshStore(t)
 	postForm := func(path string, vals url.Values, headers map[string]string) *httptest.ResponseRecorder {
 		t.Helper()
 		req := httptest.NewRequest("POST", "http://lifelog.local"+path, strings.NewReader(vals.Encode()))
@@ -307,27 +313,16 @@ func TestBrowserOriginProtection(t *testing.T) {
 		}
 	}
 
-	root := must(c.Get(t.Context(), "/"))
-	if got := fmtRows(must(c.Do(t.Context(), find(root, "query"), map[string]string{"sql": "SELECT CAST(count(*) AS text) FROM entity_names WHERE title IN ('2026-10-10','2026-10-11')"}))); got != "2" {
+	if got := scalar(t, s, "SELECT CAST(count(*) AS text) FROM entity_names WHERE title IN ('2026-10-10','2026-10-11')"); got != "2" {
 		t.Errorf("allowed day pages count = %s, want 2", got)
 	}
-	if got := fmtRows(must(c.Do(t.Context(), find(root, "query"), map[string]string{"sql": "SELECT CAST(count(*) AS text) FROM entity_names WHERE title IN ('2026-10-12','2026-10-14')"}))); got != "0" {
+	if got := scalar(t, s, "SELECT CAST(count(*) AS text) FROM entity_names WHERE title IN ('2026-10-12','2026-10-14')"); got != "0" {
 		t.Errorf("denied day pages count = %s, want 0", got)
 	}
-	if got := fmtRows(must(c.Do(t.Context(), find(root, "query"), map[string]string{"sql": "SELECT CAST(count(*) AS text) FROM measurements WHERE day='2026-10-13'"}))); got != "0" {
+	if got := scalar(t, s, "SELECT CAST(count(*) AS text) FROM measurements WHERE day='2026-10-13'"); got != "0" {
 		t.Errorf("denied readings count = %s, want 0", got)
 	}
 
-}
-
-func fmtRows(e *api.Entity) string {
-	p, _ := e.Properties.(map[string]any)
-	rows, _ := p["rows"].([]any)
-	var out []string
-	for _, r := range rows {
-		out = append(out, r.([]any)[0].(string))
-	}
-	return strings.Join(out, ",")
 }
 
 func must(e *api.Entity, err error) *api.Entity {

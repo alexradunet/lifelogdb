@@ -162,11 +162,6 @@ var commands = []command{
 		run: func(ctx context.Context, e env, args []string) error {
 			return doAction(ctx, e, "search", map[string]string{"q": strings.Join(args, " ")})
 		}},
-	{name: "query",
-		usage: "  lifelog query SQL                   one read-only SQL statement",
-		run: func(ctx context.Context, e env, args []string) error {
-			return doAction(ctx, e, "query", map[string]string{"sql": strings.Join(args, " ")})
-		}},
 	{name: "habits",
 		usage: "  lifelog habits [YYYY-MM-DD]         the day's habits and completion",
 		run: func(ctx context.Context, e env, args []string) error {

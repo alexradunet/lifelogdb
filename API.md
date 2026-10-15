@@ -70,7 +70,7 @@ ghosts oldest first; search by rank.
 `habits`, `tasks`, `deadlines`, `ghosts`, `actions`, `calendar` (this month), `week` (this week), `year` (this year). Actions: `capture` (for today), `search`,
 `find`, `open-day`, `deadlines`,
 `create-task`, `create-page`, `create-person`, `create-place`, `add-file`,
-`record`, `register-metric` (owner), `query`, `snapshot` (owner); then the `check-in` of each habit of today (today
+`record`, `register-metric` (owner), `snapshot` (owner); then the `check-in` of each habit of today (today
 filled in), and the outcome (see task) of each occurrence in `due`.
 
 | property | type | meaning |
@@ -814,17 +814,15 @@ back to 90 days on), `open` ones unless `state` is `done`, `skipped` or `all`. O
 
 ### result
 
-The class of an answer that is not a resource: `POST /query` (one read-only statement, 500 rows at most), the
-`record` of a reading whose `import_key` was seen before (`message` alone), and `add-file` with `dry_run=1` (class
-`result dry-run`, with the kept shape in `result`).
+The class of an answer that is not a resource: the `record` of a reading whose `import_key` was seen before
+(`message` alone), and `add-file` with `dry_run=1` (class `result dry-run`, with the kept shape in `result`):
 
 | property | type | meaning |
 |---|---|---|
-| `columns` | list | a query's column names |
-| `rows` | list | its rows, each a list of values |
-| `truncated` | boolean | more rows existed than were returned |
-
-A dry run's properties are `title`, `sha256`, `mime` and `picture` (boolean: a picture was sent).
+| `title` | string | the title the file would take |
+| `sha256` | string | the hash of the original |
+| `mime` | string | its type |
+| `picture` | boolean | a picture was sent |
 
 ### snapshot
 

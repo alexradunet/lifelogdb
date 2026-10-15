@@ -44,7 +44,7 @@ func TestTitlesAreTheNamesAfterABracket(t *testing.T) {
 // writes nothing, and it is a POST like any other: the origin guard and the request limit apply. A form that
 // writes a body offers it as Preview, in a new tab, so the form keeps its words (plan 108).
 func TestRenderIsTheSavedPage(t *testing.T) {
-	c, h := fresh(t)
+	c, h, s := freshStore(t)
 	body := "# Notes\n\nRan with [[Sam]] #running, <b>raw</b> and ![[IMG_0001.jpg]].\n\n- one\n- two"
 	post := func(form url.Values, header map[string]string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest("POST", "/render", strings.NewReader(form.Encode()))
@@ -58,7 +58,7 @@ func TestRenderIsTheSavedPage(t *testing.T) {
 		return rec
 	}
 	rows := func() string {
-		return fmtRows(must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "query"), map[string]string{"sql": "SELECT CAST(count(*) AS TEXT) || '/' || CAST(max(revision) AS TEXT) FROM entities"})))
+		return scalar(t, s, "SELECT CAST(count(*) AS TEXT) || '/' || CAST(max(revision) AS TEXT) FROM entities")
 	}
 	before := rows()
 	rec := post(url.Values{"body": {body}}, map[string]string{"Origin": "http://example.com", "Sec-Fetch-Site": "same-origin"})

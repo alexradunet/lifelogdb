@@ -80,3 +80,7 @@ flowchart LR
   transcriber. Record: issue 0075, RFC 0015, a non-goals row; issues 0071 and 0072 closed the other way; the README
   bullets of plans 102, 103, 106 and 109 replaced by one. Checks: `go generate ./... && go vet ./... && go test ./...`
   green. The service unit still sets `LIFELOG_MODEL_URL` and `LIFELOG_MODEL`: they are read by nothing now.
+- **Step 2 (read-only SQL).** Removed: `query` (`POST /query`), the CLI `query`, `core/query.go` with its statement
+  allow-list and `Result`, and the ad hoc reader of `internal/db`. The tests that used `query` as a probe of what a
+  surface wrote read the row from the file instead (`freshStore`, `scalar`). Record: README; API.md's `result`
+  class is the dry run's shape alone. Checks: `go generate ./... && go vet ./... && go test ./...` green.

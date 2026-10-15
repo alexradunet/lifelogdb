@@ -224,9 +224,6 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   allows no `from`). The All readings link leads a window back to the
   whole. In a browser, the page of a live metric (`/pages/{id}`) answers 303 to it, with its feedback; JSON keeps
   the page.
-- **Read-only queries.** `POST /query` runs one allowed read statement (`SELECT`, `WITH`, `VALUES`, `EXPLAIN` of
-  those reads, or an allowlisted introspection `PRAGMA`) on a short-lived `mode=ro`, `query_only` connection, 5 s
-  and 500 rows at most; scripts, transactions, setters and maintenance commands are refused.
 - **Connections** ([connection setup](docs/contract/connections.md)): one writing connection with the pragmas
   set by DSN and read back by a connection hook (a wrong value refuses the connection), `SQLITE_DBCONFIG_DEFENSIVE`,
   `BEGIN IMMEDIATE` via `_txlock=immediate`, the 3.51.3 floor checked; readers use `mode=ro` with `trusted_schema=OFF`, read back the same way.

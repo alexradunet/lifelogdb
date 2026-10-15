@@ -110,7 +110,6 @@ func NewOn(s *core.Store, localDay func() string, zone *time.Location, trustedOr
 	post("/measurements/from-table", h.readingsFromTable)
 	post("/measurements/{id}/correct", h.correct)
 	post("/measurements/{id}/retract", h.retract)
-	post("/query", h.query)
 	post("/pages/{id}/rename", h.rename)
 	post("/pages/{id}/locate", h.locate)
 	post("/metrics", h.registerMetric)

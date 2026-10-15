@@ -49,7 +49,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		"tombstoned": map[string]any{"kind": "", "ids": []int64{}, "count": 0},
 		"filed":      map[string]any{"category": core.Category{}, "created": false, "ids": []int64{}, "count": 0, "added": 0, "moved": 0},
 		"integrity":  core.IntegrityResult{},
-		"result":     core.Result{},
+		"result":     map[string]any{"title": "", "sha256": "", "mime": "", "picture": false},
 		"login":      map[string]any{"failed": false, "logged_in": false},
 		"result of capture, create-page, save-body": core.Sync{},
 		"result of add-file":                        core.Kept{},
@@ -118,11 +118,6 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 	for k := range properties(t, h, "POST", "/pages/file", "category=Filed+Things&ids="+strings.TrimPrefix(ids["person"], "/pages/")) {
 		if !named("filed", k) {
 			t.Errorf("POST /pages/file sends %q, which API.md \"filed\" does not name", k)
-		}
-	}
-	for k := range properties(t, h, "POST", "/query", "sql=SELECT+1") {
-		if !named("result", k) {
-			t.Errorf("POST /query sends %q, which API.md \"result\" does not name", k)
 		}
 	}
 	for k := range properties(t, h, "GET", "/pages/999999", "") {

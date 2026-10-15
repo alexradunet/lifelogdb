@@ -282,17 +282,6 @@ func (d *DB) Close() error {
 	return errors.Join(d.R.Close(), d.W.Close())
 }
 
-// AdHocReader opens a short-lived read-only handle for one ad-hoc query. It uses the same literal SQLite URI helper
-// and connection hook as the ordinary reader pool, but is closed instead of pooled after the query finishes.
-func (d *DB) AdHocReader() (*sql.DB, error) {
-	r, err := sql.Open("lifelog", dsn(d.path, true))
-	if err != nil {
-		return nil, err
-	}
-	r.SetMaxOpenConns(1)
-	return r, nil
-}
-
 // Write runs fn in one BEGIN IMMEDIATE transaction, committed when fn returns nil.
 func (d *DB) Write(ctx context.Context, fn func(*sql.Tx) error) error {
 	tx, err := d.W.BeginTx(ctx, nil)
