@@ -8,7 +8,7 @@ Earlier closed plans live in git history (`git log -- docs/plans`). The next pla
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| [116](116-strip-to-the-core.md) | Strip to the core: remove the conversation, read-only SQL, readings from a table, the public listener, photo positions, typed links, habits and tasks | P1 | XL | owner decision 2026-10-15; `518c3bb` | IN PROGRESS |
+| [116](116-strip-to-the-core.md) | Strip to the core: remove the conversation, read-only SQL, readings from a table, the public listener, photo positions, typed links, habits and tasks | P1 | XL | owner decision 2026-10-15; `518c3bb` | DONE |
 | [115](115-categories-to-browse.md) | Categories to browse: the tree with counts and Not filed, a category page's Filed here, and a new page filed where it is made | P2 | M | owner request 2026-10-15; `7083b88` | DONE |
 | [114](114-one-way-to-do-a-thing.md) | One way to do a thing, on every page: New on its list, ?new= links, + Add, category badges, one selection, one verb a meaning | P2 | L | owner request 2026-10-15; `ebf3a87` | DONE |
 | [113](113-new-metric-on-metrics.md) | New metric, new category and a reading from the metrics page: a kind chooser, register-metric with category and habit_from, a + on each card | P2 | M | owner request 2026-10-15; `725e260` | DONE |

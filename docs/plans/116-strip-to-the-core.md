@@ -9,7 +9,7 @@
 - **Priority:** P1. **Effort:** XL, in eight steps. **Risk:** MEDIUM: four steps change the schema, which is
   possible only before the freeze ([D13](../decisions/D13-migrations-and-freeze.md)); each of those rewrites the
   owner's rows as text before its table goes, so no word is lost.
-- **Status:** IN PROGRESS: the live file waits for the program run; every step is done or decided.
+- **Status:** DONE.
 - **Resolves:** the owner's decision (2026-10-15): "I am looking to strip all the unwanted or complex features in
   order to have a simpler more reliable software." The owner chose every candidate of the inventory below. Each
   schema step has its own issue and RFC, as [RFC 0013](../rfcs/0013-no-sessions.md) and
@@ -130,4 +130,7 @@ flowchart LR
   to a fresh file, and the program refuses to commit on any difference. Tested on 2026-10-15 on a synthetic file
   made by the binary of `498cbb8`: 2 points, 7 links, 2 periods and 2 tasks became text, 9 entities kept, the four
   checks pass, and the binary of this plan reads the result. The owner runs it with the service stopped, after a
-  snapshot, then the integrity check, then starts the service.
+  snapshot, then the integrity check, then starts the service. Run on 2026-10-15 at 19:41: the snapshot
+  `life-2026-10-15.db` in `~/life/snapshots/plan-116`, then 49 points, 135 links, 1 habit period and 214 tasks
+  became text, 2,005 entities kept, no foreign key violation, `integrity_check` ok, the search index ok; the
+  writer's four checks pass; the service is up on the converted file.
