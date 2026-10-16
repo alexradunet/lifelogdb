@@ -10,9 +10,11 @@ func photo(t *testing.T, c byte, title, day string) FileIn {
 	return FileIn{Title: title, SHA256: sha(c), MIME: "image/jpeg", Taken: day, Preview: smallJPEG(t)}
 }
 
+// TestUnknownPhotoDayHasNoCaptureOrPlaceSideEffects: a photo with no Day and no Taken has an unknown capture day. keep
+// finds that from the type and the days alone: the caller does not say it.
 func TestUnknownPhotoDayHasNoCaptureOrPlaceSideEffects(t *testing.T) {
 	s := fresh(t)
-	in := FileIn{Title: "Synthetic photo.jpg", MIME: "image/jpeg", SHA256: strings.Repeat("a", 64), Body: "Selected picture", UnknownCaptureDay: true}
+	in := FileIn{Title: "Synthetic photo.jpg", MIME: "image/jpeg", SHA256: strings.Repeat("a", 64), Body: "Selected picture"}
 	kept, err := s.AddFile(ctx, "cli", in)
 	if err != nil {
 		t.Fatal(err)
@@ -47,7 +49,7 @@ func TestUnknownPhotoDayHasNoCaptureOrPlaceSideEffects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	promoted, err := s.AddFile(ctx, "cli", FileIn{Title: "Promotion.jpg", MIME: "image/jpeg", SHA256: strings.Repeat("b", 64), UnknownCaptureDay: true})
+	promoted, err := s.AddFile(ctx, "cli", FileIn{Title: "Promotion.jpg", MIME: "image/jpeg", SHA256: strings.Repeat("b", 64)})
 	if err != nil || promoted.ID != plain || promoted.StoredDay != original.Day || promoted.Day != "" {
 		t.Fatalf("promotion attribution %+v %v", promoted, err)
 	}
@@ -70,7 +72,7 @@ func TestUnknownPhotoDryRunDedupKnownDayMissingPreviewAndTombstone(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	unknown := FileIn{Title: "Different.jpg", MIME: "image/jpeg", SHA256: in.SHA256, Body: "Do not replace", UnknownCaptureDay: true, Preview: preview}
+	unknown := FileIn{Title: "Different.jpg", MIME: "image/jpeg", SHA256: in.SHA256, Body: "Do not replace", Preview: preview}
 	before, err := countRows(ctx, s)
 	if err != nil {
 		t.Fatal(err)

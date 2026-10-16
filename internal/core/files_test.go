@@ -221,13 +221,15 @@ func TestFilePromotionDay(t *testing.T) {
 		t.Errorf("body conflict changed storage: %+v", p)
 	}
 
+	// A file that is not a photo, with no day: it takes the day it is kept, and no day page shows it. A photo with no
+	// day has no day (files_unknown_day_test.go).
 	s = fresh(t)
-	if _, _, err := s.Capture(ctx, "cli", "2099-01-01", "Undated: ![[scan.jpg]]", nil); err != nil {
+	if _, _, err := s.Capture(ctx, "cli", "2099-01-01", "Undated: ![[scan.pdf]]", nil); err != nil {
 		t.Fatal(err)
 	}
-	scanGhost, _ := s.PageID(ctx, "scan.jpg")
+	scanGhost, _ := s.PageID(ctx, "scan.pdf")
 	before := Today()
-	k, err = s.AddFile(ctx, "cli", FileIn{Title: "scan.jpg", SHA256: sha('5'), MIME: "image/jpeg", Preview: smallJPEG(t)})
+	k, err = s.AddFile(ctx, "cli", FileIn{Title: "scan.pdf", SHA256: sha('5'), MIME: "application/pdf", Preview: smallJPEG(t)})
 	after := Today()
 	if err != nil {
 		t.Fatal(err)
@@ -240,10 +242,10 @@ func TestFilePromotionDay(t *testing.T) {
 		t.Errorf("undated keep used day %q, outside [%q,%q]", p.Day, before, after)
 	}
 	if k.Day != "" || k.Embedded {
-		t.Errorf("undated photo got its own-day effects: %+v", k)
+		t.Errorf("undated file got its own-day effects: %+v", k)
 	}
 	if dayID, _ := s.PageID(ctx, p.Day); dayID != 0 {
-		t.Errorf("undated photo made an automatic day page %d for %s", dayID, p.Day)
+		t.Errorf("undated file made an automatic day page %d for %s", dayID, p.Day)
 	}
 }
 

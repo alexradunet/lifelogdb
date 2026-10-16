@@ -70,7 +70,7 @@ func parseFileForm(r *http.Request, name string) (in core.FileIn, dry, sent bool
 			return bad("send the original, or its sha256 and mime")
 		}
 		dry, err := flag(v, "dry_run")
-		return core.FileIn{UnknownCaptureDay: strings.HasPrefix(core.NormalMIME(v.Get("mime")), "image/") && v.Get("day") == "", Title: v.Get("title"), Category: v.Get("category"), SHA256: v.Get("sha256"), MIME: v.Get("mime"), Body: v.Get("body"), Day: v.Get("day")}, dry, true, err
+		return core.FileIn{Title: v.Get("title"), Category: v.Get("category"), SHA256: v.Get("sha256"), MIME: v.Get("mime"), Body: v.Get("body"), Day: v.Get("day")}, dry, true, err
 	}
 	defer r.Body.Close()
 	mr, err := r.MultipartReader()
@@ -174,7 +174,6 @@ func parseFileForm(r *http.Request, name string) (in core.FileIn, dry, sent bool
 		}
 		in.Preview = p
 	}
-	in.UnknownCaptureDay = strings.HasPrefix(core.NormalMIME(in.MIME), "image/") && in.Day == "" && in.Taken == ""
 	dry, err = flagValue("dry_run", vals.Get("dry_run"))
 	return in, dry, true, err
 }

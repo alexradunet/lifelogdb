@@ -130,6 +130,27 @@ func TestSetPictureRefuses(t *testing.T) {
 	}
 }
 
+// TestSetPictureOfAnyTypeKeepsNoDay: a picture is kept with no day, also when its type is not image/*: a PDF sent with
+// a preview. keep gives no day of its own only to an image/* type, so SetPicture sets UnknownCaptureDay itself.
+func TestSetPictureOfAnyTypeKeepsNoDay(t *testing.T) {
+	s := fresh(t)
+	ana, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	k, err := s.SetPicture(ctx, "cli", ana, "2026-10-15", FileIn{SHA256: sha('a'), MIME: "application/pdf", Preview: smallJPEG(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var null bool
+	if err := s.DB.R.QueryRowContext(ctx, `SELECT day IS NULL FROM entities WHERE id = ?`, k.ID).Scan(&null); err != nil || !null {
+		t.Errorf("the picture's day is NULL: %v, %v; want true", null, err)
+	}
+	if k.Day != "" || k.Embedded {
+		t.Errorf("the picture got a day of its own: %+v", k)
+	}
+}
+
 // TestRefusedSetPictureOfReturnsNoSync: when the write of SetPictureOf rolls back, the answer is a zero Sync, not
 // the links of a body that was never saved. A temporary trigger refuses the last statement of the body's link sync:
 // the delete of a link that the new body does not name.
@@ -143,7 +164,7 @@ func TestRefusedSetPictureOfReturnsNoSync(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.AddFile(ctx, "cli", FileIn{Title: "Ana.jpg", SHA256: sha('a'), MIME: "image/jpeg", Preview: smallJPEG(t), UnknownCaptureDay: true}); err != nil {
+	if _, err := s.AddFile(ctx, "cli", FileIn{Title: "Ana.jpg", SHA256: sha('a'), MIME: "image/jpeg", Preview: smallJPEG(t)}); err != nil {
 		t.Fatal(err)
 	}
 	// Deliberate damage: a wikilink that Ana's empty body does not name, so the link sync deletes it.
