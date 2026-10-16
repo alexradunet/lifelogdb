@@ -236,7 +236,9 @@ func TestRenamedIdentityWritesThroughRetainedHandle(t *testing.T) {
 func TestRename(t *testing.T) {
 	s := fresh(t)
 	old, _, _ := s.CreatePage(ctx, "cli", "Sourdogh", "Feed the starter. [[Baking]]", "")
-	s.Capture(ctx, "cli", "2026-09-29", "baked, see [[Sourdogh]]", nil)
+	if _, _, err := s.Capture(ctx, "cli", "2026-09-29", "baked, see [[Sourdogh]]", nil); err != nil {
+		t.Fatal(err)
+	}
 	baking, _ := s.PageID(ctx, "Baking")
 	s.Link(ctx, "cli", old, baking, "part-of", "")
 	to, err := s.Rename(ctx, "cli", old, "Sourdough")
@@ -270,7 +272,9 @@ func TestRename(t *testing.T) {
 		}
 	}
 	// a typo ghost, empty, into an existing person
-	s.Capture(ctx, "cli", "2026-09-30", "met [[Sm]]", nil)
+	if _, _, err := s.Capture(ctx, "cli", "2026-09-30", "met [[Sm]]", nil); err != nil {
+		t.Fatal(err)
+	}
 	ghost, _ := s.PageID(ctx, "Sm")
 	sam, _ := s.CreatePerson(ctx, "cli", "Sam", "Sam Example", "", "", "")
 	if to, err := s.Rename(ctx, "cli", ghost, "Sam"); !isExists(err) || to != 0 {
