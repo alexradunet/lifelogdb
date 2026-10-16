@@ -78,13 +78,19 @@ func TestListsPage(t *testing.T) {
 			t.Errorf("%s: limit=%v offset=%v next=%q prev=%q", tc.list, p["limit"], p["offset"], apitest.Href(e, "next"), apitest.Href(e, "prev"))
 		}
 	}
-	// The page past the end is empty (its links are TestPaged's); bad values are refused.
+	// The page past the end is empty (its links are TestPaged's); bad values are refused with the code invalid, on
+	// each list that reads them.
 	if last := apitest.Must(t)(c.Get(t.Context(), "/browse?kind=person&limit=3&offset=9")); len(last.Entities) != 0 {
 		t.Errorf("past the end: %d items", len(last.Entities))
 	}
-	for _, bad := range []string{"/browse?limit=0", "/browse?limit=501", "/browse?limit=x", "/browse?offset=-1", "/browse?offset=x", "/search?q=a&limit=0"} {
-		if _, err := c.Get(t.Context(), bad); apitest.Status(err) != 422 {
-			t.Errorf("%s: %v", bad, err)
+	for _, bad := range []string{"/browse?limit=0", "/browse?limit=501", "/browse?limit=x", "/browse?offset=-1", "/browse?offset=x", "/days?limit=0", "/search?q=a&limit=0"} {
+		_, err := c.Get(t.Context(), bad)
+		if apitest.Status(err) != 422 {
+			t.Errorf("%s: %v, want a 422", bad, err)
+			continue
+		}
+		if code, _ := codeOf(t, err); code != "invalid" {
+			t.Errorf("%s: code=%q, want invalid", bad, code)
 		}
 	}
 	// The browser sees the links.
