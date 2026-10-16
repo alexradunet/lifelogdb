@@ -260,3 +260,80 @@ func TestTheFirstWeekOfTheDaysHasNoLowerBound(t *testing.T) {
 		browse(t, h, "/weeks/"+tc.week)
 	}
 }
+
+// TestTheEdgesOfTheCalendarLinkOnlyToPages: the days run from 0000-01-01 to 9999-12-31 (lifelog_meta.days), and a
+// year has a page from 0001 to 9999. The first and the last week, month and year answer, and each of their links
+// leads to a page that answers: a link to a period that has no page is absent, in the links of the entity and in its
+// HTML. A week of the year 0000 has no year link.
+func TestTheEdgesOfTheCalendarLinkOnlyToPages(t *testing.T) {
+	c, h := freshOn(t, weekToday)
+	calendarHref := regexp.MustCompile(`href="(/(?:weeks|months|years)/[^"]+)"`)
+	answers := func(path, accept string) int {
+		req := httptest.NewRequest("GET", path, nil)
+		req.Header.Set("Accept", accept)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	for _, tc := range []struct{ page, rels string }{
+		{"/weeks/0000-W01", "next,month"},
+		{"/weeks/0000-W02", "prev,next,month"},
+		{"/weeks/9999-W52", "prev,month,year"},
+		{"/months/0000-01", "next"},
+		{"/months/9999-12", "prev"},
+		{"/years/0001", "next"},
+		{"/years/9999", "prev"},
+	} {
+		e, err := c.Get(t.Context(), tc.page)
+		if err != nil {
+			t.Errorf("%s: %v", tc.page, err)
+			continue
+		}
+		var rels []string
+		for _, rel := range []string{"prev", "next", "up", "month", "year"} {
+			href := hrefOf(e, rel)
+			if href == "" {
+				continue
+			}
+			rels = append(rels, rel)
+			if code := answers(href, "application/vnd.siren+json"); code != http.StatusOK {
+				t.Errorf("%s: the %s link %s answers %d, want 200", tc.page, rel, href, code)
+			}
+		}
+		if got := strings.Join(rels, ","); got != tc.rels {
+			t.Errorf("%s links %s, want %s", tc.page, got, tc.rels)
+		}
+		for _, m := range calendarHref.FindAllStringSubmatch(browse(t, h, tc.page), -1) {
+			if code := answers(m[1], "text/html"); code != http.StatusOK && code != http.StatusSeeOther {
+				t.Errorf("%s: its HTML links %s, which answers %d", tc.page, m[1], code)
+			}
+		}
+	}
+}
+
+// TestTheLastWeekOfTheDaysEndsOnTheLastDay: week 52 of 9999 runs from Monday 27 to Friday 31 December 9999, the last
+// day that a date can name. The week reads its five days, with a reading in it and with none.
+func TestTheLastWeekOfTheDaysEndsOnTheLastDay(t *testing.T) {
+	c, h := freshOn(t, weekToday)
+	root := must(c.Get(t.Context(), "/"))
+	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
+	for _, reading := range []string{"", "9999-12-31"} {
+		if reading != "" {
+			must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "weight", "day": reading, "value": "70"}))
+		}
+		w, err := c.Get(t.Context(), "/weeks/9999-W52")
+		if err != nil {
+			t.Errorf("/weeks/9999-W52 (a reading on %q): %v", reading, err)
+			continue
+		}
+		p := props(w)
+		days := objects(p, "days")
+		if p["from"] != "9999-12-27" || p["through"] != "9999-12-31" || len(days) != 5 || days[4]["day"] != "9999-12-31" {
+			t.Errorf("9999-W52: from %v, through %v, %d days", p["from"], p["through"], len(days))
+		}
+		if m := objects(p, "metrics"); (reading == "") != (len(m) == 0) || reading != "" && said(m[0]["readings"]) != "1" {
+			t.Errorf("9999-W52 metrics %v, with a reading on %q", m, reading)
+		}
+		browse(t, h, "/weeks/9999-W52")
+	}
+}

@@ -3,10 +3,10 @@
 {{define "week"}}{{template "head" .}}
 {{$w := .Props}}
 <header class="page-head"><div class="what"><span class="date">{{shortDay $w.from}} to {{shortDay $w.through}}</span><h1>{{.Title}}</h1>
-<p class="sub"><a href="{{.Link "month"}}">{{.LinkTitle "month"}}</a><a href="{{.Link "year"}}">{{.LinkTitle "year"}}</a><a href="/days/today">Today</a></p></div>
+<p class="sub"><a href="{{.Link "month"}}">{{.LinkTitle "month"}}</a>{{with .Link "year"}}<a href="{{.}}">{{$.LinkTitle "year"}}</a>{{end}}<a href="/days/today">Today</a></p></div>
 <div class="tools">
-{{template "step" (dict "href" (.Link "prev") "rel" "prev" "label" (printf "Previous week, %s" (.LinkTitle "prev")) "text" (printf "Week %d" (week (addDays $w.from -7))))}}
-{{template "step" (dict "href" (.Link "next") "rel" "next" "label" (printf "Next week, %s" (.LinkTitle "next")) "text" (printf "Week %d" (week (addDays $w.from 7))))}}
+{{with .Link "prev"}}{{template "step" (dict "href" . "rel" "prev" "label" (printf "Previous week, %s" ($.LinkTitle "prev")) "text" (printf "Week %d" (week (addDays $w.from -7))))}}{{end}}
+{{with .Link "next"}}{{template "step" (dict "href" . "rel" "next" "label" (printf "Next week, %s" ($.LinkTitle "next")) "text" (printf "Week %d" (week (addDays $w.from 7))))}}{{end}}
 {{template "boxed" (form (.Action "open-day") "button" "Go to a day")}}
 </div></header>
 

@@ -46,6 +46,21 @@ func weekName(monday time.Time) string {
 
 func yearHref(year int) string { return fmt.Sprintf("/years/%04d", year) }
 
+// isYear reports a year that has a page: 0001 to 9999. The year 0000 holds days, but it has no page (API.md).
+func isYear(year int) bool { return 1 <= year && year <= 9999 }
+
+// yearPage is the address of the page of a month's year, YYYY-MM; "" for the year 0000, which has no page.
+func yearPage(month string) string {
+	year, err := strconv.Atoi(month[:min(4, len(month))])
+	if err != nil || !isYear(year) {
+		return ""
+	}
+	return yearHref(year)
+}
+
+// lastDay is the last day that a date can name (lifelog_meta.days). The last week, 9999-W52, ends on it, a Friday.
+var lastDay = time.Date(9999, time.December, 31, 0, 0, 0, 0, time.UTC)
+
 func (h *server) currentWeek(*http.Request) (*Entity, error) {
 	t, _ := core.ParseDay(h.s.Today())
 	return nil, redirect{weekHref(t)}
@@ -70,6 +85,9 @@ func (h *server) week(r *http.Request) (*Entity, error) {
 		return nil, core.Invalid("a week is YYYY-Www")
 	}
 	sunday, before := monday.AddDate(0, 0, 6), monday.AddDate(0, 0, -7)
+	if sunday.After(lastDay) {
+		sunday = lastDay
+	}
 	from, through, previous := monday.Format(time.DateOnly), sunday.Format(time.DateOnly), before.Format(time.DateOnly)
 	cal, err := h.calendarOf(ctx, from, through)
 	if err != nil {
@@ -125,10 +143,20 @@ func (h *server) week(r *http.Request) (*Entity, error) {
 		metrics = append(metrics, wm)
 	}
 
+	// A link leads only to a page that answers: a week has a page when its Monday is a day, a year when isYear.
 	next, thursday := monday.AddDate(0, 0, 7), monday.AddDate(0, 0, 3)
-	e.Links = []Link{link("self", weekHref(monday), e.Title), link("prev", weekHref(before), weekName(before)),
-		link("next", weekHref(next), weekName(next)), link("month", monthHref(thursday), thursday.Format(layoutMonth)),
-		link("year", yearHref(thursday.Year()), strconv.Itoa(thursday.Year())), link("index", "/", "Home")}
+	e.Links = []Link{link("self", weekHref(monday), e.Title)}
+	if core.IsDay(before.Format(time.DateOnly)) {
+		e.Links = append(e.Links, link("prev", weekHref(before), weekName(before)))
+	}
+	if core.IsDay(next.Format(time.DateOnly)) {
+		e.Links = append(e.Links, link("next", weekHref(next), weekName(next)))
+	}
+	e.Links = append(e.Links, link("month", monthHref(thursday), thursday.Format(layoutMonth)))
+	if isYear(thursday.Year()) {
+		e.Links = append(e.Links, link("year", yearHref(thursday.Year()), strconv.Itoa(thursday.Year())))
+	}
+	e.Links = append(e.Links, link("index", "/", "Home"))
 	e.Properties = map[string]any{"week": weekKey(monday), "from": from, "through": through, "today": today,
 		"days": days, "metrics": metrics}
 	return e, nil
@@ -152,7 +180,7 @@ func (h *server) year(r *http.Request) (*Entity, error) {
 	ctx := r.Context()
 	s := r.PathValue("year")
 	year, _ := strconv.Atoi(s)
-	if !yearPattern.MatchString(s) || year < 1 {
+	if !yearPattern.MatchString(s) || !isYear(year) {
 		return nil, core.Invalid("a year is YYYY")
 	}
 	first := time.Date(year, time.January, 1, 0, 0, 0, 0, time.UTC)
@@ -181,8 +209,14 @@ func (h *server) year(r *http.Request) (*Entity, error) {
 		months = append(months, ym)
 		e.Entities = append(e.Entities, link("month", monthHref(m), m.Format(layoutMonth)))
 	}
-	e.Links = []Link{link("self", yearHref(year), s), link("prev", yearHref(year-1), fmt.Sprintf("%04d", year-1)),
-		link("next", yearHref(year+1), fmt.Sprintf("%04d", year+1)), link("index", "/", "Home")}
+	e.Links = []Link{link("self", yearHref(year), s)}
+	if isYear(year - 1) {
+		e.Links = append(e.Links, link("prev", yearHref(year-1), fmt.Sprintf("%04d", year-1)))
+	}
+	if isYear(year + 1) {
+		e.Links = append(e.Links, link("next", yearHref(year+1), fmt.Sprintf("%04d", year+1)))
+	}
+	e.Links = append(e.Links, link("index", "/", "Home"))
 	e.Properties = map[string]any{"year": s, "today": h.s.Today(), "written": len(entries), "readings": readings, "months": months}
 	return e, nil
 }

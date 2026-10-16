@@ -64,10 +64,16 @@ func (h *server) month(r *http.Request) (*Entity, error) {
 	}
 	name := first.Format(layoutMonth)
 	prev, next := first.AddDate(0, -1, 0), first.AddDate(0, 1, 0)
-	e := &Entity{Class: []string{"month"}, Title: name,
-		Links: []Link{link("self", monthHref(first), name), link("prev", monthHref(prev), prev.Format(layoutMonth)),
-			link("next", monthHref(next), next.Format(layoutMonth)), link("days", "/days", "Days"), link("index", "/", "Home")},
+	e := &Entity{Class: []string{"month"}, Title: name, Links: []Link{link("self", monthHref(first), name)},
 		Actions: []Action{action("open-day", nil, nil)}}
+	// A link leads only to a page that answers: a month has a page when its first day is a day.
+	if core.IsDay(prev.Format(time.DateOnly)) {
+		e.Links = append(e.Links, link("prev", monthHref(prev), prev.Format(layoutMonth)))
+	}
+	if core.IsDay(next.Format(time.DateOnly)) {
+		e.Links = append(e.Links, link("next", monthHref(next), next.Format(layoutMonth)))
+	}
+	e.Links = append(e.Links, link("days", "/days", "Days"), link("index", "/", "Home"))
 	for _, d := range cal.days {
 		e.Entities = append(e.Entities, link("day", dayHref(d.Day), d.Day))
 	}

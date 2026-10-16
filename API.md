@@ -280,9 +280,9 @@ The **reading** shape (`readings[]` here and in a series; a measurement's own pr
 ### month
 
 `GET /months/{YYYY-MM}` (`/months/current` redirects to this month; a value that is not a month is 422): the calendar
-of a month. Links: `prev`, `next` (the months before and after), `days` (the list of day pages). Embedded: a `day`
-link to each day of the month. Actions: `open-day`. Each day holds what names it
-([plan 101](docs/plans/101-the-calendar-holds-every-dated-thing.md)).
+of a month. Links: `prev`, `next` (the months before and after; 0000-01 has no `prev` and 9999-12 no `next`), `days`
+(the list of day pages). Embedded: a `day` link to each day of the month. Actions: `open-day`. Each day holds what
+names it ([plan 101](docs/plans/101-the-calendar-holds-every-dated-thing.md)).
 
 | property | type | meaning |
 |---|---|---|
@@ -305,16 +305,17 @@ link to each day of the month. Actions: `open-day`. Each day holds what names it
 
 `GET /weeks/{YYYY-Www}` (`/weeks/current` redirects to this week; a value that is not a week, or a week number the
 year does not have, is 422): a look back over an ISO 8601 week, Monday first. Links: `prev`, `next` (the weeks before
-and after), `month` (the month of the week's Thursday), `year` (the ISO year), `index`. Embedded: a `day` link to each
-day of the week. Actions: `open-day`.
+and after; 0000-W01 has no `prev` and 9999-W52 no `next`), `month` (the month of the week's Thursday), `year` (the ISO
+year; absent in the year 0000, which has no page), `index`. Embedded: a `day` link to each day of the week. Actions:
+`open-day`.
 
 | property | type | meaning |
 |---|---|---|
 | `week` | string | the week, `YYYY-Www` (the ISO year) |
 | `from` | day | the Monday |
-| `through` | day | the Sunday |
+| `through` | day | the Sunday; 9999-12-31, a Friday, in 9999-W52 |
 | `today` | day | this machine's local day |
-| `days[]` | list | the seven days, in order (as `days[]` of the month) |
+| `days[]` | list | the days from `from` through `through`, in order (as `days[]` of the month): seven, and five in 9999-W52 |
 | `days[].day` | day | the day |
 | `days[].page` | boolean | a live day page exists for it |
 | `days[].first_line` | string | the first line of that page's body that has text, as plain text; absent when none |
@@ -336,8 +337,8 @@ day of the week. Actions: `open-day`.
 ### year
 
 `GET /years/{YYYY}` (`/years/current` redirects to this year; a value that is not a year, 0001 to 9999, is 422): the
-twelve months of a year. Links: `prev`, `next` (the years before and after), `index`. Embedded: a `month` link to each
-month. Actions: `open-day`.
+twelve months of a year. Links: `prev`, `next` (the years before and after; 0001 has no `prev` and 9999 no `next`),
+`index`. Embedded: a `month` link to each month. Actions: `open-day`.
 
 | property | type | meaning |
 |---|---|---|

@@ -76,6 +76,7 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 	"week":       isoWeek,
 	"isoWeekKey": isoWeekKey,
 	"yearOf":     func(month string) string { return month[:min(4, len(month))] },
+	"yearPage":   yearPage,
 	"sinceLast":  sinceLastWeek,
 	"nameWords":  nameWords,
 	"monthName": func(month string) string { // "2026-10" to "October"
