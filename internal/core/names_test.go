@@ -117,3 +117,26 @@ func TestAWriteToAPageThatIsNotLive(t *testing.T) {
 		t.Errorf("file-pages in a tombstoned category: %v (status %d), want 409 %q", err, status(err), want)
 	}
 }
+
+// TestTheLivePageCheckDoesNotReadTheBody: livePage gives the title, the version and the day-page flag of a live page,
+// and leaves the body empty. body is the last column of entities, so a write that checks a long page (each id of a
+// bulk filing) does not read the overflow pages of its body.
+func TestTheLivePageCheckDoesNotReadTheBody(t *testing.T) {
+	s := fresh(t)
+	id, _, err := s.CreatePage(ctx, "cli", "Long", "words of the body", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Do(ctx, "cli", func(tx *Tx) error {
+		p, err := tx.livePage(id)
+		if err != nil {
+			return err
+		}
+		if p.ID != id || p.Title != "Long" || p.Version != "1" || p.DayPage || p.Body != "" {
+			t.Errorf("livePage(%d) = %+v; want the page Long at version 1, not a day page, with no body read", id, *p)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
