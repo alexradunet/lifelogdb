@@ -17,10 +17,13 @@ import (
 )
 
 // formRE finds a POST form of a page: its action and what it holds. This application's own markup is regular enough
-// to read this way; a form never nests. hiddenRE finds a hidden field of a form: its name and its value.
+// to read this way; a form never nests. hiddenRE finds a hidden field of a form: its name and its value. formTagRE
+// finds the start tag of each form, with its attributes in any order, and actionRE finds the action in such a tag.
 var (
-	formRE   = regexp.MustCompile(`(?s)<form method="POST" action="([^"]+)"[^>]*>(.*?)</form>`)
-	hiddenRE = regexp.MustCompile(`<input type="hidden" name="([^"]+)" value="([^"]*)">`)
+	formRE    = regexp.MustCompile(`(?s)<form method="POST" action="([^"]+)"[^>]*>(.*?)</form>`)
+	hiddenRE  = regexp.MustCompile(`<input type="hidden" name="([^"]+)" value="([^"]*)">`)
+	formTagRE = regexp.MustCompile(`<form\b[^>]*>`)
+	actionRE  = regexp.MustCompile(`\saction="([^"]*)"`)
 )
 
 // withoutReceipt is a Location without the feedback receipt a write adds, so a test compares the path it returned to.
@@ -254,8 +257,8 @@ func TestALinkOpensAFormAndFillsItsFields(t *testing.T) {
 		t.Error(`Home still draws <details id="new">`)
 	}
 	// No form on Home makes a person or keeps a file, whatever the order of the attributes of its tag.
-	for _, tag := range regexp.MustCompile(`<form\b[^>]*>`).FindAllString(home, -1) {
-		if m := regexp.MustCompile(`\saction="([^"]*)"`).FindStringSubmatch(tag); m != nil && (m[1] == "/people" || m[1] == "/files") {
+	for _, tag := range formTagRE.FindAllString(home, -1) {
+		if m := actionRE.FindStringSubmatch(tag); m != nil && (m[1] == "/people" || m[1] == "/files") {
 			t.Errorf("Home still draws the form %s", tag)
 		}
 	}
