@@ -319,3 +319,34 @@ Each row changes an answer that a client sees, so each waits for the owner's wor
 - `staticcheck ./...`: U1000 only, the same names plus `htmlForm` and `buttonRE` of `browser_forms_test.go`.
 - `view.ActionFor` is reported by neither: a method that a template can call through reflection stays live for
   `deadcode`. A grep of the templates shows no call.
+
+## Parts 1 and 2 results (2026-10-16, `bbb1cf5`..`c15797a`)
+
+Nineteen commits, each one reviewed by two read-only reviewers; no review asked for a fix round.
+
+- After the parts: the baseline passes, `staticcheck ./...` finds nothing, and `deadcode -test ./...` names nothing on
+  `GOOS=linux` and `GOOS=windows`.
+- Production lines: `internal/api` 5830 → 5801, `internal/core` 3088 → 3063, `internal/db` 442 → 464 (the errors it
+  now reports). The test lines grew by the reproducers. Most of the lines go in Parts 3 to 7.
+- Two answers on the wire changed outside Part 8, each one a defect fixed reproducer first:
+  - a metric's trend of a day in the first two weeks of year 0000 now counts a reading of 0000-01-01 (`2be71a4`);
+  - `Series` refuses a `from` that is not empty and not a day with "from is empty or a YYYY-MM-DD day, and to is a
+    YYYY-MM-DD day", where it said "from and to are YYYY-MM-DD days". The status stays 422.
+- `preflightEmbed` finds the day page through `entity_names` with a join that also asks
+  `e.preferred_name_key = n.name_key`. The row above names a bare subquery; the join keeps the old meaning exactly,
+  because a subquery would also match an alias.
+- `db.Close` keeps the signature `Close() error`: it runs at shutdown, often after a signal cancelled the
+  operation's context, and `busy_timeout` limits its wait. A `Close(ctx)` is an owner decision, not this plan.
+
+The rest the reviewers found goes to a later part:
+
+| finding | part |
+|---|---|
+| `core.refused` and `dryRun` lose a failed rollback that `db.Write` now joins; `Store.Capture`, `Store.CreatePage`, `Tx.SetPicture` and `Tx.SetPictureOf` return the result of a write that rolled back | 4 (`alone[T]`) |
+| `cmd/lifelog` and `core/snapshot.go` discard the error of `db.Close` | 6 (the cmd env), 4 |
+| `writeEntity` drops the error of `Encode`; `refusedOnItsPage` drops the error of `Write`; `renderHTML` logs the URL path, which can name a metric | 5 (one render entry point) |
+| `errorEntity` sends the text of every 500 to the client | 3 (one `writeError`) |
+| `/weeks/0000-W01` answers 422 when a metric has a reading that week | 4 (`core.ParseDay`) |
+| the agents' texts still name a photo's place and an `--at` flag that does not exist | 6 (the agents' texts against the catalog) |
+| the style page's task-era classes, `due-group`, README's "overdue", the tokens `--indigo`, `--done-ink` and `--done-soft`, `--text-accent` of `site/` | 5 (the style page) |
+| `jsonShape` refuses a NaN or an infinite mean with a 500 | 8 |
