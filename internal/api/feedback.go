@@ -61,11 +61,7 @@ func (s *feedbackStore) put(destination string, result any) string {
 	if s.entries == nil {
 		s.entries = make(map[string]feedbackReceipt)
 	}
-	for key, r := range s.entries {
-		if !now.Before(r.expires) {
-			delete(s.entries, key)
-		}
-	}
+	s.prune(now)
 	if len(s.entries) >= feedbackEntries {
 		var oldest string
 		var expiry time.Time
@@ -86,18 +82,22 @@ func (s *feedbackStore) put(destination string, result any) string {
 func (s *feedbackStore) take(path, token string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	now := s.clock()
-	for key, r := range s.entries {
-		if !now.Before(r.expires) {
-			delete(s.entries, key)
-		}
-	}
+	s.prune(s.clock())
 	r, ok := s.entries[token]
 	if !ok || r.path != path {
 		return ""
 	}
 	delete(s.entries, token)
 	return r.text
+}
+
+// prune deletes the receipts that expired at now. The caller holds mu.
+func (s *feedbackStore) prune(now time.Time) {
+	for key, r := range s.entries {
+		if !now.Before(r.expires) {
+			delete(s.entries, key)
+		}
+	}
 }
 
 // move gives the receipt for path to destination, the page a browser is sent to instead (the page of a metric opens
