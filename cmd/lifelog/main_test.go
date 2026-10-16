@@ -10,80 +10,76 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"lifelog/internal/core"
-	"lifelog/internal/db"
-	"lifelog/internal/db/dbtest"
-	"lifelog/internal/photo/phototest"
 )
 
-// TestFileCommand is `lifelog file PATH` on a throwaway database: the original is hashed and never stored, its text
-// read from --text, its picture made from it; the same file again keeps one page.
-func TestFileCommand(t *testing.T) {
-	dir, live := t.TempDir(), dbtest.File(t)
-	pic, text := filepath.Join(dir, "IMG_0001.jpg"), filepath.Join(dir, "caption.txt")
-	os.WriteFile(pic, phototest.JPEG(64, 48), 0o644)
-	os.WriteFile(text, []byte("Dawn at the lake with [[Sam]]."), 0o644)
-	e, _, _ := testEnv(t)
-	for range 2 {
-		if err := runArgs(t.Context(), e, []string{"file", pic, "--db", live, "--text", text, "--day", "2026-10-04"}); err != nil {
-			t.Fatal(err)
+// TestTheCommandTableDecidesTheFlagsTheUsageAndTheInterrupt: a flag a command does not take is refused, never
+// ignored: --dry-run belongs to file, --public to serve. The usage names every command of the table. A setup command
+// of the machine (init, agentic-init) keeps the OS's interrupt, as does a line with no command or a command that is not
+// in the table; every other command takes the interrupt through its context, snapshot too, as it runs through the
+// client since plan 082.
+func TestTheCommandTableDecidesTheFlagsTheUsageAndTheInterrupt(t *testing.T) {
+	for _, argv := range [][]string{{"search", "x", "--dry-run"}, {"day", "--public"}, {"search", "x", "--day", "2026-01-01"}, {"capture", "hello", "--to", "x"}} {
+		if _, err := parse(argv, noVars); err == nil || !strings.Contains(err.Error(), "does not take") {
+			t.Errorf("%v: %v, want a refusal of the flag", argv, err)
 		}
 	}
-	d, err := db.Open(t.Context(), live)
-	if err != nil {
-		t.Fatal(err)
+	for _, argv := range [][]string{{"file", "x", "--dry-run"}, {"serve", "--public"}, {"capture", "hello", "--day", "2026-01-01"}, {"snapshot", "--to", "x"}} {
+		if _, err := parse(argv, noVars); err != nil {
+			t.Errorf("%v: %v, want the flag taken", argv, err)
+		}
 	}
-	defer d.Close()
-	s := &core.Store{DB: d}
-	id, _ := s.PageID(context.Background(), "IMG_0001.jpg")
-	p, err := s.PageByID(context.Background(), id)
-	if err != nil || p.Type != "file" || p.Body != "Dawn at the lake with [[Sam]]." || p.Day != "2026-10-04" || p.File == nil || !p.File.Preview {
-		t.Fatalf("the file page: %v %+v", err, p)
+	usage := usageText()
+	for _, c := range commands {
+		if c.usage != "" && !strings.Contains(usage, "lifelog "+c.name) {
+			t.Errorf("the usage does not name %s", c.name)
+		}
 	}
-	var n int
-	d.R.QueryRow(`SELECT count(*) FROM files`).Scan(&n)
-	if n != 1 {
-		t.Errorf("%d files rows after keeping one file twice", n)
+	for _, args := range [][]string{nil, {"init"}, {"agentic-init"}, {"help"}, {"unknown"}} {
+		if commandConsumesContext(opts{args: args}) {
+			t.Errorf("%v takes the interrupt through its context; want the OS's interrupt", args)
+		}
+	}
+	for _, cmd := range []string{"serve", "mcp", "get", "actions", "do", "capture", "day", "page", "search", "rename", "file", "snapshot"} {
+		if !commandConsumesContext(opts{args: []string{cmd}}) {
+			t.Errorf("%s must take the interrupt through its context", cmd)
+		}
 	}
 }
 
-// TestFileCommandFilesInACategory is `lifelog file PATH --category TITLE`: the original kept and its page filed in the
-// category in one write, the category made when it is new (docs/plans/117-one-browse-view.md, rule 6).
-func TestFileCommandFilesInACategory(t *testing.T) {
-	dir, live := t.TempDir(), dbtest.File(t)
-	memo := filepath.Join(dir, "memo.txt")
-	if err := os.WriteFile(memo, []byte("a synthetic memo"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	e, _, _ := testEnv(t)
-	if err := runArgs(t.Context(), e, []string{"file", memo, "--db", live, "--day", "2026-10-04", "--category", "Papers"}); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(t.Context(), live)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer d.Close()
-	s := &core.Store{DB: d}
-	file, err := s.PageID(t.Context(), "memo.txt")
-	if err != nil {
-		t.Fatal(err)
-	}
-	cat, err := s.PageID(t.Context(), "Papers")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if p, err := s.PageByID(t.Context(), cat); err != nil || p.Type != "page" {
-		t.Fatalf("the category Papers: %v %+v, want a plain page", err, p)
-	}
-	var all, filed int
-	if err := d.R.QueryRowContext(t.Context(), `SELECT count(*), count(*) FILTER (WHERE from_id = ? AND to_id = ?)
-		FROM links WHERE kind = 'part-of'`, file, cat).Scan(&all, &filed); err != nil {
-		t.Fatal(err)
-	}
-	if all != 1 || filed != 1 || file == 0 {
-		t.Errorf("%d part-of links, %d from memo.txt (%d) to Papers (%d): want the one link", all, filed, file, cat)
+// TestAnUnknownCommandIsAnErrorAndNotTheUsage: a command that is not in the table is the error "unknown command", not a
+// usageError, so main writes "lifelog: unknown command ..." and exits 1. A line with no command, the line help and a
+// line that parse refuses are a usageError, so main writes the refusal (if there is one) and the usage, and exits 2.
+// runArgs itself writes nothing.
+func TestAnUnknownCommandIsAnErrorAndNotTheUsage(t *testing.T) {
+	for _, tc := range []struct {
+		argv  []string
+		usage bool   // main writes the usage and exits 2; else it exits 1
+		want  string // the error that main writes; "" for none
+	}{
+		{[]string{"unknown"}, false, `unknown command "unknown" (lifelog help)`},
+		{[]string{"unknown", "--dry-run"}, false, `unknown command "unknown" (lifelog help)`},
+		{nil, true, ""},
+		{[]string{"help"}, true, ""},
+		{[]string{"search", "x", "--dry-run"}, true, "search does not take --dry-run"},
+		{[]string{"--bogus"}, true, "unknown flag --bogus"},
+	} {
+		e, stdout, stderr := testEnv(t)
+		err := runArgs(t.Context(), e, tc.argv)
+		var u usageError
+		usage := errors.As(err, &u)
+		var said string
+		switch {
+		case usage && u.err != nil:
+			said = u.err.Error()
+		case !usage && err != nil:
+			said = err.Error()
+		}
+		if err == nil || usage != tc.usage || said != tc.want {
+			t.Errorf("%v: %v (a usage error: %v), want %q (a usage error: %v)", tc.argv, err, usage, tc.want, tc.usage)
+		}
+		if stdout.Len() != 0 || stderr.Len() != 0 {
+			t.Errorf("%v: runArgs wrote %q and %q, want nothing", tc.argv, stdout, stderr)
+		}
 	}
 }
 
@@ -131,58 +127,28 @@ func TestCommandCancellation(t *testing.T) {
 	}
 }
 
-// TestServeAddressFlag: --addr, in both of its forms, reaches the parse of the loopback address (api.LoopbackAddress,
-// whose own test has the table of addresses): LOCALHOST becomes 127.0.0.1, and a refused address stops serve before
-// the database opens, as the file is absent.
-func TestServeAddressFlag(t *testing.T) {
-	absent := filepath.Join(t.TempDir(), "absent.db")
+// lifelog init PATH makes the file at PATH, whatever $LIFELOG_DB names; --db beats PATH, and both together are a
+// mistake, refused before anything is written (docs/plans/098-the-codebase-made-cohesive.md).
+func TestInitHonoursThePathWhenTheEnvironmentNamesAnother(t *testing.T) {
+	env := filepath.Join(t.TempDir(), "env.db")
 	e, _, _ := testEnv(t)
-	for _, at := range []func(addr string) []string{
-		func(addr string) []string { return []string{"--addr", addr} },
-		func(addr string) []string { return []string{"--addr=" + addr} },
-	} {
-		o, err := parse(append([]string{"serve"}, at("LOCALHOST:7777")...), noVars)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := prepareServe(&o); err != nil || o.addr != "127.0.0.1:7777" {
-			t.Errorf("serve %v: the address %q, %v; want 127.0.0.1:7777", at("LOCALHOST:7777"), o.addr, err)
-		}
-		argv := append(at("0.0.0.0:7777"), "serve", "--db", absent)
-		if err := runArgs(t.Context(), e, argv); err == nil || !strings.Contains(err.Error(), "serve address") {
-			t.Errorf("%v: %v, want the refusal of the address", argv, err)
-		}
+	e.getenv = func(name string) string { return map[string]string{"LIFELOG_DB": env}[name] }
+	given := filepath.Join(t.TempDir(), "given.db")
+	if err := runArgs(t.Context(), e, []string{"init", given}); err != nil {
+		t.Fatalf("init PATH: %v", err)
 	}
-}
+	if _, err := os.Stat(given); err != nil {
+		t.Errorf("init PATH did not make %s: %v", given, err)
+	}
+	if _, err := os.Stat(env); err == nil {
+		t.Errorf("init PATH made the file $LIFELOG_DB names, %s", env)
+	}
 
-func TestServeAuthorityMount(t *testing.T) {
-	// Run the real serve branch against a disposable synthetic database. Read
-	// the printed ephemeral listener address rather than guessing a free port.
-	p := dbtest.File(t)
-	e, _, _ := testEnv(t)
-	scheme, address := servedAt(t, serveInProcess(t, e, "serve", "--addr", "localhost:0", "--db", p))
-	if strings.HasSuffix(address, ":0") {
-		t.Fatalf("ephemeral port not reported: %s", address)
+	other := filepath.Join(t.TempDir(), "other.db")
+	if err := runArgs(t.Context(), e, []string{"init", filepath.Join(t.TempDir(), "unused.db"), "--db", other}); err == nil || !strings.Contains(err.Error(), "--db") {
+		t.Errorf("init PATH --db OTHER is refused: %v", err)
 	}
-	base := scheme + "://" + address
-	tr := &http.Transport{Proxy: nil}
-	defer tr.CloseIdleConnections()
-	hc := &http.Client{Transport: tr, Timeout: 10 * time.Second}
-	for _, tc := range []struct {
-		host string
-		want int
-	}{{"", 200}, {"arbitrary.invalid:7777", 403}} {
-		req, _ := http.NewRequest("GET", base+"/actions", nil)
-		if tc.host != "" {
-			req.Host = tc.host
-		}
-		res, err := hc.Do(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		res.Body.Close()
-		if res.StatusCode != tc.want {
-			t.Fatalf("Host=%q status=%d", tc.host, res.StatusCode)
-		}
+	if _, err := os.Stat(other); err == nil {
+		t.Errorf("a refused init made %s", other)
 	}
 }

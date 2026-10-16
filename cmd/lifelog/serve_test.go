@@ -9,6 +9,8 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
+	"fmt"
 	"io"
 	"log"
 	"math/big"
@@ -25,6 +27,62 @@ import (
 	"lifelog/internal/core"
 	"lifelog/internal/db/dbtest"
 )
+
+// TestServeAddressFlag: --addr, in both of its forms, reaches the parse of the loopback address (api.LoopbackAddress,
+// whose own test has the table of addresses): LOCALHOST becomes 127.0.0.1, and a refused address stops serve before
+// the database opens, as the file is absent.
+func TestServeAddressFlag(t *testing.T) {
+	absent := filepath.Join(t.TempDir(), "absent.db")
+	e, _, _ := testEnv(t)
+	for _, at := range []func(addr string) []string{
+		func(addr string) []string { return []string{"--addr", addr} },
+		func(addr string) []string { return []string{"--addr=" + addr} },
+	} {
+		o, err := parse(append([]string{"serve"}, at("LOCALHOST:7777")...), noVars)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := prepareServe(&o); err != nil || o.addr != "127.0.0.1:7777" {
+			t.Errorf("serve %v: the address %q, %v; want 127.0.0.1:7777", at("LOCALHOST:7777"), o.addr, err)
+		}
+		argv := append(at("0.0.0.0:7777"), "serve", "--db", absent)
+		if err := runArgs(t.Context(), e, argv); err == nil || !strings.Contains(err.Error(), "serve address") {
+			t.Errorf("%v: %v, want the refusal of the address", argv, err)
+		}
+	}
+}
+
+func TestServeAuthorityMount(t *testing.T) {
+	// Run the real serve branch against a disposable synthetic database. Read
+	// the printed ephemeral listener address rather than guessing a free port.
+	p := dbtest.File(t)
+	e, _, _ := testEnv(t)
+	scheme, address := servedAt(t, serveInProcess(t, e, "serve", "--addr", "localhost:0", "--db", p))
+	if strings.HasSuffix(address, ":0") {
+		t.Fatalf("ephemeral port not reported: %s", address)
+	}
+	base := scheme + "://" + address
+	tr := &http.Transport{Proxy: nil}
+	defer tr.CloseIdleConnections()
+	hc := &http.Client{Transport: tr, Timeout: 10 * time.Second}
+	for _, tc := range []struct {
+		host string
+		want int
+	}{{"", 200}, {"arbitrary.invalid:7777", 403}} {
+		req, _ := http.NewRequest("GET", base+"/actions", nil)
+		if tc.host != "" {
+			req.Host = tc.host
+		}
+		res, err := hc.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != tc.want {
+			t.Fatalf("Host=%q status=%d", tc.host, res.StatusCode)
+		}
+	}
+}
 
 const testToken = "synthetic-token-0123456789abcdefghij"
 
@@ -266,5 +324,76 @@ func TestTLSListener(t *testing.T) {
 	plain.Body.Close()
 	if plain.StatusCode != http.StatusBadRequest {
 		t.Fatalf("plain HTTP on the TLS listener: %d", plain.StatusCode)
+	}
+}
+
+func TestServeShutdownDeadlineCancelsBlockedRequest(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	started := make(chan struct{})
+	type outcome struct{ read, context error }
+	finished := make(chan outcome, 1)
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(started)
+		_, err := io.Copy(io.Discard, r.Body)
+		finished <- outcome{err, r.Context().Err()}
+	})}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	returned := make(chan error, 1)
+	go func() { returned <- serveHTTP(ctx, srv, listener, 20*time.Millisecond) }()
+	defer srv.Close()
+	connection, err := net.DialTimeout("tcp", listener.Addr().String(), 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	if _, err := fmt.Fprintf(connection, "POST / HTTP/1.1\r\nHost: %s\r\nContent-Length: 5\r\n\r\n", listener.Addr()); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("request did not start")
+	}
+	cancel()
+	select {
+	case err := <-returned:
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("shutdown error = %v; want expired drain deadline", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("blocked request prevented bounded shutdown")
+	}
+	select {
+	case got := <-finished:
+		if got.read == nil || !errors.Is(got.context, context.Canceled) {
+			t.Fatalf("expired shutdown left the request running: read=%v context=%v", got.read, got.context)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("expired shutdown did not release the blocked handler")
+	}
+}
+
+func TestServeFailureJoinsShutdownWithoutContextCancellation(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+	returned := make(chan error, 1)
+	go func() { returned <- serveHTTP(context.Background(), &http.Server{}, listener, time.Second) }()
+	select {
+	case err := <-returned:
+		if !errors.Is(err, net.ErrClosed) {
+			t.Fatalf("serve error = %v; want closed listener", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("server error left shutdown waiting for command cancellation")
 	}
 }
