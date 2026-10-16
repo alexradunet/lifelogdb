@@ -4,7 +4,7 @@
      day asks of the owner: the readings (with Add a reading) and the places. On a narrow screen
      the margin comes after the sheet. */}}
 {{define "day"}}{{template "head" .}}
-{{$d := .Props}}{{$today := eq .Title .Today}}
+{{$d := .Props}}{{$p := .DayParts}}{{$today := eq .Title .Today}}
 <header class="page-head day-head">
 <div class="day-title">{{template "leaf" .Title}}
 <div class="what"><h1>{{weekday .Title}}{{template "mood" $d.mood}}</h1>
@@ -21,8 +21,8 @@
 <div class="sheet">
 <section class="journal" aria-label="Journal">
 <div class="panel-head"><h2>Journal</h2>{{with .Link "page"}}<a href="{{.}}">The day page</a>{{end}}</div>
-{{$written := false}}{{range $d.view}}{{if eq .what "day page"}}{{$written = true}}<div class="prose journal-text">{{markdown .detail}}</div>{{end}}{{end}}
-{{if not $written}}<p class="empty">{{if $today}}Nothing written today yet. <a href="#capture">Add to today</a> below.{{else}}Nothing written on this day. <a href="#capture">Add to it</a> below.{{end}}</p>{{end}}
+{{range $p.Journal}}<div class="prose journal-text">{{markdown .}}</div>{{end}}
+{{if not $p.Journal}}<p class="empty">{{if $today}}Nothing written today yet. <a href="#capture">Add to today</a> below.{{else}}Nothing written on this day. <a href="#capture">Add to it</a> below.{{end}}</p>{{end}}
 </section>
 
 {{with .Action "capture"}}<section class="capture" id="capture" aria-label="Capture">
@@ -34,9 +34,9 @@
 <small class="desc">CommonMark. [[Title]] links a page and #tag a tag page. Nothing is saved until the version you read is still the current one.</small>
 {{template "form" .}}</details>{{end}}
 
-{{$pages := false}}{{range $d.view}}{{if eq .what "page" "page (edited)"}}{{$pages = true}}{{end}}{{end}}
-{{if $pages}}<section class="also" aria-label="Pages written this day"><h2>Pages written this day</h2>
-<ul class="plain">{{range $d.view}}{{if eq .what "page" "page (edited)"}}<li><a href="{{titleHref .detail}}">{{.detail}}</a>{{if ne .what "page"}} <span class="badge">edited</span>{{end}}</li>{{end}}{{end}}</ul></section>{{end}}
+
+{{with $p.Pages}}<section class="also" aria-label="Pages written this day"><h2>Pages written this day</h2>
+<ul class="plain">{{range .}}<li><a href="{{titleHref .Title}}">{{.Title}}</a>{{if .Edited}} <span class="badge">edited</span>{{end}}</li>{{end}}</ul></section>{{end}}
 </div>
 
 <div class="margin">
@@ -54,9 +54,9 @@
 <div id="record">{{template "boxed" (form (.Action "record") "more" "taken_at,tz,import_key")}}</div>
 </section>{{end}}
 
-{{$at := false}}{{range $d.view}}{{if eq .what "at"}}{{$at = true}}{{end}}{{end}}
-{{if $at}}<section class="group" aria-label="Where"><h2>Where</h2>
-<ul class="plain">{{range $d.view}}{{if eq .what "at"}}<li><a href="{{titleHref .detail}}">{{.detail}}</a></li>{{end}}{{end}}</ul></section>{{end}}
+
+{{with $p.Places}}<section class="group" aria-label="Where"><h2>Where</h2>
+<ul class="plain">{{range .}}<li><a href="{{titleHref .}}">{{.}}</a></li>{{end}}</ul></section>{{end}}
 </div>
 </div>
 {{template "foot" .}}{{end}}

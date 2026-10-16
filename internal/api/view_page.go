@@ -296,6 +296,42 @@ func (v *view) Filed() *filedHere {
 	return &f
 }
 
+// dayParts are the rows of a day's view (cookbook/day-view.md) by the part of the day's page that draws them, each
+// in the order of the view. Journal is the body of the day page: one body when the day has a live day page (also an
+// empty body), none when it has no day page. A row of a reading is in no part: the margin draws the readings from
+// the day's readings.
+type dayParts struct {
+	Journal []string
+	Pages   []writtenPage // the other pages written on the day
+	Places  []string      // the titles of the places of the day
+}
+
+// writtenPage is a page written on a day, as the day lists it: its title, and whether it changed after it was made.
+type writtenPage struct {
+	Title  string
+	Edited bool
+}
+
+// DayParts are the rows of the day's view by part, from one pass over the view.
+func (v *view) DayParts() dayParts {
+	props, _ := v.Props.(map[string]any)
+	rows, _ := props["view"].([]any)
+	var p dayParts
+	for _, r := range rows {
+		m, _ := r.(map[string]any)
+		detail, _ := m["detail"].(string)
+		switch what, _ := m["what"].(string); what {
+		case "day page":
+			p.Journal = append(p.Journal, detail)
+		case "page", "page (edited)":
+			p.Pages = append(p.Pages, writtenPage{Title: detail, Edited: what != "page"})
+		case "at":
+			p.Places = append(p.Places, detail)
+		}
+	}
+	return p
+}
+
 // jsonShape is v as a JSON client reads it: maps by JSON name, lists, strings, float64s. A value that JSON cannot
 // carry (a NaN, an infinity) is an error, so a page is never drawn with its properties left out.
 func jsonShape(v any) (any, error) {
