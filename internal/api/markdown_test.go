@@ -52,6 +52,10 @@ func TestMarkdownLinkPrecedence(t *testing.T) {
 		{"[[Ana] text](u)", `<p><a href="u">[Ana] text</a></p>`},
 		{"`[[Ana]]` [#run](javascript:bad)", `<p><code>[[Ana]]</code> <a href="">#run</a></p>`},
 		{"[[Ana]]  \n#run", "<p><a href=\"/pages?title=Ana\" class=\"wikilink\">Ana</a><br>\n<a href=\"/pages?title=run\" class=\"wikilink\">#run</a></p>"},
+		// After a hard line break, goldmark can put the backslash of an escape and the next character in two text
+		// nodes. The renderer decodes the joined run, so "\[" is "[": a decode of each node shows "\[" (the first case).
+		{"a\\  \n\\[x", "<p>a\\<br>\n[x</p>"},
+		{"a\\  \n\\[[Ana]]", "<p>a\\<br>\n<a href=\"/pages?title=Ana\" class=\"wikilink\">Ana</a></p>"},
 	} {
 		if got := strings.TrimSpace(string(markdown(c.in))); got != c.want {
 			t.Errorf("%q: got %s; want %s", c.in, got, c.want)
