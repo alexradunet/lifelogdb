@@ -18,8 +18,11 @@ import (
 
 // TestAgenticInitAndTheDatabaseBesideTheProgram runs the command lines in-process, with the program in a folder of its
 // own (plan 090): agentic-init writes the agents' files beside it, init with no path makes life.db there and not in
-// the working directory, and a command with no --db and no LIFELOG_DB reads that file.
+// the working directory, and a command with no --db and no LIFELOG_DB reads that file. The working directory is an
+// empty folder of the test, so a command that wrote into it would not write into the repository.
 func TestAgenticInitAndTheDatabaseBesideTheProgram(t *testing.T) {
+	work := t.TempDir()
+	t.Chdir(work)
 	dir := t.TempDir()
 	exe := filepath.Join(dir, "lifelog.exe")
 	if err := os.WriteFile(exe, nil, 0o755); err != nil { // a stand-in for the program: only its path counts
@@ -34,6 +37,12 @@ func TestAgenticInitAndTheDatabaseBesideTheProgram(t *testing.T) {
 			t.Fatalf("%v: %v\n%s", args, err, stdout)
 		}
 		return stdout.String()
+	}
+	untouched := func(after string) {
+		t.Helper()
+		if files, err := os.ReadDir(work); err != nil || len(files) != 0 {
+			t.Errorf("%s wrote into the working directory: %v %v", after, files, err)
+		}
 	}
 	out := call("agentic-init")
 	if !strings.Contains(out, "written") || !strings.Contains(out, "no life.db yet") {
@@ -53,6 +62,7 @@ func TestAgenticInitAndTheDatabaseBesideTheProgram(t *testing.T) {
 	if out := call("init"); out != "created "+filepath.Join(dir, "life.db")+"\n" {
 		t.Errorf("init with no path: %q, want the life.db beside the program", out)
 	}
+	untouched("agentic-init and init")
 	if _, err := os.Stat(filepath.Join(dir, "life.db")); err != nil {
 		t.Fatalf("init with no path: %v", err)
 	}
@@ -63,6 +73,7 @@ func TestAgenticInitAndTheDatabaseBesideTheProgram(t *testing.T) {
 	if strings.Contains(again, "written") || strings.Contains(again, "no life.db yet") || !strings.Contains(again, "unchanged") {
 		t.Errorf("a second agentic-init:\n%s", again)
 	}
+	untouched("the second agentic-init and day")
 }
 
 // agenticFolder runs init and agentic-init in-process for a program in a folder of its own, dir. The life.db and the
