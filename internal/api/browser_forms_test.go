@@ -60,22 +60,12 @@ func dayOf(n int) string {
 
 // TestABrowserFormReturnsToThePageThatSentIt: a form that names a path on this server returns there with the
 // feedback; any other value is ignored and the browser goes to what it changed, as before; a JSON client never
-// follows back.
+// follows back. Which values are a path on this server is TestBackOf's.
 func TestABrowserFormReturnsToThePageThatSentIt(t *testing.T) {
 	c, h, _ := apitest.Fresh(t, "cli")
 	for _, tc := range []struct{ back, want string }{
 		{"/days?limit=5&offset=10", "/days?limit=5&offset=10"},
-		{"/", "/"},
-		{"/days/2026-09-29?x=%2F%2F", "/days/2026-09-29?x=%2F%2F"},
-		{"", "/days/2026-09-29"},
 		{"//evil.example/", "/days/2026-09-29"},
-		{"/\\evil.example/", "/days/2026-09-29"},
-		{"https://evil.example/", "/days/2026-09-29"},
-		{"javascript:alert(1)", "/days/2026-09-29"},
-		{"evil", "/days/2026-09-29"},
-		{"/a\r\nSet-Cookie: x=1", "/days/2026-09-29"},
-		{"/page#part", "/days/2026-09-29"},
-		{"/" + strings.Repeat("a", 2048), "/days/2026-09-29"},
 	} {
 		rec := submit(h, "/days/2026-09-29/capture", url.Values{"text": {"a line"}, "back": {tc.back}}, "")
 		if rec.Code != http.StatusSeeOther {

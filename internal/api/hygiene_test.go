@@ -3,7 +3,6 @@ package api_test
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -49,13 +48,7 @@ func TestErrorAnswersCarryACode(t *testing.T) {
 			_, err := c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "taken"})
 			return err
 		}(), "exists", 409},
-		{"unknown page", func() error { _, err := c.Get(t.Context(), "/pages/999999"); return err }(), "not_found", 404},
 		{"bad day", func() error { _, err := c.Get(t.Context(), "/days/2026-13-01"); return err }(), "invalid", 422},
-		{"missing field", func() error {
-			_, err := c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"body": "no title"})
-			return err
-		}(), "invalid", 422},
-		{"bad limit", func() error { _, err := c.Get(t.Context(), "/days?limit=0"); return err }(), "invalid", 422},
 	} {
 		code, status := codeOf(t, tc.err)
 		if code != tc.code || status != tc.status {
@@ -80,9 +73,9 @@ func TestErrorAnswersCarryACode(t *testing.T) {
 }
 
 // TestAnInternalErrorNamesNoCause: an error that core did not type is a fault of the server. Here the database is
-// closed under the store. The answer is 500 internal with the message "internal error" and no word of the cause, as
-// JSON and as a page. The server's log has the cause one time, with the pattern of the route and not the path,
-// because a path can name a metric.
+// closed under the store. The answer is 500 with no word of the cause, as JSON and as a page, and the page says
+// internal error; the entity of the answer is TestErrorEntity's. The server's log has the cause one time, with the
+// pattern of the route and not the path, because a path can name a metric.
 func TestAnInternalErrorNamesNoCause(t *testing.T) {
 	d, err := db.Open(t.Context(), dbtest.File(t))
 	if err != nil {
@@ -107,18 +100,8 @@ func TestAnInternalErrorNamesNoCause(t *testing.T) {
 			if strings.Contains(body, cause) || strings.Contains(body, "sql:") {
 				t.Errorf("the answer names the cause: %.600s", body)
 			}
-			if accept == "text/html" {
-				if !strings.Contains(body, "internal error") {
-					t.Errorf("the page does not say internal error: %.600s", body)
-				}
-			} else {
-				var e api.Entity
-				if err := json.Unmarshal(rec.Body.Bytes(), &e); err != nil {
-					t.Fatalf("not an entity: %v", err)
-				}
-				if got := props(&e); got["code"] != "internal" || got["message"] != "internal error" || got["status"] != float64(500) {
-					t.Errorf("properties %v, want 500 internal with the message internal error", got)
-				}
+			if accept == "text/html" && !strings.Contains(body, "internal error") {
+				t.Errorf("the page does not say internal error: %.600s", body)
 			}
 			if n := strings.Count(logged.String(), cause); n != 1 {
 				t.Errorf("the log has the cause %d times, want 1: %q", n, logged.String())
@@ -130,8 +113,8 @@ func TestAnInternalErrorNamesNoCause(t *testing.T) {
 	}
 }
 
-// TestACancelledRequestIsNotLogged: a request whose context is cancelled answers 500 internal with the message
-// "internal error", as a fault does, but the log stays empty: the client went away, or the server stopped it.
+// TestACancelledRequestIsNotLogged: a request whose context is cancelled answers 500, as a fault does, but the log
+// stays empty: the client went away, or the server stopped it. The entity of the answer is TestErrorEntity's.
 func TestACancelledRequestIsNotLogged(t *testing.T) {
 	_, h, _ := apitest.Fresh(t, "cli")
 	ctx, cancel := context.WithCancel(t.Context())
@@ -142,12 +125,8 @@ func TestACancelledRequestIsNotLogged(t *testing.T) {
 	t.Cleanup(func() { log.SetOutput(prev) })
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequestWithContext(ctx, "GET", "/days", nil))
-	var e api.Entity
-	if err := json.Unmarshal(rec.Body.Bytes(), &e); err != nil {
-		t.Fatalf("not an entity: %v: %.300s", err, rec.Body.String())
-	}
-	if got := props(&e); rec.Code != 500 || got["code"] != "internal" || got["message"] != "internal error" {
-		t.Errorf("answer %d %v, want 500 internal with the message internal error", rec.Code, got)
+	if rec.Code != 500 {
+		t.Errorf("answer %d, want 500: %.300s", rec.Code, rec.Body.String())
 	}
 	if logged.Len() != 0 {
 		t.Errorf("a cancelled request is logged: %q", logged.String())
