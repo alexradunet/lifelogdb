@@ -215,28 +215,26 @@ func TestCommandCancellation(t *testing.T) {
 	}
 }
 
-func TestServeAuthorityAddress(t *testing.T) {
-	for _, tc := range []struct{ input, want string }{
-		{"127.0.0.1:7777", "127.0.0.1:7777"}, {"127.2.3.4:0", "127.2.3.4:0"}, {"localhost:0", "127.0.0.1:0"}, {"LOCALHOST:7777", "127.0.0.1:7777"}, {"[::1]:0", "[::1]:0"},
+// TestServeAddressFlag: --addr, in both of its forms, reaches the parse of the loopback address (api.LoopbackAddress,
+// whose own test has the table of addresses): LOCALHOST becomes 127.0.0.1, and a refused address stops serve before
+// the database opens, as the file is absent.
+func TestServeAddressFlag(t *testing.T) {
+	absent := filepath.Join(t.TempDir(), "absent.db")
+	e, _, _ := testEnv(t)
+	for _, at := range []func(addr string) []string{
+		func(addr string) []string { return []string{"--addr", addr} },
+		func(addr string) []string { return []string{"--addr=" + addr} },
 	} {
-		for _, argv := range [][]string{{"serve", "--addr", tc.input}, {"--addr=" + tc.input, "serve"}} {
-			o, err := parse(argv, noVars)
-			if err != nil {
-				t.Fatal(err)
-			}
-			got, err := api.LoopbackAddress(o.addr)
-			if err != nil || got != tc.want {
-				t.Fatalf("%q got=%q err=%v", argv, got, err)
-			}
+		o, err := parse(append([]string{"serve"}, at("LOCALHOST:7777")...), noVars)
+		if err != nil {
+			t.Fatal(err)
 		}
-	}
-	for _, addr := range []string{"", ":7777", "0.0.0.0:7777", "[::]:7777", "192.0.2.1:7777", "custom.invalid:7777", "localhoſt:7777", "localhost:http", "localhost:65536", "localhost:-1", "localhost:+1", "localhost.", "[::1%zone]:7777", "[localhost]:7777", "127.0.0.1", "localhost:"} {
-		// Address refusal precedes database opening, even when the file is absent.
-		e, _, _ := testEnv(t)
-		e.o = opts{args: []string{"serve"}, addr: addr, db: filepath.Join(t.TempDir(), "absent.db")}
-		err := runContext(t.Context(), e)
-		if err == nil || !strings.Contains(err.Error(), "serve address") {
-			t.Fatalf("addr=%q error=%v", addr, err)
+		if err := prepareServe(&o); err != nil || o.addr != "127.0.0.1:7777" {
+			t.Errorf("serve %v: the address %q, %v; want 127.0.0.1:7777", at("LOCALHOST:7777"), o.addr, err)
+		}
+		argv := append(at("0.0.0.0:7777"), "serve", "--db", absent)
+		if err := runArgs(t.Context(), e, argv); err == nil || !strings.Contains(err.Error(), "serve address") {
+			t.Errorf("%v: %v, want the refusal of the address", argv, err)
 		}
 	}
 }
