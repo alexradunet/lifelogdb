@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 )
 
 // TestASnapshotTellsARefusalFromAFailure: a name in use, a folder inside a git work tree and a folder that is not there
@@ -54,16 +55,19 @@ func TestASnapshotTellsARefusalFromAFailure(t *testing.T) {
 	})
 	t.Run("no database", func(t *testing.T) {
 		// Deliberate damage: the file of the store is closed and removed.
-		gone := fresh(t)
-		gone.SnapshotDir = t.TempDir()
-		path := gone.DB.Path()
+		path := dbtest.File(t)
+		d, err := db.Open(t.Context(), path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		gone := &Store{DB: d, SnapshotDir: t.TempDir()}
 		if err := gone.DB.Close(); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.Remove(path); err != nil {
 			t.Fatal(err)
 		}
-		_, _, err := gone.TakeSnapshot(ctx, now)
+		_, _, err = gone.TakeSnapshot(ctx, now)
 		var e *Error
 		if !errors.Is(err, os.ErrNotExist) || errors.As(err, &e) {
 			t.Errorf("err = %#v, want a failure that is not a refusal", err)
@@ -92,15 +96,8 @@ func TestARestoreCheckReportsAFailedClose(t *testing.T) {
 // and leaving the snapshot as it was.
 func TestSnapshot(t *testing.T) {
 	ctx := context.Background()
-	live := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(t.Context(), live); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(t.Context(), live)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer d.Close()
+	d := dbtest.New(t)
+	live := d.Path()
 	if _, _, err := (&Store{DB: d}).Capture(ctx, "cli", "2026-10-02", "Walked to [[Lakeside]] with [[Sam]].", nil); err != nil {
 		t.Fatal(err)
 	}
@@ -310,10 +307,7 @@ func TestSnapshotPhysicalDestination(t *testing.T) {
 						t.Skip("Windows directory junctions require Windows")
 					}
 					root := t.TempDir()
-					live := filepath.Join(root, "life.db")
-					if err := db.Init(t.Context(), live); err != nil {
-						t.Fatal(err)
-					}
+					live := dbtest.File(t)
 					before := mustRead(t, live)
 					repo := filepath.Join(root, "repo")
 					target := filepath.Join(repo, "backups")
@@ -404,10 +398,7 @@ func TestSnapshotNeverFollowsDestinationFileSymlinks(t *testing.T) {
 	for _, occupied := range []string{"daily", "timestamp"} {
 		t.Run(occupied, func(t *testing.T) {
 			root := t.TempDir()
-			live := filepath.Join(root, "life.db")
-			if err := db.Init(t.Context(), live); err != nil {
-				t.Fatal(err)
-			}
+			live := dbtest.File(t)
 			dir, repo := filepath.Join(root, "snapshots"), filepath.Join(root, "repo")
 			for _, path := range []string{dir, filepath.Join(repo, ".git")} {
 				if err := os.MkdirAll(path, 0o755); err != nil {

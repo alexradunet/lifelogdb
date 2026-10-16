@@ -4,13 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
-	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 
 	"modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
@@ -20,16 +19,7 @@ var ctx = context.Background()
 
 func fresh(t *testing.T) *Store {
 	t.Helper()
-	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(t.Context(), p); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(t.Context(), p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { d.Close() })
-	return &Store{DB: d}
+	return &Store{DB: dbtest.New(t)}
 }
 
 func status(err error) int {

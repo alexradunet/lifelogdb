@@ -14,7 +14,7 @@ import (
 
 	"lifelog/internal/api"
 	"lifelog/internal/core"
-	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 )
 
 func wait(t *testing.T, ch <-chan struct{}) {
@@ -129,15 +129,7 @@ func TestClientCancellationQueuedWrite(t *testing.T) {
 }
 
 func testQueuedWrite(t *testing.T, remote bool) {
-	path := filepath.Join(t.TempDir(), "synthetic.db")
-	if err := db.Init(t.Context(), path); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(t.Context(), path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer d.Close()
+	d := dbtest.New(t)
 	held, release, finished := make(chan struct{}), make(chan struct{}), make(chan error, 1)
 	go func() {
 		finished <- d.Write(context.Background(), func(*sql.Tx) error { close(held); <-release; return nil })
