@@ -114,13 +114,13 @@ func TestMetricsArePagesFiledInCategories(t *testing.T) {
 					c = p.ID
 				}
 				if above != 0 {
-					if _, err := tx.Link(c, above, "part-of", ""); err != nil {
+					if _, err := tx.link(c, above, "part-of", ""); err != nil {
 						return err
 					}
 				}
 				above = c
 			}
-			added, err = tx.Link(id, above, "part-of", "")
+			added, err = tx.link(id, above, "part-of", "")
 			return err
 		})
 		return

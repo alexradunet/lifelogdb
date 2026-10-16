@@ -53,7 +53,7 @@ func (t *Tx) AddFile(f FileIn) (Kept, error) {
 	if err != nil || f.Category == "" || k.Deleted {
 		return k, err
 	}
-	filed, err := t.FilePages([]int64{k.ID}, f.Category, false)
+	filed, err := t.filePages([]int64{k.ID}, f.Category, false)
 	if err != nil {
 		return k, err
 	}

@@ -7,13 +7,14 @@ import (
 )
 
 // Tx is one BEGIN IMMEDIATE write transaction and the writer whose rows it writes (lifelog_meta.source).
-// Every write operation is a method on it, so an import composes several into one transaction; each Store
-// method is the same operation alone. Its SQL uses the context of the owning Do call.
+// Every write operation is a method on it, so one write can do several operations: CreateMetric registers a metric
+// and files it, and internal/scaletest writes its synthetic rows in a few large transactions. Each Store method is
+// one operation alone. Its SQL uses the context of the owning Do call.
 type Tx struct {
 	tx     *sql.Tx
 	ctx    context.Context
 	today  func() string // the local day of the store's clock (Store.Today)
-	Source string
+	source string        // the writer (lifelog_meta.source), checked by Do
 }
 
 // Do runs fn in one write transaction, committed when fn returns nil.
@@ -21,7 +22,7 @@ func (s *Store) Do(ctx context.Context, source string, fn func(*Tx) error) error
 	if err := CheckSource(source); err != nil {
 		return err
 	}
-	return refused(s.DB.Write(ctx, func(tx *sql.Tx) error { return fn(&Tx{tx: tx, ctx: ctx, today: s.Today, Source: source}) }))
+	return refused(s.DB.Write(ctx, func(tx *sql.Tx) error { return fn(&Tx{tx: tx, ctx: ctx, today: s.Today, source: source}) }))
 }
 
 // alone runs fn as the one operation of its own write transaction (Do): the Store form of a Tx method. s stands for

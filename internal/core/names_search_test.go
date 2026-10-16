@@ -79,7 +79,7 @@ func TestCanonicalNamesSearchConflictPathsAndRebuild(t *testing.T) {
 	check("Sky needle", id)
 	fail := errors.New("rollback search")
 	if err := s.Do(ctx, "cli", func(tx *Tx) error {
-		if _, err := tx.Rename(id, "Rollback"); err != nil {
+		if _, err := tx.rename(id, "Rollback"); err != nil {
 			return err
 		}
 		if _, err := tx.SetBody(id, "rolled back"); err != nil {

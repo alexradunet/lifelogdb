@@ -118,7 +118,7 @@ func (s *Store) CreateMetric(ctx context.Context, source string, m NewMetric) (a
 		if err != nil {
 			return false, err
 		}
-		_, err = t.FilePages([]int64{id}, m.Category, false)
+		_, err = t.filePages([]int64{id}, m.Category, false)
 		return added, err
 	})
 }
@@ -150,7 +150,7 @@ func (t *Tx) Record(m Reading) (id int64, err error) {
 	                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, `+nowSQL+`)
 	                     ON CONFLICT(source, import_key, metric_id) WHERE import_key IS NOT NULL DO NOTHING
 	                     RETURNING id`,
-		metric, m.Day, nullIfEmpty(m.TakenAt), nullIfEmpty(m.TZ), m.Value, t.Source, nullIfEmpty(m.ImportKey), with).Scan(&id)
+		metric, m.Day, nullIfEmpty(m.TakenAt), nullIfEmpty(m.TZ), m.Value, t.source, nullIfEmpty(m.ImportKey), with).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, nil // sent before
 	}
@@ -176,7 +176,7 @@ func (t *Tx) Correct(wrong int64, value *float64) (id int64, err error) {
 	}
 	err = t.tx.QueryRowContext(t.ctx, `INSERT INTO measurements(metric_id, day, taken_at, tz, value, source, captured_with_id, supersedes_id, created_at)
 	                     SELECT metric_id, day, taken_at, tz, ?, ?, captured_with_id, id, `+nowSQL+` FROM measurements WHERE id = ?
-	                     RETURNING id`, v, t.Source, wrong).Scan(&id)
+	                     RETURNING id`, v, t.source, wrong).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, NotFound("no measurement %d", wrong)
 	}

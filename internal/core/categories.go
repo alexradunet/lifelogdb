@@ -83,16 +83,12 @@ type Filed struct {
 	Moved    int      `json:"moved"`
 }
 
-// FilePages files every page named in the category page titled category, in one write (D26): a part-of link from
-// each. A missing category is made as an empty page, as PageForTitle makes it. With move, every other
-// part-of link of those pages is removed first. A page or a category that is not live is refused as livePage says;
-// that writes nothing. What the links registry refuses (a day page as a category, or filed in one) is
-// links_endpoint_types.
-func (t *Tx) FilePages(ids []int64, category string, move bool) (Filed, error) {
+// filePages is Store.FilePages in t.
+func (t *Tx) filePages(ids []int64, category string, move bool) (Filed, error) {
 	if err := checkTitle("category", category); err != nil {
 		return Filed{}, err
 	}
-	cat, created, err := t.PageForTitle(category)
+	cat, created, err := t.pageForTitle(category)
 	if err != nil {
 		return Filed{}, err
 	}
@@ -113,7 +109,7 @@ func (t *Tx) FilePages(ids []int64, category string, move bool) (Filed, error) {
 			n, _ := res.RowsAffected()
 			f.Moved += int(n)
 		}
-		added, err := t.Link(id, cat, "part-of", "")
+		added, err := t.link(id, cat, "part-of", "")
 		if err != nil {
 			return Filed{}, err
 		}
@@ -124,6 +120,11 @@ func (t *Tx) FilePages(ids []int64, category string, move bool) (Filed, error) {
 	return f, nil
 }
 
+// FilePages files every page named in the category page titled category, in one write (D26): a part-of link from
+// each. A missing category is made as an empty page, as PageForTitle makes it. With move, every other
+// part-of link of those pages is removed first. A page or a category that is not live is refused as livePage says;
+// that writes nothing. What the links registry refuses (a day page as a category, or filed in one) is
+// links_endpoint_types.
 func (s *Store) FilePages(ctx context.Context, source string, ids []int64, category string, move bool) (Filed, error) {
-	return alone(s, ctx, source, func(t *Tx) (Filed, error) { return t.FilePages(ids, category, move) })
+	return alone(s, ctx, source, func(t *Tx) (Filed, error) { return t.filePages(ids, category, move) })
 }

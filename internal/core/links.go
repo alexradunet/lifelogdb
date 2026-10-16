@@ -89,7 +89,7 @@ func (t *Tx) linkTarget(pageID int64, key, title string) (id int64, created, rev
 		revived = true
 	}
 	_, err = t.tx.ExecContext(t.ctx, `INSERT INTO links(from_id, to_id, kind, created_at, source) VALUES (?, ?, 'wikilink', `+nowSQL+`, ?)
-	                    ON CONFLICT(from_id, to_id, kind) DO NOTHING`, pageID, id, t.Source)
+	                    ON CONFLICT(from_id, to_id, kind) DO NOTHING`, pageID, id, t.source)
 	return
 }
 
@@ -101,10 +101,8 @@ func dayOfTitle(title string) any {
 	return nil
 }
 
-// Link adds an edge of a registered kind (D8); added reports whether it was new. wikilink rows belong to the
-// save contract; redirect is unsupported, so neither is written here. The endpoint rules, an `at` from a day page
-// among them, are links_endpoint_types. A from id that no page has is a 404.
-func (t *Tx) Link(from, to int64, kind, note string) (added bool, err error) {
+// link is Store.Link in t; added reports whether the link is new.
+func (t *Tx) link(from, to int64, kind, note string) (added bool, err error) {
 	if kind == "redirect" {
 		return false, Invalid("redirect is not a supported link kind")
 	}
@@ -120,7 +118,7 @@ func (t *Tx) Link(from, to int64, kind, note string) (added bool, err error) {
 		return false, err
 	}
 	res, err := t.tx.ExecContext(t.ctx, `INSERT INTO links(from_id, to_id, kind, note, created_at, source) VALUES (?, ?, ?, ?, `+nowSQL+`, ?)
-	                       ON CONFLICT(from_id, to_id, kind) DO NOTHING`, from, to, kind, nullIfEmpty(note), t.Source)
+	                       ON CONFLICT(from_id, to_id, kind) DO NOTHING`, from, to, kind, nullIfEmpty(note), t.source)
 	if err != nil {
 		return false, refused(err) // the registry's endpoint types refuse the link: a 422, as Do would return it
 	}
@@ -128,8 +126,8 @@ func (t *Tx) Link(from, to int64, kind, note string) (added bool, err error) {
 	return n > 0, nil
 }
 
-// Unlink deletes one edge (links rows are the one table whose rows are deleted, D11).
-func (t *Tx) Unlink(from, to int64, kind string) error {
+// unlink is Store.Unlink in t.
+func (t *Tx) unlink(from, to int64, kind string) error {
 	if kind == "redirect" {
 		return Invalid("redirect is not a supported link kind")
 	}
@@ -146,12 +144,16 @@ func (t *Tx) Unlink(from, to int64, kind string) error {
 	return nil
 }
 
+// Link adds an edge of a registered kind (D8). wikilink rows belong to the save contract; redirect is unsupported,
+// so neither is written here. The endpoint rules, an `at` from a day page among them, are links_endpoint_types. A
+// from id that no page has is a 404.
 func (s *Store) Link(ctx context.Context, source string, from, to int64, kind, note string) error {
-	return s.Do(ctx, source, func(t *Tx) error { _, err := t.Link(from, to, kind, note); return err })
+	return s.Do(ctx, source, func(t *Tx) error { _, err := t.link(from, to, kind, note); return err })
 }
 
+// Unlink deletes one edge (links rows are the one table whose rows are deleted, D11).
 func (s *Store) Unlink(ctx context.Context, source string, from, to int64, kind string) error {
-	return s.Do(ctx, source, func(t *Tx) error { return t.Unlink(from, to, kind) })
+	return s.Do(ctx, source, func(t *Tx) error { return t.unlink(from, to, kind) })
 }
 
 // Edge is a link seen from one end; ID and Title are the other end.

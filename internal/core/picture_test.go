@@ -261,11 +261,11 @@ func TestATxPictureThatFailsReturnsNoResult(t *testing.T) {
 			BEGIN SELECT RAISE(ABORT, 'synthetic fault'); END`); err != nil {
 			return err
 		}
-		k, err := tx.SetPicture(ana, "2026-10-16", FileIn{SHA256: sha('b'), MIME: "image/jpeg", Preview: pic})
+		k, err := tx.setPicture(ana, "2026-10-16", FileIn{SHA256: sha('b'), MIME: "image/jpeg", Preview: pic})
 		if err == nil || !reflect.DeepEqual(k, Kept{}) {
 			t.Errorf("SetPicture = %+v, %v; want no result and the fault", k, err)
 		}
-		r, err := tx.SetPictureOf(ana, "Ana.jpg")
+		r, err := tx.setPictureOf(ana, "Ana.jpg")
 		if err == nil || !reflect.DeepEqual(r, Sync{}) {
 			t.Errorf("SetPictureOf = %+v, %v; want no result and the fault", r, err)
 		}

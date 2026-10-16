@@ -103,7 +103,7 @@ func TestStableNamesRevivalSelfAndRollback(t *testing.T) {
 	}
 	fail := errors.New("rollback")
 	if err := s.Do(ctx, "cli", func(tx *Tx) error {
-		if _, err := tx.Rename(id, "Rolled back"); err != nil {
+		if _, err := tx.rename(id, "Rolled back"); err != nil {
 			return err
 		}
 		return fail

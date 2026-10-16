@@ -8,9 +8,8 @@ import (
 	"lifelog/internal/text"
 )
 
-// SaveBody replaces a page's body and syncs its wikilinks (cookbook/save-a-body.md). version is the
-// entities.revision token the caller read; the clock is audit metadata, not a version.
-func (t *Tx) SaveBody(id int64, body, version string) (Sync, error) {
+// saveBody is Store.SaveBody in t.
+func (t *Tx) saveBody(id int64, body, version string) (Sync, error) {
 	p, err := t.livePage(id)
 	if err != nil {
 		return Sync{}, err
@@ -49,10 +48,10 @@ func (t *Tx) CreatePage(title, body, day, importKey string) (id int64, existing 
 	return id, false, r, err
 }
 
-// PageForTitle is the id of the page that holds a title, made as an empty page when no page has it: the category a
+// pageForTitle is the id of the page that holds a title, made as an empty page when no page has it: the category a
 // filing names by its title (see FilePages), like the target of a wikilink, and like it with no day, so it is not an entry of the day it
 // was made on. A tombstoned page keeps its id and its tombstone.
-func (t *Tx) PageForTitle(title string) (id int64, created bool, err error) {
+func (t *Tx) pageForTitle(title string) (id int64, created bool, err error) {
 	if err := checkTitle("project", title); err != nil {
 		return 0, false, err
 	}
@@ -116,16 +115,15 @@ func (t *Tx) byImportKey(importKey string) (int64, error) {
 		return 0, nil
 	}
 	var id int64
-	err := t.tx.QueryRowContext(t.ctx, `SELECT id FROM entities WHERE source = ? AND import_key = ?`, t.Source, importKey).Scan(&id)
+	err := t.tx.QueryRowContext(t.ctx, `SELECT id FROM entities WHERE source = ? AND import_key = ?`, t.source, importKey).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, nil
 	}
 	return id, err
 }
 
-// Promote makes a plain page a person or a place (cookbook/person-or-place.md): the id and its links stay, a
-// tombstoned page is revived. A missing id is 404; a page of another type is a 409.
-func (t *Tx) Promote(id int64, typ, name string) error {
+// promote is Store.Promote in t.
+func (t *Tx) promote(id int64, typ, name string) error {
 	if typ != "person" && typ != "place" {
 		return Invalid("promote to person or place, not %q", typ)
 	}
@@ -154,11 +152,10 @@ func (t *Tx) Promote(id int64, typ, name string) error {
 	return err
 }
 
-// Tombstone and Revive set or clear entities.deleted_at (D11): nothing is ever deleted. A missing id is 404; the same
-// state again changes nothing.
-func (t *Tx) Tombstone(id int64) error { return t.setDeleted(id, true) }
+// tombstone and revive are Store.Tombstone and Store.Revive in t.
+func (t *Tx) tombstone(id int64) error { return t.setDeleted(id, true) }
 
-func (t *Tx) Revive(id int64) error { return t.setDeleted(id, false) }
+func (t *Tx) revive(id int64) error { return t.setDeleted(id, false) }
 
 func (t *Tx) setDeleted(id int64, deleted bool) error {
 	var tombstoned bool
@@ -182,8 +179,10 @@ func (t *Tx) setDeleted(id int64, deleted bool) error {
 
 // ---- the same operations alone, each its own transaction
 
+// SaveBody replaces a page's body and syncs its wikilinks (cookbook/save-a-body.md). version is the
+// entities.revision token the caller read; the clock is audit metadata, not a version.
 func (s *Store) SaveBody(ctx context.Context, source string, id int64, body, version string) (Sync, error) {
-	return alone(s, ctx, source, func(t *Tx) (Sync, error) { return t.SaveBody(id, body, version) })
+	return alone(s, ctx, source, func(t *Tx) (Sync, error) { return t.saveBody(id, body, version) })
 }
 
 // made is what a write that makes or writes a page gives, as one value for alone: the page's id and what the save of
@@ -236,35 +235,40 @@ func (t *Tx) fileNew(id int64, category string) error {
 	if category == "" {
 		return nil
 	}
-	_, err := t.FilePages([]int64{id}, category, false)
+	_, err := t.filePages([]int64{id}, category, false)
 	return err
 }
 
+// Promote makes a plain page a person or a place (cookbook/person-or-place.md): the id and its links stay, a
+// tombstoned page is revived. A missing id is 404; a page of another type is a 409.
 func (s *Store) Promote(ctx context.Context, source string, id int64, typ, name string) error {
-	return s.Do(ctx, source, func(t *Tx) error { return t.Promote(id, typ, name) })
+	return s.Do(ctx, source, func(t *Tx) error { return t.promote(id, typ, name) })
 }
 
+// Tombstone and Revive set or clear entities.deleted_at (D11): nothing is ever deleted. A missing id is 404; the same
+// state again changes nothing.
 func (s *Store) Tombstone(ctx context.Context, source string, id int64) error {
-	return s.Do(ctx, source, func(t *Tx) error { return t.Tombstone(id) })
+	return s.Do(ctx, source, func(t *Tx) error { return t.tombstone(id) })
 }
 
 func (s *Store) Revive(ctx context.Context, source string, id int64) error {
-	return s.Do(ctx, source, func(t *Tx) error { return t.Revive(id) })
+	return s.Do(ctx, source, func(t *Tx) error { return t.revive(id) })
 }
 
-// TombstonePages tombstones every page named, in one write (D11): a page that is tombstoned already is left as it
-// is, and an id no entity has is a 404 that writes nothing.
-func (t *Tx) TombstonePages(ids []int64) error {
+// tombstonePages is Store.TombstonePages in t.
+func (t *Tx) tombstonePages(ids []int64) error {
 	for _, id := range ids {
-		if err := t.Tombstone(id); err != nil {
+		if err := t.tombstone(id); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
+// TombstonePages tombstones every page named, in one write (D11): a page that is tombstoned already is left as it
+// is, and an id no entity has is a 404 that writes nothing.
 func (s *Store) TombstonePages(ctx context.Context, source string, ids []int64) error {
-	return s.Do(ctx, source, func(t *Tx) error { return t.TombstonePages(ids) })
+	return s.Do(ctx, source, func(t *Tx) error { return t.tombstonePages(ids) })
 }
 
 // Page is one page with what surrounds it. Version is the decimal entities.revision token: pass it back to SaveBody.

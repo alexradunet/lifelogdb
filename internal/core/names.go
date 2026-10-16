@@ -16,9 +16,9 @@ func (t *Tx) insertPage(typ, title, key string, day any, body, importKey string)
 	err = t.tx.QueryRowContext(t.ctx, `INSERT INTO entities(entity_type, preferred_name_key, day, body, created_at, updated_at, source, import_key)
                          VALUES (?, ?, ?, ?, `+nowSQL+`, `+nowSQL+`, ?, ?)
 	                     ON CONFLICT(source, import_key) WHERE import_key IS NOT NULL DO NOTHING
-	                     RETURNING id`, typ, key, day, body, t.Source, nullIfEmpty(importKey)).Scan(&id)
+	                     RETURNING id`, typ, key, day, body, t.source, nullIfEmpty(importKey)).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
-		err = t.tx.QueryRowContext(t.ctx, `SELECT id FROM entities WHERE source = ? AND import_key = ?`, t.Source, importKey).Scan(&id)
+		err = t.tx.QueryRowContext(t.ctx, `SELECT id FROM entities WHERE source = ? AND import_key = ?`, t.source, importKey).Scan(&id)
 		return id, true, err
 	}
 	if err != nil {
@@ -94,9 +94,8 @@ func orExists(err error, p *pageRef, title string) error {
 	return &ExistsError{p.ID, title}
 }
 
-// Rename selects an owned preferred name, retaining previous names and the entity's identity.
-// See contract/titles-and-wikilinks.md and cookbook/rename-a-page.md.
-func (t *Tx) Rename(id int64, newTitle string) (int64, error) {
+// rename is Store.Rename in t.
+func (t *Tx) rename(id int64, newTitle string) (int64, error) {
 	old, err := t.livePage(id)
 	if err != nil {
 		return 0, err
@@ -133,8 +132,10 @@ func (t *Tx) Rename(id int64, newTitle string) (int64, error) {
 	return id, nil
 }
 
+// Rename selects an owned preferred name, retaining previous names and the entity's identity.
+// See contract/titles-and-wikilinks.md and cookbook/rename-a-page.md.
 func (s *Store) Rename(ctx context.Context, source string, id int64, newTitle string) (to int64, err error) {
-	return alone(s, ctx, source, func(t *Tx) (int64, error) { return t.Rename(id, newTitle) })
+	return alone(s, ctx, source, func(t *Tx) (int64, error) { return t.rename(id, newTitle) })
 }
 
 // PageID resolves an owned name through the registry; 0 when no entity owns it.
