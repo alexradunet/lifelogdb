@@ -53,7 +53,7 @@ func TestMCPStableNames(t *testing.T) {
 				case "place":
 					id, err = s.CreatePlace(context.Background(), "cli", old, "")
 				case "metric":
-					_, err = s.RegisterMetric(context.Background(), "cli", old, "kg", "original metric")
+					_, err = s.CreateMetric(context.Background(), "cli", core.NewMetric{Name: old, Unit: "kg", Note: "original metric"})
 					if err == nil {
 						id, err = s.PageID(context.Background(), old)
 					}

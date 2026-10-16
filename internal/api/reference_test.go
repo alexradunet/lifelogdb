@@ -261,7 +261,7 @@ func fixture(t *testing.T) (http.Handler, *core.Store, map[string]string) {
 		t.Fatal(err)
 	}
 	ids["file"] = fmt.Sprintf("/pages/%d", kept.ID)
-	if _, err := s.RegisterMetric(ctx, "cli", "Weight", "kg", "morning"); err != nil {
+	if _, err := s.CreateMetric(ctx, "cli", core.NewMetric{Name: "Weight", Unit: "kg", Note: "morning"}); err != nil {
 		t.Fatal(err)
 	}
 	mid, err := s.Record(ctx, "cli", core.Reading{Metric: "Weight", Day: "2031-05-01", Value: 70})
@@ -269,7 +269,7 @@ func fixture(t *testing.T) (http.Handler, *core.Store, map[string]string) {
 		t.Fatal(err)
 	}
 	ids["measurement"] = fmt.Sprintf("/measurements/%d", mid)
-	if _, err := s.RegisterMetric(ctx, "cli", "Walk", "", "1 = done"); err != nil {
+	if _, err := s.CreateMetric(ctx, "cli", core.NewMetric{Name: "Walk", Note: "1 = done"}); err != nil {
 		t.Fatal(err)
 	}
 	h := New(s)

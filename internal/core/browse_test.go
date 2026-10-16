@@ -48,7 +48,7 @@ func browseFixture(t *testing.T) (*Store, map[string]int64) {
 		ids[f.Title] = k.ID
 	}
 	for _, m := range [][2]string{{"Weight", "kg"}, {"Walk", ""}} {
-		_, err := s.RegisterMetric(ctx, "cli", m[0], m[1], "")
+		_, err := s.CreateMetric(ctx, "cli", NewMetric{Name: m[0], Unit: m[1]})
 		check(err)
 		id, err := s.PageID(ctx, m[0])
 		check(err)
@@ -348,7 +348,7 @@ func TestBrowseOrdersTitlesWithoutCase(t *testing.T) {
 		}
 	}
 	for _, m := range []string{"commits", "Weight"} {
-		if _, err := s.RegisterMetric(ctx, "cli", m, "", ""); err != nil {
+		if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: m}); err != nil {
 			t.Fatal(err)
 		}
 	}

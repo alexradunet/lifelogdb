@@ -7,7 +7,7 @@ import "testing"
 func TestAnyRangeUnitHoldsItsValuesToTheRange(t *testing.T) {
 	s := fresh(t)
 	for _, m := range []struct{ name, unit string }{{"Pain", "0-10"}, {"Grade", "1-100"}} {
-		if _, err := s.RegisterMetric(ctx, "cli", m.name, m.unit, ""); err != nil {
+		if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: m.name, Unit: m.unit}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -45,7 +45,7 @@ func TestAnyRangeUnitHoldsItsValuesToTheRange(t *testing.T) {
 		t.Errorf("a correction of Pain to 4: %v", err)
 	}
 	// a metric without a range unit takes any finite number
-	if _, err := s.RegisterMetric(ctx, "cli", "Weight", "kg", ""); err != nil {
+	if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "Weight", Unit: "kg"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := record("Weight", 70.5); err != nil {
@@ -58,7 +58,7 @@ func TestAnyRangeUnitHoldsItsValuesToTheRange(t *testing.T) {
 // A different unit is one, since a unit never changes (metrics_unit_fixed).
 func TestRegisteringAnExistingScaleAdoptsIt(t *testing.T) {
 	s := fresh(t)
-	if _, err := s.RegisterMetric(ctx, "cli", "Pain", "0-10", "how much it hurts"); err != nil {
+	if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "Pain", Unit: "0-10", Note: "how much it hurts"}); err != nil {
 		t.Fatal(err)
 	}
 	for _, c := range []struct {
@@ -68,7 +68,7 @@ func TestRegisteringAnExistingScaleAdoptsIt(t *testing.T) {
 		{"Mood", "", 0}, {"mood", "1-5", 0}, {"MOOD", "", 0}, {"Mood", "kg", 409}, {"Mood", "0-10", 409}, {"Mood", "1-10", 409},
 		{"pain", "", 0}, {"Pain", "0-10", 0}, {"Pain", "1-5", 409}, {"Pain", "mg", 409},
 	} {
-		added, err := s.RegisterMetric(ctx, "cli", c.name, c.unit, "ignored note")
+		added, err := s.CreateMetric(ctx, "cli", NewMetric{Name: c.name, Unit: c.unit, Note: "ignored note"})
 		if status(err) != c.want || added {
 			t.Errorf("register %q with unit %q: added %v, %v; want added false and status %d", c.name, c.unit, added, err, c.want)
 		}
@@ -82,16 +82,16 @@ func TestRegisteringAnExistingScaleAdoptsIt(t *testing.T) {
 		t.Errorf("Pain after the adoptions: unit %q, body %q", unit, body)
 	}
 	// only a range is adopted: a physical unit, or none, stays what it was
-	if _, err := s.RegisterMetric(ctx, "cli", "Weight", "kg", ""); err != nil {
+	if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "Weight", Unit: "kg"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.RegisterMetric(ctx, "cli", "Weight", "", ""); status(err) != 409 {
+	if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "Weight"}); status(err) != 409 {
 		t.Errorf("Weight (kg) registered with no unit: %v, want a 409", err)
 	}
-	if _, err := s.RegisterMetric(ctx, "cli", "Steps", "", ""); err != nil {
+	if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "Steps"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.RegisterMetric(ctx, "cli", "Steps", "0-10", ""); status(err) != 409 {
+	if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "Steps", Unit: "0-10"}); status(err) != 409 {
 		t.Errorf("a unitless metric registered as a scale: %v, want a 409", err)
 	}
 }

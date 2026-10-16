@@ -71,14 +71,6 @@ func (t *Tx) metricID(name string) (int64, error) {
 	return id, err
 }
 
-func (s *Store) RegisterMetric(ctx context.Context, source, name, unit, note string) (added bool, err error) {
-	err = s.Do(ctx, source, func(t *Tx) (e error) { added, e = t.RegisterMetric(name, unit, note); return })
-	if err != nil {
-		added = false
-	}
-	return
-}
-
 // NewMetric is what CreateMetric makes in one write: the metric, and, when it is named, its category, a page
 // title; it may be empty.
 type NewMetric struct {

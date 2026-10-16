@@ -58,12 +58,12 @@ func TestCreationIsNotAnEdit(t *testing.T) {
 	add("page with wikilinks", id, err)
 	id, err = s.CreatePlace(ctx, "cli", "Harbour", "")
 	add("place", id, err)
-	_, err = s.RegisterMetric(ctx, "cli", "Sleep", "h", "hours slept, see [[Lakeside]]")
+	_, err = s.CreateMetric(ctx, "cli", NewMetric{Name: "Sleep", Unit: "h", Note: "hours slept, see [[Lakeside]]"})
 	if err == nil {
 		id, err = s.PageID(ctx, "Sleep")
 	}
 	add("metric with a note", id, err)
-	_, err = s.RegisterMetric(ctx, "cli", "Steps", "count", "")
+	_, err = s.CreateMetric(ctx, "cli", NewMetric{Name: "Steps", Unit: "count"})
 	if err == nil {
 		id, err = s.PageID(ctx, "Steps")
 	}

@@ -57,7 +57,7 @@ func browseFixture(t *testing.T, s *core.Store) map[string]int64 {
 		check(err)
 		ids[f.Title] = k.ID
 	}
-	_, err = s.RegisterMetric(ctx, "cli", "Weight", "kg", "")
+	_, err = s.CreateMetric(ctx, "cli", core.NewMetric{Name: "Weight", Unit: "kg"})
 	check(err)
 	for _, title := range []string{"Weight", "Mood"} {
 		ids[title], err = s.PageID(ctx, title)

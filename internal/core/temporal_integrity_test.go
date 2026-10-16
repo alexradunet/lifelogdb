@@ -7,7 +7,7 @@ import "testing"
 func TestIntegrityDetectsACorrectionOfAnotherMetric(t *testing.T) {
 	s := fresh(t)
 	for _, name := range []string{"Steps", "Floors"} {
-		if _, err := s.RegisterMetric(ctx, "cli", name, "count", ""); err != nil {
+		if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: name, Unit: "count"}); err != nil {
 			t.Fatal(err)
 		}
 	}

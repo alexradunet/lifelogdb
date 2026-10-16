@@ -240,13 +240,13 @@ func TestCorrectionDomains(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.RegisterMetric(ctx, "cli", "focus", "", ""); err != nil {
+	if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "focus"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.RegisterMetric(ctx, "cli", "evening_walk", "", ""); err != nil {
+	if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "evening_walk"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.RegisterMetric(ctx, "cli", "winter_vitamin", "", ""); err != nil {
+	if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "winter_vitamin"}); err != nil {
 		t.Fatal(err)
 	}
 

@@ -33,7 +33,7 @@ func partOf(t *testing.T, s *Store, id int64) []string {
 
 func metricID(t *testing.T, s *Store, name, unit string) int64 {
 	t.Helper()
-	if _, err := s.RegisterMetric(ctx, "cli", name, unit, ""); err != nil {
+	if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: name, Unit: unit}); err != nil {
 		t.Fatal(err)
 	}
 	return pageByTitle(t, s, name).ID

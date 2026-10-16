@@ -125,7 +125,7 @@ func TestIntegrityDetectsDeliberateTypedEdgeDamage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.RegisterMetric(ctx, "cli", "Weight", "kg", ""); err != nil {
+	if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "Weight", Unit: "kg"}); err != nil {
 		t.Fatal(err)
 	}
 	metric, err := s.PageID(ctx, "Weight")

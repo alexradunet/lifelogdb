@@ -252,7 +252,7 @@ func TestTitlesByPrefixFoldsLikeATitleKey(t *testing.T) {
 func TestReadingsCountCountsTheCurrentReadingsOfAWindow(t *testing.T) {
 	s := fresh(t)
 	for name, unit := range map[string]string{"weight": "kg", "steps": "n"} {
-		if _, err := s.RegisterMetric(ctx, "cli", name, unit, ""); err != nil {
+		if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: name, Unit: unit}); err != nil {
 			t.Fatal(err)
 		}
 	}

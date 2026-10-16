@@ -16,7 +16,7 @@ func TestMetricNoteLinks(t *testing.T) {
 	}
 	note := "Discuss with [[Bob Sample]], [[Diet Plan]], [[diet plan|again]], #health #Health and [[Health/Diet]]."
 	want := "Bob Sample,Diet Plan,health"
-	if added, err := s.RegisterMetric(ctx, "cli", "Fresh Link Metric", "count", note); err != nil || !added {
+	if added, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "Fresh Link Metric", Unit: "count", Note: note}); err != nil || !added {
 		t.Fatalf("fresh metric with a note: %v %v", added, err)
 	}
 	fresh := pageByTitle(t, s, "Fresh Link Metric")
@@ -34,7 +34,7 @@ func TestMetricNoteLinks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if added, err := s.RegisterMetric(ctx, "cli", "promoted link metric", "count", note); err != nil || !added {
+	if added, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "promoted link metric", Unit: "count", Note: note}); err != nil || !added {
 		t.Fatalf("promoted metric with a note: %v %v", added, err)
 	}
 	promoted, err := s.PageByID(ctx, ghost)
@@ -48,7 +48,7 @@ func TestMetricNoteLinks(t *testing.T) {
 		assertBacklinks(t, s, target, "Fresh Link Metric,Promoted Link Metric")
 	}
 
-	if added, err := s.RegisterMetric(ctx, "cli", "Fresh Link Metric", "count", "Replacement [[Changed Target]] #other"); err != nil || added {
+	if added, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "Fresh Link Metric", Unit: "count", Note: "Replacement [[Changed Target]] #other"}); err != nil || added {
 		t.Fatalf("re-registering a metric with a body: %v %v", added, err)
 	}
 	fresh = pageByTitle(t, s, "Fresh Link Metric")
@@ -125,20 +125,20 @@ func TestMetricsArePagesFiledInCategories(t *testing.T) {
 		})
 		return
 	}
-	if added, err := s.RegisterMetric(ctx, "cli", "LDL cholesterol", "mg/dL", "low-density lipoprotein"); err != nil || !added {
+	if added, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "LDL cholesterol", Unit: "mg/dL", Note: "low-density lipoprotein"}); err != nil || !added {
 		t.Fatalf("a metric with a title for a name: %v %v", added, err)
 	}
-	if _, err := s.RegisterMetric(ctx, "cli", "ldl CHOLESTEROL", "mmol/L", ""); status(err) != 409 {
+	if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "ldl CHOLESTEROL", Unit: "mmol/L"}); status(err) != 409 {
 		t.Errorf("the same name in another case is the same metric, and its unit never changes: %v", err)
 	}
-	if _, err := s.RegisterMetric(ctx, "cli", "a/b", "", ""); status(err) != 422 {
+	if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "a/b"}); status(err) != 422 {
 		t.Errorf("a name that is not a valid title: %v", err)
 	}
 	ghost, _, err := s.CreatePage(ctx, "cli", "Ferritin", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if added, err := s.RegisterMetric(ctx, "cli", "ferritin", "ng/mL", "iron stores"); err != nil || !added {
+	if added, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "ferritin", Unit: "ng/mL", Note: "iron stores"}); err != nil || !added {
 		t.Fatalf("an empty page of that title becomes the metric: %v %v", added, err)
 	}
 	if p, _ := s.PageByID(ctx, ghost); p.Type != "metric" || p.Body != "iron stores" {
@@ -148,13 +148,13 @@ func TestMetricsArePagesFiledInCategories(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if added, err := s.RegisterMetric(ctx, "cli", "aptt", "seconds", "aPTT"); err != nil || !added {
+	if added, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "aptt", Unit: "seconds", Note: "aPTT"}); err != nil || !added {
 		t.Fatalf("a page the owner wrote about it becomes the metric: %v %v", added, err)
 	}
 	if p, _ := s.PageByID(ctx, written); p.Type != "metric" || p.Title != "aPTT" || p.Body != "Clotting time; mine runs long." {
 		t.Errorf("the owner's text is kept, the note is not written over it: %+v", p)
 	}
-	if added, err := s.RegisterMetric(ctx, "cli", "aptt", "seconds", "aPTT"); err != nil || added {
+	if added, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "aptt", Unit: "seconds", Note: "aPTT"}); err != nil || added {
 		t.Errorf("registering it again is a no-op: %v %v", added, err)
 	}
 	if added, err := file("LDL cholesterol", "Biomarkers/Lipids"); err != nil || !added {

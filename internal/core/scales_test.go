@@ -10,7 +10,7 @@ import (
 func TestScalesAreRangeChecked(t *testing.T) {
 	s := fresh(t)
 	for _, m := range []struct{ name, unit string }{{"Energy", "1-5"}, {"Pain", "0-10"}} {
-		if _, err := s.RegisterMetric(ctx, "cli", m.name, m.unit, ""); err != nil {
+		if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: m.name, Unit: m.unit}); err != nil {
 			t.Fatal(err)
 		}
 	}

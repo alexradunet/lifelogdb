@@ -34,7 +34,7 @@ func TestAnAgentFilesMetricsThroughMCP(t *testing.T) {
 	})
 	s := &core.Store{DB: d}
 	for _, m := range []string{"Ferritin", "LDL"} {
-		if _, err := s.RegisterMetric(context.Background(), "cli", m, "mg/dL", ""); err != nil {
+		if _, err := s.CreateMetric(context.Background(), "cli", core.NewMetric{Name: m, Unit: "mg/dL"}); err != nil {
 			t.Fatal(err)
 		}
 	}

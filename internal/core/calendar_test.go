@@ -135,7 +135,7 @@ func TestReadingsByDay(t *testing.T) {
 	if _, _, err := s.Capture(ctx, "cli", "2031-05-14", "", &mood); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.RegisterMetric(ctx, "cli", "weight", "kg", ""); err != nil {
+	if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "weight", Unit: "kg"}); err != nil {
 		t.Fatal(err)
 	}
 	record := func(day string, v float64) int64 {
