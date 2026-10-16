@@ -6,6 +6,20 @@ import (
 	"testing"
 )
 
+// drawForm draws the action with the template form, as a page draws it, with the options of formOf.
+func drawForm(t *testing.T, a Action, opts ...string) (string, *formView) {
+	t.Helper()
+	f, err := formOf(a, opts...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var b bytes.Buffer
+	if err := templates.ExecuteTemplate(&b, "form", f); err != nil {
+		t.Fatal(err)
+	}
+	return b.String(), f
+}
+
 func TestBrowserFieldPresence(t *testing.T) {
 	a := Action{Name: "fields", Method: "POST", Href: "/fields", Fields: []Field{
 		{Name: "hidden", Type: "hidden", Value: 0},
@@ -14,16 +28,9 @@ func TestBrowserFieldPresence(t *testing.T) {
 		{Name: "textarea", Type: "textarea", Value: 0},
 		{Name: "choice", Type: "number", Value: 0, Options: []string{"", "0", "1"}},
 	}}
-	f, err := formOf(a)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var b bytes.Buffer
-	if err := templates.ExecuteTemplate(&b, "form", f); err != nil {
-		t.Fatal(err)
-	}
+	got, _ := drawForm(t, a)
 	for _, want := range []string{`name="hidden" value="0"`, `name="optional" value=""`, `name="default" value="5"`, `>0</textarea>`, `<option selected>0</option>`} {
-		if !strings.Contains(b.String(), want) {
+		if !strings.Contains(got, want) {
 			t.Errorf("missing %s", want)
 		}
 	}

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bytes"
 	"regexp"
 	"strings"
 	"testing"
@@ -34,28 +33,16 @@ func TestDangerIsACatalogAction(t *testing.T) {
 // TestDangerAndRowsReachTheForm says the button of a destructive action is drawn as one, and that a textarea is
 // as tall as the catalog says — both from the catalog, so no template knows an action or a field by name.
 func TestDangerAndRowsReachTheForm(t *testing.T) {
-	draw := func(t *testing.T, a Action, opts ...string) string {
-		t.Helper()
-		f, err := formOf(a, opts...)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var b bytes.Buffer
-		if err := templates.ExecuteTemplate(&b, "form", f); err != nil {
-			t.Fatal(err)
-		}
-		return b.String()
-	}
-	if got := draw(t, action("tombstone", map[string]string{"id": "7"}, nil)); !strings.Contains(got, `<button class="danger">`) {
+	if got, _ := drawForm(t, action("tombstone", map[string]string{"id": "7"}, nil)); !strings.Contains(got, `<button class="danger">`) {
 		t.Errorf("a tombstone draws no danger button: %s", got)
 	}
-	if got := draw(t, action("revive", map[string]string{"id": "7"}, nil)); strings.Contains(got, "danger") {
+	if got, _ := drawForm(t, action("revive", map[string]string{"id": "7"}, nil)); strings.Contains(got, "danger") {
 		t.Errorf("a revive draws a danger button: %s", got)
 	}
-	if got := draw(t, action("save-body", map[string]string{"id": "7"}, map[string]any{"body": "words", "version": "3"})); !strings.Contains(got, `name="body" rows="18"`) {
+	if got, _ := drawForm(t, action("save-body", map[string]string{"id": "7"}, map[string]any{"body": "words", "version": "3"})); !strings.Contains(got, `name="body" rows="18"`) {
 		t.Errorf("a body is not drawn as tall as the catalog says: %s", got)
 	}
-	if got := draw(t, action("capture", map[string]string{"day": "2026-01-01"}, nil), "autofocus", "text"); strings.Count(got, "autofocus") != 1 ||
+	if got, _ := drawForm(t, action("capture", map[string]string{"day": "2026-01-01"}, nil), "autofocus", "text"); strings.Count(got, "autofocus") != 1 ||
 		!strings.Contains(got, `name="text" rows="4" autofocus`) {
 		t.Errorf("the browser does not start in the field the view named: %s", got)
 	}
@@ -66,20 +53,8 @@ func TestDangerAndRowsReachTheForm(t *testing.T) {
 // fields with a value are drawn open; a folded file field still makes the form multipart
 // (docs/plans/095-the-leaf-and-its-margin.md).
 func TestOptionalFieldsFoldUnderMoreFields(t *testing.T) {
-	draw := func(t *testing.T, a Action, opts ...string) (string, *formView) {
-		t.Helper()
-		f, err := formOf(a, opts...)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var b bytes.Buffer
-		if err := templates.ExecuteTemplate(&b, "form", f); err != nil {
-			t.Fatal(err)
-		}
-		return b.String(), f
-	}
 	more := regexp.MustCompile(`(?s)<details class="more-fields"( open)?><summary>([^<]*)</summary>(.*?)</details>`)
-	got, f := draw(t, action("record", nil, map[string]any{"day": "2026-10-12"}), "more", "metric,taken_at,tz,import_key")
+	got, f := drawForm(t, action("record", nil, map[string]any{"day": "2026-10-12"}), "more", "metric,taken_at,tz,import_key")
 	m := more.FindStringSubmatch(got)
 	if m == nil {
 		t.Fatalf("no More fields in the form: %s", got)
@@ -100,16 +75,16 @@ func TestOptionalFieldsFoldUnderMoreFields(t *testing.T) {
 <button class="primary">`) || strings.Index(got, "</details>") > strings.Index(got, "<button") {
 		t.Errorf("the shown fields, or the button after the folded ones, are not drawn: %s", got)
 	}
-	got, _ = draw(t, action("record", nil, map[string]any{"tz": "Europe/Bucharest"}), "more", "taken_at,tz")
+	got, _ = drawForm(t, action("record", nil, map[string]any{"tz": "Europe/Bucharest"}), "more", "taken_at,tz")
 	if m := more.FindStringSubmatch(got); m == nil || m[1] != " open" || m[2] != "2 more fields" ||
 		!strings.Contains(m[3], `name="tz" value="Europe/Bucharest"`) {
 		t.Errorf("a folded field with a value is out of sight: %s", got)
 	}
-	if got, _ = draw(t, action("add-file", nil, nil), "more", "preview"); !strings.Contains(got, `enctype="multipart/form-data"`) ||
+	if got, _ = drawForm(t, action("add-file", nil, nil), "more", "preview"); !strings.Contains(got, `enctype="multipart/form-data"`) ||
 		!more.MatchString(got) || !strings.Contains(more.FindStringSubmatch(got)[3], `type="file" name="preview"`) {
 		t.Errorf("a form with a folded file is not multipart: %s", got)
 	}
-	if got, _ = draw(t, action("record", nil, nil)); strings.Contains(got, "more-fields") {
+	if got, _ = drawForm(t, action("record", nil, nil)); strings.Contains(got, "more-fields") {
 		t.Errorf("a form whose view folds nothing has More fields: %s", got)
 	}
 }
