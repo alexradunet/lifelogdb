@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -15,7 +14,7 @@ import (
 	"lifelog/internal/api"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
-	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 )
 
 // Browse (docs/plans/117-one-browse-view.md): one list with two filters, the kind and where it looks.
@@ -498,19 +497,7 @@ func TestBrowseTransportParity(t *testing.T) {
 	want := "Ana:mentions=1 Bo:mentions=0"
 	for _, remote := range []bool{false, true} {
 		t.Run(fmt.Sprint(remote), func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "life.db")
-			if err := db.Init(t.Context(), path); err != nil {
-				t.Fatal(err)
-			}
-			d, err := db.Open(t.Context(), path)
-			if err != nil {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() {
-				if err := d.Close(); err != nil {
-					t.Error(err)
-				}
-			})
+			d := dbtest.New(t)
 			s := &core.Store{DB: d}
 			browseFixture(t, s)
 			h := api.New(s)

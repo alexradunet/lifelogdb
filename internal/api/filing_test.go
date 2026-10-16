@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -15,7 +14,7 @@ import (
 	"lifelog/internal/api"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
-	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 )
 
 // The metrics as cards, and file-pages (docs/plans/112-metrics-as-cards.md): several metrics filed in a category in
@@ -129,19 +128,7 @@ func TestFileMetricsAtOnce(t *testing.T) {
 func TestFilingTransportParity(t *testing.T) {
 	for _, remote := range []bool{false, true} {
 		t.Run(fmt.Sprint(remote), func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "life.db")
-			if err := db.Init(t.Context(), path); err != nil {
-				t.Fatal(err)
-			}
-			d, err := db.Open(t.Context(), path)
-			if err != nil {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() {
-				if err := d.Close(); err != nil {
-					t.Error(err)
-				}
-			})
+			d := dbtest.New(t)
 			h := api.New(&core.Store{DB: d})
 			c := client.InProcess(h, "cli")
 			if remote {

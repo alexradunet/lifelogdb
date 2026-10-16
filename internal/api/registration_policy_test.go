@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -16,23 +15,14 @@ import (
 	"lifelog/internal/api"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
-	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 	lifelogmcp "lifelog/internal/mcp"
 )
 
 // The owner-only actions are refused to an agent and are never MCP tools; every other action is a tool.
 func TestOwnerOnlyActionsPolicy(t *testing.T) {
-	root := t.TempDir()
-	p := filepath.Join(root, "synthetic.db")
-	if err := db.Init(t.Context(), p); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(t.Context(), p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { d.Close() })
-	agent := client.InProcess(api.New(&core.Store{DB: d, SnapshotDir: root}), "agent:policy-test")
+	d := dbtest.New(t)
+	agent := client.InProcess(api.New(&core.Store{DB: d, SnapshotDir: t.TempDir()}), "agent:policy-test")
 	catalog := must(agent.Get(t.Context(), "/actions"))
 	register, snapshot, integrity, record := find(catalog, "register-metric"), find(catalog, "snapshot"), find(catalog, "integrity-check"), find(catalog, "record")
 	if !register.Owner || !snapshot.Owner || !integrity.Owner || record.Name == "" || record.Owner {

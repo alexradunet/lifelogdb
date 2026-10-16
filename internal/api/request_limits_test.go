@@ -7,13 +7,12 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"lifelog/internal/api"
 	"lifelog/internal/core"
-	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 )
 
 type repeatedByte struct{}
@@ -28,15 +27,7 @@ func generated(n int64) io.Reader { return io.LimitReader(repeatedByte{}, n) }
 
 func limitsHandler(t *testing.T) (http.Handler, func()) {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(t.Context(), path); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(t.Context(), path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { d.Close() })
+	d := dbtest.New(t)
 	counts := func() string {
 		var out string
 		for _, table := range []string{"entities", "entity_names", "measurements", "files"} {

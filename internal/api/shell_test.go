@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -13,6 +12,7 @@ import (
 	"lifelog/internal/api"
 	"lifelog/internal/core"
 	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 )
 
 // TestTheSidebarShowsTheMonth: the month is this month, with the days that have a day page marked and today framed.
@@ -169,11 +169,7 @@ func TestThePhoneHasABottomBarAndASheet(t *testing.T) {
 // the database: with the store closed the shell's read fails and the page is still drawn. A public listener refuses
 // it without the token. What it shows is TestTheStylePageRunsTheRealTemplates.
 func TestTheStylePageReadsNothing(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(t.Context(), p); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(t.Context(), p)
+	d, err := db.Open(t.Context(), dbtest.File(t))
 	if err != nil {
 		t.Fatal(err)
 	}

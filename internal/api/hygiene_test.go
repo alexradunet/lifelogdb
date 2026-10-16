@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -16,6 +15,7 @@ import (
 	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 )
 
 // codeOf is the code and status an error answer carries.
@@ -83,11 +83,7 @@ func TestErrorAnswersCarryACode(t *testing.T) {
 // JSON and as a page. The server's log has the cause one time, with the pattern of the route and not the path,
 // because a path can name a metric.
 func TestAnInternalErrorNamesNoCause(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(t.Context(), p); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(t.Context(), p)
+	d, err := db.Open(t.Context(), dbtest.File(t))
 	if err != nil {
 		t.Fatal(err)
 	}

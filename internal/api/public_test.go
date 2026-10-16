@@ -5,14 +5,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"lifelog/internal/api"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
-	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 )
 
 const testToken = "synthetic-token-0123456789abcdefghij" // 36 characters
@@ -20,15 +19,7 @@ const testToken = "synthetic-token-0123456789abcdefghij" // 36 characters
 // publicHandler is the API behind the public guard, with one allowed browser origin.
 func publicHandler(t *testing.T, o api.PublicOptions) (http.Handler, *core.Store) {
 	t.Helper()
-	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(t.Context(), p); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(t.Context(), p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { d.Close() })
+	d := dbtest.New(t)
 	s := &core.Store{DB: d}
 	h, err := api.Public(s, o)
 	if err != nil {

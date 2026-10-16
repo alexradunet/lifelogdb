@@ -15,7 +15,7 @@ import (
 	"testing"
 
 	"lifelog/internal/core"
-	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 )
 
 // TestAPIReferenceMatchesTheCode keeps API.md true: every property table of a class names exactly the paths the
@@ -226,15 +226,7 @@ func walkType(prefix string, t reflect.Type, out map[string]bool) {
 // fixture is a database with one of everything the routes show, and the hrefs of the pages made.
 func fixture(t *testing.T) (http.Handler, *core.Store, map[string]string) {
 	t.Helper()
-	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(t.Context(), p); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(t.Context(), p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { d.Close() })
+	d := dbtest.New(t)
 	s := &core.Store{DB: d}
 	ctx := t.Context()
 	ids := map[string]string{}

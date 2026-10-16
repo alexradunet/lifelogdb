@@ -12,7 +12,7 @@ import (
 	"lifelog/internal/api"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
-	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 )
 
 // TestTheStoresClockIsTheOneClock: the store's clock is in a zone far from UTC, at an instant where the UTC day and
@@ -20,15 +20,7 @@ import (
 // the root's today, the redirect of /days/today, the day page that a capture with no day makes, the day of a page and
 // of a kept file that have no day, the words for a time, the name of a snapshot, and the life of a feedback receipt.
 func TestTheStoresClockIsTheOneClock(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(t.Context(), p); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(t.Context(), p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { d.Close() })
+	d := dbtest.New(t)
 	const today, utcDay = "2026-03-11", "2026-03-10"
 	zone := time.FixedZone("+14", 14*60*60)               // the offset of Pacific/Kiritimati, with no zone database
 	now := time.Date(2026, 3, 10, 11, 30, 0, 0, time.UTC) // 2026-03-11 01:30:00 in the zone

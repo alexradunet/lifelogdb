@@ -19,7 +19,7 @@ import (
 	"lifelog/internal/api"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
-	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 )
 
 func fresh(t *testing.T) (*client.Client, http.Handler) {
@@ -31,16 +31,7 @@ func fresh(t *testing.T) (*client.Client, http.Handler) {
 // freshStore is fresh with the store too: a test reads a row straight from the file, as a probe of what a surface wrote.
 func freshStore(t *testing.T) (*client.Client, http.Handler, *core.Store) {
 	t.Helper()
-	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(t.Context(), p); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(t.Context(), p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { d.Close() })
-	s := &core.Store{DB: d}
+	s := &core.Store{DB: dbtest.New(t)}
 	h := api.New(s)
 	return client.InProcess(h, "cli"), h, s
 }
@@ -59,15 +50,7 @@ func scalar(t *testing.T, s *core.Store, query string) string {
 // uses fixed dates.
 func freshOn(t *testing.T, day string) (*client.Client, http.Handler) {
 	t.Helper()
-	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(t.Context(), p); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(t.Context(), p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { d.Close() })
+	d := dbtest.New(t)
 	start, err := time.Parse(time.DateOnly, day)
 	if err != nil {
 		t.Fatal(err)

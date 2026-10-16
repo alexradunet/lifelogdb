@@ -14,20 +14,12 @@ import (
 	"lifelog/internal/api"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
-	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 )
 
 // The owner's snapshot action, from the client and from a browser form; refused to an agent.
 func TestSnapshotIsTheOwnersFromAnySurface(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(t.Context(), p); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(t.Context(), p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { d.Close() })
+	d := dbtest.New(t)
 	dir := t.TempDir()
 	clock := func() time.Time { return time.Date(2026, 10, 2, 14, 30, 5, 0, time.UTC) }
 	h := api.New(&core.Store{DB: d, SnapshotDir: dir, Clock: clock, Zone: time.UTC})
@@ -103,15 +95,7 @@ func TestSnapshotIsTheOwnersFromAnySurface(t *testing.T) {
 // kept (the check does not delete), and the answer names it with the code restore_check_failed
 // (docs/plans/098-the-codebase-made-cohesive.md).
 func TestASnapshotThatFailsItsRestoreCheckIsAnError(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(t.Context(), p); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(t.Context(), p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { d.Close() })
+	d := dbtest.New(t)
 	dir := t.TempDir()
 	clock := func() time.Time { return time.Date(2026, 10, 2, 14, 30, 5, 0, time.UTC) }
 	h := api.New(&core.Store{DB: d, SnapshotDir: dir, Clock: clock, Zone: time.UTC})
@@ -142,15 +126,7 @@ func TestASnapshotThatFailsItsRestoreCheckIsAnError(t *testing.T) {
 // request cancelled) is a 500 internal, as every other route answers them. A 504 keeps the text of its cause; a 500
 // says only "internal error". None of them leaves a file.
 func TestOnlyARefusedSnapshotIsSnapshotRefused(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(t.Context(), p); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(t.Context(), p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { d.Close() })
+	d := dbtest.New(t)
 	snapshot := func(t *testing.T, ctx context.Context, dir string, status int, code string) (message string) {
 		t.Helper()
 		req := httptest.NewRequestWithContext(ctx, "POST", "/snapshots", nil)
