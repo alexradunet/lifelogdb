@@ -30,9 +30,7 @@
 {{template "form" (form . "autofocus" "text" "button" "Add" "back" $.Here "placeholder" "text=What happened? Who was there?" "key" "text=c")}}
 </section>{{end}}
 
-{{with form (.Action "save-body") "button" "Save" "back" (.Link "self")}}<details{{if .Refused}} open{{end}}><summary>Edit the day page</summary>
-<small class="desc">CommonMark. [[Title]] links a page and #tag a tag page. Nothing is saved until the version you read is still the current one.</small>
-{{template "form" .}}</details>{{end}}
+{{template "body-editor" (dict "action" (.Action "save-body") "back" (.Link "self") "summary" "Edit the day page")}}
 
 
 {{with $p.Pages}}<section class="also" aria-label="Pages written this day"><h2>Pages written this day</h2>

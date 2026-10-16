@@ -58,9 +58,7 @@
 {{if $s.body}}<div class="prose about">{{markdown $s.body}}</div>{{else}}<p class="empty">Nothing is written about {{.Title}} yet: what it measures, and how. Open Edit to write it.</p>{{end}}
 {{with rejected $s.body}}<div class="alert" role="note"><p>These names make no link — a title cannot hold <code>/ \ : * ? " &lt; &gt; |</code>, or start or end with a dot or space:</p>
 <p>{{range $i, $t := .}}{{if $i}}, {{end}}<code>[[{{$t}}]]</code>{{end}}</p></div>{{end}}
-{{with form (.Action "save-body") "button" "Save" "back" $.Here}}<details{{if .Refused}} open{{end}}><summary>Edit</summary>
-<small class="desc">CommonMark. [[Title]] links a page and #tag a tag page; both are created if new. Nothing is saved until the version you read is still the current one.</small>
-{{template "form" .}}</details>{{end}}
+{{template "body-editor" (dict "action" (.Action "save-body") "back" $.Here "summary" "Edit")}}
 </section>
 
 <section class="group" aria-label="Mentioned in"><h2>Mentioned in</h2>

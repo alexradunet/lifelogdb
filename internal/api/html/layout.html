@@ -102,6 +102,13 @@
 <form class="inline" method="POST" action="{{.Href}}"><input type="hidden" name="back" value="{{$.back}}"><input type="hidden" name="metric" value="{{$.metric}}"><input type="hidden" name="day" value="{{$.day}}">
 <label><span>{{if eq $.day $.today}}Today{{else}}{{shortDay $.day}}{{end}}{{with $.unit}}, {{.}}{{end}}</span><input type="number" name="value" step="any" inputmode="decimal" required></label><button class="primary small">Save</button></form></details>{{end}}{{end}}
 
+{{/* body-editor is the fold that edits the body of a page with save-body (the day, a page, a metric): it is closed,
+     and it opens when the save was refused. It takes action (save-body; nothing is drawn without it), back (the page
+     the browser returns to) and summary (the words of the fold). */}}
+{{define "body-editor"}}{{with form .action "button" "Save" "back" .back}}<details{{if .Refused}} open{{end}}><summary>{{$.summary}}</summary>
+<small class="desc">CommonMark. [[Title]] links a page and #tag a tag page; both are created if new. Nothing is saved until the version you read is still the current one.</small>
+{{template "form" .}}</details>{{end}}{{end}}
+
 {{/* categories are the categories of a page or a metric as badges (docs/plans/114-one-way-to-do-a-thing.md): each
      with x, which removes that part-of link (unlink), and + Add, which puts the page in a category (file-pages with
      this page's id; a new name makes a new category). It takes v (the view), links (the page's links) and back. */}}
