@@ -156,8 +156,6 @@ func (t *Tx) setDeleted(id int64, deleted bool) error {
 	return err
 }
 
-// ---- the same operations alone, each its own transaction
-
 // SaveBody replaces a page's body and syncs its wikilinks (cookbook/save-a-body.md). version is the
 // entities.revision token the caller read; the clock is audit metadata, not a version.
 func (s *Store) SaveBody(ctx context.Context, source string, id int64, body, version string) (Sync, error) {

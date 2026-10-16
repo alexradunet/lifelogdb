@@ -19,6 +19,14 @@ import (
 // nowSQL is the instant format of lifelog_meta.instants, written by SQLite so every row of a statement agrees.
 const nowSQL = "strftime('%Y-%m-%dT%H:%M:%fZ','now')"
 
+// nullIfEmpty is the SQL value of an optional text: NULL when the text is empty.
+func nullIfEmpty(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
 // Store is one open life.db. SnapshotDir is the folder the snapshot action writes to; empty means beside the file.
 // Clock and Zone are the clock of the writer. Every surface reads from them today (Today), the zone of the words for a
 // time and the name of a snapshot (Local), and the life of a feedback receipt (Now). A nil Clock is time.Now and a nil
@@ -173,13 +181,6 @@ func checkTitle(what, title string) error {
 		return Invalid("%s %q is not a valid title (docs/contract/titles-and-wikilinks.md)", what, title)
 	}
 	return nil
-}
-
-func nullIfEmpty(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
 }
 
 // The one loop of core over the rows of a query. rows and err are what QueryContext returned, so a caller passes its
