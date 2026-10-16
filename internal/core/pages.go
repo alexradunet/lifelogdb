@@ -62,11 +62,11 @@ func (t *Tx) CreatePlace(title string) (int64, error) {
 	return t.createNamed("place", title, "", nil, nil)
 }
 
-// createNamed inserts the entity with its whole body: creation is one write, so the new page is at revision 1
-// (lifelog_meta.edit_revisions). The caller syncs the body's wikilinks once the typed row exists.
-// createNamed is one entity with its page: a title no live page has, its row in entities and entity_names, and
-// extra for its typed row. day is a day page's day, nil for every other page. It is the one check of the title for
-// CreatePage, CreatePerson and CreatePlace.
+// createNamed creates one entity: its row in entities with the whole body, its preferred name in entity_names, and
+// then extra for its typed row. It is the one check of the title for CreatePage, CreatePerson and CreatePlace: the
+// title must be valid, and no page, live or deleted, may hold its key (the ExistsError names that page). day is the
+// day of a page (for a day page, its date), nil for a person or a place. Creation is one write, so the new entity is
+// at revision 1 (lifelog_meta.edit_revisions). The caller syncs the wikilinks of the body after the typed row exists.
 func (t *Tx) createNamed(typ, title, body string, day any, extra func(int64) error) (int64, error) {
 	if err := checkTitle("title", title); err != nil {
 		return 0, err
