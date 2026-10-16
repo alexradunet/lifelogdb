@@ -48,3 +48,5 @@ like a date but is none of these: ask the owner.
 - An embedded attachment (`![[scan.pdf]]`) makes an empty page of that name. When the owner later keeps the file
   (skill `lifelog-keep-photos`), the file becomes that page.
 - A table of dated values (bloodwork): import the note first, then `record` each reading the owner wants kept.
+  `record` needs a metric that exists (`get` `/metrics` lists them). Only the owner registers a new metric: ask the
+  owner, for example to run `lifelog do register-metric name=NAME unit=UNIT`.
