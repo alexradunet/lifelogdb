@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
@@ -43,24 +42,17 @@ func CheckToken(t string) error {
 }
 
 // PublicAddress validates a --public serve address: any numeric IP of this machine (0.0.0.0 for all of them) or
-// localhost, with a numeric port. No DNS, no service names.
+// localhost, with a numeric port. No DNS, no service names. It parses the address as LoopbackAddress does.
 func PublicAddress(authority string) (string, error) {
-	host, text, err := net.SplitHostPort(authority)
-	if err != nil || host == "" || text == "" {
+	_, ip, port, ok := authorityOf(authority)
+	if !ok {
 		return "", fmt.Errorf("serve address %q: use a numeric IP (0.0.0.0 for every interface) or localhost and a numeric port (0–65535)", authority)
 	}
-	port, err := strconv.ParseUint(text, 10, 16)
-	if err != nil || strings.ContainsAny(text, "+-") {
-		return "", fmt.Errorf("serve address %q: the port must be numeric (0–65535)", authority)
+	host := "127.0.0.1" // localhost
+	if ip.IsValid() {
+		host = ip.String()
 	}
-	if strings.EqualFold(host, "localhost") {
-		return net.JoinHostPort("127.0.0.1", strconv.FormatUint(port, 10)), nil
-	}
-	ip, err := netip.ParseAddr(host)
-	if err != nil || ip.Zone() != "" {
-		return "", fmt.Errorf("serve address %q: use a numeric IP (0.0.0.0 for every interface) or localhost and a numeric port (0–65535)", authority)
-	}
-	return net.JoinHostPort(ip.String(), strconv.FormatUint(port, 10)), nil
+	return net.JoinHostPort(host, strconv.Itoa(port)), nil
 }
 
 // CheckOrigin admits an exact browser origin: a scheme, a host, an optional port and nothing else.
@@ -104,8 +96,7 @@ func Public(next http.Handler, o PublicOptions) (http.Handler, error) {
 }
 
 func (p *public) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Absolute-form targets replace Host during parsing; no proxy deployment relies on them.
-	if r.URL == nil || r.URL.IsAbs() || r.URL.Host != "" {
+	if absoluteForm(r) {
 		writeError(w, r, errAuthority)
 		return
 	}

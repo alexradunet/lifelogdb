@@ -266,12 +266,15 @@ func TestPublicOptionsValidation(t *testing.T) {
 	}
 	for _, tc := range []struct{ in, want string }{
 		{"0.0.0.0:7777", "0.0.0.0:7777"}, {"[::]:7777", "[::]:7777"}, {"192.0.2.1:0", "192.0.2.1:0"}, {"localhost:7777", "127.0.0.1:7777"}, {"127.0.0.1:7777", "127.0.0.1:7777"},
+		{"LOCALHOST:7777", "127.0.0.1:7777"}, {"[0:0::1]:007", "[::1]:7"},
 	} {
 		if got, err := api.PublicAddress(tc.in); err != nil || got != tc.want {
 			t.Errorf("PublicAddress(%q)=%q,%v want %q", tc.in, got, err, tc.want)
 		}
 	}
-	for _, in := range []string{"", ":7777", "custom.invalid:7777", "0.0.0.0:http", "0.0.0.0:65536", "0.0.0.0:-1", "0.0.0.0:+1", "0.0.0.0", "[fe80::1%eth0]:7777"} {
+	// The parse is the one of LoopbackAddress: brackets only around an IPv6 address, and localhost in ASCII letters only.
+	for _, in := range []string{"", ":7777", "custom.invalid:7777", "0.0.0.0:http", "0.0.0.0:65536", "0.0.0.0:-1", "0.0.0.0:+1", "0.0.0.0", "[fe80::1%eth0]:7777",
+		"[192.0.2.1]:7777", "[0.0.0.0]:7777", "[localhost]:7777", "localhoſt:7777", "::1:7777"} {
 		if got, err := api.PublicAddress(in); err == nil {
 			t.Errorf("PublicAddress(%q)=%q accepted", in, got)
 		}
