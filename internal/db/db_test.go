@@ -577,6 +577,46 @@ func TestSnapshotDestinationErrors(t *testing.T) {
 	}
 }
 
+// TestCheckSnapshotDirTellsARefusalFromAFault: a folder that is not there, a file and a path under a file are the
+// refusal "no folder". A folder that the process cannot reach is a fault: its parent has no permission to search, so
+// the folder can exist, and the error is not ErrRefused.
+func TestCheckSnapshotDirTellsARefusalFromAFault(t *testing.T) {
+	root := t.TempDir()
+	file := filepath.Join(root, "file")
+	if err := os.WriteFile(file, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range []string{filepath.Join(root, "missing"), file, filepath.Join(file, "under")} {
+		if _, err := CheckSnapshotDir(dir); !errors.Is(err, ErrRefused) || !strings.Contains(err.Error(), "no folder") {
+			t.Errorf("CheckSnapshotDir(%s) = %v, want the refusal no folder", dir, err)
+		}
+	}
+
+	if runtime.GOOS == "windows" {
+		t.Skip("a folder mode does not stop a search on Windows")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root searches a folder with no permission")
+	}
+	locked := filepath.Join(root, "locked")
+	inside := filepath.Join(locked, "snapshots")
+	if err := os.MkdirAll(inside, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(locked, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chmod(locked, 0o755); err != nil {
+			t.Error(err)
+		}
+	})
+	_, err := CheckSnapshotDir(inside)
+	if err == nil || errors.Is(err, ErrRefused) || !errors.Is(err, os.ErrPermission) {
+		t.Errorf("CheckSnapshotDir of a folder under a parent with no permission = %v, want a permission fault, not a refusal", err)
+	}
+}
+
 // TestWriteReportsAFailedRollback: when fn fails and the rollback fails too, Write returns both errors in a
 // RollbackError. The caller then knows that the transaction was not rolled back. Here fn commits by itself before it
 // fails, so the rollback finds no open transaction.

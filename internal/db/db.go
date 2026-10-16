@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"modernc.org/sqlite"
@@ -392,8 +393,14 @@ func CheckSnapshotDir(dir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
+	// Only a path that is not a folder is the refusal: a folder the process cannot reach (a permission, a disk) is
+	// a fault.
+	fi, err := os.Stat(dir)
+	switch {
+	case errors.Is(err, os.ErrNotExist) || errors.Is(err, syscall.ENOTDIR) || err == nil && !fi.IsDir():
 		return "", refusal(fmt.Sprintf("no folder %s for the snapshot", dir))
+	case err != nil:
+		return "", fmt.Errorf("check snapshot folder %s: %w", dir, err)
 	}
 	physical, err := snapshotPhysicalDir(dir)
 	if err != nil {
