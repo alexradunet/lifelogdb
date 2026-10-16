@@ -17,24 +17,27 @@ import (
 // resultLine is one line of the toast: a sentence, or the facts of what no sentence said.
 type resultLine = template.HTML
 
-// ResultLines are the toast's lines for the view's result.
-func (v *view) ResultLines() []resultLine {
+// ResultLines are the toast's lines for the view's result; a result that JSON cannot carry is an error.
+func (v *view) ResultLines() ([]resultLine, error) {
 	var x any
 	switch r := v.Result.(type) {
 	case string:
 		if err := json.Unmarshal([]byte(r), &x); err != nil {
-			return []resultLine{template.HTML(template.HTMLEscapeString(r))}
+			return []resultLine{template.HTML(template.HTMLEscapeString(r))}, nil
 		}
 	default:
-		x = jsonShape(r)
+		var err error
+		if x, err = jsonShape(r); err != nil {
+			return nil, err
+		}
 	}
 	m, ok := x.(map[string]any)
 	if !ok {
 		var sb strings.Builder
 		v.clock().writeValue(&sb, x)
-		return []resultLine{template.HTML(sb.String())}
+		return []resultLine{template.HTML(sb.String())}, nil
 	}
-	return resultSentences(m, v.clock())
+	return resultSentences(m, v.clock()), nil
 }
 
 // resultSentences says a result object. Each key a sentence says is taken; what is left is drawn as facts.

@@ -1,6 +1,9 @@
 package api
 
 import (
+	"math"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -19,6 +22,35 @@ func TestNumWritesNumbersInFull(t *testing.T) {
 		if got := num(c.v); got != c.want {
 			t.Errorf("num(%v) = %q, want %q", c.v, got, c.want)
 		}
+	}
+}
+
+// TestAPageThatCannotBeDrawnNamesNoCause: when a page cannot be drawn (its properties or its result do not encode as
+// JSON, or its template fails on them), the browser gets a 500 that says no word of the internal cause.
+func TestAPageThatCannotBeDrawnNamesNoCause(t *testing.T) {
+	for name, e := range map[string]*Entity{
+		"properties that are not JSON": {Class: []string{"thing"}, Title: "Thing", Properties: map[string]any{"value": math.NaN()}},
+		"a result that is not JSON":    {Class: []string{"thing"}, Title: "Thing", Properties: map[string]any{"value": 1}, Result: map[string]any{"value": math.Inf(1)}},
+		"a template that fails":        {Class: []string{"error"}, Title: "Error", Properties: "not an object"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/things/1", nil)
+			req.Header.Set("Accept", "text/html")
+			rec := httptest.NewRecorder()
+			renderHTML(rec, req, http.StatusOK, e, nil)
+			body := rec.Body.String()
+			if rec.Code != http.StatusInternalServerError {
+				t.Errorf("status %d, want 500", rec.Code)
+			}
+			if !strings.HasPrefix(rec.Header().Get("Content-Type"), "text/html") || !strings.Contains(body, "</html>") {
+				t.Errorf("the answer is not a page: %q %.200s", rec.Header().Get("Content-Type"), body)
+			}
+			for _, cause := range []string{"template:", "executing", "evaluate", "json:", "unsupported value"} {
+				if strings.Contains(body, cause) {
+					t.Errorf("the page names the cause (%q): %.300s", cause, body)
+				}
+			}
+		})
 	}
 }
 

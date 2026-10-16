@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -172,8 +172,16 @@ func hereOf(u *url.URL) string {
 	return u.EscapedPath() + "?" + q.Encode()
 }
 
+// drawFailed is the page a browser gets when its view cannot be drawn: a 500 that names no internal cause. The
+// server's log has the cause.
+const drawFailed = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Error · Lifelog</title></head>
+<body><p role="alert">This page cannot be drawn. The server's log has the cause.</p><p><a href="/">Home</a></p></body></html>
+`
+
 func renderHTML(w http.ResponseWriter, r *http.Request, status int, e *Entity, sv *shellView) {
-	v := &view{Entity: e, Props: jsonShape(e.Properties), Path: r.URL.Path, Here: hereOf(r.URL), Shell: sv, query: r.URL.Query()}
+	shape, err := jsonShape(e.Properties)
+	v := &view{Entity: e, Props: shape, Path: r.URL.Path, Here: hereOf(r.URL), Shell: sv, query: r.URL.Query()}
 	if rf, ok := r.Context().Value(refusalKey{}).(*refusal); ok && status < 400 {
 		// This page is the one a refused form came from (refusedOnItsPage): it answers with the form's error.
 		props, _ := rf.entity.Properties.(map[string]any)
@@ -202,14 +210,20 @@ func renderHTML(w http.ResponseWriter, r *http.Request, status int, e *Entity, s
 		}
 	}
 	var b bytes.Buffer
-	if err := pages.ExecuteTemplate(&b, name, v); err != nil {
+	if err == nil {
+		err = pages.ExecuteTemplate(&b, name, v)
+	}
+	if err != nil { // a defect of this program: the owner reads the cause in the log, a client never does
+		log.Printf("lifelog: the view %s of %s cannot be drawn: %v", name, r.URL.Path, err)
 		status = http.StatusInternalServerError
 		b.Reset()
-		fmt.Fprintf(&b, "<!doctype html><title>Error</title><pre>%s</pre>", template.HTMLEscapeString(err.Error()))
+		b.WriteString(drawFailed)
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	io.Copy(w, &b)
+	if _, err := w.Write(b.Bytes()); err != nil {
+		log.Printf("lifelog: the page %s was not sent: %v", r.URL.Path, err)
+	}
 }
 
 // navItems are the sidebar's links, in order, by group: "home" is the brand, "day" the sections of every day (on a
@@ -553,15 +567,21 @@ func formOf(x any, opts ...string) (*formView, error) {
 	return f, nil
 }
 
-// jsonShape is v as a JSON client reads it: maps by JSON name, lists, strings, float64s.
-func jsonShape(v any) any {
+// jsonShape is v as a JSON client reads it: maps by JSON name, lists, strings, float64s. A value that JSON cannot
+// carry (a NaN, an infinity) is an error, so a page is never drawn with its properties left out.
+func jsonShape(v any) (any, error) {
 	if v == nil {
-		return nil
+		return nil, nil
 	}
-	b, _ := json.Marshal(v)
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
 	var x any
-	json.Unmarshal(b, &x)
-	return x
+	if err := json.Unmarshal(b, &x); err != nil {
+		return nil, err
+	}
+	return x, nil
 }
 
 // mark is a search snippet as plain text with its matched words marked: the search puts core.SnippetOpen and

@@ -237,9 +237,13 @@ func (v *view) Date(x any) string {
 	return v.clock().day(s)
 }
 
-// Value draws any value of the entity by its type.
-func (v *view) Value(x any) template.HTML {
+// Value draws any value of the entity by its type; a value that JSON cannot carry is an error.
+func (v *view) Value(x any) (template.HTML, error) {
+	shape, err := jsonShape(x)
+	if err != nil {
+		return "", err
+	}
 	var sb strings.Builder
-	v.clock().writeValue(&sb, jsonShape(x))
-	return template.HTML(sb.String())
+	v.clock().writeValue(&sb, shape)
+	return template.HTML(sb.String()), nil
 }
