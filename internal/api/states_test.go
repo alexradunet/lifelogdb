@@ -103,21 +103,27 @@ func TestNoPageShowsARawInstant(t *testing.T) {
 	}
 }
 
-// TestEveryActionFormCarriesItsName: a form drawn from an action carries the action's catalog name, so the command
-// list (docs/plans/094-the-command-list.md) opens the form the server drew: a box, a row's one-button form, the capture.
-func TestEveryActionFormCarriesItsName(t *testing.T) {
+// TestEveryActionFormSendsToItsAction: a form drawn from an action sends to the action's href with the action's
+// method (a box, a row's one-button form, the capture), and every POST form of Home sends to an action of Home.
+func TestEveryActionFormSendsToItsAction(t *testing.T) {
 	c, h := freshOn(t, fixedToday)
 	root := must(c.Get(t.Context(), "/"))
 	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "walk"}))
 	body := browse(t, h, "/")
-	for _, name := range []string{"capture", "create-page", "find", "snapshot"} {
-		if !strings.Contains(body, `data-action="`+name+`"`) {
-			t.Errorf("Home has no form named %s", name)
+	posts := map[string]bool{}
+	for _, a := range must(c.Get(t.Context(), "/")).Actions {
+		if a.Method == "POST" {
+			posts[a.Href] = true
 		}
 	}
-	for _, tag := range regexp.MustCompile(`<form method="POST"[^>]*>`).FindAllString(body, -1) {
-		if !strings.Contains(tag, ` data-action="`) {
-			t.Errorf("a form has no action's name: %s", tag)
+	for _, name := range []string{"capture", "create-page", "find", "snapshot"} {
+		if a := find(root, name); a.Name == "" || !strings.Contains(body, `<form method="`+a.Method+`" action="`+a.Href+`"`) {
+			t.Errorf("Home has no form of %s: %+v", name, a)
+		}
+	}
+	for _, m := range regexp.MustCompile(`<form method="POST" action="([^"]*)"`).FindAllStringSubmatch(body, -1) {
+		if !posts[m[1]] {
+			t.Errorf("a form of Home posts to %s, which is no action of Home", m[1])
 		}
 	}
 }

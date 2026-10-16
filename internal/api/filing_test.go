@@ -187,7 +187,7 @@ func TestTheMetricsPageDrawsCards(t *testing.T) {
 		`id="not-filed"`, `<details class="metric-sub" open><summary><h3>Iron <small>1</small></h3><span class="meta">newest `, `<a href="/pages/` + idOfSelf(t, hrefOf(iron, "self")) + `">Open Iron</a>`,
 		`<a class="name" href="/metrics/Weight">Weight</a>`, `79.5 <span class="unit">kg</span>`, `<time class="meta" datetime="2031-05-13" title="yesterday · Tue 13 May · 2 readings">yesterday</time>`, `<svg class="trend"`,
 		`<div class="reading-tile metric-card stale">`, `title="iron stores">Ferritin</a>`, `<span class="reading none"><span aria-hidden="true">–</span> <span class="unit">n</span></span><span class="line-none" aria-hidden="true"></span>`, `<div class="card-foot"><span class="meta">No reading</span>`,
-		`<form id="pick" class="pick-bar" method="POST" action="/pages/file" data-action="file-pages">`, `<input type="hidden" name="back" value="/metrics">`,
+		`<form id="pick" class="pick-bar" method="POST" action="/pages/file">`, `<input type="hidden" name="back" value="/metrics">`,
 		`<input type="checkbox" name="ids" value="` + ids["Weight"] + `" form="pick" aria-label="Select Weight">`, `<option value="Iron">Body/Iron</option>`,
 	} {
 		if !strings.Contains(page, want) {

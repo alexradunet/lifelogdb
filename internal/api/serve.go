@@ -107,7 +107,7 @@ func NewOn(s *core.Store, localDay func() string, zone *time.Location, trustedOr
 	post("/pages/{id}/promote", h.promote)
 	post("/pages/{id}/tombstone", h.tombstone)
 	post("/pages/{id}/revive", h.revive)
-	post("/pages/tombstone", h.tombstoneMany("pages"))
+	post("/pages/tombstone", h.tombstoneMany)
 	post("/pages/file", h.filePages)
 	post("/pages/{id}/links", h.linkPages)
 	post("/pages/{id}/unlink", h.unlinkPages)

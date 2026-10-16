@@ -581,7 +581,7 @@ func TestTheBrowsePageDrawsTheTreeTheChipsAndTheRows(t *testing.T) {
 	for _, want := range []string{
 		fmt.Sprintf(`<a class="entry named face" href="/pages/%d"><span class="face-picture" aria-hidden="true">`, ids["Ana"]),
 		`<span class="first">Ana</span><span class="meta">mentioned on 1 page, last `, `<span class="meta">not mentioned yet</span>`,
-		`<form id="pick" class="pick-bar" method="POST" action="/pages/file" data-action="file-pages">`,
+		`<form id="pick" class="pick-bar" method="POST" action="/pages/file">`,
 		fmt.Sprintf(`<input type="checkbox" name="ids" value="%d" form="pick" aria-label="Select Ana">`, ids["Ana"]),
 		`<option value="Cousins">Family/Cousins</option>`, `<a href="/browse?kind=person" aria-current="page">People <small>2</small></a>`,
 		`<a class="entry" href="/browse?kind=person" aria-current="page"><span class="first">Everything</span>`,
@@ -628,7 +628,7 @@ func TestTheBrowsePageDrawsTheTreeTheChipsAndTheRows(t *testing.T) {
 	// The form of the catalog's browse, on /actions: an optional select starts empty, so the form sends only what the
 	// reader picks, and the empty values it sends are the defaults.
 	actions := browse(t, h, "/actions")
-	for _, want := range []string{`<form method="GET" action="/browse" data-action="browse">`, `<select name="kind"><option></option><option>page</option>`,
+	for _, want := range []string{`<form method="GET" action="/browse">`, `<select name="kind"><option></option><option>page</option>`,
 		`<select name="media"><option></option><option>image</option>`} {
 		if !strings.Contains(actions, want) {
 			t.Errorf("/actions lacks %s", want)

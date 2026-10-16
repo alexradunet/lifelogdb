@@ -3,6 +3,8 @@ package api
 import (
 	"html/template"
 	"strings"
+
+	"lifelog/internal/core"
 )
 
 // The one page of a metric (docs/plans/100-one-page-a-metric.md): its readings newest first, in one fold a year.
@@ -43,7 +45,7 @@ func (v *view) MetricReadings() metricReadings {
 	for i := len(list) - 1; i >= 0; i-- {
 		m, _ := list[i].(map[string]any)
 		day, _ := m["day"].(string)
-		if !isDayText(day) {
+		if !core.IsDay(day) {
 			continue
 		}
 		if n := len(r.Years); n == 0 || r.Years[n-1].Year != day[:4] {
@@ -67,12 +69,6 @@ func (v *view) MetricReadings() metricReadings {
 		r.Latest = r.Years[0].Rows[0]
 	}
 	return r
-}
-
-// isDayText reports a day as the series writes it, YYYY-MM-DD: its year is its first four characters.
-func isDayText(day string) bool {
-	_, ok := dayOf(day)
-	return ok && len(day) == 10
 }
 
 // yearSummary is what a closed fold says of its year: "214 readings · 76.2 to 81 kg".

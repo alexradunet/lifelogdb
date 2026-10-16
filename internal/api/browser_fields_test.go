@@ -29,29 +29,20 @@ func TestBrowserFieldPresence(t *testing.T) {
 	}
 }
 
-// TestAFieldForAPageTitleCarriesDataPages: the catalog says which fields take a page's title (Pages), the form
-// marks them with data-pages, and the script hangs the list of names after [[ on exactly those inputs.
-func TestAFieldForAPageTitleCarriesDataPages(t *testing.T) {
-	var b bytes.Buffer
-	f, err := formOf(action("create-page", nil, nil))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := pages.ExecuteTemplate(&b, "form", f); err != nil {
-		t.Fatal(err)
-	}
-	if got := b.String(); !strings.Contains(got, `name="category" value="" data-pages>`) || strings.Count(got, "data-pages") != 1 {
-		t.Errorf("the category field of create-page is not the one field marked data-pages:\n%s", got)
-	}
-	for _, name := range []string{"link", "unlink", "find", "file-pages"} {
-		marked := 0
-		for _, fd := range action(name, nil, nil).Fields {
+// TestTheCatalogMarksTheFieldOfAPageTitle: the catalog says which field takes a page's title (Pages), so a client
+// can offer the names of the pages: one field of each action that names a page.
+func TestTheCatalogMarksTheFieldOfAPageTitle(t *testing.T) {
+	for _, tc := range []struct{ action, field string }{
+		{"create-page", "category"}, {"link", "to"}, {"unlink", "to"}, {"find", "title"}, {"file-pages", "category"},
+	} {
+		var marked []string
+		for _, fd := range action(tc.action, nil, nil).Fields {
 			if fd.Pages {
-				marked++
+				marked = append(marked, fd.Name)
 			}
 		}
-		if marked != 1 {
-			t.Errorf("%s marks %d fields as a page's title, want 1", name, marked)
+		if len(marked) != 1 || marked[0] != tc.field {
+			t.Errorf("%s marks %v as a page's title, want [%s]", tc.action, marked, tc.field)
 		}
 	}
 }

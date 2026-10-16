@@ -123,7 +123,7 @@ func TestTheListsDeleteWhatIsChecked(t *testing.T) {
 	}
 
 	list := browse(t, h, "/browse?kind=media")
-	for _, want := range []string{`<form id="pick" class="pick-bar" method="POST" action="/pages/file" data-action="file-pages">`,
+	for _, want := range []string{`<form id="pick" class="pick-bar" method="POST" action="/pages/file">`,
 		`<input type="hidden" name="back" value="/browse?kind=media">`, `<span class="desc">Check the rows, then type a category or delete them. A new name makes a new category.</span>`,
 		`<button class="danger" formaction="/pages/tombstone" formnovalidate>Delete selected</button></div></form>`,
 		`<input type="checkbox" name="ids" value="` + files[0] + `" form="pick" aria-label="Select Scan 1.jpg">`, `name="ids" value="` + files[1] + `"`} {

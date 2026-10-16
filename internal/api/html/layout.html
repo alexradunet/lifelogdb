@@ -99,7 +99,7 @@
      unit (in words), day, today (the label says Today on that day) and back. The full form, with another day and the
      folded fields, is the metric's page. */}}
 {{define "add-reading"}}{{with .action}}<details class="add-reading"><summary class="button small" aria-label="Add a reading of {{$.metric}}">+ Add</summary>
-<form class="inline" method="POST" action="{{.Href}}" data-action="{{.Name}}"><input type="hidden" name="back" value="{{$.back}}"><input type="hidden" name="metric" value="{{$.metric}}"><input type="hidden" name="day" value="{{$.day}}">
+<form class="inline" method="POST" action="{{.Href}}"><input type="hidden" name="back" value="{{$.back}}"><input type="hidden" name="metric" value="{{$.metric}}"><input type="hidden" name="day" value="{{$.day}}">
 <label><span>{{if eq $.day $.today}}Today{{else}}{{shortDay $.day}}{{end}}{{with $.unit}}, {{.}}{{end}}</span><input type="number" name="value" step="any" inputmode="decimal" required></label><button class="primary small">Save</button></form></details>{{end}}{{end}}
 
 {{/* categories are the categories of a page or a metric as badges (docs/plans/114-one-way-to-do-a-thing.md): each
@@ -108,10 +108,10 @@
 {{define "categories"}}{{$v := .v}}{{$back := .back}}{{$file := $v.Action "file-pages"}}{{$unlink := $v.Action "unlink"}}
 {{$has := false}}{{range .links}}{{if eq .kind "part-of"}}{{$has = true}}{{end}}{{end}}
 {{if or $file $has}}<div class="categories" role="group" aria-label="Categories"><span class="label">Categories</span>
-{{range .links}}{{if eq .kind "part-of"}}{{$t := .title}}<span class="badge category"><a href="/pages/{{num .id}}">{{$t}}</a>{{with $unlink}}<form class="tiny" method="POST" action="{{.Href}}" data-action="{{.Name}}"><input type="hidden" name="back" value="{{$back}}"><input type="hidden" name="to" value="{{$t}}"><input type="hidden" name="kind" value="part-of"><button class="remove" aria-label="Remove from {{$t}}">×</button></form>{{end}}</span>{{end}}{{end}}
+{{range .links}}{{if eq .kind "part-of"}}{{$t := .title}}<span class="badge category"><a href="/pages/{{num .id}}">{{$t}}</a>{{with $unlink}}<form class="tiny" method="POST" action="{{.Href}}"><input type="hidden" name="back" value="{{$back}}"><input type="hidden" name="to" value="{{$t}}"><input type="hidden" name="kind" value="part-of"><button class="remove" aria-label="Remove from {{$t}}">×</button></form>{{end}}</span>{{end}}{{end}}
 {{if not $has}}<span class="meta">none</span>{{end}}
 {{with $file}}<details class="add-category"{{if or (and $v.Refused (eq $v.Refused.Href .Href)) (eq ($v.Asked "new") .Name)}} open{{end}}><summary class="button small">+ Add</summary>
-<form class="inline" method="POST" action="{{.Href}}" data-action="{{.Name}}"><input type="hidden" name="back" value="{{$back}}">{{range .Fields}}{{if eq .Name "ids" "move"}}<input type="hidden" name="{{.Name}}" value="{{num .Value}}">{{end}}{{end}}
+<form class="inline" method="POST" action="{{.Href}}"><input type="hidden" name="back" value="{{$back}}">{{range .Fields}}{{if eq .Name "ids" "move"}}<input type="hidden" name="{{.Name}}" value="{{num .Value}}">{{end}}{{end}}
 <label><span>Category</span><input type="text" name="category" required list="category-choices" placeholder="Bloodwork, Sport, Financial"></label>
 <datalist id="category-choices">{{range .Fields}}{{if eq .Name "category"}}{{range .Options}}<option value="{{.}}">{{end}}{{end}}{{end}}</datalist>
 <button class="primary small">Add</button></form></details>{{end}}</div>{{end}}{{end}}
@@ -126,7 +126,7 @@
 {{define "pick-bar"}}{{$v := .v}}{{$file := .file}}{{$del := .del}}{{$first := $del}}{{if $file}}{{$first = $file}}{{end}}
 {{$refused := false}}{{if $v.Refused}}{{if and $file (eq $v.Refused.Href $file.Href)}}{{$refused = true}}{{end}}{{if and $del (eq $v.Refused.Href $del.Href)}}{{$refused = true}}{{end}}{{end}}
 {{$on := $refused}}{{if and $file (eq ($v.Asked "new") $file.Name)}}{{$on = true}}{{end}}
-<form id="pick" class="pick-bar" method="POST" action="{{$first.Href}}" data-action="{{$first.Name}}"><input type="hidden" name="back" value="{{.back}}">
+<form id="pick" class="pick-bar" method="POST" action="{{$first.Href}}"><input type="hidden" name="back" value="{{.back}}">
 <label class="pick-toggle button small"><input type="checkbox" class="pick-on"{{if $on}} checked{{end}}>Select</label>
 <div class="pick-tools"><span class="desc">{{.words}}</span>
 {{with $file}}<label><span>Category <small>required</small></span><input type="text" name="category" list="{{$.list}}" required value="{{if $refused}}{{$v.Sent.Get "category"}}{{end}}" placeholder="Bloodwork, Sport, Financial"></label>
@@ -141,21 +141,21 @@
      field, so a form needs no layout of its own; the catalog says how tall an area is and which action is a danger.
      The optional fields a view folds are under "More fields": still in the form, so they are sent with no script
      (docs/plans/095-the-leaf-and-its-margin.md). */}}
-{{define "form"}}{{with .}}<form method="{{.Method}}" action="{{.Href}}" data-action="{{.Name}}"{{if .Refused}} aria-describedby="refused"{{end}}{{with .Class}} class="{{.}}"{{end}}{{if .Multipart}} enctype="multipart/form-data"{{end}}>
+{{define "form"}}{{with .}}<form method="{{.Method}}" action="{{.Href}}"{{if .Refused}} aria-describedby="refused"{{end}}{{with .Class}} class="{{.}}"{{end}}{{if .Multipart}} enctype="multipart/form-data"{{end}}>
 {{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{num .Value}}">{{end}}{{with .Back}}<input type="hidden" name="back" value="{{.}}">{{end}}
 {{range .Fields false}}{{template "field" .}}{{end}}{{with .Fields true}}<details class="more-fields"{{if $.MoreOpen}} open{{end}}><summary>{{len .}} more field{{if ne (len .) 1}}s{{end}}</summary>
 {{range .}}{{template "field" .}}{{end}}</details>
 {{end}}{{if .Preview}}<button type="submit" class="quiet" formaction="/render" formmethod="POST" formtarget="_blank">Preview</button>{{end}}<button{{if .Danger}} class="danger"{{else if .Primary}} class="primary"{{end}}>{{.Button}}</button></form>{{end}}{{end}}
 
 {{/* field draws one field of a form: a few short options as a row of radio buttons, other options as a select, a
-     textarea, or an input of the field's type; data-pages marks a field for a page's title. A select of an optional
-     field starts empty, so the form sends no value that the reader did not pick. A form that writes a
-     body offers Preview, which sends it to /render in a new tab, so the words stay in the form. */}}
+     textarea, or an input of the field's type. A select of an optional field starts empty, so the form sends no
+     value that the reader did not pick. A form that writes a body offers Preview, which sends it to /render in a new
+     tab, so the words stay in the form. */}}
 {{define "field"}}{{if segmented .Field}}<fieldset class="segmented"><legend>{{or .Title .Name}}{{if .Required}} <small>required</small>{{end}}</legend>{{$v := num .Value}}{{$n := .Name}}{{$req := .Required}}{{range .Options}}<label><input type="radio" name="{{$n}}" value="{{.}}"{{if eq . $v}} checked{{end}}{{if $req}} required{{end}}><span>{{.}}</span></label>{{end}}</fieldset>
 {{else}}<label><span>{{or .Title .Name}}{{if .Required}} <small>required</small>{{end}}</span>
 {{if .Options}}<select name="{{.Name}}"{{if .Focus}} autofocus{{end}}>{{$v := num .Value}}{{if and (not .Required) (ne (index .Options 0) "")}}<option></option>{{end}}{{range .Options}}<option{{if eq . $v}} selected{{end}}>{{.}}</option>{{end}}</select>
 {{else if eq .Type "textarea"}}<textarea name="{{.Name}}"{{with .Rows}} rows="{{.}}"{{end}}{{with .Placeholder}} placeholder="{{.}}"{{end}}{{with .Key}} accesskey="{{.}}"{{end}}{{if .Focus}} autofocus{{end}}>{{num .Value}}</textarea>
-{{else}}<input type="{{.Type}}" name="{{.Name}}" value="{{num .Value}}"{{if .Required}} required{{end}}{{if eq .Type "number"}} step="any" inputmode="decimal"{{end}}{{if .Pages}} data-pages{{end}}{{with .Accept}} accept="{{.}}"{{end}}{{with .Placeholder}} placeholder="{{.}}"{{end}}{{if .Focus}} autofocus{{end}}>{{end}}</label>
+{{else}}<input type="{{.Type}}" name="{{.Name}}" value="{{num .Value}}"{{if .Required}} required{{end}}{{if eq .Type "number"}} step="any" inputmode="decimal"{{end}}{{with .Accept}} accept="{{.}}"{{end}}{{with .Placeholder}} placeholder="{{.}}"{{end}}{{if .Focus}} autofocus{{end}}>{{end}}</label>
 {{end}}{{end}}
 
 {{/* boxed is an action as a button that opens its form (the ActionForm of the design system): with no script, a

@@ -89,12 +89,12 @@ func monthBand(day string) string {
 }
 
 // calWords are the words of an item of the calendar (docs/plans/101-the-calendar-holds-every-dated-thing.md): Tag is
-// its tag in Day by day, Class the colour of its square and its tag (the tags' open, overdue and done; "" is muted),
-// Word the muted word a cell writes after the title, Note the muted note Day by day writes after the link.
-type calWords struct{ Tag, Class, Word, Note string }
+// its tag in Day by day, Word the muted word a cell writes after the title, Note the muted note Day by day writes
+// after the link.
+type calWords struct{ Tag, Word, Note string }
 
-// CalItem says an item of a day of the calendar in the words of this view.
-func (v *view) CalItem(item any, day, today string) calWords {
+// calItem says an item of a day of the calendar in words.
+func calItem(item any) calWords {
 	m, _ := item.(map[string]any)
 	str := func(k string) string { s, _ := m[k].(string); return s }
 	years, _ := m["years"].(float64)

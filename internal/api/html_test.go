@@ -139,7 +139,7 @@ func TestARefusedSaveComesBackOnItsPage(t *testing.T) {
 	}
 	for _, want := range []string{"<title>Not saved · Diet · Lifelog</title>",
 		`role="alert" id="refused" tabindex="-1" autofocus>`, "my &lt;long&gt; draft</textarea>",
-		`<details open><summary>Edit</summary>`, `data-action="save-body" aria-describedby="refused"`,
+		`<details open><summary>Edit</summary>`, `<form method="POST" action="` + action + `" aria-describedby="refused"`,
 		`value="` + version + `"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the refused page lacks %s", want)

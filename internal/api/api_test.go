@@ -229,7 +229,7 @@ func TestBrowserGetsHTMLAndSourceUI(t *testing.T) {
 	if rec.Code != http.StatusSeeOther || !feedbackLocation(rec.Header().Get("Location"), "/days/2026-09-29") {
 		t.Errorf("a browser form is answered %d, Location %q: post, then redirect", rec.Code, rec.Header().Get("Location"))
 	}
-	if body := browse(t, h, "/days/2026-09-29"); !strings.Contains(body, `<form method="POST" action="/days/2026-09-29/capture" data-action="capture">`) {
+	if body := browse(t, h, "/days/2026-09-29"); !strings.Contains(body, `<form method="POST" action="/days/2026-09-29/capture">`) {
 		t.Errorf("HTML: %.300s", body)
 	}
 	if got := scalar(t, s, "SELECT CAST(count(*) AS text) FROM entities WHERE source = 'ui'"); got != "1" {

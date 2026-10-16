@@ -66,6 +66,7 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 	"form":       formOf,
 	"group":      group,
 	"weeks":      weeks,
+	"calItem":    calItem,
 	"dayOfMonth": dayOfMonth,
 	"dict":       dict,
 	"monthBand":  monthBand,
@@ -85,7 +86,6 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 		}
 		return month
 	},
-	"depth":     func(path string) int { return strings.Count(path, "/") },                // a category's depth in the drawn tree
 	"crumbs":    func(path string) string { return strings.ReplaceAll(path, "/", " › ") }, // "Family/Cousins" to "Family › Cousins"
 	"add":       func(a, b int) int { return a + b },
 	"segmented": segmented,
@@ -358,16 +358,6 @@ func (v *view) shown(a *Action) *Action {
 	return &c
 }
 
-// ActionFor is the action of that name on the resource href (a view offering one per item).
-func (v *view) ActionFor(name, href string) *Action {
-	for i := range v.Actions {
-		if a := &v.Actions[i]; a.Name == name && strings.HasPrefix(a.Href, href+"/") {
-			return v.shown(a)
-		}
-	}
-	return nil
-}
-
 // Link is the href of the entity's link with that rel, "" when it has none.
 func (v *view) Link(rel string) string {
 	if l := v.linkByRel(rel); l != nil {
@@ -402,11 +392,11 @@ func (v *view) Embedded(rel string) []Link {
 }
 
 // formView is an action as the "form" template draws it. formOf takes name/value pairs: "button" labels the
-// button, "class" styles the form, "primary" ("1") draws its button as the primary one, "hide" lists fields kept with their value but not shown, "autofocus" names
-// the field the browser starts in, "choices:<field>" offers a field's values as a list, "more" lists optional
-// fields folded under "More fields" (docs/plans/095-the-leaf-and-its-margin.md), "back" is the page the browser
-// returns to after the write (no field of the action: the server reads it, see backOf), and any other name fixes a
-// field to a value (hidden).
+// button, "class" styles the form, "hide" lists fields kept with their value but not shown, "autofocus" names
+// the field the browser starts in, "more" lists optional fields folded under "More fields"
+// (docs/plans/095-the-leaf-and-its-margin.md), "back" is the page the browser returns to after the write (no field
+// of the action: the server reads it, see backOf), "placeholder" ("field=words") and "key" ("field=letter") give a
+// field its prompt and its access key, and any other name fixes a field to a value (hidden).
 type formView struct {
 	*Action
 	Button, Class string
@@ -492,8 +482,7 @@ func formOf(x any, opts ...string) (*formView, error) {
 	if f.Button == "" {
 		f.Button = a.Name
 	}
-	fixed, hide, more, choices := map[string]string{}, map[string]bool{}, map[string]bool{}, map[string][]string{}
-	primary := false // the view named the button primary or not; else a form with fields to fill is primary
+	fixed, hide, more := map[string]string{}, map[string]bool{}, map[string]bool{}
 	for i := 0; i < len(opts); i += 2 {
 		k, v := opts[i], opts[i+1]
 		switch {
@@ -527,10 +516,6 @@ func formOf(x any, opts ...string) (*formView, error) {
 				}
 				f.keys[name] = letter
 			}
-		case k == "primary":
-			f.Primary, primary = v == "1", true
-		case strings.HasPrefix(k, "choices:"):
-			choices[strings.TrimPrefix(k, "choices:")] = strings.Fields(v)
 		default:
 			fixed[k] = v
 		}
@@ -538,12 +523,6 @@ func formOf(x any, opts ...string) (*formView, error) {
 	for _, fd := range a.Fields {
 		if v, ok := fixed[fd.Name]; ok {
 			fd.Value, fd.Type = v, "hidden"
-		}
-		if c, ok := choices[fd.Name]; ok {
-			fd.Options = c
-			if !fd.Required {
-				fd.Options = append([]string{""}, c...)
-			}
 		}
 		switch {
 		case fd.Type == "hidden" || hide[fd.Name]:
@@ -554,9 +533,7 @@ func formOf(x any, opts ...string) (*formView, error) {
 			f.Shown = append(f.Shown, fd)
 		}
 	}
-	if !primary {
-		f.Primary = len(f.Shown)+len(f.More) > 0
-	}
+	f.Primary = len(f.Shown)+len(f.More) > 0
 	f.Refused, f.Asked = a.refused, a.asked
 	if a.asked && f.Focus == "" && len(f.Shown) > 0 { // a form the reader asked for starts in its first field
 		f.Focus = f.Shown[0].Name

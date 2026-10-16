@@ -59,14 +59,18 @@ func TestAMetricIsOnePage(t *testing.T) {
 		}
 	}
 	page := must(c.Get(t.Context(), "/pages?title=2026-10-13"))
-	for _, want := range []string{"Before breakfast.", `href="` + href(page, "self") + `"`, "Mentioned in",
-		`data-action="save-body"`, `data-action="rename"`, `data-action="link"`, `data-action="unlink"`, `data-action="tombstone"`} {
+	for _, want := range []string{"Before breakfast.", `href="` + href(page, "self") + `"`, "Mentioned in"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the metric page does not show %s", want)
 		}
 	}
 
 	all := must(c.Get(t.Context(), "/metrics/Weight"))
+	for _, name := range []string{"save-body", "rename", "link", "unlink", "tombstone"} {
+		if a := find(all, name); a.Name == "" || !strings.Contains(body, `<form method="POST" action="`+a.Href+`"`) {
+			t.Errorf("the metric page has no form of %s: %+v", name, a)
+		}
+	}
 	if n := len(all.Properties.(map[string]any)["readings"].([]any)); n != 3 {
 		t.Errorf("the series reads %d readings with no from, want every one (3)", n)
 	}

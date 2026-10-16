@@ -138,7 +138,7 @@
 
 {{/* new-metric-form is one form of the New metric fold: v the view, a the action, k the kind, mine whether the
      refused form was this one, cat the category to fill in. */}}
-{{define "new-metric-form"}}{{$v := .v}}{{$a := .a}}{{$k := .k}}{{$mine := .mine}}{{$cat := .cat}}<form class="kind-{{$k}}" method="POST" action="{{$a.Href}}" data-action="{{$a.Name}}"><input type="hidden" name="back" value="/metrics"><input type="hidden" name="kind" value="{{$k}}">
+{{define "new-metric-form"}}{{$v := .v}}{{$a := .a}}{{$k := .k}}{{$mine := .mine}}{{$cat := .cat}}<form class="kind-{{$k}}" method="POST" action="{{$a.Href}}"><input type="hidden" name="back" value="/metrics"><input type="hidden" name="kind" value="{{$k}}">
 <label><span>Name <small>required</small></span><input type="text" name="name" required value="{{if $mine}}{{$v.Sent.Get "name"}}{{end}}" placeholder="{{if eq $k "number"}}Weight, Savings{{else if eq $k "score"}}Mood, Sleep quality{{else}}Walk, No sugar{{end}}"></label>
 {{if eq $k "number"}}<label><span>Unit <small>required</small></span><input type="text" name="unit" required value="{{if $mine}}{{$v.Sent.Get "unit"}}{{end}}" placeholder="kg, EUR, bpm"></label>
 <p class="desc">A unit never changes. For another unit, make a new metric.</p>

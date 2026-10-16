@@ -40,40 +40,31 @@ func idsOf(values []string) ([]int64, error) {
 	return ids, nil
 }
 
-// tombstoneMany is tombstone-pages (kind "pages"): every id named is tombstoned
-// in one write, or none is. The answer is the class tombstoned: the ids, their count, and an item link to each.
-// A browser form returns to its list (back), with the count as its feedback.
-func (h *server) tombstoneMany(kind string) func(*http.Request, string) (*Entity, error) {
-	return func(r *http.Request, src string) (*Entity, error) {
-		v, err := form(r)
-		if err != nil {
-			return nil, err
-		}
-		ids, err := idsOf(v["ids"])
-		if err != nil {
-			return nil, err
-		}
-		var self string
-		var href func(int64) string
-		switch kind {
-		case "pages":
-			self, href = "/", pageHref
-			err = h.s.TombstonePages(r.Context(), src, ids)
-		}
-		if err != nil {
-			return nil, err
-		}
-		e := &Entity{Class: []string{"tombstoned"}, Title: "Deleted",
-			Properties: map[string]any{"kind": kind, "ids": ids, "count": len(ids)},
-			Links:      []Link{link("self", self, "Home"), link("index", "/", "Home")}}
-		for _, id := range ids {
-			e.Entities = append(e.Entities, link("item", href(id), strconv.FormatInt(id, 10)))
-		}
-		noun := strings.TrimSuffix(kind, "s")
-		if len(ids) != 1 {
-			noun = kind
-		}
-		e.Result = "Deleted " + strconv.Itoa(len(ids)) + " " + noun + "."
-		return e, nil
+// tombstoneMany is tombstone-pages: every id named is tombstoned in one write, or none is. The answer is the class
+// tombstoned: the ids, their count, and an item link to each. A browser form returns to its list (back), with the
+// count as its feedback.
+func (h *server) tombstoneMany(r *http.Request, src string) (*Entity, error) {
+	v, err := form(r)
+	if err != nil {
+		return nil, err
 	}
+	ids, err := idsOf(v["ids"])
+	if err != nil {
+		return nil, err
+	}
+	if err := h.s.TombstonePages(r.Context(), src, ids); err != nil {
+		return nil, err
+	}
+	e := &Entity{Class: []string{"tombstoned"}, Title: "Deleted",
+		Properties: map[string]any{"kind": "pages", "ids": ids, "count": len(ids)},
+		Links:      []Link{link("self", "/", "Home"), link("index", "/", "Home")}}
+	for _, id := range ids {
+		e.Entities = append(e.Entities, link("item", pageHref(id), strconv.FormatInt(id, 10)))
+	}
+	noun := "page"
+	if len(ids) != 1 {
+		noun = "pages"
+	}
+	e.Result = "Deleted " + strconv.Itoa(len(ids)) + " " + noun + "."
+	return e, nil
 }

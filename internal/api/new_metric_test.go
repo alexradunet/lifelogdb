@@ -72,7 +72,7 @@ func TestTheMetricsPageMakesAMetricACategoryAndAReading(t *testing.T) {
 			t.Errorf("/metrics lacks %s", want)
 		}
 	}
-	if home := browse(t, h, "/"); strings.Contains(home, `data-action="register-metric"`) {
+	if home := browse(t, h, "/"); strings.Contains(home, `method="POST" action="/metrics"`) {
 		t.Error("Home still draws the New metric form")
 	}
 	if p := browse(t, h, "/metrics?new=register-metric&category=Sport"); !strings.Contains(p, `id="new-metric" open>`) ||

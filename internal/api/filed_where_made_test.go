@@ -172,14 +172,15 @@ func TestBrowseNewFormsInACategoryCarryIt(t *testing.T) {
 	for _, tc := range []struct{ kind, action string }{
 		{"page", "create-page"}, {"person", "create-person"}, {"place", "create-place"}, {"media", "add-file"}, {"document", "add-file"},
 	} {
-		if v := fieldOf(find(must(c.Get(ctx, "/browse?in=family&kind="+tc.kind)), tc.action), "category"); v != "Family" {
+		made := find(must(c.Get(ctx, "/browse?in=family&kind="+tc.kind)), tc.action)
+		if v := fieldOf(made, "category"); v != "Family" {
 			t.Errorf("%s in Family: %s has category %q, want Family", tc.kind, tc.action, v)
 		}
 		if v := fieldOf(find(must(c.Get(ctx, "/browse?kind="+tc.kind)), tc.action), "category"); v != "" {
 			t.Errorf("%s everywhere: %s has category %q, want none", tc.kind, tc.action, v)
 		}
 		body := browse(t, h, "/browse?in=Family&kind="+tc.kind)
-		form := regexp.MustCompile(`(?s)<form method="POST" action="[^"]*" [^>]*data-action="` + tc.action + `".*?</form>`).FindString(body)
+		form := regexp.MustCompile(`(?s)<form method="POST" action="` + regexp.QuoteMeta(made.Href) + `"[ >].*?</form>`).FindString(body)
 		if !regexp.MustCompile(`<input[^>]*name="category"[^>]*value="Family"`).MatchString(form) {
 			t.Errorf("%s in Family: the page's %s form has no category Family: %s", tc.kind, tc.action, form)
 		}

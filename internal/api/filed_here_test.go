@@ -122,7 +122,7 @@ func TestANewPageIsFiledWhereItIsMade(t *testing.T) {
 		t.Fatalf("Travel offers create-page as %+v", here)
 	}
 	body := browse(t, h, "/pages/"+travel)
-	if !regexp.MustCompile(`<form method="POST" action="/pages" data-action="create-page"[^>]*>(?s:.*?)<input type="hidden" name="category" value="Travel">`).MatchString(body) ||
+	if !regexp.MustCompile(`<form method="POST" action="/pages"[^>]*>(?s:.*?)<input type="hidden" name="category" value="Travel">`).MatchString(body) ||
 		!strings.Contains(body, `<summary class="button">New page here</summary>`) {
 		t.Error("Travel has no New page here form with its title filled")
 	}

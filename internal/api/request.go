@@ -105,14 +105,6 @@ func idForm(r *http.Request, names ...string) (int64, url.Values, error) {
 // idParam is the path parameter of an action on the resource with this id.
 func idParam(id int64) map[string]string { return map[string]string{"id": strconv.FormatInt(id, 10)} }
 
-// boolField is a 0/1 field's value for a flag.
-func boolField(b bool) string {
-	if b {
-		return "1"
-	}
-	return "0"
-}
-
 // number is a field's value as a number, nil when the field is empty.
 func number(v url.Values, name string) (*float64, error) {
 	s := v.Get(name)
@@ -124,18 +116,6 @@ func number(v url.Values, name string) (*float64, error) {
 		return nil, core.Invalid("%s %q is not a number", name, s)
 	}
 	return &f, nil
-}
-
-// optionalID is a field's value as an id, 0 when the field is empty.
-func optionalID(v url.Values, name string) (int64, error) {
-	if v.Get(name) == "" {
-		return 0, nil
-	}
-	id, err := strconv.ParseInt(v.Get(name), 10, 64)
-	if err != nil {
-		return 0, core.Invalid("%s must be an exact integer id", name)
-	}
-	return id, nil
 }
 
 // flag is a 0/1 field: false when it is empty.

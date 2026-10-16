@@ -16,13 +16,13 @@ func TestEveryKindOfTheNewMenuOpensItsForm(t *testing.T) {
 	day := browse(t, h, "/days/"+fixedToday)
 	menu := day[strings.Index(day, `<div class="new-menu" id="new-menu" popover>`):]
 	menu = menu[:strings.Index(menu, "</nav></div>")]
-	for _, kind := range []struct{ title, href, action string }{
-		{"Page", "/browse?kind=page&new=create-page", "create-page"},
-		{"Person", "/browse?kind=person&new=create-person", "create-person"},
-		{"Place", "/browse?kind=place&new=create-place", "create-place"},
-		{"Metric", "/metrics?new=register-metric", ""},
-		{"Reading", "/metrics", ""},
-		{"File", "/browse?kind=media&new=add-file", "add-file"},
+	for _, kind := range []struct{ title, href, action, post string }{ // post: the address the action's form posts to
+		{"Page", "/browse?kind=page&new=create-page", "create-page", "/pages"},
+		{"Person", "/browse?kind=person&new=create-person", "create-person", "/people"},
+		{"Place", "/browse?kind=place&new=create-place", "create-place", "/places"},
+		{"Metric", "/metrics?new=register-metric", "", ""},
+		{"Reading", "/metrics", "", ""},
+		{"File", "/browse?kind=media&new=add-file", "add-file", "/files"},
 	} {
 		link := regexp.MustCompile(`<a href="` + regexp.QuoteMeta(strings.ReplaceAll(kind.href, "&", "&amp;")) + `">(<svg[^>]*>.*?</svg>)?` + kind.title + `</a>`)
 		if !link.MatchString(menu) {
@@ -32,7 +32,7 @@ func TestEveryKindOfTheNewMenuOpensItsForm(t *testing.T) {
 		page := browse(t, h, kind.href)
 		switch {
 		case kind.action != "":
-			open := regexp.MustCompile(`<details class="action" open><summary class="button">[^<]*(<span class="owner">owner</span>)?</summary><div class="action-form">(<p class="desc">[^<]*</p>)?<form method="POST" action="[^"]*" data-action="` + kind.action + `"`)
+			open := regexp.MustCompile(`<details class="action" open><summary class="button">[^<]*(<span class="owner">owner</span>)?</summary><div class="action-form">(<p class="desc">[^<]*</p>)?<form method="POST" action="` + kind.post + `"`)
 			if !open.MatchString(page) {
 				t.Errorf("%s does not open the form of %s", kind.href, kind.action)
 			}
@@ -52,7 +52,7 @@ func TestALinkOpensAFormAndFillsItsFields(t *testing.T) {
 	people := browse(t, h, "/browse?kind=person&new=create-person&title=Ana+Popescu&name=Ana")
 	form := people[strings.Index(people, `<details class="action" open>`):]
 	form = form[:strings.Index(form, "</details>")]
-	for _, want := range []string{`data-action="create-person"`, `name="title" value="Ana Popescu"`, `name="name" value="Ana"`, `autofocus`} {
+	for _, want := range []string{`<form method="POST" action="/people"`, `name="title" value="Ana Popescu"`, `name="name" value="Ana"`, `autofocus`} {
 		if !strings.Contains(form, want) {
 			t.Errorf("the asked form lacks %s:\n%s", want, form)
 		}
@@ -72,10 +72,10 @@ func TestALinkOpensAFormAndFillsItsFields(t *testing.T) {
 	home := browse(t, h, "/")
 	tools := home[strings.Index(home, `<div class="tools">`):]
 	tools = tools[:strings.Index(tools, "</header>")]
-	if !strings.Contains(tools, `data-action="create-page"`) || !strings.Contains(tools, `data-action="find"`) {
+	if !strings.Contains(tools, `<form method="POST" action="/pages"`) || !strings.Contains(tools, `<form method="GET" action="/pages"`) {
 		t.Errorf("Home's header lacks New page or Open a page:\n%s", tools)
 	}
-	for _, gone := range []string{`<details id="new">`, `data-action="create-person"`, `data-action="add-file"`} {
+	for _, gone := range []string{`<details id="new">`, `<form method="POST" action="/people"`, `<form method="POST" action="/files"`} {
 		if strings.Contains(home, gone) {
 			t.Errorf("Home still draws %s", gone)
 		}
