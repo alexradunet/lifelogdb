@@ -127,3 +127,14 @@ func TestTheEditorIsTallAsItsBodyAndFirst(t *testing.T) {
 		t.Errorf("the editor is not before the body: %d, %d", e, b)
 	}
 }
+
+// TestTheBrowserMarksTheBodyOfASaveRequired: save-body refuses an empty body (the catalog marks the field required),
+// so the browser marks its text area required and does not send an empty body.
+func TestTheBrowserMarksTheBodyOfASaveRequired(t *testing.T) {
+	c, h := fresh(t)
+	p := must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Notes", "body": "words"}))
+	area := regexp.MustCompile(`<textarea name="body"[^>]*>`).FindString(browse(t, h, hrefOf(p, "self")))
+	if area != `<textarea name="body" rows="12" required>` {
+		t.Errorf("the text area of save-body: %q, want it required", area)
+	}
+}
