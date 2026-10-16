@@ -2,6 +2,7 @@ package api
 
 import (
 	"html/template"
+	"regexp"
 	"strings"
 
 	"lifelog/internal/core"
@@ -239,4 +240,51 @@ func (v *view) MetricSections() []metricSection {
 		}
 	}
 	return out
+}
+
+// readingTile is a metric read on the day: its last reading of the day (the one to correct), its unit in words,
+// how many readings of the day it stands for, and the line of its trend.
+type readingTile struct {
+	Metric, Unit, Value string
+	ID                  string
+	More                int
+	Line                template.HTML
+}
+
+// ReadingTiles are the tiles of the day's trends, one for each metric, in the order of the day's readings.
+func (v *view) ReadingTiles() []readingTile {
+	props, _ := v.Props.(map[string]any)
+	day, _ := props["day"].(string)
+	readings, _ := props["readings"].([]any)
+	trends, _ := props["trends"].([]any)
+	var out []readingTile
+	for _, x := range trends {
+		t, _ := x.(map[string]any)
+		metric, _ := t["metric"].(string)
+		unit, _ := t["unit"].(string)
+		tile := readingTile{Metric: metric, Unit: unitWords(unit)}
+		for _, r := range readings {
+			m, _ := r.(map[string]any)
+			if m["metric"] == metric {
+				if tile.ID != "" {
+					tile.More++
+				}
+				tile.ID, tile.Value = num(m["id"]), num(m["value"])
+			}
+		}
+		points, _ := t["readings"].([]any)
+		tile.Line = trendLine(v.clock(), metric, unit, day, points)
+		out = append(out, tile)
+	}
+	return out
+}
+
+var scaleUnit = regexp.MustCompile(`^\d+-(\d+)$`)
+
+// unitWords is a unit as it follows a value: a scale "1-5" is "of 5"; anything else is itself.
+func unitWords(unit string) string {
+	if m := scaleUnit.FindStringSubmatch(unit); m != nil {
+		return "of " + m[1]
+	}
+	return unit
 }

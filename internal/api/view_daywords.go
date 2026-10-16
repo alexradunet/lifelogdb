@@ -1,13 +1,13 @@
 package api
 
-// The calendar in words and numbers: days stepped, ISO weeks, weekdays, and the words of a week.
-
 import (
 	"strconv"
 	"time"
 
 	"lifelog/internal/core"
 )
+
+// The calendar in words and numbers: days stepped, ISO weeks, weekdays, and the words of a week.
 
 // addDays is the day n days after day ("" for a day that is not one).
 func addDays(day string, n int) string {
@@ -145,4 +145,39 @@ func beyond(list any, n int, morePages any) int {
 func anyList(list any) []any {
 	items, _ := list.([]any)
 	return items
+}
+
+// weeks puts the days of a month into the rows of a calendar, Monday first: nil fills a cell before the first day and
+// after the last.
+func weeks(list any) [][]any {
+	days, _ := list.([]any)
+	if len(days) == 0 {
+		return nil
+	}
+	m, _ := days[0].(map[string]any)
+	first, _ := m["day"].(string)
+	t, ok := core.ParseDay(first)
+	if !ok {
+		return nil
+	}
+	var out [][]any
+	row := make([]any, (int(t.Weekday())+6)%7)
+	for _, d := range days {
+		if row = append(row, d); len(row) == 7 {
+			out, row = append(out, row), nil
+		}
+	}
+	if len(row) > 0 {
+		out = append(out, append(row, make([]any, 7-len(row))...))
+	}
+	return out
+}
+
+// yearPage is the address of the page of a month's year, YYYY-MM; "" for the year 0000, which has no page.
+func yearPage(month string) string {
+	year, err := strconv.Atoi(month[:min(4, len(month))])
+	if err != nil || !isYear(year) {
+		return ""
+	}
+	return yearHref(year)
 }

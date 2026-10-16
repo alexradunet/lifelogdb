@@ -14,6 +14,7 @@ import (
 	"github.com/yuin/goldmark/util"
 	"golang.org/x/text/unicode/norm"
 
+	"lifelog/internal/core"
 	"lifelog/internal/text"
 )
 
@@ -158,3 +159,25 @@ func enhancedRun(run string) []ast.Node {
 	plain(len(run))
 	return nodes
 }
+
+// mark is a search snippet as plain text with its matched words marked: the search puts core.SnippetOpen and
+// core.SnippetClose around them. The text is escaped first, so a snippet can never carry HTML of its own.
+func mark(snippet string) template.HTML {
+	return template.HTML(markRE.ReplaceAllString(template.HTMLEscapeString(plainSnippet(snippet)), "<mark>$1</mark>"))
+}
+
+// plainSnippet is the words of a snippet without its CommonMark, on one line: the marker of a heading, a quote, a
+// list item or a task box at the start of a line is cut, and the brackets of a wikilink or an embed. It is for a
+// list of hits, not a rendering; the JSON keeps the text as it is.
+func plainSnippet(s string) string {
+	var words []string
+	for line := range strings.SplitSeq(s, "\n") {
+		line = core.BlockMark.ReplaceAllString(strings.TrimSpace(line), "")
+		if line != "" {
+			words = append(words, line)
+		}
+	}
+	return strings.NewReplacer("![[", "", "[[", "", "]]", "").Replace(strings.Join(words, " "))
+}
+
+var markRE = regexp.MustCompile(core.SnippetOpen + `([^` + core.SnippetOpen + core.SnippetClose + `]+)` + core.SnippetClose)

@@ -1,0 +1,361 @@
+package api
+
+import (
+	"bytes"
+	"embed"
+	"encoding/json"
+	"fmt"
+	"html/template"
+	"net/url"
+	"slices"
+	"strconv"
+	"strings"
+
+	"lifelog/internal/text"
+)
+
+// The browser view is a template per class of entity (html/*.html), and the generic one for any other class:
+// properties, links, and every action as a form. A template is a view of the entity the JSON client gets: it
+// reads the properties by their JSON names and places the entity's own actions, so a form is shown only where
+// the API offers the action. A form posts, and the server answers with a redirect.
+//
+// The look is the Almanac design system (docs/plans/092-the-app-shell.md) bound in Hearthwood, the materials of the
+// owner's Balaur design system (docs/plans/096-bound-in-hearthwood.md), in two stylesheets of this application's
+// own; no framework is vendored and nothing is fetched from another host. base.css holds the tokens and styles
+// ordinary HTML by element (its forms, tables, buttons and print sheet, light and dark); app.css holds only what
+// this app's own vocabulary needs (the shell, its components, .wikilink, .chart), and a test keeps the two apart.
+// The two are one cascade in four layers (tokens, base, components, utilities), declared once in base.css, and
+// every rule is in logical properties (docs/plans/108-the-browser-made-current.md).
+// The three faces are embedded files that /assets/fonts/ serves. There is no script: what a page does beyond
+// its links and forms, the browser does by itself (docs/plans/108-the-browser-made-current.md).
+//
+//go:embed html/*.html html/*.css html/*.svg html/*.webmanifest html/fonts/*.woff2 html/fonts/*.txt
+var views embed.FS
+
+// baseCSS and appCSS are the two stylesheets, in that order: the look of ordinary HTML, then this app's own.
+var (
+	baseCSS = template.CSS(mustView("base.css"))
+	appCSS  = template.CSS(mustView("app.css"))
+)
+
+func mustView(name string) []byte {
+	b, err := views.ReadFile("html/" + name)
+	if err != nil {
+		panic(err) // the sheets are embedded: one missing is a build defect, not a runtime condition
+	}
+	return b
+}
+
+var pages = template.Must(template.New("").Funcs(template.FuncMap{
+	"basecss":    func() template.CSS { return baseCSS },
+	"appcss":     func() template.CSS { return appCSS },
+	"rel":        func(r []string) string { return strings.Join(r, " ") },
+	"markdown":   markdown,
+	"mark":       mark,
+	"rejected":   rejected,
+	"chart":      chart,
+	"titleHref":  titleHref,
+	"weekday":    weekday,
+	"unitWords":  unitWords,
+	"form":       formOf,
+	"group":      group,
+	"weeks":      weeks,
+	"calItem":    calItem,
+	"dayOfMonth": dayOfMonth,
+	"dict":       dict,
+	"monthBand":  monthBand,
+	"num":        num,
+	"pathesc":    url.PathEscape,
+	"icon":       icon,
+	"shortDay":   shortDay,
+	"addDays":    addDays,
+	"week":       isoWeek,
+	"isoWeekKey": isoWeekKey,
+	"yearOf":     func(month string) string { return month[:min(4, len(month))] },
+	"yearPage":   yearPage,
+	"sinceLast":  sinceLastWeek,
+	"nameWords":  nameWords,
+	"monthName": func(month string) string { // "2026-10" to "October"
+		if t, ok := monthOf(month); ok {
+			return t.Format("January")
+		}
+		return month
+	},
+	"crumbs":    func(path string) string { return strings.ReplaceAll(path, "/", " › ") }, // "Family/Cousins" to "Family › Cousins"
+	"add":       func(a, b int) int { return a + b },
+	"segmented": segmented,
+	"alert":     alertOf,
+	"upTo":      upTo,
+	"beyond":    beyond,
+}).ParseFS(views, "html/*.html"))
+
+// dict is the arguments of a sub-template that needs more than one value: name/value pairs, each name a string.
+func dict(kv ...any) (map[string]any, error) {
+	if len(kv)%2 != 0 {
+		return nil, fmt.Errorf("dict: %d arguments, want name/value pairs", len(kv))
+	}
+	m := make(map[string]any, len(kv)/2)
+	for i := 0; i < len(kv); i += 2 {
+		k, ok := kv[i].(string)
+		if !ok {
+			return nil, fmt.Errorf("dict: name %v is not a string", kv[i])
+		}
+		m[k] = kv[i+1]
+	}
+	return m, nil
+}
+
+// num shows a property's value. A number is written in full, never with an exponent: the JSON client reads every
+// number as a float64, and an id of a million must still make the link /pages/1000000, not /pages/1e+06.
+func num(v any) string {
+	switch x := v.(type) {
+	case nil:
+		return ""
+	case float64:
+		return strconv.FormatFloat(x, 'f', -1, 64)
+	}
+	return fmt.Sprint(v)
+}
+
+// viewOf names the template that shows an entity of a class; a class without one is shown by "generic".
+var viewOf = map[string]string{
+	"root": "root", "day": "day", "page": "page", "person": "page", "place": "page", "file": "page",
+	"days": "list", "search": "search", "browse": "browse",
+
+	"metrics": "metrics", "series": "metric", "metric": "page", "measurement": "measurement", "error": "error", "login": "login",
+	"month": "month", "week": "week", "year": "year", "styleguide": "styleguide",
+	"preview": "preview",
+}
+
+// view is what a template gets: the entity, its properties as the JSON client reads them, the path the browser
+// asked for (which navigation link is current), the address of this page (where a form on it asks to return,
+// docs/plans/091-the-browser-for-daily-use.md) and, for an error answering a form, the text that form sent (so a
+// refused save loses nothing) and the page it came from.
+type view struct {
+	*Entity
+	Props     any
+	Path      string
+	Here      string
+	Submitted string
+	Back      string
+	Shell     *shellView   // the sidebar's read; nil when the page is drawn without it
+	Refused   *refusedView // a form of this page failed: the alert, and the form as it was sent
+	Sent      url.Values
+	query     url.Values // the page's own query: ?new=<action> and the fields it fills
+}
+
+// refusedView is the error of a refused form, as the page it came from draws it: the alert at the top of the page.
+type refusedView struct {
+	Message string
+	Words   string // the alert's first words (alertOf)
+	Danger  bool
+	Href    string // the refused action's address
+}
+
+// Asked is a parameter of the page's own query (docs/plans/114-one-way-to-do-a-thing.md): ?new=<action> opens that
+// action's form, and ?category= fills a field.
+func (v *view) Asked(name string) string { return v.query.Get(name) }
+
+// hereOf is the address of the page the browser is on, without the one-use feedback receipt: a form that returns
+// here must not carry a receipt that was already taken.
+func hereOf(u *url.URL) string {
+	q := u.Query()
+	q.Del("feedback")
+	if len(q) == 0 {
+		return u.EscapedPath()
+	}
+	return u.EscapedPath() + "?" + q.Encode()
+}
+
+// drawFailed is the page a browser gets when its view cannot be drawn: a 500 that names no internal cause. The
+// server's log has the cause.
+const drawFailed = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Error · Lifelog</title></head>
+<body><p role="alert">This page cannot be drawn. The server's log has the cause.</p><p><a href="/">Home</a></p></body></html>
+`
+
+// facts are what a page shows beyond its entity. The one who draws the page reads them from the request and the
+// store: the address the browser asked for, the shell's read and, for an error that answers a form, the text that
+// form sent and the page it came from.
+type facts struct {
+	url       *url.URL   // the address the browser asked for
+	shell     *shellView // the sidebar's read; nil when the page is drawn without it
+	submitted string     // the body (or the text) that a refused form sent
+	back      string     // the page that a refused form came from, when it is a page of this server
+}
+
+// pageView is the view of a page: the entity, the facts of the page and the refusal of a form that the page shows,
+// nil for none. It reads nothing, so the same arguments give the same view. Properties that JSON cannot carry (a
+// NaN, an infinity) are an error, so a page is never drawn with its properties left out.
+func pageView(e *Entity, f facts, rf *refusal) (*view, error) {
+	shape, err := jsonShape(e.Properties)
+	if err != nil {
+		return nil, err
+	}
+	v := &view{Entity: e, Props: shape, Path: f.url.Path, Here: hereOf(f.url), Submitted: f.submitted, Back: f.back,
+		Shell: f.shell, query: f.url.Query()}
+	if rf != nil {
+		props, _ := rf.entity.Properties.(map[string]any)
+		code, _ := props["code"].(string)
+		message, _ := props["message"].(string)
+		words := alertOf(code)
+		v.Refused = &refusedView{Message: message, Words: words.Words, Danger: words.Danger, Href: rf.href}
+		v.Sent = rf.sent
+	}
+	return v, nil
+}
+
+// templateOf names the template that draws an entity: the first of its classes that has one, else "generic".
+func templateOf(e *Entity) string {
+	for _, c := range e.Class {
+		if n, ok := viewOf[c]; ok {
+			return n
+		}
+	}
+	return "generic"
+}
+
+// htmlOf is the page of a view, drawn by the template of its entity's class.
+func htmlOf(v *view) ([]byte, error) {
+	var b bytes.Buffer
+	if err := pages.ExecuteTemplate(&b, templateOf(v.Entity), v); err != nil {
+		return nil, err
+	}
+	return b.Bytes(), nil
+}
+
+// LinkTitle is the title of the entity's link with that rel, "" when it has none.
+func (v *view) LinkTitle(rel string) string {
+	if l := v.linkByRel(rel); l != nil {
+		return l.Title
+	}
+	return ""
+}
+
+// Link is the href of the entity's link with that rel, "" when it has none.
+func (v *view) Link(rel string) string {
+	if l := v.linkByRel(rel); l != nil {
+		return l.Href
+	}
+	return ""
+}
+
+// LinksOf are the entity's links with that rel, in order.
+func (v *view) LinksOf(rel string) []Link {
+	var out []Link
+	for _, l := range v.Links {
+		if slices.Contains(l.Rel, rel) {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+// Embedded are the entity's embedded links with that rel.
+func (v *view) Embedded(rel string) []Link {
+	var out []Link
+	for _, l := range v.Entities {
+		for _, r := range l.Rel {
+			if r == rel {
+				out = append(out, l)
+				break
+			}
+		}
+	}
+	return out
+}
+
+// filedHere is what a category page lists under Filed here: the sub-categories first, then the rest, each in the
+// order of the backlinks (by title).
+type filedHere struct {
+	Subs, Items []Link
+}
+
+// Filed is the Filed here of a page: its part-of backlinks, the categories first; nil when nothing is filed in it.
+func (v *view) Filed() *filedHere {
+	var f filedHere
+	for _, l := range v.Embedded("backlink") {
+		if !slices.Contains(l.Rel, "part-of") {
+			continue
+		}
+		if slices.Contains(l.Class, "category") {
+			f.Subs = append(f.Subs, l)
+		} else {
+			f.Items = append(f.Items, l)
+		}
+	}
+	if len(f.Subs)+len(f.Items) == 0 {
+		return nil
+	}
+	return &f
+}
+
+// jsonShape is v as a JSON client reads it: maps by JSON name, lists, strings, float64s. A value that JSON cannot
+// carry (a NaN, an infinity) is an error, so a page is never drawn with its properties left out.
+func jsonShape(v any) (any, error) {
+	if v == nil {
+		return nil, nil
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	var x any
+	if err := json.Unmarshal(b, &x); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// rejected are the [[…]] names in a body that make no link, because they are not valid titles.
+func rejected(body string) []string {
+	_, _, out := text.Targets(body, "")
+	return out
+}
+
+// alertView is how an error entity is drawn (docs/plans/092-the-app-shell.md): the first words, picked by the
+// error's code, and the tone: danger when the request was refused or failed, warn when the owner can fix it here.
+type alertView struct {
+	Words  string
+	Danger bool
+}
+
+// alertOf picks an error's first words and tone by its code (API.md, Errors); the message follows them.
+func alertOf(code any) alertView {
+	switch code {
+	case "forbidden", "cross_origin", "token_required", "unauthorized":
+		return alertView{"Refused.", true}
+	case "too_large", "timeout", "internal":
+		return alertView{"Not done.", true}
+	case "stale_version":
+		return alertView{"Not saved. The page changed since you opened it.", false}
+	case "exists":
+		return alertView{"Not created.", false}
+	}
+	return alertView{}
+}
+
+// group splits a list of objects by the value of key, keeping the order of first appearance. The objects without
+// the key are in the bucket whose key is "".
+type bucket struct {
+	Key   string
+	Items []any
+}
+
+func group(list any, key string) []bucket {
+	var out []bucket
+	at := map[string]int{}
+	items, _ := list.([]any)
+	for _, it := range items {
+		m, _ := it.(map[string]any)
+		k := num(m[key])
+		i, ok := at[k]
+		if !ok {
+			i = len(out)
+			at[k] = i
+			out = append(out, bucket{Key: k})
+		}
+		out[i].Items = append(out[i].Items, it)
+	}
+	return out
+}

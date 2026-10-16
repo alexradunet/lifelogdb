@@ -3,7 +3,6 @@ package api
 import (
 	"fmt"
 	"html/template"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -13,53 +12,6 @@ import (
 
 // The lines of the readings (docs/plans/093-words-phone-and-today.md): a reading's tile on a day, with its unit and
 // the line of its last 14 days, and the line of a metric's recent readings on its card.
-
-// readingTile is a metric read on the day: its last reading of the day (the one to correct), its unit in words,
-// how many readings of the day it stands for, and the line of its trend.
-type readingTile struct {
-	Metric, Unit, Value string
-	ID                  string
-	More                int
-	Line                template.HTML
-}
-
-// ReadingTiles are the tiles of the day's trends, one for each metric, in the order of the day's readings.
-func (v *view) ReadingTiles() []readingTile {
-	props, _ := v.Props.(map[string]any)
-	day, _ := props["day"].(string)
-	readings, _ := props["readings"].([]any)
-	trends, _ := props["trends"].([]any)
-	var out []readingTile
-	for _, x := range trends {
-		t, _ := x.(map[string]any)
-		metric, _ := t["metric"].(string)
-		unit, _ := t["unit"].(string)
-		tile := readingTile{Metric: metric, Unit: unitWords(unit)}
-		for _, r := range readings {
-			m, _ := r.(map[string]any)
-			if m["metric"] == metric {
-				if tile.ID != "" {
-					tile.More++
-				}
-				tile.ID, tile.Value = num(m["id"]), num(m["value"])
-			}
-		}
-		points, _ := t["readings"].([]any)
-		tile.Line = trendLine(v.clock(), metric, unit, day, points)
-		out = append(out, tile)
-	}
-	return out
-}
-
-var scaleUnit = regexp.MustCompile(`^\d+-(\d+)$`)
-
-// unitWords is a unit as it follows a value: a scale "1-5" is "of 5"; anything else is itself.
-func unitWords(unit string) string {
-	if m := scaleUnit.FindStringSubmatch(unit); m != nil {
-		return "of " + m[1]
-	}
-	return unit
-}
 
 // trendLine draws a trend as an inline SVG, 120 by 28: one point per reading, placed by its day among the 14 days
 // through the day, the last one marked; "" with no reading. Its label says the first and the last value in words,
@@ -159,5 +111,88 @@ func line(label string, pts []linePoint) template.HTML {
 		fmt.Fprintf(&sb, "%.1f,%.1f ", p.x, y(p.value))
 	}
 	fmt.Fprintf(&sb, `"/><circle cx="%.1f" cy="%.1f" r="2.5"/></svg>`, last.x, y(last.value))
+	return template.HTML(sb.String())
+}
+
+// chartPoints is how many readings the chart draws a point for: more points than this overlap on its 640 units and
+// only add weight, so the line alone draws a longer series (docs/plans/100-one-page-a-metric.md).
+const chartPoints = 200
+
+// chart draws a series as an inline SVG: a line through its readings, each placed by its day between from and to,
+// and a point a reading while there are at most chartPoints.
+func chart(from, to string, readings any) template.HTML {
+	list, _ := readings.([]any)
+	// An absent lower bound is explicit all-history mode. Plot from the earliest
+	// returned observation, without giving an ordinary calendar date sentinel meaning.
+	if from == "" {
+		for _, it := range list {
+			m, _ := it.(map[string]any)
+			day, _ := m["day"].(string)
+			if core.IsDay(day) && (from == "" || day < from) {
+				from = day
+			}
+		}
+	}
+	f, ok1 := core.ParseDay(from)
+	t, ok2 := core.ParseDay(to)
+	if len(list) == 0 || !ok1 || !ok2 || t.Before(f) {
+		return ""
+	}
+	type pt struct {
+		day   time.Time
+		x     float64
+		value float64
+	}
+	var pts []pt
+	lo, hi := 0.0, 0.0
+	for i, it := range list {
+		m, _ := it.(map[string]any)
+		day, _ := m["day"].(string)
+		v, _ := m["value"].(float64)
+		d, ok := core.ParseDay(day)
+		if !ok {
+			continue
+		}
+		if i == 0 || v < lo {
+			lo = v
+		}
+		if i == 0 || v > hi {
+			hi = v
+		}
+		// Unix seconds cover the full supported date range without duration saturation.
+		x := 0.5
+		if t.After(f) {
+			x = float64(d.Unix()-f.Unix()) / float64(t.Unix()-f.Unix())
+		}
+		pts = append(pts, pt{d, x, v})
+	}
+	const w, h, pad, left, bottom = 640.0, 200.0, 14.0, 48.0, 22.0
+	span := hi - lo
+	if span == 0 {
+		span = 1
+	}
+	x := func(p pt) float64 { return left + p.x*(w-left-pad) }
+	y := func(v float64) float64 { return pad + (1-(v-lo)/span)*(h-2*pad-bottom) }
+	var sb strings.Builder
+	first, last := f.Format(layoutDateYear), t.Format(layoutDateYear) // the ends in words, with the year: a range can span years
+	fmt.Fprintf(&sb, `<svg class="chart" viewBox="0 0 %g %g" role="img" aria-label="%d readings from %s to %s">`,
+		w, h, len(pts), first, last)
+	fmt.Fprintf(&sb, `<line class="axis" x1="%g" y1="%g" x2="%g" y2="%g"/><line class="axis" x1="%g" y1="%g" x2="%g" y2="%g"/>`,
+		left, y(hi), w-pad, y(hi), left, y(lo), w-pad, y(lo))
+	fmt.Fprintf(&sb, `<text x="%g" y="%g">%g</text><text x="%g" y="%g">%g</text>`, left-6, y(hi)+4, hi, left-6, y(lo)+4, lo)
+	fmt.Fprintf(&sb, `<text class="x" x="%g" y="%g">%s</text><text class="x" x="%g" y="%g">%s</text>`,
+		left+40, h-4, first, w-pad-40, h-4, last)
+	sb.WriteString(`<polyline points="`)
+	for _, p := range pts {
+		fmt.Fprintf(&sb, "%.1f,%.1f ", x(p), y(p.value))
+	}
+	sb.WriteString(`"/>`)
+	if len(pts) <= chartPoints {
+		for _, p := range pts {
+			fmt.Fprintf(&sb, `<circle cx="%.1f" cy="%.1f" r="3"><title>%s: %g</title></circle>`, x(p), y(p.value),
+				p.day.Format(layoutDateYear), p.value)
+		}
+	}
+	sb.WriteString(`</svg>`)
 	return template.HTML(sb.String())
 }

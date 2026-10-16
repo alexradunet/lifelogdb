@@ -49,15 +49,6 @@ func yearHref(year int) string { return fmt.Sprintf("/years/%04d", year) }
 // isYear reports a year that has a page: 0001 to 9999. The year 0000 holds days, but it has no page (API.md).
 func isYear(year int) bool { return 1 <= year && year <= 9999 }
 
-// yearPage is the address of the page of a month's year, YYYY-MM; "" for the year 0000, which has no page.
-func yearPage(month string) string {
-	year, err := strconv.Atoi(month[:min(4, len(month))])
-	if err != nil || !isYear(year) {
-		return ""
-	}
-	return yearHref(year)
-}
-
 // lastDay is the last day that a date can name (lifelog_meta.days). The last week, 9999-W52, ends on it, a Friday.
 var lastDay = time.Date(9999, time.December, 31, 0, 0, 0, 0, time.UTC)
 

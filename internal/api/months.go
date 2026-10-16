@@ -36,6 +36,13 @@ type calendarItem struct {
 // them all. An import can write thousands of pages on one day.
 const dayPages = 20
 
+// The layouts of a day and a month in words.
+const (
+	layoutDate     = "Mon 2 Jan"
+	layoutDateYear = "Mon 2 Jan 2006"
+	layoutMonth    = "January 2006"
+)
+
 // monthOf parses a month, YYYY-MM; ok is false for anything else.
 func monthOf(s string) (time.Time, bool) {
 	t, err := time.Parse("2006-01", s)
@@ -172,30 +179,4 @@ func writtenDays(entries []core.DayEntry, first, last time.Time) []writtenDay {
 		days = append(days, writtenDay{Day: day, Page: written[day]})
 	}
 	return days
-}
-
-// weeks puts the days of a month into the rows of a calendar, Monday first: nil fills a cell before the first day and
-// after the last.
-func weeks(list any) [][]any {
-	days, _ := list.([]any)
-	if len(days) == 0 {
-		return nil
-	}
-	m, _ := days[0].(map[string]any)
-	first, _ := m["day"].(string)
-	t, ok := core.ParseDay(first)
-	if !ok {
-		return nil
-	}
-	var out [][]any
-	row := make([]any, (int(t.Weekday())+6)%7)
-	for _, d := range days {
-		if row = append(row, d); len(row) == 7 {
-			out, row = append(out, row), nil
-		}
-	}
-	if len(row) > 0 {
-		out = append(out, append(row, make([]any, 7-len(row))...))
-	}
-	return out
 }

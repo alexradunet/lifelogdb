@@ -15,13 +15,6 @@ import (
 // the name of its property. A day is "Mon 5 Oct", and near today "yesterday · Sun 11 Oct"; an instant is said in the
 // clock of the server's day, "today, 09:48", with the exact instant kept in its <time> element.
 
-// The layouts of a day and a month in words.
-const (
-	layoutDate     = "Mon 2 Jan"
-	layoutDateYear = "Mon 2 Jan 2006"
-	layoutMonth    = "January 2006"
-)
-
 // clock is what words need: the server's local day and its zone. A page drawn before the handler has neither: its
 // days carry their year and its times are in UTC.
 type clock struct {
