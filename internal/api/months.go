@@ -76,8 +76,8 @@ func (h *server) month(r *http.Request) (*Entity, error) {
 }
 
 // openDay answers with the address of the day the form names.
-func (h *server) openDay(r *http.Request, _ string) (*Entity, error) {
-	v, err := fieldsOf(r, "open-day")
+func (h *server) openDay(r *http.Request, act spec, _ string) (*Entity, error) {
+	v, err := fieldsOf(r, act)
 	if err != nil {
 		return nil, err
 	}

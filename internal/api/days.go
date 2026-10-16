@@ -174,8 +174,8 @@ func (h *server) dayEntity(ctx context.Context, day string) (*Entity, error) {
 	return e, nil
 }
 
-func (h *server) capture(r *http.Request, src string) (*Entity, error) {
-	v, err := fieldsOf(r, "capture")
+func (h *server) capture(r *http.Request, act spec, src string) (*Entity, error) {
+	v, err := fieldsOf(r, act)
 	if err != nil {
 		return nil, err
 	}

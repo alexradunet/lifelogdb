@@ -43,8 +43,8 @@ func idsOf(values []string) ([]int64, error) {
 // tombstoneMany is tombstone-pages: every id named is tombstoned in one write, or none is. The answer is the class
 // tombstoned: the ids, their count, and an item link to each. A browser form returns to its list (back), with the
 // count as its feedback.
-func (h *server) tombstoneMany(r *http.Request, src string) (*Entity, error) {
-	v, err := fieldsOf(r, "tombstone-pages")
+func (h *server) tombstoneMany(r *http.Request, act spec, src string) (*Entity, error) {
+	v, err := fieldsOf(r, act)
 	if err != nil {
 		return nil, err
 	}

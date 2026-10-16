@@ -116,14 +116,16 @@ type redirect struct{ to string }
 
 func (r redirect) Error() string { return "see " + r.to }
 
-// actionFunc runs one action of the catalog. src is the writer of the request (lifelog_meta.source); a read that
-// is not the owner's alone gets "".
-type actionFunc func(r *http.Request, src string) (*Entity, error)
+// actionFunc runs one action of the catalog. act is the action's row of the catalog, which mount gives: the handler
+// reads its fields with it (fieldsOf), so a handler does not write its own name. src is the writer of the request
+// (lifelog_meta.source); a read that is not the owner's alone gets "".
+type actionFunc func(r *http.Request, act spec, src string) (*Entity, error)
 
-// mount gives each action of cat a route to its handler, with the method and the path of the action. An action that
-// writes reads its writer. An Owner action reads its writer and refuses a writer that is not the owner (an agent or
-// an import). Any other read reads no writer, so its source header cannot refuse it. mount panics when an action has
-// no handler or a handler has no action: the server does not start when the catalog and the routes disagree.
+// mount gives each action of cat a route to its handler, with the method and the path of the action, and gives the
+// handler the action's row. An action that writes reads its writer. An Owner action reads its writer and refuses a
+// writer that is not the owner (an agent or an import). Any other read reads no writer, so its source header cannot
+// refuse it. mount panics when an action has no handler or a handler has no action: the server does not start when
+// the catalog and the routes disagree.
 func (h *server) mount(m *http.ServeMux, cat []spec, handlers map[string]actionFunc) {
 	named := map[string]bool{}
 	for _, s := range cat {
@@ -150,7 +152,7 @@ func (h *server) mount(m *http.ServeMux, cat []spec, handlers map[string]actionF
 			if s.Owner && !core.IsOwner(src) {
 				return nil, core.Forbidden("this action is the owner's: an agent or an import may not run it")
 			}
-			return f(r, src)
+			return f(r, s, src)
 		}))
 	}
 }

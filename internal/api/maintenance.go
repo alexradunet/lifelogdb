@@ -14,7 +14,7 @@ import (
 // the store's folder; the answer is the path and the restore check, with self at the root so a browser form is
 // answered home with them as feedback. Core reports a refusal as 422 snapshot_refused; a timeout and a failure are
 // answered as on every route.
-func (h *server) snapshot(r *http.Request, _ string) (*Entity, error) {
+func (h *server) snapshot(r *http.Request, _ spec, _ string) (*Entity, error) {
 	path, res, err := h.s.TakeSnapshot(r.Context(), time.Now())
 	if err != nil {
 		return nil, err
@@ -28,7 +28,7 @@ func (h *server) snapshot(r *http.Request, _ string) (*Entity, error) {
 		Links: []Link{link("self", "/", "Home"), link("index", "/", "Home")}}, nil
 }
 
-func (h *server) integrity(r *http.Request, _ string) (*Entity, error) {
+func (h *server) integrity(r *http.Request, _ spec, _ string) (*Entity, error) {
 	res, err := h.s.Integrity(r.Context())
 	if err != nil {
 		return nil, err

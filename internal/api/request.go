@@ -69,19 +69,18 @@ func form(r *http.Request) (url.Values, error) {
 	return r.Form, nil
 }
 
-// fieldsOf reads the fields of the catalog action name: the query of a GET, the form of a POST. It refuses a request
+// fieldsOf reads the fields of the catalog action act: the query of a GET, the form of a POST. It refuses a request
 // that leaves a required field empty (required).
-func fieldsOf(r *http.Request, name string) (url.Values, error) {
-	s := specOf(name)
-	if s.Method == "GET" {
+func fieldsOf(r *http.Request, act spec) (url.Values, error) {
+	if act.Method == "GET" {
 		v := r.URL.Query()
-		return v, required(v, s)
+		return v, required(v, act)
 	}
 	v, err := form(r)
 	if err != nil {
 		return nil, err
 	}
-	return v, required(v, s)
+	return v, required(v, act)
 }
 
 // required refuses values that leave a required field of the action s empty. The catalog is the one list of the
@@ -104,13 +103,13 @@ func idOf(r *http.Request) (int64, error) {
 	return id, nil
 }
 
-// idForm is the opening of a write on a resource: the {id} of the path, and the fields of the action name (fieldsOf).
-func idForm(r *http.Request, name string) (int64, url.Values, error) {
+// idForm is the opening of a write on a resource: the {id} of the path, and the fields of the action act (fieldsOf).
+func idForm(r *http.Request, act spec) (int64, url.Values, error) {
 	id, err := idOf(r)
 	if err != nil {
 		return 0, nil, err
 	}
-	v, err := fieldsOf(r, name)
+	v, err := fieldsOf(r, act)
 	return id, v, err
 }
 

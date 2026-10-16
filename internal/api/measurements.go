@@ -186,8 +186,8 @@ func (h *server) measurementEntity(ctx context.Context, id int64) (*Entity, erro
 	return e, nil
 }
 
-func (h *server) record(r *http.Request, src string) (*Entity, error) {
-	v, err := fieldsOf(r, "record")
+func (h *server) record(r *http.Request, act spec, src string) (*Entity, error) {
+	v, err := fieldsOf(r, act)
 	if err != nil {
 		return nil, err
 	}
@@ -208,8 +208,8 @@ func (h *server) record(r *http.Request, src string) (*Entity, error) {
 	return h.measurementEntity(r.Context(), id)
 }
 
-func (h *server) correct(r *http.Request, src string) (*Entity, error) {
-	id, v, err := idForm(r, "correct")
+func (h *server) correct(r *http.Request, act spec, src string) (*Entity, error) {
+	id, v, err := idForm(r, act)
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +220,7 @@ func (h *server) correct(r *http.Request, src string) (*Entity, error) {
 	return h.correctTo(r.Context(), src, id, value)
 }
 
-func (h *server) retract(r *http.Request, src string) (*Entity, error) {
+func (h *server) retract(r *http.Request, _ spec, src string) (*Entity, error) {
 	id, err := idOf(r)
 	if err != nil {
 		return nil, err
@@ -237,8 +237,8 @@ func (h *server) correctTo(ctx context.Context, src string, id int64, value *flo
 	return h.measurementEntity(ctx, fix)
 }
 
-func (h *server) registerMetric(r *http.Request, src string) (*Entity, error) {
-	v, err := fieldsOf(r, "register-metric")
+func (h *server) registerMetric(r *http.Request, act spec, src string) (*Entity, error) {
+	v, err := fieldsOf(r, act)
 	if err != nil {
 		return nil, err
 	}

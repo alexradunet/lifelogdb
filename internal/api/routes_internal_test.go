@@ -23,7 +23,7 @@ func panicOf(f func()) (msg string) {
 // TestMountPanicsWhenTheCatalogAndTheHandlersDisagree: an action with no handler, or a handler with no action, stops
 // the server at start. When they agree, each action gets a route with its method and its path.
 func TestMountPanicsWhenTheCatalogAndTheHandlersDisagree(t *testing.T) {
-	run := func(*http.Request, string) (*Entity, error) { return &Entity{}, nil }
+	run := func(*http.Request, spec, string) (*Entity, error) { return &Entity{}, nil }
 	cat := []spec{{Name: "read", Method: "GET", Path: "/read"}, {Name: "write", Method: "POST", Path: "/things/{id}/write"}}
 	for _, tc := range []struct {
 		name     string
@@ -56,9 +56,9 @@ func TestMountPanicsWhenTheCatalogAndTheHandlersDisagree(t *testing.T) {
 
 // TestMountReadsTheWriterAndRefusesAnAgentAnOwnerAction: an action that writes reads its writer, and an Owner action
 // refuses an agent or an import. A read that is not the owner's alone reads no writer: a source header that is not
-// valid does not refuse it.
+// valid does not refuse it. The handler gets the row of its own action.
 func TestMountReadsTheWriterAndRefusesAnAgentAnOwnerAction(t *testing.T) {
-	ran, src := "", ""
+	ran, src, given := "", "", ""
 	handlers := map[string]actionFunc{}
 	cat := []spec{
 		{Name: "read", Method: "GET", Path: "/read"},
@@ -67,8 +67,8 @@ func TestMountReadsTheWriterAndRefusesAnAgentAnOwnerAction(t *testing.T) {
 		{Name: "keep", Method: "POST", Path: "/keep", Owner: true},
 	}
 	for _, s := range cat {
-		handlers[s.Name] = func(_ *http.Request, writer string) (*Entity, error) {
-			ran, src = s.Name, writer
+		handlers[s.Name] = func(_ *http.Request, act spec, writer string) (*Entity, error) {
+			ran, src, given = s.Name, writer, act.Method+" "+act.Path
 			return &Entity{Title: s.Name}, nil
 		}
 	}
@@ -93,7 +93,7 @@ func TestMountReadsTheWriterAndRefusesAnAgentAnOwnerAction(t *testing.T) {
 		{"POST", "/keep", "agent:x", http.StatusForbidden, ""},
 		{"POST", "/keep", "import:x", http.StatusForbidden, ""},
 	} {
-		ran, src = "", ""
+		ran, src, given = "", "", ""
 		req := httptest.NewRequest(tc.method, tc.path, nil)
 		if tc.source != "" {
 			req.Header.Set(SourceHeader, tc.source)
@@ -105,6 +105,9 @@ func TestMountReadsTheWriterAndRefusesAnAgentAnOwnerAction(t *testing.T) {
 		}
 		if didRun := ran != ""; didRun != (tc.status == http.StatusOK) || src != tc.src {
 			t.Errorf("%s %s as %q: the handler ran %v with the writer %q, want %v with %q", tc.method, tc.path, tc.source, didRun, src, tc.status == http.StatusOK, tc.src)
+		}
+		if _, pattern := m.Handler(req); ran != "" && given != pattern {
+			t.Errorf("%s %s: the handler of %s got the row of %q, want %q", tc.method, tc.path, ran, given, pattern)
 		}
 	}
 }

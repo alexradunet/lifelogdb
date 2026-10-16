@@ -77,8 +77,8 @@ func (h *server) metricOf(ctx context.Context, name string) (*core.Metric, error
 // filePages is file-pages: every page named is filed in the category page, in one write (D26). The answer is the
 // class filed: the category, whether it was made, the ids, and how many links were added and removed, with an item
 // link to each page. A browser form returns to its list (back), with the sentence as its feedback.
-func (h *server) filePages(r *http.Request, src string) (*Entity, error) {
-	v, err := fieldsOf(r, "file-pages")
+func (h *server) filePages(r *http.Request, act spec, src string) (*Entity, error) {
+	v, err := fieldsOf(r, act)
 	if err != nil {
 		return nil, err
 	}

@@ -28,8 +28,8 @@ const (
 )
 
 // addFile keeps a file (docs/cookbook/keep-a-file.md, D9) and answers with its page; Result says what was written.
-func (h *server) addFile(r *http.Request, src string) (*Entity, error) {
-	in, dry, sent, err := parseFileForm(r, "add-file")
+func (h *server) addFile(r *http.Request, act spec, src string) (*Entity, error) {
+	in, dry, sent, err := parseFileForm(r, act)
 	if err != nil {
 		return nil, err
 	}
@@ -52,17 +52,17 @@ func (h *server) addFile(r *http.Request, src string) (*Entity, error) {
 	return withResult(h.pageEntity(r.Context(), k.ID))(k)
 }
 
-// parseFileForm reads a request of the action name (add-file or set-picture): its fields, refused as fieldsOf refuses
+// parseFileForm reads a request of the action act (add-file or set-picture): its fields, refused as fieldsOf refuses
 // them, and sent, which says whether a file was sent. Multipart (a browser, the CLI): the original is streamed through
 // SHA-256 and never stored; a picture the writer reads is held, up to maxPicture, to make the preview from. A multipart
 // form with the file input left empty and no sha256 and no mime sends no file, and is not refused here: the caller
 // decides. Url-encoded or JSON (an agent that hashed the file itself): sha256 and mime, and no picture.
-func parseFileForm(r *http.Request, name string) (in core.FileIn, dry, sent bool, err error) {
+func parseFileForm(r *http.Request, act spec) (in core.FileIn, dry, sent bool, err error) {
 	bad := func(msg string) (core.FileIn, bool, bool, error) {
 		return core.FileIn{}, false, false, core.Invalid("%s", msg)
 	}
 	if ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); ct != "multipart/form-data" {
-		v, err := fieldsOf(r, name)
+		v, err := fieldsOf(r, act)
 		if err != nil {
 			return core.FileIn{}, false, false, err
 		}
@@ -147,7 +147,7 @@ func parseFileForm(r *http.Request, name string) (in core.FileIn, dry, sent bool
 			return bad("the form: " + err.Error())
 		}
 	}
-	if err := required(vals, specOf(name)); err != nil {
+	if err := required(vals, act); err != nil {
 		return core.FileIn{}, false, false, err
 	}
 	in = core.FileIn{Title: vals.Get("title"), Category: vals.Get("category"), SHA256: vals.Get("sha256"), MIME: vals.Get("mime"), Body: vals.Get("body"), Day: vals.Get("day"), Taken: meta.Day()}
@@ -265,13 +265,13 @@ func picture(get func(*http.Request) ([]byte, error), cache string) http.Handler
 
 // setPicture makes a photo a page's picture (core.SetPicture): a new photo sent as original, or a kept file named by
 // title. It answers with the page.
-func (h *server) setPicture(r *http.Request, src string) (*Entity, error) {
+func (h *server) setPicture(r *http.Request, act spec, src string) (*Entity, error) {
 	id, err := idOf(r)
 	if err != nil {
 		return nil, err
 	}
 	if ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); ct == "multipart/form-data" {
-		in, _, sent, err := parseFileForm(r, "set-picture")
+		in, _, sent, err := parseFileForm(r, act)
 		if err != nil {
 			return nil, err
 		}
@@ -284,7 +284,7 @@ func (h *server) setPicture(r *http.Request, src string) (*Entity, error) {
 		}
 		return h.setPictureOf(r, src, id, in.Title)
 	}
-	v, err := fieldsOf(r, "set-picture")
+	v, err := fieldsOf(r, act)
 	if err != nil {
 		return nil, err
 	}
