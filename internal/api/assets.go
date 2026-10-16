@@ -1,6 +1,7 @@
 package api
 
-// The embedded assets a browser gets: the fonts, the style page, the manifest and the icon, the sidebar's icons.
+// The routes that only a browser asks for: the embedded fonts, the manifest and its icon (webFiles), and the style
+// page.
 
 import (
 	"bytes"
@@ -22,7 +23,7 @@ func fonts(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	b, err := views.ReadFile("html/fonts/" + name)
+	b, err := webFiles.ReadFile("html/fonts/" + name)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -43,7 +44,7 @@ func (h *server) styleguide(w http.ResponseWriter, r *http.Request) {
 // install serves an embedded file of html/ for a browser's install of the app: the manifest and its icon. The
 // cache says how long a browser keeps it. The file is the same for every request, so it needs no read of the store.
 func install(name, typ, cache string) http.HandlerFunc {
-	b := mustView(name)
+	b := mustWebFile(name)
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", typ)
 		w.Header().Set("Cache-Control", cache)

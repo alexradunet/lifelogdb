@@ -29,17 +29,21 @@ import (
 // The three faces are embedded files that /assets/fonts/ serves. There is no script: what a page does beyond
 // its links and forms, the browser does by itself (docs/plans/108-the-browser-made-current.md).
 //
+// webFiles are the files of html/: the templates, the two stylesheets, the icon, the manifest, and the fonts with
+// their licences.
+//
 //go:embed html/*.html html/*.css html/*.svg html/*.webmanifest html/fonts/*.woff2 html/fonts/*.txt
-var views embed.FS
+var webFiles embed.FS
 
 // baseCSS and appCSS are the two stylesheets, in that order: the look of ordinary HTML, then this app's own.
 var (
-	baseCSS = template.CSS(mustView("base.css"))
-	appCSS  = template.CSS(mustView("app.css"))
+	baseCSS = template.CSS(mustWebFile("base.css"))
+	appCSS  = template.CSS(mustWebFile("app.css"))
 )
 
-func mustView(name string) []byte {
-	b, err := views.ReadFile("html/" + name)
+// mustWebFile is the file of webFiles that has the name name in html/.
+func mustWebFile(name string) []byte {
+	b, err := webFiles.ReadFile("html/" + name)
 	if err != nil {
 		panic(err) // the sheets are embedded: one missing is a build defect, not a runtime condition
 	}
@@ -88,7 +92,7 @@ var templates = template.Must(template.New("").Funcs(template.FuncMap{
 	"alert":     alertOf,
 	"upTo":      upTo,
 	"beyond":    beyond,
-}).ParseFS(views, "html/*.html"))
+}).ParseFS(webFiles, "html/*.html"))
 
 // dict is the arguments of a sub-template that needs more than one value: name/value pairs, each name a string.
 func dict(kv ...any) (map[string]any, error) {
