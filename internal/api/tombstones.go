@@ -56,7 +56,7 @@ func (h *server) tombstoneMany(r *http.Request, act spec, src string) (*Entity, 
 		return nil, err
 	}
 	e := &Entity{Class: []string{"tombstoned"}, Title: "Deleted",
-		Properties: map[string]any{"kind": "pages", "ids": ids, "count": len(ids)},
+		Properties: map[string]any{"ids": ids, "count": len(ids)},
 		Links:      []Link{link("self", "/", "Home"), link("index", "/", "Home")}}
 	for _, id := range ids {
 		e.Entities = append(e.Entities, link("item", pageHref(id), strconv.FormatInt(id, 10)))

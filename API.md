@@ -553,7 +553,6 @@ returns to. `self` is `/`.
 
 | property | type | meaning |
 |---|---|---|
-| `kind` | string | `pages` |
 | `ids` | list | the ids named, each once, in the order sent |
 | `count` | integer | how many |
 

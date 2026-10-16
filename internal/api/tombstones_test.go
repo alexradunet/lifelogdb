@@ -48,7 +48,7 @@ func TestDeletePagesAtOnce(t *testing.T) {
 
 	// Commas and spaces separate the ids; an id named twice counts once.
 	done := apitest.Must(t)(c.Do(ctx, del, map[string]string{"ids": ids[0] + ", " + ids[1] + " " + ids[0]}))
-	if done.Class[0] != "tombstoned" || props(done)["count"] != json.Number("2") || props(done)["kind"] != "pages" || len(done.Entities) != 2 ||
+	if done.Class[0] != "tombstoned" || props(done)["count"] != json.Number("2") || len(done.Entities) != 2 ||
 		done.Entities[0].Href != "/pages/"+ids[0] || done.Entities[1].Href != "/pages/"+ids[1] || done.Result != "Deleted 2 pages." {
 		t.Fatalf("the answer: %+v %v %v", done.Class, props(done), done.Result)
 	}
