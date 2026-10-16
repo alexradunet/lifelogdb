@@ -364,7 +364,8 @@ func TestNameOwnershipAndJournalReservations(t *testing.T) {
 // TestTheSchemaRefusesARenameOfAJournalDay: a day page keeps its date, and a date is the name of its day page alone.
 // The triggers of the schema hold both rules (entity_names_day_insert), so a refused rename is a 422 with the
 // sentence of the trigger, and it writes nothing. A date that a day page holds is a title another page has: a 409
-// exists, as for any title. A day page renamed to its own date is a rename to the title it has, and writes nothing.
+// exists, as for any title. A day page renamed to its own date writes nothing, so no trigger refuses it: the writer
+// refuses it with a 409 conflict, as step 0 of docs/cookbook/rename-a-page.md says.
 func TestTheSchemaRefusesARenameOfAJournalDay(t *testing.T) {
 	s := fresh(t)
 	day, _, err := s.Capture(ctx, "cli", "2026-02-28", "day prose", nil)
@@ -375,36 +376,39 @@ func TestTheSchemaRefusesARenameOfAJournalDay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const sentence = "a journal day has only its canonical date name"
+	const (
+		sentence = "a journal day has only its canonical date name"
+		ownDate  = "a day page's canonical date is not renamed"
+	)
 	for _, c := range []struct {
 		name   string
 		id     int64
 		title  string
-		status int   // 0: the rename is accepted
-		exists int64 // the page that the ExistsError of a 409 names
+		status int
+		exists int64 // the page that the ExistsError of a 409 names; 0: the 409 is the conflict of the writer
 	}{
 		{"a day page to a free title", day, "Heading", 422, 0},
 		{"a day page to the title of another page", day, "Dated note", 409, page},
 		{"a page to a date that no page has", page, "2026-03-01", 422, 0},
 		{"a page to the date of a day page", page, "2026-02-28", 409, day},
-		{"a day page to its own date", day, "2026-02-28", 0, 0},
+		{"a day page to its own date", day, "2026-02-28", 409, 0},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			before := everyRow(t, s)
-			to, err := s.Rename(ctx, "cli", c.id, c.title)
+			_, err := s.Rename(ctx, "cli", c.id, c.title)
 			var ex *ExistsError
-			switch c.status {
-			case 422:
+			switch {
+			case c.status == 422:
 				if status(err) != 422 || !strings.Contains(err.Error(), sentence) {
 					t.Errorf("got %v (status %d), want a 422 with %q", err, status(err), sentence)
 				}
-			case 409:
+			case c.exists != 0:
 				if !errors.As(err, &ex) || ex.ID != c.exists {
 					t.Errorf("got %v, want the ExistsError of page %d", err, c.exists)
 				}
 			default:
-				if err != nil || to != c.id {
-					t.Errorf("got page %d, %v; want page %d and no error", to, err, c.id)
+				if status(err) != 409 || !strings.Contains(err.Error(), ownDate) {
+					t.Errorf("got %v (status %d), want the 409 conflict %q", err, status(err), ownDate)
 				}
 			}
 			if after := everyRow(t, s); after != before {

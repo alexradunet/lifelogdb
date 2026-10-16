@@ -103,7 +103,8 @@ func orExists(err error, p *pageRef, title string) error {
 }
 
 // rename is Store.Rename in t. A day page keeps its date, and a date is the name of its day page alone: the
-// triggers entity_names_day_insert and entities_day_identity refuse the write.
+// triggers entity_names_day_insert and entities_day_identity refuse the write. A day page renamed to its own date
+// writes nothing, so no trigger sees it: rename refuses it, as step 0 of cookbook/rename-a-page.md says.
 func (t *Tx) rename(id int64, newTitle string) (int64, error) {
 	if _, err := t.livePage(id); err != nil {
 		return 0, err
@@ -118,6 +119,11 @@ func (t *Tx) rename(id int64, newTitle string) (int64, error) {
 	}
 	if target != nil && target.ID != id {
 		return 0, &ExistsError{target.ID, target.Title}
+	}
+	// Only the day page of a date holds the date's key (entity_names_day_insert, entities_day_identity): here id is
+	// that day page.
+	if target != nil && IsDay(key) {
+		return 0, Conflict("a day page's canonical date is not renamed")
 	}
 	if target == nil {
 		if _, err := t.tx.ExecContext(t.ctx, `INSERT INTO entity_names(entity_id, title, name_key) VALUES (?, ?, ?)`, id, newTitle, key); err != nil {
