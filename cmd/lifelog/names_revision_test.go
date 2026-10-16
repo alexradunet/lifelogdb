@@ -3,12 +3,11 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 	"testing"
 
-	"lifelog/internal/client"
+	"lifelog/internal/api/apitest"
 	"lifelog/internal/core"
 	"lifelog/internal/db"
 	"lifelog/internal/db/dbtest"
@@ -68,8 +67,7 @@ func TestStableNamesAndExactRevisionThroughTheCLI(t *testing.T) {
 	for _, stale := range []string{token, "2026-01-01T00:00:00.000Z"} {
 		// main writes this error as "lifelog: 409: ..." and exits 1.
 		_, err := call(false, "do", "save-body", "id="+strconv.FormatInt(id, 10), "version="+stale, "body=stale [[Forbidden]]")
-		var refused *client.Error
-		if !errors.As(err, &refused) || refused.Status != 409 {
+		if apitest.Status(err) != 409 {
 			t.Fatalf("stale refusal not semantic 409: %v", err)
 		}
 	}

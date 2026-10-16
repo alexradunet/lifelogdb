@@ -4,28 +4,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http/httptest"
 	"testing"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"lifelog/internal/api"
-	"lifelog/internal/client"
-	"lifelog/internal/core"
-	"lifelog/internal/db/dbtest"
+	"lifelog/internal/api/apitest"
 )
 
 func TestMCPRevisionTokenRoundTripAndStaleRefusal(t *testing.T) {
 	for _, remote := range []bool{false, true} {
 		t.Run(fmt.Sprintf("remote=%v", remote), func(t *testing.T) {
-			d := dbtest.New(t)
-			store := &core.Store{DB: d}
-			h := api.New(store)
-			c := client.InProcess(h, "agent:test")
+			c, h, store := apitest.Fresh(t, "agent:test")
 			if remote {
-				server := httptest.NewServer(h)
-				t.Cleanup(server.Close)
-				c = client.Remote(server.URL, "agent:test", "")
+				_, c = apitest.Clients(t, h, "agent:test")
 			}
+			d := store.DB
 			id, _, err := store.CreatePage(context.Background(), "cli", "MCP revision", "first", "")
 			if err != nil {
 				t.Fatal(err)

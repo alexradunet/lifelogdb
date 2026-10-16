@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -14,9 +13,8 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"lifelog/internal/api"
+	"lifelog/internal/api/apitest"
 	"lifelog/internal/client"
-	"lifelog/internal/core"
-	"lifelog/internal/db/dbtest"
 )
 
 // The find tools are MCP tools; the owner-only actions are not.
@@ -85,7 +83,7 @@ func TestFindTools(t *testing.T) {
 	}
 
 	page := callTool(t, ctx, session, "find", map[string]any{"title": "Ana"})
-	if page.Title != "Ana" || href(page, "self") == "" {
+	if page.Title != "Ana" || apitest.Href(page, "self") == "" {
 		t.Fatalf("find returned %+v", page)
 	}
 	// The browser's calendar and its "go to a day" are on this surface too (docs/plans/091-the-browser-for-daily-use.md).
@@ -106,27 +104,15 @@ func TestFindTools(t *testing.T) {
 
 func mcpTestClient(t *testing.T) *client.Client {
 	t.Helper()
-	handler := api.New(&core.Store{DB: dbtest.New(t)})
-	owner := client.InProcess(handler, "cli")
+	owner, handler, _ := apitest.Fresh(t, "cli")
 	for _, fields := range []map[string]string{{"name": "walk"}, {"name": "weight", "unit": "kg"}} {
-		must(owner.Do(t.Context(), actionByName(t, must(owner.Get(t.Context(), "/")), "register-metric"), fields))
+		apitest.Must(t)(owner.Do(t.Context(), apitest.Action(t, apitest.Must(t)(owner.Get(t.Context(), "/")), "register-metric"), fields))
 	}
 	c := client.InProcess(handler, "agent:test")
-	if _, err := c.Do(t.Context(), actionByName(t, must(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Ana", "body": "Synthetic page"}); err != nil {
+	if _, err := c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Ana", "body": "Synthetic page"}); err != nil {
 		t.Fatal(err)
 	}
 	return c
-}
-
-func actionByName(t *testing.T, e *api.Entity, name string) api.Action {
-	t.Helper()
-	for _, a := range e.Actions {
-		if a.Name == name {
-			return a
-		}
-	}
-	t.Fatalf("%s not found in %v", name, e.Actions)
-	return api.Action{}
 }
 
 func callTool(t *testing.T, ctx context.Context, session *mcpsdk.ClientSession, name string, args map[string]any) *api.Entity {
@@ -150,22 +136,6 @@ func callTool(t *testing.T, ctx context.Context, session *mcpsdk.ClientSession, 
 		t.Fatalf("%s returned non-entity JSON %q: %v", name, text.Text, err)
 	}
 	return &e
-}
-
-func must(e *api.Entity, err error) *api.Entity {
-	if err != nil {
-		panic(err)
-	}
-	return e
-}
-
-func href(e *api.Entity, rel string) string {
-	for _, l := range e.Links {
-		if len(l.Rel) > 0 && l.Rel[0] == rel {
-			return l.Href
-		}
-	}
-	return ""
 }
 
 func numericSession(t *testing.T, c *client.Client) (*mcpsdk.ClientSession, context.Context) {
@@ -350,9 +320,7 @@ func TestMCPExactResponseNumbers(t *testing.T) {
 			})
 			c := client.InProcess(handler, "agent:test")
 			if remote {
-				srv := httptest.NewServer(handler)
-				defer srv.Close()
-				c = client.Remote(srv.URL, "agent:test", "")
+				_, c = apitest.Clients(t, handler, "agent:test")
 			}
 			session, ctx := numericSession(t, c)
 			res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{Name: "get", Arguments: map[string]any{"href": "/numbers"}})

@@ -6,17 +6,13 @@ import (
 	"strings"
 	"testing"
 
-	"lifelog/internal/api"
-	"lifelog/internal/client"
-	"lifelog/internal/core"
-	"lifelog/internal/db/dbtest"
+	"lifelog/internal/api/apitest"
 )
 
 // browse is an MCP tool like any other of the catalog (docs/plans/117-one-browse-view.md): an agent reads the things
 // filed in a category, and it is a read, so the tool says so.
 func TestAnAgentBrowsesThroughMCP(t *testing.T) {
-	d := dbtest.New(t)
-	s := &core.Store{DB: d}
+	agent, _, s := apitest.Fresh(t, "agent:browse")
 	ctx := context.Background()
 	var ids []int64
 	for _, title := range []string{"Ana", "Bo", "Cy"} {
@@ -29,7 +25,7 @@ func TestAnAgentBrowsesThroughMCP(t *testing.T) {
 	if _, err := s.FilePages(ctx, "cli", []int64{ids[2], ids[0]}, "Family", false); err != nil {
 		t.Fatal(err)
 	}
-	session, sctx := numericSession(t, client.InProcess(api.New(s), "agent:browse"))
+	session, sctx := numericSession(t, agent)
 	tools, err := session.ListTools(sctx, nil)
 	if err != nil {
 		t.Fatal(err)

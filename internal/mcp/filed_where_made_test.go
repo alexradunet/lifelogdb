@@ -3,18 +3,14 @@ package mcp
 import (
 	"testing"
 
-	"lifelog/internal/api"
-	"lifelog/internal/client"
-	"lifelog/internal/core"
-	"lifelog/internal/db/dbtest"
+	"lifelog/internal/api/apitest"
 )
 
 // An agent files a new place where it makes it (docs/plans/117-one-browse-view.md, rule 6): the tool create_place
 // takes category, as the HTTP action does, and one write makes the place and its part-of link.
 func TestAnAgentFilesANewPlaceWhereItIsMade(t *testing.T) {
-	d := dbtest.New(t)
-	s := &core.Store{DB: d}
-	session, sctx := numericSession(t, client.InProcess(api.New(s), "agent:places"))
+	agent, _, _ := apitest.Fresh(t, "agent:places")
+	session, sctx := numericSession(t, agent)
 	got := callTool(t, sctx, session, "create_place", map[string]any{"title": "Lakeside", "category": "Trips"})
 	var parts []string
 	for _, l := range got.Entities {

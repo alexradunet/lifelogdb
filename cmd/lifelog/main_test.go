@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"lifelog/internal/api"
+	"lifelog/internal/api/apitest"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db"
@@ -95,7 +95,7 @@ func TestDoDispatchesPageFind(t *testing.T) {
 	if err != nil {
 		t.Fatalf("page find: %v", err)
 	}
-	if page.Title != "Ana" || cmdHref(page, "self") == "" {
+	if page.Title != "Ana" || apitest.Href(page, "self") == "" {
 		t.Fatalf("find returned %+v", page)
 	}
 }
@@ -108,51 +108,24 @@ func TestDoOpensADayAndGetsAMonth(t *testing.T) {
 	if err != nil || day.Title != "2031-05-14" {
 		t.Fatalf("open-day: %+v %v", day, err)
 	}
-	if month := mustEntity(c.Get(t.Context(), "/months/2031-05")); month.Title != "May 2031" {
+	if month := apitest.Must(t)(c.Get(t.Context(), "/months/2031-05")); month.Title != "May 2031" {
 		t.Fatalf("get /months/2031-05: %+v", month)
 	}
-	if titles := mustEntity(c.Get(t.Context(), "/titles?prefix=an")); len(titles.Entities) != 1 || titles.Entities[0].Title != "Ana" {
+	if titles := apitest.Must(t)(c.Get(t.Context(), "/titles?prefix=an")); len(titles.Entities) != 1 || titles.Entities[0].Title != "Ana" {
 		t.Fatalf("get /titles: %+v", titles)
 	}
-	if day, ok := mustEntity(c.Get(t.Context(), "/days/2031-05-14")).Properties.(map[string]any); !ok || day["trends"] == nil {
+	if day, ok := apitest.Must(t)(c.Get(t.Context(), "/days/2031-05-14")).Properties.(map[string]any); !ok || day["trends"] == nil {
 		t.Fatalf("get /days/2031-05-14 lacks trends: %v", day)
 	}
 }
 
 func commandClient(t *testing.T) *client.Client {
 	t.Helper()
-	c := client.InProcess(api.New(&core.Store{DB: dbtest.New(t)}), "cli")
-	if _, err := c.Do(t.Context(), cmdAction(t, mustEntity(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Ana", "body": "Synthetic page"}); err != nil {
+	c, _, _ := apitest.Fresh(t, "cli")
+	if _, err := c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Ana", "body": "Synthetic page"}); err != nil {
 		t.Fatal(err)
 	}
 	return c
-}
-
-func cmdAction(t *testing.T, e *api.Entity, name string) api.Action {
-	t.Helper()
-	for _, a := range e.Actions {
-		if a.Name == name {
-			return a
-		}
-	}
-	t.Fatalf("%s not found in %v", name, e.Actions)
-	return api.Action{}
-}
-
-func mustEntity(e *api.Entity, err error) *api.Entity {
-	if err != nil {
-		panic(err)
-	}
-	return e
-}
-
-func cmdHref(e *api.Entity, rel string) string {
-	for _, l := range e.Links {
-		if len(l.Rel) > 0 && l.Rel[0] == rel {
-			return l.Href
-		}
-	}
-	return ""
 }
 
 func TestCommandCancellation(t *testing.T) {

@@ -10,16 +10,14 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"lifelog/internal/api"
-	"lifelog/internal/client"
+	"lifelog/internal/api/apitest"
 	"lifelog/internal/core"
-	"lifelog/internal/db/dbtest"
 )
 
 // file-pages is an MCP tool like any other of the catalog (docs/plans/112-metrics-as-cards.md): an agent files
 // metrics in a category, as it may link one.
 func TestAnAgentFilesMetricsThroughMCP(t *testing.T) {
-	d := dbtest.New(t)
-	s := &core.Store{DB: d}
+	agent, _, s := apitest.Fresh(t, "agent:file")
 	for _, m := range []string{"Ferritin", "LDL"} {
 		if _, err := s.CreateMetric(context.Background(), "cli", core.NewMetric{Name: m, Unit: "mg/dL"}); err != nil {
 			t.Fatal(err)
@@ -33,7 +31,7 @@ func TestAnAgentFilesMetricsThroughMCP(t *testing.T) {
 		}
 		ids = append(ids, id)
 	}
-	session, ctx := numericSession(t, client.InProcess(api.New(s), "agent:file"))
+	session, ctx := numericSession(t, agent)
 	filed := callTool(t, ctx, session, "file_pages", map[string]any{"ids": fmt.Sprintf("%d,%d", ids[0], ids[1]), "category": "Bloodwork"})
 	p := filed.Properties.(map[string]any)
 	if filed.Class[0] != "filed" || fmt.Sprint(p["added"]) != "2" || p["created"] != true {
@@ -53,8 +51,7 @@ func TestAnAgentFilesMetricsThroughMCP(t *testing.T) {
 // A day page is never filed (D26): file_pages with a day page's id is an MCP error carrying the 422 and SQLite's
 // sentence, and nothing is written, not the other page's link, not the category.
 func TestAnAgentCannotFileADayPageThroughMCP(t *testing.T) {
-	d := dbtest.New(t)
-	s := &core.Store{DB: d}
+	agent, _, s := apitest.Fresh(t, "agent:file")
 	plain, _, err := s.CreatePage(context.Background(), "cli", "Plans", "", "")
 	if err != nil {
 		t.Fatal(err)
@@ -63,7 +60,7 @@ func TestAnAgentCannotFileADayPageThroughMCP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, ctx := numericSession(t, client.InProcess(api.New(s), "agent:file"))
+	session, ctx := numericSession(t, agent)
 	res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{Name: "file_pages", Arguments: map[string]any{"ids": fmt.Sprintf("%d,%d", plain, day), "category": "Garden"}})
 	if err != nil {
 		t.Fatal(err)

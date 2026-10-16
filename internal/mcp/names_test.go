@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http/httptest"
 	"net/url"
 	"reflect"
 	"strings"
@@ -12,23 +11,17 @@ import (
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"lifelog/internal/api"
-	"lifelog/internal/client"
+	"lifelog/internal/api/apitest"
 	"lifelog/internal/core"
-	"lifelog/internal/db/dbtest"
 )
 
 func TestMCPStableNames(t *testing.T) {
 	for _, remote := range []bool{false, true} {
 		for _, kind := range []string{"page", "person", "place", "metric", "file"} {
 			t.Run(fmt.Sprintf("remote=%v/type=%s", remote, kind), func(t *testing.T) {
-				d := dbtest.New(t)
-				s := &core.Store{DB: d}
-				h := api.New(s)
-				c := client.InProcess(h, "agent:names")
+				c, h, s := apitest.Fresh(t, "agent:names")
 				if remote {
-					server := httptest.NewServer(h)
-					t.Cleanup(server.Close)
-					c = client.Remote(server.URL, "agent:names", "")
+					_, c = apitest.Clients(t, h, "agent:names")
 				}
 				old := "Old " + kind
 				var id int64
