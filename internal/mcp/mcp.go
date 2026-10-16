@@ -6,7 +6,6 @@ package mcp
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -68,9 +67,7 @@ func result(e *api.Entity, err error) (*mcp.CallToolResult, error) {
 		return failure(err), nil
 	}
 	var b bytes.Buffer
-	enc := json.NewEncoder(&b)
-	enc.SetEscapeHTML(false) // a body reads as it was written, as the API and the CLI give it
-	if err := enc.Encode(e); err != nil {
+	if err := api.WriteJSON(&b, e, ""); err != nil {
 		return failure(err), nil
 	}
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: strings.TrimSuffix(b.String(), "\n")}}, IsError: err != nil}, nil

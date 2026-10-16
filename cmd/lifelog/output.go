@@ -19,7 +19,7 @@ func listActions(ctx context.Context, o opts, c *client.Client) error {
 		return err
 	}
 	if !o.human {
-		return printJSON(os.Stdout, actions)
+		return api.WriteJSON(os.Stdout, actions, "  ")
 	}
 	for _, a := range actions {
 		var fs []string
@@ -43,19 +43,11 @@ func show(o opts) func(*api.Entity, error) error {
 		}
 		if o.human {
 			human(os.Stdout, e)
-		} else if perr := printJSON(os.Stdout, e); perr != nil {
+		} else if perr := api.WriteJSON(os.Stdout, e, "  "); perr != nil {
 			return perr
 		}
 		return err
 	}
-}
-
-// printJSON writes a value as indented JSON, as the API answers it: no HTML escaping, so a body reads as it was written.
-func printJSON(w io.Writer, v any) error {
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-	enc.SetIndent("", "  ")
-	return enc.Encode(v)
 }
 
 // human writes an entity as a readable summary: its title and class, the result of a write, its properties, then

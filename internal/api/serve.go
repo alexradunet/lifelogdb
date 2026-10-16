@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -425,13 +426,20 @@ func sirenAnswer(r *http.Request, status int, e *Entity) (int, []byte) {
 // maxRequestBody bytes.
 func sirenJSON(e *Entity) ([]byte, error) {
 	var b bytes.Buffer
-	enc := json.NewEncoder(&b)
-	enc.SetEscapeHTML(false)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(e); err != nil {
+	if err := WriteJSON(&b, e, "  "); err != nil {
 		return nil, err
 	}
 	return b.Bytes(), nil
+}
+
+// WriteJSON writes v to w as the API's JSON: with no HTML escapes, so a body reads as it was written (< > & stay as
+// they are); indented by indent ("" for none); with a newline at the end. The API, the CLI and the MCP server write
+// their JSON with it.
+func WriteJSON(w io.Writer, v any, indent string) error {
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", indent)
+	return enc.Encode(v)
 }
 
 func wantsHTML(r *http.Request) bool {
