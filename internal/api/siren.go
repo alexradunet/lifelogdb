@@ -104,8 +104,8 @@ func areaReq(name, title string, rows int) Field {
 	return f
 }
 
-// catalog is every action the API has. NewOn mounts a route for each one, GET /actions serves it, and the CLI and the
-// MCP server are built from it.
+// catalog is every action the API has. mount gives each one its route, GET /actions serves it, and the CLI and the MCP
+// server are built from it.
 var catalog = []spec{
 	{"capture", "Add to the day", "Append an entry to the journal page of a local day (created on the first capture), with an optional mood 1-5. [[Title]] and #tag in the text link pages, creating them if new.",
 		"POST", "/days/{day}/capture", []Field{path("day", "date", "Local day, YYYY-MM-DD"), area("text", "Entry (CommonMark)", 4),

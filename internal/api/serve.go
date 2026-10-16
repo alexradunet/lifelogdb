@@ -42,6 +42,16 @@ func NewOn(s *core.Store, localDay func() string, zone *time.Location) http.Hand
 // newOn builds the API behind guard, which refuses a browser write from an origin that it does not trust. Public
 // gives the guard that trusts the allowed origins; NewOn gives one that trusts no other origin.
 func newOn(s *core.Store, localDay func() string, zone *time.Location, guard *http.CrossOriginProtection) http.Handler {
+	h := newServer(s, localDay, zone)
+	guard.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeError(w, r, errCrossOrigin)
+	}))
+	return guard.Handler(h.mux)
+}
+
+// newServer is the server with its routes: mount gives each action of the catalog its route, then the routes that are
+// not actions follow.
+func newServer(s *core.Store, localDay func() string, zone *time.Location) *server {
 	h := &server{s: s, localDay: localDay, zone: zone}
 	m := http.NewServeMux()
 	h.mux = m
@@ -90,10 +100,7 @@ func newOn(s *core.Store, localDay func() string, zone *time.Location, guard *ht
 	m.HandleFunc("GET /styleguide", h.styleguide)
 	m.HandleFunc("GET /manifest.webmanifest", install("manifest.webmanifest", "application/manifest+json", "public, max-age=3600"))
 	m.HandleFunc("GET /assets/icon.svg", install("icon.svg", "image/svg+xml", "public, max-age=31536000, immutable"))
-	guard.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeError(w, r, errCrossOrigin)
-	}))
-	return guard.Handler(m)
+	return h
 }
 
 // The refusals that two guards write: a browser write from an origin that the server does not trust (the guard of

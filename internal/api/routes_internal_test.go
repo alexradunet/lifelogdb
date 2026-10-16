@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 // panicOf runs f and returns what it panics with, "" when it does not panic.
@@ -104,6 +105,25 @@ func TestMountReadsTheWriterAndRefusesAnAgentAnOwnerAction(t *testing.T) {
 		}
 		if didRun := ran != ""; didRun != (tc.status == http.StatusOK) || src != tc.src {
 			t.Errorf("%s %s as %q: the handler ran %v with the writer %q, want %v with %q", tc.method, tc.path, tc.source, didRun, src, tc.status == http.StatusOK, tc.src)
+		}
+	}
+}
+
+// TestTheServerRoutesEachCatalogActionToItsOwnRoute asks the mux of the real server, which mount and the routes that
+// are not actions fill, which pattern takes a request of each catalog action. The pattern must be the action's own
+// method and path. A route that only takes the same path is not enough: GET /days/go must go to open-day, not to
+// GET /days/{day}. The routes do not use the store until a request runs, so the test gives none.
+func TestTheServerRoutesEachCatalogActionToItsOwnRoute(t *testing.T) {
+	h := newServer(nil, func() string { return "2026-09-01" }, time.UTC)
+	fill := strings.NewReplacer("{id}", "7", "{day}", "2026-09-01")
+	for _, s := range catalog {
+		path := fill.Replace(s.Path)
+		if strings.Contains(path, "{") {
+			t.Fatalf("%s: the test fills no value for a path field of %s", s.Name, s.Path)
+		}
+		req := httptest.NewRequest(s.Method, path, nil)
+		if _, pattern := h.mux.Handler(req); pattern != s.Method+" "+s.Path {
+			t.Errorf("%s %s (%s) goes to the route %q, want %q", s.Method, path, s.Name, pattern, s.Method+" "+s.Path)
 		}
 	}
 }
