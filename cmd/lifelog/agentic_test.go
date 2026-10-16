@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -167,13 +168,15 @@ func mcpServerOf(t *testing.T, dir, name string) (command string, args []string)
 
 // TestTheAgentsTextsNameWhatTheProgramHas: the texts that agentic-init writes (AGENTS.md, CLAUDE.md and the skills)
 // name only what the program has. So a rename in the program fails here, and not in the session of an agent.
-//   - A backticked name that looks like a tool (lowercase words joined by _) is a tool of lifelog mcp, a name that
-//     AGENTS.md calls the owner's only, or a word of notTools.
-//   - The names that AGENTS.md calls the owner's only are the tool names of all the owner's actions of the catalog,
-//     and no one of them is a tool.
-//   - A backticked command line ("lifelog" or the program, then its words) is a line that the parse of the program
-//     takes, with a command of the table. A backticked flag alone is a global flag or a flag of the last command line
-//     before it in the same text.
+//   - The sentence of AGENTS.md that calls actions the owner's only names the tool names of all the owner's actions
+//     of the catalog, and no one of them is a tool. The scan of the texts reads AGENTS.md without that sentence, so
+//     an owner's name in any other sentence fails.
+//   - A backticked name that looks like a tool (lowercase words joined by _) is a tool of lifelog mcp, a command of
+//     commandWords, or a word of notTools.
+//   - A backticked command line is a line that the parse of the program takes, with a command of the table: a full
+//     line ("lifelog" or the program, then its words) or a short form (a lowercase word and more words, such as
+//     "page TITLE"). A backticked flag alone is a global flag or a flag of the last command line before it in the
+//     same text.
 func TestTheAgentsTextsNameWhatTheProgramHas(t *testing.T) {
 	e, dir, exe := agenticFolder(t)
 	live := filepath.Join(dir, "life.db")
@@ -193,10 +196,14 @@ func TestTheAgentsTextsNameWhatTheProgramHas(t *testing.T) {
 			owners[strings.ReplaceAll(a.Name, "-", "_")] = true
 		}
 	}
-	// notTools are the backticked words of the texts that look like a tool and are not one.
+	// commandWords are the backticked words of the texts that look like a tool and are a command of the program:
+	// the short form of a command line with no words after the command.
+	commandWords := map[string]bool{
+		"actions": true, // lifelog actions
+	}
+	// notTools are the other backticked words of the texts that look like a tool and are not one.
 	notTools := map[string]bool{
 		"lifelog": true, // the name of the server in the MCP configs
-		"actions": true, // the command lifelog actions
 		"day":     true, // a field of capture
 		"text":    true, // a field of capture
 		"created": true, // a list of the answer of capture
@@ -204,6 +211,7 @@ func TestTheAgentsTextsNameWhatTheProgramHas(t *testing.T) {
 		"at":      true, // the kind of a link from a day page to a place
 	}
 	toolLike := regexp.MustCompile(`^[a-z]+(_[a-z]+)*$`)
+	lowercase := regexp.MustCompile(`^[a-z]`)
 	backticked := regexp.MustCompile("`([^`\n]+)`")
 
 	read := func(name string) string {
@@ -214,7 +222,8 @@ func TestTheAgentsTextsNameWhatTheProgramHas(t *testing.T) {
 		}
 		return string(b)
 	}
-	m := regexp.MustCompile(`the owner's only: ([^.]*)\.`).FindStringSubmatch(read("AGENTS.md"))
+	agents := read("AGENTS.md")
+	m := regexp.MustCompile(`the owner's only: ([^.]*)\.`).FindStringSubmatch(agents)
 	if m == nil {
 		t.Fatal("AGENTS.md calls no action the owner's only")
 	}
@@ -243,22 +252,34 @@ func TestTheAgentsTextsNameWhatTheProgramHas(t *testing.T) {
 	}
 	used := map[string]bool{}
 	for _, name := range texts {
+		text := read(name)
+		if name == "AGENTS.md" {
+			text = strings.Replace(text, m[0], "", 1)
+		}
 		var last command // the command of the last command line of the text
-		for _, b := range backticked.FindAllStringSubmatch(read(name), -1) {
+		for _, b := range backticked.FindAllStringSubmatch(text, -1) {
 			span, w := b[1], words(b[1])
 			switch {
 			case toolLike.MatchString(span):
 				used[span] = true
-				if !tools[span] && !ownerOnly[span] && !notTools[span] {
+				switch {
+				case commandWords[span]:
+					if commandNamed(span) == nil {
+						t.Errorf("%s: `%s` is not a command of the program", name, span)
+					}
+				case !tools[span] && !notTools[span]:
 					t.Errorf("%s: `%s` is not a tool of lifelog mcp", name, span)
 				}
-			case len(w) > 1 && (w[0] == "lifelog" || w[0] == exe):
-				o, err := parse(w[1:], noVars)
-				if err != nil || len(o.args) == 0 || commandNamed(o.args[0]) == nil {
+			case len(w) > 1 && (w[0] == exe || lowercase.MatchString(w[0])):
+				if w[0] == "lifelog" || w[0] == exe {
+					w = w[1:] // a full line: the program, then its words
+				}
+				cmd, err := commandOf(w)
+				if err != nil {
 					t.Errorf("%s: `%s` is not a command line of the program: %v", name, span, err)
 					continue
 				}
-				last = *commandNamed(o.args[0])
+				last = *cmd
 			case strings.HasPrefix(span, "--"):
 				flag, _, _ := strings.Cut(w[0], "=")
 				if !slices.Contains(globalFlags, flag) && !slices.Contains(last.flags, flag) {
@@ -273,11 +294,30 @@ func TestTheAgentsTextsNameWhatTheProgramHas(t *testing.T) {
 			}
 		}
 	}
-	for word := range notTools {
-		if !used[word] {
-			t.Errorf("no text names `%s`: remove it from notTools", word)
+	for _, list := range []map[string]bool{commandWords, notTools} {
+		for word := range list {
+			if !used[word] {
+				t.Errorf("no text names `%s`: remove it from the test", word)
+			}
 		}
 	}
+}
+
+// commandOf is the command of a command line of a text, given without the program: the parse of the program takes
+// the line, and its first word is a command of the table.
+func commandOf(line []string) (*command, error) {
+	o, err := parse(line, noVars)
+	if err != nil {
+		return nil, err
+	}
+	if len(o.args) == 0 {
+		return nil, errors.New("the line has no command")
+	}
+	cmd := commandNamed(o.args[0])
+	if cmd == nil {
+		return nil, fmt.Errorf("the program has no command %q", o.args[0])
+	}
+	return cmd, nil
 }
 
 // words splits a command line of a text at its spaces. A word in quotes keeps its spaces and loses its quotes.
