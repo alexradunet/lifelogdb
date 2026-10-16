@@ -237,7 +237,9 @@ func (h *server) refusedOnItsPage(w http.ResponseWriter, r *http.Request, e *Ent
 		w.Header()[k] = v
 	}
 	w.WriteHeader(out.status)
-	w.Write(out.body.Bytes())
+	if _, err := w.Write(out.body.Bytes()); err != nil { // the client went away: nothing else can be done
+		logFault(r, "the page was not sent", err)
+	}
 	return true
 }
 

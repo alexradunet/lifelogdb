@@ -1,6 +1,9 @@
 package api_test
 
 import (
+	"bytes"
+	"errors"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -150,6 +153,37 @@ func TestARefusedSaveComesBackOnItsPage(t *testing.T) {
 	}
 	if strings.Contains(body, `aria-label="What you sent"`) {
 		t.Error("the refused page also shows the error view's copy of the text")
+	}
+}
+
+// goneClient is a client that went away: each write of a body fails.
+type goneClient struct {
+	header http.Header
+	status int
+}
+
+func (g *goneClient) Header() http.Header       { return g.header }
+func (g *goneClient) WriteHeader(status int)    { g.status = status }
+func (g *goneClient) Write([]byte) (int, error) { return 0, errors.New("the client went away") }
+
+// TestARefusedPageThatCannotBeSentIsLogged: when the client of a refused form went away, the write of the page it came
+// from fails. The server's log has it one time; nothing else can be done.
+func TestARefusedPageThatCannotBeSentIsLogged(t *testing.T) {
+	h, self, action, version := staleSave(t)
+	req := httptest.NewRequest("POST", action, strings.NewReader(url.Values{"body": {"my draft"}, "version": {version}, "back": {self}}.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml")
+	var logged bytes.Buffer
+	prev := log.Writer()
+	log.SetOutput(&logged) // no test of this package runs in parallel
+	t.Cleanup(func() { log.SetOutput(prev) })
+	w := &goneClient{header: http.Header{}}
+	h.ServeHTTP(w, req)
+	if w.status != http.StatusConflict || !strings.HasPrefix(w.header.Get("Content-Type"), "text/html") {
+		t.Errorf("status %d %q, want the refused page with 409", w.status, w.header.Get("Content-Type"))
+	}
+	if n := strings.Count(logged.String(), "the client went away"); n != 1 {
+		t.Errorf("the log has the failed write %d times, want 1: %q", n, logged.String())
 	}
 }
 
