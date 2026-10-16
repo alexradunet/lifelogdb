@@ -2,7 +2,7 @@
 
 You are a coding agent, opened in the folder of **lifelog**: a program that keeps one person's life log in one SQLite
 file, `life.db`. The person who opened you is its owner. This file says what is here, what you can do, and what you
-must ask first. `lifelog agentic-init` wrote it; run that command again to write it anew.
+must ask first. `lifelog agentic-init` wrote it; run `lifelog agentic-init --force` to write it anew.
 
 ## What is here
 
@@ -13,14 +13,15 @@ must ask first. `lifelog agentic-init` wrote it; run that command again to write
 | this folder | `{{.Dir}}` |
 
 `life.db` holds the owner's journal (one page per day), notes, the people and places in them, health readings, and
-the files the owner keeps. A row is never deleted: it is tombstoned, and a reading is corrected by a new row.
+the files the owner keeps. A link is the one row that is deleted (`unlink` deletes one). No other row is deleted: a
+page is tombstoned, and a reading is corrected or retracted by a new row.
 
 ## The modes of lifelog
 
 | mode | command | for |
 |---|---|---|
 | browser | `lifelog serve`, then http://127.0.0.1:7777 | the owner reads and edits |
-| MCP | `lifelog mcp --agent NAME` | you: every action as a tool |
+| MCP | `lifelog mcp --agent NAME` | you: every action that is not the owner's, as a tool |
 | CLI | `"{{.Exe}}" --db "{{.DB}}" --source agent:NAME day`, then `capture TEXT`, `page TITLE`, `search WORDS`, `do ACTION field=value`, `actions` in the same form | you (as `agent:NAME`) or the owner, in a shell |
 | setup | `lifelog init` (makes `life.db` here), `lifelog agentic-init` (writes this file) | the owner |
 
@@ -32,8 +33,9 @@ Without `--db`, lifelog uses the `life.db` in its own folder. When `life.db` doe
 The MCP server `lifelog` is configured for your framework in this folder (`.mcp.json`, `.codex/config.toml`,
 `opencode.json`, `.pi/mcp.json`). Its tools are the actions of `lifelog actions` that are not the owner's, for example
 `capture`, `create_page`, `save_body`, `find`, `search`, `create_person`, `create_place`, `promote`, `link`, `record`
-and `correct`, and two reads: `get_day` (a day) and `get` (a link of an earlier result). The rows you
-write show you as their writer (`agent:NAME`). Without MCP, use the CLI through your shell with the same writer and the
+and `correct`, and two reads: `get_day` (a day) and `get` (a link of an earlier result). A tool's name is the
+action's name with `_` for `-`: the action `create-page` is the tool `create_page`. The rows you write show you as
+their writer (`agent:NAME`). Without MCP, use the CLI through your shell with the same writer and the
 same database, or the rows show the owner as their writer and the owner's rules do not hold:
 `"{{.Exe}}" --db "{{.DB}}" --source agent:NAME do ACTION field=value` (NAME as the MCP config names you).
 
