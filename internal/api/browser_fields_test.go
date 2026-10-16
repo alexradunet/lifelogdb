@@ -47,6 +47,30 @@ func TestTheCatalogMarksTheFieldOfAPageTitle(t *testing.T) {
 	}
 }
 
+// TestPreviewKeysOnATextArea: a form offers Preview when it has a text area, shown or folded, whatever the area's
+// name; a field of another type named body does not make it offer Preview.
+func TestPreviewKeysOnATextArea(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		fields []Field
+		opts   []string
+		want   bool
+	}{
+		{"a text area named note", []Field{{Name: "note", Type: "textarea"}}, nil, true},
+		{"a folded text area", []Field{{Name: "title", Type: "text", Required: true}, {Name: "note", Type: "textarea"}}, []string{"more", "note"}, true},
+		{"an input named body", []Field{{Name: "body", Type: "text"}}, nil, false},
+		{"no field", nil, nil, false},
+	} {
+		f, err := formOf(Action{Name: "x", Method: "POST", Href: "/x", Fields: c.fields}, c.opts...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := f.Preview(); got != c.want {
+			t.Errorf("%s: Preview %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
 // TestEveryTextAreaOfTheCatalogOffersPreview: a form of the catalog offers Preview when it has a text area, and only
 // then. POST /render reads the field body or text, so each text area of the catalog has one of these names.
 func TestEveryTextAreaOfTheCatalogOffersPreview(t *testing.T) {

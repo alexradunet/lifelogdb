@@ -9,9 +9,14 @@ import (
 // The reads of Browse (docs/plans/117-one-browse-view.md): the lists of each kind in one scope, what is filed
 // directly in a category, and the count of each kind in the scope.
 
-// BrowseKinds are the kinds Browse lists, in the order of its chips. A file is media when the first part of its type
-// is one of MediaKinds, else a document.
-var BrowseKinds = []string{"page", "person", "place", "media", "document", "metric"}
+// browseKinds are the kinds Browse lists, in the order of its chips. A file is media when the first part of its type
+// is one of MediaKinds, else a document. BrowseCounts counts each of them, so only BrowseKinds gives them out, as a
+// copy.
+var browseKinds = []string{"page", "person", "place", "media", "document", "metric"}
+
+// BrowseKinds are the kinds Browse lists (browseKinds). Each call gives a new copy: a caller that changes it does not
+// change the kinds that BrowseCounts counts, or the list of the next caller.
+func BrowseKinds() []string { return slices.Clone(browseKinds) }
 
 // Scope is where a Browse list looks: everything (the zero Scope), the things filed directly in the category page In,
 // or the things in no category (Unfiled).
@@ -114,7 +119,7 @@ func (s *Store) FiledIn(ctx context.Context, category int64, limit, offset int) 
 // count does not change with the scope). A day page is not counted.
 func (s *Store) BrowseCounts(ctx context.Context, sc Scope) (map[string]int, error) {
 	out := map[string]int{"all": 0}
-	for _, k := range BrowseKinds {
+	for _, k := range browseKinds {
 		out[k] = 0
 	}
 	where, args := sc.where()

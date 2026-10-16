@@ -208,7 +208,7 @@ func TestMetricsArePagesFiledInCategories(t *testing.T) {
 }
 
 // TestCategoryPathsDrawATree: the paths of the categories from the part-of links, in the order of the categories'
-// titles. Each category is drawn under its first parent by title, and a cycle ends where the walk up meets a
+// title keys. Each category is drawn under its first parent by title key, and a cycle ends where the walk up meets a
 // category it has seen. The paths are checked by hand.
 func TestCategoryPathsDrawATree(t *testing.T) {
 	for _, tc := range []struct {

@@ -509,8 +509,7 @@ dialog.palette{inline-size:min(36rem, calc(100vw - 2rem)); max-block-size:min(32
   &>.panel-head{margin-block-end:var(--space-2);
     & :is(h2,h3){font-size:18px; line-height:24px}
     & .meta{font-size:13px; flex:none}}
-  & ul.plain>li{padding:var(--space-3) 0; border-block-start:1px solid var(--line-soft); border-block-end:0;
-    &.pick{padding:0}}}
+  & ul.plain>li{padding:var(--space-3) 0; border-block-start:1px solid var(--line-soft); border-block-end:0}}
 .snippet{margin-block-start:2px; font-size:14px; line-height:20px; color:var(--muted)}
 @container column (max-width:867px){.sheet.list{padding:var(--space-1) var(--space-4)}}
 

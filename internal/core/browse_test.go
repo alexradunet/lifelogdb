@@ -405,6 +405,16 @@ func TestBrowseOrdersTitlesWithoutCase(t *testing.T) {
 	}
 }
 
+// TestBrowseKindsGivesACopy: a caller that changes the list BrowseKinds gives does not change the next list, which
+// is the order of the chips of Browse.
+func TestBrowseKindsGivesACopy(t *testing.T) {
+	kinds := BrowseKinds()
+	kinds[0] = "task"
+	if got := strings.Join(BrowseKinds(), ","); got != "page,person,place,media,document,metric" {
+		t.Errorf("BrowseKinds() = %s after a caller changed its copy, want page,person,place,media,document,metric", got)
+	}
+}
+
 // TestMediaKindsGivesACopy: a caller that changes the list MediaKinds gives does not change the next list, or the
 // condition isMedia that the reads of Browse use.
 func TestMediaKindsGivesACopy(t *testing.T) {

@@ -175,8 +175,8 @@
 {{/* field draws one field of a form: a few short options as a row of radio buttons, other options as a select, a
      textarea, or an input of the field's type. A select of an optional field starts empty, so the form sends no
      value that the reader did not pick. A required radio, textarea or input is marked required, so the browser does
-     not send it empty. A form that writes a body offers Preview, which sends it to /render in a new
-     tab, so the words stay in the form. */}}
+     not send it empty. A form with a text area offers Preview (formView.Preview, drawn by form), which sends the
+     form to /render in a new tab, so the words stay in the form. */}}
 {{define "field"}}{{if segmented .Field}}<fieldset class="segmented"><legend>{{or .Title .Name}}{{if .Required}} <small>required</small>{{end}}</legend>{{$v := num .Value}}{{$n := .Name}}{{$req := .Required}}{{range .Options}}<label><input type="radio" name="{{$n}}" value="{{.}}"{{if eq . $v}} checked{{end}}{{if $req}} required{{end}}><span>{{.}}</span></label>{{end}}</fieldset>
 {{else}}<label><span>{{or .Title .Name}}{{if .Required}} <small>required</small>{{end}}</span>
 {{if .Options}}<select name="{{.Name}}"{{if .Focus}} autofocus{{end}}>{{$v := num .Value}}{{if and (not .Required) (ne (index .Options 0) "")}}<option></option>{{end}}{{range .Options}}<option{{if eq . $v}} selected{{end}}>{{.}}</option>{{end}}</select>

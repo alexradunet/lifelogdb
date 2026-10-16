@@ -45,7 +45,7 @@ var (
 func mustWebFile(name string) []byte {
 	b, err := webFiles.ReadFile("html/" + name)
 	if err != nil {
-		panic(err) // the sheets are embedded: one missing is a build defect, not a runtime condition
+		panic(err) // the files of html/ are embedded (the sheets, the manifest, the icon): one missing is a build defect
 	}
 	return b
 }

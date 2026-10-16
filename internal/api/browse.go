@@ -15,7 +15,7 @@ import (
 // the order is fixed here, and there is no sort field.
 
 // browseKinds are the values of the field kind; "all" is a chip only inside a category, where it is the first.
-var browseKinds = append(slices.Clone(core.BrowseKinds), "all")
+var browseKinds = append(core.BrowseKinds(), "all")
 
 // chipWords are the words of each chip.
 var chipWords = map[string]string{"page": "Pages", "person": "People", "place": "Places", "media": "Media",
@@ -206,7 +206,7 @@ func (h *server) browse(r *http.Request, _ spec, _ string) (*Entity, error) {
 	self := browseHref(b.values(""))
 	e := &Entity{Class: []string{"browse"}, Title: "Browse",
 		Links: []Link{link("self", self, "Browse"), link("index", "/", "Home"), link("metrics", "/metrics", "Metrics")}}
-	chips := core.BrowseKinds
+	chips := core.BrowseKinds()
 	if in != nil { // inside a category All is the default, and its chip comes first
 		chips = append([]string{"all"}, chips...)
 	}
