@@ -355,8 +355,9 @@ func commandConsumesContext(o opts) bool {
 }
 
 // runContext runs the command of the line e.o: its prepare, then the client (a running server over --url, or the
-// handler in-process on the file dbPath names), then its run.
-func runContext(ctx context.Context, e env) error {
+// handler in-process on the file dbPath names), then its run. An error of the Close of the file (its PRAGMA optimize)
+// is joined to the error of the run.
+func runContext(ctx context.Context, e env) (err error) {
 	o := e.o
 	cmd := commandNamed(o.args[0])
 	if cmd == nil {
@@ -387,7 +388,7 @@ func runContext(ctx context.Context, e env) error {
 	if err != nil {
 		return err
 	}
-	defer d.Close()
+	defer func() { err = errors.Join(err, d.Close()) }()
 	e.o.db = path
 	e.store = &core.Store{DB: d, SnapshotDir: o.snapshots, Clock: e.clock}
 	if cmd.name != "serve" { // serve builds the handler of its listener and calls it through no client
