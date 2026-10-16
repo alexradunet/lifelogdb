@@ -239,7 +239,7 @@ func TestRenamedIdentityWritesThroughRetainedHandle(t *testing.T) {
 func TestRename(t *testing.T) {
 	s := fresh(t)
 	old, _, _ := s.CreatePage(ctx, "cli", "Sourdogh", "Feed the starter. [[Baking]]", "")
-	day, _, _ := s.Capture(ctx, "cli", "2026-09-29", "baked, see [[Sourdogh]]", nil)
+	s.Capture(ctx, "cli", "2026-09-29", "baked, see [[Sourdogh]]", nil)
 	baking, _ := s.PageID(ctx, "Baking")
 	s.Link(ctx, "cli", old, baking, "part-of", "")
 	to, err := s.Rename(ctx, "cli", old, "Sourdough")
@@ -265,7 +265,6 @@ func TestRename(t *testing.T) {
 		title string
 		want  int
 	}{
-		{day, "Day one", 409},    // a day page keeps its title
 		{to, "Baking", 409},      // into an existing page with text of its own
 		{to, "Health/Diet", 422}, // not a valid title
 	} {
@@ -339,9 +338,6 @@ func TestNameOwnershipAndJournalReservations(t *testing.T) {
 	execRefused(ordinary, `UPDATE entity_names SET entity_id=? WHERE name_key='dated note'`, day)
 	execRefused(ordinary, `UPDATE entity_names SET name_key='reassigned' WHERE entity_id=?`, ordinary)
 	execRefused(ordinary, `DELETE FROM entity_names WHERE entity_id=?`, ordinary)
-	if _, err := s.Rename(ctx, "cli", day, "Heading"); status(err) != 409 {
-		t.Fatalf("day rename: %v", err)
-	}
 	if err := s.Promote(ctx, "cli", day, "place", ""); err == nil {
 		t.Fatal("day promoted")
 	}
@@ -365,6 +361,59 @@ func TestNameOwnershipAndJournalReservations(t *testing.T) {
 	r, err := s.Integrity(ctx)
 	if err != nil || !r.OK {
 		t.Fatalf("integrity after refusals: %+v %v", r, err)
+	}
+}
+
+// TestTheSchemaRefusesARenameOfAJournalDay: a day page keeps its date, and a date is the name of its day page alone.
+// The triggers of the schema hold both rules (entity_names_day_insert), so a refused rename is a 422 with the
+// sentence of the trigger, and it writes nothing. A date that a day page holds is a title another page has: a 409
+// exists, as for any title. A day page renamed to its own date is a rename to the title it has, and writes nothing.
+func TestTheSchemaRefusesARenameOfAJournalDay(t *testing.T) {
+	s := fresh(t)
+	day, _, err := s.Capture(ctx, "cli", "2026-02-28", "day prose", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, _, err := s.CreatePage(ctx, "cli", "Dated note", "prose", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const sentence = "a journal day has only its canonical date name"
+	for _, c := range []struct {
+		name   string
+		id     int64
+		title  string
+		status int   // 0: the rename is accepted
+		exists int64 // the page that the ExistsError of a 409 names
+	}{
+		{"a day page to a free title", day, "Heading", 422, 0},
+		{"a day page to the title of another page", day, "Dated note", 409, page},
+		{"a page to a date that no page has", page, "2026-03-01", 422, 0},
+		{"a page to the date of a day page", page, "2026-02-28", 409, day},
+		{"a day page to its own date", day, "2026-02-28", 0, 0},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			before := everyRow(t, s)
+			to, err := s.Rename(ctx, "cli", c.id, c.title)
+			var ex *ExistsError
+			switch c.status {
+			case 422:
+				if status(err) != 422 || !strings.Contains(err.Error(), sentence) {
+					t.Errorf("got %v (status %d), want a 422 with %q", err, status(err), sentence)
+				}
+			case 409:
+				if !errors.As(err, &ex) || ex.ID != c.exists {
+					t.Errorf("got %v, want the ExistsError of page %d", err, c.exists)
+				}
+			default:
+				if err != nil || to != c.id {
+					t.Errorf("got page %d, %v; want page %d and no error", to, err, c.id)
+				}
+			}
+			if after := everyRow(t, s); after != before {
+				t.Errorf("the rename wrote:\nbefore:\n%s\nafter:\n%s", before, after)
+			}
+		})
 	}
 }
 

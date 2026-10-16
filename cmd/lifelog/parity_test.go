@@ -569,13 +569,16 @@ func rowRename(x *parityRun, kind string) {
 		title  string
 		status int
 		code   string
+		says   string // a part of the message; "" for any
 	}{
-		{"Reserved ghost", http.StatusConflict, "exists"},
-		{"Reserved tombstone", http.StatusConflict, "exists"},
-		{"2031-02-01", http.StatusConflict, "conflict"},
-		{"Lab [unsafe]", http.StatusUnprocessableEntity, "invalid"},
+		{"Reserved ghost", http.StatusConflict, "exists", ""},
+		{"Reserved tombstone", http.StatusConflict, "exists", ""},
+		{"2031-02-01", http.StatusUnprocessableEntity, "invalid", "a journal day has only its canonical date name"}, // entity_names_day_insert
+		{"Lab [unsafe]", http.StatusUnprocessableEntity, "invalid", ""},
 	} {
-		x.refused("rename", map[string]string{"id": id(p), "title": tc.title}, tc.status, tc.code)
+		if msg := x.refused("rename", map[string]string{"id": id(p), "title": tc.title}, tc.status, tc.code); !strings.Contains(msg, tc.says) {
+			x.t.Errorf("the refused rename to %q says %q, want %q in it", tc.title, msg, tc.says)
+		}
 		if after := x.pageByID(p); !reflect.DeepEqual(after, before) {
 			x.t.Fatalf("the refused rename to %q changed the page: %v, was %v", tc.title, after, before)
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -100,6 +101,38 @@ func countRows(ctx context.Context, s *Store) (*counts, error) {
 	                                           (SELECT count(*) FROM metrics)`).
 		Scan(&c.Pages, &c.Readings, &c.Metrics)
 	return c, err
+}
+
+// everyRow is every row of the tables that a write of core changes, as text: a test compares it before and after a
+// write that must write nothing. A tombstone, a title, a type or a revision that changes changes the text.
+func everyRow(t *testing.T, s *Store) string {
+	t.Helper()
+	var b strings.Builder
+	for _, table := range []string{"entities", "entity_names", "people", "metrics", "files", "measurements", "links"} {
+		rows, err := s.DB.R.QueryContext(ctx, "SELECT * FROM "+table+" ORDER BY rowid")
+		if err != nil {
+			t.Fatal(err)
+		}
+		columns, err := rows.Columns()
+		if err != nil {
+			t.Fatal(err)
+		}
+		values := make([]any, len(columns))
+		dst := make([]any, len(columns))
+		for i := range values {
+			dst[i] = &values[i]
+		}
+		for rows.Next() {
+			if err := rows.Scan(dst...); err != nil {
+				t.Fatal(err)
+			}
+			fmt.Fprintf(&b, "%s %v\n", table, values)
+		}
+		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return b.String()
 }
 
 // TestRowReadsReportEveryFault: each and list, the one loop of core over rows, return the error of the query, of a

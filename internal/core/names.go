@@ -111,20 +111,14 @@ func orExists(err error, p *pageRef, title string) error {
 	return &ExistsError{p.ID, title}
 }
 
-// rename is Store.Rename in t.
+// rename is Store.Rename in t. A day page keeps its date, and a date is the name of its day page alone: the
+// triggers entity_names_day_insert and entities_day_identity refuse the write.
 func (t *Tx) rename(id int64, newTitle string) (int64, error) {
-	old, err := t.livePage(id)
-	if err != nil {
+	if _, err := t.livePage(id); err != nil {
 		return 0, err
-	}
-	if old.DayPage {
-		return 0, Conflict("a day page's canonical date is not renamed")
 	}
 	if err := checkTitle("title", newTitle); err != nil {
 		return 0, err
-	}
-	if IsDay(newTitle) {
-		return 0, Conflict("a calendar date is reserved for its journal day")
 	}
 	key := text.TitleKey(newTitle)
 	target, err := t.lookupKey(key)
