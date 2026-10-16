@@ -526,16 +526,16 @@ func TestARefusedWriteReturnsNoResult(t *testing.T) {
 // dry run. fn commits by itself, so the rollback finds no open transaction, as in db's TestWriteReportsAFailedRollback.
 func TestAFailedRollbackIsAFault(t *testing.T) {
 	s := fresh(t)
-	commit := func(t *Tx) error {
-		_, err := t.tx.ExecContext(t.ctx, "COMMIT")
+	commit := func(tx *Tx) error {
+		_, err := tx.tx.ExecContext(tx.ctx, "COMMIT")
 		return err
 	}
-	after := func(fail func(t *Tx) error) func(t *Tx) error {
-		return func(t *Tx) error {
-			if err := commit(t); err != nil {
+	after := func(fail func(tx *Tx) error) func(tx *Tx) error {
+		return func(tx *Tx) error {
+			if err := commit(tx); err != nil {
 				return err
 			}
-			return fail(t)
+			return fail(tx)
 		}
 	}
 	for _, c := range []struct {
@@ -549,8 +549,8 @@ func TestAFailedRollbackIsAFault(t *testing.T) {
 			return s.Do(ctx, "cli", after(func(*Tx) error { return &ExistsError{ID: 1, Title: "Mood"} }))
 		}},
 		{"a refusal of the DDL", func() error {
-			return s.Do(ctx, "cli", after(func(t *Tx) error {
-				_, err := t.tx.ExecContext(t.ctx, `INSERT INTO entities(entity_type) VALUES ('no such type')`)
+			return s.Do(ctx, "cli", after(func(tx *Tx) error {
+				_, err := tx.tx.ExecContext(tx.ctx, `INSERT INTO entities(entity_type) VALUES ('no such type')`)
 				return err
 			}))
 		}},

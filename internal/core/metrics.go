@@ -107,8 +107,9 @@ type NewMetric struct {
 }
 
 // CreateMetric registers a metric and files it in its category (made when no page has that title, as FilePages
-// makes it), in one write: a refusal of either step writes nothing.
-func (s *Store) CreateMetric(ctx context.Context, source string, m NewMetric) (added bool, err error) {
+// makes it), in one write: a refusal of either step writes nothing. It reports whether the metric is new, as
+// RegisterMetric does.
+func (s *Store) CreateMetric(ctx context.Context, source string, m NewMetric) (bool, error) {
 	return alone(s, ctx, source, func(t *Tx) (bool, error) {
 		added, err := t.RegisterMetric(m.Name, m.Unit, m.Note)
 		if err != nil || m.Category == "" {

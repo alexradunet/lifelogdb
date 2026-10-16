@@ -173,7 +173,7 @@ type made struct {
 
 // CreatePage makes the page and, with a category, files it there in the same write, as FilePages does
 // (docs/plans/115-categories-to-browse.md): a day as the category refuses the whole write.
-func (s *Store) CreatePage(ctx context.Context, source, title, body, category string) (id int64, r Sync, err error) {
+func (s *Store) CreatePage(ctx context.Context, source, title, body, category string) (int64, Sync, error) {
 	m, err := alone(s, ctx, source, func(t *Tx) (made, error) {
 		id, _, r, err := t.CreatePage(title, body, "", "")
 		if err != nil {

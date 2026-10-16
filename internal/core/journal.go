@@ -51,7 +51,7 @@ func (t *Tx) dayPage(day string) (int64, error) {
 	return p.ID, err
 }
 
-func (s *Store) Capture(ctx context.Context, source, day, entry string, mood *float64) (id int64, r Sync, err error) {
+func (s *Store) Capture(ctx context.Context, source, day, entry string, mood *float64) (int64, Sync, error) {
 	m, err := alone(s, ctx, source, func(t *Tx) (made, error) {
 		id, r, err := t.Capture(day, entry, mood)
 		return made{id, r}, err
