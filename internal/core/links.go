@@ -120,7 +120,7 @@ func (t *Tx) link(from, to int64, kind, note string) (added bool, err error) {
 	res, err := t.tx.ExecContext(t.ctx, `INSERT INTO links(from_id, to_id, kind, note, created_at, source) VALUES (?, ?, ?, ?, `+nowSQL+`, ?)
 	                       ON CONFLICT(from_id, to_id, kind) DO NOTHING`, from, to, kind, nullIfEmpty(note), t.source)
 	if err != nil {
-		return false, refused(err) // the registry's endpoint types refuse the link: a 422, as Do would return it
+		return false, err // Do turns a refusal of the registry's endpoint types into its 422
 	}
 	n, _ := res.RowsAffected()
 	return n > 0, nil
