@@ -15,10 +15,10 @@ import (
 // stored; the title and text of its page; its preview, a JPEG preview.Make made (nil for none). Its day is Day when
 // the caller gives one, else Taken, else today for ordinary files. Unknown-capture mode follows
 // docs/cookbook/keep-a-file.md: a photo with no day of its own has no day, and goes in no day page. keep finds that
-// mode for a photo (an image/* type); UnknownCaptureDay gives it to a file of any type. A photo's position is never
-// read (D21). Category is the title of the category to file the page in ("" for none).
+// mode for a photo (an image/* type); setPicture gives it to a file of any type (unknownCaptureDay). A photo's
+// position is never read (D21). Category is the title of the category to file the page in ("" for none).
 type FileIn struct {
-	UnknownCaptureDay bool // no day of its own, whatever the type: SetPicture sets it
+	unknownCaptureDay bool // no day of its own, whatever the type: only setPicture sets it
 	Title             string
 	Category          string
 	SHA256            string
@@ -74,15 +74,12 @@ func (t *Tx) keep(f FileIn) (k Kept, err error) {
 			return k, Invalid("%v", err)
 		}
 	}
-	if f.UnknownCaptureDay && (f.Day != "" || f.Taken != "") {
-		return k, Invalid("unknown capture day requires no day attribution")
-	}
 	if strings.HasPrefix(f.MIME, "image/") && f.Day == "" && f.Taken == "" { // a photo with no day: never the day it is kept
-		f.UnknownCaptureDay = true
+		f.unknownCaptureDay = true
 	}
 	day, own := f.Day, true
 	switch {
-	case f.UnknownCaptureDay:
+	case f.unknownCaptureDay:
 		own = false
 	case day != "":
 	case f.Taken != "":
@@ -100,7 +97,7 @@ func (t *Tx) keep(f FileIn) (k Kept, err error) {
 	switch {
 	case err == nil:
 		k.Existing, k.Deleted = true, deleted.Valid
-		if f.UnknownCaptureDay {
+		if f.unknownCaptureDay {
 			k.StoredDay = storedDay.String
 		}
 		if k.Deleted {
@@ -167,7 +164,7 @@ func (t *Tx) keep(f FileIn) (k Kept, err error) {
 			return k, err
 		}
 		k.ID, k.Promoted, title = p.ID, true, p.Title
-		if f.UnknownCaptureDay {
+		if f.unknownCaptureDay {
 			if err := t.tx.QueryRowContext(t.ctx, "SELECT coalesce(day,'') FROM entities WHERE id=?", p.ID).Scan(&k.StoredDay); err != nil {
 				return k, err
 			}
@@ -194,7 +191,7 @@ func (t *Tx) ownDay(k *Kept, f FileIn, title, day string, own, picture bool) err
 	if own {
 		k.Day = day
 	}
-	if f.UnknownCaptureDay || !own || !picture {
+	if f.unknownCaptureDay || !own || !picture {
 		return nil
 	}
 	dayID, err := t.dayPage(day)

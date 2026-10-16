@@ -77,7 +77,7 @@ func (t *Tx) setPicture(id int64, day string, f FileIn) (Kept, error) {
 	if f.Preview == nil {
 		return Kept{}, Invalid("a picture: send a JPEG, PNG or GIF, or a preview of it")
 	}
-	f.UnknownCaptureDay, f.Day, f.Taken = true, "", ""
+	f.unknownCaptureDay, f.Day, f.Taken = true, "", ""
 	if f.Title == "" {
 		if f.Title, err = t.freePictureTitle(page.Title, day, f.MIME); err != nil {
 			return Kept{}, err

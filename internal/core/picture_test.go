@@ -132,7 +132,7 @@ func TestSetPictureRefuses(t *testing.T) {
 }
 
 // TestSetPictureOfAnyTypeKeepsNoDay: a picture is kept with no day, also when its type is not image/*: a PDF sent with
-// a preview. keep gives no day of its own only to an image/* type, so SetPicture sets UnknownCaptureDay itself.
+// a preview. keep gives no day of its own only to an image/* type, so setPicture sets unknownCaptureDay itself.
 func TestSetPictureOfAnyTypeKeepsNoDay(t *testing.T) {
 	s := fresh(t)
 	ana, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "", "")
