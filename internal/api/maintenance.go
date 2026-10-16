@@ -28,7 +28,7 @@ func (h *server) snapshot(r *http.Request, _ string) (*Entity, error) {
 		Links: []Link{link("self", "/", "Home"), link("index", "/", "Home")}}, nil
 }
 
-func (h *server) integrity(r *http.Request) (*Entity, error) {
+func (h *server) integrity(r *http.Request, _ string) (*Entity, error) {
 	res, err := h.s.Integrity(r.Context())
 	if err != nil {
 		return nil, err

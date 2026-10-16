@@ -76,7 +76,7 @@ func (h *server) month(r *http.Request) (*Entity, error) {
 }
 
 // openDay answers with the address of the day the form names.
-func (h *server) openDay(r *http.Request) (*Entity, error) {
+func (h *server) openDay(r *http.Request, _ string) (*Entity, error) {
 	day := r.URL.Query().Get("day")
 	if !core.IsDay(day) {
 		return nil, core.Invalid("day must be a day, YYYY-MM-DD")

@@ -39,38 +39,27 @@ func NewOn(s *core.Store, localDay func() string, zone *time.Location, trustedOr
 	h := &server{s: s, localDay: localDay, zone: zone}
 	m := http.NewServeMux()
 	h.mux = m
-	get := func(p string, f func(*http.Request) (*Entity, error)) {
-		if ownerPath("GET", p) { // a read that holds the write lock is the owner's too
-			f = ownerOnlyGet(f)
-		}
-		m.HandleFunc("GET "+p, h.serve(f))
-	}
-	post := func(p string, f func(*http.Request, string) (*Entity, error)) {
-		if ownerPath("POST", p) { // the catalog says whose the action is; the route refuses an agent
-			f = ownerOnly(f)
-		}
-		m.HandleFunc("POST "+p, h.serve(func(r *http.Request) (*Entity, error) {
-			src, err := source(r)
-			if err != nil {
-				return nil, err
-			}
-			return f(r, src)
-		}))
-	}
-	get("/{$}", h.root)
-	get("/actions", h.actions)
-	get("/days", h.days)
-	get("/days/today", h.today)
-	get("/days/go", h.openDay)
-	get("/days/{day}", h.day)
-	get("/months/current", h.currentMonth)
-	get("/months/{month}", h.month)
-	get("/weeks/current", h.currentWeek)
-	get("/weeks/{week}", h.week)
-	get("/years/current", h.currentYear)
-	get("/years/{year}", h.year)
-	get("/pages", h.find)
-	get("/pages/{id}", h.page)
+	h.mount(m, catalog, map[string]actionFunc{
+		"capture": h.capture, "create-page": h.createPage, "save-body": h.saveBody, "create-person": h.createPerson,
+		"create-place": h.createPlace, "add-file": h.addFile, "set-picture": h.setPicture, "promote": h.promote,
+		"tombstone": h.tombstone, "revive": h.revive, "tombstone-pages": h.tombstoneMany, "link": h.linkPages,
+		"unlink": h.unlinkPages, "file-pages": h.filePages, "record": h.record, "correct": h.correct,
+		"retract": h.retract, "rename": h.rename, "register-metric": h.registerMetric, "integrity-check": h.integrity,
+		"search": h.search, "browse": h.browse, "find": h.find, "open-day": h.openDay, "snapshot": h.snapshot,
+	})
+	// The routes that are not actions: the resources, the old lists, the editor's helpers and the files of the browser.
+	m.HandleFunc("GET /{$}", h.serve(h.root))
+	m.HandleFunc("GET /actions", h.serve(h.actions))
+	m.HandleFunc("GET /days", h.serve(h.days))
+	m.HandleFunc("GET /days/today", h.serve(h.today))
+	m.HandleFunc("GET /days/{day}", h.serve(h.day))
+	m.HandleFunc("GET /months/current", h.serve(h.currentMonth))
+	m.HandleFunc("GET /months/{month}", h.serve(h.month))
+	m.HandleFunc("GET /weeks/current", h.serve(h.currentWeek))
+	m.HandleFunc("GET /weeks/{week}", h.serve(h.week))
+	m.HandleFunc("GET /years/current", h.serve(h.currentYear))
+	m.HandleFunc("GET /years/{year}", h.serve(h.year))
+	m.HandleFunc("GET /pages/{id}", h.serve(h.page))
 	m.HandleFunc("GET /pages/{id}/preview", picture(func(r *http.Request) ([]byte, error) {
 		id, err := idOf(r)
 		if err != nil {
@@ -81,43 +70,20 @@ func NewOn(s *core.Store, localDay func() string, zone *time.Location, trustedOr
 	m.HandleFunc("GET /previews", picture(func(r *http.Request) ([]byte, error) {
 		return h.s.PreviewByTitle(r.Context(), r.URL.Query().Get("title"))
 	}, ""))
-	get("/metrics", h.metrics)
-	get("/metrics/{name}", h.series)
-	get("/measurements/{id}", h.measurement)
-	get("/browse", h.browse)
+	m.HandleFunc("GET /metrics", h.serve(h.metrics))
+	m.HandleFunc("GET /metrics/{name}", h.serve(h.series))
+	m.HandleFunc("GET /measurements/{id}", h.serve(h.measurement))
 	for path := range oldLists {
 		m.HandleFunc("GET "+path, func(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, toBrowse(path, r.URL.Query()), http.StatusPermanentRedirect)
 		})
 	}
-	get("/search", h.search)
-	get("/titles", h.titles)
+	m.HandleFunc("GET /titles", h.serve(h.titles))
 	m.HandleFunc("POST /render", h.render)
 	m.HandleFunc("GET /assets/fonts/{file}", fonts)
 	m.HandleFunc("GET /styleguide", h.styleguide)
 	m.HandleFunc("GET /manifest.webmanifest", install("manifest.webmanifest", "application/manifest+json", "public, max-age=3600"))
 	m.HandleFunc("GET /assets/icon.svg", install("icon.svg", "image/svg+xml", "public, max-age=31536000, immutable"))
-	post("/days/{day}/capture", h.capture)
-	post("/pages", h.createPage)
-	post("/pages/{id}/body", h.saveBody)
-	post("/people", h.createPerson)
-	post("/places", h.createPlace)
-	post("/files", h.addFile)
-	post("/pages/{id}/picture", h.setPicture)
-	post("/pages/{id}/promote", h.promote)
-	post("/pages/{id}/tombstone", h.tombstone)
-	post("/pages/{id}/revive", h.revive)
-	post("/pages/tombstone", h.tombstoneMany)
-	post("/pages/file", h.filePages)
-	post("/pages/{id}/links", h.linkPages)
-	post("/pages/{id}/unlink", h.unlinkPages)
-	post("/measurements", h.record)
-	post("/measurements/{id}/correct", h.correct)
-	post("/measurements/{id}/retract", h.retract)
-	post("/pages/{id}/rename", h.rename)
-	post("/metrics", h.registerMetric)
-	post("/snapshots", h.snapshot)
-	get("/integrity", h.integrity)
 	guard := http.NewCrossOriginProtection()
 	for _, origin := range trustedOrigins {
 		if err := guard.AddTrustedOrigin(origin); err != nil {
@@ -172,26 +138,42 @@ type redirect struct{ to string }
 
 func (r redirect) Error() string { return "see " + r.to }
 
-// ownerOnly refuses an action that is the owner's alone to an agent or an import (neither registers a metric, takes a
-// snapshot or runs the integrity checks).
-func ownerOnly(f func(*http.Request, string) (*Entity, error)) func(*http.Request, string) (*Entity, error) {
-	return func(r *http.Request, src string) (*Entity, error) {
-		if !core.IsOwner(src) {
-			return nil, core.Forbidden("this action is the owner's: an agent or an import may not run it")
-		}
-		return f(r, src)
-	}
-}
+// actionFunc runs one action of the catalog. src is the writer of the request (lifelog_meta.source); a read that
+// is not the owner's alone gets "".
+type actionFunc func(r *http.Request, src string) (*Entity, error)
 
-// ownerOnlyGet is ownerOnly for a GET route, which has no source parameter: it reads the source of the request.
-func ownerOnlyGet(f func(*http.Request) (*Entity, error)) func(*http.Request) (*Entity, error) {
-	owned := ownerOnly(func(r *http.Request, _ string) (*Entity, error) { return f(r) })
-	return func(r *http.Request) (*Entity, error) {
-		src, err := source(r)
-		if err != nil {
-			return nil, err
+// mount gives each action of cat a route to its handler, with the method and the path of the action. An action that
+// writes reads its writer. An Owner action reads its writer and refuses a writer that is not the owner (an agent or
+// an import). Any other read reads no writer, so its source header cannot refuse it. mount panics when an action has
+// no handler or a handler has no action: the server does not start when the catalog and the routes disagree.
+func (h *server) mount(m *http.ServeMux, cat []spec, handlers map[string]actionFunc) {
+	named := map[string]bool{}
+	for _, s := range cat {
+		named[s.Name] = true
+		if handlers[s.Name] == nil {
+			panic("api: the action " + s.Name + " has no handler")
 		}
-		return owned(r, src)
+	}
+	for name := range handlers {
+		if !named[name] {
+			panic("api: the handler " + name + " has no action in the catalog")
+		}
+	}
+	for _, s := range cat {
+		f := handlers[s.Name]
+		m.HandleFunc(s.Method+" "+s.Path, h.serve(func(r *http.Request) (*Entity, error) {
+			var src string
+			if s.Method != "GET" || s.Owner {
+				var err error
+				if src, err = source(r); err != nil {
+					return nil, err
+				}
+			}
+			if s.Owner && !core.IsOwner(src) {
+				return nil, core.Forbidden("this action is the owner's: an agent or an import may not run it")
+			}
+			return f(r, src)
+		}))
 	}
 }
 

@@ -138,7 +138,7 @@ func browseHref(v url.Values) string {
 
 // browse is GET /browse and the action browse: the rows of one kind in one scope, the count of each chip, and the
 // category tree. Inside a category the list's New form files the new page there.
-func (h *server) browse(r *http.Request) (*Entity, error) {
+func (h *server) browse(r *http.Request, _ string) (*Entity, error) {
 	b, err := browseQueryOf(r.URL.Query())
 	if err != nil {
 		return nil, err

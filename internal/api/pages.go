@@ -12,7 +12,7 @@ import (
 	"lifelog/internal/core"
 )
 
-func (h *server) find(r *http.Request) (*Entity, error) {
+func (h *server) find(r *http.Request, _ string) (*Entity, error) {
 	title := r.URL.Query().Get("title")
 	if err := required(r.URL.Query(), "title"); err != nil {
 		return nil, err
@@ -145,7 +145,7 @@ func (h *server) linkKinds(ctx context.Context, typ string, dayPage bool) ([]str
 	return out, nil
 }
 
-func (h *server) search(r *http.Request) (*Entity, error) {
+func (h *server) search(r *http.Request, _ string) (*Entity, error) {
 	q := r.URL.Query().Get("q")
 	e := &Entity{Class: []string{"search"}, Title: "Search",
 		Links:   []Link{link("self", "/search?q="+url.QueryEscape(q), "Search"), link("index", "/", "Home")},

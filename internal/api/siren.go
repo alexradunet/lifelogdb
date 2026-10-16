@@ -104,7 +104,8 @@ func areaReq(name, title string, rows int) Field {
 	return f
 }
 
-// catalog is every action the API has. GET /actions serves it, and the CLI and the MCP server are built from it.
+// catalog is every action the API has. NewOn mounts a route for each one, GET /actions serves it, and the CLI and the
+// MCP server are built from it.
 var catalog = []spec{
 	{"capture", "Add to the day", "Append an entry to the journal page of a local day (created on the first capture), with an optional mood 1-5. [[Title]] and #tag in the text link pages, creating them if new.",
 		"POST", "/days/{day}/capture", []Field{path("day", "date", "Local day, YYYY-MM-DD"), area("text", "Entry (CommonMark)", 4),
@@ -170,16 +171,6 @@ var catalog = []spec{
 		"GET", "/days/go", []Field{req("day", "date", "Day")}, false, false},
 	{"snapshot", "Take a snapshot", "The owner's dated copy of life.db (docs/cookbook/take-a-snapshot.md) into the server's snapshot folder, never overwriting, then its restore check. The answer names the file and the check.",
 		"POST", "/snapshots", nil, true, false},
-}
-
-// ownerPath reports whether the catalog action at a method and path is the owner's alone: the routes wrap it.
-func ownerPath(method, path string) bool {
-	for _, s := range catalog {
-		if s.Method == method && s.Path == path {
-			return s.Owner
-		}
-	}
-	return false
 }
 
 func specOf(name string) spec {

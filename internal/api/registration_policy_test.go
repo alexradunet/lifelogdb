@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -37,14 +38,15 @@ func TestOwnerOnlyActionsPolicy(t *testing.T) {
 	if !register.Owner || !snapshot.Owner || !integrity.Owner || record.Name == "" || record.Owner {
 		t.Fatalf("wrong catalog policy: %+v %+v %+v %+v", register, snapshot, integrity, record)
 	}
-	for _, op := range []struct {
-		a      api.Action
-		fields map[string]string
-	}{{register, map[string]string{"name": "Forbidden direct"}}, {snapshot, nil}, {integrity, nil}} {
-		_, err := agent.Do(t.Context(), op.a, op.fields)
+	sent := map[string]map[string]string{"register-metric": {"name": "Forbidden direct"}}
+	for _, a := range catalog.Actions {
+		if !a.Owner {
+			continue
+		}
+		_, err := agent.Do(t.Context(), a, sent[a.Name])
 		var ce *client.Error
 		if !errors.As(err, &ce) || ce.Status != 403 {
-			t.Fatalf("owner-only %s not refused: %v", op.a.Name, err)
+			t.Fatalf("owner-only %s not refused: %v", a.Name, err)
 		}
 	}
 	var count int
@@ -81,15 +83,14 @@ func TestOwnerOnlyActionsPolicy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	found := false
+	listed := map[string]bool{}
 	for _, tool := range tools.Tools {
-		found = found || tool.Name == "record"
-		if tool.Name == "register_metric" || tool.Name == "snapshot" || tool.Name == "integrity_check" {
-			t.Fatalf("owner operation exposed as tool: %s", tool.Name)
-		}
+		listed[tool.Name] = true
 	}
-	if !found {
-		t.Fatal("record missing from the MCP tools")
+	for _, a := range catalog.Actions {
+		if tool := strings.ReplaceAll(a.Name, "-", "_"); listed[tool] == a.Owner {
+			t.Errorf("action %s (owner %v): MCP tool %s listed %v", a.Name, a.Owner, tool, listed[tool])
+		}
 	}
 }
 

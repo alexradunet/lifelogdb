@@ -109,6 +109,55 @@ func TestCatalogNamesAreUnique(t *testing.T) {
 	}
 }
 
+// TestEveryCatalogActionHasItsRouteAndItsOwnerRule: each action of the catalog has a route with the action's method
+// and path, and that route refuses an agent exactly when the action is the owner's alone. The mux answers a missing
+// route with a plain-text 404 or 405; an action's handler answers with a Siren entity.
+func TestEveryCatalogActionHasItsRouteAndItsOwnerRule(t *testing.T) {
+	c, h := fresh(t)
+	root := must(c.Get(t.Context(), "/"))
+	p := must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Route probe"}))
+	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
+	m := must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "weight", "day": "2026-09-01", "value": "71"}))
+	page, reading := strings.TrimPrefix(href(p, "self"), "/pages/"), strings.TrimPrefix(href(m, "self"), "/measurements/")
+	if page == "" || strings.Contains(page, "/") || reading == "" || strings.Contains(reading, "/") {
+		t.Fatalf("no page id (%q) or reading id (%q) to fill a path with", page, reading)
+	}
+	actions, err := c.Catalog(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	owners := 0
+	for _, a := range actions {
+		id := page
+		if strings.HasPrefix(a.Href, "/measurements/") {
+			id = reading
+		}
+		path := strings.NewReplacer("{id}", id, "{day}", "2026-09-01").Replace(a.Href)
+		if strings.Contains(path, "{") {
+			t.Fatalf("%s: the test fills no value for a path field of %s", a.Name, a.Href)
+		}
+		req := httptest.NewRequest(a.Method, path, strings.NewReader(""))
+		if a.Method == "POST" {
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		}
+		req.Header.Set(api.SourceHeader, "agent:x")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if ct := rec.Header().Get("Content-Type"); rec.Code == http.StatusNotFound || rec.Code == http.StatusMethodNotAllowed || ct != "application/vnd.siren+json" {
+			t.Errorf("%s %s (%s): %d %s, not an answer of the action: %.200s", a.Method, path, a.Name, rec.Code, ct, rec.Body.String())
+		}
+		if refused := rec.Code == http.StatusForbidden; refused != a.Owner {
+			t.Errorf("%s %s (%s, owner %v): an agent got %d", a.Method, path, a.Name, a.Owner, rec.Code)
+		}
+		if a.Owner {
+			owners++
+		}
+	}
+	if owners == 0 {
+		t.Error("the catalog has no owner action: the test does not reach the owner rule")
+	}
+}
+
 func TestActionsAreOfferedOnlyWhereLegal(t *testing.T) {
 	c, _ := fresh(t)
 	day, err := c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "capture"), map[string]string{"text": "with [[Ana]]"})
