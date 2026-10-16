@@ -2,7 +2,9 @@ package core
 
 import (
 	"bytes"
+	"database/sql"
 	"errors"
+	"fmt"
 	"image"
 	"image/jpeg"
 	"strings"
@@ -284,5 +286,59 @@ func TestAddFileRefuses(t *testing.T) {
 func TestNormalMIME(t *testing.T) {
 	if NormalMIME("Text/Plain; charset=utf-8") != "text/plain" || NormalMIME("a/b/c") != "" || NormalMIME("") != "" {
 		t.Error("NormalMIME")
+	}
+}
+
+// TestKeepingAPhotoFindsTheDayPageByAnIndex: a kept photo with a day reads the body of that day's page. The lookup
+// finds the day page and not a page that only has that day, and it searches by an index: it scans no table, so its
+// cost does not grow with the number of pages.
+func TestKeepingAPhotoFindsTheDayPageByAnIndex(t *testing.T) {
+	s := fresh(t)
+	const day = "2031-02-03"
+	if err := s.Do(t.Context(), "cli", func(tx *Tx) error {
+		for i := range 200 {
+			if _, _, _, err := tx.CreatePage(fmt.Sprintf("Synthetic lookup page %03d", i), "", day, ""); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var body string
+	if err := s.DB.W.QueryRowContext(t.Context(), dayPageBody, day).Scan(&body); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("with no day page the lookup found %q, %v; want no row", body, err)
+	}
+	if _, _, err := s.Capture(t.Context(), "cli", day, "The day's words.", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DB.W.QueryRowContext(t.Context(), dayPageBody, day).Scan(&body); err != nil || body != "The day's words." {
+		t.Fatalf("the lookup found %q, %v; want the day page's body", body, err)
+	}
+	// Plan the lookup on the writer connection, where keep runs it.
+	rows, err := s.DB.W.QueryContext(t.Context(), "EXPLAIN QUERY PLAN "+dayPageBody, day)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var plan []string
+	for rows.Next() {
+		var id, parent, unused int
+		var detail string
+		if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
+			t.Fatal(err)
+		}
+		plan = append(plan, detail)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if len(plan) == 0 {
+		t.Fatal("the lookup has no query plan")
+	}
+	for _, step := range plan {
+		if fields := strings.Fields(step); len(fields) > 0 && fields[0] == "SCAN" {
+			t.Errorf("the day page lookup scans a table, not an index: %v", plan)
+		}
 	}
 }

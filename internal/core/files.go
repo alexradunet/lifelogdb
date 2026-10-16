@@ -307,9 +307,13 @@ func automaticEmbedTitle(title string) error {
 	return nil
 }
 
+// dayPageBody is the body of the page whose preferred key is the day: the journal day page of that day (D5). It
+// finds the name by the unique index of entity_names.name_key: no index starts with entities.preferred_name_key.
+const dayPageBody = `SELECT e.body FROM entity_names n JOIN entities e ON e.id = n.entity_id AND e.preferred_name_key = n.name_key WHERE n.name_key = ?`
+
 func (t *Tx) preflightEmbed(day, title string) error {
 	var body string
-	err := t.tx.QueryRowContext(t.ctx, `SELECT body FROM entities WHERE preferred_name_key = ?`, day).Scan(&body)
+	err := t.tx.QueryRowContext(t.ctx, dayPageBody, day).Scan(&body)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
