@@ -33,12 +33,22 @@ func noVars(string) string { return "" }
 // stderr. The serve stops at the end of the test; an error that it returns fails the test.
 func serveInProcess(t *testing.T, e env, argv ...string) string {
 	t.Helper()
+	return startupLine(t, func(ctx context.Context, stderr io.Writer) error {
+		e.stderr = stderr
+		return runArgs(ctx, e, argv)
+	})
+}
+
+// startupLine runs serve, which writes its startup line to stderr and returns when ctx is done, and returns that line.
+// The lines after it are read and dropped. ctx is done at the end of the test; an error that serve returns fails the
+// test.
+func startupLine(t *testing.T, serve func(ctx context.Context, stderr io.Writer) error) string {
+	t.Helper()
 	read, write := io.Pipe()
-	e.stderr = write
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		err := runArgs(ctx, e, argv)
+		err := serve(ctx, write)
 		write.Close()
 		done <- err
 	}()
@@ -55,7 +65,14 @@ func serveInProcess(t *testing.T, e env, argv ...string) string {
 		read.Close()
 	})
 	line := make(chan string, 1)
-	go func() { s, _ := bufio.NewReader(read).ReadString('\n'); line <- s }()
+	go func() {
+		r := bufio.NewReader(read)
+		s, _ := r.ReadString('\n')
+		line <- s
+		// The rest of stderr is read and dropped: a pipe has no buffer, so a later line of serve would wait for a
+		// reader until the end of the test. The copy ends when serve or the cleanup closes the pipe.
+		_, _ = io.Copy(io.Discard, r)
+	}()
 	select {
 	case s := <-line:
 		if s == "" {
@@ -79,4 +96,30 @@ func servedAt(t *testing.T, line string) (scheme, address string) {
 		t.Fatalf("serve startup line: %q", line)
 	}
 	return scheme, address
+}
+
+// TestStartupLineReadsTheLinesAfterIt: a serve that writes more lines to its stderr after the startup line does not
+// wait for a reader of them, so it stops at the end of the test, at once.
+func TestStartupLineReadsTheLinesAfterIt(t *testing.T) {
+	stopped := make(chan struct{})
+	t.Run("serve", func(t *testing.T) {
+		line := startupLine(t, func(ctx context.Context, stderr io.Writer) error {
+			defer close(stopped)
+			for _, s := range []string{"lifelog: serving synthetic.db on http://127.0.0.1:1\n", "a second line\n", "a third line\n"} {
+				if _, err := io.WriteString(stderr, s); err != nil {
+					return err
+				}
+			}
+			<-ctx.Done()
+			return nil
+		})
+		if line != "lifelog: serving synthetic.db on http://127.0.0.1:1\n" {
+			t.Errorf("the startup line is %q", line)
+		}
+	})
+	select {
+	case <-stopped:
+	default:
+		t.Error("the serve did not stop at the end of its test")
+	}
 }
