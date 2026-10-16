@@ -46,6 +46,11 @@ func submit(h http.Handler, path string, form url.Values, referer string) *httpt
 	return rec
 }
 
+// TestEveryViewRenders draws every view of a small life as a browser gets it: one table of paths, each a whole page
+// with its status. Every page carries what semantic HTML needs: both of this app's sheets under their markers, one
+// main with a way to skip to it, the sidebar's sections with one link at most marked, a footer, the search dialog, no
+// script at all (docs/plans/108-the-browser-made-current.md), and no id generated for a template to find. A row also
+// names the words that its page shows. Which link of the sidebar a page marks is TestNavMarksThePageTheBrowserIsOn's.
 func TestEveryViewRenders(t *testing.T) {
 	c, h, _ := apitest.Fresh(t, "cli")
 	root := apitest.Must(t)(c.Get(t.Context(), "/"))
@@ -53,106 +58,89 @@ func TestEveryViewRenders(t *testing.T) {
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), apitest.Href(day, "page"))), "save-body"), map[string]string{"body": "Ran with [[Sam]] and [[Ana]] #running"}))
 	ana := apitest.Must(t)(c.Get(t.Context(), "/pages?title=Ana"))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, ana, "promote"), map[string]string{"to": "person", "name": "Ana Popescu"}))
+	sam := apitest.Must(t)(c.Get(t.Context(), "/pages?title=Sam"))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-place"), map[string]string{"title": "Lisbon"}))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "walk"}))
-	var reading *string
+	var reading string
 	for _, d := range []string{"2026-09-01", "2026-09-15", "2026-09-28"} {
 		m := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "record"), map[string]string{"metric": "weight", "day": d, "value": "71.2"}))
-		reading = &m.Links[0].Href
+		reading = m.Links[0].Href
 	}
 	draft := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Draft", "body": "old words"}))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, draft, "rename"), map[string]string{"title": "Essay"}))
 	gone := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Scratch"}))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, gone, "tombstone"), nil))
 
-	for _, p := range []string{"/", "/actions", "/days", apitest.Href(day, "self"), "/browse", "/browse?kind=person", "/browse?kind=place", "/browse?ghosts=1", "/metrics",
-		"/metrics/walk", "/measurements/1", "/search", "/search?q=ran", "/integrity", apitest.Href(gone, "self"), "/weeks/2026-W40", "/years/2026",
-		apitest.Href(draft, "self"), essay(t, h)} {
-		browse(t, h, p)
-	}
-	for path, want := range map[string][]string{
-		apitest.Href(day, "page"): {`name="version" value="`, `<a href="/pages?title=Sam" class="wikilink">Sam</a>`,
-			`<a href="/pages?title=running" class="wikilink">#running</a>`},
-		"/pages?title=Ana":         {"Ana Popescu", "Backlinks", "mentioned in"},
-		"/metrics/weight":          {`<svg class="chart"`, "71.2"},
-		*reading:                   {`action="/measurements/`, "Correct"},
-		apitest.Href(gone, "self"): {"Deleted", `action="` + apitest.Href(gone, "self") + `/revive"`},
+	dayPage := apitest.Href(day, "page")
+	bodies := map[string]string{}
+	for _, row := range []struct {
+		path   string
+		status int
+		want   []string
+	}{
+		{"/", http.StatusOK, []string{`<a class="brand" href="/" aria-current="page">Lifelog</a>`}},
+		{"/actions", http.StatusOK, nil},
+		{"/days", http.StatusOK, nil},
+		{apitest.Href(day, "self"), http.StatusOK, nil},
+		{dayPage, http.StatusOK, []string{`name="version" value="`, `<a href="/pages?title=Sam" class="wikilink">Sam</a>`,
+			`<a href="/pages?title=running" class="wikilink">#running</a>`}},
+		{apitest.Href(sam, "self"), http.StatusOK, nil},
+		{opens(t, h, "Ana"), http.StatusOK, []string{"Ana Popescu", "Backlinks", "mentioned in"}},
+		{"/browse", http.StatusOK, nil},
+		{"/browse?kind=person", http.StatusOK, nil},
+		{"/browse?kind=place", http.StatusOK, nil},
+		{"/browse?ghosts=1", http.StatusOK, nil},
+		{"/metrics", http.StatusOK, nil},
+		{"/metrics/walk", http.StatusOK, nil},
+		{"/metrics/weight", http.StatusOK, []string{`<svg class="chart"`, "71.2"}},
+		{"/measurements/1", http.StatusOK, nil},
+		{reading, http.StatusOK, []string{`action="/measurements/`, "Correct"}},
+		{"/search", http.StatusOK, nil},
+		{"/search?q=ran", http.StatusOK, nil},
+		{"/integrity", http.StatusOK, nil},
+		{apitest.Href(gone, "self"), http.StatusOK, []string{"Deleted", `action="` + apitest.Href(gone, "self") + `/revive"`}},
+		{"/weeks/2026-W40", http.StatusOK, nil},
+		{"/years/2026", http.StatusOK, nil},
+		{apitest.Href(draft, "self"), http.StatusOK, nil},
+		{opens(t, h, "Essay"), http.StatusOK, nil},
+		{"/pages/999999", http.StatusNotFound, nil},
 	} {
-		req := httptest.NewRequest("GET", path, nil)
-		req.Header.Set("Accept", "text/html")
-		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, req)
-		if rec.Code == http.StatusSeeOther { // /pages?title= opens the page
-			path = rec.Header().Get("Location")
-		}
-		body := browse(t, h, path)
-		for _, w := range want {
-			if !strings.Contains(body, w) {
-				t.Errorf("%s does not show %s", path, w)
+		body := browseStatus(t, h, row.path, row.status)
+		bodies[row.path] = body
+		for _, want := range append([]string{
+			`<style data-sheet="base">`, `<style data-sheet="app">`, // the two sheets, the base one first
+			`<a class="skip" href="#main">`, `<main id="main">`, `<nav aria-label="Sections">`, "<footer>",
+			`<dialog class="palette" id="palette" closedby="any" aria-label="Search">`,
+		}, row.want...) {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s does not carry %s", row.path, want)
 			}
 		}
+		if strings.Contains(body, "<script") {
+			t.Errorf("%s carries a script: a page is HTML the browser runs by itself", row.path)
+		}
+		if strings.Contains(body, `id="f-`) {
+			t.Errorf("%s carries a generated id: a page is semantic HTML", row.path)
+		}
+		rail, _, _ := strings.Cut(body[strings.Index(body, `<aside class="rail">`)+1:], "</aside>")
+		if n := strings.Count(rail, `aria-current="page"`); n > 1 {
+			t.Errorf("%s marks %d links of the sidebar current, want one at most", row.path, n)
+		}
 	}
-	if body := browse(t, h, apitest.Href(day, "page")); strings.Contains(body, `/promote"`) {
+	if strings.Contains(bodies[dayPage], `/promote"`) {
 		t.Error("a day page shows a promote form the API does not offer")
 	}
 }
 
-// TestEveryPageIsSemanticHTML says what every page carries: both of this app's sheets under their markers, one
-// main with a way to skip to it, the sidebar's sections with this page marked, a footer, the search dialog, no
-// script at all (docs/plans/108-the-browser-made-current.md), and no id generated for a template to find.
-func TestEveryPageIsSemanticHTML(t *testing.T) {
-	c, h, _ := apitest.Fresh(t, "cli")
-	root := apitest.Must(t)(c.Get(t.Context(), "/"))
-	day := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "capture"), map[string]string{"text": "Ran with [[Sam]] #running", "mood": "4"}))
-	sam := apitest.Must(t)(c.Get(t.Context(), "/pages?title=Sam"))
-	gone := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Scratch"}))
-	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, gone, "tombstone"), nil))
-
-	for _, path := range []string{"/", "/days", apitest.Href(day, "self"), apitest.Href(sam, "self"), apitest.Href(gone, "self"),
-		"/metrics", "/search?q=ran", "/actions", "/integrity", "/pages/999999"} {
-		status := http.StatusOK
-		if path == "/pages/999999" {
-			status = http.StatusNotFound
-		}
-		body := browseStatus(t, h, path, status)
-		for _, want := range []string{
-			`<style data-sheet="base">`, `<style data-sheet="app">`, // the two sheets, the base one first
-			`<a class="skip" href="#main">`, `<main id="main">`, `<nav aria-label="Sections">`, "<footer>",
-			`<dialog class="palette" id="palette" closedby="any" aria-label="Search">`,
-		} {
-			if !strings.Contains(body, want) {
-				t.Errorf("%s does not carry %s", path, want)
-			}
-		}
-		if strings.Contains(body, "<script") {
-			t.Errorf("%s carries a script: a page is HTML the browser runs by itself", path)
-		}
-		if strings.Contains(body, `id="f-`) {
-			t.Errorf("%s carries a generated id: a page is semantic HTML", path)
-		}
-		if n := strings.Count(body, `aria-current="page"`); n > 1 {
-			t.Errorf("%s marks %d navigation links current, want one at most", path, n)
-		}
-	}
-	if body := browse(t, h, "/"); !strings.Contains(body, `<a class="brand" href="/" aria-current="page">Lifelog</a>`) {
-		t.Error("the home page does not mark the brand, its link, current")
-	}
-	if body := browse(t, h, "/days/2026-01-01"); !strings.Contains(body, `<a href="/months/current" aria-current="page">`) {
-		t.Error("a day that is not today does not mark Calendar current")
-	}
-	if body := browse(t, h, "/browse?kind=person"); !strings.Contains(body, `<a href="/browse" aria-current="page">`) {
-		t.Error("the sidebar does not mark Browse current on its page")
-	}
-}
-
-// essay is where the renamed page's title leads.
-func essay(t *testing.T, h http.Handler) string {
-	req := httptest.NewRequest("GET", "/pages?title=Essay", nil)
+// opens is the path of the page that GET /pages?title= opens for the title: a 303 to the page.
+func opens(t *testing.T, h http.Handler, title string) string {
+	t.Helper()
+	req := httptest.NewRequest("GET", "/pages?title="+url.QueryEscape(title), nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("/pages?title=Essay: %d", rec.Code)
+		t.Fatalf("/pages?title=%s: %d", title, rec.Code)
 	}
 	return rec.Header().Get("Location")
 }

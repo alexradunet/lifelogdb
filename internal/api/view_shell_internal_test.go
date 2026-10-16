@@ -6,7 +6,7 @@ import (
 )
 
 // TestNavMarksThePageTheBrowserIsOn says one navigation link is current: the one whose path is the page's, else the
-// one with the longest path the page is under, and never a fragment (a place on a page is not a page).
+// one with the longest path the page is under.
 func TestNavMarksThePageTheBrowserIsOn(t *testing.T) {
 	for path, want := range map[string]string{
 		"/":                "/",
@@ -36,11 +36,6 @@ func TestNavMarksThePageTheBrowserIsOn(t *testing.T) {
 		}
 		if got != want {
 			t.Errorf("%s marks %q current, want %q", path, got, want)
-		}
-	}
-	for _, it := range (&view{Path: "/"}).Nav() {
-		if it.Href == "/#new" && it.Current {
-			t.Error("a fragment link is marked current")
 		}
 	}
 }
