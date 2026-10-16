@@ -11,8 +11,8 @@ import (
 // RegisterMetric makes a metric (D27): a page titled name, whose body is the note, and its metrics row with the
 // unit, one id. A plain page of that title becomes the metric, as a person is promoted (D20): a ghost, or a note
 // the owner wrote about it, whose text is kept — the note is written only to an empty body. Registering one that
-// exists with the same unit is a no-op, and so is one with no unit where the existing metric is a scale: a source
-// that names Mood does not write its range (RangeUnit), so the request takes the metric as it is. Another unit is
+// exists with the same unit is a no-op, and so is one with no unit where the existing metric is a scale (isScale): a
+// source that names Mood does not write its range, so the request takes the metric as it is. Another unit is
 // refused: a unit never changes (metrics_unit_fixed).
 func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
 	if err := checkTitle("metric name", name); err != nil {
@@ -39,7 +39,7 @@ func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
 		if err := t.tx.QueryRowContext(t.ctx, `SELECT unit FROM metrics WHERE id = ?`, p.ID).Scan(&have); err != nil {
 			return false, err
 		}
-		if _, _, scale := rangeUnit(have); have != unit && !(scale && unit == "") {
+		if have != unit && !(isScale(have) && unit == "") {
 			return false, Conflict("metric %s exists with unit %q, not %q: a unit never changes; register a new metric", p.Title, have, unit)
 		}
 		return false, nil

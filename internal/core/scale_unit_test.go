@@ -96,22 +96,20 @@ func TestRegisteringAnExistingScaleAdoptsIt(t *testing.T) {
 	}
 }
 
-func TestRangeUnit(t *testing.T) {
+func TestIsScale(t *testing.T) {
 	for _, c := range []struct {
-		unit   string
-		lo, hi float64
-		ok     bool
+		unit string
+		ok   bool
 	}{
-		{"1-5", 1, 5, true}, {"0-10", 0, 10, true}, {"1-100", 1, 100, true}, {"01-05", 1, 5, true}, {"0-1", 0, 1, true},
-		{"0-100000000000000000000", 0, 1e20, true}, {"100000000000000000000-100000000000000000001", 1e20, 1e20, true},
-		{"", 0, 0, false}, {"1-1", 0, 0, false}, {"5-1", 0, 0, false}, {"0-0", 0, 0, false}, {"1-", 0, 0, false},
-		{"-5", 0, 0, false}, {"-", 0, 0, false}, {"1-5-7", 0, 0, false}, {"1--5", 0, 0, false}, {"1 -5", 0, 0, false},
-		{"1-5 ", 0, 0, false}, {"1–5", 0, 0, false}, {"+1-5", 0, 0, false}, {"1.5-5", 0, 0, false}, {"a-b", 0, 0, false},
-		{"١-٥", 0, 0, false}, {"kg", 0, 0, false}, {"mg/dL", 0, 0, false}, {"1/5", 0, 0, false}, {"2024-2025", 2024, 2025, true},
+		{"1-5", true}, {"0-10", true}, {"1-100", true}, {"01-05", true}, {"0-1", true},
+		{"0-100000000000000000000", true}, {"100000000000000000000-100000000000000000001", true},
+		{"", false}, {"1-1", false}, {"5-1", false}, {"0-0", false}, {"1-", false},
+		{"-5", false}, {"-", false}, {"1-5-7", false}, {"1--5", false}, {"1 -5", false},
+		{"1-5 ", false}, {"1–5", false}, {"+1-5", false}, {"1.5-5", false}, {"a-b", false},
+		{"١-٥", false}, {"kg", false}, {"mg/dL", false}, {"1/5", false}, {"2024-2025", true},
 	} {
-		lo, hi, ok := rangeUnit(c.unit)
-		if ok != c.ok || ok && (lo != c.lo || hi != c.hi) {
-			t.Errorf("rangeUnit(%q) = %g, %g, %v; want %g, %g, %v", c.unit, lo, hi, ok, c.lo, c.hi, c.ok)
+		if ok := isScale(c.unit); ok != c.ok {
+			t.Errorf("isScale(%q) = %v, want %v", c.unit, ok, c.ok)
 		}
 	}
 }

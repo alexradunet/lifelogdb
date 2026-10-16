@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
-	"strconv"
 	"strings"
 
 	"lifelog/internal/text"
@@ -258,22 +257,17 @@ func (t *Tx) Capture(day, entry string, mood *float64) (id int64, r Sync, err er
 	return id, r, err
 }
 
-// rangeUnit says whether a metric's unit names a scale's range: two numbers of ASCII digits around one hyphen with
-// the lower below the upper (`1-5`, `0-10`), and returns the two bounds. The range describes the metric, so a source
-// never writes it beside a number: the importer takes the number alone as the evidence of a reading, and the writer
-// holds every value of the metric to the whole numbers inside it. A count or a 0/1 habit has no unit (D7, D24).
-func rangeUnit(unit string) (lo, hi float64, ok bool) {
+// isScale says whether a metric's unit names a scale's range: two numbers of ASCII digits around one hyphen with the
+// lower below the upper (`1-5`, `0-10`). The schema holds the values of a scale to its range
+// (measurements_scale_range, D6). A count or a 0/1 habit has no unit (D7, D24).
+func isScale(unit string) bool {
 	a, b, found := strings.Cut(unit, "-")
 	if !found || !asciiDigits(a) || !asciiDigits(b) {
-		return 0, 0, false
+		return false
 	}
-	// compared as digit strings, so a bound too large for a float64 still orders exactly (a unit is at most 32 bytes)
-	if a, b = strings.TrimLeft(a, "0"), strings.TrimLeft(b, "0"); len(a) > len(b) || len(a) == len(b) && a >= b {
-		return 0, 0, false
-	}
-	lo, _ = strconv.ParseFloat("0"+a, 64)
-	hi, _ = strconv.ParseFloat(b, 64)
-	return lo, hi, true
+	// compared as digit strings, so a bound of any length orders exactly
+	a, b = strings.TrimLeft(a, "0"), strings.TrimLeft(b, "0")
+	return len(a) < len(b) || len(a) == len(b) && a < b
 }
 
 func asciiDigits(s string) bool {
