@@ -290,3 +290,38 @@ func TestReadingsByDayCountsTheCurrentReadingsOfAWindow(t *testing.T) {
 		t.Errorf("a reversed window: %v", err)
 	}
 }
+
+// TestSeriesWithNoFromHasNoLowerBound: a series is (from, to], and an empty from reads every reading through to, the
+// first day that a date can name too. A from or a to that is not a day is refused.
+func TestSeriesWithNoFromHasNoLowerBound(t *testing.T) {
+	s := fresh(t)
+	if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "weight", Unit: "kg"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range []Reading{{Metric: "weight", Day: "0000-01-01", Value: 70}, {Metric: "weight", Day: "2026-10-05", Value: 71},
+		{Metric: "weight", Day: "2026-10-09", Value: 72}} {
+		if _, err := s.Record(ctx, "cli", r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct{ from, to, want string }{
+		{"", "9999-12-31", "0000-01-01=70 2026-10-05=71 2026-10-09=72"},
+		{"", "2026-10-05", "0000-01-01=70 2026-10-05=71"},
+		{"0000-01-01", "9999-12-31", "2026-10-05=71 2026-10-09=72"},
+		{"2026-10-05", "2026-10-09", "2026-10-09=72"},
+	} {
+		rows, err := s.Series(ctx, "Weight", tc.from, tc.to)
+		var got []string
+		for _, r := range rows {
+			got = append(got, fmt.Sprintf("%s=%g", r.Day, r.Value))
+		}
+		if err != nil || strings.Join(got, " ") != tc.want {
+			t.Errorf("Series(%q, %q) = %v, %v; want %s", tc.from, tc.to, got, err, tc.want)
+		}
+	}
+	for _, bad := range [][2]string{{"2026-1-5", "2026-10-09"}, {"", ""}, {"", "2026-10-32"}} {
+		if _, err := s.Series(ctx, "weight", bad[0], bad[1]); status(err) != 422 {
+			t.Errorf("Series(%q, %q): %v, want a 422", bad[0], bad[1], err)
+		}
+	}
+}

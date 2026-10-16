@@ -520,24 +520,12 @@ func (s *Store) InUse(ctx context.Context, day string, n int) ([]string, error) 
 	return out, rows.Err()
 }
 
-// Series is cookbook/metric-series.md: the current readings of one metric in (from, to].
+// Series is cookbook/metric-series.md: the current readings of one metric in (from, to]. An empty from is no lower
+// bound: every reading through to.
 func (s *Store) Series(ctx context.Context, metric, from, to string) ([]Reading, error) {
-	if !IsDay(from) || !IsDay(to) {
-		return nil, Invalid("from and to are YYYY-MM-DD days")
+	if from != "" && !IsDay(from) || !IsDay(to) {
+		return nil, Invalid("from is empty or a YYYY-MM-DD day, and to is a YYYY-MM-DD day")
 	}
-	return s.series(ctx, metric, from, to)
-}
-
-// SeriesHistory is Series with no lower day bound; to remains inclusive.
-func (s *Store) SeriesHistory(ctx context.Context, metric, to string) ([]Reading, error) {
-	if !IsDay(to) {
-		return nil, Invalid("to is a YYYY-MM-DD day")
-	}
-	return s.series(ctx, metric, "", to)
-}
-
-// series reads the readings of the metric named metric up to to, and after from unless from is empty.
-func (s *Store) series(ctx context.Context, metric, from, to string) ([]Reading, error) {
 	predicate := `WHERE m.id=(SELECT entity_id FROM entity_names WHERE name_key=?) AND me.day<=?`
 	args := []any{text.TitleKey(metric), to}
 	if from != "" {

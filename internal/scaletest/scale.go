@@ -475,7 +475,7 @@ func verify(ctx context.Context, s *core.Store, f *fixture) error {
 		return err
 	}
 	for i, name := range metricNames {
-		got, err := s.SeriesHistory(ctx, name, "9999-12-31")
+		got, err := s.Series(ctx, name, "", "9999-12-31")
 		if err != nil {
 			return err
 		}
@@ -698,7 +698,7 @@ func exercise(ctx context.Context, s *core.Store, f *fixture, samples int, repor
 		var series []core.Reading
 		if err := record(report, "historical_metric_series", func() error {
 			var e error
-			series, e = s.SeriesHistory(ctx, metricNames[0], "9999-12-31")
+			series, e = s.Series(ctx, metricNames[0], "", "9999-12-31")
 			return e
 		}); err != nil {
 			return err

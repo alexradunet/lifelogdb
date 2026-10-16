@@ -110,12 +110,7 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 	if m != nil { // an alias names the metric by its name
 		name = m.Name
 	}
-	var rows []core.Reading
-	if allHistory {
-		rows, err = h.s.SeriesHistory(ctx, name, to)
-	} else {
-		rows, err = h.s.Series(ctx, name, from, to)
-	}
+	rows, err := h.s.Series(ctx, name, from, to) // an empty from is all history
 	if err != nil {
 		return nil, err
 	}

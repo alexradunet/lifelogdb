@@ -53,7 +53,7 @@ func (h *server) trends(ctx context.Context, day string, readings []core.Reading
 	}
 	from := t.AddDate(0, 0, -glanceDays).Format(time.DateOnly) // a series is (from, to]
 	if !core.IsDay(from) {
-		from = "0000-01-01" // the first days a date can name: the trend starts the day after
+		from = "" // the days start before the first day that a date can name: no lower bound
 	}
 	for _, name := range names {
 		rows, err := h.s.Series(ctx, name, from, day)

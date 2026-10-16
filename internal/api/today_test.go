@@ -63,6 +63,31 @@ func TestTheDayCarriesItsTrends(t *testing.T) {
 	}
 }
 
+// TestATrendOfTheFirstDaysHasNoLowerBound: the 14 days through 0000-01-05 start before the first day that a date can
+// name, so the trend reads the series with no lower bound. The reading of 0000-01-01 is one of those 14 days, and the
+// trend shows it.
+func TestATrendOfTheFirstDaysHasNoLowerBound(t *testing.T) {
+	c, _ := freshOn(t, fixedToday)
+	root := must(c.Get(t.Context(), "/"))
+	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
+	for _, r := range []struct{ day, value string }{{"0000-01-01", "70"}, {"0000-01-05", "71"}} {
+		must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "weight", "day": r.day, "value": r.value}))
+	}
+	var got []string
+	for _, x := range props(must(c.Get(t.Context(), "/days/0000-01-05")))["trends"].([]any) {
+		tr := x.(map[string]any)
+		var points []string
+		for _, p := range tr["readings"].([]any) {
+			m := p.(map[string]any)
+			points = append(points, fmt.Sprintf("%v=%v", m["day"], m["value"]))
+		}
+		got = append(got, fmt.Sprintf("%v %v [%s]", tr["metric"], tr["unit"], strings.Join(points, " ")))
+	}
+	if want := "weight kg [0000-01-01=70 0000-01-05=71]"; strings.Join(got, "\n") != want {
+		t.Errorf("the trends of 0000-01-05:\n got %s\nwant %s", strings.Join(got, "\n"), want)
+	}
+}
+
 // TestAPastDaysTrendSaysItsDaysAgainstToday: the line of a past day places its readings by that day, the last one at
 // the end, and its label says their days against today, not against the day the page shows.
 func TestAPastDaysTrendSaysItsDaysAgainstToday(t *testing.T) {
