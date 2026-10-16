@@ -167,17 +167,19 @@ func TestEveryCatalogActionHasItsRouteAndItsOwnerRule(t *testing.T) {
 // one field is missing. An action with a file field is sent as multipart too, with a file. search is the one
 // exception: GET /search with no q is the search page, which TestEveryViewRenders draws. Before each request the
 // probe page gets a body that no other request gave it, so a save of an empty body or of other words always changes
-// the file: a case cannot hide a write because the case before it wrote the same thing.
+// the file. Before each request the test also records a new probe reading, and the /measurements/ actions get its id,
+// so a correct always has a reading that no case corrected before (a reading is corrected one time only). Thus a case
+// cannot hide a write because a case before it wrote the same thing or used up the probe.
 func TestARequestWithoutARequiredFieldIsRefusedAndWritesNothing(t *testing.T) {
 	c, _, s := freshStore(t)
 	root := must(c.Get(t.Context(), "/"))
 	p := must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Required probe", "body": "first words"}))
 	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
-	m := must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "weight", "day": "2026-09-01", "value": "71"}))
-	page, reading := strings.TrimPrefix(href(p, "self"), "/pages/"), strings.TrimPrefix(href(m, "self"), "/measurements/")
-	if page == "" || reading == "" {
-		t.Fatalf("no page id (%q) or reading id (%q) to send", page, reading)
+	page := strings.TrimPrefix(href(p, "self"), "/pages/")
+	if page == "" {
+		t.Fatal("no page id to send")
 	}
+	reading := "" // the id of the probe reading of the case: each case records a new one
 	// version is the probe page's version now: a case that wrote by error, or the new body of each case, does not
 	// make the next save stale.
 	version := func() string {
@@ -268,6 +270,11 @@ func TestARequestWithoutARequiredFieldIsRefusedAndWritesNothing(t *testing.T) {
 					what := fmt.Sprintf("%s %s with %s %s, as %s", a.Method, a.Name, missing.Name, sent, how)
 					must(c.Do(t.Context(), find(must(c.Get(t.Context(), href(p, "self"))), "save-body"),
 						map[string]string{"body": fmt.Sprintf("the words before case %d", cases)}))
+					m := must(c.Do(t.Context(), find(root, "record"),
+						map[string]string{"metric": "weight", "day": "2026-09-01", "value": fmt.Sprint(60 + cases)}))
+					if reading = strings.TrimPrefix(href(m, "self"), "/measurements/"); reading == "" {
+						t.Fatalf("%s: no reading id to send", what)
+					}
 					before := state()
 					_, err := send()
 					var ce *client.Error
