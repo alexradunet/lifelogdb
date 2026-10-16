@@ -132,20 +132,40 @@ func (h *server) calendarOf(ctx context.Context, from, through string) (*calenda
 		}
 	}
 
-	pages := map[string]core.DayEntry{}
+	firstLines := map[string]string{}
 	for _, d := range entries {
-		pages[d.Day] = d
+		firstLines[d.Day] = d.FirstLine
 	}
 	days := []monthDay{}
 	first, _ := core.ParseDay(from)
 	last, _ := core.ParseDay(through)
-	for t := first; !t.After(last); t = t.AddDate(0, 0, 1) {
-		day := t.Format(time.DateOnly)
-		p, written := pages[day]
-		days = append(days, monthDay{Day: day, Page: written, FirstLine: p.FirstLine, Mood: moods[day],
+	for _, w := range writtenDays(entries, first, last) {
+		day := w.Day
+		days = append(days, monthDay{Day: day, Page: w.Page, FirstLine: firstLines[day], Mood: moods[day],
 			Items: items[day], MorePages: more[day], Readings: readings[day] - len(moods[day])})
 	}
 	return &calendar{days: days}, nil
+}
+
+// writtenDay is a day and whether it has a day page: the day is written.
+type writtenDay struct {
+	Day  string `json:"day"`
+	Page bool   `json:"page"`
+}
+
+// writtenDays are the days from first through last, each with whether one of entries is its day page. The
+// calendar, the months of a year and the month of the sidebar draw them.
+func writtenDays(entries []core.DayEntry, first, last time.Time) []writtenDay {
+	written := make(map[string]bool, len(entries))
+	for _, d := range entries {
+		written[d.Day] = true
+	}
+	days := []writtenDay{}
+	for t := first; !t.After(last); t = t.AddDate(0, 0, 1) {
+		day := t.Format(time.DateOnly)
+		days = append(days, writtenDay{Day: day, Page: written[day]})
+	}
+	return days
 }
 
 // weeks puts the days of a month into the rows of a calendar, Monday first: nil fills a cell before the first day and

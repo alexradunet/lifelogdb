@@ -136,14 +136,9 @@ func (h *server) week(r *http.Request) (*Entity, error) {
 
 // yearMonth is a month of a year: its days, and how many of them have a day page.
 type yearMonth struct {
-	Month   string    `json:"month"`
-	Written int       `json:"written"`
-	Days    []yearDay `json:"days"`
-}
-
-type yearDay struct {
-	Day  string `json:"day"`
-	Page bool   `json:"page"`
+	Month   string       `json:"month"`
+	Written int          `json:"written"`
+	Days    []writtenDay `json:"days"`
 }
 
 func (h *server) currentYear(*http.Request) (*Entity, error) {
@@ -174,18 +169,12 @@ func (h *server) year(r *http.Request) (*Entity, error) {
 	for _, n := range byDay {
 		readings += n
 	}
-	written := map[string]bool{}
-	for _, d := range entries {
-		written[d.Day] = true
-	}
 	e := &Entity{Class: []string{"year"}, Title: s, Actions: []Action{action("open-day", nil, nil)}}
 	months := []yearMonth{}
 	for m := first; m.Year() == year; m = m.AddDate(0, 1, 0) {
-		ym := yearMonth{Month: m.Format("2006-01"), Days: []yearDay{}}
-		for d := m; d.Month() == m.Month(); d = d.AddDate(0, 0, 1) {
-			day := d.Format(time.DateOnly)
-			ym.Days = append(ym.Days, yearDay{Day: day, Page: written[day]})
-			if written[day] {
+		ym := yearMonth{Month: m.Format("2006-01"), Days: writtenDays(entries, m, m.AddDate(0, 1, -1))}
+		for _, d := range ym.Days {
+			if d.Page {
 				ym.Written++
 			}
 		}

@@ -40,14 +40,9 @@ func (h *server) shell(ctx context.Context) (*shellView, error) {
 	if err != nil {
 		return nil, err
 	}
-	written := map[string]bool{}
-	for _, d := range entries {
-		written[d.Day] = true
-	}
 	sv := &shellView{Today: today, Zone: h.s.Now().Location(), Month: first.Format(layoutMonth), MonthHref: monthHref(first), Written: len(entries)}
-	for d := first; !d.After(last); d = d.AddDate(0, 0, 1) {
-		day := d.Format(time.DateOnly)
-		sv.Days = append(sv.Days, map[string]any{"day": day, "page": written[day]})
+	for _, d := range writtenDays(entries, first, last) {
+		sv.Days = append(sv.Days, map[string]any{"day": d.Day, "page": d.Page})
 	}
 	return sv, nil
 }
