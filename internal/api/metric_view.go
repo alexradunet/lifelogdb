@@ -117,6 +117,7 @@ type metricCard struct {
 	Measurement string // the latest reading's id, "" with none
 	Day         string // the latest reading's day, "" with none
 	When        string // the latest reading's day in words
+	Short       string // the first words of When: "2 days ago", or the day when it is not near today
 	Count       int    // how many recent readings the line holds
 	Line        template.HTML
 	Stale       bool // the latest reading is older than inUseDays
@@ -181,6 +182,7 @@ func (v *view) MetricSections() []metricSection {
 			last, _ := recent[n-1].(map[string]any)
 			day, _ := last["day"].(string)
 			k.Value, k.Measurement, k.Day, k.When, k.Count = num(last["value"]), num(last["id"]), day, c.relative(day), n
+			k.Short, _, _ = strings.Cut(k.When, " · ")
 			if t, ok := dayOf(day); ok && !limit.IsZero() && t.Before(limit) {
 				k.Stale = true
 			}

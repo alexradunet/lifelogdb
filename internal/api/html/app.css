@@ -753,6 +753,26 @@ details.metric-sub{margin-block:var(--space-4) var(--space-2); padding-inline-st
   &>svg.trend~.add-reading{margin-block-start:var(--space-2)}
   &>.reading.none{font:400 32px/32px var(--display); color:var(--muted); & .unit{font:400 13px/16px var(--mono)}}}
 
+/* A tidy board (docs/plans/120-a-tidy-board.md). Every metric card has the same four lines: its name, its value, its
+   line (a dashed rule with no reading) and its foot, the day in short words and a quiet + Add. So the cards of the
+   board are of one height, and the one loud button stays the page's own. Select is on the line of the switch and
+   the jump bar, and its band opens under them. */
+.metric-card{&>svg.trend,&>.line-none{flex:none; block-size:28px; margin-block-start:var(--space-1)}
+  &>svg.trend{inline-size:auto; max-inline-size:100%; align-self:flex-start} /* at the start, under the value */
+  &>.line-none{background:linear-gradient(to right,var(--line-soft) 50%,transparent 50%) 0 50%/8px 2px repeat-x}}
+.card-foot{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--space-1) var(--space-2); margin-block-start:auto; padding-block-start:var(--space-1);
+  &>.meta{flex:1 1 0; min-inline-size:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px}
+  &>.add-reading{flex:none; margin:0; &[open]{flex:1 1 100%}}}
+:is(.reading-tile,li.metric-row) .add-reading>summary.button{background:none; border-color:transparent; box-shadow:none; color:var(--text-link); padding:0 var(--space-2);
+  &:hover{border-color:var(--rule); filter:none}
+  &:active{transform:none}}
+:is(.reading-tile,li.metric-row) .add-reading[open]>summary.button{border-color:var(--rule)}
+.pick-list.board{display:grid; grid-template-columns:minmax(0,1fr) auto; column-gap:var(--space-4);
+  &>*{grid-column:1 / -1}
+  &>.board-nav{grid-column:1; grid-row:1; align-self:center; margin-block-end:var(--space-4)}
+  &>.pick-bar{grid-column:2; grid-row:1; align-self:start; margin:0}
+  &:has(.pick-on:checked)>.pick-bar{grid-column:1 / -1; grid-row:2; margin-block-end:var(--space-4)}}
+
 /* The list: one row a metric on parchment, the name first, the value in the display face, its day, its line. In a
    narrow column the day and the line go under the name. */
 ul.metric-rows{padding:var(--space-1) var(--space-3); box-shadow:var(--parch-bevel); background:var(--surface);

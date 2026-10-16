@@ -253,7 +253,10 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   the CLI's `do` and the MCP tools carry it as any action. It is a danger, not the owner's alone, and a revive undoes it.
 - **Metrics as cards, filed in groups** ([plan 112](docs/plans/112-metrics-as-cards.md)). `/metrics` draws each
   group as a grid of cards, with a jump bar to the groups: a card is a metric's latest value, its day and the line
-  of its newest 30 readings, muted when the latest is older than 60 days. `file-pages` (`POST /pages/file`) files several pages in a category page in one write, made when it is
+  of its newest 30 readings, muted when the latest is older than 60 days. Every card has the same four lines, so the
+  cards of a row are of one height: the name, the value (a dash and the unit with no reading), the line (a dashed
+  rule with none), and a foot with the day in short words and a quiet + Add; the whole day and the count of readings
+  are the day's title ([plan 120](docs/plans/120-a-tidy-board.md)). `file-pages` (`POST /pages/file`) files several pages in a category page in one write, made when it is
   missing; `move` 1 takes them out of their other categories. The page's pick bar checks the cards to file. The CLI's
   `do` and the MCP tools carry it as any action; it is not the owner's alone, as `link` is not.
 - **Browse** ([plan 117](docs/plans/117-one-browse-view.md)). A category is a page, and anything is filed in it by

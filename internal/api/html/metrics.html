@@ -8,9 +8,9 @@
 <div class="tools">{{with .Action "register-metric"}}{{template "new-metric" (dict "action" . "view" $)}}{{end}}{{with .Action "file-pages"}}<a class="button" href="/metrics?new=file-pages#pick">New category</a>{{end}}</div></header>
 {{$file := .Action "file-pages"}}{{$new := .Action "register-metric"}}{{$sections := .MetricSections}}{{$list := eq (.Asked "view") "list"}}
 <datalist id="metric-categories">{{range $.Props.categories}}<option value="{{.title}}">{{.path}}</option>{{end}}</datalist>
+<div class="pick-list board">
 {{if $sections}}<div class="board-nav"><nav class="kinds view-switch" aria-label="View"><a href="/metrics"{{if not $list}} aria-current="true"{{end}}>Cards</a><a href="/metrics?view=list"{{if $list}} aria-current="true"{{end}}>List</a></nav>
 {{if gt (len $sections) 1}}<nav class="kinds jump" aria-label="Groups">{{range $sections}}<a href="#{{.Anchor}}">{{.Title}} <small>{{.Count}}</small></a>{{end}}</nav>{{end}}</div>{{end}}
-<div class="pick-list">
 {{range $sections}}<details class="group metric-group" id="{{.Anchor}}" open><summary><h2>{{.Title}} <small>{{.Count}}</small></h2>{{with .Latest}}<span class="meta">newest {{.}}</span>{{end}}</summary>
 {{with .Cards}}{{template "metric-board" (dict "cards" . "file" $file "view" $ "list" $list)}}{{end}}
 {{if .Page}}<div class="group-tools"><a href="/pages/{{.Page}}">Open {{.Title}}</a>{{if $new}}{{template "new-here" .Title}}{{end}}</div>{{end}}
@@ -97,15 +97,17 @@
 {{define "metric-board"}}{{if .list}}{{template "metric-rows" .}}{{else}}{{template "metric-cards" .}}{{end}}{{end}}
 
 {{/* metric-cards is a grid of metric cards: a card is the metric's name, its latest reading with its unit and its day,
-     and the line of its recent readings. A card with no reading has a dash and its unit where the value goes. With the file-pages action, each card has a box that the file bar's form
+     and the line of its recent readings; its foot is the day in short words (the whole day and the count of readings
+     in its title) and + Add. Every card has the same four lines (docs/plans/120-a-tidy-board.md): a card with no
+     reading has a dash and its unit where the value goes, and an empty line. With the file-pages action, each card has a box that the file bar's form
      reads (form="pick"), and a form never holds a form. The boxes show while the file bar is open. */}}
 {{define "metric-cards"}}{{$v := .view}}{{$file := .file}}<div class="readings metric-cards">{{range .cards}}<div class="reading-tile metric-card{{if .Stale}} stale{{end}}">
 {{if $file}}<label class="pick-box"><input type="checkbox" name="ids" value="{{.ID}}" form="pick" aria-label="Select {{.Name}}"></label>{{end}}
 <a class="name" href="{{.Href}}"{{with .Note}} title="{{.}}"{{end}}>{{.Name}}</a>
 {{if .Measurement}}<a class="reading" href="/measurements/{{.Measurement}}">{{.Value}}{{with .Unit}} <span class="unit">{{.}}</span>{{end}}</a>
-<span class="meta">{{.When}}</span>{{if gt .Count 1}}<span class="meta">{{.Count}} readings</span>{{end}}
-{{.Line}}{{else}}<span class="reading none"><span aria-hidden="true">–</span>{{with .Unit}} <span class="unit">{{.}}</span>{{end}}</span><span class="meta">No reading yet</span>{{end}}
-{{template "add-reading" (dict "action" ($v.Action "record") "metric" .Name "unit" .Unit "day" $v.Props.today "today" $v.Props.today "back" $v.Here)}}
+{{.Line}}{{else}}<span class="reading none"><span aria-hidden="true">–</span>{{with .Unit}} <span class="unit">{{.}}</span>{{end}}</span><span class="line-none" aria-hidden="true"></span>{{end}}
+<div class="card-foot">{{if .Measurement}}<time class="meta" datetime="{{.Day}}" title="{{.When}}{{if gt .Count 1}} · {{.Count}} readings{{end}}">{{.Short}}</time>{{else}}<span class="meta">No reading</span>{{end}}
+{{template "add-reading" (dict "action" ($v.Action "record") "metric" .Name "unit" .Unit "day" $v.Props.today "today" $v.Props.today "back" $v.Here)}}</div>
 </div>{{end}}</div>{{end}}
 
 {{/* metric-rows is the metrics of a group as one row each (?view=list): the box, the name, the latest value with its
@@ -118,7 +120,7 @@
 </li>{{end}}</ul>{{end}}
 
 {{/* new-here is the link under a category's heading to New metric, with the category filled in */}}
-{{define "new-here"}}<a class="button small" href="/metrics?new=register-metric&amp;category={{.}}#new-metric">+ New metric here</a>{{end}}
+{{define "new-here"}}<a href="/metrics?new=register-metric&amp;category={{.}}#new-metric">+ New metric here</a>{{end}}
 
 {{/* new-metric is the New metric fold of /metrics (docs/plans/113-new-metric-on-metrics.md): "What do you record?"
      switches three forms of register-metric with CSS, with no script. A number sends its unit, a score its range,
