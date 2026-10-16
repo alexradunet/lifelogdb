@@ -50,8 +50,9 @@ func (t *Tx) lookupKey(key string) (*pageRef, error) {
 }
 
 // livePage is the page with the id when it is live. It holds the one rule of a write that needs a live page, with one
-// message for each answer: a missing page is a 404, a tombstoned one a 409. It does not read the body: body is the
-// last column of entities, so the check of a long page does not read the overflow pages of its body.
+// message for each answer: a missing page is a 404, a tombstoned one a 409 that names its id and its title, so the
+// owner reads which page. It does not read the body: body is the last column of entities, so the check of a long page
+// does not read the overflow pages of its body.
 func (t *Tx) livePage(id int64) (*pageRef, error) {
 	p, err := t.findPage(`''`, `e.id = ?`, id)
 	switch {
@@ -60,7 +61,7 @@ func (t *Tx) livePage(id int64) (*pageRef, error) {
 	case p == nil:
 		return nil, NotFound("no page %d", id)
 	case p.Deleted:
-		return nil, Conflict("page %d is deleted: revive it first", id)
+		return nil, Conflict("page %d %q is deleted: revive it first", id, p.Title)
 	}
 	return p, nil
 }

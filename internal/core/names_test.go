@@ -71,7 +71,8 @@ func TestReferenceGrammarRejectsUnaddressableNamesAtomically(t *testing.T) {
 }
 
 // TestAWriteToAPageThatIsNotLive: every write that needs a live page gives one answer for a page that does not exist,
-// a 404 "no page N", and one for a tombstoned page, a 409 "page N is deleted: revive it first" (livePage).
+// a 404 "no page N", and one for a tombstoned page, a 409 that names its id and its title: page N "Title" is deleted:
+// revive it first (livePage). The owner thus reads which page, also when the write named it by its title (a category).
 func TestAWriteToAPageThatIsNotLive(t *testing.T) {
 	s := fresh(t)
 	live, _, err := s.CreatePage(ctx, "cli", "Live", "", "")
@@ -89,6 +90,7 @@ func TestAWriteToAPageThatIsNotLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	const missing = 9999
+	want := fmt.Sprintf(`page %d "Old Group" is deleted: revive it first`, gone)
 	writes := []struct {
 		name  string
 		write func(id int64) error
@@ -106,13 +108,11 @@ func TestAWriteToAPageThatIsNotLive(t *testing.T) {
 		if err := w.write(missing); status(err) != 404 || err.Error() != "no page 9999" {
 			t.Errorf("%s of a missing page: %v (status %d), want 404 %q", w.name, err, status(err), "no page 9999")
 		}
-		want := fmt.Sprintf("page %d is deleted: revive it first", gone)
 		if err := w.write(gone); status(err) != 409 || err.Error() != want {
 			t.Errorf("%s of a tombstoned page: %v (status %d), want 409 %q", w.name, err, status(err), want)
 		}
 	}
 	// a tombstoned page as the category of a filing
-	want := fmt.Sprintf("page %d is deleted: revive it first", gone)
 	if _, err := s.FilePages(ctx, "cli", []int64{live}, "Old Group", false); status(err) != 409 || err.Error() != want {
 		t.Errorf("file-pages in a tombstoned category: %v (status %d), want 409 %q", err, status(err), want)
 	}
