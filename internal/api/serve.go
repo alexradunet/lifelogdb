@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"net/url"
@@ -352,12 +353,33 @@ func writeEntity(w http.ResponseWriter, r *http.Request, status int, e *Entity) 
 		renderHTML(w, r, status, e, nil)
 		return
 	}
+	b, err := sirenJSON(e)
+	if err != nil { // a value that JSON cannot carry (a NaN, an infinity) is a fault of this program
+		e, status = errorEntity(r, fmt.Errorf("the answer cannot be encoded as JSON: %w", err))
+		if b, err = sirenJSON(e); err != nil { // the error entity holds a number and strings only: a defect
+			logFault(r, "the error cannot be encoded as JSON", err)
+			b = nil
+		}
+	}
 	w.Header().Set("Content-Type", "application/vnd.siren+json")
 	w.WriteHeader(status)
-	enc := json.NewEncoder(w)
+	if _, err := w.Write(b); err != nil {
+		logFault(r, "the answer was not sent", err)
+	}
+}
+
+// sirenJSON is the Siren JSON of e, indented, with no HTML escapes. The answer is held whole before its first byte,
+// as a page is, so a value that JSON cannot carry is found while the status can still be 500. An entity is small: a
+// list is paged, and this writer takes a body in a request of at most maxRequestBody bytes.
+func sirenJSON(e *Entity) ([]byte, error) {
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
 	enc.SetEscapeHTML(false)
 	enc.SetIndent("", "  ")
-	enc.Encode(e)
+	if err := enc.Encode(e); err != nil {
+		return nil, err
+	}
+	return b.Bytes(), nil
 }
 
 func wantsHTML(r *http.Request) bool {

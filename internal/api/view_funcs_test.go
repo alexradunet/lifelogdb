@@ -2,11 +2,13 @@ package api
 
 import (
 	"bytes"
+	"encoding/json"
 	"log"
 	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -61,6 +63,48 @@ func TestAPageThatCannotBeDrawnNamesNoCause(t *testing.T) {
 				if strings.Contains(body, cause) {
 					t.Errorf("the page names the cause (%q): %.300s", cause, body)
 				}
+			}
+		})
+	}
+}
+
+// TestAnAnswerThatJSONCannotCarryIsAFault: when an entity has a value that JSON cannot carry (a NaN, an infinity), a
+// program gets 500 and the error entity with the general message, not 200 and a cut body. The server's log has the
+// cause one time, with the pattern of the route and not the path.
+func TestAnAnswerThatJSONCannotCarryIsAFault(t *testing.T) {
+	for name, e := range map[string]*Entity{
+		"properties that are not JSON": {Class: []string{"thing"}, Title: "Thing", Properties: map[string]any{"value": math.NaN()}},
+		"a result that is not JSON":    {Class: []string{"thing"}, Title: "Thing", Properties: map[string]any{"value": 1}, Result: map[string]any{"value": math.Inf(1)}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/things/1", nil)
+			req.Pattern = "GET /things/{id}" // as the routes set it
+			req.Header.Set("Accept", "application/vnd.siren+json")
+			rec := httptest.NewRecorder()
+			var logged bytes.Buffer
+			prev := log.Writer()
+			log.SetOutput(&logged) // no test of this package runs in parallel
+			t.Cleanup(func() { log.SetOutput(prev) })
+			writeEntity(rec, req, http.StatusOK, e)
+			if n := strings.Count(logged.String(), "cannot be encoded"); n != 1 || !strings.Contains(logged.String(), "GET /things/{id}") ||
+				strings.Contains(logged.String(), "/things/1") {
+				t.Errorf("the log does not have the cause one time with the route's pattern, or names the path: %q", logged.String())
+			}
+			var got struct {
+				Class      []string
+				Properties struct {
+					Status        int
+					Code, Message string
+				}
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+				t.Fatalf("the body is not JSON: %v: %.300s", err, rec.Body.String())
+			}
+			if rec.Code != http.StatusInternalServerError || rec.Header().Get("Content-Type") != "application/vnd.siren+json" ||
+				!slices.Equal(got.Class, []string{"error"}) || got.Properties.Status != http.StatusInternalServerError ||
+				got.Properties.Code != "internal" || got.Properties.Message != "internal error" {
+				t.Errorf("status %d %q, want 500 and the error entity with the general message: %.300s",
+					rec.Code, rec.Header().Get("Content-Type"), rec.Body.String())
 			}
 		})
 	}
