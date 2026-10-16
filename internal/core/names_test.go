@@ -118,22 +118,33 @@ func TestAWriteToAPageThatIsNotLive(t *testing.T) {
 	}
 }
 
-// TestTheLivePageCheckDoesNotReadTheBody: livePage gives the title, the version and the day-page flag of a live page,
-// and leaves the body empty. body is the last column of entities, so a write that checks a long page (each id of a
-// bulk filing) does not read the overflow pages of its body.
-func TestTheLivePageCheckDoesNotReadTheBody(t *testing.T) {
+// TestOnlyALookupWithBodyReadsTheBody: livePage and lookup give the title, the version and the day-page flag of a
+// page, and leave the body empty. body is the last column of entities, so a write that checks a long page (each id of
+// a bulk filing, each title that a write looks up) does not read the overflow pages of its body. lookupWithBody gives
+// the body too, for keep and RegisterMetric.
+func TestOnlyALookupWithBodyReadsTheBody(t *testing.T) {
 	s := fresh(t)
 	id, _, err := s.CreatePage(ctx, "cli", "Long", "words of the body", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Do(ctx, "cli", func(tx *Tx) error {
-		p, err := tx.livePage(id)
-		if err != nil {
-			return err
-		}
-		if p.ID != id || p.Title != "Long" || p.Version != "1" || p.DayPage || p.Body != "" {
-			t.Errorf("livePage(%d) = %+v; want the page Long at version 1, not a day page, with no body read", id, *p)
+		for name, find := range map[string]func() (*pageRef, error){
+			"livePage":       func() (*pageRef, error) { return tx.livePage(id) },
+			"lookup":         func() (*pageRef, error) { return tx.lookup("long") },
+			"lookupWithBody": func() (*pageRef, error) { return tx.lookupWithBody("long") },
+		} {
+			p, err := find()
+			if err != nil {
+				return err
+			}
+			body := ""
+			if name == "lookupWithBody" {
+				body = "words of the body"
+			}
+			if p == nil || p.ID != id || p.Title != "Long" || p.Version != "1" || p.DayPage || p.Body != body {
+				t.Errorf("%s = %+v; want the page Long at version 1, not a day page, with the body %q", name, p, body)
+			}
 		}
 		return nil
 	}); err != nil {

@@ -29,7 +29,7 @@ func (t *Tx) insertPage(typ, title, key string, day any, body, importKey string)
 }
 
 // pageRef is what a lookup by title or a livePage finds. Version is the decimal entities.revision token (Page.Version).
-// Body is empty when livePage found the page: it does not read the body.
+// Body is empty unless lookupWithBody found the page: no other lookup reads the body.
 type pageRef struct {
 	ID      int64
 	Type    string
@@ -40,21 +40,29 @@ type pageRef struct {
 	Deleted bool
 }
 
-// lookup finds the page that holds a title's key; nil when none does.
+// byKey is the condition of findPage for the page that holds a title key.
+const byKey = `e.id = (SELECT entity_id FROM entity_names WHERE name_key = ?)`
+
+// lookup finds the page that holds a title's key; nil when none does. It does not read the body.
 func (t *Tx) lookup(title string) (*pageRef, error) {
 	return t.lookupKey(text.TitleKey(title))
 }
 
 func (t *Tx) lookupKey(key string) (*pageRef, error) {
-	return t.findPage(`e.body`, `e.id = (SELECT entity_id FROM entity_names WHERE name_key = ?)`, key)
+	return t.findPage(false, byKey, key)
+}
+
+// lookupWithBody is lookup with the body of the page, for a write that keeps the text of the owner: keep and
+// RegisterMetric write a body only where the page has none.
+func (t *Tx) lookupWithBody(title string) (*pageRef, error) {
+	return t.findPage(true, byKey, text.TitleKey(title))
 }
 
 // livePage is the page with the id when it is live. It holds the one rule of a write that needs a live page, with one
 // message for each answer: a missing page is a 404, a tombstoned one a 409 that names its id and its title, so the
-// owner reads which page. It does not read the body: body is the last column of entities, so the check of a long page
-// does not read the overflow pages of its body.
+// owner reads which page. It does not read the body.
 func (t *Tx) livePage(id int64) (*pageRef, error) {
-	p, err := t.findPage(`''`, `e.id = ?`, id)
+	p, err := t.findPage(false, `e.id = ?`, id)
 	switch {
 	case err != nil:
 		return nil, err
@@ -66,12 +74,17 @@ func (t *Tx) livePage(id int64) (*pageRef, error) {
 	return p, nil
 }
 
-// findPage reads the page that the condition on the entity e selects, with its preferred title; nil when none. body
-// is what the query selects as the body: the column e.body, or an empty text for a read that does not need it.
-func (t *Tx) findPage(body, cond string, arg any) (*pageRef, error) {
+// findPage reads the page that the condition on the entity e selects, with its preferred title; nil when none. It reads
+// the body only when body is true: body is the last column of entities, so a read without it does not read the overflow
+// pages of a long body.
+func (t *Tx) findPage(body bool, cond string, arg any) (*pageRef, error) {
+	column := `''`
+	if body {
+		column = `e.body`
+	}
 	p := &pageRef{}
 	var day sql.NullString
-	err := t.tx.QueryRowContext(t.ctx, `SELECT e.id, e.entity_type, n.title, `+body+`, e.day, e.deleted_at IS NOT NULL,
+	err := t.tx.QueryRowContext(t.ctx, `SELECT e.id, e.entity_type, n.title, `+column+`, e.day, e.deleted_at IS NOT NULL,
                                CAST(e.revision AS TEXT)
                           FROM entities e JOIN entity_names n ON n.entity_id = e.id AND n.name_key = e.preferred_name_key
                          WHERE `+cond, arg).

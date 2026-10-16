@@ -122,7 +122,7 @@ func (t *Tx) keep(f FileIn) (k Kept, err error) {
 	if err := checkTitle("title", f.Title); err != nil {
 		return k, err
 	}
-	p, err := t.lookup(f.Title)
+	p, err := t.lookupWithBody(f.Title)
 	if err != nil {
 		return k, err
 	}

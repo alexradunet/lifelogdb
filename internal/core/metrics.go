@@ -21,7 +21,7 @@ func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
 	if err := checkTitle("metric name", name); err != nil {
 		return false, err
 	}
-	p, err := t.lookup(name)
+	p, err := t.lookupWithBody(name)
 	if err != nil {
 		return false, err
 	}
