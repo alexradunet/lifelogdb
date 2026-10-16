@@ -54,7 +54,6 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	ids := idParam(id)
 	e := &Entity{Class: []string{p.Type}, Title: p.Title, Properties: p,
 		Links: []Link{link("self", pageHref(id), p.Title), link("index", "/", "Home")}}
 	if p.IsDayPage {
@@ -78,42 +77,48 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 	isCategory := func(id int64) bool {
 		return slices.ContainsFunc(cats, func(c core.Category) bool { return c.ID == id })
 	}
-	filed := 0
 	for _, l := range p.In {
 		class := []string{l.Type}
-		if l.Kind == "part-of" {
-			filed++
-			if isCategory(l.ID) {
-				class = append(class, "category")
-			}
+		if l.Kind == "part-of" && isCategory(l.ID) {
+			class = append(class, "category")
 		}
 		e.Entities = append(e.Entities, Link{Rel: []string{"backlink", l.Kind}, Href: pageHref(l.ID), Title: l.Title, Class: class})
 	}
-	if filed > 0 && p.DeletedAt == "" { // a category page: a new page is made and filed here in one write
-		e.Actions = append(e.Actions, action("create-page", nil, map[string]any{"category": p.Title}))
-	}
+	var kinds []string
 	if p.DeletedAt != "" {
 		e.Class = append(e.Class, "deleted")
-		e.Actions = []Action{action("revive", ids, nil)}
-		return e, nil
-	}
-	e.Actions = append(e.Actions, saveBodyAction(id, p.Body, p.Version))
-	if !p.IsDayPage {
-		if p.Type == "page" {
-			e.Actions = append(e.Actions, action("promote", ids, nil))
-		}
-		e.Actions = append(e.Actions, action("rename", ids, nil))
-	}
-	if p.Type == "person" {
-		e.Actions = append(e.Actions, action("set-picture", ids, nil))
-	}
-	kinds, err := h.linkKinds(ctx, p.Type, p.IsDayPage)
-	if err != nil {
+	} else if kinds, err = h.linkKinds(ctx, p.Type, p.IsDayPage); err != nil {
 		return nil, err
 	}
+	e.Actions = pageActions(p, kinds, cats)
+	return e, nil
+}
+
+// pageActions are the actions a page offers, by its type, its state and its links. kinds are the link kinds it may
+// start (linkKinds), and cats are the categories that file-pages offers. A tombstoned page offers revive alone. A
+// page that something is part-of is a category page: a new page is made and filed there in one write.
+func pageActions(p *core.Page, kinds []string, cats []core.Category) []Action {
+	ids := idParam(p.ID)
+	if p.DeletedAt != "" {
+		return []Action{action("revive", ids, nil)}
+	}
+	var out []Action
+	if slices.ContainsFunc(p.In, func(l core.Edge) bool { return l.Kind == "part-of" }) {
+		out = append(out, action("create-page", nil, map[string]any{"category": p.Title}))
+	}
+	out = append(out, saveBodyAction(p.ID, p.Body, p.Version))
+	if !p.IsDayPage {
+		if p.Type == "page" {
+			out = append(out, action("promote", ids, nil))
+		}
+		out = append(out, action("rename", ids, nil))
+	}
+	if p.Type == "person" {
+		out = append(out, action("set-picture", ids, nil))
+	}
 	if len(kinds) > 0 {
-		e.Actions = append(e.Actions, withOptions(action("link", ids, nil), "kind", kinds))
-		e.Actions = append(e.Actions, withOptions(action("unlink", ids, nil), "kind", kinds))
+		out = append(out, withOptions(action("link", ids, nil), "kind", kinds))
+		out = append(out, withOptions(action("unlink", ids, nil), "kind", kinds))
 	}
 	if slices.Contains(kinds, "part-of") { // its categories, as badges (docs/plans/114-one-way-to-do-a-thing.md)
 		var titles []string
@@ -122,10 +127,9 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 				titles = append(titles, c.Title)
 			}
 		}
-		e.Actions = append(e.Actions, withOptions(action("file-pages", nil, map[string]any{"ids": strconv.FormatInt(p.ID, 10), "move": "0"}), "category", titles))
+		out = append(out, withOptions(action("file-pages", nil, map[string]any{"ids": strconv.FormatInt(p.ID, 10), "move": "0"}), "category", titles))
 	}
-	e.Actions = append(e.Actions, action("tombstone", ids, nil))
-	return e, nil
+	return append(out, action("tombstone", ids, nil))
 }
 
 // linkKinds are the kinds a page of this type may start (link_kinds.from_types), minus the two the save
