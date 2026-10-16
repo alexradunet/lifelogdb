@@ -63,6 +63,24 @@ func TestTheDayCarriesItsTrends(t *testing.T) {
 	}
 }
 
+// TestAPastDaysTrendSaysItsDaysAgainstToday: the line of a past day places its readings by that day, the last one at
+// the end, and its label says their days against today, not against the day the page shows.
+func TestAPastDaysTrendSaysItsDaysAgainstToday(t *testing.T) {
+	c, h := freshOn(t, fixedToday)
+	root := must(c.Get(t.Context(), "/"))
+	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
+	for _, r := range []struct{ day, value string }{{dayOf(-5), "70"}, {dayOf(-3), "71"}} {
+		must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "weight", "day": r.day, "value": r.value}))
+	}
+	body := browse(t, h, "/days/"+dayOf(-3))
+	want := `<svg class="trend" viewBox="0 0 120 28" role="img" aria-label="weight from 70 kg 5 days ago · Fri 9 May to 71 kg 3 days ago · Sun 11 May">` +
+		`<polyline points="98.8,24.0 116.0,4.0 "/><circle cx="116.0" cy="4.0" r="2.5"/></svg>`
+	if !strings.Contains(body, want) {
+		i := strings.Index(body, `<svg class="trend"`)
+		t.Errorf("the line of %s:\n got %.300s\nwant %s", dayOf(-3), body[max(i, 0):], want)
+	}
+}
+
 // TestTheDayAndHomeCarryOnThisDay: the day pages of earlier years on the month and day, the newest first, in the
 // property and in the margin; none, an empty list and no group. The capture box carries its quiet prompt.
 func TestTheDayAndHomeCarryOnThisDay(t *testing.T) {

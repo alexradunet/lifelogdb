@@ -43,7 +43,7 @@ func (v *view) ReadingTiles() []readingTile {
 			}
 		}
 		points, _ := t["readings"].([]any)
-		tile.Line = trendLine(metric, unit, day, points)
+		tile.Line = trendLine(v.clock(), metric, unit, day, points)
 		out = append(out, tile)
 	}
 	return out
@@ -60,8 +60,9 @@ func unitWords(unit string) string {
 }
 
 // trendLine draws a trend as an inline SVG, 120 by 28: one point per reading, placed by its day among the 14 days
-// through the day, the last one marked; "" with no reading. Its label says the first and the last value in words.
-func trendLine(metric, unit, day string, points []any) template.HTML {
+// through the day, the last one marked; "" with no reading. Its label says the first and the last value in words,
+// with their days against today on the clock c, also on a past day.
+func trendLine(c clock, metric, unit, day string, points []any) template.HTML {
 	end, ok := dayOf(day)
 	if !ok {
 		return ""
@@ -81,7 +82,6 @@ func trendLine(metric, unit, day string, points []any) template.HTML {
 	if len(pts) == 0 {
 		return ""
 	}
-	c := clock{today: day}
 	first, last := pts[0], pts[len(pts)-1]
 	label := fmt.Sprintf("%s from %s %s %s to %s %s %s", metric, strconv.FormatFloat(first.value, 'f', -1, 64), unitWords(unit),
 		c.relative(first.day), strconv.FormatFloat(last.value, 'f', -1, 64), unitWords(unit), c.relative(last.day))
