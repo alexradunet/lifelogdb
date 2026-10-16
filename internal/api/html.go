@@ -664,18 +664,18 @@ func chart(from, to string, readings any) template.HTML {
 		for _, it := range list {
 			m, _ := it.(map[string]any)
 			day, _ := m["day"].(string)
-			if _, ok := dayOf(day); ok && (from == "" || day < from) {
+			if core.IsDay(day) && (from == "" || day < from) {
 				from = day
 			}
 		}
 	}
-	f, ok1 := dayOf(from)
-	t, ok2 := dayOf(to)
+	f, ok1 := core.ParseDay(from)
+	t, ok2 := core.ParseDay(to)
 	if len(list) == 0 || !ok1 || !ok2 || t.Before(f) {
 		return ""
 	}
 	type pt struct {
-		day   string
+		day   time.Time
 		x     float64
 		value float64
 	}
@@ -685,8 +685,8 @@ func chart(from, to string, readings any) template.HTML {
 		m, _ := it.(map[string]any)
 		day, _ := m["day"].(string)
 		v, _ := m["value"].(float64)
-		d, err := time.Parse(time.DateOnly, day)
-		if err != nil {
+		d, ok := core.ParseDay(day)
+		if !ok {
 			continue
 		}
 		if i == 0 || v < lo {
@@ -700,7 +700,7 @@ func chart(from, to string, readings any) template.HTML {
 		if t.After(f) {
 			x = float64(d.Unix()-f.Unix()) / float64(t.Unix()-f.Unix())
 		}
-		pts = append(pts, pt{day, x, v})
+		pts = append(pts, pt{d, x, v})
 	}
 	const w, h, pad, left, bottom = 640.0, 200.0, 14.0, 48.0, 22.0
 	span := hi - lo
@@ -725,9 +725,8 @@ func chart(from, to string, readings any) template.HTML {
 	sb.WriteString(`"/>`)
 	if len(pts) <= chartPoints {
 		for _, p := range pts {
-			d, _ := time.Parse(time.DateOnly, p.day) // parsed above: a point is only made from a day
 			fmt.Fprintf(&sb, `<circle cx="%.1f" cy="%.1f" r="3"><title>%s: %g</title></circle>`, x(p), y(p.value),
-				d.Format(layoutDateYear), p.value)
+				p.day.Format(layoutDateYear), p.value)
 		}
 	}
 	sb.WriteString(`</svg>`)

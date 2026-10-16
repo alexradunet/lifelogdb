@@ -114,10 +114,20 @@ func CheckSource(s string) error {
 	return nil
 }
 
+// ParseDay parses a YYYY-MM-DD local day that round-trips (date(x) IS x). For anything else ok is false and the
+// time is zero.
+func ParseDay(s string) (time.Time, bool) {
+	t, err := time.Parse(time.DateOnly, s)
+	if err != nil || t.Format(time.DateOnly) != s {
+		return time.Time{}, false
+	}
+	return t, true
+}
+
 // IsDay reports a YYYY-MM-DD local day that round-trips (date(x) IS x).
 func IsDay(s string) bool {
-	t, err := time.Parse(time.DateOnly, s)
-	return err == nil && t.Format(time.DateOnly) == s
+	_, ok := ParseDay(s)
+	return ok
 }
 
 // instantLayout is the layout of a lifelog_meta.instants instant: UTC, milliseconds, Z.

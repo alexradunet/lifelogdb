@@ -29,9 +29,9 @@ func checkCalendarWindow(from, through string) error {
 // calendarDays are the days from from through through; nil for a window that is not one. It stops one day after the
 // bound, so the caller can see the window is too long without walking it.
 func calendarDays(from, through string) []time.Time {
-	first, err1 := time.Parse(time.DateOnly, from)
-	last, err2 := time.Parse(time.DateOnly, through)
-	if err1 != nil || err2 != nil {
+	first, ok1 := ParseDay(from)
+	last, ok2 := ParseDay(through)
+	if !ok1 || !ok2 {
 		return nil
 	}
 	var out []time.Time

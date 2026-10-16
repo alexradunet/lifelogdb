@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"lifelog/internal/core"
 )
 
 // The lines of the readings (docs/plans/093-words-phone-and-today.md): a reading's tile on a day, with its unit and
@@ -63,7 +65,7 @@ func unitWords(unit string) string {
 // through the day, the last one marked; "" with no reading. Its label says the first and the last value in words,
 // with their days against today on the clock c, also on a past day.
 func trendLine(c clock, metric, unit, day string, points []any) template.HTML {
-	end, ok := dayOf(day)
+	end, ok := core.ParseDay(day)
 	if !ok {
 		return ""
 	}
@@ -72,7 +74,7 @@ func trendLine(c clock, metric, unit, day string, points []any) template.HTML {
 		m, _ := p.(map[string]any)
 		d, _ := m["day"].(string)
 		value, _ := m["value"].(float64)
-		t, ok := dayOf(d)
+		t, ok := core.ParseDay(d)
 		if !ok {
 			continue
 		}
@@ -105,7 +107,7 @@ func sparkLine(metric, unit, today string, points []any) template.HTML {
 		m, _ := p.(map[string]any)
 		d, _ := m["day"].(string)
 		value, _ := m["value"].(float64)
-		if t, ok := dayOf(d); ok {
+		if t, ok := core.ParseDay(d); ok {
 			rs = append(rs, read{t, value, d})
 		}
 	}

@@ -29,18 +29,9 @@ type clock struct {
 	zone  *time.Location
 }
 
-// dayOf parses a day; ok is false for anything that is not one.
-func dayOf(s string) (time.Time, bool) {
-	if !core.IsDay(s) {
-		return time.Time{}, false
-	}
-	t, err := time.Parse(time.DateOnly, s)
-	return t, err == nil
-}
-
 // sameYear reports a time in the year of today; with no today, never, so the year is always written.
 func (c clock) sameYear(t time.Time) bool {
-	today, ok := dayOf(c.today)
+	today, ok := core.ParseDay(c.today)
 	return ok && today.Year() == t.Year()
 }
 
@@ -54,7 +45,7 @@ func (c clock) date(t time.Time) string {
 
 // day says a day as a date; a value that is not a day is returned as it is.
 func (c clock) day(s string) string {
-	t, ok := dayOf(s)
+	t, ok := core.ParseDay(s)
 	if !ok {
 		return s
 	}
@@ -64,11 +55,11 @@ func (c clock) day(s string) string {
 // relative says a day against today: "today", "yesterday · Sun 11 Oct", "tomorrow · Tue 13 Oct",
 // "4 days ago · Thu 8 Oct", "in 3 days · Thu 15 Oct" within 7 days, else the date.
 func (c clock) relative(s string) string {
-	d, ok := dayOf(s)
+	d, ok := core.ParseDay(s)
 	if !ok {
 		return s
 	}
-	today, ok := dayOf(c.today)
+	today, ok := core.ParseDay(c.today)
 	if !ok {
 		return c.date(d)
 	}

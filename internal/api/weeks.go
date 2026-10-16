@@ -47,7 +47,7 @@ func weekName(monday time.Time) string {
 func yearHref(year int) string { return fmt.Sprintf("/years/%04d", year) }
 
 func (h *server) currentWeek(*http.Request) (*Entity, error) {
-	t, _ := dayOf(h.s.Today())
+	t, _ := core.ParseDay(h.s.Today())
 	return nil, redirect{weekHref(t)}
 }
 
@@ -147,7 +147,7 @@ type yearDay struct {
 }
 
 func (h *server) currentYear(*http.Request) (*Entity, error) {
-	t, _ := dayOf(h.s.Today())
+	t, _ := core.ParseDay(h.s.Today())
 	return nil, redirect{yearHref(t.Year())}
 }
 

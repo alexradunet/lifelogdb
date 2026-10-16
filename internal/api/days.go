@@ -152,7 +152,7 @@ func (h *server) dayEntity(ctx context.Context, day string) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	t, _ := dayOf(day)
+	t, _ := core.ParseDay(day)
 	e := &Entity{
 		Class: []string{"day"}, Title: day, Properties: dayView{Day: *d, Mood: mood, Trends: trends, OnThisDay: onThisDay, Today: today},
 		Links: []Link{link("self", dayHref(day), day), link("prev", dayHref(t.AddDate(0, 0, -1).Format(time.DateOnly)), "Previous day"),

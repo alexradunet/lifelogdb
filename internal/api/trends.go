@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"lifelog/internal/core"
@@ -47,9 +48,9 @@ func (h *server) trends(ctx context.Context, day string, readings []core.Reading
 	for _, m := range ms {
 		units[m.Name] = m.Unit
 	}
-	t, err := time.Parse(time.DateOnly, day)
-	if err != nil {
-		return nil, err
+	t, ok := core.ParseDay(day)
+	if !ok {
+		return nil, fmt.Errorf("the trends of %q: not a day", day)
 	}
 	from := seriesFrom(t.AddDate(0, 0, -glanceDays)) // a series is (from, to]
 	for _, name := range names {

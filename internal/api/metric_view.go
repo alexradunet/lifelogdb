@@ -160,7 +160,7 @@ func (v *view) MetricSections() []metricSection {
 		}
 	}
 	c := clock{today: today}
-	limit, _ := dayOf(today)
+	limit, _ := core.ParseDay(today)
 	limit = limit.AddDate(0, 0, -inUseDays)
 	card := func(x any) metricCard {
 		g, _ := x.(map[string]any)
@@ -179,7 +179,7 @@ func (v *view) MetricSections() []metricSection {
 			day, _ := last["day"].(string)
 			k.Value, k.Measurement, k.Day, k.When, k.Count = num(last["value"]), num(last["id"]), day, c.relative(day), n
 			k.Short, _, _ = strings.Cut(k.When, " · ")
-			if t, ok := dayOf(day); ok && !limit.IsZero() && t.Before(limit) {
+			if t, ok := core.ParseDay(day); ok && !limit.IsZero() && t.Before(limit) {
 				k.Stale = true
 			}
 			k.Line = sparkLine(name, unit, today, recent)

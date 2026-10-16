@@ -46,7 +46,7 @@ func monthHref(t time.Time) string { return "/months/" + t.Format("2006-01") }
 
 // currentMonth answers with this month's address, as /days/today does with today's.
 func (h *server) currentMonth(*http.Request) (*Entity, error) {
-	t, _ := dayOf(h.s.Today())
+	t, _ := core.ParseDay(h.s.Today())
 	return nil, redirect{monthHref(t)}
 }
 
@@ -137,8 +137,8 @@ func (h *server) calendarOf(ctx context.Context, from, through string) (*calenda
 		pages[d.Day] = d
 	}
 	days := []monthDay{}
-	first, _ := dayOf(from)
-	last, _ := dayOf(through)
+	first, _ := core.ParseDay(from)
+	last, _ := core.ParseDay(through)
 	for t := first; !t.After(last); t = t.AddDate(0, 0, 1) {
 		day := t.Format(time.DateOnly)
 		p, written := pages[day]
@@ -157,7 +157,7 @@ func weeks(list any) [][]any {
 	}
 	m, _ := days[0].(map[string]any)
 	first, _ := m["day"].(string)
-	t, ok := dayOf(first)
+	t, ok := core.ParseDay(first)
 	if !ok {
 		return nil
 	}

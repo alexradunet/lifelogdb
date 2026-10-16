@@ -5,11 +5,13 @@ package api
 import (
 	"strconv"
 	"time"
+
+	"lifelog/internal/core"
 )
 
 // addDays is the day n days after day ("" for a day that is not one).
 func addDays(day string, n int) string {
-	t, ok := dayOf(day)
+	t, ok := core.ParseDay(day)
 	if !ok {
 		return ""
 	}
@@ -18,7 +20,7 @@ func addDays(day string, n int) string {
 
 // isoWeek is the ISO 8601 week of a day, 0 for a day that is not one.
 func isoWeek(day string) int {
-	t, ok := dayOf(day)
+	t, ok := core.ParseDay(day)
 	if !ok {
 		return 0
 	}
@@ -29,7 +31,7 @@ func isoWeek(day string) int {
 // isoWeekKey is the ISO 8601 week of a day as the address of the week writes it, "2026-W41"; "" for a day that is
 // not one.
 func isoWeekKey(day string) string {
-	t, ok := dayOf(day)
+	t, ok := core.ParseDay(day)
 	if !ok {
 		return ""
 	}
@@ -54,7 +56,7 @@ func sinceLastWeek(mean, previous any) string {
 
 // weekday is the name of a day's weekday, "" for a day that is not one.
 func weekday(day string) string {
-	t, ok := dayOf(day)
+	t, ok := core.ParseDay(day)
 	if !ok {
 		return ""
 	}
@@ -65,7 +67,7 @@ func weekday(day string) string {
 // day beside it, where the year is the page's. Everywhere else a day is written by Date, with its year when it is
 // not this year's.
 func shortDay(day string) string {
-	t, ok := dayOf(day)
+	t, ok := core.ParseDay(day)
 	if !ok {
 		return day
 	}
@@ -74,7 +76,7 @@ func shortDay(day string) string {
 
 // dayOfMonth is the number of a day in its month, for the calendar's cells.
 func dayOfMonth(day string) string {
-	if t, ok := dayOf(day); ok {
+	if t, ok := core.ParseDay(day); ok {
 		return strconv.Itoa(t.Day())
 	}
 	return day
@@ -82,7 +84,7 @@ func dayOfMonth(day string) string {
 
 // monthBand is the band of the calendar leaf: "Oct 2026".
 func monthBand(day string) string {
-	if t, ok := dayOf(day); ok {
+	if t, ok := core.ParseDay(day); ok {
 		return t.Format("Jan 2006")
 	}
 	return ""

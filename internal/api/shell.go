@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"lifelog/internal/core"
 )
 
 // The shell is the frame of every page a browser gets (docs/plans/092-the-app-shell.md): the sidebar, with today's
@@ -28,7 +30,7 @@ func (h *server) shell(ctx context.Context) (*shellView, error) {
 		return nil, errors.New("no store to read the shell from")
 	}
 	today := h.s.Today()
-	t, ok := dayOf(today)
+	t, ok := core.ParseDay(today)
 	if !ok {
 		return nil, fmt.Errorf("today %q is not a day", today)
 	}
