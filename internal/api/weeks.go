@@ -174,8 +174,8 @@ func (h *server) year(r *http.Request) (*Entity, error) {
 	if !yearPattern.MatchString(s) || !isYear(year) {
 		return nil, core.Invalid("a year is YYYY")
 	}
-	first := time.Date(year, time.January, 1, 0, 0, 0, 0, time.UTC)
-	from, through := first.Format(time.DateOnly), time.Date(year, time.December, 31, 0, 0, 0, 0, time.UTC).Format(time.DateOnly)
+	first, last := time.Date(year, time.January, 1, 0, 0, 0, 0, time.UTC), time.Date(year, time.December, 31, 0, 0, 0, 0, time.UTC)
+	from, through := first.Format(time.DateOnly), last.Format(time.DateOnly)
 	entries, err := h.s.DayEntries(ctx, from, through, false, 366)
 	if err != nil {
 		return nil, err
@@ -190,8 +190,11 @@ func (h *server) year(r *http.Request) (*Entity, error) {
 	}
 	e := &Entity{Class: []string{"year"}, Title: s, Actions: []Action{action("open-day", nil, nil)}}
 	months := []yearMonth{}
+	days := writtenDays(entries, first, last) // the days of the year, built once: each month takes its own
 	for m := first; m.Year() == year; m = m.AddDate(0, 1, 0) {
-		ym := yearMonth{Month: m.Format("2006-01"), Days: writtenDays(entries, m, m.AddDate(0, 1, -1))}
+		n := m.AddDate(0, 1, -1).Day() // how many days the month has
+		ym := yearMonth{Month: m.Format("2006-01"), Days: days[:n:n]}
+		days = days[n:]
 		for _, d := range ym.Days {
 			if d.Page {
 				ym.Written++
