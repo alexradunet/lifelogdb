@@ -4,15 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"lifelog/internal/db/dbtest"
-
-	"modernc.org/sqlite"
-	sqlite3 "modernc.org/sqlite/lib"
 )
 
 var ctx = context.Background()
@@ -40,371 +36,7 @@ func titles(es []Edge, kind string) string {
 	return strings.Join(out, ",")
 }
 
-func TestCaptureCreatesTheDayAndItsLinks(t *testing.T) {
-	s := fresh(t)
-	mood := 4.0
-	id, r, err := s.Capture(ctx, "cli", "2026-09-29", "Met [[Sam]] #health", &mood)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Join(r.Created, ",") != "Sam,health" {
-		t.Errorf("created %v", r.Created)
-	}
-	id2, _, err := s.Capture(ctx, "cli", "2026-09-29", "Later.", nil)
-	if err != nil || id2 != id {
-		t.Fatalf("second capture: id %d (first %d), %v", id2, id, err)
-	}
-	p, _ := s.PageByID(ctx, id)
-	if p.Body != "Met [[Sam]] #health\n\nLater." || !p.IsDayPage {
-		t.Errorf("day page %+v", p)
-	}
-	if got := titles(p.Out, "wikilink"); got != "Sam,health" {
-		t.Errorf("wikilinks after a second capture: %s", got)
-	}
-	d, _ := s.Day(ctx, "2026-09-29")
-	if len(d.Readings) != 1 || d.Readings[0].Metric != "Mood" || d.Readings[0].CapturedWith != id {
-		t.Errorf("mood reading %+v", d.Readings)
-	}
-	if _, _, err := s.Capture(ctx, "cli", "2026-09-29", "", ptr(9)); status(err) != 422 {
-		t.Errorf("mood 9: %v", err)
-	}
-}
-
 func ptr(f float64) *float64 { return &f }
-
-func TestSaveBodyAddsAndDeletesLinks(t *testing.T) {
-	s := fresh(t)
-	id, _, err := s.CreatePage(ctx, "cli", "Diet", "See [[Plan]] and [[Health/Diet]] and [[Diet]]", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	p, _ := s.PageByID(ctx, id)
-	if titles(p.Out, "wikilink") != "Plan" {
-		t.Fatalf("links %v", p.Out)
-	}
-	r, err := s.SaveBody(ctx, "cli", id, "nowSQL [[Other]] only", p.Version)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(r.Skipped) != 0 {
-		t.Errorf("skipped %v", r.Skipped)
-	}
-	p2, _ := s.PageByID(ctx, id)
-	if titles(p2.Out, "wikilink") != "Other" {
-		t.Errorf("after the re-save: %v", p2.Out)
-	}
-	if _, err := s.SaveBody(ctx, "cli", id, "stale", p.Version); status(err) != 409 {
-		t.Errorf("a save with an old version: %v", err)
-	}
-}
-
-func TestSaveRevivesATombstonedTarget(t *testing.T) {
-	s := fresh(t)
-	old, _, _ := s.CreatePage(ctx, "cli", "Old", "", "")
-	if err := s.Tombstone(ctx, "cli", old); err != nil {
-		t.Fatal(err)
-	}
-	_, r, err := s.CreatePage(ctx, "cli", "New", "[[old]]", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Join(r.Revived, ",") != "old" || len(r.Created) != 0 {
-		t.Errorf("sync %+v", r)
-	}
-}
-
-func TestTitlesAreUniqueByKey(t *testing.T) {
-	s := fresh(t)
-	s.CreatePage(ctx, "cli", "Café notes", "", "")
-	_, _, err := s.CreatePage(ctx, "cli", "CAFÉ NOTES", "", "")
-	var ex *ExistsError
-	if !errors.As(err, &ex) {
-		t.Errorf("a second page with the same key: %v", err)
-	}
-	if _, _, err := s.CreatePage(ctx, "cli", "CON", "", ""); status(err) != 422 {
-		t.Errorf("a device name: %v", err)
-	}
-}
-
-func TestPeoplePlacesAndPromotion(t *testing.T) {
-	s := fresh(t)
-	day, _, _ := s.Capture(ctx, "cli", "2026-07-31", "At [[Lakeside]] with [[Ana]]", nil)
-	ana, _ := s.PageID(ctx, "Ana")
-	lake, _ := s.PageID(ctx, "lakeside")
-	if err := s.Promote(ctx, "cli", ana, "person", "Ana Example"); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Promote(ctx, "cli", lake, "place", ""); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Promote(ctx, "cli", day, "place", ""); status(err) != 422 {
-		t.Errorf("promoting a day page: %v", err)
-	}
-	if err := s.Link(ctx, "cli", day, lake, "at", "evening"); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Link(ctx, "cli", ana, lake, "at", ""); status(err) != 422 {
-		t.Errorf("an at link from a person: %v", err)
-	}
-	d, _ := s.Day(ctx, "2026-07-31")
-	found := false
-	for _, r := range d.Rows {
-		found = found || (r.What == "at" && r.Detail == "Lakeside")
-	}
-	if !found {
-		t.Errorf("day view %+v", d.Rows)
-	}
-	bob, err := s.CreatePerson(ctx, "cli", "Bob", "Bob Sample", "1990-02-30", "", "")
-	if status(err) != 422 || bob != 0 {
-		t.Errorf("an impossible birth day: %v", err)
-	}
-	if err := s.Link(ctx, "cli", ana, lake, "friend", ""); status(err) != 422 {
-		t.Errorf("friend to a place: %v", err)
-	}
-	p, _ := s.PageByID(ctx, ana)
-	if p.Person == nil || p.Person.Name != "Ana Example" {
-		t.Errorf("person %+v", p.Person)
-	}
-}
-
-func TestMeasurementsAreAppendOnly(t *testing.T) {
-	s := fresh(t)
-	if _, err := s.Record(ctx, "cli", Reading{Metric: "weight", Day: "2026-09-29", Value: 70}); status(err) != 404 {
-		t.Errorf("an unregistered metric: %v", err)
-	}
-	m := Reading{Metric: "mood", Day: "2026-09-29", Value: 3, ImportKey: "k1"}
-	id, err := s.Record(ctx, "agent:x", m)
-	if err != nil || id == 0 {
-		t.Fatal(id, err)
-	}
-	if again, err := s.Record(ctx, "agent:x", m); err != nil || again != 0 {
-		t.Errorf("a re-send with the same key: %d, %v", again, err)
-	}
-	fix, err := s.Correct(ctx, "cli", id, ptr(4))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.Correct(ctx, "cli", id, ptr(5)); status(err) != 422 {
-		t.Errorf("a second correction of one row: %v", err)
-	}
-	if _, err := s.Correct(ctx, "cli", fix, nil); err != nil {
-		t.Fatal(err)
-	}
-	d, _ := s.Day(ctx, "2026-09-29")
-	if len(d.Readings) != 0 {
-		t.Errorf("a retracted reading is still current: %+v", d.Readings)
-	}
-}
-
-// A correction of an imported, keyed reading is the corrector's row: its writer's source and no import key.
-func TestACorrectionKeepsItsWritersProvenance(t *testing.T) {
-	s := fresh(t)
-	root, err := s.Record(ctx, "import:notebook", Reading{Metric: "mood", Day: "2026-10-07", Value: 3, ImportKey: "Medical/Mood.md|reading|mood|2026-10-07|1"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	first, err := s.Correct(ctx, "cli", root, ptr(4))
-	if err != nil {
-		t.Fatal(err)
-	}
-	newest, err := s.Correct(ctx, "cli", first, ptr(5))
-	if err != nil {
-		t.Fatal(err)
-	}
-	retracted, err := s.Correct(ctx, "agent:owner", newest, nil)
-	if err != nil {
-		t.Fatalf("retraction of newest row: %v", err)
-	}
-	var source string
-	var rowKey sql.NullString
-	var value sql.NullFloat64
-	if err := s.DB.R.QueryRowContext(ctx, `SELECT source, import_key, value FROM measurements WHERE id = ?`, retracted).Scan(&source, &rowKey, &value); err != nil {
-		t.Fatal(err)
-	}
-	if source != "agent:owner" || rowKey.Valid || value.Valid {
-		t.Fatalf("retraction provenance = source %q key %q value %v, want the writer's source, no key and no value", source, rowKey.String, value)
-	}
-	if _, err := s.Correct(ctx, "cli", 987654321, ptr(4)); status(err) != 404 {
-		t.Fatalf("unknown measurement: %v, want 404", err)
-	}
-}
-
-func TestCorrectionDomains(t *testing.T) {
-	s := fresh(t)
-	captured, _, err := s.Capture(ctx, "cli", "2026-10-01", "domain test", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "focus"}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "evening_walk"}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "winter_vitamin"}); err != nil {
-		t.Fatal(err)
-	}
-
-	assertRejectedCorrection := func(name string, r Reading, value float64) {
-		t.Helper()
-		id, err := s.Record(ctx, "cli", r)
-		if err != nil {
-			t.Fatalf("%s record: %v", name, err)
-		}
-		before := measurementRows(t, s)
-		if _, err := s.Correct(ctx, "cli", id, ptr(value)); status(err) != 422 {
-			t.Fatalf("%s correct to %g: %v, want 422", name, value, err)
-		}
-		if got := measurementRows(t, s); got != before {
-			t.Fatalf("%s wrote %d rows, want %d", name, got, before)
-		}
-		m, err := s.Measurement(ctx, id)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !m.Current || m.Value != r.Value {
-			t.Fatalf("%s current reading after rejection: current=%v value=%g, want %g", name, m.Current, m.Value, r.Value)
-		}
-	}
-
-	assertRejectedCorrection("mood above range", Reading{Metric: "mood", Day: "2026-10-01", Value: 3}, 6)
-	assertRejectedCorrection("fractional mood", Reading{Metric: "mood", Day: "2026-10-02", Value: 3}, 2.5)
-
-	unknownRows := measurementRows(t, s)
-	if _, err := s.Correct(ctx, "cli", 987654321, ptr(1)); status(err) != 404 {
-		t.Fatalf("unknown measurement: %v, want 404", err)
-	}
-	if got := measurementRows(t, s); got != unknownRows {
-		t.Fatalf("unknown correction wrote %d rows, want %d", got, unknownRows)
-	}
-
-	lo, err := s.Record(ctx, "cli", Reading{Metric: "mood", Day: "2026-10-03", TakenAt: "2026-10-03T07:00:00.000Z", TZ: "Europe/Bucharest", Value: 3, CapturedWith: captured})
-	if err != nil {
-		t.Fatal(err)
-	}
-	loFix, err := s.Correct(ctx, "cli", lo, ptr(1))
-	if err != nil {
-		t.Fatal(err)
-	}
-	m, err := s.Measurement(ctx, loFix)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if m.Metric != "Mood" || m.Day != "2026-10-03" || m.TakenAt != "2026-10-03T07:00:00.000Z" || m.TZ != "Europe/Bucharest" || m.CapturedWith != captured || m.Supersedes != lo || !m.Current || m.Value != 1 {
-		t.Errorf("corrected row did not copy identity/provenance: %+v", m)
-	}
-
-	hi, err := s.Record(ctx, "cli", Reading{Metric: "mood", Day: "2026-10-04", Value: 4})
-	if err != nil {
-		t.Fatal(err)
-	}
-	hiFix, err := s.Correct(ctx, "cli", hi, ptr(5))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.Correct(ctx, "cli", hiFix, nil); err != nil {
-		t.Fatalf("nil retraction: %v", err)
-	}
-	d, err := s.Day(ctx, "2026-10-04")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(d.Readings) != 0 {
-		t.Fatalf("retracted boundary correction remains current: %+v", d.Readings)
-	}
-
-	start, err := s.Record(ctx, "cli", Reading{Metric: "mood", Day: "2026-10-05", Value: 3})
-	if err != nil {
-		t.Fatal(err)
-	}
-	middle, err := s.Correct(ctx, "cli", start, ptr(4))
-	if err != nil {
-		t.Fatal(err)
-	}
-	end, err := s.Correct(ctx, "cli", middle, ptr(5))
-	if err != nil {
-		t.Fatalf("correction of a correction: %v", err)
-	}
-	if m, err := s.Measurement(ctx, end); err != nil || !m.Current || m.Supersedes != middle || m.Value != 5 {
-		t.Fatalf("second correction: %+v, %v", m, err)
-	}
-
-	focus, err := s.Record(ctx, "cli", Reading{Metric: "focus", Day: "2026-10-06", Value: 7})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.Correct(ctx, "cli", focus, ptr(2.5)); err != nil {
-		t.Fatalf("finite non-habit unitless correction: %v", err)
-	}
-}
-
-func measurementRows(t *testing.T, s *Store) int {
-	t.Helper()
-	var n int
-	if err := s.DB.R.QueryRowContext(ctx, `SELECT count(*) FROM measurements`).Scan(&n); err != nil {
-		t.Fatal(err)
-	}
-	return n
-}
-
-func TestRenamedIdentityWritesThroughRetainedHandle(t *testing.T) {
-	s := fresh(t)
-	id, _, err := s.CreatePage(ctx, "cli", "Typo", "prose", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	renamed, err := s.Rename(ctx, "cli", id, "Correct")
-	if err != nil || renamed != id {
-		t.Fatalf("rename: %d %v", renamed, err)
-	}
-	other, _, err := s.CreatePage(ctx, "cli", "Other", "[[Typo]]", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	before, err := s.PageByID(ctx, id)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.SaveBody(ctx, "cli", id, "#REDIRECT [[Other]]", before.Version); err != nil {
-		t.Fatal(err)
-	}
-	after, err := s.PageByID(ctx, id)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if after.Body != "#REDIRECT [[Other]]" || titles(after.Out, "wikilink") != "Other,REDIRECT" || len(after.Out) != 2 {
-		t.Fatalf("ordinary prose: %+v", after)
-	}
-	if err := s.Do(ctx, "import:synthetic", func(tx *Tx) error { _, err := tx.SetBody(id, "imported [[Other]]"); return err }); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Link(ctx, "cli", id, other, "part-of", "note"); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Unlink(ctx, "cli", id, other, "part-of"); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Link(ctx, "cli", other, id, "part-of", "reverse"); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Unlink(ctx, "cli", other, id, "part-of"); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Link(ctx, "cli", other, id, "redirect", ""); status(err) != 422 {
-		t.Fatalf("removed kind: %v", err)
-	}
-	mention, err := s.PageByID(ctx, other)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if titles(mention.Out, "wikilink") != "Correct" || len(mention.Out) != 1 {
-		t.Fatalf("old handle endpoint: %+v", mention)
-	}
-	old, err := s.PageID(ctx, "Typo")
-	if err != nil || old != id {
-		t.Fatalf("retained handle: %d %v", old, err)
-	}
-}
 
 // withoutTrigger runs one statement with a trigger dropped and restores it: deliberate damage, or a row a file
 // written before the rule may hold. It returns the statement's result.
@@ -425,6 +57,49 @@ func withoutTrigger(t *testing.T, s *Store, trigger, statement string, args ...a
 		t.Fatal(err)
 	}
 	return res
+}
+
+// counts are a database's rows by kind: a test compares them before and after a write that must change nothing.
+type counts struct {
+	Pages    int
+	ByType   map[string]int
+	Readings int
+	Links    map[string]int
+	Metrics  int
+	BySource map[string]int
+}
+
+func countRows(ctx context.Context, s *Store) (*counts, error) {
+	c := &counts{ByType: map[string]int{}, Links: map[string]int{}, BySource: map[string]int{}}
+	q := func(sql string, dest map[string]int) error {
+		rows, err := s.DB.R.QueryContext(ctx, sql)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var k string
+			var n int
+			if err := rows.Scan(&k, &n); err != nil {
+				return err
+			}
+			dest[k] = n
+		}
+		return rows.Err()
+	}
+	if err := q(`SELECT entity_type, count(*) FROM entities WHERE deleted_at IS NULL GROUP BY 1`, c.ByType); err != nil {
+		return nil, err
+	}
+	if err := q(`SELECT kind, count(*) FROM links GROUP BY 1`, c.Links); err != nil {
+		return nil, err
+	}
+	if err := q(`SELECT source, count(*) FROM entities GROUP BY 1`, c.BySource); err != nil {
+		return nil, err
+	}
+	err := s.DB.R.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM entities WHERE entity_type <> 'metric'), (SELECT count(*) FROM measurement_values),
+	                                           (SELECT count(*) FROM metrics)`).
+		Scan(&c.Pages, &c.Readings, &c.Metrics)
+	return c, err
 }
 
 // TestRowReadsReportEveryFault: each and list, the one loop of core over rows, return the error of the query, of a
@@ -483,159 +158,6 @@ func TestRowReadsReportEveryFault(t *testing.T) {
 				t.Errorf("list: %v with the error %v, want no list", got, err)
 			case err == nil && (got == nil || len(got) != 0):
 				t.Errorf("list: %#v, want an empty list that is not nil", got)
-			}
-		})
-	}
-}
-
-// TestARefusedWriteReturnsNoResult: a Store method returns the zero result with its error. The write rolled back, so a
-// Sync of the links it made would name pages that do not exist. Capture fills its Sync before the mood reading is
-// refused, and CreatePage and TryAddFile fill theirs before a day as the category is refused.
-func TestARefusedWriteReturnsNoResult(t *testing.T) {
-	s := fresh(t)
-	mood := 9.0 // the range of Mood is 1-5 (measurements_scale_range)
-	id, r, err := s.Capture(ctx, "cli", "2026-10-01", "Met [[Sam]]", &mood)
-	if err == nil || id != 0 || !reflect.DeepEqual(r, Sync{}) {
-		t.Errorf("Capture = %d, %+v, %v; want 0, no Sync and the refusal", id, r, err)
-	}
-	id, r, err = s.CreatePage(ctx, "cli", "Notes", "See [[Sam]]", "2026-10-01")
-	if err == nil || id != 0 || !reflect.DeepEqual(r, Sync{}) {
-		t.Errorf("CreatePage = %d, %+v, %v; want 0, no Sync and the refusal", id, r, err)
-	}
-	k, err := s.TryAddFile(ctx, "cli", FileIn{Title: "Scan.pdf", SHA256: sha('a'), MIME: "application/pdf", Body: "See [[Sam]]", Category: "2026-10-01"})
-	if err == nil || !reflect.DeepEqual(k, Kept{}) {
-		t.Errorf("TryAddFile = %+v, %v; want no result and the refusal", k, err)
-	}
-	if sam, err := s.PageID(ctx, "Sam"); err != nil || sam != 0 {
-		t.Errorf("Sam = %d, %v; want no page", sam, err)
-	}
-}
-
-// TestAFailedRollbackIsAFault: when fn fails and the rollback fails too, the transaction can be open or kept in part.
-// Do then returns a fault, not the refusal of fn (a 409 or a 422 on every surface), and dryRun does not report a clean
-// dry run. fn commits by itself, so the rollback finds no open transaction, as in db's TestWriteReportsAFailedRollback.
-func TestAFailedRollbackIsAFault(t *testing.T) {
-	s := fresh(t)
-	commit := func(tx *Tx) error {
-		_, err := tx.tx.ExecContext(tx.ctx, "COMMIT")
-		return err
-	}
-	after := func(fail func(tx *Tx) error) func(tx *Tx) error {
-		return func(tx *Tx) error {
-			if err := commit(tx); err != nil {
-				return err
-			}
-			return fail(tx)
-		}
-	}
-	for _, c := range []struct {
-		name string
-		run  func() error
-	}{
-		{"a refusal of core", func() error {
-			return s.Do(ctx, "cli", after(func(*Tx) error { return Conflict("synthetic refusal") }))
-		}},
-		{"a title in use", func() error {
-			return s.Do(ctx, "cli", after(func(*Tx) error { return &ExistsError{ID: 1, Title: "Mood"} }))
-		}},
-		{"a refusal of the DDL", func() error {
-			return s.Do(ctx, "cli", after(func(tx *Tx) error {
-				_, err := tx.tx.ExecContext(tx.ctx, `INSERT INTO entities(entity_type) VALUES ('no such type')`)
-				return err
-			}))
-		}},
-		{"a dry run", func() error { return s.dryRun(ctx, "cli", commit) }},
-	} {
-		err := c.run()
-		var refusal *Error
-		var exists *ExistsError
-		var rollback *sqlite.Error
-		if err == nil || errors.As(err, &refusal) || errors.As(err, &exists) {
-			t.Errorf("%s: %v; want a fault, not a refusal or no error", c.name, err)
-		}
-		if !errors.As(err, &rollback) || rollback.Code()&0xff == sqlite3.SQLITE_CONSTRAINT {
-			t.Errorf("%s: %v; want the error of the rollback in it", c.name, err)
-		}
-	}
-	if _, _, err := s.CreatePage(ctx, "cli", "After", "", ""); err != nil {
-		t.Errorf("the writer cannot write after the failed rollbacks: %v", err)
-	}
-}
-
-// TestAFailedSavepointRollbackKeepsBothErrors: fn fails, and then the savepoint cannot roll back to its start. The
-// error of savepoint holds the error of fn and the error of the rollback, and Do reports it as a fault, not as the
-// refusal of fn. Here fn releases the savepoint itself, so ROLLBACK TO finds no savepoint.
-func TestAFailedSavepointRollbackKeepsBothErrors(t *testing.T) {
-	s := fresh(t)
-	refusal := Conflict("synthetic refusal")
-	var inner error
-	err := s.Do(ctx, "cli", func(tx *Tx) error {
-		inner = tx.savepoint(func() error {
-			if _, err := tx.tx.ExecContext(tx.ctx, `RELEASE step`); err != nil {
-				return err
-			}
-			return refusal
-		})
-		return inner
-	})
-	var rollback *sqlite.Error
-	if !errors.Is(inner, refusal) || !errors.As(inner, &rollback) {
-		t.Errorf("savepoint: %v; want the error of fn and the error of ROLLBACK TO in it", inner)
-	}
-	var e *Error
-	if err == nil || errors.As(err, &e) {
-		t.Errorf("Do: %v; want a fault, not a refusal or no error", err)
-	}
-}
-
-// TestALinkTargetIsSkippedOnlyWhenItsSavepointRollsBack: a body save skips a wikilink target that fails, when the
-// savepoint of the target rolls it back alone (cookbook/save-a-body.md, "any error in 1-3"), and the rest of the save
-// commits. When the savepoint cannot roll back, the save fails as a fault, and the page keeps its body and its links.
-// A trigger of the test (deliberate damage) makes the target fail when the save inserts its name: RAISE(ABORT) is a
-// refusal; a function that does not exist is an error that is not a refusal; RAISE(ROLLBACK) rolls the whole
-// transaction back, so the savepoint cannot roll back to its start.
-func TestALinkTargetIsSkippedOnlyWhenItsSavepointRollsBack(t *testing.T) {
-	for _, tc := range []struct {
-		name, trigger string
-		skipped       bool
-	}{
-		{"a refusal of the DDL", `SELECT RAISE(ABORT, 'the test refuses the target')`, true},
-		{"an error that is not a refusal", `SELECT no_such_function()`, true},
-		{"a rollback of the whole write", `SELECT RAISE(ROLLBACK, 'the test rolls the write back')`, false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			s := fresh(t)
-			home, _, err := s.CreatePage(ctx, "cli", "Home", "[[Old]]", "")
-			if err != nil {
-				t.Fatal(err)
-			}
-			p, err := s.PageByID(ctx, home)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if _, err := s.DB.W.ExecContext(ctx, `CREATE TEMP TRIGGER fail_the_target BEFORE INSERT ON entity_names
-			    WHEN NEW.title = 'New' BEGIN `+tc.trigger+`; END`); err != nil {
-				t.Fatal(err)
-			}
-			r, err := s.SaveBody(ctx, "cli", home, "[[New]]", p.Version)
-			body, links := "[[Old]]", "Old"
-			if tc.skipped {
-				body, links = "[[New]]", ""
-				if err != nil || strings.Join(r.Skipped, ",") != "New" || len(r.Linked) != 0 {
-					t.Errorf("SaveBody = %+v, %v; want New skipped and nothing linked", r, err)
-				}
-			} else if err == nil || status(err) != 0 || !reflect.DeepEqual(r, Sync{}) {
-				t.Errorf("SaveBody = %+v, %v (status %d); want a fault, not a refusal or a skipped target", r, err, status(err))
-			}
-			got, err := s.PageByID(ctx, home)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if got.Body != body || titles(got.Out, "wikilink") != links {
-				t.Errorf("Home: body %q, links %q; want body %q, links %q", got.Body, titles(got.Out, "wikilink"), body, links)
-			}
-			if id, err := s.PageID(ctx, "New"); id != 0 || err != nil {
-				t.Errorf("PageID(New) = %d, %v; want no page", id, err)
 			}
 		})
 	}

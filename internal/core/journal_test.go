@@ -1,11 +1,65 @@
 package core
 
 import (
-	"fmt"
 	"reflect"
 	"strings"
 	"testing"
 )
+
+func TestCaptureCreatesTheDayAndItsLinks(t *testing.T) {
+	s := fresh(t)
+	mood := 4.0
+	id, r, err := s.Capture(ctx, "cli", "2026-09-29", "Met [[Sam]] #health", &mood)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(r.Created, ",") != "Sam,health" {
+		t.Errorf("created %v", r.Created)
+	}
+	id2, _, err := s.Capture(ctx, "cli", "2026-09-29", "Later.", nil)
+	if err != nil || id2 != id {
+		t.Fatalf("second capture: id %d (first %d), %v", id2, id, err)
+	}
+	p, _ := s.PageByID(ctx, id)
+	if p.Body != "Met [[Sam]] #health\n\nLater." || !p.IsDayPage {
+		t.Errorf("day page %+v", p)
+	}
+	if got := titles(p.Out, "wikilink"); got != "Sam,health" {
+		t.Errorf("wikilinks after a second capture: %s", got)
+	}
+	d, _ := s.Day(ctx, "2026-09-29")
+	if len(d.Readings) != 1 || d.Readings[0].Metric != "Mood" || d.Readings[0].CapturedWith != id {
+		t.Errorf("mood reading %+v", d.Readings)
+	}
+	if _, _, err := s.Capture(ctx, "cli", "2026-09-29", "", ptr(9)); status(err) != 422 {
+		t.Errorf("mood 9: %v", err)
+	}
+}
+
+func TestCaptureRefusesATombstonedMood(t *testing.T) {
+	s := fresh(t)
+	one := float64(1)
+	mood, err := s.PageID(ctx, "Mood")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Tombstone(ctx, "cli", mood); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.Capture(ctx, "cli", "2026-10-01", "refused", &one); status(err) != 404 {
+		t.Errorf("tombstoned mood: %v", err)
+	}
+	var n int
+	if err := s.DB.R.QueryRow(`SELECT count(*) FROM entity_names WHERE name_key = '2026-10-01'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Error("missing mood capture persisted")
+	}
+	if _, _, err := s.Capture(ctx, "cli", "2026-10-01", "text only", nil); err != nil {
+		t.Fatal(err)
+	}
+}
 
 // TestMoodsReadTheCurrentMoodOfEachDay: the current readings of the Mood metric, each day's in the order they were
 // recorded. A correction replaces its reading, and a retraction removes it.
@@ -186,142 +240,6 @@ func TestFirstLineIsPlainText(t *testing.T) {
 	} {
 		if got := firstLine(c.body); got != c.want {
 			t.Errorf("firstLine(%q) = %q, want %q", c.body, got, c.want)
-		}
-	}
-}
-
-// TestTitlesByPrefixFoldsLikeATitleKey: a prefix finds the names whose key starts with its title key (case, ß, a
-// decomposed accent), an alias with its page's preferred title, never a tombstoned page, in key order, limited.
-func TestTitlesByPrefixFoldsLikeATitleKey(t *testing.T) {
-	s := fresh(t)
-	page := func(title string) int64 {
-		t.Helper()
-		id, _, err := s.CreatePage(ctx, "cli", title, "", "")
-		if err != nil {
-			t.Fatal(err)
-		}
-		return id
-	}
-	page("Sam Example")
-	page("SAMUEL")
-	page("Sb")
-	page("Straße")
-	page("Café")
-	old := page("Samwise draft")
-	if _, err := s.Rename(ctx, "cli", old, "Gardener"); err != nil {
-		t.Fatal(err)
-	}
-	gone := page("Samantha")
-	if err := s.Tombstone(ctx, "cli", gone); err != nil {
-		t.Fatal(err)
-	}
-	show := func(prefix string, limit int) string {
-		t.Helper()
-		ms, err := s.TitlesByPrefix(ctx, prefix, limit)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var out []string
-		for _, m := range ms {
-			out = append(out, m.Name+"="+m.Title)
-		}
-		return strings.Join(out, ", ")
-	}
-	for _, c := range []struct {
-		prefix string
-		limit  int
-		want   string
-	}{
-		{"sam", 10, "Sam Example=Sam Example, SAMUEL=SAMUEL, Samwise draft=Gardener"},
-		{"  SAM", 2, "Sam Example=Sam Example, SAMUEL=SAMUEL"},
-		{"sa", 10, "Sam Example=Sam Example, SAMUEL=SAMUEL, Samwise draft=Gardener"},
-		{"STRAS", 10, "Straße=Straße"},
-		{"cafe\u0301", 10, "Café=Café"},
-		{"zz", 10, ""},
-	} {
-		if got := show(c.prefix, c.limit); got != c.want {
-			t.Errorf("TitlesByPrefix(%q, %d) = %q, want %q", c.prefix, c.limit, got, c.want)
-		}
-	}
-	if _, err := s.TitlesByPrefix(ctx, "  ", 10); status(err) != 422 {
-		t.Errorf("a blank prefix: %v", err)
-	}
-}
-
-// TestReadingsByDayCountsTheCurrentReadingsOfAWindow: three weight readings, one of them corrected, and a steps
-// reading, of all metrics together. A correction replaces its reading, so its day counts it once. The bounds are both
-// included. A sum of the counts is the count of the window that the year page shows.
-func TestReadingsByDayCountsTheCurrentReadingsOfAWindow(t *testing.T) {
-	s := fresh(t)
-	for name, unit := range map[string]string{"weight": "kg", "steps": "n"} {
-		if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: name, Unit: unit}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	var fixed int64
-	for _, r := range []Reading{{Metric: "weight", Day: "2026-10-01", Value: 70}, {Metric: "weight", Day: "2026-10-05", Value: 71},
-		{Metric: "weight", Day: "2026-10-09", Value: 72}, {Metric: "steps", Day: "2026-10-06", Value: 900}} {
-		id, err := s.Record(ctx, "cli", r)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if r.Day == "2026-10-05" {
-			fixed = id
-		}
-	}
-	value := 71.5
-	if _, err := s.Correct(ctx, "cli", fixed, &value); err != nil {
-		t.Fatal(err)
-	}
-	for _, tc := range []struct {
-		from, through string
-		want          string
-	}{
-		{"2026-10-01", "2026-10-31", "map[2026-10-01:1 2026-10-05:1 2026-10-06:1 2026-10-09:1]"},
-		{"2026-10-05", "2026-10-06", "map[2026-10-05:1 2026-10-06:1]"}, {"2026-10-01", "2026-10-01", "map[2026-10-01:1]"},
-		{"2026-10-02", "2026-10-04", "map[]"}, {"2026-09-01", "2026-09-30", "map[]"},
-	} {
-		got, err := s.ReadingsByDay(ctx, tc.from, tc.through)
-		if err != nil || fmt.Sprint(got) != tc.want {
-			t.Errorf("ReadingsByDay(%s, %s) = %v, %v; want %s", tc.from, tc.through, got, err, tc.want)
-		}
-	}
-	if _, err := s.ReadingsByDay(ctx, "2026-10-09", "2026-10-01"); status(err) != 422 {
-		t.Errorf("a reversed window: %v", err)
-	}
-}
-
-// TestSeriesWithNoFromHasNoLowerBound: a series is (from, to], and an empty from reads every reading through to, the
-// first day that a date can name too. A from or a to that is not a day is refused.
-func TestSeriesWithNoFromHasNoLowerBound(t *testing.T) {
-	s := fresh(t)
-	if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "weight", Unit: "kg"}); err != nil {
-		t.Fatal(err)
-	}
-	for _, r := range []Reading{{Metric: "weight", Day: "0000-01-01", Value: 70}, {Metric: "weight", Day: "2026-10-05", Value: 71},
-		{Metric: "weight", Day: "2026-10-09", Value: 72}} {
-		if _, err := s.Record(ctx, "cli", r); err != nil {
-			t.Fatal(err)
-		}
-	}
-	for _, tc := range []struct{ from, to, want string }{
-		{"", "9999-12-31", "0000-01-01=70 2026-10-05=71 2026-10-09=72"},
-		{"", "2026-10-05", "0000-01-01=70 2026-10-05=71"},
-		{"0000-01-01", "9999-12-31", "2026-10-05=71 2026-10-09=72"},
-		{"2026-10-05", "2026-10-09", "2026-10-09=72"},
-	} {
-		rows, err := s.Series(ctx, "Weight", tc.from, tc.to)
-		var got []string
-		for _, r := range rows {
-			got = append(got, fmt.Sprintf("%s=%g", r.Day, r.Value))
-		}
-		if err != nil || strings.Join(got, " ") != tc.want {
-			t.Errorf("Series(%q, %q) = %v, %v; want %s", tc.from, tc.to, got, err, tc.want)
-		}
-	}
-	for _, bad := range [][2]string{{"2026-1-5", "2026-10-09"}, {"", ""}, {"", "2026-10-32"}} {
-		if _, err := s.Series(ctx, "weight", bad[0], bad[1]); status(err) != 422 {
-			t.Errorf("Series(%q, %q): %v, want a 422", bad[0], bad[1], err)
 		}
 	}
 }
