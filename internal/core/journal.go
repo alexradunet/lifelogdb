@@ -43,7 +43,7 @@ func (t *Tx) dayPage(day string) (int64, error) {
 	case err != nil:
 		return 0, err
 	case p == nil:
-		id, _, err := t.insertPage("page", day, day, day, "", "")
+		id, err := t.insertPage("page", day, day, day, "")
 		return id, err
 	case p.Deleted:
 		_, err = t.tx.ExecContext(t.ctx, `UPDATE entities SET deleted_at = NULL WHERE id = ?`, p.ID)

@@ -118,7 +118,7 @@ func TestTransactionOperationsStopAfterCancellation(t *testing.T) {
 	}{
 		{"lookup", func(tx *Tx) error { _, err := tx.lookup("Before cancellation"); return err }},
 		{"create", func(tx *Tx) error {
-			_, _, _, err := tx.CreatePage("After cancellation", "", "2026-10-07", "")
+			_, _, err := tx.CreatePage("After cancellation", "", "2026-10-07")
 			return err
 		}},
 	} {
@@ -127,7 +127,7 @@ func TestTransactionOperationsStopAfterCancellation(t *testing.T) {
 			opCtx, cancel := context.WithCancel(ctx)
 			defer cancel()
 			err := s.Do(opCtx, "cli", func(tx *Tx) error {
-				if _, _, _, err := tx.CreatePage("Before cancellation", "", "2026-10-07", ""); err != nil {
+				if _, _, err := tx.CreatePage("Before cancellation", "", "2026-10-07"); err != nil {
 					return err
 				}
 				cancel()

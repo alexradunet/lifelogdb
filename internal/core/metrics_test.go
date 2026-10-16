@@ -606,7 +606,7 @@ func TestNewDatabaseReadingLookupUsesIndexes(t *testing.T) {
 	s := fresh(t)
 	if err := s.Do(t.Context(), "cli", func(tx *Tx) error {
 		for i := range 200 {
-			if _, _, _, err := tx.CreatePage(fmt.Sprintf("Synthetic lookup page %03d", i), "", "2031-02-03", ""); err != nil {
+			if _, _, err := tx.CreatePage(fmt.Sprintf("Synthetic lookup page %03d", i), "", "2031-02-03"); err != nil {
 				return err
 			}
 		}

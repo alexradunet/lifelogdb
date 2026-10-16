@@ -79,7 +79,7 @@ func TestDatedRowsOfAWindow(t *testing.T) {
 		var id int64
 		if err := s.Do(ctx, "cli", func(tx *Tx) error {
 			var err error
-			id, _, _, err = tx.CreatePage(title, "", day, "")
+			id, _, err = tx.CreatePage(title, "", day)
 			return err
 		}); err != nil {
 			t.Fatal(err)

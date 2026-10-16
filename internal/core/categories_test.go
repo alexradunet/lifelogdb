@@ -111,7 +111,7 @@ func TestMetricsArePagesFiledInCategories(t *testing.T) {
 				}
 				var c int64
 				if p == nil {
-					if c, _, _, err = tx.CreatePage(title, "", "", ""); err != nil {
+					if c, _, err = tx.CreatePage(title, "", ""); err != nil {
 						return err
 					}
 				} else {

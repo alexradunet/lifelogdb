@@ -231,12 +231,12 @@ func TestCreationIsNotAnEdit(t *testing.T) {
 	}
 	var id int64
 	var err error
-	err = s.Do(ctx, "cli", func(tx *Tx) (e error) { id, _, _, e = tx.CreatePage("Plain note", "text", day, ""); return })
+	err = s.Do(ctx, "cli", func(tx *Tx) (e error) { id, _, e = tx.CreatePage("Plain note", "text", day); return })
 	add("plain page", id, err)
 	id, err = s.CreatePerson(ctx, "cli", "Sam Sample", "Sam Sample", "1990-01-02", "", "")
 	add("person", id, err)
 	err = s.Do(ctx, "cli", func(tx *Tx) (e error) {
-		id, _, _, e = tx.CreatePage("Linked note", "met [[Sam Sample]] at [[Lakeside]] #health", day, "")
+		id, _, e = tx.CreatePage("Linked note", "met [[Sam Sample]] at [[Lakeside]] #health", day)
 		return
 	})
 	add("page with wikilinks", id, err)

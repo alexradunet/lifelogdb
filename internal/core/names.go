@@ -10,22 +10,16 @@ import (
 )
 
 // insertPage is the universal insert convention (cookbook/capture.md): entities first, RETURNING id, then the
-// owned-name row with that id. With an importKey a re-send inserts nothing and returns the row the key already names
-// (cookbook/import-a-row-once.md); existing says so.
-func (t *Tx) insertPage(typ, title, key string, day any, body, importKey string) (id int64, existing bool, err error) {
-	err = t.tx.QueryRowContext(t.ctx, `INSERT INTO entities(entity_type, preferred_name_key, day, body, created_at, updated_at, source, import_key)
-                         VALUES (?, ?, ?, ?, `+nowSQL+`, `+nowSQL+`, ?, ?)
-	                     ON CONFLICT(source, import_key) WHERE import_key IS NOT NULL DO NOTHING
-	                     RETURNING id`, typ, key, day, body, t.source, nullIfEmpty(importKey)).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) {
-		err = t.tx.QueryRowContext(t.ctx, `SELECT id FROM entities WHERE source = ? AND import_key = ?`, t.source, importKey).Scan(&id)
-		return id, true, err
-	}
+// owned-name row with that id. The writer sets no import_key on an entity.
+func (t *Tx) insertPage(typ, title, key string, day any, body string) (id int64, err error) {
+	err = t.tx.QueryRowContext(t.ctx, `INSERT INTO entities(entity_type, preferred_name_key, day, body, created_at, updated_at, source)
+                         VALUES (?, ?, ?, ?, `+nowSQL+`, `+nowSQL+`, ?)
+	                     RETURNING id`, typ, key, day, body, t.source).Scan(&id)
 	if err != nil {
-		return 0, false, err
+		return 0, err
 	}
 	_, err = t.tx.ExecContext(t.ctx, `INSERT INTO entity_names(entity_id, title, name_key) VALUES (?, ?, ?)`, id, title, key)
-	return id, false, err
+	return id, err
 }
 
 // pageRef is what a lookup by title or a livePage finds. Version is the decimal entities.revision token (Page.Version).

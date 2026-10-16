@@ -138,7 +138,7 @@ func (t *Tx) keep(f FileIn) (k Kept, err error) {
 	body := f.Body
 	switch {
 	case p == nil:
-		if k.ID, _, err = t.insertPage("file", f.Title, text.TitleKey(f.Title), nullIfEmpty(day), f.Body, ""); err != nil {
+		if k.ID, err = t.insertPage("file", f.Title, text.TitleKey(f.Title), nullIfEmpty(day), f.Body); err != nil {
 			return k, err
 		}
 		title = f.Title

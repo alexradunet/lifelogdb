@@ -174,7 +174,7 @@ func TestFilePromotionDay(t *testing.T) {
 
 	var datedGhost int64
 	if err := s.Do(ctx, "cli", func(tx *Tx) (err error) {
-		datedGhost, _, err = tx.insertPage("page", "Already dated.jpg", text.TitleKey("Already dated.jpg"), "2026-10-01", "", "")
+		datedGhost, err = tx.insertPage("page", "Already dated.jpg", text.TitleKey("Already dated.jpg"), "2026-10-01", "")
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -201,7 +201,7 @@ func TestFilePromotionDay(t *testing.T) {
 
 	var conflictID int64
 	if err := s.Do(ctx, "cli", func(tx *Tx) (err error) {
-		conflictID, _, err = tx.insertPage("page", "Conflict.pdf", text.TitleKey("Conflict.pdf"), "2026-10-02", "my own words", "")
+		conflictID, err = tx.insertPage("page", "Conflict.pdf", text.TitleKey("Conflict.pdf"), "2026-10-02", "my own words")
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -306,7 +306,7 @@ func TestTheDayPageBodyQueryFindsTheDayPageByAnIndex(t *testing.T) {
 	const day = "2031-02-03"
 	if err := s.Do(t.Context(), "cli", func(tx *Tx) error {
 		for i := range 200 {
-			if _, _, _, err := tx.CreatePage(fmt.Sprintf("Synthetic lookup page %03d", i), "", day, ""); err != nil {
+			if _, _, err := tx.CreatePage(fmt.Sprintf("Synthetic lookup page %03d", i), "", day); err != nil {
 				return err
 			}
 		}
@@ -386,7 +386,7 @@ func TestUnknownPhotoDayHasNoCaptureOrPlaceSideEffects(t *testing.T) {
 	var plain int64
 	err = s.Do(ctx, "cli", func(tx *Tx) error {
 		var e error
-		plain, _, _, e = tx.CreatePage("Promotion.jpg", "Owner body", "2012-03-04", "")
+		plain, _, e = tx.CreatePage("Promotion.jpg", "Owner body", "2012-03-04")
 		return e
 	})
 	if err != nil {

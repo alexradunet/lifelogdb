@@ -81,7 +81,7 @@ func (t *Tx) linkTarget(pageID int64, key, title string) (id int64, created, rev
 		Scan(&id, &deleted)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
-		if id, _, err = t.insertPage("page", title, key, dayOfTitle(title), "", ""); err != nil {
+		if id, err = t.insertPage("page", title, key, dayOfTitle(title), ""); err != nil {
 			return
 		}
 		created = true

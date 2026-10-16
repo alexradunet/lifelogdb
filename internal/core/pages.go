@@ -30,75 +30,55 @@ func (t *Tx) SetBody(id int64, body string) (Sync, error) {
 }
 
 // CreatePage creates a page written on purpose; day is the day it was written ("" = today). A title that is a
-// day makes that day's page. With an importKey, a page the key already names is returned with existing = true.
-func (t *Tx) CreatePage(title, body, day, importKey string) (id int64, existing bool, r Sync, err error) {
+// day makes that day's page.
+func (t *Tx) CreatePage(title, body, day string) (id int64, r Sync, err error) {
 	switch {
 	case IsDay(title):
 		day = title
 	case day == "":
 		day = t.today()
 	}
-	if id, existing, err = t.createNamed("page", title, body, day, importKey, nil); err != nil || existing {
-		return id, existing, r, err
+	if id, err = t.createNamed("page", title, body, day, nil); err != nil {
+		return id, r, err
 	}
 	r, err = t.syncWikilinks(id, body)
-	return id, false, r, err
+	return id, r, err
 }
 
 // CreatePerson and CreatePlace are cookbook/person-or-place.md's create: one id, a page, and for a person a
 // people row.
-func (t *Tx) CreatePerson(title, name, birth, death, importKey string) (int64, bool, error) {
+func (t *Tx) CreatePerson(title, name, birth, death string) (int64, error) {
 	if name == "" {
 		name = title
 	}
-	return t.createNamed("person", title, "", nil, importKey, func(id int64) error {
+	return t.createNamed("person", title, "", nil, func(id int64) error {
 		_, err := t.tx.ExecContext(t.ctx, `INSERT INTO people(id, name, birth_day, death_day) VALUES (?, ?, ?, ?)`,
 			id, name, nullIfEmpty(birth), nullIfEmpty(death))
 		return err
 	})
 }
 
-func (t *Tx) CreatePlace(title, importKey string) (int64, bool, error) {
-	return t.createNamed("place", title, "", nil, importKey, nil)
+func (t *Tx) CreatePlace(title string) (int64, error) {
+	return t.createNamed("place", title, "", nil, nil)
 }
 
 // createNamed inserts the entity with its whole body: creation is one write, so the new page is at revision 1
 // (lifelog_meta.edit_revisions). The caller syncs the body's wikilinks once the typed row exists.
-// createNamed is one entity with its page: a title no live page has (a sender's key finds the row an earlier send
-// made, and writes nothing), its row in entities and entity_names, and extra for its typed row. day is a day page's
-// day, nil for every other page. It is the one check of the title for CreatePage, CreatePerson and CreatePlace.
-func (t *Tx) createNamed(typ, title, body string, day any, importKey string, extra func(int64) error) (int64, bool, error) {
+// createNamed is one entity with its page: a title no live page has, its row in entities and entity_names, and
+// extra for its typed row. day is a day page's day, nil for every other page. It is the one check of the title for
+// CreatePage, CreatePerson and CreatePlace.
+func (t *Tx) createNamed(typ, title, body string, day any, extra func(int64) error) (int64, error) {
 	if err := checkTitle("title", title); err != nil {
-		return 0, false, err
-	}
-	have, err := t.byImportKey(importKey)
-	if err != nil {
-		return 0, false, err
-	}
-	if have != 0 {
-		return have, true, nil
+		return 0, err
 	}
 	if p, err := t.lookup(title); err != nil || p != nil {
-		return 0, false, orExists(err, p, title)
+		return 0, orExists(err, p, title)
 	}
-	id, existing, err := t.insertPage(typ, title, text.TitleKey(title), day, body, importKey)
-	if err != nil || existing || extra == nil {
-		return id, existing, err
+	id, err := t.insertPage(typ, title, text.TitleKey(title), day, body)
+	if err != nil || extra == nil {
+		return id, err
 	}
-	return id, false, extra(id)
-}
-
-// byImportKey is the entity a sender's key names under this transaction's source; 0 when none.
-func (t *Tx) byImportKey(importKey string) (int64, error) {
-	if importKey == "" {
-		return 0, nil
-	}
-	var id int64
-	err := t.tx.QueryRowContext(t.ctx, `SELECT id FROM entities WHERE source = ? AND import_key = ?`, t.source, importKey).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return 0, nil
-	}
-	return id, err
+	return id, extra(id)
 }
 
 // promote is Store.Promote in t.
@@ -173,7 +153,7 @@ type made struct {
 // (docs/plans/115-categories-to-browse.md): a day as the category refuses the whole write.
 func (s *Store) CreatePage(ctx context.Context, source, title, body, category string) (int64, Sync, error) {
 	m, err := alone(s, ctx, source, func(t *Tx) (made, error) {
-		id, _, r, err := t.CreatePage(title, body, "", "")
+		id, r, err := t.CreatePage(title, body, "")
 		if err != nil {
 			return made{}, err
 		}
@@ -186,7 +166,7 @@ func (s *Store) CreatePage(ctx context.Context, source, title, body, category st
 // (docs/plans/117-one-browse-view.md, rule 6).
 func (s *Store) CreatePerson(ctx context.Context, source, title, name, birth, death, category string) (int64, error) {
 	return alone(s, ctx, source, func(t *Tx) (int64, error) {
-		id, _, err := t.CreatePerson(title, name, birth, death, "")
+		id, err := t.CreatePerson(title, name, birth, death)
 		if err != nil {
 			return 0, err
 		}
@@ -197,7 +177,7 @@ func (s *Store) CreatePerson(ctx context.Context, source, title, name, birth, de
 // CreatePlace makes the place and, with a category, files it there in the same write, as CreatePage does.
 func (s *Store) CreatePlace(ctx context.Context, source, title, category string) (int64, error) {
 	return alone(s, ctx, source, func(t *Tx) (int64, error) {
-		id, _, err := t.CreatePlace(title, "")
+		id, err := t.CreatePlace(title)
 		if err != nil {
 			return 0, err
 		}

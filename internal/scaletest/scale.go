@@ -265,14 +265,14 @@ func build(ctx context.Context, s *core.Store, p Profile, o Options) (*fixture, 
 	digest := sha256.New()
 	err := s.Do(ctx, "import:scale", func(tx *core.Tx) error {
 		var e error
-		f.popular, _, _, e = tx.CreatePage("Scale Popular", "Synthetic shared topic", "1970-01-01", "topic")
+		f.popular, _, e = tx.CreatePage("Scale Popular", "Synthetic shared topic", "1970-01-01")
 		if e != nil {
 			return e
 		}
-		if _, _, e = tx.CreatePerson("Scale Person", "Synthetic person", "", "", "person"); e != nil {
+		if _, e = tx.CreatePerson("Scale Person", "Synthetic person", "", ""); e != nil {
 			return e
 		}
-		if _, _, e = tx.CreatePlace("Scale Place", "place"); e != nil {
+		if _, e = tx.CreatePlace("Scale Place"); e != nil {
 			return e
 		}
 		for i, name := range metricNames {
@@ -410,7 +410,7 @@ func build(ctx context.Context, s *core.Store, p Profile, o Options) (*fixture, 
 			for n := start; n < min(start+50, p.Notes); n++ {
 				body := payload(fmt.Sprintf("Synthetic note %d café Ελληνικά [[Scale Popular]]. ", n), []int{256, 1024, 4096, 16384, 65536}[n%5]*p.TextMultiplier)
 				date := anchor.AddDate(0, 0, n%p.Days).Format(time.DateOnly)
-				if _, _, _, e := tx.CreatePage(fmt.Sprintf("Scale Note %06d", n), body, date, fmt.Sprintf("note:%d", n)); e != nil {
+				if _, _, e := tx.CreatePage(fmt.Sprintf("Scale Note %06d", n), body, date); e != nil {
 					return e
 				}
 				fmt.Fprintf(digest, "note:%d:%s:%s\n", n, date, body)
@@ -595,7 +595,7 @@ func exercise(ctx context.Context, s *core.Store, f *fixture, samples int, repor
 	var editID int64
 	if err := s.Do(ctx, timedSource, func(tx *core.Tx) error {
 		var e error
-		editID, _, _, e = tx.CreatePage("Scale Edit Probe", "initial", probeDay, "")
+		editID, _, e = tx.CreatePage("Scale Edit Probe", "initial", probeDay)
 		return e
 	}); err != nil {
 		return err
