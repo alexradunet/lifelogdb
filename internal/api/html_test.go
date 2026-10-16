@@ -129,7 +129,7 @@ func TestBrowserKeepsWhatAFailedSaveSent(t *testing.T) {
 }
 
 // TestARefusedSaveComesBackOnItsPage: a form that names its page (back) is answered with that page, with the error's
-// status, the alert first and the form filled, open and described by the alert.
+// status, the alert first and the form filled, open and described by the alert. The page has its sidebar (the rail).
 func TestARefusedSaveComesBackOnItsPage(t *testing.T) {
 	h, self, action, version := staleSave(t)
 	rec := submit(h, action, url.Values{"body": {"my <long> draft"}, "version": {version}, "back": {self}}, self)
@@ -140,7 +140,7 @@ func TestARefusedSaveComesBackOnItsPage(t *testing.T) {
 	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
 		t.Errorf("Cache-Control %q, want no-store", got)
 	}
-	for _, want := range []string{"<title>Not saved · Diet · Lifelog</title>",
+	for _, want := range []string{"<title>Not saved · Diet · Lifelog</title>", `class="rail"`,
 		`role="alert" id="refused" tabindex="-1" autofocus>`, "my &lt;long&gt; draft</textarea>",
 		`<details open><summary>Edit</summary>`, `<form method="POST" action="` + action + `" aria-describedby="refused"`,
 		`value="` + version + `"`} {
@@ -156,6 +156,35 @@ func TestARefusedSaveComesBackOnItsPage(t *testing.T) {
 	}
 }
 
+// TestARefusedPageKeepsTheHeadersOfItsPage: the refused page is the answer of the GET of its page, with that GET's
+// headers. Here the page's address holds the receipt of an earlier save that no GET took (feedback), so the GET
+// takes it and sets Referrer-Policy and Cache-Control. The refused page keeps both.
+func TestARefusedPageKeepsTheHeadersOfItsPage(t *testing.T) {
+	c, h := fresh(t)
+	p := must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Diet", "body": "v1"}))
+	save, self := find(p, "save-body"), href(p, "self")
+	var version string
+	for _, f := range save.Fields {
+		if f.Name == "version" {
+			version, _ = f.Value.(string)
+		}
+	}
+	saved := submit(h, save.Href, url.Values{"body": {"v2"}, "version": {version}, "back": {self}}, self)
+	back := saved.Header().Get("Location")
+	if saved.Code != http.StatusSeeOther || !strings.HasPrefix(back, self+"?feedback=") {
+		t.Fatalf("the first save: %d to %q, want 303 to %s with a receipt", saved.Code, back, self)
+	}
+	rec := submit(h, save.Href, url.Values{"body": {"v3"}, "version": {version}, "back": {back}}, back)
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), `role="alert" id="refused"`) {
+		t.Fatalf("the stale save: %d %.300s, want 409 on its page", rec.Code, rec.Body.String())
+	}
+	for name, want := range map[string]string{"Referrer-Policy": "no-referrer", "Cache-Control": "no-store"} {
+		if got := rec.Header().Get(name); got != want {
+			t.Errorf("%s %q, want %q, the header of the GET of the page", name, got, want)
+		}
+	}
+}
+
 // goneClient is a client that went away: each write of a body fails.
 type goneClient struct {
 	header http.Header
@@ -167,7 +196,8 @@ func (g *goneClient) WriteHeader(status int)    { g.status = status }
 func (g *goneClient) Write([]byte) (int, error) { return 0, errors.New("the client went away") }
 
 // TestARefusedPageThatCannotBeSentIsLogged: when the client of a refused form went away, the write of the page it came
-// from fails. The server's log has it one time; nothing else can be done.
+// from fails. The server's log has it one time, under the route of the POST that the client sent, not the route of the
+// GET of its page; nothing else can be done.
 func TestARefusedPageThatCannotBeSentIsLogged(t *testing.T) {
 	h, self, action, version := staleSave(t)
 	req := httptest.NewRequest("POST", action, strings.NewReader(url.Values{"body": {"my draft"}, "version": {version}, "back": {self}}.Encode()))
@@ -184,6 +214,9 @@ func TestARefusedPageThatCannotBeSentIsLogged(t *testing.T) {
 	}
 	if n := strings.Count(logged.String(), "the client went away"); n != 1 {
 		t.Errorf("the log has the failed write %d times, want 1: %q", n, logged.String())
+	}
+	if !strings.Contains(logged.String(), "lifelog: POST /pages/{id}/body: ") {
+		t.Errorf("the log does not name the route of the POST: %q", logged.String())
 	}
 }
 

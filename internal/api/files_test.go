@@ -7,6 +7,7 @@ import (
 	"image"
 	"image/color"
 	"image/jpeg"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -42,6 +43,29 @@ func jpegFile(t *testing.T, name string, w, h int) (string, string) {
 }
 
 func props(e *api.Entity) map[string]any { p, _ := e.Properties.(map[string]any); return p }
+
+// TestAPictureThatCannotBeSentIsLogged: when the client of a picture went away, the write of its bytes fails. The
+// server's log has it one time, under the route of the picture; nothing else can be done.
+func TestAPictureThatCannotBeSentIsLogged(t *testing.T) {
+	c, h := fresh(t)
+	path, _ := jpegFile(t, "IMG_0001.JPG", 64, 48)
+	e, err := c.DoFiles(t.Context(), find(must(c.Get(t.Context(), "/")), "add-file"), map[string]string{"title": "Lake.jpg"}, map[string]string{"original": path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var logged bytes.Buffer
+	prev := log.Writer()
+	log.SetOutput(&logged) // no test of this package runs in parallel
+	t.Cleanup(func() { log.SetOutput(prev) })
+	w := &goneClient{header: http.Header{}}
+	h.ServeHTTP(w, httptest.NewRequest("GET", href(e, "preview"), nil))
+	if got := w.header.Get("Content-Type"); got != "image/jpeg" {
+		t.Errorf("Content-Type %q, want the picture", got)
+	}
+	if n := strings.Count(logged.String(), "lifelog: GET /pages/{id}/preview: the picture was not sent: the client went away"); n != 1 {
+		t.Errorf("the log has the failed write %d times, want 1: %q", n, logged.String())
+	}
+}
 
 func TestAddFileKeepsAPhotoAndItsPicture(t *testing.T) {
 	c, h := fresh(t)

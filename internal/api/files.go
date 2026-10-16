@@ -243,7 +243,7 @@ func (c *capped) Write(p []byte) (int, error) {
 }
 
 // picture serves the JPEG a file page keeps, 404 when there is none.
-// A cache that is not empty is sent as Cache-Control.
+// A cache that is not empty is sent as Cache-Control. A failed write is logged, as answer does.
 func picture(get func(*http.Request) ([]byte, error), cache string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		b, err := get(r)
@@ -259,7 +259,9 @@ func picture(get func(*http.Request) ([]byte, error), cache string) http.Handler
 		}
 		w.Header().Set("Content-Type", "image/jpeg")
 		w.Header().Set("Content-Length", strconv.Itoa(len(b)))
-		w.Write(b)
+		if _, err := w.Write(b); err != nil {
+			logFault(r, "the picture was not sent", err)
+		}
 	}
 }
 

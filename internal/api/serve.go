@@ -232,6 +232,7 @@ func (h *server) refusedOnItsPage(w http.ResponseWriter, r *http.Request, e *Ent
 		w.Header()[k] = v
 	}
 	w.Header().Set("Cache-Control", "no-store")
+	get.Pattern = r.Pattern // a fault of the answer is logged under the route of the POST that the client sent (logFault)
 	answer(w, get, status, page.entity, frame{shell: h.s, refused: &refusal{entity: e, href: r.URL.Path, sent: r.PostForm}})
 	return true
 }
