@@ -91,7 +91,7 @@ func NewOn(s *core.Store, localDay func() string, zone *time.Location, trustedOr
 		}
 	}
 	guard.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		refuse(w, r, http.StatusForbidden, "cross-origin browser write refused", "cross_origin")
+		writeError(w, r, errCrossOrigin)
 	}))
 	return guard.Handler(m)
 }
@@ -126,12 +126,13 @@ func toBrowse(path string, q url.Values) string {
 	return browseHref(v)
 }
 
-// refuse answers a request the guards turn away with the error entity, as every refusal is answered: status, a code
-// (the status's general name when code is "") and the message.
-func refuse(w http.ResponseWriter, r *http.Request, status int, msg, code string) {
-	e, status := errorEntity(&core.Error{Status: status, Msg: msg, Code: code})
-	writeEntity(w, r, status, e)
-}
+// The refusals that two guards write: a browser write from an origin that the server does not trust (the guard of
+// the API and the login forms of a public listener), and a request whose authority the listener does not take (the
+// local listener and the public one).
+var (
+	errCrossOrigin = &core.Error{Status: http.StatusForbidden, Msg: "cross-origin browser write refused", Code: "cross_origin"}
+	errAuthority   = &core.Error{Status: http.StatusForbidden, Msg: "HTTP authority refused"}
+)
 
 // redirect is returned by a handler that answers with another resource's address.
 type redirect struct{ to string }
@@ -336,6 +337,14 @@ func codeOf(status int) string {
 		return "timeout"
 	}
 	return "internal"
+}
+
+// writeError answers with the error entity of err, as JSON or as a page with no shell. The guards, the pictures and
+// /render use it. A route that serve wraps answers its error in serve: there a browser gets the page in the shell, or
+// the page that a refused form came from.
+func writeError(w http.ResponseWriter, r *http.Request, err error) {
+	e, status := errorEntity(err)
+	writeEntity(w, r, status, e)
 }
 
 // writeEntity answers with the entity as Siren JSON, or as a page when the client is a browser.

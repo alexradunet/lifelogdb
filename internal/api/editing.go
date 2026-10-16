@@ -51,8 +51,7 @@ func (h *server) titles(r *http.Request) (*Entity, error) {
 func (h *server) render(w http.ResponseWriter, r *http.Request) {
 	v, err := form(r)
 	if err != nil {
-		e, status := errorEntity(err)
-		writeEntity(w, r, status, e)
+		writeError(w, r, err)
 		return
 	}
 	body := v.Get("body")

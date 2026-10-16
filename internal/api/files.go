@@ -267,8 +267,7 @@ func picture(get func(*http.Request) ([]byte, error), cache string) http.Handler
 			err = core.NotFound("this page keeps no picture")
 		}
 		if err != nil { // the error entity, as every other route answers
-			e, status := errorEntity(err)
-			writeEntity(w, r, status, e)
+			writeError(w, r, err)
 			return
 		}
 		if cache != "" {

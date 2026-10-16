@@ -106,7 +106,7 @@ func Public(next http.Handler, o PublicOptions) (http.Handler, error) {
 func (p *public) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Absolute-form targets replace Host during parsing; no proxy deployment relies on them.
 	if r.URL == nil || r.URL.IsAbs() || r.URL.Host != "" {
-		refuse(w, r, http.StatusForbidden, "HTTP authority refused", "")
+		writeError(w, r, errAuthority)
 		return
 	}
 	origin := r.Header.Get("Origin")
@@ -119,7 +119,7 @@ func (p *public) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method == http.MethodOptions {
 		if !allowed {
-			refuse(w, r, http.StatusForbidden, "origin refused", "")
+			writeError(w, r, &core.Error{Status: http.StatusForbidden, Msg: "origin refused"})
 			return
 		}
 		h := w.Header()
@@ -143,8 +143,7 @@ func (p *public) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Header().Set("WWW-Authenticate", `Bearer realm="lifelog"`)
-		e, status := errorEntity(&core.Error{Status: http.StatusUnauthorized, Msg: "token required", Code: "token_required"})
-		writeEntity(w, r, status, e)
+		writeError(w, r, &core.Error{Status: http.StatusUnauthorized, Msg: "token required", Code: "token_required"})
 		return
 	}
 	p.next.ServeHTTP(w, r)
@@ -175,7 +174,7 @@ func (p *public) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := p.guard.Check(r); err != nil {
-		refuse(w, r, http.StatusForbidden, "cross-origin browser write refused", "cross_origin")
+		writeError(w, r, errCrossOrigin)
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 4096)
@@ -189,7 +188,7 @@ func (p *public) login(w http.ResponseWriter, r *http.Request) {
 
 func (p *public) logout(w http.ResponseWriter, r *http.Request) {
 	if err := p.guard.Check(r); err != nil {
-		refuse(w, r, http.StatusForbidden, "cross-origin browser write refused", "cross_origin")
+		writeError(w, r, errCrossOrigin)
 		return
 	}
 	http.SetCookie(w, &http.Cookie{Name: CookieName, Value: "", Path: "/", HttpOnly: true, Secure: p.tls, SameSite: http.SameSiteStrictMode, MaxAge: -1})
