@@ -220,8 +220,9 @@ func TestARefusedPageThatCannotBeSentIsLogged(t *testing.T) {
 	}
 }
 
-// TestAnEmptySaveComesBackOnItsPage: the markup of a body does not say required, so a browser can send an empty body.
-// The save is refused 422 on its page, with the alert, and the page keeps its body and its version.
+// TestAnEmptySaveComesBackOnItsPage: the browser marks the body required, but a client that does not check the form
+// (or an old browser) can still send an empty body. The save is refused 422 on its page, with the alert, and the page
+// keeps its body and its version.
 func TestAnEmptySaveComesBackOnItsPage(t *testing.T) {
 	c, h := fresh(t)
 	p := must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Diet", "body": "v1"}))
