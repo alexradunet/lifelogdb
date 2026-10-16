@@ -44,7 +44,7 @@ func idsOf(values []string) ([]int64, error) {
 // tombstoned: the ids, their count, and an item link to each. A browser form returns to its list (back), with the
 // count as its feedback.
 func (h *server) tombstoneMany(r *http.Request, src string) (*Entity, error) {
-	v, err := form(r)
+	v, err := fieldsOf(r, "tombstone-pages")
 	if err != nil {
 		return nil, err
 	}

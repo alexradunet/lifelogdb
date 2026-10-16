@@ -78,15 +78,12 @@ func (h *server) metricOf(ctx context.Context, name string) (*core.Metric, error
 // class filed: the category, whether it was made, the ids, and how many links were added and removed, with an item
 // link to each page. A browser form returns to its list (back), with the sentence as its feedback.
 func (h *server) filePages(r *http.Request, src string) (*Entity, error) {
-	v, err := form(r)
+	v, err := fieldsOf(r, "file-pages")
 	if err != nil {
 		return nil, err
 	}
 	ids, err := idsOf(v["ids"])
 	if err != nil {
-		return nil, err
-	}
-	if err := required(v, "category"); err != nil {
 		return nil, err
 	}
 	move, err := flag(v, "move")

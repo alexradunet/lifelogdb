@@ -153,6 +153,29 @@ func TestARefusedSaveComesBackOnItsPage(t *testing.T) {
 	}
 }
 
+// TestAnEmptySaveComesBackOnItsPage: the markup of a body does not say required, so a browser can send an empty body.
+// The save is refused 422 on its page, with the alert, and the page keeps its body and its version.
+func TestAnEmptySaveComesBackOnItsPage(t *testing.T) {
+	c, h := fresh(t)
+	p := must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Diet", "body": "v1"}))
+	save := find(p, "save-body")
+	var version string
+	for _, f := range save.Fields {
+		if f.Name == "version" {
+			version, _ = f.Value.(string)
+		}
+	}
+	rec := submit(h, save.Href, url.Values{"body": {""}, "version": {version}, "back": {href(p, "self")}}, href(p, "self"))
+	body := rec.Body.String()
+	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(body, `role="alert" id="refused"`) || !strings.Contains(body, "missing field body") {
+		t.Errorf("an empty browser save: %d %.400s", rec.Code, body)
+	}
+	after := must(c.Get(t.Context(), href(p, "self"))).Properties.(map[string]any)
+	if after["body"] != "v1" || after["version"] != version {
+		t.Errorf("after an empty save the page has body %q and version %q, want %q and %q", after["body"], after["version"], "v1", version)
+	}
+}
+
 // TestARefusedCaptureComesBackOnHome: a capture refused from Home comes back on Home with the text still in the box.
 func TestARefusedCaptureComesBackOnHome(t *testing.T) {
 	_, h := freshOn(t, "2026-10-12") // the form posts to that day, and Home's capture is today's

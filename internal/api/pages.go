@@ -13,10 +13,11 @@ import (
 )
 
 func (h *server) find(r *http.Request, _ string) (*Entity, error) {
-	title := r.URL.Query().Get("title")
-	if err := required(r.URL.Query(), "title"); err != nil {
+	v, err := fieldsOf(r, "find")
+	if err != nil {
 		return nil, err
 	}
+	title := v.Get("title")
 	id, err := h.s.PageID(r.Context(), title)
 	if err != nil {
 		return nil, err
@@ -177,11 +178,8 @@ func (h *server) search(r *http.Request, _ string) (*Entity, error) {
 }
 
 func (h *server) createPage(r *http.Request, src string) (*Entity, error) {
-	v, err := form(r)
+	v, err := fieldsOf(r, "create-page")
 	if err != nil {
-		return nil, err
-	}
-	if err := required(v, "title"); err != nil {
 		return nil, err
 	}
 	id, sync, err := h.s.CreatePage(r.Context(), src, v.Get("title"), v.Get("body"), v.Get("category"))
@@ -192,7 +190,7 @@ func (h *server) createPage(r *http.Request, src string) (*Entity, error) {
 }
 
 func (h *server) saveBody(r *http.Request, src string) (*Entity, error) {
-	id, v, err := idForm(r, "version")
+	id, v, err := idForm(r, "save-body")
 	if err != nil {
 		return nil, err
 	}
@@ -204,11 +202,8 @@ func (h *server) saveBody(r *http.Request, src string) (*Entity, error) {
 }
 
 func (h *server) createPerson(r *http.Request, src string) (*Entity, error) {
-	v, err := form(r)
+	v, err := fieldsOf(r, "create-person")
 	if err != nil {
-		return nil, err
-	}
-	if err := required(v, "title"); err != nil {
 		return nil, err
 	}
 	id, err := h.s.CreatePerson(r.Context(), src, v.Get("title"), v.Get("name"), v.Get("birth_day"), v.Get("death_day"), v.Get("category"))
@@ -219,11 +214,8 @@ func (h *server) createPerson(r *http.Request, src string) (*Entity, error) {
 }
 
 func (h *server) createPlace(r *http.Request, src string) (*Entity, error) {
-	v, err := form(r)
+	v, err := fieldsOf(r, "create-place")
 	if err != nil {
-		return nil, err
-	}
-	if err := required(v, "title"); err != nil {
 		return nil, err
 	}
 	id, err := h.s.CreatePlace(r.Context(), src, v.Get("title"), v.Get("category"))
@@ -234,7 +226,7 @@ func (h *server) createPlace(r *http.Request, src string) (*Entity, error) {
 }
 
 func (h *server) promote(r *http.Request, src string) (*Entity, error) {
-	id, v, err := idForm(r)
+	id, v, err := idForm(r, "promote")
 	if err != nil {
 		return nil, err
 	}
@@ -266,15 +258,9 @@ func (h *server) revive(r *http.Request, src string) (*Entity, error) {
 	return h.pageEntity(r.Context(), id)
 }
 
-// linkEnds resolves the page of the path and the page titled `to`.
-func (h *server) linkEnds(r *http.Request) (from, to int64, v url.Values, err error) {
-	if from, err = idOf(r); err != nil {
-		return
-	}
-	if v, err = form(r); err != nil {
-		return
-	}
-	if err = required(v, "to", "kind"); err != nil {
+// linkEnds resolves the page of the path and the page titled `to`, for the action name (link or unlink).
+func (h *server) linkEnds(r *http.Request, name string) (from, to int64, v url.Values, err error) {
+	if from, v, err = idForm(r, name); err != nil {
 		return
 	}
 	if to, err = h.s.PageID(r.Context(), v.Get("to")); err == nil && to == 0 {
@@ -284,7 +270,7 @@ func (h *server) linkEnds(r *http.Request) (from, to int64, v url.Values, err er
 }
 
 func (h *server) linkPages(r *http.Request, src string) (*Entity, error) {
-	from, to, v, err := h.linkEnds(r)
+	from, to, v, err := h.linkEnds(r, "link")
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +281,7 @@ func (h *server) linkPages(r *http.Request, src string) (*Entity, error) {
 }
 
 func (h *server) unlinkPages(r *http.Request, src string) (*Entity, error) {
-	from, to, v, err := h.linkEnds(r)
+	from, to, v, err := h.linkEnds(r, "unlink")
 	if err != nil {
 		return nil, err
 	}
@@ -306,7 +292,7 @@ func (h *server) unlinkPages(r *http.Request, src string) (*Entity, error) {
 }
 
 func (h *server) rename(r *http.Request, src string) (*Entity, error) {
-	id, v, err := idForm(r, "title")
+	id, v, err := idForm(r, "rename")
 	if err != nil {
 		return nil, err
 	}

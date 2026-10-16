@@ -39,7 +39,9 @@ Every answer is one [Siren](https://github.com/kevinswiber/siren) entity:
 
 `GET /actions` is the catalog: every action with a templated `href` (`/pages/{id}/body`). A client fills the path
 fields and sends the rest as the form. An action is offered on a resource only where it is legal there, so a client
-that follows `actions` needs no rules of its own.
+that follows `actions` needs no rules of its own. A `required` field that is missing or empty is refused (422
+`invalid`, the message `missing field <name>`), and nothing is written. `search` is the one exception: with no `q`
+it answers with no hits ([search](#search)).
 
 **Types** in the tables: `string`, `integer`, `number`, `boolean`, `day` (a local day, `YYYY-MM-DD`), `instant`
 (UTC, `2026-06-09T21:14:03.482Z`), `list`, `object`. A property marked *absent when empty* is left out of the JSON
@@ -194,6 +196,7 @@ too), `media` and `document`.
 ### search
 
 `GET /search?q=` (FTS5 syntax over titles and bodies). Hits are also embedded as `item` links. Action: `search`.
+With no `q`, the answer has the action `search` and no properties: a browser draws it as the page to search from.
 
 | property | type | meaning |
 |---|---|---|
@@ -354,7 +357,8 @@ month. Actions: `open-day`.
 `GET /pages/{id}`; `GET /pages?title=` redirects to it. The class is the page's type; a day page adds `day-page`, a
 tombstoned page adds `deleted`. Links: `day` (a day page's day view), `preview` (a file's picture). Embedded: every outgoing link under its kind, every incoming one under `backlink` and its kind, with the class
 `category` added to a `part-of` backlink from a category page. Actions by
-what is legal: `save-body` (with the current `body` and `version` filled), `promote`, `rename`, `link` and `unlink` (with the kinds this type may start), [`file-pages`](#filed) (a page that may
+what is legal: `save-body` (with the current `body` and `version` filled; an empty `body` is refused, so a save
+cannot empty a page), `promote`, `rename`, `link` and `unlink` (with the kinds this type may start), [`file-pages`](#filed) (a page that may
 be `part-of`, not a day page: `ids` is this page, and `category` offers the category titles; a new title is made),
 `create-page` with `category` filled (a live category page: something is `part-of` it; the new page is made and
 filed in it in one write), `set-picture` (a person), `tombstone`, or `revive` alone on a deleted page. In a browser, the page of a

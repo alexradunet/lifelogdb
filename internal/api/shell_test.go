@@ -22,11 +22,14 @@ func TestTheSidebarShowsTheMonth(t *testing.T) {
 		t.Errorf("an empty life log does not show its empty month:\n%s", sidebar(body))
 	}
 
-	for _, day := range []string{"2031-04-30", "2031-05-03", dayOf(-2), fixedToday} {
+	for _, day := range []string{"2031-04-30", dayOf(-2), fixedToday} {
 		must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/days/"+day)), "capture"), map[string]string{"text": "Synthetic entry"}))
 	}
-	page := must(c.Get(t.Context(), "/pages?title=2031-05-03"))
-	must(c.Do(t.Context(), find(page, "save-body"), map[string]string{"body": ""})) // a day page with an empty body is still written
+	// A mood alone makes the day page with an empty body: a day page with an empty body is still written.
+	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/days/2031-05-03")), "capture"), map[string]string{"mood": "3"}))
+	if body := must(c.Get(t.Context(), "/pages?title=2031-05-03")).Properties.(map[string]any)["body"]; body != "" {
+		t.Fatalf("the day page of 2031-05-03 has the body %q, want an empty body", body)
+	}
 
 	body := browse(t, h, "/")
 	for _, want := range []string{

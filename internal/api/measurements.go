@@ -187,11 +187,8 @@ func (h *server) measurementEntity(ctx context.Context, id int64) (*Entity, erro
 }
 
 func (h *server) record(r *http.Request, src string) (*Entity, error) {
-	v, err := form(r)
+	v, err := fieldsOf(r, "record")
 	if err != nil {
-		return nil, err
-	}
-	if err := required(v, "metric", "day", "value"); err != nil {
 		return nil, err
 	}
 	value, err := number(v, "value")
@@ -212,16 +209,13 @@ func (h *server) record(r *http.Request, src string) (*Entity, error) {
 }
 
 func (h *server) correct(r *http.Request, src string) (*Entity, error) {
-	id, v, err := idForm(r)
+	id, v, err := idForm(r, "correct")
 	if err != nil {
 		return nil, err
 	}
-	value, err := number(v, "value")
+	value, err := number(v, "value") // never nil: the catalog requires value, and a nil value retracts
 	if err != nil {
 		return nil, err
-	}
-	if value == nil {
-		return nil, core.Invalid("missing field value (to remove a reading, retract it)")
 	}
 	return h.correctTo(r.Context(), src, id, value)
 }
@@ -244,11 +238,8 @@ func (h *server) correctTo(ctx context.Context, src string, id int64, value *flo
 }
 
 func (h *server) registerMetric(r *http.Request, src string) (*Entity, error) {
-	v, err := form(r)
+	v, err := fieldsOf(r, "register-metric")
 	if err != nil {
-		return nil, err
-	}
-	if err := required(v, "name"); err != nil {
 		return nil, err
 	}
 	m := core.NewMetric{Name: v.Get("name"), Unit: v.Get("unit"), Note: v.Get("note"), Category: v.Get("category")}

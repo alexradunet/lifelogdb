@@ -175,7 +175,7 @@ func (h *server) dayEntity(ctx context.Context, day string) (*Entity, error) {
 }
 
 func (h *server) capture(r *http.Request, src string) (*Entity, error) {
-	v, err := form(r)
+	v, err := fieldsOf(r, "capture")
 	if err != nil {
 		return nil, err
 	}

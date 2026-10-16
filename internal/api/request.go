@@ -69,11 +69,27 @@ func form(r *http.Request) (url.Values, error) {
 	return r.Form, nil
 }
 
-// required refuses a request that leaves one of the named fields empty.
-func required(v url.Values, names ...string) error {
-	for _, n := range names {
-		if v.Get(n) == "" {
-			return core.Invalid("missing field %s", n)
+// fieldsOf reads the fields of the catalog action name: the query of a GET, the form of a POST. It refuses a request
+// that leaves a required field empty (required).
+func fieldsOf(r *http.Request, name string) (url.Values, error) {
+	s := specOf(name)
+	if s.Method == "GET" {
+		v := r.URL.Query()
+		return v, required(v, s)
+	}
+	v, err := form(r)
+	if err != nil {
+		return nil, err
+	}
+	return v, required(v, s)
+}
+
+// required refuses values that leave a required field of the action s empty. The catalog is the one list of the
+// fields an action requires. A path field is not in the values: the route gives it.
+func required(v url.Values, s spec) error {
+	for _, f := range s.Fields {
+		if f.Required && f.In != "path" && v.Get(f.Name) == "" {
+			return core.Invalid("missing field %s", f.Name)
 		}
 	}
 	return nil
@@ -88,18 +104,14 @@ func idOf(r *http.Request) (int64, error) {
 	return id, nil
 }
 
-// idForm is the opening of a write on a resource: the {id} of the path, the fields of the body, and the ones the
-// action cannot do without.
-func idForm(r *http.Request, names ...string) (int64, url.Values, error) {
+// idForm is the opening of a write on a resource: the {id} of the path, and the fields of the action name (fieldsOf).
+func idForm(r *http.Request, name string) (int64, url.Values, error) {
 	id, err := idOf(r)
 	if err != nil {
 		return 0, nil, err
 	}
-	v, err := form(r)
-	if err != nil {
-		return 0, nil, err
-	}
-	return id, v, required(v, names...)
+	v, err := fieldsOf(r, name)
+	return id, v, err
 }
 
 // idParam is the path parameter of an action on the resource with this id.

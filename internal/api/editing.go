@@ -19,8 +19,8 @@ const maxTitles = 20
 func (h *server) titles(r *http.Request) (*Entity, error) {
 	q := r.URL.Query()
 	prefix := q.Get("prefix")
-	if err := required(url.Values{"prefix": {strings.TrimSpace(prefix)}}, "prefix"); err != nil {
-		return nil, err
+	if strings.TrimSpace(prefix) == "" {
+		return nil, core.Invalid("missing field prefix")
 	}
 	limit := 10
 	if s := q.Get("limit"); s != "" {

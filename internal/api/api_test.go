@@ -4,9 +4,11 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -155,6 +157,126 @@ func TestEveryCatalogActionHasItsRouteAndItsOwnerRule(t *testing.T) {
 	}
 	if owners == 0 {
 		t.Error("the catalog has no owner action: the test does not reach the owner rule")
+	}
+}
+
+// TestARequestWithoutARequiredFieldIsRefusedAndWritesNothing: for each action of the catalog and each of its required
+// fields that is not a path field, a request that leaves the field out, or sends it empty, answers 422 "missing field
+// <name>" and changes nothing in the file. The other required fields carry values that a write accepts, so only the
+// one field is missing. An action with a file field is sent as multipart too, with a file. search is the one
+// exception: GET /search with no q is the search page, which TestEveryViewRenders draws.
+func TestARequestWithoutARequiredFieldIsRefusedAndWritesNothing(t *testing.T) {
+	c, _, s := freshStore(t)
+	root := must(c.Get(t.Context(), "/"))
+	p := must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Required probe", "body": "first words"}))
+	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
+	m := must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "weight", "day": "2026-09-01", "value": "71"}))
+	page, reading := strings.TrimPrefix(href(p, "self"), "/pages/"), strings.TrimPrefix(href(m, "self"), "/measurements/")
+	if page == "" || reading == "" {
+		t.Fatalf("no page id (%q) or reading id (%q) to send", page, reading)
+	}
+	// version is the probe page's version now: a case that wrote by error does not make the next save stale.
+	version := func() string {
+		for _, f := range find(must(c.Get(t.Context(), href(p, "self"))), "save-body").Fields {
+			if f.Name == "version" {
+				v, _ := f.Value.(string)
+				return v
+			}
+		}
+		t.Fatal("the probe page offers no save-body with a version")
+		return ""
+	}
+	original := filepath.Join(t.TempDir(), "notes.txt")
+	if err := os.WriteFile(original, []byte("synthetic notes"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// A value that a write accepts, for each required field; a field with options takes its first option.
+	valid := map[string]string{"title": "Probe title", "body": "new words", "to": "Required probe",
+		"kind": "part-of", "ids": page, "category": "Probe category", "metric": "weight", "day": "2026-09-02",
+		"value": "70", "name": "Probe metric", "q": "words"}
+	// state is the file in short: the rows of each table, and the sum of the edit revisions, so an edit shows too.
+	state := func() string {
+		return scalar(t, s, `SELECT (SELECT count(*) || ' ' || total(revision) FROM entities) || ' ' ||
+			(SELECT count(*) FROM entity_names) || ' ' || (SELECT count(*) FROM links) || ' ' ||
+			(SELECT count(*) FROM measurements) || ' ' || (SELECT count(*) FROM files) || ' ' ||
+			(SELECT count(*) FROM people) || ' ' || (SELECT count(*) FROM metrics)`)
+	}
+	actions, err := c.Catalog(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := 0
+	for _, a := range actions {
+		file := "" // the action's first file field
+		for _, f := range a.Fields {
+			if f.Type == "file" && file == "" {
+				file = f.Name
+			}
+		}
+		for _, missing := range a.Fields {
+			if !missing.Required || missing.In == "path" || a.Name == "search" {
+				continue
+			}
+			for _, empty := range []bool{false, true} {
+				valid["version"] = version()
+				values := map[string]string{}
+				for _, f := range a.Fields {
+					switch {
+					case f.In == "path" && f.Name == "id" && strings.HasPrefix(a.Href, "/measurements/"):
+						values[f.Name] = reading
+					case f.In == "path" && f.Name == "id":
+						values[f.Name] = page
+					case f.In == "path" && f.Name == "day":
+						values[f.Name] = "2026-09-01"
+					case f.In == "path":
+						t.Fatalf("%s: the test has no value for the path field %s", a.Name, f.Name)
+					case f.Name == missing.Name:
+						if empty {
+							values[f.Name] = ""
+						}
+					case f.Required && len(f.Options) > 0:
+						values[f.Name] = f.Options[0]
+					case f.Required:
+						v, ok := valid[f.Name]
+						if !ok {
+							t.Fatalf("%s: the test has no value for the required field %s", a.Name, f.Name)
+						}
+						values[f.Name] = v
+					}
+				}
+				sends := map[string]func() (*api.Entity, error){
+					"a form": func() (*api.Entity, error) { return c.Do(t.Context(), a, values) },
+				}
+				if file != "" {
+					sends["multipart"] = func() (*api.Entity, error) {
+						return c.DoFiles(t.Context(), a, values, map[string]string{file: original})
+					}
+				}
+				sent := "left out"
+				if empty {
+					sent = "empty"
+				}
+				for how, send := range sends {
+					what := fmt.Sprintf("%s %s with %s %s, as %s", a.Method, a.Name, missing.Name, sent, how)
+					before := state()
+					_, err := send()
+					var ce *client.Error
+					if !errors.As(err, &ce) {
+						t.Errorf("%s: %v, want a refusal", what, err)
+					} else if props, _ := ce.Entity.Properties.(map[string]any); ce.Status != http.StatusUnprocessableEntity ||
+						props["code"] != "invalid" || props["message"] != "missing field "+missing.Name {
+						t.Errorf("%s: %d %v, want 422 invalid \"missing field %s\"", what, ce.Status, props, missing.Name)
+					}
+					if after := state(); after != before {
+						t.Errorf("%s: the file changed from %s to %s", what, before, after)
+					}
+					cases++
+				}
+			}
+		}
+	}
+	if cases == 0 {
+		t.Error("no action of the catalog has a required field: the test reaches nothing")
 	}
 }
 
