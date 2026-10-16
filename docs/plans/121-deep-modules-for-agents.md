@@ -306,7 +306,9 @@ Each row changes an answer that a client sees, so each waits for the owner's wor
 
 1. Part 0: yes. Installed: `deadcode` v0.52.0, `staticcheck` 2026.2.2 (v0.8.2), `govulncheck` v1.9.0.
 2. Part 8: every row. The `save-body` row is a choice, not a change: an empty or missing body is **refused**, as the
-   catalog, API.md and the browser's `required` already say, so an agent that leaves out `body` cannot empty a page.
+   catalog and API.md already say, so an agent that leaves out `body` cannot empty a page. (The browser does not
+   mark the body `required` yet: its field template draws `required` for an input only. Part 5 draws it for a
+   required text area too.)
 3. Part 7: yes, the parity table replaces the per-surface copies, each removed assertion mapped to a row.
 4. Part 9: yes.
 
@@ -344,7 +346,7 @@ The rest the reviewers found goes to a later part:
 |---|---|
 | `core.refused` and `dryRun` lose a failed rollback that `db.Write` now joins; `Store.Capture`, `Store.CreatePage`, `Tx.SetPicture` and `Tx.SetPictureOf` return the result of a write that rolled back | 4 (`alone[T]`) |
 | `cmd/lifelog` and `core/snapshot.go` discard the error of `db.Close` | 6 (the cmd env), 4 |
-| `writeEntity` drops the error of `Encode`; `refusedOnItsPage` drops the error of `Write`; `renderHTML` logs the URL path, which can name a metric | 5 (one render entry point) |
+| `writeEntity` drops the error of `Encode`; `refusedOnItsPage` drops the error of `Write` (`renderHTML` logged the URL path: Part 3 fixed it) | 5 (one render entry point) |
 | `errorEntity` sends the text of every 500 to the client | 3 (one `writeError`) |
 | `/weeks/0000-W01` answers 422 when a metric has a reading that week | 4 (`core.ParseDay`) |
 | the agents' texts still name a photo's place and an `--at` flag that does not exist | 6 (the agents' texts against the catalog) |
@@ -358,3 +360,13 @@ The rest the reviewers found goes to a later part:
   the text of the cause. The server's log has the cause one time, with the pattern of the route and not its path; a
   cancelled request is not logged. A typed error and a 504 keep their text. The log lines of a page that cannot be
   drawn also name the pattern, not the path.
+- `--public --addr` is stricter: the public listener now uses the parse of the loopback listener. It refuses an IPv4
+  address or `localhost` in brackets (`[192.0.2.1]:7777`, `[0.0.0.0]:7777`, `[localhost]:7777`), a look-alike of
+  `localhost` (`localhoſt:7777`) and `::1:7777`; a port that is not decimal digits gets the general message. The
+  owner's service uses `--addr 127.0.0.1:7777`, which the parse accepts.
+- `save-body` refuses an empty or missing `body`, and `promote` a missing `to` (422), from the catalog's required
+  fields. `search` is the one exception: `GET /search` with no `q` is the search page. Two messages are less exact:
+  `correct` with no value says "missing field value" (the hint "to remove a reading, retract it" went), and
+  `open-day` with no day says "missing field day" until Part 8 opens today.
+- `FileIn.UnknownCaptureDay` stays: `SetPicture` sets it for a picture of any type, which the rule (an `image/*` with
+  no day and no EXIF date) does not give. Part 4 makes it core's own.

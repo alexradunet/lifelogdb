@@ -329,7 +329,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **`--public` opens the listener to other devices** ([plan 078](docs/plans/078-network-server.md)) and requires a
   **token**: `--token-file PATH` (one line of at least 32 characters; the command line never carries the secret) or
   `LIFELOG_TOKEN`; `--public` without one is refused before the listener opens. The default bind becomes `0.0.0.0:7777`
-  and `--addr` may name any numeric IP of this machine. Every request must carry `Authorization: Bearer <token>` or
+  and `--addr` may name any numeric IP of this machine, in brackets only when it is IPv6. Every request must carry `Authorization: Bearer <token>` or
   the cookie `/login` sets; one without is answered 401 with nothing of the database, and a browser is sent to
   `/login`. The `Host` check is dropped: it kept an unauthenticated local server from a DNS-rebinding page, and the
   token defeats that page on its own; absolute-form targets stay refused. A token holder is the owner: owner-only
