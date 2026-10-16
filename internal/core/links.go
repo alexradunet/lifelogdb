@@ -110,9 +110,6 @@ func dayOfTitle(title string) any {
 
 // link is Store.Link in t; added reports whether the link is new.
 func (t *Tx) link(from, to int64, kind, note string) (added bool, err error) {
-	if kind == "redirect" {
-		return false, Invalid("redirect is not a supported link kind")
-	}
 	if kind == "wikilink" {
 		return false, Invalid("wikilink links are written by saving a body, not directly")
 	}
@@ -135,9 +132,6 @@ func (t *Tx) link(from, to int64, kind, note string) (added bool, err error) {
 
 // unlink is Store.Unlink in t.
 func (t *Tx) unlink(from, to int64, kind string) error {
-	if kind == "redirect" {
-		return Invalid("redirect is not a supported link kind")
-	}
 	if kind == "wikilink" {
 		return Invalid("wikilink links are removed by saving a body, not directly")
 	}
@@ -151,9 +145,9 @@ func (t *Tx) unlink(from, to int64, kind string) error {
 	return nil
 }
 
-// Link adds an edge of a registered kind (D8). wikilink rows belong to the save contract; redirect is unsupported,
-// so neither is written here. The endpoint rules, an `at` from a day page among them, are links_endpoint_types. A
-// from id that no page has is a 404.
+// Link adds an edge of a registered kind (D8). wikilink rows belong to the save contract, so none is written here. A
+// kind that the registry does not have (redirect among them) and the endpoint rules, an `at` from a day page among
+// them, are links_endpoint_types. A from id that no page has is a 404.
 func (s *Store) Link(ctx context.Context, source string, from, to int64, kind, note string) error {
 	return s.Do(ctx, source, func(t *Tx) error { _, err := t.link(from, to, kind, note); return err })
 }

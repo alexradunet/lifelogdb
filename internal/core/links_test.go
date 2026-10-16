@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -159,6 +160,44 @@ func TestLinkFieldsImmutable(t *testing.T) {
 	}
 	if got := note(); got != "new note" {
 		t.Fatalf("a rolled back note edit changed the note: %v", got)
+	}
+}
+
+// TestALinkOfAKindThatTheRegistryDoesNotHave: redirect is not a kind of link_kinds (D8). The trigger
+// links_endpoint_types refuses a link of a kind that the registry does not have: a 422 with its sentence. A link from
+// a page that does not exist is a 404, whatever its kind. No such link exists, so a request to remove one is a 404.
+// Each refusal writes nothing.
+func TestALinkOfAKindThatTheRegistryDoesNotHave(t *testing.T) {
+	s := fresh(t)
+	a, _, err := s.CreatePage(ctx, "cli", "Page A", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _, err := s.CreatePage(ctx, "cli", "Page B", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const unregistered = "link kind is not registered in link_kinds"
+	for _, c := range []struct {
+		name   string
+		write  func() error
+		status int
+		says   string // a part of the message
+	}{
+		{"link redirect", func() error { return s.Link(ctx, "cli", a, b, "redirect", "") }, 422, unregistered},
+		{"link a kind with no row", func() error { return s.Link(ctx, "cli", a, b, "no-such-kind", "") }, 422, unregistered},
+		{"link redirect from no page", func() error { return s.Link(ctx, "cli", 9999, b, "redirect", "") }, 404, "no page 9999"},
+		{"unlink redirect", func() error { return s.Unlink(ctx, "cli", a, b, "redirect") }, 404, fmt.Sprintf("no redirect link from %d to %d", a, b)},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			before := everyRow(t, s)
+			if err := c.write(); status(err) != c.status || !strings.Contains(fmt.Sprint(err), c.says) {
+				t.Errorf("got %v (status %d), want %d with %q", err, status(err), c.status, c.says)
+			}
+			if after := everyRow(t, s); after != before {
+				t.Errorf("the refusal wrote:\nbefore:\n%s\nafter:\n%s", before, after)
+			}
+		})
 	}
 }
 

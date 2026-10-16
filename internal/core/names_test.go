@@ -220,9 +220,6 @@ func TestRenamedIdentityWritesThroughRetainedHandle(t *testing.T) {
 	if err := s.Unlink(ctx, "cli", other, id, "part-of"); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Link(ctx, "cli", other, id, "redirect", ""); status(err) != 422 {
-		t.Fatalf("removed kind: %v", err)
-	}
 	mention, err := s.PageByID(ctx, other)
 	if err != nil {
 		t.Fatal(err)
