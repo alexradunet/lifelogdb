@@ -28,22 +28,9 @@ func (t *Tx) syncWikilinks(pageID int64, body string) (Sync, error) {
 	keys, titles, rejected := text.Targets(body, own)
 	r := Sync{Linked: []string{}, Skipped: rejected}
 	before := map[int64]bool{}
+	var to int64
 	rows, err := t.tx.QueryContext(t.ctx, `SELECT to_id FROM links WHERE from_id = ? AND kind = 'wikilink'`, pageID)
-	if err != nil {
-		return Sync{}, err
-	}
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			rows.Close()
-			return Sync{}, err
-		}
-		before[id] = true
-	}
-	if err := rows.Close(); err != nil {
-		return Sync{}, err
-	}
-	if err := rows.Err(); err != nil {
+	if err := each(rows, err, []any{&to}, func() { before[to] = true }); err != nil {
 		return Sync{}, err
 	}
 	ids := []int64{}
@@ -178,19 +165,7 @@ type Edge struct {
 
 func (s *Store) edges(ctx context.Context, q string, args ...any) ([]Edge, error) {
 	rows, err := s.DB.R.QueryContext(ctx, q, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []Edge{}
-	for rows.Next() {
-		var e Edge
-		if err := rows.Scan(&e.Kind, &e.ID, &e.Title, &e.Type, &e.Note); err != nil {
-			return nil, err
-		}
-		out = append(out, e)
-	}
-	return out, rows.Err()
+	return list(rows, err, func(e *Edge) []any { return []any{&e.Kind, &e.ID, &e.Title, &e.Type, &e.Note} })
 }
 
 // LinkKindsFrom are the registered kinds a page of this type may start (link_kinds.from_types, NULL for any),
@@ -198,17 +173,5 @@ func (s *Store) edges(ctx context.Context, q string, args ...any) ([]Edge, error
 func (s *Store) LinkKindsFrom(ctx context.Context, typ string) ([]string, error) {
 	rows, err := s.DB.R.QueryContext(ctx, `SELECT kind FROM link_kinds WHERE kind <> 'wikilink'
 	    AND (from_types IS NULL OR instr(',' || from_types || ',', ',' || ? || ',') > 0) ORDER BY kind`, typ)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []string{}
-	for rows.Next() {
-		var k string
-		if err := rows.Scan(&k); err != nil {
-			return nil, err
-		}
-		out = append(out, k)
-	}
-	return out, rows.Err()
+	return list(rows, err, func(k *string) []any { return []any{k} })
 }

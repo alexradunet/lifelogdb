@@ -225,19 +225,9 @@ func (s *Store) readings(ctx context.Context, where string, args ...any) ([]Read
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT `+readingColumns+`
 		  FROM measurement_values me JOIN entities m ON m.id = me.metric_id  JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key `+where, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []Reading{}
-	for rows.Next() {
-		var r Reading
-		if err := rows.Scan(&r.ID, &r.Metric, &r.Day, &r.TakenAt, &r.TZ, &r.Value, &r.CapturedWith); err != nil {
-			return nil, err
-		}
-		out = append(out, r)
-	}
-	return out, rows.Err()
+	return list(rows, err, func(r *Reading) []any {
+		return []any{&r.ID, &r.Metric, &r.Day, &r.TakenAt, &r.TZ, &r.Value, &r.CapturedWith}
+	})
 }
 
 // Metric is a live metric (D27): its page's id, title (its name) and body (its note), its unit; Categories are the
@@ -255,45 +245,31 @@ func (s *Store) Metrics(ctx context.Context) ([]Metric, error) {
 		SELECT m.id, p_name.title, m.unit, p.body
 		  FROM metrics m JOIN entities p ON p.id = m.id JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key AND p.deleted_at IS NULL
 		 ORDER BY p.preferred_name_key`)
+	out, err := list(rows, err, func(m *Metric) []any { return []any{&m.ID, &m.Name, &m.Unit, &m.Note} })
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	out := []Metric{}
 	at := map[int64]int{}
-	for rows.Next() {
-		var m Metric
-		if err := rows.Scan(&m.ID, &m.Name, &m.Unit, &m.Note); err != nil {
-			return nil, err
-		}
-		at[m.ID] = len(out)
-		out = append(out, m)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
+	for i, m := range out {
+		at[m.ID] = i
 	}
 	cats, err := s.categories(ctx)
 	if err != nil {
 		return nil, err
 	}
+	var from, to int64
 	filed, err := s.DB.R.QueryContext(ctx, `SELECT from_id, to_id FROM links WHERE kind = 'part-of'`)
-	if err != nil {
-		return nil, err
-	}
-	defer filed.Close()
-	for filed.Next() {
-		var from, to int64
-		if err := filed.Scan(&from, &to); err != nil {
-			return nil, err
-		}
+	if err := each(filed, err, []any{&from, &to}, func() {
 		if i, ok := at[from]; ok && cats[to] != nil {
 			out[i].Categories = append(out[i].Categories, cats[to].Path)
 		}
+	}); err != nil {
+		return nil, err
 	}
 	for i := range out {
 		sort.Strings(out[i].Categories)
 	}
-	return out, filed.Err()
+	return out, nil
 }
 
 // Recent is one of a metric's recent readings: its measurement, its day and its value.
@@ -316,20 +292,13 @@ func (s *Store) RecentReadings(ctx context.Context, n int) (map[int64][]Recent, 
 		         WHERE x.metric_id = m.id
 		         ORDER BY x.day DESC, x.taken_at DESC, x.id DESC LIMIT ?)
 		 ORDER BY v.metric_id, v.day, v.taken_at, v.id`, n)
-	if err != nil {
+	out := map[int64][]Recent{}
+	var metric int64
+	var r Recent
+	if err := each(rows, err, []any{&metric, &r.ID, &r.Day, &r.Value}, func() { out[metric] = append(out[metric], r) }); err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	out := map[int64][]Recent{}
-	for rows.Next() {
-		var metric int64
-		var r Recent
-		if err := rows.Scan(&metric, &r.ID, &r.Day, &r.Value); err != nil {
-			return nil, err
-		}
-		out[metric] = append(out[metric], r)
-	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // InUse names the metrics with a current reading in the n days up to day, so a view offers the series the
@@ -343,19 +312,7 @@ func (s *Store) InUse(ctx context.Context, day string, n int) ([]string, error) 
 		 WHERE m.entity_type = 'metric' AND EXISTS (SELECT 1 FROM measurement_values v
 		                WHERE v.metric_id = m.id AND v.day > date(?, '-' || ? || ' day') AND v.day <= ?)
 		 ORDER BY m.preferred_name_key`, day, n, day)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []string{}
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, err
-		}
-		out = append(out, name)
-	}
-	return out, rows.Err()
+	return list(rows, err, func(name *string) []any { return []any{name} })
 }
 
 // Series is cookbook/metric-series.md: the current readings of one metric in (from, to]. An empty from is no lower
@@ -380,21 +337,7 @@ func (s *Store) ReadingsByDay(ctx context.Context, from, through string) (map[st
 	if err := checkWindow(from, through); err != nil {
 		return nil, err
 	}
-	rows, err := s.DB.R.QueryContext(ctx, `SELECT day, count(*) FROM measurement_values WHERE day BETWEEN ? AND ? GROUP BY day`, from, through)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := map[string]int{}
-	for rows.Next() {
-		var day string
-		var n int
-		if err := rows.Scan(&day, &n); err != nil {
-			return nil, err
-		}
-		out[day] = n
-	}
-	return out, rows.Err()
+	return groupCounts(s.DB.R.QueryContext(ctx, `SELECT day, count(*) FROM measurement_values WHERE day BETWEEN ? AND ? GROUP BY day`, from, through))
 }
 
 // Measurement reads one row of the append-only table, current or not, and what corrected it.

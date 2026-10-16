@@ -32,19 +32,12 @@ func (s *Store) categories(ctx context.Context) (map[int64]*Category, error) {
 		  JOIN entities f ON f.id = l.from_id
 		 WHERE l.kind = 'part-of'
 		 ORDER BY p.preferred_name_key`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
 	cats := map[int64]*Category{}
 	parent := map[int64]int64{} // the first category a page is part-of, by title
-	for rows.Next() {
-		var from, id int64
-		var title string
-		var live bool
-		if err := rows.Scan(&from, &id, &title, &live); err != nil {
-			return nil, err
-		}
+	var from, id int64
+	var title string
+	var live bool
+	if err := each(rows, err, []any{&from, &id, &title, &live}, func() {
 		if cats[id] == nil {
 			cats[id] = &Category{ID: id, Title: title}
 		}
@@ -54,8 +47,7 @@ func (s *Store) categories(ctx context.Context) (map[int64]*Category, error) {
 		if _, ok := parent[from]; !ok {
 			parent[from] = id
 		}
-	}
-	if err := rows.Err(); err != nil {
+	}); err != nil {
 		return nil, err
 	}
 	for id, c := range cats {

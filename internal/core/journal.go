@@ -84,21 +84,13 @@ func (s *Store) Day(ctx context.Context, day string) (*Day, error) {
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
+	var r DayRow
+	var at sql.NullString
 	rows, err := s.DB.R.QueryContext(ctx, dayView, sql.Named("day", day))
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var r DayRow
-		var at sql.NullString
-		if err := rows.Scan(&r.What, &at, &r.Detail); err != nil {
-			return nil, err
-		}
+	if err := each(rows, err, []any{&r.What, &at, &r.Detail}, func() {
 		r.At = at.String
 		d.Rows = append(d.Rows, r)
-	}
-	if err := rows.Err(); err != nil {
+	}); err != nil {
 		return nil, err
 	}
 	d.Readings, err = s.readings(ctx, `WHERE me.day = ? ORDER BY me.taken_at, me.id`, day)
@@ -143,20 +135,13 @@ func (s *Store) Moods(ctx context.Context, from, through string) (map[string][]f
 		  JOIN entity_names n ON n.entity_id = me.metric_id AND n.name_key = 'mood'
 		 WHERE me.day BETWEEN ? AND ?
 		 ORDER BY me.day, me.id`, from, through)
-	if err != nil {
+	out := map[string][]float64{}
+	var day string
+	var v float64
+	if err := each(rows, err, []any{&day, &v}, func() { out[day] = append(out[day], v) }); err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	out := map[string][]float64{}
-	for rows.Next() {
-		var day string
-		var v float64
-		if err := rows.Scan(&day, &v); err != nil {
-			return nil, err
-		}
-		out[day] = append(out[day], v)
-	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // DayEntry is a live day page as a list of days shows it: its day, its id, and the first line of its body as plain
@@ -198,21 +183,16 @@ func (s *Store) dayEntries(ctx context.Context, cond, order string, limit int, a
 		SELECT p.day, p.id, p.body FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
 		 WHERE `+cond+` AND p.is_journal AND p.deleted_at IS NULL
 		 ORDER BY p.day `+order+` LIMIT ?`, append(args, limit)...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
 	out := []DayEntry{}
-	for rows.Next() {
-		var e DayEntry
-		var body string
-		if err := rows.Scan(&e.Day, &e.PageID, &body); err != nil {
-			return nil, err
-		}
+	var e DayEntry
+	var body string
+	if err := each(rows, err, []any{&e.Day, &e.PageID, &body}, func() {
 		e.FirstLine = firstLine(body)
 		out = append(out, e)
+	}); err != nil {
+		return nil, err
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // BlockMark is the markers at the start of a line that a plain-text view cuts: headings, quotes, list items, check

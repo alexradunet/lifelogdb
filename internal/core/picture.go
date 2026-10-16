@@ -41,20 +41,10 @@ func firstPictures(ctx context.Context, q interface {
 		  JOIN entities e ON e.id = n.entity_id AND e.deleted_at IS NULL
 		  JOIN files f ON f.id = e.id AND f.preview IS NOT NULL
 		 WHERE n.name_key IN (SELECT value FROM json_each(?))`, string(arg))
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
 	byKey := map[string]int64{}
-	for rows.Next() {
-		var k string
-		var id int64
-		if err := rows.Scan(&k, &id); err != nil {
-			return nil, err
-		}
-		byKey[k] = id
-	}
-	if err := rows.Err(); err != nil {
+	var key string
+	var file int64
+	if err := each(rows, err, []any{&key, &file}, func() { byKey[key] = file }); err != nil {
 		return nil, err
 	}
 	for i, ks := range titles {

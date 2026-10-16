@@ -168,17 +168,5 @@ func (s *Store) TitlesByPrefix(ctx context.Context, prefix string, limit int) ([
 		  JOIN entity_names p ON p.entity_id = e.id AND p.name_key = e.preferred_name_key
 		 WHERE n.name_key >= ? AND n.name_key < ?
 		 ORDER BY n.name_key LIMIT ?`, key, key+"\xff", limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []TitleMatch{}
-	for rows.Next() {
-		var m TitleMatch
-		if err := rows.Scan(&m.Name, &m.Title, &m.PageID, &m.Type); err != nil {
-			return nil, err
-		}
-		out = append(out, m)
-	}
-	return out, rows.Err()
+	return list(rows, err, func(m *TitleMatch) []any { return []any{&m.Name, &m.Title, &m.PageID, &m.Type} })
 }

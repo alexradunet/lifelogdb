@@ -381,14 +381,5 @@ func (s *Store) Search(ctx context.Context, q string, limit, offset int) ([]Hit,
 	if err != nil {
 		return nil, invalidCause(err, "search %q: %v", q, err)
 	}
-	defer rows.Close()
-	out := []Hit{}
-	for rows.Next() {
-		var h Hit
-		if err := rows.Scan(&h.ID, &h.Title, &h.Snippet); err != nil {
-			return nil, invalidCause(err, "search %q: %v", q, err)
-		}
-		out = append(out, h)
-	}
-	return out, rows.Err()
+	return list(rows, nil, func(h *Hit) []any { return []any{&h.ID, &h.Title, &h.Snippet} })
 }

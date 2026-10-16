@@ -3,6 +3,7 @@
 package core
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"regexp"
@@ -165,4 +166,49 @@ func nullIfEmpty(s string) any {
 		return nil
 	}
 	return s
+}
+
+// The one loop of core over the rows of a query. rows and err are what QueryContext returned, so a caller passes its
+// call straight in. Every Scan, Err and Close branch is here.
+
+// each scans every row into dst and then runs row. A Scan error ends the read. The rows are closed in every case, and
+// the error of the query, of a Scan, of the rows (Err) or of their Close is returned.
+func each(rows *sql.Rows, err error, dst []any, row func()) (e error) {
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if cerr := rows.Close(); cerr != nil {
+			e = errors.Join(e, cerr)
+		}
+	}()
+	for rows.Next() {
+		if err := rows.Scan(dst...); err != nil {
+			return err
+		}
+		row()
+	}
+	return rows.Err()
+}
+
+// list reads every row into a slice: fields gives the destinations of one row's columns in v. The slice is never nil
+// when the read succeeds, so an empty list is [] in JSON.
+func list[T any](rows *sql.Rows, err error, fields func(v *T) []any) ([]T, error) {
+	var v T
+	out := []T{}
+	if err := each(rows, err, fields(&v), func() { out = append(out, v) }); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// groupCounts reads the rows of a GROUP BY count, a key and its count, into a map. A key with no row is absent.
+func groupCounts(rows *sql.Rows, err error) (map[string]int, error) {
+	out := map[string]int{}
+	var k string
+	var n int
+	if err := each(rows, err, []any{&k, &n}, func() { out[k] = n }); err != nil {
+		return nil, err
+	}
+	return out, nil
 }

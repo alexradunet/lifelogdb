@@ -59,19 +59,7 @@ func (s *Store) PlainPages(ctx context.Context, sc Scope, limit, offset int) ([]
 		  FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
 		 WHERE `+plainPage+` AND `+where+`
 		 ORDER BY p.preferred_name_key LIMIT ? OFFSET ?`, append(args, limit, offset)...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []PageRow{}
-	for rows.Next() {
-		var r PageRow
-		if err := rows.Scan(&r.ID, &r.Title, &r.Category); err != nil {
-			return nil, err
-		}
-		out = append(out, r)
-	}
-	return out, rows.Err()
+	return list(rows, err, func(r *PageRow) []any { return []any{&r.ID, &r.Title, &r.Category} })
 }
 
 // MetricRow is a live metric as Browse lists it: its page's id, its name and its unit ("" for a count or a habit).
@@ -90,19 +78,7 @@ func (s *Store) MetricRows(ctx context.Context, sc Scope, limit, offset int) ([]
 		  JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
 		 WHERE p.deleted_at IS NULL AND `+where+`
 		 ORDER BY p.preferred_name_key LIMIT ? OFFSET ?`, append(args, limit, offset)...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []MetricRow{}
-	for rows.Next() {
-		var r MetricRow
-		if err := rows.Scan(&r.ID, &r.Title, &r.Unit); err != nil {
-			return nil, err
-		}
-		out = append(out, r)
-	}
-	return out, rows.Err()
+	return list(rows, err, func(r *MetricRow) []any { return []any{&r.ID, &r.Title, &r.Unit} })
 }
 
 // FiledRow is a live thing filed in a category: its id, title and type, its Browse kind (BrowseKinds), whether it
@@ -126,19 +102,7 @@ func (s *Store) FiledIn(ctx context.Context, category int64, limit, offset int) 
 		  LEFT JOIN files f ON f.id = p.id
 		 WHERE p.deleted_at IS NULL AND `+where+`
 		 ORDER BY category DESC, p.preferred_name_key LIMIT ? OFFSET ?`, append(args, limit, offset)...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []FiledRow{}
-	for rows.Next() {
-		var r FiledRow
-		if err := rows.Scan(&r.ID, &r.Title, &r.Type, &r.Kind, &r.Category, &r.MIME); err != nil {
-			return nil, err
-		}
-		out = append(out, r)
-	}
-	return out, rows.Err()
+	return list(rows, err, func(r *FiledRow) []any { return []any{&r.ID, &r.Title, &r.Type, &r.Kind, &r.Category, &r.MIME} })
 }
 
 // BrowseCounts counts the live things of each Browse kind in the scope, by kind (a kind with none is 0), with "all",
@@ -150,25 +114,16 @@ func (s *Store) BrowseCounts(ctx context.Context, sc Scope) (map[string]int, err
 		out[k] = 0
 	}
 	where, args := sc.where()
-	rows, err := s.DB.R.QueryContext(ctx, `
+	kinds, err := groupCounts(s.DB.R.QueryContext(ctx, `
 		SELECT `+browseKind+`, count(*)
 		  FROM entities p LEFT JOIN files f ON f.id = p.id
 		 WHERE p.deleted_at IS NULL AND NOT p.is_journal AND `+where+`
-		 GROUP BY 1`, args...)
+		 GROUP BY 1`, args...))
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var k string
-		var n int
-		if err := rows.Scan(&k, &n); err != nil {
-			return nil, err
-		}
+	for k, n := range kinds {
 		out[k], out["all"] = n, out["all"]+n
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
 	}
 	var ghosts int
 	if err := s.DB.R.QueryRowContext(ctx, `SELECT count(*) FROM (`+plainGhosts+`)`).Scan(&ghosts); err != nil {
@@ -206,20 +161,12 @@ func (s *Store) NamedMentions(ctx context.Context, typ string, sc Scope, limit, 
 		 WHERE p.entity_type = ? AND p.deleted_at IS NULL AND `+where+`
 		 GROUP BY p.id, p_name.title
 		 ORDER BY p.preferred_name_key LIMIT ? OFFSET ?`, append(append([]any{typ}, args...), limit, offset)...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
 	out, bodies := []NamedRow{}, []string{}
-	for rows.Next() {
-		var r NamedRow
-		var body string
-		if err := rows.Scan(&r.ID, &r.Title, &r.Mentions, &r.LastDay, &body); err != nil {
-			return nil, err
-		}
+	var r NamedRow
+	var body string
+	if err := each(rows, err, []any{&r.ID, &r.Title, &r.Mentions, &r.LastDay, &body}, func() {
 		out, bodies = append(out, r), append(bodies, body)
-	}
-	if err := rows.Err(); err != nil {
+	}); err != nil {
 		return nil, err
 	}
 	if typ != "person" {
@@ -289,40 +236,14 @@ func (s *Store) filesOf(ctx context.Context, media bool, kind string, sc Scope, 
 		   AND (? = '' OR `+mediaKind+` = ?) AND `+where+`
 		 GROUP BY p.id, p_name.title, f.mime, f.preview IS NOT NULL
 		 ORDER BY day DESC, p.created_at DESC, p.id DESC LIMIT ? OFFSET ?`, append(append([]any{media, kind, kind}, args...), limit, offset)...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []FileRow{}
-	for rows.Next() {
-		var r FileRow
-		if err := rows.Scan(&r.ID, &r.Title, &r.MIME, &r.Picture, &r.Day, &r.Mentions); err != nil {
-			return nil, err
-		}
-		out = append(out, r)
-	}
-	return out, rows.Err()
+	return list(rows, err, func(r *FileRow) []any { return []any{&r.ID, &r.Title, &r.MIME, &r.Picture, &r.Day, &r.Mentions} })
 }
 
 // MediaCounts counts the live files of each media kind in the scope, by kind; a kind with none is absent.
 func (s *Store) MediaCounts(ctx context.Context, sc Scope) (map[string]int, error) {
 	where, args := sc.where()
-	rows, err := s.DB.R.QueryContext(ctx, `SELECT `+mediaKind+`, count(*) FROM files f JOIN entities p ON p.id = f.id
-		WHERE p.deleted_at IS NULL AND `+mediaKind+` IN ('image', 'video', 'audio') AND `+where+` GROUP BY 1`, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := map[string]int{}
-	for rows.Next() {
-		var k string
-		var n int
-		if err := rows.Scan(&k, &n); err != nil {
-			return nil, err
-		}
-		out[k] = n
-	}
-	return out, rows.Err()
+	return groupCounts(s.DB.R.QueryContext(ctx, `SELECT `+mediaKind+`, count(*) FROM files f JOIN entities p ON p.id = f.id
+		WHERE p.deleted_at IS NULL AND `+mediaKind+` IN ('image', 'video', 'audio') AND `+where+` GROUP BY 1`, args...))
 }
 
 // Ghost is a row of the ghost_pages view (cookbook/ghost-pages.md).
@@ -339,17 +260,5 @@ const plainGhosts = `SELECT g.id, g.title, g.created_at FROM ghost_pages g JOIN 
 // Ghosts is one page of the ghost_pages view, a day page left out (plainGhosts), oldest first.
 func (s *Store) Ghosts(ctx context.Context, limit, offset int) ([]Ghost, error) {
 	rows, err := s.DB.R.QueryContext(ctx, plainGhosts+` ORDER BY g.created_at, g.id LIMIT ? OFFSET ?`, limit, offset)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []Ghost{}
-	for rows.Next() {
-		var g Ghost
-		if err := rows.Scan(&g.ID, &g.Title, &g.CreatedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, g)
-	}
-	return out, rows.Err()
+	return list(rows, err, func(g *Ghost) []any { return []any{&g.ID, &g.Title, &g.CreatedAt} })
 }

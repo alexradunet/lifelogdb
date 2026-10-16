@@ -431,3 +431,64 @@ func withoutTrigger(t *testing.T, s *Store, trigger, statement string, args ...a
 	}
 	return res
 }
+
+// TestRowReadsReportEveryFault: each and list, the one loop of core over rows, return the error of the query, of a
+// Scan, of the rows (Err) and of their Close, and they close the rows in every case. The fault driver of
+// integrity_test.go gives each fault: its rows hold one integer, and with the fault scan a second row that is text.
+func TestRowReadsReportEveryFault(t *testing.T) {
+	for _, c := range []struct {
+		fault    string
+		rows     int  // the rows that each gives to its row function
+		closed   int  // the rows the driver closed
+		ofDriver bool // the driver's fault is in the error
+		ofScan   bool // the Scan error of the second row is in the error
+	}{
+		{fault: "", rows: 0, closed: 1},
+		{fault: "query", rows: 0, closed: 0, ofDriver: true},
+		{fault: "scan", rows: 1, closed: 1, ofScan: true},
+		{fault: "late", rows: 1, closed: 1, ofDriver: true},
+		{fault: "close", rows: 1, closed: 1, ofDriver: true},
+		{fault: "scan-close", rows: 1, closed: 1, ofDriver: true, ofScan: true},
+	} {
+		t.Run("fault="+c.fault, func(t *testing.T) {
+			check := func(what string, err error, closed int) {
+				t.Helper()
+				if (err != nil) != (c.ofDriver || c.ofScan) {
+					t.Errorf("%s: error %v, want an error: %v", what, err, c.ofDriver || c.ofScan)
+				}
+				if errors.Is(err, errIntegrityFault) != c.ofDriver {
+					t.Errorf("%s: error %v, want the driver's fault in it: %v", what, err, c.ofDriver)
+				}
+				if ofScan := err != nil && strings.Contains(err.Error(), "Scan error on column index 0"); ofScan != c.ofScan {
+					t.Errorf("%s: error %v, want the Scan error in it: %v", what, err, c.ofScan)
+				}
+				if closed != c.closed {
+					t.Errorf("%s: the driver closed %d rows, want %d", what, closed, c.closed)
+				}
+			}
+
+			driver := &integrityConnector{check: "orphan entities", fault: c.fault}
+			s := faultIntegrityStore(t, driver)
+			var v int64
+			var seen []int64
+			rows, err := s.DB.R.QueryContext(ctx, "SELECT value")
+			err = each(rows, err, []any{&v}, func() { seen = append(seen, v) })
+			check("each", err, driver.closed)
+			if len(seen) != c.rows || c.rows == 1 && seen[0] != 42 {
+				t.Errorf("each: the row function saw %v, want %d rows of 42", seen, c.rows)
+			}
+
+			driver = &integrityConnector{check: "orphan entities", fault: c.fault}
+			s = faultIntegrityStore(t, driver)
+			rows, err = s.DB.R.QueryContext(ctx, "SELECT value")
+			got, err := list(rows, err, func(v *int64) []any { return []any{v} })
+			check("list", err, driver.closed)
+			switch {
+			case err != nil && got != nil:
+				t.Errorf("list: %v with the error %v, want no list", got, err)
+			case err == nil && (got == nil || len(got) != 0):
+				t.Errorf("list: %#v, want an empty list that is not nil", got)
+			}
+		})
+	}
+}
