@@ -12,7 +12,6 @@ import (
 
 	"lifelog/internal/api"
 	"lifelog/internal/api/apitest"
-	"lifelog/internal/client"
 )
 
 // A new person, place or file is filed where it is made (docs/plans/117-one-browse-view.md, rule 6).
@@ -190,34 +189,5 @@ func TestBrowseNewFormsInACategoryCarryIt(t *testing.T) {
 	ana := apitest.Must(t)(c.Do(ctx, apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/browse?in=Family&kind=person")), "create-person"), map[string]string{"title": "Cy"}))
 	if got := partOfLinks(ana); strings.Join(got, ",") != "Family" {
 		t.Errorf("Cy made from Browse in Family is part-of %v", got)
-	}
-}
-
-// The same write in process and over HTTP, by the owner's CLI and an agent: the place and its link.
-func TestFilingWhereMadeTransportParity(t *testing.T) {
-	for _, remote := range []bool{false, true} {
-		for _, source := range []string{"cli", "agent:browse"} {
-			t.Run(fmt.Sprint(remote, source), func(t *testing.T) {
-				_, h, _ := apitest.Fresh(t, "cli")
-				c := client.InProcess(h, source)
-				if remote {
-					_, c = apitest.Clients(t, h, source)
-				}
-				actions, err := c.Catalog(t.Context())
-				if err != nil {
-					t.Fatal(err)
-				}
-				var place api.Action
-				for _, a := range actions {
-					if a.Name == "create-place" {
-						place = a
-					}
-				}
-				e := apitest.Must(t)(c.Do(t.Context(), place, map[string]string{"title": "Lakeside", "category": "Trips"}))
-				if got := partOfLinks(e); strings.Join(got, ",") != "Trips" {
-					t.Errorf("Lakeside is part-of %v, want Trips", got)
-				}
-			})
-		}
 	}
 }

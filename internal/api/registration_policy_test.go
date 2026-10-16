@@ -1,28 +1,21 @@
 package api_test
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"strings"
 	"testing"
-	"time"
-
-	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"lifelog/internal/api"
 	"lifelog/internal/api/apitest"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db/dbtest"
-	lifelogmcp "lifelog/internal/mcp"
 )
 
-// The owner-only actions are refused to an agent and are never MCP tools; every other action is a tool. A refused
-// action writes nothing: no metric, and no file in the snapshot folder.
+// The owner-only actions are refused to an agent. A refused action writes nothing: no metric, and no file in the
+// snapshot folder. That they are never MCP tools is a test of mcp (TestTheToolsAreTheActionsThatAreNotTheOwners).
 func TestOwnerOnlyActionsPolicy(t *testing.T) {
 	d, snapshots := dbtest.New(t), t.TempDir()
 	agent := client.InProcess(api.New(&core.Store{DB: d, SnapshotDir: snapshots}), "agent:policy-test")
@@ -47,45 +40,6 @@ func TestOwnerOnlyActionsPolicy(t *testing.T) {
 	}
 	if files, err := os.ReadDir(snapshots); err != nil || len(files) != 0 {
 		t.Fatalf("a refused snapshot wrote in the snapshot folder: %v %v", files, err)
-	}
-
-	// Inspect the actual SDK listing, without invoking any MCP tool.
-	srv, err := lifelogmcp.New(t.Context(), agent, "test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	st, ct := mcpsdk.NewInMemoryTransports()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	done := make(chan error, 1)
-	go func() { done <- srv.Run(ctx, st) }()
-	t.Cleanup(func() {
-		cancel()
-		select {
-		case err := <-done:
-			if err != nil && !errors.Is(err, context.Canceled) {
-				t.Error(err)
-			}
-		case <-time.After(10 * time.Second):
-			t.Error("SDK listing server did not stop")
-		}
-	})
-	session, err := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "policy-test", Version: "0"}, nil).Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { session.Close() })
-	tools, err := session.ListTools(ctx, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	listed := map[string]bool{}
-	for _, tool := range tools.Tools {
-		listed[tool.Name] = true
-	}
-	for _, a := range catalog.Actions {
-		if tool := strings.ReplaceAll(a.Name, "-", "_"); listed[tool] == a.Owner {
-			t.Errorf("action %s (owner %v): MCP tool %s listed %v", a.Name, a.Owner, tool, listed[tool])
-		}
 	}
 }
 

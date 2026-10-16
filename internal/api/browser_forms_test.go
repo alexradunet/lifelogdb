@@ -1,7 +1,9 @@
 package api_test
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -98,5 +100,95 @@ func TestABrowserFormReturnsToThePageThatSentIt(t *testing.T) {
 	}
 	if n := len(apitest.Must(t)(c.Get(t.Context(), "/days/2026-09-29")).Properties.(map[string]any)["view"].([]any)); n == 0 {
 		t.Error("the writes were not done")
+	}
+}
+
+func TestBrowserStableNameResolution(t *testing.T) {
+	_, h, s := apitest.Fresh(t, "cli")
+	id, err := s.CreatePerson(context.Background(), "cli", "Old person", "Synthetic Person", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref, _, err := s.CreatePage(context.Background(), "cli", "Old reference", "See [[Old person]].", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	post := httptest.NewRequest("POST", fmt.Sprintf("/pages/%d/rename", id), strings.NewReader(url.Values{"title": {"New person"}}.Encode()))
+	post.Header.Set("Accept", "text/html")
+	post.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, post)
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != fmt.Sprintf("/pages/%d", id) {
+		t.Fatalf("rename HTML: %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+	for _, href := range []string{fmt.Sprintf("/pages/%d", id), fmt.Sprintf("/pages/%d", ref)} {
+		req := httptest.NewRequest("GET", href, nil)
+		req.Header.Set("Accept", "text/html")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != 200 {
+			t.Fatalf("HTML: %d", rec.Code)
+		}
+		if href == fmt.Sprintf("/pages/%d", id) && !strings.Contains(rec.Body.String(), "New person") {
+			t.Fatal("preferred title absent from HTML")
+		}
+		if href == fmt.Sprintf("/pages/%d", ref) && !strings.Contains(rec.Body.String(), fmt.Sprintf(`href="/pages/%d"`, id)) {
+			t.Fatal("old reference rendered to wrong identity")
+		}
+	}
+}
+
+func TestBrowserFormCarriesRevisionAndRefusesOldClockToken(t *testing.T) {
+	_, h, store := apitest.Fresh(t, "cli")
+	d := store.DB
+	id, _, err := store.CreatePage(context.Background(), "cli", "Browser version", "first", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.W.Exec(`UPDATE entities SET revision=9007199254740993 WHERE id=?`, id); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("GET", fmt.Sprintf("/pages/%d", id), nil)
+	req.Header.Set("Accept", "text/html")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `name="version" value="9007199254740993"`) {
+		t.Fatalf("HTML token missing: status %d", rec.Code)
+	}
+	var clock string
+	if err := d.R.QueryRow(`SELECT updated_at FROM entities WHERE id=?`, id).Scan(&clock); err != nil {
+		t.Fatal(err)
+	}
+	post := func(token, body string) int {
+		t.Helper()
+		req := httptest.NewRequest("POST", fmt.Sprintf("/pages/%d/body", id), strings.NewReader(url.Values{"version": {token}, "body": {body}}.Encode()))
+		req.Header.Set("Accept", "text/html")
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		res := rec.Result()
+		defer res.Body.Close()
+		if _, err := io.Copy(io.Discard, res.Body); err != nil {
+			t.Fatal(err)
+		}
+		return rec.Code
+	}
+	if got := post("9007199254740993", "committed"); got != http.StatusSeeOther {
+		t.Fatalf("form save %d", got)
+	}
+	for _, token := range []string{"9007199254740993", clock} {
+		if got := post(token, "stale [[Forbidden]]"); got != 409 {
+			t.Fatalf("stale browser token %q: %d", token, got)
+		}
+	}
+	p, err := store.PageByID(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Body != "committed" || p.Version != "9007199254740994" {
+		t.Fatalf("browser persisted %+v", p)
+	}
+	if target, err := store.PageID(context.Background(), "Forbidden"); err != nil || target != 0 {
+		t.Fatalf("browser stale target %d %v", target, err)
 	}
 }
