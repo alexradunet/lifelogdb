@@ -102,12 +102,26 @@
 <form class="inline" method="POST" action="{{.Href}}"><input type="hidden" name="back" value="{{$.back}}"><input type="hidden" name="metric" value="{{$.metric}}"><input type="hidden" name="day" value="{{$.day}}">
 <label><span>{{if eq $.day $.today}}Today{{else}}{{shortDay $.day}}{{end}}{{with $.unit}}, {{.}}{{end}}</span><input type="number" name="value" step="any" inputmode="decimal" required></label><button class="primary small">Save</button></form></details>{{end}}{{end}}
 
+{{/* reading-link is a reading as a link to its own page: its value, and its unit when it has one. It takes id,
+     value and unit. */}}
+{{define "reading-link"}}<a class="reading" href="/measurements/{{num .id}}">{{num .value}}{{with .unit}} <span class="unit">{{.}}</span>{{end}}</a>{{end}}
+
 {{/* body-editor is the fold that edits the body of a page with save-body (the day, a page, a metric): it is closed,
      and it opens when the save was refused. It takes action (save-body; nothing is drawn without it), back (the page
      the browser returns to) and summary (the words of the fold). */}}
 {{define "body-editor"}}{{with form .action "button" "Save" "back" .back}}<details{{if .Refused}} open{{end}}><summary>{{$.summary}}</summary>
 <small class="desc">CommonMark. [[Title]] links a page and #tag a tag page; both are created if new. Nothing is saved until the version you read is still the current one.</small>
 {{template "form" .}}</details>{{end}}{{end}}
+
+{{/* rejected-names is the note under a body that lists the [[names]] in it that make no link, because a title cannot
+     hold them. It takes the body; nothing is drawn when each name makes a link. */}}
+{{define "rejected-names"}}{{with rejected .}}<div class="alert" role="note"><p>These names make no link — a title cannot hold <code>/ \ : * ? " &lt; &gt; |</code>, or start or end with a dot or space:</p>
+<p>{{range $i, $t := .}}{{if $i}}, {{end}}<code>[[{{$t}}]]</code>{{end}}</p></div>{{end}}{{end}}
+
+{{/* typed-links are the typed links of a page or a metric by kind: each kind, then its pages, each with the note of
+     its link. It takes v (the view) and links (the page's links). */}}
+{{define "typed-links"}}{{$v := .v}}<dl>{{range group .links "kind"}}<dt>{{.Key}}</dt>
+<dd>{{range .Items}}<a href="/pages/{{num .id}}">{{$v.Date .title}}</a>{{with .note}} <small>({{.}})</small>{{end}}{{end}}</dd>{{end}}</dl>{{end}}
 
 {{/* categories are the categories of a page or a metric as badges (docs/plans/114-one-way-to-do-a-thing.md): each
      with x, which removes that part-of link (unlink), and + Add, which puts the page in a category (file-pages with
@@ -140,6 +154,10 @@
 <fieldset class="segmented"><legend>Keep the other categories?</legend><label><input type="radio" name="move" value="0"{{if not (and $refused (eq ($v.Sent.Get "move") "1"))}} checked{{end}}><span>Add</span></label><label><input type="radio" name="move" value="1"{{if and $refused (eq ($v.Sent.Get "move") "1")}} checked{{end}}><span>Move</span></label></fieldset>
 <button class="primary" formaction="{{.Href}}">Put in a category</button>{{end}}
 {{with $del}}<button class="danger" formaction="{{.Href}}" formnovalidate>Delete selected</button>{{end}}</div></form>{{end}}
+
+{{/* pick-box is the box of a row, a tile or a card that joins the form of the pick bar (form="pick"). It takes id
+     and title. */}}
+{{define "pick-box"}}<label class="pick-box"><input type="checkbox" name="ids" value="{{num .id}}" form="pick" aria-label="Select {{.title}}"></label>{{end}}
 
 {{/* pager draws a list's prev and next links, when it has them */}}
 {{define "pager"}}{{$prev := .Link "prev"}}{{$next := .Link "next"}}{{if or $prev $next}}<nav class="pager" aria-label="Pages">{{with $prev}}<a href="{{.}}" rel="prev">← Previous</a>{{else}}<span></span>{{end}}{{with $next}}<a href="{{.}}" rel="next">Next →</a>{{end}}</nav>{{end}}{{end}}

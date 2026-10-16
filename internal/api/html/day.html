@@ -45,7 +45,7 @@
 {{if or $d.readings (.Action "record")}}<section class="group" aria-label="Readings">
 <div class="panel-head"><h2>Readings</h2><a href="/metrics">Metrics</a></div>
 {{with $.ReadingTiles}}<div class="readings">{{range .}}<div class="reading-tile"><a class="name" href="/metrics/{{pathesc .Metric}}">{{.Metric}}</a>
-<a class="reading" href="/measurements/{{.ID}}">{{.Value}}{{with .Unit}} <span class="unit">{{.}}</span>{{end}}</a>
+{{template "reading-link" (dict "id" .ID "value" .Value "unit" .Unit)}}
 {{.Line}}{{with .More}}<span class="meta">and {{.}} more this day</span>{{end}}
 {{template "add-reading" (dict "action" ($.Action "record") "metric" .Metric "unit" .Unit "day" $d.day "today" $.Today "back" $.Here)}}</div>{{end}}</div>{{end}}
 {{if not $d.readings}}<p class="empty">No readings on this day. <a href="#record">Add one</a> below.</p>{{end}}

@@ -24,8 +24,7 @@
 {{template "body-editor" (dict "action" (.Action "save-body") "back" (.Link "self") "summary" "Edit")}}
 {{if $p.body}}<section class="page-body" aria-label="The page">
 <div class="prose">{{markdown $p.body}}</div>
-{{with rejected $p.body}}<div class="alert" role="note"><p>These names make no link — a title cannot hold <code>/ \ : * ? " &lt; &gt; |</code>, or start or end with a dot or space:</p>
-<p>{{range $i, $t := .}}{{if $i}}, {{end}}<code>[[{{$t}}]]</code>{{end}}</p></div>{{end}}
+{{template "rejected-names" $p.body}}
 </section>{{end}}
 {{with $.Filed}}<section class="group filed" aria-label="Filed here">
 <div class="panel-head"><h2>Filed here <small>{{len .Subs | add (len .Items)}}</small></h2><a href="/browse?in={{$.Title}}">Open in Browse</a>{{with $.Action "create-page"}}{{template "boxed" (form . "hide" "category" "button" "New page here" "back" $.Here)}}{{end}}</div>
@@ -42,8 +41,7 @@
 <dt>version</dt><dd>{{$p.version}}</dd>
 </dl></section>
 
-{{with $p.links}}<section class="group" aria-label="Links"><h2>Links</h2><dl>{{range group . "kind"}}<dt>{{.Key}}</dt>
-<dd>{{range .Items}}<a href="/pages/{{num .id}}">{{$.Date .title}}</a>{{with .note}} <small>({{.}})</small>{{end}}{{end}}</dd>{{end}}</dl></section>{{end}}
+{{with $p.links}}<section class="group" aria-label="Links"><h2>Links</h2>{{template "typed-links" (dict "v" $ "links" .)}}</section>{{end}}
 {{$groups := group $p.backlinks "kind"}}{{$any := false}}{{range $groups}}{{if ne .Key "part-of"}}{{$any = true}}{{end}}{{end}}
 {{if $any}}<section class="group" aria-label="Backlinks"><h2>Backlinks</h2>{{range $groups}}{{if ne .Key "part-of"}}<p class="sub">{{if eq .Key "wikilink"}}mentioned in{{else}}{{.Key}}{{end}}</p>
 <ul class="plain">{{range .Items}}<li><a href="/pages/{{num .id}}">{{$.Date .title}}</a>{{if ne .entity_type "page"}} <span class="badge">{{.entity_type}}</span>{{end}}</li>{{end}}</ul>{{end}}{{end}}</section>{{end}}

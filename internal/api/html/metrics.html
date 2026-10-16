@@ -33,7 +33,7 @@
 {{template "categories" (dict "v" $ "links" $s.links "back" $.Here)}}
 <p class="sub">{{if not $s.all_history}}<a href="{{.Link "all-readings"}}">All readings</a>{{end}}<a href="/metrics">Every metric</a></p></div>
 {{with $r.Latest}}<div class="tools"><div class="reading-tile"><span class="name">Latest, {{$.Date .day}}</span>
-<a class="reading" href="/measurements/{{num .id}}">{{num .value}}{{with $unit}} <span class="unit">{{.}}</span>{{end}}</a></div></div>{{end}}
+{{template "reading-link" (dict "id" .id "value" .value "unit" $unit)}}</div></div>{{end}}
 </header>
 
 <div class="sheet-margin">
@@ -56,8 +56,7 @@
 {{if $s.id}}<div class="margin">
 <section class="group" aria-label="About"><h2>About</h2>
 {{if $s.body}}<div class="prose about">{{markdown $s.body}}</div>{{else}}<p class="empty">Nothing is written about {{.Title}} yet: what it measures, and how. Open Edit to write it.</p>{{end}}
-{{with rejected $s.body}}<div class="alert" role="note"><p>These names make no link — a title cannot hold <code>/ \ : * ? " &lt; &gt; |</code>, or start or end with a dot or space:</p>
-<p>{{range $i, $t := .}}{{if $i}}, {{end}}<code>[[{{$t}}]]</code>{{end}}</p></div>{{end}}
+{{template "rejected-names" $s.body}}
 {{template "body-editor" (dict "action" (.Action "save-body") "back" $.Here "summary" "Edit")}}
 </section>
 
@@ -68,8 +67,7 @@
 </section>
 
 <section class="group" aria-label="Links"><h2>Links</h2>
-{{with $s.links}}<dl>{{range group . "kind"}}<dt>{{.Key}}</dt>
-<dd>{{range .Items}}<a href="/pages/{{num .id}}">{{$.Date .title}}</a>{{with .note}} <small>({{.}})</small>{{end}}{{end}}</dd>{{end}}</dl>
+{{with $s.links}}{{template "typed-links" (dict "v" $ "links" .)}}
 {{else}}<p class="empty">Filed in no category, and linked to no page.</p>{{end}}
 <div class="actions">{{template "boxed" (form (.Action "link") "button" "Add a typed link" "back" $.Here)}}
 {{template "boxed" (form (.Action "unlink") "button" "Remove a typed link" "back" $.Here)}}</div>
@@ -100,9 +98,9 @@
      reading has a dash and its unit where the value goes, and an empty line. With the file-pages action, each card has a box that the file bar's form
      reads (form="pick"), and a form never holds a form. The boxes show while the file bar is open. */}}
 {{define "metric-cards"}}{{$v := .view}}{{$file := .file}}<div class="readings metric-cards">{{range .cards}}<div class="reading-tile metric-card{{if .Stale}} stale{{end}}">
-{{if $file}}<label class="pick-box"><input type="checkbox" name="ids" value="{{.ID}}" form="pick" aria-label="Select {{.Name}}"></label>{{end}}
+{{if $file}}{{template "pick-box" (dict "id" .ID "title" .Name)}}{{end}}
 <a class="name" href="{{.Href}}"{{with .Note}} title="{{.}}"{{end}}>{{.Name}}</a>
-{{if .Measurement}}<a class="reading" href="/measurements/{{.Measurement}}">{{.Value}}{{with .Unit}} <span class="unit">{{.}}</span>{{end}}</a>
+{{if .Measurement}}{{template "reading-link" (dict "id" .Measurement "value" .Value "unit" .Unit)}}
 {{.Line}}{{else}}<span class="reading none"><span aria-hidden="true">–</span>{{with .Unit}} <span class="unit">{{.}}</span>{{end}}</span><span class="line-none" aria-hidden="true"></span>{{end}}
 <div class="card-foot">{{if .Measurement}}<time class="meta" datetime="{{.Day}}" title="{{.When}}{{if gt .Count 1}} · {{.Count}} readings{{end}}">{{.Short}}</time>{{else}}<span class="meta">No reading</span>{{end}}
 {{template "add-reading" (dict "action" ($v.Action "record") "metric" .Name "unit" .Unit "day" $v.Props.today "today" $v.Today "back" $v.Here)}}</div>
@@ -111,9 +109,9 @@
 {{/* metric-rows is the metrics of a group as one row each (?view=list): the box, the name, the latest value with its
      unit, its day, its line and + Add. It takes what metric-cards takes. */}}
 {{define "metric-rows"}}{{$v := .view}}{{$file := .file}}<ul class="plain metric-rows">{{range .cards}}<li class="metric-row{{if $file}} pick{{end}}{{if .Stale}} stale{{end}}">
-{{if $file}}<label class="pick-box"><input type="checkbox" name="ids" value="{{.ID}}" form="pick" aria-label="Select {{.Name}}"></label>{{end}}
+{{if $file}}{{template "pick-box" (dict "id" .ID "title" .Name)}}{{end}}
 <a class="name" href="{{.Href}}"{{with .Note}} title="{{.}}"{{end}}>{{.Name}}</a>
-{{if .Measurement}}<a class="reading" href="/measurements/{{.Measurement}}">{{.Value}}{{with .Unit}} <span class="unit">{{.}}</span>{{end}}</a><span class="meta">{{.When}}</span><span class="line">{{.Line}}</span>{{else}}<span class="meta none">No reading yet{{with .Unit}} · {{.}}{{end}}</span>{{end}}
+{{if .Measurement}}{{template "reading-link" (dict "id" .Measurement "value" .Value "unit" .Unit)}}<span class="meta">{{.When}}</span><span class="line">{{.Line}}</span>{{else}}<span class="meta none">No reading yet{{with .Unit}} · {{.}}{{end}}</span>{{end}}
 {{template "add-reading" (dict "action" ($v.Action "record") "metric" .Name "unit" .Unit "day" $v.Props.today "today" $v.Today "back" $v.Here)}}
 </li>{{end}}</ul>{{end}}
 
