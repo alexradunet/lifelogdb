@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -16,7 +15,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -118,19 +116,10 @@ func TestPublicOptionsRefusals(t *testing.T) {
 	}
 }
 
-// TestPublicServeProcess runs the binary with --public on a loopback address (a non-loopback bind is covered by
+// TestPublicServe runs serve --public in-process on a loopback address (a non-loopback bind is covered by
 // api.PublicAddress; loopback keeps this test clear of the Windows firewall prompt).
-func TestPublicServeProcess(t *testing.T) {
+func TestPublicServe(t *testing.T) {
 	root := t.TempDir()
-	binary := filepath.Join(root, "lifelog")
-	if os.PathSeparator == '\\' {
-		binary += ".exe"
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	if out, err := exec.CommandContext(ctx, "go", "build", "-mod=readonly", "-o", binary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("build: %v\n%s", err, out)
-	}
 	live := filepath.Join(root, "life.db")
 	if err := db.Init(t.Context(), live); err != nil {
 		t.Fatal(err)
@@ -139,34 +128,22 @@ func TestPublicServeProcess(t *testing.T) {
 	if err := os.WriteFile(tokenFile, []byte(testToken+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	// Without a token the process refuses before it listens.
-	refused := exec.CommandContext(ctx, binary, "--db", live, "serve", "--public", "--addr", "127.0.0.1:0")
-	refused.Env = append(os.Environ(), "LIFELOG_TOKEN=")
-	if out, err := refused.CombinedOutput(); err == nil || !strings.Contains(string(out), "needs a token") {
-		t.Fatalf("serve --public without a token: err=%v out=%s", err, out)
+	ctx := t.Context()
+	// Without a token the command refuses before it listens: main writes the error and exits 1.
+	e, _, _ := testEnv(t) // no LIFELOG_TOKEN in its environment
+	if err := runArgs(ctx, e, []string{"--db", live, "serve", "--public", "--addr", "127.0.0.1:0"}); err == nil || !strings.Contains(err.Error(), "needs a token") {
+		t.Fatalf("serve --public without a token: %v", err)
 	}
 	const app = "https://app.example"
-	cmd := exec.CommandContext(ctx, binary, "--db", live, "serve", "--public", "--addr", "127.0.0.1:0", "--token-file", tokenFile, "--allow-origin", app)
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
-	startup, err := bufio.NewReader(stderr).ReadString('\n')
-	if err != nil {
-		t.Fatalf("server startup: %q, %v", startup, err)
-	}
+	startup := serveInProcess(t, e, "--db", live, "serve", "--public", "--addr", "127.0.0.1:0", "--token-file", tokenFile, "--allow-origin", app)
 	if !strings.Contains(startup, "public: token required") || !strings.Contains(startup, "in clear") {
 		t.Fatalf("startup line does not say what it serves: %q", startup)
 	}
-	_, rest, ok := strings.Cut(strings.TrimSpace(startup), " on ")
-	base, _, _ := strings.Cut(rest, " ")
-	if !ok || !strings.HasPrefix(base, "http://127.0.0.1:") {
+	scheme, address := servedAt(t, startup)
+	if scheme != "http" || !strings.HasPrefix(address, "127.0.0.1:") {
 		t.Fatalf("server startup: %q", startup)
 	}
+	base := scheme + "://" + address
 	hc := &http.Client{Timeout: 10 * time.Second}
 	get := func(token string) int {
 		t.Helper()

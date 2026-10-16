@@ -1,42 +1,30 @@
 package main
 
 import (
-	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
 
-// TestExecutableAgenticInitAndTheDatabaseBesideIt runs the built program in a folder of its own (plan 090):
-// agentic-init writes the agents' files beside it, init with no path makes life.db there, and a command with no --db
-// and no LIFELOG_DB reads that file.
-func TestExecutableAgenticInitAndTheDatabaseBesideIt(t *testing.T) {
+// TestAgenticInitAndTheDatabaseBesideTheProgram runs the command lines in-process, with the program in a folder of its
+// own (plan 090): agentic-init writes the agents' files beside it, init with no path makes life.db there and not in
+// the working directory, and a command with no --db and no LIFELOG_DB reads that file.
+func TestAgenticInitAndTheDatabaseBesideTheProgram(t *testing.T) {
 	dir := t.TempDir()
-	binary := filepath.Join(dir, "lifelog.exe")
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	if out, err := exec.CommandContext(ctx, "go", "build", "-mod=readonly", "-o", binary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("build %v %s", err, out)
+	exe := filepath.Join(dir, "lifelog.exe")
+	if err := os.WriteFile(exe, nil, 0o755); err != nil { // a stand-in for the program: only its path counts
+		t.Fatal(err)
 	}
-	var env []string
-	for _, kv := range os.Environ() {
-		if !strings.HasPrefix(kv, "LIFELOG_DB=") {
-			env = append(env, kv)
-		}
-	}
-	work := t.TempDir() // the working directory is elsewhere: the folder of the program decides
+	e, stdout, _ := testEnv(t) // no LIFELOG_DB in its environment
+	e.executable = func() (string, error) { return exe, nil }
 	call := func(args ...string) string {
 		t.Helper()
-		cmd := exec.CommandContext(ctx, binary, args...)
-		cmd.Dir, cmd.Env = work, env
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("%v: %v\n%s", args, err, out)
+		stdout.Reset()
+		if err := runArgs(t.Context(), e, args); err != nil {
+			t.Fatalf("%v: %v\n%s", args, err, stdout)
 		}
-		return string(out)
+		return stdout.String()
 	}
 	out := call("agentic-init")
 	if !strings.Contains(out, "written") || !strings.Contains(out, "no life.db yet") {
@@ -52,12 +40,12 @@ func TestExecutableAgenticInitAndTheDatabaseBesideIt(t *testing.T) {
 	if err != nil || !strings.Contains(string(agents), filepath.Join(dir, "life.db")) {
 		t.Errorf("AGENTS.md does not name the life.db beside the program: %v", err)
 	}
-	call("init")
+	// init names the one file it makes: the life.db beside the program, not one in the working directory.
+	if out := call("init"); out != "created "+filepath.Join(dir, "life.db")+"\n" {
+		t.Errorf("init with no path: %q, want the life.db beside the program", out)
+	}
 	if _, err := os.Stat(filepath.Join(dir, "life.db")); err != nil {
 		t.Fatalf("init with no path: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(work, "life.db")); !os.IsNotExist(err) {
-		t.Errorf("init wrote into the working directory: %v", err)
 	}
 	if day := call("day", "2031-04-11"); !strings.Contains(day, "2031-04-11") {
 		t.Errorf("day with no --db:\n%.300s", day)

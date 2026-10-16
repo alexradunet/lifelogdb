@@ -3,26 +3,22 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"os/exec"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"testing"
-	"time"
 
+	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db"
 )
 
-func TestExecutableStableNamesAndExactRevision(t *testing.T) {
+// TestStableNamesAndExactRevisionThroughTheCLI runs the command lines in-process on a file that it changes between
+// them: the version token of a revision above 2^53 is exact, a stale token is a 409, a rename keeps the old title as
+// an alias of the same page, and a save at the largest revision is refused with nothing written.
+func TestStableNamesAndExactRevisionThroughTheCLI(t *testing.T) {
 	root := t.TempDir()
-	binary := filepath.Join(root, "lifelog.exe")
-	buildCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	if out, err := exec.CommandContext(buildCtx, "go", "build", "-mod=readonly", "-o", binary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("build: %v\n%s", err, out)
-	}
 	live := filepath.Join(root, "synthetic.db")
 	if err := db.Init(t.Context(), live); err != nil {
 		t.Fatal(err)
@@ -44,17 +40,15 @@ func TestExecutableStableNamesAndExactRevision(t *testing.T) {
 	if err := d.Close(); err != nil {
 		t.Fatal(err)
 	}
-	call := func(wantSuccess bool, args ...string) string {
+	e, stdout, _ := testEnv(t)
+	call := func(wantSuccess bool, args ...string) (string, error) {
 		t.Helper()
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		cmd := exec.CommandContext(ctx, binary, append([]string{"--db", live}, args...)...)
-		cmd.Dir = root
-		out, err := cmd.CombinedOutput()
+		stdout.Reset()
+		err := runArgs(t.Context(), e, append([]string{"--db", live}, args...))
 		if (err == nil) != wantSuccess {
-			t.Fatalf("%v: %v\n%s", args, err, out)
+			t.Fatalf("%v: %v\n%s", args, err, stdout)
 		}
-		return string(out)
+		return stdout.String(), err
 	}
 	type response struct {
 		Title      string
@@ -62,7 +56,7 @@ func TestExecutableStableNamesAndExactRevision(t *testing.T) {
 	}
 	read := func(name string) *response {
 		t.Helper()
-		out := call(true, "page", name)
+		out, _ := call(true, "page", name)
 		var e response
 		if err := json.Unmarshal([]byte(out), &e); err != nil {
 			t.Fatalf("read JSON: %v %s", err, out)
@@ -76,8 +70,11 @@ func TestExecutableStableNamesAndExactRevision(t *testing.T) {
 	token := p.Properties["version"].(string)
 	call(true, "do", "save-body", "id="+strconv.FormatInt(id, 10), "version="+token, "body=committed [[Kept]]")
 	for _, stale := range []string{token, "2026-01-01T00:00:00.000Z"} {
-		if out := call(false, "do", "save-body", "id="+strconv.FormatInt(id, 10), "version="+stale, "body=stale [[Forbidden]]"); !strings.Contains(out, "409") {
-			t.Fatalf("stale refusal not semantic 409: %s", out)
+		// main writes this error as "lifelog: 409: ..." and exits 1.
+		_, err := call(false, "do", "save-body", "id="+strconv.FormatInt(id, 10), "version="+stale, "body=stale [[Forbidden]]")
+		var refused *client.Error
+		if !errors.As(err, &refused) || refused.Status != 409 {
+			t.Fatalf("stale refusal not semantic 409: %v", err)
 		}
 	}
 	call(true, "rename", strconv.FormatInt(id, 10), "Process final")

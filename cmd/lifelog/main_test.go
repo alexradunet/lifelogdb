@@ -1,12 +1,10 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -576,53 +574,18 @@ func TestServeAuthorityAddress(t *testing.T) {
 }
 
 func TestServeAuthorityMount(t *testing.T) {
-	// Run the real serve branch against a disposable synthetic database. Capture
+	// Run the real serve branch against a disposable synthetic database. Read
 	// the printed ephemeral listener address rather than guessing a free port.
 	p := filepath.Join(t.TempDir(), "life.db")
 	if err := db.Init(t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
-	read, write := io.Pipe()
-	defer read.Close()
 	e, _, _ := testEnv(t)
-	e.stderr = write
-	e.o = opts{args: []string{"serve"}, addr: "localhost:0", db: p, source: "cli"}
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	var serveErr error
-	go func() {
-		defer close(done)
-		serveErr = runContext(ctx, e)
-	}()
-	defer func() {
-		cancel()
-		select {
-		case <-done:
-			if serveErr != nil {
-				t.Error(serveErr)
-			}
-		case <-time.After(10 * time.Second):
-			t.Error("serve shutdown timed out")
-		}
-	}()
-	line := make(chan string, 1)
-	go func() { s, _ := bufio.NewReader(read).ReadString('\n'); line <- s }()
-	var output string
-	select {
-	case output = <-line:
-	case <-done:
-		t.Fatalf("serve stopped before startup: %v", serveErr)
-	case <-time.After(10 * time.Second):
-		t.Fatal("serve startup timed out")
+	scheme, address := servedAt(t, serveInProcess(t, e, "serve", "--addr", "localhost:0", "--db", p))
+	if strings.HasSuffix(address, ":0") {
+		t.Fatalf("ephemeral port not reported: %s", address)
 	}
-	_, base, ok := strings.Cut(output, " on ")
-	if !ok {
-		t.Fatalf("startup: %q", output)
-	}
-	base = strings.TrimSpace(base)
-	if strings.HasSuffix(base, ":0") {
-		t.Fatalf("ephemeral port not reported: %s", base)
-	}
+	base := scheme + "://" + address
 	tr := &http.Transport{Proxy: nil}
 	defer tr.CloseIdleConnections()
 	hc := &http.Client{Transport: tr, Timeout: 10 * time.Second}

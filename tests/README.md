@@ -107,6 +107,21 @@ child-local file-size limits that produce actual `SQLITE_IOERR_WRITE` errors, fo
 transaction rollback, reopen/retry and failed snapshot cleanup. This runs in the Linux baseline;
 it does not simulate disk exhaustion, sync failures, torn writes or power loss.
 
+## The coverage map
+
+The coverage map shows which statements the tests of every package reach, the process of `lifelog` included. It is a
+map, not a score ([AGENTS.md](../AGENTS.md)). The tests of `cmd/lifelog` run the CLI in-process; only
+`TestExecutableServeDrainsActiveRequest` runs the program, because an interrupt needs a process. That test builds the
+program with `go build -cover` and gives it the coverage folder of its test binary as `GOCOVERDIR`. So one folder
+gets the coverage of every test binary and of the process, and `covdata` merges it:
+
+```
+dir=$(mktemp -d)
+go test -cover -coverpkg=./... ./... -args -test.gocoverdir=$dir
+go tool covdata textfmt -i=$dir -o $dir/cover.txt
+go tool cover -func=$dir/cover.txt            # or -html=$dir/cover.txt
+```
+
 ## Synthetic scale runner
 
 `tools/lifescale` builds fresh file-backed databases through the production writer and emits a JSON report.
