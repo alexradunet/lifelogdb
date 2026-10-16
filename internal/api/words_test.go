@@ -166,43 +166,24 @@ func TestCountSaysTheNumberAndTheFormOfItsNoun(t *testing.T) {
 }
 
 // TestTheSitesOfCountSayZeroTheirOwnWay: a site that calls count says 0 in its own words, and every other number
-// with count.
+// with count. The calendar's items and a year's summary are the tables of TestACalendarItemInWords and
+// TestAYearsSummary.
 func TestTheSitesOfCountSayZeroTheirOwnWay(t *testing.T) {
 	v := &view{Shell: &shellView{Today: "2026-10-16", Zone: time.UTC}}
-	cell := func(kind string, years float64) string { // a calendar item as its cell and its note say it
-		w := calItem(map[string]any{"kind": kind, "years": years})
-		return strings.TrimSpace(w.Word + " " + w.Note)
-	}
 	for _, c := range []struct {
-		n                                      float64
-		media, mentions, birthday, death, year string
+		n               float64
+		media, mentions string
 	}{
-		{0, "no pictures", "not mentioned yet", "born", "died", "0 readings"},
-		{1, "1 picture", "mentioned on 1 page, last Thu 1 Oct", "birthday 1 year", "died 1 year ago", "1 reading · 70 kg"},
-		{2, "2 pictures", "mentioned on 2 pages, last Thu 1 Oct", "birthday 2 years", "died 2 years ago", "2 readings · 70 to 71 kg"},
-		{1234567, "1234567 pictures", "mentioned on 1234567 pages, last Thu 1 Oct", "birthday 1234567 years", "died 1234567 years ago", ""},
+		{0, "no pictures", "not mentioned yet"},
+		{1, "1 picture", "mentioned on 1 page, last Thu 1 Oct"},
+		{2, "2 pictures", "mentioned on 2 pages, last Thu 1 Oct"},
+		{1234567, "1234567 pictures", "mentioned on 1234567 pages, last Thu 1 Oct"},
 	} {
 		if got := v.MediaCount(c.n, "picture", "pictures"); got != c.media {
 			t.Errorf("MediaCount(%g) = %q, want %q", c.n, got, c.media)
 		}
 		if got := v.Mentions(c.n, "2026-10-01"); got != c.mentions {
 			t.Errorf("Mentions(%g) = %q, want %q", c.n, got, c.mentions)
-		}
-		if got := cell("birthday", c.n); got != c.birthday {
-			t.Errorf("a birthday of %g years: %q, want %q", c.n, got, c.birthday)
-		}
-		if got := cell("death", c.n); got != c.death {
-			t.Errorf("a death %g years ago: %q, want %q", c.n, got, c.death)
-		}
-		if c.year == "" {
-			continue
-		}
-		rows := make([]map[string]any, int(c.n))
-		for i := range rows {
-			rows[i] = map[string]any{"value": float64(70 + i)}
-		}
-		if got := yearSummary(rows, "kg"); got != c.year {
-			t.Errorf("the summary of a year of %g readings = %q, want %q", c.n, got, c.year)
 		}
 	}
 }

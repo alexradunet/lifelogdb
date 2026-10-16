@@ -84,3 +84,77 @@ func TestAChartWritesItsNumbersInFull(t *testing.T) {
 		}
 	}
 }
+
+// TestTheWordsOfASmallLine: the label of a trend line and of a spark line, with one reading and with more, says each
+// value with its unit in words and its day against today on the clock; a value with no unit has no gap. A trend is
+// placed by its day among the 14 days through its day, and the day may be past: here today is 16 October.
+func TestTheWordsOfASmallLine(t *testing.T) {
+	c := clock{today: "2026-10-16"}
+	r := func(day string, value float64) any { return map[string]any{"day": day, "value": value} }
+	for _, tc := range []struct {
+		name, got, want string
+	}{
+		{"a trend of one reading", string(trendLine(c, "weight", "kg", "2026-10-16", []any{r("2026-10-16", 70)})),
+			`<svg class="trend" viewBox="0 0 120 28" role="img" aria-label="weight: one reading in 14 days, 70 kg today"><polyline points="116.0,14.0 "/><circle cx="116.0" cy="14.0" r="2.5"/></svg>`},
+		{"a trend of a past day", string(trendLine(c, "weight", "kg", "2026-10-10", []any{r("2026-10-01", 70), r("2026-10-04", 72), r("2026-10-10", 71)})),
+			`<svg class="trend" viewBox="0 0 120 28" role="img" aria-label="weight from 70 kg Thu 1 Oct to 71 kg 6 days ago · Sat 10 Oct"><polyline points="38.5,24.0 64.3,4.0 116.0,14.0 "/><circle cx="116.0" cy="14.0" r="2.5"/></svg>`},
+		{"a trend with no unit", string(trendLine(c, "walk", "", "2026-10-16", []any{r("2026-10-16", 1)})),
+			`<svg class="trend" viewBox="0 0 120 28" role="img" aria-label="walk: one reading in 14 days, 1 today"><polyline points="116.0,14.0 "/><circle cx="116.0" cy="14.0" r="2.5"/></svg>`},
+		{"a trend of a scale", string(trendLine(c, "mood", "1-5", "2026-10-16", []any{r("2026-10-15", 3), r("2026-10-16", 4)})),
+			`<svg class="trend" viewBox="0 0 120 28" role="img" aria-label="mood from 3 of 5 yesterday · Thu 15 Oct to 4 of 5 today"><polyline points="107.4,24.0 116.0,4.0 "/><circle cx="116.0" cy="4.0" r="2.5"/></svg>`},
+		{"a spark of one reading", string(sparkLine(c, "ferritin", "ug/L", []any{r("2025-04-12", 85)})),
+			`<svg class="trend" viewBox="0 0 120 28" role="img" aria-label="ferritin: one reading, 85 ug/L Sat 12 Apr 2025"><polyline points="116.0,14.0 "/><circle cx="116.0" cy="14.0" r="2.5"/></svg>`},
+		{"a spark of three readings", string(sparkLine(c, "weight", "kg", []any{r("2026-10-06", 72), r("2026-10-11", 70), r("2026-10-16", 71)})),
+			`<svg class="trend" viewBox="0 0 120 28" role="img" aria-label="weight: 3 readings, from 72 kg Tue 6 Oct to 71 kg today"><polyline points="4.0,4.0 60.0,24.0 116.0,14.0 "/><circle cx="116.0" cy="14.0" r="2.5"/></svg>`},
+		{"a spark of one day", string(sparkLine(c, "weight", "kg", []any{r("2026-10-16", 70), r("2026-10-16", 71)})),
+			`<svg class="trend" viewBox="0 0 120 28" role="img" aria-label="weight: 2 readings, from 70 kg today to 71 kg today"><polyline points="116.0,24.0 116.0,4.0 "/><circle cx="116.0" cy="4.0" r="2.5"/></svg>`},
+		{"a trend of no day", string(trendLine(c, "weight", "kg", "not a day", []any{r("2026-10-16", 70)})), ""},
+	} {
+		if tc.got != tc.want {
+			t.Errorf("%s:\n%s\nwant\n%s", tc.name, tc.got, tc.want)
+		}
+	}
+}
+
+// TestAChartTakesItsRangeFromTheReadingsItDraws: the axis of a chart is the greatest and the least value of the
+// readings it draws, in whatever order they come; a reading that is not drawn is not in it. With no lower bound
+// (all history), the chart starts at the earliest reading it draws; with one day only, the point stands in the middle.
+func TestAChartTakesItsRangeFromTheReadingsItDraws(t *testing.T) {
+	r := func(day string, value any) any { return map[string]any{"day": day, "value": value} }
+	gone := r("2026-10-12", nil) // a retraction: not drawn
+	for _, c := range []struct {
+		name, from string
+		readings   []any
+		hi, lo     string
+		want       string // a part of the chart that only these ends give
+	}{
+		{"the greatest first", "2026-10-12", []any{gone, r("2026-10-14", 80.0), r("2026-10-16", 70.0)}, "80", "70",
+			`<polyline points="337.0,14.0 626.0,164.0 "/>`},
+		{"the least first", "2026-10-12", []any{gone, r("2026-10-14", 70.0), r("2026-10-16", 80.0)}, "80", "70",
+			`<polyline points="337.0,164.0 626.0,14.0 "/>`},
+		{"the ends in the middle", "2026-10-12", []any{r("2026-10-12", 75.0), r("2026-10-14", 80.0), r("2026-10-15", 70.0)}, "80", "70",
+			`<polyline points="48.0,89.0 337.0,14.0 481.5,164.0 "/>`},
+		{"one value", "2026-10-12", []any{r("2026-10-14", 70.0)}, "70", "70", `<polyline points="337.0,164.0 "/>`},
+		{"all history", "", []any{r("2026-10-14", 80.0), r("2026-10-12", 70.0)}, "80", "70",
+			`aria-label="2 readings from Mon 12 Oct 2026 to Fri 16 Oct 2026"><line class="axis" x1="48" y1="14" x2="626" y2="14"/>`},
+		{"all history, one day", "", []any{r("2026-10-16", 70.0)}, "70", "70", `<polyline points="337.0,164.0 "/>`},
+	} {
+		got := string(chart(c.from, "2026-10-16", c.readings))
+		if m := chartAxis.FindStringSubmatch(got); m == nil || m[1] != c.hi || m[2] != c.lo {
+			t.Errorf("%s: the axis is %q, want %s and %s:\n%s", c.name, m, c.hi, c.lo, got)
+		}
+		if !strings.Contains(got, c.want) {
+			t.Errorf("%s: the chart has no %s:\n%s", c.name, c.want, got)
+		}
+	}
+	for _, c := range []struct{ name, from, to string }{
+		{"to before from", "2026-10-16", "2026-10-12"}, {"from not a day", "x", "2026-10-16"}, {"to not a day", "2026-10-12", ""},
+	} {
+		if got := chart(c.from, c.to, []any{r("2026-10-14", 70.0)}); got != "" {
+			t.Errorf("%s: a chart is drawn:\n%s", c.name, got)
+		}
+	}
+	if got := chart("", "2026-10-16", []any{gone}); got != "" {
+		t.Errorf("all history with no reading to draw: a chart is drawn:\n%s", got)
+	}
+}
