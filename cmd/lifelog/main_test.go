@@ -49,8 +49,9 @@ func TestSnapshot(t *testing.T) {
 	}
 
 	dir := t.TempDir()
+	s := &core.Store{DB: d, SnapshotDir: dir}
 	now := time.Date(2026, 10, 2, 14, 30, 5, 0, time.Local)
-	first, res, err := core.Snapshot(ctx, live, dir, now)
+	first, res, err := s.TakeSnapshot(ctx, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +61,7 @@ func TestSnapshot(t *testing.T) {
 	if !res.OK {
 		t.Errorf("the restore check failed on a clean file: %+v", res)
 	}
-	// the restore check, as takeSnapshot runs it, on a snapshot no check has touched yet
+	// the restore check, as TakeSnapshot runs it, on a snapshot no check has touched yet
 	untouched, err := db.Snapshot(t.Context(), live, t.TempDir(), now)
 	if err != nil {
 		t.Fatal(err)
@@ -84,7 +85,7 @@ func TestSnapshot(t *testing.T) {
 	}
 
 	before := mustRead(t, first)
-	second, res, err := core.Snapshot(ctx, live, dir, now)
+	second, res, err := s.TakeSnapshot(ctx, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +96,7 @@ func TestSnapshot(t *testing.T) {
 	if !bytes.Equal(before, after) {
 		t.Error("the restore check or the second snapshot changed the first snapshot")
 	}
-	if _, _, err := core.Snapshot(ctx, live, dir, now); err == nil || !strings.Contains(err.Error(), "already exists") {
+	if _, _, err := s.TakeSnapshot(ctx, now); err == nil || !strings.Contains(err.Error(), "already exists") {
 		t.Errorf("a third snapshot in the same second: %v, want a refusal", err)
 	}
 	if !bytes.Equal(before, mustRead(t, first)) {
@@ -106,7 +107,7 @@ func TestSnapshot(t *testing.T) {
 	for _, name := range []string{"life-2026-10-03.db", "life-2026-10-03T143005.db"} {
 		os.WriteFile(filepath.Join(dir, name), nil, 0o644)
 	}
-	if _, _, err := core.Snapshot(ctx, live, dir, next); err == nil {
+	if _, _, err := s.TakeSnapshot(ctx, next); err == nil {
 		t.Error("a snapshot onto an existing empty file was not refused")
 	}
 	if b := mustRead(t, filepath.Join(dir, "life-2026-10-03T143005.db")); len(b) != 0 {
@@ -143,9 +144,9 @@ func TestSnapshotLiteralSpecialCharacterPaths(t *testing.T) {
 	destinationSentinel := filepath.Join(root, "snapshots # café", "life-2026-10-05.db")
 	writeSnapshotSentinel(t, destinationSentinel)
 	now := time.Date(2026, 10, 5, 8, 9, 10, 0, time.Local)
-	got, res, err := core.Snapshot(ctx, live, dir, now)
+	got, res, err := snapshotStore(t, live, dir).TakeSnapshot(ctx, now)
 	if err != nil {
-		t.Fatalf("core.Snapshot(%q, %q) failed: %v", live, dir, err)
+		t.Fatalf("the snapshot of %q into %q failed: %v", live, dir, err)
 	}
 	want := filepath.Join(dir, "life-2026-10-05.db")
 	assertSnapshotDestination(t, got, want)
@@ -166,6 +167,21 @@ func TestSnapshotLiteralSpecialCharacterPaths(t *testing.T) {
 }
 
 const snapshotSentinel = "literal snapshot sentinel\n"
+
+// snapshotStore opens the life.db at live for the owner's snapshot action, with dir as its folder. The test closes it.
+func snapshotStore(t *testing.T, live, dir string) *core.Store {
+	t.Helper()
+	d, err := db.Open(t.Context(), live)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := d.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	return &core.Store{DB: d, SnapshotDir: dir}
+}
 
 func assertSnapshotDestination(t *testing.T, got, want string) {
 	t.Helper()
@@ -246,7 +262,7 @@ func TestSnapshotRefusesAGitWorkTree(t *testing.T) {
 	os.Mkdir(filepath.Join(repo, ".git"), 0o755)
 	sub := filepath.Join(repo, "backups")
 	os.Mkdir(sub, 0o755)
-	if _, _, err := core.Snapshot(context.Background(), live, sub, time.Now()); err == nil || !strings.Contains(err.Error(), "git work tree") {
+	if _, _, err := snapshotStore(t, live, sub).TakeSnapshot(context.Background(), time.Now()); err == nil || !strings.Contains(err.Error(), "git work tree") {
 		t.Errorf("a snapshot inside a git work tree: %v, want a refusal", err)
 	}
 	if ents, _ := os.ReadDir(sub); len(ents) != 0 {
@@ -492,7 +508,7 @@ func TestSnapshotPhysicalDestination(t *testing.T) {
 					}
 					now := time.Date(2026, 10, 2, 14, 30, 5, 0, time.Local)
 					if layout == "safe" {
-						p, res, err := core.Snapshot(context.Background(), live, dest, now)
+						p, res, err := snapshotStore(t, live, dest).TakeSnapshot(context.Background(), now)
 						if err != nil || !res.OK {
 							t.Fatalf("safe linked destination: %s %+v %v", p, res, err)
 						}

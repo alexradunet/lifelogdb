@@ -45,9 +45,19 @@ func TestASnapshotTellsARefusalFromAFailure(t *testing.T) {
 		refused(t, err)
 	})
 	t.Run("no database", func(t *testing.T) {
-		_, _, err := Snapshot(ctx, filepath.Join(t.TempDir(), "absent.db"), t.TempDir(), now)
+		// Deliberate damage: the file of the store is closed and removed.
+		gone := fresh(t)
+		gone.SnapshotDir = t.TempDir()
+		path := gone.DB.Path()
+		if err := gone.DB.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Remove(path); err != nil {
+			t.Fatal(err)
+		}
+		_, _, err := gone.TakeSnapshot(ctx, now)
 		var e *Error
-		if err == nil || errors.As(err, &e) {
+		if !errors.Is(err, os.ErrNotExist) || errors.As(err, &e) {
 			t.Errorf("err = %#v, want a failure that is not a refusal", err)
 		}
 	})
