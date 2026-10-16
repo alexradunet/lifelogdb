@@ -40,7 +40,7 @@ func (h *server) shell(ctx context.Context) (*shellView, error) {
 	if err != nil {
 		return nil, err
 	}
-	sv := &shellView{Today: today, Zone: h.s.Now().Location(), Month: first.Format(layoutMonth), MonthHref: monthHref(first), Written: len(entries)}
+	sv := &shellView{Today: today, Zone: h.s.Local().Location(), Month: first.Format(layoutMonth), MonthHref: monthHref(first), Written: len(entries)}
 	for _, d := range writtenDays(entries, first, last) {
 		sv.Days = append(sv.Days, map[string]any{"day": d.Day, "page": d.Page})
 	}
@@ -65,7 +65,7 @@ func (h *server) inShell(w http.ResponseWriter, r *http.Request, status int, e *
 	if err != nil {
 		sv = &shellView{}
 		if h.s != nil {
-			sv.Today, sv.Zone = h.s.Today(), h.s.Now().Location()
+			sv.Today, sv.Zone = h.s.Today(), h.s.Local().Location()
 		}
 	}
 	renderHTML(w, r, status, e, sv)

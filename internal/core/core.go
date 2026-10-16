@@ -20,8 +20,11 @@ import (
 const nowSQL = "strftime('%Y-%m-%dT%H:%M:%fZ','now')"
 
 // Store is one open life.db. SnapshotDir is the folder the snapshot action writes to; empty means beside the file.
-// Clock and Zone are the one clock of the writer: every surface reads today and now from them (Now, Today). A nil
-// Clock is time.Now and a nil Zone is time.Local, the clock of this device; a test gives a fixed clock.
+// Clock and Zone are the clock of the writer. Every surface reads from them today (Today), the zone of the words for a
+// time and the name of a snapshot (Local), and the life of a feedback receipt (Now). A nil Clock is time.Now and a nil
+// Zone is time.Local, the clock of this device; a test gives a fixed clock. The instants that a write stores in a row
+// (created_at, updated_at, deleted_at and the others of lifelog_meta.instants) do not come from this clock: SQLite
+// writes them from its own clock (nowSQL and the triggers of the schema).
 type Store struct {
 	DB          *db.DB
 	SnapshotDir string
@@ -29,20 +32,27 @@ type Store struct {
 	Zone        *time.Location
 }
 
-// Now is the instant of the store's clock, in the store's zone.
+// Now is the instant of the store's clock. The clock of this device (a nil Clock) gives time.Now with its monotonic
+// reading, so a span between two instants (the life of a feedback receipt) does not change when the wall clock is set.
 func (s *Store) Now() time.Time {
-	now, zone := s.Clock, s.Zone
-	if now == nil {
-		now = time.Now
+	if s.Clock == nil {
+		return time.Now()
 	}
+	return s.Clock()
+}
+
+// Local is the instant of the store's clock in the store's zone: its day is today, and the words for a time and the
+// name of a snapshot are in its zone. Time.In removes the monotonic reading, so a span is measured with Now, not Local.
+func (s *Store) Local() time.Time {
+	zone := s.Zone
 	if zone == nil {
 		zone = time.Local
 	}
-	return now().In(zone)
+	return s.Now().In(zone)
 }
 
 // Today is the local calendar day of the store's clock (lifelog_meta.days).
-func (s *Store) Today() string { return s.Now().Format(time.DateOnly) }
+func (s *Store) Today() string { return s.Local().Format(time.DateOnly) }
 
 // Error carries an HTTP-shaped status so every surface reports the same failure the same way. Code, when set,
 // names the failure for a client that branches on it (docs/plans/079-client-contract-hygiene.md); the API fills

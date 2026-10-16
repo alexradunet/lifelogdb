@@ -14,7 +14,7 @@ import (
 // answered home with them as feedback. Core reports a refusal as 422 snapshot_refused; a timeout and a failure are
 // answered as on every route.
 func (h *server) snapshot(r *http.Request, _ spec, _ string) (*Entity, error) {
-	path, res, err := h.s.TakeSnapshot(r.Context(), h.s.Now())
+	path, res, err := h.s.TakeSnapshot(r.Context(), h.s.Local())
 	if err != nil {
 		return nil, err
 	}
