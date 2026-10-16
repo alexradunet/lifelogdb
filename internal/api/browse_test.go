@@ -354,9 +354,6 @@ func TestBrowseGhostsAreOldestFirstAndOfferDelete(t *testing.T) {
 	if p := props(e); p["ghosts"] != true || p["kind"] != "page" || fmt.Sprint(p["counts"].(map[string]any)["ghosts"]) != "2" {
 		t.Errorf("ghost properties: %v", p)
 	}
-	if got := names(e); got != "file-pages,tombstone-pages" {
-		t.Errorf("the ghost list offers %s", got)
-	}
 	var ids []string
 	for _, r := range props(e)["rows"].([]any) {
 		ids = append(ids, fmt.Sprint(r.(map[string]any)["id"]))
@@ -374,14 +371,9 @@ func TestBrowseRefusesACombinationWithNoMeaning(t *testing.T) {
 	c, _, s := apitest.Fresh(t, "cli")
 	ids := browseFixture(t, s)
 	ctx := t.Context()
-	for _, path := range []string{
-		"/browse?kind=all", "/browse?in=Family&unfiled=1", "/browse?ghosts=1&kind=person", "/browse?ghosts=1&in=Family",
-		"/browse?ghosts=1&unfiled=1", "/browse?media=image", "/browse?kind=page&media=image", "/browse?kind=media&media=pdf",
-		"/browse?kind=pages", "/browse?unfiled=yes", "/browse?ghosts=2", "/browse?limit=0", "/browse?offset=-1",
-	} {
-		if _, err := c.Get(ctx, path); apitest.Status(err) != http.StatusUnprocessableEntity {
-			t.Errorf("%s: %v, want 422", path, err)
-		}
+	// Which filters mean nothing is TestBrowseQueryOf's; GET /browse refuses them.
+	if _, err := c.Get(ctx, "/browse?kind=all"); apitest.Status(err) != http.StatusUnprocessableEntity {
+		t.Errorf("/browse?kind=all: %v, want 422", err)
 	}
 	if _, err := c.Get(ctx, "/browse?in=Nobody+at+all"); apitest.Status(err) != http.StatusNotFound {
 		t.Errorf("a title of nothing: %v, want 404", err)
@@ -442,30 +434,15 @@ func TestBrowsePagingKeepsTheFilters(t *testing.T) {
 	}
 }
 
+// TestBrowseOffersTheNewAndThePickBarOfItsKind: the actions of each list are TestBrowseActions'; GET /browse gives
+// them the category that the URL names and the categories of the file.
 func TestBrowseOffersTheNewAndThePickBarOfItsKind(t *testing.T) {
 	c, _, s := apitest.Fresh(t, "cli")
 	browseFixture(t, s)
 	ctx := t.Context()
-	for _, tc := range []struct{ path, want string }{
-		{"/browse", "create-page,file-pages,tombstone-pages"},
-		{"/browse?kind=person", "create-person,file-pages"},
-		{"/browse?kind=place&unfiled=1", "create-place,file-pages"},
-		{"/browse?kind=media", "add-file,file-pages,tombstone-pages"},
-		{"/browse?kind=document", "add-file,file-pages,tombstone-pages"},
-		{"/browse?kind=metric", "file-pages"},
-		{"/browse?in=Family", ""},
-		{"/browse?ghosts=1", "file-pages,tombstone-pages"},
-	} {
-		if got := names(apitest.Must(t)(c.Get(ctx, tc.path))); got != tc.want {
-			t.Errorf("%s offers %q, want %q", tc.path, got, tc.want)
-		}
-	}
-	// Inside a category the New page form files the page there; elsewhere it has no category.
+	// Inside a category the New page form files the page there; the URL names the category in lower case.
 	if v := fieldOf(apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/browse?in=family&kind=page")), "create-page"), "category"); v != "Family" {
 		t.Errorf("New page in Family has category %q", v)
-	}
-	if v := fieldOf(apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/browse")), "create-page"), "category"); v != "" {
-		t.Errorf("New page has category %q", v)
 	}
 	// The file field takes a file of any kind on both lists: New file opens the media list, and a document kept
 	// there goes to the documents.

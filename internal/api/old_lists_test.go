@@ -17,14 +17,9 @@ import (
 
 func TestTheOldListsAnswer308ToBrowse(t *testing.T) {
 	c, h, _ := apitest.Fresh(t, "cli")
+	// One request for each old list: the address that each one goes to is TestToBrowse's.
 	for _, tc := range []struct{ path, location string }{
-		{"/people", "/browse?kind=person"},
-		{"/places", "/browse?kind=place"},
-		{"/media", "/browse?kind=media"},
-		{"/media?kind=video", "/browse?kind=media&media=video"},
-		{"/files", "/browse?kind=document"},
 		{"/ghosts", "/browse?ghosts=1&kind=page"},
-		{"/categories", "/browse"},
 		{"/people?limit=3&offset=6", "/browse?kind=person&limit=3&offset=6"},
 		{"/categories?offset=200", "/browse?offset=200"},
 		{"/media?kind=image&limit=10&offset=10", "/browse?kind=media&limit=10&media=image&offset=10"},

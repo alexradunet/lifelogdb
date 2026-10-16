@@ -68,7 +68,7 @@ func TestMediaListsPicturesVideosAndRecordings(t *testing.T) {
 		}
 		return "?"
 	}
-	if accept(apitest.Action(t, e, "add-file")) != "" || accept(add) != "" || !hasAction(e, "tombstone-pages") {
+	if accept(apitest.Action(t, e, "add-file")) != "" || accept(add) != "" {
 		t.Errorf("the actions: %+v", e.Actions)
 	}
 
@@ -84,9 +84,6 @@ func TestMediaListsPicturesVideosAndRecordings(t *testing.T) {
 	}
 	if rows, _ := props(apitest.Must(t)(c.Get(ctx, "/browse?kind=media&media=image")))["rows"].([]any); len(rows) != 3 || rows[1].(map[string]any)["title"] != "Lake.jpg" {
 		t.Errorf("the pictures: %v", rows)
-	}
-	if _, err := c.Get(ctx, "/browse?kind=media&media=document"); apitest.Status(err) != 422 {
-		t.Errorf("an unknown kind: %v", err)
 	}
 
 	// The browser: the counts in words, the kinds as links, a tile a file with its picture or the icon of its kind.
@@ -115,7 +112,7 @@ func TestMediaListsPicturesVideosAndRecordings(t *testing.T) {
 	// The PDF had no day: it took the day of the store's clock when it was kept, so it is the newest.
 	if want := "Scan.pdf document application application/pdf day=" + fixedToday + "\nNotes.txt document text text/plain day=2031-05-03"; strings.Join(got, "\n") != want ||
 		len(files.Entities) != 2 || apitest.Href(root, "files") != "/browse?kind=document" ||
-		accept(apitest.Action(t, files, "add-file")) != "" || !hasAction(files, "tombstone-pages") || props(files)["media_counts"] != nil {
+		accept(apitest.Action(t, files, "add-file")) != "" || props(files)["media_counts"] != nil {
 		t.Errorf("the documents: %v\n%+v %+v", got, files.Links, props(files))
 	}
 	body = browse(t, h, "/browse?kind=document")

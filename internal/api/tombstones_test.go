@@ -26,9 +26,8 @@ func idOfSelf(t *testing.T, href string) string {
 	return id
 }
 
-// TestDeletePagesAtOnce: tombstone-pages is offered on the lists of Browse whose things a page can be deleted with
-// (pages, the ghost pages too, media and documents), and not on people or places, which are deleted from their own
-// page; it tombstones every id named in one write, or none of them.
+// TestDeletePagesAtOnce: tombstone-pages tombstones every id named in one write, or none of them. The lists of Browse
+// that offer it are TestBrowseActions'.
 func TestDeletePagesAtOnce(t *testing.T) {
 	c, h, _ := apitest.Fresh(t, "cli")
 	ctx := t.Context()
@@ -41,13 +40,6 @@ func TestDeletePagesAtOnce(t *testing.T) {
 	del := apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/browse?kind=media")), "tombstone-pages")
 	if !del.Danger || len(del.Fields) != 1 || del.Fields[0].Name != "ids" || !del.Fields[0].Required {
 		t.Fatalf("the media list's delete: %+v", del)
-	}
-	// The ghost list offers Delete: the owner's word (docs/plans/117-one-browse-view.md, rule 5).
-	for list, offers := range map[string]bool{"/browse?kind=person": false, "/browse?kind=place": false, "/browse?ghosts=1": true,
-		"/browse": true, "/browse?kind=document": true} {
-		if got := hasAction(apitest.Must(t)(c.Get(ctx, list)), "tombstone-pages"); got != offers {
-			t.Errorf("%s offers tombstone-pages: %v, want %v", list, got, offers)
-		}
 	}
 	deleted := func(id string) bool {
 		t.Helper()
