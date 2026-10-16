@@ -173,8 +173,8 @@ func TestFilePromotionDay(t *testing.T) {
 	}
 
 	var datedGhost int64
-	if err := s.Do(ctx, "cli", func(t *Tx) (err error) {
-		datedGhost, _, err = t.insertPage("page", "Already dated.jpg", text.TitleKey("Already dated.jpg"), "2026-10-01", "", "")
+	if err := s.Do(ctx, "cli", func(tx *Tx) (err error) {
+		datedGhost, _, err = tx.insertPage("page", "Already dated.jpg", text.TitleKey("Already dated.jpg"), "2026-10-01", "", "")
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -200,8 +200,8 @@ func TestFilePromotionDay(t *testing.T) {
 	}
 
 	var conflictID int64
-	if err := s.Do(ctx, "cli", func(t *Tx) (err error) {
-		conflictID, _, err = t.insertPage("page", "Conflict.pdf", text.TitleKey("Conflict.pdf"), "2026-10-02", "my own words", "")
+	if err := s.Do(ctx, "cli", func(tx *Tx) (err error) {
+		conflictID, _, err = tx.insertPage("page", "Conflict.pdf", text.TitleKey("Conflict.pdf"), "2026-10-02", "my own words", "")
 		return err
 	}); err != nil {
 		t.Fatal(err)
