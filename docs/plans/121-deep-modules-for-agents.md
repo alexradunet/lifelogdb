@@ -458,3 +458,76 @@ Left for later, as no later part of this plan takes them:
 | the templates draw the classes `num`, `agenda` and `readings-all`, which no sheet styles | a markup change of real pages |
 | the catalog writes the kinds of `browse` by hand, beside `core.BrowseKinds()` | a second copy of one list |
 | README says that "a series shows its next 5 later slots on its own page" | words of the tasks (D23) |
+| the tools of a day start with an empty line, after `<div class="tools">` | with both steps, the tools of a day are byte for byte the same as before Part 5 (`878b2b6`) |
+| the template `readings` takes an argument `s` that it does not read | a change of a fragment and its three callers, which no step asked for |
+| the + Add fold of the style page sends its POST to `/styleguide`, which answers 405 | the style page writes nothing; its comment says so |
+
+## Part 6 results (2026-10-16, `6bec68b`..`7cc4d6d`)
+
+The commits after `9849043`, in three steps: the tools, the test builders and one JSON writer; the env of the CLI
+and its tests in-process; the agents' texts against the program, with the left-overs of Part 5.
+
+- What moved:
+  - The tool list of the MCP server (`client/tools.go` and its test) is in `internal/mcp`, unexported (`6bec68b`,
+    `0af89a6`). `client` is transport only. `tools` leaves out the owner's actions itself, so the parameter `keep`
+    went.
+  - The photo builders of the tests: `phototest` has one of each kind, `JPEG`, `WithExif` and `HEIF(m, Layout)`. They
+    replace `HEIC`, `HEICLocationVersion`, `HEICOverflowingLocation` and the inline builders of the tests of core,
+    cmd, api, preview and `tests/` (`531792b`).
+  - The encoder: `api.WriteJSON` is the one JSON writer of the API, the CLI and the MCP server (`b935fd7`). Its output
+    is the same, byte for byte.
+  - The CLI tests run in-process. The CLI reads its process through `env` (`stdin`, `stdout`, `stderr`, `getenv`,
+    `executable`, the clock), and `runArgs` is what `main` runs (`e8fa58c`). Three subprocess tests run the command
+    lines in-process; only `TestExecutableServeDrainsActiveRequest` is a process, built with `-cover` (`e913a5b`).
+    One parse of the startup line, `servedAt`. `tests/README.md` gives the commands of the coverage map.
+  - The snapshot tests that call only core and db are in `internal/core/snapshot_test.go` (`5a5a22f`). One CLI case
+    stays: `snapshot --to` in a git work tree is refused before anything opens (`79426e5`). The table of
+    `LoopbackAddress` is beside its parse (`eb3a079`).
+  - Two tests in `cmd/lifelog` hold the agents' texts true to the program (`dd65bcf`). Each MCP config of
+    `agentic-init` starts this program with `mcp --agent NAME --db FILE`, and the program serves its tools on that
+    line. In AGENTS.md and the skills, each backticked tool name is a tool of `lifelog mcp`; the names that AGENTS.md
+    calls the owner's only are all the owner's actions, and no one is a tool; each command line and each flag is one
+    that the CLI takes. A rename of a tool in a text fails the test.
+- `go test -count=1 -shuffle=on ./...` passes, and with the seed 1792181223 too.
+
+Lines of Go, at `9849043` and at `7cc4d6d`:
+
+| package | production | tests |
+|---|---|---|
+| `cmd/lifelog` | 782 → 838 | 1597 → 1667 |
+| `internal/client` | 428 → 267 | 410 → 322 |
+| `internal/mcp` | 81 → 243 | 854 → 940 |
+| `internal/agentic` | 193 → 195 | 197 → 157 |
+| `internal/photo` | 388 → 388 | 246 → 247 |
+| `internal/photo/phototest` | 236 → 227 | 31 → 90 |
+| `internal/preview` | 181 → 181 | 213 → 197 |
+
+The production lines of `cmd/lifelog` grew by the env, `runArgs` with its usage error, and `errWriter`. The tests of
+`internal/core` grew by the snapshot tests that moved in: 5747 → 6125.
+
+Answers and texts that changed, each a defect fixed reproducer first or a change the step asked for:
+
+| step | what changed |
+|---|---|
+| `938cdbe` | an error of the Close of the file (its `PRAGMA optimize`) is joined to the error of the command: `main` writes it and exits 1, where it exited 0 |
+| `dd65bcf` | the skills say what keeping a photo does: lifelog does not read where a photo was taken; a photo with no EXIF date gets no day, and `--day` gives one (`--at PLACE` went); one `file` command keeps one file. Importing notes: no link kind `about`; a plain page is promoted, a place is linked `at`, and a day page links a person only by a `[[link]]` in its text |
+| `e699655` | the description of `correct` ends "To remove a reading, retract it.", on the wire, in the form of `/actions` and in API.md |
+| `1e312eb` | `init`, `agentic-init`, `actions --human` and an answer with `--human` return the error of a failed write of their output, so `main` exits 1, where it exited 0 |
+| `ffac569` | `site/README.md` names the three tokens of the site that base.css does not have: `--text-accent`, `--wide` and `--gutter` |
+| `7cc4d6d` | AGENTS.md: the tools are the actions that are not the owner's, and two reads, `get_day` and `get` |
+
+Left for later:
+
+| finding | why it waits |
+|---|---|
+| `jsonFile` of `internal/agentic` keeps its own encoder | `agentic` imports no package of lifelog; an import of `api` would add the store and SQLite to it |
+| the tests of `internal/preview` keep `encodeJPEG` and `halves` | the rotation and scale tests look at a red half and a blue half, which the gradient of `phototest.JPEG` cannot show |
+| `heifWithLocations` of the tests of `internal/photo` stays | it builds `iloc` boxes that `phototest.HEIF` cannot |
+| no `TestMain` in `cmd/lifelog` | one subprocess test is left, and it builds its binary one time |
+| no test of the error of Close that `runContext` joins | a test of the CLI cannot make `PRAGMA optimize` fail on demand; `db.TestCloseReportsAFailedOptimize` holds Close |
+| an unknown command exits 1 with "unknown command", not with the usage and 2 | the behaviour before this part; `TestAnUnknownCommandIsAnErrorAndNotTheUsage` holds it |
+| the comment of `TestSnapshot`, now in `internal/core`, says "TestSnapshot is `lifelog snapshot`" | a move changes no line; the test calls `Store.TakeSnapshot` |
+| the test of the texts knows seven words that look like a tool and are not one (`lifelog`, `actions`, `day`, `text`, `created`, `skipped`, `at`); it does not check what each one is | a check of each would need the fields, the answers and the link kinds of the program in the test |
+| the test of the texts does not count the arguments of a command line: `file PHOTO1 PHOTO2` passed the parse, and a read found it | the usage gives the count in words only |
+| the startup line of `serve` and the lines of `main` to stderr drop the error of their write | a line of the log at the edge of the process; no data is lost |
+| when a write fails and the action failed too, `show` returns the error of the write; `human` returns the error of `json.Marshal` even after a failed write | either way `main` exits 1 with a true error |
