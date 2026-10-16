@@ -502,13 +502,21 @@ func (t *Tx) setDeleted(id int64, deleted bool) error {
 
 // Link adds an edge of a registered kind (D8); added reports whether it was new. wikilink rows belong to the
 // save contract; redirect is unsupported, so neither is written here. The endpoint rules, an `at` from a day page
-// among them, are links_endpoint_types.
+// among them, are links_endpoint_types. A from id that no page has is a 404.
 func (t *Tx) Link(from, to int64, kind, note string) (added bool, err error) {
 	if kind == "redirect" {
 		return false, Invalid("redirect is not a supported link kind")
 	}
 	if kind == "wikilink" {
 		return false, Invalid("wikilink links are written by saving a body, not directly")
+	}
+	var one int
+	err = t.tx.QueryRowContext(t.ctx, `SELECT 1 FROM entities WHERE id = ?`, from).Scan(&one)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, NotFound("no page %d", from) // a missing row is a 404, not the foreign key's 422
+	}
+	if err != nil {
+		return false, err
 	}
 	res, err := t.tx.ExecContext(t.ctx, `INSERT INTO links(from_id, to_id, kind, note, created_at, source) VALUES (?, ?, ?, ?, `+nowSQL+`, ?)
 	                       ON CONFLICT(from_id, to_id, kind) DO NOTHING`, from, to, kind, nullIfEmpty(note), t.Source)

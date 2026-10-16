@@ -19,7 +19,9 @@ import (
 const (
 	maxEdge  = 1600    // the long edge of a preview, in pixels
 	maxBytes = 1 << 20 // the size of a preview (files_preview)
-	maxArea  = 120e6   // the largest picture decoded (a 108 MP phone photo), so a crafted file cannot exhaust memory
+	// The most memory a decoded picture may need, in bytes: 4 bytes a pixel is 120 MP (a 108 MP phone photo). A 16-bit
+	// PNG needs 8 bytes a pixel, so its limit is 60 MP. A crafted file cannot exhaust memory.
+	maxDecoded = 480e6
 )
 
 // errFormat is a picture this package cannot read.
@@ -37,7 +39,11 @@ func Make(src []byte) ([]byte, error) {
 	if err != nil {
 		return nil, errFormat
 	}
-	if float64(cfg.Width)*float64(cfg.Height) > maxArea {
+	bytesPerPixel := 4.0
+	if cfg.ColorModel == color.RGBA64Model || cfg.ColorModel == color.NRGBA64Model {
+		bytesPerPixel = 8 // the PNG decoder keeps 16 bits for each of the four channels
+	}
+	if float64(cfg.Width)*float64(cfg.Height)*bytesPerPixel > maxDecoded {
 		return nil, fmt.Errorf("the picture is %d×%d: too large to read", cfg.Width, cfg.Height)
 	}
 	m, _, err := image.Decode(bytes.NewReader(src))

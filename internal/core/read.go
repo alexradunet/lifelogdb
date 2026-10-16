@@ -718,26 +718,6 @@ func (s *Store) NamedMentions(ctx context.Context, typ string, sc Scope, limit, 
 	return out, nil
 }
 
-// firstPicture is the id of the first live file with a preview that body embeds, else 0. A title resolves through
-// every name of a page, as GET /previews resolves it.
-func firstPicture(ctx context.Context, q interface {
-	QueryRowContext(context.Context, string, ...any) *sql.Row
-}, body string) (int64, error) {
-	for _, title := range text.EmbeddedTitles(body) {
-		var id int64
-		err := q.QueryRowContext(ctx, `
-			SELECT f.id FROM entity_names n
-			  JOIN entities e ON e.id = n.entity_id AND e.deleted_at IS NULL
-			  JOIN files f ON f.id = e.id AND f.preview IS NOT NULL
-			 WHERE n.name_key = ?`, text.TitleKey(title)).Scan(&id)
-		if errors.Is(err, sql.ErrNoRows) {
-			continue
-		}
-		return id, err
-	}
-	return 0, nil
-}
-
 // MediaKinds are the kinds of file the media list of Browse shows, named by the first part of files.mime, in the
 // order the list counts them. A file of any other kind (a PDF, a scan's text) is a document (OtherFiles).
 var MediaKinds = []string{"image", "video", "audio"}

@@ -14,9 +14,12 @@ import (
 // SetPictureOf make a file that picture: they put its embed first in the body. The file is kept as the owner
 // picked it, with no day and no place, so a picture of a person is not put in a day page.
 
-// firstPictures is firstPicture for many bodies, with one query for all of them. The result has one id for each body,
-// in the order of bodies.
-func firstPictures(ctx context.Context, db *sql.DB, bodies []string) ([]int64, error) {
+// firstPictures gives the picture of each body: the id of the first live file with a preview that the body embeds,
+// else 0. One query serves all bodies. A title resolves through every name of a page, as GET /previews resolves it.
+// The result has one id for each body, in the order of bodies. q is a *sql.DB or the *sql.Tx of a write.
+func firstPictures(ctx context.Context, q interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}, bodies []string) ([]int64, error) {
 	keys, titles := []string{}, make([][]string, len(bodies))
 	for i, body := range bodies {
 		for _, title := range text.EmbeddedTitles(body) {
@@ -33,7 +36,7 @@ func firstPictures(ctx context.Context, db *sql.DB, bodies []string) ([]int64, e
 	if err != nil {
 		return nil, err
 	}
-	rows, err := db.QueryContext(ctx, `
+	rows, err := q.QueryContext(ctx, `
 		SELECT n.name_key, f.id FROM entity_names n
 		  JOIN entities e ON e.id = n.entity_id AND e.deleted_at IS NULL
 		  JOIN files f ON f.id = e.id AND f.preview IS NOT NULL
@@ -175,8 +178,8 @@ func (t *Tx) showFirst(id, file int64, title string) (*Sync, error) {
 	if err := t.tx.QueryRowContext(t.ctx, `SELECT body FROM entities WHERE id = ?`, id).Scan(&body); err != nil {
 		return nil, err
 	}
-	current, err := firstPicture(t.ctx, t.tx, body)
-	if err != nil || current == file {
+	current, err := firstPictures(t.ctx, t.tx, []string{body})
+	if err != nil || current[0] == file {
 		return nil, err
 	}
 	if err := automaticEmbedTitle(title); err != nil {

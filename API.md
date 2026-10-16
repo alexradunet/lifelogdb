@@ -14,7 +14,7 @@ and this page disagree, so a property here is a property on the wire.
   allowed to call it; `--tls-cert`/`--tls-key` serve HTTPS. Without one of them the answer is 401 `token_required`.
 - **Provenance:** `Lifelog-Source: <name>` names the writer on every row the request writes (`[a-z0-9_:.-]{1,64}`,
   e.g. `app:phone`). Without it a browser form writes as `ui` and anything else as `api`. A writer named `agent:…`
-  is refused the owner-only actions.
+  or `import:…` is refused the owner-only actions: `register-metric`, `snapshot` and `integrity-check`.
 - **Representation:** `Accept: application/vnd.siren+json` (or anything but `text/html`) gets the JSON below;
   `Accept: text/html` gets the same entity drawn as a page. A JSON client sends an action as
   `application/x-www-form-urlencoded`, `application/json` (one object; a non-string value is sent as its JSON text) or,
@@ -503,7 +503,8 @@ page title, made when missing): one write makes the metric and files it. A refus
 
 ### integrity
 
-`GET /integrity`: the four integrity checks of the contract, and this writer's own.
+`GET /integrity`: the four integrity checks of the contract, and this writer's own. It is an owner-only action
+(`integrity-check`). The full-text check holds the write lock while it runs, so other writes wait.
 
 | property | type | meaning |
 |---|---|---|

@@ -3,6 +3,7 @@ package preview
 import (
 	"bytes"
 	"encoding/binary"
+	"hash/crc32"
 	"image"
 	"image/color"
 	"image/gif"
@@ -147,6 +148,37 @@ func TestMakeReadsPNGAndGIF(t *testing.T) {
 		t.Fatal(err)
 	}
 	decode(t, b)
+}
+
+// A 16-bit PNG decodes to 8 bytes a pixel, twice the 4 of an 8-bit picture: the limit counts bytes, not pixels.
+func TestMakeCountsTheBytesOfADecodedPicture(t *testing.T) {
+	m := image.NewNRGBA64(image.Rect(0, 0, 10, 10))
+	for y := range 10 {
+		for x := range 10 {
+			m.SetNRGBA64(x, y, color.NRGBA64{R: 0xFFFF, G: 0x4000, B: 0x4000, A: 0x8000})
+		}
+	}
+	var p bytes.Buffer
+	if err := png.Encode(&p, m); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, _, err := image.DecodeConfig(bytes.NewReader(p.Bytes())); err != nil || cfg.ColorModel != color.NRGBA64Model {
+		t.Fatalf("the synthetic PNG is not 16-bit: %+v %v", cfg, err)
+	}
+	if _, err := Make(p.Bytes()); err != nil {
+		t.Fatalf("a small 16-bit PNG: %v", err)
+	}
+
+	// 9000×9000 is 648 MB at 8 bytes a pixel. Only the header says so: the decoder reads no more before the refusal.
+	big := append([]byte{}, p.Bytes()...)
+	const ihdr = 8 + 8 // the PNG signature, then the length and the name of the first chunk
+	binary.BigEndian.PutUint32(big[ihdr:], 9000)
+	binary.BigEndian.PutUint32(big[ihdr+4:], 9000)
+	binary.BigEndian.PutUint32(big[ihdr+13:], crc32.ChecksumIEEE(big[ihdr-4:ihdr+13]))
+	_, err := Make(big)
+	if err == nil || err.Error() != "the picture is 9000×9000: too large to read" {
+		t.Fatalf("a 9000×9000 16-bit PNG: %v", err)
+	}
 }
 
 func TestMakeRefuses(t *testing.T) {

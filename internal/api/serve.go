@@ -39,7 +39,12 @@ func NewOn(s *core.Store, localDay func() string, zone *time.Location, trustedOr
 	h := &server{s: s, localDay: localDay, zone: zone}
 	m := http.NewServeMux()
 	h.mux = m
-	get := func(p string, f func(*http.Request) (*Entity, error)) { m.HandleFunc("GET "+p, h.serve(f)) }
+	get := func(p string, f func(*http.Request) (*Entity, error)) {
+		if ownerPath("GET", p) { // a read that holds the write lock is the owner's too
+			f = ownerOnlyGet(f)
+		}
+		m.HandleFunc("GET "+p, h.serve(f))
+	}
 	post := func(p string, f func(*http.Request, string) (*Entity, error)) {
 		if ownerPath("POST", p) { // the catalog says whose the action is; the route refuses an agent
 			f = ownerOnly(f)
@@ -174,6 +179,18 @@ func ownerOnly(f func(*http.Request, string) (*Entity, error)) func(*http.Reques
 			return nil, core.Forbidden("this action is the owner's: an agent or an import may not run it")
 		}
 		return f(r, src)
+	}
+}
+
+// ownerOnlyGet is ownerOnly for a GET route, which has no source parameter: it reads the source of the request.
+func ownerOnlyGet(f func(*http.Request) (*Entity, error)) func(*http.Request) (*Entity, error) {
+	owned := ownerOnly(func(r *http.Request, _ string) (*Entity, error) { return f(r) })
+	return func(r *http.Request) (*Entity, error) {
+		src, err := source(r)
+		if err != nil {
+			return nil, err
+		}
+		return owned(r, src)
 	}
 }
 

@@ -154,7 +154,7 @@ var catalog = []spec{
 		"POST", "/metrics", []Field{req("name", "text", "Name"), opt("unit", "text", "Unit"), opt("note", "text", "Note"),
 			pageField("category", "Category (title)", false)}, true, false},
 	{"integrity-check", "Integrity", "Run the four integrity checks of the database (docs/contract/integrity-checks.md).",
-		"GET", "/integrity", nil, false, false},
+		"GET", "/integrity", nil, true, false},
 	{"search", "Search", "Full-text search over page titles and bodies (FTS5 syntax).",
 		"GET", "/search", []Field{req("q", "search", "Search")}, false, false},
 	{"browse", "Browse", "List the things of one kind, with the category tree. kind is page, person, place, media, document or metric (default page), or all, which needs in. in is the title of a category: only what is filed directly in it (default kind all). unfiled 1 lists only what is in no category. ghosts 1 lists the ghost pages (kind page only). media is image, video or audio (kind media only). limit and offset select the page of rows. A combination with no meaning is refused.",

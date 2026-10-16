@@ -2,7 +2,10 @@ package api_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -31,9 +34,9 @@ func TestOwnerOnlyActionsPolicy(t *testing.T) {
 	t.Cleanup(func() { d.Close() })
 	agent := client.InProcess(api.New(&core.Store{DB: d, SnapshotDir: root}), "agent:policy-test")
 	catalog := must(agent.Get(t.Context(), "/actions"))
-	register, snapshot, record := find(catalog, "register-metric"), find(catalog, "snapshot"), find(catalog, "record")
-	if !register.Owner || !snapshot.Owner || record.Name == "" || record.Owner {
-		t.Fatalf("wrong catalog policy: %+v %+v %+v", register, snapshot, record)
+	register, snapshot, integrity, record := find(catalog, "register-metric"), find(catalog, "snapshot"), find(catalog, "integrity-check"), find(catalog, "record")
+	if !register.Owner || !snapshot.Owner || !integrity.Owner || record.Name == "" || record.Owner {
+		t.Fatalf("wrong catalog policy: %+v %+v %+v %+v", register, snapshot, integrity, record)
 	}
 	for _, a := range catalog.Actions {
 		if strings.Contains(a.Name, "approve") || strings.HasPrefix(a.Href, "/import") {
@@ -43,7 +46,7 @@ func TestOwnerOnlyActionsPolicy(t *testing.T) {
 	for _, op := range []struct {
 		a      api.Action
 		fields map[string]string
-	}{{register, map[string]string{"name": "Forbidden direct"}}, {snapshot, nil}} {
+	}{{register, map[string]string{"name": "Forbidden direct"}}, {snapshot, nil}, {integrity, nil}} {
 		_, err := agent.Do(t.Context(), op.a, op.fields)
 		var ce *client.Error
 		if !errors.As(err, &ce) || ce.Status != 403 {
@@ -87,11 +90,47 @@ func TestOwnerOnlyActionsPolicy(t *testing.T) {
 	found := false
 	for _, tool := range tools.Tools {
 		found = found || tool.Name == "record"
-		if tool.Name == "register_metric" || tool.Name == "snapshot" || strings.Contains(tool.Name, "approve") {
+		if tool.Name == "register_metric" || tool.Name == "snapshot" || tool.Name == "integrity_check" || strings.Contains(tool.Name, "approve") {
 			t.Fatalf("owner operation exposed as tool: %s", tool.Name)
 		}
 	}
 	if !found {
 		t.Fatal("record missing from the MCP tools")
+	}
+}
+
+// The full-text check of the integrity checks holds the write lock while it runs, so it is the owner's alone: a GET
+// route refuses an agent or an import as a POST route does.
+func TestIntegrityCheckIsRefusedToAnAgent(t *testing.T) {
+	_, h := fresh(t)
+	for _, tc := range []struct {
+		source string
+		status int
+		code   string
+	}{
+		{"", http.StatusOK, ""},
+		{"agent:x", http.StatusForbidden, "forbidden"},
+		{"import:x", http.StatusForbidden, "forbidden"},
+	} {
+		req := httptest.NewRequest("GET", "/integrity", nil)
+		if tc.source != "" {
+			req.Header.Set(api.SourceHeader, tc.source)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != tc.status {
+			t.Errorf("source %q: status %d, want %d: %.200s", tc.source, rec.Code, tc.status, rec.Body.String())
+		}
+		var e struct {
+			Properties struct {
+				Code string `json:"code"`
+			} `json:"properties"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &e); err != nil {
+			t.Fatalf("source %q: %v", tc.source, err)
+		}
+		if tc.code != "" && e.Properties.Code != tc.code {
+			t.Errorf("source %q: code %q, want %q", tc.source, e.Properties.Code, tc.code)
+		}
 	}
 }

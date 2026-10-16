@@ -170,6 +170,18 @@ func TestExistingTitleLinksToThePage(t *testing.T) {
 	}
 }
 
+// A link from an id that no page has is a missing row (404), not the foreign key's refusal (422).
+func TestLinkFromAMissingPageIsNotFound(t *testing.T) {
+	c, _ := fresh(t)
+	root := must(c.Get(t.Context(), "/"))
+	must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Target"}))
+	link := find(must(c.Get(t.Context(), "/actions")), "link") // the templated action: the id is a path field
+	_, err := c.Do(t.Context(), link, map[string]string{"id": "999999", "to": "Target", "kind": "part-of"})
+	if code, status := codeOf(t, err); code != "not_found" || status != 404 {
+		t.Errorf("link from a missing page: code=%q status=%d (%v)", code, status, err)
+	}
+}
+
 func TestCorrectionDomainActions(t *testing.T) {
 	c, _ := fresh(t)
 	catalog, err := c.Catalog(t.Context())
