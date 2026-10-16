@@ -393,9 +393,68 @@ The rest the reviewers found goes to a later part:
 
 Left for a later step:
 
-| finding | where |
+| finding | where | done |
+|---|---|---|
+| `syncWikilinks` counts a savepoint whose rollback failed as a skipped target, so the write commits | Part 5, first step | yes, `a7e8165` |
+| the previous link of the first week, month and year, and the next link of the last ones, lead to a 422; `/weeks/9999-W52` answers 422 | Part 5, first step | yes, `5d54817` |
+| the lookups by title read a body that most callers do not use | Part 5, first step | yes, `d212a8d` |
+| `core.MediaKinds` is a mutable slice that the catalog shares | Part 5, first step | yes, `21d4bde` |
+
+## Part 5 results (2026-10-16, `a7e8165`..`798a601`)
+
+The commits after `5f042f8`, in five steps: the left-overs of Part 4, the view files by concept and one drawer of
+the lines, one count and the logic out of the templates, one fragment each, and the style page with the table tests.
+
+- The view files. The view code of `internal/api` is in ten files with the prefix `view_` (lines at the end of the
+  part): `view_page.go` (428: the embedded files, the template set `templates`, `view`, `pageView`, `htmlOf`, the
+  methods of a page), `view_forms.go` (232), `view_shell.go` (162: the sidebar, `Nav`, `InMore`, the icons),
+  `view_lines.go` (186: `plot`, `trendLine`, `sparkLine`, `chart`), `view_metrics.go` (290: the folds of a series,
+  the cards of `/metrics`, the tiles of a day), `view_markdown.go` (185), `view_daywords.go` (193: the calendar in
+  words, `weekPage`, `AgendaDays`), `view_words.go` (252: `clock`, `count`), `view_results.go` (177) and
+  `view_browse.go` (215). `html.go`, `today.go`, `shell.go`, `calendar.go`, `words.go`, `results.go`,
+  `browse_view.go`, `metric_view.go` and `markdown.go` went (`a33516c`). `groupMetrics` and `metricOf` are in
+  `measurements.go`; the style page's synthetic entity is in `assets.go`, next to its handler.
+- Lines of `internal/api`, at `5f042f8` and at `798a601`: production 5854 → 6071, tests 10277 → 11458, templates
+  896 → 872, style sheets 1027 → 1016. The production lines grew by the methods that took the logic out of the
+  templates and by the synthetic entity of the style page.
+- The templates hold no flag variable that a range sets: `DayParts`, `AgendaDays`, `Categories`, `Backlinks` and
+  `InMore` give those facts, each with a table test. A template compares a day with today through `view.Today`;
+  `MetricSections`, `ReadingTiles` and `Nav` read the view's clock. The pure parts of the views have table tests
+  with values checked by hand (the folds, the cards, the tiles, the calendar's items, the words of the lines,
+  `yearSummary`, `sinceLastWeek`, `groupMetrics`, the range of a chart).
+- The style page runs the real templates on a synthetic entity that reads nothing; its test finds a call of each
+  template, the mark of each component, and no class that no sheet defines.
+
+Answers and markup that changed, each a defect fixed reproducer first or a change the step asked for:
+
+| step | what changed |
 |---|---|
-| `syncWikilinks` counts a savepoint whose rollback failed as a skipped target, so the write commits | Part 5, first step |
-| the previous link of the first week, month and year, and the next link of the last ones, lead to a 422; `/weeks/9999-W52` answers 422 | Part 5, first step |
-| the lookups by title read a body that most callers do not use | Part 5, first step |
-| `core.MediaKinds` is a mutable slice that the catalog shares | Part 5, first step |
+| `a7e8165` | a link target whose savepoint does not roll back fails the save (500); before, the save went on and committed |
+| `5d54817` | the first and the last week, month and year link only to pages; `/weeks/9999-W52` answers 200, through 9999-12-31, with five days |
+| `440498f` | a line draws only the readings with a day and a number; a chart with no reading to draw is "" |
+| `5441e04` | "1 more reading of 2026" and "1 reading from …" on the page of a metric, where they said "readings" |
+| `72eaa34` | the editor of the day's body has the one help text of a page and a metric |
+| `0e4d9b5` | a required text area (the body of `save-body`) is marked `required` |
+| `f36ed84` | the groups of the search have the class `result-group` |
+| `878b2b6` | the first and the last day link only to pages: no prev step and no week link on 0000-01-01, no week link on 0000-01-02, no next step on 9999-12-31; an absent step leaves no empty line in the tools of a day, a week, a month and a year; a day page loses its doubled empty lines |
+| `d598e90` | the chart writes the values of its axis and of its points with `num`: 1000000, not 1e+06 |
+| `4844d4b` | the rule `&.pick{padding:0}` of `.result-group` went from the style sheet of every page |
+| `798a601` | the style page runs the real templates; its task-era specimens, the CSS that only they used and the tokens `--indigo`, `--done-ink` and `--done-soft` went |
+
+Left for later, as no later part of this plan takes them:
+
+| finding | why it waits |
+|---|---|
+| an error of the `SAVEPOINT` statement, or of the `RELEASE` after a target that succeeded, is counted as a skipped target (`savepoint` in `core/tx.go`) | a defect; its reproducer needs a fault of SQLite on these two statements |
+| an error in steps 1 to 3 that is not a refusal is a skipped target, as the contract says ([save a body](../cookbook/save-a-body.md), D19) | a change of the contract needs the owner |
+| `enhanceText` keeps its own decode of the joined run | `1595b26` gives the reason: a decode of each node shows a backslash that CommonMark does not show |
+| a metric titled "day page", "page", "page (edited)" or "at" would show its reading as a part of the day | the day-view query of the cookbook names the parts by these words; a change needs the process |
+| `tombstones.go` writes "Deleted N page(s)." with its own words, not with `count` | the same words, written a second time |
+| the order of "Pages written this day" is not defined for two pages written in one millisecond | the day-view query of the cookbook does not break the tie; a change needs the process |
+| Preview has no `formnovalidate`, so an empty required text area blocks Preview | harmless: there is nothing to preview |
+| the template `step` picks its access key by `.rel` | a name decides, but `rel` is the template's own parameter |
+| the titles of the embedded reading links of a day and of a series use `%g` ("weight 1e+06") | an answer on the wire: the owner decides |
+| the summary of a year writes a scale's unit as it is: "6 readings · 1 to 5 1-5" | the words need the owner |
+| the templates draw the classes `num`, `agenda` and `readings-all`, which no sheet styles | a markup change of real pages |
+| the catalog writes the kinds of `browse` by hand, beside `core.BrowseKinds()` | a second copy of one list |
+| README says that "a series shows its next 5 later slots on its own page" | words of the tasks (D23) |
