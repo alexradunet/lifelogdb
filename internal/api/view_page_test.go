@@ -48,9 +48,10 @@ func submit(h http.Handler, path string, form url.Values, referer string) *httpt
 
 // TestEveryViewRenders draws every view of a small life as a browser gets it: one table of paths, each a whole page
 // with its status. Every page carries what semantic HTML needs: both of this app's sheets under their markers, one
-// main with a way to skip to it, the sidebar's sections with one link at most marked, a footer, the search dialog, no
-// script at all (docs/plans/108-the-browser-made-current.md), and no id generated for a template to find. A row also
-// names the words that its page shows. Which link of the sidebar a page marks is TestNavMarksThePageTheBrowserIsOn's.
+// main with a way to skip to it, the sidebar's sections, one link at most marked in the whole sidebar (the brand, the
+// sections and the owner's links), a footer, the search dialog, no script at all
+// (docs/plans/108-the-browser-made-current.md), and no id generated for a template to find. A row also names the words
+// that its page shows. Which link of the sidebar a page marks is TestNavMarksThePageTheBrowserIsOn's.
 func TestEveryViewRenders(t *testing.T) {
 	c, h, _ := apitest.Fresh(t, "cli")
 	root := apitest.Must(t)(c.Get(t.Context(), "/"))
