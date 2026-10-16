@@ -46,3 +46,31 @@ func TestTheCatalogMarksTheFieldOfAPageTitle(t *testing.T) {
 		}
 	}
 }
+
+// TestEveryTextAreaOfTheCatalogOffersPreview: a form of the catalog offers Preview when it has a text area, and only
+// then. POST /render reads the field body or text, so each text area of the catalog has one of these names.
+func TestEveryTextAreaOfTheCatalogOffersPreview(t *testing.T) {
+	areas := 0
+	for _, s := range catalog {
+		f, err := formOf(templated(s))
+		if err != nil {
+			t.Fatal(err)
+		}
+		area := false
+		for _, fd := range s.Fields {
+			if fd.Type == "textarea" {
+				area = true
+				areas++
+				if fd.Name != "body" && fd.Name != "text" {
+					t.Errorf("%s: the text area %s is not body or text, which POST /render reads", s.Name, fd.Name)
+				}
+			}
+		}
+		if f.Preview() != area {
+			t.Errorf("%s: Preview %v, want %v", s.Name, f.Preview(), area)
+		}
+	}
+	if areas == 0 {
+		t.Error("the catalog has no text area: the test checks nothing")
+	}
+}

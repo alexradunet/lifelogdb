@@ -81,11 +81,11 @@ type formView struct {
 	keys          map[string]string // field name to its access key
 }
 
-// Preview reports a form with a body to write: it offers Preview, a second button that sends the form to
-// POST /render in a new tab, where the body shows as its page will show it, and nothing is saved.
+// Preview reports a form with a text area: it offers Preview, a second button that sends the form to POST /render
+// in a new tab, where the body shows as its page will show it, and nothing is saved.
 func (f *formView) Preview() bool {
 	for _, fd := range append(f.Shown[:len(f.Shown):len(f.Shown)], f.More...) {
-		if fd.Type == "textarea" && (fd.Name == "body" || fd.Name == "text") {
+		if fd.Type == "textarea" {
 			return true
 		}
 	}
