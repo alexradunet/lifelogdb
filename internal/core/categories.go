@@ -33,34 +33,56 @@ func (s *Store) categories(ctx context.Context) (cats map[int64]*Category, filed
 		 WHERE l.kind = 'part-of'
 		 ORDER BY p.preferred_name_key`)
 	cats, filed = map[int64]*Category{}, map[int64][]int64{}
-	parent := map[int64]int64{} // the first category a page is part-of, by title
-	var from, id int64
-	var title string
+	var links []categoryLink
+	var l categoryLink
 	var live bool
-	if err := each(rows, err, []any{&from, &id, &title, &live}, func() {
-		if cats[id] == nil {
-			cats[id] = &Category{ID: id, Title: title}
+	if err := each(rows, err, []any{&l.from, &l.to, &l.title, &live}, func() {
+		if cats[l.to] == nil {
+			cats[l.to] = &Category{ID: l.to, Title: l.title}
 		}
 		if live {
-			cats[id].Count++
+			cats[l.to].Count++
 		}
-		filed[from] = append(filed[from], id)
-		if _, ok := parent[from]; !ok {
-			parent[from] = id
-		}
+		filed[l.from] = append(filed[l.from], l.to)
+		links = append(links, l)
 	}); err != nil {
 		return nil, nil, err
 	}
-	for id, c := range cats {
-		titles := []string{c.Title}
+	for id, path := range categoryPaths(links) {
+		cats[id].Path = path
+	}
+	return cats, filed, nil
+}
+
+// categoryLink is a part-of link as the categories read it: from a page to a live category, and the category's title.
+type categoryLink struct {
+	from, to int64
+	title    string
+}
+
+// categoryPaths are the paths the writer draws the categories at, by id: the titles from the top, joined by '/'.
+// links are the part-of links to live categories, in the order of the categories' titles. Each category is drawn
+// under one parent, the first by title; a category that the walk up has seen ends it, so a cycle of part-of links
+// draws each category once.
+func categoryPaths(links []categoryLink) map[int64]string {
+	titles, parent := map[int64]string{}, map[int64]int64{}
+	for _, l := range links {
+		titles[l.to] = l.title
+		if _, ok := parent[l.from]; !ok {
+			parent[l.from] = l.to
+		}
+	}
+	paths := make(map[int64]string, len(titles))
+	for id, title := range titles {
+		path := []string{title}
 		seen := map[int64]bool{id: true}
 		for p, ok := parent[id]; ok && !seen[p]; p, ok = parent[p] {
 			seen[p] = true
-			titles = append([]string{cats[p].Title}, titles...)
+			path = append([]string{titles[p]}, path...)
 		}
-		c.Path = strings.Join(titles, "/")
+		paths[id] = strings.Join(path, "/")
 	}
-	return cats, filed, nil
+	return paths
 }
 
 // Categories are the category pages, by path.
