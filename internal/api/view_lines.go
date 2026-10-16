@@ -130,7 +130,8 @@ const chartPoints = 200
 
 // chart draws a series as an inline SVG: a line through its readings, each placed by its day between from and to,
 // and a point a reading while there are at most chartPoints; "" with no reading to draw. The least and the greatest
-// value of the axis are those of the readings that it draws.
+// value of the axis are those of the readings that it draws. A value is written as num writes it, as on the tile; a
+// position in the SVG is a coordinate, not a value.
 func chart(from, to string, readings any) template.HTML {
 	rs := lineReadings(anyList(readings))
 	// An absent lower bound is explicit all-history mode. Plot from the earliest
@@ -169,14 +170,14 @@ func chart(from, to string, readings any) template.HTML {
 		w, h, count(len(rs), "reading", "readings"), first, last)
 	fmt.Fprintf(&sb, `<line class="axis" x1="%g" y1="%g" x2="%g" y2="%g"/><line class="axis" x1="%g" y1="%g" x2="%g" y2="%g"/>`,
 		left, y(hi), w-pad, y(hi), left, y(lo), w-pad, y(lo))
-	fmt.Fprintf(&sb, `<text x="%g" y="%g">%g</text><text x="%g" y="%g">%g</text>`, left-6, y(hi)+4, hi, left-6, y(lo)+4, lo)
+	fmt.Fprintf(&sb, `<text x="%g" y="%g">%s</text><text x="%g" y="%g">%s</text>`, left-6, y(hi)+4, num(hi), left-6, y(lo)+4, num(lo))
 	fmt.Fprintf(&sb, `<text class="x" x="%g" y="%g">%s</text><text class="x" x="%g" y="%g">%s</text>`,
 		left+40, h-4, first, w-pad-40, h-4, last)
 	sb.WriteString(`<polyline points="` + points + `"/>`)
 	if len(rs) <= chartPoints {
 		for _, r := range rs {
-			fmt.Fprintf(&sb, `<circle cx="%.1f" cy="%.1f" r="3"><title>%s: %g</title></circle>`, x(r), y(r.value),
-				r.t.Format(layoutDateYear), r.value)
+			fmt.Fprintf(&sb, `<circle cx="%.1f" cy="%.1f" r="3"><title>%s: %s</title></circle>`, x(r), y(r.value),
+				r.t.Format(layoutDateYear), num(r.value))
 		}
 	}
 	sb.WriteString(`</svg>`)

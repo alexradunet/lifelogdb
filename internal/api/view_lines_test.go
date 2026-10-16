@@ -69,3 +69,18 @@ func TestAChartSaysHowManyReadingsItDraws(t *testing.T) {
 		}
 	}
 }
+
+// TestAChartWritesItsNumbersInFull: the axis and the title of each point write a value as num does, as the tile and
+// every other place write it: 1000000, never 1e+06, and 0.00001, never 1e-05.
+func TestAChartWritesItsNumbersInFull(t *testing.T) {
+	readings := []any{map[string]any{"day": "2026-10-12", "value": 0.00001}, map[string]any{"day": "2026-10-14", "value": 1000000.0}}
+	got := string(chart("2026-10-12", "2026-10-16", readings))
+	if m := chartAxis.FindStringSubmatch(got); m == nil || m[1] != "1000000" || m[2] != "0.00001" {
+		t.Errorf("the chart's axis is %q, want 1000000 and 0.00001:\n%s", m, got)
+	}
+	for _, want := range []string{"<title>Mon 12 Oct 2026: 0.00001</title>", "<title>Wed 14 Oct 2026: 1000000</title>"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the chart has no %s:\n%s", want, got)
+		}
+	}
+}
