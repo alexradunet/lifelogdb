@@ -370,3 +370,32 @@ The rest the reviewers found goes to a later part:
   `open-day` with no day says "missing field day" until Part 8 opens today.
 - `FileIn.UnknownCaptureDay` stays: `SetPicture` sets it for a picture of any type, which the rule (an `image/*` with
   no day and no EXIF date) does not give. Part 4 makes it core's own.
+
+## Part 4 results (2026-10-16, `2738f7a`..`4297a56`)
+
+- The layout: `core.go`, `tx.go`, `pages.go`, `names.go`, `links.go`, `journal.go`, `metrics.go`, `files.go`,
+  `picture.go`, `browse.go`, `categories.go`, `calendar.go`, `integrity.go`, `snapshot.go`. `names.go` is new: it holds
+  `Rename` and the name lookups, because `pages.go` with them had 569 lines. `calendar.go` stays: it holds the reads of
+  a month's window. The largest file has 371 lines; `read.go` had 787 and `write.go` 738.
+- The clock: `Store.Clock` and `Store.Zone`. `Store.Now` is the instant with its monotonic reading (the feedback
+  receipts use it); `Store.Local` is the same instant in the zone (the words, a snapshot's name); `Store.Today` is its
+  day. The instants that a write stores in a row (`created_at`, `updated_at`, `deleted_at`) stay SQLite's.
+- The surface: exported `Tx` methods 21 → 9 (the other 9 are called by `internal/scaletest` and `tests/`); `IsOwner`
+  and `Forbidden` moved to the api; `IsInstant` stays (`tests/` calls it).
+- Production lines of `internal/core`: 3067 → 2851.
+- Answers that changed, each a defect fixed reproducer first or a message made one:
+  - the 409 of a tombstoned page names its title, in one message for every write;
+  - `/weeks/0000-W01` answers 200 when a metric has a reading that week (it answered 422);
+  - a snapshot folder that the process cannot reach (a permission error) is a fault (500), not the refusal
+    "no folder";
+  - a failed rollback is a fault (500), not a 422 or a clean dry run;
+  - a scan fault of a search is a 500, not a 422; a page with no preferred-name row is a 404.
+
+Left for a later step:
+
+| finding | where |
+|---|---|
+| `syncWikilinks` counts a savepoint whose rollback failed as a skipped target, so the write commits | Part 5, first step |
+| the previous link of the first week, month and year, and the next link of the last ones, lead to a 422; `/weeks/9999-W52` answers 422 | Part 5, first step |
+| the lookups by title read a body that most callers do not use | Part 5, first step |
+| `core.MediaKinds` is a mutable slice that the catalog shares | Part 5, first step |
