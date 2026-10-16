@@ -32,10 +32,19 @@ func (s *Store) TakeSnapshot(ctx context.Context, now time.Time) (string, *Integ
 	if err != nil {
 		return path, nil, fmt.Errorf("the snapshot %s cannot be checked: %w", path, err)
 	}
-	defer d.Close()
-	res, err := (&Store{DB: d}).Integrity(ctx)
+	res, err := restoreCheck(ctx, d)
 	if err != nil {
 		return path, nil, fmt.Errorf("the restore check of %s: %w", path, err)
 	}
 	return path, res, nil
+}
+
+// restoreCheck runs the integrity checks on the open snapshot d, then closes it. A Close that fails is an error of the
+// check: the copy is then not known to be left as written.
+func restoreCheck(ctx context.Context, d *db.DB) (*IntegrityResult, error) {
+	res, err := (&Store{DB: d}).Integrity(ctx)
+	if err := errors.Join(err, d.Close()); err != nil {
+		return nil, err
+	}
+	return res, nil
 }

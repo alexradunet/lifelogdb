@@ -34,7 +34,12 @@ func (*integrityConn) Prepare(string) (driver.Stmt, error) {
 	return nil, errors.New("unexpected prepare")
 }
 func (*integrityConn) Begin() (driver.Tx, error) { return nil, errors.New("unexpected transaction") }
-func (*integrityConn) Close() error              { return nil }
+func (c *integrityConn) Close() error {
+	if c.c.fault == "conn-close" {
+		return errIntegrityFault
+	}
+	return nil
+}
 
 var errIntegrityFault = errors.New("synthetic integrity execution failure")
 

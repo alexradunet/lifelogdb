@@ -62,3 +62,19 @@ func TestASnapshotTellsARefusalFromAFailure(t *testing.T) {
 		}
 	})
 }
+
+// TestARestoreCheckReportsAFailedClose: the restore check closes the copy that it checked. A Close that fails is an
+// error of the check, because the copy is then not known to be left as written. The fault driver of
+// integrity_test.go fails the Close of its connection.
+func TestARestoreCheckReportsAFailedClose(t *testing.T) {
+	for _, fault := range []string{"", "conn-close"} {
+		s := faultIntegrityStore(t, &integrityConnector{fault: fault})
+		res, err := restoreCheck(ctx, s.DB)
+		switch {
+		case fault == "" && (err != nil || res == nil || !res.OK):
+			t.Errorf("a clean check = %+v, %v; want a passed check", res, err)
+		case fault != "" && (res != nil || !errors.Is(err, errIntegrityFault)):
+			t.Errorf("a check whose Close fails = %+v, %v; want no result and the fault", res, err)
+		}
+	}
+}
