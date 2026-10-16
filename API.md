@@ -366,7 +366,7 @@ live metric answers 303 to its series, the metric's one page, which carries this
 writes answer with this entity; `create-page` and `save-body` carry a `result` of the sync shape, `add-file` the kept
 shape. `set-picture` (`POST /pages/{id}/picture`) puts `![[title]]` first in the body, unless that file is the page's
 picture already (the first live file with a preview that the body embeds). It takes a new photo as `original` (and
-`preview` when the photo is not a JPEG, PNG or GIF), kept as a file with no day and no place and titled
+`preview` when the photo is not a JPEG, PNG or GIF), kept as a file with no day and titled
 `<page> <today>.jpg` (` 2`, ` 3`… when taken) unless `title` names it; its `result` is the kept shape. Or it takes
 the `title` of a kept file with a preview, and its `result` is the sync shape. A photo with no picture, or a title
 that is not a kept picture, is refused (422).
@@ -639,7 +639,7 @@ What the save contract did with the body's `[[wikilinks]]` and `#tags`:
 | `day_sync.created` | list | |
 | `day_sync.revived` | list | |
 | `day_sync.skipped` | list | |
-| `day` | day | the day it was filed under |
+| `day` | day | its own day: the `day` sent, else the EXIF date of a photo; absent when it has neither, or when its page is deleted |
 | `embedded` | boolean | `![[title]]` was appended to its day page |
 | `filed` | object | what filing it in `category` did, as [filed](#filed) says it; absent when no `category` was sent or its page is deleted |
 | `filed.category` | object | the category page; in a dry run that would make it, its `id` is 0 |
