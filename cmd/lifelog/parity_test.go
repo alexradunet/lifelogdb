@@ -27,17 +27,18 @@ import (
 // TestParityOfTheSurfaces is the parity table of the surfaces (AGENTS.md: client parity is a first-class contract). A
 // row is one scenario of the domain. It runs on each surface on a fresh file, and it holds the answer of the surface
 // and the state of the file after it, read back through the HTTP API. The surfaces are the client in process (http),
-// the client over a server (remote), the command lines of this program (cli) and the MCP server (mcp). http, remote
-// and cli run once as an owner and once as an agent. mcp runs as an agent only, and an action of the owner is not one
-// of its tools. Each surface keeps the tests of what is its own: the schema, the hints, the arguments and the
-// cancellation of MCP; the flags, the output and snapshot --to of the CLI; the transport of the client.
+// the client over a server (remote), the command lines of this program (cli), and the MCP server with the client in
+// process (mcp) and with the client over a server (mcp-remote). http, remote and cli run once as an owner and once as
+// an agent. The MCP server runs as an agent only, and an action of the owner is not one of its tools. Each surface
+// keeps the tests of what is its own: the schema, the hints, the arguments and the cancellation of MCP; the flags,
+// the output and snapshot --to of the CLI; the transport of the client.
 func TestParityOfTheSurfaces(t *testing.T) {
 	for _, row := range parityRows() {
 		for _, s := range paritySurfaces {
 			t.Run(row.name+"/"+s.name+"/"+s.source, func(t *testing.T) {
 				t.Parallel()
 				read, h, store := apitest.Fresh(t, "cli")
-				x := &parityRun{t: t, surface: s.name, owner: !strings.HasPrefix(s.source, "agent:"), read: read, store: store}
+				x := &parityRun{t: t, mcp: strings.HasPrefix(s.name, "mcp"), owner: !strings.HasPrefix(s.source, "agent:"), read: read, store: store}
 				x.call = s.open(t, h, store.DB.Path(), s.source)
 				row.run(x)
 			})
@@ -54,7 +55,7 @@ var paritySurfaces = []struct {
 	{"http", "api", openHTTP}, {"http", "agent:parity", openHTTP},
 	{"remote", "ui", openRemote}, {"remote", "agent:parity", openRemote},
 	{"cli", "cli", openCLI}, {"cli", "agent:parity", openCLI},
-	{"mcp", "agent:parity", openMCP},
+	{"mcp", "agent:parity", openMCP}, {"mcp-remote", "agent:parity", openMCPRemote},
 }
 
 // surfaceCall runs the catalog's action with the field values on one surface. It returns the entity of the answer
@@ -116,11 +117,19 @@ func cliLine(action string, args map[string]string) []string {
 	return line
 }
 
-// openMCP serves the tools of the MCP server over an in-memory transport of the SDK, with the client in process as
-// the source. A call sends a field that the schema of the tool calls a number as a JSON number, as a model does. An
-// error result of a tool is an error; its text is the error entity of the API when the API answered.
 func openMCP(t *testing.T, h http.Handler, _, source string) surfaceCall {
-	srv, err := mcp.New(t.Context(), client.InProcess(h, source), version)
+	return mcpCall(t, client.InProcess(h, source))
+}
+
+func openMCPRemote(t *testing.T, h http.Handler, _, source string) surfaceCall {
+	return mcpCall(t, apitest.Remote(t, h, source))
+}
+
+// mcpCall serves the tools of the MCP server over an in-memory transport of the SDK, with the client as the source. A
+// call sends a field that the schema of the tool calls a number as a JSON number, as a model does. An error result of
+// a tool is an error; its text is the error entity of the API when the API answered.
+func mcpCall(t *testing.T, c *client.Client) surfaceCall {
+	srv, err := mcp.New(t.Context(), c, version)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,12 +223,12 @@ func decodeEntity(t *testing.T, b []byte) *api.Entity {
 
 // parityRun is one row on one surface.
 type parityRun struct {
-	t       *testing.T
-	surface string         // http, remote, cli or mcp
-	owner   bool           // the source of the surface is an owner, not agent:*
-	call    surfaceCall    // the surface under test
-	read    *client.Client // the HTTP API in process, as the owner: the state of the file after a call
-	store   *core.Store    // the setup of a row, and a probe of the file
+	t     *testing.T
+	mcp   bool           // the surface is the MCP server (mcp or mcp-remote)
+	owner bool           // the source of the surface is an owner, not agent:*
+	call  surfaceCall    // the surface under test
+	read  *client.Client // the HTTP API in process, as the owner: the state of the file after a call
+	store *core.Store    // the setup of a row, and a probe of the file
 }
 
 type parityRow struct {
@@ -238,8 +247,8 @@ func (x *parityRun) ok(action string, args map[string]string) *api.Entity {
 }
 
 // refused calls an action that must be refused with the status and the code of the error entity, and returns the
-// message of the entity. On each surface other than mcp, the error has the status too (main writes the error of the
-// CLI as "lifelog: 409: ..."). On mcp the error is a tool result: only its text has the status.
+// message of the entity. On each surface other than the MCP server, the error has the status too (main writes the
+// error of the CLI as "lifelog: 409: ..."). On the MCP server the error is a tool result: only its text has the status.
 func (x *parityRun) refused(action string, args map[string]string, status int, code string) string {
 	x.t.Helper()
 	e, err := x.call(action, args)
@@ -250,7 +259,7 @@ func (x *parityRun) refused(action string, args map[string]string, status int, c
 	if fmt.Sprint(p["status"]) != strconv.Itoa(status) || p["code"] != code {
 		x.t.Errorf("%s %v: %v %v (%v), want %d %s", action, args, p["status"], p["code"], p["message"], status, code)
 	}
-	if got := apitest.Status(err); x.surface != "mcp" && got != status {
+	if got := apitest.Status(err); !x.mcp && got != status {
 		x.t.Errorf("%s %v: the error %q has the status %d, want %d (-1: it is not a *client.Error)", action, args, err, got, status)
 	}
 	return fmt.Sprint(p["message"])
@@ -633,7 +642,7 @@ func rowLargestVersion(x *parityRun) {
 func rowRegisterMetric(x *parityRun) {
 	args := map[string]string{"name": "Weight", "unit": "kg"}
 	switch {
-	case x.surface == "mcp":
+	case x.mcp:
 		if _, err := x.call("register-metric", args); !errors.Is(err, errNoTool) {
 			x.t.Errorf("register-metric on MCP: %v, want no tool", err)
 		}
