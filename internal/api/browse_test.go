@@ -490,36 +490,29 @@ func TestBrowseOffersTheNewAndThePickBarOfItsKind(t *testing.T) {
 	}
 }
 
-// TestBrowseTransportParity: the catalog action browse gives the same rows in process and over HTTP, and an agent
-// gets the action (it only reads).
-func TestBrowseTransportParity(t *testing.T) {
+// TestTheCatalogsBrowseGivesTheRowsToAnAgent: the catalog action browse is a read of /browse that is not the owner's
+// and not a danger, and it gives the owner and an agent the same rows.
+func TestTheCatalogsBrowseGivesTheRowsToAnAgent(t *testing.T) {
 	want := "Ana:mentions=1 Bo:mentions=0"
-	for _, remote := range []bool{false, true} {
-		t.Run(fmt.Sprint(remote), func(t *testing.T) {
-			_, h, s := apitest.Fresh(t, "cli")
-			browseFixture(t, s)
-			for _, source := range []string{"cli", "agent:browse"} {
-				c := client.InProcess(h, source)
-				if remote {
-					_, c = apitest.Clients(t, h, source)
-				}
-				actions, err := c.Catalog(t.Context())
-				if err != nil {
-					t.Fatal(err)
-				}
-				i := slices.IndexFunc(actions, func(a api.Action) bool { return a.Name == "browse" })
-				if i < 0 || actions[i].Owner || actions[i].Danger || actions[i].Method != "GET" || actions[i].Href != "/browse" {
-					t.Fatalf("%s: the catalog's browse: %+v", source, actions)
-				}
-				e, err := c.Do(t.Context(), actions[i], map[string]string{"kind": "person"})
-				if err != nil {
-					t.Fatal(err)
-				}
-				if got := browseRows(t, e, "mentions"); got != want {
-					t.Errorf("%s: %s, want %s", source, got, want)
-				}
-			}
-		})
+	_, h, s := apitest.Fresh(t, "cli")
+	browseFixture(t, s)
+	for _, source := range []string{"cli", "agent:browse"} {
+		c := client.InProcess(h, source)
+		actions, err := c.Catalog(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		i := slices.IndexFunc(actions, func(a api.Action) bool { return a.Name == "browse" })
+		if i < 0 || actions[i].Owner || actions[i].Danger || actions[i].Method != "GET" || actions[i].Href != "/browse" {
+			t.Fatalf("%s: the catalog's browse: %+v", source, actions)
+		}
+		e, err := c.Do(t.Context(), actions[i], map[string]string{"kind": "person"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := browseRows(t, e, "mentions"); got != want {
+			t.Errorf("%s: %s, want %s", source, got, want)
+		}
 	}
 }
 

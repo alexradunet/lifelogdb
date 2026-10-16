@@ -15,7 +15,7 @@ import (
 )
 
 // The metrics as cards, and file-pages (docs/plans/112-metrics-as-cards.md): several metrics filed in a category in
-// one write, on every surface, and the cards /metrics draws of them.
+// one write, and the cards /metrics draws of them. The parity table of cmd/lifelog runs file-pages on every surface.
 
 // cardsFixture registers Ferritin (read on two days long ago), Weight (read on the two days before fixedToday), Walk
 // (a habit) and Steps (never read), and returns the client, the handler and the metric ids by name.
@@ -122,23 +122,6 @@ func TestFileMetricsAtOnce(t *testing.T) {
 	}
 }
 
-func TestFilingTransportParity(t *testing.T) {
-	for _, remote := range []bool{false, true} {
-		t.Run(fmt.Sprint(remote), func(t *testing.T) {
-			c, h, _ := apitest.Fresh(t, "cli")
-			if remote {
-				_, c = apitest.Clients(t, h, "cli")
-			}
-			ids := cardsFixture(t, c)
-			file := apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/metrics")), "file-pages")
-			apitest.Must(t)(c.Do(t.Context(), file, map[string]string{"ids": ids["Weight"] + " " + ids["Steps"], "category": "Sport"}))
-			if got, want := groupsOf(t, c), "Sport:Steps,Weight Not filed:Ferritin,Mood,Walk"; got != want {
-				t.Errorf("groups %q, want %q", got, want)
-			}
-		})
-	}
-}
-
 func TestTheMetricsPageDrawsCards(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	ctx := t.Context()
@@ -197,52 +180,45 @@ func TestTheMetricsPageDrawsCards(t *testing.T) {
 	}
 }
 
-// A day page is never filed (D26), on the in-process and the remote client alike: file-pages that names a day page
-// is a 422 with SQLite's sentence and writes nothing, not even for the other ids or the category it would make; a
-// part-of link from a day page is a 422; and a day page's link form does not offer part-of.
+// A day page is never filed (D26): file-pages that names a day page is a 422 with SQLite's sentence and writes
+// nothing, not even for the other ids or the category it would make; a part-of link from a day page is a 422; and a
+// day page's link form does not offer part-of.
 func TestADayPageIsNeverFiled(t *testing.T) {
-	for _, remote := range []bool{false, true} {
-		t.Run(fmt.Sprint(remote), func(t *testing.T) {
-			c, h, _ := apitest.Fresh(t, "cli")
-			if remote {
-				_, c = apitest.Clients(t, h, "cli")
-			}
-			ctx := t.Context()
-			root := apitest.Must(t)(c.Get(ctx, "/"))
-			plain := fmt.Sprint(props(apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": "Plans"})))["id"])
-			day := apitest.Must(t)(c.Get(ctx, apitest.Href(apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "capture"), map[string]string{"text": "a synthetic entry"})), "page")))
-			dayID := fmt.Sprint(props(day)["id"])
-			const sentence = "a day page is never filed in a category (D26)"
+	c, _, _ := apitest.Fresh(t, "cli")
+	ctx := t.Context()
+	root := apitest.Must(t)(c.Get(ctx, "/"))
+	plain := fmt.Sprint(props(apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": "Plans"})))["id"])
+	day := apitest.Must(t)(c.Get(ctx, apitest.Href(apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "capture"), map[string]string{"text": "a synthetic entry"})), "page")))
+	dayID := fmt.Sprint(props(day)["id"])
+	const sentence = "a day page is never filed in a category (D26)"
 
-			file := apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/pages/"+plain)), "file-pages")
-			for _, ids := range []string{dayID, plain + " " + dayID, dayID + "," + plain} {
-				_, err := c.Do(ctx, file, map[string]string{"ids": ids, "category": "Garden"})
-				if apitest.Status(err) != http.StatusUnprocessableEntity || !strings.Contains(fmt.Sprint(err), sentence) {
-					t.Errorf("file-pages %s: %v, want a 422 that says %q", ids, err, sentence)
-				}
-			}
-			if _, err := c.Get(ctx, "/pages?title=Garden"); apitest.Status(err) != http.StatusNotFound {
-				t.Errorf("a refused filing made its category page: %v", err)
-			}
-			if got := partOfLinks(apitest.Must(t)(c.Get(ctx, "/pages/"+plain))); len(got) != 0 {
-				t.Errorf("a refused filing filed Plans in %v", got)
-			}
+	file := apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/pages/"+plain)), "file-pages")
+	for _, ids := range []string{dayID, plain + " " + dayID, dayID + "," + plain} {
+		_, err := c.Do(ctx, file, map[string]string{"ids": ids, "category": "Garden"})
+		if apitest.Status(err) != http.StatusUnprocessableEntity || !strings.Contains(fmt.Sprint(err), sentence) {
+			t.Errorf("file-pages %s: %v, want a 422 that says %q", ids, err, sentence)
+		}
+	}
+	if _, err := c.Get(ctx, "/pages?title=Garden"); apitest.Status(err) != http.StatusNotFound {
+		t.Errorf("a refused filing made its category page: %v", err)
+	}
+	if got := partOfLinks(apitest.Must(t)(c.Get(ctx, "/pages/"+plain))); len(got) != 0 {
+		t.Errorf("a refused filing filed Plans in %v", got)
+	}
 
-			if hasOption(apitest.Action(t, day, "link"), "kind", "part-of") || !hasOption(apitest.Action(t, day, "link"), "kind", "at") {
-				t.Errorf("a day page's link offers %+v: at, and never part-of", apitest.Action(t, day, "link").Fields)
-			}
-			if !hasOption(apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/pages/"+plain)), "link"), "kind", "part-of") {
-				t.Error("a plain page's link does not offer part-of")
-			}
-			apitest.Must(t)(c.Do(ctx, file, map[string]string{"ids": plain, "category": "Garden"}))
-			_, err := c.Do(ctx, apitest.Action(t, day, "link"), map[string]string{"to": "Garden", "kind": "part-of"})
-			if apitest.Status(err) != http.StatusUnprocessableEntity || !strings.Contains(fmt.Sprint(err), sentence) {
-				t.Errorf("link part-of from a day page: %v, want a 422 that says %q", err, sentence)
-			}
-			if got := partOfLinks(apitest.Must(t)(c.Get(ctx, "/pages/"+dayID))); len(got) != 0 {
-				t.Errorf("the day page is part-of %v", got)
-			}
-		})
+	if hasOption(apitest.Action(t, day, "link"), "kind", "part-of") || !hasOption(apitest.Action(t, day, "link"), "kind", "at") {
+		t.Errorf("a day page's link offers %+v: at, and never part-of", apitest.Action(t, day, "link").Fields)
+	}
+	if !hasOption(apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/pages/"+plain)), "link"), "kind", "part-of") {
+		t.Error("a plain page's link does not offer part-of")
+	}
+	apitest.Must(t)(c.Do(ctx, file, map[string]string{"ids": plain, "category": "Garden"}))
+	_, err := c.Do(ctx, apitest.Action(t, day, "link"), map[string]string{"to": "Garden", "kind": "part-of"})
+	if apitest.Status(err) != http.StatusUnprocessableEntity || !strings.Contains(fmt.Sprint(err), sentence) {
+		t.Errorf("link part-of from a day page: %v, want a 422 that says %q", err, sentence)
+	}
+	if got := partOfLinks(apitest.Must(t)(c.Get(ctx, "/pages/"+dayID))); len(got) != 0 {
+		t.Errorf("the day page is part-of %v", got)
 	}
 }
 
