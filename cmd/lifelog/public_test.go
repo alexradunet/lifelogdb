@@ -31,7 +31,7 @@ import (
 const testToken = "synthetic-token-0123456789abcdefghij"
 
 func TestPublicFlagsParse(t *testing.T) {
-	o, err := parse([]string{"serve", "--public", "--allow-origin", "https://a.example", "--allow-origin=http://localhost:3000", "--token-file", "t.txt", "--tls-cert", "c.pem", "--tls-key=k.pem"})
+	o, err := parse([]string{"serve", "--public", "--allow-origin", "https://a.example", "--allow-origin=http://localhost:3000", "--token-file", "t.txt", "--tls-cert", "c.pem", "--tls-key=k.pem"}, noVars)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,17 +39,16 @@ func TestPublicFlagsParse(t *testing.T) {
 		!reflect.DeepEqual(o.allowOrigins, []string{"https://a.example", "http://localhost:3000"}) {
 		t.Fatalf("%+v", o)
 	}
-	if _, err := parse([]string{"serve", "--allow-origin"}); err == nil {
+	if _, err := parse([]string{"serve", "--allow-origin"}, noVars); err == nil {
 		t.Fatal("--allow-origin without a value accepted")
 	}
-	o, err = parse([]string{"serve", "--addr", "0.0.0.0:0"})
+	o, err = parse([]string{"serve", "--addr", "0.0.0.0:0"}, noVars)
 	if err != nil || !o.addrExplicit || o.public {
 		t.Fatalf("%+v %v", o, err)
 	}
 }
 
 func TestPublicOptionsRefusals(t *testing.T) {
-	t.Setenv("LIFELOG_TOKEN", "")
 	absent := filepath.Join(t.TempDir(), "absent.db")
 	short := filepath.Join(t.TempDir(), "short.txt")
 	if err := os.WriteFile(short, []byte("too short\n"), 0o600); err != nil {
@@ -87,7 +86,9 @@ func TestPublicOptionsRefusals(t *testing.T) {
 				o.addr = "127.0.0.1:0"
 			}
 			// Every refusal precedes the database opening: the file is absent.
-			err := runContext(context.Background(), o)
+			e, _, _ := testEnv(t)
+			e.o = o
+			err := runContext(t.Context(), e)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("error=%v want %q", err, tc.want)
 			}
@@ -98,12 +99,22 @@ func TestPublicOptionsRefusals(t *testing.T) {
 	if err != nil || pub.Token != testToken || pub.TLS || !reflect.DeepEqual(pub.Origins, []string{"https://a.example"}) {
 		t.Fatalf("%+v %v", pub, err)
 	}
-	t.Setenv("LIFELOG_TOKEN", testToken)
-	if pub, err := publicOptions(opts{public: true}); err != nil || pub.Token != testToken {
-		t.Fatalf("%+v %v", pub, err)
-	}
-	if pub, err := publicOptions(opts{}); err != nil || pub != nil {
-		t.Fatalf("without --public the token in the environment is ignored: %+v %v", pub, err)
+	withToken := func(name string) string { return map[string]string{"LIFELOG_TOKEN": testToken}[name] }
+	for _, tc := range []struct {
+		argv   []string
+		public bool
+	}{{[]string{"serve", "--public"}, true}, {[]string{"serve"}, false}} {
+		o, err := parse(tc.argv, withToken)
+		if err != nil {
+			t.Fatal(err)
+		}
+		pub, err := publicOptions(o)
+		switch {
+		case tc.public && (err != nil || pub.Token != testToken):
+			t.Fatalf("%v: %+v %v, want the token of the environment", tc.argv, pub, err)
+		case !tc.public && (err != nil || pub != nil):
+			t.Fatalf("without --public the token in the environment is ignored: %+v %v", pub, err)
+		}
 	}
 }
 

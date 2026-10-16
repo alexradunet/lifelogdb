@@ -5,21 +5,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"strings"
 
 	"lifelog/internal/api"
-	"lifelog/internal/client"
 )
 
-func listActions(ctx context.Context, o opts, c *client.Client) error {
-	actions, err := c.Catalog(ctx)
+func listActions(ctx context.Context, e env) error {
+	actions, err := e.c.Catalog(ctx)
 	if err != nil {
 		return err
 	}
-	if !o.human {
-		return api.WriteJSON(os.Stdout, actions, "  ")
+	if !e.o.human {
+		return api.WriteJSON(e.stdout, actions, "  ")
 	}
 	for _, a := range actions {
 		var fs []string
@@ -30,20 +28,20 @@ func listActions(ctx context.Context, o opts, c *client.Client) error {
 			}
 			fs = append(fs, s)
 		}
-		fmt.Printf("%-14s %s %s\n  %s\n  fields: %s\n", a.Name, a.Method, a.Href, a.Description, strings.Join(fs, " "))
+		fmt.Fprintf(e.stdout, "%-14s %s %s\n  %s\n  fields: %s\n", a.Name, a.Method, a.Href, a.Description, strings.Join(fs, " "))
 	}
 	return nil
 }
 
 // show prints an entity (an error entity too: an agent reads the message and the links) and returns the error.
-func show(o opts) func(*api.Entity, error) error {
-	return func(e *api.Entity, err error) error {
-		if e == nil {
+func show(e env) func(*api.Entity, error) error {
+	return func(ent *api.Entity, err error) error {
+		if ent == nil {
 			return err
 		}
-		if o.human {
-			human(os.Stdout, e)
-		} else if perr := api.WriteJSON(os.Stdout, e, "  "); perr != nil {
+		if e.o.human {
+			human(e.stdout, ent)
+		} else if perr := api.WriteJSON(e.stdout, ent, "  "); perr != nil {
 			return perr
 		}
 		return err

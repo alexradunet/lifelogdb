@@ -30,7 +30,7 @@ func publicOptions(o opts) (*api.PublicOptions, error) {
 		}
 		return nil, nil
 	}
-	token := os.Getenv("LIFELOG_TOKEN")
+	token := o.token
 	if o.tokenFile != "" {
 		b, err := os.ReadFile(o.tokenFile)
 		if err != nil {
@@ -158,6 +158,6 @@ func serve(ctx context.Context, e env, _ []string) error {
 		return err
 	}
 	srv := &http.Server{Addr: listener.Addr().String(), Handler: networkHandler, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}
-	fmt.Fprintf(os.Stderr, "lifelog: serving %s on %s://%s%s\n", o.db, scheme, listener.Addr(), note)
+	fmt.Fprintf(e.stderr, "lifelog: serving %s on %s://%s%s\n", o.db, scheme, listener.Addr(), note)
 	return serveHTTP(ctx, srv, listener, 10*time.Second)
 }

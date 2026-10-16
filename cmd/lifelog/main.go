@@ -6,12 +6,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"lifelog/internal/api"
 	"lifelog/internal/client"
@@ -26,7 +28,7 @@ const version = "0.1.0"
 // global flags and its own (command.flags), and refuses any other.
 type opts struct {
 	db, url, source, addr, agent, mood, day, to, title, text, preview, mime string
-	tokenFile, tlsCert, tlsKey, snapshots, category                         string
+	tokenFile, tlsCert, tlsKey, snapshots, category, token                  string // token: $LIFELOG_TOKEN, of --url and serve --public
 	allowOrigins                                                            []string
 	human, dryRun, dbExplicit, addrExplicit, public, force                  bool
 	args                                                                    []string
@@ -46,11 +48,18 @@ Global flags, anywhere on the line:
 `
 
 // env is what a command runs with: the line, the client (nil for serve, which builds the handler of its listener),
-// and the store (nil over --url, when a running server is the one).
+// the store (nil over --url, when a running server is the one), and what the command reads from its process. main
+// gives the process's own; a test gives buffers, its own variables and its own clock.
 type env struct {
-	o     opts
-	c     *client.Client
-	store *core.Store
+	o          opts
+	c          *client.Client
+	store      *core.Store
+	stdin      io.ReadCloser // the requests of the MCP server
+	stdout     io.Writer
+	stderr     io.Writer
+	getenv     func(string) string    // LIFELOG_DB and LIFELOG_TOKEN, read by parse
+	executable func() (string, error) // the program, beside which life.db lives
+	clock      func() time.Time       // the clock of the store
 }
 
 // command is one subcommand. The table commands is the one list of them: the usage, the dispatch, the flags a
@@ -72,21 +81,21 @@ var commands = []command{
 			if len(args) > 1 {
 				return errors.New("init [PATH]")
 			}
-			path, err := dbPath(e.o, strings.Join(args, ""))
+			path, err := dbPath(e, strings.Join(args, ""))
 			if err != nil {
 				return err
 			}
 			if err := db.Init(ctx, path); err != nil {
 				return err
 			}
-			fmt.Println("created", path)
+			fmt.Fprintln(e.stdout, "created", path)
 			return nil
 		}},
 	{name: "agentic-init", setup: true, flags: []string{"--force"},
 		usage: "  lifelog agentic-init [--force]      make this program's folder ready for a coding agent: AGENTS.md, CLAUDE.md,\n" +
 			"                                      skills, and the MCP config of Claude Code, Codex, OpenCode and Pi; a file\n" +
 			"                                      with another text is kept unless --force",
-		run: func(_ context.Context, e env, _ []string) error { return agenticInit(e.o) }},
+		run: func(_ context.Context, e env, _ []string) error { return agenticInit(e) }},
 	{name: "serve", flags: []string{"--addr", "--snapshots", "--public", "--token-file", "--allow-origin", "--tls-cert", "--tls-key"},
 		usage: "  lifelog serve [--addr 127.0.0.1:7777] [--snapshots DIR]   the API: Siren JSON, or HTML in a browser; this machine only\n" +
 			"  lifelog serve --public [--addr 0.0.0.0:7777] [--allow-origin O]... [--tls-cert F --tls-key F]\n" +
@@ -103,14 +112,16 @@ var commands = []command{
 			o.source = "agent:" + name
 			return nil
 		},
-		run: func(ctx context.Context, e env, _ []string) error { return mcp.Serve(ctx, e.c, version) }},
+		run: func(ctx context.Context, e env, _ []string) error {
+			return mcp.Serve(ctx, e.c, version, e.stdin, e.stdout)
+		}},
 	{name: "get", gap: true,
 		usage: "  lifelog get PATH                    fetch a resource, e.g. /, /days/today, /pages/12 (or pages/12: Git Bash rewrites a leading /)",
 		run: func(ctx context.Context, e env, args []string) error {
 			if len(args) != 1 {
 				return errors.New("get PATH")
 			}
-			return show(e.o)(e.c.Get(ctx, "/"+strings.TrimPrefix(args[0], "/"))) // "pages/1" too: some shells rewrite a leading /
+			return show(e)(e.c.Get(ctx, "/"+strings.TrimPrefix(args[0], "/"))) // "pages/1" too: some shells rewrite a leading /
 		}},
 	{name: "do",
 		usage: "  lifelog do ACTION [field=value...]  run any action of the catalog (lifelog actions)",
@@ -130,7 +141,7 @@ var commands = []command{
 		}},
 	{name: "actions",
 		usage: "  lifelog actions                     list the actions and their fields",
-		run:   func(ctx context.Context, e env, _ []string) error { return listActions(ctx, e.o, e.c) }},
+		run:   func(ctx context.Context, e env, _ []string) error { return listActions(ctx, e) }},
 	{name: "capture", gap: true, flags: []string{"--mood", "--day"},
 		usage: "  lifelog capture [TEXT...] [--mood N] [--day YYYY-MM-DD]\n" +
 			"                                      add to a day's journal page",
@@ -149,7 +160,7 @@ var commands = []command{
 			if len(args) == 1 {
 				day = args[0]
 			}
-			return show(e.o)(e.c.Get(ctx, "/days/"+url.PathEscape(day)))
+			return show(e)(e.c.Get(ctx, "/days/"+url.PathEscape(day)))
 		}},
 	{name: "page",
 		usage: "  lifelog page TITLE                  a page by its title",
@@ -176,7 +187,7 @@ var commands = []command{
 			"                                      GIF, else from PICTURE; the title defaults to the file's name. A photo\n" +
 			"                                      is filed under its own day; --category files its page in the category\n" +
 			"                                      page C in the same write; --dry-run writes nothing",
-		run: func(ctx context.Context, e env, args []string) error { return keepFile(ctx, e.o, e.c, args) }},
+		run: func(ctx context.Context, e env, args []string) error { return keepFile(ctx, e, args) }},
 	{name: "snapshot", flags: []string{"--to"},
 		usage: "  lifelog snapshot [--to DIR]         a dated copy of life.db (life-YYYY-MM-DD.db, beside it or in DIR),\n" +
 			"                                      then its restore check (docs/cookbook/take-a-snapshot.md); with --url the\n" +
@@ -228,9 +239,9 @@ func usageText() string {
 }
 
 // parse takes flags anywhere on the line (an old CLI ignored --db after the subcommand). A flag the command does not
-// take is refused, never ignored.
-func parse(argv []string) (opts, error) {
-	o := opts{db: os.Getenv("LIFELOG_DB"), source: "cli", addr: "127.0.0.1:7777"}
+// take is refused, never ignored. getenv gives LIFELOG_DB and LIFELOG_TOKEN.
+func parse(argv []string, getenv func(string) string) (opts, error) {
+	o := opts{db: getenv("LIFELOG_DB"), token: getenv("LIFELOG_TOKEN"), source: "cli", addr: "127.0.0.1:7777"}
 	vals := map[string]*string{"--db": &o.db, "--url": &o.url, "--source": &o.source, "--addr": &o.addr,
 		"--agent": &o.agent, "--mood": &o.mood, "--day": &o.day, "--to": &o.to,
 		"--title": &o.title, "--text": &o.text, "--preview": &o.preview, "--mime": &o.mime, "--category": &o.category,
@@ -288,18 +299,49 @@ func parse(argv []string) (opts, error) {
 }
 
 func main() {
-	o, err := parse(os.Args[1:])
-	if err != nil || len(o.args) == 0 || o.args[0] == "help" {
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
+	e := env{stdin: os.Stdin, stdout: os.Stdout, stderr: os.Stderr, getenv: os.Getenv, executable: os.Executable, clock: time.Now}
+	err := runArgs(context.Background(), e, os.Args[1:])
+	var usage usageError
+	switch {
+	case errors.As(err, &usage):
+		if usage.err != nil {
+			fmt.Fprintln(e.stderr, usage.err)
 		}
-		fmt.Fprint(os.Stderr, usageText())
+		fmt.Fprint(e.stderr, usageText())
 		os.Exit(2)
-	}
-	if err := run(o); err != nil {
-		fmt.Fprintln(os.Stderr, "lifelog:", err)
+	case err != nil:
+		fmt.Fprintln(e.stderr, "lifelog:", err)
 		os.Exit(1)
 	}
+}
+
+// usageError is a line with no command, the line help, or a line that parse refuses: main writes err, if there is
+// one, and the usage, and exits 2.
+type usageError struct{ err error }
+
+func (u usageError) Error() string {
+	if u.err == nil {
+		return "usage"
+	}
+	return u.err.Error()
+}
+
+func (u usageError) Unwrap() error { return u.err }
+
+// runArgs runs one command line with the process of e, as main does: the parse, then the command. A command that takes
+// the interrupt through its context (commandConsumesContext) gets a context that an interrupt cancels.
+func runArgs(ctx context.Context, e env, argv []string) error {
+	o, err := parse(argv, e.getenv)
+	if err != nil || len(o.args) == 0 || o.args[0] == "help" {
+		return usageError{err}
+	}
+	if commandConsumesContext(o) {
+		var stop context.CancelFunc
+		ctx, stop = signal.NotifyContext(ctx, os.Interrupt)
+		defer stop()
+	}
+	e.o = o
+	return runContext(ctx, e)
 }
 
 // commandConsumesContext says whether an interrupt reaches the command through its context: every command that runs
@@ -312,18 +354,10 @@ func commandConsumesContext(o opts) bool {
 	return cmd != nil && !cmd.setup
 }
 
-func run(o opts) error {
-	if !commandConsumesContext(o) {
-		return runContext(context.Background(), o)
-	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer stop()
-	return runContext(ctx, o)
-}
-
-// runContext runs the command of the line: its prepare, then the client (a running server over --url, or the handler
-// in-process on the file dbPath names), then its run.
-func runContext(ctx context.Context, o opts) error {
+// runContext runs the command of the line e.o: its prepare, then the client (a running server over --url, or the
+// handler in-process on the file dbPath names), then its run.
+func runContext(ctx context.Context, e env) error {
+	o := e.o
 	cmd := commandNamed(o.args[0])
 	if cmd == nil {
 		return fmt.Errorf("unknown command %q (lifelog help)", o.args[0])
@@ -334,18 +368,18 @@ func runContext(ctx context.Context, o opts) error {
 			return err
 		}
 	}
+	e.o = o
 	if cmd.setup {
-		return cmd.run(ctx, env{o: o}, args)
+		return cmd.run(ctx, e, args)
 	}
 	if err := core.CheckSource(o.source); err != nil {
 		return err
 	}
-	e := env{o: o}
 	if o.url != "" {
-		e.c = client.Remote(o.url, o.source, os.Getenv("LIFELOG_TOKEN"))
+		e.c = client.Remote(o.url, o.source, o.token)
 		return cmd.run(ctx, e, args)
 	}
-	path, err := dbPath(o, "")
+	path, err := dbPath(e, "")
 	if err != nil {
 		return err
 	}
@@ -355,7 +389,7 @@ func runContext(ctx context.Context, o opts) error {
 	}
 	defer d.Close()
 	e.o.db = path
-	e.store = &core.Store{DB: d, SnapshotDir: o.snapshots}
+	e.store = &core.Store{DB: d, SnapshotDir: o.snapshots, Clock: e.clock}
 	if cmd.name != "serve" { // serve builds the handler of its listener and calls it through no client
 		e.c = client.InProcess(api.New(e.store), o.source)
 	}
@@ -364,7 +398,7 @@ func runContext(ctx context.Context, o opts) error {
 
 // doAction runs a catalog action by name and shows its answer.
 func doAction(ctx context.Context, e env, name string, vals map[string]string) error {
-	return show(e.o)(do(ctx, e.c, name, vals))
+	return show(e)(do(ctx, e.c, name, vals))
 }
 
 func do(ctx context.Context, c *client.Client, name string, vals map[string]string) (*api.Entity, error) {
@@ -399,7 +433,8 @@ func dayOrToday(o opts) string {
 
 // dbPath is the life.db a command uses, in this order: --db, the PATH init alone takes, $LIFELOG_DB, the file beside
 // this program (docs/plans/090-agentic-init.md). PATH with --db is a mistake, refused.
-func dbPath(o opts, positional string) (string, error) {
+func dbPath(e env, positional string) (string, error) {
+	o := e.o
 	switch {
 	case o.dbExplicit && positional != "":
 		return "", errors.New("init takes PATH or --db, not both")
@@ -410,18 +445,22 @@ func dbPath(o opts, positional string) (string, error) {
 	case o.db != "": // $LIFELOG_DB, read by parse
 		return o.db, nil
 	}
-	return besideExecutable("life.db")
+	exe, err := program(e)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(filepath.Dir(exe), "life.db"), nil
 }
 
-// besideExecutable is a file in the folder of the running program, where life.db lives when no --db or LIFELOG_DB
-// names another (docs/plans/090-agentic-init.md).
-func besideExecutable(name string) (string, error) {
-	exe, err := os.Executable()
+// program is the path of the running program, with its symbolic links resolved. life.db lives in its folder when no
+// --db or LIFELOG_DB names another, and agentic-init writes there (docs/plans/090-agentic-init.md).
+func program(e env) (string, error) {
+	exe, err := e.executable()
 	if err != nil {
-		return "", fmt.Errorf("the folder of this program: %w", err)
+		return "", fmt.Errorf("the path of this program: %w", err)
 	}
 	if real, err := filepath.EvalSymlinks(exe); err == nil {
 		exe = real
 	}
-	return filepath.Join(filepath.Dir(exe), name), nil
+	return exe, nil
 }

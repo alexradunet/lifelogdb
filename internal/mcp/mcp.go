@@ -6,6 +6,7 @@ package mcp
 import (
 	"bytes"
 	"context"
+	"io"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -14,14 +15,20 @@ import (
 	"lifelog/internal/client"
 )
 
-// Serve runs the MCP server on stdin/stdout until the client goes away.
-func Serve(ctx context.Context, c *client.Client, version string) error {
+// Serve runs the MCP server on in and out, the stdin and the stdout of `lifelog mcp`, until the client goes away. It
+// closes in at the end and leaves out open, as the SDK's StdioTransport does with the stdio of the process.
+func Serve(ctx context.Context, c *client.Client, version string, in io.ReadCloser, out io.Writer) error {
 	s, err := New(ctx, c, version)
 	if err != nil {
 		return err
 	}
-	return s.Run(ctx, &mcp.StdioTransport{})
+	return s.Run(ctx, &mcp.IOTransport{Reader: in, Writer: openWriter{out}})
 }
+
+// openWriter is a writer whose Close does nothing.
+type openWriter struct{ io.Writer }
+
+func (openWriter) Close() error { return nil }
 
 // New builds the server from GET /actions.
 func New(ctx context.Context, c *client.Client, version string) (*mcp.Server, error) {

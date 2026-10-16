@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -262,12 +263,9 @@ func TestFileCommand(t *testing.T) {
 	pic, text := filepath.Join(dir, "IMG_0001.jpg"), filepath.Join(dir, "caption.txt")
 	os.WriteFile(pic, phototest.JPEG(64, 48), 0o644)
 	os.WriteFile(text, []byte("Dawn at the lake with [[Sam]]."), 0o644)
+	e, _, _ := testEnv(t)
 	for range 2 {
-		o, err := parse([]string{"file", pic, "--db", live, "--text", text, "--day", "2026-10-04"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := run(o); err != nil {
+		if err := runArgs(t.Context(), e, []string{"file", pic, "--db", live, "--text", text, "--day", "2026-10-04"}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -301,11 +299,8 @@ func TestFileCommandFilesInACategory(t *testing.T) {
 	if err := os.WriteFile(memo, []byte("a synthetic memo"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	o, err := parse([]string{"file", memo, "--db", live, "--day", "2026-10-04", "--category", "Papers"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := run(o); err != nil {
+	e, _, _ := testEnv(t)
+	if err := runArgs(t.Context(), e, []string{"file", memo, "--db", live, "--day", "2026-10-04", "--category", "Papers"}); err != nil {
 		t.Fatal(err)
 	}
 	d, err := db.Open(t.Context(), live)
@@ -487,11 +482,8 @@ func TestSnapshotPhysicalDestination(t *testing.T) {
 							t.Errorf("copy path %s is not physical destination %s", p, resolved)
 						}
 					} else {
-						o, err := parse([]string{"snapshot", "--db", live, "--to", dest})
-						if err != nil {
-							t.Fatal(err)
-						}
-						if err := run(o); err == nil || !strings.Contains(err.Error(), "git work tree") {
+						e, _, _ := testEnv(t)
+						if err := runArgs(t.Context(), e, []string{"snapshot", "--db", live, "--to", dest}); err == nil || !strings.Contains(err.Error(), "git work tree") {
 							t.Errorf("command refusal: %v", err)
 						}
 						for _, dir := range []string{dest, physical} {
@@ -531,7 +523,9 @@ func TestCommandCancellation(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			done := make(chan error, 1)
-			go func() { done <- runContext(ctx, opts{args: args, url: srv.URL, source: "cli"}) }()
+			e, _, _ := testEnv(t)
+			e.o = opts{args: args, url: srv.URL, source: "cli"}
+			go func() { done <- runContext(ctx, e) }()
 			select {
 			case <-started:
 			case <-time.After(10 * time.Second):
@@ -560,7 +554,7 @@ func TestServeAuthorityAddress(t *testing.T) {
 		{"127.0.0.1:7777", "127.0.0.1:7777"}, {"127.2.3.4:0", "127.2.3.4:0"}, {"localhost:0", "127.0.0.1:0"}, {"LOCALHOST:7777", "127.0.0.1:7777"}, {"[::1]:0", "[::1]:0"},
 	} {
 		for _, argv := range [][]string{{"serve", "--addr", tc.input}, {"--addr=" + tc.input, "serve"}} {
-			o, err := parse(argv)
+			o, err := parse(argv, noVars)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -572,7 +566,9 @@ func TestServeAuthorityAddress(t *testing.T) {
 	}
 	for _, addr := range []string{"", ":7777", "0.0.0.0:7777", "[::]:7777", "192.0.2.1:7777", "custom.invalid:7777", "localhoſt:7777", "localhost:http", "localhost:65536", "localhost:-1", "localhost:+1", "localhost.", "[::1%zone]:7777", "[localhost]:7777", "127.0.0.1", "localhost:"} {
 		// Address refusal precedes database opening, even when the file is absent.
-		err := runContext(context.Background(), opts{args: []string{"serve"}, addr: addr, db: filepath.Join(t.TempDir(), "absent.db")})
+		e, _, _ := testEnv(t)
+		e.o = opts{args: []string{"serve"}, addr: addr, db: filepath.Join(t.TempDir(), "absent.db")}
+		err := runContext(t.Context(), e)
 		if err == nil || !strings.Contains(err.Error(), "serve address") {
 			t.Fatalf("addr=%q error=%v", addr, err)
 		}
@@ -586,19 +582,17 @@ func TestServeAuthorityMount(t *testing.T) {
 	if err := db.Init(t.Context(), p); err != nil {
 		t.Fatal(err)
 	}
-	read, write, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	old := os.Stderr
-	os.Stderr = write
-	defer func() { os.Stderr = old; read.Close(); write.Close() }()
+	read, write := io.Pipe()
+	defer read.Close()
+	e, _, _ := testEnv(t)
+	e.stderr = write
+	e.o = opts{args: []string{"serve"}, addr: "localhost:0", db: p, source: "cli"}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	var serveErr error
 	go func() {
 		defer close(done)
-		serveErr = runContext(ctx, opts{args: []string{"serve"}, addr: "localhost:0", db: p, source: "cli"})
+		serveErr = runContext(ctx, e)
 	}()
 	defer func() {
 		cancel()

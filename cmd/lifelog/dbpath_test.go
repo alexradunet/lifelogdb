@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,13 +11,10 @@ import (
 // mistake, refused before anything is written (docs/plans/098-the-codebase-made-cohesive.md).
 func TestInitHonoursThePathWhenTheEnvironmentNamesAnother(t *testing.T) {
 	env := filepath.Join(t.TempDir(), "env.db")
-	t.Setenv("LIFELOG_DB", env)
+	e, _, _ := testEnv(t)
+	e.getenv = func(name string) string { return map[string]string{"LIFELOG_DB": env}[name] }
 	given := filepath.Join(t.TempDir(), "given.db")
-	o, err := parse([]string{"init", given})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := runContext(context.Background(), o); err != nil {
+	if err := runArgs(t.Context(), e, []string{"init", given}); err != nil {
 		t.Fatalf("init PATH: %v", err)
 	}
 	if _, err := os.Stat(given); err != nil {
@@ -29,11 +25,7 @@ func TestInitHonoursThePathWhenTheEnvironmentNamesAnother(t *testing.T) {
 	}
 
 	other := filepath.Join(t.TempDir(), "other.db")
-	o, err = parse([]string{"init", filepath.Join(t.TempDir(), "unused.db"), "--db", other})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := runContext(context.Background(), o); err == nil || !strings.Contains(err.Error(), "--db") {
+	if err := runArgs(t.Context(), e, []string{"init", filepath.Join(t.TempDir(), "unused.db"), "--db", other}); err == nil || !strings.Contains(err.Error(), "--db") {
 		t.Errorf("init PATH --db OTHER is refused: %v", err)
 	}
 	if _, err := os.Stat(other); err == nil {
@@ -47,12 +39,12 @@ func TestInitHonoursThePathWhenTheEnvironmentNamesAnother(t *testing.T) {
 // interrupt through its context, snapshot too, as it runs through the client since plan 082.
 func TestTheCommandTable(t *testing.T) {
 	for _, argv := range [][]string{{"search", "x", "--dry-run"}, {"day", "--public"}, {"search", "x", "--day", "2026-01-01"}, {"capture", "hello", "--to", "x"}} {
-		if _, err := parse(argv); err == nil || !strings.Contains(err.Error(), "does not take") {
+		if _, err := parse(argv, noVars); err == nil || !strings.Contains(err.Error(), "does not take") {
 			t.Errorf("%v: %v, want a refusal of the flag", argv, err)
 		}
 	}
 	for _, argv := range [][]string{{"file", "x", "--dry-run"}, {"serve", "--public"}, {"capture", "hello", "--day", "2026-01-01"}, {"snapshot", "--to", "x"}} {
-		if _, err := parse(argv); err != nil {
+		if _, err := parse(argv, noVars); err != nil {
 			t.Errorf("%v: %v, want the flag taken", argv, err)
 		}
 	}
