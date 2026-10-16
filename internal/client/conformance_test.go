@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -141,6 +143,32 @@ func TestTheTwoTransportsGiveEqualAnswers(t *testing.T) {
 		if answers[0] != answers[1] {
 			t.Errorf("%s: the answers differ\nin process: %s\nremote:     %s", step.name, answers[0], answers[1])
 		}
+	}
+}
+
+// TestOnlyTheRemoteClientUsesASocket: the two transports of the conformance test are different. The client in process
+// gives the request to the handler with no socket, so the handler sees no peer address. The remote client comes to
+// the handler over a socket, from a loopback address.
+func TestOnlyTheRemoteClientUsesASocket(t *testing.T) {
+	peers := make(chan string, 1)
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		peers <- r.RemoteAddr
+		w.Header().Set("Content-Type", "application/vnd.siren+json")
+		fmt.Fprint(w, `{"title":"peer"}`)
+	})
+	peerOf := func(c *client.Client) string {
+		t.Helper()
+		if e, err := c.Get(t.Context(), "/"); err != nil || e.Title != "peer" {
+			t.Fatalf("GET /: %+v %v", e, err)
+		}
+		return <-peers
+	}
+	if peer := peerOf(client.InProcess(h, "cli")); peer != "" {
+		t.Errorf("the client in process comes from the peer %q, want none", peer)
+	}
+	peer := peerOf(apitest.Remote(t, h, "cli"))
+	if host, _, err := net.SplitHostPort(peer); err != nil || !net.ParseIP(host).IsLoopback() {
+		t.Errorf("the remote client comes from the peer %q, want a loopback address", peer)
 	}
 }
 
