@@ -465,7 +465,9 @@ Left for later, as no later part of this plan takes them:
 ## Part 6 results (2026-10-16, `6bec68b`..`7cc4d6d`)
 
 The commits after `9849043`, in three steps: the tools, the test builders and one JSON writer; the env of the CLI
-and its tests in-process; the agents' texts against the program, with the left-overs of Part 5.
+and its tests in-process; the agents' texts against the program, with the left-overs of Part 5. Three review fixes
+of this part came after its record, in the range of Part 7: `3093a6f` (the test of the texts checks the owner's names
+and the short forms of a command line), `a97b95f` and `9ca5bab` (in the table below).
 
 - What moved:
   - The tool list of the MCP server (`client/tools.go` and its test) is in `internal/mcp`, unexported (`6bec68b`,
@@ -515,6 +517,8 @@ Answers and texts that changed, each a defect fixed reproducer first or a change
 | `1e312eb` | `init`, `agentic-init`, `actions --human` and an answer with `--human` return the error of a failed write of their output, so `main` exits 1, where it exited 0 |
 | `ffac569` | `site/README.md` names the three tokens of the site that base.css does not have: `--text-accent`, `--wide` and `--gutter` |
 | `7cc4d6d` | AGENTS.md: the tools are the actions that are not the owner's, and two reads, `get_day` and `get` |
+| `a97b95f` | the AGENTS.md that `agentic-init` writes: MCP gives every action that is not the owner's; `lifelog agentic-init --force` writes a file anew; a link is the one row that is deleted; a tool's name is the action's name with `_` for `-` |
+| `9ca5bab` | the skills: a day page shows a photo when it has a picture, and a HEIC needs `--preview PICTURE`; the owner registers a new metric (`lifelog do register-metric`) before an agent records it |
 
 Left for later:
 
@@ -531,3 +535,146 @@ Left for later:
 | the test of the texts does not count the arguments of a command line: `file PHOTO1 PHOTO2` passed the parse, and a read found it | the usage gives the count in words only |
 | the startup line of `serve` and the lines of `main` to stderr drop the error of their write | a line of the log at the edge of the process; no data is lost |
 | when a write fails and the action failed too, `show` returns the error of the write; `human` returns the error of `json.Marshal` even after a failed write | either way `main` exits 1 with a true error |
+
+## Part 7 results (2026-10-17, `5a8c118`..`08910c8`)
+
+The commits after `ef004ad`, in six steps, and this record:
+
+| step | commits | what |
+|---|---|---|
+| C1 | `5a8c118`..`2dc0b4c` | `dbtest` |
+| C2 | `01c849b`..`6d7f139` | a review fix of C1, then `apitest` |
+| C3 | `417b90b`..`d04a045`; review fixes `f292065`, `7e536a7` | the parity table |
+| C4 | `a75fd4e`..`98021b6`; review fixes `461d68e`..`27e8af9` | the conformance test of the client; the table tests of the pure functions |
+| C5 | `61480b2`..`5ede95e` | the test files by subject |
+| C6 | `04bd2cf`..`08910c8` | faster feedback; the kit of `tests/` and the small files of its suites |
+
+`3093a6f`, `a97b95f` and `9ca5bab` are in the range, but they are review fixes of Part 6: its record names them.
+
+A commit is not amended. These messages say what is not true:
+
+| commit | the message says | the truth |
+|---|---|---|
+| `53c2e79` | `TestRevisionTokenTransportParity`; eleven blocks did not read the error of the Close; the internal tests of package `api` have no Init block | `TestRevisionTokenParity`; ten (`2dc0b4c` says both); `reference_test.go` is of package `api` and had one |
+| `2dc0b4c` | `TestTLSListenerServesThePublicAPI` | `TestTLSListener` |
+| `932575b` | the check `a.Name == ""` went from `TestTheMetricPageIsThePageOfTheMetric` and `TestHomeOffersItsForms`; 11257 lines | `TestAMetricIsOnePage` and `TestEveryActionFormSendsToItsAction`; 11261 (`6d7f139` says both) |
+| `16998bc`, `d04a045` | a row holds the status of a refusal on http, remote and cli (a stale save, `browse` with `kind=all`) | a row held only the status of the error entity; since `f292065` it holds the status of the error too |
+| `ebdcbdb` | the remote columns hold the transport of the MCP server | no column ran the MCP server over a socket before `7e536a7` (the column `mcp-remote`) |
+| `fcf188c` | `TestTheTwoTransportsGiveEqualAnswers` is a home of the remote half of the browse test | the row "browse" of the parity table is |
+| `4dbe32d` | the in-process half of the test of `Clients` has its homes in the parity table and the conformance test | that the client in process uses no socket had no home before `75ad5bd` |
+| `c3daa49` | GET `/days?limit=0` → the request `/browse?limit=0` of `TestListsPage` | another route: `461d68e` asks `/days?limit=0` |
+| `bc1c7c0` | `media=document` → the row `media=pdf`; the plain list of places → the row "places" | another input, and the row of the unfiled places: `c707ad7` and `8888672` add the two rows |
+| `074241e` | "a day that is not today marks Calendar" → `TestNavMarksThePageTheBrowserIsOn` and `TestTheSidebarHasMetricsAndBrowse` | these check the function `Nav` and a month; the check on a drawn day is `TestTheSidebarMarksTodayOnTodaysDay`. Browse marked on `/browse?kind=person` is in `TestTheSidebarHasMetricsAndBrowse`, as it says, and in `TestThePhoneHasABottomBarAndASheet` |
+
+The row of `apitest` in Part 7 above names `Clients(t, h, source)`; the kit has `Remote(t, h, source)` (`4dbe32d`).
+
+- **The kit.** `internal/db/dbtest`: `New(t)` is a fresh `life.db` in the temporary folder of the test, from the
+  embedded DDL, opened with the settings of the program; its cleanup closes it, and a failed Close fails the test.
+  `File(t)` is the path of such a file with no connection open, for a command line or a process that opens it. 40
+  blocks of Init, Open and cleanup went (core and client 5, api 18, mcp and cmd 17); in `api`, ten of them did not
+  read the error of the Close. `core.fresh` is `dbtest.New` in a `Store`. `internal/api/apitest`: `Fresh(t, source)`
+  (the client in process, the handler and the store), `FreshOn(t, source, day)`, `Remote(t, h, source)` (the client
+  over an httptest server), `Must(t)(e, err)` (a `t.Fatal`, not a panic; Go gives the two values of a call only to a
+  function of exactly two parameters), `Action`, `Href` and `Status`. They replace `fresh`, `freshStore`, `freshOn`,
+  `must`, `mustEntity`, `find`, `actionByName`, `cmdAction`, `href`, `hrefOf`, `cmdHref`, `clientStatus` and the
+  remote switches; `mcpTestClient` builds on `Fresh`, and `commandClient` went with the copies of the CLI. The 24
+  internal test files of package `api` cannot import `apitest` (a cycle): they use `dbtest` and one `drawForm`.
+- **The parity table.** `cmd/lifelog/parity_test.go`, `TestParityOfTheSurfaces`: 14 rows on 8 columns, 112 cases in
+  parallel, about 2 s. A column is a surface and a writer: `http` as `api` and as `agent:parity`, `remote` as `ui` and
+  as `agent:parity`, `cli` as `cli` and as `agent:parity`, and `mcp` and `mcp-remote` (the MCP server over the client
+  in process and over a socket) as `agent:parity`. A row runs on a fresh file, and holds the answer and the state of
+  the file after it, read back through the API. The rows: find; open-day; browse; create-place in a category;
+  file-pages; file-pages with a day page; rename a page, a person, a place, a metric and a file; a stale save-body;
+  save-body at the version 2^63−1; register-metric (the owner's: a 403 to an agent, and no MCP tool). A refusal holds
+  its status in the error entity, and on http, remote and cli in the error too. The table replaced, with each
+  assertion mapped in `ebdcbdb`, `16998bc`, `d04a045` and `fcf188c`: in `api`, `TestStableNameTransportParity`,
+  `TestRevisionTokenParity`, `TestFilingWhereMadeTransportParity`, `TestFilingTransportParity`, the remote halves of
+  `TestBrowseTransportParity` and `TestADayPageIsNeverFiled`, and the MCP half of `TestOwnerOnlyActionsPolicy`; in
+  `mcp`, `TestMCPStableNames`, `TestMCPRevisionTokenRoundTripAndStaleRefusal`,
+  `TestAnAgentFilesANewPlaceWhereItIsMade`, `TestAnAgentBrowsesThroughMCP`, `TestAnAgentFilesMetricsThroughMCP`,
+  `TestAnAgentCannotFileADayPageThroughMCP` and the calls find and open_day of `TestFindTools`; in `cmd`,
+  `TestStableNamesAndExactRevisionThroughTheCLI`, `TestDoBrowse`, `TestDoDispatchesPageFind` and
+  `TestDoOpensADayAndGetsAMonth`. Each surface keeps what is its own: the tool list, the schema, the hints and the
+  cancellation of MCP (`TestFindTools` is `TestTheToolsAreTheActionsThatAreNotTheOwners`); the flags, the output and
+  `snapshot --to` of the CLI; the forms of the browser in `api`.
+- **The conformance test.** `internal/client/conformance_test.go`: `TestTheTwoTransportsGiveEqualAnswers` sends the
+  same steps in process and over a socket, each transport on its own file from one fixed clock. It holds the status
+  and the JSON of the two answers equal byte for byte (the instants masked), and equal to values checked by hand: a
+  read, a write, a file sent as multipart, a 404, a 409 `exists`, a 422 `invalid`, and the exact numbers 2^53+1,
+  0.30000000000000004 and 2^63−1. `TestOnlyTheRemoteClientUsesASocket` holds that the two transports differ. The
+  feature tests of `api` then run in process only.
+- **The pure functions.** Table tests with values checked by hand: `TestBackOf` (18 values) and `FuzzBackOf` (the
+  open-redirect guard, read as a browser reads a URL), `TestErrorEntity` (15 errors), `TestBrowseQueryOf` (21
+  queries), `TestBrowseActions` (12 lists), `TestToBrowse` (13 old lists), `TestIdsOf` (18 values) and `TestPaged` (7
+  pages and an entity with no properties). The database tests that made the same assertions lost those cases, each
+  mapped in `c3daa49`, `bc1c7c0` and `018f2af`. `TestMultipartUnknownNameProjection` calls `parseFileForm`, not a copy
+  of its loop.
+- **The names.** A test of `internal/api`, `cmd/lifelog` and `internal/core` is in the file of the production file or
+  of the subject that it tests (`61480b2`, `d5b11da`, `bebcdf9`, `0114b8f`, `5ede95e`): no file that the row of Part 7
+  names keeps its name, and the five `names_*` files and the five integrity files of core are one each.
+  `TestEveryPageIsSemanticHTML` joined `TestEveryViewRenders` (one table of paths),
+  `TestIntegrityCheckIsRefusedToAnAgent` joined `TestOwnerOnlyActionsPolicy`, and `TestReadingsByDay` joined
+  `TestReadingsByDayCountsTheCurrentReadingsOfAWindow`; `TestKeepingAPhotoFindsTheDayPageByAnIndex` is
+  `TestTheDayPageBodyQueryFindsTheDayPageByAnIndex`. In `tests/`, four functions that a suite of another file calls
+  are in the file of their suite (`08910c8`); the kit uses `slices` and `maps` in place of `contains`, `eq` and
+  `sorted` (`f97dfd4`); and `tests/README.md` names the four packages of the writer that the suites import, and why.
+- **Faster feedback.** The two limit tests were slow in the save, not in the limit: `text.Candidates` builds a map
+  with one entry for each byte of a run of text, and the cases at the limit saved a body of 20 MiB and of 16 MiB. They
+  now reach the real limits with a small page, and the handler gets no option (`04bd2cf`): `TestRequestBufferLimits`
+  6.7 s → 0.18 s, `TestMultipartAggregateLimits` 2.9 s → 0.23 s. `TestPublicServe` took 5.8 to 6.3 s in 8 of 20 runs:
+  its client kept a connection with no request, and the shutdown of serve waits 5 s for one. It now closes its idle
+  connections (`ea683ee`): 0.01 s in 20 of 20. `serveInProcess` read only the first line of the stderr of serve, so a
+  second line would block serve until the cleanup (`4351ba0`, a defect fixed reproducer first).
+- **The checks at the end.** `go test -count=1 -shuffle=on ./...` passes (each package prints its seed; `cmd/lifelog`
+  had 1792190459246980868), and so does `-shuffle=1792190459` for every package. The commands of the coverage map in
+  `tests/README.md` work after Parts 6 and 7: `cmd/lifelog/output.go` has `listActions`, `show`, `Write`, `human` and
+  `indent` at 100.0 %, and `cmd/lifelog/agentic.go` has `agenticInit` at 72.7 %. `main` is at 40.0 %, and only the
+  process of `TestExecutableServeDrainsActiveRequest` runs it: the map counts the process. That test builds the
+  program with `-cover` itself; `cmd/lifelog` has no `TestMain`.
+- No answer on the wire changed. The one production change is in `cmd/lifelog`: `usageError.Unwrap`, which had no
+  caller, went (`23c82e1`).
+
+Times of `go test -count=1`, at `ef004ad` and at `08910c8`, on the same machine, two runs each:
+
+| run | before | after |
+|---|---|---|
+| `./...`, the wall time | 31.0 to 32.6 s | 31.1 to 32.2 s |
+| `-short ./...`, the wall time | 16.4 to 16.6 s | 12.8 s |
+| `internal/api`, in `./...` | 16.6 s | 6.8 to 7.1 s |
+| `cmd/lifelog`, in `./...` | 1.3 to 1.4 s | 3.8 to 3.9 s |
+
+The suites of `tests/` with their mutants (about 26 s) set the wall time of `./...`. `cmd/lifelog` is slower by
+the parity table.
+
+Lines of Go, at `ef004ad` and at `08910c8` (`wc -l` of the `.go` files of each folder; production is every file that
+is not a `_test.go`):
+
+| package | production | tests |
+|---|---|---|
+| `cmd/lifelog` | 838 → 836 | 1667 → 2141 |
+| `internal/api` | 6079 → 6079 | 11496 → 11068 |
+| `internal/api/apitest` | 0 → 98 | 0 → 117 |
+| `internal/client` | 267 → 267 | 322 → 500 |
+| `internal/core` | 2868 → 2868 | 6125 → 5988 |
+| `internal/db/dbtest` | 0 → 38 | 0 → 94 |
+| `internal/mcp` | 243 → 243 | 940 → 431 |
+| `internal/photo/phototest` | 227 → 227 | 90 → 101 |
+| `tests` | 0 → 0 | 7335 → 7306 |
+| the other packages | 2426 → 2426 | 2231 → 2231 |
+| total | 12948 → 13082 | 30206 → 29977 |
+
+The tests of `cmd/lifelog` include 40 lines of the review fixes of Part 6. Without them, Part 7 has 269 lines of
+tests less, and the kit adds 136 lines that are not tests. The plan estimated about 1,000 lines less: C1 to C3 (the
+kit and the parity table) removed 510 lines of tests, and C4 added 399 (the conformance test, the table tests and
+the fuzz target).
+
+Left for later:
+
+| finding | why it waits |
+|---|---|
+| `text.Candidates` builds a map with one entry for each byte of a run of text (`runeIndex`), and `runeToByte` walks a run from its start for each `#tag`: a save of a body of 16 to 20 MiB in one run takes about 3 s, 86 to 88 % of it in the map. With the map made only for a run that has a wikilink, the old limit tests took 0.95 s and 0.45 s (a trial, not committed) | a change of the writer's extraction, not of a test; a defect fix needs its reproducer first (a count of work, as in Part 1) |
+| no test saves a body of 16 to 20 MiB now (`04bd2cf`) | the save costs seconds until the row above is fixed |
+| `schema_adversarial_test.go`, `id_guards_test.go` and `name_grammar_test.go` (each a suite of the runner), `connection_fixture_test.go`, `identity_fixture_test.go` and `render_test.go` (each a Go test of its own), and `schema_bounds_test.go` (ten functions) keep their files | none is a small part of a suite of another file; to put two suites in one file is a choice of the grouping |
+| `usageError.Error` (`cmd/lifelog/main.go`), `redirect.Error` and `caught.WriteHeader` (`internal/api/serve.go`) are at 0 % in the coverage map | each one satisfies an interface (`error`, `http.ResponseWriter`) and no path calls it; for the closing record (done criterion 3) |
+| `agenticInit` is at 72.7 %: its error branches and its line "a kept file has another text" have no test of the CLI | `internal/agentic` tests the kept file (`TestASecondRunKeepsTheOwnersEdits`); the line is one `Fprintln` |
+| the table of `TestNavMarksThePageTheBrowserIsOn` has the path `/import/prepared`, of the import process that plan 089 removed | the row asks that no link is marked, which holds for any path; no step of this part asked |
