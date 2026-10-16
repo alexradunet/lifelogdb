@@ -18,8 +18,9 @@ import (
 )
 
 // TestTheToolsAreTheActionsThatAreNotTheOwners: each action of the catalog is a tool exactly when it is not the
-// owner's, with get and get_day, each once; the browser's preview is not a tool; browse is marked a read. The built-in
-// tool get reads what no action reads: a month and a day with its trends.
+// owner's, with get and get_day, each once; the browser's preview is not a tool; browse is marked a read. The tool
+// open_day opens a day, as get_day does in the parity table: get_day is the action open-day under a second name. The
+// built-in tool get reads what no action reads: a month and a day with its trends.
 func TestTheToolsAreTheActionsThatAreNotTheOwners(t *testing.T) {
 	c := mcpTestClient(t)
 	srv, err := New(t.Context(), c, "test")
@@ -87,6 +88,9 @@ func TestTheToolsAreTheActionsThatAreNotTheOwners(t *testing.T) {
 		t.Fatal("the catalog has no owner-only action: the check has nothing to check")
 	}
 
+	if day := callTool(t, ctx, session, "open_day", map[string]any{"day": "2031-05-14"}); day.Title != "2031-05-14" {
+		t.Fatalf("open_day 2031-05-14 returned %+v", day)
+	}
 	// The browser's calendar is on this surface too (docs/plans/091-the-browser-for-daily-use.md).
 	if month := callTool(t, ctx, session, "get", map[string]any{"href": "/months/2031-05"}); month.Title != "May 2031" {
 		t.Fatalf("get /months/2031-05 returned %+v", month)

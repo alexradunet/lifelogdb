@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -156,11 +155,11 @@ var commands = []command{
 	{name: "day",
 		usage: "  lifelog day [YYYY-MM-DD]            the day view (default today)",
 		run: func(ctx context.Context, e env, args []string) error {
-			day := "today"
+			vals := map[string]string{} // no day is today: open-day reads the clock of the API
 			if len(args) == 1 {
-				day = args[0]
+				vals["day"] = args[0]
 			}
-			return show(e)(e.c.Get(ctx, "/days/"+url.PathEscape(day)))
+			return doAction(ctx, e, "open-day", vals)
 		}},
 	{name: "page",
 		usage: "  lifelog page TITLE                  a page by its title",

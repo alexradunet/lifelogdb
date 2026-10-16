@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -29,15 +30,17 @@ import (
 // and the state of the file after it, read back through the HTTP API. The surfaces are the client in process (http),
 // the client over a server (remote), the command lines of this program (cli), and the MCP server with the client in
 // process (mcp) and with the client over a server (mcp-remote). http, remote and cli run once as an owner and once as
-// an agent. The MCP server runs as an agent only, and an action of the owner is not one of its tools. Each surface
-// keeps the tests of what is its own: the schema, the hints, the arguments and the cancellation of MCP; the flags,
-// the output and snapshot --to of the CLI; the transport of the client.
+// an agent. The MCP server runs as an agent only, and an action of the owner is not one of its tools. Where a surface
+// has a shortcut of an action, the row runs the shortcut there: the shortcut wraps the action, so its answer is the
+// action's. Each surface keeps the tests of what is its own: the schema, the hints, the arguments and the cancellation
+// of MCP; the flags, the output and snapshot --to of the CLI; the transport of the client. The clock of every row is
+// fixed at parityToday, so no row depends on the date of the run.
 func TestParityOfTheSurfaces(t *testing.T) {
 	for _, row := range parityRows() {
 		for _, s := range paritySurfaces {
 			t.Run(row.name+"/"+s.name+"/"+s.source, func(t *testing.T) {
 				t.Parallel()
-				read, h, store := apitest.Fresh(t, "cli")
+				read, h, store := apitest.FreshOn(t, "cli", parityToday)
 				x := &parityRun{t: t, mcp: strings.HasPrefix(s.name, "mcp"), owner: !strings.HasPrefix(s.source, "agent:"), read: read, store: store}
 				x.call = s.open(t, h, store.DB.Path(), s.source)
 				row.run(x)
@@ -57,6 +60,10 @@ var paritySurfaces = []struct {
 	{"cli", "cli", openCLI}, {"cli", "agent:parity", openCLI},
 	{"mcp", "agent:parity", openMCP}, {"mcp-remote", "agent:parity", openMCPRemote},
 }
+
+// parityToday is today on the clock of every row: the clock of the store of the API, and of the store that a command
+// line opens.
+const parityToday = "2031-05-20"
 
 // surfaceCall runs the catalog's action with the field values on one surface. It returns the entity of the answer
 // (the error entity of a refusal too) and the error of a refusal.
@@ -83,9 +90,15 @@ func catalogCall(t *testing.T, c *client.Client) surfaceCall {
 }
 
 // openCLI runs each action as a command line in process, on the file at path, and reads the JSON that the command
-// writes. The source cli is the default of the CLI, so its line names none.
+// writes. The source cli is the default of the CLI, so its line names none. The store that the line opens is in the
+// zone of this machine, and its clock is at noon of parityToday in that zone: its today is parityToday in any zone.
 func openCLI(t *testing.T, _ http.Handler, path, source string) surfaceCall {
 	e, stdout, _ := testEnv(t)
+	today, err := time.ParseInLocation(time.DateOnly, parityToday, time.Local)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.clock = func() time.Time { return today.Add(12 * time.Hour) }
 	return func(action string, args map[string]string) (*api.Entity, error) {
 		t.Helper()
 		argv := []string{"--db", path}
@@ -102,13 +115,18 @@ func openCLI(t *testing.T, _ http.Handler, path, source string) surfaceCall {
 }
 
 // cliLine is the command line of an action: the shortcut of the CLI when one takes these fields (page TITLE, rename
-// ID TITLE), else do ACTION field=value, with the fields in the order of their names.
+// ID TITLE, day [DAY]), else do ACTION field=value, with the fields in the order of their names.
 func cliLine(action string, args map[string]string) []string {
+	day, onlyDay := args["day"]
 	switch {
 	case action == "find" && len(args) == 1 && args["title"] != "":
 		return []string{"page", args["title"]}
 	case action == "rename" && len(args) == 2 && args["id"] != "" && args["title"] != "":
 		return []string{"rename", args["id"], args["title"]}
+	case action == "open-day" && len(args) == 0:
+		return []string{"day"}
+	case action == "open-day" && len(args) == 1 && onlyDay:
+		return []string{"day", day}
 	}
 	line := []string{"do", action}
 	for _, k := range slices.Sorted(maps.Keys(args)) {
@@ -126,8 +144,9 @@ func openMCPRemote(t *testing.T, h http.Handler, _, source string) surfaceCall {
 }
 
 // mcpCall serves the tools of the MCP server over an in-memory transport of the SDK, with the client as the source. A
-// call sends a field that the schema of the tool calls a number as a JSON number, as a model does. An error result of
-// a tool is an error; its text is the error entity of the API when the API answered.
+// call sends a field that the schema of the tool calls a number as a JSON number, as a model does. The action open-day
+// runs as the tool get_day, the shortcut of the server that wraps it. An error result of a tool is an error; its text
+// is the error entity of the API when the API answered.
 func mcpCall(t *testing.T, c *client.Client) surfaceCall {
 	srv, err := mcp.New(t.Context(), c, version)
 	if err != nil {
@@ -176,6 +195,9 @@ func mcpCall(t *testing.T, c *client.Client) surfaceCall {
 	return func(action string, args map[string]string) (*api.Entity, error) {
 		t.Helper()
 		name := strings.ReplaceAll(action, "-", "_")
+		if action == "open-day" {
+			name = "get_day"
+		}
 		number, ok := numbers[name]
 		if !ok {
 			return nil, errNoTool
@@ -347,6 +369,7 @@ func parityRows() []parityRow {
 	rows := []parityRow{
 		{"find", rowFind},
 		{"open-day", rowOpenDay},
+		{"open-day with no day", rowOpenToday},
 		{"browse", rowBrowse},
 		{"create-place in a category", rowCreatePlace},
 		{"file-pages", rowFilePages},
@@ -382,6 +405,18 @@ func rowOpenDay(x *parityRun) {
 		x.t.Errorf("open-day 2031-05-14: %q", e.Title)
 	}
 	x.absent("2031-05-14")
+}
+
+// open-day with no day, or with an empty one, is the day view of today. The word "today" is not a day: it is refused.
+// It is a read, so it makes no day page.
+func rowOpenToday(x *parityRun) {
+	for _, args := range []map[string]string{{}, {"day": ""}} {
+		if e := x.ok("open-day", args); e.Title != parityToday || apitest.Href(e, "self") != "/days/"+parityToday {
+			x.t.Errorf("open-day %v: %q %q, want the day %s", args, e.Title, apitest.Href(e, "self"), parityToday)
+		}
+	}
+	x.refused("open-day", map[string]string{"day": "today"}, http.StatusUnprocessableEntity, "invalid")
+	x.absent(parityToday)
 }
 
 // browse lists the things of one kind, in a category or in none, a page of rows at a time; a combination with no

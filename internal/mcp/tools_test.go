@@ -24,7 +24,7 @@ func TestToolsRefuseNormalizedDuplicates(t *testing.T) {
 			}
 		})
 	}
-	list, err := tools([]api.Action{{Name: "get", Owner: true}, {Name: "find"}, {Name: "import-find"}})
+	list, err := tools([]api.Action{{Name: "get", Owner: true}, {Name: "find"}, {Name: "import-find"}, {Name: "open-day", Method: "GET"}})
 	if err != nil {
 		t.Fatalf("owner-only duplicate and distinct public tools were rejected: %v", err)
 	}
@@ -32,8 +32,26 @@ func TestToolsRefuseNormalizedDuplicates(t *testing.T) {
 	for _, x := range list {
 		names = append(names, x.name)
 	}
-	if got, want := strings.Join(names, " "), "find import_find get_day get"; got != want {
+	if got, want := strings.Join(names, " "), "find import_find open_day get_day get"; got != want {
 		t.Fatalf("tools = %s, want %s", got, want)
+	}
+}
+
+// TestGetDayIsOpenDay: get_day is the action open-day under the name of a read, so there is no get_day when open-day
+// is not a tool: it is absent, or it is the owner's.
+func TestGetDayIsOpenDay(t *testing.T) {
+	for _, actions := range [][]api.Action{{{Name: "find"}}, {{Name: "find"}, {Name: "open-day", Owner: true}}} {
+		list, err := tools(actions)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var names []string
+		for _, x := range list {
+			names = append(names, x.name)
+		}
+		if got := strings.Join(names, " "); got != "find get" {
+			t.Errorf("tools(%v) = %s, want find get", actions, got)
+		}
 	}
 }
 

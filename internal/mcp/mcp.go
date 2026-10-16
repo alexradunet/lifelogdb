@@ -1,6 +1,7 @@
 // Package mcp serves the API's action catalog as MCP tools over stdio: one narrow tool per action (small local
-// models do better with fixed tools than with free browsing), plus get_day and get to follow links. Every
-// call goes through the API handler, and every result is the resource's Siren entity, links and actions included.
+// models do better with fixed tools than with free browsing), plus get_day (the action open-day under the name of a
+// read) and get to follow links. Every call goes through the API handler, and every result is the resource's Siren
+// entity, links and actions included.
 package mcp
 
 import (
@@ -49,8 +50,8 @@ func New(ctx context.Context, c *client.Client, version string) (*mcp.Server, er
 	return s, nil
 }
 
-// annotations say what a tool does to the database: a tool that only reads (get_day, get and a GET of the catalog)
-// says so; a catalog action marked Danger is destructive, as a browser draws it.
+// annotations say what a tool does to the database: a tool that only reads (get and a GET of the catalog, get_day
+// too) says so; a catalog action marked Danger is destructive, as a browser draws it.
 func annotations(t tool) *mcp.ToolAnnotations {
 	if t.action == nil || t.action.Method == "GET" {
 		return &mcp.ToolAnnotations{ReadOnlyHint: true}

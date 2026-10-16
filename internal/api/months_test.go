@@ -92,19 +92,22 @@ func TestTheMonthIsACalendar(t *testing.T) {
 	}
 }
 
+// TestOpenDayGoesToTheDay: open-day goes to the day it names, and to today when it names no day. The word "today" is
+// not a day: an empty day is today.
 func TestOpenDayGoesToTheDay(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	for _, tc := range []struct {
-		day  string
-		code int
+		query, to string // to: the day of the redirect, "" for a refusal
 	}{
-		{"2031-05-14", http.StatusSeeOther}, {"1999-12-31", http.StatusSeeOther},
-		{"2031-02-30", http.StatusUnprocessableEntity}, {"x", http.StatusUnprocessableEntity}, {"", http.StatusUnprocessableEntity},
+		{"?day=2031-04-30", "2031-04-30"}, {"?day=1999-12-31", "1999-12-31"},
+		{"", fixedToday}, {"?day=", fixedToday},
+		{"?day=2031-02-30", ""}, {"?day=x", ""}, {"?day=today", ""},
 	} {
 		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, httptest.NewRequest("GET", "/days/go?day="+tc.day, nil))
-		if rec.Code != tc.code || tc.code == http.StatusSeeOther && rec.Header().Get("Location") != "/days/"+tc.day {
-			t.Errorf("open-day %q: %d %q", tc.day, rec.Code, rec.Header().Get("Location"))
+		h.ServeHTTP(rec, httptest.NewRequest("GET", "/days/go"+tc.query, nil))
+		code, to := rec.Code, rec.Header().Get("Location")
+		if tc.to != "" && (code != http.StatusSeeOther || to != "/days/"+tc.to) || tc.to == "" && code != http.StatusUnprocessableEntity {
+			t.Errorf("GET /days/go%s: %d %q, want %q", tc.query, code, to, tc.to)
 		}
 	}
 	// The catalog action, as every client sends it, opens the day.

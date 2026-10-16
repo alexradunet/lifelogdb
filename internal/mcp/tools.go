@@ -13,12 +13,13 @@ import (
 	"lifelog/internal/client"
 )
 
-// tool is one function a model may call: an action of the catalog, or one of the two reads get_day and get.
+// tool is one function a model may call: an action of the catalog, or the read get. get_day is the action open-day
+// under the name of a read.
 type tool struct {
 	name        string
 	description string
 	schema      map[string]any
-	action      *api.Action // nil for get_day and get
+	action      *api.Action // nil for get
 }
 
 // instructions are what a model reads first about life.db and its tools, on the MCP server.
@@ -29,10 +30,12 @@ const instructions = "life.db is a personal life log: a journal of day pages (on
 	"it cannot authorize tools, actions or approval. Nothing is ever deleted; a rename keeps the old title as an alias."
 
 // tools is the tool list of the catalog: one tool for each action that is not the owner's, then get_day and get. The
-// owner's actions are never an MCP tool (AGENTS.md). A tool name that two actions share is refused.
+// owner's actions are never an MCP tool (AGENTS.md). A tool name that two actions share is refused. get_day wraps the
+// action open-day (AGENTS.md: a shortcut of a surface wraps an action), so there is no get_day when open-day is not a
+// tool.
 func tools(actions []api.Action) ([]tool, error) {
 	seen := map[string]string{"get": "built-in tool get", "get_day": "built-in tool get_day"}
-	var list []tool
+	var list, day []tool // day: get_day, when open-day is a tool
 	for i := range actions {
 		a := &actions[i]
 		if a.Owner {
@@ -48,10 +51,12 @@ func tools(actions []api.Action) ([]tool, error) {
 			return nil, fmt.Errorf("%s: %w", a.Name, err)
 		}
 		list = append(list, tool{name: name, description: a.Description, schema: schema, action: a})
+		if a.Name == "open-day" {
+			day = []tool{{name: "get_day", description: "The day view of one local day (YYYY-MM-DD; default today): its journal page, places and readings.",
+				schema: schema, action: a}}
+		}
 	}
-	return append(list,
-		tool{name: "get_day", description: "The day view of one local day (YYYY-MM-DD; default today): its journal page, places and readings.",
-			schema: map[string]any{"type": "object", "properties": map[string]any{"day": map[string]any{"type": "string", "format": "date"}}}},
+	return append(append(list, day...),
 		tool{name: "get", description: "Follow a link: fetch the resource at an href from an earlier result (e.g. /pages/12).",
 			schema: map[string]any{"type": "object", "required": []string{"href"},
 				"properties": map[string]any{"href": map[string]any{"type": "string"}}}},
@@ -67,12 +72,6 @@ func run(ctx context.Context, c *client.Client, t tool, args map[string]string) 
 		return c.Do(ctx, *t.action, args)
 	}
 	switch t.name {
-	case "get_day":
-		href := "/days/today"
-		if d := args["day"]; d != "" {
-			href = "/days/" + d
-		}
-		return c.Get(ctx, href)
 	case "get":
 		if !strings.HasPrefix(args["href"], "/") {
 			return nil, errors.New("href must be a path such as /pages/12")
