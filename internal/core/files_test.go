@@ -51,6 +51,16 @@ func TestAddFileCreatesAFilePage(t *testing.T) {
 	if got, _ := s.PreviewByTitle(ctx, "Nothing"); got != nil {
 		t.Error("a title with no file has a preview")
 	}
+	// a tombstoned file page is not embedded, but its picture stays readable by its id
+	if err := s.Tombstone(ctx, "cli", k.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.PreviewByTitle(ctx, "2026-10-04 Lake.jpg"); err != nil || got != nil {
+		t.Errorf("a tombstoned file page has a preview by its title: %d bytes, %v", len(got), err)
+	}
+	if got, _ := s.Preview(ctx, k.ID); !bytes.Equal(got, pic) {
+		t.Error("a tombstoned file page has no preview by its id")
+	}
 }
 
 func TestAddFileKeepsAnOriginalOnce(t *testing.T) {

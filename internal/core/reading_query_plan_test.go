@@ -21,16 +21,12 @@ func TestNewDatabaseReadingLookupUsesIndexes(t *testing.T) {
 	// Keep the writer open: closing it optimizes the grown database and would
 	// conceal initialization statistics that still describe only the seeded Mood.
 	// This is prepareReading's lookup, planned on that same writer connection.
-	rows, err := s.DB.W.QueryContext(t.Context(), `EXPLAIN QUERY PLAN
-		SELECT m.id, m_name.title
-		FROM entities m JOIN entity_names m_name
-		  ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key AND m.deleted_at IS NULL
-		WHERE m.id = (SELECT entity_id FROM entity_names WHERE name_key = ?) AND m.entity_type = 'metric'`, "mood")
+	rows, err := s.DB.W.QueryContext(t.Context(), `EXPLAIN QUERY PLAN `+metricLookup, "mood")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer rows.Close()
-	searched := map[string]bool{"m": false, "m_name": false}
+	searched := map[string]bool{"m": false, "entity_names": false}
 	var plan []string
 	for rows.Next() {
 		var id, parent, unused int
@@ -49,7 +45,7 @@ func TestNewDatabaseReadingLookupUsesIndexes(t *testing.T) {
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
 	}
-	for _, alias := range []string{"m", "m_name"} {
+	for _, alias := range []string{"m", "entity_names"} {
 		if !searched[alias] {
 			t.Errorf("reading lookup does not search %s by an index: %v", alias, plan)
 		}

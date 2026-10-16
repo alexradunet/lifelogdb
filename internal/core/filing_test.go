@@ -163,6 +163,15 @@ func TestRecentReadings(t *testing.T) {
 	if err := s.Tombstone(ctx, "cli", gone); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := s.Record(ctx, "cli", Reading{Metric: "gone", Day: "2026-10-06", Value: 2}); status(err) != 404 {
+		t.Errorf("a reading of a tombstoned metric: %v, want a 404", err)
+	}
+	if _, _, err := s.CreatePage(ctx, "cli", "Lake", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Record(ctx, "cli", Reading{Metric: "Lake", Day: "2026-10-06", Value: 2}); status(err) != 404 {
+		t.Errorf("a reading of a page that is not a metric: %v, want a 404", err)
+	}
 
 	got, err := s.RecentReadings(ctx, 30)
 	if err != nil {

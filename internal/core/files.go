@@ -223,7 +223,8 @@ func (s *Store) Preview(ctx context.Context, id int64) ([]byte, error) {
 
 // PreviewByTitle is the picture of the live file page a title names (an embed); nil when there is none.
 func (s *Store) PreviewByTitle(ctx context.Context, title string) ([]byte, error) {
-	return s.preview(ctx, `SELECT f.preview FROM files f JOIN entities p ON p.id = f.id JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key AND p.deleted_at IS NULL WHERE p.id = (SELECT entity_id FROM entity_names WHERE name_key = ?)`, text.TitleKey(title))
+	return s.preview(ctx, `SELECT f.preview FROM files f JOIN entities p ON p.id = f.id
+		WHERE p.id = (SELECT entity_id FROM entity_names WHERE name_key = ?) AND p.deleted_at IS NULL`, text.TitleKey(title))
 }
 
 func (s *Store) preview(ctx context.Context, q string, arg any) ([]byte, error) {

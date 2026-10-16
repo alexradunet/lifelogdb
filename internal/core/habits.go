@@ -60,11 +60,14 @@ func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
 	return true, nil
 }
 
+// metricLookup is the id of the live metric that a name_key names. TestNewDatabaseReadingLookupUsesIndexes plans it.
+const metricLookup = `SELECT m.id FROM entities m
+	WHERE m.id = (SELECT entity_id FROM entity_names WHERE name_key = ?) AND m.entity_type = 'metric' AND m.deleted_at IS NULL`
+
 // metricID finds a live metric by its name, in any case (its title_key).
 func (t *Tx) metricID(name string) (int64, error) {
 	var id int64
-	err := t.tx.QueryRowContext(t.ctx, `SELECT p.id FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key AND p.deleted_at IS NULL
-	                       WHERE p.id = (SELECT entity_id FROM entity_names WHERE name_key = ?) AND p.entity_type = 'metric'`, text.TitleKey(name)).Scan(&id)
+	err := t.tx.QueryRowContext(t.ctx, metricLookup, text.TitleKey(name)).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, NotFound("no metric %q: the owner registers metrics", name)
 	}
