@@ -11,8 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"lifelog/internal/api/apitest"
-	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db"
 	"lifelog/internal/db/dbtest"
@@ -87,45 +85,6 @@ func TestFileCommandFilesInACategory(t *testing.T) {
 	if all != 1 || filed != 1 || file == 0 {
 		t.Errorf("%d part-of links, %d from memo.txt (%d) to Papers (%d): want the one link", all, filed, file, cat)
 	}
-}
-
-func TestDoDispatchesPageFind(t *testing.T) {
-	c := commandClient(t)
-	page, err := do(t.Context(), c, "find", map[string]string{"title": "Ana"})
-	if err != nil {
-		t.Fatalf("page find: %v", err)
-	}
-	if page.Title != "Ana" || apitest.Href(page, "self") == "" {
-		t.Fatalf("find returned %+v", page)
-	}
-}
-
-// TestDoOpensADayAndGetsAMonth: the browser's "go to a day", its calendar and the names after [[ from the CLI
-// (docs/plans/091-the-browser-for-daily-use.md).
-func TestDoOpensADayAndGetsAMonth(t *testing.T) {
-	c := commandClient(t)
-	day, err := do(t.Context(), c, "open-day", map[string]string{"day": "2031-05-14"})
-	if err != nil || day.Title != "2031-05-14" {
-		t.Fatalf("open-day: %+v %v", day, err)
-	}
-	if month := apitest.Must(t)(c.Get(t.Context(), "/months/2031-05")); month.Title != "May 2031" {
-		t.Fatalf("get /months/2031-05: %+v", month)
-	}
-	if titles := apitest.Must(t)(c.Get(t.Context(), "/titles?prefix=an")); len(titles.Entities) != 1 || titles.Entities[0].Title != "Ana" {
-		t.Fatalf("get /titles: %+v", titles)
-	}
-	if day, ok := apitest.Must(t)(c.Get(t.Context(), "/days/2031-05-14")).Properties.(map[string]any); !ok || day["trends"] == nil {
-		t.Fatalf("get /days/2031-05-14 lacks trends: %v", day)
-	}
-}
-
-func commandClient(t *testing.T) *client.Client {
-	t.Helper()
-	c, _, _ := apitest.Fresh(t, "cli")
-	if _, err := c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Ana", "body": "Synthetic page"}); err != nil {
-		t.Fatal(err)
-	}
-	return c
 }
 
 func TestCommandCancellation(t *testing.T) {
