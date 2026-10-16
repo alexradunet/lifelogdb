@@ -71,10 +71,7 @@ func TestErrorAnswersCarryACode(t *testing.T) {
 	if rec.Code != 403 || !strings.Contains(rec.Body.String(), `"code": "cross_origin"`) {
 		t.Errorf("cross-origin refusal: %d %.200s", rec.Code, rec.Body.String())
 	}
-	pub, err := api.Public(h, api.PublicOptions{Token: testToken})
-	if err != nil {
-		t.Fatal(err)
-	}
+	pub, _ := publicHandler(t, api.PublicOptions{Token: testToken})
 	rec = request(pub, "GET", "/", "", nil)
 	if rec.Code != 401 || !strings.Contains(rec.Body.String(), `"code": "token_required"`) {
 		t.Errorf("token refusal: %d %.200s", rec.Code, rec.Body.String())

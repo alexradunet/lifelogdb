@@ -47,7 +47,7 @@ Global flags, anywhere on the line:
 `
 
 // env is what a command runs with: the line, the client (nil for serve, which mounts the handler itself), and the
-// handler (nil over --url, when a running server is the one).
+// handler (nil over --url, when a running server is the one; for serve --public, the handler of api.Public).
 type env struct {
 	o       opts
 	c       *client.Client
@@ -355,12 +355,15 @@ func runContext(ctx context.Context, o opts) error {
 		return err
 	}
 	defer d.Close()
-	var origins []string
-	if o.pub != nil {
-		origins = o.pub.Origins
-	}
 	e.o.db = path
-	e.handler = api.New(&core.Store{DB: d, SnapshotDir: o.snapshots}, origins...)
+	s := &core.Store{DB: d, SnapshotDir: o.snapshots}
+	if o.pub != nil { // serve --public: the token, the allowed origins and the login pages are in the handler
+		if e.handler, err = api.Public(s, *o.pub); err != nil {
+			return err
+		}
+	} else {
+		e.handler = api.New(s)
+	}
 	if cmd.name != "serve" { // serve mounts the handler on a socket and calls it through no client
 		e.c = client.InProcess(e.handler, o.source)
 	}

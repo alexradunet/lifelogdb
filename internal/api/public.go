@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"lifelog/internal/core"
 )
@@ -72,17 +73,18 @@ type public struct {
 	token   []byte
 	origins map[string]bool
 	tls     bool
-	guard   *http.CrossOriginProtection // for the login forms, which run before next's own guard
+	guard   *http.CrossOriginProtection // the guard of next; the login forms run before next, so they check it too
 }
 
-// Public wraps the API handler for a public listener. The in-process client never goes through it, and
-// NetworkAuthority, the local guard, is not mounted with it: the token defends against the rebinding page the
-// Host check exists for.
-func Public(next http.Handler, o PublicOptions) (http.Handler, error) {
+// Public is the handler of a public listener: the API on s, behind the token, CORS and the login pages. The allowed
+// origins are given once: one guard trusts them, for the writes of the API and for the login forms. The in-process
+// client never goes through it, and NetworkAuthority, the local guard, is not mounted with it: the token defends
+// against the rebinding page the Host check exists for.
+func Public(s *core.Store, o PublicOptions) (http.Handler, error) {
 	if err := CheckToken(o.Token); err != nil {
 		return nil, err
 	}
-	p := &public{next: next, token: []byte(o.Token), origins: map[string]bool{}, tls: o.TLS, guard: http.NewCrossOriginProtection()}
+	p := &public{token: []byte(o.Token), origins: map[string]bool{}, tls: o.TLS, guard: http.NewCrossOriginProtection()}
 	for _, origin := range o.Origins {
 		if err := CheckOrigin(origin); err != nil {
 			return nil, err
@@ -92,6 +94,7 @@ func Public(next http.Handler, o PublicOptions) (http.Handler, error) {
 		}
 		p.origins[origin] = true
 	}
+	p.next = newOn(s, core.Today, time.Local, p.guard)
 	return p, nil
 }
 

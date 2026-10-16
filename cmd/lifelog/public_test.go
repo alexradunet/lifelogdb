@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"lifelog/internal/api"
+	"lifelog/internal/core"
 	"lifelog/internal/db"
 )
 
@@ -133,7 +134,8 @@ func TestPublicServeProcess(t *testing.T) {
 	if out, err := refused.CombinedOutput(); err == nil || !strings.Contains(string(out), "needs a token") {
 		t.Fatalf("serve --public without a token: err=%v out=%s", err, out)
 	}
-	cmd := exec.CommandContext(ctx, binary, "--db", live, "serve", "--public", "--addr", "127.0.0.1:0", "--token-file", tokenFile)
+	const app = "https://app.example"
+	cmd := exec.CommandContext(ctx, binary, "--db", live, "serve", "--public", "--addr", "127.0.0.1:0", "--token-file", tokenFile, "--allow-origin", app)
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		t.Fatal(err)
@@ -177,6 +179,28 @@ func TestPublicServeProcess(t *testing.T) {
 	if got := get(testToken); got != 200 {
 		t.Fatalf("with the token: %d", got)
 	}
+	// --allow-origin reaches the guard of the API's writes: a browser write from that origin is done, and one from
+	// another origin is refused.
+	post := func(origin string) int {
+		t.Helper()
+		req, _ := http.NewRequestWithContext(ctx, "POST", base+"/pages", strings.NewReader("title=From+"+strings.TrimPrefix(origin, "https://")))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("Authorization", "Bearer "+testToken)
+		req.Header.Set("Origin", origin)
+		req.Header.Set("Sec-Fetch-Site", "cross-site")
+		res, err := hc.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		return res.StatusCode
+	}
+	if got := post(app); got != 200 {
+		t.Fatalf("a write from the allowed origin: %d", got)
+	}
+	if got := post("https://evil.example"); got != 403 {
+		t.Fatalf("a write from another origin: %d", got)
+	}
 }
 
 func TestTLSListener(t *testing.T) {
@@ -214,7 +238,16 @@ func TestTLSListener(t *testing.T) {
 		raw.Close()
 		t.Fatal(err)
 	}
-	handler, err := api.Public(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) }), api.PublicOptions{Token: testToken, TLS: true})
+	dbPath := filepath.Join(dir, "life.db") // a synthetic database: the API that api.Public builds needs a store
+	if err := db.Init(t.Context(), dbPath); err != nil {
+		t.Fatal(err)
+	}
+	d, err := db.Open(t.Context(), dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { d.Close() }) // after the server's shutdown below: a cleanup runs after the ones registered later
+	handler, err := api.Public(&core.Store{DB: d}, api.PublicOptions{Token: testToken, TLS: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +278,7 @@ func TestTLSListener(t *testing.T) {
 		t.Fatal(err)
 	}
 	res.Body.Close()
-	if res.StatusCode != 204 || res.TLS == nil {
+	if res.StatusCode != http.StatusOK || res.TLS == nil {
 		t.Fatalf("status=%d tls=%v", res.StatusCode, res.TLS != nil)
 	}
 	// A plain request on the TLS port is answered by the server's own 400, never by the handler.

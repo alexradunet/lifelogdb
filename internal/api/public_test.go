@@ -30,7 +30,7 @@ func publicHandler(t *testing.T, o api.PublicOptions) (http.Handler, *core.Store
 	}
 	t.Cleanup(func() { d.Close() })
 	s := &core.Store{DB: d}
-	h, err := api.Public(api.New(s, o.Origins...), o)
+	h, err := api.Public(s, o)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,19 +248,19 @@ func TestPublicRemoteClientParity(t *testing.T) {
 }
 
 func TestPublicOptionsValidation(t *testing.T) {
-	h := http.NotFoundHandler()
+	_, s := publicHandler(t, api.PublicOptions{Token: testToken})
 	for _, token := range []string{"", "short", strings.Repeat("x", 31), testToken + "\n", "line one line two\nline three abcdefghijklmnop"} {
-		if _, err := api.Public(h, api.PublicOptions{Token: token}); err == nil {
+		if _, err := api.Public(s, api.PublicOptions{Token: token}); err == nil {
 			t.Errorf("token %q accepted", token)
 		}
 	}
 	for _, origin := range []string{"", "app.example", "https://app.example/", "https://app.example/path", "https://user@app.example", "ftp://app.example", "https://app.example?x=1", "https://"} {
-		if _, err := api.Public(h, api.PublicOptions{Token: testToken, Origins: []string{origin}}); err == nil {
+		if _, err := api.Public(s, api.PublicOptions{Token: testToken, Origins: []string{origin}}); err == nil {
 			t.Errorf("origin %q accepted", origin)
 		}
 	}
 	for _, origin := range []string{"https://app.example", "http://localhost:3000", "http://192.168.1.20:8080", "http://[::1]:3000"} {
-		if _, err := api.Public(h, api.PublicOptions{Token: testToken, Origins: []string{origin}}); err != nil {
+		if _, err := api.Public(s, api.PublicOptions{Token: testToken, Origins: []string{origin}}); err != nil {
 			t.Errorf("origin %q refused: %v", origin, err)
 		}
 	}

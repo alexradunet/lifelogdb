@@ -140,7 +140,7 @@ func serve(ctx context.Context, e env, _ []string) error {
 	if pub == nil {
 		networkHandler, err = api.NetworkAuthority(listener.Addr(), e.handler)
 	} else {
-		networkHandler, err = api.Public(e.handler, *pub)
+		networkHandler = e.handler // api.Public built it (runContext)
 		note = " (public: token required; the token travels in clear, use a private network)"
 		if pub.TLS {
 			scheme, note = "https", " (public: token required)"

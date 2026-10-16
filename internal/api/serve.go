@@ -28,15 +28,21 @@ type server struct {
 }
 
 // New returns the whole API as one handler: lifelog serve mounts it on a socket, the CLI and the MCP server
-// call it in-process. trustedOrigins are the browser origins a public listener allows to write
-// (docs/plans/078-network-server.md); a local listener and the in-process client pass none.
-func New(s *core.Store, trustedOrigins ...string) http.Handler {
-	return NewOn(s, core.Today, time.Local, trustedOrigins...)
+// call it in-process. It trusts no browser origin other than its own. A public listener uses Public, which builds the
+// API with the origins that the owner allows (docs/plans/078-network-server.md).
+func New(s *core.Store) http.Handler {
+	return NewOn(s, core.Today, time.Local)
 }
 
 // NewOn is New with the clock of the local day and its zone given: a test fixes them, so today is a fixed day, and a
 // time is written in fixed words.
-func NewOn(s *core.Store, localDay func() string, zone *time.Location, trustedOrigins ...string) http.Handler {
+func NewOn(s *core.Store, localDay func() string, zone *time.Location) http.Handler {
+	return newOn(s, localDay, zone, http.NewCrossOriginProtection())
+}
+
+// newOn builds the API behind guard, which refuses a browser write from an origin that it does not trust. Public
+// gives the guard that trusts the allowed origins; NewOn gives one that trusts no other origin.
+func newOn(s *core.Store, localDay func() string, zone *time.Location, guard *http.CrossOriginProtection) http.Handler {
 	h := &server{s: s, localDay: localDay, zone: zone}
 	m := http.NewServeMux()
 	h.mux = m
@@ -85,12 +91,6 @@ func NewOn(s *core.Store, localDay func() string, zone *time.Location, trustedOr
 	m.HandleFunc("GET /styleguide", h.styleguide)
 	m.HandleFunc("GET /manifest.webmanifest", install("manifest.webmanifest", "application/manifest+json", "public, max-age=3600"))
 	m.HandleFunc("GET /assets/icon.svg", install("icon.svg", "image/svg+xml", "public, max-age=31536000, immutable"))
-	guard := http.NewCrossOriginProtection()
-	for _, origin := range trustedOrigins {
-		if err := guard.AddTrustedOrigin(origin); err != nil {
-			panic(err) // Public checked every origin before New was called
-		}
-	}
 	guard.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, errCrossOrigin)
 	}))
