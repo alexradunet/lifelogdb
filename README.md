@@ -349,7 +349,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 | path | what |
 |---|---|
 | `cmd/lifelog` | the binary: `init`, `serve`, `mcp`, `get`, `do`, `actions` and the shortcuts (`file`, `snapshot` among them) |
-| `internal/db` | open, pragmas, `BEGIN IMMEDIATE`, the embedded schema |
+| `internal/db` | open, pragmas, `BEGIN IMMEDIATE`, the embedded schema; `dbtest` makes the fresh file of a test |
 | `internal/text` | the title predicate, `title_key`, wikilink and `#tag` extraction; tested against the vectors of [titles and wikilinks](docs/contract/titles-and-wikilinks.md) |
 | `internal/core` | the cookbook's writes and reads; the save contract; metrics; renames; files |
 | `internal/preview` | the picture a file page keeps: decode, scale to 1600 px, EXIF orientation, a JPEG of at most 1 MB with no metadata |
