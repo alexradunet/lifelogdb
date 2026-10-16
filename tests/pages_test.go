@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -230,7 +231,7 @@ func pages(s *S) {
 	s.K("a CJK run is one token (the known limit of unicode61)", hits("日本語のノートを書く") == 1 && hits("本語") == 0)
 	c.must("INSERT INTO entities_fts(entities_fts) VALUES('rebuild')")
 	s.K("the index rebuilds from pages and passes its integrity-check", hits("second") == 1 && c.tryx("INSERT INTO entities_fts(entities_fts, rank) VALUES('integrity-check', 1)") == "OK")
-	s.K("cookbook/full-text-search finds a page by a word of its body", eq(c.col(s.d.Block("full-text-search"), P{"query": "second"}), []string{ids(mo)}))
+	s.K("cookbook/full-text-search finds a page by a word of its body", slices.Equal(c.col(s.d.Block("full-text-search"), P{"query": "second"}), []string{ids(mo)}))
 
 	// ---- why not a collation: an index on a collation only one program has. Another process (this test binary,
 	// run again) registers the collation and builds the file; this process has no such collation.

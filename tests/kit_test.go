@@ -14,6 +14,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -140,7 +141,7 @@ func (d *Docs) Pages() []string {
 			re := []string{"README.md"}
 			for _, k := range order {
 				listed[k] = true
-				if contains(names, k+".md") {
+				if slices.Contains(names, k+".md") {
 					re = append(re, k+".md")
 				}
 			}
@@ -150,7 +151,7 @@ func (d *Docs) Pages() []string {
 				}
 			}
 			names = re
-		} else if contains(names, "README.md") {
+		} else if slices.Contains(names, "README.md") {
 			rest := []string{"README.md"}
 			for _, n := range names {
 				if n != "README.md" {
@@ -788,15 +789,6 @@ func (c *C) runBlock(sql string, p P, after func(string)) ([][][]any, error) {
 	return out, nil
 }
 
-func contains(xs []string, x string) bool {
-	for _, y := range xs {
-		if y == x {
-			return true
-		}
-	}
-	return false
-}
-
 // ---- the save contract
 
 // The steps of cookbook/save-a-body, each one statement of its block.
@@ -942,17 +934,7 @@ func (c *C) capture(entry, day string) int64 {
 
 // linksOf is the titles a page links to by wikilink, sorted.
 func (c *C) linksOf(pid int64) []string {
-	return sorted(c.col("SELECT n.title FROM links l JOIN entities e ON e.id=l.to_id JOIN entity_names n ON n.entity_id=e.id AND n.name_key=e.preferred_name_key WHERE l.from_id=? AND l.kind='wikilink'", pid))
-}
-
-func sorted(xs []string) []string {
-	out := append([]string{}, xs...)
-	sort.Strings(out)
-	return out
-}
-
-func eq(a, b []string) bool {
-	return strings.Join(a, "\x00") == strings.Join(b, "\x00") && len(a) == len(b)
+	return slices.Sorted(slices.Values(c.col("SELECT n.title FROM links l JOIN entities e ON e.id=l.to_id JOIN entity_names n ON n.entity_id=e.id AND n.name_key=e.preferred_name_key WHERE l.from_id=? AND l.kind='wikilink'", pid)))
 }
 
 // relPath is a link target on the page base, relative to docs/ ('..' leaves the tree).

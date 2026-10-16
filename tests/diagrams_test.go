@@ -2,7 +2,9 @@ package tests
 
 import (
 	"fmt"
+	"maps"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -171,12 +173,12 @@ func diagrams(s *S) {
 		}
 	}
 	for e := range ents {
-		if !contains(tables, e) {
+		if !slices.Contains(tables, e) {
 			unknown = append(unknown, e)
 		}
 	}
 	s.K("every table of the DDL is drawn", len(undrawn) == 0, undrawn)
-	s.K("every drawn entity is a table of the DDL", len(unknown) == 0, sorted(unknown))
+	s.K("every drawn entity is a table of the DDL", len(unknown) == 0, slices.Sorted(slices.Values(unknown)))
 	var entNames []string
 	for e := range ents {
 		entNames = append(entNames, e)
@@ -213,7 +215,7 @@ func diagrams(s *S) {
 				missing = append(missing, x)
 			}
 		}
-		s.K("every key column of "+t+" is drawn somewhere", len(missing) == 0, sorted(missing))
+		s.K("every key column of "+t+" is drawn somewhere", len(missing) == 0, slices.Sorted(slices.Values(missing)))
 	}
 	type relKey struct{ parent, child, label string }
 	drawn := map[relKey][]string{}
@@ -236,8 +238,8 @@ func diagrams(s *S) {
 			notFK = append(notFK, fmt.Sprint(k))
 		}
 	}
-	s.K("every foreign key is drawn as `parent --- child : first FK column`", len(notDrawn) == 0, sorted(notDrawn))
-	s.K("every drawn relationship is a foreign key", len(notFK) == 0, sorted(notFK))
+	s.K("every foreign key is drawn as `parent --- child : first FK column`", len(notDrawn) == 0, slices.Sorted(slices.Values(notDrawn)))
+	s.K("every drawn relationship is a foreign key", len(notFK) == 0, slices.Sorted(slices.Values(notFK)))
 	var wantKeys []relKey
 	for k := range wantRel {
 		wantKeys = append(wantKeys, k)
@@ -257,12 +259,12 @@ func diagrams(s *S) {
 		for _, set := range uniqueSets(f.child) {
 			sub := true
 			for x := range set {
-				sub = sub && contains(f.cols, x)
+				sub = sub && slices.Contains(f.cols, x)
 			}
 			uniq = uniq || sub
 		}
 		exp := map[bool]string{true: "|o", false: "||"}[nullable] + map[bool]string{true: "o|", false: "o{"}[uniq]
-		s.K(fmt.Sprintf("%s -> %s (%s): cardinality %s", k.parent, k.child, k.label, exp), contains(got, exp), got, exp)
+		s.K(fmt.Sprintf("%s -> %s (%s): cardinality %s", k.parent, k.child, k.label, exp), slices.Contains(got, exp), got, exp)
 	}
 
 	// ---- C  the link map
@@ -320,19 +322,15 @@ func diagrams(s *S) {
 	setStr := func(m map[edge]map[string]bool) string {
 		var out []string
 		for e, ks := range m {
-			var kk []string
-			for k := range ks {
-				kk = append(kk, k)
-			}
-			out = append(out, fmt.Sprintf("%s->%s %v", e.from, e.to, sorted(kk)))
+			out = append(out, fmt.Sprintf("%s->%s %v", e.from, e.to, slices.Sorted(maps.Keys(ks))))
 		}
-		return strings.Join(sorted(out), "; ")
+		return strings.Join(slices.Sorted(slices.Values(out)), "; ")
 	}
 	s.K("the link map has the same edges as link_kinds", setStr(edges) == setStr(exp), "map: "+setStr(edges), "DDL: "+setStr(exp))
 	known := true
 	for _, ts := range nodes {
 		for _, t := range ts {
-			known = known && contains([]string{"any", "page", "person", "place", "metric", "file"}, t)
+			known = known && slices.Contains([]string{"any", "page", "person", "place", "metric", "file"}, t)
 		}
 	}
 	s.K("every node of the map names entity types or `any entity`", known, nodes)
@@ -369,7 +367,7 @@ func diagrams(s *S) {
 		}
 	}
 	s.K("the story has four inserts", strings.Join(rows, ",") == "1,2,3,4", steps)
-	s.K("executed, the view shows what each state of the diagram says", eq(shown, states), shown, states)
+	s.K("executed, the view shows what each state of the diagram says", slices.Equal(shown, states), shown, states)
 
 	// ---- E
 	stepSet := func(re string, text string) string {
@@ -377,11 +375,7 @@ func diagrams(s *S) {
 		for _, m := range regexp.MustCompile(re).FindAllStringSubmatch(text, -1) {
 			set[m[1]] = true
 		}
-		var out []string
-		for k := range set {
-			out = append(out, k)
-		}
-		return strings.Join(sorted(out), ",")
+		return strings.Join(slices.Sorted(maps.Keys(set)), ",")
 	}
 	stSQL := stepSet(`(?m)^-- (0|1|2a|2b|3|4)\)`, s.d.Block("save-a-body"))
 	stFig := stepSet(`\b(0|1|2a|2b|3|4)\. `, body("save-flow"))

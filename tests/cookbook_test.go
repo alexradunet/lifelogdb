@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -14,7 +15,7 @@ func cookbook(s *S) {
 	cookbookMeasurementReads(s)
 	bl := s.d.CookbookBlocks()
 	first, order := s.d.Blocks()
-	s.K("the cookbook has at least 18 SQL blocks, one or more per recipe, 18 recipes", len(bl) >= 18 && len(first) == 18 && eq(order, s.d.CookbookOrder()), order)
+	s.K("the cookbook has at least 18 SQL blocks, one or more per recipe, 18 recipes", len(bl) >= 18 && len(first) == 18 && slices.Equal(order, s.d.CookbookOrder()), order)
 
 	seeded := func(hardened bool, path string) (*C, P) {
 		c := s.freshWith(F{Hardened: hardened, Path: path})

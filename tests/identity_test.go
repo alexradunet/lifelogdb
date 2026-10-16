@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -30,7 +31,7 @@ func identity(s *S) {
 			odd = append(odd, t)
 		}
 	}
-	s.K("the tables without a single INTEGER primary key are exactly the two registries", eq(sorted(odd), []string{"lifelog_meta", "link_kinds"}), odd)
+	s.K("the tables without a single INTEGER primary key are exactly the two registries", slices.Equal(slices.Sorted(slices.Values(odd)), []string{"lifelog_meta", "link_kinds"}), odd)
 
 	// ---- ids by RETURNING
 	c = s.fresh()

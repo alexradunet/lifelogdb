@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 	"time"
 )
@@ -193,7 +194,7 @@ func facts(s *S) {
 	for _, d := range []string{"2026-07-04", "2026-07-05", "2026-10-02", "2026-10-03"} {
 		c.measure(w, d, 70)
 	}
-	s.K("cookbook/metric-series: the 90 days ending on :day, none after it", eq(c.col(s.d.Block("metric-series"), P{"day": "2026-10-02"}), []string{"2026-07-05", "2026-10-02"}))
+	s.K("cookbook/metric-series: the 90 days ending on :day, none after it", slices.Equal(c.col(s.d.Block("metric-series"), P{"day": "2026-10-02"}), []string{"2026-07-05", "2026-10-02"}))
 }
 
 // The bulk fixture belongs only to the query-plan probe; semantic fact mutants

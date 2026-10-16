@@ -71,6 +71,19 @@ writer's extraction (`internal/text`) and its save (`internal/core`); `internal/
 same table. Every save path here runs against the DDL under test, so a mutant of `schema.sql` reaches it.
 Boundary probes roll back every case, including unexpected success under a mutant.
 
+**What the suites take from the writer.** The suites keep their own kit (`kit_test.go`), not the writer's
+`dbtest`: they build every database from the `schema.sql` under test, and a mutant changes that file, where the writer
+embeds its own copy. They import four packages of the writer, each for one reason, and no other:
+
+| package | why |
+|---|---|
+| `internal/text` | the rules that the contract gives a writer to compute: the title predicate, `title_key`, the wikilinks and the `#tags` |
+| `internal/core` | the writer's own save (a body, a capture, a kept file) and its checks of a day and an instant, run on the DDL under test |
+| `internal/db` | the type that `core.Store` writes through, around the suite's own connection |
+| `internal/photo/phototest` | the synthetic JPEG of a file's preview: the DDL checks that a preview starts with the bytes of a JPEG |
+
+The suites do not reach the API, the CLI or the MCP server: what they check is the docs.
+
 The graph model runs three deterministic 160-operation sequences in the baseline. Its separate fuzz target accepts
 minimizable byte-encoded operations, caps each input at 64 transitions, and creates a fresh hardened file for every
 input. Seeds run normally; a campaign is explicit:

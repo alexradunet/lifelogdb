@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"lifelog/internal/core"
@@ -43,7 +44,7 @@ func files(s *S) {
 	s.K("files_entity_type: a files row is of type file", strings.Contains(c.tryx("INSERT INTO files(id,entity_type,sha256,mime) VALUES (?,'page',?,?)", c.page("P2"), hash(3), "image/jpeg"), "files_entity_type"))
 	cols := c.col("select name from pragma_table_info('files')")
 	s.K("files holds the hash, the type and the preview, and no path, size or name of the original",
-		eq(cols, []string{"id", "entity_type", "sha256", "mime", "preview"}), cols)
+		slices.Equal(cols, []string{"id", "entity_type", "sha256", "mime", "preview"}), cols)
 
 	// sha256
 	c = s.fresh()
@@ -108,7 +109,7 @@ func files(s *S) {
 	s.K("redirect is not a registered kind", err(c.link(c.page("Lake photo"), f, "redirect")))
 	sd, _ := c.savePage("![[2026-06-01 Lake.jpg|the lake]] and ![[Unseen.png]]", "")
 	s.K("the writer's save links an embed to the file page, and makes a ghost of a file not kept yet",
-		eq(c.linksOf(sd), []string{"2026-06-01 Lake.jpg", "Unseen.png"}) && c.str("select e.entity_type from entities e join entity_names n on n.entity_id=e.id where n.name_key='unseen.png'") == "page", c.linksOf(sd))
+		slices.Equal(c.linksOf(sd), []string{"2026-06-01 Lake.jpg", "Unseen.png"}) && c.str("select e.entity_type from entities e join entity_names n on n.entity_id=e.id where n.name_key='unseen.png'") == "page", c.linksOf(sd))
 	c.must("UPDATE entities SET body='The lake at dawn' WHERE id=?", f)
 	s.K("search finds a file's text", c.n("select count(*) from entities_fts where entities_fts match 'dawn' and rowid=?", f) == 1)
 
@@ -118,7 +119,7 @@ func files(s *S) {
 	r2 := c.tryx("INSERT INTO files(id,sha256,mime) VALUES (?,?,'image/png')", g, hash(11))
 	s.K("a ghost page becomes a file: the UPDATE cascades to its page, then the files row", r1 == "OK" && r2 == "OK" &&
 		c.tab("select e.entity_type, f.entity_type from entities e join files f using(id) where id=?", g) == "file|file", r1, r2)
-	s.K("...and the embed that made it now lands on the file (the id did not change)", contains(c.linksOf(sd), "Unseen.png") &&
+	s.K("...and the embed that made it now lands on the file (the id did not change)", slices.Contains(c.linksOf(sd), "Unseen.png") &&
 		c.n("select count(*) from links where from_id=? and to_id=?", sd, g) == 1)
 	s.K("a file cannot be turned back into a plain page (the files row's FK)", err(c.tryx("UPDATE entities SET entity_type='page' WHERE id=?", g)))
 	s.K("a day page cannot become a file (entities_day_page_plain)", strings.Contains(c.tryx("UPDATE entities SET entity_type='file' WHERE id=?", day), "entities_day_page_plain"))

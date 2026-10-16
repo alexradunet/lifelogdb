@@ -2,9 +2,11 @@ package tests
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -68,15 +70,11 @@ func document(s *S) {
 			unused = append(unused, k)
 		}
 	}
-	s.K("every lifelog_meta key answers some question (no rule without a question)", len(unused) == 0, sorted(unused))
+	s.K("every lifelog_meta key answers some question (no rule without a question)", len(unused) == 0, slices.Sorted(slices.Values(unused)))
 	s.K("import-a-row-once sends an imported body through the save contract (D19)", strings.Contains(s.d.Page("cookbook/import-a-row-once.md"), "run the link sync of [save a body](save-a-body.md)"))
 
 	// ---- the rules live in the file, once
-	var keys []string
-	for k := range meta {
-		keys = append(keys, k)
-	}
-	s.K("lifelog_meta holds only the few cross-table rules (at most 12 keys)", len(meta) <= 12, sorted(keys))
+	s.K("lifelog_meta holds only the few cross-table rules (at most 12 keys)", len(meta) <= 12, slices.Sorted(maps.Keys(meta)))
 	head := ddlHeader(s.ddl)
 	s.K("the DDL header before the first statement is a short pointer (<= 12 lines) naming lifelog_meta", strings.Count(head, "\n") <= 12 && strings.Contains(head, "lifelog_meta"))
 	inner := regexp.MustCompile(`\n\s*--`)
