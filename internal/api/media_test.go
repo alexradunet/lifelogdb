@@ -111,7 +111,8 @@ func TestMediaListsPicturesVideosAndRecordings(t *testing.T) {
 		m := r.(map[string]any)
 		got = append(got, m["title"].(string)+" "+m["kind"].(string)+" "+m["file_kind"].(string)+" "+m["mime"].(string)+" day="+str(m["day"]))
 	}
-	if want := "Notes.txt document text text/plain day=2031-05-03\nScan.pdf document application application/pdf day=" + str(props(files)["rows"].([]any)[1].(map[string]any)["day"]); strings.Join(got, "\n") != want ||
+	// The PDF had no day: it took the day of the store's clock when it was kept, so it is the newest.
+	if want := "Scan.pdf document application application/pdf day=" + fixedToday + "\nNotes.txt document text text/plain day=2031-05-03"; strings.Join(got, "\n") != want ||
 		len(files.Entities) != 2 || hrefOf(root, "files") != "/browse?kind=document" ||
 		accept(find(files, "add-file")) != "" || find(files, "tombstone-pages").Name == "" || props(files)["media_counts"] != nil {
 		t.Errorf("the documents: %v\n%+v %+v", got, files.Links, props(files))

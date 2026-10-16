@@ -55,7 +55,8 @@ func scalar(t *testing.T, s *core.Store, query string) string {
 	return v
 }
 
-// freshOn is fresh with the server's local day fixed: a test of today, or of the words for a day, uses fixed dates.
+// freshOn is fresh with the store's clock fixed at the start of day in UTC: a test of today, or of the words for a day,
+// uses fixed dates.
 func freshOn(t *testing.T, day string) (*client.Client, http.Handler) {
 	t.Helper()
 	p := filepath.Join(t.TempDir(), "life.db")
@@ -67,7 +68,11 @@ func freshOn(t *testing.T, day string) (*client.Client, http.Handler) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { d.Close() })
-	h := api.NewOn(&core.Store{DB: d}, func() string { return day }, time.UTC)
+	start, err := time.Parse(time.DateOnly, day)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := api.New(&core.Store{DB: d, Clock: func() time.Time { return start }, Zone: time.UTC})
 	return client.InProcess(h, "cli"), h
 }
 

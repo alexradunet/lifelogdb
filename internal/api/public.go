@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 
 	"lifelog/internal/core"
 )
@@ -94,7 +93,7 @@ func Public(s *core.Store, o PublicOptions) (http.Handler, error) {
 		}
 		p.origins[origin] = true
 	}
-	p.next = newOn(s, core.Today, time.Local, p.guard)
+	p.next = newOn(s, p.guard)
 	return p, nil
 }
 

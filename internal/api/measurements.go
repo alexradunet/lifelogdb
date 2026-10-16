@@ -65,7 +65,7 @@ func (h *server) metrics(r *http.Request) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	today := h.localDay()
+	today := h.s.Today()
 	e := &Entity{Class: []string{"metrics"}, Title: "Metrics",
 		Properties: map[string]any{"metrics": rows, "groups": groupMetrics(ms, cs), "categories": cs, "today": today},
 		Links:      []Link{link("self", "/metrics", "Metrics"), link("index", "/", "Home")},
@@ -86,7 +86,7 @@ func (h *server) series(r *http.Request) (*Entity, error) {
 // its readings, the writes of a reading and of a habit, and, as the metric is a page (D27), the page's text, edges
 // and actions. q is its query (from, to, all_history), nil for the defaults.
 func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*Entity, error) {
-	today := h.localDay()
+	today := h.s.Today()
 	to := q.Get("to")
 	if to == "" {
 		to = today

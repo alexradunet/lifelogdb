@@ -48,13 +48,13 @@ func TestBrowserMutationFeedbackReceipts(t *testing.T) {
 	if len(got) > feedbackLimit || !strings.Contains(got, "Feedback truncated") {
 		t.Fatal("payload cap/notice")
 	}
-	restarted := feedbackStore{}
+	restarted := feedbackStore{now: s.now}
 	if restarted.take("/pages/1", token) != "" {
 		t.Fatal("restart retained receipt")
 	}
 }
 func TestBrowserMutationFeedbackIndependentTabs(t *testing.T) {
-	s := feedbackStore{}
+	s := feedbackStore{now: func() time.Time { return time.Unix(0, 0) }}
 	var wg sync.WaitGroup
 	for i := range 32 {
 		wg.Go(func() {
@@ -69,7 +69,7 @@ func TestBrowserMutationFeedbackIndependentTabs(t *testing.T) {
 }
 
 func TestBrowserMutationFeedbackEscaping(t *testing.T) {
-	h := &server{}
+	h := &server{feedback: feedbackStore{now: func() time.Time { return time.Unix(0, 0) }}}
 	endpoint := h.serve(func(r *http.Request) (*Entity, error) {
 		e := &Entity{Class: []string{"page"}, Title: "Synthetic", Properties: map[string]any{"body": "", "entity_type": "page"}, Links: []Link{link("self", "/pages/1", "Synthetic")}}
 		if r.Method == "POST" {

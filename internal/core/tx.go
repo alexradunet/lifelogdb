@@ -12,6 +12,7 @@ import (
 type Tx struct {
 	tx     *sql.Tx
 	ctx    context.Context
+	today  func() string // the local day of the store's clock (Store.Today)
 	Source string
 }
 
@@ -20,7 +21,7 @@ func (s *Store) Do(ctx context.Context, source string, fn func(*Tx) error) error
 	if err := CheckSource(source); err != nil {
 		return err
 	}
-	return refused(s.DB.Write(ctx, func(tx *sql.Tx) error { return fn(&Tx{tx: tx, ctx: ctx, Source: source}) }))
+	return refused(s.DB.Write(ctx, func(tx *sql.Tx) error { return fn(&Tx{tx: tx, ctx: ctx, today: s.Today, Source: source}) }))
 }
 
 // errDryRun rolls a DryRun back after fn succeeded.

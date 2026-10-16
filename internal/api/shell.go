@@ -24,10 +24,10 @@ type shellView struct {
 
 // shell reads the sidebar's view.
 func (h *server) shell(ctx context.Context) (*shellView, error) {
-	if h.s == nil || h.localDay == nil {
-		return nil, errors.New("no store or clock to read the shell from")
+	if h.s == nil {
+		return nil, errors.New("no store to read the shell from")
 	}
-	today := h.localDay()
+	today := h.s.Today()
 	t, ok := dayOf(today)
 	if !ok {
 		return nil, fmt.Errorf("today %q is not a day", today)
@@ -42,7 +42,7 @@ func (h *server) shell(ctx context.Context) (*shellView, error) {
 	for _, d := range entries {
 		written[d.Day] = true
 	}
-	sv := &shellView{Today: today, Zone: h.zone, Month: first.Format(layoutMonth), MonthHref: monthHref(first), Written: len(entries)}
+	sv := &shellView{Today: today, Zone: h.s.Now().Location(), Month: first.Format(layoutMonth), MonthHref: monthHref(first), Written: len(entries)}
 	for d := first; !d.After(last); d = d.AddDate(0, 0, 1) {
 		day := d.Format(time.DateOnly)
 		sv.Days = append(sv.Days, map[string]any{"day": day, "page": written[day]})
@@ -66,9 +66,9 @@ func (h *server) write(w http.ResponseWriter, r *http.Request, status int, e *En
 func (h *server) inShell(w http.ResponseWriter, r *http.Request, status int, e *Entity) {
 	sv, err := h.shell(r.Context())
 	if err != nil {
-		sv = &shellView{Zone: h.zone}
-		if h.localDay != nil {
-			sv.Today = h.localDay()
+		sv = &shellView{}
+		if h.s != nil {
+			sv.Today, sv.Zone = h.s.Today(), h.s.Now().Location()
 		}
 	}
 	renderHTML(w, r, status, e, sv)

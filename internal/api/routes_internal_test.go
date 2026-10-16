@@ -6,7 +6,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 )
 
 // panicOf runs f and returns what it panics with, "" when it does not panic.
@@ -117,7 +116,7 @@ func TestMountReadsTheWriterAndRefusesAnAgentAnOwnerAction(t *testing.T) {
 // method and path. A route that only takes the same path is not enough: GET /days/go must go to open-day, not to
 // GET /days/{day}. The routes do not use the store until a request runs, so the test gives none.
 func TestTheServerRoutesEachCatalogActionToItsOwnRoute(t *testing.T) {
-	h := newServer(nil, func() string { return "2026-09-01" }, time.UTC)
+	h := newServer(nil)
 	fill := strings.NewReplacer("{id}", "7", "{day}", "2026-09-01")
 	for _, s := range catalog {
 		path := fill.Replace(s.Path)

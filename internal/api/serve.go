@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"lifelog/internal/core"
 )
@@ -18,31 +17,26 @@ import (
 // "ui" and any other client as "api".
 const SourceHeader = "Lifelog-Source"
 
+// server is the API on one store. The store's clock is the server's one clock: today, the words for a day and a
+// time, the feedback receipts and the name of a snapshot are read from it (core.Store.Now).
 type server struct {
 	s        *core.Store
 	feedback feedbackStore
-	localDay func() string  // the server's local day: today, and the words for a day, are read against it
-	zone     *time.Location // the zone of that day: a browser's words for a time use it
 	mux      *http.ServeMux // the routes: a refused browser form runs a GET of its page through it
 }
 
 // New returns the whole API as one handler: lifelog serve mounts it on a socket, the CLI and the MCP server
 // call it in-process. It trusts no browser origin other than its own. A public listener uses Public, which builds the
-// API with the origins that the owner allows (docs/plans/078-network-server.md).
+// API with the origins that the owner allows (docs/plans/078-network-server.md). A test gives a store with a fixed
+// clock, so today is a fixed day and a time is written in fixed words.
 func New(s *core.Store) http.Handler {
-	return NewOn(s, core.Today, time.Local)
-}
-
-// NewOn is New with the clock of the local day and its zone given: a test fixes them, so today is a fixed day, and a
-// time is written in fixed words.
-func NewOn(s *core.Store, localDay func() string, zone *time.Location) http.Handler {
-	return newOn(s, localDay, zone, http.NewCrossOriginProtection())
+	return newOn(s, http.NewCrossOriginProtection())
 }
 
 // newOn builds the API behind guard, which refuses a browser write from an origin that it does not trust. Public
-// gives the guard that trusts the allowed origins; NewOn gives one that trusts no other origin.
-func newOn(s *core.Store, localDay func() string, zone *time.Location, guard *http.CrossOriginProtection) http.Handler {
-	h := newServer(s, localDay, zone)
+// gives the guard that trusts the allowed origins; New gives one that trusts no other origin.
+func newOn(s *core.Store, guard *http.CrossOriginProtection) http.Handler {
+	h := newServer(s)
 	guard.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, crossOriginRefusal())
 	}))
@@ -51,8 +45,8 @@ func newOn(s *core.Store, localDay func() string, zone *time.Location, guard *ht
 
 // newServer is the server with its routes: mount gives each action of the catalog its route, then the routes that are
 // not actions follow.
-func newServer(s *core.Store, localDay func() string, zone *time.Location) *server {
-	h := &server{s: s, localDay: localDay, zone: zone}
+func newServer(s *core.Store) *server {
+	h := &server{s: s, feedback: feedbackStore{now: s.Now}}
 	m := http.NewServeMux()
 	h.mux = m
 	h.mount(m, catalog, map[string]actionFunc{

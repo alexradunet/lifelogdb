@@ -49,7 +49,7 @@ func (t *Tx) CreatePage(title, body, day, importKey string) (id int64, existing 
 	case IsDay(title):
 		day = title
 	case day == "":
-		day = Today()
+		day = t.today()
 	}
 	if id, existing, err = t.createNamed("page", title, body, day, importKey, nil); err != nil || existing {
 		return id, existing, r, err

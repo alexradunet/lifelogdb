@@ -47,7 +47,7 @@ func weekName(monday time.Time) string {
 func yearHref(year int) string { return fmt.Sprintf("/years/%04d", year) }
 
 func (h *server) currentWeek(*http.Request) (*Entity, error) {
-	t, _ := dayOf(h.localDay())
+	t, _ := dayOf(h.s.Today())
 	return nil, redirect{weekHref(t)}
 }
 
@@ -64,7 +64,7 @@ func round2(x float64) float64 { return math.Round(x*100) / 100 }
 
 func (h *server) week(r *http.Request) (*Entity, error) {
 	ctx := r.Context()
-	today := h.localDay()
+	today := h.s.Today()
 	monday, ok := weekOf(r.PathValue("week"))
 	if !ok {
 		return nil, core.Invalid("a week is YYYY-Www")
@@ -147,7 +147,7 @@ type yearDay struct {
 }
 
 func (h *server) currentYear(*http.Request) (*Entity, error) {
-	t, _ := dayOf(h.localDay())
+	t, _ := dayOf(h.s.Today())
 	return nil, redirect{yearHref(t.Year())}
 }
 
@@ -194,6 +194,6 @@ func (h *server) year(r *http.Request) (*Entity, error) {
 	}
 	e.Links = []Link{link("self", yearHref(year), s), link("prev", yearHref(year-1), fmt.Sprintf("%04d", year-1)),
 		link("next", yearHref(year+1), fmt.Sprintf("%04d", year+1)), link("index", "/", "Home")}
-	e.Properties = map[string]any{"year": s, "today": h.localDay(), "written": len(entries), "readings": readings, "months": months}
+	e.Properties = map[string]any{"year": s, "today": h.s.Today(), "written": len(entries), "readings": readings, "months": months}
 	return e, nil
 }

@@ -9,6 +9,7 @@ import (
 	"image/jpeg"
 	"strings"
 	"testing"
+	"time"
 
 	"lifelog/internal/text"
 )
@@ -221,16 +222,15 @@ func TestFilePromotionDay(t *testing.T) {
 		t.Errorf("body conflict changed storage: %+v", p)
 	}
 
-	// A file that is not a photo, with no day: it takes the day it is kept, and no day page shows it. A photo with no
-	// day has no day (files_unknown_day_test.go).
+	// A file that is not a photo, with no day: it takes the day it is kept, the day of the store's clock, and no day
+	// page shows it. A photo with no day has no day (files_unknown_day_test.go).
 	s = fresh(t)
+	s.Clock, s.Zone = func() time.Time { return time.Date(2026, 10, 10, 12, 0, 0, 0, time.UTC) }, time.UTC
 	if _, _, err := s.Capture(ctx, "cli", "2099-01-01", "Undated: ![[scan.pdf]]", nil); err != nil {
 		t.Fatal(err)
 	}
 	scanGhost, _ := s.PageID(ctx, "scan.pdf")
-	before := Today()
 	k, err = s.AddFile(ctx, "cli", FileIn{Title: "scan.pdf", SHA256: sha('5'), MIME: "application/pdf", Preview: smallJPEG(t)})
-	after := Today()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,8 +238,8 @@ func TestFilePromotionDay(t *testing.T) {
 	if !k.Promoted || k.ID != scanGhost {
 		t.Errorf("undated keep did not promote the ghost in place: %+v (ghost %d)", k, scanGhost)
 	}
-	if p.Day != before && p.Day != after {
-		t.Errorf("undated keep used day %q, outside [%q,%q]", p.Day, before, after)
+	if p.Day != "2026-10-10" {
+		t.Errorf("undated keep used day %q, want the day of the store's clock 2026-10-10", p.Day)
 	}
 	if k.Day != "" || k.Embedded {
 		t.Errorf("undated file got its own-day effects: %+v", k)

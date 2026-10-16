@@ -29,7 +29,8 @@ func TestSnapshotIsTheOwnersFromAnySurface(t *testing.T) {
 	}
 	t.Cleanup(func() { d.Close() })
 	dir := t.TempDir()
-	h := api.New(&core.Store{DB: d, SnapshotDir: dir})
+	clock := func() time.Time { return time.Date(2026, 10, 2, 14, 30, 5, 0, time.UTC) }
+	h := api.New(&core.Store{DB: d, SnapshotDir: dir, Clock: clock, Zone: time.UTC})
 	owner := client.InProcess(h, "cli")
 	agent := client.InProcess(h, "agent:lmstudio")
 	root := must(owner.Get(t.Context(), "/"))
@@ -44,7 +45,7 @@ func TestSnapshotIsTheOwnersFromAnySurface(t *testing.T) {
 	first := must(owner.Do(t.Context(), action, nil))
 	props := first.Properties.(map[string]any)
 	path, _ := props["snapshot"].(string)
-	today := time.Now().Format("2006-01-02")
+	today := "2026-10-02" // the day of the store's clock
 	if filepath.Dir(path) != dir || filepath.Base(path) != "life-"+today+".db" {
 		t.Fatalf("snapshot path %q: want life-%s.db in %s", path, today, dir)
 	}
@@ -59,8 +60,8 @@ func TestSnapshotIsTheOwnersFromAnySurface(t *testing.T) {
 	}
 	second := must(owner.Do(t.Context(), action, nil))
 	again, _ := second.Properties.(map[string]any)["snapshot"].(string)
-	if again == path || !strings.HasPrefix(filepath.Base(again), "life-"+today+"T") {
-		t.Fatalf("a second snapshot the same day: %q", again)
+	if filepath.Base(again) != "life-"+today+"T143005.db" {
+		t.Fatalf("a second snapshot the same day: %q, want life-%sT143005.db", again, today)
 	}
 
 	// An agent is refused and writes nothing.
@@ -74,7 +75,7 @@ func TestSnapshotIsTheOwnersFromAnySurface(t *testing.T) {
 	}
 
 	// A browser form is answered home with the path as feedback. The second file is removed first: a third
-	// snapshot within the same second would find its time-named file in use, a refusal of its own.
+	// snapshot at the same instant of the clock would find its time-named file in use, a refusal of its own.
 	if err := os.Remove(again); err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +113,8 @@ func TestASnapshotThatFailsItsRestoreCheckIsAnError(t *testing.T) {
 	}
 	t.Cleanup(func() { d.Close() })
 	dir := t.TempDir()
-	h := api.New(&core.Store{DB: d, SnapshotDir: dir})
+	clock := func() time.Time { return time.Date(2026, 10, 2, 14, 30, 5, 0, time.UTC) }
+	h := api.New(&core.Store{DB: d, SnapshotDir: dir, Clock: clock, Zone: time.UTC})
 	owner := client.InProcess(h, "cli")
 	root := must(owner.Get(t.Context(), "/"))
 	must(owner.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "Walk"}))
@@ -130,8 +132,7 @@ func TestASnapshotThatFailsItsRestoreCheckIsAnError(t *testing.T) {
 	if props["code"] != "restore_check_failed" {
 		t.Errorf("code = %v, want restore_check_failed", props["code"])
 	}
-	today := time.Now().Format("2006-01-02")
-	if _, err := os.Stat(filepath.Join(dir, "life-"+today+".db")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, "life-2026-10-02.db")); err != nil {
 		t.Errorf("the snapshot is kept although its check failed: %v", err)
 	}
 }

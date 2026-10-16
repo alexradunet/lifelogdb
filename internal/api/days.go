@@ -56,7 +56,7 @@ func (h *server) onThisDay(ctx context.Context, day string) ([]recentDay, error)
 // action that starts something.
 func (h *server) root(r *http.Request) (*Entity, error) {
 	ctx := r.Context()
-	today := h.localDay()
+	today := h.s.Today()
 	entries, err := h.s.DayEntries(ctx, "0000-01-01", today, true, recentDays)
 	if err != nil {
 		return nil, err
@@ -90,7 +90,7 @@ func (h *server) root(r *http.Request) (*Entity, error) {
 	}, nil
 }
 
-func (h *server) today(*http.Request) (*Entity, error) { return nil, redirect{dayHref(h.localDay())} }
+func (h *server) today(*http.Request) (*Entity, error) { return nil, redirect{dayHref(h.s.Today())} }
 
 func (h *server) days(r *http.Request) (*Entity, error) {
 	limit, offset, err := pageOf(r, 60)
@@ -131,7 +131,7 @@ func (h *server) dayEntity(ctx context.Context, day string) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	today := h.localDay()
+	today := h.s.Today()
 	moods, err := h.s.Moods(ctx, day, day)
 	if err != nil {
 		return nil, err
@@ -185,7 +185,7 @@ func (h *server) capture(r *http.Request, act spec, src string) (*Entity, error)
 	}
 	day := r.PathValue("day")
 	if day == "today" { // the share target of the manifest cannot know the day
-		day = h.localDay()
+		day = h.s.Today()
 	}
 	_, sync, err := h.s.Capture(r.Context(), src, day, v.Get("text"), mood)
 	if err != nil {

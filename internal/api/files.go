@@ -276,7 +276,7 @@ func (h *server) setPicture(r *http.Request, act spec, src string) (*Entity, err
 			return nil, err
 		}
 		if sent {
-			k, err := h.s.SetPicture(r.Context(), src, id, h.localDay(), in)
+			k, err := h.s.SetPicture(r.Context(), src, id, h.s.Today(), in)
 			if err != nil {
 				return nil, err
 			}

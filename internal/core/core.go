@@ -20,10 +20,29 @@ import (
 const nowSQL = "strftime('%Y-%m-%dT%H:%M:%fZ','now')"
 
 // Store is one open life.db. SnapshotDir is the folder the snapshot action writes to; empty means beside the file.
+// Clock and Zone are the one clock of the writer: every surface reads today and now from them (Now, Today). A nil
+// Clock is time.Now and a nil Zone is time.Local, the clock of this device; a test gives a fixed clock.
 type Store struct {
 	DB          *db.DB
 	SnapshotDir string
+	Clock       func() time.Time
+	Zone        *time.Location
 }
+
+// Now is the instant of the store's clock, in the store's zone.
+func (s *Store) Now() time.Time {
+	now, zone := s.Clock, s.Zone
+	if now == nil {
+		now = time.Now
+	}
+	if zone == nil {
+		zone = time.Local
+	}
+	return now().In(zone)
+}
+
+// Today is the local calendar day of the store's clock (lifelog_meta.days).
+func (s *Store) Today() string { return s.Now().Format(time.DateOnly) }
 
 // Error carries an HTTP-shaped status so every surface reports the same failure the same way. Code, when set,
 // names the failure for a client that branches on it (docs/plans/079-client-contract-hygiene.md); the API fills
@@ -88,9 +107,6 @@ func CheckSource(s string) error {
 	}
 	return nil
 }
-
-// Today is the local calendar day of this device (lifelog_meta.days).
-func Today() string { return time.Now().Format(time.DateOnly) }
 
 // IsDay reports a YYYY-MM-DD local day that round-trips (date(x) IS x).
 func IsDay(s string) bool {

@@ -201,7 +201,7 @@ this part it reads about 450. One package stays: sub-packages would export `page
 | what | where |
 |---|---|
 | **Moves only, one commit:** `core.go` (with `check.go`), `tx.go` (`Tx`, `Do`, savepoints), `pages.go`, `links.go` (wikilink sync, `Link`, `Unlink`, `LinkKindsFrom`), `journal.go`, `metrics.go` (replaces `habits.go`, which holds no habits), `files.go` with `picture.go`, `browse.go` with `categories.go`, `integrity.go`, `snapshot.go`. | `internal/core` |
-| **One clock.** `Store` gets `Today func() string` (nil is the local clock). `Tx.CreatePage` and `keep` read it; the api's `NewOn` reads the same one, and `feedbackStore` and `snapshot` get `now` from the server, not from `time.Now`. The tests that bracket `Today()` before and after a call use a fixed day. | `core/core.go`, `core/write.go`, `core/files.go`, `api/serve.go`, `api/feedback.go`, `api/maintenance.go` |
+| **One clock.** `Store` gets `Clock func() time.Time` and `Zone *time.Location` (nil is `time.Now` and `time.Local`): `Store.Now` is the instant in the zone, `Store.Today` its day. A `Today func() string` alone cannot give a snapshot and a feedback receipt their instant, so the store holds the instant and the zone. `Tx.CreatePage` and `keep` read the store's day; the api reads the same clock, so `NewOn` goes (a test gives `New` a store with a fixed clock), and `feedbackStore` and `snapshot` get `now` from it, not from `time.Now`. The tests that bracket `Today()` before and after a call use a fixed clock. | `core/core.go`, `core/tx.go`, `core/pages.go`, `core/files.go`, `api/serve.go`, `api/shell.go`, `api/feedback.go`, `api/maintenance.go` |
 | **One row scan.** `list[T](rows, func(*T) []any)` and `each(rows, func() error)`: every `Scan`, `Close` and `Err` branch is in one place, and one fault test covers it. 27 `for rows.Next()` loops; the three `GROUP BY` counts become one. | `internal/core` |
 | **One wrapper.** `alone[T](s, ctx, src, func(*Tx) (T, error))` for the about 19 `Store` one-liners; it zeroes the result on error. | `internal/core` |
 | **One live-page check** for the four copies of the 404/409 rule (`livePage`, `Rename`, `FilePages`, `pageByID` users), with one message each. | `internal/core` |
@@ -276,7 +276,7 @@ Each row changes an answer that a client sees, so each waits for the owner's wor
 
 | what | where |
 |---|---|
-| The README layout table gets a column "test it at": the seam where a test of that module attaches (`core.Store` on `dbtest.New`; `api.NewOn` with a fixed clock; the parity table for a surface; the pure view functions). | `README.md` |
+| The README layout table gets a column "test it at": the seam where a test of that module attaches (`core.Store` on `dbtest.New`; `api.New` on a store with a fixed clock; the parity table for a surface; the pure view functions). | `README.md` |
 | `cmd/lifelog` gets a package comment, as every other package has one. | `cmd/lifelog/main.go` |
 | With the owner's word: AGENTS.md keeps what an agent needs on every edit, and links the rest (the personas, the performance evidence, the engineering references, the conventions checklist that `docs/` already holds). An agent reads AGENTS.md in every session: 375 lines today. | `AGENTS.md`, `tests/README.md` |
 

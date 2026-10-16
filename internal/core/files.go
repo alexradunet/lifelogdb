@@ -88,7 +88,7 @@ func (t *Tx) keep(f FileIn) (k Kept, err error) {
 	case f.Taken != "":
 		day = f.Taken
 	default:
-		day, own = Today(), false
+		day, own = t.today(), false
 	}
 	// 0) the original kept already: that page, nothing written but a missing preview and its embed in its own day
 	var hasPreview bool
