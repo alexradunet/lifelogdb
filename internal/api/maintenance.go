@@ -12,11 +12,12 @@ import (
 
 // snapshot is the owner's action (docs/plans/082-snapshot-in-the-catalog.md): the file lands on this machine, in
 // the store's folder; the answer is the path and the restore check, with self at the root so a browser form is
-// answered home with them as feedback.
+// answered home with them as feedback. Core reports a refusal as 422 snapshot_refused; a timeout and a failure are
+// answered as on every route.
 func (h *server) snapshot(r *http.Request, _ string) (*Entity, error) {
 	path, res, err := h.s.TakeSnapshot(r.Context(), time.Now())
 	if err != nil {
-		return nil, &core.Error{Status: 422, Msg: err.Error(), Code: "snapshot_refused"}
+		return nil, err
 	}
 	if !res.OK { // the file is kept, as the check does not delete: the owner reads it before trusting it
 		return nil, &core.Error{Status: http.StatusInternalServerError, Code: "restore_check_failed",

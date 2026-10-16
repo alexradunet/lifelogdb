@@ -1,6 +1,8 @@
 package api_test
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"net/http/httptest"
 	"os"
@@ -132,4 +134,56 @@ func TestASnapshotThatFailsItsRestoreCheckIsAnError(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "life-"+today+".db")); err != nil {
 		t.Errorf("the snapshot is kept although its check failed: %v", err)
 	}
+}
+
+// TestOnlyARefusedSnapshotIsSnapshotRefused: 422 snapshot_refused is for a refusal that core reports, here a folder
+// inside a git work tree. A snapshot whose time ran out is a 504 timeout, and one that fails for another cause (its
+// request cancelled) is a 500 internal, as every other route answers them. None of them leaves a file.
+func TestOnlyARefusedSnapshotIsSnapshotRefused(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "life.db")
+	if err := db.Init(t.Context(), p); err != nil {
+		t.Fatal(err)
+	}
+	d, err := db.Open(t.Context(), p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { d.Close() })
+	snapshot := func(t *testing.T, ctx context.Context, dir string, status int, code string) {
+		t.Helper()
+		req := httptest.NewRequestWithContext(ctx, "POST", "/snapshots", nil)
+		rec := httptest.NewRecorder()
+		api.New(&core.Store{DB: d, SnapshotDir: dir}).ServeHTTP(rec, req)
+		var e api.Entity
+		if err := json.Unmarshal(rec.Body.Bytes(), &e); err != nil {
+			t.Fatalf("the answer is not an entity: %v: %s", err, rec.Body.String())
+		}
+		if got := props(&e)["code"]; rec.Code != status || got != code {
+			t.Errorf("answer %d %v, want %d %s: %s", rec.Code, got, status, code, rec.Body.String())
+		}
+		if files, err := os.ReadDir(dir); err != nil || len(files) != 0 {
+			t.Errorf("the snapshot folder after the error: %d files, %v", len(files), err)
+		}
+	}
+	t.Run("a refusal", func(t *testing.T) {
+		repo := t.TempDir()
+		if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		dir := filepath.Join(repo, "backups")
+		if err := os.Mkdir(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		snapshot(t, t.Context(), dir, 422, "snapshot_refused")
+	})
+	t.Run("a timeout", func(t *testing.T) {
+		ctx, cancel := context.WithDeadline(t.Context(), time.Now().Add(-time.Second))
+		defer cancel()
+		snapshot(t, ctx, t.TempDir(), 504, "timeout")
+	})
+	t.Run("a failure", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		snapshot(t, ctx, t.TempDir(), 500, "internal")
+	})
 }

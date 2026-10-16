@@ -240,7 +240,7 @@ func reserveDatabasePath(path string) (os.FileInfo, error) {
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o666)
 	if err != nil {
 		if os.IsExist(err) {
-			return nil, fmt.Errorf("%s already exists", path)
+			return nil, refusal(path + " already exists")
 		}
 		return nil, fmt.Errorf("reserving %s: %w", path, err)
 	}
@@ -347,6 +347,17 @@ func copyWith(from, to string, copy func(*sql.DB) error) error {
 	return nil
 }
 
+// ErrRefused is the cause of a refusal: the caller asks for what cannot be, and nothing failed. A snapshot folder
+// that is not a folder or is inside a git work tree, and a database file that exists already, are refusals.
+// errors.Is tells a refusal from a failure (a disk, a permission, a context that ran out).
+var ErrRefused = errors.New("refused")
+
+// refusal is an error whose cause is ErrRefused, with its own message.
+type refusal string
+
+func (r refusal) Error() string { return string(r) }
+func (refusal) Unwrap() error   { return ErrRefused }
+
 // Snapshot takes a snapshot of a life.db into dir (docs/cookbook/take-a-snapshot.md, D25): a Copy named by the local
 // day of now, life-YYYY-MM-DD.db, or life-YYYY-MM-DDTHHMMSS.db when the day has one already. It never overwrites a
 // file and refuses a folder inside a git work tree. It returns the snapshot's path.
@@ -374,7 +385,7 @@ func CheckSnapshotDir(dir string) (string, error) {
 		return "", err
 	}
 	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
-		return "", fmt.Errorf("no folder %s for the snapshot", dir)
+		return "", refusal(fmt.Sprintf("no folder %s for the snapshot", dir))
 	}
 	physical, err := snapshotPhysicalDir(dir)
 	if err != nil {
@@ -386,8 +397,8 @@ func CheckSnapshotDir(dir string) (string, error) {
 			return "", fmt.Errorf("check snapshot folder %s: %w", candidate, err)
 		}
 		if repo != "" {
-			return "", fmt.Errorf("%s is inside the git work tree %s: a snapshot holds health data and private notes, "+
-				"which git history cannot forget; choose a folder outside it", candidate, repo)
+			return "", refusal(fmt.Sprintf("%s is inside the git work tree %s: a snapshot holds health data and private notes, "+
+				"which git history cannot forget; choose a folder outside it", candidate, repo))
 		}
 	}
 	return physical, nil

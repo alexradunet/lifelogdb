@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"time"
@@ -11,10 +12,14 @@ import (
 
 // Snapshot takes a dated copy of the database at from into dir and runs its restore check (docs/cookbook/take-a-
 // snapshot.md, D25): the four integrity checks on a connection whose Close skips PRAGMA optimize, so the file is left
-// as written. The path is returned with the check; an error names what refused (a folder inside a git work tree,
-// a name in use) or what failed.
+// as written. The path is returned with the check. A refusal of the folder or the name (db.ErrRefused: no folder,
+// a folder inside a git work tree, a name in use) is a 422 with the code snapshot_refused; any other error is a
+// failure.
 func Snapshot(ctx context.Context, from, dir string, now time.Time) (string, *IntegrityResult, error) {
 	path, err := db.Snapshot(ctx, from, dir, now)
+	if errors.Is(err, db.ErrRefused) {
+		return "", nil, &Error{Status: 422, Msg: err.Error(), Code: "snapshot_refused", Err: err}
+	}
 	if err != nil {
 		return "", nil, err
 	}
