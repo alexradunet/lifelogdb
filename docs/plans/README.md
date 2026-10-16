@@ -4,10 +4,11 @@ A plan is a dated record ([how a change happens](../process.md)): a change large
 written as a self-contained brief with done criteria. It cites the docs as they were at the commit it names. One file
 per plan, `NNN-short-slug.md`, numbered on from the last.
 
-Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **119**.
+Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **122**.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
+| [121](121-deep-modules-for-agents.md) | Deep modules for agents: one place a concept, fewer lines, every part testable | P2 | XL | owner request 2026-10-16; `fd4d82a` | IN PROGRESS |
 | [120](120-a-tidy-board.md) | A tidy board: every metric card has the same four lines, and the repeated buttons are quiet | P3 | S | owner word 2026-10-16; `4e0219e` | DONE |
 | [119](119-the-finish.md) | The finish: the cards, the pick bar, the letter index, the folders and the margin lists look finished | P3 | M | owner request 2026-10-16; `c8c7baa` | DONE |
 | [118](118-fold-and-find.md) | Fold and find: the category tree, the Browse list (folders, letter groups) and the Metrics board (folds, Cards or List) fold | P2 | M | owner request 2026-10-15; `0f85dda` | DONE |
