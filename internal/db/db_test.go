@@ -568,6 +568,19 @@ func TestSnapshotDestinationErrors(t *testing.T) {
 			t.Errorf("refusal left artifact %s", entry.Name())
 		}
 	}
+	// A .git folder above the destination: the destination is inside that work tree.
+	backups := filepath.Join(root, "repo", "backups")
+	for _, dir := range []string{filepath.Join(root, "repo", ".git"), backups} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := Snapshot(t.Context(), live, backups, time.Now()); err == nil || !strings.Contains(err.Error(), "git work tree") {
+		t.Errorf("a destination under a .git folder: %v, want the refusal", err)
+	}
+	if entries, err := os.ReadDir(backups); err != nil || len(entries) != 0 {
+		t.Errorf("the refusal left %v (%v)", entries, err)
+	}
 	after, err := os.ReadFile(live)
 	if err != nil {
 		t.Fatal(err)

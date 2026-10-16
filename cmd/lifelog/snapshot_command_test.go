@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -43,5 +44,29 @@ func TestSnapshotCommandRunsTheAction(t *testing.T) {
 	o, err := parse([]string{"serve", "--snapshots", dir}, noVars)
 	if err != nil || o.snapshots != dir {
 		t.Fatalf("parse: %+v %v", o, err)
+	}
+}
+
+// TestSnapshotCommandRefusesAGitWorkTree: snapshot --to a folder inside a git work tree is refused before anything
+// opens. --db names a file that is not there, so a command that opened it would fail with another error, and nothing
+// is written in the folder or at the path of --db.
+func TestSnapshotCommandRefusesAGitWorkTree(t *testing.T) {
+	root := t.TempDir()
+	live := filepath.Join(root, "absent.db")
+	backups := filepath.Join(root, "repo", "backups")
+	for _, dir := range []string{filepath.Join(root, "repo", ".git"), backups} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e, _, _ := testEnv(t)
+	if err := runArgs(t.Context(), e, []string{"snapshot", "--db", live, "--to", backups}); err == nil || !strings.Contains(err.Error(), "git work tree") {
+		t.Errorf("snapshot --to inside a git work tree: %v, want the refusal", err)
+	}
+	if entries, err := os.ReadDir(backups); err != nil || len(entries) != 0 {
+		t.Errorf("the refused snapshot left %v (%v)", entries, err)
+	}
+	if _, err := os.Lstat(live); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the refused snapshot made %s: %v", live, err)
 	}
 }

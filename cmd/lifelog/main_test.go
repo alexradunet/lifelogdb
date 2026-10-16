@@ -224,23 +224,6 @@ func assertSnapshotSentinel(t *testing.T, p string) {
 	}
 }
 
-func TestSnapshotRefusesAGitWorkTree(t *testing.T) {
-	live := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(t.Context(), live); err != nil {
-		t.Fatal(err)
-	}
-	repo := t.TempDir()
-	os.Mkdir(filepath.Join(repo, ".git"), 0o755)
-	sub := filepath.Join(repo, "backups")
-	os.Mkdir(sub, 0o755)
-	if _, _, err := snapshotStore(t, live, sub).TakeSnapshot(context.Background(), time.Now()); err == nil || !strings.Contains(err.Error(), "git work tree") {
-		t.Errorf("a snapshot inside a git work tree: %v, want a refusal", err)
-	}
-	if ents, _ := os.ReadDir(sub); len(ents) != 0 {
-		t.Errorf("a refused snapshot left %d files", len(ents))
-	}
-}
-
 func mustRead(t *testing.T, p string) []byte {
 	t.Helper()
 	b, err := os.ReadFile(p)
@@ -403,6 +386,9 @@ func cmdHref(e *api.Entity, rel string) string {
 	return ""
 }
 
+// TestSnapshotPhysicalDestination: the snapshot folder is checked at its path and at the folder that a symbolic link or
+// a junction leads to. A .git folder or file at or above either one refuses the snapshot: nothing is written there,
+// and the live file stays as it was. A link to a safe folder takes the snapshot in the folder that it leads to.
 func TestSnapshotPhysicalDestination(t *testing.T) {
 	for _, kind := range []string{"symlink", "junction"} {
 		for _, marker := range []string{"directory", "file"} {
@@ -480,9 +466,8 @@ func TestSnapshotPhysicalDestination(t *testing.T) {
 							t.Errorf("copy path %s is not physical destination %s", p, resolved)
 						}
 					} else {
-						e, _, _ := testEnv(t)
-						if err := runArgs(t.Context(), e, []string{"snapshot", "--db", live, "--to", dest}); err == nil || !strings.Contains(err.Error(), "git work tree") {
-							t.Errorf("command refusal: %v", err)
+						if _, _, err := snapshotStore(t, live, dest).TakeSnapshot(context.Background(), now); err == nil || !strings.Contains(err.Error(), "git work tree") {
+							t.Errorf("snapshot refusal: %v", err)
 						}
 						for _, dir := range []string{dest, physical} {
 							entries, err := os.ReadDir(dir)
