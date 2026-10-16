@@ -495,7 +495,7 @@ func TestNameRevisionExhaustionRefusesAtomically(t *testing.T) {
 
 func TestDatedFileRenameKeepsOriginalAndOldEmbed(t *testing.T) {
 	s := fresh(t)
-	f := photo(t, 'a', "Old.jpg", "2019-06-03")
+	f := photo('a', "Old.jpg", "2019-06-03")
 	f.Body = "caption [[Subject]]"
 	kept, err := s.AddFile(ctx, "cli", f)
 	if err != nil {

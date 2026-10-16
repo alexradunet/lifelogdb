@@ -292,10 +292,11 @@ func TestNormalMIME(t *testing.T) {
 	}
 }
 
-// TestKeepingAPhotoFindsTheDayPageByAnIndex: a kept photo with a day reads the body of that day's page. The lookup
-// finds the day page and not a page that only has that day, and it searches by an index: it scans no table, so its
-// cost does not grow with the number of pages.
-func TestKeepingAPhotoFindsTheDayPageByAnIndex(t *testing.T) {
+// TestTheDayPageBodyQueryFindsTheDayPageByAnIndex: dayPageBody, the query with which keep reads the body of the day
+// page of a photo's day, finds the day page and not a page that only has that day. The test runs the query and plans
+// it by itself: SQLite searches by an index and scans no table, so the cost of the query does not grow with the
+// number of pages.
+func TestTheDayPageBodyQueryFindsTheDayPageByAnIndex(t *testing.T) {
 	s := fresh(t)
 	const day = "2031-02-03"
 	if err := s.Do(t.Context(), "cli", func(tx *Tx) error {
@@ -347,7 +348,7 @@ func TestKeepingAPhotoFindsTheDayPageByAnIndex(t *testing.T) {
 }
 
 // photo is a kept photo as the writer sees it: a JPEG with a preview, taken on day. Its position is never read (D21).
-func photo(t *testing.T, c byte, title, day string) FileIn {
+func photo(c byte, title, day string) FileIn {
 	return FileIn{Title: title, SHA256: sha(c), MIME: "image/jpeg", Taken: day, Preview: phototest.JPEG(8, 8)}
 }
 
@@ -402,7 +403,7 @@ func TestUnknownPhotoDayHasNoCaptureOrPlaceSideEffects(t *testing.T) {
 
 func TestUnknownPhotoDryRunDedupKnownDayMissingPreviewAndTombstone(t *testing.T) {
 	s := fresh(t)
-	in := photo(t, 'c', "Owner.jpg", "2012-03-04")
+	in := photo('c', "Owner.jpg", "2012-03-04")
 	preview := in.Preview
 	in.Preview = nil
 	kept, err := s.AddFile(ctx, "cli", in)
