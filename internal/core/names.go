@@ -166,7 +166,7 @@ type TitleMatch struct {
 }
 
 // TitlesByPrefix are the names of live pages whose name key starts with the title key of prefix, in key order, and
-// at most limit of them: what an editor suggests after [[. The read is a range on the unique index of name_key:
+// at most limit of them: what a search lists first. The read is a range on the unique index of name_key:
 // every key with the prefix is at or after it, and before it followed by the byte 0xFF, which no UTF-8 text holds.
 func (s *Store) TitlesByPrefix(ctx context.Context, prefix string, limit int) ([]TitleMatch, error) {
 	key := text.TitleKey(strings.TrimSpace(prefix))

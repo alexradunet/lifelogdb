@@ -1,7 +1,6 @@
 package api_test
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,35 +11,6 @@ import (
 
 	"lifelog/internal/api/apitest"
 )
-
-// TestTitlesAreTheNamesAfterABracket: /titles answers the names of live pages that start with a prefix, in key
-// order, with the page each name is of; its limits are refused, not clamped.
-func TestTitlesAreTheNamesAfterABracket(t *testing.T) {
-	c, _, _ := apitest.Fresh(t, "cli")
-	root := apitest.Must(t)(c.Get(t.Context(), "/"))
-	for _, title := range []string{"Sam Example", "SAMUEL", "Garden project"} {
-		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": title}))
-	}
-	got := apitest.Must(t)(c.Get(t.Context(), "/titles?prefix=sa"))
-	var names []string
-	for _, m := range props(got)["titles"].([]any) {
-		names = append(names, m.(map[string]any)["title"].(string))
-	}
-	if strings.Join(names, ",") != "Sam Example,SAMUEL" || len(got.Entities) != 2 || !strings.HasPrefix(got.Entities[0].Href, "/pages/") {
-		t.Errorf("titles: %v %v", names, got.Entities)
-	}
-	if fmt.Sprint(props(got)["limit"]) != "10" || props(got)["prefix"] != "sa" {
-		t.Errorf("titles' prefix and limit: %v", props(got))
-	}
-	if n := len(props(apitest.Must(t)(c.Get(t.Context(), "/titles?prefix=s&limit=1")))["titles"].([]any)); n != 1 {
-		t.Errorf("limit 1 answered %d", n)
-	}
-	for _, bad := range []string{"/titles", "/titles?prefix=", "/titles?prefix=%20", "/titles?prefix=s&limit=0", "/titles?prefix=s&limit=21", "/titles?prefix=s&limit=x"} {
-		if _, err := c.Get(t.Context(), bad); apitest.Status(err) != 422 {
-			t.Errorf("%s: %v", bad, err)
-		}
-	}
-}
 
 // TestRenderIsTheSavedPage: the preview of a body is a page whose prose is the HTML its page shows once saved, it
 // writes nothing, and it is a POST like any other: the origin guard and the request limit apply. A form that
@@ -94,8 +64,8 @@ func TestRenderIsTheSavedPage(t *testing.T) {
 		t.Errorf("GET /render: %d", get.Code)
 	}
 	for _, a := range apitest.Must(t)(c.Get(t.Context(), "/actions")).Actions {
-		if strings.HasPrefix(a.Href, "/render") || strings.HasPrefix(a.Href, "/titles") {
-			t.Errorf("the catalog names %s: the preview is presentation, and the titles a resource", a.Href)
+		if strings.HasPrefix(a.Href, "/render") {
+			t.Errorf("the catalog names %s: the preview is presentation", a.Href)
 		}
 	}
 	big := httptest.NewRequest("POST", "/render", io.MultiReader(strings.NewReader("body="), strings.NewReader(strings.Repeat("a", 20<<20))))

@@ -19,7 +19,7 @@ import (
 
 // TestTheToolsAreTheActionsThatAreNotTheOwners: each action of the catalog is a tool exactly when it is not the
 // owner's, with get and get_day, each once; the browser's preview is not a tool; browse is marked a read. The built-in
-// tool get reads what no action reads: a month, the titles, a day with its trends.
+// tool get reads what no action reads: a month and a day with its trends.
 func TestTheToolsAreTheActionsThatAreNotTheOwners(t *testing.T) {
 	c := mcpTestClient(t)
 	srv, err := New(t.Context(), c, "test")
@@ -90,9 +90,6 @@ func TestTheToolsAreTheActionsThatAreNotTheOwners(t *testing.T) {
 	// The browser's calendar is on this surface too (docs/plans/091-the-browser-for-daily-use.md).
 	if month := callTool(t, ctx, session, "get", map[string]any{"href": "/months/2031-05"}); month.Title != "May 2031" {
 		t.Fatalf("get /months/2031-05 returned %+v", month)
-	}
-	if titles := callTool(t, ctx, session, "get", map[string]any{"href": "/titles?prefix=an"}); len(titles.Entities) != 1 || titles.Entities[0].Title != "Ana" {
-		t.Fatalf("get /titles returned %+v", titles)
 	}
 	// A day's trends are on this surface too (docs/plans/093-words-phone-and-today.md).
 	if day, ok := callTool(t, ctx, session, "get", map[string]any{"href": "/days/2031-05-14"}).Properties.(map[string]any); !ok || day["trends"] == nil {

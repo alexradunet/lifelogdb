@@ -33,7 +33,6 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		"month":                     map[string]any{"month": "", "today": "", "days": []monthDay{}},
 		"week":                      map[string]any{"week": "", "from": "", "through": "", "today": "", "days": []monthDay{}, "metrics": []weekMetric{}},
 		"year":                      map[string]any{"year": "", "today": "", "written": 0, "readings": 0, "months": []yearMonth{}},
-		"titles":                    map[string]any{"prefix": "", "limit": 0, "titles": []core.TitleMatch{}},
 		"page, person, place, file": core.Page{},
 		"measurement":               core.Measurement{},
 		"series": map[string]any{"metric": "", "from": "", "to": "", "readings": []core.Reading{}, "categories": []string{}, "all_history": false,
@@ -85,7 +84,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		{"measurement", ids["measurement"]}, {"series", "/metrics/Weight"}, {"metrics", "/metrics"},
 		{"browse", "/browse?in=A+note"}, {"browse", "/browse?kind=person"}, {"browse", "/browse?kind=media"}, {"browse", "/browse?ghosts=1"},
 		{"integrity", "/integrity"},
-		{"month", "/months/2031-05"}, {"week", "/weeks/2031-W18"}, {"year", "/years/2031"}, {"titles", "/titles?prefix=s"},
+		{"month", "/months/2031-05"}, {"week", "/weeks/2031-W18"}, {"year", "/years/2031"},
 	}
 	named := func(section, key string) bool { // a list is documented as "name[]"
 		return documented[section][key] || documented[section][key+"[]"]

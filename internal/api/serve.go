@@ -91,7 +91,6 @@ func newServer(s *core.Store) *server {
 			http.Redirect(w, r, toBrowse(path, r.URL.Query()), http.StatusPermanentRedirect)
 		})
 	}
-	m.HandleFunc("GET /titles", h.serve(h.titles))
 	m.HandleFunc("POST /render", h.render)
 	m.HandleFunc("GET /assets/fonts/{file}", fonts)
 	m.HandleFunc("GET /styleguide", h.styleguide)

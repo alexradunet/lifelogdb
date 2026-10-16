@@ -22,6 +22,9 @@ and this page disagree, so a property here is a property on the wire.
 - **Writes answer with the resource they changed** (200, with `Location`), and `result` says what the write did. A
   browser form is answered 303 to that resource instead, or to the page its field `back` names when that is a path
   on this server.
+- **Preview:** `POST /render` with the field `body` (or `text`) answers a page that shows the body as its page shows
+  it once saved; it writes nothing, answers `text/html` only and is not a catalog action: it is the browser's Preview,
+  a second button of a form that writes a body, which opens it in a new tab.
 
 ## The entity
 
@@ -201,7 +204,7 @@ With no `q`, the answer has the action `search` and no properties: a browser dra
 | property | type | meaning |
 |---|---|---|
 | `q` | string | the query |
-| `titles[]` | list | the live pages whose name key starts with the title key of `q`, at most 8, in key order: the rows of `GET /titles` |
+| `titles[]` | list | the live pages whose name key starts with the title key of `q` (as [titles and wikilinks](docs/contract/titles-and-wikilinks.md) folds a title), at most 8, in key order |
 | `titles[].name` | string | the name that starts with `q`: the page's title or one of its aliases |
 | `titles[].title` | string | the page's preferred title |
 | `titles[].page_id` | integer | the page |
@@ -212,25 +215,6 @@ With no `q`, the answer has the action `search` and no properties: a browser dra
 | `hits[].snippet` | string | the matching text, matches in `⟦`…`⟧` (U+27E6, U+27E7: never brackets, which a body's text uses) |
 | `limit` | integer | the page size used |
 | `offset` | integer | the rows skipped |
-
-### titles
-
-`GET /titles?prefix=&limit=`: the names of live pages whose name key starts with the title key of `prefix` (as
-[titles and wikilinks](docs/contract/titles-and-wikilinks.md) folds a title), in key order: what an editor suggests
-after `[[`. `limit` is 1–20, default 10; an empty prefix is 422. Embedded: an `item` link to the page of each name,
-class its type. `POST /render` with the field `body` (or `text`) answers a page that shows the body as its page
-shows it once saved; it writes nothing, answers `text/html` only and is not a catalog action: it is the browser's
-Preview, a second button of a form that writes a body, which opens it in a new tab.
-
-| property | type | meaning |
-|---|---|---|
-| `prefix` | string | the prefix, as sent |
-| `limit` | integer | at most this many names |
-| `titles[]` | list | the names, in key order |
-| `titles[].name` | string | the name that starts with the prefix: the page's title or one of its aliases |
-| `titles[].title` | string | the page's preferred title |
-| `titles[].page_id` | integer | the page |
-| `titles[].entity_type` | string | its type: `page`, `person`, `place`, `file`, … |
 
 ### day
 
