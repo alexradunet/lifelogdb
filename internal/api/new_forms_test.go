@@ -77,9 +77,13 @@ func TestALinkOpensAFormAndFillsItsFields(t *testing.T) {
 	if !strings.Contains(tools, `<form method="POST" action="/pages"`) || !strings.Contains(tools, `<form method="GET" action="/pages"`) {
 		t.Errorf("Home's header lacks New page or Open a page:\n%s", tools)
 	}
-	for _, gone := range []string{`<details id="new">`, `<form method="POST" action="/people"`, `<form method="POST" action="/files"`} {
-		if strings.Contains(home, gone) {
-			t.Errorf("Home still draws %s", gone)
+	if strings.Contains(home, `<details id="new">`) {
+		t.Error(`Home still draws <details id="new">`)
+	}
+	// No form on Home makes a person or keeps a file, whatever the order of the attributes of its tag.
+	for _, tag := range regexp.MustCompile(`<form\b[^>]*>`).FindAllString(home, -1) {
+		if m := regexp.MustCompile(`\saction="([^"]*)"`).FindStringSubmatch(tag); m != nil && (m[1] == "/people" || m[1] == "/files") {
+			t.Errorf("Home still draws the form %s", tag)
 		}
 	}
 }
