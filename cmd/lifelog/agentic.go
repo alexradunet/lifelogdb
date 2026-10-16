@@ -22,21 +22,22 @@ func agenticInit(e env) error {
 		return err
 	}
 	dir := filepath.Dir(exe)
+	out := &errWriter{w: e.stdout}
 	res, err := agentic.Init(agentic.Paths{Dir: dir, Exe: exe, DB: dbPath}, e.o.force)
 	for _, r := range res {
-		fmt.Fprintf(e.stdout, "%-9s %s\n", r.State, filepath.Join(dir, filepath.FromSlash(r.Path)))
+		fmt.Fprintf(out, "%-9s %s\n", r.State, filepath.Join(dir, filepath.FromSlash(r.Path)))
 	}
 	if err != nil {
 		return err
 	}
 	for _, r := range res {
 		if r.State == agentic.Kept {
-			fmt.Fprintln(e.stdout, "a kept file has another text; lifelog agentic-init --force replaces it")
+			fmt.Fprintln(out, "a kept file has another text; lifelog agentic-init --force replaces it")
 			break
 		}
 	}
 	if _, err := os.Stat(dbPath); err != nil {
-		fmt.Fprintf(e.stdout, "no life.db yet: lifelog init %s makes it\n", dbPath)
+		fmt.Fprintf(out, "no life.db yet: lifelog init %s makes it\n", dbPath)
 	}
-	return nil
+	return out.err
 }

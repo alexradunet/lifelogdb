@@ -88,8 +88,8 @@ var commands = []command{
 			if err := db.Init(ctx, path); err != nil {
 				return err
 			}
-			fmt.Fprintln(e.stdout, "created", path)
-			return nil
+			_, err = fmt.Fprintln(e.stdout, "created", path)
+			return err
 		}},
 	{name: "agentic-init", setup: true, flags: []string{"--force"},
 		usage: "  lifelog agentic-init [--force]      make this program's folder ready for a coding agent: AGENTS.md, CLAUDE.md,\n" +

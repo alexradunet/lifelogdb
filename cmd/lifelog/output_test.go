@@ -2,6 +2,10 @@ package main
 
 import (
 	"bytes"
+	"errors"
+	"io"
+	"math"
+	"path/filepath"
 	"testing"
 
 	"lifelog/internal/api"
@@ -45,10 +49,54 @@ title: Lakeside
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var b bytes.Buffer
-			human(&b, tc.e)
+			if err := human(&b, tc.e); err != nil {
+				t.Fatal(err)
+			}
 			if b.String() != tc.want {
 				t.Errorf("human:\n%s\nwant:\n%s", b.String(), tc.want)
 			}
 		})
+	}
+}
+
+// errFull is the error of failWriter.
+var errFull = errors.New("synthetic: the disk is full")
+
+// failWriter is a stdout that refuses every write, as a full disk or a closed pipe does.
+type failWriter struct{}
+
+func (failWriter) Write([]byte) (int, error) { return 0, errFull }
+
+// TestACommandReportsAFailedWriteOfItsOutput: when the stdout of a command refuses a write, the command returns that
+// error, so main writes it and exits 1, and the output is not lost in silence. The first line makes the life.db that
+// the other lines read: init writes the file, then its line.
+func TestACommandReportsAFailedWriteOfItsOutput(t *testing.T) {
+	live := filepath.Join(t.TempDir(), "life.db")
+	for _, argv := range [][]string{
+		{"init", live},
+		{"agentic-init"},
+		{"actions", "--db", live},
+		{"actions", "--db", live, "--human"},
+		{"day", "2031-04-11", "--db", live},
+		{"day", "2031-04-11", "--db", live, "--human"},
+	} {
+		e, _, _ := testEnv(t)
+		e.stdout = failWriter{}
+		if err := runArgs(t.Context(), e, argv); !errors.Is(err, errFull) {
+			t.Errorf("%v: %v, want the error of the write", argv, err)
+		}
+	}
+}
+
+// TestHumanReportsAValueThatJSONCannotWrite: --human writes a result and a property that is not a text as JSON; a value
+// that JSON cannot write is an error, not an empty line.
+func TestHumanReportsAValueThatJSONCannotWrite(t *testing.T) {
+	for _, e := range []*api.Entity{
+		{Title: "a result", Result: math.NaN()},
+		{Title: "a property", Properties: map[string]any{"value": math.Inf(1)}},
+	} {
+		if err := human(io.Discard, e); err == nil {
+			t.Errorf("%s: no error", e.Title)
+		}
 	}
 }
