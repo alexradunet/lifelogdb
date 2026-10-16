@@ -91,7 +91,7 @@ func (v *view) NewKinds() []struct{ Title, Href, Icon string } { return newKinds
 // the page's path, else the one with the longest path the page is under. Today's day is Today, not Calendar.
 func (v *view) Nav() []navItem {
 	path := v.Path
-	if v.Shell != nil && v.Shell.Today != "" && path == dayHref(v.Shell.Today) {
+	if today := v.Today(); today != "" && path == dayHref(today) {
 		path = "/days/today"
 	}
 	out := make([]navItem, len(navItems))
@@ -108,6 +108,17 @@ func (v *view) Nav() []navItem {
 		out[best].Current = true
 	}
 	return out
+}
+
+// InMore reports a page that is one of the owner's links at the foot of More: the button More is then marked, as
+// the place that holds the page.
+func (v *view) InMore() bool {
+	for _, it := range v.Nav() {
+		if it.Current && it.Group == "owner" {
+			return true
+		}
+	}
+	return false
 }
 
 // navMatch is how well a path an item stands for fits the request path: 2 when it is the path, 1 when the path is

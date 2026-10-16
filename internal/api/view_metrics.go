@@ -147,10 +147,10 @@ func newest(cards []metricCard) string {
 	return day
 }
 
-// MetricSections are the groups of /metrics as sections of cards, in the order of the groups.
+// MetricSections are the groups of /metrics as sections of cards, in the order of the groups. The words of a day
+// and whether a card is stale are said against the today of the view's clock.
 func (v *view) MetricSections() []metricSection {
 	props, _ := v.Props.(map[string]any)
-	today, _ := props["today"].(string)
 	groups, _ := props["groups"].([]any)
 	rows := map[string]map[string]any{}
 	if ms, _ := props["metrics"].([]any); ms != nil {
@@ -160,8 +160,8 @@ func (v *view) MetricSections() []metricSection {
 			}
 		}
 	}
-	c := clock{today: today}
-	limit, _ := core.ParseDay(today)
+	c := v.clock()
+	limit, _ := core.ParseDay(c.today)
 	limit = limit.AddDate(0, 0, -inUseDays)
 	card := func(x any) metricCard {
 		g, _ := x.(map[string]any)
@@ -183,7 +183,7 @@ func (v *view) MetricSections() []metricSection {
 			if t, ok := core.ParseDay(day); ok && !limit.IsZero() && t.Before(limit) {
 				k.Stale = true
 			}
-			k.Line = sparkLine(name, unit, today, recent)
+			k.Line = sparkLine(c, name, unit, recent)
 		}
 		return k
 	}

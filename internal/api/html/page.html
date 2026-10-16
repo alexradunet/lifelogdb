@@ -10,7 +10,7 @@
 <header class="page-head"><div class="what">
 <span class="kind">{{if $p.is_day_page}}day page{{else}}{{$p.entity_type}}{{end}}{{if $p.deleted_at}}, deleted{{end}}</span>
 <h1>{{if $p.is_day_page}}{{$.Date .Title}}{{else}}{{.Title}}{{end}}</h1>
-{{if not $p.deleted_at}}{{template "categories" (dict "v" $ "links" $p.links "back" $.Here)}}{{end}}
+{{if not $p.deleted_at}}{{template "categories" (dict "v" $ "back" $.Here)}}{{end}}
 {{if $p.is_day_page}}<p class="sub"><a href="{{.Link "day"}}">{{weekday $p.day}}: the day view</a></p>{{end}}
 </div></header>
 
@@ -42,9 +42,9 @@
 </dl></section>
 
 {{with $p.links}}<section class="group" aria-label="Links"><h2>Links</h2>{{template "typed-links" (dict "v" $ "links" .)}}</section>{{end}}
-{{$groups := group $p.backlinks "kind"}}{{$any := false}}{{range $groups}}{{if ne .Key "part-of"}}{{$any = true}}{{end}}{{end}}
-{{if $any}}<section class="group" aria-label="Backlinks"><h2>Backlinks</h2>{{range $groups}}{{if ne .Key "part-of"}}<p class="sub">{{if eq .Key "wikilink"}}mentioned in{{else}}{{.Key}}{{end}}</p>
-<ul class="plain">{{range .Items}}<li><a href="/pages/{{num .id}}">{{$.Date .title}}</a>{{if ne .entity_type "page"}} <span class="badge">{{.entity_type}}</span>{{end}}</li>{{end}}</ul>{{end}}{{end}}</section>{{end}}
+{{$groups := .Backlinks}}
+{{if $groups}}<section class="group" aria-label="Backlinks"><h2>Backlinks</h2>{{range $groups}}<p class="sub">{{if eq .Key "wikilink"}}mentioned in{{else}}{{.Key}}{{end}}</p>
+<ul class="plain">{{range .Items}}<li><a href="/pages/{{num .id}}">{{$.Date .title}}</a>{{if ne .entity_type "page"}} <span class="badge">{{.entity_type}}</span>{{end}}</li>{{end}}</ul>{{end}}</section>{{end}}
 
 {{if or (.Action "rename") (.Action "promote") (.Action "link") (.Action "set-picture") (.Action "tombstone")}}<section class="group" aria-label="More"><h2>More</h2><div class="actions">
 {{template "boxed" (form (.Action "set-picture") "more" "preview")}}

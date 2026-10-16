@@ -24,7 +24,7 @@
      kinds the same way, each made on its list (docs/plans/114-one-way-to-do-a-thing.md). The access keys (k the
      search, n New, t Today, c the capture, [ and ] the previous and next page) are the browser's own, with its
      modifier. */}}
-{{define "rail"}}{{$nav := .Nav}}{{$elsewhere := false}}{{range $nav}}{{if and .Current (eq .Group "owner")}}{{$elsewhere = true}}{{end}}{{end}}<aside class="rail">
+{{define "rail"}}{{$nav := .Nav}}<aside class="rail">
 <div class="rail-head">{{range $nav}}{{if eq .Group "home"}}<a class="brand" href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}>{{.Title}}</a>{{end}}{{end}}{{with .Today}}<span class="date">{{shortDay .}}</span>{{end}}
 <button type="button" class="rail-search-link button" commandfor="palette" command="show-modal" aria-label="Search">{{icon "search"}}</button></div>
 <search><form class="rail-search" method="GET" action="/search">{{icon "search"}}<input type="search" name="q" placeholder="Search" aria-label="Search" accesskey="k"><kbd title="The access key k, with the browser's modifier, is the search">k</kbd></form></search>
@@ -33,7 +33,7 @@
 <nav aria-label="New"><ul>{{range .NewKinds}}<li><a href="{{.Href}}">{{icon .Icon}}{{.Title}}</a></li>{{end}}</ul></nav></div>
 <nav aria-label="Sections">
 <ul>{{range $nav}}{{if eq .Group "day"}}<li>{{template "navlink" .}}</li>{{end}}{{end}}
-<li class="rail-more-link"><button type="button" popovertarget="sections"{{if $elsewhere}} class="here"{{end}}>{{icon "more"}}More</button></li></ul>
+<li class="rail-more-link"><button type="button" popovertarget="sections"{{if .InMore}} class="here"{{end}}>{{icon "more"}}More</button></li></ul>
 </nav>
 <div class="rail-more" id="sections" popover>
 <div class="rail-more-head"><span class="label">More</span><button type="button" class="button small" popovertarget="sections" popovertargetaction="hide">Close</button></div>
@@ -125,12 +125,12 @@
 
 {{/* categories are the categories of a page or a metric as badges (docs/plans/114-one-way-to-do-a-thing.md): each
      with x, which removes that part-of link (unlink), and + Add, which puts the page in a category (file-pages with
-     this page's id; a new name makes a new category). It takes v (the view), links (the page's links) and back. */}}
+     this page's id; a new name makes a new category). It takes v (the view) and back. */}}
 {{define "categories"}}{{$v := .v}}{{$back := .back}}{{$file := $v.Action "file-pages"}}{{$unlink := $v.Action "unlink"}}
-{{$has := false}}{{range .links}}{{if eq .kind "part-of"}}{{$has = true}}{{end}}{{end}}
-{{if or $file $has}}<div class="categories" role="group" aria-label="Categories"><span class="label">Categories</span>
-{{range .links}}{{if eq .kind "part-of"}}{{$t := .title}}<span class="badge category"><a href="/pages/{{num .id}}">{{$t}}</a>{{with $unlink}}<form class="tiny" method="POST" action="{{.Href}}"><input type="hidden" name="back" value="{{$back}}"><input type="hidden" name="to" value="{{$t}}"><input type="hidden" name="kind" value="part-of"><button class="remove" aria-label="Remove from {{$t}}">×</button></form>{{end}}</span>{{end}}{{end}}
-{{if not $has}}<span class="meta">none</span>{{end}}
+{{$cats := $v.Categories}}
+{{if or $file $cats}}<div class="categories" role="group" aria-label="Categories"><span class="label">Categories</span>
+{{range $cats}}{{$t := .title}}<span class="badge category"><a href="/pages/{{num .id}}">{{$t}}</a>{{with $unlink}}<form class="tiny" method="POST" action="{{.Href}}"><input type="hidden" name="back" value="{{$back}}"><input type="hidden" name="to" value="{{$t}}"><input type="hidden" name="kind" value="part-of"><button class="remove" aria-label="Remove from {{$t}}">×</button></form>{{end}}</span>{{end}}
+{{if not $cats}}<span class="meta">none</span>{{end}}
 {{with $file}}<details class="add-category"{{if or (and $v.Refused (eq $v.Refused.Href .Href)) (eq ($v.Asked "new") .Name)}} open{{end}}><summary class="button small">+ Add</summary>
 <form class="inline" method="POST" action="{{.Href}}"><input type="hidden" name="back" value="{{$back}}">{{range .Fields}}{{if eq .Name "ids" "move"}}<input type="hidden" name="{{.Name}}" value="{{num .Value}}">{{end}}{{end}}
 <label><span>Category</span><input type="text" name="category" required list="category-choices" placeholder="Bloodwork, Sport, Financial"></label>

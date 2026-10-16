@@ -35,7 +35,7 @@ func TestALineDrawsOnlyTheReadingsWithADayAndANumber(t *testing.T) {
 			t.Errorf("%s first: the trend line is\n%s\nwant\n%s", name, got, want)
 		}
 
-		got = string(sparkLine("weight", "kg", "2026-10-16", readings))
+		got = string(sparkLine(c, "weight", "kg", readings))
 		if want := `<svg class="trend" viewBox="0 0 120 28" role="img" aria-label="weight: 2 readings, from 70 kg 2 days ago · Wed 14 Oct to 80 kg today"><polyline points="4.0,24.0 116.0,4.0 "/><circle cx="116.0" cy="4.0" r="2.5"/></svg>`; got != want {
 			t.Errorf("%s first: the spark line is\n%s\nwant\n%s", name, got, want)
 		}
@@ -48,7 +48,7 @@ func TestALineDrawsOnlyTheReadingsWithADayAndANumber(t *testing.T) {
 	if got := trendLine(c, "weight", "kg", "2026-10-16", none); got != "" {
 		t.Errorf("a trend line with no reading to draw is drawn:\n%s", got)
 	}
-	if got := sparkLine("weight", "kg", "2026-10-16", none); got != "" {
+	if got := sparkLine(c, "weight", "kg", none); got != "" {
 		t.Errorf("a spark line with no reading to draw is drawn:\n%s", got)
 	}
 }

@@ -125,6 +125,19 @@ func calItem(item any) calWords {
 	return calWords{Tag: "page"}
 }
 
+// AgendaDays are the days of the month that have an item, in order: Day by day lists them under the calendar.
+func (v *view) AgendaDays() []any {
+	props, _ := v.Props.(map[string]any)
+	var out []any
+	for _, d := range anyList(props["days"]) {
+		m, _ := d.(map[string]any)
+		if len(anyList(m["items"])) > 0 {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
 // upTo is the first n items of a list: a cell shows three items, and a phone's cell four squares.
 func upTo(list any, n int) []any {
 	items := anyList(list)

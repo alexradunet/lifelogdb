@@ -296,6 +296,31 @@ func (v *view) Filed() *filedHere {
 	return &f
 }
 
+// Categories are the categories of a page or a metric: the part-of links of its links, in their order.
+func (v *view) Categories() []any {
+	props, _ := v.Props.(map[string]any)
+	var out []any
+	for _, l := range anyList(props["links"]) {
+		if m, _ := l.(map[string]any); m["kind"] == "part-of" {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+// Backlinks are the backlinks of a page by kind, in the order of their first appearance, without part-of: Filed
+// here lists those.
+func (v *view) Backlinks() []bucket {
+	props, _ := v.Props.(map[string]any)
+	var out []bucket
+	for _, b := range group(props["backlinks"], "kind") {
+		if b.Key != "part-of" {
+			out = append(out, b)
+		}
+	}
+	return out
+}
+
 // dayParts are the rows of a day's view (cookbook/day-view.md) by the part of the day's page that draws them, each
 // in the order of the view. Journal is the body of the day page: one body when the day has a live day page (also an
 // empty body), none when it has no day page. A row of a reading is in no part: the margin draws the readings from

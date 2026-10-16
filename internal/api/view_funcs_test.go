@@ -341,3 +341,97 @@ func TestDayPartsSplitTheViewByPart(t *testing.T) {
 		}
 	}
 }
+
+// TestAgendaDaysAreTheDaysWithAnItem: Day by day lists the days of the month that have an item, in their order; a
+// day with an empty list of items, or with none, is not listed.
+func TestAgendaDaysAreTheDaysWithAnItem(t *testing.T) {
+	item := map[string]any{"kind": "page", "title": "Notes"}
+	d1 := map[string]any{"day": "2026-10-01", "items": []any{item}}
+	d2 := map[string]any{"day": "2026-10-02", "items": []any{}}
+	d3 := map[string]any{"day": "2026-10-03"}
+	d4 := map[string]any{"day": "2026-10-04", "items": []any{item, item}}
+	for _, c := range []struct {
+		name  string
+		props any
+		want  []any
+	}{
+		{"no properties", nil, nil},
+		{"no days", map[string]any{}, nil},
+		{"no day with an item", map[string]any{"days": []any{d2, d3}}, nil},
+		{"two days with items", map[string]any{"days": []any{d1, d2, d3, d4}}, []any{d1, d4}},
+		{"a day that is not an object", map[string]any{"days": []any{"x", d4}}, []any{d4}},
+	} {
+		if got := (&view{Props: c.props}).AgendaDays(); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// TestCategoriesAreThePartOfLinks: the categories of a page or a metric are its part-of links, in their order; a link
+// of another kind is not a category.
+func TestCategoriesAreThePartOfLinks(t *testing.T) {
+	health := map[string]any{"kind": "part-of", "title": "Health"}
+	sport := map[string]any{"kind": "part-of", "title": "Sport"}
+	lisbon := map[string]any{"kind": "at", "title": "Lisbon"}
+	for _, c := range []struct {
+		name  string
+		props any
+		want  []any
+	}{
+		{"no properties", nil, nil},
+		{"no links", map[string]any{"links": []any{}}, nil},
+		{"no part-of link", map[string]any{"links": []any{lisbon}}, nil},
+		{"two categories", map[string]any{"links": []any{health, lisbon, sport}}, []any{health, sport}},
+	} {
+		if got := (&view{Props: c.props}).Categories(); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// TestBacklinksLeaveOutPartOf: the backlinks of a page are grouped by kind, in the order of their first appearance,
+// and the part-of links are not among them: Filed here lists those.
+func TestBacklinksLeaveOutPartOf(t *testing.T) {
+	link := func(kind, title string) any { return map[string]any{"kind": kind, "title": title} }
+	a, b, c, d := link("wikilink", "A"), link("part-of", "B"), link("at", "C"), link("wikilink", "D")
+	for _, tc := range []struct {
+		name  string
+		props any
+		want  []bucket
+	}{
+		{"no properties", nil, nil},
+		{"only part-of", map[string]any{"backlinks": []any{b}}, nil},
+		{"every kind", map[string]any{"backlinks": []any{a, b, c, d}}, []bucket{{"wikilink", []any{a, d}}, {"at", []any{c}}}},
+	} {
+		if got := (&view{Props: tc.props}).Backlinks(); !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("%s: %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+// TestMoreIsMarkedOnAPageOfTheOwner: More is marked on a page of the owner's links at its foot, and on no other page.
+// Today's day page marks Today, by the today of the view's words.
+func TestMoreIsMarkedOnAPageOfTheOwner(t *testing.T) {
+	shell := &shellView{Today: "2026-10-16", Zone: time.UTC}
+	for path, want := range map[string]bool{
+		"/integrity": true, "/actions": true, "/": false, "/days/2026-10-16": false, "/metrics": false, "/pages/7": false,
+	} {
+		if got := (&view{Path: path, Shell: shell}).InMore(); got != want {
+			t.Errorf("InMore on %s = %v, want %v", path, got, want)
+		}
+	}
+	for _, c := range []struct {
+		shell *shellView
+		want  string
+	}{{shell, "/days/today"}, {nil, "/months/current"}, {&shellView{Today: "2026-10-15"}, "/months/current"}} {
+		var got string
+		for _, it := range (&view{Path: "/days/2026-10-16", Shell: c.shell}).Nav() {
+			if it.Current {
+				got = it.Href
+			}
+		}
+		if got != c.want {
+			t.Errorf("the shell %+v marks %q on /days/2026-10-16, want %q", c.shell, got, c.want)
+		}
+	}
+}

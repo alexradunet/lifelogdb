@@ -104,13 +104,13 @@ func trendLine(c clock, metric, unit, day string, points []any) template.HTML {
 
 // sparkLine draws a metric's recent readings as a small line: each point placed by its day between the first
 // reading and the last, so a marker read twice a year is drawn as it was read. Its label says how many readings,
-// and the first and the last value in words, against today.
-func sparkLine(metric, unit, today string, points []any) template.HTML {
+// and the first and the last value in words, with their days against today on the clock c.
+func sparkLine(c clock, metric, unit string, points []any) template.HTML {
 	rs := lineReadings(points)
 	if len(rs) == 0 {
 		return ""
 	}
-	c, first := clock{today: today}, rs[0]
+	first := rs[0]
 	label := fmt.Sprintf("%s: %d readings, from %s to %s", metric, len(rs), readingWords(c, first, unit), readingWords(c, rs[len(rs)-1], unit))
 	if len(rs) == 1 {
 		label = metric + ": one reading, " + readingWords(c, first, unit)

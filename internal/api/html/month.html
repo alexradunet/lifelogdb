@@ -22,14 +22,14 @@
 {{- if or .mood .readings}}<span class="meta">{{with .mood}}{{template "moodwords" .}}{{end}}{{if and .mood .readings}} · {{end}}{{with .readings}}{{count . "reading" "readings"}}{{end}}</span>{{end}}</a></td>{{else}}<td></td>{{end}}{{end}}</tr>
 {{end}}</tbody></table></div>
 
-{{$any := false}}{{range $m.days}}{{if .items}}{{$any = true}}{{end}}{{end}}
+{{$agenda := .AgendaDays}}
 <div class="sheet">
 <section class="agenda" aria-label="Day by day">
 <div class="panel-head"><h2>Day by day</h2></div>
-{{if $any}}{{range $m.days}}{{if .items}}{{$d := .}}<section class="agenda-day" aria-label="{{$.Date .day}}"><h3><a href="/days/{{.day}}">{{$.Date .day}}</a></h3>
+{{range $agenda}}{{$d := .}}<section class="agenda-day" aria-label="{{$.Date .day}}"><h3><a href="/days/{{.day}}">{{$.Date .day}}</a></h3>
 <ul class="plain">{{range .items}}{{$w := calItem .}}<li><span class="tag">{{$w.Tag}}</span> <a href="{{.href}}">{{.title}}</a>{{with $w.Note}} <small class="agenda-note">{{.}}</small>{{end}}</li>{{end}}
 {{- with $d.more_pages}}<li><a href="/days/{{$d.day}}">and {{count . "more page" "more pages"}}</a></li>{{end}}</ul></section>
-{{end}}{{end}}{{else}}<p class="empty">No page, place or birthday has a day in {{.Title}}.</p>{{end}}
+{{else}}<p class="empty">No page, place or birthday has a day in {{.Title}}.</p>{{end}}
 </section>
 </div>
 
