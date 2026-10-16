@@ -10,7 +10,7 @@ a temporary folder and discards them.
 go test ./tests                                  # every suite and every mutant
 go test -short ./tests                           # the suites without the mutants
 go test ./tests -run 'TestSuites/pages' -v       # one suite, with its count of expectations
-go test ./tests -run 'TestMutants/.*habits' -v   # the mutants of one suite
+go test ./tests -run 'TestMutants/.*facts' -v    # the mutants of one suite
 LIFELOG_MERMAID=1 go test ./tests -run TestMermaidRender   # + render every mermaid diagram (needs mmdc + a Chromium)
 ```
 
@@ -31,10 +31,10 @@ the document (a broken block makes a later step impossible) reports that as one 
 | file | suite | subject |
 |---|---|---|
 | `dates_test.go` | `dates` | instants, local days, the round-trip CHECKs and why `IS`, the zone (lifelog_meta.instants and .days, D10) |
-| `schema_safeguards_test.go`, `schema_bounds_test.go` | `schema-safeguards` | NUL-free constrained text; the bounds of import keys, person names, units, notes and task labels, with the empty-key incident; a tombstone never precedes creation; `entities.body` last; the atomic Mood seed; no `OR IGNORE`/`OR REPLACE` in a trigger; immutable typed-detail/habit identities and entity creation evidence; rowid-alias atomicity; Unicode search distinctions; cleanup excludes retained capture references |
+| `schema_safeguards_test.go`, `schema_bounds_test.go` | `schema-safeguards` | NUL-free constrained text; the bounds of import keys, person names, units and notes, with the empty-key incident; a tombstone never precedes creation; `entities.body` last; the atomic Mood seed; no `OR IGNORE`/`OR REPLACE` in a trigger; immutable typed-detail identities and entity creation evidence; rowid-alias atomicity; Unicode search distinctions; cleanup excludes retained capture references |
 | `schema_adversarial_test.go` | `schema-adversarial` | Skipped duplicate validation limits; statement ABORT versus caller transaction rollback |
 | `graph_model_test.go` | `graph-model`, `FuzzGraphTransitions` | Independent directed graph model, NULL/empty notes, self-links, retry/edit/delete sequences, which endpoints a change advances (the page a link leaves, none for a wikilink's insert or delete), savepoint and transaction rollback, typed batch refusal and read-only reopen |
-| `temporal_model_test.go` | `temporal-model` | Recursive lifecycle reads, independent correction-chain cutoff model, bounded calendar/deadline model with persisted overrides, tombstones, recurrence ends and extreme years |
+| `temporal_model_test.go` | `temporal-model` | Recursive category reads (cookbook/metrics-by-category) across tombstones, revivals, an alternate path and a cycle; an independent correction-chain model at clock cutoffs (cookbook/metric-series) |
 | `storage_resilience_test.go` | `storage-resilience` | FTS term-position equality across trigger reordering, rejected edits, rollback, reopen and rebuild; WAL reader body/index snapshot isolation and checkpoint release |
 | `connection_fixture_test.go` | `TestSchemaFixtureUsesLiteralFilename` | Literal URI-sensitive filenames in isolated schema fixtures and read-only reopen |
 | `identity_fixture_test.go` | `TestCanonicalIdentityFixtureOwnershipAndRollback` | The canonical identity fixture: a named entity owns its name, and a refused insert rolls the whole identity back |
@@ -50,7 +50,7 @@ the document (a broken block makes a later step impossible) reports that as one 
 | `facts_test.go` | `facts`, `measurement-query-plan` | metrics and measurements: append-only, supersede, retract, finite values, never `OR IGNORE`/`OR REPLACE` (D7); categories as pages and cookbook/metrics-by-category (D26); the independent query-plan suite retains the 20,000-reading index-use and count probe plus retained-reference access paths and the day and backlink lookups (`entities_day`, `links_to`) |
 | `journal_test.go` | `journal` | `entities.is_journal`, the one stored definition of a journal day page, with its SQLite premises (a CHECK and a trigger's NEW/OLD read a generated column); the day page and capture (cookbook/capture), the cookbook/day-view day view (a page is "(edited)" by its revision, not by comparing clocks), the days that name someone (cookbook/days-that-name), where I was (cookbook/where-was-i), observed habits and birthdays kept distinct from explicit planning (D5, D15, D16, D22, D23) |
 | `writers_test.go` | `writers` | the `BEGIN IMMEDIATE` race with real concurrent connections, pragmas, read-only readers and their `trusted_schema=OFF`, a hardened connection (contract/connections) |
-| `integrity_test.go`, `semantic_integrity_test.go` | `integrity`, `physical-integrity` | semantic ownership, correction cycles, habit validity, journal names, FK and FTS damage on small files; an independent fixture of 3,000 synthetic pages for zeroed pages, truncation, live-index damage and changed body bytes |
+| `integrity_test.go`, `semantic_integrity_test.go` | `integrity`, `physical-integrity` | semantic ownership, correction cycles, journal names, FK and FTS damage on small files; an independent fixture of 3,000 synthetic pages for zeroed pages, truncation, live-index damage and changed body bytes |
 | `imports_test.go` | `imports` | the import block of contract/imports on 1 000 CSV rows, and its traps |
 | `snapshots_test.go` | `snapshots` | cookbook/take-a-snapshot on a live file: `VACUUM INTO` through a read-only connection while the writer writes, its target, the restore check left byte for byte, the restore and the old `-wal` beside it (D25) |
 | `evolution_test.go`, `evolution_compatibility_test.go` | `evolution` | named CHECKs, widening, partial dates, the tokenizer switch, reader compatibility, comments inside statements (D13, D17, architecture/non-goals) |
@@ -70,16 +70,14 @@ The wikilink suites read them from the page (with the boundary cases the line un
 writer's extraction (`internal/text`) and its save (`internal/core`); `internal/text` has its own tests against the
 same table. Every save path here runs against the DDL under test, so a mutant of `schema.sql` reaches it.
 Boundary probes roll back every case, including unexpected success under a mutant.
-Run a bounded campaign explicitly with
-`go test ./internal/core -run '^$' -fuzz '^FuzzTaskCalendarWindow$' -fuzztime=20s -parallel=2`.
 
 The graph model runs three deterministic 160-operation sequences in the baseline. Its separate fuzz target accepts
 minimizable byte-encoded operations, caps each input at 64 transitions, and creates a fresh hardened file for every
 input. Seeds run normally; a campaign is explicit:
 `go test ./tests -run '^$' -fuzz '^FuzzGraphTransitions$' -fuzztime=30s -parallel=2`.
-The temporal model compares 40 correction chains at 17 clock cutoffs with independent insertion-order histories,
-and deadline results with an anchor-generated calendar oracle. These bounded models supplement the contract's literal
-vectors and rule mutants; agreement does not prove every possible input or SQLite version correct.
+The temporal model compares 40 correction chains at 17 clock cutoffs with independent insertion-order histories.
+These bounded models supplement the contract's literal vectors and rule mutants; agreement does not prove every
+possible input or SQLite version correct.
 
 **Fixture ownership.** Semantic fact and integrity mutants run their small behavior fixtures; the baseline
 `measurement-query-plan` and `physical-integrity` suites own the large query-plan and byte-corruption fixtures.
@@ -149,7 +147,7 @@ correctness, not lifetime storage capacity. Do not run large preview profiles wi
 The report includes Go/SQLite/driver/revision, OS/architecture/CPU, operator-supplied storage details, writer
 pragmas, Go allocation deltas, raw timing samples and database/WAL/SHM/copy sizes. Fixture construction is timed
 separately from capture/save, day view, rare search, popular backlinks, historical metric series and keyed root
-replay. The latter measures `core.Record` retries, **not** workspace import throughput. Capture/save includes
+replay. The latter measures `core.Record` retries, **not** the throughput of an import. Capture/save includes
 commit; each sample performs a real new capture/edit. Queries are warm after fixture validation. Snapshot and
 copy/open restore each run once, regardless of `-samples`; restored contents and integrity are checked outside
 timing. Reopening a file is not a cold-disk benchmark, and Go allocation counts are not total process memory.

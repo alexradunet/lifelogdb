@@ -254,8 +254,8 @@ func (s *Store) dayEntries(ctx context.Context, cond, order string, limit int, a
 	return out, rows.Err()
 }
 
-// BlockMark is the markers at the start of a line that a plain-text view cuts: headings, quotes, list items, task
-// boxes. A marker is cut only when a space follows it, so the "#" of a tag and the "-" of a number stay.
+// BlockMark is the markers at the start of a line that a plain-text view cuts: headings, quotes, list items, check
+// boxes ([ ] and [x]). A marker is cut only when a space follows it, so the "#" of a tag and the "-" of a number stay.
 var BlockMark = regexp.MustCompile(`^(?:#{1,6}\s+|>\s*|[-*+]\s+)*(?:\[[ xX]\]\s+)?`)
 
 // firstLineRunes is how long a first line may be before it is cut.
@@ -366,7 +366,7 @@ func (s *Store) readings(ctx context.Context, where string, args ...any) ([]Read
 }
 
 // SnippetOpen and SnippetClose mark a match in a Hit's snippet. They are not brackets, because a body's own text
-// holds [[wikilinks]] and task boxes, and a mark must never be confused with the text.
+// holds [[wikilinks]] and check boxes, and a mark must never be confused with the text.
 const (
 	SnippetOpen  = "⟦"
 	SnippetClose = "⟧"

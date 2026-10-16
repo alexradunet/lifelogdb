@@ -638,8 +638,6 @@ func (c *C) measure(metric any, day string, value any, cols ...M) string {
 	return c.tryx("INSERT INTO measurements("+strings.Join(cs, ",")+",created_at) VALUES ("+marks+","+NOW+")", vals...)
 }
 
-// habit inserts a habit period (D24): 'OK' or 'ERR <message>'.
-
 // jpegBytes is a real JPEG (8×8, grey): a preview the DDL and the writer both accept.
 var jpegBytes = func() []byte {
 	var b bytes.Buffer

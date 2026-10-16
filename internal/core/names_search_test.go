@@ -164,7 +164,7 @@ func TestCanonicalSearchRankLimitAndStableTie(t *testing.T) {
 }
 
 // TestSearchSnippetKeepsTheBracketsOfTheText says the marks of a match cannot be confused with the text: a body's
-// [[wikilinks]] and task boxes keep their brackets, and only the matched word is marked.
+// [[wikilinks]] and check boxes keep their brackets, and only the matched word is marked.
 func TestSearchSnippetKeepsTheBracketsOfTheText(t *testing.T) {
 	s := fresh(t)
 	if _, _, err := s.CreatePage(ctx, "cli", "Plans", "Coffee with [[Ana]]; we planned the [[Garden project]]. - [x] seeds", ""); err != nil {

@@ -327,7 +327,8 @@ func (t *Tx) SaveBody(id int64, body, version string) (Sync, error) {
 	return t.SetBody(id, body)
 }
 
-// SetBody is SaveBody without the version check, for a writer that owns the body it sets (an import).
+// SetBody is SaveBody without the version check, for a write that has the body it sets: SaveBody after its check,
+// the note of a new metric on an empty body, and the picture mark of a page.
 func (t *Tx) SetBody(id int64, body string) (Sync, error) {
 	if _, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET body = ? WHERE id = ? AND body IS NOT ?`, body, id, body); err != nil {
 		return Sync{}, err
