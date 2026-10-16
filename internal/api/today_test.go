@@ -8,7 +8,7 @@ import (
 
 // TestTheDayCarriesItsTrends: for each metric with a current reading on the day, its unit and its current readings
 // in the 14 days through the day, oldest first (docs/plans/093-words-phone-and-today.md). A reading outside the
-// window, a corrected value and a retracted reading stay out of it, and so does a habit: its strip tells it.
+// window, a corrected value and a retracted reading stay out of it.
 func TestTheDayCarriesItsTrends(t *testing.T) {
 	c, h := freshOn(t, fixedToday)
 	root := must(c.Get(t.Context(), "/"))

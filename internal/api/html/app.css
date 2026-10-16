@@ -424,9 +424,9 @@ svg.trend{display:block; inline-size:100%; block-size:28px; margin-block-start:v
   & polyline{fill:none; stroke:currentColor; stroke-width:2; stroke-linejoin:round; stroke-linecap:round}
   & circle{fill:var(--accent-ink)}}
 
-/* The search dialog (docs/plans/108-the-browser-made-current.md; once the command list of plan 094): the one ornate
-   panel, parchment with a gold edge and gold corner brackets, the field on top and the keys under it. The top bar's
-   Search opens it by its command; Enter searches, Escape or a tap outside closes it. */
+/* The search dialog (docs/plans/108-the-browser-made-current.md): the one ornate panel, parchment with a gold edge
+   and gold corner brackets, the field on top and the keys under it. The top bar's Search opens it by its command;
+   Enter searches, Escape or a tap outside closes it. */
 dialog.palette{inline-size:min(36rem, calc(100vw - 2rem)); max-block-size:min(32rem, calc(100vh - 6rem)); margin:12vh auto auto; padding:0;
   border-color:var(--accent-ink); box-shadow:var(--parch-bevel),var(--shadow-float); overflow:hidden;
   &[open]{display:flex; flex-direction:column}

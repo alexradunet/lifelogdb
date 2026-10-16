@@ -52,7 +52,7 @@ func scalar(t *testing.T, s *core.Store, query string) string {
 	return v
 }
 
-// freshOn is fresh with the server's local day fixed: a test of what is due or overdue uses fixed dates.
+// freshOn is fresh with the server's local day fixed: a test of today, or of the words for a day, uses fixed dates.
 func freshOn(t *testing.T, day string) (*client.Client, http.Handler) {
 	t.Helper()
 	p := filepath.Join(t.TempDir(), "life.db")
@@ -102,9 +102,6 @@ func TestCatalogNamesAreUnique(t *testing.T) {
 			t.Errorf("MCP tool name %q is used by both actions %q and %q", tool, prev.Name, a.Name)
 		}
 		normalized[tool] = a
-		if strings.HasPrefix(a.Href, "/import") {
-			t.Errorf("the import process is removed (plan 089), but the catalog has %q at %s", a.Name, a.Href)
-		}
 	}
 	page := seen["find"]
 	if page.Href != "/pages" || len(page.Fields) != 1 || page.Fields[0].Name != "title" {

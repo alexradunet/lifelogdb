@@ -44,7 +44,7 @@ func TestTheKeysAreInThePage(t *testing.T) {
 }
 
 // TestSearchListsTitlesFirst: the search answers the pages whose title starts with the words before the pages whose
-// words match, so a page is one search away by its title, as it once was by the command list.
+// words match, so a page is one search away by its title.
 func TestSearchListsTitlesFirst(t *testing.T) {
 	c, h := fresh(t)
 	root := must(c.Get(t.Context(), "/"))

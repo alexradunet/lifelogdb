@@ -9,8 +9,8 @@ import (
 )
 
 // The shell is the frame of every page a browser gets (docs/plans/092-the-app-shell.md): the sidebar, with today's
-// date, the count of what is due and this month. It reads what every client gets from the root's due and from
-// GET /months/{month}, once a page, and only for a browser: a JSON answer never runs it.
+// date and this month. It reads the day pages of this month, as GET /months/{month} gives them to every client, once
+// a page, and only for a browser: a JSON answer never runs it.
 
 // shellView is what the sidebar shows: today, and the weeks of this month with the days that have a day page.
 type shellView struct {

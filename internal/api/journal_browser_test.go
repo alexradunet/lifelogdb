@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"lifelog/internal/api"
 	"lifelog/internal/client"
 )
 
@@ -22,17 +21,6 @@ func journalFixture(t *testing.T) (*client.Client, http.Handler) {
 	capture(fixedToday, map[string]string{"text": "Quiet day.", "mood": "4"})
 	capture(fixedToday, map[string]string{"mood": "3"})
 	return c, h
-}
-
-// actionsNamed are the hrefs of an entity's actions of that name.
-func actionsNamed(e *api.Entity, name string) []string {
-	var out []string
-	for _, a := range e.Actions {
-		if a.Name == name {
-			out = append(out, a.Href)
-		}
-	}
-	return out
 }
 
 func TestTheDayCarriesItsMood(t *testing.T) {

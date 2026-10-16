@@ -9,8 +9,8 @@ import (
 	"time"
 )
 
-// The richer Today (docs/plans/093-words-phone-and-today.md): a reading's tile with its unit and the line of its
-// last 14 days, a habit's strip of its last 14 days, and a series that does not fill its own page.
+// The lines of the readings (docs/plans/093-words-phone-and-today.md): a reading's tile on a day, with its unit and
+// the line of its last 14 days, and the line of a metric's recent readings on its card.
 
 // readingTile is a metric read on the day: its last reading of the day (the one to correct), its unit in words,
 // how many readings of the day it stands for, and the line of its trend.

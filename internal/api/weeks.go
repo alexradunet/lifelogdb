@@ -12,8 +12,8 @@ import (
 )
 
 // A week and a year look back over the calendar (docs/plans/097-the-almanac-reflects.md). The week is ISO 8601: it
-// starts on Monday, and week 1 is the week that holds 4 January. Both resources only read what the month, the habits
-// already gives; the days are the month's, with their items (plan 101).
+// starts on Monday, and week 1 is the week that holds 4 January. The days of the week are the month's, with their
+// items (plan 101); its metrics are the series of the metrics read in it.
 
 var weekPattern = regexp.MustCompile(`^(\d{4})-W(\d{2})$`)
 

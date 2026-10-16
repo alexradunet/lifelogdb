@@ -92,8 +92,8 @@ func captureForm(t *testing.T, body, action string) string {
 
 // TestTheDayIsALeafAndItsMargin (docs/plans/095-the-leaf-and-its-margin.md): the head of a day is a calendar leaf
 // that opens its month, beside the weekday, the week and "today"; the previous and next day keep their whole name for
-// a reader; the sheet (the journal, then Capture) comes before the margin (Due first) in the source, so a narrow
-// screen shows the writing first; Record a reading is in the margin's Readings, its optional fields folded.
+// a reader; the sheet (the journal, then Capture) comes before the margin in the source, so a narrow screen shows
+// the writing first; Record a reading is in the margin's Readings, its optional fields folded.
 // 14 May 2031 is a Wednesday in ISO week 20 (1 January 2031 is a Wednesday, so week 1 starts on 30 December 2030).
 func TestTheDayIsALeafAndItsMargin(t *testing.T) {
 	_, h := freshOn(t, fixedToday)

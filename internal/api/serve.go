@@ -21,7 +21,7 @@ const SourceHeader = "Lifelog-Source"
 type server struct {
 	s        *core.Store
 	feedback feedbackStore
-	localDay func() string  // the server's local day: what is due, overdue and today is read against it
+	localDay func() string  // the server's local day: today, and the words for a day, are read against it
 	zone     *time.Location // the zone of that day: a browser's words for a time use it
 	mux      *http.ServeMux // the routes: a refused browser form runs a GET of its page through it
 }
@@ -33,8 +33,8 @@ func New(s *core.Store, trustedOrigins ...string) http.Handler {
 	return NewOn(s, core.Today, time.Local, trustedOrigins...)
 }
 
-// NewOn is New with the clock of the local day and its zone given: a test fixes them, so what is due, overdue and
-// today are read against a fixed day, and a time is written in fixed words.
+// NewOn is New with the clock of the local day and its zone given: a test fixes them, so today is a fixed day, and a
+// time is written in fixed words.
 func NewOn(s *core.Store, localDay func() string, zone *time.Location, trustedOrigins ...string) http.Handler {
 	h := &server{s: s, localDay: localDay, zone: zone}
 	m := http.NewServeMux()
@@ -172,7 +172,8 @@ type redirect struct{ to string }
 
 func (r redirect) Error() string { return "see " + r.to }
 
-// ownerOnly refuses an action that is the owner's alone to an agent (a model never registers a metric or approves).
+// ownerOnly refuses an action that is the owner's alone to an agent or an import (neither registers a metric, takes a
+// snapshot or runs the integrity checks).
 func ownerOnly(f func(*http.Request, string) (*Entity, error)) func(*http.Request, string) (*Entity, error) {
 	return func(r *http.Request, src string) (*Entity, error) {
 		if !core.IsOwner(src) {

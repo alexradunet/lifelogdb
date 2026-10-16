@@ -68,7 +68,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		}
 	}
 	for section := range documented {
-		if _, ok := shapes[section]; !ok && section != "errors" && section != "import, …" && section != "actions" {
+		if _, ok := shapes[section]; !ok && section != "errors" && section != "actions" {
 			t.Errorf("API.md section %q is not checked here: add its shape", section)
 		}
 	}

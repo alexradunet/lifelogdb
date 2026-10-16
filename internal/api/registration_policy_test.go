@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -37,11 +36,6 @@ func TestOwnerOnlyActionsPolicy(t *testing.T) {
 	register, snapshot, integrity, record := find(catalog, "register-metric"), find(catalog, "snapshot"), find(catalog, "integrity-check"), find(catalog, "record")
 	if !register.Owner || !snapshot.Owner || !integrity.Owner || record.Name == "" || record.Owner {
 		t.Fatalf("wrong catalog policy: %+v %+v %+v %+v", register, snapshot, integrity, record)
-	}
-	for _, a := range catalog.Actions {
-		if strings.Contains(a.Name, "approve") || strings.HasPrefix(a.Href, "/import") {
-			t.Fatalf("an import or approval action in the catalog: %s", a.Name)
-		}
 	}
 	for _, op := range []struct {
 		a      api.Action
@@ -90,7 +84,7 @@ func TestOwnerOnlyActionsPolicy(t *testing.T) {
 	found := false
 	for _, tool := range tools.Tools {
 		found = found || tool.Name == "record"
-		if tool.Name == "register_metric" || tool.Name == "snapshot" || tool.Name == "integrity_check" || strings.Contains(tool.Name, "approve") {
+		if tool.Name == "register_metric" || tool.Name == "snapshot" || tool.Name == "integrity_check" {
 			t.Fatalf("owner operation exposed as tool: %s", tool.Name)
 		}
 	}

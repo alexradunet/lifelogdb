@@ -2,7 +2,6 @@ package api_test
 
 import (
 	"fmt"
-	"html"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -14,49 +13,12 @@ import (
 	"lifelog/internal/api"
 )
 
-// htmlForm is a form of a page as a browser sends it: where, the button, and the hidden fields.
-type htmlForm struct {
-	Action, Button string
-	Fields         url.Values
-}
-
+// formRE finds a POST form of a page: its action and what it holds. This application's own markup is regular enough
+// to read this way; a form never nests. hiddenRE finds a hidden field of a form: its name and its value.
 var (
 	formRE   = regexp.MustCompile(`(?s)<form method="POST" action="([^"]+)"[^>]*>(.*?)</form>`)
 	hiddenRE = regexp.MustCompile(`<input type="hidden" name="([^"]+)" value="([^"]*)">`)
-	buttonRE = regexp.MustCompile(`<button[^>]*>([^<]+)</button>`)
 )
-
-// postForms are the POST forms of a page whose fields are all hidden: the one-button forms. This application's own
-// markup is regular enough to read this way; a form never nests.
-func postForms(body string) []htmlForm {
-	var out []htmlForm
-	for _, m := range formRE.FindAllStringSubmatch(body, -1) {
-		if strings.Contains(m[2], "<label>") {
-			continue
-		}
-		f := htmlForm{Action: html.UnescapeString(m[1]), Fields: url.Values{}}
-		if b := buttonRE.FindStringSubmatch(m[2]); b != nil {
-			f.Button = b[1]
-		}
-		for _, h := range hiddenRE.FindAllStringSubmatch(m[2], -1) {
-			f.Fields.Add(h[1], html.UnescapeString(h[2]))
-		}
-		out = append(out, f)
-	}
-	return out
-}
-
-// formFor is the one-button form of a page with that button whose action starts with prefix.
-func formFor(t *testing.T, body, button, prefix string) htmlForm {
-	t.Helper()
-	for _, f := range postForms(body) {
-		if f.Button == button && strings.HasPrefix(f.Action, prefix) {
-			return f
-		}
-	}
-	t.Fatalf("no %s form for %s on the page", button, prefix)
-	return htmlForm{}
-}
 
 // withoutReceipt is a Location without the feedback receipt a write adds, so a test compares the path it returned to.
 func withoutReceipt(t *testing.T, location string) string {
