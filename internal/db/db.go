@@ -307,9 +307,9 @@ func (d *DB) Write(ctx context.Context, fn func(*sql.Tx) error) error {
 	return tx.Commit()
 }
 
-// RollbackError is the error of a Write whose fn failed and whose rollback failed too. Err is the error of fn and
-// Rollback the error of the rollback; errors.Is and errors.As find both. A caller must not read it as the error of
-// fn alone: the transaction can still be open, or kept in part.
+// RollbackError is the error of a Write, or of a savepoint inside one, whose fn failed and whose rollback failed too.
+// Err is the error of fn and Rollback the error of the rollback; errors.Is and errors.As find both. A caller must not
+// read it as the error of fn alone: the transaction can still be open, or kept in part.
 type RollbackError struct{ Err, Rollback error }
 
 func (e *RollbackError) Error() string   { return e.Err.Error() + "\nrollback: " + e.Rollback.Error() }

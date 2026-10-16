@@ -572,6 +572,32 @@ func TestAFailedRollbackIsAFault(t *testing.T) {
 	}
 }
 
+// TestAFailedSavepointRollbackKeepsBothErrors: fn fails, and then the savepoint cannot roll back to its start. The
+// error of savepoint holds the error of fn and the error of the rollback, and Do reports it as a fault, not as the
+// refusal of fn. Here fn releases the savepoint itself, so ROLLBACK TO finds no savepoint.
+func TestAFailedSavepointRollbackKeepsBothErrors(t *testing.T) {
+	s := fresh(t)
+	refusal := Conflict("synthetic refusal")
+	var inner error
+	err := s.Do(ctx, "cli", func(tx *Tx) error {
+		inner = tx.savepoint(func() error {
+			if _, err := tx.tx.ExecContext(tx.ctx, `RELEASE step`); err != nil {
+				return err
+			}
+			return refusal
+		})
+		return inner
+	})
+	var rollback *sqlite.Error
+	if !errors.Is(inner, refusal) || !errors.As(inner, &rollback) {
+		t.Errorf("savepoint: %v; want the error of fn and the error of ROLLBACK TO in it", inner)
+	}
+	var e *Error
+	if err == nil || errors.As(err, &e) {
+		t.Errorf("Do: %v; want a fault, not a refusal or no error", err)
+	}
+}
+
 // TestParseDayReadsOnlyADayThatRoundTrips: ParseDay gives the time of a YYYY-MM-DD day (lifelog_meta.days), and a
 // zero time and false for anything else. A string that time.Parse reads but that does not round-trip is not a day:
 // "+026-10-05" is read as the year 26. IsDay agrees with ParseDay.

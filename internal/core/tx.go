@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+
+	"lifelog/internal/db"
 )
 
 // Tx is one BEGIN IMMEDIATE write transaction and the writer whose rows it writes (lifelog_meta.source).
@@ -26,8 +28,9 @@ func (s *Store) Do(ctx context.Context, source string, fn func(*Tx) error) error
 }
 
 // alone runs fn as the one operation of its own write transaction (Do): the Store form of a Tx method. s stands for
-// the receiver, because a method cannot have a type parameter. On an error the write rolled back, so the result is
-// the zero value: no surface reports what the write did not keep.
+// the receiver, because a method cannot have a type parameter. On an error the write did not commit, or its rollback
+// failed too (a fault, as refused says). In both cases the result is the zero value: no surface reports what the
+// write did not keep.
 func alone[T any](s *Store, ctx context.Context, source string, fn func(*Tx) (T, error)) (T, error) {
 	var v T
 	if err := s.Do(ctx, source, func(t *Tx) (err error) { v, err = fn(t); return err }); err != nil {
@@ -57,17 +60,20 @@ func (s *Store) dryRun(ctx context.Context, source string, fn func(*Tx) error) e
 
 // savepoint runs fn inside a savepoint of the transaction: when fn fails, what it wrote is rolled back and the
 // transaction goes on; fn's error is returned, a constraint or trigger of the DDL as the 422 that Do would return.
-// A wikilink target that cannot be made, a facts write the writer refuses: the rest of the work is unaffected.
+// A wikilink target that cannot be made, a facts write the writer refuses: the rest of the work is unaffected. When
+// fn fails and the savepoint then cannot roll back or release, the error is a *db.RollbackError with both errors, as
+// db.Write gives for a transaction. The state of the transaction is then not known, so when the caller returns this
+// error, Do reports a fault, not the refusal of fn.
 func (t *Tx) savepoint(fn func() error) error {
 	if _, err := t.tx.ExecContext(t.ctx, `SAVEPOINT step`); err != nil {
 		return err
 	}
 	if err := fn(); err != nil {
 		if _, e := t.tx.ExecContext(t.ctx, `ROLLBACK TO step`); e != nil {
-			return e
+			return &db.RollbackError{Err: err, Rollback: e}
 		}
 		if _, e := t.tx.ExecContext(t.ctx, `RELEASE step`); e != nil {
-			return e
+			return &db.RollbackError{Err: err, Rollback: e}
 		}
 		return refused(err)
 	}
