@@ -12,7 +12,7 @@ import (
 
 // New makes a fresh life.db and opens it as the program opens it. The cleanup of the test closes it, and an error of
 // that Close fails the test. A test that opens the file again, or takes a snapshot of it, gets its path from Path.
-func New(t *testing.T) *db.DB {
+func New(t testing.TB) *db.DB {
 	t.Helper()
 	d, err := db.Open(t.Context(), File(t))
 	if err != nil {
@@ -28,7 +28,7 @@ func New(t *testing.T) *db.DB {
 
 // File makes a fresh life.db and returns its path. The file is not open: it is for a test whose program opens the
 // file itself (a command line with --db, a server process), or that closes its store on purpose.
-func File(t *testing.T) string {
+func File(t testing.TB) string {
 	t.Helper()
 	p := filepath.Join(t.TempDir(), "life.db")
 	if err := db.Init(t.Context(), p); err != nil {

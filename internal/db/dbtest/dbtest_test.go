@@ -2,8 +2,10 @@ package dbtest
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
+	"slices"
 	"testing"
 
 	"lifelog/internal/db"
@@ -61,5 +63,32 @@ func TestFileIsAFreshFileThatNoConnectionHolds(t *testing.T) {
 	}
 	if err := d.Close(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// recorder is a test that keeps its cleanups and its errors, so a test of the kit can run the cleanups and read what
+// they reported. The other methods are those of the real test.
+type recorder struct {
+	testing.TB
+	cleanups []func()
+	errors   []string
+}
+
+func (r *recorder) Cleanup(f func())  { r.cleanups = append(r.cleanups, f) }
+func (r *recorder) Error(args ...any) { r.errors = append(r.errors, fmt.Sprint(args...)) }
+
+// TestAFailedCloseFailsTheTestOfNew: the cleanup of New fails the test when its Close fails. The test closes the file
+// first, so the Close of the cleanup fails.
+func TestAFailedCloseFailsTheTestOfNew(t *testing.T) {
+	r := &recorder{TB: t}
+	d := New(r)
+	if err := d.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range slices.Backward(r.cleanups) {
+		f()
+	}
+	if len(r.errors) == 0 {
+		t.Error("the Close of the cleanup failed, and the test did not fail")
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -19,10 +20,11 @@ import (
 	lifelogmcp "lifelog/internal/mcp"
 )
 
-// The owner-only actions are refused to an agent and are never MCP tools; every other action is a tool.
+// The owner-only actions are refused to an agent and are never MCP tools; every other action is a tool. A refused
+// action writes nothing: no metric, and no file in the snapshot folder.
 func TestOwnerOnlyActionsPolicy(t *testing.T) {
-	d := dbtest.New(t)
-	agent := client.InProcess(api.New(&core.Store{DB: d, SnapshotDir: t.TempDir()}), "agent:policy-test")
+	d, snapshots := dbtest.New(t), t.TempDir()
+	agent := client.InProcess(api.New(&core.Store{DB: d, SnapshotDir: snapshots}), "agent:policy-test")
 	catalog := must(agent.Get(t.Context(), "/actions"))
 	register, snapshot, integrity, record := find(catalog, "register-metric"), find(catalog, "snapshot"), find(catalog, "integrity-check"), find(catalog, "record")
 	if !register.Owner || !snapshot.Owner || !integrity.Owner || record.Name == "" || record.Owner {
@@ -42,6 +44,9 @@ func TestOwnerOnlyActionsPolicy(t *testing.T) {
 	var count int
 	if err := d.R.QueryRow("SELECT count(*) FROM entity_names WHERE name_key = 'forbidden direct'").Scan(&count); err != nil || count != 0 {
 		t.Fatalf("a refused registration wrote a metric: %d %v", count, err)
+	}
+	if files, err := os.ReadDir(snapshots); err != nil || len(files) != 0 {
+		t.Fatalf("a refused snapshot wrote in the snapshot folder: %v %v", files, err)
 	}
 
 	// Inspect the actual SDK listing, without invoking any MCP tool.
