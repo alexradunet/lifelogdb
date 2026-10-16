@@ -94,6 +94,9 @@ func (t *Tx) promote(id int64, typ, name string) error {
 	if err != nil {
 		return err
 	}
+	// This check is not a copy of a DDL rule. The foreign keys (id, entity_type) of people, metrics and files refuse
+	// a person, a metric or a file with a new type (D20). A place has no typed row, so no rule of the DDL refuses a
+	// place promoted: the writer keeps this 409 for that reason.
 	if have != "page" {
 		return Conflict("page %d is a %s, not a plain page to promote", id, have)
 	}

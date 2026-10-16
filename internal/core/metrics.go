@@ -47,6 +47,9 @@ func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
 		}
 		return false, nil
 	case p.Type != "page":
+		// This check is not a copy of a DDL rule. The foreign keys (id, entity_type) of people and files refuse a
+		// person or a file made a metric (D20). A place has no typed row, so no rule of the DDL refuses a place made
+		// a metric: the writer keeps this 409 for that reason.
 		return false, Conflict("%s is taken by a %s: a metric's title must be free or a plain page (D27)", p.Title, p.Type)
 	}
 	// a day page is never a metric: entities_day_page_plain refuses the update
