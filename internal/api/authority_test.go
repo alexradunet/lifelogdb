@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"lifelog/internal/api"
+	"lifelog/internal/api/apitest"
 )
 
 // TestLoopbackAddress: the address of a local serve is a numeric loopback IP or localhost, which binds to 127.0.0.1, and
@@ -140,7 +141,7 @@ func TestHTTPAuthority(t *testing.T) {
 }
 
 func TestHTTPAuthorityOriginsAndInProcess(t *testing.T) {
-	c, h := fresh(t)
+	c, h, _ := apitest.Fresh(t, "cli")
 	if _, err := c.Get(t.Context(), "/actions"); err != nil {
 		t.Fatal(err)
 	}

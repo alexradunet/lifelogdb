@@ -9,18 +9,26 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"lifelog/internal/api/apitest"
 )
 
-// browse GETs a path as a browser does and fails unless it is a whole page.
+// browse GETs a path as a browser does and fails unless the answer is a whole page with the status 200.
 func browse(t *testing.T, h http.Handler, path string) string {
+	t.Helper()
+	return browseStatus(t, h, path, http.StatusOK)
+}
+
+// browseStatus is browse for an answer with another status: a refusal is a whole page too.
+func browseStatus(t *testing.T, h http.Handler, path string, status int) string {
 	t.Helper()
 	req := httptest.NewRequest("GET", path, nil)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	body := rec.Body.String()
-	if rec.Code != http.StatusOK || !strings.HasSuffix(strings.TrimSpace(body), "</html>") {
-		t.Errorf("GET %s: %d %.300s", path, rec.Code, body)
+	if rec.Code != status || !strings.HasSuffix(strings.TrimSpace(body), "</html>") {
+		t.Errorf("GET %s: %d, want %d and a whole page: %.300s", path, rec.Code, status, body)
 	}
 	return body
 }
@@ -39,37 +47,37 @@ func submit(h http.Handler, path string, form url.Values, referer string) *httpt
 }
 
 func TestEveryViewRenders(t *testing.T) {
-	c, h := fresh(t)
-	root := must(c.Get(t.Context(), "/"))
-	day := must(c.Do(t.Context(), find(root, "capture"), map[string]string{"text": "Ran with [[Sam]] #running, `[[not a link]]`", "mood": "4"}))
-	must(c.Do(t.Context(), find(must(c.Get(t.Context(), href(day, "page"))), "save-body"), map[string]string{"body": "Ran with [[Sam]] and [[Ana]] #running"}))
-	ana := must(c.Get(t.Context(), "/pages?title=Ana"))
-	must(c.Do(t.Context(), find(ana, "promote"), map[string]string{"to": "person", "name": "Ana Popescu"}))
-	must(c.Do(t.Context(), find(root, "create-place"), map[string]string{"title": "Lisbon"}))
-	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
-	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "walk"}))
+	c, h, _ := apitest.Fresh(t, "cli")
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	day := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "capture"), map[string]string{"text": "Ran with [[Sam]] #running, `[[not a link]]`", "mood": "4"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), apitest.Href(day, "page"))), "save-body"), map[string]string{"body": "Ran with [[Sam]] and [[Ana]] #running"}))
+	ana := apitest.Must(t)(c.Get(t.Context(), "/pages?title=Ana"))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, ana, "promote"), map[string]string{"to": "person", "name": "Ana Popescu"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-place"), map[string]string{"title": "Lisbon"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "walk"}))
 	var reading *string
 	for _, d := range []string{"2026-09-01", "2026-09-15", "2026-09-28"} {
-		m := must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "weight", "day": d, "value": "71.2"}))
+		m := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "record"), map[string]string{"metric": "weight", "day": d, "value": "71.2"}))
 		reading = &m.Links[0].Href
 	}
-	draft := must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Draft", "body": "old words"}))
-	must(c.Do(t.Context(), find(draft, "rename"), map[string]string{"title": "Essay"}))
-	gone := must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Scratch"}))
-	must(c.Do(t.Context(), find(gone, "tombstone"), nil))
+	draft := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Draft", "body": "old words"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, draft, "rename"), map[string]string{"title": "Essay"}))
+	gone := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Scratch"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, gone, "tombstone"), nil))
 
-	for _, p := range []string{"/", "/actions", "/days", href(day, "self"), "/browse", "/browse?kind=person", "/browse?kind=place", "/browse?ghosts=1", "/metrics",
-		"/metrics/walk", "/measurements/1", "/search", "/search?q=ran", "/integrity", href(gone, "self"), "/weeks/2026-W40", "/years/2026",
-		href(draft, "self"), essay(t, h)} {
+	for _, p := range []string{"/", "/actions", "/days", apitest.Href(day, "self"), "/browse", "/browse?kind=person", "/browse?kind=place", "/browse?ghosts=1", "/metrics",
+		"/metrics/walk", "/measurements/1", "/search", "/search?q=ran", "/integrity", apitest.Href(gone, "self"), "/weeks/2026-W40", "/years/2026",
+		apitest.Href(draft, "self"), essay(t, h)} {
 		browse(t, h, p)
 	}
 	for path, want := range map[string][]string{
-		href(day, "page"): {`name="version" value="`, `<a href="/pages?title=Sam" class="wikilink">Sam</a>`,
+		apitest.Href(day, "page"): {`name="version" value="`, `<a href="/pages?title=Sam" class="wikilink">Sam</a>`,
 			`<a href="/pages?title=running" class="wikilink">#running</a>`},
-		"/pages?title=Ana": {"Ana Popescu", "Backlinks", "mentioned in"},
-		"/metrics/weight":  {`<svg class="chart"`, "71.2"},
-		*reading:           {`action="/measurements/`, "Correct"},
-		href(gone, "self"): {"Deleted", `action="` + href(gone, "self") + `/revive"`},
+		"/pages?title=Ana":         {"Ana Popescu", "Backlinks", "mentioned in"},
+		"/metrics/weight":          {`<svg class="chart"`, "71.2"},
+		*reading:                   {`action="/measurements/`, "Correct"},
+		apitest.Href(gone, "self"): {"Deleted", `action="` + apitest.Href(gone, "self") + `/revive"`},
 	} {
 		req := httptest.NewRequest("GET", path, nil)
 		req.Header.Set("Accept", "text/html")
@@ -85,7 +93,7 @@ func TestEveryViewRenders(t *testing.T) {
 			}
 		}
 	}
-	if body := browse(t, h, href(day, "page")); strings.Contains(body, `/promote"`) {
+	if body := browse(t, h, apitest.Href(day, "page")); strings.Contains(body, `/promote"`) {
 		t.Error("a day page shows a promote form the API does not offer")
 	}
 }
@@ -104,16 +112,16 @@ func essay(t *testing.T, h http.Handler) string {
 // staleSave is a page with a save that is already stale: the version it names is not the current one.
 func staleSave(t *testing.T) (h http.Handler, self, action, version string) {
 	t.Helper()
-	c, h := fresh(t)
-	p := must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Diet", "body": "v1"}))
-	save := find(p, "save-body")
-	must(c.Do(t.Context(), save, map[string]string{"body": "v2"}))
+	c, h, _ := apitest.Fresh(t, "cli")
+	p := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Diet", "body": "v1"}))
+	save := apitest.Action(t, p, "save-body")
+	apitest.Must(t)(c.Do(t.Context(), save, map[string]string{"body": "v2"}))
 	for _, f := range save.Fields {
 		if f.Name == "version" {
 			version = f.Value.(string)
 		}
 	}
-	return h, href(p, "self"), save.Href, version
+	return h, apitest.Href(p, "self"), save.Href, version
 }
 
 // TestBrowserKeepsWhatAFailedSaveSent: with no page to return to, a refused save answers with the error view, which
@@ -160,9 +168,9 @@ func TestARefusedSaveComesBackOnItsPage(t *testing.T) {
 // headers. Here the page's address holds the receipt of an earlier save that no GET took (feedback), so the GET
 // takes it and sets Referrer-Policy and Cache-Control. The refused page keeps both.
 func TestARefusedPageKeepsTheHeadersOfItsPage(t *testing.T) {
-	c, h := fresh(t)
-	p := must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Diet", "body": "v1"}))
-	save, self := find(p, "save-body"), href(p, "self")
+	c, h, _ := apitest.Fresh(t, "cli")
+	p := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Diet", "body": "v1"}))
+	save, self := apitest.Action(t, p, "save-body"), apitest.Href(p, "self")
 	var version string
 	for _, f := range save.Fields {
 		if f.Name == "version" {
@@ -224,21 +232,21 @@ func TestARefusedPageThatCannotBeSentIsLogged(t *testing.T) {
 // (or an old browser) can still send an empty body. The save is refused 422 on its page, with the alert, and the page
 // keeps its body and its version.
 func TestAnEmptySaveComesBackOnItsPage(t *testing.T) {
-	c, h := fresh(t)
-	p := must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Diet", "body": "v1"}))
-	save := find(p, "save-body")
+	c, h, _ := apitest.Fresh(t, "cli")
+	p := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Diet", "body": "v1"}))
+	save := apitest.Action(t, p, "save-body")
 	var version string
 	for _, f := range save.Fields {
 		if f.Name == "version" {
 			version, _ = f.Value.(string)
 		}
 	}
-	rec := submit(h, save.Href, url.Values{"body": {""}, "version": {version}, "back": {href(p, "self")}}, href(p, "self"))
+	rec := submit(h, save.Href, url.Values{"body": {""}, "version": {version}, "back": {apitest.Href(p, "self")}}, apitest.Href(p, "self"))
 	body := rec.Body.String()
 	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(body, `role="alert" id="refused"`) || !strings.Contains(body, "missing field body") {
 		t.Errorf("an empty browser save: %d %.400s", rec.Code, body)
 	}
-	after := must(c.Get(t.Context(), href(p, "self"))).Properties.(map[string]any)
+	after := apitest.Must(t)(c.Get(t.Context(), apitest.Href(p, "self"))).Properties.(map[string]any)
 	if after["body"] != "v1" || after["version"] != version {
 		t.Errorf("after an empty save the page has body %q and version %q, want %q and %q", after["body"], after["version"], "v1", version)
 	}
@@ -246,7 +254,7 @@ func TestAnEmptySaveComesBackOnItsPage(t *testing.T) {
 
 // TestARefusedCaptureComesBackOnHome: a capture refused from Home comes back on Home with the text still in the box.
 func TestARefusedCaptureComesBackOnHome(t *testing.T) {
-	_, h := freshOn(t, "2026-10-12") // the form posts to that day, and Home's capture is today's
+	_, h, _ := apitest.FreshOn(t, "cli", "2026-10-12") // the form posts to that day, and Home's capture is today's
 	rec := submit(h, "/days/2026-10-12/capture", url.Values{"text": {"A note that must not be lost."}, "mood": {"9"}, "back": {"/"}}, "")
 	body := rec.Body.String()
 	if rec.Code != http.StatusUnprocessableEntity {
@@ -307,10 +315,10 @@ func TestFeedbackURLPrivacyUsesStructureNotRandomSubstrings(t *testing.T) {
 }
 
 func TestBrowserMutationFeedback(t *testing.T) {
-	c, h := fresh(t)
-	root := must(c.Get(t.Context(), "/"))
-	target := must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Revived target"}))
-	must(c.Do(t.Context(), find(target, "tombstone"), nil))
+	c, h, _ := apitest.Fresh(t, "cli")
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	target := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Revived target"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, target, "tombstone"), nil))
 	rec := submit(h, "/pages", url.Values{"title": {"Feedback page"}, "body": {"[[Revived target]] [[bad/name]]"}}, "")
 	if rec.Code != 303 {
 		t.Fatalf("POST: %d %s", rec.Code, rec.Body.String())
@@ -325,8 +333,8 @@ func TestBrowserMutationFeedback(t *testing.T) {
 	if strings.Contains(browse(t, h, location), "<h2>Result</h2>") {
 		t.Error("receipt replayed")
 	}
-	page := must(c.Get(t.Context(), "/pages?title=Feedback%20page"))
-	if !feedbackLocation(location, href(page, "self")) {
+	page := apitest.Must(t)(c.Get(t.Context(), "/pages?title=Feedback%20page"))
+	if !feedbackLocation(location, apitest.Href(page, "self")) {
 		t.Errorf("feedback URL must contain only the resource path and opaque receipt: %s", location)
 	}
 }
@@ -334,9 +342,9 @@ func TestBrowserMutationFeedback(t *testing.T) {
 // TestAnEmptyPageSaysSoWithItsEditorClosed: a page with no text says so in words, as every empty view does, and its
 // editor is closed under the sentence, so the page does not open as a large empty box with the focus in it.
 func TestAnEmptyPageSaysSoWithItsEditorClosed(t *testing.T) {
-	c, h := fresh(t)
-	sam := must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "create-person"), map[string]string{"title": "Sam"}))
-	body := browse(t, h, hrefOf(sam, "self"))
+	c, h, _ := apitest.Fresh(t, "cli")
+	sam := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "create-person"), map[string]string{"title": "Sam"}))
+	body := browse(t, h, apitest.Href(sam, "self"))
 	if !strings.Contains(body, `<p class="empty">Nothing written here yet.</p>`) {
 		t.Error("an empty page does not say that nothing is written")
 	}

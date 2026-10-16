@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"lifelog/internal/api"
+	"lifelog/internal/api/apitest"
 	"lifelog/internal/client"
 )
 
@@ -19,29 +20,29 @@ import (
 func filedFixture(t *testing.T, c *client.Client) map[string]string {
 	t.Helper()
 	ctx := t.Context()
-	root := must(c.Get(ctx, "/"))
+	root := apitest.Must(t)(c.Get(ctx, "/"))
 	ids := map[string]string{}
 	for _, title := range []string{"Japan 2031", "Alps 2030"} {
-		ids[title] = fmt.Sprint(props(must(c.Do(ctx, find(root, "create-page"), map[string]string{"title": title})))["id"])
+		ids[title] = fmt.Sprint(props(apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": title})))["id"])
 	}
-	ids["Sam"] = fmt.Sprint(props(must(c.Do(ctx, find(root, "create-person"), map[string]string{"title": "Sam"})))["id"])
+	ids["Sam"] = fmt.Sprint(props(apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-person"), map[string]string{"title": "Sam"})))["id"])
 	for _, title := range []string{"Japan 2031", "Alps 2030", "Sam"} {
-		must(c.Do(ctx, find(must(c.Get(ctx, "/pages/"+ids[title])), "file-pages"), map[string]string{"category": "Travel"}))
+		apitest.Must(t)(c.Do(ctx, apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/pages/"+ids[title])), "file-pages"), map[string]string{"category": "Travel"}))
 	}
-	ids["Travel"] = fmt.Sprint(props(must(c.Get(ctx, "/pages?title=Travel")))["id"])
-	must(c.Do(ctx, find(must(c.Get(ctx, "/pages/"+ids["Travel"])), "file-pages"), map[string]string{"category": "Life"}))
-	ids["Life"] = fmt.Sprint(props(must(c.Get(ctx, "/pages?title=Life")))["id"])
+	ids["Travel"] = fmt.Sprint(props(apitest.Must(t)(c.Get(ctx, "/pages?title=Travel")))["id"])
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/pages/"+ids["Travel"])), "file-pages"), map[string]string{"category": "Life"}))
+	ids["Life"] = fmt.Sprint(props(apitest.Must(t)(c.Get(ctx, "/pages?title=Life")))["id"])
 	return ids
 }
 
 func TestACategoryPageListsWhatIsFiledInIt(t *testing.T) {
-	c, h := freshOn(t, fixedToday)
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	ctx := t.Context()
 	ids := filedFixture(t, c)
 	travel, life := ids["Travel"], ids["Life"]
 
 	// The JSON: a sub-category's backlink carries the class category; the rest their type.
-	e := must(c.Get(ctx, "/pages/"+life))
+	e := apitest.Must(t)(c.Get(ctx, "/pages/"+life))
 	var filed []string
 	for _, l := range e.Entities {
 		if l.Rel[0] == "backlink" && l.Rel[1] == "part-of" {
@@ -52,7 +53,7 @@ func TestACategoryPageListsWhatIsFiledInIt(t *testing.T) {
 		t.Errorf("Life's part-of backlinks: %v, want %s", filed, want)
 	}
 	filed = nil
-	for _, l := range must(c.Get(ctx, "/pages/"+travel)).Entities {
+	for _, l := range apitest.Must(t)(c.Get(ctx, "/pages/"+travel)).Entities {
 		if l.Rel[0] == "backlink" && l.Rel[1] == "part-of" {
 			filed = append(filed, l.Title+":"+strings.Join(l.Class, "+"))
 		}
@@ -101,13 +102,13 @@ func TestACategoryPageListsWhatIsFiledInIt(t *testing.T) {
 }
 
 func TestANewPageIsFiledWhereItIsMade(t *testing.T) {
-	c, h := freshOn(t, fixedToday)
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	ctx := t.Context()
 	ids := filedFixture(t, c)
 	travel := ids["Travel"]
 
 	// The catalog: category is an optional title field of create-page, so every surface has it.
-	create := find(must(c.Get(ctx, "/")), "create-page")
+	create := apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/")), "create-page")
 	var fields []string
 	for _, f := range create.Fields {
 		fields = append(fields, f.Name)
@@ -117,8 +118,8 @@ func TestANewPageIsFiledWhereItIsMade(t *testing.T) {
 	}
 
 	// A category page offers create-page with its own title filled, and draws it as New page here.
-	here := find(must(c.Get(ctx, "/pages/"+travel)), "create-page")
-	if here.Name == "" || here.Fields[2].Value != "Travel" {
+	here := apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/pages/"+travel)), "create-page")
+	if here.Fields[2].Value != "Travel" {
 		t.Fatalf("Travel offers create-page as %+v", here)
 	}
 	body := browse(t, h, "/pages/"+travel)
@@ -126,13 +127,13 @@ func TestANewPageIsFiledWhereItIsMade(t *testing.T) {
 		!strings.Contains(body, `<summary class="button">New page here</summary>`) {
 		t.Error("Travel has no New page here form with its title filled")
 	}
-	if find(must(c.Get(ctx, "/pages/"+ids["Japan 2031"])), "create-page").Name != "" {
+	if hasAction(apitest.Must(t)(c.Get(ctx, "/pages/"+ids["Japan 2031"])), "create-page") {
 		t.Error("a page that is no category offers create-page")
 	}
 
 	// The write: the page and its part-of link in one; a missing category is made.
-	made := must(c.Do(ctx, here, map[string]string{"title": "Kyoto", "body": "Temples."}))
-	if l := must(c.Get(ctx, "/pages/"+travel)).Entities; !titled(l, "Kyoto") {
+	made := apitest.Must(t)(c.Do(ctx, here, map[string]string{"title": "Kyoto", "body": "Temples."}))
+	if l := apitest.Must(t)(c.Get(ctx, "/pages/"+travel)).Entities; !titled(l, "Kyoto") {
 		t.Error("Kyoto is not filed in Travel")
 	}
 	var kinds []string
@@ -142,16 +143,16 @@ func TestANewPageIsFiledWhereItIsMade(t *testing.T) {
 	if want := "part-of:Travel"; strings.Join(kinds, " ") != want {
 		t.Errorf("Kyoto's links: %v, want %s", kinds, want)
 	}
-	must(c.Do(ctx, create, map[string]string{"title": "Lisbon", "category": "Cities"}))
-	if cs := props(must(c.Get(ctx, "/browse")))["categories"].([]any); len(cs) != 3 || cs[0].(map[string]any)["path"] != "Cities" {
+	apitest.Must(t)(c.Do(ctx, create, map[string]string{"title": "Lisbon", "category": "Cities"}))
+	if cs := props(apitest.Must(t)(c.Get(ctx, "/browse")))["categories"].([]any); len(cs) != 3 || cs[0].(map[string]any)["path"] != "Cities" {
 		t.Errorf("categories after Lisbon: %v", cs)
 	}
 
 	// A day cannot be a category (links_endpoint_types): refused, and no page is made.
-	if _, err := c.Do(ctx, create, map[string]string{"title": "Nothing", "category": fixedToday}); !clientStatus(err, http.StatusUnprocessableEntity) {
+	if _, err := c.Do(ctx, create, map[string]string{"title": "Nothing", "category": fixedToday}); apitest.Status(err) != http.StatusUnprocessableEntity {
 		t.Fatalf("a day as the category: %v", err)
 	}
-	if _, err := c.Get(ctx, "/pages?title=Nothing"); !clientStatus(err, http.StatusNotFound) {
+	if _, err := c.Get(ctx, "/pages?title=Nothing"); apitest.Status(err) != http.StatusNotFound {
 		t.Errorf("the page was made although its filing was refused: %v", err)
 	}
 }

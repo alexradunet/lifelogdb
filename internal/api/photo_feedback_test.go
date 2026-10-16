@@ -7,15 +7,17 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"lifelog/internal/api/apitest"
 )
 
 func TestPhotoDaySyncJSONAndBrowserReceipt(t *testing.T) {
 	for _, browser := range []bool{false, true} {
 		t.Run(map[bool]string{false: "JSON", true: "browser"}[browser], func(t *testing.T) {
-			c, h := fresh(t)
-			must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "2026-10-04", "body": "[[Old synthetic target]]"}))
-			target := must(c.Get(t.Context(), "/pages?title=Old+synthetic+target"))
-			must(c.Do(t.Context(), find(target, "tombstone"), nil))
+			c, h, _ := apitest.Fresh(t, "cli")
+			apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "2026-10-04", "body": "[[Old synthetic target]]"}))
+			target := apitest.Must(t)(c.Get(t.Context(), "/pages?title=Old+synthetic+target"))
+			apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, target, "tombstone"), nil))
 			var b bytes.Buffer
 			mw := multipart.NewWriter(&b)
 			for key, value := range map[string]string{"title": "Next synthetic.jpg", "day": "2026-10-04", "body": "[[File synthetic target]]"} {

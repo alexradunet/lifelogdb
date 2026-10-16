@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"lifelog/internal/api/apitest"
 )
 
 // The navigation of Browse (docs/plans/117-one-browse-view.md, rules 7 and 8): the old lists answer 308 to Browse,
@@ -14,7 +16,7 @@ import (
 // in Browse.
 
 func TestTheOldListsAnswer308ToBrowse(t *testing.T) {
-	c, h := fresh(t)
+	c, h, _ := apitest.Fresh(t, "cli")
 	for _, tc := range []struct{ path, location string }{
 		{"/people", "/browse?kind=person"},
 		{"/places", "/browse?kind=place"},
@@ -40,7 +42,7 @@ func TestTheOldListsAnswer308ToBrowse(t *testing.T) {
 		}
 	}
 	// A client follows the redirect, and gets Browse.
-	if e := must(c.Get(t.Context(), "/people")); e.Class[0] != "browse" || props(e)["kind"] != "person" {
+	if e := apitest.Must(t)(c.Get(t.Context(), "/people")); e.Class[0] != "browse" || props(e)["kind"] != "person" {
 		t.Errorf("GET /people followed: %v %v", e.Class, props(e)["kind"])
 	}
 	// The POST routes of the same paths do not change.
@@ -58,13 +60,13 @@ func TestTheOldListsAnswer308ToBrowse(t *testing.T) {
 }
 
 func TestHomeLinksTheListsOfBrowse(t *testing.T) {
-	c, h := fresh(t)
-	root := must(c.Get(t.Context(), "/"))
+	c, h, _ := apitest.Fresh(t, "cli")
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
 	for rel, want := range map[string]string{
 		"browse": "/browse", "categories": "/browse", "people": "/browse?kind=person", "places": "/browse?kind=place",
 		"media": "/browse?kind=media", "files": "/browse?kind=document", "ghosts": "/browse?ghosts=1&kind=page", "metrics": "/metrics",
 	} {
-		if got := hrefOf(root, rel); got != want {
+		if got := apitest.Href(root, rel); got != want {
 			t.Errorf("Home's %s is %q, want %q", rel, got, want)
 		}
 	}
@@ -83,8 +85,8 @@ func TestHomeLinksTheListsOfBrowse(t *testing.T) {
 // of a desktop and in the bottom bar of a phone (one list, which the sheet does not repeat); there is no group of
 // the record. Browse is marked on every list of Browse, Metrics on the board and under it.
 func TestTheSidebarHasMetricsAndBrowse(t *testing.T) {
-	c, h := freshOn(t, fixedToday)
-	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "register-metric"), map[string]string{"name": "Weight", "unit": "kg"}))
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "register-metric"), map[string]string{"name": "Weight", "unit": "kg"}))
 	sections := regexp.MustCompile(`(?s)<nav aria-label="Sections">(.*?)</nav>`)
 	entry := regexp.MustCompile(`<a href="([^"]+)"( aria-current="page")?[^>]*><svg class="icon"[^>]*>.*?</svg>([^<]+)</a>`)
 	for path, current := range map[string]string{
@@ -125,16 +127,16 @@ func TestTheSidebarHasMetricsAndBrowse(t *testing.T) {
 
 // TestACategoryPageOpensInBrowse: Filed here links the category's list in Browse, its title escaped in the query.
 func TestACategoryPageOpensInBrowse(t *testing.T) {
-	c, h := freshOn(t, fixedToday)
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	ctx := t.Context()
 	ids := filedFixture(t, c)
 	if body := browse(t, h, "/pages/"+ids["Travel"]); !strings.Contains(body, `<h2>Filed here <small>3</small></h2><a href="/browse?in=Travel">Open in Browse</a>`) {
 		t.Error("Travel's Filed here has no link to Browse")
 	}
-	note := must(c.Do(ctx, find(must(c.Get(ctx, "/")), "create-page"), map[string]string{"title": "A note"}))
-	must(c.Do(ctx, find(note, "file-pages"), map[string]string{"category": "Rock & roll 2031"}))
-	cat := must(c.Get(ctx, "/pages?title="+url.QueryEscape("Rock & roll 2031")))
-	body := browse(t, h, href(cat, "self"))
+	note := apitest.Must(t)(c.Do(ctx, apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/")), "create-page"), map[string]string{"title": "A note"}))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, note, "file-pages"), map[string]string{"category": "Rock & roll 2031"}))
+	cat := apitest.Must(t)(c.Get(ctx, "/pages?title="+url.QueryEscape("Rock & roll 2031")))
+	body := browse(t, h, apitest.Href(cat, "self"))
 	m := regexp.MustCompile(`<a href="(/browse\?in=[^"]*)">Open in Browse</a>`).FindStringSubmatch(body)
 	if m == nil {
 		t.Fatal("the category page has no link to Browse")
@@ -143,11 +145,11 @@ func TestACategoryPageOpensInBrowse(t *testing.T) {
 	if err != nil || u.Query().Get("in") != "Rock & roll 2031" || len(u.Query()) != 1 {
 		t.Fatalf("the link %s does not name the category: %v", m[1], err)
 	}
-	if got := browseRows(t, must(c.Get(ctx, u.String()))); got != "A note:" {
+	if got := browseRows(t, apitest.Must(t)(c.Get(ctx, u.String()))); got != "A note:" {
 		t.Errorf("Browse in the category: %s", got)
 	}
 	// A page with nothing filed in it has no Filed here, and no link.
-	if strings.Contains(browse(t, h, href(note, "self")), "Open in Browse") {
+	if strings.Contains(browse(t, h, apitest.Href(note, "self")), "Open in Browse") {
 		t.Error("a page with nothing filed in it links Browse")
 	}
 }

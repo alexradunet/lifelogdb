@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"lifelog/internal/api/apitest"
 	"lifelog/internal/client"
 )
 
@@ -17,15 +18,15 @@ import (
 // The server's day is 2026-10-13. It returns the three readings' addresses, oldest first.
 func metricFixture(t *testing.T) (*client.Client, http.Handler, []string) {
 	t.Helper()
-	c, h := freshOn(t, "2026-10-13")
-	root := must(c.Get(t.Context(), "/"))
-	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "Weight", "unit": "kg", "note": "Before breakfast."}))
+	c, h, _ := apitest.FreshOn(t, "cli", "2026-10-13")
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "Weight", "unit": "kg", "note": "Before breakfast."}))
 	var readings []string
 	for _, r := range [][2]string{{"2024-03-01", "81.5"}, {"2026-10-01", "77.4"}, {"2026-10-12", "77.1"}} {
-		m := must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "Weight", "day": r[0], "value": r[1]}))
-		readings = append(readings, href(m, "self"))
+		m := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "record"), map[string]string{"metric": "Weight", "day": r[0], "value": r[1]}))
+		readings = append(readings, apitest.Href(m, "self"))
 	}
-	must(c.Do(t.Context(), find(root, "capture"), map[string]string{"text": "Weighed in: [[Weight]] is down."}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "capture"), map[string]string{"text": "Weighed in: [[Weight]] is down."}))
 	return c, h, readings
 }
 
@@ -58,26 +59,26 @@ func TestAMetricIsOnePage(t *testing.T) {
 			t.Errorf("no open fold of %s: a short series opens every year", year)
 		}
 	}
-	page := must(c.Get(t.Context(), "/pages?title=2026-10-13"))
-	for _, want := range []string{"Before breakfast.", `href="` + href(page, "self") + `"`, "Mentioned in"} {
+	page := apitest.Must(t)(c.Get(t.Context(), "/pages?title=2026-10-13"))
+	for _, want := range []string{"Before breakfast.", `href="` + apitest.Href(page, "self") + `"`, "Mentioned in"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the metric page does not show %s", want)
 		}
 	}
 
-	all := must(c.Get(t.Context(), "/metrics/Weight"))
+	all := apitest.Must(t)(c.Get(t.Context(), "/metrics/Weight"))
 	for _, name := range []string{"save-body", "rename", "link", "unlink", "tombstone"} {
-		if a := find(all, name); a.Name == "" || !strings.Contains(body, `<form method="POST" action="`+a.Href+`"`) {
+		if a := apitest.Action(t, all, name); !strings.Contains(body, `<form method="POST" action="`+a.Href+`"`) {
 			t.Errorf("the metric page has no form of %s: %+v", name, a)
 		}
 	}
 	if n := len(all.Properties.(map[string]any)["readings"].([]any)); n != 3 {
 		t.Errorf("the series reads %d readings with no from, want every one (3)", n)
 	}
-	if href(all, "self") != "/metrics/Weight" {
-		t.Errorf("the series asked with no query names %s as itself", href(all, "self"))
+	if apitest.Href(all, "self") != "/metrics/Weight" {
+		t.Errorf("the series asked with no query names %s as itself", apitest.Href(all, "self"))
 	}
-	window := must(c.Get(t.Context(), "/metrics/Weight?from=2026-01-01"))
+	window := apitest.Must(t)(c.Get(t.Context(), "/metrics/Weight?from=2026-01-01"))
 	if n := len(window.Properties.(map[string]any)["readings"].([]any)); n != 2 {
 		t.Errorf("from=2026-01-01 reads %d readings, want 2", n)
 	}
@@ -104,8 +105,8 @@ func TestAMetricIsOnePage(t *testing.T) {
 
 func TestTheBrowserOpensAMetricsPageAtItsMetric(t *testing.T) {
 	c, h, _ := metricFixture(t)
-	series := must(c.Get(t.Context(), "/metrics/Weight"))
-	self := href(series, "page")
+	series := apitest.Must(t)(c.Get(t.Context(), "/metrics/Weight"))
+	self := apitest.Href(series, "page")
 
 	req := httptest.NewRequest("GET", self, nil)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml")
@@ -114,12 +115,12 @@ func TestTheBrowserOpensAMetricsPageAtItsMetric(t *testing.T) {
 	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/metrics/Weight" {
 		t.Fatalf("a browser at the metric's page: %d to %q, want 303 to /metrics/Weight", rec.Code, rec.Header().Get("Location"))
 	}
-	if p := must(c.Get(t.Context(), self)); p.Class[0] != "metric" || p.Properties.(map[string]any)["body"] != "Before breakfast." {
+	if p := apitest.Must(t)(c.Get(t.Context(), self)); p.Class[0] != "metric" || p.Properties.(map[string]any)["body"] != "Before breakfast." {
 		t.Errorf("JSON at the metric's page is not the page: %v %v", p.Class, p.Properties)
 	}
 
 	// A save with no page to return to ends on the metric, with its toast.
-	save := find(series, "save-body")
+	save := apitest.Action(t, series, "save-body")
 	version := ""
 	for _, f := range save.Fields {
 		if f.Name == "version" {
@@ -143,7 +144,7 @@ func TestTheBrowserOpensAMetricsPageAtItsMetric(t *testing.T) {
 	}
 
 	// A deleted metric stays a page: the page view, with Revive.
-	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/metrics/Weight")), "tombstone"), nil))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/metrics/Weight")), "tombstone"), nil))
 	body := browse(t, h, self)
 	if !strings.Contains(body, "Deleted") || !strings.Contains(body, `action="`+self+`/revive"`) || strings.Contains(body, "<h2>Properties</h2>") {
 		t.Error("a deleted metric's page is not the page view with Revive")
@@ -152,14 +153,14 @@ func TestTheBrowserOpensAMetricsPageAtItsMetric(t *testing.T) {
 
 func TestTheSeriesCarriesItsPage(t *testing.T) {
 	c, _, _ := metricFixture(t)
-	root := must(c.Get(t.Context(), "/"))
-	must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Body"}))
-	series := must(c.Get(t.Context(), "/metrics/weight"))
-	must(c.Do(t.Context(), find(series, "link"), map[string]string{"to": "Body", "kind": "part-of"}))
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Body"}))
+	series := apitest.Must(t)(c.Get(t.Context(), "/metrics/weight"))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, series, "link"), map[string]string{"to": "Body", "kind": "part-of"}))
 
-	series = must(c.Get(t.Context(), "/metrics/weight"))
+	series = apitest.Must(t)(c.Get(t.Context(), "/metrics/weight"))
 	p := series.Properties.(map[string]any)
-	if series.Title != "Weight" || p["unit"] != "kg" || p["body"] != "Before breakfast." || fmt.Sprint("/pages/", p["id"]) != href(series, "page") {
+	if series.Title != "Weight" || p["unit"] != "kg" || p["body"] != "Before breakfast." || fmt.Sprint("/pages/", p["id"]) != apitest.Href(series, "page") {
 		t.Errorf("the series lacks its page: title %q, %v", series.Title, p)
 	}
 	edge := func(list any, title string) bool {
@@ -174,19 +175,19 @@ func TestTheSeriesCarriesItsPage(t *testing.T) {
 	if !edge(p["links"], "Body") || !edge(p["backlinks"], "2026-10-13") {
 		t.Errorf("the series lacks its links or backlinks: %v %v", p["links"], p["backlinks"])
 	}
-	link := find(series, "link")
+	link := apitest.Action(t, series, "link")
 	if link.Title != "Add a link" || !hasOption(link, "kind", "part-of") {
 		t.Errorf("link is not Add a link with every kind: %+v", link)
 	}
 	for _, name := range []string{"save-body", "rename", "unlink", "tombstone"} {
-		if find(series, name).Name == "" {
+		if !hasAction(series, name) {
 			t.Errorf("the series does not offer its page's %s: %s", name, names(series))
 		}
 	}
 
-	must(c.Do(t.Context(), find(series, "rename"), map[string]string{"title": "Body weight"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, series, "rename"), map[string]string{"title": "Body weight"}))
 	for _, path := range []string{"/metrics/Body%20weight", "/metrics/Weight"} {
-		s := must(c.Get(t.Context(), path))
+		s := apitest.Must(t)(c.Get(t.Context(), path))
 		if s.Title != "Body weight" || len(s.Properties.(map[string]any)["readings"].([]any)) != 3 {
 			t.Errorf("%s after the rename: %q with %v", path, s.Title, s.Properties.(map[string]any)["readings"])
 		}
@@ -197,11 +198,11 @@ func TestTheSeriesCarriesItsPage(t *testing.T) {
 // a closed fold under them that says how many it holds, so the page's other groups stay near; every reading is
 // still on the page, newest first.
 func TestAYearShowsItsNewestReadingsFirst(t *testing.T) {
-	c, h := freshOn(t, "2026-10-13")
-	root := must(c.Get(t.Context(), "/"))
-	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "Weight", "unit": "kg"}))
+	c, h, _ := apitest.FreshOn(t, "cli", "2026-10-13")
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "Weight", "unit": "kg"}))
 	for d := 1; d <= 15; d++ {
-		must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "Weight", "day": fmt.Sprintf("2026-09-%02d", d), "value": fmt.Sprint(70 + d)}))
+		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "record"), map[string]string{"metric": "Weight", "day": fmt.Sprintf("2026-09-%02d", d), "value": fmt.Sprint(70 + d)}))
 	}
 	body := browse(t, h, "/metrics/Weight")
 	fold := body[strings.Index(body, `<details class="readings-year" open>`):]
@@ -231,11 +232,11 @@ func TestAYearShowsItsNewestReadingsFirst(t *testing.T) {
 // TestTheFoldOfOneOlderReadingSaysReading: a year of eleven readings folds one under its newest ten, and the fold
 // says "1 more reading", not "1 more readings".
 func TestTheFoldOfOneOlderReadingSaysReading(t *testing.T) {
-	c, h := freshOn(t, "2026-10-13")
-	root := must(c.Get(t.Context(), "/"))
-	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "Weight", "unit": "kg"}))
+	c, h, _ := apitest.FreshOn(t, "cli", "2026-10-13")
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "Weight", "unit": "kg"}))
 	for d := 1; d <= 11; d++ {
-		must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "Weight", "day": fmt.Sprintf("2026-09-%02d", d), "value": fmt.Sprint(70 + d)}))
+		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "record"), map[string]string{"metric": "Weight", "day": fmt.Sprintf("2026-09-%02d", d), "value": fmt.Sprint(70 + d)}))
 	}
 	body := browse(t, h, "/metrics/Weight")
 	if want := `<details class="readings-more"><summary>1 more reading of 2026</summary>`; !strings.Contains(body, want) {

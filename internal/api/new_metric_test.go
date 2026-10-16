@@ -7,14 +7,16 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"lifelog/internal/api/apitest"
 )
 
 // New metric, new category and a new reading from /metrics (docs/plans/113-new-metric-on-metrics.md).
 
 func TestRegisterMetricTakesACategoryAndAHabit(t *testing.T) {
-	c, _ := freshOn(t, fixedToday)
+	c, _, _ := apitest.FreshOn(t, "cli", fixedToday)
 	ctx := t.Context()
-	register := find(must(c.Get(ctx, "/metrics")), "register-metric")
+	register := apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/metrics")), "register-metric")
 	if !register.Owner || register.Href != "/metrics" {
 		t.Fatalf("/metrics offers register-metric as %+v", register)
 	}
@@ -29,14 +31,14 @@ func TestRegisterMetricTakesACategoryAndAHabit(t *testing.T) {
 		t.Errorf("register-metric fields: %v", fields)
 	}
 
-	walk := must(c.Do(ctx, register, map[string]string{"name": "Walk", "category": "Sport"}))
+	walk := apitest.Must(t)(c.Do(ctx, register, map[string]string{"name": "Walk", "category": "Sport"}))
 	if walk.Result != "New metric Walk, in Sport." {
 		t.Errorf("the answer's sentence: %v", walk.Result)
 	}
 	if got, want := groupsOf(t, c), "Sport:Walk Not filed:Mood"; got != want {
 		t.Errorf("groups %q, want %q", got, want)
 	}
-	if got := props(must(c.Get(ctx, "/metrics/Walk")))["categories"]; !slices.Equal(anyStrings(got), []string{"Sport"}) {
+	if got := props(apitest.Must(t)(c.Get(ctx, "/metrics/Walk")))["categories"]; !slices.Equal(anyStrings(got), []string{"Sport"}) {
 		t.Errorf("Walk's categories %v, want [Sport]", got)
 	}
 
@@ -62,7 +64,7 @@ func anyStrings(x any) []string {
 }
 
 func TestTheMetricsPageMakesAMetricACategoryAndAReading(t *testing.T) {
-	c, h := freshOn(t, fixedToday)
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 
 	page := browse(t, h, "/metrics")
 	for _, want := range []string{`<details class="action new-metric" id="new-metric">`, `<form class="kind-number"`, `<form class="kind-score"`,
@@ -110,7 +112,7 @@ func TestTheMetricsPageMakesAMetricACategoryAndAReading(t *testing.T) {
 		t.Fatalf("the card's +: %d %q", rec.Code, rec.Header().Get("Location"))
 	}
 	var weight []any
-	for _, x := range props(must(c.Get(t.Context(), "/metrics")))["metrics"].([]any) {
+	for _, x := range props(apitest.Must(t)(c.Get(t.Context(), "/metrics")))["metrics"].([]any) {
 		if m := x.(map[string]any); m["name"] == "Weight" {
 			weight = m["recent"].([]any)
 		}

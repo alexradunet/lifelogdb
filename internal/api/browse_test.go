@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"os"
 	"slices"
@@ -12,9 +11,9 @@ import (
 	"testing"
 
 	"lifelog/internal/api"
+	"lifelog/internal/api/apitest"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
-	"lifelog/internal/db/dbtest"
 )
 
 // Browse (docs/plans/117-one-browse-view.md): one list with two filters, the kind and where it looks.
@@ -115,7 +114,7 @@ func browseRows(t *testing.T, e *api.Entity, fields ...string) string {
 }
 
 func TestBrowseListsEachKindWithItsRowAndOrder(t *testing.T) {
-	c, _, s := freshStore(t)
+	c, _, s := apitest.Fresh(t, "cli")
 	ids := browseFixture(t, s)
 	ctx := t.Context()
 	all := []string{"type", "kind", "category", "mentions", "last_day", "picture", "mime", "file_kind", "day", "unit"}
@@ -135,7 +134,7 @@ func TestBrowseListsEachKindWithItsRowAndOrder(t *testing.T) {
 		{"/browse?kind=metric", "Mood:type=metric;kind=metric;category=-;mentions=-;last_day=-;picture=-;mime=-;file_kind=-;day=-;unit=1-5 " +
 			"Weight:type=metric;kind=metric;category=-;mentions=-;last_day=-;picture=-;mime=-;file_kind=-;day=-;unit=kg"},
 	} {
-		e := must(c.Get(ctx, tc.path))
+		e := apitest.Must(t)(c.Get(ctx, tc.path))
 		if e.Class[0] != "browse" || e.Title != "Browse" {
 			t.Fatalf("%s: %v %q", tc.path, e.Class, e.Title)
 		}
@@ -144,7 +143,7 @@ func TestBrowseListsEachKindWithItsRowAndOrder(t *testing.T) {
 		}
 	}
 	// The newest day comes first among the media: the first row is the photo, by its id.
-	if got := props(must(c.Get(ctx, "/browse?kind=media")))["rows"].([]any)[0].(map[string]any)["id"]; fmt.Sprint(got) != fmt.Sprint(ids["photo.jpg"]) {
+	if got := props(apitest.Must(t)(c.Get(ctx, "/browse?kind=media")))["rows"].([]any)[0].(map[string]any)["id"]; fmt.Sprint(got) != fmt.Sprint(ids["photo.jpg"]) {
 		t.Errorf("the first media row is %v, want photo.jpg %d", got, ids["photo.jpg"])
 	}
 }
@@ -152,7 +151,7 @@ func TestBrowseListsEachKindWithItsRowAndOrder(t *testing.T) {
 // TestBrowseRowsNameTheirPicture: a file kept with a preview and a person whose picture it is name the preview, and
 // the page draws it in the tile and in the face.
 func TestBrowseRowsNameTheirPicture(t *testing.T) {
-	c, h, s := freshStore(t)
+	c, h, s := apitest.Fresh(t, "cli")
 	ids := browseFixture(t, s)
 	ctx := t.Context()
 	path, sum := jpegFile(t, "lake.jpg", 40, 30)
@@ -168,10 +167,10 @@ func TestBrowseRowsNameTheirPicture(t *testing.T) {
 		t.Fatal(err)
 	}
 	preview := fmt.Sprintf("/pages/%d/preview", k.ID)
-	if got, want := browseRows(t, must(c.Get(ctx, "/browse?kind=media")), "picture"), "lake.jpg:picture="+preview+" photo.jpg:picture=- memo.m4a:picture=-"; got != want {
+	if got, want := browseRows(t, apitest.Must(t)(c.Get(ctx, "/browse?kind=media")), "picture"), "lake.jpg:picture="+preview+" photo.jpg:picture=- memo.m4a:picture=-"; got != want {
 		t.Errorf("media:\n got %s\nwant %s", got, want)
 	}
-	if got, want := browseRows(t, must(c.Get(ctx, "/browse?kind=person")), "picture"), "Ana:picture=- Bo:picture="+preview; got != want {
+	if got, want := browseRows(t, apitest.Must(t)(c.Get(ctx, "/browse?kind=person")), "picture"), "Ana:picture=- Bo:picture="+preview; got != want {
 		t.Errorf("people:\n got %s\nwant %s", got, want)
 	}
 	if body := browse(t, h, "/browse?kind=media"); !strings.Contains(body, `<img src="`+preview+`" alt="" loading="lazy"><span class="first">lake.jpg</span>`) {
@@ -183,10 +182,10 @@ func TestBrowseRowsNameTheirPicture(t *testing.T) {
 }
 
 func TestBrowseInACategoryListsOnlyWhatIsFiledDirectly(t *testing.T) {
-	c, _, s := freshStore(t)
+	c, _, s := apitest.Fresh(t, "cli")
 	ids := browseFixture(t, s)
 	ctx := t.Context()
-	family := must(c.Get(ctx, "/browse?in=Family"))
+	family := apitest.Must(t)(c.Get(ctx, "/browse?in=Family"))
 	p := props(family)
 	in := p["in"].(map[string]any)
 	if p["kind"] != "all" || in["title"] != "Family" || in["path"] != "Family" || fmt.Sprint(in["id"]) != fmt.Sprint(ids["Family"]) {
@@ -198,10 +197,10 @@ func TestBrowseInACategoryListsOnlyWhatIsFiledDirectly(t *testing.T) {
 			"photo.jpg:kind=media;category=-;file_kind=image scan.pdf:kind=document;category=-;file_kind=application"; got != want {
 		t.Errorf("All in Family:\n got %s\nwant %s", got, want)
 	}
-	if got := browseRows(t, must(c.Get(ctx, "/browse?in=Family&kind=page")), "category"); got != "Beta:category=- Cousins:category=true" {
+	if got := browseRows(t, apitest.Must(t)(c.Get(ctx, "/browse?in=Family&kind=page")), "category"); got != "Beta:category=- Cousins:category=true" {
 		t.Errorf("pages in Family: %s", got)
 	}
-	cousins := must(c.Get(ctx, "/browse?in=cousins&kind=metric")) // a title in any case names the category
+	cousins := apitest.Must(t)(c.Get(ctx, "/browse?in=cousins&kind=metric")) // a title in any case names the category
 	if got := browseRows(t, cousins, "unit"); got != "Weight:unit=kg" {
 		t.Errorf("metrics in Cousins: %s", got)
 	}
@@ -209,7 +208,7 @@ func TestBrowseInACategoryListsOnlyWhatIsFiledDirectly(t *testing.T) {
 		t.Errorf("in Cousins: %v", in)
 	}
 	// A page with nothing filed in it gives an empty list, and no tree path of its own.
-	alpha := must(c.Get(ctx, "/browse?in=Alpha"))
+	alpha := apitest.Must(t)(c.Get(ctx, "/browse?in=Alpha"))
 	if rows := props(alpha)["rows"].([]any); len(rows) != 0 {
 		t.Errorf("in Alpha: %v", rows)
 	}
@@ -219,7 +218,7 @@ func TestBrowseInACategoryListsOnlyWhatIsFiledDirectly(t *testing.T) {
 }
 
 func TestBrowseNotFiledFollowsTheKind(t *testing.T) {
-	c, _, s := freshStore(t)
+	c, _, s := apitest.Fresh(t, "cli")
 	browseFixture(t, s)
 	ctx := t.Context()
 	for _, tc := range []struct{ path, want string }{
@@ -230,7 +229,7 @@ func TestBrowseNotFiledFollowsTheKind(t *testing.T) {
 		{"/browse?kind=document&unfiled=1", ""},
 		{"/browse?kind=metric&unfiled=1", "Mood:"},
 	} {
-		e := must(c.Get(ctx, tc.path))
+		e := apitest.Must(t)(c.Get(ctx, tc.path))
 		if got := browseRows(t, e); got != tc.want {
 			t.Errorf("%s: %q, want %q", tc.path, got, tc.want)
 		}
@@ -244,18 +243,18 @@ func TestBrowseNotFiledFollowsTheKind(t *testing.T) {
 	if _, _, err := s.Capture(ctx, "cli", "2031-05-03", "a day", nil); err != nil {
 		t.Fatal(err)
 	}
-	if got := browseRows(t, must(c.Get(ctx, "/browse?unfiled=1")), "category"); got != "Alpha:category=-" {
+	if got := browseRows(t, apitest.Must(t)(c.Get(ctx, "/browse?unfiled=1")), "category"); got != "Alpha:category=-" {
 		t.Errorf("pages not filed: %s", got)
 	}
 }
 
 func TestBrowseCountsEachChipInTheScopeOfTheList(t *testing.T) {
-	c, _, s := freshStore(t)
+	c, _, s := apitest.Fresh(t, "cli")
 	browseFixture(t, s)
 	ctx := t.Context()
 	counts := func(path string) string {
 		t.Helper()
-		m := props(must(c.Get(ctx, path)))["counts"].(map[string]any)
+		m := props(apitest.Must(t)(c.Get(ctx, path)))["counts"].(map[string]any)
 		var out []string
 		for _, k := range []string{"page", "person", "place", "media", "document", "metric", "all", "ghosts"} {
 			if v, ok := m[k]; ok {
@@ -288,19 +287,19 @@ func TestBrowseCountsEachChipInTheScopeOfTheList(t *testing.T) {
 		}
 		return strings.Join(out, " ")
 	}
-	if got, want := chips(must(c.Get(ctx, "/browse?unfiled=1&kind=person"))), "page=/browse?kind=page&unfiled=1 person=/browse?kind=person&unfiled=1 "+
+	if got, want := chips(apitest.Must(t)(c.Get(ctx, "/browse?unfiled=1&kind=person"))), "page=/browse?kind=page&unfiled=1 person=/browse?kind=person&unfiled=1 "+
 		"place=/browse?kind=place&unfiled=1 media=/browse?kind=media&unfiled=1 document=/browse?kind=document&unfiled=1 metric=/browse?kind=metric&unfiled=1"; got != want {
 		t.Errorf("chips not filed:\n got %s\nwant %s", got, want)
 	}
 	// Inside a category All is the default, and its chip comes first.
-	if got := chips(must(c.Get(ctx, "/browse?in=Family&kind=media&media=image"))); !strings.HasPrefix(got, "all=/browse?in=Family&kind=all page=/browse?in=Family&kind=page ") ||
+	if got := chips(apitest.Must(t)(c.Get(ctx, "/browse?in=Family&kind=media&media=image"))); !strings.HasPrefix(got, "all=/browse?in=Family&kind=all page=/browse?in=Family&kind=page ") ||
 		!strings.HasSuffix(got, " metric=/browse?in=Family&kind=metric") || !strings.Contains(got, "media=/browse?in=Family&kind=media ") {
 		t.Errorf("chips in Family: %s", got)
 	}
 	// The ends of the tree keep a kind the URL names; without one, a branch opens All in that category.
-	e := must(c.Get(ctx, "/browse?kind=person"))
-	if href(e, "everything") != "/browse?kind=person" || href(e, "unfiled") != "/browse?kind=person&unfiled=1" {
-		t.Errorf("tree ends: %s %s", href(e, "everything"), href(e, "unfiled"))
+	e := apitest.Must(t)(c.Get(ctx, "/browse?kind=person"))
+	if apitest.Href(e, "everything") != "/browse?kind=person" || apitest.Href(e, "unfiled") != "/browse?kind=person&unfiled=1" {
+		t.Errorf("tree ends: %s %s", apitest.Href(e, "everything"), apitest.Href(e, "unfiled"))
 	}
 	var branches []string
 	for _, l := range e.Entities {
@@ -311,9 +310,9 @@ func TestBrowseCountsEachChipInTheScopeOfTheList(t *testing.T) {
 	if got := strings.Join(branches, " "); got != "Family=/browse?in=Family&kind=person Cousins=/browse?in=Cousins&kind=person" {
 		t.Errorf("branches by path: %s", got)
 	}
-	if e := must(c.Get(ctx, "/browse")); href(e, "everything") != "/browse" || href(e, "unfiled") != "/browse?unfiled=1" ||
+	if e := apitest.Must(t)(c.Get(ctx, "/browse")); apitest.Href(e, "everything") != "/browse" || apitest.Href(e, "unfiled") != "/browse?unfiled=1" ||
 		!slices.ContainsFunc(e.Entities, func(l api.Link) bool { return l.Href == "/browse?in=Family" }) {
-		t.Errorf("tree with no kind named: %s %s %v", href(e, "everything"), href(e, "unfiled"), e.Entities)
+		t.Errorf("tree with no kind named: %s %s %v", apitest.Href(e, "everything"), apitest.Href(e, "unfiled"), e.Entities)
 	}
 }
 
@@ -342,13 +341,13 @@ func oldGhosts(t *testing.T, s *core.Store, titles ...string) {
 }
 
 func TestBrowseGhostsAreOldestFirstAndOfferDelete(t *testing.T) {
-	c, _, s := freshStore(t)
+	c, _, s := apitest.Fresh(t, "cli")
 	ctx := t.Context()
 	if _, _, err := s.CreatePage(ctx, "cli", "Fresh", "", ""); err != nil { // empty, but written now: not a ghost
 		t.Fatal(err)
 	}
 	oldGhosts(t, s, "Zeta ghost", "Alpha ghost")
-	e := must(c.Get(ctx, "/browse?ghosts=1"))
+	e := apitest.Must(t)(c.Get(ctx, "/browse?ghosts=1"))
 	if got := browseRows(t, e, "kind"); got != "Zeta ghost:kind=page Alpha ghost:kind=page" {
 		t.Errorf("ghost rows: %s", got)
 	}
@@ -362,17 +361,17 @@ func TestBrowseGhostsAreOldestFirstAndOfferDelete(t *testing.T) {
 	for _, r := range props(e)["rows"].([]any) {
 		ids = append(ids, fmt.Sprint(r.(map[string]any)["id"]))
 	}
-	done := must(c.Do(ctx, find(e, "tombstone-pages"), map[string]string{"ids": strings.Join(ids, " ")}))
+	done := apitest.Must(t)(c.Do(ctx, apitest.Action(t, e, "tombstone-pages"), map[string]string{"ids": strings.Join(ids, " ")}))
 	if done.Result != "Deleted 2 pages." {
 		t.Errorf("the delete: %v", done.Result)
 	}
-	if rows := props(must(c.Get(ctx, "/browse?ghosts=1")))["rows"].([]any); len(rows) != 0 {
+	if rows := props(apitest.Must(t)(c.Get(ctx, "/browse?ghosts=1")))["rows"].([]any); len(rows) != 0 {
 		t.Errorf("ghosts after the delete: %v", rows)
 	}
 }
 
 func TestBrowseRefusesACombinationWithNoMeaning(t *testing.T) {
-	c, _, s := freshStore(t)
+	c, _, s := apitest.Fresh(t, "cli")
 	ids := browseFixture(t, s)
 	ctx := t.Context()
 	for _, path := range []string{
@@ -380,17 +379,17 @@ func TestBrowseRefusesACombinationWithNoMeaning(t *testing.T) {
 		"/browse?ghosts=1&unfiled=1", "/browse?media=image", "/browse?kind=page&media=image", "/browse?kind=media&media=pdf",
 		"/browse?kind=pages", "/browse?unfiled=yes", "/browse?ghosts=2", "/browse?limit=0", "/browse?offset=-1",
 	} {
-		if _, err := c.Get(ctx, path); !clientStatus(err, http.StatusUnprocessableEntity) {
+		if _, err := c.Get(ctx, path); apitest.Status(err) != http.StatusUnprocessableEntity {
 			t.Errorf("%s: %v, want 422", path, err)
 		}
 	}
-	if _, err := c.Get(ctx, "/browse?in=Nobody+at+all"); !clientStatus(err, http.StatusNotFound) {
+	if _, err := c.Get(ctx, "/browse?in=Nobody+at+all"); apitest.Status(err) != http.StatusNotFound {
 		t.Errorf("a title of nothing: %v, want 404", err)
 	}
 	// Only a plain page can be a category (link_kinds, links_endpoint_types): a person, a place, a file, a metric and a
 	// day are refused, not given an empty list.
 	for _, title := range []string{"Ana", "Lakeside", "photo.jpg", "Mood", "2031-05-01"} {
-		if _, err := c.Get(ctx, "/browse?in="+url.QueryEscape(title)); !clientStatus(err, http.StatusUnprocessableEntity) {
+		if _, err := c.Get(ctx, "/browse?in="+url.QueryEscape(title)); apitest.Status(err) != http.StatusUnprocessableEntity {
 			t.Errorf("in=%s: %v, want 422", title, err)
 		}
 	}
@@ -398,24 +397,24 @@ func TestBrowseRefusesACombinationWithNoMeaning(t *testing.T) {
 	if err := s.Tombstone(ctx, "cli", ids["Cousins"]); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Get(ctx, "/browse?in=Cousins"); !clientStatus(err, http.StatusConflict) {
+	if _, err := c.Get(ctx, "/browse?in=Cousins"); apitest.Status(err) != http.StatusConflict {
 		t.Errorf("in a tombstoned category: %v, want 409", err)
 	}
 	// What was filed only there is in no category now (Weight; Gamma is a page filed only there too).
-	if got := browseRows(t, must(c.Get(ctx, "/browse?kind=metric&unfiled=1"))); got != "Mood: Weight:" {
+	if got := browseRows(t, apitest.Must(t)(c.Get(ctx, "/browse?kind=metric&unfiled=1"))); got != "Mood: Weight:" {
 		t.Errorf("metrics not filed after the tombstone: %s", got)
 	}
 }
 
 func TestBrowsePagingKeepsTheFilters(t *testing.T) {
-	c, _, s := freshStore(t)
+	c, _, s := apitest.Fresh(t, "cli")
 	browseFixture(t, s)
 	ctx := t.Context()
-	first := must(c.Get(ctx, "/browse?in=Family&limit=2"))
+	first := apitest.Must(t)(c.Get(ctx, "/browse?in=Family&limit=2"))
 	if got := browseRows(t, first); got != "Cousins: Ana:" {
 		t.Errorf("the first page: %s", got)
 	}
-	next := href(first, "next")
+	next := apitest.Href(first, "next")
 	u, err := url.Parse(next)
 	if err != nil {
 		t.Fatal(err)
@@ -423,28 +422,28 @@ func TestBrowsePagingKeepsTheFilters(t *testing.T) {
 	if q := u.Query(); u.Path != "/browse" || q.Get("in") != "Family" || q.Get("limit") != "2" || q.Get("offset") != "2" || q.Has("kind") {
 		t.Errorf("next: %s", next)
 	}
-	second := must(c.Get(ctx, next))
+	second := apitest.Must(t)(c.Get(ctx, next))
 	if got := browseRows(t, second); got != "Beta: photo.jpg:" {
 		t.Errorf("the second page: %s", got)
 	}
-	if prev := href(second, "prev"); prev != "/browse?in=Family&limit=2&offset=0" {
+	if prev := apitest.Href(second, "prev"); prev != "/browse?in=Family&limit=2&offset=0" {
 		t.Errorf("prev: %s", prev)
 	}
-	last := must(c.Get(ctx, href(second, "next")))
-	if got := browseRows(t, last); got != "scan.pdf:" || href(last, "next") != "" {
-		t.Errorf("the last page: %s, next %q", got, href(last, "next"))
+	last := apitest.Must(t)(c.Get(ctx, apitest.Href(second, "next")))
+	if got := browseRows(t, last); got != "scan.pdf:" || apitest.Href(last, "next") != "" {
+		t.Errorf("the last page: %s, next %q", got, apitest.Href(last, "next"))
 	}
-	media := must(c.Get(ctx, "/browse?kind=media&media=image&unfiled=1&limit=1&offset=1"))
-	if prev := href(media, "prev"); prev != "/browse?kind=media&limit=1&media=image&offset=0&unfiled=1" {
+	media := apitest.Must(t)(c.Get(ctx, "/browse?kind=media&media=image&unfiled=1&limit=1&offset=1"))
+	if prev := apitest.Href(media, "prev"); prev != "/browse?kind=media&limit=1&media=image&offset=0&unfiled=1" {
 		t.Errorf("prev with every filter: %s", prev)
 	}
-	if self := href(media, "self"); self != "/browse?kind=media&media=image&unfiled=1" {
+	if self := apitest.Href(media, "self"); self != "/browse?kind=media&media=image&unfiled=1" {
 		t.Errorf("self: %s", self)
 	}
 }
 
 func TestBrowseOffersTheNewAndThePickBarOfItsKind(t *testing.T) {
-	c, _, s := freshStore(t)
+	c, _, s := apitest.Fresh(t, "cli")
 	browseFixture(t, s)
 	ctx := t.Context()
 	for _, tc := range []struct{ path, want string }{
@@ -457,21 +456,21 @@ func TestBrowseOffersTheNewAndThePickBarOfItsKind(t *testing.T) {
 		{"/browse?in=Family", ""},
 		{"/browse?ghosts=1", "file-pages,tombstone-pages"},
 	} {
-		if got := names(must(c.Get(ctx, tc.path))); got != tc.want {
+		if got := names(apitest.Must(t)(c.Get(ctx, tc.path))); got != tc.want {
 			t.Errorf("%s offers %q, want %q", tc.path, got, tc.want)
 		}
 	}
 	// Inside a category the New page form files the page there; elsewhere it has no category.
-	if v := fieldOf(find(must(c.Get(ctx, "/browse?in=family&kind=page")), "create-page"), "category"); v != "Family" {
+	if v := fieldOf(apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/browse?in=family&kind=page")), "create-page"), "category"); v != "Family" {
 		t.Errorf("New page in Family has category %q", v)
 	}
-	if v := fieldOf(find(must(c.Get(ctx, "/browse")), "create-page"), "category"); v != "" {
+	if v := fieldOf(apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/browse")), "create-page"), "category"); v != "" {
 		t.Errorf("New page has category %q", v)
 	}
 	// The file field takes a file of any kind on both lists: New file opens the media list, and a document kept
 	// there goes to the documents.
 	accept := func(path string) string {
-		a := find(must(c.Get(ctx, path)), "add-file")
+		a := apitest.Action(t, apitest.Must(t)(c.Get(ctx, path)), "add-file")
 		for _, f := range a.Fields {
 			if f.Name == "original" {
 				return f.Accept
@@ -486,7 +485,7 @@ func TestBrowseOffersTheNewAndThePickBarOfItsKind(t *testing.T) {
 		t.Errorf("documents accept %q", got)
 	}
 	// file-pages offers the categories by title.
-	if a := find(must(c.Get(ctx, "/browse?kind=person")), "file-pages"); !hasOption(a, "category", "Family") || !hasOption(a, "category", "Cousins") {
+	if a := apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/browse?kind=person")), "file-pages"); !hasOption(a, "category", "Family") || !hasOption(a, "category", "Cousins") {
 		t.Errorf("file-pages options: %+v", a.Fields)
 	}
 }
@@ -497,20 +496,12 @@ func TestBrowseTransportParity(t *testing.T) {
 	want := "Ana:mentions=1 Bo:mentions=0"
 	for _, remote := range []bool{false, true} {
 		t.Run(fmt.Sprint(remote), func(t *testing.T) {
-			d := dbtest.New(t)
-			s := &core.Store{DB: d}
+			_, h, s := apitest.Fresh(t, "cli")
 			browseFixture(t, s)
-			h := api.New(s)
-			base := ""
-			if remote {
-				server := httptest.NewServer(h)
-				t.Cleanup(server.Close)
-				base = server.URL
-			}
 			for _, source := range []string{"cli", "agent:browse"} {
 				c := client.InProcess(h, source)
 				if remote {
-					c = client.Remote(base, source, "")
+					_, c = apitest.Clients(t, h, source)
 				}
 				actions, err := c.Catalog(t.Context())
 				if err != nil {
@@ -533,7 +524,7 @@ func TestBrowseTransportParity(t *testing.T) {
 }
 
 func TestTheBrowsePageDrawsTheTreeTheChipsAndTheRows(t *testing.T) {
-	_, h, s := freshStore(t)
+	_, h, s := apitest.Fresh(t, "cli")
 	ids := browseFixture(t, s)
 	family := browse(t, h, "/browse?in=Family")
 	for _, want := range []string{
@@ -643,7 +634,7 @@ func TestTheBrowsePageDrawsTheTreeTheChipsAndTheRows(t *testing.T) {
 // A long list of Browse is in letter groups with a letter bar (docs/plans/118-fold-and-find.md, rule 3); the
 // thresholds are held by TestALongListIsInLetterGroups.
 func TestALongBrowseListHasALetterBar(t *testing.T) {
-	_, h, s := freshStore(t)
+	_, h, s := apitest.Fresh(t, "cli")
 	ctx := t.Context()
 	for i := range 31 {
 		title := fmt.Sprintf("Note %02d", i)

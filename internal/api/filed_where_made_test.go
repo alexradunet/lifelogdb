@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -12,6 +11,7 @@ import (
 	"testing"
 
 	"lifelog/internal/api"
+	"lifelog/internal/api/apitest"
 	"lifelog/internal/client"
 )
 
@@ -29,10 +29,10 @@ func partOfLinks(e *api.Entity) []string {
 }
 
 func TestTheMakersTakeACategory(t *testing.T) {
-	c, _ := fresh(t)
-	root := must(c.Get(t.Context(), "/"))
+	c, _, _ := apitest.Fresh(t, "cli")
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
 	for _, name := range []string{"create-page", "create-person", "create-place", "add-file"} {
-		a := find(root, name)
+		a := apitest.Action(t, root, name)
 		found := false
 		for _, f := range a.Fields {
 			if f.Name == "category" {
@@ -49,19 +49,19 @@ func TestTheMakersTakeACategory(t *testing.T) {
 }
 
 func TestANewThingIsFiledWhereItIsMadeOverHTTP(t *testing.T) {
-	c, _ := fresh(t)
+	c, _, _ := apitest.Fresh(t, "cli")
 	ctx := t.Context()
-	root := must(c.Get(ctx, "/"))
+	root := apitest.Must(t)(c.Get(ctx, "/"))
 
-	person := must(c.Do(ctx, find(root, "create-person"), map[string]string{"title": "Ana", "name": "Ana Example", "category": "Family"}))
+	person := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-person"), map[string]string{"title": "Ana", "name": "Ana Example", "category": "Family"}))
 	if got := partOfLinks(person); strings.Join(got, ",") != "Family" {
 		t.Errorf("Ana is part-of %v, want Family", got)
 	}
-	place := must(c.Do(ctx, find(root, "create-place"), map[string]string{"title": "Lakeside", "category": "family"}))
+	place := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-place"), map[string]string{"title": "Lakeside", "category": "family"}))
 	if got := partOfLinks(place); strings.Join(got, ",") != "Family" {
 		t.Errorf("Lakeside is part-of %v, want Family (the category that exists, by any case)", got)
 	}
-	file := must(c.Do(ctx, find(root, "add-file"), map[string]string{"title": "scan.pdf", "sha256": strings.Repeat("ab", 32),
+	file := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "add-file"), map[string]string{"title": "scan.pdf", "sha256": strings.Repeat("ab", 32),
 		"mime": "application/pdf", "day": "2031-05-01", "category": "Papers"}))
 	if got := partOfLinks(file); strings.Join(got, ",") != "Papers" {
 		t.Errorf("scan.pdf is part-of %v, want Papers", got)
@@ -75,14 +75,14 @@ func TestANewThingIsFiledWhereItIsMadeOverHTTP(t *testing.T) {
 	if err := os.WriteFile(path, []byte("a synthetic memo"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	memo := must(c.DoFiles(ctx, find(root, "add-file"), map[string]string{"title": "memo.txt", "category": "Papers"}, map[string]string{"original": path}))
+	memo := apitest.Must(t)(c.DoFiles(ctx, apitest.Action(t, root, "add-file"), map[string]string{"title": "memo.txt", "category": "Papers"}, map[string]string{"original": path}))
 	if got := partOfLinks(memo); strings.Join(got, ",") != "Papers" {
 		t.Errorf("memo.txt (multipart) is part-of %v, want Papers", got)
 	}
 
 	// The tree: Family with Ana and Lakeside, Papers with the two files.
 	tree := map[string]any{}
-	for _, x := range props(must(c.Get(ctx, "/browse")))["categories"].([]any) {
+	for _, x := range props(apitest.Must(t)(c.Get(ctx, "/browse")))["categories"].([]any) {
 		cat := x.(map[string]any)
 		tree[cat["title"].(string)] = cat["count"]
 	}
@@ -96,11 +96,11 @@ func TestANewThingIsFiledWhereItIsMadeOverHTTP(t *testing.T) {
 func TestADayAsTheCategoryWritesNothingOverHTTP(t *testing.T) {
 	for _, exists := range []bool{false, true} {
 		t.Run(fmt.Sprint("day page exists ", exists), func(t *testing.T) {
-			c, _ := fresh(t)
+			c, _, _ := apitest.Fresh(t, "cli")
 			ctx := t.Context()
-			root := must(c.Get(ctx, "/"))
+			root := apitest.Must(t)(c.Get(ctx, "/"))
 			if exists {
-				must(c.Do(ctx, find(must(c.Get(ctx, "/days/2031-05-02")), "capture"), map[string]string{"text": "a synthetic entry"}))
+				apitest.Must(t)(c.Do(ctx, apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/days/2031-05-02")), "capture"), map[string]string{"text": "a synthetic entry"}))
 			}
 			for _, tc := range []struct {
 				action string
@@ -111,14 +111,14 @@ func TestADayAsTheCategoryWritesNothingOverHTTP(t *testing.T) {
 				{"add-file", map[string]string{"title": "Nobody", "sha256": strings.Repeat("cd", 32), "mime": "application/pdf"}},
 			} {
 				tc.values["category"] = "2031-05-02"
-				if _, err := c.Do(ctx, find(root, tc.action), tc.values); !clientStatus(err, http.StatusUnprocessableEntity) {
+				if _, err := c.Do(ctx, apitest.Action(t, root, tc.action), tc.values); apitest.Status(err) != http.StatusUnprocessableEntity {
 					t.Errorf("%s with a day as the category: %v, want 422", tc.action, err)
 				}
-				if _, err := c.Get(ctx, "/pages?title=Nobody"); !clientStatus(err, http.StatusNotFound) {
+				if _, err := c.Get(ctx, "/pages?title=Nobody"); apitest.Status(err) != http.StatusNotFound {
 					t.Errorf("%s: Nobody was written although the write was refused: %v", tc.action, err)
 				}
 				_, err := c.Get(ctx, "/pages?title=2031-05-02")
-				if !exists && !clientStatus(err, http.StatusNotFound) {
+				if !exists && apitest.Status(err) != http.StatusNotFound {
 					t.Errorf("%s: the day page was written although the write was refused: %v", tc.action, err)
 				}
 				if exists && err != nil {
@@ -130,35 +130,35 @@ func TestADayAsTheCategoryWritesNothingOverHTTP(t *testing.T) {
 }
 
 func TestAddFileFilesTheFileThatExistsAndADryRunWritesNothing(t *testing.T) {
-	c, _ := fresh(t)
+	c, _, _ := apitest.Fresh(t, "cli")
 	ctx := t.Context()
-	add := find(must(c.Get(ctx, "/")), "add-file")
+	add := apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/")), "add-file")
 	sent := map[string]string{"title": "scan.pdf", "sha256": strings.Repeat("ef", 32), "mime": "application/pdf", "day": "2031-05-01"}
-	kept := must(c.Do(ctx, add, sent))
+	kept := apitest.Must(t)(c.Do(ctx, add, sent))
 	if got := partOfLinks(kept); len(got) != 0 {
 		t.Fatalf("no category sent, but part-of %v", got)
 	}
 
 	// A dry run with a category: it says it would file the page that exists, and writes nothing.
 	sent["category"], sent["dry_run"] = "Papers", "1"
-	dry := must(c.Do(ctx, add, sent))
+	dry := apitest.Must(t)(c.Do(ctx, add, sent))
 	r, _ := dry.Result.(map[string]any)
 	f, _ := r["filed"].(map[string]any)
 	cat, _ := f["category"].(map[string]any)
 	if dry.Class[1] != "dry-run" || r["existing"] != true || f["created"] != true || f["added"] != json.Number("1") || cat["title"] != "Papers" || cat["id"] != json.Number("0") {
 		t.Errorf("the dry run: %v %v, want the page that exists, filed in Papers it would make", dry.Class, r)
 	}
-	if _, err := c.Get(ctx, "/pages?title=Papers"); !clientStatus(err, http.StatusNotFound) {
+	if _, err := c.Get(ctx, "/pages?title=Papers"); apitest.Status(err) != http.StatusNotFound {
 		t.Errorf("the dry run made Papers: %v", err)
 	}
-	if got := partOfLinks(must(c.Get(ctx, fmt.Sprintf("/pages/%v", props(kept)["id"])))); len(got) != 0 {
+	if got := partOfLinks(apitest.Must(t)(c.Get(ctx, fmt.Sprintf("/pages/%v", props(kept)["id"])))); len(got) != 0 {
 		t.Errorf("the dry run filed the page in %v", got)
 	}
 
 	// The write: the same original again files its page.
 	delete(sent, "dry_run")
 	sent["title"] = "another title.pdf"
-	again := must(c.Do(ctx, add, sent))
+	again := apitest.Must(t)(c.Do(ctx, add, sent))
 	if props(again)["id"] != props(kept)["id"] || strings.Join(partOfLinks(again), ",") != "Papers" {
 		t.Errorf("the same original again: page %v part-of %v, want page %v part-of Papers", props(again)["id"], partOfLinks(again), props(kept)["id"])
 	}
@@ -166,17 +166,17 @@ func TestAddFileFilesTheFileThatExistsAndADryRunWritesNothing(t *testing.T) {
 
 // Browse inside a category fills category in the New form of each kind; outside one the field is empty.
 func TestBrowseNewFormsInACategoryCarryIt(t *testing.T) {
-	c, h, s := freshStore(t)
+	c, h, s := apitest.Fresh(t, "cli")
 	browseFixture(t, s)
 	ctx := t.Context()
 	for _, tc := range []struct{ kind, action string }{
 		{"page", "create-page"}, {"person", "create-person"}, {"place", "create-place"}, {"media", "add-file"}, {"document", "add-file"},
 	} {
-		made := find(must(c.Get(ctx, "/browse?in=family&kind="+tc.kind)), tc.action)
+		made := apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/browse?in=family&kind="+tc.kind)), tc.action)
 		if v := fieldOf(made, "category"); v != "Family" {
 			t.Errorf("%s in Family: %s has category %q, want Family", tc.kind, tc.action, v)
 		}
-		if v := fieldOf(find(must(c.Get(ctx, "/browse?kind="+tc.kind)), tc.action), "category"); v != "" {
+		if v := fieldOf(apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/browse?kind="+tc.kind)), tc.action), "category"); v != "" {
 			t.Errorf("%s everywhere: %s has category %q, want none", tc.kind, tc.action, v)
 		}
 		body := browse(t, h, "/browse?in=Family&kind="+tc.kind)
@@ -187,7 +187,7 @@ func TestBrowseNewFormsInACategoryCarryIt(t *testing.T) {
 	}
 
 	// The form, sent as it is filled, files the new person in Family.
-	ana := must(c.Do(ctx, find(must(c.Get(ctx, "/browse?in=Family&kind=person")), "create-person"), map[string]string{"title": "Cy"}))
+	ana := apitest.Must(t)(c.Do(ctx, apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/browse?in=Family&kind=person")), "create-person"), map[string]string{"title": "Cy"}))
 	if got := partOfLinks(ana); strings.Join(got, ",") != "Family" {
 		t.Errorf("Cy made from Browse in Family is part-of %v", got)
 	}
@@ -198,12 +198,10 @@ func TestFilingWhereMadeTransportParity(t *testing.T) {
 	for _, remote := range []bool{false, true} {
 		for _, source := range []string{"cli", "agent:browse"} {
 			t.Run(fmt.Sprint(remote, source), func(t *testing.T) {
-				_, h, _ := freshStore(t)
+				_, h, _ := apitest.Fresh(t, "cli")
 				c := client.InProcess(h, source)
 				if remote {
-					server := httptest.NewServer(h)
-					t.Cleanup(server.Close)
-					c = client.Remote(server.URL, source, "")
+					_, c = apitest.Clients(t, h, source)
 				}
 				actions, err := c.Catalog(t.Context())
 				if err != nil {
@@ -215,7 +213,7 @@ func TestFilingWhereMadeTransportParity(t *testing.T) {
 						place = a
 					}
 				}
-				e := must(c.Do(t.Context(), place, map[string]string{"title": "Lakeside", "category": "Trips"}))
+				e := apitest.Must(t)(c.Do(t.Context(), place, map[string]string{"title": "Lakeside", "category": "Trips"}))
 				if got := partOfLinks(e); strings.Join(got, ",") != "Trips" {
 					t.Errorf("Lakeside is part-of %v, want Trips", got)
 				}

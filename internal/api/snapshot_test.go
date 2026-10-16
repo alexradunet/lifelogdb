@@ -3,7 +3,6 @@ package api_test
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"lifelog/internal/api"
+	"lifelog/internal/api/apitest"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db/dbtest"
@@ -25,16 +25,16 @@ func TestSnapshotIsTheOwnersFromAnySurface(t *testing.T) {
 	h := api.New(&core.Store{DB: d, SnapshotDir: dir, Clock: clock, Zone: time.UTC})
 	owner := client.InProcess(h, "cli")
 	agent := client.InProcess(h, "agent:lmstudio")
-	root := must(owner.Get(t.Context(), "/"))
+	root := apitest.Must(t)(owner.Get(t.Context(), "/"))
 	if _, _, err := (&core.Store{DB: d}).Capture(t.Context(), "cli", "2031-08-01", "a row to copy", nil); err != nil {
 		t.Fatal(err)
 	}
-	action := find(root, "snapshot")
+	action := apitest.Action(t, root, "snapshot")
 	if action.Name == "" || !action.Owner {
 		t.Fatalf("the root offers the owner the snapshot action: %+v", action)
 	}
 
-	first := must(owner.Do(t.Context(), action, nil))
+	first := apitest.Must(t)(owner.Do(t.Context(), action, nil))
 	props := first.Properties.(map[string]any)
 	path, _ := props["snapshot"].(string)
 	today := "2026-10-02" // the day of the store's clock
@@ -47,10 +47,10 @@ func TestSnapshotIsTheOwnersFromAnySurface(t *testing.T) {
 	if check, _ := props["restore_check"].(map[string]any); check["ok"] != true {
 		t.Fatalf("restore check: %v", props["restore_check"])
 	}
-	if first.Result == nil || hrefOf(first, "self") != "/" {
-		t.Fatalf("the answer carries the result and points home: result=%v self=%q", first.Result, hrefOf(first, "self"))
+	if first.Result == nil || apitest.Href(first, "self") != "/" {
+		t.Fatalf("the answer carries the result and points home: result=%v self=%q", first.Result, apitest.Href(first, "self"))
 	}
-	second := must(owner.Do(t.Context(), action, nil))
+	second := apitest.Must(t)(owner.Do(t.Context(), action, nil))
 	again, _ := second.Properties.(map[string]any)["snapshot"].(string)
 	if filepath.Base(again) != "life-"+today+"T143005.db" {
 		t.Fatalf("a second snapshot the same day: %q, want life-%sT143005.db", again, today)
@@ -58,7 +58,7 @@ func TestSnapshotIsTheOwnersFromAnySurface(t *testing.T) {
 
 	// An agent is refused and writes nothing.
 	before, _ := os.ReadDir(dir)
-	if _, err := agent.Do(t.Context(), action, nil); !clientStatus(err, 403) {
+	if _, err := agent.Do(t.Context(), action, nil); apitest.Status(err) != 403 {
 		t.Fatalf("agent: %v", err)
 	}
 	after, _ := os.ReadDir(dir)
@@ -100,16 +100,15 @@ func TestASnapshotThatFailsItsRestoreCheckIsAnError(t *testing.T) {
 	clock := func() time.Time { return time.Date(2026, 10, 2, 14, 30, 5, 0, time.UTC) }
 	h := api.New(&core.Store{DB: d, SnapshotDir: dir, Clock: clock, Zone: time.UTC})
 	owner := client.InProcess(h, "cli")
-	root := must(owner.Get(t.Context(), "/"))
-	must(owner.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "Walk"}))
+	root := apitest.Must(t)(owner.Get(t.Context(), "/"))
+	apitest.Must(t)(owner.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "Walk"}))
 	// Deliberate damage, past the writer and the DDL: a correction of a reading of another metric, written with its
 	// trigger dropped. The semantic integrity check reports it, in the live file and in every copy of it.
-	must(owner.Do(t.Context(), find(root, "record"), map[string]string{"metric": "Walk", "day": "2026-10-01", "value": "1"}))
+	apitest.Must(t)(owner.Do(t.Context(), apitest.Action(t, root, "record"), map[string]string{"metric": "Walk", "day": "2026-10-01", "value": "1"}))
 	withoutTrigger(t, d.W, "measurements_supersede_metric", `INSERT INTO measurements(metric_id, day, value, supersedes_id, source, created_at)
 		SELECT 1, '2026-10-01', 3, (SELECT id FROM measurements LIMIT 1), 'cli', strftime('%Y-%m-%dT%H:%M:%fZ','now')`)
-	e, err := owner.Do(t.Context(), find(root, "snapshot"), nil)
-	var ce *client.Error
-	if !errors.As(err, &ce) || ce.Status != 500 {
+	e, err := owner.Do(t.Context(), apitest.Action(t, root, "snapshot"), nil)
+	if apitest.Status(err) != 500 {
 		t.Fatalf("a failed restore check answers 500, got %v", err)
 	}
 	props, _ := e.Properties.(map[string]any)

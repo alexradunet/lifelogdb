@@ -5,32 +5,34 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"lifelog/internal/api/apitest"
 )
 
 // The category tree of Browse (docs/plans/117-one-browse-view.md, rule 3): the categories by path with a count each,
 // beside the list, and Not filed at its end.
 
 func TestBrowseDrawsTheTreeAndTheUnfiledPages(t *testing.T) {
-	c, h := freshOn(t, fixedToday)
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	ctx := t.Context()
-	root := must(c.Get(ctx, "/"))
+	root := apitest.Must(t)(c.Get(ctx, "/"))
 	ids := map[string]string{}
 	for _, title := range []string{"Japan 2031", "Alps 2030", "Loose note", "Gone"} {
-		ids[title] = fmt.Sprint(props(must(c.Do(ctx, find(root, "create-page"), map[string]string{"title": title})))["id"])
+		ids[title] = fmt.Sprint(props(apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": title})))["id"])
 	}
-	must(c.Do(ctx, find(root, "capture"), map[string]string{"text": "a day"}))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "capture"), map[string]string{"text": "a day"}))
 	file := func(id, category string) {
 		t.Helper()
-		must(c.Do(ctx, find(must(c.Get(ctx, "/pages/"+id)), "file-pages"), map[string]string{"category": category}))
+		apitest.Must(t)(c.Do(ctx, apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/pages/"+id)), "file-pages"), map[string]string{"category": category}))
 	}
 	file(ids["Japan 2031"], "Travel")
 	file(ids["Alps 2030"], "Travel")
 	file(ids["Gone"], "Travel")
-	travel := fmt.Sprint(props(must(c.Get(ctx, "/pages?title=Travel")))["id"])
+	travel := fmt.Sprint(props(apitest.Must(t)(c.Get(ctx, "/pages?title=Travel")))["id"])
 	file(travel, "Life")
-	must(c.Do(ctx, find(must(c.Get(ctx, "/pages/"+ids["Gone"])), "tombstone"), nil))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/pages/"+ids["Gone"])), "tombstone"), nil))
 
-	e := must(c.Get(ctx, "/browse?unfiled=1"))
+	e := apitest.Must(t)(c.Get(ctx, "/browse?unfiled=1"))
 	var tree []string
 	for _, x := range props(e)["categories"].([]any) {
 		c := x.(map[string]any)
@@ -73,8 +75,8 @@ func TestBrowseDrawsTheTreeAndTheUnfiledPages(t *testing.T) {
 }
 
 func TestBrowseWithNoCategory(t *testing.T) {
-	c, h := freshOn(t, fixedToday)
-	e := must(c.Get(t.Context(), "/browse"))
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
+	e := apitest.Must(t)(c.Get(t.Context(), "/browse"))
 	if cs := props(e)["categories"].([]any); len(cs) != 0 {
 		t.Errorf("categories: %v", cs)
 	}

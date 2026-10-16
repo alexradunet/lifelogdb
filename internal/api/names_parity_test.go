@@ -2,7 +2,6 @@ package api_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -11,25 +10,19 @@ import (
 	"strings"
 	"testing"
 
-	"lifelog/internal/api"
-	"lifelog/internal/client"
+	"lifelog/internal/api/apitest"
 	"lifelog/internal/core"
-	"lifelog/internal/db/dbtest"
 )
 
 func TestStableNameTransportParity(t *testing.T) {
 	for _, remote := range []bool{false, true} {
 		for _, kind := range []string{"page", "person", "place", "metric", "file"} {
 			t.Run(fmt.Sprintf("remote=%v/type=%s", remote, kind), func(t *testing.T) {
-				d := dbtest.New(t)
-				s := &core.Store{DB: d}
-				h := api.New(s)
-				c := client.InProcess(h, "agent:names")
+				c, h, s := apitest.Fresh(t, "agent:names")
 				if remote {
-					server := httptest.NewServer(h)
-					t.Cleanup(server.Close)
-					c = client.Remote(server.URL, "agent:names", "")
+					_, c = apitest.Clients(t, h, "agent:names")
 				}
+				d := s.DB
 				old := "Old " + kind
 				var id int64
 				var err error
@@ -67,10 +60,10 @@ func TestStableNameTransportParity(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					if find(page, "rename").Name != "rename" {
+					if !hasAction(page, "rename") {
 						t.Fatal("typed entity lacks rename action")
 					}
-					renamed, err := c.Do(t.Context(), find(page, "rename"), map[string]string{"title": title})
+					renamed, err := c.Do(t.Context(), apitest.Action(t, page, "rename"), map[string]string{"title": title})
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -120,9 +113,8 @@ func TestStableNameTransportParity(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					_, err = c.Do(t.Context(), find(page, "rename"), map[string]string{"title": title})
-					var ce *client.Error
-					if !errors.As(err, &ce) || ce.Status != status {
+					_, err = c.Do(t.Context(), apitest.Action(t, page, "rename"), map[string]string{"title": title})
+					if apitest.Status(err) != status {
 						t.Fatalf("rename %q: %v; want %d", title, err, status)
 					}
 					after, err := s.PageByID(context.Background(), id)
@@ -146,9 +138,7 @@ func TestStableNameTransportParity(t *testing.T) {
 }
 
 func TestBrowserStableNameResolution(t *testing.T) {
-	d := dbtest.New(t)
-	s := &core.Store{DB: d}
-	h := api.New(s)
+	_, h, s := apitest.Fresh(t, "cli")
 	id, err := s.CreatePerson(context.Background(), "cli", "Old person", "Synthetic Person", "", "", "")
 	if err != nil {
 		t.Fatal(err)

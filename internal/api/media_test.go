@@ -7,30 +7,31 @@ import (
 	"testing"
 
 	"lifelog/internal/api"
+	"lifelog/internal/api/apitest"
 )
 
 // TestMediaListsPicturesVideosAndRecordings: the media list of Browse is the files of the three kinds, newest day
 // first, with a kind, a picture where one is kept and a day; a file of another kind keeps its page and is a document.
 // One kind alone is read by media=, and any other word is refused.
 func TestMediaListsPicturesVideosAndRecordings(t *testing.T) {
-	c, h := freshOn(t, fixedToday)
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	ctx := t.Context()
-	root := must(c.Get(ctx, "/"))
-	add := find(root, "add-file")
+	root := apitest.Must(t)(c.Get(ctx, "/"))
+	add := apitest.Action(t, root, "add-file")
 	jpg := func(name string, w, h int) string { p, _ := jpegFile(t, name, w, h); return p }
-	photo := must(c.DoFiles(ctx, add, map[string]string{"title": "Lake.jpg", "day": "2031-05-10"}, map[string]string{"original": jpg("lake.jpg", 40, 30)}))
-	must(c.Do(ctx, add, map[string]string{"title": "Walk.mp4", "sha256": strings.Repeat("ab", 32), "mime": "video/mp4", "day": "2031-05-12"}))
-	must(c.Do(ctx, find(root, "capture"), map[string]string{"text": "Walked. [[Walk.mp4]]"}))
+	photo := apitest.Must(t)(c.DoFiles(ctx, add, map[string]string{"title": "Lake.jpg", "day": "2031-05-10"}, map[string]string{"original": jpg("lake.jpg", 40, 30)}))
+	apitest.Must(t)(c.Do(ctx, add, map[string]string{"title": "Walk.mp4", "sha256": strings.Repeat("ab", 32), "mime": "video/mp4", "day": "2031-05-12"}))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "capture"), map[string]string{"text": "Walked. [[Walk.mp4]]"}))
 	for i, title := range []string{"Memo 1.m4a", "Memo 2.m4a"} {
-		must(c.Do(ctx, add, map[string]string{"title": title, "sha256": strings.Repeat(string(rune('c'+i))+"d", 32), "mime": "audio/mp4", "day": "2031-05-0" + string(rune('1'+i))}))
+		apitest.Must(t)(c.Do(ctx, add, map[string]string{"title": title, "sha256": strings.Repeat(string(rune('c'+i))+"d", 32), "mime": "audio/mp4", "day": "2031-05-0" + string(rune('1'+i))}))
 	}
 	// A photo with no EXIF and no day has no day of its own: the day page that shows it gives it one, or it has none.
-	must(c.DoFiles(ctx, add, map[string]string{"title": "Dawn.jpg"}, map[string]string{"original": jpg("dawn.jpg", 32, 24)}))
-	must(c.Do(ctx, find(root, "capture"), map[string]string{"text": "![[Dawn.jpg]]"}))
-	must(c.DoFiles(ctx, add, map[string]string{"title": "Blank.jpg"}, map[string]string{"original": jpg("blank.jpg", 24, 16)}))
-	must(c.Do(ctx, add, map[string]string{"title": "Scan.pdf", "sha256": strings.Repeat("ef", 32), "mime": "application/pdf"}))
+	apitest.Must(t)(c.DoFiles(ctx, add, map[string]string{"title": "Dawn.jpg"}, map[string]string{"original": jpg("dawn.jpg", 32, 24)}))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "capture"), map[string]string{"text": "![[Dawn.jpg]]"}))
+	apitest.Must(t)(c.DoFiles(ctx, add, map[string]string{"title": "Blank.jpg"}, map[string]string{"original": jpg("blank.jpg", 24, 16)}))
+	apitest.Must(t)(c.Do(ctx, add, map[string]string{"title": "Scan.pdf", "sha256": strings.Repeat("ef", 32), "mime": "application/pdf"}))
 
-	e := must(c.Get(ctx, "/browse?kind=media"))
+	e := apitest.Must(t)(c.Get(ctx, "/browse?kind=media"))
 	rows, _ := props(e)["rows"].([]any)
 	var got []string
 	for _, r := range rows {
@@ -40,7 +41,7 @@ func TestMediaListsPicturesVideosAndRecordings(t *testing.T) {
 	want := []string{
 		"Dawn.jpg media image image/jpeg day=" + fixedToday + " picture=/pages/8/preview mentions=1",
 		"Walk.mp4 media video video/mp4 day=2031-05-12 picture= mentions=1",
-		"Lake.jpg media image image/jpeg day=2031-05-10 picture=" + hrefOf(photo, "preview") + " mentions=1", // its day page shows it
+		"Lake.jpg media image image/jpeg day=2031-05-10 picture=" + apitest.Href(photo, "preview") + " mentions=1", // its day page shows it
 		"Memo 2.m4a media audio audio/mp4 day=2031-05-02 picture= mentions=0",
 		"Memo 1.m4a media audio audio/mp4 day=2031-05-01 picture= mentions=0",
 		"Blank.jpg media image image/jpeg day= picture=/pages/9/preview mentions=0",
@@ -54,8 +55,8 @@ func TestMediaListsPicturesVideosAndRecordings(t *testing.T) {
 	if len(e.Entities) != 6 || e.Entities[0].Title != "Dawn.jpg" || e.Entities[0].Class[0] != "file" {
 		t.Errorf("the items: %+v", e.Entities)
 	}
-	if hrefOf(e, "pictures") != "/browse?kind=media&media=image" || hrefOf(e, "videos") != "/browse?kind=media&media=video" ||
-		hrefOf(e, "recordings") != "/browse?kind=media&media=audio" || hrefOf(root, "media") != "/browse?kind=media" {
+	if apitest.Href(e, "pictures") != "/browse?kind=media&media=image" || apitest.Href(e, "videos") != "/browse?kind=media&media=video" ||
+		apitest.Href(e, "recordings") != "/browse?kind=media&media=audio" || apitest.Href(root, "media") != "/browse?kind=media" {
 		t.Errorf("the links: %+v", e.Links)
 	}
 	// The list's add-file takes a file of any kind, as the catalog's does.
@@ -67,24 +68,24 @@ func TestMediaListsPicturesVideosAndRecordings(t *testing.T) {
 		}
 		return "?"
 	}
-	if accept(find(e, "add-file")) != "" || accept(add) != "" || find(e, "tombstone-pages").Name == "" {
+	if accept(apitest.Action(t, e, "add-file")) != "" || accept(add) != "" || !hasAction(e, "tombstone-pages") {
 		t.Errorf("the actions: %+v", e.Actions)
 	}
 
 	// One kind alone, and its paging keeps the kind; the media counts stay those of every kind.
-	audio := must(c.Get(ctx, "/browse?kind=media&media=audio&limit=1"))
+	audio := apitest.Must(t)(c.Get(ctx, "/browse?kind=media&media=audio&limit=1"))
 	rows, _ = props(audio)["rows"].([]any)
 	if len(rows) != 1 || rows[0].(map[string]any)["title"] != "Memo 2.m4a" || props(audio)["media"] != "audio" ||
-		hrefOf(audio, "next") != "/browse?kind=media&limit=1&media=audio&offset=1" || hrefOf(audio, "self") != "/browse?kind=media&media=audio" {
-		t.Errorf("the recordings: %v %v %q", rows, props(audio)["media"], hrefOf(audio, "next"))
+		apitest.Href(audio, "next") != "/browse?kind=media&limit=1&media=audio&offset=1" || apitest.Href(audio, "self") != "/browse?kind=media&media=audio" {
+		t.Errorf("the recordings: %v %v %q", rows, props(audio)["media"], apitest.Href(audio, "next"))
 	}
 	if counts, _ := props(audio)["media_counts"].(map[string]any); str(counts["image"]) != "3" {
 		t.Errorf("the media counts of the recordings: %v", props(audio)["media_counts"])
 	}
-	if rows, _ := props(must(c.Get(ctx, "/browse?kind=media&media=image")))["rows"].([]any); len(rows) != 3 || rows[1].(map[string]any)["title"] != "Lake.jpg" {
+	if rows, _ := props(apitest.Must(t)(c.Get(ctx, "/browse?kind=media&media=image")))["rows"].([]any); len(rows) != 3 || rows[1].(map[string]any)["title"] != "Lake.jpg" {
 		t.Errorf("the pictures: %v", rows)
 	}
-	if _, err := c.Get(ctx, "/browse?kind=media&media=document"); !clientStatus(err, 422) {
+	if _, err := c.Get(ctx, "/browse?kind=media&media=document"); apitest.Status(err) != 422 {
 		t.Errorf("an unknown kind: %v", err)
 	}
 
@@ -92,7 +93,7 @@ func TestMediaListsPicturesVideosAndRecordings(t *testing.T) {
 	body := browse(t, h, "/browse?kind=media")
 	for _, want := range []string{"<span>3 pictures, 1 video, 2 recordings</span>",
 		`<nav class="kinds" aria-label="Media kind"><a href="/browse?kind=media" aria-current="page">All media</a><a href="/browse?kind=media&amp;media=image">Pictures</a><a href="/browse?kind=media&amp;media=video">Videos</a><a href="/browse?kind=media&amp;media=audio">Recordings</a></nav>`,
-		`<ul class="plain tiles">`, `<img src="` + hrefOf(photo, "preview") + `" alt="" loading="lazy"><span class="first">Lake.jpg</span><span class="meta">picture · Sat 10 May</span>`,
+		`<ul class="plain tiles">`, `<img src="` + apitest.Href(photo, "preview") + `" alt="" loading="lazy"><span class="first">Lake.jpg</span><span class="meta">picture · Sat 10 May</span>`,
 		`<span class="tile-blank" aria-hidden="true"><svg class="icon"`, `<span class="first">Walk.mp4</span><span class="meta">video · Mon 12 May</span>`, `<span class="first">Dawn.jpg</span><span class="meta">picture · Wed 14 May</span>`,
 		`<span class="first">Memo 1.m4a</span><span class="meta">recording · Thu 1 May</span>`, `<span class="first">Blank.jpg</span><span class="meta">picture · no day yet</span>`,
 		`<label class="pick-box"><input type="checkbox" name="ids" value="`} {
@@ -104,8 +105,8 @@ func TestMediaListsPicturesVideosAndRecordings(t *testing.T) {
 		t.Error("the media page shows the PDF")
 	}
 	// The documents are every other file, as rows, with the same words.
-	must(c.Do(ctx, add, map[string]string{"title": "Notes.txt", "sha256": strings.Repeat("0f", 32), "mime": "text/plain", "day": "2031-05-03"}))
-	files := must(c.Get(ctx, "/browse?kind=document"))
+	apitest.Must(t)(c.Do(ctx, add, map[string]string{"title": "Notes.txt", "sha256": strings.Repeat("0f", 32), "mime": "text/plain", "day": "2031-05-03"}))
+	files := apitest.Must(t)(c.Get(ctx, "/browse?kind=document"))
 	got = nil
 	for _, r := range props(files)["rows"].([]any) {
 		m := r.(map[string]any)
@@ -113,8 +114,8 @@ func TestMediaListsPicturesVideosAndRecordings(t *testing.T) {
 	}
 	// The PDF had no day: it took the day of the store's clock when it was kept, so it is the newest.
 	if want := "Scan.pdf document application application/pdf day=" + fixedToday + "\nNotes.txt document text text/plain day=2031-05-03"; strings.Join(got, "\n") != want ||
-		len(files.Entities) != 2 || hrefOf(root, "files") != "/browse?kind=document" ||
-		accept(find(files, "add-file")) != "" || find(files, "tombstone-pages").Name == "" || props(files)["media_counts"] != nil {
+		len(files.Entities) != 2 || apitest.Href(root, "files") != "/browse?kind=document" ||
+		accept(apitest.Action(t, files, "add-file")) != "" || !hasAction(files, "tombstone-pages") || props(files)["media_counts"] != nil {
 		t.Errorf("the documents: %v\n%+v %+v", got, files.Links, props(files))
 	}
 	body = browse(t, h, "/browse?kind=document")
@@ -140,7 +141,7 @@ func TestMediaListsPicturesVideosAndRecordings(t *testing.T) {
 // TestTheMediaCountsFollowTheScope: inside a category the media list counts what is filed there, and Not filed what
 // is in no category.
 func TestTheMediaCountsFollowTheScope(t *testing.T) {
-	c, h, s := freshStore(t)
+	c, h, s := apitest.Fresh(t, "cli")
 	browseFixture(t, s) // Family: photo.jpg and scan.pdf; nowhere: memo.m4a
 	ctx := t.Context()
 	for path, want := range map[string]string{
@@ -149,7 +150,7 @@ func TestTheMediaCountsFollowTheScope(t *testing.T) {
 		"/browse?kind=media&unfiled=1":  "image=0 video=0 audio=1",
 		"/browse?kind=media&in=Cousins": "image=0 video=0 audio=0",
 	} {
-		m := props(must(c.Get(ctx, path)))["media_counts"].(map[string]any)
+		m := props(apitest.Must(t)(c.Get(ctx, path)))["media_counts"].(map[string]any)
 		if got := "image=" + str(m["image"]) + " video=" + str(m["video"]) + " audio=" + str(m["audio"]); got != want {
 			t.Errorf("%s: %s, want %s", path, got, want)
 		}
@@ -162,10 +163,10 @@ func TestTheMediaCountsFollowTheScope(t *testing.T) {
 // TestMediaIsEmptyUntilAFileOfItsKindsIsKept: a PDF alone leaves the media list empty, with its counts and its
 // empty words, and a photo alone the documents.
 func TestMediaIsEmptyUntilAFileOfItsKindsIsKept(t *testing.T) {
-	c, h := fresh(t)
+	c, h, _ := apitest.Fresh(t, "cli")
 	ctx := t.Context()
-	must(c.Do(ctx, find(must(c.Get(ctx, "/")), "add-file"), map[string]string{"title": "Scan.pdf", "sha256": strings.Repeat("ef", 32), "mime": "application/pdf"}))
-	e := must(c.Get(ctx, "/browse?kind=media"))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/")), "add-file"), map[string]string{"title": "Scan.pdf", "sha256": strings.Repeat("ef", 32), "mime": "application/pdf"}))
+	e := apitest.Must(t)(c.Get(ctx, "/browse?kind=media"))
 	if rows, _ := props(e)["rows"].([]any); len(rows) != 0 || len(e.Entities) != 0 {
 		t.Errorf("the rows: %v", props(e)["rows"])
 	}
@@ -174,10 +175,10 @@ func TestMediaIsEmptyUntilAFileOfItsKindsIsKept(t *testing.T) {
 		t.Errorf("the empty page: %.800s", body)
 	}
 	// And the other way round: a photo alone leaves the documents empty.
-	c, h = fresh(t)
+	c, h, _ = apitest.Fresh(t, "cli")
 	path, _ := jpegFile(t, "lake.jpg", 40, 30)
-	must(c.DoFiles(ctx, find(must(c.Get(ctx, "/")), "add-file"), map[string]string{"title": "Lake.jpg"}, map[string]string{"original": path}))
-	if e := must(c.Get(ctx, "/browse?kind=document")); len(e.Entities) != 0 {
+	apitest.Must(t)(c.DoFiles(ctx, apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/")), "add-file"), map[string]string{"title": "Lake.jpg"}, map[string]string{"original": path}))
+	if e := apitest.Must(t)(c.Get(ctx, "/browse?kind=document")); len(e.Entities) != 0 {
 		t.Errorf("the documents: %+v", e.Entities)
 	}
 	if body := browse(t, h, "/browse?kind=document"); !strings.Contains(body, `<p class="empty">Nothing of this kind yet. New, above, makes the first one.</p>`) {

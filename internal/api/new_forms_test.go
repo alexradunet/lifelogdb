@@ -6,13 +6,15 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"lifelog/internal/api/apitest"
 )
 
 // One way to make a thing (docs/plans/114-one-way-to-do-a-thing.md): the rail's New is a menu of the kinds, each
 // made on its list, and ?new=<action> opens that action's form on any page.
 
 func TestEveryKindOfTheNewMenuOpensItsForm(t *testing.T) {
-	_, h := freshOn(t, fixedToday)
+	_, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	day := browse(t, h, "/days/"+fixedToday)
 	menu := day[strings.Index(day, `<div class="new-menu" id="new-menu" popover>`):]
 	menu = menu[:strings.Index(menu, "</nav></div>")]
@@ -48,7 +50,7 @@ func TestEveryKindOfTheNewMenuOpensItsForm(t *testing.T) {
 }
 
 func TestALinkOpensAFormAndFillsItsFields(t *testing.T) {
-	_, h := freshOn(t, fixedToday)
+	_, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	people := browse(t, h, "/browse?kind=person&new=create-person&title=Ana+Popescu&name=Ana")
 	form := people[strings.Index(people, `<details class="action" open>`):]
 	form = form[:strings.Index(form, "</details>")]
@@ -83,9 +85,9 @@ func TestALinkOpensAFormAndFillsItsFields(t *testing.T) {
 }
 
 func TestTheCatalogSaysOneVerbForOneMeaning(t *testing.T) {
-	c, _ := freshOn(t, fixedToday)
+	c, _, _ := apitest.FreshOn(t, "cli", fixedToday)
 	titles := map[string]string{}
-	for _, a := range must(c.Get(t.Context(), "/actions")).Actions {
+	for _, a := range apitest.Must(t)(c.Get(t.Context(), "/actions")).Actions {
 		titles[a.Name] = a.Title
 	}
 	for name, want := range map[string]string{
@@ -103,12 +105,12 @@ func TestTheCatalogSaysOneVerbForOneMeaning(t *testing.T) {
 // TestADaysReadingTileAddsAReadingForThatDay: + Add on a day's tile records one value for that day, not today, and
 // returns to the day; on today it says Today.
 func TestADaysReadingTileAddsAReadingForThatDay(t *testing.T) {
-	c, h := freshOn(t, fixedToday)
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	ctx := t.Context()
-	must(c.Do(ctx, find(must(c.Get(ctx, "/")), "register-metric"), map[string]string{"name": "Weight", "unit": "kg"}))
-	record := find(must(c.Get(ctx, "/metrics/Weight")), "record")
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/")), "register-metric"), map[string]string{"name": "Weight", "unit": "kg"}))
+	record := apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/metrics/Weight")), "record")
 	for _, day := range []string{"2031-05-12", fixedToday} {
-		must(c.Do(ctx, record, map[string]string{"metric": "Weight", "day": day, "value": "80"}))
+		apitest.Must(t)(c.Do(ctx, record, map[string]string{"metric": "Weight", "day": day, "value": "80"}))
 	}
 
 	past := browse(t, h, "/days/2031-05-12")
@@ -134,13 +136,13 @@ func TestADaysReadingTileAddsAReadingForThatDay(t *testing.T) {
 // TestAPagesCategoriesAreBadges: a page shows its categories as badges; + Add puts it in one (a new name makes it),
 // and x takes it out of that one only. A day page has none.
 func TestAPagesCategoriesAreBadges(t *testing.T) {
-	c, h := freshOn(t, fixedToday)
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	ctx := t.Context()
-	root := must(c.Get(ctx, "/"))
-	must(c.Do(ctx, find(root, "create-page"), map[string]string{"title": "Seeds"}))
-	must(c.Do(ctx, find(must(c.Get(ctx, "/pages?title=Seeds")), "file-pages"), map[string]string{"category": "Projects"}))
-	garden := must(c.Do(ctx, find(root, "create-page"), map[string]string{"title": "Garden", "body": "See [[Seeds]]."}))
-	self := href(garden, "self")
+	root := apitest.Must(t)(c.Get(ctx, "/"))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": "Seeds"}))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/pages?title=Seeds")), "file-pages"), map[string]string{"category": "Projects"}))
+	garden := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": "Garden", "body": "See [[Seeds]]."}))
+	self := apitest.Href(garden, "self")
 	id := self[strings.LastIndex(self, "/")+1:]
 
 	before := browse(t, h, self)
@@ -172,7 +174,7 @@ func TestAPagesCategoriesAreBadges(t *testing.T) {
 		t.Fatalf("x: %d %q", rec.Code, loc)
 	}
 	links := map[string]string{}
-	for _, l := range props(must(c.Get(ctx, self)))["links"].([]any) {
+	for _, l := range props(apitest.Must(t)(c.Get(ctx, self)))["links"].([]any) {
 		l := l.(map[string]any)
 		links[l["title"].(string)] = l["kind"].(string)
 	}
@@ -180,8 +182,8 @@ func TestAPagesCategoriesAreBadges(t *testing.T) {
 		t.Errorf("after x the links are %v, want Projects part-of and Seeds wikilink", links)
 	}
 
-	day := must(c.Do(ctx, find(root, "capture"), map[string]string{"text": "Dug the beds."}))
-	if body := browse(t, h, href(day, "page")); strings.Contains(body, `aria-label="Categories"`) {
+	day := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "capture"), map[string]string{"text": "Dug the beds."}))
+	if body := browse(t, h, apitest.Href(day, "page")); strings.Contains(body, `aria-label="Categories"`) {
 		t.Error("a day page shows categories")
 	}
 }
@@ -189,13 +191,13 @@ func TestAPagesCategoriesAreBadges(t *testing.T) {
 // TestEveryListSelectsTheSameWay: the lists of Browse and the Metrics board draw one pick bar, after their boxes,
 // with Select and a button for each action the list offers; a list of metrics offers no Delete of several.
 func TestEveryListSelectsTheSameWay(t *testing.T) {
-	c, h := freshOn(t, fixedToday)
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	ctx := t.Context()
-	root := must(c.Get(ctx, "/"))
-	must(c.Do(ctx, find(root, "register-metric"), map[string]string{"name": "Weight", "unit": "kg"}))
+	root := apitest.Must(t)(c.Get(ctx, "/"))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "register-metric"), map[string]string{"name": "Weight", "unit": "kg"}))
 	for _, title := range []string{"Scan.jpg", "Notes.pdf"} {
 		mime := map[string]string{"Scan.jpg": "image/jpeg", "Notes.pdf": "application/pdf"}[title]
-		must(c.Do(ctx, find(root, "add-file"), map[string]string{"title": title, "sha256": strings.Repeat(map[string]string{"Scan.jpg": "ab", "Notes.pdf": "cd"}[title], 32), "mime": mime}))
+		apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "add-file"), map[string]string{"title": title, "sha256": strings.Repeat(map[string]string{"Scan.jpg": "ab", "Notes.pdf": "cd"}[title], 32), "mime": mime}))
 	}
 	for _, list := range []struct{ path, put, del string }{
 		{"/browse?kind=media", "/pages/file", "/pages/tombstone"}, {"/browse?kind=document", "/pages/file", "/pages/tombstone"},

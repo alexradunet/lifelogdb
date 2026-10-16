@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"lifelog/internal/api"
+	"lifelog/internal/api/apitest"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db/dbtest"
@@ -29,7 +30,7 @@ func TestTheStoresClockIsTheOneClock(t *testing.T) {
 	c := client.InProcess(h, "cli")
 	ctx := t.Context()
 
-	root := must(c.Get(ctx, "/"))
+	root := apitest.Must(t)(c.Get(ctx, "/"))
 	if got := props(root)["today"]; got != today {
 		t.Errorf("the root's today is %v, want %s", got, today)
 	}
@@ -69,8 +70,8 @@ func TestTheStoresClockIsTheOneClock(t *testing.T) {
 	}
 
 	// A page and a file that is not a photo, both with no day, take the local day.
-	must(c.Do(ctx, find(root, "create-page"), map[string]string{"title": "Night thought"}))
-	must(c.Do(ctx, find(root, "add-file"), map[string]string{"title": "Scan.pdf", "sha256": strings.Repeat("ab", 32), "mime": "application/pdf"}))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": "Night thought"}))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "add-file"), map[string]string{"title": "Scan.pdf", "sha256": strings.Repeat("ab", 32), "mime": "application/pdf"}))
 	for _, title := range []string{"Night thought", "Scan.pdf"} {
 		id, err := s.PageID(ctx, title)
 		if err != nil {
@@ -87,16 +88,16 @@ func TestTheStoresClockIsTheOneClock(t *testing.T) {
 
 	// The words for a time are in the zone of the clock: a reading taken at the instant of the clock was taken today
 	// at 01:30, not yesterday at 11:30.
-	must(c.Do(ctx, find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
-	m := must(c.Do(ctx, find(root, "record"), map[string]string{"metric": "weight", "day": today, "value": "71", "taken_at": "2026-03-10T11:30:00.000Z"}))
-	if want := `>today, 01:30</time>`; !strings.Contains(browse(t, h, href(m, "self")), want) {
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
+	m := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "record"), map[string]string{"metric": "weight", "day": today, "value": "71", "taken_at": "2026-03-10T11:30:00.000Z"}))
+	if want := `>today, 01:30</time>`; !strings.Contains(browse(t, h, apitest.Href(m, "self")), want) {
 		t.Errorf("the page of a reading taken now does not say %s", want)
 	}
 
 	// A snapshot is named by the local day, and a second one of that day by the local time too.
 	var names []string
 	for range 2 {
-		e := must(c.Do(ctx, find(root, "snapshot"), nil))
+		e := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "snapshot"), nil))
 		path, _ := props(e)["snapshot"].(string)
 		names = append(names, filepath.Base(path))
 	}

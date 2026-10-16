@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"lifelog/internal/api/apitest"
 	"lifelog/internal/client"
 )
 
@@ -29,32 +30,32 @@ func idOfSelf(t *testing.T, href string) string {
 // (pages, the ghost pages too, media and documents), and not on people or places, which are deleted from their own
 // page; it tombstones every id named in one write, or none of them.
 func TestDeletePagesAtOnce(t *testing.T) {
-	c, h := fresh(t)
+	c, h, _ := apitest.Fresh(t, "cli")
 	ctx := t.Context()
-	add := find(must(c.Get(ctx, "/")), "add-file")
+	add := apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/")), "add-file")
 	var ids []string
 	for i, title := range []string{"Memo 1.m4a", "Memo 2.m4a", "Memo 3.m4a"} {
-		e := must(c.Do(ctx, add, map[string]string{"title": title, "sha256": strings.Repeat(fmt.Sprintf("%02x", i+1), 32), "mime": "audio/mp4"}))
-		ids = append(ids, idOfSelf(t, hrefOf(e, "self")))
+		e := apitest.Must(t)(c.Do(ctx, add, map[string]string{"title": title, "sha256": strings.Repeat(fmt.Sprintf("%02x", i+1), 32), "mime": "audio/mp4"}))
+		ids = append(ids, idOfSelf(t, apitest.Href(e, "self")))
 	}
-	del := find(must(c.Get(ctx, "/browse?kind=media")), "tombstone-pages")
-	if del.Name == "" || !del.Danger || len(del.Fields) != 1 || del.Fields[0].Name != "ids" || !del.Fields[0].Required {
+	del := apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/browse?kind=media")), "tombstone-pages")
+	if !del.Danger || len(del.Fields) != 1 || del.Fields[0].Name != "ids" || !del.Fields[0].Required {
 		t.Fatalf("the media list's delete: %+v", del)
 	}
 	// The ghost list offers Delete: the owner's word (docs/plans/117-one-browse-view.md, rule 5).
 	for list, offers := range map[string]bool{"/browse?kind=person": false, "/browse?kind=place": false, "/browse?ghosts=1": true,
 		"/browse": true, "/browse?kind=document": true} {
-		if got := find(must(c.Get(ctx, list)), "tombstone-pages").Name != ""; got != offers {
+		if got := hasAction(apitest.Must(t)(c.Get(ctx, list)), "tombstone-pages"); got != offers {
 			t.Errorf("%s offers tombstone-pages: %v, want %v", list, got, offers)
 		}
 	}
 	deleted := func(id string) bool {
 		t.Helper()
-		return slices.Contains(must(c.Get(ctx, "/pages/"+id)).Class, "deleted")
+		return slices.Contains(apitest.Must(t)(c.Get(ctx, "/pages/"+id)).Class, "deleted")
 	}
 
 	// Commas and spaces separate the ids; an id named twice counts once.
-	done := must(c.Do(ctx, del, map[string]string{"ids": ids[0] + ", " + ids[1] + " " + ids[0]}))
+	done := apitest.Must(t)(c.Do(ctx, del, map[string]string{"ids": ids[0] + ", " + ids[1] + " " + ids[0]}))
 	if done.Class[0] != "tombstoned" || props(done)["count"] != json.Number("2") || props(done)["kind"] != "pages" || len(done.Entities) != 2 ||
 		done.Entities[0].Href != "/pages/"+ids[0] || done.Entities[1].Href != "/pages/"+ids[1] || done.Result != "Deleted 2 pages." {
 		t.Fatalf("the answer: %+v %v %v", done.Class, props(done), done.Result)
@@ -62,19 +63,19 @@ func TestDeletePagesAtOnce(t *testing.T) {
 	if !deleted(ids[0]) || !deleted(ids[1]) || deleted(ids[2]) {
 		t.Fatalf("after the delete: %v %v %v", deleted(ids[0]), deleted(ids[1]), deleted(ids[2]))
 	}
-	if rows := props(must(c.Get(ctx, "/browse?kind=media")))["rows"].([]any); len(rows) != 1 || rows[0].(map[string]any)["title"] != "Memo 3.m4a" {
+	if rows := props(apitest.Must(t)(c.Get(ctx, "/browse?kind=media")))["rows"].([]any); len(rows) != 1 || rows[0].(map[string]any)["title"] != "Memo 3.m4a" {
 		t.Errorf("the media list after the delete: %v", rows)
 	}
 
 	// An id no page has refuses the whole write: the live page named beside it stays live.
-	if _, err := c.Do(ctx, del, map[string]string{"ids": ids[2] + " 424242"}); !clientStatus(err, 404) {
+	if _, err := c.Do(ctx, del, map[string]string{"ids": ids[2] + " 424242"}); apitest.Status(err) != 404 {
 		t.Fatalf("an id no page has: %v", err)
 	}
 	if deleted(ids[2]) {
 		t.Error("a refused delete tombstoned the live page named beside the missing id")
 	}
 	for _, bad := range []string{"", " , ", "abc", "0", "-1", "1.5"} {
-		if _, err := c.Do(ctx, del, map[string]string{"ids": bad}); !clientStatus(err, 422) {
+		if _, err := c.Do(ctx, del, map[string]string{"ids": bad}); apitest.Status(err) != 422 {
 			t.Errorf("ids %q: %v", bad, err)
 		}
 	}
@@ -82,22 +83,22 @@ func TestDeletePagesAtOnce(t *testing.T) {
 	for i := range many {
 		many[i] = strconv.Itoa(i + 1)
 	}
-	if _, err := c.Do(ctx, del, map[string]string{"ids": strings.Join(many, " ")}); !clientStatus(err, 422) {
+	if _, err := c.Do(ctx, del, map[string]string{"ids": strings.Join(many, " ")}); apitest.Status(err) != 422 {
 		t.Errorf("501 ids: %v", err)
 	}
 
 	// A page tombstoned already is left as it is; one page is said in the singular.
-	if again := must(c.Do(ctx, del, map[string]string{"ids": ids[0]})); again.Result != "Deleted 1 page." {
+	if again := apitest.Must(t)(c.Do(ctx, del, map[string]string{"ids": ids[0]})); again.Result != "Deleted 1 page." {
 		t.Errorf("a second delete: %v", again.Result)
 	}
 	// Every writer may run it: it is a danger, not the owner's alone.
 	agent := client.InProcess(h, "agent:test")
-	must(agent.Do(ctx, del, map[string]string{"ids": ids[2]}))
+	apitest.Must(t)(agent.Do(ctx, del, map[string]string{"ids": ids[2]}))
 	if !deleted(ids[2]) {
 		t.Error("an agent's delete did nothing")
 	}
 	// The browser's form sends the field once per checked box.
-	if _, err := c.Do(ctx, find(must(c.Get(ctx, "/pages/"+ids[2])), "revive"), nil); err != nil {
+	if _, err := c.Do(ctx, apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/pages/"+ids[2])), "revive"), nil); err != nil {
 		t.Fatal(err)
 	}
 	req, _ := http.NewRequestWithContext(ctx, "POST", "/pages/tombstone", strings.NewReader(url.Values{"ids": {ids[1], ids[2]}}.Encode()))
@@ -113,13 +114,13 @@ func TestDeletePagesAtOnce(t *testing.T) {
 // form, the form posts the checked ids and returns to the list with the count, and a post with no box checked comes
 // back to the list with the refusal.
 func TestTheListsDeleteWhatIsChecked(t *testing.T) {
-	c, h := fresh(t)
+	c, h, _ := apitest.Fresh(t, "cli")
 	ctx := t.Context()
-	root := must(c.Get(ctx, "/"))
+	root := apitest.Must(t)(c.Get(ctx, "/"))
 	var files []string
 	for i, title := range []string{"Scan 1.jpg", "Scan 2.jpg"} {
-		e := must(c.Do(ctx, find(root, "add-file"), map[string]string{"title": title, "sha256": strings.Repeat(fmt.Sprintf("%02x", i+7), 32), "mime": "image/jpeg"}))
-		files = append(files, idOfSelf(t, hrefOf(e, "self")))
+		e := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "add-file"), map[string]string{"title": title, "sha256": strings.Repeat(fmt.Sprintf("%02x", i+7), 32), "mime": "image/jpeg"}))
+		files = append(files, idOfSelf(t, apitest.Href(e, "self")))
 	}
 
 	list := browse(t, h, "/browse?kind=media")

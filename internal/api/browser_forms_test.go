@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"lifelog/internal/api"
+	"lifelog/internal/api/apitest"
 )
 
 // formRE finds a POST form of a page: its action and what it holds. This application's own markup is regular enough
@@ -59,7 +60,7 @@ func dayOf(n int) string {
 // feedback; any other value is ignored and the browser goes to what it changed, as before; a JSON client never
 // follows back.
 func TestABrowserFormReturnsToThePageThatSentIt(t *testing.T) {
-	c, h := fresh(t)
+	c, h, _ := apitest.Fresh(t, "cli")
 	for _, tc := range []struct{ back, want string }{
 		{"/days?limit=5&offset=10", "/days?limit=5&offset=10"},
 		{"/", "/"},
@@ -95,7 +96,7 @@ func TestABrowserFormReturnsToThePageThatSentIt(t *testing.T) {
 	if out.Code != http.StatusOK || out.Header().Get("Location") != "/days/2026-09-29" {
 		t.Errorf("a JSON client followed back: %d %q", out.Code, out.Header().Get("Location"))
 	}
-	if n := len(must(c.Get(t.Context(), "/days/2026-09-29")).Properties.(map[string]any)["view"].([]any)); n == 0 {
+	if n := len(apitest.Must(t)(c.Get(t.Context(), "/days/2026-09-29")).Properties.(map[string]any)["view"].([]any)); n == 0 {
 		t.Error("the writes were not done")
 	}
 }

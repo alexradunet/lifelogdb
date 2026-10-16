@@ -8,18 +8,20 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"lifelog/internal/api/apitest"
 )
 
 // TestTheMoodIsAChoiceOfFive: capture's mood offers the options 1 to 5 (docs/plans/092-the-app-shell.md), on the
 // day's action and in the catalog; the values the API takes do not change, and the browser draws the field as a row
 // of radio buttons that works with no script.
 func TestTheMoodIsAChoiceOfFive(t *testing.T) {
-	c, h := freshOn(t, fixedToday)
-	day := must(c.Get(t.Context(), "/days/"+fixedToday))
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
+	day := apitest.Must(t)(c.Get(t.Context(), "/days/"+fixedToday))
 	for _, a := range []string{"the day's", "the catalog's"} {
-		capture := find(day, "capture")
+		capture := apitest.Action(t, day, "capture")
 		if a == "the catalog's" {
-			capture = find(must(c.Get(t.Context(), "/actions")), "capture")
+			capture = apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/actions")), "capture")
 		}
 		var mood string
 		for _, f := range capture.Fields {
@@ -32,15 +34,15 @@ func TestTheMoodIsAChoiceOfFive(t *testing.T) {
 		}
 	}
 
-	capture := find(day, "capture")
-	must(c.Do(t.Context(), capture, map[string]string{"text": "No mood today."}))
-	must(c.Do(t.Context(), capture, map[string]string{"mood": "4"}))
+	capture := apitest.Action(t, day, "capture")
+	apitest.Must(t)(c.Do(t.Context(), capture, map[string]string{"text": "No mood today."}))
+	apitest.Must(t)(c.Do(t.Context(), capture, map[string]string{"mood": "4"}))
 	for _, bad := range []string{"6", "0", "2.5"} {
-		if _, err := c.Do(t.Context(), capture, map[string]string{"mood": bad}); !clientStatus(err, 422) {
+		if _, err := c.Do(t.Context(), capture, map[string]string{"mood": bad}); apitest.Status(err) != 422 {
 			t.Errorf("mood %s: %v, want 422", bad, err)
 		}
 	}
-	if got := fmt.Sprint(props(must(c.Get(t.Context(), "/days/"+fixedToday)))["mood"]); got != "[4]" {
+	if got := fmt.Sprint(props(apitest.Must(t)(c.Get(t.Context(), "/days/"+fixedToday)))["mood"]); got != "[4]" {
 		t.Errorf("the day's mood after the captures: %s", got)
 	}
 
@@ -59,14 +61,14 @@ func TestTheMoodIsAChoiceOfFive(t *testing.T) {
 	if rec.Code != http.StatusSeeOther || !strings.HasPrefix(rec.Header().Get("Location"), "/days/"+fixedToday) {
 		t.Fatalf("Capture from the browser: %d %q", rec.Code, rec.Header().Get("Location"))
 	}
-	if got := fmt.Sprint(props(must(c.Get(t.Context(), "/days/"+fixedToday)))["mood"]); got != "[4 3]" {
+	if got := fmt.Sprint(props(apitest.Must(t)(c.Get(t.Context(), "/days/"+fixedToday)))["mood"]); got != "[4 3]" {
 		t.Errorf("the day's mood after the browser's capture: %s", got)
 	}
 }
 
 // TestCaptureReturnsToThePageThatSentIt: Home's Capture returns to Home, a day's to the day.
 func TestCaptureReturnsToThePageThatSentIt(t *testing.T) {
-	_, h := freshOn(t, fixedToday)
+	_, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	for page, want := range map[string]string{"/": "/", "/days/" + dayOf(-3): "/days/" + dayOf(-3)} {
 		action := "/days/" + fixedToday + "/capture"
 		if page != "/" {
@@ -96,7 +98,7 @@ func captureForm(t *testing.T, body, action string) string {
 // the writing first; Record a reading is in the margin's Readings, its optional fields folded.
 // 14 May 2031 is a Wednesday in ISO week 20 (1 January 2031 is a Wednesday, so week 1 starts on 30 December 2030).
 func TestTheDayIsALeafAndItsMargin(t *testing.T) {
-	_, h := freshOn(t, fixedToday)
+	_, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	body := browse(t, h, "/days/"+fixedToday)
 	for _, want := range []string{
 		`<a class="leaf" href="/months/2031-05" aria-label="May 2031, the calendar of the month"><span class="leaf-month">May 2031</span><span class="leaf-day">14</span></a>`,

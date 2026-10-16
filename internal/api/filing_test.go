@@ -4,17 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"regexp"
 	"slices"
 	"strings"
 	"testing"
 
-	"lifelog/internal/api"
+	"lifelog/internal/api/apitest"
 	"lifelog/internal/client"
-	"lifelog/internal/core"
-	"lifelog/internal/db/dbtest"
 )
 
 // The metrics as cards, and file-pages (docs/plans/112-metrics-as-cards.md): several metrics filed in a category in
@@ -25,18 +22,18 @@ import (
 func cardsFixture(t *testing.T, c *client.Client) map[string]string {
 	t.Helper()
 	ctx := t.Context()
-	root := must(c.Get(ctx, "/"))
+	root := apitest.Must(t)(c.Get(ctx, "/"))
 	for _, m := range []map[string]string{{"name": "Ferritin", "unit": "ug/L", "note": "iron stores"}, {"name": "Weight", "unit": "kg"},
 		{"name": "Walk"}, {"name": "Steps", "unit": "n"}} {
-		must(c.Do(ctx, find(root, "register-metric"), m))
+		apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "register-metric"), m))
 	}
-	record := find(must(c.Get(ctx, "/metrics/Ferritin")), "record")
+	record := apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/metrics/Ferritin")), "record")
 	for _, r := range []map[string]string{{"metric": "Ferritin", "day": "2030-03-01", "value": "40"}, {"metric": "Ferritin", "day": "2030-09-01", "value": "55"},
 		{"metric": "Weight", "day": "2031-05-12", "value": "80"}, {"metric": "Weight", "day": "2031-05-13", "value": "79.5"}} {
-		must(c.Do(ctx, record, r))
+		apitest.Must(t)(c.Do(ctx, record, r))
 	}
 	ids := map[string]string{}
-	for _, x := range props(must(c.Get(ctx, "/metrics")))["metrics"].([]any) {
+	for _, x := range props(apitest.Must(t)(c.Get(ctx, "/metrics")))["metrics"].([]any) {
 		m := x.(map[string]any)
 		ids[m["name"].(string)] = fmt.Sprint(m["id"])
 	}
@@ -47,7 +44,7 @@ func cardsFixture(t *testing.T, c *client.Client) map[string]string {
 func groupsOf(t *testing.T, c *client.Client) string {
 	t.Helper()
 	var got []string
-	for _, g := range props(must(c.Get(t.Context(), "/metrics")))["groups"].([]any) {
+	for _, g := range props(apitest.Must(t)(c.Get(t.Context(), "/metrics")))["groups"].([]any) {
 		g := g.(map[string]any)
 		var ms []string
 		for _, m := range g["metrics"].([]any) {
@@ -59,11 +56,11 @@ func groupsOf(t *testing.T, c *client.Client) string {
 }
 
 func TestFileMetricsAtOnce(t *testing.T) {
-	c, h := freshOn(t, fixedToday)
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	ctx := t.Context()
 	ids := cardsFixture(t, c)
-	file := find(must(c.Get(ctx, "/metrics")), "file-pages")
-	if file.Name == "" || file.Owner || file.Danger || file.Method != "POST" || file.Href != "/pages/file" {
+	file := apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/metrics")), "file-pages")
+	if file.Owner || file.Danger || file.Method != "POST" || file.Href != "/pages/file" {
 		t.Fatalf("/metrics offers file-pages as %+v", file)
 	}
 	var fields []string
@@ -75,14 +72,14 @@ func TestFileMetricsAtOnce(t *testing.T) {
 	}
 
 	// Commas separate the ids; a missing category is made, and said so.
-	done := must(c.Do(ctx, file, map[string]string{"ids": ids["Ferritin"] + "," + ids["Steps"], "category": "Bloodwork"}))
+	done := apitest.Must(t)(c.Do(ctx, file, map[string]string{"ids": ids["Ferritin"] + "," + ids["Steps"], "category": "Bloodwork"}))
 	p := props(done)
 	cat := p["category"].(map[string]any)
 	if done.Class[0] != "filed" || cat["title"] != "Bloodwork" || p["created"] != true || p["added"] != json.Number("2") || p["count"] != json.Number("2") ||
 		len(done.Entities) != 2 || done.Entities[0].Href != "/pages/"+ids["Ferritin"] || done.Result != "Put 2 in Bloodwork (a new category)." {
 		t.Fatalf("the answer: %v %v %v", done.Class, p, done.Result)
 	}
-	if got, want := href(done, "self"), "/pages/"+fmt.Sprint(cat["id"]); got != want {
+	if got, want := apitest.Href(done, "self"), "/pages/"+fmt.Sprint(cat["id"]); got != want {
 		t.Errorf("the answer's self is %s, want the category %s", got, want)
 	}
 	if got, want := groupsOf(t, c), "Bloodwork:Ferritin,Steps Not filed:Mood,Walk,Weight"; got != want {
@@ -91,11 +88,11 @@ func TestFileMetricsAtOnce(t *testing.T) {
 
 	// An agent may file: a part-of link is open to it, as link is.
 	agent := client.InProcess(h, "agent:test")
-	if again := must(agent.Do(ctx, file, map[string]string{"ids": ids["Weight"], "category": "Body"})); again.Result != "Put 1 in Body (a new category)." {
+	if again := apitest.Must(t)(agent.Do(ctx, file, map[string]string{"ids": ids["Weight"], "category": "Body"})); again.Result != "Put 1 in Body (a new category)." {
 		t.Errorf("an agent's filing: %v", again.Result)
 	}
 	// Move takes Steps out of Bloodwork, and Ferritin stays in it.
-	moved := must(c.Do(ctx, file, map[string]string{"ids": ids["Steps"], "category": "Body", "move": "1"}))
+	moved := apitest.Must(t)(c.Do(ctx, file, map[string]string{"ids": ids["Steps"], "category": "Body", "move": "1"}))
 	if props(moved)["moved"] != json.Number("1") || moved.Result != "Moved 1 in Body." {
 		t.Errorf("the move: %v %v", props(moved), moved.Result)
 	}
@@ -113,11 +110,11 @@ func TestFileMetricsAtOnce(t *testing.T) {
 		{map[string]string{"category": "Mood board"}, 422},
 		{map[string]string{"ids": ids["Mood"], "category": "Mood board", "move": "yes"}, 422},
 	} {
-		if _, err := c.Do(ctx, file, bad.form); !clientStatus(err, bad.want) {
+		if _, err := c.Do(ctx, file, bad.form); apitest.Status(err) != bad.want {
 			t.Errorf("%v: %v, want %d", bad.form, err, bad.want)
 		}
 	}
-	if _, err := c.Get(ctx, "/pages?title=Mood+board"); !clientStatus(err, 404) {
+	if _, err := c.Get(ctx, "/pages?title=Mood+board"); apitest.Status(err) != 404 {
 		t.Errorf("a refused filing made its category page: %v", err)
 	}
 	if got := groupsOf(t, c); !strings.HasSuffix(got, "Not filed:Mood,Walk") {
@@ -128,17 +125,13 @@ func TestFileMetricsAtOnce(t *testing.T) {
 func TestFilingTransportParity(t *testing.T) {
 	for _, remote := range []bool{false, true} {
 		t.Run(fmt.Sprint(remote), func(t *testing.T) {
-			d := dbtest.New(t)
-			h := api.New(&core.Store{DB: d})
-			c := client.InProcess(h, "cli")
+			c, h, _ := apitest.Fresh(t, "cli")
 			if remote {
-				server := httptest.NewServer(h)
-				t.Cleanup(server.Close)
-				c = client.Remote(server.URL, "cli", "")
+				_, c = apitest.Clients(t, h, "cli")
 			}
 			ids := cardsFixture(t, c)
-			file := find(must(c.Get(t.Context(), "/metrics")), "file-pages")
-			must(c.Do(t.Context(), file, map[string]string{"ids": ids["Weight"] + " " + ids["Steps"], "category": "Sport"}))
+			file := apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/metrics")), "file-pages")
+			apitest.Must(t)(c.Do(t.Context(), file, map[string]string{"ids": ids["Weight"] + " " + ids["Steps"], "category": "Sport"}))
 			if got, want := groupsOf(t, c), "Sport:Steps,Weight Not filed:Ferritin,Mood,Walk"; got != want {
 				t.Errorf("groups %q, want %q", got, want)
 			}
@@ -147,17 +140,17 @@ func TestFilingTransportParity(t *testing.T) {
 }
 
 func TestTheMetricsPageDrawsCards(t *testing.T) {
-	c, h := freshOn(t, fixedToday)
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	ctx := t.Context()
 	ids := cardsFixture(t, c)
-	file := find(must(c.Get(ctx, "/metrics")), "file-pages")
-	must(c.Do(ctx, file, map[string]string{"ids": ids["Ferritin"], "category": "Iron"}))
-	must(c.Do(ctx, file, map[string]string{"ids": ids["Weight"] + "," + ids["Walk"], "category": "Body"}))
-	iron := must(c.Get(ctx, "/pages?title=Iron"))
-	must(c.Do(ctx, find(iron, "link"), map[string]string{"to": "Body", "kind": "part-of"}))
+	file := apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/metrics")), "file-pages")
+	apitest.Must(t)(c.Do(ctx, file, map[string]string{"ids": ids["Ferritin"], "category": "Iron"}))
+	apitest.Must(t)(c.Do(ctx, file, map[string]string{"ids": ids["Weight"] + "," + ids["Walk"], "category": "Body"}))
+	iron := apitest.Must(t)(c.Get(ctx, "/pages?title=Iron"))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, iron, "link"), map[string]string{"to": "Body", "kind": "part-of"}))
 
 	// The JSON carries each metric's recent readings, oldest first.
-	for _, x := range props(must(c.Get(ctx, "/metrics")))["metrics"].([]any) {
+	for _, x := range props(apitest.Must(t)(c.Get(ctx, "/metrics")))["metrics"].([]any) {
 		m := x.(map[string]any)
 		if m["name"] != "Weight" {
 			continue
@@ -171,7 +164,7 @@ func TestTheMetricsPageDrawsCards(t *testing.T) {
 	page := browse(t, h, "/metrics")
 	for _, want := range []string{
 		`<nav class="kinds jump" aria-label="Groups"><a href="#c-`, `>Body <small>3</small></a>`, `<a href="#not-filed">Not filed <small>2</small></a>`,
-		`id="not-filed"`, `<details class="metric-sub" open><summary><h3>Iron <small>1</small></h3><span class="meta">newest `, `<a href="/pages/` + idOfSelf(t, hrefOf(iron, "self")) + `">Open Iron</a>`,
+		`id="not-filed"`, `<details class="metric-sub" open><summary><h3>Iron <small>1</small></h3><span class="meta">newest `, `<a href="/pages/` + idOfSelf(t, apitest.Href(iron, "self")) + `">Open Iron</a>`,
 		`<a class="name" href="/metrics/Weight">Weight</a>`, `79.5 <span class="unit">kg</span>`, `<time class="meta" datetime="2031-05-13" title="yesterday · Tue 13 May · 2 readings">yesterday</time>`, `<svg class="trend"`,
 		`<div class="reading-tile metric-card stale">`, `title="iron stores">Ferritin</a>`, `<span class="reading none"><span aria-hidden="true">–</span> <span class="unit">n</span></span><span class="line-none" aria-hidden="true"></span>`, `<div class="card-foot"><span class="meta">No reading</span>`,
 		`<form id="pick" class="pick-bar" method="POST" action="/pages/file">`, `<input type="hidden" name="back" value="/metrics">`,
@@ -210,45 +203,43 @@ func TestTheMetricsPageDrawsCards(t *testing.T) {
 func TestADayPageIsNeverFiled(t *testing.T) {
 	for _, remote := range []bool{false, true} {
 		t.Run(fmt.Sprint(remote), func(t *testing.T) {
-			c, h := fresh(t)
+			c, h, _ := apitest.Fresh(t, "cli")
 			if remote {
-				server := httptest.NewServer(h)
-				t.Cleanup(server.Close)
-				c = client.Remote(server.URL, "cli", "")
+				_, c = apitest.Clients(t, h, "cli")
 			}
 			ctx := t.Context()
-			root := must(c.Get(ctx, "/"))
-			plain := fmt.Sprint(props(must(c.Do(ctx, find(root, "create-page"), map[string]string{"title": "Plans"})))["id"])
-			day := must(c.Get(ctx, href(must(c.Do(ctx, find(root, "capture"), map[string]string{"text": "a synthetic entry"})), "page")))
+			root := apitest.Must(t)(c.Get(ctx, "/"))
+			plain := fmt.Sprint(props(apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": "Plans"})))["id"])
+			day := apitest.Must(t)(c.Get(ctx, apitest.Href(apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "capture"), map[string]string{"text": "a synthetic entry"})), "page")))
 			dayID := fmt.Sprint(props(day)["id"])
 			const sentence = "a day page is never filed in a category (D26)"
 
-			file := find(must(c.Get(ctx, "/pages/"+plain)), "file-pages")
+			file := apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/pages/"+plain)), "file-pages")
 			for _, ids := range []string{dayID, plain + " " + dayID, dayID + "," + plain} {
 				_, err := c.Do(ctx, file, map[string]string{"ids": ids, "category": "Garden"})
-				if !clientStatus(err, http.StatusUnprocessableEntity) || !strings.Contains(fmt.Sprint(err), sentence) {
+				if apitest.Status(err) != http.StatusUnprocessableEntity || !strings.Contains(fmt.Sprint(err), sentence) {
 					t.Errorf("file-pages %s: %v, want a 422 that says %q", ids, err, sentence)
 				}
 			}
-			if _, err := c.Get(ctx, "/pages?title=Garden"); !clientStatus(err, http.StatusNotFound) {
+			if _, err := c.Get(ctx, "/pages?title=Garden"); apitest.Status(err) != http.StatusNotFound {
 				t.Errorf("a refused filing made its category page: %v", err)
 			}
-			if got := partOfLinks(must(c.Get(ctx, "/pages/"+plain))); len(got) != 0 {
+			if got := partOfLinks(apitest.Must(t)(c.Get(ctx, "/pages/"+plain))); len(got) != 0 {
 				t.Errorf("a refused filing filed Plans in %v", got)
 			}
 
-			if hasOption(find(day, "link"), "kind", "part-of") || !hasOption(find(day, "link"), "kind", "at") {
-				t.Errorf("a day page's link offers %+v: at, and never part-of", find(day, "link").Fields)
+			if hasOption(apitest.Action(t, day, "link"), "kind", "part-of") || !hasOption(apitest.Action(t, day, "link"), "kind", "at") {
+				t.Errorf("a day page's link offers %+v: at, and never part-of", apitest.Action(t, day, "link").Fields)
 			}
-			if !hasOption(find(must(c.Get(ctx, "/pages/"+plain)), "link"), "kind", "part-of") {
+			if !hasOption(apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/pages/"+plain)), "link"), "kind", "part-of") {
 				t.Error("a plain page's link does not offer part-of")
 			}
-			must(c.Do(ctx, file, map[string]string{"ids": plain, "category": "Garden"}))
-			_, err := c.Do(ctx, find(day, "link"), map[string]string{"to": "Garden", "kind": "part-of"})
-			if !clientStatus(err, http.StatusUnprocessableEntity) || !strings.Contains(fmt.Sprint(err), sentence) {
+			apitest.Must(t)(c.Do(ctx, file, map[string]string{"ids": plain, "category": "Garden"}))
+			_, err := c.Do(ctx, apitest.Action(t, day, "link"), map[string]string{"to": "Garden", "kind": "part-of"})
+			if apitest.Status(err) != http.StatusUnprocessableEntity || !strings.Contains(fmt.Sprint(err), sentence) {
 				t.Errorf("link part-of from a day page: %v, want a 422 that says %q", err, sentence)
 			}
-			if got := partOfLinks(must(c.Get(ctx, "/pages/"+dayID))); len(got) != 0 {
+			if got := partOfLinks(apitest.Must(t)(c.Get(ctx, "/pages/"+dayID))); len(got) != 0 {
 				t.Errorf("the day page is part-of %v", got)
 			}
 		})
@@ -258,13 +249,13 @@ func TestADayPageIsNeverFiled(t *testing.T) {
 // The Metrics board folds, and ?view=list draws the same metrics as rows (docs/plans/118-fold-and-find.md, rules 4
 // and 5).
 func TestTheMetricsBoardFoldsAndHasAList(t *testing.T) {
-	c, h := freshOn(t, fixedToday)
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	ctx := t.Context()
 	ids := cardsFixture(t, c)
-	file := find(must(c.Get(ctx, "/metrics")), "file-pages")
-	must(c.Do(ctx, file, map[string]string{"ids": ids["Ferritin"], "category": "Iron"}))
-	must(c.Do(ctx, file, map[string]string{"ids": ids["Weight"] + "," + ids["Walk"], "category": "Body"}))
-	must(c.Do(ctx, find(must(c.Get(ctx, "/pages?title=Iron")), "link"), map[string]string{"to": "Body", "kind": "part-of"}))
+	file := apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/metrics")), "file-pages")
+	apitest.Must(t)(c.Do(ctx, file, map[string]string{"ids": ids["Ferritin"], "category": "Iron"}))
+	apitest.Must(t)(c.Do(ctx, file, map[string]string{"ids": ids["Weight"] + "," + ids["Walk"], "category": "Body"}))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/pages?title=Iron")), "link"), map[string]string{"to": "Body", "kind": "part-of"}))
 
 	cards := browse(t, h, "/metrics")
 	for _, want := range []string{

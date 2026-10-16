@@ -14,6 +14,7 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"lifelog/internal/api"
+	"lifelog/internal/api/apitest"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db/dbtest"
@@ -25,9 +26,9 @@ import (
 func TestOwnerOnlyActionsPolicy(t *testing.T) {
 	d, snapshots := dbtest.New(t), t.TempDir()
 	agent := client.InProcess(api.New(&core.Store{DB: d, SnapshotDir: snapshots}), "agent:policy-test")
-	catalog := must(agent.Get(t.Context(), "/actions"))
-	register, snapshot, integrity, record := find(catalog, "register-metric"), find(catalog, "snapshot"), find(catalog, "integrity-check"), find(catalog, "record")
-	if !register.Owner || !snapshot.Owner || !integrity.Owner || record.Name == "" || record.Owner {
+	catalog := apitest.Must(t)(agent.Get(t.Context(), "/actions"))
+	register, snapshot, integrity, record := apitest.Action(t, catalog, "register-metric"), apitest.Action(t, catalog, "snapshot"), apitest.Action(t, catalog, "integrity-check"), apitest.Action(t, catalog, "record")
+	if !register.Owner || !snapshot.Owner || !integrity.Owner || record.Owner {
 		t.Fatalf("wrong catalog policy: %+v %+v %+v %+v", register, snapshot, integrity, record)
 	}
 	sent := map[string]map[string]string{"register-metric": {"name": "Forbidden direct"}}
@@ -36,8 +37,7 @@ func TestOwnerOnlyActionsPolicy(t *testing.T) {
 			continue
 		}
 		_, err := agent.Do(t.Context(), a, sent[a.Name])
-		var ce *client.Error
-		if !errors.As(err, &ce) || ce.Status != 403 {
+		if apitest.Status(err) != 403 {
 			t.Fatalf("owner-only %s not refused: %v", a.Name, err)
 		}
 	}
@@ -92,7 +92,7 @@ func TestOwnerOnlyActionsPolicy(t *testing.T) {
 // The full-text check of the integrity checks holds the write lock while it runs, so it is the owner's alone: a GET
 // route refuses an agent or an import as a POST route does.
 func TestIntegrityCheckIsRefusedToAnAgent(t *testing.T) {
-	_, h := fresh(t)
+	_, h, _ := apitest.Fresh(t, "cli")
 	for _, tc := range []struct {
 		source string
 		status int

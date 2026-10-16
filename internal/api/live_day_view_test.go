@@ -4,22 +4,24 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"lifelog/internal/api/apitest"
 )
 
 func TestLiveDayView(t *testing.T) {
-	c, _ := fresh(t)
-	root := must(c.Get(t.Context(), "/"))
-	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "Walk"}))
-	must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "Walk", "day": "2026-09-01", "value": "1"}))
-	page := must(c.Get(t.Context(), "/pages?title=Walk"))
+	c, _, _ := apitest.Fresh(t, "cli")
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "Walk"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "record"), map[string]string{"metric": "Walk", "day": "2026-09-01", "value": "1"}))
+	page := apitest.Must(t)(c.Get(t.Context(), "/pages?title=Walk"))
 	for i, hidden := range []bool{false, true, false} {
 		if hidden {
-			page = must(c.Do(t.Context(), find(page, "tombstone"), nil))
+			page = apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, page, "tombstone"), nil))
 		} else if i > 0 {
-			page = must(c.Do(t.Context(), find(page, "revive"), nil))
+			page = apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, page, "revive"), nil))
 		}
-		day := must(c.Get(t.Context(), "/days/2026-09-01"))
-		if hasOption(find(day, "record"), "metric", "Walk") == hidden {
+		day := apitest.Must(t)(c.Get(t.Context(), "/days/2026-09-01"))
+		if hasOption(apitest.Action(t, day, "record"), "metric", "Walk") == hidden {
 			t.Errorf("record options hidden=%v: %+v", hidden, day.Actions)
 		}
 		props := day.Properties.(map[string]any)

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"lifelog/internal/api"
+	"lifelog/internal/api/apitest"
 	"lifelog/internal/core"
 	"lifelog/internal/db"
 	"lifelog/internal/db/dbtest"
@@ -17,17 +18,17 @@ import (
 
 // TestTheSidebarShowsTheMonth: the month is this month, with the days that have a day page marked and today framed.
 func TestTheSidebarShowsTheMonth(t *testing.T) {
-	c, h := freshOn(t, fixedToday) // Wednesday 14 May 2031
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday) // Wednesday 14 May 2031
 	if body := browse(t, h, "/"); !strings.Contains(body, "May 2031</a><span class=\"meta\">0 written</span>") {
 		t.Errorf("an empty life log does not show its empty month:\n%s", sidebar(body))
 	}
 
 	for _, day := range []string{"2031-04-30", dayOf(-2), fixedToday} {
-		must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/days/"+day)), "capture"), map[string]string{"text": "Synthetic entry"}))
+		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/"+day)), "capture"), map[string]string{"text": "Synthetic entry"}))
 	}
 	// A mood alone makes the day page with an empty body: a day page with an empty body is still written.
-	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/days/2031-05-03")), "capture"), map[string]string{"mood": "3"}))
-	if body := must(c.Get(t.Context(), "/pages?title=2031-05-03")).Properties.(map[string]any)["body"]; body != "" {
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/2031-05-03")), "capture"), map[string]string{"mood": "3"}))
+	if body := apitest.Must(t)(c.Get(t.Context(), "/pages?title=2031-05-03")).Properties.(map[string]any)["body"]; body != "" {
 		t.Fatalf("the day page of 2031-05-03 has the body %q, want an empty body", body)
 	}
 
@@ -57,7 +58,7 @@ func sidebar(body string) string {
 
 // TestTheSidebarMarksTodayOnTodaysDay: today's day is Today; any other day is in the Calendar.
 func TestTheSidebarMarksTodayOnTodaysDay(t *testing.T) {
-	_, h := freshOn(t, fixedToday)
+	_, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	if body := browse(t, h, "/days/"+fixedToday); !strings.Contains(body, `<a href="/days/today" aria-current="page" accesskey="t">`) {
 		t.Errorf("today's day does not mark Today:\n%s", sidebar(body))
 	}
@@ -78,13 +79,13 @@ func TestThePageOfNoShellHasNoSidebar(t *testing.T) {
 // TestTheFontsAreServedByExactName: every face base.css names is served as a font that a browser keeps; the
 // licences are text; any other name is 404, and the route is a GET (HEAD too) and nothing else.
 func TestTheFontsAreServedByExactName(t *testing.T) {
-	_, h := fresh(t)
+	_, h, _ := apitest.Fresh(t, "cli")
 	get := func(method, path string) *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest(method, path, nil))
 		return rec
 	}
-	urls := regexp.MustCompile(`url\((/assets/fonts/[^)]+)\)`).FindAllStringSubmatch(page(t, h, "/"), -1)
+	urls := regexp.MustCompile(`url\((/assets/fonts/[^)]+)\)`).FindAllStringSubmatch(browse(t, h, "/"), -1)
 	if len(urls) != 12 {
 		t.Fatalf("base.css names %d font files, want 12 (6 faces, latin and latin-ext)", len(urls))
 	}
@@ -127,7 +128,7 @@ func TestTheFontsAreServedByExactName(t *testing.T) {
 // list (a phone's bottom bar); the month and the owner's links are the popover sheet that More opens and Close hides
 // (#sections), with no script; each link is drawn once, and More is marked when the page is in the sheet.
 func TestThePhoneHasABottomBarAndASheet(t *testing.T) {
-	_, h := freshOn(t, fixedToday)
+	_, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	body := browse(t, h, "/browse?kind=person")
 	bar := regexp.MustCompile(`(?s)<nav aria-label="Sections">(.*?)</nav>`).FindStringSubmatch(body)
 	sheet := regexp.MustCompile(`(?s)<div class="rail-more" id="sections" popover>(.*?)</aside>`).FindStringSubmatch(body)
@@ -191,7 +192,7 @@ func TestTheStylePageReadsNothing(t *testing.T) {
 		}
 	}
 
-	c, live := fresh(t)
+	c, live, _ := apitest.Fresh(t, "cli")
 	catalog, err := c.Catalog(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -221,7 +222,7 @@ func TestTheStylePageReadsNothing(t *testing.T) {
 // and a cache; a public listener refuses both without the token; the manifest's share target posts to a route that
 // writes on the local day.
 func TestTheManifestAndTheIconAreServed(t *testing.T) {
-	c, h := freshOn(t, fixedToday)
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	get := func(h http.Handler, method, path string, headers map[string]string) *httptest.ResponseRecorder {
 		return request(h, method, path, "", headers)
 	}
@@ -294,11 +295,11 @@ func TestTheManifestAndTheIconAreServed(t *testing.T) {
 	if r.Code != http.StatusSeeOther {
 		t.Fatalf("POST /days/today/capture: %d %.200s", r.Code, r.Body.String())
 	}
-	day := must(c.Get(t.Context(), "/days/"+fixedToday))
-	if href(day, "page") == "" || !strings.Contains(browse(t, h, "/days/"+fixedToday), "Shared from a phone") {
+	day := apitest.Must(t)(c.Get(t.Context(), "/days/"+fixedToday))
+	if apitest.Href(day, "page") == "" || !strings.Contains(browse(t, h, "/days/"+fixedToday), "Shared from a phone") {
 		t.Errorf("the shared text is not on %s", fixedToday)
 	}
-	if page := must(c.Get(t.Context(), href(day, "page"))); !strings.Contains(props(page)["body"].(string), "Shared from a phone") {
+	if page := apitest.Must(t)(c.Get(t.Context(), apitest.Href(day, "page"))); !strings.Contains(props(page)["body"].(string), "Shared from a phone") {
 		t.Errorf("the day page does not hold the shared text: %v", props(page)["body"])
 	}
 }

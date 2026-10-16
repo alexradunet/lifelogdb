@@ -14,27 +14,12 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-	"time"
 
 	"lifelog/internal/api"
+	"lifelog/internal/api/apitest"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
-	"lifelog/internal/db/dbtest"
 )
-
-func fresh(t *testing.T) (*client.Client, http.Handler) {
-	t.Helper()
-	c, h, _ := freshStore(t)
-	return c, h
-}
-
-// freshStore is fresh with the store too: a test reads a row straight from the file, as a probe of what a surface wrote.
-func freshStore(t *testing.T) (*client.Client, http.Handler, *core.Store) {
-	t.Helper()
-	s := &core.Store{DB: dbtest.New(t)}
-	h := api.New(s)
-	return client.InProcess(h, "cli"), h, s
-}
 
 // scalar reads one text value from the file: a probe, never the behaviour under test.
 func scalar(t *testing.T, s *core.Store, query string) string {
@@ -46,19 +31,6 @@ func scalar(t *testing.T, s *core.Store, query string) string {
 	return v
 }
 
-// freshOn is fresh with the store's clock fixed at the start of day in UTC: a test of today, or of the words for a day,
-// uses fixed dates.
-func freshOn(t *testing.T, day string) (*client.Client, http.Handler) {
-	t.Helper()
-	d := dbtest.New(t)
-	start, err := time.Parse(time.DateOnly, day)
-	if err != nil {
-		t.Fatal(err)
-	}
-	h := api.New(&core.Store{DB: d, Clock: func() time.Time { return start }, Zone: time.UTC})
-	return client.InProcess(h, "cli"), h
-}
-
 func names(e *api.Entity) string {
 	var out []string
 	for _, a := range e.Actions {
@@ -67,17 +39,17 @@ func names(e *api.Entity) string {
 	return strings.Join(out, ",")
 }
 
-func find(e *api.Entity, name string) api.Action {
+func hasAction(e *api.Entity, name string) bool {
 	for _, a := range e.Actions {
 		if a.Name == name {
-			return a
+			return true
 		}
 	}
-	return api.Action{}
+	return false
 }
 
 func TestCatalogNamesAreUnique(t *testing.T) {
-	c, _ := fresh(t)
+	c, _, _ := apitest.Fresh(t, "cli")
 	actions, err := c.Catalog(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -104,12 +76,12 @@ func TestCatalogNamesAreUnique(t *testing.T) {
 // and path, and that route refuses an agent exactly when the action is the owner's alone. The mux answers a missing
 // route with a plain-text 404 or 405; an action's handler answers with a Siren entity.
 func TestEveryCatalogActionHasItsRouteAndItsOwnerRule(t *testing.T) {
-	c, h := fresh(t)
-	root := must(c.Get(t.Context(), "/"))
-	p := must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Route probe"}))
-	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
-	m := must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "weight", "day": "2026-09-01", "value": "71"}))
-	page, reading := strings.TrimPrefix(href(p, "self"), "/pages/"), strings.TrimPrefix(href(m, "self"), "/measurements/")
+	c, h, _ := apitest.Fresh(t, "cli")
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	p := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Route probe"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
+	m := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "record"), map[string]string{"metric": "weight", "day": "2026-09-01", "value": "71"}))
+	page, reading := strings.TrimPrefix(apitest.Href(p, "self"), "/pages/"), strings.TrimPrefix(apitest.Href(m, "self"), "/measurements/")
 	if page == "" || strings.Contains(page, "/") || reading == "" || strings.Contains(reading, "/") {
 		t.Fatalf("no page id (%q) or reading id (%q) to fill a path with", page, reading)
 	}
@@ -159,11 +131,11 @@ func TestEveryCatalogActionHasItsRouteAndItsOwnerRule(t *testing.T) {
 // so a correct always has a reading that no case corrected before (a reading is corrected one time only). Thus a case
 // cannot hide a write because a case before it wrote the same thing or used up the probe.
 func TestARequestWithoutARequiredFieldIsRefusedAndWritesNothing(t *testing.T) {
-	c, _, s := freshStore(t)
-	root := must(c.Get(t.Context(), "/"))
-	p := must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Required probe", "body": "first words"}))
-	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
-	page := strings.TrimPrefix(href(p, "self"), "/pages/")
+	c, _, s := apitest.Fresh(t, "cli")
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	p := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Required probe", "body": "first words"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
+	page := strings.TrimPrefix(apitest.Href(p, "self"), "/pages/")
 	if page == "" {
 		t.Fatal("no page id to send")
 	}
@@ -171,7 +143,7 @@ func TestARequestWithoutARequiredFieldIsRefusedAndWritesNothing(t *testing.T) {
 	// version is the probe page's version now: a case that wrote by error, or the new body of each case, does not
 	// make the next save stale.
 	version := func() string {
-		for _, f := range find(must(c.Get(t.Context(), href(p, "self"))), "save-body").Fields {
+		for _, f := range apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), apitest.Href(p, "self"))), "save-body").Fields {
 			if f.Name == "version" {
 				v, _ := f.Value.(string)
 				return v
@@ -256,11 +228,11 @@ func TestARequestWithoutARequiredFieldIsRefusedAndWritesNothing(t *testing.T) {
 				}
 				for how, send := range sends {
 					what := fmt.Sprintf("%s %s with %s %s, as %s", a.Method, a.Name, missing.Name, sent, how)
-					must(c.Do(t.Context(), find(must(c.Get(t.Context(), href(p, "self"))), "save-body"),
+					apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), apitest.Href(p, "self"))), "save-body"),
 						map[string]string{"body": fmt.Sprintf("the words before case %d", cases)}))
-					m := must(c.Do(t.Context(), find(root, "record"),
+					m := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "record"),
 						map[string]string{"metric": "weight", "day": "2026-09-01", "value": fmt.Sprint(60 + cases)}))
-					if reading = strings.TrimPrefix(href(m, "self"), "/measurements/"); reading == "" {
+					if reading = strings.TrimPrefix(apitest.Href(m, "self"), "/measurements/"); reading == "" {
 						t.Fatalf("%s: no reading id to send", what)
 					}
 					before := state()
@@ -286,69 +258,68 @@ func TestARequestWithoutARequiredFieldIsRefusedAndWritesNothing(t *testing.T) {
 }
 
 func TestActionsAreOfferedOnlyWhereLegal(t *testing.T) {
-	c, _ := fresh(t)
-	day, err := c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "capture"), map[string]string{"text": "with [[Ana]]"})
+	c, _, _ := apitest.Fresh(t, "cli")
+	day, err := c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "capture"), map[string]string{"text": "with [[Ana]]"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	dayPage := must(c.Get(t.Context(), href(day, "page")))
+	dayPage := apitest.Must(t)(c.Get(t.Context(), apitest.Href(day, "page")))
 	if got := names(dayPage); got != "save-body,link,unlink,tombstone" {
 		t.Errorf("a day page offers %s (never promote)", got)
 	}
-	if !hasOption(find(dayPage, "link"), "kind", "at") {
+	if !hasOption(apitest.Action(t, dayPage, "link"), "kind", "at") {
 		t.Error("a day page does not offer an at link")
 	}
-	if hasOption(find(dayPage, "link"), "kind", "part-of") {
+	if hasOption(apitest.Action(t, dayPage, "link"), "kind", "part-of") {
 		t.Error("a day page offers a part-of link (D26: a day page is never filed)")
 	}
-	ana := must(c.Get(t.Context(), dayPage.Entities[0].Href))
+	ana := apitest.Must(t)(c.Get(t.Context(), dayPage.Entities[0].Href))
 	if got := names(ana); got != "save-body,promote,rename,link,unlink,file-pages,tombstone" {
 		t.Errorf("a plain page offers %s", got)
 	}
-	if hasOption(find(ana, "link"), "kind", "at") {
+	if hasOption(apitest.Action(t, ana, "link"), "kind", "at") {
 		t.Error("a plain page offers an at link (D16: from a day page only)")
 	}
-	ana = must(c.Do(t.Context(), find(ana, "promote"), map[string]string{"to": "person"}))
-	if got := names(ana); strings.Contains(got, "promote") || hasOption(find(ana, "link"), "kind", "at") {
-		t.Errorf("a person offers %s with kinds %v", got, find(ana, "link").Fields)
+	ana = apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, ana, "promote"), map[string]string{"to": "person"}))
+	if got := names(ana); strings.Contains(got, "promote") || hasOption(apitest.Action(t, ana, "link"), "kind", "at") {
+		t.Errorf("a person offers %s with kinds %v", got, apitest.Action(t, ana, "link").Fields)
 	}
-	gone := must(c.Do(t.Context(), find(ana, "tombstone"), nil))
+	gone := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, ana, "tombstone"), nil))
 	if got := names(gone); got != "revive" {
 		t.Errorf("a tombstoned page offers %s", got)
 	}
 }
 
 func TestSaveCarriesItsVersion(t *testing.T) {
-	c, _ := fresh(t)
-	p := must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Diet", "body": "v1"}))
-	save := find(p, "save-body")
-	p2 := must(c.Do(t.Context(), save, map[string]string{"body": "v2 [[Plan]]"}))
+	c, _, _ := apitest.Fresh(t, "cli")
+	p := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Diet", "body": "v1"}))
+	save := apitest.Action(t, p, "save-body")
+	p2 := apitest.Must(t)(c.Do(t.Context(), save, map[string]string{"body": "v2 [[Plan]]"}))
 	if p2.Result == nil {
 		t.Error("a save reports no result")
 	}
 	_, err := c.Do(t.Context(), save, map[string]string{"body": "v3"}) // the old form: its version is stale now
-	var ce *client.Error
-	if !errors.As(err, &ce) || ce.Status != 409 {
+	if apitest.Status(err) != 409 {
 		t.Errorf("a stale save: %v", err)
 	}
 }
 
 func TestExistingTitleLinksToThePage(t *testing.T) {
-	c, _ := fresh(t)
-	create := find(must(c.Get(t.Context(), "/")), "create-page")
+	c, _, _ := apitest.Fresh(t, "cli")
+	create := apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "create-page")
 	c.Do(t.Context(), create, map[string]string{"title": "Café"})
 	e, err := c.Do(t.Context(), create, map[string]string{"title": "CAFÉ"})
-	if err == nil || href(e, "existing") == "" {
+	if err == nil || apitest.Href(e, "existing") == "" {
 		t.Errorf("a duplicate title: %v, links %v", err, e.Links)
 	}
 }
 
 // A link from an id that no page has is a missing row (404), not the foreign key's refusal (422).
 func TestLinkFromAMissingPageIsNotFound(t *testing.T) {
-	c, _ := fresh(t)
-	root := must(c.Get(t.Context(), "/"))
-	must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Target"}))
-	link := find(must(c.Get(t.Context(), "/actions")), "link") // the templated action: the id is a path field
+	c, _, _ := apitest.Fresh(t, "cli")
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Target"}))
+	link := apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/actions")), "link") // the templated action: the id is a path field
 	_, err := c.Do(t.Context(), link, map[string]string{"id": "999999", "to": "Target", "kind": "part-of"})
 	if code, status := codeOf(t, err); code != "not_found" || status != 404 {
 		t.Errorf("link from a missing page: code=%q status=%d (%v)", code, status, err)
@@ -356,28 +327,28 @@ func TestLinkFromAMissingPageIsNotFound(t *testing.T) {
 }
 
 func TestCorrectionDomainActions(t *testing.T) {
-	c, _ := fresh(t)
+	c, _, _ := apitest.Fresh(t, "cli")
 	catalog, err := c.Catalog(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
 	actions := &api.Entity{Actions: catalog}
-	record := find(actions, "record")
-	correct := find(actions, "correct")
-	retract := find(actions, "retract")
+	record := apitest.Action(t, actions, "record")
+	correct := apitest.Action(t, actions, "correct")
+	retract := apitest.Action(t, actions, "retract")
 
-	mood := must(c.Do(t.Context(), record, map[string]string{"metric": "Mood", "day": "2026-10-01", "value": "3"}))
-	if _, err := c.Do(t.Context(), correct, map[string]string{"id": measurementID(mood), "value": "2.5"}); !clientStatus(err, 422) {
+	mood := apitest.Must(t)(c.Do(t.Context(), record, map[string]string{"metric": "Mood", "day": "2026-10-01", "value": "3"}))
+	if _, err := c.Do(t.Context(), correct, map[string]string{"id": measurementID(mood), "value": "2.5"}); apitest.Status(err) != 422 {
 		t.Fatalf("fractional mood correction: %v, want 422", err)
 	}
 	if _, err := c.Do(t.Context(), correct, map[string]string{"id": measurementID(mood), "value": "5"}); err != nil {
 		t.Fatalf("valid mood correction: %v", err)
 	}
 
-	if _, err := c.Do(t.Context(), find(actions, "register-metric"), map[string]string{"name": "api_walk"}); err != nil {
+	if _, err := c.Do(t.Context(), apitest.Action(t, actions, "register-metric"), map[string]string{"name": "api_walk"}); err != nil {
 		t.Fatal(err)
 	}
-	habit := must(c.Do(t.Context(), record, map[string]string{"metric": "api_walk", "day": "2026-10-01", "value": "1"}))
+	habit := apitest.Must(t)(c.Do(t.Context(), record, map[string]string{"metric": "api_walk", "day": "2026-10-01", "value": "1"}))
 	if _, err := c.Do(t.Context(), retract, map[string]string{"id": measurementID(habit)}); err != nil {
 		t.Fatalf("habit retraction: %v", err)
 	}
@@ -389,12 +360,12 @@ func TestCorrectionDomainActions(t *testing.T) {
 // records a new reading first and corrects it: a reading is corrected one time only, so a case cannot fail for another
 // reason because a case before it corrected the reading by error.
 func TestACorrectWithNoValueIsRefusedAndChangesNothing(t *testing.T) {
-	c, h, s := freshStore(t)
-	root := must(c.Get(t.Context(), "/"))
-	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
+	c, h, s := apitest.Fresh(t, "cli")
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
 	for i, body := range []string{"", "value="} {
-		m := must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "weight", "day": fmt.Sprintf("2026-09-%02d", i+1), "value": "71"}))
-		self := href(m, "self")
+		m := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "record"), map[string]string{"metric": "weight", "day": fmt.Sprintf("2026-09-%02d", i+1), "value": "71"}))
+		self := apitest.Href(m, "self")
 		req := httptest.NewRequest("POST", self+"/correct", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		rec := httptest.NewRecorder()
@@ -406,7 +377,7 @@ func TestACorrectWithNoValueIsRefusedAndChangesNothing(t *testing.T) {
 		if p := props(&e); rec.Code != http.StatusUnprocessableEntity || p["code"] != "invalid" || p["message"] != "missing field value" {
 			t.Errorf("correct with %q: %d %v, want 422 invalid \"missing field value\"", body, rec.Code, p)
 		}
-		back := props(must(c.Get(t.Context(), self)))
+		back := props(apitest.Must(t)(c.Get(t.Context(), self)))
 		if back["current"] != true || back["retraction"] != false || back["value"] != json.Number("71") || back["superseded_by"] != nil {
 			t.Errorf("correct with %q: the reading reads back as %v, want current 71, not retracted, not corrected", body, back)
 		}
@@ -416,17 +387,12 @@ func TestACorrectWithNoValueIsRefusedAndChangesNothing(t *testing.T) {
 	}
 }
 
-func clientStatus(err error, want int) bool {
-	var ce *client.Error
-	return errors.As(err, &ce) && ce.Status == want
-}
-
 func measurementID(e *api.Entity) string {
-	return strings.TrimPrefix(href(e, "self"), "/measurements/")
+	return strings.TrimPrefix(apitest.Href(e, "self"), "/measurements/")
 }
 
 func TestBrowserGetsHTMLAndSourceUI(t *testing.T) {
-	_, h, s := freshStore(t)
+	_, h, s := apitest.Fresh(t, "cli")
 	req := httptest.NewRequest("POST", "/days/2026-09-29/capture", strings.NewReader("text=hello"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "text/html,application/xhtml+xml")
@@ -444,7 +410,7 @@ func TestBrowserGetsHTMLAndSourceUI(t *testing.T) {
 }
 
 func TestBrowserOriginProtection(t *testing.T) {
-	_, h, s := freshStore(t)
+	_, h, s := apitest.Fresh(t, "cli")
 	postForm := func(path string, vals url.Values, headers map[string]string) *httptest.ResponseRecorder {
 		t.Helper()
 		req := httptest.NewRequest("POST", "http://lifelog.local"+path, strings.NewReader(vals.Encode()))
@@ -539,22 +505,6 @@ func TestBrowserOriginProtection(t *testing.T) {
 
 }
 
-func must(e *api.Entity, err error) *api.Entity {
-	if err != nil {
-		panic(err)
-	}
-	return e
-}
-
-func href(e *api.Entity, rel string) string {
-	for _, l := range e.Links {
-		if l.Rel[0] == rel {
-			return l.Href
-		}
-	}
-	return ""
-}
-
 func hasOption(a api.Action, field, opt string) bool {
 	for _, f := range a.Fields {
 		if f.Name == field {
@@ -569,64 +519,64 @@ func hasOption(a api.Action, field, opt string) bool {
 }
 
 func TestViewsOfferTheMetricsInUse(t *testing.T) {
-	c, _ := fresh(t)
-	root := must(c.Get(t.Context(), "/"))
+	c, _, _ := apitest.Fresh(t, "cli")
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
 	for _, m := range []map[string]string{{"name": "weight", "unit": "kg"}, {"name": "ldl", "unit": "mg/dL"}} {
-		must(c.Do(t.Context(), find(root, "register-metric"), m))
+		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), m))
 	}
 	day := "2026-06-01"
 	for _, r := range []map[string]string{
 		{"metric": "weight", "day": "2026-05-20", "value": "71.5"},
 		{"metric": "ldl", "day": "2025-12-01", "value": "96"}, // a lab marker, read twice a year
 	} {
-		must(c.Do(t.Context(), find(root, "record"), r))
+		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "record"), r))
 	}
-	dayView := must(c.Get(t.Context(), "/days/"+day))
-	rec := find(dayView, "record")
+	dayView := apitest.Must(t)(c.Get(t.Context(), "/days/"+day))
+	rec := apitest.Action(t, dayView, "record")
 	if !hasOption(rec, "metric", "weight") || hasOption(rec, "metric", "ldl") || hasOption(rec, "metric", "Mood") {
 		t.Errorf("the day view offers %v: only what was read in its last 60 days", rec.Fields[0].Options)
 	}
-	if href(dayView, "metrics") != "/metrics" {
+	if apitest.Href(dayView, "metrics") != "/metrics" {
 		t.Error("the day view does not link the whole registry")
 	}
-	if all := find(must(c.Get(t.Context(), "/metrics")), "record"); !hasOption(all, "metric", "ldl") || !hasOption(all, "metric", "Mood") {
+	if all := apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/metrics")), "record"); !hasOption(all, "metric", "ldl") || !hasOption(all, "metric", "Mood") {
 		t.Errorf("/metrics offers %v: every registered metric", all.Fields[0].Options)
 	}
-	if ldl := find(must(c.Get(t.Context(), "/metrics/ldl")), "record"); !hasOption(ldl, "metric", "ldl") || ldl.Fields[0].Value != "ldl" {
+	if ldl := apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/metrics/ldl")), "record"); !hasOption(ldl, "metric", "ldl") || ldl.Fields[0].Value != "ldl" {
 		t.Errorf("a series offers %v with %v: its own metric, selected", ldl.Fields[0].Options, ldl.Fields[0].Value)
 	}
-	must(c.Do(t.Context(), find(dayView, "record"), map[string]string{"metric": "ldl", "day": day, "value": "92"}))
-	if !hasOption(find(must(c.Get(t.Context(), "/days/"+day)), "record"), "metric", "ldl") {
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, dayView, "record"), map[string]string{"metric": "ldl", "day": day, "value": "92"}))
+	if !hasOption(apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/"+day)), "record"), "metric", "ldl") {
 		t.Error("a metric read on the day is not offered")
 	}
 }
 
 func TestMetricsAreGroupedByCategory(t *testing.T) {
-	c, h := fresh(t)
-	root := must(c.Get(t.Context(), "/"))
+	c, h, _ := apitest.Fresh(t, "cli")
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
 	for _, m := range []map[string]string{{"name": "TSH", "unit": "µUI/mL", "note": "thyroid-stimulating hormone"}, {"name": "Weight", "unit": "kg"},
 		{"name": "Walk"}, {"name": "Steps", "unit": "n"}} {
-		must(c.Do(t.Context(), find(root, "register-metric"), m))
+		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), m))
 	}
 	for _, p := range []string{"Biomarkers", "Thyroid", "Body"} {
-		must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": p}))
+		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": p}))
 	}
-	thyroid := must(c.Get(t.Context(), "/pages?title=Thyroid"))
-	must(c.Do(t.Context(), find(thyroid, "link"), map[string]string{"to": "Biomarkers", "kind": "part-of"}))
-	tsh := must(c.Get(t.Context(), "/metrics/tsh"))
-	if href(tsh, "page") == "" || find(tsh, "file-pages").Name == "" || find(tsh, "link").Title != "Add a link" {
+	thyroid := apitest.Must(t)(c.Get(t.Context(), "/pages?title=Thyroid"))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, thyroid, "link"), map[string]string{"to": "Biomarkers", "kind": "part-of"}))
+	tsh := apitest.Must(t)(c.Get(t.Context(), "/metrics/tsh"))
+	if apitest.Href(tsh, "page") == "" || !hasAction(tsh, "file-pages") || apitest.Action(t, tsh, "link").Title != "Add a link" {
 		t.Fatalf("a series links its metric's page and offers to file it: %v", names(tsh))
 	}
-	must(c.Do(t.Context(), find(tsh, "link"), map[string]string{"to": "Thyroid", "kind": "part-of"}))
-	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/metrics/Weight")), "link"), map[string]string{"to": "Body", "kind": "part-of"}))
-	walk := must(c.Get(t.Context(), "/metrics/Walk"))
-	must(c.Do(t.Context(), find(walk, "link"), map[string]string{"to": "Body", "kind": "part-of"}))
-	if _, err := c.Do(t.Context(), find(walk, "link"), map[string]string{"to": "Nowhere", "kind": "part-of"}); err == nil {
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, tsh, "link"), map[string]string{"to": "Thyroid", "kind": "part-of"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/metrics/Weight")), "link"), map[string]string{"to": "Body", "kind": "part-of"}))
+	walk := apitest.Must(t)(c.Get(t.Context(), "/metrics/Walk"))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, walk, "link"), map[string]string{"to": "Body", "kind": "part-of"}))
+	if _, err := c.Do(t.Context(), apitest.Action(t, walk, "link"), map[string]string{"to": "Nowhere", "kind": "part-of"}); err == nil {
 		t.Error("a metric is filed in a category page that does not exist")
 	}
 
 	var got []string
-	for _, g := range must(c.Get(t.Context(), "/metrics")).Properties.(map[string]any)["groups"].([]any) {
+	for _, g := range apitest.Must(t)(c.Get(t.Context(), "/metrics")).Properties.(map[string]any)["groups"].([]any) {
 		g := g.(map[string]any)
 		var ms []string
 		for _, m := range g["metrics"].([]any) {
@@ -666,41 +616,37 @@ func TestMetricCanonicalActions(t *testing.T) {
 		{"ASCII metric", "ascii METRIC", "", "unitless"},
 	} {
 		t.Run(tc.stored, func(t *testing.T) {
-			c, _ := fresh(t)
+			c, _, _ := apitest.Fresh(t, "cli")
 			if tc.state != "unknown" {
-				must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "register-metric"), map[string]string{"name": tc.stored, "unit": tc.unit}))
+				apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "register-metric"), map[string]string{"name": tc.stored, "unit": tc.unit}))
 				if tc.state == "deleted" {
-					must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/pages?title="+url.QueryEscape(tc.stored))), "tombstone"), nil))
+					apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/pages?title="+url.QueryEscape(tc.stored))), "tombstone"), nil))
 				}
 			}
-			stored := must(c.Get(t.Context(), "/metrics/"+url.PathEscape(tc.stored)))
-			equivalent := must(c.Get(t.Context(), "/metrics/"+url.PathEscape(tc.equivalent)))
+			stored := apitest.Must(t)(c.Get(t.Context(), "/metrics/"+url.PathEscape(tc.stored)))
+			equivalent := apitest.Must(t)(c.Get(t.Context(), "/metrics/"+url.PathEscape(tc.equivalent)))
 			if names(stored) != names(equivalent) {
 				t.Errorf("actions: stored %s, equivalent %s", names(stored), names(equivalent))
 			}
-			if href(stored, "page") != href(equivalent, "page") {
-				t.Errorf("page identity differs: %q vs %q", href(stored, "page"), href(equivalent, "page"))
+			if apitest.Href(stored, "page") != apitest.Href(equivalent, "page") {
+				t.Errorf("page identity differs: %q vs %q", apitest.Href(stored, "page"), apitest.Href(equivalent, "page"))
 			}
 			for _, e := range []*api.Entity{stored, equivalent} {
-				if href(e, "self") == "" {
+				if apitest.Href(e, "self") == "" {
 					t.Error("missing self link")
-				} else if names(must(c.Get(t.Context(), href(e, "self")))) != names(e) {
+				} else if names(apitest.Must(t)(c.Get(t.Context(), apitest.Href(e, "self")))) != names(e) {
 					t.Error("self link changes actions")
 				}
 				restricted := tc.state == "unknown" || tc.state == "deleted"
-				if restricted && (href(e, "page") != "" || find(e, "link").Name != "") {
+				if restricted && (apitest.Href(e, "page") != "" || hasAction(e, "link")) {
 					t.Errorf("restricted metric offers actions: %s", names(e))
 				}
 			}
 			if tc.state == "unitless" {
-				a := find(equivalent, "record")
-				if a.Name == "" {
-					t.Fatal("equivalent spelling lacks record")
-				}
-				must(c.Do(t.Context(), a, map[string]string{"day": "2026-01-01", "value": "1"}))
+				apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, equivalent, "record"), map[string]string{"day": "2026-01-01", "value": "1"}))
 			}
 			if tc.state != "unknown" && tc.state != "deleted" {
-				page := must(c.Get(t.Context(), href(equivalent, "page")))
+				page := apitest.Must(t)(c.Get(t.Context(), apitest.Href(equivalent, "page")))
 				if page.Title != tc.stored {
 					t.Errorf("stored spelling changed: %q", page.Title)
 				}
@@ -710,28 +656,28 @@ func TestMetricCanonicalActions(t *testing.T) {
 }
 
 func TestRenamedIdentityRetainsActionsAndAliasWrites(t *testing.T) {
-	c, _ := fresh(t)
-	root := must(c.Get(t.Context(), "/"))
-	p := must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Typo", "body": "prose"}))
-	oldHref := href(p, "self")
-	renamed := must(c.Do(t.Context(), find(p, "rename"), map[string]string{"title": "Correct"}))
-	if href(renamed, "self") != oldHref {
+	c, _, _ := apitest.Fresh(t, "cli")
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	p := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Typo", "body": "prose"}))
+	oldHref := apitest.Href(p, "self")
+	renamed := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, p, "rename"), map[string]string{"title": "Correct"}))
+	if apitest.Href(renamed, "self") != oldHref {
 		t.Fatal("rename changed id")
 	}
-	must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Other", "body": "[[Typo]]"}))
-	current := must(c.Get(t.Context(), oldHref))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Other", "body": "[[Typo]]"}))
+	current := apitest.Must(t)(c.Get(t.Context(), oldHref))
 	if current.Title != "Correct" || names(current) != "save-body,promote,rename,link,unlink,file-pages,tombstone" {
 		t.Fatalf("renamed actions: %+v", current)
 	}
 	version := current.Properties.(map[string]any)["version"].(string)
-	must(c.Do(t.Context(), find(current, "save-body"), map[string]string{"body": "#REDIRECT [[Other]]", "version": version}))
-	must(c.Do(t.Context(), find(current, "link"), map[string]string{"to": "Other", "kind": "part-of"}))
-	must(c.Do(t.Context(), find(must(c.Get(t.Context(), oldHref)), "unlink"), map[string]string{"to": "Other", "kind": "part-of"}))
-	alias := must(c.Get(t.Context(), "/pages?title=Typo"))
-	if href(alias, "self") != oldHref || alias.Title != "Correct" || alias.Properties.(map[string]any)["body"] != "#REDIRECT [[Other]]" {
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, current, "save-body"), map[string]string{"body": "#REDIRECT [[Other]]", "version": version}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, current, "link"), map[string]string{"to": "Other", "kind": "part-of"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), oldHref)), "unlink"), map[string]string{"to": "Other", "kind": "part-of"}))
+	alias := apitest.Must(t)(c.Get(t.Context(), "/pages?title=Typo"))
+	if apitest.Href(alias, "self") != oldHref || alias.Title != "Correct" || alias.Properties.(map[string]any)["body"] != "#REDIRECT [[Other]]" {
 		t.Fatalf("retained alias: %+v", alias)
 	}
-	if _, err := c.Do(t.Context(), find(alias, "link"), map[string]string{"to": "Other", "kind": "redirect"}); !clientStatus(err, 422) {
+	if _, err := c.Do(t.Context(), apitest.Action(t, alias, "link"), map[string]string{"to": "Other", "kind": "redirect"}); apitest.Status(err) != 422 {
 		t.Fatalf("removed kind: %v", err)
 	}
 }

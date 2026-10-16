@@ -2,7 +2,6 @@ package api_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,25 +10,18 @@ import (
 	"strings"
 	"testing"
 
-	"lifelog/internal/api"
-	"lifelog/internal/client"
-	"lifelog/internal/core"
-	"lifelog/internal/db/dbtest"
+	"lifelog/internal/api/apitest"
 )
 
 func TestRevisionTokenParity(t *testing.T) {
 	for _, remote := range []bool{false, true} {
 		for _, source := range []string{"cli", "api", "ui", "agent:revision"} {
 			t.Run(fmt.Sprintf("remote=%v/source=%s", remote, source), func(t *testing.T) {
-				d := dbtest.New(t)
-				store := &core.Store{DB: d}
-				h := api.New(store)
-				c := client.InProcess(h, source)
+				c, h, store := apitest.Fresh(t, source)
 				if remote {
-					server := httptest.NewServer(h)
-					t.Cleanup(server.Close)
-					c = client.Remote(server.URL, source, "")
+					_, c = apitest.Clients(t, h, source)
 				}
+				d := store.DB
 				id, _, err := store.CreatePage(context.Background(), "cli", "Version parity", "first", "")
 				if err != nil {
 					t.Fatal(err)
@@ -43,7 +35,7 @@ func TestRevisionTokenParity(t *testing.T) {
 				if !ok {
 					t.Fatalf("version is not an opaque string: %#v", p.Properties)
 				}
-				save := find(p, "save-body")
+				save := apitest.Action(t, p, "save-body")
 				var clock string
 				if err := d.R.QueryRow(`SELECT updated_at FROM entities WHERE id=?`, id).Scan(&clock); err != nil {
 					t.Fatal(err)
@@ -56,8 +48,7 @@ func TestRevisionTokenParity(t *testing.T) {
 				}
 				for _, token := range []string{original, clock} {
 					_, err := c.Do(t.Context(), save, map[string]string{"body": "stale [[Forbidden]]", "version": token})
-					var ce *client.Error
-					if !errors.As(err, &ce) || ce.Status != 409 {
+					if apitest.Status(err) != 409 {
 						t.Fatalf("token %q: %v; want conflict", token, err)
 					}
 				}
@@ -83,7 +74,7 @@ func TestRevisionTokenParity(t *testing.T) {
 				if got := p.Properties.(map[string]any)["version"]; got != "9223372036854775807" {
 					t.Fatalf("token property %#v", got)
 				}
-				save = find(p, "save-body")
+				save = apitest.Action(t, p, "save-body")
 				var prefilled any
 				for _, field := range save.Fields {
 					if field.Name == "version" {
@@ -97,8 +88,7 @@ func TestRevisionTokenParity(t *testing.T) {
 					t.Fatalf("max token no-op: %v", err)
 				}
 				_, err = c.Do(t.Context(), save, map[string]string{"body": "overflow [[Forbidden]]"})
-				var ce *client.Error
-				if !errors.As(err, &ce) || ce.Status != 422 {
+				if apitest.Status(err) != 422 {
 					t.Fatalf("exhaustion error: %v; want refusal", err)
 				}
 				state, err = store.PageByID(context.Background(), id)
@@ -114,9 +104,8 @@ func TestRevisionTokenParity(t *testing.T) {
 }
 
 func TestBrowserFormCarriesRevisionAndRefusesOldClockToken(t *testing.T) {
-	d := dbtest.New(t)
-	store := &core.Store{DB: d}
-	h := api.New(store)
+	_, h, store := apitest.Fresh(t, "cli")
+	d := store.DB
 	id, _, err := store.CreatePage(context.Background(), "cli", "Browser version", "first", "")
 	if err != nil {
 		t.Fatal(err)

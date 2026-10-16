@@ -6,15 +6,16 @@ import (
 	"strings"
 	"testing"
 
+	"lifelog/internal/api/apitest"
 	"lifelog/internal/client"
 )
 
 // journalFixture is a small life around fixedToday: a mood; two earlier day pages, one written as a mood alone.
 func journalFixture(t *testing.T) (*client.Client, http.Handler) {
 	t.Helper()
-	c, h := freshOn(t, fixedToday)
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	capture := func(day string, v map[string]string) {
-		must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/days/"+day)), "capture"), v))
+		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/"+day)), "capture"), v))
 	}
 	capture(dayOf(-2), map[string]string{"text": "## Morning\nRan with [[Sam]] by the river."})
 	capture(dayOf(-1), map[string]string{"mood": "2"})
@@ -26,26 +27,26 @@ func journalFixture(t *testing.T) (*client.Client, http.Handler) {
 func TestTheDayCarriesItsMood(t *testing.T) {
 	c, h := journalFixture(t)
 
-	today := must(c.Get(t.Context(), "/days/"+fixedToday))
+	today := apitest.Must(t)(c.Get(t.Context(), "/days/"+fixedToday))
 	p := props(today)
 	if fmt.Sprint(p["mood"]) != "[4 3]" || p["today"] != fixedToday {
 		t.Errorf("today's mood %v, today %v", p["mood"], p["today"])
 	}
-	save := find(today, "save-body")
-	page := must(c.Get(t.Context(), hrefOf(today, "page")))
-	if save.Href != hrefOf(today, "page")+"/body" || fieldOf(save, "version") != fmt.Sprint(props(page)["version"]) ||
+	save := apitest.Action(t, today, "save-body")
+	page := apitest.Must(t)(c.Get(t.Context(), apitest.Href(today, "page")))
+	if save.Href != apitest.Href(today, "page")+"/body" || fieldOf(save, "version") != fmt.Sprint(props(page)["version"]) ||
 		fieldOf(save, "body") != props(page)["body"] {
 		t.Errorf("the day's save-body: %+v, page %v", save, props(page))
 	}
 
 	// A past day with nothing on it.
-	past := props(must(c.Get(t.Context(), "/days/"+dayOf(-20))))
+	past := props(apitest.Must(t)(c.Get(t.Context(), "/days/"+dayOf(-20))))
 	if fmt.Sprint(past["mood"]) != "[]" {
 		t.Errorf("a day with no mood: %v", past["mood"])
 	}
-	quiet := must(c.Get(t.Context(), "/days/"+dayOf(-5)))
-	if find(quiet, "save-body").Name != "" {
-		t.Errorf("a quiet day: save-body %v", find(quiet, "save-body").Href)
+	quiet := apitest.Must(t)(c.Get(t.Context(), "/days/"+dayOf(-5)))
+	if hasAction(quiet, "save-body") {
+		t.Errorf("a quiet day offers save-body: %s", names(quiet))
 	}
 
 	// The browser.
@@ -62,7 +63,7 @@ func TestTheDayCarriesItsMood(t *testing.T) {
 
 func TestTheRootIsTodayAtAGlance(t *testing.T) {
 	c, h := journalFixture(t)
-	root := must(c.Get(t.Context(), "/"))
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
 	p := props(root)
 	var recent []string
 	for _, r := range p["recent"].([]any) {

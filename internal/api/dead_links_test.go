@@ -7,13 +7,15 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"lifelog/internal/api/apitest"
 )
 
 // TestHomeAndADayLinkOnlyToServedPaths: every link of Home and of a day page opens a page, and no link sends a query
 // that its page does not read (docs/plans/117-one-browse-view.md, step 0).
 func TestHomeAndADayLinkOnlyToServedPaths(t *testing.T) {
-	c, h := freshOn(t, fixedToday)
-	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/days/2031-05-03")), "capture"), map[string]string{"text": "Synthetic entry"}))
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/2031-05-03")), "capture"), map[string]string{"text": "Synthetic entry"}))
 	for _, page := range []string{"/", "/days/2031-05-03", "/days/" + fixedToday} {
 		body := browse(t, h, page)
 		for _, m := range regexp.MustCompile(`href="(/[^"]*)"`).FindAllStringSubmatch(body, -1) {
@@ -35,8 +37,8 @@ func TestHomeAndADayLinkOnlyToServedPaths(t *testing.T) {
 // TestActionDescriptionsNameOnlyTheirFields: a field name in an action's description (a word with an underscore) is a
 // field of that action, so a client is never told to send a field the action does not take.
 func TestActionDescriptionsNameOnlyTheirFields(t *testing.T) {
-	c, _ := fresh(t)
-	cat := must(c.Get(t.Context(), "/actions"))
+	c, _, _ := apitest.Fresh(t, "cli")
+	cat := apitest.Must(t)(c.Get(t.Context(), "/actions"))
 	for _, a := range cat.Actions {
 		var fields []string
 		for _, f := range a.Fields {
@@ -55,7 +57,7 @@ func TestActionDescriptionsNameOnlyTheirFields(t *testing.T) {
 // truth. Each pattern names a removed feature, not a bare word, so a true text such as "due to" or the position of a
 // row stays free.
 func TestTheCatalogNamesNoRemovedFeature(t *testing.T) {
-	c, _ := fresh(t)
+	c, _, _ := apitest.Fresh(t, "cli")
 	removed := regexp.MustCompile(`(?i)\b(` + strings.Join([]string{
 		`tasks?`, `overdue`, `what (is|was) due`, `due (days?|dates?)`, // D23
 		`(a|the) photo's position`, `positions? of (a|the) photos?`, `and position`, `positions? near`,
@@ -75,7 +77,7 @@ func TestTheCatalogNamesNoRemovedFeature(t *testing.T) {
 			t.Fatalf("the pattern finds a removed feature in %q: %v, want %v", s, got, want)
 		}
 	}
-	for _, a := range must(c.Get(t.Context(), "/actions")).Actions {
+	for _, a := range apitest.Must(t)(c.Get(t.Context(), "/actions")).Actions {
 		texts := []string{a.Title, a.Description}
 		for _, f := range a.Fields {
 			texts = append(texts, f.Title)

@@ -7,14 +7,16 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"lifelog/internal/api/apitest"
 )
 
 func TestBrowserAllReadingsCoordinates(t *testing.T) {
-	c, h := fresh(t)
-	root := must(c.Get(t.Context(), "/"))
-	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "synthetic"}))
+	c, h, _ := apitest.Fresh(t, "cli")
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "synthetic"}))
 	for _, day := range []string{"2026-01-01", "2026-09-01"} {
-		must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "synthetic", "day": day, "value": "1"}))
+		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "record"), map[string]string{"metric": "synthetic", "day": day, "value": "1"}))
 	}
 	body := browse(t, h, "/metrics/synthetic?from=2026-06-03&to=2026-09-01")
 	link := regexp.MustCompile(`href="([^"]+)"\>All readings`).FindStringSubmatch(body)
@@ -41,9 +43,9 @@ func TestBrowserAllReadingsCoordinates(t *testing.T) {
 func TestBrowserMultipartRecoversAcceptedBody(t *testing.T) {
 	for _, kind := range []string{"title", "preview", "overflow", "conflict"} {
 		t.Run(kind, func(t *testing.T) {
-			c, h := fresh(t)
+			c, h, _ := apitest.Fresh(t, "cli")
 			if kind == "conflict" {
-				must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "create-place"), map[string]string{"title": "Occupied"}))
+				apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "create-place"), map[string]string{"title": "Occupied"}))
 			}
 			var b bytes.Buffer
 			mw := multipart.NewWriter(&b)
@@ -71,7 +73,7 @@ func TestBrowserMultipartRecoversAcceptedBody(t *testing.T) {
 			if rec.Code < 400 || !strings.Contains(rec.Body.String(), "transcript &lt;script&gt; &amp; draft</textarea>") {
 				t.Fatalf("%s: status %d recovered=%v", kind, rec.Code, strings.Contains(rec.Body.String(), "draft</textarea>"))
 			}
-			if len(must(c.Get(t.Context(), "/browse?kind=media")).Entities) != 0 {
+			if len(apitest.Must(t)(c.Get(t.Context(), "/browse?kind=media")).Entities) != 0 {
 				t.Fatal("wrote file")
 			}
 		})

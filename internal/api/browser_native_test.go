@@ -3,6 +3,8 @@ package api_test
 import (
 	"strings"
 	"testing"
+
+	"lifelog/internal/api/apitest"
 )
 
 // The browser without a script (docs/plans/108-the-browser-made-current.md): what app.js once did, a page does by
@@ -12,8 +14,8 @@ import (
 // form inside, which the top bar's Search opens by its command and Escape or a tap outside closes (closedby). The
 // login page, which has no shell, carries none (the public listener's test says so).
 func TestTheSearchDialogIsInThePage(t *testing.T) {
-	_, h := fresh(t)
-	body := page(t, h, "/")
+	_, h, _ := apitest.Fresh(t, "cli")
+	body := browse(t, h, "/")
 	for _, want := range []string{
 		`<dialog class="palette" id="palette" closedby="any" aria-label="Search">` + "\n" + `<form method="GET" action="/search"><input type="search" name="q" autocomplete="off" aria-label="Search" placeholder="A page's title, or words of a body"></form>`,
 		`<button type="button" class="rail-search-link button" commandfor="palette" command="show-modal" aria-label="Search">`,
@@ -27,8 +29,8 @@ func TestTheSearchDialogIsInThePage(t *testing.T) {
 // TestTheKeysAreInThePage: the keys are the browser's access keys, on the search, New, Today, the capture and the
 // previous and next page, and the footer says so; there is no script to take any other key.
 func TestTheKeysAreInThePage(t *testing.T) {
-	_, h := freshOn(t, fixedToday)
-	day := page(t, h, "/days/"+fixedToday)
+	_, h, _ := apitest.FreshOn(t, "cli", fixedToday)
+	day := browse(t, h, "/days/"+fixedToday)
 	for _, want := range []string{
 		`<input type="search" name="q" placeholder="Search" aria-label="Search" accesskey="k">`,
 		`<button type="button" class="button primary rail-new" popovertarget="new-menu" accesskey="n">`,
@@ -46,11 +48,11 @@ func TestTheKeysAreInThePage(t *testing.T) {
 // TestSearchListsTitlesFirst: the search answers the pages whose title starts with the words before the pages whose
 // words match, so a page is one search away by its title.
 func TestSearchListsTitlesFirst(t *testing.T) {
-	c, h := fresh(t)
-	root := must(c.Get(t.Context(), "/"))
-	must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Garden log", "body": "The roses."}))
-	must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Roses", "body": "In the garden."}))
-	body := page(t, h, "/search?q=garden")
+	c, h, _ := apitest.Fresh(t, "cli")
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Garden log", "body": "The roses."}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Roses", "body": "In the garden."}))
+	body := browse(t, h, "/search?q=garden")
 	titles, words := strings.Index(body, `aria-label="Pages by title"`), strings.Index(body, `aria-label="Pages by their words"`)
 	if titles < 0 || words < 0 || titles > words {
 		t.Fatalf("the search does not list the pages by title first:\n%.3000s", body)
@@ -61,7 +63,7 @@ func TestSearchListsTitlesFirst(t *testing.T) {
 	if !strings.Contains(body[words:], `>Roses</a>`) {
 		t.Errorf("the pages by their words lack Roses: %.600s", body[words:])
 	}
-	e := must(c.Get(t.Context(), "/search?q=garden"))
+	e := apitest.Must(t)(c.Get(t.Context(), "/search?q=garden"))
 	if ts, _ := props(e)["titles"].([]any); len(ts) != 1 {
 		t.Errorf("the JSON search carries %d titles, want 1", len(ts))
 	}
