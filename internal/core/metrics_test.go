@@ -498,84 +498,60 @@ func TestCreateMetricRefusalsWriteNothing(t *testing.T) {
 	}
 }
 
-func TestReadingsByDay(t *testing.T) {
+// TestReadingsByDayCountsTheCurrentReadingsOfAWindow: the readings of all metrics together (the mood of a capture, a
+// weight, steps). A correction replaces its reading, so its day counts it once, and a retracted reading does not
+// count. The bounds are both included, and a day with no reading is absent. A sum of the counts is the count of the
+// window that the year page shows.
+func TestReadingsByDayCountsTheCurrentReadingsOfAWindow(t *testing.T) {
 	s := fresh(t)
 	mood := 4.0
 	if _, _, err := s.Capture(ctx, "cli", "2031-05-14", "", &mood); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "weight", Unit: "kg"}); err != nil {
-		t.Fatal(err)
-	}
-	record := func(day string, v float64) int64 {
-		t.Helper()
-		id, err := s.Record(ctx, "cli", Reading{Metric: "weight", Day: day, Value: v})
-		if err != nil {
-			t.Fatal(err)
-		}
-		return id
-	}
-	wrong := record("2031-05-14", 80)
-	if _, err := s.Correct(ctx, "cli", wrong, func() *float64 { v := 79.5; return &v }()); err != nil {
-		t.Fatal(err)
-	}
-	record("2031-05-14", 79)
-	record("2031-05-15", 78)
-	if _, err := s.Correct(ctx, "cli", record("2031-05-15", 70), nil); err != nil { // a retraction
-		t.Fatal(err)
-	}
-	record("2031-06-01", 77)
-
-	got, err := s.ReadingsByDay(ctx, "2031-05-01", "2031-05-31")
-	if err != nil {
-		t.Fatal(err)
-	}
-	// 14 May: the mood, the correction (not the reading it corrects) and 79. 15 May:
-	// 78, not the retracted reading
-	if fmt.Sprint(got) != "map[2031-05-14:3 2031-05-15:1]" {
-		t.Errorf("readings by day: %v", got)
-	}
-}
-
-// TestReadingsByDayCountsTheCurrentReadingsOfAWindow: three weight readings, one of them corrected, and a steps
-// reading, of all metrics together. A correction replaces its reading, so its day counts it once. The bounds are both
-// included. A sum of the counts is the count of the window that the year page shows.
-func TestReadingsByDayCountsTheCurrentReadingsOfAWindow(t *testing.T) {
-	s := fresh(t)
 	for name, unit := range map[string]string{"weight": "kg", "steps": "n"} {
 		if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: name, Unit: unit}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	var fixed int64
-	for _, r := range []Reading{{Metric: "weight", Day: "2026-10-01", Value: 70}, {Metric: "weight", Day: "2026-10-05", Value: 71},
-		{Metric: "weight", Day: "2026-10-09", Value: 72}, {Metric: "steps", Day: "2026-10-06", Value: 900}} {
-		id, err := s.Record(ctx, "cli", r)
+	record := func(metric, day string, v float64) int64 {
+		t.Helper()
+		id, err := s.Record(ctx, "cli", Reading{Metric: metric, Day: day, Value: v})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if r.Day == "2026-10-05" {
-			fixed = id
-		}
+		return id
 	}
-	value := 71.5
-	if _, err := s.Correct(ctx, "cli", fixed, &value); err != nil {
+	record("weight", "2031-05-01", 70)
+	wrong := record("weight", "2031-05-14", 80)
+	if _, err := s.Correct(ctx, "cli", wrong, func() *float64 { v := 79.5; return &v }()); err != nil {
 		t.Fatal(err)
 	}
+	record("weight", "2031-05-14", 79)
+	record("weight", "2031-05-15", 78)
+	if _, err := s.Correct(ctx, "cli", record("weight", "2031-05-15", 70), nil); err != nil { // a retraction
+		t.Fatal(err)
+	}
+	record("steps", "2031-05-16", 900)
+	record("weight", "2031-05-31", 72)
+	record("weight", "2031-06-01", 77)
+
 	for _, tc := range []struct {
 		from, through string
 		want          string
 	}{
-		{"2026-10-01", "2026-10-31", "map[2026-10-01:1 2026-10-05:1 2026-10-06:1 2026-10-09:1]"},
-		{"2026-10-05", "2026-10-06", "map[2026-10-05:1 2026-10-06:1]"}, {"2026-10-01", "2026-10-01", "map[2026-10-01:1]"},
-		{"2026-10-02", "2026-10-04", "map[]"}, {"2026-09-01", "2026-09-30", "map[]"},
+		// 14 May: the mood, the correction (not the reading it corrects) and 79. 15 May: 78, not the retracted
+		// reading. 1 June is after the window.
+		{"2031-05-01", "2031-05-31", "map[2031-05-01:1 2031-05-14:3 2031-05-15:1 2031-05-16:1 2031-05-31:1]"},
+		{"2031-05-15", "2031-05-16", "map[2031-05-15:1 2031-05-16:1]"}, {"2031-05-01", "2031-05-01", "map[2031-05-01:1]"},
+		{"2031-05-31", "2031-06-01", "map[2031-05-31:1 2031-06-01:1]"},
+		{"2031-05-02", "2031-05-13", "map[]"}, {"2031-04-01", "2031-04-30", "map[]"},
 	} {
 		got, err := s.ReadingsByDay(ctx, tc.from, tc.through)
 		if err != nil || fmt.Sprint(got) != tc.want {
 			t.Errorf("ReadingsByDay(%s, %s) = %v, %v; want %s", tc.from, tc.through, got, err, tc.want)
 		}
 	}
-	if _, err := s.ReadingsByDay(ctx, "2026-10-09", "2026-10-01"); status(err) != 422 {
+	if _, err := s.ReadingsByDay(ctx, "2031-05-16", "2031-05-01"); status(err) != 422 {
 		t.Errorf("a reversed window: %v", err)
 	}
 }
