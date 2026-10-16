@@ -46,7 +46,8 @@ func mustView(name string) []byte {
 	return b
 }
 
-var pages = template.Must(template.New("").Funcs(template.FuncMap{
+// templates is the set of the templates in html/*.html, with the functions that they call.
+var templates = template.Must(template.New("").Funcs(template.FuncMap{
 	"basecss":    func() template.CSS { return baseCSS },
 	"appcss":     func() template.CSS { return appCSS },
 	"rel":        func(r []string) string { return strings.Join(r, " ") },
@@ -218,7 +219,7 @@ func templateOf(e *Entity) string {
 // htmlOf is the page of a view, drawn by the template of its entity's class.
 func htmlOf(v *view) ([]byte, error) {
 	var b bytes.Buffer
-	if err := pages.ExecuteTemplate(&b, templateOf(v.Entity), v); err != nil {
+	if err := templates.ExecuteTemplate(&b, templateOf(v.Entity), v); err != nil {
 		return nil, err
 	}
 	return b.Bytes(), nil

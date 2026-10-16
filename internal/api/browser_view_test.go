@@ -41,7 +41,7 @@ func TestDangerAndRowsReachTheForm(t *testing.T) {
 			t.Fatal(err)
 		}
 		var b bytes.Buffer
-		if err := pages.ExecuteTemplate(&b, "form", f); err != nil {
+		if err := templates.ExecuteTemplate(&b, "form", f); err != nil {
 			t.Fatal(err)
 		}
 		return b.String()
@@ -73,7 +73,7 @@ func TestOptionalFieldsFoldUnderMoreFields(t *testing.T) {
 			t.Fatal(err)
 		}
 		var b bytes.Buffer
-		if err := pages.ExecuteTemplate(&b, "form", f); err != nil {
+		if err := templates.ExecuteTemplate(&b, "form", f); err != nil {
 			t.Fatal(err)
 		}
 		return b.String(), f

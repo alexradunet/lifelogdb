@@ -19,7 +19,7 @@ func TestBrowserFieldPresence(t *testing.T) {
 		t.Fatal(err)
 	}
 	var b bytes.Buffer
-	if err := pages.ExecuteTemplate(&b, "form", f); err != nil {
+	if err := templates.ExecuteTemplate(&b, "form", f); err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []string{`name="hidden" value="0"`, `name="optional" value=""`, `name="default" value="5"`, `>0</textarea>`, `<option selected>0</option>`} {
