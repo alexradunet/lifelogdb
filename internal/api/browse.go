@@ -314,7 +314,7 @@ func (h *server) browseRows(ctx context.Context, e *Entity, b browseQuery, sc co
 		}
 		for _, f := range paged(e, found, "/browse", q, limit, offset) {
 			row := browseRow{ID: f.ID, Title: f.Title, Type: "file", Kind: b.kind, Mentions: &f.Mentions, MIME: f.MIME,
-				FileKind: f.MIME[:strings.Index(f.MIME, "/")], Day: f.Day}
+				FileKind: fileKind(f.MIME), Day: f.Day}
 			if f.Picture {
 				row.Picture = pageHref(f.ID) + "/preview"
 			}
@@ -334,14 +334,17 @@ func (h *server) browseRows(ctx context.Context, e *Entity, b browseQuery, sc co
 			return nil, err
 		}
 		for _, f := range paged(e, found, "/browse", q, limit, offset) {
-			row := browseRow{ID: f.ID, Title: f.Title, Type: f.Type, Kind: f.Kind, Category: f.Category}
-			if f.MIME != "" {
-				row.FileKind = f.MIME[:strings.Index(f.MIME, "/")]
-			}
-			rows = append(rows, row)
+			rows = append(rows, browseRow{ID: f.ID, Title: f.Title, Type: f.Type, Kind: f.Kind, Category: f.Category, FileKind: fileKind(f.MIME)})
 		}
 	}
 	return rows, nil
+}
+
+// fileKind is the part of a file's type before the '/': image, video, audio, application, text. A stored type has
+// the '/' (files_mime); a row that is not a file has no type, and no kind.
+func fileKind(mime string) string {
+	kind, _, _ := strings.Cut(mime, "/")
+	return kind
 }
 
 // browseActions are the actions of a list: the New of its kind (a new thing is filed in the category of the list,
