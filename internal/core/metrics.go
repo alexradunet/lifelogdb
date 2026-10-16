@@ -233,24 +233,14 @@ func (s *Store) Metrics(ctx context.Context) ([]Metric, error) {
 	if err != nil {
 		return nil, err
 	}
-	at := map[int64]int{}
-	for i, m := range out {
-		at[m.ID] = i
-	}
-	cats, err := s.categories(ctx)
+	cats, filed, err := s.categories(ctx)
 	if err != nil {
 		return nil, err
 	}
-	var from, to int64
-	filed, err := s.DB.R.QueryContext(ctx, `SELECT from_id, to_id FROM links WHERE kind = 'part-of'`)
-	if err := each(filed, err, []any{&from, &to}, func() {
-		if i, ok := at[from]; ok && cats[to] != nil {
-			out[i].Categories = append(out[i].Categories, cats[to].Path)
-		}
-	}); err != nil {
-		return nil, err
-	}
 	for i := range out {
+		for _, c := range filed[out[i].ID] {
+			out[i].Categories = append(out[i].Categories, cats[c].Path)
+		}
 		sort.Strings(out[i].Categories)
 	}
 	return out, nil

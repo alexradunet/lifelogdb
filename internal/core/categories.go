@@ -22,15 +22,17 @@ type Category struct {
 	Count int    `json:"count,omitempty"`
 }
 
-// categories are the live pages something is part-of, by id, each with its path and its count.
-func (s *Store) categories(ctx context.Context) (map[int64]*Category, error) {
+// categories are the live pages something is part-of, by id, each with its path and its count. filed is the ids of
+// the categories that each page is part-of, by the page's id, in the order of their titles. It is one read of the
+// part-of links for both.
+func (s *Store) categories(ctx context.Context) (cats map[int64]*Category, filed map[int64][]int64, err error) {
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT l.from_id, p.id, p_name.title, f.deleted_at IS NULL
 		  FROM links l JOIN entities p ON p.id = l.to_id JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key AND p.deleted_at IS NULL
 		  JOIN entities f ON f.id = l.from_id
 		 WHERE l.kind = 'part-of'
 		 ORDER BY p.preferred_name_key`)
-	cats := map[int64]*Category{}
+	cats, filed = map[int64]*Category{}, map[int64][]int64{}
 	parent := map[int64]int64{} // the first category a page is part-of, by title
 	var from, id int64
 	var title string
@@ -42,11 +44,12 @@ func (s *Store) categories(ctx context.Context) (map[int64]*Category, error) {
 		if live {
 			cats[id].Count++
 		}
+		filed[from] = append(filed[from], id)
 		if _, ok := parent[from]; !ok {
 			parent[from] = id
 		}
 	}); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	for id, c := range cats {
 		titles := []string{c.Title}
@@ -57,12 +60,12 @@ func (s *Store) categories(ctx context.Context) (map[int64]*Category, error) {
 		}
 		c.Path = strings.Join(titles, "/")
 	}
-	return cats, nil
+	return cats, filed, nil
 }
 
 // Categories are the category pages, by path.
 func (s *Store) Categories(ctx context.Context) ([]Category, error) {
-	cats, err := s.categories(ctx)
+	cats, _, err := s.categories(ctx)
 	if err != nil {
 		return nil, err
 	}

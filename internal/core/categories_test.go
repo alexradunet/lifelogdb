@@ -169,6 +169,16 @@ func TestMetricsArePagesFiledInCategories(t *testing.T) {
 	if _, err := file("Ferritin", "Supplements"); err != nil {
 		t.Errorf("a metric in a second category: %v", err)
 	}
+	if _, err := file("Ferritin", "Old shelf"); err != nil {
+		t.Fatal(err)
+	}
+	shelf, err := s.PageID(ctx, "Old shelf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Tombstone(ctx, "cli", shelf); err != nil { // the paths below leave out a tombstoned category
+		t.Fatal(err)
+	}
 	if _, err := file("Ferritin", "2026-10-03"); status(err) != 422 {
 		t.Errorf("a day page is not a category: %v", err)
 	}
