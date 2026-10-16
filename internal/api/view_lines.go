@@ -11,7 +11,8 @@ import (
 )
 
 // The lines of the readings (docs/plans/093-words-phone-and-today.md): a reading's tile on a day, with its unit and
-// the line of its last 14 days, and the line of a metric's recent readings on its card.
+// the line of its last 14 days, and the line of a metric's recent readings on its card. A line draws only the
+// readings that have a day and a number: a retraction has no number.
 
 // trendLine draws a trend as an inline SVG, 120 by 28: one point per reading, placed by its day among the 14 days
 // through the day, the last one marked; "" with no reading. Its label says the first and the last value in words,
@@ -25,9 +26,9 @@ func trendLine(c clock, metric, unit, day string, points []any) template.HTML {
 	for _, p := range points {
 		m, _ := p.(map[string]any)
 		d, _ := m["day"].(string)
-		value, _ := m["value"].(float64)
+		value, isNumber := m["value"].(float64)
 		t, ok := core.ParseDay(d)
-		if !ok {
+		if !ok || !isNumber { // no day, or no value (a retraction): nothing to draw
 			continue
 		}
 		back := end.Sub(t).Hours() / 24 // 0 on the day, 13 on the first of the 14
@@ -58,8 +59,8 @@ func sparkLine(metric, unit, today string, points []any) template.HTML {
 	for _, p := range points {
 		m, _ := p.(map[string]any)
 		d, _ := m["day"].(string)
-		value, _ := m["value"].(float64)
-		if t, ok := core.ParseDay(d); ok {
+		value, isNumber := m["value"].(float64)
+		if t, ok := core.ParseDay(d); ok && isNumber {
 			rs = append(rs, read{t, value, d})
 		}
 	}
@@ -119,7 +120,8 @@ func line(label string, pts []linePoint) template.HTML {
 const chartPoints = 200
 
 // chart draws a series as an inline SVG: a line through its readings, each placed by its day between from and to,
-// and a point a reading while there are at most chartPoints.
+// and a point a reading while there are at most chartPoints; "" with no reading to draw. The least and the greatest
+// value of the axis are those of the readings that it draws.
 func chart(from, to string, readings any) template.HTML {
 	list, _ := readings.([]any)
 	// An absent lower bound is explicit all-history mode. Plot from the earliest
@@ -128,7 +130,8 @@ func chart(from, to string, readings any) template.HTML {
 		for _, it := range list {
 			m, _ := it.(map[string]any)
 			day, _ := m["day"].(string)
-			if core.IsDay(day) && (from == "" || day < from) {
+			_, isNumber := m["value"].(float64)
+			if core.IsDay(day) && isNumber && (from == "" || day < from) {
 				from = day
 			}
 		}
@@ -145,18 +148,18 @@ func chart(from, to string, readings any) template.HTML {
 	}
 	var pts []pt
 	lo, hi := 0.0, 0.0
-	for i, it := range list {
+	for _, it := range list {
 		m, _ := it.(map[string]any)
 		day, _ := m["day"].(string)
-		v, _ := m["value"].(float64)
+		v, isNumber := m["value"].(float64)
 		d, ok := core.ParseDay(day)
-		if !ok {
+		if !ok || !isNumber { // no day, or no value (a retraction): nothing to draw
 			continue
 		}
-		if i == 0 || v < lo {
+		if len(pts) == 0 || v < lo { // the range starts at the first reading that is drawn
 			lo = v
 		}
-		if i == 0 || v > hi {
+		if len(pts) == 0 || v > hi {
 			hi = v
 		}
 		// Unix seconds cover the full supported date range without duration saturation.
@@ -165,6 +168,9 @@ func chart(from, to string, readings any) template.HTML {
 			x = float64(d.Unix()-f.Unix()) / float64(t.Unix()-f.Unix())
 		}
 		pts = append(pts, pt{d, x, v})
+	}
+	if len(pts) == 0 {
+		return ""
 	}
 	const w, h, pad, left, bottom = 640.0, 200.0, 14.0, 48.0, 22.0
 	span := hi - lo
