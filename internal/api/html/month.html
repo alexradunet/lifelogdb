@@ -8,8 +8,10 @@
 <header class="page-head"><div class="what"><h1>{{.Title}}</h1>
 <p class="sub"><a href="/days/{{$m.today}}">Today</a><a href="/months/current">This month</a><a href="/weeks/current">This week</a>{{with yearPage $m.month}}<a href="{{.}}">The year</a>{{end}}<a href="/days">Every day, as a list</a></p></div>
 <div class="tools">
-{{with .Link "prev"}}{{template "step" (dict "href" . "rel" "prev" "label" (printf "Previous month, %s" ($.LinkTitle "prev")) "text" ($.LinkTitle "prev"))}}{{end}}
-{{with .Link "next"}}{{template "step" (dict "href" . "rel" "next" "label" (printf "Next month, %s" ($.LinkTitle "next")) "text" ($.LinkTitle "next"))}}{{end}}
+{{- with .Link "prev"}}
+{{template "step" (dict "href" . "rel" "prev" "label" (printf "Previous month, %s" ($.LinkTitle "prev")) "text" ($.LinkTitle "prev"))}}{{end}}
+{{- with .Link "next"}}
+{{template "step" (dict "href" . "rel" "next" "label" (printf "Next month, %s" ($.LinkTitle "next")) "text" ($.LinkTitle "next"))}}{{end}}
 {{template "boxed" (form (.Action "open-day") "button" "Go to a day")}}
 </div></header>
 <div class="scroll"><table class="calendar"><caption>A day with a page is tinted, with its first line. A day shows what has its date; Day by day, under the calendar, lists every one. Today has a frame.</caption>

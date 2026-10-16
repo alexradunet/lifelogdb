@@ -262,12 +262,15 @@ func TestTheFirstWeekOfTheDaysHasNoLowerBound(t *testing.T) {
 }
 
 // TestTheEdgesOfTheCalendarLinkOnlyToPages: the days run from 0000-01-01 to 9999-12-31 (lifelog_meta.days), and a
-// year has a page from 0001 to 9999. The first and the last week, month and year answer, and each of their links
-// leads to a page that answers: a link to a period that has no page is absent, in the links of the entity and in its
-// HTML. A week of the year 0000 has no year link.
+// year has a page from 0001 to 9999. The first and the last day, week, month and year answer, and each of their
+// links leads to a page that answers: a link to a period that has no page is absent, in the links of the entity and
+// in its HTML. A week of the year 0000 has no year link. 0000-01-01 is a Saturday, so it and 0000-01-02 are in a week
+// of the year -1, which has no page: their HTML has no week link. Where the entity has no prev or next link, the HTML
+// has no step with that rel, and no page has an empty href.
 func TestTheEdgesOfTheCalendarLinkOnlyToPages(t *testing.T) {
 	c, h := freshOn(t, weekToday)
-	calendarHref := regexp.MustCompile(`href="(/(?:weeks|months|years)/[^"]+)"`)
+	calendarHref := regexp.MustCompile(`href="(/(?:days|weeks|months|years)/[^"]+)"`)
+	checked := map[string]bool{} // the HTML links already fetched: the sidebar repeats the days of this month
 	answers := func(path, accept string) int {
 		req := httptest.NewRequest("GET", path, nil)
 		req.Header.Set("Accept", accept)
@@ -276,6 +279,9 @@ func TestTheEdgesOfTheCalendarLinkOnlyToPages(t *testing.T) {
 		return rec.Code
 	}
 	for _, tc := range []struct{ page, rels string }{
+		{"/days/0000-01-01", "next,month"},
+		{"/days/0000-01-02", "prev,next,month"},
+		{"/days/9999-12-31", "prev,month"},
 		{"/weeks/0000-W01", "next,month"},
 		{"/weeks/0000-W02", "prev,next,month"},
 		{"/weeks/9999-W52", "prev,month,year"},
@@ -303,10 +309,23 @@ func TestTheEdgesOfTheCalendarLinkOnlyToPages(t *testing.T) {
 		if got := strings.Join(rels, ","); got != tc.rels {
 			t.Errorf("%s links %s, want %s", tc.page, got, tc.rels)
 		}
-		for _, m := range calendarHref.FindAllStringSubmatch(browse(t, h, tc.page), -1) {
+		page := browse(t, h, tc.page)
+		for _, m := range calendarHref.FindAllStringSubmatch(page, -1) {
+			if checked[m[1]] {
+				continue
+			}
+			checked[m[1]] = true
 			if code := answers(m[1], "text/html"); code != http.StatusOK && code != http.StatusSeeOther {
 				t.Errorf("%s: its HTML links %s, which answers %d", tc.page, m[1], code)
 			}
+		}
+		for _, rel := range []string{"prev", "next"} {
+			if hrefOf(e, rel) == "" && strings.Contains(page, `rel="`+rel+`"`) {
+				t.Errorf("%s has no %s link, and its HTML draws a step with rel=%q", tc.page, rel, rel)
+			}
+		}
+		if strings.Contains(page, `href=""`) {
+			t.Errorf("%s: its HTML has an empty href", tc.page)
 		}
 	}
 }

@@ -6,7 +6,7 @@
 <header class="page-head day-head">
 <div class="day-title">{{template "leaf" $p.today}}
 <div class="what"><h1>{{weekday $p.today}}</h1>
-<p class="sub"><a class="date" href="/weeks/{{isoWeekKey $p.today}}">week {{week $p.today}}</a><a href="/days/{{$p.today}}">Today's page</a></p></div></div>
+<p class="sub">{{with weekPage $p.today}}<a class="date" href="{{.}}">week {{week $p.today}}</a>{{end}}<a href="/days/{{$p.today}}">Today's page</a></p></div></div>
 <div class="tools">
 {{with .Action "create-page"}}{{template "boxed" (form .)}}{{end}}
 {{template "boxed" (form (.Action "find") "button" "Open a page")}}

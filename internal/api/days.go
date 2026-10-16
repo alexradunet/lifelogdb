@@ -155,11 +155,17 @@ func (h *server) dayEntity(ctx context.Context, day string) (*Entity, error) {
 	t, _ := core.ParseDay(day)
 	e := &Entity{
 		Class: []string{"day"}, Title: day, Properties: dayView{Day: *d, Mood: mood, Trends: trends, OnThisDay: onThisDay, Today: today},
-		Links: []Link{link("self", dayHref(day), day), link("prev", dayHref(t.AddDate(0, 0, -1).Format(time.DateOnly)), "Previous day"),
-			link("next", dayHref(t.AddDate(0, 0, 1).Format(time.DateOnly)), "Next day"), link("metrics", "/metrics", "Metrics"), link("index", "/", "Home"),
-			link("month", monthHref(t), t.Format(layoutMonth))},
+		Links:   []Link{link("self", dayHref(day), day)},
 		Actions: []Action{action("capture", map[string]string{"day": day}, nil), record, action("open-day", nil, nil)},
 	}
+	// A link leads only to a page that answers: 0000-01-01 has no day before it, and 9999-12-31 none after it.
+	if prev := t.AddDate(0, 0, -1).Format(time.DateOnly); core.IsDay(prev) {
+		e.Links = append(e.Links, link("prev", dayHref(prev), "Previous day"))
+	}
+	if next := t.AddDate(0, 0, 1).Format(time.DateOnly); core.IsDay(next) {
+		e.Links = append(e.Links, link("next", dayHref(next), "Next day"))
+	}
+	e.Links = append(e.Links, link("metrics", "/metrics", "Metrics"), link("index", "/", "Home"), link("month", monthHref(t), t.Format(layoutMonth)))
 	if d.PageID != 0 {
 		e.Links = append(e.Links, link("page", pageHref(d.PageID), "The day page"))
 		p, err := h.s.PageByID(ctx, d.PageID)

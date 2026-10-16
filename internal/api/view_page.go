@@ -76,7 +76,7 @@ var templates = template.Must(template.New("").Funcs(template.FuncMap{
 	"shortDay":   shortDay,
 	"addDays":    addDays,
 	"week":       isoWeek,
-	"isoWeekKey": isoWeekKey,
+	"weekPage":   weekPage,
 	"yearOf":     func(month string) string { return month[:min(4, len(month))] },
 	"yearPage":   yearPage,
 	"sinceLast":  sinceLastWeek,

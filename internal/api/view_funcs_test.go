@@ -263,6 +263,25 @@ func TestWeeksStartOnMonday(t *testing.T) {
 	}
 }
 
+// TestTheWeekOfADayIsAPageOrNothing: the week link of a day leads to the page of its ISO week, and a day whose week
+// has no page has none. 0000-01-01 is a Saturday: it and 0000-01-02 are in week 52 of the year -1, whose Monday is
+// not a day. 0000-01-03 is the Monday of 0000-W01; 9999-12-31, a Friday, is in 9999-W52.
+func TestTheWeekOfADayIsAPageOrNothing(t *testing.T) {
+	for day, want := range map[string]string{
+		"0000-01-01": "",
+		"0000-01-02": "",
+		"0000-01-03": "/weeks/0000-W01",
+		"2026-10-16": "/weeks/2026-W42",
+		"2027-01-03": "/weeks/2026-W53",
+		"9999-12-31": "/weeks/9999-W52",
+		"not a day":  "",
+	} {
+		if got := weekPage(day); got != want {
+			t.Errorf("weekPage(%q) = %q, want %q", day, got, want)
+		}
+	}
+}
+
 // TestAPageComparesADayWithTheTodayOfItsWords: Today is the shell's today, the one that the view's words use, and ""
 // for a page with no shell. A page compares a day with it, not with the today of its entity: here the entity says
 // that today is 15 October and the shell says 16 October, so the page of 16 October is today's page.

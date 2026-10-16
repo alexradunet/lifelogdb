@@ -5,8 +5,10 @@
 <header class="page-head"><div class="what"><h1>{{.Title}}</h1>
 <p class="sub">{{if ne .Title (yearOf .Today)}}<a href="/years/current">This year</a>{{end}}<a href="/days/today">Today</a></p></div>
 <div class="tools">
-{{with .Link "prev"}}{{template "step" (dict "href" . "rel" "prev" "label" (printf "Previous year, %s" ($.LinkTitle "prev")) "text" ($.LinkTitle "prev"))}}{{end}}
-{{with .Link "next"}}{{template "step" (dict "href" . "rel" "next" "label" (printf "Next year, %s" ($.LinkTitle "next")) "text" ($.LinkTitle "next"))}}{{end}}
+{{- with .Link "prev"}}
+{{template "step" (dict "href" . "rel" "prev" "label" (printf "Previous year, %s" ($.LinkTitle "prev")) "text" ($.LinkTitle "prev"))}}{{end}}
+{{- with .Link "next"}}
+{{template "step" (dict "href" . "rel" "next" "label" (printf "Next year, %s" ($.LinkTitle "next")) "text" ($.LinkTitle "next"))}}{{end}}
 {{template "boxed" (form (.Action "open-day") "button" "Go to a day")}}
 </div></header>
 

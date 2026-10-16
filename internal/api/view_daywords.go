@@ -28,14 +28,19 @@ func isoWeek(day string) int {
 	return w
 }
 
-// isoWeekKey is the ISO 8601 week of a day as the address of the week writes it, "2026-W41"; "" for a day that is
-// not one.
-func isoWeekKey(day string) string {
+// weekPage is the address of the page of a day's ISO 8601 week, "/weeks/2026-W41"; "" for a day that is not one,
+// and for a week that has no page because its Monday is not a day (0000-01-01 and 0000-01-02 are in a week of the
+// year -1).
+func weekPage(day string) string {
 	t, ok := core.ParseDay(day)
 	if !ok {
 		return ""
 	}
-	return weekKey(t)
+	monday := t.AddDate(0, 0, -((int(t.Weekday()) + 6) % 7))
+	if !core.IsDay(monday.Format(time.DateOnly)) {
+		return ""
+	}
+	return weekHref(monday)
 }
 
 // sinceLastWeek says in words how a week's mean differs from the week before's: previous is nil when that week had

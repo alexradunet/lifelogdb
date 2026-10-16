@@ -8,11 +8,13 @@
 <header class="page-head day-head">
 <div class="day-title">{{template "leaf" .Title}}
 <div class="what"><h1>{{weekday .Title}}{{template "mood" $d.mood}}</h1>
-<p class="sub"><a class="date" href="/weeks/{{isoWeekKey .Title}}">week {{week .Title}}</a>{{if $today}}<span class="tag open">today</span>{{else}}<a href="/days/today">Go to today</a>{{end}}</p></div></div>
+<p class="sub">{{with weekPage .Title}}<a class="date" href="{{.}}">week {{week $.Title}}</a>{{end}}{{if $today}}<span class="tag open">today</span>{{else}}<a href="/days/today">Go to today</a>{{end}}</p></div></div>
 <div class="tools">
 {{$prev := shortDay (addDays .Title -1)}}{{$next := shortDay (addDays .Title 1)}}
-{{template "step" (dict "href" (.Link "prev") "rel" "prev" "label" (printf "Previous day, %s" $prev) "text" $prev)}}
-{{template "step" (dict "href" (.Link "next") "rel" "next" "label" (printf "Next day, %s" $next) "text" $next)}}
+{{- with .Link "prev"}}
+{{template "step" (dict "href" . "rel" "prev" "label" (printf "Previous day, %s" $prev) "text" $prev)}}{{end}}
+{{- with .Link "next"}}
+{{template "step" (dict "href" . "rel" "next" "label" (printf "Next day, %s" $next) "text" $next)}}{{end}}
 {{template "boxed" (form (.Action "open-day") "button" "Go to a day")}}
 </div>
 </header>
@@ -31,18 +33,16 @@
 </section>{{end}}
 
 {{template "body-editor" (dict "action" (.Action "save-body") "back" (.Link "self") "summary" "Edit the day page")}}
-
-
-{{with $p.Pages}}<section class="also" aria-label="Pages written this day"><h2>Pages written this day</h2>
+{{- with $p.Pages}}
+<section class="also" aria-label="Pages written this day"><h2>Pages written this day</h2>
 <ul class="plain">{{range .}}<li><a href="{{titleHref .Title}}">{{.Title}}</a>{{if .Edited}} <span class="badge">edited</span>{{end}}</li>{{end}}</ul></section>{{end}}
 </div>
 
 <div class="margin">
 
 {{template "onthisday" (dict "v" $ "days" $d.on_this_day)}}
-
-
-{{if or $d.readings (.Action "record")}}<section class="group" aria-label="Readings">
+{{- if or $d.readings (.Action "record")}}
+<section class="group" aria-label="Readings">
 <div class="panel-head"><h2>Readings</h2><a href="/metrics">Metrics</a></div>
 {{with $.ReadingTiles}}<div class="readings">{{range .}}<div class="reading-tile"><a class="name" href="/metrics/{{pathesc .Metric}}">{{.Metric}}</a>
 {{template "reading-link" (dict "id" .ID "value" .Value "unit" .Unit)}}
@@ -51,9 +51,8 @@
 {{if not $d.readings}}<p class="empty">No readings on this day. <a href="#record">Add one</a> below.</p>{{end}}
 <div id="record">{{template "boxed" (form (.Action "record") "more" "taken_at,tz,import_key")}}</div>
 </section>{{end}}
-
-
-{{with $p.Places}}<section class="group" aria-label="Where"><h2>Where</h2>
+{{- with $p.Places}}
+<section class="group" aria-label="Where"><h2>Where</h2>
 <ul class="plain">{{range .}}<li><a href="{{titleHref .}}">{{.}}</a></li>{{end}}</ul></section>{{end}}
 </div>
 </div>
