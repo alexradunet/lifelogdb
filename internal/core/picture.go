@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"strconv"
 
 	"lifelog/internal/text"
@@ -80,7 +79,7 @@ func (t *Tx) SetPicture(id int64, day string, f FileIn) (Kept, error) {
 	}
 	f.UnknownCaptureDay, f.Day, f.Taken = true, "", ""
 	if f.Title == "" {
-		if f.Title, err = t.freePictureTitle(page, day, f.MIME); err != nil {
+		if f.Title, err = t.freePictureTitle(page.Title, day, f.MIME); err != nil {
 			return Kept{}, err
 		}
 	}
@@ -125,23 +124,6 @@ func (t *Tx) SetPictureOf(id int64, title string) (Sync, error) {
 		return Sync{}, err
 	}
 	return *sync, nil
-}
-
-// livePage is the title of a live page: a missing page is 404, a deleted one 409.
-func (t *Tx) livePage(id int64) (string, error) {
-	var title string
-	var deleted bool
-	err := t.tx.QueryRowContext(t.ctx, `SELECT n.title, e.deleted_at IS NOT NULL FROM entities e JOIN entity_names n ON n.entity_id = e.id AND n.name_key = e.preferred_name_key WHERE e.id = ?`, id).
-		Scan(&title, &deleted)
-	switch {
-	case errors.Is(err, sql.ErrNoRows):
-		return "", NotFound("no page %d", id)
-	case err != nil:
-		return "", err
-	case deleted:
-		return "", Conflict("page %d is deleted: revive it first", id)
-	}
-	return title, nil
 }
 
 // freePictureTitle is "<page> <day><ext>", or "<page> <day> 2<ext>" and on when a page has that name.

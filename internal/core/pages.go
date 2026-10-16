@@ -11,21 +11,12 @@ import (
 // SaveBody replaces a page's body and syncs its wikilinks (cookbook/save-a-body.md). version is the
 // entities.revision token the caller read; the clock is audit metadata, not a version.
 func (t *Tx) SaveBody(id int64, body, version string) (Sync, error) {
-	var currentVersion string
-	var deleted sql.NullString
-	err := t.tx.QueryRowContext(t.ctx, `SELECT CAST(revision AS TEXT), deleted_at FROM entities WHERE id = ?`, id).
-		Scan(&currentVersion, &deleted)
-	if errors.Is(err, sql.ErrNoRows) {
-		return Sync{}, NotFound("no page %d", id)
-	}
+	p, err := t.livePage(id)
 	if err != nil {
 		return Sync{}, err
 	}
-	if deleted.Valid {
-		return Sync{}, Conflict("page %d is deleted: revive it first", id)
-	}
-	if version != currentVersion {
-		return Sync{}, conflictCode("stale_version", "page %d changed since version %q (now %q): read it again", id, version, currentVersion)
+	if version != p.Version {
+		return Sync{}, conflictCode("stale_version", "page %d changed since version %q (now %q): read it again", id, version, p.Version)
 	}
 	return t.SetBody(id, body)
 }

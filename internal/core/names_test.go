@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -66,5 +67,53 @@ func TestReferenceGrammarRejectsUnaddressableNamesAtomically(t *testing.T) {
 	}
 	if id, err := s.PageID(ctx, "Forbidden"); err != nil || id != 0 {
 		t.Fatalf("rejected create had side effects: %d %v", id, err)
+	}
+}
+
+// TestAWriteToAPageThatIsNotLive: every write that needs a live page gives one answer for a page that does not exist,
+// a 404 "no page N", and one for a tombstoned page, a 409 "page N is deleted: revive it first" (livePage).
+func TestAWriteToAPageThatIsNotLive(t *testing.T) {
+	s := fresh(t)
+	live, _, err := s.CreatePage(ctx, "cli", "Live", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	gone, _, err := s.CreatePage(ctx, "cli", "Old Group", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Tombstone(ctx, "cli", gone); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddFile(ctx, "cli", FileIn{Title: "Ana.jpg", SHA256: sha('a'), MIME: "image/jpeg", Preview: smallJPEG(t)}); err != nil {
+		t.Fatal(err)
+	}
+	const missing = 9999
+	writes := []struct {
+		name  string
+		write func(id int64) error
+	}{
+		{"save-body", func(id int64) error { _, err := s.SaveBody(ctx, "cli", id, "words", "1"); return err }},
+		{"rename", func(id int64) error { _, err := s.Rename(ctx, "cli", id, "New Title"); return err }},
+		{"file-pages", func(id int64) error { _, err := s.FilePages(ctx, "cli", []int64{id}, "Group", false); return err }},
+		{"set-picture", func(id int64) error {
+			_, err := s.SetPicture(ctx, "cli", id, "2026-10-16", FileIn{SHA256: sha('b'), MIME: "image/jpeg", Preview: smallJPEG(t)})
+			return err
+		}},
+		{"set-picture-of", func(id int64) error { _, err := s.SetPictureOf(ctx, "cli", id, "Ana.jpg"); return err }},
+	}
+	for _, w := range writes {
+		if err := w.write(missing); status(err) != 404 || err.Error() != "no page 9999" {
+			t.Errorf("%s of a missing page: %v (status %d), want 404 %q", w.name, err, status(err), "no page 9999")
+		}
+		want := fmt.Sprintf("page %d is deleted: revive it first", gone)
+		if err := w.write(gone); status(err) != 409 || err.Error() != want {
+			t.Errorf("%s of a tombstoned page: %v (status %d), want 409 %q", w.name, err, status(err), want)
+		}
+	}
+	// a tombstoned page as the category of a filing
+	want := fmt.Sprintf("page %d is deleted: revive it first", gone)
+	if _, err := s.FilePages(ctx, "cli", []int64{live}, "Old Group", false); status(err) != 409 || err.Error() != want {
+		t.Errorf("file-pages in a tombstoned category: %v (status %d), want 409 %q", err, status(err), want)
 	}
 }

@@ -2,8 +2,6 @@ package core
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"sort"
 	"strings"
 
@@ -87,8 +85,9 @@ type Filed struct {
 
 // FilePages files every page named in the category page titled category, in one write (D26): a part-of link from
 // each. A missing category is made as an empty page, as PageForTitle makes it. With move, every other
-// part-of link of those pages is removed first. An id no page has is a 404 and a tombstone a 409; either writes
-// nothing. What the links registry refuses (a day page as a category, or filed in one) is links_endpoint_types.
+// part-of link of those pages is removed first. A page or a category that is not live is refused as livePage says;
+// that writes nothing. What the links registry refuses (a day page as a category, or filed in one) is
+// links_endpoint_types.
 func (t *Tx) FilePages(ids []int64, category string, move bool) (Filed, error) {
 	if err := checkTitle("category", category); err != nil {
 		return Filed{}, err
@@ -97,25 +96,14 @@ func (t *Tx) FilePages(ids []int64, category string, move bool) (Filed, error) {
 	if err != nil {
 		return Filed{}, err
 	}
-	p, err := t.pageByID(cat)
+	p, err := t.livePage(cat)
 	if err != nil {
 		return Filed{}, err
 	}
-	if p.Deleted {
-		return Filed{}, Conflict("the category %s is deleted: revive it first", p.Title)
-	}
 	f := Filed{Category: Category{ID: cat, Title: p.Title}, Created: created}
 	for _, id := range ids {
-		var deleted bool
-		err := t.tx.QueryRowContext(t.ctx, `SELECT deleted_at IS NOT NULL FROM entities WHERE id = ?`, id).Scan(&deleted)
-		if errors.Is(err, sql.ErrNoRows) {
-			return Filed{}, NotFound("no page %d", id)
-		}
-		if err != nil {
+		if _, err := t.livePage(id); err != nil {
 			return Filed{}, err
-		}
-		if deleted {
-			return Filed{}, Conflict("page %d is deleted", id)
 		}
 		if move {
 			res, err := t.tx.ExecContext(t.ctx, `DELETE FROM links WHERE from_id = ? AND kind = 'part-of' AND to_id <> ?`, id, cat)

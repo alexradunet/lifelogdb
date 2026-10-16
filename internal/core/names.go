@@ -28,12 +28,13 @@ func (t *Tx) insertPage(typ, title, key string, day any, body, importKey string)
 	return id, false, err
 }
 
-// pageRef is what a lookup by title finds.
+// pageRef is what a lookup by title or a livePage finds. Version is the decimal entities.revision token (Page.Version).
 type pageRef struct {
 	ID      int64
 	Type    string
 	Title   string
 	Body    string
+	Version string
 	DayPage bool
 	Deleted bool
 }
@@ -44,29 +45,38 @@ func (t *Tx) lookup(title string) (*pageRef, error) {
 }
 
 func (t *Tx) lookupKey(key string) (*pageRef, error) {
+	return t.findPage(`e.id = (SELECT entity_id FROM entity_names WHERE name_key = ?)`, key)
+}
+
+// livePage is the page with the id when it is live. It holds the one rule of a write that needs a live page, with one
+// message for each answer: a missing page is a 404, a tombstoned one a 409.
+func (t *Tx) livePage(id int64) (*pageRef, error) {
+	p, err := t.findPage(`e.id = ?`, id)
+	switch {
+	case err != nil:
+		return nil, err
+	case p == nil:
+		return nil, NotFound("no page %d", id)
+	case p.Deleted:
+		return nil, Conflict("page %d is deleted: revive it first", id)
+	}
+	return p, nil
+}
+
+// findPage reads the page that the condition on the entity e selects, with its preferred title; nil when none.
+func (t *Tx) findPage(cond string, arg any) (*pageRef, error) {
 	p := &pageRef{}
 	var day sql.NullString
-	err := t.tx.QueryRowContext(t.ctx, `SELECT e.id, e.entity_type, n.title, e.body, e.day, e.deleted_at IS NOT NULL
+	err := t.tx.QueryRowContext(t.ctx, `SELECT e.id, e.entity_type, n.title, e.body, e.day, e.deleted_at IS NOT NULL,
+                               CAST(e.revision AS TEXT)
                           FROM entities e JOIN entity_names n ON n.entity_id = e.id AND n.name_key = e.preferred_name_key
-                         WHERE e.id = (SELECT entity_id FROM entity_names WHERE name_key = ?)`, key).
-		Scan(&p.ID, &p.Type, &p.Title, &p.Body, &day, &p.Deleted)
+                         WHERE `+cond, arg).
+		Scan(&p.ID, &p.Type, &p.Title, &p.Body, &day, &p.Deleted, &p.Version)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	p.DayPage = day.Valid && day.String == p.Title
 	return p, err
-}
-
-func (t *Tx) pageByID(id int64) (*pageRef, error) {
-	var key string
-	err := t.tx.QueryRowContext(t.ctx, `SELECT preferred_name_key FROM entities WHERE id = ?`, id).Scan(&key)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, NotFound("no page %d", id)
-	}
-	if err != nil {
-		return nil, err
-	}
-	return t.lookupKey(key)
 }
 
 // ExistsError says the title is taken and by which page, so a client can follow it (promote it, edit it).
@@ -87,12 +97,9 @@ func orExists(err error, p *pageRef, title string) error {
 // Rename selects an owned preferred name, retaining previous names and the entity's identity.
 // See contract/titles-and-wikilinks.md and cookbook/rename-a-page.md.
 func (t *Tx) Rename(id int64, newTitle string) (int64, error) {
-	old, err := t.pageByID(id)
+	old, err := t.livePage(id)
 	if err != nil {
 		return 0, err
-	}
-	if old.Deleted {
-		return 0, Conflict("page %d is deleted: revive it first", id)
 	}
 	if old.DayPage {
 		return 0, Conflict("a day page's canonical date is not renamed")
