@@ -228,3 +228,35 @@ func TestHomeLinksTheWeekAndTheYear(t *testing.T) {
 
 // said is a property as the client decodes it, written out: a number is a json.Number.
 func said(v any) string { return fmt.Sprint(v) }
+
+// TestTheFirstWeekOfTheDaysHasNoLowerBound: week 1 of 0000 runs from Monday 3 to Sunday 9 January 0000. The week
+// before it starts in the year -1, before the first day that a date can name, so the week reads its series with no
+// lower bound: the reading of 0000-01-01 is the week before. Week 2 of 0000 has a lower bound again: the reading of
+// 0000-01-01 is not in it or in the week before it.
+func TestTheFirstWeekOfTheDaysHasNoLowerBound(t *testing.T) {
+	c, h := freshOn(t, weekToday)
+	root := must(c.Get(t.Context(), "/"))
+	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
+	for day, value := range map[string]string{"0000-01-01": "70", "0000-01-03": "71", "0000-01-09": "73", "0000-01-10": "74"} {
+		must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "weight", "day": day, "value": value}))
+	}
+	for _, tc := range []struct{ week, from, through, readings, mean, previous string }{
+		{"0000-W01", "0000-01-03", "0000-01-09", "2", "72", "70"},
+		{"0000-W02", "0000-01-10", "0000-01-16", "1", "74", "72"},
+	} {
+		w, err := c.Get(t.Context(), "/weeks/"+tc.week)
+		if err != nil {
+			t.Errorf("/weeks/%s: %v", tc.week, err)
+			continue
+		}
+		p := props(w)
+		if p["from"] != tc.from || p["through"] != tc.through || len(objects(p, "days")) != 7 {
+			t.Errorf("%s: from %v, through %v, %d days", tc.week, p["from"], p["through"], len(objects(p, "days")))
+		}
+		m := objects(p, "metrics")
+		if len(m) != 1 || said(m[0]["readings"]) != tc.readings || said(m[0]["mean"]) != tc.mean || said(m[0]["previous_mean"]) != tc.previous {
+			t.Errorf("%s metrics %v: want %s readings, mean %s, the week before %s", tc.week, m, tc.readings, tc.mean, tc.previous)
+		}
+		browse(t, h, "/weeks/"+tc.week)
+	}
+}

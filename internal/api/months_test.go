@@ -227,3 +227,29 @@ func anyItems(v any) []map[string]any {
 	}
 	return out
 }
+
+// TestTheFirstMonthOfTheDaysIsACalendar: January 0000 holds the first day that a date can name. Its calendar has its
+// 31 days, a day page on its first day and a reading on its third day.
+func TestTheFirstMonthOfTheDaysIsACalendar(t *testing.T) {
+	c, h := freshOn(t, fixedToday)
+	must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/days/0000-01-01")), "capture"), map[string]string{"text": "The first day."}))
+	root := must(c.Get(t.Context(), "/"))
+	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
+	must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "weight", "day": "0000-01-03", "value": "70"}))
+	m, err := c.Get(t.Context(), "/months/0000-01")
+	if err != nil {
+		t.Fatalf("/months/0000-01: %v", err)
+	}
+	days := props(m)["days"].([]any)
+	if m.Title != "January 0000" || len(days) != 31 {
+		t.Fatalf("%q, %d days", m.Title, len(days))
+	}
+	first, third := days[0].(map[string]any), days[2].(map[string]any)
+	if first["day"] != "0000-01-01" || first["page"] != true || first["first_line"] != "The first day." {
+		t.Errorf("the first day: %v", first)
+	}
+	if third["day"] != "0000-01-03" || third["page"] != false || said(third["readings"]) != "1" {
+		t.Errorf("the third day: %v", third)
+	}
+	browse(t, h, "/months/0000-01")
+}

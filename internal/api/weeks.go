@@ -100,7 +100,7 @@ func (h *server) week(r *http.Request) (*Entity, error) {
 			continue
 		}
 		// A series is (from, to], so the day before the previous week starts it.
-		rows, err := h.s.Series(ctx, m.Name, before.AddDate(0, 0, -1).Format(time.DateOnly), through)
+		rows, err := h.s.Series(ctx, m.Name, seriesFrom(before.AddDate(0, 0, -1)), through)
 		if err != nil {
 			return nil, err
 		}

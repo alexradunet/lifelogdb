@@ -51,10 +51,7 @@ func (h *server) trends(ctx context.Context, day string, readings []core.Reading
 	if err != nil {
 		return nil, err
 	}
-	from := t.AddDate(0, 0, -glanceDays).Format(time.DateOnly) // a series is (from, to]
-	if !core.IsDay(from) {
-		from = "" // the days start before the first day that a date can name: no lower bound
-	}
+	from := seriesFrom(t.AddDate(0, 0, -glanceDays)) // a series is (from, to]
 	for _, name := range names {
 		rows, err := h.s.Series(ctx, name, from, day)
 		if err != nil {
@@ -67,4 +64,13 @@ func (h *server) trends(ctx context.Context, day string, readings []core.Reading
 		out = append(out, tr)
 	}
 	return out, nil
+}
+
+// seriesFrom is the from of a series (from, to] that starts the day after t: t as a day, or no lower bound ("") when
+// t is before the first day that a date can name.
+func seriesFrom(t time.Time) string {
+	if from := t.Format(time.DateOnly); core.IsDay(from) {
+		return from
+	}
+	return ""
 }
