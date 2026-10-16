@@ -165,7 +165,9 @@ func TestEveryCatalogActionHasItsRouteAndItsOwnerRule(t *testing.T) {
 // fields that is not a path field, a request that leaves the field out, or sends it empty, answers 422 "missing field
 // <name>" and changes nothing in the file. The other required fields carry values that a write accepts, so only the
 // one field is missing. An action with a file field is sent as multipart too, with a file. search is the one
-// exception: GET /search with no q is the search page, which TestEveryViewRenders draws.
+// exception: GET /search with no q is the search page, which TestEveryViewRenders draws. Before each request the
+// probe page gets a body that no other request gave it, so a save of an empty body or of other words always changes
+// the file: a case cannot hide a write because the case before it wrote the same thing.
 func TestARequestWithoutARequiredFieldIsRefusedAndWritesNothing(t *testing.T) {
 	c, _, s := freshStore(t)
 	root := must(c.Get(t.Context(), "/"))
@@ -176,7 +178,8 @@ func TestARequestWithoutARequiredFieldIsRefusedAndWritesNothing(t *testing.T) {
 	if page == "" || reading == "" {
 		t.Fatalf("no page id (%q) or reading id (%q) to send", page, reading)
 	}
-	// version is the probe page's version now: a case that wrote by error does not make the next save stale.
+	// version is the probe page's version now: a case that wrote by error, or the new body of each case, does not
+	// make the next save stale.
 	version := func() string {
 		for _, f := range find(must(c.Get(t.Context(), href(p, "self"))), "save-body").Fields {
 			if f.Name == "version" {
@@ -219,38 +222,42 @@ func TestARequestWithoutARequiredFieldIsRefusedAndWritesNothing(t *testing.T) {
 				continue
 			}
 			for _, empty := range []bool{false, true} {
-				valid["version"] = version()
-				values := map[string]string{}
-				for _, f := range a.Fields {
-					switch {
-					case f.In == "path" && f.Name == "id" && strings.HasPrefix(a.Href, "/measurements/"):
-						values[f.Name] = reading
-					case f.In == "path" && f.Name == "id":
-						values[f.Name] = page
-					case f.In == "path" && f.Name == "day":
-						values[f.Name] = "2026-09-01"
-					case f.In == "path":
-						t.Fatalf("%s: the test has no value for the path field %s", a.Name, f.Name)
-					case f.Name == missing.Name:
-						if empty {
-							values[f.Name] = ""
+				// values reads the version when the request goes, after the probe page got the body of its case.
+				values := func() map[string]string {
+					valid["version"] = version()
+					values := map[string]string{}
+					for _, f := range a.Fields {
+						switch {
+						case f.In == "path" && f.Name == "id" && strings.HasPrefix(a.Href, "/measurements/"):
+							values[f.Name] = reading
+						case f.In == "path" && f.Name == "id":
+							values[f.Name] = page
+						case f.In == "path" && f.Name == "day":
+							values[f.Name] = "2026-09-01"
+						case f.In == "path":
+							t.Fatalf("%s: the test has no value for the path field %s", a.Name, f.Name)
+						case f.Name == missing.Name:
+							if empty {
+								values[f.Name] = ""
+							}
+						case f.Required && len(f.Options) > 0:
+							values[f.Name] = f.Options[0]
+						case f.Required:
+							v, ok := valid[f.Name]
+							if !ok {
+								t.Fatalf("%s: the test has no value for the required field %s", a.Name, f.Name)
+							}
+							values[f.Name] = v
 						}
-					case f.Required && len(f.Options) > 0:
-						values[f.Name] = f.Options[0]
-					case f.Required:
-						v, ok := valid[f.Name]
-						if !ok {
-							t.Fatalf("%s: the test has no value for the required field %s", a.Name, f.Name)
-						}
-						values[f.Name] = v
 					}
+					return values
 				}
 				sends := map[string]func() (*api.Entity, error){
-					"a form": func() (*api.Entity, error) { return c.Do(t.Context(), a, values) },
+					"a form": func() (*api.Entity, error) { return c.Do(t.Context(), a, values()) },
 				}
 				if file != "" {
 					sends["multipart"] = func() (*api.Entity, error) {
-						return c.DoFiles(t.Context(), a, values, map[string]string{file: original})
+						return c.DoFiles(t.Context(), a, values(), map[string]string{file: original})
 					}
 				}
 				sent := "left out"
@@ -259,6 +266,8 @@ func TestARequestWithoutARequiredFieldIsRefusedAndWritesNothing(t *testing.T) {
 				}
 				for how, send := range sends {
 					what := fmt.Sprintf("%s %s with %s %s, as %s", a.Method, a.Name, missing.Name, sent, how)
+					must(c.Do(t.Context(), find(must(c.Get(t.Context(), href(p, "self"))), "save-body"),
+						map[string]string{"body": fmt.Sprintf("the words before case %d", cases)}))
 					before := state()
 					_, err := send()
 					var ce *client.Error
