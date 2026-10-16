@@ -138,7 +138,8 @@ func TestASnapshotThatFailsItsRestoreCheckIsAnError(t *testing.T) {
 
 // TestOnlyARefusedSnapshotIsSnapshotRefused: 422 snapshot_refused is for a refusal that core reports, here a folder
 // inside a git work tree. A snapshot whose time ran out is a 504 timeout, and one that fails for another cause (its
-// request cancelled) is a 500 internal, as every other route answers them. None of them leaves a file.
+// request cancelled) is a 500 internal, as every other route answers them. A 504 keeps the text of its cause; a 500
+// says only "internal error". None of them leaves a file.
 func TestOnlyARefusedSnapshotIsSnapshotRefused(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "life.db")
 	if err := db.Init(t.Context(), p); err != nil {
@@ -149,7 +150,7 @@ func TestOnlyARefusedSnapshotIsSnapshotRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { d.Close() })
-	snapshot := func(t *testing.T, ctx context.Context, dir string, status int, code string) {
+	snapshot := func(t *testing.T, ctx context.Context, dir string, status int, code string) (message string) {
 		t.Helper()
 		req := httptest.NewRequestWithContext(ctx, "POST", "/snapshots", nil)
 		rec := httptest.NewRecorder()
@@ -164,6 +165,8 @@ func TestOnlyARefusedSnapshotIsSnapshotRefused(t *testing.T) {
 		if files, err := os.ReadDir(dir); err != nil || len(files) != 0 {
 			t.Errorf("the snapshot folder after the error: %d files, %v", len(files), err)
 		}
+		message, _ = props(&e)["message"].(string)
+		return message
 	}
 	t.Run("a refusal", func(t *testing.T) {
 		repo := t.TempDir()
@@ -179,11 +182,15 @@ func TestOnlyARefusedSnapshotIsSnapshotRefused(t *testing.T) {
 	t.Run("a timeout", func(t *testing.T) {
 		ctx, cancel := context.WithDeadline(t.Context(), time.Now().Add(-time.Second))
 		defer cancel()
-		snapshot(t, ctx, t.TempDir(), 504, "timeout")
+		if msg := snapshot(t, ctx, t.TempDir(), 504, "timeout"); msg == "internal error" || !strings.Contains(msg, context.DeadlineExceeded.Error()) {
+			t.Errorf("the message of a 504 is %q, want the text of its cause (%s)", msg, context.DeadlineExceeded)
+		}
 	})
 	t.Run("a failure", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
-		snapshot(t, ctx, t.TempDir(), 500, "internal")
+		if msg := snapshot(t, ctx, t.TempDir(), 500, "internal"); msg != "internal error" {
+			t.Errorf("the message of a 500 is %q, want internal error", msg)
+		}
 	})
 }
