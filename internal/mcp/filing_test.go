@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -13,25 +12,13 @@ import (
 	"lifelog/internal/api"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
-	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 )
 
 // file-pages is an MCP tool like any other of the catalog (docs/plans/112-metrics-as-cards.md): an agent files
 // metrics in a category, as it may link one.
 func TestAnAgentFilesMetricsThroughMCP(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(t.Context(), path); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(t.Context(), path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := d.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	d := dbtest.New(t)
 	s := &core.Store{DB: d}
 	for _, m := range []string{"Ferritin", "LDL"} {
 		if _, err := s.CreateMetric(context.Background(), "cli", core.NewMetric{Name: m, Unit: "mg/dL"}); err != nil {
@@ -66,19 +53,7 @@ func TestAnAgentFilesMetricsThroughMCP(t *testing.T) {
 // A day page is never filed (D26): file_pages with a day page's id is an MCP error carrying the 422 and SQLite's
 // sentence, and nothing is written, not the other page's link, not the category.
 func TestAnAgentCannotFileADayPageThroughMCP(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(t.Context(), path); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(t.Context(), path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := d.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	d := dbtest.New(t)
 	s := &core.Store{DB: d}
 	plain, _, err := s.CreatePage(context.Background(), "cli", "Plans", "", "")
 	if err != nil {

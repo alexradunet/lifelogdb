@@ -23,7 +23,7 @@ import (
 
 	"lifelog/internal/api"
 	"lifelog/internal/core"
-	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 )
 
 const testToken = "synthetic-token-0123456789abcdefghij"
@@ -119,12 +119,8 @@ func TestPublicOptionsRefusals(t *testing.T) {
 // TestPublicServe runs serve --public in-process on a loopback address (a non-loopback bind is covered by
 // api.PublicAddress; loopback keeps this test clear of the Windows firewall prompt).
 func TestPublicServe(t *testing.T) {
-	root := t.TempDir()
-	live := filepath.Join(root, "life.db")
-	if err := db.Init(t.Context(), live); err != nil {
-		t.Fatal(err)
-	}
-	tokenFile := filepath.Join(root, "token.txt")
+	live := dbtest.File(t)
+	tokenFile := filepath.Join(t.TempDir(), "token.txt")
 	if err := os.WriteFile(tokenFile, []byte(testToken+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -226,16 +222,9 @@ func TestTLSListener(t *testing.T) {
 		raw.Close()
 		t.Fatal(err)
 	}
-	dbPath := filepath.Join(dir, "life.db") // a synthetic database: the API that api.Public builds needs a store
-	if err := db.Init(t.Context(), dbPath); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(t.Context(), dbPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { d.Close() }) // after the server's shutdown below: a cleanup runs after the ones registered later
-	handler, err := api.Public(&core.Store{DB: d}, api.PublicOptions{Token: testToken, TLS: true})
+	// A synthetic database: the API that api.Public builds needs a store. Its cleanup closes it after the server's
+	// shutdown below: a cleanup runs after the ones registered later.
+	handler, err := api.Public(&core.Store{DB: dbtest.New(t)}, api.PublicOptions{Token: testToken, TLS: true})
 	if err != nil {
 		t.Fatal(err)
 	}

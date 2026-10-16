@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -17,7 +16,7 @@ import (
 	"lifelog/internal/api"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
-	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 )
 
 // The find tools are MCP tools; the owner-only actions are not.
@@ -107,16 +106,7 @@ func TestFindTools(t *testing.T) {
 
 func mcpTestClient(t *testing.T) *client.Client {
 	t.Helper()
-	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(t.Context(), p); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(t.Context(), p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { d.Close() })
-	handler := api.New(&core.Store{DB: d})
+	handler := api.New(&core.Store{DB: dbtest.New(t)})
 	owner := client.InProcess(handler, "cli")
 	for _, fields := range []map[string]string{{"name": "walk"}, {"name": "weight", "unit": "kg"}} {
 		must(owner.Do(t.Context(), actionByName(t, must(owner.Get(t.Context(), "/")), "register-metric"), fields))

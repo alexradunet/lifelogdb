@@ -3,32 +3,19 @@ package mcp
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"lifelog/internal/api"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
-	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 )
 
 // browse is an MCP tool like any other of the catalog (docs/plans/117-one-browse-view.md): an agent reads the things
 // filed in a category, and it is a read, so the tool says so.
 func TestAnAgentBrowsesThroughMCP(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(t.Context(), path); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(t.Context(), path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := d.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	d := dbtest.New(t)
 	s := &core.Store{DB: d}
 	ctx := context.Background()
 	var ids []int64

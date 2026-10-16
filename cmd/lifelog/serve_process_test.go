@@ -18,6 +18,7 @@ import (
 
 	"lifelog/internal/core"
 	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 )
 
 func TestExecutableServeDrainsActiveRequest(t *testing.T) {
@@ -32,10 +33,7 @@ func TestExecutableServeDrainsActiveRequest(t *testing.T) {
 	if out, err := exec.CommandContext(ctx, "go", "build", "-cover", "-mod=readonly", "-o", binary, ".").CombinedOutput(); err != nil {
 		t.Fatalf("build: %v\n%s", err, out)
 	}
-	live := filepath.Join(root, "life.db")
-	if err := db.Init(t.Context(), live); err != nil {
-		t.Fatal(err)
-	}
+	live := dbtest.File(t)
 	cmd := exec.CommandContext(ctx, binary, "--db", live, "serve", "--addr", "127.0.0.1:0")
 	// The program writes its coverage to GOCOVERDIR: the coverage folder of this test binary when a coverage run gives
 	// one (tests/README.md), else a folder that the test discards. With no GOCOVERDIR, a program built with -cover

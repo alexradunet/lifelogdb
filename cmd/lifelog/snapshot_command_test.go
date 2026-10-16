@@ -8,16 +8,13 @@ import (
 	"testing"
 	"time"
 
-	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 )
 
 // lifelog snapshot is the catalog's action in-process, --to choosing the folder. The store's clock is fixed, so the
 // name of the snapshot does not depend on the day the test runs.
 func TestSnapshotCommandRunsTheAction(t *testing.T) {
-	live := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(t.Context(), live); err != nil {
-		t.Fatal(err)
-	}
+	live := dbtest.File(t)
 	dir := t.TempDir()
 	e, stdout, _ := testEnv(t)
 	e.clock = func() time.Time { return time.Date(2031, 5, 14, 12, 0, 0, 0, time.Local) }

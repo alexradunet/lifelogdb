@@ -2,22 +2,18 @@ package main
 
 import (
 	"io"
-	"path/filepath"
 	"testing"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 )
 
 // TestMCPCommandServesOnTheStdioOfItsEnv: lifelog mcp reads its requests from the stdin of its env and writes its
 // answers to the stdout of its env. The tools are the catalog's, with no owner's action. When the client closes the
 // stdin, the command ends with no error.
 func TestMCPCommandServesOnTheStdioOfItsEnv(t *testing.T) {
-	live := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(t.Context(), live); err != nil {
-		t.Fatal(err)
-	}
+	live := dbtest.File(t)
 	e, _, _ := testEnv(t)
 	names := mcpToolNames(t, e, []string{"mcp", "--agent", "test", "--db", live})
 	if !names["find"] || names["register_metric"] || names["snapshot"] {

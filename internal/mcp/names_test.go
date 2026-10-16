@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http/httptest"
 	"net/url"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -15,26 +14,14 @@ import (
 	"lifelog/internal/api"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
-	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 )
 
 func TestMCPStableNames(t *testing.T) {
 	for _, remote := range []bool{false, true} {
 		for _, kind := range []string{"page", "person", "place", "metric", "file"} {
 			t.Run(fmt.Sprintf("remote=%v/type=%s", remote, kind), func(t *testing.T) {
-				path := filepath.Join(t.TempDir(), "life.db")
-				if err := db.Init(t.Context(), path); err != nil {
-					t.Fatal(err)
-				}
-				d, err := db.Open(t.Context(), path)
-				if err != nil {
-					t.Fatal(err)
-				}
-				t.Cleanup(func() {
-					if err := d.Close(); err != nil {
-						t.Error(err)
-					}
-				})
+				d := dbtest.New(t)
 				s := &core.Store{DB: d}
 				h := api.New(s)
 				c := client.InProcess(h, "agent:names")
@@ -45,6 +32,7 @@ func TestMCPStableNames(t *testing.T) {
 				}
 				old := "Old " + kind
 				var id int64
+				var err error
 				switch kind {
 				case "page":
 					id, _, err = s.CreatePage(context.Background(), "cli", old, "original prose", "")

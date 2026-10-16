@@ -5,24 +5,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"strconv"
 	"testing"
 
 	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 )
 
 // TestStableNamesAndExactRevisionThroughTheCLI runs the command lines in-process on a file that it changes between
 // them: the version token of a revision above 2^53 is exact, a stale token is a 409, a rename keeps the old title as
 // an alias of the same page, and a save at the largest revision is refused with nothing written.
 func TestStableNamesAndExactRevisionThroughTheCLI(t *testing.T) {
-	root := t.TempDir()
-	live := filepath.Join(root, "synthetic.db")
-	if err := db.Init(t.Context(), live); err != nil {
-		t.Fatal(err)
-	}
+	live := dbtest.File(t)
 	d, err := db.Open(t.Context(), live)
 	if err != nil {
 		t.Fatal(err)

@@ -15,17 +15,14 @@ import (
 	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 	"lifelog/internal/photo/phototest"
 )
 
 // TestFileCommand is `lifelog file PATH` on a throwaway database: the original is hashed and never stored, its text
 // read from --text, its picture made from it; the same file again keeps one page.
 func TestFileCommand(t *testing.T) {
-	dir := t.TempDir()
-	live := filepath.Join(dir, "life.db")
-	if err := db.Init(t.Context(), live); err != nil {
-		t.Fatal(err)
-	}
+	dir, live := t.TempDir(), dbtest.File(t)
 	pic, text := filepath.Join(dir, "IMG_0001.jpg"), filepath.Join(dir, "caption.txt")
 	os.WriteFile(pic, phototest.JPEG(64, 48), 0o644)
 	os.WriteFile(text, []byte("Dawn at the lake with [[Sam]]."), 0o644)
@@ -56,11 +53,7 @@ func TestFileCommand(t *testing.T) {
 // TestFileCommandFilesInACategory is `lifelog file PATH --category TITLE`: the original kept and its page filed in the
 // category in one write, the category made when it is new (docs/plans/117-one-browse-view.md, rule 6).
 func TestFileCommandFilesInACategory(t *testing.T) {
-	dir := t.TempDir()
-	live := filepath.Join(dir, "life.db")
-	if err := db.Init(t.Context(), live); err != nil {
-		t.Fatal(err)
-	}
+	dir, live := t.TempDir(), dbtest.File(t)
 	memo := filepath.Join(dir, "memo.txt")
 	if err := os.WriteFile(memo, []byte("a synthetic memo"), 0o644); err != nil {
 		t.Fatal(err)
@@ -128,16 +121,7 @@ func TestDoOpensADayAndGetsAMonth(t *testing.T) {
 
 func commandClient(t *testing.T) *client.Client {
 	t.Helper()
-	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(t.Context(), p); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(t.Context(), p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { d.Close() })
-	c := client.InProcess(api.New(&core.Store{DB: d}), "cli")
+	c := client.InProcess(api.New(&core.Store{DB: dbtest.New(t)}), "cli")
 	if _, err := c.Do(t.Context(), cmdAction(t, mustEntity(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Ana", "body": "Synthetic page"}); err != nil {
 		t.Fatal(err)
 	}
@@ -242,10 +226,7 @@ func TestServeAddressFlag(t *testing.T) {
 func TestServeAuthorityMount(t *testing.T) {
 	// Run the real serve branch against a disposable synthetic database. Read
 	// the printed ephemeral listener address rather than guessing a free port.
-	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(t.Context(), p); err != nil {
-		t.Fatal(err)
-	}
+	p := dbtest.File(t)
 	e, _, _ := testEnv(t)
 	scheme, address := servedAt(t, serveInProcess(t, e, "serve", "--addr", "localhost:0", "--db", p))
 	if strings.HasSuffix(address, ":0") {
