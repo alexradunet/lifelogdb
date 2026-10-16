@@ -8,12 +8,26 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"lifelog/internal/core"
 )
 
 func receiptToken(location string) string {
 	u, _ := url.Parse(location)
 	return u.Query().Get("feedback")
 }
+
+// TestTheFeedbackReceiptsKeepTheMonotonicReading: the server gives its feedback receipts the instant of the store's
+// clock with its monotonic reading (core.Store.Now), not the same instant in the zone (core.Store.Local), which has
+// none. Thus the life of a receipt does not change when the wall clock is set. A time that keeps the monotonic reading
+// is not equal to its Round(0).
+func TestTheFeedbackReceiptsKeepTheMonotonicReading(t *testing.T) {
+	h := newServer(&core.Store{Zone: time.FixedZone("+14", 14*60*60)})
+	if now := h.feedback.now(); now == now.Round(0) {
+		t.Errorf("the clock of the receipts gives %v, with no monotonic reading: want core.Store.Now", now)
+	}
+}
+
 func TestBrowserMutationFeedbackReceipts(t *testing.T) {
 	now := time.Unix(0, 0)
 	s := feedbackStore{now: func() time.Time { return now }}

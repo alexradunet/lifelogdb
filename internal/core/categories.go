@@ -10,7 +10,7 @@ import (
 
 // A category is a page, and anything is filed in it by a part-of link to that page; a category belongs to another
 // by the same link (D26, docs/cookbook/metrics-by-category.md). Nothing keeps those links a tree, so the writer
-// draws one: each category under one parent (the first by title), and a page it has seen ends the walk.
+// draws one: each category under one parent (the first by title key), and a page it has seen ends the walk.
 
 // Category is a category page and the path the writer draws it at: the titles from the top, joined by '/'. Count
 // is how many live things are filed directly in it, the categories under it included: the rows of All in that
@@ -23,7 +23,7 @@ type Category struct {
 }
 
 // categories are the live pages something is part-of, by id, each with its path and its count. filed is the ids of
-// the categories that each page is part-of, by the page's id, in the order of their titles. It is one read of the
+// the categories that each page is part-of, by the page's id, in the order of their title keys. It is one read of the
 // part-of links for both.
 func (s *Store) categories(ctx context.Context) (cats map[int64]*Category, filed map[int64][]int64, err error) {
 	rows, err := s.DB.R.QueryContext(ctx, `
@@ -33,52 +33,38 @@ func (s *Store) categories(ctx context.Context) (cats map[int64]*Category, filed
 		 WHERE l.kind = 'part-of'
 		 ORDER BY p.preferred_name_key`)
 	cats, filed = map[int64]*Category{}, map[int64][]int64{}
-	var links []categoryLink
-	var l categoryLink
+	var from, to int64
+	var title string
 	var live bool
-	if err := each(rows, err, []any{&l.from, &l.to, &l.title, &live}, func() {
-		if cats[l.to] == nil {
-			cats[l.to] = &Category{ID: l.to, Title: l.title}
+	if err := each(rows, err, []any{&from, &to, &title, &live}, func() {
+		if cats[to] == nil {
+			cats[to] = &Category{ID: to, Title: title}
 		}
 		if live {
-			cats[l.to].Count++
+			cats[to].Count++
 		}
-		filed[l.from] = append(filed[l.from], l.to)
-		links = append(links, l)
+		filed[from] = append(filed[from], to)
 	}); err != nil {
 		return nil, nil, err
 	}
-	for id, path := range categoryPaths(links) {
+	for id, path := range categoryPaths(cats, filed) {
 		cats[id].Path = path
 	}
 	return cats, filed, nil
 }
 
-// categoryLink is a part-of link as the categories read it: from a page to a live category, and the category's title.
-type categoryLink struct {
-	from, to int64
-	title    string
-}
-
 // categoryPaths are the paths the writer draws the categories at, by id: the titles from the top, joined by '/'.
-// links are the part-of links to live categories, in the order of the categories' titles. Each category is drawn
-// under one parent, the first by title; a category that the walk up has seen ends it, so a cycle of part-of links
-// draws each category once.
-func categoryPaths(links []categoryLink) map[int64]string {
-	titles, parent := map[int64]string{}, map[int64]int64{}
-	for _, l := range links {
-		titles[l.to] = l.title
-		if _, ok := parent[l.from]; !ok {
-			parent[l.from] = l.to
-		}
-	}
-	paths := make(map[int64]string, len(titles))
-	for id, title := range titles {
-		path := []string{title}
+// filed is the categories that each page is part-of, in the order of their title keys, and each of them is in cats.
+// Each category is drawn under one parent, the first of filed; a category that the walk up has seen ends it, so a
+// cycle of part-of links draws each category once.
+func categoryPaths(cats map[int64]*Category, filed map[int64][]int64) map[int64]string {
+	paths := make(map[int64]string, len(cats))
+	for id, c := range cats {
+		path := []string{c.Title}
 		seen := map[int64]bool{id: true}
-		for p, ok := parent[id]; ok && !seen[p]; p, ok = parent[p] {
-			seen[p] = true
-			path = append([]string{titles[p]}, path...)
+		for up := filed[id]; len(up) > 0 && !seen[up[0]]; up = filed[up[0]] {
+			seen[up[0]] = true
+			path = append([]string{cats[up[0]].Title}, path...)
 		}
 		paths[id] = strings.Join(path, "/")
 	}

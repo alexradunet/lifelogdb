@@ -18,8 +18,9 @@ import (
 // "ui" and any other client as "api".
 const SourceHeader = "Lifelog-Source"
 
-// server is the API on one store. The store's clock is the server's one clock: today, the words for a day and a
-// time, the feedback receipts and the name of a snapshot are read from it (core.Store.Now).
+// server is the API on one store. The store's clock is the server's one clock: today is core.Store.Today, the words
+// for a time and the name of a snapshot are in the zone of core.Store.Local, and the life of a feedback receipt is
+// measured with core.Store.Now.
 type server struct {
 	s        *core.Store
 	feedback feedbackStore
@@ -450,7 +451,7 @@ func source(r *http.Request) (string, error) {
 }
 
 // isOwner reports a writer that is the owner: not an agent (agent:*) and not an import (import:*). The owner-only
-// actions (register-metric, snapshot) are refused to any other writer, on every surface.
+// actions (register-metric, snapshot, integrity-check) are refused to any other writer, on every surface.
 func isOwner(source string) bool {
 	return !strings.HasPrefix(source, "agent:") && !strings.HasPrefix(source, "import:")
 }

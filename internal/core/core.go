@@ -31,8 +31,8 @@ func nullIfEmpty(s string) any {
 // Clock and Zone are the clock of the writer. Every surface reads from them today (Today), the zone of the words for a
 // time and the name of a snapshot (Local), and the life of a feedback receipt (Now). A nil Clock is time.Now and a nil
 // Zone is time.Local, the clock of this device; a test gives a fixed clock. The instants that a write stores in a row
-// (created_at, updated_at, deleted_at and the others of lifelog_meta.instants) do not come from this clock: SQLite
-// writes them from its own clock (nowSQL and the triggers of the schema).
+// (created_at, updated_at and deleted_at) do not come from this clock: SQLite writes them from its own clock (nowSQL
+// and the triggers of the schema). The taken_at of a reading is the client's.
 type Store struct {
 	DB          *db.DB
 	SnapshotDir string

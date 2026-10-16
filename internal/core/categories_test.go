@@ -212,22 +212,27 @@ func TestMetricsArePagesFiledInCategories(t *testing.T) {
 // category it has seen. The paths are checked by hand.
 func TestCategoryPathsDrawATree(t *testing.T) {
 	for _, tc := range []struct {
-		name  string
-		links []categoryLink
-		want  map[int64]string
+		name   string
+		titles map[int64]string  // the categories
+		filed  map[int64][]int64 // the categories of each page, in the order of their title keys
+		want   map[int64]string
 	}{
-		{"no links", nil, map[int64]string{}},
-		{"no parent", []categoryLink{{10, 1, "Health"}}, map[int64]string{1: "Health"}},
-		{"a long chain", []categoryLink{{2, 1, "A"}, {3, 2, "B"}, {4, 3, "C"}, {10, 4, "D"}},
+		{"no links", nil, nil, map[int64]string{}},
+		{"no parent", map[int64]string{1: "Health"}, map[int64][]int64{10: {1}}, map[int64]string{1: "Health"}},
+		{"a long chain", map[int64]string{1: "A", 2: "B", 3: "C", 4: "D"}, map[int64][]int64{2: {1}, 3: {2}, 4: {3}, 10: {4}},
 			map[int64]string{1: "A", 2: "A/B", 3: "A/B/C", 4: "A/B/C/D"}},
-		{"two parents: the first by title", []categoryLink{{3, 2, "Alpha"}, {3, 1, "Beta"}, {10, 3, "Gamma"}},
+		{"two parents: the first by title key", map[int64]string{1: "Beta", 2: "Alpha", 3: "Gamma"}, map[int64][]int64{3: {2, 1}, 10: {3}},
 			map[int64]string{1: "Beta", 2: "Alpha", 3: "Alpha/Gamma"}},
-		{"a cycle", []categoryLink{{2, 1, "A"}, {10, 1, "A"}, {1, 2, "B"}},
+		{"a cycle", map[int64]string{1: "A", 2: "B"}, map[int64][]int64{2: {1}, 10: {1}, 1: {2}},
 			map[int64]string{1: "B/A", 2: "A/B"}},
-		{"a cycle of three, one with a second parent", []categoryLink{{3, 1, "A"}, {1, 2, "B"}, {2, 3, "C"}, {3, 4, "D"}},
+		{"a cycle of three, one with a second parent", map[int64]string{1: "A", 2: "B", 3: "C", 4: "D"}, map[int64][]int64{3: {1, 4}, 1: {2}, 2: {3}},
 			map[int64]string{1: "C/B/A", 2: "A/C/B", 3: "B/A/C", 4: "D"}},
 	} {
-		if got := categoryPaths(tc.links); !maps.Equal(got, tc.want) {
+		cats := map[int64]*Category{}
+		for id, title := range tc.titles {
+			cats[id] = &Category{ID: id, Title: title}
+		}
+		if got := categoryPaths(cats, tc.filed); !maps.Equal(got, tc.want) {
 			t.Errorf("%s: %v, want %v", tc.name, got, tc.want)
 		}
 	}

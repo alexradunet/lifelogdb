@@ -10,8 +10,8 @@ import (
 
 // Tx is one BEGIN IMMEDIATE write transaction and the writer whose rows it writes (lifelog_meta.source).
 // Every write operation is a method on it, so one write can do several operations: CreateMetric registers a metric
-// and files it, and internal/scaletest writes its synthetic rows in a few large transactions. Each Store method is
-// one operation alone. Its SQL uses the context of the owning Do call.
+// and files it, and internal/scaletest writes each synthetic day in one transaction and its notes 50 to a
+// transaction. Each Store method is one operation alone. Its SQL uses the context of the owning Do call.
 type Tx struct {
 	tx     *sql.Tx
 	ctx    context.Context
