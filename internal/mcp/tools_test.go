@@ -7,8 +7,6 @@ import (
 	"lifelog/internal/api"
 )
 
-func notOwner(a api.Action) bool { return !a.Owner }
-
 func TestToolsRefuseNormalizedDuplicates(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
@@ -20,19 +18,19 @@ func TestToolsRefuseNormalizedDuplicates(t *testing.T) {
 		{"built-in get day", []api.Action{{Name: "get-day"}}, `"get_day"`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := Tools(tc.actions, notOwner)
+			_, err := tools(tc.actions)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
-				t.Fatalf("Tools() = %v, want a collision containing %s", err, tc.want)
+				t.Fatalf("tools() = %v, want a collision containing %s", err, tc.want)
 			}
 		})
 	}
-	tools, err := Tools([]api.Action{{Name: "get", Owner: true}, {Name: "find"}, {Name: "import-find"}}, notOwner)
+	list, err := tools([]api.Action{{Name: "get", Owner: true}, {Name: "find"}, {Name: "import-find"}})
 	if err != nil {
 		t.Fatalf("owner-only duplicate and distinct public tools were rejected: %v", err)
 	}
 	var names []string
-	for _, tool := range tools {
-		names = append(names, tool.Name)
+	for _, x := range list {
+		names = append(names, x.name)
 	}
 	if got, want := strings.Join(names, " "), "find import_find get_day get"; got != want {
 		t.Fatalf("tools = %s, want %s", got, want)
@@ -48,40 +46,40 @@ func TestToolsRefuseAnInvalidNumericOption(t *testing.T) {
 }
 
 func TestArgumentsFlattenToFormValues(t *testing.T) {
-	got, err := Arguments([]byte(`{"day":"2031-05-14","mood":3,"value":72.50,"note":null}`))
+	got, err := arguments([]byte(`{"day":"2031-05-14","mood":3,"value":72.50,"note":null}`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := map[string]string{"day": "2031-05-14", "mood": "3", "value": "72.50"}
 	if len(got) != len(want) {
-		t.Fatalf("Arguments = %v, want %v", got, want)
+		t.Fatalf("arguments = %v, want %v", got, want)
 	}
 	for k, v := range want {
 		if got[k] != v {
-			t.Fatalf("Arguments[%s] = %q, want %q", k, got[k], v)
+			t.Fatalf("arguments[%s] = %q, want %q", k, got[k], v)
 		}
 	}
-	if _, err := Arguments([]byte(`{"list":[1]}`)); err == nil {
+	if _, err := arguments([]byte(`{"list":[1]}`)); err == nil {
 		t.Fatal("a list argument was accepted")
 	}
-	if _, err := Arguments([]byte(`{"day":`)); err == nil {
+	if _, err := arguments([]byte(`{"day":`)); err == nil {
 		t.Fatal("malformed JSON was accepted")
 	}
-	if got, err := Arguments(nil); err != nil || len(got) != 0 {
-		t.Fatalf("Arguments(nil) = %v, %v", got, err)
+	if got, err := arguments(nil); err != nil || len(got) != 0 {
+		t.Fatalf("arguments(nil) = %v, %v", got, err)
 	}
 }
 
 // TestToolsCarryNoFileField is the one allowed difference of the MCP surface: a file (a recording, a picture) is
 // sent by the CLI or a browser; the tool keeps the action's other fields.
 func TestToolsCarryNoFileField(t *testing.T) {
-	tools, err := Tools([]api.Action{{Name: "capture", Method: "POST", Href: "/days/{day}/capture", Fields: []api.Field{
+	list, err := tools([]api.Action{{Name: "capture", Method: "POST", Href: "/days/{day}/capture", Fields: []api.Field{
 		{Name: "day", Type: "date", In: "path", Required: true}, {Name: "text", Type: "textarea"},
-		{Name: "audio", Type: "file", Accept: "audio/*"}}}}, notOwner)
+		{Name: "audio", Type: "file", Accept: "audio/*"}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	props, _ := tools[0].Schema["properties"].(map[string]any)
+	props, _ := list[0].schema["properties"].(map[string]any)
 	if _, ok := props["audio"]; ok || props["text"] == nil || props["day"] == nil {
 		t.Errorf("the tool's properties: %v", props)
 	}

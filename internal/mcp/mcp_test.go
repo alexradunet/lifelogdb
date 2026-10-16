@@ -76,7 +76,7 @@ func TestFindTools(t *testing.T) {
 	for _, a := range actions {
 		if a.Owner {
 			owner++
-			if seen[ToolName(a.Name)] {
+			if seen[toolName(a.Name)] {
 				t.Fatalf("owner-only action %q was exposed as an MCP tool", a.Name)
 			}
 		}
