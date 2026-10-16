@@ -61,7 +61,7 @@ func (t *Tx) AddFile(f FileIn) (Kept, error) {
 }
 
 // keep keeps a file: the page the original's hash names already, or a new file page, or a plain page of the title
-// promoted to the file (docs/cookbook/keep-a-file.md); then its place and its day (docs/cookbook/place-of-a-photo.md).
+// promoted to the file (docs/cookbook/keep-a-file.md); then its own day (ownDay).
 func (t *Tx) keep(f FileIn) (k Kept, err error) {
 	// the hash and the type are normalized here and held by files_sha256 and files_mime; the days by entities_day
 	f.SHA256 = strings.ToLower(strings.TrimSpace(f.SHA256))
@@ -86,7 +86,7 @@ func (t *Tx) keep(f FileIn) (k Kept, err error) {
 	default:
 		day, own = Today(), false
 	}
-	// 0) the original kept already: that page, nothing written but a missing preview, its place and its day
+	// 0) the original kept already: that page, nothing written but a missing preview and its embed in its own day
 	var hasPreview bool
 	var deleted sql.NullString
 	var title string
@@ -113,7 +113,7 @@ func (t *Tx) keep(f FileIn) (k Kept, err error) {
 			}
 			k.PreviewAdded = true
 		}
-		return k, t.placeAndDay(&k, f, title, day, own, hasPreview || k.PreviewAdded)
+		return k, t.ownDay(&k, f, title, day, own, hasPreview || k.PreviewAdded)
 	case !errors.Is(err, sql.ErrNoRows):
 		return k, err
 	}
@@ -180,14 +180,13 @@ func (t *Tx) keep(f FileIn) (k Kept, err error) {
 		return k, err
 	}
 	k.Sync = &sync
-	// 3) its place and its day
-	return k, t.placeAndDay(&k, f, title, day, own, f.Preview != nil)
+	// 3) its own day
+	return k, t.ownDay(&k, f, title, day, own, f.Preview != nil)
 }
 
-// placeAndDay is cookbook/place-of-a-photo.md for a file kept: the place named (its point set from the position if it
-// has none) or the place the position is in; then, when the file has a day of its own, that day's at link and the
-// file shown in that day's page. No day of its own, no link: a photo links the day it was taken.
-func (t *Tx) placeAndDay(k *Kept, f FileIn, title, day string, own, picture bool) error {
+// ownDay reports the own day of a file kept in Kept.Day, when the file has one. When the file also has a picture,
+// the page of that day shows it (embed). A file with no day of its own goes in no day page.
+func (t *Tx) ownDay(k *Kept, f FileIn, title, day string, own, picture bool) error {
 	if own {
 		k.Day = day
 	}
@@ -260,7 +259,7 @@ func (s *Store) TryAddFile(ctx context.Context, source string, f FileIn) (k Kept
 }
 
 // embed shows a file in a day's page once: `![[title]]` appended after a blank line unless the page shows it
-// already, then the page's links synced (cookbook/place-of-a-photo.md).
+// already, then the page's links synced.
 func (t *Tx) embed(dayID int64, title string) (bool, *Sync, error) {
 	var body string
 	if err := t.tx.QueryRowContext(t.ctx, `SELECT body FROM entities WHERE id = ?`, dayID).Scan(&body); err != nil {

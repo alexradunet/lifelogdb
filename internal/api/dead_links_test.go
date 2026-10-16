@@ -49,3 +49,22 @@ func TestActionDescriptionsNameOnlyTheirFields(t *testing.T) {
 		}
 	}
 }
+
+// TestTheCatalogNamesNoRemovedFeature: no action's description or field title tells a client of a feature the
+// docs removed: a photo's position (D21) or a task and what is due (D23). An MCP agent reads these texts as the
+// truth.
+func TestTheCatalogNamesNoRemovedFeature(t *testing.T) {
+	c, _ := fresh(t)
+	removed := regexp.MustCompile(`(?i)\b(position|positions|due|overdue|task|tasks)\b`)
+	for _, a := range must(c.Get(t.Context(), "/actions")).Actions {
+		texts := []string{a.Title, a.Description}
+		for _, f := range a.Fields {
+			texts = append(texts, f.Title)
+		}
+		for _, s := range texts {
+			if w := removed.FindString(s); w != "" {
+				t.Errorf("%s says %q: %s", a.Name, w, s)
+			}
+		}
+	}
+}

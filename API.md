@@ -52,7 +52,7 @@ An error is an entity of class `error` with `properties`:
 | property | type | meaning |
 |---|---|---|
 | `status` | integer | the HTTP status |
-| `code` | string | what went wrong, to branch on: `stale_version` (a save with an old `version`), `exists` (a title in use; the link `existing` names the page), `cross_origin` (a browser write from another origin), `token_required` (a public listener without a credential), `snapshot_refused` (the snapshot folder refused it), `restore_check_failed` (the snapshot is written but fails its restore check), `no_model` (503: `ask` with no model configured), `model` (502: the model failed or did not answer), or the status's general name: `bad_request`, `unauthorized`, `forbidden`, `not_found`, `conflict`, `too_large`, `invalid` (422), `timeout`, `internal` |
+| `code` | string | what went wrong, to branch on: `stale_version` (a save with an old `version`), `exists` (a title in use; the link `existing` names the page), `cross_origin` (a browser write from another origin), `token_required` (a public listener without a credential), `snapshot_refused` (the snapshot folder refused it), `restore_check_failed` (the snapshot is written but fails its restore check), or the status's general name: `bad_request`, `unauthorized`, `forbidden`, `not_found`, `conflict`, `too_large`, `invalid` (422), `timeout`, `internal` |
 | `message` | string | the text, for a person |
 
 ## Pages of a list
@@ -105,8 +105,7 @@ The `POST` routes of `/people`, `/places` and `/files` (`create-person`, `create
 
 ### actions
 
-`GET /actions`: no properties; `actions` is the whole catalog with templated hrefs. With an import workspace the
-import actions are included and the link `import` leads to its status.
+`GET /actions`: no properties; `actions` is the whole catalog with templated hrefs.
 
 ### days
 
