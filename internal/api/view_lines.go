@@ -165,8 +165,8 @@ func chart(from, to string, readings any) template.HTML {
 	})
 	var sb strings.Builder
 	first, last := f.Format(layoutDateYear), t.Format(layoutDateYear) // the ends in words, with the year: a range can span years
-	fmt.Fprintf(&sb, `<svg class="chart" viewBox="0 0 %g %g" role="img" aria-label="%d readings from %s to %s">`,
-		w, h, len(rs), first, last)
+	fmt.Fprintf(&sb, `<svg class="chart" viewBox="0 0 %g %g" role="img" aria-label="%s from %s to %s">`,
+		w, h, count(len(rs), "reading", "readings"), first, last)
 	fmt.Fprintf(&sb, `<line class="axis" x1="%g" y1="%g" x2="%g" y2="%g"/><line class="axis" x1="%g" y1="%g" x2="%g" y2="%g"/>`,
 		left, y(hi), w-pad, y(hi), left, y(lo), w-pad, y(lo))
 	fmt.Fprintf(&sb, `<text x="%g" y="%g">%g</text><text x="%g" y="%g">%g</text>`, left-6, y(hi)+4, hi, left-6, y(lo)+4, lo)

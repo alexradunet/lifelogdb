@@ -47,7 +47,7 @@
 {{if $s.readings}}{{chart $s.from $s.to $s.readings}}{{end}}
 {{range $r.Years}}{{$year := .Year}}<details class="readings-year"{{if .Open}} open{{end}}><summary><span class="year-name">{{.Year}}</span> <span class="meta">{{.Summary}}</span></summary>
 {{template "readings" (dict "v" $ "r" $r "s" $s "rows" .Rows)}}
-{{with .More}}<details class="readings-more"><summary>{{len .}} more readings of {{$year}}</summary>
+{{with .More}}<details class="readings-more"><summary>{{count (len .) "more reading" "more readings"}} of {{$year}}</summary>
 {{template "readings" (dict "v" $ "r" $r "s" $s "rows" .)}}</details>{{end}}</details>
 {{else}}<p class="empty">{{if $s.all_history}}No reading yet. Add the first one above.{{else}}No reading in this window. <a href="{{.Link "all-readings"}}">All readings</a> has the rest.{{end}}</p>{{end}}
 </section>

@@ -52,3 +52,20 @@ func TestALineDrawsOnlyTheReadingsWithADayAndANumber(t *testing.T) {
 		t.Errorf("a spark line with no reading to draw is drawn:\n%s", got)
 	}
 }
+
+// TestAChartSaysHowManyReadingsItDraws: the label of a chart says "1 reading" for one reading and "2 readings" for two.
+func TestAChartSaysHowManyReadingsItDraws(t *testing.T) {
+	one := map[string]any{"day": "2026-10-12", "value": 70.0}
+	two := map[string]any{"day": "2026-10-14", "value": 71.0}
+	for _, c := range []struct {
+		readings []any
+		want     string
+	}{
+		{[]any{one}, `aria-label="1 reading from Mon 12 Oct 2026 to Fri 16 Oct 2026"`},
+		{[]any{one, two}, `aria-label="2 readings from Mon 12 Oct 2026 to Fri 16 Oct 2026"`},
+	} {
+		if got := string(chart("2026-10-12", "2026-10-16", c.readings)); !strings.Contains(got, c.want) {
+			t.Errorf("the chart of %v does not say %s:\n%s", c.readings, c.want, got)
+		}
+	}
+}

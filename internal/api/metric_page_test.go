@@ -227,3 +227,18 @@ func TestAYearShowsItsNewestReadingsFirst(t *testing.T) {
 		t.Error("the year's summary does not count all its readings")
 	}
 }
+
+// TestTheFoldOfOneOlderReadingSaysReading: a year of eleven readings folds one under its newest ten, and the fold
+// says "1 more reading", not "1 more readings".
+func TestTheFoldOfOneOlderReadingSaysReading(t *testing.T) {
+	c, h := freshOn(t, "2026-10-13")
+	root := must(c.Get(t.Context(), "/"))
+	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "Weight", "unit": "kg"}))
+	for d := 1; d <= 11; d++ {
+		must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "Weight", "day": fmt.Sprintf("2026-09-%02d", d), "value": fmt.Sprint(70 + d)}))
+	}
+	body := browse(t, h, "/metrics/Weight")
+	if want := `<details class="readings-more"><summary>1 more reading of 2026</summary>`; !strings.Contains(body, want) {
+		t.Errorf("the fold of one older reading is not %s", want)
+	}
+}
