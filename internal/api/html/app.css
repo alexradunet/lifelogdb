@@ -1,9 +1,9 @@
 /* app.css — only what this app's own vocabulary needs, on top of what base.css says about ordinary HTML: the shell
    and the components of the Almanac design system, bound in Hearthwood (docs/plans/096-bound-in-hearthwood.md). Every
    colour, size and font is a token of base.css; no rule here names a colour of its own. A material sets its text
-   through the aliases of base.css (--text, --text-strong, --text-muted, --text-link, --text-accent, --rule): a
-   parchment element and a wood element reset them once, here. There is no image: the icons and the chart are
-   inline <svg>, and the grain, the planks and the stitch are CSS. This sheet is the components and the utilities
+   through the aliases of base.css (--text, --text-strong, --text-muted, --text-link, --rule): a parchment element
+   and a wood element reset them once, here. There is no image: the icons and the chart are inline <svg>, and the
+   grain, the planks and the stitch are CSS. This sheet is the components and the utilities
    layers of the one cascade base.css declares (docs/plans/108-the-browser-made-current.md): a utility is a class
    no component restyles, so it may come last. There is no script: a sheet, a dialog and a popover are the
    browser's own, and a rule here only dresses them. */
@@ -11,10 +11,10 @@
 @layer components{
 /* The two materials of this sheet, as reusable declarations: parchment (what is written) and wood (the chrome).
    These two lists stay flat: a rule nested under a list takes the whole list's specificity. */
-.rail,.rail>nav,.rail-more:popover-open,.new-menu:popover-open,.scroll:has(>table.calendar){--text:var(--rail-ink); --text-strong:var(--rail-accent); --text-muted:var(--rail-ink); --text-link:var(--rail-accent); --text-accent:var(--rail-accent); --rule:var(--outline);
+.rail,.rail>nav,.rail-more:popover-open,.new-menu:popover-open,.scroll:has(>table.calendar){--text:var(--rail-ink); --text-strong:var(--rail-accent); --text-muted:var(--rail-ink); --text-link:var(--rail-accent); --rule:var(--outline);
   color:var(--text); background-color:var(--rail); background-image:var(--planks),var(--grain-ground); background-size:auto,4px 4px}
-.sheet,.panel,.leaf,.month-box,.reading-tile,.alert,.toast,.action-form,ul.suggest,dialog.palette,table.calendar td,.margin ul.plain,.margin .habit,.margin .about,
-.editor .preview,main>.scroll:not(:has(>table.calendar)),.group>.scroll{--text:var(--ink); --text-strong:var(--ink); --text-muted:var(--muted); --text-link:var(--link); --text-accent:var(--accent-ink); --rule:var(--edge);
+.sheet,.panel,.leaf,.month-box,.reading-tile,.alert,.toast,.action-form,dialog.palette,table.calendar td,.margin ul.plain,.margin .about,
+main>.scroll:not(:has(>table.calendar)),.group>.scroll{--text:var(--ink); --text-strong:var(--ink); --text-muted:var(--muted); --text-link:var(--link); --rule:var(--edge);
   color:var(--text); background-color:var(--surface); background-image:var(--grain-ink); background-size:4px 4px; border:2px solid var(--edge)}
 
 /* The shell: the sidebar, then the column of the page. Under 900 px the sidebar is a bar over the page. */
@@ -63,7 +63,6 @@ svg.icon{flex:none; inline-size:16px; block-size:16px; fill:none; stroke:current
   & :is(a,button){display:flex; align-items:center; gap:10px; padding:7px 10px; color:var(--rail-ink); white-space:nowrap;
     &:hover{color:var(--rail-accent); text-decoration:none}
     &[aria-current=page]{background:var(--rail-deep); color:var(--rail-accent); font-weight:700; box-shadow:inset 0 2px 0 var(--bevel-dark),inset 0 -2px 0 var(--bevel-light)}}}
-.count{margin-inline-start:auto; font:700 12px/18px var(--mono); padding:0 7px; border:1px solid var(--outline); background:var(--primary); color:var(--on-accent)}
 /* On a wide screen the rest of the sidebar is in its flow: More, its head and the search link are the phone's. */
 .rail-more{display:contents}
 .rail-more-link,.rail-more-head,.rail .rail-search-link{display:none}
@@ -111,8 +110,7 @@ table.month{border-collapse:separate; border-spacing:2px; table-layout:fixed; fo
     & li{flex:1 1 0; min-inline-size:0}
     & :is(a,button){position:relative; inline-size:100%; flex-direction:column; gap:2px; padding:6px 0; font-size:12px; line-height:16px;
       & svg.icon{inline-size:20px; block-size:20px}
-      &[aria-current=page],&.here{background:none; box-shadow:none; color:var(--rail-accent); font-weight:700}}
-    & .count{position:absolute; inset-block-start:2px; inset-inline-start:calc(50% + 6px); margin:0; padding:0 5px; font-size:12px; line-height:16px}}
+      &[aria-current=page],&.here{background:none; box-shadow:none; color:var(--rail-accent); font-weight:700}}}
   .rail-more-link{display:block}
   .rail-more{display:none}
   /* The sheet is a popover: the browser puts it in the top layer, with its own size, margin, border and colours,
@@ -170,9 +168,8 @@ small .mood{font-size:12px; padding:2px 8px}
   background:var(--surface-deep); color:var(--muted); border:1px solid var(--edge); vertical-align:middle}
 .tag{
   &.open{background:var(--accent-soft); color:var(--accent-ink); border-color:var(--accent-ink)}
-  &.done{background:var(--done-soft); color:var(--done-ink); border-color:var(--done)}
   &.unwritten{background:none; border-style:dashed; padding:1px 7px; color:var(--text-muted); border-color:var(--rule)}
-  &.deleted,&.notdone{background:var(--danger-soft); color:var(--danger-ink); border-color:var(--danger)}}
+  &.deleted{background:var(--danger-soft); color:var(--danger-ink); border-color:var(--danger)}}
 .owner{font:400 12px/16px var(--mono); padding:1px 6px; border:1px solid var(--outline); background:var(--rail); color:var(--rail-accent)}
 
 /* Buttons beyond the plain slab of base.css: the primary one (once a screen, in ember, for what the page is for),
@@ -246,10 +243,6 @@ svg.chart{inline-size:100%; max-inline-size:800px; block-size:auto; padding:var(
     &.x{text-anchor:middle}}}
 @container column (max-width:608px){svg.chart text{font-size:20px}} /* the chart is scaled down to the column: its words are not */
 
-
-/* The map is scaled down to a narrow column and its words with it: there it shows the dots, and the list the names. */
-@container column (max-width:487px){svg.place-map text{display:none}}
-
 /* A form of a few short fields, on one line: find, correct, check in, record on a series. */
 form.inline{display:flex; flex-wrap:wrap; align-items:flex-end; gap:var(--space-2);
   &>label{flex:1 1 130px}
@@ -270,16 +263,12 @@ dl.facts{display:grid; grid-template-columns:minmax(90px,max-content) minmax(0,1
   & dd{margin:0; display:block; font:400 14px/20px var(--mono); font-variant-numeric:tabular-nums; color:var(--text);
     &.words{font-family:var(--sans)}}}
 
-/* The state of a habit on a day, in words and in colour. */
+/* Done, in words and in colour. */
 .done{color:var(--done); font-weight:700}
-.notdone{color:var(--danger); font-weight:700}
 
-/* The metric tree: a category, then the categories under it, each one step in. */
+/* A group of a page: its heading, then what it holds, one under the other. */
 .group{display:flex; flex-direction:column; gap:var(--space-2);
-  & h3 small{font-weight:400}
-  &.depth-1{margin-inline-start:14px}
-  &.depth-2{margin-inline-start:28px}
-  &.depth-3,&.depth-4,&.depth-5{margin-inline-start:42px}}
+  & h3 small{font-weight:400}}
 
 /* A page's typed links: a kind, then the pages it points at. */
 dl:not(.facts){
@@ -394,7 +383,7 @@ fieldset.segmented{display:flex; flex-wrap:wrap; align-items:center; gap:var(--s
    focus. Then the mood and Add on one row. */
 .capture{
   & form{flex-direction:row; flex-wrap:wrap; align-items:center; justify-content:space-between;
-    &>label,&>.editor{flex:1 1 100%}
+    &>label{flex:1 1 100%}
     &>button{margin-inline-start:auto}}
   /* The box grows with its text (a browser without field-sizing keeps its rows). The least height is four lines of
      the textarea (26 px each), its padding and its border; base.css caps it at 45vh on a phone. */
@@ -521,8 +510,7 @@ dialog.palette{inline-size:min(36rem, calc(100vw - 2rem)); max-block-size:min(32
     & :is(h2,h3){font-size:18px; line-height:24px}
     & .meta{font-size:13px; flex:none}}
   & ul.plain>li{padding:var(--space-3) 0; border-block-start:1px solid var(--line-soft); border-block-end:0;
-    &.pick{padding:0;
-      &>.pick-main{padding:var(--space-3) 0}}}}
+    &.pick{padding:0}}}
 .snippet{margin-block-start:2px; font-size:14px; line-height:20px; color:var(--muted)}
 @container column (max-width:867px){.sheet.list{padding:var(--space-1) var(--space-4)}}
 
@@ -567,7 +555,7 @@ li.tile>.pick-box{position:absolute; inset-block-start:var(--space-1); inset-inl
 li.pick:has(input[name=ids]:checked),.metric-card:has(>.pick-box input:checked){counter-increment:picked}
 .pick-bar{order:-1; position:sticky; inset-block-start:0; z-index:3; display:flex; flex-direction:row; flex-wrap:wrap; align-items:center; gap:var(--space-2) var(--space-3);
   margin-block-end:var(--space-2); padding:var(--space-2) var(--space-3); background:var(--surface); box-shadow:var(--parch-bevel);
-  --text:var(--ink); --text-strong:var(--ink); --text-muted:var(--muted); --text-link:var(--link); --text-accent:var(--accent-ink); --rule:var(--edge);
+  --text:var(--ink); --text-strong:var(--ink); --text-muted:var(--muted); --text-link:var(--link); --rule:var(--edge);
   & .pick-toggle{cursor:pointer;
     & input{position:absolute; opacity:0; inline-size:1px; block-size:1px}
     &:has(input:checked){background:var(--accent-soft); color:var(--accent-ink); box-shadow:var(--slab-pressed); transform:translateY(3px)}
@@ -579,7 +567,7 @@ li.pick:has(input[name=ids]:checked),.metric-card:has(>.pick-box input:checked){
   &:has(.pick-on:checked) .pick-tools{display:flex}}
 @media (max-width:899px){.pick-bar{inset-block-start:calc(72px + env(safe-area-inset-top, 0px))}}
 li.pick{display:flex; align-items:stretch; gap:var(--space-1);
-  &>a.entry,&>.pick-main{flex:1 1 auto; min-inline-size:0}}
+  &>a.entry{flex:1 1 auto; min-inline-size:0}}
 .pick-box{flex:none; flex-direction:row; align-items:center; padding:0 var(--space-1); cursor:pointer;
   & input:disabled{opacity:.35; cursor:default}}
 
@@ -808,7 +796,6 @@ ul.metric-rows>li.metric-row{display:flex; flex-wrap:wrap; align-items:center; g
   &:focus-visible{transform:none; color:var(--on-accent)}}
 /* Words for a reader alone. */
 .sr{position:absolute; inline-size:1px; block-size:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap}
-.muted{color:var(--text-muted)}
 /* An empty state, which names the way forward. */
 .empty{color:var(--text-muted); font-size:15px; line-height:22px}
 /* What an action does, before its form; the note under a table or a search. */

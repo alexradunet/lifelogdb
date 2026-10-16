@@ -210,7 +210,7 @@ func TestASnippetIsPlainText(t *testing.T) {
 func TestTheBaseSheetCarriesNoAppVocabulary(t *testing.T) {
 	base := cssComments.ReplaceAllString(string(baseCSS), "")
 	for _, name := range []string{".wikilink", ".badge", ".chart", ".pager", ".plain", ".prose", ".sub", ".skip",
-		".tiny", ".inline", ".danger", ".quiet", ".desc", ".group", ".done", ".notdone", ".scroll", ".brand",
+		".tiny", ".inline", ".danger", ".quiet", ".desc", ".group", ".done", ".scroll", ".brand",
 		".calendar", ".mood", ".more", ".here"} {
 		if strings.Contains(base, name) {
 			t.Errorf("base.css styles %s, which belongs to app.css: the base sheet is ordinary HTML", name)

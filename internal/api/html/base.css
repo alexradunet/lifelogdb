@@ -28,14 +28,14 @@
 @font-face{font-family:"Jersey 15"; font-style:normal; font-weight:400; font-display:swap; src:url(/assets/fonts/jersey-15-400-latin-ext.woff2) format("woff2"); unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C4,U+2113,U+2C60-2C7F,U+A720-A7FF}
 
 /* The tokens: the materials (oak for the page, wood for the rail, parchment for what is written), the text of each
-   material, the accents (gold for where the owner is and what is today, ember for the one loud button and the word
-   "overdue", teal for a link and the focus ring), the shapes (bevels and hard drops, no radius) and the faces. Every
-   pair a use names holds 4.5:1 for text and 3:1 for an edge and the focus ring, in both themes; a test reads this
-   one block and checks it. A material sets its own text through the aliases --text, --text-strong, --text-muted,
-   --text-link, --text-accent and --rule: the page sets them for oak here, and a parchment or wood element resets
-   them, so one rule draws a link or a heading on any material. The type scale is 13 / 15 / 18 / 24 / 40 px (the
-   display face at 40 is as tall as the sans at 34), and a control is 40 px high, 44 px under 900 px, where the screen
-   is a touch screen (docs/plans/095-the-leaf-and-its-margin.md). */
+   material, the accents (gold for where the owner is and what is today, ember for the one loud button, teal for a
+   link and the focus ring), the shapes (bevels and hard drops, no radius) and the faces. Every pair a use names
+   holds 4.5:1 for text and 3:1 for an edge and the focus ring, in both themes; a test reads this one block and
+   checks it. A material sets its own text through the aliases --text, --text-strong, --text-muted, --text-link and
+   --rule: the page sets them for oak here, and a parchment or wood element resets them, so one rule draws a link or
+   a heading on any material. The type scale is 13 / 15 / 18 / 24 / 40 px (the display face at 40 is as tall as the
+   sans at 34), and a control is 40 px high, 44 px under 900 px, where the screen is a touch screen
+   (docs/plans/095-the-leaf-and-its-margin.md). */
 @layer tokens{
 :root{
   color-scheme:light;
@@ -47,7 +47,7 @@
   --warn:#8f3a12; --warn-ink:#7e3210; --warn-soft:light-dark(#f3d2b0, #edc8a3);
   --done:light-dark(#3f6a22, #3d6621); --done-ink:#355c1c; --done-soft:light-dark(#dbe4a6, #d0dc9a);
   --danger:#a8201f; --danger-ink:light-dark(#8f1d12, #8a1c11); --danger-soft:light-dark(#f3cbbf, #efc3b5); --danger-line:light-dark(#c25a48, #b8503f);
-  --teal:#3ecfb8; --indigo:#a8c0f0;
+  --indigo:#a8c0f0;
   --mark:#f2c14e; --focus:#0e7f6b; --backdrop:light-dark(#1a0d04b8, #0a0501b8);
   --bevel-light:light-dark(#ffdea64d, #ffc4762e); --bevel-dark:#0000008c; --paper-light:#ffffff73; --slab-shade:#40301240; --well-shade:#4030122e;
   --grain-ground:repeating-conic-gradient(light-dark(#2c20120a, #ffd69606) 0% 25%,transparent 0% 50%);
@@ -59,7 +59,7 @@
   --drop-hard:0 3px 0 var(--bevel-dark); --shadow-float:0 6px 0 var(--bevel-dark);
   --slab-bevel:inset 0 3px 0 var(--paper-light),inset 0 -3px 0 var(--slab-shade); --slab-pressed:inset 0 3px 0 var(--slab-shade);
   --well:inset 0 2px 0 var(--well-shade);
-  --text:var(--page-ink); --text-strong:var(--page-strong); --text-muted:var(--page-muted); --text-link:var(--link-page); --text-accent:var(--accent); --rule:var(--line);
+  --text:var(--page-ink); --text-strong:var(--page-strong); --text-muted:var(--page-muted); --text-link:var(--link-page); --rule:var(--line);
   --toast-bg:var(--surface); --toast-ink:var(--ink); --toast-link:var(--link);
   --display:"Jersey 15","Atkinson Hyperlegible","Segoe UI",system-ui,sans-serif;
   --sans:"Atkinson Hyperlegible","Segoe UI",system-ui,sans-serif;
@@ -109,7 +109,7 @@ footer{color:var(--text-muted); font-size:13px; line-height:19px}
 
 /* Parchment: the material of what is written. A card is an article on it, with the gold notch in its corner; a
    callout is an aside, a gold wash on the same paper. Each resets the text aliases for ink on paper. */
-article,aside{--text:var(--ink); --text-strong:var(--ink); --text-muted:var(--muted); --text-link:var(--link); --text-accent:var(--accent-ink); --rule:var(--edge);
+article,aside{--text:var(--ink); --text-strong:var(--ink); --text-muted:var(--muted); --text-link:var(--link); --rule:var(--edge);
   color:var(--text); background-color:var(--surface); background-image:var(--grain-ink); background-size:4px 4px;
   border:2px solid var(--edge); box-shadow:var(--parch-bevel)}
 article{position:relative; padding:var(--space-4) var(--space-5);
