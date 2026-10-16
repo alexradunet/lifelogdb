@@ -191,36 +191,30 @@ func (h *server) serve(f func(*http.Request) (*Entity, error)) http.HandlerFunc 
 				w.Header().Set("Referrer-Policy", "no-referrer")
 			}
 		}
-		h.write(w, r, status, e)
+		answer(w, r, status, e, frame{shell: h.s})
 	}
 }
 
-// refusal is a refused browser form, carried in the context of the GET that draws the page the form came from
-// (docs/plans/097-the-almanac-reflects.md). renderHTML reads it: the page then shows the error and the form
-// as the owner filled it. shown is set when it did.
+// refusal is a refused browser form (docs/plans/097-the-almanac-reflects.md): the page that the form came from shows
+// the error and the form as the owner filled it (pageView).
 type refusal struct {
 	entity *Entity    // the error entity
-	status int        // the error's status: the page answers with it
 	href   string     // the refused action's address
 	sent   url.Values // what the form sent
-	shown  bool
 }
-
-type refusalKey struct{}
 
 // refusedOnItsPage answers a browser form that failed with the page it came from, filled in, and reports whether it
 // did. The server runs its own GET of the back path through its routes, on the context and the headers of the POST,
-// and a refusal in the context tells renderHTML to add the alert and the sent values. The GET writes into a buffer:
-// when it does not draw a page (a 404, a redirect, a picture), nothing is sent from it and the plain error view
-// answers, as for a POST with no back path. The GET gets no body: only the refusal carries what the form sent.
+// and catches the entity that the route answers. answer then draws that entity with the refusal and the error's
+// status. When the GET answers with no entity, or with an error (a 404, a redirect, a picture), nothing is sent from
+// it and the plain error view answers, as for a POST with no back path. The GET gets no body: only the refusal
+// carries what the form sent.
 func (h *server) refusedOnItsPage(w http.ResponseWriter, r *http.Request, e *Entity, status int) bool {
 	back := backOf(r)
 	if r.Method != "POST" || !wantsHTML(r) || back == "" {
 		return false
 	}
-	rf := &refusal{entity: e, status: status, href: r.URL.Path, sent: r.PostForm}
-	ctx := context.WithValue(r.Context(), refusalKey{}, rf)
-	get, err := http.NewRequestWithContext(ctx, "GET", back, nil)
+	get, err := http.NewRequestWithContext(r.Context(), "GET", back, nil)
 	if err != nil {
 		return false
 	}
@@ -228,31 +222,31 @@ func (h *server) refusedOnItsPage(w http.ResponseWriter, r *http.Request, e *Ent
 	get.Header.Del("Content-Type")
 	get.Header.Del("Content-Length")
 	get.Host, get.RemoteAddr, get.TLS = r.Host, r.RemoteAddr, r.TLS
-	out := &pageBuffer{header: http.Header{}, status: http.StatusOK}
-	h.mux.ServeHTTP(out, get)
-	if !rf.shown {
+	page := &caught{header: http.Header{}}
+	h.mux.ServeHTTP(page, get)
+	if page.entity == nil || page.status >= 400 {
 		return false
 	}
-	for k, v := range out.header {
+	for k, v := range page.header {
 		w.Header()[k] = v
 	}
-	w.WriteHeader(out.status)
-	if _, err := w.Write(out.body.Bytes()); err != nil { // the client went away: nothing else can be done
-		logFault(r, "the page was not sent", err)
-	}
+	w.Header().Set("Cache-Control", "no-store")
+	answer(w, get, status, page.entity, frame{shell: h.s, refused: &refusal{entity: e, href: r.URL.Path, sent: r.PostForm}})
 	return true
 }
 
-// pageBuffer holds what a handler writes, so the caller can send it or drop it.
-type pageBuffer struct {
+// caught takes the answer of the GET that refusedOnItsPage runs: answer gives it the entity and the status, not their
+// bytes, and the route's headers stay in header. A route that writes bytes of its own (a redirect, a picture, a 404
+// of the routes) leaves entity nil, and its bytes are dropped.
+type caught struct {
 	header http.Header
+	entity *Entity
 	status int
-	body   bytes.Buffer
 }
 
-func (b *pageBuffer) Header() http.Header         { return b.header }
-func (b *pageBuffer) Write(p []byte) (int, error) { return b.body.Write(p) }
-func (b *pageBuffer) WriteHeader(status int)      { b.status = status }
+func (c *caught) Header() http.Header         { return c.header }
+func (c *caught) Write(p []byte) (int, error) { return len(p), nil }
+func (c *caught) WriteHeader(int)             {}
 
 // maxBack is the longest return path a browser form may send.
 const maxBack = 2048
@@ -346,33 +340,87 @@ func codeOf(status int) string {
 // the page that a refused form came from.
 func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	e, status := errorEntity(r, err)
-	writeEntity(w, r, status, e)
+	answer(w, r, status, e, frame{})
 }
 
-// writeEntity answers with the entity as Siren JSON, or as a page when the client is a browser.
-func writeEntity(w http.ResponseWriter, r *http.Request, status int, e *Entity) {
-	if wantsHTML(r) {
-		renderHTML(w, r, status, e, nil)
+// frame says how answer draws an entity as a page, and for whom. The zero frame gives a program JSON and a browser a
+// page with no sidebar: the answer of a guard, of a picture's error and of a refusal before the routes.
+type frame struct {
+	shell    *core.Store // the store that the sidebar reads; nil: no sidebar, so the page shows nothing of the database
+	refused  *refusal    // the refused form that the page shows; nil: none
+	pageOnly bool        // a page for every client, a program too: the answer is presentation and has no JSON form
+}
+
+// answer is the one way an entity leaves the API: the answer of every route, guard and error. A program gets Siren
+// JSON; a browser, and every client of a pageOnly frame, gets a page, and only then is the shell read. The GET that
+// refusedOnItsPage runs gets the entity itself (caught). The answer is held whole before its first byte, so a fault
+// found while it is made can still answer 500. A failed write is logged: the client went away, and nothing else can
+// be done.
+func answer(w http.ResponseWriter, r *http.Request, status int, e *Entity, fr frame) {
+	if c, ok := w.(*caught); ok {
+		c.entity, c.status = e, status
 		return
 	}
-	b, err := sirenJSON(e)
-	if err != nil { // a value that JSON cannot carry (a NaN, an infinity) is a fault of this program
-		e, status = errorEntity(r, fmt.Errorf("the answer cannot be encoded as JSON: %w", err))
-		if b, err = sirenJSON(e); err != nil { // the error entity holds a number and strings only: a defect
-			logFault(r, "the error cannot be encoded as JSON", err)
-			b = nil
-		}
+	typ, b := "application/vnd.siren+json", []byte(nil)
+	if fr.pageOnly || wantsHTML(r) {
+		typ = "text/html; charset=utf-8"
+		status, b = pageAnswer(r, status, e, fr)
+	} else {
+		status, b = sirenAnswer(r, status, e)
 	}
-	w.Header().Set("Content-Type", "application/vnd.siren+json")
+	w.Header().Set("Content-Type", typ)
 	w.WriteHeader(status)
 	if _, err := w.Write(b); err != nil {
 		logFault(r, "the answer was not sent", err)
 	}
 }
 
+// pageAnswer is the status and the HTML of the page of e. When the page cannot be drawn, a defect of this program,
+// the owner reads the cause in the log and a client never does: the page is drawFailed, with 500.
+func pageAnswer(r *http.Request, status int, e *Entity, fr frame) (int, []byte) {
+	f := facts{url: r.URL}
+	if fr.shell != nil {
+		f.shell = shellOf(r.Context(), fr.shell)
+	}
+	if status >= 400 && r.Method == "POST" {
+		f.submitted = r.PostForm.Get("body")
+		if f.submitted == "" {
+			f.submitted = r.PostForm.Get("text")
+		}
+		if ref, err := url.Parse(r.Referer()); err == nil && ref.Host == r.Host && strings.HasPrefix(ref.Path, "/") {
+			f.back = ref.RequestURI()
+		}
+	}
+	v, err := pageView(e, f, fr.refused)
+	var b []byte
+	if err == nil {
+		b, err = htmlOf(v)
+	}
+	if err != nil {
+		logFault(r, "the view "+templateOf(e)+" cannot be drawn", err)
+		return http.StatusInternalServerError, []byte(drawFailed)
+	}
+	return status, b
+}
+
+// sirenAnswer is the status and the Siren JSON of e. A value that JSON cannot carry (a NaN, an infinity) is a fault
+// of this program: the answer is then the error entity of the fault, with 500.
+func sirenAnswer(r *http.Request, status int, e *Entity) (int, []byte) {
+	b, err := sirenJSON(e)
+	if err == nil {
+		return status, b
+	}
+	e, status = errorEntity(r, fmt.Errorf("the answer cannot be encoded as JSON: %w", err))
+	if b, err = sirenJSON(e); err != nil { // the error entity holds a number and strings only: a defect
+		logFault(r, "the error cannot be encoded as JSON", err)
+		return status, nil
+	}
+	return status, b
+}
+
 // sirenJSON is the Siren JSON of e, indented, with no HTML escapes. The answer is held whole before its first byte,
-// as a page is, so a value that JSON cannot carry is found while the status can still be 500. An entity is small: a
-// list is paged, and this writer takes a body in a request of at most maxRequestBody bytes.
+// as a page is. An entity is small: a list is paged, and this writer takes a body in a request of at most
+// maxRequestBody bytes.
 func sirenJSON(e *Entity) ([]byte, error) {
 	var b bytes.Buffer
 	enc := json.NewEncoder(&b)

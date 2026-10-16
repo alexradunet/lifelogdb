@@ -38,7 +38,7 @@ func fonts(w http.ResponseWriter, r *http.Request) {
 // (html/styleguide.html). It is presentation, like /render, and not in the catalog. The template reads nothing from
 // the entity, so the page shows nothing of the database; only the shell around it reads, as for any page.
 func (h *server) styleguide(w http.ResponseWriter, r *http.Request) {
-	h.inShell(w, r, http.StatusOK, &Entity{Class: []string{"styleguide"}, Title: "The style page"})
+	answer(w, r, http.StatusOK, &Entity{Class: []string{"styleguide"}, Title: "The style page"}, frame{shell: h.s, pageOnly: true})
 }
 
 // install serves an embedded file of html/ for a browser's install of the app: the manifest and its icon. The

@@ -59,7 +59,7 @@ func (h *server) render(w http.ResponseWriter, r *http.Request) {
 		body = v.Get("text")
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	renderHTML(w, r, http.StatusOK, &Entity{Class: []string{"preview"}, Title: "Preview", Properties: map[string]any{"body": body}}, nil)
+	answer(w, r, http.StatusOK, &Entity{Class: []string{"preview"}, Title: "Preview", Properties: map[string]any{"body": body}}, frame{pageOnly: true})
 }
 
 // saveBody is the save-body of a page, its body and version filled. Its textarea is as tall as the body, 12 to 40

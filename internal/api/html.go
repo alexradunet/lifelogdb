@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"net/http"
 	"net/url"
 	"regexp"
 	"slices"
@@ -178,51 +177,54 @@ const drawFailed = `<!doctype html>
 <body><p role="alert">This page cannot be drawn. The server's log has the cause.</p><p><a href="/">Home</a></p></body></html>
 `
 
-func renderHTML(w http.ResponseWriter, r *http.Request, status int, e *Entity, sv *shellView) {
+// facts are what a page shows beyond its entity. The one who draws the page reads them from the request and the
+// store: the address the browser asked for, the shell's read and, for an error that answers a form, the text that
+// form sent and the page it came from.
+type facts struct {
+	url       *url.URL   // the address the browser asked for
+	shell     *shellView // the sidebar's read; nil when the page is drawn without it
+	submitted string     // the body (or the text) that a refused form sent
+	back      string     // the page that a refused form came from, when it is a page of this server
+}
+
+// pageView is the view of a page: the entity, the facts of the page and the refusal of a form that the page shows,
+// nil for none. It reads nothing, so the same arguments give the same view. Properties that JSON cannot carry (a
+// NaN, an infinity) are an error, so a page is never drawn with its properties left out.
+func pageView(e *Entity, f facts, rf *refusal) (*view, error) {
 	shape, err := jsonShape(e.Properties)
-	v := &view{Entity: e, Props: shape, Path: r.URL.Path, Here: hereOf(r.URL), Shell: sv, query: r.URL.Query()}
-	if rf, ok := r.Context().Value(refusalKey{}).(*refusal); ok && status < 400 {
-		// This page is the one a refused form came from (refusedOnItsPage): it answers with the form's error.
+	if err != nil {
+		return nil, err
+	}
+	v := &view{Entity: e, Props: shape, Path: f.url.Path, Here: hereOf(f.url), Submitted: f.submitted, Back: f.back,
+		Shell: f.shell, query: f.url.Query()}
+	if rf != nil {
 		props, _ := rf.entity.Properties.(map[string]any)
 		code, _ := props["code"].(string)
 		message, _ := props["message"].(string)
 		words := alertOf(code)
 		v.Refused = &refusedView{Message: message, Words: words.Words, Danger: words.Danger, Href: rf.href}
 		v.Sent = rf.sent
-		status, rf.shown = rf.status, true
-		w.Header().Set("Cache-Control", "no-store")
 	}
-	if status >= 400 && r.Method == "POST" {
-		v.Submitted = r.PostForm.Get("body")
-		if v.Submitted == "" {
-			v.Submitted = r.PostForm.Get("text")
-		}
-		if ref, err := url.Parse(r.Referer()); err == nil && ref.Host == r.Host && strings.HasPrefix(ref.Path, "/") {
-			v.Back = ref.RequestURI()
-		}
-	}
-	name := "generic"
+	return v, nil
+}
+
+// templateOf names the template that draws an entity: the first of its classes that has one, else "generic".
+func templateOf(e *Entity) string {
 	for _, c := range e.Class {
 		if n, ok := viewOf[c]; ok {
-			name = n
-			break
+			return n
 		}
 	}
+	return "generic"
+}
+
+// htmlOf is the page of a view, drawn by the template of its entity's class.
+func htmlOf(v *view) ([]byte, error) {
 	var b bytes.Buffer
-	if err == nil {
-		err = pages.ExecuteTemplate(&b, name, v)
+	if err := pages.ExecuteTemplate(&b, templateOf(v.Entity), v); err != nil {
+		return nil, err
 	}
-	if err != nil { // a defect of this program: the owner reads the cause in the log, a client never does
-		logFault(r, "the view "+name+" cannot be drawn", err)
-		status = http.StatusInternalServerError
-		b.Reset()
-		b.WriteString(drawFailed)
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(status)
-	if _, err := w.Write(b.Bytes()); err != nil {
-		logFault(r, "the page was not sent", err)
-	}
+	return b.Bytes(), nil
 }
 
 // navItems are the sidebar's links, in order, by group: "home" is the brand, "day" the sections of every day (on a
