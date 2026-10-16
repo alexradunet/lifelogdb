@@ -238,7 +238,8 @@ func (x *parityRun) ok(action string, args map[string]string) *api.Entity {
 }
 
 // refused calls an action that must be refused with the status and the code of the error entity, and returns the
-// message of the entity.
+// message of the entity. On each surface other than mcp, the error has the status too (main writes the error of the
+// CLI as "lifelog: 409: ..."). On mcp the error is a tool result: only its text has the status.
 func (x *parityRun) refused(action string, args map[string]string, status int, code string) string {
 	x.t.Helper()
 	e, err := x.call(action, args)
@@ -248,6 +249,9 @@ func (x *parityRun) refused(action string, args map[string]string, status int, c
 	p := props(x.t, e)
 	if fmt.Sprint(p["status"]) != strconv.Itoa(status) || p["code"] != code {
 		x.t.Errorf("%s %v: %v %v (%v), want %d %s", action, args, p["status"], p["code"], p["message"], status, code)
+	}
+	if got := apitest.Status(err); x.surface != "mcp" && got != status {
+		x.t.Errorf("%s %v: the error %q has the status %d, want %d (-1: it is not a *client.Error)", action, args, err, got, status)
 	}
 	return fmt.Sprint(p["message"])
 }
