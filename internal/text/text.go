@@ -99,7 +99,7 @@ func asciiUpper(s string) string {
 // Candidates returns the titles a body names, in order of appearance, valid or not and not de-duplicated.
 func Candidates(body string) []string {
 	var out []string
-	for _, run := range textRuns(body) {
+	for _, run := range textRuns(body, true) {
 		type hit struct {
 			pos   int
 			title string
@@ -166,10 +166,11 @@ func HasEmbed(body, title string) bool {
 	return false
 }
 
-// EmbeddedTitles returns valid rendered embed names before identity resolution.
+// EmbeddedTitles returns valid rendered embed names before identity resolution. The text of a link is not read: a
+// reader draws no embed inside a link, as HTML puts no link inside a link.
 func EmbeddedTitles(body string) []string {
 	var titles []string
-	for _, run := range renderedTextRuns(body) {
+	for _, run := range textRuns(body, false) {
 		for _, m := range wiki.FindAllStringSubmatchIndex(run, -1) {
 			if m[0] == 0 || run[m[0]-1] != '!' {
 				continue
@@ -182,37 +183,6 @@ func EmbeddedTitles(body string) []string {
 		}
 	}
 	return titles
-}
-
-func renderedTextRuns(body string) []string {
-	src := []byte(body)
-	doc := md.Parser().Parse(gtext.NewReader(src))
-	var runs []string
-	var walk func(ast.Node)
-	walk = func(parent ast.Node) {
-		for c := parent.FirstChild(); c != nil; {
-			switch node := c.(type) {
-			case *ast.Link, *ast.Image, *ast.AutoLink, *ast.CodeSpan, *ast.RawHTML,
-				*ast.CodeBlock, *ast.FencedCodeBlock, *ast.HTMLBlock:
-				c = c.NextSibling()
-			case *ast.Text:
-				var raw bytes.Buffer
-				for t := node; t != nil; t, _ = c.(*ast.Text) {
-					raw.Write(t.Segment.Value(src))
-					c = c.NextSibling()
-					if t.SoftLineBreak() || t.HardLineBreak() {
-						break
-					}
-				}
-				runs = append(runs, norm.NFC.String(string(util.ResolveEntityNames(util.ResolveNumericReferences(util.UnescapePunctuations(raw.Bytes()))))))
-			default:
-				walk(c)
-				c = c.NextSibling()
-			}
-		}
-	}
-	walk(doc)
-	return runs
 }
 
 // TagAt reads the #tag that starts s, where prev is the character before it ('\n' at the start of a line), by the
@@ -307,7 +277,9 @@ func runeToByte(s string, pos int) int {
 // textRuns returns the CommonMark text of a body as runs of plain text, each NFC-normalised. A run is a maximal
 // sequence of adjacent text nodes inside one inline container, broken at line breaks and at any other inline
 // (emphasis, code span, link, raw HTML). Code spans, raw HTML, link destinations and image alt text are not read.
-func textRuns(body string) []string {
+// The text of a link is read only with linkText: a wikilink in the text of a link is a link of the graph (the
+// contract's vector `[see [[Diet]]](http://x)`), and an embed there is not drawn (EmbeddedTitles).
+func textRuns(body string, linkText bool) []string {
 	src := []byte(body)
 	doc := md.Parser().Parse(gtext.NewReader(src))
 	var runs []string
@@ -336,6 +308,12 @@ func textRuns(body string) []string {
 			case *ast.CodeSpan, *ast.Image, *ast.RawHTML, *ast.AutoLink,
 				*ast.CodeBlock, *ast.FencedCodeBlock, *ast.HTMLBlock:
 				flush()
+			case *ast.Link:
+				flush()
+				if linkText {
+					walk(c)
+					flush()
+				}
 			default:
 				flush()
 				walk(c)

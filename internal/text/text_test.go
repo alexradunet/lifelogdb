@@ -3,6 +3,7 @@ package text
 import (
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -186,6 +187,7 @@ func TestPhotoEmbedContexts(t *testing.T) {
 		{"~~~\n![[Photo.jpg]]\n~~~", false}, {"[![[Photo.jpg]]](url)", false},
 		{"![![[Photo.jpg]]](url)", false}, {"[[Photo.jpg]]", false},
 		{"![[Photo.jpg]]", true}, {"![[Lake [1].jpg]]", false},
+		{"a\\  \n\\![[Photo.jpg]]", true}, // an escaped '!' is a '!': the embed after a hard line break
 	} {
 		title := "Photo.jpg"
 		if strings.Contains(tc.body, "Lake") {
@@ -193,6 +195,27 @@ func TestPhotoEmbedContexts(t *testing.T) {
 		}
 		if got := HasEmbed(tc.body, title); got != tc.want {
 			t.Errorf("%q: %v", tc.body, got)
+		}
+	}
+}
+
+// TestTheTextOfALinkIsReadForWikilinksOnly: one walk reads the text of a body, and its parameter says whether it
+// reads the text of a Markdown link. A wikilink there is a link of the graph (the contract's vector
+// `[see [[Diet]]](http://x)`). An embed there is not drawn, because HTML puts no link inside a link, so it is not
+// an embed.
+func TestTheTextOfALinkIsReadForWikilinksOnly(t *testing.T) {
+	body := "[see ![[Photo.jpg]]](http://x) and ![[Lake.jpg]]"
+	for _, tc := range []struct {
+		name      string
+		got, want []string
+	}{
+		{"the runs with the text of a link", textRuns(body, true), []string{"see ![[Photo.jpg]]", " and ![[Lake.jpg]]"}},
+		{"the runs without it", textRuns(body, false), []string{" and ![[Lake.jpg]]"}},
+		{"the wikilinks", Candidates(body), []string{"Photo.jpg", "Lake.jpg"}},
+		{"the embeds", EmbeddedTitles(body), []string{"Lake.jpg"}},
+	} {
+		if !slices.Equal(tc.got, tc.want) {
+			t.Errorf("%s of %q: %q, want %q", tc.name, body, tc.got, tc.want)
 		}
 	}
 }
