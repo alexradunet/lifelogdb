@@ -12,6 +12,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"modernc.org/sqlite"
 )
 
 func TestSchemaCopyIsCurrent(t *testing.T) {
@@ -572,5 +574,72 @@ func TestSnapshotDestinationErrors(t *testing.T) {
 	}
 	if !bytes.Equal(before, after) {
 		t.Error("destination error changed source")
+	}
+}
+
+// TestWriteReportsAFailedRollback: when fn fails and the rollback fails too, Write returns both errors. The caller
+// then knows that the transaction was not rolled back. Here fn commits by itself before it fails, so the rollback
+// finds no open transaction.
+func TestWriteReportsAFailedRollback(t *testing.T) {
+	d := Fresh(t)
+	failed := errors.New("fn failed")
+	err := d.Write(t.Context(), func(tx *sql.Tx) error {
+		if _, err := tx.Exec("COMMIT"); err != nil {
+			return err
+		}
+		return failed
+	})
+	var rollback *sqlite.Error
+	if !errors.Is(err, failed) || !errors.As(err, &rollback) {
+		t.Fatalf("Write = %v, want the error of fn and the SQLite error of the rollback", err)
+	}
+	if err := d.Write(t.Context(), func(*sql.Tx) error { return nil }); err != nil {
+		t.Errorf("the writer is not usable after the failed rollback: %v", err)
+	}
+}
+
+// TestCancelledWriteReportsOnlyTheCancellation: when the context is cancelled, database/sql rolls the transaction
+// back. Write's own rollback then finds it done, and that is not a failure to report.
+func TestCancelledWriteReportsOnlyTheCancellation(t *testing.T) {
+	d := Fresh(t)
+	opCtx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	err := d.Write(opCtx, func(tx *sql.Tx) error {
+		cancel()
+		// Wait until database/sql has rolled the transaction back.
+		for {
+			_, err := tx.ExecContext(context.Background(), "SELECT 1")
+			if errors.Is(err, sql.ErrTxDone) {
+				return opCtx.Err()
+			}
+			if err != nil {
+				return err
+			}
+		}
+	})
+	if !errors.Is(err, context.Canceled) || errors.Is(err, sql.ErrTxDone) {
+		t.Errorf("Write = %v, want the cancellation alone", err)
+	}
+}
+
+// TestCloseReportsAFailedOptimize: Close returns the error of PRAGMA optimize, and it still closes the readers.
+func TestCloseReportsAFailedOptimize(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "life.db")
+	if err := Init(t.Context(), p); err != nil {
+		t.Fatal(err)
+	}
+	d, err := Open(t.Context(), p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Deliberate damage: with the writer closed first, PRAGMA optimize cannot run.
+	if err := d.W.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Close(); err == nil {
+		t.Error("Close = nil, want the error of PRAGMA optimize")
+	}
+	if err := d.R.PingContext(t.Context()); err == nil {
+		t.Error("the readers are open after Close")
 	}
 }

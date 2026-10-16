@@ -275,21 +275,32 @@ func removeReservedDatabasePath(path string, reserved os.FileInfo) error {
 	return nil
 }
 
+// Close runs PRAGMA optimize on the writer, except on a snapshot under its restore check, and then closes the
+// readers and the writer. It closes them also when the optimize fails, and returns every error. Close has no
+// caller's context: it runs at the end, often after a signal cancelled the operation's context, and the optimize
+// must run then too. busy_timeout limits its wait for the lock.
 func (d *DB) Close() error {
+	var optimize error
 	if !d.keep {
-		d.W.Exec("PRAGMA optimize")
+		if _, err := d.W.ExecContext(context.Background(), "PRAGMA optimize"); err != nil {
+			optimize = fmt.Errorf("PRAGMA optimize: %w", err)
+		}
 	}
-	return errors.Join(d.R.Close(), d.W.Close())
+	return errors.Join(optimize, d.R.Close(), d.W.Close())
 }
 
-// Write runs fn in one BEGIN IMMEDIATE transaction, committed when fn returns nil.
+// Write runs fn in one BEGIN IMMEDIATE transaction, committed when fn returns nil. When fn fails and the rollback
+// fails too, Write returns both errors: the transaction can then still be open, or kept in part.
 func (d *DB) Write(ctx context.Context, fn func(*sql.Tx) error) error {
 	tx, err := d.W.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	if err := fn(tx); err != nil {
-		tx.Rollback()
+		// ErrTxDone: database/sql rolled the transaction back already, because ctx was cancelled.
+		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+			return errors.Join(err, fmt.Errorf("rollback: %w", rerr))
+		}
 		return err
 	}
 	return tx.Commit()
