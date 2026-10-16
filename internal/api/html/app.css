@@ -505,7 +505,7 @@ dialog.palette{inline-size:min(36rem, calc(100vw - 2rem)); max-block-size:min(32
   & ul.rows>li{border-block-end:1px solid var(--line-soft);
     &:last-child{border-block-end:0}}
   & .entry{border-block-end:0}}
-.due-group{display:flex; flex-direction:column; padding-block:var(--space-4);
+.result-group{display:flex; flex-direction:column; padding-block:var(--space-4);
   &>.panel-head{margin-block-end:var(--space-2);
     & :is(h2,h3){font-size:18px; line-height:24px}
     & .meta{font-size:13px; flex:none}}
