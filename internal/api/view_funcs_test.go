@@ -261,3 +261,37 @@ func TestWeeksStartOnMonday(t *testing.T) {
 		t.Error("no day makes weeks")
 	}
 }
+
+// TestAPageComparesADayWithTheTodayOfItsWords: Today is the shell's today, the one that the view's words use, and ""
+// for a page with no shell. A page compares a day with it, not with the today of its entity: here the entity says
+// that today is 15 October and the shell says 16 October, so the page of 16 October is today's page.
+func TestAPageComparesADayWithTheTodayOfItsWords(t *testing.T) {
+	shell := &shellView{Today: "2026-10-16", Zone: time.UTC}
+	for _, c := range []struct {
+		shell *shellView
+		want  string
+	}{{nil, ""}, {shell, "2026-10-16"}} {
+		if got := (&view{Shell: c.shell}).Today(); got != c.want {
+			t.Errorf("Today with the shell %+v: %q, want %q", c.shell, got, c.want)
+		}
+	}
+	u, err := url.Parse("/days/2026-10-16")
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := &Entity{Class: []string{"day"}, Title: "2026-10-16", Properties: map[string]any{"day": "2026-10-16", "today": "2026-10-15", "view": []any{}}}
+	v, err := pageView(e, facts{url: u, shell: shell}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := htmlOf(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(b)
+	for _, want := range []string{`<span class="tag open">today</span>`, "Nothing written today yet.", `<span class="date">Fri 16 Oct</span>`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the page of today lacks %s", want)
+		}
+	}
+}

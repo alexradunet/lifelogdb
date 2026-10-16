@@ -25,7 +25,7 @@
      search, n New, t Today, c the capture, [ and ] the previous and next page) are the browser's own, with its
      modifier. */}}
 {{define "rail"}}{{$nav := .Nav}}{{$elsewhere := false}}{{range $nav}}{{if and .Current (eq .Group "owner")}}{{$elsewhere = true}}{{end}}{{end}}<aside class="rail">
-<div class="rail-head">{{range $nav}}{{if eq .Group "home"}}<a class="brand" href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}>{{.Title}}</a>{{end}}{{end}}{{with .Shell.Today}}<span class="date">{{shortDay .}}</span>{{end}}
+<div class="rail-head">{{range $nav}}{{if eq .Group "home"}}<a class="brand" href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}>{{.Title}}</a>{{end}}{{end}}{{with .Today}}<span class="date">{{shortDay .}}</span>{{end}}
 <button type="button" class="rail-search-link button" commandfor="palette" command="show-modal" aria-label="Search">{{icon "search"}}</button></div>
 <search><form class="rail-search" method="GET" action="/search">{{icon "search"}}<input type="search" name="q" placeholder="Search" aria-label="Search" accesskey="k"><kbd title="The access key k, with the browser's modifier, is the search">k</kbd></form></search>
 <button type="button" class="button primary rail-new" popovertarget="new-menu" accesskey="n">{{icon "new"}}New</button>

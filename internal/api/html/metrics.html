@@ -28,7 +28,7 @@
      links and its other actions. In a browser, the metric's page (/pages/{id}) opens this one. */}}
 {{define "metric"}}{{template "head" .}}
 {{$s := .Props}}{{$r := .MetricReadings}}
-{{$today := ""}}{{with .Shell}}{{$today = .Today}}{{end}}{{$unit := ""}}{{with $s.unit}}{{$unit = .}}{{end}}
+{{$unit := ""}}{{with $s.unit}}{{$unit = .}}{{end}}
 <header class="page-head"><div class="what"><span class="kind">metric</span><h1>{{.Title}}</h1>
 {{template "categories" (dict "v" $ "links" $s.links "back" $.Here)}}
 <p class="sub">{{if not $s.all_history}}<a href="{{.Link "all-readings"}}">All readings</a>{{end}}<a href="/metrics">Every metric</a></p></div>
@@ -43,7 +43,7 @@
 
 <section class="readings-all" aria-label="Readings">
 <div class="panel-head"><h2>Readings</h2><span class="meta">{{len $s.readings}}</span></div>
-{{if or (not $s.all_history) (ne $s.to $today)}}<p class="desc">{{if not $s.all_history}}{{$.Date $s.from}} to {{$.Date $s.to}}.{{else}}All history through {{$.Date $s.to}}.{{end}}</p>{{end}}
+{{if or (not $s.all_history) (ne $s.to $.Today)}}<p class="desc">{{if not $s.all_history}}{{$.Date $s.from}} to {{$.Date $s.to}}.{{else}}All history through {{$.Date $s.to}}.{{end}}</p>{{end}}
 {{if $s.readings}}{{chart $s.from $s.to $s.readings}}{{end}}
 {{range $r.Years}}{{$year := .Year}}<details class="readings-year"{{if .Open}} open{{end}}><summary><span class="year-name">{{.Year}}</span> <span class="meta">{{.Summary}}</span></summary>
 {{template "readings" (dict "v" $ "r" $r "s" $s "rows" .Rows)}}
@@ -107,7 +107,7 @@
 {{if .Measurement}}<a class="reading" href="/measurements/{{.Measurement}}">{{.Value}}{{with .Unit}} <span class="unit">{{.}}</span>{{end}}</a>
 {{.Line}}{{else}}<span class="reading none"><span aria-hidden="true">–</span>{{with .Unit}} <span class="unit">{{.}}</span>{{end}}</span><span class="line-none" aria-hidden="true"></span>{{end}}
 <div class="card-foot">{{if .Measurement}}<time class="meta" datetime="{{.Day}}" title="{{.When}}{{if gt .Count 1}} · {{.Count}} readings{{end}}">{{.Short}}</time>{{else}}<span class="meta">No reading</span>{{end}}
-{{template "add-reading" (dict "action" ($v.Action "record") "metric" .Name "unit" .Unit "day" $v.Props.today "today" $v.Props.today "back" $v.Here)}}</div>
+{{template "add-reading" (dict "action" ($v.Action "record") "metric" .Name "unit" .Unit "day" $v.Props.today "today" $v.Today "back" $v.Here)}}</div>
 </div>{{end}}</div>{{end}}
 
 {{/* metric-rows is the metrics of a group as one row each (?view=list): the box, the name, the latest value with its
@@ -116,7 +116,7 @@
 {{if $file}}<label class="pick-box"><input type="checkbox" name="ids" value="{{.ID}}" form="pick" aria-label="Select {{.Name}}"></label>{{end}}
 <a class="name" href="{{.Href}}"{{with .Note}} title="{{.}}"{{end}}>{{.Name}}</a>
 {{if .Measurement}}<a class="reading" href="/measurements/{{.Measurement}}">{{.Value}}{{with .Unit}} <span class="unit">{{.}}</span>{{end}}</a><span class="meta">{{.When}}</span><span class="line">{{.Line}}</span>{{else}}<span class="meta none">No reading yet{{with .Unit}} · {{.}}{{end}}</span>{{end}}
-{{template "add-reading" (dict "action" ($v.Action "record") "metric" .Name "unit" .Unit "day" $v.Props.today "today" $v.Props.today "back" $v.Here)}}
+{{template "add-reading" (dict "action" ($v.Action "record") "metric" .Name "unit" .Unit "day" $v.Props.today "today" $v.Today "back" $v.Here)}}
 </li>{{end}}</ul>{{end}}
 
 {{/* new-here is the link under a category's heading to New metric, with the category filled in */}}

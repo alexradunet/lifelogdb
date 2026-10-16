@@ -4,7 +4,7 @@
      day asks of the owner: the readings (with Add a reading) and the places. On a narrow screen
      the margin comes after the sheet. */}}
 {{define "day"}}{{template "head" .}}
-{{$d := .Props}}{{$today := eq .Title $d.today}}
+{{$d := .Props}}{{$today := eq .Title .Today}}
 <header class="page-head day-head">
 <div class="day-title">{{template "leaf" .Title}}
 <div class="what"><h1>{{weekday .Title}}{{template "mood" $d.mood}}</h1>
@@ -46,10 +46,10 @@
 
 {{if or $d.readings (.Action "record")}}<section class="group" aria-label="Readings">
 <div class="panel-head"><h2>Readings</h2><a href="/metrics">Metrics</a></div>
-{{$today := ""}}{{with $.Shell}}{{$today = .Today}}{{end}}{{with $.ReadingTiles}}<div class="readings">{{range .}}<div class="reading-tile"><a class="name" href="/metrics/{{pathesc .Metric}}">{{.Metric}}</a>
+{{with $.ReadingTiles}}<div class="readings">{{range .}}<div class="reading-tile"><a class="name" href="/metrics/{{pathesc .Metric}}">{{.Metric}}</a>
 <a class="reading" href="/measurements/{{.ID}}">{{.Value}}{{with .Unit}} <span class="unit">{{.}}</span>{{end}}</a>
 {{.Line}}{{with .More}}<span class="meta">and {{.}} more this day</span>{{end}}
-{{template "add-reading" (dict "action" ($.Action "record") "metric" .Metric "unit" .Unit "day" $d.day "today" $today "back" $.Here)}}</div>{{end}}</div>{{end}}
+{{template "add-reading" (dict "action" ($.Action "record") "metric" .Metric "unit" .Unit "day" $d.day "today" $.Today "back" $.Here)}}</div>{{end}}</div>{{end}}
 {{if not $d.readings}}<p class="empty">No readings on this day. <a href="#record">Add one</a> below.</p>{{end}}
 <div id="record">{{template "boxed" (form (.Action "record") "more" "taken_at,tz,import_key")}}</div>
 </section>{{end}}

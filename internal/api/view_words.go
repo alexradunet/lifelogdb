@@ -223,6 +223,11 @@ func (v *view) clock() clock {
 	return clock{today: v.Shell.Today, zone: v.Shell.Zone}
 }
 
+// Today is the day that the server reads as today for this page: the today of the view's words and of the sidebar,
+// "" for a page with no shell. A template compares a day with today through it. The property today of a resource is
+// for a JSON client; a template reads it only as data (a link, the day of a form).
+func (v *view) Today() string { return v.clock().today }
+
 // When is a day or an instant of the entity in words, in its <time> element.
 func (v *view) When(x any) template.HTML {
 	s, _ := x.(string)

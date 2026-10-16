@@ -14,7 +14,7 @@
 <div class="sheet">
 <section aria-label="The days">
 <div class="panel-head"><h2>The days</h2></div>
-<ul class="plain">{{range $w.days}}<li><a class="entry{{if not .page}} unwritten{{end}}" href="/days/{{.day}}"><span class="date">{{shortDay .day}}</span>{{if .page}}<span class="first">{{with .first_line}}{{.}}{{else}}no text{{end}}</span>{{else}}<span class="first"></span><span class="meta">{{if gt .day $w.today}}not yet{{else}}nothing written{{end}}</span>{{end}}{{with .mood}}<span class="meta">{{template "moodwords" .}}</span>{{end}}</a></li>{{end}}</ul>
+<ul class="plain">{{range $w.days}}<li><a class="entry{{if not .page}} unwritten{{end}}" href="/days/{{.day}}"><span class="date">{{shortDay .day}}</span>{{if .page}}<span class="first">{{with .first_line}}{{.}}{{else}}no text{{end}}</span>{{else}}<span class="first"></span><span class="meta">{{if gt .day $.Today}}not yet{{else}}nothing written{{end}}</span>{{end}}{{with .mood}}<span class="meta">{{template "moodwords" .}}</span>{{end}}</a></li>{{end}}</ul>
 </section>
 </div>
 
