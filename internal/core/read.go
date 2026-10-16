@@ -547,19 +547,9 @@ func (s *Store) series(ctx context.Context, metric, from, to string) ([]Reading,
 	return s.readings(ctx, predicate+` ORDER BY me.day,me.taken_at,me.id`, args...)
 }
 
-// ReadingsCount is how many current readings fall on the days from through through, both included:
-// the readings that Series gives, for all metrics. A corrected reading counts once, and a retracted one not at all.
-func (s *Store) ReadingsCount(ctx context.Context, from, through string) (int, error) {
-	if err := checkWindow(from, through); err != nil {
-		return 0, err
-	}
-	var n int
-	err := s.DB.R.QueryRowContext(ctx, `SELECT count(*) FROM measurement_values WHERE day BETWEEN ? AND ?`, from, through).Scan(&n)
-	return n, err
-}
-
-// ReadingsByDay counts the readings of ReadingsCount for each day from from through through; a day without one is
-// absent.
+// ReadingsByDay counts the current readings of each day from from through through, both included: the readings
+// that Series gives, for all metrics. A corrected reading counts once, and a retracted one not at all. A day without
+// one is absent.
 func (s *Store) ReadingsByDay(ctx context.Context, from, through string) (map[string]int, error) {
 	if err := checkWindow(from, through); err != nil {
 		return nil, err

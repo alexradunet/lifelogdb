@@ -166,9 +166,13 @@ func (h *server) year(r *http.Request) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	readings, err := h.s.ReadingsCount(ctx, from, through)
+	byDay, err := h.s.ReadingsByDay(ctx, from, through)
 	if err != nil {
 		return nil, err
+	}
+	readings := 0
+	for _, n := range byDay {
+		readings += n
 	}
 	written := map[string]bool{}
 	for _, d := range entries {

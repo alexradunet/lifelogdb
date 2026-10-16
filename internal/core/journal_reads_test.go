@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -247,9 +248,10 @@ func TestTitlesByPrefixFoldsLikeATitleKey(t *testing.T) {
 	}
 }
 
-// TestReadingsCountCountsTheCurrentReadingsOfAWindow: three weight readings, one of them corrected, and a steps
-// reading. A correction replaces its reading, so it counts once. The bounds are both included.
-func TestReadingsCountCountsTheCurrentReadingsOfAWindow(t *testing.T) {
+// TestReadingsByDayCountsTheCurrentReadingsOfAWindow: three weight readings, one of them corrected, and a steps
+// reading, of all metrics together. A correction replaces its reading, so its day counts it once. The bounds are both
+// included. A sum of the counts is the count of the window that the year page shows.
+func TestReadingsByDayCountsTheCurrentReadingsOfAWindow(t *testing.T) {
 	s := fresh(t)
 	for name, unit := range map[string]string{"weight": "kg", "steps": "n"} {
 		if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: name, Unit: unit}); err != nil {
@@ -273,17 +275,18 @@ func TestReadingsCountCountsTheCurrentReadingsOfAWindow(t *testing.T) {
 	}
 	for _, tc := range []struct {
 		from, through string
-		want          int
+		want          string
 	}{
-		{"2026-10-01", "2026-10-31", 4}, {"2026-10-05", "2026-10-06", 2}, {"2026-10-01", "2026-10-01", 1},
-		{"2026-10-02", "2026-10-04", 0}, {"2026-09-01", "2026-09-30", 0},
+		{"2026-10-01", "2026-10-31", "map[2026-10-01:1 2026-10-05:1 2026-10-06:1 2026-10-09:1]"},
+		{"2026-10-05", "2026-10-06", "map[2026-10-05:1 2026-10-06:1]"}, {"2026-10-01", "2026-10-01", "map[2026-10-01:1]"},
+		{"2026-10-02", "2026-10-04", "map[]"}, {"2026-09-01", "2026-09-30", "map[]"},
 	} {
-		got, err := s.ReadingsCount(ctx, tc.from, tc.through)
-		if err != nil || got != tc.want {
-			t.Errorf("ReadingsCount(%s, %s) = %d, %v; want %d", tc.from, tc.through, got, err, tc.want)
+		got, err := s.ReadingsByDay(ctx, tc.from, tc.through)
+		if err != nil || fmt.Sprint(got) != tc.want {
+			t.Errorf("ReadingsByDay(%s, %s) = %v, %v; want %s", tc.from, tc.through, got, err, tc.want)
 		}
 	}
-	if _, err := s.ReadingsCount(ctx, "2026-10-09", "2026-10-01"); status(err) != 422 {
+	if _, err := s.ReadingsByDay(ctx, "2026-10-09", "2026-10-01"); status(err) != 422 {
 		t.Errorf("a reversed window: %v", err)
 	}
 }
