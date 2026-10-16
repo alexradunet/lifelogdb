@@ -130,9 +130,9 @@ func TestCommandCancellation(t *testing.T) {
 // lifelog init PATH makes the file at PATH, whatever $LIFELOG_DB names; --db beats PATH, and both together are a
 // mistake, refused before anything is written (docs/plans/098-the-codebase-made-cohesive.md).
 func TestInitHonoursThePathWhenTheEnvironmentNamesAnother(t *testing.T) {
-	env := filepath.Join(t.TempDir(), "env.db")
+	named := filepath.Join(t.TempDir(), "env.db")
 	e, _, _ := testEnv(t)
-	e.getenv = func(name string) string { return map[string]string{"LIFELOG_DB": env}[name] }
+	e.getenv = func(name string) string { return map[string]string{"LIFELOG_DB": named}[name] }
 	given := filepath.Join(t.TempDir(), "given.db")
 	if err := runArgs(t.Context(), e, []string{"init", given}); err != nil {
 		t.Fatalf("init PATH: %v", err)
@@ -140,8 +140,8 @@ func TestInitHonoursThePathWhenTheEnvironmentNamesAnother(t *testing.T) {
 	if _, err := os.Stat(given); err != nil {
 		t.Errorf("init PATH did not make %s: %v", given, err)
 	}
-	if _, err := os.Stat(env); err == nil {
-		t.Errorf("init PATH made the file $LIFELOG_DB names, %s", env)
+	if _, err := os.Stat(named); err == nil {
+		t.Errorf("init PATH made the file $LIFELOG_DB names, %s", named)
 	}
 
 	other := filepath.Join(t.TempDir(), "other.db")
