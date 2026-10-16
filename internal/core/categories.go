@@ -88,15 +88,25 @@ func (t *Tx) filePages(ids []int64, category string, move bool) (Filed, error) {
 	if err := checkTitle("category", category); err != nil {
 		return Filed{}, err
 	}
-	cat, created, err := t.pageForTitle(category)
-	if err != nil {
+	// a missing category is made as an empty page, like the target of a wikilink, and like it with no day, so it is
+	// not an entry of the day it was made on
+	var cat int64
+	have, err := t.lookup(category)
+	switch {
+	case err != nil:
 		return Filed{}, err
+	case have != nil:
+		cat = have.ID
+	default:
+		if cat, _, err = t.insertPage("page", category, text.TitleKey(category), nil, "", ""); err != nil {
+			return Filed{}, err
+		}
 	}
 	p, err := t.livePage(cat)
 	if err != nil {
 		return Filed{}, err
 	}
-	f := Filed{Category: Category{ID: cat, Title: p.Title}, Created: created}
+	f := Filed{Category: Category{ID: cat, Title: p.Title}, Created: have == nil}
 	for _, id := range ids {
 		if _, err := t.livePage(id); err != nil {
 			return Filed{}, err
@@ -121,7 +131,7 @@ func (t *Tx) filePages(ids []int64, category string, move bool) (Filed, error) {
 }
 
 // FilePages files every page named in the category page titled category, in one write (D26): a part-of link from
-// each. A missing category is made as an empty page, as PageForTitle makes it. With move, every other
+// each. A missing category is made as an empty page with no day. With move, every other
 // part-of link of those pages is removed first. A page or a category that is not live is refused as livePage says;
 // that writes nothing. What the links registry refuses (a day page as a category, or filed in one) is
 // links_endpoint_types.

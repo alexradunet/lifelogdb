@@ -32,9 +32,6 @@ func (t *Tx) SetBody(id int64, body string) (Sync, error) {
 // CreatePage creates a page written on purpose; day is the day it was written ("" = today). A title that is a
 // day makes that day's page. With an importKey, a page the key already names is returned with existing = true.
 func (t *Tx) CreatePage(title, body, day, importKey string) (id int64, existing bool, r Sync, err error) {
-	if err := checkTitle("title", title); err != nil {
-		return 0, false, r, err
-	}
 	switch {
 	case IsDay(title):
 		day = title
@@ -46,24 +43,6 @@ func (t *Tx) CreatePage(title, body, day, importKey string) (id int64, existing 
 	}
 	r, err = t.syncWikilinks(id, body)
 	return id, false, r, err
-}
-
-// pageForTitle is the id of the page that holds a title, made as an empty page when no page has it: the category a
-// filing names by its title (see FilePages), like the target of a wikilink, and like it with no day, so it is not an entry of the day it
-// was made on. A tombstoned page keeps its id and its tombstone.
-func (t *Tx) pageForTitle(title string) (id int64, created bool, err error) {
-	if err := checkTitle("project", title); err != nil {
-		return 0, false, err
-	}
-	p, err := t.lookup(title)
-	if err != nil {
-		return 0, false, err
-	}
-	if p != nil {
-		return p.ID, false, nil
-	}
-	id, _, err = t.insertPage("page", title, text.TitleKey(title), nil, "", "")
-	return id, err == nil, err
 }
 
 // CreatePerson and CreatePlace are cookbook/person-or-place.md's create: one id, a page, and for a person a
@@ -87,7 +66,7 @@ func (t *Tx) CreatePlace(title, importKey string) (int64, bool, error) {
 // (lifelog_meta.edit_revisions). The caller syncs the body's wikilinks once the typed row exists.
 // createNamed is one entity with its page: a title no live page has (a sender's key finds the row an earlier send
 // made, and writes nothing), its row in entities and entity_names, and extra for its typed row. day is a day page's
-// day, nil for every other page.
+// day, nil for every other page. It is the one check of the title for CreatePage, CreatePerson and CreatePlace.
 func (t *Tx) createNamed(typ, title, body string, day any, importKey string, extra func(int64) error) (int64, bool, error) {
 	if err := checkTitle("title", title); err != nil {
 		return 0, false, err
