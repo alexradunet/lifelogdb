@@ -1,6 +1,8 @@
 package api_test
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"regexp"
 	"strings"
 	"testing"
@@ -145,6 +147,50 @@ func TestTheKeysAreInThePage(t *testing.T) {
 	} {
 		if !strings.Contains(day, want) {
 			t.Errorf("the day lacks %s", want)
+		}
+	}
+}
+
+// TestTheSidebarHasMetricsAndBrowse: the sections of every day are Today, Calendar, Metrics and Browse, in the rail
+// of a desktop and in the bottom bar of a phone (one list, which the sheet does not repeat); there is no group of
+// the record. Browse is marked on every list of Browse, Metrics on the board and under it.
+func TestTheSidebarHasMetricsAndBrowse(t *testing.T) {
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "register-metric"), map[string]string{"name": "Weight", "unit": "kg"}))
+	sections := regexp.MustCompile(`(?s)<nav aria-label="Sections">(.*?)</nav>`)
+	entry := regexp.MustCompile(`<a href="([^"]+)"( aria-current="page")?[^>]*><svg class="icon"[^>]*>.*?</svg>([^<]+)</a>`)
+	for path, current := range map[string]string{
+		"/browse": "Browse", "/browse?kind=person": "Browse", "/browse?ghosts=1": "Browse", "/metrics": "Metrics",
+		"/metrics/Weight": "Metrics", "/days/" + fixedToday: "Today", "/months/2031-05": "Calendar", "/search": "",
+	} {
+		req := httptest.NewRequest("GET", path, nil)
+		req.Header.Set("Accept", "text/html")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		body := rec.Body.String()
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s: %d", path, rec.Code)
+		}
+		bar := sections.FindStringSubmatch(body)
+		if bar == nil {
+			t.Errorf("%s: no sections:\n%s", path, sidebar(body))
+			continue
+		}
+		var got, marked []string
+		for _, m := range entry.FindAllStringSubmatch(bar[1], -1) {
+			got = append(got, m[3]+"="+m[1])
+			if m[2] != "" {
+				marked = append(marked, m[3])
+			}
+		}
+		if want := "Today=/days/today Calendar=/months/current Metrics=/metrics Browse=/browse"; strings.Join(got, " ") != want {
+			t.Errorf("%s: the sections are %v, want %s", path, got, want)
+		}
+		if strings.Join(marked, " ") != current {
+			t.Errorf("%s marks %v, want %q", path, marked, current)
+		}
+		if strings.Contains(body, `aria-label="The record"`) || strings.Count(sidebar(body), `href="/browse"`) != 1 {
+			t.Errorf("%s: the rail has a group of the record, or a second link to Browse", path)
 		}
 	}
 }

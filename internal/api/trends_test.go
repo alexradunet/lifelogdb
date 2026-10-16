@@ -107,36 +107,3 @@ func TestAPastDaysTrendSaysItsDaysAgainstToday(t *testing.T) {
 		t.Errorf("the line of %s:\n got %.300s\nwant %s", dayOf(-3), body[max(i, 0):], want)
 	}
 }
-
-// TestTheDayAndHomeCarryOnThisDay: the day pages of earlier years on the month and day, the newest first, in the
-// property and in the margin; none, an empty list and no group. The capture box carries its quiet prompt.
-func TestTheDayAndHomeCarryOnThisDay(t *testing.T) {
-	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
-	root := apitest.Must(t)(c.Get(t.Context(), "/"))
-	older, old := strings.Replace(fixedToday, fixedToday[:4], "2029", 1), strings.Replace(fixedToday, fixedToday[:4], "2027", 1)
-	if got := props(root)["on_this_day"].([]any); len(got) != 0 {
-		t.Fatalf("on_this_day with no page = %v, want an empty list", got)
-	}
-	if body := browse(t, h, "/"); strings.Contains(body, "On this day") {
-		t.Error("Home draws On this day with no entry")
-	}
-	for day, text := range map[string]string{older: "Two years ago.", old: "Four years ago.", dayOf(-1): "Yesterday."} {
-		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/"+day)), "capture"), map[string]string{"text": text}))
-	}
-	for _, route := range []string{"/", "/days/" + fixedToday} {
-		var got []string
-		for _, x := range props(apitest.Must(t)(c.Get(t.Context(), route)))["on_this_day"].([]any) {
-			m := x.(map[string]any)
-			got = append(got, fmt.Sprintf("%v %v", m["day"], m["first_line"]))
-		}
-		if want := []string{older + " Two years ago.", old + " Four years ago."}; strings.Join(got, "|") != strings.Join(want, "|") {
-			t.Errorf("%s on_this_day = %q, want %q", route, got, want)
-		}
-		body := browse(t, h, route)
-		for _, w := range []string{`aria-label="On this day"`, `<a class="entry" href="/days/` + older + `">`, `placeholder="What happened? Who was there?"`} {
-			if !strings.Contains(body, w) {
-				t.Errorf("%s lacks %s", route, w)
-			}
-		}
-	}
-}

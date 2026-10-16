@@ -4,8 +4,10 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -638,5 +640,164 @@ func TestALongBrowseListHasALetterBar(t *testing.T) {
 	body = browse(t, h, "/browse")
 	if !strings.Contains(body, `<div class="letter-groups closed"><details class="letter"><summary>`) || strings.Contains(body, `class="kinds letters"`) {
 		t.Error("101 rows: the groups are not a closed index, or the page has a letter bar")
+	}
+}
+
+// The category tree of Browse (docs/plans/117-one-browse-view.md, rule 3): the categories by path with a count each,
+// beside the list, and Not filed at its end.
+
+func TestBrowseDrawsTheTreeAndTheUnfiledPages(t *testing.T) {
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
+	ctx := t.Context()
+	root := apitest.Must(t)(c.Get(ctx, "/"))
+	ids := map[string]string{}
+	for _, title := range []string{"Japan 2031", "Alps 2030", "Loose note", "Gone"} {
+		ids[title] = fmt.Sprint(props(apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": title})))["id"])
+	}
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "capture"), map[string]string{"text": "a day"}))
+	file := func(id, category string) {
+		t.Helper()
+		apitest.Must(t)(c.Do(ctx, apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/pages/"+id)), "file-pages"), map[string]string{"category": category}))
+	}
+	file(ids["Japan 2031"], "Travel")
+	file(ids["Alps 2030"], "Travel")
+	file(ids["Gone"], "Travel")
+	travel := fmt.Sprint(props(apitest.Must(t)(c.Get(ctx, "/pages?title=Travel")))["id"])
+	file(travel, "Life")
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/pages/"+ids["Gone"])), "tombstone"), nil))
+
+	e := apitest.Must(t)(c.Get(ctx, "/browse?unfiled=1"))
+	var tree []string
+	for _, x := range props(e)["categories"].([]any) {
+		c := x.(map[string]any)
+		tree = append(tree, fmt.Sprintf("%s=%v", c["path"], c["count"]))
+	}
+	// Life holds Travel; Travel holds the two live pages, not the tombstone.
+	if want := "Life=1 Life/Travel=2"; strings.Join(tree, " ") != want {
+		t.Errorf("tree: %v, want %s", tree, want)
+	}
+	// Not filed: not a category (Life), not a filed page, not a day page, not a tombstone.
+	var links []string
+	for _, l := range e.Entities {
+		links = append(links, strings.Join(l.Rel, "+")+":"+l.Title)
+	}
+	if want := "item:Loose note category:Life category:Travel"; strings.Join(links, " ") != want {
+		t.Errorf("links: %v, want %s", links, want)
+	}
+
+	body := browse(t, h, "/browse?unfiled=1")
+	rows := regexp.MustCompile(`<li(?: class="branch")?><a class="entry" href="/browse\?in=(\w+)"><span class="first">([^<]*)</span><span class="meta">(\d+)</span></a>`).FindAllStringSubmatch(body, -1)
+	var got []string
+	for _, r := range rows {
+		got = append(got, r[2]+"="+r[3])
+	}
+	// The tree is drawn twice: beside the list, and in the fold a phone shows.
+	if want := "Life=1 Travel=2 Life=1 Travel=2"; strings.Join(got, " ") != want {
+		t.Errorf("tree rows: %v, want %s", got, want)
+	}
+	// Travel is in the fold of Life (docs/plans/118-fold-and-find.md, rule 1), closed: the list is not on either.
+	if want := `<li class="branch"><a class="entry" href="/browse?in=Life"><span class="first">Life</span><span class="meta">1</span></a><details><summary><span class="sr">Categories in Life</span></summary><ul class="plain rows tree"><li><a class="entry" href="/browse?in=Travel">`; strings.Count(body, want) != 2 {
+		t.Errorf("the tree does not hold Travel in the closed fold of Life")
+	}
+	if !strings.Contains(body, `<a class="entry" href="/browse?unfiled=1" aria-current="page"><span class="first">Not filed</span>`) ||
+		!strings.Contains(body, `href="/pages/`+ids["Loose note"]+`"><span class="first">Loose note</span>`) {
+		t.Error("Not filed is not marked, or does not list the loose page")
+	}
+	if strings.Contains(body, `<span class="first">Gone</span>`) || strings.Contains(body, `<span class="first">Japan 2031</span>`) {
+		t.Error("Not filed lists a filed page or a tombstone")
+	}
+}
+
+func TestBrowseWithNoCategory(t *testing.T) {
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
+	e := apitest.Must(t)(c.Get(t.Context(), "/browse"))
+	if cs := props(e)["categories"].([]any); len(cs) != 0 {
+		t.Errorf("categories: %v", cs)
+	}
+	body := browse(t, h, "/browse?unfiled=1")
+	tree := regexp.MustCompile(`(?s)<nav class="browse-side panel" aria-label="Categories">(.*?)</nav>`).FindStringSubmatch(body)
+	if tree == nil || strings.Count(tree[1], "<li") != 2 || !strings.Contains(tree[1], "Everything") || !strings.Contains(tree[1], "Not filed") {
+		t.Errorf("an empty tree is not Everything and Not filed: %v", tree)
+	}
+	if !strings.Contains(body, `<p class="empty">Everything of this kind is in a category.</p>`) {
+		t.Error("an empty Not filed says nothing")
+	}
+}
+
+// TestTheGhostPagesSayWhatTheyAre: the ghost list of Browse says what a ghost page is under its title, and an empty
+// list says why it is empty, not how to make a page.
+func TestTheGhostPagesSayWhatTheyAre(t *testing.T) {
+	_, h, _ := apitest.FreshOn(t, "cli", fixedToday)
+	body := browse(t, h, "/browse?ghosts=1")
+	for _, want := range []string{`<p class="sub"><span>Ghost pages</span><span>Empty pages, older than 30 days, that nothing links to or from.</span></p>`,
+		`<p class="empty">No ghost page: every page has text or a link.</p>`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the ghost pages lack %s", want)
+		}
+	}
+}
+
+// The navigation of Browse (docs/plans/117-one-browse-view.md, rules 7 and 8): the old lists answer 308 to Browse,
+// Home links Browse, the sidebar has Metrics and Browse beside Today and Calendar, and a category page opens itself
+// in Browse.
+
+func TestTheOldListsAnswer308ToBrowse(t *testing.T) {
+	c, h, _ := apitest.Fresh(t, "cli")
+	// One request for each old list: the address that each one goes to is TestToBrowse's.
+	for _, tc := range []struct{ path, location string }{
+		{"/ghosts", "/browse?ghosts=1&kind=page"},
+		{"/people?limit=3&offset=6", "/browse?kind=person&limit=3&offset=6"},
+		{"/categories?offset=200", "/browse?offset=200"},
+		{"/media?kind=image&limit=10&offset=10", "/browse?kind=media&limit=10&media=image&offset=10"},
+		{"/places?new=create-place", "/browse?kind=place&new=create-place"},
+		{"/files?new=add-file&title=Scan", "/browse?kind=document&new=add-file"}, // only limit, offset and new are kept
+	} {
+		for _, accept := range []string{"application/vnd.siren+json", "text/html"} {
+			req := httptest.NewRequest("GET", tc.path, nil)
+			req.Header.Set("Accept", accept)
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			if rec.Code != http.StatusPermanentRedirect || rec.Header().Get("Location") != tc.location {
+				t.Errorf("GET %s (%s): %d to %q, want 308 to %q", tc.path, accept, rec.Code, rec.Header().Get("Location"), tc.location)
+			}
+		}
+	}
+	// A client follows the redirect, and gets Browse.
+	if e := apitest.Must(t)(c.Get(t.Context(), "/people")); e.Class[0] != "browse" || props(e)["kind"] != "person" {
+		t.Errorf("GET /people followed: %v %v", e.Class, props(e)["kind"])
+	}
+	// The POST routes of the same paths do not change.
+	for _, tc := range []struct{ path, form string }{
+		{"/people", "title=Ana"}, {"/places", "title=Lake"}, {"/files", "title=Scan.pdf&mime=application/pdf&sha256=" + strings.Repeat("ab", 32)},
+	} {
+		req := httptest.NewRequest("POST", tc.path, strings.NewReader(tc.form))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK || !strings.HasPrefix(rec.Header().Get("Location"), "/pages/") {
+			t.Errorf("POST %s: %d %q", tc.path, rec.Code, rec.Header().Get("Location"))
+		}
+	}
+}
+
+func TestHomeLinksTheListsOfBrowse(t *testing.T) {
+	c, h, _ := apitest.Fresh(t, "cli")
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	for rel, want := range map[string]string{
+		"browse": "/browse", "categories": "/browse", "people": "/browse?kind=person", "places": "/browse?kind=place",
+		"media": "/browse?kind=media", "files": "/browse?kind=document", "ghosts": "/browse?ghosts=1&kind=page", "metrics": "/metrics",
+	} {
+		if got := apitest.Href(root, rel); got != want {
+			t.Errorf("Home's %s is %q, want %q", rel, got, want)
+		}
+	}
+	// Every link of Home is served: no link answers a redirect or an error.
+	for _, l := range root.Links {
+		req := httptest.NewRequest("GET", l.Href, nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK && !(l.Href == "/days/today" || strings.HasSuffix(l.Href, "/current")) {
+			t.Errorf("Home's %s (%s): %d", l.Rel[0], l.Href, rec.Code)
+		}
 	}
 }

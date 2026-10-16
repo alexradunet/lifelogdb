@@ -311,3 +311,102 @@ func TestAutomaticEmbedAPIRefusal(t *testing.T) {
 		}
 	}
 }
+
+func TestBrowserMultipartRecoversAcceptedBody(t *testing.T) {
+	for _, kind := range []string{"title", "preview", "overflow", "conflict"} {
+		t.Run(kind, func(t *testing.T) {
+			c, h, _ := apitest.Fresh(t, "cli")
+			if kind == "conflict" {
+				apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "create-place"), map[string]string{"title": "Occupied"}))
+			}
+			var b bytes.Buffer
+			mw := multipart.NewWriter(&b)
+			mw.WriteField("body", "transcript <script> & draft")
+			title := "bad/name"
+			if kind != "title" {
+				title = "Occupied"
+			}
+			mw.WriteField("title", title)
+			mw.WriteField("sha256", strings.Repeat("a", 64))
+			mw.WriteField("mime", "audio/mp4")
+			switch kind {
+			case "preview":
+				p, _ := mw.CreateFormFile("preview", "bad.png")
+				p.Write([]byte("invalid"))
+			case "overflow":
+				mw.WriteField("unknown", strings.Repeat("x", 16<<20))
+			}
+			mw.Close()
+			req := httptest.NewRequest("POST", "/files", &b)
+			req.Header.Set("Content-Type", mw.FormDataContentType())
+			req.Header.Set("Accept", "text/html")
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			if rec.Code < 400 || !strings.Contains(rec.Body.String(), "transcript &lt;script&gt; &amp; draft</textarea>") {
+				t.Fatalf("%s: status %d recovered=%v", kind, rec.Code, strings.Contains(rec.Body.String(), "draft</textarea>"))
+			}
+			if len(apitest.Must(t)(c.Get(t.Context(), "/browse?kind=media")).Entities) != 0 {
+				t.Fatal("wrote file")
+			}
+		})
+	}
+}
+
+func TestPhotoDaySyncJSONAndBrowserReceipt(t *testing.T) {
+	for _, browser := range []bool{false, true} {
+		t.Run(map[bool]string{false: "JSON", true: "browser"}[browser], func(t *testing.T) {
+			c, h, _ := apitest.Fresh(t, "cli")
+			apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "2026-10-04", "body": "[[Old synthetic target]]"}))
+			target := apitest.Must(t)(c.Get(t.Context(), "/pages?title=Old+synthetic+target"))
+			apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, target, "tombstone"), nil))
+			var b bytes.Buffer
+			mw := multipart.NewWriter(&b)
+			for key, value := range map[string]string{"title": "Next synthetic.jpg", "day": "2026-10-04", "body": "[[File synthetic target]]"} {
+				if err := mw.WriteField(key, value); err != nil {
+					t.Fatal(err)
+				}
+			}
+			part, err := mw.CreateFormFile("original", "synthetic.jpg")
+			if err != nil {
+				t.Fatal(err)
+			}
+			path, _ := jpegFile(t, "synthetic.jpg", 16, 16)
+			// The fixture is generated locally and contains no metadata.
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := part.Write(data); err != nil {
+				t.Fatal(err)
+			}
+			if err := mw.Close(); err != nil {
+				t.Fatal(err)
+			}
+			r := httptest.NewRequest("POST", "/files", &b)
+			r.Header.Set("Content-Type", mw.FormDataContentType())
+			if browser {
+				r.Header.Set("Accept", "text/html")
+			}
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			body := w.Body.String()
+			if browser {
+				if w.Code != 303 {
+					t.Fatalf("POST: %d %s", w.Code, body)
+				}
+				body = browse(t, h, w.Header().Get("Location"))
+			} else if w.Code != 200 && w.Code != 201 {
+				t.Fatalf("POST: %d %s", w.Code, body)
+			}
+			wants := []string{"day_sync", "revived", "Old synthetic target", "File synthetic target"}
+			if browser { // the toast says the result in words
+				wants = []string{"In its day page: ", "Revived", "Old synthetic target", "File synthetic target"}
+			}
+			for _, want := range wants {
+				if !strings.Contains(body, want) {
+					t.Errorf("missing %s: %s", want, body)
+				}
+			}
+		})
+	}
+}
