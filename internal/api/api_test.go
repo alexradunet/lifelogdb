@@ -402,14 +402,16 @@ func TestCorrectionDomainActions(t *testing.T) {
 
 // TestACorrectWithNoValueIsRefusedAndChangesNothing: a correct with no value is refused 422, because a correct with
 // a nil value would retract the reading. The catalog's required value is the one guard of this. The reading reads back
-// as it was: current, with its value, with no correction and no retraction, and the file has no new reading.
+// as it was: current, with its value, with no correction and no retraction, and the file has no new reading. Each case
+// records a new reading first and corrects it: a reading is corrected one time only, so a case cannot fail for another
+// reason because a case before it corrected the reading by error.
 func TestACorrectWithNoValueIsRefusedAndChangesNothing(t *testing.T) {
 	c, h, s := freshStore(t)
 	root := must(c.Get(t.Context(), "/"))
 	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
-	m := must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "weight", "day": "2026-09-01", "value": "71"}))
-	self := href(m, "self")
-	for _, body := range []string{"", "value="} {
+	for i, body := range []string{"", "value="} {
+		m := must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "weight", "day": fmt.Sprintf("2026-09-%02d", i+1), "value": "71"}))
+		self := href(m, "self")
 		req := httptest.NewRequest("POST", self+"/correct", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		rec := httptest.NewRecorder()
@@ -425,8 +427,8 @@ func TestACorrectWithNoValueIsRefusedAndChangesNothing(t *testing.T) {
 		if back["current"] != true || back["retraction"] != false || back["value"] != json.Number("71") || back["superseded_by"] != nil {
 			t.Errorf("correct with %q: the reading reads back as %v, want current 71, not retracted, not corrected", body, back)
 		}
-		if n := scalar(t, s, "SELECT CAST(count(*) AS text) FROM measurements"); n != "1" {
-			t.Errorf("correct with %q: %s readings in the file, want 1", body, n)
+		if n, want := scalar(t, s, "SELECT CAST(count(*) AS text) FROM measurements"), fmt.Sprint(i+1); n != want {
+			t.Errorf("correct with %q: %s readings in the file, want %s (one for each case so far)", body, n, want)
 		}
 	}
 }
