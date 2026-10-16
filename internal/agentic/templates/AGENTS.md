@@ -64,4 +64,4 @@ through LM Studio or llama.cpp) keeps the text here.
 | skill | for |
 |---|---|
 | `lifelog-import-notes` | put a folder of notes (a journal of daily notes, topic notes) into `life.db`, with the owner |
-| `lifelog-keep-photos` | keep a chosen photo or file for a day, with the place it was taken |
+| `lifelog-keep-photos` | keep a chosen photo or file for a day |
