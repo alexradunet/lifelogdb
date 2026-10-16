@@ -7,7 +7,8 @@ One static page: `index.html` and `style.css`, with no script and no build step.
 - To see it, open `index.html` in a browser. Every path is relative.
 - The look is the application's: the tokens in `style.css` are a subset of the token block in
   [`internal/api/html/base.css`](../internal/api/html/base.css), with the same values. When a token changes there,
-  change it here too.
+  change it here too. The one exception is the alias `--text-accent` (the accent colour of the words on a material):
+  the site keeps it, and the application does not have it.
 - `fonts/` and `icon.svg` are copies of the application's own files in
   [`internal/api/html/`](../internal/api/html/). The fonts are under the SIL Open Font License; the `OFL-*.txt` files
   go with them.

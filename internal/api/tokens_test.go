@@ -34,14 +34,13 @@ func TestTheTokensHoldTheirContrast(t *testing.T) {
 			pairs = append(pairs, pair{fg, bg, 3, false})
 		}
 	}
-	text("ink", "surface", "surface-deep", "accent-soft", "mark", "warn-soft", "done-soft", "danger-soft")
+	text("ink", "surface", "surface-deep", "accent-soft", "mark", "warn-soft", "danger-soft")
 	text("muted", "surface", "surface-deep")
 	text("page-ink", "ground")
 	text("page-strong", "ground")
 	text("page-muted", "ground")
 	text("rail-ink", "rail", "rail-deep")
 	text("rail-accent", "rail", "rail-deep")
-	text("indigo", "rail", "rail-deep") // the owner's nameplate
 	text("accent", "ground")
 	text("accent-ink", "surface", "surface-deep")
 	text("link", "surface", "surface-deep")
@@ -50,7 +49,6 @@ func TestTheTokensHoldTheirContrast(t *testing.T) {
 	text("warn", "surface")
 	text("warn-ink", "warn-soft")
 	text("done", "surface")
-	text("done-ink", "done-soft")
 	text("danger", "surface")
 	text("danger-ink", "danger-soft")
 	text("toast-ink", "toast-bg")

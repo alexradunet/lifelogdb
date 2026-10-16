@@ -165,10 +165,10 @@ func TestThePhoneHasABottomBarAndASheet(t *testing.T) {
 	}
 }
 
-// TestTheStylePageShowsEveryComponent: the style page is a whole page with a component of every kind, it is not
-// in the catalog, and it reads nothing from the database: with the store closed the shell's read fails and the
-// page is still drawn. A public listener refuses it without the token.
-func TestTheStylePageShowsEveryComponent(t *testing.T) {
+// TestTheStylePageReadsNothing: the style page is a whole page, it is not in the catalog, and it reads nothing from
+// the database: with the store closed the shell's read fails and the page is still drawn. A public listener refuses
+// it without the token. What it shows is TestTheStylePageRunsTheRealTemplates.
+func TestTheStylePageReadsNothing(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "life.db")
 	if err := db.Init(t.Context(), p); err != nil {
 		t.Fatal(err)
@@ -188,13 +188,6 @@ func TestTheStylePageShowsEveryComponent(t *testing.T) {
 	body := rec.Body.String()
 	if rec.Code != http.StatusOK || !strings.HasPrefix(rec.Header().Get("Content-Type"), "text/html") || !strings.HasSuffix(strings.TrimSpace(body), "</html>") {
 		t.Fatalf("GET /styleguide with the store closed: %d %q %.300s", rec.Code, rec.Header().Get("Content-Type"), body)
-	}
-	for _, want := range []string{"leaf", "leaf-day", "sheet", "margin", "journal-text", "capture", "segmented",
-		"reading-tile", "entry", "button primary", "danger", "step", "badge", "owner", "alert", "toast", "palette",
-		`table class="calendar"`, `table class="month"`, "chart", "record", "readings-year", "pager", "empty", "facts"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("the style page does not show %q", want)
-		}
 	}
 	for _, id := range []string{`id="refused"`, `role="alert"`} {
 		if strings.Contains(body, id) {

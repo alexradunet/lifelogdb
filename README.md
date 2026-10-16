@@ -114,8 +114,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   bound in Hearthwood, the materials of the owner's Balaur design system
   ([plan 096](docs/plans/096-bound-in-hearthwood.md)): the page is dark oak, the sidebar and the phone's bars are
   wood, and everything written is parchment with ink; square corners, 2 px edges, bevels and 3 px hard drops, no
-  blur and no gradient; gold marks where the owner is and what is today, ember is the one loud button of a screen and
-  the word "overdue", teal is a link. Words are in Atkinson Hyperlegible, every day, time and number in IBM Plex Mono,
+  blur and no gradient; gold marks where the owner is and what is today, ember is the one loud button of a screen,
+  teal is a link. Words are in Atkinson Hyperlegible, every day, time and number in IBM Plex Mono,
   and a page's title, the leaf's number and a reading's value in Jersey 15; dark is the identity and light the
   daylight study of the same room, by `prefers-color-scheme`. Its tokens are custom properties of `base.css`; a
   material sets its own text through aliases (`--text`, `--text-link`, …), and a test holds every text pair at
@@ -156,8 +156,9 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   sentences by the result shapes of API.md. The day carries `trends` (each metric read that day, its unit and its
   readings of the 14 days through it), so a reading's tile has its unit and its line; a series shows its next 5
   later slots on its own page.
-  `GET /styleguide` is the style page: every component in every state, drawn on synthetic words, with the file each
-  lives in. It is presentation, like `/render`: it is not in the catalog and it reads nothing from the database.
+  `GET /styleguide` is the style page: every component in every state, with the file each lives in, drawn by the real
+  templates on synthetic words. It is presentation, like `/render`: it is not in the catalog and it reads nothing
+  from the database.
   `GET /manifest.webmanifest` and `GET /assets/icon.svg` make the app installable: two shortcuts (Today, Add to
   today) and a share target that posts shared text into Capture
   (`POST /days/today/capture`, where `today` is the local day). There is no service worker, since the server is the owner's own. A public listener
