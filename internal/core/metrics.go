@@ -1,0 +1,423 @@
+package core
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"math"
+	"sort"
+	"strings"
+
+	"lifelog/internal/text"
+)
+
+// RegisterMetric makes a metric (D27): a page titled name, whose body is the note, and its metrics row with the
+// unit, one id. A plain page of that title becomes the metric, as a person is promoted (D20): a ghost, or a note
+// the owner wrote about it, whose text is kept — the note is written only to an empty body. Registering one that
+// exists with the same unit is a no-op, and so is one with no unit where the existing metric is a scale (isScale): a
+// source that names Mood does not write its range, so the request takes the metric as it is. Another unit is
+// refused: a unit never changes (metrics_unit_fixed).
+func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
+	if err := checkTitle("metric name", name); err != nil {
+		return false, err
+	}
+	p, err := t.lookup(name)
+	if err != nil {
+		return false, err
+	}
+	switch {
+	case p == nil:
+		// the note is written by the insert: creation is one write, so the metric starts at revision 1
+		id, _, err := t.insertPage("metric", name, text.TitleKey(name), nil, note, "")
+		if err != nil {
+			return false, err
+		}
+		if _, err = t.tx.ExecContext(t.ctx, `INSERT INTO metrics(id, unit) VALUES (?, ?)`, id, unit); err != nil {
+			return false, err
+		}
+		_, err = t.syncWikilinks(id, note)
+		return err == nil, err
+	case p.Type == "metric":
+		var have string
+		if err := t.tx.QueryRowContext(t.ctx, `SELECT unit FROM metrics WHERE id = ?`, p.ID).Scan(&have); err != nil {
+			return false, err
+		}
+		if have != unit && !(isScale(have) && unit == "") {
+			return false, Conflict("metric %s exists with unit %q, not %q: a unit never changes; register a new metric", p.Title, have, unit)
+		}
+		return false, nil
+	case p.Type != "page" || p.DayPage:
+		return false, Conflict("%s is taken by a %s or a day page: a metric's title must be free or a plain page (D27)", p.Title, p.Type)
+	}
+	if _, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET entity_type = 'metric', deleted_at = NULL WHERE id = ?`, p.ID); err != nil {
+		return false, err
+	}
+	if _, err := t.tx.ExecContext(t.ctx, `INSERT INTO metrics(id, unit) VALUES (?, ?)`, p.ID, unit); err != nil {
+		return false, err
+	}
+	if note != "" && p.Body == "" { // the owner's text is never overwritten
+		if _, err := t.SetBody(p.ID, note); err != nil {
+			return false, err
+		}
+	}
+	return true, nil
+}
+
+// isScale says whether a metric's unit names a scale's range: two numbers of ASCII digits around one hyphen with the
+// lower below the upper (`1-5`, `0-10`). The schema holds the values of a scale to its range
+// (measurements_scale_range, D6). A count or a 0/1 habit has no unit (D7, D24).
+func isScale(unit string) bool {
+	a, b, found := strings.Cut(unit, "-")
+	if !found || !asciiDigits(a) || !asciiDigits(b) {
+		return false
+	}
+	// compared as digit strings, so a bound of any length orders exactly
+	a, b = strings.TrimLeft(a, "0"), strings.TrimLeft(b, "0")
+	return len(a) < len(b) || len(a) == len(b) && a < b
+}
+
+func asciiDigits(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return s != ""
+}
+
+// metricLookup is the id of the live metric that a name_key names. TestNewDatabaseReadingLookupUsesIndexes plans it.
+const metricLookup = `SELECT m.id FROM entities m
+	WHERE m.id = (SELECT entity_id FROM entity_names WHERE name_key = ?) AND m.entity_type = 'metric' AND m.deleted_at IS NULL`
+
+// metricID finds a live metric by its name, in any case (its title_key).
+func (t *Tx) metricID(name string) (int64, error) {
+	var id int64
+	err := t.tx.QueryRowContext(t.ctx, metricLookup, text.TitleKey(name)).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, NotFound("no metric %q: the owner registers metrics", name)
+	}
+	return id, err
+}
+
+// NewMetric is what CreateMetric makes in one write: the metric, and, when it is named, its category, a page
+// title; it may be empty.
+type NewMetric struct {
+	Name, Unit, Note string
+	Category         string
+}
+
+// CreateMetric registers a metric and files it in its category (made when no page has that title, as FilePages
+// makes it), in one write: a refusal of either step writes nothing.
+func (s *Store) CreateMetric(ctx context.Context, source string, m NewMetric) (added bool, err error) {
+	err = s.Do(ctx, source, func(t *Tx) error {
+		var e error
+		if added, e = t.RegisterMetric(m.Name, m.Unit, m.Note); e != nil {
+			return e
+		}
+		if m.Category != "" {
+			id, e := t.metricID(m.Name)
+			if e != nil {
+				return e
+			}
+			if _, e = t.FilePages([]int64{id}, m.Category, false); e != nil {
+				return e
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		added = false
+	}
+	return
+}
+
+// Reading is one measurement to record (D7).
+type Reading struct {
+	ID           int64   `json:"id,omitempty"`
+	Metric       string  `json:"metric"`
+	Day          string  `json:"day"`
+	TakenAt      string  `json:"taken_at,omitempty"`
+	TZ           string  `json:"tz,omitempty"`
+	ImportKey    string  `json:"import_key,omitempty"`
+	Value        float64 `json:"value"`
+	CapturedWith int64   `json:"captured_with_id,omitempty"`
+}
+
+// Record appends a measurement. An ImportKey makes a re-send a no-op (ON CONFLICT ... DO NOTHING, docs/contract/imports.md);
+// the id is 0 when the row was recorded before.
+func (t *Tx) Record(m Reading) (id int64, err error) {
+	metric, err := t.prepareReading(m)
+	if err != nil {
+		return 0, err
+	}
+	var with any
+	if m.CapturedWith != 0 {
+		with = m.CapturedWith
+	}
+	err = t.tx.QueryRowContext(t.ctx, `INSERT INTO measurements(metric_id, day, taken_at, tz, value, source, import_key, captured_with_id, created_at)
+	                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, `+nowSQL+`)
+	                     ON CONFLICT(source, import_key, metric_id) WHERE import_key IS NOT NULL DO NOTHING
+	                     RETURNING id`,
+		metric, m.Day, nullIfEmpty(m.TakenAt), nullIfEmpty(m.TZ), m.Value, t.Source, nullIfEmpty(m.ImportKey), with).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil // sent before
+	}
+	return id, err
+}
+
+// prepareReading is the live metric the reading names; the day, instant, zone and value are the DDL's to refuse.
+func (t *Tx) prepareReading(m Reading) (metric int64, err error) {
+	if err := checkValue(&m.Value); err != nil {
+		return 0, err
+	}
+	return t.metricID(m.Metric)
+}
+
+// Correct supersedes a reading with a new value, or retracts it when value is nil (cookbook/correct-a-measurement.md).
+func (t *Tx) Correct(wrong int64, value *float64) (id int64, err error) {
+	if err := checkValue(value); err != nil {
+		return 0, err
+	}
+	var v any
+	if value != nil {
+		v = *value
+	}
+	err = t.tx.QueryRowContext(t.ctx, `INSERT INTO measurements(metric_id, day, taken_at, tz, value, source, captured_with_id, supersedes_id, created_at)
+	                     SELECT metric_id, day, taken_at, tz, ?, ?, captured_with_id, id, `+nowSQL+` FROM measurements WHERE id = ?
+	                     RETURNING id`, v, t.Source, wrong).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, NotFound("no measurement %d", wrong)
+	}
+	return id, err
+}
+
+// checkValue refuses a NaN: SQLite binds it as NULL, which a correction cannot tell from a retraction (D7). Every
+// other rule of a value is the DDL's: finite (measurements_value_finite), inside a scale's range
+// (measurements_scale_range).
+func checkValue(value *float64) error {
+	if value != nil && math.IsNaN(*value) {
+		return Invalid("value must be a number")
+	}
+	return nil
+}
+
+func (s *Store) Record(ctx context.Context, source string, m Reading) (id int64, err error) {
+	err = s.Do(ctx, source, func(t *Tx) (e error) { id, e = t.Record(m); return })
+	if err != nil {
+		id = 0
+	}
+	return
+}
+
+func (s *Store) Correct(ctx context.Context, source string, wrong int64, value *float64) (id int64, err error) {
+	err = s.Do(ctx, source, func(t *Tx) (e error) { id, e = t.Correct(wrong, value); return })
+	if err != nil {
+		id = 0
+	}
+	return
+}
+
+// readingColumns are a reading's columns as Reading scans them, from measurements me joined to its metric m with
+// its name m_name.
+const readingColumns = `me.id, m_name.title, me.day, coalesce(me.taken_at, ''), coalesce(me.tz, ''), me.value, coalesce(me.captured_with_id, 0)`
+
+func (s *Store) readings(ctx context.Context, where string, args ...any) ([]Reading, error) {
+	rows, err := s.DB.R.QueryContext(ctx, `
+		SELECT `+readingColumns+`
+		  FROM measurement_values me JOIN entities m ON m.id = me.metric_id  JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key `+where, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Reading{}
+	for rows.Next() {
+		var r Reading
+		if err := rows.Scan(&r.ID, &r.Metric, &r.Day, &r.TakenAt, &r.TZ, &r.Value, &r.CapturedWith); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// Metric is a live metric (D27): its page's id, title (its name) and body (its note), its unit; Categories are the
+// paths of the categories it is filed in (D26).
+type Metric struct {
+	ID         int64    `json:"id"`
+	Name       string   `json:"name"`
+	Unit       string   `json:"unit"`
+	Note       string   `json:"note,omitempty"`
+	Categories []string `json:"categories,omitempty"`
+}
+
+func (s *Store) Metrics(ctx context.Context) ([]Metric, error) {
+	rows, err := s.DB.R.QueryContext(ctx, `
+		SELECT m.id, p_name.title, m.unit, p.body
+		  FROM metrics m JOIN entities p ON p.id = m.id JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key AND p.deleted_at IS NULL
+		 ORDER BY p.preferred_name_key`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Metric{}
+	at := map[int64]int{}
+	for rows.Next() {
+		var m Metric
+		if err := rows.Scan(&m.ID, &m.Name, &m.Unit, &m.Note); err != nil {
+			return nil, err
+		}
+		at[m.ID] = len(out)
+		out = append(out, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	cats, err := s.categories(ctx)
+	if err != nil {
+		return nil, err
+	}
+	filed, err := s.DB.R.QueryContext(ctx, `SELECT from_id, to_id FROM links WHERE kind = 'part-of'`)
+	if err != nil {
+		return nil, err
+	}
+	defer filed.Close()
+	for filed.Next() {
+		var from, to int64
+		if err := filed.Scan(&from, &to); err != nil {
+			return nil, err
+		}
+		if i, ok := at[from]; ok && cats[to] != nil {
+			out[i].Categories = append(out[i].Categories, cats[to].Path)
+		}
+	}
+	for i := range out {
+		sort.Strings(out[i].Categories)
+	}
+	return out, filed.Err()
+}
+
+// Recent is one of a metric's recent readings: its measurement, its day and its value.
+type Recent struct {
+	ID    int64   `json:"id"`
+	Day   string  `json:"day"`
+	Value float64 `json:"value"`
+}
+
+// RecentReadings are the newest n current unassociated readings of each live metric, oldest first, in the series'
+// order, so the last is the reading a metric's page calls its latest.
+// Each metric's readings are read backwards on measurements_series and stop at n, so the work is n a metric, not
+// the whole history.
+func (s *Store) RecentReadings(ctx context.Context, n int) (map[int64][]Recent, error) {
+	rows, err := s.DB.R.QueryContext(ctx, `
+		SELECT v.metric_id, v.id, v.day, v.value
+		  FROM metrics m CROSS JOIN entities e ON e.id = m.id AND e.deleted_at IS NULL -- the metrics drive, not every page
+		  JOIN measurement_values v ON v.id IN (
+		        SELECT x.id FROM measurement_values x
+		         WHERE x.metric_id = m.id
+		         ORDER BY x.day DESC, x.taken_at DESC, x.id DESC LIMIT ?)
+		 ORDER BY v.metric_id, v.day, v.taken_at, v.id`, n)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64][]Recent{}
+	for rows.Next() {
+		var metric int64
+		var r Recent
+		if err := rows.Scan(&metric, &r.ID, &r.Day, &r.Value); err != nil {
+			return nil, err
+		}
+		out[metric] = append(out[metric], r)
+	}
+	return out, rows.Err()
+}
+
+// InUse names the metrics with a current reading in the n days up to day, so a view offers the series the
+// owner keeps rather than the whole registry (a lab marker read twice a year stays at /metrics).
+func (s *Store) InUse(ctx context.Context, day string, n int) ([]string, error) {
+	if !IsDay(day) {
+		return nil, Invalid("day is YYYY-MM-DD")
+	}
+	rows, err := s.DB.R.QueryContext(ctx, `
+		SELECT m_name.title FROM entities m JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key AND m.deleted_at IS NULL
+		 WHERE m.entity_type = 'metric' AND EXISTS (SELECT 1 FROM measurement_values v
+		                WHERE v.metric_id = m.id AND v.day > date(?, '-' || ? || ' day') AND v.day <= ?)
+		 ORDER BY m.preferred_name_key`, day, n, day)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		out = append(out, name)
+	}
+	return out, rows.Err()
+}
+
+// Series is cookbook/metric-series.md: the current readings of one metric in (from, to]. An empty from is no lower
+// bound: every reading through to.
+func (s *Store) Series(ctx context.Context, metric, from, to string) ([]Reading, error) {
+	if from != "" && !IsDay(from) || !IsDay(to) {
+		return nil, Invalid("from is empty or a YYYY-MM-DD day, and to is a YYYY-MM-DD day")
+	}
+	predicate := `WHERE m.id=(SELECT entity_id FROM entity_names WHERE name_key=?) AND me.day<=?`
+	args := []any{text.TitleKey(metric), to}
+	if from != "" {
+		predicate += ` AND me.day>?`
+		args = append(args, from)
+	}
+	return s.readings(ctx, predicate+` ORDER BY me.day,me.taken_at,me.id`, args...)
+}
+
+// ReadingsByDay counts the current readings of each day from from through through, both included: the readings
+// that Series gives, for all metrics. A corrected reading counts once, and a retracted one not at all. A day without
+// one is absent.
+func (s *Store) ReadingsByDay(ctx context.Context, from, through string) (map[string]int, error) {
+	if err := checkWindow(from, through); err != nil {
+		return nil, err
+	}
+	rows, err := s.DB.R.QueryContext(ctx, `SELECT day, count(*) FROM measurement_values WHERE day BETWEEN ? AND ? GROUP BY day`, from, through)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]int{}
+	for rows.Next() {
+		var day string
+		var n int
+		if err := rows.Scan(&day, &n); err != nil {
+			return nil, err
+		}
+		out[day] = n
+	}
+	return out, rows.Err()
+}
+
+// Measurement reads one row of the append-only table, current or not, and what corrected it.
+type Measurement struct {
+	Reading
+	Current      bool  `json:"current"`
+	Supersedes   int64 `json:"supersedes_id,omitempty"`
+	SupersededBy int64 `json:"superseded_by,omitempty"`
+	Retraction   bool  `json:"retraction"`
+}
+
+func (s *Store) Measurement(ctx context.Context, id int64) (*Measurement, error) {
+	m := &Measurement{}
+	var value sql.NullFloat64
+	err := s.DB.R.QueryRowContext(ctx, `
+		SELECT `+readingColumns+`, coalesce(me.supersedes_id, 0),
+		       coalesce((SELECT x.id FROM measurements x WHERE x.supersedes_id = me.id), 0),
+		       EXISTS (SELECT 1 FROM measurement_values v WHERE v.id = me.id)
+		  FROM measurements me JOIN entities m ON m.id = me.metric_id JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key  WHERE me.id = ?`, id).
+		Scan(&m.ID, &m.Metric, &m.Day, &m.TakenAt, &m.TZ, &value, &m.CapturedWith, &m.Supersedes, &m.SupersededBy, &m.Current)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, NotFound("no measurement %d", id)
+	}
+	m.Value, m.Retraction = value.Float64, !value.Valid
+	return m, err
+}

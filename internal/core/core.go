@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"lifelog/internal/db"
+	"lifelog/internal/text"
 
 	"modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
@@ -115,4 +116,37 @@ func IsOwner(source string) bool {
 // Forbidden is a 403: the writer may not run this action.
 func Forbidden(format string, a ...any) error {
 	return &Error{Status: 403, Msg: fmt.Sprintf(format, a...)}
+}
+
+// The checks of a surface's input that every write and read shares, so one refusal has one message.
+
+// checkDay refuses a value that is not a local day (lifelog_meta.days); what names the field.
+func checkDay(what, s string) error {
+	if !IsDay(s) {
+		return Invalid("%s %q is not a day (YYYY-MM-DD)", what, s)
+	}
+	return nil
+}
+
+// checkWindow refuses a window that is not two local days in order, both inclusive.
+func checkWindow(from, through string) error {
+	if !IsDay(from) || !IsDay(through) || from > through {
+		return Invalid("from %q and through %q must be days (YYYY-MM-DD), from first", from, through)
+	}
+	return nil
+}
+
+// checkTitle refuses a title the contract does not admit (docs/contract/titles-and-wikilinks.md); what names the field.
+func checkTitle(what, title string) error {
+	if !text.ValidTitle(title) {
+		return Invalid("%s %q is not a valid title (docs/contract/titles-and-wikilinks.md)", what, title)
+	}
+	return nil
+}
+
+func nullIfEmpty(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }

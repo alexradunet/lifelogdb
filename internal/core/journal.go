@@ -1,0 +1,247 @@
+package core
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"regexp"
+	"strings"
+)
+
+// Capture appends an entry to a day page, creating or reviving it, with an optional mood (cookbook/capture.md).
+func (t *Tx) Capture(day, entry string, mood *float64) (id int64, r Sync, err error) {
+	if entry == "" && mood == nil {
+		return 0, r, Invalid("nothing to capture: give text, a mood or both")
+	}
+	if id, err = t.dayPage(day); err != nil {
+		return 0, r, err
+	}
+	if entry != "" {
+		if _, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET body = body || CASE WHEN body = '' THEN '' ELSE char(10, 10) END || ?
+		                        WHERE id = ?`, entry, id); err != nil {
+			return 0, r, err
+		}
+	}
+	var body string
+	if err := t.tx.QueryRowContext(t.ctx, `SELECT body FROM entities WHERE id = ?`, id).Scan(&body); err != nil {
+		return 0, r, err
+	}
+	if r, err = t.syncWikilinks(id, body); err != nil {
+		return 0, r, err
+	}
+	if mood != nil {
+		_, err = t.Record(Reading{Metric: "Mood", Day: day, Value: *mood, CapturedWith: id})
+	}
+	return id, r, err
+}
+
+// dayPage is the id of a local day's page: found (revived when tombstoned), or created on its first write
+// (cookbook/capture.md).
+func (t *Tx) dayPage(day string) (int64, error) {
+	p, err := t.lookupKey(day)
+	switch {
+	case err != nil:
+		return 0, err
+	case p == nil:
+		id, _, err := t.insertPage("page", day, day, day, "", "")
+		return id, err
+	case p.Deleted:
+		_, err = t.tx.ExecContext(t.ctx, `UPDATE entities SET deleted_at = NULL WHERE id = ?`, p.ID)
+	}
+	return p.ID, err
+}
+
+func (s *Store) Capture(ctx context.Context, source, day, entry string, mood *float64) (id int64, r Sync, err error) {
+	err = s.Do(ctx, source, func(t *Tx) (e error) { id, r, e = t.Capture(day, entry, mood); return })
+	if err != nil {
+		id = 0 // rolled back
+	}
+	return
+}
+
+// DayRow is one row of cookbook/day-view.md.
+type DayRow struct {
+	What   string `json:"what"`
+	At     string `json:"at,omitempty"`
+	Detail string `json:"detail"`
+}
+
+// Day is cookbook/day-view.md for one local day, plus the day page's id (0 when the day has none yet) and the
+// day's readings with their ids, so a client can correct one.
+type Day struct {
+	Day      string    `json:"day"`
+	PageID   int64     `json:"page_id,omitempty"`
+	Rows     []DayRow  `json:"view"`
+	Readings []Reading `json:"readings"`
+}
+
+func (s *Store) Day(ctx context.Context, day string) (*Day, error) {
+	if err := checkDay("day", day); err != nil {
+		return nil, err
+	}
+	d := &Day{Day: day, Rows: []DayRow{}}
+	err := s.DB.R.QueryRowContext(ctx, `SELECT id FROM entities WHERE id = (SELECT entity_id FROM entity_names WHERE name_key = ?) AND deleted_at IS NULL`, day).Scan(&d.PageID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+	rows, err := s.DB.R.QueryContext(ctx, dayView, sql.Named("day", day))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var r DayRow
+		var at sql.NullString
+		if err := rows.Scan(&r.What, &at, &r.Detail); err != nil {
+			return nil, err
+		}
+		r.At = at.String
+		d.Rows = append(d.Rows, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	d.Readings, err = s.readings(ctx, `WHERE me.day = ? ORDER BY me.taken_at, me.id`, day)
+	return d, err
+}
+
+// dayView implements cookbook/day-view.md with registry lookup and preferred display.
+const dayView = `
+SELECT what, at, detail FROM (
+  SELECT 'day page' AS what, NULL AS at, p.body AS detail
+    FROM entities p
+   WHERE p.id = (SELECT entity_id FROM entity_names WHERE name_key = :day) AND p.deleted_at IS NULL
+  UNION ALL
+  SELECT 'page' || CASE WHEN p.revision > 1 THEN ' (edited)' ELSE '' END,
+         p.updated_at, p_name.title
+    FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
+   WHERE p.day = :day AND p_name.title <> :day AND p.deleted_at IS NULL
+  UNION ALL
+  SELECT 'at', NULL, pl_name.title
+    FROM entities d
+    JOIN links l    ON l.from_id = d.id AND l.kind = 'at'
+    JOIN entities pl ON pl.id = l.to_id JOIN entity_names pl_name ON pl_name.entity_id = pl.id AND pl_name.name_key = pl.preferred_name_key AND pl.deleted_at IS NULL
+   WHERE d.id = (SELECT entity_id FROM entity_names WHERE name_key = :day) AND d.deleted_at IS NULL
+  UNION ALL
+  SELECT p_name.title, me.taken_at, CAST(me.value AS TEXT) || ' ' || m.unit
+    FROM measurement_values me JOIN metrics m ON m.id = me.metric_id JOIN entities p ON p.id = m.id AND p.deleted_at IS NULL JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
+   WHERE me.day = :day
+)
+ORDER BY (at IS NOT NULL), at;`
+
+// Moods are the values of the current Mood readings, by day, from from through through, each day's
+// in id order: cookbook/mood-over-time.md read for a window of days. The metric is found by its name key, so a
+// renamed Mood is still the mood. A day without a reading is absent.
+func (s *Store) Moods(ctx context.Context, from, through string) (map[string][]float64, error) {
+	if err := checkWindow(from, through); err != nil {
+		return nil, err
+	}
+	rows, err := s.DB.R.QueryContext(ctx, `
+		SELECT me.day, me.value
+		  FROM measurement_values me
+		  JOIN entities e ON e.id = me.metric_id AND e.deleted_at IS NULL
+		  JOIN entity_names n ON n.entity_id = me.metric_id AND n.name_key = 'mood'
+		 WHERE me.day BETWEEN ? AND ?
+		 ORDER BY me.day, me.id`, from, through)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string][]float64{}
+	for rows.Next() {
+		var day string
+		var v float64
+		if err := rows.Scan(&day, &v); err != nil {
+			return nil, err
+		}
+		out[day] = append(out[day], v)
+	}
+	return out, rows.Err()
+}
+
+// DayEntry is a live day page as a list of days shows it: its day, its id, and the first line of its body as plain
+// text.
+type DayEntry struct {
+	Day       string `json:"day"`
+	PageID    int64  `json:"page_id"`
+	FirstLine string `json:"first_line,omitempty"`
+}
+
+// DayEntries are the live day pages from from through through: in day order, or the newest first, and at most limit
+// of them.
+func (s *Store) DayEntries(ctx context.Context, from, through string, newestFirst bool, limit int) ([]DayEntry, error) {
+	if err := checkWindow(from, through); err != nil {
+		return nil, err
+	}
+	if limit < 1 {
+		return nil, Invalid("day entries need a limit of 1 or more")
+	}
+	order := "ASC"
+	if newestFirst {
+		order = "DESC"
+	}
+	return s.dayEntries(ctx, `p.day BETWEEN ? AND ?`, order, limit, from, through)
+}
+
+// OnThisDay are the live day pages of earlier years that have the month and the day of day, the newest first, and at
+// most limit of them. The text from the sixth character is "MM-DD", so 29 February matches 29 February only.
+func (s *Store) OnThisDay(ctx context.Context, day string, limit int) ([]DayEntry, error) {
+	if !IsDay(day) || limit < 1 {
+		return nil, Invalid("on this day needs an exact day and a limit")
+	}
+	return s.dayEntries(ctx, `p.day < ? AND substr(p.day, 6) = substr(?, 6)`, "DESC", limit, day, day)
+}
+
+// dayEntries reads the live day pages that a condition on p.day selects. order is ASC or DESC, never user text.
+func (s *Store) dayEntries(ctx context.Context, cond, order string, limit int, args ...any) ([]DayEntry, error) {
+	rows, err := s.DB.R.QueryContext(ctx, `
+		SELECT p.day, p.id, p.body FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
+		 WHERE `+cond+` AND p.is_journal AND p.deleted_at IS NULL
+		 ORDER BY p.day `+order+` LIMIT ?`, append(args, limit)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []DayEntry{}
+	for rows.Next() {
+		var e DayEntry
+		var body string
+		if err := rows.Scan(&e.Day, &e.PageID, &body); err != nil {
+			return nil, err
+		}
+		e.FirstLine = firstLine(body)
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// BlockMark is the markers at the start of a line that a plain-text view cuts: headings, quotes, list items, check
+// boxes ([ ] and [x]). A marker is cut only when a space follows it, so the "#" of a tag and the "-" of a number stay.
+var BlockMark = regexp.MustCompile(`^(?:#{1,6}\s+|>\s*|[-*+]\s+)*(?:\[[ xX]\]\s+)?`)
+
+// firstLineRunes is how long a first line may be before it is cut.
+const firstLineRunes = 160
+
+// firstLine is the first line of a body that has text, as plain text: a heading's or a list item's marker cut, the
+// brackets of a [[wikilink]] cut, and cut with "…" after 160 characters. It is for a list of days, not a rendering.
+func firstLine(body string) string {
+	for line := range strings.SplitSeq(body, "\n") {
+		line = strings.TrimSpace(line)
+		line = strings.TrimSpace(BlockMark.ReplaceAllString(line, ""))
+		if line == "" {
+			continue
+		}
+		line = strings.NewReplacer("![[", "", "[[", "", "]]", "").Replace(line)
+		if r := []rune(line); len(r) > firstLineRunes {
+			line = strings.TrimSpace(string(r[:firstLineRunes])) + "…"
+		}
+		return line
+	}
+	return ""
+}
+
+// RecentDays is one page of the day pages, newest first.
+func (s *Store) RecentDays(ctx context.Context, limit, offset int) ([]Edge, error) {
+	return s.edges(ctx, `SELECT 'day', p.id, p_name.title, 'page', '' FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
+	                      WHERE p.is_journal AND p.deleted_at IS NULL ORDER BY p.day DESC LIMIT ? OFFSET ?`, limit, offset)
+}
