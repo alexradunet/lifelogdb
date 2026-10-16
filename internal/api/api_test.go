@@ -3,6 +3,7 @@ package api_test
 import (
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -375,6 +376,37 @@ func TestCorrectionDomainActions(t *testing.T) {
 	habit := must(c.Do(t.Context(), record, map[string]string{"metric": "api_walk", "day": "2026-10-01", "value": "1"}))
 	if _, err := c.Do(t.Context(), retract, map[string]string{"id": measurementID(habit)}); err != nil {
 		t.Fatalf("habit retraction: %v", err)
+	}
+}
+
+// TestACorrectWithNoValueIsRefusedAndChangesNothing: a correct with no value is refused 422, because a correct with
+// a nil value would retract the reading. The catalog's required value is the one guard of this. The reading reads back
+// as it was: current, with its value, with no correction and no retraction, and the file has no new reading.
+func TestACorrectWithNoValueIsRefusedAndChangesNothing(t *testing.T) {
+	c, h, s := freshStore(t)
+	root := must(c.Get(t.Context(), "/"))
+	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
+	m := must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "weight", "day": "2026-09-01", "value": "71"}))
+	self := href(m, "self")
+	for _, body := range []string{"", "value="} {
+		req := httptest.NewRequest("POST", self+"/correct", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		var e api.Entity
+		if err := json.Unmarshal(rec.Body.Bytes(), &e); err != nil {
+			t.Fatalf("correct with %q: the answer is not an entity: %v: %s", body, err, rec.Body.String())
+		}
+		if p := props(&e); rec.Code != http.StatusUnprocessableEntity || p["code"] != "invalid" || p["message"] != "missing field value" {
+			t.Errorf("correct with %q: %d %v, want 422 invalid \"missing field value\"", body, rec.Code, p)
+		}
+		back := props(must(c.Get(t.Context(), self)))
+		if back["current"] != true || back["retraction"] != false || back["value"] != json.Number("71") || back["superseded_by"] != nil {
+			t.Errorf("correct with %q: the reading reads back as %v, want current 71, not retracted, not corrected", body, back)
+		}
+		if n := scalar(t, s, "SELECT CAST(count(*) AS text) FROM measurements"); n != "1" {
+			t.Errorf("correct with %q: %s readings in the file, want 1", body, n)
+		}
 	}
 }
 
