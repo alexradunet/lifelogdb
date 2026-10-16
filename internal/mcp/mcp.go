@@ -30,12 +30,12 @@ func New(ctx context.Context, c *client.Client, version string) (*mcp.Server, er
 	if err != nil {
 		return nil, err
 	}
-	tools, err := client.Tools(actions, func(a api.Action) bool { return !a.Owner }) // the owner's alone: never a model's tool
+	tools, err := Tools(actions, func(a api.Action) bool { return !a.Owner }) // the owner's alone: never a model's tool
 	if err != nil {
 		return nil, err
 	}
 	s := mcp.NewServer(&mcp.Implementation{Name: "lifelog", Version: version}, &mcp.ServerOptions{
-		Instructions: client.Instructions,
+		Instructions: Instructions,
 	})
 	for _, t := range tools {
 		s.AddTool(&mcp.Tool{Name: t.Name, Description: t.Description, InputSchema: t.Schema, Annotations: annotations(t)}, call(c, t))
@@ -45,7 +45,7 @@ func New(ctx context.Context, c *client.Client, version string) (*mcp.Server, er
 
 // annotations say what a tool does to the database: a tool that only reads says so; a catalog action marked Danger is
 // destructive, as a browser draws it.
-func annotations(t client.Tool) *mcp.ToolAnnotations {
+func annotations(t Tool) *mcp.ToolAnnotations {
 	if t.ReadOnly() {
 		return &mcp.ToolAnnotations{ReadOnlyHint: true}
 	}
@@ -53,13 +53,13 @@ func annotations(t client.Tool) *mcp.ToolAnnotations {
 	return &mcp.ToolAnnotations{DestructiveHint: &danger}
 }
 
-func call(c *client.Client, t client.Tool) mcp.ToolHandler {
+func call(c *client.Client, t Tool) mcp.ToolHandler {
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		args, err := client.Arguments(req.Params.Arguments)
+		args, err := Arguments(req.Params.Arguments)
 		if err != nil {
 			return failure(err), nil
 		}
-		return result(c.Call(ctx, t, args))
+		return result(Call(ctx, c, t, args))
 	}
 }
 

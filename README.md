@@ -355,8 +355,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 | `internal/preview` | the picture a file page keeps: decode, scale to 1600 px, EXIF orientation, a JPEG of at most 1 MB with no metadata |
 | `internal/photo` | what a photo's metadata says: the day and time taken and the orientation (JPEG and HEIC); `phototest` builds synthetic ones |
 | `internal/api` | the action catalog, the routes, Siren and HTML; the local and the `--public` network guards |
-| `internal/client` | the hypermedia client (in-process or remote) |
-| `internal/mcp` | the catalog as MCP tools (the tool list is `internal/client`'s) |
+| `internal/client` | the hypermedia client, transport only: in-process or remote |
+| `internal/mcp` | the catalog as MCP tools: the tool list, the arguments of a model and the call of a tool |
 | `internal/agentic` | `lifelog agentic-init`: the texts and MCP configs for a coding agent opened in the folder of the program |
 | `internal/scaletest` | the synthetic personas and the lifetime workload of `tools/lifescale`: generators, an oracle and the timed checks |
 | `tools/copyschema` | `go generate`'s copy of `docs/schema/schema.sql` into `internal/db` |

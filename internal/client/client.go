@@ -1,5 +1,6 @@
 // Package client is the hypermedia client the CLI and the MCP server share. It speaks HTTP to the API, either
-// to a running `lifelog serve` or to the same handler in-process, so every surface goes through one code path.
+// to a running `lifelog serve` or to the same handler in-process, so every surface goes through one code path. It is
+// transport only: what a surface makes of an answer (the MCP tools, the output of the CLI) is that surface's own.
 package client
 
 import (

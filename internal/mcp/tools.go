@@ -1,4 +1,4 @@
-package client
+package mcp
 
 import (
 	"bytes"
@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"lifelog/internal/api"
+	"lifelog/internal/client"
 )
 
 // Tool is one function a model may call: an action of the catalog, or one of the two reads get_day and get.
@@ -66,7 +67,7 @@ func Tools(actions []api.Action, keep func(api.Action) bool) ([]Tool, error) {
 func ToolName(action string) string { return strings.ReplaceAll(action, "-", "_") }
 
 // Call runs a tool with its arguments, as Arguments gives them.
-func (c *Client) Call(ctx context.Context, t Tool, args map[string]string) (*api.Entity, error) {
+func Call(ctx context.Context, c *client.Client, t Tool, args map[string]string) (*api.Entity, error) {
 	if t.Action != nil {
 		return c.Do(ctx, *t.Action, args)
 	}
