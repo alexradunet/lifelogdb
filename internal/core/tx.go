@@ -24,10 +24,23 @@ func (s *Store) Do(ctx context.Context, source string, fn func(*Tx) error) error
 	return refused(s.DB.Write(ctx, func(tx *sql.Tx) error { return fn(&Tx{tx: tx, ctx: ctx, today: s.Today, Source: source}) }))
 }
 
+// alone runs fn as the one operation of its own write transaction (Do): the Store form of a Tx method. s stands for
+// the receiver, because a method cannot have a type parameter. On an error the write rolled back, so the result is
+// the zero value: no surface reports what the write did not keep.
+func alone[T any](s *Store, ctx context.Context, source string, fn func(*Tx) (T, error)) (T, error) {
+	var v T
+	if err := s.Do(ctx, source, func(t *Tx) (err error) { v, err = fn(t); return err }); err != nil {
+		var zero T
+		return zero, err
+	}
+	return v, nil
+}
+
 // errDryRun rolls a DryRun back after fn succeeded.
 var errDryRun = errors.New("dry run")
 
-// dryRun runs fn in a write transaction and always rolls it back: what a write would do, without doing it.
+// dryRun runs fn in a write transaction and always rolls it back: what a write would do, without doing it. Only
+// errDryRun itself is a clean dry run: a rollback that failed after it is a fault (refused).
 func (s *Store) dryRun(ctx context.Context, source string, fn func(*Tx) error) error {
 	err := s.Do(ctx, source, func(t *Tx) error {
 		if err := fn(t); err != nil {
@@ -35,7 +48,7 @@ func (s *Store) dryRun(ctx context.Context, source string, fn func(*Tx) error) e
 		}
 		return errDryRun
 	})
-	if errors.Is(err, errDryRun) {
+	if err == errDryRun {
 		return nil
 	}
 	return err

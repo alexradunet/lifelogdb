@@ -109,26 +109,18 @@ type NewMetric struct {
 // CreateMetric registers a metric and files it in its category (made when no page has that title, as FilePages
 // makes it), in one write: a refusal of either step writes nothing.
 func (s *Store) CreateMetric(ctx context.Context, source string, m NewMetric) (added bool, err error) {
-	err = s.Do(ctx, source, func(t *Tx) error {
-		var e error
-		if added, e = t.RegisterMetric(m.Name, m.Unit, m.Note); e != nil {
-			return e
+	return alone(s, ctx, source, func(t *Tx) (bool, error) {
+		added, err := t.RegisterMetric(m.Name, m.Unit, m.Note)
+		if err != nil || m.Category == "" {
+			return added, err
 		}
-		if m.Category != "" {
-			id, e := t.metricID(m.Name)
-			if e != nil {
-				return e
-			}
-			if _, e = t.FilePages([]int64{id}, m.Category, false); e != nil {
-				return e
-			}
+		id, err := t.metricID(m.Name)
+		if err != nil {
+			return false, err
 		}
-		return nil
+		_, err = t.FilePages([]int64{id}, m.Category, false)
+		return added, err
 	})
-	if err != nil {
-		added = false
-	}
-	return
 }
 
 // Reading is one measurement to record (D7).
@@ -202,19 +194,11 @@ func checkValue(value *float64) error {
 }
 
 func (s *Store) Record(ctx context.Context, source string, m Reading) (id int64, err error) {
-	err = s.Do(ctx, source, func(t *Tx) (e error) { id, e = t.Record(m); return })
-	if err != nil {
-		id = 0
-	}
-	return
+	return alone(s, ctx, source, func(t *Tx) (int64, error) { return t.Record(m) })
 }
 
 func (s *Store) Correct(ctx context.Context, source string, wrong int64, value *float64) (id int64, err error) {
-	err = s.Do(ctx, source, func(t *Tx) (e error) { id, e = t.Correct(wrong, value); return })
-	if err != nil {
-		id = 0
-	}
-	return
+	return alone(s, ctx, source, func(t *Tx) (int64, error) { return t.Correct(wrong, value) })
 }
 
 // readingColumns are a reading's columns as Reading scans them, from measurements me joined to its metric m with

@@ -60,21 +60,13 @@ func firstPictures(ctx context.Context, q interface {
 
 // SetPicture keeps a photo as a file and makes it the page's picture. day names a new file when f has no title:
 // "<page> <day>.jpg", with a number when that title is taken.
-func (s *Store) SetPicture(ctx context.Context, source string, id int64, day string, f FileIn) (k Kept, err error) {
-	err = s.Do(ctx, source, func(t *Tx) (e error) { k, e = t.SetPicture(id, day, f); return })
-	if err != nil {
-		k = Kept{}
-	}
-	return
+func (s *Store) SetPicture(ctx context.Context, source string, id int64, day string, f FileIn) (Kept, error) {
+	return alone(s, ctx, source, func(t *Tx) (Kept, error) { return t.SetPicture(id, day, f) })
 }
 
 // SetPictureOf makes a kept file, named by its title, the page's picture.
-func (s *Store) SetPictureOf(ctx context.Context, source string, id int64, title string) (r Sync, err error) {
-	err = s.Do(ctx, source, func(t *Tx) (e error) { r, e = t.SetPictureOf(id, title); return })
-	if err != nil {
-		r = Sync{}
-	}
-	return
+func (s *Store) SetPictureOf(ctx context.Context, source string, id int64, title string) (Sync, error) {
+	return alone(s, ctx, source, func(t *Tx) (Sync, error) { return t.SetPictureOf(id, title) })
 }
 
 // SetPicture is Store.SetPicture in t.
@@ -101,10 +93,13 @@ func (t *Tx) SetPicture(id int64, day string, f FileIn) (Kept, error) {
 		return Kept{}, err
 	}
 	sync, err := t.showFirst(id, k.ID, title)
+	if err != nil {
+		return Kept{}, err
+	}
 	if sync != nil {
 		k.Sync = sync
 	}
-	return k, err
+	return k, nil
 }
 
 // SetPictureOf is Store.SetPictureOf in t.
@@ -126,10 +121,10 @@ func (t *Tx) SetPictureOf(id int64, title string) (Sync, error) {
 		return Sync{}, Invalid("%q is not a kept picture: keep it first (add-file)", title)
 	}
 	sync, err := t.showFirst(id, p.ID, p.Title)
-	if sync == nil {
+	if err != nil || sync == nil {
 		return Sync{}, err
 	}
-	return *sync, err
+	return *sync, nil
 }
 
 // livePage is the title of a live page: a missing page is 404, a deleted one 409.

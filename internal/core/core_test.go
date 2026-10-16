@@ -5,10 +5,14 @@ import (
 	"database/sql"
 	"errors"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"lifelog/internal/db"
+
+	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 var ctx = context.Background()
@@ -490,5 +494,79 @@ func TestRowReadsReportEveryFault(t *testing.T) {
 				t.Errorf("list: %#v, want an empty list that is not nil", got)
 			}
 		})
+	}
+}
+
+// TestARefusedWriteReturnsNoResult: a Store method returns the zero result with its error. The write rolled back, so a
+// Sync of the links it made would name pages that do not exist. Capture fills its Sync before the mood reading is
+// refused, and CreatePage and TryAddFile fill theirs before a day as the category is refused.
+func TestARefusedWriteReturnsNoResult(t *testing.T) {
+	s := fresh(t)
+	mood := 9.0 // the range of Mood is 1-5 (measurements_scale_range)
+	id, r, err := s.Capture(ctx, "cli", "2026-10-01", "Met [[Sam]]", &mood)
+	if err == nil || id != 0 || !reflect.DeepEqual(r, Sync{}) {
+		t.Errorf("Capture = %d, %+v, %v; want 0, no Sync and the refusal", id, r, err)
+	}
+	id, r, err = s.CreatePage(ctx, "cli", "Notes", "See [[Sam]]", "2026-10-01")
+	if err == nil || id != 0 || !reflect.DeepEqual(r, Sync{}) {
+		t.Errorf("CreatePage = %d, %+v, %v; want 0, no Sync and the refusal", id, r, err)
+	}
+	k, err := s.TryAddFile(ctx, "cli", FileIn{Title: "Scan.pdf", SHA256: sha('a'), MIME: "application/pdf", Body: "See [[Sam]]", Category: "2026-10-01"})
+	if err == nil || !reflect.DeepEqual(k, Kept{}) {
+		t.Errorf("TryAddFile = %+v, %v; want no result and the refusal", k, err)
+	}
+	if sam, err := s.PageID(ctx, "Sam"); err != nil || sam != 0 {
+		t.Errorf("Sam = %d, %v; want no page", sam, err)
+	}
+}
+
+// TestAFailedRollbackIsAFault: when fn fails and the rollback fails too, the transaction can be open or kept in part.
+// Do then returns a fault, not the refusal of fn (a 409 or a 422 on every surface), and dryRun does not report a clean
+// dry run. fn commits by itself, so the rollback finds no open transaction, as in db's TestWriteReportsAFailedRollback.
+func TestAFailedRollbackIsAFault(t *testing.T) {
+	s := fresh(t)
+	commit := func(t *Tx) error {
+		_, err := t.tx.ExecContext(t.ctx, "COMMIT")
+		return err
+	}
+	after := func(fail func(t *Tx) error) func(t *Tx) error {
+		return func(t *Tx) error {
+			if err := commit(t); err != nil {
+				return err
+			}
+			return fail(t)
+		}
+	}
+	for _, c := range []struct {
+		name string
+		run  func() error
+	}{
+		{"a refusal of core", func() error {
+			return s.Do(ctx, "cli", after(func(*Tx) error { return Conflict("synthetic refusal") }))
+		}},
+		{"a title in use", func() error {
+			return s.Do(ctx, "cli", after(func(*Tx) error { return &ExistsError{ID: 1, Title: "Mood"} }))
+		}},
+		{"a refusal of the DDL", func() error {
+			return s.Do(ctx, "cli", after(func(t *Tx) error {
+				_, err := t.tx.ExecContext(t.ctx, `INSERT INTO entities(entity_type) VALUES ('no such type')`)
+				return err
+			}))
+		}},
+		{"a dry run", func() error { return s.dryRun(ctx, "cli", commit) }},
+	} {
+		err := c.run()
+		var refusal *Error
+		var exists *ExistsError
+		var rollback *sqlite.Error
+		if err == nil || errors.As(err, &refusal) || errors.As(err, &exists) {
+			t.Errorf("%s: %v; want a fault, not a refusal or no error", c.name, err)
+		}
+		if !errors.As(err, &rollback) || rollback.Code()&0xff == sqlite3.SQLITE_CONSTRAINT {
+			t.Errorf("%s: %v; want the error of the rollback in it", c.name, err)
+		}
+	}
+	if _, _, err := s.CreatePage(ctx, "cli", "After", "", ""); err != nil {
+		t.Errorf("the writer cannot write after the failed rollbacks: %v", err)
 	}
 }

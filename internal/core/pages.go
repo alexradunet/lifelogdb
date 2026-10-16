@@ -191,56 +191,51 @@ func (t *Tx) setDeleted(id int64, deleted bool) error {
 
 // ---- the same operations alone, each its own transaction
 
-func (s *Store) SaveBody(ctx context.Context, source string, id int64, body, version string) (r Sync, err error) {
-	err = s.Do(ctx, source, func(t *Tx) (e error) { r, e = t.SaveBody(id, body, version); return })
-	if err != nil {
-		r = Sync{}
-	}
-	return
+func (s *Store) SaveBody(ctx context.Context, source string, id int64, body, version string) (Sync, error) {
+	return alone(s, ctx, source, func(t *Tx) (Sync, error) { return t.SaveBody(id, body, version) })
+}
+
+// made is what a write that makes or writes a page gives, as one value for alone: the page's id and what the save of
+// its body did to its wikilinks.
+type made struct {
+	id   int64
+	sync Sync
 }
 
 // CreatePage makes the page and, with a category, files it there in the same write, as FilePages does
 // (docs/plans/115-categories-to-browse.md): a day as the category refuses the whole write.
 func (s *Store) CreatePage(ctx context.Context, source, title, body, category string) (id int64, r Sync, err error) {
-	err = s.Do(ctx, source, func(t *Tx) (e error) {
-		if id, _, r, e = t.CreatePage(title, body, "", ""); e != nil {
-			return e
+	m, err := alone(s, ctx, source, func(t *Tx) (made, error) {
+		id, _, r, err := t.CreatePage(title, body, "", "")
+		if err != nil {
+			return made{}, err
 		}
-		return t.fileNew(id, category)
+		return made{id, r}, t.fileNew(id, category)
 	})
-	if err != nil {
-		id = 0
-	}
-	return
+	return m.id, m.sync, err
 }
 
 // CreatePerson makes the person and, with a category, files it there in the same write, as CreatePage does
 // (docs/plans/117-one-browse-view.md, rule 6).
-func (s *Store) CreatePerson(ctx context.Context, source, title, name, birth, death, category string) (id int64, err error) {
-	err = s.Do(ctx, source, func(t *Tx) (e error) {
-		if id, _, e = t.CreatePerson(title, name, birth, death, ""); e != nil {
-			return e
+func (s *Store) CreatePerson(ctx context.Context, source, title, name, birth, death, category string) (int64, error) {
+	return alone(s, ctx, source, func(t *Tx) (int64, error) {
+		id, _, err := t.CreatePerson(title, name, birth, death, "")
+		if err != nil {
+			return 0, err
 		}
-		return t.fileNew(id, category)
+		return id, t.fileNew(id, category)
 	})
-	if err != nil {
-		id = 0
-	}
-	return
 }
 
 // CreatePlace makes the place and, with a category, files it there in the same write, as CreatePage does.
-func (s *Store) CreatePlace(ctx context.Context, source, title, category string) (id int64, err error) {
-	err = s.Do(ctx, source, func(t *Tx) (e error) {
-		if id, _, e = t.CreatePlace(title, ""); e != nil {
-			return e
+func (s *Store) CreatePlace(ctx context.Context, source, title, category string) (int64, error) {
+	return alone(s, ctx, source, func(t *Tx) (int64, error) {
+		id, _, err := t.CreatePlace(title, "")
+		if err != nil {
+			return 0, err
 		}
-		return t.fileNew(id, category)
+		return id, t.fileNew(id, category)
 	})
-	if err != nil {
-		id = 0
-	}
-	return
 }
 
 // fileNew files a thing made in this write in the category titled category ("" for none), as FilePages files it:

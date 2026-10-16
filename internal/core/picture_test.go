@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -229,5 +230,48 @@ func TestNamedMentionsPictureIsTheFirstEmbedThatIsAKeptPicture(t *testing.T) {
 		if r.Picture != want[r.Title] {
 			t.Errorf("%s: Picture = %d, want %d", r.Title, r.Picture, want[r.Title])
 		}
+	}
+}
+
+// TestATxPictureThatFailsReturnsNoResult: Tx.SetPicture and Tx.SetPictureOf return no result with an error, also when
+// the save of the body failed after its links were synced, so a write that goes on after the error has no result to
+// report. A temporary trigger refuses the delete of a stray wikilink row: the save of the body then fails at its
+// last step. The write is rolled back at the end.
+func TestATxPictureThatFailsReturnsNoResult(t *testing.T) {
+	s := fresh(t)
+	pic := smallJPEG(t)
+	ana, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stray, err := s.CreatePerson(ctx, "cli", "Stray", "", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddFile(ctx, "cli", FileIn{Title: "Ana.jpg", SHA256: sha('a'), MIME: "image/jpeg", Preview: pic}); err != nil {
+		t.Fatal(err)
+	}
+	end := errors.New("the test ends the write")
+	err = s.Do(ctx, "cli", func(tx *Tx) error {
+		if _, err := tx.tx.ExecContext(tx.ctx, `INSERT INTO links(from_id, to_id, kind, created_at, source)
+			VALUES (?, ?, 'wikilink', '2026-10-16T00:00:00.000Z', 'cli')`, ana, stray); err != nil {
+			return err
+		}
+		if _, err := tx.tx.ExecContext(tx.ctx, `CREATE TEMP TRIGGER refuse_a_link_delete BEFORE DELETE ON links
+			BEGIN SELECT RAISE(ABORT, 'synthetic fault'); END`); err != nil {
+			return err
+		}
+		k, err := tx.SetPicture(ana, "2026-10-16", FileIn{SHA256: sha('b'), MIME: "image/jpeg", Preview: pic})
+		if err == nil || !reflect.DeepEqual(k, Kept{}) {
+			t.Errorf("SetPicture = %+v, %v; want no result and the fault", k, err)
+		}
+		r, err := tx.SetPictureOf(ana, "Ana.jpg")
+		if err == nil || !reflect.DeepEqual(r, Sync{}) {
+			t.Errorf("SetPictureOf = %+v, %v; want no result and the fault", r, err)
+		}
+		return end
+	})
+	if !errors.Is(err, end) {
+		t.Errorf("Do = %v, want the end of the test", err)
 	}
 }

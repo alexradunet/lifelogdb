@@ -52,11 +52,11 @@ func (t *Tx) dayPage(day string) (int64, error) {
 }
 
 func (s *Store) Capture(ctx context.Context, source, day, entry string, mood *float64) (id int64, r Sync, err error) {
-	err = s.Do(ctx, source, func(t *Tx) (e error) { id, r, e = t.Capture(day, entry, mood); return })
-	if err != nil {
-		id = 0 // rolled back
-	}
-	return
+	m, err := alone(s, ctx, source, func(t *Tx) (made, error) {
+		id, r, err := t.Capture(day, entry, mood)
+		return made{id, r}, err
+	})
+	return m.id, m.sync, err
 }
 
 // DayRow is one row of cookbook/day-view.md.

@@ -127,11 +127,7 @@ func (t *Tx) Rename(id int64, newTitle string) (int64, error) {
 }
 
 func (s *Store) Rename(ctx context.Context, source string, id int64, newTitle string) (to int64, err error) {
-	err = s.Do(ctx, source, func(t *Tx) (e error) { to, e = t.Rename(id, newTitle); return })
-	if err != nil {
-		to = 0
-	}
-	return
+	return alone(s, ctx, source, func(t *Tx) (int64, error) { return t.Rename(id, newTitle) })
 }
 
 // PageID resolves an owned name through the registry; 0 when no entity owns it.

@@ -290,7 +290,7 @@ func (d *DB) Close() error {
 }
 
 // Write runs fn in one BEGIN IMMEDIATE transaction, committed when fn returns nil. When fn fails and the rollback
-// fails too, Write returns both errors: the transaction can then still be open, or kept in part.
+// fails too, Write returns a *RollbackError with both errors: the transaction can then still be open, or kept in part.
 func (d *DB) Write(ctx context.Context, fn func(*sql.Tx) error) error {
 	tx, err := d.W.BeginTx(ctx, nil)
 	if err != nil {
@@ -299,12 +299,20 @@ func (d *DB) Write(ctx context.Context, fn func(*sql.Tx) error) error {
 	if err := fn(tx); err != nil {
 		// ErrTxDone: database/sql rolled the transaction back already, because ctx was cancelled.
 		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
-			return errors.Join(err, fmt.Errorf("rollback: %w", rerr))
+			return &RollbackError{Err: err, Rollback: rerr}
 		}
 		return err
 	}
 	return tx.Commit()
 }
+
+// RollbackError is the error of a Write whose fn failed and whose rollback failed too. Err is the error of fn and
+// Rollback the error of the rollback; errors.Is and errors.As find both. A caller must not read it as the error of
+// fn alone: the transaction can still be open, or kept in part.
+type RollbackError struct{ Err, Rollback error }
+
+func (e *RollbackError) Error() string   { return e.Err.Error() + "\nrollback: " + e.Rollback.Error() }
+func (e *RollbackError) Unwrap() []error { return []error{e.Err, e.Rollback} }
 
 // Copy writes a copy of a life.db to a new file through a read-only connection (docs/contract/imports.md step 1:
 // VACUUM INTO). It refuses an existing target.

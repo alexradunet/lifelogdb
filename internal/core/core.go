@@ -83,10 +83,16 @@ func conflictCode(code, format string, a ...any) error {
 	return &Error{Status: 409, Msg: fmt.Sprintf(format, a...), Code: code}
 }
 
-// refused turns a constraint or trigger failure of the DDL into a 422 with SQLite's own message.
+// refused turns a constraint or trigger failure of the DDL into a 422 with SQLite's own message. A write whose
+// rollback failed (db.RollbackError) is a fault, whatever its fn returned: the transaction can be open or kept in part.
+// Its text keeps the error of fn, and its chain only the error of the rollback, so no surface reads it as a refusal.
 func refused(err error) error {
 	if err == nil {
 		return nil
+	}
+	var rb *db.RollbackError
+	if errors.As(err, &rb) {
+		return fmt.Errorf("%v\nrollback: %w", rb.Err, rb.Rollback)
 	}
 	var e *Error
 	if errors.As(err, &e) {

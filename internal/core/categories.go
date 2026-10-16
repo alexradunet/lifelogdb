@@ -136,10 +136,6 @@ func (t *Tx) FilePages(ids []int64, category string, move bool) (Filed, error) {
 	return f, nil
 }
 
-func (s *Store) FilePages(ctx context.Context, source string, ids []int64, category string, move bool) (f Filed, err error) {
-	err = s.Do(ctx, source, func(t *Tx) (e error) { f, e = t.FilePages(ids, category, move); return })
-	if err != nil {
-		f = Filed{}
-	}
-	return
+func (s *Store) FilePages(ctx context.Context, source string, ids []int64, category string, move bool) (Filed, error) {
+	return alone(s, ctx, source, func(t *Tx) (Filed, error) { return t.FilePages(ids, category, move) })
 }

@@ -577,9 +577,9 @@ func TestSnapshotDestinationErrors(t *testing.T) {
 	}
 }
 
-// TestWriteReportsAFailedRollback: when fn fails and the rollback fails too, Write returns both errors. The caller
-// then knows that the transaction was not rolled back. Here fn commits by itself before it fails, so the rollback
-// finds no open transaction.
+// TestWriteReportsAFailedRollback: when fn fails and the rollback fails too, Write returns both errors in a
+// RollbackError. The caller then knows that the transaction was not rolled back. Here fn commits by itself before it
+// fails, so the rollback finds no open transaction.
 func TestWriteReportsAFailedRollback(t *testing.T) {
 	d := Fresh(t)
 	failed := errors.New("fn failed")
@@ -590,8 +590,9 @@ func TestWriteReportsAFailedRollback(t *testing.T) {
 		return failed
 	})
 	var rollback *sqlite.Error
-	if !errors.Is(err, failed) || !errors.As(err, &rollback) {
-		t.Fatalf("Write = %v, want the error of fn and the SQLite error of the rollback", err)
+	var both *RollbackError
+	if !errors.Is(err, failed) || !errors.As(err, &rollback) || !errors.As(err, &both) {
+		t.Fatalf("Write = %v, want a RollbackError with the error of fn and the SQLite error of the rollback", err)
 	}
 	if err := d.Write(t.Context(), func(*sql.Tx) error { return nil }); err != nil {
 		t.Errorf("the writer is not usable after the failed rollback: %v", err)

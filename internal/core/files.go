@@ -205,12 +205,8 @@ func (t *Tx) ownDay(k *Kept, f FileIn, title, day string, own, picture bool) err
 	return err
 }
 
-func (s *Store) AddFile(ctx context.Context, source string, f FileIn) (k Kept, err error) {
-	err = s.Do(ctx, source, func(t *Tx) (e error) { k, e = t.AddFile(f); return })
-	if err != nil {
-		k = Kept{}
-	}
-	return
+func (s *Store) AddFile(ctx context.Context, source string, f FileIn) (Kept, error) {
+	return alone(s, ctx, source, func(t *Tx) (Kept, error) { return t.AddFile(f) })
 }
 
 // File is what a file page has beyond its page.
@@ -251,16 +247,19 @@ func NormalMIME(s string) string {
 }
 
 // TryAddFile is AddFile in a transaction that is rolled back: what keeping the file would do, writing nothing. A page
-// it would create has no id, and neither has a category it would create.
-func (s *Store) TryAddFile(ctx context.Context, source string, f FileIn) (k Kept, err error) {
-	err = s.dryRun(ctx, source, func(t *Tx) (e error) { k, e = t.AddFile(f); return })
+// it would create has no id, and neither has a category it would create. A refusal gives no result, as alone does.
+func (s *Store) TryAddFile(ctx context.Context, source string, f FileIn) (Kept, error) {
+	var k Kept
+	if err := s.dryRun(ctx, source, func(t *Tx) (err error) { k, err = t.AddFile(f); return err }); err != nil {
+		return Kept{}, err
+	}
 	if !k.Existing {
 		k.ID = 0
 	}
 	if k.Filed != nil && k.Filed.Created {
 		k.Filed.Category.ID = 0
 	}
-	return
+	return k, nil
 }
 
 // embed shows a file in a day's page once: `![[title]]` appended after a blank line unless the page shows it
