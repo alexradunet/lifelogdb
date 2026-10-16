@@ -5,6 +5,7 @@ package phototest
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -90,7 +91,9 @@ func TIFF(m photo.Meta, little bool) []byte {
 	return append(out, dataArea...)
 }
 
-// JPEG is a w×h JPEG (a gradient) carrying m's EXIF in an APP1 segment right after its SOI marker.
+// JPEG is a w×h JPEG (a gradient) carrying m's EXIF in an APP1 segment right after its SOI marker. It panics with
+// the error of jpeg.Encode when the encode fails (a side of 65,536 pixels or more): such a size is a defect of the
+// test.
 func JPEG(w, h int, m photo.Meta, little bool) []byte {
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	for y := range h {
@@ -99,7 +102,9 @@ func JPEG(w, h int, m photo.Meta, little bool) []byte {
 		}
 	}
 	var b bytes.Buffer
-	jpeg.Encode(&b, img, nil)
+	if err := jpeg.Encode(&b, img, nil); err != nil {
+		panic(fmt.Errorf("phototest: a %d×%d JPEG: %w", w, h, err))
+	}
 	j := b.Bytes()
 	seg := append([]byte("Exif\x00\x00"), TIFF(m, little)...)
 	out := append([]byte{}, j[:2]...)
