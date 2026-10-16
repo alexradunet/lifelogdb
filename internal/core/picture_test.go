@@ -233,10 +233,10 @@ func TestNamedMentionsPictureIsTheFirstEmbedThatIsAKeptPicture(t *testing.T) {
 	}
 }
 
-// TestATxPictureThatFailsReturnsNoResult: Tx.SetPicture and Tx.SetPictureOf return no result with an error, also when
-// the save of the body failed after its links were synced, so a write that goes on after the error has no result to
-// report. A temporary trigger refuses the delete of a stray wikilink row: the save of the body then fails at its
-// last step. The write is rolled back at the end.
+// TestATxPictureThatFailsReturnsNoResult: the Tx methods setPicture and setPictureOf return no result with an error,
+// also when the save of the body failed after its links were synced, so a write that goes on after the error has no
+// result to report. A temporary trigger refuses the delete of a stray wikilink row: the save of the body then fails at
+// its last step. The write is rolled back at the end.
 func TestATxPictureThatFailsReturnsNoResult(t *testing.T) {
 	s := fresh(t)
 	pic := smallJPEG(t)
