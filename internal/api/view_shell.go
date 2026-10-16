@@ -49,25 +49,26 @@ func shellOf(ctx context.Context, s *core.Store) *shellView {
 // navItems are the sidebar's links, in order, by group: "home" is the brand, "day" the sections of every day (on a
 // phone, the bottom bar with More), "owner" the links at its foot. Each stands for the pages under its paths, so the
 // one the browser is on is marked (Nav). A page's own neighbours need no entry here, since every template places them
-// from the entity's links. Browse is the one list of the record (docs/plans/117-one-browse-view.md, rule 7).
+// from the entity's links. Browse is the one list of the record (docs/plans/117-one-browse-view.md, rule 7). Key is
+// the access key of an item, "" for none: t is Today.
 var navItems = []struct {
 	Title, Href, Icon string
 	Paths             []string // the pages it stands for: these paths and the paths under them
-	Group             string
+	Group, Key        string
 }{
-	{"Lifelog", "/", "", []string{"/"}, "home"},
-	{"Today", "/days/today", "today", []string{"/days/today"}, "day"},
-	{"Calendar", "/months/current", "calendar", []string{"/months", "/weeks", "/years", "/days"}, "day"},
-	{"Metrics", "/metrics", "metrics", []string{"/metrics"}, "day"},
-	{"Browse", "/browse", "browse", []string{"/browse"}, "day"},
-	{"Every action", "/actions", "", []string{"/actions"}, "owner"},
-	{"Integrity checks", "/integrity", "", []string{"/integrity"}, "owner"},
+	{"Lifelog", "/", "", []string{"/"}, "home", ""},
+	{"Today", "/days/today", "today", []string{"/days/today"}, "day", "t"},
+	{"Calendar", "/months/current", "calendar", []string{"/months", "/weeks", "/years", "/days"}, "day", ""},
+	{"Metrics", "/metrics", "metrics", []string{"/metrics"}, "day", ""},
+	{"Browse", "/browse", "browse", []string{"/browse"}, "day", ""},
+	{"Every action", "/actions", "", []string{"/actions"}, "owner", ""},
+	{"Integrity checks", "/integrity", "", []string{"/integrity"}, "owner", ""},
 }
 
 // navItem is one sidebar link, marked when the browser is on a page it stands for.
 type navItem struct {
-	Title, Href, Icon, Group string
-	Current                  bool
+	Title, Href, Icon, Group, Key string
+	Current                       bool
 }
 
 // newKinds are the items of the rail's New menu (docs/plans/114-one-way-to-do-a-thing.md): each kind is made on its
@@ -96,7 +97,7 @@ func (v *view) Nav() []navItem {
 	out := make([]navItem, len(navItems))
 	best, at, length := -1, 0, 0
 	for i, it := range navItems {
-		out[i] = navItem{Title: it.Title, Href: it.Href, Icon: it.Icon, Group: it.Group}
+		out[i] = navItem{Title: it.Title, Href: it.Href, Icon: it.Icon, Group: it.Group, Key: it.Key}
 		for _, p := range it.Paths {
 			if n := navMatch(path, p); n > at || n == at && n > 0 && len(p) > length {
 				best, at, length = i, n, len(p)

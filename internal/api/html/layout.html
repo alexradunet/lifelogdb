@@ -42,7 +42,7 @@
 </div>
 </aside>{{end}}
 
-{{define "navlink"}}<a href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}{{if eq .Href "/days/today"}} accesskey="t"{{end}}>{{icon .Icon}}{{.Title}}</a>{{end}}
+{{define "navlink"}}<a href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}{{with .Key}} accesskey="{{.}}"{{end}}>{{icon .Icon}}{{.Title}}</a>{{end}}
 
 {{/* feedback is what a browser form's POST did, carried across the redirect by a one-use receipt: the toast of the
      design system, at the top of the page, where it stays until the next page, for it may name what the write did
