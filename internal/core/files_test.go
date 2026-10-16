@@ -252,8 +252,13 @@ func TestAddFileRefuses(t *testing.T) {
 	if _, _, err := s.Capture(ctx, "cli", "2026-10-04", "x", nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.AddFile(ctx, "cli", FileIn{Title: "2026-10-04", SHA256: sha('a'), MIME: "image/jpeg"}); !errors.As(err, &ex) {
-		t.Errorf("a day page's title: %v", err)
+	// a day page is never a file: entities_day_page_plain refuses the promotion, and nothing is written
+	before := everyRow(t, s)
+	if _, err := s.AddFile(ctx, "cli", FileIn{Title: "2026-10-04", SHA256: sha('a'), MIME: "image/jpeg"}); status(err) != 422 || !strings.Contains(err.Error(), "entities_day_page_plain") {
+		t.Errorf("a day page's title: %v, want the 422 of entities_day_page_plain", err)
+	}
+	if after := everyRow(t, s); after != before {
+		t.Errorf("a refused file wrote:\nbefore:\n%s\nafter:\n%s", before, after)
 	}
 	for name, f := range map[string]FileIn{
 		"a short hash":     {Title: "A", SHA256: sha('a')[:63], MIME: "image/jpeg"},

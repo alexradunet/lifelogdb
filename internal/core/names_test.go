@@ -130,10 +130,10 @@ func TestAWriteToAPageThatIsNotLive(t *testing.T) {
 	}
 }
 
-// TestOnlyALookupWithBodyReadsTheBody: livePage and lookup give the title, the version and the day-page flag of a
-// page, and leave the body empty. body is the last column of entities, so a write that checks a long page (each id of
-// a bulk filing, each title that a write looks up) does not read the overflow pages of its body. lookupWithBody gives
-// the body too, for keep and RegisterMetric.
+// TestOnlyALookupWithBodyReadsTheBody: livePage and lookup give the title and the version of a page, and leave the
+// body empty. body is the last column of entities, so a write that checks a long page (each id of a bulk filing, each
+// title that a write looks up) does not read the overflow pages of its body. lookupWithBody gives the body too, for
+// keep and RegisterMetric.
 func TestOnlyALookupWithBodyReadsTheBody(t *testing.T) {
 	s := fresh(t)
 	id, _, err := s.CreatePage(ctx, "cli", "Long", "words of the body", "")
@@ -154,8 +154,8 @@ func TestOnlyALookupWithBodyReadsTheBody(t *testing.T) {
 			if name == "lookupWithBody" {
 				body = "words of the body"
 			}
-			if p == nil || p.ID != id || p.Title != "Long" || p.Version != "1" || p.DayPage || p.Body != body {
-				t.Errorf("%s = %+v; want the page Long at version 1, not a day page, with the body %q", name, p, body)
+			if p == nil || p.ID != id || p.Title != "Long" || p.Version != "1" || p.Body != body {
+				t.Errorf("%s = %+v; want the page Long at version 1, with the body %q", name, p, body)
 			}
 		}
 		return nil

@@ -476,23 +476,34 @@ func TestCreateMetricRefusalsWriteNothing(t *testing.T) {
 	if err := s.Tombstone(ctx, "cli", gone); err != nil {
 		t.Fatal(err)
 	}
+	if _, _, err := s.Capture(ctx, "cli", "2031-05-02", "a day", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreatePlace(ctx, "cli", "Lake Example", ""); err != nil {
+		t.Fatal(err)
+	}
 	for _, c := range []struct {
 		name string
 		m    NewMetric
 		want int
+		says string // a part of the message; "" for any
 	}{
-		{"a deleted category", NewMetric{Name: "Run", Unit: "km", Category: "Old Group"}, 409},
-		{"a day as the category", NewMetric{Name: "Run", Unit: "km", Category: "2031-05-01"}, 422},
+		{"a deleted category", NewMetric{Name: "Run", Unit: "km", Category: "Old Group"}, 409, ""},
+		{"a day as the category", NewMetric{Name: "Run", Unit: "km", Category: "2031-05-01"}, 422, ""},
+		// a day page is never a metric: the schema refuses the promotion
+		{"a day page's title", NewMetric{Name: "2031-05-02", Unit: "km"}, 422, "entities_day_page_plain"},
+		// a place is never a metric, and no rule of the schema refuses it (a place has no typed row): the writer
+		// refuses a page of another type (D27)
+		{"a place's title", NewMetric{Name: "Lake Example", Unit: "km"}, 409, "is taken by a place: a metric's title must be free or a plain page"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
+			before := everyRow(t, s)
 			_, err := s.CreateMetric(ctx, "cli", c.m)
-			if status(err) != c.want {
-				t.Fatalf("status %d (%v), want %d", status(err), err, c.want)
+			if status(err) != c.want || !strings.Contains(fmt.Sprint(err), c.says) {
+				t.Fatalf("status %d (%v), want %d with %q", status(err), err, c.want, c.says)
 			}
-			for _, title := range []string{"Run", "Sport"} {
-				if id, err := s.PageID(ctx, title); err != nil || id != 0 {
-					t.Errorf("a refused CreateMetric made %s, page %d (%v)", title, id, err)
-				}
+			if after := everyRow(t, s); after != before {
+				t.Errorf("a refused CreateMetric wrote:\nbefore:\n%s\nafter:\n%s", before, after)
 			}
 		})
 	}

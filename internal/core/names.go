@@ -36,7 +36,6 @@ type pageRef struct {
 	Title   string
 	Body    string
 	Version string
-	DayPage bool
 	Deleted bool
 }
 
@@ -83,16 +82,14 @@ func (t *Tx) findPage(body bool, cond string, arg any) (*pageRef, error) {
 		column = `e.body`
 	}
 	p := &pageRef{}
-	var day sql.NullString
-	err := t.tx.QueryRowContext(t.ctx, `SELECT e.id, e.entity_type, n.title, `+column+`, e.day, e.deleted_at IS NOT NULL,
+	err := t.tx.QueryRowContext(t.ctx, `SELECT e.id, e.entity_type, n.title, `+column+`, e.deleted_at IS NOT NULL,
                                CAST(e.revision AS TEXT)
                           FROM entities e JOIN entity_names n ON n.entity_id = e.id AND n.name_key = e.preferred_name_key
                          WHERE `+cond, arg).
-		Scan(&p.ID, &p.Type, &p.Title, &p.Body, &day, &p.Deleted, &p.Version)
+		Scan(&p.ID, &p.Type, &p.Title, &p.Body, &p.Deleted, &p.Version)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
-	p.DayPage = day.Valid && day.String == p.Title
 	return p, err
 }
 

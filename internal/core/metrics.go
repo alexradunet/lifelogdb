@@ -46,9 +46,10 @@ func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
 			return false, Conflict("metric %s exists with unit %q, not %q: a unit never changes; register a new metric", p.Title, have, unit)
 		}
 		return false, nil
-	case p.Type != "page" || p.DayPage:
-		return false, Conflict("%s is taken by a %s or a day page: a metric's title must be free or a plain page (D27)", p.Title, p.Type)
+	case p.Type != "page":
+		return false, Conflict("%s is taken by a %s: a metric's title must be free or a plain page (D27)", p.Title, p.Type)
 	}
+	// a day page is never a metric: entities_day_page_plain refuses the update
 	if _, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET entity_type = 'metric', deleted_at = NULL WHERE id = ?`, p.ID); err != nil {
 		return false, err
 	}

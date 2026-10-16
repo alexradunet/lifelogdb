@@ -142,7 +142,7 @@ func (t *Tx) keep(f FileIn) (k Kept, err error) {
 			return k, err
 		}
 		title = f.Title
-	case p.Type == "page" && !p.DayPage:
+	case p.Type == "page": // a day page is never a file: entities_day_page_plain refuses the update
 		if p.Body != "" && f.Body != "" && p.Body != f.Body {
 			return k, Conflict("%s already has text of its own: give the file another title (two texts are never merged)", p.Title)
 		}
