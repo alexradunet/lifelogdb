@@ -1,6 +1,9 @@
 package core
 
-import "context"
+import (
+	"context"
+	"strings"
+)
 
 // The reads of Browse (docs/plans/117-one-browse-view.md): the lists of each kind in one scope, what is filed
 // directly in a category, and the count of each kind in the scope.
@@ -40,7 +43,7 @@ const isCategory = `EXISTS (SELECT 1 FROM links c WHERE c.kind = 'part-of' AND c
 
 // browseKind is the Browse kind of the entity p, with its file f (a LEFT JOIN): its type, or media or document for a
 // file.
-const browseKind = `CASE WHEN p.entity_type <> 'file' THEN p.entity_type WHEN ` + mediaKind + ` IN ('image', 'video', 'audio') THEN 'media' ELSE 'document' END`
+var browseKind = `CASE WHEN p.entity_type <> 'file' THEN p.entity_type WHEN ` + isMedia + ` THEN 'media' ELSE 'document' END`
 
 // PageRow is a live plain page as Browse lists it. Category says that it is a category: a part-of link ends at it.
 type PageRow struct {
@@ -205,6 +208,9 @@ type FileRow struct {
 // mediaKind is the first part of files.mime: 'image' of 'image/jpeg'. files_mime guarantees the slash.
 const mediaKind = `substr(f.mime, 1, instr(f.mime, '/') - 1)`
 
+// isMedia is the condition on the file f of a file of the media kinds (MediaKinds).
+var isMedia = mediaKind + ` IN ('` + strings.Join(MediaKinds, `', '`) + `')`
+
 // Media is one page of the live files of the media kinds in the scope: all of them, or the one kind named. Newest
 // day first (FileRow.Day), then the newest kept.
 func (s *Store) Media(ctx context.Context, kind string, sc Scope, limit, offset int) ([]FileRow, error) {
@@ -232,7 +238,7 @@ func (s *Store) filesOf(ctx context.Context, media bool, kind string, sc Scope, 
 		  LEFT JOIN entities lp ON lp.id = l.from_id AND lp.deleted_at IS NULL
 		  LEFT JOIN entity_names lp_name ON lp_name.entity_id = lp.id AND lp_name.name_key = lp.preferred_name_key
 		 WHERE p.deleted_at IS NULL
-		   AND (`+mediaKind+` IN ('image', 'video', 'audio')) = ?
+		   AND (`+isMedia+`) = ?
 		   AND (? = '' OR `+mediaKind+` = ?) AND `+where+`
 		 GROUP BY p.id, p_name.title, f.mime, f.preview IS NOT NULL
 		 ORDER BY day DESC, p.created_at DESC, p.id DESC LIMIT ? OFFSET ?`, append(append([]any{media, kind, kind}, args...), limit, offset)...)
@@ -243,7 +249,7 @@ func (s *Store) filesOf(ctx context.Context, media bool, kind string, sc Scope, 
 func (s *Store) MediaCounts(ctx context.Context, sc Scope) (map[string]int, error) {
 	where, args := sc.where()
 	return groupCounts(s.DB.R.QueryContext(ctx, `SELECT `+mediaKind+`, count(*) FROM files f JOIN entities p ON p.id = f.id
-		WHERE p.deleted_at IS NULL AND `+mediaKind+` IN ('image', 'video', 'audio') AND `+where+` GROUP BY 1`, args...))
+		WHERE p.deleted_at IS NULL AND `+isMedia+` AND `+where+` GROUP BY 1`, args...))
 }
 
 // Ghost is a row of the ghost_pages view (cookbook/ghost-pages.md).
