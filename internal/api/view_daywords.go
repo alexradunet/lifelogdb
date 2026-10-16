@@ -105,11 +105,11 @@ func calItem(item any) calWords {
 		if years == 0 {
 			return calWords{Tag: "born", Word: "born"}
 		}
-		return calWords{Tag: "birthday", Word: "birthday", Note: yearsWords(years)}
+		return calWords{Tag: "birthday", Word: "birthday", Note: count(years, "year", "years")}
 	case "death":
 		w := calWords{Tag: "died", Word: "died"}
 		if years > 0 {
-			w.Note = yearsWords(years) + " ago"
+			w.Note = count(years, "year", "years") + " ago"
 		}
 		return w
 	case "place":
@@ -118,14 +118,6 @@ func calItem(item any) calWords {
 		return calWords{Tag: "file"}
 	}
 	return calWords{Tag: "page"}
-}
-
-// yearsWords is a count of whole years: "1 year", "36 years".
-func yearsWords(n float64) string {
-	if n == 1 {
-		return "1 year"
-	}
-	return num(n) + " years"
 }
 
 // upTo is the first n items of a list: a cell shows three items, and a phone's cell four squares.

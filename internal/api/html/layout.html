@@ -143,7 +143,7 @@
      (docs/plans/095-the-leaf-and-its-margin.md). */}}
 {{define "form"}}{{with .}}<form method="{{.Method}}" action="{{.Href}}"{{if .Refused}} aria-describedby="refused"{{end}}{{with .Class}} class="{{.}}"{{end}}{{if .Multipart}} enctype="multipart/form-data"{{end}}>
 {{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{num .Value}}">{{end}}{{with .Back}}<input type="hidden" name="back" value="{{.}}">{{end}}
-{{range .Fields false}}{{template "field" .}}{{end}}{{with .Fields true}}<details class="more-fields"{{if $.MoreOpen}} open{{end}}><summary>{{len .}} more field{{if ne (len .) 1}}s{{end}}</summary>
+{{range .Fields false}}{{template "field" .}}{{end}}{{with .Fields true}}<details class="more-fields"{{if $.MoreOpen}} open{{end}}><summary>{{count (len .) "more field" "more fields"}}</summary>
 {{range .}}{{template "field" .}}{{end}}</details>
 {{end}}{{if .Preview}}<button type="submit" class="quiet" formaction="/render" formmethod="POST" formtarget="_blank">Preview</button>{{end}}<button{{if .Danger}} class="danger"{{else if .Primary}} class="primary"{{end}}>{{.Button}}</button></form>{{end}}{{end}}
 

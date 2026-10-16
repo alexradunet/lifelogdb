@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 	"unicode"
@@ -183,10 +182,7 @@ func (v *view) Mentions(mentions, lastDay any) string {
 	if n < 1 {
 		return "not mentioned yet"
 	}
-	words := fmt.Sprintf("mentioned on %d pages", int(n))
-	if n == 1 {
-		words = "mentioned on 1 page"
-	}
+	words := "mentioned on " + count(n, "page", "pages")
 	if day, _ := lastDay.(string); day != "" {
 		words += ", last " + v.clock().day(day)
 	}
@@ -212,12 +208,8 @@ func (v *view) FileWords(kind, mime, day any) string {
 
 // MediaCount says a count of the media list in words: "3 pictures", "1 video", "no recordings".
 func (v *view) MediaCount(n any, one, many string) string {
-	c, _ := n.(float64)
-	switch c {
-	case 0:
+	if c, _ := n.(float64); c == 0 {
 		return "no " + many
-	case 1:
-		return "1 " + one
 	}
-	return num(c) + " " + many
+	return count(n, one, many)
 }

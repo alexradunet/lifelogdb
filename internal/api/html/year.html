@@ -11,5 +11,5 @@
 </div></header>
 
 <div class="year">{{range $y.months}}{{template "monthbox" (dict "href" (printf "/months/%s" .month) "name" (monthName .month) "written" .written "days" .days "today" $y.today)}}{{end}}</div>
-<p class="sub"><span class="meta">{{num $y.written}} {{if eq (num $y.written) "1"}}day{{else}}days{{end}} written</span><span class="meta">{{num $y.readings}} {{if eq (num $y.readings) "1"}}reading{{else}}readings{{end}}</span></p>
+<p class="sub"><span class="meta">{{count $y.written "day" "days"}} written</span><span class="meta">{{count $y.readings "reading" "readings"}}</span></p>
 {{template "foot" .}}{{end}}

@@ -131,3 +131,78 @@ func TestAResultIsSaidInSentences(t *testing.T) {
 		}
 	}
 }
+
+// TestCountSaysTheNumberAndTheFormOfItsNoun: count writes the number in full and the noun in the form for that
+// number, for a JSON number and for a length, with the words of each site that calls it.
+func TestCountSaysTheNumberAndTheFormOfItsNoun(t *testing.T) {
+	for _, c := range []struct {
+		n         any
+		one, many string
+		want      string
+	}{
+		{0.0, "reading", "readings", "0 readings"},
+		{1.0, "reading", "readings", "1 reading"},
+		{2.0, "reading", "readings", "2 readings"},
+		{1234567.0, "reading", "readings", "1234567 readings"},
+		{1e6, "day", "days", "1000000 days"},
+		{0.5, "day", "days", "0.5 days"},
+		{0, "more field", "more fields", "0 more fields"},
+		{1, "more field", "more fields", "1 more field"},
+		{2, "more field", "more fields", "2 more fields"},
+		{1.0, "more page", "more pages", "1 more page"},
+		{2.0, "more page", "more pages", "2 more pages"},
+		{1.0, "day", "days", "1 day"},
+		{1.0, "year", "years", "1 year"},
+		{36.0, "year", "years", "36 years"},
+		{1.0, "page", "pages", "1 page"},
+		{1.0, "picture", "pictures", "1 picture"},
+		{nil, "reading", "readings", "0 readings"},
+		{"1", "reading", "readings", "0 readings"},
+	} {
+		if got := count(c.n, c.one, c.many); got != c.want {
+			t.Errorf("count(%#v, %q, %q) = %q, want %q", c.n, c.one, c.many, got, c.want)
+		}
+	}
+}
+
+// TestTheSitesOfCountSayZeroTheirOwnWay: a site that calls count says 0 in its own words, and every other number
+// with count.
+func TestTheSitesOfCountSayZeroTheirOwnWay(t *testing.T) {
+	v := &view{Shell: &shellView{Today: "2026-10-16", Zone: time.UTC}}
+	cell := func(kind string, years float64) string { // a calendar item as its cell and its note say it
+		w := calItem(map[string]any{"kind": kind, "years": years})
+		return strings.TrimSpace(w.Word + " " + w.Note)
+	}
+	for _, c := range []struct {
+		n                                      float64
+		media, mentions, birthday, death, year string
+	}{
+		{0, "no pictures", "not mentioned yet", "born", "died", "0 readings"},
+		{1, "1 picture", "mentioned on 1 page, last Thu 1 Oct", "birthday 1 year", "died 1 year ago", "1 reading · 70 kg"},
+		{2, "2 pictures", "mentioned on 2 pages, last Thu 1 Oct", "birthday 2 years", "died 2 years ago", "2 readings · 70 to 71 kg"},
+		{1234567, "1234567 pictures", "mentioned on 1234567 pages, last Thu 1 Oct", "birthday 1234567 years", "died 1234567 years ago", ""},
+	} {
+		if got := v.MediaCount(c.n, "picture", "pictures"); got != c.media {
+			t.Errorf("MediaCount(%g) = %q, want %q", c.n, got, c.media)
+		}
+		if got := v.Mentions(c.n, "2026-10-01"); got != c.mentions {
+			t.Errorf("Mentions(%g) = %q, want %q", c.n, got, c.mentions)
+		}
+		if got := cell("birthday", c.n); got != c.birthday {
+			t.Errorf("a birthday of %g years: %q, want %q", c.n, got, c.birthday)
+		}
+		if got := cell("death", c.n); got != c.death {
+			t.Errorf("a death %g years ago: %q, want %q", c.n, got, c.death)
+		}
+		if c.year == "" {
+			continue
+		}
+		rows := make([]map[string]any, int(c.n))
+		for i := range rows {
+			rows[i] = map[string]any{"value": float64(70 + i)}
+		}
+		if got := yearSummary(rows, "kg"); got != c.year {
+			t.Errorf("the summary of a year of %g readings = %q, want %q", c.n, got, c.year)
+		}
+	}
+}

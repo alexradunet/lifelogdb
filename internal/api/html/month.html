@@ -17,7 +17,7 @@
 <tbody>{{range weeks $m.days}}<tr>{{range .}}{{if .}}<td{{if .page}} class="written"{{end}}{{if eq .day $m.today}} aria-current="date"{{end}}><a href="/days/{{.day}}"><span class="n">{{dayOfMonth .day}}</span>{{with .first_line}}<span class="first">{{.}}</span>{{end}}
 {{- with .items}}<span class="items">{{range upTo . 3}}{{$w := calItem .}}<span class="item">{{.title}}{{with $w.Word}} <small>{{.}}</small>{{end}}</span>{{end}}</span><span class="marks" aria-hidden="true">{{range upTo . 4}}<i></i>{{end}}</span>{{end}}
 {{- with beyond .items 3 .more_pages}}<span class="more">and {{.}} more</span>{{end}}
-{{- if or .mood .readings}}<span class="meta">{{with .mood}}{{template "moodwords" .}}{{end}}{{if and .mood .readings}} · {{end}}{{with .readings}}{{num .}} {{if eq (num .) "1"}}reading{{else}}readings{{end}}{{end}}</span>{{end}}</a></td>{{else}}<td></td>{{end}}{{end}}</tr>
+{{- if or .mood .readings}}<span class="meta">{{with .mood}}{{template "moodwords" .}}{{end}}{{if and .mood .readings}} · {{end}}{{with .readings}}{{count . "reading" "readings"}}{{end}}</span>{{end}}</a></td>{{else}}<td></td>{{end}}{{end}}</tr>
 {{end}}</tbody></table></div>
 
 {{$any := false}}{{range $m.days}}{{if .items}}{{$any = true}}{{end}}{{end}}
@@ -26,7 +26,7 @@
 <div class="panel-head"><h2>Day by day</h2></div>
 {{if $any}}{{range $m.days}}{{if .items}}{{$d := .}}<section class="agenda-day" aria-label="{{$.Date .day}}"><h3><a href="/days/{{.day}}">{{$.Date .day}}</a></h3>
 <ul class="plain">{{range .items}}{{$w := calItem .}}<li><span class="tag">{{$w.Tag}}</span> <a href="{{.href}}">{{.title}}</a>{{with $w.Note}} <small class="agenda-note">{{.}}</small>{{end}}</li>{{end}}
-{{- with $d.more_pages}}<li><a href="/days/{{$d.day}}">and {{num .}} more {{if eq (num .) "1"}}page{{else}}pages{{end}}</a></li>{{end}}</ul></section>
+{{- with $d.more_pages}}<li><a href="/days/{{$d.day}}">and {{count . "more page" "more pages"}}</a></li>{{end}}</ul></section>
 {{end}}{{end}}{{else}}<p class="empty">No page, place or birthday has a day in {{.Title}}.</p>{{end}}
 </section>
 </div>

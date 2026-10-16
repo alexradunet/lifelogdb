@@ -70,6 +70,7 @@ var templates = template.Must(template.New("").Funcs(template.FuncMap{
 	"dict":       dict,
 	"monthBand":  monthBand,
 	"num":        num,
+	"count":      count,
 	"pathesc":    url.PathEscape,
 	"icon":       icon,
 	"shortDay":   shortDay,
