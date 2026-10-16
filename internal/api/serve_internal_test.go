@@ -3,12 +3,15 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 
@@ -138,5 +141,84 @@ func TestErrorEntity(t *testing.T) {
 		if tc.log && (strings.Count(logged.String(), tc.err.Error()) != 1 || !strings.Contains(logged.String(), "GET /metrics/{name}")) {
 			t.Errorf("%s: the log %q does not have the cause one time under the pattern of the route", tc.name, logged.String())
 		}
+	}
+}
+
+// TestAnAnswerThatJSONCannotCarryIsAFault: when an entity has a value that JSON cannot carry (a NaN, an infinity), a
+// program gets 500 and the error entity with the general message, not 200 and a cut body. The server's log has the
+// cause one time, with the pattern of the route and not the path.
+func TestAnAnswerThatJSONCannotCarryIsAFault(t *testing.T) {
+	for name, e := range map[string]*Entity{
+		"properties that are not JSON": {Class: []string{"thing"}, Title: "Thing", Properties: map[string]any{"value": math.NaN()}},
+		"a result that is not JSON":    {Class: []string{"thing"}, Title: "Thing", Properties: map[string]any{"value": 1}, Result: map[string]any{"value": math.Inf(1)}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/things/1", nil)
+			req.Pattern = "GET /things/{id}" // as the routes set it
+			req.Header.Set("Accept", "application/vnd.siren+json")
+			rec := httptest.NewRecorder()
+			var logged bytes.Buffer
+			prev := log.Writer()
+			log.SetOutput(&logged) // no test of this package runs in parallel
+			t.Cleanup(func() { log.SetOutput(prev) })
+			answer(rec, req, http.StatusOK, e, frame{})
+			if n := strings.Count(logged.String(), "cannot be encoded"); n != 1 || !strings.Contains(logged.String(), "GET /things/{id}") ||
+				strings.Contains(logged.String(), "/things/1") {
+				t.Errorf("the log does not have the cause one time with the route's pattern, or names the path: %q", logged.String())
+			}
+			var got struct {
+				Class      []string
+				Properties struct {
+					Status        int
+					Code, Message string
+				}
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+				t.Fatalf("the body is not JSON: %v: %.300s", err, rec.Body.String())
+			}
+			if rec.Code != http.StatusInternalServerError || rec.Header().Get("Content-Type") != "application/vnd.siren+json" ||
+				!slices.Equal(got.Class, []string{"error"}) || got.Properties.Status != http.StatusInternalServerError ||
+				got.Properties.Code != "internal" || got.Properties.Message != "internal error" {
+				t.Errorf("status %d %q, want 500 and the error entity with the general message: %.300s",
+					rec.Code, rec.Header().Get("Content-Type"), rec.Body.String())
+			}
+		})
+	}
+}
+
+// TestAnswerDrawsByTheFrame: answer gives a program JSON and a browser a page; a page-only frame gives a program the
+// page too. A page with no shell has no sidebar. The GET of a refused form gets the entity and the status, no bytes.
+func TestAnswerDrawsByTheFrame(t *testing.T) {
+	e := &Entity{Class: []string{"preview"}, Title: "Preview", Properties: map[string]any{"body": "words"}}
+	for _, c := range []struct {
+		name, accept string
+		fr           frame
+		want         string // the Content-Type
+	}{
+		{"a program", "application/vnd.siren+json", frame{}, "application/vnd.siren+json"},
+		{"a browser", "text/html", frame{}, "text/html; charset=utf-8"},
+		{"a program, a page-only frame", "application/vnd.siren+json", frame{pageOnly: true}, "text/html; charset=utf-8"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/preview", nil)
+			req.Header.Set("Accept", c.accept)
+			rec := httptest.NewRecorder()
+			answer(rec, req, http.StatusAccepted, e, c.fr)
+			body := rec.Body.String()
+			if rec.Code != http.StatusAccepted || rec.Header().Get("Content-Type") != c.want {
+				t.Errorf("%d %q, want 202 %q", rec.Code, rec.Header().Get("Content-Type"), c.want)
+			}
+			if strings.HasPrefix(c.want, "text/html") && (!strings.Contains(body, "<h1>Preview</h1>") || strings.Contains(body, `class="rail"`)) {
+				t.Errorf("not the page with no sidebar: %.300s", body)
+			}
+			if !strings.HasPrefix(c.want, "text/html") && !strings.Contains(body, `"title": "Preview"`) {
+				t.Errorf("not the entity: %.300s", body)
+			}
+		})
+	}
+	page := &caught{header: http.Header{}}
+	answer(page, httptest.NewRequest("GET", "/preview", nil), http.StatusAccepted, e, frame{})
+	if page.entity != e || page.status != http.StatusAccepted {
+		t.Errorf("caught %v %d, want the entity and 202", page.entity, page.status)
 	}
 }

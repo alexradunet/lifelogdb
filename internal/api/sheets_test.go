@@ -1,183 +1,12 @@
 package api
 
 import (
+	"math"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
-
-// TestDangerIsACatalogAction keeps the destructive-action set honest: it names nothing the catalog does not
-// have, and it is what a browser draws from — never an action's name read by a template.
-func TestDangerIsACatalogAction(t *testing.T) {
-	dangerous := map[string]bool{}
-	for _, s := range catalog {
-		if s.Danger {
-			dangerous[s.Name] = true
-		}
-	}
-	if len(dangerous) == 0 {
-		t.Error("no action is destructive: the set lost its contents")
-	}
-	for _, name := range []string{"tombstone", "retract"} {
-		if !dangerous[name] {
-			t.Errorf("%s hides or retracts what is there: it is not marked dangerous", name)
-		}
-	}
-	for _, name := range []string{"revive", "capture", "save-body"} {
-		if dangerous[name] {
-			t.Errorf("%s writes or restores: it must not be marked dangerous", name)
-		}
-	}
-}
-
-// TestDangerAndRowsReachTheForm says the button of a destructive action is drawn as one, and that a textarea is
-// as tall as the catalog says — both from the catalog, so no template knows an action or a field by name.
-func TestDangerAndRowsReachTheForm(t *testing.T) {
-	if got, _ := drawForm(t, action("tombstone", map[string]string{"id": "7"}, nil)); !strings.Contains(got, `<button class="danger">`) {
-		t.Errorf("a tombstone draws no danger button: %s", got)
-	}
-	if got, _ := drawForm(t, action("revive", map[string]string{"id": "7"}, nil)); strings.Contains(got, "danger") {
-		t.Errorf("a revive draws a danger button: %s", got)
-	}
-	if got, _ := drawForm(t, action("save-body", map[string]string{"id": "7"}, map[string]any{"body": "words", "version": "3"})); !strings.Contains(got, `name="body" rows="18"`) {
-		t.Errorf("a body is not drawn as tall as the catalog says: %s", got)
-	}
-	if got, _ := drawForm(t, action("capture", map[string]string{"day": "2026-01-01"}, nil), "autofocus", "text"); strings.Count(got, "autofocus") != 1 ||
-		!strings.Contains(got, `name="text" rows="4" autofocus`) {
-		t.Errorf("the browser does not start in the field the view named: %s", got)
-	}
-}
-
-// TestOptionalFieldsFoldUnderMoreFields: the optional fields a view names are drawn inside the form under "More
-// fields", with their values, so a browser sends them with no script; a required field is never folded; folded
-// fields with a value are drawn open; a folded file field still makes the form multipart
-// (docs/plans/095-the-leaf-and-its-margin.md).
-func TestOptionalFieldsFoldUnderMoreFields(t *testing.T) {
-	more := regexp.MustCompile(`(?s)<details class="more-fields"( open)?><summary>([^<]*)</summary>(.*?)</details>`)
-	got, f := drawForm(t, action("record", nil, map[string]any{"day": "2026-10-12"}), "more", "metric,taken_at,tz,import_key")
-	m := more.FindStringSubmatch(got)
-	if m == nil {
-		t.Fatalf("no More fields in the form: %s", got)
-	}
-	if m[1] != "" || m[2] != "3 more fields" {
-		t.Errorf("More fields: open %q, summary %q; want closed, %q", m[1], m[2], "3 more fields")
-	}
-	for _, name := range []string{"taken_at", "tz", "import_key"} {
-		if !strings.Contains(m[3], `name="`+name+`"`) {
-			t.Errorf("%s is not folded: %s", name, m[3])
-		}
-	}
-	if strings.Contains(m[3], `name="metric"`) || !strings.Contains(got, `name="metric"`) {
-		t.Errorf("the required metric is folded or gone: %s", got)
-	}
-	if !strings.Contains(got, `<input type="date" name="day" value="2026-10-12" required>`) || !f.Primary ||
-		!strings.Contains(got, `</details>
-<button class="primary">`) || strings.Index(got, "</details>") > strings.Index(got, "<button") {
-		t.Errorf("the shown fields, or the button after the folded ones, are not drawn: %s", got)
-	}
-	got, _ = drawForm(t, action("record", nil, map[string]any{"tz": "Europe/Bucharest"}), "more", "taken_at,tz")
-	if m := more.FindStringSubmatch(got); m == nil || m[1] != " open" || m[2] != "2 more fields" ||
-		!strings.Contains(m[3], `name="tz" value="Europe/Bucharest"`) {
-		t.Errorf("a folded field with a value is out of sight: %s", got)
-	}
-	if got, _ = drawForm(t, action("add-file", nil, nil), "more", "preview"); !strings.Contains(got, `enctype="multipart/form-data"`) ||
-		!more.MatchString(got) || !strings.Contains(more.FindStringSubmatch(got)[3], `type="file" name="preview"`) {
-		t.Errorf("a form with a folded file is not multipart: %s", got)
-	}
-	if got, _ = drawForm(t, action("record", nil, nil)); strings.Contains(got, "more-fields") {
-		t.Errorf("a form whose view folds nothing has More fields: %s", got)
-	}
-}
-
-// TestTheChartSaysItsEndsInWords: the ends of a series' chart are dates in words with their year, on the axis and
-// for a reader, not ISO days (docs/plans/095-the-leaf-and-its-margin.md). 14 July 2026 is a Tuesday: 12 October 2026
-// is a Monday, 90 days later.
-func TestTheChartSaysItsEndsInWords(t *testing.T) {
-	got := string(chart("2026-07-14", "2026-10-12", []any{
-		map[string]any{"day": "2026-09-29", "value": 78.4}, map[string]any{"day": "2026-10-12", "value": 77.1}}))
-	for _, want := range []string{`aria-label="2 readings from Tue 14 Jul 2026 to Mon 12 Oct 2026"`, `>Tue 14 Jul 2026</text>`, `>Mon 12 Oct 2026</text>`} {
-		if !strings.Contains(got, want) {
-			t.Errorf("the chart lacks %s:\n%s", want, got)
-		}
-	}
-	if strings.Contains(got, "2026-07-14") || strings.Contains(got, "2026-10-12") {
-		t.Errorf("the chart shows an ISO day:\n%s", got)
-	}
-}
-
-// TestNavMarksThePageTheBrowserIsOn says one navigation link is current: the one whose path is the page's, else the
-// one with the longest path the page is under, and never a fragment (a place on a page is not a page).
-func TestNavMarksThePageTheBrowserIsOn(t *testing.T) {
-	for path, want := range map[string]string{
-		"/":                "/",
-		"/days":            "/months/current",
-		"/days/2026-01-01": "/months/current",
-		"/days/today":      "/days/today",
-		"/months/2026-10":  "/months/current",
-		"/weeks/2026-W41":  "/months/current",
-		"/years/2026":      "/months/current",
-		"/integrity":       "/integrity",
-		"/browse":          "/browse",
-		"/metrics":         "/metrics",
-		"/metrics/TSH":     "/metrics",
-		"/pages/7":         "",
-		"/search":          "",
-		"/import/prepared": "",
-		"/measurements/1":  "",
-	} {
-		var got string
-		for _, it := range (&view{Path: path}).Nav() {
-			if it.Current {
-				if got != "" {
-					t.Errorf("%s marks both %s and %s current", path, got, it.Href)
-				}
-				got = it.Href
-			}
-		}
-		if got != want {
-			t.Errorf("%s marks %q current, want %q", path, got, want)
-		}
-	}
-	for _, it := range (&view{Path: "/"}).Nav() {
-		if it.Href == "/#new" && it.Current {
-			t.Error("a fragment link is marked current")
-		}
-	}
-}
-
-// TestMarkShowsTheMatchedWords says a search snippet marks what matched, and that the snippet's own text can
-// never become markup.
-func TestMarkShowsTheMatchedWords(t *testing.T) {
-	for src, want := range map[string]string{
-		"…ran ⟦5k⟧ with…":                  "…ran <mark>5k</mark> with…",
-		"<b>⟦x⟧</b>":                       "&lt;b&gt;<mark>x</mark>&lt;/b&gt;",
-		"<script>alert(1)</script>":        "&lt;script&gt;alert(1)&lt;/script&gt;",
-		"no match here":                    "no match here",
-		"⟦⟧":                               "⟦⟧",
-		"the [[⟦Garden⟧ project]] - [x] a": "the <mark>Garden</mark> project - [x] a",
-	} {
-		if got := string(mark(src)); got != want {
-			t.Errorf("mark(%q) = %q, want %q", src, got, want)
-		}
-	}
-}
-
-// TestASnippetIsPlainText says a search snippet shows the words of a body without its CommonMark: the markers of a
-// heading, a quote, a list item and a task box at the start of a line, the brackets of a wikilink and of an embed are
-// cut, and the lines are joined with a space; a #tag keeps its sign, and a mark keeps its place.
-func TestASnippetIsPlainText(t *testing.T) {
-	for src, want := range map[string]string{
-		"Raised beds.\n\n- [x] Order cedar boards\n- [ ] Fill with ⟦soil⟧": "Raised beds. Order cedar boards Fill with <mark>soil</mark>",
-		"Coffee with [[Ana]]; the [[⟦Garden⟧ project]].":                   "Coffee with Ana; the <mark>Garden</mark> project.",
-		"## A ⟦heading⟧\n> a quote\n* one\n+ two":                          "A <mark>heading</mark> a quote one two",
-		"#running at the lake\n![[sunset.png]]":                            "#running at the lake sunset.png",
-		"a [link](x) and [x] in a line":                                    "a [link](x) and [x] in a line",
-	} {
-		if got := string(mark(src)); got != want {
-			t.Errorf("mark(%q) = %q, want %q", src, got, want)
-		}
-	}
-}
 
 // TestTheBaseSheetCarriesNoAppVocabulary keeps the two sheets apart: base.css styles ordinary HTML, and this
 // app's own names live in app.css alone, so a page reads as HTML with either file alone. Comments are cut first:
@@ -436,4 +265,187 @@ func TestAClosedToastIsNotShown(t *testing.T) {
 			t.Errorf("app.css sets the toast's display outside [open]: %.80s", m)
 		}
 	}
+}
+
+// TestTheTokensHoldTheirContrast reads the one token block of base.css, where each colour is written once as
+// light-dark(light, dark), and checks each pair that a token's use names (docs/plans/096-bound-in-hearthwood.md):
+// text 4.5:1 on its material (ink on parchment, the page's ink on oak, the rail's ink on wood), an edge, the outline
+// and the focus ring 3:1. The ratio is WCAG 2's, computed here and not by the application. The APCA lightness
+// contrast of every text pair is logged beside it and fails nothing (docs/plans/097-the-almanac-reflects.md).
+func TestTheTokensHoldTheirContrast(t *testing.T) {
+	css := cssComments.ReplaceAllString(string(baseCSS), "")
+	light, dark := tokenBlock(t, css, regexp.MustCompile(`(?s)
+:root\{(.*?)
+\}`))
+	type pair struct {
+		fg, bg string
+		min    float64
+		text   bool
+	}
+	var pairs []pair
+	text := func(fg string, grounds ...string) {
+		for _, bg := range grounds {
+			pairs = append(pairs, pair{fg, bg, 4.5, true})
+		}
+	}
+	mark := func(fg string, grounds ...string) {
+		for _, bg := range grounds {
+			pairs = append(pairs, pair{fg, bg, 3, false})
+		}
+	}
+	text("ink", "surface", "surface-deep", "accent-soft", "mark", "warn-soft", "danger-soft")
+	text("muted", "surface", "surface-deep")
+	text("page-ink", "ground")
+	text("page-strong", "ground")
+	text("page-muted", "ground")
+	text("rail-ink", "rail", "rail-deep")
+	text("rail-accent", "rail", "rail-deep")
+	text("accent", "ground")
+	text("accent-ink", "surface", "surface-deep")
+	text("link", "surface", "surface-deep")
+	text("link-page", "ground")
+	text("on-accent", "accent", "primary", "primary-hover")
+	text("warn", "surface")
+	text("warn-ink", "warn-soft")
+	text("done", "surface")
+	text("danger", "surface")
+	text("danger-ink", "danger-soft")
+	text("toast-ink", "toast-bg")
+	text("toast-link", "toast-bg")
+	mark("edge", "surface")
+	mark("outline", "surface", "surface-deep")
+	mark("danger-line", "surface")
+	mark("focus", "ground", "rail", "surface")
+	themes := []struct {
+		name   string
+		tokens map[string]string
+	}{{"light", light}, {"dark", dark}}
+	for _, th := range themes {
+		for _, p := range pairs {
+			fg, bg := resolve(t, th.tokens, p.fg), resolve(t, th.tokens, p.bg)
+			if r := contrast(t, fg, bg); r < p.min {
+				t.Errorf("%s: --%s %s on --%s %s is %.2f:1, want %.1f:1 or more", th.name, p.fg, fg, p.bg, bg, r, p.min)
+			}
+		}
+	}
+	// APCA (version 0.1.9) is advisory: it is logged, and it fails nothing. Read the log with -v. The Lc of a text
+	// pair is read against the table below (the sign tells light text on a dark ground, minus, from dark text on a
+	// light ground, plus).
+	//
+	//	|Lc| 90  preferred for body text
+	//	|Lc| 75  the least for body text
+	//	|Lc| 60  the floor for large or fluent text
+	//	|Lc| 45  large bold text
+	//	|Lc| 30  spot text
+	for _, th := range themes {
+		for _, p := range pairs {
+			if !p.text {
+				continue
+			}
+			fg, bg := resolve(t, th.tokens, p.fg), resolve(t, th.tokens, p.bg)
+			t.Logf("apca %s: --%s on --%s Lc %.1f", th.name, p.fg, p.bg, apca(t, fg, bg))
+		}
+	}
+}
+
+// tokenBlock is the custom properties of the one block the pattern finds: name (without --) to the light value and
+// to the dark value. A light-dark(a, b) gives a to the light map and b to the dark map; any other value goes to
+// both. Two equal values in a light-dark() fail: the token is written once.
+func tokenBlock(t *testing.T, css string, block *regexp.Regexp) (light, dark map[string]string) {
+	t.Helper()
+	m := block.FindStringSubmatch(css)
+	if m == nil {
+		t.Fatalf("base.css has no block %s", block)
+	}
+	light, dark = map[string]string{}, map[string]string{}
+	pairRe := regexp.MustCompile(`^light-dark\(\s*([^,()]+?)\s*,\s*([^,()]+?)\s*\)$`)
+	for _, d := range regexp.MustCompile(`--([a-z0-9-]+):([^;]+);`).FindAllStringSubmatch(m[1], -1) {
+		name, v := d[1], strings.TrimSpace(d[2])
+		if p := pairRe.FindStringSubmatch(v); p != nil {
+			if p[1] == p[2] {
+				t.Errorf("--%s is light-dark(%s, %s): the two values are equal, write it once as the colour", name, p[1], p[2])
+			}
+			light[name], dark[name] = p[1], p[2]
+			continue
+		}
+		light[name], dark[name] = v, v
+	}
+	return light, dark
+}
+
+// resolve follows var(--x) to a colour.
+func resolve(t *testing.T, tokens map[string]string, name string) string {
+	t.Helper()
+	v := tokens[name]
+	for i := 0; i < 8 && strings.HasPrefix(v, "var(--"); i++ {
+		v = tokens[strings.TrimSuffix(strings.TrimPrefix(v, "var(--"), ")")]
+	}
+	if !regexp.MustCompile(`^#[0-9a-f]{6}$`).MatchString(v) {
+		t.Fatalf("--%s is %q, not a colour #rrggbb", name, v)
+	}
+	return v
+}
+
+// contrast is the WCAG 2 contrast ratio of two colours #rrggbb.
+func contrast(t *testing.T, a, b string) float64 {
+	lum := func(c string) float64 {
+		var l [3]float64
+		for i := range l {
+			n, err := strconv.ParseUint(c[1+2*i:3+2*i], 16, 8)
+			if err != nil {
+				t.Fatal(err)
+			}
+			s := float64(n) / 255
+			if s <= 0.03928 {
+				l[i] = s / 12.92
+			} else {
+				l[i] = math.Pow((s+0.055)/1.055, 2.4)
+			}
+		}
+		return 0.2126*l[0] + 0.7152*l[1] + 0.0722*l[2]
+	}
+	x, y := lum(a), lum(b)
+	return (math.Max(x, y) + 0.05) / (math.Min(x, y) + 0.05)
+}
+
+// apca is the APCA-W3 0.1.9 lightness contrast Lc of text colour fg on ground bg, both #rrggbb: positive for dark
+// text on a light ground, negative for light text on a dark one. The constants are the published ones.
+func apca(t *testing.T, fg, bg string) float64 {
+	const (
+		normBG, normTXT, revTXT, revBG = 0.56, 0.57, 0.62, 0.65
+		blkThrs, blkClmp               = 0.022, 1.414
+		scaleBoW, scaleWoB             = 1.14, 1.14
+		loBoWoffset, loWoBoffset       = 0.027, 0.027
+		loClip, deltaYmin              = 0.1, 0.0005
+	)
+	luminance := func(c string) float64 {
+		var y float64
+		for i, k := range [3]float64{0.2126729, 0.7151522, 0.0721750} {
+			n, err := strconv.ParseUint(c[1+2*i:3+2*i], 16, 8)
+			if err != nil {
+				t.Fatal(err)
+			}
+			y += k * math.Pow(float64(n)/255, 2.4)
+		}
+		if y < blkThrs {
+			y += math.Pow(blkThrs-y, blkClmp)
+		}
+		return y
+	}
+	yt, yb := luminance(fg), luminance(bg)
+	if math.Abs(yb-yt) < deltaYmin {
+		return 0
+	}
+	if yb > yt {
+		c := (math.Pow(yb, normBG) - math.Pow(yt, normTXT)) * scaleBoW
+		if c < loClip {
+			return 0
+		}
+		return (c - loBoWoffset) * 100
+	}
+	c := (math.Pow(yb, revBG) - math.Pow(yt, revTXT)) * scaleWoB
+	if c > -loClip {
+		return 0
+	}
+	return (c + loWoBoffset) * 100
 }

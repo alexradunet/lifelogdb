@@ -2,6 +2,7 @@ package api
 
 import (
 	"html/template"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -90,48 +91,6 @@ func TestAValueIsDrawnByItsType(t *testing.T) {
 	}
 }
 
-// TestAResultIsSaidInSentences: each result shape of API.md in sentences; a key no sentence knows as a fact; a title
-// with markup escaped.
-func TestAResultIsSaidInSentences(t *testing.T) {
-	c := clock{today: "2026-10-12"}
-	say := func(m map[string]any) string {
-		var out []string
-		for _, l := range resultSentences(m, c) {
-			out = append(out, string(l))
-		}
-		return strings.Join(out, " | ")
-	}
-	for _, tc := range []struct {
-		name string
-		in   map[string]any
-		want string
-	}{
-		{"sync", map[string]any{"linked": []any{"B", "C", "A"}, "added": []any{"B", "A"}, "created": []any{"<b>"}, "revived": []any{"D"}, "skipped": []any{"x/y"}},
-			`Linked <a href="/pages?title=A">A</a> and <a href="/pages?title=B">B</a>. | Created <a href="/pages?title=%3Cb%3E">&lt;b&gt;</a>. | ` +
-				`Revived <a href="/pages?title=D">D</a>. | Not linked, not a valid title: <code>[[x/y]]</code>.`},
-		{"nothing to say", map[string]any{"linked": []any{}}, "Done."},
-		{"no link added", map[string]any{"linked": []any{"A", "B"}}, "Done."},
-		{"add-file", map[string]any{"id": 7.0, "existing": true, "day": "2026-10-11",
-			"embedded": true, "sync": map[string]any{"linked": []any{"A"}, "added": []any{"A"}}, "day_sync": map[string]any{"revived": []any{"B"}}},
-			`In its page: Linked <a href="/pages?title=A">A</a>. | In its day page: Revived <a href="/pages?title=B">B</a>. | ` +
-				`Kept the file: <a href="/pages/7">its page</a>. | The same original was kept before. | ` +
-				`Filed under <time datetime="2026-10-11">yesterday · Sun 11 Oct</time>. | Shown on its day page.`},
-		{"add-file filed in a new category", map[string]any{"id": 7.0, "filed": map[string]any{"category": map[string]any{"id": 9.0, "title": "Papers", "path": ""}, "created": true, "added": 1.0, "moved": 0.0}},
-			`Kept the file: <a href="/pages/7">its page</a>. | Put in the new category <a href="/pages?title=Papers">Papers</a>.`},
-		{"add-file filed", map[string]any{"filed": map[string]any{"category": map[string]any{"title": "Papers"}, "created": false, "added": 1.0, "moved": 0.0}},
-			`Put in the category <a href="/pages?title=Papers">Papers</a>.`},
-		{"add-file filed before", map[string]any{"filed": map[string]any{"category": map[string]any{"title": "Papers"}, "created": false, "added": 0.0, "moved": 0.0}},
-			`It was in the category <a href="/pages?title=Papers">Papers</a> already.`},
-		{"snapshot", map[string]any{"snapshot": "snaps/life-2026-10-12.db", "restore_check": "ok"},
-			`Took a snapshot: <code>snaps/life-2026-10-12.db</code>. | <dl class="facts"><dt>restore check</dt><dd>ok</dd></dl>`},
-		{"unknown", map[string]any{"foo_bar": 1.0}, `<dl class="facts"><dt>foo bar</dt><dd>1</dd></dl>`},
-	} {
-		if got := say(tc.in); got != tc.want {
-			t.Errorf("%s:\n got %s\nwant %s", tc.name, got, tc.want)
-		}
-	}
-}
-
 // TestCountSaysTheNumberAndTheFormOfItsNoun: count writes the number in full and the noun in the form for that
 // number, for a JSON number and for a length, with the words of each site that calls it.
 func TestCountSaysTheNumberAndTheFormOfItsNoun(t *testing.T) {
@@ -165,25 +124,36 @@ func TestCountSaysTheNumberAndTheFormOfItsNoun(t *testing.T) {
 	}
 }
 
-// TestTheSitesOfCountSayZeroTheirOwnWay: a site that calls count says 0 in its own words, and every other number
-// with count. The calendar's items and a year's summary are the tables of TestACalendarItemInWords and
-// TestAYearsSummary.
-func TestTheSitesOfCountSayZeroTheirOwnWay(t *testing.T) {
-	v := &view{Shell: &shellView{Today: "2026-10-16", Zone: time.UTC}}
+// TestAPageComparesADayWithTheTodayOfItsWords: Today is the shell's today, the one that the view's words use, and ""
+// for a page with no shell. A page compares a day with it, not with the today of its entity: here the entity says
+// that today is 15 October and the shell says 16 October, so the page of 16 October is today's page.
+func TestAPageComparesADayWithTheTodayOfItsWords(t *testing.T) {
+	shell := &shellView{Today: "2026-10-16", Zone: time.UTC}
 	for _, c := range []struct {
-		n               float64
-		media, mentions string
-	}{
-		{0, "no pictures", "not mentioned yet"},
-		{1, "1 picture", "mentioned on 1 page, last Thu 1 Oct"},
-		{2, "2 pictures", "mentioned on 2 pages, last Thu 1 Oct"},
-		{1234567, "1234567 pictures", "mentioned on 1234567 pages, last Thu 1 Oct"},
-	} {
-		if got := v.MediaCount(c.n, "picture", "pictures"); got != c.media {
-			t.Errorf("MediaCount(%g) = %q, want %q", c.n, got, c.media)
+		shell *shellView
+		want  string
+	}{{nil, ""}, {shell, "2026-10-16"}} {
+		if got := (&view{Shell: c.shell}).Today(); got != c.want {
+			t.Errorf("Today with the shell %+v: %q, want %q", c.shell, got, c.want)
 		}
-		if got := v.Mentions(c.n, "2026-10-01"); got != c.mentions {
-			t.Errorf("Mentions(%g) = %q, want %q", c.n, got, c.mentions)
+	}
+	u, err := url.Parse("/days/2026-10-16")
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := &Entity{Class: []string{"day"}, Title: "2026-10-16", Properties: map[string]any{"day": "2026-10-16", "today": "2026-10-15", "view": []any{}}}
+	v, err := pageView(e, facts{url: u, shell: shell}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := htmlOf(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(b)
+	for _, want := range []string{`<span class="tag open">today</span>`, "Nothing written today yet.", `<span class="date">Fri 16 Oct</span>`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the page of today lacks %s", want)
 		}
 	}
 }

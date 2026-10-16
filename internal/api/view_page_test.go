@@ -98,6 +98,54 @@ func TestEveryViewRenders(t *testing.T) {
 	}
 }
 
+// TestEveryPageIsSemanticHTML says what every page carries: both of this app's sheets under their markers, one
+// main with a way to skip to it, the sidebar's sections with this page marked, a footer, the search dialog, no
+// script at all (docs/plans/108-the-browser-made-current.md), and no id generated for a template to find.
+func TestEveryPageIsSemanticHTML(t *testing.T) {
+	c, h, _ := apitest.Fresh(t, "cli")
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	day := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "capture"), map[string]string{"text": "Ran with [[Sam]] #running", "mood": "4"}))
+	sam := apitest.Must(t)(c.Get(t.Context(), "/pages?title=Sam"))
+	gone := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Scratch"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, gone, "tombstone"), nil))
+
+	for _, path := range []string{"/", "/days", apitest.Href(day, "self"), apitest.Href(sam, "self"), apitest.Href(gone, "self"),
+		"/metrics", "/search?q=ran", "/actions", "/integrity", "/pages/999999"} {
+		status := http.StatusOK
+		if path == "/pages/999999" {
+			status = http.StatusNotFound
+		}
+		body := browseStatus(t, h, path, status)
+		for _, want := range []string{
+			`<style data-sheet="base">`, `<style data-sheet="app">`, // the two sheets, the base one first
+			`<a class="skip" href="#main">`, `<main id="main">`, `<nav aria-label="Sections">`, "<footer>",
+			`<dialog class="palette" id="palette" closedby="any" aria-label="Search">`,
+		} {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s does not carry %s", path, want)
+			}
+		}
+		if strings.Contains(body, "<script") {
+			t.Errorf("%s carries a script: a page is HTML the browser runs by itself", path)
+		}
+		if strings.Contains(body, `id="f-`) {
+			t.Errorf("%s carries a generated id: a page is semantic HTML", path)
+		}
+		if n := strings.Count(body, `aria-current="page"`); n > 1 {
+			t.Errorf("%s marks %d navigation links current, want one at most", path, n)
+		}
+	}
+	if body := browse(t, h, "/"); !strings.Contains(body, `<a class="brand" href="/" aria-current="page">Lifelog</a>`) {
+		t.Error("the home page does not mark the brand, its link, current")
+	}
+	if body := browse(t, h, "/days/2026-01-01"); !strings.Contains(body, `<a href="/months/current" aria-current="page">`) {
+		t.Error("a day that is not today does not mark Calendar current")
+	}
+	if body := browse(t, h, "/browse?kind=person"); !strings.Contains(body, `<a href="/browse" aria-current="page">`) {
+		t.Error("the sidebar does not mark Browse current on its page")
+	}
+}
+
 // essay is where the renamed page's title leads.
 func essay(t *testing.T, h http.Handler) string {
 	req := httptest.NewRequest("GET", "/pages?title=Essay", nil)
@@ -107,6 +155,41 @@ func essay(t *testing.T, h http.Handler) string {
 		t.Fatalf("/pages?title=Essay: %d", rec.Code)
 	}
 	return rec.Header().Get("Location")
+}
+
+// TestADestructiveActionDrawsADangerButton says the warning comes from the catalog, not from a template that
+// knows an action's name: a tombstone is drawn as a danger, and the revive that undoes it is not.
+func TestADestructiveActionDrawsADangerButton(t *testing.T) {
+	c, h, _ := apitest.Fresh(t, "cli")
+	p := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Draft"}))
+	if body := browse(t, h, apitest.Href(p, "self")); !strings.Contains(body, `<button class="danger">Delete</button>`) {
+		t.Errorf("a page that offers a tombstone draws no danger button: %.400s", body)
+	}
+	gone := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, p, "tombstone"), nil))
+	body := browse(t, h, apitest.Href(gone, "self"))
+	if !strings.Contains(body, "<button>Restore</button>") {
+		t.Errorf("a deleted page offers no plain Restore: %.400s", body)
+	}
+	if strings.Contains(body, `<button class="danger">`) {
+		t.Error("a deleted page draws a danger button for the revive that restores it")
+	}
+}
+
+// TestAnEmptyPageSaysSoWithItsEditorClosed: a page with no text says so in words, as every empty view does, and its
+// editor is closed under the sentence, so the page does not open as a large empty box with the focus in it.
+func TestAnEmptyPageSaysSoWithItsEditorClosed(t *testing.T) {
+	c, h, _ := apitest.Fresh(t, "cli")
+	sam := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "create-person"), map[string]string{"title": "Sam"}))
+	body := browse(t, h, apitest.Href(sam, "self"))
+	if !strings.Contains(body, `<p class="empty">Nothing written here yet.</p>`) {
+		t.Error("an empty page does not say that nothing is written")
+	}
+	if !strings.Contains(body, `<details><summary>Edit</summary>`) || strings.Contains(body, `<details open><summary>Edit</summary>`) {
+		t.Error("an empty page opens its editor")
+	}
+	if strings.Count(body, "autofocus") != 0 {
+		t.Error("an empty page puts the focus in its editor")
+	}
 }
 
 // staleSave is a page with a save that is already stale: the version it names is not the current one.
@@ -292,66 +375,5 @@ func TestARefusalWithoutAPageToReturnToIsTheErrorView(t *testing.T) {
 	if rec.Code != http.StatusConflict || !strings.HasPrefix(rec.Header().Get("Content-Type"), "application/vnd.siren+json") ||
 		!strings.Contains(rec.Body.String(), `"stale_version"`) || strings.Contains(rec.Body.String(), "refused") {
 		t.Errorf("a JSON client's refusal: %d %s %.300s", rec.Code, rec.Header().Get("Content-Type"), rec.Body.String())
-	}
-}
-
-func TestFeedbackURLPrivacyUsesStructureNotRandomSubstrings(t *testing.T) {
-	opaque := "bad" + strings.Repeat("0", 61)
-	if !feedbackLocation("/pages/1?feedback="+opaque, "/pages/1") {
-		t.Fatal("valid random hex may contain the substring bad")
-	}
-	for _, location := range []string{
-		"/pages/1?feedback=" + opaque + "&message=bad",
-		"/pages/1?feedback=" + opaque + "&body=private%GG",
-		"/pages/1?feedback=" + opaque + "&private%GG=value",
-		"/pages/1?feedback=" + opaque + "&note=private%",
-		"/pages/1?feedback=bad",
-		"/pages/Revived?feedback=" + opaque,
-	} {
-		if feedbackLocation(location, "/pages/1") {
-			t.Fatalf("accepted private or malformed URL %s", location)
-		}
-	}
-}
-
-func TestBrowserMutationFeedback(t *testing.T) {
-	c, h, _ := apitest.Fresh(t, "cli")
-	root := apitest.Must(t)(c.Get(t.Context(), "/"))
-	target := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Revived target"}))
-	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, target, "tombstone"), nil))
-	rec := submit(h, "/pages", url.Values{"title": {"Feedback page"}, "body": {"[[Revived target]] [[bad/name]]"}}, "")
-	if rec.Code != 303 {
-		t.Fatalf("POST: %d %s", rec.Code, rec.Body.String())
-	}
-	location := rec.Header().Get("Location")
-	body := browse(t, h, location)
-	for _, want := range []string{"Result", `Revived <a href="/pages?title=Revived+target">Revived target</a>.`, "Not linked, not a valid title: <code>[[bad/name]]</code>."} {
-		if !strings.Contains(body, want) {
-			t.Errorf("missing %q in redirected feedback", want)
-		}
-	}
-	if strings.Contains(browse(t, h, location), "<h2>Result</h2>") {
-		t.Error("receipt replayed")
-	}
-	page := apitest.Must(t)(c.Get(t.Context(), "/pages?title=Feedback%20page"))
-	if !feedbackLocation(location, apitest.Href(page, "self")) {
-		t.Errorf("feedback URL must contain only the resource path and opaque receipt: %s", location)
-	}
-}
-
-// TestAnEmptyPageSaysSoWithItsEditorClosed: a page with no text says so in words, as every empty view does, and its
-// editor is closed under the sentence, so the page does not open as a large empty box with the focus in it.
-func TestAnEmptyPageSaysSoWithItsEditorClosed(t *testing.T) {
-	c, h, _ := apitest.Fresh(t, "cli")
-	sam := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "create-person"), map[string]string{"title": "Sam"}))
-	body := browse(t, h, apitest.Href(sam, "self"))
-	if !strings.Contains(body, `<p class="empty">Nothing written here yet.</p>`) {
-		t.Error("an empty page does not say that nothing is written")
-	}
-	if !strings.Contains(body, `<details><summary>Edit</summary>`) || strings.Contains(body, `<details open><summary>Edit</summary>`) {
-		t.Error("an empty page opens its editor")
-	}
-	if strings.Count(body, "autofocus") != 0 {
-		t.Error("an empty page puts the focus in its editor")
 	}
 }

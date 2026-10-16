@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The folds of Browse (docs/plans/118-fold-and-find.md, rules 1 to 3), on props written by hand in the shape a
@@ -140,6 +141,29 @@ func TestALongListIsInLetterGroups(t *testing.T) {
 		}
 		if l := list(kind, numbered(40, "X"), more); l.Letters != nil || len(l.Rows) != 40 {
 			t.Errorf("%v is grouped", more)
+		}
+	}
+}
+
+// TestTheSitesOfCountSayZeroTheirOwnWay: a site that calls count says 0 in its own words, and every other number
+// with count. The calendar's items and a year's summary are the tables of TestACalendarItemInWords and
+// TestAYearsSummary.
+func TestTheSitesOfCountSayZeroTheirOwnWay(t *testing.T) {
+	v := &view{Shell: &shellView{Today: "2026-10-16", Zone: time.UTC}}
+	for _, c := range []struct {
+		n               float64
+		media, mentions string
+	}{
+		{0, "no pictures", "not mentioned yet"},
+		{1, "1 picture", "mentioned on 1 page, last Thu 1 Oct"},
+		{2, "2 pictures", "mentioned on 2 pages, last Thu 1 Oct"},
+		{1234567, "1234567 pictures", "mentioned on 1234567 pages, last Thu 1 Oct"},
+	} {
+		if got := v.MediaCount(c.n, "picture", "pictures"); got != c.media {
+			t.Errorf("MediaCount(%g) = %q, want %q", c.n, got, c.media)
+		}
+		if got := v.Mentions(c.n, "2026-10-01"); got != c.mentions {
+			t.Errorf("Mentions(%g) = %q, want %q", c.n, got, c.mentions)
 		}
 	}
 }

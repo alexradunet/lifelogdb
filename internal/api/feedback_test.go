@@ -1,113 +1,53 @@
-package api
+package api_test
 
 import (
-	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"strings"
-	"sync"
 	"testing"
-	"time"
 
-	"lifelog/internal/core"
+	"lifelog/internal/api/apitest"
 )
 
-func receiptToken(location string) string {
-	u, _ := url.Parse(location)
-	return u.Query().Get("feedback")
-}
-
-// TestTheFeedbackReceiptsKeepTheMonotonicReading: the server gives its feedback receipts the instant of the store's
-// clock with its monotonic reading (core.Store.Now), not the same instant in the zone (core.Store.Local), which has
-// none. Thus the life of a receipt does not change when the wall clock is set. A time that keeps the monotonic reading
-// is not equal to its Round(0).
-func TestTheFeedbackReceiptsKeepTheMonotonicReading(t *testing.T) {
-	h := newServer(&core.Store{Zone: time.FixedZone("+14", 14*60*60)})
-	if now := h.feedback.now(); now == now.Round(0) {
-		t.Errorf("the clock of the receipts gives %v, with no monotonic reading: want core.Store.Now", now)
+func TestFeedbackURLPrivacyUsesStructureNotRandomSubstrings(t *testing.T) {
+	opaque := "bad" + strings.Repeat("0", 61)
+	if !feedbackLocation("/pages/1?feedback="+opaque, "/pages/1") {
+		t.Fatal("valid random hex may contain the substring bad")
 	}
-}
-
-func TestBrowserMutationFeedbackReceipts(t *testing.T) {
-	now := time.Unix(0, 0)
-	s := feedbackStore{now: func() time.Time { return now }}
-	token := receiptToken(s.put("/pages/1", map[string]any{"revived": []string{"<script>private</script>"}}))
-	if len(token) != 64 {
-		t.Fatal("not an opaque random token")
-	}
-	if s.take("/pages/2", token) != "" || s.take("/pages/1", "unknown") != "" {
-		t.Fatal("invalid token disclosed feedback")
-	}
-	if got := s.take("/pages/1", token); !strings.Contains(got, "private") {
-		t.Fatal("wrong target consumed receipt")
-	}
-	if s.take("/pages/1", token) != "" {
-		t.Fatal("replayed")
-	}
-	token = receiptToken(s.put("/pages/1", true))
-	now = now.Add(feedbackLifetime)
-	if s.take("/pages/1", token) != "" {
-		t.Fatal("expired receipt")
-	}
-	token = receiptToken(s.put("/pages/1", true))
-	for range feedbackEntries {
-		now = now.Add(time.Second)
-		s.put("/pages/1", true)
-	}
-	if len(s.entries) != feedbackEntries || s.take("/pages/1", token) != "" {
-		t.Fatal("entry cap/eviction")
-	}
-	token = receiptToken(s.put("/pages/1", strings.Repeat("x", feedbackLimit*2)))
-	got := s.take("/pages/1", token)
-	if len(got) > feedbackLimit || !strings.Contains(got, "Feedback truncated") {
-		t.Fatal("payload cap/notice")
-	}
-	restarted := feedbackStore{now: s.now}
-	if restarted.take("/pages/1", token) != "" {
-		t.Fatal("restart retained receipt")
-	}
-}
-func TestBrowserMutationFeedbackIndependentTabs(t *testing.T) {
-	s := feedbackStore{now: func() time.Time { return time.Unix(0, 0) }}
-	var wg sync.WaitGroup
-	for i := range 32 {
-		wg.Go(func() {
-			destination := "/pages/" + strings.Repeat("x", i+1)
-			token := receiptToken(s.put(destination, destination))
-			if !strings.Contains(s.take(destination, token), destination) {
-				t.Error("tab lost its own feedback")
-			}
-		})
-	}
-	wg.Wait()
-}
-
-func TestBrowserMutationFeedbackEscaping(t *testing.T) {
-	h := &server{feedback: feedbackStore{now: func() time.Time { return time.Unix(0, 0) }}}
-	endpoint := h.serve(func(r *http.Request) (*Entity, error) {
-		e := &Entity{Class: []string{"page"}, Title: "Synthetic", Properties: map[string]any{"body": "", "entity_type": "page"}, Links: []Link{link("self", "/pages/1", "Synthetic")}}
-		if r.Method == "POST" {
-			e.Result = map[string]any{"skipped": []string{"<script>alert(1)</script>"}}
+	for _, location := range []string{
+		"/pages/1?feedback=" + opaque + "&message=bad",
+		"/pages/1?feedback=" + opaque + "&body=private%GG",
+		"/pages/1?feedback=" + opaque + "&private%GG=value",
+		"/pages/1?feedback=" + opaque + "&note=private%",
+		"/pages/1?feedback=bad",
+		"/pages/Revived?feedback=" + opaque,
+	} {
+		if feedbackLocation(location, "/pages/1") {
+			t.Fatalf("accepted private or malformed URL %s", location)
 		}
-		return e, nil
-	})
-	request := func(method, path string) *httptest.ResponseRecorder {
-		r := httptest.NewRequest(method, path, nil)
-		r.Header.Set("Accept", "text/html")
-		w := httptest.NewRecorder()
-		endpoint(w, r)
-		return w
 	}
-	post := request("POST", "/pages/1")
-	location := post.Header().Get("Location")
-	body := request("GET", location).Body.String()
-	if !strings.Contains(body, "Result") || strings.Contains(body, "<script>") || !strings.Contains(body, "alert(1)") {
-		t.Fatalf("unsafe or missing feedback: %s", body)
+}
+
+func TestBrowserMutationFeedback(t *testing.T) {
+	c, h, _ := apitest.Fresh(t, "cli")
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	target := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Revived target"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, target, "tombstone"), nil))
+	rec := submit(h, "/pages", url.Values{"title": {"Feedback page"}, "body": {"[[Revived target]] [[bad/name]]"}}, "")
+	if rec.Code != 303 {
+		t.Fatalf("POST: %d %s", rec.Code, rec.Body.String())
 	}
-	if strings.Contains(request("GET", "/pages/1?feedback=<script>&message=forged-success").Body.String(), "forged-success") {
-		t.Fatal("query trusted as message")
+	location := rec.Header().Get("Location")
+	body := browse(t, h, location)
+	for _, want := range []string{"Result", `Revived <a href="/pages?title=Revived+target">Revived target</a>.`, "Not linked, not a valid title: <code>[[bad/name]]</code>."} {
+		if !strings.Contains(body, want) {
+			t.Errorf("missing %q in redirected feedback", want)
+		}
 	}
-	if strings.Contains(request("GET", location).Body.String(), "<h2>Result</h2>") {
-		t.Fatal("refresh replayed")
+	if strings.Contains(browse(t, h, location), "<h2>Result</h2>") {
+		t.Error("receipt replayed")
+	}
+	page := apitest.Must(t)(c.Get(t.Context(), "/pages?title=Feedback%20page"))
+	if !feedbackLocation(location, apitest.Href(page, "self")) {
+		t.Errorf("feedback URL must contain only the resource path and opaque receipt: %s", location)
 	}
 }

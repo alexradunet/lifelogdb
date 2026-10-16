@@ -3,6 +3,8 @@ package api
 import (
 	"strings"
 	"testing"
+
+	"lifelog/internal/text"
 )
 
 func TestMarkdownLinksWhatNamesAPage(t *testing.T) {
@@ -59,6 +61,65 @@ func TestMarkdownLinkPrecedence(t *testing.T) {
 	} {
 		if got := strings.TrimSpace(string(markdown(c.in))); got != c.want {
 			t.Errorf("%q: got %s; want %s", c.in, got, c.want)
+		}
+	}
+}
+
+func TestMarkdownPostParseNFC(t *testing.T) {
+	for _, n := range []int{100, 118, 119} {
+		title := strings.Repeat("é", n) + ".jpg"
+		for _, spelling := range []string{title, strings.Repeat("e\u0301", n) + ".jpg"} {
+			body := "![[" + spelling + "|&lt;label&gt;&amp;]]"
+			got := string(markdown(body))
+			keys, _, _ := text.Targets(body, "")
+			want := len(title) <= 240
+			if strings.Contains(got, `class="wikilink embed"`) != want || text.HasEmbed(body, title) != want || (len(keys) == 1) != want {
+				t.Errorf("n=%d: %s", n, got)
+			}
+			if want && (!strings.Contains(got, `/previews?title=`+strings.TrimPrefix(titleHref(title), "/pages?title=")) || !strings.Contains(got, `alt="&lt;label&gt;&amp;"`)) {
+				t.Errorf("target/escaping: %s", got)
+			}
+		}
+	}
+	tag := strings.Repeat("e\u0301", 100)
+	if got := string(markdown("#" + tag)); !strings.Contains(got, `class="wikilink"`) {
+		t.Errorf("tag: %s", got)
+	}
+	if got := string(markdown("\u1fef![[Cafe\u0301.jpg]]\u1fef")); !strings.Contains(got, `class="wikilink embed"`) || strings.Contains(got, "<code>") {
+		t.Errorf("post-parse: %s", got)
+	}
+}
+
+// TestMarkShowsTheMatchedWords says a search snippet marks what matched, and that the snippet's own text can
+// never become markup.
+func TestMarkShowsTheMatchedWords(t *testing.T) {
+	for src, want := range map[string]string{
+		"…ran ⟦5k⟧ with…":                  "…ran <mark>5k</mark> with…",
+		"<b>⟦x⟧</b>":                       "&lt;b&gt;<mark>x</mark>&lt;/b&gt;",
+		"<script>alert(1)</script>":        "&lt;script&gt;alert(1)&lt;/script&gt;",
+		"no match here":                    "no match here",
+		"⟦⟧":                               "⟦⟧",
+		"the [[⟦Garden⟧ project]] - [x] a": "the <mark>Garden</mark> project - [x] a",
+	} {
+		if got := string(mark(src)); got != want {
+			t.Errorf("mark(%q) = %q, want %q", src, got, want)
+		}
+	}
+}
+
+// TestASnippetIsPlainText says a search snippet shows the words of a body without its CommonMark: the markers of a
+// heading, a quote, a list item and a task box at the start of a line, the brackets of a wikilink and of an embed are
+// cut, and the lines are joined with a space; a #tag keeps its sign, and a mark keeps its place.
+func TestASnippetIsPlainText(t *testing.T) {
+	for src, want := range map[string]string{
+		"Raised beds.\n\n- [x] Order cedar boards\n- [ ] Fill with ⟦soil⟧": "Raised beds. Order cedar boards Fill with <mark>soil</mark>",
+		"Coffee with [[Ana]]; the [[⟦Garden⟧ project]].":                   "Coffee with Ana; the <mark>Garden</mark> project.",
+		"## A ⟦heading⟧\n> a quote\n* one\n+ two":                          "A <mark>heading</mark> a quote one two",
+		"#running at the lake\n![[sunset.png]]":                            "#running at the lake sunset.png",
+		"a [link](x) and [x] in a line":                                    "a [link](x) and [x] in a line",
+	} {
+		if got := string(mark(src)); got != want {
+			t.Errorf("mark(%q) = %q, want %q", src, got, want)
 		}
 	}
 }
