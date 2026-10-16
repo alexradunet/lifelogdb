@@ -152,7 +152,7 @@ func serve(ctx context.Context, e env, _ []string) error {
 	if err != nil {
 		return err
 	}
-	srv := &http.Server{Addr: listener.Addr().String(), Handler: networkHandler, ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{Addr: listener.Addr().String(), Handler: networkHandler, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}
 	fmt.Fprintf(os.Stderr, "lifelog: serving %s on %s://%s%s\n", o.db, scheme, listener.Addr(), note)
 	return serveHTTP(ctx, srv, listener, 10*time.Second)
 }

@@ -177,6 +177,8 @@ func TestFirstLineIsPlainText(t *testing.T) {
 		{"## Morning\nRan", "Morning"},
 		{"\n- a list item\n- another", "a list item"},
 		{"> a quotation", "a quotation"},
+		{"#running 5k with [[Sam]]", "#running 5k with Sam"},
+		{"-5 kg today", "-5 kg today"},
 		{"![[IMG_0001.jpg]] by the lake", "IMG_0001.jpg by the lake"},
 		{"Café ünïcode", "Café ünïcode"},
 		{long, long[:160] + "…"},

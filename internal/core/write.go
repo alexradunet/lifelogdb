@@ -360,8 +360,8 @@ func (t *Tx) CreatePage(title, body, day, importKey string) (id int64, existing 
 	return id, false, r, err
 }
 
-// PageForTitle is the id of the page that holds a title, made as an empty page when no page has it: the context a
-// task names by its title, like the target of a wikilink, and like it with no day, so it is not an entry of the day it
+// PageForTitle is the id of the page that holds a title, made as an empty page when no page has it: the category a
+// filing names by its title (see FilePages), like the target of a wikilink, and like it with no day, so it is not an entry of the day it
 // was made on. A tombstoned page keeps its id and its tombstone.
 func (t *Tx) PageForTitle(title string) (id int64, created bool, err error) {
 	if err := checkTitle("project", title); err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -253,6 +254,10 @@ func (s *Store) dayEntries(ctx context.Context, cond, order string, limit int, a
 	return out, rows.Err()
 }
 
+// BlockMark is the markers at the start of a line that a plain-text view cuts: headings, quotes, list items, task
+// boxes. A marker is cut only when a space follows it, so the "#" of a tag and the "-" of a number stay.
+var BlockMark = regexp.MustCompile(`^(?:#{1,6}\s+|>\s*|[-*+]\s+)*(?:\[[ xX]\]\s+)?`)
+
 // firstLineRunes is how long a first line may be before it is cut.
 const firstLineRunes = 160
 
@@ -261,7 +266,7 @@ const firstLineRunes = 160
 func firstLine(body string) string {
 	for line := range strings.SplitSeq(body, "\n") {
 		line = strings.TrimSpace(line)
-		line = strings.TrimSpace(strings.TrimLeft(line, "#>-*+ "))
+		line = strings.TrimSpace(BlockMark.ReplaceAllString(line, ""))
 		if line == "" {
 			continue
 		}
@@ -703,10 +708,12 @@ func (s *Store) NamedMentions(ctx context.Context, typ string, sc Scope, limit, 
 	if typ != "person" {
 		return out, nil
 	}
+	pictures, err := firstPictures(ctx, s.DB.R, bodies)
+	if err != nil {
+		return nil, err
+	}
 	for i := range out {
-		if out[i].Picture, err = firstPicture(ctx, s.DB.R, bodies[i]); err != nil {
-			return nil, err
-		}
+		out[i].Picture = pictures[i]
 	}
 	return out, nil
 }

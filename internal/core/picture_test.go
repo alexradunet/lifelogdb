@@ -128,3 +128,49 @@ func TestSetPictureRefuses(t *testing.T) {
 		t.Errorf("Ana's body = %q, %v, want it empty", p.Body, err)
 	}
 }
+
+// TestNamedMentionsPictureIsTheFirstEmbedThatIsAKeptPicture: a title that names a plain page is skipped, a person
+// with no embed has no picture, and every person gets the file of their own first picture.
+func TestNamedMentionsPictureIsTheFirstEmbedThatIsAKeptPicture(t *testing.T) {
+	s := fresh(t)
+	pic := smallJPEG(t)
+	a, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := s.CreatePerson(ctx, "cli", "Bo", "", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreatePerson(ctx, "cli", "Cy", "", "", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.CreatePage(ctx, "cli", "Plain", "Only words.", ""); err != nil {
+		t.Fatal(err)
+	}
+	pa, err := s.SetPicture(ctx, "cli", a, "2026-10-15", FileIn{SHA256: sha('a'), MIME: "image/jpeg", Preview: pic})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pb, err := s.SetPicture(ctx, "cli", b, "2026-10-15", FileIn{SHA256: sha('b'), MIME: "image/jpeg", Preview: pic})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Bo's body now starts with the picture; put a plain page's embed before it.
+	if _, err := s.SaveBody(ctx, "cli", b, "![[Plain]]\n\n![[Bo 2026-10-15.jpg]]", "2"); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := s.NamedMentions(ctx, "person", Scope{}, 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]int64{"Ana": pa.ID, "Bo": pb.ID, "Cy": 0}
+	if len(rows) != len(want) {
+		t.Fatalf("NamedMentions = %+v, want %d people", rows, len(want))
+	}
+	for _, r := range rows {
+		if r.Picture != want[r.Title] {
+			t.Errorf("%s: Picture = %d, want %d", r.Title, r.Picture, want[r.Title])
+		}
+	}
+}

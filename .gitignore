@@ -10,6 +10,7 @@ life.db-shm
 # the built binary and editor/Windows backup files
 /lifelog
 /lifelog.exe
+/lifelog.prev
 *~
 
 # a real vault or export to import: never in git

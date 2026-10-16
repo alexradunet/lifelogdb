@@ -26,13 +26,13 @@ const version = "0.1.0"
 // opts are the flags of a command line and its words. A flag may stand anywhere on the line; a command takes the
 // global flags and its own (command.flags), and refuses any other.
 type opts struct {
-	db, url, source, addr, agent, mood, day, from, to, title, text, preview, mime string
-	tokenFile, tlsCert, tlsKey, snapshots, category                               string
-	allowOrigins                                                                  []string
-	human, dryRun, dbExplicit, addrExplicit, public, force                        bool
-	args                                                                          []string
-	given                                                                         []string           // the flags the line named
-	pub                                                                           *api.PublicOptions // serve --public, read by its prepare
+	db, url, source, addr, agent, mood, day, to, title, text, preview, mime string
+	tokenFile, tlsCert, tlsKey, snapshots, category                         string
+	allowOrigins                                                            []string
+	human, dryRun, dbExplicit, addrExplicit, public, force                  bool
+	args                                                                    []string
+	given                                                                   []string           // the flags the line named
+	pub                                                                     *api.PublicOptions // serve --public, read by its prepare
 }
 
 // globalFlags are the flags every command takes.
@@ -233,7 +233,7 @@ func usageText() string {
 func parse(argv []string) (opts, error) {
 	o := opts{db: os.Getenv("LIFELOG_DB"), source: "cli", addr: "127.0.0.1:7777"}
 	vals := map[string]*string{"--db": &o.db, "--url": &o.url, "--source": &o.source, "--addr": &o.addr,
-		"--agent": &o.agent, "--mood": &o.mood, "--day": &o.day, "--from": &o.from, "--to": &o.to,
+		"--agent": &o.agent, "--mood": &o.mood, "--day": &o.day, "--to": &o.to,
 		"--title": &o.title, "--text": &o.text, "--preview": &o.preview, "--mime": &o.mime, "--category": &o.category,
 		"--token-file": &o.tokenFile, "--tls-cert": &o.tlsCert, "--tls-key": &o.tlsKey, "--snapshots": &o.snapshots}
 	bools := map[string]*bool{"--human": &o.human, "--dry-run": &o.dryRun, "--public": &o.public, "--force": &o.force}

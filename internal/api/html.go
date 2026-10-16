@@ -579,16 +579,13 @@ func mark(snippet string) template.HTML {
 func plainSnippet(s string) string {
 	var words []string
 	for line := range strings.SplitSeq(s, "\n") {
-		line = blockMarkRE.ReplaceAllString(strings.TrimSpace(line), "")
+		line = core.BlockMark.ReplaceAllString(strings.TrimSpace(line), "")
 		if line != "" {
 			words = append(words, line)
 		}
 	}
 	return strings.NewReplacer("![[", "", "[[", "", "]]", "").Replace(strings.Join(words, " "))
 }
-
-// blockMarkRE is the markers at the start of a line that plainSnippet cuts: headings, quotes, list items, task boxes.
-var blockMarkRE = regexp.MustCompile(`^(?:#{1,6}\s+|>\s*|[-*+]\s+)*(?:\[[ xX]\]\s+)?`)
 
 var markRE = regexp.MustCompile(core.SnippetOpen + `([^` + core.SnippetOpen + core.SnippetClose + `]+)` + core.SnippetClose)
 

@@ -64,6 +64,13 @@ func TestAddFileKeepsAPhotoAndItsPicture(t *testing.T) {
 			t.Errorf("GET %s: %d %s %v", path, rec.Code, rec.Header().Get("Content-Type"), err)
 		}
 	}
+	for path, want := range map[string]string{pic: "private, max-age=31536000, immutable", "/previews?title=2026-10-04+LAKE.jpg": ""} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
+		if got := rec.Header().Get("Cache-Control"); got != want {
+			t.Errorf("GET %s: Cache-Control %q, want %q", path, got, want)
+		}
+	}
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest("GET", "/previews?title=Nothing", nil))
 	if rec.Code != http.StatusNotFound {

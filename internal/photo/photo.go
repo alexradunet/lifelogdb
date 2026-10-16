@@ -290,7 +290,8 @@ func (r *reader) skip(n uint64) bool {
 	return true
 }
 
-// parseTIFF reads IFD0 (orientation, the Exif and GPS IFD pointers), the Exif IFD (DateTimeOriginal) and the GPS IFD.
+// parseTIFF reads IFD0 (orientation, the Exif IFD pointer) and the Exif IFD (DateTimeOriginal, else DateTimeDigitized).
+// It does not read the GPS IFD (D21).
 func parseTIFF(t []byte) Meta {
 	m := Meta{Orientation: 1}
 	if len(t) < 8 {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -30,8 +31,8 @@ func TestMultipartUnknownNameProjection(t *testing.T) {
 		if len(name) < 64<<10 {
 			t.Fatalf("unexpected name length %d", len(name))
 		}
-		if key := fileTextField(name); key != "" {
-			retained[key] = ""
+		if slices.Contains(fileTextFields, name) {
+			retained[name] = ""
 		}
 		part.Close()
 	}
@@ -39,13 +40,13 @@ func TestMultipartUnknownNameProjection(t *testing.T) {
 		t.Fatalf("retained %d unknown names despite zero text bytes", len(retained))
 	}
 	for _, name := range []string{"title", "sha256", "mime", "body", "day", "dry_run"} {
-		if got := fileTextField(name); got != name {
-			t.Errorf("recognized %q projected to %q", name, got)
+		if !slices.Contains(fileTextFields, name) {
+			t.Errorf("recognized %q not retained", name)
 		}
 	}
 	for _, name := range []string{"", "original", "preview", "unknown", "Title", "title-extra"} {
-		if got := fileTextField(name); got != "" {
-			t.Errorf("unknown %q projected to %q", name, got)
+		if slices.Contains(fileTextFields, name) {
+			t.Errorf("unknown %q retained", name)
 		}
 	}
 }

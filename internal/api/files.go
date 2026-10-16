@@ -10,6 +10,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -134,7 +135,8 @@ func parseFileForm(r *http.Request) (core.FileIn, bool, error) {
 		default:
 			limited := io.LimitReader(part, int64(min(maxField, maxMultipartText-textBytes)+1))
 			var n int64
-			if key := fileTextField(name); key != "" {
+			if slices.Contains(fileTextFields, name) {
+				key := name
 				var b []byte
 				b, err = io.ReadAll(limited)
 				n = int64(len(b))
@@ -187,29 +189,8 @@ func parseFileForm(r *http.Request) (core.FileIn, bool, error) {
 	return in, dry, err
 }
 
-// fileTextField projects multipart names onto the fields retained by fileForm.
-func fileTextField(name string) string {
-	switch name {
-	case "title":
-		return "title"
-	case "sha256":
-		return "sha256"
-	case "mime":
-		return "mime"
-	case "body":
-		return "body"
-	case "day":
-		return "day"
-	case "category":
-		return "category"
-	case "dry_run":
-		return "dry_run"
-	case "back":
-		return "back"
-	default:
-		return ""
-	}
-}
+// fileTextFields are the multipart names fileForm retains as text; any other name is dropped unread.
+var fileTextFields = []string{"title", "sha256", "mime", "body", "day", "category", "dry_run", "back"}
 
 // readOriginal hashes the original as it streams, and keeps its first megabyte for its metadata (photo.Read: a
 // JPEG's EXIF is in its first 64 KB, a HEIC's Exif item near its start); a picture the writer can read is held whole,
@@ -273,7 +254,8 @@ func (c *capped) Write(p []byte) (int, error) {
 }
 
 // picture serves the JPEG a file page keeps, 404 when there is none.
-func picture(get func(*http.Request) ([]byte, error)) http.HandlerFunc {
+// A cache that is not empty is sent as Cache-Control.
+func picture(get func(*http.Request) ([]byte, error), cache string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		b, err := get(r)
 		if err == nil && b == nil {
@@ -283,6 +265,9 @@ func picture(get func(*http.Request) ([]byte, error)) http.HandlerFunc {
 			e, status := errorEntity(err)
 			writeEntity(w, r, status, e)
 			return
+		}
+		if cache != "" {
+			w.Header().Set("Cache-Control", cache)
 		}
 		w.Header().Set("Content-Type", "image/jpeg")
 		w.Header().Set("Content-Length", strconv.Itoa(len(b)))

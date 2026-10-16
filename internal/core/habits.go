@@ -110,12 +110,3 @@ func (s *Store) CreateMetric(ctx context.Context, source string, m NewMetric) (a
 	}
 	return
 }
-
-// metricUnit is a registered metric's unit; found is false when no metric has the name.
-func (t *Tx) metricUnit(name string) (unit string, found bool, err error) {
-	err = t.tx.QueryRowContext(t.ctx, `SELECT m.unit FROM metrics m JOIN entities e ON e.id = m.id AND e.deleted_at IS NULL WHERE m.id = (SELECT entity_id FROM entity_names WHERE name_key = ?)`, text.TitleKey(name)).Scan(&unit)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", false, nil
-	}
-	return unit, err == nil, err
-}

@@ -106,15 +106,6 @@ func IsInstant(s string) bool {
 	return err == nil && t.Format(instantLayout) == s
 }
 
-// checkVersion refuses a write that read an old version of a row: a client answers it by reading again. what names
-// the row's kind; have is the current version, want the one the write read.
-func checkVersion(what, have, want string) error {
-	if have != want {
-		return conflictCode("stale_version", "%s changed since version %q (now %q): read it again", what, want, have)
-	}
-	return nil
-}
-
 // IsOwner reports a writer that is the owner: not an agent (agent:*) and not an import (import:*). The owner-only
 // actions (register-metric, snapshot) are refused to any other writer, on every surface.
 func IsOwner(source string) bool {

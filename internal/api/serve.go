@@ -72,10 +72,10 @@ func NewOn(s *core.Store, localDay func() string, zone *time.Location, trustedOr
 			return nil, err
 		}
 		return h.s.Preview(r.Context(), id)
-	}))
+	}, "private, max-age=31536000, immutable")) // a preview by id never changes
 	m.HandleFunc("GET /previews", picture(func(r *http.Request) ([]byte, error) {
 		return h.s.PreviewByTitle(r.Context(), r.URL.Query().Get("title"))
-	}))
+	}, ""))
 	get("/metrics", h.metrics)
 	get("/metrics/{name}", h.series)
 	get("/measurements/{id}", h.measurement)

@@ -3,13 +3,67 @@ package core
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"strconv"
+
+	"lifelog/internal/text"
 )
 
 // A page's picture is the first live file with a preview that its body embeds (NamedRow.Picture). SetPicture and
 // SetPictureOf make a file that picture: they put its embed first in the body. The file is kept as the owner
 // picked it, with no day and no place, so a picture of a person is not put in a day page.
+
+// firstPictures is firstPicture for many bodies, with one query for all of them. The result has one id for each body,
+// in the order of bodies.
+func firstPictures(ctx context.Context, db *sql.DB, bodies []string) ([]int64, error) {
+	keys, titles := []string{}, make([][]string, len(bodies))
+	for i, body := range bodies {
+		for _, title := range text.EmbeddedTitles(body) {
+			k := text.TitleKey(title)
+			titles[i] = append(titles[i], k)
+			keys = append(keys, k)
+		}
+	}
+	out := make([]int64, len(bodies))
+	if len(keys) == 0 {
+		return out, nil
+	}
+	arg, err := json.Marshal(keys)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := db.QueryContext(ctx, `
+		SELECT n.name_key, f.id FROM entity_names n
+		  JOIN entities e ON e.id = n.entity_id AND e.deleted_at IS NULL
+		  JOIN files f ON f.id = e.id AND f.preview IS NOT NULL
+		 WHERE n.name_key IN (SELECT value FROM json_each(?))`, string(arg))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	byKey := map[string]int64{}
+	for rows.Next() {
+		var k string
+		var id int64
+		if err := rows.Scan(&k, &id); err != nil {
+			return nil, err
+		}
+		byKey[k] = id
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for i, ks := range titles {
+		for _, k := range ks {
+			if id, ok := byKey[k]; ok {
+				out[i] = id
+				break
+			}
+		}
+	}
+	return out, nil
+}
 
 // SetPicture keeps a photo as a file and makes it the page's picture. day names a new file when f has no title:
 // "<page> <day>.jpg", with a number when that title is taken.
