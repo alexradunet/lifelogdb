@@ -308,32 +308,37 @@ func (v *view) LinkTitle(rel string) string {
 	return ""
 }
 
-// Action is the entity's action of that name, nil when it is not offered.
-func (v *view) Action(name string) *Action {
-	for i := range v.Actions {
-		if v.Actions[i].Name == name {
-			return v.shown(&v.Actions[i])
+// Action is the entity's action of that name as this page draws it, nil when it is not offered.
+func (v *view) Action(name string) *shownAction {
+	for _, a := range v.Actions {
+		if a.Name == name {
+			return v.shown(a)
 		}
 	}
 	return nil
 }
 
-// shown is the action as this page draws it. On a page that shows a refusal, every action is a copy (the entity
-// stays as it is, and the JSON shape with it) that takes no focus, so the alert keeps it. The copy of the refused
-// action is also marked and filled: each of its fields holds what the form sent. A sent value that is not a field
-// of the action is dropped, and a file is never sent back.
+// shownAction is an action as a page draws it: a copy of the entity's action, so the entity stays as it is and the
+// JSON with it, and the marks of the browser, which the wire does not carry.
+type shownAction struct {
+	Action
+	refused bool // the form a refusal came from: filled, open and described by the alert
+	noFocus bool // the page shows a refusal: no field takes the focus from the alert
+	asked   bool // the page's link asked for this form (?new=<name>): open, filled from the query
+}
+
+// shown is the action as this page draws it. On a page that shows a refusal, every action takes no focus, so the
+// alert keeps it. The refused action is also marked and filled: each of its fields holds what the form sent. A sent
+// value that is not a field of the action is dropped, and a file is never sent back.
 //
-// With no refusal, the page's link can ask for one form (?new=<name>, docs/plans/114-one-way-to-do-a-thing.md): its
-// copy is open, and each field that the query names, but a path field or a file, holds the query's value.
-func (v *view) shown(a *Action) *Action {
-	if a == nil {
-		return nil
-	}
+// With no refusal, the page's link can ask for one form (?new=<name>, docs/plans/114-one-way-to-do-a-thing.md): it
+// is open, and each field that the query names, but a path field or a file, holds the query's value.
+func (v *view) shown(a Action) *shownAction {
+	c := &shownAction{Action: a}
 	if v.Refused == nil {
 		if a.Name == "" || v.Asked("new") != a.Name {
-			return a
+			return c
 		}
-		c := *a
 		c.asked = true
 		c.Fields = slices.Clone(a.Fields)
 		for i, f := range c.Fields {
@@ -341,9 +346,8 @@ func (v *view) shown(a *Action) *Action {
 				c.Fields[i].Value = v.query.Get(f.Name)
 			}
 		}
-		return &c
+		return c
 	}
-	c := *a
 	c.noFocus = true
 	if a.Href == v.Refused.Href {
 		c.refused = true
@@ -354,7 +358,7 @@ func (v *view) shown(a *Action) *Action {
 			}
 		}
 	}
-	return &c
+	return c
 }
 
 // Link is the href of the entity's link with that rel, "" when it has none.
@@ -464,16 +468,19 @@ func (f *formView) MoreOpen() bool {
 }
 
 func formOf(x any, opts ...string) (*formView, error) {
-	var a *Action
+	var c shownAction // an action of the entity's list (range .Actions) has no marks
 	switch x := x.(type) {
-	case *Action:
-		a = x
+	case *shownAction:
+		if x == nil { // the page does not offer the action
+			return nil, nil
+		}
+		c = *x
 	case Action:
-		a = &x
-	}
-	if a == nil {
+		c.Action = x
+	default:
 		return nil, nil
 	}
+	a := &c.Action
 	if len(opts)%2 != 0 {
 		return nil, fmt.Errorf("form %s: options come in name/value pairs", a.Name)
 	}
@@ -533,11 +540,11 @@ func formOf(x any, opts ...string) (*formView, error) {
 		}
 	}
 	f.Primary = len(f.Shown)+len(f.More) > 0
-	f.Refused, f.Asked = a.refused, a.asked
-	if a.asked && f.Focus == "" && len(f.Shown) > 0 { // a form the reader asked for starts in its first field
+	f.Refused, f.Asked = c.refused, c.asked
+	if c.asked && f.Focus == "" && len(f.Shown) > 0 { // a form the reader asked for starts in its first field
 		f.Focus = f.Shown[0].Name
 	}
-	if a.noFocus { // a page that shows a refusal puts the focus on the alert, and on no field
+	if c.noFocus { // a page that shows a refusal puts the focus on the alert, and on no field
 		f.Focus = ""
 	}
 	return f, nil
