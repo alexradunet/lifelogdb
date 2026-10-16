@@ -79,7 +79,8 @@ func TestBrowseActions(t *testing.T) {
 	}{
 		{"pages", browseQuery{kind: "page"}, nil, "create-page file-pages[Cousins Family] tombstone-pages"},
 		{"people", browseQuery{kind: "person"}, nil, "create-person file-pages[Cousins Family]"},
-		{"places", browseQuery{kind: "place", unfiled: true}, nil, "create-place file-pages[Cousins Family]"},
+		{"places", browseQuery{kind: "place"}, nil, "create-place file-pages[Cousins Family]"},
+		{"unfiled places", browseQuery{kind: "place", unfiled: true}, nil, "create-place file-pages[Cousins Family]"},
 		{"media", browseQuery{kind: "media"}, nil, "add-file file-pages[Cousins Family] tombstone-pages"},
 		{"documents", browseQuery{kind: "document"}, nil, "add-file file-pages[Cousins Family] tombstone-pages"},
 		{"metrics", browseQuery{kind: "metric"}, nil, "file-pages[Cousins Family]"},
