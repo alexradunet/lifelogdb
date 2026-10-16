@@ -404,3 +404,16 @@ func TestBrowseOrdersTitlesWithoutCase(t *testing.T) {
 		t.Errorf("not filed: %q", got)
 	}
 }
+
+// TestMediaKindsGivesACopy: a caller that changes the list MediaKinds gives does not change the next list, or the
+// condition isMedia that the reads of Browse use.
+func TestMediaKindsGivesACopy(t *testing.T) {
+	kinds := MediaKinds()
+	kinds[0] = "text"
+	if got := strings.Join(MediaKinds(), ","); got != "image,video,audio" {
+		t.Errorf("MediaKinds() = %s after a caller changed its copy, want image,video,audio", got)
+	}
+	if want := mediaKind + ` IN ('image', 'video', 'audio')`; isMedia != want {
+		t.Errorf("isMedia = %s, want %s", isMedia, want)
+	}
+}

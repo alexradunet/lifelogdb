@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"slices"
 	"strings"
 )
 
@@ -185,9 +186,14 @@ func (s *Store) NamedMentions(ctx context.Context, typ string, sc Scope, limit, 
 	return out, nil
 }
 
-// MediaKinds are the kinds of file the media list of Browse shows, named by the first part of files.mime, in the
-// order the list counts them. A file of any other kind (a PDF, a scan's text) is a document (OtherFiles).
-var MediaKinds = []string{"image", "video", "audio"}
+// mediaKinds are the kinds of file the media list of Browse shows, named by the first part of files.mime, in the
+// order the list counts them. A file of any other kind (a PDF, a scan's text) is a document (OtherFiles). isMedia is
+// built from them once, so only MediaKinds gives them out, as a copy.
+var mediaKinds = []string{"image", "video", "audio"}
+
+// MediaKinds are the kinds of file the media list of Browse shows (mediaKinds). Each call gives a new copy: a caller
+// that changes it does not change the list of isMedia.
+func MediaKinds() []string { return slices.Clone(mediaKinds) }
 
 // FileRow is a live file the owner keeps (docs/cookbook/keep-a-file.md), as the media and the documents of Browse
 // show it.
@@ -208,8 +214,8 @@ type FileRow struct {
 // mediaKind is the first part of files.mime: 'image' of 'image/jpeg'. files_mime guarantees the slash.
 const mediaKind = `substr(f.mime, 1, instr(f.mime, '/') - 1)`
 
-// isMedia is the condition on the file f of a file of the media kinds (MediaKinds).
-var isMedia = mediaKind + ` IN ('` + strings.Join(MediaKinds, `', '`) + `')`
+// isMedia is the condition on the file f of a file of the media kinds (mediaKinds).
+var isMedia = mediaKind + ` IN ('` + strings.Join(mediaKinds, `', '`) + `')`
 
 // Media is one page of the live files of the media kinds in the scope: all of them, or the one kind named. Newest
 // day first (FileRow.Day), then the newest kept.

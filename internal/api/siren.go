@@ -160,7 +160,7 @@ var catalog = []spec{
 			pageField("in", "In the category (title)", false),
 			{Name: "unfiled", Type: "number", Title: "Only what is in no category", Options: []string{"0", "1"}},
 			{Name: "ghosts", Type: "number", Title: "Only the ghost pages", Options: []string{"0", "1"}},
-			{Name: "media", Type: "text", Title: "Media kind", Options: core.MediaKinds},
+			{Name: "media", Type: "text", Title: "Media kind", Options: core.MediaKinds()},
 			opt("limit", "number", "Rows on a page (1-500, default 200)"), opt("offset", "number", "Rows skipped")}, false, false},
 	{"find", "Find page", "Open the page with this title (any case or normalisation).",
 		"GET", "/pages", []Field{pageField("title", "Title", true)}, false, false},

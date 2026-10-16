@@ -101,7 +101,7 @@ func browseQueryOf(q url.Values) (browseQuery, error) {
 		return b, core.Invalid("ghosts is a list of pages: it takes no other kind, no in and no unfiled")
 	case b.media != "" && b.kind != "media":
 		return b, core.Invalid("media needs kind media")
-	case b.media != "" && !slices.Contains(core.MediaKinds, b.media):
+	case b.media != "" && !slices.Contains(core.MediaKinds(), b.media):
 		return b, core.Invalid("media must be image, video or audio")
 	}
 	return b, nil
