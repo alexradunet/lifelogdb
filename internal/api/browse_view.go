@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"unicode"
@@ -173,4 +174,50 @@ func letterOf(title string) string {
 		return "#"
 	}
 	return string(unicode.ToUpper(r))
+}
+
+// Mentions says in words how often the log mentions a person or a place. mentions and lastDay are the values of a
+// row of the list as the template sees them: a JSON number and a day, or nothing.
+func (v *view) Mentions(mentions, lastDay any) string {
+	n, _ := mentions.(float64)
+	if n < 1 {
+		return "not mentioned yet"
+	}
+	words := fmt.Sprintf("mentioned on %d pages", int(n))
+	if n == 1 {
+		words = "mentioned on 1 page"
+	}
+	if day, _ := lastDay.(string); day != "" {
+		words += ", last " + v.clock().day(day)
+	}
+	return words
+}
+
+// The words of the files in Browse (docs/plans/117-one-browse-view.md): the media list is the pictures, the videos
+// and the recordings, drawn as tiles; the documents are every other file (a PDF, a text), drawn as rows. add-file
+// keeps a file of any kind.
+
+// FileWords says what a row of a list of files is, and when: "picture · Wed 14 May", "recording · no day yet",
+// "application/pdf · Mon 12 May" (a file of another kind is named by its type).
+func (v *view) FileWords(kind, mime, day any) string {
+	words, ok := map[string]string{"image": "picture", "video": "video", "audio": "recording"}[kind.(string)]
+	if !ok {
+		words, _ = mime.(string)
+	}
+	if d, _ := day.(string); d != "" {
+		return words + " · " + v.clock().day(d)
+	}
+	return words + " · no day yet"
+}
+
+// MediaCount says a count of the media list in words: "3 pictures", "1 video", "no recordings".
+func (v *view) MediaCount(n any, one, many string) string {
+	c, _ := n.(float64)
+	switch c {
+	case 0:
+		return "no " + many
+	case 1:
+		return "1 " + one
+	}
+	return num(c) + " " + many
 }

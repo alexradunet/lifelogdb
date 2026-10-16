@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"slices"
 	"strings"
 	"time"
 
@@ -95,36 +94,6 @@ func newOn(s *core.Store, localDay func() string, zone *time.Location, guard *ht
 		writeError(w, r, errCrossOrigin)
 	}))
 	return guard.Handler(m)
-}
-
-// oldLists are the lists that Browse replaced (docs/plans/117-one-browse-view.md, rule 8), each with the filters of
-// Browse that give its rows. A GET of one answers 308 to Browse, so a bookmark or a client keeps working; the POST
-// routes of the same paths do not change.
-var oldLists = map[string]url.Values{
-	"/people":     {"kind": {"person"}},
-	"/places":     {"kind": {"place"}},
-	"/media":      {"kind": {"media"}},
-	"/files":      {"kind": {"document"}},
-	"/ghosts":     {"kind": {"page"}, "ghosts": {"1"}},
-	"/categories": {},
-}
-
-// toBrowse is the Browse address of a GET of an old list: its filters, and the limit, the offset and the asked form
-// (new) of the query. The kind of the media list (image, video, audio) is the field media of Browse.
-func toBrowse(path string, q url.Values) string {
-	v := url.Values{}
-	for k, vs := range oldLists[path] {
-		v[k] = slices.Clone(vs)
-	}
-	for _, k := range []string{"limit", "offset", "new"} {
-		if x, ok := q[k]; ok {
-			v[k] = x
-		}
-	}
-	if path == "/media" && q.Get("kind") != "" {
-		v.Set("media", q.Get("kind"))
-	}
-	return browseHref(v)
 }
 
 // The refusals that two guards write: a browser write from an origin that the server does not trust (the guard of
