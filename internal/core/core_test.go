@@ -598,6 +598,59 @@ func TestAFailedSavepointRollbackKeepsBothErrors(t *testing.T) {
 	}
 }
 
+// TestALinkTargetIsSkippedOnlyWhenItsSavepointRollsBack: a body save skips a wikilink target that fails, when the
+// savepoint of the target rolls it back alone (cookbook/save-a-body.md, "any error in 1-3"), and the rest of the save
+// commits. When the savepoint cannot roll back, the save fails as a fault, and the page keeps its body and its links.
+// A trigger of the test (deliberate damage) makes the target fail when the save inserts its name: RAISE(ABORT) is a
+// refusal; a function that does not exist is an error that is not a refusal; RAISE(ROLLBACK) rolls the whole
+// transaction back, so the savepoint cannot roll back to its start.
+func TestALinkTargetIsSkippedOnlyWhenItsSavepointRollsBack(t *testing.T) {
+	for _, tc := range []struct {
+		name, trigger string
+		skipped       bool
+	}{
+		{"a refusal of the DDL", `SELECT RAISE(ABORT, 'the test refuses the target')`, true},
+		{"an error that is not a refusal", `SELECT no_such_function()`, true},
+		{"a rollback of the whole write", `SELECT RAISE(ROLLBACK, 'the test rolls the write back')`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := fresh(t)
+			home, _, err := s.CreatePage(ctx, "cli", "Home", "[[Old]]", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			p, err := s.PageByID(ctx, home)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.DB.W.ExecContext(ctx, `CREATE TEMP TRIGGER fail_the_target BEFORE INSERT ON entity_names
+			    WHEN NEW.title = 'New' BEGIN `+tc.trigger+`; END`); err != nil {
+				t.Fatal(err)
+			}
+			r, err := s.SaveBody(ctx, "cli", home, "[[New]]", p.Version)
+			body, links := "[[Old]]", "Old"
+			if tc.skipped {
+				body, links = "[[New]]", ""
+				if err != nil || strings.Join(r.Skipped, ",") != "New" || len(r.Linked) != 0 {
+					t.Errorf("SaveBody = %+v, %v; want New skipped and nothing linked", r, err)
+				}
+			} else if err == nil || status(err) != 0 || !reflect.DeepEqual(r, Sync{}) {
+				t.Errorf("SaveBody = %+v, %v (status %d); want a fault, not a refusal or a skipped target", r, err, status(err))
+			}
+			got, err := s.PageByID(ctx, home)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Body != body || titles(got.Out, "wikilink") != links {
+				t.Errorf("Home: body %q, links %q; want body %q, links %q", got.Body, titles(got.Out, "wikilink"), body, links)
+			}
+			if id, err := s.PageID(ctx, "New"); id != 0 || err != nil {
+				t.Errorf("PageID(New) = %d, %v; want no page", id, err)
+			}
+		})
+	}
+}
+
 // TestParseDayReadsOnlyADayThatRoundTrips: ParseDay gives the time of a YYYY-MM-DD day (lifelog_meta.days), and a
 // zero time and false for anything else. A string that time.Parse reads but that does not round-trip is not a day:
 // "+026-10-05" is read as the year 26. IsDay agrees with ParseDay.

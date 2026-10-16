@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 
+	"lifelog/internal/db"
 	"lifelog/internal/text"
 )
 
@@ -19,7 +20,9 @@ type Sync struct {
 	Skipped []string `json:"skipped,omitempty"`
 }
 
-// syncWikilinks is cookbook/save-a-body.md steps 1-4, after the body is written.
+// syncWikilinks is cookbook/save-a-body.md steps 1-4, after the body is written. A target that fails in steps 1-3 is
+// skipped when its savepoint rolls it back alone. When the savepoint cannot roll back, the state of the transaction is
+// not known, so the save fails.
 func (t *Tx) syncWikilinks(pageID int64, body string) (Sync, error) {
 	var own string
 	if err := t.tx.QueryRowContext(t.ctx, `SELECT preferred_name_key FROM entities WHERE id = ?`, pageID).Scan(&own); err != nil {
@@ -43,6 +46,10 @@ func (t *Tx) syncWikilinks(pageID int64, body string) (Sync, error) {
 			id, created, revived, err = t.linkTarget(pageID, key, title)
 			return err
 		}); err != nil {
+			var rb *db.RollbackError
+			if errors.As(err, &rb) {
+				return Sync{}, err // the target did not roll back alone: the save fails as a fault
+			}
 			r.Skipped = append(r.Skipped, title)
 			continue
 		}
