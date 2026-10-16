@@ -283,9 +283,11 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   only, and with no script, Browse and the Metrics board fold; the JSON and the catalog do not change. The tree folds
   each category that has categories under it, open on the path to the current branch. On Pages in Everything the top
   categories are folder tiles before the list, and they are not rows of it; inside a category, the categories under
-  it are the folders. A list in title order with more than 30 rows is in letter groups with a letter bar, closed
-  when it has more than 100 rows. The Metrics board folds each group and each category under it, and the line of a
-  fold says its count and the day of its newest reading. `/metrics?view=list` draws one row a metric in place of the
+  it are the folders. A list in title order with more than 30 rows is in letter groups with a letter bar; with more
+  than 100 rows the groups are closed and are the index, a grid of letter slabs with no bar
+  ([plan 119](docs/plans/119-the-finish.md)). The Metrics board folds each group and each category under it, and the
+  line of a fold says its count and the day of its newest reading; the link to the category and + New metric here
+  are the foot of the fold. `/metrics?view=list` draws one row a metric in place of the
   cards; `view` is a word of the page, as `new` is, and a form of the page returns to the same view.
 - **One way to make a thing** ([plan 114](docs/plans/114-one-way-to-do-a-thing.md)). The rail's New is a menu of the
   kinds; each kind is made on its list of Browse, whose header has its New button (a file on the media list, a

@@ -29,10 +29,10 @@
 <ul class="plain folder-tiles">{{range .}}<li class="folder{{if $pick}} pick{{end}}">{{if $pick}}{{template "pick-box" .}}{{end}}<a class="folder-link" href="{{.href}}">{{icon "browse"}}<span class="first">{{.title}}</span><span class="meta">{{.count}}</span></a></li>
 {{end}}</ul></details>{{end}}
 {{if eq $p.kind "media"}}<ul class="plain tiles">{{range $list.Rows}}<li class="tile{{if $pick}} pick{{end}}">{{if $pick}}{{template "pick-box" .}}{{end}}<a class="tile-link" href="/pages/{{num .id}}">{{with .picture}}<img src="{{.}}" alt="" loading="lazy">{{else}}<span class="tile-blank" aria-hidden="true">{{icon .file_kind}}</span>{{end}}<span class="first">{{.title}}</span><span class="meta">{{$.FileWords .file_kind .mime .day}}</span></a></li>{{end}}</ul>
-{{else if $list.Letters}}<nav class="kinds letters" aria-label="Letters">{{range $list.Letters}}<a href="#{{.Anchor}}">{{.Letter}}</a>{{end}}</nav>
-{{range $list.Letters}}<details class="letter"{{if not $list.Closed}} open{{end}}><summary><span class="letter-name">{{.Letter}}</span> <small>{{len .Rows}}</small></summary>
+{{else if $list.Letters}}{{if not $list.Closed}}<nav class="kinds letters" aria-label="Letters">{{range $list.Letters}}<a href="#{{.Anchor}}">{{.Letter}}</a>{{end}}</nav>{{end}}
+<div class="letter-groups{{if $list.Closed}} closed{{end}}">{{range $list.Letters}}<details class="letter"{{if not $list.Closed}} open{{end}}><summary><span class="letter-name">{{.Letter}}</span> <small>{{len .Rows}}</small></summary>
 <ul class="plain rows" id="{{.Anchor}}">{{range .Rows}}{{template "browse-row" (dict "v" $ "r" . "pick" $pick)}}{{end}}</ul></details>
-{{end}}
+{{end}}</div>
 {{else}}<ul class="plain rows">{{range $list.Rows}}{{template "browse-row" (dict "v" $ "r" . "pick" $pick)}}{{end}}</ul>{{end}}
 {{if $pick}}{{template "pick-bar" (dict "v" $ "file" $file "del" $del "list" "browse-categories" "back" $.Here "words" (or (and $del "Check the rows, then type a category or delete them. A new name makes a new category.") "Check the rows, then type a category. A new name makes a new category."))}}{{end}}</div>
 {{else}}<p class="empty">{{if $p.ghosts}}No ghost page: every page has text or a link.{{else if $p.unfiled}}Everything of this kind is in a category.{{else if $p.in}}Nothing of this kind is filed in {{$p.in.title}}.{{else if eq $p.kind "metric"}}No metric yet. The Metrics board makes the first one.{{else}}Nothing of this kind yet. New, above, makes the first one.{{end}}</p>{{end}}

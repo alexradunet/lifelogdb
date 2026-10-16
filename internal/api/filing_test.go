@@ -185,8 +185,8 @@ func TestTheMetricsPageDrawsCards(t *testing.T) {
 	for _, want := range []string{
 		`<nav class="kinds jump" aria-label="Groups"><a href="#c-`, `>Body <small>3</small></a>`, `<a href="#not-filed">Not filed <small>2</small></a>`,
 		`id="not-filed"`, `<details class="metric-sub" open><summary><h3>Iron <small>1</small></h3><span class="meta">newest `, `<a href="/pages/` + idOfSelf(t, hrefOf(iron, "self")) + `">Open Iron</a>`,
-		`<a class="name" href="/metrics/Weight">Weight</a>`, `79.5 <span class="unit">kg</span>`, `yesterday · Tue 13 May · 2 readings`, `<svg class="trend"`,
-		`<div class="reading-tile metric-card stale">`, `title="iron stores">Ferritin</a>`, `No reading yet · n`,
+		`<a class="name" href="/metrics/Weight">Weight</a>`, `79.5 <span class="unit">kg</span>`, `<span class="meta">yesterday · Tue 13 May</span><span class="meta">2 readings</span>`, `<svg class="trend"`,
+		`<div class="reading-tile metric-card stale">`, `title="iron stores">Ferritin</a>`, `<span class="reading none"><span aria-hidden="true">–</span> <span class="unit">n</span></span><span class="meta">No reading yet</span>`,
 		`<form id="pick" class="pick-bar" method="POST" action="/pages/file" data-action="file-pages">`, `<input type="hidden" name="back" value="/metrics">`,
 		`<input type="checkbox" name="ids" value="` + ids["Weight"] + `" form="pick" aria-label="Select Weight">`, `<option value="Iron">Body/Iron</option>`,
 	} {
@@ -310,6 +310,13 @@ func TestTheMetricsBoardFoldsAndHasAList(t *testing.T) {
 	// Each + Add of a row and the pick bar return to the list.
 	if strings.Contains(list, `class="reading-tile metric-card`) || strings.Count(list, `<input type="hidden" name="back" value="/metrics?view=list">`) != 6 {
 		t.Error("the list draws a card, or a form of it does not return to the list")
+	}
+	// The tools of a group are its foot: after its cards, and in Iron after Ferritin (docs/plans/119-the-finish.md, rule 3).
+	for _, page := range []string{cards, list} {
+		iron := page[strings.Index(page, `<h3>Iron`):]
+		if ferritin, tools := strings.Index(iron, `>Ferritin</a>`), strings.Index(iron, `<div class="group-tools">`); ferritin < 0 || tools < ferritin {
+			t.Errorf("the tools of Iron come before its cards: Ferritin at %d, the tools at %d", ferritin, tools)
+		}
 	}
 	names := regexp.MustCompile(`<a class="name" href="/metrics/(\w+)"`)
 	if a, b := names.FindAllString(cards, -1), names.FindAllString(list, -1); len(a) != 5 || strings.Join(a, " ") != strings.Join(b, " ") {

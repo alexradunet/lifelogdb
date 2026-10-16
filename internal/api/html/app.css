@@ -490,7 +490,7 @@ dialog.palette{inline-size:min(36rem, calc(100vw - 2rem)); max-block-size:min(32
     &>details.action{margin-block-start:var(--space-2)}}
   & .panel-head{padding-block-end:var(--space-1)}
   & ul.plain{padding:0 var(--space-3); box-shadow:var(--parch-bevel);
-    &>li{padding:var(--space-3) 0; border-block-start:1px solid var(--edge); border-block-end:0;
+    &>li{padding:var(--space-2) 0; border-block-start:1px solid var(--line-soft); border-block-end:0;
       &:first-child{border-block-start:0}}}
   & .readings{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
   & .about{padding:var(--space-3)}}
@@ -678,6 +678,107 @@ li.pick{display:flex; align-items:stretch; gap:var(--space-1);
   .browse{grid-template-columns:minmax(0,1fr)}
   .browse-side{display:none}
   .browse-fold{display:block}}
+
+/* The category tree (docs/plans/115-categories-to-browse.md, docs/plans/118-fold-and-find.md): a row is the link; a
+   branch's fold is a chevron at the start of its row, and the categories under it are indented in the fold. The rows
+   are shorter than a list's. */
+.tree .entry,.filed .entry{grid-template-columns:minmax(0,1fr) auto}
+.tree .entry{padding-block:6px; padding-inline-start:26px}
+.tree li.branch{position:relative;
+  &>details>summary{position:absolute; inset-block-start:0; inset-inline-start:0; inline-size:26px; block-size:34px; min-block-size:0; margin:0; justify-content:center; gap:0}
+  &>details[open]>summary{margin:0}
+  &>details>ul.tree{padding-inline-start:var(--space-4)}}
+
+/* Filed here (docs/plans/115-categories-to-browse.md): New page here opens in place, under the heading, full width. */
+.filed>.panel-head{flex-wrap:wrap;
+  &>details.action[open]{flex:1 1 100%}}
+
+/* The categories as folders: a slab each, as a button is, as many across as the column holds; a slab sinks when it
+   is pressed (docs/plans/119-the-finish.md, rule 5). */
+details.folders{padding-block:var(--space-3); border-block-end:1px solid var(--line-soft);
+  &>summary small,& + * small{color:var(--text-muted); font-weight:400}}
+ul.folder-tiles{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:var(--space-3) var(--space-2); padding-block-end:3px;
+  &>li{margin:0; padding:0; border:0; display:flex; align-items:stretch; gap:var(--space-1)}}
+.folder-link{display:flex; flex:1 1 auto; align-items:center; gap:var(--space-2); min-inline-size:0; padding:var(--space-2) var(--space-3);
+  background:var(--surface-deep); border:2px solid var(--edge); box-shadow:var(--slab-bevel),var(--drop-hard); color:var(--text); text-decoration:none;
+  & svg.icon{color:var(--accent-ink)}
+  &:hover{filter:brightness(1.04); text-decoration:none; color:var(--text); border-color:var(--outline)}
+  &:active{transform:translateY(3px); box-shadow:var(--slab-pressed)}
+  & .first{flex:1 1 auto; min-inline-size:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:700}
+  & .meta{font:400 12px/16px var(--mono); color:var(--text-muted)}}
+@media (prefers-reduced-motion:no-preference){.folder-link{transition:transform .08s,box-shadow .08s,filter .08s}}
+
+/* The letter groups: a bar of the letters, then a fold a letter with its count. Closed, they are an index: a grid of
+   slabs, the letter in the display face over its count, and the open one takes the full width
+   (docs/plans/119-the-finish.md, rule 4). */
+.kinds.letters{font-family:var(--mono)}
+details.letter{border-block-end:1px solid var(--line-soft);
+  &>summary{color:var(--text-strong); & .letter-name{font:700 15px/22px var(--mono)} & small{color:var(--text-muted); font-weight:400}}
+  &[open]>summary{margin-block-end:0}
+  &>ul{scroll-margin-block-start:var(--space-8)}}
+.letter-groups.closed{display:grid; grid-template-columns:repeat(auto-fill,minmax(64px,1fr)); gap:var(--space-3) var(--space-2); padding-block:var(--space-4);
+  &>details.letter[open]{grid-column:1 / -1; padding-block-end:var(--space-2)}
+  &>details.letter:not([open]){border:0;
+    &>summary{flex-direction:column; justify-content:center; gap:0; block-size:64px; margin:0; color:var(--ink);
+      background:var(--surface-deep); border:2px solid var(--edge); box-shadow:var(--slab-bevel),var(--drop-hard);
+      &::before{content:none}
+      &:hover{filter:brightness(1.04); border-color:var(--outline)}
+      &:active{transform:translateY(3px); box-shadow:var(--slab-pressed)}
+      & .letter-name{font:400 30px/30px var(--display)}
+      & small{font:400 12px/16px var(--mono)}}}}
+
+/* The folds of the Metrics board (docs/plans/118-fold-and-find.md, rules 4 and 5). A group's fold has its title and
+   count on its line, a stitch, and the day of its newest reading at the end. The link to its page and + New metric
+   here are the foot of the open fold (docs/plans/119-the-finish.md, rule 3). Cards or List is a switch of two links
+   before the jump bar. */
+.board-nav{display:flex; flex-wrap:wrap; align-items:baseline; gap:0 var(--space-6)}
+.kinds.view-switch{font-weight:700}
+details.metric-group,details.metric-sub{
+  &>summary{color:var(--text-strong); gap:var(--space-1) var(--space-3);
+    &>:is(h2,h3){display:flex; align-items:baseline; gap:var(--space-2); flex:1 1 auto; min-inline-size:0; margin:0;
+      & small{color:var(--text-muted); font:400 13px/19px var(--mono)}
+      &::after{content:""; flex:1; align-self:center; block-size:2px; min-inline-size:24px;
+        background:linear-gradient(to right,var(--rule) 50%,transparent 50%) 0 0/8px 2px repeat-x; opacity:.7}}
+    & .meta{flex:none; font-weight:400; font-size:13px; line-height:19px; color:var(--text-muted)}}
+  &[open]>summary{margin-block-end:var(--space-3)}}
+details.metric-sub{margin-block:var(--space-4) var(--space-2); padding-inline-start:var(--space-4); border-inline-start:2px solid var(--line-soft)}
+.group-tools{display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-2) var(--space-4); margin-block-start:var(--space-4);
+  &>a:not(.button){font-size:13px; line-height:19px}}
+@container column (max-width:487px){details.metric-group,details.metric-sub{&>summary>:is(h2,h3)::after{content:none}}}
+
+/* A card has a foot (docs/plans/119-the-finish.md, rule 1): a tile is a column, the free space is over its line, so
+   the line and + Add are at the foot of every card of a row. */
+.reading-tile{gap:var(--space-1);
+  &>svg.trend,&>.add-reading{margin-block-start:auto}
+  &>svg.trend~.add-reading{margin-block-start:var(--space-2)}
+  &>.reading.none{font:400 32px/32px var(--display); color:var(--muted); & .unit{font:400 13px/16px var(--mono)}}}
+
+/* The list: one row a metric on parchment, the name first, the value in the display face, its day, its line. In a
+   narrow column the day and the line go under the name. */
+ul.metric-rows{padding:var(--space-1) var(--space-3); box-shadow:var(--parch-bevel); background:var(--surface);
+  --text:var(--ink); --text-strong:var(--ink); --text-muted:var(--muted); --text-link:var(--link)}
+ul.metric-rows>li.metric-row{display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-1) var(--space-4); padding:var(--space-2) 0;
+  & .name{flex:1 1 10rem; min-inline-size:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:700}
+  & a.reading{flex:0 0 8rem; font:400 22px/24px var(--display); font-variant-numeric:tabular-nums; color:var(--ink); text-decoration:none;
+    & .unit{font:400 12px/16px var(--mono); color:var(--muted)}}
+  & .meta{flex:0 0 13rem; font-size:13px; line-height:19px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  & .meta.none{flex:0 1 calc(21rem + 120px + 2 * var(--space-4))}
+  & .line{flex:0 0 120px; & svg.trend{margin:0}}
+  & .add-reading{flex:none; &>summary::before{content:none} &[open]{flex:1 1 100%; &>summary{margin-block-end:var(--space-2)}}}
+  &.stale{& a.reading,& .name{color:var(--muted)} & svg.trend{color:var(--muted)} & svg.trend circle{fill:var(--muted)}}}
+/* In a narrow column a row is two lines, the name and the value, then the day and + Add; the cards have the line. */
+@container column (max-width:607px){ul.metric-rows>li.metric-row{display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:2px var(--space-3);
+  &>.pick-box{grid-area:1 / 1 / 3 / 2} & .name{grid-area:1 / 2} & a.reading{grid-area:1 / 3; text-align:end}
+  & .meta,& .meta.none{grid-area:2 / 2} & .line{display:none} & .add-reading{grid-area:2 / 3; justify-self:end}
+  & .add-reading[open]{grid-area:3 / 1 / 4 / -1; justify-self:stretch}}}
+
+/* The pick bar is quiet until Select (docs/plans/119-the-finish.md, rule 2): the button alone, on the material under
+   it. With Select on, it is the parchment band, and it stays in view. */
+.pick-bar:not(:has(.pick-on:checked)){position:static; padding:0; background:none; box-shadow:none}
+
+/* The tools of a head in a narrow column are the small buttons, so a row of three fits on a phone's line
+   (docs/plans/119-the-finish.md, rule 6). */
+@container column (max-width:607px){.page-head .tools :is(a.button,details.action>summary.button):not(.step){block-size:var(--control-small); min-block-size:0; padding:0 var(--space-3); font-size:13px}}
 }
 
 /* The utilities: a class with one purpose that no component restyles, so it may come last in the cascade. */
@@ -693,71 +794,3 @@ li.pick{display:flex; align-items:stretch; gap:var(--space-1);
 /* What an action does, before its form; the note under a table or a search. */
 .desc{display:block; font-size:13px; line-height:19px; color:var(--text-muted)}
 }
-
-/* The category tree (docs/plans/115-categories-to-browse.md): a row is indented by its depth in the drawn tree. */
-.tree>li.depth-1 .entry{padding-inline-start:var(--space-5)}
-.tree>li.depth-2 .entry{padding-inline-start:calc(2 * var(--space-5))}
-.tree>li.depth-3 .entry{padding-inline-start:calc(3 * var(--space-5))}
-.tree>li.depth-4 .entry{padding-inline-start:calc(4 * var(--space-5))}
-.tree .entry,.filed .entry{grid-template-columns:minmax(0,1fr) auto}
-
-/* Filed here (docs/plans/115-categories-to-browse.md): New page here opens in place, under the heading, full width. */
-.filed>.panel-head{flex-wrap:wrap;
-  &>details.action[open]{flex:1 1 100%}}
-
-/* The folds of Browse (docs/plans/118-fold-and-find.md). The tree: a branch's fold is a chevron at the start of its
-   row, and the categories under it are indented in the fold. The rows are shorter than a list's. */
-.tree .entry{padding-block:6px; padding-inline-start:26px}
-.tree li.branch{position:relative;
-  &>details>summary{position:absolute; inset-block-start:0; inset-inline-start:0; inline-size:26px; block-size:34px; min-block-size:0; margin:0; justify-content:center; gap:0}
-  &>details[open]>summary{margin:0}
-  &>details>ul.tree{padding-inline-start:var(--space-4)}}
-.tree>li.depth-1 .entry,.tree>li.depth-2 .entry,.tree>li.depth-3 .entry,.tree>li.depth-4 .entry{padding-inline-start:26px}
-/* The categories as folders: a tile each, as many across as the column holds. */
-details.folders{padding-block:var(--space-3); border-block-end:1px solid var(--line-soft);
-  &>summary small,& + * small{color:var(--text-muted); font-weight:400}}
-ul.folder-tiles{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:var(--space-2);
-  &>li{margin:0; padding:0; border:0; display:flex; align-items:stretch}}
-.folder-link{display:flex; flex:1 1 auto; align-items:center; gap:var(--space-2); min-inline-size:0; padding:var(--space-2) var(--space-3);
-  background:var(--surface-deep); border:1px solid var(--edge); color:var(--text); text-decoration:none;
-  &:hover{filter:brightness(1.04); text-decoration:none; color:var(--text)}
-  & .first{flex:1 1 auto; min-inline-size:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:700}
-  & .meta{font:400 12px/16px var(--mono); color:var(--text-muted)}}
-/* The letter groups: a bar of the letters, then a fold a letter with its count. */
-.kinds.letters{font-family:var(--mono)}
-details.letter{border-block-end:1px solid var(--line-soft);
-  &>summary{color:var(--text-strong); & .letter-name{font:700 15px/22px var(--mono)} & small{color:var(--text-muted); font-weight:400}}
-  &[open]>summary{margin-block-end:0}
-  &>ul{scroll-margin-block-start:var(--space-8)}}
-
-/* The folds of the Metrics board (docs/plans/118-fold-and-find.md, rules 4 and 5). A group's fold has its title
-   and count on its line, and the day of its newest reading at the end. The link to its page and + New metric here
-   are the first line of the open fold. Cards or List is a switch of two links over the jump bar. */
-.board-nav{display:flex; flex-wrap:wrap; align-items:baseline; gap:0 var(--space-6)}
-.kinds.view-switch{font-weight:700}
-details.metric-group,details.metric-sub{
-  &>summary{color:var(--text-strong); flex-wrap:wrap; gap:var(--space-1) var(--space-3);
-    & :is(h2,h3){margin:0; & small{color:var(--text-muted); font:400 13px/19px var(--mono)}}
-    & .meta{margin-inline-start:auto; font-weight:400; font-size:13px; line-height:19px; color:var(--text-muted)}}
-  &[open]>summary{margin-block-end:var(--space-2)}}
-details.metric-sub{margin-block:var(--space-3) var(--space-2); padding-inline-start:var(--space-4); border-inline-start:2px solid var(--line-soft)}
-.group-tools{display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:var(--space-2) var(--space-4); margin-block-end:var(--space-3);
-  &>a:not(.button){font-size:13px; line-height:19px}}
-/* The list: one row a metric on parchment, the name first, the value in the display face, its day, its line. In a
-   narrow column the day and the line go under the name. */
-ul.metric-rows{padding:var(--space-1) var(--space-3); box-shadow:var(--parch-bevel); background:var(--surface);
-  --text:var(--ink); --text-strong:var(--ink); --text-muted:var(--muted); --text-link:var(--link)}
-li.metric-row{display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-1) var(--space-4); padding:var(--space-2) 0;
-  & .name{flex:1 1 10rem; min-inline-size:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:700}
-  & a.reading{flex:0 0 8rem; font:400 22px/24px var(--display); font-variant-numeric:tabular-nums; color:var(--ink); text-decoration:none;
-    & .unit{font:400 12px/16px var(--mono); color:var(--muted)}}
-  & .meta{flex:0 0 13rem; font-size:13px; line-height:19px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-  & .meta.none{flex:0 1 calc(21rem + 120px + 2 * var(--space-4))}
-  & .line{flex:0 0 120px; & svg.trend{margin:0}}
-  & .add-reading{flex:none; &>summary::before{content:none} &[open]{flex:1 1 100%; &>summary{margin-block-end:var(--space-2)}}}
-  &.stale{& a.reading,& .name{color:var(--muted)} & svg.trend{color:var(--muted)} & svg.trend circle{fill:var(--muted)}}}
-/* In a narrow column a row is two lines, the name and the value, then the day and + Add; the cards have the line. */
-@container column (max-width:607px){li.metric-row{display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:2px var(--space-3);
-  &>.pick-box{grid-area:1 / 1 / 3 / 2} & .name{grid-area:1 / 2} & a.reading{grid-area:1 / 3; text-align:end}
-  & .meta,& .meta.none{grid-area:2 / 2} & .line{display:none} & .add-reading{grid-area:2 / 3; justify-self:end}
-  & .add-reading[open]{grid-area:3 / 1 / 4 / -1; justify-self:stretch}}}

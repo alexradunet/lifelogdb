@@ -673,9 +673,22 @@ func TestALongBrowseListHasALetterBar(t *testing.T) {
 		`<details class="letter" open><summary><span class="letter-name">A</span> <small>1</small></summary>`,
 		`<ul class="plain rows" id="letter-2"><li class="pick"><label class="pick-box">`,
 		`<span class="letter-name">N</span> <small>30</small>`,
+		`<div class="letter-groups"><details class="letter" open>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("/browse lacks %s", want)
 		}
+	}
+
+	// With 101 rows the groups are closed, and they are the index: the page has no letter bar
+	// (docs/plans/119-the-finish.md, rule 4).
+	for i := range 70 {
+		if _, _, err := s.CreatePage(ctx, "cli", fmt.Sprintf("Zeta %02d", i), "", ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	body = browse(t, h, "/browse")
+	if !strings.Contains(body, `<div class="letter-groups closed"><details class="letter"><summary>`) || strings.Contains(body, `class="kinds letters"`) {
+		t.Error("101 rows: the groups are not a closed index, or the page has a letter bar")
 	}
 }

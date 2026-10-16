@@ -258,6 +258,38 @@ func TestTheSheetsAreLayered(t *testing.T) {
 	if strings.Contains(app, "@layer tokens") || strings.Contains(app, "@layer base") || regexp.MustCompile(`@layer [^{]*;`).MatchString(app) {
 		t.Error("app.css declares a layer order or a layer of base.css")
 	}
+	// A rule outside the layers beats every layer, the utilities too: in app.css every block at the top is one of its
+	// two layers (docs/plans/119-the-finish.md, rule 8).
+	for _, head := range topBlocks(app) {
+		if head != "@layer components" && head != "@layer utilities" {
+			t.Errorf("app.css has a rule outside its layers: %.60q", head)
+		}
+	}
+}
+
+// topBlocks is the head of each block at the top of a sheet with no comments, and the text between blocks that is not
+// space, so a declaration outside any block is reported too.
+func topBlocks(sheet string) []string {
+	var heads []string
+	depth, start := 0, 0
+	for i, r := range sheet {
+		switch r {
+		case '{':
+			if depth == 0 {
+				heads = append(heads, strings.TrimSpace(sheet[start:i]))
+			}
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				start = i + 1
+			}
+		}
+	}
+	if rest := strings.TrimSpace(sheet[start:]); rest != "" {
+		heads = append(heads, rest)
+	}
+	return heads
 }
 
 // TestTheSheetsCloseEveryBlock: every block of a sheet is closed, so no rule is nested by accident in the rule

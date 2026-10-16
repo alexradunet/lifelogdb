@@ -8,6 +8,7 @@ Earlier closed plans live in git history (`git log -- docs/plans`). The next pla
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
+| [119](119-the-finish.md) | The finish: the cards, the pick bar, the letter index, the folders and the margin lists look finished | P3 | M | owner request 2026-10-16; `c8c7baa` | DONE |
 | [118](118-fold-and-find.md) | Fold and find: the category tree, the Browse list (folders, letter groups) and the Metrics board (folds, Cards or List) fold | P2 | M | owner request 2026-10-15; `0f85dda` | DONE |
 | [117](117-one-browse-view.md) | One Browse view: the kinds and the categories in one place; Metrics keeps its board | P2 | L | owner request 2026-10-15; `d7194c8` | DONE |
 | [116](116-strip-to-the-core.md) | Strip to the core: remove the conversation, read-only SQL, readings from a table, the public listener, photo positions, typed links, habits and tasks | P1 | XL | owner decision 2026-10-15; `518c3bb` | DONE |
