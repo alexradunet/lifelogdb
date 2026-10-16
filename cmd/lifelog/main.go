@@ -326,8 +326,6 @@ func (u usageError) Error() string {
 	return u.err.Error()
 }
 
-func (u usageError) Unwrap() error { return u.err }
-
 // runArgs runs one command line with the process of e, as main does: the parse, then the command. A command that takes
 // the interrupt through its context (commandConsumesContext) gets a context that an interrupt cancels.
 func runArgs(ctx context.Context, e env, argv []string) error {
