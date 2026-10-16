@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
@@ -46,12 +45,12 @@ Global flags, anywhere on the line:
   --human        print a readable summary instead of JSON
 `
 
-// env is what a command runs with: the line, the client (nil for serve, which mounts the handler itself), and the
-// handler (nil over --url, when a running server is the one; for serve --public, the handler of api.Public).
+// env is what a command runs with: the line, the client (nil for serve, which builds the handler of its listener),
+// and the store (nil over --url, when a running server is the one).
 type env struct {
-	o       opts
-	c       *client.Client
-	handler http.Handler
+	o     opts
+	c     *client.Client
+	store *core.Store
 }
 
 // command is one subcommand. The table commands is the one list of them: the usage, the dispatch, the flags a
@@ -356,16 +355,9 @@ func runContext(ctx context.Context, o opts) error {
 	}
 	defer d.Close()
 	e.o.db = path
-	s := &core.Store{DB: d, SnapshotDir: o.snapshots}
-	if o.pub != nil { // serve --public: the token, the allowed origins and the login pages are in the handler
-		if e.handler, err = api.Public(s, *o.pub); err != nil {
-			return err
-		}
-	} else {
-		e.handler = api.New(s)
-	}
-	if cmd.name != "serve" { // serve mounts the handler on a socket and calls it through no client
-		e.c = client.InProcess(e.handler, o.source)
+	e.store = &core.Store{DB: d, SnapshotDir: o.snapshots}
+	if cmd.name != "serve" { // serve builds the handler of its listener and calls it through no client
+		e.c = client.InProcess(api.New(e.store), o.source)
 	}
 	return cmd.run(ctx, e, args)
 }

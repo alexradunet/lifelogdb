@@ -127,7 +127,10 @@ func prepareServe(o *opts) error {
 	return nil
 }
 
-// serve is lifelog serve: the handler on a socket, this machine only or --public, until an interrupt drains it.
+// serve is lifelog serve: the handler on a socket, this machine only or --public, until an interrupt drains it. serve
+// builds the handler of its listener itself: the local one takes only a request to its own loopback authority, and a
+// public one serves the API behind the token, the allowed origins and the login pages (api.Public). So no code in
+// another function decides what guards a public listener.
 func serve(ctx context.Context, e env, _ []string) error {
 	o, pub := e.o, e.o.pub
 	listener, err := net.Listen("tcp", o.addr)
@@ -138,9 +141,11 @@ func serve(ctx context.Context, e env, _ []string) error {
 	var networkHandler http.Handler
 	scheme, note := "http", ""
 	if pub == nil {
-		networkHandler, err = api.NetworkAuthority(listener.Addr(), e.handler)
+		networkHandler, err = api.NetworkAuthority(listener.Addr(), api.New(e.store))
 	} else {
-		networkHandler = e.handler // api.Public built it (runContext)
+		if networkHandler, err = api.Public(e.store, *pub); err != nil {
+			return err
+		}
 		note = " (public: token required; the token travels in clear, use a private network)"
 		if pub.TLS {
 			scheme, note = "https", " (public: token required)"
