@@ -17,8 +17,9 @@ import (
 	"lifelog/internal/client"
 )
 
-// A category page shows what is filed in it, and a new page is filed where it is made
-// (docs/plans/115-categories-to-browse.md).
+// The categories (D26). A category page shows what is filed in it and opens in Browse, and a new page is filed where
+// it is made (docs/plans/115-categories-to-browse.md). file-pages files several pages in one write
+// (docs/plans/112-metrics-as-cards.md), and never a day page.
 
 // filedFixture files Alps 2030, Japan 2031 and the person Sam in Travel, and Travel in Life. It returns the page ids
 // by title.

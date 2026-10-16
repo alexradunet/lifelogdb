@@ -114,7 +114,8 @@ func TestThePhoneHasABottomBarAndASheet(t *testing.T) {
 }
 
 // The browser without a script (docs/plans/108-the-browser-made-current.md): what app.js once did, a page does by
-// the browser's own means, and these tests hold the HTML that asks for them.
+// the browser's own means. The search dialog and the keys are two of these; the next two tests hold the HTML that
+// asks for them.
 
 // TestTheSearchDialogIsInThePage: every page of the shell carries the search dialog once, a modal with the search
 // form inside, which the top bar's Search opens by its command and Escape or a tap outside closes (closedby). The

@@ -214,7 +214,7 @@ func TestFilePromotionDay(t *testing.T) {
 	}
 
 	// A file that is not a photo, with no day: it takes the day it is kept, the day of the store's clock, and no day
-	// page shows it. A photo with no day has no day (files_unknown_day_test.go).
+	// page shows it. A photo with no day has no day (TestUnknownPhotoDayHasNoCaptureOrPlaceSideEffects).
 	s = fresh(t)
 	s.Clock, s.Zone = func() time.Time { return time.Date(2026, 10, 10, 12, 0, 0, 0, time.UTC) }, time.UTC
 	if _, _, err := s.Capture(ctx, "cli", "2099-01-01", "Undated: ![[scan.pdf]]", nil); err != nil {

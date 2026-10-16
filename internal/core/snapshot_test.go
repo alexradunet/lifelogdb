@@ -91,9 +91,9 @@ func TestARestoreCheckReportsAFailedClose(t *testing.T) {
 	}
 }
 
-// TestSnapshot is `lifelog snapshot` on a live file the writer still holds open (docs/cookbook/take-a-snapshot.md):
-// the dated name, the time added on a second snapshot that day, never an existing file, the restore check passing
-// and leaving the snapshot as it was.
+// TestSnapshot is Store.TakeSnapshot on a live file that the writer still holds open
+// (docs/cookbook/take-a-snapshot.md): the dated name, the time added on a second snapshot that day, never an existing
+// file, the restore check passing and leaving the snapshot as it was.
 func TestSnapshot(t *testing.T) {
 	ctx := context.Background()
 	d := dbtest.New(t)

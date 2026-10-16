@@ -738,8 +738,8 @@ func TestTheGhostPagesSayWhatTheyAre(t *testing.T) {
 }
 
 // The navigation of Browse (docs/plans/117-one-browse-view.md, rules 7 and 8): the old lists answer 308 to Browse,
-// Home links Browse, the sidebar has Metrics and Browse beside Today and Calendar, and a category page opens itself
-// in Browse.
+// and Home links the lists of Browse. The sidebar is TestTheSidebarHasMetricsAndBrowse's, and a category page that
+// opens itself in Browse is TestACategoryPageOpensInBrowse's.
 
 func TestTheOldListsAnswer308ToBrowse(t *testing.T) {
 	c, h, _ := apitest.Fresh(t, "cli")

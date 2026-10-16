@@ -1,6 +1,6 @@
 // Package phototest builds synthetic photos for tests: EXIF (a TIFF block) in either byte order, a JPEG with or
-// without it, and the box tree of a HEIC carrying it (not a decodable image: its picture is a placeholder). No real
-// photo is used.
+// without it, and the box tree of a HEIF file carrying it (not a decodable image: its picture is a placeholder). No
+// real photo is used.
 package phototest
 
 import (

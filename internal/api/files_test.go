@@ -169,8 +169,8 @@ func TestFileViews(t *testing.T) {
 	}
 }
 
-// TestAPhotosDay is a photo's own day, read from the original: the photo is filed under it and shown on it. Its
-// position is never read (D21).
+// TestAPhotosDay is a photo's own day, read from the original: the file keeps that day, and the page of that day
+// shows the photo. Its position is never read (D21).
 func TestAPhotosDay(t *testing.T) {
 	c, h, _ := apitest.Fresh(t, "cli")
 	root := apitest.Must(t)(c.Get(t.Context(), "/"))
