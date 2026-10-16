@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
-	"image"
-	"image/color"
 	"image/jpeg"
 	"log"
 	"mime/multipart"
@@ -24,21 +22,12 @@ import (
 // jpegFile writes a synthetic w×h JPEG and returns its path and the SHA-256 of its bytes.
 func jpegFile(t *testing.T, name string, w, h int) (string, string) {
 	t.Helper()
-	m := image.NewRGBA(image.Rect(0, 0, w, h))
-	for y := range h {
-		for x := range w {
-			m.SetRGBA(x, y, color.RGBA{uint8(x), uint8(y), 128, 255})
-		}
-	}
-	var b bytes.Buffer
-	if err := jpeg.Encode(&b, m, nil); err != nil {
-		t.Fatal(err)
-	}
+	b := phototest.JPEG(w, h)
 	p := filepath.Join(t.TempDir(), name)
-	if err := os.WriteFile(p, b.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(p, b, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	sum := sha256.Sum256(b.Bytes())
+	sum := sha256.Sum256(b)
 	return p, hex.EncodeToString(sum[:])
 }
 
@@ -143,7 +132,8 @@ func TestAddFileKeepsMalformedHEIFWithUnknownMetadata(t *testing.T) {
 	c, _ := fresh(t)
 	add := find(must(c.Get(t.Context(), "/")), "add-file")
 	heic := filepath.Join(t.TempDir(), "bad.HEIC")
-	if err := os.WriteFile(heic, phototest.HEICOverflowingLocation(), 0o644); err != nil {
+	overflow := phototest.HEIF(photo.Meta{Taken: "2019-06-03 07:41:12"}, phototest.Layout{InIdat: true, Version: 1, Overflow: true})
+	if err := os.WriteFile(heic, overflow, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	e := must(c.DoFiles(t.Context(), add, map[string]string{"title": "bad.HEIC", "body": "kept despite bad metadata"}, map[string]string{"original": heic}))
@@ -191,7 +181,7 @@ func TestAPhotosDay(t *testing.T) {
 		return p
 	}
 	add := find(root, "add-file")
-	jpg := write("IMG_1.jpg", phototest.JPEG(64, 48, photo.Meta{Taken: "2019-06-03 07:41:12"}, true))
+	jpg := write("IMG_1.jpg", phototest.WithExif(phototest.JPEG(64, 48), photo.Meta{Taken: "2019-06-03 07:41:12"}, true))
 	e := must(c.DoFiles(t.Context(), add, map[string]string{"title": "2019-06-03 IMG_1.jpg"}, map[string]string{"original": jpg}))
 	res, _ := e.Result.(map[string]any)
 	if res["embedded"] != true || res["day"] != "2019-06-03" || props(e)["day"] != "2019-06-03" || res["place"] != nil || res["unmatched"] != nil {
@@ -202,7 +192,7 @@ func TestAPhotosDay(t *testing.T) {
 		t.Errorf("the day page does not show the photo")
 	}
 	// a HEIC: no picture, no embed, its day still read
-	heic := write("IMG_2.HEIC", phototest.HEIC(photo.Meta{Taken: "2019-06-04 10:00:00"}, false, false))
+	heic := write("IMG_2.HEIC", phototest.HEIF(photo.Meta{Taken: "2019-06-04 10:00:00"}, phototest.Layout{Version: 1}))
 	e = must(c.DoFiles(t.Context(), add, map[string]string{"title": "2019-06-04 IMG_2.HEIC"}, map[string]string{"original": heic}))
 	res, _ = e.Result.(map[string]any)
 	if res["day"] != "2019-06-04" || res["embedded"] == true {
@@ -279,7 +269,7 @@ func TestBrowserMutationFeedbackPhoto(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		part.Write(phototest.JPEG(64, 48, photo.Meta{Taken: "2019-06-04 10:00:00"}, true))
+		part.Write(phototest.WithExif(phototest.JPEG(64, 48), photo.Meta{Taken: "2019-06-04 10:00:00"}, true))
 		mw.Close()
 		req := httptest.NewRequest("POST", "/files", &b)
 		req.Header.Set("Content-Type", mw.FormDataContentType())

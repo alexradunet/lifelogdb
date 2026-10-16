@@ -3,6 +3,8 @@ package core
 import (
 	"fmt"
 	"testing"
+
+	"lifelog/internal/photo/phototest"
 )
 
 func TestStableRenameKeepsIdentityAndOldReferences(t *testing.T) {
@@ -86,7 +88,7 @@ func TestAWriteToAPageThatIsNotLive(t *testing.T) {
 	if err := s.Tombstone(ctx, "cli", gone); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.AddFile(ctx, "cli", FileIn{Title: "Ana.jpg", SHA256: sha('a'), MIME: "image/jpeg", Preview: smallJPEG(t)}); err != nil {
+	if _, err := s.AddFile(ctx, "cli", FileIn{Title: "Ana.jpg", SHA256: sha('a'), MIME: "image/jpeg", Preview: phototest.JPEG(8, 8)}); err != nil {
 		t.Fatal(err)
 	}
 	const missing = 9999
@@ -99,7 +101,7 @@ func TestAWriteToAPageThatIsNotLive(t *testing.T) {
 		{"rename", func(id int64) error { _, err := s.Rename(ctx, "cli", id, "New Title"); return err }},
 		{"file-pages", func(id int64) error { _, err := s.FilePages(ctx, "cli", []int64{id}, "Group", false); return err }},
 		{"set-picture", func(id int64) error {
-			_, err := s.SetPicture(ctx, "cli", id, "2026-10-16", FileIn{SHA256: sha('b'), MIME: "image/jpeg", Preview: smallJPEG(t)})
+			_, err := s.SetPicture(ctx, "cli", id, "2026-10-16", FileIn{SHA256: sha('b'), MIME: "image/jpeg", Preview: phototest.JPEG(8, 8)})
 			return err
 		}},
 		{"set-picture-of", func(id int64) error { _, err := s.SetPictureOf(ctx, "cli", id, "Ana.jpg"); return err }},

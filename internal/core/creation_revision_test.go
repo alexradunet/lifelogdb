@@ -3,6 +3,8 @@ package core
 import (
 	"strings"
 	"testing"
+
+	"lifelog/internal/photo/phototest"
 )
 
 // revisionClock is the edit token and the two audit instants of an entity, read straight from the file.
@@ -69,7 +71,7 @@ func TestCreationIsNotAnEdit(t *testing.T) {
 	}
 	add("metric without a note", id, err)
 	k, err := s.AddFile(ctx, "cli", FileIn{Title: "2026-10-04 Lake.jpg", SHA256: sha('a'), MIME: "image/jpeg",
-		Body: "the lake with [[Sam Sample]]", Day: day, Preview: smallJPEG(t)})
+		Body: "the lake with [[Sam Sample]]", Day: day, Preview: phototest.JPEG(8, 8)})
 	add("file", k.ID, err)
 	// link targets a body save made: ghosts
 	for _, title := range []string{"Lakeside", "health"} {

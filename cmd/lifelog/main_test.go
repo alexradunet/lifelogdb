@@ -6,8 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"image"
-	"image/jpeg"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -22,6 +20,7 @@ import (
 	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db"
+	"lifelog/internal/photo/phototest"
 )
 
 // TestSnapshot is `lifelog snapshot` on a live file the writer still holds open (docs/cookbook/take-a-snapshot.md):
@@ -260,13 +259,8 @@ func TestFileCommand(t *testing.T) {
 	if err := db.Init(t.Context(), live); err != nil {
 		t.Fatal(err)
 	}
-	m := image.NewGray(image.Rect(0, 0, 64, 48))
-	var b bytes.Buffer
-	if err := jpeg.Encode(&b, m, nil); err != nil {
-		t.Fatal(err)
-	}
 	pic, text := filepath.Join(dir, "IMG_0001.jpg"), filepath.Join(dir, "caption.txt")
-	os.WriteFile(pic, b.Bytes(), 0o644)
+	os.WriteFile(pic, phototest.JPEG(64, 48), 0o644)
 	os.WriteFile(text, []byte("Dawn at the lake with [[Sam]]."), 0o644)
 	for range 2 {
 		o, err := parse([]string{"file", pic, "--db", live, "--text", text, "--day", "2026-10-04"})

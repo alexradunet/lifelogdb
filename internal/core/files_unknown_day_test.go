@@ -3,11 +3,13 @@ package core
 import (
 	"strings"
 	"testing"
+
+	"lifelog/internal/photo/phototest"
 )
 
 // photo is a kept photo as the writer sees it: a JPEG with a preview, taken on day. Its position is never read (D21).
 func photo(t *testing.T, c byte, title, day string) FileIn {
-	return FileIn{Title: title, SHA256: sha(c), MIME: "image/jpeg", Taken: day, Preview: smallJPEG(t)}
+	return FileIn{Title: title, SHA256: sha(c), MIME: "image/jpeg", Taken: day, Preview: phototest.JPEG(8, 8)}
 }
 
 // TestUnknownPhotoDayHasNoCaptureOrPlaceSideEffects: a photo with no Day and no Taken has an unknown capture day. keep

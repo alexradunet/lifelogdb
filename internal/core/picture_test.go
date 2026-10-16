@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"lifelog/internal/photo/phototest"
 )
 
 // TestSetPictureKeepsThePhotoAndShowsItFirst: a new photo is kept as a file with no day and no place, and its embed
@@ -12,7 +14,7 @@ import (
 // is named by its title. A title taken that day gets a number.
 func TestSetPictureKeepsThePhotoAndShowsItFirst(t *testing.T) {
 	s := fresh(t)
-	pic := smallJPEG(t)
+	pic := phototest.JPEG(8, 8)
 	ana, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "", "")
 	if err != nil {
 		t.Fatal(err)
@@ -79,7 +81,7 @@ func TestSetPictureKeepsThePhotoAndShowsItFirst(t *testing.T) {
 // not a kept picture are refused, and nothing is written.
 func TestSetPictureRefuses(t *testing.T) {
 	s := fresh(t)
-	pic := smallJPEG(t)
+	pic := phototest.JPEG(8, 8)
 	ana, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "", "")
 	if err != nil {
 		t.Fatal(err)
@@ -139,7 +141,7 @@ func TestSetPictureOfAnyTypeKeepsNoDay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	k, err := s.SetPicture(ctx, "cli", ana, "2026-10-15", FileIn{SHA256: sha('a'), MIME: "application/pdf", Preview: smallJPEG(t)})
+	k, err := s.SetPicture(ctx, "cli", ana, "2026-10-15", FileIn{SHA256: sha('a'), MIME: "application/pdf", Preview: phototest.JPEG(8, 8)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +167,7 @@ func TestRefusedSetPictureOfReturnsNoSync(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.AddFile(ctx, "cli", FileIn{Title: "Ana.jpg", SHA256: sha('a'), MIME: "image/jpeg", Preview: smallJPEG(t)}); err != nil {
+	if _, err := s.AddFile(ctx, "cli", FileIn{Title: "Ana.jpg", SHA256: sha('a'), MIME: "image/jpeg", Preview: phototest.JPEG(8, 8)}); err != nil {
 		t.Fatal(err)
 	}
 	// Deliberate damage: a wikilink that Ana's empty body does not name, so the link sync deletes it.
@@ -191,7 +193,7 @@ func TestRefusedSetPictureOfReturnsNoSync(t *testing.T) {
 // with no embed has no picture, and every person gets the file of their own first picture.
 func TestNamedMentionsPictureIsTheFirstEmbedThatIsAKeptPicture(t *testing.T) {
 	s := fresh(t)
-	pic := smallJPEG(t)
+	pic := phototest.JPEG(8, 8)
 	a, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "", "")
 	if err != nil {
 		t.Fatal(err)
@@ -239,7 +241,7 @@ func TestNamedMentionsPictureIsTheFirstEmbedThatIsAKeptPicture(t *testing.T) {
 // its last step. The write is rolled back at the end.
 func TestATxPictureThatFailsReturnsNoResult(t *testing.T) {
 	s := fresh(t)
-	pic := smallJPEG(t)
+	pic := phototest.JPEG(8, 8)
 	ana, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "", "")
 	if err != nil {
 		t.Fatal(err)

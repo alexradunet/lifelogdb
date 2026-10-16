@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"lifelog/internal/photo/phototest"
 )
 
 func daySyncJSON(t *testing.T, k Kept) *Sync {
@@ -34,7 +36,7 @@ func TestPhotoDaySynchronizationFeedback(t *testing.T) {
 	if err := s.Tombstone(ctx, "cli", target); err != nil {
 		t.Fatal(err)
 	}
-	f := FileIn{Title: "New photo.jpg", SHA256: sha('d'), MIME: "image/jpeg", Preview: smallJPEG(t), Day: "2026-10-04", Body: "[[File target]]"}
+	f := FileIn{Title: "New photo.jpg", SHA256: sha('d'), MIME: "image/jpeg", Preview: phototest.JPEG(8, 8), Day: "2026-10-04", Body: "[[File target]]"}
 	assert := func(k Kept) {
 		t.Helper()
 		sync := daySyncJSON(t, k)
@@ -85,7 +87,7 @@ func TestPhotoEmbedNFDLongTitleDeduplication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	k, err := s.AddFile(ctx, "cli", FileIn{Title: title, SHA256: sha('e'), MIME: "image/jpeg", Preview: smallJPEG(t), Day: "2026-10-04"})
+	k, err := s.AddFile(ctx, "cli", FileIn{Title: title, SHA256: sha('e'), MIME: "image/jpeg", Preview: phototest.JPEG(8, 8), Day: "2026-10-04"})
 	if err != nil {
 		t.Fatal(err)
 	}

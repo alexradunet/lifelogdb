@@ -14,16 +14,16 @@ func TestReadsAJPEGAndAHEIC(t *testing.T) {
 	south := photo.Meta{Taken: "2024-01-31 23:59:59", Orientation: 1}
 	for _, little := range []bool{false, true} {
 		for name, b := range map[string][]byte{
-			"JPEG":         phototest.JPEG(40, 30, want, little),
-			"HEIC in mdat": phototest.HEIC(want, little, false),
-			"HEIC in idat": phototest.HEIC(want, little, true),
+			"JPEG":         phototest.WithExif(phototest.JPEG(40, 30), want, little),
+			"HEIC in mdat": phototest.HEIF(want, phototest.Layout{Little: little, Version: 1}),
+			"HEIC in idat": phototest.HEIF(want, phototest.Layout{Little: little, InIdat: true, Version: 1}),
 		} {
 			got := photo.Read(b)
 			if got.Taken != want.Taken || got.Orientation != 6 || got.Day() != "2019-06-03" {
 				t.Errorf("%s (little-endian %v): %+v", name, little, got)
 			}
 		}
-		if got := photo.Read(phototest.JPEG(8, 8, south, little)); got.Taken != south.Taken {
+		if got := photo.Read(phototest.WithExif(phototest.JPEG(8, 8), south, little)); got.Taken != south.Taken {
 			t.Errorf("south and east (little-endian %v): %+v", little, got)
 		}
 	}
@@ -31,11 +31,12 @@ func TestReadsAJPEGAndAHEIC(t *testing.T) {
 
 func TestSaysNothingItDoesNotKnow(t *testing.T) {
 	for name, b := range map[string][]byte{
-		"no EXIF":         phototest.JPEG(8, 8, photo.Meta{}, false)[:0],
+		"empty":           {},
+		"no EXIF":         phototest.JPEG(8, 8),
 		"not a photo":     []byte("%PDF-1.7 hello"),
-		"a date alone":    phototest.JPEG(8, 8, photo.Meta{Taken: "2019-06-03 07:41:12"}, true),
-		"a HEIC's head":   phototest.HEIC(photo.Meta{Taken: "2019-06-03 07:41:12"}, false, false)[:200],
-		"a JPEG's head":   phototest.JPEG(8, 8, photo.Meta{Taken: "2019-06-03 07:41:12"}, false)[:40],
+		"a date alone":    phototest.WithExif(phototest.JPEG(8, 8), photo.Meta{Taken: "2019-06-03 07:41:12"}, true),
+		"a HEIC's head":   phototest.HEIF(photo.Meta{Taken: "2019-06-03 07:41:12"}, phototest.Layout{Version: 1})[:200],
+		"a JPEG's head":   phototest.WithExif(phototest.JPEG(8, 8), photo.Meta{Taken: "2019-06-03 07:41:12"}, false)[:40],
 		"garbage in ftyp": append([]byte("\x00\x00\x00\x10ftypheic\x00\x00\x00\x00"), 0xFF, 0xFF, 0xFF, 0xFF, 'm', 'e', 't', 'a'),
 	} {
 		got := photo.Read(b)
@@ -46,7 +47,7 @@ func TestSaysNothingItDoesNotKnow(t *testing.T) {
 			t.Errorf("%s: a date from nowhere: %+v", name, got)
 		}
 	}
-	if got := photo.Read(phototest.JPEG(8, 8, photo.Meta{Taken: "2019-06-03 07:41:12"}, true)); got.Day() != "2019-06-03" {
+	if got := photo.Read(phototest.WithExif(phototest.JPEG(8, 8), photo.Meta{Taken: "2019-06-03 07:41:12"}, true)); got.Day() != "2019-06-03" {
 		t.Errorf("a date alone: %+v", got)
 	}
 	if (photo.Meta{}).Day() != "" {
@@ -59,11 +60,11 @@ func TestHEIFLocationVersions(t *testing.T) {
 	item := heifExifItem(want, true, 0)
 	split := len(item) / 2
 	for name, b := range map[string][]byte{
-		"version 0 in file":          phototest.HEICLocationVersion(want, true, false, 0),
-		"version 1 in file":          phototest.HEICLocationVersion(want, true, false, 1),
-		"version 1 in idat":          phototest.HEICLocationVersion(want, true, true, 1),
-		"version 2 in file":          phototest.HEICLocationVersion(want, true, false, 2),
-		"version 2 in idat":          phototest.HEICLocationVersion(want, true, true, 2),
+		"version 0 in file":          phototest.HEIF(want, phototest.Layout{Little: true, Version: 0}),
+		"version 1 in file":          phototest.HEIF(want, phototest.Layout{Little: true, Version: 1}),
+		"version 1 in idat":          phototest.HEIF(want, phototest.Layout{Little: true, InIdat: true, Version: 1}),
+		"version 2 in file":          phototest.HEIF(want, phototest.Layout{Little: true, Version: 2}),
+		"version 2 in idat":          phototest.HEIF(want, phototest.Layout{Little: true, InIdat: true, Version: 2}),
 		"version 1 repeated extents": heifWithLocations(1, 4, 4, 0, 0, item, heifLocation{id: 102, typ: "Exif", method: 1, extents: []heifExtent{{n: uint64(split)}, {off: uint64(split), n: uint64(len(item) - split)}}}),
 	} {
 		got := readPhoto(t, b)
@@ -133,9 +134,9 @@ func FuzzRead(f *testing.F) {
 	for _, seed := range [][]byte{
 		{},
 		[]byte("%PDF-1.7 hello"),
-		phototest.JPEG(8, 8, meta, false),
-		phototest.HEIC(meta, false, false),
-		phototest.HEICLocationVersion(meta, false, true, 2),
+		phototest.WithExif(phototest.JPEG(8, 8), meta, false),
+		phototest.HEIF(meta, phototest.Layout{Version: 1}),
+		phototest.HEIF(meta, phototest.Layout{InIdat: true, Version: 2}),
 		heifWithLocations(1, 8, 8, 0, 0, make([]byte, 16), heifLocation{id: 102, typ: "Exif", method: 1, extents: []heifExtent{{off: ^uint64(0) - 1, n: 8}}}),
 	} {
 		f.Add(seed)

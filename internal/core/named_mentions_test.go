@@ -1,6 +1,10 @@
 package core
 
-import "testing"
+import (
+	"testing"
+
+	"lifelog/internal/photo/phototest"
+)
 
 // TestNamedMentionsCountLivePagesAndTheNewestDay: a person is mentioned once by each live page that links to it.
 // A tombstoned page does not count, and only a day page gives the last day. The order is by title.
@@ -57,7 +61,7 @@ func TestNamedMentionsCountLivePagesAndTheNewestDay(t *testing.T) {
 // that keeps a preview and is live. A file with no preview, a tombstoned file and a plain [[link]] are passed over.
 func TestNamedMentionsGiveAPersonTheFirstPictureItsPageEmbeds(t *testing.T) {
 	s := fresh(t)
-	pic := smallJPEG(t)
+	pic := phototest.JPEG(8, 8)
 	keep := func(title, mime string, c byte, preview []byte) int64 {
 		t.Helper()
 		k, err := s.AddFile(ctx, "cli", FileIn{Title: title, SHA256: sha(c), MIME: mime, Day: "2026-10-01", Preview: preview})

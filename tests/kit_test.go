@@ -5,13 +5,10 @@ package tests
 // (entity first, ids by RETURNING, a named entity is one id with a page).
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"image"
-	"image/jpeg"
 	"net/url"
 	"os"
 	"path"
@@ -24,6 +21,7 @@ import (
 
 	"lifelog/internal/core"
 	"lifelog/internal/db"
+	"lifelog/internal/photo/phototest"
 	"lifelog/internal/text"
 
 	_ "modernc.org/sqlite"
@@ -638,14 +636,8 @@ func (c *C) measure(metric any, day string, value any, cols ...M) string {
 	return c.tryx("INSERT INTO measurements("+strings.Join(cs, ",")+",created_at) VALUES ("+marks+","+NOW+")", vals...)
 }
 
-// jpegBytes is a real JPEG (8×8, grey): a preview the DDL and the writer both accept.
-var jpegBytes = func() []byte {
-	var b bytes.Buffer
-	if err := jpeg.Encode(&b, image.NewGray(image.Rect(0, 0, 8, 8)), nil); err != nil {
-		panic(err)
-	}
-	return b.Bytes()
-}()
+// jpegBytes is a real JPEG (8×8): a preview the DDL and the writer both accept.
+var jpegBytes = phototest.JPEG(8, 8)
 
 // metric is a metric (D27): the entity, its page titled title, and its metrics row with the unit, one id.
 func (c *C) metric(title, unit string) int64 {

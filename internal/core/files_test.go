@@ -5,29 +5,19 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"image"
-	"image/jpeg"
 	"strings"
 	"testing"
 	"time"
 
+	"lifelog/internal/photo/phototest"
 	"lifelog/internal/text"
 )
-
-func smallJPEG(t *testing.T) []byte {
-	t.Helper()
-	var b bytes.Buffer
-	if err := jpeg.Encode(&b, image.NewGray(image.Rect(0, 0, 8, 8)), nil); err != nil {
-		t.Fatal(err)
-	}
-	return b.Bytes()
-}
 
 func sha(c byte) string { return strings.Repeat(string(c), 64) }
 
 func TestAddFileCreatesAFilePage(t *testing.T) {
 	s := fresh(t)
-	pic := smallJPEG(t)
+	pic := phototest.JPEG(8, 8)
 	k, err := s.AddFile(ctx, "cli", FileIn{Title: "2026-10-04 Lake.jpg", SHA256: strings.ToUpper(sha('a')), MIME: "image/HEIC",
 		Body: "The lake at dawn with [[Sam]].", Day: "2026-10-04", Preview: pic})
 	if err != nil {
@@ -78,7 +68,7 @@ func TestAddFileKeepsAnOriginalOnce(t *testing.T) {
 		t.Error("the re-send made a page")
 	}
 	// a missing preview is filled; an existing one is never replaced
-	pic := smallJPEG(t)
+	pic := phototest.JPEG(8, 8)
 	if k2, _ := s.AddFile(ctx, "cli", FileIn{SHA256: sha('b'), MIME: "audio/mp4", Preview: pic}); !k2.PreviewAdded {
 		t.Errorf("a missing preview was not added: %+v", k2)
 	}
@@ -230,7 +220,7 @@ func TestFilePromotionDay(t *testing.T) {
 		t.Fatal(err)
 	}
 	scanGhost, _ := s.PageID(ctx, "scan.pdf")
-	k, err = s.AddFile(ctx, "cli", FileIn{Title: "scan.pdf", SHA256: sha('5'), MIME: "application/pdf", Preview: smallJPEG(t)})
+	k, err = s.AddFile(ctx, "cli", FileIn{Title: "scan.pdf", SHA256: sha('5'), MIME: "application/pdf", Preview: phototest.JPEG(8, 8)})
 	if err != nil {
 		t.Fatal(err)
 	}
