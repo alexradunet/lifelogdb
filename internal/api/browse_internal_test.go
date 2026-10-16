@@ -42,6 +42,7 @@ func TestBrowseQueryOf(t *testing.T) {
 		{"media=image", "422 media needs kind media"},
 		{"kind=page&media=image", "422 media needs kind media"},
 		{"kind=media&media=pdf", "422 media must be image, video or audio"},
+		{"kind=media&media=document", "422 media must be image, video or audio"}, // a kind of Browse, not a kind of media
 		{"kind=pages", "422 kind must be one of page, person, place, media, document, metric, all"},
 		{"unfiled=yes", "422 unfiled must be 0 or 1"},
 		{"ghosts=2", "422 ghosts must be 0 or 1"},
