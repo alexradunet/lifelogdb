@@ -148,8 +148,8 @@ func (h *server) mount(m *http.ServeMux, cat []spec, handlers map[string]actionF
 					return nil, err
 				}
 			}
-			if s.Owner && !core.IsOwner(src) {
-				return nil, core.Forbidden("this action is the owner's: an agent or an import may not run it")
+			if s.Owner && !isOwner(src) {
+				return nil, &core.Error{Status: http.StatusForbidden, Msg: "this action is the owner's: an agent or an import may not run it"}
 			}
 			return f(r, s, src)
 		}))
@@ -375,6 +375,12 @@ func source(r *http.Request) (string, error) {
 		s = "api"
 	}
 	return s, core.CheckSource(s)
+}
+
+// isOwner reports a writer that is the owner: not an agent (agent:*) and not an import (import:*). The owner-only
+// actions (register-metric, snapshot) are refused to any other writer, on every surface.
+func isOwner(source string) bool {
+	return !strings.HasPrefix(source, "agent:") && !strings.HasPrefix(source, "import:")
 }
 
 func (h *server) actions(*http.Request) (*Entity, error) {

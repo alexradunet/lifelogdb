@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"strings"
 	"time"
 
 	"lifelog/internal/db"
@@ -128,17 +127,6 @@ const instantLayout = "2006-01-02T15:04:05.000Z"
 func IsInstant(s string) bool {
 	t, err := time.Parse(instantLayout, s)
 	return err == nil && t.Format(instantLayout) == s
-}
-
-// IsOwner reports a writer that is the owner: not an agent (agent:*) and not an import (import:*). The owner-only
-// actions (register-metric, snapshot) are refused to any other writer, on every surface.
-func IsOwner(source string) bool {
-	return !strings.HasPrefix(source, "agent:") && !strings.HasPrefix(source, "import:")
-}
-
-// Forbidden is a 403: the writer may not run this action.
-func Forbidden(format string, a ...any) error {
-	return &Error{Status: 403, Msg: fmt.Sprintf(format, a...)}
 }
 
 // The checks of a surface's input that every write and read shares, so one refusal has one message.
