@@ -60,7 +60,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   resource, with their fields prefilled (a page's `save-body` carries its body and `version`). `GET /actions` is
   the catalog; the CLI's `do` and the MCP tools are generated from it, so a new action needs no client change.
   An error is an entity too: `status`, a `code` a client branches on (`stale_version`, `exists`, `not_found`, `snapshot_refused`, `restore_check_failed`,
-  `invalid`, `cross_origin`, `token_required`, or the status's general name) and the message. The lists `/days`,
+  `invalid`, `cross_origin`, `token_required`, or the status's general name) and the message. A fault of the server (500
+  `internal`) says only "internal error": the server's log has the cause. The lists `/days`,
   `/browse` and `/search` take `limit` (1–500) and `offset` and link `next` and `prev`
   ([plan 079](docs/plans/079-client-contract-hygiene.md)).
 - **The browser gets the same entity.** `Accept: text/html` renders it with a template per class (day, page,

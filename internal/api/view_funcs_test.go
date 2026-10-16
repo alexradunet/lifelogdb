@@ -1,6 +1,8 @@
 package api
 
 import (
+	"bytes"
+	"log"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -26,7 +28,8 @@ func TestNumWritesNumbersInFull(t *testing.T) {
 }
 
 // TestAPageThatCannotBeDrawnNamesNoCause: when a page cannot be drawn (its properties or its result do not encode as
-// JSON, or its template fails on them), the browser gets a 500 that says no word of the internal cause.
+// JSON, or its template fails on them), the browser gets a 500 that says no word of the internal cause. The server's
+// log has the cause one time, with the pattern of the route and not the path.
 func TestAPageThatCannotBeDrawnNamesNoCause(t *testing.T) {
 	for name, e := range map[string]*Entity{
 		"properties that are not JSON": {Class: []string{"thing"}, Title: "Thing", Properties: map[string]any{"value": math.NaN()}},
@@ -35,10 +38,19 @@ func TestAPageThatCannotBeDrawnNamesNoCause(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			req := httptest.NewRequest("GET", "/things/1", nil)
+			req.Pattern = "GET /things/{id}" // as the routes set it
 			req.Header.Set("Accept", "text/html")
 			rec := httptest.NewRecorder()
+			var logged bytes.Buffer
+			prev := log.Writer()
+			log.SetOutput(&logged) // no test of this package runs in parallel
+			t.Cleanup(func() { log.SetOutput(prev) })
 			renderHTML(rec, req, http.StatusOK, e, nil)
 			body := rec.Body.String()
+			if n := strings.Count(logged.String(), "cannot be drawn"); n != 1 || !strings.Contains(logged.String(), "GET /things/{id}") ||
+				strings.Contains(logged.String(), "/things/1") {
+				t.Errorf("the log does not have the cause one time with the route's pattern, or names the path: %q", logged.String())
+			}
 			if rec.Code != http.StatusInternalServerError {
 				t.Errorf("status %d, want 500", rec.Code)
 			}

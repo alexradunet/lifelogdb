@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"net/url"
 	"slices"
@@ -188,7 +189,7 @@ func (h *server) serve(f func(*http.Request) (*Entity, error)) http.HandlerFunc 
 			http.Redirect(w, r, rd.to, http.StatusSeeOther)
 			return
 		case err != nil:
-			e, status = errorEntity(err)
+			e, status = errorEntity(r, err)
 			if h.refusedOnItsPage(w, r, e, status) {
 				return
 			}
@@ -294,9 +295,13 @@ func backOf(r *http.Request) string {
 	return b
 }
 
-// errorEntity is the one error representation: status, a code a client branches on, and the message.
-func errorEntity(err error) (*Entity, int) {
-	status, code := http.StatusInternalServerError, ""
+// errorEntity is the one error representation: status, a code a client branches on, and the message. An error that
+// core did not type (not a core.Error, not an ExistsError) is a fault of the server: a defect, or the disk or the
+// driver failed. Its text can name a file or show the driver, so the client gets the message "internal error", and
+// the server's log gets the cause (logFault). A cancelled request is not logged: its client went away, or the server
+// stopped it, and no fault caused it. A timeout keeps its text.
+func errorEntity(r *http.Request, err error) (*Entity, int) {
+	status, code, msg := http.StatusInternalServerError, "", err.Error()
 	e := &Entity{Class: []string{"error"}, Title: "Error", Links: []Link{{Rel: []string{"index"}, Href: "/", Title: "Home"}}}
 	var ce *core.Error
 	var ex *core.ExistsError
@@ -308,12 +313,29 @@ func errorEntity(err error) (*Entity, int) {
 		e.Links = append(e.Links, Link{Rel: []string{"existing"}, Href: pageHref(ex.ID), Title: ex.Title})
 	case errors.As(err, &ce):
 		status, code = ce.Status, ce.Code
+	default:
+		msg = "internal error"
+		if !errors.Is(err, context.Canceled) {
+			logFault(r, "internal error", err)
+		}
 	}
 	if code == "" {
 		code = codeOf(status)
 	}
-	e.Properties = map[string]any{"status": status, "code": code, "message": err.Error()}
+	e.Properties = map[string]any{"status": status, "code": code, "message": msg}
 	return e, status
+}
+
+// logFault writes a fault of the server to the standard log, which the owner reads on the server's stderr: the route,
+// what failed and the cause. A client never gets the cause. The route is the pattern that the request matched, not
+// its path, because a path can name a metric or a title. A request that a guard answers before the routes has no
+// pattern: its method stands for the route.
+func logFault(r *http.Request, what string, err error) {
+	route := r.Pattern
+	if route == "" {
+		route = r.Method
+	}
+	log.Printf("lifelog: %s: %s: %v", route, what, err)
 }
 
 // codeOf is the general code of a status, for an error that names no more specific one.
@@ -343,7 +365,7 @@ func codeOf(status int) string {
 // /render use it. A route that serve wraps answers its error in serve: there a browser gets the page in the shell, or
 // the page that a refused form came from.
 func writeError(w http.ResponseWriter, r *http.Request, err error) {
-	e, status := errorEntity(err)
+	e, status := errorEntity(r, err)
 	writeEntity(w, r, status, e)
 }
 

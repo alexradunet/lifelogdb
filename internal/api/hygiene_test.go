@@ -1,14 +1,21 @@
 package api_test
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"lifelog/internal/api"
 	"lifelog/internal/client"
+	"lifelog/internal/core"
+	"lifelog/internal/db"
 )
 
 // codeOf is the code and status an error answer carries.
@@ -71,6 +78,85 @@ func TestErrorAnswersCarryACode(t *testing.T) {
 	rec = request(pub, "GET", "/", "", nil)
 	if rec.Code != 401 || !strings.Contains(rec.Body.String(), `"code": "token_required"`) {
 		t.Errorf("token refusal: %d %.200s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestAnInternalErrorNamesNoCause: an error that core did not type is a fault of the server. Here the database is
+// closed under the store. The answer is 500 internal with the message "internal error" and no word of the cause, as
+// JSON and as a page. The server's log has the cause one time, with the pattern of the route and not the path,
+// because a path can name a metric.
+func TestAnInternalErrorNamesNoCause(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "life.db")
+	if err := db.Init(t.Context(), p); err != nil {
+		t.Fatal(err)
+	}
+	d, err := db.Open(t.Context(), p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Close(); err != nil {
+		t.Fatal(err)
+	}
+	h := api.New(&core.Store{DB: d})
+	const cause = "database is closed"
+	for _, accept := range []string{"application/vnd.siren+json", "text/html"} {
+		t.Run(accept, func(t *testing.T) {
+			var logged bytes.Buffer
+			prev := log.Writer()
+			log.SetOutput(&logged) // no test of this package runs in parallel
+			t.Cleanup(func() { log.SetOutput(prev) })
+			rec := request(h, "GET", "/metrics/weight", "", map[string]string{"Accept": accept})
+			body := rec.Body.String()
+			if rec.Code != 500 {
+				t.Fatalf("status %d, want 500: %.300s", rec.Code, body)
+			}
+			if strings.Contains(body, cause) || strings.Contains(body, "sql:") {
+				t.Errorf("the answer names the cause: %.600s", body)
+			}
+			if accept == "text/html" {
+				if !strings.Contains(body, "internal error") {
+					t.Errorf("the page does not say internal error: %.600s", body)
+				}
+			} else {
+				var e api.Entity
+				if err := json.Unmarshal(rec.Body.Bytes(), &e); err != nil {
+					t.Fatalf("not an entity: %v", err)
+				}
+				if got := props(&e); got["code"] != "internal" || got["message"] != "internal error" || got["status"] != float64(500) {
+					t.Errorf("properties %v, want 500 internal with the message internal error", got)
+				}
+			}
+			if n := strings.Count(logged.String(), cause); n != 1 {
+				t.Errorf("the log has the cause %d times, want 1: %q", n, logged.String())
+			}
+			if !strings.Contains(logged.String(), "GET /metrics/{name}") || strings.Contains(logged.String(), "weight") {
+				t.Errorf("the log does not name the route's pattern, or names the path: %q", logged.String())
+			}
+		})
+	}
+}
+
+// TestACancelledRequestIsNotLogged: a request whose context is cancelled answers 500 internal with the message
+// "internal error", as a fault does, but the log stays empty: the client went away, or the server stopped it.
+func TestACancelledRequestIsNotLogged(t *testing.T) {
+	_, h := fresh(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	var logged bytes.Buffer
+	prev := log.Writer()
+	log.SetOutput(&logged) // no test of this package runs in parallel
+	t.Cleanup(func() { log.SetOutput(prev) })
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequestWithContext(ctx, "GET", "/days", nil))
+	var e api.Entity
+	if err := json.Unmarshal(rec.Body.Bytes(), &e); err != nil {
+		t.Fatalf("not an entity: %v: %.300s", err, rec.Body.String())
+	}
+	if got := props(&e); rec.Code != 500 || got["code"] != "internal" || got["message"] != "internal error" {
+		t.Errorf("answer %d %v, want 500 internal with the message internal error", rec.Code, got)
+	}
+	if logged.Len() != 0 {
+		t.Errorf("a cancelled request is logged: %q", logged.String())
 	}
 }
 

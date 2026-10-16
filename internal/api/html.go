@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"log"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -214,7 +213,7 @@ func renderHTML(w http.ResponseWriter, r *http.Request, status int, e *Entity, s
 		err = pages.ExecuteTemplate(&b, name, v)
 	}
 	if err != nil { // a defect of this program: the owner reads the cause in the log, a client never does
-		log.Printf("lifelog: the view %s of %s cannot be drawn: %v", name, r.URL.Path, err)
+		logFault(r, "the view "+name+" cannot be drawn", err)
 		status = http.StatusInternalServerError
 		b.Reset()
 		b.WriteString(drawFailed)
@@ -222,7 +221,7 @@ func renderHTML(w http.ResponseWriter, r *http.Request, status int, e *Entity, s
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	if _, err := w.Write(b.Bytes()); err != nil {
-		log.Printf("lifelog: the page %s was not sent: %v", r.URL.Path, err)
+		logFault(r, "the page was not sent", err)
 	}
 }
 

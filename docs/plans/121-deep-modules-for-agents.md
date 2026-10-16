@@ -350,3 +350,11 @@ The rest the reviewers found goes to a later part:
 | the agents' texts still name a photo's place and an `--at` flag that does not exist | 6 (the agents' texts against the catalog) |
 | the style page's task-era classes, `due-group`, README's "overdue", the tokens `--indigo`, `--done-ink` and `--done-soft`, `--text-accent` of `site/` | 5 (the style page) |
 | `jsonShape` refuses a NaN or an infinite mean with a 500 | 8 |
+
+## Part 3 results (2026-10-16)
+
+- One answer on the wire changed outside Part 8, a defect fixed reproducer first: a fault of the server (an error
+  that core did not type, and a cancelled request too) answers 500 `internal` with the message "internal error", not
+  the text of the cause. The server's log has the cause one time, with the pattern of the route and not its path; a
+  cancelled request is not logged. A typed error and a 504 keep their text. The log lines of a page that cannot be
+  drawn also name the pattern, not the path.
