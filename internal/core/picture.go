@@ -81,6 +81,9 @@ func (s *Store) SetPicture(ctx context.Context, source string, id int64, day str
 // SetPictureOf makes a kept file, named by its title, the page's picture.
 func (s *Store) SetPictureOf(ctx context.Context, source string, id int64, title string) (r Sync, err error) {
 	err = s.Do(ctx, source, func(t *Tx) (e error) { r, e = t.SetPictureOf(id, title); return })
+	if err != nil {
+		r = Sync{}
+	}
 	return
 }
 

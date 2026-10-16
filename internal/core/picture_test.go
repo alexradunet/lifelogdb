@@ -1,6 +1,7 @@
 package core
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -126,6 +127,41 @@ func TestSetPictureRefuses(t *testing.T) {
 	}
 	if p, err := s.PageByID(ctx, ana); err != nil || p.Body != "" {
 		t.Errorf("Ana's body = %q, %v, want it empty", p.Body, err)
+	}
+}
+
+// TestRefusedSetPictureOfReturnsNoSync: when the write of SetPictureOf rolls back, the answer is a zero Sync, not
+// the links of a body that was never saved. A temporary trigger refuses the last statement of the body's link sync:
+// the delete of a link that the new body does not name.
+func TestRefusedSetPictureOfReturnsNoSync(t *testing.T) {
+	s := fresh(t)
+	ana, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bo, err := s.CreatePerson(ctx, "cli", "Bo", "", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddFile(ctx, "cli", FileIn{Title: "Ana.jpg", SHA256: sha('a'), MIME: "image/jpeg", Preview: smallJPEG(t), UnknownCaptureDay: true}); err != nil {
+		t.Fatal(err)
+	}
+	// Deliberate damage: a wikilink that Ana's empty body does not name, so the link sync deletes it.
+	if _, err := s.DB.W.ExecContext(ctx, `INSERT INTO links(from_id, to_id, kind, created_at, source) VALUES (?, ?, 'wikilink', '2026-10-16T00:00:00.000Z', 'cli')`, ana, bo); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB.W.ExecContext(ctx, `CREATE TEMP TRIGGER refuse_link_delete BEFORE DELETE ON links BEGIN SELECT RAISE(ABORT, 'the test refuses the delete'); END`); err != nil {
+		t.Fatal(err)
+	}
+	r, err := s.SetPictureOf(ctx, "cli", ana, "Ana.jpg")
+	if status(err) != 422 {
+		t.Fatalf("SetPictureOf = %v (status %d), want the 422 of the refused delete", err, status(err))
+	}
+	if !reflect.DeepEqual(r, Sync{}) {
+		t.Errorf("a refused SetPictureOf returned %+v, want a zero Sync", r)
+	}
+	if p, err := s.PageByID(ctx, ana); err != nil || p.Body != "" {
+		t.Errorf("Ana's body = %q, %v, want it empty: the write rolled back", p.Body, err)
 	}
 }
 
