@@ -198,7 +198,11 @@ func TestPublicServe(t *testing.T) {
 		t.Fatalf("server startup: %q", startup)
 	}
 	base := scheme + "://" + address
-	hc := &http.Client{Timeout: 10 * time.Second}
+	// The client has its own transport. Its idle connections close before serve stops: the shutdown of serve waits
+	// 5 s for a connection that the client opened and sent no request on.
+	tr := &http.Transport{}
+	defer tr.CloseIdleConnections()
+	hc := &http.Client{Transport: tr, Timeout: 10 * time.Second}
 	get := func(token string) int {
 		t.Helper()
 		req, _ := http.NewRequestWithContext(ctx, "GET", base+"/actions", nil)
