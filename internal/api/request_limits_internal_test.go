@@ -1,61 +1,59 @@
 package api
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"mime/multipart"
-	"slices"
+	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
+
+	"lifelog/internal/core"
 )
 
+// TestMultipartUnknownNameProjection: parseFileForm keeps the value of a name it knows, and of any other name it keeps
+// neither the name nor the value. Four parts have a name of 64 KiB and no value: modest headers, each one legal, not
+// a stress fixture.
 func TestMultipartUnknownNameProjection(t *testing.T) {
-	// Generate modest, individually legal headers incrementally, not a stress fixture.
-	const boundary = "synthetic-boundary"
-	readers := []io.Reader{}
-	for i := 0; i < 4; i++ {
-		readers = append(readers, strings.NewReader("--"+boundary+"\r\nContent-Disposition: form-data; name=\"unknown"+fmt.Sprint(i)), io.LimitReader(nameBytes{}, 64<<10), strings.NewReader("\"\r\n\r\n\r\n"))
-	}
-	readers = append(readers, strings.NewReader("--"+boundary+"--\r\n"))
-	mr := multipart.NewReader(io.MultiReader(readers...), boundary)
-	retained := map[string]string{}
-	for {
-		part, err := mr.NextPart()
-		if err == io.EOF {
-			break
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+	field := func(name, value string) {
+		w, err := mw.CreateFormField(name)
+		if err == nil {
+			_, err = io.WriteString(w, value)
 		}
 		if err != nil {
 			t.Fatal(err)
 		}
-		name := part.FormName()
-		if len(name) < 64<<10 {
-			t.Fatalf("unexpected name length %d", len(name))
-		}
-		if slices.Contains(fileTextFields, name) {
-			retained[name] = ""
-		}
-		part.Close()
 	}
-	if len(retained) != 0 {
-		t.Fatalf("retained %d unknown names despite zero text bytes", len(retained))
+	sum := strings.Repeat("ab", 32)
+	for _, f := range [][2]string{{"title", "Scan"}, {"sha256", sum}, {"mime", "application/pdf"}, {"body", "the text"},
+		{"day", "2031-05-14"}, {"category", "Letters"}, {"dry_run", "1"}, {"back", "/browse?kind=document"}} {
+		field(f[0], f[1])
 	}
-	for _, name := range []string{"title", "sha256", "mime", "body", "day", "dry_run"} {
-		if !slices.Contains(fileTextFields, name) {
-			t.Errorf("recognized %q not retained", name)
-		}
+	// After the names it knows, so that a name read as one of them changes its value. "original" and "preview" with no
+	// file name are file inputs left empty.
+	for _, name := range []string{"", "unknown", "Title", "title-extra", "original", "preview"} {
+		field(name, "NOT KEPT")
 	}
-	for _, name := range []string{"", "original", "preview", "unknown", "Title", "title-extra"} {
-		if slices.Contains(fileTextFields, name) {
-			t.Errorf("unknown %q retained", name)
-		}
+	for i := range 4 {
+		field(fmt.Sprint("unknown", i, strings.Repeat("x", 64<<10)), "")
 	}
-}
+	if err := mw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest("POST", "/files", &body)
+	r.Header.Set("Content-Type", mw.FormDataContentType())
 
-type nameBytes struct{}
-
-func (nameBytes) Read(p []byte) (int, error) {
-	for i := range p {
-		p[i] = 'x'
+	in, dry, sent, err := parseFileForm(r, specOf("add-file"))
+	want := core.FileIn{Title: "Scan", Category: "Letters", SHA256: sum, MIME: "application/pdf", Body: "the text", Day: "2031-05-14"}
+	if err != nil || !sent || !dry || !reflect.DeepEqual(in, want) {
+		t.Errorf("parseFileForm = %+v, dry %v, sent %v, %v; want %+v, dry and sent", in, dry, sent, err, want)
 	}
-	return len(p), nil
+	// Only the body and the page to return to are kept for the browser.
+	if got := fmt.Sprint(r.PostForm); got != "map[back:[/browse?kind=document] body:[the text]]" {
+		t.Errorf("the form kept for the browser: %s", got)
+	}
 }
