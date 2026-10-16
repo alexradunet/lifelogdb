@@ -408,8 +408,8 @@ that is not a kept picture, is refused (422).
 ### measurement
 
 `GET /measurements/{id}`: one reading, current or not. Links: `day`, `series`, `supersedes` (what it corrects),
-`superseded-by` (what corrected it), `captured-with`. Actions on the current reading: `correct`,
-`retract`. The properties are the reading's (above) and:
+`superseded-by` (what corrected it), `captured-with`. Actions on the current reading: `correct`, with a new value,
+and `retract`: to remove a reading, retract it. The properties are the reading's (above) and:
 
 | property | type | meaning |
 |---|---|---|
