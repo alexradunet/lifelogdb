@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -15,15 +16,18 @@ import (
 	"lifelog/internal/db/dbtest"
 )
 
-type repeatedByte struct{}
+type repeatedByte byte
 
-func (repeatedByte) Read(p []byte) (int, error) {
+func (b repeatedByte) Read(p []byte) (int, error) {
 	for i := range p {
-		p[i] = 'x'
+		p[i] = byte(b)
 	}
 	return len(p), nil
 }
-func generated(n int64) io.Reader { return io.LimitReader(repeatedByte{}, n) }
+func generated(n int64) io.Reader { return io.LimitReader(repeatedByte('x'), n) }
+
+// blanks gives n spaces: JSON reads them as the white space between two tokens.
+func blanks(n int64) io.Reader { return io.LimitReader(repeatedByte(' '), n) }
 
 func limitsHandler(t *testing.T) (http.Handler, func()) {
 	t.Helper()
@@ -48,13 +52,17 @@ func limitsHandler(t *testing.T) (http.Handler, func()) {
 	}
 }
 
+// TestRequestBufferLimits: a JSON or URL-encoded request has at most 20 MiB. The limit is of the request, not of a
+// field, so blanks between two tokens bring a request to the limit, and the page that it saves is small: a body of
+// 20 MiB would cost seconds in the save, not in the limit.
 func TestRequestBufferLimits(t *testing.T) {
 	h, unchanged := limitsHandler(t)
-	framing := int64(len(`{"title":"Long","body":""}`))
+	head, tail := `{"title":"Long",`, `"body":""}`
+	framing := int64(len(head) + len(tail))
 	for _, delta := range []int64{-1, 0, 1} {
 		boundaryHandler, boundaryUnchanged := limitsHandler(t)
 		n := int64(20<<20) - framing + delta
-		body := io.MultiReader(strings.NewReader(`{"title":"Long","body":"`), generated(n), strings.NewReader(`"}`))
+		body := io.MultiReader(strings.NewReader(head), blanks(n), strings.NewReader(tail))
 		r := httptest.NewRequest("POST", "/pages", body)
 		r.Header.Set("Content-Type", "application/json")
 		r.TransferEncoding = []string{"chunked"}
@@ -112,15 +120,21 @@ func TestMultipartAggregateLimits(t *testing.T) {
 				mw.WriteField("mime", "application/octet-stream")
 				switch kind {
 				case "text-at", "text-over":
-					p, e := mw.CreateFormField("body")
+					// An unknown field fills the text of the request to the limit, less a short body. The body comes
+					// last: it is kept only when the text of all the fields is at most 16 MiB. A long body would cost
+					// seconds in the save, not in the limit.
+					p, e := mw.CreateFormField("unknown")
 					if e != nil {
 						return
 					}
-					n := int64(16<<20) - int64(len("Synthetic")+64+len("application/octet-stream"))
+					n := int64(16<<20) - int64(len("Synthetic")+64+len("application/octet-stream")+len("the text"))
 					if kind == "text-over" {
 						n++
 					}
 					if _, e = io.Copy(p, generated(n)); e != nil {
+						return
+					}
+					if mw.WriteField("body", "the text") != nil {
 						return
 					}
 				case "aggregate", "unique":
@@ -176,6 +190,14 @@ func TestMultipartAggregateLimits(t *testing.T) {
 			}
 			if w.Code != want {
 				t.Fatalf("%d want %d: %.200s", w.Code, want, w.Body.String())
+			}
+			if kind == "text-at" {
+				var page struct {
+					Properties struct{ Body string } `json:"properties"`
+				}
+				if err := json.Unmarshal(w.Body.Bytes(), &page); err != nil || page.Properties.Body != "the text" {
+					t.Fatalf("the body at the limit: %q, %v; want it kept", page.Properties.Body, err)
+				}
 			}
 		})
 	}
