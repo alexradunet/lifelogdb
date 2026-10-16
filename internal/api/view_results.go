@@ -6,7 +6,6 @@ import (
 	"html/template"
 	"net/url"
 	"sort"
-	"strconv"
 	"strings"
 )
 
@@ -175,13 +174,4 @@ func pageLinks(titles []string) string {
 		return links[0]
 	}
 	return strings.Join(links[:len(links)-1], ", ") + " and " + links[len(links)-1]
-}
-
-// count says a number and its noun: "1 reading", "3 readings".
-func count(n any, one, many string) string {
-	f, _ := n.(float64)
-	if f == 1 {
-		return "1 " + one
-	}
-	return strconv.FormatFloat(f, 'f', -1, 64) + " " + many
 }

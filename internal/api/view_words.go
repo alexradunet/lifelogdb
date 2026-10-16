@@ -115,6 +115,15 @@ func (c clock) timeHTML(s string) template.HTML {
 // nameWords is a property's name in words: "created_at" is "created at".
 func nameWords(name string) string { return strings.ReplaceAll(name, "_", " ") }
 
+// count says a number and its noun: "1 reading", "3 readings".
+func count(n any, one, many string) string {
+	f, _ := n.(float64)
+	if f == 1 {
+		return "1 " + one
+	}
+	return strconv.FormatFloat(f, 'f', -1, 64) + " " + many
+}
+
 // writeValue draws any value by its type (the diagram of plan 093): an object as facts, a list of objects as a table,
 // a list as a list, a day or an instant in words, a boolean as yes or no, a long text as preformatted text.
 func (c clock) writeValue(sb *strings.Builder, x any) {
