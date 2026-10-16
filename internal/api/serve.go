@@ -44,7 +44,7 @@ func NewOn(s *core.Store, localDay func() string, zone *time.Location) http.Hand
 func newOn(s *core.Store, localDay func() string, zone *time.Location, guard *http.CrossOriginProtection) http.Handler {
 	h := newServer(s, localDay, zone)
 	guard.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeError(w, r, errCrossOrigin)
+		writeError(w, r, crossOriginRefusal())
 	}))
 	return guard.Handler(h.mux)
 }
@@ -103,13 +103,18 @@ func newServer(s *core.Store, localDay func() string, zone *time.Location) *serv
 	return h
 }
 
-// The refusals that two guards write: a browser write from an origin that the server does not trust (the guard of
-// the API and the login forms of a public listener), and a request whose authority the listener does not take (the
-// local listener and the public one).
-var (
-	errCrossOrigin = &core.Error{Status: http.StatusForbidden, Msg: "cross-origin browser write refused", Code: "cross_origin"}
-	errAuthority   = &core.Error{Status: http.StatusForbidden, Msg: "HTTP authority refused"}
-)
+// crossOriginRefusal is the refusal of a browser write from an origin that the server does not trust: the guard of
+// the API and the login forms of a public listener write it. Each call gives a new error, so no caller can change the
+// refusal of another.
+func crossOriginRefusal() error {
+	return &core.Error{Status: http.StatusForbidden, Msg: "cross-origin browser write refused", Code: "cross_origin"}
+}
+
+// authorityRefusal is the refusal of a request whose authority the listener does not take: the local listener and the
+// public one write it. Each call gives a new error, as crossOriginRefusal does.
+func authorityRefusal() error {
+	return &core.Error{Status: http.StatusForbidden, Msg: "HTTP authority refused"}
+}
 
 // redirect is returned by a handler that answers with another resource's address.
 type redirect struct{ to string }

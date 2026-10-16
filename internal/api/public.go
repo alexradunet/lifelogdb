@@ -100,7 +100,7 @@ func Public(s *core.Store, o PublicOptions) (http.Handler, error) {
 
 func (p *public) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if absoluteForm(r) {
-		writeError(w, r, errAuthority)
+		writeError(w, r, authorityRefusal())
 		return
 	}
 	origin := r.Header.Get("Origin")
@@ -168,7 +168,7 @@ func (p *public) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := p.guard.Check(r); err != nil {
-		writeError(w, r, errCrossOrigin)
+		writeError(w, r, crossOriginRefusal())
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 4096)
@@ -182,7 +182,7 @@ func (p *public) login(w http.ResponseWriter, r *http.Request) {
 
 func (p *public) logout(w http.ResponseWriter, r *http.Request) {
 	if err := p.guard.Check(r); err != nil {
-		writeError(w, r, errCrossOrigin)
+		writeError(w, r, crossOriginRefusal())
 		return
 	}
 	http.SetCookie(w, &http.Cookie{Name: CookieName, Value: "", Path: "/", HttpOnly: true, Secure: p.tls, SameSite: http.SameSiteStrictMode, MaxAge: -1})

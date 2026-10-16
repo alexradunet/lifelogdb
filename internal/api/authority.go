@@ -86,7 +86,7 @@ func NetworkAuthority(addr net.Addr, next http.Handler) (http.Handler, error) {
 		}
 		_, requestPort, allowed := loopbackAuthority(authority, false)
 		if !allowed || requestPort != port || absoluteForm(r) {
-			writeError(w, r, errAuthority)
+			writeError(w, r, authorityRefusal())
 			return
 		}
 		next.ServeHTTP(w, r)
