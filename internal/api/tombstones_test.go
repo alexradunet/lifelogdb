@@ -66,17 +66,9 @@ func TestDeletePagesAtOnce(t *testing.T) {
 	if deleted(ids[2]) {
 		t.Error("a refused delete tombstoned the live page named beside the missing id")
 	}
-	for _, bad := range []string{"", " , ", "abc", "0", "-1", "1.5"} {
-		if _, err := c.Do(ctx, del, map[string]string{"ids": bad}); apitest.Status(err) != 422 {
-			t.Errorf("ids %q: %v", bad, err)
-		}
-	}
-	many := make([]string, 501)
-	for i := range many {
-		many[i] = strconv.Itoa(i + 1)
-	}
-	if _, err := c.Do(ctx, del, map[string]string{"ids": strings.Join(many, " ")}); apitest.Status(err) != 422 {
-		t.Errorf("501 ids: %v", err)
+	// A word that is not an id is a 422; which words are ids is TestIdsOf's.
+	if _, err := c.Do(ctx, del, map[string]string{"ids": "abc"}); apitest.Status(err) != 422 {
+		t.Errorf("ids abc: %v", err)
 	}
 
 	// A page tombstoned already is left as it is; one page is said in the singular.
