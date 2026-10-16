@@ -17,8 +17,10 @@ import (
 	"lifelog/internal/client"
 )
 
-// The find tools are MCP tools; the owner-only actions are not.
-func TestFindTools(t *testing.T) {
+// TestTheToolsAreTheActionsThatAreNotTheOwners: each action of the catalog is a tool exactly when it is not the
+// owner's, with get and get_day, each once; the browser's preview is not a tool; browse is marked a read. The built-in
+// tool get reads what no action reads: a month, the titles, a day with its trends.
+func TestTheToolsAreTheActionsThatAreNotTheOwners(t *testing.T) {
 	c := mcpTestClient(t)
 	srv, err := New(t.Context(), c, "test")
 	if err != nil {
@@ -56,6 +58,9 @@ func TestFindTools(t *testing.T) {
 			t.Fatalf("duplicate MCP tool %q", tool.Name)
 		}
 		seen[tool.Name] = true
+		if tool.Name == "browse" && (tool.Annotations == nil || !tool.Annotations.ReadOnlyHint) {
+			t.Errorf("browse is not marked a read: %+v", tool.Annotations)
+		}
 	}
 	for _, name := range []string{"find", "get", "get_day", "open_day"} {
 		if !seen[name] {
@@ -71,25 +76,18 @@ func TestFindTools(t *testing.T) {
 	}
 	owner := 0
 	for _, a := range actions {
+		if seen[toolName(a.Name)] == a.Owner {
+			t.Errorf("action %s (owner %v): the MCP tool %s is listed %v", a.Name, a.Owner, toolName(a.Name), seen[toolName(a.Name)])
+		}
 		if a.Owner {
 			owner++
-			if seen[toolName(a.Name)] {
-				t.Fatalf("owner-only action %q was exposed as an MCP tool", a.Name)
-			}
 		}
 	}
 	if owner == 0 {
 		t.Fatal("the catalog has no owner-only action: the check has nothing to check")
 	}
 
-	page := callTool(t, ctx, session, "find", map[string]any{"title": "Ana"})
-	if page.Title != "Ana" || apitest.Href(page, "self") == "" {
-		t.Fatalf("find returned %+v", page)
-	}
-	// The browser's calendar and its "go to a day" are on this surface too (docs/plans/091-the-browser-for-daily-use.md).
-	if day := callTool(t, ctx, session, "open_day", map[string]any{"day": "2031-05-14"}); day.Title != "2031-05-14" {
-		t.Fatalf("open_day returned %+v", day)
-	}
+	// The browser's calendar is on this surface too (docs/plans/091-the-browser-for-daily-use.md).
 	if month := callTool(t, ctx, session, "get", map[string]any{"href": "/months/2031-05"}); month.Title != "May 2031" {
 		t.Fatalf("get /months/2031-05 returned %+v", month)
 	}
