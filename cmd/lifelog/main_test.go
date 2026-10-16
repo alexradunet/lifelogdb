@@ -226,33 +226,6 @@ func assertSnapshotSentinel(t *testing.T, p string) {
 	}
 }
 
-func captureStdout(t *testing.T, fn func()) string {
-	t.Helper()
-	old := os.Stdout
-	f, err := os.CreateTemp(t.TempDir(), "stdout-*.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	closed := false
-	os.Stdout = f
-	defer func() {
-		os.Stdout = old
-		if !closed {
-			f.Close()
-		}
-	}()
-	fn()
-	if err := f.Close(); err != nil {
-		t.Fatal(err)
-	}
-	closed = true
-	b, err := os.ReadFile(f.Name())
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(b)
-}
-
 func TestSnapshotRefusesAGitWorkTree(t *testing.T) {
 	live := filepath.Join(t.TempDir(), "life.db")
 	if err := db.Init(t.Context(), live); err != nil {
