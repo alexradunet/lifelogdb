@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -24,27 +23,24 @@ type shellView struct {
 	Days      []any // the days of this month as the month resource gives them (day, page): the monthbox template draws them
 }
 
-// shell reads the sidebar's view.
-func (h *server) shell(ctx context.Context) (*shellView, error) {
-	if h.s == nil {
-		return nil, errors.New("no store to read the shell from")
-	}
-	today := h.s.Today()
-	t, ok := core.ParseDay(today)
+// shell adds the month of today and its days that have a day page to sv, which has today. When the read fails, shell
+// adds nothing and returns the error.
+func (h *server) shell(ctx context.Context, sv *shellView) error {
+	t, ok := core.ParseDay(sv.Today)
 	if !ok {
-		return nil, fmt.Errorf("today %q is not a day", today)
+		return fmt.Errorf("today %q is not a day", sv.Today)
 	}
 	first := time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
 	last := first.AddDate(0, 1, -1)
 	entries, err := h.s.DayEntries(ctx, first.Format(time.DateOnly), last.Format(time.DateOnly), false, 31)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	sv := &shellView{Today: today, Zone: h.s.Local().Location(), Month: first.Format(layoutMonth), MonthHref: monthHref(first), Written: len(entries)}
+	sv.Month, sv.MonthHref, sv.Written = first.Format(layoutMonth), monthHref(first), len(entries)
 	for _, d := range writtenDays(entries, first, last) {
 		sv.Days = append(sv.Days, map[string]any{"day": d.Day, "page": d.Page})
 	}
-	return sv, nil
+	return nil
 }
 
 // write answers with the entity, as the free function write does; a browser gets it in the shell. The page is
@@ -61,12 +57,11 @@ func (h *server) write(w http.ResponseWriter, r *http.Request, status int, e *En
 
 // inShell draws the entity as a page in the shell, for any client: the read of the shell may fail, as write says.
 func (h *server) inShell(w http.ResponseWriter, r *http.Request, status int, e *Entity) {
-	sv, err := h.shell(r.Context())
-	if err != nil {
-		sv = &shellView{}
-		if h.s != nil {
-			sv.Today, sv.Zone = h.s.Today(), h.s.Local().Location()
-		}
+	sv := &shellView{}
+	if h.s != nil {
+		now := h.s.Local() // one read of the clock, so today and the zone of the words agree
+		sv.Today, sv.Zone = now.Format(time.DateOnly), now.Location()
+		_ = h.shell(r.Context(), sv) // the page is drawn without the month when the read fails
 	}
 	renderHTML(w, r, status, e, sv)
 }

@@ -18,7 +18,7 @@ import (
 // TestTheStoresClockIsTheOneClock: the store's clock is in a zone far from UTC, at an instant where the UTC day and
 // the local day are not the same. Each read of today or now agrees with the local day or the instant of that clock:
 // the root's today, the redirect of /days/today, the day page that a capture with no day makes, the day of a page and
-// of a kept file that have no day, the name of a snapshot, and the life of a feedback receipt.
+// of a kept file that have no day, the words for a time, the name of a snapshot, and the life of a feedback receipt.
 func TestTheStoresClockIsTheOneClock(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "life.db")
 	if err := db.Init(t.Context(), p); err != nil {
@@ -91,6 +91,14 @@ func TestTheStoresClockIsTheOneClock(t *testing.T) {
 		if page.Day != today {
 			t.Errorf("%s has the day %q, want %s", title, page.Day, today)
 		}
+	}
+
+	// The words for a time are in the zone of the clock: a reading taken at the instant of the clock was taken today
+	// at 01:30, not yesterday at 11:30.
+	must(c.Do(ctx, find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
+	m := must(c.Do(ctx, find(root, "record"), map[string]string{"metric": "weight", "day": today, "value": "71", "taken_at": "2026-03-10T11:30:00.000Z"}))
+	if want := `>today, 01:30</time>`; !strings.Contains(browse(t, h, href(m, "self")), want) {
+		t.Errorf("the page of a reading taken now does not say %s", want)
 	}
 
 	// A snapshot is named by the local day, and a second one of that day by the local time too.
