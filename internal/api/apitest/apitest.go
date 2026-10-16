@@ -40,13 +40,13 @@ func over(s *core.Store, source string) (*client.Client, http.Handler, *core.Sto
 	return client.InProcess(h, source), h, s
 }
 
-// Clients returns the two clients of h with the source: in process, and remote over an httptest server that the
-// cleanup of the test closes. It is for a test that must hold on both transports.
-func Clients(t testing.TB, h http.Handler, source string) (inProcess, remote *client.Client) {
+// Remote returns a client of h with the source over a socket: an httptest server that the cleanup of the test closes.
+// The client in process is client.InProcess(h, source).
+func Remote(t testing.TB, h http.Handler, source string) *client.Client {
 	t.Helper()
 	server := httptest.NewServer(h)
 	t.Cleanup(server.Close)
-	return client.InProcess(h, source), client.Remote(server.URL, source, "")
+	return client.Remote(server.URL, source, "")
 }
 
 // Must returns a function that gives the entity of a call of the client, or fails the test with the error of the

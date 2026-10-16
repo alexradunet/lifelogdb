@@ -318,7 +318,7 @@ func TestMCPExactResponseNumbers(t *testing.T) {
 			})
 			c := client.InProcess(handler, "agent:test")
 			if remote {
-				_, c = apitest.Clients(t, handler, "agent:test")
+				c = apitest.Remote(t, handler, "agent:test")
 			}
 			session, ctx := numericSession(t, c)
 			res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{Name: "get", Arguments: map[string]any{"href": "/numbers"}})

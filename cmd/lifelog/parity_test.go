@@ -69,8 +69,7 @@ func openHTTP(t *testing.T, h http.Handler, _, source string) surfaceCall {
 }
 
 func openRemote(t *testing.T, h http.Handler, _, source string) surfaceCall {
-	_, remote := apitest.Clients(t, h, source)
-	return catalogCall(t, remote)
+	return catalogCall(t, apitest.Remote(t, h, source))
 }
 
 // catalogCall runs an action of GET /actions with the client.

@@ -81,9 +81,9 @@ func TestHrefAndStatus(t *testing.T) {
 	}
 }
 
-// TestClientsReachTheHandlerInProcessAndOverHTTP: both clients send the source to the one handler; the remote one
-// comes over a socket, and its server is closed after the test.
-func TestClientsReachTheHandlerInProcessAndOverHTTP(t *testing.T) {
+// TestRemoteReachesTheHandlerOverASocket: the remote client sends the source to the handler over a socket, and its
+// server is closed after the test.
+func TestRemoteReachesTheHandlerOverASocket(t *testing.T) {
 	var sources, peers []string
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sources, peers = append(sources, r.Header.Get(api.SourceHeader)), append(peers, r.RemoteAddr)
@@ -92,19 +92,16 @@ func TestClientsReachTheHandlerInProcessAndOverHTTP(t *testing.T) {
 	})
 	var remote *client.Client
 	t.Run("the test", func(t *testing.T) {
-		in, r := Clients(t, h, "agent:kit")
-		remote = r
-		for _, c := range []*client.Client{in, remote} {
-			if e, err := c.Get(t.Context(), "/"); err != nil || e.Title != "kit" {
-				t.Errorf("GET /: %+v %v", e, err)
-			}
+		remote = Remote(t, h, "agent:kit")
+		if e, err := remote.Get(t.Context(), "/"); err != nil || e.Title != "kit" {
+			t.Errorf("GET /: %+v %v", e, err)
 		}
 	})
-	if fmt.Sprint(sources) != "[agent:kit agent:kit]" || len(peers) != 2 || peers[0] != "" || peers[1] == "" {
-		t.Errorf("the handler saw the sources %q from the peers %q; want agent:kit twice, in process and then over a socket", sources, peers)
+	if fmt.Sprint(sources) != "[agent:kit]" || len(peers) != 1 || peers[0] == "" {
+		t.Errorf("the handler saw the sources %q from the peers %q; want agent:kit one time, over a socket", sources, peers)
 	}
 	if remote == nil {
-		return // Clients failed, and the sub-test said why
+		return // Remote failed, and the sub-test said why
 	}
 	if _, err := remote.Get(t.Context(), "/"); Status(err) != -1 {
 		t.Errorf("the remote client after the test: %v; want no answer, as the server is closed", err)

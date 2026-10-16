@@ -39,7 +39,7 @@ func TestTheTwoTransportsGiveEqualAnswers(t *testing.T) {
 		apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": "Conformance", "body": "A [[Link]]."}))
 		apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "register-metric"), map[string]string{"name": "Weight", "unit": "kg"}))
 		if remote {
-			_, c = apitest.Clients(t, h, "cli")
+			c = apitest.Remote(t, h, "cli")
 		}
 		return side{c, s}
 	}

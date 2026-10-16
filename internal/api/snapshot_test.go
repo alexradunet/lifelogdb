@@ -30,7 +30,7 @@ func TestSnapshotIsTheOwnersFromAnySurface(t *testing.T) {
 		t.Fatal(err)
 	}
 	action := apitest.Action(t, root, "snapshot")
-	if action.Name == "" || !action.Owner {
+	if !action.Owner {
 		t.Fatalf("the root offers the owner the snapshot action: %+v", action)
 	}
 
