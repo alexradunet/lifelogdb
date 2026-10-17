@@ -235,6 +235,8 @@ func initWith(path string, apply func(*sql.DB) error) error {
 	// Seed-only statistics make later bulk capture choose scans as the file grows.
 	// Let ordinary connection-close maintenance collect statistics from real data.
 	// Close SQLite first: on Linux, the close of a descriptor drops every lock that the process holds on the file.
+	// A close that fails returns its error and keeps the file, with the schema in it: the cleanup cannot remove a
+	// path after the close, because only the open file shows that the path still names it (reserveDatabasePath).
 	return errors.Join(w.Close(), reserved.Close())
 }
 
@@ -361,6 +363,8 @@ func copyWith(from, to string, copy func(*sql.DB) error) error {
 	if err := errors.Join(copyErr, r.Close()); err != nil {
 		return errors.Join(err, removeReservedDatabasePath(to, reserved))
 	}
+	// A close that fails returns its error and keeps the copy that VACUUM INTO wrote, as initWith keeps its file.
+	// Snapshot returns the path with the error.
 	return reserved.Close()
 }
 

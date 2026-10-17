@@ -66,3 +66,26 @@ func openInThisProcess(t *testing.T, info os.FileInfo) bool {
 	}
 	return false
 }
+
+// TestASuccessfulInitOrCopyClosesItsReservation: after an Init and a Copy that succeed, this process has no file open
+// with the identity of the new file. A success path that did not close its reservation would hold the file open until
+// the process ends.
+func TestASuccessfulInitOrCopyClosesItsReservation(t *testing.T) {
+	dir := t.TempDir()
+	source, copied := filepath.Join(dir, "life.db"), filepath.Join(dir, "copy.db")
+	if err := Init(t.Context(), source); err != nil {
+		t.Fatal(err)
+	}
+	if err := Copy(t.Context(), source, copied); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{source, copied} {
+		info, err := os.Lstat(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if openInThisProcess(t, info) {
+			t.Errorf("%s is open in this process after its success: the reservation was not closed", p)
+		}
+	}
+}
