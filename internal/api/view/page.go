@@ -218,8 +218,7 @@ func pageView(e *siren.Entity, f Facts, rf *Refusal) (*view, error) {
 }
 
 // Draw is the page of e as HTML: the view of e (pageView), drawn by the template of its class (htmlOf). It is the one
-// call of the view that the API makes: f are the facts of the page, and rf is the refused form that the page shows,
-// nil for none.
+// call that draws a page: f are the facts of the page, and rf is the refused form that the page shows, nil for none.
 func Draw(e *siren.Entity, f Facts, rf *Refusal) ([]byte, error) {
 	v, err := pageView(e, f, rf)
 	if err != nil {
