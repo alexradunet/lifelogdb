@@ -298,6 +298,161 @@ func TestReservedCleanupWithoutIdentityPreservesPath(t *testing.T) {
 	}
 }
 
+// TestAFailedInitRemovesTheWALOfItsFile: SQLite keeps the WAL of a database and its index (PATH-wal and PATH-shm)
+// when its close cannot checkpoint. A cancelled Init interrupts SQLite, and the close then keeps the two. A WAL left
+// beside the path goes into the next database at the path: a copy put back there reads the pages of the WAL. So the
+// cleanup of a failed Init removes the two with its file, and only the two of its own file:
+//   - SQLite wrote the file, so the file is not empty: the two go with the file. The test makes the close of SQLite
+//     keep them with SQLITE_FCNTL_PERSIST_WAL, which gives the files of an interrupted close each time.
+//   - Another file took the path: the WAL and the index there stay.
+//   - The file is empty: SQLite did not read it, so a WAL beside it is not the WAL of this file, and it stays.
+//   - SQLite deletes a WAL beside an empty file when it reads the file: so a WAL beside a file that SQLite wrote is
+//     the WAL of this file.
+//   - The WAL or the index cannot go: the file stays with them, so no WAL stays alone at the path.
+func TestAFailedInitRemovesTheWALOfItsFile(t *testing.T) {
+	failure := errors.New("controlled apply failure")
+	// gone reports whether no file is at p.
+	gone := func(t *testing.T, p string) bool {
+		t.Helper()
+		_, err := os.Lstat(p)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			t.Fatal(err)
+		}
+		return err != nil
+	}
+	// keepTheWAL writes a table into the database of w, at p, in WAL mode. It makes the close of SQLite keep the WAL
+	// and its index, closes w, and returns the WAL.
+	keepTheWAL := func(t *testing.T, w *sql.DB, p string) []byte {
+		t.Helper()
+		c, err := w.Conn(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.ExecContext(t.Context(), "PRAGMA journal_mode = WAL; CREATE TABLE kept(x)"); err != nil {
+			t.Fatal(err)
+		}
+		err = c.Raw(func(dc any) error {
+			fc, ok := dc.(interface {
+				FileControlPersistWAL(string, int) (int, error)
+			})
+			if !ok {
+				return errors.New("the driver cannot keep the WAL")
+			}
+			_, err := fc.FileControlPersistWAL("main", 1)
+			return err
+		})
+		if err := errors.Join(err, c.Close(), w.Close()); err != nil {
+			t.Fatal(err)
+		}
+		wal, err := os.ReadFile(p + "-wal")
+		if err != nil || len(wal) <= 32 || gone(t, p+"-shm") {
+			t.Fatalf("SQLite did not keep the WAL (%d bytes, %v) and its index at its close", len(wal), err)
+		}
+		return wal
+	}
+	t.Run("the WAL of the file goes with the file", func(t *testing.T) {
+		p := filepath.Join(t.TempDir(), "life.db")
+		err := initWith(p, func(w *sql.DB) error {
+			keepTheWAL(t, w, p)
+			return failure
+		})
+		if !errors.Is(err, failure) {
+			t.Fatalf("initWith = %v, want the failure", err)
+		}
+		for _, name := range []string{p, p + "-wal", p + "-shm"} {
+			if !gone(t, name) {
+				t.Errorf("the cleanup left %s", name)
+			}
+		}
+	})
+	t.Run("another file took the path", func(t *testing.T) {
+		p := filepath.Join(t.TempDir(), "life.db")
+		theirs := map[string][]byte{p: []byte("another database\n"), p + "-wal": []byte("its WAL\n"), p + "-shm": []byte("its index\n")}
+		replaced := false
+		err := initWith(p, func(w *sql.DB) error {
+			keepTheWAL(t, w, p)
+			if replaced = replaceReservedFile(t, p, theirs[p]); replaced {
+				writeFile(t, p+"-wal", theirs[p+"-wal"])
+				writeFile(t, p+"-shm", theirs[p+"-shm"])
+			}
+			return failure
+		})
+		if !errors.Is(err, failure) {
+			t.Fatalf("initWith = %v, want the failure", err)
+		}
+		for name, want := range theirs {
+			got, err := os.ReadFile(name)
+			switch {
+			case !replaced && !gone(t, name):
+				t.Errorf("the reservation held its path, and the cleanup left %s", name)
+			case replaced && (err != nil || !bytes.Equal(got, want)):
+				t.Errorf("%s: %q %v, want the file of the other database", name, got, err)
+			}
+		}
+	})
+	t.Run("a WAL beside an empty file", func(t *testing.T) {
+		p := filepath.Join(t.TempDir(), "life.db")
+		stale := []byte("a WAL of no database\n")
+		writeFile(t, p+"-wal", stale)
+		if err := initWith(p, func(*sql.DB) error { return failure }); !errors.Is(err, failure) {
+			t.Fatalf("initWith = %v, want the failure", err)
+		}
+		if got, err := os.ReadFile(p + "-wal"); !gone(t, p) || err != nil || !bytes.Equal(got, stale) {
+			t.Errorf("the cleanup changed a WAL that SQLite did not open: %q %v", got, err)
+		}
+	})
+	t.Run("SQLite deletes a WAL beside an empty file", func(t *testing.T) {
+		dir := t.TempDir()
+		q := filepath.Join(dir, "other.db")
+		w, err := sql.Open("lifelog", dsn(q, false))
+		if err != nil {
+			t.Fatal(err)
+		}
+		wal := keepTheWAL(t, w, q)
+		p := filepath.Join(dir, "life.db")
+		writeFile(t, p+"-wal", wal)
+		if err := Init(t.Context(), p); err != nil {
+			t.Fatal(err)
+		}
+		if !gone(t, p+"-wal") {
+			t.Error("SQLite kept the WAL of another database beside a new file")
+		}
+		d, err := Open(t.Context(), p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var n int
+		err = d.R.QueryRowContext(t.Context(), "SELECT count(*) FROM sqlite_schema WHERE name = 'kept'").Scan(&n)
+		if err := errors.Join(err, d.Close()); err != nil || n != 0 {
+			t.Errorf("the new database has the table of the other WAL: %d, %v", n, err)
+		}
+	})
+	for _, side := range []string{"-wal", "-shm"} {
+		t.Run("a "+side+" that cannot go", func(t *testing.T) {
+			p := filepath.Join(t.TempDir(), "life.db")
+			err := initWith(p, func(w *sql.DB) error {
+				// SQLite writes the file, in its first journal mode: no WAL.
+				if _, err := w.ExecContext(t.Context(), "PRAGMA user_version = 7"); err != nil {
+					t.Fatal(err)
+				}
+				if err := w.Close(); err != nil {
+					t.Fatal(err)
+				}
+				// A folder that is not empty cannot be removed, on Linux and on Windows.
+				writeFile(t, filepath.Join(p+side, "inside"), nil)
+				return failure
+			})
+			var refused *os.PathError
+			if !errors.Is(err, failure) || !errors.As(err, &refused) || refused.Path != p+side {
+				t.Fatalf("initWith = %v, want the failure and the error of %s", err, p+side)
+			}
+			if gone(t, p) || gone(t, p+side) {
+				t.Errorf("the cleanup removed the file or its %s, and it could not remove the %s", side, side)
+			}
+		})
+	}
+}
+
 func TestOpenRefusesForeignFile(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "other.db")
 	o, _ := sql.Open("lifelog", dsn(p, false))

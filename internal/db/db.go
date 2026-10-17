@@ -258,7 +258,8 @@ func reserveDatabasePath(path string) (*os.File, error) {
 }
 
 // removeReservedDatabasePath closes the reserved file and removes path if path still names that file. It compares
-// the two while the file is open, so os.SameFile cannot take another file for it (see reserveDatabasePath).
+// the two while the file is open, so os.SameFile cannot take another file for it (see reserveDatabasePath). It also
+// removes the WAL of the file and its index, path-wal and path-shm, when SQLite wrote the file.
 func removeReservedDatabasePath(path string, reserved *os.File) error {
 	if reserved == nil {
 		return nil
@@ -279,6 +280,18 @@ func removeReservedDatabasePath(path string, reserved *os.File) error {
 	}
 	if !ours {
 		return closeErr
+	}
+	// SQLite keeps the WAL and its index at its close when it cannot checkpoint, as after an interrupt. A WAL left
+	// beside the path goes into the next database there. The two are of this file only when SQLite wrote the file:
+	// SQLite reads a new file while it is empty, and it then deletes a WAL beside it. They go before the file, while
+	// the file holds the path: after the remove, another process can make a database at the path, with its own WAL.
+	if held.Size() > 0 {
+		for _, side := range []string{path + "-wal", path + "-shm"} {
+			if err := os.Remove(side); err != nil && !errors.Is(err, os.ErrNotExist) {
+				// The file stays with its WAL, so that no WAL stays alone at the path.
+				return errors.Join(fmt.Errorf("removing %s of failed database %s: %w", side, path, err), closeErr)
+			}
+		}
 	}
 	if err := os.Remove(path); err != nil {
 		return errors.Join(fmt.Errorf("removing failed database %s: %w", path, err), closeErr)
