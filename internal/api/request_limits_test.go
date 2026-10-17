@@ -91,9 +91,11 @@ func TestRequestBufferLimits(t *testing.T) {
 	for _, delta := range []int64{-1, 0, 1} {
 		boundaryHandler, boundaryUnchanged := limitsHandler(t)
 		n := int64(20<<20) - framing + delta
-		body := io.MultiReader(strings.NewReader(head), blanks(n), strings.NewReader(tail))
+		var body io.Reader
 		if delta == 0 {
 			body = io.MultiReader(strings.NewReader(`{"title":"Long","body":"`), generated(n), strings.NewReader(`"}`))
+		} else {
+			body = io.MultiReader(strings.NewReader(head), blanks(n), strings.NewReader(tail))
 		}
 		r := httptest.NewRequest("POST", "/pages", body)
 		r.Header.Set("Content-Type", "application/json")
