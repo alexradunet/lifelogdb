@@ -7,7 +7,7 @@
 {{define "stream"}}{{template "head" .}}{{$s := .Props}}
 <header class="page-head"><div class="what"><h1>Days</h1>{{template "zoom" (dict "v" . "current" "days")}}</div>
 <div class="tools">
-{{with .Action "random-day"}}<form class="tiny" method="GET" action="{{.Href}}"><button class="quiet">A random day</button></form>{{end}}
+{{template "random" (.Action "random-day")}}
 {{template "boxed" (form (.Action "open-day") "button" "Go to a day")}}
 </div></header>
 {{with $s.on_this_day}}<section class="on-this-day panel" aria-label="On this day">
@@ -49,3 +49,8 @@
 {{- with $v.Link "month"}}<a href="{{.}}"{{if eq $c "month"}} aria-current="page"{{end}}>Month</a>{{end}}
 {{- with $v.Link "year"}}<a href="{{.}}"{{if eq $c "year"}} aria-current="page"{{end}}>Year</a>{{end}}
 <a href="/days/today">Today</a></nav>{{end}}
+
+{{/* random is a quiet button that opens a thing picked at random (docs/plans/130-the-explore-pass.md, part 5): a GET
+     form of the action, with its prefilled fields hidden (the kind of the Browse list). Nothing is drawn without the
+     action. The rail's New stays the one loud button. */}}
+{{define "random"}}{{with .}}<form class="tiny" method="GET" action="{{.Href}}">{{range .Fields}}{{$f := .}}{{with .Value}}<input type="hidden" name="{{$f.Name}}" value="{{num .}}">{{end}}{{end}}<button class="quiet">{{.Title}}</button></form>{{end}}{{end}}

@@ -127,6 +127,15 @@ func (h *server) openDay(r *http.Request, act spec, _ string) (*siren.Entity, er
 	return nil, redirect{siren.DayHref(day)}
 }
 
+// randomDay answers with the address of a day page picked at random (docs/plans/130-the-explore-pass.md, part 5).
+func (h *server) randomDay(r *http.Request, _ spec, _ string) (*siren.Entity, error) {
+	day, err := h.s.RandomDay(r.Context())
+	if err != nil {
+		return nil, err
+	}
+	return nil, redirect{siren.DayHref(day)}
+}
+
 // calendar is what a window of days holds: its days as a calendar shows them.
 type calendar struct {
 	days []monthDay

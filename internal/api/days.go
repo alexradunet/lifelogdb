@@ -243,7 +243,7 @@ func (h *server) days(r *http.Request) (*siren.Entity, error) {
 	}
 	e := &siren.Entity{Class: []string{"days"}, Title: "Days",
 		Links:   []siren.Link{link("self", streamHref(before, limit, offset), "Days"), link("index", "/", "Home")},
-		Actions: []siren.Action{action("open-day", nil, nil)}}
+		Actions: []siren.Action{action("open-day", nil, nil), action("random-day", nil, nil)}}
 	if offset > 0 {
 		e.Links = append(e.Links, link("prev", streamHref(before, limit, max(offset-limit, 0)), "Newer days"))
 	} else if newer, ok, err := h.s.NewerBefore(ctx, before, limit); err != nil {

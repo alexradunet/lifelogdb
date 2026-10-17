@@ -30,6 +30,24 @@ func (h *server) find(r *http.Request, act spec, _ string) (*siren.Entity, error
 	return nil, redirect{siren.PageHref(id)}
 }
 
+// randomPage answers with the address of a thing of the kind picked at random (docs/plans/130-the-explore-pass.md,
+// part 5); the kind is page when the request names none.
+func (h *server) randomPage(r *http.Request, act spec, _ string) (*siren.Entity, error) {
+	v, err := fieldsOf(r, act)
+	if err != nil {
+		return nil, err
+	}
+	kind := v.Get("kind")
+	if kind == "" {
+		kind = "page"
+	}
+	id, err := h.s.RandomThing(r.Context(), kind)
+	if err != nil {
+		return nil, err
+	}
+	return nil, redirect{siren.PageHref(id)}
+}
+
 func (h *server) page(r *http.Request) (*siren.Entity, error) {
 	id, err := idOf(r)
 	if err != nil {

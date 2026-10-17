@@ -439,7 +439,7 @@ func fileKind(mime string) string {
 }
 
 // browseActions are the actions of a list: the New of its kind (a new thing is filed in the category of the list,
-// rule 6), and the pick bar's. The ghosts have no New. Every list but All offers file-pages; pages (the ghosts too),
+// rule 6), the pick bar's, and a random thing of the kind. The ghosts have no New and no random thing. Every list but All offers file-pages; pages (the ghosts too),
 // media and documents also offer tombstone-pages. People, places and metrics are deleted from their own page.
 func browseActions(b browseQuery, in *browseIn, categories []string) []siren.Action {
 	var out []siren.Action
@@ -456,6 +456,11 @@ func browseActions(b browseQuery, in *browseIn, categories []string) []siren.Act
 	}
 	if k.tombstonable {
 		out = append(out, action("tombstone-pages", nil, nil))
+	}
+	// A random thing of the kind of the list (docs/plans/130-the-explore-pass.md, part 5); the ghosts have nothing to
+	// show, so their list has none.
+	if !b.ghosts {
+		out = append(out, action("random-page", nil, map[string]any{"kind": b.kind}))
 	}
 	return out
 }

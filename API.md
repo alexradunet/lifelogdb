@@ -48,6 +48,11 @@ or a `q` of blanks only, it answers with no hits ([search](#search)). A field of
 `YYYY-MM-DD`, or the word `today`: the server's local day, the day that `GET /days/today` redirects to. Any other
 value that is not empty is refused (422 `invalid`).
 
+Two reads answer `303` to a thing picked at random ([plan 130](docs/plans/130-the-explore-pass.md)): `random-day`
+(`GET /days/random`), to the day of a live day page up to today, and `random-page` (`GET /pages/random?kind=`), to a
+live thing of a Browse kind (`page` by default, or `all`), never a day page and never a ghost page. Each is a 404 when
+there is nothing to pick; another kind is 422.
+
 **Types** in the tables: `string`, `integer`, `number`, `boolean`, `day` (a local day, `YYYY-MM-DD`), `instant`
 (UTC, `2026-06-09T21:14:03.482Z`), `list`, `object`. A property marked *absent when empty* is left out of the JSON
 when it has no value.
@@ -64,9 +69,10 @@ An error is an entity of class `error` with `properties`:
 
 ## Pages of a list
 
-`/days`, `/browse` and `/search` take `limit` (1–500; defaults 60 for days, 50 for search, 200 for browse) and
+`/days`, `/browse` and `/search` take `limit` (1–500; defaults 30 for days, 50 for search, 200 for browse) and
 `offset` (0 or more), carry both in their properties, and link `next` when a further row exists and `prev` past the
-first page. Orders: days newest first; search by rank, or newest first with `order=newest` ([search](#search)); browse by the kind of its rows ([browse](#browse)).
+first page. `/days` pages by day first: `before` comes before `offset`, `next` is the days before the last card's day
+and `prev` the newer days ([days](#days)). Orders: days newest first; search by rank, or newest first with `order=newest` ([search](#search)); browse by the kind of its rows ([browse](#browse)).
 
 ## The old addresses of the lists
 
@@ -131,7 +137,7 @@ never in it. The query, all optional:
 Links: `prev` (Newer days: the page above, `/days` at the top; absent on the top page), `next` (Older days:
 `before` the last card's day; absent on the oldest page), the zoom: `days` (`/days`), `week`, `month` and `year` (the
 period of the top card's day, or of today when the page has no card; a period that has no page is absent), `index`.
-Actions: `open-day`.
+Actions: `open-day`, `random-day`.
 
 | property | type | meaning |
 |---|---|---|
@@ -204,7 +210,7 @@ its kind; it keeps `in` and `unfiled`; `all` inside a category only, and there t
 `create-place`, `add-file`, which keeps a file of any kind on the media list too; none for `metric`, `all` and the ghosts),
 with `category` filled inside a category: each of them makes the thing and files it there in one write, and a
 refusal of either step writes nothing; `file-pages` on every list but `all`; `tombstone-pages` on `page` (the ghosts
-too), `media` and `document`.
+too), `media` and `document`; `random-page` with `kind` filled with the kind of the list, on every list but the ghosts.
 
 | property | type | meaning |
 |---|---|---|

@@ -67,7 +67,7 @@ func TestBrowseQueryOf(t *testing.T) {
 
 // TestBrowseActions: the actions of each list of Browse. The New of the kind of the list (none for a metric, all and
 // the ghosts) takes the category of the list; file-pages, on every list but All, offers the categories; pages, the
-// ghosts, media and documents offer tombstone-pages.
+// ghosts, media and documents offer tombstone-pages; every list but the ghosts offers random-page.
 func TestBrowseActions(t *testing.T) {
 	family := &browseIn{ID: 7, Title: "Family", Path: "Family"}
 	categories := []string{"Cousins", "Family"}
@@ -77,18 +77,18 @@ func TestBrowseActions(t *testing.T) {
 		in   *browseIn
 		want string // each action, with the value of its field category and the options of that field
 	}{
-		{"pages", browseQuery{kind: "page"}, nil, "create-page file-pages[Cousins Family] tombstone-pages"},
-		{"people", browseQuery{kind: "person"}, nil, "create-person file-pages[Cousins Family]"},
-		{"places", browseQuery{kind: "place"}, nil, "create-place file-pages[Cousins Family]"},
-		{"unfiled places", browseQuery{kind: "place", unfiled: true}, nil, "create-place file-pages[Cousins Family]"},
-		{"media", browseQuery{kind: "media"}, nil, "add-file file-pages[Cousins Family] tombstone-pages"},
-		{"documents", browseQuery{kind: "document"}, nil, "add-file file-pages[Cousins Family] tombstone-pages"},
-		{"metrics", browseQuery{kind: "metric"}, nil, "file-pages[Cousins Family]"},
+		{"pages", browseQuery{kind: "page"}, nil, "create-page file-pages[Cousins Family] tombstone-pages random-page"},
+		{"people", browseQuery{kind: "person"}, nil, "create-person file-pages[Cousins Family] random-page"},
+		{"places", browseQuery{kind: "place"}, nil, "create-place file-pages[Cousins Family] random-page"},
+		{"unfiled places", browseQuery{kind: "place", unfiled: true}, nil, "create-place file-pages[Cousins Family] random-page"},
+		{"media", browseQuery{kind: "media"}, nil, "add-file file-pages[Cousins Family] tombstone-pages random-page"},
+		{"documents", browseQuery{kind: "document"}, nil, "add-file file-pages[Cousins Family] tombstone-pages random-page"},
+		{"metrics", browseQuery{kind: "metric"}, nil, "file-pages[Cousins Family] random-page"},
 		{"the ghosts", browseQuery{kind: "page", ghosts: true}, nil, "file-pages[Cousins Family] tombstone-pages"},
-		{"all in Family", browseQuery{kind: "all", in: "Family"}, family, ""},
-		{"pages in Family", browseQuery{kind: "page", in: "Family"}, family, "create-page=Family file-pages[Cousins Family] tombstone-pages"},
-		{"people in Family", browseQuery{kind: "person", in: "Family"}, family, "create-person=Family file-pages[Cousins Family]"},
-		{"media in Family", browseQuery{kind: "media", in: "Family"}, family, "add-file=Family file-pages[Cousins Family] tombstone-pages"},
+		{"all in Family", browseQuery{kind: "all", in: "Family"}, family, "random-page"},
+		{"pages in Family", browseQuery{kind: "page", in: "Family"}, family, "create-page=Family file-pages[Cousins Family] tombstone-pages random-page"},
+		{"people in Family", browseQuery{kind: "person", in: "Family"}, family, "create-person=Family file-pages[Cousins Family] random-page"},
+		{"media in Family", browseQuery{kind: "media", in: "Family"}, family, "add-file=Family file-pages[Cousins Family] tombstone-pages random-page"},
 	} {
 		var got []string
 		for _, a := range browseActions(tc.b, tc.in, categories) {
