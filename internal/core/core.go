@@ -100,7 +100,13 @@ func conflictCode(code, format string, a ...any) error {
 	return &Error{Status: 409, Msg: fmt.Sprintf(format, a...), Code: code}
 }
 
-// refused turns a constraint or trigger failure of the DDL into a 422 with SQLite's own message. A write whose
+// CodeBusy is the code of a write that met a locked file (SQLITE_BUSY): the CLI and the service write one file, and
+// a write can wait longer than busy_timeout for the other.
+const CodeBusy = "busy"
+
+// refused turns a constraint or trigger failure of the DDL into a 422 with SQLite's own message. A write that found the
+// file locked (SQLITE_BUSY, with its extended codes) is a 503 with CodeBusy: its transaction rolled back, so nothing was
+// applied and a retry is safe. A write whose
 // rollback failed (db.RollbackError) is a fault, whatever its fn returned: the transaction can be open or kept in part.
 // Its text keeps the error of fn, and its chain only the error of the rollback, so no surface reads it as a refusal.
 func refused(err error) error {
@@ -118,6 +124,9 @@ func refused(err error) error {
 	var se *sqlite.Error
 	if errors.As(err, &se) && se.Code()&0xff == sqlite3.SQLITE_CONSTRAINT { // CHECKs, FKs, UNIQUE and RAISE(ABORT)
 		return &Error{Status: 422, Msg: se.Error()}
+	}
+	if errors.As(err, &se) && se.Code()&0xff == sqlite3.SQLITE_BUSY {
+		return &Error{Status: 503, Msg: "the database file is busy: another writer holds it; nothing was written, so a retry is safe", Code: CodeBusy, Err: err}
 	}
 	return err
 }

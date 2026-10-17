@@ -319,11 +319,17 @@ func codeOf(status int) string {
 		return "too_large"
 	case http.StatusUnprocessableEntity:
 		return "invalid"
+	case http.StatusServiceUnavailable:
+		return core.CodeBusy
 	case http.StatusGatewayTimeout:
 		return "timeout"
 	}
 	return "internal"
 }
+
+// retryAfter is the Retry-After of a 503, in seconds. The only 503 is a busy file (core.CodeBusy), which the writer
+// has waited on for busy_timeout already, so a short wait before the next try is enough.
+const retryAfter = "1"
 
 // writeError answers with the error entity of err, as JSON or as a page with no shell. The guards, the pictures and
 // /render use it. A route that serve wraps answers its error in serve: there a browser gets the page in the shell, or
@@ -359,6 +365,9 @@ func answer(w http.ResponseWriter, r *http.Request, status int, e *siren.Entity,
 		status, b = sirenAnswer(r, status, e)
 	}
 	w.Header().Set("Content-Type", typ)
+	if status == http.StatusServiceUnavailable {
+		w.Header().Set("Retry-After", retryAfter)
+	}
 	w.WriteHeader(status)
 	if _, err := w.Write(b); err != nil {
 		logFault(r, "the answer was not sent", err)

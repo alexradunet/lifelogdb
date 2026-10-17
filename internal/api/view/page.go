@@ -414,6 +414,8 @@ func alertOf(code any) alertView {
 		return alertView{"Not saved. The page changed since you opened it.", false}
 	case "exists":
 		return alertView{"Not created.", false}
+	case "busy":
+		return alertView{"Not done. The file is busy. Nothing was written, and a retry is safe.", false}
 	}
 	return alertView{}
 }
