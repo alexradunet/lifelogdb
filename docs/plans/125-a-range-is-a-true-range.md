@@ -8,7 +8,7 @@
 - **Date / baseline:** 2026-10-17, `63e0a36` (master, after plan 124).
 - **Priority:** P3. **Effort:** S. **Risk:** LOW: one new trigger, applied to the owner's file in the same run as plan
   124's comments.
-- **Status:** IN PROGRESS on the branch `plan-125-scale-range`.
+- **Status:** DONE (2026-10-17), merged into master and installed with the owner's change of the live file.
 - **Resolves:** the question of a score's range from [plan 121's Part 8 record](121-deep-modules-for-agents.md). The
   owner's words (2026-10-17), after the question was explained with the New metric form: "let's fix it".
 
@@ -26,11 +26,11 @@ rows the file keeps).
 
 ## Done when
 
-- [ ] An issue, D6 citing the trigger, `schema.sql`, a mutant and a suite witness change together; the writer's answer
+- [x] An issue, D6 citing the trigger, `schema.sql`, a mutant and a suite witness change together; the writer's answer
       for such a unit is the schema's 422 on every surface; the baseline is green.
-- [ ] The program applies plan 124's comments and this trigger together on a copy of the old schema, and refuses a
+- [x] The program applies plan 124's comments and this trigger together on a copy of the old schema, and refuses a
       file that keeps a metric with such a unit.
-- [ ] The owner ran the change of the live file; the integrity check passes; the new binary serves.
+- [x] The owner ran the change of the live file; the integrity check passes; the new binary serves.
 
 ## Results
 
@@ -50,3 +50,23 @@ the comments of the tables `entities` and `people` and of the trigger `measureme
 `writable_schema` procedure of plan 124, and the new trigger `metrics_range_order`. The program first checks that no
 metric of the file has a unit that the new trigger refuses. Its `OLD.sql` is `schema.sql` at `cdb7b8e`, and its
 `NEW.sql` at `59a48ad`. The outcome is recorded below when the owner has run it.
+
+The change of the live file, 2026-10-17, run by the owner with `!` commands, for plans 124 and 125 together:
+
+1. A first dry run of `meta124-bin` refused before any write: "table measurements: PRAGMA index_list differs from
+   OLD.sql". The earlier one-off programs had made the indexes of `measurements` again in another order, so their
+   places in the list (`seq`) differed, while their texts were equal. The owner started the service again; the program
+   then compared the indexes by name, with their flags and columns, and left out `seq`, which holds no fact of an
+   index. A refusal now prints both lists in full. Its tests made the case first.
+2. `systemctl stop lifelog.service`; a snapshot with the installed binary of `cdb7b8e`:
+   `/home/cico/life/snapshots/2026-10-17-plan-124-125-b/life-2026-10-17.db`, its restore check ok.
+3. `meta124-bin … --dry-run`: equal to `OLD.sql`; no metric with a unit that `metrics_range_order` refuses; the texts of
+   `entities`, `people` and `measurements_scale_range` set; `schema_version` 172, was 171; `metrics_range_order` made;
+   equal to `NEW.sql` inside the transaction; `integrity_check` ok; `foreign_key_check` no rows; the trial write ok;
+   rolled back.
+4. `meta124-bin …`: the same, committed; opened again: equal to `NEW.sql`; `integrity_check` ok; `foreign_key_check`
+   no rows; the trial write ok. A second run refused (the file is no longer `OLD.sql`) and changed nothing.
+5. `lifelog get /integrity`: ok.
+6. The binary of `7d7d672` (the merge of plan 125) installed at `/home/cico/.local/bin/lifelog`, the one before it kept
+   as `lifelog.prev`, with the service stopped.
+7. `systemctl start lifelog.service`: "serving /home/cico/dev/lifelogdb/life.db on http://127.0.0.1:7777" at 14:16:54.

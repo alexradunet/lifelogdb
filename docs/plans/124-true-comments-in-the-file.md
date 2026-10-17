@@ -8,7 +8,7 @@
 - **Date / baseline:** 2026-10-17, `cdb7b8e` (master, after plan 123).
 - **Priority:** P3. **Effort:** S. **Risk:** MEDIUM: the change of the live file rewrites the stored text of two
   tables, which SQLite allows only through `PRAGMA writable_schema`.
-- **Status:** IN PROGRESS on the branch `plan-124-create-comments`.
+- **Status:** DONE (2026-10-17), merged into master and installed with the owner's change of the live file.
 - **Resolves:** the two comments that [issue 0082](../issues/0082-the-meta-rows-name-removed-columns.md) left for the
   owner. The owner's words (2026-10-17): "Fix the old comments also".
 
@@ -39,9 +39,13 @@ flowchart LR
 
 ## Done when
 
-- [ ] `schema.sql` has true comments; the suites and the docs that read them stay true; the baseline is green.
-- [ ] The program refuses a file that is not the old schema and any change that is not a comment, and makes a copy of
+- [x] `schema.sql` has true comments; the suites and the docs that read them stay true; the baseline is green.
+- [x] The program refuses a file that is not the old schema and any change that is not a comment, and makes a copy of
       the old schema equal to the new one (tested on synthetic files only).
-- [ ] The owner ran the change of the live file; the integrity check passes; the new binary serves.
+- [x] The owner ran the change of the live file; the integrity check passes; the new binary serves.
 
 ## Results
+
+The commits: `786f1d7` (the two comments, and the document suite's witness that no stored text names a link kind
+the registry does not have). The program `meta124-bin` (`/home/cico/.local/share/lifelog-oneoff/meta124/`) applied
+plans 124 and 125 together: [plan 125](125-a-range-is-a-true-range.md#results) gives the run.
