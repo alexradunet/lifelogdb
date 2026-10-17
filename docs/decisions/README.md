@@ -33,3 +33,4 @@ reused, and a decision that changes is rewritten in place (git is its history).
 | [D25](D25-snapshots.md) | Snapshots: a dated `VACUUM INTO` copy, trusted once its restore check passes. | accepted |
 | [D26](D26-metric-categories.md) | Categories: a category is a plain page, and a thing is filed in it by a `part-of` link. | accepted |
 | [D27](D27-a-metric-is-a-page.md) | A metric is a page: its title is its name, its body its note. | accepted |
+| [D28](D28-capture-keys.md) | A capture key: a capture sent again changes nothing. | accepted |

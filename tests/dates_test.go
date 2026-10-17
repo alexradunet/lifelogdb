@@ -108,6 +108,7 @@ func exactTimeBoundaries(s *S) {
 			}
 			queries["measurements.created_at"] = "INSERT INTO measurements(metric_id,day,value,source,created_at) VALUES(1,'2026-01-01',3,'ui',?)"
 			queries["measurements.taken_at"] = "INSERT INTO measurements(metric_id,day,taken_at,value,source,created_at) VALUES(1,'2026-01-01',?,3,'ui','2026-01-01T00:00:00.000Z')"
+			queries["capture_keys.recorded_at"] = "INSERT INTO capture_keys(source,import_key,page_id,recorded_at) VALUES('ui','instant witness',1,?)" // page 1 is Mood's
 			queries["links.created_at"] = fmt.Sprintf("INSERT INTO links(from_id,to_id,kind,source,created_at) VALUES(%d,%d,'wikilink','ui',?)", entity, person)
 		}
 

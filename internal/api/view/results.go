@@ -133,6 +133,11 @@ func resultSentences(m map[string]any, c clock) []resultLine {
 		}
 	}
 
+	// capture sent again (D28).
+	if b, _ := take("already"); b == true {
+		say("Already added. Nothing changed.")
+	}
+
 	// snapshot.
 	if p, ok := take("snapshot"); ok {
 		say("Took a snapshot: <code>%s</code>.", esc(fmt.Sprint(p)))

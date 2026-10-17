@@ -65,10 +65,10 @@ func areaReq(name, title string, rows int) siren.Field {
 // server are built from it.
 var catalog = []spec{
 	{Name: "capture", Title: "Add to the day",
-		Description: "Append an entry to the journal page of a local day (created on the first capture), with an optional mood 1-5. [[Title]] and #tag in the text link pages, creating them if new.",
+		Description: "Append an entry to the journal page of a local day (created on the first capture), with an optional mood 1-5. [[Title]] and #tag in the text link pages, creating them if new. import_key makes a re-send a no-op: make one key for one capture and send it again unchanged on a retry; the answer is then Already added, with the day.",
 		Method:      "POST", Path: "/days/{day}/capture",
 		Fields: []siren.Field{path("day", "date", "Local day"), area("text", "Entry (CommonMark)", 4),
-			{Name: "mood", Type: "number", Title: "Mood", Options: []string{"1", "2", "3", "4", "5"}}},
+			{Name: "mood", Type: "number", Title: "Mood", Options: []string{"1", "2", "3", "4", "5"}}, opt("import_key", "text", "Key")},
 	},
 	{Name: "create-page", Title: "New page",
 		Description: "Create a page with a unique title (a valid file name) and a CommonMark body. category files it in that category page (D26) in the same write, making the category when it is new.",

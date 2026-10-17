@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
@@ -100,6 +101,8 @@ func journal(s *S) {
 	g := c.n("select entity_id from entity_names where name_key='2026-12-02'")
 	s.K("a link that names a day before anything was written makes that day's page, with its day", c.tab("select day, body from entities where id=?", g) == "2026-12-02|")
 	s.K("...and the first capture of that day writes into it", c.capture("it came", "2026-12-02") == g && c.str("select body from entities where id=?", g) == "it came")
+
+	captureKeys(s)
 
 	// ---- cookbook/day-view
 	DV := s.d.Block("day-view")
@@ -269,4 +272,76 @@ func journalDefinition(s *S) {
 	g.must("UPDATE g SET k='2026-03-03' WHERE k='bar'")
 	s.K("a BEFORE UPDATE OF trigger's OLD and NEW expose it, NEW from the new value", g.str("SELECT what FROM seen ORDER BY rowid DESC LIMIT 1") == "update 0>1")
 	s.K("a generated column cannot be inserted into, so a writer names its columns", strings.Contains(g.tryx("INSERT INTO g(k,is_journal) VALUES ('x',1)"), "generated"))
+}
+
+// captureKeys: a capture sent again changes nothing (issue 0085, D28). The second block of cookbook/capture is run
+// literally; the writer's own capture runs on the DDL under test; and the table's rules are probed on a hardened file.
+func captureKeys(s *S) {
+	blocks := sqlBlocks(s.d.Page("cookbook/capture.md"))
+	if len(blocks) != 2 {
+		stop("cookbook/capture has %d sql blocks, want the capture and the capture sent again", len(blocks))
+	}
+	c := s.freshWith(F{Hardened: true})
+	page := c.capture("Walked the dog", "2026-09-29")
+	p := P{"import_key": "send-1", "page_id": page}
+	var lookup, keyInsert, moodInsert string
+	for _, st := range statements(blocks[1]) {
+		switch u := strings.ToUpper(code(st)); {
+		case strings.HasPrefix(u, "SELECT PAGE_ID FROM CAPTURE_KEYS"):
+			lookup = st
+		case strings.HasPrefix(u, "INSERT INTO CAPTURE_KEYS"):
+			keyInsert = st
+		case strings.HasPrefix(u, "INSERT INTO MEASUREMENTS"):
+			moodInsert = st
+		}
+	}
+	if lookup == "" || keyInsert == "" || moodInsert == "" {
+		stop("the capture sent again lacks its lookup, its key or its Mood reading: %q %q %q", lookup, keyInsert, moodInsert)
+	}
+	s.K("cookbook/capture, sent again: a key the file does not hold has no row", len(c.rows(lookup, p)) == 0)
+	_, e := c.runBlock(blocks[1], p, nil)
+	s.K("...and the block adds the key and the Mood reading of the capture in one transaction", e == nil && c.n("SELECT count(*) FROM capture_keys") == 1 &&
+		c.tab("SELECT source, import_key, page_id FROM capture_keys") == "ui|send-1|"+val(page), e)
+	s.K("...the Mood reading of that capture carries the same key", c.tab("SELECT source, import_key, captured_with_id, value FROM measurements") == "ui|send-1|"+val(page)+"|4")
+	s.K("...a key the file holds has a row, and it names the day page of the capture", c.tabOrErr(lookup) != "" && val(c.rows(lookup, p)[0][0]) == val(page))
+	again := c.tryx(keyInsert, p)
+	s.K("...the unique pair stops a second row for the same key even when a writer forgets to read it first", strings.Contains(again, "UNIQUE") && c.n("SELECT count(*) FROM capture_keys") == 1, again)
+
+	// the writer's capture, on the DDL under test
+	c = s.freshWith(F{Hardened: true})
+	mood := 4.0
+	st := c.store()
+	capture := func(source, key, day, entry string) (int64, bool) {
+		id, _, already, err := st.CaptureWithKey(context.Background(), source, key, day, entry, &mood)
+		if err != nil {
+			stop("capture %s %q: %v", source, key, err)
+		}
+		return id, already
+	}
+	first, already := capture("ui", "k1", "2026-10-17", "Walked the dog")
+	s.K("the writer: a capture with a key the file does not hold is added", !already && c.str("SELECT body FROM entities WHERE id=?", first) == "Walked the dog")
+	again1, already := capture("ui", "k1", "2026-10-17", "Walked the dog")
+	s.K("the writer: the same key again adds no paragraph and no Mood reading, and names the same day page",
+		already && again1 == first && c.str("SELECT body FROM entities WHERE id=?", first) == "Walked the dog" && c.n("SELECT count(*) FROM measurements") == 1 && c.n("SELECT count(*) FROM capture_keys") == 1)
+	capture("ui", "k2", "2026-10-17", "Walked the dog")
+	s.K("the writer: another key is another capture, with its own paragraph and Mood reading", c.n("SELECT count(*) FROM measurements") == 2 &&
+		c.str("SELECT body FROM entities WHERE id=?", first) == "Walked the dog\n\nWalked the dog")
+	_, _, otherSource, err := st.CaptureWithKey(context.Background(), "cli", "k1", "2026-10-17", "From the CLI", &mood)
+	s.K("the writer: one key under another source is another capture", err == nil && !otherSource && c.n("SELECT count(*) FROM capture_keys") == 3 && c.n("SELECT count(*) FROM measurements") == 3, err)
+	capture("ui", "", "2026-10-17", "No key")
+	capture("ui", "", "2026-10-17", "No key")
+	s.K("the writer: two captures with no key still append twice, and keep no key", strings.HasSuffix(c.str("SELECT body FROM entities WHERE id=?", first), "No key\n\nNo key") &&
+		c.n("SELECT count(*) FROM capture_keys") == 3 && c.n("SELECT count(*) FROM measurements") == 5)
+
+	// the table's own rules, one probe each; a probe that a mutant lets through is rolled back
+	insert := "INSERT INTO capture_keys(source,import_key,page_id,recorded_at) VALUES(?,?,?," + bounds0 + ")"
+	s.K("capture_keys refuses a source that is not a writer's name (capture_keys_source)", strings.Contains(c.rolledBack(insert, "UI", "z", first), "capture_keys_source"))
+	s.K("capture_keys refuses an instant without milliseconds (capture_keys_recorded_at)", strings.Contains(c.rolledBack("INSERT INTO capture_keys(source,import_key,page_id,recorded_at) VALUES('ui','z',?,'2026-10-17T10:00:00Z')", first), "capture_keys_recorded_at"))
+	s.K("capture_keys refuses a key for a page that does not exist", strings.Contains(c.rolledBack(insert, "ui", "z", 999999), "FOREIGN KEY"))
+	s.K("a capture key is unique per source: the same key twice under one source is refused", strings.Contains(c.rolledBack(insert, "ui", "k1", first), "UNIQUE"))
+	other := c.capture("another day", "2026-10-18")
+	s.K("...even for another page: the key names one capture", strings.Contains(c.rolledBack(insert, "ui", "k1", other), "UNIQUE"))
+	s.K("...and one key under another source is another row", c.rolledBack(insert, "agent:probe", "k1", first) == "OK")
+	s.K("an UPDATE of a capture key is refused (capture_keys_no_update)", strings.Contains(c.rolledBack("UPDATE capture_keys SET import_key='moved' WHERE import_key='k2'"), "append-only"))
+	s.K("a DELETE of a capture key is refused (capture_keys_no_delete)", strings.Contains(c.rolledBack("DELETE FROM capture_keys WHERE import_key='k2'"), "never deleted"))
 }

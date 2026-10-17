@@ -260,3 +260,139 @@ func TestFirstLineIsPlainText(t *testing.T) {
 		}
 	}
 }
+
+// count is the number of rows a query counts, for a test that asks what a write left in the file.
+func count(t *testing.T, s *Store, query string, args ...any) int {
+	t.Helper()
+	var n int
+	if err := s.DB.R.QueryRow(query, args...).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+// TestACaptureSentAgainChangesNothing (issue 0085, D28): a capture with the same key, sent again after a lost reply,
+// adds no paragraph and no Mood reading, and says that it was added before. A capture with another key, or with no
+// key, is a new fact.
+func TestACaptureSentAgainChangesNothing(t *testing.T) {
+	s := fresh(t)
+	mood := 4.0
+	id, _, already, err := s.CaptureWithKey(ctx, "ui", "key-1", "2026-10-17", "Walked the dog", &mood)
+	if err != nil || already {
+		t.Fatalf("first send: already %v, %v", already, err)
+	}
+	again, r, already, err := s.CaptureWithKey(ctx, "ui", "key-1", "2026-10-17", "Walked the dog", &mood)
+	if err != nil || !already || again != id || len(r.Linked) != 0 {
+		t.Fatalf("send again: id %d (first %d), already %v, sync %+v, %v", again, id, already, r, err)
+	}
+	p, _ := s.PageByID(ctx, id)
+	if p.Body != "Walked the dog" {
+		t.Errorf("body after a send again: %q", p.Body)
+	}
+	if n := count(t, s, `SELECT count(*) FROM measurements`); n != 1 {
+		t.Errorf("%d readings after a send again, want 1", n)
+	}
+	if n := count(t, s, `SELECT count(*) FROM measurements WHERE import_key = 'key-1' AND source = 'ui' AND captured_with_id = ?`, id); n != 1 {
+		t.Errorf("the Mood reading does not carry the key of its capture")
+	}
+	if n := count(t, s, `SELECT count(*) FROM capture_keys WHERE source = 'ui' AND import_key = 'key-1' AND page_id = ?`, id); n != 1 {
+		t.Errorf("capture_keys holds %d rows for the key, want 1", n)
+	}
+
+	// another key is another capture; no key is a capture that nothing recognizes
+	if _, _, already, err = s.CaptureWithKey(ctx, "ui", "key-2", "2026-10-17", "Walked the dog", &mood); err != nil || already {
+		t.Fatalf("another key: already %v, %v", already, err)
+	}
+	for range 2 {
+		if _, _, already, err = s.CaptureWithKey(ctx, "ui", "", "2026-10-17", "No key", nil); err != nil || already {
+			t.Fatalf("no key: already %v, %v", already, err)
+		}
+	}
+	p, _ = s.PageByID(ctx, id)
+	if want := "Walked the dog\n\nWalked the dog\n\nNo key\n\nNo key"; p.Body != want {
+		t.Errorf("body %q, want %q", p.Body, want)
+	}
+	if n := count(t, s, `SELECT count(*) FROM measurements`); n != 2 {
+		t.Errorf("%d readings, want 2", n)
+	}
+	if n := count(t, s, `SELECT count(*) FROM capture_keys`); n != 2 {
+		t.Errorf("%d keys, want 2: a capture with no key keeps none", n)
+	}
+}
+
+// TestACaptureKeyBelongsToItsSource: one key from two writers is two captures, as an import_key is.
+func TestACaptureKeyBelongsToItsSource(t *testing.T) {
+	s := fresh(t)
+	for _, src := range []string{"ui", "cli"} {
+		if _, _, already, err := s.CaptureWithKey(ctx, src, "same", "2026-10-17", "from "+src, nil); err != nil || already {
+			t.Fatalf("%s: already %v, %v", src, already, err)
+		}
+	}
+	id, err := s.PageID(ctx, "2026-10-17")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := s.PageByID(ctx, id); p.Body != "from ui\n\nfrom cli" {
+		t.Errorf("body %q", p.Body)
+	}
+}
+
+// TestACaptureSentAgainAnswersWithTheDayItWasAddedTo: the resend names another day, and nothing is written for it.
+func TestACaptureSentAgainAnswersWithTheDayItWasAddedTo(t *testing.T) {
+	s := fresh(t)
+	id, _, _, err := s.CaptureWithKey(ctx, "ui", "k", "2026-10-17", "first", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, _, already, err := s.CaptureWithKey(ctx, "ui", "k", "2026-10-18", "first", nil)
+	if err != nil || !already || again != id {
+		t.Fatalf("resend for another day: id %d (first %d), already %v, %v", again, id, already, err)
+	}
+	if n := count(t, s, `SELECT count(*) FROM entity_names WHERE name_key = '2026-10-18'`); n != 0 {
+		t.Error("the resend made the page of another day")
+	}
+	// a page tombstoned since stays tombstoned: the capture was added, and a resend changes nothing
+	if err := s.Tombstone(ctx, "ui", id); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, already, err = s.CaptureWithKey(ctx, "ui", "k", "2026-10-17", "first", nil); err != nil || !already {
+		t.Fatalf("resend after a tombstone: already %v, %v", already, err)
+	}
+	if n := count(t, s, `SELECT count(*) FROM entities WHERE id = ? AND deleted_at IS NULL`, id); n != 0 {
+		t.Error("the resend revived the page")
+	}
+}
+
+// TestACaptureKeyOfABadShapeIsRefusedByTheFile: the DDL refuses the key (capture_keys_import_key), and the capture
+// writes nothing.
+func TestACaptureKeyOfABadShapeIsRefusedByTheFile(t *testing.T) {
+	s := fresh(t)
+	mood := 3.0
+	for name, key := range map[string]string{"513 bytes": strings.Repeat("a", 513), "a NUL": "k\x00x"} {
+		_, _, _, err := s.CaptureWithKey(ctx, "ui", key, "2026-10-17", "text", &mood)
+		if status(err) != 422 || !strings.Contains(err.Error(), "capture_keys_import_key") {
+			t.Errorf("%s: %v, want 422 from capture_keys_import_key", name, err)
+		}
+	}
+	if n := count(t, s, `SELECT count(*) FROM entity_names WHERE name_key = '2026-10-17'`) + count(t, s, `SELECT count(*) FROM measurements`); n != 0 {
+		t.Errorf("a refused capture left %d rows", n)
+	}
+}
+
+// TestACaptureKeyUsedForAMoodReadingIsRefused: the Mood reading of a capture carries the key in the index of
+// measurements. A reading of Mood recorded under the same key and source would make it a no-op, and the mood of the
+// capture would be lost without a sign. The capture is refused instead, and writes nothing.
+func TestACaptureKeyUsedForAMoodReadingIsRefused(t *testing.T) {
+	s := fresh(t)
+	if _, err := s.Record(ctx, "ui", Reading{Metric: "Mood", Day: "2026-10-16", Value: 2, ImportKey: "shared"}); err != nil {
+		t.Fatal(err)
+	}
+	mood := 5.0
+	_, _, _, err := s.CaptureWithKey(ctx, "ui", "shared", "2026-10-17", "text", &mood)
+	if status(err) != 409 {
+		t.Fatalf("a key of a reading: %v, want 409", err)
+	}
+	if n := count(t, s, `SELECT count(*) FROM entity_names WHERE name_key = '2026-10-17'`) + count(t, s, `SELECT count(*) FROM capture_keys`); n != 0 {
+		t.Errorf("a refused capture left %d rows", n)
+	}
+}

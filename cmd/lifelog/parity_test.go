@@ -390,7 +390,42 @@ func parityRows() []parityRow {
 		parityRow{"promote a place", rowPromoteAPlace},
 		parityRow{"register-metric with a range out of order", rowRangeOutOfOrder},
 		parityRow{"set-cover by a kept title", rowSetCover},
+		parityRow{"a capture with a key sent again", rowCaptureSentAgain},
 	)
+}
+
+// A capture sent again with the same import_key changes nothing (issue 0085, D28): the answer is "Already added" with
+// the day, and the day keeps one paragraph and one Mood reading. Another key is a new capture. A key of a bad shape is
+// the 422 of the schema's CHECK (capture_keys_import_key), and it writes nothing.
+func rowCaptureSentAgain(x *parityRun) {
+	args := map[string]string{"day": "today", "text": "Walked the dog", "mood": "4", "import_key": "parity-key-1"}
+	if e := x.ok("capture", args); e.Title != parityToday {
+		x.t.Errorf("the first capture: %q, want the day %s", e.Title, parityToday)
+	}
+	for range 2 {
+		if e := x.ok("capture", args); e.Title != "Already added" || apitest.Href(e, "day") != "/days/"+parityToday {
+			x.t.Errorf("the capture sent again: %q links the day %q, want Already added with /days/%s", e.Title, apitest.Href(e, "day"), parityToday)
+		}
+	}
+	body := func() any {
+		e, err := x.page(parityToday)
+		if err != nil {
+			x.t.Fatal(err)
+		}
+		return props(x.t, e)["body"]
+	}
+	day := props(x.t, apitest.Must(x.t)(x.read.Get(x.t.Context(), "/days/"+parityToday)))
+	if fmt.Sprint(day["mood"]) != "[4]" || body() != "Walked the dog" {
+		x.t.Errorf("%s after the sends again: moods %v, page %q, want [4] and one paragraph", parityToday, day["mood"], body())
+	}
+	x.ok("capture", map[string]string{"day": "today", "text": "Again", "import_key": "parity-key-2"})
+	if body() != "Walked the dog\n\nAgain" {
+		x.t.Errorf("the page after another key: %q", body())
+	}
+	bad := map[string]string{"day": "today", "text": "Never", "import_key": strings.Repeat("k", 513)}
+	if msg := x.refused("capture", bad, http.StatusUnprocessableEntity, "invalid"); !strings.Contains(msg, "capture_keys_import_key") {
+		x.t.Errorf("a key of 513 bytes: %q, want the CHECK capture_keys_import_key", msg)
+	}
 }
 
 // set-cover with the title of a kept picture puts its embed first in the body, so it is the page's cover; the

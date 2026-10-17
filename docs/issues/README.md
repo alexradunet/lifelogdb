@@ -10,7 +10,7 @@ data could not answer, a rule that is ambiguous or untestable. It is the evidenc
 | id | title | status |
 |---|---|---|
 | [0086](0086-today-is-the-hubs-day.md) | The days rule says never a server's day, and the word today is the hub's day | resolved |
-| [0085](0085-a-resent-capture-appends-twice.md) | A capture that a client sends again appends its paragraph twice and records a second mood | open |
+| [0085](0085-a-resent-capture-appends-twice.md) | A capture that a client sends again appends its paragraph twice and records a second mood | resolved |
 | [0084](0084-a-range-out-of-order-is-a-plain-unit.md) | A scale's unit with its bounds out of order is the unit of a plain number for good | resolved |
 | [0083](0083-a-fault-of-a-savepoint-is-not-a-skipped-target.md) | The save recipe does not say that a fault of SAVEPOINT, ROLLBACK TO or RELEASE fails the save | resolved |
 | [0082](0082-the-meta-rows-name-removed-columns.md) | The lifelog_meta rows name the columns of the tasks that D23 removed | resolved |

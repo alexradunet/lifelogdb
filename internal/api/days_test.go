@@ -373,3 +373,83 @@ func TestLiveDayView(t *testing.T) {
 		}
 	}
 }
+
+// hiddenKey is the value of the hidden import_key of a form, "" when the form has none.
+func hiddenKey(form string) string {
+	m := regexp.MustCompile(`<input type="hidden" name="import_key" value="([^"]*)">`).FindStringSubmatch(form)
+	if m == nil {
+		return ""
+	}
+	return m[1]
+}
+
+// TestTheCaptureFormCarriesAFreshKeyEachTimeItIsDrawn (issue 0085, D28): the browser sends the key that the form was
+// drawn with, so a form sent twice (a double click, a reload that posts again) is one capture. The form of the next
+// draw has another key, so the next entry is a new capture.
+func TestTheCaptureFormCarriesAFreshKeyEachTimeItIsDrawn(t *testing.T) {
+	_, h, _ := apitest.FreshOn(t, "cli", fixedToday)
+	action := "/days/" + fixedToday + "/capture"
+	first := hiddenKey(captureForm(t, browse(t, h, "/days/"+fixedToday), action))
+	second := hiddenKey(captureForm(t, browse(t, h, "/days/"+fixedToday), action))
+	if len(first) < 16 || first == second {
+		t.Errorf("the keys of two draws are %q and %q: want two different keys of 16 characters or more", first, second)
+	}
+}
+
+// TestACaptureFormSentAgainIsAddedOnce: the same form sent twice answers 303 to the day both times, the second time
+// with "Already added" and no second paragraph. A JSON client gets the answer "Already added" with the day, as a
+// reading sent again gets "Already recorded".
+func TestACaptureFormSentAgainIsAddedOnce(t *testing.T) {
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
+	form := url.Values{"text": {"Walked the dog"}, "mood": {"4"}, "import_key": {"form-key-1"}}
+	toDay := "/days/" + fixedToday
+	first := submit(h, toDay+"/capture", form, "")
+	if first.Code != http.StatusSeeOther || withoutReceiptOrNot(first.Header().Get("Location")) != toDay {
+		t.Fatalf("first send: %d %q", first.Code, first.Header().Get("Location"))
+	}
+	if body := browse(t, h, first.Header().Get("Location")); strings.Contains(body, "Already added") {
+		t.Errorf("the first send says Already added:\n%.400s", body)
+	}
+	again := submit(h, toDay+"/capture", form, "")
+	if again.Code != http.StatusSeeOther || withoutReceiptOrNot(again.Header().Get("Location")) != toDay {
+		t.Fatalf("send again: %d %q, want 303 to the day", again.Code, again.Header().Get("Location"))
+	}
+	if body := browse(t, h, again.Header().Get("Location")); !strings.Contains(body, "Already added") {
+		t.Errorf("the second send does not say Already added:\n%.400s", body)
+	}
+	day := apitest.Must(t)(c.Get(t.Context(), toDay))
+	if got := fmt.Sprint(props(day)["mood"]); got != "[4]" {
+		t.Errorf("the moods of the day after a send again: %s, want [4]", got)
+	}
+	if page := apitest.Must(t)(c.Get(t.Context(), apitest.Href(day, "page"))); props(page)["body"] != "Walked the dog" {
+		t.Errorf("the page after a send again: %q", props(page)["body"])
+	}
+
+	// a JSON client sends the field import_key of the catalog
+	capture := apitest.Action(t, day, "capture")
+	if capture.Field("import_key") == nil {
+		t.Fatal("the capture action has no import_key field")
+	}
+	fields := map[string]string{"text": "By JSON", "import_key": "json-key-1"}
+	apitest.Must(t)(c.Do(t.Context(), capture, fields))
+	answer := apitest.Must(t)(c.Do(t.Context(), capture, fields))
+	if answer.Title != "Already added" || apitest.Href(answer, "day") != toDay {
+		t.Errorf("sent again by JSON: %q links the day %q, want Already added with %s", answer.Title, apitest.Href(answer, "day"), toDay)
+	}
+	if page := apitest.Must(t)(c.Get(t.Context(), apitest.Href(day, "page"))); props(page)["body"] != "Walked the dog\n\nBy JSON" {
+		t.Errorf("the page after the JSON sends: %q", props(page)["body"])
+	}
+}
+
+// withoutReceiptOrNot is a Location with its feedback receipt cut: the receipt of an answer with a result is part of
+// it, and a test of the destination does not read it.
+func withoutReceiptOrNot(location string) string {
+	u, err := url.Parse(location)
+	if err != nil {
+		return location
+	}
+	q := u.Query()
+	q.Del("feedback")
+	u.RawQuery = q.Encode()
+	return u.String()
+}

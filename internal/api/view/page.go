@@ -6,6 +6,7 @@ package view
 
 import (
 	"bytes"
+	"crypto/rand"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -69,6 +70,7 @@ var templates = template.Must(template.New("").Funcs(template.FuncMap{
 	"weekday":       weekday,
 	"unitWords":     unitWords,
 	"form":          formOf,
+	"newKey":        newKey,
 	"group":         group,
 	"weeks":         weeks,
 	"calItem":       calItem,
@@ -102,6 +104,10 @@ var templates = template.Must(template.New("").Funcs(template.FuncMap{
 	"upTo":      upTo,
 	"beyond":    beyond,
 }).ParseFS(Files, "html/*.html"))
+
+// newKey is a new key for one draw of a capture form (D28): 26 characters of crypto/rand, so a form sent twice is one
+// capture and the next draw is another.
+func newKey() string { return rand.Text() }
 
 // dict is the arguments of a sub-template that needs more than one value: name/value pairs, each name a string.
 func dict(kv ...any) (map[string]any, error) {

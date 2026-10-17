@@ -40,6 +40,7 @@ func TestAResultIsSaidInSentences(t *testing.T) {
 			`Put in the category <a href="/pages?title=Papers">Papers</a>.`},
 		{"add-file filed before", map[string]any{"filed": map[string]any{"category": map[string]any{"title": "Papers"}, "created": false, "added": 0.0, "moved": 0.0}},
 			`It was in the category <a href="/pages?title=Papers">Papers</a> already.`},
+		{"a capture sent again", map[string]any{"already": true}, "Already added. Nothing changed."},
 		{"snapshot", map[string]any{"snapshot": "snaps/life-2026-10-12.db", "restore_check": "ok"},
 			`Took a snapshot: <code>snaps/life-2026-10-12.db</code>. | <dl class="facts"><dt>restore check</dt><dd>ok</dd></dl>`},
 		{"unknown", map[string]any{"foo_bar": 1.0}, `<dl class="facts"><dt>foo bar</dt><dd>1</dd></dl>`},

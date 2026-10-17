@@ -169,7 +169,7 @@ func TestMCPNumericSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	moodEnum := ""
+	moodEnum, captureKey := "", ""
 	for _, tool := range tools.Tools {
 		b, _ := json.Marshal(tool.InputSchema)
 		var schema map[string]any
@@ -178,6 +178,9 @@ func TestMCPNumericSchema(t *testing.T) {
 			p := property.(map[string]any)
 			if tool.Name == "capture" && name == "mood" {
 				moodEnum = fmt.Sprint(p["type"], " ", p["enum"])
+			}
+			if tool.Name == "capture" && name == "import_key" {
+				captureKey = fmt.Sprint(p["type"])
 			}
 			if options, ok := p["enum"].([]any); ok {
 				for _, v := range options {
@@ -197,6 +200,9 @@ func TestMCPNumericSchema(t *testing.T) {
 	}
 	if moodEnum != "number [1 2 3 4 5]" { // the browser draws it as five buttons (docs/plans/092-the-app-shell.md)
 		t.Errorf("capture's mood is %q, want the numbers 1 to 5", moodEnum)
+	}
+	if captureKey != "string" { // a capture sent again changes nothing (D28): an agent that retries gives it a key
+		t.Errorf("the capture tool's import_key is %q, want a string", captureKey)
 	}
 	callTool(t, ctx, session, "record", map[string]any{"metric": "weight", "day": "2026-06-01", "value": 71.5})
 }

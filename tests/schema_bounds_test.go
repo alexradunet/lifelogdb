@@ -36,9 +36,11 @@ func importKeyBounds(s *S) {
 	tables := []struct {
 		name, insert string
 		args         []any // before the key, which is always the last parameter
+		notNull      bool  // the key is a required column: NULL is not a key it takes
 	}{
-		{"entities", "INSERT INTO entities(entity_type,preferred_name_key,source,created_at,updated_at,import_key) VALUES('page','import key witness','ui'," + bounds0 + "," + bounds0 + ",?)", nil},
-		{"measurements", "INSERT INTO measurements(metric_id,day,value,source,created_at,import_key) VALUES(1,'2026-01-01',3,'ui'," + bounds0 + ",?)", nil},
+		{"entities", "INSERT INTO entities(entity_type,preferred_name_key,source,created_at,updated_at,import_key) VALUES('page','import key witness','ui'," + bounds0 + "," + bounds0 + ",?)", nil, false},
+		{"measurements", "INSERT INTO measurements(metric_id,day,value,source,created_at,import_key) VALUES(1,'2026-01-01',3,'ui'," + bounds0 + ",?)", nil, false},
+		{"capture_keys", "INSERT INTO capture_keys(source,page_id,recorded_at,import_key) VALUES('ui',1," + bounds0 + ",?)", nil, true}, // page 1 is Mood's
 	}
 	accepted := []struct {
 		desc string
@@ -61,6 +63,9 @@ func importKeyBounds(s *S) {
 	}
 	for _, t := range tables {
 		for _, k := range accepted {
+			if k.key == nil && t.notNull {
+				continue
+			}
 			r := c.rolledBack(t.insert, append(append([]any{}, t.args...), k.key)...)
 			s.K(t.name+"_import_key accepts "+k.desc, r == "OK", r)
 		}

@@ -3,11 +3,14 @@
 **Who sets `import_key`:** every writer that may send the same row twice — an importer (re-run, or a
 fresh export years later), a phone replaying its offline queue, an agent retrying after a timeout whose
 first attempt did commit. It is the key the *sender* gives the row: the source's own id when there is
-one ([imports](../contract/imports.md) step 3), else a UUID the client makes once and resends unchanged. A row typed on the hub itself has no key.
+one ([imports](../contract/imports.md) step 3), else a UUID the client makes once and resends unchanged. A row typed on
+the hub itself has a key only when its sender gives one: a form of the browser carries a new key each time it is drawn.
 A save of a page body sent again is a no-op: the writer compares the body (a stale version with the body the page
-holds already is a success). A `capture` sent again after a lost reply is not recognized: it appends its paragraph
-and records its mood a second time. The same holds for measurements. A key is 1 to 512 bytes without NUL
-(`entities_import_key`): an empty one is refused, and a longer source key is hashed by the sender.
+holds already is a success). A `capture` sent again with the same key is a no-op too: the writer keeps the key in
+`capture_keys` and answers "Already added" ([a capture sent again](capture.md#a-capture-sent-again-changes-nothing),
+[D28](../decisions/D28-capture-keys.md)). A `capture` with no key appends again. The same holds for measurements.
+A key is 1 to 512 bytes without NUL (`entities_import_key`, `capture_keys_import_key`): an empty one is refused, and a
+longer source key is hashed by the sender.
 
 ```sql
 BEGIN IMMEDIATE;

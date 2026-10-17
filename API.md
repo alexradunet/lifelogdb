@@ -236,7 +236,9 @@ names, or to today when `day` is absent or empty, and a value that is not a day 
 `page` (the day page, once it exists), `metrics`, and `cover` and `choose-cover` as on [the day page](#page-person-place-file). Embedded: `reading` links to each measurement. Actions: `capture`,
 `record`, `open-day`, `set-cover` and `save-body`
 of the day page once it exists (its body and `version` filled in). The write `capture`
-answers with this entity and a `result` of the sync shape; its field `mood` has the `options` 1 to 5.
+answers with this entity and a `result` of the sync shape; its field `mood` has the `options` 1 to 5. Its field
+`import_key` makes a send again a no-op ([D28](docs/decisions/D28-capture-keys.md)): the sender makes one key for one capture and sends it
+unchanged on a retry, and the answer is then the class [result](#result), not this entity.
 
 | property | type | meaning |
 |---|---|---|
@@ -588,7 +590,8 @@ page title, made when missing): one write makes the metric and files it. A refus
 ### result
 
 The class of an answer that is not a resource: the `record` of a reading whose `import_key` was seen before
-(`message` alone), and `add-file` with `dry_run=1` (class `result dry-run`, with the kept shape in `result`):
+(`message` alone), the `capture` whose `import_key` was seen before (title `Already added`, `message` alone, its
+`result` `{"already": true}`, and `self` and `day` at the day of that capture), and `add-file` with `dry_run=1` (class `result dry-run`, with the kept shape in `result`):
 
 | property | type | meaning |
 |---|---|---|

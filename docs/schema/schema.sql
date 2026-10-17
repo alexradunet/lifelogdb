@@ -23,7 +23,7 @@ INSERT INTO lifelog_meta(key, value) VALUES
   ('instants',  'every *_at column is an exact 24-character ASCII UTC ISO-8601 TEXT instant, years 0000..9999 and hours 00..23, with milliseconds, e.g. 2026-06-09T21:14:03.482Z, written by the app, never by a SQLite default (CURRENT_TIMESTAMP has no milliseconds and is not ISO-8601; a trigger writes strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')); fixed width, so it sorts as text; supplied clock timestamps may coincide or regress and do not encode commit order; CHECK strftime(''%Y-%m-%dT%H:%M:%fZ'', x) IS x; created_at, on every table that has it, is when the row was written to life.db, never back-dated'),
   ('days',      'every *_day column (and day) is the LOCAL exact 10-character ASCII calendar date YYYY-MM-DD, years 0000..9999, where the thing happened for recorded facts, written by the app: the local calendar day of the device that captured it when the client names the date, and the local day of the writer''s own clock and zone when the client sends the word today or no day; never recomputed from an instant; CHECK explicit ASCII shape and date(x) IS x (IS, not =: a CHECK passes on NULL, and date(''2026-9-3'') is NULL)'),
   ('deletes',   'life data is never deleted except links rows: an entity is a tombstone (entities.deleted_at); revival clears the tombstone, so lifecycle transitions are not retained history; a measurement is corrected by inserting a row; BEFORE DELETE triggers enforce it on entities and every domain row; ordinary active reads filter lifecycle tombstones; explicit historical and append-only audits retain them; the registries (link_kinds, lifelog_meta) are the owner''s administrative rows, deletable while nothing references them (each CREATE comment says so)'),
-  ('source',    'entities, links and measurements: source names the original inserter of the row, not the last editor or an audit trail (ui, cli, api, agent:<name>, import:<name>; schema for the rows this file seeds); written at insert, never changed; import_key is unique per source on entities, and per source and metric on measurements; a present import_key is 1 to 512 bytes without NUL'),
+  ('source',    'entities, links and measurements: source names the original inserter of the row, not the last editor or an audit trail (ui, cli, api, agent:<name>, import:<name>; schema for the rows this file seeds); written at insert, never changed; import_key is unique per source on entities and on capture_keys, and per source and metric on measurements; a present import_key is 1 to 512 bytes without NUL'),
   ('edit_revisions', 'entities.revision is a monotonic integer edit token independent of updated_at; creation is not an edit (nothing advances a row whose creation transaction is its only write: it keeps revision 1 and the updated_at its insert wrote, its owned preferred name and typed detail row included); a later change of the row''s own content advances it: names, body, day, type, lifecycle, typed detail and the links it leaves (a link advances only the page it leaves, never the page it points at; a wikilink is derived from the body and advances nothing); no-ops do not, rollback restores it, exhaustion refuses; clients compare the token inside BEGIN IMMEDIATE, never a timestamp; exact increment counts are not meaningful'),
   ('typed_links', 'both endpoints of every retained link must satisfy link_kinds; a type change refuses invalid incoming or outgoing edges atomically; semantic integrity checks the registry independently of structural integrity'),
   ('writers',   'one writing application; every connection sets foreign_keys=ON, recursive_triggers=ON, synchronous=FULL, trusted_schema=OFF and starts write transactions with BEGIN IMMEDIATE; every other tool opens the file read-only; imports use INSERT ... ON CONFLICT DO NOTHING, never OR IGNORE (skips CHECK/NOT NULL violations silently) or OR REPLACE (a delete)'),
@@ -342,6 +342,34 @@ CREATE VIEW measurement_values AS
     FROM measurements me
    WHERE me.value IS NOT NULL
      AND NOT EXISTS (SELECT 1 FROM measurements x WHERE x.supersedes_id = me.id);
+
+CREATE TABLE capture_keys (
+  -- The keys of the captures this file has added, so that a capture a client sends again changes nothing (D28). A
+  -- capture appends a paragraph to a day page and may record a Mood reading. It has no row of its own that could hold
+  -- a key, and two equal captures can be two true facts, so the content cannot tell a retry from a repeat. The sender
+  -- gives the key, once for one capture, as for any row it may send twice (lifelog_meta.source). Read the key
+  -- first: a row back means the capture was added before, so change nothing and answer with the day of page_id.
+  -- Otherwise add the capture, record its Mood reading with the same import_key, and insert this row, all in one
+  -- BEGIN IMMEDIATE transaction. The key is unique per source (UNIQUE below), and 1 to 512 bytes without NUL
+  -- (capture_keys_import_key): an empty key would make every later capture look added before.
+  -- Append-only, as measurements are: a key that changed or went away would let its capture be added again
+  -- (capture_keys_no_update, capture_keys_no_delete). page_id is the day page the capture was added to; recorded_at is
+  -- when the row was written (lifelog_meta.instants).
+  id          INTEGER PRIMARY KEY,
+  source      TEXT NOT NULL CONSTRAINT capture_keys_source CHECK (instr(source, char(0)) = 0 AND length(source) BETWEEN 1 AND 64 AND source NOT GLOB '*[^a-z0-9_:.-]*'),   -- the writer (lifelog_meta.source)
+  import_key  TEXT NOT NULL CONSTRAINT capture_keys_import_key CHECK (instr(import_key, char(0)) = 0 AND length(CAST(import_key AS BLOB)) BETWEEN 1 AND 512),   -- the sender's key, unique per source; 1 to 512 bytes, no NUL
+  page_id     INTEGER NOT NULL REFERENCES entities(id),   -- the day page the capture was added to
+  recorded_at TEXT NOT NULL CONSTRAINT capture_keys_recorded_at CHECK (length(recorded_at) = 24 AND recorded_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z' AND substr(recorded_at,12,2) BETWEEN '00' AND '23' AND strftime('%Y-%m-%dT%H:%M:%fZ', recorded_at) IS recorded_at),   -- the write time (lifelog_meta.instants)
+  UNIQUE (source, import_key)
+) STRICT;
+CREATE TRIGGER capture_keys_no_update BEFORE UPDATE ON capture_keys
+BEGIN
+  SELECT RAISE(ABORT, 'capture keys are append-only: a changed key would let its capture be added again (D28)');
+END;
+CREATE TRIGGER capture_keys_no_delete BEFORE DELETE ON capture_keys
+BEGIN
+  SELECT RAISE(ABORT, 'capture keys are never deleted: a removed key would let its capture be added again (D28)');
+END;
 
 CREATE TABLE link_kinds (
   -- the CLOSED registry of link kinds: a link's kind must be registered first (FK), and a kind's

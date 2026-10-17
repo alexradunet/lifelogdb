@@ -4,37 +4,67 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 
 	"lifelog/internal/text"
 )
 
-// Capture appends an entry to a day page, creating or reviving it, with an optional mood (cookbook/capture.md).
+// Capture appends an entry to a day page, creating or reviving it, with an optional mood (cookbook/capture.md). It
+// gives no key, so a second send of the same capture appends again.
 func (t *Tx) Capture(day, entry string, mood *float64) (id int64, r Sync, err error) {
+	id, r, _, err = t.CaptureWithKey("", day, entry, mood)
+	return id, r, err
+}
+
+// CaptureWithKey is Capture for a sender that may send the capture twice (D28). The key is the sender's, made once for
+// one capture. A key that the file holds for this source means the capture was added before: nothing is written, and
+// the answer is the day page of that capture and already = true. The key, and the Mood reading of the capture, are
+// written in the same transaction as the entry. A key of "" is no key.
+func (t *Tx) CaptureWithKey(key, day, entry string, mood *float64) (id int64, r Sync, already bool, err error) {
 	if entry == "" && mood == nil {
-		return 0, r, Invalid("nothing to capture: give text, a mood or both")
+		return 0, r, false, Invalid("nothing to capture: give text, a mood or both")
+	}
+	if key != "" {
+		err = t.tx.QueryRowContext(t.ctx, `SELECT page_id FROM capture_keys WHERE source = ? AND import_key = ?`, t.source, key).Scan(&id)
+		if err == nil {
+			return id, r, true, nil
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return 0, r, false, err
+		}
 	}
 	if id, err = t.dayPage(day); err != nil {
-		return 0, r, err
+		return 0, r, false, err
+	}
+	if key != "" { // the shape of the key is capture_keys_import_key's to refuse
+		if _, err = t.tx.ExecContext(t.ctx, `INSERT INTO capture_keys(source, import_key, page_id, recorded_at) VALUES (?, ?, ?, `+nowSQL+`)`,
+			t.source, key, id); err != nil {
+			return 0, r, false, err
+		}
 	}
 	if entry != "" {
 		if _, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET body = body || CASE WHEN body = '' THEN '' ELSE char(10, 10) END || ?
 		                        WHERE id = ?`, entry, id); err != nil {
-			return 0, r, err
+			return 0, r, false, err
 		}
 	}
 	var body string
 	if err := t.tx.QueryRowContext(t.ctx, `SELECT body FROM entities WHERE id = ?`, id).Scan(&body); err != nil {
-		return 0, r, err
+		return 0, r, false, err
 	}
 	if r, err = t.syncWikilinks(id, body); err != nil {
-		return 0, r, err
+		return 0, r, false, err
 	}
 	if mood != nil {
-		_, err = t.Record(Reading{Metric: "Mood", Day: day, Value: *mood, CapturedWith: id})
+		var reading int64
+		reading, err = t.Record(Reading{Metric: "Mood", Day: day, Value: *mood, CapturedWith: id, ImportKey: key})
+		if err == nil && reading == 0 { // the index of measurements holds the key: a Mood recorded under it, not by this capture
+			err = Conflict("the key %q was used for a reading of Mood before: give a capture a key of its own", key)
+		}
 	}
-	return id, r, err
+	return id, r, false, err
 }
 
 // dayPage is the id of a local day's page: found (revived when tombstoned), or created on its first write
@@ -53,12 +83,23 @@ func (t *Tx) dayPage(day string) (int64, error) {
 	return p.ID, err
 }
 
+// Capture is CaptureWithKey with no key.
 func (s *Store) Capture(ctx context.Context, source, day, entry string, mood *float64) (int64, Sync, error) {
-	m, err := alone(s, ctx, source, func(t *Tx) (made, error) {
-		id, r, err := t.Capture(day, entry, mood)
-		return made{id, r}, err
+	id, r, _, err := s.CaptureWithKey(ctx, source, "", day, entry, mood)
+	return id, r, err
+}
+
+// CaptureWithKey is Tx.CaptureWithKey as one write: already says that the key was held, and the capture changed nothing.
+func (s *Store) CaptureWithKey(ctx context.Context, source, key, day, entry string, mood *float64) (id int64, r Sync, already bool, err error) {
+	type added struct {
+		made
+		already bool
+	}
+	m, err := alone(s, ctx, source, func(t *Tx) (added, error) {
+		id, r, already, err := t.CaptureWithKey(key, day, entry, mood)
+		return added{made{id, r}, already}, err
 	})
-	return m.id, m.sync, err
+	return m.id, m.sync, m.already, err
 }
 
 // DayRow is one row of cookbook/day-view.md.
@@ -229,4 +270,17 @@ func firstLine(body string) string {
 func (s *Store) RecentDays(ctx context.Context, limit, offset int) ([]Edge, error) {
 	return s.edges(ctx, `SELECT 'day', p.id, p_name.title, 'page', '' FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
 	                      WHERE p.is_journal AND p.deleted_at IS NULL ORDER BY p.day DESC LIMIT ? OFFSET ?`, limit, offset)
+}
+
+// CapturedDay is the local day of the page that the source's capture with the key was added to: the day that stands
+// when CaptureWithKey answers that it was added before. A day page never changes its day, and a capture key never
+// changes, so the read after the write finds the same row.
+func (s *Store) CapturedDay(ctx context.Context, source, key string) (string, error) {
+	var day string
+	err := s.DB.R.QueryRowContext(ctx, `SELECT p.day FROM capture_keys k JOIN entities p ON p.id = k.page_id
+	        WHERE k.source = ? AND k.import_key = ?`, source, key).Scan(&day)
+	if err != nil {
+		return "", fmt.Errorf("the capture %s added before: %w", key, err)
+	}
+	return day, nil
 }

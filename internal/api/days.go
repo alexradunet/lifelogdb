@@ -252,9 +252,18 @@ func (h *server) capture(r *http.Request, act spec, src string) (*siren.Entity, 
 		return nil, err
 	}
 	day := h.dayNamed(r.PathValue("day")) // the share target of the manifest cannot know the day: it sends the word
-	_, sync, err := h.s.Capture(r.Context(), src, day, v.Get("text"), mood)
+	_, sync, already, err := h.s.CaptureWithKey(r.Context(), src, v.Get("import_key"), day, v.Get("text"), mood)
 	if err != nil {
 		return nil, err
+	}
+	if already { // a re-send: the first one stands (docs/decisions/D28-capture-keys.md), and the answer links its day
+		if day, err = h.s.CapturedDay(r.Context(), src, v.Get("import_key")); err != nil {
+			return nil, err
+		}
+		return &siren.Entity{Class: []string{"result"}, Title: "Already added",
+			Properties: map[string]any{"message": "a capture with this import_key was added before; nothing changed"},
+			Result:     map[string]any{"already": true},
+			Links:      []siren.Link{link("self", siren.DayHref(day), day), link("day", siren.DayHref(day), day), link("index", "/", "Home")}}, nil
 	}
 	return withResult(h.dayEntity(r.Context(), day))(sync)
 }

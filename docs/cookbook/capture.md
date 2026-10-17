@@ -29,3 +29,40 @@ SELECT e.id, '2026-09-29', 4, 'ui', :page_id, strftime('%Y-%m-%dT%H:%M:%fZ','now
  WHERE e.id = 1 AND e.deleted_at IS NULL;   -- a metric is a page (D27); a timed reading also sets taken_at and tz
 COMMIT;
 ```
+
+## A capture sent again changes nothing
+
+A client that loses the reply of a capture cannot know that the capture committed, so it sends the capture again.
+A sender that may do this gives the capture a key: one `import_key`, made once and sent unchanged on every retry
+([import a row once](import-a-row-once.md)). The writer keeps the key in `capture_keys` ([D28](../decisions/D28-capture-keys.md)).
+The key is per `source`, like the key of any other row. A capture with no key is not recorded there, so a second
+capture with no key appends again: two equal captures can be two true facts.
+
+```mermaid
+%% diagram: capture-key
+flowchart TD
+  A["capture with import_key K"] --> B{"is (source, K) in capture_keys?"}
+  B -- "no" --> C["add the paragraph and the Mood reading; insert the key"]
+  B -- "yes" --> D["change nothing; answer: Already added, with the day of page_id"]
+```
+
+```sql
+BEGIN IMMEDIATE;
+-- the key first: a row back = this capture was added before. Write nothing else, ROLLBACK, and answer with the day of that page_id
+SELECT page_id FROM capture_keys WHERE source = 'ui' AND import_key = :import_key;
+-- no row back: the capture above, in this same transaction (the day page, the entry, the link sync), then the key
+INSERT INTO capture_keys(source, import_key, page_id, recorded_at)
+VALUES ('ui', :import_key, :page_id, strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+-- the Mood reading of that capture carries the same key (the index measurements_import)
+INSERT INTO measurements(metric_id, day, value, source, import_key, captured_with_id, created_at)
+SELECT e.id, '2026-09-29', 4, 'ui', :import_key, :page_id, strftime('%Y-%m-%dT%H:%M:%fZ','now')
+  FROM entities e JOIN metrics m ON m.id=e.id
+ WHERE e.id = 1 AND e.deleted_at IS NULL;
+COMMIT;
+```
+
+The unique pair is the last guard: under `BEGIN IMMEDIATE` there is one writer, so the read first finds every key
+that an earlier transaction committed. A key is 1 to 512 bytes without NUL (`capture_keys_import_key`); a longer
+source key is hashed by the sender ([imports](../contract/imports.md) step 3). A capture is the one use of a key
+for the reading and for the capture together: do not give the same key to a `record` of Mood and to a capture of
+the same writer, since both meet the index of `measurements` (D28).

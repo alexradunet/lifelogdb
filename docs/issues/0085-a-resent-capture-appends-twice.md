@@ -1,7 +1,7 @@
 # 0085 — A capture that a client sends again appends its paragraph twice and records a second mood
 
 - **Date:** 2026-10-17
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the review of the writer against the rule books ([plan 126](../plans/126-the-rule-book-review.md),
   finding A2), on 2026-10-17. It is read from the code and the cookbook, not seen on a file in use. The case is
   ordinary: a client sends a capture, the writer commits, and the reply is lost.
@@ -46,6 +46,7 @@ On a fresh database built from [schema.sql](../schema/schema.sql), with syntheti
 
 ## Resolution
 
-Open. A request key for a capture is a new column or a new table. That is a schema question, and it waits for the
-process ([how a change happens](../process.md)): a proposal that names the options (a key on the capture that the
-writer keeps, or a key that the client gives to each paragraph and reading) and what each costs after the freeze.
+Resolved 2026-10-17 by [RFC 0021](../rfcs/0021-a-capture-key.md) and [D28](../decisions/D28-capture-keys.md): the
+table `capture_keys` holds the key of each capture that a sender gave a key. A capture sent again with the same key
+changes nothing, and the answer names the day ("Already added"). [Capture](../cookbook/capture.md) and
+[import a row once](../cookbook/import-a-row-once.md) say it.

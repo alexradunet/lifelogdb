@@ -40,11 +40,12 @@ DETACH s;
 3. **Identity and time.** `source` names the importer (`import:<name>`), `import_key` is the source's
    own id, `day` / `taken_at` / `tz` say when it happened, `created_at` is when you imported it — on
    every table that has it, `created_at` is the write time (`lifelog_meta.instants`). An imported page, person or place
-   carries its key on `entities` ([import a row once](../cookbook/import-a-row-once.md)). **The key must come out the same on every run**: the source's own id
+   carries its key on `entities` ([import a row once](../cookbook/import-a-row-once.md)); a capture keeps its key in
+   `capture_keys` ([capture](../cookbook/capture.md#a-capture-sent-again-changes-nothing)). **The key must come out the same on every run**: the source's own id
    (a Health Connect record's id; a note's path in its vault). A source without ids gets a key built from
    fields it never changes (a note's file name, the day of a reading) — and a change to one of them then
    looks like a new row. **A key is 1 to 512 bytes without NUL** (`entities_import_key` and the same CHECK on
-   `measurements`): the empty string is refused, not stored —
+   `measurements` and on `capture_keys`): the empty string is refused, not stored —
    it would enter the unique index, and every later row of the source would be skipped as imported before.
    A source key that can be longer is hashed by the importer, the same way on every run: the key becomes `sha256:`
    followed by the 64 lowercase hexadecimal digits of the SHA-256 of the key's exact bytes (71 bytes in all). A key
