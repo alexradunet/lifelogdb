@@ -74,8 +74,8 @@ func TestCatalogNamesAreUnique(t *testing.T) {
 
 // TestEveryCatalogActionHasItsRouteAndItsOwnerRule: each action of the catalog has a route with the action's method
 // and path, and that route refuses an agent exactly when the action is the owner's alone. The mux answers a missing
-// route with a plain-text 404 or 405; an action's handler answers with a Siren entity, or with a 303 to the resource
-// that the action names (open-day with no day goes to today). The mux redirects only with a 301.
+// route with a plain-text 404 or 405; an action's handler answers with a Siren entity, or with a 303 whose Location is
+// the resource that the action names (open-day with no day goes to today). The mux redirects only with a 301.
 func TestEveryCatalogActionHasItsRouteAndItsOwnerRule(t *testing.T) {
 	c, h, _ := apitest.Fresh(t, "cli")
 	root := apitest.Must(t)(c.Get(t.Context(), "/"))
@@ -108,9 +108,10 @@ func TestEveryCatalogActionHasItsRouteAndItsOwnerRule(t *testing.T) {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
 		ct := rec.Header().Get("Content-Type")
-		answered := ct == "application/vnd.siren+json" || rec.Code == http.StatusSeeOther
+		answered := ct == "application/vnd.siren+json" || rec.Code == http.StatusSeeOther && rec.Header().Get("Location") != ""
 		if rec.Code == http.StatusNotFound || rec.Code == http.StatusMethodNotAllowed || !answered {
-			t.Errorf("%s %s (%s): %d %s, not an answer of the action: %.200s", a.Method, path, a.Name, rec.Code, ct, rec.Body.String())
+			t.Errorf("%s %s (%s): %d %s %q, not an answer of the action: %.200s", a.Method, path, a.Name, rec.Code, ct,
+				rec.Header().Get("Location"), rec.Body.String())
 		}
 		if refused := rec.Code == http.StatusForbidden; refused != a.Owner {
 			t.Errorf("%s %s (%s, owner %v): an agent got %d", a.Method, path, a.Name, a.Owner, rec.Code)

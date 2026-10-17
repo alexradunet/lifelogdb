@@ -71,8 +71,7 @@ func run(ctx context.Context, c *client.Client, t tool, args map[string]string) 
 	if t.action != nil {
 		return c.Do(ctx, *t.action, args)
 	}
-	switch t.name {
-	case "get":
+	if t.name == "get" {
 		if !strings.HasPrefix(args["href"], "/") {
 			return nil, errors.New("href must be a path such as /pages/12")
 		}
