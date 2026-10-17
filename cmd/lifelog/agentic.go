@@ -10,15 +10,15 @@ import (
 
 // agenticInit is `lifelog agentic-init`: the folder of this program made ready for a coding agent opened in it.
 func agenticInit(e env) error {
-	exe, err := program(e)
-	if err != nil {
-		return err
-	}
 	dbPath, err := dbPath(e, "")
 	if err != nil {
 		return err
 	}
 	if dbPath, err = filepath.Abs(dbPath); err != nil {
+		return err
+	}
+	exe, err := program(e)
+	if err != nil {
 		return err
 	}
 	dir := filepath.Dir(exe)

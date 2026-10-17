@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -342,4 +343,126 @@ func words(line string) []string {
 		}
 	}
 	return out
+}
+
+// TestAgenticInitAtAFailureOrAKeptFile runs agentic-init in-process at each of its branches:
+//   - The path of the program is not known: the command fails and prints nothing, with and without --db.
+//   - --db is relative and the working directory is gone: the command fails, because the files name the database by
+//     an absolute path.
+//   - A file is where a folder of the agents' files must be: the command prints the files that it wrote before it,
+//     then fails and names the file that it cannot write. It writes no file after it.
+//   - A file has another text: without --force the command keeps the file and prints one line that says how to
+//     replace it, also for two kept files. With --force it replaces the file and does not print that line.
+func TestAgenticInitAtAFailureOrAKeptFile(t *testing.T) {
+	// inFolder is the env of a program in the folder dir, and the output of the env.
+	inFolder := func(t *testing.T, dir string) (env, *bytes.Buffer) {
+		e, stdout, _ := testEnv(t)
+		e.executable = func() (string, error) { return filepath.Join(dir, "lifelog"), nil }
+		return e, stdout
+	}
+	t.Run("the path of the program is not known", func(t *testing.T) {
+		for _, argv := range [][]string{{"agentic-init"}, {"agentic-init", "--db", filepath.Join(t.TempDir(), "life.db")}} {
+			e, stdout, _ := testEnv(t)
+			lost := errors.New("synthetic: no path")
+			e.executable = func() (string, error) { return "", lost }
+			if err := runArgs(t.Context(), e, argv); !errors.Is(err, lost) {
+				t.Errorf("%v: %v, want the error of the path of the program", argv, err)
+			}
+			if stdout.Len() != 0 {
+				t.Errorf("%v printed %q", argv, stdout)
+			}
+		}
+	})
+	t.Run("a relative --db and no working directory", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("Windows does not remove the working directory of a process")
+		}
+		dir := t.TempDir()
+		e, stdout := inFolder(t, dir)
+		gone := t.TempDir()
+		t.Chdir(gone)
+		if err := os.Remove(gone); err != nil {
+			t.Fatal(err)
+		}
+		// The error is the one of the working directory: it is not there.
+		if err := runArgs(t.Context(), e, []string{"agentic-init", "--db", "life.db"}); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("agentic-init with a relative --db and no working directory: %v, want the error of the working directory", err)
+		}
+		if files, err := os.ReadDir(dir); err != nil || len(files) != 0 || stdout.Len() != 0 {
+			t.Errorf("the command wrote %v (%v) and printed %q", files, err, stdout)
+		}
+	})
+	t.Run("a file where a folder must be", func(t *testing.T) {
+		dir := t.TempDir()
+		e, stdout := inFolder(t, dir)
+		if err := os.WriteFile(filepath.Join(dir, ".codex"), []byte("not a folder\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		err := runArgs(t.Context(), e, []string{"agentic-init"})
+		if err == nil || !strings.Contains(err.Error(), ".codex/config.toml") {
+			t.Fatalf("agentic-init: %v, want the error of .codex/config.toml", err)
+		}
+		// In path order, the skills come before .codex/config.toml: the command wrote each one, and printed it.
+		skills, err := filepath.Glob(filepath.Join(dir, ".*", "skills", "*", "SKILL.md"))
+		if err != nil || len(skills) == 0 {
+			t.Fatalf("no skill was written: %v", err)
+		}
+		var want []string
+		for _, s := range skills {
+			want = append(want, fmt.Sprintf("%-9s %s", "written", s))
+		}
+		got := strings.Split(strings.TrimSuffix(stdout.String(), "\n"), "\n")
+		slices.Sort(want)
+		slices.Sort(got)
+		if !slices.Equal(got, want) {
+			t.Errorf("the command printed\n%s\nwant the lines of the skills that it wrote:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+		}
+		if _, err := os.Stat(filepath.Join(dir, "AGENTS.md")); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("AGENTS.md comes after the failure, and it is there: %v", err)
+		}
+	})
+	t.Run("a kept file", func(t *testing.T) {
+		dir := t.TempDir()
+		e, stdout := inFolder(t, dir)
+		run := func(argv ...string) string {
+			t.Helper()
+			stdout.Reset()
+			if err := runArgs(t.Context(), e, argv); err != nil {
+				t.Fatalf("%v: %v\n%s", argv, err, stdout)
+			}
+			return stdout.String()
+		}
+		run("agentic-init")
+		agents, claude := filepath.Join(dir, "AGENTS.md"), filepath.Join(dir, "CLAUDE.md")
+		program, err := os.ReadFile(agents)
+		if err != nil {
+			t.Fatal(err)
+		}
+		own := []byte("The owner's own words.\n")
+		for _, name := range []string{agents, claude} {
+			if err := os.WriteFile(name, own, 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		const hint = "a kept file has another text; lifelog agentic-init --force replaces it\n"
+		out := run("agentic-init")
+		for _, name := range []string{agents, claude} {
+			if !strings.Contains(out, fmt.Sprintf("%-9s %s\n", "kept", name)) {
+				t.Errorf("agentic-init does not say that it kept %s:\n%s", name, out)
+			}
+		}
+		if n := strings.Count(out, hint); n != 1 {
+			t.Errorf("agentic-init prints the line of a kept file %d times, want 1:\n%s", n, out)
+		}
+		if b, err := os.ReadFile(agents); err != nil || !bytes.Equal(b, own) {
+			t.Errorf("agentic-init changed a kept file: %q %v", b, err)
+		}
+		out = run("agentic-init", "--force")
+		if !strings.Contains(out, fmt.Sprintf("%-9s %s\n", "replaced", agents)) || strings.Contains(out, hint) {
+			t.Errorf("agentic-init --force:\n%s", out)
+		}
+		if b, err := os.ReadFile(agents); err != nil || !bytes.Equal(b, program) {
+			t.Errorf("agentic-init --force did not write the text of the program: %q %v", b, err)
+		}
+	})
 }
