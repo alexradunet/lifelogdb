@@ -80,7 +80,10 @@ func run(ctx context.Context, c *client.Client, t tool, args map[string]string) 
 	return nil, fmt.Errorf("no tool %q", t.name)
 }
 
-// inputSchema is a JSON Schema for an action's fields: numbers as numbers, everything else a string.
+// inputSchema is a JSON Schema for an action's fields: numbers as numbers, everything else a string. A date takes a
+// local day or the word today (API.md, "The entity"), so its schema has a pattern for the two, not the format date,
+// which takes no word, and its description adds the hint to the title. The title stays without the hint: it is also
+// the label of the browser's date picker, in which a person cannot type the word.
 func inputSchema(fields []siren.Field) (map[string]any, error) {
 	props := map[string]any{}
 	req := []string{}
@@ -89,13 +92,14 @@ func inputSchema(fields []siren.Field) (map[string]any, error) {
 			continue
 		}
 		p := map[string]any{"type": "string"}
+		desc := f.Title
 		switch f.Type {
 		case "number":
 			p["type"] = "number"
 		case "date":
-			p["format"] = "date"
+			p["pattern"] = `^([0-9]{4}-[0-9]{2}-[0-9]{2}|today)$`
+			desc = strings.TrimSpace(desc + " (YYYY-MM-DD or today)")
 		}
-		desc := f.Title
 		if desc != "" {
 			p["description"] = desc
 		}
