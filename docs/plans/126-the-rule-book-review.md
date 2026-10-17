@@ -9,7 +9,8 @@
 - **Priority:** P1 for batch 1, P2 for batch 2, P3 for batch 3 and the docs. **Effort:** L in all.
   **Risk:** LOW for batches 1 and 3 (small diffs, behavior-preserving refactors); MEDIUM for batch 2 (new checks and
   two new owner-only actions).
-- **Status:** TODO. The owner approved the plan on 2026-10-17 ("retry", then the approval of the plan file).
+- **Status:** IN PROGRESS. Batches 1 and 2 and the docs actions (1–11, 18, 19) are done; batch 3 (12–17) is open.
+  The owner approved the plan on 2026-10-17 ("retry", then the approval of the plan file).
 - **Resolves:** the owner's request of 2026-10-17: "do a review of the entire codebase based on the new rules we
   applied. Let's find all the gaps and opportunities".
 
@@ -183,6 +184,22 @@ change follows the process; none is proposed here without an issue first.
 
 - 2026-10-17: the review ran as four read-only passes; the findings were verified against the code; the owner
   approved the plan. No code has changed yet.
+- 2026-10-17: actions 1–11, 18 and 19 are done, in small commits merged on `master`. The choices made where the
+  plan gave one:
+  - Action 9: `CheckSource` is gone. A write meets `entities_source`; an owner-only action checks the name and the
+    prefix at the boundary (`requireOwner`), because a read meets no CHECK and "Agent:x" must not pass as the owner.
+  - Action 18: the first option. The `days` row says the hub gives the day when the client sends `today`
+    ([issue 0086](../issues/0086-today-is-the-hubs-day.md)). The capture retry is [issue 0085](../issues/0085-a-resent-capture-appends-twice.md), open.
+  - Action 6: the script and the units in `deploy/` were written new, because the installed copies were not in
+    the work folder. They hold `OWNER` placeholders; the owner compares them with the installed copies first.
+  - Action 10: `schema_drift` is a finding and is not part of `ok`; `link_drift` is part of `ok`, like the
+    full-text check. A live file with link drift therefore fails the restore check of a snapshot until the owner
+    runs `resync-links`.
+  - B5: no change. [Connections](../contract/connections.md) asks nothing more of a reader under WAL.
+  - Open: a process killed between the copy and the restore check leaves an unchecked file under a good name; a
+    fix copies under a temporary name first and changes D25, so it waits for the owner.
+  - Not done here: shipping. The work ran in a cloud container with no service. The owner builds to the install
+    path, restarts `lifelog.service` and reads the new start line, which names the version and `user_version`.
 
 Skills: a-philosophy-of-software-design, code-complete, refactoring, release-it,
 designing-data-intensive-applications. Conflict: Code Complete says "validate input at trust boundaries"; AGENTS.md
