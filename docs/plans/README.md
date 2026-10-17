@@ -8,7 +8,7 @@ Earlier closed plans live in git history (`git log -- docs/plans`). The next pla
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| [129](129-the-ux-pass.md) | The UX pass: plain words, quiet pages, the sentence of a mention, one Today, a capture that is safe to send again | P2 | L | owner word 2026-10-17; `14083e8` | TODO |
+| [129](129-the-ux-pass.md) | The UX pass: plain words, quiet pages, the sentence of a mention, one Today, a capture that is safe to send again | P2 | L | owner word 2026-10-17; `14083e8` | IN REVIEW (owner) |
 | [128](128-smaller-pictures.md) | Smaller pictures: 1280 px at quality 80, inside the contract's 1600 px and 1 MB | P3 | S | owner word 2026-10-17; `29c1628` | DONE |
 | [127](127-a-cover-for-every-page.md) | A cover for every page: the first picture of a page, beside it, in the lists and the calendar, set from a picker | P2 | M | owner word 2026-10-17; `2f568fe` | DONE |
 | [126](126-the-rule-book-review.md) | The rule-book review: the gaps against the five books, and the actions that close them | P1/P2/P3 | L | owner request 2026-10-17; `01221e5` | DONE |

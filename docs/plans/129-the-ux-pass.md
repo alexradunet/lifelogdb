@@ -8,7 +8,8 @@
 - **Date / baseline:** 2026-10-17, `14083e8` (master).
 - **Priority:** P2. **Effort:** L. **Risk:** MEDIUM: parts 1 to 10 change the browser's views and three API
   properties; part 11 changes the contract (a new table) and the owner's live file.
-- **Status:** TODO. To be done in a separate session, one part at a time.
+- **Status:** IN REVIEW (owner). The code of all eleven parts is done (2026-10-17). The deploy, the owner's look and
+  the one-off program for the live file wait for the owner (see Result).
 - **Resolves:** issue [0085](../issues/0085-a-resent-capture-appends-twice.md) (part 11, with an RFC and a decision).
   The rest is the owner's word after a screenshot review (2026-10-17): "I want to do them all".
 
@@ -214,4 +215,36 @@ flowchart TD
 
 ## Result
 
-To be written part by part, as each part ships.
+All eleven parts were done in one session on 2026-10-17, on the owner's word ("implement plan 129"), in a cloud
+container. Each part was written by an agent in its own worktree, then reviewed and merged. The parts did not ship one
+at a time: the container has no service and no live file, so no part was deployed.
+
+| part | what was done, where it departs from the plan |
+|---|---|
+| 1 | `text.Plain` (a goldmark walk) and `text.CutInlineMarks` (for a snippet). `firstLine` passes over a line with no words (`---`, a lone image), shows the alias of `[[T\|alias]]`, and escapes a number at the start of a line, so "1986. Born" keeps its number. |
+| 2 | A mean has the most decimals of the readings of the two weeks, at least 1, at most 6 (`maxDecimals`). The data of `TestTheMeanOfAWeekDividesTheSumOnce` changed, so that the test still holds a boundary case at one decimal. |
+| 3 | The cell shows the mood only. `ReadingsByDay` leaves out the readings of a tombstoned metric. |
+| 4 | The labels Entry and Words, "How to search", no version row, no calendar caption. A form of one field does not say "required" (`fieldView.Sole`); the browser still refuses an empty field. |
+| 5 | `.actions.quiet` shares the declarations of `button.quiet`. The templates had no `quiet` class before, so they got it. |
+| 6 | `moodWord` in the view. The catalog's field title is "Mood"; the description keeps "mood 1-5" for an agent. |
+| 7 | `order` (`best`, `newest`) on `search`, refused with 422 when it is another word. The words group leaves out the pages of the titles group in SQL (`SearchOptions.Omit`), so the paging counts the pages that are left. `newest` takes the day of `created_at` in the zone of the store, in Go. |
+| 8 | `text.Mention` takes the first block (paragraph, heading, list item), not the first run, so a link in emphasis keeps its sentence. `Edge.Context`; the bodies come in one query; the day pages come first, newest first. `links[].context` is in `API.md` too, always absent. |
+| 9 | `recentDay.picture`; `dayentry` takes a `cover` flag, so the last entries keep their layout. |
+| 10 | `GET /` in a browser answers 303 to today, and carries a toast's receipt with it (`redirectKeepingFeedback`). Today's margin ends with Last entries. The rail's Snapshot opens `/actions?new=snapshot`; the generic view opens a form by `?new=`. The manifest's "Add to today" opens `/days/today#capture`. |
+| 11 | RFC 0021, D28, the table `capture_keys` (an `INTEGER PRIMARY KEY` and `UNIQUE (source, import_key)`, as D3 asks of a fact table; append-only by two triggers), three CHECKs and their mutants. `Tx.CaptureWithKey` reads the key first under `BEGIN IMMEDIATE`, so a resend that names another day makes no page. A key used before for a Mood `record` is a 409. Issue 0085 is resolved. |
+
+Checks, on Linux, on the merged tree: `gofmt -l` (no output); `go generate ./... && go vet ./... && go test ./...` and
+`go test -count=1 -shuffle=on ./...`: all pass except `TestHTTPAuthority/[::1]:0`, which fails because the container
+has no IPv6, before and after the change. The mutants: 273 of 273 killed. Screenshots on a review server with
+synthetic data (desktop and phone, light and dark, nine views): no console error.
+
+Not run: `LIFELOG_MERMAID=1 go test ./tests -run TestMermaidRender` (no `mmdc`), `staticcheck` and `govulncheck` (not
+installed), the race check, Windows.
+
+Open, for the owner:
+
+- **The live file.** It has no `capture_keys`. On that file the new binary fails every capture that has a key, and
+  the browser's form always sends one; the integrity check also reports the drift. So before the deploy, the one-off
+  program of part 11 (on the pattern of `meta123`, outside the repo) adds the table and its two triggers to
+  `life.db`. It is not written yet.
+- **The deploy.** Build to the install path, restart the service, read its log line, and look at the live app.
