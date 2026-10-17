@@ -23,6 +23,57 @@ func drawForm(t *testing.T, a Action, opts ...string) (string, *formView) {
 	return b.String(), f
 }
 
+// The actions that the tests of the forms draw, written out in the shapes of actions of the catalog: an entity gives
+// the view its actions, and the view does not know the catalog. The tests of the catalog itself are in package api.
+
+// filePages is the action file-pages, with the value of its field move; categories are the options of its field
+// category.
+func filePages(move any, categories ...string) Action {
+	return Action{Name: "file-pages", Title: "Put in a category", Method: "POST", Href: "/pages/file", Fields: []Field{
+		{Name: "ids", Type: "text", Title: "Page ids, separated by spaces or commas", Required: true},
+		{Name: "category", Type: "text", Title: "Category (title)", Required: true, Options: categories, Pages: true},
+		{Name: "move", Type: "number", Title: "Move (remove the other categories)", Value: move, Options: []string{"0", "1"}},
+	}}
+}
+
+// registerMetric is the action register-metric; categories are the options of its field category.
+func registerMetric(categories ...string) Action {
+	return Action{Name: "register-metric", Owner: true, Title: "New metric", Method: "POST", Href: "/metrics", Fields: []Field{
+		{Name: "name", Type: "text", Title: "Name", Required: true},
+		{Name: "unit", Type: "text", Title: "Unit"},
+		{Name: "note", Type: "text", Title: "Note"},
+		{Name: "category", Type: "text", Title: "Category (title)", Options: categories, Pages: true},
+	}}
+}
+
+// tombstonePages is the action tombstone-pages.
+func tombstonePages() Action {
+	return Action{Name: "tombstone-pages", Danger: true, Title: "Delete pages", Method: "POST", Href: "/pages/tombstone", Fields: []Field{
+		{Name: "ids", Type: "text", Title: "Page ids, separated by spaces or commas", Required: true},
+	}}
+}
+
+// record is the action record, with the values of its fields day and tz.
+func record(day, tz any) Action {
+	return Action{Name: "record", Title: "Add a reading", Method: "POST", Href: "/measurements", Fields: []Field{
+		{Name: "metric", Type: "text", Title: "Metric", Required: true},
+		{Name: "day", Type: "date", Title: "Day", Value: day, Required: true},
+		{Name: "value", Type: "number", Title: "Value", Required: true},
+		{Name: "taken_at", Type: "text", Title: "Taken at (UTC, 2026-06-09T21:14:03.482Z)"},
+		{Name: "tz", Type: "text", Title: "Zone (IANA)", Value: tz},
+		{Name: "import_key", Type: "text", Title: "Key"},
+	}}
+}
+
+// addFile is the action add-file, with the fields that the tests read: its title and its two files.
+func addFile() Action {
+	return Action{Name: "add-file", Title: "New file", Method: "POST", Href: "/files", Fields: []Field{
+		{Name: "title", Type: "text", Title: "Title", Required: true},
+		{Name: "original", Type: "file", Title: "The file (read, never stored)"},
+		{Name: "preview", Type: "file", Title: "Picture, when the original is not a JPEG, PNG or GIF"},
+	}}
+}
+
 func TestBrowserFieldPresence(t *testing.T) {
 	a := Action{Name: "fields", Method: "POST", Href: "/fields", Fields: []Field{
 		{Name: "hidden", Type: "hidden", Value: 0},
@@ -35,24 +86,6 @@ func TestBrowserFieldPresence(t *testing.T) {
 	for _, want := range []string{`name="hidden" value="0"`, `name="optional" value=""`, `name="default" value="5"`, `>0</textarea>`, `<option selected>0</option>`} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %s", want)
-		}
-	}
-}
-
-// TestTheCatalogMarksTheFieldOfAPageTitle: the catalog says which field takes a page's title (Pages), so a client
-// can offer the names of the pages: one field of each action that names a page.
-func TestTheCatalogMarksTheFieldOfAPageTitle(t *testing.T) {
-	for _, tc := range []struct{ action, field string }{
-		{"create-page", "category"}, {"link", "to"}, {"unlink", "to"}, {"find", "title"}, {"file-pages", "category"},
-	} {
-		var marked []string
-		for _, fd := range action(tc.action, nil, nil).Fields {
-			if fd.Pages {
-				marked = append(marked, fd.Name)
-			}
-		}
-		if len(marked) != 1 || marked[0] != tc.field {
-			t.Errorf("%s marks %v as a page's title, want [%s]", tc.action, marked, tc.field)
 		}
 	}
 }
@@ -77,46 +110,6 @@ func TestPreviewKeysOnATextArea(t *testing.T) {
 		}
 		if got := f.Preview(); got != c.want {
 			t.Errorf("%s: Preview %v, want %v", c.name, got, c.want)
-		}
-	}
-}
-
-// TestEveryTextAreaOfTheCatalogOffersPreview: a form of the catalog offers Preview when it has a text area, and only
-// then. POST /render reads the field body or text, so each text area of the catalog has one of these names.
-func TestEveryTextAreaOfTheCatalogOffersPreview(t *testing.T) {
-	areas := 0
-	for _, s := range catalog {
-		f, err := formOf(templated(s))
-		if err != nil {
-			t.Fatal(err)
-		}
-		area := false
-		for _, fd := range s.Fields {
-			if fd.Type == "textarea" {
-				area = true
-				areas++
-				if fd.Name != "body" && fd.Name != "text" {
-					t.Errorf("%s: the text area %s is not body or text, which POST /render reads", s.Name, fd.Name)
-				}
-			}
-		}
-		if f.Preview() != area {
-			t.Errorf("%s: Preview %v, want %v", s.Name, f.Preview(), area)
-		}
-	}
-	if areas == 0 {
-		t.Error("the catalog has no text area: the test checks nothing")
-	}
-}
-
-// TestNoActionHasAFieldNamedFormOrBack: a browser form sends its id in form and the page to return to in back, and the
-// handlers ignore both, so no action of the catalog has a field of either name.
-func TestNoActionHasAFieldNamedFormOrBack(t *testing.T) {
-	for _, s := range catalog {
-		for _, fd := range s.Fields {
-			if fd.Name == "form" || fd.Name == "back" {
-				t.Errorf("%s has a field named %s, which the browser sends for itself", s.Name, fd.Name)
-			}
 		}
 	}
 }
@@ -162,7 +155,7 @@ func TestAFlagIsOneCheckbox(t *testing.T) {
 		{"0", `<label><input type="checkbox" name="move" value="1"><span>`},
 		{"1", `<label><input type="checkbox" name="move" value="1" checked><span>`},
 	} {
-		got := markup(drawForm(t, action("file-pages", nil, map[string]any{"move": tc.move})))
+		got := markup(drawForm(t, filePages(tc.move)))
 		if want := tc.want + "Move (remove the other categories)</span></label>"; !strings.Contains(got, want) || strings.Contains(got, `type="radio"`) {
 			t.Errorf("move %q: the form lacks %s, or has radio buttons:\n%s", tc.move, want, got)
 		}
@@ -175,8 +168,8 @@ func TestAFlagIsOneCheckbox(t *testing.T) {
 // page's title is still a select. Titles that look like a flag (0 and 1) in a field that is not required are still
 // titles: an input with a datalist, not a checkbox.
 func TestAFieldOfPageTitlesOffersThemInADatalist(t *testing.T) {
-	file := withOptions(action("file-pages", nil, nil), "category", []string{"Art", "Gym"})
-	flagLike := withOptions(action("register-metric", nil, nil), "category", []string{"0", "1"})
+	file := filePages(nil, "Art", "Gym")
+	flagLike := registerMetric("0", "1")
 	for _, tc := range []struct {
 		name string
 		got  string
@@ -186,9 +179,10 @@ func TestAFieldOfPageTitlesOffersThemInADatalist(t *testing.T) {
 			`<input type="text" name="category" value="" required list="file-pages-category"><datalist id="file-pages-category"><option value="Art"><option value="Gym"></datalist></label>`},
 		{"named by its form", markup(drawForm(t, file, "id", "pick")),
 			`<input type="text" name="category" value="" required list="pick-category"><datalist id="pick-category"><option value="Art"><option value="Gym"></datalist></label>`},
-		{"with no options", markup(drawForm(t, action("file-pages", nil, nil))),
+		{"with no options", markup(drawForm(t, filePages(nil))),
 			`<input type="text" name="category" value="" required></label>`},
-		{"not a page's title", markup(drawForm(t, action("promote", map[string]string{"id": "7"}, nil))),
+		{"not a page's title", markup(drawForm(t, Action{Name: "promote", Title: "Promote", Method: "POST", Href: "/pages/7/promote", Fields: []Field{
+			{Name: "to", Type: "text", Title: "Into", Required: true, Options: []string{"person", "place"}}}})),
 			`<select name="to"><option>person</option><option>place</option></select>`},
 		{"the titles 0 and 1", markup(drawForm(t, flagLike)),
 			`<input type="text" name="category" value="" list="register-metric-category"><datalist id="register-metric-category"><option value="0"><option value="1"></datalist></label>`},
@@ -197,7 +191,7 @@ func TestAFieldOfPageTitlesOffersThemInADatalist(t *testing.T) {
 			t.Errorf("%s: the form lacks %s:\n%s", tc.name, tc.want, tc.got)
 		}
 	}
-	if got := markup(drawForm(t, action("file-pages", nil, nil))); strings.Contains(got, "datalist") || strings.Contains(got, " list=") {
+	if got := markup(drawForm(t, filePages(nil))); strings.Contains(got, "datalist") || strings.Contains(got, " list=") {
 		t.Errorf("a field with no options has a datalist: %s", got)
 	}
 }
@@ -225,8 +219,8 @@ func TestOrSendsTheFormToASecondAction(t *testing.T) {
 		}
 		return f
 	}
-	file := &shownAction{Action: withOptions(action("file-pages", nil, nil), "category", []string{"Art"})}
-	del := &shownAction{Action: action("tombstone-pages", nil, nil)}
+	file := &shownAction{Action: filePages(nil, "Art")}
+	del := &shownAction{Action: tombstonePages()}
 
 	got := draw(form(file, "id", "pick", "outside", "ids", "back", "/browse").Or(form(del)))
 	for _, want := range []string{`<form id="pick" method="POST" action="/pages/file">`, `<input type="hidden" name="back" value="/browse">`,
@@ -249,16 +243,16 @@ func TestOrSendsTheFormToASecondAction(t *testing.T) {
 }
 
 // TestALabelGivesAFieldATitleOfItsForm: the option label ("field=words") gives a field a title in this form only, as
-// the score form of New metric calls its unit Range. The action keeps the catalog's title, so another form of it, and
-// the JSON, still say Unit.
+// the score form of New metric calls its unit Range. The action keeps its own title, so another form of it, and the
+// JSON, still say Unit.
 func TestALabelGivesAFieldATitleOfItsForm(t *testing.T) {
-	a := action("register-metric", nil, nil)
+	a := registerMetric()
 	if got := markup(drawForm(t, a, "label", "unit=Range")); !strings.Contains(got, "<label><span>Range</span>\n"+`<input type="text" name="unit" value="">`) ||
 		strings.Contains(got, "Unit") {
 		t.Errorf("the label option does not give the unit the title Range:\n%s", got)
 	}
 	if got := markup(drawForm(t, a)); !strings.Contains(got, "<label><span>Unit</span>") || a.field("unit").Title != "Unit" {
-		t.Errorf("a form with no label option, or the action, lost the catalog's title Unit:\n%s", got)
+		t.Errorf("a form with no label option, or the action, lost the action's title Unit:\n%s", got)
 	}
 }
 
@@ -266,7 +260,7 @@ func TestALabelGivesAFieldATitleOfItsForm(t *testing.T) {
 // names the field, or none ("autofocus" ""): the New metric fold draws one action in three forms, and only the first
 // takes the focus.
 func TestAnEmptyAutofocusKeepsTheFocusOut(t *testing.T) {
-	asked := &shownAction{Action: action("register-metric", nil, nil), asked: true}
+	asked := &shownAction{Action: registerMetric(), asked: true}
 	for _, tc := range []struct {
 		opts []string
 		want string
@@ -292,7 +286,7 @@ func TestAnEmptyAutofocusKeepsTheFocusOut(t *testing.T) {
 // file is never drawn back, and no form of a page that shows a refusal takes the focus.
 func TestARefusalFillsTheFormThatWasSent(t *testing.T) {
 	refusal := func(sent url.Values) *shownAction {
-		return &shownAction{Action: action("register-metric", nil, nil), refused: true, sent: sent, noFocus: true}
+		return &shownAction{Action: registerMetric(), refused: true, sent: sent, noFocus: true}
 	}
 	byScore := refusal(url.Values{"form": {"new-score"}, "name": {"Mood"}, "unit": {"1-10"}})
 	for _, tc := range []struct {
@@ -326,7 +320,7 @@ func TestARefusalFillsTheFormThatWasSent(t *testing.T) {
 	if !habit.Refused || unit < 0 || habit.Hidden[unit].Value != "" {
 		t.Errorf("a refusal that sent no id and the unit 1-10: the habit's form is refused %v, its hidden fields %v; want refused, and the unit hidden and empty", habit.Refused, habit.Hidden)
 	}
-	file := &shownAction{Action: action("add-file", nil, nil), refused: true, sent: url.Values{"title": {"Scan"}, "original": {"scan.jpg"}}}
+	file := &shownAction{Action: addFile(), refused: true, sent: url.Values{"title": {"Scan"}, "original": {"scan.jpg"}}}
 	f, err := formOf(file)
 	if err != nil {
 		t.Fatal(err)
@@ -338,43 +332,28 @@ func TestARefusalFillsTheFormThatWasSent(t *testing.T) {
 	}
 }
 
-// TestDangerIsACatalogAction keeps the destructive-action set honest: it names nothing the catalog does not
-// have, and it is what a browser draws from — never an action's name read by a template.
-func TestDangerIsACatalogAction(t *testing.T) {
-	dangerous := map[string]bool{}
-	for _, s := range catalog {
-		if s.Danger {
-			dangerous[s.Name] = true
-		}
-	}
-	if len(dangerous) == 0 {
-		t.Error("no action is destructive: the set lost its contents")
-	}
-	for _, name := range []string{"tombstone", "retract"} {
-		if !dangerous[name] {
-			t.Errorf("%s hides or retracts what is there: it is not marked dangerous", name)
-		}
-	}
-	for _, name := range []string{"revive", "capture", "save-body"} {
-		if dangerous[name] {
-			t.Errorf("%s writes or restores: it must not be marked dangerous", name)
-		}
-	}
-}
-
 // TestDangerAndRowsReachTheForm says the button of a destructive action is drawn as one, and that a textarea is
-// as tall as the catalog says — both from the catalog, so no template knows an action or a field by name.
+// as tall as its field says: both from the action (Danger, Rows), so no template knows an action or a field by name.
+// The catalog marks them (TestDangerIsACatalogAction, in package api).
 func TestDangerAndRowsReachTheForm(t *testing.T) {
-	if got, _ := drawForm(t, action("tombstone", map[string]string{"id": "7"}, nil)); !strings.Contains(got, `<button class="danger">`) {
+	tombstone := Action{Name: "tombstone", Danger: true, Title: "Delete", Method: "POST", Href: "/pages/7/tombstone"}
+	revive := Action{Name: "revive", Title: "Restore", Method: "POST", Href: "/pages/7/revive"}
+	save := Action{Name: "save-body", Title: "Save", Method: "POST", Href: "/pages/7/body", Fields: []Field{
+		{Name: "body", Type: "textarea", Title: "Body", Value: "words", Required: true, Rows: 18},
+		{Name: "version", Type: "hidden", Title: "Version", Value: "3", Required: true}}}
+	capture := Action{Name: "capture", Title: "Add to the day", Method: "POST", Href: "/days/2026-01-01/capture", Fields: []Field{
+		{Name: "text", Type: "textarea", Title: "Entry (CommonMark)", Rows: 4},
+		{Name: "mood", Type: "number", Title: "Mood 1-5", Options: []string{"1", "2", "3", "4", "5"}}}}
+	if got, _ := drawForm(t, tombstone); !strings.Contains(got, `<button class="danger">`) {
 		t.Errorf("a tombstone draws no danger button: %s", got)
 	}
-	if got, _ := drawForm(t, action("revive", map[string]string{"id": "7"}, nil)); strings.Contains(got, "danger") {
+	if got, _ := drawForm(t, revive); strings.Contains(got, "danger") {
 		t.Errorf("a revive draws a danger button: %s", got)
 	}
-	if got, _ := drawForm(t, action("save-body", map[string]string{"id": "7"}, map[string]any{"body": "words", "version": "3"})); !strings.Contains(got, `name="body" rows="18"`) {
-		t.Errorf("a body is not drawn as tall as the catalog says: %s", got)
+	if got, _ := drawForm(t, save); !strings.Contains(got, `name="body" rows="18"`) {
+		t.Errorf("a body is not drawn as tall as its field says: %s", got)
 	}
-	if got, _ := drawForm(t, action("capture", map[string]string{"day": "2026-01-01"}, nil), "autofocus", "text"); strings.Count(got, "autofocus") != 1 ||
+	if got, _ := drawForm(t, capture, "autofocus", "text"); strings.Count(got, "autofocus") != 1 ||
 		!strings.Contains(got, `name="text" rows="4" autofocus`) {
 		t.Errorf("the browser does not start in the field the view named: %s", got)
 	}
@@ -386,7 +365,7 @@ func TestDangerAndRowsReachTheForm(t *testing.T) {
 // (docs/plans/095-the-leaf-and-its-margin.md).
 func TestOptionalFieldsFoldUnderMoreFields(t *testing.T) {
 	more := regexp.MustCompile(`(?s)<details class="more-fields"( open)?><summary>([^<]*)</summary>(.*?)</details>`)
-	got, f := drawForm(t, action("record", nil, map[string]any{"day": "2026-10-12"}), "more", "metric,taken_at,tz,import_key")
+	got, f := drawForm(t, record("2026-10-12", nil), "more", "metric,taken_at,tz,import_key")
 	m := more.FindStringSubmatch(got)
 	if m == nil {
 		t.Fatalf("no More fields in the form: %s", got)
@@ -407,16 +386,16 @@ func TestOptionalFieldsFoldUnderMoreFields(t *testing.T) {
 <button class="primary">`) || strings.Index(got, "</details>") > strings.Index(got, "<button") {
 		t.Errorf("the shown fields, or the button after the folded ones, are not drawn: %s", got)
 	}
-	got, _ = drawForm(t, action("record", nil, map[string]any{"tz": "Europe/Bucharest"}), "more", "taken_at,tz")
+	got, _ = drawForm(t, record(nil, "Europe/Bucharest"), "more", "taken_at,tz")
 	if m := more.FindStringSubmatch(got); m == nil || m[1] != " open" || m[2] != "2 more fields" ||
 		!strings.Contains(m[3], `name="tz" value="Europe/Bucharest"`) {
 		t.Errorf("a folded field with a value is out of sight: %s", got)
 	}
-	if got, _ = drawForm(t, action("add-file", nil, nil), "more", "preview"); !strings.Contains(got, `enctype="multipart/form-data"`) ||
+	if got, _ = drawForm(t, addFile(), "more", "preview"); !strings.Contains(got, `enctype="multipart/form-data"`) ||
 		!more.MatchString(got) || !strings.Contains(more.FindStringSubmatch(got)[3], `type="file" name="preview"`) {
 		t.Errorf("a form with a folded file is not multipart: %s", got)
 	}
-	if got, _ = drawForm(t, action("record", nil, nil)); strings.Contains(got, "more-fields") {
+	if got, _ = drawForm(t, record(nil, nil)); strings.Contains(got, "more-fields") {
 		t.Errorf("a form whose view folds nothing has More fields: %s", got)
 	}
 }

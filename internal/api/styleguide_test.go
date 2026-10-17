@@ -9,10 +9,12 @@ import (
 	"time"
 )
 
-// The classes of a page and of a sheet: a class attribute's words, and a class selector's name.
+// The classes of a page and of a sheet: a class attribute's words, and a class selector's name. sheetComments cuts the
+// comments of a sheet, so the test reads its rules and not its prose.
 var (
-	classAttr   = regexp.MustCompile(`class="([^"]*)"`)
-	cssSelector = regexp.MustCompile(`\.([a-zA-Z_][\w-]*)`)
+	classAttr     = regexp.MustCompile(`class="([^"]*)"`)
+	cssSelector   = regexp.MustCompile(`\.([a-zA-Z_][\w-]*)`)
+	sheetComments = regexp.MustCompile(`(?s)/\*.*?\*/`)
 )
 
 // calledTemplates are the names of the templates that the tree n calls, at any depth.
@@ -39,12 +41,9 @@ func calledTemplates(n parse.Node, called map[string]bool) {
 	}
 }
 
-// TestTheStylePageRunsTheRealTemplates: the style page calls the template of each component that has one, and each
-// draws the synthetic entity of the page (styleEntity): the mark of each one, checked by hand, is in the page, and so
-// is each component that a page draws inline. The page draws no class that base.css or app.css does not define, but
-// num: the readings template marks the column of the values with it, and no sheet styles it. The page is drawn with
-// a shell whose today is Friday 16 October 2026, in UTC.
-func TestTheStylePageRunsTheRealTemplates(t *testing.T) {
+// TestTheStylePageCallsEveryComponent: the style page calls the template of each component that has one. What each
+// draws is TestTheStylePageRunsTheRealTemplates's, in package api, which has the synthetic entity of the page.
+func TestTheStylePageCallsEveryComponent(t *testing.T) {
 	called := map[string]bool{}
 	calledTemplates(templates.Lookup("styleguide").Tree.Root, called)
 	for _, name := range []string{"leaf", "mood", "step", "form", "boxed", "body-editor", "onthisday", "reading-link",
@@ -53,16 +52,20 @@ func TestTheStylePageRunsTheRealTemplates(t *testing.T) {
 			t.Errorf("the style page does not call the template %s", name)
 		}
 	}
+}
 
+// TestTheStylePageRunsTheRealTemplates: the components of the style page draw the synthetic entity of the page
+// (styleEntity) with the real templates: the mark of each one, checked by hand, is in the page, and so is each
+// component that a page draws inline. The page draws no class that base.css or app.css does not define, but num: the
+// readings template marks the column of the values with it, and no sheet styles it. The page is drawn with a shell
+// whose today is Friday 16 October 2026, in UTC. That the page calls each component is
+// TestTheStylePageCallsEveryComponent's, in the tests of the view.
+func TestTheStylePageRunsTheRealTemplates(t *testing.T) {
 	u, err := url.Parse("/styleguide")
 	if err != nil {
 		t.Fatal(err)
 	}
-	v, err := pageView(styleEntity(), facts{url: u, shell: &shellView{Today: "2026-10-16", Zone: time.UTC}}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, err := htmlOf(v)
+	b, err := draw(styleEntity(), facts{url: u, shell: &shellView{Today: "2026-10-16", Zone: time.UTC}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +126,7 @@ func TestTheStylePageRunsTheRealTemplates(t *testing.T) {
 	}
 
 	defined := map[string]bool{}
-	for _, m := range cssSelector.FindAllStringSubmatch(cssComments.ReplaceAllString(string(baseCSS)+string(appCSS), ""), -1) {
+	for _, m := range cssSelector.FindAllStringSubmatch(sheetComments.ReplaceAllString(string(mustWebFile("base.css"))+string(mustWebFile("app.css")), ""), -1) {
 		defined[m[1]] = true
 	}
 	if defined["num"] {
