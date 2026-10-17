@@ -66,9 +66,7 @@ func (t *Tx) AddFile(f FileIn) (Kept, error) {
 func (t *Tx) keep(f FileIn) (k Kept, err error) {
 	// the hash and the type are normalized here and held by files_sha256 and files_mime; the days by entities_day
 	f.SHA256 = strings.ToLower(strings.TrimSpace(f.SHA256))
-	if f.MIME = NormalMIME(f.MIME); f.MIME == "" {
-		return k, Invalid("mime: a type/subtype such as audio/mp4 or image/heic")
-	}
+	f.MIME = NormalMIME(f.MIME)
 	if f.Preview != nil {
 		if err := preview.Check(f.Preview); err != nil {
 			return k, Invalid("%v", err)

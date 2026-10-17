@@ -173,6 +173,8 @@ func TestMakeRefuses(t *testing.T) {
 	}
 }
 
+// Check holds the long edge only. The magic bytes and the size of a preview are files_preview's: the core suite
+// witnesses that the schema refuses a preview over 1 MB.
 func TestCheck(t *testing.T) {
 	small := encodeJPEG(t, halves(16, 16))
 	if err := Check(small); err != nil {
@@ -184,7 +186,6 @@ func TestCheck(t *testing.T) {
 		"a PNG":           p.Bytes(),
 		"empty":           {},
 		"too wide":        encodeJPEG(t, halves(1601, 10)),
-		"over 1 MB":       append(append([]byte{}, small...), make([]byte, maxBytes)...),
 		"JPEG bytes only": {0xFF, 0xD8, 0xFF, 0xE0, 0, 0},
 	} {
 		if Check(b) == nil {

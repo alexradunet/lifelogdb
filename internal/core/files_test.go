@@ -288,6 +288,33 @@ func TestAddFileRefuses(t *testing.T) {
 	}
 }
 
+// The rules of a file's type and preview are held by files_mime and files_preview: the writer sends the row and the
+// 422 is SQLite's sentence, which names the constraint. Only the long edge of a preview is the writer's rule.
+func TestAddFileLetsTheSchemaRefuseATypeAndAPreview(t *testing.T) {
+	s := fresh(t)
+	pic := phototest.JPEG(8, 8)
+	for name, tc := range map[string]struct {
+		f    FileIn
+		rule string
+	}{
+		"no type":          {FileIn{Title: "A", SHA256: sha('a'), MIME: ""}, "files_mime"},
+		"a bad type":       {FileIn{Title: "A", SHA256: sha('a'), MIME: "jpeg"}, "files_mime"},
+		"a type with a /":  {FileIn{Title: "A", SHA256: sha('a'), MIME: "a/b/c"}, "files_mime"},
+		"a big preview":    {FileIn{Title: "A", SHA256: sha('a'), MIME: "image/jpeg", Preview: append(append([]byte{}, pic...), make([]byte, 1<<20)...)}, "files_preview"},
+		"a wide preview":   {FileIn{Title: "A", SHA256: sha('a'), MIME: "image/jpeg", Preview: phototest.JPEG(1601, 10)}, "long edge"},
+		"a PNG as preview": {FileIn{Title: "A", SHA256: sha('a'), MIME: "image/jpeg", Preview: []byte("\x89PNG\r\n\x1a\n")}, "JPEG"},
+	} {
+		before := everyRow(t, s)
+		_, err := s.AddFile(ctx, "cli", tc.f)
+		if status(err) != 422 || !strings.Contains(err.Error(), tc.rule) {
+			t.Errorf("%s: %v, want a 422 that names %q", name, err, tc.rule)
+		}
+		if after := everyRow(t, s); after != before {
+			t.Errorf("%s: a refused file wrote:\nbefore:\n%s\nafter:\n%s", name, before, after)
+		}
+	}
+}
+
 func TestNormalMIME(t *testing.T) {
 	if NormalMIME("Text/Plain; charset=utf-8") != "text/plain" || NormalMIME("a/b/c") != "" || NormalMIME("") != "" {
 		t.Error("NormalMIME")

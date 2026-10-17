@@ -71,15 +71,11 @@ func Make(src []byte) ([]byte, error) {
 	return nil, errors.New("the picture does not fit in 1 MB")
 }
 
-// Check reports whether b is a preview as the schema keeps it: a JPEG of at most maxBytes whose long edge is at most
-// maxEdge.
+// Check reports whether the long edge of the JPEG b is at most maxEdge. It is the one rule of a preview that SQLite
+// cannot hold, as it cannot decode a picture. The magic bytes and the size are held by files_preview, so the
+// schema refuses them when the row is written. Bytes that are not a JPEG header cannot be measured: that is
+// refused here.
 func Check(b []byte) error {
-	if len(b) < 3 || b[0] != 0xFF || b[1] != 0xD8 || b[2] != 0xFF {
-		return errors.New("a preview is a JPEG")
-	}
-	if len(b) > maxBytes {
-		return fmt.Errorf("a preview is at most %d bytes, not %d", maxBytes, len(b))
-	}
 	cfg, err := jpeg.DecodeConfig(bytes.NewReader(b))
 	if err != nil {
 		return fmt.Errorf("a preview is a JPEG: %v", err)
