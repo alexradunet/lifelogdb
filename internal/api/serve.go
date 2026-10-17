@@ -559,7 +559,7 @@ func requireOwner(source string) error {
 	if !writerRE.MatchString(source) {
 		return core.Invalid("source %q: 1-64 characters of a-z 0-9 _ : . -", source)
 	}
-	if strings.HasPrefix(source, "agent:") || strings.HasPrefix(source, "import:") {
+	if strings.HasPrefix(source, siren.AgentPrefix) || strings.HasPrefix(source, siren.ImportPrefix) {
 		return &core.Error{Status: http.StatusForbidden, Msg: "this action is the owner's: an agent or an import may not run it"}
 	}
 	return nil

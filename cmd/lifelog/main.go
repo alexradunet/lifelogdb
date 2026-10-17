@@ -114,7 +114,7 @@ var commands = []command{
 			if name == "" {
 				name = "mcp"
 			}
-			o.source = "agent:" + name
+			o.source = siren.AgentPrefix + name
 			return nil
 		},
 		run: func(ctx context.Context, e env, _ []string) error {

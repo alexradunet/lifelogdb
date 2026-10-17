@@ -18,6 +18,13 @@ import (
 // "ui" and any other client as "api".
 const SourceHeader = "Lifelog-Source"
 
+// The prefixes of the writers that are not the owner: an agent (the MCP server) writes as AgentPrefix+name, an import
+// as ImportPrefix+name. The owner-only actions are refused to both (api.requireOwner).
+const (
+	AgentPrefix  = "agent:"
+	ImportPrefix = "import:"
+)
+
 // The codes of the error entity (property code; API.md, Errors; core.Error.Code). A client branches on a code, so a
 // string never changes. They are constants so that the code that makes one (core, the API) and the code that picks
 // words for it (the view) cannot drift apart: a renamed code fails to compile instead of drawing an empty alert.

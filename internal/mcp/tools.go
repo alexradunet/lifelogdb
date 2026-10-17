@@ -19,7 +19,8 @@ type tool struct {
 	name        string
 	description string
 	schema      map[string]any
-	action      *siren.Action // nil for get
+	action      *siren.Action // the action that the tool runs; nil for get
+	follow      bool          // the built-in get: it follows a link and runs no action
 }
 
 // instructions are what a model reads first about life.db and its tools, on the MCP server.
@@ -57,7 +58,7 @@ func tools(actions []siren.Action) ([]tool, error) {
 		}
 	}
 	return append(append(list, day...),
-		tool{name: "get", description: "Follow a link: fetch the resource at an href from an earlier result (e.g. /pages/12).",
+		tool{name: "get", follow: true, description: "Follow a link: fetch the resource at an href from an earlier result (e.g. /pages/12).",
 			schema: map[string]any{"type": "object", "required": []string{"href"},
 				"properties": map[string]any{"href": map[string]any{"type": "string"}}}},
 	), nil
@@ -71,13 +72,13 @@ func run(ctx context.Context, c *client.Client, t tool, args map[string]string) 
 	if t.action != nil {
 		return c.Do(ctx, *t.action, args)
 	}
-	if t.name == "get" {
-		if !strings.HasPrefix(args["href"], "/") {
-			return nil, errors.New("href must be a path such as /pages/12")
-		}
-		return c.Get(ctx, args["href"])
+	if !t.follow {
+		return nil, fmt.Errorf("no tool %q", t.name)
 	}
-	return nil, fmt.Errorf("no tool %q", t.name)
+	if !strings.HasPrefix(args["href"], "/") {
+		return nil, errors.New("href must be a path such as /pages/12")
+	}
+	return c.Get(ctx, args["href"])
 }
 
 // inputSchema is a JSON Schema for an action's fields: numbers as numbers, everything else a string. A date takes a
