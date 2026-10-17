@@ -71,6 +71,7 @@ func (h *server) loadPage(ctx context.Context, id int64) (*core.Page, *siren.Ent
 	if p.File != nil && p.File.Preview {
 		e.Links = append(e.Links, link("preview", siren.PageHref(id)+"/preview", "Picture"))
 	}
+	e.Links = append(e.Links, coverLinks(p)...)
 	for _, l := range p.Out {
 		e.Entities = append(e.Entities, siren.Link{Rel: []string{l.Kind}, Href: siren.PageHref(l.ID), Title: l.Title, Class: []string{l.Type}})
 	}
@@ -121,8 +122,8 @@ func pageActions(p *core.Page, kinds []string, cats []core.Category) []siren.Act
 		}
 		out = append(out, action("rename", ids, nil))
 	}
-	if p.Type == "person" {
-		out = append(out, action("set-picture", ids, nil))
+	if p.Type != "file" {
+		out = append(out, action("set-cover", ids, nil))
 	}
 	if len(kinds) > 0 {
 		out = append(out, withOptions(action("link", ids, nil), "kind", kinds))
@@ -138,6 +139,19 @@ func pageActions(p *core.Page, kinds []string, cats []core.Category) []siren.Act
 		out = append(out, withOptions(action("file-pages", nil, map[string]any{"ids": strconv.FormatInt(p.ID, 10), "move": "0"}), "category", titles))
 	}
 	return append(out, action("tombstone", ids, nil))
+}
+
+// coverLinks are the links of a page's cover: cover, its picture, when it has one; choose-cover, the pictures it may
+// take, when it may take one (a live page that is not a file).
+func coverLinks(p *core.Page) []siren.Link {
+	var out []siren.Link
+	if p.Cover != nil {
+		out = append(out, link("cover", siren.PageHref(p.Cover.ID)+"/preview", p.Cover.Title))
+	}
+	if p.Type != "file" && p.DeletedAt == "" {
+		out = append(out, link("choose-cover", siren.PageHref(p.ID)+"/cover", "Set cover photo"))
+	}
+	return out
 }
 
 // linkKinds are the kinds a page of this type may start (link_kinds.from_types), minus the two the save

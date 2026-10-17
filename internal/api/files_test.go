@@ -155,10 +155,11 @@ func TestFileViews(t *testing.T) {
 	f := apitest.Must(t)(c.DoFiles(t.Context(), apitest.Action(t, root, "add-file"), map[string]string{"title": "Lake.jpg", "body": "dawn"}, map[string]string{"original": path}))
 	day := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "capture"), map[string]string{"text": "Swam. ![[Lake.jpg|the lake]]"}))
 	for path, want := range map[string][]string{
-		"/browse?kind=document":   {`enctype="multipart/form-data"`, `type="file" name="original"`, `type="hidden" name="sha256"`},
-		"/browse?kind=media":      {"Lake.jpg", `action="/files"`, `<img src="` + apitest.Href(f, "preview") + `" alt="" loading="lazy">`},
-		apitest.Href(f, "self"):   {`<img class="preview" src="` + apitest.Href(f, "preview") + `"`, "image/jpeg", "Backlinks"},
-		apitest.Href(day, "page"): {`<img src="/previews?title=Lake.jpg" alt="the lake"`},
+		"/browse?kind=document": {`enctype="multipart/form-data"`, `type="file" name="original"`, `type="hidden" name="sha256"`},
+		"/browse?kind=media":    {"Lake.jpg", `action="/files"`, `<img src="` + apitest.Href(f, "preview") + `" alt="" loading="lazy">`},
+		apitest.Href(f, "self"): {`<img class="preview" src="` + apitest.Href(f, "preview") + `"`, "image/jpeg", "Backlinks"},
+		// the first picture of a day page is its cover, drawn above it and not again in the body
+		apitest.Href(day, "page"): {`<figure class="cover"><img src="` + apitest.Href(f, "preview") + `" alt="Lake.jpg">`, "Swam."},
 	} {
 		body := browse(t, h, path)
 		for _, w := range want {
@@ -166,6 +167,9 @@ func TestFileViews(t *testing.T) {
 				t.Errorf("%s does not show %s", path, w)
 			}
 		}
+	}
+	if body := browse(t, h, apitest.Href(day, "page")); strings.Contains(body, `/previews?title=Lake.jpg`) {
+		t.Errorf("the day page draws its cover twice")
 	}
 }
 
@@ -189,8 +193,8 @@ func TestAPhotosDay(t *testing.T) {
 		t.Fatalf("a photo with a day: %+v", res)
 	}
 	day := apitest.Must(t)(c.Get(t.Context(), "/days/2019-06-03"))
-	if body := browse(t, h, apitest.Href(day, "page")); !strings.Contains(body, `<img src="/previews?title=2019-06-03+IMG_1.jpg"`) {
-		t.Errorf("the day page does not show the photo")
+	if body := browse(t, h, apitest.Href(day, "page")); !strings.Contains(body, `<figure class="cover"><img src="`+apitest.Href(e, "preview")+`"`) {
+		t.Errorf("the day page does not show the photo as its cover")
 	}
 	// a HEIC: no picture, no embed, its day still read
 	heic := write("IMG_2.HEIC", phototest.HEIF(photo.Meta{Taken: "2019-06-04 10:00:00"}, phototest.Layout{Version: 1}))

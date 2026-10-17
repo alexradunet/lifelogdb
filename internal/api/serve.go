@@ -109,7 +109,7 @@ func newServer(s *core.Store) *server {
 	h.mux = m
 	h.mount(m, catalog, map[string]actionFunc{
 		"capture": h.capture, "create-page": h.createPage, "save-body": h.saveBody, "create-person": h.createPerson,
-		"create-place": h.createPlace, "add-file": h.addFile, "set-picture": h.setPicture, "promote": h.promote,
+		"create-place": h.createPlace, "add-file": h.addFile, "set-cover": h.setCover, "promote": h.promote,
 		"tombstone": h.tombstone, "revive": h.revive, "tombstone-pages": h.tombstoneMany, "link": h.linkPages,
 		"unlink": h.unlinkPages, "file-pages": h.filePages, "record": h.record, "correct": h.correct,
 		"retract": h.retract, "rename": h.rename, "register-metric": h.registerMetric, "integrity-check": h.integrity,
@@ -129,6 +129,7 @@ func newServer(s *core.Store) *server {
 	m.HandleFunc("GET /years/current", h.serve(h.currentYear))
 	m.HandleFunc("GET /years/{year}", h.serve(h.year))
 	m.HandleFunc("GET /pages/{id}", h.serve(h.page))
+	m.HandleFunc("GET /pages/{id}/cover", h.serve(h.coverChoice))
 	m.HandleFunc("GET /pages/{id}/preview", picture(func(r *http.Request) ([]byte, error) {
 		id, err := idOf(r)
 		if err != nil {

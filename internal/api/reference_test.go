@@ -34,6 +34,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		"week":                      map[string]any{"week": "", "from": "", "through": "", "today": "", "days": []monthDay{}, "metrics": []weekMetric{}},
 		"year":                      map[string]any{"year": "", "today": "", "written": 0, "readings": 0, "months": []yearMonth{}},
 		"page, person, place, file": core.Page{},
+		"cover-choice":              coverChoiceProps{Rows: []coverRow{}},
 		"measurement":               core.Measurement{},
 		"series": map[string]any{"metric": "", "from": "", "to": "", "readings": []core.Reading{}, "categories": []string{}, "all_history": false,
 			"id": int64(0), "unit": "", "body": "", "links": []core.Edge{}, "backlinks": []core.Edge{}},
@@ -85,7 +86,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		{"page, person, place, file", ids["place"]}, {"page, person, place, file", ids["file"]},
 		{"measurement", ids["measurement"]}, {"series", "/metrics/Weight"}, {"metrics", "/metrics"},
 		{"browse", "/browse?in=A+note"}, {"browse", "/browse?kind=person"}, {"browse", "/browse?kind=media"}, {"browse", "/browse?ghosts=1"},
-		{"integrity", "/integrity"},
+		{"integrity", "/integrity"}, {"cover-choice", ids["page"] + "/cover"},
 		{"month", "/months/2031-05"}, {"week", "/weeks/2031-W18"}, {"year", "/years/2031"},
 	}
 	named := func(section, key string) bool { // a list is documented as "name[]"

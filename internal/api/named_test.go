@@ -62,7 +62,7 @@ func TestPeopleListCarriesItsMentions(t *testing.T) {
 
 // TestPeopleListShowsThePictureAPersonEmbeds: in the people list of Browse, a person whose page embeds a picture has
 // that picture's preview in its row, and the sheet draws it round before the name; a person with none has the icon of a person. A place has
-// neither, even when its page embeds a picture.
+// its cover too, drawn as a small square, never as a face (docs/plans/127-a-cover-for-every-page.md).
 func TestPeopleListShowsThePictureAPersonEmbeds(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	ctx := t.Context()
@@ -93,11 +93,12 @@ func TestPeopleListShowsThePictureAPersonEmbeds(t *testing.T) {
 		}
 	}
 	places, _ := props(apitest.Must(t)(c.Get(ctx, "/browse?kind=place")))["rows"].([]any)
-	if len(places) != 1 || places[0].(map[string]any)["picture"] != nil {
-		t.Errorf("the places rows = %v, want Lake with no picture", places)
+	if len(places) != 1 || places[0].(map[string]any)["picture"] != want {
+		t.Errorf("the places rows = %v, want Lake with its cover %s", places, want)
 	}
-	if body := browse(t, h, "/browse?kind=place"); strings.Contains(body, `class="face-picture"`) {
-		t.Errorf("the places sheet draws a picture of a face")
+	if body := browse(t, h, "/browse?kind=place"); strings.Contains(body, `class="face-picture"`) ||
+		!strings.Contains(body, `<a class="entry named covered" href="`+apitest.Href(lake, "self")+`"><img class="cover-picture" src="`+want+`" alt="" loading="lazy">`) {
+		t.Errorf("the places sheet does not draw the cover square, or draws a face")
 	}
 }
 

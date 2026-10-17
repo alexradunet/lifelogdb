@@ -196,6 +196,14 @@ var commands = []command{
 			"                                      another file the day it is kept; --category files its page in the\n" +
 			"                                      category page C in the same write; --dry-run writes nothing",
 		run: func(ctx context.Context, e env, args []string) error { return keepFile(ctx, e, args) }},
+	{name: "cover", flags: []string{"--title", "--preview"},
+		usage: "  lifelog cover PAGE-ID [PHOTO] [--title T] [--preview PICTURE]\n" +
+			"                                      set a page's cover photo (docs/plans/127-a-cover-for-every-page.md):\n" +
+			"                                      PHOTO is a new one, kept with no day and titled T (default: the page's\n" +
+			"                                      title and today; a day page's: its day), its picture from\n" +
+			"                                      PICTURE when it is not a JPEG, PNG or GIF; with no PHOTO, T names\n" +
+			"                                      a kept picture (lifelog get /pages/PAGE-ID/cover lists them)",
+		run: func(ctx context.Context, e env, args []string) error { return setCover(ctx, e, args) }},
 	{name: "snapshot", flags: []string{"--to"},
 		usage: "  lifelog snapshot [--to DIR]         a dated copy of life.db (life-YYYY-MM-DD.db, beside it or in DIR),\n" +
 			"                                      then its restore check (docs/cookbook/take-a-snapshot.md); with --url the\n" +

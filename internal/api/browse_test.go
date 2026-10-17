@@ -165,7 +165,7 @@ func TestBrowseRowsNameTheirPicture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.SetPictureOf(ctx, "cli", ids["Bo"], "lake.jpg"); err != nil {
+	if _, err := s.SetCoverOf(ctx, "cli", ids["Bo"], "lake.jpg"); err != nil {
 		t.Fatal(err)
 	}
 	preview := fmt.Sprintf("/pages/%d/preview", k.ID)

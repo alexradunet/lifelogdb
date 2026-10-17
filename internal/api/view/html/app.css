@@ -276,10 +276,18 @@ dl:not(.facts){
 table.calendar{inline-size:100%; min-inline-size:320px; table-layout:fixed; border-collapse:separate; border-spacing:3px;
   & caption{color:var(--rail-ink)}
   & th{padding:var(--space-1) var(--space-2); text-align:start; border-block-end:0; font:400 12px/16px var(--mono); color:var(--rail-ink)}
-  & td{position:relative; block-size:96px; padding:0; vertical-align:top;
+  & td{position:relative; padding:0; vertical-align:top;
     &:empty{background:none; border-color:transparent}
-    &>a{display:flex; flex-direction:column; gap:2px; block-size:100%; padding:6px var(--space-2); color:var(--ink);
-      &:hover{background:var(--surface-deep); text-decoration:none}}
+    /* A cell is a square (a table cell takes no aspect-ratio, so its link does). */
+    &>a{position:relative; isolation:isolate; display:flex; flex-direction:column; gap:2px; aspect-ratio:1; overflow:hidden; padding:6px var(--space-2); color:var(--ink);
+      &:hover{background:var(--surface-deep); text-decoration:none}
+      &>:not(.cell-cover){position:relative; z-index:1}}
+    /* A day with a cover (docs/plans/127-a-cover-for-every-page.md) has it behind the day, under a veil of the parchment
+       that is thickest where the words are, so they keep their contrast in both schemes. */
+    &.pictured>a::before{content:""; position:absolute; inset:0; z-index:0;
+      background:linear-gradient(to bottom, color-mix(in srgb, var(--surface) 90%, transparent) 0, color-mix(in srgb, var(--surface) 78%, transparent) 60%, color-mix(in srgb, var(--surface) 45%, transparent) 100%)}
+    &.pictured>a:hover::before{background:color-mix(in srgb, var(--surface) 55%, transparent)}
+    & .cell-cover{position:absolute; inset:0; z-index:-1; inline-size:100%; block-size:100%; object-fit:cover}
     &.written{background-color:var(--accent-soft);
       & .n{color:var(--accent-ink)}}
     &[aria-current=date]{border-color:var(--accent-ink); box-shadow:inset 0 0 0 1px var(--accent-ink);
@@ -296,7 +304,7 @@ table.calendar{inline-size:100%; min-inline-size:320px; table-layout:fixed; bord
   & .marks{display:none;
     & i{display:block; inline-size:6px; block-size:6px; background:var(--muted)}}
   & tbody tr:hover{background:none}}
-@container column (max-width:567px){table.calendar td{block-size:52px} table.calendar .first,table.calendar .meta,table.calendar .items,table.calendar .more{display:none}
+@container column (max-width:567px){table.calendar td>a{padding:4px} table.calendar .first,table.calendar .meta,table.calendar .items,table.calendar .more{display:none}
   table.calendar .marks{display:flex; flex-wrap:wrap; gap:3px} table.calendar th{padding:var(--space-1); text-align:center}}
 
 /* An alert: an error entity in words, what went wrong and what to do, on parchment with the tone's edge. */
@@ -339,6 +347,25 @@ details.more-fields{align-self:stretch; border:0; padding:0; background:none;
 
 /* A kept picture, on its own line. */
 figure a{display:block}
+
+/* The cover of a page or a day (docs/plans/127-a-cover-for-every-page.md): a square of its picture at the head of the
+   margin, then the other pictures of the page as small squares, five across, and a last one that opens the picker. On
+   a narrow screen the margin comes after the sheet, so the cover leaves it and goes first. */
+.cover-box{display:flex; flex-direction:column; gap:var(--space-2);
+  & figure.cover{margin:0}
+  & figure.cover img{display:block; inline-size:100%; aspect-ratio:1; object-fit:cover; background:var(--surface-deep);
+    border:2px solid var(--edge); box-shadow:var(--drop-hard)}}
+.margin ul.plain.cover-thumbs{display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:var(--space-2); padding:0; background:none; border:0; box-shadow:none;
+  &>li{padding:0; border:0}
+  & form{margin:0}
+  & :is(button,a.more){display:grid; place-items:center; inline-size:100%; block-size:auto; aspect-ratio:1; padding:0; overflow:hidden;
+    background:var(--surface-deep); border:1px solid var(--edge); box-shadow:none; color:var(--text-muted); font-size:20px; text-decoration:none;
+    &:hover{border-color:var(--ink); filter:none}
+    &:active{transform:none; box-shadow:none}}
+  & img{display:block; inline-size:100%; block-size:100%; object-fit:cover}}
+@container column (max-width:867px){.sheet-margin:has(>.margin>.cover-box){
+  &>.margin{display:contents}
+  & .cover-box{order:-1; inline-size:min(100%,320px)}}}
 
 /* The access keys, in the footer; a phone has no keyboard. The search's hint is a kbd after its field. */
 footer .keys{color:var(--text-muted)}
@@ -510,9 +537,12 @@ dialog.palette{inline-size:min(36rem, calc(100vw - 2rem)); max-block-size:min(32
 .entry.named.face{grid-template-columns:32px minmax(0,1fr) auto; align-items:center;
   & .face-picture{display:grid; place-items:center; inline-size:32px; block-size:32px; border-radius:50%; object-fit:cover;
     background:var(--surface-deep); border:1px solid var(--edge); color:var(--text-muted)}}
+/* Any other row with a cover has it first, as a small square of the same size. */
+.entry.named.covered{grid-template-columns:32px minmax(0,1fr) auto; align-items:center;
+  & .cover-picture{display:block; inline-size:32px; block-size:32px; object-fit:cover; background:var(--surface-deep); border:1px solid var(--edge)}}
 /* In a narrow column the name keeps the line, and the mentions go under it. */
-@container column (max-width:487px){.entry.named.face{grid-template-columns:32px minmax(0,1fr); row-gap:0;
-  & .face-picture{grid-row:span 2} & .meta{grid-column:2}}}
+@container column (max-width:487px){.entry.named:is(.face,.covered){grid-template-columns:32px minmax(0,1fr); row-gap:0;
+  & :is(.face-picture,.cover-picture){grid-row:span 2} & .meta{grid-column:2}}}
 
 /* The media list (docs/plans/110-the-media-list.md): the kinds as links under the head, the current one in the
    ink; then a tile a file, its picture square over its title, as many across as the column holds. A blank tile
@@ -532,6 +562,13 @@ dialog.palette{inline-size:min(36rem, calc(100vw - 2rem)); max-block-size:min(32
   &:hover .first{text-decoration:underline}}
 li.tile>.pick-box{position:absolute; inset-block-start:var(--space-1); inset-inline-start:var(--space-1); z-index:1; padding:var(--space-1); background:var(--surface); border:2px solid var(--edge)}
 @container column (max-width:487px){.sheet.list ul.tiles{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}}
+/* The picker of a cover: a tile is a form, and its button is drawn as the tile's link. The cover now is outlined. */
+.cover-choice{
+  &>section+section{margin-block-start:var(--space-5)}
+  & button.tile-link{display:flex; align-items:stretch; justify-content:flex-start; inline-size:100%; block-size:auto; padding:0; text-align:start; font:inherit; font-weight:400; white-space:normal;
+    background:none; border:0; box-shadow:none;
+    &:active{transform:none; box-shadow:none}}
+  & li.current img{border-color:var(--ink); outline:2px solid var(--ink)}}
 
 /* The one selection (docs/plans/114-one-way-to-do-a-thing.md): the lists of Browse and the Metrics board. A
    list with a pick bar draws the bar first (order), though it comes after the boxes, so a counter counts the

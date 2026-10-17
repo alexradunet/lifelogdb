@@ -22,8 +22,9 @@
 <div class="sheet-margin">
 <div class="sheet">
 <section class="journal" aria-label="Journal">
-<div class="panel-head"><h2>Journal</h2>{{with .Link "page"}}<a href="{{.}}">The day page</a>{{end}}</div>
-{{range $p.Journal}}<div class="prose journal-text">{{markdown .}}</div>{{end}}
+<div class="panel-head"><h2>Journal</h2>{{if not $d.cover}}{{with .Link "choose-cover"}}<a href="{{.}}">Set cover photo</a>{{end}}{{end}}{{with .Link "page"}}<a href="{{.}}">The day page</a>{{end}}</div>
+{{$embed := ""}}{{with $d.cover}}{{$embed = .embed}}{{end}}
+{{range $p.Journal}}<div class="prose journal-text">{{markdownCover . $embed}}</div>{{end}}
 {{if not $p.Journal}}<p class="empty">{{if $today}}Nothing written today yet. <a href="#capture">Add to today</a> below.{{else}}Nothing written on this day. <a href="#capture">Add to it</a> below.{{end}}</p>{{end}}
 </section>
 
@@ -39,7 +40,7 @@
 </div>
 
 <div class="margin">
-
+{{template "cover" .}}
 {{template "onthisday" (dict "v" $ "days" $d.on_this_day)}}
 {{- if or $d.readings (.Action "record")}}
 <section class="group" aria-label="Readings">

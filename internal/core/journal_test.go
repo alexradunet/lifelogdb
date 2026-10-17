@@ -234,7 +234,12 @@ func TestFirstLineIsPlainText(t *testing.T) {
 		{"> a quotation", "a quotation"},
 		{"#running 5k with [[Sam]]", "#running 5k with Sam"},
 		{"-5 kg today", "-5 kg today"},
-		{"![[IMG_0001.jpg]] by the lake", "IMG_0001.jpg by the lake"},
+		// a picture is not words: an embed is left out, and a line of pictures alone is passed over, so a cover put
+		// first (set-cover) does not take the place of the text
+		{"![[IMG_0001.jpg]] by the lake", "by the lake"},
+		{"![[2026-10-04 2026-10-17.jpg]]\n\nA walk by the lake.", "A walk by the lake."},
+		{"![[A.jpg]] ![[B.jpg|the lake]]\nWords", "Words"},
+		{"![[A.jpg]]", ""},
 		{"Café ünïcode", "Café ünïcode"},
 		{long, long[:160] + "…"},
 	} {

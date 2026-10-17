@@ -1,0 +1,274 @@
+package api_test
+
+import (
+	"bytes"
+	"errors"
+	"io"
+	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"reflect"
+	"strings"
+	"testing"
+
+	"lifelog/internal/api/apitest"
+	"lifelog/internal/api/siren"
+	"lifelog/internal/client"
+)
+
+// TestSetCoverFromAnyPage: every page offers set-cover and a link to its picker, a file page and the lists do not. A
+// browser opens the picker from the page, sends a new photo there and comes back to the page; the photo is the
+// page's cover, drawn once above it, and the person's picture in People, kept with a title of the page and today.
+// A tile of the picker sets a kept picture, which the picker then marks. A client names a kept picture by its title,
+// as the CLI and an agent do.
+func TestSetCoverFromAnyPage(t *testing.T) {
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
+	ctx := t.Context()
+	root := apitest.Must(t)(c.Get(ctx, "/"))
+	ana := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-person"), map[string]string{"title": "Ana"}))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, ana, "save-body"), map[string]string{"body": "Met at school."}))
+	lake := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-place"), map[string]string{"title": "Lake"}))
+	trip := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": "Trip"}))
+	scanPath, _ := jpegFile(t, "scan.jpg", 20, 20)
+	scan := apitest.Must(t)(c.DoFiles(ctx, apitest.Action(t, root, "add-file"), map[string]string{"title": "Scan.jpg"}, map[string]string{"original": scanPath}))
+	for _, e := range []*siren.Entity{ana, lake, trip} {
+		coverAction(t, e, apitest.Href(e, "self")+"/cover")
+		if apitest.Href(e, "choose-cover") != apitest.Href(e, "self")+"/cover" {
+			t.Errorf("%s has no link to its picker", e.Title)
+		}
+	}
+	for _, e := range []*siren.Entity{scan, apitest.Must(t)(c.Get(ctx, "/browse?kind=person")), apitest.Must(t)(c.Get(ctx, "/browse?kind=place"))} {
+		if hasAction(e, "set-cover") {
+			t.Errorf("%s offers set-cover", e.Title)
+		}
+	}
+	if body := browse(t, h, "/browse?kind=person"); strings.Contains(body, "/cover\"") {
+		t.Errorf("the people sheet draws a form to set a cover")
+	}
+	self := apitest.Href(ana, "self")
+	if body := browse(t, h, self); !strings.Contains(body, `<a class="button" href="`+self+`/cover">Set cover photo</a>`) || strings.Contains(body, `<figure class="cover">`) {
+		t.Errorf("the person's page does not lead to its picker, or draws a cover it has not")
+	}
+	picker := browse(t, h, self+"/cover")
+	for _, s := range []string{`action="` + self + `/cover"`, `enctype="multipart/form-data"`, `name="original"`, `accept="image/*"`,
+		`<input type="hidden" name="title" value="Scan.jpg">`, `<img src="` + apitest.Href(scan, "preview") + `" alt="" loading="lazy">`} {
+		if !strings.Contains(picker, s) {
+			t.Errorf("the picker lacks %q", s)
+		}
+	}
+
+	jpg, _ := jpegFile(t, "ana.jpg", 40, 30)
+	rec := postPhoto(t, h, self+"/cover", jpg, self)
+	if rec.Code != http.StatusSeeOther || !strings.HasPrefix(rec.Header().Get("Location"), self) {
+		t.Fatalf("POST %s/cover: %d to %q %.300s", self, rec.Code, rec.Header().Get("Location"), rec.Body.String())
+	}
+	title := "Ana " + fixedToday + ".jpg"
+	page := apitest.Must(t)(c.Get(ctx, self))
+	if got := str(props(page)["body"]); got != "![["+title+"]]\n\nMet at school." {
+		t.Errorf("Ana's body = %q", got)
+	}
+	cover := apitest.Href(page, "cover")
+	if !strings.HasSuffix(cover, "/preview") {
+		t.Fatalf("Ana's page has no cover link: %+v", page.Links)
+	}
+	body := browse(t, h, self)
+	if !strings.Contains(body, `<section class="cover-box" aria-label="Cover photo">`+"\n"+`<figure class="cover"><img src="`+cover+`" alt="`+title+`"></figure>`) ||
+		!strings.Contains(body, `<a class="more" href="`+self+`/cover"`) || strings.Contains(body, "/previews?title=") {
+		t.Errorf("the cover is not drawn once, at the head of the margin, with the way to the picker")
+	}
+	rows, _ := props(apitest.Must(t)(c.Get(ctx, "/browse?kind=person")))["rows"].([]any)
+	if len(rows) != 1 || str(rows[0].(map[string]any)["picture"]) != cover {
+		t.Fatalf("rows = %v, want Ana with the cover %s", rows, cover)
+	}
+
+	// A tile of the picker is a form of the picture's title; it sends the reader back to the page.
+	rec = submit(h, self+"/cover", url.Values{"title": {"Scan.jpg"}, "back": {self}}, self+"/cover")
+	if rec.Code != http.StatusSeeOther || !strings.HasPrefix(rec.Header().Get("Location"), self) {
+		t.Fatalf("the tile: %d to %q %.300s", rec.Code, rec.Header().Get("Location"), rec.Body.String())
+	}
+	choice := apitest.Must(t)(c.Get(ctx, self+"/cover"))
+	marked := map[string]bool{}
+	for _, r := range props(choice)["rows"].([]any) {
+		m := r.(map[string]any)
+		marked[str(m["title"])] = m["current"] == true
+	}
+	if want := map[string]bool{"Scan.jpg": true, title: false}; !reflect.DeepEqual(marked, want) {
+		t.Errorf("the picker rows = %v, want %v", marked, want)
+	}
+
+	// A client names a kept picture by its title.
+	apitest.Must(t)(c.Do(ctx, coverAction(t, apitest.Must(t)(c.Get(ctx, apitest.Href(lake, "self"))), apitest.Href(lake, "self")+"/cover"), map[string]string{"title": title}))
+	places, _ := props(apitest.Must(t)(c.Get(ctx, "/browse?kind=place")))["rows"].([]any)
+	if len(places) != 1 || str(places[0].(map[string]any)["picture"]) != cover {
+		t.Errorf("the places rows = %v, want Lake with the cover %s", places, cover)
+	}
+	if _, err := c.Do(ctx, coverAction(t, page, self+"/cover"), map[string]string{"title": "Nothing.jpg"}); err == nil {
+		t.Errorf("a title that is no kept picture was taken")
+	}
+}
+
+// TestTheCoverOfADay: the first picture of a day page is its cover, in the day page and in the day view, which draw
+// it above and not again in the journal. A day view whose day page has no cover leads to the picker from the
+// journal; a day with no day page yet has no picker, since there is no page to take a cover.
+func TestTheCoverOfADay(t *testing.T) {
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
+	ctx := t.Context()
+	root := apitest.Must(t)(c.Get(ctx, "/"))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/days/2026-01-02")), "capture"), map[string]string{"text": "Words."}))
+	plain := apitest.Must(t)(c.Get(ctx, "/days/2026-01-02"))
+	if body := browse(t, h, "/days/2026-01-02"); apitest.Href(plain, "choose-cover") == "" ||
+		!strings.Contains(body, `<a href="`+apitest.Href(plain, "choose-cover")+`">Set cover photo</a>`) {
+		t.Errorf("a day with no cover does not lead to the picker")
+	}
+	if body := browse(t, h, "/days/2026-01-03"); strings.Contains(body, "Set cover photo") {
+		t.Errorf("a day with no day page offers a cover")
+	}
+	jpg, _ := jpegFile(t, "lake.jpg", 40, 30)
+	f := apitest.Must(t)(c.DoFiles(ctx, apitest.Action(t, root, "add-file"), map[string]string{"title": "Lake.jpg", "day": fixedToday}, map[string]string{"original": jpg}))
+	day := apitest.Must(t)(c.Get(ctx, "/days/"+fixedToday))
+	if got := props(day)["cover"]; got == nil || str(got.(map[string]any)["title"]) != "Lake.jpg" {
+		t.Errorf("the day's cover = %v, want Lake.jpg", got)
+	}
+	if apitest.Href(day, "cover") != apitest.Href(f, "preview") {
+		t.Errorf("the day's cover link = %q, want %q", apitest.Href(day, "cover"), apitest.Href(f, "preview"))
+	}
+	for _, path := range []string{"/days/" + fixedToday, apitest.Href(day, "page")} {
+		body := browse(t, h, path)
+		if !strings.Contains(body, `<figure class="cover"><img src="`+apitest.Href(f, "preview")+`"`) || strings.Contains(body, "/previews?title=Lake.jpg") ||
+			strings.Contains(body, "Set cover photo") {
+			t.Errorf("%s does not draw its cover once, above it, or still offers to set one", path)
+		}
+	}
+}
+
+// TestThePickerRefuses: a file page has no picker, its own picture is its cover; a deleted page is revived first; a
+// page that does not exist is not found.
+func TestThePickerRefuses(t *testing.T) {
+	c, _, _ := apitest.FreshOn(t, "cli", fixedToday)
+	ctx := t.Context()
+	root := apitest.Must(t)(c.Get(ctx, "/"))
+	jpg, _ := jpegFile(t, "lake.jpg", 40, 30)
+	f := apitest.Must(t)(c.DoFiles(ctx, apitest.Action(t, root, "add-file"), map[string]string{"title": "Lake.jpg"}, map[string]string{"original": jpg}))
+	gone := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": "Gone"}))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, gone, "tombstone"), nil))
+	if apitest.Href(f, "choose-cover") != "" {
+		t.Errorf("a file page links a picker")
+	}
+	for path, want := range map[string]int{apitest.Href(f, "self") + "/cover": 404, apitest.Href(gone, "self") + "/cover": 409, "/pages/999/cover": 404} {
+		_, err := c.Get(ctx, path)
+		var e *client.Error
+		if !errors.As(err, &e) || e.Status != want {
+			t.Errorf("GET %s: %v, want %d", path, err, want)
+		}
+	}
+}
+
+func coverAction(t *testing.T, e *siren.Entity, href string) siren.Action {
+	t.Helper()
+	for _, a := range e.Actions {
+		if a.Name == "set-cover" && a.Href == href {
+			return a
+		}
+	}
+	t.Fatalf("%s: no set-cover to %s among %+v", e.Title, href, e.Actions)
+	return siren.Action{}
+}
+
+// postPhoto sends a photo as a browser's form does.
+func postPhoto(t *testing.T, h http.Handler, path, file, back string) *httptest.ResponseRecorder {
+	t.Helper()
+	var b bytes.Buffer
+	mw := multipart.NewWriter(&b)
+	mw.WriteField("back", back)
+	mw.WriteField("title", "")
+	p, err := mw.CreateFormFile("original", "photo.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Open(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if _, err := io.Copy(p, f); err != nil {
+		t.Fatal(err)
+	}
+	mw.CreateFormFile("preview", "") // the folded preview input, left empty
+	mw.Close()
+	req := httptest.NewRequest("POST", path, &b)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("Accept", "text/html,application/xhtml+xml")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	return rec
+}
+
+// TestTheOtherPicturesOfAPage: the margin draws the other pictures the body embeds under the cover, each a form of
+// set-cover with its title; one press makes it the cover by trading places with the old cover's embed, and the
+// browser comes back to the page.
+func TestTheOtherPicturesOfAPage(t *testing.T) {
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
+	ctx := t.Context()
+	root := apitest.Must(t)(c.Get(ctx, "/"))
+	for i, title := range []string{"A.jpg", "B.jpg"} {
+		jpg, _ := jpegFile(t, strings.ToLower(title), 40, 30+i) // another size: another original
+		apitest.Must(t)(c.DoFiles(ctx, apitest.Action(t, root, "add-file"), map[string]string{"title": title}, map[string]string{"original": jpg}))
+	}
+	trip := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": "Trip", "body": "![[A.jpg]]\n\nSwam. ![[B.jpg]]"}))
+	self := apitest.Href(trip, "self")
+	pics, _ := props(apitest.Must(t)(c.Get(ctx, self)))["pictures"].([]any)
+	if len(pics) != 1 || str(pics[0].(map[string]any)["title"]) != "B.jpg" {
+		t.Fatalf("pictures = %v, want B.jpg", pics)
+	}
+	body := browse(t, h, self)
+	form := `<form method="post" action="` + self + `/cover"><input type="hidden" name="back" value="` + self + `"><input type="hidden" name="title" value="B.jpg">`
+	if !strings.Contains(body, form) {
+		t.Fatalf("the margin lacks the form of B.jpg")
+	}
+	rec := submit(h, self+"/cover", url.Values{"title": {"B.jpg"}, "back": {self}}, self)
+	if rec.Code != http.StatusSeeOther || !strings.HasPrefix(rec.Header().Get("Location"), self) {
+		t.Fatalf("the thumbnail: %d to %q", rec.Code, rec.Header().Get("Location"))
+	}
+	p := props(apitest.Must(t)(c.Get(ctx, self)))
+	if got := str(p["body"]); got != "![[B.jpg]]\n\nSwam. ![[A.jpg]]" {
+		t.Errorf("the body after the thumbnail = %q", got)
+	}
+	if str(p["cover"].(map[string]any)["title"]) != "B.jpg" {
+		t.Errorf("the cover = %v, want B.jpg", p["cover"])
+	}
+}
+
+// TestTheCalendarShowsTheCovers: a day page with a cover gives the month and the week its picture, and the month
+// draws it behind the day; a day page without one, and a day with no page, have none.
+func TestTheCalendarShowsTheCovers(t *testing.T) {
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
+	ctx := t.Context()
+	root := apitest.Must(t)(c.Get(ctx, "/"))
+	jpg, _ := jpegFile(t, "lake.jpg", 40, 30)
+	f := apitest.Must(t)(c.DoFiles(ctx, apitest.Action(t, root, "add-file"), map[string]string{"title": "Lake.jpg", "day": "2031-05-02"}, map[string]string{"original": jpg}))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/days/2031-05-01")), "capture"), map[string]string{"text": "No photo."}))
+	pictures := func(path string) map[string]string {
+		t.Helper()
+		out := map[string]string{}
+		for _, d := range props(apitest.Must(t)(c.Get(ctx, path)))["days"].([]any) {
+			m := d.(map[string]any)
+			if m["page"] == true {
+				out[str(m["day"])] = str(m["picture"])
+			}
+		}
+		return out
+	}
+	want := map[string]string{"2031-05-01": "", "2031-05-02": apitest.Href(f, "preview")}
+	for _, path := range []string{"/months/2031-05", "/weeks/2031-W18"} {
+		if got := pictures(path); !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: pictures = %v, want %v", path, got, want)
+		}
+	}
+	body := browse(t, h, "/months/2031-05")
+	if !strings.Contains(body, `<td class="written pictured"><a href="/days/2031-05-02"><img class="cell-cover" src="`+apitest.Href(f, "preview")+`" alt="" loading="lazy">`) ||
+		strings.Count(body, `class="cell-cover"`) != 1 {
+		t.Errorf("the month does not draw the one cover behind its day")
+	}
+}

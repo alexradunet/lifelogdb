@@ -21,15 +21,72 @@ import (
 // not this rendering, is what the save contract wrote.
 var bodyMD = goldmark.New()
 
-func markdown(src string) template.HTML {
+func markdown(src string) template.HTML { return markdownCover(src, "") }
+
+// markdownCover is markdown with the page's cover drawn apart, above the body (docs/plans/127-a-cover-for-every-page.md):
+// the first embed that names the cover (embed, its title as the body writes it) is left out, and so is its paragraph
+// when nothing else is in it. An empty embed leaves out nothing.
+func markdownCover(src, embed string) template.HTML {
 	var b bytes.Buffer
 	source := []byte(src)
 	doc := bodyMD.Parser().Parse(gtext.NewReader(source))
 	enhanceText(doc, source)
+	if embed != "" {
+		leaveOutEmbed(doc, source, text.TitleKey(embed))
+	}
 	if err := bodyMD.Renderer().Render(&b, source, doc); err != nil {
 		return template.HTML("<pre>" + template.HTMLEscapeString(src) + "</pre>")
 	}
 	return template.HTML(b.String())
+}
+
+// leaveOutEmbed removes the first embed whose title has the key, in the order of the text, and its paragraph when
+// nothing but blanks and line breaks is left in it.
+func leaveOutEmbed(doc ast.Node, source []byte, key string) {
+	var found ast.Node
+	ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering || found != nil {
+			return ast.WalkContinue, nil
+		}
+		if l, ok := n.(*ast.Link); ok {
+			if c, ok := l.Attribute([]byte("class")); ok && string(c.([]byte)) == "wikilink embed" {
+				if title, ok := embedTitle(l); ok && text.TitleKey(title) == key {
+					found = l
+					return ast.WalkStop, nil
+				}
+			}
+			return ast.WalkSkipChildren, nil
+		}
+		return ast.WalkContinue, nil
+	})
+	if found == nil {
+		return
+	}
+	para := found.Parent()
+	para.RemoveChild(para, found)
+	if _, ok := para.(*ast.Paragraph); !ok {
+		return
+	}
+	for c := para.FirstChild(); c != nil; c = c.NextSibling() {
+		if s, ok := c.(*ast.String); ok && strings.TrimSpace(string(s.Value)) == "" {
+			continue
+		}
+		if t, ok := c.(*ast.Text); ok && strings.TrimSpace(string(t.Segment.Value(source))) == "" {
+			continue
+		}
+		return
+	}
+	para.Parent().RemoveChild(para.Parent(), para)
+}
+
+// embedTitle is the title of the file an embed link of embedLink draws, read back from its destination.
+func embedTitle(l *ast.Link) (string, bool) {
+	title, ok := strings.CutPrefix(string(l.Destination), "/pages?title=")
+	if !ok {
+		return "", false
+	}
+	title, err := url.QueryUnescape(title)
+	return title, err == nil
 }
 
 // titleHref opens the page a title names, through GET /pages?title= (any case or normalisation).

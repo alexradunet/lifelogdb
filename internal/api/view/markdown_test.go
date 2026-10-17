@@ -143,3 +143,33 @@ func TestASnippetIsPlainText(t *testing.T) {
 		}
 	}
 }
+
+// TestMarkdownCoverLeavesOutTheCoverOnce: the cover is drawn above the body, so the first embed that names it (by any
+// spelling of its title key) is left out, with its paragraph when nothing else is in it. Another embed of the same
+// file, the other embeds and the words stay. An empty embed leaves out nothing.
+func TestMarkdownCoverLeavesOutTheCoverOnce(t *testing.T) {
+	img := func(title string) string { return `<img src="/previews?title=` + title + `"` }
+	for _, c := range []struct {
+		name, body, embed string
+		want              []string // each with the number of times it is drawn
+		count             []int
+	}{
+		{"first, alone in its paragraph", "![[Lake.jpg]]\n\nWords.", "Lake.jpg",
+			[]string{img("Lake.jpg"), "<p></p>", "<p>Words.</p>"}, []int{0, 0, 1}},
+		{"a later embed of the same file stays", "![[Lake.jpg]]\n\nWords ![[Lake.jpg]]", "Lake.jpg",
+			[]string{img("Lake.jpg"), "<p>Words"}, []int{1, 1}},
+		{"in a line of words", "Before ![[Sea.jpg]] then ![[lake.JPG]] after.", "Lake.jpg",
+			[]string{img("Sea.jpg"), img("lake.JPG"), "after."}, []int{1, 0, 1}},
+		{"no cover", "![[Lake.jpg]]", "",
+			[]string{img("Lake.jpg")}, []int{1}},
+		{"an embed inside a link is not one", "[![[Lake.jpg]]](https://example.org) ![[Lake.jpg]]", "Lake.jpg",
+			[]string{img("Lake.jpg"), "example.org"}, []int{0, 1}},
+	} {
+		got := string(markdownCover(c.body, c.embed))
+		for i, w := range c.want {
+			if n := strings.Count(got, w); n != c.count[i] {
+				t.Errorf("%s: %q drawn %d times, want %d, in %s", c.name, w, n, c.count[i], got)
+			}
+		}
+	}
+}

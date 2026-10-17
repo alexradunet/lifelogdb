@@ -4,7 +4,7 @@
      first, with New page here and a link to the category in Browse; docs/plans/115-categories-to-browse.md,
      docs/plans/117-one-browse-view.md); the margin with its facts, its typed
      links, its other backlinks and its other actions. A day page's title is a day in words wherever a page is
-     listed. */}}
+     listed. The cover heads the margin, and the body does not draw it again (docs/plans/127-a-cover-for-every-page.md). */}}
 {{define "page"}}{{template "head" .}}
 {{$p := .Props}}
 <header class="page-head"><div class="what">
@@ -23,7 +23,7 @@
 {{if not $p.body}}<p class="empty">Nothing written here yet.</p>{{end}}
 {{template "body-editor" (dict "action" (.Action "save-body") "back" (.Link "self") "summary" "Edit")}}
 {{if $p.body}}<section class="page-body" aria-label="The page">
-<div class="prose">{{markdown $p.body}}</div>
+<div class="prose">{{$embed := ""}}{{with $p.cover}}{{$embed = .embed}}{{end}}{{markdownCover $p.body $embed}}</div>
 {{template "rejected-names" $p.body}}
 </section>{{end}}
 {{with $.Filed}}<section class="group filed" aria-label="Filed here">
@@ -33,6 +33,7 @@
 </div>
 
 <div class="margin">
+{{template "cover" .}}
 <section class="group" aria-label="Facts"><h2>Facts</h2>
 <dl class="facts">
 {{with $p.person}}{{with .name}}<dt>name</dt><dd class="words">{{.}}</dd>{{end}}{{with .birth_day}}<dt>born</dt><dd>{{$.Date .}}</dd>{{end}}{{with .death_day}}<dt>died</dt><dd>{{$.Date .}}</dd>{{end}}{{end}}
@@ -46,14 +47,41 @@
 {{if $groups}}<section class="group" aria-label="Backlinks"><h2>Backlinks</h2>{{range $groups}}<p class="sub">{{if eq .Key "wikilink"}}mentioned in{{else}}{{.Key}}{{end}}</p>
 <ul class="plain">{{range .Items}}<li><a href="/pages/{{num .id}}">{{$.Date .title}}</a>{{if ne .entity_type "page"}} <span class="badge">{{.entity_type}}</span>{{end}}</li>{{end}}</ul>{{end}}</section>{{end}}
 
-{{if or (.Action "rename") (.Action "promote") (.Action "link") (.Action "set-picture") (.Action "tombstone")}}<section class="group" aria-label="More"><h2>More</h2><div class="actions">
-{{template "boxed" (form (.Action "set-picture") "more" "preview")}}
+{{if or (.Action "rename") (.Action "promote") (.Action "link") (.Link "choose-cover") (.Action "tombstone")}}<section class="group" aria-label="More"><h2>More</h2><div class="actions">
+{{with .Link "choose-cover"}}<a class="button" href="{{.}}">{{if $p.cover}}Change cover photo{{else}}Set cover photo{{end}}</a>{{end}}
 {{template "boxed" (form (.Action "link") "button" "Add a typed link")}}
 {{template "boxed" (form (.Action "unlink") "button" "Remove a typed link")}}
 {{template "boxed" (form (.Action "rename"))}}
 {{template "boxed" (form (.Action "promote") "button" "Make it a person or a place")}}
 {{template "boxed" (form (.Action "tombstone"))}}</div></section>{{end}}
 </div>
+</div>
+{{template "foot" .}}{{end}}
+
+{{/* cover is the cover of a page or a day at the head of its margin: the picture as a square, then the other pictures
+     its body embeds as small squares, each a form of set-cover with its title (one press makes it the cover, no
+     script), and a last square that opens the picker of every kept picture (choose-cover). Nothing when there is no
+     cover. On a narrow screen it comes before the sheet (app.css). */}}
+{{define "cover"}}{{$p := .Props}}{{$set := .Action "set-cover"}}{{$choose := .Link "choose-cover"}}{{with $p.cover}}<section class="cover-box" aria-label="Cover photo">
+<figure class="cover"><img src="/pages/{{num .id}}/preview" alt="{{.title}}"></figure>
+{{if or (and $set $p.pictures) $choose}}<ul class="plain cover-thumbs" aria-label="Other pictures">{{if $set}}{{range $p.pictures}}<li><form method="post" action="{{$set.Href}}"><input type="hidden" name="back" value="{{$.Here}}"><input type="hidden" name="title" value="{{.title}}"><button type="submit" title="Make {{.title}} the cover"><img src="/pages/{{num .id}}/preview" alt="{{.title}}" loading="lazy"></button></form></li>{{end}}{{end}}{{with $choose}}<li><a class="more" href="{{.}}" title="Every kept picture"><span aria-hidden="true">+</span><span class="sr">Change cover photo</span></a></li>{{end}}</ul>{{end}}
+</section>{{end}}{{end}}
+
+{{/* cover-choice is GET /pages/{id}/cover: the page's cover, a new photo to send, and the kept pictures as tiles.
+     A tile is a form of set-cover with the picture's title: the picture is its button, so no script is needed.
+     The answer goes back to the page. */}}
+{{define "cover-choice"}}{{template "head" .}}
+{{$p := .Props}}{{$set := .Action "set-cover"}}{{$back := .Link "page"}}
+<header class="page-head"><div class="what"><span class="kind">cover photo</span>
+<h1>{{if $p.page.is_day_page}}{{$.Date $p.page.title}}{{else}}{{$p.page.title}}{{end}}</h1>
+<p class="sub"><a href="{{$back}}">Back to the page</a></p></div></header>
+<div class="sheet list cover-choice">
+<section aria-label="A new photo"><h2>A new photo</h2>{{template "form" (form $set "more" "title,preview" "back" $back "button" "Send and set as cover")}}</section>
+<section aria-label="Kept pictures"><h2>A kept picture</h2>
+{{if $p.rows}}<ul class="plain tiles">{{range $p.rows}}<li class="tile{{if .current}} current{{end}}"><form method="post" action="{{$set.Href}}"><input type="hidden" name="back" value="{{$back}}"><input type="hidden" name="title" value="{{.title}}">
+<button class="tile-link" type="submit"><img src="{{.picture}}" alt="" loading="lazy"><span class="first">{{.title}}</span><span class="meta">{{if .current}}the cover now{{else}}{{with .day}}{{$.Date .}}{{else}}no day{{end}}{{end}}</span></button></form></li>{{end}}</ul>
+{{else}}<p class="empty">No picture is kept yet. Send a new photo above.</p>{{end}}
+{{template "pager" .}}</section>
 </div>
 {{template "foot" .}}{{end}}
 

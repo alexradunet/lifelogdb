@@ -110,11 +110,11 @@ func TestAWriteToAPageThatIsNotLive(t *testing.T) {
 		{"save-body", func(id int64) error { _, err := s.SaveBody(ctx, "cli", id, "words", "1"); return err }},
 		{"rename", func(id int64) error { _, err := s.Rename(ctx, "cli", id, "New Title"); return err }},
 		{"file-pages", func(id int64) error { _, err := s.FilePages(ctx, "cli", []int64{id}, "Group", false); return err }},
-		{"set-picture", func(id int64) error {
-			_, err := s.SetPicture(ctx, "cli", id, "2026-10-16", FileIn{SHA256: sha('b'), MIME: "image/jpeg", Preview: phototest.JPEG(8, 8)})
+		{"set-cover", func(id int64) error {
+			_, err := s.SetCover(ctx, "cli", id, "2026-10-16", FileIn{SHA256: sha('b'), MIME: "image/jpeg", Preview: phototest.JPEG(8, 8)})
 			return err
 		}},
-		{"set-picture-of", func(id int64) error { _, err := s.SetPictureOf(ctx, "cli", id, "Ana.jpg"); return err }},
+		{"set-cover-of", func(id int64) error { _, err := s.SetCoverOf(ctx, "cli", id, "Ana.jpg"); return err }},
 	}
 	for _, w := range writes {
 		if err := w.write(missing); status(err) != 404 || err.Error() != "no page 9999" {

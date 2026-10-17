@@ -23,6 +23,7 @@ import (
 	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/mcp"
+	"lifelog/internal/photo/phototest"
 )
 
 // TestParityOfTheSurfaces is the parity table of the surfaces (AGENTS.md: client parity is a first-class contract). A
@@ -387,7 +388,36 @@ func parityRows() []parityRow {
 		parityRow{"resync-links", rowResyncLinks},
 		parityRow{"promote a place", rowPromoteAPlace},
 		parityRow{"register-metric with a range out of order", rowRangeOutOfOrder},
+		parityRow{"set-cover by a kept title", rowSetCover},
 	)
+}
+
+// set-cover with the title of a kept picture puts its embed first in the body, so it is the page's cover; the
+// page's picker lists it as the cover. A file page takes no cover, and a title that is no kept picture is refused.
+// A new photo is a file field, which an MCP tool does not carry (internal/mcp leaves out file fields).
+func rowSetCover(x *parityRun) {
+	ctx := x.t.Context()
+	k, err := x.store.AddFile(ctx, "cli", core.FileIn{Title: "Lake.jpg", SHA256: strings.Repeat("a", 64), MIME: "image/jpeg", Preview: phototest.JPEG(8, 8)})
+	if err != nil {
+		x.t.Fatal(err)
+	}
+	trip, _, err := x.store.CreatePage(ctx, "cli", "Trip", "Away.", "")
+	if err != nil {
+		x.t.Fatal(err)
+	}
+	x.ok("set-cover", map[string]string{"id": id(trip), "title": "Lake.jpg"})
+	p := x.pageByID(trip)
+	cover, _ := p["cover"].(map[string]any)
+	if p["body"] != "![[Lake.jpg]]\n\nAway." || cover["id"] != json.Number(id(k.ID)) || cover["title"] != "Lake.jpg" {
+		x.t.Errorf("Trip after set-cover: %q, cover %v", p["body"], p["cover"])
+	}
+	choice := props(x.t, apitest.Must(x.t)(x.read.Get(ctx, "/pages/"+id(trip)+"/cover")))
+	rows, _ := choice["rows"].([]any)
+	if len(rows) != 1 || rows[0].(map[string]any)["current"] != true {
+		x.t.Errorf("the picker of Trip: %v, want Lake.jpg as the cover", rows)
+	}
+	x.refused("set-cover", map[string]string{"id": id(k.ID), "title": "Lake.jpg"}, http.StatusUnprocessableEntity, "invalid")
+	x.refused("set-cover", map[string]string{"id": id(trip), "title": "Nothing.jpg"}, http.StatusUnprocessableEntity, "invalid")
 }
 
 // find opens the page with the title; a title that no page has is a 404.

@@ -8,6 +8,7 @@ Earlier closed plans live in git history (`git log -- docs/plans`). The next pla
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
+| [127](127-a-cover-for-every-page.md) | A cover for every page: the first picture of a page, beside it, in the lists and the calendar, set from a picker | P2 | M | owner word 2026-10-17; `2f568fe` | DONE |
 | [126](126-the-rule-book-review.md) | The rule-book review: the gaps against the five books, and the actions that close them | P1/P2/P3 | L | owner request 2026-10-17; `01221e5` | DONE |
 | [125](125-a-range-is-a-true-range.md) | A range is a true range: the schema refuses a scale's unit with its high number first | P3 | S | owner word 2026-10-17; `63e0a36` | DONE |
 | [124](124-true-comments-in-the-file.md) | True comments in the file: the comments inside CREATE TABLE say what is true | P3 | S | owner word 2026-10-17; `cdb7b8e` | DONE |

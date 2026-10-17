@@ -102,7 +102,7 @@ The `POST` routes of `/people`, `/places` and `/files` (`create-person`, `create
 | `recent[]` | list | the 5 newest live day pages up to today, the newest first |
 | `recent[].day` | day | the day |
 | `recent[].page_id` | integer | the day page's id |
-| `recent[].first_line` | string | the first line of its body that has text, as plain text: a heading's or a list item's marker and the brackets of a wikilink cut, 160 characters at most; absent when the body is empty |
+| `recent[].first_line` | string | the first line of its body that has text, as plain text: a heading's or a list item's marker and the brackets of a wikilink cut, an embed left out (a picture is not words, so a line of pictures alone is passed over), 160 characters at most; absent when the body has no such line |
 | `recent[].mood` | list | the values of the day's current Mood readings, in the order they were recorded; absent when none |
 | `on_this_day[]` | list | the live day pages of earlier years with the same month and day of the month, at most 10, the newest first; empty when none; 29 February matches 29 February only |
 | `on_this_day[].day` | day | the day |
@@ -190,7 +190,7 @@ too), `media` and `document`.
 | `rows[].category` | boolean | a page that is a category; absent otherwise |
 | `rows[].mentions` | integer | a person, a place, a file (not in `all`): the live pages that link to it, each counted once |
 | `rows[].last_day` | string | a person, a place: the day of the newest live day page among them; absent when none |
-| `rows[].picture` | string | a person, a file: the address of its picture; absent when none |
+| `rows[].picture` | string | the address of its cover's picture, or of a file's own; absent when none |
 | `rows[].mime` | string | a file (not in `all`): the type of the original |
 | `rows[].file_kind` | string | a file: the first part of its type, `image`, `video`, `audio`, `application`, `text`, … |
 | `rows[].day` | string | a file (not in `all`): its day (the day given, a photo's EXIF day, else the day it was kept), else the day of the newest live day page that shows it; absent when it has neither |
@@ -224,8 +224,8 @@ action `search` and no properties: a browser draws it as the page to search from
 `GET /days/{day}` (`/days/today` redirects; `GET /days/go?day=`, the action `open-day`, redirects to the day it
 names, or to today when `day` is absent or empty, and a value that is not a day is 422). Links:
 `prev`, `next` (the neighbouring days; 0000-01-01 has no `prev` and 9999-12-31 no `next`), `month` (its calendar),
-`page` (the day page, once it exists), `metrics`. Embedded: `reading` links to each measurement. Actions: `capture`,
-`record`, `open-day`, `save-body`
+`page` (the day page, once it exists), `metrics`, and `cover` and `choose-cover` as on [the day page](#page-person-place-file). Embedded: `reading` links to each measurement. Actions: `capture`,
+`record`, `open-day`, `set-cover` and `save-body`
 of the day page once it exists (its body and `version` filled in). The write `capture`
 answers with this entity and a `result` of the sync shape; its field `mood` has the `options` 1 to 5.
 
@@ -251,6 +251,14 @@ answers with this entity and a `result` of the sync shape; its field `mood` has 
 | `on_this_day[].first_line` | string | the first line of its body (as `recent[]` of the root); absent when the body is empty |
 | `on_this_day[].mood` | list | the values of the day's current Mood readings; absent when none |
 | `today` | day | this machine's local day |
+| `cover` | object | the day page's cover, as `cover` of [a page](#page-person-place-file); absent when it has none |
+| `cover.id` | integer | |
+| `cover.title` | string | |
+| `cover.embed` | string | |
+| `pictures[]` | list | the other pictures of the day page, as `pictures[]` of [a page](#page-person-place-file) |
+| `pictures[].id` | integer | |
+| `pictures[].title` | string | |
+| `pictures[].embed` | string | |
 
 The **reading** shape (`readings[]` here and in a series; a measurement's own properties):
 
@@ -288,6 +296,7 @@ names it ([plan 101](docs/plans/101-the-calendar-holds-every-dated-thing.md)).
 | `days[].items[].years` | integer | a birthday's or a death's: the whole years since the day the person's row holds; absent on that day |
 | `days[].more_pages` | integer | the pages and files of the day after the first 20 in `items[]`; absent when none |
 | `days[].readings` | integer | the current readings on the day, of every metric but the Mood (`mood` holds those); absent when none |
+| `days[].picture` | string | the address of the picture of the day page's cover (as `cover` of [a page](#page-person-place-file)); absent when it has none |
 
 ### week
 
@@ -315,6 +324,7 @@ year; absent in the year 0000, which has no page), `index`. Embedded: a `day` li
 | `days[].items[].years` | integer | a birthday's or a death's: the whole years since the day the person's row holds; absent on that day |
 | `days[].more_pages` | integer | the pages and files of the day after the first 20 in `items[]`; absent when none |
 | `days[].readings` | integer | the current readings on the day, of every metric but the Mood (`mood` holds those); absent when none |
+| `days[].picture` | string | the address of the picture of the day page's cover (as `cover` of [a page](#page-person-place-file)); absent when it has none |
 | `metrics[]` | list | each metric with a current reading in the week, by name |
 | `metrics[].metric` | string | the metric's name |
 | `metrics[].unit` | string | its unit; empty for a metric with none |
@@ -344,21 +354,27 @@ twelve months of a year. Links: `prev`, `next` (the years before and after; 0001
 ### page, person, place, file
 
 `GET /pages/{id}`; `GET /pages?title=` redirects to it. The class is the page's type; a day page adds `day-page`, a
-tombstoned page adds `deleted`. Links: `day` (a day page's day view), `preview` (a file's picture). Embedded: every outgoing link under its kind, every incoming one under `backlink` and its kind, with the class
+tombstoned page adds `deleted`. Links: `day` (a day page's day view), `preview` (a file's picture), `cover` (the
+picture of the page's cover, when it has one), `choose-cover` (the [pictures it may take](#cover-choice): a live page that
+is not a file). Embedded: every outgoing link under its kind, every incoming one under `backlink` and its kind, with the class
 `category` added to a `part-of` backlink from a category page. Actions by
 what is legal: `save-body` (with the current `body` and `version` filled; an empty `body` is refused, so a save
 cannot empty a page), `promote`, `rename`, `link` and `unlink` (with the kinds this type may start), [`file-pages`](#filed) (a page that may
 be `part-of`, not a day page: `ids` is this page, and `category` offers the category titles; a new title is made),
 `create-page` with `category` filled (a live category page: something is `part-of` it; the new page is made and
-filed in it in one write), `set-picture` (a person), `tombstone`, or `revive` alone on a deleted page. In a browser, the page of a
+filed in it in one write), `set-cover` (a live page that is not a file), `tombstone`, or `revive` alone on a deleted page. In a browser, the page of a
 live metric answers 303 to its series, the metric's one page, which carries this page's text, links and actions. The
 writes answer with this entity; `create-page` and `save-body` carry a `result` of the sync shape, `add-file` the kept
-shape. `set-picture` (`POST /pages/{id}/picture`) puts `![[title]]` first in the body, unless that file is the page's
-picture already (the first live file with a preview that the body embeds). It takes a new photo as `original` (and
+shape. A page's cover is the first live file with a preview that its body embeds; a file page has none, its own
+picture stands for it. A browser draws the cover as a square at the head of the margin, with the other `pictures`
+under it, and leaves that embed out of the body.
+`set-cover` (`POST /pages/{id}/cover`) puts `![[title]]` first in the body, unless that file is the page's
+cover already; a file the body embeds already trades places with the cover's embed, each with its label, so the body
+keeps each picture once. It takes a new photo as `original` (and
 `preview` when the photo is not a JPEG, PNG or GIF), kept as a file with no day and titled
-`<page> <today>.jpg` (` 2`, ` 3`… when taken) unless `title` names it; its `result` is the kept shape. Or it takes
-the `title` of a kept file with a preview, and its `result` is the sync shape. A photo with no picture, or a title
-that is not a kept picture, is refused (422).
+`<page> <today>.jpg`, a day page's `<day>.jpg` (` 2`, ` 3`… when taken) unless `title` names it; its `result` is the kept shape. Or it takes
+the `title` of a kept file with a preview, and its `result` is the sync shape. A photo with no picture, a title
+that is not a kept picture, or a file page, is refused (422).
 
 | property | type | meaning |
 |---|---|---|
@@ -379,6 +395,14 @@ that is not a kept picture, is refused (422).
 | `file.sha256` | string | the SHA-256 of the original, hex |
 | `file.mime` | string | its media type |
 | `file.preview` | boolean | a picture is kept (`GET /pages/{id}/preview`) |
+| `cover` | object | the page's cover: the first live file with a preview that the body embeds; absent for a file page and a page with none |
+| `cover.id` | integer | the file's page id (its picture is `GET /pages/{id}/preview`) |
+| `cover.title` | string | the file's title |
+| `cover.embed` | string | the title as the body's embed writes it, which may be an alias: a reader that draws the cover apart from the body leaves out the first embed of that title |
+| `pictures[]` | list | the other live files with a preview that the body embeds, after the cover, each once, in the order of the body; absent when none |
+| `pictures[].id` | integer | the file's page id |
+| `pictures[].title` | string | its title: the `title` that `set-cover` takes |
+| `pictures[].embed` | string | the title as the body's embed writes it |
 | `links[]` | list | the typed links this page starts |
 | `links[].kind` | string | the link kind (`wikilink`, `at`, `part-of`) |
 | `links[].id` | integer | the other page's id |
@@ -391,6 +415,31 @@ that is not a kept picture, is refused (422).
 | `backlinks[].title` | string | |
 | `backlinks[].entity_type` | string | |
 | `backlinks[].note` | string | |
+
+### cover-choice
+
+`GET /pages/{id}/cover`: the pictures a page may take as its cover, newest day first (as the media list orders
+them), paged (48 rows). Links: `page` (the page). Actions: `set-cover` of the page. A file page is 404 (its own picture
+is its cover), a deleted page 409.
+
+| property | type | meaning |
+|---|---|---|
+| `page` | object | the page |
+| `page.id` | integer | its id |
+| `page.title` | string | its title |
+| `page.is_day_page` | boolean | it is a day page |
+| `cover` | object | its cover, as `cover` of [a page](#page-person-place-file); absent when it has none |
+| `cover.id` | integer | |
+| `cover.title` | string | |
+| `cover.embed` | string | |
+| `rows[]` | list | the live files that keep a picture, of any kind |
+| `rows[].id` | integer | the file's page id |
+| `rows[].title` | string | its title: the `title` that `set-cover` takes |
+| `rows[].picture` | string | the address of its picture |
+| `rows[].day` | day | its day, as the media list says it; absent when it has none |
+| `rows[].current` | boolean | it is the page's cover; absent otherwise |
+| `limit` | integer | the page size used |
+| `offset` | integer | the rows skipped |
 
 ### measurement
 

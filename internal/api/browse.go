@@ -57,7 +57,7 @@ type browseRow struct {
 	Category bool   `json:"category,omitempty"` // a page that is a category
 	Mentions *int   `json:"mentions,omitempty"` // a person, a place, a file: the live pages that link to it
 	LastDay  string `json:"last_day,omitempty"` // a person, a place: the newest day page among them
-	Picture  string `json:"picture,omitempty"`  // a person, a file: the address of its picture
+	Picture  string `json:"picture,omitempty"`  // the address of its cover, or of a file's own picture
 	MIME     string `json:"mime,omitempty"`     // a file: the type of the original
 	FileKind string `json:"file_kind,omitempty"`
 	Day      string `json:"day,omitempty"`  // a file: its day, as the media list says it
@@ -363,7 +363,7 @@ func (h *server) pageRows(ctx context.Context, rd browseRead) ([]browseRow, page
 	found, props, err := readList(rd, func(limit, offset int) ([]core.PageRow, error) { return h.s.PlainPages(ctx, rd.sc, limit, offset) })
 	rows := []browseRow{}
 	for _, p := range found {
-		rows = append(rows, browseRow{ID: p.ID, Title: p.Title, Type: "page", Kind: "page", Category: p.Category})
+		rows = append(rows, browseRow{ID: p.ID, Title: p.Title, Type: "page", Kind: "page", Category: p.Category, Picture: pictureHref(p.Picture)})
 	}
 	return rows, props, err
 }
@@ -376,11 +376,8 @@ func (h *server) namedRows(ctx context.Context, rd browseRead) ([]browseRow, pag
 	})
 	rows := []browseRow{}
 	for _, p := range found {
-		row := browseRow{ID: p.ID, Title: p.Title, Type: kind, Kind: kind, Mentions: &p.Mentions, LastDay: p.LastDay}
-		if p.Picture != 0 {
-			row.Picture = siren.PageHref(p.Picture) + "/preview"
-		}
-		rows = append(rows, row)
+		rows = append(rows, browseRow{ID: p.ID, Title: p.Title, Type: kind, Kind: kind, Mentions: &p.Mentions, LastDay: p.LastDay,
+			Picture: pictureHref(p.Picture)})
 	}
 	return rows, props, err
 }
@@ -410,7 +407,7 @@ func (h *server) metricRows(ctx context.Context, rd browseRead) ([]browseRow, pa
 	found, props, err := readList(rd, func(limit, offset int) ([]core.MetricRow, error) { return h.s.MetricRows(ctx, rd.sc, limit, offset) })
 	rows := []browseRow{}
 	for _, m := range found {
-		rows = append(rows, browseRow{ID: m.ID, Title: m.Title, Type: "metric", Kind: "metric", Unit: m.Unit})
+		rows = append(rows, browseRow{ID: m.ID, Title: m.Title, Type: "metric", Kind: "metric", Unit: m.Unit, Picture: pictureHref(m.Picture)})
 	}
 	return rows, props, err
 }
@@ -420,9 +417,18 @@ func (h *server) filedRows(ctx context.Context, rd browseRead) ([]browseRow, pag
 	found, props, err := readList(rd, func(limit, offset int) ([]core.FiledRow, error) { return h.s.FiledIn(ctx, rd.sc.In, limit, offset) })
 	rows := []browseRow{}
 	for _, f := range found {
-		rows = append(rows, browseRow{ID: f.ID, Title: f.Title, Type: f.Type, Kind: f.Kind, Category: f.Category, FileKind: fileKind(f.MIME)})
+		rows = append(rows, browseRow{ID: f.ID, Title: f.Title, Type: f.Type, Kind: f.Kind, Category: f.Category, FileKind: fileKind(f.MIME),
+			Picture: pictureHref(f.Picture)})
 	}
 	return rows, props, err
+}
+
+// pictureHref is the address of the picture of the file with the id; "" for 0, no file.
+func pictureHref(id int64) string {
+	if id == 0 {
+		return ""
+	}
+	return siren.PageHref(id) + "/preview"
 }
 
 // fileKind is the part of a file's type before the '/': image, video, audio, application, text. A stored type has

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"lifelog/internal/core"
@@ -80,4 +81,67 @@ func TestFileCommandFilesInACategory(t *testing.T) {
 	if all != 1 || filed != 1 || file == 0 {
 		t.Errorf("%d part-of links, %d from memo.txt (%d) to Papers (%d): want the one link", all, filed, file, cat)
 	}
+}
+
+// TestCoverCommand is `lifelog cover PAGE-ID PHOTO` and `lifelog cover PAGE-ID --title T` on a throwaway database:
+// a new photo is kept as a file with no day and becomes the page's cover; a kept picture named by its title becomes
+// it next. A file page takes no cover, and a call with neither a photo nor a title is refused before it sends.
+func TestCoverCommand(t *testing.T) {
+	dir, live := t.TempDir(), dbtest.File(t)
+	pic, other := filepath.Join(dir, "trip.jpg"), filepath.Join(dir, "other.jpg")
+	os.WriteFile(pic, phototest.JPEG(64, 48), 0o644)
+	os.WriteFile(other, phototest.JPEG(48, 64), 0o644)
+	e, _, _ := testEnv(t)
+	run := func(args ...string) error { return runArgs(t.Context(), e, append(args, "--db", live)) }
+	if err := run("file", other, "--title", "Other.jpg"); err != nil {
+		t.Fatal(err)
+	}
+	d, err := db.Open(t.Context(), live)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	s := &core.Store{DB: d}
+	trip, _, err := s.CreatePage(t.Context(), "cli", "Trip", "Away.", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cover := func() string {
+		t.Helper()
+		p, err := s.PageByID(t.Context(), trip)
+		if err != nil || p.Cover == nil {
+			t.Fatalf("Trip: %v, cover %+v", err, p)
+		}
+		return p.Cover.Title
+	}
+	if err := run("cover", strconv.FormatInt(trip, 10), pic, "--title", "Trip cover.jpg"); err != nil {
+		t.Fatal(err)
+	}
+	if got := cover(); got != "Trip cover.jpg" {
+		t.Errorf("the cover after a new photo = %q, want Trip cover.jpg", got)
+	}
+	if f, err := s.PageByID(t.Context(), mustID(t, s, "Trip cover.jpg")); err != nil || f.Type != "file" || f.Day != "" {
+		t.Errorf("the new photo: %v %+v, want a file with no day", err, f)
+	}
+	if err := run("cover", strconv.FormatInt(trip, 10), "--title", "Other.jpg"); err != nil {
+		t.Fatal(err)
+	}
+	if got := cover(); got != "Other.jpg" {
+		t.Errorf("the cover after a kept picture = %q, want Other.jpg", got)
+	}
+	if err := run("cover", strconv.FormatInt(mustID(t, s, "Other.jpg"), 10), "--title", "Other.jpg"); err == nil {
+		t.Error("a file page took a cover")
+	}
+	if err := run("cover", strconv.FormatInt(trip, 10)); err == nil {
+		t.Error("cover with neither a photo nor a title was taken")
+	}
+}
+
+func mustID(t *testing.T, s *core.Store, title string) int64 {
+	t.Helper()
+	id, err := s.PageID(t.Context(), title)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
 }

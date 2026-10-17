@@ -52,10 +52,13 @@ const isCategory = `EXISTS (SELECT 1 FROM links c WHERE c.kind = 'part-of' AND c
 var browseKind = `CASE WHEN p.entity_type <> 'file' THEN p.entity_type WHEN ` + isMedia + ` THEN 'media' ELSE 'document' END`
 
 // PageRow is a live plain page as Browse lists it. Category says that it is a category: a part-of link ends at it.
+// Picture is its cover (0 when it has none).
 type PageRow struct {
 	ID       int64
 	Title    string
 	Category bool
+	Picture  int64
+	body     string
 }
 
 // PlainPages is one page of the live plain pages in the scope, by title (the folded title, preferred_name_key, as the
@@ -64,34 +67,46 @@ type PageRow struct {
 func (s *Store) PlainPages(ctx context.Context, sc Scope, limit, offset int) ([]PageRow, error) {
 	where, args := sc.where()
 	rows, err := s.DB.R.QueryContext(ctx, `
-		SELECT p.id, p_name.title, `+isCategory+`
+		SELECT p.id, p_name.title, `+isCategory+`, p.body
 		  FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
 		 WHERE `+plainPage+` AND `+where+`
 		 ORDER BY p.preferred_name_key LIMIT ? OFFSET ?`, append(args, limit, offset)...)
-	return list(rows, err, func(r *PageRow) []any { return []any{&r.ID, &r.Title, &r.Category} })
+	out, err := list(rows, err, func(r *PageRow) []any { return []any{&r.ID, &r.Title, &r.Category, &r.body} })
+	if err != nil {
+		return nil, err
+	}
+	return out, setPictures(ctx, s.DB.R, out, func(r *PageRow) (string, *int64) { return r.body, &r.Picture })
 }
 
-// MetricRow is a live metric as Browse lists it: its page's id, its name and its unit ("" for a count or a habit).
+// MetricRow is a live metric as Browse lists it: its page's id, its name, its unit ("" for a count or a habit) and
+// its cover (Picture, 0 when it has none).
 type MetricRow struct {
-	ID    int64
-	Title string
-	Unit  string
+	ID      int64
+	Title   string
+	Unit    string
+	Picture int64
+	body    string
 }
 
 // MetricRows is one page of the live metrics in the scope, by title. The values are on the board of /metrics.
 func (s *Store) MetricRows(ctx context.Context, sc Scope, limit, offset int) ([]MetricRow, error) {
 	where, args := sc.where()
 	rows, err := s.DB.R.QueryContext(ctx, `
-		SELECT p.id, p_name.title, m.unit
+		SELECT p.id, p_name.title, m.unit, p.body
 		  FROM metrics m JOIN entities p ON p.id = m.id
 		  JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
 		 WHERE p.deleted_at IS NULL AND `+where+`
 		 ORDER BY p.preferred_name_key LIMIT ? OFFSET ?`, append(args, limit, offset)...)
-	return list(rows, err, func(r *MetricRow) []any { return []any{&r.ID, &r.Title, &r.Unit} })
+	out, err := list(rows, err, func(r *MetricRow) []any { return []any{&r.ID, &r.Title, &r.Unit, &r.body} })
+	if err != nil {
+		return nil, err
+	}
+	return out, setPictures(ctx, s.DB.R, out, func(r *MetricRow) (string, *int64) { return r.body, &r.Picture })
 }
 
 // FiledRow is a live thing filed in a category: its id, title and type, its Browse kind (BrowseKinds), whether it
-// is a category itself, and the type of a file's original ("" for any other thing).
+// is a category itself, the type of a file's original ("" for any other thing) and the file whose preview stands
+// for it (Picture): its cover, or a file's own preview; 0 when there is none.
 type FiledRow struct {
 	ID       int64
 	Title    string
@@ -99,6 +114,9 @@ type FiledRow struct {
 	Kind     string
 	Category bool
 	MIME     string
+	Picture  int64
+	body     string
+	preview  bool
 }
 
 // FiledIn is one page of every live thing filed directly in the category page with that id: the categories under
@@ -106,12 +124,33 @@ type FiledRow struct {
 func (s *Store) FiledIn(ctx context.Context, category int64, limit, offset int) ([]FiledRow, error) {
 	where, args := Scope{In: category}.where()
 	rows, err := s.DB.R.QueryContext(ctx, `
-		SELECT p.id, p_name.title, p.entity_type, `+browseKind+`, `+isCategory+` AS category, coalesce(f.mime, '')
+		SELECT p.id, p_name.title, p.entity_type, `+browseKind+`, `+isCategory+` AS category, coalesce(f.mime, ''),
+		       p.body, f.preview IS NOT NULL
 		  FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
 		  LEFT JOIN files f ON f.id = p.id
 		 WHERE p.deleted_at IS NULL AND `+where+`
 		 ORDER BY category DESC, p.preferred_name_key LIMIT ? OFFSET ?`, append(args, limit, offset)...)
-	return list(rows, err, func(r *FiledRow) []any { return []any{&r.ID, &r.Title, &r.Type, &r.Kind, &r.Category, &r.MIME} })
+	out, err := list(rows, err, func(r *FiledRow) []any {
+		return []any{&r.ID, &r.Title, &r.Type, &r.Kind, &r.Category, &r.MIME, &r.body, &r.preview}
+	})
+	if err != nil {
+		return nil, err
+	}
+	// A file has no cover: its own preview stands for it.
+	if err := setPictures(ctx, s.DB.R, out, func(r *FiledRow) (string, *int64) {
+		if r.Type == "file" {
+			return "", &r.Picture
+		}
+		return r.body, &r.Picture
+	}); err != nil {
+		return nil, err
+	}
+	for i := range out {
+		if out[i].preview {
+			out[i].Picture = out[i].ID
+		}
+	}
+	return out, nil
 }
 
 // BrowseCounts counts the live things of each Browse kind in the scope, by kind (a kind with none is 0), with "all",
@@ -150,9 +189,9 @@ type NamedRow struct {
 	Mentions int
 	// LastDay is the day of the newest live day page among those pages. It is "" when there is none.
 	LastDay string
-	// Picture is the file whose preview stands for a person: the first embed of its body (![[title]]) that names a
-	// live file with a preview. It is 0 when there is none, and for a place.
+	// Picture is its cover (0 when it has none).
 	Picture int64
+	body    string
 }
 
 // NamedMentions is one page of the live people or places in the scope, by title (the folded title,
@@ -170,25 +209,11 @@ func (s *Store) NamedMentions(ctx context.Context, typ string, sc Scope, limit, 
 		 WHERE p.entity_type = ? AND p.deleted_at IS NULL AND `+where+`
 		 GROUP BY p.id, p_name.title
 		 ORDER BY p.preferred_name_key LIMIT ? OFFSET ?`, append(append([]any{typ}, args...), limit, offset)...)
-	out, bodies := []NamedRow{}, []string{}
-	var r NamedRow
-	var body string
-	if err := each(rows, err, []any{&r.ID, &r.Title, &r.Mentions, &r.LastDay, &body}, func() {
-		out, bodies = append(out, r), append(bodies, body)
-	}); err != nil {
-		return nil, err
-	}
-	if typ != "person" {
-		return out, nil
-	}
-	pictures, err := firstPictures(ctx, s.DB.R, bodies)
+	out, err := list(rows, err, func(r *NamedRow) []any { return []any{&r.ID, &r.Title, &r.Mentions, &r.LastDay, &r.body} })
 	if err != nil {
 		return nil, err
 	}
-	for i := range out {
-		out[i].Picture = pictures[i]
-	}
-	return out, nil
+	return out, setPictures(ctx, s.DB.R, out, func(r *NamedRow) (string, *int64) { return r.body, &r.Picture })
 }
 
 // mediaKinds are the kinds of file the media list of Browse shows, named by the first part of files.mime, in the
@@ -225,18 +250,24 @@ var isMedia = mediaKind + ` IN ('` + strings.Join(mediaKinds, `', '`) + `')`
 // Media is one page of the live files of the media kinds in the scope: all of them, or the one kind named. Newest
 // day first (FileRow.Day), then the newest kept.
 func (s *Store) Media(ctx context.Context, kind string, sc Scope, limit, offset int) ([]FileRow, error) {
-	return s.filesOf(ctx, true, kind, sc, limit, offset)
+	return s.filesWhere(ctx, `(`+isMedia+`) AND (? = '' OR `+mediaKind+` = ?)`, []any{kind, kind}, sc, limit, offset)
 }
 
 // OtherFiles is one page of the live files of every other kind (a PDF, a text) in the scope: the documents, in the
 // order of Media.
 func (s *Store) OtherFiles(ctx context.Context, sc Scope, limit, offset int) ([]FileRow, error) {
-	return s.filesOf(ctx, false, "", sc, limit, offset)
+	return s.filesWhere(ctx, `NOT (`+isMedia+`)`, nil, sc, limit, offset)
 }
 
-// filesOf is one page of the live files of the media kinds (media true) or of every other kind, one media kind alone
-// when kind names it, in the scope.
-func (s *Store) filesOf(ctx context.Context, media bool, kind string, sc Scope, limit, offset int) ([]FileRow, error) {
+// Pictures is one page of the live files that keep a picture, of any kind, in the order of Media: the covers a page
+// may take (SetCoverOf).
+func (s *Store) Pictures(ctx context.Context, limit, offset int) ([]FileRow, error) {
+	return s.filesWhere(ctx, `f.preview IS NOT NULL`, nil, Scope{}, limit, offset)
+}
+
+// filesWhere is one page of the live files in the scope that meet cond, a condition on the file f with its
+// arguments, in the order of Media.
+func (s *Store) filesWhere(ctx context.Context, cond string, condArgs []any, sc Scope, limit, offset int) ([]FileRow, error) {
 	where, args := sc.where()
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT p.id, p_name.title, f.mime, f.preview IS NOT NULL,
@@ -248,11 +279,9 @@ func (s *Store) filesOf(ctx context.Context, media bool, kind string, sc Scope, 
 		  LEFT JOIN links l ON l.to_id = p.id
 		  LEFT JOIN entities lp ON lp.id = l.from_id AND lp.deleted_at IS NULL
 		  LEFT JOIN entity_names lp_name ON lp_name.entity_id = lp.id AND lp_name.name_key = lp.preferred_name_key
-		 WHERE p.deleted_at IS NULL
-		   AND (`+isMedia+`) = ?
-		   AND (? = '' OR `+mediaKind+` = ?) AND `+where+`
+		 WHERE p.deleted_at IS NULL AND `+cond+` AND `+where+`
 		 GROUP BY p.id, p_name.title, f.mime, f.preview IS NOT NULL
-		 ORDER BY day DESC, p.created_at DESC, p.id DESC LIMIT ? OFFSET ?`, append(append([]any{media, kind, kind}, args...), limit, offset)...)
+		 ORDER BY day DESC, p.created_at DESC, p.id DESC LIMIT ? OFFSET ?`, append(append(condArgs, args...), limit, offset)...)
 	return list(rows, err, func(r *FileRow) []any { return []any{&r.ID, &r.Title, &r.MIME, &r.Picture, &r.Day, &r.Mentions} })
 }
 

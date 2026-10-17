@@ -255,8 +255,12 @@ type Page struct {
 	IsDayPage bool    `json:"is_day_page"`
 	Person    *Person `json:"person,omitempty"`
 	File      *File   `json:"file,omitempty"`
-	Out       []Edge  `json:"links"`
-	In        []Edge  `json:"backlinks"`
+	Cover     *Cover  `json:"cover,omitempty"` // nil for a file page, and for a page with no cover
+	// Pictures are the other pictures the body embeds, after the cover, each once, in the order of the body: each
+	// may become the cover (SetCoverOf).
+	Pictures []Cover `json:"pictures,omitempty"`
+	Out      []Edge  `json:"links"`
+	In       []Edge  `json:"backlinks"`
 }
 
 type Person struct {
@@ -296,6 +300,8 @@ func (s *Store) PageByID(ctx context.Context, id int64) (*Page, error) {
 			Scan(&p.File.SHA256, &p.File.MIME, &p.File.Preview); err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return nil, err
 		}
+	} else if p.Cover, p.Pictures, err = picturesOf(ctx, s.DB.R, p.Body); err != nil {
+		return nil, err
 	}
 	// outgoing edges to live entities
 	if p.Out, err = s.edges(ctx, `

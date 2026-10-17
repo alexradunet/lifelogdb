@@ -15,10 +15,10 @@ import (
 // stored; the title and text of its page; its preview, a JPEG preview.Make made (nil for none). Its day is Day when
 // the caller gives one, else Taken, else today for ordinary files. Unknown-capture mode follows
 // docs/cookbook/keep-a-file.md: a photo with no day of its own has no day, and goes in no day page. dayOf finds that
-// mode for a photo (an image/* type); setPicture gives it to a file of any type (unknownCaptureDay). A photo's
+// mode for a photo (an image/* type); setCover gives it to a file of any type (unknownCaptureDay). A photo's
 // position is never read (D21). Category is the title of the category to file the page in ("" for none).
 type FileIn struct {
-	unknownCaptureDay bool // no day of its own, whatever the type: only setPicture sets it (dayOf)
+	unknownCaptureDay bool // no day of its own, whatever the type: only setCover sets it (dayOf)
 	Title             string
 	Category          string
 	SHA256            string
@@ -79,7 +79,7 @@ type fileDay struct {
 // own says whether the file belongs to its day: only then ownDay reports the day and embeds the picture.
 func (d fileDay) own() bool { return d.Kind == dayOwn }
 
-// dayOf finds the day of the file f. Unknown capture is explicit (unknownCaptureDay, set by setPicture for a file of
+// dayOf finds the day of the file f. Unknown capture is explicit (unknownCaptureDay, set by setCover for a file of
 // any type) or found here for a photo (an image/* type) with neither Day nor Taken.
 func (t *Tx) dayOf(f FileIn) fileDay {
 	photoWithNoDay := strings.HasPrefix(f.MIME, "image/") && f.Day == "" && f.Taken == ""

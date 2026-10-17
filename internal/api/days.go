@@ -156,6 +156,10 @@ type dayView struct {
 	// OnThisDay are the day pages of earlier years on this month and day.
 	OnThisDay []recentDay `json:"on_this_day"`
 	Today     string      `json:"today"`
+	// Cover is the cover of the day page, which the journal draws above it; absent when it has none.
+	Cover *core.Cover `json:"cover,omitempty"`
+	// Pictures are the other pictures of the day page, as on a page.
+	Pictures []core.Cover `json:"pictures,omitempty"`
 }
 
 func (h *server) day(r *http.Request) (*siren.Entity, error) {
@@ -208,6 +212,11 @@ func (h *server) dayEntity(ctx context.Context, day string) (*siren.Entity, erro
 			return nil, err
 		}
 		e.Actions = append(e.Actions, saveBodyAction(d.PageID, p.Body, p.Version))
+		e.Links = append(e.Links, coverLinks(p)...)
+		e.Actions = append(e.Actions, action("set-cover", idParam(d.PageID), nil))
+		dv := e.Properties.(dayView)
+		dv.Cover, dv.Pictures = p.Cover, p.Pictures
+		e.Properties = dv
 	}
 	for _, m := range d.Readings {
 		e.Entities = append(e.Entities, link("reading", siren.MeasurementHref(m.ID), m.Metric+" "+view.Num(m.Value)))

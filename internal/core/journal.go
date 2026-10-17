@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"regexp"
 	"strings"
 
 	"lifelog/internal/text"
@@ -151,6 +152,9 @@ type DayEntry struct {
 	Day       string `json:"day"`
 	PageID    int64  `json:"page_id"`
 	FirstLine string `json:"first_line,omitempty"`
+	// Picture is the day page's cover (0 when it has none); the calendar draws it behind the day.
+	Picture int64  `json:"-"`
+	body    string // read for Picture
 }
 
 // DayEntries are the live day pages from from through through: in day order, or the newest first, and at most limit
@@ -186,29 +190,32 @@ func (s *Store) dayEntries(ctx context.Context, cond, order string, limit int, a
 		 ORDER BY p.day `+order+` LIMIT ?`, append(args, limit)...)
 	out := []DayEntry{}
 	var e DayEntry
-	var body string
-	if err := each(rows, err, []any{&e.Day, &e.PageID, &body}, func() {
-		e.FirstLine = firstLine(body)
+	if err := each(rows, err, []any{&e.Day, &e.PageID, &e.body}, func() {
+		e.FirstLine = firstLine(e.body)
 		out = append(out, e)
 	}); err != nil {
 		return nil, err
 	}
-	return out, nil
+	return out, setPictures(ctx, s.DB.R, out, func(e *DayEntry) (string, *int64) { return e.body, &e.Picture })
 }
+
+// embedMark is an ![[embed]] in a line, its label with it.
+var embedMark = regexp.MustCompile(`!\[\[[^\[\]\n\r]*\]\]`)
 
 // firstLineRunes is how long a first line may be before it is cut.
 const firstLineRunes = 160
 
-// firstLine is the first line of a body that has text, as plain text: a heading's or a list item's marker cut, the
-// brackets of a [[wikilink]] cut, and cut with "…" after 160 characters. It is for a list of days, not a rendering.
+// firstLine is the first line of a body that has text, as plain text: a heading's or a list item's marker cut, an
+// ![[embed]] left out (a picture is not words, and a cover goes first in the body), the brackets of a [[wikilink]]
+// cut, and cut with "…" after 160 characters. It is for a list of days, not a rendering.
 func firstLine(body string) string {
 	for line := range strings.SplitSeq(body, "\n") {
-		line = strings.TrimSpace(line)
+		line = strings.TrimSpace(embedMark.ReplaceAllString(line, ""))
 		line = strings.TrimSpace(text.BlockMark.ReplaceAllString(line, ""))
 		if line == "" {
 			continue
 		}
-		line = strings.NewReplacer("![[", "", "[[", "", "]]", "").Replace(line)
+		line = strings.NewReplacer("[[", "", "]]", "").Replace(line)
 		if r := []rune(line); len(r) > firstLineRunes {
 			line = strings.TrimSpace(string(r[:firstLineRunes])) + "…"
 		}

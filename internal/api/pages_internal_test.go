@@ -26,6 +26,7 @@ func TestPageActionsByTypeAndState(t *testing.T) {
 			"save-body /pages/9/body version:4",
 			"promote /pages/9/promote to=person|place",
 			"rename /pages/9/rename",
+			"set-cover /pages/9/cover",
 			"link /pages/9/links kind=part-of",
 			"unlink /pages/9/unlink kind=part-of",
 			"file-pages /pages/file ids:9 category=Health move=0|1 move:0",
@@ -36,6 +37,7 @@ func TestPageActionsByTypeAndState(t *testing.T) {
 			"save-body /pages/9/body version:4",
 			"promote /pages/9/promote to=person|place",
 			"rename /pages/9/rename",
+			"set-cover /pages/9/cover",
 			"link /pages/9/links kind=part-of",
 			"unlink /pages/9/unlink kind=part-of",
 			"file-pages /pages/file ids:9 category=Health move=0|1 move:0",
@@ -43,6 +45,7 @@ func TestPageActionsByTypeAndState(t *testing.T) {
 		}},
 		{"a day page", core.Page{ID: 2, Type: "page", Title: "2026-10-16", Day: "2026-10-16", IsDayPage: true, Version: "1"}, []string{"at"}, []string{
 			"save-body /pages/2/body version:1",
+			"set-cover /pages/2/cover",
 			"link /pages/2/links kind=at",
 			"unlink /pages/2/unlink kind=at",
 			"tombstone /pages/2/tombstone",
@@ -50,7 +53,7 @@ func TestPageActionsByTypeAndState(t *testing.T) {
 		{"a person", core.Page{ID: 5, Type: "person", Title: "Ana", Version: "2", Person: &core.Person{Name: "Ana Popescu"}}, []string{"part-of"}, []string{
 			"save-body /pages/5/body version:2",
 			"rename /pages/5/rename",
-			"set-picture /pages/5/picture",
+			"set-cover /pages/5/cover",
 			"link /pages/5/links kind=part-of",
 			"unlink /pages/5/unlink kind=part-of",
 			"file-pages /pages/file ids:5 category=Health|Writing move=0|1 move:0",
@@ -59,6 +62,7 @@ func TestPageActionsByTypeAndState(t *testing.T) {
 		{"a place", core.Page{ID: 6, Type: "place", Title: "Lisbon", Version: "1"}, []string{"part-of"}, []string{
 			"save-body /pages/6/body version:1",
 			"rename /pages/6/rename",
+			"set-cover /pages/6/cover",
 			"link /pages/6/links kind=part-of",
 			"unlink /pages/6/unlink kind=part-of",
 			"file-pages /pages/file ids:6 category=Health|Writing move=0|1 move:0",
@@ -75,6 +79,7 @@ func TestPageActionsByTypeAndState(t *testing.T) {
 		{"a metric", core.Page{ID: 7, Type: "metric", Title: "weight", Version: "3"}, []string{"part-of"}, []string{
 			"save-body /pages/7/body version:3",
 			"rename /pages/7/rename",
+			"set-cover /pages/7/cover",
 			"link /pages/7/links kind=part-of",
 			"unlink /pages/7/unlink kind=part-of",
 			"file-pages /pages/file ids:7 category=Health|Writing move=0|1 move:0",

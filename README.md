@@ -33,6 +33,7 @@ lifelog mcp --agent lmstudio               # MCP on stdio; rows are written as a
 lifelog snapshot --to ~/snapshots --human  # life-YYYY-MM-DD.db and its restore check
 lifelog file memo.m4a --text memo.txt     # keep a file: its text, the original hashed and never stored
 lifelog file IMG_0001.HEIC --preview IMG_0001.jpg   # a photo lifelog cannot read: send a JPEG of it
+lifelog cover 12 lake.jpg                  # a new photo as page 12's cover; `lifelog cover 12 --title Lake.jpg` takes a kept one
 ```
 
 To run `lifelog serve` as a system service with a nightly snapshot, see [deploy/](deploy/README.md): the unit files
@@ -102,12 +103,20 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   day pages of the same date in earlier years, which the margin shows. `/weeks/{YYYY-Www}` is the week (its days, its
   readings against the week before) and `/years/{YYYY}` the year (twelve months);
   People and Places list each name with the pages that mention it and the day of the last one
-  ([plan 097](docs/plans/097-the-almanac-reflects.md)). A person's row starts with a round picture: the preview of
-  the first live file with a preview that the person's page embeds (`![[Ana.jpg]]`), else the icon of a person. The
-  row's `picture` gives its href. The schema has no link for it, by the owner's choice (2026-10-15): an embed is
-  how any page shows a picture, so every surface can set it. `set-picture` on the person's page sets it: a new
-  photo (the browser) or a kept file by its title (the CLI and an agent, which send no file through the catalog).
-  The photo goes in no day page.
+  ([plan 097](docs/plans/097-the-almanac-reflects.md)). A person's row starts with a round picture, its cover,
+  else the icon of a person.
+- **A cover for every page** ([plan 127](docs/plans/127-a-cover-for-every-page.md)). A page's cover is the first live
+  file with a preview that its body embeds (`![[Ana.jpg]]`); a day page's first photo is its cover with no action. A
+  file page has none: its own picture stands for it. The browser draws the cover as a square at the head of the
+  margin of the page and the day (first on a phone), with the other pictures of the body under it, each one press
+  from being the cover (it trades places with the cover's embed), and leaves that embed out of the body; a Browse row
+  starts with it as a small square (a person's is round), and the row's `picture` gives its href. The calendar draws
+  a day's cover behind its square cell, under a veil of the parchment that keeps the words readable. The schema has no link for it, by the owner's choice (2026-10-15, again
+  2026-10-17): an embed is how any page shows a picture, so every surface can set it. `set-cover` sets it: a new
+  photo (the browser, and `lifelog cover PAGE-ID PHOTO`) or a kept picture by its title (`lifelog cover PAGE-ID
+  --title T`, and an agent, whose MCP tools carry no file).
+  `GET /pages/{id}/cover` is the picker: the kept pictures as tiles, each a form of its title, and the form of a new
+  photo. The new photo goes in no day page.
 - **The app shell: the Almanac design system** ([plan 092](docs/plans/092-the-app-shell.md)). Every page a browser
   gets is in one shell: a sidebar with the brand and today's date, the search, New, the sections of every day (Today,
   Calendar, Metrics and Browse), this month with its written days, and the owner's links. Under 900 px it is a phone's layout

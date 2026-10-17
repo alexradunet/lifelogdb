@@ -31,7 +31,7 @@ const (
 // errNoFile is the refusal of a form that sends neither the original nor its sha256 and mime.
 const errNoFile = "send the original, or its sha256 and mime"
 
-// fileForm is a request of add-file or set-picture, read.
+// fileForm is a request of add-file or set-cover, read.
 type fileForm struct {
 	In   core.FileIn
 	Dry  bool // dry_run: write nothing, say what keeping the file would do
@@ -65,7 +65,7 @@ func (h *server) addFile(r *http.Request, act spec, src string) (*siren.Entity, 
 	return withResult(h.pageEntity(r.Context(), k.ID))(k)
 }
 
-// parseFileForm reads a request of the action act (add-file or set-picture): its fields, refused as fieldsOf refuses
+// parseFileForm reads a request of the action act (add-file or set-cover): its fields, refused as fieldsOf refuses
 // them. Multipart (a browser, the CLI): the original is streamed through SHA-256 and never stored; a picture the
 // writer reads is held, up to maxPicture, to make the preview from. A multipart form with the file input left empty
 // and no sha256 and no mime sends no file (Sent is false), and is not refused here. Url-encoded or JSON (an agent
@@ -353,9 +353,9 @@ func picture(get func(*http.Request) ([]byte, error), cache string) http.Handler
 	}
 }
 
-// setPicture makes a photo a page's picture (core.SetPicture): a new photo sent as original, or a kept file named by
+// setCover makes a photo a page's cover (core.SetCover): a new photo sent as original, or a kept file named by
 // title. It answers with the page.
-func (h *server) setPicture(r *http.Request, act spec, src string) (*siren.Entity, error) {
+func (h *server) setCover(r *http.Request, act spec, src string) (*siren.Entity, error) {
 	id, err := idOf(r)
 	if err != nil {
 		return nil, err
@@ -366,28 +366,94 @@ func (h *server) setPicture(r *http.Request, act spec, src string) (*siren.Entit
 			return nil, err
 		}
 		if f.Sent {
-			k, err := h.s.SetPicture(r.Context(), src, id, h.s.Today(), f.In)
+			k, err := h.s.SetCover(r.Context(), src, id, h.s.Today(), f.In)
 			if err != nil {
 				return nil, err
 			}
 			return withResult(h.pageEntity(r.Context(), id))(k)
 		}
-		return h.setPictureOf(r, src, id, f.In.Title)
+		return h.setCoverOf(r, src, id, f.In.Title)
 	}
 	v, err := fieldsOf(r, act)
 	if err != nil {
 		return nil, err
 	}
-	return h.setPictureOf(r, src, id, v.Get("title"))
+	return h.setCoverOf(r, src, id, v.Get("title"))
 }
 
-func (h *server) setPictureOf(r *http.Request, src string, id int64, title string) (*siren.Entity, error) {
+func (h *server) setCoverOf(r *http.Request, src string, id int64, title string) (*siren.Entity, error) {
 	if title == "" {
 		return nil, core.Invalid("title: a kept picture's title, or send a new photo as original")
 	}
-	sync, err := h.s.SetPictureOf(r.Context(), src, id, title)
+	sync, err := h.s.SetCoverOf(r.Context(), src, id, title)
 	if err != nil {
 		return nil, err
 	}
 	return withResult(h.pageEntity(r.Context(), id))(sync)
+}
+
+// coverChoice is GET /pages/{id}/cover: what a page may take as its cover (docs/plans/127-a-cover-for-every-page.md).
+// It carries the page, its cover, a page of the kept pictures (core.Pictures) with the cover marked, and set-cover,
+// which takes a new photo or one of those pictures by its title. A file page has none, and a deleted page is revived
+// first, as set-cover refuses them.
+func (h *server) coverChoice(r *http.Request) (*siren.Entity, error) {
+	id, err := idOf(r)
+	if err != nil {
+		return nil, err
+	}
+	p, err := h.s.PageByID(r.Context(), id)
+	switch {
+	case err != nil:
+		return nil, err
+	case p.Type == "file":
+		return nil, core.NotFound("%q is a file: its own picture is its cover", p.Title)
+	case p.DeletedAt != "":
+		return nil, core.Conflict("page %d %q is deleted: revive it first", id, p.Title)
+	}
+	limit, offset, err := pageOf(r, 48)
+	if err != nil {
+		return nil, err
+	}
+	self := siren.PageHref(id) + "/cover"
+	e := &siren.Entity{Class: []string{"cover-choice"}, Title: "Cover of " + p.Title,
+		Links:   []siren.Link{link("self", self, "Set cover photo"), link("page", siren.PageHref(id), p.Title), link("index", "/", "Home")},
+		Actions: []siren.Action{action("set-cover", idParam(id), nil)}}
+	found, props, err := readPage(e, self, nil, limit, offset, func(limit, offset int) ([]core.FileRow, error) {
+		return h.s.Pictures(r.Context(), limit, offset)
+	})
+	if err != nil {
+		return nil, err
+	}
+	rows := []coverRow{}
+	for _, f := range found {
+		rows = append(rows, coverRow{ID: f.ID, Title: f.Title, Picture: pictureHref(f.ID), Day: f.Day,
+			Current: p.Cover != nil && p.Cover.ID == f.ID})
+	}
+	e.Properties = coverChoiceProps{pageProps: props, Page: pageRef{ID: id, Title: p.Title, DayPage: p.IsDayPage},
+		Cover: p.Cover, Rows: rows}
+	return e, nil
+}
+
+// coverChoiceProps are the properties of GET /pages/{id}/cover.
+type coverChoiceProps struct {
+	pageProps
+	Page  pageRef     `json:"page"`
+	Cover *core.Cover `json:"cover,omitempty"` // absent when the page has none
+	Rows  []coverRow  `json:"rows"`
+}
+
+// pageRef names the page whose cover is chosen.
+type pageRef struct {
+	ID      int64  `json:"id"`
+	Title   string `json:"title"`
+	DayPage bool   `json:"is_day_page"`
+}
+
+// coverRow is a kept picture a page may take as its cover; Current marks the page's cover.
+type coverRow struct {
+	ID      int64  `json:"id"`
+	Title   string `json:"title"`
+	Picture string `json:"picture"`
+	Day     string `json:"day,omitempty"`
+	Current bool   `json:"current,omitempty"`
 }

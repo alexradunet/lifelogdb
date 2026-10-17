@@ -24,6 +24,7 @@ type monthDay struct {
 	Items     []calendarItem `json:"items,omitempty"`
 	MorePages int            `json:"more_pages,omitempty"`
 	Readings  int            `json:"readings,omitempty"`
+	Picture   string         `json:"picture,omitempty"` // the address of the day page's cover
 }
 
 // calendarItem is a thing that names a day besides its day page: its kind, its title and the address of its own
@@ -136,9 +137,9 @@ func (h *server) calendarOf(ctx context.Context, from, through string) (*calenda
 		}
 	}
 
-	firstLines := map[string]string{}
+	firstLines, pictures := map[string]string{}, map[string]string{}
 	for _, d := range entries {
-		firstLines[d.Day] = d.FirstLine
+		firstLines[d.Day], pictures[d.Day] = d.FirstLine, pictureHref(d.Picture)
 	}
 	days := []monthDay{}
 	first, _ := text.ParseDay(from)
@@ -146,7 +147,7 @@ func (h *server) calendarOf(ctx context.Context, from, through string) (*calenda
 	for _, w := range writtenDays(entries, first, last) {
 		day := w.Day
 		days = append(days, monthDay{Day: day, Page: w.Page, FirstLine: firstLines[day], Mood: moods[day],
-			Items: items[day], MorePages: more[day], Readings: readings[day] - len(moods[day])})
+			Items: items[day], MorePages: more[day], Readings: readings[day] - len(moods[day]), Picture: pictures[day]})
 	}
 	return &calendar{days: days}, nil
 }
