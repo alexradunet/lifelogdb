@@ -9,8 +9,9 @@
 - **Date / baseline:** 2026-10-16, `fd4d82a` (master).
 - **Priority:** P2. **Effort:** XL in total; each part is S or M and is one or more commits. **Risk:** MEDIUM: many
   files move and many tests merge. A move is a move; a merged test keeps every assertion (the rules below).
-- **Status:** IN PROGRESS on the branch `plan-121-deep-modules`. One commit for the records, then one or more
-  commits a part, then the closing commit.
+- **Status:** DONE (2026-10-17) on the branch `plan-121-deep-modules`, with
+  [the closing record](#the-closing-record-2026-10-17). One commit for the records, then one or more commits a part,
+  then the closing commit. The owner decides the merge, the build and the install.
 - **Resolves:** no issue, no RFC. The owner's request (2026-10-16): organise the code for agentic development, remove
   the lines that can go, and make every part of the code testable.
 
@@ -626,11 +627,13 @@ The row of `apitest` in Part 7 above names `Clients(t, h, source)`; the kit has 
   connections (`ea683ee`): 0.01 s in 20 of 20. `serveInProcess` read only the first line of the stderr of serve, so a
   second line would block serve until the cleanup (`4351ba0`, a defect fixed reproducer first).
 - **The checks at the end.** `go test -count=1 -shuffle=on ./...` passes (each package prints its seed; `cmd/lifelog`
-  had 1792190459246980868), and so does `-shuffle=1792190459` for every package. The commands of the coverage map in
-  `tests/README.md` work after Parts 6 and 7: `cmd/lifelog/output.go` has `listActions`, `show`, `Write`, `human` and
-  `indent` at 100.0 %, and `cmd/lifelog/agentic.go` has `agenticInit` at 72.7 %. `main` is at 40.0 %, and only the
-  process of `TestExecutableServeDrainsActiveRequest` runs it: the map counts the process. That test builds the
-  program with `-cover` itself; `cmd/lifelog` has no `TestMain`.
+  had 1792190459246980868). A run with `-shuffle=1792190459` passes for every package too, but 1792190459 is another
+  seed, so that run was not a replay. The reviewer of C6 replayed the seed 1792190459246980868, and it passes.
+  (Corrected at the close of the plan: this line gave 1792190459 as the replay of the printed seed.) The commands of
+  the coverage map in `tests/README.md` work after Parts 6 and 7: `cmd/lifelog/output.go` has `listActions`, `show`,
+  `Write`, `human` and `indent` at 100.0 %, and `cmd/lifelog/agentic.go` has `agenticInit` at 72.7 %. `main` is at
+  40.0 %, and only the process of `TestExecutableServeDrainsActiveRequest` runs it: the map counts the process. That
+  test builds the program with `-cover` itself; `cmd/lifelog` has no `TestMain`.
 - No answer on the wire changed. The one production change is in `cmd/lifelog`: `usageError.Unwrap`, which had no
   caller, went (`23c82e1`).
 
@@ -674,15 +677,17 @@ Left for later:
 |---|---|
 | `text.Candidates` builds a map with one entry for each byte of a run of text (`runeIndex`), and `runeToByte` walks a run from its start for each `#tag`: a save of a body of 16 to 20 MiB in one run takes about 3 s, 86 to 88 % of it in the map. With the map made only for a run that has a wikilink, the old limit tests took 0.95 s and 0.45 s (a trial, not committed) | a change of the writer's extraction, not of a test; a defect fix needs its reproducer first (a count of work, as in Part 1) |
 | no test saves a body of 16 to 20 MiB now (`04bd2cf`) | the save costs seconds until the row above is fixed |
+| no test checks that the server stops reading a request at its limit: no test counts the bytes that the server reads (added at the close of the plan, from the review of C6) | the limit tests hold the status and that nothing is written; a count needs a request body that counts what the server reads, and no step asked for it |
 | `schema_adversarial_test.go`, `id_guards_test.go` and `name_grammar_test.go` (each a suite of the runner), `connection_fixture_test.go`, `identity_fixture_test.go` and `render_test.go` (each a Go test of its own), and `schema_bounds_test.go` (ten functions) keep their files | none is a small part of a suite of another file; to put two suites in one file is a choice of the grouping |
-| `usageError.Error` (`cmd/lifelog/main.go`), `redirect.Error` and `caught.WriteHeader` (`internal/api/serve.go`) are at 0 % in the coverage map | each one satisfies an interface (`error`, `http.ResponseWriter`) and no path calls it; for the closing record (done criterion 3) |
+| `usageError.Error` (`cmd/lifelog/main.go`), `redirect.Error` and `caught.WriteHeader` (`internal/api/serve.go`) are at 0 % in the coverage map | each one satisfies an interface (`error`, `http.ResponseWriter`) and no path calls it; for the closing record (done criterion 3). (Corrected at the close of the plan: a test calls `caught.WriteHeader`, and the map cannot show it; the closing record, done criterion 3, says why) |
 | `agenticInit` is at 72.7 %: its error branches and its line "a kept file has another text" have no test of the CLI | `internal/agentic` tests the kept file (`TestASecondRunKeepsTheOwnersEdits`); the line is one `Fprintln` |
 | the table of `TestNavMarksThePageTheBrowserIsOn` has the path `/import/prepared`, of the import process that plan 089 removed | the row asks that no link is marked, which holds for any path; no step of this part asked |
 
-## Part 8 results (2026-10-17, `b8a5a8c`..`c6d3687`)
+## Part 8 results (2026-10-17, `c7b5665`..`c6d3687`)
 
 The commits after `c7b5665`, in six steps with their review fixes, and this record. The owner said yes to every row of
-Part 8 (the owner's decisions, item 2). A range `A..B` is the commits after `A`, up to `B` and with it.
+Part 8 (the owner's decisions, item 2). A range `A..B` is the commits after `A`, up to `B` and with it. (Corrected at
+the close of the plan: the heading said `b8a5a8c`..`c6d3687`, which by this rule leaves out `b8a5a8c`.)
 
 | step | range | what |
 |---|---|---|
@@ -726,7 +731,9 @@ Part 8. No commit of Part 8 changes it.
   declarations, and 0 differ. The render dump (the pages of the fixture of `TestEveryViewRenders` and more: 112
   answers, HTML and JSON, a refused form on its page, two toasts, the style page, the preview and the login page; the
   instants masked) is the same, byte for byte, at `3b61d2c` and after each commit of D6 but `cb8d496`, which changes
-  tests only. `api` and `view` pass 260 top-level tests, as `api` did before (197 and 63).
+  tests only. At `452c2ea`, `api` and `view` pass 260 top-level tests (197 and 63), as `api` did before; at `c6d3687`
+  they pass 261 (`view` 64, with `TestTheViewImportsNoStore`). (Corrected at the close of the plan: this line gave the
+  count of `452c2ea` only.)
 
 The answers that changed on the wire in Part 8, at `c7b5665` and at `c6d3687` (D6 changes none):
 
@@ -784,7 +791,9 @@ The templates and the sheets: 1888 → 1876 lines. D6 alone (`3b61d2c` → `c6d3
 6170 → 6243 production lines (the package comments, the doc comments of the exported addresses, the imports and
 `Draw`) and 11548 → 11676 lines of tests (the actions that the tests of the forms write out, and the test of the
 imports). `text` gains 46 lines of production and 35 of tests (`plain.go` and its test), and `core` loses 33 and 29.
-The plan estimated that about 2,100 lines move: 2439 lines of production and 2313 of tests moved to `view`.
+The plan estimated that about 2,100 lines move: 2439 lines of production and 2265 lines of tests moved to `view`; the
+other 48 lines of its tests, `view/imports_test.go`, are new. (Corrected at the close of the plan: this line said that
+2313 lines of tests moved.)
 
 The checks at the end: `go test -count=1 -shuffle=on ./...` passes; `govulncheck ./...` (v1.9.0) finds no
 vulnerability; `staticcheck ./...` and `deadcode -test ./...` (with `GOOS=windows` too) report nothing.
@@ -806,7 +815,7 @@ Questions for the owner, each true at `c6d3687`:
 | question | why it is a question |
 |---|---|
 | `record` and `add-file` refuse the day `today` (422, by a CHECK), and `capture` and `open-day` read it as today | one word, two answers; a change makes `record` and `add-file` read it too, or none |
-| a place is kept from being promoted to a person or registered as a metric only by the 409 of the writer: a place has no typed row, so no rule of the DDL refuses it | a rule that the DDL does not hold (issue 0068 asks for it in the DDL) |
+| a place with no `at` link is kept from being promoted to a person or registered as a metric only by the 409 of the writer: a place has no typed row, so no rule of the DDL refuses it (corrected at the close of the plan: the question said "a place"; the trigger `entities_endpoint_types` refuses a type change of a place that an `at` link points to) | a rule that the DDL does not hold (issue 0068 asks for it in the DDL) |
 | the pattern of a score cannot say that lo is less than hi: "5-1" makes a number metric with the unit "5-1", and the server takes it | the unit of a metric never changes (`metrics_unit_fixed`) |
 | MCP has two tools for one action: `open_day` and `get_day` | `get_day` is the name of a read; one of the two can go |
 | an `import:*` or `agent:*` client that sends `create-page` again gets 409 exists: the API has no import key of an entity | a client that sends again must find the page itself |
@@ -822,3 +831,205 @@ Left for later:
 | the tests of the forms of `view` draw actions written out in the shapes of the catalog's (`cb8d496`): a change of a field of the catalog does not reach them | the view cannot import the catalog; the tests of the pages in `api` draw the real catalog |
 | `sheetComments` (`api/styleguide_test.go`) is the expression of `cssComments` (`view/sheets_test.go`) a second time | the test of the style page needs the catalog (`styleEntity`) and the sheets, and two test packages share no helper |
 | the title of a reading link in the JSON takes its number from `view.Num` | one way to write a number (`2f60a83`); a home for it in `siren` or `text` is a move that no row asks for |
+
+## Part 9 results (2026-10-17, `22c3023`..`c7ba599`)
+
+The commits after `22c3023`, in two steps with their review fixes, and then the closing record. The owner said yes to
+Part 9 (the owner's decisions, item 4).
+
+| step | range | what |
+|---|---|---|
+| E1 | `22c3023..9cc8199` | `SourceHeader` and `WriteJSON` move to `siren` (`59a7a9d`); the README layout table gets the column "test it at" (`fbcc2e1`); `cmd/lifelog` gets a package comment (`bb443b2`); AGENTS.md keeps the rules of every edit and links the rest (`9cc8199`) |
+| E1, review fixes | `9cc8199..4055079` | the conventions checklist of AGENTS.md links the homes of its rules, and the guide [building a writer](../guides/building-a-writer.md) is again as it was before `9cc8199` (`9877a20`); the README row of `internal/api` says that `apitest.FreshOn` fixes the clock and `apitest.Fresh` does not (`7e06aca`); the sentences of the performance evidence have one home in `tests/README.md` (`4055079`) |
+| E2 | `4055079..c7ba599` | four comments and a README row say what is true (`adf3960`); the test of the view's imports walks linux and windows (`a6e238b`); `agentic-init` writes its MCP configs with `siren.WriteJSON` (`c7ba599`) |
+
+- **`client`, `mcp` and `agentic` build no store.** Of this module, `client` imports only `siren`, `mcp` imports
+  `client` and `siren`, and `agentic` imports only `siren` (`go list -deps`). None of them builds `core`, `db` or
+  SQLite. This closes the first row of the Part 8 "left for later" (`59a7a9d`) and the first row of the Part 6 "left
+  for later" (`c7ba599`). The MCP configs that `agentic-init` writes are the same, byte for byte, before and after
+  `c7ba599`: `diff -r` of the files of two sets of paths, 20 files, finds no difference.
+- **AGENTS.md** has 375 lines at `fd4d82a`, 295 at `9cc8199` and 312 at `c7ba599`: the conventions checklist stays in
+  AGENTS.md as a list of links (`9877a20`). The personas and the performance evidence are sections of
+  `tests/README.md`; the engineering references are a section of `README.md`.
+- **The test of the view's imports.** `TestTheViewImportsNoStore` read the imports for the system of the run only. A
+  file of `view` for Windows only that imports `core` passed on Linux (a probe file, not committed). Now the test
+  walks the imports for linux and for windows, and its subtest windows fails on that probe.
+- **Comments.** `view.Draw` is the one call that draws a page (the API also calls `TemplateOf`, `DrawFailed`,
+  `Files`, `MustFile`, `Num`, `GlanceDays` and `InUseDays`). `dbtest.New` names the method `Path` of the DB and the
+  function `File`. The package comment of `photo` cites [keep a file](../cookbook/keep-a-file.md), which exists, and
+  says that the package does not read where a photo was taken (D21). The README row of `internal/text` names
+  `BlockMark` and the marks of a snippet.
+- No answer on the wire changed in Part 9.
+
+## The closing record (2026-10-17)
+
+The code of the plan is final at `c7ba599`; the commit of this record changes only this page and the plans index. The
+checks ran on Linux only (Debian 13, Linux 6.12.111+deb13-amd64, x86_64), at `c7ba599`, with these tools:
+
+| tool | version |
+|---|---|
+| Go | go1.27.2 linux/amd64, the version of `go.mod` |
+| SQLite | `modernc.org/sqlite` v1.60.1 |
+| `staticcheck` | 2026.2.2 (v0.8.2) |
+| `deadcode` | `golang.org/x/tools` v0.52.0 |
+| `govulncheck` | v1.9.0; its database was updated 2026-10-08 22:31:09 UTC |
+
+What each done criterion shows:
+
+1. **The baseline.** The message of each commit of the plan gives its checks. At `c7ba599`,
+   `go generate ./... && go vet ./... && go test -count=1 ./...` passes in 32.3 s. `go test -count=1 -shuffle=on
+   ./...` passes, two times. In the second run, with `-v`, 499 top-level tests run and 3 of them skip (two helpers
+   that a subprocess test starts, and `TestMermaidRender`, which needs `LIFELOG_MERMAID=1`), and each package prints
+   its seed: for example `cmd/lifelog` 1792205324591436177, `internal/api` 1792205324709533956 and `tests`
+   1792205329449562585. A replay of the first two seeds passes. `gofmt -l` on the 203 `.go` files in git prints
+   nothing. **Windows: not run.** No part of the plan ran its tests on Windows: the manual workflow
+   `.github/workflows/windows-validation.yml` needs a push, and the owner decides the push. `GOOS=windows go vet
+   ./...` and `GOOS=windows deadcode -test ./...` pass, but a check that cross-compiles is not Windows coverage. This
+   part of the criterion is open.
+2. **The tools.** `deadcode -test ./...` names nothing with `GOOS=linux` and with `GOOS=windows`. `staticcheck ./...`
+   finds nothing. `govulncheck ./...`, in its text mode, exits 0 and prints "No vulnerabilities found."
+3. **The coverage map**, made with the commands of [tests/README.md](../../tests/README.md#the-coverage-map), with the
+   process of `TestExecutableServeDrainsActiveRequest` and without `-short`: 562 functions, 91.1 % of the statements.
+   (The 87.2 % of the audit was a map with `-short` and without the process: the two numbers have different methods.)
+   Three functions are at 0.0 %, and each one stays:
+   - `usageError.Error` (`cmd/lifelog/main.go`) and `redirect.Error` (`internal/api/serve.go`) only satisfy `error`.
+     `main` and `serve` take the error with `errors.As` and read its field (`err`, `to`): no path asks for its text.
+     The build needs each method: `runArgs` returns a `usageError` as an `error`, and the handlers return a
+     `redirect` as an `error`. A probe that deleted each method did not build.
+   - `caught.WriteHeader` (`internal/api/serve.go`): a test calls it, but the map cannot show it. The method has no
+     statement, and `go tool cover -func` gives 0.0 % to a function with no statement. In the profile, the empty
+     block of the method has the count 1: `TestARefusalWithoutAPageToReturnToIsTheErrorView` calls it, because its
+     back page `/days/today` redirects, and `http.Redirect` calls `WriteHeader`. `*caught` must be an
+     `http.ResponseWriter`, so the method stays.
+
+   The map has no row for `tools/copyschema` and `tools/lifescale`: each is one function `main`, and no test binary
+   links a `main` package of `tools/`. `go generate` runs `copyschema` in the baseline, and `TestSchemaCopyIsCurrent`
+   holds its output; `lifescale` runs `scaletest.Run`, which the baseline tests with the profile `small`.
+4. **The lists that must agree.** `TestEveryCatalogActionHasItsRouteAndItsOwnerRule`,
+   `TestTheServerRoutesEachCatalogActionToItsOwnRoute`, `TestMountPanicsWhenTheCatalogAndTheHandlersDisagree` and
+   `TestARequestWithoutARequiredFieldIsRefusedAndWritesNothing` hold the catalog and the routes equal (Part 3).
+   `TestTheMCPConfigsStartTheMCPServerOfThisProgram` and `TestTheAgentsTextsNameWhatTheProgramHas` hold the agents'
+   texts equal to the program (Part 6). All pass.
+5. **The reference, the docs and the surfaces.** `TestAPIReferenceMatchesTheCode` passes. The `document` suite:
+   69/69 met expectations. `TestParityOfTheSurfaces` passes on its 15 rows and 8 columns (120 cases). In its row
+   `register-metric`, `agent:parity` gets a 403 on `http`, `remote` and `cli`, the MCP server has no tool for it on
+   `mcp` and `mcp-remote`, and no column writes the metric. `TestOwnerOnlyActionsPolicy` loops every `Owner` row of
+   the catalog.
+6. **The line counts**, at `fd4d82a` and at `c7ba599`: `wc -l` of the `.go` files of each folder, production every
+   file that is not a `_test.go`; the templates are `html/*.html` and the sheets `html/*.css` (`internal/api/html` at
+   `fd4d82a`, `internal/api/view/html` at `c7ba599`).
+
+| package | production | tests |
+|---|---|---|
+| `cmd/lifelog` | 782 → 841 | 1590 → 2194 |
+| `internal/agentic` | 193 → 192 | 197 → 157 |
+| `internal/api` | 5830 → 3660 | 9208 → 9332 |
+| `internal/api/apitest` | 0 → 99 | 0 → 117 |
+| `internal/api/siren` | 0 → 145 | 0 → 30 |
+| `internal/api/view` | 0 → 2438 | 0 → 2321 |
+| `internal/client` | 428 → 267 | 410 → 501 |
+| `internal/core` | 3088 → 2808 | 5036 → 6101 |
+| `internal/db` | 442 → 479 | 1188 → 1311 |
+| `internal/db/dbtest` | 0 → 39 | 0 → 94 |
+| `internal/mcp` | 81 → 242 | 854 → 450 |
+| `internal/photo` | 388 → 389 | 246 → 247 |
+| `internal/photo/phototest` | 231 → 227 | 0 → 101 |
+| `internal/preview` | 181 → 181 | 213 → 197 |
+| `internal/scaletest` | 783 → 783 | 72 → 72 |
+| `internal/text` | 358 → 382 | 224 → 282 |
+| `tests` | 0 → 0 | 7383 → 7306 |
+| `tools/copyschema` | 21 → 21 | 0 → 0 |
+| `tools/lifescale` | 43 → 43 | 0 → 0 |
+| total | 12849 → 13236 | 26621 → 30813 |
+| the templates | 896 → 861 | |
+| the sheets | 1040 → 1015 | |
+
+`internal/api` with `siren` and `view` has 5830 → 6243 production lines and 9208 → 11683 lines of tests. The audit's
+1,961 lines of templates and CSS also counted `manifest.webmanifest` (24) and `icon.svg` (1); the method above
+counts 1936 → 1876.
+
+The title of the plan asks for fewer lines, and Part 7 estimated about 1,000 lines of tests less. The production lines
+grew by 387 (3.0 %), and the tests by 4192 (15.7 %). Between the records, in the order of their commits:
+
+| commits | parts | production | tests |
+|---|---|---|---|
+| `fd4d82a..eb918d2` | 1 and 2 | −27 | +331 |
+| `eb918d2..76d6609` | 3 | −6 | +492 |
+| `76d6609..5f042f8` | the review fix of 3, 4, the first commits of 5 | −160 | +996 |
+| `5f042f8..9849043` | 5 | +234 | +1273 |
+| `9849043..ef004ad` | 6 | +58 | +493 |
+| `ef004ad..c7b5665` | 7, the review fixes of 6 | +134 | −229 |
+| `c7b5665..22c3023` | 8 | +154 | +830 |
+| `22c3023..c7ba599` | 9 | 0 | +6 |
+
+The tests grew by the reproducers of the defects, the table tests of the pure functions (Parts 4, 5 and 7), the
+conformance test and the fuzz target (Part 7), and the tests of the forms of `view` (Part 8). The production lines
+grew by the methods that took the logic out of the templates (Part 5), the env of the CLI (Part 6), the kit (Part 7)
+and the package comments and doc comments of `view` and `siren` (Part 8).
+
+The answers on the wire that changed over the plan, from the records of the parts (each record gives the commits and
+the exact texts):
+
+| part | what a client sees now, where `fd4d82a` was different |
+|---|---|
+| [1 and 2](#parts-1-and-2-results-2026-10-16-bbb1cf5c15797a) | the trend of a day in the first two weeks of the year 0000 counts a reading of 0000-01-01; the 422 of `Series` with a `from` that is not empty and not a day says "from is empty or a YYYY-MM-DD day, and to is a YYYY-MM-DD day" |
+| [3](#part-3-results-2026-10-16) | a fault of the server answers 500 `internal` "internal error", not the text of its cause; `--public --addr` takes only what the parse of the loopback listener takes; `save-body` with an empty or missing `body` and `promote` with no `to` are refused (422); `correct` with no value says "missing field value" |
+| [4](#part-4-results-2026-10-16-2738f7a4297a56) | the 409 of a tombstoned page names its title; `/weeks/0000-W01` answers 200 when a metric has a reading that week; a snapshot folder that the process cannot reach, a failed rollback and a scan fault of a search are faults (500); a page with no preferred-name row is a 404 |
+| [5](#part-5-results-2026-10-16-a7e8165798a601) | a link target whose savepoint does not roll back fails the save (500); the first and the last day, week, month and year link only to pages, and `/weeks/9999-W52` answers 200; a line draws only the readings with a day and a number; the chart writes its numbers with `num`; the words and the markup of its table (one count, one help text, a required text area, `result-group`, the style page) |
+| [6](#part-6-results-2026-10-16-6bec68b7cc4d6d) | the CLI exits 1 when the Close of the file or the write of its output fails (it exited 0); the description of `correct` ends "To remove a reading, retract it."; the AGENTS.md and the skills that `agentic-init` writes |
+| [7](#part-7-results-2026-10-17-5a8c11808910c8) | none |
+| [8](#part-8-results-2026-10-17-c7b5665c6d3687) | the DDL's refusal where a Go copy of a DDL rule answered: a rename of a day page or to a date, `register-metric` and `add-file` with the title of a day page, a `redirect` link; `GET /titles` is a 404; the answer of `tombstone-pages` has no `kind`; `open-day`, `lifelog day` and `get_day` with no day, an empty day or `today` open today, and the field `day` is not required; a field of page titles is an input with a datalist, a flag is one checkbox, and three hand forms are drawn by `form`; `GET /metrics` offers the categories; a week whose sum overflows answers 200, and a line of ±1e308 draws each point; the titles of the reading links write their numbers with `num`; a scale reads "N of M"; the toast of `add-file` and the usage of `lifelog file` have new words; a search of only blanks answers 200, empty |
+| 9 | none |
+
+Left for later: the rows of the records that no later part did.
+
+| finding | part | why it waits |
+|---|---|---|
+| an error of the `SAVEPOINT` statement, or of the `RELEASE` after a target that succeeded, is counted as a skipped target (`core/tx.go`) | 5 | a defect; its reproducer needs a fault of SQLite on these two statements |
+| an error in steps 1 to 3 that is not a refusal is a skipped target, as the contract says ([save a body](../cookbook/save-a-body.md), D19) | 5 | a change of the contract needs the owner |
+| `enhanceText` keeps its own decode of the joined run | 5 | `1595b26` gives the reason |
+| a metric titled "day page", "page", "page (edited)" or "at" would show its reading as a part of the day | 5 | the day-view query of the cookbook names the parts by these words; a change needs the process |
+| `tombstones.go` writes "Deleted N pages." with its own words, not with `count` | 5 | the same words, written a second time |
+| the order of "Pages written this day" is not defined for two pages written in one millisecond | 5 | the cookbook's query does not break the tie; a change needs the process |
+| Preview has no `formnovalidate`, so an empty required text area blocks Preview | 5 | harmless: there is nothing to preview |
+| the template `step` picks its access key by `.rel` | 5 | `rel` is the template's own parameter |
+| the templates draw the classes `num`, `agenda` and `readings-all`, which no sheet styles | 5 | a markup change of real pages |
+| the tools of a day start with an empty line | 5 | the tools of a day are byte for byte as before Part 5 |
+| the + Add fold of the style page sends its POST to `/styleguide`, which answers 405 | 5 | the style page writes nothing; its comment says so |
+| the tests of `internal/preview` keep `encodeJPEG` and `halves`; the tests of `internal/photo` keep `heifWithLocations` | 6 | `phototest` cannot make a red half and a blue half, or the `iloc` boxes of these tests |
+| no `TestMain` in `cmd/lifelog` | 6 | one subprocess test is left, and it builds its binary one time |
+| no test of the error of Close that `runContext` joins | 6 | a test of the CLI cannot make `PRAGMA optimize` fail; `db.TestCloseReportsAFailedOptimize` holds Close |
+| an unknown command exits 1 with "unknown command", not with the usage and 2 | 6 | the behaviour before the plan; `TestAnUnknownCommandIsAnErrorAndNotTheUsage` holds it |
+| the test of the agents' texts knows seven words that look like a tool and are not one, and does not count the arguments of a command line | 6 | a check of each needs the fields, the answers and the link kinds in the test; the usage gives the count in words only |
+| the startup line of `serve` and the lines of `main` to stderr drop the error of their write | 6 | a line of the log at the edge of the process; no data is lost |
+| when a write and the action both fail, `show` returns the error of the write; `human` returns the error of `json.Marshal` even after a failed write | 6 | either way `main` exits 1 with a true error |
+| `text.Candidates` builds a map with one entry for each character of a run (`runeIndex`): a save of a body of 16 to 20 MiB in one run takes about 3 s | 7 | a change of the writer's extraction; a fix needs its reproducer first, a count of work |
+| no test saves a body of 16 to 20 MiB (`04bd2cf`) | 7 | the save costs seconds until the row above is fixed |
+| no test checks that the server stops reading a request at its limit: no test counts the bytes that the server reads | 7 | a count needs a request body that counts what the server reads |
+| seven files of `tests/` keep their own file (the Part 7 record names them) | 7 | to put two suites in one file is a choice of the grouping |
+| `agenticInit` is at 72.7 %: its error branches and the line "a kept file has another text" have no test of the CLI | 7 | `internal/agentic` tests the kept file; the line is one `Fprintln` |
+| the table of `TestNavMarksThePageTheBrowserIsOn` has the path `/import/prepared`, which plan 089 removed | 7 | the row asks that no link is marked, which holds for any path |
+| `view_forms_test.go`, `view_page_test.go` and `view_shell_test.go` of `internal/api` keep their names | 8 | they are tests of `api_test`, and they share their helpers with the other tests of `api` |
+| the tests of the forms of `view` draw actions written out in the shapes of the catalog's | 8 | the view cannot import the catalog; the tests of the pages in `api` draw the real catalog |
+| `sheetComments` (`api/styleguide_test.go`) is `cssComments` (`view/sheets_test.go`) a second time | 8 | two test packages share no helper |
+| the title of a reading link in the JSON takes its number from `view.Num` | 8 | a home in `siren` or `text` is a move that no row asks for |
+
+For the owner:
+
+- The branch `plan-121-deep-modules` is not merged, and the program of the branch is not installed: the owner
+  decides the merge, the build, the install, the restart of the service and the run of the Windows workflow.
+- When the new program is installed, the owner's agent folders keep the old agents' texts until the owner runs
+  `lifelog agentic-init --force` (the texts changed in Part 6). `--force` writes each file anew: an edit of the
+  owner's in one of these files goes, and the result of that file says `replaced`.
+- The `lifelog_meta` rows `instants`, `days` and `source` of `docs/schema/schema.sql` still name the columns of the
+  tasks that D23 removed (`completed_at` and `reminder_override_at` of a task; `tasks.anchor_day`,
+  `tasks.repeat_until_day`, `task_occurrences.due_day` and `occurrence_key`; the `import_key` of `tasks` and
+  `task_occurrences`). No table of tasks is in the schema. This is a text of the contract, to correct through
+  [the process](../process.md).
+- `text.Candidates` builds a map with one entry for each character of a run of text (`runeIndex`): a save of a body
+  of 16 to 20 MiB takes about 3 s. This is a performance item, and a fix needs a reproducer that counts the work first.
+- Done criterion 3: `usageError.Error` and `redirect.Error` are at 0 % because they only satisfy `error`.
+  `caught.WriteHeader` is at 0 % in the map, but a test calls it: the map gives 0 % to a function with no statement.
+  No other function is at 0 %.
+- The questions of the Part 8 record: [Part 8 results](#part-8-results-2026-10-17-c7b5665c6d3687), the table
+  "Questions for the owner".
