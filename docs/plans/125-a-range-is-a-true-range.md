@@ -33,3 +33,20 @@ rows the file keeps).
 - [ ] The owner ran the change of the live file; the integrity check passes; the new binary serves.
 
 ## Results
+
+The commits after `af93c8d`, the commit of this page:
+
+| commits | what changed |
+|---|---|
+| `b3c5393` | [issue 0084](../issues/0084-a-range-out-of-order-is-a-plain-unit.md); the trigger `metrics_range_order`, the last statement of `schema.sql`, refuses a unit of the shape of a range whose low bound is not less than its high bound (`5-1`, `3-3`, `10-2`); D6 cites it; the facts suite witnesses it, and a mutant that removes it is killed |
+| `6510682` | `register-metric` and the New metric forms answer the schema's 422 for such a unit, and nothing is written; the order compare in `isScale`, which repeated the trigger, goes |
+| `59a48ad` | the comment of `measurements_scale_range` says what is true of its bounds and cites `metrics_range_order` (a change of the comment only) |
+
+The checks at `59a48ad`, on Linux: the baseline with `-count=1`, `-shuffle=on`, `staticcheck`, `deadcode -test` (linux
+and windows), `GOOS=windows go vet` and `gofmt`: all clean. The mutants are 261.
+
+The owner's file gets plans 124 and 125 in one run of `meta124-bin` (`/home/cico/.local/share/lifelog-oneoff/meta124/`):
+the comments of the tables `entities` and `people` and of the trigger `measurements_scale_range` by the
+`writable_schema` procedure of plan 124, and the new trigger `metrics_range_order`. The program first checks that no
+metric of the file has a unit that the new trigger refuses. Its `OLD.sql` is `schema.sql` at `cdb7b8e`, and its
+`NEW.sql` at `59a48ad`. The outcome is recorded below when the owner has run it.
