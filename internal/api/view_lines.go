@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"html/template"
+	"math"
 	"strings"
 	"time"
 
@@ -61,12 +62,15 @@ func plot(rs []lineReading, x func(lineReading) float64, y func(v, lo, hi float6
 }
 
 // share is where v stands between lo and hi: 0 at lo, 1 at hi, and 0 when hi is lo. A reading can be as large as a
-// float64 holds (measurements_value_finite), so hi-lo can overflow (1e308 and -1e308): share takes the difference of
-// the halves, which cannot. A half of a value that is not near zero is exact, so the share is the same as with the
-// whole values.
+// float64 holds (measurements_value_finite), so hi-lo can overflow (1e308 and -1e308): only then does share take
+// the difference of the halves, which cannot overflow. The halves are not used for other values: the half of a value
+// near zero is not exact, and the halves of 0 and 5e-324 are the same, so their difference is 0.
 func share(v, lo, hi float64) float64 {
 	if hi == lo {
 		return 0
+	}
+	if d := hi - lo; !math.IsInf(d, 0) {
+		return (v - lo) / d
 	}
 	return (v/2 - lo/2) / (hi/2 - lo/2)
 }
