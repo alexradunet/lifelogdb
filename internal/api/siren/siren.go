@@ -1,7 +1,7 @@
 // Package siren is the hypermedia of the API: the Siren types that every answer is made of (an entity, its links, its
 // actions and their fields), the header that names the writer of a request, the JSON of an answer, and the addresses
 // of the resources that the API serves and that its view links. The API (internal/api), its view (internal/api/view),
-// the clients (internal/client, internal/mcp, cmd/lifelog) and agentic-init (internal/agentic, for the JSON of an MCP
+// the clients (internal/client, internal/mcp, cmd/lifelog), core (for the codes of an error) and agentic-init (internal/agentic, for the JSON of an MCP
 // config) import it. It imports only the standard library, so a client of the types gets none of the server with them.
 package siren
 
@@ -17,6 +17,38 @@ import (
 // SourceHeader names the writer of a request's rows (lifelog_meta.source). Without it a browser form writes as
 // "ui" and any other client as "api".
 const SourceHeader = "Lifelog-Source"
+
+// The prefixes of the writers that are not the owner: an agent (the MCP server) writes as AgentPrefix+name, an import
+// as ImportPrefix+name. The owner-only actions are refused to both (api.requireOwner).
+const (
+	AgentPrefix  = "agent:"
+	ImportPrefix = "import:"
+)
+
+// The codes of the error entity (property code; API.md, Errors; core.Error.Code). A client branches on a code, so a
+// string never changes. They are constants so that the code that makes one (core, the API) and the code that picks
+// words for it (the view) cannot drift apart: a renamed code fails to compile instead of drawing an empty alert.
+// The API gives the general code of a status when a failure names none (codeOf).
+const (
+	CodeBadRequest         = "bad_request"
+	CodeUnauthorized       = "unauthorized"
+	CodeForbidden          = "forbidden"
+	CodeNotFound           = "not_found"
+	CodeConflict           = "conflict"
+	CodeTooLarge           = "too_large"
+	CodeInvalid            = "invalid"
+	CodeTimeout            = "timeout"
+	CodeInternal           = "internal"
+	CodeExists             = "exists"               // a title in use (core.ExistsError)
+	CodeCrossOrigin        = "cross_origin"         // a browser write from an origin that the server does not trust
+	CodeTokenRequired      = "token_required"       // a request with no token, where the server needs one
+	CodeStaleVersion       = "stale_version"        // a page saved from a version that is not the current one
+	CodeSnapshotRefused    = "snapshot_refused"     // the snapshot action refused its target
+	CodeRestoreCheckFailed = "restore_check_failed" // a snapshot that did not restore
+	// CodeBusy is the code of a write that met a locked file (SQLITE_BUSY): the CLI and the service write one file,
+	// and a write can wait longer than busy_timeout for the other.
+	CodeBusy = "busy"
+)
 
 // Entity is a Siren entity. Result is an extension: what a POST did (e.g. the wikilinks a save skipped).
 type Entity struct {

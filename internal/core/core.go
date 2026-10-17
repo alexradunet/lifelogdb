@@ -6,8 +6,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
+	"lifelog/internal/api/siren"
 	"lifelog/internal/db"
 	"lifelog/internal/text"
 
@@ -76,35 +78,31 @@ func (e *Error) Unwrap() error { return e.Err }
 
 // invalidCause is a 422 that keeps its cause: SQLite's refusal of a query, with the message as the client sees it.
 func invalidCause(err error, format string, a ...any) error {
-	return &Error{Status: 422, Msg: fmt.Sprintf(format, a...), Err: err}
+	return &Error{Status: http.StatusUnprocessableEntity, Msg: fmt.Sprintf(format, a...), Err: err}
 }
 
 // NotFound is a 404: the row the request names does not exist.
 func NotFound(format string, a ...any) error {
-	return &Error{Status: 404, Msg: fmt.Sprintf(format, a...)}
+	return &Error{Status: http.StatusNotFound, Msg: fmt.Sprintf(format, a...)}
 }
 
 // Invalid is a 422: the request is well-formed, and a rule refuses it.
 func Invalid(format string, a ...any) error {
-	return &Error{Status: 422, Msg: fmt.Sprintf(format, a...)}
+	return &Error{Status: http.StatusUnprocessableEntity, Msg: fmt.Sprintf(format, a...)}
 }
 
 // Conflict is a 409 with no code: the row is not in the state the request needs.
 func Conflict(format string, a ...any) error {
-	return &Error{Status: 409, Msg: fmt.Sprintf(format, a...)}
+	return &Error{Status: http.StatusConflict, Msg: fmt.Sprintf(format, a...)}
 }
 
 // conflictCode is a 409 with a code a client branches on (e.g. stale_version).
 func conflictCode(code, format string, a ...any) error {
-	return &Error{Status: 409, Msg: fmt.Sprintf(format, a...), Code: code}
+	return &Error{Status: http.StatusConflict, Msg: fmt.Sprintf(format, a...), Code: code}
 }
 
-// CodeBusy is the code of a write that met a locked file (SQLITE_BUSY): the CLI and the service write one file, and
-// a write can wait longer than busy_timeout for the other.
-const CodeBusy = "busy"
-
 // refused turns a constraint or trigger failure of the DDL into a 422 with SQLite's own message. A write that found the
-// file locked (SQLITE_BUSY, with its extended codes) is a 503 with CodeBusy: its transaction rolled back, so nothing was
+// file locked (SQLITE_BUSY, with its extended codes) is a 503 with siren.CodeBusy: its transaction rolled back, so nothing was
 // applied and a retry is safe. A write whose
 // rollback failed (db.RollbackError) is a fault, whatever its fn returned: the transaction can be open or kept in part.
 // Its text keeps the error of fn, and its chain only the error of the rollback, so no surface reads it as a refusal.
@@ -122,10 +120,10 @@ func refused(err error) error {
 	}
 	var se *sqlite.Error
 	if errors.As(err, &se) && se.Code()&0xff == sqlite3.SQLITE_CONSTRAINT { // CHECKs, FKs, UNIQUE and RAISE(ABORT)
-		return &Error{Status: 422, Msg: se.Error()}
+		return &Error{Status: http.StatusUnprocessableEntity, Msg: se.Error()}
 	}
 	if errors.As(err, &se) && se.Code()&0xff == sqlite3.SQLITE_BUSY {
-		return &Error{Status: 503, Msg: "the database file is busy: another writer holds it; nothing was written, so a retry is safe", Code: CodeBusy, Err: err}
+		return &Error{Status: http.StatusServiceUnavailable, Msg: "the database file is busy: another writer holds it; nothing was written, so a retry is safe", Code: siren.CodeBusy, Err: err}
 	}
 	return err
 }

@@ -47,10 +47,10 @@ func TestMultipartUnknownNameProjection(t *testing.T) {
 	r := httptest.NewRequest("POST", "/files", &body)
 	r.Header.Set("Content-Type", mw.FormDataContentType())
 
-	in, dry, sent, err := parseFileForm(r, specOf("add-file"))
+	f, err := parseFileForm(r, specOf("add-file"))
 	want := core.FileIn{Title: "Scan", Category: "Letters", SHA256: sum, MIME: "application/pdf", Body: "the text", Day: "2031-05-14"}
-	if err != nil || !sent || !dry || !reflect.DeepEqual(in, want) {
-		t.Errorf("parseFileForm = %+v, dry %v, sent %v, %v; want %+v, dry and sent", in, dry, sent, err, want)
+	if err != nil || !f.Sent || !f.Dry || !reflect.DeepEqual(f.In, want) {
+		t.Errorf("parseFileForm = %+v, %v; want %+v, dry and sent", f, err, want)
 	}
 	// Only the body and the page to return to are kept for the browser.
 	if got := fmt.Sprint(r.PostForm); got != "map[back:[/browse?kind=document] body:[the text]]" {

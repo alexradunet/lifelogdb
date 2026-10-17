@@ -157,6 +157,63 @@ func (f *formView) MoreOpen() bool {
 	return false
 }
 
+// formOptions are the options of a form call, read from the name/value pairs of the template (formView lists them). A
+// template cannot build a struct, so the pairs stay its syntax; this is the one place that knows the names.
+type formOptions struct {
+	button, class, id, back string
+	hasButton               bool // "button" was given, also as ""
+	autofocus               string
+	hasAutofocus            bool // "autofocus" was given, also as "": the options name the field of the focus, or none
+	hide, outside           nameSet
+	more, required          nameSet
+	labels, placeholders    map[string]string // field name to words
+	keys, patterns          map[string]string // field name to letter, field name to regexp
+	fixed                   map[string]string // any other option: field name to its fixed value
+}
+
+// nameSet is a set of field names.
+type nameSet map[string]bool
+
+// parseFormOptions reads the pairs of a form call. A list option ("hide": "ids,move") and a "field=words" option
+// ("placeholder": "text=What happened?") add to the earlier ones of the same name when it is repeated. A "field=words"
+// option with no "=" is ignored.
+func parseFormOptions(pairs []string) (formOptions, error) {
+	if len(pairs)%2 != 0 {
+		return formOptions{}, fmt.Errorf("options come in name/value pairs")
+	}
+	o := formOptions{hide: nameSet{}, outside: nameSet{}, more: nameSet{}, required: nameSet{},
+		labels: map[string]string{}, placeholders: map[string]string{}, keys: map[string]string{}, patterns: map[string]string{},
+		fixed: map[string]string{}}
+	lists := map[string]nameSet{"hide": o.hide, "outside": o.outside, "more": o.more, "required": o.required}
+	perField := map[string]map[string]string{"label": o.labels, "placeholder": o.placeholders, "key": o.keys, "pattern": o.patterns}
+	for i := 0; i < len(pairs); i += 2 {
+		name, v := pairs[i], pairs[i+1]
+		switch name {
+		case "button":
+			o.button, o.hasButton = v, true
+		case "class":
+			o.class = v
+		case "id":
+			o.id = v
+		case "back":
+			o.back = v
+		case "autofocus":
+			o.autofocus, o.hasAutofocus = v, true
+		case "hide", "outside", "more", "required":
+			for _, field := range strings.Split(v, ",") {
+				lists[name][field] = true
+			}
+		case "label", "placeholder", "key", "pattern":
+			if field, words, ok := strings.Cut(v, "="); ok {
+				perField[name][field] = words
+			}
+		default:
+			o.fixed[name] = v
+		}
+	}
+	return o, nil
+}
+
 func formOf(x any, opts ...string) (*formView, error) {
 	var c shownAction // an action of the entity's list (range .Actions) has no marks
 	switch x := x.(type) {
@@ -171,73 +228,16 @@ func formOf(x any, opts ...string) (*formView, error) {
 		return nil, nil
 	}
 	a := &c.Action
-	if len(opts)%2 != 0 {
-		return nil, fmt.Errorf("form %s: options come in name/value pairs", a.Name)
+	o, err := parseFormOptions(opts)
+	if err != nil {
+		return nil, fmt.Errorf("form %s: %w", a.Name, err)
 	}
-	f := &formView{Action: a, Button: a.Title}
-	if f.Button == "" {
+	f := &formView{Action: a, Button: a.Title, Class: o.class, ID: o.id, Back: o.back, Focus: o.autofocus,
+		prompts: o.placeholders, keys: o.keys, patterns: o.patterns}
+	if o.hasButton {
+		f.Button = o.button
+	} else if f.Button == "" {
 		f.Button = a.Name
-	}
-	fixed, hide, outside, more, required := map[string]string{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}
-	labels := map[string]string{}
-	focused := false // the options name the field of the focus, or none
-	for i := 0; i < len(opts); i += 2 {
-		k, v := opts[i], opts[i+1]
-		switch {
-		case k == "button":
-			f.Button = v
-		case k == "class":
-			f.Class = v
-		case k == "id":
-			f.ID = v
-		case k == "hide":
-			for _, n := range strings.Split(v, ",") {
-				hide[n] = true
-			}
-		case k == "outside":
-			for _, n := range strings.Split(v, ",") {
-				outside[n] = true
-			}
-		case k == "more":
-			for _, n := range strings.Split(v, ",") {
-				more[n] = true
-			}
-		case k == "required":
-			for _, n := range strings.Split(v, ",") {
-				required[n] = true
-			}
-		case k == "autofocus":
-			f.Focus, focused = v, true
-		case k == "back":
-			f.Back = v
-		case k == "label": // "field=words"
-			if name, words, ok := strings.Cut(v, "="); ok {
-				labels[name] = words
-			}
-		case k == "placeholder": // "field=words"
-			if name, words, ok := strings.Cut(v, "="); ok {
-				if f.prompts == nil {
-					f.prompts = map[string]string{}
-				}
-				f.prompts[name] = words
-			}
-		case k == "key": // "field=letter"
-			if name, letter, ok := strings.Cut(v, "="); ok {
-				if f.keys == nil {
-					f.keys = map[string]string{}
-				}
-				f.keys[name] = letter
-			}
-		case k == "pattern": // "field=regexp"
-			if name, re, ok := strings.Cut(v, "="); ok {
-				if f.patterns == nil {
-					f.patterns = map[string]string{}
-				}
-				f.patterns[name] = re
-			}
-		default:
-			fixed[k] = v
-		}
 	}
 	// The form a refusal came from is open, described by the alert, and each of its fields holds what it sent: a sent
 	// value that is not a field of the action is dropped, and a file is never sent back. A page that draws one action
@@ -248,20 +248,20 @@ func formOf(x any, opts ...string) (*formView, error) {
 		if _, sent := c.sent[fd.Name]; f.Refused && sent && fd.Type != "file" {
 			fd.Value = c.sent.Get(fd.Name)
 		}
-		if v, ok := fixed[fd.Name]; ok { // after the sent value: a fixed field keeps its value (the habit's empty unit)
+		if v, ok := o.fixed[fd.Name]; ok { // after the sent value: a fixed field keeps its value (the habit's empty unit)
 			fd.Value, fd.Type = v, "hidden"
 		}
-		if required[fd.Name] {
+		if o.required[fd.Name] {
 			fd.Required = true
 		}
-		if l, ok := labels[fd.Name]; ok {
+		if l, ok := o.labels[fd.Name]; ok {
 			fd.Title = l
 		}
 		switch {
-		case outside[fd.Name]:
-		case fd.Type == "hidden" || hide[fd.Name]:
+		case o.outside[fd.Name]:
+		case fd.Type == "hidden" || o.hide[fd.Name]:
 			f.Hidden = append(f.Hidden, fd)
-		case more[fd.Name] && !fd.Required:
+		case o.more[fd.Name] && !fd.Required:
 			f.More = append(f.More, fd)
 		default:
 			f.Shown = append(f.Shown, fd)
@@ -269,7 +269,7 @@ func formOf(x any, opts ...string) (*formView, error) {
 	}
 	f.Primary = len(f.Shown)+len(f.More) > 0
 	f.Asked = c.asked
-	if c.asked && !focused && len(f.Shown) > 0 { // a form the reader asked for starts in its first field
+	if c.asked && !o.hasAutofocus && len(f.Shown) > 0 { // a form the reader asked for starts in its first field
 		f.Focus = f.Shown[0].Name
 	}
 	if c.noFocus { // a page that shows a refusal puts the focus on the alert, and on no field

@@ -53,7 +53,7 @@ func New(ctx context.Context, c *client.Client, version string) (*mcp.Server, er
 // annotations say what a tool does to the database: a tool that only reads (get and a GET of the catalog, get_day
 // too) says so; a catalog action marked Danger is destructive, as a browser draws it.
 func annotations(t tool) *mcp.ToolAnnotations {
-	if t.action == nil || t.action.Method == "GET" {
+	if t.follow || t.action.Method == "GET" {
 		return &mcp.ToolAnnotations{ReadOnlyHint: true}
 	}
 	danger := t.action.Danger

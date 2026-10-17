@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"regexp"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"time"
 
@@ -158,7 +159,7 @@ func newServer(s *core.Store) *server {
 // the API and the login forms of a public listener write it. Each call gives a new error, so no caller can change the
 // refusal of another.
 func crossOriginRefusal() error {
-	return &core.Error{Status: http.StatusForbidden, Msg: "cross-origin browser write refused", Code: "cross_origin"}
+	return &core.Error{Status: http.StatusForbidden, Msg: "cross-origin browser write refused", Code: siren.CodeCrossOrigin}
 }
 
 // authorityRefusal is the refusal of a request whose authority the listener does not take: the local listener and the
@@ -246,7 +247,7 @@ func (h *server) serve(f func(*http.Request) (*siren.Entity, error)) http.Handle
 				w.Header().Set("Referrer-Policy", "no-referrer")
 			}
 		}
-		answer(w, r, status, e, frame{shell: h.s})
+		answer(w, r, status, e, frame{shell: h.s, submitted: submittedText(r)})
 	}
 }
 
@@ -312,6 +313,35 @@ func (c *caught) Header() http.Header         { return c.header }
 func (c *caught) Write(p []byte) (int, error) { return len(p), nil }
 func (c *caught) WriteHeader(int)             {}
 
+// textareas are the names of the long-text fields of the catalog (a body, an entry), sorted, so the first with a value
+// does not depend on the order of the catalog.
+var textareas = func() []string {
+	var names []string
+	for _, s := range catalog {
+		for _, f := range s.Fields {
+			if f.Type == "textarea" && !slices.Contains(names, f.Name) {
+				names = append(names, f.Name)
+			}
+		}
+	}
+	slices.Sort(names)
+	return names
+}()
+
+// submittedText is the long text that a POST sent, for the page of a refusal to show it again: the value of the first
+// long-text field of the catalog that has one. A request that is not a POST sent none.
+func submittedText(r *http.Request) string {
+	if r.Method != "POST" {
+		return ""
+	}
+	for _, name := range textareas {
+		if v := r.PostForm.Get(name); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
 // maxBack is the longest return path a browser form may send.
 const maxBack = 2048
 
@@ -347,7 +377,7 @@ func errorEntity(r *http.Request, err error) (*siren.Entity, int) {
 	case errors.Is(err, context.DeadlineExceeded): // before the typed errors: a refusal that wraps a timeout is a timeout
 		status = http.StatusGatewayTimeout
 	case errors.As(err, &ex):
-		status, code = http.StatusConflict, "exists"
+		status, code = http.StatusConflict, siren.CodeExists
 		e.Links = append(e.Links, siren.Link{Rel: []string{"existing"}, Href: siren.PageHref(ex.ID), Title: ex.Title})
 	case errors.As(err, &ce):
 		status, code = ce.Status, ce.Code
@@ -380,28 +410,28 @@ func logFault(r *http.Request, what string, err error) {
 func codeOf(status int) string {
 	switch status {
 	case http.StatusBadRequest:
-		return "bad_request"
+		return siren.CodeBadRequest
 	case http.StatusUnauthorized:
-		return "unauthorized"
+		return siren.CodeUnauthorized
 	case http.StatusForbidden:
-		return "forbidden"
+		return siren.CodeForbidden
 	case http.StatusNotFound:
-		return "not_found"
+		return siren.CodeNotFound
 	case http.StatusConflict:
-		return "conflict"
+		return siren.CodeConflict
 	case http.StatusRequestEntityTooLarge:
-		return "too_large"
+		return siren.CodeTooLarge
 	case http.StatusUnprocessableEntity:
-		return "invalid"
+		return siren.CodeInvalid
 	case http.StatusServiceUnavailable:
-		return core.CodeBusy
+		return siren.CodeBusy
 	case http.StatusGatewayTimeout:
-		return "timeout"
+		return siren.CodeTimeout
 	}
-	return "internal"
+	return siren.CodeInternal
 }
 
-// retryAfter is the Retry-After of a 503, in seconds. The only 503 is a busy file (core.CodeBusy), which the writer
+// retryAfter is the Retry-After of a 503, in seconds. The only 503 is a busy file (siren.CodeBusy), which the writer
 // has waited on for busy_timeout already, so a short wait before the next try is enough.
 const retryAfter = "1"
 
@@ -410,7 +440,7 @@ const retryAfter = "1"
 // the page that a refused form came from.
 func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	e, status := errorEntity(r, err)
-	answer(w, r, status, e, frame{})
+	answer(w, r, status, e, frame{submitted: submittedText(r)})
 }
 
 // frame says how answer draws an entity as a page, and for whom. The zero frame gives a program JSON and a browser a
@@ -419,6 +449,9 @@ type frame struct {
 	shell    *core.Store   // the store that the sidebar reads; nil: no sidebar, so the page shows nothing of the database
 	refused  *view.Refusal // the refused form that the page shows; nil: none
 	pageOnly bool          // a page for every client, a program too: the answer is presentation and has no JSON form
+	// submitted is the long text that a refused browser form sent (submittedText), which the page of the refusal shows
+	// again. It is used only when the answer is the error of a POST.
+	submitted string
 }
 
 // answer is the one way an entity leaves the API: the answer of every route, guard and error. A program gets Siren
@@ -456,10 +489,7 @@ func pageAnswer(r *http.Request, status int, e *siren.Entity, fr frame) (int, []
 		f.Shell = shellOf(r.Context(), fr.shell)
 	}
 	if status >= 400 && r.Method == "POST" {
-		f.Submitted = r.PostForm.Get("body")
-		if f.Submitted == "" {
-			f.Submitted = r.PostForm.Get("text")
-		}
+		f.Submitted = fr.submitted
 		if ref, err := url.Parse(r.Referer()); err == nil && ref.Host == r.Host && strings.HasPrefix(ref.Path, "/") {
 			f.Back = ref.RequestURI()
 		}
@@ -529,7 +559,7 @@ func requireOwner(source string) error {
 	if !writerRE.MatchString(source) {
 		return core.Invalid("source %q: 1-64 characters of a-z 0-9 _ : . -", source)
 	}
-	if strings.HasPrefix(source, "agent:") || strings.HasPrefix(source, "import:") {
+	if strings.HasPrefix(source, siren.AgentPrefix) || strings.HasPrefix(source, siren.ImportPrefix) {
 		return &core.Error{Status: http.StatusForbidden, Msg: "this action is the owner's: an agent or an import may not run it"}
 	}
 	return nil
