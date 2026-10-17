@@ -534,7 +534,7 @@ dialog.palette{inline-size:min(36rem, calc(100vw - 2rem)); max-block-size:min(32
   & ul.plain>li{padding:var(--space-3) 0; border-block-start:1px solid var(--line-soft); border-block-end:0}}
 .snippet{margin-block-start:2px; font-size:14px; line-height:20px; color:var(--muted)}
 /* A hit of a search (docs/plans/130-the-explore-pass.md): its cover, or the icon of its kind, before its title. */
-.hit-link{display:inline-flex; align-items:center; gap:var(--space-2);
+ul.rows>li>a.hit-link{display:flex; align-items:center; gap:var(--space-2);
   & .cover-picture{inline-size:24px; block-size:24px; object-fit:cover; background:var(--surface-deep); border:1px solid var(--edge)}}
 .hit-icon{display:inline-flex; align-items:center; justify-content:center; inline-size:24px; block-size:24px; color:var(--text-muted);
   background:var(--surface-deep); border:1px solid var(--edge)}
