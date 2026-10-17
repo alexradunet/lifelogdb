@@ -86,14 +86,14 @@ func TestAFailedRollbackIsAFault(t *testing.T) {
 }
 
 // TestAFailedSavepointRollbackKeepsBothErrors: fn fails, and then the savepoint cannot roll back to its start. The
-// error of savepoint holds the error of fn and the error of the rollback, and Do reports it as a fault, not as the
-// refusal of fn. Here fn releases the savepoint itself, so ROLLBACK TO finds no savepoint.
+// fault of savepoint holds the error of fn and the error of the rollback, savepoint skips nothing, and Do reports a
+// fault, not the refusal of fn. Here fn releases the savepoint itself, so ROLLBACK TO finds no savepoint.
 func TestAFailedSavepointRollbackKeepsBothErrors(t *testing.T) {
 	s := fresh(t)
 	refusal := Conflict("synthetic refusal")
-	var inner error
+	var skipped, inner error
 	err := s.Do(ctx, "cli", func(tx *Tx) error {
-		inner = tx.savepoint(func() error {
+		skipped, inner = tx.savepoint(func() error {
 			if _, err := tx.tx.ExecContext(tx.ctx, `RELEASE step`); err != nil {
 				return err
 			}
@@ -102,8 +102,8 @@ func TestAFailedSavepointRollbackKeepsBothErrors(t *testing.T) {
 		return inner
 	})
 	var rollback *sqlite.Error
-	if !errors.Is(inner, refusal) || !errors.As(inner, &rollback) {
-		t.Errorf("savepoint: %v; want the error of fn and the error of ROLLBACK TO in it", inner)
+	if skipped != nil || !errors.Is(inner, refusal) || !errors.As(inner, &rollback) {
+		t.Errorf("savepoint = %v, %v; want no skipped error, and a fault with the error of fn and the error of ROLLBACK TO in it", skipped, inner)
 	}
 	var e *Error
 	if err == nil || errors.As(err, &e) {

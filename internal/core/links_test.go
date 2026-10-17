@@ -104,6 +104,97 @@ func TestALinkTargetIsSkippedOnlyWhenItsSavepointRollsBack(t *testing.T) {
 	}
 }
 
+// TestAFaultOfSavepointOrReleaseFailsTheSave: when the SAVEPOINT of a link target fails, or the RELEASE after a target
+// that succeeded fails, the save fails as a fault. The page keeps its body and its links, and the target is not made.
+//
+// The fault is a full file. VACUUM removes the free pages, and PRAGMA max_page_count then lets the file grow by 16
+// pages only. FTS5 keeps the terms of a write in memory. It writes them to the file when a savepoint opens, and when a
+// savepoint closes after a statement in it opened its own savepoint. The terms of a body of 10,000 words need more than
+// 16 pages. When SAVEPOINT or RELEASE fails because the file is full, SQLite rolls back the whole transaction, and the
+// statements after it then run outside a transaction. A row that keeps its size is written in place and needs no new
+// page. So the test saves each page once in capitals first (the same length, and a revision that keeps its size), and
+// the save under test writes a body of the same length.
+//
+// In the SAVEPOINT case, the terms are those of the long body that the save writes. In the RELEASE case, a trigger of
+// the test (deliberate damage) writes the long body of Big again with other terms when the save links New. That is the
+// last statement of the target, so the terms stay in memory until the RELEASE. The test needs the FTS5 and the b-tree
+// of the SQLite that go.mod names.
+func TestAFaultOfSavepointOrReleaseFailsTheSave(t *testing.T) {
+	var long strings.Builder // 10,000 different words
+	for i := range 10000 {
+		fmt.Fprintf(&long, " c%05d", i)
+	}
+	for _, tc := range []struct {
+		name, home, save, trigger string // home is the body of Home before the save
+	}{
+		{"SAVEPOINT", "[[Old]]" + long.String(), "[[New]]" + strings.ReplaceAll(long.String(), "c", "b"), ""},
+		{"RELEASE", "[[Old]]", "[[New]]", `CREATE TEMP TRIGGER rewrite_big AFTER INSERT ON links WHEN NEW.kind = 'wikilink'
+		    BEGIN UPDATE entities SET body = replace(body, 'C', 'D') WHERE preferred_name_key = 'big'; END`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := fresh(t)
+			// page makes a page and saves its body once more in capitals: the same length, and the revision 2.
+			page := func(title, body string) (int64, string) {
+				t.Helper()
+				id, _, err := s.CreatePage(ctx, "cli", title, body, "")
+				if err != nil {
+					t.Fatal(err)
+				}
+				p, err := s.PageByID(ctx, id)
+				if err == nil {
+					_, err = s.SaveBody(ctx, "cli", id, strings.ToUpper(body), p.Version)
+				}
+				if err == nil {
+					p, err = s.PageByID(ctx, id)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				return id, p.Version
+			}
+			page("Big", long.String())
+			home, version := page("Home", tc.home)
+			if tc.trigger != "" {
+				if _, err := s.DB.W.ExecContext(ctx, tc.trigger); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var limit, pages int64
+			if err := s.DB.W.QueryRowContext(ctx, `PRAGMA max_page_count`).Scan(&limit); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.DB.W.ExecContext(ctx, `VACUUM`); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.DB.W.QueryRowContext(ctx, `PRAGMA page_count`).Scan(&pages); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.DB.W.ExecContext(ctx, fmt.Sprintf(`PRAGMA max_page_count = %d`, pages+16)); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { // before the Close of fresh, whose PRAGMA optimize needs room
+				if _, err := s.DB.W.ExecContext(ctx, fmt.Sprintf(`PRAGMA max_page_count = %d`, limit)); err != nil {
+					t.Error(err)
+				}
+			})
+			r, err := s.SaveBody(ctx, "cli", home, tc.save, version)
+			if err == nil || status(err) != 0 || !reflect.DeepEqual(r, Sync{}) {
+				t.Errorf("SaveBody = %+v, %v (status %d); want a fault, not a refusal or a skipped target", r, err, status(err))
+			}
+			got, err := s.PageByID(ctx, home)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := strings.ToUpper(tc.home); got.Body != want || titles(got.Out, "wikilink") != "Old" {
+				t.Errorf("Home: body %.20q, links %q; want body %.20q, links %q", got.Body, titles(got.Out, "wikilink"), want, "Old")
+			}
+			if id, err := s.PageID(ctx, "New"); id != 0 || err != nil {
+				t.Errorf("PageID(New) = %d, %v; want no page", id, err)
+			}
+		})
+	}
+}
+
 func TestLinkFieldsImmutable(t *testing.T) {
 	s := fresh(t)
 	a, _, err := s.CreatePage(ctx, "cli", "Page A", "", "")

@@ -58,25 +58,26 @@ func (s *Store) dryRun(ctx context.Context, source string, fn func(*Tx) error) e
 	return err
 }
 
-// savepoint runs fn inside a savepoint of the transaction: when fn fails, what it wrote is rolled back and the
-// transaction goes on; fn's error is returned, a constraint or trigger of the DDL as the 422 that Do would return.
-// A wikilink target that cannot be made: the rest of the work is unaffected (syncWikilinks). When fn fails and the
-// savepoint then cannot roll back or release, the error is a *db.RollbackError with both errors, as db.Write gives for
-// a transaction. The state of the transaction is then not known, so when the caller returns this error, Do reports a
-// fault, not the refusal of fn.
-func (t *Tx) savepoint(fn func() error) error {
+// savepoint runs fn inside a savepoint of the transaction. When fn fails and the savepoint rolls back what fn wrote,
+// the transaction goes on: skipped is the error of fn, a constraint or trigger of the DDL as the 422 that Do would
+// return. A wikilink target that cannot be made: the rest of the work is unaffected (syncWikilinks). fault is an error
+// of the savepoint itself, and the caller must fail the write with it: the SAVEPOINT failed, the RELEASE failed, or fn
+// failed and the savepoint then could not roll back or release (a *db.RollbackError with both errors, as db.Write
+// gives for a transaction). The state of the transaction is then not known. A RELEASE that fails can keep what fn
+// wrote, and when SAVEPOINT or RELEASE fails because the file is full, SQLite rolls back the whole transaction.
+func (t *Tx) savepoint(fn func() error) (skipped, fault error) {
 	if _, err := t.tx.ExecContext(t.ctx, `SAVEPOINT step`); err != nil {
-		return err
+		return nil, err
 	}
 	if err := fn(); err != nil {
 		if _, e := t.tx.ExecContext(t.ctx, `ROLLBACK TO step`); e != nil {
-			return &db.RollbackError{Err: err, Rollback: e}
+			return nil, &db.RollbackError{Err: err, Rollback: e}
 		}
 		if _, e := t.tx.ExecContext(t.ctx, `RELEASE step`); e != nil {
-			return &db.RollbackError{Err: err, Rollback: e}
+			return nil, &db.RollbackError{Err: err, Rollback: e}
 		}
-		return refused(err)
+		return refused(err), nil
 	}
 	_, err := t.tx.ExecContext(t.ctx, `RELEASE step`)
-	return err
+	return nil, err
 }
