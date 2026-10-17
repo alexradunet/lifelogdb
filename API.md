@@ -46,7 +46,7 @@ that follows `actions` needs no rules of its own. A `required` field that is mis
 `invalid`, the message `missing field <name>`), and nothing is written. `search` is the one exception: with no `q`,
 or a `q` of blanks only, it answers with no hits ([search](#search)). A field of the type `date` takes a local day,
 `YYYY-MM-DD`, or the word `today`: the server's local day, the day that `GET /days/today` redirects to. Any other
-value that is not a day is refused (422 `invalid`).
+value that is not empty is refused (422 `invalid`).
 
 **Types** in the tables: `string`, `integer`, `number`, `boolean`, `day` (a local day, `YYYY-MM-DD`), `instant`
 (UTC, `2026-06-09T21:14:03.482Z`), `list`, `object`. A property marked *absent when empty* is left out of the JSON
