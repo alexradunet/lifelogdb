@@ -16,8 +16,8 @@ func TestMCPCommandServesOnTheStdioOfItsEnv(t *testing.T) {
 	live := dbtest.File(t)
 	e, _, _ := testEnv(t)
 	names := mcpToolNames(t, e, []string{"mcp", "--agent", "test", "--db", live})
-	if !names["find"] || names["register_metric"] || names["snapshot"] || names["rebuild_search"] {
-		t.Errorf("the tools of lifelog mcp: %v; want find, and no register_metric, no snapshot and no rebuild_search", names)
+	if !names["find"] || names["register_metric"] || names["snapshot"] || names["rebuild_search"] || names["resync_links"] {
+		t.Errorf("the tools of lifelog mcp: %v; want find, and no register_metric, no snapshot, no rebuild_search and no resync_links", names)
 	}
 }
 

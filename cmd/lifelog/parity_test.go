@@ -384,6 +384,7 @@ func parityRows() []parityRow {
 		parityRow{"save-body at the largest version", rowLargestVersion},
 		parityRow{"register-metric", rowRegisterMetric},
 		parityRow{"rebuild-search", rowRebuildSearch},
+		parityRow{"resync-links", rowResyncLinks},
 		parityRow{"promote a place", rowPromoteAPlace},
 		parityRow{"register-metric with a range out of order", rowRangeOutOfOrder},
 	)
@@ -776,6 +777,48 @@ func rowRebuildSearch(x *parityRun) {
 	}
 	if indexOK() {
 		x.t.Error("a surface that may not rebuild the index repaired it")
+	}
+}
+
+// resync-links is the owner's repair of the links of the bodies: a surface of an owner rewrites the links of a page whose
+// link row is missing and lists the page; a surface of an agent is refused with 403 forbidden and leaves the link
+// missing; the MCP server has no such tool.
+func rowResyncLinks(x *parityRun) {
+	to, _, err := x.store.CreatePage(x.t.Context(), "cli", "Bridge", "", "")
+	if err != nil {
+		x.t.Fatal(err)
+	}
+	from, _, err := x.store.CreatePage(x.t.Context(), "cli", "Anchor", "see [[Bridge]]", "")
+	if err != nil {
+		x.t.Fatal(err)
+	}
+	x.sql(`DELETE FROM links WHERE from_id = ? AND to_id = ?`, from, to)
+	drifted := func() int {
+		x.t.Helper()
+		r, err := x.store.Integrity(x.t.Context())
+		if err != nil {
+			x.t.Fatal(err)
+		}
+		return len(r.LinkDrift)
+	}
+	switch {
+	case x.mcp:
+		if _, err := x.call("resync-links", nil); !errors.Is(err, errNoTool) {
+			x.t.Errorf("resync-links on MCP: %v, want no tool", err)
+		}
+	case x.owner:
+		if p := props(x.t, x.ok("resync-links", nil)); fmt.Sprint(p["pages"]) != fmt.Sprint([]any{json.Number(id(from))}) {
+			x.t.Errorf("resync-links lists %v; want the page %d", p["pages"], from)
+		}
+		if n := drifted(); n != 0 {
+			x.t.Errorf("resync-links left %d pages with other links than their bodies", n)
+		}
+		return
+	default:
+		x.refused("resync-links", nil, http.StatusForbidden, "forbidden")
+	}
+	if n := drifted(); n != 1 {
+		x.t.Errorf("a surface that may not resync links changed them: %d pages drift, want 1", n)
 	}
 }
 

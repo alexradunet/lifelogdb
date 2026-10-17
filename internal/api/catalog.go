@@ -124,6 +124,8 @@ var catalog = []spec{
 		"POST", "/snapshots", nil, true, false},
 	{"rebuild-search", "Rebuild search", "The owner's repair of the full-text index: rebuild it from the pages (docs/contract/integrity-checks.md). Run it when integrity-check says the index is not ok. It reads every page and holds the write lock while it runs. The answer says how many documents the new index holds.",
 		"POST", "/search/rebuild", nil, true, false},
+	{"resync-links", "Resync links", "The owner's repair of the links of the bodies: every live page whose [[wikilinks]] differ from its body gets the links of its body, as a save of the same body would give them (docs/contract/integrity-checks.md). A page whose links are right is not written. A page that a body names and no page has is made, and a deleted one is revived, as a save does. The answer lists the pages rewritten.",
+		"POST", "/links/resync", nil, true, false},
 }
 
 func specOf(name string) spec {

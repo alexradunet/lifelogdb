@@ -63,6 +63,16 @@ INSERT INTO entities_fts(entities_fts, rank) VALUES ('integrity-check', 1);   --
   This check is not SQL, and the page holds no query for it. The file refuses a change of a key (`entity_names_fixed`),
   so a drift is reported and not repaired: a repair is a change of the schema, which follows the
   [process](../process.md). A writer whose Unicode tables moved finds here the titles whose key moved.
+- **The links — derived from the bodies.** A `wikilink` row is derived from the body of the page it leaves
+  ([D19](../decisions/D19-wikilink-save-contract.md)): the body is the truth, and the database does not check that the
+  two agree. SQL cannot extract the wikilinks of a body, so a writer does it with the extraction of [titles and
+  wikilinks](titles-and-wikilinks.md). For each live page it resolves every distinct target of the body to the page
+  that holds its name (a deleted page too, the page itself left out) and compares that set with the page's
+  `wikilink` rows. A target that no page has counts as a difference, since a save would make the page. It lists the
+  `id` of each page that differs: a link row is missing, a link row has no word in the body, or the body names a page
+  that does not exist. The repair is the save of the same body: it rewrites only the `wikilink` rows of the pages
+  listed, with the code that a body save uses, so it makes a missing target page and revives a deleted one as a save
+  does. A page that a save skips as a target stays in the list until its body changes.
 - **The schema — a file that no longer has the DDL.** The data checks do not see a missing trigger or a changed
   index: a file edited by hand or by a one-off program can lose a rule while every row stays valid. A writer builds a
   fresh file from [`schema.sql`](../schema/schema.sql) in a temporary folder and compares the rows of `sqlite_schema`
@@ -85,7 +95,8 @@ INSERT INTO entities_fts(entities_fts, rank) VALUES ('integrity-check', 1);   --
   it runs on a writer connection, in one transaction: a rebuild that fails keeps the old index. A connection keeps
   state of a virtual table between its statements, so a reader that read the old index can still report
   corruption in `PRAGMA integrity_check` after the rebuild of another connection (executed). A writer therefore
-  closes its idle read connections after a rebuild. The check holds that connection for as long as it runs, and it reads the whole
+  closes its idle read connections after a rebuild. A writer that offers repairs to its owner offers this one, and the
+  link repair above, as actions of the owner, so that nobody runs the statement by hand. The check holds that connection for as long as it runs, and it reads the whole
   index: every other write of the same writer waits, and a writer in another process meets the lock. A writer
   therefore puts one deadline on the whole run, so that a check that never ends cannot block the writes for ever. A
   run that passes the deadline ends with an error, not with a result.

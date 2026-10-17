@@ -48,3 +48,14 @@ func (h *server) rebuildSearch(r *http.Request, _ spec, _ string) (*siren.Entity
 	return &siren.Entity{Class: []string{"rebuilt"}, Title: "Search rebuilt", Properties: props, Result: props,
 		Links: []siren.Link{link("self", "/", "Home"), link("index", "/", "Home")}}, nil
 }
+
+// resyncLinks is the owner's repair of the links of the bodies (docs/contract/integrity-checks.md). The answer lists
+// the pages rewritten and what the rewrite made; self is the root, as for the other repairs.
+func (h *server) resyncLinks(r *http.Request, _ spec, src string) (*siren.Entity, error) {
+	res, err := h.s.ResyncLinks(r.Context(), src)
+	if err != nil {
+		return nil, err
+	}
+	return &siren.Entity{Class: []string{"resynced"}, Title: "Links resynced", Properties: res, Result: res,
+		Links: []siren.Link{link("self", "/", "Home"), link("index", "/", "Home")}}, nil
+}

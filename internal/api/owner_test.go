@@ -1,6 +1,8 @@
 package api_test
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 
@@ -20,9 +22,10 @@ func TestOwnerOnlyActionsPolicy(t *testing.T) {
 	h := api.New(&core.Store{DB: d, SnapshotDir: snapshots})
 	catalog := apitest.Must(t)(client.InProcess(h, "agent:policy-test").Get(t.Context(), "/actions"))
 	register, snapshot, integrity, record := apitest.Action(t, catalog, "register-metric"), apitest.Action(t, catalog, "snapshot"), apitest.Action(t, catalog, "integrity-check"), apitest.Action(t, catalog, "record")
-	rebuild := apitest.Action(t, catalog, "rebuild-search")
-	if !register.Owner || !snapshot.Owner || !integrity.Owner || integrity.Method != "GET" || record.Owner || !rebuild.Owner || rebuild.Method != "POST" {
-		t.Fatalf("wrong catalog policy: %+v %+v %+v %+v %+v", register, snapshot, integrity, record, rebuild)
+	rebuild, resync := apitest.Action(t, catalog, "rebuild-search"), apitest.Action(t, catalog, "resync-links")
+	if !register.Owner || !snapshot.Owner || !integrity.Owner || integrity.Method != "GET" || record.Owner ||
+		!rebuild.Owner || rebuild.Method != "POST" || !resync.Owner || resync.Method != "POST" {
+		t.Fatalf("wrong catalog policy: %+v %+v %+v %+v %+v %+v", register, snapshot, integrity, record, rebuild, resync)
 	}
 	sent := map[string]map[string]string{"register-metric": {"name": "Forbidden direct"}}
 	for _, source := range []string{"agent:policy-test", "import:policy-test"} {
@@ -88,5 +91,52 @@ func TestRebuildSearchIsTheOwnersRepair(t *testing.T) {
 	}
 	if !indexOK() {
 		t.Fatal("the owner's rebuild-search did not repair the index")
+	}
+}
+
+// resync-links rewrites the links of the bodies, for the owner only. The body of a page here names a page, and no link
+// row says so. An agent is refused and the link stays missing; the owner's call writes it and lists the page.
+func TestResyncLinksIsTheOwnersRepair(t *testing.T) {
+	d := dbtest.New(t)
+	s := &core.Store{DB: d}
+	h := api.New(s)
+	to, _, err := s.CreatePage(t.Context(), "cli", "Bridge", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	from, _, err := s.CreatePage(t.Context(), "cli", "Anchor", "see [[Bridge]]", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.W.ExecContext(t.Context(), `DELETE FROM links WHERE from_id = ? AND to_id = ?`, from, to); err != nil {
+		t.Fatal(err)
+	}
+	drift := func() []int64 {
+		t.Helper()
+		r, err := s.Integrity(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r.LinkDrift
+	}
+	if got := drift(); len(got) != 1 || got[0] != from {
+		t.Fatalf("the fixture must have the drift of the page %d: %v", from, got)
+	}
+	agent := client.InProcess(h, "agent:repair-test")
+	catalog := apitest.Must(t)(agent.Get(t.Context(), "/actions"))
+	resync := apitest.Action(t, catalog, "resync-links")
+	e, err := agent.Do(t.Context(), resync, nil)
+	if p, _ := e.Properties.(map[string]any); apitest.Status(err) != 403 || p["code"] != "forbidden" {
+		t.Fatalf("an agent's resync-links: %v %v; want 403 forbidden", err, e)
+	}
+	if len(drift()) != 1 {
+		t.Fatal("a refused resync-links repaired the links")
+	}
+	e = apitest.Must(t)(client.InProcess(h, "cli").Do(t.Context(), resync, nil))
+	if p, _ := e.Properties.(map[string]any); fmt.Sprint(p["pages"]) != fmt.Sprint([]any{json.Number(fmt.Sprint(from))}) {
+		t.Errorf("the answer of resync-links lists %v; want the page %d", p["pages"], from)
+	}
+	if len(drift()) != 0 {
+		t.Fatal("the owner's resync-links did not repair the links")
 	}
 }

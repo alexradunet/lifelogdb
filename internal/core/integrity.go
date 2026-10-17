@@ -23,6 +23,7 @@ type IntegrityResult struct {
 	InvalidLinkDayRules           []int64  `json:"invalid_link_day_rules"`
 	InvalidScaleValues            []int64  `json:"invalid_scale_values"`
 	NameKeyMismatches             []int64  `json:"name_key_mismatches"`
+	LinkDrift                     []int64  `json:"link_drift"`
 	SchemaDrift                   []string `json:"schema_drift"`
 	FullTextIndexOK               bool     `json:"full_text_index_ok"`
 	FullTextError                 string   `json:"full_text_error,omitempty"`
@@ -123,6 +124,10 @@ func (s *Store) Integrity(ctx context.Context) (*IntegrityResult, error) {
 		return nil, err
 	}
 	semanticOK = semanticOK && len(r.NameKeyMismatches) == 0
+	if r.LinkDrift, err = driftedLinkPages(ctx, tx); err != nil {
+		return nil, err
+	}
+	semanticOK = semanticOK && len(r.LinkDrift) == 0
 	if err := r.checkSchema(ctx, tx); err != nil {
 		return nil, err
 	}

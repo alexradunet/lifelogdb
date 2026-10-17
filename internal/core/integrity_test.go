@@ -82,6 +82,8 @@ func (c *integrityConn) QueryContext(ctx context.Context, query string, _ []driv
 		check = "measurement corrections"
 	} else if strings.Contains(query, "FROM entity_names ORDER BY id") {
 		check = "name keys"
+	} else if strings.Contains(query, "preferred_name_key FROM entities WHERE deleted_at IS NULL") {
+		check = "link drift"
 	} else if strings.Contains(query, "FROM sqlite_schema") {
 		check = "schema drift"
 	}
@@ -119,6 +121,9 @@ func (r *integrityRows) Columns() []string {
 	if r.check == "schema drift" {
 		return []string{"type", "name", "tbl_name", "sql"}
 	}
+	if r.check == "link drift" {
+		return []string{"id", "body", "preferred_name_key"}
+	}
 	return []string{"value"}
 }
 func (r *integrityRows) Close() error {
@@ -148,6 +153,8 @@ func (r *integrityRows) Next(dest []driver.Value) error {
 		copy(dest, []driver.Value{int64(42), "Title", "not the key of Title"})
 	} else if r.check == "schema drift" {
 		copy(dest, []driver.Value{"table", "stray", "stray", "CREATE TABLE stray(a)"})
+	} else if r.check == "link drift" {
+		copy(dest, []driver.Value{int64(42), "[[Linked]]", "own"}) // its target has no page: the links differ
 	} else if r.check == "integrity_check" {
 		dest[0] = "ok"
 	} else {
@@ -168,6 +175,8 @@ func (r *integrityRows) Next(dest []driver.Value) error {
 			dest[0] = "not an integer"
 		} else if r.check == "schema drift" {
 			dest[0] = nil
+		} else if r.check == "link drift" {
+			dest[0] = "not an integer"
 		} else {
 			dest[0] = "not an integer"
 		}
@@ -185,7 +194,7 @@ func faultIntegrityStore(t *testing.T, c *integrityConnector) *Store {
 
 // integrityCheckNames are the reads of Integrity in the order it runs them.
 var integrityCheckNames = []string{"integrity_check", "foreign_key_check", "orphan entities", "typed link endpoints", "measurement corrections",
-	"measurement correction chains", "journal name ownership", "link day-page rules", "scale ranges", "name keys", "schema drift"}
+	"measurement correction chains", "journal name ownership", "link day-page rules", "scale ranges", "name keys", "link drift", "schema drift"}
 
 func TestIntegrityReadFailures(t *testing.T) {
 	for i, check := range integrityCheckNames {
@@ -309,13 +318,21 @@ func TestIntegrityDiagnostics(t *testing.T) {
 				if !slices.Contains(r.SchemaDrift, "extra table stray") {
 					t.Errorf("schema diagnostic lost: %+v", r)
 				}
+			case "link drift":
+				if len(r.LinkDrift) != 1 || r.LinkDrift[0] != 42 {
+					t.Errorf("link drift diagnostic lost: %+v", r)
+				}
 			case "name keys":
 				if len(r.NameKeyMismatches) != 1 || r.NameKeyMismatches[0] != 42 {
 					t.Errorf("name key diagnostic lost: %+v", r)
 				}
 			}
-			if c.closed != len(integrityCheckNames) || c.execs != 1 {
-				t.Errorf("closed=%d execs=%d", c.closed, c.execs)
+			want := len(integrityCheckNames)
+			if check == "link drift" {
+				want++ // the lookup of the target, which has no page: the links differ before the stored links are read
+			}
+			if c.closed != want || c.execs != 1 {
+				t.Errorf("closed=%d execs=%d; want %d/1", c.closed, c.execs, want)
 			}
 		})
 	}

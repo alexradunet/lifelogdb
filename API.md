@@ -14,7 +14,7 @@ and this page disagree, so a property here is a property on the wire.
   allowed to call it; `--tls-cert`/`--tls-key` serve HTTPS. Without one of them the answer is 401 `token_required`.
 - **Provenance:** `Lifelog-Source: <name>` names the writer on every row the request writes (`[a-z0-9_:.-]{1,64}`,
   e.g. `app:phone`). Without it a browser form writes as `ui` and anything else as `api`. A writer named `agent:…`
-  or `import:…` is refused the owner-only actions: `register-metric`, `snapshot`, `integrity-check` and `rebuild-search`.
+  or `import:…` is refused the owner-only actions: `register-metric`, `snapshot`, `integrity-check`, `rebuild-search` and `resync-links`.
 - **Representation:** `Accept: application/vnd.siren+json` (or anything but `text/html`) gets the JSON below;
   `Accept: text/html` gets the same entity drawn as a page. A JSON client sends an action as
   `application/x-www-form-urlencoded`, `application/json` (one object; a non-string value is sent as its JSON text) or,
@@ -511,6 +511,7 @@ page title, made when missing): one write makes the metric and files it. A refus
 | `invalid_link_day_rules` | list | ids of `links` |
 | `invalid_scale_values` | list | ids of `measurements` |
 | `name_key_mismatches` | list | ids of `entity_names` |
+| `link_drift` | list | ids of the live pages whose `wikilink` rows are not the links of their bodies; the repair is `resync-links` |
 | `schema_drift` | list | the objects of the schema that differ from the DDL this writer embeds, each as `missing`, `extra` or `changed`, a type and a name; not part of `ok` |
 | `full_text_index_ok` | boolean | |
 | `full_text_error` | string | absent when the index is fine |
@@ -550,6 +551,7 @@ A timeout is 504 `timeout`, and any other failure is 500 `internal`.
 | `restore_check.invalid_link_day_rules` | list | |
 | `restore_check.invalid_scale_values` | list | |
 | `restore_check.name_key_mismatches` | list | |
+| `restore_check.link_drift` | list | |
 | `restore_check.schema_drift` | list | |
 | `restore_check.full_text_index_ok` | boolean | |
 | `restore_check.full_text_error` | string | |
@@ -564,6 +566,20 @@ keeps the old index. It reads every page and holds the write lock while it runs.
 | property | type | meaning |
 |---|---|---|
 | `documents` | integer | how many documents the new index holds |
+
+### resynced
+
+`POST /links/resync` (the owner's action `resync-links`, refused to an `agent:*` or `import:*` writer): the repair of the
+pages whose `link_drift` `integrity-check` lists. It rewrites the `wikilink` rows of each such live page from its body,
+by the code of a body save, in one write. A page whose links are right is not written. The same value is in `result`;
+`self` is `/`.
+
+| property | type | meaning |
+|---|---|---|
+| `pages` | list | ids of the pages rewritten |
+| `created` | list | titles of the pages that the bodies named and no page had, now made; absent when none |
+| `revived` | list | titles of the deleted pages that the bodies named, now restored; absent when none |
+| `skipped` | list | titles that were not valid and so not linked; absent when none |
 
 ### tombstoned
 

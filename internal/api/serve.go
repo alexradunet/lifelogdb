@@ -55,7 +55,7 @@ func newServer(s *core.Store) *server {
 		"unlink": h.unlinkPages, "file-pages": h.filePages, "record": h.record, "correct": h.correct,
 		"retract": h.retract, "rename": h.rename, "register-metric": h.registerMetric, "integrity-check": h.integrity,
 		"search": h.search, "browse": h.browse, "find": h.find, "open-day": h.openDay, "snapshot": h.snapshot,
-		"rebuild-search": h.rebuildSearch,
+		"rebuild-search": h.rebuildSearch, "resync-links": h.resyncLinks,
 	})
 	// The routes that are not actions: the resources, the old lists, the editor's helpers and the files of the browser.
 	m.HandleFunc("GET /{$}", h.serve(h.root))
@@ -434,7 +434,7 @@ func source(r *http.Request) (string, error) {
 }
 
 // isOwner reports a writer that is the owner: not an agent (agent:*) and not an import (import:*). The owner-only
-// actions (register-metric, snapshot, integrity-check, rebuild-search) are refused to any other writer, on every surface.
+// actions (register-metric, snapshot, integrity-check, rebuild-search, resync-links) are refused to any other writer, on every surface.
 func isOwner(source string) bool {
 	return !strings.HasPrefix(source, "agent:") && !strings.HasPrefix(source, "import:")
 }
