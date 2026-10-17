@@ -14,7 +14,7 @@
 {{template "step" (dict "href" . "rel" "next" "label" (printf "Next month, %s" ($.LinkTitle "next")) "text" ($.LinkTitle "next"))}}{{end}}
 {{template "boxed" (form (.Action "open-day") "button" "Go to a day")}}
 </div></header>
-<div class="scroll"><table class="calendar"><caption>A day with a page is tinted, with its first line, and its cover photo behind it. A day shows what has its date; Day by day, under the calendar, lists every one. Today has a frame.</caption>
+<div class="scroll"><table class="calendar">
 {{template "weekdays" false}}
 <tbody>{{range weeks $m.days}}<tr>{{range .}}{{if .}}<td{{if .page}} class="written{{if .picture}} pictured{{end}}"{{end}}{{if eq .day $.Today}} aria-current="date"{{end}}><a href="/days/{{.day}}">{{with .picture}}<img class="cell-cover" src="{{.}}" alt="" loading="lazy">{{end}}<span class="n">{{dayOfMonth .day}}</span>{{with .first_line}}<span class="first">{{.}}</span>{{end}}
 {{- with .items}}<span class="items">{{range upTo . 3}}{{$w := calItem .}}<span class="item">{{.title}}{{with $w.Word}} <small>{{.}}</small>{{end}}</span>{{end}}</span><span class="marks" aria-hidden="true">{{range upTo . 4}}<i></i>{{end}}</span>{{end}}

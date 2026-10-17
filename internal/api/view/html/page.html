@@ -39,7 +39,6 @@
 {{with $p.person}}{{with .name}}<dt>name</dt><dd class="words">{{.}}</dd>{{end}}{{with .birth_day}}<dt>born</dt><dd>{{$.Date .}}</dd>{{end}}{{with .death_day}}<dt>died</dt><dd>{{$.Date .}}</dd>{{end}}{{end}}
 {{with $p.file}}<dt>type</dt><dd>{{.mime}}</dd><dt>SHA-256</dt><dd title="SHA-256 of the original">{{slice .sha256 0 12}}…</dd>{{end}}
 <dt>created</dt><dd>{{$.When $p.created_at}}</dd>
-<dt>version</dt><dd>{{$p.version}}</dd>
 </dl></section>
 
 {{with $p.links}}<section class="group" aria-label="Links"><h2>Links</h2>{{template "typed-links" (dict "v" $ "links" .)}}</section>{{end}}

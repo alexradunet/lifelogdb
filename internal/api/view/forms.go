@@ -127,6 +127,7 @@ type fieldView struct {
 	Key         string // the field's access key, which the browser's own modifier reaches
 	List        string // the id of the datalist of a field of page titles with options (Pages): see Fields
 	Pattern     string // the browser sends the form only when the value matches it
+	Sole        bool   // the only field the form draws: it needs no mark "required"
 }
 
 // Fields are the fields the form shows (folded false) or folds under "More fields" (folded true). A field of page
@@ -138,8 +139,9 @@ func (f *formView) Fields(folded bool) []fieldView {
 		list = f.More
 	}
 	out := make([]fieldView, len(list))
+	sole := len(f.Shown)+len(f.More) == 1
 	for i, fd := range list {
-		out[i] = fieldView{fd, fd.Name == f.Focus, f.prompts[fd.Name], f.keys[fd.Name], "", f.patterns[fd.Name]}
+		out[i] = fieldView{fd, fd.Name == f.Focus, f.prompts[fd.Name], f.keys[fd.Name], "", f.patterns[fd.Name], sole}
 		if fd.Pages && len(fd.Options) > 0 {
 			out[i].List = cmp.Or(f.ID, f.Name) + "-" + fd.Name
 		}

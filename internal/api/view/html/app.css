@@ -279,7 +279,6 @@ dl:not(.facts){
    today has the gold edge and the notch. On a phone the cells keep the day and its tint. */
 .scroll:has(>table.calendar){padding:var(--space-2); border:2px solid var(--outline); box-shadow:var(--bevel-up)}
 table.calendar{inline-size:100%; min-inline-size:320px; table-layout:fixed; border-collapse:separate; border-spacing:3px;
-  & caption{color:var(--rail-ink)}
   & th{padding:var(--space-1) var(--space-2); text-align:start; border-block-end:0; font:400 12px/16px var(--mono); color:var(--rail-ink)}
   & td{position:relative; padding:0; vertical-align:top;
     &:empty{background:none; border-color:transparent}

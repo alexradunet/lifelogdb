@@ -258,6 +258,31 @@ func TestALabelGivesAFieldATitleOfItsForm(t *testing.T) {
 	}
 }
 
+// TestAFormOfOneFieldDoesNotSayRequired: the word "required" is a mark for the field that a form needs among others.
+// In a form of one field, the field is the whole form, so the mark says nothing. The browser still refuses an empty
+// box (the attribute required stays). A form of two fields, or of one shown field and one folded, keeps the mark.
+func TestAFormOfOneFieldDoesNotSayRequired(t *testing.T) {
+	search := siren.Action{Name: "search", Title: "Search", Method: "GET", Href: "/search", Fields: []siren.Field{
+		{Name: "q", Type: "search", Title: "Search", Required: true},
+	}}
+	got := markup(drawForm(t, search, "label", "q=Words"))
+	if strings.Contains(got, "required</small>") || !strings.Contains(got, `<span>Words</span>`) || !strings.Contains(got, `name="q" value="" required`) {
+		t.Errorf("the form of one field says required, lacks its label, or lost the attribute:\n%s", got)
+	}
+	if got := markup(drawForm(t, filePages(nil))); strings.Count(got, "<small>required</small>") != 2 {
+		t.Errorf("a form of three fields lost the mark on its two required fields:\n%s", got)
+	}
+	if got := markup(drawForm(t, registerMetric(), "more", "unit")); !strings.Contains(got, "<small>required</small>") {
+		t.Errorf("a form of one shown field and one folded field lost the mark:\n%s", got)
+	}
+	mood := siren.Action{Name: "mood", Title: "Mood", Method: "POST", Href: "/mood", Fields: []siren.Field{
+		{Name: "mood", Type: "number", Title: "Mood", Required: true, Options: []string{"1", "2", "3"}},
+	}}
+	if got := markup(drawForm(t, mood)); strings.Contains(got, "required</small>") || !strings.Contains(got, " required>") {
+		t.Errorf("a segmented field alone says required, or lost the attribute:\n%s", got)
+	}
+}
+
 // TestAnEmptyAutofocusKeepsTheFocusOut: a form the page's link asks for starts in its first field, unless the view
 // names the field, or none ("autofocus" ""): the New metric fold draws one action in three forms, and only the first
 // takes the focus.

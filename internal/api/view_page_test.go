@@ -109,6 +109,7 @@ func TestEveryViewRenders(t *testing.T) {
 		{apitest.Href(gone, "self"), http.StatusOK, []string{"Deleted", `action="` + apitest.Href(gone, "self") + `/revive"`}},
 		{"/weeks/2026-W40", http.StatusOK, nil},
 		{"/years/2026", http.StatusOK, nil},
+		{"/months/2026-09", http.StatusOK, nil},
 		{apitest.Href(draft, "self"), http.StatusOK, nil},
 		{opens(t, h, "Essay"), http.StatusOK, nil},
 		{"/pages/999999", http.StatusNotFound, nil},
@@ -146,6 +147,24 @@ func TestEveryViewRenders(t *testing.T) {
 		rail, _, _ := strings.Cut(body[strings.Index(body, `<aside class="rail">`)+1:], "</aside>")
 		if n := strings.Count(rail, `aria-current="page"`); n > 1 {
 			t.Errorf("%s marks %d links of the sidebar current, want one at most", row.path, n)
+		}
+	}
+	// Plain labels (docs/plans/129-the-ux-pass.md, part 4): the screen has no technical word where a plain one serves.
+	for _, c := range []struct{ path, want, not string }{
+		{apitest.Href(day, "self"), "<span>Entry</span>", "(CommonMark)"},
+		{dayPage, "", "<dt>version</dt>"},
+		{"/search", "<span>Words</span>", "required</small>"},
+		{"/search", "How to search", "FTS5"},
+		{"/search?q=ran", "<span>Words</span>", "required</small>"},
+		{"/search?q=ran", "How to search", "FTS5"},
+		{"/", "<span>Entry</span>", "(CommonMark)"},
+		{"/months/2026-09", "", "A day with a page is tinted"},
+	} {
+		if c.want != "" && !strings.Contains(bodies[c.path], c.want) {
+			t.Errorf("%s lacks %q", c.path, c.want)
+		}
+		if strings.Contains(bodies[c.path], c.not) {
+			t.Errorf("%s still carries %q", c.path, c.not)
 		}
 	}
 	if strings.Contains(bodies[dayPage], `/promote"`) {
