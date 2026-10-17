@@ -189,6 +189,30 @@ schema is frozen ([D13](docs/decisions/D13-migrations-and-freeze.md)):
   behavior. Respect platform differences in case, separators, symlinks and file replacement. Keep dependency and
   toolchain updates deliberate, reviewed and tested; do not freeze vulnerable versions for the sake of longevity.
 
+## Engineering rule books
+
+The repo keeps five rule books as skills in `.agents/skills/`; Claude Code reads them through the links in
+`.claude/skills/`. They are general advice. **This file and `docs/` win over a skill.** When a skill and this file
+disagree, follow this file and name the conflict in the report.
+
+Before you edit, load the skills of the task type. When you review a diff, load the skills of its type. Read the
+`mini` file of each skill; read the full file only when the mini file does not settle the question.
+
+| task | primary | companion |
+|---|---|---|
+| new code: a package, an API, an action | `a-philosophy-of-software-design` | `code-complete` |
+| a change to existing code, a refactor, a bug fix | `refactoring` | `a-philosophy-of-software-design` |
+| failure handling, the service, timeouts, snapshots, imports | `release-it` | `designing-data-intensive-applications` |
+| a change to `schema.sql` or the contract, on the path of [the process](docs/process.md) | `designing-data-intensive-applications` | — |
+
+Any other change to `docs/`, or a plan, loads no skill. Each row pairs books that the upstream
+[compatibility matrix](https://ciembor.github.io/agent-rules-books/compatibility/index.html) rates as complementary.
+The skills are frozen: do not update them from the upstream repo, and do not add or remove a skill without the
+owner's word. `skills-lock.json` records the source and the hash of each.
+
+End the report with one line: `Skills: <names>. Conflict: <none, or the skill rule and the rule of this file that
+won>.`
+
 ## Tests that earn confidence
 
 - **Test-first where it matters.** For a bug, write a reproducer and observe the intended failure before the fix.
