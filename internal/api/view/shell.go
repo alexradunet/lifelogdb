@@ -52,12 +52,12 @@ type navItem struct {
 // Browse list (docs/plans/117-one-browse-view.md, rule 7); a file on the media list. A metric is made on /metrics,
 // and a reading is added on its metric's card.
 var newKinds = []struct{ Title, Href, Icon string }{
-	{"Page", "/browse?kind=page&new=create-page", "new"},
-	{"Person", "/browse?kind=person&new=create-person", "people"},
-	{"Place", "/browse?kind=place&new=create-place", "places"},
+	{"Page", siren.BrowseNewHref("page"), "new"},
+	{"Person", siren.BrowseNewHref("person"), "people"},
+	{"Place", siren.BrowseNewHref("place"), "places"},
 	{"Metric", "/metrics?new=register-metric", "metrics"},
 	{"Reading", "/metrics", "metrics"},
-	{"File", "/browse?kind=media&new=add-file", "files"},
+	{"File", siren.BrowseNewHref("media"), "files"},
 }
 
 // NewKinds are the items of the rail's New menu.

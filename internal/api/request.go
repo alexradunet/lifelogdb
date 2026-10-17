@@ -177,19 +177,31 @@ func pageOf(r *http.Request, def int) (limit, offset int, err error) {
 	return limit, offset, nil
 }
 
-// paged trims a read of limit+1 rows to the page, records limit and offset in the properties and adds the next
-// and prev links; path and q are the list's own address.
-func paged[T any](e *siren.Entity, rows []T, path string, q url.Values, limit, offset int) []T {
+// pageProps are the properties that every paged list carries: the limit and the offset of the page it shows.
+type pageProps struct {
+	Limit  int `json:"limit"`
+	Offset int `json:"offset"`
+}
+
+// readPage reads one page of a list and links its next and previous pages (paged). read is the list's read: it
+// gets the rows to ask for and the offset. The rows to ask for are limit+1: the one more row says that a next page
+// exists. Only readPage knows this, so a list cannot lose its next link by asking for limit rows.
+func readPage[T any](e *siren.Entity, path string, q url.Values, limit, offset int, read func(limit, offset int) ([]T, error)) ([]T, pageProps, error) {
+	rows, err := read(limit+1, offset)
+	if err != nil {
+		return nil, pageProps{}, err
+	}
+	rows, props := paged(e, rows, path, q, limit, offset)
+	return rows, props, nil
+}
+
+// paged trims a read of limit+1 rows to the page and adds the next and prev links to e; path and q are the list's
+// own address. It gives back the page and its properties, which the caller puts in its own.
+func paged[T any](e *siren.Entity, rows []T, path string, q url.Values, limit, offset int) ([]T, pageProps) {
 	more := len(rows) > limit
 	if more {
 		rows = rows[:limit]
 	}
-	props, _ := e.Properties.(map[string]any)
-	if props == nil {
-		props = map[string]any{}
-		e.Properties = props
-	}
-	props["limit"], props["offset"] = limit, offset
 	href := func(offset int) string {
 		v := url.Values{}
 		for k, vs := range q {
@@ -205,5 +217,5 @@ func paged[T any](e *siren.Entity, rows []T, path string, q url.Values, limit, o
 	if more {
 		e.Links = append(e.Links, link("next", href(offset+limit), "Next page"))
 	}
-	return rows
+	return rows, pageProps{Limit: limit, Offset: offset}
 }

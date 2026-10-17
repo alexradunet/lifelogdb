@@ -83,9 +83,9 @@ func (h *server) root(r *http.Request) (*siren.Entity, error) {
 		Class: []string{"root"}, Title: "Lifelog",
 		Properties: map[string]any{"today": today, "recent": recent, "on_this_day": onThisDay},
 		Links: []siren.Link{link("self", "/", "Lifelog"), link("today", siren.DayHref(today), "Today"), link("days", "/days", "Days"),
-			link("browse", "/browse", "Browse"), link("categories", "/browse", "Categories"), link("people", "/browse?kind=person", "People"),
-			link("places", "/browse?kind=place", "Places"), link("media", "/browse?kind=media", "Media"), link("files", "/browse?kind=document", "Documents"),
-			link("metrics", "/metrics", "Metrics"), link("ghosts", "/browse?ghosts=1&kind=page", "Ghost pages"), link("actions", "/actions", "All actions"),
+			link("browse", siren.BrowseHref(nil), "Browse"), link("categories", siren.BrowseHref(nil), "Categories"), link("people", siren.BrowseKindHref("person"), "People"),
+			link("places", siren.BrowseKindHref("place"), "Places"), link("media", siren.BrowseKindHref("media"), "Media"), link("files", siren.BrowseKindHref("document"), "Documents"),
+			link("metrics", "/metrics", "Metrics"), link("ghosts", siren.GhostsHref(), "Ghost pages"), link("actions", "/actions", "All actions"),
 			link("calendar", "/months/current", "Calendar"),
 			link("week", "/weeks/current", "This week"), link("year", "/years/current", "This year")},
 		Actions: actions,
@@ -107,17 +107,39 @@ func (h *server) dayNamed(day string) string {
 	return day
 }
 
+// neighbour is the page next to this one in time: the day its address stands for (the first day of a month or of
+// a week), its address and its title.
+type neighbour struct {
+	day         time.Time
+	href, title string
+}
+
+// neighbourLinks are the links prev and next of a page of the calendar. A link leads only to a page that answers: a
+// neighbour whose day is not a day (before 0000-01-01, after 9999-12-31) has no link.
+func neighbourLinks(prev, next neighbour) []siren.Link {
+	var out []siren.Link
+	if text.IsDay(prev.day.Format(time.DateOnly)) {
+		out = append(out, link("prev", prev.href, prev.title))
+	}
+	if text.IsDay(next.day.Format(time.DateOnly)) {
+		out = append(out, link("next", next.href, next.title))
+	}
+	return out
+}
+
 func (h *server) days(r *http.Request) (*siren.Entity, error) {
 	limit, offset, err := pageOf(r, 60)
 	if err != nil {
 		return nil, err
 	}
-	days, err := h.s.RecentDays(r.Context(), limit+1, offset)
+	e := &siren.Entity{Class: []string{"days"}, Title: "Days", Links: []siren.Link{link("self", "/days", "Days"), link("index", "/", "Home")}}
+	days, props, err := readPage(e, "/days", nil, limit, offset, func(limit, offset int) ([]core.Edge, error) {
+		return h.s.RecentDays(r.Context(), limit, offset)
+	})
 	if err != nil {
 		return nil, err
 	}
-	e := &siren.Entity{Class: []string{"days"}, Title: "Days", Links: []siren.Link{link("self", "/days", "Days"), link("index", "/", "Home")}}
-	days = paged(e, days, "/days", nil, limit, offset)
+	e.Properties = props
 	for _, d := range days {
 		e.Entities = append(e.Entities, link("item", siren.DayHref(d.Title), d.Title))
 	}
@@ -173,13 +195,11 @@ func (h *server) dayEntity(ctx context.Context, day string) (*siren.Entity, erro
 		Links:   []siren.Link{link("self", siren.DayHref(day), day)},
 		Actions: []siren.Action{action("capture", map[string]string{"day": day}, nil), record, action("open-day", nil, nil)},
 	}
-	// A link leads only to a page that answers: 0000-01-01 has no day before it, and 9999-12-31 none after it.
-	if prev := t.AddDate(0, 0, -1).Format(time.DateOnly); text.IsDay(prev) {
-		e.Links = append(e.Links, link("prev", siren.DayHref(prev), "Previous day"))
-	}
-	if next := t.AddDate(0, 0, 1).Format(time.DateOnly); text.IsDay(next) {
-		e.Links = append(e.Links, link("next", siren.DayHref(next), "Next day"))
-	}
+	// 0000-01-01 has no day before it, and 9999-12-31 none after it.
+	before, after := t.AddDate(0, 0, -1), t.AddDate(0, 0, 1)
+	e.Links = append(e.Links, neighbourLinks(
+		neighbour{before, siren.DayHref(before.Format(time.DateOnly)), "Previous day"},
+		neighbour{after, siren.DayHref(after.Format(time.DateOnly)), "Next day"})...)
 	e.Links = append(e.Links, link("metrics", "/metrics", "Metrics"), link("index", "/", "Home"), link("month", siren.MonthHref(t), t.Format(layoutMonth)))
 	if d.PageID != 0 {
 		e.Links = append(e.Links, link("page", siren.PageHref(d.PageID), "The day page"))

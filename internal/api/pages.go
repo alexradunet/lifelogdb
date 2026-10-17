@@ -35,13 +35,13 @@ func (h *server) page(r *http.Request) (*siren.Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	e, err := h.pageEntity(r.Context(), id)
+	p, e, err := h.pageAnswer(r.Context(), id)
 	if err != nil {
 		return nil, err
 	}
 	// In a browser, the page of a live metric is its metric's one page, which carries the page's text, edges and
 	// actions (docs/plans/100-one-page-a-metric.md); a receipt of feedback goes with it. JSON keeps the page.
-	if p := e.Properties.(*core.Page); wantsHTML(r) && p.Type == "metric" && p.DeletedAt == "" {
+	if wantsHTML(r) && p.Type == "metric" && p.DeletedAt == "" {
 		to := siren.MetricHref(p.Title)
 		if t := r.URL.Query().Get("feedback"); t != "" && h.feedback.move(t, r.URL.Path, to) {
 			to += "?" + url.Values{"feedback": {t}}.Encode()
@@ -52,9 +52,15 @@ func (h *server) page(r *http.Request) (*siren.Entity, error) {
 }
 
 func (h *server) pageEntity(ctx context.Context, id int64) (*siren.Entity, error) {
+	_, e, err := h.pageAnswer(ctx, id)
+	return e, err
+}
+
+// pageAnswer is the page with that id, and the entity that serves it: the page is the properties of the entity.
+func (h *server) pageAnswer(ctx context.Context, id int64) (*core.Page, *siren.Entity, error) {
 	p, err := h.s.PageByID(ctx, id)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	e := &siren.Entity{Class: []string{p.Type}, Title: p.Title, Properties: p,
 		Links: []siren.Link{link("self", siren.PageHref(id), p.Title), link("index", "/", "Home")}}
@@ -73,7 +79,7 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*siren.Entity, error
 	var cats []core.Category
 	if !p.IsDayPage {
 		if cats, err = h.s.Categories(ctx); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	isCategory := func(id int64) bool {
@@ -90,10 +96,10 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*siren.Entity, error
 	if p.DeletedAt != "" {
 		e.Class = append(e.Class, "deleted")
 	} else if kinds, err = h.linkKinds(ctx, p.Type, p.IsDayPage); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	e.Actions = pageActions(p, kinds, cats)
-	return e, nil
+	return p, e, nil
 }
 
 // pageActions are the actions a page offers, by its type, its state and its links. kinds are the link kinds it may
@@ -152,6 +158,15 @@ func (h *server) linkKinds(ctx context.Context, typ string, dayPage bool) ([]str
 	return out, nil
 }
 
+// searchProps are the properties of the search answer: the words, the pages whose title starts with them, and a page
+// of the hits.
+type searchProps struct {
+	pageProps
+	Q      string            `json:"q"`
+	Titles []core.TitleMatch `json:"titles"`
+	Hits   []core.Hit        `json:"hits"`
+}
+
 func (h *server) search(r *http.Request, _ spec, _ string) (*siren.Entity, error) {
 	q := r.URL.Query().Get("q")
 	e := &siren.Entity{Class: []string{"search"}, Title: "Search",
@@ -164,7 +179,9 @@ func (h *server) search(r *http.Request, _ spec, _ string) (*siren.Entity, error
 	if err != nil {
 		return nil, err
 	}
-	hits, err := h.s.Search(r.Context(), q, limit+1, offset)
+	hits, props, err := readPage(e, "/search", url.Values{"q": {q}}, limit, offset, func(limit, offset int) ([]core.Hit, error) {
+		return h.s.Search(r.Context(), q, limit, offset)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -174,9 +191,7 @@ func (h *server) search(r *http.Request, _ spec, _ string) (*siren.Entity, error
 	if err != nil {
 		return nil, err
 	}
-	e.Properties = map[string]any{"q": q, "titles": titles}
-	hits = paged(e, hits, "/search", url.Values{"q": {q}}, limit, offset)
-	e.Properties.(map[string]any)["hits"] = hits
+	e.Properties = searchProps{pageProps: props, Q: q, Titles: titles, Hits: hits}
 	for _, x := range hits {
 		e.Entities = append(e.Entities, link("item", siren.PageHref(x.ID), x.Title))
 	}

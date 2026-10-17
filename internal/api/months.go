@@ -64,13 +64,10 @@ func (h *server) month(r *http.Request) (*siren.Entity, error) {
 	prev, next := first.AddDate(0, -1, 0), first.AddDate(0, 1, 0)
 	e := &siren.Entity{Class: []string{"month"}, Title: name, Links: []siren.Link{link("self", siren.MonthHref(first), name)},
 		Actions: []siren.Action{action("open-day", nil, nil)}}
-	// A link leads only to a page that answers: a month has a page when its first day is a day.
-	if text.IsDay(prev.Format(time.DateOnly)) {
-		e.Links = append(e.Links, link("prev", siren.MonthHref(prev), prev.Format(layoutMonth)))
-	}
-	if text.IsDay(next.Format(time.DateOnly)) {
-		e.Links = append(e.Links, link("next", siren.MonthHref(next), next.Format(layoutMonth)))
-	}
+	// A month has a page when its first day is a day.
+	e.Links = append(e.Links, neighbourLinks(
+		neighbour{prev, siren.MonthHref(prev), prev.Format(layoutMonth)},
+		neighbour{next, siren.MonthHref(next), next.Format(layoutMonth)})...)
 	e.Links = append(e.Links, link("days", "/days", "Days"), link("index", "/", "Home"))
 	for _, d := range cal.days {
 		e.Entities = append(e.Entities, link("day", siren.DayHref(d.Day), d.Day))

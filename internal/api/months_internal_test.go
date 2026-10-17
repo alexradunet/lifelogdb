@@ -66,3 +66,32 @@ func TestWrittenDaysMarksTheDaysWithAPage(t *testing.T) {
 		}
 	}
 }
+
+// TestNeighbourLinks: a neighbour that is a day has its link; a neighbour before 0000-01-01 or after 9999-12-31 has
+// none, and the other side keeps its own.
+func TestNeighbourLinks(t *testing.T) {
+	day := func(s string) time.Time {
+		d, ok := text.ParseDay(s)
+		if !ok {
+			t.Fatalf("%s is not a day", s)
+		}
+		return d
+	}
+	for _, c := range []struct {
+		name       string
+		prev, next time.Time
+		want       []string // the rel of each link
+	}{
+		{"both", day("2024-05-10"), day("2024-05-12"), []string{"prev", "next"}},
+		{"the first day", day("0000-01-01").AddDate(0, 0, -1), day("0000-01-02"), []string{"next"}},
+		{"the last day", day("9999-12-30"), day("9999-12-31").AddDate(0, 0, 1), []string{"prev"}},
+	} {
+		var rels []string
+		for _, l := range neighbourLinks(neighbour{c.prev, "/p", "P"}, neighbour{c.next, "/n", "N"}) {
+			rels = append(rels, l.Rel[0])
+		}
+		if !slices.Equal(rels, c.want) {
+			t.Errorf("%s: links %v, want %v", c.name, rels, c.want)
+		}
+	}
+}
