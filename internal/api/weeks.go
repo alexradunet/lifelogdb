@@ -154,15 +154,12 @@ func (h *server) week(r *http.Request) (*siren.Entity, error) {
 		metrics = append(metrics, wm)
 	}
 
-	// A link leads only to a page that answers: a week has a page when its Monday is a day, a year when IsYear.
+	// A week has a page when its Monday is a day, a year when IsYear.
 	next, thursday := monday.AddDate(0, 0, 7), monday.AddDate(0, 0, 3)
 	e.Links = []siren.Link{link("self", siren.WeekHref(monday), e.Title)}
-	if text.IsDay(before.Format(time.DateOnly)) {
-		e.Links = append(e.Links, link("prev", siren.WeekHref(before), weekName(before)))
-	}
-	if text.IsDay(next.Format(time.DateOnly)) {
-		e.Links = append(e.Links, link("next", siren.WeekHref(next), weekName(next)))
-	}
+	e.Links = append(e.Links, neighbourLinks(
+		neighbour{before, siren.WeekHref(before), weekName(before)},
+		neighbour{next, siren.WeekHref(next), weekName(next)})...)
 	e.Links = append(e.Links, link("month", siren.MonthHref(thursday), thursday.Format(layoutMonth)))
 	if siren.IsYear(thursday.Year()) {
 		e.Links = append(e.Links, link("year", siren.YearHref(thursday.Year()), strconv.Itoa(thursday.Year())))

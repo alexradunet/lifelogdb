@@ -255,7 +255,7 @@ func (h *server) browse(r *http.Request, _ spec, _ string) (*siren.Entity, error
 	if k := treeKind.Get("kind"); k != "" {
 		unfiled.Set("kind", k)
 	}
-	e.Links = append(e.Links, link("unfiled", siren.BrowseHref(unfiled), "Not filed"), link("ghosts", "/browse?ghosts=1&kind=page", "Ghost pages"))
+	e.Links = append(e.Links, link("unfiled", siren.BrowseHref(unfiled), "Not filed"), link("ghosts", siren.GhostsHref(), "Ghost pages"))
 	if b.kind == "media" {
 		for _, m := range []struct{ rel, kind, title string }{{"pictures", "image", "Pictures"}, {"videos", "video", "Videos"}, {"recordings", "audio", "Recordings"}} {
 			v := b.values("", "media")

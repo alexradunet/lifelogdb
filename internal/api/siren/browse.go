@@ -18,3 +18,9 @@ func NewActionOf(kind string) string { return newActions[kind] }
 func BrowseNewHref(kind string) string {
 	return BrowseHref(url.Values{"kind": {kind}, "new": {NewActionOf(kind)}})
 }
+
+// BrowseKindHref is the address of the Browse list of a kind.
+func BrowseKindHref(kind string) string { return BrowseHref(url.Values{"kind": {kind}}) }
+
+// GhostsHref is the address of the Browse list of the ghost pages.
+func GhostsHref() string { return BrowseHref(url.Values{"kind": {"page"}, "ghosts": {"1"}}) }
