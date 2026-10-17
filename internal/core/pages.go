@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 
+	"lifelog/internal/api/siren"
 	"lifelog/internal/text"
 )
 
@@ -22,7 +23,7 @@ func (t *Tx) saveBody(id int64, body, version string) (Sync, error) {
 			return Sync{}, err
 		}
 		if !same {
-			return Sync{}, conflictCode("stale_version", "page %d changed since version %q (now %q): read it again", id, version, p.Version)
+			return Sync{}, conflictCode(siren.CodeStaleVersion, "page %d changed since version %q (now %q): read it again", id, version, p.Version)
 		}
 	}
 	return t.SetBody(id, body)

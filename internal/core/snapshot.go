@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"path/filepath"
 	"time"
 
+	"lifelog/internal/api/siren"
 	"lifelog/internal/db"
 )
 
@@ -24,7 +26,7 @@ func (s *Store) TakeSnapshot(ctx context.Context, now time.Time) (string, *Integ
 	}
 	path, err := db.Snapshot(ctx, s.DB.Path(), dir, now)
 	if errors.Is(err, db.ErrRefused) {
-		return "", nil, &Error{Status: 422, Msg: err.Error(), Code: "snapshot_refused", Err: err}
+		return "", nil, &Error{Status: http.StatusUnprocessableEntity, Msg: err.Error(), Code: siren.CodeSnapshotRefused, Err: err}
 	}
 	if err != nil {
 		return "", nil, err

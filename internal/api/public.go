@@ -138,7 +138,7 @@ func (p *public) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Header().Set("WWW-Authenticate", `Bearer realm="lifelog"`)
-		writeError(w, r, &core.Error{Status: http.StatusUnauthorized, Msg: "token required", Code: "token_required"})
+		writeError(w, r, &core.Error{Status: http.StatusUnauthorized, Msg: "token required", Code: siren.CodeTokenRequired})
 		return
 	}
 	p.next.ServeHTTP(w, r)

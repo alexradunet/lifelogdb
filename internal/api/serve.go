@@ -158,7 +158,7 @@ func newServer(s *core.Store) *server {
 // the API and the login forms of a public listener write it. Each call gives a new error, so no caller can change the
 // refusal of another.
 func crossOriginRefusal() error {
-	return &core.Error{Status: http.StatusForbidden, Msg: "cross-origin browser write refused", Code: "cross_origin"}
+	return &core.Error{Status: http.StatusForbidden, Msg: "cross-origin browser write refused", Code: siren.CodeCrossOrigin}
 }
 
 // authorityRefusal is the refusal of a request whose authority the listener does not take: the local listener and the
@@ -347,7 +347,7 @@ func errorEntity(r *http.Request, err error) (*siren.Entity, int) {
 	case errors.Is(err, context.DeadlineExceeded): // before the typed errors: a refusal that wraps a timeout is a timeout
 		status = http.StatusGatewayTimeout
 	case errors.As(err, &ex):
-		status, code = http.StatusConflict, "exists"
+		status, code = http.StatusConflict, siren.CodeExists
 		e.Links = append(e.Links, siren.Link{Rel: []string{"existing"}, Href: siren.PageHref(ex.ID), Title: ex.Title})
 	case errors.As(err, &ce):
 		status, code = ce.Status, ce.Code
@@ -380,28 +380,28 @@ func logFault(r *http.Request, what string, err error) {
 func codeOf(status int) string {
 	switch status {
 	case http.StatusBadRequest:
-		return "bad_request"
+		return siren.CodeBadRequest
 	case http.StatusUnauthorized:
-		return "unauthorized"
+		return siren.CodeUnauthorized
 	case http.StatusForbidden:
-		return "forbidden"
+		return siren.CodeForbidden
 	case http.StatusNotFound:
-		return "not_found"
+		return siren.CodeNotFound
 	case http.StatusConflict:
-		return "conflict"
+		return siren.CodeConflict
 	case http.StatusRequestEntityTooLarge:
-		return "too_large"
+		return siren.CodeTooLarge
 	case http.StatusUnprocessableEntity:
-		return "invalid"
+		return siren.CodeInvalid
 	case http.StatusServiceUnavailable:
-		return core.CodeBusy
+		return siren.CodeBusy
 	case http.StatusGatewayTimeout:
-		return "timeout"
+		return siren.CodeTimeout
 	}
-	return "internal"
+	return siren.CodeInternal
 }
 
-// retryAfter is the Retry-After of a 503, in seconds. The only 503 is a busy file (core.CodeBusy), which the writer
+// retryAfter is the Retry-After of a 503, in seconds. The only 503 is a busy file (siren.CodeBusy), which the writer
 // has waited on for busy_timeout already, so a short wait before the next try is enough.
 const retryAfter = "1"
 

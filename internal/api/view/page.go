@@ -406,15 +406,15 @@ type alertView struct {
 // alertOf picks an error's first words and tone by its code (API.md, Errors); the message follows them.
 func alertOf(code any) alertView {
 	switch code {
-	case "forbidden", "cross_origin", "token_required", "unauthorized":
+	case siren.CodeForbidden, siren.CodeCrossOrigin, siren.CodeTokenRequired, siren.CodeUnauthorized:
 		return alertView{"Refused.", true}
-	case "too_large", "timeout", "internal":
+	case siren.CodeTooLarge, siren.CodeTimeout, siren.CodeInternal:
 		return alertView{"Not done.", true}
-	case "stale_version":
+	case siren.CodeStaleVersion:
 		return alertView{"Not saved. The page changed since you opened it.", false}
-	case "exists":
+	case siren.CodeExists:
 		return alertView{"Not created.", false}
-	case "busy":
+	case siren.CodeBusy:
 		return alertView{"Not done. The file is busy. Nothing was written, and a retry is safe.", false}
 	}
 	return alertView{}

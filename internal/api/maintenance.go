@@ -20,7 +20,7 @@ func (h *server) snapshot(r *http.Request, _ spec, _ string) (*siren.Entity, err
 		return nil, err
 	}
 	if !res.OK { // the file is kept, as the check does not delete, under a .failed.db name (D25): the owner reads it
-		return nil, &core.Error{Status: http.StatusInternalServerError, Code: "restore_check_failed",
+		return nil, &core.Error{Status: http.StatusInternalServerError, Code: siren.CodeRestoreCheckFailed,
 			Msg: fmt.Sprintf("%s failed its restore check: it is kept under this .failed.db name, and it is not one to restore", path)}
 	}
 	props := map[string]any{"snapshot": path, "restore_check": res}
