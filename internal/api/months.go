@@ -216,12 +216,16 @@ func writtenDays(entries []core.DayEntry, first, last time.Time) []writtenDay {
 	return days
 }
 
-// shellOf is the sidebar's read of the store s: today, then the month of today and its days that have a day page.
-// The page is drawn even when the read of the month fails: the sidebar then has its sections and today's date but no
-// count or month, and the read that the page is about has already answered on its own.
+// shellOf is the sidebar's read of the store s: today, the titles its search box suggests (the root's recent_titles),
+// then the month of today and its days that have a day page. The page is drawn even when a read fails: the sidebar
+// then has its sections and today's date but no suggestions, or no count or month, and the read that the page is
+// about has already answered on its own.
 func shellOf(ctx context.Context, s *core.Store) *view.Shell {
 	now := s.Local() // one read of the clock, so today and the zone of the words agree
 	sv := &view.Shell{Today: now.Format(time.DateOnly), Zone: now.Location()}
+	if titles, err := recentTitles(ctx, s); err == nil { // the rail is drawn without the datalist
+		sv.Titles = titles
+	}
 	t, ok := text.ParseDay(sv.Today)
 	if !ok { // a clock beyond the years that a day can name: the sidebar has no month
 		return sv

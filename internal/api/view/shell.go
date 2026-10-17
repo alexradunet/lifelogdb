@@ -20,6 +20,8 @@ type Shell struct {
 	MonthHref string
 	Written   int
 	Days      []any // the days of this month as the month resource gives them (day, page): the monthbox template draws them
+	// Titles are the titles the search box suggests (the root's recent_titles), in a datalist; none when the read failed.
+	Titles []string
 }
 
 // navItems are the sidebar's links, in order, by group: "home" is the brand, "day" the sections of every day (on a

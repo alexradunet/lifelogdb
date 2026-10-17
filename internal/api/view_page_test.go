@@ -96,7 +96,7 @@ func TestEveryViewRenders(t *testing.T) {
 			`<a href="/pages?title=running" class="wikilink">#running</a>`}},
 		{apitest.Href(sam, "self"), http.StatusOK, nil},
 		{opens(t, h, "Ana"), http.StatusOK, []string{"Ana Popescu", "Backlinks", "mentioned in", `<div class="snippet">Ran with Sam and Ana #running</div>`}},
-		{"/browse", http.StatusOK, nil},
+		{"/browse", http.StatusOK, []string{`accesskey="k" list="search-q">`, `placeholder="A page's title, or words of a body" list="search-q">`, `<datalist id="search-q"><option value="`, `<option value="Essay">`}},
 		{"/browse?kind=person", http.StatusOK, []string{`<form class="tiny" method="GET" action="/pages/random"><input type="hidden" name="kind" value="person"><button class="quiet">A random page</button></form>`}},
 		{"/browse?kind=place", http.StatusOK, nil},
 		{"/browse?ghosts=1", http.StatusOK, nil},

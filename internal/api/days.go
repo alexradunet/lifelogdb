@@ -19,6 +19,19 @@ import (
 // recentDays is how many of the newest day pages the root shows.
 const recentDays = 5
 
+// The title suggestions of the search box (docs/plans/130-the-explore-pass.md, part 7): the titles of the last 90
+// days, at most 200 of them, about 8 KB on each page.
+const (
+	recentTitleDays = 90
+	recentTitleMax  = 200
+)
+
+// recentTitles are the titles the search box suggests, by the clock of the store s.
+func recentTitles(ctx context.Context, s *core.Store) ([]string, error) {
+	since := s.Local().AddDate(0, 0, -recentTitleDays).Format(time.DateOnly)
+	return s.RecentTitles(ctx, since, recentTitleMax)
+}
+
 // recentDay is a day page as the root lists it: the day, the first line of its body, its mood and the address of the
 // picture of its cover. Picture hides the id of the embedded entry, which has no JSON name.
 type recentDay struct {
@@ -88,13 +101,17 @@ func (h *server) root(r *http.Request) (*siren.Entity, error) {
 	if err != nil {
 		return nil, err
 	}
+	titles, err := recentTitles(ctx, h.s)
+	if err != nil {
+		return nil, err
+	}
 	actions := []siren.Action{
 		action("capture", map[string]string{"day": today}, nil), action("search", nil, nil), action("find", nil, nil), action("open-day", nil, nil),
 		action("create-page", nil, nil), action("create-person", nil, nil), action("create-place", nil, nil), action("add-file", nil, nil),
 		record, action("register-metric", nil, nil), action("snapshot", nil, nil)}
 	return &siren.Entity{
 		Class: []string{"root"}, Title: "Lifelog",
-		Properties: map[string]any{"today": today, "recent": recent, "on_this_day": onThisDay},
+		Properties: map[string]any{"today": today, "recent": recent, "on_this_day": onThisDay, "recent_titles": titles},
 		Links: []siren.Link{link("self", "/", "Lifelog"), link("today", siren.DayHref(today), "Today"), link("days", "/days", "Days"),
 			link("browse", siren.BrowseHref(nil), "Browse"), link("categories", siren.BrowseHref(nil), "Categories"), link("people", siren.BrowseKindHref("person"), "People"),
 			link("places", siren.BrowseKindHref("place"), "Places"), link("media", siren.BrowseKindHref("media"), "Media"), link("files", siren.BrowseKindHref("document"), "Documents"),

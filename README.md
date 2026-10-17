@@ -101,7 +101,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   and the catalog action `open-day` goes to a day by its date, or to today with no date. Every field of the catalog
   whose type is `date` reads the word `today` as the server's local day. The handlers read today from one clock,
   which a test fixes. The day and the root carry `on_this_day`, the
-  day pages of the same date in earlier years, which the margin shows. `/weeks/{YYYY-Www}` is the week (its days, its
+  day pages of the same date in earlier years, which the margin shows (and the strip at the top of the stream).
+  `/weeks/{YYYY-Www}` is the week (its days, its
   readings against the week before) and `/years/{YYYY}` the year (twelve months);
   People and Places list each name with the pages that mention it and the day of the last one
   ([plan 097](docs/plans/097-the-almanac-reflects.md)). A person's row starts with a round picture, its cover,
@@ -283,6 +284,24 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   are the day's title ([plan 120](docs/plans/120-a-tidy-board.md)). `file-pages` (`POST /pages/file`) files several pages in a category page in one write, made when it is
   missing; `move` 1 takes them out of their other categories. The page's pick bar checks the cards to file. The CLI's
   `do` and the MCP tools carry it as any action; it is not the owner's alone, as `link` is not.
+- **The stream, the zoom, a random thing and search by kind** ([plan 130](docs/plans/130-the-explore-pass.md)). The
+  Calendar opens on the stream, `GET /days`: the days of the record as cards, the newest first, 30 a page, then Older
+  days. A day is in the stream when it holds something: its day page, a page or a file with its day, or a current
+  reading. A day after today is not in it. `before` (a day, exclusive) comes first and `offset` after it. A card holds
+  up to four plain lines of the journal, the mood, the cover only (a preview is 100–300 KB, so no other picture), the
+  places and the people as chips, the birthdays, and three pages, then a count. A day with no day page is a slim card
+  with no words, and the empty days between two cards are a quiet line, with no streak. Every read of a page of the
+  stream takes its days as one set, not a window: 30 sparse cards can span decades. On the first page, On this day is
+  a strip at the top; the margin of a day keeps its own. Days, Week, Month and Year are the zoom of the Calendar: one
+  row of chips, with Today, and the links `days`, `week`, `month` and `year`. A scrubber of years and months is beside
+  the cards (a closed fold on a phone). `random-day` (`GET /days/random`) and `random-page` (`GET /pages/random`,
+  `kind`) are reads that answer 303 to a thing picked at random: a quiet button on the stream and on Browse. A random
+  page is never a day page, so Browse still holds no day. `search` takes `kind` (day, page, person, place, file), and
+  its answer has `counts`: the page draws Pages by title first, then chips with the counts, then the hits in groups by
+  kind, each with its cover or the icon of its kind. The root's `recent_titles` are the titles of the last 90 days, at
+  most 200, and the rail's search and the search dialog suggest them from one `datalist` (`search-q`). The cost is
+  about 8 KB on each page, and Safari matches only the start of a title; an older title is one search away, since
+  Pages by title matches over the whole record.
 - **Browse** ([plan 117](docs/plans/117-one-browse-view.md)). A category is a page, and anything is filed in it by
   `part-of` (D26); the owner's word (2026-10-15) is "category" everywhere, a thing may be in several, and a category
   shows everything filed in it, whatever its type. `GET /browse` (the catalog action `browse`) is one list with two

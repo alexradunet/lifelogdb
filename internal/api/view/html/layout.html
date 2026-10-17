@@ -27,7 +27,7 @@
 {{define "rail"}}{{$nav := .Nav}}<aside class="rail">
 <div class="rail-head">{{range $nav}}{{if eq .Group "home"}}<a class="brand" href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}>{{.Title}}</a>{{end}}{{end}}{{with .Today}}<span class="date">{{shortDay .}}</span>{{end}}
 <button type="button" class="rail-search-link button" commandfor="palette" command="show-modal" aria-label="Search">{{icon "search"}}</button></div>
-<search><form class="rail-search" method="GET" action="/search">{{icon "search"}}<input type="search" name="q" placeholder="Search" aria-label="Search" accesskey="k"><kbd title="The access key k, with the browser's modifier, is the search">k</kbd></form></search>
+<search><form class="rail-search" method="GET" action="/search">{{icon "search"}}<input type="search" name="q" placeholder="Search" aria-label="Search" accesskey="k"{{if .Shell.Titles}} list="search-q"{{end}}><kbd title="The access key k, with the browser's modifier, is the search">k</kbd></form></search>
 <button type="button" class="button primary rail-new" popovertarget="new-menu" accesskey="n">{{icon "new"}}New</button>
 <div class="new-menu" id="new-menu" popover><div class="new-menu-head"><span class="label">New</span><button type="button" class="button small" popovertarget="new-menu" popovertargetaction="hide">Close</button></div>
 <nav aria-label="New"><ul>{{range .NewKinds}}<li><a href="{{.Href}}">{{icon .Icon}}{{.Title}}</a></li>{{end}}</ul></nav></div>
@@ -52,14 +52,17 @@
 
 {{/* foot closes the page: the footer with the access keys and the search dialog
      (docs/plans/108-the-browser-made-current.md): a modal the top bar's Search opens by its command, with the search
-     form inside, so a page by its title or the words of a body is one key away; Escape or a tap outside closes it. */}}
+     form inside, so a page by its title or the words of a body is one key away; Escape or a tap outside closes it.
+     The titles of the last 90 days are one datalist (search-q), which the rail's search and the dialog's name: the
+     browser suggests them as the owner types (docs/plans/130-the-explore-pass.md, part 7). */}}
 {{define "foot"}}</main>
 <footer><p>Lifelog, the one writer of <code>life.db</code>.</p>{{if .Shell}}<p class="keys"><small>Access keys, with the browser's modifier: <kbd>k</kbd> search · <kbd>n</kbd> new · <kbd>c</kbd> capture · <kbd>t</kbd> today · <kbd>[</kbd> <kbd>]</kbd> previous, next</small></p>{{end}}</footer>
 </div>
 {{if .Shell}}<dialog class="palette" id="palette" closedby="any" aria-label="Search">
-<form method="GET" action="/search"><input type="search" name="q" autocomplete="off" aria-label="Search" placeholder="A page's title, or words of a body"></form>
+<form method="GET" action="/search"><input type="search" name="q" autocomplete="off" aria-label="Search" placeholder="A page's title, or words of a body"{{if .Shell.Titles}} list="search-q"{{end}}></form>
 <p class="meta">Enter searches · <kbd>Escape</kbd> closes · access keys, with the browser's modifier: <kbd>k</kbd> search · <kbd>n</kbd> new · <kbd>c</kbd> capture · <kbd>t</kbd> today · <kbd>[</kbd> <kbd>]</kbd> previous, next</p>
-</dialog>{{end}}
+</dialog>
+{{with .Shell.Titles}}<datalist id="search-q">{{range .}}<option value="{{.}}">{{end}}</datalist>{{end}}{{end}}
 </div>
 </body></html>{{end}}
 

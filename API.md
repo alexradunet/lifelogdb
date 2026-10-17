@@ -118,6 +118,7 @@ the page of today, and a receipt of feedback goes with it. Links: `today`, `days
 | `on_this_day[].first_line` | string | the first line of its body (as `recent[]` of the root); absent when the body is empty |
 | `on_this_day[].mood` | list | the values of the day's current Mood readings; absent when none |
 | `on_this_day[].picture` | string | the address of the picture of the day page's cover, as `recent[].picture` of the root; absent when it has none |
+| `recent_titles` | list | the titles a search box may suggest ([plan 130](docs/plans/130-the-explore-pass.md)): the live pages, people, places and metrics made in the last 90 days or linked from a live day page of the last 90 days, the newest first, at most 200; never a file or a day page; empty when none |
 
 ### actions
 
