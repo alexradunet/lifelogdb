@@ -1,5 +1,9 @@
-// lifelog is the writing application of a life.db (docs/guides/building-a-writer.md): one binary that serves
-// the API, the MCP server and the CLI, all three through the same handler.
+// Lifelog is the writing application of a life.db (docs/guides/building-a-writer.md). It is one binary that serves
+// the API, the MCP server and the CLI, all three through the same handler (internal/api).
+//
+// The table commands in this file is the one list of its commands: the usage, the dispatch and the check of the
+// flags read it, and "lifelog help" prints it. "lifelog actions" lists the actions of the catalog, and "lifelog do"
+// runs any one of them. README.md gives the usual command lines.
 package main
 
 import (
