@@ -496,7 +496,7 @@ page title, made when missing): one write makes the metric and files it. A refus
 ### integrity
 
 `GET /integrity`: the four integrity checks of the contract, and this writer's own. It is an owner-only action
-(`integrity-check`). The full-text check holds the write lock while it runs, so other writes wait. The whole run has a deadline of five minutes (`core.IntegrityDeadline`); a run that passes it is answered 504 `timeout`.
+(`integrity-check`). The full-text check holds the write lock while it runs, so other writes wait. The whole run has a deadline of 90 seconds (`core.IntegrityDeadline`), below the deadline of two minutes of every request; a run that passes it is answered 504 `timeout`.
 
 | property | type | meaning |
 |---|---|---|

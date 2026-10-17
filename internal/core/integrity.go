@@ -30,8 +30,9 @@ type IntegrityResult struct {
 
 // IntegrityDeadline bounds one run of Integrity. The full-text step holds the writer connection until it ends
 // (docs/contract/integrity-checks.md), so a run that never ends would block every write. A run that passes the
-// deadline ends with an error and no result.
-const IntegrityDeadline = 5 * time.Minute
+// deadline ends with an error and no result. It is below the deadline of a request of the API (two minutes), so the
+// error of a run that is too slow names the check, and the CLI and the snapshot's restore check are bound too.
+const IntegrityDeadline = 90 * time.Second
 
 // idCheck is one semantic check: a query that selects the id of every row that breaks a rule, and the list of the
 // result it fills. An empty list is a passed check.
