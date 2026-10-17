@@ -20,8 +20,9 @@ func TestOwnerOnlyActionsPolicy(t *testing.T) {
 	h := api.New(&core.Store{DB: d, SnapshotDir: snapshots})
 	catalog := apitest.Must(t)(client.InProcess(h, "agent:policy-test").Get(t.Context(), "/actions"))
 	register, snapshot, integrity, record := apitest.Action(t, catalog, "register-metric"), apitest.Action(t, catalog, "snapshot"), apitest.Action(t, catalog, "integrity-check"), apitest.Action(t, catalog, "record")
-	if !register.Owner || !snapshot.Owner || !integrity.Owner || integrity.Method != "GET" || record.Owner {
-		t.Fatalf("wrong catalog policy: %+v %+v %+v %+v", register, snapshot, integrity, record)
+	rebuild := apitest.Action(t, catalog, "rebuild-search")
+	if !register.Owner || !snapshot.Owner || !integrity.Owner || integrity.Method != "GET" || record.Owner || !rebuild.Owner || rebuild.Method != "POST" {
+		t.Fatalf("wrong catalog policy: %+v %+v %+v %+v %+v", register, snapshot, integrity, record, rebuild)
 	}
 	sent := map[string]map[string]string{"register-metric": {"name": "Forbidden direct"}}
 	for _, source := range []string{"agent:policy-test", "import:policy-test"} {
@@ -47,5 +48,45 @@ func TestOwnerOnlyActionsPolicy(t *testing.T) {
 	}
 	if files, err := os.ReadDir(snapshots); err != nil || len(files) != 0 {
 		t.Fatalf("a refused snapshot wrote in the snapshot folder: %v %v", files, err)
+	}
+}
+
+// rebuild-search repairs the full-text index, for the owner only. The index here holds a document that no page has,
+// which the full-text check of Integrity finds. An agent is refused and the index stays as it was; the owner's call
+// repairs it and answers the number of documents.
+func TestRebuildSearchIsTheOwnersRepair(t *testing.T) {
+	d := dbtest.New(t)
+	s := &core.Store{DB: d}
+	h := api.New(s)
+	if _, err := d.W.ExecContext(t.Context(), `INSERT INTO entities_fts(rowid, preferred, all_names, body) VALUES (999, 'ghost', 'ghost', 'drifted')`); err != nil {
+		t.Fatal(err)
+	}
+	indexOK := func() bool {
+		t.Helper()
+		r, err := s.Integrity(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r.FullTextIndexOK
+	}
+	if indexOK() {
+		t.Fatal("the fixture index must be drifted")
+	}
+	agent := client.InProcess(h, "agent:repair-test")
+	catalog := apitest.Must(t)(agent.Get(t.Context(), "/actions"))
+	rebuild := apitest.Action(t, catalog, "rebuild-search")
+	e, err := agent.Do(t.Context(), rebuild, nil)
+	if p, _ := e.Properties.(map[string]any); apitest.Status(err) != 403 || p["code"] != "forbidden" {
+		t.Fatalf("an agent's rebuild-search: %v %v; want 403 forbidden", err, e)
+	}
+	if indexOK() {
+		t.Fatal("a refused rebuild-search repaired the index")
+	}
+	e = apitest.Must(t)(client.InProcess(h, "cli").Do(t.Context(), rebuild, nil))
+	if p, _ := e.Properties.(map[string]any); p["documents"] == nil {
+		t.Errorf("the answer of rebuild-search has no document count: %+v", e.Properties)
+	}
+	if !indexOK() {
+		t.Fatal("the owner's rebuild-search did not repair the index")
 	}
 }

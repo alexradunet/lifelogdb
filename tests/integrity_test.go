@@ -325,6 +325,18 @@ func integrity(s *S) {
 	c.must("INSERT INTO entities_fts(entities_fts) VALUES('rebuild')")
 	s.K("...until 'rebuild' repairs it", c.tryx(sts[len(sts)-1]) == "OK")
 
+	// A connection keeps state of the virtual table between its statements: a reader that read the old index still
+	// reports FTS5 corruption in integrity_check after the rebuild of the writer, and a new reader says ok.
+	stalePath := filepath.Join(s.dir, "stale-reader.db")
+	sw := s.freshWith(F{Path: stalePath})
+	sw.page("Alpha")
+	sw.must("INSERT INTO entities_fts(rowid, preferred, all_names, body) VALUES (999, 'ghost', 'ghost', 'drifted')")
+	old := s.readOnly(stalePath)
+	s.K("a reader checks the drifted file: integrity_check says ok", old.tab("PRAGMA integrity_check") == "ok")
+	sw.must("INSERT INTO entities_fts(entities_fts) VALUES('rebuild')")
+	s.K("after the rebuild, the reader that read the old index reports FTS5 corruption in integrity_check", strings.Contains(old.tab("PRAGMA integrity_check"), "fts5"))
+	s.K("...and a new reader says ok", s.readOnly(stalePath).tab("PRAGMA integrity_check") == "ok")
+
 	gone := c.page("Gone")
 	c.must("PRAGMA foreign_keys=OFF")
 	c.must("DROP TRIGGER entities_no_delete")

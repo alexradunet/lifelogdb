@@ -383,6 +383,7 @@ func parityRows() []parityRow {
 		parityRow{"stale save-body", rowStaleSave},
 		parityRow{"save-body at the largest version", rowLargestVersion},
 		parityRow{"register-metric", rowRegisterMetric},
+		parityRow{"rebuild-search", rowRebuildSearch},
 		parityRow{"promote a place", rowPromoteAPlace},
 		parityRow{"register-metric with a range out of order", rowRangeOutOfOrder},
 	)
@@ -742,6 +743,40 @@ func rowRegisterMetric(x *parityRun) {
 		x.refused("register-metric", args, http.StatusForbidden, "forbidden")
 	}
 	x.absent("Weight")
+}
+
+// rebuild-search is the owner's repair of the full-text index: a surface of an owner repairs a drifted index and
+// answers the number of documents; a surface of an agent is refused with 403 forbidden and leaves the index as it
+// was; the MCP server has no such tool.
+func rowRebuildSearch(x *parityRun) {
+	x.sql(`INSERT INTO entities_fts(rowid, preferred, all_names, body) VALUES (999, 'ghost', 'ghost', 'drifted')`)
+	indexOK := func() bool {
+		x.t.Helper()
+		r, err := x.store.Integrity(x.t.Context())
+		if err != nil {
+			x.t.Fatal(err)
+		}
+		return r.FullTextIndexOK
+	}
+	switch {
+	case x.mcp:
+		if _, err := x.call("rebuild-search", nil); !errors.Is(err, errNoTool) {
+			x.t.Errorf("rebuild-search on MCP: %v, want no tool", err)
+		}
+	case x.owner:
+		if p := props(x.t, x.ok("rebuild-search", nil)); p["documents"] == nil {
+			x.t.Errorf("rebuild-search: %v, want a document count", p)
+		}
+		if !indexOK() {
+			x.t.Error("rebuild-search did not repair the index")
+		}
+		return
+	default:
+		x.refused("rebuild-search", nil, http.StatusForbidden, "forbidden")
+	}
+	if indexOK() {
+		x.t.Error("a surface that may not rebuild the index repaired it")
+	}
 }
 
 // A place is never promoted: promote of a place to a person is refused by the schema (entities_promote_from_page) as a

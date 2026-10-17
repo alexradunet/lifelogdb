@@ -39,6 +39,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 			"id": int64(0), "unit": "", "body": "", "links": []core.Edge{}, "backlinks": []core.Edge{}},
 		"metrics":    map[string]any{"metrics": []metricRow{}, "groups": []metricGroup{}, "categories": []core.Category{}, "today": ""},
 		"snapshot":   map[string]any{"snapshot": "", "restore_check": core.IntegrityResult{}},
+		"rebuilt":    map[string]any{"documents": 0},
 		"tombstoned": map[string]any{"ids": []int64{}, "count": 0},
 		"filed":      map[string]any{"category": core.Category{}, "created": false, "ids": []int64{}, "count": 0, "added": 0, "moved": 0},
 		"integrity":  core.IntegrityResult{},
@@ -100,6 +101,11 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 	for k := range properties(t, h, "POST", "/snapshots", "") {
 		if !named("snapshot", k) {
 			t.Errorf("POST /snapshots sends %q, which API.md \"snapshot\" does not name", k)
+		}
+	}
+	for k := range properties(t, h, "POST", "/search/rebuild", "") {
+		if !named("rebuilt", k) {
+			t.Errorf("POST /search/rebuild sends %q, which API.md \"rebuilt\" does not name", k)
 		}
 	}
 	for k := range properties(t, h, "POST", "/pages/tombstone", "ids="+strings.TrimPrefix(ids["page"], "/pages/")) {

@@ -1,6 +1,6 @@
 package api
 
-// The database as a whole: the integrity checks and the owner's snapshot.
+// The database as a whole: the integrity checks, the owner's snapshot and the owner's repairs of derived data.
 
 import (
 	"fmt"
@@ -35,4 +35,16 @@ func (h *server) integrity(r *http.Request, _ spec, _ string) (*siren.Entity, er
 	}
 	return &siren.Entity{Class: []string{"integrity"}, Title: "Integrity checks", Properties: res,
 		Links: []siren.Link{link("self", "/integrity", "Integrity"), link("index", "/", "Home")}}, nil
+}
+
+// rebuildSearch is the owner's repair of the full-text index (docs/contract/integrity-checks.md). The answer is the
+// number of documents of the new index, with self at the root so that a browser form is answered home with it.
+func (h *server) rebuildSearch(r *http.Request, _ spec, _ string) (*siren.Entity, error) {
+	documents, err := h.s.RebuildSearch(r.Context())
+	if err != nil {
+		return nil, err
+	}
+	props := map[string]any{"documents": documents}
+	return &siren.Entity{Class: []string{"rebuilt"}, Title: "Search rebuilt", Properties: props, Result: props,
+		Links: []siren.Link{link("self", "/", "Home"), link("index", "/", "Home")}}, nil
 }

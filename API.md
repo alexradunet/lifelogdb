@@ -14,7 +14,7 @@ and this page disagree, so a property here is a property on the wire.
   allowed to call it; `--tls-cert`/`--tls-key` serve HTTPS. Without one of them the answer is 401 `token_required`.
 - **Provenance:** `Lifelog-Source: <name>` names the writer on every row the request writes (`[a-z0-9_:.-]{1,64}`,
   e.g. `app:phone`). Without it a browser form writes as `ui` and anything else as `api`. A writer named `agent:…`
-  or `import:…` is refused the owner-only actions: `register-metric`, `snapshot` and `integrity-check`.
+  or `import:…` is refused the owner-only actions: `register-metric`, `snapshot`, `integrity-check` and `rebuild-search`.
 - **Representation:** `Accept: application/vnd.siren+json` (or anything but `text/html`) gets the JSON below;
   `Accept: text/html` gets the same entity drawn as a page. A JSON client sends an action as
   `application/x-www-form-urlencoded`, `application/json` (one object; a non-string value is sent as its JSON text) or,
@@ -553,6 +553,17 @@ A timeout is 504 `timeout`, and any other failure is 500 `internal`.
 | `restore_check.schema_drift` | list | |
 | `restore_check.full_text_index_ok` | boolean | |
 | `restore_check.full_text_error` | string | |
+
+### rebuilt
+
+`POST /search/rebuild` (the owner's action `rebuild-search`, refused to an `agent:*` or `import:*` writer): the repair of a
+full-text index that `integrity-check` found not ok. It rebuilds the index from the pages in one write, so a failure
+keeps the old index. It reads every page and holds the write lock while it runs. The same value is in `result`;
+`self` is `/`, so a browser form is answered home with it.
+
+| property | type | meaning |
+|---|---|---|
+| `documents` | integer | how many documents the new index holds |
 
 ### tombstoned
 
