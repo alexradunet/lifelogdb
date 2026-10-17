@@ -14,11 +14,11 @@ import (
 // FileIn is a file to keep (docs/cookbook/keep-a-file.md, D9): the hash and type of the original, which is never
 // stored; the title and text of its page; its preview, a JPEG preview.Make made (nil for none). Its day is Day when
 // the caller gives one, else Taken, else today for ordinary files. Unknown-capture mode follows
-// docs/cookbook/keep-a-file.md: a photo with no day of its own has no day, and goes in no day page. keep finds that
+// docs/cookbook/keep-a-file.md: a photo with no day of its own has no day, and goes in no day page. dayOf finds that
 // mode for a photo (an image/* type); setPicture gives it to a file of any type (unknownCaptureDay). A photo's
 // position is never read (D21). Category is the title of the category to file the page in ("" for none).
 type FileIn struct {
-	unknownCaptureDay bool // no day of its own, whatever the type: only setPicture sets it
+	unknownCaptureDay bool // no day of its own, whatever the type: only setPicture sets it (dayOf)
 	Title             string
 	Category          string
 	SHA256            string
@@ -61,62 +61,96 @@ func (t *Tx) AddFile(f FileIn) (Kept, error) {
 	return k, nil
 }
 
+// dayKind says what the day of a file kept means.
+type dayKind int
+
+const (
+	dayOwn  dayKind = iota // the day the caller gave, else the one the metadata gives: the file belongs to that day
+	dayKept                // no day of its own: the file has the day it is kept, and belongs to no day page
+	dayNone                // unknown capture: the file has no day, and goes in no day page
+)
+
+// fileDay is the day of a file kept, with what the day means. A dayNone file has no day: Day is "".
+type fileDay struct {
+	Day  string
+	Kind dayKind
+}
+
+// own says whether the file belongs to its day: only then ownDay reports the day and embeds the picture.
+func (d fileDay) own() bool { return d.Kind == dayOwn }
+
+// dayOf finds the day of the file f. Unknown capture is explicit (unknownCaptureDay, set by setPicture for a file of
+// any type) or found here for a photo (an image/* type) with neither Day nor Taken.
+func (t *Tx) dayOf(f FileIn) fileDay {
+	photoWithNoDay := strings.HasPrefix(f.MIME, "image/") && f.Day == "" && f.Taken == ""
+	switch {
+	case f.unknownCaptureDay || photoWithNoDay:
+		return fileDay{Kind: dayNone}
+	case f.Day != "":
+		return fileDay{Day: f.Day, Kind: dayOwn}
+	case f.Taken != "":
+		return fileDay{Day: f.Taken, Kind: dayOwn}
+	}
+	return fileDay{Day: t.today(), Kind: dayKept}
+}
+
 // keep keeps a file: the page the original's hash names already, or a new file page, or a plain page of the title
 // promoted to the file (docs/cookbook/keep-a-file.md); then its own day (ownDay).
-func (t *Tx) keep(f FileIn) (k Kept, err error) {
+func (t *Tx) keep(f FileIn) (Kept, error) {
 	// the hash and the type are normalized here and held by files_sha256 and files_mime; the days by entities_day
 	f.SHA256 = strings.ToLower(strings.TrimSpace(f.SHA256))
 	f.MIME = NormalMIME(f.MIME)
 	if f.Preview != nil {
 		if err := preview.Check(f.Preview); err != nil {
-			return k, Invalid("%v", err)
+			return Kept{}, Invalid("%v", err)
 		}
 	}
-	if strings.HasPrefix(f.MIME, "image/") && f.Day == "" && f.Taken == "" { // a photo with no day: never the day it is kept
-		f.unknownCaptureDay = true
+	d := t.dayOf(f)
+	if k, found, err := t.keepKept(f, d); found || err != nil {
+		return k, err
 	}
-	day, own := f.Day, true
-	switch {
-	case f.unknownCaptureDay:
-		own = false
-	case day != "":
-	case f.Taken != "":
-		day = f.Taken
-	default:
-		day, own = t.today(), false
-	}
-	// 0) the original kept already: that page, nothing written but a missing preview and its embed in its own day
+	return t.keepNew(f, d)
+}
+
+// keepKept handles an original that is kept already: that page, nothing written but a missing preview and its embed
+// in its own day. found is false when the original is not kept.
+func (t *Tx) keepKept(f FileIn, d fileDay) (k Kept, found bool, err error) {
 	var hasPreview bool
 	var deleted sql.NullString
 	var title string
 	var storedDay sql.NullString
 	err = t.tx.QueryRowContext(t.ctx, `SELECT f.id, f.preview IS NOT NULL, p.deleted_at, p_name.title,p.day FROM files f JOIN entities p ON p.id = f.id JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key  WHERE f.sha256 = ?`, f.SHA256).
 		Scan(&k.ID, &hasPreview, &deleted, &title, &storedDay)
-	switch {
-	case err == nil:
-		k.Existing, k.Deleted = true, deleted.Valid
-		if f.unknownCaptureDay {
-			k.StoredDay = storedDay.String
-		}
-		if k.Deleted {
-			return k, nil
-		}
-		if own && (hasPreview || f.Preview != nil) {
-			if err := t.preflightEmbed(day, title); err != nil {
-				return k, err
-			}
-		}
-		if !hasPreview && f.Preview != nil {
-			if _, err := t.tx.ExecContext(t.ctx, `UPDATE files SET preview = ? WHERE id = ? AND preview IS NULL`, f.Preview, k.ID); err != nil {
-				return k, err
-			}
-			k.PreviewAdded = true
-		}
-		return k, t.ownDay(&k, f, title, day, own, hasPreview || k.PreviewAdded)
-	case !errors.Is(err, sql.ErrNoRows):
-		return k, err
+	if errors.Is(err, sql.ErrNoRows) {
+		return k, false, nil
 	}
-	// 1) the title: free, or a plain page to promote
+	if err != nil {
+		return k, true, err
+	}
+	k.Existing, k.Deleted = true, deleted.Valid
+	if d.Kind == dayNone {
+		k.StoredDay = storedDay.String
+	}
+	if k.Deleted {
+		return k, true, nil
+	}
+	if d.own() && (hasPreview || f.Preview != nil) {
+		if err := t.preflightEmbed(d.Day, title); err != nil {
+			return k, true, err
+		}
+	}
+	if !hasPreview && f.Preview != nil {
+		if _, err := t.tx.ExecContext(t.ctx, `UPDATE files SET preview = ? WHERE id = ? AND preview IS NULL`, f.Preview, k.ID); err != nil {
+			return k, true, err
+		}
+		k.PreviewAdded = true
+	}
+	return k, true, t.ownDay(&k, ownDayFacts{Title: title, Day: d, Picture: hasPreview || k.PreviewAdded})
+}
+
+// keepNew keeps an original that is not kept yet: its page is new, or a plain page of the title promoted; then the
+// files row, the links its text names and its own day.
+func (t *Tx) keepNew(f FileIn, d fileDay) (k Kept, err error) {
 	if err := checkTitle("title", f.Title); err != nil {
 		return k, err
 	}
@@ -124,49 +158,28 @@ func (t *Tx) keep(f FileIn) (k Kept, err error) {
 	if err != nil {
 		return k, err
 	}
-	title = f.Title
+	title := f.Title
 	if p != nil {
 		title = p.Title
 	}
-	if own && f.Preview != nil {
-		if err := t.preflightEmbed(day, title); err != nil {
+	if d.own() && f.Preview != nil {
+		if err := t.preflightEmbed(d.Day, title); err != nil {
 			return k, err
 		}
 	}
 	body := f.Body
 	switch {
 	case p == nil:
-		if k.ID, err = t.insertPage("file", f.Title, text.TitleKey(f.Title), nullIfEmpty(day), f.Body); err != nil {
+		if k.ID, err = t.insertPage("file", f.Title, text.TitleKey(f.Title), nullIfEmpty(d.Day), f.Body); err != nil {
 			return k, err
 		}
-		title = f.Title
 	case p.Type == "page": // a day page is never a file: entities_day_page_plain refuses the update
-		if p.Body != "" && f.Body != "" && p.Body != f.Body {
-			return k, Conflict("%s already has text of its own: give the file another title (two texts are never merged)", p.Title)
-		}
-		if _, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET entity_type = 'file', deleted_at = NULL WHERE id = ? AND entity_type = 'page'`, p.ID); err != nil {
+		if body, err = t.promoteToFile(&k, p, f, d); err != nil {
 			return k, err
-		}
-		if p.Body == "" && f.Body != "" {
-			if _, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET body = ? WHERE id = ?`, f.Body, p.ID); err != nil {
-				return k, err
-			}
-		} else {
-			body = p.Body
-		}
-		if _, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET day = ? WHERE id = ? AND day IS NULL`, nullIfEmpty(day), p.ID); err != nil {
-			return k, err
-		}
-		k.ID, k.Promoted, title = p.ID, true, p.Title
-		if f.unknownCaptureDay {
-			if err := t.tx.QueryRowContext(t.ctx, "SELECT coalesce(day,'') FROM entities WHERE id=?", p.ID).Scan(&k.StoredDay); err != nil {
-				return k, err
-			}
 		}
 	default:
 		return k, &ExistsError{p.ID, p.Title}
 	}
-	// 2) the files row, then the links the text names
 	if _, err := t.tx.ExecContext(t.ctx, `INSERT INTO files(id, sha256, mime, preview) VALUES (?, ?, ?, ?)`, k.ID, f.SHA256, f.MIME, f.Preview); err != nil {
 		return k, err
 	}
@@ -175,24 +188,60 @@ func (t *Tx) keep(f FileIn) (k Kept, err error) {
 		return k, err
 	}
 	k.Sync = &sync
-	// 3) its own day
-	return k, t.ownDay(&k, f, title, day, own, f.Preview != nil)
+	return k, t.ownDay(&k, ownDayFacts{Title: title, Day: d, Picture: f.Preview != nil})
+}
+
+// promoteToFile makes the plain page p the page of the file f, and sets k to say so. It returns the text of the
+// page: the text of p, or that of f when p has none. Two different texts are never merged.
+func (t *Tx) promoteToFile(k *Kept, p *pageRef, f FileIn, d fileDay) (body string, err error) {
+	if p.Body != "" && f.Body != "" && p.Body != f.Body {
+		return "", Conflict("%s already has text of its own: give the file another title (two texts are never merged)", p.Title)
+	}
+	if _, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET entity_type = 'file', deleted_at = NULL WHERE id = ? AND entity_type = 'page'`, p.ID); err != nil {
+		return "", err
+	}
+	body = f.Body
+	if p.Body == "" && f.Body != "" {
+		if _, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET body = ? WHERE id = ?`, f.Body, p.ID); err != nil {
+			return "", err
+		}
+	} else {
+		body = p.Body
+	}
+	if _, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET day = ? WHERE id = ? AND day IS NULL`, nullIfEmpty(d.Day), p.ID); err != nil {
+		return "", err
+	}
+	k.ID, k.Promoted = p.ID, true
+	if d.Kind == dayNone {
+		if err := t.tx.QueryRowContext(t.ctx, "SELECT coalesce(day,'') FROM entities WHERE id=?", p.ID).Scan(&k.StoredDay); err != nil {
+			return "", err
+		}
+	}
+	return body, nil
+}
+
+// ownDayFacts are what ownDay needs to know about a file kept.
+type ownDayFacts struct {
+	Title   string // the title of its page
+	Day     fileDay
+	Picture bool // the file has a preview
 }
 
 // ownDay reports the own day of a file kept in Kept.Day, when the file has one. When the file also has a picture,
 // the page of that day shows it (embed). A file with no day of its own goes in no day page.
-func (t *Tx) ownDay(k *Kept, f FileIn, title, day string, own, picture bool) error {
-	if own {
-		k.Day = day
-	}
-	if f.unknownCaptureDay || !own || !picture {
+func (t *Tx) ownDay(k *Kept, f ownDayFacts) error {
+	if !f.Day.own() {
 		return nil
 	}
-	dayID, err := t.dayPage(day)
+	k.Day = f.Day.Day
+	if !f.Picture {
+		return nil
+	}
+	dayID, err := t.dayPage(f.Day.Day)
 	if err != nil {
 		return err
 	}
-	k.Embedded, k.DaySync, err = t.embed(dayID, title)
+	k.Embedded, k.DaySync, err = t.embed(dayID, f.Title)
 	return err
 }
 
