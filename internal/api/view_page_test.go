@@ -93,7 +93,7 @@ func TestEveryViewRenders(t *testing.T) {
 		{dayPage, http.StatusOK, []string{`name="version" value="`, `<a href="/pages?title=Sam" class="wikilink">Sam</a>`,
 			`<a href="/pages?title=running" class="wikilink">#running</a>`}},
 		{apitest.Href(sam, "self"), http.StatusOK, nil},
-		{opens(t, h, "Ana"), http.StatusOK, []string{"Ana Popescu", "Backlinks", "mentioned in"}},
+		{opens(t, h, "Ana"), http.StatusOK, []string{"Ana Popescu", "Backlinks", "mentioned in", `<div class="snippet">Ran with Sam and Ana #running</div>`}},
 		{"/browse", http.StatusOK, nil},
 		{"/browse?kind=person", http.StatusOK, nil},
 		{"/browse?kind=place", http.StatusOK, nil},

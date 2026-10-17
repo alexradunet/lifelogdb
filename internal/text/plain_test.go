@@ -1,8 +1,10 @@
 package text
 
 import (
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 // TestParseDayReadsOnlyADayThatRoundTrips: ParseDay gives the time of a YYYY-MM-DD day (lifelog_meta.days), and a
@@ -96,6 +98,66 @@ func TestCutInlineMarksIsForAFragment(t *testing.T) {
 	} {
 		if got := CutInlineMarks(src); got != want {
 			t.Errorf("CutInlineMarks(%q) = %q, want %q", src, got, want)
+		}
+	}
+}
+
+// TestMentionIsTheSentenceThatNamesATarget: the words of the first block that names one of the keys, by a wikilink or
+// a #tag, with the marks gone. An alias of the target counts, and a link shows its display text. A code span, an
+// embed and a key of another page do not count. A block longer than the cut is cut around the link, on a space.
+func TestMentionIsTheSentenceThatNamesATarget(t *testing.T) {
+	ana := []string{TitleKey("Ana Popescu"), TitleKey("Annie")}
+	long := strings.Repeat("alpha beta gamma. ", 30)
+	for _, tc := range []struct {
+		name, body string
+		keys       []string
+		want       string
+	}{
+		{"a title", "Ran with [[Ana Popescu]] today.", ana, "Ran with Ana Popescu today."},
+		{"an alias name", "Ran with [[Annie]] today.", ana, "Ran with Annie today."},
+		{"the display text", "Ran with [[Ana Popescu|my friend]].", ana, "Ran with my friend."},
+		{"a case-folded title", "Ran with [[ANA popescu]].", ana, "Ran with ANA popescu."},
+		{"a tag", "Felt great #annie after the run.", ana, "Felt great #annie after the run."},
+		{"a link in emphasis", "**Ran** with *[[Annie]]* and slept.", ana, "Ran with Annie and slept."},
+		{"two links on one line", "[[Bo]] met [[Annie]] and [[Ana Popescu]].", ana, "Bo met Annie and Ana Popescu."},
+		{"the first block that matches", "Nothing here.\n\nSecond with [[Bo]].\n\nThird with [[Annie]].\n\nFourth [[Ana Popescu]].", ana, "Third with Annie."},
+		{"a list item", "- walked\n- lunch with [[Annie]]\n- slept", ana, "lunch with Annie"},
+		{"a heading", "# Day with [[Annie]]\n\nText.", ana, "Day with Annie"},
+		{"a block of two lines", "Walked far.\nThen met [[Annie]].", ana, "Walked far. Then met Annie."},
+		{"another page", "Ran with [[Bo]].", ana, ""},
+		{"no keys", "Ran with [[Ana Popescu]].", nil, ""},
+		{"a code span", "Typed `[[Ana Popescu]]` in the shell.", ana, ""},
+		{"a code block", "```\n[[Ana Popescu]]\n```", ana, ""},
+		{"an embed is not a mention", "![[Ana Popescu.jpg]] by the lake", ana, ""},
+		{"a number tag names no page", "Item #1 done.", []string{TitleKey("1")}, ""},
+		{"no body", "", ana, ""},
+		{"a block with a long text keeps its link", long + "met [[Annie]] there. " + long, ana, ""},
+	} {
+		got := Mention(tc.body, tc.keys)
+		if tc.name == "a block with a long text keeps its link" {
+			n := utf8.RuneCountInString(got)
+			if !strings.Contains(got, "met Annie there.") || n < 190 || n > 205 || !strings.HasPrefix(got, "…") || !strings.HasSuffix(got, "…") || !utf8.ValidString(got) {
+				t.Errorf("%s: Mention = %q (%d runes), want about 200 runes around the link, cut on spaces, with an ellipsis at each end", tc.name, got, n)
+			}
+			continue
+		}
+		if got != tc.want {
+			t.Errorf("%s: Mention(%q) = %q, want %q", tc.name, tc.body, got, tc.want)
+		}
+	}
+}
+
+// TestMentionCutsOnRuneBoundaries: a long text of multi-byte letters is cut at runes, never inside one, and the link
+// stays in the cut, also when the text has no space at all.
+func TestMentionCutsOnRuneBoundaries(t *testing.T) {
+	for _, filler := range []string{"é", "日本語 ", "x"} {
+		body := strings.Repeat(filler, 400) + "[[Ana]]" + strings.Repeat(filler, 400)
+		got := Mention(body, []string{TitleKey("Ana")})
+		if !utf8.ValidString(got) || !strings.Contains(got, "Ana") {
+			t.Errorf("filler %q: Mention = %q, want valid UTF-8 that holds the link", filler, got)
+		}
+		if n := utf8.RuneCountInString(got); n > 205 {
+			t.Errorf("filler %q: Mention has %d runes, want about 200", filler, n)
 		}
 	}
 }

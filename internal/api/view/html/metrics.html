@@ -61,7 +61,8 @@
 
 <section class="group" aria-label="Mentioned in"><h2>Mentioned in</h2>
 {{with $s.backlinks}}{{range group . "kind"}}{{if ne .Key "wikilink"}}<p class="sub">{{.Key}}</p>{{end}}
-<ul class="plain">{{range .Items}}<li><a href="/pages/{{num .id}}">{{$.Date .title}}</a>{{if ne .entity_type "page"}} <span class="badge">{{.entity_type}}</span>{{end}}</li>{{end}}</ul>{{end}}
+<ul class="plain">{{range .Items}}<li><a href="/pages/{{num .id}}">{{$.Date .title}}</a>{{if ne .entity_type "page"}} <span class="badge">{{.entity_type}}</span>{{end}}{{with .context}}
+<div class="snippet">{{.}}</div>{{end}}</li>{{end}}</ul>{{end}}
 {{else}}<p class="empty">No page names {{.Title}} yet. Write [[{{.Title}}]] in a day, and the day is listed here.</p>{{end}}
 </section>
 

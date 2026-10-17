@@ -310,14 +310,17 @@ func (s *Store) PageByID(ctx context.Context, id int64) (*Page, error) {
 		 WHERE l.from_id = ? ORDER BY l.kind, pg_name.title`, id); err != nil {
 		return nil, err
 	}
-	// cookbook/backlinks.md: owned names resolve to this id
+	// cookbook/backlinks.md: owned names resolve to this id. The day pages come first, newest first.
 	if p.In, err = s.edges(ctx, `
 		SELECT l.kind, l.from_id, pg_name.title, e.entity_type, coalesce(l.note, '')
 		  FROM links l
 		  JOIN entities e  ON e.id = l.from_id AND e.deleted_at IS NULL
 		  JOIN entity_names pg_name ON pg_name.entity_id = e.id AND pg_name.name_key = e.preferred_name_key
 		 WHERE l.to_id = ?
-		 ORDER BY pg_name.title`, id); err != nil {
+		 ORDER BY e.is_journal DESC, CASE WHEN e.is_journal THEN e.day END DESC, pg_name.title`, id); err != nil {
+		return nil, err
+	}
+	if err := s.addContexts(ctx, id, p.In); err != nil {
 		return nil, err
 	}
 	return p, nil

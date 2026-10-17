@@ -163,11 +163,47 @@ type Edge struct {
 	Title string `json:"title"`
 	Type  string `json:"entity_type"`
 	Note  string `json:"note,omitempty"`
+	// Context is the sentence of the other page that names this one, for a wikilink backlink (text.Mention).
+	Context string `json:"context,omitempty"`
 }
 
 func (s *Store) edges(ctx context.Context, q string, args ...any) ([]Edge, error) {
 	rows, err := s.DB.R.QueryContext(ctx, q, args...)
 	return list(rows, err, func(e *Edge) []any { return []any{&e.Kind, &e.ID, &e.Title, &e.Type, &e.Note} })
+}
+
+// addContexts sets Edge.Context of each wikilink edge in in, the backlinks of page id: the sentence of the source that
+// names the page. The names are every name that the page has kept, as a link by an old name still ends at the page.
+// The bodies of all the sources come in one query.
+func (s *Store) addContexts(ctx context.Context, id int64, in []Edge) error {
+	var sources []int64
+	for _, e := range in {
+		if e.Kind == "wikilink" {
+			sources = append(sources, e.ID)
+		}
+	}
+	if len(sources) == 0 {
+		return nil
+	}
+	rows, err := s.DB.R.QueryContext(ctx, `SELECT name_key FROM entity_names WHERE entity_id = ?`, id)
+	keys, err := list(rows, err, func(k *string) []any { return []any{k} })
+	if err != nil {
+		return err
+	}
+	ids, _ := json.Marshal(sources)
+	rows, err = s.DB.R.QueryContext(ctx, `SELECT id, body FROM entities WHERE id IN (SELECT value FROM json_each(?))`, string(ids))
+	contexts := make(map[int64]string, len(sources))
+	var from int64
+	var body string
+	if err := each(rows, err, []any{&from, &body}, func() { contexts[from] = text.Mention(body, keys) }); err != nil {
+		return err
+	}
+	for i := range in {
+		if in[i].Kind == "wikilink" {
+			in[i].Context = contexts[in[i].ID]
+		}
+	}
+	return nil
 }
 
 // LinkKindsFrom are the registered kinds a page of this type may start (link_kinds.from_types, NULL for any),

@@ -101,6 +101,19 @@ func asciiUpper(s string) string {
 // Candidates returns the titles a body names, in order of appearance, valid or not and not de-duplicated.
 func Candidates(body string) []string {
 	var out []string
+	for _, m := range mentions(body) {
+		out = append(out, m.title)
+	}
+	return out
+}
+
+// mention is a title that a body names, and the words a reader sees for it: the text of a wikilink after any |, or a
+// #tag with its #.
+type mention struct{ title, shown string }
+
+// mentions is Candidates with the words that show each title.
+func mentions(body string) []mention {
+	var out []mention
 	for _, run := range textRuns(body, true) {
 		links := wiki.FindAllStringSubmatchIndex(run, -1)
 		// One walk over the run blanks the wikilinks, so that their text is not read again for tags. It also finds
@@ -127,15 +140,20 @@ func Candidates(body string) []string {
 				continue
 			}
 			for ; k < len(links) && linkAt[k] < t.pos; k++ {
-				out = append(out, linkTitle(run, links[k]))
+				out = append(out, linkMention(run, links[k]))
 			}
-			out = append(out, t.tag)
+			out = append(out, mention{t.tag, "#" + t.tag})
 		}
 		for ; k < len(links); k++ {
-			out = append(out, linkTitle(run, links[k]))
+			out = append(out, linkMention(run, links[k]))
 		}
 	}
 	return out
+}
+
+// linkMention is the mention of the wikilink at m, a match of wiki in run.
+func linkMention(run string, m []int) mention {
+	return mention{linkTitle(run, m), wikiShown(run[m[2]:m[3]])}
 }
 
 // linkTitle is the title of the wikilink at m, a match of wiki in run: the text before a |, without the spaces at

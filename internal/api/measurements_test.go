@@ -82,7 +82,8 @@ func TestAMetricIsOnePage(t *testing.T) {
 		}
 	}
 	page := apitest.Must(t)(c.Get(t.Context(), "/pages?title=2026-10-13"))
-	for _, want := range []string{"Before breakfast.", `href="` + apitest.Href(page, "self") + `"`, "Mentioned in"} {
+	for _, want := range []string{"Before breakfast.", `href="` + apitest.Href(page, "self") + `"`, "Mentioned in",
+		`<div class="snippet">Weighed in: Weight is down.</div>`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the metric page does not show %s", want)
 		}

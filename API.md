@@ -412,12 +412,14 @@ that is not a kept picture, or a file page, is refused (422).
 | `links[].title` | string | its title |
 | `links[].entity_type` | string | its type |
 | `links[].note` | string | the link's note; absent when none |
+| `links[].context` | string | always absent: only a backlink has a context |
 | `backlinks[]` | list | the links that end here, the same shape |
 | `backlinks[].kind` | string | |
 | `backlinks[].id` | integer | |
 | `backlinks[].title` | string | |
 | `backlinks[].entity_type` | string | |
 | `backlinks[].note` | string | |
+| `backlinks[].context` | string | for a `wikilink`: the words of the block of that page that names this one; absent when none |
 
 ### cover-choice
 
@@ -499,12 +501,14 @@ by default). An alias names the metric too. Links: `self` (`/metrics/{name}` whe
 | `links[].title` | string | |
 | `links[].entity_type` | string | |
 | `links[].note` | string | |
+| `links[].context` | string | always absent: only a backlink has a context |
 | `backlinks[]` | list | the links that end at its page (the page's shape); absent likewise |
 | `backlinks[].kind` | string | |
 | `backlinks[].id` | integer | |
 | `backlinks[].title` | string | |
 | `backlinks[].entity_type` | string | |
 | `backlinks[].note` | string | |
+| `backlinks[].context` | string | for a `wikilink`: the words of the block of that page that names this one; absent when none |
 | `all_history` | boolean | no `from` was named: every admitted day through `to` was selected |
 
 ### metrics
