@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"lifelog/internal/db"
 )
@@ -19,6 +20,12 @@ import (
 type integrityConnector struct {
 	check, fault           string
 	closed, queries, execs int
+	deadlines              []time.Time // the deadline of the context of each query and exec; zero when it has none
+}
+
+func (c *integrityConnector) noteDeadline(ctx context.Context) {
+	d, _ := ctx.Deadline()
+	c.deadlines = append(c.deadlines, d)
 }
 
 func (c *integrityConnector) Connect(context.Context) (driver.Conn, error) {
@@ -53,7 +60,8 @@ func (c *integrityConn) Close() error {
 
 var errIntegrityFault = errors.New("synthetic integrity execution failure")
 
-func (c *integrityConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+func (c *integrityConn) QueryContext(ctx context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+	c.c.noteDeadline(ctx)
 	c.c.queries++
 	check := "orphan entities"
 	if strings.Contains(query, "PRAGMA integrity_check") {
@@ -86,7 +94,8 @@ func (c *integrityConn) QueryContext(_ context.Context, query string, _ []driver
 	}
 	return &integrityRows{c: c.c, check: check, fault: fault}, nil
 }
-func (c *integrityConn) ExecContext(context.Context, string, []driver.NamedValue) (driver.Result, error) {
+func (c *integrityConn) ExecContext(ctx context.Context, _ string, _ []driver.NamedValue) (driver.Result, error) {
+	c.c.noteDeadline(ctx)
 	c.c.execs++
 	if c.c.fault == "fts" {
 		return nil, errIntegrityFault
@@ -216,6 +225,35 @@ func TestIntegrityResultSemantics(t *testing.T) {
 				t.Errorf("closed=%d execs=%d", c.closed, c.execs)
 			}
 		})
+	}
+}
+
+// Every read and the full-text step, which holds the writer connection, run under the deadline of Integrity.
+func TestIntegrityRunsUnderItsDeadline(t *testing.T) {
+	c := &integrityConnector{}
+	start := time.Now()
+	if _, err := faultIntegrityStore(t, c).Integrity(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	end := time.Now()
+	if len(c.deadlines) != len(integrityCheckNames)+1 { // the reads and the full-text exec
+		t.Fatalf("%d statements noted; want %d", len(c.deadlines), len(integrityCheckNames)+1)
+	}
+	for i, d := range c.deadlines {
+		if d.IsZero() || d.After(end.Add(IntegrityDeadline)) || !d.After(start.Add(IntegrityDeadline-time.Minute)) {
+			t.Errorf("statement %d: deadline %v; want about %v after the call (%v to %v)", i, d, IntegrityDeadline, start, end)
+		}
+	}
+}
+
+// A run that its context ends gives an error and no result, not a result of the checks that ran.
+func TestIntegrityEndsWithTheErrorOfItsContext(t *testing.T) {
+	s := fresh(t)
+	done, cancel := context.WithCancel(context.Background())
+	cancel()
+	r, err := s.Integrity(done)
+	if r != nil || !errors.Is(err, context.Canceled) {
+		t.Fatalf("result=%+v error=%v; want no result and context.Canceled", r, err)
 	}
 }
 

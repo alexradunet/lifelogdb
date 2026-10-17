@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"lifelog/internal/text"
 )
@@ -26,6 +27,11 @@ type IntegrityResult struct {
 	FullTextIndexOK               bool     `json:"full_text_index_ok"`
 	FullTextError                 string   `json:"full_text_error,omitempty"`
 }
+
+// IntegrityDeadline bounds one run of Integrity. The full-text step holds the writer connection until it ends
+// (docs/contract/integrity-checks.md), so a run that never ends would block every write. A run that passes the
+// deadline ends with an error and no result.
+const IntegrityDeadline = 5 * time.Minute
 
 // idCheck is one semantic check: a query that selects the id of every row that breaks a rule, and the list of the
 // result it fills. An empty list is a passed check.
@@ -78,9 +84,12 @@ SELECT id FROM measurements EXCEPT SELECT id FROM rooted ORDER BY id`, &r.Invali
 
 // Integrity runs the checks: SQLite's own two, the semantic checks of idChecks, the name keys, and the full-text
 // index's. All of them but the last read in one transaction, so the result is one view of the file while a writer
-// goes on. The full-text check writes nothing but needs the writer connection: it runs after the others.
+// goes on. The full-text check writes nothing but needs the writer connection: it runs after the others and holds
+// the connection until it ends. The whole run is under IntegrityDeadline.
 func (s *Store) Integrity(ctx context.Context) (*IntegrityResult, error) {
 	r := &IntegrityResult{IntegrityCheck: []string{}}
+	ctx, cancel := context.WithTimeout(ctx, IntegrityDeadline)
+	defer cancel()
 	tx, err := s.DB.R.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return nil, fmt.Errorf("integrity: %w", err)
