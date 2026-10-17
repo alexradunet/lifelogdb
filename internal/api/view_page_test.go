@@ -86,8 +86,8 @@ func TestEveryViewRenders(t *testing.T) {
 		status int
 		want   []string
 	}{
-		{"/", http.StatusOK, []string{`<a class="brand" href="/" aria-current="page">Lifelog</a>`}},
 		{"/actions", http.StatusOK, nil},
+		{"/actions?new=snapshot", http.StatusOK, []string{`<details class="action" open><summary class="button">Take a snapshot`}}, // the rail's Snapshot link
 		{"/days", http.StatusOK, nil},
 		{apitest.Href(day, "self"), http.StatusOK, nil},
 		{dayPage, http.StatusOK, []string{`name="version" value="`, `<a href="/pages?title=Sam" class="wikilink">Sam</a>`,
@@ -157,7 +157,6 @@ func TestEveryViewRenders(t *testing.T) {
 		{"/search", "How to search", "FTS5"},
 		{"/search?q=ran", "<span>Words</span>", "required</small>"},
 		{"/search?q=ran", "How to search", "FTS5"},
-		{"/", "<span>Entry</span>", "(CommonMark)"},
 		{"/months/2026-09", "", "A day with a page is tinted"},
 	} {
 		if c.want != "" && !strings.Contains(bodies[c.path], c.want) {
@@ -365,22 +364,30 @@ func TestAnEmptySaveComesBackOnItsPage(t *testing.T) {
 	}
 }
 
-// TestARefusedCaptureComesBackOnHome: a capture refused from Home comes back on Home with the text still in the box.
-func TestARefusedCaptureComesBackOnHome(t *testing.T) {
-	_, h, _ := apitest.FreshOn(t, "cli", "2026-10-12") // the form posts to that day, and Home's capture is today's
-	rec := submit(h, "/days/2026-10-12/capture", url.Values{"text": {"A note that must not be lost."}, "mood": {"9"}, "back": {"/"}}, "")
+// TestARefusedCaptureComesBackOnToday: a capture refused from the page of today (Home) comes back on that page with
+// the text still in the box. A capture that a stale page sent with back=/ gets the plain error view: Home is a
+// redirect, and the refusal keeps the text there too.
+func TestARefusedCaptureComesBackOnToday(t *testing.T) {
+	_, h, _ := apitest.FreshOn(t, "cli", "2026-10-12") // the form posts to that day, and today's capture is that day's
+	rec := submit(h, "/days/2026-10-12/capture", url.Values{"text": {"A note that must not be lost."}, "mood": {"9"}, "back": {"/days/2026-10-12"}}, "")
 	body := rec.Body.String()
 	if rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status %d, want 422: %.400s", rec.Code, body)
 	}
-	for _, want := range []string{"<title>Not saved · Lifelog · Lifelog</title>", `aria-label="Capture"`, "Add to today", `role="alert" id="refused"`,
+	for _, want := range []string{"<title>Not saved · 2026-10-12 · Lifelog</title>", `aria-label="Capture"`, "Add to today", `role="alert" id="refused"`,
 		">A note that must not be lost.</textarea>", `aria-describedby="refused"`} {
 		if !strings.Contains(body, want) {
-			t.Errorf("Home, refused, lacks %s", want)
+			t.Errorf("today, refused, lacks %s", want)
 		}
 	}
 	if n := strings.Count(body, "autofocus"); n != 1 {
 		t.Errorf("%d autofocus on the refused page, want 1 (the alert)", n)
+	}
+
+	old := submit(h, "/days/2026-10-12/capture", url.Values{"text": {"A note that must not be lost."}, "mood": {"9"}, "back": {"/"}}, "")
+	if old.Code != http.StatusUnprocessableEntity || !strings.Contains(old.Body.String(), `aria-label="What you sent"`) ||
+		!strings.Contains(old.Body.String(), "A note that must not be lost.") {
+		t.Errorf("back=/: %d, want the error view that keeps the text: %.400s", old.Code, old.Body.String())
 	}
 }
 

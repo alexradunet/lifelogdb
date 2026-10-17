@@ -38,7 +38,7 @@
 <div class="rail-more" id="sections" popover>
 <div class="rail-more-head"><span class="label">More</span><button type="button" class="button small" popovertarget="sections" popovertargetaction="hide">Close</button></div>
 {{with .Shell}}{{if .Days}}{{template "monthbox" (dict "href" .MonthHref "name" .Month "written" .Written "days" .Days "today" .Today)}}{{end}}{{end}}
-<p class="rail-foot">Owner{{range $nav}}{{if eq .Group "owner"}} · <a href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}>{{.Title}}</a>{{end}}{{end}} · <a href="/#owner">Snapshot</a></p>
+<p class="rail-foot">Owner{{range $nav}}{{if eq .Group "owner"}} · <a href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}>{{.Title}}</a>{{end}}{{end}} · <a href="/actions?new=snapshot">Snapshot</a></p>
 </div>
 </aside>{{end}}
 
@@ -190,11 +190,12 @@
      closed <details>. An owner-only action carries the owner mark. */}}
 {{define "boxed"}}{{with .}}<details class="action"{{if or .Refused .Asked}} open{{end}}><summary class="button">{{.Button}}{{if .Owner}} <span class="owner">owner</span>{{end}}</summary><div class="action-form">{{with .Description}}<p class="desc">{{.}}</p>{{end}}{{template "form" .}}</div></details>{{end}}{{end}}
 
-{{/* generic is the view of any class without a template of its own: the whole entity, and every action it offers */}}
+{{/* generic is the view of any class without a template of its own: the whole entity, and every action it offers.
+     An action is drawn by its name, so a link with ?new=<action> opens its form (the rail's Snapshot). */}}
 {{define "generic"}}{{template "head" .}}
 <header class="page-head"><div class="what">{{with .Class}}<span class="kind">{{rel .}}</span>{{end}}<h1>{{.Title}}</h1>
 {{with .Links}}<p class="sub">{{range .}}<a href="{{.Href}}" rel="{{rel .Rel}}">{{or .Title .Href}}</a>{{end}}</p>{{end}}</div></header>
 {{with .Properties}}<section class="panel" aria-label="Properties"><h2>Properties</h2><div class="scroll">{{$.Value .}}</div></section>{{end}}
 {{with .Entities}}<section class="section" aria-label="Links"><h2>Links</h2><ul class="plain">{{range .}}<li><a href="{{.Href}}">{{or .Title .Href}}</a> <span class="badge">{{rel .Rel}}</span></li>{{end}}</ul></section>{{end}}
-{{with .Actions}}<section class="section" aria-label="Actions"><h2>Actions</h2><div class="actions">{{range .}}{{template "boxed" (form .)}}{{end}}</div></section>{{end}}
+{{with .Actions}}<section class="section" aria-label="Actions"><h2>Actions</h2><div class="actions">{{range .}}{{template "boxed" (form ($.Action .Name))}}{{end}}</div></section>{{end}}
 {{template "foot" .}}{{end}}

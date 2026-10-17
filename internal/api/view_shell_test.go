@@ -14,7 +14,7 @@ import (
 // TestTheSidebarShowsTheMonth: the month is this month, with the days that have a day page marked and today framed.
 func TestTheSidebarShowsTheMonth(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday) // Wednesday 14 May 2031
-	if body := browse(t, h, "/"); !strings.Contains(body, "May 2031</a><span class=\"meta\">0 written</span>") {
+	if body := browse(t, h, "/days/"+fixedToday); !strings.Contains(body, "May 2031</a><span class=\"meta\">0 written</span>") {
 		t.Errorf("an empty life log does not show its empty month:\n%s", sidebar(body))
 	}
 
@@ -27,7 +27,7 @@ func TestTheSidebarShowsTheMonth(t *testing.T) {
 		t.Fatalf("the day page of 2031-05-03 has the body %q, want an empty body", body)
 	}
 
-	body := browse(t, h, "/")
+	body := browse(t, h, "/days/"+fixedToday)
 	for _, want := range []string{
 		`<a href="/months/2031-05">May 2031</a><span class="meta">3 written</span>`,
 		`<tr><td></td><td></td><td></td><td><a href="/days/2031-05-01" aria-label="Thu 1 May">1</a></td>`,
@@ -96,7 +96,7 @@ func TestThePhoneHasABottomBarAndASheet(t *testing.T) {
 		t.Errorf("the bottom bar does not mark Browse, or marks More:\n%s", bar[1])
 	}
 	if got := links(sheet[1]); !strings.HasPrefix(got, "/months/2031-05") || strings.Contains(got, "/browse") || strings.Contains(got, "/metrics") ||
-		!strings.HasSuffix(got, "/actions /integrity") || !strings.Contains(sheet[1], `<a href="/#owner">Snapshot</a>`) {
+		!strings.HasSuffix(got, "/actions /integrity /actions?new=snapshot") || !strings.Contains(sheet[1], `<a href="/actions?new=snapshot">Snapshot</a>`) {
 		t.Errorf("the sheet: %s", got)
 	}
 	if !strings.Contains(sheet[1], `<button type="button" class="button small" popovertarget="sections" popovertargetaction="hide">Close</button>`) {
@@ -121,8 +121,8 @@ func TestThePhoneHasABottomBarAndASheet(t *testing.T) {
 // form inside, which the top bar's Search opens by its command and Escape or a tap outside closes (closedby). The
 // login page, which has no shell, carries none (the public listener's test says so).
 func TestTheSearchDialogIsInThePage(t *testing.T) {
-	_, h, _ := apitest.Fresh(t, "cli")
-	body := browse(t, h, "/")
+	_, h, _ := apitest.FreshOn(t, "cli", fixedToday)
+	body := browse(t, h, "/days/"+fixedToday) // Home is the page of today
 	for _, want := range []string{
 		`<dialog class="palette" id="palette" closedby="any" aria-label="Search">` + "\n" + `<form method="GET" action="/search"><input type="search" name="q" autocomplete="off" aria-label="Search" placeholder="A page's title, or words of a body"></form>`,
 		`<button type="button" class="rail-search-link button" commandfor="palette" command="show-modal" aria-label="Search">`,

@@ -279,13 +279,9 @@ func TestALinkOpensAFormAndFillsItsFields(t *testing.T) {
 		}
 	}
 
-	// Home has New page beside Open a page, and no fold of every create form.
-	home := browse(t, h, "/")
-	tools := home[strings.Index(home, `<div class="tools">`):]
-	tools = tools[:strings.Index(tools, "</header>")]
-	if !strings.Contains(tools, `<form method="POST" action="/pages"`) || !strings.Contains(tools, `<form method="GET" action="/pages"`) {
-		t.Errorf("Home's header lacks New page or Open a page:\n%s", tools)
-	}
+	// Home is the page of today (docs/plans/129-the-ux-pass.md, part 10): New page is in the New menu of the rail, and
+	// the page has no fold of every create form.
+	home := browse(t, h, "/days/"+fixedToday)
 	if strings.Contains(home, `<details id="new">`) {
 		t.Error(`Home still draws <details id="new">`)
 	}

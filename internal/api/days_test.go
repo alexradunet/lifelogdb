@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"regexp"
 	"strings"
@@ -64,6 +65,9 @@ func TestTheDayCarriesItsMood(t *testing.T) {
 	}
 }
 
+// TestTheRootIsTodayAtAGlance: a browser's Home is the page of today (docs/plans/129-the-ux-pass.md, part 10): GET /
+// answers 303 to the day, and a one-use receipt of feedback goes with it. The JSON root, the entry point of the API,
+// does not change.
 func TestTheRootIsTodayAtAGlance(t *testing.T) {
 	c, h := journalFixture(t)
 	root := apitest.Must(t)(c.Get(t.Context(), "/"))
@@ -76,12 +80,82 @@ func TestTheRootIsTodayAtAGlance(t *testing.T) {
 	if got, want := strings.Join(recent, " | "), fixedToday+" [4 3] Quiet day. | "+dayOf(-1)+" [2] <nil> | "+dayOf(-2)+" <nil> Morning"; got != want {
 		t.Errorf("recent:\n got %s\nwant %s", got, want)
 	}
+	if p["today"] != fixedToday || !hasAction(root, "snapshot") {
+		t.Errorf("the JSON root: today %v, actions %s", p["today"], names(root))
+	}
 
-	body := browse(t, h, "/")
-	for _, want := range []string{"<h2>Last entries</h2>", "Quiet day."} {
-		if !strings.Contains(body, want) {
-			t.Errorf("the root lacks %q", want)
+	for _, accept := range []string{"text/html,application/xhtml+xml", "text/html"} {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set("Accept", accept)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/days/"+fixedToday {
+			t.Errorf("GET / as %q: %d %q, want 303 to /days/%s", accept, rec.Code, rec.Header().Get("Location"), fixedToday)
 		}
+	}
+	for _, accept := range []string{"application/vnd.siren+json", "application/json", "text/html,application/json", ""} {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set("Accept", accept)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"class": [`) {
+			t.Errorf("GET / as %q: %d, want the JSON root: %.200s", accept, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+// TestAFormThatReturnsHomeLandsOnToday: the write that answers "/" (a snapshot, a capture sent with back=/) is sent
+// to the page of today, and its one-use receipt is read there, once.
+func TestAFormThatReturnsHomeLandsOnToday(t *testing.T) {
+	_, h, _ := apitest.FreshOn(t, "cli", fixedToday)
+	rec := submit(h, "/days/"+fixedToday+"/capture", url.Values{"text": {"Walked with [[Dana Example]]."}, "back": {"/"}}, "")
+	if rec.Code != http.StatusSeeOther || !strings.HasPrefix(rec.Header().Get("Location"), "/?feedback=") {
+		t.Fatalf("capture: %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+	req := httptest.NewRequest("GET", rec.Header().Get("Location"), nil)
+	req.Header.Set("Accept", "text/html")
+	home := httptest.NewRecorder()
+	h.ServeHTTP(home, req)
+	to := home.Header().Get("Location")
+	if home.Code != http.StatusSeeOther || !strings.HasPrefix(to, "/days/"+fixedToday+"?feedback=") {
+		t.Fatalf("Home with a receipt: %d %q, want 303 to the day with the receipt", home.Code, to)
+	}
+	if body := browse(t, h, to); !strings.Contains(body, `class="toast"`) || !strings.Contains(body, "Dana Example") {
+		t.Errorf("the page of today does not carry the receipt of the capture:\n%.600s", body)
+	}
+	if strings.Contains(browse(t, h, to), `class="toast"`) {
+		t.Error("the receipt came back on a reload")
+	}
+
+}
+
+// TestTheDayOfTodayCarriesTheLastEntries: Home is the page of today, so "Last entries", the list the root had, is in
+// the margin of today and of no other day (docs/plans/129-the-ux-pass.md, part 10).
+func TestTheDayOfTodayCarriesTheLastEntries(t *testing.T) {
+	c, h := journalFixture(t)
+	today := props(apitest.Must(t)(c.Get(t.Context(), "/days/"+fixedToday)))
+	var recent []string
+	list, _ := today["recent"].([]any)
+	for _, r := range list {
+		m := r.(map[string]any)
+		recent = append(recent, fmt.Sprintf("%v %v %v", m["day"], m["mood"], m["first_line"]))
+	}
+	if got, want := strings.Join(recent, " | "), fixedToday+" [4 3] Quiet day. | "+dayOf(-1)+" [2] <nil> | "+dayOf(-2)+" <nil> Morning"; got != want {
+		t.Errorf("recent of today:\n got %s\nwant %s", got, want)
+	}
+	if _, ok := props(apitest.Must(t)(c.Get(t.Context(), "/days/"+dayOf(-1))))["recent"]; ok {
+		t.Error("a day that is not today carries recent")
+	}
+
+	body := browse(t, h, "/days/"+fixedToday)
+	for _, want := range []string{`aria-label="Last entries"`, "<h2>Last entries</h2>", `<a href="/days">Every day</a>`,
+		`<a class="entry" href="/days/` + dayOf(-2) + `">`, "Morning"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the page of today lacks %q", want)
+		}
+	}
+	if strings.Contains(browse(t, h, "/days/"+dayOf(-1)), "Last entries") {
+		t.Error("a day that is not today draws Last entries")
 	}
 }
 
@@ -146,16 +220,14 @@ func TestTheMoodIsAChoiceOfFive(t *testing.T) {
 	}
 }
 
-// TestCaptureReturnsToThePageThatSentIt: Home's Capture returns to Home, a day's to the day.
+// TestCaptureReturnsToThePageThatSentIt: the Capture of a day, today's too, returns to the day. Home is the page of
+// today, so no form returns to "/".
 func TestCaptureReturnsToThePageThatSentIt(t *testing.T) {
 	_, h, _ := apitest.FreshOn(t, "cli", fixedToday)
-	for page, want := range map[string]string{"/": "/", "/days/" + dayOf(-3): "/days/" + dayOf(-3)} {
-		action := "/days/" + fixedToday + "/capture"
-		if page != "/" {
-			action = page + "/capture"
-		}
-		if form := captureForm(t, browse(t, h, page), action); !strings.Contains(form, `name="back" value="`+want+`"`) {
-			t.Errorf("Capture on %s does not return to %s:\n%s", page, want, form)
+	for _, day := range []string{fixedToday, dayOf(-3)} {
+		page := "/days/" + day
+		if form := captureForm(t, browse(t, h, page), page+"/capture"); !strings.Contains(form, `name="back" value="`+page+`"`) {
+			t.Errorf("Capture on %s does not return to it:\n%s", page, form)
 		}
 	}
 }
@@ -226,7 +298,7 @@ func TestTheDayIsALeafAndItsMargin(t *testing.T) {
 }
 
 // TestTheDayAndHomeCarryOnThisDay: the day pages of earlier years on the month and day, the newest first, in the
-// property and in the margin; none, an empty list and no group. The capture box carries its quiet prompt. A day page
+// property (the day's and the JSON root's) and in the margin of the day; none, an empty list and no group. The capture box carries its quiet prompt. A day page
 // with a cover names its picture, and the margin draws it first in the entry; a day page without one has none.
 func TestTheDayAndHomeCarryOnThisDay(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
@@ -235,8 +307,8 @@ func TestTheDayAndHomeCarryOnThisDay(t *testing.T) {
 	if got := props(root)["on_this_day"].([]any); len(got) != 0 {
 		t.Fatalf("on_this_day with no page = %v, want an empty list", got)
 	}
-	if body := browse(t, h, "/"); strings.Contains(body, "On this day") {
-		t.Error("Home draws On this day with no entry")
+	if body := browse(t, h, "/days/"+fixedToday); strings.Contains(body, "On this day") {
+		t.Error("the page of today draws On this day with no entry")
 	}
 	for day, text := range map[string]string{older: "Two years ago.", old: "Four years ago.", dayOf(-1): "Yesterday."} {
 		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/"+day)), "capture"), map[string]string{"text": text}))
@@ -253,6 +325,9 @@ func TestTheDayAndHomeCarryOnThisDay(t *testing.T) {
 		}
 		if want := []string{older + " Two years ago. picture=" + preview, old + " Four years ago. picture="}; strings.Join(got, "|") != strings.Join(want, "|") {
 			t.Errorf("%s on_this_day = %q, want %q", route, got, want)
+		}
+		if route == "/" { // the JSON root carries the property; the browser's Home is the page of today
+			continue
 		}
 		body := browse(t, h, route)
 		covered := `<a class="entry covered" href="/days/` + older + `"><span class="date">`

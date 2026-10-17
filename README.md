@@ -91,8 +91,9 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   What a template cannot know comes from the entity: `danger` marks a destructive action's button, `owner` an
   owner-only one, `rows` a textarea's height, `options` a field's choices, `pages` a field whose value is a page's
   title and an error's `code` its first words, so no view decides any of them by an action's or a field's name.
-- **The browser for daily use** ([plan 091](docs/plans/091-the-browser-for-daily-use.md)). The root is today at a
-  glance: the five newest day pages. A day carries its mood and the `save-body` of its day page, so the day view
+- **The browser for daily use** ([plan 091](docs/plans/091-the-browser-for-daily-use.md)). The root is the entry point
+  of the API, with the five newest day pages; a browser's `GET /` goes to the page of today ([plan 129](docs/plans/129-the-ux-pass.md)),
+  which holds the same lists in its margin. A day carries its mood and the `save-body` of its day page, so the day view
   edits in place. These are properties and actions of the entities, so every client gets them ([API.md](API.md)). `/months/{YYYY-MM}` is the calendar of a month (each day, whether it has a
   page, its first line, its mood and its readings, and every other thing that names the day: a
   birthday or a death each year, a place, a page or a file; under the calendar, Day by
@@ -161,7 +162,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   of an entity has one component: the title and the `prev`/`next` links a page header, properties facts and
   panels, sub-entities rows, an action with no visible field a button, one with
   fields a button that opens its form, an error an alert, and a write's `result` a toast at the top of the page,
-  which stays until the next page because it may name what the write did not do. A day and Home are a calendar
+  which stays until the next page because it may name what the write did not do. A day and Home (the page of today) are a calendar
   leaf, a sheet and its margin ([plan 095](docs/plans/095-the-leaf-and-its-margin.md)): the leaf (the month on a
   band, the day's number in mono) heads the page; the sheet holds what the page is for (the journal, then Capture);
   the margin holds what the page asks of the owner (the readings, the places), and comes after the
@@ -262,7 +263,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   `application_id`.
 - **Snapshots are the owner's, from any surface** ([take a snapshot](docs/cookbook/take-a-snapshot.md),
   [plan 082](docs/plans/082-snapshot-in-the-catalog.md)). `snapshot` is an owner-only action of the catalog
-  (`POST /snapshots`): refused to an `agent:*` or `import:*` writer, never an MCP tool, offered at the root to the owner. It takes
+  (`POST /snapshots`): refused to an `agent:*` or `import:*` writer, never an MCP tool, offered at the root to the owner, and in a browser by the rail's Snapshot link (`/actions?new=snapshot`). It takes
   no path: the file lands in the folder `serve --snapshots DIR` names, or beside `life.db`, named by the local day
   and never overwritten; it refuses a folder inside a git work tree, and its restore check opens the snapshot with
   `Close` skipping `PRAGMA optimize`. The answer carries the path and the check. `lifelog snapshot [--to DIR]` is the
@@ -317,7 +318,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   cards; `view` is a word of the page, as `new` is, and a form of the page returns to the same view.
 - **One way to make a thing** ([plan 114](docs/plans/114-one-way-to-do-a-thing.md)). The rail's New is a menu of the
   kinds; each kind is made on its list of Browse, whose header has its New button (a file on the media list, a
-  metric on `/metrics`; a page also on Home, beside Open a page).
+  metric on `/metrics`).
   `?new=<action>` opens that action's form on any page, and a query parameter that names a field fills it in. The
   catalog's titles say one verb for one meaning: New makes a thing, Add adds to one, Remove takes away, Restore
   brings back. The action names do not change. A number card and a day's reading tile have + Add, one value for
@@ -325,7 +326,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   page). The lists of Browse and the Metrics board act on several things the same way: Select shows the boxes, and one bar holds
   the count and a button for each action the list offers.
 - **New metric, new category and a reading from `/metrics`** ([plan 113](docs/plans/113-new-metric-on-metrics.md)).
-  New metric is in the header of `/metrics` and under each category's heading, not on Home. It asks what you
+  New metric is in the header of `/metrics` and under each category's heading, not on the page of today. It asks what you
   record: a number with its unit, a score with its range, or done or not done (a 0/1 habit). Its category is
   made when it is new. `register-metric` takes `category`, and does both in one write. New
   category opens the file bar. Each number card has a +, which records one value for today.

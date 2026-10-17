@@ -25,7 +25,7 @@ func TestTheFontsAreServedByExactName(t *testing.T) {
 		h.ServeHTTP(rec, httptest.NewRequest(method, path, nil))
 		return rec
 	}
-	urls := regexp.MustCompile(`url\((/assets/fonts/[^)]+)\)`).FindAllStringSubmatch(browse(t, h, "/"), -1)
+	urls := regexp.MustCompile(`url\((/assets/fonts/[^)]+)\)`).FindAllStringSubmatch(browse(t, h, "/actions"), -1)
 	if len(urls) != 12 {
 		t.Fatalf("base.css names %d font files, want 12 (6 faces, latin and latin-ext)", len(urls))
 	}

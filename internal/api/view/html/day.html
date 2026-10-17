@@ -1,7 +1,8 @@
 {{/* The day (docs/plans/095-the-leaf-and-its-margin.md): a calendar leaf heads it, with the weekday, the mood, the
      previous and next day and Go to a day. Then the sheet and its margin. The sheet is what the owner writes and
      reads: the journal, Capture as its next part, the editor and the pages written this day. The margin is what the
-     day asks of the owner: the readings (with Add a reading) and the places. On a narrow screen
+     day asks of the owner: the readings (with Add a reading) and the places. The day of today is Home
+     (docs/plans/129-the-ux-pass.md): its margin ends with the last entries. On a narrow screen
      the margin comes after the sheet. */}}
 {{define "day"}}{{template "head" .}}
 {{$d := .Props}}{{$p := .DayParts}}{{$today := eq .Title .Today}}
@@ -55,6 +56,10 @@
 {{- with $p.Places}}
 <section class="group" aria-label="Where"><h2>Where</h2>
 <ul class="plain">{{range .}}<li><a href="{{titleHref .}}">{{.}}</a></li>{{end}}</ul></section>{{end}}
+{{- with $d.recent}}
+<section class="group" aria-label="Last entries">
+<div class="panel-head"><h2>Last entries</h2><a href="/days">Every day</a></div>
+<ul class="plain">{{range .}}<li>{{template "dayentry" (dict "v" $ "e" .)}}</li>{{end}}</ul></section>{{end}}
 </div>
 </div>
 {{template "foot" .}}{{end}}

@@ -11,12 +11,12 @@ import (
 	"lifelog/internal/api/apitest"
 )
 
-// TestHomeAndADayLinkOnlyToServedPaths: every link of Home and of a day page opens a page, and no link sends a query
+// TestHomeAndADayLinkOnlyToServedPaths: every link of Home (the page of today) and of a day page opens a page, and no link sends a query
 // that its page does not read (docs/plans/117-one-browse-view.md, step 0).
 func TestHomeAndADayLinkOnlyToServedPaths(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/2031-05-03")), "capture"), map[string]string{"text": "Synthetic entry"}))
-	for _, page := range []string{"/", "/days/2031-05-03", "/days/" + fixedToday} {
+	for _, page := range []string{"/actions", "/days/2031-05-03", "/days/" + fixedToday} {
 		body := browse(t, h, page)
 		for _, m := range regexp.MustCompile(`href="(/[^"]*)"`).FindAllStringSubmatch(body, -1) {
 			href, _, _ := strings.Cut(strings.ReplaceAll(m[1], "&amp;", "&"), "#") // a browser sends no fragment

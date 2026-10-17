@@ -42,11 +42,7 @@ func (h *server) page(r *http.Request) (*siren.Entity, error) {
 	// In a browser, the page of a live metric is its metric's one page, which carries the page's text, edges and
 	// actions (docs/plans/100-one-page-a-metric.md); a receipt of feedback goes with it. JSON keeps the page.
 	if wantsHTML(r) && p.Type == "metric" && p.DeletedAt == "" {
-		to := siren.MetricHref(p.Title)
-		if t := r.URL.Query().Get("feedback"); t != "" && h.feedback.move(t, r.URL.Path, to) {
-			to += "?" + url.Values{"feedback": {t}}.Encode()
-		}
-		return nil, redirect{to}
+		return nil, h.redirectKeepingFeedback(r, siren.MetricHref(p.Title))
 	}
 	return e, nil
 }

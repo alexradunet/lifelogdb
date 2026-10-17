@@ -88,7 +88,8 @@ The `POST` routes of `/people`, `/places` and `/files` (`create-person`, `create
 
 ### root
 
-`GET /`: today at a glance. Links: `today`, `days`, `browse`, `categories` (`/browse`), `people`
+`GET /`: the entry point of the API. A browser's `GET /` (it asks for HTML, and not Siren) is answered `303` to `/days/{today}`,
+the page of today, and a receipt of feedback goes with it. Links: `today`, `days`, `browse`, `categories` (`/browse`), `people`
 (`/browse?kind=person`), `places` (`/browse?kind=place`), `media` (`/browse?kind=media`), `files`
 (`/browse?kind=document`), `metrics`, `ghosts` (`/browse?ghosts=1&kind=page`), `actions`, `calendar` (this month),
 `week` (this week), `year` (this year). Actions: `capture` (for today), `search`,
@@ -260,6 +261,12 @@ answers with this entity and a `result` of the sync shape; its field `mood` has 
 | `on_this_day[].mood` | list | the values of the day's current Mood readings; absent when none |
 | `on_this_day[].picture` | string | the address of the picture of the day page's cover, as `recent[].picture` of the root; absent when it has none |
 | `today` | day | this machine's local day |
+| `recent[]` | list | on the day of today only: the 5 newest live day pages up to today, as `recent[]` of [the root](#root); absent on any other day, and when there is none |
+| `recent[].day` | day | the day |
+| `recent[].page_id` | integer | the day page's id |
+| `recent[].first_line` | string | the first line of its body, as `recent[]` of the root; absent when the body has no such line |
+| `recent[].mood` | list | the values of the day's current Mood readings; absent when none |
+| `recent[].picture` | string | the address of the picture of the day page's cover, as `recent[].picture` of the root; absent when it has none |
 | `cover` | object | the day page's cover, as `cover` of [a page](#page-person-place-file); absent when it has none |
 | `cover.id` | integer | |
 | `cover.title` | string | |

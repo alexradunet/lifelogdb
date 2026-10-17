@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"html"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -53,8 +54,8 @@ func TestAnErrorIsAnAlertInWords(t *testing.T) {
 // dialog in the flow, which Escape (closedby) and its own Close close with no script.
 func TestAWriteEndsInAToast(t *testing.T) {
 	_, h, _ := apitest.FreshOn(t, "cli", fixedToday)
-	rec := submit(h, "/days/"+fixedToday+"/capture", url.Values{"text": {"Walked with [[Dana Example]]."}, "back": {"/"}}, "")
-	if rec.Code != http.StatusSeeOther || !strings.HasPrefix(rec.Header().Get("Location"), "/?feedback=") {
+	rec := submit(h, "/days/"+fixedToday+"/capture", url.Values{"text": {"Walked with [[Dana Example]]."}, "back": {"/days/" + fixedToday}}, "")
+	if rec.Code != http.StatusSeeOther || !strings.HasPrefix(rec.Header().Get("Location"), "/days/"+fixedToday+"?feedback=") {
 		t.Fatalf("capture: %d %q", rec.Code, rec.Header().Get("Location"))
 	}
 	body := browse(t, h, rec.Header().Get("Location"))
@@ -70,9 +71,9 @@ func TestAWriteEndsInAToast(t *testing.T) {
 // TestAnOwnerActionCarriesTheOwnerMark: the catalog's owner flag, not a template, puts the mark on the button.
 func TestAnOwnerActionCarriesTheOwnerMark(t *testing.T) {
 	_, h, _ := apitest.Fresh(t, "cli")
-	body := browse(t, h, "/")
+	body := browse(t, h, "/actions")
 	if want := `<summary class="button">Take a snapshot <span class="owner">owner</span></summary>`; !strings.Contains(body, want) {
-		t.Errorf("Home lacks %s", want)
+		t.Errorf("/actions lacks %s", want)
 	}
 	if want := `<summary class="button">New metric <span class="owner">owner</span></summary>`; !strings.Contains(browse(t, h, "/metrics"), want) {
 		t.Errorf("/metrics lacks %s", want)
@@ -123,26 +124,40 @@ func TestNoPageShowsARawInstant(t *testing.T) {
 }
 
 // TestEveryActionFormSendsToItsAction: a form drawn from an action sends to the action's href with the action's
-// method (a box, a row's one-button form, the capture), and every POST form of Home sends to an action of Home.
+// method (a box, a row's one-button form, the capture), and every POST form of the page of today sends to an action of
+// that page. Every action that the JSON root offers has its form on /actions, the page of every action, so a browser
+// reaches what Home used to offer (docs/plans/129-the-ux-pass.md, part 10).
 func TestEveryActionFormSendsToItsAction(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	root := apitest.Must(t)(c.Get(t.Context(), "/"))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "walk"}))
-	body := browse(t, h, "/")
+	day := apitest.Must(t)(c.Get(t.Context(), "/days/"+fixedToday))
+	body := browse(t, h, "/days/"+fixedToday)
 	posts := map[string]bool{}
-	for _, a := range apitest.Must(t)(c.Get(t.Context(), "/")).Actions {
+	for _, a := range day.Actions {
 		if a.Method == "POST" {
 			posts[a.Href] = true
 		}
 	}
-	for _, name := range []string{"capture", "create-page", "find", "snapshot"} {
-		if a := apitest.Action(t, root, name); !strings.Contains(body, `<form method="`+a.Method+`" action="`+a.Href+`"`) {
-			t.Errorf("Home has no form of %s: %+v", name, a)
+	for _, name := range []string{"capture", "open-day"} {
+		if a := apitest.Action(t, day, name); !strings.Contains(body, `<form method="`+a.Method+`" action="`+a.Href+`"`) {
+			t.Errorf("the page of today has no form of %s: %+v", name, a)
 		}
 	}
 	for _, m := range regexp.MustCompile(`<form method="POST" action="([^"]*)"`).FindAllStringSubmatch(body, -1) {
 		if !posts[m[1]] {
-			t.Errorf("a form of Home posts to %s, which is no action of Home", m[1])
+			t.Errorf("a form of the page of today posts to %s, which is no action of that page", m[1])
+		}
+	}
+
+	every, catalog := browse(t, h, "/actions"), apitest.Must(t)(c.Get(t.Context(), "/actions"))
+	for _, offered := range root.Actions {
+		a := apitest.Action(t, catalog, offered.Name)
+		if strings.Contains(a.Href, "{") { // the day's action (capture): its form is the page of the day, checked above
+			continue
+		}
+		if !strings.Contains(every, `<form method="`+a.Method+`" action="`+html.EscapeString(a.Href)+`"`) {
+			t.Errorf("/actions has no form of %s, which the root offers: %+v", offered.Name, a)
 		}
 	}
 }

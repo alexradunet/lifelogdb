@@ -85,11 +85,21 @@ func TestSnapshotIsTheOwnersFromAnySurface(t *testing.T) {
 	req.Header.Set("Accept", "text/html")
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
+	if to := rec.Header().Get("Location"); rec.Code != 303 || !strings.HasPrefix(to, "/days/"+today+"?feedback=") { // Home is the page of today
+		t.Fatalf("Home with the receipt: %d %q, want 303 to the page of today", rec.Code, to)
+	}
+	req = httptest.NewRequest("GET", rec.Header().Get("Location"), nil)
+	req.Header.Set("Accept", "text/html")
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
 	if !strings.Contains(rec.Body.String(), "life-"+today) || !strings.Contains(rec.Body.String(), "Took a snapshot: <code>") || !strings.Contains(rec.Body.String(), "<dt>restore check</dt>") {
 		t.Fatalf("feedback lacks the snapshot: %.500s", rec.Body.String())
 	}
-	if body := browse(t, h, "/"); !strings.Contains(body, `action="/snapshots"`) {
-		t.Fatalf("the home page lacks the snapshot form")
+	// The rail's Snapshot link opens this form, now that Home is the page of today.
+	body := browse(t, h, "/actions?new=snapshot")
+	if !strings.Contains(body, `<details class="action" open><summary class="button">Take a snapshot <span class="owner">owner</span></summary>`) ||
+		!strings.Contains(body, `action="/snapshots"`) {
+		t.Fatalf("the rail's Snapshot link does not open the snapshot form:\n%.800s", body)
 	}
 }
 

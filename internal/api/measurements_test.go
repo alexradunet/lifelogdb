@@ -449,8 +449,8 @@ func TestTheMetricsPageMakesAMetricACategoryAndAReading(t *testing.T) {
 			t.Errorf("the form %s lacks %s:\n%s", tc.form, tc.unit, form)
 		}
 	}
-	if home := browse(t, h, "/"); strings.Contains(home, `method="POST" action="/metrics"`) {
-		t.Error("Home still draws the New metric form")
+	if home := browse(t, h, "/days/"+fixedToday); strings.Contains(home, `method="POST" action="/metrics"`) {
+		t.Error("Home, the page of today, draws the New metric form")
 	}
 	// The link fills the category of each form; the focus is in the first form only.
 	if p := browse(t, h, "/metrics?new=register-metric&category=Sport"); !strings.Contains(p, `id="new-metric" open>`) ||

@@ -56,16 +56,24 @@ func (h *server) onThisDay(ctx context.Context, day string) ([]recentDay, error)
 	return h.withMoods(ctx, entries)
 }
 
-// The root is today at a glance (docs/plans/091-the-browser-for-daily-use.md): the newest day pages, and every
-// action that starts something.
-func (h *server) root(r *http.Request) (*siren.Entity, error) {
-	ctx := r.Context()
-	today := h.s.Today()
+// recentDaysUpTo are the newest day pages up to today, the newest first, with their moods.
+func (h *server) recentDaysUpTo(ctx context.Context, today string) ([]recentDay, error) {
 	entries, err := h.s.DayEntries(ctx, "0000-01-01", today, true, recentDays)
 	if err != nil {
 		return nil, err
 	}
-	recent, err := h.withMoods(ctx, entries)
+	return h.withMoods(ctx, entries)
+}
+
+// The root is the entry point of the API: the newest day pages, and every action that starts something. A browser's
+// Home is the page of today instead (docs/plans/129-the-ux-pass.md, part 10), which carries the same lists.
+func (h *server) root(r *http.Request) (*siren.Entity, error) {
+	ctx := r.Context()
+	today := h.s.Today()
+	if wantsHTML(r) {
+		return nil, h.redirectKeepingFeedback(r, siren.DayHref(today))
+	}
+	recent, err := h.recentDaysUpTo(ctx, today)
 	if err != nil {
 		return nil, err
 	}
@@ -158,6 +166,8 @@ type dayView struct {
 	// OnThisDay are the day pages of earlier years on this month and day.
 	OnThisDay []recentDay `json:"on_this_day"`
 	Today     string      `json:"today"`
+	// Recent are the newest day pages, on the day of today only: Home is the page of today.
+	Recent []recentDay `json:"recent,omitempty"`
 	// Cover is the cover of the day page, which the journal draws above it; absent when it has none.
 	Cover *core.Cover `json:"cover,omitempty"`
 	// Pictures are the other pictures of the day page, as on a page.
@@ -191,13 +201,19 @@ func (h *server) dayEntity(ctx context.Context, day string) (*siren.Entity, erro
 	if mood == nil {
 		mood = []float64{}
 	}
+	var recent []recentDay
+	if day == today {
+		if recent, err = h.recentDaysUpTo(ctx, today); err != nil {
+			return nil, err
+		}
+	}
 	record, err := h.recordAction(ctx, "", day)
 	if err != nil {
 		return nil, err
 	}
 	t, _ := text.ParseDay(day)
 	e := &siren.Entity{
-		Class: []string{"day"}, Title: day, Properties: dayView{Day: *d, Mood: mood, Trends: trends, OnThisDay: onThisDay, Today: today},
+		Class: []string{"day"}, Title: day, Properties: dayView{Day: *d, Mood: mood, Trends: trends, OnThisDay: onThisDay, Today: today, Recent: recent},
 		Links:   []siren.Link{link("self", siren.DayHref(day), day)},
 		Actions: []siren.Action{action("capture", map[string]string{"day": day}, nil), record, action("open-day", nil, nil)},
 	}
