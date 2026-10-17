@@ -1,6 +1,7 @@
 package view
 
 import (
+	"runtime"
 	"strings"
 	"testing"
 
@@ -87,6 +88,25 @@ func TestMarkdownPostParseNFC(t *testing.T) {
 	}
 	if got := string(markdown("\u1fef![[Cafe\u0301.jpg]]\u1fef")); !strings.Contains(got, `class="wikilink embed"`) || strings.Contains(got, "<code>") {
 		t.Errorf("post-parse: %s", got)
+	}
+}
+
+// TestALineOfManyTagsIsDrawnWithWorkInProportionToIt: the renderer reads a tag at each '#' of a line. A read to the
+// end of the line at each '#' makes the work grow with the square of the number of tags. The bytes that the drawing
+// allocates count the work. Each tag is checked as a title (text.ValidTitle) and becomes a link: that is about 20 KB.
+// The bound is 64 KB for each tag.
+func TestALineOfManyTagsIsDrawnWithWorkInProportionToIt(t *testing.T) {
+	const n = 10000
+	line := strings.Repeat("#a ", n)
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	got := string(markdown(line))
+	runtime.ReadMemStats(&after)
+	if links := strings.Count(got, `<a href="/pages?title=a" class="wikilink">#a</a>`); links != n {
+		t.Fatalf("a line of %d tags draws %d links to a tag", n, links)
+	}
+	if allocated, limit := after.TotalAlloc-before.TotalAlloc, uint64(n*64<<10); allocated > limit {
+		t.Errorf("a line of %d tags allocated %d bytes (%d for each tag), want at most %d", n, allocated, allocated/n, limit)
 	}
 }
 

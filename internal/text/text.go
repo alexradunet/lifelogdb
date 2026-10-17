@@ -200,8 +200,14 @@ func TagAt(prev rune, s string) (tag string, n int) {
 	if !strings.HasPrefix(s, "#") {
 		return "", 0
 	}
-	line, _, _ := strings.Cut(s, "\n")
-	for _, t := range scanTags(append([]rune{prev}, []rune(line)...)) {
+	// A tag has only tag characters and '-', so the scan reads s only to the first other character after the '#'. A
+	// renderer calls TagAt at each '#' of a line: a scan to the end of the line makes the work grow with the square
+	// of the number of tags.
+	end := len(s)
+	if i := strings.IndexFunc(s[1:], func(r rune) bool { return !tagChar(r) && r != '-' }); i >= 0 {
+		end = 1 + i
+	}
+	for _, t := range scanTags(append([]rune{prev}, []rune(s[:end])...)) {
 		if t.pos == 1 && namesPage(t.tag) {
 			return t.tag, 1 + len(t.tag)
 		}
