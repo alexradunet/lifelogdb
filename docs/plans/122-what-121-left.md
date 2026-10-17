@@ -8,7 +8,8 @@
 
 - **Date / baseline:** 2026-10-17, `d407bb7` (the branch `plan-121-deep-modules`, at the close of plan 121).
 - **Priority:** P2. **Effort:** M. **Risk:** LOW: each step is one defect or one gap, reproducer first.
-- **Status:** IN PROGRESS on the branch `plan-121-deep-modules`.
+- **Status:** DONE (2026-10-17) on the branch `plan-121-deep-modules`. The owner decides the merge, the build and
+  the install.
 - **Resolves:** no issue, no RFC. The owner's words (2026-10-17): "keep going, report when all phases are done",
   after the close of [plan 121](121-deep-modules-for-agents.md). This plan takes the rows of 121's "left for later"
   table that need no word of the owner and no change of the contract.
@@ -46,15 +47,16 @@ are a choice and not a defect, stay in [121's closing record](121-deep-modules-f
 
 The commits after `2b333f8`, the commit of this page, in the order of the steps. The message of each commit gives its
 checks. The reviews of F1, F2 and F2b found the items that F4 does as their review fixes (the rows "from the review
-of" below). The review of F3 is open when this record is written, so the status stays IN PROGRESS until it ends.
+of" below). The reviews of F3 and F4 found no blocking defect; their small fixes are `887a299` (F3) and `9455dfd`
+(F4), in the table below.
 
 | step | commits | what changed |
 |---|---|---|
 | F1 | `6eae5b4` | Init and Copy hold their reservation open until the cleanup. The cleanup compares the open file with the path, so `os.SameFile` is exact also on ext4, which gives the inode number of a removed file to the next new file. `TestAReservationHoldsItsFileUntilTheCleanup` failed at the old code on tmpfs and on ext4 |
 | F2 | `0c56d30`, `0309543`, `47b436f` | `text.Candidates` does work in proportion to the run: a save of a body of 16 MiB in one run takes 0.18 to 0.21 s of CPU, not 2.44 to 2.68 s. The limit tests save a body at the real limits again. A test counts the bytes that the handler reads at the limit of 20 MiB: the limit and one byte |
 | F2b | `bf12992` | `text.TagAt` reads only the tag at its start: the page of a body of 40000 tags in one line draws in about 1.5 s, not 48 to 65 s |
-| F3 | `eba272f` | an error of `SAVEPOINT`, or of the `RELEASE` after a target that succeeded, fails the save. At the old code, a full disk at a `SAVEPOINT` made the save go on outside a transaction, and the page lost its links |
-| F4 | `f280b07`..`a6df908` | the table below |
+| F3 | `eba272f`, `887a299` | an error of `SAVEPOINT`, or of the `RELEASE` after a target that succeeded, fails the save. At the old code, a full disk at a `SAVEPOINT` made the save go on outside a transaction, and the page lost its links. `887a299` makes the comment of `savepoint` exact: it is the one place where a method of `Tx` catches an error of its SQL and goes on. The review asked also for an assertion that the error of the reproducer has `SQLITE_FULL` in its chain; it is not added, because `refused` keeps only the error of the rollback in the chain, and the place of the fault cannot be seen without a hook in production code |
+| F4 | `f280b07` to `a6df908`, and `9455dfd` | the table below. `9455dfd` (the review of F4): the cleanup removes `-wal` and `-shm` while it still holds the reservation open, so on Windows no other process can remove or rename the file between the check and the removes; README says that the server closes an HTTP/1.1 connection after a body over the limit (HTTP/2 resets the stream) |
 
 F4, item by item:
 
@@ -95,17 +97,27 @@ A commit is not amended. These messages say what is not true:
 | `85eb461` | `TestTombstonePages` (`tombstones_test.go`) holds "Deleted 1 page." and "Deleted 2 pages." | the test is `TestDeletePagesAtOnce`; in `browse_test.go` it is `TestBrowseGhostsAreOldestFirstAndOfferDelete` |
 | `a6df908` | the document suite reads the links of the plans | the document suite reads the current folders of `docs/` and the indexes and templates of `issues/` and `rfcs/`; no suite checks the text of the pages of `docs/plans/` |
 
-The checks at the end, at `a6df908`, on Linux only (Debian 13, Linux 6.12.111+deb13-amd64, x86_64), with go1.27.2,
-`modernc.org/sqlite` v1.60.1, `staticcheck` 2026.2.2 (v0.8.2), `deadcode` v0.52.0 and `govulncheck` v1.9.0:
+The checks at the end, at `9455dfd`, on Linux only (Debian 13, Linux 6.12.111+deb13-amd64, x86_64), with go1.27.2,
+`modernc.org/sqlite` v1.60.1, `staticcheck` 2026.2.2 (v0.8.2), `deadcode` v0.52.0 and `govulncheck` v1.9.0. F4 ran the
+same checks at `a6df908`; these are of the last commit of code:
 
-- `go generate ./... && go vet ./... && go test -count=1 ./...`: pass, in 35 s.
-- `go test -count=1 -shuffle=on ./...`: pass. With `-v`, 509 top-level tests run and 3 of them skip
+- `go generate ./... && go vet ./... && go test -count=1 ./...`: pass.
+- `go test -count=1 -shuffle=on -v ./...`: pass. 509 top-level tests run, and 3 of them skip
   (`TestFilesystemWriteFailureChild` and `TestCollationHelper`, which a subprocess test starts, and
-  `TestMermaidRender`, which needs `LIFELOG_MERMAID=1`). The seeds: `cmd/lifelog` 1792223630441851020,
-  `internal/api` 1792223630622055517, `internal/db` 1792223631547907897, `tests` 1792223635621777411. A replay of the
-  first three passes.
+  `TestMermaidRender`, which needs `LIFELOG_MERMAID=1`). The seeds: `cmd/lifelog` 1792225688595860798,
+  `internal/api` 1792225688648095474, `internal/core` 1792225689479476097, `internal/db` 1792225689834609485,
+  `tests` 1792225693801563652.
 - `staticcheck ./...`: nothing. `deadcode -test ./...` with `GOOS=linux` and with `GOOS=windows`: nothing.
-- `gofmt -l` on the 204 `.go` files in git: nothing.
+  `GOOS=windows go vet ./...`: pass.
+- `gofmt -l` on every `.go` file in git: nothing.
 - `govulncheck ./...`, in its text mode: "No vulnerabilities found."
 - `LIFELOG_MERMAID=1 go test ./tests -run TestMermaidRender`: not run (no `mmdc` on this machine), and it does not
   read `docs/plans/`.
+
+For the owner, besides [121's list](121-deep-modules-for-agents.md#the-closing-record-2026-10-17):
+
+- A Windows run of the tests before a release (F1, F4: the held reservation, the removes of the WAL and its index).
+- [Save a body](../cookbook/save-a-body.md) says that a target that fails for any reason is rolled back alone and the
+  save carries on. It does not say that a fault of `SAVEPOINT`, `ROLLBACK TO` or `RELEASE` fails the save, so that
+  rule is now in the Go code only, and a writer in another language can make the same mistake. A change of the
+  contract goes through [the process](../process.md).

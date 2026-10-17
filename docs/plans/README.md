@@ -8,7 +8,7 @@ Earlier closed plans live in git history (`git log -- docs/plans`). The next pla
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| [122](122-what-121-left.md) | What 121 left: four defects and gaps, and the small tidy ones | P2 | M | owner word 2026-10-17; `d407bb7` | IN PROGRESS |
+| [122](122-what-121-left.md) | What 121 left: four defects and gaps, and the small tidy ones | P2 | M | owner word 2026-10-17; `d407bb7` | DONE |
 | [121](121-deep-modules-for-agents.md) | Deep modules for agents: one place a concept, fewer lines, every part testable | P2 | XL | owner request 2026-10-16; `fd4d82a` | DONE |
 | [120](120-a-tidy-board.md) | A tidy board: every metric card has the same four lines, and the repeated buttons are quiet | P3 | S | owner word 2026-10-16; `4e0219e` | DONE |
 | [119](119-the-finish.md) | The finish: the cards, the pick bar, the letter index, the folders and the margin lists look finished | P3 | M | owner request 2026-10-16; `c8c7baa` | DONE |
