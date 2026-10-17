@@ -45,6 +45,20 @@ func objects(p map[string]any, key string) []map[string]any {
 // readings are checked against the scenario by hand.
 func TestTheWeekLooksBackOverSevenDays(t *testing.T) {
 	c, h := weekScenario(t)
+	// A mean has the decimals of the readings of its metric in the two weeks, and one at least. Besides weight (one
+	// decimal), week 41 and week 40 hold a whole-number metric and a two-decimal metric. The means, by hand:
+	//   steps: 8000, 8001, 8001 are 24002 over 3, 8000.666..., so 8000.7. The week before: 7000, a whole number.
+	//   coffee: 0.25, 0.5, 0.5 are 1.25 over 3, 0.41666..., so 0.42. The week before: 0.75.
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	for _, r := range []struct{ metric, unit string }{{"steps", "steps"}, {"coffee", "cup"}} {
+		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": r.metric, "unit": r.unit}))
+	}
+	for _, r := range []struct{ metric, day, value string }{
+		{"steps", "2026-10-06", "8000"}, {"steps", "2026-10-07", "8001"}, {"steps", "2026-10-08", "8001"}, {"steps", "2026-10-01", "7000"},
+		{"coffee", "2026-10-06", "0.25"}, {"coffee", "2026-10-07", "0.5"}, {"coffee", "2026-10-08", "0.5"}, {"coffee", "2026-10-01", "0.75"},
+	} {
+		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "record"), map[string]string{"metric": r.metric, "day": r.day, "value": r.value}))
+	}
 	w := apitest.Must(t)(c.Get(t.Context(), "/weeks/2026-W41"))
 	p := props(w)
 	if w.Class[0] != "week" || w.Title != "Week 41 of 2026" || p["week"] != "2026-W41" || p["from"] != "2026-10-05" || p["through"] != "2026-10-11" || p["today"] != weekToday {
@@ -71,9 +85,22 @@ func TestTheWeekLooksBackOverSevenDays(t *testing.T) {
 	}
 
 	metrics := objects(p, "metrics")
-	if len(metrics) != 1 || metrics[0]["metric"] != "weight" || metrics[0]["unit"] != "kg" || said(metrics[0]["readings"]) != "2" ||
-		said(metrics[0]["mean"]) != "71.4" || said(metrics[0]["previous_mean"]) != "71.9" {
-		t.Errorf("metrics %v: weight, 2 readings, mean (71.6+71.2)/2 = 71.4, the week before 71.9", metrics)
+	if len(metrics) != 3 {
+		t.Fatalf("metrics %v: want weight, steps and coffee", metrics)
+	}
+	byName := map[string]map[string]any{}
+	for _, m := range metrics {
+		byName[m["metric"].(string)] = m
+	}
+	for _, want := range []struct{ metric, unit, readings, mean, previous string }{
+		{"weight", "kg", "2", "71.4", "71.9"}, // (71.6+71.2)/2 = 71.4, the week before 71.9
+		{"steps", "steps", "3", "8000.7", "7000"},
+		{"coffee", "cup", "3", "0.42", "0.75"},
+	} {
+		m := byName[want.metric]
+		if m["unit"] != want.unit || said(m["readings"]) != want.readings || said(m["mean"]) != want.mean || said(m["previous_mean"]) != want.previous {
+			t.Errorf("%s: %v, want unit %s, %s readings, mean %s, the week before %s", want.metric, m, want.unit, want.readings, want.mean, want.previous)
+		}
 	}
 	for rel, want := range map[string]string{"self": "/weeks/2026-W41", "prev": "/weeks/2026-W40", "next": "/weeks/2026-W42", "month": "/months/2026-10", "year": "/years/2026"} {
 		if got := apitest.Href(w, rel); got != want {
@@ -87,11 +114,19 @@ func TestTheWeekLooksBackOverSevenDays(t *testing.T) {
 	// The week before has one reading and no week before it: no previous mean.
 	p40 := props(apitest.Must(t)(c.Get(t.Context(), "/weeks/2026-W40")))
 	m40 := objects(p40, "metrics")
-	if len(m40) != 1 || said(m40[0]["readings"]) != "1" || said(m40[0]["mean"]) != "71.9" {
+	if len(m40) != 3 {
 		t.Fatalf("week 40 metrics %v", m40)
 	}
-	if _, has := m40[0]["previous_mean"]; has {
-		t.Error("week 40 has a previous mean, and week 39 has no reading")
+	for _, m := range m40 {
+		if said(m["readings"]) != "1" {
+			t.Errorf("week 40 metric %v: want 1 reading", m)
+		}
+		if _, has := m["previous_mean"]; has {
+			t.Errorf("week 40 metric %v has a previous mean, and week 39 has no reading", m)
+		}
+		if m["metric"] == "weight" && said(m["mean"]) != "71.9" {
+			t.Errorf("week 40 weight %v, want 71.9", m)
+		}
 	}
 	// A week with nothing in it is still a week.
 	p42 := props(apitest.Must(t)(c.Get(t.Context(), "/weeks/2026-W42")))
@@ -392,11 +427,10 @@ func TestTheMeanOfAWeekDoesNotOverflow(t *testing.T) {
 }
 
 // TestTheMeanOfAWeekDividesTheSumOnce: the mean of a week is the sum of its readings divided by their count, and then
-// rounded to two places. A division of each reading before the sum adds a rounding error for each reading, and a
-// mean on the boundary of two places then goes to the wrong side. Week 41 has 24 readings with the sum 81 and the
-// mean 3.375 exactly: 3.38. Week 40 has three readings of 2.675, a float64 a little less than 2.675: 2.67. Week 42
-// has one reading of -1.7105991318142733e171: its mean is that value times 100, rounded, divided by 100, which is
-// -1.710599131814273e171 (the last digit changes).
+// rounded to the decimals of the readings, one at least. A division of each reading before the sum adds a rounding
+// error for each reading, and a mean on the boundary of two places then goes to the wrong side. Week 41 has 24
+// whole-number readings with the sum 78 and the mean 3.25 exactly: 3.3. Week 40 has three readings of 2.5: 2.5.
+// Week 42 has one reading of -1.7105991318142733e171, a whole number: its mean is that value, unchanged.
 func TestTheMeanOfAWeekDividesTheSumOnce(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", weekToday)
 	root := apitest.Must(t)(c.Get(t.Context(), "/"))
@@ -405,8 +439,8 @@ func TestTheMeanOfAWeekDividesTheSumOnce(t *testing.T) {
 		day, value string
 		times      int
 	}{
-		{"2026-09-28", "2.675", 3},
-		{"2026-10-05", "3", 4}, {"2026-10-06", "1", 4}, {"2026-10-07", "5", 4}, {"2026-10-08", "8", 3},
+		{"2026-09-28", "2.5", 3},
+		{"2026-10-05", "3", 4}, {"2026-10-06", "1", 4}, {"2026-10-07", "5", 4}, {"2026-10-08", "7", 3},
 		{"2026-10-09", "1", 3}, {"2026-10-10", "3", 3}, {"2026-10-11", "3", 3},
 		{"2026-10-12", "-1.7105991318142733e171", 1},
 	} {
@@ -415,9 +449,9 @@ func TestTheMeanOfAWeekDividesTheSumOnce(t *testing.T) {
 		}
 	}
 	for _, tc := range []struct{ week, readings, mean, previous string }{
-		{"2026-W40", "3", "2.67", "<nil>"},
-		{"2026-W41", "24", "3.38", "2.67"},
-		{"2026-W42", "1", "-1.710599131814273e+171", "3.38"},
+		{"2026-W40", "3", "2.5", "<nil>"},
+		{"2026-W41", "24", "3.3", "2.5"},
+		{"2026-W42", "1", "-1.7105991318142733e+171", "3.3"},
 	} {
 		w, err := c.Get(t.Context(), "/weeks/"+tc.week)
 		if err != nil {

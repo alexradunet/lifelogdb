@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"lifelog/internal/api/siren"
@@ -56,22 +57,50 @@ type weekMetric struct {
 	PreviousMean *float64 `json:"previous_mean,omitempty"`
 }
 
-// round2 rounds x to two places. For a value near the largest float64, x*100 overflows: such a value is a whole
-// number, so round2 returns it as it is.
-func round2(x float64) float64 {
-	if math.IsInf(x*100, 0) {
-		return x
+// maxDecimals caps the decimals of a mean. A reading can hold more (a computed value as 5432.123456), but a mean
+// with more than six places shows noise, not a measurement.
+const maxDecimals = 6
+
+// decimals is how many decimals a reading has in its shortest decimal text ("60.25" has 2, "58" has 0). It reads
+// strconv.FormatFloat, not the value minus its floor: the float64 of 60.29 is 60.2899999999999991..., and only its
+// shortest text is the number that the owner wrote. A reading with more than maxDecimals has maxDecimals.
+func decimals(x float64) int {
+	s := strconv.FormatFloat(x, 'f', -1, 64)
+	i := strings.IndexByte(s, '.')
+	if i < 0 {
+		return 0
 	}
-	return math.Round(x*100) / 100
+	return min(len(s)-i-1, maxDecimals)
 }
 
-// mean is the mean of xs, rounded to two places; xs holds one value at least. The sum is divided by the count one
-// time: a division of each value adds a rounding error for each value, and a mean on the boundary of two places (81
-// over 24 is 3.375) then goes to the wrong side. A reading can be as large as a float64 holds
+// meanDecimals is the decimals that a mean shows: the most that a reading of the two weeks has, and one at least.
+func meanDecimals(weeks ...[]float64) int {
+	n := 1
+	for _, xs := range weeks {
+		for _, x := range xs {
+			n = max(n, decimals(x))
+		}
+	}
+	return n
+}
+
+// roundTo rounds x to places decimals. For a value near the largest float64, x times the factor overflows: such a
+// value is a whole number, so roundTo returns it as it is.
+func roundTo(x float64, places int) float64 {
+	f := math.Pow10(places)
+	if math.IsInf(x*f, 0) {
+		return x
+	}
+	return math.Round(x*f) / f
+}
+
+// mean is the mean of xs, rounded to places decimals; xs holds one value at least. The sum is divided by the count
+// one time: a division of each value adds a rounding error for each value, and a mean on the boundary of two places
+// (78 over 24 is 3.25) then goes to the wrong side. A reading can be as large as a float64 holds
 // (measurements_value_finite), so the sum can overflow: only then is each value divided by the count before the sum.
 // Near the largest float64 the rounding of that sum can overflow still, and a mean is never less than the least
 // value or more than the greatest: that mean is held between the two.
-func mean(xs []float64) float64 {
+func mean(xs []float64, places int) float64 {
 	n := float64(len(xs))
 	sum, lo, hi := 0.0, xs[0], xs[0]
 	for _, x := range xs {
@@ -86,7 +115,7 @@ func mean(xs []float64) float64 {
 		}
 		m = min(max(m, lo), hi)
 	}
-	return round2(m)
+	return roundTo(m, places)
 }
 
 func (h *server) week(r *http.Request) (*siren.Entity, error) {
@@ -146,9 +175,10 @@ func (h *server) week(r *http.Request) (*siren.Entity, error) {
 		if len(inWeek) == 0 {
 			continue
 		}
-		wm := weekMetric{Metric: m.Name, Unit: m.Unit, Readings: len(inWeek), Mean: mean(inWeek)}
+		places := meanDecimals(inWeek, weekBefore)
+		wm := weekMetric{Metric: m.Name, Unit: m.Unit, Readings: len(inWeek), Mean: mean(inWeek, places)}
 		if len(weekBefore) > 0 {
-			pm := mean(weekBefore)
+			pm := mean(weekBefore, places)
 			wm.PreviousMean = &pm
 		}
 		metrics = append(metrics, wm)

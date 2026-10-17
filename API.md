@@ -329,7 +329,7 @@ year; absent in the year 0000, which has no page), `index`. Embedded: a `day` li
 | `metrics[].metric` | string | the metric's name |
 | `metrics[].unit` | string | its unit; empty for a metric with none |
 | `metrics[].readings` | integer | how many such readings the week holds |
-| `metrics[].mean` | number | their mean, rounded to 2 decimals |
+| `metrics[].mean` | number | their mean, rounded to the most decimals that a reading of this metric has in the week and the week before, at least 1 and at most 6 |
 | `metrics[].previous_mean` | number | the mean of the week before, in the same way; absent when that week had no reading |
 
 ### year
