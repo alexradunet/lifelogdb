@@ -74,8 +74,8 @@ func TestAddFileKeepsAPhotoAndItsPicture(t *testing.T) {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
 		m, err := jpeg.Decode(rec.Body)
-		if rec.Code != 200 || rec.Header().Get("Content-Type") != "image/jpeg" || err != nil || m.Bounds().Dx() != 1600 || m.Bounds().Dy() != 1200 {
-			t.Errorf("GET %s: %d %s %v", path, rec.Code, rec.Header().Get("Content-Type"), err)
+		if rec.Code != 200 || rec.Header().Get("Content-Type") != "image/jpeg" || err != nil || m.Bounds().Dx() != 1280 || m.Bounds().Dy() != 960 {
+			t.Errorf("GET %s: %d %s %v, want 1280x960 (docs/plans/128-smaller-pictures.md)", path, rec.Code, rec.Header().Get("Content-Type"), err)
 		}
 	}
 	for path, want := range map[string]string{pic: "private, max-age=31536000, immutable", "/previews?title=2026-10-04+LAKE.jpg": ""} {

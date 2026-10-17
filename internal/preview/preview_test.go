@@ -57,8 +57,10 @@ func decode(t *testing.T, b []byte) image.Image {
 func reddish(c color.Color) bool { r, _, b, _ := c.RGBA(); return r > 2*b }
 func bluish(c color.Color) bool  { r, _, b, _ := c.RGBA(); return b > 2*r }
 
+// Make scales the long edge to 1280 px, the writer's choice inside the contract's 1600 (Check): it is sharp at twice
+// the size the browser draws a picture in a page, and about half the bytes of 1600.
 func TestMakeScalesTheLongEdge(t *testing.T) {
-	for _, sz := range [][4]int{{4000, 3000, 1600, 1200}, {3000, 4000, 1200, 1600}, {800, 600, 800, 600}, {5000, 7, 1600, 2}} {
+	for _, sz := range [][4]int{{4000, 3000, 1280, 960}, {3000, 4000, 960, 1280}, {1600, 1200, 1280, 960}, {800, 600, 800, 600}, {5000, 7, 1280, 2}} {
 		b, err := Make(encodeJPEG(t, halves(sz[0], sz[1])))
 		if err != nil {
 			t.Fatal(err)
@@ -173,12 +175,30 @@ func TestMakeRefuses(t *testing.T) {
 	}
 }
 
+// Make encodes at quality 80 first. A JPEG names its quality only in its tables: by the IJG scaling of the standard
+// luminance table (Annex K of ITU T.81, first value 16), quality 80 makes the first value (16*40+50)/100 = 6, and
+// quality 85 makes 5. The picture is small, so the first quality fits in 1 MB.
+func TestMakeEncodesAtQuality80(t *testing.T) {
+	b, err := Make(encodeJPEG(t, halves(64, 48)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := bytes.Index(b, []byte{0xFF, 0xDB}) // DQT: the marker, a length of 2 bytes, Pq/Tq, then 64 values
+	if i < 0 || len(b) < i+6 {
+		t.Fatal("no quantization table")
+	}
+	if pqtq, first := b[i+4], b[i+5]; pqtq != 0 || first != 6 {
+		t.Errorf("the luminance table starts Pq/Tq %d, value %d; want 0 and 6 (quality 80)", pqtq, first)
+	}
+}
+
 // Check holds the long edge only. The magic bytes and the size of a preview are files_preview's: the core suite
 // witnesses that the schema refuses a preview over 1 MB.
 func TestCheck(t *testing.T) {
-	small := encodeJPEG(t, halves(16, 16))
-	if err := Check(small); err != nil {
-		t.Errorf("a small JPEG: %v", err)
+	for name, b := range map[string][]byte{"a small JPEG": encodeJPEG(t, halves(16, 16)), "1600 px, the contract's edge": encodeJPEG(t, halves(1600, 10))} {
+		if err := Check(b); err != nil { // a writer may send any edge up to the contract's, whatever Make chooses
+			t.Errorf("%s: %v", name, err)
+		}
 	}
 	var p bytes.Buffer
 	png.Encode(&p, halves(4, 4))

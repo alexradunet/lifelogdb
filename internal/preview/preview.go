@@ -1,6 +1,7 @@
 // Package preview makes the picture a file page keeps (docs/decisions/D09-binary-files.md, the files table of
 // docs/schema/schema.sql): a JPEG, upright, its long edge at most 1600 px, at most 1 MB, with no metadata. It reads
-// what the standard library reads: JPEG, PNG and GIF.
+// what the standard library reads: JPEG, PNG and GIF. Inside those limits it makes a smaller picture (makeEdge,
+// qualities): the contract holds every writer, and this writer chooses fewer bytes.
 package preview
 
 import (
@@ -17,8 +18,11 @@ import (
 )
 
 const (
-	maxEdge  = 1600    // the long edge of a preview, in pixels
+	maxEdge  = 1600    // the longest edge of a preview, in pixels: the contract's (D9), which Check holds
 	maxBytes = 1 << 20 // the size of a preview (files_preview)
+	// makeEdge is the long edge Make scales to: twice the size the browser draws a picture in a page, so it is sharp
+	// on a dense screen, at about half the bytes of maxEdge (docs/plans/128-smaller-pictures.md).
+	makeEdge = 1280
 	// The most memory a decoded picture may need, in bytes: 4 bytes a pixel is 120 MP (a 108 MP phone photo). A 16-bit
 	// PNG needs 8 bytes a pixel, so its limit is 60 MP. A crafted file cannot exhaust memory.
 	maxDecoded = 480e6
@@ -32,7 +36,11 @@ func Readable(mime string) bool {
 	return mime == "image/jpeg" || mime == "image/png" || mime == "image/gif"
 }
 
-// Make decodes a picture, scales its long edge to at most maxEdge, turns it upright by a JPEG's EXIF orientation, and
+// qualities are the JPEG qualities Make tries, in order, until the picture fits in maxBytes: 80 first, which on a
+// screen looks as 85 does at about three quarters of its bytes.
+var qualities = []int{80, 70, 60, 50, 40, 35}
+
+// Make decodes a picture, scales its long edge to at most makeEdge, turns it upright by a JPEG's EXIF orientation, and
 // encodes it as a JPEG of at most maxBytes. The result carries no metadata: a photo's GPS stays out (D21).
 func Make(src []byte) ([]byte, error) {
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(src))
@@ -55,11 +63,11 @@ func Make(src []byte) ([]byte, error) {
 		return nil, errFormat
 	}
 	dw, dh := w, h
-	if long := max(w, h); long > maxEdge {
-		dw, dh = max(1, (w*maxEdge+long/2)/long), max(1, (h*maxEdge+long/2)/long)
+	if long := max(w, h); long > makeEdge {
+		dw, dh = max(1, (w*makeEdge+long/2)/long), max(1, (h*makeEdge+long/2)/long)
 	}
 	out := orient(scale(m, dw, dh), photo.Read(src).Orientation)
-	for _, q := range []int{85, 75, 65, 55, 45, 35} {
+	for _, q := range qualities {
 		var b bytes.Buffer
 		if err := jpeg.Encode(&b, out, &jpeg.Options{Quality: q}); err != nil {
 			return nil, err
