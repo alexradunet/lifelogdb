@@ -22,7 +22,7 @@ func TestNavMarksThePageTheBrowserIsOn(t *testing.T) {
 		"/metrics/TSH":     "/metrics",
 		"/pages/7":         "",
 		"/search":          "",
-		"/import/prepared": "",
+		"/styleguide":      "",
 		"/measurements/1":  "",
 	} {
 		var got string
