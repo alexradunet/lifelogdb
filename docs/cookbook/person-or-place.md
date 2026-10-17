@@ -35,4 +35,4 @@ cannot go wrong quietly: a page that is already typed, or none at all, makes the
 row, so the `people` insert fails on its key; a day page makes the `UPDATE` itself fail
 (`entities_day_page_plain`). Both executed; roll the transaction back. A place's promotion has no second
 statement, so its writer checks that the `UPDATE` changed one row. Without its `entity_type = 'page'` condition, the
-`UPDATE` of a person, a place, a metric or a file fails itself (`entities_promote_from_page`, executed).
+`UPDATE` of a person, a place, a metric or a file to another type fails itself (`entities_promote_from_page`, executed).

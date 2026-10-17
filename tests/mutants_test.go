@@ -197,6 +197,7 @@ var mutants = []struct {
 	{"identity", "the tombstone does not bump updated_at", "a tombstone bumps updated_at to the tombstone instant, and the trigger does not re-fire itself", notrigger("entities_touch")},
 	{"named", "a day page may be promoted", "a day page cannot become a person or a place: the cascade meets entities_day_page_plain", nocheck("entities_day_page_plain")},
 	{"named", "a place may be promoted", "a place is never promoted to a person, a metric, a file or a plain page (entities_promote_from_page)", notrigger("entities_promote_from_page")},
+	{"named", "entities_promote_from_page refuses an update that keeps the type", "a full-row update of a place that keeps its type passes", edit("  WHEN NEW.entity_type IS NOT OLD.entity_type AND OLD.entity_type IS NOT 'page'\n", "  WHEN OLD.entity_type IS NOT 'page'\n")},
 	{"named", "ghost_pages lists the page of a person", "ghost_pages lists the real ghost and none of the person or place pages, and not a page a rename points at", edit("WHERE e.entity_type = 'page' AND e.body = ''", "WHERE e.body = ''")},
 	{"named", "a wikilink cannot land on a person", "the day page links to the person's own id, and no new page was made", edit("('wikilink', 'page,person,place,metric,file', 'page,person,place,metric,file',", "('wikilink', 'page,person,place,metric,file', 'page',")},
 	{"named", "a page may claim an unknown type", "entities.entity_type is checked without foreign keys", nocheck("entities_entity_type")},

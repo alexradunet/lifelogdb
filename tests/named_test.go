@@ -72,6 +72,10 @@ func named(s *S) {
 	}
 	s.K("a place is never promoted to a person, a metric, a file or a plain page (entities_promote_from_page)",
 		refusedAll && c.str("SELECT entity_type FROM entities WHERE id=?", pl) == "place")
+	// a tool that writes back every column of the row it read names entity_type with its own value
+	fullRow := c.tryx(`UPDATE entities SET entity_type=entity_type, preferred_name_key=preferred_name_key, day=day, created_at=created_at,
+	    updated_at=updated_at, revision=revision, deleted_at=deleted_at, source=source, import_key=import_key, body='By the lake' WHERE id=?`, pl)
+	s.K("a full-row update of a place that keeps its type passes", fullRow == "OK" && c.str("SELECT entity_type || '|' || body FROM entities WHERE id=?", pl) == "place|By the lake", fullRow)
 	dp := c.dayPage("2026-09-29", "x")
 	s.K("a day page cannot become a person or a place: the cascade meets entities_day_page_plain",
 		strings.Contains(c.tryx("UPDATE entities SET entity_type='person' WHERE id=?", dp), "entities_day_page_plain") &&
@@ -131,6 +135,20 @@ func named(s *S) {
 		gp := c.page("Lakeside")
 		s.K("a plain page becomes a place by the UPDATE alone, its links kept", c.tryx(strings.Replace(promo[1], "'person'", "'place'", 1), P{"ghost_id": gp}) == "OK" &&
 			c.str("SELECT entity_type FROM entities WHERE id=?", gp) == "place")
+		// the promotion UPDATE without its entity_type = 'page' condition, from each typed entity to another type
+		bare := strings.Replace(promo[1], " AND entity_type = 'page'", "", 1)
+		toPlace := strings.Replace(bare, "'person'", "'place'", 1)
+		var notRefused []string
+		for _, x := range []struct {
+			update, from string
+		}{{bare, "place"}, {bare, "metric"}, {bare, "file"}, {toPlace, "person"}} {
+			id := c.named(x.from, "")
+			if r := c.tryx(x.update, P{"ghost_id": id}); !strings.Contains(r, "only a plain page is promoted") || c.str("SELECT entity_type FROM entities WHERE id=?", id) != x.from {
+				notRefused = append(notRefused, x.from+": "+r)
+			}
+		}
+		s.K("without its entity_type = 'page' condition, the promotion UPDATE of a person, a place, a metric or a file to another type fails itself (entities_promote_from_page)",
+			bare != promo[1] && len(notRefused) == 0, notRefused)
 		// promote a ghost an earlier day page made
 		c = s.fresh()
 		mid := c.capture("Today I met [[Ana Example]]", "2026-09-30")
