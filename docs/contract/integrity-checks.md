@@ -1,6 +1,6 @@
 # Integrity checks
 
-Four check groups inspect the file structure, stored relationships and derived search index. They read only the file, need no other
+Four groups of SQL checks inspect the file structure, stored relationships, the rules that only a trigger holds, and the derived search index. A fifth check, which SQL cannot make, compares the name keys. They read only the file, need no other
 copy, and each catches what the others cannot. Run them before and after an import ([imports](imports.md)) or a
 migration ([D13](../decisions/D13-migrations-and-freeze.md)), on every snapshot ([take a snapshot](../cookbook/take-a-snapshot.md)), and after any writer crashed. Every claim below was executed on the **live**
 file, not on a copy.
@@ -22,6 +22,16 @@ SELECT n.id FROM entity_names n JOIN entities e ON e.id=n.entity_id
    AND (e.entity_type<>'page' OR e.preferred_name_key IS NOT n.name_key OR e.day IS NOT n.name_key OR n.title IS NOT n.name_key))
  OR (e.is_journal
    AND (n.name_key IS NOT e.preferred_name_key OR n.title IS NOT e.preferred_name_key)) ORDER BY n.id; -- no rows
+SELECT l.id FROM links l LEFT JOIN entities f ON f.id=l.from_id LEFT JOIN entities t ON t.id=l.to_id
+ WHERE (l.kind='at' AND NOT coalesce(f.is_journal,0))
+ OR (l.kind='part-of' AND coalesce(t.is_journal,0))
+ OR (l.kind='part-of' AND coalesce(f.is_journal,0)) ORDER BY l.id; -- no rows
+SELECT m.id FROM measurements m JOIN metrics x ON x.id=m.metric_id
+ WHERE m.value IS NOT NULL AND x.unit GLOB '[0-9]*-[0-9]*' AND x.unit NOT GLOB '*[^0-9-]*' AND x.unit NOT GLOB '*-*-*'
+ AND CAST(substr(x.unit, 1, instr(x.unit, '-') - 1) AS REAL) < CAST(substr(x.unit, instr(x.unit, '-') + 1) AS REAL)
+ AND (m.value <> round(m.value)
+   OR m.value NOT BETWEEN CAST(substr(x.unit, 1, instr(x.unit, '-') - 1) AS REAL) AND CAST(substr(x.unit, instr(x.unit, '-') + 1) AS REAL))
+ ORDER BY m.id; -- no rows
 INSERT INTO entities_fts(entities_fts, rank) VALUES ('integrity-check', 1);   -- no error
 ```
 
@@ -31,13 +41,31 @@ INSERT INTO entities_fts(entities_fts, rank) VALUES ('integrity-check', 1);   --
 - **`foreign_key_check` — what the first cannot see.** A writer that forgot `PRAGMA foreign_keys=ON`
   ([connection setup](connections.md) — per connection; `STRICT` does not enforce foreign keys) stored a reading of a metric that
   does not exist, and `integrity_check` said `ok`.
-- **Semantic integrity — domain ownership and typed graph endpoints.** The orphan query finds a missing owned preferred name or a missing typed extension. A fully named plain page/place is complete without another prose row; a person, metric or file needs its extension. Missing name ownership also violates a foreign key; missing typed extensions do not. The typed-edge query independently checks both endpoints against
-  the closed kind registry, even when a damaged file bypassed the insertion and type-change guards (executed).
+- **Semantic integrity — domain ownership and typed graph endpoints.** The orphan query finds a missing owned preferred name or a missing typed extension. A fully named plain page/place is complete without another prose row; a person, metric or file needs its extension. Missing name ownership also violates a foreign key; missing typed extensions do not. The typed-edge query checks both endpoints against
+  the closed kind registry (`link_kinds`) only, even when a damaged file bypassed the insertion and type-change guards (executed).
+  It does not check the three rules that the registry cannot say, which the next group holds.
   The remaining semantic queries detect a correction of a missing reading or of another metric,
   correction rows unreachable from an original reading (cycles or dangling chains), and invalid journal-name ownership
   (executed with deliberately bypassed guards restored before checking). The rooted-chain query visits each
   reachable reading once; it does not follow every row's full ancestry.
   Journal diagnostics report `entity_names.id`; other diagnostics report the inspected table's `id`.
+- **Rules that only a trigger holds.** Two triggers hold rules that no CHECK can say, and each has a query that
+  finds a row written while the trigger was missing. The link query covers the three rules of `links_endpoint_types`
+  that `link_kinds` cannot say, since a day page and a plain page are both `page`: an `at` link starts at a day page,
+  a `part-of` link never ends at a day page, and a `part-of` link never starts at one ([D16](../decisions/D16-places.md),
+  [D26](../decisions/D26-metric-categories.md)). The scale query covers `measurements_scale_range`: a reading of a scale
+  (a unit `lo-hi`) is a whole number inside the range. A retraction has no value and is never held. Both queries
+  read every row, so they find a row written while the trigger was missing. Both report the `id` of the inspected
+  table (executed with the trigger dropped before the bad row was written).
+- **The name keys — what SQL cannot compute.** `entity_names.name_key` is the key of its `title`, computed by the
+  algorithm of [titles and wikilinks](titles-and-wikilinks.md). SQLite has no such function, so a writer compares
+  every stored key with the key it computes from the title, and lists the ids of the `entity_names` rows that differ.
+  This check is not SQL, and the page holds no query for it. The file refuses a change of a key (`entity_names_fixed`),
+  so a drift is reported and not repaired: a repair is a change of the schema, which follows the
+  [process](../process.md). A writer whose Unicode tables moved finds here the titles whose key moved.
+- **One view.** A writer runs all the checks above, the name keys included, in one read transaction. Another writer
+  that commits meanwhile changes none of their results. The FTS5 check below needs a writer connection and runs after
+  them.
 - **The FTS5 integrity-check — the index against its content.** `entities_fts` is an external-content
   index over `entity_search_content`; if the two drift apart, searches return wrong rows and `integrity_check` still
   says `ok`. The FTS5 command with rank `1` compares the index with `entity_search_content` and fails. The index is
@@ -52,7 +80,7 @@ INSERT INTO entities_fts(entities_fts, rank) VALUES ('integrity-check', 1);   --
 
 These are data checks, not a proof that a file has every required trigger, index or metadata row. A replacement
 writer must also recognize the supported schema and apply the [connection contract](connections.md). The SQL
-cannot independently recompute the pinned Unicode name-key algorithm, extract CommonMark wikilinks, decode
+cannot recompute the pinned Unicode name-key algorithm (the name-key check above is the writer's), extract CommonMark wikilinks, decode
 pictures, reconstruct overwritten history or establish that a plausible value is what the owner recorded.
 Those boundaries need the [writer contract](../guides/building-a-writer.md), retained source evidence where
 available, and [snapshots](../decisions/D25-snapshots.md); a clean result never certifies completeness or truth.

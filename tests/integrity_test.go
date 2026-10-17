@@ -29,9 +29,9 @@ func newIntegrityFile(s *S, pageRows int) *integrityFile {
 		}
 	}
 	s.K("contract/integrity-checks has four groups: structure, foreign keys, domain/typed-edge semantics, FTS5",
-		len(sts) == 8 && strings.HasPrefix(strings.ToLower(sts[0]), "pragma integrity_check") && strings.HasPrefix(strings.ToLower(sts[1]), "pragma foreign_key_check") &&
+		len(sts) == 10 && strings.HasPrefix(strings.ToLower(sts[0]), "pragma integrity_check") && strings.HasPrefix(strings.ToLower(sts[1]), "pragma foreign_key_check") &&
 			strings.HasPrefix(strings.ToUpper(sts[2]), "SELECT ID FROM ENTITIES") && strings.HasPrefix(sts[3], "SELECT l.id FROM links") && strings.HasPrefix(sts[4], "SELECT m.id FROM measurements") && strings.Contains(sts[len(sts)-1], "'integrity-check', 1"), sts)
-	if len(sts) != 8 {
+	if len(sts) != 10 {
 		return nil
 	}
 	base := filepath.Join(s.dir, "base.db")
@@ -372,4 +372,37 @@ func semanticIntegrity(s *S, checks []string) {
 		}
 		s.K(witness, c.integrityOK() && c.tab(checks[6]) == c.tab("SELECT id FROM entity_names WHERE name_key=?", key))
 	}
+
+	// The rules that only a trigger holds (links_endpoint_types, measurements_scale_range) have a query each.
+	c = s.fresh()
+	start, day, category, place := c.page("Start"), c.dayPage("2026-10-02", ""), c.page("Category"), c.thing("place")
+	link := func(id int64, from, to int64, kind string) {
+		c.must("INSERT INTO links(id,from_id,to_id,kind,created_at,source) VALUES(?,?,?,?,"+NOW+",'ui')", id, from, to, kind)
+	}
+	link(500, day, place, "at")
+	link(501, start, category, "part-of")
+	s.K("the link-rule query accepts an at link from a day page and a part-of link between plain pages", c.tab(checks[7]) == "")
+	bypass(c, "links_endpoint_types", func() {
+		link(510, start, place, "at")
+		link(511, start, day, "part-of")
+		link(512, day, category, "part-of")
+	})
+	s.K("the link-rule query detects an at link from a plain page and a part-of link to or from a day page, while the registry query sees nothing",
+		c.integrityOK() && c.tab(checks[7]) == "510; 511; 512" && c.tab(checks[3]) == "")
+
+	c = s.fresh()
+	scale := c.n("SELECT entity_id FROM entity_names WHERE name_key = 'mood'")
+	weight := c.metric("Weight", "kg")
+	reading := func(id, metric int64, value any) {
+		c.must("INSERT INTO measurements(id,metric_id,day,value,supersedes_id,source,created_at) VALUES(?,?,'2026-10-01',?,?,'ui',"+NOW+")", id, metric, value, nil)
+	}
+	reading(600, scale, 5)
+	reading(601, weight, 99.5)
+	s.K("the scale query accepts a whole number inside the range, and any value of a metric that is not a scale", c.tab(checks[8]) == "")
+	bypass(c, "measurements_scale_range", func() {
+		reading(610, scale, 6)
+		reading(611, scale, 2.5)
+		reading(612, scale, 0)
+	})
+	s.K("the scale query detects a value above the range, a fraction and a value below it", c.integrityOK() && c.tab(checks[8]) == "610; 611; 612")
 }

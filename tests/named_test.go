@@ -42,7 +42,7 @@ func named(s *S) {
 		stop("missing literal integrity block")
 	}
 	integrityStatements := statements(integrityBlocks[0])
-	if len(integrityStatements) != 8 {
+	if len(integrityStatements) != 10 {
 		stop("unexpected integrity statement count")
 	}
 	s.K("a named person missing its extension is found by the semantic query", c.n("SELECT count(*) FROM people WHERE id=?", half) == 0 && slices.Contains(c.col(integrityStatements[2]), ids(half)))

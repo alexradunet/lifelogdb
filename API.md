@@ -508,6 +508,9 @@ page title, made when missing): one write makes the metric and files it. A refus
 | `invalid_measurement_corrections` | list | ids |
 | `invalid_measurement_chains` | list | ids |
 | `invalid_journal_names` | list | ids |
+| `invalid_link_day_rules` | list | ids of `links` |
+| `invalid_scale_values` | list | ids of `measurements` |
+| `name_key_mismatches` | list | ids of `entity_names` |
 | `full_text_index_ok` | boolean | |
 | `full_text_error` | string | absent when the index is fine |
 
@@ -543,6 +546,9 @@ A timeout is 504 `timeout`, and any other failure is 500 `internal`.
 | `restore_check.invalid_measurement_corrections` | list | |
 | `restore_check.invalid_measurement_chains` | list | |
 | `restore_check.invalid_journal_names` | list | |
+| `restore_check.invalid_link_day_rules` | list | |
+| `restore_check.invalid_scale_values` | list | |
+| `restore_check.name_key_mismatches` | list | |
 | `restore_check.full_text_index_ok` | boolean | |
 | `restore_check.full_text_error` | string | |
 
