@@ -57,7 +57,8 @@ func TestMountPanicsWhenTheCatalogAndTheHandlersDisagree(t *testing.T) {
 
 // TestMountReadsTheWriterAndRefusesAnAgentAnOwnerAction: an action that writes reads its writer, and an Owner action
 // refuses an agent or an import. A read that is not the owner's alone reads no writer: a source header that is not
-// valid does not refuse it. The handler gets the row of its own action.
+// valid does not refuse it. A write passes its writer on without a check: the CHECKs of the rows refuse a name that
+// is not valid (TestMalformedWriterIsRefusedByTheSchemaOrTheOwnerCheck). The handler gets the row of its own action.
 func TestMountReadsTheWriterAndRefusesAnAgentAnOwnerAction(t *testing.T) {
 	ran, src, given := "", "", ""
 	handlers := map[string]actionFunc{}
@@ -89,7 +90,7 @@ func TestMountReadsTheWriterAndRefusesAnAgentAnOwnerAction(t *testing.T) {
 		{"GET", "/check", "Bad Source!", http.StatusUnprocessableEntity, ""},
 		{"POST", "/things/7/write", "", http.StatusOK, "api"},
 		{"POST", "/things/7/write", "agent:x", http.StatusOK, "agent:x"},
-		{"POST", "/things/7/write", "Bad Source!", http.StatusUnprocessableEntity, ""},
+		{"POST", "/things/7/write", "Bad Source!", http.StatusOK, "Bad Source!"}, // the schema refuses it when a row carries it
 		{"POST", "/keep", "cli", http.StatusOK, "cli"},
 		{"POST", "/keep", "agent:x", http.StatusForbidden, ""},
 		{"POST", "/keep", "import:x", http.StatusForbidden, ""},

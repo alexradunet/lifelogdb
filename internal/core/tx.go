@@ -16,14 +16,12 @@ type Tx struct {
 	tx     *sql.Tx
 	ctx    context.Context
 	today  func() string // the local day of the store's clock (Store.Today)
-	source string        // the writer (lifelog_meta.source), checked by Do
+	source string        // the writer (lifelog_meta.source), held by the CHECKs of the rows that carry it
 }
 
-// Do runs fn in one write transaction, committed when fn returns nil.
+// Do runs fn in one write transaction, committed when fn returns nil. It does not check source: a row that carries it
+// meets entities_source, measurements_source or links_source, and refused gives the 422.
 func (s *Store) Do(ctx context.Context, source string, fn func(*Tx) error) error {
-	if err := CheckSource(source); err != nil {
-		return err
-	}
 	return refused(s.DB.Write(ctx, func(tx *sql.Tx) error { return fn(&Tx{tx: tx, ctx: ctx, today: s.Today, source: source}) }))
 }
 

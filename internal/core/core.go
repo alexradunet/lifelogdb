@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"regexp"
 	"time"
 
 	"lifelog/internal/db"
@@ -120,16 +119,6 @@ func refused(err error) error {
 		return &Error{Status: 422, Msg: se.Error()}
 	}
 	return err
-}
-
-var sourceRE = regexp.MustCompile(`^[a-z0-9_:.-]{1,64}$`)
-
-// CheckSource validates a writer name (lifelog_meta.source).
-func CheckSource(s string) error {
-	if !sourceRE.MatchString(s) {
-		return Invalid("source %q: 1-64 characters of a-z 0-9 _ : . -", s)
-	}
-	return nil
 }
 
 // The checks of a surface's input that every write and read shares, so one refusal has one message.
