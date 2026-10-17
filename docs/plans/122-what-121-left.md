@@ -18,7 +18,8 @@
 ```mermaid
 flowchart LR
   F1["F1: db init on a disk folder"] --> F2["F2: the work of Candidates; a save at the real limits"]
-  F2 --> F3["F3: a fault of SAVEPOINT or RELEASE fails the save"]
+  F2 --> F2b["F2b: TagAt reads only the tag at its start"]
+  F2b --> F3["F3: a fault of SAVEPOINT or RELEASE fails the save"]
   F3 --> F4["F4: agentic-init's branches; the small tidy rows; the record"]
 ```
 
