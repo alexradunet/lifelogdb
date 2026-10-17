@@ -46,6 +46,21 @@ func TestTheCommandTableDecidesTheFlagsTheUsageAndTheInterrupt(t *testing.T) {
 	}
 }
 
+// TestTheUsageOfFileSaysTheDayAsTheCatalogDoes: the usage of file says the file's own day as add-file of the catalog
+// and the skill lifelog-keep-photos say it: the day the owner gives (--day), else a photo's EXIF date. "Filed" is the
+// word of D26 for a page in a category, never for a day.
+func TestTheUsageOfFileSaysTheDayAsTheCatalogDoes(t *testing.T) {
+	var usage string
+	for _, c := range commands {
+		if c.name == "file" {
+			usage = c.usage
+		}
+	}
+	if !strings.Contains(usage, "EXIF") || strings.Contains(usage, "filed under") {
+		t.Errorf("the usage of file does not say the day as the catalog does:\n%s", usage)
+	}
+}
+
 // TestAnUnknownCommandIsAnErrorAndNotTheUsage: a command that is not in the table is the error "unknown command", not a
 // usageError, so main writes "lifelog: unknown command ..." and exits 1. A line with no command, the line help and a
 // line that parse refuses are a usageError, so main writes the refusal (if there is one) and the usage, and exits 2.

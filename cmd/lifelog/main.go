@@ -183,9 +183,10 @@ var commands = []command{
 		usage: "  lifelog file PATH [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day D] [--category C]\n" +
 			"                  [--dry-run]         keep a file (docs/cookbook/keep-a-file.md): the original is hashed,\n" +
 			"                                      never stored; its text from FILE; a picture made from a JPEG, PNG or\n" +
-			"                                      GIF, else from PICTURE; the title defaults to the file's name. A photo\n" +
-			"                                      is filed under its own day; --category files its page in the category\n" +
-			"                                      page C in the same write; --dry-run writes nothing",
+			"                                      GIF, else from PICTURE; the title defaults to the file's name. Its own\n" +
+			"                                      day is D, else a photo's EXIF date; a photo with neither has no day,\n" +
+			"                                      another file the day it is kept; --category files its page in the\n" +
+			"                                      category page C in the same write; --dry-run writes nothing",
 		run: func(ctx context.Context, e env, args []string) error { return keepFile(ctx, e, args) }},
 	{name: "snapshot", flags: []string{"--to"},
 		usage: "  lifelog snapshot [--to DIR]         a dated copy of life.db (life-YYYY-MM-DD.db, beside it or in DIR),\n" +
