@@ -174,3 +174,21 @@ func TestTheChartSaysItsEndsInWords(t *testing.T) {
 		t.Errorf("the chart shows an ISO day:\n%s", got)
 	}
 }
+
+// TestALineOfReadingsNearTheLimitHasItsPlaces: a reading can be as large as a float64 holds
+// (measurements_value_finite), so the difference of the greatest and the least value of a line can overflow. The
+// readings 1e308 and -1e308 stand at the top and at the bottom of each line, as two readings of 80 and 70 do: no
+// place is NaN. The top of a small line is 4 and its bottom 24; the top of a chart is 14 and its bottom 164.
+func TestALineOfReadingsNearTheLimitHasItsPlaces(t *testing.T) {
+	c := clock{today: "2026-10-16"}
+	rs := []any{map[string]any{"day": "2026-10-12", "value": 1e308}, map[string]any{"day": "2026-10-14", "value": -1e308}}
+	for _, tc := range []struct{ name, got, want string }{
+		{"a trend", string(trendLine(c, "x", "m", "2026-10-16", rs)), `<polyline points="81.5,4.0 98.8,24.0 "/>`},
+		{"a spark", string(sparkLine(c, "x", "m", rs)), `<polyline points="4.0,4.0 116.0,24.0 "/>`},
+		{"a chart", string(chart("2026-10-12", "2026-10-16", rs)), `<polyline points="48.0,14.0 337.0,164.0 "/>`},
+	} {
+		if !strings.Contains(tc.got, tc.want) || strings.Contains(tc.got, "NaN") {
+			t.Errorf("%s: want %s and no NaN:\n%s", tc.name, tc.want, tc.got)
+		}
+	}
+}

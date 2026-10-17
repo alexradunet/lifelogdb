@@ -60,6 +60,17 @@ func plot(rs []lineReading, x func(lineReading) float64, y func(v, lo, hi float6
 	return sb.String(), at, lo, hi
 }
 
+// share is where v stands between lo and hi: 0 at lo, 1 at hi, and 0 when hi is lo. A reading can be as large as a
+// float64 holds (measurements_value_finite), so hi-lo can overflow (1e308 and -1e308): share takes the difference of
+// the halves, which cannot. A half of a value that is not near zero is exact, so the share is the same as with the
+// whole values.
+func share(v, lo, hi float64) float64 {
+	if hi == lo {
+		return 0
+	}
+	return (v/2 - lo/2) / (hi/2 - lo/2)
+}
+
 // readingWords say a reading of a line for a screen reader: its value, its unit and its day against today on the
 // clock c, "70 kg 2 days ago · Wed 14 Oct".
 func readingWords(c clock, r lineReading, unit string) string {
@@ -77,7 +88,7 @@ func smallLine(rs []lineReading, label string, x func(lineReading) float64) temp
 		if hi == lo {
 			return 14
 		}
-		return 24 - (v-lo)/(hi-lo)*20
+		return 24 - share(v, lo, hi)*20
 	})
 	last := rs[len(rs)-1]
 	return template.HTML(fmt.Sprintf(`<svg class="trend" viewBox="0 0 120 28" role="img" aria-label="%s"><polyline points="%s"/><circle cx="%.1f" cy="%.1f" r="2.5"/></svg>`,
@@ -159,11 +170,7 @@ func chart(from, to string, readings any) template.HTML {
 		return left + across*(w-left-pad)
 	}
 	points, y, lo, hi := plot(rs, x, func(v, lo, hi float64) float64 {
-		span := hi - lo
-		if span == 0 {
-			span = 1
-		}
-		return pad + (1-(v-lo)/span)*(h-2*pad-bottom)
+		return pad + (1-share(v, lo, hi))*(h-2*pad-bottom)
 	})
 	var sb strings.Builder
 	first, last := f.Format(layoutDateYear), t.Format(layoutDateYear) // the ends in words, with the year: a range can span years
