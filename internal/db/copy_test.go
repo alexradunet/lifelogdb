@@ -143,3 +143,39 @@ func TestCopySQLiteFailureRemovesReservation(t *testing.T) {
 		t.Fatalf("failed SQLite copy left its destination: %v", err)
 	}
 }
+
+// TestMarkFailedRenamesAndNeverOverwrites: NAME.db becomes NAME.failed.db; a taken failed name gets a number; a name
+// that is not a .db name, and a file that is not there, are errors that leave the path as it was.
+func TestMarkFailedRenamesAndNeverOverwrites(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, body string) string {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	first := write("life-2031-05-14.db", "first")
+	got, err := MarkFailed(first)
+	if err != nil || filepath.Base(got) != "life-2031-05-14.failed.db" {
+		t.Fatalf("MarkFailed = %q, %v; want life-2031-05-14.failed.db", got, err)
+	}
+	if _, err := os.Lstat(first); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the old name is still there: %v", err)
+	}
+	got, err = MarkFailed(write("life-2031-05-14.db", "second"))
+	if err != nil || filepath.Base(got) != "life-2031-05-14.2.failed.db" {
+		t.Fatalf("MarkFailed with the failed name taken = %q, %v; want life-2031-05-14.2.failed.db", got, err)
+	}
+	if b, err := os.ReadFile(filepath.Join(dir, "life-2031-05-14.failed.db")); err != nil || string(b) != "first" {
+		t.Errorf("the first failed snapshot = %q, %v; want it unchanged", b, err)
+	}
+	other := write("life-2031-05-14.bak", "x")
+	if got, err := MarkFailed(other); err == nil || got != other {
+		t.Errorf("MarkFailed of a name without .db = %q, %v; want the path back and an error", got, err)
+	}
+	gone := filepath.Join(dir, "life-2031-05-15.db")
+	if got, err := MarkFailed(gone); err == nil || got != gone {
+		t.Errorf("MarkFailed of a missing file = %q, %v; want the path back and an error", got, err)
+	}
+}

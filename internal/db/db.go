@@ -412,6 +412,34 @@ func Snapshot(ctx context.Context, from, dir string, now time.Time) (string, err
 	return to, Copy(ctx, from, to)
 }
 
+// MarkFailed renames a snapshot that did not pass its restore check from NAME.db to NAME.failed.db
+// (life-2026-10-02.failed.db, life-2026-10-02T143005.failed.db), and returns the new path. The old name is then free,
+// and no routine that restores or counts life-*.db snapshots by their good names can pick the file (D25). It never
+// overwrites a file: when the failed name is taken, it puts a number before ".failed.db" (NAME.2.failed.db).
+func MarkFailed(path string) (string, error) {
+	base, ok := strings.CutSuffix(path, ".db")
+	if !ok {
+		return path, fmt.Errorf("mark failed snapshot %s: the name does not end in .db", path)
+	}
+	for n := 1; ; n++ {
+		to := base + ".failed.db"
+		if n > 1 {
+			to = fmt.Sprintf("%s.%d.failed.db", base, n)
+		}
+		_, err := os.Lstat(to)
+		if err == nil {
+			continue
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return path, fmt.Errorf("mark failed snapshot %s: %w", path, err)
+		}
+		if err := os.Rename(path, to); err != nil {
+			return path, fmt.Errorf("mark failed snapshot %s: %w", path, err)
+		}
+		return to, nil
+	}
+}
+
 // CheckSnapshotDir is the folder a snapshot may land in, resolved to its physical path: it must exist, and
 // neither it nor what it resolves to may lie inside a git work tree (a snapshot holds health data and private
 // notes, which git history cannot forget). A command checks it before it opens anything.

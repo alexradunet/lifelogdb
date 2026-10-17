@@ -528,7 +528,7 @@ The class of an answer that is not a resource: the `record` of a reading whose `
 `POST /snapshots` (the owner's action `snapshot`, refused to an `agent:*` writer): a dated copy of the database into
 the server's snapshot folder, then its restore check. The same two values are in `result`; `self` is `/`, so a
 browser form is answered home with them as feedback. A refusal (no folder, a folder inside a git work tree, a name in
-use) is 422 `snapshot_refused`. A copy that fails its restore check is kept and answered 500 `restore_check_failed`.
+use) is 422 `snapshot_refused`. A copy that fails its restore check is kept as `life-YYYY-MM-DD.failed.db` and answered 500 `restore_check_failed`.
 A timeout is 504 `timeout`, and any other failure is 500 `internal`.
 
 | property | type | meaning |

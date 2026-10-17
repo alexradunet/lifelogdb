@@ -3,6 +3,7 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -116,8 +117,14 @@ func TestASnapshotThatFailsItsRestoreCheckIsAnError(t *testing.T) {
 	if props["code"] != "restore_check_failed" {
 		t.Errorf("code = %v, want restore_check_failed", props["code"])
 	}
-	if _, err := os.Stat(filepath.Join(dir, "life-2026-10-02.db")); err != nil {
-		t.Errorf("the snapshot is kept although its check failed: %v", err)
+	if _, err := os.Stat(filepath.Join(dir, "life-2026-10-02.failed.db")); err != nil {
+		t.Errorf("the snapshot is kept under the failed name although its check failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "life-2026-10-02.db")); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("a snapshot that failed its check keeps the good name: %v", err)
+	}
+	if msg, _ := props["message"].(string); !strings.Contains(msg, "life-2026-10-02.failed.db") {
+		t.Errorf("the answer = %q, want it to name the failed file", msg)
 	}
 }
 
