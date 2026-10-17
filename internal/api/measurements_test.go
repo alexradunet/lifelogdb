@@ -420,6 +420,17 @@ func TestTheMetricsPageMakesAMetricACategoryAndAReading(t *testing.T) {
 			t.Errorf("/metrics lacks %s", want)
 		}
 	}
+	// A number asks for its unit and a score for its range, lo-hi (docs/plans/113-new-metric-on-metrics.md): the browser
+	// does not send the form without them, so "abc" in the score form does not make a number with the unit "abc".
+	// html/template writes the + of the pattern as &#43;, which the browser reads as +.
+	for _, tc := range []struct{ form, unit string }{
+		{`id="new-number"`, "<label><span>Unit <small>required</small></span>\n" + `<input type="text" name="unit" value="" required placeholder="kg, EUR, bpm"></label>`},
+		{`id="new-score"`, "<label><span>Unit <small>required</small></span>\n" + `<input type="text" name="unit" value="" required pattern="[0-9]&#43;-[0-9]&#43;" placeholder="1-5"></label>`},
+	} {
+		if form := regexp.MustCompile(`(?s)<form ` + regexp.QuoteMeta(tc.form) + `.*?</form>`).FindString(page); !strings.Contains(form, tc.unit) {
+			t.Errorf("the form %s lacks %s:\n%s", tc.form, tc.unit, form)
+		}
+	}
 	if home := browse(t, h, "/"); strings.Contains(home, `method="POST" action="/metrics"`) {
 		t.Error("Home still draws the New metric form")
 	}

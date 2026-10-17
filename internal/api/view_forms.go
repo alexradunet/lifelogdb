@@ -67,7 +67,9 @@ func (v *view) shown(a Action) *shownAction {
 // does not draw, "autofocus" names the field the browser starts in ("" for none), "more" lists optional fields folded
 // under "More fields" (docs/plans/095-the-leaf-and-its-margin.md), "back" is the page the browser returns to after the
 // write (no field of the action: the server reads it, see backOf), "placeholder" ("field=words") and "key"
-// ("field=letter") give a field its prompt and its access key, and any other name fixes a field to a value (hidden).
+// ("field=letter") give a field its prompt and its access key, "required" lists fields that the form requires though
+// the action does not, "pattern" ("field=regexp") is what the browser accepts in a field (a score's range), and any
+// other name fixes a field to a value (hidden).
 type formView struct {
 	*Action
 	Button, Class string
@@ -83,6 +85,7 @@ type formView struct {
 	Hidden        []Field
 	prompts       map[string]string // field name to placeholder words
 	keys          map[string]string // field name to its access key
+	patterns      map[string]string // field name to the pattern of its value
 }
 
 // Or is the form f with a second button, after its own, that sends the same form to the action of g (formaction),
@@ -125,6 +128,7 @@ type fieldView struct {
 	Placeholder string // a quiet prompt in an empty box; it is an attribute, never sent
 	Key         string // the field's access key, which the browser's own modifier reaches
 	List        string // the id of the datalist of a field of page titles with options (Pages): see Fields
+	Pattern     string // the browser sends the form only when the value matches it
 }
 
 // Fields are the fields the form shows (folded false) or folds under "More fields" (folded true). A field of page
@@ -137,7 +141,7 @@ func (f *formView) Fields(folded bool) []fieldView {
 	}
 	out := make([]fieldView, len(list))
 	for i, fd := range list {
-		out[i] = fieldView{fd, fd.Name == f.Focus, f.prompts[fd.Name], f.keys[fd.Name], ""}
+		out[i] = fieldView{fd, fd.Name == f.Focus, f.prompts[fd.Name], f.keys[fd.Name], "", f.patterns[fd.Name]}
 		if fd.Pages && len(fd.Options) > 0 {
 			out[i].List = cmp.Or(f.ID, f.Name) + "-" + fd.Name
 		}
@@ -176,7 +180,7 @@ func formOf(x any, opts ...string) (*formView, error) {
 	if f.Button == "" {
 		f.Button = a.Name
 	}
-	fixed, hide, outside, more := map[string]string{}, map[string]bool{}, map[string]bool{}, map[string]bool{}
+	fixed, hide, outside, more, required := map[string]string{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}
 	focused := false // the options name the field of the focus, or none
 	for i := 0; i < len(opts); i += 2 {
 		k, v := opts[i], opts[i+1]
@@ -199,6 +203,10 @@ func formOf(x any, opts ...string) (*formView, error) {
 			for _, n := range strings.Split(v, ",") {
 				more[n] = true
 			}
+		case k == "required":
+			for _, n := range strings.Split(v, ",") {
+				required[n] = true
+			}
 		case k == "autofocus":
 			f.Focus, focused = v, true
 		case k == "back":
@@ -217,6 +225,13 @@ func formOf(x any, opts ...string) (*formView, error) {
 				}
 				f.keys[name] = letter
 			}
+		case k == "pattern": // "field=regexp"
+			if name, re, ok := strings.Cut(v, "="); ok {
+				if f.patterns == nil {
+					f.patterns = map[string]string{}
+				}
+				f.patterns[name] = re
+			}
 		default:
 			fixed[k] = v
 		}
@@ -224,6 +239,9 @@ func formOf(x any, opts ...string) (*formView, error) {
 	for _, fd := range a.Fields {
 		if v, ok := fixed[fd.Name]; ok {
 			fd.Value, fd.Type = v, "hidden"
+		}
+		if required[fd.Name] {
+			fd.Required = true
 		}
 		switch {
 		case outside[fd.Name]:
