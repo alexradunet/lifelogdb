@@ -285,5 +285,8 @@ func segmented(f Field) bool {
 
 // checkbox reports a flag that the browser draws as one checkbox before the field's title: the options 0 and 1, in
 // a field that the action does not require. A checked box sends 1, and a box that is not checked sends nothing,
-// which the server reads as 0 (flag). A required flag stays a row of radio buttons, as a checkbox cannot send 0.
-func checkbox(f Field) bool { return !f.Required && slices.Equal(f.Options, []string{"0", "1"}) }
+// which the server reads as 0 (flag). A required flag stays a row of radio buttons, as a checkbox cannot send 0. A
+// field of page titles is never one: its options are titles (two categories titled 0 and 1), which a datalist offers.
+func checkbox(f Field) bool {
+	return !f.Pages && !f.Required && slices.Equal(f.Options, []string{"0", "1"})
+}

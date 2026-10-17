@@ -160,9 +160,11 @@ func TestAFlagIsOneCheckbox(t *testing.T) {
 // TestAFieldOfPageTitlesOffersThemInADatalist: a field of page titles with options is a text input with a datalist
 // of the titles, so the reader picks one or types a new one. The datalist's id is the action's name and the field's,
 // or the form's id and the field's. With no options it is a plain input; a field with options that does not take a
-// page's title is still a select.
+// page's title is still a select. Titles that look like a flag (0 and 1) in a field that is not required are still
+// titles: an input with a datalist, not a checkbox.
 func TestAFieldOfPageTitlesOffersThemInADatalist(t *testing.T) {
 	file := withOptions(action("file-pages", nil, nil), "category", []string{"Art", "Gym"})
+	flagLike := withOptions(action("register-metric", nil, nil), "category", []string{"0", "1"})
 	for _, tc := range []struct {
 		name string
 		got  string
@@ -176,6 +178,8 @@ func TestAFieldOfPageTitlesOffersThemInADatalist(t *testing.T) {
 			`<input type="text" name="category" value="" required></label>`},
 		{"not a page's title", markup(drawForm(t, action("promote", map[string]string{"id": "7"}, nil))),
 			`<select name="to"><option>person</option><option>place</option></select>`},
+		{"the titles 0 and 1", markup(drawForm(t, flagLike)),
+			`<input type="text" name="category" value="" list="register-metric-category"><datalist id="register-metric-category"><option value="0"><option value="1"></datalist></label>`},
 	} {
 		if !strings.Contains(tc.got, tc.want) {
 			t.Errorf("%s: the form lacks %s:\n%s", tc.name, tc.want, tc.got)
