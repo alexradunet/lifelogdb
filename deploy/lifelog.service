@@ -1,0 +1,18 @@
+# Reference copy. Compare it with the installed unit before you replace it (deploy/README.md).
+[Unit]
+Description=Lifelog server (life.db)
+After=network.target
+
+[Service]
+Type=simple
+# Replace OWNER and the paths.
+User=OWNER
+ExecStart=/home/OWNER/.local/bin/lifelog --db /home/OWNER/lifelog/life.db serve --snapshots /home/OWNER/snapshots
+Restart=on-failure
+# systemd stops the server with SIGTERM. lifelog then drains the requests that it admitted (up to 10 seconds) and
+# closes life.db. TimeoutStopSec is longer than the drain, so systemd sends SIGKILL only to a server that is stuck.
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
