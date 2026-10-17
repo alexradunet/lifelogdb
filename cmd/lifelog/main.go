@@ -32,13 +32,27 @@ const version = "0.1.0"
 // opts are the flags of a command line and its words. A flag may stand anywhere on the line; a command takes the
 // global flags and its own (command.flags), and refuses any other.
 type opts struct {
-	db, url, source, addr, agent, mood, day, to, title, text, preview, mime string
-	tokenFile, tlsCert, tlsKey, snapshots, category, token                  string // token: $LIFELOG_TOKEN, of --url and serve --public
-	allowOrigins                                                            []string
-	human, dryRun, dbExplicit, addrExplicit, public, force                  bool
-	args                                                                    []string
-	given                                                                   []string           // the flags the line named
-	pub                                                                     *api.PublicOptions // serve --public, read by its prepare
+	db, url, source, agent, mood, day, to, snapshots, token string // token: $LIFELOG_TOKEN, of --url and serve --public
+	human, dbExplicit, force                                bool
+	args                                                    []string // the words of the line that are no flag
+	given                                                   []string // the flags the line named
+	serve                                                   serveFlags
+	file                                                    fileFlags
+}
+
+// serveFlags are the flags that only serve reads.
+type serveFlags struct {
+	addr                       string
+	tokenFile, tlsCert, tlsKey string
+	allowOrigins               []string
+	addrExplicit, public       bool
+	pub                        *api.PublicOptions // set by prepareServe from the flags of --public
+}
+
+// fileFlags are the flags that only file reads. --day, which capture reads too, is opts.day.
+type fileFlags struct {
+	title, text, preview, mime, category string
+	dryRun                               bool
 }
 
 // globalFlags are the flags every command takes.
@@ -70,38 +84,26 @@ type env struct {
 // command is one subcommand. The table commands is the one list of them: the usage, the dispatch, the flags a
 // command takes and whether an interrupt reaches it all read it.
 type command struct {
-	name    string
-	gap     bool                // a blank line before its usage: the start of a group
-	usage   string              // its lines of the usage text; "" for an alias with none of its own
-	flags   []string            // the flags it takes, besides the global ones
-	setup   bool                // a setup command of the machine (init, agentic-init): no client, and the OS's interrupt
-	prepare func(o *opts) error // what it checks and sets before anything opens
-	run     func(ctx context.Context, e env, args []string) error
+	name       string
+	gap        bool                       // a blank line before its usage: the start of a group
+	usage      string                     // its lines of the usage text; "" for an alias with none of its own
+	flags      []string                   // the flags it takes, besides the global ones
+	setup      bool                       // a setup command of the machine (init, agentic-init): no client, and the OS's interrupt
+	ownHandler bool                       // it builds the handler of its listener (serve): it gets the store and no client
+	prepare    func(o opts) (opts, error) // what it checks before anything opens, and the line it runs with: o, changed or not
+	run        func(ctx context.Context, e env, args []string) error
 }
 
 var commands = []command{
 	{name: "init", setup: true, gap: true,
 		usage: "  lifelog init [PATH]                 create a new life.db from docs/schema/schema.sql (default: beside this program)",
-		run: func(ctx context.Context, e env, args []string) error {
-			if len(args) > 1 {
-				return errors.New("init [PATH]")
-			}
-			path, err := dbPath(e, strings.Join(args, ""))
-			if err != nil {
-				return err
-			}
-			if err := db.Init(ctx, path); err != nil {
-				return err
-			}
-			_, err = fmt.Fprintln(e.stdout, "created", path)
-			return err
-		}},
+		run:   initDB},
 	{name: "agentic-init", setup: true, flags: []string{"--force"},
 		usage: "  lifelog agentic-init [--force]      make this program's folder ready for a coding agent: AGENTS.md, CLAUDE.md,\n" +
 			"                                      skills, and the MCP config of Claude Code, Codex, OpenCode and Pi; a file\n" +
 			"                                      with another text is kept unless --force",
 		run: func(_ context.Context, e env, _ []string) error { return agenticInit(e) }},
-	{name: "serve", flags: []string{"--addr", "--snapshots", "--public", "--token-file", "--allow-origin", "--tls-cert", "--tls-key"},
+	{name: "serve", ownHandler: true, flags: []string{"--addr", "--snapshots", "--public", "--token-file", "--allow-origin", "--tls-cert", "--tls-key"},
 		usage: "  lifelog serve [--addr 127.0.0.1:7777] [--snapshots DIR]   the API: Siren JSON, or HTML in a browser; this machine only\n" +
 			"  lifelog serve --public [--addr 0.0.0.0:7777] [--allow-origin O]... [--tls-cert F --tls-key F]\n" +
 			"                                      the API for other devices: every request needs the owner's token\n" +
@@ -109,13 +111,13 @@ var commands = []command{
 		prepare: prepareServe, run: serve},
 	{name: "mcp", flags: []string{"--agent"},
 		usage: "  lifelog mcp [--agent NAME]          the MCP server on stdio (writes as agent:NAME)",
-		prepare: func(o *opts) error {
+		prepare: func(o opts) (opts, error) {
 			name := o.agent
 			if name == "" {
 				name = "mcp"
 			}
 			o.source = "agent:" + name
-			return nil
+			return o, nil
 		},
 		run: func(ctx context.Context, e env, _ []string) error {
 			return mcp.Serve(ctx, e.c, version, e.stdin, e.stdout)
@@ -198,20 +200,20 @@ var commands = []command{
 		usage: "  lifelog snapshot [--to DIR]         a dated copy of life.db (life-YYYY-MM-DD.db, beside it or in DIR),\n" +
 			"                                      then its restore check (docs/cookbook/take-a-snapshot.md); with --url the\n" +
 			"                                      server's folder (serve --snapshots), and --to is refused",
-		prepare: func(o *opts) error {
+		prepare: func(o opts) (opts, error) {
 			if o.url != "" && o.to != "" {
-				return errors.New("snapshot over --url lands in the server's folder (serve --snapshots): drop --to")
+				return o, errors.New("snapshot over --url lands in the server's folder (serve --snapshots): drop --to")
 			}
 			if o.url == "" {
 				o.snapshots = o.to
 				if o.snapshots != "" {
 					// Refused before the database is opened: a mistaken folder leaves life.db untouched.
 					if _, err := db.CheckSnapshotDir(o.snapshots); err != nil {
-						return err
+						return o, err
 					}
 				}
 			}
-			return nil
+			return o, nil
 		},
 		run: func(ctx context.Context, e env, _ []string) error { return doAction(ctx, e, "snapshot", nil) }},
 }
@@ -247,12 +249,13 @@ func usageText() string {
 // parse takes flags anywhere on the line (an old CLI ignored --db after the subcommand). A flag the command does not
 // take is refused, never ignored. getenv gives LIFELOG_DB and LIFELOG_TOKEN.
 func parse(argv []string, getenv func(string) string) (opts, error) {
-	o := opts{db: getenv("LIFELOG_DB"), token: getenv("LIFELOG_TOKEN"), source: "cli", addr: "127.0.0.1:7777"}
-	vals := map[string]*string{"--db": &o.db, "--url": &o.url, "--source": &o.source, "--addr": &o.addr,
+	o := opts{db: getenv("LIFELOG_DB"), token: getenv("LIFELOG_TOKEN"), source: "cli"}
+	o.serve.addr = "127.0.0.1:7777"
+	vals := map[string]*string{"--db": &o.db, "--url": &o.url, "--source": &o.source, "--addr": &o.serve.addr,
 		"--agent": &o.agent, "--mood": &o.mood, "--day": &o.day, "--to": &o.to,
-		"--title": &o.title, "--text": &o.text, "--preview": &o.preview, "--mime": &o.mime, "--category": &o.category,
-		"--token-file": &o.tokenFile, "--tls-cert": &o.tlsCert, "--tls-key": &o.tlsKey, "--snapshots": &o.snapshots}
-	bools := map[string]*bool{"--human": &o.human, "--dry-run": &o.dryRun, "--public": &o.public, "--force": &o.force}
+		"--title": &o.file.title, "--text": &o.file.text, "--preview": &o.file.preview, "--mime": &o.file.mime, "--category": &o.file.category,
+		"--token-file": &o.serve.tokenFile, "--tls-cert": &o.serve.tlsCert, "--tls-key": &o.serve.tlsKey, "--snapshots": &o.snapshots}
+	bools := map[string]*bool{"--human": &o.human, "--dry-run": &o.file.dryRun, "--public": &o.serve.public, "--force": &o.force}
 	for i := 0; i < len(argv); i++ {
 		a := argv[i]
 		if a == "--" {
@@ -283,11 +286,11 @@ func parse(argv []string, getenv func(string) string) (opts, error) {
 		o.given = append(o.given, name)
 		switch name {
 		case "--allow-origin":
-			o.allowOrigins = append(o.allowOrigins, val)
+			o.serve.allowOrigins = append(o.serve.allowOrigins, val)
 		case "--db":
 			*p, o.dbExplicit = val, true
 		case "--addr":
-			*p, o.addrExplicit = val, true
+			*p, o.serve.addrExplicit = val, true
 		default:
 			*p = val
 		}
@@ -370,7 +373,7 @@ func runContext(ctx context.Context, e env) (err error) {
 	}
 	args := o.args[1:]
 	if cmd.prepare != nil {
-		if err := cmd.prepare(&o); err != nil {
+		if o, err = cmd.prepare(o); err != nil {
 			return err
 		}
 	}
@@ -382,7 +385,7 @@ func runContext(ctx context.Context, e env) (err error) {
 		e.c = client.Remote(o.url, o.source, o.token)
 		return cmd.run(ctx, e, args)
 	}
-	path, err := dbPath(e, "")
+	path, err := dbPath(e)
 	if err != nil {
 		return err
 	}
@@ -393,7 +396,7 @@ func runContext(ctx context.Context, e env) (err error) {
 	defer func() { err = errors.Join(err, d.Close()) }()
 	e.o.db = path
 	e.store = &core.Store{DB: d, SnapshotDir: o.snapshots, Clock: e.clock}
-	if cmd.name != "serve" { // serve builds the handler of its listener and calls it through no client
+	if !cmd.ownHandler {
 		e.c = client.InProcess(api.New(e.store), o.source)
 	}
 	return cmd.run(ctx, e, args)
@@ -434,18 +437,34 @@ func dayOrToday(o opts) string {
 	return "today"
 }
 
-// dbPath is the life.db a command uses, in this order: --db, the PATH init alone takes, $LIFELOG_DB, the file beside
-// this program (docs/plans/090-agentic-init.md). PATH with --db is a mistake, refused.
-func dbPath(e env, positional string) (string, error) {
-	o := e.o
+// initDB is `lifelog init [PATH]`: a new life.db at PATH, else where every other command looks for it. PATH with --db
+// is a mistake, refused.
+func initDB(ctx context.Context, e env, args []string) error {
+	if len(args) > 1 {
+		return errors.New("init [PATH]")
+	}
+	path := strings.Join(args, "")
 	switch {
-	case o.dbExplicit && positional != "":
-		return "", errors.New("init takes PATH or --db, not both")
-	case o.dbExplicit:
-		return o.db, nil
-	case positional != "":
-		return positional, nil
-	case o.db != "": // $LIFELOG_DB, read by parse
+	case path != "" && e.o.dbExplicit:
+		return errors.New("init takes PATH or --db, not both")
+	case path == "":
+		var err error
+		if path, err = dbPath(e); err != nil {
+			return err
+		}
+	}
+	if err := db.Init(ctx, path); err != nil {
+		return err
+	}
+	_, err := fmt.Fprintln(e.stdout, "created", path)
+	return err
+}
+
+// dbPath is the life.db a command uses, in this order: --db, $LIFELOG_DB, the file beside this program
+// (docs/plans/090-agentic-init.md).
+func dbPath(e env) (string, error) {
+	o := e.o
+	if o.dbExplicit || o.db != "" { // --db, else $LIFELOG_DB, which parse reads first
 		return o.db, nil
 	}
 	exe, err := program(e)

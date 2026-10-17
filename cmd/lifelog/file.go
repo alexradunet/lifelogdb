@@ -19,28 +19,28 @@ func keepFile(ctx context.Context, e env, args []string) error {
 	if err != nil {
 		return err
 	}
-	vals := map[string]string{"title": o.title}
-	if o.title == "" {
+	vals := map[string]string{"title": o.file.title}
+	if o.file.title == "" {
 		vals["title"] = filepath.Base(args[0])
 	}
-	if o.text != "" {
-		b, err := os.ReadFile(o.text)
+	if o.file.text != "" {
+		b, err := os.ReadFile(o.file.text)
 		if err != nil {
 			return err
 		}
 		vals["body"] = string(b)
 	}
-	for k, v := range map[string]string{"mime": o.mime, "day": o.day, "category": o.category} {
+	for k, v := range map[string]string{"mime": o.file.mime, "day": o.day, "category": o.file.category} {
 		if v != "" {
 			vals[k] = v
 		}
 	}
-	if o.dryRun {
+	if o.file.dryRun {
 		vals["dry_run"] = "1"
 	}
 	files := map[string]string{"original": args[0]}
-	if o.preview != "" {
-		files["preview"] = o.preview
+	if o.file.preview != "" {
+		files["preview"] = o.file.preview
 	}
 	return show(e)(c.DoFiles(ctx, add, vals, files))
 }

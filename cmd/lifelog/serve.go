@@ -19,20 +19,20 @@ import (
 // flags that belong to it are refused rather than ignored; with it, the token from --token-file or $LIFELOG_TOKEN
 // is required before any listener opens.
 func publicOptions(o opts) (*api.PublicOptions, error) {
-	if !o.public {
+	if !o.serve.public {
 		switch {
-		case o.tokenFile != "":
+		case o.serve.tokenFile != "":
 			return nil, errors.New("--token-file needs --public")
-		case len(o.allowOrigins) > 0:
+		case len(o.serve.allowOrigins) > 0:
 			return nil, errors.New("--allow-origin needs --public")
-		case o.tlsCert != "" || o.tlsKey != "":
+		case o.serve.tlsCert != "" || o.serve.tlsKey != "":
 			return nil, errors.New("--tls-cert and --tls-key need --public")
 		}
 		return nil, nil
 	}
 	token := o.token
-	if o.tokenFile != "" {
-		b, err := os.ReadFile(o.tokenFile)
+	if o.serve.tokenFile != "" {
+		b, err := os.ReadFile(o.serve.tokenFile)
 		if err != nil {
 			return nil, fmt.Errorf("token file: %w", err)
 		}
@@ -44,15 +44,15 @@ func publicOptions(o opts) (*api.PublicOptions, error) {
 	if err := api.CheckToken(token); err != nil {
 		return nil, fmt.Errorf("token: %w", err)
 	}
-	for _, origin := range o.allowOrigins {
+	for _, origin := range o.serve.allowOrigins {
 		if err := api.CheckOrigin(origin); err != nil {
 			return nil, err
 		}
 	}
-	if (o.tlsCert == "") != (o.tlsKey == "") {
+	if (o.serve.tlsCert == "") != (o.serve.tlsKey == "") {
 		return nil, errors.New("--tls-cert and --tls-key go together")
 	}
-	return &api.PublicOptions{Token: token, Origins: o.allowOrigins, TLS: o.tlsCert != ""}, nil
+	return &api.PublicOptions{Token: token, Origins: o.serve.allowOrigins, TLS: o.serve.tlsCert != ""}, nil
 }
 
 // tlsListener serves TLS on a public listener with the owner's certificate; the standard library does the rest.
@@ -98,33 +98,34 @@ func serveHTTP(ctx context.Context, srv *http.Server, listener net.Listener, dra
 }
 
 // prepareServe reads the --public flags and the address before anything opens: a wrong flag, a wrong address or a
-// snapshot folder that is not one refuses the command with life.db untouched.
-func prepareServe(o *opts) error {
-	pub, err := publicOptions(*o)
+// snapshot folder that is not one refuses the command with life.db untouched. It gives the line with the address
+// checked and the public options set.
+func prepareServe(o opts) (opts, error) {
+	pub, err := publicOptions(o)
 	if err != nil {
-		return err
+		return o, err
 	}
 	if pub == nil {
-		o.addr, err = api.LoopbackAddress(o.addr)
+		o.serve.addr, err = api.LoopbackAddress(o.serve.addr)
 	} else {
-		if !o.addrExplicit {
-			o.addr = "0.0.0.0:7777"
+		if !o.serve.addrExplicit {
+			o.serve.addr = "0.0.0.0:7777"
 		}
-		o.addr, err = api.PublicAddress(o.addr)
+		o.serve.addr, err = api.PublicAddress(o.serve.addr)
 	}
 	if err != nil {
-		return err
+		return o, err
 	}
-	o.pub = pub
+	o.serve.pub = pub
 	if o.url != "" {
-		return errors.New("serve opens the file itself: drop --url")
+		return o, errors.New("serve opens the file itself: drop --url")
 	}
 	if o.snapshots != "" {
 		if _, err := db.CheckSnapshotDir(o.snapshots); err != nil {
-			return err
+			return o, err
 		}
 	}
-	return nil
+	return o, nil
 }
 
 // serve is lifelog serve: the handler on a socket, this machine only or --public, until an interrupt drains it. serve
@@ -132,8 +133,8 @@ func prepareServe(o *opts) error {
 // public one serves the API behind the token, the allowed origins and the login pages (api.Public). So no code in
 // another function decides what guards a public listener.
 func serve(ctx context.Context, e env, _ []string) error {
-	o, pub := e.o, e.o.pub
-	listener, err := net.Listen("tcp", o.addr)
+	o, pub := e.o, e.o.serve.pub
+	listener, err := net.Listen("tcp", o.serve.addr)
 	if err != nil {
 		return err
 	}
@@ -149,7 +150,7 @@ func serve(ctx context.Context, e env, _ []string) error {
 		note = " (public: token required; the token travels in clear, use a private network)"
 		if pub.TLS {
 			scheme, note = "https", " (public: token required)"
-			if listener, err = tlsListener(listener, o.tlsCert, o.tlsKey); err != nil {
+			if listener, err = tlsListener(listener, o.serve.tlsCert, o.serve.tlsKey); err != nil {
 				return err
 			}
 		}

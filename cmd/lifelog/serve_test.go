@@ -42,8 +42,8 @@ func TestServeAddressFlag(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := prepareServe(&o); err != nil || o.addr != "127.0.0.1:7777" {
-			t.Errorf("serve %v: the address %q, %v; want 127.0.0.1:7777", at("LOCALHOST:7777"), o.addr, err)
+		if o, err = prepareServe(o); err != nil || o.serve.addr != "127.0.0.1:7777" {
+			t.Errorf("serve %v: the address %q, %v; want 127.0.0.1:7777", at("LOCALHOST:7777"), o.serve.addr, err)
 		}
 		argv := append(at("0.0.0.0:7777"), "serve", "--db", absent)
 		if err := runArgs(t.Context(), e, argv); err == nil || !strings.Contains(err.Error(), "serve address") {
@@ -91,15 +91,15 @@ func TestPublicFlagsParse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !o.public || o.tokenFile != "t.txt" || o.tlsCert != "c.pem" || o.tlsKey != "k.pem" || o.addrExplicit ||
-		!reflect.DeepEqual(o.allowOrigins, []string{"https://a.example", "http://localhost:3000"}) {
+	if !o.serve.public || o.serve.tokenFile != "t.txt" || o.serve.tlsCert != "c.pem" || o.serve.tlsKey != "k.pem" || o.serve.addrExplicit ||
+		!reflect.DeepEqual(o.serve.allowOrigins, []string{"https://a.example", "http://localhost:3000"}) {
 		t.Fatalf("%+v", o)
 	}
 	if _, err := parse([]string{"serve", "--allow-origin"}, noVars); err == nil {
 		t.Fatal("--allow-origin without a value accepted")
 	}
 	o, err = parse([]string{"serve", "--addr", "0.0.0.0:0"}, noVars)
-	if err != nil || !o.addrExplicit || o.public {
+	if err != nil || !o.serve.addrExplicit || o.serve.public {
 		t.Fatalf("%+v %v", o, err)
 	}
 }
@@ -123,23 +123,23 @@ func TestPublicOptionsRefusals(t *testing.T) {
 		o    opts
 		want string
 	}{
-		{"token file without --public", opts{tokenFile: good}, "--token-file needs --public"},
-		{"origin without --public", opts{allowOrigins: []string{"https://a.example"}}, "--allow-origin needs --public"},
-		{"tls without --public", opts{tlsCert: "c", tlsKey: "k"}, "need --public"},
-		{"--public without a token", opts{public: true}, "needs a token"},
-		{"short token file", opts{public: true, tokenFile: short}, "at least 32"},
-		{"two-line token file", opts{public: true, tokenFile: two}, "one line"},
-		{"missing token file", opts{public: true, tokenFile: filepath.Join(t.TempDir(), "none")}, "token file"},
-		{"one tls flag", opts{public: true, tokenFile: good, tlsCert: "c"}, "go together"},
-		{"bad origin", opts{public: true, tokenFile: good, allowOrigins: []string{"a.example"}}, "origin"},
-		{"non-loopback address without --public", opts{addr: "0.0.0.0:0"}, "serve address"},
+		{"token file without --public", opts{serve: serveFlags{tokenFile: good}}, "--token-file needs --public"},
+		{"origin without --public", opts{serve: serveFlags{allowOrigins: []string{"https://a.example"}}}, "--allow-origin needs --public"},
+		{"tls without --public", opts{serve: serveFlags{tlsCert: "c", tlsKey: "k"}}, "need --public"},
+		{"--public without a token", opts{serve: serveFlags{public: true}}, "needs a token"},
+		{"short token file", opts{serve: serveFlags{public: true, tokenFile: short}}, "at least 32"},
+		{"two-line token file", opts{serve: serveFlags{public: true, tokenFile: two}}, "one line"},
+		{"missing token file", opts{serve: serveFlags{public: true, tokenFile: filepath.Join(t.TempDir(), "none")}}, "token file"},
+		{"one tls flag", opts{serve: serveFlags{public: true, tokenFile: good, tlsCert: "c"}}, "go together"},
+		{"bad origin", opts{serve: serveFlags{public: true, tokenFile: good, allowOrigins: []string{"a.example"}}}, "origin"},
+		{"non-loopback address without --public", opts{serve: serveFlags{addr: "0.0.0.0:0"}}, "serve address"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			o := tc.o
 			o.args = []string{"serve"}
 			o.db = absent
-			if o.addr == "" {
-				o.addr = "127.0.0.1:0"
+			if o.serve.addr == "" {
+				o.serve.addr = "127.0.0.1:0"
 			}
 			// Every refusal precedes the database opening: the file is absent.
 			e, _, _ := testEnv(t)
@@ -151,7 +151,7 @@ func TestPublicOptionsRefusals(t *testing.T) {
 		})
 	}
 	// A good token file, with its line ending trimmed, and the env fallback.
-	pub, err := publicOptions(opts{public: true, tokenFile: good, allowOrigins: []string{"https://a.example"}})
+	pub, err := publicOptions(opts{serve: serveFlags{public: true, tokenFile: good, allowOrigins: []string{"https://a.example"}}})
 	if err != nil || pub.Token != testToken || pub.TLS || !reflect.DeepEqual(pub.Origins, []string{"https://a.example"}) {
 		t.Fatalf("%+v %v", pub, err)
 	}
