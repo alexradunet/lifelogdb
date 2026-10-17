@@ -19,26 +19,30 @@ func cookbook(s *S) {
 
 	seeded := func(hardened bool, path string) (*C, P) {
 		c := s.freshWith(F{Hardened: hardened, Path: path})
+		link := func(from, to int64, kind string) { // the seed's links: a refused one stops the suite
+			if r := c.link(from, to, kind); r != "OK" {
+				stop("cookbook seed, a link of the kind %s: %s", kind, r)
+			}
+		}
 		dp := c.dayPage("2026-09-28", "Shipped the schema with [[Sam]] in [[Japan]]. [[Lifelog]]")
 		wp := c.page("Lifelog")
 		cat := c.page("Biomarkers")
-		c.link(dp, wp, "wikilink")
+		link(dp, wp, "wikilink")
 		pe := c.named("person", "Sam", M{"name": "Sam"})
 		gh := c.page("Ana")
 		pl := c.named("place", "Japan")
-		c.link(dp, pe, "wikilink")
-		c.link(dp, pl, "wikilink")
-		c.link(dp, pl, "at")
+		link(dp, pe, "wikilink")
+		link(dp, pl, "wikilink")
+		link(dp, pl, "at")
 		w := c.metric("weight", "kg")
 		c.metric("vitamin_d", "")
 		c.measure(w, "2026-09-29", 71.2)
 		c.measure(w, "2026-09-28", 70.9)
 		old := c.pageW("Sourdogh", nil, "Feed the starter. [[Lifelog]]")
-		c.link(old, wp, "wikilink")
-		c.link(old, pl, "about")
+		link(old, wp, "wikilink")
 		return c, P{"include_deleted": 0, "old_id": old, "new_title": "Sourdough starter", "new_key": "sourdough starter", "found_id": wp, "target_id": wp, "target_ids": "[]", "place_id": pl, "day_page_id": dp, "mistaken_row_id": 2, "from_day": "2026-01-15", "to_day": "2026-09-10",
 			"day": "2026-09-29", "page_id": wp, "person_id": pe, "entity_id": pe, "handle_title": "Bob Sample", "handle_key": "bob sample", "ghost_id": gh,
-			"due_day": "2026-10-05", "query": "schema", "key": "newpage", "title": "Newpage", "metric_id": w, "wrong_row_id": 1, "source": "ui",
+			"query": "schema", "key": "newpage", "title": "Newpage", "metric_id": w, "wrong_row_id": 1, "source": "ui",
 			"import_key": "notes/sourdough.md", "metric": "vitamin_d", "as_of": "2099-01-01T00:00:00.000Z", "parent_id": cat,
 			"sha256": strings.Repeat("ab", 32), "mime": "image/heic", "preview": jpegBytes, "file_title": "2026-09-29 Lake.jpg", "append_embed": 1,
 			"file_key": "2026-09-29 lake.jpg", "body": "The lake at dawn with [[Sam]].",
