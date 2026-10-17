@@ -17,7 +17,7 @@ import (
 // fontTypes are the files the font route serves, by their extension: the faces and their licences.
 var fontTypes = map[string]string{"woff2": "font/woff2", "txt": "text/plain; charset=utf-8"}
 
-// fonts is GET /assets/fonts/{file}: an embedded face or licence, by its exact name (html/fonts/README.md). It is
+// fonts is GET /assets/fonts/{file}: an embedded face or licence, by its exact name (view/html/fonts/README.md). It is
 // presentation, like /render, and not in the catalog. A file never changes under its name, so a browser keeps it
 // for a year.
 func fonts(w http.ResponseWriter, r *http.Request) {
@@ -39,7 +39,7 @@ func fonts(w http.ResponseWriter, r *http.Request) {
 }
 
 // styleguide is GET /styleguide: every component of the Almanac in every state, drawn by the real templates on
-// synthetic words (html/styleguide.html). It is presentation, like /render, and not in the catalog. Its entity is
+// synthetic words (view/html/styleguide.html). It is presentation, like /render, and not in the catalog. Its entity is
 // styleEntity, which reads nothing, so the page shows nothing of the database; only the shell around it reads, as
 // for any page.
 func (h *server) styleguide(w http.ResponseWriter, r *http.Request) {
@@ -107,7 +107,7 @@ func styleEntity() *siren.Entity {
 			at("browse", nil)}}
 }
 
-// install serves an embedded file of html/ for a browser's install of the app: the manifest and its icon. The
+// install serves an embedded file of view/html/ for a browser's install of the app: the manifest and its icon. The
 // cache says how long a browser keeps it. The file is the same for every request, so it needs no read of the store.
 func install(name, typ, cache string) http.HandlerFunc {
 	b := view.MustFile(name)
