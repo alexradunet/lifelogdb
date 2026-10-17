@@ -502,3 +502,12 @@ CREATE TRIGGER metrics_no_delete BEFORE DELETE ON metrics
 BEGIN SELECT RAISE(ABORT, 'metrics are never deleted: tombstone the entity (entities.deleted_at)'); END;
 CREATE TRIGGER files_no_delete BEFORE DELETE ON files
 BEGIN SELECT RAISE(ABORT, 'files are never deleted: tombstone the entity (entities.deleted_at)'); END;
+
+CREATE TRIGGER entities_promote_from_page BEFORE UPDATE OF entity_type ON entities
+  WHEN NEW.entity_type IS NOT OLD.entity_type AND OLD.entity_type IS NOT 'page'
+BEGIN
+  -- promotion (D20): only a plain page changes its type, to a person, a place, a metric or a file; a typed entity
+  -- never changes its type. The foreign key of a typed row also holds a person, a metric and a file, but a place
+  -- has no typed row: this trigger is what keeps a place from becoming a person or a metric
+  SELECT RAISE(ABORT, 'only a plain page is promoted: a person, a place, a metric or a file keeps its type (D20)');
+END;

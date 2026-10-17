@@ -42,7 +42,7 @@ the document (a broken block makes a later step impossible) reports that as one 
 | `name_grammar_test.go` | `name-grammar` | documented raw/NFC addressability vectors under mutation; canonical key and bracket-storage probes, separate from production pipeline tests |
 | `identity_test.go` | `identity` | the supertype and its composite FKs, ids by `RETURNING`, `source` on every row, no hard deletes, `updated_at` and the edit revisions: creation is not an edit, a link advances only the page it leaves (schema.sql, D8, D10, D11, D12) |
 | `names_test.go` | `names`, `name-ownership` | mandatory deferred preferred ownership; direct reserved names and immutable owner/key/id; actual alias/preferred/spelling/body FTS maintenance and journal-name reservations |
-| `named_test.go` | `named` | a person or a place is a page: one id, promotion, cookbook/person-or-place, cookbook/days-that-name and cookbook/everything-about run literally, two Sams (D16, D20) |
+| `named_test.go` | `named` | a person or a place is a page: one id, promotion of a plain page only, cookbook/person-or-place, cookbook/days-that-name and cookbook/everything-about run literally, two Sams (D16, D20) |
 | `files_test.go` | `files` | a file is a page: one id, the hash, type and preview of the original and their CHECKs (`IS` for the JPEG bytes: `substr` of an empty blob is NULL), what never changes, never deleted, the graph (an embed, a caption, `about`, `part-of`, refused redirect), a ghost promoted, cookbook/keep-a-file as a writer runs it (D9) |
 | `pages_test.go` | `pages` | every page titled, the day rule, filename-safe titles, normalized owned keys and their vectors, lookups, FTS, why not a collation (contract/titles-and-wikilinks, D5) |
 | `renames_test.go` | `renames` | cookbook/rename-a-page run literally: id, prose, day, provenance, typed detail and incident links retained; direct aliases, owned-name selection, case-only rename and no-effect refusals; writer parity (contract/titles-and-wikilinks, D5) |
@@ -60,7 +60,7 @@ the document (a broken block makes a later step impossible) reports that as one 
 | `wikilinks_test.go` | `doc-save-contract` | the save contract as the docs print it: the vector table of contract/titles-and-wikilinks, cookbook/save-a-body run literally (and equal to a writer's own save after 400 random edits), cookbook/backlinks |
 | | `save-contract` | the save contract through a writer's own save against the DDL: invalid targets, the `SAVEPOINT` backstop, set equality, ordinary REDIRECT prose, revival, 400 random edits against a rebuild, 4 concurrent writers, every vector |
 | | `title-fuzz` | writer acceptance is a subset of the DDL's filename checks over 60 000 generated strings; DB-only names independently fail reference addressability |
-| `mutants_test.go` | `TestMutants` | 255 broken copies of the docs tree, one rule each; a completed owning suite must fail the mutant's explicit rule witness |
+| `mutants_test.go` | `TestMutants` | 256 broken copies of the docs tree, one rule each; a completed owning suite must fail the mutant's explicit rule witness |
 | `render_test.go` | `TestMermaidRender` | optional: every diagram renders |
 | `kit_test.go`, `suites_test.go` | | reading the tree (a page, the cookbook blocks by recipe key, an overlay of broken files for a mutant); fresh databases and the insert conventions (entity first, `RETURNING`, named entities); the runner |
 

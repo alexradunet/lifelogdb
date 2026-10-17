@@ -3,6 +3,7 @@
 A page starts as a ghost when a link names a title that does not exist yet, or as a written page when
 the owner creates it on purpose — a day page when the first thing is captured that day ([D5](../decisions/D05-pages-and-day-pages.md)). Either can
 become the page of a person, a place, a metric or a file ([D20](../decisions/D20-named-pages.md), [D27](../decisions/D27-a-metric-is-a-page.md), [D9](../decisions/D09-binary-files.md)) — except a day page (`entities_day_page_plain`).
+A named page keeps its type: no arrow leaves Named for another type (`entities_promote_from_page`).
 
 ```mermaid
 %% diagram: page-life

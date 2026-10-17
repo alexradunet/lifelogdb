@@ -60,8 +60,18 @@ func named(s *S) {
 	s.K("a plain page is promoted: UPDATE entities.entity_type cascades to pages.entity_type, then the people row", r1 == "OK" && r2 == "OK" &&
 		c.tab("select e.entity_type, pe.entity_type from entities e join people pe using(id) where id=?", g) == "person|person", r1, r2)
 	s.K("...and the day page's link to it is kept (the id did not change)", c.tab("select to_id from links where from_id=?", mm) == ids(g))
-	s.K("a promoted person cannot be turned back into a plain page (the people row's FK)", err(c.tryx("UPDATE entities SET entity_type='page' WHERE id=?", g)))
-	s.K("...nor into a place", err(c.tryx("UPDATE entities SET entity_type='place' WHERE id=?", g)))
+	// a typed entity never changes its type (entities_promote_from_page, D20); the people row's FK holds a person
+	// too, but a place has no typed row, so only the trigger keeps a place a place
+	promoteOnly := func(r string) bool { return strings.Contains(r, "only a plain page is promoted") }
+	s.K("a promoted person cannot be turned back into a plain page (entities_promote_from_page)", promoteOnly(c.tryx("UPDATE entities SET entity_type='page' WHERE id=?", g)))
+	s.K("...nor into a place", promoteOnly(c.tryx("UPDATE entities SET entity_type='place' WHERE id=?", g)))
+	pl := c.named("place", "Lakeside")
+	refusedAll := true
+	for _, typ := range []string{"person", "metric", "file", "page"} {
+		refusedAll = refusedAll && promoteOnly(c.tryx("UPDATE entities SET entity_type=? WHERE id=?", typ, pl))
+	}
+	s.K("a place is never promoted to a person, a metric, a file or a plain page (entities_promote_from_page)",
+		refusedAll && c.str("SELECT entity_type FROM entities WHERE id=?", pl) == "place")
 	dp := c.dayPage("2026-09-29", "x")
 	s.K("a day page cannot become a person or a place: the cascade meets entities_day_page_plain",
 		strings.Contains(c.tryx("UPDATE entities SET entity_type='person' WHERE id=?", dp), "entities_day_page_plain") &&

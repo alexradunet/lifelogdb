@@ -154,12 +154,13 @@ func evolution(s *S) {
 	s.K("after the migration a day page may be at a person's home page", c.link(c.dayPage("2026-09-30", "x"), c.named("person", ""), "at") == "OK")
 	s.K("...and the guard is back: the next change is refused", strings.Contains(c.tryx("UPDATE link_kinds SET to_types = NULL WHERE kind = 'at'"), "fixed at registration"))
 
-	// ---- type changes preserve the registry's endpoint rules.
+	// ---- type changes preserve the registry's endpoint rules. Only a plain page changes its type
+	// (entities_promote_from_page), so the incoming edge ends at a plain page: the category of a part-of link.
 	c = s.fresh()
-	d := c.dayPage("2026-07-31", "x")
 	w := c.named("place", "Lakeside")
-	s.K("a day page at the place [[Lakeside]]", c.link(d, w, "at") == "OK")
-	s.K("type change refuses a retained incoming typed edge", strings.Contains(c.tryx("UPDATE entities SET entity_type='person' WHERE id=?", w), "retained link endpoint") && c.str("SELECT entity_type FROM entities WHERE id=?", w) == "place" && c.n("SELECT count(*) FROM links WHERE to_id=? AND kind='at'", w) == 1)
+	lakes := c.page("Lakes")
+	s.K("the place [[Lakeside]] is filed in the category [[Lakes]]", c.link(w, lakes, "part-of") == "OK")
+	s.K("type change refuses a retained incoming typed edge", strings.Contains(c.tryx("UPDATE entities SET entity_type='person' WHERE id=?", lakes), "retained link endpoint") && c.str("SELECT entity_type FROM entities WHERE id=?", lakes) == "page" && c.n("SELECT count(*) FROM links WHERE to_id=? AND kind='part-of'", lakes) == 1)
 	out := c.dayPage("2026-08-01", "x")
 	c.link(out, w, "at")
 	s.K("type change refuses a retained outgoing typed edge", strings.Contains(c.tryx("UPDATE entities SET entity_type='person' WHERE id=?", out), "retained link endpoint") && c.str("SELECT entity_type FROM entities WHERE id=?", out) == "page")
