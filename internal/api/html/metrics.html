@@ -32,7 +32,7 @@
 {{template "categories" (dict "v" $ "back" $.Here)}}
 <p class="sub">{{if not $s.all_history}}<a href="{{.Link "all-readings"}}">All readings</a>{{end}}<a href="/metrics">Every metric</a></p></div>
 {{with $r.Latest}}<div class="tools"><div class="reading-tile"><span class="name">Latest, {{$.Date .day}}</span>
-{{template "reading-link" (dict "id" .id "value" .value "unit" $unit)}}</div></div>{{end}}
+{{template "reading-link" (dict "id" .id "value" .value "unit" (unitWords $unit))}}</div></div>{{end}}
 </header>
 
 <div class="sheet-margin">

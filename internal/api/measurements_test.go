@@ -35,6 +35,19 @@ func metricFixture(t *testing.T) (*client.Client, http.Handler, []string) {
 	return c, h, readings
 }
 
+// TestTheLatestTileWritesAScaleInWords: the Latest tile of a metric's page writes a scale's unit as every tile does,
+// "of 5" for 1-5, and any other unit as it is.
+func TestTheLatestTileWritesAScaleInWords(t *testing.T) {
+	c, h, _ := metricFixture(t)
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "record"), map[string]string{"metric": "Mood", "day": "2026-10-12", "value": "4"}))
+	for path, value := range map[string]string{"/metrics/Mood": `4 <span class="unit">of 5</span>`, "/metrics/Weight": `77.1 <span class="unit">kg</span>`} {
+		latest := regexp.MustCompile(`<span class="name">Latest, Mon 12 Oct</span>\n<a class="reading" href="/measurements/\d+">` + regexp.QuoteMeta(value) + `</a>`)
+		if body := browse(t, h, path); !latest.MatchString(body) {
+			t.Errorf("the Latest tile of %s does not write %s", path, value)
+		}
+	}
+}
+
 func TestAMetricIsOnePage(t *testing.T) {
 	c, h, readings := metricFixture(t)
 	body := browse(t, h, "/metrics/Weight")
