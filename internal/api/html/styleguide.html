@@ -129,7 +129,7 @@
 <p class="desc">All history through {{$.Date $s.to}}.</p>
 {{chart "" $s.to $s.readings}}
 {{range $r.Years}}<details class="readings-year"{{if .Open}} open{{end}}><summary><span class="year-name">{{.Year}}</span> <span class="meta">{{.Summary}}</span></summary>
-{{template "readings" (dict "v" $ "r" $r "s" $s "rows" .Rows)}}</details>
+{{template "readings" (dict "v" $ "r" $r "rows" .Rows)}}</details>
 {{end}}</section>
 </div>
 </section>

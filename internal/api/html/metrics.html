@@ -45,9 +45,9 @@
 {{if or (not $s.all_history) (ne $s.to $.Today)}}<p class="desc">{{if not $s.all_history}}{{$.Date $s.from}} to {{$.Date $s.to}}.{{else}}All history through {{$.Date $s.to}}.{{end}}</p>{{end}}
 {{if $s.readings}}{{chart $s.from $s.to $s.readings}}{{end}}
 {{range $r.Years}}{{$year := .Year}}<details class="readings-year"{{if .Open}} open{{end}}><summary><span class="year-name">{{.Year}}</span> <span class="meta">{{.Summary}}</span></summary>
-{{template "readings" (dict "v" $ "r" $r "s" $s "rows" .Rows)}}
+{{template "readings" (dict "v" $ "r" $r "rows" .Rows)}}
 {{with .More}}<details class="readings-more"><summary>{{count (len .) "more reading" "more readings"}} of {{$year}}</summary>
-{{template "readings" (dict "v" $ "r" $r "s" $s "rows" .)}}</details>{{end}}</details>
+{{template "readings" (dict "v" $ "r" $r "rows" .)}}</details>{{end}}</details>
 {{else}}<p class="empty">{{if $s.all_history}}No reading yet. Add the first one above.{{else}}No reading in this window. <a href="{{.Link "all-readings"}}">All readings</a> has the rest.{{end}}</p>{{end}}
 </section>
 </div>
@@ -81,8 +81,8 @@
 {{template "foot" .}}{{end}}
 
 {{/* readings is a table of a metric's readings, newest first: a year's newest ones, or the rest of that year. It takes
-     v (the view), r (MetricReadings), s (the series) and rows. */}}
-{{define "readings"}}{{$v := .v}}{{$r := .r}}{{$s := .s}}<div class="scroll"><table>
+     v (the view), r (MetricReadings) and rows. */}}
+{{define "readings"}}{{$v := .v}}{{$r := .r}}<div class="scroll"><table>
 <thead><tr><th scope="col">day</th><th scope="col" class="num">value</th>{{if $r.Times}}<th scope="col">taken at</th>{{end}}</tr></thead>
 <tbody>{{range .rows}}<tr><td><a href="/days/{{.day}}">{{$v.Date .day}}</a></td><td class="num"><a href="/measurements/{{num .id}}">{{num .value}}</a></td>{{if $r.Times}}<td>{{with .taken_at}}{{$v.When .}}{{end}}</td>{{end}}</tr>
 {{end}}</tbody></table></div>{{end}}
