@@ -357,3 +357,36 @@ func TestTheLastWeekOfTheDaysEndsOnTheLastDay(t *testing.T) {
 		browse(t, h, "/weeks/9999-W52")
 	}
 }
+
+// TestTheMeanOfAWeekDoesNotOverflow: a reading can be as large as a float64 holds (measurements_value_finite), so the
+// sum of a week's readings can overflow where their mean does not. The mean of week 40 is that of three readings of
+// the largest float64, of week 41 that of two readings of 1e308, and of week 42 that of two readings of -1e308. Each
+// week answers 200, in JSON and in HTML, with its mean and the mean of the week before.
+func TestTheMeanOfAWeekDoesNotOverflow(t *testing.T) {
+	c, h, _ := apitest.FreshOn(t, "cli", weekToday)
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "distance", "unit": "m"}))
+	for _, r := range []struct{ day, value string }{
+		{"2026-09-28", "1.7976931348623157e308"}, {"2026-09-29", "1.7976931348623157e308"}, {"2026-09-30", "1.7976931348623157e308"},
+		{"2026-10-05", "1e308"}, {"2026-10-06", "1e308"},
+		{"2026-10-12", "-1e308"}, {"2026-10-12", "-1e308"},
+	} {
+		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "record"), map[string]string{"metric": "distance", "day": r.day, "value": r.value}))
+	}
+	for _, tc := range []struct{ week, readings, mean, previous string }{
+		{"2026-W40", "3", "1.7976931348623157e+308", "<nil>"},
+		{"2026-W41", "2", "1e+308", "1.7976931348623157e+308"},
+		{"2026-W42", "2", "-1e+308", "1e+308"},
+	} {
+		w, err := c.Get(t.Context(), "/weeks/"+tc.week)
+		if err != nil {
+			t.Errorf("/weeks/%s: %v", tc.week, err)
+			continue
+		}
+		m := objects(props(w), "metrics")
+		if len(m) != 1 || said(m[0]["readings"]) != tc.readings || said(m[0]["mean"]) != tc.mean || said(m[0]["previous_mean"]) != tc.previous {
+			t.Errorf("%s metrics %v: want %s readings, mean %s, the week before %s", tc.week, m, tc.readings, tc.mean, tc.previous)
+		}
+		browse(t, h, "/weeks/"+tc.week)
+	}
+}

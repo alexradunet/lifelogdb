@@ -66,7 +66,27 @@ type weekMetric struct {
 	PreviousMean *float64 `json:"previous_mean,omitempty"`
 }
 
-func round2(x float64) float64 { return math.Round(x*100) / 100 }
+// round2 rounds x to two places. A float64 of 2^53 or more is a whole number, so it has no places to round, and x*100
+// overflows for the largest ones.
+func round2(x float64) float64 {
+	if math.Abs(x) >= 1<<53 {
+		return x
+	}
+	return math.Round(x*100) / 100
+}
+
+// mean is the mean of xs, rounded to two places; xs holds one value at least. A reading can be as large as a float64
+// holds (measurements_value_finite), so the sum of two readings can overflow: each value is divided by the count
+// before the sum. Near the largest float64 the rounding of that sum can overflow still, and the mean is never less
+// than the least value or more than the greatest: the mean is held between the two.
+func mean(xs []float64) float64 {
+	sum, lo, hi := 0.0, xs[0], xs[0]
+	for _, x := range xs {
+		sum += x / float64(len(xs))
+		lo, hi = min(lo, x), max(hi, x)
+	}
+	return round2(min(max(sum, lo), hi))
+}
 
 func (h *server) week(r *http.Request) (*Entity, error) {
 	ctx := r.Context()
@@ -113,23 +133,22 @@ func (h *server) week(r *http.Request) (*Entity, error) {
 		if err != nil {
 			return nil, err
 		}
-		var sum, sumBefore float64
-		var n, nBefore int
+		var inWeek, weekBefore []float64
 		for _, x := range rows {
 			switch {
 			case x.Day >= from:
-				sum, n = sum+x.Value, n+1
+				inWeek = append(inWeek, x.Value)
 			case x.Day >= previous:
-				sumBefore, nBefore = sumBefore+x.Value, nBefore+1
+				weekBefore = append(weekBefore, x.Value)
 			}
 		}
-		if n == 0 {
+		if len(inWeek) == 0 {
 			continue
 		}
-		wm := weekMetric{Metric: m.Name, Unit: m.Unit, Readings: n, Mean: round2(sum / float64(n))}
-		if nBefore > 0 {
-			mean := round2(sumBefore / float64(nBefore))
-			wm.PreviousMean = &mean
+		wm := weekMetric{Metric: m.Name, Unit: m.Unit, Readings: len(inWeek), Mean: mean(inWeek)}
+		if len(weekBefore) > 0 {
+			pm := mean(weekBefore)
+			wm.PreviousMean = &pm
 		}
 		metrics = append(metrics, wm)
 	}
