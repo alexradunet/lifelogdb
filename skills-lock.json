@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "skills": {
+    "a-philosophy-of-software-design": {
+      "source": "ciembor/agent-rules-books",
+      "sourceType": "github",
+      "skillPath": "a-philosophy-of-software-design/SKILL.md",
+      "computedHash": "0abb6e5dd4568beba79150908492df9396d493fe224a59857cca123cff0d3893"
+    },
+    "clean-architecture": {
+      "source": "ciembor/agent-rules-books",
+      "sourceType": "github",
+      "skillPath": "clean-architecture/SKILL.md",
+      "computedHash": "84fd3d3edd262c968d49c8b57c51370974feb0e28832a8dcc8049f1347e50da8"
+    },
+    "clean-code": {
+      "source": "ciembor/agent-rules-books",
+      "sourceType": "github",
+      "skillPath": "clean-code/SKILL.md",
+      "computedHash": "eb3a646d4c3ab8ef33dafe2ddb0978eaf1f6613a06e8ebd5a1ce1ab85826c4e3"
+    },
+    "code-complete": {
+      "source": "ciembor/agent-rules-books",
+      "sourceType": "github",
+      "skillPath": "code-complete/SKILL.md",
+      "computedHash": "30b88bae88b379a86b8d5443bf274d00c8006204f9627c98849df6eb01929a04"
+    },
+    "designing-data-intensive-applications": {
+      "source": "ciembor/agent-rules-books",
+      "sourceType": "github",
+      "skillPath": "designing-data-intensive-applications/SKILL.md",
+      "computedHash": "8e28216b1b087531969b22c3bb8d719ca5b733989b0b88737a2fbd0eec6cdfa7"
+    },
+    "domain-driven-design": {
+      "source": "ciembor/agent-rules-books",
+      "sourceType": "github",
+      "skillPath": "domain-driven-design/SKILL.md",
+      "computedHash": "addf0bc930431c47ed6e427f1f6b37b8ac0c7dad55bc3bd63f8e2cb4fe14b7db"
+    },
+    "domain-driven-design-distilled": {
+      "source": "ciembor/agent-rules-books",
+      "sourceType": "github",
+      "skillPath": "domain-driven-design-distilled/SKILL.md",
+      "computedHash": "8a9aa1a8c5ddcdcdfb4bc6c6ca6f976796bd7807b57e384956988c676f0b6b98"
+    },
+    "implementing-domain-driven-design": {
+      "source": "ciembor/agent-rules-books",
+      "sourceType": "github",
+      "skillPath": "implementing-domain-driven-design/SKILL.md",
+      "computedHash": "90d14055645812c6df495efd7598b0e0330f9b33e7e9e8ecb72c5df4ea834d6e"
+    },
+    "patterns-of-enterprise-application-architecture": {
+      "source": "ciembor/agent-rules-books",
+      "sourceType": "github",
+      "skillPath": "patterns-of-enterprise-application-architecture/SKILL.md",
+      "computedHash": "398baed8fb3ee72fc8425aac03079f6ab0d91e4a1439652f8814536b46a43385"
+    },
+    "refactoring": {
+      "source": "ciembor/agent-rules-books",
+      "sourceType": "github",
+      "skillPath": "refactoring/SKILL.md",
+      "computedHash": "670b52574be2041152611ece9fd717fe5c95873926f92ca9375ccd317ee4e7c2"
+    },
+    "refactoring-guru": {
+      "source": "ciembor/agent-rules-books",
+      "sourceType": "github",
+      "skillPath": "refactoring-guru/SKILL.md",
+      "computedHash": "13eca11e1d8776d6e0b229f4a5c999021350bb625a60386e2a9a562779acc0bc"
+    },
+    "release-it": {
+      "source": "ciembor/agent-rules-books",
+      "sourceType": "github",
+      "skillPath": "release-it/SKILL.md",
+      "computedHash": "e0a18151fd6fca6d7f736d673df3f22593fa5747e73dcfc115811a176a715795"
+    },
+    "the-pragmatic-programmer": {
+      "source": "ciembor/agent-rules-books",
+      "sourceType": "github",
+      "skillPath": "the-pragmatic-programmer/SKILL.md",
+      "computedHash": "4a38e71d6d29134d086ae35e9e41fb0dcf7f86b265ed6c9809f519264c79021e"
+    },
+    "working-effectively-with-legacy-code": {
+      "source": "ciembor/agent-rules-books",
+      "sourceType": "github",
+      "skillPath": "working-effectively-with-legacy-code/SKILL.md",
+      "computedHash": "be287dc29fc0a97f0402c0aedb5f3cd9a6ba4da5bf56be5606204d5ac9716cd0"
+    }
+  }
+}
