@@ -234,10 +234,17 @@ func initWith(path string, apply func(*sql.DB) error) error {
 	}
 	// Seed-only statistics make later bulk capture choose scans as the file grows.
 	// Let ordinary connection-close maintenance collect statistics from real data.
-	return w.Close()
+	// Close SQLite first: on Linux, the close of a descriptor drops every lock that the process holds on the file.
+	return errors.Join(w.Close(), reserved.Close())
 }
 
-func reserveDatabasePath(path string) (os.FileInfo, error) {
+// reserveDatabasePath creates path, which must not exist, and returns the new file open. The caller keeps the file
+// open until its work on path ends: then it closes the file, or gives it to removeReservedDatabasePath. An open file
+// keeps its identity. On Linux its inode stays in use, so the file system cannot give the inode number to a new file
+// (ext4 gives the number of a removed file to the next new file). On Windows no other handle can remove or rename
+// the file, because Go opens it without FILE_SHARE_DELETE; the share modes of this handle and of SQLite's handle
+// allow each other.
+func reserveDatabasePath(path string) (*os.File, error) {
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o666)
 	if err != nil {
 		if os.IsExist(err) {
@@ -245,35 +252,36 @@ func reserveDatabasePath(path string) (os.FileInfo, error) {
 		}
 		return nil, fmt.Errorf("reserving %s: %w", path, err)
 	}
-	info, statErr := f.Stat()
-	closeErr := f.Close()
-	if statErr != nil {
-		return nil, errors.Join(fmt.Errorf("stat reserved database %s: %w", path, statErr), closeErr)
-	}
-	if closeErr != nil {
-		return nil, errors.Join(fmt.Errorf("closing reserved database %s: %w", path, closeErr), removeReservedDatabasePath(path, info))
-	}
-	return info, nil
+	return f, nil
 }
 
-func removeReservedDatabasePath(path string, reserved os.FileInfo) error {
+// removeReservedDatabasePath closes the reserved file and removes path if path still names that file. It compares
+// the two while the file is open, so os.SameFile cannot take another file for it (see reserveDatabasePath).
+func removeReservedDatabasePath(path string, reserved *os.File) error {
 	if reserved == nil {
 		return nil
 	}
+	held, err := reserved.Stat()
+	if err != nil {
+		return errors.Join(fmt.Errorf("checking reserved database %s for cleanup: %w", path, err), reserved.Close())
+	}
 	current, err := os.Lstat(path)
+	ours := err == nil && os.SameFile(held, current)
+	// Windows does not remove a file while a handle holds it, so the handle closes before the remove.
+	closeErr := reserved.Close()
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil
+			return closeErr
 		}
-		return fmt.Errorf("checking reserved database %s for cleanup: %w", path, err)
+		return errors.Join(fmt.Errorf("checking reserved database %s for cleanup: %w", path, err), closeErr)
 	}
-	if !os.SameFile(reserved, current) {
-		return nil
+	if !ours {
+		return closeErr
 	}
 	if err := os.Remove(path); err != nil {
-		return fmt.Errorf("removing failed database %s: %w", path, err)
+		return errors.Join(fmt.Errorf("removing failed database %s: %w", path, err), closeErr)
 	}
-	return nil
+	return closeErr
 }
 
 // Close runs PRAGMA optimize on the writer, except on a snapshot under its restore check, and then closes the
@@ -353,7 +361,7 @@ func copyWith(from, to string, copy func(*sql.DB) error) error {
 	if err := errors.Join(copyErr, r.Close()); err != nil {
 		return errors.Join(err, removeReservedDatabasePath(to, reserved))
 	}
-	return nil
+	return reserved.Close()
 }
 
 // ErrRefused is the cause of a refusal: the caller asks for what cannot be, and nothing failed. A snapshot folder

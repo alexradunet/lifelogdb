@@ -144,6 +144,21 @@ func writeFile(t *testing.T, p string, b []byte) {
 	}
 }
 
+// replaceReservedFile removes the reserved file at p and writes b at p, as another process can do. It returns false
+// when Windows refuses the remove: the reservation holds its file open without FILE_SHARE_DELETE, so on Windows no
+// other file can take the path.
+func replaceReservedFile(t *testing.T, p string, b []byte) bool {
+	t.Helper()
+	if err := os.Remove(p); err != nil {
+		if runtime.GOOS == "windows" {
+			return false
+		}
+		t.Fatal(err)
+	}
+	writeFile(t, p, b)
+	return true
+}
+
 func createForeignSQLiteFile(t *testing.T, p string) {
 	t.Helper()
 	d, err := sql.Open("sqlite", p)
@@ -244,15 +259,19 @@ func TestInitApplyFailurePreservesReplacement(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "life.db")
 	replacement := []byte("replacement created after reservation\n")
 	applyErr := errors.New("controlled apply failure")
+	replaced := false
 	err := initWith(p, func(*sql.DB) error {
-		if err := os.Remove(p); err != nil {
-			t.Fatal(err)
-		}
-		writeFile(t, p, replacement)
+		replaced = replaceReservedFile(t, p, replacement)
 		return applyErr
 	})
 	if err == nil || !strings.Contains(err.Error(), applyErr.Error()) {
 		t.Fatalf("initWith error = %v, want controlled apply failure", err)
+	}
+	if !replaced {
+		if _, err := os.Lstat(p); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("failed owned reservation remains: %v", err)
+		}
+		return
 	}
 	got, err := os.ReadFile(p)
 	if err != nil {
