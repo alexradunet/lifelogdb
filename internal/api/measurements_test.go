@@ -528,6 +528,32 @@ func TestTheMetricsPageMakesAMetricACategoryAndAReading(t *testing.T) {
 	}
 }
 
+// TestAScoreRangeOutOfOrderComesBackOnItsForm: a score's range is lo-hi with lo less than hi (metrics_range_order,
+// D6). The pattern of the score form cannot compare two numbers, so a browser sends 5-1. The server answers the
+// schema's 422 on /metrics: New metric is open on the score form, that form holds what it sent, the alert says the
+// sentence of the trigger, and nothing is written, not the metric and not its new category.
+func TestAScoreRangeOutOfOrderComesBackOnItsForm(t *testing.T) {
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
+	page := browse(t, h, "/metrics")
+	rec := submit(h, "/metrics", formSends(t, page, `id="new-score"`, url.Values{"name": {"Pain"}, "unit": {"5-1"}, "category": {"Body"}}), "")
+	body := rec.Body.String()
+	score := regexp.MustCompile(`(?s)<form id="new-score".*?</form>`).FindString(body)
+	alert := regexp.MustCompile(`(?s)<div class="alert[^"]*" role="alert" id="refused".*?</div>`).FindString(body)
+	const trigger = "a scale names its range as its unit, lo-hi with lo less than hi, as in 1-5 (D6)"
+	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(alert, trigger) || !strings.Contains(body, `id="new-metric" open>`) ||
+		!strings.Contains(body, `<input type="radio" name="new-kind" value="score" checked>`) ||
+		!strings.Contains(score, `<form id="new-score" method="POST" action="/metrics" aria-describedby="refused" class="kind-score">`) ||
+		!strings.Contains(score, `name="name" value="Pain"`) || !strings.Contains(score, `name="unit" value="5-1"`) ||
+		!strings.Contains(score, `name="category" value="Body"`) {
+		t.Errorf("a score with the range 5-1: %d\nthe alert: %s\nthe score form: %s", rec.Code, alert, score)
+	}
+	for _, title := range []string{"Pain", "Body"} {
+		if e, err := c.Get(t.Context(), "/pages?title="+title); apitest.Status(err) != http.StatusNotFound {
+			t.Errorf("the page %s after the refusal: %v %v, want none", title, e, err)
+		}
+	}
+}
+
 // The metrics as cards (docs/plans/112-metrics-as-cards.md): the cards that /metrics draws. Several metrics filed in a
 // category in one write are TestFileMetricsAtOnce's; the parity table of cmd/lifelog runs file-pages on every surface.
 

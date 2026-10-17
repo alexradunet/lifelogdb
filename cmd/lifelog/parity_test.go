@@ -384,6 +384,7 @@ func parityRows() []parityRow {
 		parityRow{"save-body at the largest version", rowLargestVersion},
 		parityRow{"register-metric", rowRegisterMetric},
 		parityRow{"promote a place", rowPromoteAPlace},
+		parityRow{"register-metric with a range out of order", rowRangeOutOfOrder},
 	)
 }
 
@@ -767,4 +768,20 @@ func rowPromoteAPlace(x *parityRun) {
 	if after := same(x.pageByID(p)); !reflect.DeepEqual(after, before) || before["type"] != "place" {
 		x.t.Errorf("the place after the refusals: %v, want %v, a place", after, before)
 	}
+}
+
+// A scale's range is lo-hi with lo less than hi: register-metric with the unit 5-1 is refused by the schema
+// (metrics_range_order) as a 422 with the sentence of the trigger, for an owner on http, remote and cli. Nothing is
+// written: not the metric and not the category that the same write makes. register-metric is the owner's action, and
+// the row register-metric holds its refusal to an agent.
+func rowRangeOutOfOrder(x *parityRun) {
+	if x.owner {
+		const trigger = "a scale names its range as its unit, lo-hi with lo less than hi, as in 1-5 (D6)"
+		args := map[string]string{"name": "Pain", "unit": "5-1", "category": "Body"}
+		if msg := x.refused("register-metric", args, http.StatusUnprocessableEntity, "invalid"); !strings.Contains(msg, trigger) {
+			x.t.Errorf("register-metric with the unit 5-1: %q, want the sentence of the trigger", msg)
+		}
+	}
+	x.absent("Pain")
+	x.absent("Body")
 }

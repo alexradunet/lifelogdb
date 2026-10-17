@@ -54,5 +54,8 @@ Resolved 2026-10-17 without a proposal: D6 already names a range `lo-hi` with `l
 no decision ([how a change happens](../process.md)). The trigger `metrics_range_order` in
 [schema.sql](../schema/schema.sql) refuses, when a metric is made, a unit of the shape `lo-hi` whose `lo` is not less
 than its `hi`; [D6](../decisions/D06-mood-is-a-measurement.md) cites it, a mutant and the `facts` suite hold it. An
-`UPDATE` needs no trigger of its own: `metrics_unit_fixed` refuses every change of a unit. Plan 125 applies the
-trigger to the owner's file.
+`UPDATE` needs no trigger of its own: `metrics_unit_fixed` refuses every change of a unit. No Go check of the writer
+refused such a unit, so `register-metric` and the New metric forms now answer the schema's 422 with the sentence of
+the trigger, on every surface, and nothing is written; the writer's own tests and the parity table hold it. The
+writer's `isScale` compared the two bounds again: it now reads the shape only, since the schema keeps the bounds in
+order. Plan 125 applies the trigger to the owner's file.

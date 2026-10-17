@@ -65,17 +65,13 @@ func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
 	return true, nil
 }
 
-// isScale says whether a metric's unit names a scale's range: two numbers of ASCII digits around one hyphen with the
-// lower below the upper (`1-5`, `0-10`). The schema holds the values of a scale to its range
-// (measurements_scale_range, D6). A count or a 0/1 habit has no unit (D7, D24).
+// isScale says whether the unit of a stored metric names a scale's range: two numbers of ASCII digits around one
+// hyphen (`1-5`, `0-10`). The schema keeps the lower number below the upper one (metrics_range_order), so the shape is
+// enough, and it holds the values of a scale to its range (measurements_scale_range, D6). A count or a 0/1 habit has
+// no unit (D7, D24).
 func isScale(unit string) bool {
 	a, b, found := strings.Cut(unit, "-")
-	if !found || !asciiDigits(a) || !asciiDigits(b) {
-		return false
-	}
-	// compared as digit strings, so a bound of any length orders exactly
-	a, b = strings.TrimLeft(a, "0"), strings.TrimLeft(b, "0")
-	return len(a) < len(b) || len(a) == len(b) && a < b
+	return found && asciiDigits(a) && asciiDigits(b)
 }
 
 func asciiDigits(s string) bool {

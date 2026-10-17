@@ -301,6 +301,8 @@ func TestRegisteringAnExistingScaleAdoptsIt(t *testing.T) {
 	}
 }
 
+// TestIsScale: the shape of a scale's range. A unit with its bounds out of order (5-1, 3-3) is never stored: the schema
+// refuses it (metrics_range_order), as TestCreateMetricRefusalsWriteNothing holds.
 func TestIsScale(t *testing.T) {
 	for _, c := range []struct {
 		unit string
@@ -308,7 +310,7 @@ func TestIsScale(t *testing.T) {
 	}{
 		{"1-5", true}, {"0-10", true}, {"1-100", true}, {"01-05", true}, {"0-1", true},
 		{"0-100000000000000000000", true}, {"100000000000000000000-100000000000000000001", true},
-		{"", false}, {"1-1", false}, {"5-1", false}, {"0-0", false}, {"1-", false},
+		{"", false}, {"1-", false},
 		{"-5", false}, {"-", false}, {"1-5-7", false}, {"1--5", false}, {"1 -5", false},
 		{"1-5 ", false}, {"1–5", false}, {"+1-5", false}, {"1.5-5", false}, {"a-b", false},
 		{"١-٥", false}, {"kg", false}, {"mg/dL", false}, {"1/5", false}, {"2024-2025", true},
@@ -488,7 +490,11 @@ func TestCreateMetricRefusalsWriteNothing(t *testing.T) {
 	if _, err := s.AddFile(ctx, "cli", FileIn{Title: "Scan.pdf", SHA256: sha('c'), MIME: "application/pdf"}); err != nil {
 		t.Fatal(err)
 	}
+	if _, _, err := s.CreatePage(ctx, "cli", "Grade", "what the teacher gives", ""); err != nil {
+		t.Fatal(err)
+	}
 	const promoteOnly = "only a plain page is promoted: a person, a place, a metric or a file keeps its type (D20)"
+	const outOfOrder = "a scale names its range as its unit, lo-hi with lo less than hi, as in 1-5 (D6)"
 	for _, c := range []struct {
 		name string
 		m    NewMetric
@@ -503,6 +509,12 @@ func TestCreateMetricRefusalsWriteNothing(t *testing.T) {
 		{"a place's title", NewMetric{Name: "Lake Example", Unit: "km"}, 422, promoteOnly},
 		{"a person's title", NewMetric{Name: "Ana Example", Unit: "km"}, 422, promoteOnly},
 		{"a file's title", NewMetric{Name: "Scan.pdf", Unit: "km"}, 422, promoteOnly},
+		// a unit of the shape lo-hi with lo not less than hi is not a range: the schema refuses it (metrics_range_order),
+		// for a new metric, for a plain page that becomes the metric, and with the category that the same write makes
+		{"a range with its bounds out of order", NewMetric{Name: "Pain", Unit: "5-1"}, 422, outOfOrder},
+		{"a range with equal bounds", NewMetric{Name: "Pain", Unit: "3-3"}, 422, outOfOrder},
+		{"a plain page with a range out of order", NewMetric{Name: "Grade", Unit: "10-1"}, 422, outOfOrder},
+		{"a range out of order in a new category", NewMetric{Name: "Pain", Unit: "5-1", Category: "Body"}, 422, outOfOrder},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			before := everyRow(t, s)
