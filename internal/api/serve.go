@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"lifelog/internal/api/siren"
@@ -141,13 +142,12 @@ func (h *server) mount(m *http.ServeMux, cat []spec, handlers map[string]actionF
 		m.HandleFunc(s.Method+" "+s.Path, h.serve(func(r *http.Request) (*siren.Entity, error) {
 			var src string
 			if s.Method != "GET" || s.Owner {
-				var err error
-				if src, err = source(r); err != nil {
+				src = source(r)
+			}
+			if s.Owner {
+				if err := requireOwner(src); err != nil {
 					return nil, err
 				}
-			}
-			if s.Owner && !isOwner(src) {
-				return nil, &core.Error{Status: http.StatusForbidden, Msg: "this action is the owner's: an agent or an import may not run it"}
 			}
 			return f(r, s, src)
 		}))
@@ -420,7 +420,8 @@ func wantsHTML(r *http.Request) bool {
 	return strings.Contains(a, "text/html") && !strings.Contains(a, "json")
 }
 
-func source(r *http.Request) (string, error) {
+// source is the writer of a request: its header, else "ui" for a browser and "api". The name is not checked here.
+func source(r *http.Request) string {
 	s := r.Header.Get(siren.SourceHeader)
 	switch {
 	case s != "":
@@ -429,13 +430,25 @@ func source(r *http.Request) (string, error) {
 	default:
 		s = "api"
 	}
-	return s, core.CheckSource(s)
+	return s
 }
 
-// isOwner reports a writer that is the owner: not an agent (agent:*) and not an import (import:*). The owner-only
+// writerRE is the grammar of a writer name: entities_source, measurements_source and links_source.
+var writerRE = regexp.MustCompile(`^[a-z0-9_:.-]{1,64}$`)
+
+// requireOwner refuses a writer that is not the owner: an agent (agent:*) or an import (import:*). The owner-only
 // actions (register-metric, snapshot, integrity-check) are refused to any other writer, on every surface.
-func isOwner(source string) bool {
-	return !strings.HasPrefix(source, "agent:") && !strings.HasPrefix(source, "import:")
+// It checks the grammar of the name too, which repeats the CHECKs on purpose. An owner-only action can read and meet
+// no CHECK, and the prefix tests below would pass "Agent:x" as the owner. Any other write leaves the name to the
+// schema.
+func requireOwner(source string) error {
+	if !writerRE.MatchString(source) {
+		return core.Invalid("source %q: 1-64 characters of a-z 0-9 _ : . -", source)
+	}
+	if strings.HasPrefix(source, "agent:") || strings.HasPrefix(source, "import:") {
+		return &core.Error{Status: http.StatusForbidden, Msg: "this action is the owner's: an agent or an import may not run it"}
+	}
+	return nil
 }
 
 func (h *server) actions(*http.Request) (*siren.Entity, error) {

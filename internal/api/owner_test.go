@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"lifelog/internal/api"
@@ -47,5 +48,29 @@ func TestOwnerOnlyActionsPolicy(t *testing.T) {
 	}
 	if files, err := os.ReadDir(snapshots); err != nil || len(files) != 0 {
 		t.Fatalf("a refused snapshot wrote in the snapshot folder: %v %v", files, err)
+	}
+}
+
+// A writer name that is not well formed is refused where it is used. A write that inserts a row meets
+// entities_source, so the 422 is SQLite's and names the constraint. An owner-only action may only read, and meets no
+// CHECK, so the boundary refuses the name: "Agent:x" must not pass as the owner by missing the prefix "agent:".
+func TestMalformedWriterIsRefusedByTheSchemaOrTheOwnerCheck(t *testing.T) {
+	d := dbtest.New(t)
+	h := api.New(&core.Store{DB: d, SnapshotDir: t.TempDir()})
+	catalog := apitest.Must(t)(client.InProcess(h, "cli").Get(t.Context(), "/actions"))
+	for _, source := range []string{"Bad Source!", "Agent:x", strings.Repeat("a", 65)} {
+		c := client.InProcess(h, source)
+		_, err := c.Do(t.Context(), apitest.Action(t, catalog, "create-page"), map[string]string{"title": "Malformed " + source[:3], "body": "words"})
+		if apitest.Status(err) != 422 || !strings.Contains(err.Error(), "entities_source") {
+			t.Errorf("create-page as %q: %v; want 422 that names entities_source", source, err)
+		}
+		_, err = c.Do(t.Context(), apitest.Action(t, catalog, "integrity-check"), nil)
+		if apitest.Status(err) != 422 {
+			t.Errorf("integrity-check as %q: %v; want 422", source, err)
+		}
+	}
+	var count int
+	if err := d.R.QueryRow("SELECT count(*) FROM entity_names WHERE title LIKE 'Malformed%'").Scan(&count); err != nil || count != 0 {
+		t.Errorf("a refused write left pages: %d %v", count, err)
 	}
 }

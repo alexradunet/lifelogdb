@@ -8,14 +8,22 @@ import (
 	"lifelog/internal/text"
 )
 
-// saveBody is Store.SaveBody in t.
+// saveBody is Store.SaveBody in t. A stale version is a conflict unless the body sent is the body the page holds:
+// that is a save sent again after its reply was lost, and it succeeds as the no-op it is. SetBody writes nothing
+// when the body is equal, so the page keeps its version.
 func (t *Tx) saveBody(id int64, body, version string) (Sync, error) {
 	p, err := t.livePage(id)
 	if err != nil {
 		return Sync{}, err
 	}
 	if version != p.Version {
-		return Sync{}, conflictCode("stale_version", "page %d changed since version %q (now %q): read it again", id, version, p.Version)
+		var same bool
+		if err := t.tx.QueryRowContext(t.ctx, `SELECT body IS ? FROM entities WHERE id = ?`, body, id).Scan(&same); err != nil {
+			return Sync{}, err
+		}
+		if !same {
+			return Sync{}, conflictCode("stale_version", "page %d changed since version %q (now %q): read it again", id, version, p.Version)
+		}
 	}
 	return t.SetBody(id, body)
 }

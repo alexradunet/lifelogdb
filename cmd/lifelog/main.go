@@ -376,9 +376,6 @@ func runContext(ctx context.Context, e env) (err error) {
 	if cmd.setup {
 		return cmd.run(ctx, e, args)
 	}
-	if err := core.CheckSource(o.source); err != nil {
-		return err
-	}
 	if o.url != "" {
 		e.c = client.Remote(o.url, o.source, o.token)
 		return cmd.run(ctx, e, args)

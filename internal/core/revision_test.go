@@ -50,6 +50,50 @@ func TestConditionalSaveRejectsEqualClockStaleToken(t *testing.T) {
 	}
 }
 
+// A save whose reply was lost is sent again with the old version. When the body is the one the page holds, the save
+// is a no-op that succeeds and answers the live version. When the body differs, the version decides: 409.
+func TestSaveBodyResentWithAStaleVersionIsANoop(t *testing.T) {
+	s := fresh(t)
+	id, _, err := s.CreatePage(ctx, "cli", "Resend witness", "first", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	read, err := s.PageByID(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const body = "second [[Kept]]"
+	if _, err := s.SaveBody(ctx, "cli", id, body, read.Version); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := s.PageByID(ctx, id)
+	if err != nil || saved.Version == read.Version {
+		t.Fatalf("the save did not advance the version: %+v %v", saved, err)
+	}
+
+	r, err := s.SaveBody(ctx, "cli", id, body, read.Version) // the retry: the old version, the same body
+	if err != nil {
+		t.Fatalf("a resent body with a stale version: %v; want success", err)
+	}
+	if len(r.Linked) != 1 || r.Linked[0] != "Kept" || len(r.Added) != 0 || len(r.Created) != 0 {
+		t.Errorf("the answer of the resend: %+v; want the link Kept and nothing added or created", r)
+	}
+	after, err := s.PageByID(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Version != saved.Version || after.Body != body || titles(after.Out, "wikilink") != "Kept" {
+		t.Errorf("the resend changed the page: %+v, was %+v", after, saved)
+	}
+
+	if _, err := s.SaveBody(ctx, "cli", id, body+" changed", read.Version); status(err) != 409 {
+		t.Errorf("a different body with a stale version: %v; want 409", err)
+	}
+	if again, err := s.PageByID(ctx, id); err != nil || again.Version != saved.Version || again.Body != body {
+		t.Errorf("the refused save changed the page: %+v %v", again, err)
+	}
+}
+
 func TestEditRevisionNoopRollbackAndTypedMutation(t *testing.T) {
 	s := fresh(t)
 	id, err := s.CreatePerson(ctx, "cli", "Person witness", "Name", "", "", "")

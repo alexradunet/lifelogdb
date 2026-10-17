@@ -670,7 +670,8 @@ func rowRename(x *parityRun, kind string) {
 }
 
 // A save with an old version is a 409 stale_version and writes nothing: the version of the last read, and a clock
-// token equal to updated_at (the token of an old program). The version is a string exact above 2^53.
+// token equal to updated_at (the token of an old program). The same save with the body the page holds is a no-op
+// that succeeds. The version is a string exact above 2^53.
 func rowStaleSave(x *parityRun) {
 	p, _, err := x.store.CreatePage(x.t.Context(), "cli", "Version parity", "first", "")
 	if err != nil {
@@ -697,6 +698,11 @@ func rowStaleSave(x *parityRun) {
 		x.t.Errorf("after the stale saves: %v %v, want the committed body at 9007199254740994", now["body"], now["version"])
 	}
 	x.absent("Forbidden")
+	// a save sent again after its reply was lost: the old version, the body the page holds
+	x.ok("save-body", map[string]string{"id": id(p), "version": "9007199254740993", "body": "committed [[Kept]]"})
+	if now := x.pageByID(p); now["body"] != "committed [[Kept]]" || now["version"] != "9007199254740994" {
+		x.t.Errorf("after the resent save: %v %v, want the committed body still at 9007199254740994", now["body"], now["version"])
+	}
 }
 
 // At the largest version, 2^63-1, the version is exact on the surface and in the action's field. A save of the same
