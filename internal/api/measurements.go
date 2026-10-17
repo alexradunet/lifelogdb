@@ -269,7 +269,10 @@ func (h *server) record(r *http.Request, act spec, src string) (*siren.Entity, e
 	if err != nil {
 		return nil, err
 	}
-	if id == 0 { // a re-send: the first one stands (docs/contract/imports.md)
+	if id == 0 { // a re-send: the first one stands (docs/contract/imports.md), and the answer links its day
+		if day, err = h.s.RecordedDay(r.Context(), src, v.Get("import_key"), v.Get("metric")); err != nil {
+			return nil, err
+		}
 		return &siren.Entity{Class: []string{"result"}, Title: "Already recorded",
 			Properties: map[string]any{"message": "a reading with this import_key was recorded before; nothing changed"},
 			Links:      []siren.Link{link("day", siren.DayHref(day), day), link("index", "/", "Home")}}, nil

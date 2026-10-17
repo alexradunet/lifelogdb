@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"math"
 	"sort"
 	"strings"
@@ -197,6 +198,20 @@ func checkValue(value *float64) error {
 
 func (s *Store) Record(ctx context.Context, source string, m Reading) (id int64, err error) {
 	return alone(s, ctx, source, func(t *Tx) (int64, error) { return t.Record(m) })
+}
+
+// RecordedDay is the day of the reading that the source recorded with the import key for the metric that the name
+// names: the reading that stands when Record answers that it was sent before. A name never leaves its owner and a
+// reading never changes, so the read after the write finds the same row.
+func (s *Store) RecordedDay(ctx context.Context, source, importKey, metric string) (string, error) {
+	var day string
+	err := s.DB.R.QueryRowContext(ctx, `SELECT day FROM measurements
+	        WHERE source = ? AND import_key = ? AND metric_id = (SELECT entity_id FROM entity_names WHERE name_key = ?)`,
+		source, importKey, text.TitleKey(metric)).Scan(&day)
+	if err != nil {
+		return "", fmt.Errorf("the reading %s sent before: %w", importKey, err)
+	}
+	return day, nil
 }
 
 func (s *Store) Correct(ctx context.Context, source string, wrong int64, value *float64) (id int64, err error) {
