@@ -393,6 +393,7 @@ func parityRows() []parityRow {
 		parityRow{"a capture with a key sent again", rowCaptureSentAgain},
 		parityRow{"random-day", rowRandomDay},
 		parityRow{"random-page kind=person", rowRandomPage},
+		parityRow{"search kind=person", rowSearchKind},
 	)
 }
 
@@ -654,6 +655,30 @@ func rowSearchNewest(x *parityRun) {
 	if msg := x.refused("search", map[string]string{"q": "lantern", "order": "oldest"}, http.StatusUnprocessableEntity, "invalid"); !strings.Contains(msg, "best, newest") {
 		x.t.Errorf("the refusal %q does not name the orders", msg)
 	}
+}
+
+// search with a kind lists only the hits of that kind, and counts every kind (docs/plans/130-the-explore-pass.md); a
+// kind that is not one is a 422.
+func rowSearchKind(x *parityRun) {
+	ctx := x.t.Context()
+	if _, _, err := x.store.Capture(ctx, "cli", "2021-05-05", "A lantern.", nil); err != nil {
+		x.t.Fatal(err)
+	}
+	if _, err := x.store.CreatePerson(ctx, "cli", "Keeper of the lantern", "", "", "", ""); err != nil {
+		x.t.Fatal(err)
+	}
+	e := x.ok("search", map[string]string{"q": "lantern", "kind": "person"})
+	p := props(x.t, e)
+	var hits []string
+	for _, h := range p["hits"].([]any) {
+		h := h.(map[string]any)
+		hits = append(hits, fmt.Sprint(h["kind"], " ", h["title"]))
+	}
+	if counts := p["counts"].(map[string]any); strings.Join(hits, ",") != "person Keeper of the lantern" || p["kind"] != "person" ||
+		counts["all"] != json.Number("2") || counts["day"] != json.Number("1") || counts["person"] != json.Number("1") {
+		x.t.Errorf("search kind=person: %v, kind %v, counts %v", hits, p["kind"], p["counts"])
+	}
+	x.refused("search", map[string]string{"q": "lantern", "kind": "metric"}, http.StatusUnprocessableEntity, "invalid")
 }
 
 // create-place with a category makes the place and its part-of link in one write, and the category when it is new.

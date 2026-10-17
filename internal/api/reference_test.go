@@ -29,7 +29,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 			"years": []yearJump{}, "months": []monthJump{}},
 		"browse": map[string]any{"kind": "", "in": browseIn{}, "unfiled": false, "ghosts": false, "media": "", "counts": browseCounts{},
 			"media_counts": mediaCounts{}, "categories": []core.Category{}, "rows": []browseRow{}, "limit": 0, "offset": 0},
-		"search":                    map[string]any{"q": "", "order": "", "titles": []core.TitleMatch{}, "hits": []core.Hit{}, "limit": 0, "offset": 0},
+		"search":                    map[string]any{"q": "", "order": "", "kind": "", "counts": map[string]int{}, "titles": []core.TitleMatch{}, "hits": []searchHit{}, "limit": 0, "offset": 0},
 		"day":                       dayView{},
 		"month":                     map[string]any{"month": "", "today": "", "days": []monthDay{}},
 		"week":                      map[string]any{"week": "", "from": "", "through": "", "today": "", "days": []monthDay{}, "metrics": []weekMetric{}},

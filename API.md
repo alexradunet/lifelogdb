@@ -258,11 +258,15 @@ too), `media` and `document`; `random-page` with `kind` filled with the kind of 
 
 ### search
 
-`GET /search?q=&order=` (FTS5 syntax over titles and bodies). Hits are also embedded as `item` links. Action: `search`.
+`GET /search?q=&order=&kind=` (FTS5 syntax over titles and bodies). Hits are also embedded as `item` links. Action: `search`.
 `order` is optional: `best` (the default) lists the best match first; `newest` lists the newest day first. The day of a
 page is its title when it is a day page, and else the local day of its `created_at` (in the zone of the writer). Pages of
 one day keep the order of the best match. Any other `order` is a 422 (`invalid`) that names the two. Links: `self`,
-`index`, `order` (the same words in the other order, titled `Newest first` or `Best match`), `prev` and `next`.
+`index`, `order` (the same words in the other order, titled `Newest first` or `Best match`), `prev` and `next`, and a
+`kind` link for each chip ([plan 130](docs/plans/130-the-explore-pass.md)): `All`, then `Days`, `Pages`, `People`,
+`Places` and `Files`, each with `class` its kind (`all` for All) and the same words and order.
+`kind` is optional: `day`, `page` (a metric is one), `person`, `place` or `file` lists only the hits of that kind; with
+none, every kind. Any other `kind` is a 422 (`invalid`).
 A page is in one list only: the `hits` leave out the pages that `titles` lists, and the paging counts the pages that are left.
 With no `q`, or a `q` of blanks only (spaces, tabs, a no-break space or another Unicode space), the answer has the
 action `search` and no properties: a browser draws it as the page to search from.
@@ -271,6 +275,8 @@ action `search` and no properties: a browser draws it as the page to search from
 |---|---|---|
 | `q` | string | the query |
 | `order` | string | the order of `hits`: `best` or `newest` |
+| `kind` | string | the kind of `hits`; empty for every kind |
+| `counts` | object | the hits of every page of the search by kind (`day`, `page`, `person`, `place`, `file`, each 0 when none) and `all`, their sum; the `titles` are not counted, and `kind` does not change a count |
 | `titles[]` | list | the live pages whose name key starts with the title key of `q` (as [titles and wikilinks](docs/contract/titles-and-wikilinks.md) folds a title), at most 8, in key order |
 | `titles[].name` | string | the name that starts with `q`: the page's title or one of its aliases |
 | `titles[].title` | string | the page's preferred title |
@@ -280,6 +286,8 @@ action `search` and no properties: a browser draws it as the page to search from
 | `hits[].id` | integer | the page's id |
 | `hits[].title` | string | its title |
 | `hits[].snippet` | string | the matching text, matches in `⟦`…`⟧` (U+27E6, U+27E7: never brackets, which a body's text uses) |
+| `hits[].kind` | string | `day` (a day page), `page` (a page or a metric), `person`, `place` or `file` |
+| `hits[].picture` | string | the address of the picture of its cover, or of a file's own picture; absent when it has none |
 | `limit` | integer | the page size used |
 | `offset` | integer | the rows skipped |
 
