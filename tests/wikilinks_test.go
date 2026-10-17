@@ -97,7 +97,8 @@ func targets(body string) []string { _, t, _ := text.Targets(body, ""); return t
 //
 //	orphan, carries ids by RETURNING, and equals the writer's own save after 400 random edits;
 //
-// C  cookbook/backlinks lists a day page's wikilink and not a stub's redirect row.
+// C  cookbook/backlinks lists a day page's wikilink and not a stub's redirect row;
+// D  a fault of SAVEPOINT or RELEASE fails the save (docSaveFault).
 func docSaveContract(s *S) {
 	// ---- A  the table of contract/titles-and-wikilinks
 	rows, bad := s.printedVectors()
@@ -209,6 +210,93 @@ func docSaveContract(s *S) {
 	}
 	s.K("C cookbook/backlinks keeps old-name mentions on the same identity", slices.Equal(slices.Sorted(slices.Values(got)), slices.Sorted(slices.Values([]string{"wikilink|" + ids(mm), "wikilink|" + ids(dd)}))), tab(r))
 
+	// ---- D  a fault of a savepoint fails the save
+	s.K("D cookbook/save-a-body says that an error of SAVEPOINT, ROLLBACK TO or RELEASE fails the whole save",
+		strings.Contains(strings.Join(strings.Fields(s.d.Page("cookbook/save-a-body.md")), " "), "An error of `SAVEPOINT`, of `ROLLBACK TO` or of `RELEASE` fails the whole save"))
+	if ok {
+		docSaveFault(s, st)
+	}
+}
+
+// docSaveFault: cookbook/save-a-body run literally on a full file. A fault of SAVEPOINT, and a fault of the RELEASE
+// after a target that succeeded, each fail the save: SQLite has rolled the transaction back, and the page keeps its
+// body and its links. A save that goes on after the fault writes outside a transaction and loses the page's links
+// (D19). The method is the one of the writer's own test of the fault. VACUUM removes the free pages, and
+// max_page_count then lets the file grow by 16 pages only. FTS5 keeps the terms of a write in memory. It writes them
+// to the file when a savepoint opens, and when a savepoint closes after a statement in it opened its own savepoint.
+// The terms of 10,000 different words need more than 16 pages. A row that keeps its size is written in place and
+// needs no new page, so each page is saved once more in capitals first, and the save under test writes a body of
+// the same length. In the RELEASE case, a TEMP trigger (deliberate damage) writes the long body of Big again with
+// other terms when the save links New: the last statement of the target, so the terms wait for its RELEASE. The
+// witness needs the FTS5 of the driver's SQLite (tests/README.md); each label also holds that the fault came.
+func docSaveFault(s *S, st saveSteps) {
+	var long strings.Builder // 10,000 different words
+	for i := range 10000 {
+		fmt.Fprintf(&long, " c%05d", i)
+	}
+	for _, tc := range []struct {
+		name, home, save, trigger string // home is the body of Home before the save
+	}{
+		{"SAVEPOINT", "[[Old]]" + long.String(), "[[New]]" + strings.ReplaceAll(long.String(), "c", "b"), ""},
+		{"RELEASE", "[[Old]]", "[[New]]", `CREATE TEMP TRIGGER rewrite_big AFTER INSERT ON links WHEN NEW.kind = 'wikilink'
+		    BEGIN UPDATE entities SET body = replace(body, 'C', 'D') WHERE preferred_name_key = 'big'; END`},
+	} {
+		c := s.freshWith(F{Path: filepath.Join(s.dir, "fault-"+tc.name+".db")})
+		// save is the recipe, literally: the body (step 0), the links (steps 1-4) and the COMMIT.
+		save := func(id int64, body string) string {
+			return try(func() {
+				c.must(st.begin)
+				c.must("UPDATE entities SET body=? WHERE id=?", body, id)
+				c.docSave(st, id, body, c.str("SELECT preferred_name_key FROM entities WHERE id=?", id), true)
+				c.must(st.commit)
+			})
+		}
+		page := func(title, body string) int64 {
+			c.must(st.begin)
+			id := c.pageW(title, nil, "")
+			c.must(st.commit)
+			if out := save(id, body); out != "OK" {
+				stop("fault fixture %s: %s", title, out)
+			}
+			if out := save(id, strings.ToUpper(body)); out != "OK" {
+				stop("fault fixture %s: %s", title, out)
+			}
+			return id
+		}
+		page("Big", long.String())
+		home := page("Home", tc.home)
+		if tc.trigger != "" {
+			c.must(tc.trigger)
+		}
+		limit := c.str("PRAGMA max_page_count")
+		c.must("VACUUM")
+		c.must(fmt.Sprintf("PRAGMA max_page_count = %d", c.n("PRAGMA page_count")+16))
+		kept := func() bool {
+			return c.str("SELECT body FROM entities WHERE id=?", home) == strings.ToUpper(tc.home) && slices.Equal(c.linksOf(home), []string{"Old"}) &&
+				c.n("SELECT count(*) FROM entity_names WHERE name_key='new'") == 0
+		}
+
+		out := save(home, tc.save)
+		ended := c.tryx("ROLLBACK") // the save fails: the writer rolls back, and SQLite has done it already
+		s.K("D a full file at "+tc.name+": the save fails, and SQLite has rolled the transaction back",
+			strings.Contains(out, "database or disk is full") && strings.Contains(ended, "no transaction is active"), clip(out, 120), ended)
+		s.K("D ...and the page keeps its body and its link, and no page New is made ("+tc.name+")", kept(), c.linksOf(home))
+
+		// a save that goes on after the fault, as if the target were only skipped: step 4 and COMMIT
+		out = try(func() {
+			c.must(st.begin)
+			c.must("UPDATE entities SET body=? WHERE id=?", tc.save, home)
+			c.docSave(st, home, tc.save, "home", true)
+		})
+		dele := c.tryx(st.dele, P{"page_id": home, "target_ids": "[]"})
+		commit := c.tryx(st.commit)
+		s.K("D a save that goes on after the fault at "+tc.name+" writes outside a transaction: step 4 commits alone, and the page loses its link",
+			strings.Contains(out, "database or disk is full") && dele == "OK" && strings.Contains(commit, "no transaction is active") &&
+				c.str("SELECT body FROM entities WHERE id=?", home) == strings.ToUpper(tc.home) && len(c.linksOf(home)) == 0,
+			clip(out, 120), dele, commit, c.linksOf(home))
+		c.must("PRAGMA max_page_count = " + limit)
+		c.Close()
+	}
 }
 
 // saveContract: the save contract through the writer's own save, against the DDL under test. Expected outcome in each label.
