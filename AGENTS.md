@@ -49,9 +49,10 @@ fast feedback**. Safeguards should catch failures, not create ceremony.
   knobs or speculative extension points for hypothetical needs. Do not reorganize working code just for uniformity.
 - Keep application engineering guidance here, and its rules for synthetic workloads and performance evidence in
   [tests/README.md](tests/README.md). Keep application decisions and the
-  [engineering references](README.md#engineering-references) in [README.md](README.md). The database contract, with
-  the checklist of the conventions every writer keeps, remains language-neutral in `docs/`. Explain non-obvious
-  reasons and constraints, not what the syntax does.
+  [engineering references](README.md#engineering-references) in [README.md](README.md). The database contract remains
+  language-neutral in `docs/`, and each of its conventions has its home there; the
+  [checklist of the conventions](#conventions-every-writer-and-every-ddl-change-preserves) here only links those
+  homes. Explain non-obvious reasons and constraints, not what the syntax does.
 - **Write in Simplified Technical English** (ASD-STE100), in every page, comment, commit message and conversation:
   short sentences with one idea each, the active voice, one approved word for one meaning, no synonyms for variety,
   no idioms. The reader fifty years from now may not have English as a first language.
@@ -275,12 +276,28 @@ schema is frozen ([D13](docs/decisions/D13-migrations-and-freeze.md)):
 
 ## Conventions every writer and every DDL change preserves
 
-Their homes are in `docs/`.
-[Building a writer](docs/guides/building-a-writer.md#conventions-every-writer-and-every-ddl-change-preserves) holds
-the checklist: time, identity and provenance, no deletes, append-only facts, imports, CHECKs, links, names and journal
-identity, connections, the wikilink save contract and integrity. Check every writer change and every DDL change
-against it.
+Their homes are in `docs/`; this list is the checklist, not the rule. Each item names only the homes of its rules: a
+table and a `lifelog_meta` key are in [schema.sql](docs/schema/schema.sql).
 
+- **Time**: `lifelog_meta.instants` and `.days`, [D10](docs/decisions/D10-time-model.md).
+- **Identity and provenance**: the tables `entities` and `entity_names`, the typed extensions and
+  `lifelog_meta.source`; [a person or a place](docs/cookbook/person-or-place.md); [imports](docs/contract/imports.md).
+  Review owned names, direct typed foreign keys, stable identity and provenance together.
+- **No deletes**: `lifelog_meta.deletes`, [D11](docs/decisions/D11-tombstones.md).
+- **Append-only facts**: [D7](docs/decisions/D07-measurements.md),
+  [correct a measurement](docs/cookbook/correct-a-measurement.md).
+- **Imports**: [imports](docs/contract/imports.md), `lifelog_meta.writers`.
+- **CHECKs**: [the schema page](docs/schema/README.md), [D13](docs/decisions/D13-migrations-and-freeze.md),
+  `lifelog_meta.sqlite`.
+- **Links**: the table `link_kinds`, `lifelog_meta.typed_links`, [D8](docs/decisions/D08-entities-and-links.md).
+- **Names and journal identity**: [titles and wikilinks](docs/contract/titles-and-wikilinks.md),
+  [D5](docs/decisions/D05-pages-and-day-pages.md). Check preferred-name changes, retained aliases and journal
+  reservations against those rules. Spans and sessions follow [D22](docs/decisions/D22-events.md);
+  habits follow [D24](docs/decisions/D24-habits.md).
+- **Connections**: [connection setup](docs/contract/connections.md), `lifelog_meta.writers` and `.sqlite`.
+- **The wikilink save contract**: [titles and wikilinks](docs/contract/titles-and-wikilinks.md),
+  [save a body](docs/cookbook/save-a-body.md), [D19](docs/decisions/D19-wikilink-save-contract.md).
+- **Integrity**: [integrity checks](docs/contract/integrity-checks.md).
 - **Privacy**: `life.db` with its `-wal`/`-shm`, and every snapshot of it, never in git (health data, private notes and pictures cannot be scrubbed from history; `.gitignore` covers `*.db`, `*.db-journal`
   and `/import/`). Never commit a real vault, real notes or real data as a fixture:
   tests use synthetic data only.
