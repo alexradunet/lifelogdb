@@ -10,8 +10,8 @@
   cutoff can answer which version was recorded by a stated instant. This is not database-managed transaction
   time: equal timestamps, clock regressions and writes in the same transaction prevent exact commit-history
   reconstruction from `created_at`. The table is append-only (`measurements_no_update`, `measurements_no_delete`); a
-  correction supersedes (`measurements_one_correction`, `measurements_supersede_metric` and `measurements_supersede_scope` — the one
-  supersede invariant that could silently corrupt a series); a NULL value retracts
+  correction supersedes (`measurements_one_correction`); a correction stays in the metric of the row it corrects
+  (`measurements_supersede_metric`), as a correction in another metric would corrupt a series; a NULL value retracts
   (`measurements_first_has_value`); values are finite (`measurements_value_finite`: a `REAL` column
   stores `1e999` as infinity, and one such row poisons every average). SQLite turns a bound `NaN` into
   NULL before any CHECK sees it: as a first reading that is rejected, but as a correction it is a
