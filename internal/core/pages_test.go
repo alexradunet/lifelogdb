@@ -309,6 +309,12 @@ func TestSearchNewestKeepsRankThenIDInADay(t *testing.T) {
 	if newest[1].ID != beta || newest[2].Title != "Alpha" {
 		t.Errorf("newest puts %q then %q after the day page, want Beta then Alpha (the order of best)", newest[1].Title, newest[2].Title)
 	}
+	// A page of no hits is empty, as with best: a limit of 0, or an offset after the last hit.
+	for _, c := range []struct{ limit, offset int }{{0, 0}, {10, 3}} {
+		if got, err := s.SearchWith(ctx, "needle", SearchOptions{Order: SearchNewest}, c.limit, c.offset); err != nil || len(got) != 0 {
+			t.Errorf("newest with limit %d offset %d = %+v %v, want no hits", c.limit, c.offset, got, err)
+		}
+	}
 }
 
 // TestSearchRefusesAnUnknownOrder: the order is one of the SearchOrders. Anything else is a 422 before any read.

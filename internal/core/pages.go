@@ -431,7 +431,8 @@ func (s *Store) searchNewest(ctx context.Context, q, omit string, args []any, li
 		return nil, err
 	}
 	slices.SortStableFunc(matches, func(a, b match) int { return -strings.Compare(a.day, b.day) })
-	if offset >= len(matches) {
+	offset = max(offset, 0)
+	if limit <= 0 || offset >= len(matches) {
 		return []Hit{}, nil
 	}
 	matches = matches[offset:min(offset+limit, len(matches))]
