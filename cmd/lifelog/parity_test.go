@@ -383,6 +383,7 @@ func parityRows() []parityRow {
 		parityRow{"stale save-body", rowStaleSave},
 		parityRow{"save-body at the largest version", rowLargestVersion},
 		parityRow{"register-metric", rowRegisterMetric},
+		parityRow{"promote a place", rowPromoteAPlace},
 	)
 }
 
@@ -740,4 +741,30 @@ func rowRegisterMetric(x *parityRun) {
 		x.refused("register-metric", args, http.StatusForbidden, "forbidden")
 	}
 	x.absent("Weight")
+}
+
+// A place is never promoted: promote of a place to a person is refused by the schema (entities_promote_from_page) as a
+// 422 with the sentence of the trigger, on every surface. So is register-metric with the title of a place, which only
+// an owner may call. Nothing is written: the place keeps its type, its version and its body, and no person is made.
+func rowPromoteAPlace(x *parityRun) {
+	p, err := x.store.CreatePlace(x.t.Context(), "cli", "Lakeside", "")
+	if err != nil {
+		x.t.Fatal(err)
+	}
+	same := func(m map[string]any) map[string]any {
+		return map[string]any{"type": m["entity_type"], "version": m["version"], "body": m["body"], "person": m["person"]}
+	}
+	before := same(x.pageByID(p))
+	const trigger = "only a plain page is promoted: a person, a place, a metric or a file keeps its type (D20)"
+	if msg := x.refused("promote", map[string]string{"id": id(p), "to": "person"}, http.StatusUnprocessableEntity, "invalid"); !strings.Contains(msg, trigger) {
+		x.t.Errorf("promote of a place: %q, want the sentence of the trigger", msg)
+	}
+	if x.owner {
+		if msg := x.refused("register-metric", map[string]string{"name": "Lakeside", "unit": "km"}, http.StatusUnprocessableEntity, "invalid"); !strings.Contains(msg, trigger) {
+			x.t.Errorf("register-metric with the title of a place: %q, want the sentence of the trigger", msg)
+		}
+	}
+	if after := same(x.pageByID(p)); !reflect.DeepEqual(after, before) || before["type"] != "place" {
+		x.t.Errorf("the place after the refusals: %v, want %v, a place", after, before)
+	}
 }

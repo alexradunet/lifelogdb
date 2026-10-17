@@ -49,5 +49,7 @@ On a fresh database built from [schema.sql](../schema/schema.sql), with syntheti
 Resolved 2026-10-17 without a proposal: D20 and D27 already promote only a plain page, so the fix changes no
 decision ([how a change happens](../process.md)). The trigger `entities_promote_from_page` in
 [schema.sql](../schema/schema.sql) refuses a change of `entity_type` unless the old type is `page`;
-[D20](../decisions/D20-named-pages.md) cites it, a mutant and the `named` suite hold it. Plan 123 applies the
-trigger to the owner's file.
+[D20](../decisions/D20-named-pages.md) cites it, a mutant and the `named` suite hold it. The writer's 409s for a page
+of another type went: `promote` and `register-metric` answer the schema's 422 with the sentence of the trigger.
+`promote` keeps one 409, for a promotion to the type that the entity has already: it changes no type, so no rule of
+the schema sees it. Plan 123 applies the trigger to the owner's file.

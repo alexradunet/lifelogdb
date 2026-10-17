@@ -13,7 +13,8 @@ import (
 
 // RegisterMetric makes a metric (D27): a page titled name, whose body is the note, and its metrics row with the
 // unit, one id. A plain page of that title becomes the metric, as a person is promoted (D20): a ghost, or a note
-// the owner wrote about it, whose text is kept — the note is written only to an empty body. Registering one that
+// the owner wrote about it, whose text is kept — the note is written only to an empty body. The schema refuses a
+// person, a place or a file of that title (entities_promote_from_page). Registering one that
 // exists with the same unit is a no-op, and so is one with no unit where the existing metric is a scale (isScale): a
 // source that names Mood does not write its range, so the request takes the metric as it is. Another unit is
 // refused: a unit never changes (metrics_unit_fixed).
@@ -46,13 +47,9 @@ func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
 			return false, Conflict("metric %s exists with unit %q, not %q: a unit never changes; register a new metric", p.Title, have, unit)
 		}
 		return false, nil
-	case p.Type != "page":
-		// This check is not a copy of a DDL rule. The foreign keys (id, entity_type) of people and files refuse a
-		// person or a file made a metric (D20). A place has no typed row, so no rule of the DDL refuses a place made
-		// a metric: the writer keeps this 409 for that reason.
-		return false, Conflict("%s is taken by a %s: a metric's title must be free or a plain page (D27)", p.Title, p.Type)
 	}
-	// a day page is never a metric: entities_day_page_plain refuses the update
+	// a day page is never a metric (entities_day_page_plain), and a person, a place or a file never becomes one
+	// (entities_promote_from_page): the schema refuses the update
 	if _, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET entity_type = 'metric', deleted_at = NULL WHERE id = ?`, p.ID); err != nil {
 		return false, err
 	}
