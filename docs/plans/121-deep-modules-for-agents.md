@@ -985,16 +985,16 @@ Left for later: the rows of the records that no later part did.
 
 | finding | part | why it waits |
 |---|---|---|
-| an error of the `SAVEPOINT` statement, or of the `RELEASE` after a target that succeeded, is counted as a skipped target (`core/tx.go`) | 5 | a defect; its reproducer needs a fault of SQLite on these two statements |
+| an error of the `SAVEPOINT` statement, or of the `RELEASE` after a target that succeeded, is counted as a skipped target (`core/tx.go`) | 5 | a defect; its reproducer needs a fault of SQLite on these two statements; closed by plan 122, `eba272f` |
 | an error in steps 1 to 3 that is not a refusal is a skipped target, as the contract says ([save a body](../cookbook/save-a-body.md), D19) | 5 | a change of the contract needs the owner |
 | `enhanceText` keeps its own decode of the joined run | 5 | `1595b26` gives the reason |
 | a metric titled "day page", "page", "page (edited)" or "at" would show its reading as a part of the day | 5 | the day-view query of the cookbook names the parts by these words; a change needs the process |
-| `tombstones.go` writes "Deleted N pages." with its own words, not with `count` | 5 | the same words, written a second time |
+| `tombstones.go` writes "Deleted N pages." with its own words, not with `count` | 5 | the same words, written a second time; closed by plan 122, `85eb461` |
 | the order of "Pages written this day" is not defined for two pages written in one millisecond | 5 | the cookbook's query does not break the tie; a change needs the process |
 | Preview has no `formnovalidate`, so an empty required text area blocks Preview | 5 | harmless: there is nothing to preview |
 | the template `step` picks its access key by `.rel` | 5 | `rel` is the template's own parameter |
 | the templates draw the classes `num`, `agenda` and `readings-all`, which no sheet styles | 5 | a markup change of real pages |
-| the tools of a day start with an empty line | 5 | the tools of a day are byte for byte as before Part 5 |
+| the tools of a day start with an empty line | 5 | the tools of a day are byte for byte as before Part 5; closed by plan 122, `24c953a` |
 | the + Add fold of the style page sends its POST to `/styleguide`, which answers 405 | 5 | the style page writes nothing; its comment says so |
 | the tests of `internal/preview` keep `encodeJPEG` and `halves`; the tests of `internal/photo` keep `heifWithLocations` | 6 | `phototest` cannot make a red half and a blue half, or the `iloc` boxes of these tests |
 | no `TestMain` in `cmd/lifelog` | 6 | one subprocess test is left, and it builds its binary one time |
@@ -1003,12 +1003,12 @@ Left for later: the rows of the records that no later part did.
 | the test of the agents' texts knows seven words that look like a tool and are not one, and does not count the arguments of a command line | 6 | a check of each needs the fields, the answers and the link kinds in the test; the usage gives the count in words only |
 | the startup line of `serve` and the lines of `main` to stderr drop the error of their write | 6 | a line of the log at the edge of the process; no data is lost |
 | when a write and the action both fail, `show` returns the error of the write; `human` returns the error of `json.Marshal` even after a failed write | 6 | either way `main` exits 1 with a true error |
-| `text.Candidates` builds a map with one entry for each character of a run (`runeIndex`): a save of a body of 16 to 20 MiB in one run takes about 3 s | 7 | a change of the writer's extraction; a fix needs its reproducer first, a count of work |
-| no test saves a body of 16 to 20 MiB (`04bd2cf`) | 7 | the save costs seconds until the row above is fixed |
-| no test checks that the server stops reading a request at its limit: no test counts the bytes that the server reads | 7 | a count needs a request body that counts what the server reads |
+| `text.Candidates` builds a map with one entry for each character of a run (`runeIndex`): a save of a body of 16 to 20 MiB in one run takes about 3 s | 7 | a change of the writer's extraction; a fix needs its reproducer first, a count of work; closed by plan 122, `0c56d30` |
+| no test saves a body of 16 to 20 MiB (`04bd2cf`) | 7 | the save costs seconds until the row above is fixed; closed by plan 122, `0309543` |
+| no test checks that the server stops reading a request at its limit: no test counts the bytes that the server reads | 7 | a count needs a request body that counts what the server reads; closed by plan 122, `47b436f` |
 | seven files of `tests/` keep their own file (the Part 7 record names them) | 7 | to put two suites in one file is a choice of the grouping |
-| `agenticInit` is at 72.7 %: its error branches and the line "a kept file has another text" have no test of the CLI | 7 | `internal/agentic` tests the kept file; the line is one `Fprintln` |
-| the table of `TestNavMarksThePageTheBrowserIsOn` has the path `/import/prepared`, which plan 089 removed | 7 | the row asks that no link is marked, which holds for any path |
+| `agenticInit` is at 72.7 %: its error branches and the line "a kept file has another text" have no test of the CLI | 7 | `internal/agentic` tests the kept file; the line is one `Fprintln`; closed by plan 122, `f280b07` |
+| the table of `TestNavMarksThePageTheBrowserIsOn` has the path `/import/prepared`, which plan 089 removed | 7 | the row asks that no link is marked, which holds for any path; closed by plan 122, `13814a7` |
 | `view_forms_test.go`, `view_page_test.go` and `view_shell_test.go` of `internal/api` keep their names | 8 | they are tests of `api_test`, and they share their helpers with the other tests of `api` |
 | the tests of the forms of `view` draw actions written out in the shapes of the catalog's | 8 | the view cannot import the catalog; the tests of the pages in `api` draw the real catalog |
 | `sheetComments` (`api/styleguide_test.go`) is `cssComments` (`view/sheets_test.go`) a second time | 8 | two test packages share no helper |
