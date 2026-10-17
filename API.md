@@ -43,8 +43,8 @@ Every answer is one [Siren](https://github.com/kevinswiber/siren) entity:
 `GET /actions` is the catalog: every action with a templated `href` (`/pages/{id}/body`). A client fills the path
 fields and sends the rest as the form. An action is offered on a resource only where it is legal there, so a client
 that follows `actions` needs no rules of its own. A `required` field that is missing or empty is refused (422
-`invalid`, the message `missing field <name>`), and nothing is written. `search` is the one exception: with no `q`
-it answers with no hits ([search](#search)).
+`invalid`, the message `missing field <name>`), and nothing is written. `search` is the one exception: with no `q`,
+or a `q` of blanks only, it answers with no hits ([search](#search)).
 
 **Types** in the tables: `string`, `integer`, `number`, `boolean`, `day` (a local day, `YYYY-MM-DD`), `instant`
 (UTC, `2026-06-09T21:14:03.482Z`), `list`, `object`. A property marked *absent when empty* is left out of the JSON
@@ -199,7 +199,8 @@ too), `media` and `document`.
 ### search
 
 `GET /search?q=` (FTS5 syntax over titles and bodies). Hits are also embedded as `item` links. Action: `search`.
-With no `q`, the answer has the action `search` and no properties: a browser draws it as the page to search from.
+With no `q`, or a `q` of blanks only (spaces, tabs, a no-break space or another Unicode space), the answer has the
+action `search` and no properties: a browser draws it as the page to search from.
 
 | property | type | meaning |
 |---|---|---|

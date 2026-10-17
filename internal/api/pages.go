@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+	"strings"
 
 	"lifelog/internal/core"
 )
@@ -155,7 +156,7 @@ func (h *server) search(r *http.Request, _ spec, _ string) (*Entity, error) {
 	e := &Entity{Class: []string{"search"}, Title: "Search",
 		Links:   []Link{link("self", "/search?q="+url.QueryEscape(q), "Search"), link("index", "/", "Home")},
 		Actions: []Action{action("search", nil, map[string]any{"q": q})}}
-	if q == "" {
+	if strings.TrimSpace(q) == "" { // a q of only blanks has no words: it answers as the empty search does
 		return e, nil
 	}
 	limit, offset, err := pageOf(r, 50)
