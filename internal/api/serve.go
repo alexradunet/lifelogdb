@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"regexp"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"time"
 
@@ -246,7 +247,7 @@ func (h *server) serve(f func(*http.Request) (*siren.Entity, error)) http.Handle
 				w.Header().Set("Referrer-Policy", "no-referrer")
 			}
 		}
-		answer(w, r, status, e, frame{shell: h.s})
+		answer(w, r, status, e, frame{shell: h.s, submitted: submittedText(r)})
 	}
 }
 
@@ -311,6 +312,35 @@ type caught struct {
 func (c *caught) Header() http.Header         { return c.header }
 func (c *caught) Write(p []byte) (int, error) { return len(p), nil }
 func (c *caught) WriteHeader(int)             {}
+
+// textareas are the names of the long-text fields of the catalog (a body, an entry), sorted, so the first with a value
+// does not depend on the order of the catalog.
+var textareas = func() []string {
+	var names []string
+	for _, s := range catalog {
+		for _, f := range s.Fields {
+			if f.Type == "textarea" && !slices.Contains(names, f.Name) {
+				names = append(names, f.Name)
+			}
+		}
+	}
+	slices.Sort(names)
+	return names
+}()
+
+// submittedText is the long text that a POST sent, for the page of a refusal to show it again: the value of the first
+// long-text field of the catalog that has one. A request that is not a POST sent none.
+func submittedText(r *http.Request) string {
+	if r.Method != "POST" {
+		return ""
+	}
+	for _, name := range textareas {
+		if v := r.PostForm.Get(name); v != "" {
+			return v
+		}
+	}
+	return ""
+}
 
 // maxBack is the longest return path a browser form may send.
 const maxBack = 2048
@@ -410,7 +440,7 @@ const retryAfter = "1"
 // the page that a refused form came from.
 func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	e, status := errorEntity(r, err)
-	answer(w, r, status, e, frame{})
+	answer(w, r, status, e, frame{submitted: submittedText(r)})
 }
 
 // frame says how answer draws an entity as a page, and for whom. The zero frame gives a program JSON and a browser a
@@ -419,6 +449,9 @@ type frame struct {
 	shell    *core.Store   // the store that the sidebar reads; nil: no sidebar, so the page shows nothing of the database
 	refused  *view.Refusal // the refused form that the page shows; nil: none
 	pageOnly bool          // a page for every client, a program too: the answer is presentation and has no JSON form
+	// submitted is the long text that a refused browser form sent (submittedText), which the page of the refusal shows
+	// again. It is used only when the answer is the error of a POST.
+	submitted string
 }
 
 // answer is the one way an entity leaves the API: the answer of every route, guard and error. A program gets Siren
@@ -456,10 +489,7 @@ func pageAnswer(r *http.Request, status int, e *siren.Entity, fr frame) (int, []
 		f.Shell = shellOf(r.Context(), fr.shell)
 	}
 	if status >= 400 && r.Method == "POST" {
-		f.Submitted = r.PostForm.Get("body")
-		if f.Submitted == "" {
-			f.Submitted = r.PostForm.Get("text")
-		}
+		f.Submitted = fr.submitted
 		if ref, err := url.Parse(r.Referer()); err == nil && ref.Host == r.Host && strings.HasPrefix(ref.Path, "/") {
 			f.Back = ref.RequestURI()
 		}

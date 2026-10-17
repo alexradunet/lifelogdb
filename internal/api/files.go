@@ -28,17 +28,28 @@ const (
 	maxMeta          = 1 << 20  // the head of an original read for its metadata
 )
 
+// errNoFile is the refusal of a form that sends neither the original nor its sha256 and mime.
+const errNoFile = "send the original, or its sha256 and mime"
+
+// fileForm is a request of add-file or set-picture, read.
+type fileForm struct {
+	In   core.FileIn
+	Dry  bool // dry_run: write nothing, say what keeping the file would do
+	Sent bool // a file was sent: the original, or its sha256 and mime. A form with no file is not refused: the caller decides
+}
+
 // addFile keeps a file (docs/cookbook/keep-a-file.md, D9) and answers with its page; Result says what was written.
 func (h *server) addFile(r *http.Request, act spec, src string) (*siren.Entity, error) {
-	in, dry, sent, err := parseFileForm(r, act)
+	f, err := parseFileForm(r, act)
 	if err != nil {
 		return nil, err
 	}
-	if !sent {
-		return nil, core.Invalid("send the original, or its sha256 and mime")
+	if !f.Sent {
+		return nil, core.Invalid(errNoFile)
 	}
+	in := f.In
 	in.Day = h.dayNamed(in.Day)
-	if dry {
+	if f.Dry {
 		k, err := h.s.TryAddFile(r.Context(), src, in)
 		if err != nil {
 			return nil, err
@@ -55,129 +66,204 @@ func (h *server) addFile(r *http.Request, act spec, src string) (*siren.Entity, 
 }
 
 // parseFileForm reads a request of the action act (add-file or set-picture): its fields, refused as fieldsOf refuses
-// them, and sent, which says whether a file was sent. Multipart (a browser, the CLI): the original is streamed through
-// SHA-256 and never stored; a picture the writer reads is held, up to maxPicture, to make the preview from. A multipart
-// form with the file input left empty and no sha256 and no mime sends no file, and is not refused here: the caller
-// decides. Url-encoded or JSON (an agent that hashed the file itself): sha256 and mime, and no picture.
-func parseFileForm(r *http.Request, act spec) (in core.FileIn, dry, sent bool, err error) {
-	bad := func(msg string) (core.FileIn, bool, bool, error) {
-		return core.FileIn{}, false, false, core.Invalid("%s", msg)
-	}
+// them. Multipart (a browser, the CLI): the original is streamed through SHA-256 and never stored; a picture the
+// writer reads is held, up to maxPicture, to make the preview from. A multipart form with the file input left empty
+// and no sha256 and no mime sends no file (Sent is false), and is not refused here. Url-encoded or JSON (an agent
+// that hashed the file itself): sha256 and mime, and no picture.
+func parseFileForm(r *http.Request, act spec) (fileForm, error) {
 	if ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); ct != "multipart/form-data" {
-		v, err := fieldsOf(r, act)
-		if err != nil {
-			return core.FileIn{}, false, false, err
-		}
-		if v.Get("sha256") == "" || v.Get("mime") == "" {
-			return bad("send the original, or its sha256 and mime")
-		}
-		dry, err := flag(v, "dry_run")
-		return core.FileIn{Title: v.Get("title"), Category: v.Get("category"), SHA256: v.Get("sha256"), MIME: v.Get("mime"), Body: v.Get("body"), Day: v.Get("day")}, dry, true, err
+		return encodedFileForm(r, act)
 	}
+	m, err := readMultipart(r)
+	// A multipart form is read by hand, so net/http fills no r.PostForm. The text that was kept goes there, as ParseForm
+	// would put it: the page to return to and a refused form read it (backOf, Refusal), on an error too.
+	r.PostForm = m.retained()
+	if err != nil {
+		return fileForm{}, err
+	}
+	if err := required(m.text, act); err != nil {
+		return fileForm{}, err
+	}
+	in, sent, err := verifyOriginal(m)
+	if err != nil || !sent {
+		return fileForm{In: in}, err
+	}
+	if in.Preview, err = previewOf(m); err != nil {
+		return fileForm{}, err
+	}
+	dry, err := flagValue("dry_run", m.text.Get("dry_run"))
+	if err != nil {
+		return fileForm{}, err
+	}
+	return fileForm{In: in, Dry: dry, Sent: true}, nil
+}
+
+// encodedFileForm reads a file form that is not multipart: there is no original, so sha256 and mime say which file.
+func encodedFileForm(r *http.Request, act spec) (fileForm, error) {
+	v, err := fieldsOf(r, act)
+	if err != nil {
+		return fileForm{}, err
+	}
+	if v.Get("sha256") == "" || v.Get("mime") == "" {
+		return fileForm{}, core.Invalid(errNoFile)
+	}
+	dry, err := flag(v, "dry_run")
+	if err != nil {
+		return fileForm{}, err
+	}
+	in := core.FileIn{Title: v.Get("title"), Category: v.Get("category"), SHA256: v.Get("sha256"), MIME: v.Get("mime"), Body: v.Get("body"), Day: v.Get("day")}
+	return fileForm{In: in, Dry: dry, Sent: true}, nil
+}
+
+// multipartForm is what readMultipart takes from a multipart request.
+type multipartForm struct {
+	text      url.Values // the fields of fileTextFields, within the budget
+	textBytes int        // the budget used: every text field counts, kept or not
+	original  bool       // an original with a file name was sent
+	sum, typ  string     // SHA-256 and type of the original
+	picture   []byte     // the original, held, when the writer can read it as a picture and it is not too large
+	given     []byte     // the preview part, when one was sent
+	meta      photo.Meta // the metadata read from the head of the original
+}
+
+// retained is the part of the text that the browser needs back when a form is refused, or to return from it: the
+// body (the transcript) and the page to return to.
+func (m *multipartForm) retained() url.Values {
+	kept := url.Values{}
+	for _, key := range []string{"body", "back"} {
+		if m.text.Has(key) {
+			kept.Set(key, m.text.Get(key))
+		}
+	}
+	return kept
+}
+
+// readMultipart streams the parts of a multipart request and keeps only what the budgets allow: bounded text of known
+// names, and the original and the preview. It returns what it has read, also when it returns an error.
+func readMultipart(r *http.Request) (*multipartForm, error) {
+	m := &multipartForm{text: url.Values{}}
 	defer r.Body.Close()
 	mr, err := r.MultipartReader()
 	if err != nil {
-		return bad("the form: " + err.Error())
+		return m, invalidForm(err)
 	}
-	vals := url.Values{}
-	// Only accepted, bounded text is retained: the transcript for browser error recovery, and the page to return to.
-	r.PostForm = make(url.Values)
-	var sum, typ string
-	var picture, given []byte
-	var meta photo.Meta
-	original := false
-	parts, textBytes := 0, 0
+	parts := 0
 	seen := map[string]bool{}
-	overflow := func(msg string) (core.FileIn, bool, bool, error) {
-		return core.FileIn{}, false, false, requestLimit(msg)
-	}
 	for {
 		part, err := mr.NextPart()
 		if errors.Is(err, io.EOF) {
-			break
+			return m, nil
 		}
 		if err != nil {
-			return bad("the form: " + err.Error())
+			return m, invalidForm(err)
 		}
 		parts++
 		if parts > maxParts {
-			return overflow("multipart request has more than 64 parts")
+			return m, requestLimit("multipart request has more than 64 parts")
 		}
 		name := part.FormName()
 		if name == "original" || name == "preview" {
 			if seen[name] {
-				return overflow("duplicate " + name + " part")
+				return m, requestLimit("duplicate " + name + " part")
 			}
 			seen[name] = true
 		}
-		switch {
-		case (name == "original" || name == "preview") && part.FileName() == "": // a file input left empty
-			_, err = io.Copy(io.Discard, part)
-		case name == "original":
-			original = true
-			sum, typ, picture, meta, err = readOriginal(part)
-		case name == "preview":
-			given, err = io.ReadAll(io.LimitReader(part, maxPicture+1))
-			if err == nil && len(given) > maxPicture {
-				return overflow("the picture sent is larger than 64 MiB")
-			}
-		default:
-			limited := io.LimitReader(part, int64(min(maxField, maxMultipartText-textBytes)+1))
-			var n int64
-			if slices.Contains(fileTextFields, name) {
-				key := name
-				var b []byte
-				b, err = io.ReadAll(limited)
-				n = int64(len(b))
-				if err == nil && n <= maxField && textBytes+len(b) <= maxMultipartText {
-					vals.Set(key, string(b))
-					if key == "body" || key == "back" { // the browser's recovery and the page it returns to
-						r.PostForm.Set(key, vals.Get(key))
-					}
-				}
-			} else {
-				// Unknown values still consume the budget, but neither names nor values are retained.
-				n, err = io.Copy(io.Discard, limited)
-			}
-			textBytes += int(n)
-			if err == nil && (n > maxField || textBytes > maxMultipartText) {
-				return overflow("multipart text is larger than 16 MiB")
-			}
+		if err := m.take(part, name); err != nil {
+			return m, err
 		}
 		part.Close()
-		if err != nil {
-			return bad("the form: " + err.Error())
-		}
 	}
-	if err := required(vals, act); err != nil {
-		return core.FileIn{}, false, false, err
-	}
-	in = core.FileIn{Title: vals.Get("title"), Category: vals.Get("category"), SHA256: vals.Get("sha256"), MIME: vals.Get("mime"), Body: vals.Get("body"), Day: vals.Get("day"), Taken: meta.Day()}
+}
+
+// invalidForm is the refusal of a request that is not a form that can be read.
+func invalidForm(err error) error { return core.Invalid("the form: %v", err) }
+
+// take reads one part into m.
+func (m *multipartForm) take(part *multipart.Part, name string) error {
+	var err error
 	switch {
-	case original && in.SHA256 != "" && !strings.EqualFold(strings.TrimSpace(in.SHA256), sum):
-		return bad("the sha256 sent is not the original's (" + sum + ")")
-	case original:
-		in.SHA256 = sum
+	case (name == "original" || name == "preview") && part.FileName() == "": // a file input left empty
+		_, err = io.Copy(io.Discard, part)
+	case name == "original":
+		m.original = true
+		m.sum, m.typ, m.picture, m.meta, err = readOriginal(part)
+	case name == "preview":
+		m.given, err = io.ReadAll(io.LimitReader(part, maxPicture+1))
+		if err == nil && len(m.given) > maxPicture {
+			return requestLimit("the picture sent is larger than 64 MiB")
+		}
+	default:
+		return m.takeText(part, name)
+	}
+	if err != nil {
+		return invalidForm(err)
+	}
+	return nil
+}
+
+// takeText reads a text part. A name that is not in fileTextFields still uses the budget, but neither its name nor its
+// value is kept.
+func (m *multipartForm) takeText(part *multipart.Part, name string) error {
+	limited := io.LimitReader(part, int64(min(maxField, maxMultipartText-m.textBytes)+1))
+	var n int64
+	var err error
+	if slices.Contains(fileTextFields, name) {
+		var b []byte
+		b, err = io.ReadAll(limited)
+		n = int64(len(b))
+		if err == nil && n <= maxField && m.textBytes+len(b) <= maxMultipartText {
+			m.text.Set(name, string(b))
+		}
+	} else {
+		n, err = io.Copy(io.Discard, limited)
+	}
+	m.textBytes += int(n)
+	if err != nil {
+		return invalidForm(err)
+	}
+	if n > maxField || m.textBytes > maxMultipartText {
+		return requestLimit("multipart text is larger than 16 MiB")
+	}
+	return nil
+}
+
+// verifyOriginal makes the file of the form from its text and its original: an original gives the sha256 (a sha256
+// sent with it must be the same) and the type if none was sent. Without an original, the form must send sha256 and
+// mime, or neither: sent is then false, and the file is the one of the form's text only.
+func verifyOriginal(m *multipartForm) (in core.FileIn, sent bool, err error) {
+	in = core.FileIn{Title: m.text.Get("title"), Category: m.text.Get("category"), SHA256: m.text.Get("sha256"), MIME: m.text.Get("mime"),
+		Body: m.text.Get("body"), Day: m.text.Get("day"), Taken: m.meta.Day()}
+	switch {
+	case m.original && in.SHA256 != "" && !strings.EqualFold(strings.TrimSpace(in.SHA256), m.sum):
+		return core.FileIn{}, false, core.Invalid("the sha256 sent is not the original's (%s)", m.sum)
+	case m.original:
+		in.SHA256 = m.sum
 		if in.MIME == "" {
-			in.MIME = typ
+			in.MIME = m.typ
 		}
 	case in.SHA256 == "" && in.MIME == "": // no file sent: the dry_run field is not read
-		return in, false, false, nil
+		return in, false, nil
 	case in.SHA256 == "" || in.MIME == "":
-		return bad("send the original, or its sha256 and mime")
+		return core.FileIn{}, false, core.Invalid(errNoFile)
 	}
-	if given == nil {
-		given = picture
+	return in, true, nil
+}
+
+// previewOf makes the picture of the file: from the preview that was sent, else from the original when the writer can
+// read it. Nil when there is neither.
+func previewOf(m *multipartForm) ([]byte, error) {
+	source := m.given
+	if source == nil {
+		source = m.picture
 	}
-	if given != nil {
-		p, err := preview.Make(given)
-		if err != nil {
-			return bad("the picture: " + err.Error())
-		}
-		in.Preview = p
+	if source == nil {
+		return nil, nil
 	}
-	dry, err = flagValue("dry_run", vals.Get("dry_run"))
-	return in, dry, true, err
+	p, err := preview.Make(source)
+	if err != nil {
+		return nil, core.Invalid("the picture: %v", err)
+	}
+	return p, nil
 }
 
 // fileTextFields are the multipart names parseFileForm retains as text; any other name is dropped unread.
@@ -275,18 +361,18 @@ func (h *server) setPicture(r *http.Request, act spec, src string) (*siren.Entit
 		return nil, err
 	}
 	if ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); ct == "multipart/form-data" {
-		in, _, sent, err := parseFileForm(r, act)
+		f, err := parseFileForm(r, act)
 		if err != nil {
 			return nil, err
 		}
-		if sent {
-			k, err := h.s.SetPicture(r.Context(), src, id, h.s.Today(), in)
+		if f.Sent {
+			k, err := h.s.SetPicture(r.Context(), src, id, h.s.Today(), f.In)
 			if err != nil {
 				return nil, err
 			}
 			return withResult(h.pageEntity(r.Context(), id))(k)
 		}
-		return h.setPictureOf(r, src, id, in.Title)
+		return h.setPictureOf(r, src, id, f.In.Title)
 	}
 	v, err := fieldsOf(r, act)
 	if err != nil {
