@@ -20,7 +20,9 @@ It uses read-only repository permissions and does not publish a release.
 
 Needs Go ≥ 1.27 and nothing else: SQLite is the driver's own build (`modernc.org/sqlite`, pure Go, SQLite 3.53.4 with
 FTS5); the `writers` suite checks the floor of `lifelog_meta.sqlite` on it. The schema-evolution probes execute `ALTER TABLE …
-DROP CONSTRAINT` on disposable files and need 3.53; they are not a migration runner. A writer needs only 3.51.3. The rendering test also needs
+DROP CONSTRAINT` on disposable files and need 3.53; they are not a migration runner. The full-file labels of
+`doc-save-contract` need the FTS5 of that build to write its pending terms at a `SAVEPOINT` or a `RELEASE`; each label
+fails loudly when the fault does not come. A writer needs only 3.51.3. The rendering test also needs
 `npm i -g @mermaid-js/mermaid-cli` and a Chromium; point `MMDC` / `PUPPETEER_EXECUTABLE_PATH` at them if they are
 not on `PATH`.
 

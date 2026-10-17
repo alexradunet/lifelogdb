@@ -5,9 +5,10 @@ spelling, NFC) and `:key` (`title_key(:title)`). Everything below is **one `BEGI
 transaction**: two writers that save the same new link cannot both see "none found" — the second
 waits, then finds the first one's page. Each target is its own `SAVEPOINT`. An error in steps 1–3 of a target rolls
 that target back alone (no link, no orphan `entities` row), and the save goes on. An error of `SAVEPOINT`, of
-`ROLLBACK TO` or of `RELEASE` fails the whole save: send `ROLLBACK` and report the failure. The state of the
-transaction is then not known: SQLite can have rolled it back already (on a full file it does, executed), and the
-statements after it would run outside a transaction ([D19](../decisions/D19-wikilink-save-contract.md)).
+`ROLLBACK TO` or of `RELEASE` fails the whole save: send `ROLLBACK` and report the error of that statement. The
+state of the transaction is then not known: SQLite can have rolled it back already (on a full file it does, executed),
+and the `ROLLBACK` then fails with "no transaction is active", which does no harm
+([D19](../decisions/D19-wikilink-save-contract.md) gives the reason).
 
 ```mermaid
 %% diagram: save-flow
