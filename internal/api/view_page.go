@@ -90,6 +90,7 @@ var templates = template.Must(template.New("").Funcs(template.FuncMap{
 	"crumbs":    func(path string) string { return strings.ReplaceAll(path, "/", " › ") }, // "Family/Cousins" to "Family › Cousins"
 	"add":       func(a, b int) int { return a + b },
 	"segmented": segmented,
+	"checkbox":  checkbox,
 	"alert":     alertOf,
 	"upTo":      upTo,
 	"beyond":    beyond,

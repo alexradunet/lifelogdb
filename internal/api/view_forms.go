@@ -265,11 +265,11 @@ func formOf(x any, opts ...string) (*formView, error) {
 }
 
 // segmented reports a field the browser draws as a Segmented choice of the design system, a row of radio buttons:
-// 2 to 5 options, none empty and each of 3 characters or fewer (a mood 1 to 5, a 1 or a 0). A field of page titles
-// is never one: its options are the titles it offers, and it takes a new title too (a datalist). Any other field
-// with options is a select.
+// 2 to 5 options, none empty and each of 3 characters or fewer (a mood 1 to 5). A field of page titles is never one:
+// its options are the titles it offers, and it takes a new title too (a datalist). A flag is never one either: it is
+// a checkbox. Any other field with options is a select.
 func segmented(f Field) bool {
-	if f.Pages || len(f.Options) < 2 || len(f.Options) > 5 {
+	if f.Pages || checkbox(f) || len(f.Options) < 2 || len(f.Options) > 5 {
 		return false
 	}
 	for _, o := range f.Options {
@@ -279,3 +279,8 @@ func segmented(f Field) bool {
 	}
 	return true
 }
+
+// checkbox reports a flag that the browser draws as one checkbox before the field's title: the options 0 and 1, in
+// a field that the action does not require. A checked box sends 1, and a box that is not checked sends nothing,
+// which the server reads as 0 (flag). A required flag stays a row of radio buttons, as a checkbox cannot send 0.
+func checkbox(f Field) bool { return !f.Required && slices.Equal(f.Options, []string{"0", "1"}) }

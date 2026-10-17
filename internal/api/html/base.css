@@ -145,6 +145,7 @@ input,textarea,select{inline-size:100%; block-size:var(--control); padding:0 var
   &:focus-visible{outline:2px solid var(--focus); outline-offset:0; border-color:var(--focus)}}
 input[type=date],input[type=time],input[type=number],input[type=datetime-local]{font-family:var(--mono); font-size:14px; font-variant-numeric:tabular-nums}
 input[type=checkbox],input[type=radio]{inline-size:auto; block-size:auto; box-shadow:none; accent-color:var(--accent-ink)}
+label:has(>input[type=checkbox]){flex-direction:row; align-items:center} /* a checkbox before its words, on one row */
 input[type=file]{block-size:auto; padding:var(--space-2) var(--space-3)}
 textarea{block-size:auto; min-block-size:6em; padding:10px var(--space-3); resize:vertical; font:400 16px/26px var(--sans)}
 input[readonly],textarea[readonly]{background:var(--surface)}

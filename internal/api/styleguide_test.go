@@ -75,6 +75,7 @@ func TestTheStylePageRunsTheRealTemplates(t *testing.T) {
 		{"form of capture", `<textarea name="text" rows="4" placeholder="What happened? Who was there?"></textarea>`},
 		{"form, a segmented field", `<fieldset class="segmented"><legend>Mood 1-5</legend>`},
 		{"form, a select", `<select name="kind"><option></option><option>page</option>`},
+		{"form, a flag", `<label><input type="checkbox" name="unfiled" value="1"><span>Only what is in no category</span></label>`},
 		{"form, folded fields", `<details class="more-fields"><summary>3 more fields</summary>`},
 		{"boxed", `<details class="action"><summary class="button">New person</summary>`},
 		{"form, a field of page titles", `<input type="text" name="category" value="" list="create-person-category"><datalist id="create-person-category"><option value="Bloodwork"><option value="Sport"></datalist>`},

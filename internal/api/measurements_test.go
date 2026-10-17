@@ -578,6 +578,7 @@ func TestTheMetricsPageDrawsCards(t *testing.T) {
 		`<form id="pick" method="POST" action="/pages/file" class="inline">` + "\n" + `<input type="hidden" name="back" value="/metrics">`,
 		`<input type="checkbox" name="ids" value="` + ids["Weight"] + `" form="pick" aria-label="Select Weight">`,
 		`<input type="text" name="category" value="" required list="pick-category" placeholder="Bloodwork, Sport, Financial"><datalist id="pick-category"><option value="Body"><option value="Iron"></datalist>`,
+		`<label><input type="checkbox" name="move" value="1"><span>Move (remove the other categories)</span></label>`,
 	} {
 		if !strings.Contains(page, want) {
 			t.Errorf("/metrics lacks %s", want)
@@ -590,18 +591,19 @@ func TestTheMetricsPageDrawsCards(t *testing.T) {
 		t.Error("Select is on with nothing refused")
 	}
 
-	// The browser's form: a box per card, back to /metrics with the sentence.
-	rec := submit(h, "/pages/file", formSends(t, page, `id="pick"`, url.Values{"ids": {ids["Mood"], ids["Steps"]}, "category": {"Daily"}, "move": {"0"}}), "")
+	// The browser's form: a box per card, back to /metrics with the sentence. Move is not checked, so the form sends
+	// no move, which the server reads as 0.
+	rec := submit(h, "/pages/file", formSends(t, page, `id="pick"`, url.Values{"ids": {ids["Mood"], ids["Steps"]}, "category": {"Daily"}}), "")
 	if rec.Code != http.StatusSeeOther || !feedbackLocation(rec.Header().Get("Location"), "/metrics") {
 		t.Fatalf("the form: %d %q %.300s", rec.Code, rec.Header().Get("Location"), rec.Body.String())
 	}
 	if after := browse(t, h, rec.Header().Get("Location")); !strings.Contains(after, "Put 2 in Daily (a new category).") || !strings.Contains(after, `<a href="#c-`) || strings.Contains(after, `id="not-filed"`) {
 		t.Errorf("/metrics after the filing: %.600s", after)
 	}
-	// A refused form comes back to the page with Select on and the category it sent.
-	rec = submit(h, "/pages/file", formSends(t, page, `id="pick"`, url.Values{"category": {"Daily"}}), "")
+	// A refused form comes back to the page with Select on, the category it sent and Move checked.
+	rec = submit(h, "/pages/file", formSends(t, page, `id="pick"`, url.Values{"category": {"Daily"}, "move": {"1"}}), "")
 	if body := rec.Body.String(); rec.Code != http.StatusUnprocessableEntity || !strings.Contains(body, `<input type="checkbox" class="pick-on" checked>`) ||
-		!strings.Contains(body, `value="Daily"`) || !strings.Contains(body, "missing field ids") {
+		!strings.Contains(body, `value="Daily"`) || !strings.Contains(body, `<input type="checkbox" name="move" value="1" checked>`) || !strings.Contains(body, "missing field ids") {
 		t.Errorf("no box checked: %d %.600s", rec.Code, body)
 	}
 }

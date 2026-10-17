@@ -108,7 +108,8 @@ func TestEveryTextAreaOfTheCatalogOffersPreview(t *testing.T) {
 }
 
 // TestSegmentedIsForAFewShortOptions: a field is drawn as a row of radio buttons only when it has 2 to 5 options,
-// none empty and each of 3 characters or fewer; any other field with options is a select.
+// none empty and each of 3 characters or fewer; any other field with options is a select. A flag (the options 0 and
+// 1) is one checkbox, unless the action requires it.
 func TestSegmentedIsForAFewShortOptions(t *testing.T) {
 	for _, tc := range []struct {
 		options []string
@@ -116,6 +117,7 @@ func TestSegmentedIsForAFewShortOptions(t *testing.T) {
 	}{
 		{[]string{"1", "2", "3", "4", "5"}, true},
 		{[]string{"1", "0"}, true},
+		{[]string{"0", "1"}, false},
 		{[]string{"yes", "no"}, true},
 		{[]string{"1"}, false},
 		{[]string{"1", "2", "3", "4", "5", "6"}, false},
@@ -129,6 +131,27 @@ func TestSegmentedIsForAFewShortOptions(t *testing.T) {
 	}
 	if segmented(Field{Name: "f", Type: "text", Pages: true, Options: []string{"Art", "Gym"}}) {
 		t.Error("a field of two short page titles is segmented: it takes a new title too")
+	}
+	if !segmented(Field{Name: "f", Type: "number", Required: true, Options: []string{"0", "1"}}) {
+		t.Error("a required flag is not segmented: a checkbox cannot send 0")
+	}
+}
+
+// TestAFlagIsOneCheckbox: a field of the options 0 and 1 is one checkbox before the field's title. It sends 1 when it
+// is checked and nothing when it is not, which the server reads as 0; a value of 1 draws it checked.
+func TestAFlagIsOneCheckbox(t *testing.T) {
+	for _, tc := range []struct {
+		move string
+		want string
+	}{
+		{"", `<label><input type="checkbox" name="move" value="1"><span>`},
+		{"0", `<label><input type="checkbox" name="move" value="1"><span>`},
+		{"1", `<label><input type="checkbox" name="move" value="1" checked><span>`},
+	} {
+		got := markup(drawForm(t, action("file-pages", nil, map[string]any{"move": tc.move})))
+		if want := tc.want + "Move (remove the other categories)</span></label>"; !strings.Contains(got, want) || strings.Contains(got, `type="radio"`) {
+			t.Errorf("move %q: the form lacks %s, or has radio buttons:\n%s", tc.move, want, got)
+		}
 	}
 }
 
