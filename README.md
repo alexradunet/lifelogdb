@@ -380,8 +380,8 @@ must contain exactly one object. Multipart uploads allow up to 64 parts, 16 MiB
 per text field and 16 MiB total text (including unknown or repeated fields),
 and at most one original and one preview part. A supplied preview may be up to
 64 MiB. Over-limit requests return HTTP 413 without writing; after a JSON or
-URL-encoded body over the limit, the server also closes the connection. Originals are
-hashed as streams without a total size limit; originals above the 64 MiB picture
+URL-encoded body over the limit, the server also closes an HTTP/1.1 connection (over
+HTTP/2 it resets the stream, and the connection stays open). Originals are hashed as streams without a total size limit; originals above the 64 MiB picture
 budget are kept without an automatically generated preview.
 
 ## Engineering references

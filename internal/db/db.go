@@ -269,30 +269,31 @@ func removeReservedDatabasePath(path string, reserved *os.File) error {
 		return errors.Join(fmt.Errorf("checking reserved database %s for cleanup: %w", path, err), reserved.Close())
 	}
 	current, err := os.Lstat(path)
-	ours := err == nil && os.SameFile(held, current)
-	// Windows does not remove a file while a handle holds it, so the handle closes before the remove.
-	closeErr := reserved.Close()
 	if err != nil {
+		closeErr := reserved.Close()
 		if os.IsNotExist(err) {
 			return closeErr
 		}
 		return errors.Join(fmt.Errorf("checking reserved database %s for cleanup: %w", path, err), closeErr)
 	}
-	if !ours {
-		return closeErr
+	if !os.SameFile(held, current) {
+		return reserved.Close()
 	}
 	// SQLite keeps the WAL and its index at its close when it cannot checkpoint, as after an interrupt. A WAL left
 	// beside the path goes into the next database there. The two are of this file only when SQLite wrote the file:
-	// SQLite reads a new file while it is empty, and it then deletes a WAL beside it. They go before the file, while
-	// the file holds the path: after the remove, another process can make a database at the path, with its own WAL.
+	// SQLite reads a new file while it is empty, and it then deletes a WAL beside it. They go before the file, and
+	// while the handle is still open: on Windows the handle keeps any other process from removing or renaming the
+	// file, so the path still names it. On Linux another process that does not use Init can still change the path.
 	if held.Size() > 0 {
 		for _, side := range []string{path + "-wal", path + "-shm"} {
 			if err := os.Remove(side); err != nil && !errors.Is(err, os.ErrNotExist) {
 				// The file stays with its WAL, so that no WAL stays alone at the path.
-				return errors.Join(fmt.Errorf("removing %s of failed database %s: %w", side, path, err), closeErr)
+				return errors.Join(fmt.Errorf("removing %s of failed database %s: %w", side, path, err), reserved.Close())
 			}
 		}
 	}
+	// Windows does not remove a file while a handle holds it, so the handle closes before the remove.
+	closeErr := reserved.Close()
 	if err := os.Remove(path); err != nil {
 		return errors.Join(fmt.Errorf("removing failed database %s: %w", path, err), closeErr)
 	}
