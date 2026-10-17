@@ -35,7 +35,7 @@ func (h *server) page(r *http.Request) (*siren.Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	p, e, err := h.pageAnswer(r.Context(), id)
+	p, e, err := h.loadPage(r.Context(), id)
 	if err != nil {
 		return nil, err
 	}
@@ -52,12 +52,12 @@ func (h *server) page(r *http.Request) (*siren.Entity, error) {
 }
 
 func (h *server) pageEntity(ctx context.Context, id int64) (*siren.Entity, error) {
-	_, e, err := h.pageAnswer(ctx, id)
+	_, e, err := h.loadPage(ctx, id)
 	return e, err
 }
 
-// pageAnswer is the page with that id, and the entity that serves it: the page is the properties of the entity.
-func (h *server) pageAnswer(ctx context.Context, id int64) (*core.Page, *siren.Entity, error) {
+// loadPage is the page with that id, and the entity that serves it: the page is the properties of the entity.
+func (h *server) loadPage(ctx context.Context, id int64) (*core.Page, *siren.Entity, error) {
 	p, err := h.s.PageByID(ctx, id)
 	if err != nil {
 		return nil, nil, err

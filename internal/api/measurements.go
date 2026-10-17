@@ -186,7 +186,7 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 		Links:   []siren.Link{link("all-readings", allHref, "All readings"), link("self", self, name), link("up", "/metrics", "Metrics"), link("index", "/", "Home")},
 		Actions: []siren.Action{record}}
 	if m != nil { // the metric is a page (D27): the page's text, edges and actions are the series' too, built once
-		p, page, err := h.pageAnswer(ctx, m.ID)
+		p, page, err := h.loadPage(ctx, m.ID)
 		if err != nil {
 			return nil, err
 		}
