@@ -186,11 +186,10 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 		Links:   []siren.Link{link("all-readings", allHref, "All readings"), link("self", self, name), link("up", "/metrics", "Metrics"), link("index", "/", "Home")},
 		Actions: []siren.Action{record}}
 	if m != nil { // the metric is a page (D27): the page's text, edges and actions are the series' too, built once
-		page, err := h.pageEntity(ctx, m.ID)
+		p, page, err := h.pageAnswer(ctx, m.ID)
 		if err != nil {
 			return nil, err
 		}
-		p := page.Properties.(*core.Page)
 		props["categories"], props["id"], props["unit"], props["body"], props["links"], props["backlinks"] = m.Categories, m.ID, m.Unit, p.Body, p.Out, p.In
 		e.Links = append(e.Links, link("page", siren.PageHref(m.ID), "Page"))
 		e.Actions = append(e.Actions, page.Actions...)

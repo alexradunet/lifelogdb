@@ -64,6 +64,20 @@ type browseIn struct {
 	Path  string `json:"path"`
 }
 
+// browseProps are the properties of the browse answer. The view draws the list and the tree from them.
+type browseProps struct {
+	pageProps
+	Kind        string          `json:"kind"`
+	Unfiled     bool            `json:"unfiled"`
+	Ghosts      bool            `json:"ghosts"`
+	Media       string          `json:"media"`
+	Categories  []core.Category `json:"categories"`
+	Rows        []browseRow     `json:"rows"`
+	In          *browseIn       `json:"in,omitempty"`
+	Counts      browseCounts    `json:"counts"`
+	MediaCounts *mediaCounts    `json:"media_counts,omitempty"` // kind media only
+}
+
 // browseQuery is what GET /browse was asked, checked: the filters as the URL names them, and the kind they come to.
 type browseQuery struct {
 	kind    string // the kind of the rows: the field, else its default
@@ -245,23 +259,20 @@ func (h *server) browse(r *http.Request, _ spec, _ string) (*siren.Entity, error
 	}
 	e.Actions = browseActions(b, in, titles)
 
-	props := map[string]any{"limit": page.Limit, "offset": page.Offset}
-	props["kind"], props["unfiled"], props["ghosts"], props["media"] = b.kind, b.unfiled, b.ghosts, b.media
-	props["categories"], props["rows"] = cs, rows
-	c := browseCounts{Page: counts["page"], Person: counts["person"], Place: counts["place"], Media: counts["media"],
+	props := browseProps{pageProps: page, Kind: b.kind, Unfiled: b.unfiled, Ghosts: b.ghosts, Media: b.media,
+		Categories: cs, Rows: rows, In: in}
+	props.Counts = browseCounts{Page: counts["page"], Person: counts["person"], Place: counts["place"], Media: counts["media"],
 		Document: counts["document"], Metric: counts["metric"], Ghosts: counts["ghosts"]}
 	if in != nil {
 		all := counts["all"]
-		c.All = &all
-		props["in"] = in
+		props.Counts.All = &all
 	}
-	props["counts"] = c
 	if b.kind == "media" {
 		m, err := h.s.MediaCounts(ctx, sc)
 		if err != nil {
 			return nil, err
 		}
-		props["media_counts"] = mediaCounts{Image: m["image"], Video: m["video"], Audio: m["audio"]}
+		props.MediaCounts = &mediaCounts{Image: m["image"], Video: m["video"], Audio: m["audio"]}
 	}
 	e.Properties = props
 	return e, nil
