@@ -35,7 +35,8 @@ func TestMetricSectionsSayDaysByTheClockOfTheView(t *testing.T) {
 }
 
 // TestAYearsSummary: the line of a year's fold counts every reading of the year, a retraction too, and gives the
-// least and the greatest value of the readings that have a number, in full, with the unit as it is.
+// least and the greatest value of the readings that have a number, in full, with the unit as a tile writes it: a
+// scale 1-5 is "of 5".
 func TestAYearsSummary(t *testing.T) {
 	rows := func(values ...any) []map[string]any {
 		out := []map[string]any{}
@@ -59,6 +60,8 @@ func TestAYearsSummary(t *testing.T) {
 		{rows(nil, 70.0), "kg", "2 readings · 70 kg"},
 		{rows(nil), "kg", "1 reading"},
 		{rows(1000000.0, 0.00001), "C", "2 readings · 0.00001 to 1000000 C"},
+		{rows(3.0, 1.0, 5.0, 2.0, 4.0, 5.0), "1-5", "6 readings · 1 to 5 of 5"},
+		{rows(4.0), "1-5", "1 reading · 4 of 5"},
 	} {
 		if got := yearSummary(c.rows, c.unit); got != c.want {
 			t.Errorf("yearSummary(%v, %q) = %q, want %q", c.rows, c.unit, got, c.want)

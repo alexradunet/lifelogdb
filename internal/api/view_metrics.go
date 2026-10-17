@@ -72,7 +72,8 @@ func (v *view) MetricReadings() metricReadings {
 	return r
 }
 
-// yearSummary is what a closed fold says of its year: "214 readings · 76.2 to 81 kg".
+// yearSummary is what a closed fold says of its year: "214 readings · 76.2 to 81 kg". The unit is in words, as a
+// tile writes it: "6 readings · 1 to 5 of 5".
 func yearSummary(rows []map[string]any, unit string) string {
 	var lo, hi float64
 	n := 0
@@ -98,7 +99,7 @@ func yearSummary(rows []map[string]any, unit string) string {
 		values += " to " + num(hi)
 	}
 	if unit != "" {
-		values += " " + unit
+		values += " " + unitWords(unit)
 	}
 	return s + " · " + values
 }
