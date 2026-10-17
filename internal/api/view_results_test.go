@@ -30,7 +30,10 @@ func TestAResultIsSaidInSentences(t *testing.T) {
 			"embedded": true, "sync": map[string]any{"linked": []any{"A"}, "added": []any{"A"}}, "day_sync": map[string]any{"revived": []any{"B"}}},
 			`In its page: Linked <a href="/pages?title=A">A</a>. | In its day page: Revived <a href="/pages?title=B">B</a>. | ` +
 				`Kept the file: <a href="/pages/7">its page</a>. | The same original was kept before. | ` +
-				`Filed under <time datetime="2026-10-11">yesterday · Sun 11 Oct</time>. | Shown on its day page.`},
+				`Its own day is <time datetime="2026-10-11">yesterday · Sun 11 Oct</time>. | Shown on its day page.`},
+		{"add-file of a photo with no day, kept before", map[string]any{"id": 7.0, "existing": true, "stored_day": "2026-10-11"},
+			`Kept the file: <a href="/pages/7">its page</a>. | The same original was kept before. | ` +
+				`Its own day stays <time datetime="2026-10-11">yesterday · Sun 11 Oct</time>.`},
 		{"add-file filed in a new category", map[string]any{"id": 7.0, "filed": map[string]any{"category": map[string]any{"id": 9.0, "title": "Papers", "path": ""}, "created": true, "added": 1.0, "moved": 0.0}},
 			`Kept the file: <a href="/pages/7">its page</a>. | Put in the new category <a href="/pages?title=Papers">Papers</a>.`},
 		{"add-file filed", map[string]any{"filed": map[string]any{"category": map[string]any{"title": "Papers"}, "created": false, "added": 1.0, "moved": 0.0}},
