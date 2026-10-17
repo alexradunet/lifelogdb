@@ -26,3 +26,36 @@ compatibility follows [D13](../decisions/D13-migrations-and-freeze.md).
 
 Such an application changes nothing here. If it finds a rule that is ambiguous, untestable or missing, that is an
 [issue](../issues/README.md): the fix goes into the docs (and their suites), not just into the application.
+
+## Conventions every writer and every DDL change preserves
+
+Their homes are in these docs; this list is the checklist, not the rule.
+
+- **Time** (`lifelog_meta.instants` and `.days`, [D10](../decisions/D10-time-model.md)): UTC ISO-8601 instants and local-day TEXT columns with round-trip CHECKs
+  (`date(x) IS x`, `strftime(...) IS x` — the `IS` matters).
+- **Identity and provenance**: follow the `entities`, `entity_names`, typed-extension and `lifelog_meta.source`
+  rules in [schema.sql](../schema/schema.sql), with the insert conventions in
+  [a person or a place](../cookbook/person-or-place.md) and [imports](../contract/imports.md).
+  Review owned names, direct typed foreign keys, stable identity and provenance together.
+- **No deletes** (`lifelog_meta.deletes`, [D11](../decisions/D11-tombstones.md)): tombstones (BEFORE DELETE triggers);
+  only `links` rows are deleted.
+- **Append-only facts**: measurements. A reading is corrected with `supersedes_id` and retracted with a
+  NULL value (D7).
+- **Imports**: `ON CONFLICT … DO NOTHING`, never `OR IGNORE` / `OR REPLACE` ([imports](../contract/imports.md)).
+- **CHECKs**: every one NAMED (`CONSTRAINT <table>_<rule> CHECK …`), using only functions the minimum
+  SQLite has (`lifelog_meta.sqlite`) — no math functions, even where a build has them.
+- **Links**: a closed, endpoint-typed `link_kinds` registry (D8).
+- **Names and journal identity**: use [titles and wikilinks](../contract/titles-and-wikilinks.md), its vectors,
+  and [D5](../decisions/D05-pages-and-day-pages.md). Check preferred-name changes, retained aliases and journal
+  reservations against those rules. Spans and sessions follow [D22](../decisions/D22-events.md);
+  habits follow [D24](../decisions/D24-habits.md).
+- **Connections** ([connection setup](../contract/connections.md)): one writing application per file; per connection
+  `PRAGMA foreign_keys=ON`, `recursive_triggers=ON`, `synchronous=FULL`, `trusted_schema=OFF` (the first three read back and refused
+  if wrong); SQLite ≥ 3.51.3 for writers; every write transaction starts with `BEGIN IMMEDIATE`; the driver opens
+  no transactions of its own. Readers open the file read-only (`mode=ro`, never `immutable=1`) and set
+  `trusted_schema=OFF` too;
+  exploration tools (Datasette) likewise, and nothing that edits rows is pointed at it.
+- **The wikilink save contract**: implement [titles and wikilinks](../contract/titles-and-wikilinks.md) and
+  [save a body](../cookbook/save-a-body.md), including reference resolution, target savepoints, set equality,
+  invalid targets, tags and ordinary REDIRECT prose. Keep the contract's vectors as their sole specification.
+- **Integrity**: the four [integrity checks](../contract/integrity-checks.md).

@@ -382,3 +382,21 @@ and at most one original and one preview part. A supplied preview may be up to
 64 MiB. Over-limit requests return HTTP 413 without writing. Originals are
 hashed as streams without a total size limit; originals above the 64 MiB picture
 budget are kept without an automatically generated preview.
+
+## Engineering references
+
+These primary sources inform the application policies of [AGENTS.md](AGENTS.md); they do not override this
+repository's database contract or turn optional techniques into universal Go rules.
+
+- Go: [review comments](https://go.dev/wiki/CodeReviewComments), [module layout](https://go.dev/doc/modules/layout),
+  [error wrapping and API boundaries](https://go.dev/blog/go1.13-errors), [context](https://pkg.go.dev/context).
+- Testing: [test review comments](https://go.dev/wiki/TestComments), [testing APIs](https://pkg.go.dev/testing),
+  [fuzzing](https://go.dev/doc/security/fuzz/), [synctest](https://pkg.go.dev/testing/synctest),
+  [race detector and prerequisites](https://go.dev/doc/articles/race_detector).
+- Tools: [Staticcheck](https://staticcheck.dev/docs/),
+  [govulncheck and its limitations](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck).
+- Measurement: [benchmark loops](https://go.dev/blog/testing-b-loop),
+  [benchstat](https://pkg.go.dev/golang.org/x/perf/cmd/benchstat), [profiling](https://go.dev/doc/diagnostics),
+  [SQLite performance methodology](https://sqlite.org/cpu.html), [query-plan caveats](https://sqlite.org/eqp.html).
+- Model-based testing: [stateful reference-model example](https://hypothesis.readthedocs.io/en/latest/stateful.html)
+  (the technique, not a Python dependency).

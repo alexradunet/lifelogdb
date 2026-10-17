@@ -135,6 +135,32 @@ go tool covdata textfmt -i=$dir -o $dir/cover.txt
 go tool cover -func=$dir/cover.txt            # or -html=$dir/cover.txt
 ```
 
+## Synthetic personas and scale
+
+When adding generators, use these agreed workloads. They exercise existing capabilities, not new schema requirements
+or a promise of performance. Generate from scratch, never from private exports or supposedly anonymized records.
+
+| persona | behavior to exercise |
+|---|---|
+| daily journaler | decades of day pages, people, places, links, search and edits |
+| measurement-heavy user | dense readings, habits, corrections, retractions and historical queries |
+| mixed-media keeper | notes, long transcripts, document text and selected photo previews |
+| messy importer | overlapping imports, duplicates, Unicode, malformed inputs, interruption and retries |
+
+- **Small:** representative cases of all four personas for routine correctness tests. **Lifetime:** a 50-year mixed
+  workload with 20 measurements/day, 3 files/day and about 4,000 imported notes in addition to day pages. **Stress:**
+  explicitly increased density, long text, high-degree links and import bursts; record the parameters, not just "large".
+- Make the logical dataset reproducible: fixed calendar anchor, seeds, generator version, operation order, payload-size
+  distributions and known answers. Include gaps, bursts, popular and rare links/terms, corrections and backdated data,
+  not just uniform append-only rows. On failure report the scenario, seed and operation; reduce it to a small regression.
+- Exercise end-to-end workflows and persisted results, not just successful bulk insertion. Keep a simple independent
+  oracle for expected queries/state. Label accelerated SQL loaders and compare manageable equivalent scenarios against
+  writer-built fixtures. Do not claim a direct-SQL load measures application import throughput.
+- Keep generators, small fixtures and regression inputs in git, not generated databases. Build databases in temporary
+  or explicitly selected ignored scratch storage with cleanup. Keep large preview-heavy runs opt-in and report disk
+  requirements; use valid synthetic payloads with representative sizes. Metadata-only runs are useful but must be
+  labeled: tiny repeated blobs do not establish realistic preview/storage scale.
+
 ## Synthetic scale runner
 
 `tools/lifescale` builds fresh file-backed databases through the production writer and emits a JSON report.
@@ -180,3 +206,22 @@ commit; each sample performs a real new capture/edit. Queries are warm after fix
 copy/open restore each run once, regardless of `-samples`; restored contents and integrity are checked outside
 timing. Reopening a file is not a cold-disk benchmark, and Go allocation counts are not total process memory.
 Compare repeated reports under the same environment; there is no universal wall-clock pass/fail threshold.
+
+## Performance evidence, not speculative optimization
+
+- Measure important workflows at small and lifetime sizes: capture/save, day view, search/backlinks, historical
+  measurements, imports and snapshot/restore. Check correctness as well as cost. Establish reproducible baselines
+  before adding caches, indexes or concurrency; contract/schema changes still need the normal evidence and approval.
+- Keep fixture construction and correctness-oracle work outside timed query operations. Prefer `for b.Loop()` for new
+  Go benchmarks; report allocations. Fully consume results and check errors. Define whether preparation, commit,
+  decoding or preview creation is included. Reset mutable state outside timing or measure an explicitly bounded growth
+  trace; repeated iterations must not silently turn writes into no-ops or change the workload.
+- Compare repeated samples with `benchstat`, not one run; profile with `pprof` before optimizing. Every benchmark runs
+  with `go test ./... -run '^$' -bench . -benchmem -count=10`; none exists today (the import's went with it, plan 089).
+- Record scenario/seed, revision, Go and SQLite/driver versions, OS, hardware/storage, connection/maintenance settings
+  and cache conditions. Report latency, allocations, import throughput and storage (database, WAL/SHM and relevant
+  temporary files). Go allocation counts are not total process memory. Label warm versus fresh-process runs; do not
+  call a reopened database a cold-disk measurement without controlling the OS cache.
+- Use query plans and work counts to investigate scaling, not brittle exact `EXPLAIN QUERY PLAN` text assertions.
+  No universal wall-clock CI gate: introduce a hard budget only for an agreed usability requirement on a defined
+  environment. The 50-year workload is a test envelope, not evidence that any implementation already meets it.
