@@ -204,8 +204,8 @@ separately from capture/save, day view, rare search, popular backlinks, historic
 replay. The latter measures `core.Record` retries, **not** the throughput of an import. Capture/save includes
 commit; each sample performs a real new capture/edit. Queries are warm after fixture validation. Snapshot and
 copy/open restore each run once, regardless of `-samples`; restored contents and integrity are checked outside
-timing. Reopening a file is not a cold-disk benchmark, and Go allocation counts are not total process memory.
-Compare repeated reports under the same environment; there is no universal wall-clock pass/fail threshold.
+timing. Compare repeated reports under the same environment, and read them by the rules of
+[performance evidence](#performance-evidence-not-speculative-optimization).
 
 ## Performance evidence, not speculative optimization
 
