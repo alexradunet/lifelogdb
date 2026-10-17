@@ -325,9 +325,9 @@ END;
 CREATE TRIGGER measurements_scale_range BEFORE INSERT ON measurements
   WHEN NEW.value IS NOT NULL
 BEGIN
-  -- a scale names its range as its unit, lo-hi of ASCII digits with lo < hi (metrics_unit, D6): every value is a whole
-  -- number inside it. A unit is at most 32 bytes, so each bound has at most 15 digits and is exact as a REAL;
-  -- round() is a core function, not a math one
+  -- a scale names its range as its unit, lo-hi of ASCII digits with lo < hi (metrics_range_order, D6): every value is
+  -- a whole number inside it. As in metrics_range_order, one bound is exact as a REAL and the other is exact or more
+  -- than 10^15, so the two REALs compare as the two numbers do; round() is a core function, not a math one
   SELECT RAISE(ABORT, 'a scale value is a whole number inside the range its unit names (D6)')
    WHERE EXISTS (SELECT 1 FROM metrics m WHERE m.id = NEW.metric_id
                    AND m.unit GLOB '[0-9]*-[0-9]*' AND m.unit NOT GLOB '*[^0-9-]*' AND m.unit NOT GLOB '*-*-*'
@@ -510,4 +510,16 @@ BEGIN
   -- never changes its type. The foreign key of a typed row also holds a person, a metric and a file, but a place
   -- has no typed row: only this trigger keeps the type of a place
   SELECT RAISE(ABORT, 'only a plain page is promoted: a person, a place, a metric or a file keeps its type (D20)');
+END;
+
+CREATE TRIGGER metrics_range_order BEFORE INSERT ON metrics
+  WHEN NEW.unit GLOB '[0-9]*-[0-9]*' AND NEW.unit NOT GLOB '*[^0-9-]*' AND NEW.unit NOT GLOB '*-*-*'
+   AND CAST(substr(NEW.unit, 1, instr(NEW.unit, '-') - 1) AS REAL) >= CAST(substr(NEW.unit, instr(NEW.unit, '-') + 1) AS REAL)
+BEGIN
+  -- a scale names its range as its unit, lo-hi of ASCII digits with lo < hi (D6), and measurements_scale_range holds
+  -- its values to that range. A unit of that shape with lo >= hi (5-1, 3-3) is not a range, so it is refused here; a
+  -- unit of another shape (kg, '', x-y, 1-2-3) is not touched. A unit never changes (metrics_unit_fixed), so the rule
+  -- needs no UPDATE trigger. A unit is at most 32 bytes (metrics_unit), so one bound has at most 15 digits and is
+  -- exact as a REAL; the other is exact too, or more than 10^15 as a REAL: the two REALs compare as the two numbers do
+  SELECT RAISE(ABORT, 'a scale names its range as its unit, lo-hi with lo less than hi, as in 1-5 (D6)');
 END;
