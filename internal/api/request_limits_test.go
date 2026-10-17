@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -28,6 +29,18 @@ func generated(n int64) io.Reader { return io.LimitReader(repeatedByte('x'), n) 
 
 // blanks gives n spaces: JSON reads them as the white space between two tokens.
 func blanks(n int64) io.Reader { return io.LimitReader(repeatedByte(' '), n) }
+
+// counted counts the bytes that the handler reads from a request body.
+type counted struct {
+	r io.Reader
+	n int64
+}
+
+func (c *counted) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n += int64(n)
+	return n, err
+}
 
 func limitsHandler(t *testing.T) (http.Handler, func()) {
 	t.Helper()
@@ -100,9 +113,12 @@ func TestRequestBufferLimits(t *testing.T) {
 		}
 	}
 	defer unchanged()
+	// A request of 1 MiB more than the limit: the handler reads the limit and one byte more, and no other byte.
+	// http.MaxBytesReader asks for one byte past the limit, and it refuses the request when it gets that byte.
 	for _, ct := range []string{"application/json", "application/x-www-form-urlencoded"} {
 		for _, html := range []bool{false, true} {
-			r := httptest.NewRequest("POST", "/pages", io.MultiReader(strings.NewReader(`{"title":"Overflow","body":"`), generated(21<<20), strings.NewReader(`"}`)))
+			body := &counted{r: io.MultiReader(strings.NewReader(`{"title":"Overflow","body":"`), generated(21<<20), strings.NewReader(`"}`))}
+			r := httptest.NewRequest("POST", "/pages", body)
 			r.ContentLength = 1
 			r.Header.Set("Content-Type", ct)
 			if html {
@@ -112,6 +128,9 @@ func TestRequestBufferLimits(t *testing.T) {
 			h.ServeHTTP(w, r)
 			if w.Code != 413 {
 				t.Fatalf("%s html=%v: %d %.200s", ct, html, w.Code, w.Body.String())
+			}
+			if body.n != 20<<20+1 {
+				t.Fatalf("%s html=%v: the handler read %d bytes, want %d (the limit and one byte)", ct, html, body.n, 20<<20+1)
 			}
 		}
 	}
@@ -124,9 +143,10 @@ func TestRequestBufferLimits(t *testing.T) {
 	}
 }
 
+// firstFields is the length of the text of the three fields that come first in a form: title, sha256 and mime.
+const firstFields = int64(len("Synthetic") + 64 + len("application/octet-stream"))
+
 func TestMultipartAggregateLimits(t *testing.T) {
-	// fields is the length of the text of the three fields that come first: title, sha256 and mime.
-	fields := int64(len("Synthetic") + 64 + len("application/octet-stream"))
 	for _, kind := range []string{"aggregate", "unique", "body-at", "text-at", "text-over", "parts", "original", "preview", "large-original"} {
 		t.Run(kind, func(t *testing.T) {
 			h, unchanged := limitsHandler(t)
@@ -147,7 +167,7 @@ func TestMultipartAggregateLimits(t *testing.T) {
 					if e != nil {
 						return
 					}
-					if _, e = io.Copy(p, generated(16<<20-fields)); e != nil {
+					if _, e = io.Copy(p, generated(16<<20-firstFields)); e != nil {
 						return
 					}
 				case "text-at", "text-over":
@@ -157,7 +177,7 @@ func TestMultipartAggregateLimits(t *testing.T) {
 					if e != nil {
 						return
 					}
-					n := 16<<20 - fields - int64(len("the text"))
+					n := 16<<20 - firstFields - int64(len("the text"))
 					if kind == "text-over" {
 						n++
 					}
@@ -223,8 +243,8 @@ func TestMultipartAggregateLimits(t *testing.T) {
 			}
 			switch kind {
 			case "body-at":
-				if got := keptBody(t, w); got != strings.Repeat("x", int(16<<20-fields)) {
-					t.Fatalf("the body that fills the text: %d bytes, want %d bytes of x", len(got), 16<<20-fields)
+				if got := keptBody(t, w); got != strings.Repeat("x", int(16<<20-firstFields)) {
+					t.Fatalf("the body that fills the text: %d bytes, want %d bytes of x", len(got), 16<<20-firstFields)
 				}
 			case "text-at":
 				if got := keptBody(t, w); got != "the text" {
@@ -232,5 +252,40 @@ func TestMultipartAggregateLimits(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestMultipartTextLimitStopsTheRead: a form whose text goes 1 MiB past the limit of 16 MiB is refused, and the
+// handler stops its read near the limit. An original has no limit, so the request as a whole has none. The handler
+// reads the text up to the limit and one byte more. The multipart reader reads at most 4096 bytes more than the
+// part gives (its buffer: peekBufferSize of mime/multipart).
+func TestMultipartTextLimitStopsTheRead(t *testing.T) {
+	h, unchanged := limitsHandler(t)
+	var form bytes.Buffer
+	mw := multipart.NewWriter(&form)
+	for _, f := range [][2]string{{"title", "Synthetic"}, {"sha256", strings.Repeat("a", 64)}, {"mime", "application/octet-stream"}} {
+		if err := mw.WriteField(f[0], f[1]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := mw.CreateFormField("body"); err != nil {
+		t.Fatal(err)
+	}
+	head := bytes.Clone(form.Bytes()) // the bytes before the text of the body
+	form.Reset()
+	if err := mw.Close(); err != nil { // the end of the form
+		t.Fatal(err)
+	}
+	body := &counted{r: io.MultiReader(bytes.NewReader(head), generated(17<<20-firstFields), &form)}
+	r := httptest.NewRequest("POST", "/files", body)
+	r.Header.Set("Content-Type", mw.FormDataContentType())
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != 413 {
+		t.Fatalf("%d want 413: %.200s", w.Code, w.Body.String())
+	}
+	unchanged()
+	if read := int64(len(head)) + 16<<20 - firstFields + 1; body.n < read || body.n > read+4096 {
+		t.Fatalf("the handler read %d bytes, want %d to %d: the text up to the limit, one byte, and at most the buffer of the multipart reader", body.n, read, read+4096)
 	}
 }
