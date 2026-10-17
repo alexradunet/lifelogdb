@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -21,18 +22,26 @@ import (
 	"lifelog/internal/db/dbtest"
 )
 
+// TestExecutableServeDrainsActiveRequest: an interrupt and a SIGTERM (the signal of systemctl stop and restart) both
+// stop new work, let an admitted request finish, and end the process with exit 0.
 func TestExecutableServeDrainsActiveRequest(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("sending os.Interrupt to another process is unsupported on Windows")
+		t.Skip("Windows cannot send os.Interrupt or SIGTERM to another process")
 	}
 	root := t.TempDir()
 	binary := filepath.Join(root, "lifelog")
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	// -cover: the coverage map counts the process (tests/README.md).
 	if out, err := exec.CommandContext(ctx, "go", "build", "-cover", "-mod=readonly", "-o", binary, ".").CombinedOutput(); err != nil {
 		t.Fatalf("build: %v\n%s", err, out)
 	}
+	for _, sig := range []os.Signal{os.Interrupt, syscall.SIGTERM} {
+		t.Run(sig.String(), func(t *testing.T) { drainsOn(ctx, t, binary, sig) })
+	}
+}
+
+func drainsOn(ctx context.Context, t *testing.T, binary string, sig os.Signal) {
 	live := dbtest.File(t)
 	cmd := exec.CommandContext(ctx, binary, "--db", live, "serve", "--addr", "127.0.0.1:0")
 	// The program writes its coverage to GOCOVERDIR: the coverage folder of this test binary when a coverage run gives
@@ -88,7 +97,7 @@ func TestExecutableServeDrainsActiveRequest(t *testing.T) {
 	if response.StatusCode != http.StatusContinue {
 		t.Fatalf("handler did not begin reading the request: %s", response.Status)
 	}
-	if err := cmd.Process.Signal(os.Interrupt); err != nil {
+	if err := cmd.Process.Signal(sig); err != nil {
 		t.Fatal(err)
 	}
 	// The listener closing is the observable shutdown barrier. Keep the admitted

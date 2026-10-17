@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 	"time"
 
 	"lifelog/internal/api"
@@ -332,7 +333,8 @@ func (u usageError) Error() string {
 }
 
 // runArgs runs one command line with the process of e, as main does: the parse, then the command. A command that takes
-// the interrupt through its context (commandConsumesContext) gets a context that an interrupt cancels.
+// the interrupt through its context (commandConsumesContext) gets a context that an interrupt cancels. So does
+// SIGTERM: it is the signal of `systemctl stop` and `restart`, and without it the drain of serve never runs.
 func runArgs(ctx context.Context, e env, argv []string) error {
 	o, err := parse(argv, e.getenv)
 	if err != nil || len(o.args) == 0 || o.args[0] == "help" {
@@ -340,7 +342,7 @@ func runArgs(ctx context.Context, e env, argv []string) error {
 	}
 	if commandConsumesContext(o) {
 		var stop context.CancelFunc
-		ctx, stop = signal.NotifyContext(ctx, os.Interrupt)
+		ctx, stop = signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 		defer stop()
 	}
 	e.o = o
