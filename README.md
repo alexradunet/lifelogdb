@@ -56,7 +56,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **One handler, three surfaces.** `internal/api` is the only thing the surfaces call. `serve` mounts it on a
   socket; the CLI and the MCP server call it in-process (`internal/client`), or a running server with `--url`.
   Writes go through `internal/core` only: no generic UPDATE or DELETE exists anywhere.
-- **Server shutdown drains admitted requests.** An interrupt closes the listener, then allows ten seconds for active
+- **Server shutdown drains admitted requests.** An interrupt or a SIGTERM closes the listener, then allows ten seconds for active
   requests to finish before closing their connections. Shutdown completes before the database closes; expiration
   is reported as an error.
 - **Hypermedia (HATEOAS).** Every response is a Siren entity: properties, links, and the actions legal on that
