@@ -3,6 +3,7 @@ package api_test
 import (
 	"context"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -25,6 +26,38 @@ var (
 	formTagRE = regexp.MustCompile(`<form\b[^>]*>`)
 	actionRE  = regexp.MustCompile(`\saction="([^"]*)"`)
 )
+
+// formSends is what a browser sends with the form of body whose start tag holds mark (id="pick", or its action): the
+// value of each hidden input and each text input of the form, then the values that the reader gives (typed) in place
+// of these. Each name of typed must be a control of the form, or of a box outside it that joins it by its id
+// (form="pick"), else the test fails: a form that draws no control of a field cannot send it.
+func formSends(t *testing.T, body, mark string, typed url.Values) url.Values {
+	t.Helper()
+	m := regexp.MustCompile(`(?s)(<form\b[^>]*` + regexp.QuoteMeta(mark) + `[^>]*>)(.*?)</form>`).FindStringSubmatch(body)
+	if m == nil {
+		t.Fatalf("no form holds %s", mark)
+	}
+	controls := map[string]bool{}
+	for _, n := range regexp.MustCompile(`name="([^"]+)"`).FindAllStringSubmatch(m[2], -1) {
+		controls[n[1]] = true
+	}
+	if id := regexp.MustCompile(`\sid="([^"]+)"`).FindStringSubmatch(m[1]); id != nil {
+		for _, n := range regexp.MustCompile(`name="([^"]+)"[^>]*\sform="`+regexp.QuoteMeta(id[1])+`"`).FindAllStringSubmatch(body, -1) {
+			controls[n[1]] = true
+		}
+	}
+	sent := url.Values{}
+	for _, in := range regexp.MustCompile(`<input type="(?:hidden|text)" name="([^"]+)" value="([^"]*)"`).FindAllStringSubmatch(m[2], -1) {
+		sent.Add(in[1], html.UnescapeString(in[2]))
+	}
+	for name, values := range typed {
+		if !controls[name] {
+			t.Fatalf("the form %s has no control %s", mark, name)
+		}
+		sent[name] = values
+	}
+	return sent
+}
 
 // withoutReceipt is a Location without the feedback receipt a write adds, so a test compares the path it returned to.
 func withoutReceipt(t *testing.T, location string) string {
@@ -314,7 +347,8 @@ func TestADaysReadingTileAddsAReadingForThatDay(t *testing.T) {
 }
 
 // TestAPagesCategoriesAreBadges: a page shows its categories as badges; + Add puts it in one (a new name makes it),
-// and x takes it out of that one only. A day page has none.
+// and x takes it out of that one only. + Add is the form of file-pages: it sends this page's id and move 0, and its
+// category offers the titles of the categories in a datalist. A day page has none.
 func TestAPagesCategoriesAreBadges(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	ctx := t.Context()
@@ -327,7 +361,8 @@ func TestAPagesCategoriesAreBadges(t *testing.T) {
 
 	before := browse(t, h, self)
 	for _, want := range []string{`<div class="categories" role="group" aria-label="Categories"><span class="label">Categories</span>`, `<span class="meta">none</span>`,
-		`<input type="hidden" name="ids" value="` + id + `"><input type="hidden" name="move" value="0">`, `<option value="Projects">`} {
+		`<form method="POST" action="/pages/file" class="inline">` + "\n" + `<input type="hidden" name="ids" value="` + id + `"><input type="hidden" name="move" value="0">`,
+		`<input type="text" name="category" value="" required list="file-pages-category" placeholder="Bloodwork, Sport, Financial"><datalist id="file-pages-category"><option value="Projects"></datalist>`} {
 		if !strings.Contains(before, want) {
 			t.Errorf("the page lacks %s", want)
 		}
@@ -337,7 +372,7 @@ func TestAPagesCategoriesAreBadges(t *testing.T) {
 	}
 
 	for _, cat := range []string{"Projects", "Outdoors"} {
-		rec := submit(h, "/pages/file", url.Values{"ids": {id}, "move": {"0"}, "category": {cat}, "back": {self}}, "")
+		rec := submit(h, "/pages/file", formSends(t, before, `action="/pages/file"`, url.Values{"category": {cat}}), "")
 		if rec.Code != http.StatusSeeOther || !feedbackLocation(rec.Header().Get("Location"), self) {
 			t.Fatalf("+ Add %s: %d %q", cat, rec.Code, rec.Header().Get("Location"))
 		}
@@ -369,7 +404,8 @@ func TestAPagesCategoriesAreBadges(t *testing.T) {
 }
 
 // TestEveryListSelectsTheSameWay: the lists of Browse and the Metrics board draw one pick bar, after their boxes,
-// with Select and a button for each action the list offers; a list of metrics offers no Delete of several.
+// with Select and a button for each action the list offers: the form of file-pages (id pick), and Delete pages as its
+// second button; a list of metrics offers no Delete of several.
 func TestEveryListSelectsTheSameWay(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	ctx := t.Context()
@@ -391,8 +427,9 @@ func TestEveryListSelectsTheSameWay(t *testing.T) {
 		if bar, last := strings.Index(body, `id="pick"`), strings.LastIndex(body, `form="pick"`); last < 0 || bar < last {
 			t.Errorf("%s: the bar is not after its boxes", list.path)
 		}
-		put := strings.Contains(body, `<button class="primary" formaction="/pages/file">Put in a category</button>`)
-		del := strings.Contains(body, `<button class="danger" formaction="`+list.del+`" formnovalidate>Delete selected</button>`)
+		put := strings.Contains(body, `<form id="pick" method="POST" action="`+list.put+`" class="inline">`) &&
+			strings.Contains(body, `<button class="primary">Put in a category</button>`)
+		del := strings.Contains(body, `<button class="danger" formaction="`+list.del+`" formnovalidate>Delete pages</button></form>`)
 		if put != (list.put != "") || del != (list.del != "") {
 			t.Errorf("%s: Put in a category %v, Delete %v; want %v, %v", list.path, put, del, list.put != "", list.del != "")
 		}

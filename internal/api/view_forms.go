@@ -1,6 +1,7 @@
 package api
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
 	"strings"
@@ -61,24 +62,39 @@ func (v *view) shown(a Action) *shownAction {
 }
 
 // formView is an action as the "form" template draws it. formOf takes name/value pairs: "button" labels the
-// button, "class" styles the form, "hide" lists fields kept with their value but not shown, "autofocus" names
-// the field the browser starts in, "more" lists optional fields folded under "More fields"
-// (docs/plans/095-the-leaf-and-its-margin.md), "back" is the page the browser returns to after the write (no field
-// of the action: the server reads it, see backOf), "placeholder" ("field=words") and "key" ("field=letter") give a
-// field its prompt and its access key, and any other name fixes a field to a value (hidden).
+// button, "class" styles the form, "id" names it, "hide" lists fields kept with their value but not shown, "outside"
+// lists fields that controls outside the form send (the boxes of a list join the form by its id) and that the form
+// does not draw, "autofocus" names the field the browser starts in ("" for none), "more" lists optional fields folded
+// under "More fields" (docs/plans/095-the-leaf-and-its-margin.md), "back" is the page the browser returns to after the
+// write (no field of the action: the server reads it, see backOf), "placeholder" ("field=words") and "key"
+// ("field=letter") give a field its prompt and its access key, and any other name fixes a field to a value (hidden).
 type formView struct {
 	*Action
 	Button, Class string
+	ID            string // the form's id, which the controls outside it name (form="pick")
 	Focus         string
 	Back          string
-	Refused       bool    // the form a refusal came from: open, filled, described by the alert, with no focus
-	Asked         bool    // the form the page's link asked for (?new=<name>): open
-	Primary       bool    // the button is the primary one: a form with fields to fill
-	Shown         []Field // the fields most writes need
-	More          []Field // optional fields, folded; still in the form, so a browser sends them with no script
+	Refused       bool      // the form a refusal came from: open, filled, described by the alert, with no focus
+	Asked         bool      // the form the page's link asked for (?new=<name>): open
+	Primary       bool      // the button is the primary one: a form with fields to fill
+	Also          *formView // a second action that the form sends to, by a button of its own (Or)
+	Shown         []Field   // the fields most writes need
+	More          []Field   // optional fields, folded; still in the form, so a browser sends them with no script
 	Hidden        []Field
 	prompts       map[string]string // field name to placeholder words
 	keys          map[string]string // field name to its access key
+}
+
+// Or is the form f with a second button, after its own, that sends the same form to the action of g (formaction),
+// with no check of the fields that f requires: the Delete of a list, beside its Put in a category. g's action takes
+// the method of f's and no field that f does not send. When g is the form a refusal came from, so is f. With no g, f
+// is as it was.
+func (f *formView) Or(g *formView) *formView {
+	f.Also = g
+	if g != nil && g.Refused {
+		f.Refused = true
+	}
+	return f
 }
 
 // Preview reports a form with a text area: it offers Preview, a second button that sends the form to POST /render
@@ -108,9 +124,12 @@ type fieldView struct {
 	Focus       bool
 	Placeholder string // a quiet prompt in an empty box; it is an attribute, never sent
 	Key         string // the field's access key, which the browser's own modifier reaches
+	List        string // the id of the datalist of a field of page titles with options (Pages): see Fields
 }
 
-// Fields are the fields the form shows (folded false) or folds under "More fields" (folded true).
+// Fields are the fields the form shows (folded false) or folds under "More fields" (folded true). A field of page
+// titles with options offers them in a datalist, whose id is the form's id, or else its action's name, and the
+// field's name: a page draws an action in one form, or gives each of its forms an id.
 func (f *formView) Fields(folded bool) []fieldView {
 	list := f.Shown
 	if folded {
@@ -118,7 +137,10 @@ func (f *formView) Fields(folded bool) []fieldView {
 	}
 	out := make([]fieldView, len(list))
 	for i, fd := range list {
-		out[i] = fieldView{fd, fd.Name == f.Focus, f.prompts[fd.Name], f.keys[fd.Name]}
+		out[i] = fieldView{fd, fd.Name == f.Focus, f.prompts[fd.Name], f.keys[fd.Name], ""}
+		if fd.Pages && len(fd.Options) > 0 {
+			out[i].List = cmp.Or(f.ID, f.Name) + "-" + fd.Name
+		}
 	}
 	return out
 }
@@ -154,7 +176,8 @@ func formOf(x any, opts ...string) (*formView, error) {
 	if f.Button == "" {
 		f.Button = a.Name
 	}
-	fixed, hide, more := map[string]string{}, map[string]bool{}, map[string]bool{}
+	fixed, hide, outside, more := map[string]string{}, map[string]bool{}, map[string]bool{}, map[string]bool{}
+	focused := false // the options name the field of the focus, or none
 	for i := 0; i < len(opts); i += 2 {
 		k, v := opts[i], opts[i+1]
 		switch {
@@ -162,16 +185,22 @@ func formOf(x any, opts ...string) (*formView, error) {
 			f.Button = v
 		case k == "class":
 			f.Class = v
+		case k == "id":
+			f.ID = v
 		case k == "hide":
 			for _, n := range strings.Split(v, ",") {
 				hide[n] = true
+			}
+		case k == "outside":
+			for _, n := range strings.Split(v, ",") {
+				outside[n] = true
 			}
 		case k == "more":
 			for _, n := range strings.Split(v, ",") {
 				more[n] = true
 			}
 		case k == "autofocus":
-			f.Focus = v
+			f.Focus, focused = v, true
 		case k == "back":
 			f.Back = v
 		case k == "placeholder": // "field=words"
@@ -197,6 +226,7 @@ func formOf(x any, opts ...string) (*formView, error) {
 			fd.Value, fd.Type = v, "hidden"
 		}
 		switch {
+		case outside[fd.Name]:
 		case fd.Type == "hidden" || hide[fd.Name]:
 			f.Hidden = append(f.Hidden, fd)
 		case more[fd.Name] && !fd.Required:
@@ -207,7 +237,7 @@ func formOf(x any, opts ...string) (*formView, error) {
 	}
 	f.Primary = len(f.Shown)+len(f.More) > 0
 	f.Refused, f.Asked = c.refused, c.asked
-	if c.asked && f.Focus == "" && len(f.Shown) > 0 { // a form the reader asked for starts in its first field
+	if c.asked && !focused && len(f.Shown) > 0 { // a form the reader asked for starts in its first field
 		f.Focus = f.Shown[0].Name
 	}
 	if c.noFocus { // a page that shows a refusal puts the focus on the alert, and on no field
@@ -217,10 +247,11 @@ func formOf(x any, opts ...string) (*formView, error) {
 }
 
 // segmented reports a field the browser draws as a Segmented choice of the design system, a row of radio buttons:
-// 2 to 5 options, none empty and each of 3 characters or fewer (a mood 1 to 5, a 1 or a 0). Any other field with
-// options is a select.
+// 2 to 5 options, none empty and each of 3 characters or fewer (a mood 1 to 5, a 1 or a 0). A field of page titles
+// is never one: its options are the titles it offers, and it takes a new title too (a datalist). Any other field
+// with options is a select.
 func segmented(f Field) bool {
-	if len(f.Options) < 2 || len(f.Options) > 5 {
+	if f.Pages || len(f.Options) < 2 || len(f.Options) > 5 {
 		return false
 	}
 	for _, o := range f.Options {

@@ -124,36 +124,30 @@
 <dd>{{range .Items}}<a href="/pages/{{num .id}}">{{$v.Date .title}}</a>{{with .note}} <small>({{.}})</small>{{end}}{{end}}</dd>{{end}}</dl>{{end}}
 
 {{/* categories are the categories of a page or a metric as badges (docs/plans/114-one-way-to-do-a-thing.md): each
-     with x, which removes that part-of link (unlink), and + Add, which puts the page in a category (file-pages with
-     this page's id; a new name makes a new category). It takes v (the view) and back. */}}
-{{define "categories"}}{{$v := .v}}{{$back := .back}}{{$file := $v.Action "file-pages"}}{{$unlink := $v.Action "unlink"}}
+     with x, which removes that part-of link (unlink), and + Add, which puts the page in a category: the form of
+     file-pages, whose ids and move the page fills in (this page's id, 0), and whose category offers the titles of the
+     categories (a new name makes a new category). It takes v (the view) and back. */}}
+{{define "categories"}}{{$v := .v}}{{$back := .back}}{{$file := form ($v.Action "file-pages") "class" "inline" "button" "Add" "hide" "ids,move" "back" $back "placeholder" "category=Bloodwork, Sport, Financial"}}{{$unlink := $v.Action "unlink"}}
 {{$cats := $v.Categories}}
 {{if or $file $cats}}<div class="categories" role="group" aria-label="Categories"><span class="label">Categories</span>
 {{range $cats}}{{$t := .title}}<span class="badge category"><a href="/pages/{{num .id}}">{{$t}}</a>{{with $unlink}}<form class="tiny" method="POST" action="{{.Href}}"><input type="hidden" name="back" value="{{$back}}"><input type="hidden" name="to" value="{{$t}}"><input type="hidden" name="kind" value="part-of"><button class="remove" aria-label="Remove from {{$t}}">×</button></form>{{end}}</span>{{end}}
 {{if not $cats}}<span class="meta">none</span>{{end}}
-{{with $file}}<details class="add-category"{{if or (and $v.Refused (eq $v.Refused.Href .Href)) (eq ($v.Asked "new") .Name)}} open{{end}}><summary class="button small">+ Add</summary>
-<form class="inline" method="POST" action="{{.Href}}"><input type="hidden" name="back" value="{{$back}}">{{range .Fields}}{{if eq .Name "ids" "move"}}<input type="hidden" name="{{.Name}}" value="{{num .Value}}">{{end}}{{end}}
-<label><span>Category</span><input type="text" name="category" required list="category-choices" placeholder="Bloodwork, Sport, Financial"></label>
-<datalist id="category-choices">{{range .Fields}}{{if eq .Name "category"}}{{range .Options}}<option value="{{.}}">{{end}}{{end}}{{end}}</datalist>
-<button class="primary small">Add</button></form></details>{{end}}</div>{{end}}{{end}}
+{{with $file}}<details class="add-category"{{if or .Refused .Asked}} open{{end}}><summary class="button small">+ Add</summary>
+{{template "form" .}}</details>{{end}}</div>{{end}}{{end}}
 
 {{/* pick-bar is the one way to act on several things of a list (docs/plans/114-one-way-to-do-a-thing.md): Select
-     shows a box on each row, tile or card, and the bar's tools, with no script. The bar is a form of its own (id
-     "pick"), and each box joins it by its form attribute, so a card may hold a form of its own. Each
-     action the list offers is one button, which sends the checked ids to its own address (formaction); Delete needs
-     no category. The bar comes after the boxes, so a CSS counter counts them on the buttons, and it is drawn first by
-     order, at the top of the list. It takes v (the view), back, words (what to check), and the actions: file
-     (file-pages, with list, the id of a datalist of categories) and del (a delete of several). */}}
-{{define "pick-bar"}}{{$v := .v}}{{$file := .file}}{{$del := .del}}{{$first := $del}}{{if $file}}{{$first = $file}}{{end}}
-{{$refused := false}}{{if $v.Refused}}{{if and $file (eq $v.Refused.Href $file.Href)}}{{$refused = true}}{{end}}{{if and $del (eq $v.Refused.Href $del.Href)}}{{$refused = true}}{{end}}{{end}}
-{{$on := $refused}}{{if and $file (eq ($v.Asked "new") $file.Name)}}{{$on = true}}{{end}}
-<form id="pick" class="pick-bar" method="POST" action="{{$first.Href}}"><input type="hidden" name="back" value="{{.back}}">
-<label class="pick-toggle button small"><input type="checkbox" class="pick-on"{{if $on}} checked{{end}}>Select</label>
+     shows a box on each row, tile or card, and the bar's tools, with no script. The tools are the form of the first
+     action the list offers (id "pick"), and each box joins it by its form attribute, so a card may hold a form of its
+     own; the boxes send its ids. The other action is a second button of the form (Or), which sends the checked ids to
+     its own address and needs no category. The bar comes after the boxes, so a CSS counter counts them on the
+     buttons, and it is drawn first by order, at the top of the list. Select is on when the page asks for the form or
+     shows its refusal. It takes back, words (what to check), and the actions: file (file-pages) and del (a delete of
+     several). */}}
+{{define "pick-bar"}}{{$f := form (or .file .del) "id" "pick" "class" "inline" "outside" "ids" "back" .back "placeholder" "category=Bloodwork, Sport, Financial"}}{{if .file}}{{$f = $f.Or (form .del)}}{{end}}
+<div class="pick-bar">
+<label class="pick-toggle button small"><input type="checkbox" class="pick-on"{{if or $f.Refused $f.Asked}} checked{{end}}>Select</label>
 <div class="pick-tools"><span class="desc">{{.words}}</span>
-{{with $file}}<label><span>Category <small>required</small></span><input type="text" name="category" list="{{$.list}}" required value="{{if $refused}}{{$v.Sent.Get "category"}}{{end}}" placeholder="Bloodwork, Sport, Financial"></label>
-<fieldset class="segmented"><legend>Keep the other categories?</legend><label><input type="radio" name="move" value="0"{{if not (and $refused (eq ($v.Sent.Get "move") "1"))}} checked{{end}}><span>Add</span></label><label><input type="radio" name="move" value="1"{{if and $refused (eq ($v.Sent.Get "move") "1")}} checked{{end}}><span>Move</span></label></fieldset>
-<button class="primary" formaction="{{.Href}}">Put in a category</button>{{end}}
-{{with $del}}<button class="danger" formaction="{{.Href}}" formnovalidate>Delete selected</button>{{end}}</div></form>{{end}}
+{{template "form" $f}}</div></div>{{end}}
 
 {{/* pick-box is the box of a row, a tile or a card that joins the form of the pick bar (form="pick"). It takes id
      and title. */}}
@@ -165,23 +159,25 @@
 {{/* form draws one action of the entity (see formOf); nothing when the action is not offered. A label wraps its
      field, so a form needs no layout of its own; the catalog says how tall an area is and which action is a danger.
      The optional fields a view folds are under "More fields": still in the form, so they are sent with no script
-     (docs/plans/095-the-leaf-and-its-margin.md). */}}
-{{define "form"}}{{with .}}<form method="{{.Method}}" action="{{.Href}}"{{if .Refused}} aria-describedby="refused"{{end}}{{with .Class}} class="{{.}}"{{end}}{{if .Multipart}} enctype="multipart/form-data"{{end}}>
+     (docs/plans/095-the-leaf-and-its-margin.md). A second action of the form (formView.Or) is a button after its own,
+     which sends the form to that action's address. */}}
+{{define "form"}}{{with .}}<form{{with .ID}} id="{{.}}"{{end}} method="{{.Method}}" action="{{.Href}}"{{if .Refused}} aria-describedby="refused"{{end}}{{with .Class}} class="{{.}}"{{end}}{{if .Multipart}} enctype="multipart/form-data"{{end}}>
 {{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{num .Value}}">{{end}}{{with .Back}}<input type="hidden" name="back" value="{{.}}">{{end}}
 {{range .Fields false}}{{template "field" .}}{{end}}{{with .Fields true}}<details class="more-fields"{{if $.MoreOpen}} open{{end}}><summary>{{count (len .) "more field" "more fields"}}</summary>
 {{range .}}{{template "field" .}}{{end}}</details>
-{{end}}{{if .Preview}}<button type="submit" class="quiet" formaction="/render" formmethod="POST" formtarget="_blank">Preview</button>{{end}}<button{{if .Danger}} class="danger"{{else if .Primary}} class="primary"{{end}}>{{.Button}}</button></form>{{end}}{{end}}
+{{end}}{{if .Preview}}<button type="submit" class="quiet" formaction="/render" formmethod="POST" formtarget="_blank">Preview</button>{{end}}<button{{if .Danger}} class="danger"{{else if .Primary}} class="primary"{{end}}>{{.Button}}</button>{{with .Also}}<button{{if .Danger}} class="danger"{{end}} formaction="{{.Href}}" formnovalidate>{{.Button}}</button>{{end}}</form>{{end}}{{end}}
 
 {{/* field draws one field of a form: a few short options as a row of radio buttons, other options as a select, a
-     textarea, or an input of the field's type. A select of an optional field starts empty, so the form sends no
-     value that the reader did not pick. A required radio, textarea or input is marked required, so the browser does
-     not send it empty. A form with a text area offers Preview (formView.Preview, drawn by form), which sends the
-     form to /render in a new tab, so the words stay in the form. */}}
+     textarea, or an input of the field's type. A field of page titles with options is an input with a datalist of
+     them (List), so the reader picks a title or types a new one. A select of an optional field starts empty, so the
+     form sends no value that the reader did not pick. A required radio, textarea or input is marked required, so the
+     browser does not send it empty. A form with a text area offers Preview (formView.Preview, drawn by form), which
+     sends the form to /render in a new tab, so the words stay in the form. */}}
 {{define "field"}}{{if segmented .Field}}<fieldset class="segmented"><legend>{{or .Title .Name}}{{if .Required}} <small>required</small>{{end}}</legend>{{$v := num .Value}}{{$n := .Name}}{{$req := .Required}}{{range .Options}}<label><input type="radio" name="{{$n}}" value="{{.}}"{{if eq . $v}} checked{{end}}{{if $req}} required{{end}}><span>{{.}}</span></label>{{end}}</fieldset>
 {{else}}<label><span>{{or .Title .Name}}{{if .Required}} <small>required</small>{{end}}</span>
-{{if .Options}}<select name="{{.Name}}"{{if .Focus}} autofocus{{end}}>{{$v := num .Value}}{{if and (not .Required) (ne (index .Options 0) "")}}<option></option>{{end}}{{range .Options}}<option{{if eq . $v}} selected{{end}}>{{.}}</option>{{end}}</select>
+{{if and .Options (not .List)}}<select name="{{.Name}}"{{if .Focus}} autofocus{{end}}>{{$v := num .Value}}{{if and (not .Required) (ne (index .Options 0) "")}}<option></option>{{end}}{{range .Options}}<option{{if eq . $v}} selected{{end}}>{{.}}</option>{{end}}</select>
 {{else if eq .Type "textarea"}}<textarea name="{{.Name}}"{{with .Rows}} rows="{{.}}"{{end}}{{if .Required}} required{{end}}{{with .Placeholder}} placeholder="{{.}}"{{end}}{{with .Key}} accesskey="{{.}}"{{end}}{{if .Focus}} autofocus{{end}}>{{num .Value}}</textarea>
-{{else}}<input type="{{.Type}}" name="{{.Name}}" value="{{num .Value}}"{{if .Required}} required{{end}}{{if eq .Type "number"}} step="any" inputmode="decimal"{{end}}{{with .Accept}} accept="{{.}}"{{end}}{{with .Placeholder}} placeholder="{{.}}"{{end}}{{if .Focus}} autofocus{{end}}>{{end}}</label>
+{{else}}<input type="{{.Type}}" name="{{.Name}}" value="{{num .Value}}"{{if .Required}} required{{end}}{{if eq .Type "number"}} step="any" inputmode="decimal"{{end}}{{with .Accept}} accept="{{.}}"{{end}}{{with .List}} list="{{.}}"{{end}}{{with .Placeholder}} placeholder="{{.}}"{{end}}{{if .Focus}} autofocus{{end}}>{{with .List}}<datalist id="{{.}}">{{range $.Options}}<option value="{{.}}">{{end}}</datalist>{{end}}{{end}}</label>
 {{end}}{{end}}
 
 {{/* boxed is an action as a button that opens its form (the ActionForm of the design system): with no script, a

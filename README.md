@@ -74,7 +74,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   list. A value that is not a plain path is ignored, and a JSON client never follows it
   ([plan 091](docs/plans/091-the-browser-for-daily-use.md)).
 - **The page is semantic HTML, and the catalog says how to draw it.** A field is a `label` around its input (a field
-  of 2 to 5 short options a `fieldset` of radio buttons), a card is an `article`, a callout an `aside`, an error a
+  of 2 to 5 short options a `fieldset` of radio buttons, a `pages` field with `options` a text input with a `datalist`
+  of those titles, so the reader can also type a new title), a card is an `article`, a callout an `aside`, an error a
   `role="alert"`, a series a `table` with a header row, a write's result and the search an open or a modal `dialog`,
   the phone's sheet a popover; a field the browser refuses once the owner has typed in it (`:user-invalid`) shows
   the same danger edge as one the server refused (`aria-invalid`), and the select is the app's own where the browser

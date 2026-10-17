@@ -77,6 +77,7 @@ func TestTheStylePageRunsTheRealTemplates(t *testing.T) {
 		{"form, a select", `<select name="kind"><option></option><option>page</option>`},
 		{"form, folded fields", `<details class="more-fields"><summary>3 more fields</summary>`},
 		{"boxed", `<details class="action"><summary class="button">New person</summary>`},
+		{"form, a field of page titles", `<input type="text" name="category" value="" list="create-person-category"><datalist id="create-person-category"><option value="Bloodwork"><option value="Sport"></datalist>`},
 		{"body-editor", "<details><summary>Edit the day page</summary>\n<small class=\"desc\">CommonMark."},
 		{"body-editor, its form", `<textarea name="body" rows="18" required>A walk in Lisbon</textarea>`},
 		{"onthisday", `<a class="entry" href="/days/2025-10-12"><span class="date">Sun 12 Oct 2025</span><span class="first">A walk with Sam</span><span class="meta">mood 4</span></a>`},

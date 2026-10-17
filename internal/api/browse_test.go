@@ -531,9 +531,9 @@ func TestTheBrowsePageDrawsTheTreeTheChipsAndTheRows(t *testing.T) {
 	for _, want := range []string{
 		fmt.Sprintf(`<a class="entry named face" href="/pages/%d"><span class="face-picture" aria-hidden="true">`, ids["Ana"]),
 		`<span class="first">Ana</span><span class="meta">mentioned on 1 page, last `, `<span class="meta">not mentioned yet</span>`,
-		`<form id="pick" class="pick-bar" method="POST" action="/pages/file">`,
+		`<form id="pick" method="POST" action="/pages/file" class="inline">`,
 		fmt.Sprintf(`<input type="checkbox" name="ids" value="%d" form="pick" aria-label="Select Ana">`, ids["Ana"]),
-		`<option value="Cousins">Family/Cousins</option>`, `<a href="/browse?kind=person" aria-current="page">People <small>2</small></a>`,
+		`<datalist id="pick-category"><option value="Family"><option value="Cousins"></datalist>`, `<a href="/browse?kind=person" aria-current="page">People <small>2</small></a>`,
 		`<a class="entry" href="/browse?kind=person" aria-current="page"><span class="first">Everything</span>`,
 	} {
 		if !strings.Contains(people, want) {

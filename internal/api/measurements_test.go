@@ -405,13 +405,17 @@ func anyStrings(x any) []string {
 	return out
 }
 
+// TestTheMetricsPageMakesAMetricACategoryAndAReading: New metric is three forms of register-metric, one a kind, each
+// with an id, so the category of each has a datalist of its own; the habit form sends no unit. The forms send what
+// a browser sends, and the metrics are made with their units and categories.
 func TestTheMetricsPageMakesAMetricACategoryAndAReading(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 
 	page := browse(t, h, "/metrics")
-	for _, want := range []string{`<details class="action new-metric" id="new-metric">`, `<form class="kind-number"`, `<form class="kind-score"`,
-		`<form class="kind-habit"`, `<a class="button" href="/metrics?new=file-pages#pick">New category</a>`,
-		`<input type="radio" name="new-kind" value="number" checked>`} {
+	for _, want := range []string{`<details class="action new-metric" id="new-metric">`,
+		`<form id="new-number" method="POST" action="/metrics" class="kind-number">`, `<form id="new-score" method="POST" action="/metrics" class="kind-score">`,
+		`<form id="new-habit" method="POST" action="/metrics" class="kind-habit">` + "\n" + `<input type="hidden" name="unit" value=""><input type="hidden" name="back" value="/metrics">`,
+		`<a class="button" href="/metrics?new=file-pages#pick">New category</a>`, `<input type="radio" name="new-kind" value="number" checked>`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("/metrics lacks %s", want)
 		}
@@ -419,26 +423,42 @@ func TestTheMetricsPageMakesAMetricACategoryAndAReading(t *testing.T) {
 	if home := browse(t, h, "/"); strings.Contains(home, `method="POST" action="/metrics"`) {
 		t.Error("Home still draws the New metric form")
 	}
+	// The link fills the category of each form; the focus is in the first form only.
 	if p := browse(t, h, "/metrics?new=register-metric&category=Sport"); !strings.Contains(p, `id="new-metric" open>`) ||
-		!strings.Contains(p, `name="category" list="metric-categories" value="Sport"`) {
-		t.Error("?new=register-metric&category=Sport does not open New metric with Sport filled in")
+		strings.Count(p, `<input type="text" name="category" value="Sport" placeholder="Bloodwork, Sport, Financial">`) != 3 ||
+		strings.Count(p, "autofocus") != 1 || !strings.Contains(p, `<input type="text" name="name" value="" required placeholder="Weight, Savings" autofocus>`) {
+		t.Error("?new=register-metric&category=Sport does not open New metric with Sport filled in and the focus in its name")
 	}
 	if p := browse(t, h, "/metrics?new=file-pages"); !strings.Contains(p, `<input type="checkbox" class="pick-on" checked>`) {
 		t.Error("?new=file-pages does not turn Select on")
 	}
 
 	// The habit form and the number form, as a browser sends them.
-	for _, form := range []url.Values{
-		{"kind": {"habit"}, "name": {"Walk"}, "unit": {""}, "category": {"Sport"}, "note": {""}, "back": {"/metrics"}},
-		{"kind": {"number"}, "name": {"Weight"}, "unit": {"kg"}, "category": {"Body"}, "note": {"Before breakfast"}, "back": {"/metrics"}},
+	for _, form := range []struct {
+		id    string
+		typed url.Values
+	}{
+		{`id="new-habit"`, url.Values{"name": {"Walk"}, "category": {"Sport"}}},
+		{`id="new-number"`, url.Values{"name": {"Weight"}, "unit": {"kg"}, "category": {"Body"}, "note": {"Before breakfast"}}},
 	} {
-		rec := submit(h, "/metrics", form, "")
+		rec := submit(h, "/metrics", formSends(t, page, form.id, form.typed), "")
 		if rec.Code != http.StatusSeeOther || !feedbackLocation(rec.Header().Get("Location"), "/metrics") {
-			t.Fatalf("New metric %s: %d %q %.300s", form.Get("name"), rec.Code, rec.Header().Get("Location"), rec.Body.String())
+			t.Fatalf("New metric %s: %d %q %.300s", form.typed.Get("name"), rec.Code, rec.Header().Get("Location"), rec.Body.String())
 		}
-		if form.Get("name") == "Walk" && !strings.Contains(browse(t, h, rec.Header().Get("Location")), "New metric Walk, in Sport.") {
+		if form.typed.Get("name") == "Walk" && !strings.Contains(browse(t, h, rec.Header().Get("Location")), "New metric Walk, in Sport.") {
 			t.Error("the toast does not say what New metric made")
 		}
+	}
+	made := map[string]string{}
+	for _, x := range props(apitest.Must(t)(c.Get(t.Context(), "/metrics")))["metrics"].([]any) {
+		m := x.(map[string]any)
+		made[m["name"].(string)] = fmt.Sprintf("unit %q, categories %v, note %v", m["unit"], m["categories"], m["note"])
+	}
+	if want := `unit "", categories [Sport], note <nil>`; made["Walk"] != want {
+		t.Errorf("the habit form made Walk with %s, want %s", made["Walk"], want)
+	}
+	if want := `unit "kg", categories [Body], note Before breakfast`; made["Weight"] != want {
+		t.Errorf("the number form made Weight with %s, want %s", made["Weight"], want)
 	}
 	page = browse(t, h, "/metrics")
 	for _, want := range []string{`href="/metrics?new=register-metric&amp;category=Body#new-metric">+ New metric here</a>`,
@@ -463,12 +483,14 @@ func TestTheMetricsPageMakesAMetricACategoryAndAReading(t *testing.T) {
 		t.Errorf("Weight's readings %v, want 80.5 on %s", weight, fixedToday)
 	}
 
-	// A refused form opens again on its own kind, with what it sent.
-	submit(h, "/metrics", url.Values{"kind": {"score"}, "name": {"Mood"}, "unit": {"1-5"}, "back": {"/metrics"}}, "")
-	rec = submit(h, "/metrics", url.Values{"kind": {"score"}, "name": {"Mood"}, "unit": {"1-10"}, "category": {"Mind"}, "back": {"/metrics"}}, "")
+	// A refused form opens the fold again: each form holds what was sent (the habit keeps no unit), and the alert
+	// describes each. The kind is a word of the page, which no form sends: the fold opens on a number.
+	submit(h, "/metrics", formSends(t, page, `id="new-score"`, url.Values{"name": {"Mood"}, "unit": {"1-5"}}), "")
+	rec = submit(h, "/metrics", formSends(t, page, `id="new-score"`, url.Values{"name": {"Mood"}, "unit": {"1-10"}, "category": {"Mind"}}), "")
 	body := rec.Body.String()
-	if rec.Code != http.StatusConflict || !strings.Contains(body, `id="new-metric" open>`) || !strings.Contains(body, `<input type="radio" name="new-kind" value="score" checked>`) ||
-		!strings.Contains(body, `value="1-10"`) || !strings.Contains(body, `value="Mind"`) {
+	if rec.Code != http.StatusConflict || !strings.Contains(body, `id="new-metric" open>`) || strings.Count(body, `<input type="text" name="unit" value="1-10"`) != 2 ||
+		strings.Count(body, `<input type="text" name="category" value="Mind"`) != 3 || strings.Count(body, `action="/metrics" aria-describedby="refused"`) != 3 ||
+		!strings.Contains(body, `<form id="new-habit" method="POST" action="/metrics" aria-describedby="refused" class="kind-habit">`+"\n"+`<input type="hidden" name="unit" value="">`) {
 		t.Errorf("a refused New metric: %d %.600s", rec.Code, body)
 	}
 }
@@ -542,8 +564,9 @@ func TestTheMetricsPageDrawsCards(t *testing.T) {
 		`id="not-filed"`, `<details class="metric-sub" open><summary><h3>Iron <small>1</small></h3><span class="meta">newest `, `<a href="/pages/` + idOfSelf(t, apitest.Href(iron, "self")) + `">Open Iron</a>`,
 		`<a class="name" href="/metrics/Weight">Weight</a>`, `79.5 <span class="unit">kg</span>`, `<time class="meta" datetime="2031-05-13" title="yesterday · Tue 13 May · 2 readings">yesterday</time>`, `<svg class="trend"`,
 		`<div class="reading-tile metric-card stale">`, `title="iron stores">Ferritin</a>`, `<span class="reading none"><span aria-hidden="true">–</span> <span class="unit">n</span></span><span class="line-none" aria-hidden="true"></span>`, `<div class="card-foot"><span class="meta">No reading</span>`,
-		`<form id="pick" class="pick-bar" method="POST" action="/pages/file">`, `<input type="hidden" name="back" value="/metrics">`,
-		`<input type="checkbox" name="ids" value="` + ids["Weight"] + `" form="pick" aria-label="Select Weight">`, `<option value="Iron">Body/Iron</option>`,
+		`<form id="pick" method="POST" action="/pages/file" class="inline">` + "\n" + `<input type="hidden" name="back" value="/metrics">`,
+		`<input type="checkbox" name="ids" value="` + ids["Weight"] + `" form="pick" aria-label="Select Weight">`,
+		`<input type="text" name="category" value="" required list="pick-category" placeholder="Bloodwork, Sport, Financial"><datalist id="pick-category"><option value="Body"><option value="Iron"></datalist>`,
 	} {
 		if !strings.Contains(page, want) {
 			t.Errorf("/metrics lacks %s", want)
@@ -557,7 +580,7 @@ func TestTheMetricsPageDrawsCards(t *testing.T) {
 	}
 
 	// The browser's form: a box per card, back to /metrics with the sentence.
-	rec := submit(h, "/pages/file", url.Values{"ids": {ids["Mood"], ids["Steps"]}, "category": {"Daily"}, "move": {"0"}, "back": {"/metrics"}}, "")
+	rec := submit(h, "/pages/file", formSends(t, page, `id="pick"`, url.Values{"ids": {ids["Mood"], ids["Steps"]}, "category": {"Daily"}, "move": {"0"}}), "")
 	if rec.Code != http.StatusSeeOther || !feedbackLocation(rec.Header().Get("Location"), "/metrics") {
 		t.Fatalf("the form: %d %q %.300s", rec.Code, rec.Header().Get("Location"), rec.Body.String())
 	}
@@ -565,7 +588,7 @@ func TestTheMetricsPageDrawsCards(t *testing.T) {
 		t.Errorf("/metrics after the filing: %.600s", after)
 	}
 	// A refused form comes back to the page with Select on and the category it sent.
-	rec = submit(h, "/pages/file", url.Values{"category": {"Daily"}, "back": {"/metrics"}}, "")
+	rec = submit(h, "/pages/file", formSends(t, page, `id="pick"`, url.Values{"category": {"Daily"}}), "")
 	if body := rec.Body.String(); rec.Code != http.StatusUnprocessableEntity || !strings.Contains(body, `<input type="checkbox" class="pick-on" checked>`) ||
 		!strings.Contains(body, `value="Daily"`) || !strings.Contains(body, "missing field ids") {
 		t.Errorf("no box checked: %d %.600s", rec.Code, body)

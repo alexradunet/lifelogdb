@@ -66,12 +66,16 @@ func (h *server) metrics(r *http.Request) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
+	var titles []string // the category of file-pages and of register-metric offers them, as Browse and a page do
+	for _, c := range cs {
+		titles = append(titles, c.Title)
+	}
 	today := h.s.Today()
 	e := &Entity{Class: []string{"metrics"}, Title: "Metrics",
 		Properties: map[string]any{"metrics": rows, "groups": groupMetrics(ms, cs), "categories": cs, "today": today},
 		Links:      []Link{link("self", "/metrics", "Metrics"), link("index", "/", "Home")},
 		Actions: []Action{withOptions(action("record", nil, map[string]any{"day": today}), "metric", names),
-			action("file-pages", nil, nil), action("register-metric", nil, nil)}}
+			withOptions(action("file-pages", nil, nil), "category", titles), withOptions(action("register-metric", nil, nil), "category", titles)}}
 	for _, m := range ms {
 		e.Entities = append(e.Entities, link("item", metricHref(m.Name), m.Name))
 	}

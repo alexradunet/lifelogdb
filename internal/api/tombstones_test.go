@@ -95,8 +95,8 @@ func TestDeletePagesAtOnce(t *testing.T) {
 }
 
 // TestTheListsDeleteWhatIsChecked follows the browser: the media list of Browse draws a box on each tile for one
-// form, the form posts the checked ids and returns to the list with the count, and a post with no box checked comes
-// back to the list with the refusal.
+// form, the form's Delete pages posts what the form sends with the checked ids to tombstone-pages and returns to the
+// list with the count, and a post with no box checked comes back to the list with the refusal.
 func TestTheListsDeleteWhatIsChecked(t *testing.T) {
 	c, h, _ := apitest.Fresh(t, "cli")
 	ctx := t.Context()
@@ -108,9 +108,9 @@ func TestTheListsDeleteWhatIsChecked(t *testing.T) {
 	}
 
 	list := browse(t, h, "/browse?kind=media")
-	for _, want := range []string{`<form id="pick" class="pick-bar" method="POST" action="/pages/file">`,
+	for _, want := range []string{`<form id="pick" method="POST" action="/pages/file" class="inline">`,
 		`<input type="hidden" name="back" value="/browse?kind=media">`, `<span class="desc">Check the rows, then type a category or delete them. A new name makes a new category.</span>`,
-		`<button class="danger" formaction="/pages/tombstone" formnovalidate>Delete selected</button></div></form>`,
+		`<button class="danger" formaction="/pages/tombstone" formnovalidate>Delete pages</button></form></div></div>`,
 		`<input type="checkbox" name="ids" value="` + files[0] + `" form="pick" aria-label="Select Scan 1.jpg">`, `name="ids" value="` + files[1] + `"`} {
 		if !strings.Contains(list, want) {
 			t.Errorf("the media list lacks %s", want)
@@ -123,7 +123,13 @@ func TestTheListsDeleteWhatIsChecked(t *testing.T) {
 	if bar, last := strings.Index(list, `class="pick-bar"`), strings.LastIndex(list, `name="ids"`); bar < last || !strings.Contains(list[bar:], "</form>") {
 		t.Error("the bar is not after the rows")
 	}
-	rec := submit(h, "/pages/tombstone", url.Values{"ids": files, "back": {"/browse?kind=media"}}, "")
+	// With no box checked, Delete is refused: the list opens Select again, and the alert describes the form.
+	rec := submit(h, "/pages/tombstone", formSends(t, list, `id="pick"`, nil), "")
+	if body := rec.Body.String(); rec.Code != http.StatusUnprocessableEntity || !strings.Contains(body, `role="alert"`) || !strings.Contains(body, "missing field ids") || !strings.Contains(body, "<h1>Browse</h1>") ||
+		!strings.Contains(body, `<input type="checkbox" class="pick-on" checked>`) || !strings.Contains(body, `<form id="pick" method="POST" action="/pages/file" aria-describedby="refused" class="inline">`) {
+		t.Errorf("no box checked: %d %.300s", rec.Code, body)
+	}
+	rec = submit(h, "/pages/tombstone", formSends(t, list, `id="pick"`, url.Values{"ids": files}), "")
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("the form: %d %.300s", rec.Code, rec.Body.String())
 	}
@@ -135,9 +141,4 @@ func TestTheListsDeleteWhatIsChecked(t *testing.T) {
 	if !strings.Contains(after, "Deleted 2 pages.") || strings.Contains(after, `href="/pages/`+files[0]+`"`) || strings.Contains(after, `href="/pages/`+files[1]+`"`) {
 		t.Errorf("the list after the delete: %.600s", after)
 	}
-	rec = submit(h, "/pages/tombstone", url.Values{"back": {"/browse?kind=media"}}, "")
-	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), `role="alert"`) || !strings.Contains(rec.Body.String(), "missing field ids") || !strings.Contains(rec.Body.String(), "<h1>Browse</h1>") {
-		t.Errorf("no box checked: %d %.300s", rec.Code, rec.Body.String())
-	}
-
 }

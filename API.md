@@ -455,7 +455,7 @@ by default). An alias names the metric too. Links: `self` (`/metrics/{name}` whe
 ### metrics
 
 `GET /metrics`: the registry. Embedded: `item` links to each series. Actions: `record` with the metrics as options,
-[`file-pages`](#filed), `register-metric` (owner). A browser draws each metric as a card: its latest reading and the
+[`file-pages`](#filed) and `register-metric` (owner), each with the category titles as the options of `category`. A browser draws each metric as a card: its latest reading and the
 line of its recent readings ([plan 112](docs/plans/112-metrics-as-cards.md)). `register-metric` takes `category` (a
 page title, made when missing): one write makes the metric and files it. A refusal of either step writes nothing. Its answer is the metric's [series](#series), with a `result` sentence
 ([plan 113](docs/plans/113-new-metric-on-metrics.md)).

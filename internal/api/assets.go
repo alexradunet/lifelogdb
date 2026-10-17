@@ -45,7 +45,8 @@ func (h *server) styleguide(w http.ResponseWriter, r *http.Request) {
 
 // styleEntity is the entity of the style page. Its properties are synthetic, each part in the shape of the resource
 // whose template draws it: a day, a month, the metrics, a series and the facts of a page. Its actions are actions of
-// the catalog that send to the style page itself by GET, so a form of the page changes nothing.
+// the catalog that send to the style page itself by GET, so a form of the page changes nothing; the category of
+// New person offers two titles, as a field of page titles with options does.
 func styleEntity() *Entity {
 	reading := func(id float64, day string, value float64) map[string]any {
 		return map[string]any{"id": id, "day": day, "value": value}
@@ -99,7 +100,8 @@ func styleEntity() *Entity {
 	return &Entity{Class: []string{"styleguide"}, Title: "The style page", Properties: props,
 		Links: []Link{link("self", "/styleguide", "The style page"), link("prev", "/styleguide", "Previous"), link("next", "/styleguide", "Next")},
 		Actions: []Action{at("capture", nil), at("save-body", map[string]any{"body": "A walk in Lisbon", "version": "3"}),
-			at("record", map[string]any{"day": "2026-10-13"}), at("create-person", nil), at("browse", nil)}}
+			at("record", map[string]any{"day": "2026-10-13"}), withOptions(at("create-person", nil), "category", []string{"Bloodwork", "Sport"}),
+			at("browse", nil)}}
 }
 
 // styleParts are the parts of the style page that the methods of a real page's view give: the tiles of a day, the

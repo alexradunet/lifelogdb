@@ -127,6 +127,107 @@ func TestSegmentedIsForAFewShortOptions(t *testing.T) {
 			t.Errorf("segmented(%q) = %v, want %v", tc.options, got, tc.want)
 		}
 	}
+	if segmented(Field{Name: "f", Type: "text", Pages: true, Options: []string{"Art", "Gym"}}) {
+		t.Error("a field of two short page titles is segmented: it takes a new title too")
+	}
+}
+
+// TestAFieldOfPageTitlesOffersThemInADatalist: a field of page titles with options is a text input with a datalist
+// of the titles, so the reader picks one or types a new one. The datalist's id is the action's name and the field's,
+// or the form's id and the field's. With no options it is a plain input; a field with options that does not take a
+// page's title is still a select.
+func TestAFieldOfPageTitlesOffersThemInADatalist(t *testing.T) {
+	file := withOptions(action("file-pages", nil, nil), "category", []string{"Art", "Gym"})
+	for _, tc := range []struct {
+		name string
+		got  string
+		want string
+	}{
+		{"named by its action", markup(drawForm(t, file)),
+			`<input type="text" name="category" value="" required list="file-pages-category"><datalist id="file-pages-category"><option value="Art"><option value="Gym"></datalist></label>`},
+		{"named by its form", markup(drawForm(t, file, "id", "pick")),
+			`<input type="text" name="category" value="" required list="pick-category"><datalist id="pick-category"><option value="Art"><option value="Gym"></datalist></label>`},
+		{"with no options", markup(drawForm(t, action("file-pages", nil, nil))),
+			`<input type="text" name="category" value="" required></label>`},
+		{"not a page's title", markup(drawForm(t, action("promote", map[string]string{"id": "7"}, nil))),
+			`<select name="to"><option>person</option><option>place</option></select>`},
+	} {
+		if !strings.Contains(tc.got, tc.want) {
+			t.Errorf("%s: the form lacks %s:\n%s", tc.name, tc.want, tc.got)
+		}
+	}
+	if got := markup(drawForm(t, action("file-pages", nil, nil))); strings.Contains(got, "datalist") || strings.Contains(got, " list=") {
+		t.Errorf("a field with no options has a datalist: %s", got)
+	}
+}
+
+// markup is the first value of drawForm: the markup, without the formView.
+func markup(s string, _ *formView) string { return s }
+
+// TestOrSendsTheFormToASecondAction: the pick bar's form is file-pages with an id, whose ids the boxes outside it
+// send, and Delete pages is its second button: it sends the same form to tombstone-pages with no check of the
+// category. When the delete is the refused form, so is the bar's. With no second action, the form has one button.
+func TestOrSendsTheFormToASecondAction(t *testing.T) {
+	draw := func(f *formView) string {
+		t.Helper()
+		var b bytes.Buffer
+		if err := templates.ExecuteTemplate(&b, "form", f); err != nil {
+			t.Fatal(err)
+		}
+		return b.String()
+	}
+	form := func(a *shownAction, opts ...string) *formView {
+		t.Helper()
+		f, err := formOf(a, opts...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+	file := &shownAction{Action: withOptions(action("file-pages", nil, nil), "category", []string{"Art"})}
+	del := &shownAction{Action: action("tombstone-pages", nil, nil)}
+
+	got := draw(form(file, "id", "pick", "outside", "ids", "back", "/browse").Or(form(del)))
+	for _, want := range []string{`<form id="pick" method="POST" action="/pages/file">`, `<input type="hidden" name="back" value="/browse">`,
+		`<button class="primary">Put in a category</button><button class="danger" formaction="/pages/tombstone" formnovalidate>Delete pages</button></form>`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the form lacks %s:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, `name="ids"`) || strings.Contains(got, "aria-describedby") {
+		t.Errorf("the form draws the ids that the boxes send, or is described by an alert: %s", got)
+	}
+
+	refused := &shownAction{Action: del.Action, refused: true, noFocus: true}
+	if got := draw(form(file, "id", "pick").Or(form(refused))); !strings.Contains(got, `<form id="pick" method="POST" action="/pages/file" aria-describedby="refused">`) {
+		t.Errorf("a refused delete does not mark the bar's form: %s", got)
+	}
+	if got := draw(form(file).Or(nil)); strings.Count(got, "<button") != 1 || strings.Contains(got, "formaction") {
+		t.Errorf("a form with no second action has another button: %s", got)
+	}
+}
+
+// TestAnEmptyAutofocusKeepsTheFocusOut: a form the page's link asks for starts in its first field, unless the view
+// names the field, or none ("autofocus" ""): the New metric fold draws one action in three forms, and only the first
+// takes the focus.
+func TestAnEmptyAutofocusKeepsTheFocusOut(t *testing.T) {
+	asked := &shownAction{Action: action("register-metric", nil, nil), asked: true}
+	for _, tc := range []struct {
+		opts []string
+		want string
+	}{
+		{nil, "name"},
+		{[]string{"autofocus", "note"}, "note"},
+		{[]string{"autofocus", ""}, ""},
+	} {
+		f, err := formOf(asked, tc.opts...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if f.Focus != tc.want {
+			t.Errorf("options %q: the focus is in %q, want %q", tc.opts, f.Focus, tc.want)
+		}
+	}
 }
 
 // TestDangerIsACatalogAction keeps the destructive-action set honest: it names nothing the catalog does not
