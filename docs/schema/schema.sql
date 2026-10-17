@@ -36,7 +36,7 @@ CREATE TABLE entities (
   -- Insert this row first with RETURNING id, then its owned preferred entity_names row in the same
   -- BEGIN IMMEDIATE transaction; preferred ownership is NOT NULL and checked by the deferred composite FK.
   -- Never carry last_insert_rowid() across statements. Typed extension rows use this same id and
-  -- (id, entity_type) FK directly; a place's point is optional. Promotion changes type, not identity.
+  -- (id, entity_type) FK directly; a place has no typed row (D21). Promotion changes type, not identity.
   -- A canonical date key is the one plain journal-day identity for that local day: its day equals its
   -- preferred key, neither may transfer, and its only registry spelling is that date. Other objects
   -- may have a day without being journal days. Their aliases and preferred names remain editable.
@@ -187,7 +187,7 @@ END;
 
 CREATE TABLE people (
   -- The owning id is immutable (people_identity_fixed), including through rowid aliases.
-  -- people in the owner's life; relationships between them are links (friend, family, parent-of).
+  -- people in the owner's life; a relationship between them is words in a page (D8).
   -- A person is also a page with the same id (D20): registry names are the handles [[wikilinks]] write
   -- ('Sam (barber)' tells two Sams apart), its body holds the prose; name is the editable full name.
   id          INTEGER PRIMARY KEY,

@@ -102,6 +102,22 @@ func document(s *S) {
 		}
 	}
 	s.K("every name with an underscore in a lifelog_meta row is a column, a schema object, a key or a pragma of this file", len(stale) == 0, slices.Sorted(slices.Values(stale)))
+	// A stored CREATE text names only the link kinds of the file (issue 0082): a word of the shape x-of or x-in, the
+	// shape of part-of, is a registered kind.
+	kinds := map[string]bool{}
+	for _, k := range c.col("select kind from link_kinds") {
+		kinds[k] = true
+	}
+	relation := regexp.MustCompile(`\b[a-z]+-(?:of|in)\b`)
+	var unregistered []string
+	for name, sql := range schema {
+		for _, w := range relation.FindAllString(sql, -1) {
+			if !kinds[w] {
+				unregistered = append(unregistered, name+": "+w)
+			}
+		}
+	}
+	s.K("every word of the shape x-of or x-in in the stored schema is a registered link kind", len(unregistered) == 0, slices.Sorted(slices.Values(unregistered)))
 	s.K("import-a-row-once sends an imported body through the save contract (D19)", strings.Contains(s.d.Page("cookbook/import-a-row-once.md"), "run the link sync of [save a body](save-a-body.md)"))
 
 	// ---- the rules live in the file, once
