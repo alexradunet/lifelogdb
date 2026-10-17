@@ -167,7 +167,8 @@ schema is frozen ([D13](docs/decisions/D13-migrations-and-freeze.md)):
   without further work; a shortcut on one surface (`lifelog capture`, a dedicated HTML view) wraps an action, never
   replaces or extends it. A feature that exists on one surface only is a defect, not a convenience. The only
   differences allowed are the ones the README names and tests assert: owner-only actions (`register-metric`,
-  `snapshot`, `integrity-check`) are refused to an `agent:*` or `import:*` writer and are never MCP tools.
+  `snapshot`, `integrity-check`, `rebuild-search`, `resync-links`) are refused to an `agent:*` or `import:*` writer
+  and are never MCP tools.
 - **Contexts and ownership.** Pass the operation's `context.Context` explicitly, first, through blocking calls and SQL.
   Do not replace a request context with `Background` to evade cancellation, or use context values as dependency bags.
   Prefer synchronous APIs. Every goroutine needs an owner, bounded work, a shutdown path and a way to await completion;
